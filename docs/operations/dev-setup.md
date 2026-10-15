@@ -2,7 +2,7 @@
 
 > **Dự án:** CRM-CSKH
 > **Tài liệu:** `docs/operations/dev-setup.md`
-> **Phiên bản:** 1.3 — 15/10/2026
+> **Phiên bản:** 1.4 — 15/10/2026
 > **Tài liệu cha:** [`../root-plan/P0.md`](../root-plan/P0.md) (§3 P0-A) · [`../architecture/version-lock.md`](../architecture/version-lock.md)
 > **Đối tượng:** người thứ hai cần setup lại từ repo mà không cần hướng dẫn miệng.
 
@@ -295,7 +295,7 @@ Chi tiết command/evidence: [`wp01-runtime.md`](../../deploy/dev/evidence/wp01-
 - Bootstrap trên volume bench rỗng, clean test site, repeated migration và backup/restore đã chạy; xem [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md).
 - Python source reload đã xác minh trên `bench start`; Vue build pass nhưng Vite route hiển thị trắng nên chưa chứng minh hot reload.
 - MariaDB 11.8 phát cảnh báo từ pinned Frappe v15 vì mới hơn 10.8; stack đã qua test P0 nhưng compatibility ngoài các thao tác đó còn cần kiểm tra.
-- GitHub Actions PR check đang chờ; security transport cases SEC-13/14/27 và ảnh checklist tiếng Việt còn thiếu.
+- GitHub Actions trên PR #1 đã pass bootstrap sạch, lint/format, 28 tests, migrate và backup/restore ([run](https://github.com/nobita6986/new-crm/actions/runs/38712593755)); SEC-13/14/27 và ảnh checklist tiếng Việt còn thiếu.
 
 **Docker/WSL2 blockers đã gỡ trên máy hiện tại; Yarn đã có trong bench image nên không cần cài trên host.** Linux DEV VM vẫn là phương án dự phòng nếu engine này hỏng.
 
@@ -322,7 +322,7 @@ Chi tiết command/evidence: [`wp01-runtime.md`](../../deploy/dev/evidence/wp01-
 - WP-03 primitives đã chạy; CSV import và SLA apply follow-up đạt. XLSX, SLA calendar/holiday semantics, dedup/canonical phone thuộc phần còn lại.
 - WP-04 PoC `/cskh` cùng site/session đã đạt; Vue SPA dev server còn trắng, hot reload chưa đạt.
 - WP-05 security tests chặn các route đã gọi; SEC-13/14/27 và các ô matrix chưa chạy còn mở.
-- WP-07 workflow GitHub Actions có trên nhánh làm việc; chưa kết luận trước PR run thật.
+- WP-07 GitHub Actions trên PR #1 đã pass bootstrap sạch, lint/format, test, migrate và backup/restore; [xem run](https://github.com/nobita6986/new-crm/actions/runs/38712593755).
 - WP-06 glossary và trang CSKH tiếng Việt có; cần screenshot lưu vào repo và checklist các màn P0.
 - P0 hiện **NO-GO cho P1** theo [`p0-exit-report.md`](../architecture/p0-exit-report.md); không dùng DEV với dữ liệu thật.
 
@@ -332,6 +332,6 @@ Chi tiết command/evidence: [`wp01-runtime.md`](../../deploy/dev/evidence/wp01-
 
 - **WP-01 runtime: PASS** cho bootstrap, migrate, seed, clean volume, restore và HTTP/API smoke. P0-A tổng thể: **PARTIAL** vì Vue hot reload chưa được xác minh.
 - Bằng chứng tổng hợp: [`wp01-runtime.md`](../../deploy/dev/evidence/wp01-runtime.md). Raw logs ở `deploy/dev/evidence/*.log` bị loại khỏi Git theo `.gitignore`.
-- P0 vẫn **NO-GO cho P1** tới khi GitHub Actions xanh và G0-02/G0-07/G0-09 được đóng theo [`p0-exit-report.md`](../architecture/p0-exit-report.md).
+- P0 vẫn **NO-GO cho P1** tới khi G0-02/G0-07/G0-09 cùng các điểm tương thích/field-scope còn mở được đóng theo [`p0-exit-report.md`](../architecture/p0-exit-report.md); CI PR #1 đã xanh.
 
-> Cập nhật 1.2: seed DEV đặt timezone và bật Sales Hierarchy; WP-02/WP-03 được phản ánh đúng trạng thái runtime hiện tại.
+> Cập nhật 1.4: ghi nhận PR CI đã pass; P0 vẫn NO-GO cho P1 do security transport/full-matrix, Vue hot reload và checklist UI còn mở.

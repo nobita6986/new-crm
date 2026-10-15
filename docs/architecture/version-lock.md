@@ -2,9 +2,9 @@
 
 > **Dự án:** CRM-CSKH — Quản trị kho khách hàng, phân phối lead và chất lượng CSKH
 > **Tài liệu:** `docs/architecture/version-lock.md`
-> **Phiên bản:** 1.3 — 15/10/2026 (ghi nhận app POC WP-02)
+> **Phiên bản:** 1.4 — 15/10/2026 (ghi nhận CI runner sạch và app POC WP-05)
 > **Tài liệu cha:** [`../root-plan/P0.md`](../root-plan/P0.md) (§2, ADR-001) · [`../root-plan/master-plan.md`](../root-plan/master-plan.md) (§3, §19)
-> **Trạng thái:** Metadata/tag/digest đã khóa; baseline CRM/Frappe đã cài, migrate và smoke trên máy DEV hiện tại. **MariaDB 11.8 compatibility vẫn cần chốt** vì Framework cảnh báo phiên bản này chưa được kiểm thử — xem §8.
+> **Trạng thái:** Metadata/tag/digest đã khóa; baseline CRM/Frappe đã cài, migrate và smoke trên máy DEV cùng GitHub runner sạch. **MariaDB 11.8 compatibility vẫn cần chốt** vì Framework cảnh báo phiên bản này chưa được kiểm thử — xem §8.
 
 ---
 
@@ -42,7 +42,7 @@ Không dùng `latest`, `main`, `develop` làm bản phát hành. Tất cả mụ
 | L-02 | **Frappe Framework** (chính) | `github.com/frappe/frappe` | `v15.123.1` | `d2efa79657ba5c1abf96098b3bfacc199517d57e` | ✅ VERIFIED |
 | L-03 | Frappe Framework (thay thế, xem §4) | `github.com/frappe/frappe` | `v16.52.0` | `4515014c87ece6cb20ee91d2cfb121c5cbd1ff4a` | ✅ VERIFIED (chưa chọn) |
 | L-04 | **Frappe Docker** (tooling DEV) | `github.com/frappe/frappe_docker` | `v4.0.1` | `2b26e9ab8d751e5ea33bb7b930aea3550bb81ded` | ✅ VERIFIED |
-| L-05 | Custom app `crm_cskh` | `github.com/nobita6986/new-crm` | `0.0.1` (working tree) | Chưa commit; repo HEAD `bc114d21cd099593c2dcb4396b040838f36a3cce` | Cài trên bench/site hiện có, 9 test POC đạt; clean-bench chưa xác minh ([WP-02 evidence](../../deploy/dev/evidence/wp-02-p0b.md)) |
+| L-05 | Custom app `crm_cskh` | `github.com/nobita6986/new-crm` | `0.0.1` | Có trong PR #1 (`codex/p0-ci-exit`); GitHub Actions clean bootstrap + 28 tests + backup/restore pass ([run](https://github.com/nobita6986/new-crm/actions/runs/38712593755)) |
 | L-06 | Repo dự án (docs + app) | `github.com/nobita6986/new-crm` | `main` | `bc114d21cd099593c2dcb4396b040838f36a3cce` | ✅ VERIFIED |
 
 **Ghi chú xác minh quan trọng:**
@@ -202,7 +202,7 @@ Phân biệt rõ hai mức độ bằng chứng:
 |---|---|---|---|---|---|---|
 | C1 | v1.87.0 | v15.123.1 | 3.12 | Chạy được | ✅ hợp lệ (`>=3.10,<3.15`) | ⛔ Chưa chạy trên Python 3.12 |
 | C2 | v1.87.0 | v16.52.0 | 3.14 | Chạy được | ✅ hợp lệ (đúng biên) | ⛔ Chưa cài/test Frappe v16 trong bench này |
-| C3 | v1.87.0 | v15.123.1 | 3.14 | Chạy được | ✅ hợp lệ | ✅ Python 3.14.8: clean bootstrap/install/migrate/seed, 28 tests, import, SLA, backup/restore đạt; MariaDB 11.8 vẫn có cảnh báo framework >10.8 chưa được thử rộng |
+| C3 | v1.87.0 | v15.123.1 | 3.14 | Chạy được | ✅ hợp lệ | ✅ Python 3.14.8: clean bootstrap/install/migrate/seed, 28 tests, import, SLA, backup/restore; GitHub Actions clean runner cũng pass. MariaDB 11.8 vẫn có cảnh báo framework >10.8 chưa được thử rộng |
 | Cx | v1.87.0 | bất kỳ <v15 hoặc ≥v17 | — | Không hỗ trợ | ❌ ngoài `>=15.0.0,<17.0.0` | — (loại) |
 
 ### 8.1. Runtime đã đo trên máy DEV hiện tại
@@ -217,7 +217,7 @@ Phân biệt rõ hai mức độ bằng chứng:
 
 **Caveat tương thích:** khi tạo site, Frappe v15 cảnh báo rằng MariaDB 11.8 vượt phiên bản 10.8 chưa được Framework kiểm thử. Install/migrate thành công chứng minh stack chạy được cho WP-01, nhưng không xóa bỏ caveat này; cần chốt MariaDB tương thích trước khi đóng ADR-001.
 
-➡️ Docker/WSL2 blocker đã gỡ trên host hiện tại. P0-A vẫn còn các mục A4/hot reload, setup độc lập/restore và các gate P0 khác; runtime smoke này **không** phải bằng chứng G0-01..G0-10 đều PASS.
+➡️ Docker/WSL2 blocker đã gỡ trên host hiện tại; CI trên GitHub runner đã kiểm tra clean bootstrap và backup/restore. P0-A còn Vue hot reload; cảnh báo MariaDB và các gate bảo mật/UI vẫn cần xử lý. Kết quả này **không** phải bằng chứng G0-01..G0-10 đều PASS.
 
 ---
 
@@ -260,4 +260,4 @@ Một phiên bản được coi là **đã khóa** khi và chỉ khi:
 2. Đã có **[RUNTIME] PASS** trong §8 trên môi trường DEV tái tạo được, và
 3. Kết quả được ghi lại kèm log/lệnh ở [`docs/operations/dev-setup.md`](../operations/dev-setup.md).
 
-Hiện tại: điều kiện (1) **đạt**; một lần runtime trên host hiện tại đã chạy và có evidence, nhưng setup trên môi trường DEV độc lập chưa thử; điều kiện (2)(3) chưa được coi là hoàn tất cho P0.
+Hiện tại: điều kiện (1) **đạt**; điều kiện (2)(3) có bằng chứng trên máy DEV và GitHub-hosted runner ([CI run](https://github.com/nobita6986/new-crm/actions/runs/38712593755)). Phạm vi đã chạy là baseline Frappe v15/Python 3.14.8/MariaDB 11.8; cảnh báo MariaDB >10.8 vẫn mở, còn Python 3.12 và Frappe v16 chưa được thử.

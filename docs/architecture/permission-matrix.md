@@ -1,9 +1,9 @@
 # Permission Matrix — RBAC / ACL (P0)
 
 > **Owner:** T1C — Thiết kế & kiểm chứng bảo mật P0
-> **Phiên bản:** 0.8 (runtime coverage) — 15/10/2026
+> **Phiên bản:** 0.9 (runtime coverage) — 15/10/2026
 > **Trạng thái:** 18 permission-boundary tests chạy trong suite app (28/28 test tổng thể đạt). Bảng ~70 ô vẫn `CHƯA XÁC MINH` trừ khi từng ô có test mapping cụ thể.
-> **Đối chiếu checkout (0.8):** security suite mới chạy trên test site sạch, có scope owner/team, child records, private file, export, assignment, BOD và field-level ([`test_permissions.py`](../../apps/crm_cskh/crm_cskh/tests/test_permissions.py), [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md)). SEC-13/14/27 còn thiếu xác minh transport/full path; không suy rộng 28 test app thành 28 SEC case hoàn chỉnh.
+> **Đối chiếu checkout (0.9):** GitHub Actions PR #1 đã xác nhận clean bootstrap, lint/format và suite 28 tests ([run](https://github.com/nobita6986/new-crm/actions/runs/38712593755)). Security suite có scope owner/team, child records, private file, export, assignment, BOD và field-level ([`test_permissions.py`](../../apps/crm_cskh/crm_cskh/tests/test_permissions.py), [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md)). SEC-13/14/27 còn thiếu xác minh transport/full path; không suy rộng 28 test app thành 28 SEC case hoàn chỉnh.
 > **ADR-004/005:** quyết định đã được T0 chốt — ADR-004: thực thi quyền ở **backend/record-level** + ownership service tập trung ([`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md)); ADR-005: `BOD_VIEWER` **read-only**, **không** System Manager ([`adr-005-bod-viewer-scope.md`](./adr-005-bod-viewer-scope.md)). Runtime/security **CHƯA XÁC MINH**.
 > **Tài liệu cha:** [`../root-plan/master-plan.md`](../root-plan/master-plan.md) §7, §9, §14 · [`../root-plan/P0.md`](../root-plan/P0.md) §7, §12
 > **Phạm vi lượt này:** T0 cập nhật bằng chứng WP-05 trên app/test site cô lập; không sửa upstream.
@@ -371,11 +371,11 @@ Mỗi ca lưu: user/role, Lead ID giả, endpoint/method, HTTP status, response 
 - Số ca thiết kế: **~70 ô ma trận**, 28 ca test âm (`SEC-01…SEC-28`).
 - 18 permission-boundary test methods chạy trong suite app; toàn suite **28/28 PASS** trên test site sạch.
 - SEC coverage: **PASS có giới hạn** cho các case đã mapping; SEC-13/14/27 `PARTIAL`; ~70 ô matrix chưa có từng kết quả vẫn `CHƯA XÁC MINH`.
-- Không kết luận toàn hệ thống an toàn; CI PR và security transport checks còn pending.
+- Không kết luận toàn hệ thống an toàn; CI PR đã pass nhưng security transport checks và các ô matrix chưa chạy vẫn mở.
 
 ## 13. Việc cần T0 quyết / blocker
 
-1. **WP-05 đã có suite và remediation fail-closed cho các API đã test.** Còn phải hoàn thiện SEC-13/14/27, CI PR và kiểm tra đầy đủ các ô matrix; trạng thái chi tiết ở [`p0-exit-report.md`](./p0-exit-report.md) và `risk-register.md` §4.
+1. **WP-05 đã có suite và remediation fail-closed cho các API đã test; GitHub Actions PR #1 đã pass.** Còn phải hoàn thiện SEC-13/14/27 và kiểm tra đầy đủ các ô matrix; trạng thái chi tiết ở [`p0-exit-report.md`](./p0-exit-report.md) và `risk-register.md` §4.
 2. **ADR-004/005: đã ghi tài liệu** — T0 chốt nội dung; file có trong checkout: [`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md) (thực thi quyền owner/team ở backend/record-level + ownership service tập trung) và [`adr-005-bod-viewer-scope.md`](./adr-005-bod-viewer-scope.md) (`BOD_VIEWER` read-only, không System Manager). Runtime/security **CHƯA XÁC MINH**.
 3. Role `CRM_ADMIN`/`BOD_VIEWER`: **giữ là role PoC** theo P0 §7.1 (BOD read-only). Whitelist field CSKH cho Staff + endpoint server-side (LEAD-06/14) sẽ **chốt cùng schema cụ thể ở P1/P2** — P0 từ chối sửa trực tiếp `CRM Lead`.
 4. Không cấp thêm quyền Staff/BOD/CRM_ADMIN hoặc triển khai dữ liệu thật trước khi các gate còn partial được đóng.
@@ -383,7 +383,7 @@ Mỗi ca lưu: user/role, Lead ID giả, endpoint/method, HTTP status, response 
 ## 14. Changelog
 
 | Ngày | Người | Nội dung |
-| 15/10/2026 | T0 | Bản 0.8: ghi nhận 18 permission-boundary methods, suite 28/28 pass, field-level regression; map từng SEC với PASS/PARTIAL có giới hạn. CI PR, SEC-13/14/27 và full matrix vẫn mở. |
+| 15/10/2026 | T0 | Bản 0.9: ghi nhận CI PR #1 pass cùng clean bootstrap và backup/restore; 18 permission-boundary methods, suite 28/28 pass; SEC-13/14/27 và full matrix vẫn mở. |
 |---|---|---|
 | 15/10/2026 | T0 | Bản 0.7: đồng bộ WP-02/03 — app POC, test site và 9 test chức năng đã chạy; ghi probe owner/team sau bật hierarchy; giữ `0/28` SEC, mọi ô quyền `CHƯA XÁC MINH`. |
 | 15/10/2026 | T0 | Bản 0.6: ghi nhận baseline/site/seed/UI/API smoke WP-01 trên host hiện tại; cập nhật blocker còn thiếu `crm_cskh`/test harness. Giữ `0/28` SEC, 0 ô PASS/FAIL, toàn bộ permission thực tế `CHƯA XÁC MINH`. |

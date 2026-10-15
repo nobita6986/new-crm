@@ -1,9 +1,9 @@
 # Risk Register — Security (P0)
 
 > **Owner:** T1C — Thiết kế & kiểm chứng bảo mật P0
-> **Phiên bản:** 0.9 (runtime evidence) — 15/10/2026
+> **Phiên bản:** 0.10 (runtime evidence) — 15/10/2026
 > **Trạng thái:** 28/28 test app đạt trên test site sạch; 18 permission-boundary methods. Rủi ro chỉ được giảm thiểu trong các route đã test; RISK-SEC-12 còn mở.
-> **Đối chiếu checkout (0.9):** security hooks/regression tests đã chạy; ma trận đầy đủ và transport-level SEC-13/14/27 chưa xong ([`permission-matrix.md`](./permission-matrix.md), [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md)). CI PR đang chờ. B-2/B-4 đã gỡ; B-3 ghi ADR; B-5 theo role PoC.
+> **Đối chiếu checkout (0.10):** GitHub Actions PR #1 đã pass bootstrap sạch, lint/format, 28 tests, migration và backup/restore ([run](https://github.com/nobita6986/new-crm/actions/runs/38712593755)). Security transport-level SEC-13/14/27 và full matrix vẫn chưa xong ([`permission-matrix.md`](./permission-matrix.md)). B-2/B-4 đã gỡ; B-3 ghi ADR; B-5 theo role PoC.
 > **ADR-004/005:** ADR-004 — thực thi quyền owner/team ở **backend/record-level** + ownership service tập trung ([`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md)); ADR-005 — `BOD_VIEWER` **read-only**, **không** System Manager ([`adr-005-bod-viewer-scope.md`](./adr-005-bod-viewer-scope.md)). Runtime/security **CHƯA XÁC MINH**.
 > **Tài liệu cha:** [`../root-plan/master-plan.md`](../root-plan/master-plan.md) §16 · [`../root-plan/P0.md`](../root-plan/P0.md) §13
 > **Tài liệu liên quan:** [`permission-matrix.md`](./permission-matrix.md)
@@ -97,11 +97,11 @@
 
 ## 4. Blockers & trạng thái gỡ
 
-> Cập nhật theo T0: **B-2 đã gỡ**; B-4 seed chạy; B-3 ghi ADR; B-5 role PoC. WP-05 suite chạy **28/28** gồm 18 permission-boundary methods; B-1 còn một phần mở cho SEC-13/14/27, full matrix và GitHub Actions. Không tuyên bố toàn hệ thống an toàn.
+> Cập nhật theo T0: **B-2 đã gỡ**; B-4 seed chạy; B-3 ghi ADR; B-5 role PoC. WP-05 suite chạy **28/28** gồm 18 permission-boundary methods; B-1 còn mở cho SEC-13/14/27 và full matrix. GitHub Actions PR #1 đã pass. Không tuyên bố toàn hệ thống an toàn.
 
 | # | Blocker | Ảnh hưởng | Cần để gỡ |
 |---|---|---|---|
-| B-1 | WP-05 suite/remediation đã chạy cục bộ; **SEC-13/14/27 còn partial, full matrix chưa điền** | Không ký G0-07 tới khi transport/full-path gap được xử lý | Hoàn thiện test mapping + CI PR; xem [`permission-matrix.md`](./permission-matrix.md) |
+| B-1 | WP-05 suite/remediation đã chạy cục bộ và trên CI; **SEC-13/14/27 còn partial, full matrix chưa điền** | Không ký G0-07 tới khi transport/full-path gap được xử lý | Hoàn thiện test mapping; xem [`permission-matrix.md`](./permission-matrix.md) |
 | B-2 | **ĐÃ GỠ trên host hiện tại:** WSL2 backend hoạt động; Docker Engine 29.7.2 chạy Linux; các service DEV lên khỏe ([`wp01-runtime.md`](../../deploy/dev/evidence/wp01-runtime.md)) | Setup trên máy thứ hai/clean machine chưa chứng minh | Giữ cấu hình; Linux DEV VM là dự phòng nếu engine hiện tại hỏng |
 | B-3 | **HOÀN TẤT ở mức ghi tài liệu** — ADR-004/005 đã được T0 chốt và có file trong checkout: [`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md), [`adr-005-bod-viewer-scope.md`](./adr-005-bod-viewer-scope.md) | Quyết định + tài liệu đã có; **không** phải bằng chứng runtime/security | — (đã xong) |
 | B-4 | **ĐÃ CHẠY:** seed tạo hai nhóm sales, user giả, 15 Lead, 3 Call Log, 2 Task, attachment; seed lần hai idempotent. T0 bổ sung timezone + bật hierarchy; probe mẫu owner/team có evidence ở [`p0-d-runtime.md`](./p0-d-runtime.md) §5.1. | Fixture/config DEV đã có; không phải kết quả permission/security test | Dùng test suite WP-05 để kiểm chứng đầy đủ |
@@ -120,7 +120,7 @@
 | WP-01 runtime | [`wp01-runtime.md`](../../deploy/dev/evidence/wp01-runtime.md) + raw logs trong `deploy/dev/evidence/` | Docker/WSL2, app baseline install/migrate, seed idempotence, authenticated UI/API smoke đã chạy trên host hiện tại; MariaDB 11.8 caveat còn mở |
 | WP-02/03 runtime | [`wp-02-p0b.md`](../../deploy/dev/evidence/wp-02-p0b.md) + [`p0-d-runtime.md`](./p0-d-runtime.md) §5.1 | App POC/test 9 ca; timezone và owner/team probe mẫu; không phải WP-05 |
 | Security tests | 28/28 app tests; 18 permission-boundary methods. Một số SEC case partial; không đồng nhất số test app với 28 SEC scenarios. | Test report [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md); map ở `permission-matrix.md` |
-| CI log | GitHub Actions PR check đang chờ | Chưa đánh dấu CI PASS trước kết quả run thật |
+| CI log | [GitHub Actions PR #1](https://github.com/nobita6986/new-crm/actions/runs/38712593755) — bootstrap sạch, 28 tests, migrate, backup/restore đều pass | Xác nhận G0-04/G0-10 trong phạm vi workflow; không thay thế security transport/full matrix |
 | Screenshot/demo | Trang `/cskh` tiếng Việt, cùng phiên đăng nhập và POST CSRF hợp lệ đã quan sát trong browser; chưa lưu ảnh vào repo | Còn thiếu file screenshot bền vững và checklist đủ màn |
 
 **Kết luận bằng chứng:** runtime tests đã giảm thiểu các route được gọi; SEC-13/14/27 và các API/ô chưa chạy vẫn mở. Chỉ kết luận theo test cụ thể, không suy rộng thành bảo đảm an toàn.
@@ -146,7 +146,7 @@
 ## 7. Changelog
 
 | Ngày | Người | Nội dung |
-| 15/10/2026 | T0 | Bản 0.9: ghi nhận 28/28 app tests (18 permission-boundary methods), giảm thiểu các rủi ro có route test; RISK-SEC-12, SEC-13/14/27, full matrix và CI còn mở. |
+| 15/10/2026 | T0 | Bản 0.10: ghi nhận GitHub Actions PR #1 pass clean bootstrap, lint, 28 tests, migration và backup/restore; SEC-13/14/27, full matrix và RISK-SEC-12 vẫn mở. |
 |---|---|---|
 | 15/10/2026 | T0 | Bản 0.8: đồng bộ WP-02/03; B-1 đổi từ thiếu app sang thiếu security suite/negative tests/remediation. Giữ mọi rủi ro `MỞ — CHƯA XÁC MINH`. |
 | 15/10/2026 | T0 | Bản 0.7: ghi nhận WP-01 runtime trên host hiện tại; B-2 gỡ, B-4 seed chạy, B-1 còn thiếu `crm_cskh`/test harness. Giữ `0/28` security cases và mọi rủi ro bảo mật `CHƯA XÁC MINH`; ghi caveat MariaDB 11.8. |

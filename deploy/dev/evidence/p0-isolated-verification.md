@@ -41,4 +41,8 @@ The first restore attempt omitted the MariaDB root password and failed with acce
 
 ## Limits
 
-Frappe emitted its compatibility warning because MariaDB `11.8` is newer than `10.8`, the latest version this pinned Framework build reports as tested. The official v15 installation requirement is MariaDB `10.6.6+`; this exact `11.8` stack passed bootstrap, migrations, tests, import, SLA, backup, and restore, but upgrade and production workloads remain outside this evidence. Vue's Vite page rendered blank during the browser probe, so UI hot reload is not claimed. The GitHub Actions result is pending until the PR run completes.
+Frappe emitted its compatibility warning because MariaDB `11.8` is newer than `10.8`, the latest version this pinned Framework build reports as tested. The official v15 installation requirement is MariaDB `10.6.6+`; this exact `11.8` stack passed bootstrap, migrations, tests, import, SLA, backup, and restore, but upgrade and production workloads remain outside this evidence. Vue's Vite page rendered blank during the browser probe, so UI hot reload is not claimed.
+
+## GitHub Actions pull request run
+
+PR #1 passed on a clean GitHub-hosted runner: empty-volume bootstrap, Ruff lint/format, seed and repeated migration, fresh test-site installation, **28 Frappe tests**, and backup/restore with recovered-record/file/health assertions. The isolated stack was removed at the end. [Run details](https://github.com/nobita6986/new-crm/actions/runs/38712593755); see [PR checks](https://github.com/nobita6986/new-crm/pull/1/checks) for the current head.
