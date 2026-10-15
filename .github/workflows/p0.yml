@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 90
     env:
       P0_PROJECT: p0-ci-${{ github.run_id }}
-      P0_ENV: ${{ runner.temp }}/p0.env
+      P0_ENV: p0.env
 
     steps:
       - uses: actions/checkout@v4
