@@ -1,0 +1,15 @@
+[
+ {
+  "description": "P0-B PoC marker do crm_cskh quản lý (fixture). KHÔNG phải trường nghiệp vụ P1-P3.",
+  "doctype": "Custom Field",
+  "dt": "CRM Lead",
+  "fieldname": "cskh_poc_marker",
+  "fieldtype": "Data",
+  "insert_after": "lead_owner",
+  "label": "CSKH POC Marker",
+  "modified": "2026-10-15 00:00:00.000000",
+  "modified_by": "Administrator",
+  "name": "CRM Lead-cskh_poc_marker",
+  "owner": "Administrator"
+ }
+]
