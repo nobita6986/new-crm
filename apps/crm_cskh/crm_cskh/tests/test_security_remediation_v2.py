@@ -569,9 +569,19 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 	  - Non-system caller + file public (`is_private=0`): giữ URL (public URL
 	    không nhạy cảm, cần cho UI render).
 
+	**Về `content_hash` (per user direction 2026-10-19 lần 5):**
+	Contract upstream CRM v1.87.0 chưa được verify chắc chắn rằng
+	`crm.api.activities.get_attachments` có trả field `content_hash`. Do đó:
+	  - Test non-system KHÔNG chứng minh được việc redact `content_hash` nếu
+	    upstream không trả field này (vacuous truth).
+	  - Test system KHÔNG assert `content_hash` (tránh false negative nếu upstream
+	    không trả).
+	  - Wrapper code vẫn redact `content_hash` (xem `_FILE_URL_FIELDS`) khi upstream
+	    trả; chỉ là test chưa pin. TODO T1B-ext+1: viết test riêng có seed upstream
+	    trả `content_hash` để pin redaction này.
+
 	Test pin (NOT RUN — chưa có runtime evidence trên test site sạch):
-	  1. `get_attachments` non-system caller + private file — `file_url`/`content_hash`
-	     bị redact.
+	  1. `get_attachments` non-system caller + private file — `file_url` bị redact.
 	  2. `get_attachments` system caller + private file — `file_url` KHỚP giá trị
 	     fixture `self.file_url_value` (giữ nguyên từ upstream).
 	  3. `get_attachments` non-system caller + public file — `file_url` KHỚP giá trị
@@ -609,16 +619,25 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		frappe.set_user("Administrator")
 
 	def test_get_attachments_redacts_file_url_for_non_system_user(self):
-		"""SEC-26 — `get_attachments` phải redact `file_url` và `content_hash` của file
-		private khi caller không phải system.
+		"""SEC-26 — `get_attachments` phải redact `file_url` của file private khi caller
+		không phải system.
 
 		Source CRM v1.87.0 (`crm.api.activities.get_attachments`) trả list[dict] với
 		field `file_url` (signed URL cho private file). Wrapper
-		`_redact_private_file_urls` (commit `43980d5`) xoá `file_url`/`content_hash`
-		cho non-system caller để chặn rò rỉ signed URL.
+		`_redact_private_file_urls` (commit `43980d5`) xoá `file_url` cho non-system
+		caller để chặn rò rỉ signed URL.
 
 		Test tìm entry bằng `name == self.file_private` (không dùng index `[0]`) để đảm
 		bảo assert đúng file private fixture.
+
+		**Về `content_hash` (per user direction 2026-10-19 lần 5):**
+		Test này KHÔNG chứng minh được việc redact `content_hash` vì contract upstream
+		CRM v1.87.0 chưa được verify chắc chắn rằng `crm.api.activities.get_attachments`
+		CÓ trả field này. Nếu upstream không trả `content_hash` thì `assertNotIn` sẽ
+		pass một cách vô nghĩa (vacuous truth). Nếu upstream trả, wrapper vẫn redact nó
+		(xem `_FILE_URL_FIELDS = ("file_url", "content_hash")` trong `guarded_crm.py`)
+		— nhưng test này không pin điều đó. Khi cần pin redaction `content_hash` cần
+		một test riêng có seed upstream trả field này (TODO T1B-ext+1).
 
 		STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
 		"""
@@ -641,7 +660,7 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		# Metadata an toàn phải có.
 		self.assertIn("name", private_entry)
 		self.assertTrue(private_entry.get("is_private"))
-		# URL/private hash phải bị redact cho non-system caller.
+		# URL private phải bị redact cho non-system caller.
 		# Per CRM v1.87.0 source: upstream trả `file_url`; wrapper phải xoá nó.
 		self.assertNotIn(
 			"file_url",
@@ -649,11 +668,7 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 			f"non-system caller MUST NOT see `file_url` (signed URL leak). "
 			f"Upstream expected to return {expected_url!r}, but wrapper should redact.",
 		)
-		self.assertNotIn(
-			"content_hash",
-			private_entry,
-			"non-system caller MUST NOT see `content_hash` (allows URL re-derivation)",
-		)
+		# NOTE: Không assert về `content_hash` ở đây — xem docstring ở trên.
 
 	def test_get_attachments_preserves_file_url_for_system_caller(self):
 		"""SEC-26 — system caller (Administrator) vẫn nhận payload upstream nguyên bản
@@ -663,6 +678,15 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		URL) trong mỗi entry. Wrapper `_redact_private_file_urls` skip redaction khi
 		`_is_system(frappe.session.user)` đúng → system caller nhận đúng URL mà upstream
 		trả về (giá trị `self.file_url_value` lưu trong setUp từ DB).
+
+		**Về `content_hash` (per user direction 2026-10-19 lần 5):**
+		Test này KHÔNG assert `content_hash` cho system caller. Lý do: contract upstream
+		CRM v1.87.0 chưa được verify chắc chắn rằng `crm.api.activities.get_attachments`
+		trả field này. Nếu assert `assertIn("content_hash", ...)` mà upstream không trả,
+		test sẽ FAIL một cách sai (false negative). Nếu upstream CÓ trả, system caller
+		vẫn nhận field đó (do `_is_system` short-circuit trả nguyên bản) — nhưng test
+		này không pin. TODO T1B-ext+1: thêm test riêng nếu upstream xác nhận có
+		`content_hash`.
 
 		STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
 		"""
@@ -692,8 +716,7 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 			f"System caller: file_url phải được giữ nguyên từ upstream. "
 			f"Expected {self.file_url_value!r}, got {private_entry.get('file_url')!r}.",
 		)
-		# Tương tự cho content_hash: phải có mặt (upstream trả).
-		self.assertIn("content_hash", private_entry)
+		# NOTE: Không assert về `content_hash` ở đây — xem docstring ở trên.
 
 	def test_get_attachments_does_not_redact_non_private_file(self):
 		"""SEC-26 — file công khai (`is_private=0`) KHÔNG bị redact `file_url` (vì
@@ -790,9 +813,9 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 			if isinstance(entry, dict):
 				# Upstream v1.87.0 chỉ trả `doc` và `reference_docname`. Nếu có thêm
 				# `is_private` thì file_url cũng phải được redact bởi helper.
+				# (Không assert `content_hash` — contract upstream chưa verify.)
 				if entry.get("is_private"):
 					self.assertNotIn("file_url", entry)
-					self.assertNotIn("content_hash", entry)
 
 	def test_get_attachments_does_not_leak_cross_scope_file_url(self):
 		"""`get_attachments` KHÔNG được trả file thuộc Lead ngoài scope."""
