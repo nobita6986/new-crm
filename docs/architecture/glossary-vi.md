@@ -4,7 +4,7 @@
 > **Chủ sở hữu tài liệu:** T1B
 > **Trạng thái:** Khảo sát **tĩnh** trên `vi.po`; **chưa** render UI thật (chưa có DEV)
 > **Tài liệu liên quan:** [`reuse-audit.md`](./reuse-audit.md), [`ui-extension-spike.md`](./ui-extension-spike.md), [`master-plan.md`](../root-plan/master-plan.md) §10, [`P0.md`](../root-plan/P0.md) §8, [`P2.md`](../root-plan/P2.md) §12.5, [`t1a-g009-vi-checklist.md`](../../deploy/dev/evidence/t1a-g009-vi-checklist.md) (checklist màn P0 + điều kiện thu screenshot)
-> **Phiên bản:** 1.5 — 19/10/2026 (T1A: liên kết checklist G0-09 + ghi nhận thiếu bằng chứng runtime)
+> **Phiên bản:** 1.5 — 19/10/2026 (T1A: liên kết checklist G0-09 + ghi nhận thiếu bằng chứng runtime; lần 2: nội dung ổn định, không thay đổi)
 
 ---
 

@@ -206,3 +206,79 @@ docker compose exec bench bash -lc '
 
 **Không tuyên bố G0-09 PASS.** T1A ghi nhận checklist hoàn thiện + điều kiện thu
 screenshot, nhưng bằng chứng runtime phải được thực hiện trên máy có Docker.
+
+---
+
+## 6. Lệnh Owner cần chạy trên máy có Docker/WSL2 + browser thật
+
+> Phần này bổ sung sau khi Owner yêu cầu T1A "sửa metadata và hoàn tất bằng chứng
+> runtime". Phiên Codex không có Docker, nên chỉ liệt kê lệnh, không chạy được.
+
+### 6.1. Chuẩn bị seed đã khử PII
+
+```bash
+docker compose -f deploy/dev/docker-compose.yml exec backend bash -lc '
+  cd /home/frappe/frappe-bench/apps/crm_cskh &&
+  python scripts/seed_demo.py --mask-phones
+'
+# kỳ vọng: tất cả Lead dùng SĐT 0900-XXX-001 đến 0900-XXX-015
+```
+
+### 6.2. Đặt ngôn ngữ user = VI, timezone = Asia/Ho_Chi_Minh
+
+```bash
+docker compose exec backend bench --site dev.localhost execute '
+  frappe.db.set_value("User", "staff.a@dev.local", {
+    "language": "vi",
+    "time_zone": "Asia/Ho_Chi_Minh"
+  })
+'
+```
+
+### 6.3. Mở browser và chụp 10 màn
+
+Mở Chrome, đăng nhập `staff.a@dev.local`, **lần lượt** truy cập 10 URL trong bảng §3.6,
+chụp màn hình với **viewport 1280×800**, lưu vào:
+
+```
+deploy/dev/evidence/screenshots/t1a-g009-<NN>-<screen>.png
+```
+
+> Trước khi chụp mỗi màn, **đối chiếu** dữ liệu hiển thị với §2 "Nguyên tắc khử
+> PII". Nếu thấy SĐT/tên/email thật → KHÔNG chụp, sửa seed rồi chạy lại.
+
+### 6.4. Đo số chuỗi ưu tiên cao còn sai (sau khi đã chạy G0-09)
+
+```bash
+docker compose exec backend bash -lc '
+  bench --site dev.localhost execute crm_cskh.i18n_audit.probe_ui_strings
+'
+# API này chưa có; sẽ được thêm ở task T1A-runtime (ngoài phạm vi T1A-metadata)
+```
+
+### 6.5. Quét lỗi hard-code tiếng Việt trong template (cần Python trên host)
+
+```bash
+# Trên máy Owner (Windows + Python 3.12/3.13 thật, không phải App Execution Alias)
+python scripts/scan_vi_hardcode.py
+# kỳ vọng: chỉ in ra csrf_token, current_user; không có chuỗi tiếng Việt
+```
+
+### 6.6. Blocker log
+
+| # | Blocker | Owner cần |
+|---|---|---|
+| B-1 | Không có Docker | Máy có Docker Desktop / WSL2 distro |
+| B-2 | Không có Python thật (chỉ App Execution Alias stub) | Cài Python 3.12 hoặc 3.13 |
+| B-3 | Không có browser thật để chụp | Chrome/Edge trên máy local có quyền lưu file ra host |
+| B-4 | Browser phiên Codex có thể đã cache ảnh chứa dữ liệu thật từ lần chạy trước | Dùng Incognito + session admin riêng cho screenshot |
+
+---
+
+## 7. Kết luận G0-09 (T1A)
+
+- **Trạng thái:** ⛔ BLOCKER runtime. Checklist + PII rules đã chuẩn bị xong,
+  nhưng không có screenshot nào trong repo ở phiên này.
+- **Khi runtime chạy xong:** chụp 10 ảnh theo §3.6, đối chiếu PII theo §2, điền
+  lại checklist §3 với dấu ✅/❌, đánh dấu lại G0-09 trong `p0-exit-report.md`.
+- **KHÔNG tuyên bố PASS** ở phiên này.
