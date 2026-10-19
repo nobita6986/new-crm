@@ -1,0 +1,106 @@
+# deploy/dev/docker-compose.yml
+#
+# Môi trường DEV cục bộ cho CRM-CSKH (WP-01 / P0-A).
+# Tái sử dụng mô hình frappe_docker (bench container + MariaDB + Redis cache/queue),
+# nhưng KHÔNG dùng tag trôi: mọi image ghim tag@digest (xem docs/architecture/version-lock.md §5).
+#
+# Chỉ dành cho DEV với DỮ LIỆU GIẢ. Không dùng cho production.
+# DB/Redis KHÔNG publish ra ngoài; web/realtime chỉ bind 127.0.0.1.
+#
+# Dùng:
+#   cp .env.example .env        # rồi sửa nếu cần (KHÔNG commit .env)
+#   docker compose up -d db redis-cache redis-queue bench
+#   docker compose exec bench bash
+#   bash /src/deploy/dev/bootstrap.sh
+
+name: ${COMPOSE_PROJECT_NAME:-crm-cskh-dev}
+
+x-bench-common: &bench-common
+  image: ${BENCH_IMAGE}
+  working_dir: /workspace
+  environment:
+    DB_HOST: db
+    DB_PORT: "3306"
+    DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+    REDIS_CACHE: redis://redis-cache:6379
+    REDIS_QUEUE: redis://redis-queue:6379
+    SITE_NAME: ${SITE_NAME:-dev.localhost}
+    ADMIN_PASSWORD: ${ADMIN_PASSWORD:?set ADMIN_PASSWORD in .env}
+    FRAPPE_TAG: ${FRAPPE_TAG}
+    FRAPPE_SHA: ${FRAPPE_SHA}
+    CRM_TAG: ${CRM_TAG}
+    CRM_SHA: ${CRM_SHA}
+    FRAPPE_DOCKER_SHA: ${FRAPPE_DOCKER_SHA}
+    INSTALL_CSKH: ${INSTALL_CSKH:-0}
+    TZ: ${TZ:-Asia/Ho_Chi_Minh}
+  networks:
+    - backend
+
+services:
+  db:
+    image: ${MARIADB_IMAGE}
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:?set DB_ROOT_PASSWORD in .env}
+      MARIADB_AUTO_UPGRADE: "1"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 15s
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - backend
+    # KHÔNG publish cổng DB ra host.
+
+  redis-cache:
+    image: ${REDIS_IMAGE}
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks:
+      - backend
+    # KHÔNG publish cổng Redis ra host.
+
+  redis-queue:
+    image: ${REDIS_IMAGE}
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-queue-data:/data
+    networks:
+      - backend
+
+  # Container phát triển chính: chạy `bench` (giống devcontainer của frappe_docker).
+  # Giữ sống bằng `sleep infinity`; mọi thao tác bench chạy qua `docker compose exec`.
+  bench:
+    <<: *bench-common
+    command: ["sleep", "infinity"]
+    volumes:
+      # Bench được tạo bên trong volume Linux (nhanh, không bind mount NTFS).
+      - bench-workspace:/workspace
+      # Repo dự án mount chỉ-đọc để lấy bootstrap/seed (và crm_cskh ở WP-02).
+      - ../../:/src:ro
+    ports:
+      # CHỈ bind loopback: web + realtime (socketio).
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+      - "127.0.0.1:${SOCKETIO_PORT:-9000}:9000"
+      - "127.0.0.1:${VITE_PORT:-8080}:8080"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+
+volumes:
+  db-data:
+  redis-queue-data:
+  bench-workspace:
+
+networks:
+  backend:
+    driver: bridge
