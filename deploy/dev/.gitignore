@@ -1,0 +1,10 @@
+# deploy/dev/.gitignore
+# Không bao giờ commit file .env thật hay dữ liệu sinh ra khi chạy DEV.
+.env
+.env.local
+*.env
+!*.env.example
+workspace/
+dumps/
+backups/
+*.log

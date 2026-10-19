@@ -1,0 +1,11 @@
+[
+ {
+  "doctype": "CRM Form Script",
+  "name": "CSKH - Open CSKH Page",
+  "dt": "CRM Lead",
+  "view": "List",
+  "enabled": 1,
+  "is_standard": 1,
+  "script": "function setupList() {\n    return {\n        actions: [{\n            label: __('CSKH'),\n            onClick: () => window.location.assign('/cskh'),\n        }],\n    }\n}"
+ }
+]

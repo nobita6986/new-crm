@@ -1,0 +1,24 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<main class="cskh-page">
+  <h1>{{ _("CSKH") }}</h1>
+  <p>{{ _("Signed in as") }} <strong>{{ current_user }}</strong></p>
+  <p>{{ _("This page uses the same Frappe site session as CRM.") }}</p>
+  <button id="cskh-session-check" type="button">{{ _("Check session and CSRF") }}</button>
+  <output id="cskh-session-result" aria-live="polite"></output>
+  <p><a href="/crm/leads/view/list">{{ _("Return to CRM Leads") }}</a></p>
+</main>
+<script>
+  document.getElementById("cskh-session-check").addEventListener("click", async () => {
+    const result = document.getElementById("cskh-session-result");
+    const response = await fetch("/api/method/crm_cskh.api.health.ping", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "X-Frappe-CSRF-Token": "{{ csrf_token }}" },
+    });
+    const payload = await response.json();
+    result.textContent = response.ok ? `${payload.message.status}: ${payload.message.user}` : "Request denied";
+  });
+</script>
+{% endblock %}

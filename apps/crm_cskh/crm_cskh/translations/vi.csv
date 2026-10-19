@@ -1,0 +1,9 @@
+Lead,Khách hàng tiềm năng
+Lead Owner,Nhân viên phụ trách
+Assigned To,Người phụ trách
+Note,Ghi chú
+Deal,Cơ hội
+Signed in as,Đã đăng nhập với tư cách
+This page uses the same Frappe site session as CRM.,Trang này dùng cùng phiên đăng nhập Frappe với CRM.
+Check session and CSRF,Kiểm tra phiên đăng nhập và CSRF
+Return to CRM Leads,Về danh sách khách hàng tiềm năng

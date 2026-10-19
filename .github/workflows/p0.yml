@@ -1,0 +1,76 @@
+name: P0 DEV verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p0-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p0:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      P0_PROJECT: p0-ci-${{ github.run_id }}
+      P0_ENV: p0.env
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create isolated DEV configuration
+        shell: bash
+        run: |
+          cp deploy/dev/.env.example "$P0_ENV"
+          sed -i \
+            -e "s/^COMPOSE_PROJECT_NAME=.*/COMPOSE_PROJECT_NAME=$P0_PROJECT/" \
+            -e 's/^SITE_NAME=.*/SITE_NAME=p0-ci.localhost/' \
+            -e "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$(openssl rand -hex 24)/" \
+            -e "s/^DB_ROOT_PASSWORD=.*/DB_ROOT_PASSWORD=$(openssl rand -hex 24)/" \
+            -e 's/^WEB_PORT=.*/WEB_PORT=18000/' \
+            -e 's/^SOCKETIO_PORT=.*/SOCKETIO_PORT=19000/' \
+            -e 's/^INSTALL_CSKH=.*/INSTALL_CSKH=1/' \
+            "$P0_ENV"
+
+      - name: Start pinned stack
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" up -d
+
+      - name: Bootstrap from empty volumes
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T -u root bench chown -R frappe:frappe /workspace
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash /src/deploy/dev/bootstrap.sh
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'bash -n /src/deploy/dev/bootstrap.sh && bash -n /src/deploy/dev/seed/run-seed.sh'
+
+      - name: Lint and format Python app
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh'
+
+      - name: Seed and repeat migration
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash /src/deploy/dev/seed/run-seed.sh
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site "$SITE_NAME" migrate'
+
+      - name: Install on a fresh test site and run Frappe tests
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p0-test.localhost && bench --site p0-test.localhost set-config allow_tests true && bench --site p0-test.localhost migrate && bench --site p0-test.localhost run-tests --app crm_cskh && bench --site p0-test.localhost migrate'
+
+      - name: Backup, restore to a new site, and verify recovered data
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site "$SITE_NAME" backup --with-files && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p0-restore.localhost && db=$(find "sites/$SITE_NAME/private/backups" -name "*-database.sql.gz" -print | sort | tail -n 1) && public=$(find "sites/$SITE_NAME/private/backups" -name "*-files.tar" ! -name "*-private-files.tar" -print | sort | tail -n 1) && private=$(find "sites/$SITE_NAME/private/backups" -name "*-private-files.tar" -print | sort | tail -n 1) && test -n "$db" && test -n "$public" && test -n "$private" && bench --site p0-restore.localhost restore "$db" --db-root-password "$DB_ROOT_PASSWORD" --with-public-files "$public" --with-private-files "$private" && bench --site p0-restore.localhost migrate && bench --site p0-restore.localhost list-apps && bench --site p0-restore.localhost execute crm_cskh.api.health.ping && test -f sites/p0-restore.localhost/private/files/DEMO-CRM-LEAD-00001.txt && bench --site p0-restore.localhost console' <<'PY'
+          counts = (frappe.db.count("CRM Lead"), frappe.db.count("CRM Call Log"), frappe.db.count("CRM Task"))
+          print("RESTORE_COUNTS", *counts)
+          assert counts == (15, 3, 2), counts
+          PY
+
+      - name: Show stack logs if a gate fails
+        if: failure()
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" logs --no-color
+
+      - name: Remove isolated stack
+        if: always()
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" down --volumes --remove-orphans

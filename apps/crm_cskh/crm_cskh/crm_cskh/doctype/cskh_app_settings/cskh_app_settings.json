@@ -1,0 +1,68 @@
+{
+ "actions": [],
+ "creation": "2026-10-15 00:00:00.000000",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "enabled",
+  "column_break_cskh",
+  "poc_marker",
+  "section_break_cskh",
+  "notes"
+ ],
+ "fields": [
+  {
+   "default": "1",
+   "description": "Bật/tắt các tính năng crm_cskh (mặc định bật).",
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled"
+  },
+  {
+   "fieldname": "column_break_cskh",
+   "fieldtype": "Column Break"
+  },
+  {
+   "default": "crm_cskh P0-B",
+   "description": "Nhãn PoC chỉ đọc, dùng để xác minh read/write của Single.",
+   "fieldname": "poc_marker",
+   "fieldtype": "Data",
+   "label": "POC Marker",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_break_cskh",
+   "fieldtype": "Section Break"
+  },
+  {
+   "description": "Ghi chú cấu hình (không chứa dữ liệu khách hàng).",
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "issingle": 1,
+ "links": [],
+ "modified": "2026-10-15 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "CRM CSKH",
+ "name": "CSKH App Settings",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "email": 1,
+   "print": 1,
+   "read": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

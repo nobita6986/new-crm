@@ -1,0 +1,21 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtualenv / env
+env/
+venv/
+.env
+
+# Node / frontend build artifacts
+node_modules/
+.eslintcache
+
+# Logs / temp
+*.log
+*.sql.gz
+.DS_Store
