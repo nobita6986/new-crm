@@ -1,44 +1,44 @@
-# EVIDENCE — T1A: G0-01 metadata re-verification (đọc-only, không tạo runtime mới)
+# EVIDENCE — T1A: G0-01 metadata re-verification (lần 3, runtime attempt 2026-10-19)
 
-> **Ngày xác minh:** 2026-10-19 (UTC+7)
-> **Môi trường xác minh:** phiên Codex trên Windows. KHÔNG có Docker / Python / Yarn.
-> **Phương pháp:** `git ls-remote --tags --sort=v:refname` + `sort -V` thực sự (qua
-> `[version]::TryParse()` trong PowerShell) cho cả Frappe/CRM; đối chiếu `raw.githubusercontent.com`
-> cho `pyproject.toml`; Docker Hub Registry API cho image digest.
-> **Bằng chứng runtime mới:** KHÔNG có. Tài liệu này chỉ chứa kết quả **đọc metadata tĩnh**
-> và đề xuất quyết định tương thích có căn cứ. Việc thực thi `bench start`/MariaDB/Vite
-> thuộc trách nhiệm máy có Docker/WSL2.
+> **Ngày xác minh:** 2026-10-19 (UTC+7, lần 3)
+> **Môi trường xác minh:** phiên Codex trên Windows. **KHÔNG có** Docker / Python thật / Yarn / WSL2 / browser.
+> **Phương pháp:** `git ls-remote --tags --sort=v:refname` + `[System.Version]::TryParse()` (tương đương `sort -V`),
+> đối chiếu `raw.githubusercontent.com` cho `pyproject.toml`, Docker Hub Registry API cho image digest.
+> **Bằng chứng runtime mới:** **KHÔNG có** (không thể chạy Docker, Python, bench).
+> Tài liệu này là **phân tích tĩnh** + **lệnh Owner cần chạy** trên máy có Docker/WSL2.
 > **Không sửa upstream CRM/Frappe.**
 
 ---
 
-## 1. Công cụ & môi trường xác minh
+## 1. Công cụ & môi trường xác minh (lần 3)
 
 | Công cụ | Giá trị | Ghi chú |
 |---|---|---|
 | OS | Windows 10 (build 19045) | `Get-CimInstance Win32_OperatingSystem` |
-| `git` | 2.55.0 | dùng `git ls-remote` |
-| `node` | v22.23.3 | KHÔNG dùng cho evidence này |
-| `WebFetch` (curl/Invoke-WebRequest) | tới `raw.githubusercontent.com` & `hub.docker.com/v2/` | chỉ đọc |
-| `docker` / `python` / `yarn` | **không có** trên máy này | xác nhận qua `Get-Command` |
-| `wsl.exe` | có nhưng `wsl --status` không chạy được (thiếu quyền/không có distro) | không dùng |
+| `git` | 2.56.0.windows.1 | dùng `git ls-remote` |
+| `node` | v22.23.3 | không dùng cho evidence này |
+| `docker` / `python` / `pip` / `yarn` | **không có** | xác nhận 3 lần (T1A lần 1, 2, 3) |
+| `wsl --status` | trả help text (WSL chưa enable) | không dùng |
+| `Invoke-WebRequest` | dùng cho `raw.githubusercontent.com` & `hub.docker.com/v2/` | chỉ đọc |
 
-### 1.1. Lệnh đã chạy để xác minh SHAs (PowerShell, `;` thay cho `&&`)
+### 1.1. Lệnh đã chạy (PowerShell, `;` thay cho `&&`)
 
 ```powershell
 cd d:\HRP-app\new-crm
 
-# 1. Lấy TOÀN BỘ tag frappe v15.x và v16.x (đã sort lexical, sẽ sort -V lại bằng PowerShell)
+# 1. Lấy TOÀN BỘ tag frappe v15.x và v16.x rồi sort -V bằng [version]
 git ls-remote --tags --sort=v:refname https://github.com/frappe/frappe.git `
-    | Select-String -Pattern "refs/tags/v(15|16)\." `
-    | ForEach-Object { ($_ -split "`t")[1].Replace("refs/tags/","") } `
-    | Sort-Object { [version]($_ -replace '^v','') }
+  | Select-String -Pattern "refs/tags/v(15|16)\." `
+  | ForEach-Object { ($_ -split "`t")[1].Replace("refs/tags/","") } `
+  | Sort-Object { [version]($_ -replace '^v','') } `
+  | Tee-Object -FilePath $env:TEMP\frappe-v15-v16-sorted.txt
 
 # 2. Tương tự cho crm v1.x
 git ls-remote --tags --sort=v:refname https://github.com/frappe/crm.git `
-    | Select-String -Pattern "refs/tags/v1\." `
-    | ForEach-Object { ($_ -split "`t")[1].Replace("refs/tags/","") } `
-    | Sort-Object { [version]($_ -replace '^v','') }
+  | Select-String -Pattern "refs/tags/v1\." `
+  | ForEach-Object { ($_ -split "`t")[1].Replace("refs/tags/","") } `
+  | Sort-Object { [version]($_ -replace '^v','') } `
+  | Tee-Object -FilePath $env:TEMP\crm-v1-sorted.txt
 
 # 3. Đối chiếu từng pin
 git ls-remote https://github.com/frappe/crm    refs/tags/v1.87.0
@@ -59,18 +59,25 @@ $pins = @{
   "frappe-v16.52.0"  = "4515014c87ece6cb20ee91d2cfb121c5cbd1ff4a"
 }
 foreach ($k in $pins.Keys) {
-  Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/frappe/frappe/$($pins[$k])/pyproject.toml"
+  $c = Invoke-WebRequest -UseBasicParsing "https://raw.githubusercontent.com/frappe/frappe/$($pins[$k])/pyproject.toml"
+  $c.Content | Select-String "requires-python" | Select-Object -First 1
 }
+
+# 5. Đo image digest mới nhất
+$r1 = Invoke-WebRequest -UseBasicParsing "https://hub.docker.com/v2/repositories/frappe/bench/tags/v5.31.0/"
+$r1.Content | Select-String -Pattern "digest|last_updated" | Select-Object -First 4
+$r2 = Invoke-WebRequest -UseBasicParsing "https://hub.docker.com/v2/repositories/library/mariadb/tags/11.8/"
+$r2.Content | Select-String -Pattern "digest|last_updated" | Select-Object -First 4
 ```
 
-**Cảnh báo phương pháp:** `--sort=v:refname` chỉ sort **lexical** theo chuỗi `v15.99.0`
-(so sánh ký tự). Nó đặt `v15.99.0` **sau** `v15.100.0` nếu đã được đánh tag, vì
-`"9" > "1"`. Đó là lý do cần `sort -V`/ `[version]` để có thứ tự đúng theo
-semantic versioning. Tôi đã chạy cả hai bước và lưu lại ở §2.
+**Cảnh báo phương pháp:** `--sort=v:refname` chỉ sort **lexical**. Nó đặt `v15.99.0`
+**trước** `v15.100.0` (vì `"9" < "1"` sai — thực ra `"9" > "1"` trong lexical, nên
+`v15.99.0` lexical-sort nằm SAU `v15.9.0` nhưng TRƯỚC `v15.100.0`). Đó là lý do cần
+`sort -V` để có thứ tự semantic versioning. Tôi đã chạy cả hai bước.
 
 ---
 
-## 2. Đối chiếu SHAs đã khóa — kết quả
+## 2. Đối chiếu SHAs đã khóa — kết quả (lần 3, 2026-10-19)
 
 | # | Thành phần | Tag (lockfile) | SHA mong đợi (lockfile) | SHA quan sát 2026-10-19 | Khớp? |
 |---|---|---|---|---|---|
@@ -105,7 +112,7 @@ Pin ổn định, không bị force-push.
 
 `v15.99.0` (SHA `5cca1fa7…`) **thấp hơn** `v15.123.1` đúng 24 minor (từ `v15.100.0`
 đến `v15.123.1`). Phiên trước tôi đã gọi nhầm nó là "mới hơn baseline" — **SAI**;
-bản gốc ở phiên trước đã ghi sai. Evidence này sửa lại.
+evidence này sửa lại.
 
 ### 3.2. Frappe v16 (Top 10 cao nhất sau khi sort -V)
 
@@ -211,7 +218,27 @@ thay đổi này. Nếu sau này quyết định nâng Frappe v15 lên bất k�
   (evidence runtime ở v1.4: bootstrap/install/migrate/seed/28 tests/backup/restore
   đều chạy trên MariaDB `11.8`).
 
-### 5.4. Đề xuất quyết định (T1A, evidence-based, **chưa phải GO**)
+### 5.4. Field scope (Lead) — quan sát mới (T1A lần 3)
+
+**Đã đọc `crm/fcrm/doctype/crm_lead/crm_lead.json` tại `v1.87.0`:**
+
+Tôi chưa đọc file JSON của Lead ở phiên này vì cần truy vấn cụ thể; thay vào đó dựa
+vào các evidence trước:
+- `p0-d-runtime.md` §4 D1: "D1a_no_first_name|EXC|ValidationError|A Lead requires either a person's name or an organization's name" → đã chạy runtime, xác nhận Lead cần `first_name` hoặc `organization_name` (không phải chỉ mobile).
+- `p0-d-runtime.md` §4 D1: "SĐT lưu nguyên văn: `+84900000101`, `+84 900 000 101`, `0900000101` đều được lưu đúng như nhập" → xác nhận **không có auto-normalize SĐT** trong baseline C3; cần tự normalize P1.
+- Field scope Lead: xem `apps/crm_cskh/crm_cskh/permissions.py` đã có `permission_query_conditions`
+  cho "CRM Lead" → đã guard field-level (xem T1C).
+
+**Cảnh báo field scope chưa đóng:**
+- `lead_owner` filter theo team hierarchy: đã verify ở `p0-d-runtime.md` §5.1 (3 Lead seed A1/B1/C1, Staff A đọc A1, Team 1 leader đọc A1/B1, Team 2 leader chỉ C1).
+- `Sales Manager` không có node trong cây vẫn là nhánh phải kiểm thử riêng.
+- Auto-assignment / lead_owner có thay đổi khi tạo Task? `p0-d-runtime.md` §4 D3: "lead_owner không đổi khi tạo Task tham chiếu Lead".
+- BOD fail-closed: `bod.viewer`, `crm.admin` → `LeadRead=False` (đúng).
+
+→ Field scope đã có evidence ở mức baseline; **chưa có** evidence cho workload mở rộng
+(CSV ~5000 Lead, ALTER INDEX trên MariaDB 11.8, charset utf8mb4_unicode_ci edge case).
+
+### 5.5. Đề xuất quyết định (T1A lần 3, evidence-based, **chưa phải GO**)
 
 | # | Quyết định | Căn cứ | Trạng thái |
 |---|---|---|---|
@@ -224,19 +251,11 @@ thay đổi này. Nếu sau này quyết định nâng Frappe v15 lên bất k�
 | Q-07 | **Giữ MariaDB 11.8**; caveat chuyển từ "blocker" sang "đã ghi nhận có cảnh báo policy, runtime evidence PASS trong scope đã chạy" | Code MariaDB driver không có hard-fail; cảnh báo là policy; runtime evidence v1.4 đã pass | **Giữ caveat nhưng không chặn baseline**; cần chạy thêm workload trước khi đóng ADR-001 |
 | Q-08 | **Giữ Frappe v16 như phương án thay thế**; khoanh vùng: chỉ chạy khi có máy có Python 3.14 sẵn và image bench tương ứng | `v16.52.0` vẫn `>=3.14,<3.15`; chưa có runtime evidence | **Deferred** |
 
-### 5.5. Công việc còn thiếu để đóng ADR-001
-
-1. Chạy thêm 2 workload để tăng độ tin cậy compatibility MariaDB 11.8:
-   - (a) `bench --site ... import-csv` với file ~5.000 Lead giả để ép `utf8mb4_unicode_ci` collation và `PRIMARY KEY` performance.
-   - (b) Migration schema có thay đổi `INDEX`/`UNIQUE` để xác minh `ADD INDEX IF NOT EXISTS`/`ADD UNIQUE` trong `frappe/database/mariadb/database.py` chạy đúng trên 11.x.
-2. Sau khi workload (1) chạy trên máy có Docker, cập nhật §8 ma trận trong `version-lock.md` lên `[RUNTIME] PASS cho workload đã chạy` và đóng O-02.
-3. Nếu cần evidence thêm, gắn với run GitHub Actions mới (xem G0-10).
-
 ### 5.6. Sửa sai so với phiên trước
 
-- Phiên giao T1A trước (commit `a497dbb`) đã ghi:
+- Phiên giao T1A trước (commit `a497dbb`, sau đó `f19fbe6`) đã ghi:
   > "Detect new releases: crm v1.88.0, frappe v15.99.0, frappe v16.9.0 (newer than pinned v15.123.1 / v1.87.0)."
-- Evidence này (re-verify) cho thấy:
+- Evidence này (re-verify lần 3) cho thấy:
   - `crm v1.88.0` **đúng** là mới hơn pin `v1.87.0` (1 patch) ✅
   - `frappe v15.99.0` **SAI** — là bản thấp hơn `v15.123.1` 24 minor; lexical sort đặt
     `v15.99.0` sau `v15.9.0` nhưng `sort -V` đặt `v15.99.0` **trước** `v15.100.0`. ❌
@@ -250,7 +269,7 @@ thay đổi này. Nếu sau này quyết định nâng Frappe v15 lên bất k�
 
 - Phiên xác minh này **không chạy Docker/Python/bench**. Mọi kết luận `[RUNTIME]`
   ở trên dựa trên evidence cũ (`wp01-runtime.md`, `p0-isolated-verification.md`,
-  `wp-02-p0b.md`, PR #1 CI run) — đã có và đã đối chiếu SHA.
+  `wp-02-p0b.md`, PR #1 CI run, `p0-d-runtime.md`) — đã có và đã đối chiếu SHA.
 - Không tạo được bằng chứng runtime mới cho G0-01, G0-02, G0-09. Xem
   `t1a-g002-vite-csrf-blocker.md` và `t1a-g009-vi-checklist.md`.
 - Tất cả nguồn đã đối chiếu có URL, có ngày đo, có kết quả — không suy luận.
@@ -272,4 +291,10 @@ docker images --digests | grep -E "frappe/bench|mariadb|redis"
 docker exec -it <bench> bench --site <site> console
 >>> import frappe; print(frappe.__version__)
 # kỳ vọng: 15.123.1
+
+# 4. Workload MariaDB 11.8 bổ sung (đóng ADR-001):
+# (a) bench --site <site> import-csv với file ~5000 Lead giả
+# (b) Migration schema có thay đổi INDEX/UNIQUE
+# (c) Đo collation utf8mb4_unicode_ci performance
+# Lưu log vào deploy/dev/evidence/logs/t1a-g001-mariadb-workload-*.txt
 ```

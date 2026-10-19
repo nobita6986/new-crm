@@ -1,8 +1,8 @@
 # EVIDENCE — T1A: G0-09 (i18n checklist hoàn thiện + điều kiện thu screenshot)
 
-> **Ngày xác minh:** 2026-10-19 (UTC+7)
-> **Môi trường xác minh:** phiên Codex trên Windows. **KHÔNG có Docker / Python / Yarn / browser automation**
-> có quyền lưu file vào repo.
+> **Ngày xác minh:** 2026-10-19 (UTC+7, lần 3)
+> **Môi trường xác minh:** phiên Codex trên Windows. **KHÔNG có Docker / Python thật / Yarn / WSL2 / browser** có quyền lưu file vào repo.
+> **Probe môi trường lần 3 (2026-10-19 ~09:37 UTC+7):** `Get-Command docker/python/pip/yarn` đều không có; `wsl --status` trả help text (WSL chưa enable); `node` v22.23.3, `npm` 10.9.9, `git` 2.56.0 có. **Không thể chạy runtime trong phiên này.**
 > **Phạm vi:** hoàn thiện checklist màn tiếng Việt (P0 §8.4 + master-plan §10.3) theo dạng
 > test plan có thể chạy lại; xác định điều kiện thu screenshot không chứa dữ liệu nhạy cảm;
 > cập nhật `glossary-vi.md` để checklist dùng được ngay khi có DEV.
