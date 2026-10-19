@@ -2,7 +2,7 @@
 
 > **Dự án:** CRM-CSKH — Quản trị kho khách hàng, phân phối lead và chất lượng CSKH
 > **Tài liệu:** `docs/architecture/version-lock.md`
-> **Phiên bản:** 1.5 — 19/10/2026 (T1A: cập nhật digest 2 image; bổ sung ma trận tương thích rộng với Python range; liệt kê tag mới hơn upstream; bổ sung Q-01…Q-06)
+> **Phiên bản:** 1.6 — 19/10/2026 (T1A: sửa version sort + metadata; `v15.99.0`/`v16.9.0` thực ra thấp hơn pin; Q-01…Q-08 thay thế Q-01…Q-06; O-06 viết lại)
 > **Tài liệu cha:** [`../root-plan/P0.md`](../root-plan/P0.md) (§2, ADR-001) · [`../root-plan/master-plan.md`](../root-plan/master-plan.md) (§3, §19)
 > **Trạng thái:** Metadata/tag/digest đã khóa (đã cập nhật digest mới cho `frappe/bench:v5.31.0` và `mariadb:11.8` ngày 2026-10-19); baseline CRM/Frappe đã cài, migrate và smoke trên máy DEV cùng GitHub runner sạch. **MariaDB 11.8 compatibility vẫn cần chốt** vì Framework cảnh báo phiên bản này chưa được kiểm thử — xem §8.
 
@@ -215,16 +215,25 @@ Phân biệt rõ hai mức độ bằng chứng:
 
 | Tổ hợp | CRM | Framework | Python | Kỳ vọng | [DECLARED] | [RUNTIME] |
 |---|---|---|---|---|---|---|
-| C4 | v1.87.0 | v15.99.0 | 3.13 | Chạy được | ✅ hợp lệ (`>=3.10,<3.14`) | ⛔ Chưa chạy; v15.99.0 chưa được verify trong dự án |
-| C5 | v1.87.0 | v15.99.0 | 3.14 | **KHÔNG chạy** | ❌ v15.99.0 đã bỏ Python 3.14 khỏi dải cho phép (`>=3.10,<3.14`) | — (không nên thử; image bench hiện dùng 3.14.8) |
-| C6 | v1.88.0 | v15.123.1 | 3.14 | Chạy được | ✅ theo compatibility table README CRM v1.88.0 (`v15.x & v16.x`); CRM v1.88.0 thêm dependency `requests>=2.28.0` + `tldextract>=5.0.0` | ⛔ Chưa chạy; CRM v1.88.0 chưa được verify runtime trong dự án |
-| C7 | v1.87.0 | v16.9.0 | 3.14 | Chạy được | ✅ hợp lệ (`>=3.14,<3.15`) | ⛔ Chưa cài/test v16.9.0 |
+| C4 | v1.88.0 | v15.123.1 | 3.14 | Chạy được | ✅ theo compatibility table README CRM v1.88.0 (`v15.x & v16.x`); CRM v1.88.0 thêm dependency `requests>=2.28.0` + `tldextract>=5.0.0` | ⛔ Chưa chạy; CRM v1.88.0 chưa được verify runtime trong dự án |
+| C5 | v1.87.0 | v15.99.0 (cũ hơn pin) | 3.14 | **KHÔNG chạy** (không nên thử) | ❌ v15.99.0 đã bỏ Python 3.14 khỏi dải cho phép (`>=3.10,<3.14`) | — (lùi về bản cũ hơn pin 24 minor không có lý do kỹ thuật) |
+| C6 | v1.87.0 | v16.9.0 (cũ hơn pin) | 3.14 | Chạy nếu muốn lùi | ✅ hợp lệ (`>=3.14,<3.15`) | ⛔ Lùi về bản cũ hơn pin 43 minor không có lý do kỹ thuật; KHÔNG đề xuất |
+| C7 | v1.88.0 | v16.52.0 | 3.14 | Chạy được | ✅ hợp lệ | ⛔ Chưa chạy; kịch bản nâng cả CRM vừa Frappe — phạm vi P1 trở đi |
 
 **Bằng chứng cho C5** (Frappe v15.99.0 không còn hỗ trợ Python 3.14): trích từ
 `raw.githubusercontent.com/frappe/frappe/v15.99.0/pyproject.toml`:
-`requires-python = ">=3.10,<3.14"`. Nếu sau này muốn nâng Frappe v15 lên bản ≥ v15.99.0,
-phải giảm Python runtime xuống ≤ 3.13 (không thực hiện trong P0). Chi tiết và đề xuất
-quyết định Q-01…Q-06 ở [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §5.
+`requires-python = ">=3.10,<3.14"`. Tuy nhiên `v15.99.0` là bản **thấp hơn** pin
+`v15.123.1` đúng 24 minor (từ `v15.100.0` đến `v15.123.1`); kịch bản "nâng lên v15.99.0"
+không tồn tại — chỉ có kịch bản **lùi** về `v15.99.0` (không khuyến nghị) hoặc **nâng**
+lên `v15.100.0+` (cần verify `requires-python` của từng bản vì policy có thể đã đổi).
+
+**Bằng chứng cho pin hiện tại vẫn hỗ trợ Python 3.14:** trích từ
+`raw.githubusercontent.com/frappe/frappe/v15.123.1/pyproject.toml`:
+`requires-python = ">=3.10,<3.15"` — phủ Python 3.10 đến 3.14 (đúng biên).
+Do đó baseline C3 hiện hành (Python 3.14.8) **không bị ảnh hưởng** bởi thay đổi
+`requires-python` ở `v15.99.0`.
+
+Chi tiết và đề xuất quyết định Q-01…Q-08 ở [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §5.4.
 
 ### 8.1. Runtime đã đo trên máy DEV hiện tại
 
@@ -271,7 +280,7 @@ Dùng `image: docker.io/frappe/bench:latest` và `docker.io/redis:alpine` → **
 | O-03 | Python/Node/Yarn thực tế trong `frappe/bench:v5.31.0` | Tính tái tạo | **ĐÃ GHI:** Python 3.14.8, Node 24.22.0, Yarn 1.22.22, Bench 5.31.0 (§8.1) |
 | O-04 | `package.json` CRM ghi `GPL-3.0` vs `LICENSE` AGPL-3.0 | Nghĩa vụ pháp lý | Dùng **AGPL-3.0** (file LICENSE) làm căn cứ |
 | O-05 | (ĐÃ ĐÓNG) Trước đây repo có `.survey-cache/crm/` — checkout upstream **untracked**. **Nay thư mục này KHÔNG còn trong working tree.** | Trước đây có nguy cơ commit nhầm source upstream | Đã hết. Khi commit: **loại trừ** `.commandcode/`, mọi cache và checkout upstream; đưa `apps/crm_cskh/`, `docs/` và `deploy/` vào phạm vi review. |
-| O-06 | **T1A — 2026-10-19:** (a) digest `frappe/bench:v5.31.0` và `mariadb:11.8` đã thay đổi; §5 và `deploy/dev/.env.example` đã cập nhật. (b) Đã có CRM `v1.88.0`, Frappe `v15.99.0` và `v16.9.0` mới hơn; **không nâng** trong P0 vì (i) chưa có runtime evidence mới và (ii) v15.99.0 đã bỏ Python 3.14. (c) `crm/frontend/vite.config.js` upstream chưa đọc trong phiên này — cần đọc trước khi chạy Vue hot reload. | Ảnh hưởng tái tạo + lộ trình nâng version | Xem [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §5.4 (Q-01…Q-06). Khi có máy Docker, chạy lại ma trận workload MariaDB (xem §5.5) trước khi đóng ADR-001. |
+| O-06 | **T1A — 2026-10-19 (sửa lần 2):** (a) digest `frappe/bench:v5.31.0` và `mariadb:11.8` đã thay đổi; §5 và `deploy/dev/.env.example` đã cập nhật. (b) Re-verify bằng `git ls-remote --sort=v:refname` + `sort -V` cho thấy: CRM `v1.88.0` là bản duy nhất thực sự mới hơn pin (1 patch); `frappe v15.99.0` (5cca1fa7…) thực ra thấp hơn pin `v15.123.1` 24 minor; `frappe v16.9.0` (e5b04e04…) thực ra thấp hơn pin `v16.52.0` 43 minor. (c) Pin hiện tại `v15.123.1` vẫn `>=3.10,<3.15` — hỗ trợ Python 3.14. Baseline C3 không bị ảnh hưởng. (d) `v15.99.0` (cũ hơn pin) đã giới hạn `<3.14`, nhưng không có kịch bản nâng lên `v15.99.0` vì nó thấp hơn pin; chỉ cần ghi nhận nếu tương lai có yêu cầu **nâng** lên `v15.100.0+` thì phải kiểm tra `requires-python` của từng bản. | Ảnh hưởng tái tạo + lộ trình nâng version | Xem [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §5.4 (Q-01…Q-08) và §3 (bảng sort -V). Khi có máy Docker, chạy lại ma trận workload MariaDB (xem §5.5) trước khi đóng ADR-001. |
 
 ---
 
