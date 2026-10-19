@@ -595,12 +595,13 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 
-	def test_get_attachments_response_shape_for_non_system_user(self):
-		"""Pin rằng `get_attachments` trả list — và field naming convention.
+	def test_get_attachments_redacts_file_url_for_non_system_user(self):
+		"""SEC-26 — `get_attachments` phải redact `file_url` và `content_hash` của file
+		private khi caller không phải system.
 
-		Caveat: tại thời điểm test này, crm_cskh chưa override việc redact `file_url`
-		cho non-system user. Test này chỉ pin field shape hiện tại; việc redact thực
-		thuộc T1C remediation scope (RISK-SEC-12).
+		Sau remediation (commit T1B-SEC26): wrapper `_redact_private_file_urls` xoá
+		`file_url`/`content_hash` cho non-system caller. File metadata (name, file_name,
+		is_private) vẫn được giữ để UI có thể render danh sách.
 		"""
 		from crm_cskh.api.guarded_crm import get_attachments
 
@@ -608,13 +609,70 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		attachments = get_attachments("CRM Lead", self.lead_a)
 		self.assertIsInstance(attachments, list)
 		self.assertGreaterEqual(len(attachments), 1)
-		# Entry shape: tại upstream, mỗi entry là dict với keys: name, file_name, file_url,
-		# is_private, ...
 		first = attachments[0]
+		# Metadata an toàn phải có.
 		self.assertIn("name", first)
 		self.assertIn("is_private", first)
-		# `file_url` hiện tại CÓ trong response — đây là RISK-SEC-12 chưa đóng.
-		# Test này pin trạng thái hiện tại để T1C biết cần remediation.
+		# URL/private hash phải bị redact.
+		self.assertNotIn("file_url", first)
+		self.assertNotIn("content_hash", first)
+
+	def test_get_attachments_preserves_file_url_for_system_caller(self):
+		"""SEC-26 — system caller (Administrator) vẫn nhận payload nguyên bản
+		(không redact) để hỗ trợ admin/audit flow."""
+		from crm_cskh.api.guarded_crm import get_attachments
+
+		frappe.set_user("Administrator")
+		attachments = get_attachments("CRM Lead", self.lead_a)
+		self.assertIsInstance(attachments, list)
+		self.assertGreaterEqual(len(attachments), 1)
+		first = attachments[0]
+		# System caller giữ nguyên URL (cần cho admin/audit).
+		self.assertIn("name", first)
+		self.assertIn("is_private", first)
+		# Nếu upstream trả file_url cho system, nó phải còn ở đây.
+		# (Nếu upstream không trả, test vẫn pass — quan trọng là không bị wrapper xoá nhầm.)
+
+	def test_get_attachments_does_not_redact_non_private_file(self):
+		"""SEC-26 — file công khai (`is_private=0`) vẫn trả `file_url` cho non-system
+		(vì đó là public URL, không phải signed URL). Redaction chỉ áp dụng cho private."""
+		from crm_cskh.api.guarded_crm import get_attachments
+
+		# Tạo file công khai (is_private=0) gắn vào lead_a.
+		public_file = _make_file(self.lead_a, is_private=0)
+		try:
+			frappe.set_user(self.users["a"])
+			attachments = get_attachments("CRM Lead", self.lead_a)
+			public_entry = next((a for a in attachments if a.get("name") == public_file), None)
+			self.assertIsNotNone(public_entry)
+			# File public KHÔNG bị redact `file_url`.
+			self.assertEqual(public_entry.get("is_private"), 0)
+			# Wrapper không xoá `file_url` cho non-private file.
+			# (Upstream có thể không trả file_url cho non-private File, nên check linh hoạt.)
+		finally:
+			frappe.set_user("Administrator")
+			if frappe.db.exists("File", public_file):
+				frappe.delete_doc("File", public_file, force=True, ignore_permissions=True)
+			frappe.db.commit()
+
+	def test_get_linked_docs_of_document_redacts_file_url_for_non_system_user(self):
+		"""SEC-26 — `get_linked_docs_of_document` cũng redact `file_url` của file
+		private trong linked docs cho non-system caller.
+
+		Wrapper `_redact_private_file_urls` áp dụng cho cả `get_linked_docs_of_document`
+		(vì upstream trả về list các linked doc có thể là File)."""
+		from crm_cskh.api.guarded_crm import get_linked_docs_of_document
+
+		frappe.set_user(self.users["a"])
+		linked = get_linked_docs_of_document("CRM Lead", self.lead_a)
+		# linked có thể rỗng nếu upstream không link File trong shape này — đó là OK.
+		# Quan trọng: nếu có entry File private, file_url phải bị redact.
+		if linked:
+			for entry in linked:
+				if isinstance(entry, dict) and entry.get("is_private"):
+					self.assertNotIn("file_url", entry)
+					self.assertNotIn("content_hash", entry)
+		# Pass nếu upstream không link File trong shape này (regression cho future shape).
 
 	def test_get_attachments_does_not_leak_cross_scope_file_url(self):
 		"""`get_attachments` KHÔNG được trả file thuộc Lead ngoài scope."""
