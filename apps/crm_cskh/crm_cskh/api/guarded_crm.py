@@ -34,15 +34,48 @@ def get_assigned_users(doctype, name, default_assigned_to=None):
 	return [user for user in users if user_in_scope(frappe.session.user, user)]
 
 
+# Field level redaction cho entry có `is_private` URL — áp dụng cho non-system caller
+# nhằm chặn rò rỉ `file_url` (signed URL) của file private. SEC-26.
+_FILE_URL_FIELDS = ("file_url", "content_hash")  # content_hash cho phép re-derive URL
+
+
+def _redact_private_file_urls(entries):
+	"""Trả về list các entry giống `entries` nhưng đã redact URL/hash cho non-system caller.
+
+	- System caller (Administrator / System Manager): trả nguyên bản.
+	- Non-system caller: với mỗi entry có `is_private` truthy, xoá `file_url` (và
+	  `content_hash` để tránh tái dựng URL). Các field khác (file_name, name,
+	  is_private, file_size) được giữ vì không nhạy cảm — caller cần biết file
+	  tồn tại để UI hiển thị, nhưng không cần truy cập nội dung.
+	"""
+	if _is_system(frappe.session.user):
+		return entries
+	redacted = []
+	for entry in entries:
+		if not isinstance(entry, dict):
+			redacted.append(entry)
+			continue
+		# Nếu entry là File có is_private=1 → redact URL.
+		is_file = entry.get("is_private") is not None or "file_url" in entry
+		if is_file and entry.get("is_private"):
+			new_entry = {k: v for k, v in entry.items() if k not in _FILE_URL_FIELDS}
+			redacted.append(new_entry)
+		else:
+			redacted.append(entry)
+	return redacted
+
+
 @frappe.whitelist()
 def get_linked_docs_of_document(doctype, docname):
 	_check_read(doctype, docname)
 	docs = frappe.get_attr("crm.api.doc.get_linked_docs_of_document")(doctype, docname)
-	return [
+	filtered = [
 		linked
 		for linked in docs
 		if frappe.has_permission(linked["doc"], "read", linked["reference_docname"], throw=False)
 	]
+	# SEC-26: nếu linked doc là File private, redact URL cho non-system caller.
+	return _redact_private_file_urls(filtered)
 
 
 @frappe.whitelist()
@@ -66,7 +99,10 @@ def get_linked_tasks(name):
 @frappe.whitelist()
 def get_attachments(doctype, name):
 	_check_read(doctype, name)
-	return frappe.get_attr("crm.api.activities.get_attachments")(doctype, name)
+	attachments = frappe.get_attr("crm.api.activities.get_attachments")(doctype, name)
+	# SEC-26: redact `file_url`/`content_hash` của file private cho non-system caller
+	# để chặn rò rỉ signed URL. System caller nhận payload nguyên bản.
+	return _redact_private_file_urls(attachments)
 
 
 @frappe.whitelist()
