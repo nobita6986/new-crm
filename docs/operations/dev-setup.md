@@ -2,12 +2,17 @@
 
 > **Dự án:** CRM-CSKH
 > **Tài liệu:** `docs/operations/dev-setup.md`
-> **Phiên bản:** 1.4 — 15/10/2026
+> **Phiên bản:** 1.5 — 19/10/2026 (T1A: cập nhật digest image; bổ sung ghi chú blocker Vite runtime + checklist i18n)
 > **Tài liệu cha:** [`../root-plan/P0.md`](../root-plan/P0.md) (§3 P0-A) · [`../architecture/version-lock.md`](../architecture/version-lock.md)
 > **Đối tượng:** người thứ hai cần setup lại từ repo mà không cần hướng dẫn miệng.
 
 > **TRẠNG THÁI:** WP-01 runtime có bootstrap trên volume rỗng, migrate, seed, UI/API và backup/restore; WP-02/P0 suite chạy trên test site sạch.
 > **P0-A còn PARTIAL:** Python reload đã xác minh; Vite page hiện trắng nên chưa chứng minh Vue hot reload. MariaDB 11.8 có cảnh báo Framework >10.8 chưa được kiểm thử; xem [`p0-exit-report.md`](../architecture/p0-exit-report.md).
+> **T1A (2026-10-19):** phiên Codex không có Docker/Python/Yarn; chỉ cập nhật metadata.
+> Bằng chứng runtime mới cho G0-02 (Vite hot reload) và G0-09 (screenshot) chưa có; xem
+> [`t1a-g002-vite-csrf-blocker.md`](../../deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md) và
+> [`t1a-g009-vi-checklist.md`](../../deploy/dev/evidence/t1a-g009-vi-checklist.md) để biết
+> kế hoạch chạy và checklist.
 
 ---
 
@@ -251,6 +256,35 @@ docker compose exec bench bash -lc 'cd /workspace/frappe-bench/apps/crm/frontend
 ```
 
 `VITE_PORT` mặc định bind vào `127.0.0.1:8080`; mở `http://dev.localhost:8080/crm`. README upstream CRM lưu ý Vite proxy có thể cần `ignore_csrf=1`; dự án **không** bật chế độ bỏ CSRF. Luồng Vue qua Vite vì vậy chưa được nghiệm thu cho tới khi xác minh được proxy giữ nguyên CSRF. Image bench đang dùng có Node 24.22.0 và Yarn 1.22.22; không cần cài Yarn trên host.
+
+**Bằng chứng runtime cần thu (G0-02, xem chi tiết ở [`t1a-g002-vite-csrf-blocker.md`](../../deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md)):**
+
+1. Trước khi chạy, **đọc `crm/frontend/vite.config.js`** tại tag `v1.87.0` (đã khóa) để biết upstream đã có proxy rule `/api` → `http://127.0.0.1:8000` hay chưa. Nếu chưa, chuẩn bị patch tối thiểu + ADR rebase (đề xuất V-A trong evidence G0-02 §4).
+2. Sau khi `yarn dev` chạy, browser vào `http://dev.localhost:8080/crm` và DevTools Network:
+   - SPA shell phải tải được (HTTP 200 cho `/`).
+   - Request `auth` / `boot` / `ping` (gọi từ SPA) phải tới cùng origin (8080) hoặc được Vite proxy sang 8000 mà **giữ cookie Frappe** (Set-Cookie không bị mất; cookie Frappe `SameSite=Lax` mặc định).
+3. **Test CSRF retention**:
+   - Lấy CSRF token + session cookie qua `curl -c jar.txt` tới `127.0.0.1:8000`.
+   - Gửi POST từ Vite origin (8080) tới `/api/method/crm_cskh.api.health.ping` với `X-Frappe-CSRF-Token` header.
+   - Kỳ vọng: HTTP 200 + JSON `{message: {status: ok, user: Administrator, ...}}`.
+   - Lặp lại sau khi sửa một chuỗi trong `crm/frontend/src/...` để chứng minh hot reload không phá session/CSRF.
+4. **Ghi lại bằng chứng** vào `deploy/dev/evidence/t1a-g002-runtime.md` (Owner tạo file mới) với:
+   - Output `git -C apps/crm status --porcelain` (rỗng) để chứng minh không sửa upstream.
+   - Output Vite log (`vite hmr update`) khi sửa nhãn.
+   - Output POST test có/không CSRF token.
+   - Screenshot trước/sau (xem quy tắc khử PII ở `t1a-g009-vi-checklist.md` §2).
+
+**Lưu ý về `crm_cskh`:**
+
+- Vite config phục vụ SPA CRM upstream, **không** trực tiếp phục vụ Vue của `crm_cskh`.
+  Trang `/cskh` hiện là Jinja template (xem `apps/crm_cskh/crm_cskh/www/cskh.html`),
+  nhúng `__()` server-side qua Frappe translations; không cần Vite cho phần này.
+- Nếu sau này thêm Vue SPA riêng cho `crm_cskh`, cần Vite config riêng (entry point,
+  manifest) và quyết định có proxy chung `/api` hay tách.
+
+**Trạng thái G0-02 (T1A):** không chạy được Vite ở phiên Codex này (thiếu Docker/Yarn);
+xem blocker chi tiết và đề xuất V-A ở `t1a-g002-vite-csrf-blocker.md`. **Không** tuyên bố
+G0-02 PASS cho tới khi chạy được runtime và có output thật ở các bước 1–4.
 
 ---
 

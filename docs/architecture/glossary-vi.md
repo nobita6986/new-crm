@@ -3,7 +3,8 @@
 > **Dự án:** CRM-CSKH
 > **Chủ sở hữu tài liệu:** T1B
 > **Trạng thái:** Khảo sát **tĩnh** trên `vi.po`; **chưa** render UI thật (chưa có DEV)
-> **Tài liệu liên quan:** [`reuse-audit.md`](./reuse-audit.md), [`ui-extension-spike.md`](./ui-extension-spike.md), [`master-plan.md`](../root-plan/master-plan.md) §10, [`P0.md`](../root-plan/P0.md) §8, [`P2.md`](../root-plan/P2.md) §12.5
+> **Tài liệu liên quan:** [`reuse-audit.md`](./reuse-audit.md), [`ui-extension-spike.md`](./ui-extension-spike.md), [`master-plan.md`](../root-plan/master-plan.md) §10, [`P0.md`](../root-plan/P0.md) §8, [`P2.md`](../root-plan/P2.md) §12.5, [`t1a-g009-vi-checklist.md`](../../deploy/dev/evidence/t1a-g009-vi-checklist.md) (checklist màn P0 + điều kiện thu screenshot)
+> **Phiên bản:** 1.5 — 19/10/2026 (T1A: liên kết checklist G0-09 + ghi nhận thiếu bằng chứng runtime)
 
 ---
 
@@ -109,6 +110,14 @@
 - [ ] Xác nhận luồng chính không còn chuỗi tiếng Anh lẫn (đặc biệt `Deal`).
 - [ ] Xác nhận date/time hiển thị `Asia/Ho_Chi_Minh`.
 - [ ] Page CSKH mới dùng `__()` và hiển thị tiếng Việt.
+
+**T1A (2026-10-19):** checklist màn chi tiết (10 màn) + quy tắc khử PII khi chụp
+screenshot đã chuyển sang [`t1a-g009-vi-checklist.md`](../../deploy/dev/evidence/t1a-g009-vi-checklist.md)
+§2–§3 để khỏi trùng lặp. Bản G0-09 vẫn PARTIAL; cần runtime evidence mới.
+
+**Phiên Codex 2026-10-19** không có Docker/Yarn nên không tạo được bằng chứng
+runtime mới cho G0-09. Checklist ở `t1a-g009-vi-checklist.md` được viết để
+Owner chạy ngay khi có máy DEV.
 
 ---
 
