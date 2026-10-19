@@ -183,6 +183,7 @@ override_whitelisted_methods = {
 	"crm.api.dashboard.get_chart": "crm_cskh.api.guarded_reporting.crm_manager_chart",
 	"crm.integrations.api.get_contact_by_phone_number": "crm_cskh.api.guarded_crm.get_contact_by_phone_number",
 	"crm.integrations.api.get_contact_lead_or_deal_from_number": "crm_cskh.api.guarded_crm.get_contact_lead_or_deal_from_number",
+	"crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log": "crm_cskh.api.guarded_crm.get_call_log",
 	"crm.api.doc.remove_assignments": "crm_cskh.permissions.remove_assignments",
 	"crm.api.doc.delete_bulk_docs": "crm_cskh.api.guarded_crm.delete_bulk_docs",
 	"crm.api.doc.get_assigned_users": "crm_cskh.api.guarded_crm.get_assigned_users",
