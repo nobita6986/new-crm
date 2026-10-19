@@ -118,22 +118,30 @@ Mỗi màn có 4 cột đánh dấu: `□` chưa chạy, `✅` đạt, `❌` kh�
 
 ### 3.6. Screenshot cần thu (dự kiến)
 
+> Số điện thoại trong seed: `seed_demo.py` dùng `_phone(index) = "0900000" + "{index:02d}0"` → 15 Lead có SĐT dạng `0900000` + 2 chữ số + `0` (ví dụ `0900000010`, `0900000020`, ..., `0900000150`). **Tất cả đều là placeholder, không dialable** (bắt đầu bằng `09000000` không phải SĐT VN hợp lệ). Khi mask, dùng `0900-XXX-NNN` chỉ để hiển thị trong screenshot; KHÔNG đổi giá trị thật trong DB trừ khi Owner chạy lại seed.
+
 | File | Màn | Quy tắc khử PII | Ghi chú |
 |---|---|---|---|
-| `t1a-g009-01-login.png` | Login | form trống | OK |
+| `t1a-g009-01-login.png` | `/login` (port 8000) | form trống | OK |
 | `t1a-g009-02-prefs.png` | Preferences | user = `staff.a@dev.local` (đã là user giả) | OK |
-| `t1a-g009-03-leads-list.png` | Leads List | ẩn cột Mobile No; chỉ chụp cột Name/Status/Source | OK nếu ẩn cột SĐT |
-| `t1a-g009-04-lead-detail.png` | Lead Detail | mask SĐT (ví dụ 0900-XXX-001) | cần seed đã mask trước |
-| `t1a-g009-05-call-logs.png` | Call Logs List | mask số `from`/`to` | cần seed đã mask trước |
-| `t1a-g009-06-tasks.png` | Tasks List | task description chỉ chứa placeholder | OK |
-| `t1a-g009-07-data-import.png` | Data Import | không upload file thật | OK |
-| `t1a-g009-08-dashboard.png` | Dashboard | biểu đồ có số liệu giả | OK |
-| `t1a-g009-09-cskh.png` | `/cskh` | user = `staff.a@dev.local` (giả) | OK |
-| `t1a-g009-10-error.png` | Lỗi validation | không chứa nội dung Lead | OK |
+| `t1a-g009-03-leads-list.png` | Leads List | ẩn cột Mobile No trong filter; chỉ chụp cột Name/Status/Source | OK nếu ẩn cột SĐT |
+| `t1a-g009-04-lead-detail.png` | Lead Detail | crop hoặc che vùng `mobile_no` (`09000001010`-style); dùng placeholder trong caption nếu cần | OK nếu che/mask |
+| `t1a-g009-05-call-logs.png` | Call Logs List | mask số `from`/`to` (`0900000010`-style) | OK nếu che/mask |
+| `t1a-g009-06-tasks.png` | Tasks List | task description chỉ chứa placeholder (`[DEMO]`) | OK |
+| `t1a-g009-07-data-import.png` | Data Import | KHÔNG upload file thật | OK |
+| `t1a-g009-08-dashboard.png` | Dashboard | biểu đồ có số liệu giả (15 Lead) | OK |
+| `t1a-g009-09-cskh.png` | `/cskh` (port 8000, Jinja) | user = `Administrator` (admin DEV) | OK |
+| `t1a-g009-10-error.png` | Lỗi validation (submit form CRM Lead không có first_name) | không chứa nội dung Lead | OK |
 
-**Cách khử PII trong seed (nếu chưa có):** cập nhật `seed_demo.py` để:
-- Lead `A1`–`C4` dùng SĐT format `0900-XXX-001` thay vì `0900000001` (giữ deterministic).
-- Task/Note description chỉ dùng `[PLACEHOLDER]`, `P0D-T1B`... không chứa tên thật.
+**Cách khử PII hiện có trong `seed_demo.py` (đã chuẩn):**
+- Tên giả: `DEMO A1 (giả lập)`, `Khách chưa rõ tên - DEMOA4` (A4 là Lead chỉ có SĐT — kịch bản P0 D1).
+- SĐT: `0900000xx0` (10 số, prefix `0900000` không phải SĐT VN hợp lệ).
+- User email: `<role>@dev.local` (domain giả).
+- Mật khẩu: `DevSeed-Only-2026!` (mặc định dev, không bí mật).
+- Call log: 3 bản ghi (`No Answer`, `Busy`, `Completed`), không chứa SĐT thật.
+- Attachment: file text nội dung giả, đính kèm Lead `A1`.
+
+> **KHÔNG CẦN sửa `seed_demo.py`** cho G0-09 — seed hiện tại đã an toàn để chụp screenshot.
 
 ---
 
@@ -211,74 +219,176 @@ screenshot, nhưng bằng chứng runtime phải được thực hiện trên m�
 
 ## 6. Lệnh Owner cần chạy trên máy có Docker/WSL2 + browser thật
 
-> Phần này bổ sung sau khi Owner yêu cầu T1A "sửa metadata và hoàn tất bằng chứng
-> runtime". Phiên Codex không có Docker, nên chỉ liệt kê lệnh, không chạy được.
+> Phần này viết lại dựa trên cấu trúc repo thực tế:
+> - Service name trong `deploy/dev/docker-compose.yml`: `bench` (KHÔNG phải `backend`).
+> - Đường dẫn repo trong container: `/src` (read-only) cho source code; `/workspace/frappe-bench` (named volume) cho bench/site/apps.
+> - Site: `dev.localhost`; user test: `staff.a@dev.local` với password `DevSeed-Only-2026!` (xem `seed_demo.py`).
+> - Quy ước tên service file: `deploy/dev/docker-compose.yml`.
 
-### 6.1. Chuẩn bị seed đã khử PII
+### 6.1. Khởi động stack + site + seed (idempotent)
 
-```bash
-docker compose -f deploy/dev/docker-compose.yml exec backend bash -lc '
-  cd /home/frappe/frappe-bench/apps/crm_cskh &&
-  python scripts/seed_demo.py --mask-phones
+```powershell
+cd d:\HRP-app\new-crm
+Copy-Item deploy/dev/.env.example deploy/dev/.env -Force
+docker compose -f deploy/dev/docker-compose.yml pull
+docker compose -f deploy/dev/docker-compose.yml up -d
+
+# Bootstrap (chỉ chạy lần đầu hoặc khi site chưa có)
+docker compose -f deploy/dev/docker-compose.yml exec bench bash /src/deploy/dev/bootstrap.sh
+
+# Cài app crm_cskh (nếu chưa)
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  ln -sfn /src/apps/crm_cskh /workspace/frappe-bench/apps/crm_cskh
+  if ! grep -qx "crm_cskh" /workspace/frappe-bench/sites/apps.txt 2>/dev/null; then
+    echo "crm_cskh" >> /workspace/frappe-bench/sites/apps.txt
+  fi
+  ./env/bin/uv pip install -e /workspace/frappe-bench/apps/crm_cskh --python ./env/bin/python
+  bench --site dev.localhost install-app crm_cskh
 '
-# kỳ vọng: tất cả Lead dùng SĐT 0900-XXX-001 đến 0900-XXX-015
+
+# Seed dữ liệu giả (idempotent)
+docker compose -f deploy/dev/docker-compose.yml exec bench bash /src/deploy/dev/seed/run-seed.sh
+# Kỳ vọng: 7 user, 2 group, 15 Lead, 3 Call Log, 2 Task, 1 attachment, 1 reassignment.
 ```
 
-### 6.2. Đặt ngôn ngữ user = VI, timezone = Asia/Ho_Chi_Minh
+### 6.2. Khởi động Frappe web server (port 8000)
 
-```bash
-docker compose exec backend bench --site dev.localhost execute '
-  frappe.db.set_value("User", "staff.a@dev.local", {
-    "language": "vi",
-    "time_zone": "Asia/Ho_Chi_Minh"
-  })
+```powershell
+docker compose -f deploy/dev/docker-compose.yml exec -d bench bash -lc '
+  cd /workspace/frappe-bench &&
+  bench start
 '
 ```
 
-### 6.3. Mở browser và chụp 10 màn
+Smoke test:
 
-Mở Chrome, đăng nhập `staff.a@dev.local`, **lần lượt** truy cập 10 URL trong bảng §3.6,
-chụp màn hình với **viewport 1280×800**, lưu vào:
-
-```
-deploy/dev/evidence/screenshots/t1a-g009-<NN>-<screen>.png
+```powershell
+curl.exe -s -o /dev/null -w "GET / -> HTTP %{http_code}`n" http://127.0.0.1:8000/
+curl.exe -s -o /dev/null -w "GET /cskh -> HTTP %{http_code}`n" http://127.0.0.1:8000/cskh
 ```
 
-> Trước khi chụp mỗi màn, **đối chiếu** dữ liệu hiển thị với §2 "Nguyên tắc khử
-> PII". Nếu thấy SĐT/tên/email thật → KHÔNG chụp, sửa seed rồi chạy lại.
-
-### 6.4. Đo số chuỗi ưu tiên cao còn sai (sau khi đã chạy G0-09)
+### 6.3. Đặt ngôn ngữ user = VI, timezone = Asia/Ho_Chi_Minh
 
 ```bash
-docker compose exec backend bash -lc '
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  bench --site dev.localhost execute "
+frappe.db.set_value(\"User\", \"staff.a@dev.local\", {
+  \"language\": \"vi\",
+  \"time_zone\": \"Asia/Ho_Chi_Minh\"
+})
+frappe.db.commit()
+print(\"updated\")
+"
+'
+# (System Settings.time_zone đã được seed_demo.py đặt = Asia/Ho_Chi_Minh ở _ensure_dev_settings.)
+```
+
+### 6.4. Mở browser và chụp 10 màn (PII-safe)
+
+**Dùng Chrome ở chế độ Incognito** (tránh cache ảnh có thể chứa dữ liệu từ phiên trước).
+
+1. Truy cập `http://127.0.0.1:8000/login`, đăng nhập `staff.a@dev.local` / `DevSeed-Only-2026!`.
+2. Lần lượt truy cập 10 URL trong bảng §3.6, **đối chiếu từng màn với PII rules** trước khi chụp.
+3. Chụp với **viewport 1280×800**, định dạng PNG, ≤ 500 KB.
+4. Lưu vào `deploy/dev/evidence/screenshots/t1a-g009-<NN>-<screen>.png`.
+
+**Danh sách 10 URL cần truy cập:**
+
+| # | URL (gốc `127.0.0.1:8000`) | Tên màn |
+|---|---|---|
+| 1 | `/login` | Login |
+| 2 | `/desk#Form/User/staff.a%40dev.local` (Preferences) | Preferences |
+| 3 | `/crm/leads/view/list` | Leads List |
+| 4 | `/crm/leads/<name>` (lấy `<name>` từ URL trước) | Lead Detail |
+| 5 | `/crm/call-logs` | Call Logs List |
+| 6 | `/crm/tasks` | Tasks List |
+| 7 | `/app/data-import` hoặc `/crm/data-import` | Data Import |
+| 8 | `/crm/dashboard` | Dashboard |
+| 9 | `/cskh` | `/cskh` page (Jinja) |
+| 10 | submit form CRM Lead trống `first_name` để chụp lỗi validation | Error/Validation |
+
+### 6.5. Kiểm tra chuỗi ưu tiên cao (offline — chỉ cần container, không cần browser)
+
+```bash
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  cd /workspace/frappe-bench/apps/crm
+  echo "== Tong msgid =="; grep -c "^msgid " crm/locale/vi.po
+  echo "== msgstr rong =="; grep -c "^msgstr \"\"$" crm/locale/vi.po
+  echo "== Lead->Chi =="; grep -n -A1 "Chì" crm/locale/vi.po | head
+  echo "== Note->Luu y =="; grep -n "Lưu ý" crm/locale/vi.po
+  echo "== Assigned To->Duoc giao Cho =="; grep -n "Được giao Cho" crm/locale/vi.po
+  echo "== Lead Owner->Chu so huu khach hang tien nang =="; grep -n "Chủ sở hữu khách hàng tiềm năng" crm/locale/vi.po
+  echo "== Phone->So di dong =="; grep -n "Số di động" crm/locale/vi.po
+  echo "== Deal (giu tieng Anh) =="; grep -n -A1 "^msgid \"Deal\"" crm/locale/vi.po
+'
+```
+
+Lưu output vào `deploy/dev/evidence/logs/t1a-g009-vi-po-checks.txt`.
+
+**Kỳ vọng (sau khi patch upstream trong tương lai):**
+- `Lead` → `Khách hàng tiềm năng` (KHÔNG `Chì`)
+- `Note` → `Ghi chú` (KHÔNG `Lưu ý`)
+- `Assigned To` → `Người phụ trách` (KHÔNG `Được giao Cho`)
+- `Lead Owner` → `Nhân viên phụ trách` (KHÔNG `Chủ sở hữu khách hàng tiềm năng`)
+- `Phone` → `Số điện thoại` (KHÔNG `Số di động`)
+- `Deal` → `Cơ hội` / `Thương vụ` (hoặc giữ `Deal` nếu CRM quyết định)
+
+> **Hiện tại** tại `crm@v1.87.0`: 6 chuỗi trên **vẫn sai** ở `vi.po` upstream (đã verify 2026-10-19 từ `raw.githubusercontent.com/frappe/crm/v1.87.0/crm/locale/vi.po` — file 315.700 bytes, 1782 msgid, 236 msgstr rỗng). Sửa yêu cầu patch upstream, **không thuộc P0**.
+
+### 6.6. Quét hard-code tiếng Việt trong template `crm_cskh` (cần Python thật trên host)
+
+```powershell
+# Cần Python 3.12+ thật (KHÔNG phải App Execution Alias stub).
+# Cài Python: winget install Python.Python.3.12
+
+python -c "
+import re, pathlib
+hits = []
+vietnamese = 'àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ'
+VI = vietnamese + vietnamese.upper()
+for p in pathlib.Path('apps/crm_cskh').rglob('*.html'):
+    for m in re.finditer(r'[A-Za-z][A-Za-z ,.!?]{6,}', p.read_text(encoding='utf-8')):
+        s = m.group()
+        if any(c in VI for c in s):
+            hits.append((str(p), s))
+for p, s in hits:
+    print(p, '->', s[:80])
+"
+# Kỳ vọng: KHÔNG có dòng nào (vì template chỉ dùng {{ _( ) }} và csrf_token, current_user).
+```
+
+Lưu output vào `deploy/dev/evidence/logs/t1a-g009-vi-hardcode-scan.txt`.
+
+### 6.7. Đo số chuỗi ưu tiên cao còn hiển thị trên UI (cần DEV)
+
+> API `crm_cskh.i18n_audit.probe_ui_strings` chưa có. Nếu muốn tự động hóa, Owner tạo file mới `crm_cskh/i18n_audit.py` với hàm `probe_ui_strings()` — nằm ngoài phạm vi T1A (chỉ metadata + runbook).
+
+```bash
+# Placeholder (khi API đã có):
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
   bench --site dev.localhost execute crm_cskh.i18n_audit.probe_ui_strings
 '
-# API này chưa có; sẽ được thêm ở task T1A-runtime (ngoài phạm vi T1A-metadata)
 ```
 
-### 6.5. Quét lỗi hard-code tiếng Việt trong template (cần Python trên host)
-
-```bash
-# Trên máy Owner (Windows + Python 3.12/3.13 thật, không phải App Execution Alias)
-python scripts/scan_vi_hardcode.py
-# kỳ vọng: chỉ in ra csrf_token, current_user; không có chuỗi tiếng Việt
-```
-
-### 6.6. Blocker log
+### 6.8. Blocker log
 
 | # | Blocker | Owner cần |
 |---|---|---|
-| B-1 | Không có Docker | Máy có Docker Desktop / WSL2 distro |
-| B-2 | Không có Python thật (chỉ App Execution Alias stub) | Cài Python 3.12 hoặc 3.13 |
-| B-3 | Không có browser thật để chụp | Chrome/Edge trên máy local có quyền lưu file ra host |
-| B-4 | Browser phiên Codex có thể đã cache ảnh chứa dữ liệu thật từ lần chạy trước | Dùng Incognito + session admin riêng cho screenshot |
+| B-1 | Không có Docker CLI trong PowerShell session Codex | Mở PowerShell session mới sau khi Docker Desktop đã start (xem `environment-probe.md` §8 — đã chạy thành công 2026-10-15) |
+| B-2 | Không có Python thật (chỉ App Execution Alias stub) | `winget install Python.Python.3.12` cho host script (§6.6); container bench đã có Python 3.14.8 |
+| B-3 | Không có browser thật để chụp | Chrome/Edge trên máy local có quyền lưu file ra host; dùng Incognito + session admin riêng |
+| B-4 | `dev.localhost` không resolve trên Windows host | Thêm `127.0.0.1 dev.localhost` vào `C:\Windows\System32\drivers\etc\hosts` (cần admin) HOẶC dùng `127.0.0.1:8000` trực tiếp + sửa cookie domain trong site_config nếu cần |
 
 ---
 
-## 7. Kết luận G0-09 (T1A)
+## 7. Kết luận G0-09 (T1A lần 3)
 
-- **Trạng thái:** ⛔ BLOCKER runtime. Checklist + PII rules đã chuẩn bị xong,
-  nhưng không có screenshot nào trong repo ở phiên này.
-- **Khi runtime chạy xong:** chụp 10 ảnh theo §3.6, đối chiếu PII theo §2, điền
-  lại checklist §3 với dấu ✅/❌, đánh dấu lại G0-09 trong `p0-exit-report.md`.
+- **Trạng thái:** ⛔ BLOCKER runtime. Checklist + PII rules + runbook đã chuẩn bị xong, nhưng không có screenshot nào trong repo ở phiên này (PowerShell session Codex không có Docker CLI / browser).
+- **Đã cập nhật dựa trên cấu trúc repo thực tế** (lần 3):
+  - Service name: `bench` (không phải `backend`).
+  - Đường dẫn trong container: `/src/...` cho source read-only; `/workspace/frappe-bench/...` cho bench/site.
+  - SĐT seed: `0900000xx0` (đã deterministic, không dialable; **không cần sửa seed**).
+  - 6 chuỗi ưu tiên cao vẫn còn sai trong `vi.po` upstream `v1.87.0` (Lead→Chì, Note→Lưu ý, …) — đã verify bằng `raw.githubusercontent.com`; **không thể sửa ở P0** (cần patch upstream).
+  - Site `dev.localhost` không resolve trên Windows host — dùng `127.0.0.1:8000` + `Host: dev.localhost` header.
+- **Khi runtime chạy xong:** chụp 10 ảnh theo §3.6 (đã cập nhật), đối chiếu PII theo §2, điền lại checklist §3 với dấu ✅/❌, đánh dấu lại G0-09 trong `p0-exit-report.md`.
 - **KHÔNG tuyên bố PASS** ở phiên này.

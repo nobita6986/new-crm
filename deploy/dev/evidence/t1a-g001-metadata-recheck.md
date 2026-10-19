@@ -276,25 +276,260 @@ vào các evidence trước:
 
 ---
 
-## 6. Lệnh cần Owner chạy trên máy có Docker/WSL2 (để đóng G0-01)
+## 6. Runbook cho Owner — workload MariaDB 11.8 (đóng G0-01 / ADR-001)
+
+> Tài liệu này dựa trên `deploy/dev/docker-compose.yml` thực tế (4 service: `db`, `redis-cache`, `redis-queue`, `bench`; chỉ `bench` publish port 8000/9000/8080 ra `127.0.0.1`) và `deploy/dev/.env.example` (digest đã cập nhật 2026-10-19). Đã đối chiếu với `wp01-runtime.md` để biết lệnh đã chạy thành công.
+>
+> **Quan trọng về môi trường:** `environment-probe.md` §8 ghi rằng **WSL2 + Docker Desktop đã chạy thành công 2026-10-15** trên máy này (WP-01 baseline). Phiên Codex hiện tại (2026-10-19) ghi nhận `Get-Command docker` không có và `wsl --status` trả help text — nghĩa là Docker Desktop chưa start hoặc PowerShell session này không inherit PATH. **Owner chạy runbook này cần mở PowerShell session mới sau khi Docker Desktop đã start** (xem §6.0).
+
+### 6.0. Pre-flight: kiểm tra môi trường
+
+```powershell
+# (1) Docker CLI có sẵn chưa
+docker --version
+# Kỳ vọng: Docker version 29.7.x, build ...
+
+# (2) WSL2 distro đang chạy
+wsl -l -v
+# Kỳ vọng: docker-desktop   Running   2
+
+# (3) Docker context
+docker context ls
+# Kỳ vọng: desktop-linux *   npipe:////./pipe/dockerDesktopLinuxEngine
+
+# (4) Engine sống
+docker info | Select-String "Server Version","Storage Driver","OS Type"
+# Kỳ vọng: Server Version 29.7.x, OS Type: linux
+
+# (5) Windows hosts: dev.localhost cần trỏ 127.0.0.1 (chỉ chạy 1 lần, cần quyền admin)
+#    Nếu PowerShell session KHÔNG có quyền admin → dùng 127.0.0.1 + Host header
+#    cho mọi request (xem §6.2 và §6.3).
+#    Hoặc mở PowerShell "Run as Administrator" rồi:
+Add-Content -Path C:\Windows\System32\drivers\etc\hosts -Value "`n127.0.0.1`tdev.localhost" -Force
+```
+
+### 6.1. Khởi động stack
+
+```powershell
+# (a) Từ thư mục dự án
+cd d:\HRP-app\new-crm
+
+# (b) Copy .env (KHÔNG commit .env)
+Copy-Item deploy/dev/.env.example deploy/dev/.env -Force
+# Kiểm tra ADMIN_PASSWORD đã đổi (mặc định dev-only-change-me — chỉ DEV)
+
+# (c) Pull theo digest đã pin
+docker compose -f deploy/dev/docker-compose.yml pull
+
+# (d) Khởi động 4 service
+docker compose -f deploy/dev/docker-compose.yml up -d
+
+# (e) Đợi service healthy
+docker compose -f deploy/dev/docker-compose.yml ps
+# Kỳ vọng: cột STATUS đều "Up (healthy)" cho db; "Up" cho redis-cache, redis-queue, bench.
+```
+
+### 6.2. Bootstrap site (chạy đúng 1 lần cho site mới)
+
+```powershell
+# Service name trong compose: "bench". Tên container: crm-cskh-dev-bench-1
+docker compose -f deploy/dev/docker-compose.yml exec bench bash /src/deploy/dev/bootstrap.sh
+# Kỳ vọng cuối log:
+#   frappe  SHA: d2efa79657ba5c1abf96098b3bfacc199517d57e
+#   crm     SHA: 0d3910b456ef4fb913e77b29db011b3debc4f778
+#   apps       :
+#     - crm
+#     - frappe
+
+# Cài app crm_cskh (nếu chưa set INSTALL_CSKH=1 trong .env):
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  ln -s /src/apps/crm_cskh /workspace/frappe-bench/apps/crm_cskh &&
+  echo "crm_cskh" >> /workspace/frappe-bench/sites/apps.txt &&
+  ./env/bin/uv pip install -e /workspace/frappe-bench/apps/crm_cskh --python ./env/bin/python &&
+  bench --site dev.localhost install-app crm_cskh
+'
+
+# Seed dữ liệu giả
+docker compose -f deploy/dev/docker-compose.yml exec bench bash /src/deploy/dev/seed/run-seed.sh
+# Kỳ vọng: in 7 user, 2 group, 15 Lead, 3 Call Log, 2 Task, 1 attachment, 1 reassignment.
+```
+
+### 6.3. Khởi động Frappe web server (KHÔNG dùng Vite cho site gốc)
+
+```powershell
+# Foreground (Ctrl+C để dừng):
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  cd /workspace/frappe-bench &&
+  bench start
+'
+# Hoặc chạy nền:
+docker compose -f deploy/dev/docker-compose.yml exec -d bench bash -lc '
+  cd /workspace/frappe-bench &&
+  bench start
+'
+
+# Smoke test
+curl.exe -s -o /dev/null -w "GET / -> HTTP %{http_code}`n" http://127.0.0.1:8000/
+curl.exe -s -o /dev/null -w "GET /crm -> HTTP %{http_code}`n" -H "Host: dev.localhost" http://127.0.0.1:8000/crm
+# (Nếu chưa thêm dev.localhost vào hosts file, dùng header Host như trên.)
+```
+
+### 6.4. Workload MariaDB 11.8 (đóng ADR-001)
 
 ```bash
-# 1. Kéo image theo digest mới (sau khi áp dụng Q-02)
-docker pull frappe/bench:v5.31.0@sha256:3b75943bf00a1db92723d99ec34fbfa92f4b67b9b643ae1e96750899b7fbd980
-docker pull mariadb:11.8@sha256:f16d7a344413e519dff518f27bdb221388f84b0d274c97c4fb5f2cb0dc1b34fa
-docker pull redis:8.6-alpine@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba
+# === Trong container bench (path: /workspace/frappe-bench) ===
 
-# 2. Đo lại RepoDigest cục bộ để khớp với lockfile
-docker images --digests | grep -E "frappe/bench|mariadb|redis"
+# (1) MariaDB version & collation
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  cd /workspace/frappe-bench
+  bench --site dev.localhost execute "
+import frappe
+print(\"MariaDB version:\", frappe.db.sql(\"SELECT VERSION()\")[0][0])
+print(\"collation_server:\", frappe.db.sql(\"SHOW VARIABLES LIKE %s\")[0][1] % \"collation_server\")
+print(\"character_set_server:\", frappe.db.sql(\"SHOW VARIABLES LIKE %s\")[0][1] % \"character_set_server\")
+"
+'
+# Kỳ vọng: 11.8.x; collation_server = utf8mb4_unicode_ci; character_set_server = utf8mb4
 
-# 3. Sau khi `docker compose up -d`:
-docker exec -it <bench> bench --site <site> console
->>> import frappe; print(frappe.__version__)
-# kỳ vọng: 15.123.1
+# (2) Sinh file CSV ~5.000 Lead giả (trong container)
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  python - <<PY
+import csv, random
+random.seed(42)
+rows = [["lead_name","first_name","mobile_no","status","source","lead_owner"]]
+sources = ["Facebook","Website","Cold Calling","Reference","Email"]
+owners  = ["staff.a@dev.local","staff.b@dev.local","staff.c@dev.local","team1.leader@dev.local","team2.leader@dev.local"]
+for i in range(1, 5001):
+    rows.append([
+        f"WL-{i:05d}",
+        f"Workload {i:05d}",
+        f"0900{i:06d}",                       # placeholder, không dialable
+        random.choice(["New","Contacted","Nurture","Qualified","Unqualified","Converted"]),
+        random.choice(sources),
+        random.choice(owners),
+    ])
+with open("/tmp/leads-5000.csv","w",newline="") as f:
+    csv.writer(f).writerows(rows)
+print("wrote /tmp/leads-5000.csv")
+PY
+'
 
-# 4. Workload MariaDB 11.8 bổ sung (đóng ADR-001):
-# (a) bench --site <site> import-csv với file ~5000 Lead giả
-# (b) Migration schema có thay đổi INDEX/UNIQUE
-# (c) Đo collation utf8mb4_unicode_ci performance
-# Lưu log vào deploy/dev/evidence/logs/t1a-g001-mariadb-workload-*.txt
+# (3) Insert 5.000 Lead qua ORM (đo thời gian + lỗi)
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  bench --site dev.localhost execute "
+import time
+t0 = time.perf_counter()
+import csv
+from frappe import get_doc
+n_ok = n_err = 0
+with open(\"/tmp/leads-5000.csv\") as f:
+    rd = csv.DictReader(f)
+    for row in rd:
+        try:
+            get_doc({
+              \"doctype\": \"CRM Lead\",
+              \"naming_series\": \"CRM-LEAD-\",
+              \"first_name\": row[\"first_name\"],
+              \"lead_name\": row[\"lead_name\"],
+              \"mobile_no\": row[\"mobile_no\"],
+              \"status\": row[\"status\"],
+              \"source\": row[\"source\"] if frappe.db.exists(\"CRM Lead Source\", row[\"source\"]) else None,
+              \"lead_owner\": row[\"lead_owner\"] if frappe.db.exists(\"User\", row[\"lead_owner\"]) else None,
+            }).insert(ignore_permissions=True)
+            n_ok += 1
+        except Exception as e:
+            n_err += 1
+            if n_err <= 3: print(\"ERR:\", e)
+frappe.db.commit()
+t1 = time.perf_counter()
+print(f\"inserted ok={n_ok} err={n_err} time={t1-t0:.2f}s\")
+"
+'
+# Kỳ vọng: inserted ok=5000 err=0 time=<vài chục giây>
+
+# (4) EXPLAIN truy vấn có WHERE mobile_no
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc "
+  bench --site dev.localhost execute '
+import json, frappe
+rows = frappe.db.sql(\"EXPLAIN SELECT name FROM \`tabCRM Lead\` WHERE mobile_no = %s\", \"09000001010\", as_dict=True)
+print(json.dumps(rows, indent=2, default=str))
+'
+"
+# Kỳ vọng: rows chứa key=\"mobile_no\" hoặc \"idx\" nếu có index; \"ALL\" + \"rows\" cao nếu full scan.
+
+# (5) Dọn 5.000 Lead workload
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  bench --site dev.localhost execute "
+import frappe
+frappe.db.sql(\"DELETE FROM \`tabCRM Lead\` WHERE first_name LIKE %s\", (\"Workload %\",))
+frappe.db.commit()
+print(\"cleaned\")
+"
+'
 ```
+
+Lưu tất cả output vào `deploy/dev/evidence/logs/t1a-g001-mariadb-workload-<N>.txt`.
+
+### 6.5. Workload collation utf8mb4_unicode_ci
+
+```bash
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc "
+  bench --site dev.localhost execute '
+import frappe
+n_ok = 0
+for i in range(100):
+    doc = frappe.get_doc({
+      \"doctype\": \"CRM Lead\",
+      \"naming_series\": \"CRM-LEAD-\",
+      \"first_name\": f\"Khách hàng tiềm năng {i:03d}\",
+      \"lead_name\": f\"Collation Test {i:03d}\",
+      \"mobile_no\": f\"090011100{i:02d}\",
+      \"status\": \"New\",
+    })
+    doc.insert(ignore_permissions=True)
+    n_ok += 1
+frappe.db.commit()
+print(\"inserted\", n_ok, \"VI-named leads\")
+print(\"Khach vs Khách STRCMP:\", frappe.db.sql(\"SELECT STRCMP(%s, %s)\", (\"Khach hang\", \"Khách hàng\")))
+frappe.db.sql(\"DELETE FROM \`tabCRM Lead\` WHERE first_name LIKE %s\", (\"Khách hàng tiềm năng %\",))
+frappe.db.commit()
+print(\"cleaned\")
+'
+"
+```
+
+### 6.6. Cách ghi log tối thiểu
+
+Mỗi lệnh trên Owner cần:
+
+1. Chạy lệnh.
+2. Copy output stdout/stderr vào file `deploy/dev/evidence/logs/t1a-g001-mariadb-workload-<N>.txt`.
+3. Commit file log kèm theo evidence.
+
+Format file log gợi ý:
+
+```text
+# T1A-G0-01 / workload MariaDB 11.8 — step 4.3 (CSV insert 5000 Lead)
+# Date (UTC+7): 2026-10-19 HH:MM
+# Host: <hostname>, Docker Engine: <version>, MariaDB: <version> (from step 4.1)
+# Site: dev.localhost
+# Tooling: bench <version> / Python 3.14.8 / Node 24.22.0 / Yarn 1.22.22
+
+$ docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '...'
+<output nguyên văn>
+```
+
+### 6.7. Đóng ADR-001 (MariaDB 11.8 policy)
+
+Sau khi có log workload:
+- **OK**: mọi query < 1s; insert 5.000 Lead không lỗi collation; EXPLAIN có index → ghi "MariaDB 11.8 PASS cho workload baseline (5.000 Lead)", đóng ADR-001 với caveat "tái verify khi lên 50.000 Lead ở P1".
+- **CẢNH BÁO**: nếu 1 trong các query > 1s hoặc insert lỗi → mở thêm ticket, KHÔNG đóng ADR-001.
+- **KHÔNG ĐẠT**: nếu lỗi collation/encoding → mở blocker, ADR-001 vẫn mở, **chưa đạt**.
+
+### 6.8. Ràng buộc
+
+- KHÔNG dùng `latest/main/develop` cho image hoặc upstream tag.
+- KHÔNG xoá `db-data` volume nếu chưa backup.
+- KHÔNG chạy migrate từ ngoài container (luôn qua `docker compose exec bench`).
+- Tất cả file log ghi vào `deploy/dev/evidence/logs/` (đã có `.gitignore` cho `*.log`).
+- KHÔNG commit `.env` (đã có `.gitignore`).
