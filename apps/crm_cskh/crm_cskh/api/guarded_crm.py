@@ -76,3 +76,33 @@ def delete_bulk_docs(doctype: str, items: str | list, delete_linked: bool = Fals
 		for name in items:
 			frappe.has_permission(doctype, "delete", name, throw=True)
 	return frappe.get_attr("crm.api.doc.delete_bulk_docs")(doctype, items, delete_linked)
+
+
+@frappe.whitelist()
+def get_call_log(name: str):
+	"""Override của `crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log`.
+
+	Upstream `parse_call_log(call)` gọi `get_call_contact(call, phone_number)` →
+	`get_contact_by_phone_number(phone_number)` khi Call Log không tham chiếu Lead/Deal.
+	Nhánh này lộ `_caller`/`_receiver` cho user có DocType-level read trên CRM Call Log —
+	rò rỉ contact theo số điện thoại. SEC-27.
+
+	Fail-closed:
+	  - System caller: delegate nguyên bản.
+	  - Non-system + ref là CRM Lead/Deal: kiểm tra scope qua hook permission rồi delegate.
+	  - Non-system + ref KHÔNG phải CRM Lead/Deal (kể cả None): từ chối để chặn lộ contact."""
+	frappe.has_permission("CRM Call Log", "read", name, throw=True)
+	if not _is_system(frappe.session.user):
+		# Nhánh fallback chỉ an toàn khi Call Log có `reference_doctype` là Lead/Deal
+		# (vì parse_call_log sẽ dùng parent contact). Khi ref rỗng/khác, nhánh fallback
+		# gọi `get_contact_by_phone_number` → rò rỉ contact. Chặn non-system caller.
+		ref_doctype = frappe.db.get_value("CRM Call Log", name, "reference_doctype")
+		if ref_doctype not in ("CRM Lead", "CRM Deal"):
+			frappe.throw(
+				"Call Log fallback contact lookup is restricted to system callers "
+				"until record-scoped reporting is available.",
+				frappe.PermissionError,
+			)
+	return frappe.get_attr(
+		"crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log"
+	)(name)
