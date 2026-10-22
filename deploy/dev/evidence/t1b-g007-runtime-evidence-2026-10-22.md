@@ -150,25 +150,55 @@ Cả 7 method fail với `unexpectedly None` tại `self.assertIsNotNone(self._s
 
 ## 5. HTTP transport probe
 
-| Hạng mục | Kết quả run #39793215900 |
-|---|---|
-| `bench serve` trên site **đã seed** | ✅ khởi động được sau khi sửa path `bench` |
-| Readiness poll (socket 8000) | ✅ sẵn sàng |
-| Case `sec13-guest` | ✅ **PASS** — HTTP **403**, `exc_type = PermissionError` |
-| Case `sec13-user` trở đi | ❌ **không chạy** — probe crash `KeyError: 'transport_error'` |
-| Kết luận | `probe_result = FAIL`, `failed_cases = ['probe-error:KeyError']` |
+Run đầy đủ: [#39796261932](https://github.com/nobita6986/new-crm/actions/runs/39796261932) (đã qua bản sửa `KeyError` ở §5.2).
 
-### 5.1 Nguyên nhân (đã tái hiện, đã sửa)
+**`11 / 12` case PASS.** `probe_result = FAIL` chỉ vì **`sec16-setup` FAIL** (bước setup, xem §5.3).
 
-`request()` trả dict 4 key (`status`, `json`, `text`, `entry`) nhưng `check()` đọc `response["transport_error"]` ⇒ `KeyError` ngay sau case đầu tiên.
+| Case | Kết quả | HTTP | Kỳ vọng đã đạt |
+|---|---|---:|---|
+| `sec13-guest` | ✅ **PASS** | **403** | Guest bị chặn, `exc_type = PermissionError` — **negative control có giá trị** |
+| `staff-login` | ✅ PASS | 200 | login HTTP 200 |
+| `sec13-user` | ✅ **PASS** | 200 | user đã đăng nhập nhận đúng danh tính của mình |
+| `csrf-page` | ✅ PASS | 200 | `/cskh` trả CSRF token |
+| `sec14-get` | ✅ **PASS** | 200 | GET **không** cần CSRF header |
+| `sec14-post-nocsrf` | ✅ **PASS** | **400** | POST thiếu token → `CSRFTokenError` |
+| `sec14-post-badtok` | ✅ **PASS** | **400** | POST token sai → `CSRFTokenError` |
+| `sec14-post-ok` | ✅ **PASS** | 200 | POST với token hợp lệ → thành công |
+| `administrator-login` | ✅ PASS | 200 | login HTTP 200 |
+| `sec13-admin` | ✅ PASS | 200 | Administrator nhận đúng danh tính |
+| `sec26-staff-private` | ✅ **PASS** | 200 | non-system **không** có key `file_url` cho file private |
+| `sec26-admin-private` | ✅ **PASS** | 200 | system caller **giữ** `file_url` |
+| `sec16-setup` | ❌ **FAIL** | — | setup chưa tạo được field `permlevel=1` (xem §5.3) |
 
-`transport_error` **đã được tính** trong `request()` nhưng chỉ đưa vào `entry` (evidence), không đưa vào dict trả về.
+### 5.1 `bench serve` trên site đã seed
+
+✅ Khởi động được sau bản sửa path `bench` (`435f2c7`) — chạy trên site **đã seed**, có user giả, không dùng site sạch.
+
+### 5.2 Đã đóng — `KeyError` làm probe dừng sau case đầu (commit `8e4f694`)
+
+Run #39793215900: `request()` trả dict 4 key (`status`, `json`, `text`, `entry`) nhưng `check()` đọc `response["transport_error"]` ⇒ `KeyError` ngay sau `sec13-guest`; evidence chỉ có **1/13** case.
+
+`transport_error` đã được **tính** trong `request()` nhưng chỉ đưa vào `entry` (evidence), không đưa vào dict trả về.
 
 **Đã sửa** (commit `8e4f694`): thêm `transport_error` vào dict trả về của `request()`.
 
-**Xác minh cục bộ** (harness mock HTTP server — **không phải** runtime evidence của app): trước khi sửa crash đúng dòng `check()`; sau khi sửa **13/13 case chạy hết** và có kết quả. 21/21 test static của probe vẫn PASS.
+**Xác minh cục bộ** (harness mock HTTP server — **không phải** runtime evidence của app): trước khi sửa crash đúng dòng `check()`; sau khi sửa **13/13 case chạy hết**. 21/21 test static của probe vẫn PASS.
 
-> **Lưu ý:** SEC-16/SEC-26/SEC-14 **chưa** có kết quả probe HTTP. `sec13-user`, `csrf-page`, `sec14-*`, `sec16-*`, `sec26-*` phải chờ run sau khi sửa.
+### 5.3 Còn lại — `sec16-setup` FAIL (CI run #39796261932)
+
+```
+sec16-setup: không kết nối được site: [Errno 2] No such file or directory: '/logs/database.log'
+```
+
+**Nguyên nhân:** Frappe ghi log theo đường dẫn tương đối với **CWD**. Probe được gọi từ `working_dir` mặc định của compose (`/workspace`) ⇒ Frappe tìm `/logs` ⇒ `frappe.connect()` ném.
+
+`deploy/dev/seed/run-seed.sh` L17 **có** `cd "$BENCH_DIR"` trước khi gọi script; probe trước đó thiếu bước này.
+
+**Đã sửa:** gọi probe qua `bash -lc 'cd /workspace/frappe-bench && …'`, giống hệt `run-seed.sh` (§6.3).
+
+**Chưa xác nhận bằng runtime** — phải chờ lần chạy CI kế tiếp mới biết `sec16-permlevel-get-data` và `sec16-permlevel-sentinel-scan` có đạt hay không.
+
+> **Không ghi PASS cho SEC-16.** Hai assertion SEC-16 (giá trị `permlevel=1` không lộ; sentinel `RESTRICTED-SEC-16-SENTINEL` không xuất hiện trong response) **chưa** có kết quả.
 
 ---
 
@@ -182,7 +212,17 @@ Run #39790982457: `bash: line 1: ./env/bin/bench: No such file or directory` ⇒
 
 Bằng chứng đối chiếu trong chính run đó: step `backup_restore` (dùng `bench` trần) **SUCCESS**, các step dùng `./env/bin/bench` **FAIL**.
 
-### 6.2 `KeyError` trong probe (§5.1, commit `8e4f694`)
+### 6.2 `KeyError` trong probe (§5.2, commit `8e4f694`)
+
+### 6.3 CWD của probe — Frappe tìm `/logs` (commit `e1b0f0a`)
+
+Run #39796261932: `sec16-setup` FAIL với `[Errno 2] No such file or directory: '/logs/database.log'`.
+
+Frappe ghi log theo đường dẫn tương đối với **CWD**; probe chạy từ `working_dir` mặc định của compose (`/workspace`) nên Frappe tìm `/logs`. `run-seed.sh` đã có `cd "$BENCH_DIR"`; probe thì không.
+
+**Đã sửa** (commit `e1b0f0a`): gọi probe qua `bash -lc 'cd /workspace/frappe-bench && /workspace/frappe-bench/env/bin/python …'`, truyền thêm `BENCH_DIR=/workspace/frappe-bench`.
+
+**Trạng thái:** đã commit, đang chờ CI xác nhận. Nếu vẫn FAIL thì nguyên nhân không còn ở CWD mà chuyển sang bản thân `frappe.init()`/`frappe.connect()` trong probe.
 
 ---
 
@@ -192,10 +232,10 @@ Bằng chứng đối chiếu trong chính run đó: step `backup_restore` (dùn
 |---|---|---|
 | Runtime evidence per-method | 0/99 | **63/99 PASS** · 12 FAIL · 24 ERROR · 0 SKIP · 0 NOT_RUN |
 | `test_permissions` | PARTIAL | **18/18 PASS** |
-| `SEC-13` | PARTIAL | **PARTIAL** — negative control (`sec13-guest`) PASS qua HTTP thật; phần authenticated **chưa** probe xong |
-| `SEC-14` | PARTIAL | **PARTIAL** — chưa có kết quả probe HTTP |
-| `SEC-16` | PARTIAL | **PARTIAL** — 1 FAIL (`_caller`) + 1 ERROR; chưa probe HTTP |
-| `SEC-26` | PARTIAL | **PARTIAL** — 4 ERROR (fixture) + chưa probe HTTP |
+| `SEC-13` | PARTIAL | **PARTIAL** — negative control (`sec13-guest`) **PASS 403** qua HTTP thật; `sec13-user`/`sec13-admin` **PASS 200** |
+| `SEC-14` | PARTIAL | **PARTIAL** — probe HTTP **4/4 PASS**: GET 200, POST no-CSRF 400, bad-token 400, valid-token 200 |
+| `SEC-16` | PARTIAL | **PARTIAL** — 1 FAIL (`_caller`) + 1 ERROR; probe HTTP **chưa chạy** (`sec16-setup` FAIL, §5.3) |
+| `SEC-26` | PARTIAL | **PARTIAL** — probe HTTP **2/2 PASS** (staff không `file_url`, admin giữ `file_url`); unit test vẫn 4 ERROR fixture |
 | `G0-07` | PARTIAL — CHƯA KÝ | **PARTIAL — CHƯA KÝ** |
 | `P0` | NO-GO | **NO-GO** |
 | `OWNER_DECISIONS_CONFIRMED` | `False` | **`False`** |

@@ -181,7 +181,13 @@ jobs:
             exit 1
           fi
 
-          if "${compose[@]}" exec -T -e GITHUB_SHA="$GITHUB_SHA" -e P0_HTTP_SITE=p0-ci.localhost bench /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_http_transport_probe.py; then
+          # `cd "$BENCH_DIR"` là BẮT BUỘC: `frappe.init`/`frappe.connect` của probe
+          # tạo field permlevel cho SEC-16 và Frappe ghi log theo đường dẫn tương
+          # đối với CWD. Chạy từ `/workspace` (working_dir mặc định của compose)
+          # làm Frappe tìm `/logs` => `sec16-setup` FAIL (CI run #39796261932).
+          # Cách gọi này giống hệt `run-seed.sh` (`cd "$BENCH_DIR"` rồi gọi
+          # `env/bin/python /src/deploy/dev/seed/seed_demo.py`).
+          if "${compose[@]}" exec -T -e GITHUB_SHA="$GITHUB_SHA" -e P0_HTTP_SITE=p0-ci.localhost -e BENCH_DIR=/workspace/frappe-bench bench bash -lc 'cd /workspace/frappe-bench && /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_http_transport_probe.py'; then
             probe_status=0
           else
             probe_status=$?
