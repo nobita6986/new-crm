@@ -181,11 +181,14 @@ jobs:
             exit 1
           fi
 
-          # Probe tự chdir vào `sites/` trước khi `frappe.init()` (xem
-          # `setup_sec16_permlevel_field`). `bash -lc 'cd <bench> && ...'` ở đây chỉ
-          # để nối với pattern `run-seed.sh`; nó KHÔNG phải là thứ sửa lỗi `/logs`
-          # — CWD ở bench dir làm Frappe tìm `/workspace/logs` (CI #39800240716).
-          if "${compose[@]}" exec -T -e GITHUB_SHA="$GITHUB_SHA" -e P0_HTTP_SITE=p0-ci.localhost -e BENCH_DIR=/workspace/frappe-bench bench bash -lc 'cd /workspace/frappe-bench && /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_http_transport_probe.py'; then
+          # `FRAPPE_STREAM_LOGGING=1` là BẮT BUỘC và là thứ đã sửa đúng lỗi `/logs`.
+          # Frappe dựng đường dẫn `logs/database.log` theo **thư mục cha của CWD**
+          # (bằng chứng: CWD=/workspace -> /logs; CWD=/workspace/frappe-bench ->
+          # /workspace/logs — CI #39796261932 và #39800240716). Chạy từ `<bench>/sites`
+          # sẽ ra `<bench>/logs` nhưng probe vẫn cần mở file log đó. `run-seed.sh`
+          # L18 tránh được hẳn vấn đề vì bật cờ này: Frappe ghi log ra **stdout**
+          # thay vì tạo file. Ta dùng đúng cách đó (giống hệt run-seed.sh).
+          if "${compose[@]}" exec -T -e GITHUB_SHA="$GITHUB_SHA" -e P0_HTTP_SITE=p0-ci.localhost -e BENCH_DIR=/workspace/frappe-bench bench bash -lc 'cd /workspace/frappe-bench && FRAPPE_STREAM_LOGGING=1 /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_http_transport_probe.py'; then
             probe_status=0
           else
             probe_status=$?
