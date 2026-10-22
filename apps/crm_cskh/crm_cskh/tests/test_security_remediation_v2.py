@@ -38,6 +38,8 @@ import json
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from crm_cskh.tests._http_context import bound_request
+
 # ---------------------------------------------------------------------------
 # Helper — seed users + hierarchy (mirror TestPermissionBoundaries để test này
 # có thể chạy độc lập, không phụ thuộc thứ tự test runner).
@@ -324,7 +326,8 @@ class TestSEC13GuestTransportHTTP(FrappeTestCase):
 		"""Positive regression: user đã login gọi được `health.ping` qua HTTP transport path."""
 		frappe.set_user(self.users["a"])
 		frappe.local.form_dict = frappe._dict({})
-		result = frappe.handler.execute_cmd("crm_cskh.api.health.ping")
+		with bound_request():
+			result = frappe.handler.execute_cmd("crm_cskh.api.health.ping")
 		self.assertIsInstance(result, dict)
 		self.assertEqual(result.get("status"), "ok")
 		self.assertEqual(result.get("user"), self.users["a"])
@@ -395,12 +398,23 @@ class TestSEC14CSRFAndSessionHTTP(FrappeTestCase):
 		_run_csrf_check(_build_request("POST", headers={"Content-Type": "application/json"}))
 
 	def test_post_via_execute_cmd_without_csrf_rejected(self):
-		"""End-to-end: bind CSRF-rejecting request rồi gọi `frappe.handler.execute_cmd()`
-		với method thật — verify CSRFTokenError lan tới handler entry point."""
-		_run_csrf_check(_build_request("POST", headers={"Content-Type": "application/json"}))
+		"""End-to-end: POST không có `X-Frappe-CSRF-Token` tới `execute_cmd` phải bị chặn.
+
+		Thứ tự thực tế của Frappe: `app.py:init_request()` tạo `HTTPRequest()` và gọi
+		`validate_csrf_token()` **trước**, rồi mới tới `frappe.handler.execute_cmd()`.
+		Nên CSRFTokenError raise ở tầng CSRF và `execute_cmd` không bao giờ được gọi —
+		đây chính là fail-closed mong muốn, không phải thiếu kiểm chứng.
+
+		Vì vậy `assertRaises` phải bao **cả hai** lệnh: `_run_csrf_check` (tầng CSRF,
+		nơi raise) và `execute_cmd` (entry point, phải không bao giờ chạy tới). Trước
+		đây `assertRaises` chỉ bao `execute_cmd`, nên CSRFTokenError từ
+		`_run_csrf_check` thoát ra ngoài ⇒ test ERROR thay vì kiểm chứng điều nó mô
+		tả (CI #39810335017).
+		"""
 		frappe.set_user(self.users["a"])
 		frappe.local.form_dict = frappe._dict({})
 		with self.assertRaises(frappe.CSRFTokenError):
+			_run_csrf_check(_build_request("POST", headers={"Content-Type": "application/json"}))
 			frappe.handler.execute_cmd("crm_cskh.api.health.ping")
 
 
@@ -963,7 +977,7 @@ class TestSEC27CallLogFallbackContactInternal(FrappeTestCase):
 
 		frappe.set_user(self.users["a"])
 		frappe.local.form_dict = frappe._dict({"name": self.orphan_call})
-		with self.assertRaises(frappe.PermissionError):
+		with bound_request(), self.assertRaises(frappe.PermissionError):
 			execute_cmd("crm_cskh.api.guarded_crm.get_call_log")
 
 	def test_wrapper_get_call_log_administrator_succeeds(self):
@@ -973,7 +987,8 @@ class TestSEC27CallLogFallbackContactInternal(FrappeTestCase):
 		frappe.set_user("Administrator")
 		frappe.local.form_dict = frappe._dict({"name": self.orphan_call})
 		try:
-			result = execute_cmd("crm_cskh.api.guarded_crm.get_call_log")
+			with bound_request():
+				result = execute_cmd("crm_cskh.api.guarded_crm.get_call_log")
 		finally:
 			frappe.local.form_dict = frappe._dict()
 		self.assertIsInstance(result, dict)
@@ -1033,7 +1048,7 @@ class TestSEC15BODAndRISKSEC12BulkReassign(FrappeTestCase):
 			"crm_cskh.api.guarded_reporting.query_report_export_query",
 		):
 			with self.subTest(endpoint=endpoint):
-				with self.assertRaises(frappe.PermissionError):
+				with bound_request(), self.assertRaises(frappe.PermissionError):
 					frappe.handler.execute_cmd(endpoint)
 
 	def test_bod_calling_crm_cskh_api_endpoints_denied(self):
@@ -1047,7 +1062,7 @@ class TestSEC15BODAndRISKSEC12BulkReassign(FrappeTestCase):
 			"crm_cskh.api.guarded_crm.get_attachments",
 		):
 			with self.subTest(endpoint=endpoint):
-				with self.assertRaises(frappe.PermissionError):
+				with bound_request(), self.assertRaises(frappe.PermissionError):
 					frappe.handler.execute_cmd(endpoint)
 
 	def test_staff_bulk_delete_cross_scope_denied(self):
@@ -1060,7 +1075,7 @@ class TestSEC15BODAndRISKSEC12BulkReassign(FrappeTestCase):
 			frappe.local.form_dict = frappe._dict(
 				{"doctype": "CRM Lead", "items": json.dumps([lead_b]), "delete_linked": 0}
 			)
-			with self.assertRaises(frappe.PermissionError):
+			with bound_request(), self.assertRaises(frappe.PermissionError):
 				execute_cmd("crm_cskh.api.guarded_crm.delete_bulk_docs")
 		finally:
 			frappe.set_user("Administrator")

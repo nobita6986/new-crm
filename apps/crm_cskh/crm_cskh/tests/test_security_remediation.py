@@ -25,6 +25,8 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from crm_cskh.tests._http_context import bound_request
+
 # ---------------------------------------------------------------------------
 # Helper — seed users + hierarchy (mirror TestPermissionBoundaries để test này
 # có thể chạy độc lập, không phụ thuộc thứ tự test runner).
@@ -377,7 +379,7 @@ class TestSEC27CallLogFallbackContact(FrappeTestCase):
 		from frappe.handler import execute_cmd
 
 		frappe.local.form_dict = frappe._dict({"name": self.orphan_call})
-		with self.assertRaises(frappe.PermissionError):
+		with bound_request(), self.assertRaises(frappe.PermissionError):
 			execute_cmd("crm_cskh.api.guarded_crm.get_call_log")
 
 	def test_administrator_get_call_log_for_orphan_succeeds(self):
@@ -387,7 +389,8 @@ class TestSEC27CallLogFallbackContact(FrappeTestCase):
 		frappe.set_user("Administrator")
 		frappe.local.form_dict = frappe._dict({"name": self.orphan_call})
 		try:
-			result = execute_cmd("crm_cskh.api.guarded_crm.get_call_log")
+			with bound_request():
+				result = execute_cmd("crm_cskh.api.guarded_crm.get_call_log")
 		finally:
 			frappe.local.form_dict = frappe._dict()
 		self.assertIsInstance(result, dict)
