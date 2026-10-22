@@ -216,7 +216,18 @@ def request(
 	}
 	records.append(entry)
 	write_evidence()
-	return {"status": status, "json": parsed_response, "text": response_text, "entry": entry}
+	# `transport_error` phai nam o day: `check()` doc `response["transport_error"]`
+	# de phan biet "HTTP loi thuoc ve mo-duong" (assertion co the dung) voi
+	# "khong goi duoc server" (transport_error khac None => case FAIL).
+	# CI run #39793215900: thieu key nay lam moi case sau `sec13-guest` ném
+	# KeyError va khong case nao duoc ghi nhan.
+	return {
+		"status": status,
+		"json": parsed_response,
+		"text": response_text,
+		"entry": entry,
+		"transport_error": transport_error,
+	}
 
 
 def check(case_id: str, response: dict[str, object], condition: bool, detail: str) -> bool:
