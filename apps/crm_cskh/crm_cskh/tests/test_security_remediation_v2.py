@@ -34,9 +34,9 @@
 # KHÔNG sửa source upstream CRM/Frappe.
 
 import json
+
 import frappe
 from frappe.tests.utils import FrappeTestCase
-
 
 # ---------------------------------------------------------------------------
 # Helper — seed users + hierarchy (mirror TestPermissionBoundaries để test này
@@ -46,9 +46,9 @@ from frappe.tests.utils import FrappeTestCase
 
 def _ensure_role(role_name):
 	if not frappe.db.exists("Role", role_name):
-		frappe.get_doc(
-			{"doctype": "Role", "role_name": role_name, "desk_access": 1}
-		).insert(ignore_permissions=True)
+		frappe.get_doc({"doctype": "Role", "role_name": role_name, "desk_access": 1}).insert(
+			ignore_permissions=True
+		)
 
 
 def _ensure_user(email, *roles):
@@ -78,9 +78,7 @@ def _ensure_hierarchy(user, is_group, reports_to_user=None):
 			"doctype": "CRM Sales Hierarchy",
 			"user": user,
 			"is_group": is_group,
-			"reports_to": frappe.db.get_value(
-				"CRM Sales Hierarchy", {"user": reports_to_user}, "name"
-			)
+			"reports_to": frappe.db.get_value("CRM Sales Hierarchy", {"user": reports_to_user}, "name")
 			if reports_to_user
 			else None,
 		}
@@ -88,11 +86,29 @@ def _ensure_hierarchy(user, is_group, reports_to_user=None):
 	return row.name
 
 
-def _seed_security_users():
+def _restore_sales_hierarchy(previous_value):
+	"""Khôi phục `FCRM Settings.enable_sales_hierarchy` về giá trị trước khi test.
+
+	Được đăng ký qua `cls.addClassCleanup` nên chạy **sau** `tearDownClass` dù
+	test fail. `None` được chuẩn hoá thành `0` vì field là checkbox.
+	"""
+	frappe.set_user("Administrator")
+	frappe.db.set_single_value("FCRM Settings", "enable_sales_hierarchy", previous_value or 0)
+	frappe.db.commit()
+
+
+def _seed_security_users(cls):
 	"""Seed các user và cây hierarchy giống TestPermissionBoundaries để test này
-	độc lập (không phụ thuộc vào thứ tự class load)."""
+	độc lập (không phụ thuộc vào thứ tự class load).
+
+	Nhận `cls` để đăng ký `addClassCleanup` khôi phục `enable_sales_hierarchy`
+	sau `tearDownClass`. 5 module test trong G0-07 chạy tuần tự trên **cùng**
+	một site (`p0-test.localhost`), nếu bật `enable_sales_hierarchy` mà không
+	restore thì các module chạy sau sẽ bị ô nhiễm trạng thái của module trước.
+	"""
 	previous_hierarchy = frappe.db.get_single_value("FCRM Settings", "enable_sales_hierarchy")
 	frappe.db.set_single_value("FCRM Settings", "enable_sales_hierarchy", 1)
+	cls.addClassCleanup(_restore_sales_hierarchy, previous_hierarchy)
 	_ensure_role("CSKH BOD Viewer")
 	_ensure_role("CSKH CRM Admin")
 	users = {
@@ -226,9 +242,7 @@ def _ensure_csrf_session(user):
 	"""Khởi tạo session data + generate CSRF token, return token string."""
 	frappe.set_user(user)
 	if not getattr(frappe.local, "session", None) or not hasattr(frappe.local.session, "data"):
-		frappe.local.session = frappe._dict(
-			{"data": frappe._dict({}), "user": user}
-		)
+		frappe.local.session = frappe._dict({"data": frappe._dict({}), "user": user})
 	frappe.sessions.generate_csrf_token()
 	return frappe.sessions.get_csrf_token()
 
@@ -255,7 +269,7 @@ class TestSEC13GuestTransportHTTP(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 
 	def setUp(self):
 		frappe.set_user("Administrator")
@@ -336,7 +350,7 @@ class TestSEC14CSRFAndSessionHTTP(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 
 	def setUp(self):
 		self.valid_csrf = _ensure_csrf_session(self.users["a"])
@@ -351,9 +365,7 @@ class TestSEC14CSRFAndSessionHTTP(FrappeTestCase):
 
 	def test_post_without_csrf_token_rejected(self):
 		with self.assertRaises(frappe.CSRFTokenError):
-			_run_csrf_check(
-				_build_request("POST", headers={"Content-Type": "application/json"})
-			)
+			_run_csrf_check(_build_request("POST", headers={"Content-Type": "application/json"}))
 
 	def test_post_with_invalid_csrf_token_rejected(self):
 		with self.assertRaises(frappe.CSRFTokenError):
@@ -380,16 +392,12 @@ class TestSEC14CSRFAndSessionHTTP(FrappeTestCase):
 
 	def test_post_with_valid_csrf_form_dict_succeeds(self):
 		frappe.local.form_dict = frappe._dict({"csrf_token": self.valid_csrf})
-		_run_csrf_check(
-			_build_request("POST", headers={"Content-Type": "application/json"})
-		)
+		_run_csrf_check(_build_request("POST", headers={"Content-Type": "application/json"}))
 
 	def test_post_via_execute_cmd_without_csrf_rejected(self):
 		"""End-to-end: bind CSRF-rejecting request rồi gọi `frappe.handler.execute_cmd()`
 		với method thật — verify CSRFTokenError lan tới handler entry point."""
-		_run_csrf_check(
-			_build_request("POST", headers={"Content-Type": "application/json"})
-		)
+		_run_csrf_check(_build_request("POST", headers={"Content-Type": "application/json"}))
 		frappe.set_user(self.users["a"])
 		frappe.local.form_dict = frappe._dict({})
 		with self.assertRaises(frappe.CSRFTokenError):
@@ -418,7 +426,7 @@ class TestSEC16FieldExposure(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 		cls.lead_a = _make_lead("0901111111", cls.users["a"])
 		cls.lead_b = _make_lead("0902222222", cls.users["b"])
 		cls.call_a = _make_call(cls.lead_a)
@@ -457,7 +465,9 @@ class TestSEC16FieldExposure(FrappeTestCase):
 				}
 			).insert(ignore_permissions=True)
 		else:
-			self.custom_field = frappe.get_doc("Custom Field", {"dt": "CRM Lead", "fieldname": self.fieldname})
+			self.custom_field = frappe.get_doc(
+				"Custom Field", {"dt": "CRM Lead", "fieldname": self.fieldname}
+			)
 		frappe.clear_cache(doctype="CRM Lead")
 		frappe.db.set_value("CRM Lead", self.lead_a, self.fieldname, "RESTRICTED-SECRET")
 		frappe.db.commit()
@@ -555,40 +565,49 @@ class TestSEC16FieldExposure(FrappeTestCase):
 
 
 class TestSEC26FileURLLeak(FrappeTestCase):
-	"""SEC-26 — `file_url` (signed/private URL) không được lộ qua API `crm_cskh` khi
+	"""SEC-26 — `file_url` của file private không được lộ qua API `crm_cskh` khi
 	user không phải system.
 
-	Source CRM v1.87.0 (`crm.api.activities.get_attachments`) trả list[dict] với
-	field `file_url` cho CẢ public và private file (per user direction — sửa lại
-	giả định cũ trong `43980d5` / `f73adce`).
+	Source CRM v1.87.0 (`crm.api.activities.get_attachments`) trả `list[dict]`
+	với field `file_url` cho CẢ public và private file (xác minh tĩnh tại
+	`t1b-sec26-upstream-contract-v1.87.0.md`: upstream chọn
+	`fields=[name, file_name, file_type, file_url, file_size, is_private, modified,
+	creation, owner]`, KHÔNG chọn `content_hash`).
 
 	Wrapper `_redact_private_file_urls` (commit `43980d5`) áp dụng:
-	  - Non-system caller + file private (`is_private=1`): xoá `file_url` +
-	    `content_hash` để chặn rò rỉ signed URL.
+	  - Non-system caller + file private (`is_private=1`): loại bỏ `file_url`;
+	    đồng thời loại bỏ `content_hash` **nếu key này xuất hiện** (defense-in-depth).
 	  - System caller (Administrator): giữ payload nguyên bản (admin/audit).
-	  - Non-system caller + file public (`is_private=0`): giữ URL (public URL
-	    không nhạy cảm, cần cho UI render).
+	  - Non-system caller + file public (`is_private=0`): giữ `file_url` — test V18
+	    kiểm tra hành vi này (không suy diễn lý do bảo mật của việc giữ lại).
 
-	**Về `content_hash` (per user direction 2026-10-19 lần 5):**
-	Contract upstream CRM v1.87.0 chưa được verify chắc chắn rằng
-	`crm.api.activities.get_attachments` có trả field `content_hash`. Do đó:
-	  - Test non-system KHÔNG chứng minh được việc redact `content_hash` nếu
-	    upstream không trả field này (vacuous truth).
-	  - Test system KHÔNG assert `content_hash` (tránh false negative nếu upstream
-	    không trả).
-	  - Wrapper code vẫn redact `content_hash` (xem `_FILE_URL_FIELDS`) khi upstream
-	    trả; chỉ là test chưa pin. TODO T1B-ext+1: viết test riêng có seed upstream
-	    trả `content_hash` để pin redaction này.
+	**Về `content_hash` (per static verification 2026-10-19 tại
+	`t1b-sec26-upstream-contract-v1.87.0.md`):**
+	CRM v1.87.0 `crm.api.activities.get_attachments` KHÔNG chọn `content_hash`
+	trong `fields=...` (đã xác minh tĩnh) — nên upstream không trả field này ở
+	v1.87.0. Wrapper code vẫn redact `content_hash` (xem `_FILE_URL_FIELDS`) khi
+	upstream trả hoặc khi payload đến từ nguồn khác (defense-in-depth). Các test
+	trong class này KHÔNG assert `content_hash` vì field này vắng mặt trong
+	response hiện tại; nếu upstream đổi shape, cần viết test riêng (TODO T1B-ext+1).
+	**Runtime evidence vẫn NOT RUN** cho cả 6 method trong class — chưa có log
+	trên test site sạch.
 
 	Test pin (NOT RUN — chưa có runtime evidence trên test site sạch):
-	  1. `get_attachments` non-system caller + private file — `file_url` bị redact.
-	  2. `get_attachments` system caller + private file — `file_url` KHỚP giá trị
-	     fixture `self.file_url_value` (giữ nguyên từ upstream).
-	  3. `get_attachments` non-system caller + public file — `file_url` KHỚP giá trị
-	     fixture (giữ nguyên vì public URL).
-	  4. `get_linked_docs_of_document` — shape probe, KHÔNG phải bằng chứng redaction
-	     (upstream v1.87.0 `crm.api.doc.get_linked_docs_of_document` không trả
-	     `file_url` trong entries; defense-in-depth cho tương lai).
+	  - V16 (L621) `get_attachments` non-system caller + private file — assert
+	    trực tiếp `file_url` không còn trong entry private.
+	  - V17 (L673) `get_attachments` system caller + private file — assert
+	    trực tiếp `file_url` khớp giá trị fixture `self.file_url_value` (giữ
+	    nguyên từ upstream).
+	  - V18 (L721) `get_attachments` non-system caller + entry `is_private=0` —
+	    assert trực tiếp `file_url` khớp giá trị fixture (giữ nguyên).
+	  - V19 (L766) `get_linked_docs_of_document` shape probe — KHÔNG phải bằng
+	    chứng redaction (upstream v1.87.0 `crm.api.doc.get_linked_docs_of_document`
+	    không trả `file_url`); chỉ pin rằng wrapper trả list và defense-in-depth
+	    helper sẽ redact nếu upstream thêm `file_url`.
+	  - V20 (L820) `get_attachments` cross-scope filter — danh sách trả về cho
+	    non-system user KHÔNG chứa file thuộc Lead ngoài scope.
+	  - V21 (L839) `find_file_by_url` sau reassignment — old owner trả None,
+	    new owner trả file row.
 
 	Risk chưa đóng cho tới khi có runtime evidence.
 	"""
@@ -596,7 +615,7 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 		cls.lead_a = _make_lead("0903333333", cls.users["a"])
 		cls.file_private = _make_file(cls.lead_a, is_private=1)
 
@@ -622,22 +641,24 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		"""SEC-26 — `get_attachments` phải redact `file_url` của file private khi caller
 		không phải system.
 
-		Source CRM v1.87.0 (`crm.api.activities.get_attachments`) trả list[dict] với
-		field `file_url` (signed URL cho private file). Wrapper
+		Source CRM v1.87.0 (`crm.api.activities.get_attachments`) trả `list[dict]`
+		với field `file_url` (đã xác minh tĩnh tại
+		`t1b-sec26-upstream-contract-v1.87.0.md`). Wrapper
 		`_redact_private_file_urls` (commit `43980d5`) xoá `file_url` cho non-system
-		caller để chặn rò rỉ signed URL.
+		caller để chặn rò rỉ URL.
 
 		Test tìm entry bằng `name == self.file_private` (không dùng index `[0]`) để đảm
 		bảo assert đúng file private fixture.
 
-		**Về `content_hash` (per user direction 2026-10-19 lần 5):**
-		Test này KHÔNG chứng minh được việc redact `content_hash` vì contract upstream
-		CRM v1.87.0 chưa được verify chắc chắn rằng `crm.api.activities.get_attachments`
-		CÓ trả field này. Nếu upstream không trả `content_hash` thì `assertNotIn` sẽ
-		pass một cách vô nghĩa (vacuous truth). Nếu upstream trả, wrapper vẫn redact nó
-		(xem `_FILE_URL_FIELDS = ("file_url", "content_hash")` trong `guarded_crm.py`)
-		— nhưng test này không pin điều đó. Khi cần pin redaction `content_hash` cần
-		một test riêng có seed upstream trả field này (TODO T1B-ext+1).
+		**Về `content_hash` (per static verification 2026-10-19 tại
+		`t1b-sec26-upstream-contract-v1.87.0.md`):**
+		CRM v1.87.0 `crm.api.activities.get_attachments` KHÔNG chọn `content_hash`
+		trong `fields=...` (đã xác minh tĩnh) — nên upstream không trả field này ở
+		v1.87.0. Test này KHÔNG assert `content_hash` vì field vắng mặt trong
+		response hiện tại (sẽ là vacuous truth nếu `assertNotIn`). Wrapper code vẫn
+		redact `content_hash` nếu xuất hiện (xem `_FILE_URL_FIELDS` trong
+		`guarded_crm.py`) — defense-in-depth. Khi upstream đổi shape, cần viết test
+		riêng để pin redaction này (TODO T1B-ext+1).
 
 		STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
 		"""
@@ -649,9 +670,7 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		attachments = get_attachments("CRM Lead", self.lead_a)
 		self.assertIsInstance(attachments, list)
 		# Tìm entry đúng file private fixture.
-		private_entry = next(
-			(a for a in attachments if a.get("name") == self.file_private), None
-		)
+		private_entry = next((a for a in attachments if a.get("name") == self.file_private), None)
 		self.assertIsNotNone(
 			private_entry,
 			f"Entry with name={self.file_private!r} not found in attachments. "
@@ -665,7 +684,7 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		self.assertNotIn(
 			"file_url",
 			private_entry,
-			f"non-system caller MUST NOT see `file_url` (signed URL leak). "
+			f"non-system caller MUST NOT see `file_url` (private file URL leak). "
 			f"Upstream expected to return {expected_url!r}, but wrapper should redact.",
 		)
 		# NOTE: Không assert về `content_hash` ở đây — xem docstring ở trên.
@@ -674,19 +693,20 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		"""SEC-26 — system caller (Administrator) vẫn nhận payload upstream nguyên bản
 		(không redact) để hỗ trợ admin/audit flow.
 
-		Source CRM v1.87.0: `crm.api.activities.get_attachments` trả `file_url` (signed
-		URL) trong mỗi entry. Wrapper `_redact_private_file_urls` skip redaction khi
+		Source CRM v1.87.0: `crm.api.activities.get_attachments` trả `file_url` cho
+		mỗi entry (đã xác minh tĩnh tại `t1b-sec26-upstream-contract-v1.87.0.md`).
+		Wrapper `_redact_private_file_urls` skip redaction khi
 		`_is_system(frappe.session.user)` đúng → system caller nhận đúng URL mà upstream
 		trả về (giá trị `self.file_url_value` lưu trong setUp từ DB).
 
-		**Về `content_hash` (per user direction 2026-10-19 lần 5):**
-		Test này KHÔNG assert `content_hash` cho system caller. Lý do: contract upstream
-		CRM v1.87.0 chưa được verify chắc chắn rằng `crm.api.activities.get_attachments`
-		trả field này. Nếu assert `assertIn("content_hash", ...)` mà upstream không trả,
-		test sẽ FAIL một cách sai (false negative). Nếu upstream CÓ trả, system caller
-		vẫn nhận field đó (do `_is_system` short-circuit trả nguyên bản) — nhưng test
-		này không pin. TODO T1B-ext+1: thêm test riêng nếu upstream xác nhận có
-		`content_hash`.
+		**Về `content_hash` (per static verification 2026-10-19 tại
+		`t1b-sec26-upstream-contract-v1.87.0.md`):**
+		CRM v1.87.0 `crm.api.activities.get_attachments` KHÔNG chọn `content_hash`
+		trong `fields=...` (đã xác minh tĩnh) — nên upstream không trả field này ở
+		v1.87.0. Test này KHÔNG assert `content_hash` vì field vắng mặt trong response
+		hiện tại (sẽ là false negative nếu `assertIn`). Wrapper code vẫn redact
+		`content_hash` nếu xuất hiện (xem `_FILE_URL_FIELDS`) — defense-in-depth. Khi
+		upstream đổi shape, cần viết test riêng (TODO T1B-ext+1).
 
 		STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
 		"""
@@ -696,9 +716,7 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		attachments = get_attachments("CRM Lead", self.lead_a)
 		self.assertIsInstance(attachments, list)
 		# Tìm entry đúng file private fixture.
-		private_entry = next(
-			(a for a in attachments if a.get("name") == self.file_private), None
-		)
+		private_entry = next((a for a in attachments if a.get("name") == self.file_private), None)
 		self.assertIsNotNone(
 			private_entry,
 			f"Entry with name={self.file_private!r} not found in attachments. "
@@ -719,12 +737,18 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		# NOTE: Không assert về `content_hash` ở đây — xem docstring ở trên.
 
 	def test_get_attachments_does_not_redact_non_private_file(self):
-		"""SEC-26 — file công khai (`is_private=0`) KHÔNG bị redact `file_url` (vì
-		đó là public URL, không phải signed URL). Redaction chỉ áp dụng cho private.
+		"""SEC-26 — entry có `is_private=0` KHÔNG bị loại bỏ `file_url`. Redaction chỉ
+		áp dụng khi `is_private` truthy.
 
 		Source CRM v1.87.0: `crm.api.activities.get_attachments` trả `file_url` cho
-		cả public và private file. Wrapper `_redact_private_file_urls` chỉ redact khi
-		`is_private=1`; public file giữ nguyên URL.
+		cả public và private file (xác minh tĩnh tại
+		`t1b-sec26-upstream-contract-v1.87.0.md`). Wrapper `_redact_private_file_urls`
+		chỉ loại bỏ `file_url` khi `is_private=1`; entry `is_private=0` giữ nguyên.
+
+		Test này kiểm tra **hành vi** của helper (giữ `file_url` khi `is_private=0`),
+		chứ không khẳng định giá trị runtime của `file_url` với `is_private=0` có
+		"không nhạy cảm" hay không — cần nguồn Frappe framework riêng để xác minh điều
+		đó (xem giới hạn tại `t1b-sec26-upstream-contract-v1.87.0.md` §6.4).
 
 		STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
 		"""
@@ -738,23 +762,21 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 			public_url = frappe.db.get_value("File", public_file, "file_url")
 			frappe.set_user(self.users["a"])
 			attachments = get_attachments("CRM Lead", self.lead_a)
-			public_entry = next(
-				(a for a in attachments if a.get("name") == public_file), None
-			)
+			public_entry = next((a for a in attachments if a.get("name") == public_file), None)
 			self.assertIsNotNone(
 				public_entry,
 				f"Entry with name={public_file!r} not found. "
 				f"Available: {[a.get('name') for a in attachments]}",
 			)
-			# File public có is_private=0.
+			# Entry có is_private=0.
 			self.assertEqual(public_entry.get("is_private"), 0)
-			# Per CRM v1.87.0 source: upstream trả `file_url` cho cả public file.
-			# Wrapper KHÔNG redact public URL (helper chỉ áp dụng khi is_private=1).
+			# Per CRM v1.87.0 source: upstream trả `file_url` ở cả entry có
+			# `is_private=0`. Helper chỉ loại bỏ `file_url` khi `is_private` truthy.
 			self.assertIn("file_url", public_entry)
 			self.assertEqual(
 				public_entry["file_url"],
 				public_url,
-				f"Public file: file_url phải được giữ nguyên từ upstream. "
+				f"Entry is_private=0: file_url phải được giữ nguyên. "
 				f"Expected {public_url!r}, got {public_entry.get('file_url')!r}.",
 			)
 		finally:
@@ -766,16 +788,17 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 	def test_get_linked_docs_of_document_shape_probe_only(self):
 		"""SEC-26 — `get_linked_docs_of_document` shape probe (NOT proof of redaction).
 
-		Per user direction (2026-10-19): upstream CRM v1.87.0
-		`crm.api.doc.get_linked_docs_of_document` KHÔNG trả field `file_url`
-		trong entries của nó. Do đó, test này KHÔNG được tính là bằng chứng redaction
-		cho `get_linked_docs_of_document` — nó chỉ pin rằng wrapper hiện tại trả về
-		shape list, và nếu upstream trong tương lai thêm `file_url` thì wrapper
-		`_redact_private_file_urls` sẽ redact cho non-system caller.
+		Per static verification 2026-10-19 tại
+		`t1b-sec26-upstream-contract-v1.87.0.md`: upstream CRM v1.87.0
+		`crm.api.doc.get_linked_docs_of_document` KHÔNG trả field `file_url` trong
+		entries của nó (xác minh tĩnh tại source `crm/api/doc.py` v1.87.0, function
+		`get_linked_docs_of_document`). Do đó, test này KHÔNG được tính là bằng chứng
+		redaction cho `get_linked_docs_of_document` — nó chỉ pin rằng wrapper hiện
+		tại trả về shape list, và nếu upstream trong tương lai thêm `file_url` thì
+		wrapper `_redact_private_file_urls` sẽ redact cho non-system caller.
 
 		Test được giữ làm shape regression — đảm bảo wrapper gọi upstream đúng cách
-		và trả về list (không phải None hoặc raise). Status: NOT RUN cho đến khi
-		runtime evidence có.
+		và trả về list (không phải None hoặc raise).
 
 		**Caller-upstream pair đã verify tĩnh:**
 		  - `crm_cskh.api.guarded_crm.get_linked_docs_of_document(doctype, docname)`
@@ -784,7 +807,8 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		  - Upstream trả list[dict] với keys: `doc`, `reference_docname` (verified qua
 		    test_permissions.py test_linked_activity_endpoints_check_parent_before_returning_data
 		    ở cross-scope branch — user_a trên lead_b trả []).
-		  - Upstream v1.87.0 KHÔNG trả `file_url` / `content_hash` (theo user direction).
+		  - Upstream v1.87.0 KHÔNG trả `file_url` / `content_hash` trong shape
+		    `get_linked_docs_of_document` (xác minh tĩnh).
 
 		**Hệ quả:**
 		  - Wrapper `_redact_private_file_urls` áp dụng trên kết quả upstream. Nếu
@@ -813,12 +837,17 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 			if isinstance(entry, dict):
 				# Upstream v1.87.0 chỉ trả `doc` và `reference_docname`. Nếu có thêm
 				# `is_private` thì file_url cũng phải được redact bởi helper.
-				# (Không assert `content_hash` — contract upstream chưa verify.)
+				# (Không assert `content_hash` — per static verification
+				# `t1b-sec26-upstream-contract-v1.87.0.md`, upstream
+				# `get_linked_docs_of_document` v1.87.0 không trả field này.)
 				if entry.get("is_private"):
 					self.assertNotIn("file_url", entry)
 
 	def test_get_attachments_does_not_leak_cross_scope_file_url(self):
-		"""`get_attachments` KHÔNG được trả file thuộc Lead ngoài scope."""
+		"""`get_attachments` KHÔNG được trả file thuộc Lead ngoài scope.
+
+		STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
+		"""
 		from crm_cskh.api.guarded_crm import get_attachments
 
 		# Tạo file gắn vào lead_b (cross-scope với user_a)
@@ -841,6 +870,8 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		sau khi Lead reassign (T1C đã verify qua test #4 trong test_permissions.py).
 
 		Pin thêm tại đây để mapping thấy coverage.
+
+		STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
 		"""
 		from frappe.core.doctype.file.utils import find_file_by_url
 
@@ -880,7 +911,7 @@ class TestSEC27CallLogFallbackContactInternal(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 
 	def setUp(self):
 		frappe.set_user("Administrator")
@@ -972,7 +1003,7 @@ class TestSEC15BODAndRISKSEC12BulkReassign(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 		cls.lead_a = _make_lead("0905555555", cls.users["a"])
 
 	@classmethod
@@ -1070,7 +1101,7 @@ class TestSEC22And23StaleAfterReassign(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 		cls.lead_a = _make_lead("0907777777", cls.users["a"])
 		cls.call_a = _make_call(cls.lead_a)
 		cls.note_a = (

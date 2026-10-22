@@ -25,7 +25,6 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
-
 # ---------------------------------------------------------------------------
 # Helper — seed users + hierarchy (mirror TestPermissionBoundaries để test này
 # có thể chạy độc lập, không phụ thuộc thứ tự test runner).
@@ -34,9 +33,9 @@ from frappe.tests.utils import FrappeTestCase
 
 def _ensure_role(role_name):
 	if not frappe.db.exists("Role", role_name):
-		frappe.get_doc(
-			{"doctype": "Role", "role_name": role_name, "desk_access": 1}
-		).insert(ignore_permissions=True)
+		frappe.get_doc({"doctype": "Role", "role_name": role_name, "desk_access": 1}).insert(
+			ignore_permissions=True
+		)
 
 
 def _ensure_user(email, *roles):
@@ -66,9 +65,7 @@ def _ensure_hierarchy(user, is_group, reports_to_user=None):
 			"doctype": "CRM Sales Hierarchy",
 			"user": user,
 			"is_group": is_group,
-			"reports_to": frappe.db.get_value(
-				"CRM Sales Hierarchy", {"user": reports_to_user}, "name"
-			)
+			"reports_to": frappe.db.get_value("CRM Sales Hierarchy", {"user": reports_to_user}, "name")
 			if reports_to_user
 			else None,
 		}
@@ -76,11 +73,29 @@ def _ensure_hierarchy(user, is_group, reports_to_user=None):
 	return row.name
 
 
-def _seed_security_users():
+def _restore_sales_hierarchy(previous_value):
+	"""Khôi phục `FCRM Settings.enable_sales_hierarchy` về giá trị trước khi test.
+
+	Được đăng ký qua `cls.addClassCleanup` nên chạy **sau** `tearDownClass` dù
+	test fail. `None` được chuẩn hoá thành `0` vì field là checkbox.
+	"""
+	frappe.set_user("Administrator")
+	frappe.db.set_single_value("FCRM Settings", "enable_sales_hierarchy", previous_value or 0)
+	frappe.db.commit()
+
+
+def _seed_security_users(cls):
 	"""Seed các user và cây hierarchy giống TestPermissionBoundaries để test này
-	độc lập (không phụ thuộc vào thứ tự class load)."""
+	độc lập (không phụ thuộc vào thứ tự class load).
+
+	Nhận `cls` để đăng ký `addClassCleanup` khôi phục `enable_sales_hierarchy`
+	sau `tearDownClass`. 5 module test trong G0-07 chạy tuần tự trên **cùng**
+	một site (`p0-test.localhost`), nếu bật `enable_sales_hierarchy` mà không
+	restore thì các module chạy sau sẽ bị ô nhiễm trạng thái của module trước.
+	"""
 	previous_hierarchy = frappe.db.get_single_value("FCRM Settings", "enable_sales_hierarchy")
 	frappe.db.set_single_value("FCRM Settings", "enable_sales_hierarchy", 1)
+	cls.addClassCleanup(_restore_sales_hierarchy, previous_hierarchy)
 	_ensure_role("CSKH BOD Viewer")
 	_ensure_role("CSKH CRM Admin")
 	users = {
@@ -118,7 +133,7 @@ class TestSEC13GuestTransport(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 
 	def setUp(self):
 		frappe.set_user("Administrator")
@@ -184,15 +199,13 @@ class TestSEC14CSRFAndSession(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 
 	def setUp(self):
 		frappe.set_user(self.users["a"])
 		# Khởi tạo session data đúng shape Frappe dùng cho `validate_csrf_token`.
 		if not getattr(frappe.local, "session", None) or not hasattr(frappe.local.session, "data"):
-			frappe.local.session = frappe._dict(
-				{"data": frappe._dict({}), "user": self.users["a"]}
-			)
+			frappe.local.session = frappe._dict({"data": frappe._dict({}), "user": self.users["a"]})
 		frappe.sessions.generate_csrf_token()
 		self.valid_csrf = frappe.sessions.get_csrf_token()
 
@@ -228,9 +241,7 @@ class TestSEC14CSRFAndSession(FrappeTestCase):
 	def test_post_without_csrf_token_is_rejected(self):
 		"""POST không kèm `X-Frappe-CSRF-Token` → expect CSRFTokenError."""
 		with self.assertRaises(frappe.CSRFTokenError):
-			self._run_csrf_check(
-				self._build_request("POST", headers={"Content-Type": "application/json"})
-			)
+			self._run_csrf_check(self._build_request("POST", headers={"Content-Type": "application/json"}))
 
 	def test_post_with_invalid_csrf_token_is_rejected(self):
 		"""POST kèm CSRF token sai → expect CSRFTokenError."""
@@ -290,7 +301,7 @@ class TestSEC27CallLogFallbackContact(FrappeTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		cls.users = _seed_security_users()
+		cls.users = _seed_security_users(cls)
 
 	def setUp(self):
 		frappe.set_user("Administrator")
@@ -325,13 +336,9 @@ class TestSEC27CallLogFallbackContact(FrappeTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		if frappe.db.exists("CRM Call Log", getattr(self, "orphan_call", None)):
-			frappe.delete_doc(
-				"CRM Call Log", self.orphan_call, force=True, ignore_permissions=True
-			)
+			frappe.delete_doc("CRM Call Log", self.orphan_call, force=True, ignore_permissions=True)
 		if frappe.db.exists("Contact", "CSKH-SEC27-Contact"):
-			frappe.delete_doc(
-				"Contact", "CSKH-SEC27-Contact", force=True, ignore_permissions=True
-			)
+			frappe.delete_doc("Contact", "CSKH-SEC27-Contact", force=True, ignore_permissions=True)
 		frappe.db.commit()
 
 	def test_get_call_contact_orphan_routes_to_lookup_path(self):
