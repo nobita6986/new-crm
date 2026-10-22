@@ -280,8 +280,26 @@ def setup_sec16_permlevel_field() -> bool:
 		return False
 
 	bench_dir = os.environ.get("BENCH_DIR", "/workspace/frappe-bench")
+	# Frappe dựng đường dẫn `logs/` theo **thư mục cha của CWD**, KHÔNG theo
+	# `sites_path` mà ta truyền vào. Quan sát được trên CI:
+	#   CWD=/workspace           -> /logs/database.log           (#39796261932)
+	#   CWD=/workspace/frappe-bench -> /workspace/logs/database.log (#39800240716)
+	# Cả hai đều sai vì `bench_dir/logs` mới là thư mục log thật.
+	#
+	# `run-seed.sh` không gặp lỗi này vì L18 bật `FRAPPE_STREAM_LOGGING=1` (Frappe
+	# ghi log ra stdout thay vì mở file). Probe không được bật cờ đó nên phải đặt
+	# CWD vào một thư mục con của bench dir để `CWD/..` trỏ đúng `bench_dir`.
+	# `sites/` là lựa chọn tự nhiên: nó chắc chắn tồn tại và đã có sẵn sau
+	# `bench new-site` mà workflow chạy ở step trước.
+	previous_cwd = os.getcwd()
+	sites_dir = os.path.join(bench_dir, "sites")
+	if os.path.isdir(sites_dir):
+		try:
+			os.chdir(sites_dir)
+		except OSError as error:  # noqa: PERF203 - giữ nguyên hành vi cũ nếu không chdir được
+			print(f"sec16-setup: không chdir được sang {sites_dir} ({error}); giữ CWD={previous_cwd}")
 	try:
-		frappe.init(site=SITE_NAME, sites_path=os.path.join(bench_dir, "sites"))
+		frappe.init(site=SITE_NAME, sites_path=sites_dir)
 		frappe.connect()
 		frappe.set_user("Administrator")
 		try:
@@ -317,7 +335,13 @@ def setup_sec16_permlevel_field() -> bool:
 			return False
 		finally:
 			frappe.destroy()
+			# Trả CWD về ban đầu: phần HTTP probe chạy sau đây cần CWD gốc
+			# (và `OUTPUT`/`SEED_SOURCE` đều là đường dẫn tuyệt đối).
+			if previous_cwd != os.getcwd():
+				os.chdir(previous_cwd)
 	except Exception as error:  # noqa: BLE001
+		if previous_cwd != os.getcwd():
+			os.chdir(previous_cwd)
 		print(f"sec16-setup: không kết nối được site: {error}")
 		return False
 
