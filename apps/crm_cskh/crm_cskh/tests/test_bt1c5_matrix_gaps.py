@@ -40,6 +40,8 @@
 import frappe
 from frappe.tests.utils import FrappeTestCase
 
+from crm_cskh.tests._http_context import bound_request
+
 # ---------------------------------------------------------------------------
 # Helper — seed users + hierarchy
 # ---------------------------------------------------------------------------
@@ -390,7 +392,8 @@ class TestCL0607TeamLeaderCallLog(_BT1C5Base):
 		frappe.set_user(self.users["tl1"])
 		frappe.local.form_dict = frappe._dict({"name": self.call_t1})
 		try:
-			result = execute_cmd("crm_cskh.api.guarded_crm.get_call_log")
+			with bound_request():
+				result = execute_cmd("crm_cskh.api.guarded_crm.get_call_log")
 		finally:
 			frappe.local.form_dict = frappe._dict()
 		self.assertIsInstance(result, dict)
@@ -426,7 +429,7 @@ class TestCL0607TeamLeaderCallLog(_BT1C5Base):
 		frappe.set_user(self.users["tl1"])
 		frappe.local.form_dict = frappe._dict({"name": self.call_t2})
 		try:
-			with self.assertRaises(frappe.PermissionError):
+			with bound_request(), self.assertRaises(frappe.PermissionError):
 				execute_cmd("crm_cskh.api.guarded_crm.get_call_log")
 		finally:
 			frappe.local.form_dict = frappe._dict()
@@ -475,7 +478,8 @@ class TestTK0506TeamLeaderTask(_BT1C5Base):
 		frappe.set_user(self.users["tl1"])
 		frappe.local.form_dict = frappe._dict({"name": self.lead_t1})
 		try:
-			result = execute_cmd("crm_cskh.api.guarded_crm.get_linked_tasks")
+			with bound_request():
+				result = execute_cmd("crm_cskh.api.guarded_crm.get_linked_tasks")
 		finally:
 			frappe.local.form_dict = frappe._dict()
 		self.assertIn(self.task_t1, result)
@@ -505,7 +509,7 @@ class TestTK0506TeamLeaderTask(_BT1C5Base):
 		frappe.set_user(self.users["tl1"])
 		frappe.local.form_dict = frappe._dict({"name": self.lead_t2})
 		try:
-			with self.assertRaises(frappe.PermissionError):
+			with bound_request(), self.assertRaises(frappe.PermissionError):
 				execute_cmd("crm_cskh.api.guarded_crm.get_linked_tasks")
 		finally:
 			frappe.local.form_dict = frappe._dict()
@@ -553,7 +557,8 @@ class TestNT0506TeamLeaderNote(_BT1C5Base):
 		frappe.set_user(self.users["tl1"])
 		frappe.local.form_dict = frappe._dict({"name": self.lead_t1})
 		try:
-			result = execute_cmd("crm_cskh.api.guarded_crm.get_linked_notes")
+			with bound_request():
+				result = execute_cmd("crm_cskh.api.guarded_crm.get_linked_notes")
 		finally:
 			frappe.local.form_dict = frappe._dict()
 		self.assertIn(self.note_t1, result)
@@ -583,7 +588,7 @@ class TestNT0506TeamLeaderNote(_BT1C5Base):
 		frappe.set_user(self.users["tl1"])
 		frappe.local.form_dict = frappe._dict({"name": self.lead_t2})
 		try:
-			with self.assertRaises(frappe.PermissionError):
+			with bound_request(), self.assertRaises(frappe.PermissionError):
 				execute_cmd("crm_cskh.api.guarded_crm.get_linked_notes")
 		finally:
 			frappe.local.form_dict = frappe._dict()
