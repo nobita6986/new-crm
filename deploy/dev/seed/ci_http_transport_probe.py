@@ -459,8 +459,21 @@ def run() -> int:
 	else:
 		# `crm.api.doc.get_data` là endpoint upstream có trả permlevel field; gọi
 		# nó với `rows=[name, <field permlevel=1>]` để pin hành vi lọc.
+		#
+		# Contract thật của CRM v1.87.0 (SHA `0d3910b4`, `crm/api/doc.py`):
+		#   def get_data(doctype, filters, order_by, page_length=20, ...)
+		# `filters` và `order_by` là **positional bắt buộc**, không có default.
+		# Thiếu chúng => `TypeError` => HTTP 500 (CI run #39802331716). Gọi bằng
+		# GET nên phải truyền chúng trong query string dưới dạng chuỗi JSON;
+		# bên trong hàm có `frappe._dict(filters)` và `frappe.parse_json(rows)`.
+		# Khớp với cách gọi của test nguồn `get_data(dt, {..}, "creation desc", rows=[..])`.
+		sec16_query = {
+			"doctype": "CRM Lead",
+			"filters": json.dumps({"name": LEAD_NAME}),
+			"order_by": "creation desc",
+		}
 		rows_param = urllib.parse.urlencode(
-			{"doctype": "CRM Lead", "name": LEAD_NAME, "rows": f'["name","{SEC16_FIELDNAME}"]'}
+			{**sec16_query, "rows": json.dumps(["name", SEC16_FIELDNAME])}
 		)
 		get_data_path = "/api/method/crm.api.doc.get_data?" + rows_param
 		staff_get_data = request("sec16-permlevel-get-data", staff, "GET", get_data_path)
@@ -491,7 +504,7 @@ def run() -> int:
 			staff,
 			"GET",
 			"/api/method/crm.api.doc.get_data?"
-			+ urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME}),
+			+ urllib.parse.urlencode({**sec16_query, "rows": json.dumps(["name"])}),
 		)
 		check(
 			"sec16-permlevel-sentinel-scan",
