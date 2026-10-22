@@ -35,18 +35,35 @@ def get_assigned_users(doctype, name, default_assigned_to=None):
 
 
 # Field level redaction cho entry có `is_private` URL — áp dụng cho non-system caller
-# nhằm chặn rò rỉ `file_url` (signed URL) của file private. SEC-26.
-_FILE_URL_FIELDS = ("file_url", "content_hash")  # content_hash cho phép re-derive URL
+# nhằm chặn rò rỉ URL của file private. SEC-26.
+#
+# Bao gồm `content_hash` để defense-in-depth: source `crm.api.activities.get_attachments`
+# CRM v1.87.0 (commit `0d3910b456ef4fb913e77b29db011b3debc4f778`, xem evidence
+# `t1b-sec26-upstream-contract-v1.87.0.md`) chỉ liệt kê
+# `[name, file_name, file_type, file_url, file_size, is_private, modified, creation,
+# owner]` trong `frappe.db.get_all("File", ...)` — không chọn `content_hash`, nên
+# upstream không trả field này ở v1.87.0. Helper vẫn loại bỏ `content_hash` nếu field
+# này xuất hiện trong payload khác (ví dụ kết quả từ endpoint trả dict có key khác)
+# hoặc khi upstream đổi shape. Nếu upstream thực sự bổ sung `content_hash`, cần viết
+# test riêng để pin redaction (TODO T1B-ext+1).
+_FILE_URL_FIELDS = ("file_url", "content_hash")
 
 
 def _redact_private_file_urls(entries):
 	"""Trả về list các entry giống `entries` nhưng đã redact URL/hash cho non-system caller.
 
 	- System caller (Administrator / System Manager): trả nguyên bản.
-	- Non-system caller: với mỗi entry có `is_private` truthy, xoá `file_url` (và
-	  `content_hash` để tránh tái dựng URL). Các field khác (file_name, name,
-	  is_private, file_size) được giữ vì không nhạy cảm — caller cần biết file
-	  tồn tại để UI hiển thị, nhưng không cần truy cập nội dung.
+	- Non-system caller: với mỗi entry có `is_private` truthy, loại bỏ `file_url`;
+	  đồng thời loại bỏ `content_hash` **nếu key này xuất hiện trong entry**.
+	  Các field khác (file_name, name, is_private, file_size) được giữ nguyên giá
+	  trị upstream — helper không đánh giá độ nhạy cảm của chúng.
+
+	Lưu ý về contract: CRM v1.87.0 `crm.api.activities.get_attachments` không chọn
+	`content_hash` trong `fields=...` (đã xác minh tĩnh), nên việc redact
+	`content_hash` hiện là no-op đối với payload của `get_attachments`. Helper giữ
+	field này trong `_FILE_URL_FIELDS` để áp dụng khi payload đến từ nguồn khác
+	hoặc khi upstream đổi shape (xem evidence
+	`t1b-sec26-upstream-contract-v1.87.0.md`).
 	"""
 	if _is_system(frappe.session.user):
 		return entries
@@ -101,7 +118,10 @@ def get_attachments(doctype, name):
 	_check_read(doctype, name)
 	attachments = frappe.get_attr("crm.api.activities.get_attachments")(doctype, name)
 	# SEC-26: redact `file_url`/`content_hash` của file private cho non-system caller
-	# để chặn rò rỉ signed URL. System caller nhận payload nguyên bản.
+	# để chặn rò rỉ URL private. System caller nhận payload nguyên bản.
+	# (CRM v1.87.0 không chọn `content_hash` trong `fields=...` của
+	# `crm.api.activities.get_attachments`, nên redaction trên `content_hash` ở
+	# đây hiện là no-op — xem evidence `t1b-sec26-upstream-contract-v1.87.0.md`.)
 	return _redact_private_file_urls(attachments)
 
 
@@ -139,6 +159,4 @@ def get_call_log(name: str):
 				"until record-scoped reporting is available.",
 				frappe.PermissionError,
 			)
-	return frappe.get_attr(
-		"crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log"
-	)(name)
+	return frappe.get_attr("crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log")(name)
