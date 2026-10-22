@@ -71,7 +71,7 @@ jobs:
           artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
           compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
 
-          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && ./env/bin/bench setup requirements --dev && ./env/bin/bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p0-test.localhost && ./env/bin/bench --site p0-test.localhost set-config allow_tests true && ./env/bin/bench --site p0-test.localhost migrate'; then
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench setup requirements --dev && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p0-test.localhost && bench --site p0-test.localhost set-config allow_tests true && bench --site p0-test.localhost migrate'; then
             echo 'Fresh-site setup or Bench dev dependency installation failed.' | tee "$artifact_dir/site-setup-failed.txt"
             exit 1
           fi
@@ -95,7 +95,7 @@ jobs:
               test_docshare_lifecycle) expected_methods=10 ;;
             esac
             echo "=== Running module: $module ==="
-            if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p /tmp/p0-g007-evidence && set +e; ./env/bin/bench --site p0-test.localhost --verbose run-tests --module '$module' --junit-xml-output '$container_xml' > '$container_log' 2>&1; rc=\$?; exit \$rc"; then
+            if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p /tmp/p0-g007-evidence && set +e; bench --site p0-test.localhost --verbose run-tests --module '$module' --junit-xml-output '$container_xml' > '$container_log' 2>&1; rc=\$?; exit \$rc"; then
               module_status=0
             else
               module_status=$?
@@ -104,7 +104,7 @@ jobs:
             printf '%s expected_methods=%s exit=%s\n' "$module" "$expected_methods" "$module_status" >> "$artifact_dir/module-status.txt"
           done
 
-          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && ./env/bin/bench --site p0-test.localhost migrate'; then
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p0-test.localhost migrate'; then
             echo 'Post-test migration failed.' >> "$artifact_dir/module-status.txt"
             overall_status=1
           fi
@@ -162,7 +162,7 @@ jobs:
             exit 1
           fi
 
-          if ! "${compose[@]}" exec -d bench bash -lc 'cd /workspace/frappe-bench && nohup ./env/bin/bench --site p0-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p0-g007-http-serve.log 2>&1 </dev/null &'; then
+          if ! "${compose[@]}" exec -d bench bash -lc 'cd /workspace/frappe-bench && nohup bench --site p0-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p0-g007-http-serve.log 2>&1 </dev/null &'; then
             echo 'Could not start bench serve for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
             exit 1
           fi
@@ -294,7 +294,7 @@ jobs:
           container_id=$(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" ps -q bench 2>/dev/null || true)
           if [ -n "$container_id" ]; then
             docker inspect --format 'bench_container_image_id={{.Image}}' "$container_id" >> "$RUNNER_TEMP/p0-g007-evidence/workflow-metadata.txt" || true
-            docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && ./env/bin/bench --version' >> "$RUNNER_TEMP/p0-g007-evidence/workflow-metadata.txt" 2>&1 || true
+            docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --version' >> "$RUNNER_TEMP/p0-g007-evidence/workflow-metadata.txt" 2>&1 || true
           fi
 
       - name: Upload sanitized G0-07 evidence
