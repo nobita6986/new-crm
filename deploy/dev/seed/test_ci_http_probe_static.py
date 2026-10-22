@@ -55,6 +55,31 @@ def all_check_ids(tree: ast.Module) -> list[str]:
 	return ids
 
 
+def assigned_string_constants(tree: ast.Module) -> dict[str, str]:
+	"""Bảng `{tên biến: giá trị chuỗi}` cho biến được gán bằng string literal.
+
+	Dùng để truy vết giá trị thực của biến (ví dụ `get_data_path`) khi kiểm tra
+	tĩnh, thay vì so chuỗi rời rạc có thể vỡ khi cấu trúc lời gọi thay đổi.
+	"""
+	assigned: dict[str, str] = {}
+	for node in ast.walk(tree):
+		if not isinstance(node, ast.Assign) or len(node.targets) != 1:
+			continue
+		target = node.targets[0]
+		value = node.value
+		if (
+			isinstance(target, ast.Name)
+			and isinstance(value, ast.Constant)
+			and isinstance(value.value, str)
+		):
+			assigned[target.id] = value.value
+		elif isinstance(target, ast.Name) and isinstance(value, ast.BinOp):
+			# `"/api/..." + biến` — chỉ giữ phần literal đầu làm dấu hiệu.
+			if isinstance(value.left, ast.Constant) and isinstance(value.left.value, str):
+				assigned.setdefault(target.id, value.left.value)
+	return assigned
+
+
 def check_call(tree: ast.Module, case_id: str) -> ast.Call | None:
 	for node in ast.walk(tree):
 		if (
@@ -214,23 +239,55 @@ class TestProbeSec16RealCoverage(unittest.TestCase):
 		cls.source, cls.tree = load_probe()
 		cls.check_ids = all_check_ids(cls.tree)
 		cls.sec16_ids = [i for i in cls.check_ids if i.startswith("sec16-")]
+		cls.assignments = assigned_string_constants(cls.tree)
+
+	@classmethod
+	def _resolve_name(cls, name: str) -> str:
+		"""Giá trị của một biến module cấp chuỗi (ví dụ `get_data_path`)."""
+		return cls.assignments.get(name, name)
 
 	def test_sec16_exists(self):
 		self.assertTrue(self.sec16_ids, "phải có case SEC-16 (field exposure)")
 
 	def test_sec16_uses_crm_api_doc_get_data(self):
-		"""SEC-16 phải đi qua `crm.api.doc.get_data` — endpoint có trả permlevel field."""
-		uses = any(
-			"crm.api.doc.get_data" in ast.unparse(node)
-			for node in ast.walk(self.tree)
-			if isinstance(node, ast.Call)
-			and isinstance(node.func, ast.Name)
-			and node.func.id == "request"
-			and node.args
-			and isinstance(node.args[0], ast.Constant)
-			and str(node.args[0].value).startswith("sec16-")
+		"""SEC-16 phải đi qua `crm.api.doc.get_data` — endpoint có trả permlevel field.
+
+		Endpoint được truyền qua biến `get_data_path` (không nằm trực tiếp trong
+		lời gọi `request`) nên ta gom chuỗi endpoint của **mọi** lời gọi `request`
+		có case id bắt đầu bằng `sec16-`, rồi resolve biến để không bỏ sót khi
+		cấu trúc call thay đổi (ví dụ GET → POST + JSON body).
+		"""
+		sec16_paths: list[str] = []
+		for node in ast.walk(self.tree):
+			if not (
+				isinstance(node, ast.Call)
+				and isinstance(node.func, ast.Name)
+				and node.func.id == "request"
+				and node.args
+				and isinstance(node.args[0], ast.Constant)
+				and str(node.args[0].value).startswith("sec16-")
+			):
+				continue
+			# `request(case_id, opener, method, path, body=None, headers=None)`
+			if len(node.args) < 4:
+				continue
+			path = node.args[3]
+			if isinstance(path, ast.Constant) and isinstance(path.value, str):
+				sec16_paths.append(path.value)
+			elif isinstance(path, ast.Name):
+				sec16_paths.append(self._resolve_name(path.id))
+		# `sec16-setup` là bước chuẩn bị (fail-closed khi không tạo được field), không
+		# phải case HTTP — nó cố ý **không** gọi `request()`.
+		http_sec16_ids = [i for i in self.sec16_ids if i != "sec16-setup"]
+		self.assertEqual(
+			len(sec16_paths),
+			len(http_sec16_ids),
+			"mỗi case SEC-16 HTTP phải gọi request() với path tường minh",
 		)
-		self.assertTrue(uses, "SEC-16 phải gọi crm.api.doc.get_data")
+		self.assertTrue(
+			sec16_paths and all("crm.api.doc.get_data" in path for path in sec16_paths),
+			"mọi case SEC-16 phải trỏ cùng endpoint crm.api.doc.get_data, thấy: %r" % (sec16_paths,),
+		)
 
 	def test_sec16_uses_synthetic_permlevel_field_with_sentinel(self):
 		"""Field synthetic phải có permlevel=1 và record phải chứa sentinel secret."""
