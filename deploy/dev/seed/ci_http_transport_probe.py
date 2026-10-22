@@ -462,21 +462,40 @@ def run() -> int:
 		#
 		# Contract thật của CRM v1.87.0 (SHA `0d3910b4`, `crm/api/doc.py`):
 		#   def get_data(doctype, filters, order_by, page_length=20, ...)
-		# `filters` và `order_by` là **positional bắt buộc**, không có default.
-		# Thiếu chúng => `TypeError` => HTTP 500 (CI run #39802331716). Gọi bằng
-		# GET nên phải truyền chúng trong query string dưới dạng chuỗi JSON;
-		# bên trong hàm có `frappe._dict(filters)` và `frappe.parse_json(rows)`.
-		# Khớp với cách gọi của test nguồn `get_data(dt, {..}, "creation desc", rows=[..])`.
-		sec16_query = {
+		# `filters` là `dict` và `order_by` là positional bắt buộc — không có
+		# default. Hai lỗi liên tiếp đã gặp trên CI:
+		#   thiếu args      => TypeError                          => HTTP 500
+		#                    (#39802331716)
+		#   filters="..."   => FrappeTypeError: Argument 'filters' should be of
+		#                    type 'dict' but got 'str'            => HTTP 417
+		#                    (#39804284753)
+		#
+		# Lý do HTTP 417: `make_form_dict` trong Frappe (SHA `d2efa796`) chỉ
+		# `json.loads` **body**, còn query string luôn là chuỗi:
+		#     request_data = request.get_data(as_text=True)
+		#     if request_data and request.is_json: args = json.loads(request_data)
+		#     else: args = {}
+		#     args.update(request.args or {})
+		# Nên `filters` phải đi trong **JSON body** của POST để thành dict thật.
+		# Đây cũng là cách desk gọi endpoint (POST kèm CSRF token, xem SEC-14).
+		sec16_base = {
 			"doctype": "CRM Lead",
-			"filters": json.dumps({"name": LEAD_NAME}),
+			"filters": {"name": LEAD_NAME},
 			"order_by": "creation desc",
 		}
-		rows_param = urllib.parse.urlencode(
-			{**sec16_query, "rows": json.dumps(["name", SEC16_FIELDNAME])}
+		sec16_headers = {
+			"Content-Type": "application/json",
+			"X-Frappe-CSRF-Token": csrf_token,
+		}
+		get_data_path = "/api/method/crm.api.doc.get_data"
+		staff_get_data = request(
+			"sec16-permlevel-get-data",
+			staff,
+			"POST",
+			get_data_path,
+			json.dumps({**sec16_base, "rows": ["name", SEC16_FIELDNAME]}).encode("utf-8"),
+			sec16_headers,
 		)
-		get_data_path = "/api/method/crm.api.doc.get_data?" + rows_param
-		staff_get_data = request("sec16-permlevel-get-data", staff, "GET", get_data_path)
 		staff_get_data_payload = staff_get_data["json"]
 		message = (
 			staff_get_data_payload.get("message")
@@ -502,9 +521,10 @@ def run() -> int:
 		staff_get_all = request(
 			"sec16-permlevel-sentinel-scan",
 			staff,
-			"GET",
-			"/api/method/crm.api.doc.get_data?"
-			+ urllib.parse.urlencode({**sec16_query, "rows": json.dumps(["name"])}),
+			"POST",
+			get_data_path,
+			json.dumps({**sec16_base, "rows": ["name"]}).encode("utf-8"),
+			sec16_headers,
 		)
 		check(
 			"sec16-permlevel-sentinel-scan",
