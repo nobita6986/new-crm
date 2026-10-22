@@ -309,8 +309,10 @@ class TestLEAD07UnassignedLead(_BT1C5Base):
 		from frappe.client import get_list as client_get_list
 
 		filters = {"name": ["in", [self.lead_t1, self.lead_t1_unassigned]]}
+		# `pluck="name"` trả list[str] (không phải list[dict]) nên không có
+		# `.name` — dùng trực tiếp giá trị trả về (CI #39815209140).
 		self.assertEqual(
-			{row.name for row in frappe.get_list("CRM Lead", filters=filters, pluck="name")},
+			set(frappe.get_list("CRM Lead", filters=filters, pluck="name")),
 			{self.lead_t1},
 			"Lead chưa giao KHÔNG được xuất hiện trong list của Staff A.",
 		)
@@ -482,7 +484,13 @@ class TestTK0506TeamLeaderTask(_BT1C5Base):
 				result = execute_cmd("crm_cskh.api.guarded_crm.get_linked_tasks")
 		finally:
 			frappe.local.form_dict = frappe._dict()
-		self.assertIn(self.task_t1, result)
+		# Upstream `crm.api.activities.get_linked_tasks` trả `list[dict]`, mỗi
+		# entry có `name` — không phải list[string] (CI #39815209140).
+		self.assertIn(
+			self.task_t1,
+			{row["name"] for row in result},
+			f"Task Team 1 phải có trong kết quả, nhận: {result!r}",
+		)
 
 	def test_tk06_tl1_list_does_not_include_task_of_team_2(self):
 		"""TK-06 (list) — TL1 KHÔNG thấy Task gắn Lead Team 2."""
@@ -561,7 +569,13 @@ class TestNT0506TeamLeaderNote(_BT1C5Base):
 				result = execute_cmd("crm_cskh.api.guarded_crm.get_linked_notes")
 		finally:
 			frappe.local.form_dict = frappe._dict()
-		self.assertIn(self.note_t1, result)
+		# Upstream `crm.api.activities.get_linked_notes` trả `list[dict]`, mỗi
+		# entry có `name` — không phải list[string] (CI #39815209140).
+		self.assertIn(
+			self.note_t1,
+			{row["name"] for row in result},
+			f"Note Team 1 phải có trong kết quả, nhận: {result!r}",
+		)
 
 	def test_nt06_tl1_list_does_not_include_note_of_team_2(self):
 		"""NT-06 (list) — TL1 KHÔNG thấy Note gắn Lead Team 2."""

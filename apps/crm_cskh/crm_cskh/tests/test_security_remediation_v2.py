@@ -410,11 +410,18 @@ class TestSEC14CSRFAndSessionHTTP(FrappeTestCase):
 		đây `assertRaises` chỉ bao `execute_cmd`, nên CSRFTokenError từ
 		`_run_csrf_check` thoát ra ngoài ⇒ test ERROR thay vì kiểm chứng điều nó mô
 		tả (CI #39810335017).
+
+		Thứ tự lệnh phải giữ nguyên như cũ: `setUp` đã `_ensure_csrf_session()` tạo
+		token hợp lệ trong `frappe.local.session`. `frappe.set_user()` dựng session mới
+		(xoá `csrf_token`) nên phải gọi **sau** `_run_csrf_check` — nếu gọi trước thì
+		`validate_csrf_token()` thấy `csrf_token is None`, sinh token mới rồi
+		`return` mà không raise ⇒ `AssertionError: CSRFTokenError not raised`
+		(CI #39815209140).
 		"""
-		frappe.set_user(self.users["a"])
-		frappe.local.form_dict = frappe._dict({})
 		with self.assertRaises(frappe.CSRFTokenError):
 			_run_csrf_check(_build_request("POST", headers={"Content-Type": "application/json"}))
+			frappe.set_user(self.users["a"])
+			frappe.local.form_dict = frappe._dict({})
 			frappe.handler.execute_cmd("crm_cskh.api.health.ping")
 
 
@@ -1039,31 +1046,43 @@ class TestSEC15BODAndRISKSEC12BulkReassign(FrappeTestCase):
 		"""BOD Viewer gọi `crm_cskh.api.guarded_reporting.*` qua `frappe.handler.execute_cmd()`
 		phải raise — fail-closed vì `_require_system_manager`."""
 		frappe.set_user(self.users["bod"])
-		for endpoint in (
-			"crm_cskh.api.guarded_reporting.crm_manager_dashboard",
-			"crm_cskh.api.guarded_reporting.crm_manager_chart",
-			"crm_cskh.api.guarded_reporting.reportview_export_query",
-			"crm_cskh.api.guarded_reporting.data_export",
-			"crm_cskh.api.guarded_reporting.query_report_run",
-			"crm_cskh.api.guarded_reporting.query_report_export_query",
-		):
+		# `execute_cmd` truyền `frappe.form_dict` làm kwargs, nên mỗi endpoint cần
+		# đủ tham số bắt buộc để tới được **tầng guard**. Trước đây thiếu
+		# `name`/`type` ⇒ `TypeError` ở tầng Python trước khi guard chạy, test
+		# ERROR thay vì kiểm chứng fail-closed (CI #39815209140).
+		cases = (
+			("crm_cskh.api.guarded_reporting.crm_manager_dashboard", {}),
+			("crm_cskh.api.guarded_reporting.crm_manager_chart", {"name": "x", "type": "y"}),
+			("crm_cskh.api.guarded_reporting.reportview_export_query", {}),
+			("crm_cskh.api.guarded_reporting.data_export", {}),
+			("crm_cskh.api.guarded_reporting.query_report_run", {"report_name": "x"}),
+			("crm_cskh.api.guarded_reporting.query_report_export_query", {}),
+		)
+		for endpoint, kwargs in cases:
 			with self.subTest(endpoint=endpoint):
+				frappe.local.form_dict = frappe._dict(kwargs)
 				with bound_request(), self.assertRaises(frappe.PermissionError):
 					frappe.handler.execute_cmd(endpoint)
+		frappe.local.form_dict = frappe._dict()
 
 	def test_bod_calling_crm_cskh_api_endpoints_denied(self):
 		"""BOD Viewer gọi `crm_cskh.api.guarded_crm.*` qua handler — pin rằng wrapper
 		cũng từ chối (không chỉ reporting)."""
 		frappe.set_user(self.users["bod"])
-		for endpoint in (
-			"crm_cskh.api.guarded_crm.get_contact_by_phone_number",
-			"crm_cskh.api.guarded_crm.get_call_log",
-			"crm_cskh.api.guarded_crm.get_linked_calls",
-			"crm_cskh.api.guarded_crm.get_attachments",
-		):
+		# Mỗi endpoint cần tham số bắt buộc để chạm tới tầng guard, xem giải thích
+		# ở `test_bod_calling_guarded_reporting_via_execute_cmd_denied`.
+		cases = (
+			("crm_cskh.api.guarded_crm.get_contact_by_phone_number", {"phone_number": "0900000000"}),
+			("crm_cskh.api.guarded_crm.get_call_log", {"name": "orphan"}),
+			("crm_cskh.api.guarded_crm.get_linked_calls", {"name": self.lead_a}),
+			("crm_cskh.api.guarded_crm.get_attachments", {"doctype": "CRM Lead", "name": self.lead_a}),
+		)
+		for endpoint, kwargs in cases:
 			with self.subTest(endpoint=endpoint):
+				frappe.local.form_dict = frappe._dict(kwargs)
 				with bound_request(), self.assertRaises(frappe.PermissionError):
 					frappe.handler.execute_cmd(endpoint)
+		frappe.local.form_dict = frappe._dict()
 
 	def test_staff_bulk_delete_cross_scope_denied(self):
 		"""RISK-SEC-12: Staff gọi `delete_bulk_docs` cho Lead cross-scope phải raise."""
