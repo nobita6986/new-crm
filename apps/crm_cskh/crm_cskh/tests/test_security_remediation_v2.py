@@ -502,16 +502,99 @@ class TestSEC16FieldExposure(FrappeTestCase):
 		frappe.db.commit()
 
 	def test_get_attachments_does_not_leak_permlevel_field(self):
-		"""`get_attachments` không được trả field có `permlevel > 0` của File row."""
+		"""SEC-16 — `get_attachments` không được trả field có `permlevel > 0` của File row.
+
+		**Sửa vacuous assertion (T1B, 2026-10-23).** Bản trước viết:
+		    `assertNotIn("owner", {k for k in att.keys() if k.startswith("_")})`
+		Tập ở vế phải chỉ chứa key bắt đầu bằng `_`, còn `"owner"` không bao giờ bắt
+		đầu bằng `_` ⇒ assertion **luôn đúng, không bao giờ fail** (tautology). Thêm
+		nữa, nếu `attachments` rỗng thì vòng `for` không chạy lần nào ⇒ cũng pass vô
+		nghĩa. Fixture cũ không tạo field permlevel=1 nào trên chính doctype `File`
+		(`setUp` chỉ tạo trên `CRM Lead`), nên không có sentinel để rò rỉ.
+		Bản này bổ sung đủ positive control để test KHÔNG thể pass vacuous:
+		  1. Tạo Custom Field `permlevel=1` trên chính doctype `File` với sentinel riêng.
+		  2. Fixture phải có thật: sentinel set và đọc lại được từ DB, permlevel = 1.
+		  3. Attachment phải CÓ trong response (chặn response rỗng → vacuous).
+		  4. Cả tên field lẫn GIÁ TRỊ sentinel đều không được xuất hiện trong response.
+
+		**Giới hạn bắt buộc đọc cùng:** CRM v1.87.0 `crm.api.activities.get_attachments`
+		gọi `frappe.db.get_all("File", ..., fields=[<allowlist 9 field>])` — xem
+		`t1b-sec26-upstream-contract-v1.87.0.md` §2. Field permlevel KHÔNG nằm trong
+		allowlist đó, nên nó vắng mặt khỏi response **do allowlist**, KHÔNG phải do cơ
+		chế lọc permlevel (và `frappe.db.get_all` không áp permlevel). Vì vậy test này
+		pin thuộc tính "response không chứa field permlevel" và bắt được drift khi
+		upstream đổi `fields` (ví dụ sang `"*"`) — KHÔNG khẳng định `get_attachments`
+		đang lọc permlevel.
+		"""
 		from crm_cskh.api.guarded_crm import get_attachments
 
-		frappe.set_user(self.users["a"])
-		attachments = get_attachments("CRM Lead", self.lead_a)
-		self.assertIsInstance(attachments, list)
-		for att in attachments:
-			# File có permlevel=1 field — assert field đó không xuất hiện
-			# với user không có role System Manager.
-			self.assertNotIn("owner", {k for k in att.keys() if k.startswith("_")})
+		file_fieldname = "custom_cskh_sec16_file_restricted"
+		sentinel = "FILE-RESTRICTED-SENTINEL-SEC16"
+
+		frappe.set_user("Administrator")
+		if not frappe.db.exists("Custom Field", {"dt": "File", "fieldname": file_fieldname}):
+			frappe.get_doc(
+				{
+					"doctype": "Custom Field",
+					"dt": "File",
+					"fieldname": file_fieldname,
+					"label": "CSKH Sec16 File Restricted",
+					"fieldtype": "Data",
+					"permlevel": 1,
+				}
+			).insert(ignore_permissions=True)
+		frappe.clear_cache(doctype="File")
+		frappe.db.set_value("File", self.file_a, file_fieldname, sentinel)
+		frappe.db.commit()
+
+		try:
+			# (2) Positive control — sentinel thật sự nằm trong DB trên File row,
+			# và field đúng là permlevel=1. Không có 2 assert này thì (4) vacuous.
+			self.assertEqual(
+				frappe.db.get_value("File", self.file_a, file_fieldname),
+				sentinel,
+				"fixture phải thật: Custom Field permlevel=1 trên File chưa được set sentinel",
+			)
+			self.assertEqual(
+				frappe.db.get_value("Custom Field", {"dt": "File", "fieldname": file_fieldname}, "permlevel"),
+				1,
+				"fixture phải thật: Custom Field trên File phải có permlevel=1",
+			)
+
+			# Caller cần kiểm tra: user `a` (Sales User — không có System Manager).
+			frappe.set_user(self.users["a"])
+
+			# (3) Attachment phải xuất hiện trong response.
+			attachments = get_attachments("CRM Lead", self.lead_a)
+			self.assertIsInstance(attachments, list)
+			entry = next((a for a in attachments if a.get("name") == self.file_a), None)
+			self.assertIsNotNone(
+				entry,
+				f"attachment fixture {self.file_a!r} phải xuất hiện trong response; "
+				f"response rỗng hoặc thiếu fixture làm các assertion sau vô nghĩa. "
+				f"names nhận được: {[a.get('name') for a in attachments]}",
+			)
+			self.assertEqual(entry.get("name"), self.file_a)
+			self.assertTrue(entry.get("is_private"))
+
+			# (4) Tên field permlevel phải bị ẩn khỏi entry.
+			self.assertNotIn(file_fieldname, entry)
+
+			# (4b) GIÁ TRỊ sentinel cũng không được lộ ở bất kỳ key nào.
+			serialized = json.dumps(attachments, default=str)
+			self.assertNotIn(
+				sentinel,
+				serialized,
+				"giá trị sentinel của field permlevel=1 bị lộ qua get_attachments",
+			)
+		finally:
+			frappe.set_user("Administrator")
+			frappe.db.set_value("File", self.file_a, file_fieldname, None)
+			cf_name = frappe.db.exists("Custom Field", {"dt": "File", "fieldname": file_fieldname})
+			if cf_name:
+				frappe.delete_doc("Custom Field", cf_name, force=True, ignore_permissions=True)
+			frappe.clear_cache(doctype="File")
+			frappe.db.commit()
 
 	def test_get_linked_calls_does_not_leak_permlevel_field(self):
 		"""`get_linked_calls` không được trả Call Log với permlevel field bị ẩn."""
