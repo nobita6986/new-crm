@@ -13,10 +13,11 @@
 | Run **sau** (verify) | [`#39892127563`](https://github.com/nobita6986/new-crm/actions/runs/39892127563) · head `658780e` · PR merge `1e0fc26c` |
 | Run **xác nhận** (re-run) | [`#39893839646`](https://github.com/nobita6986/new-crm/actions/runs/39893839646) · head `da62569` — **tái lập nguyên vẹn** 91 PASS / 8 FAIL |
 | Run **xác nhận 2** | [`#39894784269`](https://github.com/nobita6986/new-crm/actions/runs/39894784269) · head `af83589` — **tái lập lần 3** 91 PASS / 8 FAIL |
+| Run **xác nhận 3** | [`#39895414507`](https://github.com/nobita6986/new-crm/actions/runs/39895414507) · head `e3182ba` — **tái lập lần 4** 91 PASS / 8 FAIL |
 | Commit sửa (T1B) | `658780e` — "T1B(G0-07): triage 22 method FAIL/ERROR" |
 | `frappe_sha` | `d2efa79657ba5c1abf96098b3bfacc199517d57e` (v15.123.1) |
 | `crm_sha` | `0d3910b456ef4fb913e77b29db011b3debc4f778` (v1.87.0) |
-| Artifact SHA-256 | `g007-per-method-gate.json` = `196ba75cd27720c9226a7ed67427aba2e6efb124363fc7acc62c447649770637`<br>`http/http-transport.json` = `ce3b4747f80f253e4b738e2ba6cceb5d5cd08fb8f62c37a47f12eeb8dc0e9df0`<br>`test_security_remediation_v2.junit.xml` = `8ec0d2c16d73a950f0f763d27fc6b233ff2364b0ac7abdc7636c5825a696e125`<br>`test_bt1c5_matrix_gaps.junit.xml` = `ea72840ece29f377750994b492fa198148893405d750c0887f840ca160906536`<br>`test_docshare_lifecycle.junit.xml` = `72e595ca0703ded4531f306af99ce9f865ef18cb194e9fa6cb872d833250c0c3`<br>`test_permissions.junit.xml` = `eb8c1172cf4d60c5d2e24a919e91b41e4dcea8cd499fb3e18575036747b5ccc5`<br>`test_security_remediation.junit.xml` = `7c83d2e2dcd6851e15241e4831b9d93ca5e057e116dfcebd7601a1297afeae3d`<br>`workflow-metadata.json` = `6951b5e52bf9db8822f252113a3de23717d84e00ed6dad3bc612864d6a3cb4f3` |
+| Artifact SHA-256 (run xác nhận 3, `#39895414507`) | Zip `p0-g007-evidence-39895414507` = `b7b8ae4982be04bf2b3949f2513870a49c88055be3990d7a6833cdc2ceaac800` (**khớp digest GitHub API**)<br>Content digest (thứ tự path + SHA-256 từng file) = `dc2d777dcd9f3007b5c17073026db2dbf6fdadac9d1a4f71779d26ba314f8b6b`<br>`g007-per-method-gate.json` = `196ba75cd27720c9226a7ed67427aba2e6efb124363fc7acc62c447649770637`<br>`http-transport.json` = `562f77d5b0aa9d8bf798d59afba176dbf77743f2f2e3c5939fb08c8ec67267f4`<br>`test_security_remediation_v2.junit.xml` = `3657a74af1d485931e10ef42196581502b0bb3906f7e863015e3f25aebe37d3b`<br>`test_bt1c5_matrix_gaps.junit.xml` = `0de37c77e352a9578ccd65d1aaecc368a24460fe1de289402b5466524d0001f1`<br>`test_docshare_lifecycle.junit.xml` = `1f3bf38baf790685c84bdb240551d230759b9592bf88d6d23ea5778a9ee65a65`<br>`test_permissions.junit.xml` = `f5894718b53b9473815b611064744cf38c1e0811044e61e2aa98b0f01b4ed660`<br>`test_security_remediation.junit.xml` = `d0078c14672c9eae39f2d30bc14f4059878425ad418f178c605c2a0956a75dc8`<br>`workflow-metadata.json` = `8be3ebb05ae1a9160376da911bce6eae6cfe5c155b36fc58aba168942ab2a6bf` |
 
 ---
 
@@ -28,8 +29,79 @@
 | **#39892127563 (sau)** | **91** | **8** | **0** | 0 | 0 | 99 | **`false`** |
 | #39893839646 (xác nhận) | 91 | 8 | 0 | 0 | 0 | 99 | `false` |
 | #39894784269 (xác nhận 2) | 91 | 8 | 0 | 0 | 0 | 99 | `false` |
+| #39895414507 (xác nhận 3) | 91 | 8 | 0 | 0 | 0 | 99 | `false` |
 
-> Run #39893839646 là commit **docs-only** (`da62569` = thêm báo cáo này); test code **giống hệt** `658780e` ⇒ kết quả **tái lập được**, không phải ngẫu nhiên. Run #39894784269 (`af83589`) tái lập lần 3 — cả 3 run đều cho **cùng** 8 FAIL và **cùng** danh sách method. `missing_methods` / `unexpected_cases` / `duplicate_methods` / `parse_errors` đều `[]` ở cả 3 run. HTTP probe 14/14 PASS ở cả 3 run.
+> Bốn run sau-fix (#39892127563, #39893839646, #39894784269, #39895414507) cho **cùng** kết quả 91/8/0 và **cùng** danh sách 8 method FAIL (đối chiếu tập method exact, `identical = True`). `missing_methods` / `unexpected_cases` / `duplicate_methods` / `parse_errors` / `missing_modules` / `empty_xml_files` đều `[]` ở cả bốn run. HTTP probe 14/14 PASS ở cả bốn run (cùng tập `case id`, cùng vector kết quả).
+
+### 2.1 Xác minh độc lập run xác nhận 3 (`#39895414507`, head `e3182ba`)
+
+Không suy luận "docs-only ⇒ kết quả y hệt" mà **đọc lại artifact từ đầu** và tự kiểm chứng ba tầng:
+
+| Tầng kiểm chứng | Phương pháp | Kết quả |
+|---|---|---|
+| **A. Gate JSON** | Đọc `g007-per-method-gate.json`, tự đếm lại `results[]` | `counts={PASS:91, FAIL:8}` · tổng 99 · `gate_passed=false` — **khớp** với `counts` khai báo |
+| **B. 5 JUnit XML** | Parse lại `<testcase>` bằng `ElementTree`, **không** tin gate | `bt1c5_matrix_gaps` 27 (1 FAIL) · `docshare_lifecycle` 10 (7 FAIL) · `permissions` 18 (0) · `security_remediation` 12 (0) · `security_remediation_v2` 32 (0) ⇒ **99 `<testcase>`, 91 PASS / 8 FAIL / 0 ERROR / 0 SKIP / 0 NOT RUN** |
+| **C. Inventory nguồn** | AST quét `apps/crm_cskh/crm_cskh/tests/test_*.py` | **99** method `test_*` trong class `Test*` (27+10+18+12+32) — **trùng khớp 1:1** với gate |
+
+**Đối chiếu 3 tầng:** sau khi chuẩn hoá `module.Class` → `Class`:
+- Tập method của **gate** (99) ≡ tập method của **XML** (99) ⇒ `gate-only = []`, `xml-only = []`.
+- **0** status disagreement giữa gate và XML (99/99 trùng khớp).
+- Tập method của **gate** ≡ **inventory nguồn** (99) ⇒ `source-not-in-gate = []`, `gate-not-in-source = []` ⇒ gate **phủ đúng toàn bộ** inventory, không bỏ sót method nào.
+
+**Sanity gate:** `expected_total=99` · `observed_total=99` · `missing_methods=[]` · `unexpected_cases=[]` · `duplicate_methods=[]` · `parse_errors=[]` · `missing_modules=[]` · `empty_xml_files=[]` · `errored_methods=[]` · `skipped_methods=[]` (`failed_methods` = 8).
+
+**Module-status (exit code từng module):** `test_permissions` 18/18 exit=0 · `test_security_remediation` 12/12 exit=0 · `test_security_remediation_v2` 32/32 exit=0 · `test_bt1c5_matrix_gaps` 27 (exit=1) · `test_docshare_lifecycle` 10 (exit=1).
+
+**Trạng thái theo method (module → PASS/FAIL):**
+
+| Module | Tổng | PASS | FAIL | ERROR | SKIP |
+|---|---|---|---|---|---|
+| `TestPermissionBoundaries` | 18 | 18 | 0 | 0 | 0 |
+| `TestSEC27CallLogFallbackContactInternal` | 4 | 4 | 0 | 0 | 0 |
+| `TestSEC27CallLogFallbackContact` | 4 | 4 | 0 | 0 | 0 |
+| `TestSEC26FileURLLeak` | 6 | 6 | 0 | 0 | 0 |
+| `TestSEC22And23StaleAfterReassign` | 3 | 3 | 0 | 0 | 0 |
+| `TestSEC16FieldExposure` | 6 | 6 | 0 | 0 | 0 |
+| `TestSEC15BODAndRISKSEC12BulkReassign` | 4 | 4 | 0 | 0 | 0 |
+| `TestSEC14CSRFAndSessionHTTP` | 6 | 6 | 0 | 0 | 0 |
+| `TestSEC14CSRFAndSession` | 5 | 5 | 0 | 0 | 0 |
+| `TestSEC13GuestTransportHTTP` | 3 | 3 | 0 | 0 | 0 |
+| `TestSEC13GuestTransport` | 3 | 3 | 0 | 0 | 0 |
+| `TestNT0506TeamLeaderNote` | 6 | 6 | 0 | 0 | 0 |
+| `TestTK0506TeamLeaderTask` | 6 | 6 | 0 | 0 | 0 |
+| `TestLS02GlobalSearchScope` | 3 | 3 | 0 | 0 | 0 |
+| `TestLEAD07UnassignedLead` | 3 | 3 | 0 | 0 | 0 |
+| `TestCL0607TeamLeaderCallLog` | 6 | 6 | 0 | 0 | 0 |
+| `TestDocSharePolicyPinRegistry` | 1 | 1 | 0 | 0 | 0 |
+| `TestDocShareBaseline` | 1 | 1 | 0 | 0 | 0 |
+| `TestDocShareAssignAgent` | 3 | 1 | **2** | 0 | 0 |
+| `TestDocShareEffectivePermission` | 2 | 0 | **2** | 0 | 0 |
+| `TestDocShareLeadSave` | 2 | 0 | **2** | 0 | 0 |
+| `TestDocShareRemoveAssignments` | 1 | 0 | **1** | 0 | 0 |
+| `TestRA04CrmAdminReassignBlocked` | 3 | 2 | **1** | 0 | 0 |
+| **Tổng** | **99** | **91** | **8** | **0** | **0** |
+
+**HTTP transport probe (`http-transport.json`):** `probe_result="PASS"` · `failed_cases=[]` · **14/14** case `assertion.result == "PASS"` · `transport_error=null` ở cả 14 case.
+Phạm vi case (14): `sec13-guest` · `staff-login` · `sec13-user` · `csrf-page` · `sec14-get` · `sec14-post-nocsrf` · `sec14-post-badtok` · `sec14-post-ok` · `administrator-login` · `sec13-admin` · `sec16-permlevel-get-data` · `sec16-permlevel-sentinel-scan` · `sec26-staff-private` · `sec26-admin-private`.
+**Phạm vi coverage (trích nguyên văn từ artifact):** `"direct HTTP to bench serve; reverse-proxy and CORS behavior are not covered"` — probe chỉ bắt được lỗi ở tầng HTTP trực tiếp tới `bench serve`, **không** phủ hành vi reverse-proxy/CORS.
+
+**Định danh (Mã định danh bằng chứng):**
+- `run_id` = `39895414507` (khớp `workflow-metadata.json` `run_id`).
+- `head_sha` (branch commit) = `e3182ba67230e4c6e8a41d3af2b2ca85977e060e`.
+- `commit_sha` trong `workflow-metadata.json` và `http-transport.json` = `1678a9738aeba4c2589ea1c0e8589a5db0ac3e09` ⇒ đây là **PR merge commit tổng hợp** (`refs/pull/2/merge`), **không** phải head branch. Đã xác minh: `gh api .../git/ref/pull/2/merge` → `sha = 1678a973…`; `compare/e3182ba...1678a973` → `ahead_by=1`, `files=[]` ⇒ **nội dung cây thư mục y hệt** head. Đây là hành vi đúng cho event `pull_request` (mỗi push sinh merge commit mới); `commit_sha` **đổi theo mỗi push** ở cả bốn run (`1e0fc26c` → `db21338e` → `ca945f30` → `1678a973`) — vì vậy **không** dùng `commit_sha` làm khoá so sánh giữa các run.
+- `frappe_sha` = `d2efa79657ba5c1abf96098b3bfacc199517d57e` (v15.123.1) · `crm_sha` = `0d3910b456ef4fb913e77b29db011b3debc4f778` (v1.87.0) — **không đổi** ở cả bốn run.
+- `bench_image_ref` = `frappe/bench:v5.31.0@sha256:3b75943bf00a1db92723d99ec34fbfa92f4b67b9b643ae1e96750899b7fbd980` · `bench_container_image_id` = `sha256:a096b5b275c5fff5c869093684bb7bfac292a23f862b99d53aaf5874236e390e`.
+- **Tính toàn vẹn artifact:** tải qua **hai đường độc lập** (`gh run download` và `GET /actions/artifacts/{id}/zip`) ⇒ **16/16 file byte-identical**; SHA-256 zip tải lại = `b7b8ae4982be04bf2b3949f2513870a49c88055be3990d7a6833cdc2ceaac800` = **khớp chính xác** digest do GitHub API báo (`sha256:b7b8ae…`) và size 131.763 bytes.
+
+**Workflow outcomes (run xác nhận 3):** `bootstrap=success` · `lint=success` · `seed=success` · `per_method=failure` · `per_method_gate=failure` · `http_transport=success` · `backup_restore=success` · `redaction_replacements=4`.
+
+**Đối chiếu phạm vi code giữa các run:** `git diff --stat 658780e e3182ba -- apps/` ⇒ **rỗng** (không thay đổi code app/test); `git diff --stat 658780e e3182ba` ⇒ **chỉ 1 file** `deploy/dev/evidence/t1b-g007-method-triage-2026-10-23.md` (+208 dòng). Tuy vậy kết luận "tái lập" trong báo cáo này dựa trên **artifact đọc lại và kiểm chứng độc lập**, không dựa trên nhãn "docs-only".
+
+**Nguyên nhân 8 FAIL (đọc trực tiếp từ `<failure>` trong XML):**
+- 7 × DocShare — thông điệp `unexpectedly None : PINNED BEHAVIOR [Q2] — pending T0/Owner decision…` và `assertIsNotNone(self._share_for(self.users["c"]))` ⇒ **canary chờ Owner**, không phải hồi quy.
+- 1 × RA-04 — `Lists differ: ['crm.api.doc.remove_assignments', 'crm.api.doc.get_assigned_users'] != []` ⇒ canary ownership-service chưa tồn tại.
+
+⇒ 8 FAIL **giống hệt** danh sách E1–E8 ở §3.5 (canary, không phải hồi quy mới).
 
 **HTTP transport probe:** 14/14 PASS (`probe_result: "PASS"`, `failed_cases: []`) — không đổi so với run trước.
 
@@ -206,3 +278,4 @@ return lead and {"full_name": lead.lead_name, "image": lead.image}
 2. **T1B-ext+1** — nhánh **Dynamic Link** trong `get_linked_calls` có thể đưa Call Log `reference_doctype` rỗng vào nhánh phone-lookup của `get_call_contact` ⇒ nghi vấn rò rỉ Contact ngoài scope. **Chưa có runtime evidence.** Cần (a) Owner duyệt thêm method vào inventory 99, hoặc (b) tách thành PR remediation riêng.
 3. **T1B-ext+2** — vì sao `check_permission("read")` cho `ToDo`/`Comment` lại chặn user **đúng scope** (tầng doctype-permission của Frappe). Chưa biến thành tiêu chí PASS.
 4. **G0-07 / P0:** vẫn `NO-GO` — 8/99 method FAIL ⇒ `gate_passed=false`.
+5. **PR #2:** vẫn `open`, `merged=false`, `mergeable=true`, `mergeStateStatus=UNSTABLE` — **không merge** theo yêu cầu Owner. Bốn run liên tiếp đã xác nhận 91/99; vấn đề còn lại **không** là flakiness mà là 8 canary chờ quyết định policy.
