@@ -12,6 +12,7 @@
 | Run **trước** (input triage) | [`#39885152649`](https://github.com/nobita6986/new-crm/actions/runs/39885152649) · head `fb55dfa` |
 | Run **sau** (verify) | [`#39892127563`](https://github.com/nobita6986/new-crm/actions/runs/39892127563) · head `658780e` · PR merge `1e0fc26c` |
 | Run **xác nhận** (re-run) | [`#39893839646`](https://github.com/nobita6986/new-crm/actions/runs/39893839646) · head `da62569` — **tái lập nguyên vẹn** 91 PASS / 8 FAIL |
+| Run **xác nhận 2** | [`#39894784269`](https://github.com/nobita6986/new-crm/actions/runs/39894784269) · head `af83589` — **tái lập lần 3** 91 PASS / 8 FAIL |
 | Commit sửa (T1B) | `658780e` — "T1B(G0-07): triage 22 method FAIL/ERROR" |
 | `frappe_sha` | `d2efa79657ba5c1abf96098b3bfacc199517d57e` (v15.123.1) |
 | `crm_sha` | `0d3910b456ef4fb913e77b29db011b3debc4f778` (v1.87.0) |
@@ -26,8 +27,9 @@
 | #39885152649 (trước) | 77 | 12 | 10 | 0 | 0 | 99 | `false` |
 | **#39892127563 (sau)** | **91** | **8** | **0** | 0 | 0 | 99 | **`false`** |
 | #39893839646 (xác nhận) | 91 | 8 | 0 | 0 | 0 | 99 | `false` |
+| #39894784269 (xác nhận 2) | 91 | 8 | 0 | 0 | 0 | 99 | `false` |
 
-> Run #39893839646 là commit **docs-only** (`da62569` = thêm báo cáo này); test code **giống hệt** `658780e` ⇒ kết quả **tái lập được**, không phải ngẫu nhiên. `missing_methods` / `unexpected_cases` / `duplicate_methods` / `parse_errors` đều `[]` ở cả hai run.
+> Run #39893839646 là commit **docs-only** (`da62569` = thêm báo cáo này); test code **giống hệt** `658780e` ⇒ kết quả **tái lập được**, không phải ngẫu nhiên. Run #39894784269 (`af83589`) tái lập lần 3 — cả 3 run đều cho **cùng** 8 FAIL và **cùng** danh sách method. `missing_methods` / `unexpected_cases` / `duplicate_methods` / `parse_errors` đều `[]` ở cả 3 run. HTTP probe 14/14 PASS ở cả 3 run.
 
 **HTTP transport probe:** 14/14 PASS (`probe_result: "PASS"`, `failed_cases: []`) — không đổi so với run trước.
 
