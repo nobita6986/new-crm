@@ -148,11 +148,15 @@ def _seed_bt1c5_users(cls):
 # ---------------------------------------------------------------------------
 
 
-def _make_lead(phone, owner=None):
-	"""Tạo CRM Lead. `owner=None` → Lead CHƯA GIAO (`lead_owner` rỗng)."""
+def _make_lead(phone, owner=None, first_name="CSKH BT1C5"):
+	"""Tạo CRM Lead. `owner=None` → Lead CHƯA GIAO (`lead_owner` rỗng).
+
+	Tham số `first_name` cho phép fixture có giá trị **searchable** (xem
+	`_make_searchable_lead`).
+	"""
 	doc = {
 		"doctype": "CRM Lead",
-		"first_name": "CSKH BT1C5",
+		"first_name": first_name,
 		"mobile_no": phone,
 		"status": "New",
 	}
@@ -746,7 +750,47 @@ class TestLS02GlobalSearchScope(_BT1C5Base):
 	- Lead của đồng đội `B` (Team 1, ngoài owner scope);
 	- Lead của `C` (Team 2);
 	- Lead chưa giao (owner rỗng) — owner `""` không thuộc scope của bất kỳ ai.
+
+	**Sửa lỗi fixture (T1B, 2026-10-23) — search term không khớp field searchable.**
+	`search_widget` (Frappe v15.123.1 `frappe/desk/search.py`) **KHÔNG dùng
+	`searchfield` để lọc**. Filter thật được dựng trong `or_filters` từ:
+	    - `name` (docname — CRM Lead dùng `naming_series` ⇒ `CRM-LEAD-2026-XXXXX`)
+	    - `meta.title_field` (`lead_name`)
+	    - `meta.get_search_fields()` (`status`, `email`, `lead_name`)
+	`searchfield` chỉ quyết định danh sách field được SELECT, không quyết định
+	điều kiện lọc.
+
+	Fixture cũ tìm bằng `mobile_no` = `"091..."` ⇒ không field nào ở trên chứa
+	"091" ⇒ `search_widget` trả list RỖNG ⇒ assert "A phải thấy Lead của chính
+	mình" FAIL **nham** (CI #39885152649: `'CRM-LEAD-2026-00060' not found in set()`).
+	Đây là lỗi **fixture**, KHÔNG phải lỗi scope — `search_widget` vẫn
+	permission-aware; fix bằng cách dùng `lead_name` (field `search_index=1`)
+	làm giá trị tìm kiếm.
 	"""
+
+	# Giá trị tìm kiếm dùng cho LS-02 — nằm trong `lead_name` (searchable).
+	SEARCH_T1 = "cskh-ls02-team1"
+	SEARCH_T2 = "cskh-ls02-team2"
+
+	@classmethod
+	def setUpClass(cls):
+		super().setUpClass()
+		# Fixture riêng cho LS-02 với `lead_name` chứa giá trị tìm kiếm.
+		base_phone = int(frappe.generate_hash(length=6), 16) % 1_000_000
+		cls.lead_t1 = _make_lead(f"091{base_phone:07d}", cls.users["a"], first_name=cls.SEARCH_T1)
+		cls.lead_t2 = _make_lead(
+			f"092{(base_phone + 1) % 1_000_000:07d}", cls.users["c"], first_name=cls.SEARCH_T2
+		)
+		frappe.db.commit()
+
+	@classmethod
+	def tearDownClass(cls):
+		frappe.set_user("Administrator")
+		for name in (getattr(cls, "lead_t1", None), getattr(cls, "lead_t2", None)):
+			if name and frappe.db.exists("CRM Lead", name):
+				frappe.delete_doc("CRM Lead", name, force=True, ignore_permissions=True)
+		frappe.db.commit()
+		super().tearDownClass()
 
 	def test_ls02_search_widget_returns_only_own_leads_for_staff(self):
 		"""LS-02 — `search_widget` (search box) trả đúng scope của `A`.
@@ -758,8 +802,12 @@ class TestLS02GlobalSearchScope(_BT1C5Base):
 		from frappe.desk.search import search_widget
 
 		frappe.set_user(self.users["a"])
-		# Search bằng `mobile_no` (search field của CRM Lead) — trả về list các tuple.
-		rows = search_widget("CRM Lead", "091", searchfield="mobile_no", page_length=50, as_dict=True)
+		# Search term phải nằm trong field SEARCHABLE của CRM Lead
+		# (`lead_name` — `search_index=1`); `search_widget` KHÔNG lọc theo
+		# `searchfield` (xem docstring class).
+		rows = search_widget(
+			"CRM Lead", self.SEARCH_T1, searchfield="lead_name", page_length=50, as_dict=True
+		)
 		returned = {row.get("name") for row in rows}
 		self.assertIn(
 			self.lead_t1,
@@ -782,7 +830,9 @@ class TestLS02GlobalSearchScope(_BT1C5Base):
 		from frappe.desk.search import search_link
 
 		frappe.set_user(self.users["a"])
-		results = search_link("CRM Lead", "092", page_length=50)
+		# `search_link` → `search_widget` ⇒ cùng bộ filter `or_filters`
+		# (name / title_field / search_fields) — dùng `lead_name` như ở test trên.
+		results = search_link("CRM Lead", self.SEARCH_T2, page_length=50)
 		returned = {item.get("value") for item in results}
 		self.assertNotIn(
 			self.lead_t2,
@@ -796,22 +846,41 @@ class TestLS02GlobalSearchScope(_BT1C5Base):
 		`search_widget` nhận `ignore_user_permissions`. Với actor thường, `has_permission`
 		phải trả `False` (CRM-ADMIN không có read ⇒ `lead_has_permission` trả `False`),
 		nên `ignore_permissions` không được bật. Test pin hành vi này để chống bypass.
+
+		**Sửa lỗi assertion — hợp đồng thật là RAISE, không phải trả list rỗng
+		(T1B, 2026-10-23).** Bản trước gọi `search_widget(...)` rồi assert
+		`lead_t2 not in returned` ⇒ kỳ vọng hàm **trả list rỗng**. Nhưng theo
+		source Frappe v15.123.1 `frappe/desk/search.py` (đã xác minh tĩnh):
+
+		    ignore_permissions = doctype == "DocType" or (
+		        cint(ignore_user_permissions)
+		        and has_permission(doctype, ptype=..., parent_doctype=...)
+		    )
+		    values = frappe.get_list(..., ignore_permissions=ignore_permissions, ...)
+
+		CRM-ADMIN không có DocPerm read trên CRM Lead ⇒ `has_permission` trả False
+		⇒ `ignore_permissions` giữ **False** ⇒ `frappe.get_list` gọi
+		`db_query.check_read_permission` ⇒ `frappe.has_permission(..., throw=True)`
+		⇒ **raise `frappe.PermissionError`** (không phải trả list rỗng).
+
+		Bằng chứng CI #39885152649: ERROR tại `search.py:222 → frappe.get_list →
+		db_query.py:351 check_read_permission → db_query.py:906 _set_permission_map
+		→ frappe/__init__.py:1083 raise frappe.PermissionError`.
+
+		⇒ Hành vi fail-closed **đúng** là raise. `assertRaises(PermissionError)` mạnh
+		hơn "trả list rỗng" (chặn hẳn request thay vì lọc rỗng), nên đây là
+		siết chặt hơn, KHÔNG phải nới lỏng để làm CI xanh. Test vẫn pin đúng ý
+		"bypass bằng `ignore_user_permissions=True` KHÔNG thành công".
 		"""
 		from frappe.desk.search import search_widget
 
 		frappe.set_user(self.users["admin"])  # CRM-ADMIN: fail-closed (không read)
-		rows = search_widget(
-			"CRM Lead",
-			"092",
-			searchfield="mobile_no",
-			page_length=50,
-			as_dict=True,
-			ignore_user_permissions=True,
-		)
-		returned = {row.get("name") for row in rows}
-		self.assertNotIn(
-			self.lead_t2,
-			returned,
-			"CRM-ADMIN không có quyền read CRM Lead ⇒ search với "
-			"ignore_user_permissions=True không được lộ Lead nào.",
-		)
+		with self.assertRaises(frappe.PermissionError):
+			search_widget(
+				"CRM Lead",
+				self.SEARCH_T2,
+				searchfield="lead_name",
+				page_length=50,
+				as_dict=True,
+				ignore_user_permissions=True,
+			)

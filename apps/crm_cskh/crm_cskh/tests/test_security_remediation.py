@@ -308,12 +308,19 @@ class TestSEC27CallLogFallbackContact(FrappeTestCase):
 	def setUp(self):
 		frappe.set_user("Administrator")
 		# Tạo Contact cho lookup test.
+		# Sửa lỗi fixture (T1B, 2026-10-23): thêm child row `Contact Phone` tường minh.
+		# Upstream CRM v1.87.0 `crm/integrations/api.py::get_contact` query child table
+		# `Contact Phone` (`ContactPhone.phone`), KHÔNG query `Contact.mobile_no` ⇒
+		# thiếu child row thì upstream rơi vào fallback `{"mobile_no": phone_number}`
+		# và test FAIL sai (CI #39885152649: `'full_name' not found in
+		# {'mobile_no': '0909876543'}`). Đây là lỗi fixture, KHÔNG phải lỗi upstream.
 		if not frappe.db.exists("Contact", "CSKH-SEC27-Contact"):
 			frappe.get_doc(
 				{
 					"doctype": "Contact",
 					"first_name": "CSKH Sec27 Lookup",
 					"mobile_no": "0909876543",
+					"phone_nos": [{"phone": "0909876543", "is_primary_mobile_no": 1}],
 				}
 			).insert(ignore_permissions=True)
 		# Tạo orphan Call Log (không ref Lead/Deal).
