@@ -1,10 +1,12 @@
-# T1B — Rà từng method FAIL/ERROR (run mới nhất `#39916992699`)
+# T1B — Rà từng method FAIL/ERROR (run mới nhất `#39976477275`)
 
 **Ngày:** 2026-10-23 · **Phạm vi:** T1B (test-owned) · **PR:** [#2](https://github.com/nobita6986/new-crm/pull/2) — `open`, **KHÔNG merge**
-**Run mới nhất:** [`#39916992699`](https://github.com/nobita6986/new-crm/actions/runs/39916992699) — event `pull_request`, head `85fbf7c`, conclusion `failure`. Đây là run **mới nhất** của PR #2 tại thời điểm kiểm tra.
-**Artifact:** `p0-g007-evidence-39916992699` · artifact **ID `12485168467`** · 131.680 bytes · SHA-256 `7314993c4d7ab50822d5d3f982b791a99e3ecdb09e314a8ce935c03ab0a47bca` — **khớp chính xác** digest GitHub API (đã tải zip qua `gh api` và băm lại cục bộ)
-**Merge commit SHA:** `1c91b8606e185a8ca8aa21945e6a871d90aa25b3` (= `commit_sha` trong `workflow-metadata.json` **và** `http-transport.json`; khớp `refs/pull/2/merge`)
-**Nguồn đọc:** `g007-per-method-gate.json` · 5 file `*.junit.xml` · `test_docshare_lifecycle.log` · `test_bt1c5_matrix_gaps.junit.xml` · `http-transport.json` · `workflow-metadata.json` — tất cả thuộc artifact của run `#39916992699`
+**Run mới nhất:** [`#39976477275`](https://github.com/nobita6986/new-crm/actions/runs/39976477275) — event `pull_request`, head `138f6677006c978eee0823033c4e8a9634cf6435`, conclusion `failure`. Đây là run **mới nhất** của PR #2 tại thời điểm kiểm tra.
+**Artifact:** `p0-g007-evidence-39976477275` · artifact **ID `12512295421`** · 131.623 bytes · SHA-256 `f17dd94fc5b67929027db3769831e99589768af4542d86295c5e3ab8cf83c6e0` — **khớp chính xác** digest GitHub API (`digest=sha256:f17dd94f…`, tải zip qua `gh api` và băm lại cục bộ)
+**Merge commit SHA:** `08170e954f63af209f393e066cd85cfff4329844` (= `commit_sha` trong `http-transport.json`; khớp `refs/pull/2/merge` đọc trực tiếp từ GitHub API)
+**Nguồn đọc:** `g007-per-method-gate.json` · 5 file `*.junit.xml` · `test_docshare_lifecycle.log` · `test_bt1c5_matrix_gaps.junit.xml` · `http/http-transport.json` · `workflow-metadata.json` — tất cả thuộc artifact của run `#39976477275`
+
+> **Tương thích ngược:** run trước [`#39916992699`](https://github.com/nobita6986/new-crm/actions/runs/39916992699) (head `85fbf7c`, merge `1c91b860`) cho **cùng** kết quả 91/8/0 và **cùng** tập 8 method FAIL ⇒ **không** regression. Đối chiếu tập FAIL hai run: `identical = True`, `new = []`, `gone = []` (§0.1).
 
 > **Lưu ý về nguồn SHA:** các đường dẫn dòng cho **Frappe** (`d2efa796…`) trích từ file tải trực tiếp từ GitHub API tại SHA đã ghim trong lần rà này. Tài liệu gốc của `test_docshare_lifecycle.py` header ghi `assign_to.py L104-118` / `share.py L47-83` — **đã đối chiếu và khớp** với nội dung tại SHA này (`_add` L104-118; `add_docshare` L47-83). Các đường dẫn dòng cho **CRM v1.87.0** (`0d3910b4…`) trích từ bản copy trong `deploy/dev/evidence/logs/upstream-crm-v1.87.0/` đã có sẵn từ lần trước.
 >
@@ -12,15 +14,26 @@
 
 ---
 
-## 0. Xác minh counts từ artifact của run `#39916992699`
+## 0. Xác minh counts từ artifact của run `#39976477275`
 
 **Không** suy ra từ commit message, nhãn "docs-only", hay `conclusion` tổng quát của run. Ba tầng đọc độc lập, parse trực tiếp file trong artifact:
 
 | Tầng | Phương pháp | Kết quả |
 |---|---|---|
 | **A. Gate JSON** | Đọc `g007-per-method-gate.json`, tự đếm lại `results[]` | `counts(declared)={PASS:91, FAIL:8}`; `counts(recomputed)={PASS:91, FAIL:8}`; tổng 99; `passing_total=91`; `gate_passed=false` |
-| **B. 5 JUnit XML** | Parse lại `<testcase>` bằng `ElementTree`, **không** tin gate | `bt1c5_matrix_gaps` 27 (1 FAIL) · `docshare_lifecycle` 10 (7 FAIL) · `permissions` 18 (0) · `security_remediation` 12 (0) · `security_remediation_v2` 32 (0) ⇒ **99 `<testcase>`** |
+| **B. 5 JUnit XML** | Parse lại `<testcase>` bằng `ElementTree`, **không** tin gate | `bt1c5_matrix_gaps` 27 (1 FAIL) · `docshare_lifecycle` 10 (7 FAIL) · `permissions` 18 (0) · `security_remediation` 12 (0) · `security_remediation_v2` 32 (0) ⇒ **99 `<testcase>`**; sum thuộc tính `<testsuite>` = `tests=99, failures=8, errors=0, skipped=0` |
 | **C. Inventory nguồn** | AST quét `apps/crm_cskh/crm_cskh/tests/test_*.py` | **99** method `test_*` trong class `Test*` |
+
+**Đối chiếu tập method 1:1 (không chỉ đếm):**
+
+| So sánh | Kết quả |
+|---|---|
+| AST (99) vs Gate `results[]` (99) | `EXACT 1:1 MATCH: True` · `AST-only=[]` · `Gate-only=[]` |
+| XML `<testcase>` (99) vs Gate (99) | `unique(classname::name)=99` ⇒ **không** trùng tên, **không** thiếu |
+| Gate vs XML theo từng status | **0** status disagreement |
+| Tất cả case có status | `PASS=91`, `FAIL=8`, `ERROR=0`, `SKIP=0` (đếm per-`<testcase>`) |
+| Gate hygiene | `missing_modules=[]` · `empty_xml_files=[]` · `missing_methods=[]` · `unexpected_cases=[]` · `duplicate_methods=[]` · `parse_errors=[]` · `errored_methods=[]` · `skipped_methods=[]` |
+| `xml_module_binding` | Cả 5 XML đều map đúng module (`bt1c5_matrix_gaps`→`…test_bt1c5_matrix_gaps`, `docshare_lifecycle`→`…test_docshare_lifecycle`, `permissions`→`…test_permissions`, `security_remediation`→`…test_security_remediation`, `security_remediation_v2`→`…test_security_remediation_v2`) |
 
 **Counts thực tế (từ artifact, cả 3 tầng khớp nhau):**
 
@@ -50,30 +63,57 @@
 
 | Trường | Giá trị |
 |---|---|
-| `run_id` | `39916992699` (khớp `workflow-metadata.json`) |
+| `run_id` | `39976477275` (khớp `workflow-metadata.json`) |
 | Event | `pull_request` |
-| `head_sha` (branch) | `85fbf7cee6d3566f7ddb825c18b0b63b1c904a0f` |
-| **Merge commit SHA** | `1c91b8606e185a8ca8aa21945e6a871d90aa25b3` — đây là `commit_sha` ghi trong `workflow-metadata.json` **và** `http-transport.json`, tức **PR synthetic merge commit** (`refs/pull/2/merge`), **không phải** head branch. Xác minh `refs/pull/2/merge` → `1c91b860…` |
+| `head_sha` (branch) | `138f6677006c978eee0823033c4e8a9634cf6435` |
+| **Merge commit SHA** | `08170e954f63af209f393e066cd85cfff4329844` — đây là `commit_sha` ghi trong `workflow-metadata.json` **và** `http/http-transport.json`, tức **PR synthetic merge commit** (`refs/pull/2/merge`), **không phải** head branch. Xác minh `refs/pull/2/merge` → `08170e95…` |
 | `frappe_sha` | `d2efa79657ba5c1abf96098b3bfacc199517d57e` (v15.123.1) |
 | `crm_sha` | `0d3910b456ef4fb913e77b29db011b3debc4f778` (v1.87.0) |
-| Artifact name | `p0-g007-evidence-39916992699` |
-| **Artifact ID** | `12485168467` |
-| **Artifact zip SHA-256** | `7314993c4d7ab50822d5d3f982b791a99e3ecdb09e314a8ce935c03ab0a47bca` — **khớp chính xác** digest GitHub API; size 131.680 bytes cũng khớp |
+| Artifact name | `p0-g007-evidence-39976477275` |
+| **Artifact ID** | `12512295421` |
+| **Artifact zip SHA-256** | `f17dd94fc5b67929027db3769831e99589768af4542d86295c5e3ab8cf83c6e0` — **khớp chính xác** digest GitHub API (`digest=sha256:f17dd94f…`); size 131.623 bytes cũng khớp |
 | `g007-per-method-gate.json` SHA-256 | `196ba75cd27720c9226a7ed67427aba2e6efb124363fc7acc62c447649770637` |
-| `http-transport.json` SHA-256 | `1770832914a18d59bcb7d7b4dae3472d467b54c42154bcfcdd90055410f42f6e` |
-| `test_docshare_lifecycle.log` SHA-256 | `e5e61df4abbf5fede19e8a0eda6aa493d5c491b24b033df37c1fde25c1632795` |
-| `test_bt1c5_matrix_gaps.junit.xml` SHA-256 | `add06cd930b9ff6ffcfc7ed580ced7331f383058340ffdd6bf77fce044346c2e` |
-| `test_permissions.junit.xml` SHA-256 | `bb1346948552b73cfd010db2a8b0ef7272d834ef353bfe179923d11aea396839` |
-| `test_security_remediation_v2.junit.xml` SHA-256 | `eb81bc92ef8a71ab8fdb1951e212142c07bab6a599536ab4e7a35fd5648fa228` |
-| `workflow-metadata.json` SHA-256 | `118655757b63a2783d300193606ba4f487db76ddc15ce8bc964ab515a43edd42` |
+| `http/http-transport.json` SHA-256 | `0771db2891f8368e32af3923d0386d4651036ea3332b89ea9b4b269b2058f40c` |
+| `test_docshare_lifecycle.log` SHA-256 | `f7b089fdb54d0ebfca74ef026222fb3719ccbeac1d915d0d6c17860257b67349` |
+| `test_bt1c5_matrix_gaps.junit.xml` SHA-256 | `ac9a5a375b4e41ced6643642e7f846fcca7b17ba35e731106bdb119f2cca9beb` |
+| `test_permissions.junit.xml` SHA-256 | `093e71d60088a361a47fd016939feb3d8a1128dff8d60fe6dff08b410314aa64` |
+| `test_security_remediation_v2.junit.xml` SHA-256 | `812b1e1e7ab52acf33e1ad55b467955e1becd1938a34383b375d708a99fd6d5f` |
+| `workflow-metadata.json` SHA-256 | `a353048e2f2294f36387a5ace40a5e15e25ad355842d0deaaec78b6835d2bbb7` |
 
 **Workflow outcomes:** `bootstrap=success` · `lint=success` · `seed=success` · `per_method=failure` · `per_method_gate=failure` · `http_transport=success` · `backup_restore=success` · `redaction_replacements=4`.
 
-**Ghi chú về tính xác định của gate JSON:** `g007-per-method-gate.json` của run này **byte-identical** với các run `#39895414507`, `#39900046839`, `#39906441722` và `#39907255611` (`196ba75c…`). File này **không** chứa commit SHA hay timestamp, và `results[]` chỉ ghi `module` / `class` / `method` / `status` / `source_xml` / `raw_name` / `match_reason` ⇒ khi test code không đổi, byte-identical là **kết quả mong đợi**, không phải dấu hiệu artifact bị cache lại. Đây vẫn là bằng chứng **độc lập** vì zip artifact của run này có SHA-256 **khác** (`7314993c…` ≠ `62acc51e…`/`21831855…`/`d394ae92…`), và **mọi** file XML/log đều có SHA-256 **khác** run trước.
+**Ghi chú về tính xác định của gate JSON:** `g007-per-method-gate.json` của run này **byte-identical** với các run `#39895414507`, `#39900046839`, `#39906441722`, `#39907255611` và `#39916992699` (`196ba75c…`). File này **không** chứa commit SHA hay timestamp, và `results[]` chỉ ghi `module` / `class` / `method` / `status` / `source_xml` / `raw_name` / `match_reason` ⇒ khi test code không đổi, byte-identical là **kết quả mong đợi**, không phải dấu hiệu artifact bị cache lại. Đây vẫn là bằng chứng **độc lập** vì zip artifact của run này có SHA-256 **khác** (`f17dd94f…` ≠ `7314993c…`/`62acc51e…`/`21831855…`/`d394ae92…`), và **mọi** file XML/log đều có SHA-256 **khác** run trước.
 
-> **Kết luận:** run `#39916992699` **tái lập** 91 PASS / 8 FAIL / 0 ERROR / 0 SKIP, HTTP 14/14 — **đã xác minh từ artifact**, không phải suy luận từ commit message hay trạng thái tổng quát của run.
+> **Kết luận:** run `#39976477275` **tái lập** 91 PASS / 8 FAIL / 0 ERROR / 0 SKIP, HTTP 14/14 — **đã xác minh từ artifact**, không phải suy luận từ commit message hay trạng thái tổng quát của run.
 
-### 0.1 Chuỗi run đã xác minh
+### 0.1 So sánh tập FAIL giữa hai run liên tiếp — không regression
+
+Đối chiếu máy (so tập `failed_methods` trong `g007-per-method-gate.json` của hai run):
+
+| So sánh | Kết quả |
+|---|---|
+| `prev` = run `#39916992699` (head `85fbf7c`) | 8 method FAIL |
+| `cur` = run `#39976477275` (head `138f667`) | 8 method FAIL |
+| Tập FAIL **giống hệt**? | **`True`** |
+| Method FAIL **mới** xuất hiện | `[]` (không) |
+| Method FAIL **biến mất** | `[]` (không) |
+
+⇒ `138f667` (commit chỉ bổ sung tài liệu RFC) **không** làm thay đổi hành vi test. Cả 8 FAIL đều là **canary PIN** chờ quyết định Owner (§1) — **không** phải hồi quy mới.
+
+**Nguyên nhân 8 FAIL (trích nguyên văn `<failure>` từ raw XML của run này):**
+
+| # | Method | Lỗi | Nguyên nhân |
+|---|---|---|---|
+| 1 | `TestDocShareAssignAgent.test_docshare_created_by_assign_agent_when_assignee_lacks_permission` | `AssertionError: unexpectedly None : PINNED BEHAVIOR [Q2] …` | Canary Q2 — chờ Owner |
+| 2 | `TestDocShareAssignAgent.test_docshare_flags_after_assign_agent` | `AssertionError: unexpectedly None : PINNED BEHAVIOR [Q2] …` | Canary Q2 — chờ Owner |
+| 3 | `TestDocShareLeadSave.test_docshare_removed_by_lead_save_when_owner_changes` | `AssertionError: unexpectedly None` (L627) | **Tiền đề** `assertIsNotNone(self._share_for(c))` — dựa trên Q2 |
+| 4 | `TestDocShareLeadSave.test_docshare_survives_lead_save_when_owner_unchanged` | `AssertionError: unexpectedly None` (L653) | **Tiền đề** — dựa trên Q2 |
+| 5 | `TestDocShareRemoveAssignments.test_docshare_survives_remove_assignments` | `AssertionError: unexpectedly None` (L697) | **Tiền đề** — dựa trên Q2 |
+| 6 | `TestDocShareEffectivePermission.test_effective_permission_before_and_after_reassign` | `AssertionError: unexpectedly None` (L768) | **Tiền đề** — dựa trên Q2 |
+| 7 | `TestDocShareEffectivePermission.test_effective_permission_of_shared_child_records` | `AssertionError: unexpectedly None` (L819) | **Tiền đề** — dựa trên Q2 |
+| 8 | `TestRA04CrmAdminReassignBlocked.test_ra04_ownership_service_does_not_exist_yet` | `AssertionError: Lists differ: ['crm.api.doc.remove_assignments', 'crm.api.doc.get_assigned_users'] != []` | Canary RA-04 — chờ ADR (§1.3) |
+
+### 0.2 Chuỗi run đã xác minh
 
 | Run | Head | Merge commit (`commit_sha` trong artifact) | Kết quả | HTTP |
 |---|---|---|---|---|
@@ -85,9 +125,10 @@
 | `#39900046839` | `8613e86` | `8dfa1b7f` | 91 / 8 / 0 | 14/14 |
 | `#39906441722` | `7ea105c` | `0119c3ff` | 91 / 8 / 0 | 14/14 |
 | `#39907255611` | `7905195` | `e87b65e1` | 91 / 8 / 0 | 14/14 |
-| **`#39916992699`** | **`85fbf7c`** | **`1c91b860`** | **91 / 8 / 0** | **14/14** |
+| `#39916992699` | `85fbf7c` | `1c91b860` | 91 / 8 / 0 | 14/14 |
+| **`#39976477275`** | **`138f667`** | **`08170e95`** | **91 / 8 / 0** | **14/14** |
 
-⇒ **8 run liên tiếp** sau-fix đều cho cùng 91/8/0 và HTTP 14/14.
+⇒ **9 run liên tiếp** sau-fix đều cho cùng 91/8/0 và HTTP 14/14.
 
 ---
 
@@ -120,7 +161,7 @@ Bảng FAIL ở §1 cho thấy 2 canary FAIL ngay tại assert (PIN) Q2, còn **
 
 #### 1.2.1 QUAN SÁT (runtime evidence — dẫn nguồn đầy đủ)
 
-**Nguồn:** artifact của run [`#39916992699`](https://github.com/nobita6986/new-crm/actions/runs/39916992699) (head `85fbf7c`, merge `1c91b860`), artifact ID `12485168467`, file `p0-g007-evidence-39916992699/test_docshare_lifecycle.log`, SHA-256 `e5e61df4abbf5fede19e8a0eda6aa493d5c491b24b033df37c1fde25c1632795`.
+**Nguồn:** artifact của run [`#39976477275`](https://github.com/nobita6986/new-crm/actions/runs/39976477275) (head `138f667`, merge `08170e95`), artifact ID `12512295421`, file `p0-g007-evidence-39976477275/test_docshare_lifecycle.log`, SHA-256 `f7b089fdb54d0ebfca74ef026222fb3719ccbeac1d915d0d6c17860257b67349`.
 
 Ba dòng do helper `observe()` in ra (test_docshare_lifecycle.py L293-298):
 
@@ -136,7 +177,7 @@ Ba dòng do helper `observe()` in ra (test_docshare_lifecycle.py L293-298):
 
 > **Phạm vi của quan sát:** log chỉ ghi **kết quả** (`DocShare: None`), **không** ghi giá trị `frappe.has_permission(...)` hay `lead_owner` tại các thời điểm trước/sau. Vì vậy quan sát **không** tự chứng minh được *vì sao* không có share. Việc suy luận cơ chế là mục §1.2.2 và **mang nhãn giả thuyết**.
 
-**Tính lặp lại:** quan sát `DocShare: None` xuất hiện **giống hệt** trong **cả 9 run** đã tải (`#39885152649`, `#39892127563`, `#39893839646`, `#39894784269`, `#39895414507`, `#39900046839`, `#39906441722`, `#39907255611`, `#39916992699`) ⇒ hiện tượng **tái lập xuyên suốt**, không phải nhiễu của một lần chạy.
+**Tính lặp lại:** quan sát `DocShare: None` xuất hiện **giống hệt** trong **cả 10 run** đã tải (`#39885152649`, `#39892127563`, `#39893839646`, `#39894784269`, `#39895414507`, `#39900046839`, `#39906441722`, `#39907255611`, `#39916992699`, `#39976477275`) ⇒ hiện tượng **tái lập xuyên suốt**, không phải nhiễu của một lần chạy.
 
 #### 1.2.2 GIẢ THUYẾT cơ chế (static analysis — **CHƯA** xác minh bằng runtime)
 
@@ -165,7 +206,7 @@ Nếu `assign_agent` khiến assignee **ngoài scope** trở thành **có quyề
 
 ### 1.3 Method RA-04 — chi tiết
 
-**Nguồn:** run `#39916992699`, artifact ID `12485168467`, `test_bt1c5_matrix_gaps.junit.xml` (SHA-256 `add06cd930b9ff6ffcfc7ed580ced7331f383058340ffdd6bf77fce044346c2e`), testcase `TestRA04CrmAdminReassignBlocked::test_ra04_ownership_service_does_not_exist_yet` (traceback tại dòng 679).
+**Nguồn:** run `#39976477275`, artifact ID `12512295421`, `test_bt1c5_matrix_gaps.junit.xml` (SHA-256 `ac9a5a375b4e41ced6643642e7f846fcca7b17ba35e731106bdb119f2cca9beb`), testcase `TestRA04CrmAdminReassignBlocked::test_ra04_ownership_service_does_not_exist_yet` (traceback tại dòng 679).
 
 **Assertion:** `test_bt1c5_matrix_gaps.py` L679-684 — `assertEqual(reassign_routes, [])`, trong đó `reassign_routes` (L674-678) lọc key của `frappe.get_hooks("override_whitelisted_methods")` theo token substring `reassign` / `transfer_ownership` / `assign`.
 
@@ -372,7 +413,7 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 
 | Thuộc tính | Nội dung |
 |---|---|
-| Quan sát (runtime, **đã xác minh**) | Run [`#39916992699`](https://github.com/nobita6986/new-crm/actions/runs/39916992699), artifact ID `12485168467`, `test_docshare_lifecycle.log` (SHA-256 `e5e61df4…`): `after assign_agent (assignee ngoài scope) — DocShare: None`. Giống hệt ở **cả 9 run** đã tải ⇒ **tái lập xuyên suốt** |
+| Quan sát (runtime, **đã xác minh**) | Run [`#39976477275`](https://github.com/nobita6986/new-crm/actions/runs/39976477275), artifact ID `12512295421`, `test_docshare_lifecycle.log` (SHA-256 `f7b089fd…`): `after assign_agent (assignee ngoài scope) — DocShare: None`. Giống hệt ở **cả 10 run** đã tải ⇒ **tái lập xuyên suốt** |
 | Đối chiếu pin | `PINNED_BEHAVIOR["Q2"]["current_behavior"]` = *"assign_to.add tạo DocShare khi assignee chưa có quyền"* ⇒ quan sát **không khớp** mô tả |
 | Tác động | 7/7 canary DocShare FAIL; Q1/Q3 **không đánh giá được** vì tiền đề thiết lập (theo Q2) chưa đạt |
 | **Giả thuyết cơ chế (chưa xác minh)** | H1 `lead_owner` bị `crm/api/todo.py` L22-25 ghi đè thành `c` · H2 nhánh ToDo của `crm.permissions.org_hierarchy._permission_query_conditions` L42-51 cho phép đọc · H3 tương tác hai hệ scope. Chi tiết tại §1.2.2. **Cả ba đều chưa được phân biệt bằng runtime** |
@@ -466,25 +507,99 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 
 ### 5.2 Runtime observation — tìm trong artifact run mới nhất
 
-**Artifact đã kiểm tra:** run [`#39916992699`](https://github.com/nobita6986/new-crm/actions/runs/39916992699) · head `85fbf7c` · merge `1c91b8606e185a8ca8aa21945e6a871d90aa25b3` · artifact **ID `12485168467`** · SHA-256 `7314993c4d7ab50822d5d3f982b791a99e3ecdb09e314a8ce935c03ab0a47bca` (131.680 bytes — **khớp** digest GitHub API).
+**Artifact đã kiểm tra:** run [`#39976477275`](https://github.com/nobita6986/new-crm/actions/runs/39976477275) · head `138f6677006c978eee0823033c4e8a9634cf6435` · merge `08170e954f63af209f393e066cd85cfff4329844` · artifact **ID `12512295421`** · SHA-256 `f17dd94fc5b67929027db3769831e99589768af4542d86295c5e3ab8cf83c6e0` (131.623 bytes — **khớp** digest GitHub API).
 
 **Tìm kiếm runtime evidence trực tiếp cho `get_activities`:**
 
 | Phạm vi tìm | Kết quả |
 |---|---|
-| Toàn bộ artifact của run `#39916992699` (mọi file, regex `get_activities`, không phân biệt hoa thường) | **0 hit** |
-| **Tất cả 9 run đã tải** (`run39885152649` … `run39916992699`) | **0 hit** |
-| 14 case của HTTP transport probe (`http-transport.json`) | **KHÔNG** có case nào gọi `get_activities`. Danh sách case: `sec13-guest`, `staff-login`, `sec13-user`, `csrf-page`, `sec14-get`, `sec14-post-nocsrf`, `sec14-post-badtok`, `sec14-post-ok`, `administrator-login`, `sec13-admin`, `sec16-permlevel-get-data`, `sec16-permlevel-sentinel-scan`, `sec26-staff-private`, `sec26-admin-private` |
+| Toàn bộ artifact của run `#39976477275` (mọi file, regex `get_activities`, không phân biệt hoa thường) | **0 hit** |
+| **Tất cả 10 run đã tải** (`run39885152649` … `run39976477275`) | **0 hit** |
+| 14 case của HTTP transport probe (`http/http-transport.json`) | **KHÔNG** có case nào gọi `get_activities`. Danh sách case: `sec13-guest`, `staff-login`, `sec13-user`, `csrf-page`, `sec14-get`, `sec14-post-nocsrf`, `sec14-post-badtok`, `sec14-post-ok`, `administrator-login`, `sec13-admin`, `sec16-permlevel-get-data`, `sec16-permlevel-sentinel-scan`, `sec26-staff-private`, `sec26-admin-private` |
 | Probe script `deploy/dev/seed/ci_http_transport_probe.py` | Chỉ dựng `attachments_path = "/api/method/crm_cskh.api.guarded_crm.get_attachments?"` (L446). **Không** có path nào trỏ `crm.api.activities.get_activities` |
 
-⇒ **Kết luận runtime:** **KHÔNG có** runtime evidence trực tiếp cho endpoint `get_activities` trong artifact đã kiểm tra.
+> **Lưu ý về 2 hit `get_activities` trong thư mục run `#39976477275`:** đến từ **script kiểm tra cục bộ** do T1B tạo (`_http_check.py`), **không** phải từ artifact CI. Script đó **không** được đưa vào artifact ⇒ **không** làm thay đổi kết luận "0 hit trong artifact".
+>
+> **Lưu ý về 7 hit `crm.api.activities` trong `test_security_remediation_v2.junit.xml`:** đó là **docstring** của test SEC-16/SEC-26 tham chiếu `crm.api.activities.get_attachments` (hàm upstream) để **mô tả contract**, **không** phải test gọi `get_activities`. Đã đọc lại từng hit: L141, L315, L332, L340, L354, L365 (docstring) và L291 (`attachments = frappe.get_attr("crm.api.activities.get_attachments")(doctype, name)` — đây là **lời gọi** `get_attachments`, nằm trong test SEC-16 `test_get_attachments_does_not_leak_permlevel_field`, gọi hàm upstream **trực tiếp**, không qua `get_activities`).
+
+⇒ **Kết luận runtime:** **KHÔNG có** runtime evidence trực tiếp cho endpoint `get_activities` trong artifact đã kiểm tra (10/10 run).
+
+### 5.2.1 Bổ sung tĩnh — endpoint này nằm **trên đường chính của sản phẩm** (không phải API thừa)
+
+Quét toàn bộ frontend CRM v1.87.0 (507 file `.js`/`.vue`/`.ts` tại SHA `0d3910b4…`) cho `get_activities` → **3 hit**, tất cả trong `frontend/src/components/Activities/Activities.vue`:
+
+| Line | Nội dung | Ý nghĩa |
+|---|---|---|
+| L540 | `url: 'crm.api.activities.get_activities'` (trong `createResource`) | **Đây là endpoint mà UI chính của CRM gọi** khi mở tab Activity của một Lead/Deal |
+| L541 | `params: { name: props.docname }` | Truyền `name` = tài liệu đang xem |
+| L544-546 | `transform: ([versions, calls, notes, tasks, attachments]) => …` | UI **nhận và dùng** cả 5 phần tử, trong đó có `attachments` |
+| L635/L645 | `function get_activities()` / `_activities = get_activities()` | Hàm cục bộ cùng tên, **không** phải endpoint |
+
+⇒ **Hệ quả:** `get_activities` **không** phải endpoint "để quên" — nó là **đường dẫn chính** để tải danh sách attachment của Lead/Deal trong UI. Bất kỳ khoảng trống redaction nào trên chuỗi này ảnh hưởng **ngay** tới payload mà sản phẩm dùng.
+
+**UI render `file_url` trực tiếp** (`frontend/src/components/Activities/AttachmentArea.vue`, tại SHA `0d3910b4…`):
+
+| Line | Nội dung |
+|---|---|
+| L16 | `:src="attachment.file_url"` — ảnh thumbnail dùng `file_url` làm `src` |
+| L27 | `{{ attachment.file_name }}` |
+| L39/L48 | `attachment.is_private ? __('Make Public') : __('Make Private')` — UI **hiển thị** trạng thái private |
+| L92-94 | `function openFile(attachment) { window.open(attachment.file_url, '_blank') }` — bấm là mở URL file |
+
+⇒ Nếu `file_url` của file private có mặt trong payload, UI **hiện** nó (thumbnail + link mở tab mới). Đây là **bằng chứng tĩnh về hành vi UI**, **không** phải runtime evidence, và **không** nói gì về việc URL đó có tải được hay không (xem H-RFC-2).
+
+### 5.2.2 Bổ sung tĩnh — đường thứ hai cùng lộ `file_url`: `docinfo.attachments`
+
+Khi `get_lead_activities` gọi `get_docinfo("", "CRM Lead", name)` (CRM L183), Frappe ghi `frappe.response["docinfo"] = docinfo` (`frappe/desk/form/load.py` L147). `frappe.response` là `local("response")` (`frappe/__init__.py` L188, `frappe.local` = `werkzeug.local.Local` — thread-local dict), và `as_json()` serialize **toàn bộ** `frappe.local.response` (`frappe/utils/response.py` L154) ⇒ `docinfo` **có** trong body JSON.
+
+Trong `docinfo` có `attachments` lấy từ `frappe/desk/form/load.py` L128 → `get_attachments(doc.doctype, doc.name)` (L200-214), với `fields` **bao gồm** `"file_url"` (L206) — **không** qua bất kỳ wrapper redaction nào của `crm_cskh`.
+
+| Đường | Nguồn `file_url` | Có redaction? |
+|---|---|---|
+| `message[4].attachments` (phần tử thứ 5 của tuple trả về) | CRM `activities.py` L321-339 | **KHÔNG** |
+| `docinfo.attachments` | Frappe `load.py` L200-214 | **KHÔNG** |
+
+⇒ **Hai** đường trong cùng một response đều có thể chứa `file_url` của file private mà không đi qua `_redact_private_file_urls`.
+
+**Lưu ý giới hạn quan trọng (làm giảm mức độ, không tăng):** `get_docinfo` gọi `add_comments` → `get_document_comments` (`frappe/core/doctype/comment/comment.py` L172-210), hàm này **lọc theo quyền read của từng `comment_type`** qua `has_controller_permissions` (L196-209) ⇒ phần **Comment** trong `docinfo` **đã** được lọc quyền. Vì vậy **không** thể kết luận rằng `get_activities` lộ dữ liệu Comment ngoài scope; chỉ có thể nói phần **`attachments`** là đường không qua redaction.
+
+### 5.2.3 Bổ sung tĩnh — **ranh giới quyền** của chính `get_activities` (giới hạn mức độ)
+
+`get_activities` **không** phải endpoint không kiểm tra quyền. Ngay ở đầu chuỗi:
+
+| Vị trí | Source | Nội dung |
+|---|---|---|
+| `get_deal_activities` | CRM `activities.py` **L24-25** | `if not frappe.has_permission("CRM Deal", "read", name): frappe.throw(_("Not permitted"), frappe.PermissionError)` |
+| `get_lead_activities` | CRM `activities.py` **L181-182** | `if not frappe.has_permission("CRM Lead", "read", name): frappe.throw(_("Not permitted"), frappe.PermissionError)` |
+
+⇒ **Caller phải có quyền `read` trên chính Lead/Deal** mới đi qua được `get_activities`. Đây là **guard thật**, chạy **trước** khi dựng payload.
+
+**Hệ quả đối với việc phân loại mức độ — KHÔNG được diễn giải quá mức:**
+
+1. Đây **không** phải IDOR (không đọc chéo Lead của người khác): caller ngoài scope bị chặn ngay ở L181/L24 bằng `PermissionError`.
+2. Khoảng trống redaction **chỉ** liên quan tới file private **đính kèm trên chính tài liệu mà caller đã có quyền `read`**. Câu hỏi cần trả lời là: *"caller có quyền `read` trên Lead, nhưng không nên thấy `file_url` của file private đính kèm"* — tức là **mức độ thấp hơn** so với việc lộ tài liệu ngoài scope.
+3. Vẫn **không** được coi là `PASS`: `_redact_private_file_urls` tồn tại **chính vì** chính sách này — payload của file private **không** nên chứa `file_url` khi caller không phải system. Việc một đường đi vòng wrapper là **lệch hợp đồng redaction**, dù mức độ thấp.
+4. Chưa có runtime evidence ⇒ **không** nâng lên `CONFIRMED VULNERABILITY`. Kết luận đúng là **coverage gap** của SEC-26 (xem §5.4).
+
+### 5.2.4 Đối chiếu với `get_attachments` đã override — vì sao 2 chuỗi khác nhau
+
+| | `guarded_crm.get_attachments` (đã override) | `crm.api.activities.get_activities` (**không** override) |
+|---|---|---|
+| Guard quyền | `_check_read(doctype, name)` → `PermissionError` (L117-119) | `frappe.has_permission(..., "read", name)` ngay trong upstream (L24/L181) |
+| Nguồn `file_url` | upstream `crm.api.activities.get_attachments` (L321-339) | **cùng** hàm upstream, gọi nội bộ |
+| Redaction | **CÓ** — `_redact_private_file_urls` (L125) | **KHÔNG** |
+| Payload `attachments` | list thuần | list thuần **+** `docinfo.attachments` (L128/147 `load.py`) |
+
+⇒ Hai chuỗi **dùng chung** hàm upstream `get_attachments` (L321). Chỉ khác ở chỗ chuỗi thứ hai **không** đi qua wrapper ⇒ **cùng một nguồn `file_url`, hai chính sách redaction khác nhau**. Đây là **bất nhất** về mặt hợp đồng, và là lý do đề xuất ở §5.4 là đưa `get_activities` vào cùng cơ chế override sẵn có (không phải viết lại logic redaction).
 
 **Case SEC-26 có sẵn — CHỈ phủ endpoint đã override (không suy ra cho `get_activities`):**
 
 | Case | Request | Response (đã redact theo artifact) | Assertion |
 |---|---|---|---|
-| `sec26-staff-private` | `GET http://127.0.0.1:8000/api/method/crm_cskh.api.guarded_crm.get_attachments?doctype=CRM+Lead&name=CRM-LEAD-00001` · `cookie` = `[REDACTED]` | **200** · `{"message":[{"name":"eb0fb1d699","file_name":"DEMO-CRM-LEAD-00001.txt","file_type":"TXT","file_size":72,"is_private":1,"modified":"2026-10-23 14:22:19.042580","creation":"2026-10-23 14:22:19.042580","owner":"Administrator"}]}` — **KHÔNG có `file_url`** | `result=PASS` (staff non-system bị redact) |
-| `sec26-admin-private` | Cùng URL, session Administrator | **200** · `{"message":[{"name":"eb0fb1d699","file_name":"DEMO-CRM-LEAD-00001.txt","file_type":"TXT","file_url":"[REDACTED]","file_size":72,"is_private":1,"modified":"2026-10-23 14:22:19.042580","creation":"2026-10-23 14:22:19.042580","owner":"Administrator"}]}` — **CÓ `file_url`** (giá trị đã redact trong artifact) | `result=PASS` (system caller giữ URL) |
+| `sec26-staff-private` | `GET http://127.0.0.1:8000/api/method/crm_cskh.api.guarded_crm.get_attachments?doctype=CRM+Lead&name=CRM-LEAD-00001` · `cookie` = `[REDACTED]` | **200** · `{"message":[{"name":"9349f349d9","file_name":"DEMO-CRM-LEAD-00001.txt","file_type":"TXT","file_size":72,"is_private":1,"modified":"2026-10-23 22:16:38.396225","creation":"2026-10-23 22:16:38.396225","owner":"Administrator"}]}` — **KHÔNG có `file_url`** | `result=PASS` (staff non-system bị redact) |
+| `sec26-admin-private` | Cùng URL, session Administrator | **200** · `{"message":[{"name":"9349f349d9","file_name":"DEMO-CRM-LEAD-00001.txt","file_type":"TXT","file_url":"[REDACTED]","file_size":72,"is_private":1,"modified":"2026-10-23 22:16:38.396225","creation":"2026-10-23 22:16:38.396225","owner":"Administrator"}]}` — **CÓ `file_url`** (giá trị đã redact trong artifact) | `result=PASS` (system caller giữ URL) |
+
+> **Lưu ý về `name` của file:** `9349f349d9` ở run này vs `eb0fb1d699` ở run trước — **khác** ⇒ file được seed lại mỗi run (hash tên file), **không** phải artifact bị cache. Hành vi redaction **giống hệt**: staff ⇒ không `file_url`; Administrator ⇒ có `file_url`.
 
 **Giới hạn phạm vi của bằng chứng runtime này — KHÔNG được suy rộng:**
 
@@ -499,9 +614,9 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 
 | Tầng | Nội dung | Trạng thái |
 |---|---|---|
-| **SOURCE TĨNH** (đã xác minh, có line reference) | A: `get_activities` là `@frappe.whitelist()` (CRM L13-14), không cho Guest · B: **không** có override (hooks L177-195; CRM hooks L345-347 bị comment; Frappe chỉ có 2 điểm dispatch L67/L36, không patch attribute) · C: gọi hàm upstream gốc L321 (bare name, 0 import) · D: payload **có** `file_url` (L330), `content_hash` **không** có · E: chuỗi này **không** đi qua `_redact_private_file_urls` | **Xác minh** — đọc source tại SHA đã ghim |
-| **RUNTIME OBSERVATION** (đã xác minh) | Probe `sec26-staff-private` → 200, **không** `file_url`; `sec26-admin-private` → 200, **có** `file_url`. `TestSEC26FileURLLeak` **6/6 PASS**. **0 hit** `get_activities` trong **mọi** artifact đã tải | **Xác minh** — nhưng **chỉ** cho endpoint đã override |
-| **GIẢ THUYẾT** (chưa xác minh) | H-RFC-1: một caller **đã đăng nhập** gọi `GET /api/method/crm.api.activities.get_activities?name=<Lead trong scope>` sẽ nhận payload chứa `file_url` của file **private** đính kèm Lead đó, **không** qua redaction | **GIẢ THUYẾT** — dựa trên A+B+C+D+E; **chưa** có runtime confirm |
+| **SOURCE TĨNH** (đã xác minh, có line reference) | A: `get_activities` là `@frappe.whitelist()` (CRM L13-14), không cho Guest · B: **không** có override (hooks L177-195; CRM hooks L345-347 bị comment; Frappe chỉ có 2 điểm dispatch L67/L36, không patch attribute) · C: gọi hàm upstream gốc L321 (bare name, 0 import) · D: payload **có** `file_url` (L330), `content_hash` **không** có · E: chuỗi này **không** đi qua `_redact_private_file_urls` · **F: hai** đường lộ `file_url` (`message[4].attachments` + `docinfo.attachments` — Frappe `load.py` L128/L147/L206) · **G: đây là endpoint UI chính** (CRM `Activities.vue` L540) và UI **render** `file_url` (`AttachmentArea.vue` L16, L93) | **Xác minh** — đọc source tại SHA đã ghim |
+| **RUNTIME OBSERVATION** (đã xác minh) | Probe `sec26-staff-private` → 200, **không** `file_url`; `sec26-admin-private` → 200, **có** `file_url`. `TestSEC26FileURLLeak` **6/6 PASS**. **0 hit** `get_activities` trong **mọi** artifact đã tải (10/10 run) | **Xác minh** — nhưng **chỉ** cho endpoint đã override |
+| **GIẢ THUYẾT** (chưa xác minh) | H-RFC-1: một caller **đã đăng nhập** **có quyền `read` trên Lead** gọi `GET /api/method/crm.api.activities.get_activities?name=<Lead trong scope>` sẽ nhận payload chứa `file_url` của file **private** đính kèm Lead đó, **không** qua redaction | **GIẢ THUYẾT** — dựa trên A+B+C+D+E+F+G + §5.2.1–§5.2.4; **chưa** có runtime confirm. **Phạm vi giới hạn:** caller ngoài scope bị chặn ở L24/L181 ⇒ không phải IDOR |
 | **GIẢ THUYẾT** (chưa xác minh) | H-RFC-2: lộ `file_url` **tự nó** chưa đủ để tải nội dung — `frappe/handler.py` L287-302 `download_file` → `find_file_by_url` → `File.is_downloadable()` → `has_permission(file,"read")` (`file.py` L891-892, L992-1031) vẫn kiểm tra quyền read trên File / doc cha ⇒ việc lộ URL **có thể** không tự động cấp quyền tải | **GIẢ THUYẾT** — đọc source Frappe; **chưa** có runtime confirm |
 
 ### 5.4 Đánh giá mức độ — KHÔNG kết luận có vulnerability, cũng KHÔNG kết luận an toàn
@@ -514,6 +629,17 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 
 **Kết luận T1B ở thời điểm này:** đây là **một khoảng trống phạm vi phủ (coverage gap)** đã được xác định bằng source tĩnh, **chưa** phải vulnerability đã chứng minh. Mức độ bằng chứng: **static-only cho `get_activities`; runtime cho endpoint đã override.**
 
+**Mức độ cụ thể mà bằng chứng hiện có cho phép nói (không hơn):**
+
+| Khía cạnh | Mức độ | Cơ sở |
+|---|---|---|
+| Đọc chéo tài liệu ngoài scope (IDOR) | **KHÔNG** — đã có guard `has_permission` ở L24/L181 | §5.2.3 |
+| Lộ `file_url` cho caller **có** quyền `read` trên tài liệu | **Chưa đo** — static cho thấy 2 đường không qua redaction | §5.2.1, §5.2.2, §5.2.4 |
+| Tải được **nội dung** file private nhờ URL lộ | **Chưa đo** — `File.is_downloadable()` vẫn kiểm tra quyền | H-RFC-2 |
+| Lộ dữ liệu Comment ngoài scope | **KHÔNG** — `get_document_comments` đã lọc theo quyền từng `comment_type` | §5.2.2 |
+
+Vì đường lộ nằm **trên đường chính của UI** (§5.2.1) và có **2** đường (§5.2.2), khoảng trống này **không** phải loại "API thừa không ai dùng" — nhưng ranh giới quyền ở L24/L181 **giữ** nó ở mức **thấp**, không phải IDOR.
+
 ### 5.5 Đề xuất kiểm chứng tiếp theo
 
 | # | Kiểm chứng | Mục đích | Cần method mới? |
@@ -523,8 +649,12 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 | RFC-3 | Unit test ở tầng Python: gọi `crm.api.activities.get_activities(name)` với user **đúng scope** trong khi file private đính kèm ⇒ assert payload **có** `file_url` | Pin hành vi thực tế của chuỗi nội bộ | **Có** — cần method test ⇒ **cần Owner duyệt** nâng inventory 99 → 100 |
 | RFC-4 | Nếu RFC-3 xác nhận lộ `file_url`: Owner/T1C chọn remediation — override `crm.api.activities.get_activities` trong `hooks.py` sang wrapper có redaction, **hoặc** thu hẹp filter `fields` của `get_attachments` upstream | Đóng khoảng trống phủ | **Không** — nhưng là **thay đổi code production**, cần Owner duyệt |
 | RFC-5 | Method test chứng minh `guarded_crm.get_attachments` vẫn redact sau mọi thay đổi (chống regression) | Bảo vệ endpoint đã cover | **Không** — đã có V16/V17 |
+| **RFC-6** | Probe HTTP: **tách riêng** `message[4].attachments` và `docinfo.attachments` trong response `get_activities` — ghi rõ `file_url` xuất hiện ở đường nào | Xác định chính xác đường lộ (2 đường: upstream L321 vs Frappe `load.py` L200-214) | **Không** — mở rộng case RFC-1 |
+| **RFC-7** | Probe HTTP: caller **ngoài scope** gọi `get_activities` ⇒ xác minh response là `PermissionError` (L181/L24), **không** phải payload | Chứng minh ranh giới quyền bằng runtime, **giảm** mức độ từ "chưa biết" xuống "đã đo" | **Không** — mở rộng case RFC-1 |
 
-**Kết luận về nhu cầu method mới:** RFC-1 và RFC-2 là **case probe HTTP** — mở rộng `deploy/dev/seed/ci_http_transport_probe.py`, **không** đụng inventory 99 method. **RFC-3 là method unit mới ⇒ cần Owner duyệt** trước khi nâng inventory 99 → 100; **hiện chưa thêm**. RFC-4 là thay đổi code production ⇒ cần Owner/T1C quyết định, **T1B không tự thực hiện** trong vòng này.
+**Kết luận về nhu cầu method mới:** RFC-1, RFC-2, RFC-6 và RFC-7 là **case probe HTTP** — mở rộng `deploy/dev/seed/ci_http_transport_probe.py`, **không** đụng inventory 99 method. **RFC-3 là method unit mới ⇒ cần Owner duyệt** trước khi nâng inventory 99 → 100; **hiện chưa thêm**. RFC-4 là thay đổi code production ⇒ cần Owner/T1C quyết định, **T1B không tự thực hiện** trong vòng này.
+
+> **Ưu tiên đề xuất cho vòng kiểm chứng tiếp theo:** RFC-1 + RFC-6 + RFC-7 nên gộp **một** lần chạy probe (cùng site, cùng fixture) ⇒ chi phí thấp, đóng được cả ba câu hỏi: *có lộ không? lộ ở đường nào? ngoài scope có bị chặn không?* RFC-2 chỉ chạy **nếu** RFC-1 trả lời "có lộ".
 
 ### 5.6 Phạm vi việc đã làm trong vòng này
 
@@ -535,7 +665,8 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 | Sửa policy / tài liệu T1A / T1C / Owner | **KHÔNG** |
 | Thêm method thứ 100 | **KHÔNG** — inventory vẫn 99 (AST recheck: `gate==source: True`, `source-only=[]`) |
 | Merge PR | **KHÔNG** |
-| Tài liệu T1B đã cập nhật | `deploy/dev/evidence/t1b-fail-method-review-2026-10-23.md` (§5) — bảo toàn toàn bộ nội dung trước đó |
+| Tài liệu T1B đã cập nhật | `deploy/dev/evidence/t1b-fail-method-review-2026-10-23.md` (§0, §0.1, §0.2, §5) — bảo toàn toàn bộ nội dung trước đó |
+| Bổ sung tĩnh trong vòng này | §5.2.1 (endpoint là **đường chính của UI**: `Activities.vue` L540; UI render `file_url` ở `AttachmentArea.vue` L16/L93) · §5.2.2 (đường lộ thứ hai: `docinfo.attachments` — `load.py` L128/L147/L206) · §5.2.3 (**ranh giới quyền**: L24/L181 `has_permission` ⇒ không phải IDOR) · §5.2.4 (so sánh 2 chuỗi dùng chung hàm upstream L321) · RFC-6/RFC-7 |
 | Trạng thái giữ nguyên | **SEC-26 `PARTIAL`** · **G0-07 `PARTIAL` / CHƯA KÝ** · **P0 `NO-GO`** · Q1–Q4 + RA-04 chờ Owner |
 
 ---
@@ -552,13 +683,13 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 | `T1B-ext+1` (Dynamic Link) | `OPEN` — static-only, chưa có runtime evidence | Owner/T1C | Không sửa code |
 | `T1B-ext+2` (ToDo/Comment) | `OPEN` — static-only, chưa có runtime evidence | **T1C rà tiếp** | Không sửa code |
 | `T1B-ext+3` (drift pin Q2) | `OPEN` — quan sát có runtime; cơ chế là giả thuyết | T0/Owner | Ghi nhận, không sửa |
-| **`RFC` §5 (`get_activities` / SEC-26)** | **`OPEN`** — source tĩnh xác minh chuỗi nội bộ **không** qua wrapper redaction; **0** runtime evidence cho `get_activities`; **KHÔNG** kết luận có/không có vulnerability | **Owner/T1C** | Ghi nhận RFC; **không** sửa code, **không** thêm method thứ 100 |
+| **`RFC` §5 (`get_activities` / SEC-26)** | **`OPEN`** — source tĩnh xác minh chuỗi nội bộ **không** qua wrapper redaction; **2** đường lộ `file_url`; **0** runtime evidence cho `get_activities`; **KHÔNG** kết luận có/không có vulnerability | **Owner/T1C** | Ghi nhận RFC; **không** sửa code, **không** thêm method thứ 100 |
 
 **Trạng thái thoát (exit status):**
 
 | Mốc | Trạng thái | Lý do |
 |---|---|---|
-| **G0-07** | **`PARTIAL` / `CHƯA KÝ`** | 91/99 PASS xác minh từ artifact run `#39916992699` (artifact ID `12485168467`); `gate_passed=false` vì 8 canary chưa có quyết định Owner; `T1B-ext+1/+2/+3` + `RFC` §5 đều `OPEN` |
+| **G0-07** | **`PARTIAL` / `CHƯA KÝ`** | 91/99 PASS xác minh từ artifact run `#39976477275` (artifact ID `12512295421`, SHA-256 `f17dd94f…`); `gate_passed=false` vì 8 canary chưa có quyết định Owner; `T1B-ext+1/+2/+3` + `RFC` §5 đều `OPEN` |
 | **P0** | **`NO-GO`** | G0-07 chưa ký ⇒ P0 chưa đủ điều kiện thoát |
 | **SEC-26** | **`PARTIAL`** | Remediation có + runtime evidence **chỉ** cho endpoint đã override (`guarded_crm.get_attachments`, `guarded_crm.get_linked_docs_of_document`); phạm vi phủ chưa đủ — xem RFC §5 |
 
