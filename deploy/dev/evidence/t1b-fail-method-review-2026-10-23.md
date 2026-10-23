@@ -1,16 +1,16 @@
-# T1B — Rà từng method FAIL/ERROR (run mới nhất `#39900046839`)
+# T1B — Rà từng method FAIL/ERROR (run mới nhất `#39906441722`)
 
 **Ngày:** 2026-10-23 · **Phạm vi:** T1B (test-owned) · **PR:** [#2](https://github.com/nobita6986/new-crm/pull/2) — `open`, **KHÔNG merge**
-**Artifact (run mới nhất):** run [`#39900046839`](https://github.com/nobita6986/new-crm/actions/runs/39900046839) · head `8613e86` · PR merge `8dfa1b7f` · zip SHA-256 `d394ae92f6fb54a6bb8196c04605eb8766ca27d881f55ea42eb683438072c682` (131.728 bytes — **khớp** digest GitHub API)
-**Nguồn đọc:** `test_docshare_lifecycle.log` · `test_docshare_lifecycle.junit.xml` · `test_bt1c5_matrix_gaps.junit.xml` · `g007-per-method-gate.json` — tất cả thuộc artifact của run `#39900046839`
+**Artifact (run mới nhất):** run [`#39906441722`](https://github.com/nobita6986/new-crm/actions/runs/39906441722) · head `7ea105c` · PR merge `0119c3ff` · zip SHA-256 `21831855c38b87917eae94f1237319de67df63cbc96bf83abda6673fc85aa7d3` (131.675 bytes — **khớp** digest GitHub API)
+**Nguồn đọc:** `test_docshare_lifecycle.log` · `test_docshare_lifecycle.junit.xml` · `test_bt1c5_matrix_gaps.junit.xml` · `g007-per-method-gate.json` — tất cả thuộc artifact của run `#39906441722`
 
 > **Lưu ý về nguồn SHA:** các đường dẫn dòng cho **Frappe** (`d2efa796…`) trích từ file tải trực tiếp từ GitHub API tại SHA đã ghim trong lần rà này. Tài liệu gốc của `test_docshare_lifecycle.py` header ghi `assign_to.py L104-118` / `share.py L47-83` — **đã đối chiếu và khớp** với nội dung tại SHA này (`_add` L104-118; `add_docshare` L47-83). Các đường dẫn dòng cho **CRM v1.87.0** (`0d3910b4…`) trích từ bản copy trong `deploy/dev/evidence/logs/upstream-crm-v1.87.0/` đã có sẵn từ lần trước.
 
 ---
 
-## 0. Xác minh counts từ artifact của run `#39900046839`
+## 0. Xác minh counts từ artifact của run `#39906441722`
 
-**Không** suy ra từ nhãn "docs-only" của commit `8613e86`. Ba tầng đọc độc lập:
+**Không** suy ra từ nhãn "docs-only" của commit `7ea105c`. Ba tầng đọc độc lập:
 
 | Tầng | Phương pháp | Kết quả |
 |---|---|---|
@@ -46,28 +46,42 @@
 
 | Trường | Giá trị |
 |---|---|
-| `run_id` | `39900046839` (khớp `workflow-metadata.json`) |
-| `head_sha` (branch) | `8613e86d03edec0273756a38e7b852d15b3d29b3` |
-| `commit_sha` (artifact) | `8dfa1b7f8ebd61493d3bdef7d4952605f92141be` = **PR merge commit tổng hợp** (`refs/pull/2/merge`), **không** phải head branch |
+| `run_id` | `39906441722` (khớp `workflow-metadata.json`) |
+| `head_sha` (branch) | `7ea105cc7ed35324f6e0903964e9bcff42755dc7` |
+| `commit_sha` (artifact) | `0119c3ff3a66053a1422928611c77f30988fcdcd` = **PR merge commit tổng hợp** (`refs/pull/2/merge`), **không** phải head branch — xác minh `compare/7ea105c...0119c3ff` → `ahead_by=1`, `files=[]` |
 | `frappe_sha` | `d2efa79657ba5c1abf96098b3bfacc199517d57e` (v15.123.1) |
 | `crm_sha` | `0d3910b456ef4fb913e77b29db011b3debc4f778` (v1.87.0) |
-| Artifact zip SHA-256 | `d394ae92f6fb54a6bb8196c04605eb8766ca27d881f55ea42eb683438072c682` — **khớp chính xác** digest GitHub API |
-| Content digest (path + SHA-256 từng file) | `5013a4093d562ba2898c69a98441b2cbcea47b0533c005d8c0f25006d12466ef` |
+| Artifact zip SHA-256 | `21831855c38b87917eae94f1237319de67df63cbc96bf83abda6673fc85aa7d3` — **khớp chính xác** digest GitHub API |
+| Content digest (path + SHA-256 từng file) | `369769bed9054ded7f0676afc75b198acc5a2133dd80abd3a255e3181a3d42ca` |
 | `g007-per-method-gate.json` SHA-256 | `196ba75cd27720c9226a7ed67427aba2e6efb124363fc7acc62c447649770637` |
-| `http-transport.json` SHA-256 | `60f1615efc534c96c276ec1da9382e2dc43aae4add07fdba34fe5c59ac6f7292` |
-| `test_docshare_lifecycle.junit.xml` SHA-256 | `8dc1b6335f226d6168468710f93d5abc8cb806b323c16e33c7b3ed9371ffcbd2` |
-| `test_docshare_lifecycle.log` SHA-256 | `cd838faf1360c6915db908a572680d034f38d195b70a2bbd17495526bdf42d1e` |
-| `test_bt1c5_matrix_gaps.junit.xml` SHA-256 | `f2982215e491fb6a93d49c6b9ea5ba501e98166f73b656c1f0b525a8b63de9d4` |
-| `test_permissions.junit.xml` SHA-256 | `e8dc36df7c81398f06f641d25e39b40afce76b788f34da9a10b0d870ff49c4cd` |
-| `test_security_remediation.junit.xml` SHA-256 | `3538cd68ab0cb07126f8aa35a7d200c6d08a2046158dcb7a67f9e875f4a1aa19` |
-| `test_security_remediation_v2.junit.xml` SHA-256 | `da354397b3ccddc187c2ed5062944d3de2e208ab55c4f371b6800b10877a9702` |
-| `workflow-metadata.json` SHA-256 | `3e137ef4f4c962737facc4da45fc0475f894687f0e76a54f7ba1d022742c07c5` |
+| `http-transport.json` SHA-256 | `9bcab9cb0b8c6429d31539e06c935c0de6cf987e4a601b1dcc1edb7945e166bb` |
+| `test_docshare_lifecycle.junit.xml` SHA-256 | `8837507d432ac7287e324bc699314ed8a290ad1807f7e9142a3a6c852e09067c` |
+| `test_docshare_lifecycle.log` SHA-256 | `31a85342e759d92eca3b91804a43576b14329ed8b8a098fc50c1cf10ffaed613` |
+| `test_bt1c5_matrix_gaps.junit.xml` SHA-256 | `ff4b2a2cd2087963cc140fae81b26749eb8a9e11b2fc52c1e8f8a490c68a882e` |
+| `test_permissions.junit.xml` SHA-256 | `6663527e470da7a371bc2680985a653ce3325a27c0a713906c4299a53eca1bbd` |
+| `test_security_remediation.junit.xml` SHA-256 | `830d44669c00d68d9224dc857d3581101525aea15267cc35cea28f68f59d61ba` |
+| `test_security_remediation_v2.junit.xml` SHA-256 | `fb860803067d73db7694ecc4ddabd8d66bbd880871f59f9ce56c334a5b12f001` |
+| `workflow-metadata.json` SHA-256 | `d911c3ac509cd44ad33c74972086d4510b5c6d0b8d135b5dcc8dee11e1b6bd0f` |
 
 **Workflow outcomes:** `bootstrap=success` · `lint=success` · `seed=success` · `per_method=failure` · `per_method_gate=failure` · `http_transport=success` · `backup_restore=success` · `redaction_replacements=4`.
 
-**Ghi chú về tính xác định của gate JSON:** `g007-per-method-gate.json` của run này **byte-identical** với run `#39895414507` (`196ba75c…`). File này **không** chứa commit SHA hay timestamp, và `results[]` chỉ ghi `module` / `class` / `method` / `status` / `source_xml` / `raw_name` / `match_reason` ⇒ khi test code không đổi, byte-identical là **kết quả mong đợi**, không phải dấu hiệu artifact bị cache lại. Đây vẫn là bằng chứng **độc lập** vì các file XML/log của run này có SHA-256 **khác** run trước.
+**Ghi chú về tính xác định của gate JSON:** `g007-per-method-gate.json` của run này **byte-identical** với các run `#39895414507` và `#39900046839` (`196ba75c…`). File này **không** chứa commit SHA hay timestamp, và `results[]` chỉ ghi `module` / `class` / `method` / `status` / `source_xml` / `raw_name` / `match_reason` ⇒ khi test code không đổi, byte-identical là **kết quả mong đợi**, không phải dấu hiệu artifact bị cache lại. Đây vẫn là bằng chứng **độc lập** vì các file XML/log của run này có SHA-256 **khác** run trước.
 
-> **Kết luận:** run `#39900046839` **tái lập** 91 PASS / 8 FAIL / 0 ERROR / 0 SKIP, HTTP 14/14 — **đã xác minh từ artifact**, không phải suy luận từ nhãn commit.
+> **Kết luận:** run `#39906441722` **tái lập** 91 PASS / 8 FAIL / 0 ERROR / 0 SKIP, HTTP 14/14 — **đã xác minh từ artifact**, không phải suy luận từ nhãn commit.
+
+### 0.1 Chuỗi run đã xác minh
+
+| Run | Head | Artifact `commit_sha` | Kết quả | HTTP |
+|---|---|---|---|---|
+| `#39885152649` | `fb55dfa` | — | 77 PASS / 12 FAIL / 10 ERROR | 14/14 |
+| `#39892127563` | `658780e` | `1e0fc26c` | 91 / 8 / 0 | 14/14 |
+| `#39893839646` | `da62569` | `db21338e` | 91 / 8 / 0 | 14/14 |
+| `#39894784269` | `af83589` | `ca945f30` | 91 / 8 / 0 | 14/14 |
+| `#39895414507` | `e3182ba` | `1678a973` | 91 / 8 / 0 | 14/14 |
+| `#39900046839` | `8613e86` | `8dfa1b7f` | 91 / 8 / 0 | 14/14 |
+| **`#39906441722`** | **`7ea105c`** | **`0119c3ff`** | **91 / 8 / 0** | **14/14** |
+
+⇒ **6 run liên tiếp** sau-fix đều cho cùng 91/8/0 và HTTP 14/14.
 
 ---
 
@@ -100,7 +114,7 @@ Bảng FAIL ở §1 cho thấy 2 canary FAIL ngay tại assert (PIN) Q2, còn **
 
 #### 1.2.1 QUAN SÁT (runtime evidence — dẫn nguồn đầy đủ)
 
-**Nguồn:** artifact của run [`#39900046839`](https://github.com/nobita6986/new-crm/actions/runs/39900046839) (head `8613e86`), file `p0-g007-evidence-39900046839/test_docshare_lifecycle.log`, SHA-256 `cd838faf1360c6915db908a572680d034f38d195b70a2bbd17495526bdf42d1e`.
+**Nguồn:** artifact của run [`#39906441722`](https://github.com/nobita6986/new-crm/actions/runs/39906441722) (head `7ea105c`), file `p0-g007-evidence-39906441722/test_docshare_lifecycle.log`, SHA-256 `31a85342e759d92eca3b91804a43576b14329ed8b8a098fc50c1cf10ffaed613`.
 
 Ba dòng do helper `observe()` in ra (test_docshare_lifecycle.py L293-298):
 
@@ -116,7 +130,7 @@ Ba dòng do helper `observe()` in ra (test_docshare_lifecycle.py L293-298):
 
 > **Phạm vi của quan sát:** log chỉ ghi **kết quả** (`DocShare: None`), **không** ghi giá trị `frappe.has_permission(...)` hay `lead_owner` tại các thời điểm trước/sau. Vì vậy quan sát **không** tự chứng minh được *vì sao* không có share. Việc suy luận cơ chế là mục §1.2.2 và **mang nhãn giả thuyết**.
 
-**Tính lặp lại:** quan sát `DocShare: None` xuất hiện **giống hệt** trong **cả 6 run** đã tải (`#39885152649`, `#39892127563`, `#39893839646`, `#39894784269`, `#39895414507`, `#39900046839`) ⇒ hiện tượng **tái lập xuyên suốt**, không phải nhiễu của một lần chạy.
+**Tính lặp lại:** quan sát `DocShare: None` xuất hiện **giống hệt** trong **cả 7 run** đã tải (`#39885152649`, `#39892127563`, `#39893839646`, `#39894784269`, `#39895414507`, `#39900046839`, `#39906441722`) ⇒ hiện tượng **tái lập xuyên suốt**, không phải nhiễu của một lần chạy.
 
 #### 1.2.2 GIẢ THUYẾT cơ chế (static analysis — **CHƯA** xác minh bằng runtime)
 
@@ -145,7 +159,7 @@ Nếu `assign_agent` khiến assignee **ngoài scope** trở thành **có quyề
 
 ### 1.3 Method RA-04 — chi tiết
 
-**Nguồn:** run `#39900046839`, `test_bt1c5_matrix_gaps.junit.xml` (SHA-256 `f2982215e491fb6a93d49c6b9ea5ba501e98166f73b656c1f0b525a8b63de9d4`), testcase `TestRA04CrmAdminReassignBlocked::test_ra04_ownership_service_does_not_exist_yet`, timestamp `2026-10-23T11:27:52`.
+**Nguồn:** run `#39906441722`, `test_bt1c5_matrix_gaps.junit.xml` (SHA-256 `ff4b2a2cd2087963cc140fae81b26749eb8a9e11b2fc52c1e8f8a490c68a882e`), testcase `TestRA04CrmAdminReassignBlocked::test_ra04_ownership_service_does_not_exist_yet` (traceback tại dòng 679).
 
 **Assertion:** `test_bt1c5_matrix_gaps.py` L679-684 — `assertEqual(reassign_routes, [])`, trong đó `reassign_routes` (L674-678) lọc key của `frappe.get_hooks("override_whitelisted_methods")` theo token substring `reassign` / `transfer_ownership` / `assign`.
 
@@ -316,7 +330,7 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 
 | Thuộc tính | Nội dung |
 |---|---|
-| Quan sát (runtime, **đã xác minh**) | Run [`#39900046839`](https://github.com/nobita6986/new-crm/actions/runs/39900046839), `test_docshare_lifecycle.log` (SHA-256 `cd838faf…`): `after assign_agent (assignee ngoài scope) — DocShare: None`. Giống hệt ở **cả 6 run** đã tải ⇒ **tái lập xuyên suốt** |
+| Quan sát (runtime, **đã xác minh**) | Run [`#39906441722`](https://github.com/nobita6986/new-crm/actions/runs/39906441722), `test_docshare_lifecycle.log` (SHA-256 `31a85342…`): `after assign_agent (assignee ngoài scope) — DocShare: None`. Giống hệt ở **cả 7 run** đã tải ⇒ **tái lập xuyên suốt** |
 | Đối chiếu pin | `PINNED_BEHAVIOR["Q2"]["current_behavior"]` = *"assign_to.add tạo DocShare khi assignee chưa có quyền"* ⇒ quan sát **không khớp** mô tả |
 | Tác động | 7/7 canary DocShare FAIL; Q1/Q3 **không đánh giá được** vì tiền đề thiết lập (theo Q2) chưa đạt |
 | **Giả thuyết cơ chế (chưa xác minh)** | H1 `lead_owner` bị `crm/api/todo.py` L22-25 ghi đè thành `c` · H2 nhánh ToDo của `crm.permissions.org_hierarchy._permission_query_conditions` L42-51 cho phép đọc · H3 tương tác hai hệ scope. Chi tiết tại §1.2.2. **Cả ba đều chưa được phân biệt bằng runtime** |
@@ -346,7 +360,7 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 
 | Mốc | Trạng thái | Lý do |
 |---|---|---|
-| **G0-07** | **`PARTIAL` / `CHƯA KÝ`** | 91/99 PASS xác minh từ artifact run `#39900046839`; `gate_passed=false` vì 8 canary chưa có quyết định Owner; `T1B-ext+1/+2/+3` đều `OPEN` |
+| **G0-07** | **`PARTIAL` / `CHƯA KÝ`** | 91/99 PASS xác minh từ artifact run `#39906441722`; `gate_passed=false` vì 8 canary chưa có quyết định Owner; `T1B-ext+1/+2/+3` đều `OPEN` |
 | **P0** | **`NO-GO`** | G0-07 chưa ký ⇒ P0 chưa đủ điều kiện thoát |
 
 **Kết luận:** 8/99 method FAIL vẫn là **canary chờ Owner** (Q1–Q4 + RA-04), `gate_passed=false`. PR #2 **giữ mở, không merge**. Lần cập nhật này **không sửa** assertion, **không** sửa policy, **không** sửa upstream code, **không** thêm method thứ 100, **không** thay đổi mức độ rủi ro.
