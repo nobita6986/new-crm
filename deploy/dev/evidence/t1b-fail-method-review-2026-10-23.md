@@ -1,10 +1,73 @@
-# T1B — Rà từng method FAIL/ERROR (run xác nhận 3 `#39895414507`)
+# T1B — Rà từng method FAIL/ERROR (run mới nhất `#39900046839`)
 
 **Ngày:** 2026-10-23 · **Phạm vi:** T1B (test-owned) · **PR:** [#2](https://github.com/nobita6986/new-crm/pull/2) — `open`, **KHÔNG merge**
-**Artifact:** run [`#39895414507`](https://github.com/nobita6986/new-crm/actions/runs/39895414507) · head `e3182ba` · PR merge `1678a973` · zip SHA-256 `b7b8ae4982be04bf2b3949f2513870a49c88055be3990d7a6833cdc2ceaac800`
-**Nguồn đọc:** `test_docshare_lifecycle.log` · `test_docshare_lifecycle.junit.xml` · `test_bt1c5_matrix_gaps.junit.xml` · `g007-per-method-gate.json` (đã kiểm chứng 3 tầng ở `t1b-g007-method-triage-2026-10-23.md` §2.1)
+**Artifact (run mới nhất):** run [`#39900046839`](https://github.com/nobita6986/new-crm/actions/runs/39900046839) · head `8613e86` · PR merge `8dfa1b7f` · zip SHA-256 `d394ae92f6fb54a6bb8196c04605eb8766ca27d881f55ea42eb683438072c682` (131.728 bytes — **khớp** digest GitHub API)
+**Nguồn đọc:** `test_docshare_lifecycle.log` · `test_docshare_lifecycle.junit.xml` · `test_bt1c5_matrix_gaps.junit.xml` · `g007-per-method-gate.json` — tất cả thuộc artifact của run `#39900046839`
 
 > **Lưu ý về nguồn SHA:** các đường dẫn dòng cho **Frappe** (`d2efa796…`) trích từ file tải trực tiếp từ GitHub API tại SHA đã ghim trong lần rà này. Tài liệu gốc của `test_docshare_lifecycle.py` header ghi `assign_to.py L104-118` / `share.py L47-83` — **đã đối chiếu và khớp** với nội dung tại SHA này (`_add` L104-118; `add_docshare` L47-83). Các đường dẫn dòng cho **CRM v1.87.0** (`0d3910b4…`) trích từ bản copy trong `deploy/dev/evidence/logs/upstream-crm-v1.87.0/` đã có sẵn từ lần trước.
+
+---
+
+## 0. Xác minh counts từ artifact của run `#39900046839`
+
+**Không** suy ra từ nhãn "docs-only" của commit `8613e86`. Ba tầng đọc độc lập:
+
+| Tầng | Phương pháp | Kết quả |
+|---|---|---|
+| **A. Gate JSON** | Đọc `g007-per-method-gate.json`, tự đếm lại `results[]` | `counts(declared)={PASS:91, FAIL:8}`; `counts(recomputed)={PASS:91, FAIL:8}`; tổng 99; `passing_total=91`; `gate_passed=false` |
+| **B. 5 JUnit XML** | Parse lại `<testcase>` bằng `ElementTree`, **không** tin gate | `bt1c5_matrix_gaps` 27 (1 FAIL) · `docshare_lifecycle` 10 (7 FAIL) · `permissions` 18 (0) · `security_remediation` 12 (0) · `security_remediation_v2` 32 (0) ⇒ **99 `<testcase>`** |
+| **C. Inventory nguồn** | AST quét `apps/crm_cskh/crm_cskh/tests/test_*.py` | **99** method `test_*` trong class `Test*` |
+
+**Counts thực tế (từ artifact, cả 3 tầng khớp nhau):**
+
+> **PASS = 91 · FAIL = 8 · ERROR = 0 · SKIP = 0 · NOT RUN = 0 · Tổng = 99**
+> Gate JSON: `expected_total=99` · `observed_total=99` · `passing_total=91` · `gate_passed=false`
+> Sanity: `missing_methods=[]` · `unexpected_cases=[]` · `duplicate_methods=[]` · `parse_errors=[]` · `missing_modules=[]` · `empty_xml_files=[]` · `errored_methods=[]` · `skipped_methods=[]` · `failed_methods=8`
+
+**Đối chiếu 3 tầng:** `gate == xml` (99 ≡ 99, `gate-only=[]`, `xml-only=[]`) · `gate == source` (99 ≡ 99, `source-only=[]`) · **0** status disagreement giữa gate và XML.
+
+**Danh sách 8 FAIL (lấy từ raw XML — ground truth, không qua gate):**
+
+1. `TestDocShareAssignAgent.test_docshare_created_by_assign_agent_when_assignee_lacks_permission`
+2. `TestDocShareAssignAgent.test_docshare_flags_after_assign_agent`
+3. `TestDocShareLeadSave.test_docshare_removed_by_lead_save_when_owner_changes`
+4. `TestDocShareLeadSave.test_docshare_survives_lead_save_when_owner_unchanged`
+5. `TestDocShareRemoveAssignments.test_docshare_survives_remove_assignments`
+6. `TestDocShareEffectivePermission.test_effective_permission_before_and_after_reassign`
+7. `TestDocShareEffectivePermission.test_effective_permission_of_shared_child_records`
+8. `TestRA04CrmAdminReassignBlocked.test_ra04_ownership_service_does_not_exist_yet`
+
+**Module-status (exit code từng module):** `test_permissions` 18/18 exit=0 · `test_security_remediation` 12/12 exit=0 · `test_security_remediation_v2` 32/32 exit=0 · `test_bt1c5_matrix_gaps` 27 (exit=1) · `test_docshare_lifecycle` 10 (exit=1).
+
+**HTTP transport probe:** `probe_result="PASS"` · `failed_cases=[]` · **14/14** case `assertion.result == "PASS"` · `transport_error` khác null: **0**.
+**Phạm vi coverage (nguyên văn từ artifact):** `"direct HTTP to bench serve; reverse-proxy and CORS behavior are not covered"`.
+
+**Định danh bằng chứng:**
+
+| Trường | Giá trị |
+|---|---|
+| `run_id` | `39900046839` (khớp `workflow-metadata.json`) |
+| `head_sha` (branch) | `8613e86d03edec0273756a38e7b852d15b3d29b3` |
+| `commit_sha` (artifact) | `8dfa1b7f8ebd61493d3bdef7d4952605f92141be` = **PR merge commit tổng hợp** (`refs/pull/2/merge`), **không** phải head branch |
+| `frappe_sha` | `d2efa79657ba5c1abf96098b3bfacc199517d57e` (v15.123.1) |
+| `crm_sha` | `0d3910b456ef4fb913e77b29db011b3debc4f778` (v1.87.0) |
+| Artifact zip SHA-256 | `d394ae92f6fb54a6bb8196c04605eb8766ca27d881f55ea42eb683438072c682` — **khớp chính xác** digest GitHub API |
+| Content digest (path + SHA-256 từng file) | `5013a4093d562ba2898c69a98441b2cbcea47b0533c005d8c0f25006d12466ef` |
+| `g007-per-method-gate.json` SHA-256 | `196ba75cd27720c9226a7ed67427aba2e6efb124363fc7acc62c447649770637` |
+| `http-transport.json` SHA-256 | `60f1615efc534c96c276ec1da9382e2dc43aae4add07fdba34fe5c59ac6f7292` |
+| `test_docshare_lifecycle.junit.xml` SHA-256 | `8dc1b6335f226d6168468710f93d5abc8cb806b323c16e33c7b3ed9371ffcbd2` |
+| `test_docshare_lifecycle.log` SHA-256 | `cd838faf1360c6915db908a572680d034f38d195b70a2bbd17495526bdf42d1e` |
+| `test_bt1c5_matrix_gaps.junit.xml` SHA-256 | `f2982215e491fb6a93d49c6b9ea5ba501e98166f73b656c1f0b525a8b63de9d4` |
+| `test_permissions.junit.xml` SHA-256 | `e8dc36df7c81398f06f641d25e39b40afce76b788f34da9a10b0d870ff49c4cd` |
+| `test_security_remediation.junit.xml` SHA-256 | `3538cd68ab0cb07126f8aa35a7d200c6d08a2046158dcb7a67f9e875f4a1aa19` |
+| `test_security_remediation_v2.junit.xml` SHA-256 | `da354397b3ccddc187c2ed5062944d3de2e208ab55c4f371b6800b10877a9702` |
+| `workflow-metadata.json` SHA-256 | `3e137ef4f4c962737facc4da45fc0475f894687f0e76a54f7ba1d022742c07c5` |
+
+**Workflow outcomes:** `bootstrap=success` · `lint=success` · `seed=success` · `per_method=failure` · `per_method_gate=failure` · `http_transport=success` · `backup_restore=success` · `redaction_replacements=4`.
+
+**Ghi chú về tính xác định của gate JSON:** `g007-per-method-gate.json` của run này **byte-identical** với run `#39895414507` (`196ba75c…`). File này **không** chứa commit SHA hay timestamp, và `results[]` chỉ ghi `module` / `class` / `method` / `status` / `source_xml` / `raw_name` / `match_reason` ⇒ khi test code không đổi, byte-identical là **kết quả mong đợi**, không phải dấu hiệu artifact bị cache lại. Đây vẫn là bằng chứng **độc lập** vì các file XML/log của run này có SHA-256 **khác** run trước.
+
+> **Kết luận:** run `#39900046839` **tái lập** 91 PASS / 8 FAIL / 0 ERROR / 0 SKIP, HTTP 14/14 — **đã xác minh từ artifact**, không phải suy luận từ nhãn commit.
 
 ---
 
@@ -31,11 +94,15 @@
 
 **Điều kiện chuyển thành regression test** (theo L146-153): Owner ghi quyết định vào `t1b-g007-runtime-evidence-2026-10-21.md` §8.4 **kèm ngày + người quyết + nội dung**; mọi mục `PINNED_BEHAVIOR` phải có `status = "DECIDED"` và đủ `decision` / `decided_by` / `decided_on`; chuyển `OWNER_DECISIONS_CONFIRMED = True`. **Thứ tự phụ thuộc:** Q2 phải quyết trước Q1/Q3 vì 4/7 canary dừng ở tiền đề thiết lập theo Q2 (§1.2).
 
-### 1.2 Phát hiện mới trong lần rà này — **7 canary có CÙNG một nguyên nhân gốc**
+### 1.2 Quan sát runtime: 7 canary có cùng một tiền đề thiết lập chưa đạt
 
-Bảng FAIL trên cho thấy 2 canary FAIL ngay ở assert (PIN) Q2, còn **5 canary FAIL ở tiền đề thiết lập** `assertIsNotNone(self._share_for(c))` (L627, L653, L697, L768, L819). Cả 7 đều dùng chung một bước thiết lập: `self._assign(self.users["c"])`.
+Bảng FAIL ở §1 cho thấy 2 canary FAIL ngay tại assert (PIN) Q2, còn **5 canary FAIL ở tiền đề thiết lập** `assertIsNotNone(self._share_for(c))` (L627, L653, L697, L768, L819). Cả 7 đều dùng chung một bước thiết lập: `self._assign(self.users["c"])`.
 
-**Bằng chứng runtime** (`test_docshare_lifecycle.log`, dòng 8-15):
+#### 1.2.1 QUAN SÁT (runtime evidence — dẫn nguồn đầy đủ)
+
+**Nguồn:** artifact của run [`#39900046839`](https://github.com/nobita6986/new-crm/actions/runs/39900046839) (head `8613e86`), file `p0-g007-evidence-39900046839/test_docshare_lifecycle.log`, SHA-256 `cd838faf1360c6915db908a572680d034f38d195b70a2bbd17495526bdf42d1e`.
+
+Ba dòng do helper `observe()` in ra (test_docshare_lifecycle.py L293-298):
 
 ```
 [DocShare characterization] after assign_agent (assignee ngoài scope) — DocShare: None
@@ -43,32 +110,74 @@ Bảng FAIL trên cho thấy 2 canary FAIL ngay ở assert (PIN) Q2, còn **5 ca
 [DocShare characterization] after assign_agent (assignee trong scope) — DocShare: []
 ```
 
-Nghĩa là `frappe.desk.form.assign_to.add()` **không tạo `DocShare` nào cho user `c`** (ngoài scope), trong khi pin Q2 ghi `current_behavior` là *"tạo `DocShare` khi assignee chưa có quyền"* ⇒ **hành vi thực tế KHÔNG khớp với pin ⇒ đây là DRIFT so với pin, không phải canary "đang chờ" đơn thuần**.
+**Điều quan sát được:** sau `frappe.desk.form.assign_to.add()` với assignee user `c` (Team 2, **ngoài scope**), `_share_for(c)` trả `None` — tức **không tồn tại bản ghi `DocShare` nào** cho user `c` trên Lead đó. Dòng thứ ba cho thấy nhánh "assignee trong scope" trả `[]` (đúng kỳ vọng của Q2 nhánh bù, method này **PASS**).
 
-**Đường gọi và điểm chặn (đọc source tại SHA đã ghim):**
+**Đối chiếu với pin:** `PINNED_BEHAVIOR["Q2"]["current_behavior"]` ghi *"tạo `DocShare` khi assignee chưa có quyền"* (registry in ra trong cùng log). Quan sát `None` **không khớp** với mô tả đó ⇒ đây là **drift giữa pin và hành vi quan sát được**.
+
+> **Phạm vi của quan sát:** log chỉ ghi **kết quả** (`DocShare: None`), **không** ghi giá trị `frappe.has_permission(...)` hay `lead_owner` tại các thời điểm trước/sau. Vì vậy quan sát **không** tự chứng minh được *vì sao* không có share. Việc suy luận cơ chế là mục §1.2.2 và **mang nhãn giả thuyết**.
+
+**Tính lặp lại:** quan sát `DocShare: None` xuất hiện **giống hệt** trong **cả 6 run** đã tải (`#39885152649`, `#39892127563`, `#39893839646`, `#39894784269`, `#39895414507`, `#39900046839`) ⇒ hiện tượng **tái lập xuyên suốt**, không phải nhiễu của một lần chạy.
+
+#### 1.2.2 GIẢ THUYẾT cơ chế (static analysis — **CHƯA** xác minh bằng runtime)
+
+> **Nhãn: GIẢ THUYẾT.** Dựa trên đọc source tại SHA đã ghim, **không** có runtime confirm. Không được trích dẫn như kết luận.
+
+**Đường gọi và điểm chặn (tĩnh):**
 
 1. `test._assign()` (L446) → `frappe.desk.form.assign_to.add({...})` → `_add(args, ignore_permissions=False)` (`assign_to.py` L55-58).
 2. ToDo insert (`assign_to.py` L85-98) với `ignore_permissions=True`.
-3. `crm.api.todo.after_insert` (`crm/api/todo.py` L19-25) — hook upstream `doc_events["ToDo"]["after_insert"]` (`crm/hooks.py` L244-248) — chạy **ngay sau** ToDo insert và gọi `frappe.db.set_value("CRM Lead", reference_name, "lead_owner", doc.allocated_to)`.
-4. `assign_to.py` L106-107: `if not frappe.has_permission(doc=doc, user=assign_to):`
-5. … nhánh này **không** được chạy ⇒ `frappe.has_permission("CRM Lead", doc=lead, user="c")` đã trả **True**.
+3. `crm.api.todo.after_insert` (`crm/api/todo.py` L19-25) — hook upstream `doc_events["ToDo"]["after_insert"]` (`crm/hooks.py` L244-248) — chạy **ngay sau** ToDo insert, gọi `frappe.db.set_value("CRM Lead", reference_name, "lead_owner", doc.allocated_to, update_modified=False)`.
+4. `assign_to.py` L106-107: `if not frappe.has_permission(doc=doc, user=assign_to):` → nhánh này **không** chạy ⇒ `has_permission("CRM Lead", doc=lead, user="c")` đã trả `True` tại thời điểm đó.
 
-**Vì sao `c` lại "có quyền" sau bước 3 — ứng viên chính, CHƯA xác minh bằng runtime:** `crm_cskh/hooks.py` L147-156 đăng ký `permission_query_conditions` cho CRM Lead/Deal (và CRM v1.87.0 `crm/hooks.py` L135-139 đăng ký thêm `crm.permissions.org_hierarchy.get_lead_permission_query_conditions`). `has_controller_permissions` (`frappe/permissions.py` L455-473) chạy hook `has_permission` **trước**, và các hook này chỉ trả về `bool` theo điều kiện cây phân quyền. Điểm cần Owner xác minh: **liệu `crm_cskh.permissions.lead_has_permission` có thực sự chặn được sau khi ToDo đã gán**, hay để nhánh "gán việc" của upstream làm record rơi vào scope.
+**Ứng viên giải thích (chưa loại trừ được ứng viên nào):**
 
-> **Mức độ bằng chứng: TĨNH, CHƯA CÓ RUNTIME CONFIRMATION.** Đây là **hypothesis cần kiểm chứng**, không phải kết luận. Việc xác minh cần thêm một method mới vào inventory 99 ⇒ **cần Owner duyệt** (xem `T1B-ext+3`, §3).
+- **(H1) `lead_owner` bị ghi đè làm `c` trở thành owner.** `crm/api/todo.py` L22-25 đặt `lead_owner = allocated_to`. Nếu `lead_owner` thành `c` thì `_user_owns_in_scope("c", "c")` (`crm_cskh/permissions.py` L39-55) trả `True` ⇒ đọc được, **không cần** share. *Lưu ý phản chứng:* `frappe.db.set_value` **không** gọi Document events (docstring `frappe/database/database.py` L942-945: *"do not call the ORM triggers"*) ⇒ hook `on_update → clear_stale_lead_shares` (`hooks.py` L172) **không** chạy ⇒ giả thuyết này **tương thích** với việc không có share nào bị xoá.
+- **(H2) Nhánh "gán việc" của upstream CRM cho phép đọc.** `crm/hooks.py` L135-139 đăng ký `permission_query_conditions` → `crm.permissions.org_hierarchy._permission_query_conditions` (L42-51) có nhánh `q2 = DT.name.isin(... ToDo ... allocated_to == user ...)` ⇒ **record được gán ToDo cho `c` là đọc được** với `c`, **bất kể** `lead_owner`.
+- **(H3) Tương tác hai hệ scope.** `has_controller_permissions` (`frappe/permissions.py` L455-473) chạy hook `has_permission` **trước** share fallback; `crm_cskh/permissions.py` `lead_has_permission` (L99-107) và `crm.permissions.org_hierarchy.has_lead_permission` (L98-99 → `_has_permission` L73-95) đều có thể trả về giá trị cho phép.
 
-**Hệ quả nếu hypothesis đúng:** nếu `assign_agent` khiến assignee **ngoài scope** trở thành **có quyền đọc** record, thì đây là **mở rộng scope ngoài ý muốn** — và câu hỏi Q2 của Owner cần được trả lời **theo hướng khác** so với giả định ban đầu trong pin (pin giả định Frappe sẽ tạo share `read=1`; runtime cho thấy **không** có share ⇒ thay vào đó quyền đến từ đường khác). Vì vậy **giữ nguyên** toàn bộ canary là đúng: **chưa đủ bằng chứng** để kết luận.
+> **Cả H1, H2, H3 đều chưa được phân biệt.** Quan sát `DocShare: None` tương thích với cả ba. **Không** kết luận cơ chế nào là nguyên nhân.
+
+#### 1.2.3 Khoảng trống cần Owner/T0 xem xét (nếu bất kỳ giả thuyết nào đúng)
+
+Nếu `assign_agent` khiến assignee **ngoài scope** trở thành **có quyền đọc** record mà **không** thông qua `DocShare`, thì câu hỏi Q2 cần được trả lời **khác** so với giả định trong pin (pin giả định cơ chế là *share `read=1`*; runtime thì **không** có share). Đây là **quyết định policy của Owner**, không phải sửa test.
+
+**Vì sao vẫn giữ nguyên canary:** chưa có bằng chứng runtime phân biệt được H1/H2/H3 ⇒ **chưa đủ cơ sở** để kết luận có hoặc không có vấn đề scope. Xem `T1B-ext+3` (§4) cho hạng mục theo dõi.
 
 ### 1.3 Method RA-04 — chi tiết
 
-| Thuộc tính | Giá trị |
+**Nguồn:** run `#39900046839`, `test_bt1c5_matrix_gaps.junit.xml` (SHA-256 `f2982215e491fb6a93d49c6b9ea5ba501e98166f73b656c1f0b525a8b63de9d4`), testcase `TestRA04CrmAdminReassignBlocked::test_ra04_ownership_service_does_not_exist_yet`, timestamp `2026-10-23T11:27:52`.
+
+**Assertion:** `test_bt1c5_matrix_gaps.py` L679-684 — `assertEqual(reassign_routes, [])`, trong đó `reassign_routes` (L674-678) lọc key của `frappe.get_hooks("override_whitelisted_methods")` theo token substring `reassign` / `transfer_ownership` / `assign`.
+
+**Traceback thực tế (nguyên văn từ `<failure>`):**
+
+```
+AssertionError: Lists differ: ['crm.api.doc.remove_assignments', 'crm.api.doc.get_assigned_users'] != []
+
+First list contains 2 additional elements.
+First extra element 0:
+'crm.api.doc.remove_assignments'
+
+- ['crm.api.doc.remove_assignments', 'crm.api.doc.get_assigned_users']
++ [] : Không được đăng ký endpoint reassign/transfer khi ownership service chưa có
+      (nếu có, phải xem lại guard theo ADR-004 §2.2).
+```
+
+⇒ **`reassign_routes` thực tế = `['crm.api.doc.remove_assignments', 'crm.api.doc.get_assigned_users']`** — **2 phần tử**.
+
+**Đánh giá: hai route này có liên quan gì đến ownership service không? → KHÔNG.**
+
+| Tiêu chí | Đánh giá |
 |---|---|
-| Failure | `Lists differ: ['crm.api.doc.remove_assignments', 'crm.api.doc.get_assigned_users'] != []` |
-| Assertion | `test_bt1c5_matrix_gaps.py` L679-684: `assertEqual(reassign_routes, [])`, với `reassign_routes` lọc `override_whitelisted_methods` theo token `reassign`/`transfer_ownership`/`assign` (L674-678). Hai assert `assertFalse(hasattr(permissions, "reassign_lead"))` / `("transfer_lead_ownership")` (L665-672) **đã PASS** ⇒ tên hàm thực sự không tồn tại |
-| Ý nghĩa | Canary khẳng định **ownership service chưa tồn tại**. Hai route bị bắt là **substring match** trên token `assign` — chúng là bản **fail-closed** đã được `crm_cskh` override (`hooks.py` L187, L189), **không** phải ownership service thật |
-| Blocker | `hooks.py` không đăng ký endpoint reassign nào đồng bộ `lead_owner` + `ToDo` + `DocShare` trong một transaction (ADR-004 §2.2) |
-| Quyết định Owner | Chốt có/không tạo ownership service; nếu **có** ⇒ viết service + đổi pin thành assert "service tồn tại và đồng bộ 3 bảng"; nếu **không** ⇒ ADR-004 §2.2 ghi nhận owner chấp nhận trạng thái hiện tại và pin được giữ **vĩnh viễn** dưới dạng characterization |
-| Mức độ | **Đúng như kỳ vọng** — canary không đổi |
+| Có phải ownership service không? | **Không.** Cả hai đã được `crm_cskh` **override** thành bản **fail-closed**: `crm.api.doc.remove_assignments` → `crm_cskh.permissions.remove_assignments` (`hooks.py` L187, guard `_is_system` tại `permissions.py` L165-170); `crm.api.doc.get_assigned_users` → `crm_cskh.api.guarded_crm.get_assigned_users` (`hooks.py` L189, `_check_read` + lọc `user_in_scope`). Không route nào đồng bộ `lead_owner` + `ToDo` + `DocShare` trong một transaction |
+| Vì sao bị bắt? | **Substring match**, không phải ngữ nghĩa. Token `assign` khớp trong cả `remove_assignments` **và** `get_assigned_users` ⇒ test bắt nhầm hai endpoint có tên chứa "assign" nhưng **không** phải reassign endpoint |
+| Hai assert kèm theo | `assertFalse(hasattr(permissions, "reassign_lead"))` (L665-668) và `assertFalse(hasattr(permissions, "transfer_lead_ownership"))` (L669-672) — **PASS** ⇒ tên hàm ownership service thực sự **không** tồn tại trong `crm_cskh.permissions` |
+| Kết luận | Canary **đúng nghĩa**: ownership service **chưa** tồn tại. Cơ chế phát hiện có **độ nhạy thấp** (substring) nên FAIL do route không liên quan — nhưng đây là **vấn đề độ chính xác của phép kiểm**, **không** phải phát hiện lỗ hổng |
+| Mức độ | Canary giữ nguyên chức năng; **không** diễn giải thành lỗi bảo mật đã xác nhận |
+
+**Quyết định Owner cần có:** chốt có/không tạo ownership service theo ADR-004 §2.2.
+- Nếu **có** ⇒ viết service + đổi pin thành assert "service tồn tại và đồng bộ 3 bảng", **và** thu hẹp phép lọc `reassign_routes` để tránh bắt nhầm.
+- Nếu **không** ⇒ ADR-004 §2.2 ghi nhận owner chấp nhận trạng thái hiện tại; pin được giữ **vĩnh viễn** dưới dạng characterization, **không** sửa.
 
 ---
 
@@ -159,14 +268,21 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 
 **Diễn giải cần Owner/T1C xác nhận — chưa kết luận:**
 
-- **`ToDo`:** có `All` ⇒ **mọi** user (kể cả `b`, `Sales User`) đều có quyền `read` ở **tầng doctype**. Vì vậy `frappe.has_permission("ToDo", "read", doc)` với `doc` cho tới `get_doc_permissions` → `has_controller_permissions` (`frappe/permissions.py` L219-221, L455-473) → hook `crm_cskh.permissions.linked_lead_has_permission` (hooks.py L166), vốn **trả `None`** khi user **có** quyền đọc Lead ⇒ **không** chặn. Kết quả: ToDo đọc được **vì** quyền doctype `All`, **không phải** vì stale-access.
-- **`Comment`:** chỉ `System Manager` / `Website Manager` ⇒ user `b` (`Sales User`) **không** có quyền doctype ⇒ `get_doc_permissions` trả `{ptype: 0}`; nhánh share fallback (`frappe/permissions.py` L189-191) cũng không có DocShare ⇒ **deny**. Comment đọc được **vì** thiếu quyền doctype, **không phải** vì stale-access.
+- **`ToDo`:** có `All` ⇒ **mọi** user (kể cả `b`, `Sales User`) đều có quyền `read` ở **tầng doctype**. Vì vậy `frappe.has_permission("ToDo", "read", doc)` với `doc` cho tới `get_doc_permissions` → `has_controller_permissions` (`frappe/permissions.py` L219-221, L455-473) → hook `crm_cskh.permissions.linked_lead_has_permission` (hooks.py L166), vốn **trả `None`** khi user **có** quyền đọc Lead ⇒ **không** chặn. Nếu đúng như vậy, ToDo đọc được **vì** quyền doctype `All`, **không phải** vì stale-access.
+- **`Comment`:** chỉ `System Manager` / `Website Manager` ⇒ user `b` (`Sales User`) **không** có quyền doctype ⇒ `get_doc_permissions` trả `{ptype: 0}`; nhánh share fallback (`frappe/permissions.py` L189-191) cũng không có DocShare ⇒ **deny**. Nếu đúng như vậy, Comment bị chặn **vì** thiếu quyền doctype, **không phải** vì stale-access.
 
-⇒ **Hai doctype cho hai lý do KHÁC NHAU**, cùng biểu hiện "PermissionError". Đây chính là điểm cần tách bạch; tuyệt đối **không** diễn giải thành "đã chặn đúng stale access".
+> **Mức độ bằng chứng: TĨNH (đọc DocPerm JSON + source tại SHA đã ghim).** Hai vế trên là **suy luận từ cấu hình**, **chưa** có runtime confirm cho tình huống cụ thể.
+
+⇒ **Hai doctype, hai lý do KHÁC NHAU**, cùng biểu hiện `PermissionError`. Đây là điểm cần tách bạch.
+
+> **Cách diễn đạt bắt buộc:** `PermissionError` quan sát được ở đây là **bằng chứng chưa đủ** để kết luận **có** hay **không có** vulnerability:
+> - **Không** phải bằng chứng rằng stale-access **đã** được chặn đúng — vì lý do chặn có thể là cấu hình DocPerm, không phải guard.
+> - **Cũng không** phải bằng chứng rằng **không có** lỗ hổng — vì chưa có kịch bản nào thử đọc dữ liệu ngoài scope qua đường này.
+> - Kết luận đúng ở thời điểm này: **chưa đủ evidence để kết luận theo hướng nào.**
 
 ### 3.3 Dữ liệu có thể lộ
 
-Ở fixture hiện tại: **không phát hiện rò rì** — `b` bị chặn ở **tầng doctype**, tức chặn **mạnh hơn** (chặn luôn ToDo hợp lệ trong scope nếu DocPerm đổi). Đây là **fail-closed** do cấu hình DocPerm upstream, **không phải** guard cố ý của `crm_cskh`.
+Ở fixture hiện tại: **không quan sát thấy** dữ liệu bị lộ qua đường ToDo/Comment với user `b` — nhưng đây là **"không quan sát thấy trong kịch bản đã chạy"**, **không** phải kết luận "không có rủi ro". Cơ chế bị chặn là hệ quả của cấu hình DocPerm upstream, **không phải** guard cố ý của `crm_cskh`.
 
 **Rủi ro tiềm năng (chưa xác minh):** nếu ai đó thêm DocPerm `read` cho `ToDo`/`Comment` cho `Sales User` trong tương lai (ví dụ để hiện task trong UI), thì:
 - `ToDo` sẽ mở cho mọi Sales User **ngoài scope** ⇒ rò rỉ tiêu đề/nội dung task của Lead ngoài scope — **trừ khi** hook `linked_lead_has_permission` chặn được.
@@ -196,16 +312,17 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 
 ## 4. Hạng mục mới: `T1B-ext+3` — truy nguyên drift của pin Q2
 
-**Trạng thái: `OPEN` — mới phát hiện trong lần rà này (§1.2).**
+**Trạng thái: `OPEN` — mới phát hiện. Quan sát đã có runtime; cơ chế chỉ là giả thuyết.**
 
 | Thuộc tính | Nội dung |
 |---|---|
-| Vấn đề | Pin Q2 ghi `current_behavior` = *"assign_to.add tạo DocShare khi assignee chưa có quyền"*, nhưng runtime cho thấy **không có DocShare nào được tạo** |
-| Tác động | 7/7 canary DocShare FAIL; Q1/Q3 **không thể đánh giá được** vì tiền đề thiết lập (theo Q2) chưa đạt |
-| Bằng chứng | Runtime: `after assign_agent (assignee ngoài scope) — DocShare: None`. Tĩnh: `assign_to.py` L106-107, `crm/api/todo.py` L19-25, `crm/hooks.py` L135-139 + `crm_cskh/hooks.py` L147-167 |
-| Mức độ | **CHƯA xác minh** — chỉ có static analysis, **không** có runtime confirm |
-| Test cần | Method xác minh `frappe.has_permission("CRM Lead", doc=lead, user="c")` ngay **trước** và **sau** `assign_agent`, đồng thời đọc `lead_owner` trước/sau (vì `crm/api/todo.py` L22-25 ghi đè `lead_owner` bằng `allocated_to`) |
-| Ràng buộc | Method mới ⇒ **cần Owner duyệt** inventory 99 |
+| Quan sát (runtime, **đã xác minh**) | Run [`#39900046839`](https://github.com/nobita6986/new-crm/actions/runs/39900046839), `test_docshare_lifecycle.log` (SHA-256 `cd838faf…`): `after assign_agent (assignee ngoài scope) — DocShare: None`. Giống hệt ở **cả 6 run** đã tải ⇒ **tái lập xuyên suốt** |
+| Đối chiếu pin | `PINNED_BEHAVIOR["Q2"]["current_behavior"]` = *"assign_to.add tạo DocShare khi assignee chưa có quyền"* ⇒ quan sát **không khớp** mô tả |
+| Tác động | 7/7 canary DocShare FAIL; Q1/Q3 **không đánh giá được** vì tiền đề thiết lập (theo Q2) chưa đạt |
+| **Giả thuyết cơ chế (chưa xác minh)** | H1 `lead_owner` bị `crm/api/todo.py` L22-25 ghi đè thành `c` · H2 nhánh ToDo của `crm.permissions.org_hierarchy._permission_query_conditions` L42-51 cho phép đọc · H3 tương tác hai hệ scope. Chi tiết tại §1.2.2. **Cả ba đều chưa được phân biệt bằng runtime** |
+| Mức độ | Quan sát = **runtime evidence**. Cơ chế = **static hypothesis**. **Không** kết luận có/không có lỗ hổng scope |
+| Test cần | Method xác minh `frappe.has_permission("CRM Lead", doc=lead, user="c")` ngay **trước** và **sau** `assign_agent`, đồng thời đọc `lead_owner` trước/sau, để phân biệt H1 với H2/H3 |
+| Ràng buộc | Method mới ⇒ **cần Owner duyệt** trước khi nâng inventory 99 → 100. **Hiện chưa thêm** |
 | Owner | **Owner/T0** (quyết định Q2) + T1B (viết test sau khi được duyệt) |
 
 > **Không tự ý sửa pin Q2.** Pin sai về mặt mô tả là việc của Owner: nếu hành vi thực tế (không tạo share) là **đúng ý**, thì Q2 cần viết lại theo hướng đó và assertion đổi tương ứng — đây là **quyết định policy**, không phải sửa test.
@@ -217,12 +334,21 @@ Lý do ghi nhầm ban đầu: `check_permission("read")` đi qua `frappe.has_per
 | Hạng mục | Trạng thái | Owner | Hành động lần này |
 |---|---|---|---|
 | Q1 (4 canary) | `OPEN` — chờ Owner; **thêm** blocker drift Q2 | T0/Owner | Giữ nguyên canary |
-| Q2 (3 canary) | `OPEN` — chờ Owner; phát hiện **drift** | T0/Owner | Giữ nguyên canary; ghi nhận drift |
+| Q2 (3 canary) | `OPEN` — chờ Owner; quan sát drift đã có runtime | T0/Owner | Giữ nguyên canary |
 | Q3 (1 canary) | `OPEN` — chờ Owner; phụ thuộc Q2 | T0/Owner | Giữ nguyên canary |
 | Q4 (chung với Q2) | `OPEN` — chờ Owner | T0/Owner | Giữ nguyên canary |
 | RA-04 (1 canary) | `OPEN` — chờ ADR-004 §2.2 | T0/Owner | Giữ nguyên canary |
 | `T1B-ext+1` (Dynamic Link) | `OPEN` — static-only, chưa có runtime evidence | Owner/T1C | Không sửa code |
-| `T1B-ext+2` (ToDo/Comment) | `OPEN` — static-only, chưa có runtime evidence | Owner/T1C | Không sửa code |
-| `T1B-ext+3` (drift pin Q2) — **mới** | `OPEN` — mới phát hiện, chưa xác minh | T0/Owner | Ghi nhận, không sửa |
+| `T1B-ext+2` (ToDo/Comment) | `OPEN` — static-only, chưa có runtime evidence | **T1C rà tiếp** | Không sửa code |
+| `T1B-ext+3` (drift pin Q2) | `OPEN` — quan sát có runtime; cơ chế là giả thuyết | T0/Owner | Ghi nhận, không sửa |
 
-**Kết luận:** 8/99 method FAIL vẫn là **canary chờ Owner**, `gate_passed=false`, **G0-07 / P0 vẫn `NO-GO`**. PR #2 **giữ mở, không merge**. Lần rà này **không sửa** assertion, **không** sửa upstream code, **không** thay đổi mức độ rủi ro.
+**Trạng thái thoát (exit status):**
+
+| Mốc | Trạng thái | Lý do |
+|---|---|---|
+| **G0-07** | **`PARTIAL` / `CHƯA KÝ`** | 91/99 PASS xác minh từ artifact run `#39900046839`; `gate_passed=false` vì 8 canary chưa có quyết định Owner; `T1B-ext+1/+2/+3` đều `OPEN` |
+| **P0** | **`NO-GO`** | G0-07 chưa ký ⇒ P0 chưa đủ điều kiện thoát |
+
+**Kết luận:** 8/99 method FAIL vẫn là **canary chờ Owner** (Q1–Q4 + RA-04), `gate_passed=false`. PR #2 **giữ mở, không merge**. Lần cập nhật này **không sửa** assertion, **không** sửa policy, **không** sửa upstream code, **không** thêm method thứ 100, **không** thay đổi mức độ rủi ro.
+
+**Phối hợp:** `T1C` rà tiếp `T1B-ext+2` (ToDo/Comment). `T1A` chờ `T1C` cập nhật rồi đồng bộ báo cáo P0.
