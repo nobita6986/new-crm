@@ -145,7 +145,7 @@ jobs:
           echo "per-method gate exit=$gate_status" >> "$artifact_dir/module-status.txt"
           exit "$gate_status"
 
-      - name: Run direct HTTP probes for SEC-13/14/16 on seeded site
+      - name: Run direct HTTP probes for SEC-13/14/16/26 on seeded site
         id: http_transport
         if: always() && steps.seed.outcome == 'success'
         continue-on-error: true

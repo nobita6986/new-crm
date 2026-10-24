@@ -40,6 +40,10 @@ OUTPUT = Path(os.environ.get("P0_HTTP_EVIDENCE_DIR", "/tmp/p0-g007-http"))
 SEED_SOURCE = Path(os.environ.get("P0_SEED_SOURCE", "/src/deploy/dev/seed/seed_demo.py"))
 LEAD_NAME = "CRM-LEAD-00001"
 PRIVATE_FILE_NAME = f"DEMO-{LEAD_NAME}.txt"
+# Endpoint RFC `get_activities` — **KHÔNG** nằm trong `override_whitelisted_methods`
+# của `crm_cskh` ⇒ gọi HTTP tới đây đi qua hàm upstream **gốc**, không qua
+# wrapper redaction. Khai báo ở module scope để có thể kiểm chứng tĩnh.
+ACTIVITIES_ENDPOINT = "/api/method/crm.api.activities.get_activities"
 
 # --- SEC-16 permlevel probe -------------------------------------------------
 # Field synthetic có `permlevel=1` trên CRM Lead. `permlevel > 0` nghĩa là field
@@ -78,6 +82,8 @@ SENSITIVE_KEYS = {
 }
 records: list[dict[str, object]] = []
 failures: list[str] = []
+# Quan sát characterization (KHÔNG ảnh hưởng PASS/FAIL của gate).
+observations: list[dict[str, object]] = []
 
 
 def redact_text(value: str) -> str:
@@ -120,6 +126,10 @@ def write_evidence() -> None:
 		"cases": records,
 		"failed_cases": failures,
 		"probe_result": "FAIL" if failures else "PASS",
+		# Quan sát characterization: đo **riêng** từng đường lộ `file_url`.
+		# Đây là **bằng chứng quan sát**, KHÔNG phải tiêu chí PASS/FAIL của gate
+		# (gate vẫn chỉ dựa vào `failed_cases`).
+		"observations": observations,
 	}
 	(OUTPUT / "http-transport.json").write_text(
 		json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
@@ -586,6 +596,110 @@ def run() -> int:
 		and bool(admin_private["file_url"]),
 		"system caller retains file_url for seeded private attachment",
 	)
+
+	# --- SEC-26 (RFC `get_activities`): kịch bản caller ĐÚNG scope ----------
+	#
+	# `crm.api.activities.get_activities` **KHÔNG** nằm trong
+	# `override_whitelisted_methods` của `crm_cskh` ⇒ gọi HTTP tới endpoint này
+	# đi qua `frappe/handler.py::execute_cmd` → `frappe.call(method, …)` →
+	# hàm upstream `crm/api/activities.py` **gốc**, **KHÔNG** qua
+	# `guarded_crm.get_attachments` ⇒ **KHÔNG** qua `_redact_private_file_urls`.
+	#
+	# Case này đo **hai** đường lộ `file_url` trong **cùng một** response:
+	#   (1) `message[4].attachments` — CRM `activities.py` L321-339 (L330 `file_url`)
+	#   (2) `docinfo.attachments`    — Frappe `desk/form/load.py` L128/L147/L206
+	# `docinfo` nằm ở **top-level** của response (không phải trong `message`) vì
+	# `frappe/utils/response.py::as_json` L154 dump **toàn bộ**
+	# `frappe.local.response` ⇒ `frappe.response["docinfo"]` (load.py L147) đi
+	# cùng response với `message` của `frappe.call` (handler.py L86).
+	#
+	# Caller: `staff.a@dev.local` — role `Sales User` (KHÔNG phải System Manager)
+	# và là `lead_owner` của `CRM-LEAD-00001` ⇒ **đúng scope**, có quyền read
+	# ⇒ các guard L24/L56/L181 của `activities.py` **cho qua**, nên đây là
+	# **kịch bản dương** (không phải kịch bản ngoài scope đã bị chặn).
+	#
+	# Dữ liệu: **hoàn toàn giả** — site seed `p0-ci.localhost`, file
+	# `DEMO-CRM-LEAD-00001.txt` do `seed_demo.py::_ensure_attachment` tạo với
+	# `is_private=1`. Không dùng dữ liệu thật.
+	activities_path = ACTIVITIES_ENDPOINT + "?" + urllib.parse.urlencode({"name": LEAD_NAME})
+	staff_activities = request("sec26-activities-in-scope", staff, "GET", activities_path)
+	staff_activities_json = staff_activities["json"]
+
+	# `message` là tuple 5 phần tử trả về bởi `get_deal_activities`/`get_lead_activities`:
+	# (versions, calls, notes, tasks, attachments) — CRM `activities.py` L318.
+	message = (
+		staff_activities_json.get("message") if isinstance(staff_activities_json, dict) else None
+	)
+	message_attachments = message[4] if isinstance(message, (list, tuple)) and len(message) == 5 else None
+	message_private = next(
+		(
+			entry
+			for entry in message_attachments or []
+			if isinstance(entry, dict) and entry.get("file_name") == PRIVATE_FILE_NAME
+		),
+		None,
+	)
+
+	# `docinfo` là key top-level của response (không nằm trong `message`).
+	docinfo = (
+		staff_activities_json.get("docinfo") if isinstance(staff_activities_json, dict) else None
+	)
+	docinfo_attachments = docinfo.get("attachments") if isinstance(docinfo, dict) else None
+	docinfo_private = next(
+		(
+			entry
+			for entry in docinfo_attachments or []
+			if isinstance(entry, dict) and entry.get("file_name") == PRIVATE_FILE_NAME
+		),
+		None,
+	)
+
+	# Đo **tồn tại** của `file_url` cho file private ở **cả hai** đường.
+	# KHÔNG assert giá trị phải là bao nhiêu, KHÔNG assert phải có hay không:
+	# đây là **characterization** — ghi lại hành vi quan sát được để Owner/verifier
+	# quyết định. `check()` chỉ PASS khi **cả hai** đường được quan sát cùng lúc
+	# (nếu không, case FAIL ⇒ tín hiệu rõ ràng cho reviewer).
+	message_has_url = isinstance(message_private, dict) and isinstance(
+		message_private.get("file_url"), str
+	)
+	docinfo_has_url = isinstance(docinfo_private, dict) and isinstance(
+		docinfo_private.get("file_url"), str
+	)
+	check(
+		"sec26-activities-in-scope",
+		staff_activities,
+		staff_activities["status"] == 200
+		and isinstance(staff_activities_json, dict)
+		# Cả hai đường đều phải trả về **entry** của file private đã seed
+		# ⇒ kịch bản dương thực sự đã chạy tới tận payload.
+		and isinstance(message_private, dict)
+		and bool(message_private.get("is_private"))
+		and isinstance(docinfo_private, dict)
+		and bool(docinfo_private.get("is_private")),
+		"in-scope caller reaches get_activities payload for seeded private attachment",
+	)
+
+	# Ghi **riêng** quan sát của từng đường ra evidence (không làm thay đổi
+	# PASS/FAIL của gate) để reviewer thấy rõ đường nào lộ `file_url`.
+	for observation_id, has_url in (
+		("sec26-activities-message-attachments", message_has_url),
+		("sec26-activities-docinfo-attachments", docinfo_has_url),
+	):
+		observations.append(
+			{
+				"id": observation_id,
+				"case": "sec26-activities-in-scope",
+				"endpoint": "crm.api.activities.get_activities",
+				"caller": SEC16_USER,
+				"caller_scope": "in-scope (lead_owner of %s)" % LEAD_NAME,
+				"document": LEAD_NAME,
+				"file_name": PRIVATE_FILE_NAME,
+				"file_is_private": True,
+				"observation": "file_url_present" if has_url else "file_url_absent",
+				"file_url_present": has_url,
+				"source": "synthetic seeded private attachment (p0-ci.localhost)",
+			}
+		)
 
 	return 1 if failures else 0
 

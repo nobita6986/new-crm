@@ -444,6 +444,191 @@ class TestProbeSourceSemanticsMatch(unittest.TestCase):
 		self.assertIn("test_crm_api_get_data_filters_permlevel_field", self.source)
 
 
+class TestProbeGetActivitiesCoverage(unittest.TestCase):
+	"""C6 — SEC-26 RFC: probe phải đo `get_activities` (2 đường lộ `file_url`).
+
+	Đây là **coverage gap** mà T1C lần 22b nêu: probe 14/14 và V16–V21 chỉ phủ
+	endpoint **đã override** (`guarded_crm.get_attachments`), **KHÔNG** phủ
+	`crm.api.activities.get_activities` và **KHÔNG** phủ `docinfo.attachments`.
+
+	Nguyên tắc bất di bất dịch:
+	- Probe phải gọi **đúng** endpoint `crm.api.activities.get_activities`.
+	- Phải đo **riêng** `message[4].attachments` **và** `docinfo.attachments`
+	  (2 đường độc lập, không được gộp).
+	- Đây là **characterization**: KHÔNG được assert giá trị `file_url` phải có
+	  hay không — phải **ghi lại quan sát**. Assert cứng sẽ biến kết luận đang
+	  chờ Owner thành kết luận đã chốt.
+	- Caller phải là **non-system** (để không đo nhầm hành vi Administrator).
+	"""
+
+	@classmethod
+	def setUpClass(cls):
+		cls.source, cls.tree = load_probe()
+		cls.check_ids = all_check_ids(cls.tree)
+
+	def test_case_exists_and_is_labelled_sec26(self):
+		ids = [i for i in self.check_ids if "activities" in i]
+		self.assertTrue(ids, "phải có case đo `get_activities` (RFC SEC-26)")
+		for case_id in ids:
+			self.assertTrue(
+				case_id.startswith("sec26-"),
+				f"case đo get_activities phải mang nhãn sec26-*: {case_id}",
+			)
+
+	def test_case_calls_get_activities_endpoint(self):
+		"""Case phải trỏ đúng `crm.api.activities.get_activities` (KHÔNG phải
+		endpoint đã override `guarded_crm.get_attachments`)."""
+		found = False
+		for node in ast.walk(self.tree):
+			if (
+				isinstance(node, ast.Call)
+				and isinstance(node.func, ast.Name)
+				and node.func.id == "request"
+				and len(node.args) >= 4
+				and isinstance(node.args[0], ast.Constant)
+				and "activities" in str(node.args[0].value)
+			):
+				path = ast.unparse(node.args[3])
+				# Resolve tên hằng module-scope (vd `ACTIVITIES_ENDPOINT`) để kiểm
+				# được endpoint thật, không chỉ tên biến.
+				resolved = self.resolve_path(path)
+				if "crm.api.activities.get_activities" in resolved:
+					found = True
+				else:
+					self.fail(f"case activities phải gọi đúng endpoint, thấy: {resolved}")
+		self.assertTrue(found, "không tìm thấy request() nào trỏ get_activities")
+
+	def resolve_path(self, rendered: str) -> str:
+		"""Resolve tên biến/hằng trong path đã render (module scope + local scope).
+
+		`request(..., activities_path)` trong đó `activities_path` được gán
+		`ACTIVITIES_ENDPOINT + "?" + urlencode(...)` ⇒ phải truy vết tới hằng
+		module-scope `ACTIVITIES_ENDPOINT` để kiểm được endpoint thật.
+		"""
+		# 1) Bảng gán: tên -> biểu thức RHS (module scope + function scope).
+		assignments: dict[str, ast.AST] = {}
+		for node in ast.walk(self.tree):
+			if isinstance(node, ast.Assign) and len(node.targets) == 1:
+				target = node.targets[0]
+				if isinstance(target, ast.Name):
+					assignments.setdefault(target.id, node.value)
+
+		# 2) Tìm chuỗi literal đầu tiên trong biểu thức, nếu có.
+		def first_literal(node: ast.AST) -> str | None:
+			if isinstance(node, ast.Constant) and isinstance(node.value, str):
+				return node.value
+			if isinstance(node, ast.Name):
+				target = assignments.get(node.id)
+				if target is not None:
+					return first_literal(target)
+				return None
+			if isinstance(node, ast.BinOp):
+				return first_literal(node.left)
+			if isinstance(node, ast.Call):
+				return None
+			return None
+
+		# 3) Resolve lặp cho tới khi không còn tên biến nào.
+		for _ in range(5):
+			before = rendered
+			for name in list(assignments):
+				if name not in rendered:
+					continue
+				literal = first_literal(assignments[name])
+				if literal:
+					rendered = rendered.replace(name, literal)
+			if rendered == before:
+				break
+		return rendered
+
+	def test_does_not_call_overridden_endpoint_for_activities(self):
+		"""`get_activities` phải **không** đi qua `guarded_crm.get_attachments`."""
+		self.assertNotIn(
+			"guarded_crm.get_attachments",
+			self.source_for_activities(),
+			"case get_activities không được gọi endpoint đã override",
+		)
+
+	def test_measures_both_paths_separately(self):
+		"""Phải đo riêng `message[4].attachments` và `docinfo.attachments`."""
+		src = self.source_for_activities()
+		# Phải **thực sự lấy** `message` và `docinfo` từ response, không chỉ
+		# nhắc tới tên biến.
+		self.assertRegex(src, r'get\("message"\)', "phải lấy `message` từ response")
+		self.assertRegex(src, r'get\("docinfo"\)', "phải lấy `docinfo` từ response")
+		self.assertIn("attachments", src)
+		# `message[4]` là phần tử thứ 5 của tuple 5 phần tử.
+		self.assertRegex(src, r"message\[4\]|len\(message\) == 5")
+		# Hai đường phải được rút ra bằng **hai biến khác nhau**.
+		self.assertIn("message_private", src)
+		self.assertIn("docinfo_private", src)
+
+	def test_does_not_hardcode_file_url_expectation(self):
+		"""KHÔNG được assert cứng `file_url` có/không — phải ghi quan sát.
+
+		Đây là characterization: kết luận còn chờ Owner, probe chỉ **đo**.
+		"""
+		src = self.source_for_activities()
+		for forbidden in (
+			"'file_url' not in",
+			'"file_url" not in',
+			"not in message_private",
+			"not in docinfo_private",
+		):
+			self.assertNotIn(
+				forbidden,
+				src,
+				"probe không được assert cứng file_url (phải ghi quan sát thay vì kết luận)",
+			)
+
+	def test_records_observations_for_each_path(self):
+		"""Mỗi đường phải có **một** quan sát riêng trong evidence."""
+		self.assertIn("observations", self.source, "phải ghi `observations` vào evidence")
+		for observation_id in (
+			"sec26-activities-message-attachments",
+			"sec26-activities-docinfo-attachments",
+		):
+			self.assertIn(observation_id, self.source)
+		# Quan sát phải được **ghi vào** list `observations` (không chỉ nhắc tên).
+		self.assertRegex(
+			self.source,
+			r"observations\s*\.\s*append\s*\(",
+			"phải thực sự append vào list `observations`",
+		)
+
+	def test_observations_do_not_affect_gate(self):
+		"""`observations` KHÔNG được ảnh hưởng PASS/FAIL của gate.
+
+		Gate chỉ dựa vào `failed_cases`; quan sát là **bằng chứng quan sát**.
+		"""
+		self.assertIn('"failed_cases": failures', self.source)
+		self.assertIn('"probe_result": "FAIL" if failures else "PASS"', self.source)
+
+	def test_uses_non_system_caller(self):
+		"""Caller phải là non-system (`staff.a@dev.local`), KHÔNG phải Administrator."""
+		src = self.source_for_activities()
+		self.assertIn("staff", src, "case get_activities phải dùng opener của staff (non-system)")
+		self.assertNotIn("admin,", src)
+
+	def test_uses_seeded_synthetic_document(self):
+		"""Phải dùng tài liệu seed **giả** (CRM-LEAD-00001), không dữ liệu thật."""
+		src = self.source_for_activities()
+		self.assertIn("LEAD_NAME", src)
+		self.assertIn("PRIVATE_FILE_NAME", src)
+
+	def source_for_activities(self) -> str:
+		"""Render source của phần code xử lý case `get_activities`."""
+		lines = self.source.splitlines()
+		start = None
+		for i, line in enumerate(lines):
+			if "sec26-activities-in-scope" in line:
+				start = i
+				break
+		self.assertIsNotNone(start, "không tìm thấy case sec26-activities-in-scope")
+		# Lấy từ case đầu tiên tới hết file (case này nằm cuối `run()`).
+		return "\n".join(lines[start:])
+
+
 class TestProbeSyntax(unittest.TestCase):
 	def test_probe_parses(self):
 		source, tree = load_probe()
