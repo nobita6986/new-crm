@@ -586,7 +586,9 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 		self.assertIn("observations", self.source, "phải ghi `observations` vào evidence")
 		for observation_id in (
 			"sec26-activities-message-attachments",
+			"sec26-activities-message-attachment-log",
 			"sec26-activities-docinfo-attachments",
+			"sec26-activities-docinfo-attachment-logs",
 		):
 			self.assertIn(observation_id, self.source)
 		# Quan sát phải được **ghi vào** list `observations` (không chỉ nhắc tên).
@@ -595,6 +597,100 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 			r"observations\s*\.\s*append\s*\(",
 			"phải thực sự append vào list `observations`",
 		)
+
+	def test_measures_attachment_log_paths(self):
+		"""Phải đo **2 đường attachment_log** (URL trong HTML/activity, không phải key `file_url`).
+
+		Đường 3: `message[0][attachment_log].data.file_url` (CRM `parse_attachment_log` L524).
+		Đường 4: `docinfo.attachment_logs[].content` — HTML `<a href="/private/files/…">`
+		(Frappe `file.py` L898-906). Ở đường 4 URL nằm trong **chuỗi HTML**, KHÔNG phải
+		key `file_url` ⇒ probe không redact được ⇒ phải đo riêng.
+		"""
+		src = self.source_for_activities()
+		# Đường 3: phải **thực sự lấy** activity type `attachment_log` từ `message[0]`
+		# và đọc `data.file_url` — không được chỉ nhắc tên.
+		self.assertRegex(
+			src,
+			r'get\(\s*"activity_type"\s*\)\s*==\s*"attachment_log"',
+			"phải lọc activity có activity_type == 'attachment_log'",
+		)
+		# `attachment_log_data` phải được **rút từ** `attachment_log_activity` — nếu
+		# đường 3 bị cắt (activity = None) thì `data` không bao giờ được đọc.
+		self.assertRegex(
+			src,
+			r"attachment_log_data\s*=\s*attachment_log_activity\.get\(\s*\"data\"\s*\)",
+			"đường 3 phải rút `data` từ activity attachment_log",
+		)
+		self.assertRegex(
+			src,
+			r"attachment_log_data\.get\(\s*\"file_url\"\s*\)",
+			"đường 3 phải đọc `data.file_url`",
+		)
+		# Kiểm tra **AST**: `attachment_log_activity` phải được gán bằng lời gọi
+		# `next(...)` — nếu đường 3 bị cắt (gán `None`) thì các regex ở trên vẫn
+		# khớp vì phần đọc `data` còn nằm trong source ⇒ phải kiểm ở tầng AST.
+		self.assertIsNotNone(
+			self.assignment_is_next_call("attachment_log_activity"),
+			"`attachment_log_activity` phải được rút bằng next(...) từ message[0]",
+		)
+		self.assertIsNotNone(
+			self.assignment_reads_docinfo_key("docinfo_attachment_logs", "attachment_logs"),
+			"`docinfo_attachment_logs` phải được đọc từ `docinfo['attachment_logs']`",
+		)
+		# Đường 4: phải đọc `content` của dòng attachment_log và nhận diện URL private.
+		self.assertRegex(
+			src,
+			r'attachment_log_row\.get\(\s*"content"\s*\)',
+			"đường 4 phải đọc `content` của dòng attachment_log",
+		)
+		self.assertIn("/private/files/", src, "phải nhận diện URL private trong HTML")
+
+	def assignment_is_next_call(self, name: str) -> ast.Call | None:
+		"""Trả về lời gọi `next(...)` được gán cho biến `name` (nếu có)."""
+		for node in ast.walk(self.tree):
+			if (
+				isinstance(node, ast.Assign)
+				and len(node.targets) == 1
+				and isinstance(node.targets[0], ast.Name)
+				and node.targets[0].id == name
+				and isinstance(node.value, ast.Call)
+				and isinstance(node.value.func, ast.Name)
+				and node.value.func.id == "next"
+			):
+				return node.value
+		return None
+
+	def assignment_reads_docinfo_key(self, name: str, key: str) -> ast.Call | None:
+		"""Trả về lời gọi `.get("key")` được gán cho biến `name` (nếu có).
+
+		Chấp nhận cả dạng `docinfo.get("key")` lẫn dạng có điều kiện
+		(`x.get("key") if … else None`) — cả hai đều là truy vấn thật.
+		"""
+		for node in ast.walk(self.tree):
+			if not (
+				isinstance(node, ast.Assign)
+				and len(node.targets) == 1
+				and isinstance(node.targets[0], ast.Name)
+				and node.targets[0].id == name
+			):
+				continue
+			value = node.value
+			# Bóc điều kiện `X if cond else Y`.
+			if isinstance(value, ast.IfExp):
+				candidates = [value.body, value.orelse]
+			else:
+				candidates = [value]
+			for cand in candidates:
+				if (
+					isinstance(cand, ast.Call)
+					and isinstance(cand.func, ast.Attribute)
+					and cand.func.attr == "get"
+					and cand.args
+					and isinstance(cand.args[0], ast.Constant)
+					and cand.args[0].value == key
+				):
+					return cand
+		return None
 
 	def test_observations_do_not_affect_gate(self):
 		"""`observations` KHÔNG được ảnh hưởng PASS/FAIL của gate.
