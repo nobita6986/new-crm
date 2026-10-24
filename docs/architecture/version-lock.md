@@ -2,9 +2,9 @@
 
 > **Dự án:** CRM-CSKH — Quản trị kho khách hàng, phân phối lead và chất lượng CSKH
 > **Tài liệu:** `docs/architecture/version-lock.md`
-> **Phiên bản:** 1.4 — 15/10/2026 (ghi nhận CI runner sạch và app POC WP-05)
+> **Phiên bản:** 1.6 — 19/10/2026 (T1A: sửa version sort + metadata; `v15.99.0`/`v16.9.0` thực ra thấp hơn pin; Q-01…Q-08 thay thế Q-01…Q-06; O-06 viết lại)
 > **Tài liệu cha:** [`../root-plan/P0.md`](../root-plan/P0.md) (§2, ADR-001) · [`../root-plan/master-plan.md`](../root-plan/master-plan.md) (§3, §19)
-> **Trạng thái:** Metadata/tag/digest đã khóa; baseline CRM/Frappe đã cài, migrate và smoke trên máy DEV cùng GitHub runner sạch. **MariaDB 11.8 compatibility vẫn cần chốt** vì Framework cảnh báo phiên bản này chưa được kiểm thử — xem §8.
+> **Trạng thái:** Metadata/tag/digest đã khóa (đã cập nhật digest mới cho `frappe/bench:v5.31.0` và `mariadb:11.8` ngày 2026-10-19); baseline CRM/Frappe đã cài, migrate và smoke trên máy DEV cùng GitHub runner sạch. **MariaDB 11.8 compatibility vẫn cần chốt** vì Framework cảnh báo phiên bản này chưa được kiểm thử — xem §8.
 
 ---
 
@@ -122,19 +122,25 @@ Không dùng `latest`, `main`, `develop` làm bản phát hành. Tất cả mụ
 
 ## 5. IMAGE & HẠ TẦNG (digest lock)
 
-Nguyên tắc: **không tag trôi**. Mọi image dùng cho DEV được ghim `tag@digest` (manifest-list digest). Các image dưới đây lấy digest trực tiếp từ Docker Hub Registry API ngày 2026-10-15.
+Nguyên tắc: **không tag trôi**. Mọi image dùng cho DEV được ghim `tag@digest` (manifest-list digest). Các image dưới đây lấy digest trực tiếp từ Docker Hub Registry API; digest cho `frappe/bench:v5.31.0` và `mariadb:11.8` đã được **cập nhật 2026-10-19** do upstream push lại image với cùng tag. `redis:8.6-alpine` giữ nguyên digest.
 
 | Vai trò | Image | Tag | Manifest digest (multi-arch) | amd64 digest | Ghi chú |
 |---|---|---|---|---|---|
-| Bench DEV (tooling) | `frappe/bench` | `v5.31.0` | `sha256:1b27bb30ab18b0a50b5264f44988335bfe8e280a68b45d0ff2daf72ca6ddb85f` | `sha256:73c0aa3fff8face360021450f9cb6dc862fa5f2e02d7e0d012fb170928a91de2` | Chứa bench + pyenv + nvm; ta `bench init` bên trong |
-| Database | `mariadb` | `11.8` | `sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15` | `sha256:93fc3fe333b6cdfb061425869c2c3a5bb2851c0c74dbebc2c940f024e7482d76` | Khớp `frappe_docker@v4.0.1` override |
-| Redis cache + queue | `redis` | `8.6-alpine` | `sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba` | `sha256:019e4fb3c6de024c8f70ab5219d4abded5f335de770876981c7b0a051c43df87` | Khớp `frappe_docker@v4.0.1` override |
+| Bench DEV (tooling) | `frappe/bench` | `v5.31.0` | `sha256:3b75943bf00a1db92723d99ec34fbfa92f4b67b9b643ae1e96750899b7fbd980` | `sha256:05d3bc0d739db2146c73515bf320a2cc88e7bfb1f97a5c74d73ef3b2fd56f18d` | Chứa bench + pyenv + nvm; ta `bench init` bên trong. **Digest index/amd64 thay đổi so với v1.4**; `tag_last_pushed = 2026-10-18T04:11:04Z`. |
+| Database | `mariadb` | `11.8` | `sha256:f16d7a344413e519dff518f27bdb221388f84b0d274c97c4fb5f2cb0dc1b34fa` | `sha256:d689f65e09e887e96db5c40ca3957dd9f4e3fad3516baec96d7726c78a5fc2ee` | Khớp `frappe_docker@v4.0.1` override. **Digest index/amd64 thay đổi so với v1.4**; `tag_last_pushed = 2026-10-17T05:36:40Z`. |
+| Redis cache + queue | `redis` | `8.6-alpine` | `sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba` | `sha256:019e4fb3c6de024c8f70ab5219d4abded5f335de770876981c7b0a051c43df87` | Khớp `frappe_docker@v4.0.1` override. Digest **không đổi** kể từ v1.4. |
 
-**Cơ sở chọn phiên bản image:** `frappe_docker@v4.0.1` dùng `mariadb:11.8` và `redis:8.6-alpine` (xem `overrides/compose.mariadb.yaml`, `overrides/compose.redis.yaml`). Ta bám theo để giảm sai lệch với cấu hình được upstream kiểm thử.
+**Cơ sở chọn phiên bản image:** `frappe_docker@v4.0.1` dùng `mariadb:11.8` và `redis:8.6-alpine` (xem `overrides/compose.mariadb.yaml`, `overrides/compose.redis.yaml`). Ta bám theo để giảm sai lệch với cấu hình được upstream kiểm thử. Trên `main` của `frappe_docker` (commit `11d6062…` ngày 2026-10-19), override vẫn dùng `mariadb:11.8` — chưa có tag mới được phát hành kể từ `v4.0.1`.
 
 **Đã đo trong lần WP-01 runtime (linux/amd64):**
 - `frappe/bench:v5.31.0`: Bench 5.31.0, Python 3.14.8, Node 24.22.0, Yarn 1.22.22.
-- RepoDigests của bench/MariaDB/Redis khớp các digest khóa ở §5.
+- RepoDigests của bench/MariaDB/Redis khớp các digest khóa ở §5 (cập nhật 2026-10-19).
+
+**Ghi chú về việc thay đổi digest:** hai image `frappe/bench:v5.31.0` và `mariadb:11.8` đã được
+upstream rebuild và push lại cùng tag. Đây là thực tiễn bình thường của Docker Hub
+("cùng tag, nội dung khác"). Sau khi Owner chạy `docker compose pull` trên host DEV
+và cập nhật `.env.example` tương ứng (xem `deploy/dev/.env.example`), `RepoDigest` cục bộ
+sẽ khớp digest mới. Bằng chứng đo lại: [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §4.
 
 ---
 
@@ -205,6 +211,30 @@ Phân biệt rõ hai mức độ bằng chứng:
 | C3 | v1.87.0 | v15.123.1 | 3.14 | Chạy được | ✅ hợp lệ | ✅ Python 3.14.8: clean bootstrap/install/migrate/seed, 28 tests, import, SLA, backup/restore; GitHub Actions clean runner cũng pass. MariaDB 11.8 vẫn có cảnh báo framework >10.8 chưa được thử rộng |
 | Cx | v1.87.0 | bất kỳ <v15 hoặc ≥v17 | — | Không hỗ trợ | ❌ ngoài `>=15.0.0,<17.0.0` | — (loại) |
 
+**Tổ hợp bổ sung (T1A, ngày 2026-10-19):**
+
+| Tổ hợp | CRM | Framework | Python | Kỳ vọng | [DECLARED] | [RUNTIME] |
+|---|---|---|---|---|---|---|
+| C4 | v1.88.0 | v15.123.1 | 3.14 | Chạy được | ✅ theo compatibility table README CRM v1.88.0 (`v15.x & v16.x`); CRM v1.88.0 thêm dependency `requests>=2.28.0` + `tldextract>=5.0.0` | ⛔ Chưa chạy; CRM v1.88.0 chưa được verify runtime trong dự án |
+| C5 | v1.87.0 | v15.99.0 (cũ hơn pin) | 3.14 | **KHÔNG chạy** (không nên thử) | ❌ v15.99.0 đã bỏ Python 3.14 khỏi dải cho phép (`>=3.10,<3.14`) | — (lùi về bản cũ hơn pin 24 minor không có lý do kỹ thuật) |
+| C6 | v1.87.0 | v16.9.0 (cũ hơn pin) | 3.14 | Chạy nếu muốn lùi | ✅ hợp lệ (`>=3.14,<3.15`) | ⛔ Lùi về bản cũ hơn pin 43 minor không có lý do kỹ thuật; KHÔNG đề xuất |
+| C7 | v1.88.0 | v16.52.0 | 3.14 | Chạy được | ✅ hợp lệ | ⛔ Chưa chạy; kịch bản nâng cả CRM vừa Frappe — phạm vi P1 trở đi |
+
+**Bằng chứng cho C5** (Frappe v15.99.0 không còn hỗ trợ Python 3.14): trích từ
+`raw.githubusercontent.com/frappe/frappe/v15.99.0/pyproject.toml`:
+`requires-python = ">=3.10,<3.14"`. Tuy nhiên `v15.99.0` là bản **thấp hơn** pin
+`v15.123.1` đúng 24 minor (từ `v15.100.0` đến `v15.123.1`); kịch bản "nâng lên v15.99.0"
+không tồn tại — chỉ có kịch bản **lùi** về `v15.99.0` (không khuyến nghị) hoặc **nâng**
+lên `v15.100.0+` (cần verify `requires-python` của từng bản vì policy có thể đã đổi).
+
+**Bằng chứng cho pin hiện tại vẫn hỗ trợ Python 3.14:** trích từ
+`raw.githubusercontent.com/frappe/frappe/v15.123.1/pyproject.toml`:
+`requires-python = ">=3.10,<3.15"` — phủ Python 3.10 đến 3.14 (đúng biên).
+Do đó baseline C3 hiện hành (Python 3.14.8) **không bị ảnh hưởng** bởi thay đổi
+`requires-python` ở `v15.99.0`.
+
+Chi tiết và đề xuất quyết định Q-01…Q-08 ở [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §5.4.
+
 ### 8.1. Runtime đã đo trên máy DEV hiện tại
 
 - `wsl --status`: default version 2; `wsl -l -v`: `docker-desktop` Running, version 2.
@@ -250,6 +280,7 @@ Dùng `image: docker.io/frappe/bench:latest` và `docker.io/redis:alpine` → **
 | O-03 | Python/Node/Yarn thực tế trong `frappe/bench:v5.31.0` | Tính tái tạo | **ĐÃ GHI:** Python 3.14.8, Node 24.22.0, Yarn 1.22.22, Bench 5.31.0 (§8.1) |
 | O-04 | `package.json` CRM ghi `GPL-3.0` vs `LICENSE` AGPL-3.0 | Nghĩa vụ pháp lý | Dùng **AGPL-3.0** (file LICENSE) làm căn cứ |
 | O-05 | (ĐÃ ĐÓNG) Trước đây repo có `.survey-cache/crm/` — checkout upstream **untracked**. **Nay thư mục này KHÔNG còn trong working tree.** | Trước đây có nguy cơ commit nhầm source upstream | Đã hết. Khi commit: **loại trừ** `.commandcode/`, mọi cache và checkout upstream; đưa `apps/crm_cskh/`, `docs/` và `deploy/` vào phạm vi review. |
+| O-06 | **T1A — 2026-10-19 (sửa lần 2):** (a) digest `frappe/bench:v5.31.0` và `mariadb:11.8` đã thay đổi; §5 và `deploy/dev/.env.example` đã cập nhật. (b) Re-verify bằng `git ls-remote --sort=v:refname` + `sort -V` cho thấy: CRM `v1.88.0` là bản duy nhất thực sự mới hơn pin (1 patch); `frappe v15.99.0` (5cca1fa7…) thực ra thấp hơn pin `v15.123.1` 24 minor; `frappe v16.9.0` (e5b04e04…) thực ra thấp hơn pin `v16.52.0` 43 minor. (c) Pin hiện tại `v15.123.1` vẫn `>=3.10,<3.15` — hỗ trợ Python 3.14. Baseline C3 không bị ảnh hưởng. (d) `v15.99.0` (cũ hơn pin) đã giới hạn `<3.14`, nhưng không có kịch bản nâng lên `v15.99.0` vì nó thấp hơn pin; chỉ cần ghi nhận nếu tương lai có yêu cầu **nâng** lên `v15.100.0+` thì phải kiểm tra `requires-python` của từng bản. | Ảnh hưởng tái tạo + lộ trình nâng version | Xem [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §5.4 (Q-01…Q-08) và §3 (bảng sort -V). Khi có máy Docker, chạy lại ma trận workload MariaDB (xem §5.5) trước khi đóng ADR-001. |
 
 ---
 

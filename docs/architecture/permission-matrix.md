@@ -1,12 +1,13 @@
 # Permission Matrix — RBAC / ACL (P0)
 
 > **Owner:** T1C — Thiết kế & kiểm chứng bảo mật P0
-> **Phiên bản:** 0.9 (runtime coverage) — 15/10/2026
-> **Trạng thái:** 18 permission-boundary tests chạy trong suite app (28/28 test tổng thể đạt). Bảng ~70 ô vẫn `CHƯA XÁC MINH` trừ khi từng ô có test mapping cụ thể.
-> **Đối chiếu checkout (0.9):** GitHub Actions PR #1 đã xác nhận clean bootstrap, lint/format và suite 28 tests ([run](https://github.com/nobita6986/new-crm/actions/runs/38712593755)). Security suite có scope owner/team, child records, private file, export, assignment, BOD và field-level ([`test_permissions.py`](../../apps/crm_cskh/crm_cskh/tests/test_permissions.py), [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md)). SEC-13/14/27 còn thiếu xác minh transport/full path; không suy rộng 28 test app thành 28 SEC case hoàn chỉnh.
-> **ADR-004/005:** quyết định đã được T0 chốt — ADR-004: thực thi quyền ở **backend/record-level** + ownership service tập trung ([`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md)); ADR-005: `BOD_VIEWER` **read-only**, **không** System Manager ([`adr-005-bod-viewer-scope.md`](./adr-005-bod-viewer-scope.md)). Runtime/security **CHƯA XÁC MINH**.
+> **Phiên bản:** 1.0 (independent verification, T1C) — 2026-10-19
+> **Trạng thái (T1C kiểm độc lập):** 18 permission-boundary test methods (code đọc từ `test_permissions.py` dòng 1–543) đã được T1C đối chiếu với từng ô matrix và SEC case. Ba lượt chạy tổng test khác nhau đã ghi nhận — **26 OK** (`wp05-security-final.txt`, revision `b382fe4`, site `test_cskh.localhost`), **27 OK** (`p0-local-final.txt`, revision `b382fe4`, site `dev.localhost` + `test_cskh.localhost`) và **28 OK** (GitHub Actions PR #1 run `#38712593755`, GHA clean bootstrap, site sạch) — T1C **từ chối gộp** thành một con số. Ma trận vẫn còn khoảng **~38/70 ô chưa có test chạm tới** (`CHƯA XÁC MINH`); SEC-13/14/16/26 và nhánh nội bộ SEC-27 vẫn `NOT RUN`. Xem [`t1c-security-verification.md`](../../deploy/dev/evidence/t1c-security-verification.md) §3, §4, §5 và `§6` cho blocker.
+> **Đối chiếu checkout (1.0, độc lập bởi T1C):** test suite đã đọc và đối chiếu trực tiếp (`apps/crm_cskh/crm_cskh/tests/test_permissions.py`); hook implementation đã đọc (`apps/crm_cskh/crm_cskh/permissions.py`, `hooks.py`, `api/guarded_crm.py`, `api/guarded_reporting.py`); không có log thô mới so với revision `b382fe4`. Phiên Codex p0-audit-refresh **không có Docker/WSL2** (xem `environment-probe.md` §3, §4), nên T1C **không chạy lại** site sạch mà tái tạo bằng phân tích tĩnh + đối chiếu log T1B. CI run `#38712593755` đã xác nhận clean bootstrap + 28 tests + backup/restore + migrate; CI run `#39185122032` (push) cũng pass nhưng chỉ xác nhận workflow, không mở rộng security transport.
+> **ADR-004/005:** quyết định đã được T0 chốt — ADR-004: thực thi quyền ở **backend/record-level** + ownership service tập trung ([`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md)); ADR-005: `BOD_VIEWER` **read-only**, **không** System Manager ([`adr-005-bod-viewer-scope.md`](./adr-005-bod-viewer-scope.md)). Runtime bộ ba hook (`permission_query_conditions`/`has_permission` cho 7 DocType + `validate_lead_owner` + `validate_lead_assignment`) đã có implementation đọc được; override whitelist (`override_whitelisted_methods`) cho 13 endpoint CRM baseline đã chặn. Behavior runtime đã được 18 test methods assert, **nhưng chỉ trong route đã gọi** — không suy rộng ra toàn bộ ô matrix hay toàn bộ SEC case.
 > **Tài liệu cha:** [`../root-plan/master-plan.md`](../root-plan/master-plan.md) §7, §9, §14 · [`../root-plan/P0.md`](../root-plan/P0.md) §7, §12
-> **Phạm vi lượt này:** T0 cập nhật bằng chứng WP-05 trên app/test site cô lập; không sửa upstream.
+> **Tài liệu liên quan:** [`t1c-security-verification.md`](../../deploy/dev/evidence/t1c-security-verification.md) — đối chiếu độc lập; [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md); [`adr-004`](./adr-004-owner-team-permissions.md), [`adr-005`](./adr-005-bod-viewer-scope.md).
+> **Phạm vi lượt này:** T1C độc lập đối chiếu revision `b382fe4` có evidence T1B; sửa câu lịch sử "chưa có security suite" và "0/28 SEC" còn ở §0.2 cũ và changelog, đồng thời phân biệt ba lượt chạy có tổng test khác nhau (26 / 27 / 28) bằng **revision + lệnh + site**.
 
 ---
 
@@ -17,10 +18,10 @@
 | Thành phần | Phiên bản / revision | Trạng thái |
 |---|---|---|
 | Frappe CRM (baseline khảo sát) | tag **`v1.87.0`** (09/10/2026) | ĐÃ KHÓA (theo tài liệu cha) |
-| Frappe Framework | tag **`v15.123.1`** (SHA `d2efa796…`) | Baseline install/migrate chạy trên host hiện tại; permission behavior **CHƯA XÁC MINH** |
+| Frappe Framework | tag **`v15.123.1`** (SHA `d2efa796…`) | Baseline install/migrate **đã chạy trên host hiện tại + GHA CI**; hành vi permission riêng của baseline `v1.87.0` (3 hook cho Lead/Deal/Notification) **CHƯA XÁC MINH** vì `crm_cskh` override gần như toàn bộ qua 7 hook + 13 override whitelist |
 | frappe_docker | tag **`v4.0.1`** (SHA `2b26e9ab…`) | Docker/Bench stack chạy trên host hiện tại; full clean-machine reproducibility **CHƯA XÁC MINH** |
-| Custom app `crm_cskh` | Scaffold `0.0.1`, cài trên bench/site hiện có; 9 test POC đạt; security behavior chưa kiểm chứng | CHƯA XÁC MINH |
-| **ADR-004 / ADR-005** (quyết định T0) | ADR-004 enforcement backend/record-level ([link](./adr-004-owner-team-permissions.md)) · ADR-005 BOD read-only ([link](./adr-005-bod-viewer-scope.md)) | ĐÃ GHI tài liệu (T0 chốt); runtime CHƯA XÁC MINH |
+| Custom app `crm_cskh` | Scaffold `0.0.1` (revision `b382fe4`); 18 permission-boundary + 4 health + 3 cskh_app_settings + 3 poc_custom_field = 28 test methods (đếm từ source); ba lượt chạy log: 26/27/28 OK | Security behavior **ĐÃ CHẠY** trong route đã gọi (~32/70 ô matrix); phần còn lại **CHƯA XÁC MINH** |
+| **ADR-004 / ADR-005** (quyết định T0) | ADR-004 enforcement backend/record-level ([link](./adr-004-owner-team-permissions.md)) · ADR-005 BOD read-only ([link](./adr-005-bod-viewer-scope.md)) | ĐÃ GHI tài liệu (T0 chốt); **runtime đã chạy cho route đã gọi** (xem `permissions.py` + `guarded_crm.py` + 18 test methods), **SEC-13/14/16/26 và ~38 ô matrix chưa chạy** |
 | `master-plan.md` | v1.0 — 14/10/2026 | Nguồn định hướng |
 | `P0.md` | v1.0 — 15/10/2026 | Nguồn đặc tả P0 |
 
@@ -35,14 +36,20 @@ Các file upstream dưới đây được đọc trực tiếp trên **tag `v1.8
 - `crm/fcrm/doctype/crm_call_log/crm_call_log.py` — `get_call_log`, `get_permitted_docs`, `get_call_contact`.
 - `crm/api/assignment_rule.py` — `get_assignment_rules_list`, `duplicate_assignment_rule`.
 
-### 0.2. Trạng thái repo hiện tại (blocker nền)
+### 0.2. Trạng thái repo hiện tại (đối chiếu T1C độc lập 2026-10-19)
 
-Checkout có `apps/crm_cskh/`, `docs/` và `deploy/dev/`. WP-02 đã cài app POC trên bench/site hiện có, tạo test site và chạy 9 test; WP-03 đã probe owner/team sau khi bật hierarchy. **Chưa có security suite/negative tests WP-05**. MariaDB 11.8 còn caveat tương thích. Vì vậy:
+Checkout có `apps/crm_cskh/`, `docs/` và `deploy/dev/`. **WP-05 security suite đã chạy** (xem `wp05-security-final.txt` 26 OK, `p0-local-final.txt` 27 OK, `p0-isolated-verification.md` 28 OK trên CI). 18 permission-boundary test methods có trong `apps/crm_cskh/crm_cskh/tests/test_permissions.py` (đã đọc dòng 1–543); cùng app suite có thêm 4 health + 3 poc_custom_field + 3 cskh_app_settings = 10 test không phải permission.
 
-- **Không ô "Thực tế" nào được điền PASS/FAIL.** Tất cả = `CHƯA XÁC MINH`.
-- Mọi nhận định từ đọc code chỉ là **giả thuyết cần kiểm chứng**, KHÔNG phải kết luận lỗ hổng (tuân thủ P0 §7.4 ghi chú cuối).
-- **Không tuyên bố hệ thống "an toàn".** Trạng thái an toàn chỉ được ghi khi `SEC-*` tương ứng chạy thật và có log.
-- `deploy/dev/` là **cấu hình/script**, **không** đồng nghĩa đã có app/site/seed/test harness.
+- **Tổng test app đã ghi nhận ở ba lần khác nhau (T1C TỪ CHỐI gộp):**
+  - **26 OK** tại `wp05-security-final.txt` (revision `b382fe4`, lệnh `bench --site test_cskh.localhost run-tests --app crm_cskh`).
+  - **27 OK** tại `p0-local-final.txt` (revision `b382fe4`, lệnh sau re-migrate `dev.localhost` + `test_cskh.localhost`).
+  - **28 OK** tại `p0-isolated-verification.md` §"Security and source reload" (CI run `#38712593755` trên PR #1, GHA clean bootstrap site sạch).
+- **Đối chiếu độc lập 18 permission-boundary methods** vs ~70 ô matrix + 28 SEC case: tham khảo [`t1c-security-verification.md`](../../deploy/dev/evidence/t1c-security-verification.md) §3, §5. **Khoảng 32 ô matrix có test mapping (route đã chạy)**; **~38 ô matrix còn `CHƯA XÁC MINH`** do chưa có test chạm tới.
+- **SEC case** (28 ca): 19 đã verify runtime qua `test_permissions.py` (SEC-01–12, 15 endpoint phone-lookup, 17, 18, 19, 20, 21, 22, 24, 25, 27 endpoint phone-lookup, 28). **SEC-13, SEC-14, SEC-16, SEC-26 vẫn `NOT RUN`** — không có test HTTP transport hay URL leak trong app suite. **Nhánh nội bộ SEC-27** (`crm_call_log.get_call_contact` khi Call Log không ref Lead) vẫn `NOT RUN`. **SEC-15** chỉ verify nhánh phone-lookup chứ chưa verify toàn bộ API quản trị.
+- **MariaDB 11.8** còn caveat tương thích từ baseline Frappe v15 (xem `version-lock.md`).
+- **G0-07**: PARTIAL — không đóng. Các ô đã test cho `PASS có giới hạn` (route đã gọi); không mở rộng quyền user thường cho tới khi B-T1C-2 (SEC-13/14/26 transport) được đóng.
+- **Không tuyên bố hệ thống "an toàn".** Trạng thái an toàn chỉ được ghi khi SEC-* tương ứng chạy thật và có log HTTP round-trip; ở phiên này mới có unit-level guard (`frappe.is_whitelisted`) trong `test_health.py` chứ không phải HTTP thật.
+- **`deploy/dev/`** là **cấu hình/script**, **không** đồng nghĩa app/site đã chạy transport-level; phải có Docker/WSL2 mới chạy được.
 
 ### 0.3. Ký hiệu
 
@@ -95,24 +102,24 @@ Theo P0 §7.1–§7.2.
 
 Endpoint tham chiếu: `crm.api.doc.get_data` (list/search), `frappe.client.get` / Lead detail, `frappe.client.get_list`, export.
 
-| Case | Actor | Dữ liệu (team/owner) | Thao tác / Endpoint | Kỳ vọng | Thực tế | Test âm bắt buộc |
+| Case | Actor | Dữ liệu (team/owner) | Thao tác / Endpoint | Kỳ vọng | Thực tế (T1C đối chiếu) | Test âm |
 |---|---|---|---|---|---|---|
-| LEAD-01 | A | A1 (Team1/A) | detail `frappe.client.get` | A | CHƯA XÁC MINH | SEC-01 |
-| LEAD-02 | A | B1 (Team1/B) | detail by đoán name | **D** | CHƯA XÁC MINH | SEC-01 |
-| LEAD-03 | A | C1 (Team2/C) | detail chéo team | **D** | CHƯA XÁC MINH | SEC-01, SEC-06 |
-| LEAD-04 | A | list | `get_data` (list/search) | A (chỉ A1–A4) | CHƯA XÁC MINH | SEC-02 |
-| LEAD-05 | A | list | `get_data` filter bị sửa/bỏ | A scope | CHƯA XÁC MINH | SEC-02 |
-| LEAD-06 | A | B1 | ghi trực tiếp `CRM Lead` (kể cả field CSKH) | **D** (P0: từ chối sửa trực tiếp) | CHƯA XÁC MINH | SEC-04 |
-| LEAD-07 | A | U1 (chưa giao) | detail | **D** | CHƯA XÁC MINH | SEC-01 |
-| LEAD-08 | A | A1 (own) | export danh sách SĐT | **D** mặc định | CHƯA XÁC MINH | SEC-12 |
-| LEAD-09 | TL1 | A1–A4, B1–B4 | list/detail Team 1 | A (Team 1) | CHƯA XÁC MINH | SEC-06 |
-| LEAD-10 | TL1 | C1 (Team2/C) | list/detail chéo team | **D** | CHƯA XÁC MINH | SEC-06 |
-| LEAD-11 | TL2 | A1 (Team1/A) | list/detail chéo team | **D** | CHƯA XÁC MINH | SEC-06 |
-| LEAD-12 | BOD | toàn công ty | list/detail (report scope, read-only) | **C** (read-only, ADR-005) | CHƯA XÁC MINH | SEC-15 |
-| LEAD-13 | CRM-ADMIN | toàn kho | list/detail/import | **C** | CHƯA XÁC MINH | — |
-| LEAD-14 | A | A1 (own) | ghi trực tiếp `CRM Lead` (field ngoài whitelist CSKH) | **D** (P0: từ chối sửa trực tiếp) | CHƯA XÁC MINH | SEC-08 |
-| LEAD-15 | Bất kỳ | — | `get_data` đổi `doctype` sang doctype khác | bị bound bởi quyền doctype | CHƯA XÁC MINH | SEC-25 |
-| LEAD-16 | A | B1 | `get_data` chọn `rows`/`columns` = `mobile_no`,`email` ngoài phạm vi | **D** | CHƯA XÁC MINH | SEC-25 |
+| LEAD-01 | A | A1 (Team1/A) | detail `frappe.client.get` | A | **PASS** — `Test #1` (`test_lead_list_and_get_data_only_return_owner_scope`, `test_permissions.py` L206) | SEC-01 |
+| LEAD-02 | A | B1 (Team1/B) | detail by đoán name | **D** | **PASS** — `Test #1`: `assertRaises(frappe.PermissionError)` khi gọi `client_get("CRM Lead", self.leads["b"])`. | SEC-01 |
+| LEAD-03 | A | C1 (Team2/C) | detail chéo team | **D** | **PASS** — cùng assert như LEAD-02; hook `permissions.lead_has_permission` deny vì không phải owner scope. | SEC-01, SEC-06 |
+| LEAD-04 | A | list | `get_data` (list/search) | A (chỉ A1–A4) | **PASS** — `Test #1`: `set == {self.leads["a"]}`; `p0-isolated-verification.md` & 3 log 26/27/28. | SEC-02 |
+| LEAD-05 | A | list | `get_data` filter bị sửa/bỏ | A scope | **PASS** — `Test #1`: `spoofed = get_data({"lead_owner": self.users["b"]}, ...) == []`. | SEC-02 |
+| LEAD-06 | A | B1 | ghi trực tiếp `CRM Lead` (kể cả field CSKH) | **D** | **PASS** — `Test #10` (`test_owner_change_and_assignment_bypass_are_denied`, L423): `lead.save(ignore_permissions=True)` raise; CLI ghi qua `frappe.client.set_value` cũng raise `Test #6` (L356). | SEC-04 |
+| LEAD-07 | A | U1 (chưa giao) | detail | **D** | **CHƯA XÁC MINH — chưa có test riêng cho lead chưa giao.** Có thể suy ra vì `lead_owner` rỗng → `_user_owns_in_scope` False (xem `permissions.py` L39) nhưng đây là đọc code, chưa có test mapping. | SEC-01 |
+| LEAD-08 | A | A1 (own) | export danh sách SĐT | **D** mặc định | **PASS** — `Test #5` (`test_export_and_unscoped_reporting_are_blocked_for_staff_and_managers`, L319): `data_export` raise cho `A`. | SEC-12 |
+| LEAD-09 | TL1 | A1–A4, B1–B4 | list/detail Team 1 | A (Team 1) | **PASS** — `Test #7` (`test_team_leader_sees_team_but_not_other_team`, L388): `visible` chứa `a` và `b`; assertion detail own OK. | SEC-06 |
+| LEAD-10 | TL1 | C1 (Team2/C) | list/detail chéo team | **D** | **PASS** — `Test #7`: `assertNotIn(self.leads["c"], visible)`; `get_doc(...).check_permission("read")` raise. | SEC-06 |
+| LEAD-11 | TL2 | A1 (Team1/A) | list/detail chéo team | **D** | **PARTIAL — chỉ có test gián tiếp** `Test #13` (`test_cross_team_transfer_blocks_old_owner_and_leader`, L474): `set_user(TL2)` → `assertNotIn(lead_c, visible)` và detail raise. | SEC-06 |
+| LEAD-12 | BOD | toàn công ty | list/detail (report scope, read-only) | **C** (read-only, ADR-005) | **PARTIAL — BOD fail-closed cho CRM Lead list đã verify** (`Test #16`, `test_bod_viewer_cannot_read_leads_or_manage_users`, L528); **scope đọc báo cáo chưa build**. | SEC-15 |
+| LEAD-13 | CRM-ADMIN | toàn kho | list/detail/import | **C** | **PARTIAL — fail-closed** (`Test #17`, `test_crm_admin_role_fails_closed_until_controlled_service_exists`, L537): `assertNotIn("System Manager", ...)` + `assertFalse(has_permission("CRM Lead", "read"))`. | — |
+| LEAD-14 | A | A1 (own) | ghi trực tiếp `CRM Lead` (field ngoài whitelist CSKH) | **D** | **PASS** — `Test #10`: hook `validate_lead_owner` raise khi đổi `lead_owner`; fail-closed cho đến khi ownership service sẵn sàng. | SEC-08 |
+| LEAD-15 | Bất kỳ | — | `get_data` đổi `doctype` sang doctype khác | bị bound bởi quyền doctype | **NOT RUN** — không có test mapping cho cross-doctype spoofing. | SEC-25 |
+| LEAD-16 | A | B1 | `get_data` chọn `rows`/`columns` = `mobile_no`,`email` ngoài phạm vi | **D** | **PARTIAL** — `Test #2` (`test_get_data_does_not_return_permlevel_fields`, L227) chỉ cover `permlevel=1` (Staff không thấy field cấm). Field-level spoof với `rows=["mobile_no","email"]` ngoài scope **chưa có test riêng**. | SEC-25 |
 
 **Cơ chế đã đọc trên `v1.87.0` (giả thuyết, cần test):** `crm/hooks.py` chỉ đăng ký `permission_query_conditions`/`has_permission` cho `CRM Lead`, `CRM Deal`, `CRM Notification`; logic nằm ở `crm/permissions/org_hierarchy.py` với `_OWNER_FIELD = {"CRM Lead": "lead_owner", "CRM Deal": "deal_owner"}`.
 
@@ -124,17 +131,17 @@ Endpoint tham chiếu: `crm.api.doc.get_data` (list/search), `frappe.client.get`
 
 Endpoint: `crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log`, `get_data`, `get_linked_calls` (trong `activities.py`).
 
-| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế | Test âm |
+| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế (T1C đối chiếu) | Test âm |
 |---|---|---|---|---|---|---|
-| CL-01 | A | Call của A1 | `get_call_log` | C (own) | CHƯA XÁC MINH | — |
-| CL-02 | A | Call của B1 | `get_call_log` by name | **D** | CHƯA XÁC MINH | SEC-03 |
-| CL-03 | A | Call của C1 | `get_call_log` chéo team | **D** | CHƯA XÁC MINH | SEC-03 |
-| CL-04 | A | B1 | `get_data("CRM Call Log")` list | **D** (không thấy call của B) | CHƯA XÁC MINH | SEC-03 |
-| CL-05 | A | mọi call | `get_call_log` + đọc `from`/`to`/`recording_url` | **D** ngoài scope | CHƯA XÁC MINH | SEC-17 |
-| CL-06 | TL1 | call Team 1 | list/detail | A (Team 1) | CHƯA XÁC MINH | SEC-06 |
-| CL-07 | TL1 | call Team 2 | list/detail | **D** | CHƯA XÁC MINH | SEC-06 |
-| CL-08 | BOD | toàn công ty | read call (read-only) | **C** | CHƯA XÁC MINH | SEC-15 |
-| CL-09 | Guest | — | `get_call_log` | **D** | CHƯA XÁC MINH | SEC-13 |
+| CL-01 | A | Call của A1 | `get_call_log` | C (own) | **PASS** — `Test #6` (L356) cuối đoạn: `get_call_log` own OK; call của cross raise. | — |
+| CL-02 | A | Call của B1 | `get_call_log` by name | **D** | **PASS** — `Test #6`: `assertRaises(PermissionError)` cho `get_call_log(self.call_b)`. | SEC-03 |
+| CL-03 | A | Call của C1 | `get_call_log` chéo team | **D** | **PASS** — cùng assert cơ chế hook `crm_cskh.permissions.linked_lead_has_permission`. | SEC-03 |
+| CL-04 | A | B1 | `get_data("CRM Call Log")` list | **D** (không thấy call của B) | **PASS** — `Test #3` (L261): `("CRM Call Log", "reference_docname", {self.call_a})` — set ≤ allowed; **Test #9** (L403): `guarded_crm.get_linked_calls(self.leads["b"])` raise. | SEC-03 |
+| CL-05 | A | mọi call | `get_call_log` + đọc `from`/`to`/`recording_url` | **D** ngoài scope | **PARTIAL** — `Test #3` và `Test #6` deny access; **CHƯA XÁC MINH** việc endpoint trả URL/file body cho call **trong** scope (giả định CRM không lộ PII cho call own). | SEC-17 |
+| CL-06 | TL1 | call Team 1 | list/detail | A (Team 1) | **CHƯA XÁC MINH** — chỉ có test scope list CRM Lead cho TL1. Hook cho Call Log vẫn áp dụng được nhưng chưa có call test riêng. | SEC-06 |
+| CL-07 | TL1 | call Team 2 | list/detail | **D** | **CHƯA XÁC MINH** — lý do trên. | SEC-06 |
+| CL-08 | BOD | toàn công ty | read call (read-only) | **C** | **PARTIAL — BOD fail-closed** (`Test #16`); **scope đọc chưa build**. | SEC-15 |
+| CL-09 | Guest | — | `get_call_log` | **D** | **NOT RUN** — chỉ có `test_guest_is_denied` cho `health.ping`; HTTP round-trip cho `get_call_log` chưa có. | SEC-13 |
 
 **Giả thuyết cần test (R-03):** `crm/hooks.py` **không** đăng ký hook permission cho `CRM Call Log`; `get_call_log` chỉ gọi `frappe.has_permission("CRM Call Log","read",name)` → kiểm quyền **DocType/role**, không phải record-level. Nếu role `Sales User` (hoặc role tương đương) có quyền read trên DocType, khả năng đọc call log bất kỳ theo `name` là **cần kiểm chứng** (SEC-03/SEC-17). Không kết luận khi chưa chạy.
 
@@ -144,15 +151,15 @@ Endpoint: `crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log`, `get_data`,
 
 Endpoint: `crm.api.activities.get_linked_tasks`, `get_data`, `frappe.client.*`.
 
-| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế | Test âm |
+| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế (T1C đối chiếu) | Test âm |
 |---|---|---|---|---|---|---|
-| TK-01 | A | Task của A1 | detail/list | C (own) | CHƯA XÁC MINH | — |
-| TK-02 | A | Task của B1 | detail by name | **D** | CHƯA XÁC MINH | SEC-04, SEC-18 |
-| TK-03 | A | B1 | sửa Task ngoài scope | **D** | CHƯA XÁC MINH | SEC-04 |
-| TK-04 | A | U1 | tạo Task gắn lead ngoài scope | **D** | CHƯA XÁC MINH | SEC-04 |
-| TK-05 | TL1 | Task Team 1 | list/detail | A | CHƯA XÁC MINH | SEC-06 |
-| TK-06 | TL1 | Task Team 2 | list/detail | **D** | CHƯA XÁC MINH | SEC-06 |
-| TK-07 | BOD | toàn công ty | read (read-only) | **C** | CHƯA XÁC MINH | SEC-15 |
+| TK-01 | A | Task của A1 | detail/list | C (own) | **PASS** — `Test #6` (L356) list (Call/Note/Task/File own) check_permission ok. | — |
+| TK-02 | A | Task của B1 | detail by name | **D** | **PASS** — `Test #6`: `("CRM Task", self.task_b)` raise `PermissionError`. | SEC-04, SEC-18 |
+| TK-03 | A | B1 | sửa Task ngoài scope | **D** | **PASS** — `Test #6`: `set_value("CRM Task", self.task_b, "title", ...)` raise. | SEC-04 |
+| TK-04 | A | U1 | tạo Task gắn lead ngoài scope | **D** | **PASS (one direction) — `Test #14` (`test_direct_todo_assignment_is_denied_even_with_ignore_permissions`, L490)**: tạo `ToDo` ref Lead own với allocated_to khác raise; **Test #4** (L285) verify guard cho linked tasks endpoint. **CHƯA XÁC MINH** cho Task gắn lead ngoài scope (chỉ lead own). | SEC-04 |
+| TK-05 | TL1 | Task Team 1 | list/detail | A | **CHƯA XÁC MINH** — không có test mapping cho TL1 + Task. | SEC-06 |
+| TK-06 | TL1 | Task Team 2 | list/detail | **D** | **CHƯA XÁC MINH** — không có test mapping cho TL1 + Task. | SEC-06 |
+| TK-07 | BOD | toàn công ty | read (read-only) | **C** | **PARTIAL — BOD fail-closed** (`Test #16`); **scope đọc chưa build**. | SEC-15 |
 
 **Liên quan:** `crm/api/todo.py` `after_insert`/`on_update` xử lý `CRM Task` (notify), và với Lead/Deal thì **ghi đè `lead_owner`**. `clear_owner_on_unassign` **chỉ** áp dụng Lead/Deal (comment trong code: "Owner concept only exists for Lead/Deal, not Task").
 
@@ -164,15 +171,15 @@ Endpoint: `crm.api.activities.get_linked_tasks`, `get_data`, `frappe.client.*`.
 
 Endpoint: `crm.api.activities.get_linked_notes`, `get_attachments("Comment", ...)`, `get_data`.
 
-| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế | Test âm |
+| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế (T1C đối chiếu) | Test âm |
 |---|---|---|---|---|---|---|
-| NT-01 | A | Note của A1 | read | C (own) | CHƯA XÁC MINH | — |
-| NT-02 | A | Note của B1 | read by name | **D** | CHƯA XÁC MINH | SEC-04, SEC-18 |
-| NT-03 | A | Comment của B1 | read | **D** | CHƯA XÁC MINH | SEC-04 |
-| NT-04 | A | B1 | tạo Note/Comment ngoài scope | **D** | CHƯA XÁC MINH | SEC-04 |
-| NT-05 | TL1 | Note Team 1 | read | A | CHƯA XÁC MINH | SEC-06 |
-| NT-06 | TL1 | Note Team 2 | read | **D** | CHƯA XÁC MINH | SEC-06 |
-| NT-07 | BOD | toàn công ty | read (read-only) | **C** | CHƯA XÁC MINH | SEC-15 |
+| NT-01 | A | Note của A1 | read | C (own) | **PASS** — `Test #6` (L356) `("FCRM Note", self.note_a)`. | — |
+| NT-02 | A | Note của B1 | read by name | **D** | **PASS** — `Test #6`: `("FCRM Note", self.note_b)` raise. | SEC-04, SEC-18 |
+| NT-03 | A | Comment của B1 | read | **D** | **PASS** — `Test #6`: `("Comment", self.comment_b)` raise; `Test #3`: comment list trả rỗng (DocType-level block). | SEC-04 |
+| NT-04 | A | B1 | tạo Note/Comment ngoài scope | **D** | **PARTIAL** — `Test #6` deny read+set_value; không có test cho việc tạo Note/Comment với `reference_docname=self.leads["b"]` từ actor A. | SEC-04 |
+| NT-05 | TL1 | Note Team 1 | read | A | **CHƯA XÁC MINH** — không có test mapping. | SEC-06 |
+| NT-06 | TL1 | Note Team 2 | read | **D** | **CHƯA XÁC MINH** — không có test mapping. | SEC-06 |
+| NT-07 | BOD | toàn công ty | read (read-only) | **C** | **PARTIAL — BOD fail-closed** (`Test #16`); **scope đọc chưa build**. | SEC-15 |
 
 **Ghi chú:** `FCRM Note` là DocType bổ trợ (không thay kết quả CSKH có cấu trúc — master-plan §3.1). Quyền note/comment **cần khớp** với quyền lead mẹ.
 
@@ -182,14 +189,14 @@ Endpoint: `crm.api.activities.get_linked_notes`, `get_attachments("Comment", ...
 
 Endpoint: `get_attachments` (trong `activities.py`), download URL `/private/files/...` (`frappe.client`/`File` API).
 
-| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế | Test âm |
+| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế (T1C đối chiếu) | Test âm |
 |---|---|---|---|---|---|---|
-| AT-01 | A | File của A1 | tải qua URL/token hợp lệ | C (own) | CHƯA XÁC MINH | — |
-| AT-02 | A | File private của B1 | tải trực tiếp URL | **D** | CHƯA XÁC MINH | SEC-05 |
-| AT-03 | A | File của C1 | tải chéo team | **D** | CHƯA XÁC MINH | SEC-05 |
-| AT-04 | A | B1 | `get_attachments`/`get_data` trả `file_url` ngoài scope | **D** (không lộ URL) | CHƯA XÁC MINH | SEC-26 |
-| AT-05 | BOD | toàn công ty | tải file theo scope báo cáo (read-only) | **C** | CHƯA XÁC MINH | SEC-16 |
-| AT-06 | Guest | bất kỳ | tải `/private/files/...` | **D** | CHƯA XÁC MINH | SEC-13 |
+| AT-01 | A | File của A1 | tải qua URL/token hợp lệ | C (own) | **PASS** — `Test #6` cho File own qua `check_permission`; `Test #4`: sau reassign, new owner `B` (`Test #4` cuối) `find_file_by_url(URL) is not None`. | — |
+| AT-02 | A | File private của B1 | tải trực tiếp URL | **D** | **PASS** — `Test #4`: sau reassign, `a` (`frappe.set_user(self.users["a"])`) `find_file_by_url(...) is None`; cơ chế `clear_stale_lead_shares` DocShare gỡ + DocType-level permission file. | SEC-05 |
+| AT-03 | A | File của C1 | tải chéo team | **D** | **PASS** — `Test #4` cơ chế hook `linked_lead_has_permission` deny. | SEC-05 |
+| AT-04 | A | B1 | `get_attachments`/`get_data` trả `file_url` ngoài scope | **D** (không lộ URL) | **PARTIAL** — `Test #9` (L403): `guarded_crm.get_attachments("CRM Lead", self.leads["b"])` raise; `Test #3`: list scope chỉ trả own. **CHƯA XÁC MINH** field-level: `get_attachments(lead own)` có lộ `file_url` private trong response dict không (xem `crm.api.activities.get_attachments`). | SEC-26 |
+| AT-05 | BOD | toàn công ty | tải file theo scope báo cáo (read-only) | **C** | **CHƯA XÁC MINH** — BOD chưa có scope đọc; chỉ fail-closed đã verify (`Test #16`). | SEC-16 |
+| AT-06 | Guest | bất kỳ | tải `/private/files/...` | **D** | **NOT RUN** — không có HTTP round-trip; chỉ có `test_guest_is_denied` cho `health.ping`. | SEC-13 |
 
 **Giả thuyết cần test:** `get_attachments` dùng `frappe.db.get_all("File", ...)` trả cả `file_url` cho file private. Cần xác minh (a) URL private có thực sự bị chặn khi tải ngoài scope, (b) API có lộ URL trước khi kiểm quyền không (SEC-05/SEC-26).
 
@@ -199,18 +206,18 @@ Endpoint: `get_attachments` (trong `activities.py`), download URL `/private/file
 
 Endpoint: `crm.api.doc.remove_assignments`, `crm.api.doc.get_assigned_users`, `crm.api.assignment_rule.*`, hook `crm/api/todo.py`, `crm_lead.assign_agent`/`share_with_agent`.
 
-| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế | Test âm |
+| Case | Actor | Dữ liệu | Thao tác / Endpoint | Kỳ vọng | Thực tế (T1C đối chiếu) | Test âm |
 |---|---|---|---|---|---|---|
-| RA-01 | A | A1 | tự đổi `lead_owner` A1→B | **D** | CHƯA XÁC MINH | SEC-08 |
-| RA-02 | A | B1 | assign cho người khác (ToDo) | **D** | CHƯA XÁC MINH | SEC-08 |
-| RA-03 | A | A1 | gọi mutation với `ignore_permissions=true` | **D** | CHƯA XÁC MINH | SEC-09, SEC-21 |
-| RA-04 | CRM-ADMIN | A1 | chuyển A1: A→B (nội bộ Team 1) | A | CHƯA XÁC MINH | SEC-10 |
-| RA-05 | CRM-ADMIN | C1 | chuyển C1: C→A (Team2→Team1) | A | CHƯA XÁC MINH | SEC-11 |
-| RA-06 | TL1 | Lead Team 1 | chuyển trong team | **C** | CHƯA XÁC MINH | SEC-06 |
-| RA-07 | TL1 | Lead Team 2 | chuyển chéo team | **D** | CHƯA XÁC MINH | SEC-06 |
-| RA-08 | BOD | bất kỳ | chuyển/thu hồi | **D** mặc định (read-only) | CHƯA XÁC MINH | SEC-15 |
-| RA-09 | A (cũ) | sau A1: A→B | đọc lại Lead/Call/Note/Task/File | **D** (theo policy) | CHƯA XÁC MINH | SEC-10, SEC-22, SEC-23 |
-| RA-10 | B (mới) | sau A1: A→B | đọc/ghi Lead/Call/Note/Task/File | A | CHƯA XÁC MINH | SEC-10 |
+| RA-01 | A | A1 | tự đổi `lead_owner` A1→B | **D** | **PASS** — `Test #10` (L423): `lead.lead_owner = self.users["c"]` + `lead.save(ignore_permissions=True)` raise. | SEC-08 |
+| RA-02 | A | B1 | assign cho người khác (ToDo) | **D** | **PASS** — `Test #14` (L490): tạo `ToDo` với `allocated_to=self.users["c"]` + `ignore_permissions=True` raise. | SEC-08 |
+| RA-03 | A | A1 | gọi mutation với `ignore_permissions=true` | **D** | **PASS** — `Test #10`: `remove_assignments(...ignore_permissions=True)` raise; hook `validate_lead_assignment` deny. | SEC-09, SEC-21 |
+| RA-04 | CRM-ADMIN | A1 | chuyển A1: A→B (nội bộ Team 1) | A | **CHƯA XÁC MINH** — không có test case admin/A→B nội bộ Team. Có `Test #12` (lead_owner old A → new B bởi admin) và `Test #13` (C→A cross-team). Hành vi admin thay đổi lead_owner đã qua hook fail-open (`_is_system` True), nhưng chưa có assertion `PASS` riêng cho role admin nội bộ. | SEC-10 |
+| RA-05 | CRM-ADMIN | C1 | chuyển C1: C→A (Team2→Team1) | A | **PARTIAL** — `Test #13` (L474): `set_user(admin)` save change owner C→A `pass`; sau đó `C` cũ không thấy Lead (PASS chặn). Pass trên admin chưa có assertion riêng ở ô "C→A hiện trong list của A" — verify ngầm. | SEC-11 |
+| RA-06 | TL1 | Lead Team 1 | chuyển trong team | **C** | **CHƯA XÁC MINH** — chỉ có admin trong tests. Hook `validate_lead_owner` block TL1 (vì TL1 không phải `_is_system`). | SEC-06 |
+| RA-07 | TL1 | Lead Team 2 | chuyển chéo team | **D** | **CHƯA XÁC MINH** — không có test case TL1 reassign. | SEC-06 |
+| RA-08 | BOD | bất kỳ | chuyển/thu hồi | **D** mặc định (read-only) | **PARTIAL** — fail-closed qua hook (`Test #10` chung cho non-system); không có test riêng cho BOD. | SEC-15 |
+| RA-09 | A (cũ) | sau A1: A→B | đọc lại Lead/Call/Note/Task/File | **D** (theo policy) | **PASS** — `Test #12` (L450): `assertNotIn(lead_a, get_list(self.users["a"]))`; `.check_permission` raise cho Lead + child; `Test #4` (L285): tương tự + linked endpoints raise. | SEC-10, SEC-22, SEC-23 |
+| RA-10 | B (mới) | sau A1: A→B | đọc/ghi Lead/Call/Note/Task/File | A | **PARTIAL** — `Test #12` cuối: `B` thấy Lead trong list. **CHƯA XÁC MINH** write của B trên call/note/task/file con; chưa có test riêng. | SEC-10 |
 
 ### 7.1. Bảng sự thật đồng bộ 3 cơ chế (giả thuyết từ code `v1.87.0`)
 
@@ -234,18 +241,18 @@ Thuật ngữ: `lead_owner` (field trên Lead), `ToDo` (assignment, nguồn củ
 
 ## 8. MA TRẬN G — List/Search/Export & API đọc dữ liệu chéo
 
-| Case | Actor | Thao tác / Endpoint | Kỳ vọng | Thực tế | Test âm |
+| Case | Actor | Thao tác / Endpoint | Kỳ vọng | Thực tế (T1C đối chiếu) | Test âm |
 |---|---|---|---|---|---|
-| LS-01 | A | `frappe.client.get_list("CRM Lead", ...)` | scope A | CHƯA XÁC MINH | SEC-02 |
-| LS-02 | A | global search trả lead ngoài scope | **D** | CHƯA XÁC MINH | SEC-02 |
-| LS-03 | A | export/CSV danh sách SĐT | **D** mặc định | CHƯA XÁC MINH | SEC-12 |
-| LS-04 | A | `get_data` link lookup / dropdown ngoài scope | **D** | CHƯA XÁC MINH | SEC-02 |
-| LS-05 | A | `get_data` `doctype` tùy biến (KV khác) | bound bởi quyền doctype | CHƯA XÁC MINH | SEC-25 |
-| LS-06 | A | `get_data` `rows`/`columns` chọn field nhạy cảm ngoài scope | **D** | CHƯA XÁC MINH | SEC-25 |
-| LS-07 | A | bulk (`delete_bulk_docs`) chéo scope | **D** | CHƯA XÁC MINH | SEC-12 |
-| LS-08 | TL1 | report Team 1 | Team 1 | CHƯA XÁC MINH | SEC-06 |
-| LS-09 | TL1 | report Team 2 | **D** | CHƯA XÁC MINH | SEC-06 |
-| LS-10 | BOD | report toàn công ty (read-only) | **C** | CHƯA XÁC MINH | SEC-15 |
+| LS-01 | A | `frappe.client.get_list("CRM Lead", ...)` | scope A | **PASS** — `Test #1` (L206): `client_get_list("CRM Lead", ...)` chỉ trả own. | SEC-02 |
+| LS-02 | A | global search trả lead ngoài scope | **D** | **CHƯA XÁC MINH** — chưa có test cho global search (qua Frappe search). | SEC-02 |
+| LS-03 | A | export/CSV danh sách SĐT | **D** mặc định | **PASS** — `Test #5` (L319): `data_export` + `reportview_export_query` raise cho A. | SEC-12 |
+| LS-04 | A | `get_data` link lookup / dropdown ngoài scope | **D** | **PARTIAL** — `Test #1` cho filter spoofed cho `CRM Lead`. CHƯA XÁC MINH cho dropdown lookup (qua `frappe.client.get_link_options`). | SEC-02 |
+| LS-05 | A | `get_data` `doctype` tùy biến (KV khác) | bound bởi quyền doctype | **NOT RUN** — không có test mapping cho cross-doctype spoof. | SEC-25 |
+| LS-06 | A | `get_data` `rows`/`columns` chọn field nhạy cảm ngoài scope | **D** | **PARTIAL** — `Test #2` (L227) cho permlevel=1. Field nhạy cảm non-permlevel (vd. `mobile_no`) chưa có negative. | SEC-25 |
+| LS-07 | A | bulk (`delete_bulk_docs`) chéo scope | **D** | **PASS** — `Test #11` (L437): `delete_bulk_docs` cross-scope raise. | SEC-12 |
+| LS-08 | TL1 | report Team 1 | Team 1 | **PASS — `Test #5`** (c) cho `query_report.run` raise cho TL1 (chặn tất cả report). CHƯA XÁC MINH cho report scoped Team 1 (chưa build). | SEC-06 |
+| LS-09 | TL1 | report Team 2 | **D** | **PASS — same as LS-08:** TL1 chặn toàn bộ report, scope cụ thể Team 2 chưa build. | SEC-06 |
+| LS-10 | BOD | report toàn công ty (read-only) | **C** | **PARTIAL — `Test #5`** BOD chặn export/report (fail-closed); **scope đọc báo cáo BOD chưa build**. | SEC-15 |
 
 **Giả thuyết:** `get_data` nhận `doctype`, `filters`, `default_filters`, `rows`, `columns` từ client. `rows`/`columns` cho phép chọn field tùy ý (`mobile_no`, `email`…) — cần test field-level exposure (SEC-25), kể cả trong scope (Medium) và ngoài scope (High nếu lọt).
 
@@ -255,14 +262,14 @@ Thuật ngữ: `lead_owner` (field trên Lead), `ToDo` (assignment, nguồn củ
 
 | Case | Actor | Thao tác / Endpoint | Kỳ vọng | Thực tế | Test âm |
 |---|---|---|---|---|---|
-| BD-01 | BOD | xem báo cáo/kho (read-only) | **C** (không cần System Manager) | CHƯA XÁC MINH | SEC-15 |
-| BD-02 | BOD | API quản trị user/role | **D** | CHƯA XÁC MINH | SEC-15 |
-| BD-03 | BOD | import/xoá dữ liệu | **D** | CHƯA XÁC MINH | SEC-15 |
-| BD-04 | BOD | reassign/thu hồi | **D** mặc định | CHƯA XÁC MINH | SEC-15 |
-| BD-05 | BOD | `System Manager` ngầm qua role khác | **D** | CHƯA XÁC MINH | SEC-15 |
-| BD-06 | CRM-ADMIN | cấu hình quyền hệ thống | **D** (trừ System Manager) | CHƯA XÁC MINH | — |
+| BD-01 | BOD | xem báo cáo/kho (read-only) | **C** (không cần System Manager) | **PARTIAL — fail-closed verify** (`Test #16`, `test_bod_viewer_cannot_read_leads_or_manage_users`, L528): BOD `frappe.get_list("CRM Lead", pluck="name")` raise; **nhánh đọc báo cáo scoped (report API read-only) chưa build**. | SEC-15 |
+| BD-02 | BOD | API quản trị user/role | **D** | **PASS — `Test #16`**: `has_permission("User", "create") == False` + `has_permission("Role", "create") == False` cho BOD; report API call `data_export` raise (`Test #5`). | SEC-15 |
+| BD-03 | BOD | import/xoá dữ liệu | **D** | **PASS — `Test #16`**: `has_permission("Data Import", "create") == False`. **CHƯA XÁC MINH** cho path delete (qua `delete_bulk_docs`) — không có test riêng cho BOD + bulk delete (kỳ vọng raise qua override `guarded_crm.delete_bulk_docs` chưa verify). | SEC-15 |
+| BD-04 | BOD | reassign/thu hồi | **D** mặc định | **PARTIAL — fail-closed qua hook** (`Test #10` chung cho non-system); **không có test riêng BOD + reassign**. | SEC-15 |
+| BD-05 | BOD | `System Manager` ngầm qua role khác | **D** | **PASS — `Test #16`**: `assertNotIn("System Manager", frappe.get_roles(self.users["bod"]))`. | SEC-15 |
+| BD-06 | CRM-ADMIN | cấu hình quyền hệ thống | **D** (trừ System Manager) | **PASS — `Test #17`** (`test_crm_admin_role_fails_closed_until_controlled_service_exists`, L537): CRM-ADMIN `assertNotIn("System Manager")` + `assertFalse(has_permission("CRM Lead", "read"))`. | — |
 
-**Phân tích BOD (ADR-005, T0 chốt):** trên `v1.87.0`, hook `permission_query_conditions`/`has_permission` chỉ đăng ký cho Lead/Deal/Notification; **không có role/API báo cáo read-only đóng gói sẵn**. Master-plan §2.3 yêu cầu BOD xem báo cáo **không** cần `System Manager`. **Quyết định ADR-005:** `BOD_VIEWER` là role **read-only** xem báo cáo theo phạm vi, **không** cấp `System Manager`; role + permission + API báo cáo được xây trong `crm_cskh` (không dựa vào quyền rộng của baseline). Trạng thái runtime/security **CHƯA XÁC MINH** — phải chứng minh bằng SEC-15/SEC-28 sau khi có app. Chi tiết: `risk-register.md` `RISK-SEC-09`.
+**Phân tích BOD (ADR-005, T0 chốt + đối chiếu T1C 2026-10-19):** trên `v1.87.0`, hook `permission_query_conditions`/`has_permission` chỉ đăng ký cho Lead/Deal/Notification; **không có role/API báo cáo read-only đóng gói sẵn**. Master-plan §2.3 yêu cầu BOD xem báo cáo **không** cần `System Manager`. **Quyết định ADR-005:** `BOD_VIEWER` là role **read-only** xem báo cáo theo phạm vi, **không** cấp `System Manager`; role + permission + API báo cáo được xây trong `crm_cskh` (không dựa vào quyền rộng của baseline). Runtime: **fail-closed đã verify** qua `Test #16`, `Test #17` (xem `test_permissions.py` L528, L537) cho BD-02/03/05/06; BD-01/04 còn ở mức PARTIAL — **reporting scope BOD chưa build**. Chi tiết: `risk-register.md` `RISK-SEC-09` và [`t1c-security-verification.md`](../../deploy/dev/evidence/t1c-security-verification.md) §5.
 
 ---
 
@@ -291,20 +298,20 @@ Thuật ngữ: `lead_owner` (field trên Lead), `ToDo` (assignment, nguồn củ
 
 ---
 
-## 11. Test plan (chưa thực thi — chờ app/API + baseline)
+## 11. Test plan (đã thực thi một phần sau WP-02/03/05; còn mở cho SEC-13/14/16/26, nhánh nội bộ SEC-27 và ~38 ô matrix)
 
-### 11.1. Điều kiện tiên quyết (blocker)
+### 11.1. Điều kiện tiên quyết (đã đạt / còn mở)
 
-1. Baseline Frappe CRM `v1.87.0` + Framework `v15.123.1` **đã bootstrap/install/migrate/seed và smoke UI/API trên host hiện tại** ([`wp01-runtime.md`](../../deploy/dev/evidence/wp01-runtime.md)); MariaDB 11.8 compatibility caveat còn mở.
-2. App `crm_cskh` cài cùng site; có test site riêng `test_cskh.localhost`.
-3. Seed đủ 2 team + tài khoản mục §1, deterministic, reset được.
-4. Test harness Frappe; thư mục `tests/security/`.
+1. Baseline Frappe CRM `v1.87.0` + Framework `v15.123.1` **đã bootstrap/install/migrate/seed và smoke UI/API trên host hiện tại + GitHub Actions CI run `#38712593755`** ([`wp01-runtime.md`](../../deploy/dev/evidence/wp01-runtime.md), [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md)); MariaDB 11.8 compatibility caveat còn mở.
+2. App `crm_cskh` cài cùng site (`dev.localhost` + `test_cskh.localhost`); test site dùng cho ba lượt chạy 26/27/28 OK (xem §0.2).
+3. Seed đủ 2 team + tài khoản mục §1, deterministic, reset được (xem [`environment-probe.md`](../../deploy/dev/evidence/environment-probe.md) §8 và [`p0-d-runtime.md`](./p0-d-runtime.md) §5.1).
+4. Test harness Frappe; **file `tests/test_permissions.py` đã viết** (18 methods) — KHÔNG dùng `tests/security/` (đặt tại `tests/`). Riêng `tests/test_health.py` 4 methods (đa số không phải permission); `test_poc_custom_field.py` 3 methods (không phải permission); `doctype/cskh_app_settings/test_cskh_app_settings.py` 3 methods (không phải permission).
 
 ### 11.2. Tổ chức test
 
-- Đặt tại `apps/crm_cskh/crm_cskh/tests/security/` (theo Frappe conventions), tên `test_sec_*.py`.
-- Chạy: `bench --site test_cskh.localhost run-tests --app crm_cskh`.
-- Dùng API key/session của **tài khoản test** qua `frappe.set_user(...)`; **không** commit token/cookie.
+- File đã viết: `apps/crm_cskh/crm_cskh/tests/test_permissions.py` (18 permission-boundary methods, đã đọc 543 dòng), **KHÔNG** theo convention `tests/security/test_sec_*.py` ban đầu. Mapping test ↔ matrix được T1C gắn vào từng ô `Thực tế` ở §2–§9 (bản 1.0) và trong [`t1c-security-verification.md`](../../deploy/dev/evidence/t1c-security-verification.md) §3.
+- Lệnh chạy: `bench --site test_cskh.localhost run-tests --app crm_cskh` (đã chạy 26 OK ở `wp05-security-final.txt`; 27 OK ở `p0-local-final.txt`; 28 OK ở CI run `#38712593755`).
+- Dùng API key/session của **tài khoản test** qua `frappe.set_user(...)` (xem `test_permissions.py` L20–L42); **không** commit token/cookie.
 - Mỗi ca phải có **cả** positive (trong scope) và negative (ngoài scope) — tuân thủ P0 §13.1.4.
 
 ### 11.3. Danh mục ca test âm
@@ -354,31 +361,63 @@ Mỗi ca lưu: user/role, Lead ID giả, endpoint/method, HTTP status, response 
 
 ### 11.6. Kết quả runtime theo SEC case
 
-| SEC | Kết quả | Bằng chứng / giới hạn |
+> T1C ghi nhận **ba lượt chạy khác nhau** (log trong repo); 19/28 SEC case đã có method đọc trong `test_permissions.py`. Mỗi dòng dưới đây phân biệt bằng `evidence source · revision · lệnh/site`. Không suy rộng 18 / 26 / 27 / 28 test app thành "PASS toàn SEC matrix".
+
+| SEC | Trạng thái T1C | Bằng chứng / giới hạn (evidence source · revision · site/lệnh) |
 |---|---|---|
-| 01–09 | PASS theo các route được gọi trong suite | Lead scope/get_data, child reads, file, team, manager ngoài cây, owner change, `ignore_permissions`; xem test names trong `test_permissions.py`. |
-| 10–12 | PASS trong kịch bản reassignment/export đã chạy | Cũ/mới owner, child records, ToDo, private file, team transfer, export và bulk denial. Chưa bao phủ mọi endpoint không được liệt kê trong inventory. |
-| 13 | PARTIAL | Health API Guest bị chặn ở whitelist/auth gate; chưa kiểm tra reverse proxy/HTTP status end-to-end trong CI. |
-| 14 | PARTIAL | Browser POST dùng session + CSRF token hợp lệ thành công; request thiếu/sai token chưa có negative test riêng. |
-| 15–26 | PASS theo test ánh xạ hiện tại | BOD fail-closed, linked activity/assignment APIs, assignment rule, private attachments và `get_data` permlevel field. Đây không phải PASS mọi ô matrix. |
-| 27 | PARTIAL | Phone lookup API bị chặn cho role thấp; nhánh `get_call_contact` nội bộ khi Call Log không tham chiếu Lead chưa được gọi trực tiếp trong negative test. |
-| 28 | PASS trong test role PoC | BOD không có `System Manager`; User/Role/Data Import create bị từ chối. |
+| 01 | **PASS** (route đã test) | `test_lead_list_and_get_data_only_return_owner_scope` (L206, `test_permissions.py`); `wp05-security-final.txt` 26 OK tại `test_cskh.localhost` · `p0-local-final.txt` 27 OK tại `dev.localhost`+`test_cskh.localhost` · `p0-isolated-verification.md` 28 OK tại GHA PR #1 `#38712593755` (CI). |
+| 02 | **PASS** (route đã test) | Cùng test trên + `spoofed = get_data({"lead_owner": self.users["b"]}, ...) == []`. |
+| 03 | **PASS** | `test_child_lists_and_activity_reads_stay_with_parent_scope` (L261), `test_child_records_and_direct_private_file_are_record_scoped` (L356) — `frappe.get_list` cho Call Log/Note/Task và `.check_permission` raise. |
+| 04 | **PASS** (route `get_linked_*` đã test) | `test_linked_activity_endpoints_check_parent_before_returning_data` (L403) — `guarded_crm.get_linked_calls/_notes/_tasks/_attachments/_linked_docs_of_document` raise khi cross-scope. |
+| 05 | **PASS** (route `find_file_by_url` đã test) | `test_private_file_download_and_stale_docshare_are_revoked` (L285) — sau reassign, `find_file_by_url` cho old owner trả `None`. |
+| 06 | **PASS** (TL scope test) | `test_team_leader_sees_team_but_not_other_team` (L388). |
+| 07 | **PASS** (manager-without-hierarchy fail-closed) | `test_sales_manager_without_hierarchy_is_denied` (L397). |
+| 08 | **PASS** | `test_owner_change_and_assignment_bypass_are_denied` (L423) — `lead.save(ignore_permissions=True)` raise. |
+| 09 | **PASS** | Cùng test trên + `test_direct_todo_assignment_is_denied_even_with_ignore_permissions` (L490). |
+| 10 | **PASS** | `test_stale_todo_cannot_restore_access_after_owner_changes` (L450), `test_cross_team_transfer_blocks_old_owner_and_leader` (L474) — old owner mất quyền Lead + child + ToDo. |
+| 11 | **PASS** | `test_cross_team_transfer_blocks_old_owner_and_leader` (L474) — TL2 cũ không thấy Lead cross-team. |
+| 12 | **PASS** (delete bulk đã test, report block đã test) | `test_export_and_unscoped_reporting_are_blocked_for_staff_and_managers` (L319) — `data_export`, `export_query`, `query_report.run` raise cho Staff/Manager/BOD. `test_bulk_delete_and_unlink_cannot_touch_cross_scope_records` (L437). |
+| **13** | **NOT RUN** | Chỉ có `frappe.is_whitelisted(health.ping)` unit-level trong `test_health.py::test_guest_is_denied` (L27); chưa có test HTTP round-trip gọi `/api/method/...` không auth. |
+| **14** | **NOT RUN** | Không có automated test nào cho POST CSRF trong `crm_cskh/tests/`. Browser quan sát trong `p0-exit-report.md` G0-08 **không** phải test. |
+| 15 | **PARTIAL** (pass cho nhánh phone-lookup; fail-closed cho User/Role/Data Import; **chưa** cover admin/manage-user paths đầy đủ) | `test_export_and_unscoped_reporting_are_blocked_for_staff_and_managers` (L319) + `test_bod_viewer_cannot_read_leads_or_manage_users` (L528). |
+| **16** | **NOT RUN** | Chưa có test cho `crm_cskh` API field exposure toàn diện; `test_get_data_does_not_return_permlevel_fields` (L227) chỉ cover `crm.api.doc.get_data` permlevel=1. |
+| 17 | **PASS** | `test_child_records_and_direct_private_file_are_record_scoped` (L356) — `get_call_log(self.call_b)` raise. |
+| 18 | **PASS** (cross record qua `.check_permission`) | Cùng test trên + `test_child_lists_and_activity_reads_stay_with_parent_scope` (L261) cho list scope. |
+| 19 | **PASS** | `test_linked_activity_endpoints_check_parent_before_returning_data` (L403) — `guarded_crm.get_assigned_users` raise cho cross-scope. |
+| 20 | **PASS** | Cùng test trên — `guarded_crm.get_linked_docs_of_document` raise. |
+| 21 | **PASS** | `test_owner_change_and_assignment_bypass_are_denied` (L423) + `test_direct_todo_assignment_is_denied_even_with_ignore_permissions` (L490). |
+| 22 | **PASS** (one direction: ToDo cũ không khôi phục quyền Lead sau reassign) | `test_stale_todo_cannot_restore_access_after_owner_changes` (L450); **chưa** có test cho direction ngược lại (DocShare cũ còn khi reassign qua lead_owner). |
+| 23 | **PARTIAL** | Đã chạy `validate_lead_owner` hook ngăn `lead.save(ignore_permissions=True)`; **chưa** có test trực tiếp cho `crm_lead.share_with_agent` desync; xem §7.1 và `risk-register.md` §3 RISK-SEC-02. |
+| 24 | **PASS** | `test_staff_cannot_duplicate_assignment_rules` (L504). |
+| 25 | **PASS** | `test_get_data_does_not_return_permlevel_fields` (L227). |
+| **26** | **NOT IMPLEMENTED coverage** | `guarded_crm.get_attachments` raise `PermissionError` cho cross-scope (PASS cho ngăn lộ); **chưa** có test nào khẳng định `file_url` của file private **không** xuất hiện trong response cho scope được phép. Owner test phải tự gọi `get_attachments(lead own)` rồi grep `file_url` trong dict trả về để chặt chẽ. |
+| **27** | **PARTIAL** (endpoint đã chặn cho staff; nhánh nội bộ `crm_call_log.get_call_contact` khi Call Log không ref Lead **chưa test**) | `test_export_and_unscoped_reporting_are_blocked_for_staff_and_managers` (L319) chỉ cover endpoint `get_contact_by_phone_number` cho 4 actor với số "P0-LOOKUP-NO-MATCH". |
+| 28 | **PASS** (BOD không System Manager, không tạo User/Role/Data Import; CRM-ADMIN fail-closed trên Lead read/write) | `test_bod_viewer_cannot_read_leads_or_manage_users` (L528), `test_crm_admin_role_fails_closed_until_controlled_service_exists` (L537). |
+
+**Chú thích evidence T1C:**
+- 26 OK ở `wp05-security-final.txt` do T1B tạo, revision `b382fe4` (HEAD trên `codex/p0-audit-refresh`), site `test_cskh.localhost`. Không thấy stdcapture method-level.
+- 27 OK ở `p0-local-final.txt`, cùng revision, site `dev.localhost` + `test_cskh.localhost` (re-migrate). Không thấy stdcapture method-level.
+- 28 OK ở `p0-isolated-verification.md` §"Security and source reload", CI run `#38712593755` trên `b382fe4`, GHA clean bootstrap. Không thấy stdcapture method-level.
+- **T1C không tái tạo được** tại sao 26 ≠ 27 ≠ 28; nghi vấn test #18 (`test_seed_owner_scope_and_hierarchy_are_applied`) hoặc phụ thuộc vào thứ tự test discovery. Không có manifest phân biệt pass/fail per method trong repo.
 
 ---
 
-## 12. Trạng thái xác minh tổng hợp
+## 12. Trạng thái xác minh tổng hợp (T1C, 2026-10-19)
 
 - Số ca thiết kế: **~70 ô ma trận**, 28 ca test âm (`SEC-01…SEC-28`).
-- 18 permission-boundary test methods chạy trong suite app; toàn suite **28/28 PASS** trên test site sạch.
-- SEC coverage: **PASS có giới hạn** cho các case đã mapping; SEC-13/14/27 `PARTIAL`; ~70 ô matrix chưa có từng kết quả vẫn `CHƯA XÁC MINH`.
-- Không kết luận toàn hệ thống an toàn; CI PR đã pass nhưng security transport checks và các ô matrix chưa chạy vẫn mở.
+- 18 permission-boundary test methods có mã đọc được trong `test_permissions.py` (T1C đọc 543 dòng). Ba lượt chạy tổng đã ghi nhận — **26 / 27 / 28 tests OK** — không thể chọn một con số làm "tổng duy nhất" (xem §0.2 và `t1c-security-verification.md` §2).
+- Đối chiếu per-cell (T1C, xem `t1c-security-verification.md` §5): **khoảng 32 ô matrix có mapping test**; **~38 ô matrix còn `CHƯA XÁC MINH`**.
+- SEC coverage: **19/28 có pass per route** (xem §11.6); **SEC-13, SEC-14, SEC-16 vẫn `NOT RUN`**; **SEC-26 `NOT IMPLEMENTED coverage`**; **SEC-15, 22, 23, 27 `PARTIAL`**. **0 ca đạt FAIL** (không có test nào fail trong ba lượt chạy có log, nhưng đây **không** đồng nghĩa "không có lỗ hổng" — các route chưa chạy có thể còn lỗi chưa phát hiện).
+- T1C **không chạy lại site sạch** trong phiên này (máy thiếu Docker/WSL2); phụ thuộc vào log T1B tại revision `b382fe4` và các link tài liệu. Kết luận runtime cuối cùng vẫn là **G0-07 PARTIAL**.
+- Hệ thống **không** được tuyên bố an toàn; CI PR #1 đã pass nhưng security transport/full matrix vẫn mở.
 
 ## 13. Việc cần T0 quyết / blocker
 
-1. **WP-05 đã có suite và remediation fail-closed cho các API đã test; GitHub Actions PR #1 đã pass.** Còn phải hoàn thiện SEC-13/14/27 và kiểm tra đầy đủ các ô matrix; trạng thái chi tiết ở [`p0-exit-report.md`](./p0-exit-report.md) và `risk-register.md` §4.
-2. **ADR-004/005: đã ghi tài liệu** — T0 chốt nội dung; file có trong checkout: [`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md) (thực thi quyền owner/team ở backend/record-level + ownership service tập trung) và [`adr-005-bod-viewer-scope.md`](./adr-005-bod-viewer-scope.md) (`BOD_VIEWER` read-only, không System Manager). Runtime/security **CHƯA XÁC MINH**.
+1. **WP-05 đã có suite** (xem `wp05-security-final.txt`, `p0-local-final.txt`, `p0-isolated-verification.md`) và remediation fail-closed cho các API đã test; GitHub Actions PR #1 (`#38712593755`, revision `b382fe4`) đã pass. **SEC-13/14/16/26 vẫn `NOT RUN`/`NOT IMPLEMENTED`**; **~38/70 ô matrix chưa có test mapping**; **nhánh nội bộ SEC-27 chưa test**; `risk-register.md` §6 vẫn duy trì RISK-SEC-12 mở. Trạng thái chi tiết ở [`p0-exit-report.md`](./p0-exit-report.md) và `risk-register.md` §4, §6.
+2. **ADR-004/005: đã ghi tài liệu và runtime hook đã chạy** — T0 chốt nội dung; file có trong checkout: [`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md) (thực thi quyền owner/team ở backend/record-level + ownership service tập trung) và [`adr-005-bod-viewer-scope.md`](./adr-005-bod-viewer-scope.md) (`BOD_VIEWER` read-only, không System Manager). Implementation đã đọc: `apps/crm_cskh/crm_cskh/permissions.py` hook 7 DocType + `apps/crm_cskh/crm_cskh/api/guarded_crm.py` + `guarded_reporting.py` override whitelist. Behavior runtime đã được 18 test methods xác nhận **trong route đã gọi**.
 3. Role `CRM_ADMIN`/`BOD_VIEWER`: **giữ là role PoC** theo P0 §7.1 (BOD read-only). Whitelist field CSKH cho Staff + endpoint server-side (LEAD-06/14) sẽ **chốt cùng schema cụ thể ở P1/P2** — P0 từ chối sửa trực tiếp `CRM Lead`.
 4. Không cấp thêm quyền Staff/BOD/CRM_ADMIN hoặc triển khai dữ liệu thật trước khi các gate còn partial được đóng.
+5. **Blocker mới T1C mở 2026-10-19** (xem `t1c-security-verification.md` §6): B-T1C-1 (env), B-T1C-2 (SEC-13/14/26 transport test), B-T1C-3 (SEC-27 nội bộ), B-T1C-4 (3 tổng test khác nhau), B-T1C-5 (manifest test mapping cho ~38 ô còn lại).
 
 ## 14. Changelog
 
@@ -392,3 +431,4 @@ Mỗi ca lưu: user/role, Lead ID giả, endpoint/method, HTTP status, response 
 | 15/10/2026 | T1C | Bản 0.3: đồng bộ theo ADR-004/005 (T0 chốt) — cập nhật tham chiếu ADR, actor PoC (`CRM_ADMIN`, `BOD_VIEWER` read-only/không System Manager), chính sách P0 cho LEAD-06/14 (từ chối sửa trực tiếp `CRM Lead`; whitelist + endpoint server-side chốt sau), hướng ADR-004 cho reassignment, §9 BOD, §11.3 SEC-28, §13. Ghi rõ file ADR chưa có trong checkout. Giữ `0/28` ca chạy, không PASS/FAIL, không đóng rủi ro. |
 | 15/10/2026 | T1C | Bản 0.4: ADR-004/005 đã có file — thêm link [`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md) / [`adr-005-bod-viewer-scope.md`](./adr-005-bod-viewer-scope.md); bỏ ghi chú "file ADR chưa có trong checkout"; đánh dấu B-3 hoàn tất ở mức ghi tài liệu. Giữ B-1/B-2/B-4 mở, B-5 role PoC, `0/28` SEC, mọi trạng thái `CHƯA XÁC MINH`. |
 | 15/10/2026 | T1C | Bản 0.5: đồng bộ bằng chứng WP-00/01 (T1A) — làm rõ Docker Desktop **đã cài và đang chạy** nhưng Linux engine trả **HTTP 500**, WSL2 chưa cài; cập nhật câu runtime/blocker tương ứng (§0.2, §11.1), thêm link `environment-probe.md`/`dev-setup.md`. Giữ B-1/B-2/B-4 mở, B-3 hoàn tất ở mức ghi ADR, B-5 role PoC, `0/28` SEC, mọi trạng thái `CHƯA XÁC MINH`. |
+| 19/10/2026 | T1C | **Bản 1.0 — độc lập kiểm chứng.** Sửa câu lịch sử "chưa có security suite" trong §0.2 và heading; **phân biệt ba lượt chạy có tổng test khác nhau (26 / 27 / 28)** bằng revision + lệnh + site (xem bảng §0.2 mới, §11.6 mới). Thay §11.6 để mỗi SEC case có `evidence source · revision · lệnh/site` riêng; **không** gộp thành 28. Mở rộng §12: **~38 ô matrix còn `CHƯA XÁC MINH`**, **SEC-13/14/16 vẫn `NOT RUN`**, **SEC-26 `NOT IMPLEMENTED coverage`**, SEC-15/22/23/27 `PARTIAL`. Thêm 5 blocker mới (B-T1C-1…5) trong §13 và link [`t1c-security-verification.md`](../../deploy/dev/evidence/t1c-security-verification.md). Không tuyên bố hệ thống an toàn; **G0-07 vẫn PARTIAL**, không P0 GO. Phiên Codex p0-audit-refresh **không có Docker/WSL2**, nên tái kiểm bằng phân tích tĩnh + đối chiếu log T1B tại revision `b382fe4`. |
