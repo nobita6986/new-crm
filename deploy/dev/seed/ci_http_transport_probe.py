@@ -665,6 +665,53 @@ def run() -> int:
 	docinfo_has_url = isinstance(docinfo_private, dict) and isinstance(
 		docinfo_private.get("file_url"), str
 	)
+
+	# --- Đường lộ thứ 3: `message[0][attachment_log].data.file_url` ----------
+	# CRM `activities.py` L299-308: vòng lặp `for attachment_log in docinfo.attachment_logs:`
+	# ⇒ `parse_attachment_log(attachment_log.content, ...)` (L305) với
+	# `parse_attachment_log` L505-526: L518 `if "private/files" in a_tag["href"]` ⇒
+	# `is_private=True`, L524 `"file_url": a_tag["href"]` ⇒ **trả URL thật**.
+	# Đây là đường **thứ 3**, khác `message[4].attachments`.
+	message_activities = message[0] if isinstance(message, (list, tuple)) and len(message) == 5 else None
+	attachment_log_activity = next(
+		(
+			activity
+			for activity in message_activities or []
+			if isinstance(activity, dict)
+			and activity.get("activity_type") == "attachment_log"
+			and isinstance(activity.get("data"), dict)
+			and activity["data"].get("file_name") == PRIVATE_FILE_NAME
+		),
+		None,
+	)
+	attachment_log_data = attachment_log_activity.get("data") if attachment_log_activity else None
+	attachment_log_has_url = isinstance(attachment_log_data, dict) and isinstance(
+		attachment_log_data.get("file_url"), str
+	) and bool(attachment_log_data.get("file_url"))
+
+	# --- Đường lộ thứ 4: `docinfo.attachment_logs[].content` (HTML) --------
+	# Frappe `file.py` L898-906 `create_attachment_record()` ⇒
+	# `add_comment_in_reference_doc("Attachment", f"<a href='{file_url}' …>…")`
+	# ⇒ nội dung **HTML** của comment type `Attachment` chứa URL private thật.
+	# `add_comments` (load.py L150-184) đưa các comment này vào
+	# `docinfo.attachment_logs` (L175-176). Loc quyền của `get_document_comments`
+	# (comment.py L196-209) là theo **comment_type**, KHÔNG theo `is_private` của File.
+	# Ở đây `content` là **chuỗi HTML** ⇒ probe KHÔNG redact (key là `content`,
+	# không nằm trong `SENSITIVE_KEYS`); chỉ regex của workflow CI mới che được.
+	docinfo_attachment_logs = docinfo.get("attachment_logs") if isinstance(docinfo, dict) else None
+	attachment_log_row = next(
+		(
+			row
+			for row in docinfo_attachment_logs or []
+			if isinstance(row, dict) and PRIVATE_FILE_NAME in str(row.get("content"))
+		),
+		None,
+	)
+	attachment_log_content = attachment_log_row.get("content") if attachment_log_row else None
+	attachment_log_html_has_url = isinstance(attachment_log_content, str) and (
+		"/private/files/" in attachment_log_content
+	)
+
 	check(
 		"sec26-activities-in-scope",
 		staff_activities,
@@ -681,9 +728,19 @@ def run() -> int:
 
 	# Ghi **riêng** quan sát của từng đường ra evidence (không làm thay đổi
 	# PASS/FAIL của gate) để reviewer thấy rõ đường nào lộ `file_url`.
-	for observation_id, has_url in (
-		("sec26-activities-message-attachments", message_has_url),
-		("sec26-activities-docinfo-attachments", docinfo_has_url),
+	for observation_id, has_url, site in (
+		("sec26-activities-message-attachments", message_has_url, "message[4].attachments[].file_url"),
+		(
+			"sec26-activities-message-attachment-log",
+			attachment_log_has_url,
+			"message[0][attachment_log].data.file_url",
+		),
+		("sec26-activities-docinfo-attachments", docinfo_has_url, "docinfo.attachments[].file_url"),
+		(
+			"sec26-activities-docinfo-attachment-logs",
+			attachment_log_html_has_url,
+			"docinfo.attachment_logs[].content (HTML <a href>)",
+		),
 	):
 		observations.append(
 			{
@@ -695,6 +752,7 @@ def run() -> int:
 				"document": LEAD_NAME,
 				"file_name": PRIVATE_FILE_NAME,
 				"file_is_private": True,
+				"leak_site": site,
 				"observation": "file_url_present" if has_url else "file_url_absent",
 				"file_url_present": has_url,
 				"source": "synthetic seeded private attachment (p0-ci.localhost)",
