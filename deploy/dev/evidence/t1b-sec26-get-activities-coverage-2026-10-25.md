@@ -1,7 +1,7 @@
 # T1B — Điều tra coverage gap SEC-26: `get_activities` + `docinfo.attachments`
 
 **Vòng:** T1B (theo yêu cầu Owner, sau T1C lần 22b §(7))
-**Ngày:** 2026-10-25 (UTC+7) — **cập nhật 2026-10-26 (lần 4)**: §1.0 **bảng tổng hợp 4 run** (34/35/36/37) + chi tiết từng run, §3.5 (kết quả runtime thật của H-RFC-2 + H-RFC-4), §3.5b (audit redaction 4 run), §4.2b (siết test tĩnh), §5 (giới hạn) + xác nhận **không hồi quy** ở cả 4 run
+**Ngày:** 2026-10-25 (UTC+7) — **cập nhật 2026-10-26 (lần 5)**: bổ sung run 40 sau instrumentation A; fingerprint SHA-256 + độ dài của 4 giá trị trước sanitizer ở §3.6; cập nhật trạng thái và provenance tại §0/§1/§7/§9. Các bảng run 34–37 bên dưới được giữ làm lịch sử.
 **Loại báo cáo:** Điều tra coverage gap — **không** sửa policy/wrapper/assertion/tally, **không** thêm method thứ 100, **không** merge PR.
 **Dữ liệu:** 100% giả (site seed `p0-ci.localhost`), **không** dùng dữ liệu thật.
 
@@ -21,19 +21,41 @@ Ba câu hỏi được **phân biệt rõ** bằng runtime (không dựa vào so
 |---|---|---|
 | Endpoint `get_activities` có trả `file_url` hay không? | 4 đường có `file_url` | **CÓ** — 4/4 đường, `file_url_present = true` (không đổi so với run 31/32) |
 | Có redaction hay không? | Đường 4 **KHÔNG** lọt redact của probe (đã đính chính) | **KHÔNG** — đường 1/2/3 che **theo key** `file_url`; đường 4 che **theo chuỗi** `redact_text`; **không** đường nào có wrapper redaction của `crm_cskh` |
-| Khả năng tải file có được đo hay không? | **CHƯA** đo | **ĐÃ ĐO** — URL lấy từ payload thật, tải bằng **chính** caller in-scope ⇒ **HTTP 200**, `content_length = 90`, `contains_seed_marker = true` ⇒ lộ URL **⇔** đọc được nội dung |
+| Khả năng tải file có được đo hay không? | **CHƯA** đo | **ĐÃ ĐO** — trong fixture/run đã đo, URL từ payload và việc tải HTTP 200/90 byte cùng được quan sát với caller in-scope; không suy ra truy cập trái phép hoặc kết luận policy |
 
 Ngoài ra đã đo **kịch bản ngoài scope** ở tầng HTTP: actor `staff.c@dev.local` (Team 2) gọi **đúng** endpoint ⇒ **HTTP 403 `PermissionError`**, `private_entry_visible = false` ⇒ **không** có bằng chứng IDOR.
 
-⚠️ **Không** nâng `SEC-26`, **không** đóng RFC, **không** đổi policy/wrapper/assertion/tally, **không** thêm method thứ 100 — vì tải được nội dung với caller **đúng scope** là **hành vi đúng theo thiết kế**; mức độ nghiêm trọng thuộc Owner.
+⚠️ **Không** nâng `SEC-26`, **không** đóng RFC, **không** đổi policy/wrapper/assertion/tally, **không** thêm method thứ 100 — kết quả tải file chỉ là quan sát với caller đúng scope và file seed; đánh giá mức độ/ngữ nghĩa chính sách thuộc Owner.
+
+### 🆕 Lần 5 — fingerprint trước sanitizer (run 40)
+
+Run [#40282505556](https://github.com/nobita6986/new-crm/actions/runs/40282505556) là validation run cho commit instrumentation A và là run mới nhất khi artifact được kiểm tra; artifact được đối chiếu trực tiếp. Sau khi cập nhật evidence có thể có run docs-only mới hơn, không đổi code probe. Bốn fingerprint của các đường `file_url`/HTML đều có cùng SHA-256 và độ dài 38 byte, khớp fingerprint đã tính trong bộ nhớ cho giá trị synthetic seed dự kiến. Giá trị URL thô **không** được ghi vào artifact.
+
+Điều quan sát được: đối với một attachment private giả và caller in-scope, giá trị đã có mặt trong response đã parse **trước** khi probe gọi `sanitize()`. Vì vậy sanitizer của probe đã che giá trị khỏi artifact; quan sát này chỉ áp dụng cho request/fixture đó, không chứng minh hành vi mọi endpoint, proxy, browser hay file khác. Run 40 cũng ghi nhận caller ngoài scope nhận HTTP 403 và caller in-scope tải file seed được HTTP 200/90 byte. Đây là characterization, không phải kết luận vulnerability hoặc quyết định policy.
+
+Gate và trạng thái bảo mật không đổi: probe 18/18 PASS; per-method 91 PASS / 8 FAIL / 0 ERROR / 0 SKIP / 0 NOT RUN; `SEC-26` PARTIAL, RFC OPEN, `G0-07` PARTIAL / CHƯA KÝ, P0 NO-GO.
 
 ---
 
 ## 1. Run / artifact mới nhất (đọc trước khi kết luận)
 
-### 1.0 Bảng tổng hợp 4 run (đọc trước khi kết luận)
+### 1.0.0 Run 40 (validation instrumentation A; mới nhất tại thời điểm đọc artifact) — metadata và counts
 
-| Hạng mục | Run 34 | Run 35 | Run 36 | **Run 37 (mới nhất)** |
+| Hạng mục | Giá trị |
+|---|---|
+| Run | [#40282505556](https://github.com/nobita6986/new-crm/actions/runs/40282505556), run number 40, `pull_request`, kết thúc `failure` tại gate cuối |
+| Head SHA | `1b8f87db19df8f4737aea6673ad891573971405e` |
+| Merge SHA trong artifact | `0b084bd297dfea13cca905674c610a6d2986f4f3`; cha: `b382fe4` và head `1b8f87d` |
+| Artifact | ID `12632348633`, `p0-g007-evidence-40282505556`, 133 848 byte, chưa hết hạn |
+| Digest | `sha256:9c652c629cf64c1eb64f1ed55711498b71d48810f6cdece1960926bc88511ecd` — khớp digest API GitHub và bản tải đã xác minh |
+| Gate | Gate JSON và 5 JUnit XML tự parse: 99 total, 91 PASS / 8 FAIL / 0 ERROR / 0 SKIP; các danh sách missing/skipped/errors/unexpected/duplicate/modules rỗng; `gate_passed=false` |
+| HTTP probe | `PASS`, 18 case, `failed_cases=[]`; 6 observations |
+
+Run 40 có đủ bootstrap, lint, test, per-method reporting, HTTP probe, backup/restore, sanitize và upload artifact; job cuối cùng thất bại tại gate enforce vì 8 method FAIL. PR #2 vẫn OPEN, chưa merge. Bảng run 34–37 bên dưới là snapshot lịch sử trước instrumentation A, không còn là run mới nhất.
+
+### 1.0 Bảng 4 run lịch sử (34–37; snapshot trước instrumentation A)
+
+| Hạng mục | Run 34 | Run 35 | Run 36 | **Run 37 (mới nhất tại snapshot lịch sử)** |
 |---|---|---|---|---|
 | Run ID | [`#40261069257`](https://github.com/nobita6986/new-crm/actions/runs/40261069257) | [`#40263613563`](https://github.com/nobita6986/new-crm/actions/runs/40263613563) | [`#40266333553`](https://github.com/nobita6986/new-crm/actions/runs/40266333553) | [`#40270681816`](https://github.com/nobita6986/new-crm/actions/runs/40270681816) |
 | `run_number` / `event` | 34 / `pull_request` | 35 / `pull_request` | 36 / `pull_request` | **37 / `pull_request`** |
@@ -58,7 +80,7 @@ Ngoài ra đã đo **kịch bản ngoài scope** ở tầng HTTP: actor `staff.c
 
 > ✅ **Kết luận đối chiếu 4 run**: `g007-per-method-gate.json` + `module-status.txt` **byte-identical** qua cả 4 run; FAIL set **giống 100%**; `probe_result = PASS`, `failed_cases = []`; 18/18 case cùng **nhận dạng** (`status` / `exc_type` / `transport_error` / `assertion`); 6/6 observation **giống hệt** ⇒ **KHÔNG hồi quy**.
 
-#### 1.0.1 Run 37 (mới nhất) — chi tiết
+#### 1.0.1 Run 37 — chi tiết (mới nhất tại snapshot lịch sử)
 
 | Hạng mục | Giá trị |
 |---|---|
@@ -417,7 +439,7 @@ Cả 4 đều: `caller=staff.a@dev.local`, `caller_scope=in-scope (lead_owner of
 >
 > ⚠️ **Giới hạn bắt buộc**: đây là **hành vi đúng theo thiết kế** (caller có quyền read ⇒ được đọc file của lead mình sở hữu). Vì vậy **không** tự nâng `SEC-26`, **không** kết luận vulnerability, **không** đóng RFC — quyết định thuộc Owner.
 
-### 3.5b ⚠️ Audit redaction artifact run 34 + 35 + 36 + 37 — **không rò** identifier/secret
+### 3.5b ⚠️ Audit redaction artifact run 34 + 35 + 36 + 37 (lịch sử trước instrumentation A) — **không rò** identifier/secret
 
 Quét **toàn bộ** thư mục mỗi run bằng `_audit_redaction_run34.py` (đã generalize nhận `run_id` qua argv) — **33 file / run**: **16 entry** của artifact (`p0-g007-evidence-<run id>/`) + **16 bản copy** phẳng + **1** raw evidence. Bao gồm `http/http-transport.json`, `*.log`, `*.junit.xml`, `workflow-metadata.json`.
 
@@ -437,6 +459,23 @@ Quét **toàn bộ** thư mục mỗi run bằng `_audit_redaction_run34.py` (đ
 > ℹ️ **Vì sao "4 lần" ở cả 4 run?** Vì `redact_text()` thay **theo chuỗi** (`/private/files/...` → `/private/files/[REDACTED…]`) và `sanitize()` thay **theo key** `file_url`; mỗi run ghi **2** dấu vết text trong `http/http-transport.json` bản phẳng + **2** trong bản nested ⇒ **4**. Đối chiếu chéo 4 run: **cùng số**, **cùng vị trí** ⇒ redaction **ổn định**, không phụ thuộc lần chạy.
 
 ⇒ **Không** ghi cookie, token, password, URL file thật, hay file identifier vào artifact.
+
+### 3.6 Lần 5 — fingerprint giá trị trước `sanitize()` (run 40)
+
+Instrumentation A được thêm trong commit `1b8f87d` tại `deploy/dev/seed/ci_http_transport_probe.py`. Trong case `sec26-activities-in-scope`, probe fingerprint các giá trị từ response đã parse trước khi gọi `sanitize()`; map chứa giá trị thô chỉ tồn tại trong bộ nhớ và không được serialize. Artifact chỉ chứa SHA-256 và độ dài UTF-8.
+
+| Đường trong response | `file_url_present` | `value_len` (byte) | `value_sha256` |
+|---|---:|---:|---|
+| `message[4].attachments[].file_url` | `true` | 38 | `13af0423da6b8d4f87f964847bbc60b62388b71dfe9341a7ea14a3464e7be7bc` |
+| `message[0][attachment_log].data.file_url` | `true` | 38 | cùng SHA-256 |
+| `docinfo.attachments[].file_url` | `true` | 38 | cùng SHA-256 |
+| `docinfo.attachment_logs[].content` (HTML `href`) | `true` | 38 | cùng SHA-256 |
+
+Bốn observation có fingerprint trùng nhau. SHA-256/độ dài cũng khớp giá trị synthetic dự kiến được dựng trong bộ nhớ từ prefix và filename seed đã pin; với fixture/run này, quan sát được giá trị đúng bằng đường dẫn seed dự kiến và không có phần ký số bổ sung. Đây là đối chiếu hẹp cho một file seed, không khái quát hóa cơ chế URL ở file/endpoint khác hoặc thời hạn URL. Kiểm tra artifact đã tải: giá trị URL private thô không xuất hiện; `response.body` và request/download fields vẫn được redact theo probe. Không ghi URL thô vào báo cáo.
+
+**Diễn giải có giới hạn:** response trực tiếp từ `get_activities` chứa giá trị tương ứng trước khi probe sanitizer chạy; phần che giấu quan sát được trong artifact xảy ra ở bước sanitizer/logging của probe đối với case này. Điều này không chứng minh gì về proxy/CORS, browser render, endpoint khác, hay mọi file private. Kết quả không đóng RFC và không tự xác định mức độ nghiêm trọng theo policy.
+
+Run 40 cũng xác nhận hai observations riêng: caller ngoài scope nhận 403 `PermissionError`; caller in-scope tải file synthetic được HTTP 200, `content_length=90`. Hai kết quả chỉ mô tả actor/fixture đã đo; không suy ra truy cập trái phép.
 
 ---
 
@@ -546,18 +585,22 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 
 **KHÔNG đổi:** policy · wrapper (`guarded_crm.py`) · assertion hiện hữu · SEC tally · `g007_test_inventory.json` (vẫn `expected_total=99`, **không** thêm method thứ 100) · `test_permissions.py` / `test_security_remediation*.py` · `q1`-`q4`/`ra-04`.
 
+### 4.4 Instrumentation A — commit `1b8f87d`
+
+Chỉ sửa `deploy/dev/seed/ci_http_transport_probe.py`: với response của case `sec26-activities-in-scope`, fingerprint các giá trị `file_url` và href private **trước** `sanitize()`, lưu SHA-256 + độ dài byte trong observations; URL thô chỉ nằm trong map process-local và không được ghi ra evidence. Không thêm case/test method, không đổi assertion/gate/workflow/policy/inventory. Run 40 xác nhận probe pass và artifact chỉ chứa fingerprint.
+
 ---
 
 ## 5. Giới hạn bắt buộc của bằng chứng
 
 1. **Tầng đo:** direct HTTP tới `bench serve` (`coverage_scope` trong artifact ghi rõ: *"reverse-proxy and CORS behavior are not covered"*). Chưa phủ reverse-proxy/CORS.
 2. ~~**Chỉ caller đúng scope.**~~ ⇒ **ĐÃ ĐO (một phần) 2026-10-26**: thêm **một** case ngoài scope qua HTTP (`staff.c@dev.local` ⇒ **403 `PermissionError`**, `private_entry_visible = false`) — xem §3.5 + §6 H-RFC-4. Vẫn **chưa** phủ nhiều actor/tài liệu.
-3. ~~**Giá trị `file_url` không có trong artifact ⇒ không chứng minh được URL tải được.**~~ ⇒ **ĐÃ ĐO 2026-10-26**: URL lấy từ payload thật đã được tải qua HTTP bằng **chính** caller in-scope ⇒ **HTTP 200, `content_length = 90`, `contains_seed_marker = true`** (xem §3.5 + §6 H-RFC-2). Vẫn **chưa** đo: URL có **ký số / hạn dùng** hay không (H-RFC-1(a)).
+3. ~~**Giá trị `file_url` không có trong artifact ⇒ không chứng minh được URL tải được.**~~ ⇒ **ĐÃ ĐO 2026-10-26**: URL lấy từ payload thật đã được tải qua HTTP bằng **chính** caller in-scope ⇒ **HTTP 200, `content_length = 90`, `contains_seed_marker = true`** (xem §3.5 + §6 H-RFC-2). Run 40 bổ sung fingerprint pre-sanitize cho **một** giá trị synthetic; không khái quát hóa URL signing/expiry hoặc endpoint khác.
 4. ~~**Đường 4 lọt tầng redact của probe**~~ ⇒ **ĐÃ ĐÍNH CHÍNH 2026-10-26**: đường 4 **KHÔNG** lọt tầng redact của probe — tầng chuỗi (`redact_text`) đã che URL trong HTML. Xem §2.4.
 5. **Một tài liệu seed, một file, một caller.** Không khái quát hoá cho mọi doctype / mọi file.
 6. **Không** kết luận IDOR: cả 4 đường đều nằm sau guard read-level (CRM L24/L181, Frappe `load.py` L109–110); case ngoài scope bị chặn **403** ở tầng HTTP ⇒ **không** có bằng chứng IDOR.
 7. **URL tải được ⇒ hành vi đúng theo thiết kế** (caller có quyền read ⇒ được đọc file của lead mình sở hữu). Đo **không** đồng nghĩa **là** vulnerability.
-8. **Chưa đo:** URL có ký số/hạn dùng (H-RFC-1(a)); phạm vi `docinfo` ở endpoint khác (H-RFC-3); nhánh `Deal`; `get_linked_calls/_notes/_tasks`; `content_hash` assert.
+8. **Chưa đo rộng:** các URL/file/endpoint khác có ký số hoặc hạn dùng hay không (H-RFC-1(a)); phạm vi `docinfo` ở endpoint khác (H-RFC-3); nhánh `Deal`; `get_linked_calls/_notes/_tasks`; `content_hash` assert. Run 40 chỉ đối chiếu một file seed, không có phần ký số bổ sung trong giá trị quan sát đó.
 9. **Guard tĩnh không nằm trong CI** (xem §4.3) ⇒ regression guard chỉ có hiệu lực khi chạy cục bộ, **không** tự động chặn PR.
 
 ---
@@ -572,12 +615,12 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 |---|---|
 | Trước lần này | CHƯA đo ở tầng nào |
 | Sau lần này | **ĐÃ ĐO** (runtime, §3.2–§3.3): **4/4 đường** `file_url_present`, `is_private=1` |
-| **Còn lại chưa phân biệt** | (a) URL **có ký số / hạn dùng** hay tĩnh? (b) ~~URL đó **tải được** với chính caller đó?~~ ⇒ **ĐÃ ĐO 2026-10-26: CÓ** (HTTP 200, `content_length = 90`) — xem H-RFC-2. (c) mức độ lộ có **tương đương** endpoint **đã override** (đã redaction) hay **nặng hơn** (vì có **4** đường thay vì 1)? |
+| **Còn lại chưa phân biệt** | (a) Với **một** file seed ở run 40, fingerprint pre-sanitize khớp chính xác giá trị synthetic dự kiến (38 byte), nên trong quan sát này không có suffix ký số bổ sung; điều đó không khái quát hóa mọi file/endpoint hoặc thời hạn URL. (b) ~~URL đó **tải được** với chính caller đó?~~ ⇒ **ĐÃ ĐO 2026-10-26: CÓ** (HTTP 200, `content_length = 90`) — xem H-RFC-2. (c) mức độ lộ/policy tổng thể so với endpoint đã override vẫn cần đánh giá Owner.
 
 > **(b) đã đo ở lần rà soát 2026-10-26** — xem H-RFC-2 bên dưới.
 > ⚠️ **ĐÍNH CHÍNH**: mệnh đề cũ *"nặng hơn (vì có 4 đường, **1 đường lọt tầng redact của probe**)"* là **sai** — đường 4 **KHÔNG** lọt tầng redact của probe (§2.4). Cơ sở so sánh còn lại hợp lệ: 4 đường lộ thay vì 1.
 
-⇒ **H-RFC-1 được thu hẹp mạnh nhưng CHƯA đóng**: đã chứng minh *mặt cảnh* (URL xuất hiện ở 4 nơi) **và** *tác động* (đọc được nội dung, H-RFC-2); **còn** (a) URL có ký số/hạn dùng hay không.
+⇒ **H-RFC-1 được thu hẹp nhưng CHƯA đóng**: đã quan sát 4 đường và khả năng tải với caller in-scope; run 40 xác nhận fingerprint của **một** giá trị seed trước sanitizer. Phạm vi nhiều file/endpoint và quyết định mức độ/chính sách vẫn chưa được giải quyết.
 
 ### H-RFC-2 — lộ `file_url` ≠ đọc được nội dung
 
@@ -597,8 +640,8 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 | | |
 |---|---|
 | **Kết quả đo** | URL lấy từ payload thật ⇒ `GET /private/files/…` bằng **chính** `staff.a@dev.local` ⇒ **HTTP 200**, `content_length = 90`, `contains_seed_marker = true`, `transport_error = null` |
-| **Kết luận** | ✅ **H-RFC-2 ĐÃ PHÂN BIỆT ĐƯỢC**: lộ `file_url` **⇔** đọc được nội dung file private (với caller đúng scope). "Chỉ lộ URL" là mô tả **sai** |
-| **Còn lại chưa phân biệt** | (a) URL **có ký số / hạn dùng** hay tĩnh? (b) hành vi này có **đúng** là *by design* hay là *sai sót cấu hình*? ⇒ thuộc Owner |
+| **Kết luận quan sát** | Với fixture/run đã đo, caller đúng scope nhận `file_url` trong payload và tải được nội dung seed (HTTP 200, 90 byte). Đây là characterization cho actor/file này, không phải kết luận tổng quát về policy hoặc vulnerability |
+| **Còn lại chưa phân biệt** | (a) Run 40 cho **một** file seed có fingerprint khớp giá trị đường dẫn seed dự kiến, không có phần ký số bổ sung trong giá trị này; chưa khái quát hóa URL/file/endpoint khác hoặc thời hạn. (b) Hành vi in-scope có đúng policy hay không ⇒ thuộc Owner |
 
 ### H-RFC-3 — `docinfo` là đường **riêng**, không sửa được bằng cơ chế override
 
@@ -629,7 +672,7 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 
 | Hạng mục | Trạng thái | Lý do |
 |---|---|---|
-| `SEC-26` | **`PARTIAL`** (giữ nguyên) | Đã có runtime evidence tầng HTTP cho **4 đường** **+** khả năng tải file **+** kịch bản ngoài scope (run 34). Vẫn **chưa** phân biệt được H-RFC-1(a) (URL ký số/hạn dùng) ⇒ **không** đủ điều kiện đóng |
+| `SEC-26` | **`PARTIAL`** (giữ nguyên) | Run 40 cho thấy giá trị trước probe sanitizer khớp đường dẫn seed dự kiến trong **một** fixture; đã đo 4 đường, tải in-scope 200 và ngoài scope 403. Bằng chứng hẹp này không khái quát hóa mọi URL/endpoint hoặc quyết định policy; RFC vẫn mở |
 | `G0-07` | **`PARTIAL` / CHƯA KÝ** (giữ nguyên) | Chưa có ký |
 | `P0` | **`NO-GO`** (giữ nguyên) | — |
 | RFC | **`OPEN`** (giữ nguyên) | — |
@@ -637,19 +680,19 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 | Inventory | `expected_total=99` (**giữ nguyên**) | **KHÔNG** thêm method thứ 100 (cần Owner duyệt) |
 | `Q1`–`Q4` + `RA-04` | `PENDING_T0_OWNER_DECISION` (giữ nguyên) | Vẫn chờ Owner |
 | `OWNER_DECISIONS_CONFIRMED` | `False` (giữ nguyên) | — |
-| `B-T1C-3` | giữ **`MỞ`** — lý do **thu hẹp thêm** | (i) redaction chỉ được chứng minh trên endpoint **đã override**; (ii) RFC `get_activities` — **đã có** runtime evidence kịch bản dương tầng HTTP cho **4 đường** **+ đã đo H-RFC-2** (tải được, HTTP 200); **còn** H-RFC-1(a) (URL ký số/hạn dùng) chưa đo; (iii) `docinfo` — **đã có** runtime evidence (2 đường), **còn** phạm vi endpoint khác chưa đo; (iv) `content_hash` chưa có assert |
+| `B-T1C-3` | giữ **`MỞ`** — phạm vi hẹp hơn, chưa đóng | Run 40 quan sát trực tiếp một response `get_activities` trước probe sanitizer: 4 fingerprint khớp fixture synthetic. Đây chỉ là một file/actor/endpoint; endpoint khác, `docinfo` ở các đường khác, mức độ/policy và `content_hash` vẫn chưa được giải quyết |
 | `B-T1C-2` | giữ **`MỞ`** | Probe **18/18** `PASS` nhưng `coverage_scope` **không đổi** (chỉ direct HTTP tới bench serve) ⇒ **không** đủ điều kiện đóng `SEC-13` |
-| `B-T1C-4` | giữ **`ĐÓNG`** | 99/99 per-method, 0 `SKIP`, 0 `NOT_RUN`, 0 `parse_error` ở cả 4 run (34/35/36/37) |
-| `B-T1C-6` | giữ **`MỞ`, `8`** | 8/99 method không xanh, FAIL set **giống 100%** ở cả 4 run (34/35/36/37) ⇒ tất định lần thứ **chín** |
-| PR #2 | **OPEN**, `mergeStateStatus=UNSTABLE` (head `05cdaaa`) | **KHÔNG merge** |
+| `B-T1C-4` | giữ **`ĐÓNG`** | Run 40 cũng xác nhận 99/99 observed, 0 `SKIP`, 0 `NOT_RUN`, 0 `ERROR`, 0 parse errors; 91 PASS / 8 FAIL |
+| `B-T1C-6` | giữ **`MỞ`, `8`** | Run 40 vẫn có 8 FAIL / 99; 7 canary DocShare Q1–Q4 và 1 RA-04 chờ Owner |
+| PR #2 | **OPEN**, chưa merge (head `1b8f87d`; xác nhận 2026-10-26) | **KHÔNG merge** |
 
 ---
 
 ## 8. Việc còn lại (đề xuất — **chưa** thực hiện, cần Owner duyệt)
 
-> ✅ **ĐÃ XONG Ở LẦN RÀ SOÁT 2026-10-26**: mục **1** (đo H-RFC-2 ở tầng HTTP) và mục **3** (đo H-RFC-4 qua HTTP) — xem §3.5 (run 34). Mục **4** đã được **ĐÍNH CHÍNH**: đường 4 **KHÔNG** lọt tầng redact của probe (§2.4) ⇒ không cần sửa sanitizer.
+> ✅ **ĐÃ XONG Ở LẦN RÀ SOÁT 2026-10-26**: mục **1** (đo H-RFC-2 ở tầng HTTP) và mục **3** (đo H-RFC-4 qua HTTP) — xem §3.5 (run 34); run 40 bổ sung fingerprint cho một fixture in-scope. Mục **4** đã được **ĐÍNH CHÍNH**: đường 4 **KHÔNG** lọt tầng redact của probe (§2.4) ⇒ không cần sửa sanitizer.
 
-1. ~~**Đo H-RFC-2 ở tầng HTTP**~~ ⇒ **ĐÃ ĐO** (run 34): URL tải được, HTTP 200, `content_length = 90`. **Còn lại:** URL có **ký số / hạn dùng** hay tĩnh (H-RFC-1(a)) — *bước quyết định để đóng hay giữ RFC.* **Cần Owner duyệt** vì có thể chạm assertion SEC-26 hiện hữu.
+1. ~~**Đo H-RFC-2 ở tầng HTTP**~~ ⇒ **ĐÃ ĐO** (run 34): URL tải được, HTTP 200, `content_length = 90`. Run 40 bổ sung fingerprint của **một** file seed, khớp giá trị dự kiến và không có phần ký số bổ sung trong giá trị đó; chưa khái quát hóa URL/file/endpoint khác hoặc thời hạn (H-RFC-1(a)). Mọi thay đổi assertion/policy cần Owner duyệt.
 2. **Đo H-RFC-3 phạm vi rộng**: kiểm `docinfo` ở endpoint khác (`/api/resource/…`) ⇒ xác định `docinfo.attachments` là lỗ hổng riêng hay hệ quả của `get_activities`.
 3. ~~**Đo H-RFC-4 qua HTTP**~~ ⇒ **ĐÃ ĐO** (run 34): **403 `PermissionError`**, `private_entry_visible = false`. **Còn lại:** nhiều actor / nhiều tài liệu / nhánh `Deal` / `get_linked_calls/_notes/_tasks`.
 4. ~~**Cân nhắc đường 4 lọt tầng redact của probe**~~ ⇒ **ĐÍNH CHÍNH**: đường 4 **KHÔNG** lọt tầng redact (tầng chuỗi `redact_text` đã che) — xem §2.4. **Không** cần sửa sanitizer.
@@ -663,7 +706,7 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `deploy/dev/evidence/logs/run40270681816/p0-g007-evidence-40270681816/` | **artifact CI mới nhất** (run 37) giải nén — digest `sha256:2982cf3b…` |
+| [Artifact CI run 40](https://github.com/nobita6986/new-crm/actions/runs/40282505556) · ID `12632348633` | **Artifact mới nhất xác minh** — 133 848 B, digest `sha256:9c652c629cf64c1eb64f1ed55711498b71d48810f6cdece1960926bc88511ecd`; file tải tạm đã dọn sau khi kiểm tra |
 | `deploy/dev/evidence/logs/run40270681816/` | artifact run 37 giải nén (16 entry + raw evidence) |
 | `deploy/dev/evidence/logs/run40270681816/_raw_sec26_review_run40270681816.json` | **raw output 6 observations** + meta (sha256 `0d36771a…`) |
 | `deploy/dev/evidence/logs/run40266333553/p0-g007-evidence-40266333553/` | artifact CI run 36 giải nén — digest `sha256:8153a6c0…` |
@@ -707,3 +750,7 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 | `deploy/dev/evidence/logs/_check_activities_shape.py`, `_check_two_get_attachments.py`, `_check_parse_attachment_log.py` | xác minh 2 `get_attachments` độc lập + shape 5-tuple + `parse_attachment_log` |
 
 > `deploy/dev/evidence/logs/` là thư mục **không track** trong git (không run dir nào được commit) — artifact đã xác minh digest, tải lại được từ run ID.
+
+## 10. Lịch sử cập nhật
+
+- **Lần 5 (2026-10-26):** ghi nhận run 40 và instrumentation A; thêm SHA-256/độ dài của bốn giá trị trước probe `sanitize()`; xác minh digest artifact, counts gate/JUnit, probe 18 case, 403 ngoài scope và tải in-scope 200/90 byte; giữ nguyên `SEC-26 PARTIAL`, RFC OPEN, `G0-07 PARTIAL / CHƯA KÝ`, P0 NO-GO, inventory 99, Q1–Q4/RA-04 chờ Owner.
