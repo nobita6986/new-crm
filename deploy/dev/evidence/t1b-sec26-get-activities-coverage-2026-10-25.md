@@ -1,7 +1,7 @@
 # T1B — Điều tra coverage gap SEC-26: `get_activities` + `docinfo.attachments`
 
 **Vòng:** T1B (theo yêu cầu Owner, sau T1C lần 22b §(7))
-**Ngày:** 2026-10-25 (UTC+7) — **cập nhật 2026-10-26 (lần 2)**: thêm §1.0 (run 35 = run mới nhất) + §1.0b (run 34, chứa **2 case SEC-26 mới**) + §1.0c (run 32), §3.5 (kết quả runtime thật của H-RFC-2 + H-RFC-4), §3.5b (audit redaction), §4.2b (siết test tĩnh), §5 (giới hạn) + xác nhận **không hồi quy** ở cả 3 run
+**Ngày:** 2026-10-25 (UTC+7) — **cập nhật 2026-10-26 (lần 3)**: thêm §1.0 (run 36 = run mới nhất, **docs-only**) + §1.0a (run 35) + §1.0b (run 34, chứa **2 case SEC-26 mới**) + §1.0c (run 32), §3.5 (kết quả runtime thật của H-RFC-2 + H-RFC-4), §3.5b (audit redaction 3 run), §4.2b (siết test tĩnh), §5 (giới hạn) + xác nhận **không hồi quy** ở cả 4 run
 **Loại báo cáo:** Điều tra coverage gap — **không** sửa policy/wrapper/assertion/tally, **không** thêm method thứ 100, **không** merge PR.
 **Dữ liệu:** 100% giả (site seed `p0-ci.localhost`), **không** dùng dữ liệu thật.
 
@@ -13,11 +13,11 @@ Runtime characterization **đã thu được**: caller **đúng scope** nhận `
 
 ⚠️ **Phát hiện mới so với T1C lần 22b:** T1C lần 22b nêu **2** đường lộ (`message[4].attachments` + `docinfo.attachments`). Runtime cho thấy thực tế là **4** đường — 2 đường còn lại là **đường `attachment_log`** (URL nằm trong **HTML** của Comment type `Attachment`), đều **không** qua redaction.
 
-### 🆕 Kết quả lần rà soát 2026-10-26 (run [#40261069257](https://github.com/nobita6986/new-crm/actions/runs/40261069257) — có 2 case mới; xác nhận lại ở run [#40263613563](https://github.com/nobita6986/new-crm/actions/runs/40263613563))
+### 🆕 Kết quả lần rà soát 2026-10-26 (run [#40261069257](https://github.com/nobita6986/new-crm/actions/runs/40261069257) — có 2 case mới; xác nhận lại ở run [#40263613563](https://github.com/nobita6986/new-crm/actions/runs/40263613563) và [#40266333553](https://github.com/nobita6986/new-crm/actions/runs/40266333553))
 
 Ba câu hỏi được **phân biệt rõ** bằng runtime (không dựa vào source tĩnh, không dựa vào permission guard, không dựa vào HTTP 14/14 cũ):
 
-| Câu hỏi | Trước | **Sau (run 34/35)** |
+| Câu hỏi | Trước | **Sau (run 34/35/36)** |
 |---|---|---|
 | Endpoint `get_activities` có trả `file_url` hay không? | 4 đường có `file_url` | **CÓ** — 4/4 đường, `file_url_present = true` (không đổi so với run 31/32) |
 | Có redaction hay không? | Đường 4 **KHÔNG** lọt redact của probe (đã đính chính) | **KHÔNG** — đường 1/2/3 che **theo key** `file_url`; đường 4 che **theo chuỗi** `redact_text`; **không** đường nào có wrapper redaction của `crm_cskh` |
@@ -31,7 +31,35 @@ Ngoài ra đã đo **kịch bản ngoài scope** ở tầng HTTP: actor `staff.c
 
 ## 1. Run / artifact mới nhất (đọc trước khi kết luận)
 
-### 1.0 Run MỚI NHẤT — run 35 (xác nhận **không hồi quy** sau khi siết test tĩnh)
+### 1.0 Run MỚI NHẤT — run 36 (xác nhận **không hồi quy** sau khi cập nhật báo cáo)
+
+| Hạng mục | Giá trị |
+|---|---|
+| Run ID | [`#40266333553`](https://github.com/nobita6986/new-crm/actions/runs/40266333553) (run_number **36**, event `pull_request`) |
+| PR head SHA | `b2e7288b1a7ad3214d69621dbea35e45b661af1e` (= commit `docs(SEC-26): cap nhat bao cao T1B voi ket qua run 35 va xac nhan khong hoi quy` — **chỉ** báo cáo, **không** đụng probe **không** đụng test tĩnh) |
+| PR merge SHA | xác minh qua `gh api git/commits/<merge sha>` — merge **chứa** commit `b2e7288` (xem `compare`: `ahead_by=1, behind_by=0`) |
+| `commit_sha` ghi trong probe | merge SHA (= `GITHUB_SHA`) — đối chiếu trong `workflow-metadata.json` |
+| Artifact id / name | `12627170197` / `p0-g007-evidence-40266333553` (`expired=false`) |
+| **Artifact digest** | **`sha256:8153a6c08cfe75c8d432fb31a9413692158e788c0bb300e78b532e0e5998aebc`** (133 825 B) — **khớp** digest GitHub trả về **và** sha256 tính lại từ zip tải xuống |
+| Kết quả job | `p0` = **failure** ở step `Enforce CI test and direct-HTTP probe gates`; step `Run direct HTTP probes for SEC-13/14/16/26` = **success** |
+
+**Đối chiếu run 35 ↔ run 36 — KHÔNG hồi quy:**
+
+| Hạng mục | Run 35 | **Run 36** | Kết luận |
+|---|---|---|---|
+| `g007-per-method-gate.json` | `196ba75c…` | **`196ba75c…`** | **byte-identical** |
+| `module-status.txt` | `23e8b30f…` | **`23e8b30f…`** | **byte-identical** |
+| Gate counts / FAIL set | 91 PASS / 8 FAIL | **91 PASS / 8 FAIL** | **FAIL set giống 100%** |
+| Probe `probe_result` / `failed_cases` | `PASS` / `[]` | **`PASS` / `[]`** | không đổi |
+| Số case / số observation | 18 / 6 | **18 / 6** | không đổi |
+| Tập `case.id` | — | — | **giống hệt** |
+| **Nhận dạng** từng case (`status` + `exc_type` + `transport_error` + `assertion`) | — | — | **18/18 giống hệt** |
+| **Observations** | 6 | **6** | **giống hệt 100%** |
+| Audit redaction (33 file) | 0 rò | **0 rò** | dấu vết redaction **4 / 4** |
+
+> ℹ️ Run 36 là **docs-only** ⇒ probe **không** đổi ⇒ kết quả **phải** y hệt run 35, và **đã** y hệt. Đây là bằng chứng bổ sung rằng các thay đổi báo cáo **không** ảnh hưởng gate.
+
+### 1.0a Run 35 (trước đó) — xác nhận **không hồi quy** sau khi siết test tĩnh
 
 | Hạng mục | Giá trị |
 |---|---|
@@ -63,7 +91,6 @@ Ngoài ra đã đo **kịch bản ngoài scope** ở tầng HTTP: actor `staff.c
 > ℹ️ **Vì sao không so byte-thoi `http-transport.json`?** Vì run 34 (02:54) và run 35 (03:25) là **2 lần chạy** của cùng mã probe ⇒ các giá trị **không mang nghĩa** đổi theo lần chạy: hash bundle asset (`website.bundle.<hash>.css`), `__frappe_exc_id` (id random của traceback), docname record seed, timestamp tạo/sửa. Đã **xác minh từng ký tự** bằng `_char_diff_34_35.py` rồi chuẩn hoá ⇒ **không** có khác biệt nào về **hành vi** (`status` / `exc_type` / `assertion` / key path / giá trị có nghĩa).
 
 ### 1.0b Run 34 (trước đó) — chứa 2 case SEC-26 mới
-
 | Hạng mục | Giá trị |
 |---|---|
 | Run ID | [`#40261069257`](https://github.com/nobita6986/new-crm/actions/runs/40261069257) (run_number **34**, event `pull_request`) |
@@ -324,7 +351,7 @@ Cả 4 đều: `caller=staff.a@dev.local`, `caller_scope=in-scope (lead_owner of
 | Dữ liệu | **100% giả** — site seed `p0-ci.localhost`, lead `CRM-LEAD-00001`, file `DEMO-CRM-LEAD-00001.txt` | **100% giả** — cùng file seed |
 | Ghi vào artifact | status + `exc_type` + boolean `private_entry_visible` | status + `content_length` + **`content_sha256`** + boolean `contains_seed_marker` — **KHÔNG** ghi bytes/nội dung file |
 
-**Kết quả runtime — run [#40261069257](https://github.com/nobita6986/new-crm/actions/runs/40261069257) (run 34) — và **xác nhận y hệt** ở run [#40263613563](https://github.com/nobita6986/new-crm/actions/runs/40263613563) (run 35):**
+**Kết quả runtime — run [#40261069257](https://github.com/nobita6986/new-crm/actions/runs/40261069257) (run 34) — và **xác nhận y hệt** ở run [#40263613563](https://github.com/nobita6986/new-crm/actions/runs/40263613563) (run 35) + [#40266333553](https://github.com/nobita6986/new-crm/actions/runs/40266333553) (run 36):**
 
 | Case | HTTP status | `exc_type` | Quan sát |
 |---|---|---|---|
@@ -369,24 +396,24 @@ Cả 4 đều: `caller=staff.a@dev.local`, `caller_scope=in-scope (lead_owner of
 >
 > ⚠️ **Giới hạn bắt buộc**: đây là **hành vi đúng theo thiết kế** (caller có quyền read ⇒ được đọc file của lead mình sở hữu). Vì vậy **không** tự nâng `SEC-26`, **không** kết luận vulnerability, **không** đóng RFC — quyết định thuộc Owner.
 
-### 3.5b ⚠️ Audit redaction artifact run 34 + run 35 — **không rò** identifier/secret
+### 3.5b ⚠️ Audit redaction artifact run 34 + 35 + 36 — **không rò** identifier/secret
 
 Quét **toàn bộ** thư mục mỗi run bằng `_audit_redaction_run34.py` (đã generalize nhận `run_id` qua argv) — **33 file / run**: **16 entry** của artifact (`p0-g007-evidence-<run id>/`) + **16 bản copy** phẳng + **1** raw evidence. Bao gồm `http/http-transport.json`, `*.log`, `*.junit.xml`, `workflow-metadata.json`.
 
-| Kiểm tra | Run 34 | **Run 35** |
-|---|---|---|
-| Secret thật (cookie / token / password / sid / csrf) | **0 hit** | **0 hit** |
-| `SEED_PASSWORD` (so sánh trong RAM, không ghi ra artifact) | **0 hit** | **0 hit** |
-| URL file private thật (sau `/private/files/`) | **0 hit** | **0 hit** |
-| Dấu vết redaction URL private | **4** | **4** |
-| File docname (hash hex 8–12) còn lại | **0 hit** | **0 hit** |
-| Raw bytes nội dung file trong artifact | **0** — `response.body == ""` (hằng rỗng) | **0** — `response.body == ""` (hằng rỗng) |
-| Ghi `content_length` + `content_sha256` (64 hex) | ✅ | ✅ |
-| **Kết luận script** | `KET QUA: KHONG RO RI` | `KET QUA: KHONG RO RI` |
+| Kiểm tra | Run 34 | Run 35 | **Run 36** |
+|---|---|---|---|
+| Secret thật (cookie / token / password / sid / csrf) | **0 hit** | **0 hit** | **0 hit** |
+| `SEED_PASSWORD` (so sánh trong RAM, không ghi ra artifact) | **0 hit** | **0 hit** | **0 hit** |
+| URL file private thật (sau `/private/files/`) | **0 hit** | **0 hit** | **0 hit** |
+| Dấu vết redaction URL private | **4** | **4** | **4** |
+| File docname (hash hex 8–12) còn lại | **0 hit** | **0 hit** | **0 hit** |
+| Raw bytes nội dung file trong artifact | **0** — `response.body == ""` | **0** | **0** |
+| Ghi `content_length` + `content_sha256` (64 hex) | ✅ | ✅ | ✅ |
+| **Kết luận script** | `KHONG RO RI` | `KHONG RO RI` | `KHONG RO RI` |
 
-⇒ **Không** ghi cookie, token, password, URL file thật, hay file identifier vào artifact (cả 2 run).
+⇒ **Không** ghi cookie, token, password, URL file thật, hay file identifier vào artifact (cả 3 run).
 
-> ℹ️ **Vì sao "4 lần" ở cả 2 run?** Vì `redact_text()` thay **theo chuỗi** (`/private/files/...` → `/private/files/[REDACTED…]`) và `sanitize()` thay **theo key** `file_url`; mỗi run ghi **2** dấu vết text trong `http/http-transport.json` bản phẳng + **2** trong bản nested ⇒ **4**. Đối chiếu chéo run 34 ↔ run 35: **cùng số**, **cùng vị trí** ⇒ redaction **ổn định**, không phụ thuộc lần chạy.
+> ℹ️ **Vì sao "4 lần" ở cả 3 run?** Vì `redact_text()` thay **theo chuỗi** (`/private/files/...` → `/private/files/[REDACTED…]`) và `sanitize()` thay **theo key** `file_url`; mỗi run ghi **2** dấu vết text trong `http/http-transport.json` bản phẳng + **2** trong bản nested ⇒ **4**. Đối chiếu chéo 3 run: **cùng số**, **cùng vị trí** ⇒ redaction **ổn định**, không phụ thuộc lần chạy.
 
 ⇒ **Không** ghi cookie, token, password, URL file thật, hay file identifier vào artifact.
 
@@ -486,9 +513,10 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 | **Mutation check 2 case mới** (10 mutation) | **10/10 `CAUGHT`** — *(lần đầu **5/10 `MISSED`** ⇒ đã siết bằng kiểm tra **AST**, mới đạt 10/10.)* |
 | **Mutation check gốc (chạy lại)** | **8/8 `CAUGHT`** — sau khi thêm 2 case mới, 2 mutation gốc lại lọt ⇒ đã vá (2 test mới), đạt **18/18** tổng |
 | **Simulation shape** (13 tình huống, dữ liệu 100% giả) | **13/13 `PASS`** — 4 đường độc lập, 5-tuple đúng/sai, `docinfo` không phải dict, thiếu key, `file_url` là `None`/số, `content` không phải str, response rỗng |
-| **Audit redaction artifact run 34 + run 35** | **0 rò** ở cả 2 run (33 file / run) — secret/URL/docname/raw-bytes: 0 hit; dấu vết redaction: **4** / **4** (ổn định) |
+| **Audit redaction artifact run 34 + 35 + 36** | **0 rò** ở cả 3 run (33 file / run) — secret/URL/docname/raw-bytes: 0 hit; dấu vết redaction: **4 / 4 / 4** (ổn định) |
 | **Đối chiếu run 32 ↔ run 34** | **KHÔNG hồi quy** — gate JSON + `module-status.txt` **byte-identical**; FAIL set giống 100%; 0 case bị xoá; mọi case cũ giữ nguyên status + assertion |
 | **Đối chiếu run 34 ↔ run 35** (sau khi siết test tĩnh) | **KHÔNG hồi quy** — gate JSON + `module-status.txt` **byte-identical**; 18/18 case cùng nhận dạng + cùng cấu trúc + cùng giá trị có nghĩa; 6/6 observation giống hệt |
+| **Đối chiếu run 35 ↔ run 36** (sau khi cập nhật báo cáo) | **KHÔNG hồi quy** — gate JSON + `module-status.txt` **byte-identical**; 18/18 case cùng nhận dạng; 6/6 observation giống hệt; audit redaction 0 rò |
 | `git diff --check` trên file đã sửa | `exit 0` |
 | Probe còn **fail-closed** | ✅ `return 1 if failures else 0` giữ nguyên |
 
@@ -589,9 +617,9 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 | `OWNER_DECISIONS_CONFIRMED` | `False` (giữ nguyên) | — |
 | `B-T1C-3` | giữ **`MỞ`** — lý do **thu hẹp thêm** | (i) redaction chỉ được chứng minh trên endpoint **đã override**; (ii) RFC `get_activities` — **đã có** runtime evidence kịch bản dương tầng HTTP cho **4 đường** **+ đã đo H-RFC-2** (tải được, HTTP 200); **còn** H-RFC-1(a) (URL ký số/hạn dùng) chưa đo; (iii) `docinfo` — **đã có** runtime evidence (2 đường), **còn** phạm vi endpoint khác chưa đo; (iv) `content_hash` chưa có assert |
 | `B-T1C-2` | giữ **`MỞ`** | Probe **18/18** `PASS` nhưng `coverage_scope` **không đổi** (chỉ direct HTTP tới bench serve) ⇒ **không** đủ điều kiện đóng `SEC-13` |
-| `B-T1C-4` | giữ **`ĐÓNG`** | 99/99 per-method, 0 `SKIP`, 0 `NOT_RUN`, 0 `parse_error` ở run 34 **và** run 35 |
-| `B-T1C-6` | giữ **`MỞ`, `8`** | 8/99 method không xanh, FAIL set **giống 100%** so với run 32 **và** run 34 ⇒ tất định lần thứ **bảy** |
-| PR #2 | **OPEN**, `mergeStateStatus=UNSTABLE` (head `a619a68`) | **KHÔNG merge** |
+| `B-T1C-4` | giữ **`ĐÓNG`** | 99/99 per-method, 0 `SKIP`, 0 `NOT_RUN`, 0 `parse_error` ở run 34, 35 **và** 36 |
+| `B-T1C-6` | giữ **`MỞ`, `8`** | 8/99 method không xanh, FAIL set **giống 100%** ở cả 4 run (32/34/35/36) ⇒ tất định lần thứ **tám** |
+| PR #2 | **OPEN**, `mergeStateStatus=UNSTABLE` (head `b2e7288`) | **KHÔNG merge** |
 
 ---
 
@@ -613,7 +641,10 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `deploy/dev/evidence/logs/run40263613563/p0-g007-evidence-40263613563/` | **artifact CI mới nhất** (run 35) giải nén — digest `sha256:77fde5b4…` |
+| `deploy/dev/evidence/logs/run40266333553/p0-g007-evidence-40266333553/` | **artifact CI mới nhất** (run 36) giải nén — digest `sha256:8153a6c0…` |
+| `deploy/dev/evidence/logs/run40266333553/` | artifact run 36 giải nén (16 entry + raw evidence) |
+| `deploy/dev/evidence/logs/run40266333553/_raw_sec26_review_run40266333553.json` | **raw output 6 observations** + meta (sha256 `7c597c03…`) |
+| `deploy/dev/evidence/logs/run40263613563/p0-g007-evidence-40263613563/` | **artifact CI run 35** giải nén — digest `sha256:77fde5b4…` |
 | `deploy/dev/evidence/logs/run40263613563/` | artifact run 35 giải nén (16 entry + raw evidence) |
 | `deploy/dev/evidence/logs/run40263613563/_raw_sec26_review_run40263613563.json` | **raw output 6 observations** + meta (sha256 `bd7aef55…`, 4 713 B) |
 | `deploy/dev/evidence/logs/run40261069257/p0-g007-evidence-40261069257/` | artifact CI run 34 giải nén (16 entry) — digest `sha256:d1be8c70…` |
@@ -624,6 +655,7 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 | `deploy/dev/evidence/logs/run40253195658/` | artifact run 32 giải nén (16 entry) |
 | `deploy/dev/evidence/logs/run40134550329/_raw_sec26_activities_4_sites.json` | **raw output 4 đường** + observations + meta (sha256 `13add90d…`) |
 | `deploy/dev/evidence/logs/run40133210954/_raw_sec26_activities_observations.json` | raw output 2 đường (run trung gian) (sha256 `abd9a302…`) |
+| `deploy/dev/evidence/logs/_dl_run40266333553.py` | tải artifact run 36 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40263613563.py` | tải artifact run 35 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40261069257.py` | tải artifact run 34 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40253195658.py` | tải artifact run 32 + **tự** kiểm digest |
@@ -631,7 +663,7 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 | `deploy/dev/evidence/logs/_compare_run34_run35.py` | **đối chiếu run 34 ↔ run 35** theo **nghĩa hành vi** (nhận dạng + cấu trúc + giá trị có nghĩa) |
 | `deploy/dev/evidence/logs/_char_diff_34_35.py` | tìm **từng ký tự** khác biệt giữa 2 run (chứng minh chỉ là giá trị không mang nghĩa) |
 | `deploy/dev/evidence/logs/_compare_run32_run34.py` | **đối chiếu run 32 ↔ run 34**: gate / FAIL set / probe / byte-identical / rò rỉ |
-| `deploy/dev/evidence/logs/_audit_redaction_run34.py` | **audit redaction toàn artifact** (33 file / run) — generalize nhận `run_id`; chạy cho run 34 **và** run 35: 0 rò |
+| `deploy/dev/evidence/logs/_audit_redaction_run34.py` | **audit redaction toàn artifact** (33 file / run) — generalize nhận `run_id`; chạy cho run 34, 35 **và** 36: 0 rò |
 | `deploy/dev/evidence/logs/_mutation_check_new_cases.py` | **mutation check 10/10** cho 2 case mới |
 | `deploy/dev/evidence/logs/_mutation_check.py` | mutation check 8/8 (gốc) |
 | `deploy/dev/evidence/logs/_verify_run32_invariants.py` | đối chiếu bất biến gate/probe/FAIL-set giữa **4 run** (29→32) |
