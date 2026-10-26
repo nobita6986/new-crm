@@ -146,6 +146,61 @@ def sanitize(value: object, key: str = "") -> object:
 	return value
 
 
+def fingerprint_file_url(value: object) -> dict[str, object]:
+	"""Return an opaque fingerprint without retaining the URL in evidence.
+
+	Called with values from the parsed HTTP response, before `sanitize()` is
+	used to write the response body. `value_len` is the UTF-8 byte length.
+	The URL itself is never returned or stored in the observation.
+	"""
+	if not isinstance(value, str):
+		return {"value_sha256": None, "value_len": None}
+	value_bytes = value.encode("utf-8")
+	return {
+		"value_sha256": hashlib.sha256(value_bytes).hexdigest(),
+		"value_len": len(value_bytes),
+	}
+
+
+def extract_private_file_url_from_html(value: object) -> str | None:
+	"""Extract a private-file href from attachment-log HTML for fingerprinting."""
+	if not isinstance(value, str):
+		return None
+	for match in re.finditer(r"\bhref\s*=\s*(['\"])(.*?)\1", value, flags=re.IGNORECASE):
+		href = match.group(2)
+		if href.startswith(DOWNLOAD_PATH_PREFIX):
+			return href
+	return None
+
+
+def collect_pre_sanitize_file_url_fingerprints(value: object) -> dict[str, dict[str, object]]:
+	"""Fingerprint `file_url` values and private hrefs before response sanitization.
+
+	The returned map is process-local and is never serialized; its keys are raw
+	URLs used only to associate each selected leak site with its fingerprint.
+	"""
+	fingerprints: dict[str, dict[str, object]] = {}
+
+	def visit(item: object) -> None:
+		if isinstance(item, dict):
+			for key, child in item.items():
+				if str(key).lower() == "file_url" and isinstance(child, str):
+					fingerprints.setdefault(child, fingerprint_file_url(child))
+				elif str(key).lower() == "content":
+					href = extract_private_file_url_from_html(child)
+					if href:
+						fingerprints.setdefault(href, fingerprint_file_url(href))
+					visit(child)
+				else:
+					visit(child)
+		elif isinstance(item, list):
+			for child in item:
+				visit(child)
+
+	visit(value)
+	return fingerprints
+
+
 def write_evidence() -> None:
 	OUTPUT.mkdir(parents=True, exist_ok=True)
 	payload = {
@@ -211,6 +266,13 @@ def request(
 		parsed_response: object = json.loads(response_text) if response_text else None
 	except json.JSONDecodeError:
 		parsed_response = None
+	# Fingerprint the received response before applying the probe's sanitizer.
+	# The map is kept only in memory so raw values never enter the artifact.
+	pre_sanitize_file_url_fingerprints = (
+		collect_pre_sanitize_file_url_fingerprints(parsed_response)
+		if case_id == "sec26-activities-in-scope"
+		else {}
+	)
 	if parsed_response is not None:
 		safe_response: object = sanitize(parsed_response)
 		safe_body = json.dumps(safe_response, ensure_ascii=False)
@@ -273,6 +335,7 @@ def request(
 		"text": response_text,
 		"entry": entry,
 		"transport_error": transport_error,
+		"file_url_fingerprints": pre_sanitize_file_url_fingerprints,
 	}
 
 
@@ -837,6 +900,20 @@ def run() -> int:
 	attachment_log_html_has_url = isinstance(attachment_log_content, str) and (
 		"/private/files/" in attachment_log_content
 	)
+	attachment_log_html_url = extract_private_file_url_from_html(attachment_log_content)
+
+	# Fingerprints are derived from the parsed HTTP response **before** the
+	# response sanitizer runs in `request()`. Only SHA-256 and UTF-8 byte length
+	# are added to evidence; no raw URL is copied into `observations`.
+	message_file_url = (
+		message_private.get("file_url") if isinstance(message_private, dict) else None
+	)
+	attachment_log_file_url = (
+		attachment_log_data.get("file_url") if isinstance(attachment_log_data, dict) else None
+	)
+	docinfo_file_url = (
+		docinfo_private.get("file_url") if isinstance(docinfo_private, dict) else None
+	)
 
 	check(
 		"sec26-activities-in-scope",
@@ -854,20 +931,40 @@ def run() -> int:
 
 	# Ghi **riêng** quan sát của từng đường ra evidence (không làm thay đổi
 	# PASS/FAIL của gate) để reviewer thấy rõ đường nào lộ `file_url`.
-	for observation_id, has_url, site in (
-		("sec26-activities-message-attachments", message_has_url, "message[4].attachments[].file_url"),
+	for observation_id, has_url, site, file_url_value in (
+		(
+			"sec26-activities-message-attachments",
+			message_has_url,
+			"message[4].attachments[].file_url",
+			message_file_url,
+		),
 		(
 			"sec26-activities-message-attachment-log",
 			attachment_log_has_url,
 			"message[0][attachment_log].data.file_url",
+			attachment_log_file_url,
 		),
-		("sec26-activities-docinfo-attachments", docinfo_has_url, "docinfo.attachments[].file_url"),
+		(
+			"sec26-activities-docinfo-attachments",
+			docinfo_has_url,
+			"docinfo.attachments[].file_url",
+			docinfo_file_url,
+		),
 		(
 			"sec26-activities-docinfo-attachment-logs",
 			attachment_log_html_has_url,
 			"docinfo.attachment_logs[].content (HTML <a href>)",
+			attachment_log_html_url,
 		),
 	):
+		file_url_fingerprints = staff_activities.get("file_url_fingerprints")
+		file_url_fingerprint = (
+			file_url_fingerprints.get(file_url_value)
+			if isinstance(file_url_fingerprints, dict)
+			else None
+		)
+		if not isinstance(file_url_fingerprint, dict):
+			file_url_fingerprint = {"value_sha256": None, "value_len": None}
 		observations.append(
 			{
 				"id": observation_id,
@@ -881,6 +978,7 @@ def run() -> int:
 				"leak_site": site,
 				"observation": "file_url_present" if has_url else "file_url_absent",
 				"file_url_present": has_url,
+				**file_url_fingerprint,
 				"source": "synthetic seeded private attachment (p0-ci.localhost)",
 			}
 		)
