@@ -1,7 +1,7 @@
 # T1B — Điều tra coverage gap SEC-26: `get_activities` + `docinfo.attachments`
 
 **Vòng:** T1B (theo yêu cầu Owner, sau T1C lần 22b §(7))
-**Ngày:** 2026-10-25 (UTC+7)
+**Ngày:** 2026-10-25 (UTC+7) — **cập nhật 2026-10-26**: thêm §1.0 (run 32 = run mới nhất, sau khi commit báo cáo) + xác nhận không hồi quy
 **Loại báo cáo:** Điều tra coverage gap — **không** sửa policy/wrapper/assertion/tally, **không** thêm method thứ 100, **không** merge PR.
 **Dữ liệu:** 100% giả (site seed `p0-ci.localhost`), **không** dùng dữ liệu thật.
 
@@ -17,7 +17,36 @@ Runtime characterization **đã thu được**: caller **đúng scope** nhận `
 
 ## 1. Run / artifact mới nhất (đọc trước khi kết luận)
 
-### 1.1 Run cuối — chứa đủ 4 đường
+### 1.0 Run MỚI NHẤT — run sau khi commit báo cáo (xác nhận không hồi quy)
+
+| Hạng mục | Giá trị |
+|---|---|
+| Run ID | [`#40253195658`](https://github.com/nobita6986/new-crm/actions/runs/40253195658) (run_number **32**, event `pull_request`) |
+| PR head SHA | `072e18ffb771e5657471fea4f57d732958937302` (= commit báo cáo §0–§9, **docs-only**, không đụng code) |
+| PR merge SHA | `116202b4ab6374159a51f631fd82837857c54697` — `Merge 072e18f… into b382fe42…`, parents `b382fe425b3f1f6c2037cd3bed20e65e5df2d928` + `072e18ffb771e5657471fea4f57d732958937302` ⇒ xác minh qua `gh api git/commits` ⇒ merge **chứa** commit báo cáo của tôi |
+| `commit_sha` ghi trong probe | `116202b4ab6374159a51f631fd82837857c54697` (= `GITHUB_SHA` = merge SHA, từ `workflow-metadata.json`) |
+| Artifact id / name | `12621750874` / `p0-g007-evidence-40253195658` (`expired=false`) |
+| **Artifact digest** | **`sha256:bc2201a0685b61dd0d5db9a4168ac03bdd878d563318b95173afb48f69b1ba47`** (132 676 B) — **khớp** digest GitHub trả về **và** sha256 tính lại từ zip tải xuống |
+| Entry quan trọng | `http/http-transport.json` — sha256 `44c9f4f9650427eb3a0d11031255b2a738360b0c32c0e3978c95ecbc8c078194` |
+| Kết quả job | `p0` = **failure** ở step `Enforce CI test and direct-HTTP probe gates`; step `Run direct HTTP probes for SEC-13/14/16/26` = **success** |
+
+**Bất biến giữ nguyên so với run 31 (đã đối chiếu bằng script, 4 run):**
+
+| Chỉ số | Run 29 | Run 30 | Run 31 | **Run 32** | Kết luận |
+|---|---|---|---|---|---|
+| `expected_total` / `observed_total` | 99 / 99 | 99 / 99 | 99 / 99 | **99 / 99** | không đổi |
+| `passing_total` | 91 | 91 | 91 | **91** | không đổi |
+| `gate_passed` | `false` | `false` | `false` | **`false`** | không đổi |
+| `missing_methods` / `skipped_methods` / `parse_errors` | `[]` / `[]` / `[]` | `[]` / `[]` / `[]` | `[]` / `[]` / `[]` | **`[]` / `[]` / `[]`** | không đổi |
+| Probe `probe_result` | `PASS` (14) | `PASS` (15) | `PASS` (15) | **`PASS` (15)** | không đổi |
+| Probe `failed_cases` | `[]` | `[]` | `[]` | **`[]`** | không đổi |
+| Probe `observations` | — | 2 | 4 | **4** | giữ nguyên 4 đường |
+| FAIL set | 8 | 8 | 8 | **8** | `only_in_* = ∅` (giống 100%) |
+| `module-status.txt` | 3×`exit=0`, 2×`exit=1` | y hệt | y hệt | **y hệt** | không đổi |
+
+⇒ Run 32 xác nhận: 4 quan sát `file_url_present=true` / `file_is_private=true` / `caller=staff.a@dev.local` vẫn hiện diện; `content_hash` vẫn **không** xuất hiện; **không** hồi quy nào so với run 31.
+
+### 1.1 Run trước đó — chứa đủ 4 đường (nguồn evidence chính của §3)
 
 | Hạng mục | Giá trị |
 |---|---|
@@ -138,16 +167,18 @@ FAIL set 8/8 (giống nhau ở cả 3 run, `test_bt1c5_matrix_gaps` 1 + `test_do
 | File đo | `DEMO-CRM-LEAD-00001.txt` — **file giả** do `seed_demo.py::_ensure_attachment` (L215–227) tạo với `is_private=1` |
 | Top-level keys | `docinfo` (dict, 23 keys) + `message` (list, len=5) |
 
-### 3.2 Bốn quan sát runtime (run `#40134550329`)
+### 3.2 Bốn quan sát runtime (run `#40134550329` — và **xác nhận lại** ở run `#40253195658`)
 
-| # | `leak_site` | `observation` | `file_url_present` |
-|---|---|---|---|
-| 1 | `message[4].attachments[].file_url` | `file_url_present` | **true** |
-| 2 | `message[0][attachment_log].data.file_url` | `file_url_present` | **true** |
-| 3 | `docinfo.attachments[].file_url` | `file_url_present` | **true** |
-| 4 | `docinfo.attachment_logs[].content (HTML <a href>)` | `file_url_present` | **true** |
+| # | `leak_site` | `observation` | `file_url_present` | `file_is_private` |
+|---|---|---|---|---|
+| 1 | `message[4].attachments[].file_url` | `file_url_present` | **true** | **true** |
+| 2 | `message[0][attachment_log].data.file_url` | `file_url_present` | **true** | **true** |
+| 3 | `docinfo.attachments[].file_url` | `file_url_present` | **true** | **true** |
+| 4 | `docinfo.attachment_logs[].content (HTML <a href>)` | `file_url_present` | **true** | **true** |
 
 Cả 4 đều: `caller=staff.a@dev.local`, `caller_scope=in-scope (lead_owner of CRM-LEAD-00001)`, `file_is_private=true`, `source=synthetic seeded private attachment (p0-ci.localhost)`.
+
+> **Tính lặp lại:** 4 quan sát này hiện diện **giống hệt** ở cả run 31 (`#40134550329`) **và** run 32 (`#40253195658`, commit docs-only `072e18f`) ⇒ kết quả **tất định**, không phải nhiễu của seed. Bằng chứng đối chiếu bằng script `_verify_run32_invariants.py`.
 
 ### 3.3 Raw payload
 
@@ -329,10 +360,15 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `deploy/dev/evidence/logs/run40134550329/p0-g007-evidence-40134550329/` | artifact CI giải nén (16 entry) |
+| `deploy/dev/evidence/logs/run40253195658/p0-g007-evidence-40253195658/` | **artifact CI mới nhất** (run 32) giải nén — digest `sha256:bc2201a0…` |
+| `deploy/dev/evidence/logs/run40134550329/p0-g007-evidence-40134550329/` | artifact CI run 31 giải nén (16 entry) — digest `sha256:817ec470…` |
+| `deploy/dev/evidence/logs/run40253195658/` | artifact run 32 giải nén (16 entry) |
 | `deploy/dev/evidence/logs/run40134550329/_raw_sec26_activities_4_sites.json` | **raw output 4 đường** + observations + meta (sha256 `13add90d…`) |
 | `deploy/dev/evidence/logs/run40133210954/_raw_sec26_activities_observations.json` | raw output 2 đường (run trung gian) (sha256 `abd9a302…`) |
+| `deploy/dev/evidence/logs/_dl_run40253195658.py` | tải artifact run 32 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40134550329.py`, `_dl_run40133210954.py` | tải artifact + **tự** kiểm digest |
+| `deploy/dev/evidence/logs/_verify_run32_invariants.py` | đối chiếu bất biến gate/probe/FAIL-set giữa **4 run** (29→32) |
+| `deploy/dev/evidence/logs/_verify_final_claims.py` | kiểm chứng 22 claim của báo cáo (4 quan sát, 15 case, gate 99/99/91, FAIL set) |
 | `deploy/dev/evidence/logs/_read_observations_4path.py`, `_read_observations.py` | đọc observations + payload raw |
 | `deploy/dev/evidence/logs/_extract_raw_paths.py`, `_enumerate_leak_sites.py` | tách 4 đường + so sánh |
 | `deploy/dev/evidence/logs/_verify_and_persist_4path.py`, `_verify_merge_sha.py` | xác minh merge SHA chứa commit của T1B; lưu raw evidence |
