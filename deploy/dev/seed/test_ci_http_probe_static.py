@@ -725,6 +725,264 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 		return "\n".join(lines[start:])
 
 
+class TestProbeDownloadMeasurement(unittest.TestCase):
+	"""H-RFC-2 — khả năng tải file phải được **đo**, và **không** rò nội dung.
+
+	Yêu cầu:
+	- Có case đo tải file từ URL lấy từ payload `get_activities`.
+	- **KHÔNG** ghi bytes/nội dung file vào artifact (chỉ đặc trưng).
+	- **KHÔNG** assert cứng "phải tải được" / "phải bị chặn" (kết luận thuộc Owner).
+	"""
+
+	@classmethod
+	def setUpClass(cls):
+		cls.source, cls.tree = load_probe()
+		cls.check_ids = all_check_ids(cls.tree)
+
+	def test_case_exists(self):
+		self.assertIn(
+			"sec26-activities-download-in-scope",
+			self.check_ids,
+			"phải có case đo khả năng tải file (H-RFC-2)",
+		)
+
+	def test_uses_private_file_url_prefix(self):
+		"""Case tải phải dùng đúng tiền tố đường private của Frappe."""
+		self.assertIn("DOWNLOAD_PATH_PREFIX", self.source)
+		self.assertIn('DOWNLOAD_PATH_PREFIX = "/private/files/"', self.source)
+
+	def test_does_not_assert_download_outcome(self):
+		"""KHÔNG được assert cứng 200/403 cho case tải — chỉ quan sát."""
+		call = check_call(self.tree, "sec26-activities-download-in-scope")
+		self.assertIsNotNone(call)
+		rendered = ast.unparse(call)
+		for forbidden in ("== 200", "== 403", "in (401, 403)"):
+			self.assertNotIn(
+				forbidden,
+				rendered,
+				f"case tải file không được assert cứng kết quả: {forbidden}",
+			)
+
+	def test_does_not_write_raw_bytes_to_artifact(self):
+		"""Nội dung file tải về **KHÔNG** được ghi vào evidence.
+
+		Kiểm ở tầng **AST**: trong dict `entry` của `download_bytes`, giá trị
+		`body` phải là **hằng chuỗi rỗng** — không được là biến chứa bytes
+		(`payload`, `response_text`, …) và không được là `.decode(...)`.
+		"""
+		func = None
+		for node in ast.walk(self.tree):
+			if isinstance(node, ast.FunctionDef) and node.name == "download_bytes":
+				func = node
+				break
+		self.assertIsNotNone(func, "phải có hàm `download_bytes` tải file an toàn")
+		rendered = ast.unparse(func)
+		self.assertIn("content_sha256", rendered, "phải ghi sha256 thay vì nội dung")
+		self.assertIn("content_length", rendered, "phải ghi độ dài thay vì nội dung")
+
+		# `entry` là dict được gán trong hàm — tìm dict có key "body".
+		body_values: list[ast.AST] = []
+		for node in ast.walk(func):
+			if not isinstance(node, ast.Dict):
+				continue
+			for key, value in zip(node.keys, node.values):
+				if (
+					isinstance(key, ast.Constant)
+					and key.value == "body"
+					and isinstance(value, ast.Constant)
+					and value.value == ""
+				):
+					body_values.append(value)
+		self.assertTrue(
+			body_values,
+			"entry của download_bytes phải có `body` là hằng chuỗi rỗng",
+		)
+		# Ngược lại: KHÔNG được gán `body` = biến chứa bytes.
+		for node in ast.walk(func):
+			if not isinstance(node, ast.Dict):
+				continue
+			for key, value in zip(node.keys, node.values):
+				if not (isinstance(key, ast.Constant) and key.value == "body"):
+					continue
+				self.assertIsInstance(
+					value,
+					ast.Constant,
+					"`body` của download_bytes phải là hằng rỗng, không gán bytes thô",
+				)
+
+	def test_download_bytes_helper_never_assigns_payload_to_body(self):
+		"""Không được gán `payload` (bytes file) vào bất kỳ key `body` nào."""
+		func = None
+		for node in ast.walk(self.tree):
+			if isinstance(node, ast.FunctionDef) and node.name == "download_bytes":
+				func = node
+				break
+		self.assertIsNotNone(func)
+		for node in ast.walk(func):
+			if not isinstance(node, ast.Assign):
+				continue
+			for target in node.targets:
+				if not (isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)):
+					continue
+				if target.slice.value != "body":
+					continue
+				self.fail(
+					"download_bytes không được gán vào key `body` (bytes file thô): %s"
+					% ast.unparse(node)
+				)
+
+	def test_download_records_sha256_and_length(self):
+		"""Phải ghi `content_sha256` + `content_length` (đặc trưng không nhận diện)."""
+		func = None
+		for node in ast.walk(self.tree):
+			if isinstance(node, ast.FunctionDef) and node.name == "download_bytes":
+				func = node
+				break
+		self.assertIsNotNone(func)
+		rendered = ast.unparse(func)
+		self.assertRegex(
+			rendered,
+			r"content_sha256.*hashlib\.sha256",
+			"phải tính sha256 của bytes tải về",
+		)
+		self.assertRegex(
+			rendered,
+			r"content_length.*len\(payload\)",
+			"phải ghi độ dài bytes tải về",
+		)
+
+	def test_download_uses_url_from_payload(self):
+		"""URL tải phải lấy từ **payload thật** của `get_activities`."""
+		self.assertIn("observed_private_url", self.source)
+		self.assertRegex(
+			self.source,
+			r'observed_private_url\s*=\s*message_private\.get\(\s*"file_url"\s*\)',
+			"URL tải phải lấy từ entry file private trong payload",
+		)
+
+	def test_file_docname_identifier_is_redacted(self):
+		"""Identifier của File (docname) **không** được ghi vào artifact.
+
+		`name` của hồ sơ File là **file identifier**. Dict giống hồ sơ File
+		(có `file_name`) ⇒ phải che `name`; dict khác (vd CRM Lead) ⇒ giữ nguyên
+		để reviewer còn đối chiếu được tài liệu seed giả.
+		"""
+		self.assertRegex(
+			self.source,
+			r'is_file_record\s*=\s*"file_name" in value',
+			"phải nhận diện dict giống hồ sơ File để che identifier",
+		)
+		self.assertRegex(
+			self.source,
+			r'str\(k\)\.lower\(\)\s*==\s*"name"',
+			"phải che `name` của hồ sơ File",
+		)
+
+
+class TestProbeOutOfScopeMeasurement(unittest.TestCase):
+	"""H-RFC-4 — kịch bản ngoài scope phải được đo ở **tầng HTTP**."""
+
+	@classmethod
+	def setUpClass(cls):
+		cls.source, cls.tree = load_probe()
+		cls.check_ids = all_check_ids(cls.tree)
+
+	def test_case_exists(self):
+		"""Case ngoài scope là **quan sát** ⇒ không dùng `check()`.
+
+		Đây là **cố ý**: kịch bản ngoài scope chỉ **đo** hành vi (status /
+		exc_type), không phải tiêu chí PASS/FAIL của gate. Vì vậy case id xuất
+		hiện trong `request(...)` + `observations`, **không** trong `check()`.
+		"""
+		self.assertIn("sec26-activities-out-of-scope", self.source)
+		self.assertRegex(
+			self.source,
+			r'request\(\s*"sec26-activities-out-of-scope"',
+			"phải có request() cho case ngoài scope",
+		)
+		self.assertNotIn(
+			"sec26-activities-out-of-scope",
+			all_check_ids(self.tree),
+			"case ngoài scope không được dùng check() cứng (chỉ quan sát)",
+		)
+
+	def test_uses_distinct_out_of_scope_actor(self):
+		"""Actor ngoài scope phải **khác** actor in-scope."""
+		consts = load_env_consts()
+		out_of_scope = consts.get("OUT_OF_SCOPE_USER", "")
+		in_scope = consts.get("SEC16_USER", "")
+		self.assertTrue(out_of_scope)
+		self.assertTrue(in_scope)
+		self.assertNotEqual(out_of_scope, in_scope, "actor ngoài scope phải khác actor in-scope")
+		self.assertNotEqual(out_of_scope, "Administrator", "actor ngoài scope phải non-system")
+
+	def test_out_of_scope_case_calls_same_endpoint(self):
+		"""Case ngoài scope phải gọi **cùng** endpoint `get_activities`."""
+		found = False
+		for node in ast.walk(self.tree):
+			if (
+				isinstance(node, ast.Call)
+				and isinstance(node.func, ast.Name)
+				and node.func.id == "request"
+				and node.args
+				and isinstance(node.args[0], ast.Constant)
+				and node.args[0].value == "sec26-activities-out-of-scope"
+			):
+				self.assertIn("activities_path", ast.unparse(node))
+				found = True
+		self.assertTrue(found, "không tìm thấy request() cho case ngoài scope")
+
+	def test_does_not_hardcode_permission_error(self):
+		"""KHÔNG được assert cứng `PermissionError` — kết luận thuộc Owner.
+
+		Case ngoài scope chỉ **đo** (status/exc_type) rồi ghi observation.
+		"""
+		call = check_call(self.tree, "sec26-activities-out-of-scope")
+		self.assertIsNone(
+			call,
+			"case ngoài scope không được dùng check() cứng — chỉ ghi observation",
+		)
+		self.assertIn("observations", self.source)
+		self.assertRegex(
+			self.source,
+			r'"id"\s*:\s*"sec26-activities-out-of-scope"',
+			"phải ghi observation cho kịch bản ngoài scope",
+		)
+
+	def test_out_of_scope_observation_records_status(self):
+		"""Observation phải ghi HTTP status + exc_type để reviewer thấy hành vi thật."""
+		self.assertRegex(
+			self.source,
+			r'"http_status"\s*:\s*out_of_scope_activities\["status"\]',
+			"observation phải ghi HTTP status thật",
+		)
+		self.assertRegex(
+			self.source,
+			r'"exc_type"\s*:\s*out_of_scope_exc',
+			"observation phải ghi exc_type thật",
+		)
+
+
+class TestProbeRedactionCoversRequestUrl(unittest.TestCase):
+	"""`request.url` cũng phải qua redact — URL private có identifier file."""
+
+	def test_request_url_is_redacted(self):
+		source, _ = load_probe()
+		self.assertRegex(
+			source,
+			r'"url"\s*:\s*redact_text\(url\)',
+			"request.url phải qua redact_text để không lộ identifier file",
+		)
+
+	def test_download_helper_redacts_url(self):
+		source, _ = load_probe()
+		self.assertIn(
+			'"url": redact_text(url)',
+			source,
+			"download_bytes cũng phải redact URL trước khi ghi vào artifact",
+		)
+
+
 class TestProbeSyntax(unittest.TestCase):
 	def test_probe_parses(self):
 		source, tree = load_probe()
