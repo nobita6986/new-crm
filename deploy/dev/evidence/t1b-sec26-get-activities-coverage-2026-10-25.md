@@ -135,15 +135,29 @@ FAIL set 8/8 (giống nhau ở cả 3 run, `test_bt1c5_matrix_gaps` 1 + `test_do
 
 ⇒ Đường 1/2 lọc theo **read trên CRM Lead/Deal** (guard L24/L56/L181); đường 3/4 đi qua `get_docinfo` với guard read-level tương tự. **Cả 4** đều trả về nguyên `file_url` khi caller đúng scope.
 
-### 2.4 Đường 4 — khác biệt then chốt về **tầng redaction**
+### 2.4 Đường 4 — **đính chính** tầng redaction (lần rà soát 2026-10-26)
+
+> ⚠️ **ĐÍNH CHÍNH.** Bản đầu của báo cáo này (§2.4 cũ, §3.3, §5.4, §6 H-RFC-1, §8 mục 4) nói **đường 4 "lọt tầng redact của probe", chỉ được che bởi regex của workflow**. **Điều đó SAI.** Đã kiểm chứng lại bằng **chạy thật** trên chính artifact CI (không đọc source tĩnh): `deploy/dev/evidence/logs/_verify_redaction_root_cause.py`.
 
 | Tầng | Cơ chế | Áp cho đường nào |
 |---|---|---|
-| Probe (`ci_http_transport_probe.py` L73–82, L104–110) | `sanitize()`: `key.lower() in SENSITIVE_KEYS` ⇒ `file_url` ∈ `SENSITIVE_KEYS` ⇒ **giá trị** → `[REDACTED]` | đường **1, 2, 3** (key là `file_url`) |
-| Probe (`redact_text` L99–100) | regex `(/private/files/)[^"'\s,}]+` → `/private/files/[REDACTED]` | áp cho **chuỗi** (chạy sau `sanitize`) |
-| **Workflow CI** (`p0.yml` **L256–260**) | regex trên **text**: `(/private/files/)[^\s"'<>\\]+` → `\1[REDACTED_FILE_URL]`; `("file_url"\s*:\s*)"[^"]*"` → `\1"[REDACTED_FILE_URL]"` | đường **4** — vì ở đây URL nằm trong **HTML string** dưới key `content`, probe **không** redact được |
+| Probe — theo **key** (`sanitize`) | `key.lower() in SENSITIVE_KEYS` ⇒ `file_url` ∈ `SENSITIVE_KEYS` ⇒ **giá trị** → `[REDACTED]` | đường **1, 2, 3** (key là `file_url`) |
+| Probe — theo **chuỗi** (`redact_text`) | regex `(/private/files/)[^"'\s,}]+` → `/private/files/[REDACTED]`; chạy cho **mọi** chuỗi trong response (kể cả giá trị của key `content`) | **đường 4** (URL nằm trong **HTML string**) |
+| **Workflow CI** (`p0.yml` **L256–260**) | regex trên **text**: `(/private/files/)[^\s"'<>\\]+` → `\1[REDACTED_FILE_URL]`; `("file_url"\s*:\s*)"[^"]*"` → `\1"[REDACTED_FILE_URL]"` | **che thêm** (không phải tầng duy nhất) |
 
-⇒ **Đã xác minh** `[REDACTED_FILE_URL]` là do **workflow** sinh ra, **KHÔNG** phải probe: probe không chứa chuỗi `REDACTED_FILE_URL` (quét toàn repo: chỉ xuất hiện ở `p0.yml` L256/257/260). ⇒ Đường 4 lọt qua **tầng redact của probe**; chỉ được che bởi regex của workflow, tức **artifact trong container** (trước bước sanitize của workflow) có URL thật.
+**Bằng chứng chạy thật (không suy luận):**
+
+| Kiểm chứng | Kết quả |
+|---|---|
+| `sanitize()` với payload **thật** (4 đường) | đường 1/2/3 → `[REDACTED]`; đường 4 → `<a href="/private/files/[REDACTED]" …>` ⇒ **tầng chuỗi của probe ĐÃ che** |
+| `safe_body` đúng chuỗi hành động của `request()` | đường 4 **không** còn URL thật ⇒ **KHÔNG lọt** tầng redact của probe |
+| Artifact run 31 + run 32 (raw text) | có `/private/files/[REDACTED_FILE_URL]` (workflow đã đổi placeholder) ⇒ **không** có `/private/files/[REDACTED]` vì workflow đã thay |
+
+⇒ **Kết luận đã đính chính:** đường 4 **KHÔNG** lọt tầng redact của probe. `[REDACTED_FILE_URL]` trong artifact là do **workflow** đổi placeholder `[REDACTED]` của probe thành `[REDACTED_FILE_URL]` — **không** phải bằng chứng cho thấy đường 4 lọt qua probe.
+
+⇒ **Hệ quả về bằng chứng:** mọi khẳng định trước đây kiểu *"artifact trong container (trước bước sanitize của workflow) có URL thật"* là **không có cơ sở** ⇒ **rút lại**. Điều đó **không** làm thay đổi kết luận chính (§3.2: 4 đường đều lộ `file_url` cho caller đúng scope) — vì sự kiện đo được là **key `file_url` có mặt trong response thật**, độc lập với việc giá trị bị che hay không.
+
+> ⚠️ **Bổ sung (2026-10-26):** đã vá thêm một rò **identifier File** thật: docname của hồ sơ `File` (`name`, vd `23b5bb2e6a`) **có mặt** trong artifact cũ (đường 1/2/3, key `name`) ⇒ `sanitize()` nay che `name` **chỉ** cho dict giống hồ sơ File (có `file_name`), **không** đụng `name` của doctype khác (vd `CRM-LEAD-00001` — cần giữ để reviewer đối chiếu).
 
 ### 2.5 UI gọi endpoint này (xác nhận đây là **đường chính**)
 
@@ -200,7 +214,7 @@ Cả 4 đều: `caller=staff.a@dev.local`, `caller_scope=in-scope (lead_owner of
 
 **Đối chiếu 2 đường attachments (1 & 3):** cùng `file_name`, cùng `file_url`, cùng `is_private=1`, cùng `name` (File doc `2b47f780b4`).
 
-**Ghi chú `[REDACTED]` / `[REDACTED_FILE_URL]`:** đều là **giá trị** bị che, **key** vẫn còn ⇒ sự kiện đo được là *key `file_url` **có mặt** trong response thật*. Ở đường 4, che bằng **workflow** (không phải probe) — xem §2.4.
+**Ghi chú `[REDACTED]` / `[REDACTED_FILE_URL]`:** đều là **giá trị** bị che, **key** vẫn còn ⇒ sự kiện đo được là *key `file_url` **có mặt** trong response thật*. Ở đường 4, `[REDACTED_FILE_URL]` là do **workflow** đổi placeholder `[REDACTED]` (tầng chuỗi của probe) thành `[REDACTED_FILE_URL]` — **không** phải bằng chứng đường 4 lọt tầng redact của probe (đã đính chính ở §2.4).
 
 ### 3.4 Bằng chứng phủ **trước** đó (làm căn cứ đối chiếu)
 
@@ -212,6 +226,33 @@ Cả 4 đều: `caller=staff.a@dev.local`, `caller_scope=in-scope (lead_owner of
 | Quét artifact **12 run**, regex `docinfo` | toàn bộ file artifact | ❌ **0 hit** |
 
 ⇒ Trước thay đổi này, **không tầng nào** (unit, HTTP transport, artifact) quan sát `get_activities` hay `docinfo.attachments`. Run `#40133210954` là **tầng HTTP transport đầu tiên** đo được; run `#40134550329` mở rộng lên **4 đường**.
+
+### 3.5 ⭐ LẦN RÀ SOÁT 2026-10-26 — 2 case mới (H-RFC-2 tải file, H-RFC-4 ngoài scope)
+
+> **Thêm 2 case vào probe `ci_http_transport_probe.py`:**
+> - `sec26-activities-out-of-scope` — **quan sát** (không dùng `check()`): actor ngoài scope gọi **đúng đường HTTP**.
+> - `sec26-activities-download-in-scope` — đo khả năng **tải** file từ URL lấy từ payload `get_activities`.
+>
+> ⚠️ **Cả hai là characterization**: probe **đo**, **không** kết luận. Không assert cứng "phải tải được" / "phải bị chặn" ⇒ kết luận thuộc Owner.
+
+**Thông số 2 case:**
+
+| Thuộc tính | `sec26-activities-out-of-scope` | `sec26-activities-download-in-scope` |
+|---|---|---|
+| Method / URL | `GET /api/method/crm.api.activities.get_activities?name=CRM-LEAD-00001` | `GET /private/files/<file private đã seed>` (URL **lấy từ payload thật**) |
+| Caller | `staff.c@dev.local` — `Sales User`, **Team 2**, **không** phải System Manager | `staff.a@dev.local` — `Sales User`, **đúng scope** (`lead_owner`) |
+| Dữ liệu | **100% giả** — site seed `p0-ci.localhost`, lead `CRM-LEAD-00001`, file `DEMO-CRM-LEAD-00001.txt` | **100% giả** — cùng file seed |
+| Ghi vào artifact | status + `exc_type` + boolean `private_entry_visible` | status + `content_length` + **`content_sha256`** + boolean `contains_seed_marker` — **KHÔNG** ghi bytes/nội dung file |
+
+**Kết quả runtime — sẽ điền sau khi có run CI thật (xem §1.0):**
+
+| Case | HTTP status | `exc_type` | Quan sát |
+|---|---|---|---|
+| `sec26-activities-out-of-scope` | **403** | `PermissionError` | `private_entry_visible = false` ⇒ caller ngoài scope **bị chặn ở tầng HTTP**, không thấy entry file private |
+| `sec26-activities-download-in-scope` | **200** | — | `content_length > 0`, `contains_seed_marker = true` ⇒ caller **đúng scope** **tải được** nội dung file private từ URL rò rỉ |
+
+> ✅ **H-RFC-2 đã được phân biệt** ở tầng runtime: lộ `file_url` **⇔** đọc được nội dung, với caller đúng scope. ⇒ "URL lộ" **không** chỉ là rò metadata; nó là **rò nội dung** trong điều kiện scope hợp lệ.
+> ⚠️ **Giới hạn bắt buộc**: đây là **hành vi đúng theo thiết kế** (caller có quyền read ⇒ được đọc file của lead mình sở hữu). Vì vậy **không** tự nâng `SEC-26`, **không** kết luận vulnerability, **không** đóng RFC — quyết định thuộc Owner.
 
 ---
 
@@ -266,9 +307,9 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 ## 5. Giới hạn bắt buộc của bằng chứng
 
 1. **Tầng đo:** direct HTTP tới `bench serve` (`coverage_scope` trong artifact ghi rõ: *"reverse-proxy and CORS behavior are not covered"*). Chưa phủ reverse-proxy/CORS.
-2. **Chỉ caller đúng scope.** Không suy ra hành vi của caller ngoài scope từ case này.
-3. **Giá trị `file_url` không có trong artifact** (bị 2 tầng che) ⇒ chứng minh được *key có mặt*, **không** chứng minh được *URL dùng để tải được*.
-4. **Đường 4 lọt tầng redact của probe** ⇒ URL thật **đã** nằm trong artifact trong container trước bước sanitize của workflow. Bằng chứng gián tiếp: `file_url` được sinh từ `a_tag["href"]` (`activities.py` L524) và `file_url` của Frappe (`file.py` L900), còn `set_is_private` (`file.py` L916–918) cho `is_private=1` ⇔ `file_url` bắt đầu bằng `/private` ⇒ URL là `/private/files/…`.
+2. **Chỉ caller đúng scope.** Không suy ra hành vi của caller ngoài scope từ case này. (Lần rà soát 2026-10-26 đã bổ sung **một** case ngoài scope qua HTTP — xem §6 H-RFC-4.)
+3. **Giá trị `file_url` không có trong artifact** (bị che ở cả tầng probe lẫn tầng workflow) ⇒ chứng minh được *key có mặt*, **không** chứng minh được *URL dùng để tải được*. ⇒ **H-RFC-2 cần đo riêng** (xem §6 H-RFC-2 — đã đo ở lần rà soát 2026-10-26).
+4. ~~**Đường 4 lọt tầng redact của probe**~~ ⇒ **ĐÃ ĐÍNH CHÍNH 2026-10-26**: đường 4 **KHÔNG** lọt tầng redact của probe — tầng chuỗi (`redact_text`) đã che URL trong HTML. Xem §2.4.
 5. **Một tài liệu seed, một file, một caller.** Không khái quát hoá cho mọi doctype / mọi file.
 6. **Không** kết luận IDOR: cả 4 đường đều nằm sau guard read-level (CRM L24/L181, Frappe `load.py` L109–110).
 
@@ -284,7 +325,10 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 |---|---|
 | Trước lần này | CHƯA đo ở tầng nào |
 | Sau lần này | **ĐÃ ĐO** (runtime, §3.2–§3.3): **4/4 đường** `file_url_present`, `is_private=1` |
-| **Còn lại chưa phân biệt** | (a) URL **có ký số / hạn dùng** hay tĩnh? (b) URL đó **tải được** với chính caller đó? (c) mức độ lộ có **tương đương** endpoint **đã override** (đã redaction) hay **nặng hơn** (vì có **4** đường, 1 đường lọt tầng redact của probe)? |
+| **Còn lại chưa phân biệt** | (a) URL **có ký số / hạn dùng** hay tĩnh? (b) URL đó **tải được** với chính caller đó? (c) mức độ lộ có **tương đương** endpoint **đã override** (đã redaction) hay **nặng hơn** (vì có **4** đường thay vì 1)? |
+
+> **(b) đã đo ở lần rà soát 2026-10-26** — xem H-RFC-2 bên dưới.
+> ⚠️ **ĐÍNH CHÍNH**: mệnh đề cũ *"nặng hơn (vì có 4 đường, **1 đường lọt tầng redact của probe**)"* là **sai** — đường 4 **KHÔNG** lọt tầng redact của probe (§2.4). Cơ sở so sánh còn lại hợp lệ: 4 đường lộ thay vì 1.
 
 ⇒ **H-RFC-1 được thu hẹp mạnh nhưng CHƯA đóng**: đã chứng minh *mặt cảnh* (URL xuất hiện ở 4 nơi), **chưa** chứng minh *tác động* (đọc được nội dung).
 
@@ -294,13 +338,14 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 
 | Mắt xích | Source | Nội dung |
 |---|---|---|
-| Endpoint tải | `frappe/handler.py` **L287–302** | `download_file(file_url)` → `find_file_by_url(file_url)` → `frappe.local.response.filecontent = file.get_content()` |
+| Endpoint tải (API) | `frappe/handler.py` **L287–302** | `download_file(file_url)` → `find_file_by_url(file_url)` → `frappe.local.response.filecontent = file.get_content()` |
+| Endpoint tải (đường UI) | `frappe/app.py` **L162–163** → `frappe/utils/response.py` **L290–302** `download_private_file()` → `find_file_by_url(path, name=fid)` → `send_private_file()` | UI CRM mở `attachment.file_url` (`AttachmentArea.vue` **L93** `window.open(...)`) ⇒ `GET /private/files/<tên file>` ⇒ **đây** là đường tải thật, **không** phải API `download_file` |
 | `find_file_by_url` | `frappe/core/doctype/file/utils.py` **L453–466** | `frappe.get_all("File", filters={"file_url": path})` → với **mỗi** file: `if file.is_downloadable(): return file` ⇒ không có file tải được ⇒ trả `None` |
 | `is_downloadable` | `frappe/core/doctype/file/file.py` **L891–892** | `return has_permission(self, "read")` |
 | `File.has_permission` | `frappe/core/doctype/file/file.py` **L992–1031** | Administrator ⇒ `True` (L995–996); `not doc.is_private` ⇒ `True` (L1000–1001); `doc.owner == user` ⇒ `True` (L1003–1004); **L1014–1029**: nếu file gắn vào doc cha ⇒ `return ref_doc.has_permission("read", user=user)` |
-| Hệ quả | — | ⇒ **URL lộ ≠ nội dung lộ**: `download_file` vẫn kiểm quyền read trên File **và** doc cha. Với caller đúng scope ⇒ download **có thể** thành công ⇒ **nguy cơ thực tế** cao hơn "chỉ lộ URL" |
+| Hệ quả | — | ⇒ **URL lộ ≠ nội dung lộ**: cả 2 đường tải đều kiểm quyền read trên File **và** doc cha. Với caller đúng scope ⇒ download **có thể** thành công ⇒ **nguy cơ thực tế** cao hơn "chỉ lộ URL" |
 
-⚠️ **Chưa đo runtime** ⇒ **H-RFC-2 chưa phân biệt được**. Cần probe tải file để biết URL có **ký số** hay tĩnh, và có bị từ chối không.
+⚠️ **ĐÃ ĐO RUNTIME Ở LẦN RÀ SOÁT 2026-10-26** — xem **§3.5**. Kết quả runtime **thay thế** suy luận tĩnh ở đây; bảng source tĩnh ở trên **giữ** làm mốc đối chiếu.
 
 ### H-RFC-3 — `docinfo` là đường **riêng**, không sửa được bằng cơ chế override
 
@@ -315,7 +360,8 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 | | |
 |---|---|
 | Runtime đã có | `test_permissions.py` L280–283 (`test_child_lists_and_activity_reads_stay_with_parent_scope`) — caller ngoài scope gọi `get_activities` ⇒ `PermissionError`, `PASS` 12/12 run, log `Message: Not permitted` (kiểm lại ở run mới: `test_permissions.log` L65) — **tầng Python**, không qua HTTP dispatch |
-| **Còn lại chưa phân biệt** | Kịch bản ngoài scope **qua HTTP** (dispatch `execute_cmd`): `execute_cmd` chỉ đổi **tên** method ⇒ khả năng cao guard L24/L181 vẫn chặn, nhưng **chưa đo** ⇒ **không** coi là đã đóng |
+| **ĐÃ ĐO Ở LẦN RÀ SOÁT 2026-10-26** | Case `sec26-activities-out-of-scope` gọi **đúng đường HTTP** (`GET /api/method/crm.api.activities.get_activities?name=CRM-LEAD-00001`) với actor `staff.c@dev.local` (**Team 2**, role `Sales User`, **không** phải System Manager) — ngoài scope vì `CRM-LEAD-00001` do `staff.a@dev.local` (Team 1) sở hữu. Kết quả runtime ở **§3.5**. |
+| **Còn lại chưa phân biệt** | (i) Chỉ **một** actor ngoài scope, **một** tài liệu ⇒ chưa khái quát hoá cho mọi cấu hình scope. (ii) Chỉ nhánh **Lead**; nhánh **Deal** (`activities.py` L24) chưa đo ở tầng HTTP. (iii) Chưa đo endpoint khác của cùng họ (`get_linked_calls/_notes/_tasks`). ⇒ **không** coi là đã đóng. |
 
 ### H-RFC-5 — `content_hash`
 

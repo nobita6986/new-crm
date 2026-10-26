@@ -23,6 +23,7 @@ assertion SEC-16 đều đi qua HTTP endpoint.
 from __future__ import annotations
 
 import ast
+import hashlib
 import http.cookiejar
 import json
 import os
@@ -45,6 +46,19 @@ PRIVATE_FILE_NAME = f"DEMO-{LEAD_NAME}.txt"
 # wrapper redaction. Khai báo ở module scope để có thể kiểm chứng tĩnh.
 ACTIVITIES_ENDPOINT = "/api/method/crm.api.activities.get_activities"
 
+# --- SEC-26 (H-RFC-2): khả năng tải file -------------------------------------
+# `file_url` rò rỉ từ `get_activities` trỏ tới `/private/files/<tên file>`.
+# Đường HTTP **thật** mà UI dùng: `AttachmentArea.vue` L93
+# `window.open(attachment.file_url, '_blank')` ⇒ `GET /private/files/...`
+# → `frappe/app.py` L162-163 → `download_private_file()`
+# → `find_file_by_url()` → `File.is_downloadable()` → `has_permission(file, "read")`.
+# Đo bằng **chính** caller in-scope ⇒ trả lời câu hỏi của H-RFC-2: lộ URL có
+# đọc được nội dung hay không.
+DOWNLOAD_PATH_PREFIX = "/private/files/"
+# Marker trong nội dung file seed (**giả**) — dùng để chứng minh bytes tải về
+# là đúng file seed. **KHÔNG** ghi nội dung thô vào artifact.
+SEED_CONTENT_MARKER = b"DEMO"
+
 # --- SEC-16 permlevel probe -------------------------------------------------
 # Field synthetic có `permlevel=1` trên CRM Lead. `permlevel > 0` nghĩa là field
 # chỉ đọc được bởi user có System Manager role; mọi user khác phải không thấy.
@@ -53,6 +67,12 @@ SEC16_SENTINEL = "RESTRICTED-SEC-16-SENTINEL"
 # `staff.a@dev.local` có role `Sales User` (không phải System Manager) và là
 # `lead_owner` của CRM-LEAD-00001 ⇒ non-system caller có quyền đọc lead.
 SEC16_USER = "staff.a@dev.local"
+
+# Actor **ngoài scope** cho H-RFC-4: `staff.c@dev.local` thuộc Team 2
+# (`seed_demo.py` L30) trong khi `CRM-LEAD-00001` do `staff.a@dev.local`
+# (Team 1) sở hữu ⇒ không có quyền read ⇒ guard của `activities.py` L181
+# (và `crm_cskh.permissions.lead_has_permission` L104-105) phải chặn.
+OUT_OF_SCOPE_USER = "staff.c@dev.local"
 
 
 def seed_password_from_source(path: Path) -> str:
@@ -105,7 +125,20 @@ def sanitize(value: object, key: str = "") -> object:
 	if key.lower() in SENSITIVE_KEYS:
 		return "[REDACTED]"
 	if isinstance(value, dict):
-		return {str(k): sanitize(v, str(k)) for k, v in value.items()}
+		# Identifier của **File** (`name` = docname File, vd `23b5bb2e6a`) là
+		# **file identifier** ⇒ không được ghi vào artifact. Chỉ áp cho dict
+		# **giống hồ sơ File** (có `file_name`), để **không** đụng tới `name`
+		# của doctype khác (vd `CRM-LEAD-00001` — định danh tài liệu seed giả,
+		# cần giữ để reviewer đối chiếu).
+		is_file_record = "file_name" in value
+		return {
+			str(k): (
+				"[REDACTED]"
+				if is_file_record and str(k).lower() == "name"
+				else sanitize(v, str(k))
+			)
+			for k, v in value.items()
+		}
 	if isinstance(value, list):
 		return [sanitize(item) for item in value]
 	if isinstance(value, str):
@@ -211,7 +244,10 @@ def request(
 		"id": case_id,
 		"request": {
 			"method": method,
-			"url": url,
+			# `url` có thể chứa **đường dẫn file private** (`/private/files/...`)
+			# khi đo khả năng tải file ⇒ phải đi qua `redact_text` để **không**
+			# ghi identifier file thật vào artifact.
+			"url": redact_text(url),
 			"headers": safe_request_headers,
 			"cookie": "[REDACTED]" if has_cookies else "",
 			"body": safe_request_body,
@@ -237,6 +273,86 @@ def request(
 		"text": response_text,
 		"entry": entry,
 		"transport_error": transport_error,
+	}
+
+
+def download_bytes(
+	case_id: str,
+	opener: urllib.request.OpenerDirector,
+	path: str,
+) -> dict[str, object]:
+	"""Tải nội dung file (bytes thô) — **KHÔNG** ghi bytes vào artifact.
+
+	Vì sao không dùng `request()`:
+	`request()` đưa **toàn bộ** body response vào `entry["response"]["body"]`
+	(sau khi sanitize). Nội dung file tải về là **bytes nhị phân** (không phải
+	JSON) ⇒ `redact_text()` không che được ⇒ **nguy cơ ghi nội dung file thật**
+	vào artifact. Ở đây ta chỉ giữ:
+	  - HTTP status
+	  - **độ dài** byte tải về
+	  - **sha256** của bytes (để so sánh giữa 2 lần tải mà không lộ nội dung)
+	  - có chứa marker nội dung seed (**giả**) hay không
+	  - `Content-Type` / `Content-Disposition`
+	⇒ Đủ để trả lời "URL có tải được không" mà **không** rò nội dung.
+	"""
+	url = BASE_URL + path
+	request_headers = {
+		"Accept": "*/*",
+		"X-Frappe-Site-Name": SITE_NAME,
+	}
+	req = urllib.request.Request(url, headers=request_headers, method="GET")
+	status: int | None = None
+	response_headers: dict[str, str] = {}
+	payload = b""
+	transport_error = None
+	try:
+		with opener.open(req, timeout=15) as response:
+			status = response.status
+			response_headers = dict(response.headers.items())
+			payload = response.read()
+	except urllib.error.HTTPError as error:
+		status = error.code
+		response_headers = dict(error.headers.items()) if error.headers else {}
+		payload = error.read()
+	except (urllib.error.URLError, TimeoutError, OSError) as error:
+		transport_error = type(error).__name__
+
+	for key in list(response_headers):
+		if key.lower() in {"set-cookie", "authorization", "x-frappe-csrf-token"}:
+			response_headers[key] = "[REDACTED]"
+
+	entry: dict[str, object] = {
+		"id": case_id,
+		"request": {
+			"method": "GET",
+			# Đường dẫn private ⇒ che identifier file trước khi ghi vào artifact.
+			"url": redact_text(url),
+			"headers": {"Accept": "*/*", "X-Frappe-Site-Name": SITE_NAME},
+			"cookie": "[REDACTED]",
+			"body": "",
+		},
+		"response": {
+			"status": status,
+			"headers": sanitize(response_headers),
+			# **KHÔNG** ghi body thô — chỉ ghi đặc trưng không nhận diện được.
+			"body": "",
+			"content_length": len(payload),
+			"content_sha256": hashlib.sha256(payload).hexdigest() if payload else "",
+			"content_type": response_headers.get("Content-Type", ""),
+			"exc_type": None,
+		},
+		"transport_error": transport_error,
+	}
+	records.append(entry)
+	write_evidence()
+	return {
+		"status": status,
+		"entry": entry,
+		"transport_error": transport_error,
+		"content_length": len(payload),
+		"content_sha256": hashlib.sha256(payload).hexdigest() if payload else "",
+		# Marker nội dung seed (**giả**) — boolean, không ghi bytes.
+		"contains_seed_marker": SEED_CONTENT_MARKER in payload,
 	}
 
 
@@ -696,8 +812,18 @@ def run() -> int:
 	# `add_comments` (load.py L150-184) đưa các comment này vào
 	# `docinfo.attachment_logs` (L175-176). Loc quyền của `get_document_comments`
 	# (comment.py L196-209) là theo **comment_type**, KHÔNG theo `is_private` của File.
-	# Ở đây `content` là **chuỗi HTML** ⇒ probe KHÔNG redact (key là `content`,
-	# không nằm trong `SENSITIVE_KEYS`); chỉ regex của workflow CI mới che được.
+	# Ở đây `content` là **chuỗi HTML** ⇒ không nằm trong `SENSITIVE_KEYS`
+	# (key là `content`, không phải `file_url`) ⇒ tầng redact **theo key** không
+	# đụng tới. **Tuy nhiên** tầng redact **theo chuỗi** (`redact_text`, regex
+	# `(/private/files/)[^"'\s,}]+`) **CÓ** che URL nằm trong HTML ⇒ đường này
+	# **KHÔNG** lọt tầng redact của probe.
+	# ⚠️ Đính chính: báo cáo T1B 2026-10-25 §2.4/§5.4 trước đây nói đường 4
+	# "lọt tầng redact của probe, chỉ được che bởi regex của workflow" — điều
+	# đó **SAI**, đã được kiểm chứng lại bằng script chạy trên chính artifact
+	# (`deploy/dev/evidence/logs/_verify_redaction_root_cause.py`).
+	# `[REDACTED_FILE_URL]` trong artifact là do **workflow** đổi placeholder
+	# `[REDACTED]` của probe thành `[REDACTED_FILE_URL]` — **không** phải bằng
+	# chứng đường 4 lọt qua probe.
 	docinfo_attachment_logs = docinfo.get("attachment_logs") if isinstance(docinfo, dict) else None
 	attachment_log_row = next(
 		(
@@ -758,6 +884,139 @@ def run() -> int:
 				"source": "synthetic seeded private attachment (p0-ci.localhost)",
 			}
 		)
+
+	# --- SEC-26 (H-RFC-4): kịch bản NGOÀI scope qua HTTP dispatch ----------
+	#
+	# T1C lần 22c xác nhận ranh giới quyền của `get_activities` ở **tầng Python**
+	# (`test_permissions.py` L280-283 ⇒ `PermissionError`), nhưng **chưa** đo ở
+	# **tầng transport HTTP**. Ở đây ta gọi **đúng endpoint HTTP** với actor
+	# **ngoài scope** để đo hành vi thật của đường dispatch.
+	#
+	# Actor: `staff.c@dev.local` — role `Sales User`, thuộc **Team 2**
+	# (`seed_demo.py` L30), trong khi `CRM-LEAD-00001` (A1) do `staff.a@dev.local`
+	# (Team 1) sở hữu ⇒ **ngoài scope**. `enable_sales_hierarchy=1` nên
+	# `staff.c` (Team 2) **KHÔNG** nằm trong cây con của `staff.a` (Team 1).
+	#
+	# ⚠️ Đây là **quan sát characterization**, KHÔNG phải kết luận:
+	# probe **đo** status/exc_type, **không** assert cứng giá trị ⇒ nếu hành vi
+	# đổi, reviewer thấy ngay trong evidence mà không làm đỏ gate.
+	out_of_scope = login("staffc", OUT_OF_SCOPE_USER, SEED_PASSWORD)
+	out_of_scope_activities = request(
+		"sec26-activities-out-of-scope",
+		out_of_scope,
+		"GET",
+		activities_path,
+	)
+	out_of_scope_json = out_of_scope_activities["json"]
+	out_of_scope_exc = (
+		out_of_scope_json.get("exc_type") if isinstance(out_of_scope_json, dict) else None
+	)
+	# Payload của actor ngoài scope: **không** được chứa entry của file private
+	# đã seed (nếu bị chặn thì không có payload nào).
+	out_of_scope_message = (
+		out_of_scope_json.get("message") if isinstance(out_of_scope_json, dict) else None
+	)
+	out_of_scope_entries: list[object] = []
+	if isinstance(out_of_scope_message, (list, tuple)) and len(out_of_scope_message) == 5:
+		candidate = out_of_scope_message[4]
+		if isinstance(candidate, list):
+			out_of_scope_entries = candidate
+	out_of_scope_leaks = [
+		entry
+		for entry in out_of_scope_entries
+		if isinstance(entry, dict) and entry.get("file_name") == PRIVATE_FILE_NAME
+	]
+	observations.append(
+		{
+			"id": "sec26-activities-out-of-scope",
+			"case": "sec26-activities-out-of-scope",
+			"endpoint": "crm.api.activities.get_activities",
+			"caller": OUT_OF_SCOPE_USER,
+			"caller_scope": "out-of-scope (Team 2; %s do %s sở hữu)" % (LEAD_NAME, SEC16_USER),
+			"document": LEAD_NAME,
+			"http_status": out_of_scope_activities["status"],
+			"exc_type": out_of_scope_exc,
+			"private_entry_visible": bool(out_of_scope_leaks),
+			"observation": (
+				"blocked_with_permission_error"
+				if out_of_scope_exc == "PermissionError"
+				else ("payload_returned" if out_of_scope_activities["status"] == 200 else "other_response")
+			),
+			"source": "synthetic seeded private attachment (p0-ci.localhost)",
+		}
+	)
+
+	# --- SEC-26 (H-RFC-2): khả năng TẢI file từ URL rò rỉ ------------------
+	#
+	# Câu hỏi cần trả lời bằng **runtime**: lộ `file_url` có đồng nghĩa với
+	# **đọc được nội dung file** không?
+	#
+	# Đường tải thật (không phải `download_file` API): UI CRM mở
+	# `attachment.file_url` bằng `window.open(..., '_blank')`
+	# (`AttachmentArea.vue` L93) ⇒ `GET /private/files/<tên file>` ⇒
+	# `frappe/app.py` L162-163 → `download_private_file()` →
+	# `find_file_by_url()` → `File.is_downloadable()` → `has_permission(file,"read")`
+	# ⇒ vẫn có kiểm quyền; câu hỏi là caller **đúng scope** có tải được không.
+	#
+	# URL lấy từ **payload thật** của `get_activities` (đường 1) ⇒ đo đúng
+	# chuỗi rò rỉ, không tự chế path.
+	#
+	# ⚠️ **KHÔNG** ghi bytes/nội dung file vào artifact — chỉ status, độ dài,
+	# sha256 và boolean "có chứa marker seed". `download_bytes()` đảm bảo điều đó.
+	#
+	# ⚠️ Đây là **quan sát characterization**: KHÔNG assert cứng "phải tải được"
+	# hay "phải bị chặn" — kết luận thuộc Owner. Gate chỉ FAIL nếu case **không
+	# chạy được** (transport error) — xem `check()` bên dưới.
+	observed_private_url = message_private.get("file_url") if isinstance(message_private, dict) else None
+	download_status = None
+	download_length = 0
+	download_has_marker = False
+	download_transport_error = "not-attempted"
+	download_response: dict[str, object] = {"entry": {}, "transport_error": "download-url-not-available"}
+	if isinstance(observed_private_url, str) and observed_private_url.startswith(DOWNLOAD_PATH_PREFIX):
+		download_result = download_bytes(
+			"sec26-activities-download-in-scope",
+			staff,
+			observed_private_url,
+		)
+		download_status = download_result["status"]
+		download_length = download_result["content_length"]
+		download_has_marker = download_result["contains_seed_marker"]
+		download_transport_error = download_result["transport_error"]
+		download_response = {
+			"entry": download_result["entry"],
+			"transport_error": download_result["transport_error"],
+		}
+	# Case HTTP **thật**. PASS khi transport chạy được và server **trả lời** —
+	# **không** assert cứng "200" hay "403", vì đó là kết luận thuộc Owner.
+	# Nếu payload không có URL private để tải ⇒ fail-closed (không im lặng bỏ qua).
+	check(
+		"sec26-activities-download-in-scope",
+		download_response,
+		download_status is not None,
+		"private file URL obtained from get_activities is fetched over HTTP",
+	)
+	observations.append(
+		{
+			"id": "sec26-activities-download-in-scope",
+			"case": "sec26-activities-download-in-scope",
+			"endpoint": "GET /private/files/<seeded private file>",
+			"caller": SEC16_USER,
+			"caller_scope": "in-scope (lead_owner of %s)" % LEAD_NAME,
+			"document": LEAD_NAME,
+			"file_name": PRIVATE_FILE_NAME,
+			"http_status": download_status,
+			"transport_error": download_transport_error,
+			"content_length": download_length,
+			"contains_seed_marker": download_has_marker,
+			"observation": (
+				"download_succeeded"
+				if download_status == 200
+				else ("download_denied" if download_status in (401, 403) else "download_other")
+			),
+			"source": "synthetic seeded private attachment (p0-ci.localhost)",
+		}
+	)
 
 	return 1 if failures else 0
 
