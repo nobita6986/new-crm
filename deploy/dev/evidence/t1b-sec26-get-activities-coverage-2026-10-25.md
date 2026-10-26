@@ -1,7 +1,7 @@
 # T1B — Điều tra coverage gap SEC-26: `get_activities` + `docinfo.attachments`
 
 **Vòng:** T1B (theo yêu cầu Owner, sau T1C lần 22b §(7))
-**Ngày:** 2026-10-25 (UTC+7) — **cập nhật 2026-10-26**: thêm §1.0 (run 32 = run mới nhất, sau khi commit báo cáo) + xác nhận không hồi quy
+**Ngày:** 2026-10-25 (UTC+7) — **cập nhật 2026-10-26 (lần 2)**: thêm §1.0 (run 34 = run mới nhất, chứa **2 case SEC-26 mới**), §3.5 (kết quả runtime thật của H-RFC-2 + H-RFC-4), §4.3 (siết test tĩnh), §5 (giới hạn) + xác nhận không hồi quy so với run 32
 **Loại báo cáo:** Điều tra coverage gap — **không** sửa policy/wrapper/assertion/tally, **không** thêm method thứ 100, **không** merge PR.
 **Dữ liệu:** 100% giả (site seed `p0-ci.localhost`), **không** dùng dữ liệu thật.
 
@@ -13,17 +13,66 @@ Runtime characterization **đã thu được**: caller **đúng scope** nhận `
 
 ⚠️ **Phát hiện mới so với T1C lần 22b:** T1C lần 22b nêu **2** đường lộ (`message[4].attachments` + `docinfo.attachments`). Runtime cho thấy thực tế là **4** đường — 2 đường còn lại là **đường `attachment_log`** (URL nằm trong **HTML** của Comment type `Attachment`), đều **không** qua redaction.
 
+### 🆕 Kết quả lần rà soát 2026-10-26 (run [#40261069257](https://github.com/nobita6986/new-crm/actions/runs/40261069257))
+
+Ba câu hỏi được **phân biệt rõ** bằng runtime (không dựa vào source tĩnh, không dựa vào permission guard, không dựa vào HTTP 14/14 cũ):
+
+| Câu hỏi | Trước | **Sau (run 34)** |
+|---|---|---|
+| Endpoint `get_activities` có trả `file_url` hay không? | 4 đường có `file_url` | **CÓ** — 4/4 đường, `file_url_present = true` (không đổi so với run 31/32) |
+| Có redaction hay không? | Đường 4 **KHÔNG** lọt redact của probe (đã đính chính) | **KHÔNG** — đường 1/2/3 che **theo key** `file_url`; đường 4 che **theo chuỗi** `redact_text`; **không** đường nào có wrapper redaction của `crm_cskh` |
+| Khả năng tải file có được đo hay không? | **CHƯA** đo | **ĐÃ ĐO** — URL lấy từ payload thật, tải bằng **chính** caller in-scope ⇒ **HTTP 200**, `content_length = 90`, `contains_seed_marker = true` ⇒ lộ URL **⇔** đọc được nội dung |
+
+Ngoài ra đã đo **kịch bản ngoài scope** ở tầng HTTP: actor `staff.c@dev.local` (Team 2) gọi **đúng** endpoint ⇒ **HTTP 403 `PermissionError`**, `private_entry_visible = false` ⇒ **không** có bằng chứng IDOR.
+
+⚠️ **Không** nâng `SEC-26`, **không** đóng RFC, **không** đổi policy/wrapper/assertion/tally, **không** thêm method thứ 100 — vì tải được nội dung với caller **đúng scope** là **hành vi đúng theo thiết kế**; mức độ nghiêm trọng thuộc Owner.
+
 ---
 
 ## 1. Run / artifact mới nhất (đọc trước khi kết luận)
 
-### 1.0 Run MỚI NHẤT — run sau khi commit báo cáo (xác nhận không hồi quy)
+### 1.0 Run MỚI NHẤT — run 34 (chứa 2 case SEC-26 mới, xác nhận không hồi quy)
+
+| Hạng mục | Giá trị |
+|---|---|
+| Run ID | [`#40261069257`](https://github.com/nobita6986/new-crm/actions/runs/40261069257) (run_number **34**, event `pull_request`) |
+| PR head SHA | `01b3a52d0a29ab76383600010bec7ef2e1bf393e` (= commit `T1B(SEC-26): do kha nang tai file (H-RFC-2) + kich ban ngoai scope HTTP (H-RFC-4)` — **có** đổi probe) |
+| PR merge SHA | `6c3a3bedb7c31fc01155c77db35757a3af016f66` — `Merge 01b3a52… into b382fe42…`, parents `b382fe425b3f1f6c2037cd3bed20e65e5df2d928` + `01b3a52d0a29ab76383600010bec7ef2e1bf393e` ⇒ xác minh qua `gh api git/commits` ⇒ merge **chứa** commit probe của tôi |
+| `compare` merge ↔ head | `status=ahead, ahead_by=1, behind_by=0` ⇒ merge **chứa** đúng commit probe đã sửa |
+| `commit_sha` ghi trong probe | `6c3a3bedb7c31fc01155c77db35757a3af016f66` (= `GITHUB_SHA` = merge SHA, từ `workflow-metadata.json`) |
+| Artifact id / name | `12624940008` / `p0-g007-evidence-40261069257` (`expired=false`) |
+| **Artifact digest** | **`sha256:d1be8c7055a96a3ad849c04d779981b6d011e3f5dad2f7cf542bf8e583fa6fa9`** (133 732 B) — **khớp** digest GitHub trả về **và** sha256 tính lại từ zip tải xuống (`_dl_run40261069257.py`) |
+| Entry quan trọng | `http/http-transport.json` — sha256 `db62c216faab70d52e606cb170e60a1fb420c46799adb6029701bb64010a2944` |
+| Raw output (đã lưu) | `deploy/dev/evidence/logs/run40261069257/_raw_sec26_review_run40261069257.json` (sha256 `ecebbd89bebacab6ba94dc476b9b3e462175ec862f8cd79623c34ecc6fa5acab`, 4 713 B) |
+| Kết quả job | `p0` = **failure** ở step `Enforce CI test and direct-HTTP probe gates`; step `Run direct HTTP probes for SEC-13/14/16/26` = **success** (`workflow_outcomes.http_transport = "success"`) |
+| `module-status.txt` | 3×`exit=0` (`test_permissions` 18, `test_security_remediation` 12, `test_security_remediation_v2` 32), 2×`exit=1` (`test_bt1c5_matrix_gaps` 27, `test_docshare_lifecycle` 10) — **y hệt** run 32 (byte-identical) |
+
+**Bất biến — đối chiếu run 32 (trước) ↔ run 34 (sau) bằng script `_compare_run32_run34.py`:**
+
+| Chỉ số | Run 32 | **Run 34** | Kết luận |
+|---|---|---|---|
+| `expected_total` / `observed_total` | 99 / 99 | **99 / 99** | không đổi |
+| `passing_total` | 91 | **91** | không đổi |
+| `counts` (PASS/FAIL) | 91 / 8 | **91 / 8** | không đổi |
+| `gate_passed` | `false` | **`false`** | không đổi |
+| `missing_methods` / `skipped_methods` / `parse_errors` / `errored_methods` | `[]` / `[]` / `[]` / `[]` | **`[]` / `[]` / `[]` / `[]`** | không đổi |
+| FAIL set (8 method canary) | 8 | **8** | `only_in_32 = ∅`, `only_in_34 = ∅` ⇒ **giống 100%** |
+| `g007-per-method-gate.json` | — | — | **byte-identical** (`196ba75c…`) |
+| `module-status.txt` | — | — | **byte-identical** (`23e8b30f…`) |
+| Probe `probe_result` | `PASS` (15 case) | **`PASS` (18 case)** | thêm 3 case, **không** case nào FAIL |
+| Probe `failed_cases` | `[]` | **`[]`** | không đổi |
+| Probe `observations` | 4 | **6** | 4 đường lộ (giống hệt) + 2 quan sát mới |
+| Case **bị xoá** | — | **∅** | không xoá case nào |
+
+⇒ **Run 34 không hồi quy.** 4 quan sát cũ vẫn `file_url_present=true` / `file_is_private=true` / `caller=staff.a@dev.local` **giống hệt**; mọi case cũ giữ nguyên `status` + `transport_error` + `assertion`; FAIL set 8/8 **không đổi**; gate JSON và `module-status.txt` **byte-identical**.
+
+### 1.0b Run 32 (trước đó) — baseline đối chiếu
 
 | Hạng mục | Giá trị |
 |---|---|
 | Run ID | [`#40253195658`](https://github.com/nobita6986/new-crm/actions/runs/40253195658) (run_number **32**, event `pull_request`) |
 | PR head SHA | `072e18ffb771e5657471fea4f57d732958937302` (= commit báo cáo §0–§9, **docs-only**, không đụng code) |
-| PR merge SHA | `116202b4ab6374159a51f631fd82837857c54697` — `Merge 072e18f… into b382fe42…`, parents `b382fe425b3f1f6c2037cd3bed20e65e5df2d928` + `072e18ffb771e5657471fea4f57d732958937302` ⇒ xác minh qua `gh api git/commits` ⇒ merge **chứa** commit báo cáo của tôi |
+| PR merge SHA | `116202b4ab6374159a51f631fd82837857c54697` — `Merge 072e18f… into b382fe42…` ⇒ merge **chứa** commit báo cáo của tôi |
 | `commit_sha` ghi trong probe | `116202b4ab6374159a51f631fd82837857c54697` (= `GITHUB_SHA` = merge SHA, từ `workflow-metadata.json`) |
 | Artifact id / name | `12621750874` / `p0-g007-evidence-40253195658` (`expired=false`) |
 | **Artifact digest** | **`sha256:bc2201a0685b61dd0d5db9a4168ac03bdd878d563318b95173afb48f69b1ba47`** (132 676 B) — **khớp** digest GitHub trả về **và** sha256 tính lại từ zip tải xuống |
@@ -244,21 +293,68 @@ Cả 4 đều: `caller=staff.a@dev.local`, `caller_scope=in-scope (lead_owner of
 | Dữ liệu | **100% giả** — site seed `p0-ci.localhost`, lead `CRM-LEAD-00001`, file `DEMO-CRM-LEAD-00001.txt` | **100% giả** — cùng file seed |
 | Ghi vào artifact | status + `exc_type` + boolean `private_entry_visible` | status + `content_length` + **`content_sha256`** + boolean `contains_seed_marker` — **KHÔNG** ghi bytes/nội dung file |
 
-**Kết quả runtime — sẽ điền sau khi có run CI thật (xem §1.0):**
+**Kết quả runtime — run [#40261069257](https://github.com/nobita6986/new-crm/actions/runs/40261069257) (run 34):**
 
 | Case | HTTP status | `exc_type` | Quan sát |
 |---|---|---|---|
 | `sec26-activities-out-of-scope` | **403** | `PermissionError` | `private_entry_visible = false` ⇒ caller ngoài scope **bị chặn ở tầng HTTP**, không thấy entry file private |
-| `sec26-activities-download-in-scope` | **200** | — | `content_length > 0`, `contains_seed_marker = true` ⇒ caller **đúng scope** **tải được** nội dung file private từ URL rò rỉ |
+| `sec26-activities-download-in-scope` | **200** | — | `content_length = 90`, `content_sha256 = a4fdbb873f55b413c93a2e9bad544022ed9913111d3533dfaae6568a758de129` (64 hex), `contains_seed_marker = true` ⇒ caller **đúng scope** **tải được** nội dung file private từ URL rò rỉ |
+
+**Raw observation (trích từ `http/http-transport.json`, run 34 — đã redact, không có identifier):**
+
+```json
+{
+  "id": "sec26-activities-out-of-scope",
+  "endpoint": "crm.api.activities.get_activities",
+  "caller": "staff.c@dev.local",
+  "caller_scope": "out-of-scope (Team 2; CRM-LEAD-00001 do staff.a@dev.local sở hữu)",
+  "http_status": 403,
+  "exc_type": "PermissionError",
+  "private_entry_visible": false,
+  "observation": "blocked_with_permission_error"
+}
+```
+
+```json
+{
+  "id": "sec26-activities-download-in-scope",
+  "endpoint": "GET /private/files/<seeded private file>",
+  "caller": "staff.a@dev.local",
+  "caller_scope": "in-scope (lead_owner of CRM-LEAD-00001)",
+  "http_status": 200,
+  "transport_error": null,
+  "content_length": 90,
+  "contains_seed_marker": true,
+  "observation": "download_succeeded"
+}
+```
 
 > ✅ **H-RFC-2 đã được phân biệt** ở tầng runtime: lộ `file_url` **⇔** đọc được nội dung, với caller đúng scope. ⇒ "URL lộ" **không** chỉ là rò metadata; nó là **rò nội dung** trong điều kiện scope hợp lệ.
+>
+> ✅ **H-RFC-4 đã được đo ở tầng HTTP** (không chỉ tầng Python như `test_permissions.py`): actor ngoài scope bị chặn **403 `PermissionError`**, `private_entry_visible = false` ⇒ **không** thấy entry file private.
+>
 > ⚠️ **Giới hạn bắt buộc**: đây là **hành vi đúng theo thiết kế** (caller có quyền read ⇒ được đọc file của lead mình sở hữu). Vì vậy **không** tự nâng `SEC-26`, **không** kết luận vulnerability, **không** đóng RFC — quyết định thuộc Owner.
+
+### 3.5b ⚠️ Audit redaction artifact run 34 — **không rò** identifier/secret
+
+Quét **toàn bộ** thư mục run 34 bằng `_audit_redaction_run34.py` — **33 file**: **16 entry** của artifact (`p0-g007-evidence-40261069257/`) + **16 bản copy** phẳng + **1** raw evidence của tôi (`_raw_sec26_review_run40261069257.json`). Bao gồm `http/http-transport.json`, `*.log`, `*.junit.xml`, `workflow-metadata.json`:
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Secret thật (cookie / token / password / sid / csrf) | **0 hit** |
+| `SEED_PASSWORD` (so sánh trong RAM, không ghi ra artifact) | **0 hit** |
+| URL file private thật (sau `/private/files/`) | **0 hit** |
+| Dấu vết redaction URL private | **4** lần `/private/files/[REDACTED…]` ⇒ redaction **có** hoạt động |
+| File docname (hash hex 8–12) còn lại | **0 hit** |
+| Raw bytes nội dung file trong artifact | **0** — `response.body == ""` (hằng rỗng), chỉ có `content_length` + `content_sha256` + boolean marker |
+
+⇒ **Không** ghi cookie, token, password, URL file thật, hay file identifier vào artifact.
 
 ---
 
 ## 4. THAY ĐỔI TỐI THIỂU
 
-**3 file, +457 / −3 dòng.** Không đụng policy, wrapper, assertion hiện hữu, SEC tally, hay method nào trong inventory 99.
+**3 file, +457 / −3 dòng** (run 32→34). Lần rà soát 2026-10-26 thêm **+~312 dòng** vào **duy nhất** file test tĩnh (không đụng probe). Không đụng policy, wrapper, assertion hiện hữu, SEC tally, hay method nào trong inventory 99.
 
 ### 4.1 `deploy/dev/seed/ci_http_transport_probe.py` (+~200)
 
@@ -270,10 +366,15 @@ Cả 4 đều: `caller=staff.a@dev.local`, `caller_scope=in-scope (lead_owner of
 | 4 | Tách **riêng** 4 đường (đường 2 & 3 & 4 thêm ở commit `997e681`) | Đo từng đường độc lập, không gộp |
 | 5 | 4 quan sát: `…-message-attachments`, `…-message-attachment-log`, `…-docinfo-attachments`, `…-docinfo-attachment-logs` | Bằng chứng quan sát **tách riêng** từng đường + trường `leak_site` |
 | 6 | **KHÔNG** assert cứng `file_url` có/không | **Characterization**: kết luận còn chờ Owner ⇒ probe **chỉ đo** |
+| 7 | 🆕 `download_bytes()` — tải file **riêng**, **KHÔNG** dùng `request()` | `request()` đưa **toàn bộ** body vào artifact ⇒ bytes nhị phân không che được ⇒ helper riêng chỉ ghi `content_length` + `content_sha256` + boolean marker, `body` là **hằng `""`** |
+| 8 | 🆕 `DOWNLOAD_PATH_PREFIX` + `SEED_CONTENT_MARKER` | Tiền tố đường private thật của Frappe + marker nội dung seed (**giả**) |
+| 9 | 🆕 Case `sec26-activities-out-of-scope` — actor `staff.c@dev.local` (Team 2) | Đo kịch bản **ngoài scope** qua HTTP; **quan sát**, **không** `check()` |
+| 10 | 🆕 Case `sec26-activities-download-in-scope` — URL lấy từ **payload thật** | Đo **khả năng tải**; **quan sát**, **không** assert cứng 200/403 |
+| 11 | 🆕 `is_file_record` trong `sanitize()` | Che `name` của dict giống hồ sơ **File** (docname = file identifier), **không** đụng `name` của doctype khác (`CRM-LEAD-00001` — cần giữ để reviewer đối chiếu) |
 
 **Thay đổi duy nhất ngoài probe:** `.github/workflows/p0.yml` — đổi **tên** step `… SEC-13/14/16` → `… /26` (step này vốn đã chạy case SEC-26). **KHÔNG** đổi logic gate, điều kiện, hay artifact path.
 
-### 4.2 `deploy/dev/seed/test_ci_http_probe_static.py` (+~250)
+### 4.2 `deploy/dev/seed/test_ci_http_probe_static.py` (+~250 → **+~560**)
 
 Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 
@@ -290,15 +391,66 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 | `test_uses_seeded_synthetic_document` | dùng tài liệu không phải seed giả |
 | `test_measures_attachment_log_paths` | bỏ đo đường **2** / **4** (kèm kiểm **AST**: `attachment_log_activity` phải = `next(...)`; `docinfo_attachment_logs` phải = `.get("attachment_logs")`) |
 
+Thêm **3 class** cho 2 case mới (H-RFC-2 download, H-RFC-4 ngoài scope) — **tổng 52 test**:
+
+| Class | Test | Chặn regression |
+|---|---|---|
+| `TestProbeDownloadMeasurement` | `test_case_exists` | thiếu case đo tải file |
+| | `test_uses_private_file_url_prefix` | sai tiền tố đường private |
+| | `test_does_not_assert_download_outcome` | assert cứng `200`/`403` (kết luận thuộc Owner) |
+| | `test_does_not_write_raw_bytes_to_artifact` | ghi raw bytes file vào artifact (kiểm **AST**: `body` phải là hằng `""`) |
+| | `test_download_bytes_helper_never_assigns_payload_to_body` | gán `payload` vào key `body` |
+| | `test_download_records_sha256_and_length` | bỏ `sha256` / `content_length` |
+| | `test_download_uses_url_from_payload` | tự chế path thay vì lấy từ payload thật |
+| | `test_file_docname_identifier_is_redacted` | lộ docname File (identifier) |
+| | **`test_content_length_is_measured_from_payload`** | hardcode `content_length` ⇒ không còn đo khả năng tải |
+| | **`test_content_sha256_is_computed_from_payload`** | hardcode/rỗng `content_sha256` |
+| `TestProbeOutOfScopeMeasurement` | `test_case_exists` | case ngoài scope phải là **quan sát** (không `check()`) |
+| | `test_uses_distinct_out_of_scope_actor` | actor ngoài scope == actor in-scope |
+| | `test_out_of_scope_case_calls_same_endpoint` | gọi sai endpoint (vd `get_attachments`) |
+| | `test_does_not_hardcode_permission_error` | assert cứng `PermissionError` |
+| | `test_out_of_scope_observation_records_status` | thiếu `http_status` / `exc_type` trong observation |
+| | **`test_out_of_scope_case_actually_logs_in_with_out_of_scope_actor`** | login bằng actor in-scope ⇒ đo **sai** kịch bản |
+| | **`test_observation_label_is_derived_from_measured_exc_type`** | nhãn `blocked_with_permission_error` gán vô điều kiện |
+| `TestProbeRedactionCoversRequestUrl` | `test_request_url_is_redacted` | `request.url` không qua redact |
+| | `test_download_helper_redacts_url` | `download_bytes` không redact URL |
+| | **`test_every_url_written_to_artifact_is_redacted`** | **mọi** key `url` ghi vào artifact phải qua `redact_text` (kiểm **AST** toàn probe) |
+
+### 4.2b Siết test tĩnh — phát hiện **5 lỗ hổng** guard (lần rà soát 2026-10-26)
+
+Chạy mutation check mới (`_mutation_check_new_cases.py`, 10 mutation) trên 2 case mới phát hiện **5/10 `MISSED`** ⇒ **test tĩnh cũ chưa đủ chặt**. Đã siết bằng kiểm tra **AST** (không đổi probe, không đổi assertion/policy):
+
+| Mutation bị lọt | Nguyên nhân | Cách sửa |
+|---|---|---|
+| `"content_length": 0` | test cũ chỉ kiểm **có** `len(payload)` ở đâu đó | `test_content_length_is_measured_from_payload` — mọi occurrence `content_length` phải **không** phải hằng |
+| `"content_sha256": ""` | tương tự | `test_content_sha256_is_computed_from_payload` — mọi occurrence phải gọi `hashlib.sha256(payload)` |
+| `"url": url` (bỏ redact trong `download_bytes`) | test cũ dùng `assertIn` ⇒ chỉ bắt **một** occurrence | `test_every_url_written_to_artifact_is_redacted` — quét **mọi** dict có key `url` |
+| login bằng `SEC16_USER` (actor in-scope) | test cũ chỉ so `OUT_OF_SCOPE_USER != SEC16_USER` ở **hằng** | `test_out_of_scope_case_actually_logs_in_with_out_of_scope_actor` — kiểm **lời gọi** `login()` + opener dùng cho `request()` |
+| nhãn `blocked_with_permission_error` gán `if True` | test cũ chỉ kiểm case **không** nằm trong `check()` | `test_observation_label_is_derived_from_measured_exc_type` — kiểm điều kiện `out_of_scope_exc == "PermissionError"` trong AST |
+
+Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case mới phát hiện **2/8 `MISSED`** — nguyên nhân: regex cũ khớp **comment** thay vì **biểu thức** (đường 4) và chỉ bắt **một** occurrence `observations.append(` (nhóm 4 đường lộ):
+
+| Mutation bị lọt | Nguyên nhân | Cách sửa |
+|---|---|---|
+| `attachment_log_html_has_url = False` | `assertIn("/private/files/", src)` khớp **comment** | `test_measures_attachment_log_paths` — kiểm **biểu thức gán** qua AST (`assignment_node`) |
+| `observations.append(` → `_ignored.append(` (nhóm 4 đường) | regex chỉ bắt **một** occurrence | `test_every_observation_group_is_actually_appended` — AST: vòng `for` nhóm 4 đường + 2 observation dict |
+
+⇒ **Tổng 18/18 mutation `CAUGHT`** (8 gốc + 10 mới).
+
 ### 4.3 Kiểm chứng cục bộ
 
 | Kiểm chứng | Kết quả |
 |---|---|
-| Test tĩnh | **31/31 `PASS`** (21 cũ + 10 mới) |
-| **Mutation check** (8 mutation) | **8/8 `CAUGHT`** — endpoint sai, bỏ `docinfo`, assert cứng, bỏ `observations`, đổi caller admin, bỏ đường 2, bỏ đường 4, không nhận diện URL trong HTML. *(Lần đầu 2/8 và 3/8 `MISSED` ⇒ đã siết bằng kiểm tra **AST**, mới đạt 8/8.)* |
+| Test tĩnh | **52/52 `PASS`** (46 trước + 6 mới của lần siết 2026-10-26) |
+| **Mutation check gốc** (8 mutation) | **8/8 `CAUGHT`** — endpoint sai, bỏ `docinfo`, assert cứng, bỏ `observations`, đổi caller admin, bỏ đường 2, bỏ đường 4, không nhận diện URL trong HTML. *(Lần đầu 2/8 và 3/8 `MISSED` ⇒ đã siết bằng kiểm tra **AST**, mới đạt 8/8.)* |
+| **Mutation check 2 case mới** (10 mutation) | **10/10 `CAUGHT`** — *(lần đầu **5/10 `MISSED`** ⇒ đã siết bằng kiểm tra **AST**, mới đạt 10/10.)* |
+| **Mutation check gốc (chạy lại)** | **8/8 `CAUGHT`** — sau khi thêm 2 case mới, 2 mutation gốc lại lọt ⇒ đã vá (2 test mới), đạt **18/18** tổng |
 | **Simulation shape** (13 tình huống, dữ liệu 100% giả) | **13/13 `PASS`** — 4 đường độc lập, 5-tuple đúng/sai, `docinfo` không phải dict, thiếu key, `file_url` là `None`/số, `content` không phải str, response rỗng |
-| `git diff --check` trên 3 file | `exit 0` |
+| **Audit redaction artifact run 34** | **0 rò** — secret/URL/docname/raw-bytes: 0 hit; dấu vết redaction: 4 || **Đối chiếu run 32 ↔ run 34** | **KHÔNG hồi quy** — gate JSON + `module-status.txt` **byte-identical**; FAIL set giống 100%; 0 case bị xoá; mọi case cũ giữ nguyên status + assertion |
+| `git diff --check` trên file đã sửa | `exit 0` |
 | Probe còn **fail-closed** | ✅ `return 1 if failures else 0` giữ nguyên |
+
+> ⚠️ **Giới hạn quan trọng:** `test_ci_http_probe_static.py` **KHÔNG được chạy trong CI** (`git grep` xác nhận: không có workflow nào gọi file này) ⇒ 52 test tĩnh là **guard cục bộ**, **không** phải gate của pipeline. Việc thêm nó vào CI là **thay đổi phạm vi CI** ⇒ **cần Owner duyệt** (không tự thêm trong lần này).
 
 **KHÔNG đổi:** policy · wrapper (`guarded_crm.py`) · assertion hiện hữu · SEC tally · `g007_test_inventory.json` (vẫn `expected_total=99`, **không** thêm method thứ 100) · `test_permissions.py` / `test_security_remediation*.py` · `q1`-`q4`/`ra-04`.
 
@@ -307,11 +459,14 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 ## 5. Giới hạn bắt buộc của bằng chứng
 
 1. **Tầng đo:** direct HTTP tới `bench serve` (`coverage_scope` trong artifact ghi rõ: *"reverse-proxy and CORS behavior are not covered"*). Chưa phủ reverse-proxy/CORS.
-2. **Chỉ caller đúng scope.** Không suy ra hành vi của caller ngoài scope từ case này. (Lần rà soát 2026-10-26 đã bổ sung **một** case ngoài scope qua HTTP — xem §6 H-RFC-4.)
-3. **Giá trị `file_url` không có trong artifact** (bị che ở cả tầng probe lẫn tầng workflow) ⇒ chứng minh được *key có mặt*, **không** chứng minh được *URL dùng để tải được*. ⇒ **H-RFC-2 cần đo riêng** (xem §6 H-RFC-2 — đã đo ở lần rà soát 2026-10-26).
+2. ~~**Chỉ caller đúng scope.**~~ ⇒ **ĐÃ ĐO (một phần) 2026-10-26**: thêm **một** case ngoài scope qua HTTP (`staff.c@dev.local` ⇒ **403 `PermissionError`**, `private_entry_visible = false`) — xem §3.5 + §6 H-RFC-4. Vẫn **chưa** phủ nhiều actor/tài liệu.
+3. ~~**Giá trị `file_url` không có trong artifact ⇒ không chứng minh được URL tải được.**~~ ⇒ **ĐÃ ĐO 2026-10-26**: URL lấy từ payload thật đã được tải qua HTTP bằng **chính** caller in-scope ⇒ **HTTP 200, `content_length = 90`, `contains_seed_marker = true`** (xem §3.5 + §6 H-RFC-2). Vẫn **chưa** đo: URL có **ký số / hạn dùng** hay không (H-RFC-1(a)).
 4. ~~**Đường 4 lọt tầng redact của probe**~~ ⇒ **ĐÃ ĐÍNH CHÍNH 2026-10-26**: đường 4 **KHÔNG** lọt tầng redact của probe — tầng chuỗi (`redact_text`) đã che URL trong HTML. Xem §2.4.
 5. **Một tài liệu seed, một file, một caller.** Không khái quát hoá cho mọi doctype / mọi file.
-6. **Không** kết luận IDOR: cả 4 đường đều nằm sau guard read-level (CRM L24/L181, Frappe `load.py` L109–110).
+6. **Không** kết luận IDOR: cả 4 đường đều nằm sau guard read-level (CRM L24/L181, Frappe `load.py` L109–110); case ngoài scope bị chặn **403** ở tầng HTTP ⇒ **không** có bằng chứng IDOR.
+7. **URL tải được ⇒ hành vi đúng theo thiết kế** (caller có quyền read ⇒ được đọc file của lead mình sở hữu). Đo **không** đồng nghĩa **là** vulnerability.
+8. **Chưa đo:** URL có ký số/hạn dùng (H-RFC-1(a)); phạm vi `docinfo` ở endpoint khác (H-RFC-3); nhánh `Deal`; `get_linked_calls/_notes/_tasks`; `content_hash` assert.
+9. **Guard tĩnh không nằm trong CI** (xem §4.3) ⇒ regression guard chỉ có hiệu lực khi chạy cục bộ, **không** tự động chặn PR.
 
 ---
 
@@ -325,12 +480,12 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 |---|---|
 | Trước lần này | CHƯA đo ở tầng nào |
 | Sau lần này | **ĐÃ ĐO** (runtime, §3.2–§3.3): **4/4 đường** `file_url_present`, `is_private=1` |
-| **Còn lại chưa phân biệt** | (a) URL **có ký số / hạn dùng** hay tĩnh? (b) URL đó **tải được** với chính caller đó? (c) mức độ lộ có **tương đương** endpoint **đã override** (đã redaction) hay **nặng hơn** (vì có **4** đường thay vì 1)? |
+| **Còn lại chưa phân biệt** | (a) URL **có ký số / hạn dùng** hay tĩnh? (b) ~~URL đó **tải được** với chính caller đó?~~ ⇒ **ĐÃ ĐO 2026-10-26: CÓ** (HTTP 200, `content_length = 90`) — xem H-RFC-2. (c) mức độ lộ có **tương đương** endpoint **đã override** (đã redaction) hay **nặng hơn** (vì có **4** đường thay vì 1)? |
 
 > **(b) đã đo ở lần rà soát 2026-10-26** — xem H-RFC-2 bên dưới.
 > ⚠️ **ĐÍNH CHÍNH**: mệnh đề cũ *"nặng hơn (vì có 4 đường, **1 đường lọt tầng redact của probe**)"* là **sai** — đường 4 **KHÔNG** lọt tầng redact của probe (§2.4). Cơ sở so sánh còn lại hợp lệ: 4 đường lộ thay vì 1.
 
-⇒ **H-RFC-1 được thu hẹp mạnh nhưng CHƯA đóng**: đã chứng minh *mặt cảnh* (URL xuất hiện ở 4 nơi), **chưa** chứng minh *tác động* (đọc được nội dung).
+⇒ **H-RFC-1 được thu hẹp mạnh nhưng CHƯA đóng**: đã chứng minh *mặt cảnh* (URL xuất hiện ở 4 nơi) **và** *tác động* (đọc được nội dung, H-RFC-2); **còn** (a) URL có ký số/hạn dùng hay không.
 
 ### H-RFC-2 — lộ `file_url` ≠ đọc được nội dung
 
@@ -347,6 +502,12 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 
 ⚠️ **ĐÃ ĐO RUNTIME Ở LẦN RÀ SOÁT 2026-10-26** — xem **§3.5**. Kết quả runtime **thay thế** suy luận tĩnh ở đây; bảng source tĩnh ở trên **giữ** làm mốc đối chiếu.
 
+| | |
+|---|---|
+| **Kết quả đo** | URL lấy từ payload thật ⇒ `GET /private/files/…` bằng **chính** `staff.a@dev.local` ⇒ **HTTP 200**, `content_length = 90`, `contains_seed_marker = true`, `transport_error = null` |
+| **Kết luận** | ✅ **H-RFC-2 ĐÃ PHÂN BIỆT ĐƯỢC**: lộ `file_url` **⇔** đọc được nội dung file private (với caller đúng scope). "Chỉ lộ URL" là mô tả **sai** |
+| **Còn lại chưa phân biệt** | (a) URL **có ký số / hạn dùng** hay tĩnh? (b) hành vi này có **đúng** là *by design* hay là *sai sót cấu hình*? ⇒ thuộc Owner |
+
 ### H-RFC-3 — `docinfo` là đường **riêng**, không sửa được bằng cơ chế override
 
 | | |
@@ -360,7 +521,7 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 | | |
 |---|---|
 | Runtime đã có | `test_permissions.py` L280–283 (`test_child_lists_and_activity_reads_stay_with_parent_scope`) — caller ngoài scope gọi `get_activities` ⇒ `PermissionError`, `PASS` 12/12 run, log `Message: Not permitted` (kiểm lại ở run mới: `test_permissions.log` L65) — **tầng Python**, không qua HTTP dispatch |
-| **ĐÃ ĐO Ở LẦN RÀ SOÁT 2026-10-26** | Case `sec26-activities-out-of-scope` gọi **đúng đường HTTP** (`GET /api/method/crm.api.activities.get_activities?name=CRM-LEAD-00001`) với actor `staff.c@dev.local` (**Team 2**, role `Sales User`, **không** phải System Manager) — ngoài scope vì `CRM-LEAD-00001` do `staff.a@dev.local` (Team 1) sở hữu. Kết quả runtime ở **§3.5**. |
+| **ĐÃ ĐO Ở LẦN RÀ SOÁT 2026-10-26** | Case `sec26-activities-out-of-scope` gọi **đúng đường HTTP** (`GET /api/method/crm.api.activities.get_activities?name=CRM-LEAD-00001`) với actor `staff.c@dev.local` (**Team 2**, role `Sales User`, **không** phải System Manager) — ngoài scope vì `CRM-LEAD-00001` do `staff.a@dev.local` (Team 1) sở hữu. **Kết quả runtime (run 34): HTTP 403, `exc_type = "PermissionError"`, `private_entry_visible = false`** ⇒ không thấy entry file private. |
 | **Còn lại chưa phân biệt** | (i) Chỉ **một** actor ngoài scope, **một** tài liệu ⇒ chưa khái quát hoá cho mọi cấu hình scope. (ii) Chỉ nhánh **Lead**; nhánh **Deal** (`activities.py` L24) chưa đo ở tầng HTTP. (iii) Chưa đo endpoint khác của cùng họ (`get_linked_calls/_notes/_tasks`). ⇒ **không** coi là đã đóng. |
 
 ### H-RFC-5 — `content_hash`
@@ -376,7 +537,7 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 
 | Hạng mục | Trạng thái | Lý do |
 |---|---|---|
-| `SEC-26` | **`PARTIAL`** (giữ nguyên) | Đã có runtime evidence tầng HTTP cho **4 đường**, nhưng **chưa** phân biệt được H-RFC-2 ⇒ **không** đủ điều kiện đóng |
+| `SEC-26` | **`PARTIAL`** (giữ nguyên) | Đã có runtime evidence tầng HTTP cho **4 đường** **+** khả năng tải file **+** kịch bản ngoài scope (run 34). Vẫn **chưa** phân biệt được H-RFC-1(a) (URL ký số/hạn dùng) ⇒ **không** đủ điều kiện đóng |
 | `G0-07` | **`PARTIAL` / CHƯA KÝ** (giữ nguyên) | Chưa có ký |
 | `P0` | **`NO-GO`** (giữ nguyên) | — |
 | RFC | **`OPEN`** (giữ nguyên) | — |
@@ -384,21 +545,25 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 | Inventory | `expected_total=99` (**giữ nguyên**) | **KHÔNG** thêm method thứ 100 (cần Owner duyệt) |
 | `Q1`–`Q4` + `RA-04` | `PENDING_T0_OWNER_DECISION` (giữ nguyên) | Vẫn chờ Owner |
 | `OWNER_DECISIONS_CONFIRMED` | `False` (giữ nguyên) | — |
-| `B-T1C-3` | giữ **`MỞ`** — lý do **thu hẹp thêm** | (i) redaction chỉ được chứng minh trên endpoint **đã override**; (ii) RFC `get_activities` — **đã có** runtime evidence kịch bản dương tầng HTTP cho **4 đường**, **còn** H-RFC-2 chưa đo; (iii) `docinfo` — **đã có** runtime evidence (2 đường), **còn** phạm vi endpoint khác chưa đo; (iv) `content_hash` chưa có assert |
-| `B-T1C-2` | giữ **`MỞ`** | Probe **15/15** `PASS` nhưng `coverage_scope` **không đổi** (chỉ direct HTTP tới bench serve) ⇒ **không** đủ điều kiện đóng `SEC-13` |
-| `B-T1C-4` | giữ **`ĐÓNG`** | 99/99 per-method, 0 `SKIP`, 0 `NOT_RUN`, 0 `parse_error` ở run mới |
-| `B-T1C-6` | giữ **`MỞ`, `8`** | 8/99 method không xanh, FAIL set **giống 100%** ⇒ tất định lần thứ năm |
-| PR #2 | **OPEN**, `mergeStateStatus=UNSTABLE` | **KHÔNG merge** |
+| `B-T1C-3` | giữ **`MỞ`** — lý do **thu hẹp thêm** | (i) redaction chỉ được chứng minh trên endpoint **đã override**; (ii) RFC `get_activities` — **đã có** runtime evidence kịch bản dương tầng HTTP cho **4 đường** **+ đã đo H-RFC-2** (tải được, HTTP 200); **còn** H-RFC-1(a) (URL ký số/hạn dùng) chưa đo; (iii) `docinfo` — **đã có** runtime evidence (2 đường), **còn** phạm vi endpoint khác chưa đo; (iv) `content_hash` chưa có assert |
+| `B-T1C-2` | giữ **`MỞ`** | Probe **18/18** `PASS` nhưng `coverage_scope` **không đổi** (chỉ direct HTTP tới bench serve) ⇒ **không** đủ điều kiện đóng `SEC-13` |
+| `B-T1C-4` | giữ **`ĐÓNG`** | 99/99 per-method, 0 `SKIP`, 0 `NOT_RUN`, 0 `parse_error` ở run 34 |
+| `B-T1C-6` | giữ **`MỞ`, `8`** | 8/99 method không xanh, FAIL set **giống 100%** so với run 32 ⇒ tất định lần thứ **sáu** |
+| PR #2 | **OPEN**, `mergeStateStatus=UNSTABLE` (head `01b3a52`) | **KHÔNG merge** |
 
 ---
 
 ## 8. Việc còn lại (đề xuất — **chưa** thực hiện, cần Owner duyệt)
 
-1. **Đo H-RFC-2 ở tầng HTTP**: thêm case tải `download_file` bằng URL lấy từ `get_activities` với chính caller in-scope ⇒ biết URL có ký số không, có tải được không. *Bước quyết định để đóng hay giữ RFC.* Cần Owner duyệt vì có thể chạm assertion SEC-26 hiện hữu.
+> ✅ **ĐÃ XONG Ở LẦN RÀ SOÁT 2026-10-26**: mục **1** (đo H-RFC-2 ở tầng HTTP) và mục **3** (đo H-RFC-4 qua HTTP) — xem §3.5 (run 34). Mục **4** đã được **ĐÍNH CHÍNH**: đường 4 **KHÔNG** lọt tầng redact của probe (§2.4) ⇒ không cần sửa sanitizer.
+
+1. ~~**Đo H-RFC-2 ở tầng HTTP**~~ ⇒ **ĐÃ ĐO** (run 34): URL tải được, HTTP 200, `content_length = 90`. **Còn lại:** URL có **ký số / hạn dùng** hay tĩnh (H-RFC-1(a)) — *bước quyết định để đóng hay giữ RFC.* **Cần Owner duyệt** vì có thể chạm assertion SEC-26 hiện hữu.
 2. **Đo H-RFC-3 phạm vi rộng**: kiểm `docinfo` ở endpoint khác (`/api/resource/…`) ⇒ xác định `docinfo.attachments` là lỗ hổng riêng hay hệ quả của `get_activities`.
-3. **Đo H-RFC-4 qua HTTP**: kịch bản ngoài scope qua dispatch `execute_cmd`.
-4. **Cân nhắc đường 4** (`docinfo.attachment_logs[].content`): lọt tầng redact của probe ⇒ nếu Owner muốn, sanitizer của probe nên che URL private trong **chuỗi HTML**, không chỉ key `file_url`.
+3. ~~**Đo H-RFC-4 qua HTTP**~~ ⇒ **ĐÃ ĐO** (run 34): **403 `PermissionError`**, `private_entry_visible = false`. **Còn lại:** nhiều actor / nhiều tài liệu / nhánh `Deal` / `get_linked_calls/_notes/_tasks`.
+4. ~~**Cân nhắc đường 4 lọt tầng redact của probe**~~ ⇒ **ĐÍNH CHÍNH**: đường 4 **KHÔNG** lọt tầng redact (tầng chuỗi `redact_text` đã che) — xem §2.4. **Không** cần sửa sanitizer.
 5. **`Q1`–`Q4` + `RA-04`**: vẫn chờ Owner — 8 canary FAIL **không** đóng được bằng sửa code.
+6. **🆕 Đưa `test_ci_http_probe_static.py` vào CI**: hiện **52 test tĩnh KHÔNG** được pipeline chạy ⇒ guard chỉ có hiệu lực cục bộ. Đây là **thay đổi phạm vi CI** ⇒ **cần Owner duyệt** trước khi thêm step vào `p0.yml`.
+7. **🆕 Owner quyết định mức độ nghiêm trọng của H-RFC-2**: lộ `file_url` **+** tải được nội dung (nhưng **đúng scope**) — là *by design* hay *sai sót*? Không tự nâng `SEC-26` / không đóng RFC từ source tĩnh.
 
 ---
 
@@ -406,20 +571,27 @@ Thêm class `TestProbeGetActivitiesCoverage` — **10 test** ghim coverage:
 
 | Đường dẫn | Nội dung |
 |---|---|
-| `deploy/dev/evidence/logs/run40253195658/p0-g007-evidence-40253195658/` | **artifact CI mới nhất** (run 32) giải nén — digest `sha256:bc2201a0…` |
+| `deploy/dev/evidence/logs/run40261069257/p0-g007-evidence-40261069257/` | **artifact CI mới nhất** (run 34) giải nén — digest `sha256:d1be8c70…` |
+| `deploy/dev/evidence/logs/run40261069257/` | artifact run 34 giải nén (16 entry) + raw evidence |
+| `deploy/dev/evidence/logs/run40261069257/_raw_sec26_review_run40261069257.json` | **raw output 6 observations** + meta (sha256 `ecebbd89…`, 4 713 B) |
+| `deploy/dev/evidence/logs/run40253195658/p0-g007-evidence-40253195658/` | artifact CI run 32 giải nén (16 entry) — digest `sha256:bc2201a0…` |
 | `deploy/dev/evidence/logs/run40134550329/p0-g007-evidence-40134550329/` | artifact CI run 31 giải nén (16 entry) — digest `sha256:817ec470…` |
 | `deploy/dev/evidence/logs/run40253195658/` | artifact run 32 giải nén (16 entry) |
 | `deploy/dev/evidence/logs/run40134550329/_raw_sec26_activities_4_sites.json` | **raw output 4 đường** + observations + meta (sha256 `13add90d…`) |
 | `deploy/dev/evidence/logs/run40133210954/_raw_sec26_activities_observations.json` | raw output 2 đường (run trung gian) (sha256 `abd9a302…`) |
+| `deploy/dev/evidence/logs/_dl_run40261069257.py` | tải artifact run 34 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40253195658.py` | tải artifact run 32 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40134550329.py`, `_dl_run40133210954.py` | tải artifact + **tự** kiểm digest |
+| `deploy/dev/evidence/logs/_compare_run32_run34.py` | **đối chiếu run 32 ↔ run 34**: gate / FAIL set / probe / byte-identical / rò rỉ |
+| `deploy/dev/evidence/logs/_audit_redaction_run34.py` | **audit redaction toàn artifact run 34** (33 file) — 0 rò |
+| `deploy/dev/evidence/logs/_mutation_check_new_cases.py` | **mutation check 10/10** cho 2 case mới |
+| `deploy/dev/evidence/logs/_mutation_check.py` | mutation check 8/8 (gốc) |
 | `deploy/dev/evidence/logs/_verify_run32_invariants.py` | đối chiếu bất biến gate/probe/FAIL-set giữa **4 run** (29→32) |
 | `deploy/dev/evidence/logs/_verify_final_claims.py` | kiểm chứng 22 claim của báo cáo (4 quan sát, 15 case, gate 99/99/91, FAIL set) |
 | `deploy/dev/evidence/logs/_read_observations_4path.py`, `_read_observations.py` | đọc observations + payload raw |
 | `deploy/dev/evidence/logs/_extract_raw_paths.py`, `_enumerate_leak_sites.py` | tách 4 đường + so sánh |
 | `deploy/dev/evidence/logs/_verify_and_persist_4path.py`, `_verify_merge_sha.py` | xác minh merge SHA chứa commit của T1B; lưu raw evidence |
 | `deploy/dev/evidence/logs/_compare_runs.py` | đối chiếu FAIL set / gate / probe giữa các run |
-| `deploy/dev/evidence/logs/_mutation_check.py` | mutation check 8/8 |
 | `deploy/dev/evidence/logs/_sim_probe_4paths.py`, `_sim_probe_parsing.py` | simulation shape (4 đường + 2 đường) |
 | `deploy/dev/evidence/logs/_hunt_docinfo.py` | quét 12 artifact: `docinfo`/`get_activities` **0 hit** (trước thay đổi) |
 | `deploy/dev/evidence/logs/_check_download_path.py`, `_check_file_perm.py`, `_check_find_file.py`, `_check_attachment_logs.py` | source tĩnh H-RFC-2 + đường 4 |

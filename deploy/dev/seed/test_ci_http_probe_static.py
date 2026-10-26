@@ -94,6 +94,14 @@ def check_call(tree: ast.Module, case_id: str) -> ast.Call | None:
 	return None
 
 
+def find_function(tree: ast.Module, name: str) -> ast.FunctionDef | None:
+	"""Tìm định nghĩa hàm theo tên (dùng cho kiểm tra AST trong một hàm)."""
+	for node in ast.walk(tree):
+		if isinstance(node, ast.FunctionDef) and node.name == name:
+			return node
+	return None
+
+
 def request_path(tree: ast.Module, case_id: str) -> str | None:
 	"""Tìm path literal truyền cho `request(case_id, ...)`, gộp string nối chuỗi."""
 	for node in ast.walk(tree):
@@ -598,6 +606,88 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 			"phải thực sự append vào list `observations`",
 		)
 
+	def test_every_observation_group_is_actually_appended(self):
+		"""**Mọi** nhóm quan sát phải thực sự `observations.append(...)`.
+
+		Regex `observations\\.append(` của test cũ chỉ bắt được **một** occurrence
+		⇒ mutation đổi occurrence **đầu tiên** (nhóm 4 đường lộ) thành
+		`_ignored.append(` vẫn lọt, dù 4 quan sát đó không còn được ghi.
+		"""
+		append_calls = [
+			node
+			for node in ast.walk(self.tree)
+			if (
+				isinstance(node, ast.Call)
+				and isinstance(node.func, ast.Attribute)
+				and node.func.attr == "append"
+				and isinstance(node.func.value, ast.Name)
+				and node.func.value.id == "observations"
+			)
+		]
+		self.assertGreaterEqual(
+			len(append_calls),
+			3,
+			"phải có ≥3 lời gọi observations.append (4 đường lộ + ngoài scope + tải file)",
+		)
+
+		# (a) Nhóm 4 đường lộ: vòng `for` duyệt tuple chứa id của đường đầu
+		#     ⇒ thân vòng phải append vào `observations`.
+		loop_appends = False
+		for node in ast.walk(self.tree):
+			if not (isinstance(node, ast.For) and isinstance(node.iter, ast.Tuple)):
+				continue
+			# `for ... in (("id-1", ...), ("id-2", ...)):` — id nằm ở tuple con.
+			iter_ids: set[str] = set()
+			for element in node.iter.elts:
+				if isinstance(element, ast.Constant) and isinstance(element.value, str):
+					iter_ids.add(element.value)
+				elif isinstance(element, ast.Tuple):
+					for sub in element.elts:
+						if (
+							isinstance(sub, ast.Constant)
+							and isinstance(sub.value, str)
+						):
+							iter_ids.add(sub.value)
+			if "sec26-activities-message-attachments" not in iter_ids:
+				continue
+			for sub in ast.walk(node):
+				if (
+					isinstance(sub, ast.Call)
+					and isinstance(sub.func, ast.Attribute)
+					and sub.func.attr == "append"
+					and isinstance(sub.func.value, ast.Name)
+					and sub.func.value.id == "observations"
+				):
+					loop_appends = True
+		self.assertTrue(
+			loop_appends,
+			"vòng lặp ghi 4 quan sát đường lộ phải append vào `observations`",
+		)
+
+		# (b) Quan sát ngoài scope + tải file: dict literal có `id` hằng.
+		appended_ids = set()
+		for call in append_calls:
+			for sub in ast.walk(call):
+				if not isinstance(sub, ast.Dict):
+					continue
+				for key, value in zip(sub.keys, sub.values):
+					if (
+						isinstance(key, ast.Constant)
+						and key.value == "id"
+						and isinstance(value, ast.Constant)
+						and isinstance(value.value, str)
+					):
+						appended_ids.add(value.value)
+		for observation_id in (
+			"sec26-activities-out-of-scope",
+			"sec26-activities-download-in-scope",
+		):
+			self.assertIn(
+				observation_id,
+				appended_ids,
+				"quan sát %s phải được append vào `observations`" % observation_id,
+			)
+
 	def test_measures_attachment_log_paths(self):
 		"""Phải đo **2 đường attachment_log** (URL trong HTML/activity, không phải key `file_url`).
 
@@ -643,7 +733,32 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 			r'attachment_log_row\.get\(\s*"content"\s*\)',
 			"đường 4 phải đọc `content` của dòng attachment_log",
 		)
-		self.assertIn("/private/files/", src, "phải nhận diện URL private trong HTML")
+		# Nhận diện URL private trong HTML phải nằm trong **biểu thức tính** của
+		# `attachment_log_html_has_url` — kiểm ở tầng **AST**, không phải regex
+		# trên text: regex `"/private/files/" in src` khớp được cả **comment**
+		# ⇒ mutation đặt biểu thức thành `False` vẫn lọt.
+		assign = self.assignment_node("attachment_log_html_has_url")
+		self.assertIsNotNone(
+			assign,
+			"phải có biến `attachment_log_html_has_url` để đo đường 4",
+		)
+		self.assertRegex(
+			ast.unparse(assign),
+			r"/private/files/'\s+in\s+attachment_log_content",
+			"đường 4 phải nhận diện URL private trong nội dung HTML attachment_log",
+		)
+
+	def assignment_node(self, name: str) -> ast.Assign | None:
+		"""Trả về lệnh gán `name = ...` (nếu có)."""
+		for node in ast.walk(self.tree):
+			if (
+				isinstance(node, ast.Assign)
+				and len(node.targets) == 1
+				and isinstance(node.targets[0], ast.Name)
+				and node.targets[0].id == name
+			):
+				return node
+		return None
 
 	def assignment_is_next_call(self, name: str) -> ast.Call | None:
 		"""Trả về lời gọi `next(...)` được gán cho biến `name` (nếu có)."""
@@ -878,6 +993,65 @@ class TestProbeDownloadMeasurement(unittest.TestCase):
 			"phải che `name` của hồ sơ File",
 		)
 
+	def test_content_length_is_measured_from_payload(self):
+		"""`content_length` phải đo **thật** từ bytes tải về, không hardcode.
+
+		Mutation ``"content_length": 0`` làm case vẫn PASS nhưng **không** đo
+		được khả năng tải ⇒ phải bị bắt.
+
+		Kiểm **mọi** chỗ ghi `content_length` trong `download_bytes` (cả entry
+		ghi vào artifact lẫn giá trị trả về) đều phải suy ra từ `len(payload)`
+		— không được có bất kỳ giá trị hằng nào.
+		"""
+		func = find_function(self.tree, "download_bytes")
+		self.assertIsNotNone(func)
+		length_values = [
+			value
+			for node in ast.walk(func)
+			if isinstance(node, ast.Dict)
+			for key, value in zip(node.keys, node.values)
+			if isinstance(key, ast.Constant) and key.value == "content_length"
+		]
+		self.assertTrue(length_values, "phải có `content_length` trong download_bytes")
+		for value in length_values:
+			self.assertNotIsInstance(
+				value,
+				ast.Constant,
+				"content_length phải được tính từ `len(payload)`, không phải hằng số",
+			)
+		self.assertRegex(
+			ast.unparse(func),
+			r"content_length.*len\(payload\)",
+			"content_length phải đo từ `len(payload)`",
+		)
+
+	def test_content_sha256_is_computed_from_payload(self):
+		"""`content_sha256` phải **tính** từ bytes tải về, không hardcode/rỗng.
+
+		Mutation ``"content_sha256": ""`` làm mất đặc trưng so sánh ⇒ phải bị bắt.
+		"""
+		func = find_function(self.tree, "download_bytes")
+		self.assertIsNotNone(func)
+		sha_values = [
+			value
+			for node in ast.walk(func)
+			if isinstance(node, ast.Dict)
+			for key, value in zip(node.keys, node.values)
+			if isinstance(key, ast.Constant) and key.value == "content_sha256"
+		]
+		self.assertTrue(sha_values, "phải có `content_sha256` trong entry")
+		for value in sha_values:
+			self.assertNotIsInstance(
+				value,
+				ast.Constant,
+				"content_sha256 phải được tính (hashlib.sha256), không hardcode/rỗng",
+			)
+		self.assertRegex(
+			ast.unparse(func),
+			r"content_sha256.*hashlib\.sha256\(payload\)",
+			"content_sha256 phải tính từ `hashlib.sha256(payload)`",
+		)
+
 
 class TestProbeOutOfScopeMeasurement(unittest.TestCase):
 	"""H-RFC-4 — kịch bản ngoài scope phải được đo ở **tầng HTTP**."""
@@ -916,6 +1090,74 @@ class TestProbeOutOfScopeMeasurement(unittest.TestCase):
 		self.assertNotEqual(out_of_scope, in_scope, "actor ngoài scope phải khác actor in-scope")
 		self.assertNotEqual(out_of_scope, "Administrator", "actor ngoài scope phải non-system")
 
+	def test_out_of_scope_case_actually_logs_in_with_out_of_scope_actor(self):
+		"""Case ngoài scope phải **login bằng** actor ngoài scope.
+
+		Mutation ``login("staffc", SEC16_USER, ...)`` khiến case ngoài scope thực
+		chất chạy bằng actor **đúng scope** ⇒ đo sai kịch bản, phải bị bắt.
+		"""
+		consts = load_env_consts()
+		out_of_scope = consts.get("OUT_OF_SCOPE_USER", "")
+		in_scope = consts.get("SEC16_USER", "")
+		self.assertTrue(out_of_scope)
+		self.assertTrue(in_scope)
+
+		login_calls = [
+			ast.unparse(node)
+			for node in ast.walk(self.tree)
+			if (
+				isinstance(node, ast.Call)
+				and isinstance(node.func, ast.Name)
+				and node.func.id == "login"
+				and len(node.args) >= 2
+				and isinstance(node.args[1], (ast.Constant, ast.Name))
+			)
+		]
+		self.assertTrue(login_calls, "phải có lời gọi login() trong probe")
+		# `login("staffc", OUT_OF_SCOPE_USER, ...)` — tham số là **tên hằng**,
+		# không phải literal ⇒ phải resolve qua bảng hằng module scope.
+		out_of_scope_logins = [
+			text
+			for text in login_calls
+			if out_of_scope in text or "OUT_OF_SCOPE_USER" in text
+		]
+		self.assertTrue(
+			out_of_scope_logins,
+			"phải login bằng actor ngoài scope %s (thấy: %s)"
+			% (out_of_scope, login_calls),
+		)
+		# Không được login bằng actor **in-scope** rồi dùng làm actor ngoài scope.
+		self.assertFalse(
+			any(in_scope in text for text in out_of_scope_logins),
+			"login của case ngoài scope không được dùng actor in-scope %s" % in_scope,
+		)
+		self.assertFalse(
+			any("SEC16_USER" in text for text in out_of_scope_logins),
+			"login của case ngoài scope không được dùng hằng SEC16_USER (actor in-scope)",
+		)
+		# `request()` cho case ngoài scope phải dùng **opener** của actor ngoài scope.
+		for node in ast.walk(self.tree):
+			if not (
+				isinstance(node, ast.Call)
+				and isinstance(node.func, ast.Name)
+				and node.func.id == "request"
+				and node.args
+				and isinstance(node.args[0], ast.Constant)
+				and node.args[0].value == "sec26-activities-out-of-scope"
+			):
+				continue
+			rendered = ast.unparse(node)
+			self.assertIn(
+				"out_of_scope",
+				rendered,
+				"case ngoài scope phải dùng opener của actor ngoài scope",
+			)
+			self.assertNotIn(
+				in_scope,
+				rendered,
+				"case ngoài scope không được dùng opener của actor in-scope",
+			)
+
 	def test_out_of_scope_case_calls_same_endpoint(self):
 		"""Case ngoài scope phải gọi **cùng** endpoint `get_activities`."""
 		found = False
@@ -949,6 +1191,44 @@ class TestProbeOutOfScopeMeasurement(unittest.TestCase):
 			"phải ghi observation cho kịch bản ngoài scope",
 		)
 
+	def test_observation_label_is_derived_from_measured_exc_type(self):
+		"""Nhãn quan sát phải **suy ra từ** `exc_type` đo được, không hardcode.
+
+		Mutation `if True` (thay vì `if out_of_scope_exc == "PermissionError"`)
+		khiến nhãn `blocked_with_permission_error` được gán **vô điều kiện** ⇒
+		bằng chứng có thể nói dối ⇒ phải bị bắt.
+		"""
+		obs_calls = [
+			node
+			for node in ast.walk(self.tree)
+			if (
+				isinstance(node, ast.Call)
+				and isinstance(node.func, ast.Attribute)
+				and node.func.attr == "append"
+				and node.args
+				and isinstance(node.args[0], ast.Dict)
+				and any(
+					isinstance(key, ast.Constant)
+					and key.value == "id"
+					and isinstance(value, ast.Constant)
+					and value.value == "sec26-activities-out-of-scope"
+					for key, value in zip(node.args[0].keys, node.args[0].values)
+				)
+			)
+		]
+		self.assertTrue(obs_calls, "phải có observation cho case ngoài scope")
+		rendered = ast.unparse(obs_calls[0])
+		self.assertRegex(
+			rendered,
+			r'out_of_scope_exc\s*==\s*[\'"]PermissionError[\'"]',
+			"nhãn `blocked_with_permission_error` phải được suy ra từ exc_type đo được",
+		)
+		self.assertNotRegex(
+			rendered,
+			r"if\s+True\b",
+			"nhãn quan sát không được gán vô điều kiện (phải suy ra từ exc_type)",
+		)
+
 	def test_out_of_scope_observation_records_status(self):
 		"""Observation phải ghi HTTP status + exc_type để reviewer thấy hành vi thật."""
 		self.assertRegex(
@@ -980,6 +1260,37 @@ class TestProbeRedactionCoversRequestUrl(unittest.TestCase):
 			'"url": redact_text(url)',
 			source,
 			"download_bytes cũng phải redact URL trước khi ghi vào artifact",
+		)
+
+	def test_every_url_written_to_artifact_is_redacted(self):
+		"""**Mọi** chỗ ghi `url` vào artifact phải qua `redact_text`.
+
+		Regex `assertIn('"url": redact_text(url)')` của test cũ chỉ bắt được
+		**một** occurrence ⇒ mutation đổi occurrence trong `download_bytes`
+		(thành `url` thô) vẫn lọt. Test này kiểm **toàn bộ** dict entry trong
+		probe: mọi key `url` phải có value gọi `redact_text(...)`.
+		"""
+		tree = load_probe()[1]
+		offenders: list[str] = []
+		total = 0
+		for node in ast.walk(tree):
+			if not isinstance(node, ast.Dict):
+				continue
+			for key, value in zip(node.keys, node.values):
+				if not (isinstance(key, ast.Constant) and key.value == "url"):
+					continue
+				total += 1
+				if not (
+					isinstance(value, ast.Call)
+					and isinstance(value.func, ast.Name)
+					and value.func.id == "redact_text"
+				):
+					offenders.append(ast.unparse(value))
+		self.assertTrue(total, "phải có ít nhất một key `url` trong artifact")
+		self.assertEqual(
+			offenders,
+			[],
+			"mọi `url` ghi vào artifact phải qua redact_text(); vi phạm: %s" % offenders,
 		)
 
 
