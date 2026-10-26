@@ -683,6 +683,7 @@ Ngoài ra, chạy lại mutation check gốc (8 mutation) sau khi thêm 2 case m
 | `deploy/dev/evidence/logs/_dl_run40266333553.py` | tải artifact run 36 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40270681816.py` | tải artifact run 37 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40263613563.py` | tải artifact run 35 + **tự** kiểm digest |
+| `deploy/dev/evidence/logs/_verify_report_run34_claims.py` | **verify 184 claim** trong báo cáo này (gate/probe/observations/artifact digest/redaction/PR state) — `KET QUA: TAT CA CLAIM DUNG` |
 | `deploy/dev/evidence/logs/_dl_run40261069257.py` | tải artifact run 34 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40253195658.py` | tải artifact run 32 + **tự** kiểm digest |
 | `deploy/dev/evidence/logs/_dl_run40134550329.py`, `_dl_run40133210954.py` | tải artifact + **tự** kiểm digest |
