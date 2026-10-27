@@ -1,10 +1,24 @@
 # P0 Exit Report
 
-**Ngày đánh giá:** 2026-10-19 (T1A: cập nhật metadata G0-01; checklist G0-09; ghi nhận blocker G0-02)
-**Kết luận hiện tại:** **NO-GO cho P1** — chưa đạt mọi gate của P0 §12.
+**Ngày đánh giá hiện hành:** 2026-10-27 (T1A: bổ sung kiểm tra runtime DEV, HMR, nhãn giao diện và truy vấn G0-01)
+**Kết luận hiện hành:** **NO-GO cho P1** — các gate chặn được liệt kê ở phần chốt hiện trạng bên dưới.
 **Dữ liệu:** chỉ dữ liệu giả; không dùng production.
 
-## Gate G0-01…G0-10
+> Phần “Gate G0-01…G0-10” và các kết luận phía dưới là hồ sơ lịch sử, bắt đầu từ ảnh chụp 2026-10-19. Trạng thái mới nhất và quyết định hiện hành nằm ở bảng sau; không dùng các số liệu lịch sử đó thay cho bằng chứng mới.
+
+## Chốt P0 — 2026-10-27
+
+| Gate | Trạng thái hiện hành | Căn cứ và việc còn lại |
+|---|---|---|
+| G0-01 — Baseline | **PASS (baseline DEV đã kiểm chứng)** | Trên site sạch `p0-final-verify-20261027.localhost`, Frappe 15.123.1 / CRM 1.87.0 chạy MariaDB 11.8.9, `utf8mb4_unicode_ci`; 5.000 Lead giả được tạo qua Frappe ORM, 0 lỗi, cleanup còn 0, `STRCMP` tiếng Việt = 0. Frappe v15 có prerequisite MariaDB 10.6.6+ trong [hướng dẫn cài đặt chính thức](https://docs.frappe.io/framework/user/en/installation); Frappe vẫn cảnh báo >10.8 chưa được kiểm thử rộng, nên quyết định này chỉ chấp nhận đúng baseline DEV đã chạy, không tuyên bố tương thích production. `mobile_no` không có index và EXPLAIN vẫn full scan (~5.036 dòng); ghi nhận là theo dõi hiệu năng P1, không tự thêm index khi chưa có kế hoạch truy vấn được duyệt. Xem [`t1a-p0-final-validation-2026-10-27.md`](../../deploy/dev/evidence/t1a-p0-final-validation-2026-10-27.md) và [`g001-workload.json`](../../deploy/dev/evidence/logs/p0-final-20261027/clean-site-validation-20261027/g001-workload.json). |
+| G0-02 — DEV/Vite/CSRF | **PARTIAL** | Stack vừa được khởi động lại: DB healthy; `bench start` và Vite dev server đang chạy. Kiểm tra mới qua `127.0.0.1` kèm `Host: dev.localhost`: Frappe ping HTTP 200, Vite `/crm` HTTP 200. Đăng nhập và `/cskh` trả 200; health API với CSRF hợp lệ trả 200, thiếu/sai token trong cùng phiên trả 400. Trước đó browser đã xác nhận CRM SPA mount và HMR CSS probe (`27`) rồi khôi phục đúng SHA. Còn thiếu thao tác nút `/cskh` trực tiếp trên browser và kiểm tra console CORS/WebSocket; giữ `PARTIAL`. `dev.localhost` hiện không phân giải được từ PowerShell host, nên dùng `http://127.0.0.1:8080/crm/dashboard` để mở DEV. Chi tiết ở [`G0-02 follow-up`](../../deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md). |
+| G0-07 — Bảo mật | **PARTIAL / CHƯA KÝ** | Trên site test sạch, snapshot `0301264` + working tree hiện hành: 99/99 method PASS, 0 FAIL/ERROR/SKIP/NOT RUN; HTTP probe 18/18 PASS. Đây là runtime cục bộ của working tree, chưa phải CI trên commit mới. CI mới nhất vẫn là `#40285825943` trên commit `0301264` trước các thay đổi chưa commit (91 PASS / 8 FAIL); cần đẩy thay đổi đã rà soát để có run mới và T1C review độc lập code/policy. Không đổi SEC tally/matrix trong lượt này. |
+| G0-09 — Tiếng Việt | **PARTIAL** | `vi.csv` hiện có 196 khóa duy nhất, không trùng/không rỗng; các nhãn ưu tiên Lead, Note, Assigned To, Lead Owner, Phone, Mobile No., Deal/Deals, Call Logs, Last Modified, stage/source và thông báo CSKH có bản dịch. Patcher có ghim revision CRM/Frappe/frappe-ui; CRM frontend build thành công sau bản vá. Chưa xác nhận trực quan toàn bộ 10 màn hoặc chạy PII sweep sau bản vá mới; trong checkout hiện chỉ có 1/10 ảnh và phiên này không chụp thêm được. Xem [`t1a-p0-final-validation-2026-10-27.md`](../../deploy/dev/evidence/t1a-p0-final-validation-2026-10-27.md). |
+| G0-10 — CI/packaging | **PARTIAL** | CRM frontend build cục bộ thành công; workflow CI mới nhất hiện có vẫn là `#40285825943` và đỏ trên revision trước các thay đổi working tree. Cần CI mới trên commit đã review để xác nhận packaging, per-method gate và HTTP probe ở cùng revision. |
+
+**Quyết định:** G0-01 được đóng trong phạm vi baseline DEV đã chạy; cảnh báo kiểm thử MariaDB 11.8 rộng hơn và full scan `mobile_no` được giữ làm giới hạn/việc theo dõi hiệu năng, không thay đổi schema. P0 vẫn **NO-GO cho P1** vì G0-02 còn thiếu kiểm tra browser trực tiếp/console, G0-07 cần CI mới và T1C review, G0-09 còn thiếu vòng rà trực quan/PII, G0-10 chờ CI mới. Các kết quả 99/99 local và probe 18/18 không được gán thành CI PASS. Xem [`t1a-p0-final-validation-2026-10-27.md`](../../deploy/dev/evidence/t1a-p0-final-validation-2026-10-27.md).
+
+## Gate G0-01…G0-10 — ảnh chụp lịch sử 2026-10-19
 
 | Gate | Trạng thái | Bằng chứng / phần còn thiếu |
 |---|---|---|

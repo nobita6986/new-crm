@@ -965,6 +965,27 @@ class TestSEC26FileURLLeak(FrappeTestCase):
 		)
 		# NOTE: Không assert về `content_hash` ở đây — xem docstring ở trên.
 
+		# The activity endpoint also returns the same private file in nested
+		# activity data and mutates frappe.response.docinfo. Prove the fixture
+		# exposes the URL upstream, then verify the app override removes it from
+		# both channels for an in-scope non-system caller.
+		upstream_get_activities = frappe.get_attr("crm.api.activities.get_activities")
+		frappe.set_user("Administrator")
+		frappe.local.response = {}
+		raw_activities = upstream_get_activities(self.lead_a)
+		raw_docinfo = frappe.response.get("docinfo")
+		self.assertIn(self.file_url_value, repr(raw_activities))
+		self.assertIn(self.file_url_value, repr(raw_docinfo))
+
+		from crm_cskh.api.guarded_crm import get_activities
+
+		frappe.set_user(self.users["a"])
+		activities = get_activities(self.lead_a)
+		self.assertNotIn(self.file_url_value, repr(activities))
+		self.assertNotIn(self.file_url_value, repr(frappe.response.get("docinfo")))
+		self.assertNotIn("/private/files/", repr(activities))
+		self.assertNotIn("/private/files/", repr(frappe.response.get("docinfo")))
+
 	def test_get_attachments_preserves_file_url_for_system_caller(self):
 		"""SEC-26 — system caller (Administrator) vẫn nhận payload upstream nguyên bản
 		(không redact) để hỗ trợ admin/audit flow.

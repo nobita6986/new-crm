@@ -9,7 +9,7 @@
 #   - TK-06   : TL1 đọc Task thuộc Lead Team 2 → D (list + detail)
 #   - NT-05   : TL1 đọc Note thuộc Lead Team 1 → A (list + detail)
 #   - NT-06   : TL1 đọc Note thuộc Lead Team 2 → D (list + detail)
-#   - RA-04   : CRM-ADMIN reassign Lead nội bộ Team 1 A→B → **BLOCKED, chưa đóng**
+#   - RA-04   : CRM-ADMIN reassign Lead nội bộ Team 1 A→B → **D tạm thời, fail-closed**
 #   - LS-02   : global search không trả Lead ngoài scope (A)
 #
 # NGUYÊN TẮC:
@@ -613,16 +613,16 @@ class TestNT0506TeamLeaderNote(_BT1C5Base):
 
 
 # ---------------------------------------------------------------------------
-# RA-04 — CRM-ADMIN reassign Lead nội bộ Team 1 (BLOCKED)
+# RA-04 — CRM-ADMIN reassign Lead nội bộ Team 1 (D tạm thời)
 # ---------------------------------------------------------------------------
 
 
 class TestRA04CrmAdminReassignBlocked(_BT1C5Base):
-	"""RA-04 — CRM-ADMIN reassign Lead nội bộ Team 1 `A → B`. **BLOCKED — chưa đóng.**
+	"""RA-04 — CRM-ADMIN reassign Lead nội bộ Team 1 `A → B`: **D tạm thời**.
 
-	Matrix (`permission-matrix.md` §7) ghi kỳ vọng **`A`** (cho phép) cho CRM-ADMIN.
-	ADR-004 §2.2 quy định **ownership service trong `crm_cskh` là đường DUY NHẤT**
-	để đổi owner/assignee, chạy trong một transaction có kiểm soát.
+	Owner ủy quyền chốt ngày 2026-10-26: giữ fail-closed `D` tới khi ownership
+	service ADR-004 §2.2 được triển khai. Generic assignment/ToDo không được dùng
+	để đổi owner.
 
 	**Blocker (bằng chứng tĩnh, đọc từ source trong checkout):**
 
@@ -641,16 +641,15 @@ class TestRA04CrmAdminReassignBlocked(_BT1C5Base):
 	   Test `test_crm_admin_role_fails_closed_until_controlled_service_exists`
 	   (`test_permissions.py`) đã chứng minh actor CRM-ADMIN **không** có
 	   `System Manager`. ⇒ CRM-ADMIN sẽ bị `validate_lead_owner` chặn khi đổi
-	   `lead_owner` ⇒ hành vi runtime là **D**, **mâu thuẫn** với kỳ vọng matrix `A`.
+		   `lead_owner`; đây là kết quả mong đợi `D` theo quyết định P0 tạm thời.
 
 	3. **Vì sao KHÔNG viết test "cho phép":** dùng `Administrator` để reassign sẽ
 	   *đại diện sai actor* (Administrator ≠ CRM-ADMIN) và tạo bằng chứng giả cho
 	   RA-04. Dùng `lead.save(ignore_permissions=True)` từ CRM-ADMIN sẽ vô hiệu hóa
 	   chính guard mà test cần kiểm chứng. Cả hai đều là **bypass**, bị T0 cấm.
 
-	Các test dưới đây KHÔNG assert hành vi "cho phép" hay "từ chối" — chúng **pin
-	sự thật hiện trạng** để T1C/Owner có bằng chứng để chốt, và ghi rõ RA-04
-	**chưa được đóng**.
+	Các test xác nhận hành vi `D` đã chọn; không mô phỏng service chưa tồn tại và
+	không dùng Administrator làm đại diện cho CRM-ADMIN.
 	"""
 
 	def test_ra04_ownership_service_does_not_exist_yet(self):
@@ -671,23 +670,21 @@ class TestRA04CrmAdminReassignBlocked(_BT1C5Base):
 			"ADR-004 §2.2 yêu cầu ownership service; `transfer_lead_ownership` chưa tồn tại.",
 		)
 		override = frappe.get_hooks("override_whitelisted_methods") or {}
-		reassign_routes = [
+		transfer_routes = [
 			route
 			for route in override
-			if any(token in route.lower() for token in ("reassign", "transfer_ownership", "assign"))
+			if any(token in route.lower() for token in ("reassign_lead", "transfer_lead_ownership"))
 		]
 		self.assertEqual(
-			reassign_routes,
+			transfer_routes,
 			[],
-			"Không được đăng ký endpoint reassign/transfer khi ownership service chưa có "
-			"(nếu có, phải xem lại guard theo ADR-004 §2.2).",
+			"Chưa có ownership service nên không được đăng ký endpoint chuyển owner.",
 		)
 
 	def test_ra04_crm_admin_is_not_system_and_is_blocked_by_validate_lead_owner(self):
-		"""Blocker #2 — CRM-ADMIN bị `validate_lead_owner` chặn ⇒ runtime là D, không phải A.
+		"""RA-04 — CRM-ADMIN bị `validate_lead_owner` chặn theo chính sách D tạm thời.
 
-		Đây là **hành vi quan sát được**, không phải kỳ vọng matrix. Test KHÔNG khẳng
-		định RA-04 PASS/FAIL — nó pin sự thật để Owner/T1C chốt chính sách.
+		Đây là quyết định P0; không tạo bypass và không dùng Administrator làm đại diện.
 		"""
 		from crm_cskh import permissions
 
@@ -706,21 +703,21 @@ class TestRA04CrmAdminReassignBlocked(_BT1C5Base):
 		self.assertEqual(frappe.db.get_value("CRM Lead", self.lead_t1, "lead_owner"), self.users["a"])
 
 	def test_ra04_stays_unclosed_pending_owner_decision(self):
-		"""Ghi nhận trạng thái — RA-04 **chưa đóng**, cần Owner/T1C chốt.
+		"""Tên method được giữ để bảo toàn inventory 99; xác nhận chính sách D.
 
-		Ba câu hỏi cần quyết định (không tự ý chọn phương án nào ở T1B):
-		  1. Có build ownership service (ADR-004 §2.2) trước P0 exit không?
-		  2. Nếu chưa build: matrix RA-04 có chấp nhận kỳ vọng `D` (fail-closed) tạm thời
-		     cho tới khi service sẵn sàng, thay vì `A`?
-		  3. Nếu build: actor nào được gọi service — CRM-ADMIN role, hay System Manager?
+		CRM-ADMIN không có System Manager, request đổi owner bị từ chối và owner giữ nguyên.
 		"""
-		self.assertTrue(
-			True,
-			"RA-04 CHƯA ĐÓNG — runtime hiện là D (fail-closed) do `validate_lead_owner` chặn "
-			"CRM-ADMIN, MÂU THUẪN với kỳ vọng A của permission-matrix.md §7. Cần Owner/T1C "
-			"chốt: build ownership service (ADR-004 §2.2) hay tạm đổi kỳ vọng sang D. "
-			"T1B không tạo bypass và không dùng Administrator thay CRM-ADMIN.",
-		)
+		from crm_cskh import permissions
+
+		actor = self.users["admin"]
+		self.assertNotIn("System Manager", frappe.get_roles(actor))
+		self.assertFalse(permissions._is_system(actor))
+		frappe.set_user(actor)
+		with self.assertRaises(frappe.PermissionError):
+			lead = frappe.get_doc("CRM Lead", self.lead_t1)
+			lead.lead_owner = self.users["b"]
+			lead.save()
+		self.assertEqual(frappe.db.get_value("CRM Lead", self.lead_t1, "lead_owner"), self.users["a"])
 
 
 # ---------------------------------------------------------------------------

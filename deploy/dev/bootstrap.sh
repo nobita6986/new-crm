@@ -153,6 +153,33 @@ fi
 log "Chạy migrate ..."
 bench --site "$SITE" migrate
 
+log "Đặt ngôn ngữ mặc định cho DEV site là tiếng Việt ..."
+bench --site "$SITE" set-config default_language vi
+
+# Một số nhãn onboarding của frappe-ui v1.0.0-beta.29 không gọi hàm dịch.
+# Áp dụng bản vá nhỏ, có ghim version, chỉ vào node_modules của DEV; mã vá được
+# lưu trong repo để chạy lại sau khi cài frontend dependencies.
+FRAPPE_UI_PATCHER="$SRC_DIR/deploy/dev/apply-crm-ui-vi-patch.py"
+CRM_FRONTEND="$BENCH_DIR/apps/crm/frontend"
+if [ -f "$CRM_FRONTEND/node_modules/frappe-ui/package.json" ]; then
+  log "Áp dụng bản dịch nhãn onboarding vào frappe-ui đã ghim ..."
+  python "$FRAPPE_UI_PATCHER" "$CRM_FRONTEND"
+else
+  warn "Chưa có frappe-ui trong node_modules; sau khi yarn install, chạy:
+    python $FRAPPE_UI_PATCHER $CRM_FRONTEND"
+fi
+
+CRM_DEV_PATCHER="$SRC_DIR/deploy/dev/apply-crm-vite-dev-patch.py"
+log "Áp dụng bản vá Vite DEV có ghim revision CRM ..."
+python "$CRM_DEV_PATCHER" "$BENCH_DIR/apps/crm"
+
+FRAPPE_DEV_PATCHER="$SRC_DIR/deploy/dev/apply-frappe-vi-patch.py"
+log "Áp dụng bản dịch nhãn điều hướng cho Frappe đã ghim ..."
+python "$FRAPPE_DEV_PATCHER" "$BENCH_DIR/apps/frappe"
+
+log "Xoá cache để nạp lại từ điển dịch ..."
+bench --site "$SITE" clear-cache
+
 log "===== XÁC MINH ====="
 printf 'frappe  SHA: %s\n' "$(git -C apps/frappe rev-parse HEAD)"
 printf 'crm     SHA: %s\n' "$(git -C apps/crm rev-parse HEAD)"

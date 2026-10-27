@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "site": "p0-final-verify-20261027.localhost",
+  "apps": {
+    "frappe": "15.123.1",
+    "crm": "1.87.0",
+    "crm_cskh": "0.0.1 (working tree)"
+  },
+  "database": {
+    "version": "11.8.9-MariaDB-ubu2404",
+    "character_set_server": "utf8mb4",
+    "collation_server": "utf8mb4_unicode_ci",
+    "site_database_collation": "utf8mb4_unicode_ci",
+    "crm_lead_table_collation": "utf8mb4_unicode_ci"
+  },
+  "workload": {
+    "doctype": "CRM Lead",
+    "synthetic_prefix": "P0WL20261027-",
+    "target_rows": 5000,
+    "inserted_rows": 5000,
+    "insert_errors": 0,
+    "insert_seconds": 476.94,
+    "rows_observed_before_cleanup": 5000,
+    "rows_remaining_after_cleanup": 0
+  },
+  "query_check": {
+    "sql_shape": "SELECT name FROM tabCRM Lead WHERE mobile_no = ?",
+    "mobile_no_indexes_before_run": 0,
+    "explain_type": "ALL",
+    "possible_keys": null,
+    "key": null,
+    "estimated_rows": 5036,
+    "extra": "Using where"
+  },
+  "collation_check": {
+    "comparison": "STRCMP('Khach hang', 'Khách hàng')",
+    "result": 0
+  },
+  "sanitization": {
+    "database_schema_name": "omitted",
+    "data": "synthetic only"
+  },
+  "source": "g001-workload-runner.py; command output was captured directly from the isolated Frappe site"
+}
