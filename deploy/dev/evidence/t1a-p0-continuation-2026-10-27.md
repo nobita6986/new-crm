@@ -7,14 +7,14 @@
 
 ## CI mới nhất — xác minh độc lập
 
-`gh run list --workflow p0.yml --limit 5` xác nhận run mới nhất là [#40481457445](https://github.com/nobita6986/new-crm/actions/runs/40481457445), không phải run #40479841377.
+`gh run list --workflow p0.yml --limit 5` xác nhận trước khi commit run mới nhất là [#40481457445](https://github.com/nobita6986/new-crm/actions/runs/40481457445). Sau khi commit bản cập nhật `48e1b18`, run [#40510496233](https://github.com/nobita6986/new-crm/actions/runs/40510496233) đã chạy thành công trên đúng commit này; đây là run dùng xác nhận patcher và báo cáo hiện tại.
 
 | Trường | Giá trị |
 |---|---|
-| Head | `e0e0519fe64257829e606049212e2103f973df84` |
-| Kết quả | `completed / success` |
-| Artifact | `12723162687`, `p0-g007-evidence-40481457445`, 132.845 byte, chưa hết hạn |
-| Digest artifact từ GitHub API | `sha256:46201693f8aed9c25ff75819bf520b29ed76ba636211d726c9d1349c10b9cf44` |
+| Head được xác nhận | `48e1b181263190da266f9cb8fe6f848924930268` |
+| Run | `#40510496233`, `completed / success` |
+| Artifact | `12736484571`, `p0-g007-evidence-40510496233`, 132.808 byte, chưa hết hạn |
+| Digest artifact từ GitHub API | `sha256:153e3e154a98ab31a264a3d8d2ff8d5514085b1f4b0700b0a67fac9f99ff42c8` |
 
 Đã tải artifact rồi parse lại: `g007-per-method-gate.json` ghi `expected_total=99`, `observed_total=99`, `PASS=99`, `gate_passed=true`; 5 JUnit XML có tổng 99 `<testcase>`, 0 failure, 0 error, 0 skipped; HTTP probe `PASS`, 18/18 case, 0 failed. Phạm vi probe tự ghi là HTTP trực tiếp tới `bench serve`, **không** bao phủ reverse-proxy/CORS. CI PASS chứng minh các bước và ca kiểm tra có trong workflow ở revision này; không thay thế rà soát độc lập T1C hoặc mở rộng phạm vi probe.
 
@@ -54,6 +54,6 @@ Không tự sửa hoặc ký thay T1C trong evidence này. Cần T1C đối chi�
 | G0-02 | `PARTIAL` | Xác nhận browser/console sau restart và truy nguyên JSON parse lỗi đã thấy trước đó. |
 | G0-07 | `PARTIAL / CHƯA KÝ` | T1C đồng bộ/review security docs với code và run mới; probe không bao phủ reverse-proxy/CORS. |
 | G0-09 | `PARTIAL` | Chụp đủ 10 màn, quét PII, kiểm tra trực quan nhãn sau patch cuối. |
-| G0-10 | `PASS` trong phạm vi CI PR #2 | Run #40481457445 xanh; không suy rộng sang các gate khác. |
+| G0-10 | `PASS` trong phạm vi CI PR #2 | Run #40510496233 xanh trên commit `48e1b18`; không suy rộng sang các gate khác. |
 
 **P0 vẫn `NO-GO cho P1`.** Không có thay đổi policy ngoài các quyết định Q1–Q4 đã được ghi trong source; không đổi SEC tally/matrix hoặc ký thay T1C. Không chạy workload phá hủy, không xóa volume/site.
