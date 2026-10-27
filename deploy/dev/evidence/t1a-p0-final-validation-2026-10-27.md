@@ -55,3 +55,28 @@ Docker bench/DB/Redis đang chạy; DB healthy. `GET /crm/dashboard` qua Vite `1
 | P0 | **NO-GO cho P1** |
 
 Không stage/commit/push/merge trong bước đo lường này.
+
+## CI follow-up — run #40479841377 (2026-10-27)
+
+Sau khi commit `12d4229888fc36b002451339ebaca5c57dea9b9a` được đẩy lên PR #2, workflow `p0` hoàn tất `success` trên synthetic merge commit `8c2fde0ec3953afe8b86338c6957e60d6bf8b135`. GitHub API xác nhận merge commit có base `b382fe425b3f1f6c2037cd3bed20e65e5df2d928` và PR head `12d4229888fc36b002451339ebaca5c57dea9b9a` làm hai parent.
+
+Artifact gốc `p0-g007-evidence-40479841377`: ID `12723270292`, 132.748 byte, SHA-256 `2a7d59245b16fc7c72f844e77004726235971a2ce519b7a61dd6a0ab4df9929d`; digest và kích thước khớp GitHub API.
+
+- Gate JSON: `expected_total=99`, `observed_total=99`, `passing_total=99`, `gate_passed=true`; `PASS=99`, không có FAIL/ERROR/SKIP/NOT RUN, method thiếu/trùng/thừa hay lỗi parse.
+- Đọc lại độc lập 5 JUnit XML: 27 + 10 + 18 + 12 + 32 = **99 PASS**, 0 FAIL/ERROR/SKIP; tập `(class, method)` khớp gate 99/99, 0 thiếu/thừa và 0 lệch trạng thái.
+- HTTP probe: **18/18 PASS**, `failed_cases=[]`. Giới hạn tự khai: `direct HTTP to bench serve; reverse-proxy and CORS behavior are not covered`. Case `sec26-activities-download-in-scope` không gửi request khi URL đã bị wrapper khử; không tính đây là bằng chứng tải file thành công.
+- Audit artifact: không phát hiện giá trị cookie, CSRF token, authorization hay password chưa khử; không ghi giá trị nhạy cảm vào báo cáo.
+- Workflow gồm clean bootstrap, build/lint, migration, suites, probe, backup/restore, sanitizer và cleanup; tất cả step bắt buộc thành công. Đây là CI evidence tại commit trên, khác với runtime local ở phần trước.
+
+### Trạng thái gate sau CI
+
+| Gate | Trạng thái | Lý do còn mở |
+|---|---|---|
+| G0-01 | **PASS có giới hạn** | Chỉ baseline DEV MariaDB đã chạy; không suy rộng production. |
+| G0-02 | **PARTIAL** | Cần click kiểm tra luồng trên browser và rà console CORS/WebSocket. |
+| G0-07 | **PARTIAL / CHƯA KÝ** | CI per-method xanh; T1C cần rà lại matrix/risk theo code mới. Probe direct-to-bench không bao phủ reverse-proxy/CORS. |
+| G0-09 | **PARTIAL** | Chưa có đủ 10 ảnh đã rà và PII sweep toàn bộ ảnh sau bản dịch hiện hành. |
+| G0-10 | **PASS trong phạm vi workflow PR #2** | Run #40479841377 xác nhận clean bootstrap, test gate, probe, backup/restore và cleanup trên CI. |
+| P0 | **NO-GO cho P1** | G0-02, G0-07 và G0-09 vẫn chưa đạt điều kiện nghiệm thu. |
+
+PR #2 vẫn mở, chưa merge. Kết quả này cập nhật trạng thái CI; không tự thay đổi SEC tally, không ký G0-07 và không biến probe transport thành bằng chứng reverse-proxy/CORS.
