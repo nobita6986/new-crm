@@ -45,7 +45,8 @@ def main() -> int:
 
     config = crm_root / "frontend/vite.config.js"
     main_js = crm_root / "frontend/src/main.js"
-    if not config.is_file() or not main_js.is_file():
+    translation_js = crm_root / "frontend/src/translation.js"
+    if not config.is_file() or not main_js.is_file() or not translation_js.is_file():
         print("Pinned CRM Vite source files are missing", file=sys.stderr)
         return 2
 
@@ -606,8 +607,37 @@ if (import.meta.env.DEV) {
         )
         changed_main = True
 
+    # CRM modules evaluate translated labels while their ESM imports load.
+    # Install the translator before importing router/App so module-level
+    # `__('...')` calls do not crash the Vite entry point.
+    translator_prelude = """if (typeof window !== 'undefined' && typeof window.__ !== 'function') {
+  window.__ = translate
+}
+
+export default function translationPlugin(app) {"""
+    changed_translation = patch_once(
+        translation_js,
+        "export default function translationPlugin(app) {",
+        translator_prelude,
+    )
+
+    current_main = main_js.read_text(encoding="utf-8")
+    translation_import = "import translationPlugin from './translation'\n"
+    if current_main.count(translation_import) != 1:
+        raise RuntimeError("Expected one translation plugin import in CRM main.js")
+    if not current_main.startswith(translation_import):
+        current_main = current_main.replace(translation_import, "", 1)
+        if not current_main.startswith("import './index.css'\n"):
+            raise RuntimeError("Pinned CRM main.js import prefix differs from expected source")
+        current_main = translation_import + current_main
+        main_js.write_text(current_main, encoding="utf-8", newline="\n")
+        changed_main = True
+
     print(f"Vite config: {'patched' if changed_config else 'already patched'}")
     print(f"Dev bootstrap: {'patched' if changed_main else 'already patched'}")
+    print(
+        f"Early translation global: {'patched' if changed_translation else 'already patched'}"
+    )
     return 0
 
 
