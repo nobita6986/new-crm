@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_bt1c5_matrix_gaps.TestCL0607TeamLeaderCallLog-20261027151849" tests="6" file="crm_cskh/tests/test_bt1c5_matrix_gaps.py" time="0.316" timestamp="2026-10-27T15:18:51" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestCL0607TeamLeaderCallLog" name="test_cl06_tl1_can_call_get_call_log_endpoint_for_team_1" time="0.150" timestamp="2026-10-27T15:18:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="394">
+			<!--CL-06 (endpoint) — wrapper `get_call_log` trả dữ liệu cho TL1 trong Team 1.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestCL0607TeamLeaderCallLog" name="test_cl06_tl1_can_list_call_log_of_team_1" time="0.035" timestamp="2026-10-27T15:18:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="367">
+			<!--CL-06 (list) — TL1 thấy Call Log gắn Lead Team 1.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestCL0607TeamLeaderCallLog" name="test_cl06_tl1_can_read_call_log_detail_of_team_1" time="0.040" timestamp="2026-10-27T15:18:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="386">
+			<!--CL-06 (detail) — TL1 đọc được record Call Log Team 1.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestCL0607TeamLeaderCallLog" name="test_cl07_tl1_detail_is_denied_for_call_log_of_team_2" time="0.043" timestamp="2026-10-27T15:18:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="424">
+			<!--CL-07 (detail) — TL1 bị từ chối record-level cho Call Log Team 2.-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00057Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: CRM Call Log - e07a83bb7206
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestCL0607TeamLeaderCallLog" name="test_cl07_tl1_get_call_log_endpoint_is_denied_for_team_2" time="0.031" timestamp="2026-10-27T15:18:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="431">
+			<!--CL-07 (endpoint) — wrapper `get_call_log` fail-closed cho TL1 ở Call Log Team 2.-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00057Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: CRM Call Log - e07a83bb7206
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestCL0607TeamLeaderCallLog" name="test_cl07_tl1_list_does_not_include_call_log_of_team_2" time="0.018" timestamp="2026-10-27T15:18:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="408">
+			<!--CL-07 (list) — TL1 KHÔNG thấy Call Log gắn Lead Team 2.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_bt1c5_matrix_gaps.TestLEAD07UnassignedLead-20261027151849" tests="3" file="crm_cskh/tests/test_bt1c5_matrix_gaps.py" time="0.368" timestamp="2026-10-27T15:18:52" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestLEAD07UnassignedLead" name="test_staff_detail_is_denied_for_unassigned_lead" time="0.123" timestamp="2026-10-27T15:18:52" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="334">
+			<!--LEAD-07 (detail) — `A` bị từ chối ở cả `frappe.client.get` và `check_permission`.-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00059
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00059
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestLEAD07UnassignedLead" name="test_staff_list_does_not_return_unassigned_lead" time="0.140" timestamp="2026-10-27T15:18:52" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="310">
+			<!--LEAD-07 (list) — `A` không thấy Lead chưa giao trong list path.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestLEAD07UnassignedLead" name="test_unassigned_lead_has_no_owner_and_no_share" time="0.105" timestamp="2026-10-27T15:18:52" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="304">
+			<!--Precondition — fixture đúng trạng thái "chưa giao": owner rỗng, không DocShare.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_bt1c5_matrix_gaps.TestLS02GlobalSearchScope-20261027151849" tests="3" file="crm_cskh/tests/test_bt1c5_matrix_gaps.py" time="0.071" timestamp="2026-10-27T15:18:54" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestLS02GlobalSearchScope" name="test_ls02_search_link_does_not_leak_cross_scope_lead" time="0.035" timestamp="2026-10-27T15:18:54" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="822">
+			<!--LS-02 — `search_link` (Link Field) cũng phải giữ scope cho `A`.
+
+`search_link` là wrapper của `search_widget` → cùng code path permission-aware.
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestLS02GlobalSearchScope" name="test_ls02_search_widget_returns_only_own_leads_for_staff" time="0.017" timestamp="2026-10-27T15:18:54" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="792">
+			<!--LS-02 — `search_widget` (search box) trả đúng scope của `A`.
+
+`search_widget` gọi `frappe.get_list` với `ignore_permissions=0` cho user
+thường ⇒ áp `permission_query_conditions["CRM Lead"]` →
+`crm_cskh.permissions.lead_query_conditions`.
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestLS02GlobalSearchScope" name="test_ls02_search_with_ignore_user_permissions_is_still_scope_bound" time="0.019" timestamp="2026-10-27T15:18:54" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="840">
+			<!--LS-02 — đường có tham số `ignore_user_permissions` vẫn bị chặn cho non-system.
+
+`search_widget` nhận `ignore_user_permissions`. Với actor thường, `has_permission`
+phải trả `False` (CRM-ADMIN không có read ⇒ `lead_has_permission` trả `False`),
+nên `ignore_permissions` không được bật. Test pin hành vi này để chống bypass.
+
+**Sửa lỗi assertion — hợp đồng thật là RAISE, không phải trả list rỗng
+(T1B, 2026-10-23).** Bản trước gọi `search_widget(...)` rồi assert
+`lead_t2 not in returned` ⇒ kỳ vọng hàm **trả list rỗng**. Nhưng theo
+source Frappe v15.123.1 `frappe/desk/search.py` (đã xác minh tĩnh):
+
+    ignore_permissions = doctype == "DocType" or (
+        cint(ignore_user_permissions)
+        and has_permission(doctype, ptype=..., parent_doctype=...)
+    )
+    values = frappe.get_list(..., ignore_permissions=ignore_permissions, ...)
+
+CRM-ADMIN không có DocPerm read trên CRM Lead ⇒ `has_permission` trả False
+⇒ `ignore_permissions` giữ **False** ⇒ `frappe.get_list` gọi
+`db_query.check_read_permission` ⇒ `frappe.has_permission(..., throw=True)`
+⇒ **raise `frappe.PermissionError`** (không phải trả list rỗng).
+
+Bằng chứng CI #39885152649: ERROR tại `search.py:222 → frappe.get_list →
+db_query.py:351 check_read_permission → db_query.py:906 _set_permission_map
+→ frappe/__init__.py:1083 raise frappe.PermissionError`.
+
+⇒ Hành vi fail-closed **đúng** là raise. `assertRaises(PermissionError)` mạnh
+hơn "trả list rỗng" (chặn hẳn request thay vì lọc rỗng), nên đây là
+siết chặt hơn, KHÔNG phải nới lỏng để làm CI xanh. Test vẫn pin đúng ý
+"bypass bằng `ignore_user_permissions=True` KHÔNG thành công".
+-->
+			<system-out><![CDATA[Message: User cskh-sec-admin@example.test does not have doctype access via role permission for document CRM Lead
+Message: User cskh-sec-admin@example.test does not have doctype access via role permission for document CRM Lead
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_bt1c5_matrix_gaps.TestNT0506TeamLeaderNote-20261027151849" tests="6" file="crm_cskh/tests/test_bt1c5_matrix_gaps.py" time="0.178" timestamp="2026-10-27T15:18:55" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestNT0506TeamLeaderNote" name="test_nt05_tl1_can_call_get_linked_notes_endpoint_for_team_1" time="0.031" timestamp="2026-10-27T15:18:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="565">
+			<!--NT-05 (endpoint) — `get_linked_notes` trả Note Team 1 cho TL1.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestNT0506TeamLeaderNote" name="test_nt05_tl1_can_list_note_of_team_1" time="0.019" timestamp="2026-10-27T15:18:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="546">
+			<!--NT-05 (list) — TL1 thấy Note gắn Lead Team 1.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestNT0506TeamLeaderNote" name="test_nt05_tl1_can_read_note_detail_of_team_1" time="0.043" timestamp="2026-10-27T15:18:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="557">
+			<!--NT-05 (detail) — TL1 đọc được record Note Team 1.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestNT0506TeamLeaderNote" name="test_nt06_tl1_detail_is_denied_for_note_of_team_2" time="0.053" timestamp="2026-10-27T15:18:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="595">
+			<!--NT-06 (detail) — TL1 bị từ chối record-level cho Note Team 2.-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00062Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: FCRM Note - c2m3nrho18
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestNT0506TeamLeaderNote" name="test_nt06_tl1_get_linked_notes_endpoint_is_denied_for_team_2" time="0.020" timestamp="2026-10-27T15:18:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="602">
+			<!--NT-06 (endpoint) — `get_linked_notes` raise cho TL1 khi gọi trên Lead Team 2.-->
+			<system-out><![CDATA[Message: Not permitted
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestNT0506TeamLeaderNote" name="test_nt06_tl1_list_does_not_include_note_of_team_2" time="0.012" timestamp="2026-10-27T15:18:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="584">
+			<!--NT-06 (list) — TL1 KHÔNG thấy Note gắn Lead Team 2.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_bt1c5_matrix_gaps.TestRA04CrmAdminReassignBlocked-20261027151849" tests="3" file="crm_cskh/tests/test_bt1c5_matrix_gaps.py" time="0.067" timestamp="2026-10-27T15:18:56" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestRA04CrmAdminReassignBlocked" name="test_ra04_crm_admin_is_not_system_and_is_blocked_by_validate_lead_owner" time="0.034" timestamp="2026-10-27T15:18:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="684">
+			<!--RA-04 — CRM-ADMIN bị `validate_lead_owner` chặn theo chính sách D tạm thời.
+
+Đây là quyết định P0; không tạo bypass và không dùng Administrator làm đại diện.
+-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-admin@example.test does not have doctype access via role permission for document CRM LeadUser cskh-sec-admin@example.test does not have access to this document
+Message: User cskh-sec-admin@example.test does not have doctype access via role permission for document CRM Lead
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestRA04CrmAdminReassignBlocked" name="test_ra04_ownership_service_does_not_exist_yet" time="0.010" timestamp="2026-10-27T15:18:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="655">
+			<!--Blocker #1 — chứng minh `crm_cskh` chưa có ownership service (ADR-004 §2.2).
+
+Assert: không có attribute nào trong `crm_cskh.permissions` trông giống
+ownership/reassign service, và không có endpoint reassign nào được đăng ký
+trong `override_whitelisted_methods`.
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestRA04CrmAdminReassignBlocked" name="test_ra04_stays_unclosed_pending_owner_decision" time="0.023" timestamp="2026-10-27T15:18:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="705">
+			<!--Tên method được giữ để bảo toàn inventory 99; xác nhận chính sách D.
+
+CRM-ADMIN không có System Manager, request đổi owner bị từ chối và owner giữ nguyên.
+-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-admin@example.test does not have doctype access via role permission for document CRM LeadUser cskh-sec-admin@example.test does not have access to this document
+Message: User cskh-sec-admin@example.test does not have doctype access via role permission for document CRM Lead
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_bt1c5_matrix_gaps.TestTK0506TeamLeaderTask-20261027151849" tests="6" file="crm_cskh/tests/test_bt1c5_matrix_gaps.py" time="0.169" timestamp="2026-10-27T15:18:57" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestTK0506TeamLeaderTask" name="test_tk05_tl1_can_call_get_linked_tasks_endpoint_for_team_1" time="0.030" timestamp="2026-10-27T15:18:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="480">
+			<!--TK-05 (endpoint) — `get_linked_tasks` trả Task Team 1 cho TL1.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestTK0506TeamLeaderTask" name="test_tk05_tl1_can_list_task_of_team_1" time="0.021" timestamp="2026-10-27T15:18:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="461">
+			<!--TK-05 (list) — TL1 thấy Task gắn Lead Team 1.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestTK0506TeamLeaderTask" name="test_tk05_tl1_can_read_task_detail_of_team_1" time="0.033" timestamp="2026-10-27T15:18:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="472">
+			<!--TK-05 (detail) — TL1 đọc được record Task Team 1.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestTK0506TeamLeaderTask" name="test_tk06_tl1_detail_is_denied_for_task_of_team_2" time="0.044" timestamp="2026-10-27T15:18:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="510">
+			<!--TK-06 (detail) — TL1 bị từ chối record-level cho Task Team 2.-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00064Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: CRM Task - 48
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestTK0506TeamLeaderTask" name="test_tk06_tl1_get_linked_tasks_endpoint_is_denied_for_team_2" time="0.025" timestamp="2026-10-27T15:18:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="517">
+			<!--TK-06 (endpoint) — `get_linked_tasks` raise cho TL1 khi gọi trên Lead Team 2.-->
+			<system-out><![CDATA[Message: Not permitted
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_bt1c5_matrix_gaps.TestTK0506TeamLeaderTask" name="test_tk06_tl1_list_does_not_include_task_of_team_2" time="0.017" timestamp="2026-10-27T15:18:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_bt1c5_matrix_gaps.py" line="499">
+			<!--TK-06 (list) — TL1 KHÔNG thấy Task gắn Lead Team 2.-->
+		</testcase>
+	</testsuite>
+</testsuites>

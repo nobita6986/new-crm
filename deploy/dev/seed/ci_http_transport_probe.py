@@ -38,12 +38,15 @@ from pathlib import Path
 BASE_URL = os.environ.get("P0_HTTP_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 SITE_NAME = os.environ.get("P0_HTTP_SITE", "p0-ci.localhost")
 OUTPUT = Path(os.environ.get("P0_HTTP_EVIDENCE_DIR", "/tmp/p0-g007-http"))
-SEED_SOURCE = Path(os.environ.get("P0_SEED_SOURCE", "/src/deploy/dev/seed/seed_demo.py"))
+SEED_SOURCE = Path(
+	os.environ.get("P0_SEED_SOURCE", "/src/deploy/dev/seed/seed_demo.py")
+)
 LEAD_NAME = "CRM-LEAD-00001"
 PRIVATE_FILE_NAME = f"DEMO-{LEAD_NAME}.txt"
-# Endpoint RFC `get_activities` — **KHÔNG** nằm trong `override_whitelisted_methods`
-# của `crm_cskh` ⇒ gọi HTTP tới đây đi qua hàm upstream **gốc**, không qua
-# wrapper redaction. Khai báo ở module scope để có thể kiểm chứng tĩnh.
+# Endpoint RFC `get_activities` được override trong `hooks.py` sang wrapper
+# `crm_cskh.api.guarded_crm.get_activities`. Probe gọi route gốc bằng HTTP để
+# xác nhận dispatch có áp dụng wrapper và redaction trước khi response ra ngoài.
+# Khai báo ở module scope để có thể kiểm chứng tĩnh.
 ACTIVITIES_ENDPOINT = "/api/method/crm.api.activities.get_activities"
 
 # --- SEC-26 (H-RFC-2): khả năng tải file -------------------------------------
@@ -55,6 +58,9 @@ ACTIVITIES_ENDPOINT = "/api/method/crm.api.activities.get_activities"
 # Đo bằng **chính** caller in-scope ⇒ trả lời câu hỏi của H-RFC-2: lộ URL có
 # đọc được nội dung hay không.
 DOWNLOAD_PATH_PREFIX = "/private/files/"
+_PRIVATE_FILE_URL_RE = re.compile(
+	r"(?i)(?:https?://[^/\s\"'<>]+)?/private/files/[^\s\"'<>]*"
+)
 # Marker trong nội dung file seed (**giả**) — dùng để chứng minh bytes tải về
 # là đúng file seed. **KHÔNG** ghi nội dung thô vào artifact.
 SEED_CONTENT_MARKER = b"DEMO"
@@ -80,7 +86,8 @@ def seed_password_from_source(path: Path) -> str:
 	tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
 	for statement in tree.body:
 		if isinstance(statement, ast.Assign) and any(
-			isinstance(target, ast.Name) and target.id == "SEED_PASSWORD" for target in statement.targets
+			isinstance(target, ast.Name) and target.id == "SEED_PASSWORD"
+			for target in statement.targets
 		):
 			value = ast.literal_eval(statement.value)
 			if isinstance(value, str) and value:
@@ -166,14 +173,24 @@ def extract_private_file_url_from_html(value: object) -> str | None:
 	"""Extract a private-file href from attachment-log HTML for fingerprinting."""
 	if not isinstance(value, str):
 		return None
-	for match in re.finditer(r"\bhref\s*=\s*(['\"])(.*?)\1", value, flags=re.IGNORECASE):
-		href = match.group(2)
-		if href.startswith(DOWNLOAD_PATH_PREFIX):
-			return href
+	for match in re.finditer(
+		r"\bhref\s*=\s*(['\"])(.*?)\1", value, flags=re.IGNORECASE
+	):
+		href = urllib.parse.unquote(match.group(2))
+		parsed = urllib.parse.urlsplit(href)
+		if parsed.path.startswith(DOWNLOAD_PATH_PREFIX):
+			return parsed.path
 	return None
 
 
-def collect_pre_sanitize_file_url_fingerprints(value: object) -> dict[str, dict[str, object]]:
+def contains_private_file_url(value: object) -> bool:
+	"""Return whether a field/text contains an actual private-file URL."""
+	return isinstance(value, str) and bool(_PRIVATE_FILE_URL_RE.search(value))
+
+
+def collect_pre_sanitize_file_url_fingerprints(
+	value: object,
+) -> dict[str, dict[str, object]]:
 	"""Fingerprint `file_url` values and private hrefs before response sanitization.
 
 	The returned map is process-local and is never serialized; its keys are raw
@@ -287,14 +304,23 @@ def request(
 	except (TypeError, ValueError):
 		safe_request_body = "[REDACTED]"
 
-	allowed_headers = {"accept", "content-type", "x-frappe-site-name", "x-frappe-csrf-token"}
+	allowed_headers = {
+		"accept",
+		"content-type",
+		"x-frappe-site-name",
+		"x-frappe-csrf-token",
+	}
 	safe_request_headers = {
 		key: ("[REDACTED]" if key.lower() == "x-frappe-csrf-token" else value)
 		for key, value in request_headers.items()
 		if key.lower() in allowed_headers
 	}
 	cookie_handler = next(
-		(handler for handler in opener.handlers if isinstance(handler, urllib.request.HTTPCookieProcessor)),
+		(
+			handler
+			for handler in opener.handlers
+			if isinstance(handler, urllib.request.HTTPCookieProcessor)
+		),
 		None,
 	)
 	has_cookies = bool(cookie_handler and any(cookie_handler.cookiejar))
@@ -318,7 +344,9 @@ def request(
 			"status": status,
 			"headers": sanitize(response_headers),
 			"body": safe_body,
-			"exc_type": parsed_response.get("exc_type") if isinstance(parsed_response, dict) else None,
+			"exc_type": parsed_response.get("exc_type")
+			if isinstance(parsed_response, dict)
+			else None,
 		},
 		"transport_error": transport_error,
 	}
@@ -419,9 +447,14 @@ def download_bytes(
 	}
 
 
-def check(case_id: str, response: dict[str, object], condition: bool, detail: str) -> bool:
+def check(
+	case_id: str, response: dict[str, object], condition: bool, detail: str
+) -> bool:
 	passed = bool(condition) and response["transport_error"] is None
-	response["entry"]["assertion"] = {"expected": detail, "result": "PASS" if passed else "FAIL"}
+	response["entry"]["assertion"] = {
+		"expected": detail,
+		"result": "PASS" if passed else "FAIL",
+	}
 	if not passed:
 		failures.append(case_id)
 		response["entry"]["assertion"]["detail"] = detail
@@ -487,7 +520,9 @@ def setup_sec16_permlevel_field() -> bool:
 		try:
 			os.chdir(sites_dir)
 		except OSError as error:  # noqa: PERF203 - giữ nguyên hành vi cũ nếu không chdir được
-			print(f"sec16-setup: không chdir được sang {sites_dir} ({error}); giữ CWD={previous_cwd}")
+			print(
+				f"sec16-setup: không chdir được sang {sites_dir} ({error}); giữ CWD={previous_cwd}"
+			)
 	try:
 		frappe.init(site=SITE_NAME, sites_path=sites_dir)
 		frappe.connect()
@@ -538,10 +573,14 @@ def setup_sec16_permlevel_field() -> bool:
 
 def run() -> int:
 	if not ADMIN_PASSWORD:
-		raise RuntimeError("ADMIN_PASSWORD is not available in the bench container environment")
+		raise RuntimeError(
+			"ADMIN_PASSWORD is not available in the bench container environment"
+		)
 
 	guest, _ = make_opener()
-	guest_response = request("sec13-guest", guest, "GET", "/api/method/crm_cskh.api.health.ping")
+	guest_response = request(
+		"sec13-guest", guest, "GET", "/api/method/crm_cskh.api.health.ping"
+	)
 	guest_data = guest_response["json"]
 	check(
 		"sec13-guest",
@@ -553,7 +592,9 @@ def run() -> int:
 	)
 
 	staff = login("staff", "staff.a@dev.local", SEED_PASSWORD)
-	staff_ping = request("sec13-user", staff, "GET", "/api/method/crm_cskh.api.health.ping")
+	staff_ping = request(
+		"sec13-user", staff, "GET", "/api/method/crm_cskh.api.health.ping"
+	)
 	staff_data = staff_ping["json"]
 	check(
 		"sec13-user",
@@ -580,7 +621,12 @@ def run() -> int:
 
 	ping_path = "/api/method/crm_cskh.api.health.ping"
 	get_ping = request("sec14-get", staff, "GET", ping_path)
-	check("sec14-get", get_ping, get_ping["status"] == 200, "safe GET succeeds without a CSRF header")
+	check(
+		"sec14-get",
+		get_ping,
+		get_ping["status"] == 200,
+		"safe GET succeeds without a CSRF header",
+	)
 
 	post_without_token = request("sec14-post-nocsrf", staff, "POST", ping_path, b"")
 	data = post_without_token["json"]
@@ -594,7 +640,12 @@ def run() -> int:
 	)
 
 	post_bad_token = request(
-		"sec14-post-badtok", staff, "POST", ping_path, b"", {"X-Frappe-CSRF-Token": "invalid-ci-probe-token"}
+		"sec14-post-badtok",
+		staff,
+		"POST",
+		ping_path,
+		b"",
+		{"X-Frappe-CSRF-Token": "invalid-ci-probe-token"},
 	)
 	data = post_bad_token["json"]
 	check(
@@ -606,7 +657,14 @@ def run() -> int:
 		"unsafe POST with incorrect CSRF token returns HTTP 400 CSRFTokenError",
 	)
 
-	post_valid = request("sec14-post-ok", staff, "POST", ping_path, b"", {"X-Frappe-CSRF-Token": csrf_token})
+	post_valid = request(
+		"sec14-post-ok",
+		staff,
+		"POST",
+		ping_path,
+		b"",
+		{"X-Frappe-CSRF-Token": csrf_token},
+	)
 	data = post_valid["json"]
 	check(
 		"sec14-post-ok",
@@ -683,7 +741,9 @@ def run() -> int:
 			staff,
 			"POST",
 			get_data_path,
-			json.dumps({**sec16_base, "rows": ["name", SEC16_FIELDNAME]}).encode("utf-8"),
+			json.dumps({**sec16_base, "rows": ["name", SEC16_FIELDNAME]}).encode(
+				"utf-8"
+			),
 			sec16_headers,
 		)
 		staff_get_data_payload = staff_get_data["json"]
@@ -776,15 +836,12 @@ def run() -> int:
 		"system caller retains file_url for seeded private attachment",
 	)
 
-	# --- SEC-26 (RFC `get_activities`): kịch bản caller ĐÚNG scope ----------
+	# --- SEC-26: redaction `get_activities` cho caller ĐÚNG scope ----------
 	#
-	# `crm.api.activities.get_activities` **KHÔNG** nằm trong
-	# `override_whitelisted_methods` của `crm_cskh` ⇒ gọi HTTP tới endpoint này
-	# đi qua `frappe/handler.py::execute_cmd` → `frappe.call(method, …)` →
-	# hàm upstream `crm/api/activities.py` **gốc**, **KHÔNG** qua
-	# `guarded_crm.get_attachments` ⇒ **KHÔNG** qua `_redact_private_file_urls`.
+	# Endpoint được override tại `hooks.py`; wrapper gọi upstream rồi redact
+	# tuple activities và `frappe.response.docinfo` trước khi response được gửi.
 	#
-	# Case này đo **hai** đường lộ `file_url` trong **cùng một** response:
+	# Case này kiểm tra **bốn** đường có thể lộ private URL trong cùng response:
 	#   (1) `message[4].attachments` — CRM `activities.py` L321-339 (L330 `file_url`)
 	#   (2) `docinfo.attachments`    — Frappe `desk/form/load.py` L128/L147/L206
 	# `docinfo` nằm ở **top-level** của response (không phải trong `message`) vì
@@ -794,22 +851,29 @@ def run() -> int:
 	#
 	# Caller: `staff.a@dev.local` — role `Sales User` (KHÔNG phải System Manager)
 	# và là `lead_owner` của `CRM-LEAD-00001` ⇒ **đúng scope**, có quyền read
-	# ⇒ các guard L24/L56/L181 của `activities.py` **cho qua**, nên đây là
-	# **kịch bản dương** (không phải kịch bản ngoài scope đã bị chặn).
+	# ⇒ quyền đọc Lead hợp lệ; probe đo redaction, không nhầm với từ chối quyền.
 	#
-	# Dữ liệu: **hoàn toàn giả** — site seed `p0-ci.localhost`, file
+	# Dữ liệu: **hoàn toàn giả** — site seed hiện tại, file
 	# `DEMO-CRM-LEAD-00001.txt` do `seed_demo.py::_ensure_attachment` tạo với
 	# `is_private=1`. Không dùng dữ liệu thật.
-	activities_path = ACTIVITIES_ENDPOINT + "?" + urllib.parse.urlencode({"name": LEAD_NAME})
-	staff_activities = request("sec26-activities-in-scope", staff, "GET", activities_path)
+	activities_path = (
+		ACTIVITIES_ENDPOINT + "?" + urllib.parse.urlencode({"name": LEAD_NAME})
+	)
+	staff_activities = request(
+		"sec26-activities-in-scope", staff, "GET", activities_path
+	)
 	staff_activities_json = staff_activities["json"]
 
 	# `message` là tuple 5 phần tử trả về bởi `get_deal_activities`/`get_lead_activities`:
 	# (versions, calls, notes, tasks, attachments) — CRM `activities.py` L318.
 	message = (
-		staff_activities_json.get("message") if isinstance(staff_activities_json, dict) else None
+		staff_activities_json.get("message")
+		if isinstance(staff_activities_json, dict)
+		else None
 	)
-	message_attachments = message[4] if isinstance(message, (list, tuple)) and len(message) == 5 else None
+	message_attachments = (
+		message[4] if isinstance(message, (list, tuple)) and len(message) == 5 else None
+	)
 	message_private = next(
 		(
 			entry
@@ -821,9 +885,13 @@ def run() -> int:
 
 	# `docinfo` là key top-level của response (không nằm trong `message`).
 	docinfo = (
-		staff_activities_json.get("docinfo") if isinstance(staff_activities_json, dict) else None
+		staff_activities_json.get("docinfo")
+		if isinstance(staff_activities_json, dict)
+		else None
 	)
-	docinfo_attachments = docinfo.get("attachments") if isinstance(docinfo, dict) else None
+	docinfo_attachments = (
+		docinfo.get("attachments") if isinstance(docinfo, dict) else None
+	)
 	docinfo_private = next(
 		(
 			entry
@@ -833,25 +901,26 @@ def run() -> int:
 		None,
 	)
 
-	# Đo **tồn tại** của `file_url` cho file private ở **cả hai** đường.
-	# KHÔNG assert giá trị phải là bao nhiêu, KHÔNG assert phải có hay không:
-	# đây là **characterization** — ghi lại hành vi quan sát được để Owner/verifier
-	# quyết định. `check()` chỉ PASS khi **cả hai** đường được quan sát cùng lúc
-	# (nếu không, case FAIL ⇒ tín hiệu rõ ràng cho reviewer).
-	message_has_url = isinstance(message_private, dict) and isinstance(
-		message_private.get("file_url"), str
+	# Đo riêng private URL trên cả bốn đường. Caller non-system không được
+	# nhận URL private ở bất kỳ đường nào.
+	message_file_url = (
+		message_private.get("file_url") if isinstance(message_private, dict) else None
 	)
-	docinfo_has_url = isinstance(docinfo_private, dict) and isinstance(
-		docinfo_private.get("file_url"), str
+	docinfo_file_url = (
+		docinfo_private.get("file_url") if isinstance(docinfo_private, dict) else None
 	)
+	message_has_url = contains_private_file_url(message_file_url)
+	docinfo_has_url = contains_private_file_url(docinfo_file_url)
 
 	# --- Đường lộ thứ 3: `message[0][attachment_log].data.file_url` ----------
 	# CRM `activities.py` L299-308: vòng lặp `for attachment_log in docinfo.attachment_logs:`
 	# ⇒ `parse_attachment_log(attachment_log.content, ...)` (L305) với
-	# `parse_attachment_log` L505-526: L518 `if "private/files" in a_tag["href"]` ⇒
-	# `is_private=True`, L524 `"file_url": a_tag["href"]` ⇒ **trả URL thật**.
+	# `parse_attachment_log` L505-526 nhận diện private URL và đưa vào activity;
+	# wrapper phải loại URL trước khi response được serialize.
 	# Đây là đường **thứ 3**, khác `message[4].attachments`.
-	message_activities = message[0] if isinstance(message, (list, tuple)) and len(message) == 5 else None
+	message_activities = (
+		message[0] if isinstance(message, (list, tuple)) and len(message) == 5 else None
+	)
 	attachment_log_activity = next(
 		(
 			activity
@@ -863,10 +932,15 @@ def run() -> int:
 		),
 		None,
 	)
-	attachment_log_data = attachment_log_activity.get("data") if attachment_log_activity else None
-	attachment_log_has_url = isinstance(attachment_log_data, dict) and isinstance(
-		attachment_log_data.get("file_url"), str
-	) and bool(attachment_log_data.get("file_url"))
+	attachment_log_data = (
+		attachment_log_activity.get("data") if attachment_log_activity else None
+	)
+	attachment_log_file_url = (
+		attachment_log_data.get("file_url")
+		if isinstance(attachment_log_data, dict)
+		else None
+	)
+	attachment_log_has_url = contains_private_file_url(attachment_log_file_url)
 
 	# --- Đường lộ thứ 4: `docinfo.attachment_logs[].content` (HTML) --------
 	# Frappe `file.py` L898-906 `create_attachment_record()` ⇒
@@ -887,7 +961,9 @@ def run() -> int:
 	# `[REDACTED_FILE_URL]` trong artifact là do **workflow** đổi placeholder
 	# `[REDACTED]` của probe thành `[REDACTED_FILE_URL]` — **không** phải bằng
 	# chứng đường 4 lọt qua probe.
-	docinfo_attachment_logs = docinfo.get("attachment_logs") if isinstance(docinfo, dict) else None
+	docinfo_attachment_logs = (
+		docinfo.get("attachment_logs") if isinstance(docinfo, dict) else None
+	)
 	attachment_log_row = next(
 		(
 			row
@@ -896,11 +972,19 @@ def run() -> int:
 		),
 		None,
 	)
-	attachment_log_content = attachment_log_row.get("content") if attachment_log_row else None
-	attachment_log_html_has_url = isinstance(attachment_log_content, str) and (
-		"/private/files/" in attachment_log_content
+	attachment_log_content = (
+		attachment_log_row.get("content") if attachment_log_row else None
 	)
+	attachment_log_html_has_url = contains_private_file_url(attachment_log_content)
 	attachment_log_html_url = extract_private_file_url_from_html(attachment_log_content)
+	any_private_file_url = any(
+		(
+			message_has_url,
+			attachment_log_has_url,
+			docinfo_has_url,
+			attachment_log_html_has_url,
+		)
+	)
 
 	# Fingerprints are derived from the parsed HTTP response **before** the
 	# response sanitizer runs in `request()`. Only SHA-256 and UTF-8 byte length
@@ -909,7 +993,9 @@ def run() -> int:
 		message_private.get("file_url") if isinstance(message_private, dict) else None
 	)
 	attachment_log_file_url = (
-		attachment_log_data.get("file_url") if isinstance(attachment_log_data, dict) else None
+		attachment_log_data.get("file_url")
+		if isinstance(attachment_log_data, dict)
+		else None
 	)
 	docinfo_file_url = (
 		docinfo_private.get("file_url") if isinstance(docinfo_private, dict) else None
@@ -925,36 +1011,43 @@ def run() -> int:
 		and isinstance(message_private, dict)
 		and bool(message_private.get("is_private"))
 		and isinstance(docinfo_private, dict)
-		and bool(docinfo_private.get("is_private")),
-		"in-scope caller reaches get_activities payload for seeded private attachment",
+		and bool(docinfo_private.get("is_private"))
+		and isinstance(attachment_log_activity, dict)
+		and isinstance(attachment_log_row, dict)
+		and not any_private_file_url,
+		"in-scope private attachment and both attachment-log rows are present; private URLs are redacted from all four payload paths",
 	)
 
 	# Ghi **riêng** quan sát của từng đường ra evidence (không làm thay đổi
 	# PASS/FAIL của gate) để reviewer thấy rõ đường nào lộ `file_url`.
-	for observation_id, has_url, site, file_url_value in (
+	for observation_id, has_url, site, file_url_value, entry_present in (
 		(
 			"sec26-activities-message-attachments",
 			message_has_url,
 			"message[4].attachments[].file_url",
 			message_file_url,
+			isinstance(message_private, dict),
 		),
 		(
 			"sec26-activities-message-attachment-log",
 			attachment_log_has_url,
 			"message[0][attachment_log].data.file_url",
 			attachment_log_file_url,
+			isinstance(attachment_log_data, dict),
 		),
 		(
 			"sec26-activities-docinfo-attachments",
 			docinfo_has_url,
 			"docinfo.attachments[].file_url",
 			docinfo_file_url,
+			isinstance(docinfo_private, dict),
 		),
 		(
 			"sec26-activities-docinfo-attachment-logs",
 			attachment_log_html_has_url,
 			"docinfo.attachment_logs[].content (HTML <a href>)",
 			attachment_log_html_url,
+			isinstance(attachment_log_row, dict),
 		),
 	):
 		file_url_fingerprints = staff_activities.get("file_url_fingerprints")
@@ -976,10 +1069,11 @@ def run() -> int:
 				"file_name": PRIVATE_FILE_NAME,
 				"file_is_private": True,
 				"leak_site": site,
+				"payload_entry_present": entry_present,
 				"observation": "file_url_present" if has_url else "file_url_absent",
 				"file_url_present": has_url,
 				**file_url_fingerprint,
-				"source": "synthetic seeded private attachment (p0-ci.localhost)",
+				"source": "synthetic seeded private attachment (%s)" % SITE_NAME,
 			}
 		)
 
@@ -995,9 +1089,9 @@ def run() -> int:
 	# (Team 1) sở hữu ⇒ **ngoài scope**. `enable_sales_hierarchy=1` nên
 	# `staff.c` (Team 2) **KHÔNG** nằm trong cây con của `staff.a` (Team 1).
 	#
-	# ⚠️ Đây là **quan sát characterization**, KHÔNG phải kết luận:
-	# probe **đo** status/exc_type, **không** assert cứng giá trị ⇒ nếu hành vi
-	# đổi, reviewer thấy ngay trong evidence mà không làm đỏ gate.
+# Đây là ranh giới bảo mật được assert trong gate: caller ngoài scope phải bị
+# từ chối và không nhận entry của file private. Artifact vẫn ghi status/exc_type
+# để giữ chẩn đoán nếu hành vi đổi.
 	out_of_scope = login("staffc", OUT_OF_SCOPE_USER, SEED_PASSWORD)
 	out_of_scope_activities = request(
 		"sec26-activities-out-of-scope",
@@ -1007,15 +1101,22 @@ def run() -> int:
 	)
 	out_of_scope_json = out_of_scope_activities["json"]
 	out_of_scope_exc = (
-		out_of_scope_json.get("exc_type") if isinstance(out_of_scope_json, dict) else None
+		out_of_scope_json.get("exc_type")
+		if isinstance(out_of_scope_json, dict)
+		else None
 	)
 	# Payload của actor ngoài scope: **không** được chứa entry của file private
 	# đã seed (nếu bị chặn thì không có payload nào).
 	out_of_scope_message = (
-		out_of_scope_json.get("message") if isinstance(out_of_scope_json, dict) else None
+		out_of_scope_json.get("message")
+		if isinstance(out_of_scope_json, dict)
+		else None
 	)
 	out_of_scope_entries: list[object] = []
-	if isinstance(out_of_scope_message, (list, tuple)) and len(out_of_scope_message) == 5:
+	if (
+		isinstance(out_of_scope_message, (list, tuple))
+		and len(out_of_scope_message) == 5
+	):
 		candidate = out_of_scope_message[4]
 		if isinstance(candidate, list):
 			out_of_scope_entries = candidate
@@ -1024,13 +1125,25 @@ def run() -> int:
 		for entry in out_of_scope_entries
 		if isinstance(entry, dict) and entry.get("file_name") == PRIVATE_FILE_NAME
 	]
+	# This is a security boundary assertion, not observation-only: an actor
+	# outside the Lead scope must receive the expected permission denial and
+	# must not receive the seeded private attachment entry.
+	check(
+		"sec26-activities-out-of-scope",
+		out_of_scope_activities,
+		out_of_scope_activities["status"] == 403
+		and out_of_scope_exc == "PermissionError"
+		and not out_of_scope_leaks,
+		"out-of-scope caller is denied with HTTP 403 PermissionError and receives no private attachment",
+	)
 	observations.append(
 		{
 			"id": "sec26-activities-out-of-scope",
 			"case": "sec26-activities-out-of-scope",
 			"endpoint": "crm.api.activities.get_activities",
 			"caller": OUT_OF_SCOPE_USER,
-			"caller_scope": "out-of-scope (Team 2; %s do %s sở hữu)" % (LEAD_NAME, SEC16_USER),
+			"caller_scope": "out-of-scope (Team 2; %s do %s sở hữu)"
+			% (LEAD_NAME, SEC16_USER),
 			"document": LEAD_NAME,
 			"http_status": out_of_scope_activities["status"],
 			"exc_type": out_of_scope_exc,
@@ -1038,13 +1151,17 @@ def run() -> int:
 			"observation": (
 				"blocked_with_permission_error"
 				if out_of_scope_exc == "PermissionError"
-				else ("payload_returned" if out_of_scope_activities["status"] == 200 else "other_response")
+				else (
+					"payload_returned"
+					if out_of_scope_activities["status"] == 200
+					else "other_response"
+				)
 			),
-			"source": "synthetic seeded private attachment (p0-ci.localhost)",
+			"source": "synthetic seeded private attachment (%s)" % SITE_NAME,
 		}
 	)
 
-	# --- SEC-26 (H-RFC-2): khả năng TẢI file từ URL rò rỉ ------------------
+	# --- SEC-26: theo dõi handoff tải file nếu URL vẫn lộ -------------------
 	#
 	# Câu hỏi cần trả lời bằng **runtime**: lộ `file_url` có đồng nghĩa với
 	# **đọc được nội dung file** không?
@@ -1062,16 +1179,32 @@ def run() -> int:
 	# ⚠️ **KHÔNG** ghi bytes/nội dung file vào artifact — chỉ status, độ dài,
 	# sha256 và boolean "có chứa marker seed". `download_bytes()` đảm bảo điều đó.
 	#
-	# ⚠️ Đây là **quan sát characterization**: KHÔNG assert cứng "phải tải được"
-	# hay "phải bị chặn" — kết luận thuộc Owner. Gate chỉ FAIL nếu case **không
-	# chạy được** (transport error) — xem `check()` bên dưới.
-	observed_private_url = message_private.get("file_url") if isinstance(message_private, dict) else None
+	# Nếu wrapper đã redacted URL thì không gửi request tải file. Nếu URL còn lộ,
+	# thử tải chỉ để ghi nhận khả năng truy cập; case redaction phía trên sẽ FAIL.
+	observed_private_url = next(
+		(
+			value
+			for value in (
+				message_file_url,
+				attachment_log_file_url,
+				docinfo_file_url,
+				attachment_log_html_url,
+			)
+			if isinstance(value, str) and value.startswith(DOWNLOAD_PATH_PREFIX)
+		),
+		None,
+	)
 	download_status = None
 	download_length = 0
 	download_has_marker = False
 	download_transport_error = "not-attempted"
-	download_response: dict[str, object] = {"entry": {}, "transport_error": "download-url-not-available"}
-	if isinstance(observed_private_url, str) and observed_private_url.startswith(DOWNLOAD_PATH_PREFIX):
+	download_response: dict[str, object] = {
+		"entry": {},
+		"transport_error": "download-url-not-available",
+	}
+	if isinstance(observed_private_url, str) and observed_private_url.startswith(
+		DOWNLOAD_PATH_PREFIX
+	):
 		download_result = download_bytes(
 			"sec26-activities-download-in-scope",
 			staff,
@@ -1085,14 +1218,47 @@ def run() -> int:
 			"entry": download_result["entry"],
 			"transport_error": download_result["transport_error"],
 		}
-	# Case HTTP **thật**. PASS khi transport chạy được và server **trả lời** —
-	# **không** assert cứng "200" hay "403", vì đó là kết luận thuộc Owner.
-	# Nếu payload không có URL private để tải ⇒ fail-closed (không im lặng bỏ qua).
+	else:
+		# Không có URL để tải là kết quả mong đợi sau redaction. Đây không phải
+		# bằng chứng tải file thành công; assertion chỉ ghi nhận handoff bị chặn.
+		download_entry: dict[str, object] = {
+			"id": "sec26-activities-download-in-scope",
+			"request": {
+				"method": "NOT SENT",
+				"url": redact_text("[NOT SENT]"),
+				"headers": {"X-Frappe-Site-Name": SITE_NAME},
+				"cookie": "",
+				"body": "",
+			},
+			"response": {
+				"status": None,
+				"headers": {},
+				"body": "",
+				"content_length": 0,
+				"content_sha256": "",
+				"content_type": "",
+				"exc_type": None,
+			},
+			"transport_error": None,
+			"not_requested_reason": "private URL absent after response redaction",
+		}
+		records.append(download_entry)
+		write_evidence()
+		download_response = {
+			"entry": download_entry,
+			"transport_error": None,
+		}
 	check(
 		"sec26-activities-download-in-scope",
 		download_response,
-		download_status is not None,
-		"private file URL obtained from get_activities is fetched over HTTP",
+		download_status is not None
+		if observed_private_url
+		else not any_private_file_url,
+		(
+			"private file URL is redacted; no download request is made"
+			if not observed_private_url
+			else "an exposed private URL is sent to the download endpoint for characterization"
+		),
 	)
 	observations.append(
 		{
@@ -1108,11 +1274,19 @@ def run() -> int:
 			"content_length": download_length,
 			"contains_seed_marker": download_has_marker,
 			"observation": (
-				"download_succeeded"
-				if download_status == 200
-				else ("download_denied" if download_status in (401, 403) else "download_other")
+				"redacted_before_download"
+				if download_status is None and not any_private_file_url
+				else (
+					"download_succeeded"
+					if download_status == 200
+					else (
+						"download_denied"
+						if download_status in (401, 403)
+						else "download_other"
+					)
+				)
 			),
-			"source": "synthetic seeded private attachment (p0-ci.localhost)",
+			"source": "synthetic seeded private attachment (%s)" % SITE_NAME,
 		}
 	)
 
@@ -1122,7 +1296,9 @@ def run() -> int:
 if __name__ == "__main__":
 	try:
 		exit_code = run()
-	except Exception as error:  # evidence should still be written on an unexpected probe error
+	except (
+		Exception
+	) as error:  # evidence should still be written on an unexpected probe error
 		failures.append(f"probe-error:{type(error).__name__}")
 		print(f"HTTP probe failed: {type(error).__name__}")
 		exit_code = 1

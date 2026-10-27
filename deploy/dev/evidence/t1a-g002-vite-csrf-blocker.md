@@ -180,7 +180,7 @@ Frappe webserver (mặc định 8000), bao gồm cả WebSocket (HMR). Vite port
 | "Cần cấu hình Vite proxy trong `crm_cskh/frontend/vite.config.js`" | Sai — `crm_cskh/frontend/` không tồn tại; CRM upstream đã có `frappe-ui` plugin với `frappeProxy: true`. |
 | "Cập nhật `host_name = http://127.0.0.1:8080`" | Không cần — nếu chỉ test CRM frontend qua Vite upstream, host_name mặc định `http://127.0.0.1:8000` vẫn dùng được vì proxy tự forward. |
 | "Cấu hình V-A: Vite proxy same-origin" | Áp dụng upstream qua plugin `frappe-ui`, không cần tự viết. |
-| "POST hợp lệ → 200, thiếu token → 403, sai token → 403" | Phương án test vẫn đúng cho `/cskh` vì `/cskh` gọi `/api/method/crm_cskh.api.health.ping` thực sự. |
+| "POST hợp lệ → 200, thiếu token → 403, sai token → 403" | Quan sát runtime trên Frappe 15.123.1 trả HTTP 400 `CSRFTokenError` cho thiếu/sai token; yêu cầu vẫn bị từ chối như mong đợi. Không ghi 403 làm kết quả thực tế. |
 
 ---
 
@@ -335,7 +335,7 @@ curl.exe -s -o /dev/null -w "GET /crm -> HTTP %{http_code}`n" -H "Host: dev.loca
 curl.exe -s -o /dev/null -w "GET /api/method/frappe.sessions.get_csrf_token -> HTTP %{http_code}`n" -H "Host: dev.localhost" http://127.0.0.1:8080/api/method/frappe.sessions.get_csrf_token
 ```
 
-**Kỳ vọng**: (a) 200 (Vite shell); (b) 200 (SPA shell hoặc HTML rỗng); (c) 200 trả JSON `{"message":"<csrf-token>"}` nếu cookie session đã có.
+**Kết quả đã quan sát:** (a) và (b) 200; (c) trả HTTP 403 `PermissionError` trên site đã kiểm tra. Lấy token sau khi đăng nhập từ HTML `/cskh` cùng origin; không dùng endpoint này như nguồn token.
 
 **Mở Chrome** trên máy Owner, truy cập `http://127.0.0.1:8080/crm`:
 
@@ -345,7 +345,7 @@ curl.exe -s -o /dev/null -w "GET /api/method/frappe.sessions.get_csrf_token -> H
 
 Nếu thấy trắng:
 - Kiểm tra log Vite có dòng "frappe-ui vite plugin" không.
-- Kiểm tra Network tab: request `/api/method/frappe.sessions.get_csrf_token` có response 200 qua proxy.
+- Request `/api/method/frappe.sessions.get_csrf_token` có thể bị từ chối quyền; lấy token từ HTML `/cskh` rồi kiểm tra POST qua Vite.
 - Plugin tự động include `@framework/ui` từ `apps/frappe/ui/src` — nếu checkout thiếu, plugin fallback npm; vẫn chạy được.
 
 ### 4.5. Verify Vite hot reload (HMR)
@@ -370,21 +370,29 @@ Lưu screenshot vào `deploy/dev/evidence/screenshots/t1a-g002-01-hmr.png`.
 ### 4.6. Verify CSRF retention (qua Vite proxy ở port 8080)
 
 ```bash
-# (1) Lấy CSRF token qua Vite proxy
-TOKEN=$(curl -s -c /tmp/cookies.txt http://127.0.0.1:8080/api/method/frappe.sessions.get_csrf_token \
-  -H "Host: dev.localhost" -H "X-Requested-With: XMLHttpRequest" \
-  | python -c "import json,sys;print(json.load(sys.stdin)['message'])")
-echo "CSRF token: $TOKEN" | tee deploy/dev/evidence/logs/t1a-g002-csrf-token.txt
-
-# (2) Login (sử dụng ADMIN_PASSWORD trong .env, mặc định dev-only-change-me)
-ADMIN_PWD=$(grep ^ADMIN_PASSWORD deploy/dev/.env | cut -d= -f2)
+# Dùng mật khẩu DEV trong .env; không ghi mật khẩu, cookie hoặc token vào evidence.
+touch /tmp/cookies.txt
+ADMIN_PWD=$(grep ^ADMIN_PASSWORD deploy/dev/.env | cut -d= -f2-)
 curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
   http://127.0.0.1:8080/api/method/login \
-  -H "Host: dev.localhost" -H "X-Frappe-CSRF-Token: $TOKEN" \
-  -H "Content-Type: application/json" \
+  -H "Host: dev.localhost" -H "Content-Type: application/json" \
   -d "{\"usr\":\"Administrator\",\"pwd\":\"$ADMIN_PWD\"}" \
-  | tee deploy/dev/evidence/logs/t1a-g002-login.txt
-# kỳ vọng: {"message":"Logged In"}
+  -o /tmp/t1a-g002-login.json -w "login HTTP %{http_code}\n"
+
+# Lấy token server-rendered từ /cskh; endpoint get_csrf_token riêng bị 403.
+curl -fsS -b /tmp/cookies.txt -c /tmp/cookies.txt \
+  -H "Host: dev.localhost" http://127.0.0.1:8080/cskh -o /tmp/t1a-g002-cskh.html
+TOKEN=$(python - <<'PY'
+import re
+from pathlib import Path
+
+html = Path("/tmp/t1a-g002-cskh.html").read_text()
+match = re.search(r"frappe\.csrf_token\s*=\s*(['\"])(.*?)\1", html)
+if not match:
+    raise SystemExit("CSRF token was not present in /cskh HTML")
+print(match.group(2))
+PY
+)
 
 # (3) POST hợp lệ — frappe.ping (kỳ vọng HTTP 200, body {"message":"pong"})
 curl -s -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/frappe.ping \
@@ -398,17 +406,20 @@ curl -s -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/crm_cskh.ap
   -w "\nHTTP %{http_code}\n" \
   | tee deploy/dev/evidence/logs/t1a-g002-health-ok.txt
 
-# (5) POST thiếu token (kỳ vọng HTTP 403)
+# (5) POST thiếu token (quan sát: HTTP 400 CSRFTokenError)
 curl -s -o /dev/null -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/frappe.ping \
   -H "Host: dev.localhost" \
   -w "HTTP %{http_code}\n" \
   | tee deploy/dev/evidence/logs/t1a-g002-curl-no-token.txt
 
-# (6) POST sai token (kỳ vọng HTTP 403)
+# (6) POST sai token (quan sát: HTTP 400 CSRFTokenError)
 curl -s -o /dev/null -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/frappe.ping \
   -H "Host: dev.localhost" -H "X-Frappe-CSRF-Token: WRONG-TOKEN-12345" \
   -w "HTTP %{http_code}\n" \
   | tee deploy/dev/evidence/logs/t1a-g002-curl-bad-token.txt
+
+# Dọn file tạm có HTML/token sau khi hoàn tất.
+rm -f /tmp/t1a-g002-cskh.html /tmp/t1a-g002-login.json /tmp/cookies.txt
 ```
 
 ### 4.7. Verify `/cskh` (Jinja ở port 8000 — KHÔNG qua Vite)
@@ -416,20 +427,29 @@ curl -s -o /dev/null -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/metho
 `/cskh` là Jinja template server-side, **không cần Vite**. Test thẳng port 8000:
 
 ```bash
-# (1) Lấy CSRF token trực tiếp port 8000
-TOKEN=$(curl -s -c /tmp/cookies-cskh.txt http://127.0.0.1:8000/api/method/frappe.sessions.get_csrf_token \
-  -H "X-Requested-With: XMLHttpRequest" \
-  | python -c "import json,sys;print(json.load(sys.stdin)['message'])")
-echo "CSRF token: $TOKEN" | tee deploy/dev/evidence/logs/t1a-g002-cskh-csrf-token.txt
-
-# (2) Login
-ADMIN_PWD=$(grep ^ADMIN_PASSWORD deploy/dev/.env | cut -d= -f2)
+# (1) Login. Frappe accepts the login POST without a prior CSRF token.
+touch /tmp/cookies-cskh.txt
+ADMIN_PWD=$(grep ^ADMIN_PASSWORD deploy/dev/.env | cut -d= -f2-)
 curl -s -b /tmp/cookies-cskh.txt -c /tmp/cookies-cskh.txt -X POST \
   http://127.0.0.1:8000/api/method/login \
-  -H "X-Frappe-CSRF-Token: $TOKEN" -H "Content-Type: application/json" \
+  -H "Content-Type: application/json" \
   -d "{\"usr\":\"Administrator\",\"pwd\":\"$ADMIN_PWD\"}" \
-  | tee deploy/dev/evidence/logs/t1a-g002-cskh-login.txt
-# kỳ vọng: {"message":"Logged In"}
+  -o /dev/null -w "login HTTP %{http_code}\n"
+
+# (2) Lấy token server-rendered từ /cskh; không in/lưu token vào evidence.
+curl -fsS -b /tmp/cookies-cskh.txt -c /tmp/cookies-cskh.txt \
+  http://127.0.0.1:8000/cskh -o /tmp/t1a-g002-cskh.html
+TOKEN=$(python - <<'PY'
+import re
+from pathlib import Path
+
+html = Path("/tmp/t1a-g002-cskh.html").read_text()
+match = re.search(r"frappe\.csrf_token\s*=\s*(['\"])(.*?)\1", html)
+if not match:
+    raise SystemExit("CSRF token was not present in /cskh HTML")
+print(match.group(2))
+PY
+)
 
 # (3) POST hợp lệ tới crm_cskh.api.health.ping (kỳ vọng 200)
 curl -s -b /tmp/cookies-cskh.txt -X POST http://127.0.0.1:8000/api/method/crm_cskh.api.health.ping \
@@ -437,18 +457,14 @@ curl -s -b /tmp/cookies-cskh.txt -X POST http://127.0.0.1:8000/api/method/crm_cs
   | tee deploy/dev/evidence/logs/t1a-g002-cskh-health.txt
 # kỳ vọng: {"message":{"app":"crm_cskh","status":"ok","app_version":"0.0.1","user":"Administrator"}}
 
-# (4) GET /cskh (HTML)
-curl -s -b /tmp/cookies-cskh.txt -o /tmp/cskh.html -w "HTTP %{http_code}\n" \
-  http://127.0.0.1:8000/cskh
-# Kỳ vọng: HTTP 200; file có chứa "csrf-token" trong <meta> hoặc inline.
-grep -c "csrf" /tmp/cskh.html
-# Kỳ vọng: >= 1
-
-# (5) POST thiếu token (kỳ vọng 403)
+# (4) POST thiếu token (quan sát: HTTP 400 CSRFTokenError)
 curl -s -o /dev/null -b /tmp/cookies-cskh.txt -X POST \
   http://127.0.0.1:8000/api/method/crm_cskh.api.health.ping \
   -w "HTTP %{http_code}\n" \
   | tee deploy/dev/evidence/logs/t1a-g002-cskh-no-token.txt
+
+# Dọn file tạm có HTML/token sau khi hoàn tất.
+rm -f /tmp/t1a-g002-cskh.html /tmp/cookies-cskh.txt
 ```
 
 **Trên Chrome** (PowerShell không cần):
@@ -496,12 +512,12 @@ deploy/dev/evidence/screenshots/t1a-g002-02-cskh-jinja.png
 - [ ] (c) Vite dev server khởi động, log có dòng "frappe-ui vite plugin" và "VITE ready".
 - [ ] (d) Truy cập `http://127.0.0.1:8080/crm` render CRM SPA (không trắng).
 - [ ] (e) Sửa component `Probe.vue` → DOM tự cập nhật timestamp trong < 2 giây (HMR).
-- [ ] (f) `GET /api/method/frappe.sessions.get_csrf_token` qua Vite proxy trả token.
+- [ ] (f) `GET /api/method/frappe.sessions.get_csrf_token` qua Vite proxy trả token. (Kết quả đã quan sát: HTTP 403; token lấy từ `/cskh`.)
 - [ ] (g) `POST /api/method/frappe.ping` với token hợp lệ → HTTP 200 `{"message":"pong"}`.
-- [ ] (h) `POST /api/method/frappe.ping` không token → HTTP 403.
-- [ ] (i) `POST /api/method/frappe.ping` sai token → HTTP 403.
+- [ ] (h) `POST /api/method/frappe.ping` không token → HTTP 400 `CSRFTokenError`.
+- [ ] (i) `POST /api/method/frappe.ping` sai token → HTTP 400 `CSRFTokenError`.
 - [ ] (j) `POST /api/method/crm_cskh.api.health.ping` với token hợp lệ → HTTP 200 `{"message":{"status":"ok",...}}`.
-- [ ] (k) `POST /api/method/crm_cskh.api.health.ping` không token → HTTP 403.
+- [ ] (k) `POST /api/method/crm_cskh.api.health.ping` không token → HTTP 400 `CSRFTokenError`.
 - [ ] (l) Truy cập `http://127.0.0.1:8000/cskh` render Jinja; bấm nút "Kiểm tra phiên" → response ok.
 - [ ] (m) `site_config.json` KHÔNG chứa `ignore_csrf`.
 - [ ] (n) Không có lỗi CORS/WebSocket trong browser console.
@@ -531,3 +547,32 @@ deploy/dev/evidence/screenshots/t1a-g002-02-cskh-jinja.png
 - **Lệnh chạy runtime:** §4 — Owner cần chạy trên máy có Docker + browser.
 - **Khi runtime chạy xong:** điền lại checklist §5 (14 mục) và đánh dấu lại G0-02 trong `p0-exit-report.md`. Đến lúc đó mới có thể nói "đạt" hay "không đạt".
 - **KHÔNG tuyên bố PASS** ở phiên này.
+
+## 8. Cập nhật runtime DEV (T1A, 2026-10-27)
+
+> Phần 5–7 là ảnh chụp lịch sử khi chưa có Docker/browser runtime. Phần này cập nhật những mục đã kiểm tra trong follow-up; không xóa lịch sử và không đánh dấu G0-02 PASS.
+
+| Mục | Kết quả mới nhất |
+|---|---|
+| (a) stack | **PASS** — bốn container chạy, DB healthy |
+| (b) `crm_cskh` | **PASS** — site hiện hành đã cài app |
+| (c) Vite | **PASS** — dev server sẵn sàng; HMR log được ghi |
+| (d) SPA | **PASS** — CRM Vue mount trong browser, không trắng |
+| (e) HMR | **PASS** — CSS probe `--p0-hmr-probe=27` cập nhật computed style; CSS gốc được khôi phục và SHA-256 khớp |
+| (f) nguồn token | Endpoint `get_csrf_token` trả **403 `PermissionError`**; token được lấy từ HTML `/cskh`, không nới quyền endpoint |
+| (g) `frappe.ping` hợp lệ | **PASS** — HTTP 200 |
+| (h)/(i) thiếu/sai token | **Bị từ chối đúng** — HTTP 400 `CSRFTokenError` (không phải 403 như checklist cũ) |
+| (j)/(k) `crm_cskh.api.health.ping` | **ĐÃ KIỂM TRA HTTP** trong cùng phiên đăng nhập: CSRF hợp lệ → 200 với `status=ok`; thiếu token → 400; token sai → 400. Đã lấy token từ HTML `/cskh`, không ghi token/cookie vào log. Chưa bấm nút bằng browser. |
+| (l) `/cskh` | HTML Jinja tải được; thao tác nút kiểm tra phiên chưa xác minh |
+| (m) `ignore_csrf` | **PASS** — khóa không được đặt và giá trị hiệu dụng false |
+| (n) console CORS/WebSocket sạch | **CHƯA XÁC MINH** toàn bộ; không kết luận không có lỗi |
+
+Trạng thái checklist không còn là “0/14” hiện hành; các dòng checkbox ở §5 được giữ làm mẫu lịch sử. Sau kiểm tra bổ sung tại §9, (j)/(k) đã được kiểm tra qua HTTP; G0-02 tiếp tục **PARTIAL** vì chưa click nút thật trên browser và chưa kiểm tra console CORS/WebSocket sạch.
+
+## 9. Kiểm tra bổ sung sau khởi động lại (T1A, 2026-10-27)
+
+- Docker Desktop 29.9.2 được khởi động; `db` healthy, `redis-cache`, `redis-queue`, `bench` đều lên. Trong `bench`, chạy nền `bench start` và CRM Vite `yarn dev --host 0.0.0.0 --port 8080`.
+- Qua loopback `127.0.0.1` với `Host: dev.localhost`: `/api/method/ping` → **200**; Vite `/crm` → **200**. Host PowerShell không phân giải tên `dev.localhost`, nên link mở được từ host là `http://127.0.0.1:8080/crm/dashboard`.
+- Đăng nhập dùng `ADMIN_PASSWORD` lấy từ môi trường container; giá trị không được in/log. Login → **200**; HTML `/cskh` → **200**, nút `cskh-session-check` hiện diện. Lấy CSRF token từ HTML và gọi đúng endpoint mà nút dùng: token hợp lệ → **200**, payload `status=ok`; thiếu token trong cùng session → **400**; token sai → **400**.
+- Một request thiếu token nhưng **không có session** trước đó trả **403** do kiểm tra quyền. Không dùng kết quả này để kết luận CSRF; phép đo hợp lệ là các request cùng session ở trên. Không log token, cookie hay nội dung xác thực.
+- Đây là HTTP/API round-trip, không phải thao tác click UI. Chưa xác nhận click nút thật hoặc console CORS/WebSocket; G0-02 vẫn **PARTIAL**.

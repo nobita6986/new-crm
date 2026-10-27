@@ -1,0 +1,442 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_security_remediation_v2.TestSEC13GuestTransportHTTP-20261027151835" tests="3" file="crm_cskh/tests/test_security_remediation_v2.py" time="0.126" timestamp="2026-10-27T15:18:36" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC13GuestTransportHTTP" name="test_authenticated_user_via_execute_cmd_health_ping_succeeds" time="0.063" timestamp="2026-10-27T15:18:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="373">
+			<!--Positive regression: user đã login gọi được `health.ping` qua HTTP transport path.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC13GuestTransportHTTP" name="test_guest_via_execute_cmd_all_crm_cskh_endpoints_denied" time="0.059" timestamp="2026-10-27T15:18:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="344">
+			<!--Mọi endpoint `crm_cskh` đăng ký trong override_whitelisted_methods phải từ chối Guest
+qua `frappe.handler.execute_cmd()` (HTTP transport path).-->
+			<system-out><![CDATA[Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.health.ping is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_reporting.crm_manager_dashboard is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_reporting.reportview_export_query is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_reporting.data_export is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_reporting.query_report_run is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_reporting.query_report_export_query is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_contact_by_phone_number is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_contact_lead_or_deal_from_number is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_call_log is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_linked_calls is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_linked_notes is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_linked_tasks is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_attachments is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_assigned_users is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_linked_docs_of_document is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.delete_bulk_docs is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.permissions.remove_assignments is not whitelisted.
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC13GuestTransportHTTP" name="test_guest_via_execute_cmd_health_ping_denied" time="0.004" timestamp="2026-10-27T15:18:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="335">
+			<!--Guest gọi `frappe.handler.execute_cmd('crm_cskh.api.health.ping')` → PermissionError.
+
+Đây là cùng entry point mà HTTP handler `frappe.handler.handle()` gọi.-->
+			<system-out><![CDATA[Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.health.ping is not whitelisted.
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_security_remediation_v2.TestSEC14CSRFAndSessionHTTP-20261027151835" tests="6" file="crm_cskh/tests/test_security_remediation_v2.py" time="0.042" timestamp="2026-10-27T15:18:36" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC14CSRFAndSessionHTTP" name="test_get_does_not_require_csrf" time="0.010" timestamp="2026-10-27T15:18:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="414"/>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC14CSRFAndSessionHTTP" name="test_post_via_execute_cmd_without_csrf_rejected" time="0.008" timestamp="2026-10-27T15:18:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="448">
+			<!--End-to-end: POST không có `X-Frappe-CSRF-Token` tới `execute_cmd` phải bị chặn.
+
+Thứ tự thực tế của Frappe: `app.py:init_request()` tạo `HTTPRequest()` và gọi
+`validate_csrf_token()` **trước**, rồi mới tới `frappe.handler.execute_cmd()`.
+Nên CSRFTokenError raise ở tầng CSRF và `execute_cmd` không bao giờ được gọi —
+đây chính là fail-closed mong muốn, không phải thiếu kiểm chứng.
+
+Vì vậy `assertRaises` phải bao **cả hai** lệnh: `_run_csrf_check` (tầng CSRF,
+nơi raise) và `execute_cmd` (entry point, phải không bao giờ chạy tới). Trước
+đây `assertRaises` chỉ bao `execute_cmd`, nên CSRFTokenError từ
+`_run_csrf_check` thoát ra ngoài ⇒ test ERROR thay vì kiểm chứng điều nó mô
+tả (CI #39810335017).
+
+Thứ tự lệnh phải giữ nguyên như cũ: `setUp` đã `_ensure_csrf_session()` tạo
+token hợp lệ trong `frappe.local.session`. `frappe.set_user()` dựng session mới
+(xoá `csrf_token`) nên phải gọi **sau** `_run_csrf_check` — nếu gọi trước thì
+`validate_csrf_token()` thấy `csrf_token is None`, sinh token mới rồi
+`return` mà không raise ⇒ `AssertionError: CSRFTokenError not raised`
+(CI #39815209140).
+-->
+			<system-out><![CDATA[Message: Invalid Request
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC14CSRFAndSessionHTTP" name="test_post_with_invalid_csrf_token_rejected" time="0.008" timestamp="2026-10-27T15:18:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="421">
+			<system-out><![CDATA[Message: Invalid Request
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC14CSRFAndSessionHTTP" name="test_post_with_valid_csrf_form_dict_succeeds" time="0.006" timestamp="2026-10-27T15:18:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="444"/>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC14CSRFAndSessionHTTP" name="test_post_with_valid_csrf_header_succeeds" time="0.004" timestamp="2026-10-27T15:18:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="433"/>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC14CSRFAndSessionHTTP" name="test_post_without_csrf_token_rejected" time="0.005" timestamp="2026-10-27T15:18:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="417">
+			<system-out><![CDATA[Message: Invalid Request
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_security_remediation_v2.TestSEC15BODAndRISKSEC12BulkReassign-20261027151835" tests="4" file="crm_cskh/tests/test_security_remediation_v2.py" time="0.422" timestamp="2026-10-27T15:18:38" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC15BODAndRISKSEC12BulkReassign" name="test_bod_calling_crm_cskh_api_endpoints_denied" time="0.064" timestamp="2026-10-27T15:18:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1391">
+			<!--BOD Viewer gọi `crm_cskh.api.guarded_crm.*` qua handler — pin rằng wrapper
+cũng từ chối (không chỉ reporting).-->
+			<system-out><![CDATA[Message: Phone lookup is disabled until it can be restricted to the user's scope.
+Message: Not allowed via controller permission checkUser cskh-sec-bod@example.test does not have doctype access via role permission for document CRM Call LogUser cskh-sec-bod@example.test does not have access to this document
+Message: User cskh-sec-bod@example.test does not have doctype access via role permission for document CRM Call Log
+Message: Not permitted
+Message: Not permitted
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC15BODAndRISKSEC12BulkReassign" name="test_bod_calling_guarded_reporting_via_execute_cmd_denied" time="0.012" timestamp="2026-10-27T15:18:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1368">
+			<!--BOD Viewer gọi `crm_cskh.api.guarded_reporting.*` qua `frappe.handler.execute_cmd()`
+phải raise — fail-closed vì `_require_system_manager`.-->
+			<system-out><![CDATA[Message: You are not permitted to access this resource.
+Message: You are not permitted to access this resource.
+Message: Reporting and export are disabled until record-scoped reporting is available.
+Message: Reporting and export are disabled until record-scoped reporting is available.
+Message: Reporting and export are disabled until record-scoped reporting is available.
+Message: Reporting and export are disabled until record-scoped reporting is available.
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC15BODAndRISKSEC12BulkReassign" name="test_bod_cross_scope_set_value_denied" time="0.025" timestamp="2026-10-27T15:18:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1429">
+			<!--BOD thử `frappe.client.set_value` cho Lead cross-scope — DocType-level permission
+chặn (BOD không có read Lead).-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-bod@example.test does not have doctype access via role permission for document CRM LeadUser cskh-sec-bod@example.test does not have access to this document
+Message: User cskh-sec-bod@example.test does not have doctype access via role permission for document CRM Lead
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC15BODAndRISKSEC12BulkReassign" name="test_staff_bulk_delete_cross_scope_denied" time="0.320" timestamp="2026-10-27T15:18:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1410">
+			<!--RISK-SEC-12: Staff gọi `delete_bulk_docs` cho Lead cross-scope phải raise.-->
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00056
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_security_remediation_v2.TestSEC16FieldExposure-20261027151835" tests="6" file="crm_cskh/tests/test_security_remediation_v2.py" time="2.627" timestamp="2026-10-27T15:18:42" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC16FieldExposure" name="test_crm_api_get_data_filters_permlevel_field" time="0.592" timestamp="2026-10-27T15:18:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="819">
+			<!--`crm.api.doc.get_data` filter permlevel field khi row request permlevel column.
+
+Positive regression — T1C ghi nhận test #2 (`test_get_data_does_not_return_permlevel_fields`)
+đã cover. Pin thêm tại test file này để matrix mapping thấy test thực sự tồn tại.
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC16FieldExposure" name="test_get_assigned_users_returns_only_user_identifier" time="0.286" timestamp="2026-10-27T15:18:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="770">
+			<!--`get_assigned_users` chỉ trả user identifier — không lộ full_name/email ngoài scope.
+
+T1C ghi nhận: chỉ có test ở test_permissions.py verify trả `[self.users["a"]]` (1 user)
+nhưng chưa verify field shape. Pin shape: list of email strings.
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC16FieldExposure" name="test_get_attachments_does_not_leak_permlevel_field" time="0.717" timestamp="2026-10-27T15:18:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="552">
+			<!--SEC-16 — `get_attachments` không được trả field có `permlevel > 0` của File row.
+
+**Sửa vacuous assertion (T1B, 2026-10-23).** Bản trước viết:
+    `assertNotIn("owner", {k for k in att.keys() if k.startswith("_")})`
+Tập ở vế phải chỉ chứa key bắt đầu bằng `_`, còn `"owner"` không bao giờ bắt
+đầu bằng `_` ⇒ assertion **luôn đúng, không bao giờ fail** (tautology). Thêm
+nữa, nếu `attachments` rỗng thì vòng `for` không chạy lần nào ⇒ cũng pass vô
+nghĩa. Fixture cũ không tạo field permlevel=1 nào trên chính doctype `File`
+(`setUp` chỉ tạo trên `CRM Lead`), nên không có sentinel để rò rỉ.
+Bản này bổ sung đủ positive control để test KHÔNG thể pass vacuous:
+  1. Tạo Custom Field `permlevel=1` trên chính doctype `File` với sentinel riêng.
+  2. Fixture phải có thật: sentinel set và đọc lại được từ DB, permlevel = 1.
+  3. Attachment phải CÓ trong response (chặn response rỗng → vacuous).
+  4. Cả tên field lẫn GIÁ TRỊ sentinel đều không được xuất hiện trong response.
+
+**Giới hạn bắt buộc đọc cùng:** CRM v1.87.0 `crm.api.activities.get_attachments`
+gọi `frappe.db.get_all("File", ..., fields=[<allowlist 9 field>])` — xem
+`t1b-sec26-upstream-contract-v1.87.0.md` §2. Field permlevel KHÔNG nằm trong
+allowlist đó, nên nó vắng mặt khỏi response **do allowlist**, KHÔNG phải do cơ
+chế lọc permlevel (và `frappe.db.get_all` không áp permlevel). Vì vậy test này
+pin thuộc tính "response không chứa field permlevel" và bắt được drift khi
+upstream đổi `fields` (ví dụ sang `"*"`) — KHÔNG khẳng định `get_attachments`
+đang lọc permlevel.
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC16FieldExposure" name="test_get_linked_calls_does_not_leak_permlevel_field" time="0.345" timestamp="2026-10-27T15:18:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="647">
+			<!--SEC-16 — `get_linked_calls` không được trả field có `permlevel > 0` của Call Log.
+
+**Sửa assertion — hợp đồng đã xác minh (T1B, 2026-10-23).**
+
+Bản trước assert `_caller` / `_receiver` KHÔNG có trong mỗi call, với luận
+điểm "wrapper `get_linked_calls` KHÔNG gọi `parse_call_log`". Luận điểm
+đó SAI với CRM v1.87.0:
+
+Upstream `crm/api/activities.py::get_linked_calls` (commit
+`0d3910b456ef4fb913e77b29db011b3debc4f778`) kết thúc bằng:
+
+    calls = [parse_call_log(call) for call in calls] if calls else []
+    return {"calls": calls, "notes": notes, "tasks": tasks}
+
+⇒ `parse_call_log` **ĐƯỢC** gọi. Và `parse_call_log` (CRM v1.87.0
+`crm/fcrm/doctype/crm_call_log/crm_call_log.py` L158-194) gán:
+
+    call["_caller"]   = {"label": ..., "image": ...}
+    call["_receiver"] = {"label": ..., "image": ...}
+
+Bằng chứng runtime CI #39885152649: FAIL tại `assertNotIn("_caller", call)`
+với payload thật chứa
+`'_caller': {'label': None, 'image': None}, '_receiver': {'label': 'CSKH Sec V2', 'image': None}`.
+
+**Mức độ rò rỉ — KHÔNG tự kết luận an toàn:**
+- `_caller`/`_receiver` là **derived field** do upstream tự tính, KHÔNG phải
+  field `permlevel` của doctype ⇒ test này (đặt tên "permlevel_field")
+  **không đo đúng thứ nó tên**, và assertion cũ đã sai ⇒ nội dung assert
+  được thay; **tên method giữ nguyên** để không phá inventory 99 method
+  của gate G0-07.
+- `label` của `_caller` lấy từ `User.full_name` của `call.caller` (user nội
+  bộ), `_receiver` lấy từ `get_call_contact(...)` ⇒ `full_name` của
+  Contact/Lead được resolve theo số điện thoại. Ở đây Call Log có
+  `reference_doctype = "CRM Lead"` ⇒ `get_call_contact` đi nhánh
+  `get_reference_contact` (KHÔNG qua phone lookup) ⇒ trả `lead_name` của
+  chính Lead trong scope.
+- Vì vậy, với fixture hiện tại, KHÔNG có bằng chứng rò rỉ dữ liệu ngoài
+  scope: `_receiver.label` = tên Lead mà caller `a` **đã** có quyền đọc.
+- **Nhưng** nhánh phone-lookup (`reference_doctype` rỗng/khác Lead/Deal)
+  là nơi `get_contact_by_phone_number` có thể trả Contact **ngoài scope** —
+  đó chính là SEC-27, đã có wrapper `crm_cskh.api.guarded_crm.get_call_log`
+  chặn ở tầng entry point (xem `TestSEC27CallLogFallbackContact`).
+  Test này KHÔNG phủi nhánh đó.
+
+⇒ Assertion mới: pin hành vi **thực tế** đã xác minh, chốt **allowlist
+field** của upstream (để bắt drift khi upstream thêm field vào
+`fields=[...]` — ví dụ một field permlevel), và bổ sung positive control để
+test không pass vacuous (response phải có call thật).
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC16FieldExposure" name="test_get_linked_docs_of_document_returns_only_allowed" time="0.356" timestamp="2026-10-27T15:18:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="785">
+			<!--`get_linked_docs_of_document` filter theo `has_permission(..., throw=False)`
+trên từng linked doc. Pin rằng cross-scope doc bị filter ra.
+
+**Sửa assertion — hợp đồng đã xác minh là RAISE (T1B, 2026-10-23).**
+Bản trước gọi `get_linked_docs_of_document("CRM Lead", self.lead_b)` với
+`lead_b` thuộc user `b` rồi assert kết quả `== []`. Nhưng wrapper
+`crm_cskh.api.guarded_crm.get_linked_docs_of_document` L85-95 gọi
+`_check_read(doctype, docname)` TRƯỚC khi lọc từng linked doc:
+
+    def get_linked_docs_of_document(doctype, docname):
+        _check_read(doctype, docname)       # ← raise PermissionError
+        docs = frappe.get_attr("crm.api.doc.get_linked_docs_of_document")(doctype, docname)
+        filtered = [linked for linked in docs
+                    if frappe.has_permission(linked["doc"], "read", ...)]
+
+`_check_read` → `frappe.has_permission(..., throw=False)` → False ⇒
+`frappe.throw("Not permitted", frappe.PermissionError)`.
+
+Bằng chứng CI #39885152649: ERROR `PermissionError: Not permitted` tại
+`guarded_crm.py:87 _check_read`.
+
+⇒ `assertRaises(PermissionError)` là hợp đồng ĐÚNG và **siết chặt hơn**
+(list rỗng chỉ chứng minh "không trả doc", còn raise chứng minh "chặn ở
+tầng guard"). KHÔNG phải nới lỏng để làm CI xanh.
+-->
+			<system-out><![CDATA[Message: Not permitted
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC16FieldExposure" name="test_get_linked_notes_does_not_leak_permlevel_field" time="0.331" timestamp="2026-10-27T15:18:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="762">
+			<!--`get_linked_notes` không được trả field có permlevel của FCRM Note.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_security_remediation_v2.TestSEC22And23StaleAfterReassign-20261027151835" tests="3" file="crm_cskh/tests/test_security_remediation_v2.py" time="1.149" timestamp="2026-10-27T15:18:43" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC22And23StaleAfterReassign" name="test_cross_team_reassign_blocks_old_owner_and_leader" time="0.564" timestamp="2026-10-27T15:18:43" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1591">
+			<!--Cross-team reassign `c→a`: user `c` (old) + TL2 (old leader) mất access;
+user `a` (new) + TL1 (new leader) thấy Lead.-->
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: Not allowed via controller permission checkUser cskh-sec-c@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00057
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC22And23StaleAfterReassign" name="test_stale_comment_after_reassign_raises_for_old_owner" time="0.322" timestamp="2026-10-27T15:18:43" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1560">
+			<!--SEC-23: Comment linked Lead `a` — sau reassign, user `a` không read được Comment.-->
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00056Not allowed via controller permission checkUser cskh-sec-a@example.test does not have doctype access via role permission for document CommentUser cskh-sec-a@example.test does not have access to this document
+Message: User cskh-sec-a@example.test does not have doctype access via role permission for document Comment
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC22And23StaleAfterReassign" name="test_stale_todo_after_reassign_raises_for_old_owner" time="0.263" timestamp="2026-10-27T15:18:43" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1511">
+			<!--SEC-22: ToDo `allocated_to=a` với ref Lead `a` — sau reassign `a→b`, user `a`
+không read được ToDo (`linked_lead_has_permission` chặn vì Lead không còn owner=a).-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00056
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00056Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: ToDo - bv5so1snip
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_security_remediation_v2.TestSEC26FileURLLeak-20261027151835" tests="6" file="crm_cskh/tests/test_security_remediation_v2.py" time="1.810" timestamp="2026-10-27T15:18:46" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC26FileURLLeak" name="test_find_file_by_url_returns_none_for_old_owner_after_reassign" time="0.861" timestamp="2026-10-27T15:18:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1186">
+			<!--`frappe.core.doctype.file.utils.find_file_by_url` phải trả None cho old owner
+        sau khi Lead reassign (T1C đã verify qua test #4 trong test_permissions.py).
+
+        Pin thêm tại đây để mapping thấy coverage.
+
+**Sửa lỗi harness — rò trạng thái (T1B, 2026-10-23).** Bản trước reassign
+`lead_a` từ `a` → `b` rồi KHÔNG restore. Do unittest chạy method theo thứ tự
+ALPHABET trong class, method này đứng trước
+`test_get_attachments_does_not_redact_non_private_file`,
+`test_get_attachments_redacts_file_url_for_non_system_user` và
+`test_get_linked_docs_of_document_shape_probe_only` — cả 3 đều đọc `lead_a`
+dưới user `a`, nên kế thừa `lead_owner = b` và nhận `PermissionError: Not permitted`
+(CI #39885152649). Đây là **ô nhiễm trạng thái giữa các test**, không phải lỗi
+production: `_check_read` chặn đúng khi caller không thuộc scope.
+Fix: restore `lead_owner` về `a` trong `finally`.
+-->
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-00056
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC26FileURLLeak" name="test_get_attachments_does_not_leak_cross_scope_file_url" time="0.396" timestamp="2026-10-27T15:18:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1143">
+			<!--`get_attachments` KHÔNG được trả file thuộc Lead ngoài scope.
+
+**Sửa assertion — hợp đồng đã xác minh là RAISE (T1B, 2026-10-23).**
+Bản trước gọi `get_attachments("CRM Lead", lead_b)` với `lead_b` thuộc user `b`
+rồi assert kết quả `== []`. Nhưng wrapper `crm_cskh.api.guarded_crm.get_attachments`
+L117-125 gọi `_check_read(doctype, name)` TRƯỚC khi gọi upstream:
+
+    def get_attachments(doctype, name):
+        _check_read(doctype, name)          # ← raise PermissionError
+        attachments = frappe.get_attr("crm.api.activities.get_attachments")(doctype, name)
+        return _redact_private_file_urls(attachments)
+
+`_check_read` → `frappe.has_permission(..., throw=False)` → False ⇒
+`frappe.throw("Not permitted", frappe.PermissionError)`.
+
+Bằng chứng CI #39885152649: ERROR `PermissionError: Not permitted` tại
+`guarded_crm.py:118 _check_read` (không phải list rỗng).
+
+⇒ `assertRaises(PermissionError)` là hợp đồng ĐÚNG và **siết chặt hơn**
+(list rỗng chỉ chứng minh "không trả file", còn raise chứng minh "chặn
+luôn ở tầng guard"). Đây là khẳng định đúng hành vi fail-closed, KHÔNG
+phải nới lỏng để làm CI xanh.
+
+STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
+-->
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: Not permitted
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC26FileURLLeak" name="test_get_attachments_does_not_redact_non_private_file" time="0.107" timestamp="2026-10-27T15:18:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1036">
+			<!--SEC-26 — entry có `is_private=0` KHÔNG bị loại bỏ `file_url`. Redaction chỉ
+áp dụng khi `is_private` truthy.
+
+Source CRM v1.87.0: `crm.api.activities.get_attachments` trả `file_url` cho
+cả public và private file (xác minh tĩnh tại
+`t1b-sec26-upstream-contract-v1.87.0.md`). Wrapper `_redact_private_file_urls`
+chỉ loại bỏ `file_url` khi `is_private=1`; entry `is_private=0` giữ nguyên.
+
+Test này kiểm tra **hành vi** của helper (giữ `file_url` khi `is_private=0`),
+chứ không khẳng định giá trị runtime của `file_url` với `is_private=0` có
+"không nhạy cảm" hay không — cần nguồn Frappe framework riêng để xác minh điều
+đó (xem giới hạn tại `t1b-sec26-upstream-contract-v1.87.0.md` §6.4).
+
+STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC26FileURLLeak" name="test_get_attachments_preserves_file_url_for_system_caller" time="0.013" timestamp="2026-10-27T15:18:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="989">
+			<!--SEC-26 — system caller (Administrator) vẫn nhận payload upstream nguyên bản
+(không redact) để hỗ trợ admin/audit flow.
+
+Source CRM v1.87.0: `crm.api.activities.get_attachments` trả `file_url` cho
+mỗi entry (đã xác minh tĩnh tại `t1b-sec26-upstream-contract-v1.87.0.md`).
+Wrapper `_redact_private_file_urls` skip redaction khi
+`_is_system(frappe.session.user)` đúng → system caller nhận đúng URL mà upstream
+trả về (giá trị `self.file_url_value` lưu trong setUp từ DB).
+
+**Về `content_hash` (per static verification 2026-10-19 tại
+`t1b-sec26-upstream-contract-v1.87.0.md`):**
+CRM v1.87.0 `crm.api.activities.get_attachments` KHÔNG chọn `content_hash`
+trong `fields=...` (đã xác minh tĩnh) — nên upstream không trả field này ở
+v1.87.0. Test này KHÔNG assert `content_hash` vì field vắng mặt trong response
+hiện tại (sẽ là false negative nếu `assertIn`). Wrapper code vẫn redact
+`content_hash` nếu xuất hiện (xem `_FILE_URL_FIELDS`) — defense-in-depth. Khi
+upstream đổi shape, cần viết test riêng (TODO T1B-ext+1).
+
+STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC26FileURLLeak" name="test_get_attachments_redacts_file_url_for_non_system_user" time="0.295" timestamp="2026-10-27T15:18:46" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="916">
+			<!--SEC-26 — `get_attachments` phải redact `file_url` của file private khi caller
+không phải system.
+
+Source CRM v1.87.0 (`crm.api.activities.get_attachments`) trả `list[dict]`
+với field `file_url` (đã xác minh tĩnh tại
+`t1b-sec26-upstream-contract-v1.87.0.md`). Wrapper
+`_redact_private_file_urls` (commit `43980d5`) xoá `file_url` cho non-system
+caller để chặn rò rỉ URL.
+
+Test tìm entry bằng `name == self.file_private` (không dùng index `[0]`) để đảm
+bảo assert đúng file private fixture.
+
+**Về `content_hash` (per static verification 2026-10-19 tại
+`t1b-sec26-upstream-contract-v1.87.0.md`):**
+CRM v1.87.0 `crm.api.activities.get_attachments` KHÔNG chọn `content_hash`
+trong `fields=...` (đã xác minh tĩnh) — nên upstream không trả field này ở
+v1.87.0. Test này KHÔNG assert `content_hash` vì field vắng mặt trong
+response hiện tại (sẽ là vacuous truth nếu `assertNotIn`). Wrapper code vẫn
+redact `content_hash` nếu xuất hiện (xem `_FILE_URL_FIELDS` trong
+`guarded_crm.py`) — defense-in-depth. Khi upstream đổi shape, cần viết test
+riêng để pin redaction này (TODO T1B-ext+1).
+
+STATUS: NOT RUN — chưa có runtime evidence trên test site sạch. Risk chưa đóng.
+-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC26FileURLLeak" name="test_get_linked_docs_of_document_shape_probe_only" time="0.137" timestamp="2026-10-27T15:18:46" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1085">
+			<!--SEC-26 — `get_linked_docs_of_document` shape probe (NOT proof of redaction).
+
+Per static verification 2026-10-19 tại
+`t1b-sec26-upstream-contract-v1.87.0.md`: upstream CRM v1.87.0
+`crm.api.doc.get_linked_docs_of_document` KHÔNG trả field `file_url` trong
+entries của nó (xác minh tĩnh tại source `crm/api/doc.py` v1.87.0, function
+`get_linked_docs_of_document`). Do đó, test này KHÔNG được tính là bằng chứng
+redaction cho `get_linked_docs_of_document` — nó chỉ pin rằng wrapper hiện
+tại trả về shape list, và nếu upstream trong tương lai thêm `file_url` thì
+wrapper `_redact_private_file_urls` sẽ redact cho non-system caller.
+
+Test được giữ làm shape regression — đảm bảo wrapper gọi upstream đúng cách
+và trả về list (không phải None hoặc raise).
+
+**Caller-upstream pair đã verify tĩnh:**
+  - `crm_cskh.api.guarded_crm.get_linked_docs_of_document(doctype, docname)`
+    gọi `frappe.get_attr("crm.api.doc.get_linked_docs_of_document")(doctype, docname)`
+    rồi filter qua `frappe.has_permission(linked["doc"], "read", ...)`.
+  - Upstream trả list[dict] với keys: `doc`, `reference_docname` (verified qua
+    test_permissions.py test_linked_activity_endpoints_check_parent_before_returning_data
+    ở cross-scope branch — user_a trên lead_b trả []).
+  - Upstream v1.87.0 KHÔNG trả `file_url` / `content_hash` trong shape
+    `get_linked_docs_of_document` (xác minh tĩnh).
+
+**Hệ quả:**
+  - Wrapper `_redact_private_file_urls` áp dụng trên kết quả upstream. Nếu
+    upstream không có `file_url` thì helper vẫn pass qua nguyên bản (loop
+    không tìm thấy field).
+  - Đây là **defense-in-depth**: nếu upstream thay đổi shape trong tương lai,
+    wrapper sẽ tự động redact.
+  - **KHÔNG** coi test này là PASS cho SEC-26 redaction; cần test mới nếu
+    upstream thay đổi shape.
+
+STATUS: NOT RUN — chưa có runtime evidence trên test site sạch.
+-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_security_remediation_v2.TestSEC27CallLogFallbackContactInternal-20261027151835" tests="4" file="crm_cskh/tests/test_security_remediation_v2.py" time="0.689" timestamp="2026-10-27T15:18:47" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC27CallLogFallbackContactInternal" name="test_upstream_get_call_contact_orphan_routes_to_phone_lookup" time="0.269" timestamp="2026-10-27T15:18:46" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1265">
+			<!--REPRODUCTION: gọi upstream `get_call_contact` với orphan call phải trả Contact
+match qua `get_contact_by_phone_number`.
+
+Đây là nhánh leak nội bộ upstream — wrapper `crm_cskh.api.guarded_crm.get_call_log`
+(commit 158e0fd) chặn ở tầng entry point.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC27CallLogFallbackContactInternal" name="test_upstream_get_call_log_orphan_raises_for_staff_via_check_permission" time="0.140" timestamp="2026-10-27T15:18:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1279">
+			<!--`get_call_log` upstream có `.check_permission('read')` ở đầu — staff vẫn raise
+khi Call Log có reference_doctype not in (CRM Lead, CRM Deal).
+
+Wrapper `crm_cskh.api.guarded_crm.get_call_log` thêm 1 lớp check cho non-system
++ ref rỗng/khác Lead/Deal. Test này pin hành vi upstream + wrapper.
+-->
+			<system-out><![CDATA[Message: Not permitted
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC27CallLogFallbackContactInternal" name="test_wrapper_get_call_log_administrator_succeeds" time="0.134" timestamp="2026-10-27T15:18:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1304">
+			<!--Sanity: Administrator (system) vẫn gọi được wrapper (fail-open cố ý).-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation_v2.TestSEC27CallLogFallbackContactInternal" name="test_wrapper_get_call_log_still_raises_for_staff" time="0.146" timestamp="2026-10-27T15:18:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py" line="1294">
+			<!--Wrapper `crm_cskh.api.guarded_crm.get_call_log` fail-closed cho non-system caller
++ orphan call (commit 158e0fd remediation).-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Call Log - ba29a3690402
+]]></system-out>
+		</testcase>
+	</testsuite>
+</testsuites>

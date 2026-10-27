@@ -10,7 +10,7 @@
 > Docker để chạy site tiếng Việt, và browser của phiên Codex không được dùng để lưu file
 > ảnh có thể chứa PII mà chưa khử. Tài liệu này cung cấp checklist + script shell để
 > Owner thu thập screenshot an toàn trên máy có Docker + browser thật.
-> **Không sửa upstream CRM/Frappe.**
+> Không sửa source upstream CRM/Frappe trong repository hoặc upstream remote. Bản vá thử nghiệm cho DEV, nếu có, chỉ được áp dụng vào checkout/dependency nằm trong Docker bench volume và phải được ghi rõ như vậy.
 
 ---
 
@@ -392,3 +392,25 @@ docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
   - Site `dev.localhost` không resolve trên Windows host — dùng `127.0.0.1:8000` + `Host: dev.localhost` header.
 - **Khi runtime chạy xong:** chụp 10 ảnh theo §3.6 (đã cập nhật), đối chiếu PII theo §2, điền lại checklist §3 với dấu ✅/❌, đánh dấu lại G0-09 trong `p0-exit-report.md`.
 - **KHÔNG tuyên bố PASS** ở phiên này.
+## 8. Cập nhật hiện trạng bản dịch (T1A, 2026-10-27)
+
+> Mục 7 và các blocker ở §6.8 là ảnh chụp lịch sử trước khi có Docker/Python/browser runtime. Mục này cập nhật phần hiện trạng đã kiểm chứng; không xóa các bước kiểm tra còn thiếu.
+
+- Site kiểm tra sạch: `p0-final-check-20261027.localhost`; Frappe `15.123.1`, CRM `1.87.0`, `crm_cskh` cài trong site.
+- `translations/vi.csv`: 166 khóa duy nhất, không khóa trùng, không có bản dịch rỗng.
+- Bản dịch hiệu dụng qua `frappe._(..., lang="vi")`: `Lead` → “Khách hàng tiềm năng”; `Note` → “Ghi chú”; `Assigned To` → “Người phụ trách”; `Lead Owner` → “Nhân viên phụ trách”; `Phone` → “Điện thoại”; `Mobile No.` → “Số di động”; `Deals` → “Cơ hội”; `Call Logs` → “Nhật ký cuộc gọi”; `Last Modified` → “Cập nhật lần cuối”. Các khóa sản phẩm được bổ sung trong `vi.csv`; `Phone`/`Mobile No.` đang được dịch bởi bộ từ điển đã ghép của CRM/Frappe. Không sửa mã nguồn upstream.
+- `/login` trả HTTP 200 với `lang=vi`; các nhãn văn bản “Đăng nhập”, “Trang chủ”, “Thư điện tử”, “Mật khẩu” đã được kiểm tra trong HTML render. Tham số `?_lang=en` vẫn trả giao diện tiếng Anh theo yêu cầu tường minh.
+- Đã lưu ảnh `/screenshots/t1a-g009-03-leads-list.png`; tổng hiện có **1/10** ảnh checklist. Ảnh cho thấy điều hướng Leads bằng tiếng Việt. Không tuyên bố hoàn tất rà trực quan 10 màn hoặc quét PII toàn bộ bộ ảnh.
+- Patcher dịch nhãn cho CRM/frappe-ui và navbar Frappe được ghim theo revision, chạy lặp lại được; checkout CRM và dependency frappe-ui bên trong Docker bench volume đã được patch, cache đã clear. Đây không phải thay đổi upstream remote hoặc source tracked trong repository.
+- **G0-09 vẫn PARTIAL.** Còn 9 ảnh checklist và vòng rà nhãn/PII toàn bộ màn. Không đánh dấu PASS chỉ dựa trên số lượng khóa dịch hoặc trang đăng nhập.
+
+## 9. Bổ sung hiện trạng sau runtime follow-up (T1A, 2026-10-27)
+
+Mục 8 là ảnh chụp sớm hơn (166 khóa dịch, 1/10 ảnh). Dùng mục này cùng `t1a-p0-follow-up-2026-10-27.md` cho hiện trạng mới hơn; không đọc số 166 như số hiện tại.
+
+- `apps/crm_cskh/crm_cskh/translations/vi.csv`: **191 khóa duy nhất**, không trùng, không bản dịch rỗng; CRLF thuần, không BOM.
+- Dashboard và command palette đã hiển thị nhãn tiếng Việt trong lần kiểm tra browser. Bản vá DEV thêm dịch tường minh cho tên/giá trị nhãn biểu đồ; `yarn build` thành công sau patch.
+- Hai nhãn biểu đồ trống `stage/source` chưa được xác nhận trực quan sau bản vá cuối. Không tuyên bố đã rà hết nhãn tiếng Anh.
+- Patcher [`apply-crm-vite-dev-patch.py`](../apply-crm-vite-dev-patch.py) chạy trong Docker bench volume, áp dụng lên checkout CRM và dependency `frappe-ui` của môi trường DEV. Nó không sửa upstream remote hay source upstream tracked trong repository. Patcher hiện là tệp working-tree chưa commit; giữ lại để tái áp dụng nếu volume được dựng lại.
+- DEV được khởi động lại trong lượt tiếp tục này; Vite `/crm` trả HTTP 200 qua `127.0.0.1:8080`. Điều này chỉ xác nhận endpoint phục vụ được, không thay cho xác nhận trực quan sau patch.
+- Chỉ có **1/10** screenshot checklist trong checkout; chưa hoàn tất rà 10 màn hình hoặc quét PII cho toàn bộ ảnh. **G0-09 vẫn PARTIAL**.

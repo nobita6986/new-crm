@@ -10,6 +10,13 @@
   <p><a href="/crm/leads/view/list">{{ _("Return to CRM Leads") }}</a></p>
 </main>
 <script>
+  const navigationToggle = document.querySelector(
+    'button.navbar-toggler[aria-label="Toggle navigation"]',
+  );
+  if (navigationToggle) {
+    navigationToggle.setAttribute("aria-label", "{{ _('Toggle navigation')|e }}");
+  }
+
   document.getElementById("cskh-session-check").addEventListener("click", async () => {
     const result = document.getElementById("cskh-session-result");
     const response = await fetch("/api/method/crm_cskh.api.health.ping", {
@@ -18,7 +25,9 @@
       headers: { "X-Frappe-CSRF-Token": "{{ csrf_token }}" },
     });
     const payload = await response.json();
-    result.textContent = response.ok ? `${payload.message.status}: ${payload.message.user}` : "Request denied";
+    result.textContent = response.ok
+      ? `{{ _('Session verified for')|e }} ${payload.message.user}`
+      : "{{ _('Request denied')|e }}";
   });
 </script>
 {% endblock %}

@@ -1,25 +1,12 @@
 # T1B — Characterization: vòng đời DocShare của CRM Lead
 #
 # Mục đích
-#   Ghi nhận (characterize) trạng thái `DocShare` và quyền hiệu dụng TRƯỚC/SAU
-#   các thao tác: `lead.save()` (đổi / không đổi `lead_owner`), `assign_agent`
-#   (Frappe `frappe.desk.form.assign_to.add`), và `remove_assignments`.
+#   Regression tests cho chính sách fail-closed về `DocShare`, ownership và
+#   assignment của CRM Lead. Quyết định Q1-Q4 do Owner ủy quyền ngày 2026-10-26.
 #
 # Ranh giới phạm vi — ĐỌC KỸ TRƯỚC KHI SỬA
-#   1. Đây là CHARACTERIZATION, không phải test tiêu chí chính sách.
-#      Mọi assert trong file được phân loại rõ ràng theo 3 nhóm, và mỗi
-#      assert đều có nhãn trong docstring:
-#        (P)   PRECONDITION — tiền đề kỹ thuật, **trung lập** với chính sách.
-#              VD: assignee ngoài scope không đọc được Lead trước khi assign.
-#        (PIN) PINNED      — hành vi **HIỆN TRẠNG** đang được pin, gắn với một
-#              câu hỏi chính sách **chưa chốt** (Q1..Q4 trong `PINNED_BEHAVIOR`).
-#              Assert nhóm này chỉ phát hiện **drift** so với hành vi hiện tại;
-#              **KHÔNG** phải tiêu chí PASS của chính sách. Mọi assert (PIN) đều
-#              đi qua helper `assert_pinned_*` để message ghi rõ câu hỏi liên
-#              quan ⇒ không thể nhầm với tiêu chí chính sách khi đọc log fail.
-#        (O)   OBSERVATION  — chỉ **in** giá trị quan sát được, không assert.
-#      Giá trị quan sát luôn được **in ra** (kể cả khi assert (PIN) fail) để
-#      T0/Owner có artifact độc lập để quyết định.
+#   1. Assertions kiểm tra quyết định fail-closed đã chọn, không phải canary
+#      chờ chính sách. Log quan sát chỉ bổ sung chẩn đoán, không thay assertion.
 #   2. Không sửa `permission-matrix.md`, `risk-register.md`, ADR-004/005,
 #      `t1c-security-verification.md`.
 #   3. Không dùng `ignore_permissions=True` để "ép" một kết quả mong muốn.
@@ -27,11 +14,7 @@
 #      sau khi bypass, và điều đó được nêu rõ trong docstring.
 #   4. Không sửa source upstream CRM/Frappe.
 #
-# Runtime
-#   STATUS: NOT RUN — host probe (2026-10-21) không có Docker/bench/Python/site.
-#   Xem `deploy/dev/evidence/t1b-g007-runtime-evidence-2026-10-21.md` §8.
-#   Test đã THÊM + assertion đã VIẾT, nhưng chưa có log thực thi ⇒ không tuyên bố
-#   PASS cho bất kỳ method nào và không nâng G0-07 / P0.
+# Runtime status is recorded in current P0 evidence, not in this source header.
 #
 # Cơ sở tĩnh (đọc source upstream tại SHA đã ghim)
 #   Frappe v15.123.1 = d2efa79657ba5c1abf96098b3bfacc199517d57e
@@ -73,24 +56,25 @@
 #                                                     thấy lead_owner == user
 #
 # ---------------------------------------------------------------------------
-# REGISTRY câu hỏi chính sách đang MỞ (T0/Owner chưa quyết)
+# REGISTRY quyết định chính sách đã chốt cho P0
 #
-#   Mỗi mục ghi: câu hỏi, trạng thái quyết định, hành vi hiện trạng đang được
-#   pin, và danh sách test pin nó. `pinned_by` được kiểm tra bởi
-#   `TestDocSharePolicyPinRegistry::test_policy_pin_registry_is_consistent`
-#   ⇒ không thể để registry lệch với code thực tế.
+#   `covered_by` được kiểm tra bởi `TestDocSharePolicyPinRegistry` để tránh
+#   khai báo coverage tới test không tồn tại.
 # ---------------------------------------------------------------------------
-PINNED_BEHAVIOR = {
+POLICY_DECISIONS = {
 	"Q1": {
 		"question": (
 			"Khi `lead_owner` đổi, `DocShare` cũ có nên bị xoá hết, hay giữ lại share đã được cấp hợp lệ?"
 		),
-		"status": "PENDING_T0_OWNER_DECISION",
+		"status": "DECIDED",
+		"decision": "Xoá toàn bộ DocShare của Lead khi lead_owner đổi; giữ share khi owner không đổi.",
+		"decided_by": "Owner đã ủy quyền Codex chốt P0",
+		"decided_on": "2026-10-26",
 		"current_behavior": (
 			"`clear_stale_lead_shares` (permissions.py L141-143) xoá TOÀN BỘ "
 			"`DocShare` của Lead khi `lead_owner` đổi; giữ nguyên khi không đổi."
 		),
-		"pinned_by": [
+		"covered_by": [
 			"TestDocShareLeadSave::test_docshare_removed_by_lead_save_when_owner_changes",
 			"TestDocShareLeadSave::test_docshare_survives_lead_save_when_owner_unchanged",
 			("TestDocShareEffectivePermission::test_effective_permission_before_and_after_reassign"),
@@ -102,12 +86,19 @@ PINNED_BEHAVIOR = {
 			"`assign_agent` tự tạo `DocShare` `read=1` cho assignee ngoài scope — "
 			"có đúng ý định không khi `crm_cskh` chủ động chặn scope?"
 		),
-		"status": "PENDING_T0_OWNER_DECISION",
-		"current_behavior": (
-			"`assign_to.add` (assign_to.py L107-118) tạo `DocShare` khi assignee "
-			"chưa có quyền; KHÔNG tạo khi assignee đã có quyền."
+		"status": "DECIDED",
+		"decision": (
+			"Không dùng DocShare để cấp quyền đọc ngoài scope. Generic assignment không được đổi "
+			"lead_owner kể cả với System Manager; chỉ System Manager được đổi owner qua guarded "
+			"CRM Lead document path."
 		),
-		"pinned_by": [
+		"decided_by": "Owner đã ủy quyền Codex chốt P0",
+		"decided_on": "2026-10-26",
+		"current_behavior": (
+			"Guarded generic assignment từ chối assignee khác owner hiện tại; assignment cho owner "
+			"hiện tại không tạo DocShare."
+		),
+		"covered_by": [
 			("TestDocShareAssignAgent::test_docshare_created_by_assign_agent_when_assignee_lacks_permission"),
 			(
 				"TestDocShareAssignAgent::"
@@ -121,37 +112,40 @@ PINNED_BEHAVIOR = {
 			"`remove_assignments` hủy `ToDo` nhưng không gỡ `DocShare` — "
 			"assignee cũ có còn đọc được Lead không?"
 		),
-		"status": "PENDING_T0_OWNER_DECISION",
-		"current_behavior": (
-			"`crm.api.doc.remove_assignments` (CRM v1.87.0 L589-604 — đã kiểm "
-			"chứng byte-exact, xem header file) chỉ set "
-			"`ToDo.status = Cancelled`; `DocShare` được giữ nguyên."
+		"status": "DECIDED",
+		"decision": (
+			"Khi System Manager hủy assignment Lead, giữ hành vi hủy ToDo của upstream và "
+			"xóa DocShare thuộc đúng assignee bị gỡ trong cùng transaction."
 		),
-		"pinned_by": [
+		"decided_by": "Owner đã ủy quyền Codex chốt P0",
+		"decided_on": "2026-10-26",
+		"current_behavior": (
+			"Upstream chỉ hủy ToDo; wrapper crm_cskh bổ sung thu hồi DocShare của assignee "
+			"vì cập nhật owner qua DB bỏ qua on_update."
+		),
+		"covered_by": [
 			"TestDocShareRemoveAssignments::test_docshare_survives_remove_assignments",
 		],
 	},
 	"Q4": {
 		"question": ("Có cần path nâng quyền share (`write`/`share`) cho `crm_cskh` không?"),
-		"status": "PENDING_T0_OWNER_DECISION",
+		"status": "DECIDED",
+		"decision": "Không cấp write, submit hoặc share qua DocShare; app không tạo DocShare tự động.",
+		"decided_by": "Owner đã ủy quyền Codex chốt P0",
+		"decided_on": "2026-10-26",
 		"current_behavior": (
 			"`frappe.share.add_docshare` đặt read=1, write=0, submit=0, share=0, "
 			"everyone=0 (share.py L54-60)."
 		),
-		"pinned_by": [
+		"covered_by": [
 			"TestDocShareAssignAgent::test_docshare_flags_after_assign_agent",
 		],
 	},
 }
 
-# Owner/T0 CHƯA xác nhận Q1..Q4 ⇒ file này **KHÔNG** được dùng làm regression
-# gate cho các hành vi đã pin. Chỉ chuyển thành `True` khi T0/Owner đã ghi
-# quyết định vào evidence `t1b-g007-runtime-evidence-2026-10-21.md` §8.4
-# (kèm ngày + người quyết + nội dung quyết định). Khi đó mọi mục trong
-# `PINNED_BEHAVIOR` phải có `status = "DECIDED"` và đủ trường
-# `decision` / `decided_by` / `decided_on` — `TestDocSharePolicyPinRegistry`
-# sẽ kiểm tra điều đó.
-OWNER_DECISIONS_CONFIRMED = False
+# Owner delegated the P0 policy decisions to Codex on 2026-10-26. Each
+# decision is recorded above and is now a regression gate.
+OWNER_DECISIONS_CONFIRMED = True
 
 from typing import ClassVar
 
@@ -297,63 +291,9 @@ class _DocShareHelpers:
 		"""
 		print(f"[DocShare characterization] {label}: {payload}")
 
-	def assert_pinned_true(self, condition, policy_ref, detail):
-		"""(PIN) Assert hành vi **HIỆN TRẠNG** đang được pin.
-
-		`policy_ref` = mã câu hỏi chính sách (Q1..Q4) trong `PINNED_BEHAVIOR`
-		(evidence `t1b-g007-runtime-evidence-2026-10-21.md` §8.4).
-
-		Ý nghĩa: assert này chỉ phát hiện **drift** so với hành vi hiện tại.
-		Nó **KHÔNG** đại diện cho tiêu chí PASS của chính sách — T0/Owner chưa
-		quyết. Khi câu hỏi được chốt, kỳ vọng ở đây **phải** được cập nhật lại.
-		"""
-		self.assertTrue(
-			bool(condition),
-			f"PINNED BEHAVIOR [{policy_ref}] — pending T0/Owner decision — {detail}. "
-			"Assert này PIN hành vi hiện trạng để phát hiện drift; "
-			"KHÔNG phải tiêu chí PASS chính sách.",
-		)
-
-	def assert_pinned_false(self, condition, policy_ref, detail):
-		"""(PIN) Ngược của `assert_pinned_true` — xem chú thích tại đó."""
-		self.assertFalse(
-			bool(condition),
-			f"PINNED BEHAVIOR [{policy_ref}] — pending T0/Owner decision — {detail}. "
-			"Assert này PIN hành vi hiện trạng để phát hiện drift; "
-			"KHÔNG phải tiêu chí PASS chính sách.",
-		)
-
-	def assert_pinned_equal(self, actual, expected, policy_ref, detail):
-		"""(PIN) `actual == expected` theo hành vi hiện trạng — xem `assert_pinned_true`."""
-		self.assertEqual(
-			actual,
-			expected,
-			f"PINNED BEHAVIOR [{policy_ref}] — pending T0/Owner decision — {detail}. "
-			"Assert này PIN hành vi hiện trạng để phát hiện drift; "
-			"KHÔNG phải tiêu chí PASS chính sách.",
-		)
-
-	def assert_pinned_is_none(self, actual, policy_ref, detail):
-		"""(PIN) `actual is None` theo hành vi hiện trạng — xem `assert_pinned_true`."""
-		self.assertIsNone(
-			actual,
-			f"PINNED BEHAVIOR [{policy_ref}] — pending T0/Owner decision — {detail}. "
-			"Assert này PIN hành vi hiện trạng để phát hiện drift; "
-			"KHÔNG phải tiêu chí PASS chính sách.",
-		)
-
-	def assert_pinned_is_not_none(self, actual, policy_ref, detail):
-		"""(PIN) `actual is not None` theo hành vi hiện trạng — xem `assert_pinned_true`."""
-		self.assertIsNotNone(
-			actual,
-			f"PINNED BEHAVIOR [{policy_ref}] — pending T0/Owner decision — {detail}. "
-			"Assert này PIN hành vi hiện trạng để phát hiện drift; "
-			"KHÔNG phải tiêu chí PASS chính sách.",
-		)
-
 
 class _DocShareBase(_DocShareHelpers, FrappeTestCase):
-	"""Base — seed user/hierarchy + fixture Lead cho characterization DocShare.
+	"""Base — seed user/hierarchy + fixture Lead cho DocShare policy tests.
 
 	Team 1: `a` (Sales User) dưới `tl1`; Team 2: `c` (Sales User) dưới `tl2`.
 	`c` dùng làm assignee **ngoài scope** để khảo sát nhánh Frappe tự tạo
@@ -407,6 +347,7 @@ class _DocShareBase(_DocShareHelpers, FrappeTestCase):
 	def tearDown(self):
 		frappe.set_user("Administrator")
 		for doctype, name in (
+			("ToDo", getattr(self, "todo", None)),
 			("CRM Call Log", getattr(self, "call", None)),
 			("CRM Task", getattr(self, "task", None)),
 			("FCRM Note", getattr(self, "note", None)),
@@ -435,15 +376,9 @@ class _DocShareBase(_DocShareHelpers, FrappeTestCase):
 		return None
 
 	def _assign(self, assign_to, lead=None):
-		"""Gọi `frappe.desk.form.assign_to.add` (assign_agent) với actor Administrator.
-
-		Đây là entry point Frappe dùng cho "Assign To" trong UI (client gọi
-		`frappe.desk.form.assign_to.add`). Gọi trực tiếp hàm server để có
-		logic server-side đầy đủ (tạo ToDo + có/không tạo DocShare).
-		"""
-		from frappe.desk.form import assign_to as frappe_assign_to
-
-		return frappe_assign_to.add(
+		"""Gọi route assignment đã được `crm_cskh` override."""
+		method = frappe.get_attr(frappe.override_whitelisted_method("frappe.desk.form.assign_to.add"))
+		return method(
 			{
 				"assign_to": [assign_to],
 				"doctype": "CRM Lead",
@@ -451,6 +386,11 @@ class _DocShareBase(_DocShareHelpers, FrappeTestCase):
 				"description": "CSKH DocShare characterization",
 			}
 		)
+
+	def _seed_read_share(self, user, lead=None):
+		"""Tạo DocShare trực tiếp để test vòng đời, độc lập với assign_agent."""
+		frappe.share.add("CRM Lead", lead or self.lead, user=user, read=1)
+		return self._share_for(user, lead)
 
 	def _remove_assignments(self, assignees, lead=None):
 		"""Gọi wrapper `crm_cskh.permissions.remove_assignments` (đã override trong hooks)."""
@@ -505,18 +445,13 @@ class TestDocShareAssignAgent(_DocShareBase):
 	"""`assign_agent` (`frappe.desk.form.assign_to.add`) — ảnh hưởng lên `DocShare`."""
 
 	def test_docshare_created_by_assign_agent_when_assignee_lacks_permission(self):
-		"""(PIN Q2) assign cho assignee **ngoài scope** ⇒ Frappe có tự tạo `DocShare`?
+		"""Q2 — generic assignment không được đổi owner hoặc cấp share ngoài scope.
 
 		Actor: `Administrator` (system). Assignee: user `c` (Team 2, ngoài scope
 		của Lead của Team 1).
 
-		**PIN — chờ T0/Owner (Q2).** Câu hỏi: `assign_agent` tạo share `read=1`
-		tự động cho assignee ngoài scope có đúng ý định không, khi `crm_cskh`
-		chủ động chặn scope?
-
-		Assert (PIN) ở đây **pin hành vi hiện trạng** để phát hiện drift —
-		**KHÔNG** phải tiêu chí PASS chính sách. Giá trị quan sát được in ra
-		để T0/Owner quyết định độc lập với kết quả assert.
+		Quyết định P0: không actor nào được đổi owner qua `assign_to.add`; System Manager
+		có thể đổi owner riêng qua guarded CRM Lead document path.
 		"""
 		# (P) Precondition — assignee ngoài scope KHÔNG đọc được Lead trước khi assign.
 		# Trung lập với chính sách: đây là hành vi scope đã được matrix chốt.
@@ -525,21 +460,30 @@ class TestDocShareAssignAgent(_DocShareBase):
 		frappe.set_user("Administrator")
 		self.assertFalse(can_read, "precondition: assignee ngoài scope phải không đọc được Lead")
 
-		self._assign(self.users["c"])
+		frappe.set_user(self.users["c"])
+		with self.assertRaises(frappe.PermissionError):
+			self._assign(self.users["c"])
+		frappe.set_user("Administrator")
+		with self.assertRaises(frappe.PermissionError):
+			self._assign(self.users["c"])
+		self.assertEqual(frappe.db.get_value("CRM Lead", self.lead, "lead_owner"), self.users["a"])
+		self.assertEqual(self._docshares(), [])
 
-		share = self._share_for(self.users["c"])
-		self.observe("after assign_agent (assignee ngoài scope) — DocShare", share)
+		# Ownership changes use the permission-checked Lead document path.
+		lead = frappe.get_doc("CRM Lead", self.lead)
+		lead.lead_owner = self.users["c"]
+		lead.save()
 
-		# (PIN Q2) — hành vi hiện trạng của `assign_to.add` (assign_to.py L107-118).
-		self.assert_pinned_is_not_none(
-			share, "Q2", "assign_agent phải tạo DocShare khi assignee chưa có quyền"
-		)
-		self.assert_pinned_equal(share.get("read"), 1, "Q2", "DocShare mới tạo phải có cờ read=1")
+		self.assertIsNone(self._share_for(self.users["c"]))
+		self.assertEqual(frappe.db.get_value("CRM Lead", self.lead, "lead_owner"), self.users["c"])
+		frappe.set_user(self.users["c"])
+		self.assertTrue(frappe.has_permission("CRM Lead", "read", self.lead, throw=False))
+		frappe.set_user("Administrator")
 
 	def test_docshare_not_created_by_assign_agent_when_assignee_already_in_scope(self):
-		"""(PIN Q2) assign cho assignee **đã có quyền** ⇒ KHÔNG tạo `DocShare`.
+		"""Q2 — assignment cho người trong scope không tạo DocShare phụ.
 
-		Assignee: user `tl1` (Sales Manager, nút hierarchy làm gốc của Team 1).
+		Assignee: user `a` (owner hiện tại của Lead).
 
 		**Lưu ý về fixture:** user `b` (Sales User, Team 1) **không** dùng
 		được làm assignee "đã có quyền" — theo scope của `crm_cskh`, Sales User
@@ -552,53 +496,34 @@ class TestDocShareAssignAgent(_DocShareBase):
 		# (P) Precondition — assignee trong scope ĐỌC ĐƯỢC Lead trước khi assign.
 		# Nếu precondition này sai thì `assign_to.add` sẽ đi vào nhánh tạo share
 		# (assign_to.py L107) và kết luận "không tạo DocShare" sẽ sai.
-		frappe.set_user(self.users["tl1"])
+		frappe.set_user(self.users["a"])
 		can_read = frappe.has_permission("CRM Lead", "read", self.lead, throw=False)
 		frappe.set_user("Administrator")
 		self.assertTrue(can_read, "precondition: assignee trong scope phải đọc được Lead")
 
-		self._assign(self.users["tl1"])
+		self._assign(self.users["a"])
 
 		shares = self._docshares()
 		self.observe("after assign_agent (assignee trong scope) — DocShare", shares)
 
-		# (PIN Q2) — nhánh bù: không tạo DocShare khi assignee đã có quyền.
-		self.assert_pinned_is_none(
-			self._share_for(self.users["tl1"]),
-			"Q2",
-			"assign_agent không được tạo DocShare khi assignee đã có quyền",
-		)
-		self.assert_pinned_equal(shares, [], "Q2", "không được có bất kỳ DocShare nào sau assign_agent")
+		self.assertIsNone(self._share_for(self.users["a"]))
+		self.assertEqual(shares, [], "không được có DocShare sau assign_agent")
 
 	def test_docshare_flags_after_assign_agent(self):
-		"""(PIN Q2/Q4) Ghi nhận 4 cờ quyền của `DocShare` sau `assign_agent`.
+		"""Q2/Q4 — System Manager cũng không đổi owner qua generic assignment.
 
-		`frappe.share.add_docshare` đặt `read=1` (luôn), `write=0`, `submit=0`,
-		`share=0` theo mặc định (share.py L54-60).
-
-		**PIN — chờ T0/Owner (Q2, Q4).** Q2: share `read=1` tự động cho assignee
-		ngoài scope có đúng ý không. Q4: có cần path nâng quyền share
-		(`write`/`share`) cho `crm_cskh` không — hiện chưa có, nên các cờ
-		`write`/`submit`/`share` đều là 0.
-
-		Assert ở đây **pin hành vi hiện trạng**, **KHÔNG** phải tiêu chí PASS
-		chính sách.
+		Quyết định: assignment chung không được biến thành đường đổi owner; thay đổi
+		owner chỉ qua CRM Lead document path và share cũ bị dọn ở on_update.
 		"""
-		self._assign(self.users["c"])
+		with self.assertRaises(frappe.PermissionError):
+			self._assign(self.users["c"])
 
 		share = self._share_for(self.users["c"])
-		self.observe("after assign_agent — cờ quyền DocShare", share)
+		self.observe("after denied generic assignment — DocShare", share)
 
-		# (PIN Q2) — share được tạo, cờ read = 1.
-		self.assert_pinned_is_not_none(
-			share, "Q2", "assign_agent phải tạo DocShare khi assignee chưa có quyền"
-		)
-		self.assert_pinned_equal(share.get("read"), 1, "Q2", "DocShare mới tạo phải có cờ read=1")
-		# (PIN Q4) — chưa có path nâng quyền share ⇒ các cờ còn lại bằng 0.
-		self.assert_pinned_equal(share.get("write"), 0, "Q4", "chưa có path nâng quyền ⇒ cờ write=0")
-		self.assert_pinned_equal(share.get("submit"), 0, "Q4", "chưa có path nâng quyền ⇒ cờ submit=0")
-		self.assert_pinned_equal(share.get("share"), 0, "Q4", "chưa có path nâng quyền ⇒ cờ share=0")
-		self.assert_pinned_equal(share.get("everyone"), 0, "Q4", "share cấp cho user cụ thể ⇒ cờ everyone=0")
+		self.assertIsNone(share)
+		self.assertEqual(self._docshares(), [])
+		self.assertEqual(frappe.db.get_value("CRM Lead", self.lead, "lead_owner"), self.users["a"])
 
 
 # ===========================================================================
@@ -610,20 +535,15 @@ class TestDocShareLeadSave(_DocShareBase):
 	"""`lead.save()` — ảnh hưởng lên `DocShare` khi `lead_owner` đổi / không đổi."""
 
 	def test_docshare_removed_by_lead_save_when_owner_changes(self):
-		"""(PIN Q1) `lead.save()` **đổi** `lead_owner` ⇒ `DocShare` bị xoá?
+		"""Q1 — đổi `lead_owner` thu hồi mọi DocShare cũ.
 
 		Cơ chế: `doc_events["CRM Lead"]["on_update"]` → `clear_stale_lead_shares`
 		xoá toàn bộ `DocShare` của Lead khi `lead_owner` đổi
 		(`crm_cskh/permissions.py` L141-143).
 
-		**PIN — chờ T0/Owner (Q1).** Câu hỏi: có nên xoá **hết** share (kể cả
-		share đã được cấp hợp lệ) hay giữ lại? Test **pin hành vi hiện trạng**
-		(và in ra giá trị quan sát) — **KHÔNG** phải tiêu chí PASS chính sách.
+		Quyết định P0: xóa hết share cũ vì DocShare không phải nguồn quyền độc lập.
 		"""
-		self._assign(self.users["c"])
-		# (P) Tiền đề thiết lập: cần một DocShare trước khi đổi owner.
-		# Lưu ý: tiền đề này **phụ thuộc** hành vi hiện trạng của Q2 — nếu Owner
-		# chốt Q2 theo hướng khác, bước thiết lập này phải được viết lại.
+		self._seed_read_share(self.users["c"])
 		self.assertIsNotNone(self._share_for(self.users["c"]))
 
 		self._reassign_owner(self.users["b"])
@@ -631,13 +551,8 @@ class TestDocShareLeadSave(_DocShareBase):
 		shares = self._docshares()
 		self.observe("after lead.save() đổi lead_owner — DocShare", shares)
 
-		# (PIN Q1) — hành vi hiện trạng: xoá toàn bộ DocShare của Lead.
-		self.assert_pinned_equal(shares, [], "Q1", "đổi lead_owner phải xoá toàn bộ DocShare của Lead")
-		self.assert_pinned_is_none(
-			self._share_for(self.users["c"]),
-			"Q1",
-			"DocShare của assignee cũ phải bị xoá khi đổi lead_owner",
-		)
+		self.assertEqual(shares, [])
+		self.assertIsNone(self._share_for(self.users["c"]))
 
 	def test_docshare_survives_lead_save_when_owner_unchanged(self):
 		"""(PIN Q1) `lead.save()` **không** đổi `lead_owner` ⇒ `DocShare` còn?
@@ -645,11 +560,9 @@ class TestDocShareLeadSave(_DocShareBase):
 		Cơ chế: `clear_stale_lead_shares` chỉ chạy khi `doc.has_value_changed(
 		"lead_owner")` ⇒ share được giữ nguyên.
 
-		**PIN — chờ T0/Owner (Q1)** — đây là **nhánh bù** của Q1 (cùng câu hỏi
-		chính sách, hướng ngược). **KHÔNG** phải tiêu chí PASS chính sách.
+		Quyết định P0: khi owner không đổi, share hợp lệ hiện có được giữ nguyên.
 		"""
-		self._assign(self.users["c"])
-		# (P) Tiền đề thiết lập (phụ thuộc hành vi hiện trạng của Q2).
+		self._seed_read_share(self.users["c"])
 		self.assertIsNotNone(self._share_for(self.users["c"]))
 
 		# Thay đổi field KHÁC (first_name) để chắc `save()` thực sự chạy
@@ -662,12 +575,8 @@ class TestDocShareLeadSave(_DocShareBase):
 		self.observe("after lead.save() KHÔNG đổi lead_owner — DocShare", shares)
 
 		# (PIN Q1) — nhánh bù: share được giữ nguyên.
-		self.assert_pinned_is_not_none(
-			self._share_for(self.users["c"]),
-			"Q1",
-			"không đổi lead_owner thì DocShare phải được giữ",
-		)
-		self.assert_pinned_equal(len(shares), 1, "Q1", "không đổi lead_owner thì số DocShare không đổi")
+		self.assertIsNotNone(self._share_for(self.users["c"]))
+		self.assertEqual(len(shares), 1)
 
 
 # ===========================================================================
@@ -679,21 +588,32 @@ class TestDocShareRemoveAssignments(_DocShareBase):
 	"""`remove_assignments` — ảnh hưởng lên `DocShare`."""
 
 	def test_docshare_survives_remove_assignments(self):
-		"""(PIN Q3) `remove_assignments` hủy `ToDo` nhưng có gỡ `DocShare` không?
+		"""Q3 — hủy assignment phải thu hồi DocShare của assignee đó.
 
 		Cơ chế: `crm.api.doc.remove_assignments` (CRM v1.87.0 L589-604 — đã kiểm
 		chứng byte-exact tại SHA `0d3910b4…`) chỉ gọi
 		`set_status(..., status="Cancelled")` trên `ToDo` ⇒ **không** đụng `DocShare`.
 
-		**PIN — chờ T0/Owner (Q3).** Câu hỏi: assignee cũ vẫn đọc được Lead sau
-		khi bị unassign — có chấp nhận được không? Test **pin hành vi hiện trạng**
-		(và in ra giá trị quan sát) — **KHÔNG** phải tiêu chí PASS chính sách.
+		Quyết định P0: hủy ToDo phải thu hồi share của assignee trong cùng
+		transaction; upstream chỉ hủy ToDo nên wrapper crm_cskh thực hiện cleanup.
 
 		Phần assert về `ToDo.status = Cancelled` là **(P)** — hành vi upstream
 		CRM đã xác định, không phải câu hỏi chính sách của `crm_cskh`.
 		"""
-		self._assign(self.users["c"])
-		# (P) Tiền đề thiết lập (phụ thuộc hành vi hiện trạng của Q2).
+		self.todo = (
+			frappe.get_doc(
+				{
+					"doctype": "ToDo",
+					"description": "legacy assignment for revoke test",
+					"allocated_to": self.users["c"],
+					"status": "Open",
+				}
+			)
+			.insert(ignore_permissions=True)
+			.name
+		)
+		frappe.db.set_value("ToDo", self.todo, {"reference_type": "CRM Lead", "reference_name": self.lead})
+		self._seed_read_share(self.users["c"])
 		self.assertIsNotNone(self._share_for(self.users["c"]))
 
 		self._remove_assignments([self.users["c"]])
@@ -716,12 +636,7 @@ class TestDocShareRemoveAssignments(_DocShareBase):
 		share = self._share_for(self.users["c"])
 		self.observe("after remove_assignments — DocShare", share)
 
-		# (PIN Q3) — hành vi hiện trạng: DocShare được giữ sau khi unassign.
-		self.assert_pinned_is_not_none(
-			share,
-			"Q3",
-			"remove_assignments hiện KHÔNG gỡ DocShare ⇒ share của assignee cũ còn lại",
-		)
+		self.assertIsNone(share, "DocShare của assignee bị gỡ phải bị thu hồi")
 
 
 # ===========================================================================
@@ -749,22 +664,18 @@ class TestDocShareEffectivePermission(_DocShareBase):
 		return lead in rows
 
 	def test_effective_permission_before_and_after_reassign(self):
-		"""(PIN Q1) Quyền đọc `CRM Lead` của user được share, trước và sau reassign.
+		"""Q1 — reassign thu hồi share cũ và không để quyền đọc còn sót.
 
 		Chuỗi quan sát:
 		  1. Owner `a` tạo Lead; `a` có quyền đọc (thuộc scope).
-		  2. `assign_agent` share cho `c` (ngoài scope) ⇒ `DocShare` read=1.
+		  2. Fixture tạo một DocShare read-only trực tiếp cho user `c`.
 		  3. Quan sát quyền hiệu dụng của `c` **trước** reassign.
 		  4. Reassign owner `a` → `b` ⇒ `clear_stale_lead_shares` xoá `DocShare`.
 		  5. Quan sát quyền hiệu dụng của `c` **sau** reassign.
 
-		**PIN — chờ T0/Owner (Q1).** Bước 4-5 phụ thuộc Q1 (xoá hay giữ share
-		khi đổi owner). Assert (PIN) ở đây **pin hành vi hiện trạng** — **KHÔNG**
-		phải tiêu chí PASS chính sách. Giá trị quyền hiệu dụng **được in ra**
-		để T0/Owner quyết định, kể cả ở các nhánh chưa có quyết định.
+		Quyết định P0: mọi DocShare cũ trên Lead được thu hồi khi owner đổi.
 		"""
-		self._assign(self.users["c"])
-		# (P) Tiền đề thiết lập (phụ thuộc hành vi hiện trạng của Q2).
+		self._seed_read_share(self.users["c"])
 		self.assertIsNotNone(self._share_for(self.users["c"]))
 
 		frappe.set_user(self.users["c"])
@@ -780,8 +691,7 @@ class TestDocShareEffectivePermission(_DocShareBase):
 		shares = self._docshares()
 		self.observe("after reassign — DocShare", shares)
 
-		# (PIN Q1) — hành vi hiện trạng: share bị xoá khi đổi owner.
-		self.assert_pinned_equal(shares, [], "Q1", "đổi lead_owner phải xoá toàn bộ DocShare của Lead")
+		self.assertEqual(shares, [])
 
 		frappe.set_user(self.users["c"])
 		after = frappe.has_permission("CRM Lead", "read", self.lead, throw=False)
@@ -795,27 +705,19 @@ class TestDocShareEffectivePermission(_DocShareBase):
 		# (PIN Q1) — nhất quán nội bộ gắn với Q1: sau khi share bị xoá thì
 		# quyền đọc record-level không còn được cấp bởi share fallback
 		# (frappe/permissions.py L162-191).
-		self.assert_pinned_false(
-			after, "Q1", "sau khi DocShare bị xoá thì quyền đọc CRM Lead không còn được cấp"
-		)
-		self.assert_pinned_true(
-			after_list in (False, "DENIED"),
-			"Q1",
-			"list path không được trả về Lead nữa sau khi DocShare bị xoá",
-		)
+		self.assertFalse(after)
+		self.assertIn(after_list, (False, "DENIED"))
 
 	def test_effective_permission_of_shared_child_records(self):
-		"""(PIN Q1) Quyền đọc child records (Call Log / Task / Note / File) của user được share.
+		"""Q1 — share trên Lead không cấp quyền cho child ngoài phạm vi.
 
 		Đây là nhánh quan trọng: hook `linked_lead_has_permission`
 		(`crm_cskh/permissions.py` L119-130) chặn child nếu parent Lead ngoài
 		scope ⇒ share fallback của framework **không** áp dụng cho child.
 
-		**PIN — chờ T0/Owner (Q1).** **KHÔNG** phải tiêu chí PASS chính sách.
-		Giá trị quyền đọc child **được in ra** trước/sau reassign.
+		Quyết định P0: child access vẫn bị giới hạn theo parent scope.
 		"""
-		self._assign(self.users["c"])
-		# (P) Tiền đề thiết lập (phụ thuộc hành vi hiện trạng của Q2).
+		self._seed_read_share(self.users["c"])
 		self.assertIsNotNone(self._share_for(self.users["c"]))
 
 		children = (
@@ -836,8 +738,7 @@ class TestDocShareEffectivePermission(_DocShareBase):
 		shares = self._docshares()
 		self.observe("after reassign — DocShare", shares)
 
-		# (PIN Q1) — hành vi hiện trạng: share bị xoá khi đổi owner.
-		self.assert_pinned_equal(shares, [], "Q1", "đổi lead_owner phải xoá toàn bộ DocShare của Lead")
+		self.assertEqual(shares, [])
 
 		frappe.set_user(self.users["c"])
 		after = {
@@ -849,11 +750,7 @@ class TestDocShareEffectivePermission(_DocShareBase):
 		# (PIN Q1) — sau khi share bị xoá thì quyền đọc child không được
 		# cấp bởi share fallback (hook `linked_lead_has_permission` chặn trước).
 		for doctype, _name in children:
-			self.assert_pinned_false(
-				after[doctype],
-				"Q1",
-				f"{doctype} vẫn đọc được sau khi share bị xoá",
-			)
+			self.assertFalse(after[doctype], f"{doctype} remains readable after the share is revoked")
 
 		# (O) Ghi nhận bổ sung: `permissions.user_in_scope` — helper scope của app.
 		self.observe(
@@ -868,31 +765,30 @@ class TestDocShareEffectivePermission(_DocShareBase):
 
 
 class TestDocSharePolicyPinRegistry(_DocShareHelpers, FrappeTestCase):
-	"""(P) Bảo toàn tính nhất quán của registry `PINNED_BEHAVIOR`.
+	"""Giữ metadata quyết định Q1-Q4 khớp với regression tests.
 
-	Đây là test **trung lập với chính sách**: nó không assert hành vi của
-	`DocShare` mà chỉ kiểm tra **metadata** — các câu hỏi chính sách đang mở
-	đều được đăng ký, và mọi test được liệt kê trong registry đều tồn tại thật
-	trong module (chống viết sai tên / đổi tên mà quên cập nhật registry).
+	Test kiểm tra registry có đủ quyết định đã chốt và các method được liệt kê
+	đều tồn tại thật trong module (chống sai tên/đổi tên mà quên cập nhật).
 
 	Không dùng `_DocShareBase` ⇒ **không** dựng fixture Lead/child record —
 	test này thuần metadata, không cần dữ liệu nghiệp vụ.
 	"""
 
-	ALLOWED_STATUS: ClassVar[frozenset[str]] = frozenset({"PENDING_T0_OWNER_DECISION", "DECIDED"})
+	ALLOWED_STATUS: ClassVar[frozenset[str]] = frozenset({"DECIDED"})
 	REQUIRED_QUESTION_IDS: ClassVar[frozenset[str]] = frozenset({"Q1", "Q2", "Q3", "Q4"})
 
 	def test_policy_pin_registry_is_consistent(self):
-		"""(P) Registry `PINNED_BEHAVIOR` phải nhất quán với code thực tế."""
-		self.assertEqual(set(PINNED_BEHAVIOR), self.REQUIRED_QUESTION_IDS)
+		"""Registry `POLICY_DECISIONS` phải nhất quán với code thực tế."""
+		self.assertEqual(set(POLICY_DECISIONS), self.REQUIRED_QUESTION_IDS)
 
-		for ref, entry in PINNED_BEHAVIOR.items():
+		for ref, entry in POLICY_DECISIONS.items():
 			self.assertIn(entry["status"], self.ALLOWED_STATUS, f"{ref}: status không hợp lệ")
 			self.assertTrue(entry["question"].strip(), f"{ref}: thiếu câu hỏi chính sách")
-			self.assertTrue(entry["current_behavior"].strip(), f"{ref}: thiếu mô tả hành vi hiện trạng")
-			self.assertTrue(entry["pinned_by"], f"{ref}: chưa liệt kê test nào pin")
+			self.assertTrue(entry.get("decision", "").strip(), f"{ref}: thiếu quyết định")
+			self.assertTrue(entry["current_behavior"].strip(), f"{ref}: thiếu mô tả hành vi")
+			self.assertTrue(entry["covered_by"], f"{ref}: chưa liệt kê test coverage")
 
-			for dotted in entry["pinned_by"]:
+			for dotted in entry["covered_by"]:
 				class_name, _, method_name = dotted.partition("::")
 				klass = globals().get(class_name)
 				self.assertIsNotNone(klass, f"{ref}: class {class_name} không tồn tại")
@@ -901,24 +797,18 @@ class TestDocSharePolicyPinRegistry(_DocShareHelpers, FrappeTestCase):
 					f"{ref}: method {class_name}::{method_name} không tồn tại",
 				)
 
-		# Nếu Owner đã xác nhận quyết định thì mọi mục phải đủ thông tin quyết định.
-		if OWNER_DECISIONS_CONFIRMED:
-			for ref, entry in PINNED_BEHAVIOR.items():
-				self.assertEqual(
-					entry["status"], "DECIDED", f"{ref}: đã xác nhận quyết định nhưng status còn PENDING"
-				)
-				for field in ("decision", "decided_by", "decided_on"):
-					self.assertTrue(
-						entry.get(field), f"{ref}: thiếu trường '{field}' khi đã xác nhận quyết định"
-					)
+		self.assertTrue(OWNER_DECISIONS_CONFIRMED)
+		for ref, entry in POLICY_DECISIONS.items():
+			for field in ("decided_by", "decided_on"):
+				self.assertTrue(entry.get(field), f"{ref}: thiếu trường '{field}'")
 
-		# (O) In registry ra log để Owner đọc kèm artifact runtime.
+		# (O) In quyết định cùng artifact runtime.
 		self.observe(
 			f"OWNER_DECISIONS_CONFIRMED={OWNER_DECISIONS_CONFIRMED}",
-			{ref: entry["status"] for ref, entry in sorted(PINNED_BEHAVIOR.items())},
+			{ref: entry["status"] for ref, entry in sorted(POLICY_DECISIONS.items())},
 		)
-		for ref in sorted(PINNED_BEHAVIOR):
-			entry = PINNED_BEHAVIOR[ref]
+		for ref in sorted(POLICY_DECISIONS):
+			entry = POLICY_DECISIONS[ref]
 			self.observe(f"{ref} — {entry['question']}", entry["current_behavior"])
-			for dotted in entry["pinned_by"]:
-				self.observe(f"  {ref} pinned by", dotted)
+			for dotted in entry["covered_by"]:
+				self.observe(f"  {ref} covered by", dotted)

@@ -38,6 +38,7 @@ PROBE_PATH = HERE / "ci_http_transport_probe.py"
 REPO = HERE.parent.parent.parent
 SOURCE_TEST = REPO / "apps/crm_cskh/crm_cskh/tests/test_security_remediation_v2.py"
 WRAPPER = REPO / "apps/crm_cskh/crm_cskh/api/guarded_crm.py"
+HOOKS = REPO / "apps/crm_cskh/crm_cskh/hooks.py"
 
 
 def load_probe() -> tuple[str, ast.Module]:
@@ -49,7 +50,11 @@ def all_check_ids(tree: ast.Module) -> list[str]:
 	"""Mọi case id được truyền làm tham số đầu của `check(...)`."""
 	ids: list[str] = []
 	for node in ast.walk(tree):
-		if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and node.func.id == "check":
+		if (
+			isinstance(node, ast.Call)
+			and isinstance(node.func, ast.Name)
+			and node.func.id == "check"
+		):
 			if node.args and isinstance(node.args[0], ast.Constant):
 				ids.append(str(node.args[0].value))
 	return ids
@@ -75,7 +80,9 @@ def assigned_string_constants(tree: ast.Module) -> dict[str, str]:
 			assigned[target.id] = value.value
 		elif isinstance(target, ast.Name) and isinstance(value, ast.BinOp):
 			# `"/api/..." + biến` — chỉ giữ phần literal đầu làm dấu hiệu.
-			if isinstance(value.left, ast.Constant) and isinstance(value.left.value, str):
+			if isinstance(value.left, ast.Constant) and isinstance(
+				value.left.value, str
+			):
 				assigned.setdefault(target.id, value.left.value)
 	return assigned
 
@@ -178,10 +185,13 @@ class TestProbeLabeling(unittest.TestCase):
 		offenders = [
 			case_id
 			for case_id in self.check_ids
-			if case_id.startswith("sec16-") and "get_attachments" in self.source_for_case(case_id)
+			if case_id.startswith("sec16-")
+			and "get_attachments" in self.source_for_case(case_id)
 		]
 		self.assertEqual(
-			offenders, [], f"case SEC-16 gọi get_attachments (thuộc SEC-26): {offenders}"
+			offenders,
+			[],
+			f"case SEC-16 gọi get_attachments (thuộc SEC-26): {offenders}",
 		)
 
 	def test_no_sec16_case_asserts_file_url(self):
@@ -294,7 +304,8 @@ class TestProbeSec16RealCoverage(unittest.TestCase):
 		)
 		self.assertTrue(
 			sec16_paths and all("crm.api.doc.get_data" in path for path in sec16_paths),
-			"mọi case SEC-16 phải trỏ cùng endpoint crm.api.doc.get_data, thấy: %r" % (sec16_paths,),
+			"mọi case SEC-16 phải trỏ cùng endpoint crm.api.doc.get_data, thấy: %r"
+			% (sec16_paths,),
 		)
 
 	def test_sec16_uses_synthetic_permlevel_field_with_sentinel(self):
@@ -317,9 +328,7 @@ class TestProbeSec16RealCoverage(unittest.TestCase):
 
 	def test_sec16_asserts_sentinel_absent(self):
 		"""Assertion phải chứng minh sentinel không lộ (không chỉ field vắng mặt)."""
-		scan_ids = [
-			i for i in self.sec16_ids if "sentinel" in i or "get-data" in i
-		]
+		scan_ids = [i for i in self.sec16_ids if "sentinel" in i or "get-data" in i]
 		self.assertTrue(scan_ids, "phải có case kiểm sentinel của SEC-16")
 		found_value_assert = False
 		found_key_absent_assert = False
@@ -394,8 +403,12 @@ class TestProbeSec26Boundary(unittest.TestCase):
 
 	def test_sec26_has_staff_and_admin_cases(self):
 		sec26 = [i for i in self.check_ids if i.startswith("sec26-")]
-		self.assertTrue(any("staff" in i for i in sec26), "thiếu case SEC-26 non-system")
-		self.assertTrue(any("admin" in i for i in sec26), "thiếu case SEC-26 system caller")
+		self.assertTrue(
+			any("staff" in i for i in sec26), "thiếu case SEC-26 non-system"
+		)
+		self.assertTrue(
+			any("admin" in i for i in sec26), "thiếu case SEC-26 system caller"
+		)
 
 	def test_non_system_private_must_have_file_url_absent(self):
 		"""Private + non-system: wrapper loại **key** `file_url` ⇒ assert key vắng mặt."""
@@ -446,26 +459,25 @@ class TestProbeSourceSemanticsMatch(unittest.TestCase):
 	def test_source_test_asserts_value_falsy_not_key_absent(self):
 		"""Test nguồn assert `assertFalse(result["data"][0].get(fieldname))` —
 		nghĩa là **giá trị** falsy, không phải key bị loại."""
-		self.assertIn("assertFalse(result[\"data\"][0].get(self.fieldname))", self.source)
+		self.assertIn('assertFalse(result["data"][0].get(self.fieldname))', self.source)
 
 	def test_source_test_is_named_for_get_data_permlevel(self):
 		self.assertIn("test_crm_api_get_data_filters_permlevel_field", self.source)
 
 
 class TestProbeGetActivitiesCoverage(unittest.TestCase):
-	"""C6 — SEC-26 RFC: probe phải đo `get_activities` (2 đường lộ `file_url`).
+	"""C6 — SEC-26: probe phải xác minh redaction qua `get_activities`.
 
-	Đây là **coverage gap** mà T1C lần 22b nêu: probe 14/14 và V16–V21 chỉ phủ
-	endpoint **đã override** (`guarded_crm.get_attachments`), **KHÔNG** phủ
-	`crm.api.activities.get_activities` và **KHÔNG** phủ `docinfo.attachments`.
+	Probe phải gọi route `get_activities` đã override và kiểm tra payload cùng
+	`docinfo` sau khi wrapper áp dụng redaction.
 
 	Nguyên tắc bất di bất dịch:
 	- Probe phải gọi **đúng** endpoint `crm.api.activities.get_activities`.
 	- Phải đo **riêng** `message[4].attachments` **và** `docinfo.attachments`
 	  (2 đường độc lập, không được gộp).
-	- Đây là **characterization**: KHÔNG được assert giá trị `file_url` phải có
-	  hay không — phải **ghi lại quan sát**. Assert cứng sẽ biến kết luận đang
-	  chờ Owner thành kết luận đã chốt.
+	- Với file private và caller non-system, actual `/private/files/` URL phải
+	  vắng mặt trên mọi nhánh response; placeholder redaction không phải URL.
+	- Nếu URL bị loại, không được gọi download endpoint và báo đã tải thành công.
 	- Caller phải là **non-system** (để không đo nhầm hành vi Administrator).
 	"""
 
@@ -503,7 +515,9 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 				if "crm.api.activities.get_activities" in resolved:
 					found = True
 				else:
-					self.fail(f"case activities phải gọi đúng endpoint, thấy: {resolved}")
+					self.fail(
+						f"case activities phải gọi đúng endpoint, thấy: {resolved}"
+					)
 		self.assertTrue(found, "không tìm thấy request() nào trỏ get_activities")
 
 	def resolve_path(self, rendered: str) -> str:
@@ -549,13 +563,15 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 				break
 		return rendered
 
-	def test_does_not_call_overridden_endpoint_for_activities(self):
-		"""`get_activities` phải **không** đi qua `guarded_crm.get_attachments`."""
-		self.assertNotIn(
-			"guarded_crm.get_attachments",
-			self.source_for_activities(),
-			"case get_activities không được gọi endpoint đã override",
+	def test_get_activities_route_is_overridden_by_wrapper(self):
+		"""Route HTTP phải đi qua wrapper bảo vệ `get_activities`."""
+		hooks = HOOKS.read_text(encoding="utf-8")
+		wrapper = WRAPPER.read_text(encoding="utf-8")
+		self.assertIn(
+			'"crm.api.activities.get_activities": "crm_cskh.api.guarded_crm.get_activities"',
+			hooks,
 		)
+		self.assertIn("def get_activities(name: str):", wrapper)
 
 	def test_measures_both_paths_separately(self):
 		"""Phải đo riêng `message[4].attachments` và `docinfo.attachments`."""
@@ -571,27 +587,24 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 		self.assertIn("message_private", src)
 		self.assertIn("docinfo_private", src)
 
-	def test_does_not_hardcode_file_url_expectation(self):
-		"""KHÔNG được assert cứng `file_url` có/không — phải ghi quan sát.
-
-		Đây là characterization: kết luận còn chờ Owner, probe chỉ **đo**.
-		"""
+	def test_private_file_urls_must_be_redacted_from_all_paths(self):
+		"""Response in-scope không được chứa private URL tại bất kỳ leak site nào."""
 		src = self.source_for_activities()
-		for forbidden in (
-			"'file_url' not in",
-			'"file_url" not in',
-			"not in message_private",
-			"not in docinfo_private",
+		self.assertIn("any_private_file_url = any(", src)
+		self.assertIn("and not any_private_file_url", src)
+		for name in (
+			"message_has_url",
+			"attachment_log_has_url",
+			"docinfo_has_url",
+			"attachment_log_html_has_url",
 		):
-			self.assertNotIn(
-				forbidden,
-				src,
-				"probe không được assert cứng file_url (phải ghi quan sát thay vì kết luận)",
-			)
+			self.assertIn(name, src)
 
 	def test_records_observations_for_each_path(self):
 		"""Mỗi đường phải có **một** quan sát riêng trong evidence."""
-		self.assertIn("observations", self.source, "phải ghi `observations` vào evidence")
+		self.assertIn(
+			"observations", self.source, "phải ghi `observations` vào evidence"
+		)
 		for observation_id in (
 			"sec26-activities-message-attachments",
 			"sec26-activities-message-attachment-log",
@@ -643,10 +656,7 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 					iter_ids.add(element.value)
 				elif isinstance(element, ast.Tuple):
 					for sub in element.elts:
-						if (
-							isinstance(sub, ast.Constant)
-							and isinstance(sub.value, str)
-						):
+						if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
 							iter_ids.add(sub.value)
 			if "sec26-activities-message-attachments" not in iter_ids:
 				continue
@@ -692,9 +702,9 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 		"""Phải đo **2 đường attachment_log** (URL trong HTML/activity, không phải key `file_url`).
 
 		Đường 3: `message[0][attachment_log].data.file_url` (CRM `parse_attachment_log` L524).
-		Đường 4: `docinfo.attachment_logs[].content` — HTML `<a href="/private/files/…">`
-		(Frappe `file.py` L898-906). Ở đường 4 URL nằm trong **chuỗi HTML**, KHÔNG phải
-		key `file_url` ⇒ probe không redact được ⇒ phải đo riêng.
+		        Đường 4: `docinfo.attachment_logs[].content` — HTML `<a href="/private/files/…">`
+		        (Frappe `file.py` L898-906). Vì URL nằm trong chuỗi HTML, probe phải đo
+		        riêng đường này và xác nhận wrapper đã thay URL trước khi trả response.
 		"""
 		src = self.source_for_activities()
 		# Đường 3: phải **thực sự lấy** activity type `attachment_log` từ `message[0]`
@@ -706,9 +716,11 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 		)
 		# `attachment_log_data` phải được **rút từ** `attachment_log_activity` — nếu
 		# đường 3 bị cắt (activity = None) thì `data` không bao giờ được đọc.
-		self.assertRegex(
-			src,
-			r"attachment_log_data\s*=\s*attachment_log_activity\.get\(\s*\"data\"\s*\)",
+		data_assignment = self.assignment_node("attachment_log_data")
+		self.assertIsNotNone(data_assignment)
+		self.assertIn(
+			"attachment_log_activity.get",
+			ast.unparse(data_assignment),
 			"đường 3 phải rút `data` từ activity attachment_log",
 		)
 		self.assertRegex(
@@ -724,7 +736,9 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 			"`attachment_log_activity` phải được rút bằng next(...) từ message[0]",
 		)
 		self.assertIsNotNone(
-			self.assignment_reads_docinfo_key("docinfo_attachment_logs", "attachment_logs"),
+			self.assignment_reads_docinfo_key(
+				"docinfo_attachment_logs", "attachment_logs"
+			),
 			"`docinfo_attachment_logs` phải được đọc từ `docinfo['attachment_logs']`",
 		)
 		# Đường 4: phải đọc `content` của dòng attachment_log và nhận diện URL private.
@@ -742,10 +756,10 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 			assign,
 			"phải có biến `attachment_log_html_has_url` để đo đường 4",
 		)
-		self.assertRegex(
+		self.assertIn(
+			"contains_private_file_url(attachment_log_content)",
 			ast.unparse(assign),
-			r"/private/files/'\s+in\s+attachment_log_content",
-			"đường 4 phải nhận diện URL private trong nội dung HTML attachment_log",
+			"đường 4 phải nhận diện private URL trong HTML attachment_log",
 		)
 
 	def assignment_node(self, name: str) -> ast.Assign | None:
@@ -818,7 +832,9 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 	def test_uses_non_system_caller(self):
 		"""Caller phải là non-system (`staff.a@dev.local`), KHÔNG phải Administrator."""
 		src = self.source_for_activities()
-		self.assertIn("staff", src, "case get_activities phải dùng opener của staff (non-system)")
+		self.assertIn(
+			"staff", src, "case get_activities phải dùng opener của staff (non-system)"
+		)
 		self.assertNotIn("admin,", src)
 
 	def test_uses_seeded_synthetic_document(self):
@@ -827,24 +843,33 @@ class TestProbeGetActivitiesCoverage(unittest.TestCase):
 		self.assertIn("LEAD_NAME", src)
 		self.assertIn("PRIVATE_FILE_NAME", src)
 
+	def test_out_of_scope_case_is_asserted_as_permission_denial(self):
+		"""Caller ngoài scope phải nằm trong gate, không chỉ là observation."""
+		src = self.source_for_activities()
+		self.assertIn('"sec26-activities-out-of-scope"', src)
+		self.assertIn('out_of_scope_activities["status"] == 403', src)
+		self.assertIn('out_of_scope_exc == "PermissionError"', src)
+		self.assertIn("and not out_of_scope_leaks", src)
+
 	def source_for_activities(self) -> str:
 		"""Render source của phần code xử lý case `get_activities`."""
 		lines = self.source.splitlines()
 		start = None
 		for i, line in enumerate(lines):
-			if "sec26-activities-in-scope" in line:
+			if "SEC-26: redaction `get_activities`" in line:
 				start = i
 				break
-		self.assertIsNotNone(start, "không tìm thấy case sec26-activities-in-scope")
+		self.assertIsNotNone(start, "không tìm thấy request của case get_activities")
 		# Lấy từ case đầu tiên tới hết file (case này nằm cuối `run()`).
 		return "\n".join(lines[start:])
 
 
 class TestProbeDownloadMeasurement(unittest.TestCase):
-	"""H-RFC-2 — khả năng tải file phải được **đo**, và **không** rò nội dung.
+	"""H-RFC-2 — không gọi tải nếu wrapper đã loại private URL.
 
 	Yêu cầu:
-	- Có case đo tải file từ URL lấy từ payload `get_activities`.
+	- Có case ghi nhận handoff tải; URL chỉ được dùng nếu thực sự còn lộ.
+	- Không URL là kết quả redaction mong đợi, không phải download PASS.
 	- **KHÔNG** ghi bytes/nội dung file vào artifact (chỉ đặc trưng).
 	- **KHÔNG** assert cứng "phải tải được" / "phải bị chặn" (kết luận thuộc Owner).
 	"""
@@ -937,7 +962,10 @@ class TestProbeDownloadMeasurement(unittest.TestCase):
 			if not isinstance(node, ast.Assign):
 				continue
 			for target in node.targets:
-				if not (isinstance(target, ast.Subscript) and isinstance(target.slice, ast.Constant)):
+				if not (
+					isinstance(target, ast.Subscript)
+					and isinstance(target.slice, ast.Constant)
+				):
 					continue
 				if target.slice.value != "body":
 					continue
@@ -967,12 +995,30 @@ class TestProbeDownloadMeasurement(unittest.TestCase):
 		)
 
 	def test_download_uses_url_from_payload(self):
-		"""URL tải phải lấy từ **payload thật** của `get_activities`."""
+		"""URL tải, nếu còn lộ, phải lấy từ payload thật trên một trong bốn nhánh."""
 		self.assertIn("observed_private_url", self.source)
+		self.assertIn("message_file_url", self.source)
+		self.assertIn("attachment_log_file_url", self.source)
+		self.assertIn("docinfo_file_url", self.source)
+		self.assertIn("attachment_log_html_url", self.source)
+
+	def test_redacted_url_means_no_download_request(self):
+		self.assertIn("if not observed_private_url", self.source)
+		self.assertIn('"redacted_before_download"', self.source)
+		self.assertIn("not any_private_file_url", self.source)
+
+	def test_redacted_download_case_is_recorded_without_request(self):
+		"""Gate case phải có trong JSON dù redaction ngăn yêu cầu tải file."""
+		self.assertIn('"method": "NOT SENT"', self.source)
+		self.assertIn('"url": redact_text("[NOT SENT]")', self.source)
+		self.assertIn(
+			'"not_requested_reason": "private URL absent after response redaction"',
+			self.source,
+		)
 		self.assertRegex(
 			self.source,
-			r'observed_private_url\s*=\s*message_private\.get\(\s*"file_url"\s*\)',
-			"URL tải phải lấy từ entry file private trong payload",
+			r"records\.append\(download_entry\)\s+write_evidence\(\)",
+			"case không gửi request vẫn phải được ghi vào `cases` trước assertion",
 		)
 
 	def test_file_docname_identifier_is_redacted(self):
@@ -1062,22 +1108,17 @@ class TestProbeOutOfScopeMeasurement(unittest.TestCase):
 		cls.check_ids = all_check_ids(cls.tree)
 
 	def test_case_exists(self):
-		"""Case ngoài scope là **quan sát** ⇒ không dùng `check()`.
-
-		Đây là **cố ý**: kịch bản ngoài scope chỉ **đo** hành vi (status /
-		exc_type), không phải tiêu chí PASS/FAIL của gate. Vì vậy case id xuất
-		hiện trong `request(...)` + `observations`, **không** trong `check()`.
-		"""
+		"""Case ngoài scope phải vừa được request, vừa được assert trong gate."""
 		self.assertIn("sec26-activities-out-of-scope", self.source)
 		self.assertRegex(
 			self.source,
 			r'request\(\s*"sec26-activities-out-of-scope"',
 			"phải có request() cho case ngoài scope",
 		)
-		self.assertNotIn(
+		self.assertIn(
 			"sec26-activities-out-of-scope",
-			all_check_ids(self.tree),
-			"case ngoài scope không được dùng check() cứng (chỉ quan sát)",
+			self.check_ids,
+			"case ngoài scope phải được tính vào failed_cases/gate",
 		)
 
 	def test_uses_distinct_out_of_scope_actor(self):
@@ -1087,8 +1128,12 @@ class TestProbeOutOfScopeMeasurement(unittest.TestCase):
 		in_scope = consts.get("SEC16_USER", "")
 		self.assertTrue(out_of_scope)
 		self.assertTrue(in_scope)
-		self.assertNotEqual(out_of_scope, in_scope, "actor ngoài scope phải khác actor in-scope")
-		self.assertNotEqual(out_of_scope, "Administrator", "actor ngoài scope phải non-system")
+		self.assertNotEqual(
+			out_of_scope, in_scope, "actor ngoài scope phải khác actor in-scope"
+		)
+		self.assertNotEqual(
+			out_of_scope, "Administrator", "actor ngoài scope phải non-system"
+		)
 
 	def test_out_of_scope_case_actually_logs_in_with_out_of_scope_actor(self):
 		"""Case ngoài scope phải **login bằng** actor ngoài scope.
@@ -1174,16 +1219,16 @@ class TestProbeOutOfScopeMeasurement(unittest.TestCase):
 				found = True
 		self.assertTrue(found, "không tìm thấy request() cho case ngoài scope")
 
-	def test_does_not_hardcode_permission_error(self):
-		"""KHÔNG được assert cứng `PermissionError` — kết luận thuộc Owner.
-
-		Case ngoài scope chỉ **đo** (status/exc_type) rồi ghi observation.
-		"""
+	def test_asserts_out_of_scope_permission_denial(self):
+		"""Case ngoài scope chỉ PASS khi HTTP từ chối quyền và không lộ file."""
 		call = check_call(self.tree, "sec26-activities-out-of-scope")
-		self.assertIsNone(
-			call,
-			"case ngoài scope không được dùng check() cứng — chỉ ghi observation",
+		self.assertIsNotNone(call, "case ngoài scope phải có assertion trong gate")
+		rendered = ast.unparse(call)
+		self.assertRegex(
+			rendered, r"out_of_scope_activities\[['\"]status['\"]\] == 403"
 		)
+		self.assertRegex(rendered, r"out_of_scope_exc == ['\"]PermissionError['\"]")
+		self.assertIn("not out_of_scope_leaks", rendered)
 		self.assertIn("observations", self.source)
 		self.assertRegex(
 			self.source,
@@ -1290,7 +1335,8 @@ class TestProbeRedactionCoversRequestUrl(unittest.TestCase):
 		self.assertEqual(
 			offenders,
 			[],
-			"mọi `url` ghi vào artifact phải qua redact_text(); vi phạm: %s" % offenders,
+			"mọi `url` ghi vào artifact phải qua redact_text(); vi phạm: %s"
+			% offenders,
 		)
 
 
