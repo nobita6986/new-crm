@@ -247,13 +247,21 @@ Chi tiết và đề xuất quyết định Q-01…Q-08 ở [`t1a-g001-metadata-
 
 **Caveat tương thích:** khi tạo site, Frappe v15 cảnh báo rằng MariaDB 11.8 vượt phiên bản 10.8 chưa được Framework kiểm thử. Install/migrate thành công chứng minh stack chạy được cho WP-01, nhưng không xóa bỏ caveat này; cần chốt MariaDB tương thích trước khi đóng ADR-001.
 
-➡️ Docker/WSL2 blocker đã gỡ trên host hiện tại; CI trên GitHub runner đã kiểm tra clean bootstrap và backup/restore. P0-A còn Vue hot reload; cảnh báo MariaDB và các gate bảo mật/UI vẫn cần xử lý. Kết quả này **không** phải bằng chứng G0-01..G0-10 đều PASS.
+➡️ Docker/WSL2 blocker đã gỡ trên host hiện tại; CI trên GitHub runner đã kiểm tra clean bootstrap và backup/restore. HMR CSS đã được kiểm tra trước đó; G0-02 còn click luồng trực tiếp và rà console CORS/WebSocket. Các gate bảo mật/UI khác vẫn được đánh giá riêng. Kết quả này **không** phải bằng chứng G0-01..G0-10 đều PASS.
 
 ### 8.2. Chốt baseline DEV cho P0 — 2026-10-27
 
 Site sạch `p0-final-verify-20261027.localhost` đã cài/migrate CRM `1.87.0` + Frappe `15.123.1` trên MariaDB `11.8.9-MariaDB-ubu2404`. Tạo 5.000 CRM Lead giả qua Frappe ORM: 0 lỗi; cleanup xác nhận còn 0 hàng theo prefix. `character_set_server=utf8mb4`, collation server/site/table `utf8mb4_unicode_ci`; `STRCMP('Khach hang','Khách hàng')=0`. Bộ 5 suite security trên site này: **99 PASS / 0 FAIL / 0 ERROR / 0 SKIP**, và HTTP probe direct-to-bench: **18/18 PASS**. Bằng chứng + hash: [`t1a-p0-final-validation-2026-10-27.md`](../../deploy/dev/evidence/t1a-p0-final-validation-2026-10-27.md), [`g001-workload.json`](../../deploy/dev/evidence/logs/p0-final-20261027/clean-site-validation-20261027/g001-workload.json), [`g007-per-method-gate.json`](../../deploy/dev/evidence/logs/p0-final-20261027/clean-site-validation-20261027/g007-per-method-gate.json).
 
 **Quyết định phạm vi P0:** giữ nguyên pin MariaDB 11.8 cho DEV vì đúng tổ hợp đã được bootstrap/migrate/workload/test thực tế; do đó đóng G0-01 cho baseline DEV này. Hướng dẫn cài đặt Frappe hiện nêu MariaDB `10.6.6+` cho v14/v15, trong khi runtime của pin vẫn phát cảnh báo rằng bản >10.8 chưa được kiểm thử rộng. Hai thông tin được giữ song song: lần chạy này chứng minh tổ hợp DEV cụ thể hoạt động, nhưng không chứng minh tương thích tổng quát hoặc production readiness. `mobile_no` full scan không làm đổi schema/index trong P0; đánh giá hiệu năng và index cần yêu cầu truy vấn P1 riêng.
+
+### 8.3. Xác minh CI P0 trên PR #2 — 2026-10-27
+
+GitHub Actions run [#40479841377](https://github.com/nobita6986/new-crm/actions/runs/40479841377) chạy trên PR head `12d4229888fc36b002451339ebaca5c57dea9b9a`; synthetic merge commit `8c2fde0ec3953afe8b86338c6957e60d6bf8b135` có parent base `b382fe425b3f1f6c2037cd3bed20e65e5df2d928` và PR head. Run kết thúc `success`.
+
+Artifact `12723270292` (`p0-g007-evidence-40479841377`), 132.748 byte, SHA-256 `2a7d59245b16fc7c72f844e77004726235971a2ce519b7a61dd6a0ab4df9929d` (khớp GitHub API). Gate JSON và parse độc lập 5 JUnit XML đều xác nhận **99/99 PASS**, không FAIL/ERROR/SKIP/NOT RUN hay sai khác giữa XML và gate. HTTP probe đạt **18/18**, nhưng chỉ gọi trực tiếp `bench serve`; reverse-proxy/CORS không thuộc phạm vi. Case tải file trong scope không gửi request sau khi URL đã bị khử, nên không ghi là tải thành công.
+
+Đây là căn cứ cho **G0-10 PASS trong phạm vi workflow PR #2**. G0-07 vẫn **PARTIAL / CHƯA KÝ** cho tới khi rà lại ma trận/risk với code mới và xử lý giới hạn reverse-proxy/CORS; G0-02/G0-09 vẫn cần bằng chứng browser đầy đủ. P0 vẫn **NO-GO cho P1** theo tiêu chí 10/10 gate tại [`P0.md` §12](../root-plan/P0.md).
 
 ---
 
