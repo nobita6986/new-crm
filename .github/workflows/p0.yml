@@ -56,6 +56,25 @@ jobs:
         id: lint
         run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh'
 
+      # 65 test tĩnh (AST guard) cho probe HTTP. Trước đây chỉ chạy tay ở máy
+      # cục bộ ⇒ guard chỉ có hiệu lực khi T1B tự chạy, KHÔNG chặn được PR.
+      # Step này đưa guard vào pipeline để regression bị chặn tự động.
+      # Chạy TỪ `/src` vì `deploy` là package root (import `deploy.dev.seed...`).
+      - name: Run static AST guards for HTTP probe
+        id: probe_static
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+          if "${compose[@]}" exec -T bench bash -lc 'cd /src && /workspace/frappe-bench/env/bin/python -m unittest -v deploy.dev.seed.test_ci_http_probe_static'; then
+            static_status=0
+          else
+            static_status=$?
+          fi
+          printf 'probe_static exit=%s\n' "$static_status" >> "$artifact_dir/module-status.txt"
+          exit "$static_status"
+
       - name: Seed and repeat migration
         id: seed
         run: |
@@ -319,6 +338,7 @@ jobs:
         env:
           BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
+          PROBE_STATIC_OUTCOME: ${{ steps.probe_static.outcome }}
           SEED_OUTCOME: ${{ steps.seed.outcome }}
           PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
           PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
@@ -327,6 +347,7 @@ jobs:
         run: |
           printf 'bootstrap=%s\n' "$BOOTSTRAP_OUTCOME"
           printf 'lint=%s\n' "$LINT_OUTCOME"
+          printf 'probe_static=%s\n' "$PROBE_STATIC_OUTCOME"
           printf 'seed=%s\n' "$SEED_OUTCOME"
           printf 'per_method=%s\n' "$PER_METHOD_OUTCOME"
           printf 'per_method_gate=%s\n' "$PER_METHOD_GATE_OUTCOME"
@@ -334,6 +355,7 @@ jobs:
           printf 'backup_restore=%s\n' "$BACKUP_RESTORE_OUTCOME"
           test "$BOOTSTRAP_OUTCOME" = success && \
             test "$LINT_OUTCOME" = success && \
+            test "$PROBE_STATIC_OUTCOME" = success && \
             test "$SEED_OUTCOME" = success && \
             test "$PER_METHOD_OUTCOME" = success && \
             test "$PER_METHOD_GATE_OUTCOME" = success && \
