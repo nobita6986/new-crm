@@ -1352,6 +1352,67 @@ class TestProbeSyntax(unittest.TestCase):
 		self.assertIn("return 1 if failures else 0", source)
 
 
+class TestRemainingP0GapsProbe(unittest.TestCase):
+	"""Static safety and coverage guard for the P0 closure probe."""
+
+	def load_source(self):
+		path = HERE / "ci_g007_remaining_gaps_probe.py"
+		source = path.read_text(encoding="utf-8")
+		return source, ast.parse(source, filename=str(path))
+
+	def test_probe_parses_and_records_only_sanitized_summaries(self):
+		source, tree = self.load_source()
+		self.assertIsInstance(tree, ast.Module)
+		self.assertIn('"body_length"', source)
+		self.assertIn('"body_sha256"', source)
+		self.assertNotIn('"body": body', source)
+		self.assertNotIn('"response_body":', source)
+
+	def test_probe_covers_the_remaining_matrix_and_file_routes(self):
+		source, _ = self.load_source()
+		for marker in (
+			"cross-doctype-get-data-vs-get-list",
+			"/api/method/crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log",
+			"at06-private-download-",
+			"sec26-private-download-out-of-scope-existing-vs-unknown",
+		):
+			with self.subTest(marker=marker):
+				self.assertIn(marker, source)
+
+	def test_probe_has_twelve_permlevel_surfaces_and_positive_controls(self):
+		source, tree = self.load_source()
+		endpoint_specs = [
+			node.value
+			for node in ast.walk(tree)
+			if isinstance(node, ast.Assign)
+			and any(
+				isinstance(target, ast.Name) and target.id == "endpoint_specs"
+				for target in node.targets
+			)
+			and isinstance(node.value, ast.Dict)
+		]
+		self.assertEqual(len(endpoint_specs), 1)
+		self.assertEqual(len(endpoint_specs[0].keys), 12)
+		self.assertIn("FIELD_SENTINEL.encode() in body", source)
+		self.assertIn("sec16-system-positive-control-", source)
+
+	def test_probe_does_not_serialize_credentials_or_private_url_values(self):
+		source, _ = self.load_source()
+		self.assertIn('"private_file_url_present"', source)
+		self.assertIn('"sentinel_present"', source)
+		self.assertNotIn('"cookie":', source)
+		self.assertNotIn('"password":', source)
+		self.assertNotIn('"csrf_token":', source)
+
+	def test_probe_restores_the_synthetic_field_after_measurement(self):
+		source, _ = self.load_source()
+		self.assertIn("def cleanup_permlevel_field()", source)
+		self.assertIn('"sec16-field-cleanup"', source)
+		self.assertIn("atexit.register(cleanup_permlevel_field)", source)
+		self.assertIn("atexit.unregister(cleanup_permlevel_field)", source)
+		self.assertIn("cleanup_ok = cleanup_permlevel_field()", source)
+
+
 if __name__ == "__main__":
 	if hasattr(sys.stdout, "reconfigure"):
 		sys.stdout.reconfigure(encoding="utf-8", errors="replace")

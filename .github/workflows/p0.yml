@@ -51,12 +51,13 @@ jobs:
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash /src/deploy/dev/bootstrap.sh
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'bash -n /src/deploy/dev/bootstrap.sh && bash -n /src/deploy/dev/seed/run-seed.sh'
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import ast,pathlib; ast.parse(pathlib.Path("/src/deploy/dev/seed/ci_http_transport_probe.py").read_text(encoding="utf-8"))'
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import ast,pathlib; ast.parse(pathlib.Path("/src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py").read_text(encoding="utf-8"))'
 
       - name: Lint and format Python app
         id: lint
-        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh'
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --config /src/apps/crm_cskh/pyproject.toml --cache-dir /tmp/ruff-cache /src/apps/crm_cskh /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py && uvx ruff==0.14.0 format --check --config /src/apps/crm_cskh/pyproject.toml --cache-dir /tmp/ruff-cache /src/apps/crm_cskh /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py'
 
-      # 55 test tĩnh (AST guard) cho probe HTTP. Trước đây chỉ chạy tay ở máy
+      # 60 test tĩnh (AST guard) cho probe HTTP. Trước đây chỉ chạy tay ở máy
       # cục bộ ⇒ guard chỉ có hiệu lực khi T1B tự chạy, KHÔNG chặn được PR.
       # Step này đưa guard vào pipeline để regression bị chặn tự động.
       # Chạy TỪ `/src` vì `deploy` là package root (import `deploy.dev.seed...`).
@@ -286,6 +287,57 @@ jobs:
           fi
           exit "$probe_status"
 
+      - name: Probe remaining G0-07 runtime gaps (scope matrix, SEC-16, File routes)
+        id: remaining_gaps_http
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        env:
+          P0_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+          container_id=$("${compose[@]}" ps -q bench)
+          mkdir -p "$artifact_dir/http/remaining-gaps"
+          if [ -z "$container_id" ]; then
+            echo 'Bench container unavailable; remaining P0 HTTP probe did not run.' > "$artifact_dir/http/remaining-gaps/probe-start-failed.txt"
+            printf 'remaining_gaps_http exit=1\n' >> "$artifact_dir/module-status.txt"
+            exit 1
+          fi
+
+          ready=0
+          for attempt in $(seq 1 45); do
+            if "${compose[@]}" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import socket; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close()' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'Seeded-site HTTP server unavailable; remaining P0 HTTP probe did not run.' > "$artifact_dir/http/remaining-gaps/probe-start-failed.txt"
+            printf 'remaining_gaps_http exit=1\n' >> "$artifact_dir/module-status.txt"
+            exit 1
+          fi
+
+          if "${compose[@]}" exec -T \
+            -e P0_HTTP_SITE=p0-ci.localhost \
+            -e P0_CI_HEAD_SHA="$P0_CI_HEAD_SHA" \
+            -e P0_CI_MERGE_SHA="$GITHUB_SHA" \
+            -e P0_G007_GAPS_EVIDENCE=/tmp/p0-g007-http/remaining-gaps.json \
+            -e BENCH_DIR=/workspace/frappe-bench \
+            bench bash -lc 'cd /workspace/frappe-bench && FRAPPE_STREAM_LOGGING=1 /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py'; then
+            probe_status=0
+          else
+            probe_status=$?
+          fi
+          if ! docker cp "$container_id:/tmp/p0-g007-http/remaining-gaps.json" "$artifact_dir/http/remaining-gaps/remaining-gaps.json"; then
+            echo 'Could not copy sanitized remaining-gap evidence.' > "$artifact_dir/http/remaining-gaps/evidence-copy-failed.txt"
+            probe_status=1
+          fi
+          printf 'remaining_gaps_http exit=%s\n' "$probe_status" >> "$artifact_dir/module-status.txt"
+          exit "$probe_status"
+
       - name: Backup, restore to a new site, and verify recovered data
         id: backup_restore
         run: |
@@ -304,6 +356,7 @@ jobs:
           HTTP_TRANSPORT_OUTCOME: ${{ steps.http_transport.outcome }}
           FILE_ORACLE_UNIT_OUTCOME: ${{ steps.file_oracle_unit.outcome }}
           FILE_ORACLE_HTTP_OUTCOME: ${{ steps.file_oracle_http.outcome }}
+          REMAINING_GAPS_HTTP_OUTCOME: ${{ steps.remaining_gaps_http.outcome }}
           BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
           SEED_OUTCOME: ${{ steps.seed.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
@@ -380,6 +433,7 @@ jobs:
                   "http_transport": os.environ.get("HTTP_TRANSPORT_OUTCOME"),
                   "file_oracle_unit": os.environ.get("FILE_ORACLE_UNIT_OUTCOME"),
                   "file_oracle_http": os.environ.get("FILE_ORACLE_HTTP_OUTCOME"),
+                  "remaining_gaps_http": os.environ.get("REMAINING_GAPS_HTTP_OUTCOME"),
                   "backup_restore": os.environ.get("BACKUP_RESTORE_OUTCOME"),
               },
               "redaction_replacements": redactions,
@@ -417,6 +471,7 @@ jobs:
           HTTP_TRANSPORT_OUTCOME: ${{ steps.http_transport.outcome }}
           FILE_ORACLE_UNIT_OUTCOME: ${{ steps.file_oracle_unit.outcome }}
           FILE_ORACLE_HTTP_OUTCOME: ${{ steps.file_oracle_http.outcome }}
+          REMAINING_GAPS_HTTP_OUTCOME: ${{ steps.remaining_gaps_http.outcome }}
           BACKUP_RESTORE_OUTCOME: ${{ steps.backup_restore.outcome }}
         run: |
           printf 'bootstrap=%s\n' "$BOOTSTRAP_OUTCOME"
@@ -428,6 +483,7 @@ jobs:
           printf 'http_transport=%s\n' "$HTTP_TRANSPORT_OUTCOME"
           printf 'file_oracle_unit=%s\n' "$FILE_ORACLE_UNIT_OUTCOME"
           printf 'file_oracle_http=%s\n' "$FILE_ORACLE_HTTP_OUTCOME"
+          printf 'remaining_gaps_http=%s\n' "$REMAINING_GAPS_HTTP_OUTCOME"
           printf 'backup_restore=%s\n' "$BACKUP_RESTORE_OUTCOME"
           test "$BOOTSTRAP_OUTCOME" = success && \
             test "$LINT_OUTCOME" = success && \
@@ -438,6 +494,7 @@ jobs:
             test "$HTTP_TRANSPORT_OUTCOME" = success && \
             test "$FILE_ORACLE_UNIT_OUTCOME" = success && \
             test "$FILE_ORACLE_HTTP_OUTCOME" = success && \
+            test "$REMAINING_GAPS_HTTP_OUTCOME" = success && \
             test "$BACKUP_RESTORE_OUTCOME" = success
 
       - name: Show stack logs if a gate fails
