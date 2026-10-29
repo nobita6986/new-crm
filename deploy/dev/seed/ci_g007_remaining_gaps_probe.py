@@ -319,6 +319,136 @@ def names_digest(names: list[str]) -> str:
     return hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest()
 
 
+def nt04_create_doc_case(actor, actor_csrf, admin, admin_csrf, doctype: str):
+    """Verify an out-of-scope actor cannot create a linked Note or Comment.
+
+    A unique synthetic marker is used only in memory. The admin-side query checks
+    whether the attempted insert created a row; any unexpected row is deleted and
+    the query is repeated so the disposable site is left clean. Artifact output
+    contains only the response summary and counts, never the marker or doc name.
+    """
+    marker = f"P0-NT04-{uuid.uuid4().hex}"
+    if doctype == "Comment":
+        doc = {
+            "doctype": doctype,
+            "comment_type": "Comment",
+            "content": marker,
+            "reference_doctype": "CRM Lead",
+            "reference_name": LEAD_NAME,
+        }
+        marker_field = "content"
+    elif doctype == "FCRM Note":
+        doc = {
+            "doctype": doctype,
+            "title": marker,
+            "content": "Synthetic NT-04 permission probe",
+            "reference_doctype": "CRM Lead",
+            "reference_docname": LEAD_NAME,
+        }
+        marker_field = "title"
+    else:
+        raise ValueError("NT-04 supports only linked Comment and FCRM Note")
+
+    insert_body = json.dumps({"doc": doc}, separators=(",", ":")).encode("utf-8")
+    insert_response = send(
+        actor,
+        "POST",
+        "/api/method/frappe.client.insert",
+        insert_body,
+        {
+            "Content-Type": "application/json",
+            "X-Frappe-CSRF-Token": actor_csrf,
+        },
+    )
+    insert_status, insert_response_body, _, insert_error = insert_response
+    insert_payload = payload(insert_response_body)
+    inserted_doc = insert_payload.get("message") if insert_payload else None
+    inserted_name = (
+        inserted_doc.get("name")
+        if isinstance(inserted_doc, dict) and isinstance(inserted_doc.get("name"), str)
+        else None
+    )
+
+    def find_matches():
+        query = urllib.parse.urlencode(
+            {
+                "doctype": doctype,
+                "fields": json.dumps(["name"], separators=(",", ":")),
+                "filters": json.dumps(
+                    [[doctype, marker_field, "=", marker]], separators=(",", ":")
+                ),
+                "limit_page_length": 20,
+            }
+        )
+        response = send(admin, "GET", "/api/method/frappe.client.get_list?" + query)
+        status, body, _, error = response
+        names = extract_names(body, get_data=False)
+        return response, names
+
+    before_response, before_names = find_matches()
+    before_status, before_body, _, before_error = before_response
+    cleanup_ok = (
+        before_error is None and before_status == 200 and before_names is not None
+    )
+    cleanup_names = set(before_names or [])
+    if inserted_name:
+        cleanup_names.add(inserted_name)
+
+    admin_form_headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Frappe-CSRF-Token": admin_csrf,
+    }
+    for name in sorted(cleanup_names):
+        delete_response = send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.delete",
+            urllib.parse.urlencode({"doctype": doctype, "name": name}).encode(),
+            admin_form_headers,
+        )
+        delete_status, _, _, delete_error = delete_response
+        if delete_error or delete_status != 200:
+            cleanup_ok = False
+
+    after_response, after_names = find_matches()
+    after_status, after_body, _, after_error = after_response
+    cleanup_ok = (
+        cleanup_ok and after_error is None and after_status == 200 and after_names == []
+    )
+    insert_exc_type = (insert_payload or {}).get("exc_type")
+    denied = (
+        insert_error is None
+        and insert_status == 403
+        and isinstance(insert_exc_type, str)
+        and insert_exc_type.endswith("PermissionError")
+    )
+    no_side_effect = (
+        before_error is None and before_status == 200 and before_names == []
+    )
+    passed = denied and no_side_effect and cleanup_ok
+    return record(
+        f"nt04-create-{doctype.lower().replace(' ', '-')}-out-of-scope",
+        insert_status,
+        insert_response_body,
+        insert_error,
+        "out-of-scope insert is denied and creates no linked record",
+        passed,
+        supplied_markers=(LEAD_NAME, marker, inserted_name or ""),
+        extra={
+            "doctype": doctype,
+            "linked_target": "synthetic seeded CRM Lead",
+            "insert_exc_type": insert_exc_type,
+            "matching_rows_before_cleanup": len(before_names)
+            if before_names is not None
+            else None,
+            "cleanup_verified": cleanup_ok,
+            "matching_rows_after_cleanup": len(after_names)
+            if after_names is not None
+            else None,
+        },
+    )
+
+
 def setup_error_case(detail="synthetic permlevel field exists with sentinel"):
     record(
         "sec16-field-setup",
@@ -341,6 +471,8 @@ def run() -> int:
     admin = login("Administrator", administrator_password)
     guest = new_client()
     staff_csrf = csrf_token(staff)
+    out_of_scope_csrf = csrf_token(out_of_scope)
+    admin_csrf = csrf_token(admin)
 
     if not setup_permlevel_field():
         setup_error_case()
@@ -349,6 +481,16 @@ def run() -> int:
         "Content-Type": "application/json",
         "X-Frappe-CSRF-Token": staff_csrf,
     }
+
+    # NT-04: prevent a non-owner from creating linked child records on the Lead.
+    for linked_doctype in ("FCRM Note", "Comment"):
+        nt04_create_doc_case(
+            out_of_scope,
+            out_of_scope_csrf,
+            admin,
+            admin_csrf,
+            linked_doctype,
+        )
 
     # LEAD-15 / LS-05: cross-doctype calls must match ordinary Frappe get_list
     # visibility for the same actor. Only counts and opaque name-set digests leave memory.
@@ -878,7 +1020,7 @@ def run() -> int:
         "merge_sha": os.environ.get("P0_CI_MERGE_SHA", "unknown"),
         "started_at_utc": started,
         "finished_at_utc": datetime.now(timezone.utc).isoformat(),
-        "scope": "direct HTTP on seeded P0 site; cross-doctype permission parity, 12 permlevel surfaces, standard attachment surfaces, CL-09 and AT-06",
+        "scope": "direct HTTP on seeded P0 site; cross-doctype permission parity, 12 permlevel surfaces, standard attachment surfaces, CL-09, AT-06, and NT-04 linked Note/Comment create denial",
         "case_count": len(cases),
         "cases": cases,
         "failed_cases": failures,
