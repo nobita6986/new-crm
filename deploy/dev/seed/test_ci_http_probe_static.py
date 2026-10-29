@@ -1375,9 +1375,25 @@ class TestRemainingP0GapsProbe(unittest.TestCase):
 			"/api/method/crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log",
 			"at06-private-download-",
 			"sec26-private-download-out-of-scope-existing-vs-unknown",
+			'for linked_doctype in ("FCRM Note", "Comment")',
+			"nt04_create_doc_case(",
 		):
 			with self.subTest(marker=marker):
 				self.assertIn(marker, source)
+
+	def test_nt04_create_probe_is_fail_closed_and_cleans_unexpected_rows(self):
+		source, _ = self.load_source()
+		self.assertIn("def nt04_create_doc_case(", source)
+		self.assertIn('"/api/method/frappe.client.insert"', source)
+		self.assertIn('"/api/method/frappe.client.delete"', source)
+		self.assertIn('and insert_status == 403', source)
+		self.assertIn('insert_exc_type.endswith("PermissionError")', source)
+		self.assertIn('"matching_rows_before_cleanup"', source)
+		self.assertIn('"matching_rows_after_cleanup"', source)
+		self.assertIn('"cleanup_verified": cleanup_ok', source)
+		self.assertIn('supplied_markers=(LEAD_NAME, marker, inserted_name or "")', source)
+		self.assertNotIn('"marker": marker', source)
+		self.assertNotIn('"response_body":', source)
 
 	def test_probe_has_twelve_permlevel_surfaces_and_positive_controls(self):
 		source, tree = self.load_source()
