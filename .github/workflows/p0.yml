@@ -55,7 +55,7 @@ jobs:
 
       - name: Lint and format Python app
         id: lint
-        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --config /src/apps/crm_cskh/pyproject.toml --cache-dir /tmp/ruff-cache /src/apps/crm_cskh /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py && uvx ruff==0.14.0 format --check --config /src/apps/crm_cskh/pyproject.toml --cache-dir /tmp/ruff-cache /src/apps/crm_cskh /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py'
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py'
 
       # 60 test tĩnh (AST guard) cho probe HTTP. Trước đây chỉ chạy tay ở máy
       # cục bộ ⇒ guard chỉ có hiệu lực khi T1B tự chạy, KHÔNG chặn được PR.
