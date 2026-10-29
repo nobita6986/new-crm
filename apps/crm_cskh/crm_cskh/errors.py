@@ -56,7 +56,7 @@ def _looks_like_permission_echo(payload: dict) -> bool:
 	if payload.get("exc_type") not in ("PermissionError", "DoesNotExistError"):
 		return False
 	haystack = ""
-	for key in ("_error_message", "_server_messages", "exception", "message"):
+	for key in ("_error_message", "_server_messages", "exception", "exc", "message"):
 		value = payload.get(key)
 		if isinstance(value, str) and value:
 			haystack += value + "\n"
@@ -171,6 +171,19 @@ def normalize_error_response(response=None, request=None):
 			payload["_error_message"] = _GENERIC_DENIAL
 		if isinstance(payload.get("_server_messages"), str):
 			payload["_server_messages"] = _normalize_server_messages(payload["_server_messages"])
+		# Frappe's `exception` and serialized traceback (`exc`) can contain the
+		# denied document name even after message fields were scrubbed. Preserve
+		# the HTTP status and `exc_type`, but do not return request-specific
+		# exception text or stack frames to the caller.
+		if isinstance(payload.get("exception"), str):
+			exc_type = payload.get("exc_type")
+			payload["exception"] = (
+				f"frappe.exceptions.{exc_type}"
+				if isinstance(exc_type, str) and exc_type
+				else "frappe.exceptions.PermissionError"
+			)
+		if isinstance(payload.get("exc"), str):
+			payload["exc"] = "[]"
 		if isinstance(payload.get("message"), str):
 			cleaned = payload["message"]
 			for pattern in _ID_PATTERNS:
