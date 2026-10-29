@@ -56,7 +56,7 @@ jobs:
         id: lint
         run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh'
 
-      # 65 test tĩnh (AST guard) cho probe HTTP. Trước đây chỉ chạy tay ở máy
+      # 55 test tĩnh (AST guard) cho probe HTTP. Trước đây chỉ chạy tay ở máy
       # cục bộ ⇒ guard chỉ có hiệu lực khi T1B tự chạy, KHÔNG chặn được PR.
       # Step này đưa guard vào pipeline để regression bị chặn tự động.
       # Chạy TỪ `/src` vì `deploy` là package root (import `deploy.dev.seed...`).
@@ -136,6 +136,32 @@ jobs:
             overall_status=1
           fi
           exit "$overall_status"
+
+      # Auxiliary regression tests for the File-oracle response hook. Keep this
+      # JUnit in a subdirectory so the canonical 99-method inventory stays 99.
+      - name: Run File error-normalization regression tests (outside 99-method inventory)
+        id: file_oracle_unit
+        if: always() && steps.per_method.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+          aux_dir=/tmp/p0-g007-evidence/auxiliary
+          mkdir -p "$artifact_dir/auxiliary"
+          if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p '$aux_dir' && set +e; bench --site p0-test.localhost --verbose run-tests --module crm_cskh.tests.test_error_response_normalization --junit-xml-output '$aux_dir/test_error_response_normalization.junit.xml' > '$aux_dir/test_error_response_normalization.log' 2>&1; rc=\$?; exit \$rc"; then
+            unit_status=0
+          else
+            unit_status=$?
+          fi
+          printf 'test_error_response_normalization expected_methods=8 exit=%s\n' "$unit_status" >> "$artifact_dir/module-status.txt"
+          container_id=$("${compose[@]}" ps -q bench)
+          if [ -z "$container_id" ] || ! docker cp "$container_id:$aux_dir/." "$artifact_dir/auxiliary/"; then
+            echo 'Could not copy auxiliary File-oracle regression evidence.' >> "$artifact_dir/module-status.txt"
+            unit_status=1
+          fi
+          exit "$unit_status"
 
       - name: Enforce per-method JUnit coverage gate (99 methods)
         id: per_method_gate
@@ -218,6 +244,48 @@ jobs:
           fi
           exit "$probe_status"
 
+      - name: Run direct File existence-oracle HTTP probe
+        id: file_oracle_http
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        env:
+          P0_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+          container_id=$("${compose[@]}" ps -q bench)
+          mkdir -p "$artifact_dir/http/file-oracle"
+          if [ -z "$container_id" ]; then
+            echo 'Bench container is unavailable; File-oracle probe could not start.' > "$artifact_dir/http/file-oracle/probe-start-failed.txt"
+            exit 1
+          fi
+
+          ready=0
+          for attempt in $(seq 1 45); do
+            if "${compose[@]}" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import socket; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close()' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'Seeded-site HTTP server is unavailable for File-oracle probe.' > "$artifact_dir/http/file-oracle/probe-start-failed.txt"
+            exit 1
+          fi
+
+          if "${compose[@]}" exec -T -e P0_HTTP_SITE=p0-ci.localhost -e P0_CI_HEAD_SHA="$P0_CI_HEAD_SHA" -e P0_CI_MERGE_SHA="$GITHUB_SHA" -e P0_FILE_ORACLE_EVIDENCE=/tmp/p0-g007-http/file-oracle.json bench bash -lc 'cd /workspace/frappe-bench && /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_file_oracle_probe.py'; then
+            probe_status=0
+          else
+            probe_status=$?
+          fi
+          if ! docker cp "$container_id:/tmp/p0-g007-http/file-oracle.json" "$artifact_dir/http/file-oracle/file-oracle.json"; then
+            echo 'Could not copy File-oracle probe evidence.' > "$artifact_dir/http/file-oracle/evidence-copy-failed.txt"
+            exit 1
+          fi
+          exit "$probe_status"
+
       - name: Backup, restore to a new site, and verify recovered data
         id: backup_restore
         run: |
@@ -234,6 +302,8 @@ jobs:
           PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
           PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
           HTTP_TRANSPORT_OUTCOME: ${{ steps.http_transport.outcome }}
+          FILE_ORACLE_UNIT_OUTCOME: ${{ steps.file_oracle_unit.outcome }}
+          FILE_ORACLE_HTTP_OUTCOME: ${{ steps.file_oracle_http.outcome }}
           BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
           SEED_OUTCOME: ${{ steps.seed.outcome }}
           LINT_OUTCOME: ${{ steps.lint.outcome }}
@@ -308,6 +378,8 @@ jobs:
                   "per_method": os.environ.get("PER_METHOD_OUTCOME"),
                   "per_method_gate": os.environ.get("PER_METHOD_GATE_OUTCOME"),
                   "http_transport": os.environ.get("HTTP_TRANSPORT_OUTCOME"),
+                  "file_oracle_unit": os.environ.get("FILE_ORACLE_UNIT_OUTCOME"),
+                  "file_oracle_http": os.environ.get("FILE_ORACLE_HTTP_OUTCOME"),
                   "backup_restore": os.environ.get("BACKUP_RESTORE_OUTCOME"),
               },
               "redaction_replacements": redactions,
@@ -343,6 +415,8 @@ jobs:
           PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
           PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
           HTTP_TRANSPORT_OUTCOME: ${{ steps.http_transport.outcome }}
+          FILE_ORACLE_UNIT_OUTCOME: ${{ steps.file_oracle_unit.outcome }}
+          FILE_ORACLE_HTTP_OUTCOME: ${{ steps.file_oracle_http.outcome }}
           BACKUP_RESTORE_OUTCOME: ${{ steps.backup_restore.outcome }}
         run: |
           printf 'bootstrap=%s\n' "$BOOTSTRAP_OUTCOME"
@@ -352,6 +426,8 @@ jobs:
           printf 'per_method=%s\n' "$PER_METHOD_OUTCOME"
           printf 'per_method_gate=%s\n' "$PER_METHOD_GATE_OUTCOME"
           printf 'http_transport=%s\n' "$HTTP_TRANSPORT_OUTCOME"
+          printf 'file_oracle_unit=%s\n' "$FILE_ORACLE_UNIT_OUTCOME"
+          printf 'file_oracle_http=%s\n' "$FILE_ORACLE_HTTP_OUTCOME"
           printf 'backup_restore=%s\n' "$BACKUP_RESTORE_OUTCOME"
           test "$BOOTSTRAP_OUTCOME" = success && \
             test "$LINT_OUTCOME" = success && \
@@ -360,6 +436,8 @@ jobs:
             test "$PER_METHOD_OUTCOME" = success && \
             test "$PER_METHOD_GATE_OUTCOME" = success && \
             test "$HTTP_TRANSPORT_OUTCOME" = success && \
+            test "$FILE_ORACLE_UNIT_OUTCOME" = success && \
+            test "$FILE_ORACLE_HTTP_OUTCOME" = success && \
             test "$BACKUP_RESTORE_OUTCOME" = success
 
       - name: Show stack logs if a gate fails
