@@ -41,7 +41,8 @@ class _FakeRequest:
 def _permission_payload():
 	return {
 		"exc_type": "PermissionError",
-		"exception": "frappe.exceptions.PermissionError",
+		"exception": "frappe.exceptions.PermissionError: ('read', 'CRM Lead', 'CRM-LEAD-00001')",
+		"exc": json.dumps(["Traceback frame references CRM-LEAD-00001 and 1e0c8a768c"]),
 		"_error_message": "You need the 'read' permission on File 1e0c8a768c",
 		"_server_messages": json.dumps(
 			[
@@ -83,6 +84,8 @@ class TestNormalizeErrorResponse(unittest.TestCase):
 		body = out.data.decode("utf-8") if isinstance(out.data, (bytes, bytearray)) else out.data
 		cleaned = json.loads(body)
 		self.assertEqual(cleaned["exc_type"], "PermissionError")
+		self.assertEqual(cleaned["exception"], "frappe.exceptions.PermissionError")
+		self.assertEqual(cleaned["exc"], "[]")
 		self.assertEqual(cleaned["_error_message"], _GENERIC_DENIAL)
 		server_messages = json.loads(cleaned["_server_messages"])
 		for item in server_messages:

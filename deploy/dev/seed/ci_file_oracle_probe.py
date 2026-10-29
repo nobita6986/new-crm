@@ -4,7 +4,8 @@
 Runs only against the seeded fake-data P0 site. Authentication material, File
 IDs, private URLs, and response bodies are used in memory and never serialized.
 The 99-method security inventory remains unchanged; this is an auxiliary HTTP
-gate for the two direct File endpoints changed by ``crm_cskh.errors``.
+gate for the two direct File endpoints changed by ``crm_cskh.errors`` plus the
+generic out-of-scope Lead denial response scrub.
 """
 
 from __future__ import annotations
@@ -218,13 +219,45 @@ def run():
         if positive_status != 200 or not positive_has_url:
             failures.append(f"{route}-in-scope-positive")
 
+    lead_query = urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME})
+    lead_status, lead_body, _ = request(
+        out_of_scope,
+        "GET",
+        f"/api/method/frappe.desk.form.load.getdoc?{lead_query}",
+    )
+    lead_text = lead_body.decode("utf-8", errors="replace")
+    try:
+        lead_payload = json.loads(lead_text)
+    except ValueError:
+        lead_payload = None
+    lead_echo = LEAD_NAME in lead_text
+    lead_exception_sanitized = (
+        isinstance(lead_payload, dict)
+        and lead_payload.get("exception") == "frappe.exceptions.PermissionError"
+        and lead_payload.get("exc") == "[]"
+    )
+    cases.append(
+        {
+            "id": "getdoc-out-of-scope-denial-scrubs-name-and-traceback",
+            "status": lead_status,
+            "exc_type": lead_payload.get("exc_type")
+            if isinstance(lead_payload, dict)
+            else None,
+            "identifier_echo": lead_echo,
+            "exception_sanitized": lead_exception_sanitized,
+            "body_length": len(lead_body),
+        }
+    )
+    if lead_status != 403 or lead_echo or not lead_exception_sanitized:
+        failures.append("getdoc-out-of-scope-denial-scrubs-name-and-traceback")
+
     payload = {
         "site": SITE_NAME,
         "head_sha": os.environ.get("P0_CI_HEAD_SHA", "unknown"),
         "merge_sha": os.environ.get("P0_CI_MERGE_SHA", "unknown"),
         "started_at_utc": started,
         "finished_at_utc": datetime.now(timezone.utc).isoformat(),
-        "scope": "direct File REST and frappe.client.get endpoints; response bodies and identifiers are not stored",
+        "scope": "direct File REST/frappe.client.get endpoints and out-of-scope Lead denial scrub; bodies and identifiers are not stored",
         "case_count": len(cases),
         "cases": cases,
         "failed_cases": failures,
