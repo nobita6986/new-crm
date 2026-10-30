@@ -1381,6 +1381,34 @@ class TestRemainingP0GapsProbe(unittest.TestCase):
 			with self.subTest(marker=marker):
 				self.assertIn(marker, source)
 
+	def test_sec16_actor_uses_its_own_csrf_token(self):
+		_, tree = self.load_source()
+		run_fn = next(
+			node
+			for node in tree.body
+			if isinstance(node, ast.FunctionDef) and node.name == "run"
+		)
+		actors_assignment = next(
+			node
+			for node in ast.walk(run_fn)
+			if isinstance(node, ast.Assign)
+			and any(
+				isinstance(target, ast.Name) and target.id == "actors"
+				for target in node.targets
+			)
+		)
+		actors = [
+			[(part.value if isinstance(part, ast.Constant) else part.id) for part in item.elts]
+			for item in actors_assignment.value.elts
+		]
+		self.assertEqual(
+			actors,
+			[
+				["in-scope", "staff", "staff_csrf"],
+				["out-of-scope", "out_of_scope", "out_of_scope_csrf"],
+			],
+		)
+
 	def test_nt04_create_probe_is_fail_closed_and_cleans_unexpected_rows(self):
 		source, _ = self.load_source()
 		self.assertIn("def nt04_create_doc_case(", source)
