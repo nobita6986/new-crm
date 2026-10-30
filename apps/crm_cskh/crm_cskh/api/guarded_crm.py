@@ -160,10 +160,140 @@ def get_linked_docs_of_document(doctype, docname):
 	return _redact_private_file_urls(filtered)
 
 
+def _link_target_is_readable(link_doctype: str, link_name: str) -> bool:
+	"""`True` khi caller hiện tại được đọc `link_doctype`/`link_name`."""
+	if not link_doctype or not link_name:
+		return False
+	return bool(frappe.has_permission(link_doctype, "read", link_name, throw=False))
+
+
+def _call_log_in_scope(call: dict) -> bool:
+	"""`True` khi Call Log được phép hiển thị cho caller hiện tại (non-system).
+
+	Fail-closed:
+	  - Bỏ mọi row mang `link_doctype`/`link_name` (do upstream join Dynamic Link).
+	    Row Dynamic Link không chứng minh `from`/`to`, `note`, `recording_url` hay
+	    nhãn contact (phone lookup) đều an toàn; giữ nó có thể lộ `link_name` ngoài
+	    scope (khi một Call Log có nhiều Dynamic Link) hoặc lộ dữ liệu của Call Log
+	    orphan (thiếu `reference_doctype`/`reference_docname`).
+	  - Chỉ giữ Call Log có `reference_doctype`/`reference_docname` trỏ tới
+	    Lead/Deal mà caller đọc được — đường hợp lệ, upstream dùng
+	    `get_reference_contact` (không phone lookup).
+	"""
+	if call.get("link_doctype") or call.get("link_name"):
+		return False
+
+	ref_doctype = call.get("reference_doctype")
+	ref_docname = call.get("reference_docname")
+	if ref_doctype in ("CRM Lead", "CRM Deal") and ref_docname:
+		return _link_target_is_readable(ref_doctype, ref_docname)
+
+	return False
+
+
+def _filter_linked_calls_for_scope(result: dict) -> dict:
+	"""Lọc `get_linked_calls` của upstream theo scope của caller (non-system).
+
+	Giữ nguyên shape của upstream (`calls`/`notes`/`tasks`) để không làm hỏng
+	hợp đồng của endpoint.
+	"""
+	if not isinstance(result, dict):
+		return result
+
+	kept_calls = []
+	for call in result.get("calls") or []:
+		if not isinstance(call, dict):
+			continue
+		if not _call_log_in_scope(call):
+			continue
+		clean = dict(call)
+		# `recording_url` có thể trỏ file local private — URL đó là đường đọc file
+		# không cần quyền, cùng lý do SEC-26 chặn `file_url` của file private. Chỉ
+		# gỡ URL private; URL public hoặc URL ngoài (https://) giữ nguyên.
+		recording_url = clean.get("recording_url")
+		if isinstance(recording_url, str) and recording_url.startswith("/private/files/"):
+			clean.pop("recording_url", None)
+		kept_calls.append(clean)
+
+	kept_notes = []
+	for note in result.get("notes") or []:
+		if not isinstance(note, dict):
+			continue
+		if _link_target_is_readable("FCRM Note", note.get("name")):
+			kept_notes.append(note)
+
+	kept_tasks = []
+	for task in result.get("tasks") or []:
+		if not isinstance(task, dict):
+			continue
+		if _link_target_is_readable("CRM Task", task.get("name")):
+			kept_tasks.append(task)
+
+	return {"calls": kept_calls, "notes": kept_notes, "tasks": kept_tasks}
+
+
+def _filter_linked_calls_payload(payload):
+	"""Lọc tuple `(activities, calls, notes, tasks, attachments)` của
+	`crm.api.activities.get_activities` theo scope của caller (non-system).
+
+	Upstream `get_lead_activities`/`get_deal_activities` gọi
+	`get_linked_calls`/`get_linked_notes`/`get_linked_tasks` **nội bộ** (không qua
+	wrapper `crm_cskh`), nên payload của `get_activities` cũng đi qua cùng đường
+	Dynamic Link. Vì vậy phải lọc `calls`/`notes`/`tasks` ở đây bằng CÙNG tiêu chí
+	với `get_linked_calls` — nếu không, `get_activities` là đường vòng để đọc lại
+	dữ liệu ngoài scope đã bị chặn ở `get_linked_calls`.
+	"""
+	if not isinstance(payload, (list, tuple)) or len(payload) < 3:
+		return payload
+	calls = payload[1]
+	notes = payload[2]
+	tasks = payload[3] if len(payload) > 3 else []
+	attachments = payload[4] if len(payload) > 4 else []
+
+	filtered = _filter_linked_calls_for_scope(
+		{"calls": calls or [], "notes": notes or [], "tasks": tasks or []}
+	)
+	out = list(payload)
+	out[1] = filtered["calls"]
+	out[2] = filtered["notes"]
+	out[3] = filtered["tasks"]
+	if len(payload) > 4:
+		out[4] = attachments
+	return out
+
+
 @frappe.whitelist()
 def get_linked_calls(name):
 	_check_read("CRM Lead", name)
-	return frappe.get_attr("crm.api.activities.get_linked_calls")(name)
+	result = frappe.get_attr("crm.api.activities.get_linked_calls")(name)
+	if _is_system(frappe.session.user):
+		return result
+	# T1B-ext+1 — fail-closed theo từng bản ghi.
+	#
+	# Upstream CRM v1.87.0 `crm.api.activities.get_linked_calls` (commit
+	# `0d3910b456ef4fb913e77b29db011b3debc4f778`) dùng `frappe.db.get_all` cho
+	# CẢ ba nhánh, tức bỏ qua `has_permission` của app:
+	#   1. `calls` — lấy theo `reference_docname` VÀ qua `Dynamic Link`
+	#      (`parenttype = "CRM Call Log"`, `link_name = <Lead>`).
+	#   2. `notes` — lấy Note mà Dynamic Link trỏ tới.
+	#   3. `tasks` — lấy Task mà Dynamic Link trỏ tới.
+	# Vì `db.get_all` không áp permission query condition, Call Log chỉ nối bằng
+	# Dynamic Link (không có `reference_doctype`/`reference_docname`) vẫn lọt vào
+	# response; `parse_call_log` gọi `get_call_contact` → khi `reference_doctype`
+	# rỗng thì rơi vào `get_contact_by_phone_number` ⇒ lộ Contact NGOÀN scope theo
+	# số điện thoại; `recording_url` private cũng được trả nguyên văn.
+	#
+	# Vá hẹp (chỉ trong `crm_cskh`, KHÔNG sửa upstream):
+	#   - `calls`: chỉ giữ Call Log có `reference_doctype`/`reference_docname` trỏ
+	#     tới Lead/Deal trong scope. Bỏ mọi row Dynamic Link (`link_doctype`/
+	#     `link_name`) và Call Log orphan — vì không thể chứng minh `from`/`to`,
+	#     `note`, `recording_url` hay nhãn contact (phone lookup) đều an toàn.
+	#   - `notes`/`tasks`: giữ lại Note/Task mà caller đọc được (dùng
+	#     `frappe.has_permission` với `throw=False` ⇒ cùng tiêu chí với hook
+	#     `linked_lead_has_permission` đang áp cho `frappe.client.get_list`).
+	#   - `recording_url`: với Call Log được giữ lại, gỡ URL file local private
+	#     (đường đọc file không cần quyền, xem SEC-26); URL public giữ nguyên.
+	return _filter_linked_calls_for_scope(result)
 
 
 @frappe.whitelist()
@@ -204,6 +334,11 @@ def get_activities(name: str):
 	_check_read(doctype, name)
 	activities = frappe.get_attr("crm.api.activities.get_activities")(name)
 	if not _is_system(frappe.session.user):
+		# T1B-ext+1: lọc `calls`/`notes`/`tasks` theo scope TRƯỚC khi redact URL
+		# private. Upstream `get_activities` gọi `get_linked_calls` nội bộ nên
+		# payload này đi qua cùng đường Dynamic Link — lọc ở đây để
+		# `get_activities` không trở thành đường vòng đọc dữ liệu ngoài scope.
+		activities = _filter_linked_calls_payload(activities)
 		activities = _redact_private_file_payload(activities)
 		response = getattr(frappe, "response", None)
 		if isinstance(response, dict) and response.get("docinfo") is not None:
