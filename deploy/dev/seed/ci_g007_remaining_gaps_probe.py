@@ -783,7 +783,9 @@ def dl01_dynamic_link_case(admin, admin_csrf, staff, staff_csrf):
         )
     )
 
-    def make_call_log(links, phone, reference=None, with_recording=False, from_phone="0900000001"):
+    def make_call_log(
+        links, phone, reference=None, with_recording=False, from_phone="0900000001"
+    ):
         # `Dynamic Link` là CHILD TABLE của `CRM Call Log` (field `links`) nên
         # phải insert inline cùng parent — insert riêng sẽ bị Frappe từ chối
         # ("Parenttype, Parent and Parentfield are required to insert a child record").
@@ -821,9 +823,7 @@ def dl01_dynamic_link_case(admin, admin_csrf, staff, staff_csrf):
         "0900000010",
         from_phone=from_phone,
     )
-    positive_call = make_call_log(
-        [], "0900000010", reference=("CRM Lead", LEAD_NAME)
-    )
+    positive_call = make_call_log([], "0900000010", reference=("CRM Lead", LEAD_NAME))
     multi_link_call = make_call_log(
         [
             ("CRM Lead", LEAD_NAME),
