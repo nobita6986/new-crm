@@ -942,7 +942,7 @@ def run() -> int:
     }
     actors = (
         ("in-scope", staff, staff_csrf),
-        ("out-of-scope", out_of_scope, staff_csrf),
+        ("out-of-scope", out_of_scope, out_of_scope_csrf),
     )
     for actor_name, actor, actor_token in actors:
         for endpoint_name, (method, path, body, is_json) in endpoint_specs.items():
