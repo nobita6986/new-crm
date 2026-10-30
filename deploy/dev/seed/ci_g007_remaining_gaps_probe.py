@@ -33,6 +33,7 @@ SEED_SOURCE = Path(
 )
 BENCH_DIR = os.environ.get("BENCH_DIR", "/workspace/frappe-bench")
 LEAD_NAME = "CRM-LEAD-00001"
+OUT_OF_SCOPE_LEAD_NAME = "CRM-LEAD-00009"
 CALL_NAME = "DEMO-CALL-003"
 PRIVATE_FILE_NAME = f"DEMO-{LEAD_NAME}.txt"
 SEED_MARKER = b"DEMO"
@@ -452,27 +453,29 @@ def nt04_create_doc_case(actor, actor_csrf, admin, admin_csrf, doctype: str):
 def tk04_create_task_out_of_scope_case(actor, actor_csrf, admin, admin_csrf):
     """Fail closed if a staff user can link a new ToDo to another team's Lead."""
     target_query = urllib.parse.urlencode(
-        {
-            "doctype": "CRM Lead",
-            "fields": json.dumps(["name"], separators=(",", ":")),
-            "filters": json.dumps({"lead_owner": OUT_USER}, separators=(",", ":")),
-            "order_by": "name asc",
-            "limit_page_length": 20,
-        }
+        {"doctype": "CRM Lead", "name": OUT_OF_SCOPE_LEAD_NAME}
     )
     target_response = send(
-        admin, "GET", "/api/method/frappe.client.get_list?" + target_query
+        admin, "GET", "/api/method/frappe.client.get?" + target_query
     )
     target_status, target_body, _, target_error = target_response
-    target_names = extract_names(target_body, get_data=False)
-    target_lead = target_names[0] if target_names else None
+    target_payload = payload(target_body)
+    target_doc = target_payload.get("message") if target_payload else None
+    target_lead = (
+        target_doc.get("name")
+        if isinstance(target_doc, dict)
+        and target_doc.get("lead_owner") == OUT_USER
+        and target_doc.get("name") == OUT_OF_SCOPE_LEAD_NAME
+        else None
+    )
+    target_names = [target_lead] if target_lead else []
     target_found = target_error is None and target_status == 200 and bool(target_lead)
     record(
         "tk04-out-of-scope-target-fixture",
         target_status,
         target_body,
         target_error,
-        "Administrator resolves a seeded Lead owned by another team",
+        "Administrator resolves the seeded Team 2 C1 Lead and confirms its owner",
         target_found,
         supplied_markers=(target_lead or "",),
         extra={
