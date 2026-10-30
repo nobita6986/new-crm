@@ -669,6 +669,369 @@ def ls04_search_link_case(
     )
 
 
+def dl01_dynamic_link_case(admin, admin_csrf, staff, staff_csrf):
+    """T1B-ext+1 — Dynamic Link của `crm.api.activities.get_linked_calls`.
+
+    Upstream CRM v1.87.0 `crm.api.activities.get_linked_calls` dùng
+    `frappe.db.get_all` cho cả `calls`/`notes`/`tasks` ⇒ bỏ qua `has_permission`
+    của app. Call Log chỉ nối bằng `Dynamic Link` (không có
+    `reference_doctype`/`reference_docname`) vẫn lọt vào response; và khi
+    `reference_doctype` rỗng, `parse_call_log` rơi vào
+    `get_contact_by_phone_number` ⇒ lộ Contact NGOÀN scope theo số điện thoại.
+
+    Fixture (tạo bằng Administrator, dọn sau khi đo):
+      - Call Log `ref rỗng` + Dynamic Link tới Lead TRONG SCOPE, số điện thoại
+        trùng Contact NGOÀN scope, có `recording_url` trỏ file private.
+      - Call Log `ref rỗng` + Dynamic Link tới Lead TRONG SCOPE + Dynamic Link
+        tới FCRM Note / CRM Task tham chiếu Lead NGOÀN scope.
+      - Call Log `ref → Lead TRONG SCOPE` + NHIỀU Dynamic Link (một link tới Lead
+        TRONG SCOPE, một link tới Lead NGOÀN scope) — pin rằng `link_name` ngoài
+        scope không bị trả về dù upstream join mọi link.
+      - POSITIVE CONTROL: Call Log có `reference_doctype`/`reference_docname`
+        trỏ tới Lead TRONG SCOPE (đường hợp lệ).
+
+    Không dùng response rỗng làm bằng chứng: positive control phải chứng minh
+    endpoint vẫn trả dữ liệu hợp lệ trong scope.
+    """
+    contact_marker = f"P0-DL01-CONTACT-{uuid.uuid4().hex}"
+    # Số điện thoại phải là chuỗi chữ số hợp lệ — `uuid4().hex` có thể chứa ký
+    # tự a-f nên Frappe từ chối (`InvalidPhoneNumberError`). Dùng `uuid4().int`
+    # để lấy chỉ chữ số.
+    contact_phone = "09" + f"{uuid.uuid4().int % 10**9:09d}"
+    from_phone = "09" + f"{uuid.uuid4().int % 10**9:09d}"
+    note_marker = f"P0-DL01-NOTE-{uuid.uuid4().hex}"
+    task_marker = f"P0-DL01-TASK-{uuid.uuid4().hex}"
+    recording_url = "/private/files/p0-dl01-recording.mp3"
+
+    admin_form = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Frappe-CSRF-Token": admin_csrf,
+    }
+    admin_json = {
+        "Content-Type": "application/json",
+        "X-Frappe-CSRF-Token": admin_csrf,
+    }
+
+    def admin_insert(doc):
+        return send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.insert",
+            json.dumps({"doc": doc}, separators=(",", ":")).encode("utf-8"),
+            admin_json,
+        )
+
+    def admin_delete(doctype, name):
+        return send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.delete",
+            urllib.parse.urlencode({"doctype": doctype, "name": name}).encode(),
+            admin_form,
+        )
+
+    def inserted_name(response):
+        status, body, _, error = response
+        if error or status != 200:
+            return None
+        parsed = payload(body)
+        doc = parsed.get("message") if parsed else None
+        name = doc.get("name") if isinstance(doc, dict) else None
+        # `CRM Task` dùng naming rule autoincrement ⇒ `name` là số nguyên.
+        # Chuẩn hoá về str để so sánh với payload của endpoint (JSON string).
+        if isinstance(name, int):
+            return str(name)
+        return name if isinstance(name, str) else None
+
+    # --- fixture: Contact NGOÀN scope có số điện thoại riêng -----------------
+    contact_name = inserted_name(
+        admin_insert(
+            {
+                "doctype": "Contact",
+                "first_name": contact_marker,
+                "last_name": "P0DL01",
+                "mobile_no": contact_phone,
+                "phone_nos": [{"phone": contact_phone, "is_primary_mobile_no": 1}],
+            }
+        )
+    )
+
+    # --- fixture: Note NGOÀN scope -------------------------------------------
+    note_name = inserted_name(
+        admin_insert(
+            {
+                "doctype": "FCRM Note",
+                "title": note_marker,
+                "content": note_marker,
+                "reference_doctype": "CRM Lead",
+                "reference_docname": OUT_OF_SCOPE_LEAD_NAME,
+            }
+        )
+    )
+
+    # --- fixture: Task NGOÀN scope -------------------------------------------
+    task_name = inserted_name(
+        admin_insert(
+            {
+                "doctype": "CRM Task",
+                "title": task_marker,
+                "description": task_marker,
+                "status": "Todo",
+                "reference_doctype": "CRM Lead",
+                "reference_docname": OUT_OF_SCOPE_LEAD_NAME,
+            }
+        )
+    )
+
+    def make_call_log(links, phone, reference=None, with_recording=False, from_phone="0900000001"):
+        # `Dynamic Link` là CHILD TABLE của `CRM Call Log` (field `links`) nên
+        # phải insert inline cùng parent — insert riêng sẽ bị Frappe từ chối
+        # ("Parenttype, Parent and Parentfield are required to insert a child record").
+        doc = {
+            "doctype": "CRM Call Log",
+            "type": "Outgoing",
+            "status": "Completed",
+            "from": from_phone,
+            "to": phone,
+            "caller": "Administrator",
+            "duration": 30,
+            "links": [
+                {"link_doctype": link_doctype, "link_name": link_name}
+                for link_doctype, link_name in links
+            ],
+        }
+        if with_recording:
+            doc["recording_url"] = recording_url
+        if reference:
+            doc["reference_doctype"], doc["reference_docname"] = reference
+        return inserted_name(admin_insert(doc))
+
+    contact_call = make_call_log(
+        [("CRM Lead", LEAD_NAME)],
+        contact_phone,
+        with_recording=True,
+        from_phone=from_phone,
+    )
+    notes_tasks_call = make_call_log(
+        [
+            ("CRM Lead", LEAD_NAME),
+            ("FCRM Note", note_name or ""),
+            ("CRM Task", task_name or ""),
+        ],
+        "0900000010",
+        from_phone=from_phone,
+    )
+    positive_call = make_call_log(
+        [], "0900000010", reference=("CRM Lead", LEAD_NAME)
+    )
+    multi_link_call = make_call_log(
+        [
+            ("CRM Lead", LEAD_NAME),
+            ("CRM Lead", OUT_OF_SCOPE_LEAD_NAME),
+        ],
+        "0900000011",
+        reference=("CRM Lead", LEAD_NAME),
+    )
+
+    fixtures_ready = all(
+        [
+            contact_name,
+            note_name,
+            task_name,
+            contact_call,
+            notes_tasks_call,
+            positive_call,
+            multi_link_call,
+        ]
+    )
+    record(
+        "dl01-fixture-created",
+        None,
+        b"",
+        None if fixtures_ready else "FixtureUnavailable",
+        "Administrator creates the synthetic Dynamic Link fixtures",
+        fixtures_ready,
+    )
+
+    def cleanup():
+        for doctype, name in (
+            ("CRM Call Log", contact_call),
+            ("CRM Call Log", notes_tasks_call),
+            ("CRM Call Log", positive_call),
+            ("CRM Call Log", multi_link_call),
+            ("Contact", contact_name),
+            ("FCRM Note", note_name),
+            ("CRM Task", task_name),
+        ):
+            if name:
+                admin_delete(doctype, name)
+
+    atexit.register(cleanup)
+
+    if not fixtures_ready:
+        cleanup()
+        record(
+            "dl01-linked-calls-in-scope-actor",
+            None,
+            b"",
+            "FixtureUnavailable",
+            "in-scope actor does not receive out-of-scope contact, note, task or private recording URL",
+            False,
+        )
+        record(
+            "dl01-linked-calls-positive-control",
+            None,
+            b"",
+            "FixtureUnavailable",
+            "in-scope actor still receives the valid in-scope Call Log",
+            False,
+        )
+        record(
+            "dl01-activities-in-scope-actor",
+            None,
+            b"",
+            "FixtureUnavailable",
+            "get_activities does not re-expose out-of-scope contact, note, task or private recording URL",
+            False,
+        )
+        return
+
+    linked_path = (
+        "/api/method/crm_cskh.api.guarded_crm.get_linked_calls?"
+        + urllib.parse.urlencode({"name": LEAD_NAME})
+    )
+
+    # --- NEGATIVE: staff đọc Lead trong scope, Dynamic Link sang NGOÀN scope -
+    neg_status, neg_body, _, neg_error = send(
+        staff, "GET", linked_path, None, {"X-Frappe-CSRF-Token": staff_csrf}
+    )
+    neg_text = neg_body.decode("utf-8", errors="replace")
+    leaked_markers = [
+        marker
+        for marker in (
+            contact_marker,
+            contact_phone,
+            from_phone,
+            note_marker,
+            task_marker,
+            recording_url,
+            OUT_OF_SCOPE_LEAD_NAME,
+        )
+        if marker in neg_text
+    ]
+    neg_passed = neg_error is None and neg_status == 200 and not leaked_markers
+    record(
+        "dl01-linked-calls-in-scope-actor",
+        neg_status,
+        neg_body,
+        neg_error,
+        "in-scope actor does not receive out-of-scope contact, phone, note, task, private recording URL or out-of-scope link_name",
+        neg_passed,
+        supplied_markers=(
+            LEAD_NAME,
+            contact_marker,
+            contact_phone,
+            from_phone,
+            note_marker,
+            task_marker,
+            OUT_OF_SCOPE_LEAD_NAME,
+        ),
+        extra={
+            "leaked_marker_count": len(leaked_markers),
+            "out_of_scope_lead_echo": OUT_OF_SCOPE_LEAD_NAME in neg_text,
+        },
+    )
+
+    # --- POSITIVE CONTROL: Call Log tham chiếu Lead hợp lệ vẫn được trả -----
+    pos_status, pos_body, _, pos_error = send(
+        staff, "GET", linked_path, None, {"X-Frappe-CSRF-Token": staff_csrf}
+    )
+    pos_text = pos_body.decode("utf-8", errors="replace")
+    pos_parsed = payload(pos_body)
+    pos_message = pos_parsed.get("message") if pos_parsed else None
+    pos_calls = pos_message.get("calls") if isinstance(pos_message, dict) else None
+    pos_call_names = [
+        call.get("name")
+        for call in (pos_calls or [])
+        if isinstance(call, dict) and isinstance(call.get("name"), str)
+    ]
+    positive_visible = bool(positive_call) and positive_call in pos_call_names
+    pos_passed = (
+        pos_error is None
+        and pos_status == 200
+        and positive_visible
+        and not any(
+            marker in pos_text
+            for marker in (
+                contact_marker,
+                contact_phone,
+                from_phone,
+                note_marker,
+                task_marker,
+                recording_url,
+                OUT_OF_SCOPE_LEAD_NAME,
+            )
+        )
+    )
+    record(
+        "dl01-linked-calls-positive-control",
+        pos_status,
+        pos_body,
+        pos_error,
+        "in-scope actor still receives the valid in-scope Call Log with a real payload",
+        pos_passed,
+        supplied_markers=(LEAD_NAME, positive_call or ""),
+        extra={
+            "positive_call_visible": positive_visible,
+            "returned_call_count": len(pos_call_names or []),
+        },
+    )
+
+    # --- NEGATIVE: cùng đường qua `get_activities` (upstream gọi nội bộ) ----
+    activities_path = (
+        "/api/method/crm_cskh.api.guarded_crm.get_activities?"
+        + urllib.parse.urlencode({"name": LEAD_NAME})
+    )
+    act_status, act_body, _, act_error = send(
+        staff, "GET", activities_path, None, {"X-Frappe-CSRF-Token": staff_csrf}
+    )
+    act_text = act_body.decode("utf-8", errors="replace")
+    act_leaked = [
+        marker
+        for marker in (
+            contact_marker,
+            contact_phone,
+            from_phone,
+            note_marker,
+            task_marker,
+            recording_url,
+            OUT_OF_SCOPE_LEAD_NAME,
+        )
+        if marker in act_text
+    ]
+    act_passed = act_error is None and act_status == 200 and not act_leaked
+    record(
+        "dl01-activities-in-scope-actor",
+        act_status,
+        act_body,
+        act_error,
+        "get_activities does not re-expose out-of-scope contact, phone, note, task, private recording URL or out-of-scope link_name",
+        act_passed,
+        supplied_markers=(
+            LEAD_NAME,
+            contact_marker,
+            contact_phone,
+            from_phone,
+            note_marker,
+            task_marker,
+            OUT_OF_SCOPE_LEAD_NAME,
+        ),
+        extra={"leaked_marker_count": len(act_leaked)},
+    )
+
+    cleanup()
+
+
 def setup_error_case(detail="synthetic permlevel field exists with sentinel"):
     record(
         "sec16-field-setup",
@@ -744,6 +1107,10 @@ def run() -> int:
                 "Link-field scope is checked with in-scope and out-of-scope controls",
                 False,
             )
+
+    # T1B-ext+1: Dynamic Link của `get_linked_calls` (calls/notes/tasks) và cùng
+    # đường đó đi qua `get_activities`.
+    dl01_dynamic_link_case(admin, admin_csrf, staff, staff_csrf)
 
     # LEAD-15 / LS-05: cross-doctype calls must match ordinary Frappe get_list
     # visibility for the same actor. Only counts and opaque name-set digests leave memory.
