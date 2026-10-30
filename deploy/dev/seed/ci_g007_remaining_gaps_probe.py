@@ -449,6 +449,223 @@ def nt04_create_doc_case(actor, actor_csrf, admin, admin_csrf, doctype: str):
     )
 
 
+def tk04_create_task_out_of_scope_case(actor, actor_csrf, admin, admin_csrf):
+    """Fail closed if a staff user can link a new ToDo to another team's Lead."""
+    target_query = urllib.parse.urlencode(
+        {
+            "doctype": "CRM Lead",
+            "fields": json.dumps(["name"], separators=(",", ":")),
+            "filters": json.dumps({"lead_owner": OUT_USER}, separators=(",", ":")),
+            "order_by": "name asc",
+            "limit_page_length": 20,
+        }
+    )
+    target_response = send(
+        admin, "GET", "/api/method/frappe.client.get_list?" + target_query
+    )
+    target_status, target_body, _, target_error = target_response
+    target_names = extract_names(target_body, get_data=False)
+    target_lead = target_names[0] if target_names else None
+    target_found = target_error is None and target_status == 200 and bool(target_lead)
+    record(
+        "tk04-out-of-scope-target-fixture",
+        target_status,
+        target_body,
+        target_error,
+        "Administrator resolves a seeded Lead owned by another team",
+        target_found,
+        supplied_markers=(target_lead or "",),
+        extra={
+            "target_found": target_found,
+            "matching_target_count": len(target_names or []),
+        },
+    )
+    if not target_found:
+        record(
+            "tk04-read-out-of-scope-target",
+            None,
+            b"",
+            "TargetFixtureUnavailable",
+            "out-of-scope Lead is denied to the staff actor",
+            False,
+        )
+        record(
+            "tk04-create-task-out-of-scope",
+            None,
+            b"",
+            "TargetFixtureUnavailable",
+            "out-of-scope linked Task insert is denied without creating a ToDo",
+            False,
+        )
+        return None
+
+    denied_read = send(
+        actor,
+        "GET",
+        "/api/method/frappe.client.get?"
+        + urllib.parse.urlencode({"doctype": "CRM Lead", "name": target_lead}),
+    )
+    read_status, read_body, _, read_error = denied_read
+    read_text = read_body.decode("utf-8", errors="replace")
+    read_denied = (
+        read_error is None and read_status == 403 and target_lead not in read_text
+    )
+    record(
+        "tk04-read-out-of-scope-target",
+        read_status,
+        read_body,
+        read_error,
+        "out-of-scope Lead is denied to the staff actor",
+        read_denied,
+        supplied_markers=(target_lead,),
+        extra={"target_found_by_admin": target_found},
+    )
+
+    marker = f"P0-TK04-{uuid.uuid4().hex}"
+
+    def find_matches():
+        query = urllib.parse.urlencode(
+            {
+                "doctype": "ToDo",
+                "fields": json.dumps(["name"], separators=(",", ":")),
+                "filters": json.dumps({"description": marker}, separators=(",", ":")),
+                "limit_page_length": 20,
+            }
+        )
+        response = send(admin, "GET", "/api/method/frappe.client.get_list?" + query)
+        status, body, _, error = response
+        names = extract_names(body, get_data=False)
+        return response, names, error is None and status == 200
+
+    _, before_names, before_query_ok = find_matches()
+    task_doc = {
+        "doctype": "ToDo",
+        "allocated_to": SEED_USER,
+        "reference_type": "CRM Lead",
+        "reference_name": target_lead,
+        "description": marker,
+        "status": "Open",
+    }
+    insert_response = send(
+        actor,
+        "POST",
+        "/api/method/frappe.client.insert",
+        json.dumps({"doc": task_doc}, separators=(",", ":")).encode("utf-8"),
+        {
+            "Content-Type": "application/json",
+            "X-Frappe-CSRF-Token": actor_csrf,
+        },
+    )
+    insert_status, insert_body, _, insert_error = insert_response
+    insert_payload = payload(insert_body)
+    inserted_doc = insert_payload.get("message") if insert_payload else None
+    inserted_name = (
+        inserted_doc.get("name")
+        if isinstance(inserted_doc, dict) and isinstance(inserted_doc.get("name"), str)
+        else None
+    )
+    _, after_names, after_query_ok = find_matches()
+    delete_names = set(after_names or [])
+    if inserted_name:
+        delete_names.add(inserted_name)
+    cleanup_ok = before_query_ok and after_query_ok and before_names == []
+    for name in sorted(delete_names):
+        delete_response = send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.delete",
+            urllib.parse.urlencode({"doctype": "ToDo", "name": name}).encode(),
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Frappe-CSRF-Token": admin_csrf,
+            },
+        )
+        delete_status, _, _, delete_error = delete_response
+        cleanup_ok = cleanup_ok and delete_error is None and delete_status == 200
+    _, remaining_names, final_query_ok = find_matches()
+    cleanup_ok = cleanup_ok and final_query_ok and remaining_names == []
+    insert_exc_type = insert_payload.get("exc_type") if insert_payload else None
+    body_text = insert_body.decode("utf-8", errors="replace")
+    no_identifier_echo = target_lead not in body_text and marker not in body_text
+    passed = (
+        cleanup_ok
+        and insert_error is None
+        and insert_status == 403
+        and isinstance(insert_exc_type, str)
+        and insert_exc_type.endswith("PermissionError")
+        and after_names == []
+        and no_identifier_echo
+    )
+    record(
+        "tk04-create-task-out-of-scope",
+        insert_status,
+        insert_body,
+        insert_error,
+        "out-of-scope linked Task insert is denied without creating a ToDo",
+        passed,
+        supplied_markers=(target_lead, marker, inserted_name or ""),
+        extra={
+            "target_found_by_admin": target_found,
+            "matching_rows_before": len(before_names or []),
+            "matching_rows_after_insert": len(after_names or []),
+            "matching_rows_after_cleanup": len(remaining_names or []),
+            "cleanup_verified": cleanup_ok,
+        },
+    )
+    return target_lead
+
+
+def ls04_search_link_case(
+    actor, actor_csrf, lead_name: str, case_id: str, *, in_scope: bool
+):
+    """Probe the HTTP Link-field endpoint used by Frappe's get_link_options()."""
+    request_body = json.dumps(
+        {
+            "doctype": "CRM Lead",
+            "txt": lead_name,
+            "page_length": 20,
+            "searchfield": "name",
+            "reference_doctype": "ToDo",
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    response = send(
+        actor,
+        "POST",
+        "/api/method/frappe.desk.search.search_link",
+        request_body,
+        {
+            "Content-Type": "application/json",
+            "X-Frappe-CSRF-Token": actor_csrf,
+        },
+    )
+    status, body, _, error = response
+    root = payload(body)
+    results = root.get("message") if root else None
+    values = [
+        row.get("value")
+        for row in results or []
+        if isinstance(row, dict) and isinstance(row.get("value"), str)
+    ]
+    matched = lead_name in values
+    text = body.decode("utf-8", errors="replace")
+    passed = error is None and (
+        (status == 200 and matched)
+        if in_scope
+        else status in (200, 403) and not matched and lead_name not in text
+    )
+    record(
+        case_id,
+        status,
+        body,
+        error,
+        "Link-field lookup returns the in-scope Lead and omits the out-of-scope Lead",
+        passed,
+        supplied_markers=() if in_scope else (lead_name,),
+        extra={"result_count": len(values), "target_match_present": matched},
+    )
+
+
 def setup_error_case(detail="synthetic permlevel field exists with sentinel"):
     record(
         "sec16-field-setup",
@@ -491,6 +708,39 @@ def run() -> int:
             admin_csrf,
             linked_doctype,
         )
+
+    # TK-04 / LS-04: direct HTTP checks for task creation and Link-field lookup.
+    out_of_scope_lead = tk04_create_task_out_of_scope_case(
+        staff, staff_csrf, admin, admin_csrf
+    )
+    if out_of_scope_lead:
+        ls04_search_link_case(
+            staff,
+            staff_csrf,
+            LEAD_NAME,
+            "ls04-search-link-in-scope-positive",
+            in_scope=True,
+        )
+        ls04_search_link_case(
+            staff,
+            staff_csrf,
+            out_of_scope_lead,
+            "ls04-search-link-out-of-scope",
+            in_scope=False,
+        )
+    else:
+        for case_id in (
+            "ls04-search-link-in-scope-positive",
+            "ls04-search-link-out-of-scope",
+        ):
+            record(
+                case_id,
+                None,
+                b"",
+                "TargetFixtureUnavailable",
+                "Link-field scope is checked with in-scope and out-of-scope controls",
+                False,
+            )
 
     # LEAD-15 / LS-05: cross-doctype calls must match ordinary Frappe get_list
     # visibility for the same actor. Only counts and opaque name-set digests leave memory.

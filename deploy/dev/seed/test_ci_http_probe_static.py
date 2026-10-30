@@ -1377,6 +1377,10 @@ class TestRemainingP0GapsProbe(unittest.TestCase):
 			"sec26-private-download-out-of-scope-existing-vs-unknown",
 			'for linked_doctype in ("FCRM Note", "Comment")',
 			"nt04_create_doc_case(",
+			"tk04-create-task-out-of-scope",
+			"ls04-search-link-out-of-scope",
+			"/api/method/frappe.desk.search.search_link",
+			"cleanup_verified",
 		):
 			with self.subTest(marker=marker):
 				self.assertIn(marker, source)
