@@ -44,9 +44,15 @@ def main() -> int:
         return 2
 
     config = crm_root / "frontend/vite.config.js"
+    index_html = crm_root / "frontend/index.html"
     main_js = crm_root / "frontend/src/main.js"
     translation_js = crm_root / "frontend/src/translation.js"
-    if not config.is_file() or not main_js.is_file() or not translation_js.is_file():
+    if (
+        not config.is_file()
+        or not index_html.is_file()
+        or not main_js.is_file()
+        or not translation_js.is_file()
+    ):
         print("Pinned CRM Vite source files are missing", file=sys.stderr)
         return 2
 
@@ -400,6 +406,16 @@ const chartConfig = computed(() => {
         crm_root / "frontend/src/pages/Organization.vue": (
             ("label: 'Deals',", "label: __('Deals'),"),
         ),
+        crm_root / "frontend/src/components/SidePanelLayout.vue": (
+            (
+                '                          :placeholder="\n'
+                "                            __('Select') + ' ' + field.label + '...'\n"
+                '                          "',
+                '                          :placeholder="\n'
+                "                            __('Select {0}...', [__(field.label)])\n"
+                '                          "',
+            ),
+        ),
     }
     for path, replacements in static_label_patches.items():
         for old, new in replacements:
@@ -407,6 +423,27 @@ const chartConfig = computed(() => {
             print(
                 f"{'patched' if changed else 'already patched'}: {path.relative_to(crm_root)} ({new})"
             )
+
+    side_panel_layout = crm_root / "frontend/src/components/SidePanelLayout.vue"
+    side_panel_text = side_panel_layout.read_text(encoding="utf-8")
+    translated_placeholder = (
+        ':placeholder="field.placeholder ? __(field.placeholder) : field.placeholder"'
+    )
+    placeholder_changed = False
+    for placeholder_source in (
+        ':placeholder="field.placeholder"',
+        ':placeholder="__(field.placeholder)"',
+    ):
+        if placeholder_source in side_panel_text:
+            side_panel_text = side_panel_text.replace(
+                placeholder_source, translated_placeholder
+            )
+            placeholder_changed = True
+    if placeholder_changed:
+        side_panel_layout.write_text(side_panel_text, encoding="utf-8", newline="\n")
+    print(
+        f"Side-panel field placeholders: {'patched' if placeholder_changed else 'already patched'}"
+    )
 
     donut_options = (
         crm_root
@@ -456,15 +493,82 @@ function localizeChartLabel(value: string) {
             f"already patched chart label display: {donut_options.relative_to(crm_root)}"
         )
 
+    # frappe-ui derives the Vite dev port from `webserver_port` (8080 + offset)
+    # and that derived value overrides the CLI `--port` flag.  The realtime
+    # self-authentication request is sent to `Origin + /api/...`, i.e. to the
+    # browser-facing Vite origin, so the Vite port must be reachable INSIDE the
+    # container under the very same port number the browser uses.  Allow the
+    # operator to pin it through VITE_DEV_PORT; compose publishes that same
+    # number on the host (host port == container port) to keep the two equal.
     proxy_new = (
+        "      frappeProxy: {\n"
+        "        source: '^/(desk|app|login|api|assets|files|private|cskh)',\n"
+        "        port: Number(process.env.VITE_DEV_PORT || 8080),\n"
+        "      },"
+    )
+    # Upgrade a proxy block that was patched without the explicit port option.
+    proxy_previous = (
         "      frappeProxy: {\n"
         "        source: '^/(desk|app|login|api|assets|files|private|cskh)',\n"
         "      },"
     )
-    proxy_changed = patch_once(config, "      frappeProxy: true,", proxy_new)
+    config_text = config.read_text(encoding="utf-8")
+    if proxy_new in config_text:
+        proxy_changed = False
+    elif proxy_previous in config_text:
+        proxy_changed = patch_once(config, proxy_previous, proxy_new)
+    else:
+        proxy_changed = patch_once(config, "      frappeProxy: true,", proxy_new)
     config_text = config.read_text(encoding="utf-8")
     if not proxy_changed and proxy_new not in config_text:
         raise RuntimeError("Pinned Vite proxy block differs from the expected source")
+
+    # frappe-ui's built-in proxy correctly sends HTTP application routes to the
+    # Frappe web server on :8000, but the realtime Socket.IO server is a
+    # separate process on :9000.  Do not add `/socket.io` to `frappeProxy`:
+    # that would route Engine.IO handshakes to the web server and Vite would
+    # eventually return the SPA document.  The explicit proxy keeps the
+    # browser same-origin in DEV and supports both polling and WebSocket
+    # upgrade.
+    #
+    # `changeOrigin` MUST stay false.  Frappe's realtime authentication
+    # middleware compares the Host header hostname against the Origin header
+    # hostname and rejects the handshake with "Invalid origin" when they
+    # differ (apps/frappe/realtime/middlewares/authenticate.js).  With
+    # `changeOrigin: true` Vite rewrites Host to the proxy target
+    # (127.0.0.1:9000) while the browser Origin stays on dev.localhost, so
+    # every namespace join fails even though the Engine.IO handshake itself
+    # returns HTTP 200.  Measured 2026-10-31 (T1A): changeOrigin=true ->
+    # connect_error "Invalid origin"; changeOrigin=false -> namespace
+    # /dev.localhost connected=true over websocket with a pong reply.
+    socket_proxy_new = """    server: {
+      proxy: {
+        '/socket.io': {
+          target: 'http://127.0.0.1:9000',
+          changeOrigin: false,
+          ws: true,
+        },
+      },
+      fs: {"""
+    # Upgrade the earlier repository-owned DEV proxy as well as a clean pin.
+    socket_proxy_previous = socket_proxy_new.replace(
+        "changeOrigin: false", "changeOrigin: true"
+    )
+    socket_proxy_upgraded = False
+    if socket_proxy_previous in config.read_text(encoding="utf-8"):
+        socket_proxy_upgraded = patch_once(
+            config, socket_proxy_previous, socket_proxy_new
+        )
+    socket_proxy_changed = patch_once(
+        config,
+        "    server: {\n      fs: {",
+        socket_proxy_new,
+    )
+    config_text = config.read_text(encoding="utf-8")
+    if not socket_proxy_changed and socket_proxy_new not in config_text:
+        raise RuntimeError(
+            "Pinned Vite Socket.IO proxy block differs from the expected source"
+        )
 
     optimizer_new = "      exclude: [\n        'frappe-ui/editor',\n      ],"
     optimizer_changed = patch_once(
@@ -477,7 +581,40 @@ function localizeChartLabel(value: string) {
         raise RuntimeError(
             "Pinned Vite optimizer block differs from the expected source"
         )
-    changed_config = proxy_changed or optimizer_changed
+    changed_config = (
+        proxy_changed
+        or socket_proxy_changed
+        or socket_proxy_upgraded
+        or optimizer_changed
+    )
+
+    socket_js = crm_root / "frontend/src/socket.js"
+    socket_boot_old = """export function initSocket() {
+  let socketio_port = window.socketio_port || 9000
+  let host = window.location.hostname
+  let siteName = window.site_name
+  let port = window.location.port ? `:${socketio_port}` : ''
+  let protocol = port ? 'http' : 'https'
+  let url = `${protocol}://${host}${port}/${siteName}`
+"""
+    socket_boot_new = """export function initSocket() {
+  let siteName = window.site_name
+  // During Vite development, go through its same-origin `/socket.io` proxy.
+  // The proxy above forwards Engine.IO polling and WebSocket upgrades to the
+  // separate Frappe realtime process on :9000.  Production keeps the
+  // upstream direct-realtime behavior.
+  let url
+  if (import.meta.env.DEV) {
+    url = `${window.location.origin}/${siteName}`
+  } else {
+    let socketio_port = window.socketio_port || 9000
+    let host = window.location.hostname
+    let port = window.location.port ? `:${socketio_port}` : ''
+    let protocol = port ? 'http' : 'https'
+    url = `${protocol}://${host}${port}/${siteName}`
+  }
+"""
+    socket_boot_changed = patch_once(socket_js, socket_boot_old, socket_boot_new)
 
     old_boot = """if (import.meta.env.DEV) {
   frappeRequest({ url: '/api/method/crm.www.crm.get_context_for_dev' }).then(
@@ -621,6 +758,46 @@ export default function translationPlugin(app) {"""
         translator_prelude,
     )
 
+    # Some Frappe-served CRM chunks call the global __ before the Vite module
+    # graph installs the real translator. Provide an identity fallback in the
+    # document head; translationPlugin replaces it after boot context loads.
+    shim_line = (
+        "    <script>var __ = window.__ = window.__ || ((message) => message)</script>"
+    )
+    current_index = index_html.read_text(encoding="utf-8")
+    index_lines = [
+        line
+        for line in current_index.splitlines()
+        if not (
+            "window.__ = window.__ || ((message) => message)" in line
+            or "var __ = window.__ = window.__ || ((message) => message)" in line
+        )
+    ]
+    head_index = index_lines.index("  <head>") if "  <head>" in index_lines else -1
+    if head_index < 0:
+        raise RuntimeError("Pinned CRM Vite index.html head marker is missing")
+    index_lines.insert(head_index + 1, shim_line)
+    normalized_index = "\n".join(index_lines) + "\n"
+    changed_index = normalized_index != current_index
+    if changed_index:
+        index_html.write_text(normalized_index, encoding="utf-8", newline="\n")
+
+    # In Vite mode the CRM onboarding helper can pass a dotted Frappe method
+    # name to frappe-ui's generic request() utility. A relative URL then
+    # resolves under the current CRM route and receives the SPA HTML fallback.
+    # Normalize only bare dotted method names to the standard RPC endpoint.
+    request_ts = crm_root / "frontend/node_modules/frappe-ui/src/utils/request.ts"
+    if not request_ts.is_file():
+        raise RuntimeError("Pinned frappe-ui request utility is missing")
+    changed_request = patch_once(
+        request_ts,
+        "  let url = options.url\n",
+        "  let url = options.url\n"
+        "  if (/^[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+$/.test(url)) {\n"
+        "    url = `/api/method/${url}`\n"
+        "  }\n",
+    )
+
     current_main = main_js.read_text(encoding="utf-8")
     translation_import = "import translationPlugin from './translation'\n"
     if current_main.count(translation_import) != 1:
@@ -628,15 +805,45 @@ export default function translationPlugin(app) {"""
     if not current_main.startswith(translation_import):
         current_main = current_main.replace(translation_import, "", 1)
         if not current_main.startswith("import './index.css'\n"):
-            raise RuntimeError("Pinned CRM main.js import prefix differs from expected source")
+            raise RuntimeError(
+                "Pinned CRM main.js import prefix differs from expected source"
+            )
         current_main = translation_import + current_main
         main_js.write_text(current_main, encoding="utf-8", newline="\n")
         changed_main = True
 
+    vueuse_core = crm_root / "frontend/node_modules/@vueuse/core/index.mjs"
+    if not vueuse_core.is_file():
+        raise RuntimeError("Pinned VueUse core source is missing")
+    vueuse_old_targets = """const targets = computed(() => Array.isArray(target) ? target.map((el) => unrefElement(el)) : [unrefElement(target)]);"""
+    vueuse_new_targets = """const targets = computed(() => {
+    const value = unref(target);
+    const inputTargets = Array.isArray(value) ? value : [value];
+    return inputTargets.flatMap((item) => {
+      const element = unrefElement(item);
+      return Array.isArray(element) ? element.map(unrefElement) : [element];
+    }).filter((element) => element && element.nodeType === 1);
+  });"""
+    vueuse_observer_changed = patch_once(
+        vueuse_core, vueuse_old_targets, vueuse_new_targets
+    )
+
     print(f"Vite config: {'patched' if changed_config else 'already patched'}")
+    print(
+        f"Same-origin Socket.IO bootstrap: {'patched' if socket_boot_changed else 'already patched'}"
+    )
     print(f"Dev bootstrap: {'patched' if changed_main else 'already patched'}")
     print(
         f"Early translation global: {'patched' if changed_translation else 'already patched'}"
+    )
+    print(
+        f"Computed element-array observer normalization: {'patched' if vueuse_observer_changed else 'already patched'}"
+    )
+    print(
+        f"HTML translation bootstrap: {'patched' if changed_index else 'already patched'}"
+    )
+    print(
+        f"Vite RPC request normalization: {'patched' if changed_request else 'already patched'}"
     )
     return 0
 

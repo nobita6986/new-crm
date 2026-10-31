@@ -414,3 +414,63 @@ Mục 8 là ảnh chụp sớm hơn (166 khóa dịch, 1/10 ảnh). Dùng mục 
 - Patcher [`apply-crm-vite-dev-patch.py`](../apply-crm-vite-dev-patch.py) chạy trong Docker bench volume, áp dụng lên checkout CRM và dependency `frappe-ui` của môi trường DEV. Nó không sửa upstream remote hay source upstream tracked trong repository. Patcher hiện là tệp working-tree chưa commit; giữ lại để tái áp dụng nếu volume được dựng lại.
 - DEV được khởi động lại trong lượt tiếp tục này; Vite `/crm` trả HTTP 200 qua `127.0.0.1:8080`. Điều này chỉ xác nhận endpoint phục vụ được, không thay cho xác nhận trực quan sau patch.
 - Chỉ có **1/10** screenshot checklist trong checkout; chưa hoàn tất rà 10 màn hình hoặc quét PII cho toàn bộ ảnh. **G0-09 vẫn PARTIAL**.
+
+## 10. Tái kiểm tra UI và ảnh (T1A, 2026-10-28)
+
+> Mục 8–9 là các snapshot lịch sử. Kết quả hiện hành cùng manifest và hash nằm trong [`t1a-p0-runtime-evidence-2026-10-28.md`](t1a-p0-runtime-evidence-2026-10-28.md) §G0-09.
+
+- `vi.csv` hiện có 201 khóa duy nhất, không khóa trùng, không bản dịch rỗng; 5 khóa local mới được thêm. Sau clear-cache, dashboard trên CRM Vue hiển thị các nhãn cốt lõi bằng tiếng Việt. Chỉ ghi nhận nhãn đã nhìn thấy trên dashboard; không suy rộng thành toàn bộ 10 màn đã được dịch.
+- Ảnh checklist được chấp nhận: **2/10** — Dashboard sạch (`screenshots/t1a-g009-20261028-final-03/08-dashboard-clean.png`) và `/cskh` (`screenshots/t1a-g009-20261028-final-02/09-cskh.png`, email giả đã che thành `[EMAIL]`). Các screenshot khác còn lại bị loại vì wizard tiếng Anh, màn trống/chưa hoàn tất hoặc overlay onboarding.
+- OCR/PII scan đã chạy trên 13 ảnh ứng viên: 0 email-like, 0 phone-like, 0 token-like, 0 OCR errors. Vì chỉ 2 ảnh đạt checklist, scan này không thay cho PII sweep bộ 10 ảnh cuối.
+- **G0-09 vẫn PARTIAL**: còn 8 màn cần ảnh hợp lệ và rà trực quan toàn bộ bộ cuối.
+
+## 11. Bộ cuối G0-09 — chụp lại, dịch nhãn và rà PII (T1A, 2026-10-29)
+
+> Mục 8–10 và §17 là lịch sử. Bộ hiện hành là `screenshots/t1a-g009-20261029-final-155200/`; các ảnh thử trước khi sửa bộ lọc số điện thoại không được dùng làm evidence cuối.
+
+- Site: `dev.localhost`; CRM `v1.87.0` tại SHA `0d3910b456ef4fb913e77b29db011b3debc4f778`; viewport `1280×800`; capture từ `2026-10-29T15:52:26Z` đến `15:54:19Z`.
+- Đăng nhập staff và Administrator đều được xác nhận; 10/10 route trả HTTP 200, app không blank, `navigationErrors=[]`; Lead detail lấy từ seed giả `CRM-LEAD-10207`.
+- 10/10 PNG đều `1280×800`, <500 KB; manifest có SHA-256 từng ảnh tại [`t1a-g009-capture-manifest-20261029-final-v2.json`](logs/t1a-g009-capture-manifest-20261029-final-v2.json).
+- PII scan trước khi chụp kiểm tra DOM text, input values và title/aria/placeholder: phát hiện 3 email và 3 số điện thoại seed giả; che 56 lần email và 3 lần số; kiểm tra residual sau che = **0 email / 0 phone-like string**. Màn Lead detail đã được soi ở kích thước gốc; số 12 chữ số hiển thị thành `0900-XXX-NNN`. Không dùng screenshot capture cũ có số đó chưa được che.
+- Từ DOM thật trên các route, **7/7 thuật ngữ ưu tiên** khớp bản dịch và hiện diện đúng màn: `Lead`, `Note`, `Assigned To`, `Lead Owner`, `Phone`, `Deal`, `Mobile No.`; artifact [`t1a-g009-priority-terms-20261029.json`](logs/t1a-g009-priority-terms-20261029.json).
+- Lead detail: **12/12 placeholder** trên UI là tiếng Việt; không còn placeholder bắt đầu bằng `Add`/`Select`. Artifact [`t1a-g009-placeholder-translation-20261029.json`](logs/t1a-g009-placeholder-translation-20261029.json). Helper DEV [`apply-crm-vite-dev-patch.py`](../apply-crm-vite-dev-patch.py) giờ dịch field placeholder ở `SidePanelLayout.vue`; `vi.csv` có bản dịch cho các placeholder thêm mới.
+- Form validation hiện thông báo bắt buộc bằng tiếng Việt; `frappe.client.insert` requests = 0. `/cskh` vẫn là Jinja và capture như màn checklist, không coi việc thiếu Vue socket ở route này là lỗi.
+- Bản vá CRM chỉ áp dụng trong checkout DEV/volume ghim SHA; không sửa upstream. Ảnh chứng minh giao diện DEV tại thời điểm capture, không phải production.
+- **Verdict G0-09: PASS trong phạm vi giao diện DEV P0 đã liệt kê ở §3.2–§3.5.** P0 tổng thể vẫn phụ thuộc G0-07 và việc xác minh CI trên revision cuối.
+
+| # | Ảnh cuối | SHA-256 |
+|---|---|---|
+| 1 | `screenshots/t1a-g009-20261029-final-155200/01-login.png` | `a6a900f3317b993833fed6da48d801b003decfa92fc9f45d1adfb2395e546734` |
+| 2 | `screenshots/t1a-g009-20261029-final-155200/02-preferences.png` | `1fb196900ee81cb5d0f04fe75d8e6f323d3b318815d5d259b7afc3bfd3ee4d6e` |
+| 3 | `screenshots/t1a-g009-20261029-final-155200/03-leads-list.png` | `f485429eb2541b1f03cefb8e6d6cc8e26fc032b958805ded19ad8e9da4ad4cd3` |
+| 4 | `screenshots/t1a-g009-20261029-final-155200/04-lead-detail.png` | `10c2ed9094fc54e772e08215c983ec951be2bc5dad5662d83fc1ff260d68a642` |
+| 5 | `screenshots/t1a-g009-20261029-final-155200/05-call-logs.png` | `5307fef669cdccd095eadda6640f70ebdb9801c610f98974fd1684a06acf4f89` |
+| 6 | `screenshots/t1a-g009-20261029-final-155200/06-tasks.png` | `0198078703b046758dd1c6f8dabf14849cd300ac9e477a705b73082cebcd33e4` |
+| 7 | `screenshots/t1a-g009-20261029-final-155200/07-data-import.png` | `9ebf182a267aff43271502997ade351ea9625bd4988bfa4f5d3cad9e6202bb2a` |
+| 8 | `screenshots/t1a-g009-20261029-final-155200/08-dashboard.png` | `698a0f57038e79b99df049be833ad244020a72cd80729fda0ce25ca858b7afb7` |
+| 9 | `screenshots/t1a-g009-20261029-final-155200/09-cskh.png` | `de69f91bf8aabad715962ceec731035a052b7674c9ae385fccce10ef9af40ae7` |
+| 10 | `screenshots/t1a-g009-20261029-final-155200/10-validation-error.png` | `3492144900d63628744e667a210d2b658cca5df26f619ffc84ed2997bd04648c` |
+
+## 12. Bộ cuối G0-09 (bản 3) — xác nhận dịch "Deal"/"lead", chụp lại màn 04 (T1A, 2026-10-31)
+
+> Mục 8–11 là lịch sử. Bộ hiện hành là `screenshots/t1a-g009-20261031-final/`; manifest v3 tại [`logs/t1a-g009-capture-manifest-20261031-final-v3.json`](logs/t1a-g009-capture-manifest-20261031-final-v3.json).
+
+- **Rà trực quan 10/10 ảnh bộ 2026-10-29 (vision):** chỉ màn 04 còn 2 chuỗi tiếng Anh — nút `Chuyển thành Deal` và dòng hoạt động `Administrator đã tạo lead này`. 9 màn còn lại sạch (menu `Cơ hội`, cột `Hạn chót`, `Người phụ trách`, validation `Tên khách hàng là trường bắt buộc`, `/cskh` email `[EMAIL]`...).
+- **Nguyên nhân gốc:** không phải thiếu key dịch — `vi.csv` đã có `Convert to Deal,Chuyển thành Cơ hội` và `created this lead,đã tạo khách hàng tiềm năng này` (nay **218 khóa duy nhất, 0 trùng, 0 rỗng**). Site đang phục vụ bản dịch cũ của upstream `vi.po` (`Chuyển thành Deal` / `đã tạo lead này`) từ **cache dịch cũ**; sau `bench clear-cache`, `get_all_translations('vi')` trả đúng `Chuyển thành Cơ hội` và `đã tạo khách hàng tiềm năng này`.
+- **Chụp lại màn 04** trên lead giả `CRM-LEAD-00001` (staff.a; `CRM-LEAD-10207` workload đã bị cleanup sau re-seed): DOM assert `must` 4/4 (`Chuyển thành Cơ hội`, `Nhân viên phụ trách`, `Số di động`, `đã tạo khách hàng tiềm năng này`) và `forbid` 4/4 (không `Chuyển thành Deal` / `đã tạo lead này` / `Convert to Deal` / `created this lead`) đều PASS.
+- **PII:** màn 04 che 20 email + 1 số seed giả; residual sau che = **0 email / 0 phone-like**; SĐT hiển thị `0900-XXX-NNN`. 9 ảnh còn lại giữ nguyên SHA từ bộ v2 (PII residual đã 0 ở v2).
+- **Ports session:** host 8000/8080/9000 đang bị giữ bởi stack `p0-ci47-verify` (T1B); session này dùng `WEB_PORT=8010`, `SOCKETIO_PORT=9010`, `VITE_PORT=8091` (chỉ env khi `up`, không sửa file). Capture qua Vite `:8091`.
+- **Verdict G0-09: PASS trong phạm vi giao diện DEV** — bộ 10 ảnh cuối không còn `Deal`/`lead` chưa dịch trên luồng chính; manifest v3 + PII sạch.
+
+| # | Ảnh cuối (bản 3) | SHA-256 |
+|---|---|---|
+| 1 | `screenshots/t1a-g009-20261031-final/01-login.png` | `a6a900f3317b993833fed6da48d801b003decfa92fc9f45d1adfb2395e546734` |
+| 2 | `screenshots/t1a-g009-20261031-final/02-preferences.png` | `1fb196900ee81cb5d0f04fe75d8e6f323d3b318815d5d259b7afc3bfd3ee4d6e` |
+| 3 | `screenshots/t1a-g009-20261031-final/03-leads-list.png` | `f485429eb2541b1f03cefb8e6d6cc8e26fc032b958805ded19ad8e9da4ad4cd3` |
+| 4 | `screenshots/t1a-g009-20261031-final/04-lead-detail.png` | `936e546d4e639d7fc55aa092d6eb8553d9e41fcada227b26046d3ff0f6255adb` |
+| 5 | `screenshots/t1a-g009-20261031-final/05-call-logs.png` | `5307fef669cdccd095eadda6640f70ebdb9801c610f98974fd1684a06acf4f89` |
+| 6 | `screenshots/t1a-g009-20261031-final/06-tasks.png` | `0198078703b046758dd1c6f8dabf14849cd300ac9e477a705b73082cebcd33e4` |
+| 7 | `screenshots/t1a-g009-20261031-final/07-data-import.png` | `9ebf182a267aff43271502997ade351ea9625bd4988bfa4f5d3cad9e6202bb2a` |
+| 8 | `screenshots/t1a-g009-20261031-final/08-dashboard.png` | `698a0f57038e79b99df049be833ad244020a72cd80729fda0ce25ca858b7afb7` |
+| 9 | `screenshots/t1a-g009-20261031-final/09-cskh.png` | `de69f91bf8aabad715962ceec731035a052b7674c9ae385fccce10ef9af40ae7` |
+| 10 | `screenshots/t1a-g009-20261031-final/10-validation-error.png` | `3492144900d63628744e667a210d2b658cca5df26f619ffc84ed2997bd04648c` |
