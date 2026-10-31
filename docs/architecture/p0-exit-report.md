@@ -289,7 +289,7 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 | `dcae46c` | T1A Round 34 (song song): đồng bộ revision CI + refresh hash bàn giao |
 | `b50320a` | T1B: đồng bộ báo cáo + bàn giao sang run #41184602987 |
 | `04824df` | T1A Round 34 (song song): đồng bộ revision CI #41185474002 |
-| `ddf8921` | T1B: đồng bộ báo cáo + bàn giao sang run #41232064137 |
+| `ddf8921` | T1B: đồng bộ báo cáo + bàn giao sang run #41232064137 (run_number 139) |
 | `1294116` | T1A: refresh revision CI run #41232064137 (run_number 139) |
 | `ddf8921` | T1A: refresh revision CI run #41232064137 (run_number 139) |
 | `1ed7801` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41233336736 (run_number 142) |
@@ -346,7 +346,7 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 
 ### 5. Kết luận T1B
 
-- G0-10 **PASS** tại revision đóng gói cuối `ddf8921` — CI xanh **trên chính revision chứa gói DEV/i18n/evidence**, không còn khoảng trống "evidence chưa có CI".
+- G0-10 **PASS** tại revision đóng gói cuối `1ed7801` — CI xanh **trên chính revision chứa gói DEV/i18n/evidence**, không còn khoảng trống "evidence chưa có CI".
 - G0-07 giữ **PASS (T1C ký Round 32)**; các số 99/99 + 18/18 + 9/9 + 74/74 trên run #41233336736 **trùng khớp** với run #41159273106 mà T1C đã kiểm định ⇒ không có hồi quy.
 - **Bàn giao cho T1C:** artifact `13054332957` (digest `sha256:eafeac05…`) + danh sách file đã commit + revision `1ed7801` — T1C kiểm định độc lập.
 - **Bàn giao cho T1A:** commit đóng gói cuối `1ed7801` + run CI #41233336736 + kết quả parse để tổng hợp P0.

@@ -66,9 +66,9 @@
 | `170e9c1` | T1A: chỉnh merge SHA + run_number cho run CI #41216145009 |
 | `192064e` | T1A: đồng bộ run CI #41217191623 (run_number 112) + ghi chú Round 32b vào bàn giao T1B |
 | `5ba358a` | T1A: đồng bộ run CI #41218489232 (run_number 114) |
-| `ddf8921` | T1B: đồng bộ báo cáo + bàn giao sang run #41232064137 |
+| `ddf8921` | T1B: đồng bộ báo cáo + bàn giao sang run #41232064137 (run_number 139) |
 | `1294116` | T1A: refresh revision CI run #41232064137 (run_number 139) |
-| `1ed7801` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41233336736 |
+| `1ed7801` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41233336736 (run_number 142) |
 
 Tổng: `git diff --stat e0ef02f..1ed7801` = **48 file, +3 987 / −89**.
 
