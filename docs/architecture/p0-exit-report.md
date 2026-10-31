@@ -281,15 +281,17 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 | `582a99e` | Ghi nhận Round 34 T1A: bug cú pháp chặn trong patcher (`optimizeDeps` nuốt dấu `]` ⇒ `vite.config.js` không parse ⇒ Vite không khởi động) + sửa + cổng `node --check`; artifact socket namespace → schema v3 |
 | `ddf817c` | Cập nhật bàn giao T1A Round 34 (hash đã đổi ⇒ bắt buộc commit lại + CI mới) |
 | `ba49857` | T1A Round 34 (commit song song): cập nhật `p0-exit-report.md` + `t1a-handover-t1b-dev-i18n.md` cho Round 34 |
-| `9fdeee6` | **T1B — revision đóng gói cuối**: báo cáo đóng gói + bàn giao artifact cho T1C/T1A (`t1b-final-handover-2026-10-31.md`) |
+| `9fdeee6` | T1B: báo cáo đóng gói + bàn giao artifact cho T1C/T1A (`t1b-final-handover-2026-10-31.md`) |
+| `dcae46c` | T1A Round 34 (song song): đồng bộ revision CI + refresh hash bàn giao |
+| `b50320a` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41184602987 |
 
-**PR #2 head sau đóng gói = `9fdeee6a1140a4eeb90d5774b53ee27aae5219be`.** Không merge.
+**PR #2 head sau đóng gói = `b50320aa2c896eca0530af4a3201c550e82ad0d6`.** Không merge.
 
 ### 2. Rà diff đóng gói (T1B tự thực hiện)
 
 | Hạng mục | Kết quả |
 |---|---|
-| Phạm vi file | 44 file / 3 686 dòng thêm / 73 dòng xoá (`git diff --stat e0ef02f..9fdeee6`) — chỉ DEV/i18n, tài liệu, evidence đã bàn giao. **Không** đụng code app, test, workflow, seed, ADR |
+| Phạm vi file | 46 file / 3 713 dòng thêm / 79 dòng xoá (`git diff --stat e0ef02f..b50320a`) — chỉ DEV/i18n, tài liệu, evidence đã bàn giao. **Không** đụng code app, test, workflow, seed, ADR |
 | Inventory JUnit 99 method | `g007_test_inventory.json` **không đổi**; CI gate vẫn `expected_total=99`/`observed_total=99` |
 | Auxiliary tests | `test_error_response_normalization` 8/8 — ghi **riêng** trong `auxiliary/`, ngoài inventory 99 |
 | Secret / `.env` / cookie / token | Không có `.env`, cookie phiên, CSRF token, bearer, private file URL trong file đóng gói. `verify-socket-namespace.mjs` chỉ đọc `ADMIN_PASSWORD` từ env, **không** ghi giá trị ra log/artifact |
@@ -302,16 +304,16 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 
 | Trường | Giá trị |
 |---|---|
-| Run ID / run_number | **#41183641044** / 64 |
-| Trạng thái | `success` (completed 2026-10-31T08:20:15Z) |
-| Branch head SHA | `9fdeee6a1140a4eeb90d5774b53ee27aae5219be` (= PR #2 HEAD) |
-| Merge SHA | `f65fec1b71d6503ffef8920f65a65a3175ba0510` (`workflow-metadata.json` `commit_sha`) |
-| Artifact ID | `13036566067` (`p0-g007-evidence-41183641044`) |
-| Artifact size | 140 947 B |
-| Digest API | `sha256:d20ef778ca8b09eb562a121b976522352aae13f676b480b5432350c43370a0fb` |
-| **SHA-256 T1B tự hash zip** | `D20EF778CA8B09EB562A121B976522352AAE13F676B480B5432350C43370A0FB` → **KHỚP 100%** |
+| Run ID / run_number | **#41184602987** / 66 |
+| Trạng thái | `success` (completed 2026-10-31T08:34:47Z) |
+| Branch head SHA | `b50320aa2c896eca0530af4a3201c550e82ad0d6` (= PR #2 HEAD) |
+| Merge SHA | `4a8bb0a5f546bbae27a60b62bb3ee5677c71f947` (`workflow-metadata.json` `commit_sha`) |
+| Artifact ID | `13035818049` (`p0-g007-evidence-41184602987`) |
+| Artifact size | 140 978 B |
+| Digest API | `sha256:de985d90b658015ae1c6d479ac8ce2ef733d3d275c3c8b5d03b4807c4a5c4aff` |
+| **SHA-256 T1B tự hash zip** | `DE985D90B658015AE1C6D479AC8CE2EF733D3D275C3C8B5D03B4807C4A5C4AFF` → **KHỚP 100%** |
 
-> Run trước đó #41183084515 (run_number 62, head `ddf817c`, merge `1dbf58af`, artifact `13035534433` 140 913 B, digest `sha256:dc733082…`) cũng **success** với kết quả parse giống hệt. Run #41183398104 (run_number 63, head `ba49857`) bị `cancelled` do bị supersede khi T1B push commit `9fdeee6` — **không** phải lỗi CI. Revision đang bàn giao cho T1C/T1A là run **#41183641044**.
+> Các run trước cùng **success** với kết quả parse **giống hệt**: #41183084515 (run_number 62, head `ddf817c`, merge `1dbf58af`, artifact `13035534433` 140 913 B, digest `sha256:dc733082…`) và #41183641044 (run_number 64, head `9fdeee6`, merge `f65fec1b`, artifact `13036566067` 140 947 B, digest `sha256:d20ef778…`). Run #41183398104 (63) và #41184507863 (65) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao cho T1C/T1A là run **#41184602987** trên head `b50320a`.
 
 ### 4. Parse độc lập (không suy từ tên commit)
 
@@ -322,14 +324,14 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 | Auxiliary | `test_error_response_normalization` 8/8 (ngoài inventory 99) |
 | `module-status.txt` | `probe_static exit=0` + 5 module `exit=0` + `test_error_response_normalization exit=0` + `per-method gate exit=0` + `remaining_gaps_http exit=0` |
 | HTTP transport probe | `probe_result=PASS`, `failed_cases=[]`, **18/18**; `coverage_scope` không đổi (direct `bench serve`, không phủ proxy/CORS) |
-| File-oracle probe | `probe_result=PASS`, `failed_cases=[]`, **9/9**; `head_sha=9fdeee6`, `merge_sha=f65fec1b` |
-| Remaining-gaps probe | `probe_result=PASS`, `failed_cases=[]`, **74/74**; `head_sha=9fdeee6`, `merge_sha=f65fec1b` |
+| File-oracle probe | `probe_result=PASS`, `failed_cases=[]`, **9/9**; `head_sha=b50320a`, `merge_sha=4a8bb0a5` |
+| Remaining-gaps probe | `probe_result=PASS`, `failed_cases=[]`, **74/74**; `head_sha=b50320a`, `merge_sha=4a8bb0a5` |
 | `workflow-metadata.json` | `frappe_sha=d2efa796…`, `crm_sha=0d3910b4…`, `bench_image_ref=frappe/bench:v5.31.0@sha256:3b7594…`; **10/10 `workflow_outcomes` = `success`**; `redaction_replacements=4` |
 
 ### 5. Kết luận T1B
 
-- G0-10 **PASS** tại revision đóng gói cuối `9fdeee6` — CI xanh **trên chính revision chứa gói DEV/i18n/evidence**, không còn khoảng trống "evidence chưa có CI".
-- G0-07 giữ **PASS (T1C ký Round 32)**; các số 99/99 + 18/18 + 9/9 + 74/74 trên run #41183641044 **trùng khớp** với run #41159273106 mà T1C đã kiểm định ⇒ không có hồi quy.
-- **Bàn giao cho T1C:** artifact `13036566067` (digest `sha256:d20ef778…`) + danh sách file đã commit + revision `9fdeee6` — T1C kiểm định độc lập.
-- **Bàn giao cho T1A:** commit đóng gói cuối `9fdeee6` + run CI #41183641044 + kết quả parse để tổng hợp P0.
+- G0-10 **PASS** tại revision đóng gói cuối `b50320a` — CI xanh **trên chính revision chứa gói DEV/i18n/evidence**, không còn khoảng trống "evidence chưa có CI".
+- G0-07 giữ **PASS (T1C ký Round 32)**; các số 99/99 + 18/18 + 9/9 + 74/74 trên run #41184602987 **trùng khớp** với run #41159273106 mà T1C đã kiểm định ⇒ không có hồi quy.
+- **Bàn giao cho T1C:** artifact `13035818049` (digest `sha256:de985d90…`) + danh sách file đã commit + revision `b50320a` — T1C kiểm định độc lập.
+- **Bàn giao cho T1A:** commit đóng gói cuối `b50320a` + run CI #41184602987 + kết quả parse để tổng hợp P0.
 - **Bất biến:** KHÔNG merge PR #2; KHÔNG tự ký P0 GO/NO-GO (thuộc T0/Owner); không mở rộng kiểm thử khi không còn lỗi/gap cụ thể.
