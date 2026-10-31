@@ -309,7 +309,7 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 | Trường | Giá trị |
 |---|---|
 | Run ID / run_number | **#41190382586** / 76 |
-| Trạng thái | `success` (completed 2026-10-31T09:46:05Z) |
+| Trạng thái | `success` (completed 2026-10-31T09:57:48Z) |
 | Branch head SHA | `7cfeaa5a3c8863e1b5a843f0e647d54a330cb99f` (= PR #2 HEAD) |
 | Merge SHA | `b1745ce522c0af1262aa4fc0efe5a260c41d9604` (`workflow-metadata.json` `commit_sha`) |
 | Artifact ID | `13038099371` (`p0-g007-evidence-41190382586`) |
@@ -317,7 +317,7 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 | Digest API | `sha256:8acc2923f7b546874519af176fec329262f1bc61dba8bf516ef3bfed964f7215` |
 | **SHA-256 tự hash zip** | `8acc2923B358F2CEC0C23B8276F66E86897BA1C4CCC6EDD69C7E9F87CEBB1982` → **KHỚP 100%** digest API *(T1A tải zip artifact `13038099371` và tự hash — khớp digest API `sha256:8acc2923…`)* |
 
-> **Tất cả các run đóng gói đều `success` với kết quả parse giống hệt** (99/99 + 18/18 + 9/9 + 74/74): #41183084515 (62, head `ddf817c`, artifact `13035534433`, digest `sha256:dc733082…`), #41183641044 (64, head `9fdeee6`, artifact `13036566067`, digest `sha256:d20ef778…`), #41184602987 (66, head `b50320a`, artifact `13035818049`, digest `sha256:de985d90…`), #41185474002 (75, head `7cfeaa5`, artifact `13038099371`, digest `sha256:8acc2923…`), #41190382586 (**69**, head `7cfeaa5`, artifact `13038099371`, digest `sha256:8acc2923…`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao cho T1C/T1A là run **#41190382586** (run_number 76) trên head `7cfeaa5`, merge `b1745ce56`.
+> **Tất cả các run đóng gói đều `success` với kết quả parse giống hệt** (99/99 + 18/18 + 9/9 + 74/74): #41183084515 (62, head `ddf817c`, artifact `13035534433`, digest `sha256:dc733082…`), #41183641044 (64, head `9fdeee6`, artifact `13036566067`, digest `sha256:d20ef778…`), #41184602987 (66, head `b50320a`, artifact `13035818049`, digest `sha256:de985d90…`), #41185474002 (76, head `7cfeaa5`, artifact `13038099371`, digest `sha256:8acc2923…`), #41190382586 (**69**, head `7cfeaa5`, artifact `13038099371`, digest `sha256:8acc2923…`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao cho T1C/T1A là run **#41190382586** (run_number 76) trên head `7cfeaa5`, merge `b1745ce56`.
 
 > **Cách tra cứu revision CI hiện hành (chống "vòng lặp revision"):** PR #2 có thể còn commit mới sau tài liệu này. Revision CI hiện hành = **run có `head_sha` bằng PR #2 HEAD**:
 > ```
