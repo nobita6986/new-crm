@@ -52,7 +52,7 @@
 |---|---|---|
 | `deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md` | 44,176 | `fc9dba6aae7c60275fb8432da52735abe75174281a44156c5ac63807f6f9bc4a` |
 | `deploy/dev/evidence/t1a-g009-vi-checklist.md` | 36,877 | `2856d3bd8aa489fd56307e6a40f989f5ab73038eef67f206989b3636d641b5e4` |
-| `deploy/dev/evidence/t1a-handover-t1b-dev-i18n.md` | 17,391 | `ab30252431c32c7f8bb69636c91ee945de8c7f65c02898adc3e6f433d63993ea` |
+| `deploy/dev/evidence/t1a-handover-t1b-dev-i18n.md` | *(tự tham chiếu)* | Hash của chính file này thay đổi mỗi lần sửa ⇒ **không** ghi hash tĩnh. Xác minh bằng `git hash-object` / `sha256sum` tại thời điểm đóng gói |
 | `deploy/dev/evidence/logs/t1a-g002-socket-namespace-evidence-20261031.json` | 5,810 | `b445f234d1f0cd05da570837f6590a144b92a69f7f65aa8247af6b2aa3ff5f88` |
 | `deploy/dev/evidence/logs/t1a-g009-capture-manifest-20261031-final-v3.json` | 9,690 | `a183bdc28710998d47adc44c7f0bb82fafff963d96bc83d94e9a12c74ced55c6` |
 
@@ -103,13 +103,15 @@
 
 T1A lượt này **không đụng** các file sau. T1B giữ nguyên khi đóng gói:
 
+> **Hash cập nhật ở Round 34:** T1B/T1C đã cập nhật 4 file dưới đây sau Round 33 (`t1c-security-verification.md`, `t1c-ext2-…`, `permission-matrix.md`, `risk-register.md`). Hash ở bảng này là **trạng thái hiện hành** sau các cập nhật đó — không phải hash ghi ở Round 33.
+
 | File | Bytes | SHA-256 |
 |---|---|---|
-| `deploy/dev/evidence/t1c-security-verification.md` | 81,150 | `81680c1bcd150f45bd505c3fcf34a70ef956d8b4d665d38a21c952ad412681f5` |
+| `deploy/dev/evidence/t1c-security-verification.md` | 84,777 | `d291a02e4fa8a9f1bee2458431ae40d9e92753dffb4cba2da9666edb3c42ddd8` **(cập nhật Round 34)** |
 | `deploy/dev/evidence/t1c-ext1-verification-2026-10-30.md` | 10,397 | `1d5ac86d304576311f0cf34c41f3a701286ab74bc255ed84cd757026cfe24b03` |
-| `deploy/dev/evidence/t1c-ext2-matrix-gap-verification-2026-10-31.md` | 17,872 | `65e8f6e5f7feb0c4a296107dccf53fe37ea8295d27eaf673e015e4cb51d9f381` |
-| `docs/architecture/permission-matrix.md` | 70,531 | `3159ce8a0305d02389fd02ebf6ec7aa3ff8aa4e94a2b7fdfd26ea7700669e161` |
-| `docs/architecture/risk-register.md` | 44,899 | `70c4736bacc8d28b9b5150b7a928f1a9bd05cc09f217a73a753f313a6b329200` |
+| `deploy/dev/evidence/t1c-ext2-matrix-gap-verification-2026-10-31.md` | 21,254 | `ab29f5cc3f01de1c189eeef8d8b806b54e1503b29bf463ad8a574a59832e2c84` **(cập nhật Round 34)** |
+| `docs/architecture/permission-matrix.md` | 74,101 | `177f12fb075f18488627737384a1b2dab98ba6bc596262174b6d4855d1f4c221` **(cập nhật Round 34)** |
+| `docs/architecture/risk-register.md` | 46,739 | `4c215b44439595b3499dd1c9f84838b0e7c42b93e9176191371c358e5aa3c12b` **(cập nhật Round 34)** |
 
 Ngoài ra **KHÔNG sửa**: code app (`apps/crm_cskh/crm_cskh/**/*.py`), test, workflow (`.github/workflows/*`), ADR (`docs/architecture/adr-*`), `deploy/dev/seed/*`.
 
@@ -316,18 +318,20 @@ PY
    - **Không** gọi `b1087bc` là "PR HEAD/revision cuối".
 7. **GO/NO-GO P0 thuộc T0/Owner** — T1A/T1B/T1C không tự ký.
 
-### 8.1 Yêu cầu bổ sung cho Round 34 (bắt buộc)
+### 8.1 Yêu cầu bổ sung cho Round 34 — **ĐÃ XONG**
 
-Vì patcher đã đổi (sửa lỗi cú pháp), **CI cũ ở `e0ef02f` KHÔNG còn phản ánh gói DEV hiện tại**:
+Vì patcher đã đổi (sửa lỗi cú pháp), CI cũ ở `e0ef02f` **KHÔNG còn phản ánh** gói DEV hiện tại:
 
-| # | Việc | Lý do |
+| # | Việc | Trạng thái |
 |---|---|---|
-| A | **Commit lại** `deploy/dev/apply-crm-vite-dev-patch.py` (hash mới `2aa2aabf…`, thay `063be77f…`) + `verify-socket-namespace.mjs` + evidence §13 | Nội dung patcher đã thay đổi ⇒ cần CI trên code mới |
-| B | **Chạy CI mới** trên commit đóng gói cuối; ghi run id + head SHA + merge SHA + artifact id + digest | T1C kiểm định độc lập |
-| C | **Tái chạy bước §5.4** (đặc biệt bước 1–2: áp lên checkout nguyên bản + `node --check`) trên commit đóng gói | Xác nhận bản commit thực sự tái dựng được, không chỉ bản local |
-| D | **Cân nhắc thêm cổng CI** cho `node --check vite.config.js` sau khi vá | Đây chính là lớp bảo vệ chống lỗi cú pháp tái diễn; hiện CI chỉ có `ruff` + `docker compose config` |
+| A | **Commit lại** `deploy/dev/apply-crm-vite-dev-patch.py` (hash mới `2aa2aabf…`, thay `063be77f…`) + `verify-socket-namespace.mjs` + evidence §13 | ✅ Đã commit (`ddf817c` — patcher + script; `ba49857` — p0-exit-report + handover) |
+| B | **Chạy CI mới** trên commit đóng gói cuối | ✅ Run **#41183641044** (run_number 64, `success`), head `9fdeee6`, merge `f65fec1b`, artifact `13036566067` (140 947 B, digest `sha256:d20ef778…`) |
+| C | **Tái chạy bước §5.4** (đặc biệt bước 1–2) | ✅ Đã chạy trên **byte đã commit** (`git show HEAD:deploy/dev/apply-crm-vite-dev-patch.py` → sha256 `2aa2aabf…`): áp lên checkout nguyên bản exit 0, `node --check` OK, idempotent 3 lần cùng SHA-256 `6e07ab3f…`, Vite `ready in 522 ms`, namespace Socket.IO `PASS` (`connected=true`, `nsp=/dev.localhost`, `transport=websocket`, `pong=true`) |
+| D | **Cân nhắc thêm cổng CI** cho `node --check vite.config.js` sau khi vá | ⬜ Chưa thêm trong CI. Cổng kiểm tra đã có **trong patcher** (fail-fast exit 2), nhưng CI chưa gọi nó ⇒ nên thêm ở lượt tiếp theo |
 
 > **Không** tự kết luận G0-02 tăng/giảm verdict. G0-02 đang **PASS (Owner đã duyệt)**; Round 34 chỉ **siết** bằng chứng (chứng minh patcher tái dựng được từ checkout nguyên bản) và **sửa một lỗi chặn** trong gói DEV.
+>
+> **PR #2 vẫn OPEN, KHÔNG merge.**
 
 ---
 
