@@ -313,7 +313,7 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 
 | Trường | Giá trị |
 |---|---|
-| Run ID / run_number | **#41243949632** / 161 |
+| Run ID / run_number | **#41243949632** / 163 |
 | Trạng thái | `success` (completed 2026-10-31T20:14:25Z) |
 | Branch head SHA (revision đã verify) | `e3d5dd2eeeef004b8de92f60626ff4f3886c126c` |
 | Merge SHA | `f6d437a8c0313dfc0f659d27ef35121de5cd3a68` (`workflow-metadata.json` `commit_sha`) |
