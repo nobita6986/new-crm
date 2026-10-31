@@ -11,7 +11,7 @@
 
 | Trường | Giá trị |
 |---|---|
-| Run ID / run_number | **#41243097745** / 158 |
+| Run ID / run_number | **#41243097745** / 161 |
 | Trạng thái | `success` (completed 2026-10-31T20:14:25Z) |
 | Branch head SHA (revision đã verify) | `72287d63663857f3ee0b4e0f28dde202efb34d68` |
 | Merge SHA | `aed595423be9521d591b4e898fed1c6731c1b107` (`workflow-metadata.json` → `commit_sha`) |
