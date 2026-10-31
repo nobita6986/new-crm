@@ -1,7 +1,7 @@
 # T1B — BÀN GIAO GÓI CUỐI P0 + KẾT QUẢ CI (2026-10-31)
 
 **Người gửi:** T1B · **Người nhận:** T1C (kiểm định độc lập) + T1A (tổng hợp P0)
-**PR #2:** `state=open`, `mergeable=MERGEABLE`, **KHÔNG merge**. Head sau đóng gói: `ddf817c414ccbb3e61f40db21bb0fdcfecbe4598`.
+**PR #2:** `state=open`, `mergeable=MERGEABLE`, **KHÔNG merge**. Head sau đóng gói: `9fdeee6a1140a4eeb90d5774b53ee27aae5219be` (chứa `ba49857` — bản vá lỗi cú pháp patcher của T1A Round 34).
 
 ---
 
@@ -9,14 +9,16 @@
 
 | Trường | Giá trị |
 |---|---|
-| Run ID / run_number | **#41183084515** / 62 |
-| Trạng thái | `success` (completed 2026-10-31T08:08:53Z) |
-| Branch head SHA | `ddf817c414ccbb3e61f40db21bb0fdcfecbe4598` (= PR #2 HEAD) |
-| Merge SHA | `1dbf58af6f66e73f71c5f63d66cabd672185f564` (`workflow-metadata.json` → `commit_sha`) |
-| Artifact ID | `13035534433` — tên `p0-g007-evidence-41183084515` |
-| Artifact size | **140 913 B** |
-| Digest (API) | `sha256:dc7330829afc8bc63dbc4dd1a79dc04b160df58617763f9d9260385b99fea713` |
-| **SHA-256 T1B tự hash zip** | `DC7330829AFC8BC63DBC4DD1A79DC04B160DF58617763F9D9260385B99FEA713` → **khớp 100%** |
+| Run ID / run_number | **#41183641044** / 64 |
+| Trạng thái | `success` (completed 2026-10-31T08:20:15Z) |
+| Branch head SHA | `9fdeee6a1140a4eeb90d5774b53ee27aae5219be` (= PR #2 HEAD) |
+| Merge SHA | `f65fec1b71d6503ffef8920f65a65a3175ba0510` (`workflow-metadata.json` → `commit_sha`) |
+| Artifact ID | `13036566067` — tên `p0-g007-evidence-41183641044` |
+| Artifact size | **140 947 B** |
+| Digest (API) | `sha256:d20ef778ca8b09eb562a121b976522352aae13f676b480b5432350c43370a0fb` |
+| **SHA-256 T1B tự hash zip** | `D20EF778CA8B09EB562A121B976522352AAE13F676B480B5432350C43370A0FB` → **khớp 100%** |
+
+> **Ghi chú về các run trước:** run #41183084515 (run_number 62, head `ddf817c`, merge `1dbf58af`, artifact `13035534433` 140 913 B, digest `sha256:dc733082…`) cũng **success** với kết quả parse giống hệt. Run #41183398104 (run_number 63, head `ba49857`) bị `cancelled` do bị supersede khi T1B push commit `9fdeee6` — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41183641044**.
 
 ## 2. Parse độc lập của T1B (không suy từ tên commit)
 
@@ -46,8 +48,10 @@
 | `58487d9` | Gói Round 33 T1A: sửa `changeOrigin` → `false` + `VITE_DEV_PORT` (cùng cổng host/container) · `check_js_syntax()` (`node --check`) · `verify-socket-namespace.mjs` · `t1a-g002-socket-namespace-evidence-20261031.json` · `t1a-handover-t1b-dev-i18n.md` · `deploy/dev/README.md` · `.gitignore` root |
 | `582a99e` | Round 34 T1A: `t1a-g002-vite-csrf-blocker.md` §13 (lỗi cú pháp chặn patcher) + artifact socket namespace → schema **v3** (`b445f234d1f0cd05da570837f6590a144b92a69f7f65aa8247af6b2aa3ff5f88`) |
 | `ddf817c` | Cập nhật bảng bàn giao T1A Round 34 |
+| `ba49857` | T1A Round 34 (commit song song): cập nhật `p0-exit-report.md` + `t1a-handover-t1b-dev-i18n.md` |
+| `9fdeee6` | **T1B — revision đóng gói cuối**: báo cáo đóng gói + bàn giao artifact cho T1C/T1A (file này) |
 
-Tổng: `git diff --stat e0ef02f..ddf817c` = **43 file, +3 445 / −73**.
+Tổng: `git diff --stat e0ef02f..9fdeee6` = **44 file, +3 686 / −73**.
 
 ## 4. Rà đóng gói (T1B tự thực hiện)
 
@@ -64,8 +68,8 @@ Tổng: `git diff --stat e0ef02f..ddf817c` = **43 file, +3 445 / −73**.
 
 ## 5. Bàn giao
 
-- **Cho T1C:** artifact `13035534433` + digest `sha256:dc733082…` + revision head `ddf817c` / merge `1dbf58af` / run `#41183084515` — đề nghị T1C tự tải + tự hash + tự parse độc lập như Round 31/32.
-- **Cho T1A:** commit đóng gói `ddf817c` + run CI + kết quả parse (đã ghi vào `docs/architecture/p0-exit-report.md` mục "T1B — ĐÓNG GÓI CUỐI + CI XÁC MINH").
+- **Cho T1C:** artifact `13036566067` + digest `sha256:d20ef778…` + revision head `9fdeee6` / merge `f65fec1b` / run `#41183641044` — đề nghị T1C tự tải + tự hash + tự parse độc lập như Round 31/32.
+- **Cho T1A:** commit đóng gói `9fdeee6` + run CI #41183641044 + kết quả parse (đã ghi vào `docs/architecture/p0-exit-report.md` mục "T1B — ĐÓNG GÓI CUỐI + CI XÁC MINH").
 - **Không còn lỗi/gap cụ thể** trong phạm vi P0: 8 ô matrix PARTIAL còn lại và 3 ô DEFER P1 đều là nghiệp vụ P1 **chưa triển khai**, đang fail-closed (BOD scoped reporting ADR-005, ownership service ADR-004).
 
 ## 6. Bất biến
