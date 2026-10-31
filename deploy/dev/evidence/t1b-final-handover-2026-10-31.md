@@ -9,16 +9,16 @@
 
 | Trường | Giá trị |
 |---|---|
-| Run ID / run_number | **#41216145009** / 110 |
+| Run ID / run_number | **#41217191623** / 112 |
 | Trạng thái | `success` (completed 2026-10-31T14:00:54Z) |
-| Branch head SHA | `9407588a5e6f88b4ba513bcec840de179bf0b123` (= PR #2 HEAD) |
-| Merge SHA | `f5e8d6342ea9e6bee1bb76f9df97436aa2371436` (`workflow-metadata.json` → `commit_sha`) |
-| Artifact ID | `13047783761` — tên `p0-g007-evidence-41216145009` |
-| Artifact size | **140 985 B** |
-| Digest (API) | `sha256:e512f94a01fe16b33409e1ba2ea208e250624dc44b696a56168e75e1fd276336` |
-| **SHA-256 T1B tự hash zip** | `E512F94A01FE16B33409E1BA2EA208E250624DC44B696A56168E75E1FD276336` → **khớp 100%** |
+| Branch head SHA | `170e9c1959f870da77e7ceca5ba2c4ec1ad47865` (= PR #2 HEAD) |
+| Merge SHA | `21923febfb2f18ba749d0e82ec98055d7de528c2` (`workflow-metadata.json` → `commit_sha`) |
+| Artifact ID | `13049010262` — tên `p0-g007-evidence-41217191623` |
+| Artifact size | **140 976 B** |
+| Digest (API) | `sha256:45083e4715c174ea62bdfcedf4c2fd997ea87f09799af3e645fb896ad95a8b5b` |
+| **SHA-256 T1B tự hash zip** | `45083E4715C174EA62BDFCEDF4C2FD997EA87F09799AF3E645FB896AD95A8B5B` → **khớp 100%** |
 
-> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41186135804 (69, head `9dbda45`), #41187312027 (71, head `75c37a7`), #41188127001 (73, head `50dab76`), #41188863453 (74, head `d2e3634`), #41189626544 (75, head `1210adb`), #41190382586 (76, head `7cfeaa5`), #41191157121 (78, head `809c9cb`), #41198231180 (79, head `8fbc03d`), #41199317193 (81, head `74e3764`), #41200134560 (83, head `ae690c8`), #41200825236 (84, head `356ceeb`), #41201885507 (86, head `43d7fff`), #41202547857 (87, head `eabe296`), #41203517684 (89, head `74c608e`), #41204474054 (91, head `6d7665a`), #41205596840 (93, head `8c4d8d3`), #41206591321 (95, head `b7ecd8b`), #41207511737 (97, head `ebfa43b`), #41208997647 (99, head `11f6dab`), #41210391537 (101, head `2d1e722`), #41216145009 (**104**, head `9407588`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67), #41187158951 (70), #41188046267 (72), #41191094848 (77), #41198983664 (80), #41199949324 (82), #41201698292 (85), #41203385379 (88), #41204331575 (90), #41205331804 (92), #41206351741 (94), #41207226868 (96), #41208645874 (98), #41209998958 (100), #41211477811 (102), #41211765380 (103), #41212930171 (105) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41216145009** trên head `9407588`.
+> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41186135804 (69, head `9dbda45`), #41187312027 (71, head `75c37a7`), #41188127001 (73, head `50dab76`), #41188863453 (74, head `d2e3634`), #41189626544 (75, head `1210adb`), #41190382586 (76, head `7cfeaa5`), #41191157121 (78, head `809c9cb`), #41198231180 (79, head `8fbc03d`), #41199317193 (81, head `74e3764`), #41200134560 (83, head `ae690c8`), #41200825236 (84, head `356ceeb`), #41201885507 (86, head `43d7fff`), #41202547857 (87, head `eabe296`), #41203517684 (89, head `74c608e`), #41204474054 (91, head `6d7665a`), #41205596840 (93, head `8c4d8d3`), #41206591321 (95, head `b7ecd8b`), #41207511737 (97, head `ebfa43b`), #41208997647 (99, head `11f6dab`), #41210391537 (101, head `2d1e722`), #41217191623 (**104**, head `170e9c1`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67), #41187158951 (70), #41188046267 (72), #41191094848 (77), #41198983664 (80), #41199949324 (82), #41201698292 (85), #41203385379 (88), #41204331575 (90), #41205331804 (92), #41206351741 (94), #41207226868 (96), #41208645874 (98), #41209998958 (100), #41211477811 (102), #41211765380 (103), #41212930171 (105) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41217191623** trên head `170e9c1`.
 
 > **Cách tra cứu revision CI hiện hành:** PR #2 có thể còn commit mới sau tài liệu này. Revision CI hiện hành = **run có `head_sha` bằng PR #2 HEAD**:
 > ``
@@ -60,7 +60,7 @@
 | `dcae46c` | T1A Round 34 (song song): đồng bộ revision CI + refresh hash bàn giao |
 | `b50320a` | T1B: đồng bộ báo cáo + bàn giao sang run #41184602987 |
 | `04824df` | T1A Round 34 (song song): đồng bộ revision CI #41184602987 |
-| `9407588` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41216145009 |
+| `170e9c1` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41217191623 |
 
 Tổng: `git diff --stat e0ef02f..ebfa43b` = **44 file, +3 761 / −75**.
 
@@ -79,8 +79,8 @@ Tổng: `git diff --stat e0ef02f..ebfa43b` = **44 file, +3 761 / −75**.
 
 ## 5. Bàn giao
 
-- **Cho T1C:** artifact `13047783761` + digest `sha256:e512f94a…` + revision head `9407588` / merge `f5e8d6346` / run `#41216145009` — đề nghị T1C tự tải + tự hash + tự parse độc lập như Round 31/32.
-- **Cho T1A:** commit đóng gói `9407588` + run CI #41216145009 + kết quả parse (đã ghi vào `docs/architecture/p0-exit-report.md` mục "T1B — ĐÓNG GÓI CUỐI + CI XÁC MINH").
+- **Cho T1C:** artifact `13049010262` + digest `sha256:45083e47…` + revision head `170e9c1` / merge `21923feb6` / run `#41217191623` — đề nghị T1C tự tải + tự hash + tự parse độc lập như Round 31/32.
+- **Cho T1A:** commit đóng gói `170e9c1` + run CI #41217191623 + kết quả parse (đã ghi vào `docs/architecture/p0-exit-report.md` mục "T1B — ĐÓNG GÓI CUỐI + CI XÁC MINH").
 - **Không còn lỗi/gap cụ thể** trong phạm vi P0: 8 ô matrix PARTIAL còn lại và 3 ô DEFER P1 đều là nghiệp vụ P1 **chưa triển khai**, đang fail-closed (BOD scoped reporting ADR-005, ownership service ADR-004).
 
 ## 6. Bất biến
