@@ -20,3 +20,6 @@ __pycache__/
 
 # Node
 node_modules/
+
+# Cursor local config (không commit)
+.cursor/

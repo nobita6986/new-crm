@@ -1,6 +1,6 @@
 # P0 Exit Report
 
-**Ngày đánh giá hiện hành:** 2026-10-31 (đồng bộ T1C **Round 32** — kiểm định độc lập 12 ca mới của matrix-gap probe; G0-07 được T1C ký PASS; T1A G0-02/G0-09 PASS + kiểm tra lại patcher/CSRF/Socket.IO; G0-09 bộ ảnh bản 3 sau khi xử lý 2 chuỗi "Deal"/"lead" còn sót) **+ T1A Round 33** — đo lại namespace Socket.IO thật, phát hiện & sửa 2 nguyên nhân gốc DEV, kiểm lại manifest 10 ảnh và bàn giao gói T1B.
+**Ngày đánh giá hiện hành:** 2026-10-31 (đồng bộ T1C **Round 32** — kiểm định độc lập 12 ca mới của matrix-gap probe; G0-07 được T1C ký PASS; T1A G0-02/G0-09 PASS + kiểm tra lại patcher/CSRF/Socket.IO; G0-09 bộ ảnh bản 3 sau khi xử lý 2 chuỗi "Deal"/"lead" còn sót) **+ T1A Round 33** — đo lại namespace Socket.IO thật, phát hiện & sửa 2 nguyên nhân gốc DEV, kiểm lại manifest 10 ảnh và bàn giao gói T1B **+ T1A Round 34** — phát hiện & sửa **lỗi cú pháp chặn** trong patcher DEV (áp lên checkout nguyên bản sinh ra `vite.config.js` không parse được ⇒ Vite không khởi động), thêm cổng kiểm tra cú pháp `node --check` và script tái dùng `verify-socket-namespace.mjs`.
 **Kết luận hiện hành:** 10/10 gate P0 có verdict PASS theo chủ sở hữu từng gate (T1A/T1B/T1C + Owner). **GO/NO-GO P0 thuộc T0/Owner** — agent không tự ký P0.
 **Dữ liệu:** chỉ dữ liệu giả; không dùng production.
 
@@ -184,9 +184,10 @@ Tiêu chí PASS: sự kiện `connect` với `socket.id` khác null, `nsp=/dev.l
 | Hạng mục | Trạng thái |
 |---|---|
 | `apps/crm_cskh/crm_cskh/translations/vi.csv` | 218 khóa duy nhất / 0 trùng / 0 rỗng / 0 lỗi cấu trúc; đã xác nhận nạp runtime (8.369 khóa) |
-| `deploy/dev/apply-crm-vite-dev-patch.py` | Áp dụng được trên CRM ghim `0d3910b4…`; **idempotent** (chạy 2–3 lần ⇒ output giống hệt, exit 0); tự từ chối SHA lệch pin; **đã sửa** `changeOrigin` + thêm `VITE_DEV_PORT` |
+| `deploy/dev/apply-crm-vite-dev-patch.py` | Áp dụng được trên CRM ghim `0d3910b4…`; **idempotent** (chạy 2–3 lần ⇒ output giống hệt, exit 0); tự từ chối SHA lệch pin; **đã sửa** `changeOrigin` + thêm `VITE_DEV_PORT`; **Round 34 — đã sửa lỗi cú pháp + thêm cổng `node --check`** (xem mục Round 34) |
+| `deploy/dev/verify-socket-namespace.mjs` | **Round 34 — mới.** Kiểm chứng namespace Socket.IO thật bằng 1 lệnh; exit 0 = PASS / 2 = FAIL; in JSON, không ghi cookie/token |
 | `deploy/dev/docker-compose.yml` | `docker compose config --quiet` hợp lệ; thêm `VITE_DEV_PORT`; publish cổng Vite host == container; giữ `extra_hosts dev.localhost:127.0.0.1` |
-| Evidence DEV/i18n | §12 G0-02 (kèm artifact namespace Socket.IO) + §12 G0-09 (manifest v3 khớp 10/10, PII residual 0) |
+| Evidence DEV/i18n | §12 G0-02 (kèm artifact namespace Socket.IO) + §12 G0-09 (manifest v3 khớp 10/10, PII residual 0) + **§13 G0-02 (lỗi cú pháp patcher)** |
 | Bộ ảnh 2026-10-31 | `screenshots/t1a-g009-20261031-final/` — 10 ảnh + manifest, SHA-256 khớp 10/10 |
 | Bàn giao T1B | §6 bên dưới |
 
@@ -199,3 +200,67 @@ Tiêu chí PASS: sự kiện `connect` với `socket.id` khác null, `nsp=/dev.l
 ### 7. Bất biến lượt này
 
 KHÔNG sửa file T1B/T1C/ADR/code/tests/workflow; KHÔNG merge PR #2; KHÔNG tự ký P0. **GO/NO-GO P0 thuộc T0/Owner.**
+
+---
+
+## Đồng bộ T1A — Round 33 → Round 34 (2026-10-31) — SỬA LỖI CÚ PHÁP TRONG PATCHER DEV
+
+> **Vì sao có Round 34:** lượt kiểm tra 4 áp patcher lên checkout CRM **nguyên bản** (thay vì config đã vá sẵn) và phát hiện patcher sinh ra `vite.config.js` **không parse được** ⇒ **Vite dev server không khởi động được**. Đây là lỗi **chặn** trong gói DEV: mọi bằng chứng DEV của Round 33 đều được đo trên container có config **dựng tay**, không phải config do patcher sinh ra.
+
+### 1. Lỗi
+
+```text
+failed to load config from /workspace/frappe-bench/apps/crm/frontend/vite.config.js
+[PARSE_ERROR] Expected `,` or `]` but found `:`
+  vite.config.js:103:14
+   103 │       exclude: [
+```
+
+**Nguyên nhân:** patch `optimizeDeps` dùng anchor `"      ],\n    },\n    server: {"` — anchor này **bao gồm** dấu `]` đóng mảng `include:`, nhưng phần thay thế **không phát lại** dấu `]` đó ⇒ mảng `include:` bị bỏ dấu đóng.
+
+### 2. Vì sao lỗi này lọt qua mọi kiểm tra trước đó
+
+| Kiểm tra đã chạy | Kết quả | Vì sao không bắt được |
+|---|---|---|
+| Idempotency trên config **đã vá sẵn** | `already patched` | `patch_once()` trả `False` ngay khi chuỗi đích đã có ⇒ phép thay thế **không chạy** ⇒ không sinh code hỏng |
+| Runtime trên container có config **dựng tay** | Vite chạy được | Config dựng tay **có** dấu `],` đóng mảng ⇒ không hỏng |
+| `docker compose config --quiet` | hợp lệ | Chỉ kiểm tra YAML của compose, **không** parse JS |
+| CI (`ruff`, `docker compose config`) | xanh | Không có bước nào parse `vite.config.js` sau khi vá |
+
+⇒ Chỉ lộ ra khi **áp lên checkout nguyên bản** rồi **khởi động Vite**.
+
+### 3. Sửa
+
+1. **Sửa phép thay thế** — phát lại dấu `]` đóng mảng `include:`:
+   ```python
+   optimizer_new = (
+       "      ],\n"
+       "      exclude: [\n"
+       "        'frappe-ui/editor',\n"
+       "      ],\n"
+       "    },\n"
+       "    server: {"
+   )
+   ```
+2. **Thêm cổng kiểm tra cú pháp** `check_js_syntax()` dùng `node --check` cho `vite.config.js`, `src/socket.js`, `src/main.js`, `src/translation.js` **ngay sau khi vá** ⇒ lỗi cú pháp dừng patcher với **exit 2** ngay tại lúc vá.
+
+### 4. Kiểm chứng sau khi sửa
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Áp patcher lên checkout **nguyên bản** ghim `0d3910b4…` | exit **0**, `Vite config: patched` |
+| `node --check vite.config.js` | **OK** |
+| Cấu trúc `optimizeDeps` | `include: [...]` **có** `],` đóng, rồi mới tới `exclude: [...]` |
+| Idempotency | 3 lần liên tiếp ⇒ `vite.config.js` **cùng SHA-256** `6e07ab3f…`, exit 0 |
+| Khởi động Vite | `VITE v8.2.0 ready in 937 ms` — không còn PARSE_ERROR |
+| Namespace Socket.IO sau khi sửa | `connected=true`, `nsp=/dev.localhost`, `transport=websocket`, `pong=true` |
+| **Kiểm tra phản chứng** (cố ý tái tạo lỗi cũ) | Patcher dừng **exit 2** với `is not valid JavaScript` ⇒ cổng kiểm tra **thực sự bắt được** lỗi |
+
+Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/evidence/logs/t1a-g002-socket-namespace-evidence-20261031.json) (schema **v3**, sha256 `b445f234d1f0cd05da570837f6590a144b92a69f7f65aa8247af6b2aa3ff5f88`). Chi tiết: [`t1a-g002-vite-csrf-blocker.md` §13](../../deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md).
+
+### 5. Tác động lên verdict
+
+- **G0-02 giữ PASS (Owner đã duyệt).** Round 34 **siết** bằng chứng (chứng minh patcher tái dựng được **từ checkout nguyên bản** và sinh ra config Vite khởi động được) chứ **không** đổi verdict.
+- **G0-09, G0-01, G0-07, G0-10:** không bị ảnh hưởng (lỗi nằm trong gói DEV, không đụng bản dịch/ảnh/probe app).
+- **Bắt buộc CI mới:** nội dung patcher đã đổi ⇒ CI cũ ở `e0ef02f` **không** phản ánh gói DEV hiện tại. T1B cần commit lại + chạy CI mới + T1C kiểm định độc lập.
+- **Giới hạn DEV/P1:** không đổi (xem §4 Round 33). Bằng chứng vẫn là **DEV**; không mở rộng sang production ingress/TLS/CORS.
