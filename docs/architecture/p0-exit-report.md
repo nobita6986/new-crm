@@ -1,6 +1,6 @@
 # P0 Exit Report
 
-**Ngày đánh giá hiện hành:** 2026-10-31 (đồng bộ T1C **Round 32** — kiểm định độc lập 12 ca mới của matrix-gap probe; G0-07 được T1C ký PASS; T1A G0-02/G0-09 PASS + kiểm tra lại patcher/CSRF/Socket.IO; G0-09 bộ ảnh bản 3 sau khi xử lý 2 chuỗi "Deal"/"lead" còn sót) **+ T1A Round 33** — đo lại namespace Socket.IO thật, phát hiện & sửa 2 nguyên nhân gốc DEV, kiểm lại manifest 10 ảnh và bàn giao gói T1B **+ T1A Round 34** — phát hiện & sửa **lỗi cú pháp chặn** trong patcher DEV (áp lên checkout nguyên bản sinh ra `vite.config.js` không parse được ⇒ Vite không khởi động), thêm cổng kiểm tra cú pháp `node --check` và script tái dùng `verify-socket-namespace.mjs`. **Revision CI mới nhất: PR #2 head `ddf817c` / merge `1dbf58af`, run [#41183084515](https://github.com/nobita6986/new-crm/actions/runs/41183084515) run_number 62 (SUCCESS, artifact `13035534433` 140 913 B, digest `sha256:dc733082…` — tự tải + tự hash khớp 100%).**
+**Ngày đánh giá hiện hành:** 2026-10-31 (đồng bộ T1C **Round 32** — kiểm định độc lập 12 ca mới của matrix-gap probe; G0-07 được T1C ký PASS; T1A G0-02/G0-09 PASS + kiểm tra lại patcher/CSRF/Socket.IO; G0-09 bộ ảnh bản 3 sau khi xử lý 2 chuỗi "Deal"/"lead" còn sót) **+ T1A Round 33** — đo lại namespace Socket.IO thật, phát hiện & sửa 2 nguyên nhân gốc DEV, kiểm lại manifest 10 ảnh và bàn giao gói T1B **+ T1A Round 34** — phát hiện & sửa **lỗi cú pháp chặn** trong patcher DEV (áp lên checkout nguyên bản sinh ra `vite.config.js` không parse được ⇒ Vite không khởi động), thêm cổng kiểm tra cú pháp `node --check` và script tái dùng `verify-socket-namespace.mjs`. **Revision CI mới nhất: PR #2 head `9fdeee6` / merge `f65fec1b`, run [#41183641044](https://github.com/nobita6986/new-crm/actions/runs/41183641044) run_number 64 (SUCCESS, artifact `13036566067` 140 947 B, digest `sha256:d20ef778…`) — head này **chứa** bản vá lỗi cú pháp patcher (`ba49857`).**
 **Kết luận hiện hành:** 10/10 gate P0 có verdict PASS theo chủ sở hữu từng gate (T1A/T1B/T1C + Owner). **GO/NO-GO P0 thuộc T0/Owner** — agent không tự ký P0.
 **Dữ liệu:** chỉ dữ liệu giả; không dùng production.
 
@@ -8,9 +8,10 @@
 
 | Loại revision | Giá trị hiện hành |
 |---|---|
-| **Revision chạy CI (đóng gói cuối)** | PR #2 head `ddf817c414ccbb3e61f40db21bb0fdcfecbe4598`, merge `1dbf58af6f66e73f71c5f63d66cabd672185f564`, run **#41183084515** (run_number 62, `success`), artifact `13035534433` (140 913 B, digest `sha256:dc733082…` — T1B tự tải + tự hash khớp 100%) |
-| **Revision CI trước đó (T1C đã kiểm định)** | PR #2 head `e0ef02f8619c428ef4b2457fc5ce5f04cb0d7baa`, merge `136a10c20740cff0a2bab5254843e94763aff5ae`, run **#41159273106** (run_number 61, `success`), artifact `13026861084` (140 924 B, digest `sha256:8cfe5f10…`) |
-| **Revision lưu evidence** | Commit đóng gói `ddf817c` (gói T1A Round 33/34 + i18n + evidence T1A/T1C) — **đã có CI xanh** trên chính revision này (run #41183084515) |
+| **Revision chạy CI (đóng gói cuối)** | PR #2 head `9fdeee6a1140a4eeb90d5774b53ee27aae5219be` (chứa `ba49857` — bản vá lỗi cú pháp patcher của T1A Round 34), merge `f65fec1b71d6503ffef8920f65a65a3175ba0510`, run **#41183641044** (run_number 64, `success`), artifact `13036566067` (140 947 B, digest API `sha256:d20ef778…`) |
+| **Revision CI trước đó (đã có báo cáo đóng gói)** | PR #2 head `ddf817c414ccbb3e61f40db21bb0fdcfecbe4598`, merge `1dbf58af6f66e73f71c5f63d66cabd672185f564`, run **#41183084515** (run_number 62, `success`), artifact `13035534433` (140 913 B, digest `sha256:dc733082…`) |
+| **Revision CI do T1C đã kiểm định** | PR #2 head `e0ef02f8619c428ef4b2457fc5ce5f04cb0d7baa`, merge `136a10c20740cff0a2bab5254843e94763aff5ae`, run **#41159273106** (run_number 61, `success`), artifact `13026861084` (140 924 B, digest `sha256:8cfe5f10…`) |
+| **Revision lưu evidence** | Commit đóng gói `9fdeee6` (gói T1A Round 33/34 + i18n + evidence T1A/T1C) — **đã có CI xanh** trên chính revision này (run #41183641044) |
 | **Giới hạn DEV/P1** | Bằng chứng Socket.IO/CSRF/i18n là **DEV** (site giả, Vite dev server); không mở rộng production ingress/TLS/CORS. Phần hoãn P1: 8 ô matrix PARTIAL (fail-closed) + 3 ô DEFER P1 + `mobile_no` chưa index + G0-01 `PARTIAL` (ADR-001 mở) |
 
 > `b1087bc` **KHÔNG còn là** "PR HEAD/revision cuối" — PR #2 đã đi tới `e0ef02f` (T1C kiểm định) rồi `ddf817c` (commit đóng gói cuối, CI xanh). Chi tiết ở mục **Round 33** §1.
@@ -263,7 +264,7 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 
 - **G0-02 giữ PASS (Owner đã duyệt).** Round 34 **siết** bằng chứng (chứng minh patcher tái dựng được **từ checkout nguyên bản** và sinh ra config Vite khởi động được) chứ **không** đổi verdict.
 - **G0-09, G0-01, G0-07, G0-10:** không bị ảnh hưởng (lỗi nằm trong gói DEV, không đụng bản dịch/ảnh/probe app).
-- **Bắt buộc CI mới:** nội dung patcher đã đổi ⇒ CI cũ ở `e0ef02f` **không** phản ánh gói DEV hiện tại. T1B cần commit lại + chạy CI mới + T1C kiểm định độc lập.
+- **CI mới đã chạy và xanh:** bản vá (`ba49857`) nằm trong PR #2 head `9fdeee6`; run **#41183641044** (run_number 64) `success`, merge `f65fec1b`, artifact `13036566067` (140 947 B, digest `sha256:d20ef778…`). ⇒ CI cũ ở `e0ef02f` **không** còn là revision CI hiện hành; dùng run #41183641044.
 - **Giới hạn DEV/P1:** không đổi (xem §4 Round 33). Bằng chứng vẫn là **DEV**; không mở rộng sang production ingress/TLS/CORS.
 
 ---
@@ -278,14 +279,16 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 | `58487d9` | Gói Round 33 T1A: sửa 2 nguyên nhân gốc Socket.IO DEV (`changeOrigin: false`, `VITE_DEV_PORT` cùng cổng host/container) + `verify-socket-namespace.mjs` + `t1a-handover-t1b-dev-i18n.md` + `.gitignore` root (chặn `_tmp_*`, `_recovery/`, `.commandcode/`) |
 | `582a99e` | Ghi nhận Round 34 T1A: bug cú pháp chặn trong patcher (`optimizeDeps` nuốt dấu `]` ⇒ `vite.config.js` không parse ⇒ Vite không khởi động) + sửa + cổng `node --check`; artifact socket namespace → schema v3 |
 | `ddf817c` | Cập nhật bàn giao T1A Round 34 (hash đã đổi ⇒ bắt buộc commit lại + CI mới) |
+| `ba49857` | T1A Round 34 (commit song song): cập nhật `p0-exit-report.md` + `t1a-handover-t1b-dev-i18n.md` cho Round 34 |
+| `9fdeee6` | **T1B — revision đóng gói cuối**: báo cáo đóng gói + bàn giao artifact cho T1C/T1A (`t1b-final-handover-2026-10-31.md`) |
 
-**PR #2 head sau đóng gói = `ddf817c414ccbb3e61f40db21bb0fdcfecbe4598`.** Không merge.
+**PR #2 head sau đóng gói = `9fdeee6a1140a4eeb90d5774b53ee27aae5219be`.** Không merge.
 
 ### 2. Rà diff đóng gói (T1B tự thực hiện)
 
 | Hạng mục | Kết quả |
 |---|---|
-| Phạm vi file | 43 file / 3 445 dòng thêm / 73 dòng xoá (`git diff --stat e0ef02f..ddf817c`) — chỉ DEV/i18n, tài liệu, evidence đã bàn giao. **Không** đụng code app, test, workflow, seed, ADR |
+| Phạm vi file | 44 file / 3 686 dòng thêm / 73 dòng xoá (`git diff --stat e0ef02f..9fdeee6`) — chỉ DEV/i18n, tài liệu, evidence đã bàn giao. **Không** đụng code app, test, workflow, seed, ADR |
 | Inventory JUnit 99 method | `g007_test_inventory.json` **không đổi**; CI gate vẫn `expected_total=99`/`observed_total=99` |
 | Auxiliary tests | `test_error_response_normalization` 8/8 — ghi **riêng** trong `auxiliary/`, ngoài inventory 99 |
 | Secret / `.env` / cookie / token | Không có `.env`, cookie phiên, CSRF token, bearer, private file URL trong file đóng gói. `verify-socket-namespace.mjs` chỉ đọc `ADMIN_PASSWORD` từ env, **không** ghi giá trị ra log/artifact |
@@ -298,14 +301,16 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 
 | Trường | Giá trị |
 |---|---|
-| Run ID / run_number | **#41183084515** / 62 |
-| Trạng thái | `success` (completed 2026-10-31T08:08:53Z) |
-| Branch head SHA | `ddf817c414ccbb3e61f40db21bb0fdcfecbe4598` (= PR #2 HEAD) |
-| Merge SHA | `1dbf58af6f66e73f71c5f63d66cabd672185f564` (`workflow-metadata.json` `commit_sha`) |
-| Artifact ID | `13035534433` (`p0-g007-evidence-41183084515`) |
-| Artifact size | 140 913 B |
-| Digest API | `sha256:dc7330829afc8bc63dbc4dd1a79dc04b160df58617763f9d9260385b99fea713` |
-| **SHA-256 T1B tự hash zip** | `DC7330829AFC8BC63DBC4DD1A79DC04B160DF58617763F9D9260385B99FEA713` → **KHỚP 100%** |
+| Run ID / run_number | **#41183641044** / 64 |
+| Trạng thái | `success` (completed 2026-10-31T08:20:15Z) |
+| Branch head SHA | `9fdeee6a1140a4eeb90d5774b53ee27aae5219be` (= PR #2 HEAD) |
+| Merge SHA | `f65fec1b71d6503ffef8920f65a65a3175ba0510` (`workflow-metadata.json` `commit_sha`) |
+| Artifact ID | `13036566067` (`p0-g007-evidence-41183641044`) |
+| Artifact size | 140 947 B |
+| Digest API | `sha256:d20ef778ca8b09eb562a121b976522352aae13f676b480b5432350c43370a0fb` |
+| **SHA-256 T1B tự hash zip** | `D20EF778CA8B09EB562A121B976522352AAE13F676B480B5432350C43370A0FB` → **KHỚP 100%** |
+
+> Run trước đó #41183084515 (run_number 62, head `ddf817c`, merge `1dbf58af`, artifact `13035534433` 140 913 B, digest `sha256:dc733082…`) cũng **success** với kết quả parse giống hệt. Run #41183398104 (run_number 63, head `ba49857`) bị `cancelled` do bị supersede khi T1B push commit `9fdeee6` — **không** phải lỗi CI. Revision đang bàn giao cho T1C/T1A là run **#41183641044**.
 
 ### 4. Parse độc lập (không suy từ tên commit)
 
