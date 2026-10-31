@@ -62,9 +62,13 @@
 | `dcae46c` | T1A Round 34 (song song): đồng bộ revision CI + refresh hash bàn giao |
 | `b50320a` | T1B: đồng bộ báo cáo + bàn giao sang run #41184602987 |
 | `04824df` | T1A Round 34 (song song): đồng bộ revision CI #41184602987 |
+| `9407588` | **T1A — đồng bộ `p0-exit-report.md` theo T1C Round 32b**: ô `RA-05` hạ **PASS → PARTIAL** (2 ca `ra05-*` đo actor `Administrator` ≠ CRM-ADMIN của ô) ⇒ tally hiện hành **59 PASS + 9 PARTIAL + 0 NOT RUN + 3 DEFER P1 = 71**; 2 ca `ra05-*` tách thành **positive control `RA-05-SM`** (System Manager) **ngoài lưới 71 ô**; SEC tally giữ **28/28 PASS** ⇒ verdict **G0-07 không đổi**; số Round 32 cũ (60/8/0/3) giữ **nhãn lịch sử** |
+| `170e9c1` | T1A: chỉnh merge SHA + run_number cho run CI #41216145009 |
+| `192064e` | T1A: đồng bộ run CI #41217191623 (run_number 112) + ghi chú Round 32b vào bàn giao T1B |
+| `5ba358a` | T1A: đồng bộ run CI #41218489232 (run_number 114) |
 | `a95dd7d` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41219625279 |
 
-Tổng: `git diff --stat e0ef02f..a95dd7d` = **48 file, +3 981 / −89**.
+Tổng: `git diff --stat e0ef02f..a95dd7d` = **48 file, +3 983 / −89**.
 
 ## 4. Rà đóng gói (T1B tự thực hiện)
 
