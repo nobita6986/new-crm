@@ -617,7 +617,7 @@ Trạng thái checklist không còn là “0/14” hiện hành; các dòng chec
 
 ### 12.3 Đo có đối chứng (artifact)
 
-Artifact: [`logs/t1a-g002-socket-namespace-evidence-20261031.json`](logs/t1a-g002-socket-namespace-evidence-20261031.json) — sha256 `2a83b0f0b44268d23cdc6135f60362f680fd52be0c8b998bd9eeac0492a54a03`.
+Artifact: [`logs/t1a-g002-socket-namespace-evidence-20261031.json`](logs/t1a-g002-socket-namespace-evidence-20261031.json) — sha256 `b445f234d1f0cd05da570837f6590a144b92a69f7f65aa8247af6b2aa3ff5f88` (schema **v3** — artifact hiện hành đã bổ sung thêm phép đo "FIXED AFTER PATCHER SYNTAX FIX" của §13.5; hash của bản v2 từng ghi ở đây là `2a83b0f0b44268d23cdc6135f60362f680fd52be0c8b998bd9eeac0492a54a03`).
 
 | Kịch bản | Cấu hình | Kết quả |
 |---|---|---|
