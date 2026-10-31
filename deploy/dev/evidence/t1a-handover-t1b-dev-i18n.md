@@ -198,31 +198,47 @@ docker compose exec -d bench bash -lc \
 
 ### 5.4 Kiểm tra lại (kiểm chứng idempotent + namespace thật)
 
-```bash
-# 1) Patcher idempotent: chạy 2 lần, output phải giống hệt, exit 0
-docker compose exec bench bash -lc \
-  'python /src/deploy/dev/apply-crm-vite-dev-patch.py /workspace/frappe-bench/apps/crm'
-docker compose exec bench bash -lc \
-  'python /src/deploy/dev/apply-crm-vite-dev-patch.py /workspace/frappe-bench/apps/crm'
+> **Quan trọng:** kiểm tra idempotency **phải chạy trên checkout CRM nguyên bản**, không phải trên config đã vá sẵn. Nếu chạy trên config đã vá, `patch_once()` trả `False` ngay ⇒ phép thay thế **không chạy** ⇒ bỏ sót lỗi cú pháp (§0).
 
-# 2) Config đúng sau khi vá
+```bash
+# 1) Áp patcher lên checkout CRM NGUYÊN BẢN (đây là bước bắt được lỗi cú pháp)
+docker compose exec bench bash -lc \
+  'cd /workspace/frappe-bench/apps/crm && git checkout -- . && git clean -fdq frontend/src'
+docker compose exec bench bash -lc \
+  'python /src/deploy/dev/apply-crm-vite-dev-patch.py /workspace/frappe-bench/apps/crm'
+# kỳ vọng: exit 0, "Vite config: patched"
+# nếu exit 2 với "is not valid JavaScript" -> patcher đã bắt được lỗi cú pháp
+
+# 2) Cổng cú pháp: config sau khi vá phải parse được
+docker compose exec bench bash -lc \
+  'cd /workspace/frappe-bench/apps/crm/frontend && node --check vite.config.js && echo SYNTAX_OK'
+# kỳ vọng: SYNTAX_OK
+
+# 3) Idempotent: chạy lại 2 lần, cấu trúc file phải không đổi
+docker compose exec bench bash -lc \
+  'python /src/deploy/dev/apply-crm-vite-dev-patch.py /workspace/frappe-bench/apps/crm'
+docker compose exec bench bash -lc \
+  'cd /workspace/frappe-bench/apps/crm/frontend && sha256sum vite.config.js'
+# kỳ vọng: "already patched" + cùng SHA-256 qua cả 3 lần
+
+# 4) Config đúng sau khi vá
 docker compose exec bench grep -n -A 3 'frappeProxy:' /workspace/frappe-bench/apps/crm/frontend/vite.config.js
 docker compose exec bench grep -n changeOrigin /workspace/frappe-bench/apps/crm/frontend/vite.config.js
 # kỳ vọng: changeOrigin: false
+docker compose exec bench grep -n -A 4 'optimizeDeps:' /workspace/frappe-bench/apps/crm/frontend/vite.config.js
+# kỳ vọng: mảng include: có dấu '],' đóng TRƯỚC khi tới exclude:
 
-# 3) compose hợp lệ
+# 5) compose hợp lệ
 docker compose config --quiet && echo COMPOSE_OK
 
-# 4) Namespace Socket.IO thật (không chỉ polling 200)
+# 6) Namespace Socket.IO THẬT (không chỉ polling 200) — dùng script tái dùng
 docker compose exec bench bash -lc \
-  'cd /workspace/frappe-bench/apps/crm/frontend && node -e "
-const {io}=require(\"socket.io-client\");
-const s=io(\"http://dev.localhost:8091/dev.localhost\",{transports:[\"websocket\"],reconnection:false,timeout:8000});
-s.on(\"connect\",()=>{console.log(\"CONNECTED\",s.id,s.nsp,s.io.engine.transport.name);s.emit(\"ping\");});
-s.on(\"pong\",()=>{console.log(\"PONG_OK\");process.exit(0);});
-s.on(\"connect_error\",e=>{console.log(\"FAIL\",e.message);process.exit(2);});
-setTimeout(()=>{console.log(\"TIMEOUT\");process.exit(3);},9000);"'
-# kỳ vọng: CONNECTED <id> /dev.localhost websocket  rồi  PONG_OK
+  'cp /src/deploy/dev/verify-socket-namespace.mjs /workspace/frappe-bench/apps/crm/frontend/'
+docker compose exec bench bash -lc \
+  'cd /workspace/frappe-bench/apps/crm/frontend && node verify-socket-namespace.mjs \
+     --origin http://dev.localhost:8091 --web http://dev.localhost:8000 --site dev.localhost'
+# kỳ vọng: {"result":"PASS",...,"connected":true,"nsp":"/dev.localhost",
+#           "transport":"websocket","pong":true,"error":null}   và exit 0
 ```
 
 ### 5.5 Kiểm tra manifest 10 ảnh
@@ -250,12 +266,17 @@ PY
 | Kiểm tra | Kết quả |
 |---|---|
 | Patcher trên CRM ghim `0d3910b4…` | Chạy được; tự từ chối SHA lệch pin |
-| Patcher idempotent | Chạy 2–3 lần ⇒ **output giống hệt**, exit 0 |
+| **Patcher áp lên checkout NGUYÊN BẢN (Round 34)** | exit **0**, `Vite config: patched` — trước Round 34 bước này **sinh ra config hỏng** |
+| **`node --check vite.config.js` sau khi vá (Round 34)** | **OK** — syntax hợp lệ |
+| **Kiểm tra phản chứng (Round 34)** | Cố ý tái tạo lỗi cũ ⇒ patcher dừng **exit 2** với `is not valid JavaScript` ⇒ cổng kiểm tra **thực sự bắt được** lỗi |
+| Patcher idempotent | Chạy 3 lần trên checkout nguyên bản ⇒ `vite.config.js` **cùng SHA-256** `6e07ab3f…` qua cả 3 lần, exit 0 |
 | Patcher tự nâng cấp config cũ | `changeOrigin: true` → `false`; thêm `port: …VITE_DEV_PORT…` |
 | `docker compose config --quiet` | Hợp lệ; `VITE_DEV_PORT` = `VITE_PORT` |
 | `VITE_DEV_PORT` truyền vào container | `8091` khi `VITE_PORT=8091` |
 | Vite bind đúng cổng trong container | `8091` (không còn bị frappe-ui ghi đè về 8080) |
+| **Vite khởi động từ config vừa vá (Round 34)** | `VITE v8.2.0 ready in 937 ms` — **không** còn PARSE_ERROR |
 | **Namespace Socket.IO (FIXED)** | `connected=true`, `nsp=/dev.localhost`, `transport=websocket`, `emit('ping')` → **`pong`** |
+| **Namespace Socket.IO sau khi sửa lỗi cú pháp (Round 34)** | `connected=true`, `nsp=/dev.localhost`, `transport=websocket`, `pong=true` — xác nhận lại bằng script tái dùng `verify-socket-namespace.mjs` |
 | **Namespace Socket.IO (REGRESSION, chỉ đổi `changeOrigin: true`)** | `connected=false`, `connect_error="Invalid origin"` |
 | Engine.IO polling qua Vite | HTTP 200 + open packet (không còn HTML SPA fallback) |
 | CSRF qua Vite proxy | 6/6 PASS (token hợp lệ 200 / thiếu 400 / sai 400) |
@@ -294,6 +315,19 @@ PY
    - Ghi rõ **giới hạn DEV/P1** (§1 của `p0-exit-report.md` mục Round 33 §4).
    - **Không** gọi `b1087bc` là "PR HEAD/revision cuối".
 7. **GO/NO-GO P0 thuộc T0/Owner** — T1A/T1B/T1C không tự ký.
+
+### 8.1 Yêu cầu bổ sung cho Round 34 (bắt buộc)
+
+Vì patcher đã đổi (sửa lỗi cú pháp), **CI cũ ở `e0ef02f` KHÔNG còn phản ánh gói DEV hiện tại**:
+
+| # | Việc | Lý do |
+|---|---|---|
+| A | **Commit lại** `deploy/dev/apply-crm-vite-dev-patch.py` (hash mới `2aa2aabf…`, thay `063be77f…`) + `verify-socket-namespace.mjs` + evidence §13 | Nội dung patcher đã thay đổi ⇒ cần CI trên code mới |
+| B | **Chạy CI mới** trên commit đóng gói cuối; ghi run id + head SHA + merge SHA + artifact id + digest | T1C kiểm định độc lập |
+| C | **Tái chạy bước §5.4** (đặc biệt bước 1–2: áp lên checkout nguyên bản + `node --check`) trên commit đóng gói | Xác nhận bản commit thực sự tái dựng được, không chỉ bản local |
+| D | **Cân nhắc thêm cổng CI** cho `node --check vite.config.js` sau khi vá | Đây chính là lớp bảo vệ chống lỗi cú pháp tái diễn; hiện CI chỉ có `ruff` + `docker compose config` |
+
+> **Không** tự kết luận G0-02 tăng/giảm verdict. G0-02 đang **PASS (Owner đã duyệt)**; Round 34 chỉ **siết** bằng chứng (chứng minh patcher tái dựng được từ checkout nguyên bản) và **sửa một lỗi chặn** trong gói DEV.
 
 ---
 
