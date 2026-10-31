@@ -1,0 +1,25 @@
+[
+  {
+    "actor": "Guest",
+    "desk_status": 200,
+    "login_redirect": true
+  },
+  {
+    "actor": "staff.a@dev.local",
+    "cskh_status": 200,
+    "desk_status": 200,
+    "csrf_token_present": true,
+    "context_post_status": 200,
+    "missing_csrf_status": 400,
+    "invalid_csrf_status": 400
+  },
+  {
+    "actor": "bod.viewer@dev.local",
+    "cskh_status": 403,
+    "desk_status": 200,
+    "csrf_token_present": true,
+    "context_post_status": 200,
+    "missing_csrf_status": 400,
+    "invalid_csrf_status": 400
+  }
+]

@@ -1,0 +1,1307 @@
+#!/usr/bin/env python3
+"""Run sanitized HTTP transport checks for the P0 CI evidence job.
+
+The probe talks only to the seeded fake-data site. Credentials, cookies, CSRF
+tokens, and file URLs are used in memory and redacted from the evidence file.
+
+Nhãn case SEC-16 vs SEC-26 (sửa theo T1C lần 17)
+------------------------------------------------
+- **SEC-16 = field exposure theo permlevel.** Probe gọi `crm.api.doc.get_data`
+  với một Custom Field synthetic `permlevel=1` được ghi sentinel secret, và kiểm
+  sentinel **không** xuất hiện trong response của non-system user. Khớp đúng
+  semantics của test nguồn `test_crm_api_get_data_filters_permlevel_field`
+  (field không có giá trị cho user thiếu System Manager).
+- **SEC-26 = rò rỉ `file_url` của file private.** Các case gọi `get_attachments`
+  và kiểm `file_url` **không** phải SEC-16; trước đây chúng bị gắn nhãn
+  `sec16-*` khiến SEC-16 không hề được probe.
+
+Việc chuẩn bị field permlevel (tạo Custom Field + ghi sentinel) chạy trong
+container bench vì cần `frappe`; đó là **setup**, không phải bằng chứng — mọi
+assertion SEC-16 đều đi qua HTTP endpoint.
+"""
+
+from __future__ import annotations
+
+import ast
+import hashlib
+import http.cookiejar
+import json
+import os
+import re
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+BASE_URL = os.environ.get("P0_HTTP_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+SITE_NAME = os.environ.get("P0_HTTP_SITE", "p0-ci.localhost")
+OUTPUT = Path(os.environ.get("P0_HTTP_EVIDENCE_DIR", "/tmp/p0-g007-http"))
+SEED_SOURCE = Path(
+	os.environ.get("P0_SEED_SOURCE", "/src/deploy/dev/seed/seed_demo.py")
+)
+LEAD_NAME = "CRM-LEAD-00001"
+PRIVATE_FILE_NAME = f"DEMO-{LEAD_NAME}.txt"
+# Endpoint RFC `get_activities` được override trong `hooks.py` sang wrapper
+# `crm_cskh.api.guarded_crm.get_activities`. Probe gọi route gốc bằng HTTP để
+# xác nhận dispatch có áp dụng wrapper và redaction trước khi response ra ngoài.
+# Khai báo ở module scope để có thể kiểm chứng tĩnh.
+ACTIVITIES_ENDPOINT = "/api/method/crm.api.activities.get_activities"
+
+# --- SEC-26 (H-RFC-2): khả năng tải file -------------------------------------
+# `file_url` rò rỉ từ `get_activities` trỏ tới `/private/files/<tên file>`.
+# Đường HTTP **thật** mà UI dùng: `AttachmentArea.vue` L93
+# `window.open(attachment.file_url, '_blank')` ⇒ `GET /private/files/...`
+# → `frappe/app.py` L162-163 → `download_private_file()`
+# → `find_file_by_url()` → `File.is_downloadable()` → `has_permission(file, "read")`.
+# Đo bằng **chính** caller in-scope ⇒ trả lời câu hỏi của H-RFC-2: lộ URL có
+# đọc được nội dung hay không.
+DOWNLOAD_PATH_PREFIX = "/private/files/"
+_PRIVATE_FILE_URL_RE = re.compile(
+	r"(?i)(?:https?://[^/\s\"'<>]+)?/private/files/[^\s\"'<>]*"
+)
+# Marker trong nội dung file seed (**giả**) — dùng để chứng minh bytes tải về
+# là đúng file seed. **KHÔNG** ghi nội dung thô vào artifact.
+SEED_CONTENT_MARKER = b"DEMO"
+
+# --- SEC-16 permlevel probe -------------------------------------------------
+# Field synthetic có `permlevel=1` trên CRM Lead. `permlevel > 0` nghĩa là field
+# chỉ đọc được bởi user có System Manager role; mọi user khác phải không thấy.
+SEC16_FIELDNAME = "custom_cskh_sec16_restricted"
+SEC16_SENTINEL = "RESTRICTED-SEC-16-SENTINEL"
+# `staff.a@dev.local` có role `Sales User` (không phải System Manager) và là
+# `lead_owner` của CRM-LEAD-00001 ⇒ non-system caller có quyền đọc lead.
+SEC16_USER = "staff.a@dev.local"
+
+# Actor **ngoài scope** cho H-RFC-4: `staff.c@dev.local` thuộc Team 2
+# (`seed_demo.py` L30) trong khi `CRM-LEAD-00001` do `staff.a@dev.local`
+# (Team 1) sở hữu ⇒ không có quyền read ⇒ guard của `activities.py` L181
+# (và `crm_cskh.permissions.lead_has_permission` L104-105) phải chặn.
+OUT_OF_SCOPE_USER = "staff.c@dev.local"
+
+
+def seed_password_from_source(path: Path) -> str:
+	"""Read the fake seed password as a literal without importing the seed."""
+	tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+	for statement in tree.body:
+		if isinstance(statement, ast.Assign) and any(
+			isinstance(target, ast.Name) and target.id == "SEED_PASSWORD"
+			for target in statement.targets
+		):
+			value = ast.literal_eval(statement.value)
+			if isinstance(value, str) and value:
+				return value
+	raise RuntimeError("SEED_PASSWORD literal not found in seed source")
+
+
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+SEED_PASSWORD = seed_password_from_source(SEED_SOURCE)
+SENSITIVE_KEYS = {
+	"authorization",
+	"cookie",
+	"csrf_token",
+	"file_url",
+	"password",
+	"pwd",
+	"sid",
+	"token",
+}
+records: list[dict[str, object]] = []
+failures: list[str] = []
+# Quan sát characterization (KHÔNG ảnh hưởng PASS/FAIL của gate).
+observations: list[dict[str, object]] = []
+
+
+def redact_text(value: str) -> str:
+	value = value.replace(ADMIN_PASSWORD, "[REDACTED]") if ADMIN_PASSWORD else value
+	value = value.replace(SEED_PASSWORD, "[REDACTED]") if SEED_PASSWORD else value
+	value = re.sub(
+		r'(?i)(["\']X-Frappe-CSRF-Token["\']\s*:\s*["\'])[^"\']+',
+		r"\1[REDACTED]",
+		value,
+	)
+	value = re.sub(r"(?i)(csrf[_-]?token[\"'=:\s]+)[^\"'&\s<]+", r"\1[REDACTED]", value)
+	value = re.sub(r"(?i)(sid[\"'=:\s]+)[^\"'&\s<]+", r"\1[REDACTED]", value)
+	value = re.sub(r"(?i)(/private/files/)[^\"'\s,}]+", r"\1[REDACTED]", value)
+	value = re.sub(r"(?i)(/files/)[^\"'\s,}]+", r"\1[REDACTED]", value)
+	return value
+
+
+def sanitize(value: object, key: str = "") -> object:
+	if key.lower() in SENSITIVE_KEYS:
+		return "[REDACTED]"
+	if isinstance(value, dict):
+		# Identifier của **File** (`name` = docname File, vd `23b5bb2e6a`) là
+		# **file identifier** ⇒ không được ghi vào artifact. Chỉ áp cho dict
+		# **giống hồ sơ File** (có `file_name`), để **không** đụng tới `name`
+		# của doctype khác (vd `CRM-LEAD-00001` — định danh tài liệu seed giả,
+		# cần giữ để reviewer đối chiếu).
+		is_file_record = "file_name" in value
+		return {
+			str(k): (
+				"[REDACTED]"
+				if is_file_record and str(k).lower() == "name"
+				else sanitize(v, str(k))
+			)
+			for k, v in value.items()
+		}
+	if isinstance(value, list):
+		return [sanitize(item) for item in value]
+	if isinstance(value, str):
+		return redact_text(value)
+	return value
+
+
+def fingerprint_file_url(value: object) -> dict[str, object]:
+	"""Return an opaque fingerprint without retaining the URL in evidence.
+
+	Called with values from the parsed HTTP response, before `sanitize()` is
+	used to write the response body. `value_len` is the UTF-8 byte length.
+	The URL itself is never returned or stored in the observation.
+	"""
+	if not isinstance(value, str):
+		return {"value_sha256": None, "value_len": None}
+	value_bytes = value.encode("utf-8")
+	return {
+		"value_sha256": hashlib.sha256(value_bytes).hexdigest(),
+		"value_len": len(value_bytes),
+	}
+
+
+def extract_private_file_url_from_html(value: object) -> str | None:
+	"""Extract a private-file href from attachment-log HTML for fingerprinting."""
+	if not isinstance(value, str):
+		return None
+	for match in re.finditer(
+		r"\bhref\s*=\s*(['\"])(.*?)\1", value, flags=re.IGNORECASE
+	):
+		href = urllib.parse.unquote(match.group(2))
+		parsed = urllib.parse.urlsplit(href)
+		if parsed.path.startswith(DOWNLOAD_PATH_PREFIX):
+			return parsed.path
+	return None
+
+
+def contains_private_file_url(value: object) -> bool:
+	"""Return whether a field/text contains an actual private-file URL."""
+	return isinstance(value, str) and bool(_PRIVATE_FILE_URL_RE.search(value))
+
+
+def collect_pre_sanitize_file_url_fingerprints(
+	value: object,
+) -> dict[str, dict[str, object]]:
+	"""Fingerprint `file_url` values and private hrefs before response sanitization.
+
+	The returned map is process-local and is never serialized; its keys are raw
+	URLs used only to associate each selected leak site with its fingerprint.
+	"""
+	fingerprints: dict[str, dict[str, object]] = {}
+
+	def visit(item: object) -> None:
+		if isinstance(item, dict):
+			for key, child in item.items():
+				if str(key).lower() == "file_url" and isinstance(child, str):
+					fingerprints.setdefault(child, fingerprint_file_url(child))
+				elif str(key).lower() == "content":
+					href = extract_private_file_url_from_html(child)
+					if href:
+						fingerprints.setdefault(href, fingerprint_file_url(href))
+					visit(child)
+				else:
+					visit(child)
+		elif isinstance(item, list):
+			for child in item:
+				visit(child)
+
+	visit(value)
+	return fingerprints
+
+
+def write_evidence() -> None:
+	OUTPUT.mkdir(parents=True, exist_ok=True)
+	payload = {
+		"site": SITE_NAME,
+		"base_url": BASE_URL,
+		"recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+		"commit_sha": os.environ.get("GITHUB_SHA", "unknown"),
+		"frappe_sha": os.environ.get("FRAPPE_SHA", "unknown"),
+		"crm_sha": os.environ.get("CRM_SHA", "unknown"),
+		"coverage_scope": "direct HTTP to bench serve; reverse-proxy and CORS behavior are not covered",
+		"cases": records,
+		"failed_cases": failures,
+		"probe_result": "FAIL" if failures else "PASS",
+		# Quan sát characterization: đo **riêng** từng đường lộ `file_url`.
+		# Đây là **bằng chứng quan sát**, KHÔNG phải tiêu chí PASS/FAIL của gate
+		# (gate vẫn chỉ dựa vào `failed_cases`).
+		"observations": observations,
+	}
+	(OUTPUT / "http-transport.json").write_text(
+		json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+	)
+
+
+def make_opener() -> tuple[urllib.request.OpenerDirector, http.cookiejar.CookieJar]:
+	jar = http.cookiejar.CookieJar()
+	return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar)), jar
+
+
+def request(
+	case_id: str,
+	opener: urllib.request.OpenerDirector,
+	method: str,
+	path: str,
+	body: bytes | None = None,
+	headers: dict[str, str] | None = None,
+) -> dict[str, object]:
+	url = BASE_URL + path
+	request_headers = {
+		"Accept": "application/json, text/html",
+		"X-Frappe-Site-Name": SITE_NAME,
+	}
+	if headers:
+		request_headers.update(headers)
+	req = urllib.request.Request(url, data=body, headers=request_headers, method=method)
+	status: int | None = None
+	response_headers: dict[str, str] = {}
+	response_text = ""
+	transport_error = None
+	try:
+		with opener.open(req, timeout=15) as response:
+			status = response.status
+			response_headers = dict(response.headers.items())
+			response_text = response.read().decode("utf-8", errors="replace")
+	except urllib.error.HTTPError as error:
+		status = error.code
+		response_headers = dict(error.headers.items()) if error.headers else {}
+		response_text = error.read().decode("utf-8", errors="replace")
+	except (urllib.error.URLError, TimeoutError, OSError) as error:
+		transport_error = type(error).__name__
+
+	request_body = body.decode("utf-8", errors="replace") if body else ""
+	try:
+		parsed_response: object = json.loads(response_text) if response_text else None
+	except json.JSONDecodeError:
+		parsed_response = None
+	# Fingerprint the received response before applying the probe's sanitizer.
+	# The map is kept only in memory so raw values never enter the artifact.
+	pre_sanitize_file_url_fingerprints = (
+		collect_pre_sanitize_file_url_fingerprints(parsed_response)
+		if case_id == "sec26-activities-in-scope"
+		else {}
+	)
+	if parsed_response is not None:
+		safe_response: object = sanitize(parsed_response)
+		safe_body = json.dumps(safe_response, ensure_ascii=False)
+	else:
+		safe_body = redact_text(response_text)
+	try:
+		parsed_request = urllib.parse.parse_qs(request_body, keep_blank_values=True)
+		if parsed_request:
+			safe_request_body = json.dumps(sanitize(parsed_request), ensure_ascii=False)
+		else:
+			safe_request_body = redact_text(request_body)
+	except (TypeError, ValueError):
+		safe_request_body = "[REDACTED]"
+
+	allowed_headers = {
+		"accept",
+		"content-type",
+		"x-frappe-site-name",
+		"x-frappe-csrf-token",
+	}
+	safe_request_headers = {
+		key: ("[REDACTED]" if key.lower() == "x-frappe-csrf-token" else value)
+		for key, value in request_headers.items()
+		if key.lower() in allowed_headers
+	}
+	cookie_handler = next(
+		(
+			handler
+			for handler in opener.handlers
+			if isinstance(handler, urllib.request.HTTPCookieProcessor)
+		),
+		None,
+	)
+	has_cookies = bool(cookie_handler and any(cookie_handler.cookiejar))
+	for key in list(response_headers):
+		if key.lower() in {"set-cookie", "authorization", "x-frappe-csrf-token"}:
+			response_headers[key] = "[REDACTED]"
+
+	entry: dict[str, object] = {
+		"id": case_id,
+		"request": {
+			"method": method,
+			# `url` có thể chứa **đường dẫn file private** (`/private/files/...`)
+			# khi đo khả năng tải file ⇒ phải đi qua `redact_text` để **không**
+			# ghi identifier file thật vào artifact.
+			"url": redact_text(url),
+			"headers": safe_request_headers,
+			"cookie": "[REDACTED]" if has_cookies else "",
+			"body": safe_request_body,
+		},
+		"response": {
+			"status": status,
+			"headers": sanitize(response_headers),
+			"body": safe_body,
+			"exc_type": parsed_response.get("exc_type")
+			if isinstance(parsed_response, dict)
+			else None,
+		},
+		"transport_error": transport_error,
+	}
+	records.append(entry)
+	write_evidence()
+	# `transport_error` phai nam o day: `check()` doc `response["transport_error"]`
+	# de phan biet "HTTP loi thuoc ve mo-duong" (assertion co the dung) voi
+	# "khong goi duoc server" (transport_error khac None => case FAIL).
+	# CI run #39793215900: thieu key nay lam moi case sau `sec13-guest` ném
+	# KeyError va khong case nao duoc ghi nhan.
+	return {
+		"status": status,
+		"json": parsed_response,
+		"text": response_text,
+		"entry": entry,
+		"transport_error": transport_error,
+		"file_url_fingerprints": pre_sanitize_file_url_fingerprints,
+	}
+
+
+def download_bytes(
+	case_id: str,
+	opener: urllib.request.OpenerDirector,
+	path: str,
+) -> dict[str, object]:
+	"""Tải nội dung file (bytes thô) — **KHÔNG** ghi bytes vào artifact.
+
+	Vì sao không dùng `request()`:
+	`request()` đưa **toàn bộ** body response vào `entry["response"]["body"]`
+	(sau khi sanitize). Nội dung file tải về là **bytes nhị phân** (không phải
+	JSON) ⇒ `redact_text()` không che được ⇒ **nguy cơ ghi nội dung file thật**
+	vào artifact. Ở đây ta chỉ giữ:
+	  - HTTP status
+	  - **độ dài** byte tải về
+	  - **sha256** của bytes (để so sánh giữa 2 lần tải mà không lộ nội dung)
+	  - có chứa marker nội dung seed (**giả**) hay không
+	  - `Content-Type` / `Content-Disposition`
+	⇒ Đủ để trả lời "URL có tải được không" mà **không** rò nội dung.
+	"""
+	url = BASE_URL + path
+	request_headers = {
+		"Accept": "*/*",
+		"X-Frappe-Site-Name": SITE_NAME,
+	}
+	req = urllib.request.Request(url, headers=request_headers, method="GET")
+	status: int | None = None
+	response_headers: dict[str, str] = {}
+	payload = b""
+	transport_error = None
+	try:
+		with opener.open(req, timeout=15) as response:
+			status = response.status
+			response_headers = dict(response.headers.items())
+			payload = response.read()
+	except urllib.error.HTTPError as error:
+		status = error.code
+		response_headers = dict(error.headers.items()) if error.headers else {}
+		payload = error.read()
+	except (urllib.error.URLError, TimeoutError, OSError) as error:
+		transport_error = type(error).__name__
+
+	for key in list(response_headers):
+		if key.lower() in {"set-cookie", "authorization", "x-frappe-csrf-token"}:
+			response_headers[key] = "[REDACTED]"
+
+	entry: dict[str, object] = {
+		"id": case_id,
+		"request": {
+			"method": "GET",
+			# Đường dẫn private ⇒ che identifier file trước khi ghi vào artifact.
+			"url": redact_text(url),
+			"headers": {"Accept": "*/*", "X-Frappe-Site-Name": SITE_NAME},
+			"cookie": "[REDACTED]",
+			"body": "",
+		},
+		"response": {
+			"status": status,
+			"headers": sanitize(response_headers),
+			# **KHÔNG** ghi body thô — chỉ ghi đặc trưng không nhận diện được.
+			"body": "",
+			"content_length": len(payload),
+			"content_sha256": hashlib.sha256(payload).hexdigest() if payload else "",
+			"content_type": response_headers.get("Content-Type", ""),
+			"exc_type": None,
+		},
+		"transport_error": transport_error,
+	}
+	records.append(entry)
+	write_evidence()
+	return {
+		"status": status,
+		"entry": entry,
+		"transport_error": transport_error,
+		"content_length": len(payload),
+		"content_sha256": hashlib.sha256(payload).hexdigest() if payload else "",
+		# Marker nội dung seed (**giả**) — boolean, không ghi bytes.
+		"contains_seed_marker": SEED_CONTENT_MARKER in payload,
+	}
+
+
+def check(
+	case_id: str, response: dict[str, object], condition: bool, detail: str
+) -> bool:
+	passed = bool(condition) and response["transport_error"] is None
+	response["entry"]["assertion"] = {
+		"expected": detail,
+		"result": "PASS" if passed else "FAIL",
+	}
+	if not passed:
+		failures.append(case_id)
+		response["entry"]["assertion"]["detail"] = detail
+	write_evidence()
+	print(f"{case_id}: {'PASS' if passed else 'FAIL'}")
+	return passed
+
+
+def login(label: str, username: str, password: str) -> urllib.request.OpenerDirector:
+	opener, _ = make_opener()
+	body = urllib.parse.urlencode({"usr": username, "pwd": password}).encode()
+	response = request(
+		f"{label}-login",
+		opener,
+		"POST",
+		"/api/method/login",
+		body,
+		{"Content-Type": "application/x-www-form-urlencoded"},
+	)
+	data = response["json"]
+	check(
+		f"{label}-login",
+		response,
+		response["status"] == 200 and isinstance(data, dict),
+		"login returns HTTP 200",
+	)
+	return opener
+
+
+def setup_sec16_permlevel_field() -> bool:
+	"""Tạo field synthetic `permlevel=1` + ghi sentinel vào lead đã seed.
+
+	Probe chạy **trong container bench** (`docker compose exec bench ... python`),
+	nên có thể import `frappe` để chuẩn bị dữ liệu — giống `seed_demo.py` làm.
+	Việc này là **setup**, không phải bằng chứng: assertion của SEC-16 nằm ở
+	các case HTTP bên dưới, chạy hoàn toàn qua `crm.api.doc.get_data`.
+
+	Trả về False nếu không thiết lập được (case SEC-16 sẽ FAIL fail-closed thay
+	vì im lặng bỏ qua).
+	"""
+	try:
+		import frappe
+	except ImportError as error:
+		print(f"sec16-setup: không import được frappe ({error})")
+		return False
+
+	bench_dir = os.environ.get("BENCH_DIR", "/workspace/frappe-bench")
+	# Frappe dựng đường dẫn `logs/database.log` theo **thư mục cha của CWD**, KHÔNG
+	# theo `sites_path` mà ta truyền vào. Bằng chứng trên CI:
+	#   CWD=/workspace             -> /logs/database.log            (#39796261932)
+	#   CWD=/workspace/frappe-bench -> /workspace/logs/database.log  (#39800240716)
+	#
+	# Nên CWD phải là một thư mục con của bench dir để `CWD/..` trỏ đúng bench dir.
+	# `sites/` là lựa chọn tự nhiên: tồn tại sẵn sau `bench new-site` ở step trước.
+	#
+	# Lưu ý: `FRAPPE_STREAM_LOGGING=1` (workflow bật, giống `run-seed.sh` L18) làm
+	# Frappe ghi log ra stdout nên không mở file log. `chdir` ở đây vẫn giữ như một
+	# lớp phòng vệ: nếu cờ đó bị bỏ trong tương lai thì ít nhất CWD vẫn hợp lệ,
+	# thay vì trỏ tới `/logs` hoặc `/workspace/logs`.
+	previous_cwd = os.getcwd()
+	sites_dir = os.path.join(bench_dir, "sites")
+	if os.path.isdir(sites_dir):
+		try:
+			os.chdir(sites_dir)
+		except OSError as error:  # noqa: PERF203 - giữ nguyên hành vi cũ nếu không chdir được
+			print(
+				f"sec16-setup: không chdir được sang {sites_dir} ({error}); giữ CWD={previous_cwd}"
+			)
+	try:
+		frappe.init(site=SITE_NAME, sites_path=sites_dir)
+		frappe.connect()
+		frappe.set_user("Administrator")
+		try:
+			existing = frappe.db.exists(
+				"Custom Field", {"dt": "CRM Lead", "fieldname": SEC16_FIELDNAME}
+			)
+			if not existing:
+				frappe.get_doc(
+					{
+						"doctype": "Custom Field",
+						"dt": "CRM Lead",
+						"fieldname": SEC16_FIELDNAME,
+						"label": "CSKH Sec16 Restricted",
+						"fieldtype": "Data",
+						"insert_after": "first_name",
+						# permlevel > 0 ⇒ chỉ System Manager đọc được field này.
+						"permlevel": 1,
+					}
+				).insert(ignore_permissions=True)
+			frappe.clear_cache(doctype="CRM Lead")
+			frappe.db.set_value("CRM Lead", LEAD_NAME, SEC16_FIELDNAME, SEC16_SENTINEL)
+			frappe.db.commit()
+			# Sanity: sentinel thực sự nằm trong DB (nếu không, case HTTP sẽ
+			# "pass" một cách giả do dữ liệu vắng mặt).
+			stored = frappe.db.get_value("CRM Lead", LEAD_NAME, SEC16_FIELDNAME)
+			if stored != SEC16_SENTINEL:
+				print(f"sec16-setup: sentinel không được ghi (got {stored!r})")
+				return False
+			return True
+		except Exception as error:  # noqa: BLE001 - setup lỗi phải thành case FAIL
+			frappe.db.rollback()
+			print(f"sec16-setup: lỗi khi chuẩn bị permlevel field: {error}")
+			return False
+		finally:
+			frappe.destroy()
+			# Trả CWD về ban đầu: phần HTTP probe chạy sau đây cần CWD gốc
+			# (và `OUTPUT`/`SEED_SOURCE` đều là đường dẫn tuyệt đối).
+			if previous_cwd != os.getcwd():
+				os.chdir(previous_cwd)
+	except Exception as error:  # noqa: BLE001
+		if previous_cwd != os.getcwd():
+			os.chdir(previous_cwd)
+		print(f"sec16-setup: không kết nối được site: {error}")
+		return False
+
+
+def run() -> int:
+	if not ADMIN_PASSWORD:
+		raise RuntimeError(
+			"ADMIN_PASSWORD is not available in the bench container environment"
+		)
+
+	guest, _ = make_opener()
+	guest_response = request(
+		"sec13-guest", guest, "GET", "/api/method/crm_cskh.api.health.ping"
+	)
+	guest_data = guest_response["json"]
+	check(
+		"sec13-guest",
+		guest_response,
+		guest_response["status"] == 403
+		and isinstance(guest_data, dict)
+		and guest_data.get("exc_type") == "PermissionError",
+		"Guest request is denied with HTTP 403 PermissionError",
+	)
+
+	staff = login("staff", "staff.a@dev.local", SEED_PASSWORD)
+	staff_ping = request(
+		"sec13-user", staff, "GET", "/api/method/crm_cskh.api.health.ping"
+	)
+	staff_data = staff_ping["json"]
+	check(
+		"sec13-user",
+		staff_ping,
+		staff_ping["status"] == 200
+		and isinstance(staff_data, dict)
+		and isinstance(staff_data.get("message"), dict)
+		and staff_data["message"].get("user") == "staff.a@dev.local",
+		"authenticated staff receives own identity in HTTP response",
+	)
+
+	page = request("csrf-page", staff, "GET", "/cskh")
+	token_match = re.search(
+		r'["\']X-Frappe-CSRF-Token["\']\s*:\s*["\']([^"\']+)["\']',
+		str(page["text"]),
+	)
+	csrf_token = token_match.group(1) if token_match else ""
+	check(
+		"csrf-page",
+		page,
+		page["status"] == 200 and bool(csrf_token),
+		"authenticated /cskh returns a CSRF token for the browser",
+	)
+
+	ping_path = "/api/method/crm_cskh.api.health.ping"
+	get_ping = request("sec14-get", staff, "GET", ping_path)
+	check(
+		"sec14-get",
+		get_ping,
+		get_ping["status"] == 200,
+		"safe GET succeeds without a CSRF header",
+	)
+
+	post_without_token = request("sec14-post-nocsrf", staff, "POST", ping_path, b"")
+	data = post_without_token["json"]
+	check(
+		"sec14-post-nocsrf",
+		post_without_token,
+		post_without_token["status"] == 400
+		and isinstance(data, dict)
+		and data.get("exc_type") == "CSRFTokenError",
+		"unsafe POST without CSRF token returns HTTP 400 CSRFTokenError",
+	)
+
+	post_bad_token = request(
+		"sec14-post-badtok",
+		staff,
+		"POST",
+		ping_path,
+		b"",
+		{"X-Frappe-CSRF-Token": "invalid-ci-probe-token"},
+	)
+	data = post_bad_token["json"]
+	check(
+		"sec14-post-badtok",
+		post_bad_token,
+		post_bad_token["status"] == 400
+		and isinstance(data, dict)
+		and data.get("exc_type") == "CSRFTokenError",
+		"unsafe POST with incorrect CSRF token returns HTTP 400 CSRFTokenError",
+	)
+
+	post_valid = request(
+		"sec14-post-ok",
+		staff,
+		"POST",
+		ping_path,
+		b"",
+		{"X-Frappe-CSRF-Token": csrf_token},
+	)
+	data = post_valid["json"]
+	check(
+		"sec14-post-ok",
+		post_valid,
+		post_valid["status"] == 200
+		and isinstance(data, dict)
+		and isinstance(data.get("message"), dict)
+		and data["message"].get("status") == "ok",
+		"unsafe POST with session CSRF token succeeds",
+	)
+
+	admin = login("administrator", "Administrator", ADMIN_PASSWORD)
+	admin_ping = request("sec13-admin", admin, "GET", ping_path)
+	admin_data = admin_ping["json"]
+	check(
+		"sec13-admin",
+		admin_ping,
+		admin_ping["status"] == 200
+		and isinstance(admin_data, dict)
+		and isinstance(admin_data.get("message"), dict)
+		and admin_data["message"].get("user") == "Administrator",
+		"Administrator receives own identity in HTTP response",
+	)
+
+	query = urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME})
+	attachments_path = "/api/method/crm_cskh.api.guarded_crm.get_attachments?" + query
+
+	# --- SEC-16: field exposure (permlevel) qua `crm.api.doc.get_data` --------
+	# SEC-16 KHÔNG phải về `file_url`. Các case gọi `get_attachments` và kiểm
+	# `file_url` thuộc SEC-26 (xem `sec26-*` bên dưới) — trước đây chúng bị gắn
+	# nhãn `sec16-*` và làm SEC-16 không hề được probe.
+	sec16_ready = setup_sec16_permlevel_field()
+	if not sec16_ready:
+		check(
+			"sec16-setup",
+			{"entry": {}, "transport_error": "sec16-setup-failed"},
+			False,
+			"permlevel=1 field with sentinel secret is prepared on the seeded lead",
+		)
+	else:
+		# `crm.api.doc.get_data` là endpoint upstream có trả permlevel field; gọi
+		# nó với `rows=[name, <field permlevel=1>]` để pin hành vi lọc.
+		#
+		# Contract thật của CRM v1.87.0 (SHA `0d3910b4`, `crm/api/doc.py`):
+		#   def get_data(doctype, filters, order_by, page_length=20, ...)
+		# `filters` là `dict` và `order_by` là positional bắt buộc — không có
+		# default. Hai lỗi liên tiếp đã gặp trên CI:
+		#   thiếu args      => TypeError                          => HTTP 500
+		#                    (#39802331716)
+		#   filters="..."   => FrappeTypeError: Argument 'filters' should be of
+		#                    type 'dict' but got 'str'            => HTTP 417
+		#                    (#39804284753)
+		#
+		# Lý do HTTP 417: `make_form_dict` trong Frappe (SHA `d2efa796`) chỉ
+		# `json.loads` **body**, còn query string luôn là chuỗi:
+		#     request_data = request.get_data(as_text=True)
+		#     if request_data and request.is_json: args = json.loads(request_data)
+		#     else: args = {}
+		#     args.update(request.args or {})
+		# Nên `filters` phải đi trong **JSON body** của POST để thành dict thật.
+		# Đây cũng là cách desk gọi endpoint (POST kèm CSRF token, xem SEC-14).
+		sec16_base = {
+			"doctype": "CRM Lead",
+			"filters": {"name": LEAD_NAME},
+			"order_by": "creation desc",
+		}
+		sec16_headers = {
+			"Content-Type": "application/json",
+			"X-Frappe-CSRF-Token": csrf_token,
+		}
+		get_data_path = "/api/method/crm.api.doc.get_data"
+		staff_get_data = request(
+			"sec16-permlevel-get-data",
+			staff,
+			"POST",
+			get_data_path,
+			json.dumps({**sec16_base, "rows": ["name", SEC16_FIELDNAME]}).encode(
+				"utf-8"
+			),
+			sec16_headers,
+		)
+		staff_get_data_payload = staff_get_data["json"]
+		message = (
+			staff_get_data_payload.get("message")
+			if isinstance(staff_get_data_payload, dict)
+			else None
+		)
+		rows = message.get("data") if isinstance(message, dict) else None
+		row = rows[0] if isinstance(rows, list) and rows else None
+		check(
+			"sec16-permlevel-get-data",
+			staff_get_data,
+			staff_get_data["status"] == 200
+			and isinstance(row, dict)
+			# Khớp semantics test nguồn `test_crm_api_get_data_filters_permlevel_field`:
+			# field permlevel phải **vắng/falsy** trong data trả về cho user
+			# không có System Manager.
+			and not row.get(SEC16_FIELDNAME),
+			f"non-system user receives no value for permlevel=1 field {SEC16_FIELDNAME}",
+		)
+
+		# Chứng minh sentinel KHÔNG lộ ở **bất kỳ** nơi nào trong response, kể cả
+		# khi client không yêu cầu cột permlevel — bảo vệ chống rò rì qua field khác.
+		staff_get_all = request(
+			"sec16-permlevel-sentinel-scan",
+			staff,
+			"POST",
+			get_data_path,
+			json.dumps({**sec16_base, "rows": ["name"]}).encode("utf-8"),
+			sec16_headers,
+		)
+		check(
+			"sec16-permlevel-sentinel-scan",
+			staff_get_all,
+			staff_get_all["status"] == 200
+			# So trên **raw text** của response để bắt sentinel ở *bất kỳ* field
+			# nào, kể cả khi client không yêu cầu cột permlevel.
+			# Không assert key `SEC16_FIELDNAME` vắng mặt: test nguồn chỉ chứng
+			# minh **giá trị** vắng/falsy, và "key bị loại" là kết luận mạnh hơn.
+			and SEC16_SENTINEL not in str(staff_get_all["text"]),
+			f"sentinel secret {SEC16_FIELDNAME} never appears in non-system response",
+		)
+
+	# --- SEC-26: `file_url` của file private không lộ cho non-system caller --
+	# Nhãn `sec16-*` ở đây là sai (T1C lần 17): nội dung là SEC-26.
+	staff_files = request("sec26-staff-private", staff, "GET", attachments_path)
+	staff_data = staff_files["json"]
+	staff_entries = staff_data.get("message") if isinstance(staff_data, dict) else None
+	staff_private = next(
+		(
+			entry
+			for entry in staff_entries or []
+			if isinstance(entry, dict) and entry.get("file_name") == PRIVATE_FILE_NAME
+		),
+		None,
+	)
+	check(
+		"sec26-staff-private",
+		staff_files,
+		staff_files["status"] == 200
+		and isinstance(staff_private, dict)
+		and bool(staff_private.get("is_private"))
+		# Wrapper `_redact_private_file_urls` **loại bỏ key** `file_url` cho
+		# non-system caller + file private. Kiểm key vắng mặt, không phải falsy.
+		and "file_url" not in staff_private,
+		"non-system response redacts file_url for seeded private attachment",
+	)
+
+	admin_files = request("sec26-admin-private", admin, "GET", attachments_path)
+	admin_data = admin_files["json"]
+	admin_entries = admin_data.get("message") if isinstance(admin_data, dict) else None
+	admin_private = next(
+		(
+			entry
+			for entry in admin_entries or []
+			if isinstance(entry, dict) and entry.get("file_name") == PRIVATE_FILE_NAME
+		),
+		None,
+	)
+	check(
+		"sec26-admin-private",
+		admin_files,
+		admin_files["status"] == 200
+		and isinstance(admin_private, dict)
+		and bool(admin_private.get("is_private"))
+		# System caller: wrapper trả payload nguyên bản ⇒ `file_url` còn nguyên.
+		and isinstance(admin_private.get("file_url"), str)
+		and bool(admin_private["file_url"]),
+		"system caller retains file_url for seeded private attachment",
+	)
+
+	# --- SEC-26: redaction `get_activities` cho caller ĐÚNG scope ----------
+	#
+	# Endpoint được override tại `hooks.py`; wrapper gọi upstream rồi redact
+	# tuple activities và `frappe.response.docinfo` trước khi response được gửi.
+	#
+	# Case này kiểm tra **bốn** đường có thể lộ private URL trong cùng response:
+	#   (1) `message[4].attachments` — CRM `activities.py` L321-339 (L330 `file_url`)
+	#   (2) `docinfo.attachments`    — Frappe `desk/form/load.py` L128/L147/L206
+	# `docinfo` nằm ở **top-level** của response (không phải trong `message`) vì
+	# `frappe/utils/response.py::as_json` L154 dump **toàn bộ**
+	# `frappe.local.response` ⇒ `frappe.response["docinfo"]` (load.py L147) đi
+	# cùng response với `message` của `frappe.call` (handler.py L86).
+	#
+	# Caller: `staff.a@dev.local` — role `Sales User` (KHÔNG phải System Manager)
+	# và là `lead_owner` của `CRM-LEAD-00001` ⇒ **đúng scope**, có quyền read
+	# ⇒ quyền đọc Lead hợp lệ; probe đo redaction, không nhầm với từ chối quyền.
+	#
+	# Dữ liệu: **hoàn toàn giả** — site seed hiện tại, file
+	# `DEMO-CRM-LEAD-00001.txt` do `seed_demo.py::_ensure_attachment` tạo với
+	# `is_private=1`. Không dùng dữ liệu thật.
+	activities_path = (
+		ACTIVITIES_ENDPOINT + "?" + urllib.parse.urlencode({"name": LEAD_NAME})
+	)
+	staff_activities = request(
+		"sec26-activities-in-scope", staff, "GET", activities_path
+	)
+	staff_activities_json = staff_activities["json"]
+
+	# `message` là tuple 5 phần tử trả về bởi `get_deal_activities`/`get_lead_activities`:
+	# (versions, calls, notes, tasks, attachments) — CRM `activities.py` L318.
+	message = (
+		staff_activities_json.get("message")
+		if isinstance(staff_activities_json, dict)
+		else None
+	)
+	message_attachments = (
+		message[4] if isinstance(message, (list, tuple)) and len(message) == 5 else None
+	)
+	message_private = next(
+		(
+			entry
+			for entry in message_attachments or []
+			if isinstance(entry, dict) and entry.get("file_name") == PRIVATE_FILE_NAME
+		),
+		None,
+	)
+
+	# `docinfo` là key top-level của response (không nằm trong `message`).
+	docinfo = (
+		staff_activities_json.get("docinfo")
+		if isinstance(staff_activities_json, dict)
+		else None
+	)
+	docinfo_attachments = (
+		docinfo.get("attachments") if isinstance(docinfo, dict) else None
+	)
+	docinfo_private = next(
+		(
+			entry
+			for entry in docinfo_attachments or []
+			if isinstance(entry, dict) and entry.get("file_name") == PRIVATE_FILE_NAME
+		),
+		None,
+	)
+
+	# Đo riêng private URL trên cả bốn đường. Caller non-system không được
+	# nhận URL private ở bất kỳ đường nào.
+	message_file_url = (
+		message_private.get("file_url") if isinstance(message_private, dict) else None
+	)
+	docinfo_file_url = (
+		docinfo_private.get("file_url") if isinstance(docinfo_private, dict) else None
+	)
+	message_has_url = contains_private_file_url(message_file_url)
+	docinfo_has_url = contains_private_file_url(docinfo_file_url)
+
+	# --- Đường lộ thứ 3: `message[0][attachment_log].data.file_url` ----------
+	# CRM `activities.py` L299-308: vòng lặp `for attachment_log in docinfo.attachment_logs:`
+	# ⇒ `parse_attachment_log(attachment_log.content, ...)` (L305) với
+	# `parse_attachment_log` L505-526 nhận diện private URL và đưa vào activity;
+	# wrapper phải loại URL trước khi response được serialize.
+	# Đây là đường **thứ 3**, khác `message[4].attachments`.
+	message_activities = (
+		message[0] if isinstance(message, (list, tuple)) and len(message) == 5 else None
+	)
+	attachment_log_activity = next(
+		(
+			activity
+			for activity in message_activities or []
+			if isinstance(activity, dict)
+			and activity.get("activity_type") == "attachment_log"
+			and isinstance(activity.get("data"), dict)
+			and activity["data"].get("file_name") == PRIVATE_FILE_NAME
+		),
+		None,
+	)
+	attachment_log_data = (
+		attachment_log_activity.get("data") if attachment_log_activity else None
+	)
+	attachment_log_file_url = (
+		attachment_log_data.get("file_url")
+		if isinstance(attachment_log_data, dict)
+		else None
+	)
+	attachment_log_has_url = contains_private_file_url(attachment_log_file_url)
+
+	# --- Đường lộ thứ 4: `docinfo.attachment_logs[].content` (HTML) --------
+	# Frappe `file.py` L898-906 `create_attachment_record()` ⇒
+	# `add_comment_in_reference_doc("Attachment", f"<a href='{file_url}' …>…")`
+	# ⇒ nội dung **HTML** của comment type `Attachment` chứa URL private thật.
+	# `add_comments` (load.py L150-184) đưa các comment này vào
+	# `docinfo.attachment_logs` (L175-176). Loc quyền của `get_document_comments`
+	# (comment.py L196-209) là theo **comment_type**, KHÔNG theo `is_private` của File.
+	# Ở đây `content` là **chuỗi HTML** ⇒ không nằm trong `SENSITIVE_KEYS`
+	# (key là `content`, không phải `file_url`) ⇒ tầng redact **theo key** không
+	# đụng tới. **Tuy nhiên** tầng redact **theo chuỗi** (`redact_text`, regex
+	# `(/private/files/)[^"'\s,}]+`) **CÓ** che URL nằm trong HTML ⇒ đường này
+	# **KHÔNG** lọt tầng redact của probe.
+	# ⚠️ Đính chính: báo cáo T1B 2026-10-25 §2.4/§5.4 trước đây nói đường 4
+	# "lọt tầng redact của probe, chỉ được che bởi regex của workflow" — điều
+	# đó **SAI**, đã được kiểm chứng lại bằng script chạy trên chính artifact
+	# (`deploy/dev/evidence/logs/_verify_redaction_root_cause.py`).
+	# `[REDACTED_FILE_URL]` trong artifact là do **workflow** đổi placeholder
+	# `[REDACTED]` của probe thành `[REDACTED_FILE_URL]` — **không** phải bằng
+	# chứng đường 4 lọt qua probe.
+	docinfo_attachment_logs = (
+		docinfo.get("attachment_logs") if isinstance(docinfo, dict) else None
+	)
+	attachment_log_row = next(
+		(
+			row
+			for row in docinfo_attachment_logs or []
+			if isinstance(row, dict) and PRIVATE_FILE_NAME in str(row.get("content"))
+		),
+		None,
+	)
+	attachment_log_content = (
+		attachment_log_row.get("content") if attachment_log_row else None
+	)
+	attachment_log_html_has_url = contains_private_file_url(attachment_log_content)
+	attachment_log_html_url = extract_private_file_url_from_html(attachment_log_content)
+	any_private_file_url = any(
+		(
+			message_has_url,
+			attachment_log_has_url,
+			docinfo_has_url,
+			attachment_log_html_has_url,
+		)
+	)
+
+	# Fingerprints are derived from the parsed HTTP response **before** the
+	# response sanitizer runs in `request()`. Only SHA-256 and UTF-8 byte length
+	# are added to evidence; no raw URL is copied into `observations`.
+	message_file_url = (
+		message_private.get("file_url") if isinstance(message_private, dict) else None
+	)
+	attachment_log_file_url = (
+		attachment_log_data.get("file_url")
+		if isinstance(attachment_log_data, dict)
+		else None
+	)
+	docinfo_file_url = (
+		docinfo_private.get("file_url") if isinstance(docinfo_private, dict) else None
+	)
+
+	check(
+		"sec26-activities-in-scope",
+		staff_activities,
+		staff_activities["status"] == 200
+		and isinstance(staff_activities_json, dict)
+		# Cả hai đường đều phải trả về **entry** của file private đã seed
+		# ⇒ kịch bản dương thực sự đã chạy tới tận payload.
+		and isinstance(message_private, dict)
+		and bool(message_private.get("is_private"))
+		and isinstance(docinfo_private, dict)
+		and bool(docinfo_private.get("is_private"))
+		and isinstance(attachment_log_activity, dict)
+		and isinstance(attachment_log_row, dict)
+		and not any_private_file_url,
+		"in-scope private attachment and both attachment-log rows are present; private URLs are redacted from all four payload paths",
+	)
+
+	# Ghi **riêng** quan sát của từng đường ra evidence (không làm thay đổi
+	# PASS/FAIL của gate) để reviewer thấy rõ đường nào lộ `file_url`.
+	for observation_id, has_url, site, file_url_value, entry_present in (
+		(
+			"sec26-activities-message-attachments",
+			message_has_url,
+			"message[4].attachments[].file_url",
+			message_file_url,
+			isinstance(message_private, dict),
+		),
+		(
+			"sec26-activities-message-attachment-log",
+			attachment_log_has_url,
+			"message[0][attachment_log].data.file_url",
+			attachment_log_file_url,
+			isinstance(attachment_log_data, dict),
+		),
+		(
+			"sec26-activities-docinfo-attachments",
+			docinfo_has_url,
+			"docinfo.attachments[].file_url",
+			docinfo_file_url,
+			isinstance(docinfo_private, dict),
+		),
+		(
+			"sec26-activities-docinfo-attachment-logs",
+			attachment_log_html_has_url,
+			"docinfo.attachment_logs[].content (HTML <a href>)",
+			attachment_log_html_url,
+			isinstance(attachment_log_row, dict),
+		),
+	):
+		file_url_fingerprints = staff_activities.get("file_url_fingerprints")
+		file_url_fingerprint = (
+			file_url_fingerprints.get(file_url_value)
+			if isinstance(file_url_fingerprints, dict)
+			else None
+		)
+		if not isinstance(file_url_fingerprint, dict):
+			file_url_fingerprint = {"value_sha256": None, "value_len": None}
+		observations.append(
+			{
+				"id": observation_id,
+				"case": "sec26-activities-in-scope",
+				"endpoint": "crm.api.activities.get_activities",
+				"caller": SEC16_USER,
+				"caller_scope": "in-scope (lead_owner of %s)" % LEAD_NAME,
+				"document": LEAD_NAME,
+				"file_name": PRIVATE_FILE_NAME,
+				"file_is_private": True,
+				"leak_site": site,
+				"payload_entry_present": entry_present,
+				"observation": "file_url_present" if has_url else "file_url_absent",
+				"file_url_present": has_url,
+				**file_url_fingerprint,
+				"source": "synthetic seeded private attachment (%s)" % SITE_NAME,
+			}
+		)
+
+	# --- SEC-26 (H-RFC-4): kịch bản NGOÀI scope qua HTTP dispatch ----------
+	#
+	# T1C lần 22c xác nhận ranh giới quyền của `get_activities` ở **tầng Python**
+	# (`test_permissions.py` L280-283 ⇒ `PermissionError`), nhưng **chưa** đo ở
+	# **tầng transport HTTP**. Ở đây ta gọi **đúng endpoint HTTP** với actor
+	# **ngoài scope** để đo hành vi thật của đường dispatch.
+	#
+	# Actor: `staff.c@dev.local` — role `Sales User`, thuộc **Team 2**
+	# (`seed_demo.py` L30), trong khi `CRM-LEAD-00001` (A1) do `staff.a@dev.local`
+	# (Team 1) sở hữu ⇒ **ngoài scope**. `enable_sales_hierarchy=1` nên
+	# `staff.c` (Team 2) **KHÔNG** nằm trong cây con của `staff.a` (Team 1).
+	#
+# Đây là ranh giới bảo mật được assert trong gate: caller ngoài scope phải bị
+# từ chối và không nhận entry của file private. Artifact vẫn ghi status/exc_type
+# để giữ chẩn đoán nếu hành vi đổi.
+	out_of_scope = login("staffc", OUT_OF_SCOPE_USER, SEED_PASSWORD)
+	out_of_scope_activities = request(
+		"sec26-activities-out-of-scope",
+		out_of_scope,
+		"GET",
+		activities_path,
+	)
+	out_of_scope_json = out_of_scope_activities["json"]
+	out_of_scope_exc = (
+		out_of_scope_json.get("exc_type")
+		if isinstance(out_of_scope_json, dict)
+		else None
+	)
+	# Payload của actor ngoài scope: **không** được chứa entry của file private
+	# đã seed (nếu bị chặn thì không có payload nào).
+	out_of_scope_message = (
+		out_of_scope_json.get("message")
+		if isinstance(out_of_scope_json, dict)
+		else None
+	)
+	out_of_scope_entries: list[object] = []
+	if (
+		isinstance(out_of_scope_message, (list, tuple))
+		and len(out_of_scope_message) == 5
+	):
+		candidate = out_of_scope_message[4]
+		if isinstance(candidate, list):
+			out_of_scope_entries = candidate
+	out_of_scope_leaks = [
+		entry
+		for entry in out_of_scope_entries
+		if isinstance(entry, dict) and entry.get("file_name") == PRIVATE_FILE_NAME
+	]
+	# This is a security boundary assertion, not observation-only: an actor
+	# outside the Lead scope must receive the expected permission denial and
+	# must not receive the seeded private attachment entry.
+	check(
+		"sec26-activities-out-of-scope",
+		out_of_scope_activities,
+		out_of_scope_activities["status"] == 403
+		and out_of_scope_exc == "PermissionError"
+		and not out_of_scope_leaks,
+		"out-of-scope caller is denied with HTTP 403 PermissionError and receives no private attachment",
+	)
+	observations.append(
+		{
+			"id": "sec26-activities-out-of-scope",
+			"case": "sec26-activities-out-of-scope",
+			"endpoint": "crm.api.activities.get_activities",
+			"caller": OUT_OF_SCOPE_USER,
+			"caller_scope": "out-of-scope (Team 2; %s do %s sở hữu)"
+			% (LEAD_NAME, SEC16_USER),
+			"document": LEAD_NAME,
+			"http_status": out_of_scope_activities["status"],
+			"exc_type": out_of_scope_exc,
+			"private_entry_visible": bool(out_of_scope_leaks),
+			"observation": (
+				"blocked_with_permission_error"
+				if out_of_scope_exc == "PermissionError"
+				else (
+					"payload_returned"
+					if out_of_scope_activities["status"] == 200
+					else "other_response"
+				)
+			),
+			"source": "synthetic seeded private attachment (%s)" % SITE_NAME,
+		}
+	)
+
+	# --- SEC-26: theo dõi handoff tải file nếu URL vẫn lộ -------------------
+	#
+	# Câu hỏi cần trả lời bằng **runtime**: lộ `file_url` có đồng nghĩa với
+	# **đọc được nội dung file** không?
+	#
+	# Đường tải thật (không phải `download_file` API): UI CRM mở
+	# `attachment.file_url` bằng `window.open(..., '_blank')`
+	# (`AttachmentArea.vue` L93) ⇒ `GET /private/files/<tên file>` ⇒
+	# `frappe/app.py` L162-163 → `download_private_file()` →
+	# `find_file_by_url()` → `File.is_downloadable()` → `has_permission(file,"read")`
+	# ⇒ vẫn có kiểm quyền; câu hỏi là caller **đúng scope** có tải được không.
+	#
+	# URL lấy từ **payload thật** của `get_activities` (đường 1) ⇒ đo đúng
+	# chuỗi rò rỉ, không tự chế path.
+	#
+	# ⚠️ **KHÔNG** ghi bytes/nội dung file vào artifact — chỉ status, độ dài,
+	# sha256 và boolean "có chứa marker seed". `download_bytes()` đảm bảo điều đó.
+	#
+	# Nếu wrapper đã redacted URL thì không gửi request tải file. Nếu URL còn lộ,
+	# thử tải chỉ để ghi nhận khả năng truy cập; case redaction phía trên sẽ FAIL.
+	observed_private_url = next(
+		(
+			value
+			for value in (
+				message_file_url,
+				attachment_log_file_url,
+				docinfo_file_url,
+				attachment_log_html_url,
+			)
+			if isinstance(value, str) and value.startswith(DOWNLOAD_PATH_PREFIX)
+		),
+		None,
+	)
+	download_status = None
+	download_length = 0
+	download_has_marker = False
+	download_transport_error = "not-attempted"
+	download_response: dict[str, object] = {
+		"entry": {},
+		"transport_error": "download-url-not-available",
+	}
+	if isinstance(observed_private_url, str) and observed_private_url.startswith(
+		DOWNLOAD_PATH_PREFIX
+	):
+		download_result = download_bytes(
+			"sec26-activities-download-in-scope",
+			staff,
+			observed_private_url,
+		)
+		download_status = download_result["status"]
+		download_length = download_result["content_length"]
+		download_has_marker = download_result["contains_seed_marker"]
+		download_transport_error = download_result["transport_error"]
+		download_response = {
+			"entry": download_result["entry"],
+			"transport_error": download_result["transport_error"],
+		}
+	else:
+		# Không có URL để tải là kết quả mong đợi sau redaction. Đây không phải
+		# bằng chứng tải file thành công; assertion chỉ ghi nhận handoff bị chặn.
+		download_entry: dict[str, object] = {
+			"id": "sec26-activities-download-in-scope",
+			"request": {
+				"method": "NOT SENT",
+				"url": redact_text("[NOT SENT]"),
+				"headers": {"X-Frappe-Site-Name": SITE_NAME},
+				"cookie": "",
+				"body": "",
+			},
+			"response": {
+				"status": None,
+				"headers": {},
+				"body": "",
+				"content_length": 0,
+				"content_sha256": "",
+				"content_type": "",
+				"exc_type": None,
+			},
+			"transport_error": None,
+			"not_requested_reason": "private URL absent after response redaction",
+		}
+		records.append(download_entry)
+		write_evidence()
+		download_response = {
+			"entry": download_entry,
+			"transport_error": None,
+		}
+	check(
+		"sec26-activities-download-in-scope",
+		download_response,
+		download_status is not None
+		if observed_private_url
+		else not any_private_file_url,
+		(
+			"private file URL is redacted; no download request is made"
+			if not observed_private_url
+			else "an exposed private URL is sent to the download endpoint for characterization"
+		),
+	)
+	observations.append(
+		{
+			"id": "sec26-activities-download-in-scope",
+			"case": "sec26-activities-download-in-scope",
+			"endpoint": "GET /private/files/<seeded private file>",
+			"caller": SEC16_USER,
+			"caller_scope": "in-scope (lead_owner of %s)" % LEAD_NAME,
+			"document": LEAD_NAME,
+			"file_name": PRIVATE_FILE_NAME,
+			"http_status": download_status,
+			"transport_error": download_transport_error,
+			"content_length": download_length,
+			"contains_seed_marker": download_has_marker,
+			"observation": (
+				"redacted_before_download"
+				if download_status is None and not any_private_file_url
+				else (
+					"download_succeeded"
+					if download_status == 200
+					else (
+						"download_denied"
+						if download_status in (401, 403)
+						else "download_other"
+					)
+				)
+			),
+			"source": "synthetic seeded private attachment (%s)" % SITE_NAME,
+		}
+	)
+
+	return 1 if failures else 0
+
+
+if __name__ == "__main__":
+	try:
+		exit_code = run()
+	except (
+		Exception
+	) as error:  # evidence should still be written on an unexpected probe error
+		failures.append(f"probe-error:{type(error).__name__}")
+		print(f"HTTP probe failed: {type(error).__name__}")
+		exit_code = 1
+	finally:
+		write_evidence()
+	sys.exit(exit_code)

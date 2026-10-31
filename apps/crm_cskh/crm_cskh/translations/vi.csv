@@ -3,7 +3,216 @@ Lead Owner,Nhân viên phụ trách
 Assigned To,Người phụ trách
 Note,Ghi chú
 Deal,Cơ hội
+Deals,Cơ hội
+Call Logs,Nhật ký cuộc gọi
+Last Modified,Cập nhật lần cuối
 Signed in as,Đã đăng nhập với tư cách
 This page uses the same Frappe site session as CRM.,Trang này dùng cùng phiên đăng nhập Frappe với CRM.
 Check session and CSRF,Kiểm tra phiên đăng nhập và CSRF
 Return to CRM Leads,Về danh sách khách hàng tiềm năng
+CSKH,CSKH
+Email,Thư điện tử
+Emails,Thư điện tử
+Email Address,Địa chỉ thư điện tử
+Phone,Điện thoại
+Mobile No.,Số di động
+Receiver,Người nhận
+From (number),Số gọi đi
+To (number),Số nhận cuộc gọi
+Outgoing,Gọi đi
+In Progress,Đang thực hiện
+Todo,Việc cần làm
+Low,Thấp
+Medium,Trung bình
+High,Cao
+Load More,Tải thêm
+of,trên
+No {0} Found,Không tìm thấy {0}
+No {0} found,Không tìm thấy {0}
+It appears that there are currently no {0} available. You can create more {0} by using the Create button.,Hiện chưa có {0} nào. Bạn có thể tạo thêm {0} bằng nút Tạo.
+Getting started,Bắt đầu sử dụng
+Start now,Bắt đầu ngay
+Continue,Tiếp tục
+Help centre,Trung tâm trợ giúp
+Help center,Trung tâm trợ giúp
+Welcome to {0},Chào mừng đến với {0}
+{0}/{1} steps,{0}/{1} bước
+{0}/{1} steps completed,{0}/{1} bước đã hoàn thành
+{0}% completed,Đã hoàn thành {0}%
+Skip all,Bỏ qua tất cả
+Reset all,Đặt lại tất cả
+Skip,Bỏ qua
+Reset,Đặt lại
+You are all set,Bạn đã sẵn sàng
+All steps are completed successfully,Bạn đã hoàn thành tất cả các bước
+Reset onboarding steps,Đặt lại các bước hướng dẫn
+"You need to complete ""{0}"" first.","Bạn cần hoàn thành ""{0}"" trước."
+Capture leads with a form,Thu thập khách hàng tiềm năng bằng biểu mẫu
+Won Deals,Cơ hội thành công
+Lost Deals,Cơ hội thất bại
+Avg Ongoing Deal Value,Giá trị trung bình của cơ hội đang mở
+Avg Won Deal Value,Giá trị trung bình của cơ hội thành công
+Avg Deal Value,Giá trị trung bình của cơ hội
+Forecasted Revenue,Doanh thu dự báo
+Forecasted,Dự báo
+Actual,Thực tế
+Value,Giá trị
+Deals by Ongoing & Won Stage,Cơ hội theo giai đoạn đang mở và thành công
+Deals by Territory,Cơ hội theo khu vực
+Deals by Salesperson,Cơ hội theo nhân viên bán hàng
+Deals by Stage,Cơ hội theo giai đoạn
+Deals by Source,Cơ hội theo nguồn
+Total leads,Tổng số khách hàng tiềm năng
+Total number of leads,Tổng số khách hàng tiềm năng
+Ongoing deals,Cơ hội đang theo đuổi
+Total number of non won/lost deals,Tổng số cơ hội chưa thành công hoặc thất bại
+Avg. ongoing deal value,Giá trị trung bình của cơ hội đang theo đuổi
+Average deal value of non won/lost deals,Giá trị trung bình của cơ hội chưa thành công hoặc thất bại
+Won deals,Cơ hội thành công
+Total number of won deals based on its closure date,Tổng số cơ hội thành công theo ngày chốt
+Avg. won deal value,Giá trị trung bình của cơ hội thành công
+Average deal value of won deals,Giá trị trung bình của cơ hội thành công
+Avg. deal value,Giá trị trung bình mỗi cơ hội
+Average deal value of ongoing & won deals,Giá trị trung bình của cơ hội đang theo đuổi và thành công
+Avg. time to close a lead,Thời gian trung bình để chuyển đổi khách hàng tiềm năng
+Average time taken from lead creation to deal closure,Thời gian trung bình từ khi tạo khách hàng tiềm năng đến khi chốt cơ hội
+Avg. time to close a deal,Thời gian trung bình để chốt cơ hội
+Average time taken from deal creation to deal closure,Thời gian trung bình từ khi tạo cơ hội đến khi chốt
+Sales trend,Xu hướng bán hàng
+"Daily performance of leads, deals, and wins","Hiệu suất hằng ngày về khách hàng tiềm năng, cơ hội và giao dịch thành công"
+Date,Ngày
+Count,Số lượng
+Forecasted revenue,Doanh thu dự báo
+Projected vs actual revenue based on deal probability,Doanh thu dự kiến so với thực tế theo xác suất thành công của cơ hội
+Month,Tháng
+Revenue,Doanh thu
+Funnel conversion,Chuyển đổi qua phễu bán hàng
+Lead to deal conversion pipeline,Quy trình chuyển đổi khách hàng tiềm năng thành cơ hội
+Stage,Giai đoạn
+stage,Giai đoạn
+days,ngày
+source,Nguồn
+Prospecting,Thăm dò
+Negotiation,Đàm phán
+Qualification,Đủ điều kiện
+Reference,Giới thiệu
+Referral,Giới thiệu
+Website,Trang web
+Cold Calling,Gọi điện chủ động
+Deals by ongoing & won stage,Cơ hội theo giai đoạn đang theo đuổi và thành công
+Deals by stage,Cơ hội theo giai đoạn
+Current pipeline distribution,Phân bổ cơ hội hiện tại theo giai đoạn
+Lost deal reasons,Lý do cơ hội thất bại
+Common reasons for losing deals,Các lý do phổ biến khiến cơ hội thất bại
+Reason,Lý do
+Leads by source,Khách hàng tiềm năng theo nguồn
+Lead generation channel analysis,Phân tích kênh tạo khách hàng tiềm năng
+Deals by source,Cơ hội theo nguồn
+Deal generation channel analysis,Phân tích kênh tạo cơ hội
+Deals by territory,Cơ hội theo khu vực
+Geographic distribution of deals and revenue,Phân bổ cơ hội và doanh thu theo khu vực
+Territory,Khu vực
+Number of deals,Số lượng cơ hội
+Deal value,Giá trị cơ hội
+Deals by salesperson,Cơ hội theo nhân viên bán hàng
+Number of deals and total value per salesperson,Số lượng cơ hội và tổng giá trị theo nhân viên bán hàng
+Salesperson,Nhân viên bán hàng
+Leads,Khách hàng tiềm năng
+leads,Khách hàng tiềm năng
+deals,Cơ hội
+won_deals,Cơ hội thành công
+forecasted,Dự báo
+actual,Thực tế
+count,Số lượng
+New,Mới
+Contacted,Đã liên hệ
+Nurture,Nuôi dưỡng
+Qualified,Đủ điều kiện
+Unqualified,Không đủ điều kiện
+Open,Đang mở
+Won,Thành công
+Lost,Thất bại
+No Answer,Không trả lời
+Busy,Máy bận
+Completed,Hoàn thành
+Cancelled,Đã hủy
+Pending,Đang chờ
+Working,Đang xử lý
+Overdue,Quá hạn
+Data Import,Nhập dữ liệu
+Import data into your system using CSV files.,Nhập dữ liệu vào hệ thống bằng tệp CSV.
+Import,Nhập dữ liệu
+Search imported files,Tìm lần nhập dữ liệu
+All,Tất cả
+Name,Tên
+Status,Trạng thái
+No data imports found.,Không có lần nhập dữ liệu nào.
+New Data Import,Lần nhập dữ liệu mới
+Choose a Document Type to import,Chọn loại tài liệu cần nhập
+Successful,Thành công
+Failed,Thất bại
+Success,Thành công
+Partial Success,Thành công một phần
+Error,Lỗi
+Timed Out,Hết thời gian
+Importing {0},Đang nhập {0}
+Tasks,Nhiệm vụ
+Contacts,Liên hệ
+Organizations,Các tổ chức
+Notes,Ghi chú
+You have unseen notifications,Bạn có thông báo chưa đọc
+My Settings,Cài đặt cá nhân
+Toggle Full Width,Bật/tắt chế độ rộng
+Toggle Theme,Đổi giao diện
+Toggle navigation,Ẩn/hiện thanh điều hướng
+Session verified for,Phiên đăng nhập hợp lệ cho
+Request denied,Yêu cầu bị từ chối
+Password,Mật khẩu
+Forgot Password?,Quên mật khẩu?
+Login,Đăng nhập
+Login with Email Link,Đăng nhập bằng liên kết thư điện tử
+Home,Trang chủ
+Reset Password,Đặt lại mật khẩu
+Back to Login,Quay lại đăng nhập
+Send login link,Gửi liên kết đăng nhập
+jane@example.com,ten@vidu.vn
+CRM Lead assignments cannot change ownership; use the controlled Lead ownership path.,Không thể đổi chủ sở hữu Khách hàng tiềm năng bằng phân công thông thường; hãy dùng luồng chuyển quyền sở hữu được kiểm soát.
+Lead assignment changes are disabled until the controlled ownership service is available.,Chưa thể thay đổi phân công Khách hàng tiềm năng cho đến khi có dịch vụ chuyển quyền sở hữu được kiểm soát.
+Only a System Manager can change Lead ownership until the ownership service is available.,Hiện chỉ Quản trị hệ thống được đổi chủ sở hữu Khách hàng tiềm năng cho đến khi có dịch vụ chuyển quyền sở hữu.
+Lead assignment changes are not available for this role.,Vai trò này không được phép thay đổi phân công Khách hàng tiềm năng.
+Switch view,Chuyển chế độ xem
+Filter list,Lọc danh sách
+Refresh list,Làm mới danh sách
+Create Deal,Tạo cơ hội
+Create Contact,Tạo liên hệ
+Create Organization,Tạo tổ chức
+Create Note,Tạo ghi chú
+Create Task,Tạo nhiệm vụ
+Navigate,Điều hướng
+Web Form,Biểu mẫu web
+Exhibition,Triển lãm
+Mass Mailing,Gửi thư hàng loạt
+Walk In,Khách đến trực tiếp
+Advertisement,Quảng cáo
+Due Date,Hạn chót
+Dashboard,Trang tổng quan
+Upload a file,Tải lên tệp
+Map columns,Ánh xạ cột
+First Name is mandatory,Tên khách hàng là trường bắt buộc
+Add Territory...,Thêm địa bàn...
+Add Industry...,Thêm ngành nghề...
+Add Salutation...,Thêm danh xưng...
+Add Organization...,Thêm tổ chức...
+Add Website...,Thêm trang web...
+Add Job Title...,Thêm chức danh...
+Add First Name...,Thêm tên...
+Add Last Name...,Thêm họ...
+Add Email...,Thêm thư điện tử...
+Add Mobile No....,Thêm số di động...
+Add Source...,Thêm nguồn...
+Select {0}...,Chọn {0}...
+Convert to Deal,Chuyển thành Cơ hội
+created this lead,đã tạo khách hàng tiềm năng này
+Due Date,Hạn chót,CRM Task
+Lead Name,Tên khách hàng,CRM Lead
+Search or type a command ({0}),Tìm kiếm hoặc nhập lệnh ({0})

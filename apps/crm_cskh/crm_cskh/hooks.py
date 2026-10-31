@@ -183,14 +183,17 @@ override_whitelisted_methods = {
 	"crm.api.dashboard.get_chart": "crm_cskh.api.guarded_reporting.crm_manager_chart",
 	"crm.integrations.api.get_contact_by_phone_number": "crm_cskh.api.guarded_crm.get_contact_by_phone_number",
 	"crm.integrations.api.get_contact_lead_or_deal_from_number": "crm_cskh.api.guarded_crm.get_contact_lead_or_deal_from_number",
+	"crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log": "crm_cskh.api.guarded_crm.get_call_log",
 	"crm.api.doc.remove_assignments": "crm_cskh.permissions.remove_assignments",
 	"crm.api.doc.delete_bulk_docs": "crm_cskh.api.guarded_crm.delete_bulk_docs",
 	"crm.api.doc.get_assigned_users": "crm_cskh.api.guarded_crm.get_assigned_users",
+	"frappe.desk.form.assign_to.add": "crm_cskh.api.guarded_crm.add_assignment",
 	"crm.api.doc.get_linked_docs_of_document": "crm_cskh.api.guarded_crm.get_linked_docs_of_document",
 	"crm.api.activities.get_linked_calls": "crm_cskh.api.guarded_crm.get_linked_calls",
 	"crm.api.activities.get_linked_notes": "crm_cskh.api.guarded_crm.get_linked_notes",
 	"crm.api.activities.get_linked_tasks": "crm_cskh.api.guarded_crm.get_linked_tasks",
 	"crm.api.activities.get_attachments": "crm_cskh.api.guarded_crm.get_attachments",
+	"crm.api.activities.get_activities": "crm_cskh.api.guarded_crm.get_activities",
 }
 
 # DocType Class
@@ -264,8 +267,9 @@ override_whitelisted_methods = {
 
 # Request Events
 # ----------------
-# before_request = ["crm_cskh.utils.before_request"]
-# after_request = ["crm_cskh.utils.after_request"]
+before_request = ["crm_cskh.i18n.set_guest_language"]
+update_website_context = ["crm_cskh.i18n.update_website_context"]
+after_request = ["crm_cskh.errors.normalize_error_response"]
 
 # Job Events
 # ----------

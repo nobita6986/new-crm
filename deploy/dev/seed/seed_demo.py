@@ -76,6 +76,7 @@ def _ensure_user(email, full_name, roles):
             "email": email,
             "first_name": full_name,
             "enabled": 1,
+            "language": "vi",
             "send_welcome_email": 0,
             "user_type": "System User",
         })
@@ -84,6 +85,11 @@ def _ensure_user(email, full_name, roles):
         user.save(ignore_permissions=True)
         print(f"  + user {email}")
     user = frappe.get_doc("User", email)
+    if user.language != "vi":
+        # Seed accounts are dedicated DEV fixtures; keep their UI locale aligned
+        # with the Vietnamese checklist on both fresh and existing sites.
+        frappe.db.set_value("User", email, "language", "vi")
+        print(f"  ~ language {email}: vi")
     existing = {r.role for r in user.roles}
     to_add = [r for r in roles if r not in existing]
     if to_add:

@@ -1,0 +1,736 @@
+# EVIDENCE — T1A: G0-02 Vite hot reload + CSRF (BLOCKER runtime + sửa phân tích tĩnh)
+
+> **Ngày xác minh:** 2026-10-19 (UTC+7, lần 3)
+> **Trạng thái:** ⛔ **BLOCKER runtime** — phiên Codex này **KHÔNG có** Docker / Python thật / Yarn / WSL2 / browser.
+> Bằng chứng dưới đây là **phân tích tĩnh** (đọc source code đã khóa + cấu hình upstream) + **lệnh Owner cần chạy** trên máy có Docker/WSL2.
+> **Không sửa upstream CRM/Frappe.** Không bật `ignore_csrf=1`. **KHÔNG đánh dấu PASS** ở phiên này.
+
+---
+
+## 1. Probe môi trường (lần 3, 2026-10-19 ~09:37 UTC+7)
+
+```powershell
+PS> Get-Command docker
+CommandType     Name
+-----------     ----
+# (không có output — command not found)
+
+PS> docker --version
+docker : The term 'docker' is not recognized as the name of a cmdlet, function, script file, or operable program.
+
+PS> Get-Command python
+Application     python.exe        0.0.0.0    %LOCALAPPDATA%\Microsoft\...
+# python --version trả: "Python was not found; run without arguments to install from the Microsoft Store..."
+# → chỉ là App Execution Alias stub, không phải Python thật
+
+PS> Get-Command yarn
+yarn : The term 'yarn' is not recognized as the name of a cmdlet, function, script file, or operable program.
+
+PS> Get-Command pip
+pip : The term 'pip' is not recognized ...
+
+PS> wsl --status
+# Trả help text thay vì status — WSL feature chưa enable / không có distro
+
+PS> wsl -l -v
+# Trả help text — không có distro WSL
+
+PS> Get-Command node
+Application     node.exe   22.23.3.0
+
+PS> Get-Command npm
+ExternalScript  npm.ps1    # 10.9.9
+
+PS> Get-Command git
+Application     git.exe    # 2.56.0.windows.1
+```
+
+| Thành phần | Trạng thái | Ghi chú |
+|---|---|---|
+| `docker` | ❌ không có | xác nhận 3 lần (T1A lần 1, 2, 3) |
+| `docker-compose` | ❌ không có | (legacy v1) cũng không có |
+| `python` / `python3` | ❌ App Execution Alias stub trỏ Microsoft Store | không phải Python thật |
+| `pip` | ❌ không có | |
+| `yarn` | ❌ không có | |
+| `wsl --status` | ⚠️ trả help text | WSL feature chưa enable / không có distro |
+| `node` v22.23.3 | ✅ có | nhưng Vite phải chạy trong container |
+| `npm` 10.9.9 | ✅ có | dùng để cài yarn global nếu muốn; không dùng cho runtime |
+| `git` 2.56.0.windows.1 | ✅ có | dùng cho static analysis |
+| Browser | ❌ không có quyền lưu file ảnh ra host | |
+
+→ **Kết luận:** KHÔNG thể chạy runtime. Toàn bộ G0-02 runtime evidence **chưa tồn tại**.
+
+---
+
+## 2. Sửa lại phân tích tĩnh (lần 3 — phát hiện lỗi của T1A lần 1/2)
+
+### 2.1. Trang `/cskh` KHÔNG phải SPA Vue — là Jinja template
+
+**Phát hiện mới (T1A lần 3):** kiểm tra thực tế trong working tree:
+
+```text
+apps/crm_cskh/crm_cskh/www/
+├── cskh.html          ← Jinja template (1067 bytes)
+├── cskh.py            ← get_context (558 bytes)
+└── __init__.py
+
+apps/crm_cskh/crm_cskh/frontend/   ← KHÔNG TỒN TẠI
+```
+
+`apps/crm_cskh/crm_cskh/hooks.py` **không** khai báo `app_include_js` (toàn comment, không có dòng nào uncomment). Nội dung `cskh.html`:
+
+```jinja
+{% extends "templates/web.html" %}
+{% block page_content %}
+<main class="cskh-page">
+  <h1>{{ _("CSKH") }}</h1>
+  <p>{{ _("Signed in as") }} <strong>{{ current_user }}</strong></p>
+  ...
+</main>
+<script>
+  document.getElementById("cskh-session-check").addEventListener("click", async () => {
+    const response = await fetch("/api/method/crm_cskh.api.health.ping", {
+      method: "POST", credentials: "same-origin",
+      headers: { "X-Frappe-CSRF-Token": "{{ csrf_token }}" },
+    });
+  });
+</script>
+{% endblock %}
+```
+
+→ Trang `/cskh` được phục vụ bởi **Frappe web template engine** (server-side render), **không qua Vite**. Chỉ có 1 fetch POST tới `/api/method/crm_cskh.api.health.ping`.
+
+**Sai trong T1A lần 1/2:** đã viết "Trang `/cskh` qua Vite"; "cần cấu hình Vite proxy"; "cập nhật `crm_cskh/frontend/vite.config.js`". Tất cả dựa trên giả định sai. T1A lần 3 sửa lại:
+
+- `/cskh` **không** cần Vite dev server.
+- `/cskh` cần Vite **chỉ** nếu muốn HMR cho phần `<script>` inline (tức là thay vanilla JS bằng module Vue). Hiện tại không có module nào như vậy.
+- `/cskh` chạy trực tiếp qua Frappe web server (port 8000). Cùng origin với `/api/method/...` → cookie `sid` và `X-Frappe-CSRF-Token` đi cùng request, **không cần Vite proxy** vì không có cross-origin.
+- Vấn đề G0-02 thực sự là với **CRM frontend** (Vue SPA ở `/crm/...`), không phải `/cskh`.
+
+### 2.2. CRM frontend dùng plugin `frappe-ui/vite` với `frappeProxy: true`
+
+Đã đọc `crm/frontend/vite.config.js` tại tag `v1.87.0` (đã khóa) qua `raw.githubusercontent.com`:
+
+```js
+// https://raw.githubusercontent.com/frappe/crm/v1.87.0/frontend/vite.config.js
+import { defineConfig } from 'vite'
+import vue from '@vitejs/plugin-vue'
+import vueJsx from '@vitejs/plugin-vue-jsx'
+import path from 'path'
+import { VitePWA } from 'vite-plugin-pwa'
+
+export default defineConfig(async ({ mode }) => {
+  const isDev = mode === 'development'
+  const config = { plugins: [vue(), vueJsx(), VitePWA({...})], resolve: {...}, ... }
+  const frappeui = await importFrappeUIPlugin(isDev, config)
+  config.plugins.unshift(
+    frappeui({
+      frappeProxy: true,           // ← plugin tự cấu hình proxy
+      lucideIcons: true,
+      jinjaBootData: true,
+      buildConfig: {
+        indexHtmlPath: '../crm/www/crm.html',
+        emptyOutDir: true,
+        sourcemap: true,
+      },
+    }),
+  )
+  return config
+})
+```
+
+**Quan sát quan trọng:**
+- Upstream CRM **KHÔNG** cấu hình `server.proxy` thủ công trong `vite.config.js`.
+- Thay vào đó dùng plugin `frappe-ui/vite` với option `frappeProxy: true`. Plugin này tự động cấu hình proxy `/api` → `http://127.0.0.1:8000` (mặc định).
+- Plugin này tự cấu hình CORS và HMR WebSocket cho phù hợp.
+- Plugin cũng tự resolve `@framework/ui` → `../../frappe/ui/src` (linked package).
+
+**Chi tiết plugin `frappeProxy` (đã đọc source `unpkg.com/frappe-ui@1.0.0-beta.29/vite/frappeProxy.js`):**
+
+```js
+export function frappeProxy({
+  port,
+  source = '^/(desk|app|login|api|assets|files|private)',
+} = {}) {
+  // ...
+  let proxy = {}
+  proxy[source] = {
+    target: `http://127.0.0.1:${webserver_port}`,  // mặc định 8000
+    ws: true,                                       // ← Hỗ trợ WebSocket (HMR)
+    router: function (req) {
+      const site_name = req.headers.host.split(':')[0]
+      return `http://${site_name}:${webserver_port}`  // ← route theo host header
+    },
+  }
+  return { name: 'frappeui-proxy-plugin', config: () => ({ server: { port: port, proxy: proxy } }) }
+}
+```
+
+→ Plugin proxy tất cả path matching `^/(desk|app|login|api|assets|files|private)` sang
+Frappe webserver (mặc định 8000), bao gồm cả WebSocket (HMR). Vite port mặc định = 8080
+(nếu webserver 8000) hoặc webserver_port + 80 (nếu đổi port).
+
+→ Vậy việc chạy CRM Vue qua Vite trong dev đã được upstream giải quyết sẵn bằng plugin. **Không cần patch upstream `vite.config.js`**.
+
+### 2.3. Lỗi của T1A lần 1/2 cần sửa
+
+| T1A lần 1/2 viết | T1A lần 3 sửa lại |
+|---|---|
+| "Trang `/cskh` qua Vite" | Sai — `/cskh` là Jinja template, server-side render. Vấn đề Vite (nếu có) chỉ liên quan CRM frontend. |
+| "Cần cấu hình Vite proxy trong `crm_cskh/frontend/vite.config.js`" | Sai — `crm_cskh/frontend/` không tồn tại; CRM upstream đã có `frappe-ui` plugin với `frappeProxy: true`. |
+| "Cập nhật `host_name = http://127.0.0.1:8080`" | Không cần — nếu chỉ test CRM frontend qua Vite upstream, host_name mặc định `http://127.0.0.1:8000` vẫn dùng được vì proxy tự forward. |
+| "Cấu hình V-A: Vite proxy same-origin" | Áp dụng upstream qua plugin `frappe-ui`, không cần tự viết. |
+| "POST hợp lệ → 200, thiếu token → 403, sai token → 403" | Quan sát runtime trên Frappe 15.123.1 trả HTTP 400 `CSRFTokenError` cho thiếu/sai token; yêu cầu vẫn bị từ chối như mong đợi. Không ghi 403 làm kết quả thực tế. |
+
+---
+
+## 3. Phân tích tĩnh — đã xác minh bằng `git show` trên commit khóa + `raw.githubusercontent.com`
+
+### 3.1. Cấu trúc `/cskh` (cùng-origin với Frappe)
+
+| Mục | Giá trị | Nguồn |
+|---|---|---|
+| Template | `apps/crm_cskh/crm_cskh/www/cskh.html` | đã đọc ở phiên này |
+| Backend | `apps/crm_cskh/crm_cskh/www/cskh.py` (`get_context`) | đã đọc ở phiên này |
+| Endpoint | `/cskh` (cùng origin với Frappe port 8000) | hooks.py không khai báo route; đây là route mặc định của `www/cskh.html` |
+| API gọi từ JS | `POST /api/method/crm_cskh.api.health.ping` | `cskh.html` line 18 |
+| CSRF contract | `csrf_token` được nhúng từ server-side (`frappe.sessions.get_csrf_token()` trong `cskh.py`); client dùng `X-Frappe-CSRF-Token` header | `cskh.py` + `cskh.html` |
+| Cookie | Set tại `http://127.0.0.1:8000` với `SameSite=Lax`; client `credentials: "same-origin"` nghĩa là gửi cookie khi cùng origin | `cskh.html` line 17 |
+| Endpoint `ping` | `crm_cskh.api.health.ping` trả `{app, status, app_version, user}`; `@frappe.whitelist()` (không `allow_guest`) → Frampe từ chối Guest | `apps/crm_cskh/crm_cskh/api/health.py` đã đọc |
+
+### 3.2. Cấu trúc CRM frontend (Vue SPA qua Vite, upstream đã xử lý proxy)
+
+| Mục | Giá trị | Nguồn |
+|---|---|---|
+| Vite cổng | `8080` (mặc định qua plugin) | `frappe-ui/vite` plugin; upstream không hardcode |
+| Frappe dev server cổng | `8000` | image `frappe/bench:v5.31.0` mặc định |
+| Proxy | `/api` → `http://127.0.0.1:8000` (qua plugin `frappe-ui`, không phải tự viết) | `frappeProxy: true` trong `vite.config.js` upstream |
+| CORS | Plugin tự cấu hình | `frappe-ui/vite` source |
+| HMR WebSocket | Plugin tự cấu hình | `frappe-ui/vite` source |
+| Build output | `apps/crm/crm/public/frontend/index.html` → `apps/crm/crm/www/crm.html` (copy) | `package.json` script `copy-html-entry` |
+
+### 3.3. Vấn đề gốc G0-02
+
+- Từ WP-01/PR-#1 đã có: "Vite page hiện trắng nên chưa chứng minh Vue hot reload" (xem `p0-d-runtime.md` §7 và `p0-exit-report.md`).
+- Nguyên nhân có thể (cần runtime verify):
+  1. Plugin `frappe-ui/vite` chưa tải vì thiếu linked package `@framework/ui` (cần `apps/frappe` checkout local — trong docker image bench đã có sẵn).
+  2. Vite không khởi động nếu thiếu `frappe-ui` npm package version mismatch.
+  3. Port 8080 chưa được compose publish ra host ngoài.
+  4. CSRF/session issue nếu truy cập từ origin khác (ít khả năng vì plugin đã xử lý).
+
+→ Đây là **giả thuyết**; cần runtime mới xác minh được.
+
+---
+
+## 4. Lệnh Owner cần chạy trên máy có Docker/WSL2
+
+> **Tách rõ 2 entry-point** trong compose `deploy/dev/docker-compose.yml`:
+> - **Port 8000** (publish ra `127.0.0.1:8000`): Frappe web server chính (do `bench start` chạy trong container `bench`). Phục vụ **Jinja template `/cskh`** (server-side render), `/api/method/...`, `/crm` (production build nếu đã build), `/desk`, `/login`. Tất cả request đi cùng origin `http://127.0.0.1:8000` (hoặc `http://dev.localhost:8000` sau khi thêm hosts).
+> - **Port 8080** (publish ra `127.0.0.1:8080`): Vite dev server (chỉ khởi động khi Owner chạy `yarn dev` trong `apps/crm/frontend`). Phục vụ **CRM frontend SPA** (Vue qua Vite) với HMR. Plugin `frappe-ui/vite` (upstream CRM đã khai báo `frappeProxy: true`) tự proxy `/api`, `/files`, `/assets` sang port 8000.
+>
+> Vì vậy:
+> - **Test `/cskh`** → dùng port **8000**, không cần Vite, curl có thể chạy trực tiếp.
+> - **Test CRM Vue + HMR + CSRF retention** → cần Vite chạy ở port **8080**; test qua port 8080 (plugin proxy sang 8000).
+> - **Cả hai cùng chia sẻ session** qua cookie `sid` Frappe.
+>
+> **Tên service trong compose:** `bench` (KHÔNG phải `backend` — chỗ này T1A lần 1/2 viết sai).
+
+### 4.1. Khởi động stack (sau khi `up -d`)
+
+```powershell
+cd d:\HRP-app\new-crm
+Copy-Item deploy/dev/.env.example deploy/dev/.env -Force
+docker compose -f deploy/dev/docker-compose.yml pull
+docker compose -f deploy/dev/docker-compose.yml up -d
+docker compose -f deploy/dev/docker-compose.yml ps
+# kỳ vọng: 4 service đều "Up (healthy)": db, redis-cache, redis-queue, bench
+```
+
+Nếu chưa có site, chạy bootstrap (xem `t1a-g001-metadata-recheck.md` §6.2):
+
+```powershell
+docker compose -f deploy/dev/docker-compose.yml exec bench bash /src/deploy/dev/bootstrap.sh
+docker compose -f deploy/dev/docker-compose.yml exec bench bash /src/deploy/dev/seed/run-seed.sh
+```
+
+### 4.2. Khởi động Frappe web server (cho `/cskh` Jinja + port 8000)
+
+**Mở terminal PowerShell thứ nhất**, chạy nền:
+
+```powershell
+docker compose -f deploy/dev/docker-compose.yml exec -d bench bash -lc '
+  cd /workspace/frappe-bench &&
+  bench start
+'
+# Hoặc chạy foreground (Ctrl+C để dừng):
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  cd /workspace/frappe-bench &&
+  bench start
+'
+```
+
+**Smoke test ngay** (terminal PowerShell thứ hai):
+
+```powershell
+# (a) Root
+curl.exe -s -o /dev/null -w "GET / -> HTTP %{http_code}`n" http://127.0.0.1:8000/
+
+# (b) /cskh (KHÔNG có Host header — dùng 127.0.0.1 thẳng)
+curl.exe -s -o /dev/null -w "GET /cskh -> HTTP %{http_code}`n" http://127.0.0.1:8000/cskh
+
+# (c) /crm production (nếu đã build, nếu chưa sẽ 404 — OK)
+curl.exe -s -o /dev/null -w "GET /crm -> HTTP %{http_code}`n" http://127.0.0.1:8000/crm
+
+# (d) /desk (cùng host)
+curl.exe -s -o /dev/null -w "GET /desk -> HTTP %{http_code}`n" http://127.0.0.1:8000/desk
+```
+
+**Kỳ vọng (a-d)**: tất cả trả 200 trừ (c) có thể 404 nếu chưa build CRM production.
+
+### 4.3. Khởi động CRM frontend (Vite, port 8080)
+
+**Mở terminal PowerShell thứ ba**, chạy nền:
+
+```powershell
+docker compose -f deploy/dev/docker-compose.yml exec -d bench bash -lc '
+  cd /workspace/frappe-bench/apps/crm/frontend &&
+  yarn install --check-files &&
+  yarn dev --host 0.0.0.0 --port 8080
+'
+# Hoặc foreground (Ctrl+C để dừng):
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  cd /workspace/frappe-bench/apps/crm/frontend &&
+  yarn install --check-files &&
+  yarn dev --host 0.0.0.0 --port 8080
+'
+```
+
+**Lưu log Vite startup** vào file:
+
+```powershell
+docker compose -f deploy/dev/docker-compose.yml logs bench | Tee-Object deploy/dev/evidence/logs/t1a-g002-vite-startup.txt
+```
+
+**Kỳ vọng log Vite:**
+
+```text
+  VITE v8.2.0  ready in NNN ms
+  frappe-ui vite plugin: frappeProxy enabled
+  ➜  Local:   http://localhost:8080/
+  ➜  Network: http://0.0.0.0:8080/
+```
+
+### 4.4. Verify Vite page không trắng (CRM frontend ở port 8080)
+
+**Smoke test bằng curl** (PowerShell thứ hai):
+
+```powershell
+# (a) Vite root
+curl.exe -s -o /dev/null -w "GET / -> HTTP %{http_code}`n" http://127.0.0.1:8080/
+
+# (b) Vite proxy CRM frontend
+curl.exe -s -o /dev/null -w "GET /crm -> HTTP %{http_code}`n" -H "Host: dev.localhost" http://127.0.0.1:8080/crm
+
+# (c) Vite proxy API
+curl.exe -s -o /dev/null -w "GET /api/method/frappe.sessions.get_csrf_token -> HTTP %{http_code}`n" -H "Host: dev.localhost" http://127.0.0.1:8080/api/method/frappe.sessions.get_csrf_token
+```
+
+**Kết quả đã quan sát:** (a) và (b) 200; (c) trả HTTP 403 `PermissionError` trên site đã kiểm tra. Lấy token sau khi đăng nhập từ HTML `/cskh` cùng origin; không dùng endpoint này như nguồn token.
+
+**Mở Chrome** trên máy Owner, truy cập `http://127.0.0.1:8080/crm`:
+
+- Tab Network: SPA shell HTTP 200; request `/api/method/...` được proxy sang 8000 (status 200, không CORS error).
+- Tab Console: KHÔNG có lỗi `WebSocket connection to ws://... failed` hoặc `CORS policy`.
+- DOM: `<div id="app">` có markup Vue render (form login CRM).
+
+Nếu thấy trắng:
+- Kiểm tra log Vite có dòng "frappe-ui vite plugin" không.
+- Request `/api/method/frappe.sessions.get_csrf_token` có thể bị từ chối quyền; lấy token từ HTML `/cskh` rồi kiểm tra POST qua Vite.
+- Plugin tự động include `@framework/ui` từ `apps/frappe/ui/src` — nếu checkout thiếu, plugin fallback npm; vẫn chạy được.
+
+### 4.5. Verify Vite hot reload (HMR)
+
+**Trong PowerShell thứ tư**, sửa 1 component CRM:
+
+```powershell
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc '
+  cat > /tmp/probe.vue <<EOF
+<template><div>Probe T1A G0-02 HMR — {{ ts }}</div></template>
+<script setup>const ts = new Date().toISOString();</script>
+EOF
+  cp /tmp/probe.vue /workspace/frappe-bench/apps/crm/frontend/src/components/Probe.vue
+  echo "Probe.vue created at $(date)"
+'
+```
+
+Trong Chrome DevTools Network tab, xác nhận có message `WebSocket message: 'update'` cho file `Probe.vue`. DOM phải tự cập nhật timestamp trong < 2 giây.
+
+Lưu screenshot vào `deploy/dev/evidence/screenshots/t1a-g002-01-hmr.png`.
+
+### 4.6. Verify CSRF retention (qua Vite proxy ở port 8080)
+
+```bash
+# Dùng mật khẩu DEV trong .env; không ghi mật khẩu, cookie hoặc token vào evidence.
+touch /tmp/cookies.txt
+ADMIN_PWD=$(grep ^ADMIN_PASSWORD deploy/dev/.env | cut -d= -f2-)
+curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
+  http://127.0.0.1:8080/api/method/login \
+  -H "Host: dev.localhost" -H "Content-Type: application/json" \
+  -d "{\"usr\":\"Administrator\",\"pwd\":\"$ADMIN_PWD\"}" \
+  -o /tmp/t1a-g002-login.json -w "login HTTP %{http_code}\n"
+
+# Lấy token server-rendered từ /cskh; endpoint get_csrf_token riêng bị 403.
+curl -fsS -b /tmp/cookies.txt -c /tmp/cookies.txt \
+  -H "Host: dev.localhost" http://127.0.0.1:8080/cskh -o /tmp/t1a-g002-cskh.html
+TOKEN=$(python - <<'PY'
+import re
+from pathlib import Path
+
+html = Path("/tmp/t1a-g002-cskh.html").read_text()
+match = re.search(r"frappe\.csrf_token\s*=\s*(['\"])(.*?)\1", html)
+if not match:
+    raise SystemExit("CSRF token was not present in /cskh HTML")
+print(match.group(2))
+PY
+)
+
+# (3) POST hợp lệ — frappe.ping (kỳ vọng HTTP 200, body {"message":"pong"})
+curl -s -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/frappe.ping \
+  -H "Host: dev.localhost" -H "X-Frappe-CSRF-Token: $TOKEN" \
+  -w "\nHTTP %{http_code}\n" \
+  | tee deploy/dev/evidence/logs/t1a-g002-curl-ok.txt
+
+# (4) POST hợp lệ — crm_cskh.api.health.ping
+curl -s -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/crm_cskh.api.health.ping \
+  -H "Host: dev.localhost" -H "X-Frappe-CSRF-Token: $TOKEN" \
+  -w "\nHTTP %{http_code}\n" \
+  | tee deploy/dev/evidence/logs/t1a-g002-health-ok.txt
+
+# (5) POST thiếu token (quan sát: HTTP 400 CSRFTokenError)
+curl -s -o /dev/null -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/frappe.ping \
+  -H "Host: dev.localhost" \
+  -w "HTTP %{http_code}\n" \
+  | tee deploy/dev/evidence/logs/t1a-g002-curl-no-token.txt
+
+# (6) POST sai token (quan sát: HTTP 400 CSRFTokenError)
+curl -s -o /dev/null -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/frappe.ping \
+  -H "Host: dev.localhost" -H "X-Frappe-CSRF-Token: WRONG-TOKEN-12345" \
+  -w "HTTP %{http_code}\n" \
+  | tee deploy/dev/evidence/logs/t1a-g002-curl-bad-token.txt
+
+# Dọn file tạm có HTML/token sau khi hoàn tất.
+rm -f /tmp/t1a-g002-cskh.html /tmp/t1a-g002-login.json /tmp/cookies.txt
+```
+
+### 4.7. Verify `/cskh` (Jinja ở port 8000 — KHÔNG qua Vite)
+
+`/cskh` là Jinja template server-side, **không cần Vite**. Test thẳng port 8000:
+
+```bash
+# (1) Login. Frappe accepts the login POST without a prior CSRF token.
+touch /tmp/cookies-cskh.txt
+ADMIN_PWD=$(grep ^ADMIN_PASSWORD deploy/dev/.env | cut -d= -f2-)
+curl -s -b /tmp/cookies-cskh.txt -c /tmp/cookies-cskh.txt -X POST \
+  http://127.0.0.1:8000/api/method/login \
+  -H "Content-Type: application/json" \
+  -d "{\"usr\":\"Administrator\",\"pwd\":\"$ADMIN_PWD\"}" \
+  -o /dev/null -w "login HTTP %{http_code}\n"
+
+# (2) Lấy token server-rendered từ /cskh; không in/lưu token vào evidence.
+curl -fsS -b /tmp/cookies-cskh.txt -c /tmp/cookies-cskh.txt \
+  http://127.0.0.1:8000/cskh -o /tmp/t1a-g002-cskh.html
+TOKEN=$(python - <<'PY'
+import re
+from pathlib import Path
+
+html = Path("/tmp/t1a-g002-cskh.html").read_text()
+match = re.search(r"frappe\.csrf_token\s*=\s*(['\"])(.*?)\1", html)
+if not match:
+    raise SystemExit("CSRF token was not present in /cskh HTML")
+print(match.group(2))
+PY
+)
+
+# (3) POST hợp lệ tới crm_cskh.api.health.ping (kỳ vọng 200)
+curl -s -b /tmp/cookies-cskh.txt -X POST http://127.0.0.1:8000/api/method/crm_cskh.api.health.ping \
+  -H "X-Frappe-CSRF-Token: $TOKEN" -w "\nHTTP %{http_code}\n" \
+  | tee deploy/dev/evidence/logs/t1a-g002-cskh-health.txt
+# kỳ vọng: {"message":{"app":"crm_cskh","status":"ok","app_version":"0.0.1","user":"Administrator"}}
+
+# (4) POST thiếu token (quan sát: HTTP 400 CSRFTokenError)
+curl -s -o /dev/null -b /tmp/cookies-cskh.txt -X POST \
+  http://127.0.0.1:8000/api/method/crm_cskh.api.health.ping \
+  -w "HTTP %{http_code}\n" \
+  | tee deploy/dev/evidence/logs/t1a-g002-cskh-no-token.txt
+
+# Dọn file tạm có HTML/token sau khi hoàn tất.
+rm -f /tmp/t1a-g002-cskh.html /tmp/cookies-cskh.txt
+```
+
+**Trên Chrome** (PowerShell không cần):
+
+- Mở `http://127.0.0.1:8000/cskh` → trang render server-side, có nút "Kiểm tra phiên đăng nhập và CSRF".
+- Bấm nút → DevTools Network: `POST /api/method/crm_cskh.api.health.ping` trả 200, body `{"message":{"status":"ok",...,"user":"Administrator"}}`.
+- Nếu thiếu session: response là "Request denied" (Jinja cũng render message).
+- Chụp screenshot: `deploy/dev/evidence/screenshots/t1a-g002-02-cskh-jinja.png`.
+
+### 4.8. Không bật `ignore_csrf`
+
+```powershell
+docker compose -f deploy/dev/docker-compose.yml exec bench bash -lc 'cat /workspace/frappe-bench/sites/dev.localhost/site_config.json' \
+  | Select-String "ignore_csrf" | Tee-Object deploy/dev/evidence/logs/t1a-g002-site-config.txt
+# kỳ vọng: (không có dòng nào) → OK: ignore_csrf not set
+```
+
+### 4.9. Lưu log
+
+Tất cả output đã được lưu trong các lệnh trên vào:
+
+```
+deploy/dev/evidence/logs/t1a-g002-vite-startup.txt
+deploy/dev/evidence/logs/t1a-g002-csrf-token.txt
+deploy/dev/evidence/logs/t1a-g002-login.txt
+deploy/dev/evidence/logs/t1a-g002-curl-ok.txt
+deploy/dev/evidence/logs/t1a-g002-curl-no-token.txt
+deploy/dev/evidence/logs/t1a-g002-curl-bad-token.txt
+deploy/dev/evidence/logs/t1a-g002-health-ok.txt
+deploy/dev/evidence/logs/t1a-g002-cskh-csrf-token.txt
+deploy/dev/evidence/logs/t1a-g002-cskh-login.txt
+deploy/dev/evidence/logs/t1a-g002-cskh-health.txt
+deploy/dev/evidence/logs/t1a-g002-cskh-no-token.txt
+deploy/dev/evidence/logs/t1a-g002-site-config.txt
+deploy/dev/evidence/screenshots/t1a-g002-01-hmr.png
+deploy/dev/evidence/screenshots/t1a-g002-02-cskh-jinja.png
+```
+
+---
+
+## 5. Checklist kết quả (CHƯA điền — chờ runtime)
+
+- [ ] (a) Stack `db/redis-cache/redis-queue/bench` đều `Up (healthy)`.
+- [ ] (b) `crm_cskh` cài thành công (`bench --site dev.localhost list-apps` có `crm_cskh`).
+- [ ] (c) Vite dev server khởi động, log có dòng "frappe-ui vite plugin" và "VITE ready".
+- [ ] (d) Truy cập `http://127.0.0.1:8080/crm` render CRM SPA (không trắng).
+- [ ] (e) Sửa component `Probe.vue` → DOM tự cập nhật timestamp trong < 2 giây (HMR).
+- [ ] (f) `GET /api/method/frappe.sessions.get_csrf_token` qua Vite proxy trả token. (Kết quả đã quan sát: HTTP 403; token lấy từ `/cskh`.)
+- [ ] (g) `POST /api/method/frappe.ping` với token hợp lệ → HTTP 200 `{"message":"pong"}`.
+- [ ] (h) `POST /api/method/frappe.ping` không token → HTTP 400 `CSRFTokenError`.
+- [ ] (i) `POST /api/method/frappe.ping` sai token → HTTP 400 `CSRFTokenError`.
+- [ ] (j) `POST /api/method/crm_cskh.api.health.ping` với token hợp lệ → HTTP 200 `{"message":{"status":"ok",...}}`.
+- [ ] (k) `POST /api/method/crm_cskh.api.health.ping` không token → HTTP 400 `CSRFTokenError`.
+- [ ] (l) Truy cập `http://127.0.0.1:8000/cskh` render Jinja; bấm nút "Kiểm tra phiên" → response ok.
+- [ ] (m) `site_config.json` KHÔNG chứa `ignore_csrf`.
+- [ ] (n) Không có lỗi CORS/WebSocket trong browser console.
+
+**Trạng thái hiện tại:** 0/14 — KHÔNG đánh dấu PASS.
+
+---
+
+## 6. Blocker log — điều kiện cần để chạy runtime
+
+| # | Blocker | Owner cần |
+|---|---|---|
+| B-1 | `docker` không có trong PowerShell session Codex này (xác nhận 3 lần) | Mở PowerShell session mới sau khi Docker Desktop đã start; theo `environment-probe.md` §8, Docker Desktop + WSL2 đã chạy thành công 2026-10-15 nên có thể tái dựng |
+| B-2 | `python` / `pip` không phải binary thật (chỉ App Execution Alias) | Cài Python 3.12+ thật nếu cần chạy ngoài container; container `bench` đã có Python 3.14.8 |
+| B-3 | `yarn` không có trên host | Container `frappe/bench` đã có Yarn 1.22.22 (xem `wp01-runtime.md`); không cần cài trên host |
+| B-4 | `wsl --status` trả help text trong session này (WSL2 đã chạy 2026-10-15 nhưng PowerShell session hiện không inherit WSL) | Mở PowerShell mới hoặc chạy `wsl -l -v` sau khi Docker Desktop start xong |
+| B-5 | Không có GUI browser để chụp screenshot và verify Vite render | Owner dùng Chrome/Edge trên máy local; container đã publish port 8080 ra `127.0.0.1:8080` nên browser truy cập trực tiếp được |
+| B-6 | `dev.localhost` không resolve trên Windows host | Thêm `127.0.0.1 dev.localhost` vào `C:\Windows\System32\drivers\etc\hosts` (cần quyền admin) — HOẶC dùng `127.0.0.1:port` + `Host: dev.localhost` header cho mọi curl request (xem §4.6, §4.7) |
+
+---
+
+## 7. Kết luận G0-02 (T1A lần 3)
+
+- **Trạng thái:** ⛔ BLOCKER runtime. Không có bằng chứng runtime trong phiên này.
+- **Phân tích tĩnh đã sửa:** T1A lần 1/2 viết sai rằng `/cskh` qua Vite; thực tế `/cskh` là Jinja template, cùng-origin với Frappe. Vấn đề Vite (nếu có) chỉ liên quan CRM frontend.
+- **CRM upstream:** đã xử lý Vite proxy qua plugin `frappe-ui/vite` với `frappeProxy: true`. Không cần patch upstream `vite.config.js`.
+- **Lệnh chạy runtime:** §4 — Owner cần chạy trên máy có Docker + browser.
+- **Khi runtime chạy xong:** điền lại checklist §5 (14 mục) và đánh dấu lại G0-02 trong `p0-exit-report.md`. Đến lúc đó mới có thể nói "đạt" hay "không đạt".
+- **KHÔNG tuyên bố PASS** ở phiên này.
+
+## 8. Cập nhật runtime DEV (T1A, 2026-10-27)
+
+> Phần 5–7 là ảnh chụp lịch sử khi chưa có Docker/browser runtime. Phần này cập nhật những mục đã kiểm tra trong follow-up; không xóa lịch sử và không đánh dấu G0-02 PASS.
+
+| Mục | Kết quả mới nhất |
+|---|---|
+| (a) stack | **PASS** — bốn container chạy, DB healthy |
+| (b) `crm_cskh` | **PASS** — site hiện hành đã cài app |
+| (c) Vite | **PASS** — dev server sẵn sàng; HMR log được ghi |
+| (d) SPA | **PASS** — CRM Vue mount trong browser, không trắng |
+| (e) HMR | **PASS** — CSS probe `--p0-hmr-probe=27` cập nhật computed style; CSS gốc được khôi phục và SHA-256 khớp |
+| (f) nguồn token | Endpoint `get_csrf_token` trả **403 `PermissionError`**; token được lấy từ HTML `/cskh`, không nới quyền endpoint |
+| (g) `frappe.ping` hợp lệ | **PASS** — HTTP 200 |
+| (h)/(i) thiếu/sai token | **Bị từ chối đúng** — HTTP 400 `CSRFTokenError` (không phải 403 như checklist cũ) |
+| (j)/(k) `crm_cskh.api.health.ping` | **ĐÃ KIỂM TRA HTTP** trong cùng phiên đăng nhập: CSRF hợp lệ → 200 với `status=ok`; thiếu token → 400; token sai → 400. Đã lấy token từ HTML `/cskh`, không ghi token/cookie vào log. Chưa bấm nút bằng browser. |
+| (l) `/cskh` | HTML Jinja tải được; thao tác nút kiểm tra phiên chưa xác minh |
+| (m) `ignore_csrf` | **PASS** — khóa không được đặt và giá trị hiệu dụng false |
+| (n) console CORS/WebSocket sạch | **CHƯA XÁC MINH** toàn bộ; không kết luận không có lỗi |
+
+Trạng thái checklist không còn là “0/14” hiện hành; các dòng checkbox ở §5 được giữ làm mẫu lịch sử. Sau kiểm tra bổ sung tại §9, (j)/(k) đã được kiểm tra qua HTTP; G0-02 tiếp tục **PARTIAL** vì chưa click nút thật trên browser và chưa kiểm tra console CORS/WebSocket sạch.
+
+## 9. Kiểm tra bổ sung sau khởi động lại (T1A, 2026-10-27)
+
+- Docker Desktop 29.9.2 được khởi động; `db` healthy, `redis-cache`, `redis-queue`, `bench` đều lên. Trong `bench`, chạy nền `bench start` và CRM Vite `yarn dev --host 0.0.0.0 --port 8080`.
+- Qua loopback `127.0.0.1` với `Host: dev.localhost`: `/api/method/ping` → **200**; Vite `/crm` → **200**. Host PowerShell không phân giải tên `dev.localhost`, nên link mở được từ host là `http://127.0.0.1:8080/crm/dashboard`.
+- Đăng nhập dùng `ADMIN_PASSWORD` lấy từ môi trường container; giá trị không được in/log. Login → **200**; HTML `/cskh` → **200**, nút `cskh-session-check` hiện diện. Lấy CSRF token từ HTML và gọi đúng endpoint mà nút dùng: token hợp lệ → **200**, payload `status=ok`; thiếu token trong cùng session → **400**; token sai → **400**.
+- Một request thiếu token nhưng **không có session** trước đó trả **403** do kiểm tra quyền. Không dùng kết quả này để kết luận CSRF; phép đo hợp lệ là các request cùng session ở trên. Không log token, cookie hay nội dung xác thực.
+- Đây là HTTP/API round-trip, không phải thao tác click UI. Chưa xác nhận click nút thật hoặc console CORS/WebSocket; G0-02 vẫn **PARTIAL**.
+
+## 10. Tái kiểm tra runtime T1A (2026-10-28)
+
+> Các mục 1–9 là lịch sử và vẫn được giữ nguyên. Kết quả hiện hành có log chi tiết tại [`t1a-p0-runtime-evidence-2026-10-28.md`](t1a-p0-runtime-evidence-2026-10-28.md) §G0-02.
+
+- Login/session trên site hiện hữu `dev.localhost` thành công. Cùng session: CSRF hợp lệ → HTTP 200; thiếu/sai token → HTTP 400 JSON `CSRFTokenError`. Không tắt CSRF.
+- CRM Vue mount được qua temporary Vite `:8090` trỏ tới site `:8010`; `/api/method/frappe.ping` trả 200 JSON. HMR probe qua Vite `:8080` nhận WebSocket update cho temporary module, nhưng đây không phải hot replacement của CRM Vue component.
+- CDP bắt được ba JSON parse error: `GET /crm/frappe.onboarding.get_onboarding_status` trả 200 `text/html`, initiator `node_modules/frappe-ui/src/utils/request.ts:27`. Endpoint API đúng `POST /api/method/frappe.onboarding.get_onboarding_status` trả 200 JSON. Đây là SPA fallback; upstream dependency không được sửa.
+- Các lỗi riêng còn mở: built CRM bundle `UserAvatar-B8XM8YZb.js:1:6600` báo `ReferenceError: __ is not defined`; `/website_script.js` 404; Socket.IO polling qua Vite `:8080` nhận 200 HTML, port `:9000` bị từ chối. G0-02 vẫn **PARTIAL** vì standard proxy/Socket.IO và bundle error chưa được khắc phục; không có căn cứ đủ để sửa upstream hoặc tuyên bố PASS.
+
+## 11. Tái kiểm tra sau bộ vá mới (T1A, 2026-10-31) — patcher, CSRF, Socket.IO
+
+> G0-02 đã được Owner duyệt PASS (bằng chứng §15.5–§15.6 của các lượt trước). Mục này ghi lại lượt kiểm tra độc lập sau khi gói vá DEV (patcher + docker-compose) được cập nhật.
+
+- **Patcher** [`apply-crm-vite-dev-patch.py`](../apply-crm-vite-dev-patch.py): chạy 2 lần trong bench container trên checkout CRM ghim `0d3910b456ef4fb913e77b29db011b3debc4f778` — lần 1 toàn bộ `already patched`, lần 2 **idempotent** (cùng output, exit 0, không lỗi). Patcher tự chối chạy nếu SHA lệch pin. Nội dung vá đã xác minh có mặt: Socket.IO proxy block `target: http://127.0.0.1:9000` trong `vite.config.js`, nhánh `import.meta.env.DEV` trong `src/socket.js`, shim `window.__` trong `index.html`, chuẩn hóa RPC dotted-path trong `frappe-ui/src/utils/request.ts`, observer `@vueuse/core`, placeholder `SidePanelLayout.vue`.
+- **docker-compose.yml**: `docker compose config --quiet` hợp lệ; `extra_hosts dev.localhost:127.0.0.1` cho bench đã áp dụng.
+- **Runtime (2026-10-31, ports remap):** host 8000/8080/9000 đang bị giữ bởi stack `p0-ci47-verify` (T1B) ⇒ session dùng `WEB_PORT=8010`, `SOCKETIO_PORT=9010`, `VITE_PORT=8091` (env khi `up`, không sửa file). `bench start` + `bench socketio` + Vite `yarn dev --port 8080` chạy trong container; web `/api/method/frappe.ping` → 200, Vite `/` → 200.
+- **CSRF qua Vite proxy `:8091` — 6/6 PASS:** login staff → 200 · `/cskh` Jinja → 200 (lấy token từ HTML) · POST `crm_cskh.api.health.ping` token hợp lệ → **200** (`status=ok`) · thiếu token → **400** · sai token → **400** · Socket.IO polling same-origin `/socket.io/?EIO=4&transport=polling` → **200** Engine.IO open packet (không còn nhận HTML SPA fallback như §10).
+- **Socket.IO:** proxy `ws: true` + `changeOrigin: true` đã có trong config; bootstrap `socket.js` dùng same-origin ở DEV. Browser CDP capture trên lead detail render đầy đủ SPA (tiêu đề lead, nút `Chuyển thành Cơ hội`).
+- **Kết luận:** gói vá áp dụng đúng trên revision ghim, chạy lại không lỗi; CSRF fail-closed và Socket.IO qua Vite hoạt động sau các thay đổi. G0-02 giữ **PASS (Owner đã duyệt)**, bằng chứng bổ sung này không làm thay đổi verdict.
+
+> ⚠️ **Cảnh báo (bổ sung 2026-10-31, mục §12):** dòng "Socket.IO: `changeOrigin: true`" ở trên **sai** — `changeOrigin: true` là nguyên nhân gốc làm namespace join thất bại, không phải cấu hình đúng. Xem §12.
+
+## 12. Namespace Socket.IO thật + sửa nguyên nhân gốc (T1A, 2026-10-31)
+
+> §11 mới chỉ chứng minh **Engine.IO handshake / polling 200**. Yêu cầu bổ sung: phải chứng minh **namespace thật đã join** (`connected=true`), vì handshake 200 một mình không chứng minh connected. Mục này đo lại và sửa 2 nguyên nhân gốc phát hiện được.
+
+### 12.1 Nguyên nhân gốc #1 — `changeOrigin: true` phá namespace join
+
+- `apps/frappe/realtime/middlewares/authenticate.js` so sánh **hostname của header `Host`** với **hostname của header `Origin`**; lệch → `next(new Error("Invalid origin"))`.
+- Với `changeOrigin: true`, Vite ghi đè `Host` thành target proxy (`127.0.0.1:9000`) trong khi `Origin` của trình duyệt vẫn là `dev.localhost` ⇒ **mọi namespace join thất bại**, DÙ Engine.IO handshake vẫn trả HTTP 200.
+- Với `changeOrigin: false`, Vite giữ nguyên `Host` ⇒ hostname khớp ⇒ namespace join thành công.
+
+### 12.2 Nguyên nhân gốc #2 — cổng Vite không nhất quán host ↔ container
+
+- Realtime tự xác thực bằng request tới `Origin + /api/method/frappe.realtime.get_user_info` (`apps/frappe/realtime/utils.js`). `Origin` là cổng mà **trình duyệt** dùng, nên cổng đó phải truy cập được **bên trong container**.
+- `frappe-ui` tự tính cổng Vite từ `webserver_port` (`8080 + offset`) và giá trị này **ghi đè** cờ `--port` của CLI ⇒ chạy `vite --port 8091` vẫn bind `8080`.
+- Sửa: `frappeProxy` nhận `port: Number(process.env.VITE_DEV_PORT || 8080)`, và compose publish **cùng số cổng** cho host lẫn container (`VITE_PORT` == `VITE_DEV_PORT`).
+
+### 12.3 Đo có đối chứng (artifact)
+
+Artifact: [`logs/t1a-g002-socket-namespace-evidence-20261031.json`](logs/t1a-g002-socket-namespace-evidence-20261031.json) — sha256 `2a83b0f0b44268d23cdc6135f60362f680fd52be0c8b998bd9eeac0492a54a03`.
+
+| Kịch bản | Cấu hình | Kết quả |
+|---|---|---|
+| **FIXED** | `changeOrigin: false`, host port == container port (8091) | `connected=true`, `id=ZA2FztZV0uliyTwLAAAI`, `nsp=/dev.localhost`, `transport=websocket`, `emit('ping')` → **`pong`** |
+| **REGRESSION** | **giống hệt**, chỉ đổi `changeOrigin: true` | `connected=false`, `connect_error = "Invalid origin"` |
+| **FIXED RESTORED** | `changeOrigin: false` lại | `connected=true`, `transport=websocket`, `pong` |
+
+- Tiêu chí PASS: sự kiện `connect` với `socket.id` khác null, `nsp=/dev.localhost`, `transport=websocket`, **và** `emit('ping')` nhận được `pong` ⇒ round-trip server thật, không phải chỉ handshake.
+- Đo bằng `socket.io-client` v4.7.2 (bản ghim trong `apps/crm/frontend`), cookie phiên hợp lệ; **không ghi cookie/token vào artifact**.
+- Cổng: host `8010/9010/8091`, container `8000/9000/8091` — `VITE_PORT == VITE_DEV_PORT == 8091` ⇒ nhất quán.
+
+### 12.4 Thay đổi đã áp dụng
+
+- [`apply-crm-vite-dev-patch.py`](../apply-crm-vite-dev-patch.py): `changeOrigin: true` → **`false`** (và tự nâng cấp từ bản `true` cũ lên `false`); thêm `port: Number(process.env.VITE_DEV_PORT || 8080)` vào khối `frappeProxy`.
+- [`docker-compose.yml`](../docker-compose.yml): thêm `VITE_DEV_PORT: ${VITE_PORT:-8080}` cho service `bench`; publish `127.0.0.1:${VITE_PORT}:${VITE_PORT}` (host port == container port).
+
+### 12.5 Idempotency sau thay đổi
+
+- Patcher chạy trên checkout CRM ghim `0d3910b456ef4fb913e77b29db011b3debc4f778`: lần 1 trên config cũ (`changeOrigin: true`, `frappeProxy` chưa có `port`) → vá đúng 2 chỗ; lần 2 → `already patched`, **output giống hệt lần 3**, exit 0. Không có lỗi.
+- `docker compose config --quiet` → hợp lệ; `VITE_DEV_PORT` = `8091` đúng khi `VITE_PORT=8091`.
+- `docker compose up -d --force-recreate bench` với `WEB_PORT=8010 SOCKETIO_PORT=9010 VITE_PORT=8091` → container nhận `VITE_DEV_PORT=8091`; Vite bind đúng `8091` trong container (không còn bị frappe-ui ghi đè về 8080).
+
+### 12.6 Kết luận
+
+- **G0-02 giữ PASS (Owner đã duyệt)**; nay đã có bằng chứng **namespace Socket.IO thật** thay cho suy luận từ polling 200.
+- Bản chất gói DEV đã được sửa đúng 2 điểm làm Socket.IO không bao giờ thật sự kết nối trong DEV.
+- **Giới hạn:** đây là bằng chứng **DEV** (Vite dev server + Frappe realtime). Không mở rộng sang production ingress/TLS/CORS; SEC-13 vẫn giữ giới hạn topology P0.
+
+## 13. LỖI NGỮ PHÁP TRONG PATCHER — `vite.config.js` hỏng sau khi vá (T1A, 2026-10-31, lượt 4)
+
+> §12 kết luận "patcher chạy đúng" **chỉ đúng khi config ĐÃ được vá sẵn**. Lượt kiểm tra 4 (áp patcher lên checkout CRM **nguyên bản** ghim) phát hiện lỗi chặn: patcher sinh ra `vite.config.js` **không parse được**, khiến Vite dev server **không khởi động được**.
+
+### 13.1 Triệu chứng
+
+```text
+failed to load config from /workspace/frappe-bench/apps/crm/frontend/vite.config.js
+[PARSE_ERROR] Expected `,` or `]` but found `:`
+  vite.config.js:103:14
+   103 │       exclude: [
+        │              ┬
+        ╰── `,` or `]` expected
+```
+
+`node --check vite.config.js` → `SyntaxError: Unexpected token ':'` tại dòng 103.
+
+### 13.2 Nguyên nhân gốc
+
+Patch `optimizeDeps` dùng anchor là **dấu đóng ngoặc vuông của mảng `include:`**:
+
+```python
+optimizer_new = "      exclude: [\n        'frappe-ui/editor',\n      ],"
+optimizer_changed = patch_once(
+    config,
+    "      ],\n    },\n    server: {",     # <- anchor NUOT đóng mảng include:
+    optimizer_new + "\n    },\n    server: {",
+)
+```
+
+Anchor `"      ],\n    },\n    server: {"` **bao gồm** dấu `]` đóng mảng `include:`, nhưng phần thay thế **không phát lại** dấu `]` đó ⇒ mảng `include:` bị bỏ dấu đóng, và `exclude:` được chèn vào **giữa** mảng:
+
+```js
+    optimizeDeps: {
+      include: [
+        'feather-icons',
+        ...
+        'interactjs',
+      exclude: [              // <-- sai: `],` của include bị nuốt mất
+        'frappe-ui/editor',
+      ],
+    },
+```
+
+### 13.3 Vì sao trước đây không bị phát hiện
+
+| Bước đo | Kết quả | Lý do không bắt được lỗi |
+|---|---|---|
+| §12.5 chạy patcher trên config **đã vá sẵn** | `already patched` | `patch_once` trả `False` ngay khi `new in text` ⇒ **không** chạy phép thay thế ⇒ không sinh code hỏng |
+| §12 chạy trên container có config **do tay dựng** | Vite chạy được | Config dựng tay (`/tmp/vite.cfg.final.bak`) **có** dấu `],` đóng mảng ⇒ không hỏng |
+| `docker compose config --quiet` | hợp lệ | Chỉ kiểm tra YAML của compose, **không** parse JS |
+| CI (`ruff`, `docker compose config`) | xanh | Không có bước nào parse `vite.config.js` sau khi vá |
+
+⇒ Chỉ lộ ra khi **áp patcher lên checkout nguyên bản** rồi **khởi động Vite**.
+
+### 13.4 Sửa
+
+1. **Sửa phép thay thế** — phát lại dấu `]` đóng mảng `include:`:
+
+```python
+optimizer_new = (
+    "      ],\n"
+    "      exclude: [\n"
+    "        'frappe-ui/editor',\n"
+    "      ],\n"
+    "    },\n"
+    "    server: {"
+)
+```
+
+2. **Thêm cổng kiểm tra cú pháp** `check_js_syntax()` dùng `node --check` cho `vite.config.js`, `src/socket.js`, `src/main.js`, `src/translation.js` **ngay sau** khi vá. Lỗi cú pháp ⇒ patcher dừng với exit code 2, **không** chờ tới lúc khởi động Vite mới lộ.
+
+### 13.5 Kiểm chứng sau khi sửa
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Áp patcher lên checkout **nguyên bản** ghim `0d3910b4…` | exit **0**, `Vite config: patched` |
+| `node --check vite.config.js` | **OK** (syntax hợp lệ) |
+| Cấu trúc `optimizeDeps` | `include: [...]` **có** dấu `],` đóng, rồi mới tới `exclude: [...]` |
+| Chạy lại lần 2, lần 3 | `already patched`; `vite.config.js` **cùng SHA-256** `6e07ab3f…` qua cả 3 lần ⇒ **idempotent** |
+| Khởi động Vite | `VITE v8.2.0 ready in 937 ms` — **không** còn PARSE_ERROR |
+| Namespace Socket.IO sau khi sửa | `connected=true`, `nsp=/dev.localhost`, `transport=websocket`, `emit('ping')` → **`pong`** |
+| **Kiểm tra phản chứng** (cố ý tái tạo lỗi cũ) | Patcher dừng với exit **2** và báo `Patched file ... is not valid JavaScript` ⇒ cổng kiểm tra **thực sự bắt được** lỗi |
+
+### 13.6 Kết luận
+
+- G0-02 vẫn giữ **PASS (Owner đã duyệt)**; mục này **siết** bằng chứng: nay đã chứng minh patcher **áp dụng được trên checkout nguyên bản** và **sinh ra config Vite khởi động được**, thay vì chỉ "idempotent trên config đã vá".
+- Bản vá nằm trong gói DEV của T1A ⇒ cần **commit + CI mới** trên PR #2 (PR giữ **OPEN**, **KHÔNG merge**).

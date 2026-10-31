@@ -1,0 +1,52 @@
+{
+  "generatedAt": "2026-10-29T15:59:00.130Z",
+  "site": "dev.localhost",
+  "route": "/crm/leads/CRM-LEAD-10207#activity",
+  "httpStatus": 200,
+  "check": {
+    "actual": [
+      "Thêm tổ chức...",
+      "Thêm trang web...",
+      "Thêm địa bàn...",
+      "Thêm ngành nghề...",
+      "Thêm chức danh...",
+      "Thêm nguồn...",
+      "Chọn Nhân viên phụ trách...",
+      "Thêm danh xưng...",
+      "Thêm tên...",
+      "Thêm họ...",
+      "Thêm thư điện tử...",
+      "Thêm số di động..."
+    ],
+    "expected": [
+      "Thêm tổ chức...",
+      "Thêm trang web...",
+      "Thêm địa bàn...",
+      "Thêm ngành nghề...",
+      "Thêm chức danh...",
+      "Thêm nguồn...",
+      "Chọn Nhân viên phụ trách...",
+      "Thêm danh xưng...",
+      "Thêm tên...",
+      "Thêm họ...",
+      "Thêm thư điện tử...",
+      "Thêm số di động..."
+    ],
+    "checks": {
+      "Thêm tổ chức...": true,
+      "Thêm trang web...": true,
+      "Thêm địa bàn...": true,
+      "Thêm ngành nghề...": true,
+      "Thêm chức danh...": true,
+      "Thêm nguồn...": true,
+      "Chọn Nhân viên phụ trách...": true,
+      "Thêm danh xưng...": true,
+      "Thêm tên...": true,
+      "Thêm họ...": true,
+      "Thêm thư điện tử...": true,
+      "Thêm số di động...": true
+    },
+    "remainingEnglish": [],
+    "allPass": true
+  }
+}
