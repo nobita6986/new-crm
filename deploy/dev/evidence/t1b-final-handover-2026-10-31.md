@@ -70,7 +70,7 @@
 | `1294116` | T1A: refresh revision CI run #41232064137 (run_number 139) |
 | `1f92421` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41238364593 (run_number 151) |
 
-Tổng: `git diff --stat e0ef02f..1f92421` = **48 file, +3 993 / −89** (91 commit đóng gói).
+Tổng: `git diff --stat e0ef02f..1f92421` = **48 file, +3 993 / −89** (93 commit đóng gói).
 
 ## 4. Rà đóng gói (T1B tự thực hiện)
 
