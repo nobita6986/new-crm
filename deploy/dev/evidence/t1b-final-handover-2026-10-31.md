@@ -10,7 +10,7 @@
 | Trường | Giá trị |
 |---|---|
 | Run ID / run_number | **#41190382586** / 76 |
-| Trạng thái | `success` (completed 2026-10-31T09:46:05Z) |
+| Trạng thái | `success` (completed 2026-10-31T09:57:48Z) |
 | Branch head SHA | `7cfeaa5a3c8863e1b5a843f0e647d54a330cb99f` (= PR #2 HEAD) |
 | Merge SHA | `b1745ce522c0af1262aa4fc0efe5a260c41d9604` (`workflow-metadata.json` → `commit_sha`) |
 | Artifact ID | `13038099371` — tên `p0-g007-evidence-41190382586` |
