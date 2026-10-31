@@ -1,7 +1,7 @@
 # T1B — BÀN GIAO GÓI CUỐI P0 + KẾT QUẢ CI (2026-10-31)
 
 **Người gửi:** T1B · **Người nhận:** T1C (kiểm định độc lập) + T1A (tổng hợp P0)
-**PR #2:** `state=open`, `mergeable=MERGEABLE`, **KHÔNG merge**. Head sau đóng gói: `1fdefcab023f81e46be60e179bf0b34430adb7af` (chứa `ba49857` — bản vá lỗi cú pháp patcher của T1A Round 34).
+**PR #2:** `state=open`, `mergeable=MERGEABLE`, **KHÔNG merge**. Revision CI đã verify: `1fdefcab023f81e46be60e179bf0b34430adb7af` (chứa `ba49857` — bản vá lỗi cú pháp patcher của T1A Round 34).
 
 ---
 
@@ -13,7 +13,7 @@
 |---|---|
 | Run ID / run_number | **#41239129191** / 152 |
 | Trạng thái | `success` (completed 2026-10-31T20:14:25Z) |
-| Branch head SHA | `1fdefcab023f81e46be60e179bf0b34430adb7af` (= PR #2 HEAD) |
+| Branch head SHA (revision đã verify) | `1fdefcab023f81e46be60e179bf0b34430adb7af` |
 | Merge SHA | `47003cd01957e6a019bf9710e7107ea80dc2a405` (`workflow-metadata.json` → `commit_sha`) |
 | Artifact ID | `13057120918` — tên `p0-g007-evidence-41239129191` |
 | Artifact size | **140 926 B** |
@@ -70,7 +70,7 @@
 | `1294116` | T1A: refresh revision CI run #41232064137 (run_number 139) |
 | `1fdefca` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41239129191 (run_number 152) |
 
-Tổng: `git diff --stat e0ef02f..1fdefca` = **48 file, +3 993 / −89** (95 commit đóng gói).
+Tổng: `git diff --stat e0ef02f..1fdefca` = **48 file, +3 993 / −89** (96 commit đóng gói, mốc `1501705`).
 
 ## 4. Rà đóng gói (T1B tự thực hiện)
 
