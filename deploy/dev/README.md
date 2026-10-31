@@ -88,6 +88,17 @@ docker compose down -v                    # XOÁ CẢ DỮ LIỆU DEV (reset ho�
 Chi tiết đầy đủ (start/stop/migrate/reset/backup, kiểm chứng UI/API, xử lý sự cố Windows/WSL):
 [`../../docs/operations/dev-setup.md`](../../docs/operations/dev-setup.md).
 
+## Phiên Chrome mới và lỗi màn hình trắng
+
+Vite DEV lấy CSRF từ trang Desk cùng site, không phụ thuộc quyền đọc trang
+`/cskh`. Khi chưa đăng nhập, app chuyển tới `/login` và giữ đường dẫn CRM
+để quay lại sau đăng nhập. Lỗi khởi tạo khác sẽ hiện thông báo và liên kết
+đăng nhập lại thay vì để màn hình trắng. Sau khi cập nhật helper, chạy lại
+`apply-crm-vite-dev-patch.py` rồi tải lại trang Chrome. Cảnh báo HTTP localhost
+và log Workbox không thay thế lỗi bootstrap thực tế trong Console.
+
+Kiểm tra hồi quy riêng cho luồng này: `node --test deploy/dev/test-crm-vite-bootstrap.cjs`.
+
 ## Nguyên tắc bất biến
 
 1. Không commit `.env` hay bất kỳ bí mật thật nào.

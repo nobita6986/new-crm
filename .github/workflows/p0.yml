@@ -68,7 +68,7 @@ jobs:
           set -u
           artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
           compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
-          if "${compose[@]}" exec -T bench bash -lc 'cd /src && /workspace/frappe-bench/env/bin/python -m unittest -v deploy.dev.seed.test_ci_http_probe_static'; then
+          if "${compose[@]}" exec -T bench bash -lc 'cd /src && /workspace/frappe-bench/env/bin/python -m unittest -v deploy.dev.seed.test_ci_http_probe_static && node deploy/dev/test-crm-vite-bootstrap.cjs'; then
             static_status=0
           else
             static_status=$?
