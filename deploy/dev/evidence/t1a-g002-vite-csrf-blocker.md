@@ -576,3 +576,23 @@ Trạng thái checklist không còn là “0/14” hiện hành; các dòng chec
 - Đăng nhập dùng `ADMIN_PASSWORD` lấy từ môi trường container; giá trị không được in/log. Login → **200**; HTML `/cskh` → **200**, nút `cskh-session-check` hiện diện. Lấy CSRF token từ HTML và gọi đúng endpoint mà nút dùng: token hợp lệ → **200**, payload `status=ok`; thiếu token trong cùng session → **400**; token sai → **400**.
 - Một request thiếu token nhưng **không có session** trước đó trả **403** do kiểm tra quyền. Không dùng kết quả này để kết luận CSRF; phép đo hợp lệ là các request cùng session ở trên. Không log token, cookie hay nội dung xác thực.
 - Đây là HTTP/API round-trip, không phải thao tác click UI. Chưa xác nhận click nút thật hoặc console CORS/WebSocket; G0-02 vẫn **PARTIAL**.
+
+## 10. Tái kiểm tra runtime T1A (2026-10-28)
+
+> Các mục 1–9 là lịch sử và vẫn được giữ nguyên. Kết quả hiện hành có log chi tiết tại [`t1a-p0-runtime-evidence-2026-10-28.md`](t1a-p0-runtime-evidence-2026-10-28.md) §G0-02.
+
+- Login/session trên site hiện hữu `dev.localhost` thành công. Cùng session: CSRF hợp lệ → HTTP 200; thiếu/sai token → HTTP 400 JSON `CSRFTokenError`. Không tắt CSRF.
+- CRM Vue mount được qua temporary Vite `:8090` trỏ tới site `:8010`; `/api/method/frappe.ping` trả 200 JSON. HMR probe qua Vite `:8080` nhận WebSocket update cho temporary module, nhưng đây không phải hot replacement của CRM Vue component.
+- CDP bắt được ba JSON parse error: `GET /crm/frappe.onboarding.get_onboarding_status` trả 200 `text/html`, initiator `node_modules/frappe-ui/src/utils/request.ts:27`. Endpoint API đúng `POST /api/method/frappe.onboarding.get_onboarding_status` trả 200 JSON. Đây là SPA fallback; upstream dependency không được sửa.
+- Các lỗi riêng còn mở: built CRM bundle `UserAvatar-B8XM8YZb.js:1:6600` báo `ReferenceError: __ is not defined`; `/website_script.js` 404; Socket.IO polling qua Vite `:8080` nhận 200 HTML, port `:9000` bị từ chối. G0-02 vẫn **PARTIAL** vì standard proxy/Socket.IO và bundle error chưa được khắc phục; không có căn cứ đủ để sửa upstream hoặc tuyên bố PASS.
+
+## 11. Tái kiểm tra sau bộ vá mới (T1A, 2026-10-31) — patcher, CSRF, Socket.IO
+
+> G0-02 đã được Owner duyệt PASS (bằng chứng §15.5–§15.6 của các lượt trước). Mục này ghi lại lượt kiểm tra độc lập sau khi gói vá DEV (patcher + docker-compose) được cập nhật.
+
+- **Patcher** [`apply-crm-vite-dev-patch.py`](../apply-crm-vite-dev-patch.py): chạy 2 lần trong bench container trên checkout CRM ghim `0d3910b456ef4fb913e77b29db011b3debc4f778` — lần 1 toàn bộ `already patched`, lần 2 **idempotent** (cùng output, exit 0, không lỗi). Patcher tự chối chạy nếu SHA lệch pin. Nội dung vá đã xác minh có mặt: Socket.IO proxy block `target: http://127.0.0.1:9000` trong `vite.config.js`, nhánh `import.meta.env.DEV` trong `src/socket.js`, shim `window.__` trong `index.html`, chuẩn hóa RPC dotted-path trong `frappe-ui/src/utils/request.ts`, observer `@vueuse/core`, placeholder `SidePanelLayout.vue`.
+- **docker-compose.yml**: `docker compose config --quiet` hợp lệ; `extra_hosts dev.localhost:127.0.0.1` cho bench đã áp dụng.
+- **Runtime (2026-10-31, ports remap):** host 8000/8080/9000 đang bị giữ bởi stack `p0-ci47-verify` (T1B) ⇒ session dùng `WEB_PORT=8010`, `SOCKETIO_PORT=9010`, `VITE_PORT=8091` (env khi `up`, không sửa file). `bench start` + `bench socketio` + Vite `yarn dev --port 8080` chạy trong container; web `/api/method/frappe.ping` → 200, Vite `/` → 200.
+- **CSRF qua Vite proxy `:8091` — 6/6 PASS:** login staff → 200 · `/cskh` Jinja → 200 (lấy token từ HTML) · POST `crm_cskh.api.health.ping` token hợp lệ → **200** (`status=ok`) · thiếu token → **400** · sai token → **400** · Socket.IO polling same-origin `/socket.io/?EIO=4&transport=polling` → **200** Engine.IO open packet (không còn nhận HTML SPA fallback như §10).
+- **Socket.IO:** proxy `ws: true` + `changeOrigin: true` đã có trong config; bootstrap `socket.js` dùng same-origin ở DEV. Browser CDP capture trên lead detail render đầy đủ SPA (tiêu đề lead, nút `Chuyển thành Cơ hội`).
+- **Kết luận:** gói vá áp dụng đúng trên revision ghim, chạy lại không lỗi; CSRF fail-closed và Socket.IO qua Vite hoạt động sau các thay đổi. G0-02 giữ **PASS (Owner đã duyệt)**, bằng chứng bổ sung này không làm thay đổi verdict.
