@@ -1,9 +1,24 @@
-# Bàn giao T1A → T1B — gói DEV/i18n (T1A Round 33, 2026-10-31)
+# Bàn giao T1A → T1B — gói DEV/i18n (T1A Round 33+34, 2026-10-31)
 
 **Người gửi:** T1A · **Người nhận:** T1B · **Mục đích:** đóng gói + CI trên commit đóng gói cuối.
 **PR #2:** `state=open`, head `e0ef02f8619c428ef4b2457fc5ce5f04cb0d7baa`, merge `136a10c20740cff0a2bab5254843e94763aff5ae`, CI run **#41159273106** (run_number 61, `success`), artifact `13026861084` (140 924 B, digest API `sha256:8cfe5f10…`).
 
 > **KHÔNG merge PR #2.** T1A lượt này **không** stage/commit/push. Việc commit + chạy CI thuộc T1B.
+>
+> ⚠️ **Round 34 (lượt 4) — SỬA LỖI CHẶN trong patcher.** Lượt kiểm tra này áp patcher lên checkout CRM **nguyên bản** (không phải config đã vá sẵn) và phát hiện patcher sinh ra `vite.config.js` **không parse được** ⇒ Vite dev server **không khởi động được**. Đã sửa + thêm cổng kiểm tra cú pháp `node --check`. Chi tiết: [`evidence/t1a-g002-vite-csrf-blocker.md`](t1a-g002-vite-csrf-blocker.md) **§13**. **⇒ Bắt buộc commit lại gói patcher (hash đã đổi) và chạy CI mới.**
+
+---
+
+## 0. Tóm tắt Round 34 — thay đổi so với Round 33
+
+| # | Thay đổi | Tác động |
+|---|---|---|
+| 1 | **Sửa lỗi cú pháp patcher** (`optimizeDeps` nuốt dấu `]` đóng mảng `include:`) | `vite.config.js` hỏng ⇒ Vite không khởi động ⇒ **G0-02 DEV không tái dựng được**. Đây là lỗi **chặn**, không phải cosmetic |
+| 2 | **Thêm cổng kiểm tra cú pháp** `check_js_syntax()` (dùng `node --check`) cho `vite.config.js`, `socket.js`, `main.js`, `translation.js` | Lỗi cú pháp ⇒ patcher dừng **exit 2** ngay tại lúc vá, không đợi tới lúc khởi động Vite |
+| 3 | **Thêm script tái dùng** [`verify-socket-namespace.mjs`](../verify-socket-namespace.mjs) | Kiểm chứng namespace Socket.IO thật bằng **một lệnh**, in JSON kết quả, exit 0 = PASS / 2 = FAIL; không ghi cookie/token |
+| 4 | Cập nhật evidence: `t1a-g002-vite-csrf-blocker.md` §13, artifact socket namespace → **v3** | Ghi rõ lỗi, nguyên nhân, tại sao trước đây không phát hiện, và cách kiểm chứng (kể cả **kiểm tra phản chứng**) |
+
+> **Vì sao lỗi này lọt qua:** `patch_once()` trả `False` ngay khi chuỗi đích đã có trong file ⇒ khi chạy trên config **đã vá sẵn** thì phép thay thế **không bao giờ chạy** ⇒ không sinh code hỏng. `docker compose config --quiet` chỉ kiểm tra YAML, không parse JS. CI (`ruff`, `docker compose config`) không có bước nào parse `vite.config.js` sau khi vá. Lỗi chỉ lộ ra khi **áp lên checkout nguyên bản** rồi **khởi động Vite**.
 
 ---
 
@@ -19,24 +34,26 @@
 
 ---
 
-## 2. Danh sách file thuộc gói T1A (34 file)
+## 2. Danh sách file thuộc gói T1A (35 file)
 
-### 2.1 Mã nguồn / cấu hình DEV (4 file)
+### 2.1 Mã nguồn / cấu hình DEV (5 file)
 
 | File | Bytes | SHA-256 |
 |---|---|---|
 | `apps/crm_cskh/crm_cskh/translations/vi.csv` | 10,065 | `7e7dbbc219af9164c144d7a59161c46dc78bcaa313ef25e5a30d4464cd24d779` |
-| `deploy/dev/apply-crm-vite-dev-patch.py` | 34,714 | `063be77fcd823f8949daf19001523b58702c70ed2b22b89d4276c77295ad28a2` |
+| `deploy/dev/apply-crm-vite-dev-patch.py` | 36,480 | `2aa2aabf7e3f13ba23dd5bccde64529edae8f81c5c4da876493bd327a11464c9` |
 | `deploy/dev/docker-compose.yml` | 4,056 | `a9d47ea4f4c8ca37e2435898d8579c9a155cf89677ac48693633386891c48ae1` |
 | `deploy/dev/README.md` | 5,169 | `4691afb93dfe1480219162d70ec3b23945135f0beec57b0aaa98255ac13ad81f` |
+| `deploy/dev/verify-socket-namespace.mjs` | 4,287 | `dafc4145f4da2365a83bb4b2f0e3031d2ce272ac98e83d7e1d88a57de802a4a2` |
 
-### 2.2 Evidence T1A (4 file)
+### 2.2 Evidence T1A (5 file)
 
 | File | Bytes | SHA-256 |
 |---|---|---|
-| `deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md` | 39,667 | `da81c85eb3cc2ca14d9a3acf0ee8d421f313b47bae11caa09a33264cd5a78e49` |
+| `deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md` | 44,176 | `fc9dba6aae7c60275fb8432da52735abe75174281a44156c5ac63807f6f9bc4a` |
 | `deploy/dev/evidence/t1a-g009-vi-checklist.md` | 36,877 | `2856d3bd8aa489fd56307e6a40f989f5ab73038eef67f206989b3636d641b5e4` |
-| `deploy/dev/evidence/logs/t1a-g002-socket-namespace-evidence-20261031.json` | 3,994 | `2a83b0f0b44268d23cdc6135f60362f680fd52be0c8b998bd9eeac0492a54a03` |
+| `deploy/dev/evidence/t1a-handover-t1b-dev-i18n.md` | 17,391 | `ab30252431c32c7f8bb69636c91ee945de8c7f65c02898adc3e6f433d63993ea` |
+| `deploy/dev/evidence/logs/t1a-g002-socket-namespace-evidence-20261031.json` | 5,810 | `b445f234d1f0cd05da570837f6590a144b92a69f7f65aa8247af6b2aa3ff5f88` |
 | `deploy/dev/evidence/logs/t1a-g009-capture-manifest-20261031-final-v3.json` | 9,690 | `a183bdc28710998d47adc44c7f0bb82fafff963d96bc83d94e9a12c74ced55c6` |
 
 ### 2.3 Bộ ảnh cuối 2026-10-31 — `screenshots/t1a-g009-20261031-final/` (11 file: 10 ảnh + manifest)
@@ -126,6 +143,12 @@ git diff --stat b1087bc -- \
 | 6 | `README.md`: mục "Cổng DEV — quy tắc nhất quán host ↔ container" | Ghi rõ quy tắc + lệnh remap để lượt sau không lặp lại lỗi. |
 | 7 | `t1a-g002-vite-csrf-blocker.md` §12 | Bằng chứng namespace Socket.IO thật + 2 nguyên nhân gốc + đo có đối chứng. |
 | 8 | `p0-exit-report.md` | Tách 3 loại revision; cập nhật G0-02/G0-09/G0-10; thêm mục Round 33. |
+| 9 | **`apply-crm-vite-dev-patch.py`: sửa lỗi cú pháp patch `optimizeDeps`** | Anchor cũ nuốt mất dấu `]` đóng mảng `include:` ⇒ `vite.config.js` không parse được ⇒ Vite không khởi động. Sửa: phát lại `],` trong phần thay thế |
+| 10 | **`apply-crm-vite-dev-patch.py`: thêm `check_js_syntax()`** (cổng `node --check`) | Lỗi cú pháp do patch ⇒ exit 2 **ngay lúc vá**, thay vì lộ ra muộn khi khởi động Vite |
+| 11 | **Thêm `deploy/dev/verify-socket-namespace.mjs`** | Kiểm chứng namespace Socket.IO thật bằng 1 lệnh, tái dùng được cho mọi lượt kiểm tra; không ghi cookie/token |
+| 9 | **`apply-crm-vite-dev-patch.py`: sửa lỗi cú pháp patch `optimizeDeps`** | Anchor `"      ],\n    },\n    server: {"` **bao gồm** dấu `]` đóng mảng `include:` nhưng phần thay thế **không phát lại** ⇒ mảng `include:` bị bỏ dấu đóng ⇒ `vite.config.js` không parse ⇒ **Vite không khởi động được**. Xem §13 evidence |
+| 10 | **`apply-crm-vite-dev-patch.py`: thêm `check_js_syntax()`** (`node --check`) | Lỗi cú pháp ⇒ patcher dừng **exit 2** ngay lúc vá, thay vì đợi tới lúc khởi động Vite mới lộ |
+| 11 | **`verify-socket-namespace.mjs` (file mới)** | Kiểm chứng namespace Socket.IO thật bằng 1 lệnh; in JSON kết quả; exit 0 = PASS / 2 = FAIL; không ghi cookie/token |
 
 ---
 
