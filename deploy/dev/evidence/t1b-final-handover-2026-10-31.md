@@ -18,7 +18,7 @@
 | Digest (API) | `sha256:a73d8cc85c4b6020f01c94960d64e3d00c243896ba2fbb32a2cba298618716e2` |
 | **SHA-256 T1B tự hash zip** | `A73D8CC85C4B6020F01C94960D64E3D00C243896BA2FBB32A2CBA298618716E2` → **khớp 100%** |
 
-> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41187312027 (71, head `75c37a7`), #41198231180 (79, head `8fbc03d`), #41199317193 (81, head `74e3764`), #41200134560 (83, head `ae690c8`), #41201885507 (86, head `43d7fff`), #41203517684 (**87**, head `74c608e`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41203517684** trên head `74c608e`.
+> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41187312027 (71, head `75c37a7`), #41198231180 (79, head `8fbc03d`), #41199317193 (81, head `74e3764`), #41200134560 (83, head `ae690c8`), #41201885507 (86, head `43d7fff`), #41202547857 (87, head `eabe296`), #41203517684 (**89**, head `74c608e`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41203517684** trên head `74c608e`.
 
 > **Cách tra cứu revision CI hiện hành:** PR #2 có thể còn commit mới sau tài liệu này. Revision CI hiện hành = **run có `head_sha` bằng PR #2 HEAD**:
 > ```
@@ -79,7 +79,7 @@ Tổng: `git diff --stat e0ef02f..74c608e` = **44 file, +3 761 / −75**.
 
 ## 5. Bàn giao
 
-- **Cho T1C:** artifact `13044051253` + digest `sha256:a73d8cc8…` + revision head `74c608e` / merge `522dded` / run `#41203517684` — đề nghị T1C tự tải + tự hash + tự parse độc lập như Round 31/32.
+- **Cho T1C:** artifact `13044051253` + digest `sha256:a73d8cc8…` + revision head `74c608e` / merge `4a46c51e6` / run `#41203517684` — đề nghị T1C tự tải + tự hash + tự parse độc lập như Round 31/32.
 - **Cho T1A:** commit đóng gói `74c608e` + run CI #41203517684 + kết quả parse (đã ghi vào `docs/architecture/p0-exit-report.md` mục "T1B — ĐÓNG GÓI CUỐI + CI XÁC MINH").
 - **Không còn lỗi/gap cụ thể** trong phạm vi P0: 8 ô matrix PARTIAL còn lại và 3 ô DEFER P1 đều là nghiệp vụ P1 **chưa triển khai**, đang fail-closed (BOD scoped reporting ADR-005, ownership service ADR-004).
 
