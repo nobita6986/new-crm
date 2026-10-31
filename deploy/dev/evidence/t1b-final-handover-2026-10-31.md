@@ -15,16 +15,16 @@
 | Merge SHA | `ebc1da686b7aca4f6b880c6f231e9ba6cded2996` (`workflow-metadata.json` → `commit_sha`) |
 | Artifact ID | `13045838633` — tên `p0-g007-evidence-41210391537` |
 | Artifact size | **140 956 B** |
-| Digest (API) | `sha256:sha256:9c6053c7f33a431245cace4a8108f012d09f1c01bcf0b681abae128f9fdfffcc` |
+| Digest (API) | `sha256:9c6053c7f33a431245cace4a8108f012d09f1c01bcf0b681abae128f9fdfffcc` |
 | **SHA-256 T1B tự hash zip** | `9C6053C7F33A431245CACE4A8108F012D09F1C01BCF0B681ABAE128F9FDFFFCC` → **khớp 100%** |
 
-> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41186135804 (69, head `9dbda45`), #41187312027 (71, head `75c37a7`), #41188127001 (73, head `50dab76`), #41188863453 (74, head `d2e3634`), #41189626544 (75, head `1210adb`), #41190382586 (76, head `7cfeaa5`), #41191157121 (78, head `809c9cb`), #41198231180 (79, head `8fbc03d`), #41199317193 (81, head `74e3764`), #41200134560 (83, head `ae690c8`), #41200825236 (84, head `356ceeb`), #41201885507 (86, head `43d7fff`), #41202547857 (87, head `eabe296`), #41203517684 (89, head `74c608e`), #41204474054 (91, head `6d7665a`), #41205596840 (93, head `8c4d8d3`), #41206591321 (95, head `b7ecd8b`), #41207511737 (97, head `ebfa43b`), #41210391537 (101, head `2d1e722`), #41210391537 (**101**, head `2d1e722`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67), #41187158951 (70), #41188046267 (72), #41191094848 (77), #41198983664 (80), #41199949324 (82), #41201698292 (85), #41203385379 (88), #41204331575 (90), #41205331804 (92), #41206351741 (94), #41207226868 (96), #41208645874 (98), #41209998958 (100), #41209998958 (100) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41210391537** trên head `2d1e722`.
+> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41186135804 (69, head `9dbda45`), #41187312027 (71, head `75c37a7`), #41188127001 (73, head `50dab76`), #41188863453 (74, head `d2e3634`), #41189626544 (75, head `1210adb`), #41190382586 (76, head `7cfeaa5`), #41191157121 (78, head `809c9cb`), #41198231180 (79, head `8fbc03d`), #41199317193 (81, head `74e3764`), #41200134560 (83, head `ae690c8`), #41200825236 (84, head `356ceeb`), #41201885507 (86, head `43d7fff`), #41202547857 (87, head `eabe296`), #41203517684 (89, head `74c608e`), #41204474054 (91, head `6d7665a`), #41205596840 (93, head `8c4d8d3`), #41206591321 (95, head `b7ecd8b`), #41207511737 (97, head `ebfa43b`), #41208997647 (99, head `11f6dab`), #41210391537 (**101**, head `2d1e722`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67), #41187158951 (70), #41188046267 (72), #41191094848 (77), #41198983664 (80), #41199949324 (82), #41201698292 (85), #41203385379 (88), #41204331575 (90), #41205331804 (92), #41206351741 (94), #41207226868 (96), #41208645874 (98), #41209998958 (100) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41210391537** trên head `2d1e722`.
 
 > **Cách tra cứu revision CI hiện hành:** PR #2 có thể còn commit mới sau tài liệu này. Revision CI hiện hành = **run có `head_sha` bằng PR #2 HEAD**:
-> ```
+> ``
 > gh api "repos/nobita6986/new-crm/actions/runs?branch=codex/p0-t1a-g001-g002-g009&per_page=3" \
 >   --jq '.workflow_runs[] | {id, run_number, status, conclusion, head_sha}'
-> ```
+> ``
 > Mọi run đóng gói đều cho **cùng một kết quả parse** (99/99 + 18/18 + 9/9 + 74/74) nên dùng run nào cũng có giá trị kiểm định, miễn là run `success` trên head chứa đầy đủ gói DEV/i18n/evidence.
 
 ## 2. Parse độc lập của T1B (không suy từ tên commit)
