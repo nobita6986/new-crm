@@ -9,7 +9,7 @@
 | Loại revision | Giá trị hiện hành |
 |---|---|
 | **Revision chạy CI (đóng gói cuối)** | PR #2 head `ddf8921e523d953e4f74326514af0f0be991c6ef` (chứa `ba49857` — bản vá lỗi cú pháp patcher của T1A Round 34), merge `9c607586c33b62a2cba3d5096f765d11fafdeea0`, run **#41232064137** (run_number 139, `success`), artifact `13053978403` (140 901 B, digest API `sha256:59ce4cc0…`) |
-| **Revision CI trước đó (đã có báo cáo đóng gói)** | PR #2 head `ddf8921e523d953e4f74326514af0f0be991c6ef`, merge `9c607586c33b62a2cba3d5096f765d11fafdeea0`, run **#41232064137** (run_number 139, `success`), artifact `13053978403` (140 901 B, digest `sha256:59ce4cc0…`) |
+| **Revision CI trước đó (đã có báo cáo đóng gói)** | PR #2 head `6edbcdfca07d76ca137b4abfc46ee80ce2e1d752`, merge `99f511cc33f92d31e2f40658c74fbefbc7539378`, run **#41231226679** (run_number 138, `success`), artifact `13054410071` (140 971 B, digest `sha256:fa65f74a…`) |
 | **Revision CI trước đó (đã có báo cáo đóng gói)** | PR #2 head `9fdeee6a1140a4eeb90d5774b53ee27aae5219be`, merge `f65fec1b71d6503ffef8920f65a65a3175ba0510`, run **#41183641044** (run_number 64, `success`), artifact `13036566067` (141 025 B, digest `sha256:d20ef778…`) |
 | **Revision CI trước đó (đã có báo cáo đóng gói)** | PR #2 head `ddf817c414ccbb3e61f40db21bb0fdcfecbe4598`, merge `1dbf58af6f66e73f71c5f63d66cabd672185f564`, run **#41183084515** (run_number 62, `success`), artifact `13035534433` (140 901 B, digest `sha256:dc733082…`) |
 | **Revision CI do T1C đã kiểm định** | PR #2 head `e0ef02f8619c428ef4b2457fc5ce5f04cb0d7baa`, merge `136a10c20740cff0a2bab5254843e94763aff5ae`, run **#41159273106** (run_number 61, `success`), artifact `13026861084` (140 924 B, digest `sha256:8cfe5f10…`) |
