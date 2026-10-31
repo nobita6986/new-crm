@@ -49,7 +49,26 @@
 
 > Lưu ý cho T1C: `coverage_scope` của HTTP probe **không đổi** — *"direct HTTP to bench serve; reverse-proxy and CORS behavior are not covered"*. SEC-13 giữ giới hạn topology P0.
 
-## 3. Danh sách file đã commit (4 commit)
+## 3. Danh sách file đã commit
+
+### 3.1 Bốn file T1C Round 32b (hiệu chỉnh actor ô `RA-05`) + bản cập nhật P0 của T1A
+
+Bốn file T1C Round 32/32b và bản P0 của T1A **đã có trong gói đóng gói cuối** (đã commit, đã chạy CI xanh trên chính các revision đó):
+
+| File | Nội dung Round 32b | Commit | Trạng thái trong gói |
+|---|---|---|---|
+| `deploy/dev/evidence/t1c-ext2-matrix-gap-verification-2026-10-31.md` | §4.1/§4.3 — 2 ca `ra05-*` đo actor `Administrator` ⇒ tách thành **positive control `RA-05-SM`** (ngoài lưới 71 ô); ô `RA-05` hạ **PASS → PARTIAL**; điều kiện đóng ô (1 ca HTTP đo trực tiếp `crm.admin@dev.local`) | `75c37a7` | ✅ đã có |
+| `deploy/dev/evidence/t1c-security-verification.md` | Header §"Round 32b" — caveat actor RA-05, tally **59 PASS + 9 PARTIAL + 0 NOT RUN + 3 DEFER P1 = 71**, SEC **28/28 PASS** | `4744311` | ✅ đã có |
+| `docs/architecture/permission-matrix.md` | §7.0.1 — bảng **positive control `RA-05-SM`** tách riêng, hàng ô `RA-05` → **PARTIAL** (kỳ vọng `D tạm thời`); đồng bộ 19 hàng §§2–§9 | `7c7183f` | ✅ đã có |
+| `docs/architecture/risk-register.md` | §4.1 — hàng caveat actor RA-05 + 3 hàng residual P1; tally 59/9/0/3 | `7c7183f` | ✅ đã có |
+| `docs/architecture/p0-exit-report.md` (bản cập nhật P0 của T1A) | Ghi nhận Round 32b: RA-05 hạ PARTIAL, tally 59/9/0/3 = 71, SEC 28/28 ⇒ **verdict G0-07 không đổi** | `9407588` / `7c7183f` | ✅ đã có (đồng bộ tiếp theo bản đóng gói cuối) |
+| `deploy/dev/evidence/t1b-ext1-matrix-gap-probe-2026-10-30.md` | **Hiệu chỉnh diễn giải**: 2 ca `ra05-*` = positive control `RA-05-SM`, **không** phải evidence HTTP của ô `RA-05`; §5 tách ảnh chụp lịch sử 2026-10-30 khỏi trạng thái hiện hành | commit đóng gói này | ✅ vừa hiệu chỉnh |
+
+> **Probe/assertion KHÔNG đổi:** `deploy/dev/seed/ci_g007_remaining_gaps_probe.py` giữ nguyên;
+> 2 ca `ra05-*` vẫn đo actor `Administrator` và vẫn PASS (74/74). Chỉ **diễn giải evidence**
+> trong tài liệu được hiệu chỉnh để 2 ca đó là **positive control `RA-05-SM`**.
+
+### 3.2 Các commit đóng gói chính
 
 | Commit | Nội dung |
 |---|---|
