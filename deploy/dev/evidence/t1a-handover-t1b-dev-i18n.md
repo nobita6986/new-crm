@@ -1,0 +1,283 @@
+# Bàn giao T1A → T1B — gói DEV/i18n (T1A Round 33, 2026-10-31)
+
+**Người gửi:** T1A · **Người nhận:** T1B · **Mục đích:** đóng gói + CI trên commit đóng gói cuối.
+**PR #2:** `state=open`, head `e0ef02f8619c428ef4b2457fc5ce5f04cb0d7baa`, merge `136a10c20740cff0a2bab5254843e94763aff5ae`, CI run **#41159273106** (run_number 61, `success`), artifact `13026861084` (140 924 B, digest API `sha256:8cfe5f10…`).
+
+> **KHÔNG merge PR #2.** T1A lượt này **không** stage/commit/push. Việc commit + chạy CI thuộc T1B.
+
+---
+
+## 1. Phân biệt revision (bắt buộc khi viết báo cáo)
+
+| Loại | Giá trị | Ghi chú |
+|---|---|---|
+| **Revision chạy CI** | `e0ef02f` (merge `136a10c2`), run `#41159273106` | Đã xanh; T1C đã kiểm định độc lập (99/99 + 18/18 + 9/9 + 74/74) |
+| **Revision lưu evidence (gói T1A)** | workspace `b1087bc911a35b2310ddd3e80dd17f6438170dec` **+ thay đổi chưa commit dưới đây** | Evidence DEV/i18n được sinh ở đây. **Chưa** có CI run trên revision này |
+| **Giới hạn DEV/P1** | Bằng chứng là DEV (site giả `dev.localhost`, Vite dev server); P1 còn hoãn | Xem `docs/architecture/p0-exit-report.md` mục "Round 33" §4 |
+
+> `b1087bc` **KHÔNG còn là** "PR HEAD/revision cuối". Mọi câu "revision cuối" trong báo cáo phải ghi rõ loại revision theo bảng trên.
+
+---
+
+## 2. Danh sách file thuộc gói T1A (34 file)
+
+### 2.1 Mã nguồn / cấu hình DEV (4 file)
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `apps/crm_cskh/crm_cskh/translations/vi.csv` | 10,065 | `7e7dbbc219af9164c144d7a59161c46dc78bcaa313ef25e5a30d4464cd24d779` |
+| `deploy/dev/apply-crm-vite-dev-patch.py` | 34,714 | `063be77fcd823f8949daf19001523b58702c70ed2b22b89d4276c77295ad28a2` |
+| `deploy/dev/docker-compose.yml` | 4,056 | `a9d47ea4f4c8ca37e2435898d8579c9a155cf89677ac48693633386891c48ae1` |
+| `deploy/dev/README.md` | 5,169 | `4691afb93dfe1480219162d70ec3b23945135f0beec57b0aaa98255ac13ad81f` |
+
+### 2.2 Evidence T1A (4 file)
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md` | 39,667 | `da81c85eb3cc2ca14d9a3acf0ee8d421f313b47bae11caa09a33264cd5a78e49` |
+| `deploy/dev/evidence/t1a-g009-vi-checklist.md` | 36,877 | `2856d3bd8aa489fd56307e6a40f989f5ab73038eef67f206989b3636d641b5e4` |
+| `deploy/dev/evidence/logs/t1a-g002-socket-namespace-evidence-20261031.json` | 3,994 | `2a83b0f0b44268d23cdc6135f60362f680fd52be0c8b998bd9eeac0492a54a03` |
+| `deploy/dev/evidence/logs/t1a-g009-capture-manifest-20261031-final-v3.json` | 9,690 | `a183bdc28710998d47adc44c7f0bb82fafff963d96bc83d94e9a12c74ced55c6` |
+
+### 2.3 Bộ ảnh cuối 2026-10-31 — `screenshots/t1a-g009-20261031-final/` (11 file: 10 ảnh + manifest)
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `capture-manifest.json` | 9,690 | `a183bdc28710998d47adc44c7f0bb82fafff963d96bc83d94e9a12c74ced55c6` |
+| `01-login.png` | 18,265 | `a6a900f3317b993833fed6da48d801b003decfa92fc9f45d1adfb2395e546734` |
+| `02-preferences.png` | 55,569 | `1fb196900ee81cb5d0f04fe75d8e6f323d3b318815d5d259b7afc3bfd3ee4d6e` |
+| `03-leads-list.png` | 98,460 | `f485429eb2541b1f03cefb8e6d6cc8e26fc032b958805ded19ad8e9da4ad4cd3` |
+| `04-lead-detail.png` | 91,872 | `936e546d4e639d7fc55aa092d6eb8553d9e41fcada227b26046d3ff0f6255adb` |
+| `05-call-logs.png` | 40,674 | `5307fef669cdccd095eadda6640f70ebdb9801c610f98974fd1684a06acf4f89` |
+| `06-tasks.png` | 40,914 | `0198078703b046758dd1c6f8dabf14849cd300ac9e477a705b73082cebcd33e4` |
+| `07-data-import.png` | 25,248 | `9ebf182a267aff43271502997ade351ea9625bd4988bfa4f5d3cad9e6202bb2a` |
+| `08-dashboard.png` | 61,031 | `698a0f57038e79b99df049be833ad244020a72cd80729fda0ce25ca858b7afb7` |
+| `09-cskh.png` | 25,320 | `de69f91bf8aabad715962ceec731035a052b7674c9ae385fccce10ef9af40ae7` |
+| `10-validation-error.png` | 72,157 | `3492144900d63628744e667a210d2b658cca5df26f619ffc84ed2997bd04648c` |
+
+### 2.4 Bộ ảnh trước 2026-10-29 (giữ để đối chiếu lịch sử) — 11 file
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `screenshots/t1a-g009-20261029-final-155200/capture-manifest.json` | 8,265 | `04605cbf000260650271656060ffb95d72c4b58a13eb18c507902721a13ac3de` |
+| `01-login.png` | 18,265 | `a6a900f3317b993833fed6da48d801b003decfa92fc9f45d1adfb2395e546734` |
+| `02-preferences.png` | 55,569 | `1fb196900ee81cb5d0f04fe75d8e6f323d3b318815d5d259b7afc3bfd3ee4d6e` |
+| `03-leads-list.png` | 98,460 | `f485429eb2541b1f03cefb8e6d6cc8e26fc032b958805ded19ad8e9da4ad4cd3` |
+| `04-lead-detail.png` | 71,120 | `10c2ed9094fc54e772e08215c983ec951be2bc5dad5662d83fc1ff260d68a642` |
+| `05-call-logs.png` | 40,674 | `5307fef669cdccd095eadda6640f70ebdb9801c610f98974fd1684a06acf4f89` |
+| `06-tasks.png` | 40,914 | `0198078703b046758dd1c6f8dabf14849cd300ac9e477a705b73082cebcd33e4` |
+| `07-data-import.png` | 25,248 | `9ebf182a267aff43271502997ade351ea9625bd4988bfa4f5d3cad9e6202bb2a` |
+| `08-dashboard.png` | 61,031 | `698a0f57038e79b99df049be833ad244020a72cd80729fda0ce25ca858b7afb7` |
+| `09-cskh.png` | 25,320 | `de69f91bf8aabad715962ceec731035a052b7674c9ae385fccce10ef9af40ae7` |
+| `10-validation-error.png` | 72,157 | `3492144900d63628744e667a210d2b658cca5df26f619ffc84ed2997bd04648c` |
+
+### 2.5 Artifact i18n phụ (3 file)
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `logs/t1a-g009-capture-manifest-20261029-final-v2.json` | 8,265 | `04605cbf000260650271656060ffb95d72c4b58a13eb18c507902721a13ac3de` |
+| `logs/t1a-g009-placeholder-translation-20261029.json` | 1,445 | `17b8ce22f4302cfb9711b9d56dfe10c3fc4620e3ac6e4c620949059ddcff6a33` |
+| `logs/t1a-g009-priority-terms-20261029.json` | 2,361 | `ff162bbe96b4d94a62312bfd1f4514a0fdfccba52e7879eb978c3bd982dc64c9` |
+| `logs/t1a-g009-recapture-04-20261031.json` | 849 | `f6b3e0a372533220a20824a59e51d003c87417a35fe6dcfecfc04cf88bc0085a` |
+
+---
+
+## 3. File của T1B/T1C — **BẢO TOÀN, KHÔNG SỬA**
+
+T1A lượt này **không đụng** các file sau. T1B giữ nguyên khi đóng gói:
+
+| File | Bytes | SHA-256 |
+|---|---|---|
+| `deploy/dev/evidence/t1c-security-verification.md` | 81,150 | `81680c1bcd150f45bd505c3fcf34a70ef956d8b4d665d38a21c952ad412681f5` |
+| `deploy/dev/evidence/t1c-ext1-verification-2026-10-30.md` | 10,397 | `1d5ac86d304576311f0cf34c41f3a701286ab74bc255ed84cd757026cfe24b03` |
+| `deploy/dev/evidence/t1c-ext2-matrix-gap-verification-2026-10-31.md` | 17,872 | `65e8f6e5f7feb0c4a296107dccf53fe37ea8295d27eaf673e015e4cb51d9f381` |
+| `docs/architecture/permission-matrix.md` | 70,531 | `3159ce8a0305d02389fd02ebf6ec7aa3ff8aa4e94a2b7fdfd26ea7700669e161` |
+| `docs/architecture/risk-register.md` | 44,899 | `70c4736bacc8d28b9b5150b7a928f1a9bd05cc09f217a73a753f313a6b329200` |
+
+Ngoài ra **KHÔNG sửa**: code app (`apps/crm_cskh/crm_cskh/**/*.py`), test, workflow (`.github/workflows/*`), ADR (`docs/architecture/adr-*`), `deploy/dev/seed/*`.
+
+---
+
+## 4. Diff gói T1A so với `b1087bc`
+
+```bash
+git diff --stat b1087bc -- \
+  apps/crm_cskh/crm_cskh/translations/vi.csv \
+  deploy/dev/apply-crm-vite-dev-patch.py \
+  deploy/dev/docker-compose.yml \
+  deploy/dev/README.md \
+  deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md \
+  deploy/dev/evidence/t1a-g009-vi-checklist.md \
+  deploy/dev/evidence/logs/ \
+  deploy/dev/evidence/screenshots/t1a-g009-20261031-final/ \
+  deploy/dev/evidence/screenshots/t1a-g009-20261029-final-155200/ \
+  docs/architecture/p0-exit-report.md
+```
+
+### 4.1 Tóm tắt thay đổi ý nghĩa
+
+| # | Thay đổi | Vì sao |
+|---|---|---|
+| 1 | `apply-crm-vite-dev-patch.py`: proxy `/socket.io` **`changeOrigin: true` → `false`** (tự nâng cấp từ bản cũ) | `changeOrigin: true` khiến Vite ghi đè `Host` thành `127.0.0.1:9000`, còn `Origin` là `dev.localhost` ⇒ realtime từ chối namespace join với **`Invalid origin`**. Handshake/polling vẫn 200 nên bằng chứng cũ bỏ sót. |
+| 2 | `apply-crm-vite-dev-patch.py`: thêm `port: Number(process.env.VITE_DEV_PORT \|\| 8080)` vào khối `frappeProxy` | `frappe-ui` tự tính cổng Vite từ `webserver_port` và **ghi đè** `--port` của CLI. Realtime tự xác thực qua `Origin + /api/...` ⇒ cổng trong `Origin` phải truy cập được trong container. |
+| 3 | `docker-compose.yml`: thêm `VITE_DEV_PORT: ${VITE_PORT:-8080}`; publish `127.0.0.1:${VITE_PORT}:${VITE_PORT}` (thay `…:${VITE_PORT}:8080`) | Giữ **cổng Vite host == container**. Lệch ⇒ `ECONNREFUSED` ⇒ namespace join fail. |
+| 4 | `docker-compose.yml`: `extra_hosts: dev.localhost:127.0.0.1` cho service `bench` | Realtime so sánh hostname `Host`/`Origin`; `dev.localhost` phải resolve trong container. |
+| 5 | `vi.csv`: +22 khóa (218 tổng) | Bổ sung nhãn UI tiếng Việt còn sót + 2 override theo context (`Due Date:CRM Task`, `Lead Name:CRM Lead`). |
+| 6 | `README.md`: mục "Cổng DEV — quy tắc nhất quán host ↔ container" | Ghi rõ quy tắc + lệnh remap để lượt sau không lặp lại lỗi. |
+| 7 | `t1a-g002-vite-csrf-blocker.md` §12 | Bằng chứng namespace Socket.IO thật + 2 nguyên nhân gốc + đo có đối chứng. |
+| 8 | `p0-exit-report.md` | Tách 3 loại revision; cập nhật G0-02/G0-09/G0-10; thêm mục Round 33. |
+
+---
+
+## 5. Lệnh tái dựng (reproducible rebuild)
+
+### 5.1 Tái dựng môi trường DEV từ đầu
+
+```bash
+cd deploy/dev
+cp .env.example .env          # sửa mật khẩu DEV, KHÔNG commit
+# Cổng: VITE_PORT (host) PHẢI BẰNG VITE_DEV_PORT (container) — xem README.md
+docker compose up -d db redis-cache redis-queue bench
+docker compose exec -u root bench bash -lc 'mkdir -p /workspace && chown -R frappe:frappe /workspace'
+docker compose exec bench bash /src/deploy/dev/bootstrap.sh
+docker compose exec bench bash /src/deploy/dev/seed/run-seed.sh
+```
+
+`bootstrap.sh` đã gọi sẵn cả 3 patcher theo thứ tự:
+
+```
+python $SRC_DIR/deploy/dev/apply-crm-ui-vi-patch.py   $CRM_FRONTEND
+python $SRC_DIR/deploy/dev/apply-crm-vite-dev-patch.py $BENCH_DIR/apps/crm
+python $SRC_DIR/deploy/dev/apply-frappe-vi-patch.py    $BENCH_DIR/apps/frappe
+bench --site $SITE clear-cache
+```
+
+### 5.2 Chạy DEV
+
+```bash
+docker compose exec bench bash -lc 'cd /workspace/frappe-bench && bench start'
+# realtime
+docker compose exec -d bench bash -lc 'cd /workspace/frappe-bench && node apps/frappe/socketio.js'
+# vite (VITE_DEV_PORT phải khớp cổng publish trên host)
+docker compose exec -d bench bash -lc \
+  'cd /workspace/frappe-bench/apps/crm/frontend && VITE_DEV_PORT=$VITE_DEV_PORT node node_modules/.bin/vite --host 0.0.0.0 --port $VITE_DEV_PORT'
+```
+
+### 5.3 Nếu phải dùng cổng khác (ví dụ 8000/8080/9000 đã bị chiếm)
+
+```bash
+# HOST
+WEB_PORT=8010 SOCKETIO_PORT=9010 VITE_PORT=8091 docker compose up -d --force-recreate bench
+# trong container
+docker compose exec -d bench bash -lc \
+  'cd /workspace/frappe-bench/apps/crm/frontend && VITE_DEV_PORT=8091 node node_modules/.bin/vite --host 0.0.0.0 --port 8091'
+```
+
+### 5.4 Kiểm tra lại (kiểm chứng idempotent + namespace thật)
+
+```bash
+# 1) Patcher idempotent: chạy 2 lần, output phải giống hệt, exit 0
+docker compose exec bench bash -lc \
+  'python /src/deploy/dev/apply-crm-vite-dev-patch.py /workspace/frappe-bench/apps/crm'
+docker compose exec bench bash -lc \
+  'python /src/deploy/dev/apply-crm-vite-dev-patch.py /workspace/frappe-bench/apps/crm'
+
+# 2) Config đúng sau khi vá
+docker compose exec bench grep -n -A 3 'frappeProxy:' /workspace/frappe-bench/apps/crm/frontend/vite.config.js
+docker compose exec bench grep -n changeOrigin /workspace/frappe-bench/apps/crm/frontend/vite.config.js
+# kỳ vọng: changeOrigin: false
+
+# 3) compose hợp lệ
+docker compose config --quiet && echo COMPOSE_OK
+
+# 4) Namespace Socket.IO thật (không chỉ polling 200)
+docker compose exec bench bash -lc \
+  'cd /workspace/frappe-bench/apps/crm/frontend && node -e "
+const {io}=require(\"socket.io-client\");
+const s=io(\"http://dev.localhost:8091/dev.localhost\",{transports:[\"websocket\"],reconnection:false,timeout:8000});
+s.on(\"connect\",()=>{console.log(\"CONNECTED\",s.id,s.nsp,s.io.engine.transport.name);s.emit(\"ping\");});
+s.on(\"pong\",()=>{console.log(\"PONG_OK\");process.exit(0);});
+s.on(\"connect_error\",e=>{console.log(\"FAIL\",e.message);process.exit(2);});
+setTimeout(()=>{console.log(\"TIMEOUT\");process.exit(3);},9000);"'
+# kỳ vọng: CONNECTED <id> /dev.localhost websocket  rồi  PONG_OK
+```
+
+### 5.5 Kiểm tra manifest 10 ảnh
+
+```bash
+python - <<'PY'
+import hashlib, json, os
+d = "deploy/dev/evidence/screenshots/t1a-g009-20261031-final"
+m = json.load(open(os.path.join(d, "capture-manifest.json"), encoding="utf-8"))
+ok = True
+for s in m["screenshots"]:
+    p = os.path.join(d, f"{s['id']}-{s['name']}.png")
+    b = open(p, "rb").read()
+    good = hashlib.sha256(b).hexdigest() == s["sha256"] and len(b) == s["bytes"]
+    ok &= good
+    print(s["id"], s["name"], "OK" if good else "MISMATCH")
+print("MANIFEST_OK" if ok else "MANIFEST_FAIL")
+PY
+```
+
+---
+
+## 6. Kết quả kiểm chứng (T1A đã chạy, 2026-10-31)
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Patcher trên CRM ghim `0d3910b4…` | Chạy được; tự từ chối SHA lệch pin |
+| Patcher idempotent | Chạy 2–3 lần ⇒ **output giống hệt**, exit 0 |
+| Patcher tự nâng cấp config cũ | `changeOrigin: true` → `false`; thêm `port: …VITE_DEV_PORT…` |
+| `docker compose config --quiet` | Hợp lệ; `VITE_DEV_PORT` = `VITE_PORT` |
+| `VITE_DEV_PORT` truyền vào container | `8091` khi `VITE_PORT=8091` |
+| Vite bind đúng cổng trong container | `8091` (không còn bị frappe-ui ghi đè về 8080) |
+| **Namespace Socket.IO (FIXED)** | `connected=true`, `nsp=/dev.localhost`, `transport=websocket`, `emit('ping')` → **`pong`** |
+| **Namespace Socket.IO (REGRESSION, chỉ đổi `changeOrigin: true`)** | `connected=false`, `connect_error="Invalid origin"` |
+| Engine.IO polling qua Vite | HTTP 200 + open packet (không còn HTML SPA fallback) |
+| CSRF qua Vite proxy | 6/6 PASS (token hợp lệ 200 / thiếu 400 / sai 400) |
+| `vi.csv` | **218 khóa**, 0 trùng theo `(msgid, context)`, 0 rỗng, 0 lỗi cấu trúc |
+| `vi.csv` nạp runtime | `get_all_translations('vi')` = **8.369 khóa**; override context đúng |
+| Manifest 10 ảnh | **10/10** đúng SHA-256 **và** đúng `bytes`; không có file thừa |
+| Màn 04 | `must` 4/4 + `forbid` 4/4 PASS; rà mắt: `Chuyển thành Cơ hội` / `…đã tạo khách hàng tiềm năng này` — không còn `Chuyển thành Deal` / `đã tạo lead này` |
+| PII residual | **0** email / **0** phone trên cả 10 màn |
+
+---
+
+## 7. KHÔNG đưa vào gói
+
+| Loại | Ví dụ | Lý do |
+|---|---|---|
+| Bí mật | `deploy/dev/.env`, `deploy/dev/.env.local` | `.gitignore` đã chặn; chứa mật khẩu DEV |
+| Profile Chrome | `sites/g009-chrome-profile/` trong container, `*chrome-profile*` | Dữ liệu phiên trình duyệt |
+| Script debug | `_tmp_*.py`, `_tmp_*.sh`, `_tmp_*.js`, `_tmp_*.json`, `_tmp_crop/`, `_tmp_out.txt`, `_tmp_head_patcher.py` | Bản làm việc tạm của T1A, **không** đưa vào repo |
+| Thư mục tạm của T1B/T1C | `_recovery/`, `.commandcode/` | Ngoài phạm vi gói T1A |
+| Dữ liệu nhạy cảm | dump DB, `sites/*/private/`, log có token/cookie | Chỉ dữ liệu giả; log đã redact |
+| Kết quả dò tạm | `_tmp_t1a_socket_results*.json`, `_tmp_t1a_translations.json` | Đã tổng hợp vào artifact chính thức |
+
+**Lưu ý:** `.gitignore` ở `deploy/dev/` chặn `.env`, `workspace/`, `dumps/`, `backups/`, `*.log` — nhưng **KHÔNG** chặn `_tmp_*` hay `_recovery/`. T1B nên thêm pattern ignore cho các thư mục tạm này hoặc tự xóa trước khi commit, để tránng lọt vào commit đóng gói.
+
+---
+
+## 8. Việc T1B cần làm
+
+1. **Dọn thư mục tạm** theo §7 trước khi stage.
+2. **Stage đúng** danh sách §2 + bản `p0-exit-report.md` đã cập nhật; **giữ nguyên** các file T1B/T1C ở §3.
+3. **Commit** trên branch hiện tại (`codex/p0-t1a-g001-g002-g009`) — PR #2 giữ **OPEN**, **KHÔNG merge**.
+4. **Chạy CI** trên commit đóng gói cuối; ghi lại **run id + head SHA + merge SHA + artifact id + digest** (T1C sẽ kiểm định độc lập).
+5. **Bàn giao T1C**: kết quả CI + danh sách file đã commit + hash artifact.
+6. **Cập nhật `p0-exit-report.md`** sau khi có CI trên commit đóng gói cuối:
+   - Ghi **revision chạy CI** (run mới) tách khỏi **revision lưu evidence** (commit đóng gói).
+   - Ghi rõ **giới hạn DEV/P1** (§1 của `p0-exit-report.md` mục Round 33 §4).
+   - **Không** gọi `b1087bc` là "PR HEAD/revision cuối".
+7. **GO/NO-GO P0 thuộc T0/Owner** — T1A/T1B/T1C không tự ký.
+
+---
+
+## 9. Bất biến T1A lượt này
+
+- KHÔNG sửa file T1B/T1C/ADR/code app/test/workflow/seed.
+- KHÔNG mutate dữ liệu nghiệp vụ (chỉ `clear-cache` + đăng nhập + chụp ảnh trên dữ liệu giả).
+- KHÔNG stage/commit/push/merge PR #2.
+- KHÔNG tự ký P0.
+- Không log/đưa vào gói cookie phiên, CSRF token hay mật khẩu.

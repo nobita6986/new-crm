@@ -27,6 +27,29 @@ def patch_once(path: Path, old: str, new: str) -> bool:
     return True
 
 
+def check_js_syntax(path: Path) -> None:
+    """Fail fast when a patched JS file does not parse.
+
+    The Vite config is edited by string replacement, so a mistake can produce
+    syntactically invalid JavaScript that only blows up when the dev server
+    tries to load it.  Node is always available in the bench image, so use it
+    as a cheap syntax gate right after the edits.
+    """
+    try:
+        result = subprocess.run(
+            ["node", "--check", str(path)],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
+        # Node is not installed: skip the gate rather than fail the patch.
+        return
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Patched file {path} is not valid JavaScript:\n{result.stderr.strip()}"
+        )
+
+
 def main() -> int:
     if len(sys.argv) != 2:
         print("Usage: apply-crm-vite-dev-patch.py <crm-app-dir>", file=sys.stderr)
@@ -570,11 +593,25 @@ function localizeChartLabel(value: string) {
             "Pinned Vite Socket.IO proxy block differs from the expected source"
         )
 
-    optimizer_new = "      exclude: [\n        'frappe-ui/editor',\n      ],"
+    # The anchor is the closing bracket of `optimizeDeps.include`, followed by
+    # the closing brace of `optimizeDeps` and the `server` key.  The
+    # replacement MUST re-emit that closing bracket: dropping it leaves the
+    # `include:` array unterminated and Vite then fails to parse the config
+    # with "Expected `,` or `]` but found `:`" at the injected `exclude:` key.
+    # That parse error only surfaces when the dev server starts, i.e. long
+    # after the patch that caused it, so it is easy to miss.
+    optimizer_new = (
+        "      ],\n"
+        "      exclude: [\n"
+        "        'frappe-ui/editor',\n"
+        "      ],\n"
+        "    },\n"
+        "    server: {"
+    )
     optimizer_changed = patch_once(
         config,
         "      ],\n    },\n    server: {",
-        optimizer_new + "\n    },\n    server: {",
+        optimizer_new,
     )
     config_text = config.read_text(encoding="utf-8")
     if not optimizer_changed and optimizer_new not in config_text:
@@ -827,6 +864,13 @@ export default function translationPlugin(app) {"""
     vueuse_observer_changed = patch_once(
         vueuse_core, vueuse_old_targets, vueuse_new_targets
     )
+
+    # Fail fast if any edited JavaScript file does not parse.  This catches
+    # malformed string replacements (e.g. an unbalanced bracket) at patch time
+    # instead of much later when the Vite dev server refuses to start.
+    for js_path in (config, socket_js, main_js, translation_js):
+        if js_path.is_file():
+            check_js_syntax(js_path)
 
     print(f"Vite config: {'patched' if changed_config else 'already patched'}")
     print(

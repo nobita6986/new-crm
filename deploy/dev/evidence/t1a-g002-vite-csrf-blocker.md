@@ -19,7 +19,7 @@ PS> docker --version
 docker : The term 'docker' is not recognized as the name of a cmdlet, function, script file, or operable program.
 
 PS> Get-Command python
-Application     python.exe        0.0.0.0    C:\Users\Admin\AppData\Local\Microsoft\...
+Application     python.exe        0.0.0.0    %LOCALAPPDATA%\Microsoft\...
 # python --version trả: "Python was not found; run without arguments to install from the Microsoft Store..."
 # → chỉ là App Execution Alias stub, không phải Python thật
 
@@ -596,3 +596,52 @@ Trạng thái checklist không còn là “0/14” hiện hành; các dòng chec
 - **CSRF qua Vite proxy `:8091` — 6/6 PASS:** login staff → 200 · `/cskh` Jinja → 200 (lấy token từ HTML) · POST `crm_cskh.api.health.ping` token hợp lệ → **200** (`status=ok`) · thiếu token → **400** · sai token → **400** · Socket.IO polling same-origin `/socket.io/?EIO=4&transport=polling` → **200** Engine.IO open packet (không còn nhận HTML SPA fallback như §10).
 - **Socket.IO:** proxy `ws: true` + `changeOrigin: true` đã có trong config; bootstrap `socket.js` dùng same-origin ở DEV. Browser CDP capture trên lead detail render đầy đủ SPA (tiêu đề lead, nút `Chuyển thành Cơ hội`).
 - **Kết luận:** gói vá áp dụng đúng trên revision ghim, chạy lại không lỗi; CSRF fail-closed và Socket.IO qua Vite hoạt động sau các thay đổi. G0-02 giữ **PASS (Owner đã duyệt)**, bằng chứng bổ sung này không làm thay đổi verdict.
+
+> ⚠️ **Cảnh báo (bổ sung 2026-10-31, mục §12):** dòng "Socket.IO: `changeOrigin: true`" ở trên **sai** — `changeOrigin: true` là nguyên nhân gốc làm namespace join thất bại, không phải cấu hình đúng. Xem §12.
+
+## 12. Namespace Socket.IO thật + sửa nguyên nhân gốc (T1A, 2026-10-31)
+
+> §11 mới chỉ chứng minh **Engine.IO handshake / polling 200**. Yêu cầu bổ sung: phải chứng minh **namespace thật đã join** (`connected=true`), vì handshake 200 một mình không chứng minh connected. Mục này đo lại và sửa 2 nguyên nhân gốc phát hiện được.
+
+### 12.1 Nguyên nhân gốc #1 — `changeOrigin: true` phá namespace join
+
+- `apps/frappe/realtime/middlewares/authenticate.js` so sánh **hostname của header `Host`** với **hostname của header `Origin`**; lệch → `next(new Error("Invalid origin"))`.
+- Với `changeOrigin: true`, Vite ghi đè `Host` thành target proxy (`127.0.0.1:9000`) trong khi `Origin` của trình duyệt vẫn là `dev.localhost` ⇒ **mọi namespace join thất bại**, DÙ Engine.IO handshake vẫn trả HTTP 200.
+- Với `changeOrigin: false`, Vite giữ nguyên `Host` ⇒ hostname khớp ⇒ namespace join thành công.
+
+### 12.2 Nguyên nhân gốc #2 — cổng Vite không nhất quán host ↔ container
+
+- Realtime tự xác thực bằng request tới `Origin + /api/method/frappe.realtime.get_user_info` (`apps/frappe/realtime/utils.js`). `Origin` là cổng mà **trình duyệt** dùng, nên cổng đó phải truy cập được **bên trong container**.
+- `frappe-ui` tự tính cổng Vite từ `webserver_port` (`8080 + offset`) và giá trị này **ghi đè** cờ `--port` của CLI ⇒ chạy `vite --port 8091` vẫn bind `8080`.
+- Sửa: `frappeProxy` nhận `port: Number(process.env.VITE_DEV_PORT || 8080)`, và compose publish **cùng số cổng** cho host lẫn container (`VITE_PORT` == `VITE_DEV_PORT`).
+
+### 12.3 Đo có đối chứng (artifact)
+
+Artifact: [`logs/t1a-g002-socket-namespace-evidence-20261031.json`](logs/t1a-g002-socket-namespace-evidence-20261031.json) — sha256 `2a83b0f0b44268d23cdc6135f60362f680fd52be0c8b998bd9eeac0492a54a03`.
+
+| Kịch bản | Cấu hình | Kết quả |
+|---|---|---|
+| **FIXED** | `changeOrigin: false`, host port == container port (8091) | `connected=true`, `id=ZA2FztZV0uliyTwLAAAI`, `nsp=/dev.localhost`, `transport=websocket`, `emit('ping')` → **`pong`** |
+| **REGRESSION** | **giống hệt**, chỉ đổi `changeOrigin: true` | `connected=false`, `connect_error = "Invalid origin"` |
+| **FIXED RESTORED** | `changeOrigin: false` lại | `connected=true`, `transport=websocket`, `pong` |
+
+- Tiêu chí PASS: sự kiện `connect` với `socket.id` khác null, `nsp=/dev.localhost`, `transport=websocket`, **và** `emit('ping')` nhận được `pong` ⇒ round-trip server thật, không phải chỉ handshake.
+- Đo bằng `socket.io-client` v4.7.2 (bản ghim trong `apps/crm/frontend`), cookie phiên hợp lệ; **không ghi cookie/token vào artifact**.
+- Cổng: host `8010/9010/8091`, container `8000/9000/8091` — `VITE_PORT == VITE_DEV_PORT == 8091` ⇒ nhất quán.
+
+### 12.4 Thay đổi đã áp dụng
+
+- [`apply-crm-vite-dev-patch.py`](../apply-crm-vite-dev-patch.py): `changeOrigin: true` → **`false`** (và tự nâng cấp từ bản `true` cũ lên `false`); thêm `port: Number(process.env.VITE_DEV_PORT || 8080)` vào khối `frappeProxy`.
+- [`docker-compose.yml`](../docker-compose.yml): thêm `VITE_DEV_PORT: ${VITE_PORT:-8080}` cho service `bench`; publish `127.0.0.1:${VITE_PORT}:${VITE_PORT}` (host port == container port).
+
+### 12.5 Idempotency sau thay đổi
+
+- Patcher chạy trên checkout CRM ghim `0d3910b456ef4fb913e77b29db011b3debc4f778`: lần 1 trên config cũ (`changeOrigin: true`, `frappeProxy` chưa có `port`) → vá đúng 2 chỗ; lần 2 → `already patched`, **output giống hệt lần 3**, exit 0. Không có lỗi.
+- `docker compose config --quiet` → hợp lệ; `VITE_DEV_PORT` = `8091` đúng khi `VITE_PORT=8091`.
+- `docker compose up -d --force-recreate bench` với `WEB_PORT=8010 SOCKETIO_PORT=9010 VITE_PORT=8091` → container nhận `VITE_DEV_PORT=8091`; Vite bind đúng `8091` trong container (không còn bị frappe-ui ghi đè về 8080).
+
+### 12.6 Kết luận
+
+- **G0-02 giữ PASS (Owner đã duyệt)**; nay đã có bằng chứng **namespace Socket.IO thật** thay cho suy luận từ polling 200.
+- Bản chất gói DEV đã được sửa đúng 2 điểm làm Socket.IO không bao giờ thật sự kết nối trong DEV.
+- **Giới hạn:** đây là bằng chứng **DEV** (Vite dev server + Frappe realtime). Không mở rộng sang production ingress/TLS/CORS; SEC-13 vẫn giữ giới hạn topology P0.

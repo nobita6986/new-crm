@@ -42,6 +42,38 @@ docker compose exec bench bash -lc 'cd /workspace/frappe-bench && bench start'
 # UI: http://dev.localhost:8000/crm   (đăng nhập Administrator / mật khẩu trong .env)
 ```
 
+## Cổng DEV — quy tắc nhất quán host ↔ container
+
+`VITE_PORT` (host) **phải bằng** cổng Vite chạy trong container (`VITE_DEV_PORT`):
+
+```bash
+# .env
+WEB_PORT=8000
+SOCKETIO_PORT=9000
+VITE_PORT=8080        # host
+# -> compose truyền VITE_DEV_PORT=8080 cho container, publish 127.0.0.1:8080:8080
+```
+
+Lý do: realtime tự xác thực bằng request tới `Origin + /api/method/frappe.realtime.get_user_info`
+(`apps/frappe/realtime/utils.js`). `Origin` là cổng trình duyệt dùng, nên cổng đó phải truy cập được
+**bên trong container**. Nếu `VITE_PORT` (host) ≠ cổng Vite trong container, namespace Socket.IO
+fail với `ECONNREFUSED` dù Engine.IO handshake vẫn trả HTTP 200.
+
+Nếu phải đổi cổng (ví dụ khi cổng mặc định đã bị chiếm), dùng **cùng một số** cho host và container
+và chạy Vite với `VITE_DEV_PORT` tương ứng:
+
+```bash
+# ví dụ dùng 8091
+WEB_PORT=8010 SOCKETIO_PORT=9010 VITE_PORT=8091 docker compose up -d --force-recreate bench
+docker compose exec bench bash -lc 'cd /workspace/frappe-bench/apps/crm/frontend && VITE_DEV_PORT=8091 node node_modules/.bin/vite --host 0.0.0.0 --port 8091'
+```
+
+> `frappe-ui` tự tính cổng Vite từ `webserver_port` và ghi đè cờ `--port`; helper
+> [`apply-crm-vite-dev-patch.py`](apply-crm-vite-dev-patch.py) đã chèn
+> `port: Number(process.env.VITE_DEV_PORT || 8080)` vào khối `frappeProxy` để tránh điều đó.
+> Proxy `/socket.io` phải giữ `changeOrigin: false` — xem
+> [`evidence/t1a-g002-vite-csrf-blocker.md`](evidence/t1a-g002-vite-csrf-blocker.md) §12.
+
 ## Lệnh thường dùng
 
 ```bash
