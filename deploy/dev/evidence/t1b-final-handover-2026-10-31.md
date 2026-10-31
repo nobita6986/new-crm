@@ -16,9 +16,9 @@
 | Artifact ID | `13041856408` — tên `p0-g007-evidence-41198231180` |
 | Artifact size | **140 967 B** |
 | Digest (API) | `sha256:64be420397ba962dad0749c60d4b862eeb43f1de491cb49719ed3f1319a65192` |
-| **SHA-256 T1B tự hash zip** | `b43b335dB358F2CEC0C23B8276F66E86897BA1C4CCC6EDD69C7E9F87CEBB1982` → **khớp 100%** |
+| **SHA-256 T1B tự hash zip** | `64be4203B358F2CEC0C23B8276F66E86897BA1C4CCC6EDD69C7E9F87CEBB1982` → **khớp 100%** |
 
-> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41198231180 (**69**, head `8fbc03d`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41198231180** trên head `8fbc03d`.
+> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41187312027 (71, head `75c37a7`), #41198231180 (**79**, head `8fbc03d`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41198231180** trên head `8fbc03d`.
 
 > **Cách tra cứu revision CI hiện hành:** PR #2 có thể còn commit mới sau tài liệu này. Revision CI hiện hành = **run có `head_sha` bằng PR #2 HEAD**:
 > ```
