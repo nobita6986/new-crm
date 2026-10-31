@@ -667,16 +667,16 @@ function localizeChartLabel(value: string) {
 } else {"""
     new_boot = """if (import.meta.env.DEV) {
   // Vite serves index.html without Frappe's Jinja boot data. Read the CSRF
-  // token from the authenticated same-site /cskh page before the first POST;
+  // token from the authenticated same-site Desk page before the first POST;
   // the API boot method itself requires that token.
-  fetch('/cskh', { credentials: 'same-origin' })
+  fetch('/desk', { credentials: 'same-origin', cache: 'no-store' })
     .then((response) => {
       if (!response.ok) throw new Error(`CSRF bootstrap returned ${response.status}`)
       return response.text()
     })
     .then((html) => {
       const match = html.match(/frappe\\.csrf_token\\s*=\\s*(['\\\"])(.*?)\\1/)
-      if (!match || !match[2]) throw new Error('CSRF token missing from /cskh response')
+      if (!match || !match[2]) throw new Error('CSRF token missing from Desk response')
       window.csrf_token = match[2]
       return frappeRequest({ url: '/api/method/crm.www.crm.get_context_for_dev' })
     })
@@ -737,34 +737,62 @@ function localizeChartLabel(value: string) {
 }
 
 if (import.meta.env.DEV) {
-  // Vite serves index.html without Frappe's Jinja boot data. Read the CSRF
-  // token from the authenticated same-site /cskh page before installing the
-  // router, resources, or telemetry that can issue POST requests.
-  fetch('/cskh', { credentials: 'same-origin' })
+  // Desk boot is independent of business permission to read a CRM Lead.
+  // Guest sessions are redirected to login before any CSRF-protected POST.
+  const loginUrl = '/login?redirect-to=' + encodeURIComponent(
+    window.location.pathname + window.location.search + window.location.hash,
+  )
+  fetch('/desk', { credentials: 'same-origin', cache: 'no-store' })
     .then((response) => {
+      if (new URL(response.url, window.location.origin).pathname === '/login') {
+        window.location.replace(loginUrl)
+        return null
+      }
       if (!response.ok) throw new Error(`CSRF bootstrap returned ${response.status}`)
       return response.text()
     })
     .then((html) => {
+      if (html === null) return null
       const match = html.match(/frappe\\.csrf_token\\s*=\\s*(['\\\"])(.*?)\\1/)
-      if (!match || !match[2]) throw new Error('CSRF token missing from /cskh response')
+      if (!match || !match[2] || match[2] === 'None') {
+        throw new Error('CSRF token missing from Desk response')
+      }
       window.csrf_token = match[2]
       return frappeRequest({ url: '/api/method/crm.www.crm.get_context_for_dev' })
     })
     .then((values) => {
+      if (!values) return
       for (const key in values) window[key] = values[key]
       initializeApp()
     })
-    .catch((error) => console.error('CRM Vite boot failed', error))
+    .catch((error) => {
+      console.error('CRM Vite boot failed', error)
+      const root = document.getElementById('app')
+      if (!root) return
+      const heading = document.createElement('h1')
+      heading.textContent = 'Không thể mở CRM'
+      const message = document.createElement('p')
+      message.textContent = 'Không thể khởi tạo phiên. Vui lòng tải lại trang hoặc đăng nhập lại.'
+      const loginLink = document.createElement('a')
+      loginLink.href = loginUrl
+      loginLink.textContent = 'Đăng nhập lại'
+      root.replaceChildren(heading, message, loginLink)
+    })
 } else {
   initializeApp()
 }"""
     if new_main_suffix not in current_main:
-        if current_main.count(main_marker) != 1:
+        # The first application removes the upstream comment. Later upgrades
+        # must replace our existing initializer rather than require that comment.
+        initialization_marker = main_marker
+        if current_main.count(initialization_marker) == 0:
+            initialization_marker = "function initializeApp() {"
+        if current_main.count(initialization_marker) != 1:
             raise RuntimeError(
-                f"Expected one CRM main initialization marker, found {current_main.count(main_marker)}"
+                "Expected one CRM main initialization marker, "
+                f"found {current_main.count(initialization_marker)}"
             )
-        source_suffix = current_main.split(main_marker, 1)[1]
+        source_prefix, source_suffix = current_main.split(initialization_marker, 1)
         required = (
             "app.use(router)",
             "app.use(telemetryPlugin, { app_name: 'crm' })",
@@ -775,7 +803,7 @@ if (import.meta.env.DEV) {
                 "Pinned CRM main.js initialization block differs from expected source"
             )
         main_js.write_text(
-            current_main.split(main_marker, 1)[0] + new_main_suffix,
+            source_prefix + new_main_suffix,
             encoding="utf-8",
             newline="\n",
         )

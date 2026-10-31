@@ -213,12 +213,12 @@ KHÔNG sửa file T1B/T1C/ADR/code/tests/workflow; KHÔNG merge PR #2; KHÔNG t�
 
 ### 1. Lỗi
 
-```text
+``text
 failed to load config from /workspace/frappe-bench/apps/crm/frontend/vite.config.js
 [PARSE_ERROR] Expected `,` or `]` but found `:`
   vite.config.js:103:14
    103 │       exclude: [
-```
+``
 
 **Nguyên nhân:** patch `optimizeDeps` dùng anchor `"      ],\n    },\n    server: {"` — anchor này **bao gồm** dấu `]` đóng mảng `include:`, nhưng phần thay thế **không phát lại** dấu `]` đó ⇒ mảng `include:` bị bỏ dấu đóng.
 
@@ -236,7 +236,7 @@ failed to load config from /workspace/frappe-bench/apps/crm/frontend/vite.config
 ### 3. Sửa
 
 1. **Sửa phép thay thế** — phát lại dấu `]` đóng mảng `include:`:
-   ```python
+   ``python
    optimizer_new = (
        "      ],\n"
        "      exclude: [\n"
@@ -245,7 +245,7 @@ failed to load config from /workspace/frappe-bench/apps/crm/frontend/vite.config
        "    },\n"
        "    server: {"
    )
-   ```
+   ``
 2. **Thêm cổng kiểm tra cú pháp** `check_js_syntax()` dùng `node --check` cho `vite.config.js`, `src/socket.js`, `src/main.js`, `src/translation.js` **ngay sau khi vá** ⇒ lỗi cú pháp dừng patcher với **exit 2** ngay tại lúc vá.
 
 ### 4. Kiểm chứng sau khi sửa
@@ -314,16 +314,16 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 | Merge SHA | `ebc1da686b7aca4f6b880c6f231e9ba6cded2996` (`workflow-metadata.json` `commit_sha`) |
 | Artifact ID | `13045838633` (`p0-g007-evidence-41210391537`) |
 | Artifact size | 140 956 B |
-| Digest API | `sha256:sha256:9c6053c7f33a431245cace4a8108f012d09f1c01bcf0b681abae128f9fdfffcc` |
+| Digest API | `sha256:9c6053c7f33a431245cace4a8108f012d09f1c01bcf0b681abae128f9fdfffcc` |
 | **SHA-256 tự hash zip** | `9C6053C7F33A431245CACE4A8108F012D09F1C01BCF0B681ABAE128F9FDFFFCC` → **KHỚP 100%** digest API *(T1A tải zip artifact `13045838633` và tự hash — khớp digest API `sha256:9c6053c7…`)* |
 
-> **Tất cả các run đóng gói đều `success` với kết quả parse giống hệt** (99/99 + 18/18 + 9/9 + 74/74): #41183084515 (62, head `ddf817c`, artifact `13035534433`, digest `sha256:dc733082…`), #41183641044 (64, head `9fdeee6`, artifact `13036566067`, digest `sha256:d20ef778…`), #41184602987 (66, head `b50320a`, artifact `13035818049`, digest `sha256:de985d90…`), #41185474002 (68, head `10f479b`, artifact `13036987864`, digest `sha256:a778844c…`), #41186135804 (69, head `9dbda45`, artifact `13035909529`, digest `sha256:814b3bba…`), #41187312027 (71, head `75c37a7`, artifact `13038140741`, digest `sha256:673176b4…`), #41188127001 (73, head `50dab76`, artifact `13037926540`, digest `sha256:a80a2223…`), #41188863453 (74, head `d2e3634`, artifact `13038286054`, digest `sha256:c45fba0f…`), #41189626544 (75, head `1210adb`, artifact `13038222611`, digest `sha256:41726865…`), #41190382586 (76, head `7cfeaa5`, artifact `13038099371`, digest `sha256:8acc2923…`), #41191157121 (78, head `809c9cb`, artifact `13039190745`, digest `sha256:b43b335d…`), #41198231180 (79, head `8fbc03d`, artifact `13041856408`, digest `sha256:64be4203…`), #41199317193 (81, head `74e3764`, artifact `13041863349`, digest `sha256:7d87e31f…`), #41200134560 (83, head `ae690c8`, artifact `13042043665`, digest `sha256:cb365f53…`), #41200825236 (84, head `356ceeb`, artifact `13042607579`, digest `sha256:d391e971…`), #41201885507 (86, head `43d7fff`, artifact `13042933206`, digest `sha256:1d0d6e17…`), #41202547857 (87, head `eabe296`, artifact `13043193285`, digest `sha256:d001fdef…`), #41203517684 (89, head `74c608e`, artifact `13044051253`, digest `sha256:a73d8cc8…`), #41204474054 (91, head `6d7665a`, artifact `13043978075`, digest `sha256:d08ef86b…`), #41205596840 (93, head `8c4d8d3`, artifact `13043994871`, digest `sha256:97045256…`), #41206591321 (95, head `b7ecd8b`, artifact `13043719761`, digest `sha256:5e05003b…`), #41207511737 (97, head `ebfa43b`, artifact `13045760286`, digest `sha256:a5d4674f…`), #41210391537 (101, head `2d1e722`, artifact `13045838633`, digest `sha256:9c6053c7…`), #41210391537 (**101**, head `2d1e722`, artifact `13045838633`, digest `sha256:9c6053c7…`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67), #41187158951 (70), #41188046267 (72), #41191094848 (77), #41198983664 (80), #41199949324 (82), #41201698292 (85), #41203385379 (88), #41204331575 (90), #41205331804 (92), #41206351741 (94), #41207226868 (96), #41208645874 (98), #41209998958 (100), #41209998958 (100) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao cho T1C/T1A là run **#41210391537** (run_number 101) trên head `2d1e722`, merge `ebc1da686`.
+> **Tất cả các run đóng gói đều `success` với kết quả parse giống hệt** (99/99 + 18/18 + 9/9 + 74/74): #41183084515 (62, head `ddf817c`, artifact `13035534433`, digest `sha256:dc733082…`), #41183641044 (64, head `9fdeee6`, artifact `13036566067`, digest `sha256:d20ef778…`), #41184602987 (66, head `b50320a`, artifact `13035818049`, digest `sha256:de985d90…`), #41185474002 (68, head `10f479b`, artifact `13036987864`, digest `sha256:a778844c…`), #41186135804 (69, head `9dbda45`, artifact `13035909529`, digest `sha256:814b3bba…`), #41187312027 (71, head `75c37a7`, artifact `13038140741`, digest `sha256:673176b4…`), #41188127001 (73, head `50dab76`, artifact `13037926540`, digest `sha256:a80a2223…`), #41188863453 (74, head `d2e3634`, artifact `13038286054`, digest `sha256:c45fba0f…`), #41189626544 (75, head `1210adb`, artifact `13038222611`, digest `sha256:41726865…`), #41190382586 (76, head `7cfeaa5`, artifact `13038099371`, digest `sha256:8acc2923…`), #41191157121 (78, head `809c9cb`, artifact `13039190745`, digest `sha256:b43b335d…`), #41198231180 (79, head `8fbc03d`, artifact `13041856408`, digest `sha256:64be4203…`), #41199317193 (81, head `74e3764`, artifact `13041863349`, digest `sha256:7d87e31f…`), #41200134560 (83, head `ae690c8`, artifact `13042043665`, digest `sha256:cb365f53…`), #41200825236 (84, head `356ceeb`, artifact `13042607579`, digest `sha256:d391e971…`), #41201885507 (86, head `43d7fff`, artifact `13042933206`, digest `sha256:1d0d6e17…`), #41202547857 (87, head `eabe296`, artifact `13043193285`, digest `sha256:d001fdef…`), #41203517684 (89, head `74c608e`, artifact `13044051253`, digest `sha256:a73d8cc8…`), #41204474054 (91, head `6d7665a`, artifact `13043978075`, digest `sha256:d08ef86b…`), #41205596840 (93, head `8c4d8d3`, artifact `13043994871`, digest `sha256:97045256…`), #41206591321 (95, head `b7ecd8b`, artifact `13043719761`, digest `sha256:5e05003b…`), #41207511737 (97, head `ebfa43b`, artifact `13045760286`, digest `sha256:a5d4674f…`), #41208997647 (99, head `11f6dab`, artifact `13045484144`, digest `sha256:33c7c666…`), #41210391537 (**101**, head `2d1e722`, artifact `13045838633`, digest `sha256:9c6053c7…`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67), #41187158951 (70), #41188046267 (72), #41191094848 (77), #41198983664 (80), #41199949324 (82), #41201698292 (85), #41203385379 (88), #41204331575 (90), #41205331804 (92), #41206351741 (94), #41207226868 (96), #41208645874 (98), #41209998958 (100) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao cho T1C/T1A là run **#41210391537** (run_number 101) trên head `2d1e722`, merge `ebc1da686`.
 
 > **Cách tra cứu revision CI hiện hành (chống "vòng lặp revision"):** PR #2 có thể còn commit mới sau tài liệu này. Revision CI hiện hành = **run có `head_sha` bằng PR #2 HEAD**:
-> ```
+> ``
 > gh api "repos/nobita6986/new-crm/actions/runs?branch=codex/p0-t1a-g001-g002-g009&per_page=3" \
 >   --jq '.workflow_runs[] | {id, run_number, status, conclusion, head_sha}'
-> ```
+> ``
 > Mọi run đóng gói đều cho **cùng một kết quả parse** (99/99 + 18/18 + 9/9 + 74/74) nên dùng run nào cũng có giá trị kiểm định, miễn là run `success` trên head chứa đầy đủ gói DEV/i18n/evidence.
 
 ### 4. Parse độc lập (không suy từ tên commit)
