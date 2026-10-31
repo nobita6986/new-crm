@@ -1,0 +1,82 @@
+{
+  "schema": "t1a-g002-socket-namespace-evidence-v2",
+  "recorded_at_utc": "2026-10-31T07:40:34Z",
+  "host": "dev.localhost",
+  "purpose": "Chung minh namespace Socket.IO THẬT đã join (không chỉ handshake/polling 200). Đây là bằng chứng bổ sung cho thay đổi cuối của gói DEV T1A.",
+  "environment": {
+    "crm_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+    "frappe_sha": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+    "compose_project": "crm-cskh-dev",
+    "container": "crm-cskh-dev-bench-1",
+    "host_ports": {
+      "web": 8010,
+      "socketio": 9010,
+      "vite": 8091
+    },
+    "container_ports": {
+      "web": 8000,
+      "socketio": 9000,
+      "vite": 8091
+    },
+    "port_mapping_note": "VITE_PORT (host) == VITE_DEV_PORT (container) == 8091. Bắt buộc: realtime tự xác thực qua `Origin + /api/method/frappe.realtime.get_user_info`, nên cổng trong Origin phải truy cập được trong container."
+  },
+  "mechanism": {
+    "engine_io_handshake_via_vite": "HTTP 200 + open packet (KHÔNG đủ để chứng minh connected)",
+    "namespace_join_proof": "socket.io-client v4.7.2 nối tới namespace /dev.localhost với cookie sid hợp lệ; tiêu chí PASS = sự kiện 'connect' với socket.id khác null, nsp=/dev.localhost, transport=websocket, và emit('ping') nhận được 'pong' (xác nhận round-trip server).",
+    "frappe_realtime_auth": "apps/frappe/realtime/middlewares/authenticate.js so sánh hostname của header Host với hostname của header Origin; lệch -> next(new Error('Invalid origin'))."
+  },
+  "root_cause": {
+    "finding": "Proxy '/socket.io' của Vite DEV phải dùng changeOrigin: false. Với changeOrigin: true, Vite ghi đè Host thành target (127.0.0.1:9000) trong khi Origin của trình duyệt vẫn là dev.localhost -> realtime từ chối namespace join với 'Invalid origin', DÙ Engine.IO handshake vẫn trả HTTP 200.",
+    "second_finding": "Cổng Vite phải nhất quán host<->container (VITE_PORT == VITE_DEV_PORT). Nếu khác, request tự xác thực `Origin + /api/...` không resolve được trong container (ECONNREFUSED) -> namespace join thất bại.",
+    "evidence": "xem kết quả đo kiểm soát: cùng cấu hình, chỉ đổi changeOrigin."
+  },
+  "measurements": [
+    {
+      "url": "http://127.0.0.1:8091",
+      "ns": "/dev.localhost",
+      "origin": "http://dev.localhost:8091",
+      "hostHeader": "dev.localhost:8091",
+      "connected": true,
+      "id": "ZA2FztZV0uliyTwLAAAI",
+      "nsp": "/dev.localhost",
+      "transport": "websocket",
+      "error": null,
+      "events": [
+        "pong"
+      ],
+      "label": "FIXED: Vite proxy 8091, changeOrigin=false, host port == container port"
+    },
+    {
+      "url": "http://127.0.0.1:8091",
+      "ns": "/dev.localhost",
+      "origin": "http://dev.localhost:8091",
+      "hostHeader": "dev.localhost:8091",
+      "connected": false,
+      "id": null,
+      "nsp": null,
+      "transport": null,
+      "error": "Invalid origin",
+      "events": [],
+      "label": "REGRESSION: identical setup but changeOrigin=true"
+    },
+    {
+      "url": "http://127.0.0.1:8091",
+      "ns": "/dev.localhost",
+      "origin": "http://dev.localhost:8091",
+      "hostHeader": "dev.localhost:8091",
+      "connected": true,
+      "id": "HQQ4yx03kKCTbRCOAAAM",
+      "nsp": "/dev.localhost",
+      "transport": "websocket",
+      "error": null,
+      "events": [
+        "pong"
+      ],
+      "label": "FIXED RESTORED: changeOrigin=false"
+    }
+  ],
+  "verdict": {
+    "g0_02_socketio_namespace": "PASS — namespace /dev.localhost join thành công qua proxy Vite (transport=websocket, có pong). Không dựa vào handshake/polling 200.",
+    "scope": "Bằng chứng DEV (Vite dev server + Frappe realtime). Không mở rộng sang production ingress/TLS/CORS — SEC-13 vẫn giữ giới hạn topology P0."
+  }
+}
