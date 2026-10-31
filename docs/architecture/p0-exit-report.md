@@ -300,7 +300,7 @@ Artifact: [`t1a-g002-socket-namespace-evidence-20261031.json`](../../deploy/dev/
 
 | Hạng mục | Kết quả |
 |---|---|
-| Phạm vi file | 48 file / 3 987 dòng thêm / 89 dòng xoá (`git diff --stat e0ef02f..4744311`) — chỉ DEV/i18n, tài liệu, evidence đã bàn giao. **Không** đụng code app, test, workflow, seed, ADR |
+| Phạm vi file | 48 file / 3 993 dòng thêm / 89 dòng xoá (`git diff --stat e0ef02f..4744311`) — chỉ DEV/i18n, tài liệu, evidence đã bàn giao. **Không** đụng code app, test, workflow, seed, ADR |
 | Inventory JUnit 99 method | `g007_test_inventory.json` **không đổi**; CI gate vẫn `expected_total=99`/`observed_total=99` |
 | Auxiliary tests | `test_error_response_normalization` 8/8 — ghi **riêng** trong `auxiliary/`, ngoài inventory 99 |
 | Secret / `.env` / cookie / token | Không có `.env`, cookie phiên, CSRF token, bearer, private file URL trong file đóng gói. `verify-socket-namespace.mjs` chỉ đọc `ADMIN_PASSWORD` từ env, **không** ghi giá trị ra log/artifact |
