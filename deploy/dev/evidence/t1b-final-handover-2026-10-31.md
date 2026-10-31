@@ -18,7 +18,7 @@
 | Digest (API) | `sha256:d001fdef413abafccd7b40e701936a85c9a8155c5a0c1769765e19108ae8dc73` |
 | **SHA-256 T1B tự hash zip** | `D001FDEF413ABAFCCD7B40E701936A85C9A8155C5A0C1769765E19108AE8DC73` → **khớp 100%** |
 
-> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41187312027 (71, head `75c37a7`), #41198231180 (79, head `8fbc03d`), #41199317193 (81, head `74e3764`), #41200134560 (83, head `ae690c8`), #41202547857 (87, head `eabe296`), #41202547857 (**87**, head `eabe296`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41202547857** trên head `eabe296`.
+> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41187312027 (71, head `75c37a7`), #41198231180 (79, head `8fbc03d`), #41199317193 (81, head `74e3764`), #41200134560 (83, head `ae690c8`), #41201885507 (86, head `43d7fff`), #41202547857 (**87**, head `eabe296`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41202547857** trên head `eabe296`.
 
 > **Cách tra cứu revision CI hiện hành:** PR #2 có thể còn commit mới sau tài liệu này. Revision CI hiện hành = **run có `head_sha` bằng PR #2 HEAD**:
 > ```
