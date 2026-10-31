@@ -1,16 +1,18 @@
 # T1B — BÀN GIAO GÓI CUỐI P0 + KẾT QUẢ CI (2026-10-31)
 
 **Người gửi:** T1B · **Người nhận:** T1C (kiểm định độc lập) + T1A (tổng hợp P0)
-**PR #2:** `state=open`, `mergeable=MERGEABLE`, **KHÔNG merge**. Head sau đóng gói: `ebfa43b1272219f1265a1b499e71be3eed33e2a3` (chứa `ba49857` — bản vá lỗi cú pháp patcher của T1A Round 34).
+**PR #2:** `state=open`, `mergeable=MERGEABLE`, **KHÔNG merge**. Head sau đóng gói: `170e9c1959f870da77e7ceca5ba2c4ec1ad47865` (chứa `ba49857` — bản vá lỗi cú pháp patcher của T1A Round 34).
 
 ---
 
 ## 1. Run CI của commit đóng gói cuối
 
+> **Ghi chú hiệu chỉnh T1C Round 32b (2026-10-31):** ô `RA-05` (Actor = **CRM-ADMIN**) đã bị **hạ PASS → PARTIAL** vì 2 ca HTTP `ra05-*` đo actor `Administrator` (System Manager) ⇒ **evidence không đúng actor của ô**; kỳ vọng P0 của ô đổi `A` → **`D` tạm thời** (Owner 2026-10-26, cùng chính sách `RA-04`). 2 ca `ra05-*` được tách thành **positive control `RA-05-SM`** (actor System Manager) **ngoài lưới 71 ô** ⇒ **KHÔNG** nâng ô `RA-05`. Ô `RA-05` còn **PARTIAL** vì thiếu 1 ca HTTP đo trực tiếp actor `CSKH CRM Admin` (`crm.admin@dev.local`). **Tally hiện hành: 59 PASS + 9 PARTIAL + 0 NOT RUN + 3 DEFER P1 = 71**; SEC tally giữ **28/28 PASS** ⇒ **verdict G0-07 = PASS không đổi** (ô hạ vẫn fail-closed đúng kỳ vọng P0 `D`). Chi tiết: `docs/architecture/p0-exit-report.md` mục "Hiệu chỉnh Round 32b" + `deploy/dev/evidence/t1c-ext2-matrix-gap-verification-2026-10-31.md` §4.3. **GO/NO-GO P0 thuộc T0/Owner** — T1A/T1B/T1C không tự ký.
+
 | Trường | Giá trị |
 |---|---|
 | Run ID / run_number | **#41217191623** / 112 |
-| Trạng thái | `success` (completed 2026-10-31T14:00:54Z) |
+| Trạng thái | `success` (completed 2026-10-31T16:03:28Z) |
 | Branch head SHA | `170e9c1959f870da77e7ceca5ba2c4ec1ad47865` (= PR #2 HEAD) |
 | Merge SHA | `21923febfb2f18ba749d0e82ec98055d7de528c2` (`workflow-metadata.json` → `commit_sha`) |
 | Artifact ID | `13049010262` — tên `p0-g007-evidence-41217191623` |
@@ -18,7 +20,7 @@
 | Digest (API) | `sha256:45083e4715c174ea62bdfcedf4c2fd997ea87f09799af3e645fb896ad95a8b5b` |
 | **SHA-256 T1B tự hash zip** | `45083E4715C174EA62BDFCEDF4C2FD997EA87F09799AF3E645FB896AD95A8B5B` → **khớp 100%** |
 
-> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`), #41183641044 (64, head `9fdeee6`), #41184602987 (66, head `b50320a`), #41185474002 (68, head `10f479b`), #41186135804 (69, head `9dbda45`), #41187312027 (71, head `75c37a7`), #41188127001 (73, head `50dab76`), #41188863453 (74, head `d2e3634`), #41189626544 (75, head `1210adb`), #41190382586 (76, head `7cfeaa5`), #41191157121 (78, head `809c9cb`), #41198231180 (79, head `8fbc03d`), #41199317193 (81, head `74e3764`), #41200134560 (83, head `ae690c8`), #41200825236 (84, head `356ceeb`), #41201885507 (86, head `43d7fff`), #41202547857 (87, head `eabe296`), #41203517684 (89, head `74c608e`), #41204474054 (91, head `6d7665a`), #41205596840 (93, head `8c4d8d3`), #41206591321 (95, head `b7ecd8b`), #41207511737 (97, head `ebfa43b`), #41208997647 (99, head `11f6dab`), #41210391537 (101, head `2d1e722`), #41217191623 (**104**, head `170e9c1`). Run #41183398104 (63), #41184507863 (65), #41185396150 (67), #41187158951 (70), #41188046267 (72), #41191094848 (77), #41198983664 (80), #41199949324 (82), #41201698292 (85), #41203385379 (88), #41204331575 (90), #41205331804 (92), #41206351741 (94), #41207226868 (96), #41208645874 (98), #41209998958 (100), #41211477811 (102), #41211765380 (103), #41212930171 (105) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41217191623** trên head `170e9c1`.
+> **Ghi chú về các run trước:** mọi run đóng gói đều **success** với kết quả parse **giống hệt** — #41183084515 (62, head `ddf817c`, artifact `13035534433`, digest `sha256:dc733082…`), #41183641044 (64, head `9fdeee6`, artifact `13036566067`, digest `sha256:d20ef778…`), #41184602987 (66, head `b50320a`, artifact `13035818049`, digest `sha256:de985d90…`), #41185474002 (68, head `10f479b`, artifact `13036987864`, digest `sha256:a778844c…`), #41186135804 (69, head `9dbda45`, artifact `13035909529`, digest `sha256:814b3bba…`), #41187312027 (71, head `75c37a7`, artifact `13038140741`, digest `sha256:673176b4…`), #41188127001 (73, head `50dab76`, artifact `13037926540`, digest `sha256:a80a2223…`), #41188863453 (74, head `d2e3634`, artifact `13038286054`, digest `sha256:c45fba0f…`), #41189626544 (75, head `1210adb`, artifact `13038222611`, digest `sha256:41726865…`), #41190382586 (76, head `7cfeaa5`, artifact `13038099371`, digest `sha256:8acc2923…`), #41191157121 (78, head `809c9cb`, artifact `13039190745`, digest `sha256:b43b335d…`), #41198231180 (79, head `8fbc03d`, artifact `13041856408`, digest `sha256:64be4203…`), #41199317193 (81, head `74e3764`, artifact `13041863349`, digest `sha256:7d87e31f…`), #41200134560 (83, head `ae690c8`, artifact `13042043665`, digest `sha256:cb365f53…`), #41200825236 (84, head `356ceeb`, artifact `13042607579`, digest `sha256:d391e971…`), #41201885507 (86, head `43d7fff`, artifact `13042933206`, digest `sha256:1d0d6e17…`), #41202547857 (87, head `eabe296`, artifact `13043193285`, digest `sha256:d001fdef…`), #41203517684 (89, head `74c608e`, artifact `13044051253`, digest `sha256:a73d8cc8…`), #41204474054 (91, head `6d7665a`, artifact `13043978075`, digest `sha256:d08ef86b…`), #41205596840 (93, head `8c4d8d3`, artifact `13043994871`, digest `sha256:97045256…`), #41206591321 (95, head `b7ecd8b`, artifact `13043719761`, digest `sha256:5e05003b…`), #41207511737 (97, head `ebfa43b`, artifact `13045760286`, digest `sha256:a5d4674f…`), #41208997647 (99, head `11f6dab`, artifact `13045484144`, digest `sha256:33c7c666…`), #41210391537 (101, head `2d1e722`, artifact `13045838633`, digest `sha256:9c6053c7…`), #41211925325 (104, head `c3035bd`, artifact `13046473893`, digest `sha256:b1c199319…`), #41213268348 (106, head `32b6a31`, artifact `13047027236`, digest `sha256:22942137e…`), #41214366200 (107, head `aa2f62c`, artifact `13046829344`, digest `sha256:3319889c9…`), #41215340404 (108, head `c4a0bde`, artifact `13048540101`, digest `sha256:b4218240d…`), #41216145009 (110, head `9407588`, artifact `13047783761`, digest `sha256:e512f94a0…`), #41217191623 (112, head `170e9c1`, artifact `13049010262`, digest `sha256:45083e471…`). Run #41183398104 (63) #41184507863 (65) #41185396150 (67) #41187158951 (70) #41188046267 (72) #41191094848 (77) #41198983664 (80) #41199949324 (82) #41201698292 (85) #41203385379 (88) #41204331575 (90) #41205331804 (92) #41206351741 (94) #41207226868 (96) #41208645874 (98) #41209998958 (100) #41211477811 (102) #41211765380 (103) #41212930171 (105) #41215883282 (109) #41216808465 (111) bị `cancelled` do bị supersede khi push commit mới — **không** phải lỗi CI. Revision đang bàn giao để kiểm định độc lập là run **#41217191623** trên head `170e9c1`.
 
 > **Cách tra cứu revision CI hiện hành:** PR #2 có thể còn commit mới sau tài liệu này. Revision CI hiện hành = **run có `head_sha` bằng PR #2 HEAD**:
 > ``
@@ -62,7 +64,7 @@
 | `04824df` | T1A Round 34 (song song): đồng bộ revision CI #41184602987 |
 | `170e9c1` | **T1B — revision đóng gói cuối**: đồng bộ báo cáo + bàn giao sang run #41217191623 |
 
-Tổng: `git diff --stat e0ef02f..ebfa43b` = **44 file, +3 761 / −75**.
+Tổng: `git diff --stat e0ef02f..170e9c1` = **48 file, +3 981 / −89**.
 
 ## 4. Rà đóng gói (T1B tự thực hiện)
 
@@ -79,9 +81,9 @@ Tổng: `git diff --stat e0ef02f..ebfa43b` = **44 file, +3 761 / −75**.
 
 ## 5. Bàn giao
 
-- **Cho T1C:** artifact `13049010262` + digest `sha256:45083e47…` + revision head `170e9c1` / merge `21923feb6` / run `#41217191623` — đề nghị T1C tự tải + tự hash + tự parse độc lập như Round 31/32.
+- **Cho T1C:** artifact `13049010262` + digest `sha256:45083e47…` + revision head `170e9c1` / merge `21923feb` / run `#41217191623` — đề nghị T1C tự tải + tự hash + tự parse độc lập như Round 31/32.
 - **Cho T1A:** commit đóng gói `170e9c1` + run CI #41217191623 + kết quả parse (đã ghi vào `docs/architecture/p0-exit-report.md` mục "T1B — ĐÓNG GÓI CUỐI + CI XÁC MINH").
-- **Không còn lỗi/gap cụ thể** trong phạm vi P0: 8 ô matrix PARTIAL còn lại và 3 ô DEFER P1 đều là nghiệp vụ P1 **chưa triển khai**, đang fail-closed (BOD scoped reporting ADR-005, ownership service ADR-004).
+- **Không còn lỗi/gap cụ thể** trong phạm vi P0: **9 ô matrix PARTIAL** (LEAD-12/13, **RA-05**, CL-08, TK-07, NT-07, LS-08/10, BD-01) và 3 ô DEFER P1 đều là nghiệp vụ P1 **chưa triển khai**, đang fail-closed (BOD scoped reporting ADR-005, ownership service ADR-004). **Tally hiện hành (T1C Round 32b): 59 PASS + 9 PARTIAL + 0 NOT RUN + 3 DEFER P1 = 71**; SEC tally **28/28 PASS** ⇒ verdict **G0-07 = PASS không đổi**.
 
 ## 6. Bất biến
 
