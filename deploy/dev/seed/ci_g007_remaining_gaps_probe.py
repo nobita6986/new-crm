@@ -107,11 +107,16 @@ def login(username: str, password: str):
 
 
 def csrf_token(client) -> str:
-    status, body, _, error = send(client, "GET", "/cskh")
-    match = re.search(rb'["\']X-Frappe-CSRF-Token["\']\s*:\s*["\']([^"\']+)', body)
-    if error or status != 200 or not match:
-        raise RuntimeError("could not obtain CSRF token for authenticated probe")
-    return match.group(1).decode("utf-8")
+    for path in ("/cskh", "/desk"):
+        status, body, _, error = send(client, "GET", path)
+        if error or status != 200:
+            continue
+        match = re.search(rb'["\']X-Frappe-CSRF-Token["\']\s*:\s*["\']([^"\']+)', body)
+        if not match:
+            match = re.search(rb'csrf_token\s*=\s*["\']([^"\']+)', body)
+        if match:
+            return match.group(1).decode("utf-8")
+    raise RuntimeError("could not obtain CSRF token for authenticated probe")
 
 
 def setup_permlevel_field() -> bool:
@@ -1032,6 +1037,550 @@ def dl01_dynamic_link_case(admin, admin_csrf, staff, staff_csrf):
     cleanup()
 
 
+def lead16_ls06_get_data_field_scope_case(admin, admin_csrf, staff, staff_csrf):
+    """LEAD-16 / LS-06 — `crm.api.doc.get_data` chọn field nhạy cảm theo scope.
+
+    Đặt email giả riêng cho Lead TRONG scope (A1) và Lead NGOÀI scope (C1) qua
+    admin, rồi staff trong scope gọi `get_data` với `rows=["name","mobile_no",
+    "email"]`. Response phải chứa mobile_no/email của Lead trong scope (positive
+    control — không vacuous) và KHÔNG chứa mobile_no/email/name của Lead ngoài
+    scope. Email giả được trả về rỗng sau khi đo.
+    """
+    in_scope_email = f"p0-gap-in-{uuid.uuid4().hex}@example.test"
+    out_email = f"p0-gap-out-{uuid.uuid4().hex}@example.test"
+    in_scope_phone = "0900000010"
+    out_of_scope_phone = "0900000090"
+
+    def set_lead_email(name, value):
+        body = urllib.parse.urlencode(
+            {"doctype": "CRM Lead", "name": name, "fieldname": "email", "value": value}
+        ).encode()
+        return send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.set_value",
+            body,
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Frappe-CSRF-Token": admin_csrf,
+            },
+        )
+
+    def revert_emails():
+        set_lead_email(LEAD_NAME, "")
+        set_lead_email(OUT_OF_SCOPE_LEAD_NAME, "")
+
+    atexit.register(revert_emails)
+    set_lead_email(LEAD_NAME, in_scope_email)
+    set_lead_email(OUT_OF_SCOPE_LEAD_NAME, out_email)
+
+    try:
+        headers = {
+            "Content-Type": "application/json",
+            "X-Frappe-CSRF-Token": staff_csrf,
+        }
+        body = json.dumps(
+            {
+                "doctype": "CRM Lead",
+                "filters": {},
+                "order_by": "name asc",
+                "rows": ["name", "mobile_no", "email"],
+                "columns": [
+                    {
+                        "label": "Name",
+                        "type": "Data",
+                        "key": "name",
+                        "width": "16rem",
+                    }
+                ],
+                "page_length": 100,
+                "page_length_count": 100,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+        status, resp_body, _, error = send(
+            staff, "POST", "/api/method/crm.api.doc.get_data", body, headers
+        )
+        text = resp_body.decode("utf-8", errors="replace")
+        leaked = [
+            marker
+            for marker in (OUT_OF_SCOPE_LEAD_NAME, out_of_scope_phone, out_email)
+            if marker in text
+        ]
+        positive = (
+            in_scope_phone in text and in_scope_email in text and LEAD_NAME in text
+        )
+        passed = error is None and status == 200 and not leaked and positive
+        record(
+            "lead16-ls06-get-data-field-scope",
+            status,
+            resp_body,
+            error,
+            "get_data rows=[mobile_no,email] tra trong scope; field Lead ngoai scope khong lo",
+            passed,
+            supplied_markers=(LEAD_NAME, OUT_OF_SCOPE_LEAD_NAME),
+            extra={
+                "in_scope_mobile_present": in_scope_phone in text,
+                "in_scope_email_present": in_scope_email in text,
+                "out_of_scope_mobile_present": out_of_scope_phone in text,
+                "out_of_scope_email_present": out_email in text,
+                "leaked_marker_count": len(leaked),
+            },
+        )
+    finally:
+        revert_emails()
+
+
+def lead11_team2_leader_cross_team_case(password):
+    """LEAD-11 — Team Leader ngoài team không đọc được Lead của team khác.
+
+    Team 2 Leader (Sales Manager + Sales User, trong cây Team 2) gọi list và
+    đọc trực tiếp. Kỳ vọng: thấy Lead của team mình (C1), KHÔNG thấy Lead Team 1
+    (A1) ở list, và bị 403 khi đọc trực tiếp A1.
+    """
+    team2_leader = login("team2.leader@dev.local", password)
+
+    list_query = urllib.parse.urlencode(
+        {
+            "doctype": "CRM Lead",
+            "fields": json.dumps(["name"], separators=(",", ":")),
+            "limit_page_length": 100,
+        }
+    )
+    list_status, list_body, _, list_error = send(
+        team2_leader, "GET", "/api/method/frappe.client.get_list?" + list_query
+    )
+    list_text = list_body.decode("utf-8", errors="replace")
+    team1_lead_visible = LEAD_NAME in list_text
+    team2_lead_visible = OUT_OF_SCOPE_LEAD_NAME in list_text
+    list_passed = (
+        list_error is None
+        and list_status == 200
+        and not team1_lead_visible
+        and team2_lead_visible
+    )
+    record(
+        "lead11-team2-leader-list-scope",
+        list_status,
+        list_body,
+        list_error,
+        "Team 2 Leader thay lead cua team 2 (positive) nhung khong thay lead Team 1",
+        list_passed,
+        supplied_markers=(LEAD_NAME, OUT_OF_SCOPE_LEAD_NAME),
+        extra={
+            "team1_lead_visible": team1_lead_visible,
+            "team2_lead_visible": team2_lead_visible,
+        },
+    )
+
+    direct_query = urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME})
+    direct_status, direct_body, _, direct_error = send(
+        team2_leader, "GET", "/api/method/frappe.client.get?" + direct_query
+    )
+    direct_text = direct_body.decode("utf-8", errors="replace")
+    direct_passed = (
+        direct_error is None and direct_status == 403 and LEAD_NAME not in direct_text
+    )
+    record(
+        "lead11-team2-leader-direct-read-denied",
+        direct_status,
+        direct_body,
+        direct_error,
+        "Team 2 Leader bi 403 khi doc truc tiep Lead Team 1",
+        direct_passed,
+        supplied_markers=(LEAD_NAME,),
+    )
+
+
+def ra05_ra10_new_owner_after_transfer_case(
+    admin, admin_csrf, staff_a, staff_csrf, password
+):
+    """RA-05 / RA-10 — quyền của chủ mới sau chuyển giao.
+
+    RA-10 (A→B, seed A2 = CRM-LEAD-00002 đã chuyển sang staff.b):
+      - staff.b (chủ mới) đọc được A2 (positive control).
+      - staff.b đọc được Note con của A2 (positive control).
+      - staff.b ghi (set_value) Note con của A2 bị 403 — fail-closed vì
+        `linked_lead_has_permission` chỉ cho phép read/select/email/print cho
+        non-system (ownership service chưa có, RA-04 = D).
+      - staff.a (chủ cũ) bị 403 khi đọc A2 (negative).
+    RA-05 (cross-team C→A): tạo Lead giả của staff.c qua admin, admin chuyển
+    lead_owner sang staff.a, kiểm staff.a thấy trong list, staff.c bị 403, rồi
+    xoá Lead giả (không đụng seed).
+    """
+    a2_name = "CRM-LEAD-00002"
+    staff_b = login("staff.b@dev.local", password)
+    staff_b_csrf = csrf_token(staff_b)
+    admin_form = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Frappe-CSRF-Token": admin_csrf,
+    }
+
+    def inserted_name(response):
+        status, body, _, error = response
+        if error or status != 200:
+            return None
+        parsed = payload(body)
+        doc = parsed.get("message") if parsed else None
+        name = doc.get("name") if isinstance(doc, dict) else None
+        if isinstance(name, int):
+            return str(name)
+        return name if isinstance(name, str) else None
+
+    def admin_delete(doctype, name):
+        return send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.delete",
+            urllib.parse.urlencode({"doctype": doctype, "name": name}).encode(),
+            admin_form,
+        )
+
+    # --- RA-10 positive: chủ mới đọc A2 --------------------------------------
+    direct_query = urllib.parse.urlencode({"doctype": "CRM Lead", "name": a2_name})
+    b_status, b_body, _, b_error = send(
+        staff_b, "GET", "/api/method/frappe.client.get?" + direct_query
+    )
+    b_text = b_body.decode("utf-8", errors="replace")
+    b_read_ok = b_error is None and b_status == 200 and a2_name in b_text
+    record(
+        "ra10-new-owner-reads-transferred-lead",
+        b_status,
+        b_body,
+        b_error,
+        "chu moi (staff.b) doc duoc A2 sau chuyen giao A->B",
+        b_read_ok,
+        supplied_markers=(a2_name,),
+    )
+
+    # --- RA-10 positive: chủ mới đọc Note con của A2 --------------------------
+    note_query = urllib.parse.urlencode(
+        {
+            "doctype": "FCRM Note",
+            "fields": json.dumps(["name"], separators=(",", ":")),
+            "filters": json.dumps(
+                {"reference_docname": a2_name}, separators=(",", ":")
+            ),
+            "limit_page_length": 20,
+        }
+    )
+    note_status, note_body, _, note_error = send(
+        staff_b, "GET", "/api/method/frappe.client.get_list?" + note_query
+    )
+    note_names = extract_names(note_body, get_data=False)
+    child_read_ok = note_error is None and note_status == 200 and bool(note_names)
+    record(
+        "ra10-new-owner-reads-child-note",
+        note_status,
+        note_body,
+        note_error,
+        "chu moi (staff.b) doc duoc Note con cua A2 (positive control)",
+        child_read_ok,
+        supplied_markers=(a2_name,),
+        extra={"child_note_count": len(note_names or [])},
+    )
+
+    # --- RA-10: chủ mới ghi con bị 403 (fail-closed, ownership service chưa có)
+    write_marker = f"P0-RA10-WRITE-{uuid.uuid4().hex}"
+    target_note = (note_names or [None])[0]
+    if target_note:
+        set_status, set_body, _, set_error = send(
+            staff_b,
+            "POST",
+            "/api/method/frappe.client.set_value",
+            urllib.parse.urlencode(
+                {
+                    "doctype": "FCRM Note",
+                    "name": target_note,
+                    "fieldname": "title",
+                    "value": write_marker,
+                }
+            ).encode(),
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Frappe-CSRF-Token": staff_b_csrf,
+            },
+        )
+        set_text = set_body.decode("utf-8", errors="replace")
+        write_fail_closed = (
+            set_error is None and set_status == 403 and write_marker not in set_text
+        )
+    else:
+        set_status, set_body, set_error, write_fail_closed = (
+            None,
+            b"",
+            "TargetFixtureUnavailable",
+            False,
+        )
+    record(
+        "ra10-new-owner-writes-child-fail-closed",
+        set_status,
+        set_body,
+        set_error,
+        "chu moi ghi Note con bi 403 (fail-closed den khi co ownership service)",
+        write_fail_closed,
+        supplied_markers=(target_note or "",),
+        extra={
+            "permission_error": "PermissionError"
+            in set_body.decode("utf-8", errors="replace")
+        },
+    )
+
+    # --- RA-10 negative: chủ cũ bị chặn ---------------------------------------
+    a_status, a_body, _, a_error = send(
+        staff_a, "GET", "/api/method/frappe.client.get?" + direct_query
+    )
+    a_text = a_body.decode("utf-8", errors="replace")
+    a_denied = a_error is None and a_status == 403 and a2_name not in a_text
+    record(
+        "ra10-old-owner-denied-after-transfer",
+        a_status,
+        a_body,
+        a_error,
+        "chu cu (staff.a) bi 403 khi doc A2 sau chuyen giao",
+        a_denied,
+        supplied_markers=(a2_name,),
+    )
+
+    # --- RA-05: cross-team C->A (Lead giả, không đụng seed) ------------------
+    synthetic_phone = "09" + f"{uuid.uuid4().int % 10**9:09d}"
+    synthetic_marker = f"P0-RA05-{uuid.uuid4().hex}"
+    synthetic_name = inserted_name(
+        send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.insert",
+            json.dumps(
+                {
+                    "doc": {
+                        "doctype": "CRM Lead",
+                        "naming_series": "CRM-LEAD-",
+                        "first_name": synthetic_marker,
+                        "lead_name": synthetic_marker,
+                        "mobile_no": synthetic_phone,
+                        "status": "New",
+                        "lead_owner": OUT_USER,
+                    }
+                },
+                separators=(",", ":"),
+            ).encode("utf-8"),
+            {
+                "Content-Type": "application/json",
+                "X-Frappe-CSRF-Token": admin_csrf,
+            },
+        )
+    )
+
+    def delete_synthetic():
+        if not synthetic_name:
+            return
+        # CRM tự tạo CRM Notification gắn Lead khi insert ⇒ phải xoá thông báo
+        # trước (LinkExistsError nếu xoá Lead trước).
+        notif_query = urllib.parse.urlencode(
+            {
+                "doctype": "CRM Notification",
+                "fields": json.dumps(["name"], separators=(",", ":")),
+                "filters": json.dumps(
+                    {"reference_name": synthetic_name}, separators=(",", ":")
+                ),
+                "limit_page_length": 20,
+            }
+        )
+        _, n_body, _, _ = send(
+            admin, "GET", "/api/method/frappe.client.get_list?" + notif_query
+        )
+        for notif_name in extract_names(n_body, get_data=False) or []:
+            admin_delete("CRM Notification", notif_name)
+        admin_delete("CRM Lead", synthetic_name)
+
+    atexit.register(delete_synthetic)
+
+    if not synthetic_name:
+        record(
+            "ra05-cross-team-transfer-new-owner-visible",
+            None,
+            b"",
+            "FixtureUnavailable",
+            "sau chuyen giao cross-team, chu moi thay Lead trong list va chu cu bi chan",
+            False,
+        )
+        return
+
+    try:
+        transfer_response = send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.set_value",
+            urllib.parse.urlencode(
+                {
+                    "doctype": "CRM Lead",
+                    "name": synthetic_name,
+                    "fieldname": "lead_owner",
+                    "value": SEED_USER,
+                }
+            ).encode(),
+            admin_form,
+        )
+        t_status, t_body, _, t_error = transfer_response
+        transfer_ok = t_error is None and t_status == 200
+        record(
+            "ra05-cross-team-transfer-admin-set-owner",
+            t_status,
+            t_body,
+            t_error,
+            "admin chuyen lead_owner cua Lead gia C -> A (cross-team)",
+            transfer_ok,
+        )
+
+        list_query = urllib.parse.urlencode(
+            {
+                "doctype": "CRM Lead",
+                "fields": json.dumps(["name"], separators=(",", ":")),
+                "limit_page_length": 100,
+            }
+        )
+        a_list_status, a_list_body, _, a_list_error = send(
+            staff_a, "GET", "/api/method/frappe.client.get_list?" + list_query
+        )
+        a_list_text = a_list_body.decode("utf-8", errors="replace")
+        new_owner_visible = (
+            a_list_error is None
+            and a_list_status == 200
+            and synthetic_name in a_list_text
+        )
+        c_status, c_body, _, c_error = send(
+            login(OUT_USER, password),
+            "GET",
+            "/api/method/frappe.client.get?"
+            + urllib.parse.urlencode({"doctype": "CRM Lead", "name": synthetic_name}),
+        )
+        c_text = c_body.decode("utf-8", errors="replace")
+        old_owner_denied = (
+            c_error is None and c_status == 403 and synthetic_name not in c_text
+        )
+        record(
+            "ra05-cross-team-transfer-new-owner-visible",
+            a_list_status,
+            a_list_body,
+            a_list_error,
+            "sau chuyen giao cross-team, chu moi thay Lead trong list va chu cu bi chan",
+            new_owner_visible and old_owner_denied,
+            supplied_markers=(synthetic_name,),
+            extra={
+                "new_owner_visible": new_owner_visible,
+                "old_owner_denied": old_owner_denied,
+                "old_owner_status": c_status,
+            },
+        )
+    finally:
+        delete_synthetic()
+
+
+def bod_mutation_denied_case(admin, admin_csrf, password):
+    """RA-08 / BD-04 / BD-03 — BOD bị chặn reassign/revoke/bulk delete.
+
+    BOD Viewer không có vai trò Sales ⇒ bị 403 ở:
+      - remove_assignments (RA-08 / BD-04 — wrapper `crm_cskh.permissions`).
+      - set_value lead_owner (RA-08 — không quyền write + `validate_lead_owner`).
+      - delete_bulk_docs (BD-03 — wrapper `guarded_crm.delete_bulk_docs`).
+    Positive control: các phản hồi đều là 403 `PermissionError` (không transport
+    error, không 500) ⇒ fail-closed hoạt động.
+    """
+    bod = login("bod.viewer@dev.local", password)
+    bod_csrf = csrf_token(bod)
+    bod_form = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Frappe-CSRF-Token": bod_csrf,
+    }
+    bod_json = {
+        "Content-Type": "application/json",
+        "X-Frappe-CSRF-Token": bod_csrf,
+    }
+
+    revoke_status, revoke_body, _, revoke_error = send(
+        bod,
+        "POST",
+        "/api/method/crm.api.doc.remove_assignments",
+        urllib.parse.urlencode(
+            {
+                "doctype": "CRM Lead",
+                "name": LEAD_NAME,
+                "assignees": json.dumps([SEED_USER], separators=(",", ":")),
+            }
+        ).encode(),
+        bod_form,
+    )
+    revoke_text = revoke_body.decode("utf-8", errors="replace")
+    revoke_passed = (
+        revoke_error is None
+        and revoke_status == 403
+        and "PermissionError" in revoke_text
+    )
+    record(
+        "bod-remove-assignments-denied",
+        revoke_status,
+        revoke_body,
+        revoke_error,
+        "BOD bi 403 khi revoke/reassign (remove_assignments)",
+        revoke_passed,
+        supplied_markers=(LEAD_NAME,),
+    )
+
+    set_status, set_body, _, set_error = send(
+        bod,
+        "POST",
+        "/api/method/frappe.client.set_value",
+        urllib.parse.urlencode(
+            {
+                "doctype": "CRM Lead",
+                "name": LEAD_NAME,
+                "fieldname": "lead_owner",
+                "value": OUT_USER,
+            }
+        ).encode(),
+        bod_form,
+    )
+    set_text = set_body.decode("utf-8", errors="replace")
+    set_passed = set_error is None and set_status == 403
+    record(
+        "bod-set-lead-owner-denied",
+        set_status,
+        set_body,
+        set_error,
+        "BOD bi 403 khi doi lead_owner (reassign)",
+        set_passed,
+        supplied_markers=(LEAD_NAME,),
+        extra={"permission_error": "PermissionError" in set_text},
+    )
+
+    del_status, del_body, _, del_error = send(
+        bod,
+        "POST",
+        "/api/method/crm.api.doc.delete_bulk_docs",
+        json.dumps(
+            {
+                "doctype": "CRM Lead",
+                "items": json.dumps([LEAD_NAME], separators=(",", ":")),
+            },
+            separators=(",", ":"),
+        ).encode("utf-8"),
+        bod_json,
+    )
+    del_text = del_body.decode("utf-8", errors="replace")
+    del_passed = (
+        del_error is None and del_status == 403 and "PermissionError" in del_text
+    )
+    record(
+        "bod-bulk-delete-denied",
+        del_status,
+        del_body,
+        del_error,
+        "BOD bi 403 khi bulk delete Lead",
+        del_passed,
+        supplied_markers=(LEAD_NAME,),
+    )
+
+
 def setup_error_case(detail="synthetic permlevel field exists with sentinel"):
     record(
         "sec16-field-setup",
@@ -1111,6 +1660,15 @@ def run() -> int:
     # T1B-ext+1: Dynamic Link của `get_linked_calls` (calls/notes/tasks) và cùng
     # đường đó đi qua `get_activities`.
     dl01_dynamic_link_case(admin, admin_csrf, staff, staff_csrf)
+
+    # T1B — chốt khoảng trống còn lại: LEAD-16/LS-06 field scope, LEAD-11 TL2
+    # cross-team, RA-05/RA-10 chủ mới sau chuyển giao, RA-08/BD-04/BD-03 BOD.
+    lead16_ls06_get_data_field_scope_case(admin, admin_csrf, staff, staff_csrf)
+    lead11_team2_leader_cross_team_case(password)
+    ra05_ra10_new_owner_after_transfer_case(
+        admin, admin_csrf, staff, staff_csrf, password
+    )
+    bod_mutation_denied_case(admin, admin_csrf, password)
 
     # LEAD-15 / LS-05: cross-doctype calls must match ordinary Frappe get_list
     # visibility for the same actor. Only counts and opaque name-set digests leave memory.
