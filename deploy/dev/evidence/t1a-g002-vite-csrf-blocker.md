@@ -645,3 +645,92 @@ Artifact: [`logs/t1a-g002-socket-namespace-evidence-20261031.json`](logs/t1a-g00
 - **G0-02 giữ PASS (Owner đã duyệt)**; nay đã có bằng chứng **namespace Socket.IO thật** thay cho suy luận từ polling 200.
 - Bản chất gói DEV đã được sửa đúng 2 điểm làm Socket.IO không bao giờ thật sự kết nối trong DEV.
 - **Giới hạn:** đây là bằng chứng **DEV** (Vite dev server + Frappe realtime). Không mở rộng sang production ingress/TLS/CORS; SEC-13 vẫn giữ giới hạn topology P0.
+
+## 13. LỖI NGỮ PHÁP TRONG PATCHER — `vite.config.js` hỏng sau khi vá (T1A, 2026-10-31, lượt 4)
+
+> §12 kết luận "patcher chạy đúng" **chỉ đúng khi config ĐÃ được vá sẵn**. Lượt kiểm tra 4 (áp patcher lên checkout CRM **nguyên bản** ghim) phát hiện lỗi chặn: patcher sinh ra `vite.config.js` **không parse được**, khiến Vite dev server **không khởi động được**.
+
+### 13.1 Triệu chứng
+
+```text
+failed to load config from /workspace/frappe-bench/apps/crm/frontend/vite.config.js
+[PARSE_ERROR] Expected `,` or `]` but found `:`
+  vite.config.js:103:14
+   103 │       exclude: [
+        │              ┬
+        ╰── `,` or `]` expected
+```
+
+`node --check vite.config.js` → `SyntaxError: Unexpected token ':'` tại dòng 103.
+
+### 13.2 Nguyên nhân gốc
+
+Patch `optimizeDeps` dùng anchor là **dấu đóng ngoặc vuông của mảng `include:`**:
+
+```python
+optimizer_new = "      exclude: [\n        'frappe-ui/editor',\n      ],"
+optimizer_changed = patch_once(
+    config,
+    "      ],\n    },\n    server: {",     # <- anchor NUOT đóng mảng include:
+    optimizer_new + "\n    },\n    server: {",
+)
+```
+
+Anchor `"      ],\n    },\n    server: {"` **bao gồm** dấu `]` đóng mảng `include:`, nhưng phần thay thế **không phát lại** dấu `]` đó ⇒ mảng `include:` bị bỏ dấu đóng, và `exclude:` được chèn vào **giữa** mảng:
+
+```js
+    optimizeDeps: {
+      include: [
+        'feather-icons',
+        ...
+        'interactjs',
+      exclude: [              // <-- sai: `],` của include bị nuốt mất
+        'frappe-ui/editor',
+      ],
+    },
+```
+
+### 13.3 Vì sao trước đây không bị phát hiện
+
+| Bước đo | Kết quả | Lý do không bắt được lỗi |
+|---|---|---|
+| §12.5 chạy patcher trên config **đã vá sẵn** | `already patched` | `patch_once` trả `False` ngay khi `new in text` ⇒ **không** chạy phép thay thế ⇒ không sinh code hỏng |
+| §12 chạy trên container có config **do tay dựng** | Vite chạy được | Config dựng tay (`/tmp/vite.cfg.final.bak`) **có** dấu `],` đóng mảng ⇒ không hỏng |
+| `docker compose config --quiet` | hợp lệ | Chỉ kiểm tra YAML của compose, **không** parse JS |
+| CI (`ruff`, `docker compose config`) | xanh | Không có bước nào parse `vite.config.js` sau khi vá |
+
+⇒ Chỉ lộ ra khi **áp patcher lên checkout nguyên bản** rồi **khởi động Vite**.
+
+### 13.4 Sửa
+
+1. **Sửa phép thay thế** — phát lại dấu `]` đóng mảng `include:`:
+
+```python
+optimizer_new = (
+    "      ],\n"
+    "      exclude: [\n"
+    "        'frappe-ui/editor',\n"
+    "      ],\n"
+    "    },\n"
+    "    server: {"
+)
+```
+
+2. **Thêm cổng kiểm tra cú pháp** `check_js_syntax()` dùng `node --check` cho `vite.config.js`, `src/socket.js`, `src/main.js`, `src/translation.js` **ngay sau** khi vá. Lỗi cú pháp ⇒ patcher dừng với exit code 2, **không** chờ tới lúc khởi động Vite mới lộ.
+
+### 13.5 Kiểm chứng sau khi sửa
+
+| Kiểm tra | Kết quả |
+|---|---|
+| Áp patcher lên checkout **nguyên bản** ghim `0d3910b4…` | exit **0**, `Vite config: patched` |
+| `node --check vite.config.js` | **OK** (syntax hợp lệ) |
+| Cấu trúc `optimizeDeps` | `include: [...]` **có** dấu `],` đóng, rồi mới tới `exclude: [...]` |
+| Chạy lại lần 2, lần 3 | `already patched`; `vite.config.js` **cùng SHA-256** `6e07ab3f…` qua cả 3 lần ⇒ **idempotent** |
+| Khởi động Vite | `VITE v8.2.0 ready in 937 ms` — **không** còn PARSE_ERROR |
+| Namespace Socket.IO sau khi sửa | `connected=true`, `nsp=/dev.localhost`, `transport=websocket`, `emit('ping')` → **`pong`** |
+| **Kiểm tra phản chứng** (cố ý tái tạo lỗi cũ) | Patcher dừng với exit **2** và báo `Patched file ... is not valid JavaScript` ⇒ cổng kiểm tra **thực sự bắt được** lỗi |
+
+### 13.6 Kết luận
+
+- G0-02 vẫn giữ **PASS (Owner đã duyệt)**; mục này **siết** bằng chứng: nay đã chứng minh patcher **áp dụng được trên checkout nguyên bản** và **sinh ra config Vite khởi động được**, thay vì chỉ "idempotent trên config đã vá".
+- Bản vá nằm trong gói DEV của T1A ⇒ cần **commit + CI mới** trên PR #2 (PR giữ **OPEN**, **KHÔNG merge**).
