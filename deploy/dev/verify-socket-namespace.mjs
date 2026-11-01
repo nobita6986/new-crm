@@ -27,7 +27,15 @@
  * Exit code: 0 = PASS, 2 = FAIL.
  */
 
-import { io } from 'socket.io-client'
+import { createRequire } from 'node:module'
+import { resolve } from 'node:path'
+
+// Resolve from the CRM frontend, not /src/deploy/dev where this helper lives.
+// Changing cwd alone does not change ESM bare-import resolution.
+const frontendRequire = createRequire(
+	resolve(process.env.CRM_FRONTEND || process.cwd(), 'package.json'),
+)
+const { io } = frontendRequire('socket.io-client')
 
 function parseArgs(argv) {
 	const args = { origin: null, web: null, site: null, timeout: 10000 }

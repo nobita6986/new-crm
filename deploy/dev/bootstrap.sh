@@ -29,6 +29,14 @@ SRC_DIR="${SRC_DIR:-/src}"
 SITE="${SITE_NAME}"
 CRM_REPO="${CRM_REPO:-https://github.com/frappe/crm.git}"
 
+# Không tạo site thiếu permission/API guards của dự án. Kiểm tra trước khi
+# gọi bench hoặc thay đổi DB, kể cả khi dùng .env cũ từ giai đoạn scaffold.
+[ "${INSTALL_CSKH:-1}" = "1" ] \
+  || die "P0 DEV yêu cầu INSTALL_CSKH=1 để cài crm_cskh và các guard bảo mật."
+APP_SRC="$SRC_DIR/apps/crm_cskh"
+[ -f "$APP_SRC/crm_cskh/hooks.py" ] && [ -f "$APP_SRC/crm_cskh/permissions.py" ] \
+  || die "Không tìm thấy source crm_cskh có permission hooks tại $APP_SRC."
+
 log "Site=${SITE}  bench=${BENCH_DIR}"
 log "Frappe ${FRAPPE_TAG} (${FRAPPE_SHA})  CRM ${CRM_TAG} (${CRM_SHA})"
 
@@ -107,7 +115,11 @@ bench --site "$SITE" set-config time_zone "Asia/Ho_Chi_Minh"
 # ---------------------------------------------------------------------------
 # 5. Cài app (idempotent theo list-apps)
 # ---------------------------------------------------------------------------
-installed() { bench --site "$SITE" list-apps 2>/dev/null | grep -qx "$1"; }
+installed() {
+  bench --site "$SITE" list-apps --format json | python -c \
+    'import json,sys; apps=json.load(sys.stdin); sys.exit(0 if sys.argv[2] in apps.get(sys.argv[1], []) else 1)' \
+    "$SITE" "$1"
+}
 
 if installed crm; then
   log "App 'crm' đã cài — bỏ qua."
@@ -119,32 +131,25 @@ fi
 # crm_cskh: repo là nguồn duy nhất. /src được mount READ-ONLY và apps/crm_cskh
 # không phải git repo riêng, nên `bench get-app` không dùng được ở đây — dùng symlink
 # (đã kiểm chứng ở WP-02: install-app + migrate + run-tests đều chạy).
-if [ "${INSTALL_CSKH:-0}" = "1" ]; then
-  APP_SRC="$SRC_DIR/apps/crm_cskh"
-  if [ -d "$APP_SRC/crm_cskh" ]; then
-    if [ -e "$BENCH_DIR/apps/crm_cskh" ]; then
-      log "Đã có $BENCH_DIR/apps/crm_cskh — bỏ qua symlink."
-    else
-      log "Symlink $APP_SRC -> $BENCH_DIR/apps/crm_cskh"
-      ln -s "$APP_SRC" "$BENCH_DIR/apps/crm_cskh"
-    fi
-    # bench cần biết app tồn tại trong bench trước khi install-app.
-    if ! grep -qx "crm_cskh" "$BENCH_DIR/sites/apps.txt" 2>/dev/null; then
-      python -c 'from pathlib import Path; p=Path("sites/apps.txt"); s=p.read_text(); p.write_text(s + ("" if s.endswith("\n") else "\n") + "crm_cskh\n")'
-    fi
-    uv pip install --quiet -e "$BENCH_DIR/apps/crm_cskh" --python "$BENCH_DIR/env/bin/python"
-
-    if installed crm_cskh; then
-      log "App 'crm_cskh' đã cài trên site $SITE — bỏ qua."
-    else
-      log "Cài app 'crm_cskh' vào site $SITE ..."
-      bench --site "$SITE" install-app crm_cskh
-    fi
-  else
-    warn "INSTALL_CSKH=1 nhưng không thấy $APP_SRC/crm_cskh — bỏ qua."
-  fi
+if [ -e "$BENCH_DIR/apps/crm_cskh" ]; then
+  [ "$(readlink -f "$BENCH_DIR/apps/crm_cskh")" = "$(readlink -f "$APP_SRC")" ] \
+    || die "apps/crm_cskh không trỏ tới source repo $APP_SRC; giữ nguyên để kiểm tra."
+  log "Đã có $BENCH_DIR/apps/crm_cskh trỏ đúng repo — bỏ qua symlink."
 else
-  log "INSTALL_CSKH != 1 — chưa cài crm_cskh (bật =1 để cài app tùy chỉnh)."
+  log "Symlink $APP_SRC -> $BENCH_DIR/apps/crm_cskh"
+  ln -s "$APP_SRC" "$BENCH_DIR/apps/crm_cskh"
+fi
+# bench cần biết app tồn tại trong bench trước khi install-app.
+if ! grep -qx "crm_cskh" "$BENCH_DIR/sites/apps.txt" 2>/dev/null; then
+  python -c 'from pathlib import Path; p=Path("sites/apps.txt"); s=p.read_text(); p.write_text(s + ("" if s.endswith("\n") else "\n") + "crm_cskh\n")'
+fi
+uv pip install --quiet -e "$BENCH_DIR/apps/crm_cskh" --python "$BENCH_DIR/env/bin/python"
+
+if installed crm_cskh; then
+  log "App 'crm_cskh' đã cài trên site $SITE — bỏ qua."
+else
+  log "Cài app 'crm_cskh' vào site $SITE ..."
+  bench --site "$SITE" install-app crm_cskh
 fi
 
 # ---------------------------------------------------------------------------
@@ -185,6 +190,7 @@ printf 'frappe  SHA: %s\n' "$(git -C apps/frappe rev-parse HEAD)"
 printf 'crm     SHA: %s\n' "$(git -C apps/crm rev-parse HEAD)"
 printf 'apps       :\n'
 bench --site "$SITE" list-apps | sed 's/^/  - /'
+installed crm_cskh || die "Site $SITE chưa cài crm_cskh; không chấp nhận DEV thiếu guard."
 
 log "HOÀN TẤT. Bước tiếp theo:"
 cat <<EOF

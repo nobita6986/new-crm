@@ -1,5 +1,7 @@
 # UI EXTENSION SPIKE — FRAPPE CRM `v1.87.0` (P0)
 
+> **Phạm vi tài liệu:** báo cáo khảo sát tĩnh lịch sử. PoC/runtime UI sau đó đã được nghiệm thu ở [ADR-UI-001](adr-ui-001.md), [evidence G0-02](../../deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md) và [P0 exit report](p0-exit-report.md); các câu “chưa có DEV/chưa PoC” bên dưới chỉ mô tả thời điểm khảo sát.
+
 > **Dự án:** CRM-CSKH
 > **Chủ sở hữu tài liệu:** T1B
 > **Trạng thái:** Khảo sát **tĩnh**; **chưa PoC trên DEV**. **ADR-003 (T0)** đã cho phép PoC UI-A+UI-B trên cùng site/session, **không fork**; **ADR-UI-001 chốt sau PoC**. **ADR-001 (T0):** metadata pin cho lần chạy P0 là **CRM `v1.87.0`** + **Frappe Framework `v15.123.1`** + **frappe_docker `v4.0.1`**; **runtime compatibility CHƯA xác minh**, ADR-001 **chưa chốt cuối** cho đến khi baseline chạy thật.

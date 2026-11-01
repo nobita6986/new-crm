@@ -31,7 +31,7 @@ x-bench-common: &bench-common
     CRM_TAG: ${CRM_TAG}
     CRM_SHA: ${CRM_SHA}
     FRAPPE_DOCKER_SHA: ${FRAPPE_DOCKER_SHA}
-    INSTALL_CSKH: ${INSTALL_CSKH:-0}
+    INSTALL_CSKH: ${INSTALL_CSKH:-1}
     # Vite dev port INSIDE the container. Must equal the published host port
     # (VITE_PORT) so the realtime self-auth request to `Origin + /api/...`
     # resolves inside the container under the same port the browser uses.
