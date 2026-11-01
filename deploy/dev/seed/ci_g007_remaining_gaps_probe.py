@@ -1,0 +1,2224 @@
+#!/usr/bin/env python3
+"""Fail-closed direct-HTTP characterization for remaining P0 matrix gaps.
+
+Runs only against the disposable seeded p0-ci site. Response bodies, user
+credentials, CSRF tokens, File IDs, private URLs, and seed text stay in memory;
+artifact output contains statuses, lengths, hashes, and booleans only.
+"""
+
+from __future__ import annotations
+
+import ast
+import atexit
+import hashlib
+import http.cookiejar
+import json
+import os
+import re
+import urllib.error
+import urllib.parse
+import urllib.request
+import uuid
+from datetime import datetime, timezone
+from pathlib import Path
+from urllib.parse import urlsplit
+
+BASE_URL = os.environ.get("P0_HTTP_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
+SITE_NAME = os.environ.get("P0_HTTP_SITE", "p0-ci.localhost")
+OUTPUT = Path(
+    os.environ.get("P0_G007_GAPS_EVIDENCE", "/tmp/p0-g007-http/remaining-gaps.json")
+)
+SEED_SOURCE = Path(
+    os.environ.get("P0_SEED_SOURCE", "/src/deploy/dev/seed/seed_demo.py")
+)
+BENCH_DIR = os.environ.get("BENCH_DIR", "/workspace/frappe-bench")
+LEAD_NAME = "CRM-LEAD-00001"
+OUT_OF_SCOPE_LEAD_NAME = "CRM-LEAD-00009"
+CALL_NAME = "DEMO-CALL-003"
+PRIVATE_FILE_NAME = f"DEMO-{LEAD_NAME}.txt"
+SEED_MARKER = b"DEMO"
+FIELD_NAME = "custom_cskh_sec16_restricted"
+FIELD_SENTINEL = "RESTRICTED-SEC-16-SENTINEL"
+SEED_USER = "staff.a@dev.local"
+OUT_USER = "staff.c@dev.local"
+
+failures: list[str] = []
+cases: list[dict[str, object]] = []
+field_created_by_probe = False
+field_was_touched = False
+field_original_value = None
+
+
+def seed_password() -> str:
+    tree = ast.parse(SEED_SOURCE.read_text(encoding="utf-8"), filename=str(SEED_SOURCE))
+    for node in tree.body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "SEED_PASSWORD"
+            for target in node.targets
+        ):
+            value = ast.literal_eval(node.value)
+            if isinstance(value, str) and value:
+                return value
+    raise RuntimeError("SEED_PASSWORD literal not found")
+
+
+def new_client():
+    jar = http.cookiejar.CookieJar()
+    return urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
+
+
+def send(client, method: str, path: str, body: bytes | None = None, headers=None):
+    request_headers = {
+        "Accept": "application/json, text/html",
+        "X-Frappe-Site-Name": SITE_NAME,
+    }
+    if headers:
+        request_headers.update(headers)
+    request = urllib.request.Request(
+        BASE_URL + path, data=body, headers=request_headers, method=method
+    )
+    try:
+        with client.open(request, timeout=20) as response:
+            return (
+                response.status,
+                response.read(),
+                dict(response.headers.items()),
+                None,
+            )
+    except urllib.error.HTTPError as error:
+        return error.code, error.read(), dict(error.headers.items()), None
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        return None, b"", {}, type(error).__name__
+
+
+def login(username: str, password: str):
+    client = new_client()
+    body = urllib.parse.urlencode({"usr": username, "pwd": password}).encode()
+    status, _, _, transport_error = send(
+        client,
+        "POST",
+        "/api/method/login",
+        body,
+        {"Content-Type": "application/x-www-form-urlencoded"},
+    )
+    if transport_error or status != 200:
+        raise RuntimeError(f"fixture actor login failed ({status or transport_error})")
+    return client
+
+
+def csrf_token(client) -> str:
+    for path in ("/cskh", "/desk"):
+        status, body, _, error = send(client, "GET", path)
+        if error or status != 200:
+            continue
+        match = re.search(rb'["\']X-Frappe-CSRF-Token["\']\s*:\s*["\']([^"\']+)', body)
+        if not match:
+            match = re.search(rb'csrf_token\s*=\s*["\']([^"\']+)', body)
+        if match:
+            return match.group(1).decode("utf-8")
+    raise RuntimeError("could not obtain CSRF token for authenticated probe")
+
+
+def setup_permlevel_field() -> bool:
+    """Set a synthetic permlevel=1 value; HTTP responses below are the evidence."""
+    global field_created_by_probe, field_was_touched, field_original_value
+    try:
+        import frappe
+    except ImportError:
+        return False
+
+    previous_cwd = os.getcwd()
+    sites_dir = os.path.join(BENCH_DIR, "sites")
+    connected = False
+    if os.path.isdir(sites_dir):
+        os.chdir(sites_dir)
+    try:
+        frappe.init(site=SITE_NAME, sites_path=sites_dir)
+        frappe.connect()
+        connected = True
+        frappe.set_user("Administrator")
+        field = frappe.db.get_value(
+            "Custom Field", {"dt": "CRM Lead", "fieldname": FIELD_NAME}, "permlevel"
+        )
+        if field is None:
+            frappe.get_doc(
+                {
+                    "doctype": "Custom Field",
+                    "dt": "CRM Lead",
+                    "fieldname": FIELD_NAME,
+                    "label": "CSKH P0 restricted field",
+                    "fieldtype": "Data",
+                    "insert_after": "first_name",
+                    "permlevel": 1,
+                }
+            ).insert(ignore_permissions=True)
+            field_created_by_probe = True
+        elif int(field) != 1:
+            return False
+        else:
+            field_original_value = frappe.db.get_value(
+                "CRM Lead", LEAD_NAME, FIELD_NAME
+            )
+        frappe.clear_cache(doctype="CRM Lead")
+        field_was_touched = True
+        frappe.db.set_value("CRM Lead", LEAD_NAME, FIELD_NAME, FIELD_SENTINEL)
+        frappe.db.commit()
+        return frappe.db.get_value("CRM Lead", LEAD_NAME, FIELD_NAME) == FIELD_SENTINEL
+    except Exception:
+        try:
+            if connected:
+                frappe.db.rollback()
+        except Exception:
+            pass
+        return False
+    finally:
+        if connected:
+            try:
+                frappe.destroy()
+            except Exception:
+                pass
+        os.chdir(previous_cwd)
+
+
+def cleanup_permlevel_field() -> bool:
+    """Restore the seeded record and remove only a field created by this probe."""
+    global field_created_by_probe, field_was_touched, field_original_value
+    if not field_created_by_probe and not field_was_touched:
+        return True
+
+    try:
+        import frappe
+    except ImportError:
+        return False
+
+    previous_cwd = os.getcwd()
+    sites_dir = os.path.join(BENCH_DIR, "sites")
+    connected = False
+    if os.path.isdir(sites_dir):
+        os.chdir(sites_dir)
+    try:
+        frappe.init(site=SITE_NAME, sites_path=sites_dir)
+        frappe.connect()
+        connected = True
+        frappe.set_user("Administrator")
+        field_name = frappe.db.get_value(
+            "Custom Field", {"dt": "CRM Lead", "fieldname": FIELD_NAME}, "name"
+        )
+        if field_created_by_probe and field_name:
+            frappe.delete_doc("Custom Field", field_name, ignore_permissions=True)
+            frappe.clear_cache(doctype="CRM Lead")
+        elif field_name and field_was_touched:
+            frappe.db.set_value("CRM Lead", LEAD_NAME, FIELD_NAME, field_original_value)
+        frappe.db.commit()
+        field_created_by_probe = False
+        field_was_touched = False
+        field_original_value = None
+        return True
+    except Exception:
+        try:
+            if connected:
+                frappe.db.rollback()
+        except Exception:
+            pass
+        return False
+    finally:
+        if connected:
+            try:
+                frappe.destroy()
+            except Exception:
+                pass
+        os.chdir(previous_cwd)
+
+
+def payload(body: bytes):
+    try:
+        result = json.loads(body.decode("utf-8", errors="replace"))
+    except (TypeError, ValueError):
+        return None
+    return result if isinstance(result, dict) else None
+
+
+def private_url_present(body: bytes) -> bool:
+    return b"/private/files/" in body
+
+
+def record(
+    case_id: str,
+    status: int | None,
+    body: bytes,
+    transport_error: str | None,
+    expected: str,
+    passed: bool,
+    *,
+    supplied_markers: tuple[str, ...] = (),
+    sentinel_expected: bool | None = None,
+    file_url_expected: bool | None = None,
+    extra: dict[str, object] | None = None,
+):
+    parsed = payload(body)
+    text = body.decode("utf-8", errors="replace")
+    entry: dict[str, object] = {
+        "id": case_id,
+        "status": status,
+        "body_length": len(body),
+        "body_sha256": hashlib.sha256(body).hexdigest(),
+        "exc_type": parsed.get("exc_type") if parsed else None,
+        "transport_error": transport_error,
+        "sentinel_present": FIELD_SENTINEL in text,
+        "private_file_url_present": private_url_present(body),
+        "identifier_echo": any(
+            marker and marker in text for marker in supplied_markers
+        ),
+        "assertion": {"expected": expected, "result": "PASS" if passed else "FAIL"},
+    }
+    if sentinel_expected is not None:
+        entry["sentinel_expected"] = sentinel_expected
+    if file_url_expected is not None:
+        entry["file_url_expected"] = file_url_expected
+    if extra:
+        entry.update(extra)
+    if not passed or transport_error:
+        failures.append(case_id)
+    cases.append(entry)
+    return entry
+
+
+def response_case(case_id, response, predicate, expected, **kwargs):
+    status, body, _, error = response
+    passed = error is None and bool(predicate(status, body))
+    return record(case_id, status, body, error, expected, passed, **kwargs)
+
+
+def extract_file_record(client, filters):
+    query = urllib.parse.urlencode(
+        {
+            "dt": "CRM Lead",
+            "dn": LEAD_NAME,
+            "filters": json.dumps(filters, separators=(",", ":")),
+        }
+    )
+    return send(
+        client,
+        "GET",
+        "/api/method/frappe.desk.form.load.get_filtered_attachments?" + query,
+    )
+
+
+def extract_names(body: bytes, *, get_data: bool):
+    root = payload(body)
+    message = root.get("message") if root else None
+    if get_data:
+        rows = message.get("data") if isinstance(message, dict) else None
+    else:
+        rows = message
+    if not isinstance(rows, list):
+        return None
+    names = [
+        row.get("name")
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("name"), str)
+    ]
+    return sorted(names)
+
+
+def names_digest(names: list[str]) -> str:
+    return hashlib.sha256("\n".join(names).encode("utf-8")).hexdigest()
+
+
+def nt04_create_doc_case(actor, actor_csrf, admin, admin_csrf, doctype: str):
+    """Verify an out-of-scope actor cannot create a linked Note or Comment.
+
+    A unique synthetic marker is used only in memory. The admin-side query checks
+    whether the attempted insert created a row; any unexpected row is deleted and
+    the query is repeated so the disposable site is left clean. Artifact output
+    contains only the response summary and counts, never the marker or doc name.
+    """
+    marker = f"P0-NT04-{uuid.uuid4().hex}"
+    if doctype == "Comment":
+        doc = {
+            "doctype": doctype,
+            "comment_type": "Comment",
+            "content": marker,
+            "reference_doctype": "CRM Lead",
+            "reference_name": LEAD_NAME,
+        }
+        marker_field = "content"
+    elif doctype == "FCRM Note":
+        doc = {
+            "doctype": doctype,
+            "title": marker,
+            "content": "Synthetic NT-04 permission probe",
+            "reference_doctype": "CRM Lead",
+            "reference_docname": LEAD_NAME,
+        }
+        marker_field = "title"
+    else:
+        raise ValueError("NT-04 supports only linked Comment and FCRM Note")
+
+    insert_body = json.dumps({"doc": doc}, separators=(",", ":")).encode("utf-8")
+    insert_response = send(
+        actor,
+        "POST",
+        "/api/method/frappe.client.insert",
+        insert_body,
+        {
+            "Content-Type": "application/json",
+            "X-Frappe-CSRF-Token": actor_csrf,
+        },
+    )
+    insert_status, insert_response_body, _, insert_error = insert_response
+    insert_payload = payload(insert_response_body)
+    inserted_doc = insert_payload.get("message") if insert_payload else None
+    inserted_name = (
+        inserted_doc.get("name")
+        if isinstance(inserted_doc, dict) and isinstance(inserted_doc.get("name"), str)
+        else None
+    )
+
+    def find_matches():
+        query = urllib.parse.urlencode(
+            {
+                "doctype": doctype,
+                "fields": json.dumps(["name"], separators=(",", ":")),
+                "filters": json.dumps(
+                    [[doctype, marker_field, "=", marker]], separators=(",", ":")
+                ),
+                "limit_page_length": 20,
+            }
+        )
+        response = send(admin, "GET", "/api/method/frappe.client.get_list?" + query)
+        status, body, _, error = response
+        names = extract_names(body, get_data=False)
+        return response, names
+
+    before_response, before_names = find_matches()
+    before_status, before_body, _, before_error = before_response
+    cleanup_ok = (
+        before_error is None and before_status == 200 and before_names is not None
+    )
+    cleanup_names = set(before_names or [])
+    if inserted_name:
+        cleanup_names.add(inserted_name)
+
+    admin_form_headers = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Frappe-CSRF-Token": admin_csrf,
+    }
+    for name in sorted(cleanup_names):
+        delete_response = send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.delete",
+            urllib.parse.urlencode({"doctype": doctype, "name": name}).encode(),
+            admin_form_headers,
+        )
+        delete_status, _, _, delete_error = delete_response
+        if delete_error or delete_status != 200:
+            cleanup_ok = False
+
+    after_response, after_names = find_matches()
+    after_status, after_body, _, after_error = after_response
+    cleanup_ok = (
+        cleanup_ok and after_error is None and after_status == 200 and after_names == []
+    )
+    insert_exc_type = (insert_payload or {}).get("exc_type")
+    denied = (
+        insert_error is None
+        and insert_status == 403
+        and isinstance(insert_exc_type, str)
+        and insert_exc_type.endswith("PermissionError")
+    )
+    no_side_effect = (
+        before_error is None and before_status == 200 and before_names == []
+    )
+    passed = denied and no_side_effect and cleanup_ok
+    return record(
+        f"nt04-create-{doctype.lower().replace(' ', '-')}-out-of-scope",
+        insert_status,
+        insert_response_body,
+        insert_error,
+        "out-of-scope insert is denied and creates no linked record",
+        passed,
+        supplied_markers=(LEAD_NAME, marker, inserted_name or ""),
+        extra={
+            "doctype": doctype,
+            "linked_target": "synthetic seeded CRM Lead",
+            "insert_exc_type": insert_exc_type,
+            "matching_rows_before_cleanup": len(before_names)
+            if before_names is not None
+            else None,
+            "cleanup_verified": cleanup_ok,
+            "matching_rows_after_cleanup": len(after_names)
+            if after_names is not None
+            else None,
+        },
+    )
+
+
+def tk04_create_task_out_of_scope_case(actor, actor_csrf, admin, admin_csrf):
+    """Fail closed if a staff user can link a new ToDo to another team's Lead."""
+    target_query = urllib.parse.urlencode(
+        {"doctype": "CRM Lead", "name": OUT_OF_SCOPE_LEAD_NAME}
+    )
+    target_response = send(
+        admin, "GET", "/api/method/frappe.client.get?" + target_query
+    )
+    target_status, target_body, _, target_error = target_response
+    target_payload = payload(target_body)
+    target_doc = target_payload.get("message") if target_payload else None
+    target_lead = (
+        target_doc.get("name")
+        if isinstance(target_doc, dict)
+        and target_doc.get("lead_owner") == OUT_USER
+        and target_doc.get("name") == OUT_OF_SCOPE_LEAD_NAME
+        else None
+    )
+    target_names = [target_lead] if target_lead else []
+    target_found = target_error is None and target_status == 200 and bool(target_lead)
+    record(
+        "tk04-out-of-scope-target-fixture",
+        target_status,
+        target_body,
+        target_error,
+        "Administrator resolves the seeded Team 2 C1 Lead and confirms its owner",
+        target_found,
+        supplied_markers=(target_lead or "",),
+        extra={
+            "target_found": target_found,
+            "matching_target_count": len(target_names or []),
+        },
+    )
+    if not target_found:
+        record(
+            "tk04-read-out-of-scope-target",
+            None,
+            b"",
+            "TargetFixtureUnavailable",
+            "out-of-scope Lead is denied to the staff actor",
+            False,
+        )
+        record(
+            "tk04-create-task-out-of-scope",
+            None,
+            b"",
+            "TargetFixtureUnavailable",
+            "out-of-scope linked Task insert is denied without creating a ToDo",
+            False,
+        )
+        return None
+
+    denied_read = send(
+        actor,
+        "GET",
+        "/api/method/frappe.client.get?"
+        + urllib.parse.urlencode({"doctype": "CRM Lead", "name": target_lead}),
+    )
+    read_status, read_body, _, read_error = denied_read
+    read_text = read_body.decode("utf-8", errors="replace")
+    read_denied = (
+        read_error is None and read_status == 403 and target_lead not in read_text
+    )
+    record(
+        "tk04-read-out-of-scope-target",
+        read_status,
+        read_body,
+        read_error,
+        "out-of-scope Lead is denied to the staff actor",
+        read_denied,
+        supplied_markers=(target_lead,),
+        extra={"target_found_by_admin": target_found},
+    )
+
+    marker = f"P0-TK04-{uuid.uuid4().hex}"
+
+    def find_matches():
+        query = urllib.parse.urlencode(
+            {
+                "doctype": "ToDo",
+                "fields": json.dumps(["name"], separators=(",", ":")),
+                "filters": json.dumps({"description": marker}, separators=(",", ":")),
+                "limit_page_length": 20,
+            }
+        )
+        response = send(admin, "GET", "/api/method/frappe.client.get_list?" + query)
+        status, body, _, error = response
+        names = extract_names(body, get_data=False)
+        return response, names, error is None and status == 200
+
+    _, before_names, before_query_ok = find_matches()
+    task_doc = {
+        "doctype": "ToDo",
+        "allocated_to": SEED_USER,
+        "reference_type": "CRM Lead",
+        "reference_name": target_lead,
+        "description": marker,
+        "status": "Open",
+    }
+    insert_response = send(
+        actor,
+        "POST",
+        "/api/method/frappe.client.insert",
+        json.dumps({"doc": task_doc}, separators=(",", ":")).encode("utf-8"),
+        {
+            "Content-Type": "application/json",
+            "X-Frappe-CSRF-Token": actor_csrf,
+        },
+    )
+    insert_status, insert_body, _, insert_error = insert_response
+    insert_payload = payload(insert_body)
+    inserted_doc = insert_payload.get("message") if insert_payload else None
+    inserted_name = (
+        inserted_doc.get("name")
+        if isinstance(inserted_doc, dict) and isinstance(inserted_doc.get("name"), str)
+        else None
+    )
+    _, after_names, after_query_ok = find_matches()
+    delete_names = set(after_names or [])
+    if inserted_name:
+        delete_names.add(inserted_name)
+    cleanup_ok = before_query_ok and after_query_ok and before_names == []
+    for name in sorted(delete_names):
+        delete_response = send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.delete",
+            urllib.parse.urlencode({"doctype": "ToDo", "name": name}).encode(),
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Frappe-CSRF-Token": admin_csrf,
+            },
+        )
+        delete_status, _, _, delete_error = delete_response
+        cleanup_ok = cleanup_ok and delete_error is None and delete_status == 200
+    _, remaining_names, final_query_ok = find_matches()
+    cleanup_ok = cleanup_ok and final_query_ok and remaining_names == []
+    insert_exc_type = insert_payload.get("exc_type") if insert_payload else None
+    body_text = insert_body.decode("utf-8", errors="replace")
+    no_identifier_echo = target_lead not in body_text and marker not in body_text
+    passed = (
+        cleanup_ok
+        and insert_error is None
+        and insert_status == 403
+        and isinstance(insert_exc_type, str)
+        and insert_exc_type.endswith("PermissionError")
+        and after_names == []
+        and no_identifier_echo
+    )
+    record(
+        "tk04-create-task-out-of-scope",
+        insert_status,
+        insert_body,
+        insert_error,
+        "out-of-scope linked Task insert is denied without creating a ToDo",
+        passed,
+        supplied_markers=(target_lead, marker, inserted_name or ""),
+        extra={
+            "target_found_by_admin": target_found,
+            "matching_rows_before": len(before_names or []),
+            "matching_rows_after_insert": len(after_names or []),
+            "matching_rows_after_cleanup": len(remaining_names or []),
+            "cleanup_verified": cleanup_ok,
+        },
+    )
+    return target_lead
+
+
+def ls04_search_link_case(
+    actor, actor_csrf, lead_name: str, case_id: str, *, in_scope: bool
+):
+    """Probe the HTTP Link-field endpoint used by Frappe's get_link_options()."""
+    request_body = json.dumps(
+        {
+            "doctype": "CRM Lead",
+            "txt": lead_name,
+            "page_length": 20,
+            "searchfield": "name",
+            "reference_doctype": "ToDo",
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    response = send(
+        actor,
+        "POST",
+        "/api/method/frappe.desk.search.search_link",
+        request_body,
+        {
+            "Content-Type": "application/json",
+            "X-Frappe-CSRF-Token": actor_csrf,
+        },
+    )
+    status, body, _, error = response
+    root = payload(body)
+    results = root.get("message") if root else None
+    values = [
+        row.get("value")
+        for row in results or []
+        if isinstance(row, dict) and isinstance(row.get("value"), str)
+    ]
+    matched = lead_name in values
+    text = body.decode("utf-8", errors="replace")
+    passed = error is None and (
+        (status == 200 and matched)
+        if in_scope
+        else status in (200, 403) and not matched and lead_name not in text
+    )
+    record(
+        case_id,
+        status,
+        body,
+        error,
+        "Link-field lookup returns the in-scope Lead and omits the out-of-scope Lead",
+        passed,
+        supplied_markers=() if in_scope else (lead_name,),
+        extra={"result_count": len(values), "target_match_present": matched},
+    )
+
+
+def dl01_dynamic_link_case(admin, admin_csrf, staff, staff_csrf):
+    """T1B-ext+1 — Dynamic Link của `crm.api.activities.get_linked_calls`.
+
+    Upstream CRM v1.87.0 `crm.api.activities.get_linked_calls` dùng
+    `frappe.db.get_all` cho cả `calls`/`notes`/`tasks` ⇒ bỏ qua `has_permission`
+    của app. Call Log chỉ nối bằng `Dynamic Link` (không có
+    `reference_doctype`/`reference_docname`) vẫn lọt vào response; và khi
+    `reference_doctype` rỗng, `parse_call_log` rơi vào
+    `get_contact_by_phone_number` ⇒ lộ Contact NGOÀN scope theo số điện thoại.
+
+    Fixture (tạo bằng Administrator, dọn sau khi đo):
+      - Call Log `ref rỗng` + Dynamic Link tới Lead TRONG SCOPE, số điện thoại
+        trùng Contact NGOÀN scope, có `recording_url` trỏ file private.
+      - Call Log `ref rỗng` + Dynamic Link tới Lead TRONG SCOPE + Dynamic Link
+        tới FCRM Note / CRM Task tham chiếu Lead NGOÀN scope.
+      - Call Log `ref → Lead TRONG SCOPE` + NHIỀU Dynamic Link (một link tới Lead
+        TRONG SCOPE, một link tới Lead NGOÀN scope) — pin rằng `link_name` ngoài
+        scope không bị trả về dù upstream join mọi link.
+      - POSITIVE CONTROL: Call Log có `reference_doctype`/`reference_docname`
+        trỏ tới Lead TRONG SCOPE (đường hợp lệ).
+
+    Không dùng response rỗng làm bằng chứng: positive control phải chứng minh
+    endpoint vẫn trả dữ liệu hợp lệ trong scope.
+    """
+    contact_marker = f"P0-DL01-CONTACT-{uuid.uuid4().hex}"
+    # Số điện thoại phải là chuỗi chữ số hợp lệ — `uuid4().hex` có thể chứa ký
+    # tự a-f nên Frappe từ chối (`InvalidPhoneNumberError`). Dùng `uuid4().int`
+    # để lấy chỉ chữ số.
+    contact_phone = "09" + f"{uuid.uuid4().int % 10**9:09d}"
+    from_phone = "09" + f"{uuid.uuid4().int % 10**9:09d}"
+    note_marker = f"P0-DL01-NOTE-{uuid.uuid4().hex}"
+    task_marker = f"P0-DL01-TASK-{uuid.uuid4().hex}"
+    recording_url = "/private/files/p0-dl01-recording.mp3"
+
+    admin_form = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Frappe-CSRF-Token": admin_csrf,
+    }
+    admin_json = {
+        "Content-Type": "application/json",
+        "X-Frappe-CSRF-Token": admin_csrf,
+    }
+
+    def admin_insert(doc):
+        return send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.insert",
+            json.dumps({"doc": doc}, separators=(",", ":")).encode("utf-8"),
+            admin_json,
+        )
+
+    def admin_delete(doctype, name):
+        return send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.delete",
+            urllib.parse.urlencode({"doctype": doctype, "name": name}).encode(),
+            admin_form,
+        )
+
+    def inserted_name(response):
+        status, body, _, error = response
+        if error or status != 200:
+            return None
+        parsed = payload(body)
+        doc = parsed.get("message") if parsed else None
+        name = doc.get("name") if isinstance(doc, dict) else None
+        # `CRM Task` dùng naming rule autoincrement ⇒ `name` là số nguyên.
+        # Chuẩn hoá về str để so sánh với payload của endpoint (JSON string).
+        if isinstance(name, int):
+            return str(name)
+        return name if isinstance(name, str) else None
+
+    # --- fixture: Contact NGOÀN scope có số điện thoại riêng -----------------
+    contact_name = inserted_name(
+        admin_insert(
+            {
+                "doctype": "Contact",
+                "first_name": contact_marker,
+                "last_name": "P0DL01",
+                "mobile_no": contact_phone,
+                "phone_nos": [{"phone": contact_phone, "is_primary_mobile_no": 1}],
+            }
+        )
+    )
+
+    # --- fixture: Note NGOÀN scope -------------------------------------------
+    note_name = inserted_name(
+        admin_insert(
+            {
+                "doctype": "FCRM Note",
+                "title": note_marker,
+                "content": note_marker,
+                "reference_doctype": "CRM Lead",
+                "reference_docname": OUT_OF_SCOPE_LEAD_NAME,
+            }
+        )
+    )
+
+    # --- fixture: Task NGOÀN scope -------------------------------------------
+    task_name = inserted_name(
+        admin_insert(
+            {
+                "doctype": "CRM Task",
+                "title": task_marker,
+                "description": task_marker,
+                "status": "Todo",
+                "reference_doctype": "CRM Lead",
+                "reference_docname": OUT_OF_SCOPE_LEAD_NAME,
+            }
+        )
+    )
+
+    def make_call_log(
+        links, phone, reference=None, with_recording=False, from_phone="0900000001"
+    ):
+        # `Dynamic Link` là CHILD TABLE của `CRM Call Log` (field `links`) nên
+        # phải insert inline cùng parent — insert riêng sẽ bị Frappe từ chối
+        # ("Parenttype, Parent and Parentfield are required to insert a child record").
+        doc = {
+            "doctype": "CRM Call Log",
+            "type": "Outgoing",
+            "status": "Completed",
+            "from": from_phone,
+            "to": phone,
+            "caller": "Administrator",
+            "duration": 30,
+            "links": [
+                {"link_doctype": link_doctype, "link_name": link_name}
+                for link_doctype, link_name in links
+            ],
+        }
+        if with_recording:
+            doc["recording_url"] = recording_url
+        if reference:
+            doc["reference_doctype"], doc["reference_docname"] = reference
+        return inserted_name(admin_insert(doc))
+
+    contact_call = make_call_log(
+        [("CRM Lead", LEAD_NAME)],
+        contact_phone,
+        with_recording=True,
+        from_phone=from_phone,
+    )
+    notes_tasks_call = make_call_log(
+        [
+            ("CRM Lead", LEAD_NAME),
+            ("FCRM Note", note_name or ""),
+            ("CRM Task", task_name or ""),
+        ],
+        "0900000010",
+        from_phone=from_phone,
+    )
+    positive_call = make_call_log([], "0900000010", reference=("CRM Lead", LEAD_NAME))
+    multi_link_call = make_call_log(
+        [
+            ("CRM Lead", LEAD_NAME),
+            ("CRM Lead", OUT_OF_SCOPE_LEAD_NAME),
+        ],
+        "0900000011",
+        reference=("CRM Lead", LEAD_NAME),
+    )
+
+    fixtures_ready = all(
+        [
+            contact_name,
+            note_name,
+            task_name,
+            contact_call,
+            notes_tasks_call,
+            positive_call,
+            multi_link_call,
+        ]
+    )
+    record(
+        "dl01-fixture-created",
+        None,
+        b"",
+        None if fixtures_ready else "FixtureUnavailable",
+        "Administrator creates the synthetic Dynamic Link fixtures",
+        fixtures_ready,
+    )
+
+    def cleanup():
+        for doctype, name in (
+            ("CRM Call Log", contact_call),
+            ("CRM Call Log", notes_tasks_call),
+            ("CRM Call Log", positive_call),
+            ("CRM Call Log", multi_link_call),
+            ("Contact", contact_name),
+            ("FCRM Note", note_name),
+            ("CRM Task", task_name),
+        ):
+            if name:
+                admin_delete(doctype, name)
+
+    atexit.register(cleanup)
+
+    if not fixtures_ready:
+        cleanup()
+        record(
+            "dl01-linked-calls-in-scope-actor",
+            None,
+            b"",
+            "FixtureUnavailable",
+            "in-scope actor does not receive out-of-scope contact, note, task or private recording URL",
+            False,
+        )
+        record(
+            "dl01-linked-calls-positive-control",
+            None,
+            b"",
+            "FixtureUnavailable",
+            "in-scope actor still receives the valid in-scope Call Log",
+            False,
+        )
+        record(
+            "dl01-activities-in-scope-actor",
+            None,
+            b"",
+            "FixtureUnavailable",
+            "get_activities does not re-expose out-of-scope contact, note, task or private recording URL",
+            False,
+        )
+        return
+
+    linked_path = (
+        "/api/method/crm_cskh.api.guarded_crm.get_linked_calls?"
+        + urllib.parse.urlencode({"name": LEAD_NAME})
+    )
+
+    # --- NEGATIVE: staff đọc Lead trong scope, Dynamic Link sang NGOÀN scope -
+    neg_status, neg_body, _, neg_error = send(
+        staff, "GET", linked_path, None, {"X-Frappe-CSRF-Token": staff_csrf}
+    )
+    neg_text = neg_body.decode("utf-8", errors="replace")
+    leaked_markers = [
+        marker
+        for marker in (
+            contact_marker,
+            contact_phone,
+            from_phone,
+            note_marker,
+            task_marker,
+            recording_url,
+            OUT_OF_SCOPE_LEAD_NAME,
+        )
+        if marker in neg_text
+    ]
+    neg_passed = neg_error is None and neg_status == 200 and not leaked_markers
+    record(
+        "dl01-linked-calls-in-scope-actor",
+        neg_status,
+        neg_body,
+        neg_error,
+        "in-scope actor does not receive out-of-scope contact, phone, note, task, private recording URL or out-of-scope link_name",
+        neg_passed,
+        supplied_markers=(
+            LEAD_NAME,
+            contact_marker,
+            contact_phone,
+            from_phone,
+            note_marker,
+            task_marker,
+            OUT_OF_SCOPE_LEAD_NAME,
+        ),
+        extra={
+            "leaked_marker_count": len(leaked_markers),
+            "out_of_scope_lead_echo": OUT_OF_SCOPE_LEAD_NAME in neg_text,
+        },
+    )
+
+    # --- POSITIVE CONTROL: Call Log tham chiếu Lead hợp lệ vẫn được trả -----
+    pos_status, pos_body, _, pos_error = send(
+        staff, "GET", linked_path, None, {"X-Frappe-CSRF-Token": staff_csrf}
+    )
+    pos_text = pos_body.decode("utf-8", errors="replace")
+    pos_parsed = payload(pos_body)
+    pos_message = pos_parsed.get("message") if pos_parsed else None
+    pos_calls = pos_message.get("calls") if isinstance(pos_message, dict) else None
+    pos_call_names = [
+        call.get("name")
+        for call in (pos_calls or [])
+        if isinstance(call, dict) and isinstance(call.get("name"), str)
+    ]
+    positive_visible = bool(positive_call) and positive_call in pos_call_names
+    pos_passed = (
+        pos_error is None
+        and pos_status == 200
+        and positive_visible
+        and not any(
+            marker in pos_text
+            for marker in (
+                contact_marker,
+                contact_phone,
+                from_phone,
+                note_marker,
+                task_marker,
+                recording_url,
+                OUT_OF_SCOPE_LEAD_NAME,
+            )
+        )
+    )
+    record(
+        "dl01-linked-calls-positive-control",
+        pos_status,
+        pos_body,
+        pos_error,
+        "in-scope actor still receives the valid in-scope Call Log with a real payload",
+        pos_passed,
+        supplied_markers=(LEAD_NAME, positive_call or ""),
+        extra={
+            "positive_call_visible": positive_visible,
+            "returned_call_count": len(pos_call_names or []),
+        },
+    )
+
+    # --- NEGATIVE: cùng đường qua `get_activities` (upstream gọi nội bộ) ----
+    activities_path = (
+        "/api/method/crm_cskh.api.guarded_crm.get_activities?"
+        + urllib.parse.urlencode({"name": LEAD_NAME})
+    )
+    act_status, act_body, _, act_error = send(
+        staff, "GET", activities_path, None, {"X-Frappe-CSRF-Token": staff_csrf}
+    )
+    act_text = act_body.decode("utf-8", errors="replace")
+    act_leaked = [
+        marker
+        for marker in (
+            contact_marker,
+            contact_phone,
+            from_phone,
+            note_marker,
+            task_marker,
+            recording_url,
+            OUT_OF_SCOPE_LEAD_NAME,
+        )
+        if marker in act_text
+    ]
+    act_passed = act_error is None and act_status == 200 and not act_leaked
+    record(
+        "dl01-activities-in-scope-actor",
+        act_status,
+        act_body,
+        act_error,
+        "get_activities does not re-expose out-of-scope contact, phone, note, task, private recording URL or out-of-scope link_name",
+        act_passed,
+        supplied_markers=(
+            LEAD_NAME,
+            contact_marker,
+            contact_phone,
+            from_phone,
+            note_marker,
+            task_marker,
+            OUT_OF_SCOPE_LEAD_NAME,
+        ),
+        extra={"leaked_marker_count": len(act_leaked)},
+    )
+
+    cleanup()
+
+
+def lead16_ls06_get_data_field_scope_case(admin, admin_csrf, staff, staff_csrf):
+    """LEAD-16 / LS-06 — `crm.api.doc.get_data` chọn field nhạy cảm theo scope.
+
+    Đặt email giả riêng cho Lead TRONG scope (A1) và Lead NGOÀI scope (C1) qua
+    admin, rồi staff trong scope gọi `get_data` với `rows=["name","mobile_no",
+    "email"]`. Response phải chứa mobile_no/email của Lead trong scope (positive
+    control — không vacuous) và KHÔNG chứa mobile_no/email/name của Lead ngoài
+    scope. Email giả được trả về rỗng sau khi đo.
+    """
+    in_scope_email = f"p0-gap-in-{uuid.uuid4().hex}@example.test"
+    out_email = f"p0-gap-out-{uuid.uuid4().hex}@example.test"
+    in_scope_phone = "0900000010"
+    out_of_scope_phone = "0900000090"
+
+    def set_lead_email(name, value):
+        body = urllib.parse.urlencode(
+            {"doctype": "CRM Lead", "name": name, "fieldname": "email", "value": value}
+        ).encode()
+        return send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.set_value",
+            body,
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Frappe-CSRF-Token": admin_csrf,
+            },
+        )
+
+    def revert_emails():
+        set_lead_email(LEAD_NAME, "")
+        set_lead_email(OUT_OF_SCOPE_LEAD_NAME, "")
+
+    atexit.register(revert_emails)
+    set_lead_email(LEAD_NAME, in_scope_email)
+    set_lead_email(OUT_OF_SCOPE_LEAD_NAME, out_email)
+
+    try:
+        headers = {
+            "Content-Type": "application/json",
+            "X-Frappe-CSRF-Token": staff_csrf,
+        }
+        body = json.dumps(
+            {
+                "doctype": "CRM Lead",
+                "filters": {},
+                "order_by": "name asc",
+                "rows": ["name", "mobile_no", "email"],
+                "columns": [
+                    {
+                        "label": "Name",
+                        "type": "Data",
+                        "key": "name",
+                        "width": "16rem",
+                    }
+                ],
+                "page_length": 100,
+                "page_length_count": 100,
+            },
+            separators=(",", ":"),
+        ).encode("utf-8")
+        status, resp_body, _, error = send(
+            staff, "POST", "/api/method/crm.api.doc.get_data", body, headers
+        )
+        text = resp_body.decode("utf-8", errors="replace")
+        leaked = [
+            marker
+            for marker in (OUT_OF_SCOPE_LEAD_NAME, out_of_scope_phone, out_email)
+            if marker in text
+        ]
+        positive = (
+            in_scope_phone in text and in_scope_email in text and LEAD_NAME in text
+        )
+        passed = error is None and status == 200 and not leaked and positive
+        record(
+            "lead16-ls06-get-data-field-scope",
+            status,
+            resp_body,
+            error,
+            "get_data rows=[mobile_no,email] tra trong scope; field Lead ngoai scope khong lo",
+            passed,
+            supplied_markers=(LEAD_NAME, OUT_OF_SCOPE_LEAD_NAME),
+            extra={
+                "in_scope_mobile_present": in_scope_phone in text,
+                "in_scope_email_present": in_scope_email in text,
+                "out_of_scope_mobile_present": out_of_scope_phone in text,
+                "out_of_scope_email_present": out_email in text,
+                "leaked_marker_count": len(leaked),
+            },
+        )
+    finally:
+        revert_emails()
+
+
+def lead11_team2_leader_cross_team_case(password):
+    """LEAD-11 — Team Leader ngoài team không đọc được Lead của team khác.
+
+    Team 2 Leader (Sales Manager + Sales User, trong cây Team 2) gọi list và
+    đọc trực tiếp. Kỳ vọng: thấy Lead của team mình (C1), KHÔNG thấy Lead Team 1
+    (A1) ở list, và bị 403 khi đọc trực tiếp A1.
+    """
+    team2_leader = login("team2.leader@dev.local", password)
+
+    list_query = urllib.parse.urlencode(
+        {
+            "doctype": "CRM Lead",
+            "fields": json.dumps(["name"], separators=(",", ":")),
+            "limit_page_length": 100,
+        }
+    )
+    list_status, list_body, _, list_error = send(
+        team2_leader, "GET", "/api/method/frappe.client.get_list?" + list_query
+    )
+    list_text = list_body.decode("utf-8", errors="replace")
+    team1_lead_visible = LEAD_NAME in list_text
+    team2_lead_visible = OUT_OF_SCOPE_LEAD_NAME in list_text
+    list_passed = (
+        list_error is None
+        and list_status == 200
+        and not team1_lead_visible
+        and team2_lead_visible
+    )
+    record(
+        "lead11-team2-leader-list-scope",
+        list_status,
+        list_body,
+        list_error,
+        "Team 2 Leader thay lead cua team 2 (positive) nhung khong thay lead Team 1",
+        list_passed,
+        supplied_markers=(LEAD_NAME, OUT_OF_SCOPE_LEAD_NAME),
+        extra={
+            "team1_lead_visible": team1_lead_visible,
+            "team2_lead_visible": team2_lead_visible,
+        },
+    )
+
+    direct_query = urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME})
+    direct_status, direct_body, _, direct_error = send(
+        team2_leader, "GET", "/api/method/frappe.client.get?" + direct_query
+    )
+    direct_text = direct_body.decode("utf-8", errors="replace")
+    direct_passed = (
+        direct_error is None and direct_status == 403 and LEAD_NAME not in direct_text
+    )
+    record(
+        "lead11-team2-leader-direct-read-denied",
+        direct_status,
+        direct_body,
+        direct_error,
+        "Team 2 Leader bi 403 khi doc truc tiep Lead Team 1",
+        direct_passed,
+        supplied_markers=(LEAD_NAME,),
+    )
+
+
+def ra05_ra10_new_owner_after_transfer_case(
+    admin, admin_csrf, staff_a, staff_csrf, password
+):
+    """RA-05 / RA-10 — quyền của chủ mới sau chuyển giao.
+
+    RA-10 (A→B, seed A2 = CRM-LEAD-00002 đã chuyển sang staff.b):
+      - staff.b (chủ mới) đọc được A2 (positive control).
+      - staff.b đọc được Note con của A2 (positive control).
+      - staff.b ghi (set_value) Note con của A2 bị 403 — fail-closed vì
+        `linked_lead_has_permission` chỉ cho phép read/select/email/print cho
+        non-system (ownership service chưa có, RA-04 = D).
+      - staff.a (chủ cũ) bị 403 khi đọc A2 (negative).
+    RA-05 (cross-team C→A): tạo Lead giả của staff.c qua admin, admin chuyển
+    lead_owner sang staff.a, kiểm staff.a thấy trong list, staff.c bị 403, rồi
+    xoá Lead giả (không đụng seed).
+    """
+    a2_name = "CRM-LEAD-00002"
+    staff_b = login("staff.b@dev.local", password)
+    staff_b_csrf = csrf_token(staff_b)
+    admin_form = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Frappe-CSRF-Token": admin_csrf,
+    }
+
+    def inserted_name(response):
+        status, body, _, error = response
+        if error or status != 200:
+            return None
+        parsed = payload(body)
+        doc = parsed.get("message") if parsed else None
+        name = doc.get("name") if isinstance(doc, dict) else None
+        if isinstance(name, int):
+            return str(name)
+        return name if isinstance(name, str) else None
+
+    def admin_delete(doctype, name):
+        return send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.delete",
+            urllib.parse.urlencode({"doctype": doctype, "name": name}).encode(),
+            admin_form,
+        )
+
+    # --- RA-10 positive: chủ mới đọc A2 --------------------------------------
+    direct_query = urllib.parse.urlencode({"doctype": "CRM Lead", "name": a2_name})
+    b_status, b_body, _, b_error = send(
+        staff_b, "GET", "/api/method/frappe.client.get?" + direct_query
+    )
+    b_text = b_body.decode("utf-8", errors="replace")
+    b_read_ok = b_error is None and b_status == 200 and a2_name in b_text
+    record(
+        "ra10-new-owner-reads-transferred-lead",
+        b_status,
+        b_body,
+        b_error,
+        "chu moi (staff.b) doc duoc A2 sau chuyen giao A->B",
+        b_read_ok,
+        supplied_markers=(a2_name,),
+    )
+
+    # --- RA-10 positive: chủ mới đọc Note con của A2 --------------------------
+    note_query = urllib.parse.urlencode(
+        {
+            "doctype": "FCRM Note",
+            "fields": json.dumps(["name"], separators=(",", ":")),
+            "filters": json.dumps(
+                {"reference_docname": a2_name}, separators=(",", ":")
+            ),
+            "limit_page_length": 20,
+        }
+    )
+    note_status, note_body, _, note_error = send(
+        staff_b, "GET", "/api/method/frappe.client.get_list?" + note_query
+    )
+    note_names = extract_names(note_body, get_data=False)
+    child_read_ok = note_error is None and note_status == 200 and bool(note_names)
+    record(
+        "ra10-new-owner-reads-child-note",
+        note_status,
+        note_body,
+        note_error,
+        "chu moi (staff.b) doc duoc Note con cua A2 (positive control)",
+        child_read_ok,
+        supplied_markers=(a2_name,),
+        extra={"child_note_count": len(note_names or [])},
+    )
+
+    # --- RA-10: chủ mới ghi con bị 403 (fail-closed, ownership service chưa có)
+    write_marker = f"P0-RA10-WRITE-{uuid.uuid4().hex}"
+    target_note = (note_names or [None])[0]
+    if target_note:
+        set_status, set_body, _, set_error = send(
+            staff_b,
+            "POST",
+            "/api/method/frappe.client.set_value",
+            urllib.parse.urlencode(
+                {
+                    "doctype": "FCRM Note",
+                    "name": target_note,
+                    "fieldname": "title",
+                    "value": write_marker,
+                }
+            ).encode(),
+            {
+                "Content-Type": "application/x-www-form-urlencoded",
+                "X-Frappe-CSRF-Token": staff_b_csrf,
+            },
+        )
+        set_text = set_body.decode("utf-8", errors="replace")
+        write_fail_closed = (
+            set_error is None and set_status == 403 and write_marker not in set_text
+        )
+    else:
+        set_status, set_body, set_error, write_fail_closed = (
+            None,
+            b"",
+            "TargetFixtureUnavailable",
+            False,
+        )
+    record(
+        "ra10-new-owner-writes-child-fail-closed",
+        set_status,
+        set_body,
+        set_error,
+        "chu moi ghi Note con bi 403 (fail-closed den khi co ownership service)",
+        write_fail_closed,
+        supplied_markers=(target_note or "",),
+        extra={
+            "permission_error": "PermissionError"
+            in set_body.decode("utf-8", errors="replace")
+        },
+    )
+
+    # --- RA-10 negative: chủ cũ bị chặn ---------------------------------------
+    a_status, a_body, _, a_error = send(
+        staff_a, "GET", "/api/method/frappe.client.get?" + direct_query
+    )
+    a_text = a_body.decode("utf-8", errors="replace")
+    a_denied = a_error is None and a_status == 403 and a2_name not in a_text
+    record(
+        "ra10-old-owner-denied-after-transfer",
+        a_status,
+        a_body,
+        a_error,
+        "chu cu (staff.a) bi 403 khi doc A2 sau chuyen giao",
+        a_denied,
+        supplied_markers=(a2_name,),
+    )
+
+    # --- RA-05: cross-team C->A (Lead giả, không đụng seed) ------------------
+    synthetic_phone = "09" + f"{uuid.uuid4().int % 10**9:09d}"
+    synthetic_marker = f"P0-RA05-{uuid.uuid4().hex}"
+    synthetic_name = inserted_name(
+        send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.insert",
+            json.dumps(
+                {
+                    "doc": {
+                        "doctype": "CRM Lead",
+                        "naming_series": "CRM-LEAD-",
+                        "first_name": synthetic_marker,
+                        "lead_name": synthetic_marker,
+                        "mobile_no": synthetic_phone,
+                        "status": "New",
+                        "lead_owner": OUT_USER,
+                    }
+                },
+                separators=(",", ":"),
+            ).encode("utf-8"),
+            {
+                "Content-Type": "application/json",
+                "X-Frappe-CSRF-Token": admin_csrf,
+            },
+        )
+    )
+
+    def delete_synthetic():
+        if not synthetic_name:
+            return
+        # CRM tự tạo CRM Notification gắn Lead khi insert ⇒ phải xoá thông báo
+        # trước (LinkExistsError nếu xoá Lead trước).
+        notif_query = urllib.parse.urlencode(
+            {
+                "doctype": "CRM Notification",
+                "fields": json.dumps(["name"], separators=(",", ":")),
+                "filters": json.dumps(
+                    {"reference_name": synthetic_name}, separators=(",", ":")
+                ),
+                "limit_page_length": 20,
+            }
+        )
+        _, n_body, _, _ = send(
+            admin, "GET", "/api/method/frappe.client.get_list?" + notif_query
+        )
+        for notif_name in extract_names(n_body, get_data=False) or []:
+            admin_delete("CRM Notification", notif_name)
+        admin_delete("CRM Lead", synthetic_name)
+
+    atexit.register(delete_synthetic)
+
+    if not synthetic_name:
+        record(
+            "ra05-cross-team-transfer-new-owner-visible",
+            None,
+            b"",
+            "FixtureUnavailable",
+            "sau chuyen giao cross-team, chu moi thay Lead trong list va chu cu bi chan",
+            False,
+        )
+        return
+
+    try:
+        transfer_response = send(
+            admin,
+            "POST",
+            "/api/method/frappe.client.set_value",
+            urllib.parse.urlencode(
+                {
+                    "doctype": "CRM Lead",
+                    "name": synthetic_name,
+                    "fieldname": "lead_owner",
+                    "value": SEED_USER,
+                }
+            ).encode(),
+            admin_form,
+        )
+        t_status, t_body, _, t_error = transfer_response
+        transfer_ok = t_error is None and t_status == 200
+        record(
+            "ra05-cross-team-transfer-admin-set-owner",
+            t_status,
+            t_body,
+            t_error,
+            "admin chuyen lead_owner cua Lead gia C -> A (cross-team)",
+            transfer_ok,
+        )
+
+        list_query = urllib.parse.urlencode(
+            {
+                "doctype": "CRM Lead",
+                "fields": json.dumps(["name"], separators=(",", ":")),
+                "limit_page_length": 100,
+            }
+        )
+        a_list_status, a_list_body, _, a_list_error = send(
+            staff_a, "GET", "/api/method/frappe.client.get_list?" + list_query
+        )
+        a_list_text = a_list_body.decode("utf-8", errors="replace")
+        new_owner_visible = (
+            a_list_error is None
+            and a_list_status == 200
+            and synthetic_name in a_list_text
+        )
+        c_status, c_body, _, c_error = send(
+            login(OUT_USER, password),
+            "GET",
+            "/api/method/frappe.client.get?"
+            + urllib.parse.urlencode({"doctype": "CRM Lead", "name": synthetic_name}),
+        )
+        c_text = c_body.decode("utf-8", errors="replace")
+        old_owner_denied = (
+            c_error is None and c_status == 403 and synthetic_name not in c_text
+        )
+        record(
+            "ra05-cross-team-transfer-new-owner-visible",
+            a_list_status,
+            a_list_body,
+            a_list_error,
+            "sau chuyen giao cross-team, chu moi thay Lead trong list va chu cu bi chan",
+            new_owner_visible and old_owner_denied,
+            supplied_markers=(synthetic_name,),
+            extra={
+                "new_owner_visible": new_owner_visible,
+                "old_owner_denied": old_owner_denied,
+                "old_owner_status": c_status,
+            },
+        )
+    finally:
+        delete_synthetic()
+
+
+def bod_mutation_denied_case(admin, admin_csrf, password):
+    """RA-08 / BD-04 / BD-03 — BOD bị chặn reassign/revoke/bulk delete.
+
+    BOD Viewer không có vai trò Sales ⇒ bị 403 ở:
+      - remove_assignments (RA-08 / BD-04 — wrapper `crm_cskh.permissions`).
+      - set_value lead_owner (RA-08 — không quyền write + `validate_lead_owner`).
+      - delete_bulk_docs (BD-03 — wrapper `guarded_crm.delete_bulk_docs`).
+    Positive control: các phản hồi đều là 403 `PermissionError` (không transport
+    error, không 500) ⇒ fail-closed hoạt động.
+    """
+    bod = login("bod.viewer@dev.local", password)
+    bod_csrf = csrf_token(bod)
+    bod_form = {
+        "Content-Type": "application/x-www-form-urlencoded",
+        "X-Frappe-CSRF-Token": bod_csrf,
+    }
+    bod_json = {
+        "Content-Type": "application/json",
+        "X-Frappe-CSRF-Token": bod_csrf,
+    }
+
+    revoke_status, revoke_body, _, revoke_error = send(
+        bod,
+        "POST",
+        "/api/method/crm.api.doc.remove_assignments",
+        urllib.parse.urlencode(
+            {
+                "doctype": "CRM Lead",
+                "name": LEAD_NAME,
+                "assignees": json.dumps([SEED_USER], separators=(",", ":")),
+            }
+        ).encode(),
+        bod_form,
+    )
+    revoke_text = revoke_body.decode("utf-8", errors="replace")
+    revoke_passed = (
+        revoke_error is None
+        and revoke_status == 403
+        and "PermissionError" in revoke_text
+    )
+    record(
+        "bod-remove-assignments-denied",
+        revoke_status,
+        revoke_body,
+        revoke_error,
+        "BOD bi 403 khi revoke/reassign (remove_assignments)",
+        revoke_passed,
+        supplied_markers=(LEAD_NAME,),
+    )
+
+    set_status, set_body, _, set_error = send(
+        bod,
+        "POST",
+        "/api/method/frappe.client.set_value",
+        urllib.parse.urlencode(
+            {
+                "doctype": "CRM Lead",
+                "name": LEAD_NAME,
+                "fieldname": "lead_owner",
+                "value": OUT_USER,
+            }
+        ).encode(),
+        bod_form,
+    )
+    set_text = set_body.decode("utf-8", errors="replace")
+    set_passed = set_error is None and set_status == 403
+    record(
+        "bod-set-lead-owner-denied",
+        set_status,
+        set_body,
+        set_error,
+        "BOD bi 403 khi doi lead_owner (reassign)",
+        set_passed,
+        supplied_markers=(LEAD_NAME,),
+        extra={"permission_error": "PermissionError" in set_text},
+    )
+
+    del_status, del_body, _, del_error = send(
+        bod,
+        "POST",
+        "/api/method/crm.api.doc.delete_bulk_docs",
+        json.dumps(
+            {
+                "doctype": "CRM Lead",
+                "items": json.dumps([LEAD_NAME], separators=(",", ":")),
+            },
+            separators=(",", ":"),
+        ).encode("utf-8"),
+        bod_json,
+    )
+    del_text = del_body.decode("utf-8", errors="replace")
+    del_passed = (
+        del_error is None and del_status == 403 and "PermissionError" in del_text
+    )
+    record(
+        "bod-bulk-delete-denied",
+        del_status,
+        del_body,
+        del_error,
+        "BOD bi 403 khi bulk delete Lead",
+        del_passed,
+        supplied_markers=(LEAD_NAME,),
+    )
+
+
+def setup_error_case(detail="synthetic permlevel field exists with sentinel"):
+    record(
+        "sec16-field-setup",
+        None,
+        b"",
+        "setup-failed",
+        detail,
+        False,
+    )
+
+
+def run() -> int:
+    started = datetime.now(timezone.utc).isoformat()
+    password = seed_password()
+    staff = login(SEED_USER, password)
+    out_of_scope = login(OUT_USER, password)
+    administrator_password = os.environ.get("ADMIN_PASSWORD", "")
+    if not administrator_password:
+        raise RuntimeError("ADMIN_PASSWORD unavailable")
+    admin = login("Administrator", administrator_password)
+    guest = new_client()
+    staff_csrf = csrf_token(staff)
+    out_of_scope_csrf = csrf_token(out_of_scope)
+    admin_csrf = csrf_token(admin)
+
+    if not setup_permlevel_field():
+        setup_error_case()
+    atexit.register(cleanup_permlevel_field)
+    json_headers_staff = {
+        "Content-Type": "application/json",
+        "X-Frappe-CSRF-Token": staff_csrf,
+    }
+
+    # NT-04: prevent a non-owner from creating linked child records on the Lead.
+    for linked_doctype in ("FCRM Note", "Comment"):
+        nt04_create_doc_case(
+            out_of_scope,
+            out_of_scope_csrf,
+            admin,
+            admin_csrf,
+            linked_doctype,
+        )
+
+    # TK-04 / LS-04: direct HTTP checks for task creation and Link-field lookup.
+    out_of_scope_lead = tk04_create_task_out_of_scope_case(
+        staff, staff_csrf, admin, admin_csrf
+    )
+    if out_of_scope_lead:
+        ls04_search_link_case(
+            staff,
+            staff_csrf,
+            LEAD_NAME,
+            "ls04-search-link-in-scope-positive",
+            in_scope=True,
+        )
+        ls04_search_link_case(
+            staff,
+            staff_csrf,
+            out_of_scope_lead,
+            "ls04-search-link-out-of-scope",
+            in_scope=False,
+        )
+    else:
+        for case_id in (
+            "ls04-search-link-in-scope-positive",
+            "ls04-search-link-out-of-scope",
+        ):
+            record(
+                case_id,
+                None,
+                b"",
+                "TargetFixtureUnavailable",
+                "Link-field scope is checked with in-scope and out-of-scope controls",
+                False,
+            )
+
+    # T1B-ext+1: Dynamic Link của `get_linked_calls` (calls/notes/tasks) và cùng
+    # đường đó đi qua `get_activities`.
+    dl01_dynamic_link_case(admin, admin_csrf, staff, staff_csrf)
+
+    # T1B — chốt khoảng trống còn lại: LEAD-16/LS-06 field scope, LEAD-11 TL2
+    # cross-team, RA-05/RA-10 chủ mới sau chuyển giao, RA-08/BD-04/BD-03 BOD.
+    lead16_ls06_get_data_field_scope_case(admin, admin_csrf, staff, staff_csrf)
+    lead11_team2_leader_cross_team_case(password)
+    ra05_ra10_new_owner_after_transfer_case(
+        admin, admin_csrf, staff, staff_csrf, password
+    )
+    bod_mutation_denied_case(admin, admin_csrf, password)
+
+    # LEAD-15 / LS-05: cross-doctype calls must match ordinary Frappe get_list
+    # visibility for the same actor. Only counts and opaque name-set digests leave memory.
+    doctype_filters = {
+        "CRM Deal": {},
+        "ToDo": {},
+        "CRM Call Log": {},
+        "File": {"attached_to_name": LEAD_NAME},
+        "User": {},
+        "Custom Field": {"dt": "CRM Lead"},
+    }
+    for doctype, filters in doctype_filters.items():
+        common = {"doctype": doctype, "filters": filters, "order_by": "name asc"}
+        get_data_body = json.dumps(
+            {**common, "rows": ["name"], "page_length": 100, "page_length_count": 100}
+        ).encode("utf-8")
+        get_data_response = send(
+            staff,
+            "POST",
+            "/api/method/crm.api.doc.get_data",
+            get_data_body,
+            json_headers_staff,
+        )
+        list_query = urllib.parse.urlencode(
+            {
+                "doctype": doctype,
+                "fields": json.dumps(["name"], separators=(",", ":")),
+                "filters": json.dumps(filters, separators=(",", ":")),
+                "order_by": "name asc",
+                "limit_page_length": 100,
+            }
+        )
+        get_list_response = send(
+            staff, "GET", "/api/method/frappe.client.get_list?" + list_query
+        )
+        gd_status, gd_body, _, gd_error = get_data_response
+        gl_status, gl_body, _, gl_error = get_list_response
+        gd_names = extract_names(gd_body, get_data=True)
+        gl_names = extract_names(gl_body, get_data=False)
+        both_denied = gd_status == gl_status == 403
+        same_rows = (
+            gd_names is not None and gl_names is not None and gd_names == gl_names
+        )
+        passed = (
+            gd_error is None
+            and gl_error is None
+            and ((both_denied) or (gd_status == gl_status == 200 and same_rows))
+            and FIELD_SENTINEL.encode() not in gd_body
+            and FIELD_SENTINEL.encode() not in gl_body
+        )
+        record(
+            f"cross-doctype-get-data-vs-get-list-{doctype.lower().replace(' ', '-')}",
+            gd_status,
+            gd_body,
+            gd_error,
+            "same doctype permission boundary and visible name set as frappe.client.get_list",
+            passed,
+            extra={
+                "control_status": gl_status,
+                "get_data_row_count": len(gd_names) if gd_names is not None else None,
+                "get_list_row_count": len(gl_names) if gl_names is not None else None,
+                "get_data_names_sha256": names_digest(gd_names)
+                if gd_names is not None
+                else None,
+                "get_list_names_sha256": names_digest(gl_names)
+                if gl_names is not None
+                else None,
+                "same_visible_name_set": same_rows,
+            },
+        )
+
+    # Resolve the seeded private file using the authorized standard attachment route.
+    gallery_filters = [["File", "file_name", "=", PRIVATE_FILE_NAME]]
+    gallery_response = extract_file_record(staff, gallery_filters)
+    gallery_status, gallery_body, _, gallery_error = gallery_response
+    gallery_payload = payload(gallery_body)
+    gallery_rows = gallery_payload.get("message") if gallery_payload else None
+    file_entry = next(
+        (
+            row
+            for row in gallery_rows or []
+            if isinstance(row, dict)
+            and row.get("file_name") == PRIVATE_FILE_NAME
+            and row.get("is_private")
+            and isinstance(row.get("name"), str)
+            and isinstance(row.get("file_url"), str)
+            and row["file_url"].startswith("/private/files/")
+        ),
+        None,
+    )
+    if gallery_error or gallery_status != 200 or not file_entry:
+        response_case(
+            "sec26-in-scope-file-fixture",
+            gallery_response,
+            lambda status, body: False,
+            "authorized gallery resolves the synthetic private File without persisting its id or URL",
+            supplied_markers=(LEAD_NAME, PRIVATE_FILE_NAME),
+        )
+        file_id = ""
+        file_url = ""
+    else:
+        file_id = file_entry["name"]
+        file_url = file_entry["file_url"]
+        record(
+            "sec26-in-scope-file-fixture",
+            gallery_status,
+            gallery_body,
+            gallery_error,
+            "authorized gallery resolves the synthetic private File without persisting its id or URL",
+            True,
+            supplied_markers=(LEAD_NAME, PRIVATE_FILE_NAME, file_id, file_url),
+            file_url_expected=True,
+            extra={"matching_private_file_count": 1},
+        )
+
+    if file_id and file_url:
+        # Residual standard Frappe routes: parent permission is enforced before
+        # returning attachment metadata; only the in-scope caller may see the URL.
+        for actor_name, actor in (("in-scope", staff), ("out-of-scope", out_of_scope)):
+            filtered = extract_file_record(actor, gallery_filters)
+            status, body, _, error = filtered
+            root = payload(body)
+            rows = root.get("message") if root else None
+            has_expected_file = any(
+                isinstance(row, dict) and row.get("name") == file_id
+                for row in rows or []
+            )
+            has_url = private_url_present(body)
+            passed = error is None and (
+                (
+                    actor_name == "in-scope"
+                    and status == 200
+                    and has_expected_file
+                    and has_url
+                )
+                or (
+                    actor_name == "out-of-scope"
+                    and status == 403
+                    and not has_url
+                    and file_id not in body.decode("utf-8", errors="replace")
+                    and LEAD_NAME not in body.decode("utf-8", errors="replace")
+                )
+            )
+            record(
+                f"sec26-get-filtered-attachments-{actor_name}",
+                status,
+                body,
+                error,
+                "in-scope gets only its private attachment; out-of-scope receives a scrubbed 403",
+                passed,
+                supplied_markers=(LEAD_NAME, PRIVATE_FILE_NAME, file_id, file_url),
+                file_url_expected=actor_name == "in-scope",
+                extra={"matching_private_file_present": has_expected_file},
+            )
+
+        # Direct docinfo and getdoc are separate surfaces from get_activities.
+        doc_query = urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME})
+        for route in ("get_docinfo", "getdoc"):
+            for actor_name, actor in (
+                ("in-scope", staff),
+                ("out-of-scope", out_of_scope),
+            ):
+                response = send(
+                    actor,
+                    "GET",
+                    f"/api/method/frappe.desk.form.load.{route}?{doc_query}",
+                )
+                status, body, _, error = response
+                root = payload(body)
+                docinfo = root.get("docinfo") if root else None
+                if route == "getdoc" and isinstance(root, dict):
+                    docinfo = root.get("docinfo")
+                attachments = (
+                    docinfo.get("attachments") if isinstance(docinfo, dict) else []
+                )
+                file_visible = any(
+                    isinstance(row, dict) and row.get("name") == file_id
+                    for row in attachments or []
+                )
+                has_url = private_url_present(body)
+                text = body.decode("utf-8", errors="replace")
+                passed = error is None and (
+                    (
+                        actor_name == "in-scope"
+                        and status == 200
+                        and file_visible
+                        and has_url
+                    )
+                    or (
+                        actor_name == "out-of-scope"
+                        and status == 403
+                        and not has_url
+                        and file_id not in text
+                        and LEAD_NAME not in text
+                    )
+                )
+                record(
+                    f"sec26-{route}-{actor_name}",
+                    status,
+                    body,
+                    error,
+                    "docinfo attachment is visible only after parent-document read permission",
+                    passed,
+                    supplied_markers=(LEAD_NAME, PRIVATE_FILE_NAME, file_id, file_url),
+                    file_url_expected=actor_name == "in-scope",
+                    extra={"matching_private_file_present": file_visible},
+                )
+
+        # Standard File listing must match its permission-filtered positive/negative controls.
+        file_list_query = urllib.parse.urlencode(
+            {
+                "doctype": "File",
+                "fields": json.dumps(
+                    [
+                        "name",
+                        "file_name",
+                        "file_url",
+                        "attached_to_doctype",
+                        "attached_to_name",
+                    ],
+                    separators=(",", ":"),
+                ),
+                "filters": json.dumps({"name": file_id}, separators=(",", ":")),
+                "limit_page_length": 20,
+            }
+        )
+        for actor_name, actor in (("in-scope", staff), ("out-of-scope", out_of_scope)):
+            response = send(
+                actor, "GET", "/api/method/frappe.client.get_list?" + file_list_query
+            )
+            status, body, _, error = response
+            root = payload(body)
+            rows = root.get("message") if root else None
+            has_file = any(
+                isinstance(row, dict) and row.get("name") == file_id
+                for row in rows or []
+            )
+            has_url = private_url_present(body)
+            text = body.decode("utf-8", errors="replace")
+            passed = error is None and (
+                (actor_name == "in-scope" and status == 200 and has_file and has_url)
+                or (
+                    actor_name == "out-of-scope"
+                    and status in (200, 403)
+                    and not has_file
+                    and not has_url
+                    and file_id not in text
+                )
+            )
+            record(
+                f"sec26-client-get-list-{actor_name}",
+                status,
+                body,
+                error,
+                "File list respects record scope; out-of-scope caller receives no record or URL",
+                passed,
+                supplied_markers=(LEAD_NAME, PRIVATE_FILE_NAME, file_id, file_url),
+                file_url_expected=actor_name == "in-scope",
+                extra={"matching_private_file_present": has_file},
+            )
+
+        # GET /private/files is the actual browser download hand-off (AT-06).
+        download_path = urlsplit(file_url).path
+        unknown_path = "/private/files/p0-missing-" + uuid.uuid4().hex + ".txt"
+        downloads = {}
+        for actor_name, actor, path in (
+            ("in-scope", staff, download_path),
+            ("out-of-scope", out_of_scope, download_path),
+            ("guest", guest, download_path),
+            ("out-of-scope-unknown", out_of_scope, unknown_path),
+        ):
+            response = send(actor, "GET", path, headers={"Accept": "*/*"})
+            status, body, headers, error = response
+            downloads[actor_name] = (status, body)
+            passed = error is None and (
+                (actor_name == "in-scope" and status == 200 and SEED_MARKER in body)
+                or (
+                    actor_name != "in-scope"
+                    and status == 403
+                    and SEED_MARKER not in body
+                )
+            )
+            record(
+                f"at06-private-download-{actor_name}",
+                status,
+                body,
+                error,
+                "only in-scope receives seeded bytes; guest/out-of-scope are denied",
+                passed,
+                supplied_markers=(LEAD_NAME, PRIVATE_FILE_NAME, file_id, file_url),
+                extra={
+                    "content_length": len(body),
+                    "content_sha256": hashlib.sha256(body).hexdigest(),
+                    "content_type": headers.get("Content-Type", ""),
+                    "contains_seed_marker": SEED_MARKER in body,
+                },
+            )
+        actual_status, actual_body = downloads.get("out-of-scope", (None, b""))
+        unknown_status, unknown_body = downloads.get(
+            "out-of-scope-unknown", (None, b"")
+        )
+        equivalent = actual_status == unknown_status and actual_body == unknown_body
+        record(
+            "sec26-private-download-out-of-scope-existing-vs-unknown",
+            actual_status,
+            actual_body,
+            None,
+            "existing and random private file paths are indistinguishable to out-of-scope caller",
+            equivalent and actual_status == 403,
+            extra={"indistinguishable_status_and_body": equivalent},
+        )
+
+    # CL-09: guest and out-of-scope denial, with an in-scope positive control.
+    call_query = urllib.parse.urlencode({"name": CALL_NAME})
+    for actor_name, actor in (
+        ("guest", guest),
+        ("out-of-scope", out_of_scope),
+        ("in-scope", staff),
+    ):
+        response = send(
+            actor,
+            "GET",
+            "/api/method/crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log?"
+            + call_query,
+        )
+        status, body, _, error = response
+        expected_status = 200 if actor_name == "in-scope" else 403
+        record(
+            f"cl09-get-call-log-{actor_name}",
+            status,
+            body,
+            error,
+            f"{actor_name} call-log access returns HTTP {expected_status}",
+            error is None
+            and status == expected_status
+            and FIELD_SENTINEL.encode() not in body,
+            supplied_markers=(CALL_NAME,),
+        )
+
+    # SEC-16: audit 12 real data surfaces for a live permlevel=1 sentinel.
+    endpoint_specs = {
+        "crm-get-data": (
+            "POST",
+            "/api/method/crm.api.doc.get_data",
+            json.dumps(
+                {
+                    "doctype": "CRM Lead",
+                    "filters": {"name": LEAD_NAME},
+                    "order_by": "name asc",
+                    "rows": ["name", FIELD_NAME],
+                    "page_length": 20,
+                }
+            ).encode("utf-8"),
+            True,
+        ),
+        "frappe-client-get": (
+            "GET",
+            "/api/method/frappe.client.get?"
+            + urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME}),
+            None,
+            False,
+        ),
+        "rest-resource-get": (
+            "GET",
+            "/api/resource/CRM%20Lead/"
+            + urllib.parse.quote(LEAD_NAME, safe="")
+            + "?fields="
+            + urllib.parse.quote(
+                json.dumps(["name", FIELD_NAME], separators=(",", ":"))
+            ),
+            None,
+            False,
+        ),
+        "desk-getdoc": (
+            "GET",
+            "/api/method/frappe.desk.form.load.getdoc?"
+            + urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME}),
+            None,
+            False,
+        ),
+        "desk-get-docinfo": (
+            "GET",
+            "/api/method/frappe.desk.form.load.get_docinfo?"
+            + urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME}),
+            None,
+            False,
+        ),
+        "frappe-client-get-list": (
+            "GET",
+            "/api/method/frappe.client.get_list?"
+            + urllib.parse.urlencode(
+                {
+                    "doctype": "CRM Lead",
+                    "fields": json.dumps(["name", FIELD_NAME], separators=(",", ":")),
+                    "filters": json.dumps({"name": LEAD_NAME}, separators=(",", ":")),
+                }
+            ),
+            None,
+            False,
+        ),
+        "frappe-client-get-value": (
+            "GET",
+            "/api/method/frappe.client.get_value?"
+            + urllib.parse.urlencode(
+                {
+                    "doctype": "CRM Lead",
+                    "fieldname": json.dumps([FIELD_NAME], separators=(",", ":")),
+                    "filters": LEAD_NAME,
+                }
+            ),
+            None,
+            False,
+        ),
+        "crm-activities": (
+            "GET",
+            "/api/method/crm.api.activities.get_activities?"
+            + urllib.parse.urlencode({"name": LEAD_NAME}),
+            None,
+            False,
+        ),
+        "crm-linked-calls": (
+            "GET",
+            "/api/method/crm.api.activities.get_linked_calls?"
+            + urllib.parse.urlencode({"name": LEAD_NAME}),
+            None,
+            False,
+        ),
+        "crm-linked-notes": (
+            "GET",
+            "/api/method/crm.api.activities.get_linked_notes?"
+            + urllib.parse.urlencode({"name": LEAD_NAME}),
+            None,
+            False,
+        ),
+        "crm-linked-tasks": (
+            "GET",
+            "/api/method/crm.api.activities.get_linked_tasks?"
+            + urllib.parse.urlencode({"name": LEAD_NAME}),
+            None,
+            False,
+        ),
+        "crm-linked-docs": (
+            "GET",
+            "/api/method/crm.api.doc.get_linked_docs_of_document?"
+            + urllib.parse.urlencode({"doctype": "CRM Lead", "docname": LEAD_NAME}),
+            None,
+            False,
+        ),
+    }
+    actors = (
+        ("in-scope", staff, staff_csrf),
+        ("out-of-scope", out_of_scope, out_of_scope_csrf),
+    )
+    for actor_name, actor, actor_token in actors:
+        for endpoint_name, (method, path, body, is_json) in endpoint_specs.items():
+            headers = {"X-Frappe-CSRF-Token": actor_token}
+            if is_json:
+                headers["Content-Type"] = "application/json"
+            response = send(actor, method, path, body, headers)
+            status, response_body, _, error = response
+            allowed_status = (
+                (status == 200) if actor_name == "in-scope" else status in (200, 403)
+            )
+            record(
+                f"sec16-{endpoint_name}-{actor_name}",
+                status,
+                response_body,
+                error,
+                "non-system response does not contain permlevel=1 sentinel; route remains authorized/denied as scoped",
+                error is None
+                and allowed_status
+                and FIELD_SENTINEL.encode() not in response_body,
+                supplied_markers=(LEAD_NAME,),
+                sentinel_expected=False,
+            )
+
+    # Positive controls prove the sentinel exists and the detector catches it.
+    admin_endpoints = (
+        (
+            "frappe-client-get",
+            "/api/method/frappe.client.get?"
+            + urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME}),
+        ),
+        (
+            "rest-resource-get",
+            "/api/resource/CRM%20Lead/"
+            + urllib.parse.quote(LEAD_NAME, safe="")
+            + "?fields="
+            + urllib.parse.quote(
+                json.dumps(["name", FIELD_NAME], separators=(",", ":"))
+            ),
+        ),
+        (
+            "desk-getdoc",
+            "/api/method/frappe.desk.form.load.getdoc?"
+            + urllib.parse.urlencode({"doctype": "CRM Lead", "name": LEAD_NAME}),
+        ),
+    )
+    for endpoint_name, path in admin_endpoints:
+        response = send(admin, "GET", path)
+        status, body, _, error = response
+        record(
+            f"sec16-system-positive-control-{endpoint_name}",
+            status,
+            body,
+            error,
+            "System Manager positive control can read the restricted sentinel",
+            error is None and status == 200 and FIELD_SENTINEL.encode() in body,
+            supplied_markers=(LEAD_NAME,),
+            sentinel_expected=True,
+        )
+
+    cleanup_ok = cleanup_permlevel_field()
+    atexit.unregister(cleanup_permlevel_field)
+    record(
+        "sec16-field-cleanup",
+        None,
+        b"",
+        None,
+        "restore the seeded record and remove only the synthetic field created by this probe",
+        cleanup_ok,
+    )
+
+    result = {
+        "site": SITE_NAME,
+        "head_sha": os.environ.get("P0_CI_HEAD_SHA", "unknown"),
+        "merge_sha": os.environ.get("P0_CI_MERGE_SHA", "unknown"),
+        "started_at_utc": started,
+        "finished_at_utc": datetime.now(timezone.utc).isoformat(),
+        "scope": "direct HTTP on seeded P0 site; cross-doctype permission parity, 12 permlevel surfaces, standard attachment surfaces, CL-09, AT-06, and NT-04 linked Note/Comment create denial",
+        "case_count": len(cases),
+        "cases": cases,
+        "failed_cases": failures,
+        "probe_result": "PASS" if not failures else "FAIL",
+    }
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    OUTPUT.write_text(
+        json.dumps(result, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    print(
+        json.dumps(
+            {
+                "probe_result": result["probe_result"],
+                "case_count": len(cases),
+                "failed_cases": failures,
+            }
+        )
+    )
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(run())

@@ -3,7 +3,7 @@
 > **Dự án:** CRM-CSKH
 > **Chủ sở hữu tài liệu:** T1B
 > **Ngày:** 2026-10-15
-> **Trạng thái:** **Quyết định kiến trúc đã được T0 chốt** — đây **KHÔNG** phải bằng chứng runtime hay kết quả security test. WP-01 baseline đã chạy; role permission tests chưa có.
+> **Trạng thái:** **Quyết định kiến trúc đã được T0 chốt** — đây **KHÔNG** phải bằng chứng runtime hay kết quả security test đầy đủ. WP-01 baseline đã chạy. Security suite đã chạy ở ba lượt (26/27/28 OK tại revision `b382fe4`); role PoC đã có test fail-closed (`Test #16` `test_bod_viewer_cannot_read_leads_or_manage_users`, `Test #17` `test_crm_admin_role_fails_closed_until_controlled_service_exists` trong `apps/crm_cskh/crm_cskh/tests/test_permissions.py`) — xem [`t1c-security-verification.md`](../../deploy/dev/evidence/t1c-security-verification.md) §5 và [`risk-register.md`](./risk-register.md) §5. Runtime đã pass per-route cho route đã gọi; BOD/CRM-ADMIN reporting scope chưa build. **T1C đối chiếu độc lập 2026-10-19** dùng phân tích tĩnh + log T1B (phiên không có Docker/WSL2).
 > **Tài liệu liên quan:** [`reuse-audit.md`](./reuse-audit.md) §7 · §12, [`adr-004-owner-team-permissions.md`](./adr-004-owner-team-permissions.md), [`version-lock.md`](./version-lock.md), [`P0.md`](../root-plan/P0.md) §7, [`master-plan.md`](../root-plan/master-plan.md) §2.3
 
 ---
@@ -44,9 +44,9 @@ P0 dùng **`CRM_ADMIN`** và **`BOD_VIEWER`** làm **role PoC**.
 
 ## 4. PHẦN CẦN KIỂM CHỨNG (RUNTIME / SECURITY)
 
-> Tất cả mục dưới đây **CHƯA XÁC MINH**. ADR này là **quyết định thiết kế**, không phải kết quả test.
+> ADR này là **quyết định thiết kế**; runtime check cho role PoC đã có fail-closed (xem đối chiếu T1C 2026-10-19 trong [`t1c-security-verification.md`](../../deploy/dev/evidence/t1c-security-verification.md) §5 BOD/CRM-ADMIN rows, và [`permission-matrix.md`](./permission-matrix.md) §9 bản 1.0). Mục còn dưới đây **vẫn CHƯA XÁC MINH** hoặc **còn mở một phần** sau T1C.
 
-- `SEC-15` (P0 §7.5): `BOD_VIEWER` gọi API quản trị user/role/import → phải bị từ chối; không hưởng `System Manager` ngầm.
+- `SEC-15` (P0 §7.5): `BOD_VIEWER` gọi API quản trị user/role/import → phải bị từ chối; không hưởng `System Manager` ngầm. **Đã pass per-route** cho fail-closed (`Test #16`, `Test #17` trong `test_permissions.py`); **API báo cáo BOD chưa build** (xem §9 LEAD-12, BD-01 BD-04).
 - BOD gọi API ghi/reassign/close/policy → bị từ chối (`FORBIDDEN`).
 - Leader/Admin không vượt scope team; aggregate report không rò rỉ dữ liệu ngoài phạm vi.
 - Seed đã tạo hai role PoC với tên Frappe `CSKH CRM Admin` và `CSKH BOD Viewer`; việc ánh xạ các tên này sang nhãn quyết định `CRM_ADMIN`/`BOD_VIEWER`, cấu hình quyền least-privilege và kiểm chứng bằng nhiều tài khoản — **chưa chạy**.

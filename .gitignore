@@ -1,0 +1,25 @@
+# Root .gitignore — bảo vệ khỏi commit nhầm file tạm/scratch của agent.
+# Chỉ áp dụng cho file KHÔNG thuộc gói bàn giao (DEV/i18n/docs/evidence).
+
+# File làm việc tạm của T1A/T1B/T1C
+_tmp_*
+_t1b_ext1_*
+_t1b-*
+t1b-ext1-*.json
+
+# Thư mục tạm
+_recovery/
+_tmp_crop/
+.commandcode/
+
+# Python
+__pycache__/
+*.pyc
+.ruff_cache/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Cursor local config (không commit)
+.cursor/

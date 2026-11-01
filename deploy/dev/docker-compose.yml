@@ -32,6 +32,10 @@ x-bench-common: &bench-common
     CRM_SHA: ${CRM_SHA}
     FRAPPE_DOCKER_SHA: ${FRAPPE_DOCKER_SHA}
     INSTALL_CSKH: ${INSTALL_CSKH:-0}
+    # Vite dev port INSIDE the container. Must equal the published host port
+    # (VITE_PORT) so the realtime self-auth request to `Origin + /api/...`
+    # resolves inside the container under the same port the browser uses.
+    VITE_DEV_PORT: ${VITE_PORT:-8080}
     TZ: ${TZ:-Asia/Ho_Chi_Minh}
   networks:
     - backend
@@ -78,6 +82,9 @@ services:
   bench:
     <<: *bench-common
     command: ["sleep", "infinity"]
+    # Realtime authenticates the browser Origin against this local DEV site.
+    extra_hosts:
+      - "dev.localhost:127.0.0.1"
     volumes:
       # Bench được tạo bên trong volume Linux (nhanh, không bind mount NTFS).
       - bench-workspace:/workspace
@@ -85,9 +92,12 @@ services:
       - ../../:/src:ro
     ports:
       # CHỈ bind loopback: web + realtime (socketio).
+      # VITE_PORT phải BẰNG cổng Vite chạy trong container (VITE_DEV_PORT):
+      # realtime tự xác thực qua `Origin + /api/...` nên cổng Origin phải
+      # truy cập được trong container. Xem apply-crm-vite-dev-patch.py.
       - "127.0.0.1:${WEB_PORT:-8000}:8000"
       - "127.0.0.1:${SOCKETIO_PORT:-9000}:9000"
-      - "127.0.0.1:${VITE_PORT:-8080}:8080"
+      - "127.0.0.1:${VITE_PORT:-8080}:${VITE_PORT:-8080}"
     depends_on:
       db:
         condition: service_healthy
