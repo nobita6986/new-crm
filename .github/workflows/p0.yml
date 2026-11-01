@@ -24,6 +24,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Initialize CI evidence directory
+        run: mkdir -p "$RUNNER_TEMP/p0-g007-evidence"
+
       - name: Create isolated DEV configuration
         shell: bash
         run: |
@@ -42,30 +45,457 @@ jobs:
         run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" up -d
 
       - name: Bootstrap from empty volumes
+        id: bootstrap
         run: |
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T -u root bench chown -R frappe:frappe /workspace
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash /src/deploy/dev/bootstrap.sh
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'bash -n /src/deploy/dev/bootstrap.sh && bash -n /src/deploy/dev/seed/run-seed.sh'
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import ast,pathlib; ast.parse(pathlib.Path("/src/deploy/dev/seed/ci_http_transport_probe.py").read_text(encoding="utf-8"))'
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import ast,pathlib; ast.parse(pathlib.Path("/src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py").read_text(encoding="utf-8"))'
 
       - name: Lint and format Python app
-        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh'
+        id: lint
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py'
+
+      # 61 test tĩnh (AST guard) cho probe HTTP. Trước đây chỉ chạy tay ở máy
+      # cục bộ ⇒ guard chỉ có hiệu lực khi T1B tự chạy, KHÔNG chặn được PR.
+      # Step này đưa guard vào pipeline để regression bị chặn tự động.
+      # Chạy TỪ `/src` vì `deploy` là package root (import `deploy.dev.seed...`).
+      - name: Run static AST guards for HTTP probe
+        id: probe_static
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+          if "${compose[@]}" exec -T bench bash -lc 'cd /src && /workspace/frappe-bench/env/bin/python -m unittest -v deploy.dev.seed.test_ci_http_probe_static && node deploy/dev/test-crm-vite-bootstrap.cjs'; then
+            static_status=0
+          else
+            static_status=$?
+          fi
+          printf 'probe_static exit=%s\n' "$static_status" >> "$artifact_dir/module-status.txt"
+          exit "$static_status"
 
       - name: Seed and repeat migration
+        id: seed
         run: |
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash /src/deploy/dev/seed/run-seed.sh
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site "$SITE_NAME" migrate'
 
-      - name: Install on a fresh test site and run Frappe tests
+      - name: Install fresh test site and run per-module Frappe suites
+        id: per_method
+        continue-on-error: true
+        shell: bash
         run: |
-          docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p0-test.localhost && bench --site p0-test.localhost set-config allow_tests true && bench --site p0-test.localhost migrate && bench --site p0-test.localhost run-tests --app crm_cskh && bench --site p0-test.localhost migrate'
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench setup requirements --dev && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p0-test.localhost && bench --site p0-test.localhost set-config allow_tests true && bench --site p0-test.localhost migrate'; then
+            echo 'Fresh-site setup or Bench dev dependency installation failed.' | tee "$artifact_dir/site-setup-failed.txt"
+            exit 1
+          fi
+
+          overall_status=0
+          for module in \
+            crm_cskh.tests.test_permissions \
+            crm_cskh.tests.test_security_remediation \
+            crm_cskh.tests.test_security_remediation_v2 \
+            crm_cskh.tests.test_bt1c5_matrix_gaps \
+            crm_cskh.tests.test_docshare_lifecycle
+          do
+            slug="${module##*.}"
+            container_log="/tmp/p0-g007-evidence/${slug}.log"
+            container_xml="/tmp/p0-g007-evidence/${slug}.junit.xml"
+            case "$slug" in
+              test_permissions) expected_methods=18 ;;
+              test_security_remediation) expected_methods=12 ;;
+              test_security_remediation_v2) expected_methods=32 ;;
+              test_bt1c5_matrix_gaps) expected_methods=27 ;;
+              test_docshare_lifecycle) expected_methods=10 ;;
+            esac
+            echo "=== Running module: $module ==="
+            if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p /tmp/p0-g007-evidence && set +e; bench --site p0-test.localhost --verbose run-tests --module '$module' --junit-xml-output '$container_xml' > '$container_log' 2>&1; rc=\$?; exit \$rc"; then
+              module_status=0
+            else
+              module_status=$?
+              overall_status=1
+            fi
+            printf '%s expected_methods=%s exit=%s\n' "$module" "$expected_methods" "$module_status" >> "$artifact_dir/module-status.txt"
+          done
+
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p0-test.localhost migrate'; then
+            echo 'Post-test migration failed.' >> "$artifact_dir/module-status.txt"
+            overall_status=1
+          fi
+
+          container_id=$("${compose[@]}" ps -q bench)
+          if [ -n "$container_id" ] && "${compose[@]}" exec -T bench test -d /tmp/p0-g007-evidence; then
+            docker cp "$container_id:/tmp/p0-g007-evidence/." "$artifact_dir/"
+          else
+            echo 'Per-module evidence directory was not created in the bench container.' >> "$artifact_dir/module-status.txt"
+            overall_status=1
+          fi
+          exit "$overall_status"
+
+      # Auxiliary regression tests for the File-oracle response hook. Keep this
+      # JUnit in a subdirectory so the canonical 99-method inventory stays 99.
+      - name: Run File error-normalization regression tests (outside 99-method inventory)
+        id: file_oracle_unit
+        if: always() && steps.per_method.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+          aux_dir=/tmp/p0-g007-evidence/auxiliary
+          mkdir -p "$artifact_dir/auxiliary"
+          if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p '$aux_dir' && set +e; bench --site p0-test.localhost --verbose run-tests --module crm_cskh.tests.test_error_response_normalization --junit-xml-output '$aux_dir/test_error_response_normalization.junit.xml' > '$aux_dir/test_error_response_normalization.log' 2>&1; rc=\$?; exit \$rc"; then
+            unit_status=0
+          else
+            unit_status=$?
+          fi
+          printf 'test_error_response_normalization expected_methods=8 exit=%s\n' "$unit_status" >> "$artifact_dir/module-status.txt"
+          container_id=$("${compose[@]}" ps -q bench)
+          if [ -z "$container_id" ] || ! docker cp "$container_id:$aux_dir/." "$artifact_dir/auxiliary/"; then
+            echo 'Could not copy auxiliary File-oracle regression evidence.' >> "$artifact_dir/module-status.txt"
+            unit_status=1
+          fi
+          exit "$unit_status"
+
+      - name: Enforce per-method JUnit coverage gate (99 methods)
+        id: per_method_gate
+        if: always()
+        # `continue-on-error` để step `backup_restore` phía sau vẫn chạy (bằng
+        # chứng backup/restore không bị mất khi gate fail). Trạng thái thật được
+        # kiểm ở step "Enforce CI test and direct-HTTP probe gates" qua
+        # `steps.per_method_gate.outcome`.
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          mkdir -p "$artifact_dir"
+
+          # §3.6 của `t1b-g007-ci-plan-review-2026-10-22.md`: exit code tổng hợp
+          # của `bench run-tests` KHÔNG chứng minh từng method đã chạy. Gate này
+          # đọc 5 file `.junit.xml` thô và đối chiếu với inventory chuẩn 99
+          # method ⇒ method vắng mặt ở mọi XML là NOT RUN (gate fail).
+          python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
+            --inventory "$GITHUB_WORKSPACE/deploy/dev/seed/g007_test_inventory.json" \
+            --xml-dir "$artifact_dir" \
+            --out "$artifact_dir/g007-per-method-gate.json" \
+            | tee "$artifact_dir/g007-per-method-gate.txt"
+          gate_status=${PIPESTATUS[0]}
+          echo "per-method gate exit=$gate_status" >> "$artifact_dir/module-status.txt"
+          exit "$gate_status"
+
+      - name: Run direct HTTP probes for SEC-13/14/16/26 on seeded site
+        id: http_transport
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+          container_id=$("${compose[@]}" ps -q bench)
+          mkdir -p "$artifact_dir/http"
+
+          if [ -z "$container_id" ]; then
+            echo 'Bench container is unavailable; HTTP transport probe could not start.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          if ! "${compose[@]}" exec -d bench bash -lc 'cd /workspace/frappe-bench && nohup bench --site p0-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p0-g007-http-serve.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench serve for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          ready=0
+          for attempt in $(seq 1 45); do
+            if "${compose[@]}" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import socket; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close()' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            "${compose[@]}" exec -T bench cat /tmp/p0-g007-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
+            echo 'HTTP server did not become ready within 45 seconds.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          # `FRAPPE_STREAM_LOGGING=1` là BẮT BUỘC và là thứ đã sửa đúng lỗi `/logs`.
+          # Frappe dựng đường dẫn `logs/database.log` theo **thư mục cha của CWD**
+          # (bằng chứng: CWD=/workspace -> /logs; CWD=/workspace/frappe-bench ->
+          # /workspace/logs — CI #39796261932 và #39800240716). Chạy từ `<bench>/sites`
+          # sẽ ra `<bench>/logs` nhưng probe vẫn cần mở file log đó. `run-seed.sh`
+          # L18 tránh được hẳn vấn đề vì bật cờ này: Frappe ghi log ra **stdout**
+          # thay vì tạo file. Ta dùng đúng cách đó (giống hệt run-seed.sh).
+          if "${compose[@]}" exec -T -e GITHUB_SHA="$GITHUB_SHA" -e P0_HTTP_SITE=p0-ci.localhost -e BENCH_DIR=/workspace/frappe-bench bench bash -lc 'cd /workspace/frappe-bench && FRAPPE_STREAM_LOGGING=1 /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_http_transport_probe.py'; then
+            probe_status=0
+          else
+            probe_status=$?
+          fi
+          if ! docker cp "$container_id:/tmp/p0-g007-http/." "$artifact_dir/http/"; then
+            echo 'Could not copy sanitized HTTP evidence from the bench container.' > "$artifact_dir/http/evidence-copy-failed.txt"
+            exit 1
+          fi
+          exit "$probe_status"
+
+      - name: Run direct File existence-oracle HTTP probe
+        id: file_oracle_http
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        env:
+          P0_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+          container_id=$("${compose[@]}" ps -q bench)
+          mkdir -p "$artifact_dir/http/file-oracle"
+          if [ -z "$container_id" ]; then
+            echo 'Bench container is unavailable; File-oracle probe could not start.' > "$artifact_dir/http/file-oracle/probe-start-failed.txt"
+            exit 1
+          fi
+
+          ready=0
+          for attempt in $(seq 1 45); do
+            if "${compose[@]}" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import socket; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close()' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'Seeded-site HTTP server is unavailable for File-oracle probe.' > "$artifact_dir/http/file-oracle/probe-start-failed.txt"
+            exit 1
+          fi
+
+          if "${compose[@]}" exec -T -e P0_HTTP_SITE=p0-ci.localhost -e P0_CI_HEAD_SHA="$P0_CI_HEAD_SHA" -e P0_CI_MERGE_SHA="$GITHUB_SHA" -e P0_FILE_ORACLE_EVIDENCE=/tmp/p0-g007-http/file-oracle.json bench bash -lc 'cd /workspace/frappe-bench && /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_file_oracle_probe.py'; then
+            probe_status=0
+          else
+            probe_status=$?
+          fi
+          if ! docker cp "$container_id:/tmp/p0-g007-http/file-oracle.json" "$artifact_dir/http/file-oracle/file-oracle.json"; then
+            echo 'Could not copy File-oracle probe evidence.' > "$artifact_dir/http/file-oracle/evidence-copy-failed.txt"
+            exit 1
+          fi
+          exit "$probe_status"
+
+      - name: Probe remaining G0-07 runtime gaps (scope matrix, SEC-16, File routes)
+        id: remaining_gaps_http
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        env:
+          P0_CI_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p0-g007-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT")
+          container_id=$("${compose[@]}" ps -q bench)
+          mkdir -p "$artifact_dir/http/remaining-gaps"
+          if [ -z "$container_id" ]; then
+            echo 'Bench container unavailable; remaining P0 HTTP probe did not run.' > "$artifact_dir/http/remaining-gaps/probe-start-failed.txt"
+            printf 'remaining_gaps_http exit=1\n' >> "$artifact_dir/module-status.txt"
+            exit 1
+          fi
+
+          ready=0
+          for attempt in $(seq 1 45); do
+            if "${compose[@]}" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import socket; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close()' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo 'Seeded-site HTTP server unavailable; remaining P0 HTTP probe did not run.' > "$artifact_dir/http/remaining-gaps/probe-start-failed.txt"
+            printf 'remaining_gaps_http exit=1\n' >> "$artifact_dir/module-status.txt"
+            exit 1
+          fi
+
+          if "${compose[@]}" exec -T \
+            -e P0_HTTP_SITE=p0-ci.localhost \
+            -e P0_CI_HEAD_SHA="$P0_CI_HEAD_SHA" \
+            -e P0_CI_MERGE_SHA="$GITHUB_SHA" \
+            -e P0_G007_GAPS_EVIDENCE=/tmp/p0-g007-http/remaining-gaps.json \
+            -e BENCH_DIR=/workspace/frappe-bench \
+            bench bash -lc 'cd /workspace/frappe-bench && FRAPPE_STREAM_LOGGING=1 /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_g007_remaining_gaps_probe.py'; then
+            probe_status=0
+          else
+            probe_status=$?
+          fi
+          if ! docker cp "$container_id:/tmp/p0-g007-http/remaining-gaps.json" "$artifact_dir/http/remaining-gaps/remaining-gaps.json"; then
+            echo 'Could not copy sanitized remaining-gap evidence.' > "$artifact_dir/http/remaining-gaps/evidence-copy-failed.txt"
+            probe_status=1
+          fi
+          printf 'remaining_gaps_http exit=%s\n' "$probe_status" >> "$artifact_dir/module-status.txt"
+          exit "$probe_status"
 
       - name: Backup, restore to a new site, and verify recovered data
+        id: backup_restore
         run: |
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site "$SITE_NAME" backup --with-files && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p0-restore.localhost && db=$(find "sites/$SITE_NAME/private/backups" -name "*-database.sql.gz" -print | sort | tail -n 1) && public=$(find "sites/$SITE_NAME/private/backups" -name "*-files.tar" ! -name "*-private-files.tar" -print | sort | tail -n 1) && private=$(find "sites/$SITE_NAME/private/backups" -name "*-private-files.tar" -print | sort | tail -n 1) && test -n "$db" && test -n "$public" && test -n "$private" && bench --site p0-restore.localhost restore "$db" --db-root-password "$DB_ROOT_PASSWORD" --with-public-files "$public" --with-private-files "$private" && bench --site p0-restore.localhost migrate && bench --site p0-restore.localhost list-apps && bench --site p0-restore.localhost execute crm_cskh.api.health.ping && test -f sites/p0-restore.localhost/private/files/DEMO-CRM-LEAD-00001.txt && bench --site p0-restore.localhost console' <<'PY'
           counts = (frappe.db.count("CRM Lead"), frappe.db.count("CRM Call Log"), frappe.db.count("CRM Task"))
           print("RESTORE_COUNTS", *counts)
           assert counts == (15, 3, 2), counts
           PY
+
+      - name: Sanitize evidence and record environment metadata
+        if: always()
+        shell: bash
+        env:
+          PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
+          PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.http_transport.outcome }}
+          FILE_ORACLE_UNIT_OUTCOME: ${{ steps.file_oracle_unit.outcome }}
+          FILE_ORACLE_HTTP_OUTCOME: ${{ steps.file_oracle_http.outcome }}
+          REMAINING_GAPS_HTTP_OUTCOME: ${{ steps.remaining_gaps_http.outcome }}
+          BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
+          SEED_OUTCOME: ${{ steps.seed.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          BACKUP_RESTORE_OUTCOME: ${{ steps.backup_restore.outcome }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/p0-g007-evidence"
+          export P0_EVIDENCE_DIR="$RUNNER_TEMP/p0-g007-evidence"
+          export P0_ENV_FILE="$P0_ENV"
+          export P0_SEED_SOURCE="$GITHUB_WORKSPACE/deploy/dev/seed/seed_demo.py"
+          python3 - <<'PY'
+          import ast
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ["P0_EVIDENCE_DIR"])
+          env_file = Path(os.environ["P0_ENV_FILE"])
+          seed_file = Path(os.environ["P0_SEED_SOURCE"])
+          env_values = {}
+          for line in env_file.read_text(encoding="utf-8").splitlines():
+              if "=" in line and not line.lstrip().startswith("#"):
+                  key, value = line.split("=", 1)
+                  env_values[key] = value
+          secrets = [env_values.get(key, "") for key in ("ADMIN_PASSWORD", "DB_ROOT_PASSWORD")]
+          seed_tree = ast.parse(seed_file.read_text(encoding="utf-8"), filename=str(seed_file))
+          for node in seed_tree.body:
+              if isinstance(node, ast.Assign) and any(
+                  isinstance(target, ast.Name) and target.id == "SEED_PASSWORD"
+                  for target in node.targets
+              ):
+                  value = ast.literal_eval(node.value)
+                  if isinstance(value, str):
+                      secrets.append(value)
+          secrets = [value for value in secrets if value]
+          patterns = [
+              (re.compile(r"(?im)(set-cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?im)(cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(/private/files/)[^\s\"'<>\\]+"), r"\1[REDACTED_FILE_URL]"),
+              (re.compile(r"(?i)(/files/)[^\s\"'<>\\]+"), r"\1[REDACTED_FILE_URL]"),
+              (re.compile(r"(?i)(x-frappe-csrf-token[\"'=:\s]+)[^\"'&\s<,}]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(sid=)[^;\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r'(?i)("file_url"\s*:\s*)"[^"]*"'), r'\1"[REDACTED_FILE_URL]"'),
+          ]
+          redactions = 0
+          for path in root.rglob("*"):
+              if not path.is_file() or path.suffix.lower() not in {".log", ".xml", ".json", ".txt"}:
+                  continue
+              content = path.read_text(encoding="utf-8", errors="replace")
+              for secret in secrets:
+                  if secret in content:
+                      content = content.replace(secret, "[REDACTED]")
+                      redactions += 1
+              for pattern, replacement in patterns:
+                  content, count = pattern.subn(replacement, content)
+                  redactions += count
+              path.write_text(content, encoding="utf-8")
+
+          metadata = {
+              "commit_sha": os.environ.get("GITHUB_SHA", "unknown"),
+              "run_id": os.environ.get("GITHUB_RUN_ID", "unknown"),
+              "event_name": os.environ.get("GITHUB_EVENT_NAME", "unknown"),
+              "site_seeded": "p0-ci.localhost",
+              "site_fresh_test": "p0-test.localhost",
+              "frappe_sha": env_values.get("FRAPPE_SHA", "unknown"),
+              "crm_sha": env_values.get("CRM_SHA", "unknown"),
+              "bench_image_ref": env_values.get("BENCH_IMAGE", "unknown"),
+              "workflow_outcomes": {
+                  "bootstrap": os.environ.get("BOOTSTRAP_OUTCOME"),
+                  "lint": os.environ.get("LINT_OUTCOME"),
+                  "seed": os.environ.get("SEED_OUTCOME"),
+                  "per_method": os.environ.get("PER_METHOD_OUTCOME"),
+                  "per_method_gate": os.environ.get("PER_METHOD_GATE_OUTCOME"),
+                  "http_transport": os.environ.get("HTTP_TRANSPORT_OUTCOME"),
+                  "file_oracle_unit": os.environ.get("FILE_ORACLE_UNIT_OUTCOME"),
+                  "file_oracle_http": os.environ.get("FILE_ORACLE_HTTP_OUTCOME"),
+                  "remaining_gaps_http": os.environ.get("REMAINING_GAPS_HTTP_OUTCOME"),
+                  "backup_restore": os.environ.get("BACKUP_RESTORE_OUTCOME"),
+              },
+              "redaction_replacements": redactions,
+          }
+          (root / "workflow-metadata.json").write_text(
+              json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+
+          container_id=$(docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" ps -q bench 2>/dev/null || true)
+          if [ -n "$container_id" ]; then
+            docker inspect --format 'bench_container_image_id={{.Image}}' "$container_id" >> "$RUNNER_TEMP/p0-g007-evidence/workflow-metadata.txt" || true
+            docker compose -f deploy/dev/docker-compose.yml --env-file "$P0_ENV" -p "$P0_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --version' >> "$RUNNER_TEMP/p0-g007-evidence/workflow-metadata.txt" 2>&1 || true
+          fi
+
+      - name: Upload sanitized G0-07 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-g007-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/p0-g007-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce CI test and direct-HTTP probe gates
+        if: always()
+        shell: bash
+        env:
+          BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          PROBE_STATIC_OUTCOME: ${{ steps.probe_static.outcome }}
+          SEED_OUTCOME: ${{ steps.seed.outcome }}
+          PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
+          PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.http_transport.outcome }}
+          FILE_ORACLE_UNIT_OUTCOME: ${{ steps.file_oracle_unit.outcome }}
+          FILE_ORACLE_HTTP_OUTCOME: ${{ steps.file_oracle_http.outcome }}
+          REMAINING_GAPS_HTTP_OUTCOME: ${{ steps.remaining_gaps_http.outcome }}
+          BACKUP_RESTORE_OUTCOME: ${{ steps.backup_restore.outcome }}
+        run: |
+          printf 'bootstrap=%s\n' "$BOOTSTRAP_OUTCOME"
+          printf 'lint=%s\n' "$LINT_OUTCOME"
+          printf 'probe_static=%s\n' "$PROBE_STATIC_OUTCOME"
+          printf 'seed=%s\n' "$SEED_OUTCOME"
+          printf 'per_method=%s\n' "$PER_METHOD_OUTCOME"
+          printf 'per_method_gate=%s\n' "$PER_METHOD_GATE_OUTCOME"
+          printf 'http_transport=%s\n' "$HTTP_TRANSPORT_OUTCOME"
+          printf 'file_oracle_unit=%s\n' "$FILE_ORACLE_UNIT_OUTCOME"
+          printf 'file_oracle_http=%s\n' "$FILE_ORACLE_HTTP_OUTCOME"
+          printf 'remaining_gaps_http=%s\n' "$REMAINING_GAPS_HTTP_OUTCOME"
+          printf 'backup_restore=%s\n' "$BACKUP_RESTORE_OUTCOME"
+          test "$BOOTSTRAP_OUTCOME" = success && \
+            test "$LINT_OUTCOME" = success && \
+            test "$PROBE_STATIC_OUTCOME" = success && \
+            test "$SEED_OUTCOME" = success && \
+            test "$PER_METHOD_OUTCOME" = success && \
+            test "$PER_METHOD_GATE_OUTCOME" = success && \
+            test "$HTTP_TRANSPORT_OUTCOME" = success && \
+            test "$FILE_ORACLE_UNIT_OUTCOME" = success && \
+            test "$FILE_ORACLE_HTTP_OUTCOME" = success && \
+            test "$REMAINING_GAPS_HTTP_OUTCOME" = success && \
+            test "$BACKUP_RESTORE_OUTCOME" = success
 
       - name: Show stack logs if a gate fails
         if: failure()

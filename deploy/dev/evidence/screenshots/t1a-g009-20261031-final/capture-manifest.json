@@ -1,0 +1,358 @@
+{
+  "host": "dev.localhost",
+  "manifestVersion": 3,
+  "startedAt": "2026-10-31T02:13:16Z",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "recaptureNotes": {
+    "reason": "T0 yêu cầu xác nhận các chữ còn thấy trong ảnh (Deal/lead) đã được dịch. Rà trực quan bộ 10 ảnh 2026-10-29 phát hiện 2 chuỗi còn tiếng Anh trên màn 04: nút 'Chuyển thành Deal' và dòng hoạt động 'đã tạo lead này'. Nguyên nhân gốc: cache bản dịch của site cũ (upstream vi.po thắng app vi.csv) — bản ghi tại thời điểm chụp 2026-10-29 được phục vụ từ cache trước khi vi.csv được nạp lại; KHÔNG phải thiếu key dịch (vi.csv đã có 'Convert to Deal,Chuyển thành Cơ hội' và 'created this lead,đã tạo khách hàng tiềm năng này').",
+    "fix": "bench clear-cache; xác minh get_all_translations('vi') trả 'Chuyển thành Cơ hội' và 'đã tạo khách hàng tiềm năng này' trước khi chụp lại.",
+    "portsRemap": "Ports host 8000/8080/9000 đang bị giữ bởi stack p0-ci47-verify (T1B). Session này dùng WEB_PORT=8010, SOCKETIO_PORT=9010, VITE_PORT=8091 (chỉ env khi 'docker compose up', không sửa file).",
+    "leadDetailChanged": "Lead CRM-LEAD-10207 (workload) đã bị cleanup sau re-seed; màn 04 chụp lại trên CRM-LEAD-00001 (lead giả của staff.a@dev.local)."
+  },
+  "screenshots": [
+    {
+      "id": "01",
+      "name": "login",
+      "route": "/login",
+      "port": 8000,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "title": "Đăng nhập",
+      "lang": "vi",
+      "appMounted": false,
+      "bodyChildren": 10,
+      "blankApp": false,
+      "must": {
+        "Đăng nhập": true,
+        "Thư điện tử": true,
+        "Mật khẩu": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 1,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 1,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 18265,
+      "sha256": "a6a900f3317b993833fed6da48d801b003decfa92fc9f45d1adfb2395e546734"
+    },
+    {
+      "id": "02",
+      "name": "preferences",
+      "route": "/app/user/Administrator",
+      "port": 8000,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "title": "Quản Trị Viên - Administrator",
+      "lang": "vi",
+      "appMounted": false,
+      "bodyChildren": 21,
+      "blankApp": false,
+      "must": {
+        "Ngôn ngữ": true,
+        "Múi giờ": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 1,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 18,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 55569,
+      "sha256": "1fb196900ee81cb5d0f04fe75d8e6f323d3b318815d5d259b7afc3bfd3ee4d6e"
+    },
+    {
+      "id": "03",
+      "name": "leads-list",
+      "route": "/crm/leads/view/list",
+      "port": 8080,
+      "status": 200,
+      "contentType": "text/html",
+      "title": "Khách hàng tiềm năng - Danh sách",
+      "lang": "en",
+      "appMounted": true,
+      "bodyChildren": 11,
+      "blankApp": false,
+      "must": {
+        "Khách hàng tiềm năng": true,
+        "Trạng thái": true,
+        "Nguồn": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 98460,
+      "sha256": "f485429eb2541b1f03cefb8e6d6cc8e26fc032b958805ded19ad8e9da4ad4cd3"
+    },
+    {
+      "id": "04",
+      "name": "lead-detail",
+      "route": "/crm/leads/CRM-LEAD-00001",
+      "port": 8091,
+      "status": 200,
+      "title": "DEMO A1 (giả lập)",
+      "lang": "vi",
+      "appMounted": true,
+      "must": {
+        "Chuyển thành Cơ hội": true,
+        "Nhân viên phụ trách": true,
+        "Số di động": true,
+        "đã tạo khách hàng tiềm năng này": true
+      },
+      "forbid": {
+        "Chuyển thành Deal": true,
+        "đã tạo lead này": true,
+        "Convert to Deal": true,
+        "created this lead": true
+      },
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 20,
+        "phones": 1
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 91872,
+      "sha256": "936e546d4e639d7fc55aa092d6eb8553d9e41fcada227b26046d3ff0f6255adb",
+      "capturedAtUtc": "2026-10-31T02:13:16Z"
+    },
+    {
+      "id": "05",
+      "name": "call-logs",
+      "route": "/crm/call-logs",
+      "port": 8080,
+      "status": 200,
+      "contentType": "text/html",
+      "title": "Nhật ký cuộc gọi - Danh sách",
+      "lang": "en",
+      "appMounted": true,
+      "bodyChildren": 15,
+      "blankApp": false,
+      "must": {
+        "Nhật ký cuộc gọi": true
+      },
+      "forbid": {
+        "Call Logs": false
+      },
+      "rawPii": {
+        "emails": 0,
+        "phones": 2
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 2
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 40674,
+      "sha256": "5307fef669cdccd095eadda6640f70ebdb9801c610f98974fd1684a06acf4f89"
+    },
+    {
+      "id": "06",
+      "name": "tasks",
+      "route": "/crm/tasks",
+      "port": 8080,
+      "status": 200,
+      "contentType": "text/html",
+      "title": "Nhiệm vụ - Danh sách",
+      "lang": "en",
+      "appMounted": true,
+      "bodyChildren": 13,
+      "blankApp": false,
+      "must": {
+        "Nhiệm vụ": true
+      },
+      "forbid": {
+        "Tasks": false
+      },
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 40914,
+      "sha256": "0198078703b046758dd1c6f8dabf14849cd300ac9e477a705b73082cebcd33e4"
+    },
+    {
+      "id": "07",
+      "name": "data-import",
+      "route": "/app/data-import",
+      "port": 8000,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "title": "Nhập dữ liệu",
+      "lang": "vi",
+      "appMounted": false,
+      "bodyChildren": 20,
+      "blankApp": false,
+      "must": {
+        "Nhập dữ liệu": true
+      },
+      "forbid": {
+        "Data Import": false
+      },
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 16,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 25248,
+      "sha256": "9ebf182a267aff43271502997ade351ea9625bd4988bfa4f5d3cad9e6202bb2a"
+    },
+    {
+      "id": "08",
+      "name": "dashboard",
+      "route": "/crm/dashboard",
+      "port": 8080,
+      "status": 200,
+      "contentType": "text/html",
+      "title": "Bảng Điều Khiển CRM",
+      "lang": "en",
+      "appMounted": true,
+      "bodyChildren": 9,
+      "blankApp": false,
+      "must": {
+        "Trang tổng quan": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 61031,
+      "sha256": "698a0f57038e79b99df049be833ad244020a72cd80729fda0ce25ca858b7afb7"
+    },
+    {
+      "id": "09",
+      "name": "cskh",
+      "route": "/cskh",
+      "port": 8000,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "title": "CSKH",
+      "lang": "vi",
+      "appMounted": false,
+      "bodyChildren": 9,
+      "blankApp": false,
+      "must": {
+        "CSKH": true,
+        "Kiểm tra phiên đăng nhập và CSRF": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 1,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 1,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 25320,
+      "sha256": "de69f91bf8aabad715962ceec731035a052b7674c9ae385fccce10ef9af40ae7"
+    },
+    {
+      "id": "10",
+      "name": "validation-error",
+      "route": "/crm/leads/new",
+      "port": 8080,
+      "status": 200,
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 72157,
+      "sha256": "3492144900d63628744e667a210d2b658cca5df26f619ffc84ed2997bd04648c"
+    }
+  ],
+  "navigationErrors": [],
+  "checks": {
+    "staffLogin": {
+      "status": 200,
+      "authenticated": true,
+      "reverifiedAt": "2026-10-31T02:13:16Z"
+    },
+    "visualReview10Screens": "Rà trực quan 10/10 ảnh (vision): chỉ màn 04 có 2 chuỗi EN ('Chuyển thành Deal', 'đã tạo lead này') ở bộ 2026-10-29; đã xử lý và chụp lại ở bộ này.",
+    "domAssertions04": {
+      "must": true,
+      "forbid": true
+    },
+    "piiResidualAllScreens": {
+      "emails": 0,
+      "phones": 0
+    },
+    "captureCount": 10,
+    "allRoutesOk": true,
+    "piiMasked": true,
+    "csrfProbe": "6/6 PASS 2026-10-31 (login, /cskh Jinja, token hợp lệ 200, thiếu token 400, sai token 400, Socket.IO polling qua Vite proxy 200)",
+    "socketioPollingViaVite": "200 Engine.IO open packet (same-origin /socket.io proxy -> 127.0.0.1:9000)"
+  },
+  "finishedAt": "2026-10-31T02:13:16Z"
+}

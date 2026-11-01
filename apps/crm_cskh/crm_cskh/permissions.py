@@ -151,20 +151,36 @@ def validate_lead_assignment(doc, method=None):
 		and (
 			doc.is_new()
 			or any(
-				doc.has_value_changed(field)
-				for field in ("allocated_to", "reference_type", "reference_name", "status")
+				doc.has_value_changed(field) for field in ("allocated_to", "reference_type", "reference_name")
 			)
 		)
 	):
-		frappe.throw(
-			"Lead assignments are disabled until the ownership service is available.", frappe.PermissionError
-		)
+		lead_owner = frappe.db.get_value("CRM Lead", doc.reference_name, "lead_owner")
+		if doc.allocated_to != lead_owner:
+			frappe.throw(
+				"Lead assignment changes are disabled until the controlled ownership service is available.",
+				frappe.PermissionError,
+			)
 
 
 @frappe.whitelist()
 def remove_assignments(doctype, name, assignees, ignore_permissions=False):
 	if not _is_system(frappe.session.user):
 		frappe.throw("Lead assignment changes are not available for this role.", frappe.PermissionError)
-	return frappe.get_attr("crm.api.doc.remove_assignments")(
+	assignees = frappe.parse_json(assignees)
+	result = frappe.get_attr("crm.api.doc.remove_assignments")(
 		doctype, name, assignees, ignore_permissions=False
 	)
+	# CRM clears lead_owner through a direct DB write on unassign, which skips
+	# the CRM Lead on_update hook. Revoke only shares belonging to the revoked
+	# assignees in the same transaction so a stale grant cannot outlive access.
+	if doctype == "CRM Lead" and isinstance(assignees, (list, tuple)) and assignees:
+		frappe.db.delete(
+			"DocShare",
+			{
+				"share_doctype": "CRM Lead",
+				"share_name": name,
+				"user": ["in", list(assignees)],
+			},
+		)
+	return result

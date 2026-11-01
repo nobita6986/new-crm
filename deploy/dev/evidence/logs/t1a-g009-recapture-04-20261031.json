@@ -1,0 +1,37 @@
+{
+  "id": "04",
+  "name": "lead-detail",
+  "route": "/crm/leads/CRM-LEAD-00001",
+  "port": 8091,
+  "status": 200,
+  "title": "DEMO A1 (giả lập)",
+  "lang": "vi",
+  "appMounted": true,
+  "must": {
+    "Chuyển thành Cơ hội": true,
+    "Nhân viên phụ trách": true,
+    "Số di động": true,
+    "đã tạo khách hàng tiềm năng này": true
+  },
+  "forbid": {
+    "Chuyển thành Deal": true,
+    "đã tạo lead này": true,
+    "Convert to Deal": true,
+    "created this lead": true
+  },
+  "rawPii": {
+    "emails": 0,
+    "phones": 0
+  },
+  "masks": {
+    "emails": 20,
+    "phones": 1
+  },
+  "piiResidual": {
+    "emails": 0,
+    "phones": 0
+  },
+  "bytes": 91872,
+  "sha256": "936e546d4e639d7fc55aa092d6eb8553d9e41fcada227b26046d3ff0f6255adb",
+  "capturedAtUtc": "2026-10-31T02:13:16Z"
+}

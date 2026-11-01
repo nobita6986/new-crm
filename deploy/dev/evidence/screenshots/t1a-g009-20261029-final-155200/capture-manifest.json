@@ -1,0 +1,356 @@
+{
+  "host": "dev.localhost",
+  "startedAt": "2026-10-29T15:52:26.831Z",
+  "viewport": {
+    "width": 1280,
+    "height": 800
+  },
+  "screenshots": [
+    {
+      "id": "01",
+      "name": "login",
+      "route": "/login",
+      "port": 8000,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "title": "Đăng nhập",
+      "lang": "vi",
+      "appMounted": false,
+      "bodyChildren": 10,
+      "blankApp": false,
+      "must": {
+        "Đăng nhập": true,
+        "Thư điện tử": true,
+        "Mật khẩu": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 1,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 1,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 18265,
+      "sha256": "a6a900f3317b993833fed6da48d801b003decfa92fc9f45d1adfb2395e546734"
+    },
+    {
+      "id": "02",
+      "name": "preferences",
+      "route": "/app/user/Administrator",
+      "port": 8000,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "title": "Quản Trị Viên - Administrator",
+      "lang": "vi",
+      "appMounted": false,
+      "bodyChildren": 21,
+      "blankApp": false,
+      "must": {
+        "Ngôn ngữ": true,
+        "Múi giờ": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 1,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 18,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 55569,
+      "sha256": "1fb196900ee81cb5d0f04fe75d8e6f323d3b318815d5d259b7afc3bfd3ee4d6e"
+    },
+    {
+      "id": "03",
+      "name": "leads-list",
+      "route": "/crm/leads/view/list",
+      "port": 8080,
+      "status": 200,
+      "contentType": "text/html",
+      "title": "Khách hàng tiềm năng - Danh sách",
+      "lang": "en",
+      "appMounted": true,
+      "bodyChildren": 11,
+      "blankApp": false,
+      "must": {
+        "Khách hàng tiềm năng": true,
+        "Trạng thái": true,
+        "Nguồn": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 98460,
+      "sha256": "f485429eb2541b1f03cefb8e6d6cc8e26fc032b958805ded19ad8e9da4ad4cd3"
+    },
+    {
+      "id": "04",
+      "name": "lead-detail",
+      "route": "/crm/leads/CRM-LEAD-10207#activity",
+      "port": 8080,
+      "status": 200,
+      "contentType": "text/html",
+      "title": "Workload 04992",
+      "lang": "en",
+      "appMounted": true,
+      "bodyChildren": 15,
+      "blankApp": false,
+      "must": {
+        "Khách hàng tiềm năng": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 0,
+        "phones": 1
+      },
+      "masks": {
+        "emails": 20,
+        "phones": 1
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 71120,
+      "sha256": "10c2ed9094fc54e772e08215c983ec951be2bc5dad5662d83fc1ff260d68a642"
+    },
+    {
+      "id": "05",
+      "name": "call-logs",
+      "route": "/crm/call-logs",
+      "port": 8080,
+      "status": 200,
+      "contentType": "text/html",
+      "title": "Nhật ký cuộc gọi - Danh sách",
+      "lang": "en",
+      "appMounted": true,
+      "bodyChildren": 15,
+      "blankApp": false,
+      "must": {
+        "Nhật ký cuộc gọi": true
+      },
+      "forbid": {
+        "Call Logs": false
+      },
+      "rawPii": {
+        "emails": 0,
+        "phones": 2
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 2
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 40674,
+      "sha256": "5307fef669cdccd095eadda6640f70ebdb9801c610f98974fd1684a06acf4f89"
+    },
+    {
+      "id": "06",
+      "name": "tasks",
+      "route": "/crm/tasks",
+      "port": 8080,
+      "status": 200,
+      "contentType": "text/html",
+      "title": "Nhiệm vụ - Danh sách",
+      "lang": "en",
+      "appMounted": true,
+      "bodyChildren": 13,
+      "blankApp": false,
+      "must": {
+        "Nhiệm vụ": true
+      },
+      "forbid": {
+        "Tasks": false
+      },
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 40914,
+      "sha256": "0198078703b046758dd1c6f8dabf14849cd300ac9e477a705b73082cebcd33e4"
+    },
+    {
+      "id": "07",
+      "name": "data-import",
+      "route": "/app/data-import",
+      "port": 8000,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "title": "Nhập dữ liệu",
+      "lang": "vi",
+      "appMounted": false,
+      "bodyChildren": 20,
+      "blankApp": false,
+      "must": {
+        "Nhập dữ liệu": true
+      },
+      "forbid": {
+        "Data Import": false
+      },
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 16,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 25248,
+      "sha256": "9ebf182a267aff43271502997ade351ea9625bd4988bfa4f5d3cad9e6202bb2a"
+    },
+    {
+      "id": "08",
+      "name": "dashboard",
+      "route": "/crm/dashboard",
+      "port": 8080,
+      "status": 200,
+      "contentType": "text/html",
+      "title": "Bảng Điều Khiển CRM",
+      "lang": "en",
+      "appMounted": true,
+      "bodyChildren": 9,
+      "blankApp": false,
+      "must": {
+        "Trang tổng quan": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 61031,
+      "sha256": "698a0f57038e79b99df049be833ad244020a72cd80729fda0ce25ca858b7afb7"
+    },
+    {
+      "id": "09",
+      "name": "cskh",
+      "route": "/cskh",
+      "port": 8000,
+      "status": 200,
+      "contentType": "text/html; charset=utf-8",
+      "title": "CSKH",
+      "lang": "vi",
+      "appMounted": false,
+      "bodyChildren": 9,
+      "blankApp": false,
+      "must": {
+        "CSKH": true,
+        "Kiểm tra phiên đăng nhập và CSRF": true
+      },
+      "forbid": {},
+      "rawPii": {
+        "emails": 1,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 1,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 25320,
+      "sha256": "de69f91bf8aabad715962ceec731035a052b7674c9ae385fccce10ef9af40ae7"
+    },
+    {
+      "id": "10",
+      "name": "validation-error",
+      "route": "/crm/leads/new",
+      "port": 8080,
+      "status": 200,
+      "rawPii": {
+        "emails": 0,
+        "phones": 0
+      },
+      "masks": {
+        "emails": 0,
+        "phones": 0
+      },
+      "piiResidual": {
+        "emails": 0,
+        "phones": 0
+      },
+      "bytes": 72157,
+      "sha256": "3492144900d63628744e667a210d2b658cca5df26f619ffc84ed2997bd04648c"
+    }
+  ],
+  "navigationErrors": [],
+  "checks": {
+    "staffLogin": {
+      "status": 200,
+      "authenticated": true
+    },
+    "adminLogin": {
+      "status": 200,
+      "authenticated": true
+    },
+    "leadListDetailLinks": [
+      "/crm/leads/view",
+      "/crm/leads/view",
+      "/crm/leads/CRM-LEAD-10207?viewType=list",
+      "/crm/leads/CRM-LEAD-10201?viewType=list",
+      "/crm/leads/CRM-LEAD-10197?viewType=list",
+      "/crm/leads/CRM-LEAD-10190?viewType=list",
+      "/crm/leads/CRM-LEAD-10181?viewType=list",
+      "/crm/leads/CRM-LEAD-10177?viewType=list"
+    ],
+    "columnMenuHasMobileNo": false,
+    "selectedLeadDetailPath": "/crm/leads/CRM-LEAD-10207#activity",
+    "createLeadDialog": true,
+    "validationError": {
+      "hasVietnameseMandatory": true,
+      "hasEnglishMandatory": false,
+      "insertRequests": 0
+    },
+    "captureCount": 10,
+    "allRoutesOk": true,
+    "piiMasked": true
+  },
+  "finishedAt": "2026-10-29T15:54:19.307Z",
+  "outputDir": "/tmp/t1a-g009-clean-1793289146831"
+}

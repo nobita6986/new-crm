@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_security_remediation.TestSEC13GuestTransport-20261027151831" tests="3" file="crm_cskh/tests/test_security_remediation.py" time="0.133" timestamp="2026-10-27T15:18:32" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC13GuestTransport" name="test_guest_is_denied_for_every_crm_cskh_endpoint" time="0.128" timestamp="2026-10-27T15:18:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="161">
+			<!--Mọi endpoint `crm_cskh` đã đăng ký phải từ chối Guest.-->
+			<system-out><![CDATA[Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.health.ping is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_reporting.crm_manager_dashboard is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_reporting.reportview_export_query is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_contact_by_phone_number is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_contact_lead_or_deal_from_number is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_call_log is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_linked_calls is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_linked_notes is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_linked_tasks is not whitelisted.
+Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.guarded_crm.get_attachments is not whitelisted.
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC13GuestTransport" name="test_guest_is_denied_for_health_ping" time="0.003" timestamp="2026-10-27T15:18:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="153">
+			<!--Guest gọi whitelist gate của `crm_cskh.api.health.ping` → expect raise.-->
+			<system-out><![CDATA[Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.health.ping is not whitelisted.
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC13GuestTransport" name="test_health_ping_endpoint_not_registered_for_guest" time="0.002" timestamp="2026-10-27T15:18:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="146">
+			<!--`crm_cskh.api.health.ping` KHÔNG nằm trong `frappe.guest_methods`.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_security_remediation.TestSEC14CSRFAndSession-20261027151831" tests="5" file="crm_cskh/tests/test_security_remediation.py" time="0.021" timestamp="2026-10-27T15:18:32" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC14CSRFAndSession" name="test_get_request_does_not_require_csrf" time="0.009" timestamp="2026-10-27T15:18:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="238">
+			<!--GET là SAFE_HTTP_METHODS — không yêu cầu CSRF token (positive regression).-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC14CSRFAndSession" name="test_post_with_invalid_csrf_token_is_rejected" time="0.004" timestamp="2026-10-27T15:18:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="248">
+			<!--POST kèm CSRF token sai → expect CSRFTokenError.-->
+			<system-out><![CDATA[Message: Invalid Request
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC14CSRFAndSession" name="test_post_with_valid_csrf_token_succeeds" time="0.003" timestamp="2026-10-27T15:18:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="261">
+			<!--POST kèm CSRF token đúng → không raise (positive regression).-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC14CSRFAndSession" name="test_post_with_valid_csrf_token_via_form_data_succeeds" time="0.003" timestamp="2026-10-27T15:18:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="274">
+			<!--POST kèm CSRF token trong `form_dict.csrf_token` (đường thay thế Frappe chấp nhận).-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC14CSRFAndSession" name="test_post_without_csrf_token_is_rejected" time="0.003" timestamp="2026-10-27T15:18:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="243">
+			<!--POST không kèm `X-Frappe-CSRF-Token` → expect CSRFTokenError.-->
+			<system-out><![CDATA[Message: Invalid Request
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_security_remediation.TestSEC27CallLogFallbackContact-20261027151831" tests="4" file="crm_cskh/tests/test_security_remediation.py" time="0.934" timestamp="2026-10-27T15:18:33" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC27CallLogFallbackContact" name="test_administrator_get_call_log_for_orphan_succeeds" time="0.552" timestamp="2026-10-27T15:18:33" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="392">
+			<!--Sanity: Administrator vẫn gọi được (fail-open cố ý cho system caller).-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC27CallLogFallbackContact" name="test_get_call_contact_orphan_routes_to_lookup_path" time="0.136" timestamp="2026-10-27T15:18:33" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="353">
+			<!--Reproduction: gọi upstream `get_call_contact` cho orphan call phải trả
+từ `get_contact_by_phone_number` (nhánh leak nếu wrapper không guard).
+
+Test này chứng minh nhánh nội bộ upstream KHÔNG guard — đây là gap cần fix.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC27CallLogFallbackContact" name="test_overridden_get_call_log_wrapper_exists_and_is_whitelisted" time="0.078" timestamp="2026-10-27T15:18:33" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="367">
+			<!--Wrapper `crm_cskh.api.guarded_crm.get_call_log` phải tồn tại và Frappe
+phải công nhận là override của upstream.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_security_remediation.TestSEC27CallLogFallbackContact" name="test_staff_get_call_log_for_orphan_raises_permission_error" time="0.168" timestamp="2026-10-27T15:18:33" file="/src/apps/crm_cskh/crm_cskh/tests/test_security_remediation.py" line="381">
+			<!--Staff gọi wrapper `get_call_log` cho orphan call → expect raise.
+
+Sau remediation, wrapper fail-closed cho non-system caller.-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Call Log - ee567cfa39f4
+]]></system-out>
+		</testcase>
+	</testsuite>
+</testsuites>

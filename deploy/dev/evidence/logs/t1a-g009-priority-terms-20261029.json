@@ -1,0 +1,84 @@
+{
+  "generatedAt": "2026-10-29T15:45:16.261Z",
+  "site": "dev.localhost",
+  "results": [
+    {
+      "term": "Lead",
+      "path": "/crm/leads/view/list",
+      "status": 200,
+      "title": "Khách hàng tiềm năng - Danh sách",
+      "translated": "Khách hàng tiềm năng",
+      "expected": "Khách hàng tiềm năng",
+      "translationExact": true,
+      "visibleTranslated": true,
+      "sourceStillVisible": false
+    },
+    {
+      "term": "Note",
+      "path": "/crm/leads/CRM-LEAD-10207#activity",
+      "status": 200,
+      "title": "Workload 04992",
+      "translated": "Ghi chú",
+      "expected": "Ghi chú",
+      "translationExact": true,
+      "visibleTranslated": true,
+      "sourceStillVisible": false
+    },
+    {
+      "term": "Assigned To",
+      "path": "/crm/tasks",
+      "status": 200,
+      "title": "Nhiệm vụ - Danh sách",
+      "translated": "Người phụ trách",
+      "expected": "Người phụ trách",
+      "translationExact": true,
+      "visibleTranslated": true,
+      "sourceStillVisible": false
+    },
+    {
+      "term": "Lead Owner",
+      "path": "/crm/leads/CRM-LEAD-10207#activity",
+      "status": 200,
+      "title": "CRM-LEAD-10207",
+      "translated": "Nhân viên phụ trách",
+      "expected": "Nhân viên phụ trách",
+      "translationExact": true,
+      "visibleTranslated": true,
+      "sourceStillVisible": false
+    },
+    {
+      "term": "Phone",
+      "path": "/crm/call-logs",
+      "status": 200,
+      "title": "Nhật ký cuộc gọi - Danh sách",
+      "translated": "Điện thoại",
+      "expected": "Điện thoại",
+      "translationExact": true,
+      "visibleTranslated": true,
+      "sourceStillVisible": false
+    },
+    {
+      "term": "Deal",
+      "path": "/crm/deals/view/list",
+      "status": 200,
+      "title": "Cơ hội - Danh sách",
+      "translated": "Cơ hội",
+      "expected": "Cơ hội",
+      "translationExact": true,
+      "visibleTranslated": true,
+      "sourceStillVisible": false
+    },
+    {
+      "term": "Mobile No.",
+      "path": "/crm/leads/CRM-LEAD-10207#activity",
+      "status": 200,
+      "title": "Workload 04992",
+      "translated": "Số di động",
+      "expected": "Số di động",
+      "translationExact": true,
+      "visibleTranslated": true,
+      "sourceStillVisible": false
+    }
+  ],
+  "allPass": true
+}

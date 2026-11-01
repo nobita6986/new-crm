@@ -2,9 +2,9 @@
 
 > **Dự án:** CRM-CSKH — Quản trị kho khách hàng, phân phối lead và chất lượng CSKH
 > **Tài liệu:** `docs/architecture/version-lock.md`
-> **Phiên bản:** 1.4 — 15/10/2026 (ghi nhận CI runner sạch và app POC WP-05)
+> **Phiên bản:** 1.7 — 27/10/2026 (T1A: chốt G0-01 cho baseline DEV đã chạy; thêm site sạch 5.000 Lead, 99 test local và phân biệt rõ caveat P0 vs production)
 > **Tài liệu cha:** [`../root-plan/P0.md`](../root-plan/P0.md) (§2, ADR-001) · [`../root-plan/master-plan.md`](../root-plan/master-plan.md) (§3, §19)
-> **Trạng thái:** Metadata/tag/digest đã khóa; baseline CRM/Frappe đã cài, migrate và smoke trên máy DEV cùng GitHub runner sạch. **MariaDB 11.8 compatibility vẫn cần chốt** vì Framework cảnh báo phiên bản này chưa được kiểm thử — xem §8.
+> **Trạng thái:** Pin metadata/tag/digest giữ nguyên. Baseline CRM/Frappe + MariaDB 11.8.9 đã qua clean-site bootstrap, migrate, workload 5.000 Lead và 99 security methods trên DEV; chấp nhận đúng tổ hợp này cho P0 DEV. Frappe vẫn cảnh báo MariaDB >10.8 chưa được kiểm thử rộng — không suy rộng sang production; xem §8.2.
 
 ---
 
@@ -122,19 +122,25 @@ Không dùng `latest`, `main`, `develop` làm bản phát hành. Tất cả mụ
 
 ## 5. IMAGE & HẠ TẦNG (digest lock)
 
-Nguyên tắc: **không tag trôi**. Mọi image dùng cho DEV được ghim `tag@digest` (manifest-list digest). Các image dưới đây lấy digest trực tiếp từ Docker Hub Registry API ngày 2026-10-15.
+Nguyên tắc: **không tag trôi**. Mọi image dùng cho DEV được ghim `tag@digest` (manifest-list digest). Các image dưới đây lấy digest trực tiếp từ Docker Hub Registry API; digest cho `frappe/bench:v5.31.0` và `mariadb:11.8` đã được **cập nhật 2026-10-19** do upstream push lại image với cùng tag. `redis:8.6-alpine` giữ nguyên digest.
 
 | Vai trò | Image | Tag | Manifest digest (multi-arch) | amd64 digest | Ghi chú |
 |---|---|---|---|---|---|
-| Bench DEV (tooling) | `frappe/bench` | `v5.31.0` | `sha256:1b27bb30ab18b0a50b5264f44988335bfe8e280a68b45d0ff2daf72ca6ddb85f` | `sha256:73c0aa3fff8face360021450f9cb6dc862fa5f2e02d7e0d012fb170928a91de2` | Chứa bench + pyenv + nvm; ta `bench init` bên trong |
-| Database | `mariadb` | `11.8` | `sha256:6422478cb8e159f080fb1d8ccf65101e26fe51385787fde7d16c3b165a331f15` | `sha256:93fc3fe333b6cdfb061425869c2c3a5bb2851c0c74dbebc2c940f024e7482d76` | Khớp `frappe_docker@v4.0.1` override |
-| Redis cache + queue | `redis` | `8.6-alpine` | `sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba` | `sha256:019e4fb3c6de024c8f70ab5219d4abded5f335de770876981c7b0a051c43df87` | Khớp `frappe_docker@v4.0.1` override |
+| Bench DEV (tooling) | `frappe/bench` | `v5.31.0` | `sha256:3b75943bf00a1db92723d99ec34fbfa92f4b67b9b643ae1e96750899b7fbd980` | `sha256:05d3bc0d739db2146c73515bf320a2cc88e7bfb1f97a5c74d73ef3b2fd56f18d` | Chứa bench + pyenv + nvm; ta `bench init` bên trong. **Digest index/amd64 thay đổi so với v1.4**; `tag_last_pushed = 2026-10-18T04:11:04Z`. |
+| Database | `mariadb` | `11.8` | `sha256:f16d7a344413e519dff518f27bdb221388f84b0d274c97c4fb5f2cb0dc1b34fa` | `sha256:d689f65e09e887e96db5c40ca3957dd9f4e3fad3516baec96d7726c78a5fc2ee` | Khớp `frappe_docker@v4.0.1` override. **Digest index/amd64 thay đổi so với v1.4**; `tag_last_pushed = 2026-10-17T05:36:40Z`. |
+| Redis cache + queue | `redis` | `8.6-alpine` | `sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba` | `sha256:019e4fb3c6de024c8f70ab5219d4abded5f335de770876981c7b0a051c43df87` | Khớp `frappe_docker@v4.0.1` override. Digest **không đổi** kể từ v1.4. |
 
-**Cơ sở chọn phiên bản image:** `frappe_docker@v4.0.1` dùng `mariadb:11.8` và `redis:8.6-alpine` (xem `overrides/compose.mariadb.yaml`, `overrides/compose.redis.yaml`). Ta bám theo để giảm sai lệch với cấu hình được upstream kiểm thử.
+**Cơ sở chọn phiên bản image:** `frappe_docker@v4.0.1` dùng `mariadb:11.8` và `redis:8.6-alpine` (xem `overrides/compose.mariadb.yaml`, `overrides/compose.redis.yaml`). Ta bám theo để giảm sai lệch với cấu hình được upstream kiểm thử. Trên `main` của `frappe_docker` (commit `11d6062…` ngày 2026-10-19), override vẫn dùng `mariadb:11.8` — chưa có tag mới được phát hành kể từ `v4.0.1`.
 
 **Đã đo trong lần WP-01 runtime (linux/amd64):**
 - `frappe/bench:v5.31.0`: Bench 5.31.0, Python 3.14.8, Node 24.22.0, Yarn 1.22.22.
-- RepoDigests của bench/MariaDB/Redis khớp các digest khóa ở §5.
+- RepoDigests của bench/MariaDB/Redis khớp các digest khóa ở §5 (cập nhật 2026-10-19).
+
+**Ghi chú về việc thay đổi digest:** hai image `frappe/bench:v5.31.0` và `mariadb:11.8` đã được
+upstream rebuild và push lại cùng tag. Đây là thực tiễn bình thường của Docker Hub
+("cùng tag, nội dung khác"). Sau khi Owner chạy `docker compose pull` trên host DEV
+và cập nhật `.env.example` tương ứng (xem `deploy/dev/.env.example`), `RepoDigest` cục bộ
+sẽ khớp digest mới. Bằng chứng đo lại: [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §4.
 
 ---
 
@@ -205,6 +211,30 @@ Phân biệt rõ hai mức độ bằng chứng:
 | C3 | v1.87.0 | v15.123.1 | 3.14 | Chạy được | ✅ hợp lệ | ✅ Python 3.14.8: clean bootstrap/install/migrate/seed, 28 tests, import, SLA, backup/restore; GitHub Actions clean runner cũng pass. MariaDB 11.8 vẫn có cảnh báo framework >10.8 chưa được thử rộng |
 | Cx | v1.87.0 | bất kỳ <v15 hoặc ≥v17 | — | Không hỗ trợ | ❌ ngoài `>=15.0.0,<17.0.0` | — (loại) |
 
+**Tổ hợp bổ sung (T1A, ngày 2026-10-19):**
+
+| Tổ hợp | CRM | Framework | Python | Kỳ vọng | [DECLARED] | [RUNTIME] |
+|---|---|---|---|---|---|---|
+| C4 | v1.88.0 | v15.123.1 | 3.14 | Chạy được | ✅ theo compatibility table README CRM v1.88.0 (`v15.x & v16.x`); CRM v1.88.0 thêm dependency `requests>=2.28.0` + `tldextract>=5.0.0` | ⛔ Chưa chạy; CRM v1.88.0 chưa được verify runtime trong dự án |
+| C5 | v1.87.0 | v15.99.0 (cũ hơn pin) | 3.14 | **KHÔNG chạy** (không nên thử) | ❌ v15.99.0 đã bỏ Python 3.14 khỏi dải cho phép (`>=3.10,<3.14`) | — (lùi về bản cũ hơn pin 24 minor không có lý do kỹ thuật) |
+| C6 | v1.87.0 | v16.9.0 (cũ hơn pin) | 3.14 | Chạy nếu muốn lùi | ✅ hợp lệ (`>=3.14,<3.15`) | ⛔ Lùi về bản cũ hơn pin 43 minor không có lý do kỹ thuật; KHÔNG đề xuất |
+| C7 | v1.88.0 | v16.52.0 | 3.14 | Chạy được | ✅ hợp lệ | ⛔ Chưa chạy; kịch bản nâng cả CRM vừa Frappe — phạm vi P1 trở đi |
+
+**Bằng chứng cho C5** (Frappe v15.99.0 không còn hỗ trợ Python 3.14): trích từ
+`raw.githubusercontent.com/frappe/frappe/v15.99.0/pyproject.toml`:
+`requires-python = ">=3.10,<3.14"`. Tuy nhiên `v15.99.0` là bản **thấp hơn** pin
+`v15.123.1` đúng 24 minor (từ `v15.100.0` đến `v15.123.1`); kịch bản "nâng lên v15.99.0"
+không tồn tại — chỉ có kịch bản **lùi** về `v15.99.0` (không khuyến nghị) hoặc **nâng**
+lên `v15.100.0+` (cần verify `requires-python` của từng bản vì policy có thể đã đổi).
+
+**Bằng chứng cho pin hiện tại vẫn hỗ trợ Python 3.14:** trích từ
+`raw.githubusercontent.com/frappe/frappe/v15.123.1/pyproject.toml`:
+`requires-python = ">=3.10,<3.15"` — phủ Python 3.10 đến 3.14 (đúng biên).
+Do đó baseline C3 hiện hành (Python 3.14.8) **không bị ảnh hưởng** bởi thay đổi
+`requires-python` ở `v15.99.0`.
+
+Chi tiết và đề xuất quyết định Q-01…Q-08 ở [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §5.4.
+
 ### 8.1. Runtime đã đo trên máy DEV hiện tại
 
 - `wsl --status`: default version 2; `wsl -l -v`: `docker-desktop` Running, version 2.
@@ -217,7 +247,21 @@ Phân biệt rõ hai mức độ bằng chứng:
 
 **Caveat tương thích:** khi tạo site, Frappe v15 cảnh báo rằng MariaDB 11.8 vượt phiên bản 10.8 chưa được Framework kiểm thử. Install/migrate thành công chứng minh stack chạy được cho WP-01, nhưng không xóa bỏ caveat này; cần chốt MariaDB tương thích trước khi đóng ADR-001.
 
-➡️ Docker/WSL2 blocker đã gỡ trên host hiện tại; CI trên GitHub runner đã kiểm tra clean bootstrap và backup/restore. P0-A còn Vue hot reload; cảnh báo MariaDB và các gate bảo mật/UI vẫn cần xử lý. Kết quả này **không** phải bằng chứng G0-01..G0-10 đều PASS.
+➡️ Docker/WSL2 blocker đã gỡ trên host hiện tại; CI trên GitHub runner đã kiểm tra clean bootstrap và backup/restore. HMR CSS đã được kiểm tra trước đó; G0-02 còn click luồng trực tiếp và rà console CORS/WebSocket. Các gate bảo mật/UI khác vẫn được đánh giá riêng. Kết quả này **không** phải bằng chứng G0-01..G0-10 đều PASS.
+
+### 8.2. Chốt baseline DEV cho P0 — 2026-10-27
+
+Site sạch `p0-final-verify-20261027.localhost` đã cài/migrate CRM `1.87.0` + Frappe `15.123.1` trên MariaDB `11.8.9-MariaDB-ubu2404`. Tạo 5.000 CRM Lead giả qua Frappe ORM: 0 lỗi; cleanup xác nhận còn 0 hàng theo prefix. `character_set_server=utf8mb4`, collation server/site/table `utf8mb4_unicode_ci`; `STRCMP('Khach hang','Khách hàng')=0`. Bộ 5 suite security trên site này: **99 PASS / 0 FAIL / 0 ERROR / 0 SKIP**, và HTTP probe direct-to-bench: **18/18 PASS**. Bằng chứng + hash: [`t1a-p0-final-validation-2026-10-27.md`](../../deploy/dev/evidence/t1a-p0-final-validation-2026-10-27.md), [`g001-workload.json`](../../deploy/dev/evidence/logs/p0-final-20261027/clean-site-validation-20261027/g001-workload.json), [`g007-per-method-gate.json`](../../deploy/dev/evidence/logs/p0-final-20261027/clean-site-validation-20261027/g007-per-method-gate.json).
+
+**Quyết định phạm vi P0:** giữ nguyên pin MariaDB 11.8 cho DEV vì đúng tổ hợp đã được bootstrap/migrate/workload/test thực tế; do đó đóng G0-01 cho baseline DEV này. Hướng dẫn cài đặt Frappe hiện nêu MariaDB `10.6.6+` cho v14/v15, trong khi runtime của pin vẫn phát cảnh báo rằng bản >10.8 chưa được kiểm thử rộng. Hai thông tin được giữ song song: lần chạy này chứng minh tổ hợp DEV cụ thể hoạt động, nhưng không chứng minh tương thích tổng quát hoặc production readiness. `mobile_no` full scan không làm đổi schema/index trong P0; đánh giá hiệu năng và index cần yêu cầu truy vấn P1 riêng.
+
+### 8.3. Xác minh CI P0 trên PR #2 — 2026-10-27
+
+GitHub Actions run [#40479841377](https://github.com/nobita6986/new-crm/actions/runs/40479841377) chạy trên PR head `12d4229888fc36b002451339ebaca5c57dea9b9a`; synthetic merge commit `8c2fde0ec3953afe8b86338c6957e60d6bf8b135` có parent base `b382fe425b3f1f6c2037cd3bed20e65e5df2d928` và PR head. Run kết thúc `success`.
+
+Artifact `12723270292` (`p0-g007-evidence-40479841377`), 132.748 byte, SHA-256 `2a7d59245b16fc7c72f844e77004726235971a2ce519b7a61dd6a0ab4df9929d` (khớp GitHub API). Gate JSON và parse độc lập 5 JUnit XML đều xác nhận **99/99 PASS**, không FAIL/ERROR/SKIP/NOT RUN hay sai khác giữa XML và gate. HTTP probe đạt **18/18**, nhưng chỉ gọi trực tiếp `bench serve`; reverse-proxy/CORS không thuộc phạm vi. Case tải file trong scope không gửi request sau khi URL đã bị khử, nên không ghi là tải thành công.
+
+Đây là căn cứ cho **G0-10 PASS trong phạm vi workflow PR #2**. G0-07 vẫn **PARTIAL / CHƯA KÝ** cho tới khi rà lại ma trận/risk với code mới và xử lý giới hạn reverse-proxy/CORS; G0-02/G0-09 vẫn cần bằng chứng browser đầy đủ. P0 vẫn **NO-GO cho P1** theo tiêu chí 10/10 gate tại [`P0.md` §12](../root-plan/P0.md).
 
 ---
 
@@ -246,10 +290,11 @@ Dùng `image: docker.io/frappe/bench:latest` và `docker.io/redis:alpine` → **
 | # | Điểm mở | Ảnh hưởng | Đề xuất |
 |---|---|---|---|
 | O-01 | **ĐÃ GỠ trên host hiện tại:** Docker Desktop Linux Engine hoạt động qua WSL2; Docker/Compose và bốn service chạy | Setup trên máy khác/clean machine chưa thử | Giữ DEV stack; Linux DEV VM vẫn là phương án dự phòng nếu host này không ổn định |
-| O-02 | ADR-001: chốt Framework + DB tương thích | Ảnh hưởng toàn bộ P1+ | Giữ Frappe v15.123.1 làm baseline P0; quyết định cuối chờ xử lý caveat MariaDB 11.8 chưa được Frappe kiểm thử |
+| O-02 | ADR-001: chốt Framework + DB tương thích | Ảnh hưởng toàn bộ P1+ | **ĐÃ CHỐT TRONG PHẠM VI P0 DEV**: giữ Frappe v15.123.1 + CRM v1.87.0 + MariaDB 11.8.9 vì tổ hợp đã clean-bootstrap/migrate/workload/test thành công ngày 2026-10-27 (§8.2). Caveat Frappe >10.8 chưa được kiểm thử rộng vẫn còn; không suy rộng thành production support. Full scan `mobile_no` là follow-up hiệu năng P1, chưa thêm index. |
 | O-03 | Python/Node/Yarn thực tế trong `frappe/bench:v5.31.0` | Tính tái tạo | **ĐÃ GHI:** Python 3.14.8, Node 24.22.0, Yarn 1.22.22, Bench 5.31.0 (§8.1) |
 | O-04 | `package.json` CRM ghi `GPL-3.0` vs `LICENSE` AGPL-3.0 | Nghĩa vụ pháp lý | Dùng **AGPL-3.0** (file LICENSE) làm căn cứ |
 | O-05 | (ĐÃ ĐÓNG) Trước đây repo có `.survey-cache/crm/` — checkout upstream **untracked**. **Nay thư mục này KHÔNG còn trong working tree.** | Trước đây có nguy cơ commit nhầm source upstream | Đã hết. Khi commit: **loại trừ** `.commandcode/`, mọi cache và checkout upstream; đưa `apps/crm_cskh/`, `docs/` và `deploy/` vào phạm vi review. |
+| O-06 | **T1A — 2026-10-19 (sửa lần 2):** (a) digest `frappe/bench:v5.31.0` và `mariadb:11.8` đã thay đổi; §5 và `deploy/dev/.env.example` đã cập nhật. (b) Re-verify bằng `git ls-remote --sort=v:refname` + `sort -V` cho thấy: CRM `v1.88.0` là bản duy nhất thực sự mới hơn pin (1 patch); `frappe v15.99.0` (5cca1fa7…) thực ra thấp hơn pin `v15.123.1` 24 minor; `frappe v16.9.0` (e5b04e04…) thực ra thấp hơn pin `v16.52.0` 43 minor. (c) Pin hiện tại `v15.123.1` vẫn `>=3.10,<3.15` — hỗ trợ Python 3.14. Baseline C3 không bị ảnh hưởng. (d) `v15.99.0` (cũ hơn pin) đã giới hạn `<3.14`, nhưng không có kịch bản nâng lên `v15.99.0` vì nó thấp hơn pin; chỉ cần ghi nhận nếu tương lai có yêu cầu **nâng** lên `v15.100.0+` thì phải kiểm tra `requires-python` của từng bản. | Ảnh hưởng tái tạo + lộ trình nâng version | Xem [`t1a-g001-metadata-recheck.md`](../../deploy/dev/evidence/t1a-g001-metadata-recheck.md) §5.4 (Q-01…Q-08) và §3 (bảng sort -V). Khi có máy Docker, chạy lại ma trận workload MariaDB (xem §5.5) trước khi đóng ADR-001. |
 
 ---
 
@@ -260,4 +305,4 @@ Một phiên bản được coi là **đã khóa** khi và chỉ khi:
 2. Đã có **[RUNTIME] PASS** trong §8 trên môi trường DEV tái tạo được, và
 3. Kết quả được ghi lại kèm log/lệnh ở [`docs/operations/dev-setup.md`](../operations/dev-setup.md).
 
-Hiện tại: điều kiện (1) **đạt**; điều kiện (2)(3) có bằng chứng trên máy DEV và GitHub-hosted runner ([CI run](https://github.com/nobita6986/new-crm/actions/runs/38712593755)). Phạm vi đã chạy là baseline Frappe v15/Python 3.14.8/MariaDB 11.8; cảnh báo MariaDB >10.8 vẫn mở, còn Python 3.12 và Frappe v16 chưa được thử.
+Hiện tại: điều kiện (1) **đạt**; điều kiện (2)(3) có evidence trên máy DEV, trong đó §8.2 là lần xác minh clean-site mới nhất (5.000 Lead, 99 security test, HTTP 18/18) và evidence run cũ trên GitHub Actions vẫn tham chiếu riêng. Tổ hợp MariaDB 11.8.9 được chấp nhận cho baseline DEV P0 theo đúng lần chạy đã ghi; caveat >10.8 chưa được kiểm thử rộng vẫn giới hạn phạm vi, còn Python 3.12 và Frappe v16 chưa được thử.
