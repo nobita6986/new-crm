@@ -1,0 +1,18 @@
+{
+  "check": "absolute-private-recording-wrapper",
+  "baseline_main": "584cbc2877d9a5caf42f049ece1f7855dccf4a9d",
+  "layer": "Frappe function calls in an uncommitted transaction, not HTTP",
+  "before_private_url_present": true,
+  "after_private_url_present": false,
+  "in_scope_call_retained": true,
+  "out_of_scope_denied": true,
+  "system_positive_control_url_retained": true,
+  "transaction": "rolled back in finally; no commit",
+  "temporary_call_remaining_after_rollback": 0,
+  "source_sha256": {
+    "baseline": "703396062e94b2f13ef5680ce0b0c97b762e6f45280c3f053ae8f47f582d4a7c",
+    "patched_worktree": "b7600563f3a4788626f0ef9b6a3faca52eed1619d7c05a335e171d37b5cbbf2a"
+  },
+  "generated_date": "2026-11-02",
+  "patched_source_state": "uncommitted worktree based on main 584cbc2; not deployed"
+}
