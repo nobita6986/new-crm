@@ -219,7 +219,7 @@ Search or type a command ({0}),Tìm kiếm hoặc nhập lệnh ({0})
 1. Upload a private file,1. Tải lên tệp riêng tư
 2. Preview and confirm,2. Xem trước và xác nhận
 3. Follow the progress,3. Theo dõi tiến độ
-"A queued, revoked or closed work item must not have an assignee.","Công việc đang chờ, đã thu hồi hoặc đã đóng không được có người phụ trách."
+A queued, revoked or closed work item must not have an assignee.
 A revocation event must not have a target user.,Sự kiện thu hồi không được có người nhận.
 ALREADY_ASSIGNED,Đã được giao (ALREADY_ASSIGNED)
 Active campaigns,Chiến dịch đang hoạt động
@@ -241,7 +241,7 @@ Batch,Lô
 CAPACITY_EXCEEDED,Vượt quá sức chứa (CAPACITY_EXCEEDED)
 CAPACITY_FULL,Đã đầy sức chứa (CAPACITY_FULL)
 CONFLICT,Xung đột (CONFLICT)
-"CSV or XLSX, up to 10 MB. Keep the phone column as text so the leading zero is not lost.","CSV hoặc XLSX, tối đa 10 MB. Giữ cột số điện thoại ở dạng văn bản để không mất số 0 ở đầu."
+CSV or XLSX, up to 10 MB. Keep the phone column as text so the leading zero is not lost.
 Campaign,Chiến dịch
 Campaigns,Chiến dịch
 Campaigns and distribution rules,Chiến dịch và quy tắc phân phối
@@ -267,7 +267,6 @@ Current owners are counted from work items; assignment events come from the audi
 Currently assigned,Đang được giao
 Customer,Khách hàng
 Customer pool,Kho khách hàng
-"Customer pool, imports, campaigns and distribution.","Kho khách hàng, nhập danh sách, chiến dịch và phân phối."
 Customers assigned to me,Khách hàng được giao cho tôi
 Customers assigned to me.,Khách hàng được giao cho tôi.
 Customers currently assigned to you.,Những khách hàng hiện đang được giao cho bạn.
@@ -302,7 +301,7 @@ Import counters must not be negative.,Bộ đếm nhập dữ liệu không đư
 Import history,Lịch sử nhập
 Import list,Nhập danh sách
 Import source files must be private.,Tệp nguồn nhập dữ liệu phải là riêng tư.
-"Leads in your scope, with the derived distribution state.","Khách hàng tiềm năng trong phạm vi của bạn, kèm trạng thái phân phối."
+Leads in your scope, with the derived distribution state.
 Loading...,Đang tải...
 Log in to access this page.,Hãy đăng nhập để truy cập trang này.
 My customers,Khách được giao
@@ -335,7 +334,7 @@ Planned,Dự kiến
 Preview,Xem trước
 Preview ID,Mã xem trước
 Preview distribution,Xem trước phân phối
-"Preview first. Executing is a separate, explicitly confirmed action.",Phải xem trước trước. Thực thi là hành động riêng biệt và phải được xác nhận rõ ràng.
+Preview first. Executing is a separate, explicitly confirmed action.
 Preview is ready. Review the numbers before confirming.,Đã sẵn sàng xem trước. Hãy rà soát các con số trước khi xác nhận.
 Previous,Trang trước
 Queued,Trong hàng đợi
@@ -353,7 +352,7 @@ Scope,Phạm vi
 Search,Tìm kiếm
 Search by name or phone number.,Tìm theo tên hoặc số điện thoại.
 Selection fingerprint,Vân tay lựa chọn
-"Set up the target set and the weights, then preview before distributing.","Thiết lập tập mục tiêu và trọng số, rồi xem trước trước khi phân phối."
+Set up the target set and the weights, then preview before distributing.
 Share,Tỷ lệ
 Source,Nguồn
 Start over,Bắt đầu lại
@@ -384,15 +383,15 @@ The rules changed after the preview. Run the preview again.,Quy tắc đã thay 
 The selection fingerprint is required.,Cần có vân tay lựa chọn.
 The selection must be a JSON object.,Tập lựa chọn phải là một đối tượng JSON.
 The upload failed.,Tải lên thất bại.
-"This campaign, assignee and version already has a rule.","Chiến dịch, người được giao và phiên bản này đã có quy tắc."
+This campaign, assignee and version already has a rule.
 Title,Tiêu đề
-"Total pool, assigned, unassigned, per team, per user and per campaign.","Tổng kho, đã giao, chưa giao, theo đội, theo người và theo chiến dịch."
+Total pool, assigned
 Total rows,Tổng số dòng
 UNSUPPORTED_FORMAT,Định dạng không được hỗ trợ (UNSUPPORTED_FORMAT)
 Unassigned or conflicted work items,Công việc chưa giao hoặc xung đột
 Unique customers,Số khách hàng duy nhất
 Unique customers in scope,Khách hàng duy nhất trong phạm vi
-"Upload a private file, map the phone column, preview, then confirm.","Tải lên tệp riêng tư, ánh xạ cột số điện thoại, xem trước rồi xác nhận."
+Upload a private file, map the phone column
 Valid rows,Số dòng hợp lệ
 Weight,Trọng số
 Weight and version must be positive; capacity must not be negative.,Trọng số và phiên bản phải là số dương; sức chứa không được âm.
@@ -435,4 +434,13 @@ The request is invalid.,Yêu cầu không hợp lệ.
 The requested data does not exist.,Dữ liệu yêu cầu không tồn tại.
 No customer is eligible for this campaign.,Không có khách hàng nào đủ điều kiện cho chiến dịch này.
 The capacity of the assignee is exhausted.,Sức chứa của người được giao đã cạn.
+"A queued, revoked or closed work item must not have an assignee.","Công việc đang chờ, đã thu hồi hoặc đã đóng không được có người phụ trách."
+"CSV or XLSX, up to 10 MB. Keep the phone column as text so the leading zero is not lost.","CSV hoặc XLSX, tối đa 10 MB. Giữ cột số điện thoại ở dạng văn bản để không mất số 0 ở đầu."
+"Customer pool, imports, campaigns and distribution.","Kho khách hàng, nhập danh sách, chiến dịch và phân phối."
+"Leads in your scope, with the derived distribution state.","Khách hàng tiềm năng trong phạm vi của bạn, kèm trạng thái phân phối."
+"Preview first. Executing is a separate, explicitly confirmed action.",Phải xem trước trước. Thực thi là hành động riêng biệt và phải được xác nhận rõ ràng.
+"Set up the target set and the weights, then preview before distributing.","Thiết lập tập mục tiêu và trọng số, rồi xem trước trước khi phân phối."
+"This campaign, assignee and version already has a rule.","Chiến dịch, người được giao và phiên bản này đã có quy tắc."
+"Total pool, assigned, unassigned, per team, per user and per campaign.","Tổng kho, đã giao, chưa giao, theo đội, theo người và theo chiến dịch."
 Unlimited,Không giới hạn
+"Upload a private file, map the phone column, preview, then confirm.","Tải lên tệp riêng tư, ánh xạ cột số điện thoại, xem trước rồi xác nhận."

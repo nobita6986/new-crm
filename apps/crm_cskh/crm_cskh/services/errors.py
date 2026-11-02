@@ -58,15 +58,24 @@ class P1Error(Exception):
 	situation. Frappe only puts the *class* name into the error body, so a
 	`Conflict` raised with `NO_ELIGIBLE_LEADS` would otherwise reach the
 	browser as a generic `CONFLICT` (P1 §10.1, `crm_cskh.p1_errors`).
+
+	> **HTTP status (contract §2):** Frappe reads `http_status_code` off the
+	> exception (`frappe.app.handle_exception`), never `http_status`. Without
+	> the alias below every P1 error would leave as HTTP 500 instead of the
+	> contracted 403 / 404 / 409 / 413, and the UI could not branch on the
+	> status. `http_status` is kept as the readable name of the same value.
+
 	"""
 
 	code = INVALID_REQUEST
 	http_status = 400
+	http_status_code = 400
 
 	def __init__(self, message=None, code=None, http_status=None, details=None):
 		self.code = code or self.code
 		if http_status is not None:
 			self.http_status = http_status
+			self.http_status_code = http_status
 		self.details = details or {}
 		super().__init__(message or self.code)
 		_record_p1_error(self)
@@ -93,53 +102,64 @@ def _record_p1_error(error):
 class InvalidRequest(P1Error):
 	code = INVALID_REQUEST
 	http_status = 400
+	http_status_code = 400
 
 
 class Forbidden(P1Error):
 	code = FORBIDDEN
 	http_status = 403
+	http_status_code = 403
 
 
 class NotFound(P1Error):
 	code = NOT_FOUND
 	http_status = 404
+	http_status_code = 404
 
 
 class Conflict(P1Error):
 	code = CONFLICT
 	http_status = 409
+	http_status_code = 409
 
 
 class RuleChanged(P1Error):
 	code = RULE_CHANGED
 	http_status = 409
+	http_status_code = 409
 
 
 class PreviewExpired(P1Error):
 	code = PREVIEW_EXPIRED
 	http_status = 409
+	http_status_code = 409
 
 
 class CapacityExceeded(P1Error):
 	code = CAPACITY_EXCEEDED
 	http_status = 409
+	http_status_code = 409
 
 
 class InvalidPhoneError(P1Error):
 	code = INVALID_PHONE
 	http_status = 400
+	http_status_code = 400
 
 
 class UnsupportedFormat(P1Error):
 	code = UNSUPPORTED_FORMAT
 	http_status = 400
+	http_status_code = 400
 
 
 class FileTooLarge(P1Error):
 	code = FILE_TOO_LARGE
 	http_status = 413
+	http_status_code = 413
 
 
 class TooManyRows(P1Error):
 	code = TOO_MANY_ROWS
 	http_status = 413
+	http_status_code = 413

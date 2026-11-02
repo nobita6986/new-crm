@@ -89,7 +89,7 @@ def history(work_item=None, limit=50):
 	if actor != "Administrator" and "System Manager" not in frappe.get_roles(actor):
 		if not frappe.has_permission("CSKH Work Item", "read", doc=work_item, throw=False):
 			raise Forbidden("You may not read this assignment history.")
-	rows = frappe.get_all(
+	rows = frappe.get_list(
 		"CSKH Assignment History",
 		filters={"work_item": work_item},
 		fields=[
@@ -106,6 +106,6 @@ def history(work_item=None, limit=50):
 			"event_id",
 		],
 		order_by="event_at asc",
-		limit=limit,
+		limit_page_length=limit,
 	)
 	return {"work_item": work_item, "items": rows, "total": len(rows)}

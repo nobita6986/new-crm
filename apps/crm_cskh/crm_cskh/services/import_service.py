@@ -49,11 +49,17 @@ FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
 _HTML_PATTERN = re.compile(r"<[^>]*>")
 
 
-def sanitize_cell(value):
+def sanitize_cell(value, allow_leading_sign=False):
 	"""Make a cell safe to store and to show (SEC-08).
 
 	* a formula prefix is neutralised with a leading apostrophe;
 	* HTML tags are removed, so a lead name can never carry a script.
+
+	`allow_leading_sign` keeps a leading `+` or `-` that belongs to a
+	**value** and not to a formula: a canonical phone number `+84912345678` is
+	a valid number and must not be broken (L-13). The sign is still a formula
+	prefix in a spreadsheet, so the caller that writes the cell to a CSV keeps
+	escaping it there.
 
 	The function is pure so it can be unit-tested without a database.
 	"""
@@ -63,9 +69,16 @@ def sanitize_cell(value):
 	if not text:
 		return ""
 	text = _HTML_PATTERN.sub("", text)
+	text = text.strip()
+	if not text:
+		return ""
 	if text[:1] in FORMULA_PREFIXES:
+		if allow_leading_sign and text[:1] in ("+", "-"):
+			# A leading sign followed by a digit is a number, not a formula.
+			if re.match(r"^[+-]?\d", text):
+				return text
 		text = "'" + text
-	return text.strip()
+	return text
 
 
 def looks_like_formula(value):
@@ -111,6 +124,16 @@ def _file_content(file_name):
 
 
 def _checksum(content):
+	"""Return the SHA-256 of the content.
+
+	The content is normalized to **bytes** first: `File.get_content()` returns
+	`str` when the file has been flushed to disk and `bytes` while it is still
+	in memory, and `hashlib.sha256` refuses a `str` (L-02).
+	"""
+	if isinstance(content, str):
+		content = content.encode("utf-8")
+	elif not isinstance(content, bytes):
+		content = bytes(content)
 	return hashlib.sha256(content).hexdigest()
 
 
@@ -169,17 +192,43 @@ def _read_rows(content, extension, max_rows):
 		workbook.close()
 
 
+# The canonical field of the mapping that holds the phone number. The
+# mapping may carry several fields (name, source, …); the phone column is
+# the one of `PHONE_FIELD`, never simply the first mapped column (L-03).
+PHONE_FIELD = "phone"
+
+
 def _resolve_column_name(cells, mapping, candidates):
 	"""Return the **name** of the column that holds the phone number.
 
 	ADR-P1-03: the mapping maps a canonical field to a *column name*. The
 	previous implementation returned the *value* of the cell, which made every
 	row look like a missing phone column.
+
+	When the mapping carries several fields, the column of the canonical
+	`phone` field wins: taking the first mapped column would read the name
+	column as a phone number (L-03).
 	"""
 	if mapping:
+		mapped = mapping.get(PHONE_FIELD)
+		if mapped and mapped in cells:
+			return mapped
+		# A mapping without an explicit phone field: accept a mapped column
+		# only when it is one of the recognised phone headers, otherwise the
+		# mapping is incomplete and the **header** is used to find the phone
+		# column. The candidates come from the header of the file, never from
+		# the client, so the fallback cannot be abused (L-03).
 		for _field, column in mapping.items():
-			if column and column in cells:
+			if column and column in cells and (column or "").strip().lower() in candidates:
 				return column
+		# No mapped column is a phone column: fall back to the phone header
+		# of the file, exactly like the unmapped path.
+		for candidate in candidates:
+			if candidate in cells:
+				return candidate
+		for key in cells:
+			if (key or "").strip().lower() in candidates:
+				return key
 		return None
 	for candidate in candidates:
 		if candidate in cells:

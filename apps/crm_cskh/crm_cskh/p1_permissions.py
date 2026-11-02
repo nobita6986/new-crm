@@ -85,10 +85,32 @@ def _campaign_scope_condition(user, column="campaign"):
 	(the name of a `CRM Sales Hierarchy` node), so the condition has to go
 	through the campaign — comparing the campaign name with a hierarchy node
 	name never matches (L-07).
+
+	The subtree is resolved from the **nested set** (`lft` / `rgt`), so the
+	condition covers the whole team subtree and not only the direct reports.
 	"""
 	return (
 		f"`{column}` in (select c.name from `tabCSKH Campaign` c "
 		f"where c.team_scope is null or c.team_scope in {_hierarchy_subtree(user)})"
+	)
+
+
+def _campaign_and_assignee_scope_condition(user, campaign_column="campaign", assignee_column="user"):
+	"""SQL condition for a row that links a campaign **and** an assignee.
+
+	A shared campaign (`team_scope is null`) is visible to every leader, but
+	the **assignee** of a rule still belongs to a team: a leader of team A
+	must not see the rule of a member of team B, not even in a shared
+	campaign (L-07).
+
+	The assignee is matched against the **user** of the hierarchy node, so the
+	condition follows the same subtree as the campaign scope.
+	"""
+	return (
+		f"({_campaign_scope_condition(user, campaign_column)} "
+		f"and `{assignee_column}` in (select m.`user` from `tabCRM Sales Hierarchy` m "
+		f"where m.`lft` >= (select lft from `tabCRM Sales Hierarchy` where `user` = {_escape(user)}) "
+		f"and m.`rgt` <= (select rgt from `tabCRM Sales Hierarchy` where `user` = {_escape(user)})))"
 	)
 
 
@@ -124,12 +146,17 @@ def campaign_query_conditions(user=None, **kwargs):
 
 
 def rule_query_conditions(user=None, **kwargs):
-	"""The rules of a campaign follow the campaign scope."""
+	"""The rules of a campaign follow the campaign scope.
+
+	A rule links a campaign **and** an assignee. Both must be in the scope of
+	the actor: a leader of team A never sees the rule of a member of team B,
+	not even in a shared campaign (L-07).
+	"""
 	user = user or frappe.session.user
 	if _is_system(user) or ROLE_ADMIN in _roles(user) or ROLE_BOD in _roles(user):
 		return ""
 	if _is_leader(user):
-		return _campaign_scope_condition(user, "campaign")
+		return _campaign_and_assignee_scope_condition(user, "campaign", "user")
 	return "1=0"
 
 
