@@ -343,8 +343,7 @@ def pool_list(user=None, page=1, page_size=20, campaign=None):
 	)[0][0]
 
 	unique_customers = frappe.db.sql(
-		"select count(distinct wi.lead) from `tabCSKH Work Item` wi where "
-		+ " and ".join(lead_clauses),
+		"select count(distinct wi.lead) from `tabCSKH Work Item` wi where " + " and ".join(lead_clauses),
 		tuple(lead_params),
 	)[0][0]
 
@@ -420,9 +419,7 @@ def _pool_state(lead):
 	if not rows:
 		return "eligible", "", "", None
 
-	claim = frappe.db.get_value(
-		"CSKH Active Claim", {"lead": lead}, ["campaign", "work_item"], as_dict=True
-	)
+	claim = frappe.db.get_value("CSKH Active Claim", {"lead": lead}, ["campaign", "work_item"], as_dict=True)
 
 	for row in rows:
 		if row.status == "assigned" and row.assigned_to:

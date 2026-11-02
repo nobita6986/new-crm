@@ -171,7 +171,6 @@ TRANSLATIONS = {
 	"Per assignee": "Theo người được giao",
 	"Share": "Tỷ lệ",
 	"Currently assigned": "Đang được giao",
-	"Remaining capacity": "Sức chứa còn lại",
 	"No data in the current scope.": "Không có dữ liệu trong phạm vi hiện tại.",
 	"Per campaign": "Theo chiến dịch",
 	"Data as of": "Dữ liệu tính đến",
@@ -261,12 +260,10 @@ def build_translation_rows():
 
 	import frappe
 
-	path = os.path.join(
-		os.path.dirname(__file__), "translations", "vi.csv"
-	)
+	path = os.path.join(os.path.dirname(__file__), "translations", "vi.csv")
 	existing = set()
 	if os.path.exists(path):
-		with open(path, "r", encoding="utf-8", newline="") as handle:
+		with open(path, encoding="utf-8", newline="") as handle:
 			for row in csv.reader(handle):
 				if row:
 					existing.add(row[0])

@@ -345,7 +345,4 @@ def translated_error_texts():
 	because the operator has to act on it (P1 §9.6).
 	"""
 	language = frappe.local.lang or "en"
-	return {
-		code: frappe._(message, lang=language)
-		for code, message in ERROR_EXPLANATIONS.items()
-	}
+	return {code: frappe._(message, lang=language) for code, message in ERROR_EXPLANATIONS.items()}
