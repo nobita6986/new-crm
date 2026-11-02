@@ -1,13 +1,16 @@
-# P1 Exit Report — CRM-CSKH Backend P1
+# P1 Exit Report — CRM-CSKH P1 (backend + UI)
 
 **Ngày:** 2026-11-02
-**Vai trò:** T1B (sửa backend P1 theo báo cáo kiểm định T1C)
-**Nhánh:** `codex/p1-foundation` — worktree `D:/HRP-app/p1-foundation`
+**Vai trò:** T1B (chương 0–6: sửa backend P1 theo báo cáo kiểm định T1C) · T1A (chương 7: giao diện P1)
+**Nhánh:** `codex/p1-foundation` — worktree `D:/HRP-app/p1-foundation` (chương 0–6) · `codex/p1-ui` — worktree `D:/HRP-app/p1-ui` (chương 7, **đã merge** backend của T1B)
 **Báo cáo đầu vào:** [`deploy/dev/evidence/t1c-p1-verification-baseline-2026-11-02.md`](../../deploy/dev/evidence/t1c-p1-verification-baseline-2026-11-02.md) (L-01 … L-15)
 **Kế hoạch:** [`docs/root-plan/P1.md`](../root-plan/P1.md)
-**PR:** [#4 — feat(p1): CSKH P1 backend](https://github.com/nobita6986/new-crm/pull/4) — **OPEN, KHÔNG merge**
-**SHA bàn giao:** `96ef842` — `fix(p1): close L-01..L-15 verification findings of the P1 backend` (HEAD của `codex/p1-foundation`, đã push lên `origin/codex/p1-foundation`)
-**Dữ liệu:** chỉ dữ liệu giả trên site DEV; không dùng production.
+**PR backend:** [#4 — feat(p1): CSKH P1 backend](https://github.com/nobita6986/new-crm/pull/4) — **OPEN, KHÔNG merge**
+**PR UI (đầy đủ P1):** [#5 — feat(p1): CSKH P1 UI](https://github.com/nobita6986/new-crm/pull/5) — **OPEN, KHÔNG merge**
+**SHA bàn giao backend:** `96ef842` — `fix(p1): close L-01..L-15 verification findings of the P1 backend` (HEAD của `codex/p1-foundation`, đã push lên `origin/codex/p1-foundation`)
+**SHA bàn giao UI:** `ec5b4f7` — `fix(p1): publish the CSRF header of the session so the direct-HTTP probe can read the token` (HEAD của `codex/p1-ui`, đã push lên `origin/codex/p1-ui`)
+**CI (PR #5, SHA `ec5b4f7`):** `P0 DEV verification` = run [`41455932205`](https://github.com/nobita6986/new-crm/actions/runs/41455932205) — **SUCCESS** (probe HTTP 18/18 PASS) · `P1 backend verification` = run [`41455932165`](https://github.com/nobita6986/new-crm/actions/runs/41455932165) — **SUCCESS**
+**Dữ liệu:** chỉ dữ liệu giả trên site kiểm định; không dùng production.
 
 ---
 
@@ -226,6 +229,21 @@ Workflow mới: [`.github/workflows/p1.yml`](../../.github/workflows/p1.yml). C�
 
 > Suite P1 **không** được trộn vào inventory 99 của P0: `p1_test_inventory.json` và
 > `g007_test_inventory.json` là hai file riêng, hai gate riêng, hai thư mục evidence riêng.
+
+### 4.1. CI của PR #5 (nhánh `codex/p1-ui`, SHA `ec5b4f7`)
+
+| Workflow | Run | Kết quả | Ghi chú |
+|---|---|---|---|
+| `P0 DEV verification` | [`41455932205`](https://github.com/nobita6986/new-crm/actions/runs/41455932205) | **SUCCESS** | probe HTTP trực tiếp **18/18 PASS** (`probe_result=PASS`, `failed_cases=[]`); 99 method P0 vẫn xanh |
+| `P1 backend verification` | [`41455932165`](https://github.com/nobita6986/new-crm/actions/runs/41455932165) | **SUCCESS** | per-method gate 174 method P1 + lint/format + schema |
+
+Run `P0 DEV verification` trước đó (`41450325670`, SHA `c32e48f`) **FAIL** ở
+case `csrf-page`: trang `/cskh` chỉ xuất `frappe.csrf_token = "…"`, còn probe
+trực tiếp đọc token qua mẫu `"X-Frappe-CSRF-Token": "<token>"` ⇒ token rỗng ⇒
+`sec14-post-ok` và 2 case `sec16-*` cũng fail (POST không có token hợp lệ).
+Sửa tại `ec5b4f7`: trang `/cskh` **xuất header CSRF của session** dưới dạng
+object JSON (`window.cskhCsrfHeader`), `window.frappe.csrf_token` đọc lại từ
+đó — một nguồn sự thật duy nhất cho cả trình duyệt lẫn probe.
 
 ---
 
@@ -449,6 +467,10 @@ Cả hai đều **không** đổi kỳ vọng của `test_p1_regressions` (71/71
 7. **Bộ lọc "team" và "user"** của dashboard (P1 §9.5) **chưa** có trong UI:
    endpoint chỉ nhận `campaign` / `date_from` / `date_to`.
 8. **PR chưa merge.** Nhánh `codex/p1-ui` chờ T1C kiểm định độc lập.
+9. **CI P0 DEV vừa được sửa để đọc được CSRF token** (`ec5b4f7`): trang `/cskh`
+   xuất header CSRF của session dưới dạng object JSON; probe HTTP đọc token
+   từ đó. Trước đó trang chỉ xuất `frappe.csrf_token` ⇒ probe rỗng token ⇒
+   3 case fail. Xem §4.1.
 
 ### 7.12. Tóm tắt trạng thái nghiệm thu (T1A)
 
@@ -462,6 +484,7 @@ Cả hai đều **không** đổi kỳ vọng của `test_p1_regressions` (71/71
 | Mã lỗi ổn định + HTTP status đúng hợp đồng | ✅ | `p1_errors` + `services/errors.py` |
 | Việt hóa 100 % chuỗi P1 | ✅ | 232/232, `vi.csv` 446 dòng |
 | Suite P1 + P0 core xanh trên nhánh merge | ✅ | 174 + 99 method |
+| CI P0 DEV (probe HTTP 18/18) + CI P1 đều xanh | ✅ | run `41455932205` · `41455932165` (SHA `ec5b4f7`) |
 | CI có bước kiểm tra UI | ❌ | Xem §7.11 mục 1 |
 | Test tự động cho DOM | ❌ | Xem §7.11 mục 2 |
 | Màn lịch sử batch + tải lỗi | ❌ | Xem §7.11 mục 4 |
