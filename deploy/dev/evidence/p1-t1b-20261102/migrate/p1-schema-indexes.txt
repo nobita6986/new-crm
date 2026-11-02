@@ -1,0 +1,51 @@
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Ignored
+tabCSKH Identity Index	0	PRIMARY	1	name	A	2422	NULL	NULL		BTREE			NO
+tabCSKH Identity Index	0	normalized_phone	1	normalized_phone	A	2422	NULL	NULL	YES	BTREE			NO
+tabCSKH Identity Index	0	canonical_lead	1	canonical_lead	A	2422	NULL	NULL	YES	BTREE			NO
+tabCSKH Identity Index	1	modified	1	modified	A	2422	NULL	NULL	YES	BTREE			NO
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Ignored
+tabCSKH Active Claim	0	PRIMARY	1	name	A	1024	NULL	NULL		BTREE			NO
+tabCSKH Active Claim	0	lead	1	lead	A	1024	NULL	NULL	YES	BTREE			NO
+tabCSKH Active Claim	0	work_item	1	work_item	A	1024	NULL	NULL	YES	BTREE			NO
+tabCSKH Active Claim	1	modified	1	modified	A	1024	NULL	NULL	YES	BTREE			NO
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Ignored
+tabCSKH Work Item	0	PRIMARY	1	name	A	2670	NULL	NULL		BTREE			NO
+tabCSKH Work Item	0	cskh_domain_unique	1	campaign	A	890	NULL	NULL	YES	BTREE			NO
+tabCSKH Work Item	0	cskh_domain_unique	2	lead	A	2670	NULL	NULL	YES	BTREE			NO
+tabCSKH Work Item	1	modified	1	modified	A	2670	NULL	NULL	YES	BTREE			NO
+tabCSKH Work Item	1	cskh_lookup_0	1	assigned_to	A	4	NULL	NULL	YES	BTREE			NO
+tabCSKH Work Item	1	cskh_lookup_0	2	status	A	4	NULL	NULL	YES	BTREE			NO
+tabCSKH Work Item	1	cskh_lookup_0	3	assigned_at	A	2670	NULL	NULL	YES	BTREE			NO
+tabCSKH Work Item	1	cskh_lookup_1	1	campaign	A	890	NULL	NULL	YES	BTREE			NO
+tabCSKH Work Item	1	cskh_lookup_1	2	status	A	890	NULL	NULL	YES	BTREE			NO
+tabCSKH Work Item	1	cskh_lookup_2	1	lead	A	2670	NULL	NULL	YES	BTREE			NO
+tabCSKH Work Item	1	cskh_lookup_2	2	status	A	2670	NULL	NULL	YES	BTREE			NO
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Ignored
+tabCSKH Assignment Rule	0	PRIMARY	1	name	A	523	NULL	NULL		BTREE			NO
+tabCSKH Assignment Rule	0	cskh_domain_unique	1	campaign	A	523	NULL	NULL	YES	BTREE			NO
+tabCSKH Assignment Rule	0	cskh_domain_unique	2	user	A	523	NULL	NULL	YES	BTREE			NO
+tabCSKH Assignment Rule	0	cskh_domain_unique	3	version	A	523	NULL	NULL		BTREE			NO
+tabCSKH Assignment Rule	1	modified	1	modified	A	523	NULL	NULL	YES	BTREE			NO
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Ignored
+tabCSKH Assignment History	0	PRIMARY	1	name	A	1418	NULL	NULL		BTREE			NO
+tabCSKH Assignment History	0	event_id	1	event_id	A	1418	NULL	NULL	YES	BTREE			NO
+tabCSKH Assignment History	1	modified	1	modified	A	1418	NULL	NULL	YES	BTREE			NO
+tabCSKH Assignment History	1	cskh_lookup_0	1	work_item	A	1418	NULL	NULL	YES	BTREE			NO
+tabCSKH Assignment History	1	cskh_lookup_0	2	event_at	A	1418	NULL	NULL	YES	BTREE			NO
+tabCSKH Assignment History	1	cskh_lookup_1	1	to_user	A	4	NULL	NULL	YES	BTREE			NO
+tabCSKH Assignment History	1	cskh_lookup_1	2	ownership_start	A	1418	NULL	NULL	YES	BTREE			NO
+tabCSKH Assignment History	1	cskh_lookup_1	3	ownership_end	A	1418	NULL	NULL	YES	BTREE			NO
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Ignored
+tabCSKH Import Batch	0	PRIMARY	1	name	A	213	NULL	NULL		BTREE			NO
+tabCSKH Import Batch	0	idempotency_key	1	idempotency_key	A	213	NULL	NULL	YES	BTREE			NO
+tabCSKH Import Batch	1	modified	1	modified	A	213	NULL	NULL	YES	BTREE			NO
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Ignored
+tabCSKH Distribution Run	0	PRIMARY	1	name	A	699	NULL	NULL		BTREE			NO
+tabCSKH Distribution Run	0	idempotency_key	1	idempotency_key	A	699	NULL	NULL	YES	BTREE			NO
+tabCSKH Distribution Run	1	modified	1	modified	A	699	NULL	NULL	YES	BTREE			NO
+tabCSKH Distribution Run	1	cskh_lookup_0	1	campaign	A	349	NULL	NULL	YES	BTREE			NO
+tabCSKH Distribution Run	1	cskh_lookup_0	2	status	A	349	NULL	NULL	YES	BTREE			NO
+Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_part	Packed	Null	Index_type	Comment	Index_comment	Ignored
+tabCSKH Campaign	0	PRIMARY	1	name	A	1256	NULL	NULL		BTREE			NO
+tabCSKH Campaign	0	code	1	code	A	1256	NULL	NULL	YES	BTREE			NO
+tabCSKH Campaign	1	modified	1	modified	A	1256	NULL	NULL	YES	BTREE			NO

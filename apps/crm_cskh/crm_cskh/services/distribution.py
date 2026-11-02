@@ -163,6 +163,9 @@ def _latest_state(campaign, version):
 	state the committed assignments produced, and the name is the stable
 	tie-break.
 	"""
+	# `frappe.db.get_all` is the **database level** API: it does not apply the
+	# row-level permission, so it is only safe here because the output is
+	# reduced to the campaign state of the run, never returned to a caller.
 	runs = frappe.db.get_all(
 		"CSKH Distribution Run",
 		filters={
@@ -453,19 +456,50 @@ def get_run(run_id, actor=None):
 
 
 def reconcile(campaign, actor=None):
-	"""Reconcile the persisted state with the database (P1 7.4, 12.5)."""
+	"""Reconcile the persisted state with the database (P1 7.4, 12.5).
+
+	The reconciliation compares **five independent numbers** (P1 §12.5):
+
+	* the distinct leads (the customers),
+	* the work items,
+	* the active claims,
+	* the current owners,
+	* the assignment events.
+
+	The events are read from `CSKH Assignment History`, whose assignee column
+	is `to_user` — not `assigned_to`, which is the column of the work item
+	(L-01). The events are filtered by the **campaign of the run** that
+	produced them, so the history of the whole installation is never added to
+	the reconciliation of one campaign.
+	"""
 	actor = actor or frappe.session.user
 	loads = _campaign_loads(campaign)
+
+	# The events of a campaign are the events of the **work items** of that
+	# campaign — the events that carry its `distribution_run` **and** the
+	# manual events of the same work items. The history of the whole
+	# installation is never added to the reconciliation of one campaign
+	# (L-01).
 	counts = frappe.db.sql(
-		"""select to_user as user, count(*) as total
-		   from `tabCSKH Assignment History`
-		   where action = 'assign' group by to_user""",
+		"""select h.to_user as user, count(*) as total
+		   from `tabCSKH Assignment History` h
+		   inner join `tabCSKH Work Item` wi on wi.name = h.work_item
+		   where wi.campaign = %s and h.action = 'assign'
+		   group by h.to_user""",
+		(campaign,),
 		as_dict=True,
 	)
+
+	distinct_leads = frappe.db.sql(
+		"select count(distinct lead) from `tabCSKH Work Item` where campaign = %s",
+		(campaign,),
+	)[0][0]
+
 	return {
 		"campaign": campaign,
 		"current_owners": loads,
 		"assignment_events": {row.user: int(row.total) for row in counts if row.user},
+		"distinct_leads": int(distinct_leads),
 		"active_work_items": frappe.db.count("CSKH Work Item", {"campaign": campaign, "status": "assigned"}),
 		"active_claims": frappe.db.count("CSKH Active Claim", {"campaign": campaign}),
 		"as_of": now_datetime(),

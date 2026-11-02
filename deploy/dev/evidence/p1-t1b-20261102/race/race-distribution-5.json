@@ -1,0 +1,18 @@
+{
+  "mode": "distribution",
+  "workers": 5,
+  "lead": "CRM-LEAD-2026-01661",
+  "campaign": "7pnt07dce5",
+  "claims": 1,
+  "work_items": 1,
+  "duplicate_items": 0,
+  "winners": 1,
+  "errors": [
+    "UniqueValidationError: ('CSKH Work Item', '7qeg5sjqks', IntegrityError(1062, \"Duplicate entry '7pnt07dce5-CRM-LEAD-2026-01661' for key 'cskh_domain_unique'\"))",
+    "UniqueValidationError: ('CSKH Work Item', '7qqs56pgdo', IntegrityError(1062, \"Duplicate entry '7pnt07dce5-CRM-LEAD-2026-01661' for key 'cskh_domain_unique'\"))",
+    "UniqueValidationError: ('CSKH Work Item', '7r62l1m95g', IntegrityError(1062, \"Duplicate entry '7pnt07dce5-CRM-LEAD-2026-01661' for key 'cskh_domain_unique'\"))",
+    "UniqueValidationError: ('CSKH Work Item', '7rknnvsvf8', IntegrityError(1062, \"Duplicate entry '7pnt07dce5-CRM-LEAD-2026-01661' for key 'cskh_domain_unique'\"))"
+  ],
+  "ok": true
+}
+{"mode": "distribution", "workers": 5, "lead": "CRM-LEAD-2026-01661", "campaign": "7pnt07dce5", "claims": 1, "work_items": 1, "duplicate_items": 0, "winners": 1, "errors": ["UniqueValidationError: ('CSKH Work Item', '7qeg5sjqks', IntegrityError(1062, \"Duplicate entry '7pnt07dce5-CRM-LEAD-2026-01661' for key 'cskh_domain_unique'\"))", "UniqueValidationError: ('CSKH Work Item', '7qqs56pgdo', IntegrityError(1062, \"Duplicate entry '7pnt07dce5-CRM-LEAD-2026-01661' for key 'cskh_domain_unique'\"))", "UniqueValidationError: ('CSKH Work Item', '7r62l1m95g', IntegrityError(1062, \"Duplicate entry '7pnt07dce5-CRM-LEAD-2026-01661' for key 'cskh_domain_unique'\"))", "UniqueValidationError: ('CSKH Work Item', '7rknnvsvf8', IntegrityError(1062, \"Duplicate entry '7pnt07dce5-CRM-LEAD-2026-01661' for key 'cskh_domain_unique'\"))"], "ok": true}
