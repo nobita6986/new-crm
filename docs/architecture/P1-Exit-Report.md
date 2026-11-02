@@ -6,6 +6,7 @@
 **Báo cáo đầu vào:** [`deploy/dev/evidence/t1c-p1-verification-baseline-2026-11-02.md`](../../deploy/dev/evidence/t1c-p1-verification-baseline-2026-11-02.md) (L-01 … L-15)
 **Kế hoạch:** [`docs/root-plan/P1.md`](../root-plan/P1.md)
 **PR:** [#4 — feat(p1): CSKH P1 backend](https://github.com/nobita6986/new-crm/pull/4) — **OPEN, KHÔNG merge**
+**SHA bàn giao:** `96ef842` — `fix(p1): close L-01..L-15 verification findings of the P1 backend` (HEAD của `codex/p1-foundation`, đã push lên `origin/codex/p1-foundation`)
 **Dữ liệu:** chỉ dữ liệu giả trên site DEV; không dùng production.
 
 ---
