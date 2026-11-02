@@ -30,15 +30,22 @@ REASON_CAPACITY_FULL = "capacity_full"
 
 
 def campaign_rules(campaign, version=None):
-	"""Return the enabled rules of a campaign as allocator-shaped dicts."""
+	"""Return the enabled rules of a campaign as allocator-shaped dicts.
+
+	The rules are read with `frappe.get_list`, so the row-level permission of
+	the caller applies: a leader only receives the rules of their own team
+	(P1 §8.2: `frappe.get_all` must not be used to bypass the row-level
+	permission).
+	"""
 	filters = {"campaign": campaign, "enabled": 1}
 	if version is not None:
 		filters["version"] = version
-	rules = frappe.get_all(
+	rules = frappe.get_list(
 		"CSKH Assignment Rule",
 		filters=filters,
 		fields=["name", "user", "team", "weight", "capacity_limit", "version", "enabled"],
 		order_by="user asc",
+		limit_page_length=0,
 	)
 	return [
 		{
@@ -56,13 +63,13 @@ def campaign_rules(campaign, version=None):
 
 def current_rule_version(campaign):
 	"""The highest rule version configured for a campaign."""
-	versions = frappe.db.get_all(
+	versions = frappe.get_list(
 		"CSKH Assignment Rule",
 		filters={"campaign": campaign},
 		fields=["version"],
-		pluck="version",
+		limit_page_length=0,
 	)
-	return max([int(v or 1) for v in versions], default=1)
+	return max([int(row.version or 1) for row in versions], default=1)
 
 
 def capacity_usage(campaign, user):

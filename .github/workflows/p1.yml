@@ -88,7 +88,8 @@ jobs:
             crm_cskh.tests.test_p1_distribution \
             crm_cskh.tests.test_p1_imports \
             crm_cskh.tests.test_p1_api_permissions \
-            crm_cskh.tests.test_p1_concurrency
+            crm_cskh.tests.test_p1_concurrency \
+            crm_cskh.tests.test_p1_regressions
           do
             slug="${module##*.}"
             container_log="/tmp/p1-evidence/${slug}.log"

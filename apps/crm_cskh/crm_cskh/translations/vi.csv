@@ -216,3 +216,222 @@ created this lead,đã tạo khách hàng tiềm năng này
 Due Date,Hạn chót,CRM Task
 Lead Name,Tên khách hàng,CRM Lead
 Search or type a command ({0}),Tìm kiếm hoặc nhập lệnh ({0})
+1. Upload a private file,1. Tải lên tệp riêng tư
+2. Preview and confirm,2. Xem trước và xác nhận
+3. Follow the progress,3. Theo dõi tiến độ
+A queued, revoked or closed work item must not have an assignee.,Công việc đang chờ, đã thu hồi hoặc đã đóng không được có người phụ trách.
+A revocation event must not have a target user.,Sự kiện thu hồi không được có người nhận.
+ALREADY_ASSIGNED,Đã được giao (ALREADY_ASSIGNED)
+Active campaigns,Chiến dịch đang hoạt động
+An assigned work item requires an assignee.,Công việc đã giao bắt buộc có người phụ trách.
+An assigned work item requires an assignment timestamp.,Công việc đã giao bắt buộc có thời điểm phân công.
+An assignment event requires a target user.,Sự kiện phân công bắt buộc có người nhận.
+Apply filters,Áp dụng bộ lọc
+Assigned,Đã giao
+Assigned at,Giao lúc
+Assigned in the run,Giao trong đợt phân phối
+Assigned in this run,Giao trong đợt này
+Assigned now,Đang được giao
+Assigned work items,Công việc đã giao
+Assignee,Người được giao
+Assignment events,Số sự kiện phân công
+Assignment history is append-only; use a compensating event.,Lịch sử phân công chỉ được ghi thêm; hãy dùng sự kiện bù trừ.
+Assignment rules,Quy tắc phân công
+Batch,Lô
+CAPACITY_EXCEEDED,Vượt quá sức chứa (CAPACITY_EXCEEDED)
+CAPACITY_FULL,Đã đầy sức chứa (CAPACITY_FULL)
+CONFLICT,Xung đột (CONFLICT)
+CSV or XLSX, up to 10 MB. Keep the phone column as text so the leading zero is not lost.,CSV hoặc XLSX, tối đa 10 MB. Giữ cột số điện thoại ở dạng văn bản để không mất số 0 ở đầu.
+Campaign,Chiến dịch
+Campaigns,Chiến dịch
+Campaigns and distribution rules,Chiến dịch và quy tắc phân phối
+Campaigns and rules,Chiến dịch và quy tắc
+Cancel,Hủy
+Capacity,Sức chứa
+Classification,Phân loại
+Close,Đóng
+Closed,Đã đóng
+Code,Mã
+Column mapping,Ánh xạ cột
+Column mapping must be a JSON object.,Ánh xạ cột phải là một đối tượng JSON.
+Committed at,Thời điểm ghi nhận
+Confirm,Xác nhận
+Confirm distribution,Xác nhận phân phối
+Confirm import,Xác nhận nhập
+Conflict,Xung đột
+Create campaign,Tạo chiến dịch
+Created,Đã tạo
+Created at,Thời điểm tạo
+Current owners,Người đang phụ trách
+Current owners are counted from work items; assignment events come from the audit trail.,Người đang phụ trách được đếm từ công việc; sự kiện phân công lấy từ nhật ký kiểm toán.
+Currently assigned,Đang được giao
+Customer,Khách hàng
+Customer pool,Kho khách hàng
+Customer pool, imports, campaigns and distribution.,Kho khách hàng, nhập danh sách, chiến dịch và phân phối.
+Customers assigned to me,Khách hàng được giao cho tôi
+Customers assigned to me.,Khách hàng được giao cho tôi.
+Customers currently assigned to you.,Những khách hàng hiện đang được giao cho bạn.
+DUPLICATE,Trùng lặp (DUPLICATE)
+Data as of,Dữ liệu tính đến
+Description,Mô tả
+Display name,Tên hiển thị
+Distribution,Phân phối
+Distribution completed with errors.,Đã phân phối xong nhưng có lỗi.
+Distribution completed.,Đã phân phối xong.
+Distribution dashboard,Bảng điều khiển phân phối
+Distribution runs,Đợt phân phối
+Distribution state,Trạng thái phân phối
+Duplicate rows,Số dòng trùng
+Eligibility,Đủ điều kiện
+Eligible,Đủ điều kiện
+Eligible customers,Khách hàng đủ điều kiện
+Eligible in the pool,Đủ điều kiện trong kho
+Ended at,Kết thúc lúc
+Error rows,Số dòng lỗi
+Errors,Số lỗi
+Excluded,Bị loại
+Excluded customers,Khách hàng bị loại
+Expires at,Hết hạn lúc
+FILE_TOO_LARGE,Tệp quá lớn (FILE_TOO_LARGE)
+FORBIDDEN,Không có quyền (FORBIDDEN)
+Failed batches,Lô nhập lỗi
+File,Tệp
+INVALID_PHONE,Số điện thoại không hợp lệ (INVALID_PHONE)
+INVALID_REQUEST,Yêu cầu không hợp lệ (INVALID_REQUEST)
+Import counters must not be negative.,Bộ đếm nhập dữ liệu không được âm.
+Import history,Lịch sử nhập
+Import list,Nhập danh sách
+Import source files must be private.,Tệp nguồn nhập dữ liệu phải là riêng tư.
+Leads in your scope, with the derived distribution state.,Khách hàng tiềm năng trong phạm vi của bạn, kèm trạng thái phân phối.
+Loading...,Đang tải...
+Log in to access this page.,Hãy đăng nhập để truy cập trang này.
+My customers,Khách được giao
+NOT_FOUND,Không tìm thấy (NOT_FOUND)
+NO_ELIGIBLE_LEADS,Không có khách hàng đủ điều kiện (NO_ELIGIBLE_LEADS)
+Name or phone number,Tên hoặc số điện thoại
+New campaign,Chiến dịch mới
+New rows,Số dòng mới
+Next,Trang sau
+No assignment rule yet.,Chưa có quy tắc phân công nào.
+No campaign yet.,Chưa có chiến dịch nào.
+No customers match the current filters.,Không có khách hàng nào khớp với bộ lọc hiện tại.
+No data,Không có dữ liệu
+No data in the current scope.,Không có dữ liệu trong phạm vi hiện tại.
+No import batch yet.,Chưa có lô nhập nào.
+Normalized share,Tỷ lệ chuẩn hóa
+Not distributed,Chưa phân phối
+Only an active work item may hold an active claim.,Chỉ công việc đang hoạt động mới được giữ quyền sở hữu đang hoạt động.
+Only the customers that are currently assigned to you.,Chỉ những khách hàng đang được giao cho bạn.
+Open in CRM,Mở trong CRM
+Operational distribution figures for your scope.,Số liệu phân phối trong phạm vi của bạn.
+Owner,Người phụ trách
+PARTIAL_SUCCESS,Thành công một phần (PARTIAL_SUCCESS)
+PREVIEW_EXPIRED,Bản xem trước đã hết hạn (PREVIEW_EXPIRED)
+Per assignee,Theo người được giao
+Per campaign,Theo chiến dịch
+Phone column,Cột số điện thoại
+Phone number,Số điện thoại
+Planned,Dự kiến
+Preview,Xem trước
+Preview ID,Mã xem trước
+Preview distribution,Xem trước phân phối
+Preview first. Executing is a separate, explicitly confirmed action.,Phải xem trước trước. Thực thi là hành động riêng biệt và phải được xác nhận rõ ràng.
+Preview is ready. Review the numbers before confirming.,Đã sẵn sàng xem trước. Hãy rà soát các con số trước khi xác nhận.
+Previous,Trang trước
+Queued,Trong hàng đợi
+RETRYABLE_FAILURE,Lỗi có thể thử lại (RETRYABLE_FAILURE)
+RULE_CHANGED,Quy tắc đã thay đổi (RULE_CHANGED)
+Refresh,Làm mới
+Remaining capacity,Sức chứa còn lại
+Resolve the active work items before closing the campaign; nothing is released implicitly.,Hãy xử lý các công việc đang hoạt động trước khi đóng chiến dịch; không có gì được giải phóng ngầm.
+Revoked,Đã thu hồi
+Row,Dòng
+Rule version,Phiên bản quy tắc
+Run ID,Mã đợt chạy
+Save,Lưu
+Scope,Phạm vi
+Search,Tìm kiếm
+Search by name or phone number.,Tìm theo tên hoặc số điện thoại.
+Selection fingerprint,Vân tay lựa chọn
+Set up the target set and the weights, then preview before distributing.,Thiết lập tập mục tiêu và trọng số, rồi xem trước trước khi phân phối.
+Share,Tỷ lệ
+Source,Nguồn
+Start over,Bắt đầu lại
+Started at,Bắt đầu lúc
+TOO_MANY_ROWS,Quá nhiều dòng (TOO_MANY_ROWS)
+Team,Đội
+Team scope,Phạm vi đội
+The active claim must reference the same lead and campaign as its work item.,Quyền sở hữu đang hoạt động phải trỏ tới cùng khách hàng và chiến dịch với công việc của nó.
+The actual payload must be valid JSON.,Dữ liệu kết quả phải là JSON hợp lệ.
+The allocator state must be a JSON object.,Trạng thái bộ phân bổ phải là một đối tượng JSON.
+The allocator state must be valid JSON.,Trạng thái bộ phân bổ phải là JSON hợp lệ.
+The assignee must be an enabled Sales User.,Người được giao phải là nhân viên bán hàng đang hoạt động.
+The campaign is already distributed by another executor.,Chiến dịch đã được một bộ thực thi khác phân phối.
+The canonical lead must have a mobile number.,Khách hàng chuẩn phải có số điện thoại di động.
+The distribution run,Đợt phân phối
+The distribution state changed after the preview. Run the preview again.,Trạng thái phân phối đã thay đổi sau khi xem trước. Hãy chạy lại xem trước.
+The end date must not precede the start date.,Ngày kết thúc không được trước ngày bắt đầu.
+The event id is required so the event stays idempotent.,Cần có mã sự kiện để sự kiện giữ tính idempotent.
+The file must be CSV or XLSX.,Tệp phải là CSV hoặc XLSX.
+The import batch,Lô nhập dữ liệu
+The phone column was not found. Map the column that holds the phone number.,Không tìm thấy cột số điện thoại. Hãy ánh xạ cột chứa số điện thoại.
+The phone identity must be a canonical Vietnamese mobile number.,Định danh số điện thoại phải là số di động Việt Nam chuẩn hóa.
+The phone identity must match the canonical lead mobile number.,Định danh số điện thoại phải khớp với số di động của khách hàng chuẩn.
+The preview has expired. Run the preview again.,Bản xem trước đã hết hạn. Hãy xem trước lại.
+The preview payload must be valid JSON.,Dữ liệu xem trước phải là JSON hợp lệ.
+The rule version must be positive.,Phiên bản quy tắc phải là số dương.
+The rules changed after the preview. Run the preview again.,Quy tắc đã thay đổi sau khi xem trước. Hãy chạy lại xem trước.
+The selection fingerprint is required.,Cần có vân tay lựa chọn.
+The selection must be a JSON object.,Tập lựa chọn phải là một đối tượng JSON.
+The upload failed.,Tải lên thất bại.
+This campaign, assignee and version already has a rule.,Chiến dịch, người được giao và phiên bản này đã có quy tắc.
+Title,Tiêu đề
+Total pool, assigned, unassigned, per team, per user and per campaign.,Tổng kho, đã giao, chưa giao, theo đội, theo người và theo chiến dịch.
+Total rows,Tổng số dòng
+UNSUPPORTED_FORMAT,Định dạng không được hỗ trợ (UNSUPPORTED_FORMAT)
+Unassigned or conflicted work items,Công việc chưa giao hoặc xung đột
+Unique customers,Số khách hàng duy nhất
+Unique customers in scope,Khách hàng duy nhất trong phạm vi
+Upload a private file, map the phone column, preview, then confirm.,Tải lên tệp riêng tư, ánh xạ cột số điện thoại, xem trước rồi xác nhận.
+Valid rows,Số dòng hợp lệ
+Weight,Trọng số
+Weight and version must be positive; capacity must not be negative.,Trọng số và phiên bản phải là số dương; sức chứa không được âm.
+Work item,Công việc
+Work item status,Trạng thái công việc
+Work items,Số công việc
+You do not have permission to access this page.,Bạn không có quyền truy cập trang này.
+You have not been assigned any customer yet.,Anh/chị chưa được giao khách hàng nào.
+active_claim_in_other_campaign,Đang được giữ bởi chiến dịch khác
+assignment_failed,Phân công thất bại
+capacity_full,Đã đầy sức chứa
+conflict_active_campaign,Xung đột chiến dịch đang hoạt động
+duplicate_in_crm,Trùng trong CRM
+duplicate_in_file,Trùng trong tệp
+invalid,Không hợp lệ
+no_assignment_rule,Chưa có quy tắc phân công
+no_canonical_identity,Chưa có định danh chuẩn
+no_eligible_assignee,Không có người nhận đủ điều kiện
+no_positive_weight,Trọng số không dương
+owned_outside_cskh,Được quản lý ngoài phạm vi CSKH
+user_disabled,Tài khoản đã bị vô hiệu hóa
+user_is_not_sales_user,Không phải nhân viên bán hàng
+user_out_of_team_scope,Ngoài phạm vi đội được phép
+valid,Hợp lệ
+work_item_exists_in_campaign,Đã có công việc trong chiến dịch
+{0} cannot move from {1} to {2}.,{0} không thể chuyển từ {1} sang {2}.
+The phone number is not a valid Vietnamese mobile number.,Số điện thoại không phải là số di động Việt Nam hợp lệ.
+The customer already exists in the CRM.,Khách hàng đã tồn tại trong CRM.
+The customer is already assigned in another campaign.,Khách hàng đã được giao trong chiến dịch khác.
+The assignment rules changed after the preview. Run the preview again.,Quy tắc phân công đã thay đổi sau khi xem trước. Hãy xem trước lại.
+The assignment exceeds the capacity of the assignee.,Phân công vượt quá sức chứa của người được giao.
+The operation conflicts with the current state of the data.,Thao tác xung đột với trạng thái hiện tại của dữ liệu.
+You do not have permission to perform this operation.,Bạn không có quyền thực hiện thao tác này.
+The operation completed with some failures. Review the failed rows.,Thao tác hoàn tất nhưng có một phần lỗi. Hãy xem lại các dòng lỗi.
+The operation failed temporarily. Try again.,Thao tác lỗi tạm thời. Hãy thử lại.
+The file format is not supported.,Định dạng tệp không được hỗ trợ.
+The file is larger than the allowed limit.,Tệp vượt quá giới hạn cho phép.
+The file has more rows than the allowed limit.,Tệp có nhiều dòng hơn giới hạn cho phép.
+The request is invalid.,Yêu cầu không hợp lệ.
+The requested data does not exist.,Dữ liệu yêu cầu không tồn tại.
+No customer is eligible for this campaign.,Không có khách hàng nào đủ điều kiện cho chiến dịch này.
+The capacity of the assignee is exhausted.,Sức chứa của người được giao đã cạn.
