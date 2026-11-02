@@ -283,7 +283,13 @@ override_whitelisted_methods = {
 # ----------------
 before_request = ["crm_cskh.i18n.set_guest_language"]
 update_website_context = ["crm_cskh.i18n.update_website_context"]
-after_request = ["crm_cskh.errors.normalize_error_response"]
+after_request = [
+	"crm_cskh.errors.normalize_error_response",
+	# P1: the stable business error codes of the frozen contract must reach the
+	# browser (P1 §10.1). Without this hook every P1 error is a generic HTTP
+	# 500 and the UI cannot tell a conflict from a permission denial.
+	"crm_cskh.p1_errors.normalize_p1_error_response",
+]
 
 # Job Events
 # ----------

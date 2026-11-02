@@ -1,0 +1,82 @@
+﻿{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Campaigns and distribution rules") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Set up the target set and the weights, then preview before distributing.") }}{% endblock %}
+
+{% block cskh_body %}
+<div id="campaign-alert" aria-live="polite"></div>
+
+<div class="cskh-card">
+	<h2>{{ _("Campaigns") }}</h2>
+	<div id="campaign-list-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="campaign-list"></div>
+</div>
+
+<div class="cskh-card">
+	<h2>{{ _("New campaign") }}</h2>
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Code") }}
+			<input id="campaign-code" class="cskh-input" type="text">
+		</label>
+		<label class="cskh-field">
+			{{ _("Title") }}
+			<input id="campaign-title" class="cskh-input" type="text">
+		</label>
+		<label class="cskh-field">
+			{{ _("Description") }}
+			<input id="campaign-description" class="cskh-input" type="text">
+		</label>
+		<label class="cskh-field">
+			{{ _("Status") }}
+			<select id="campaign-status" class="cskh-select">
+				<option value="Draft">Draft</option>
+				<option value="Active">Active</option>
+				<option value="Paused">Paused</option>
+				<option value="Closed">Closed</option>
+			</select>
+		</label>
+		<label class="cskh-field">
+			{{ _("Team scope") }}
+			<input id="campaign-team" class="cskh-input" type="text">
+		</label>
+		<button id="campaign-create" class="cskh-btn is-primary" type="button">
+			{{ _("Create campaign") }}
+		</button>
+	</div>
+</div>
+
+<div class="cskh-card">
+	<h2>{{ _("Assignment rules") }}</h2>
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Campaign") }}
+			<select id="rule-campaign" class="cskh-select"></select>
+		</label>
+	</div>
+	<div id="rule-list-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="rule-list"></div>
+</div>
+
+<div class="cskh-card">
+	<h2>{{ _("Distribution") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Preview first. Executing is a separate, explicitly confirmed action.") }}
+	</p>
+	<div class="cskh-actions">
+		<button id="dist-preview" class="cskh-btn is-primary" type="button">
+			{{ _("Preview distribution") }}
+		</button>
+		<button id="dist-execute" class="cskh-btn" type="button" disabled>
+			{{ _("Confirm distribution") }}
+		</button>
+	</div>
+	<div id="dist-summary"></div>
+	<div id="dist-targets"></div>
+	<div id="dist-results"></div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/campaigns.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}

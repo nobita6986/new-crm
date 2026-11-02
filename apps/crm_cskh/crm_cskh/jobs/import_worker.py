@@ -139,9 +139,12 @@ def _process(batch):
 	batch.valid_rows = classification["valid_rows"]
 	batch.new_rows = classification["new_rows"]
 	batch.duplicate_rows = classification["duplicate_rows"]
-	batch.error_rows = classification["error_rows"] + len(
-		[row for row in error_rows if row.get("reason") != "invalid_row"]
-	)
+	# The error rows are the rows of the error report, and the report contains
+	# the rows the preview already rejected *and* the rows that failed while
+	# they were committed. Counting `classification["error_rows"]` **and** the
+	# report would count every rejected row twice, so the counter is the size
+	# of the report (P1 6.4: the counters are reconciled, never summed).
+	batch.error_rows = len(error_rows)
 	batch.total_rows = classification["total_rows"]
 	batch.status = "COMPLETED_WITH_ERRORS" if batch.error_rows else "COMPLETED"
 	batch.committed_at = now_datetime()
