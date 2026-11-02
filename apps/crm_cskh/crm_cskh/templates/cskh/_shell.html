@@ -34,9 +34,13 @@
 	window.cskhErrorCodes = {{ cskh_error_codes | tojson }}
 	window.cskhErrorTexts = {{ cskh_error_texts | tojson }}
 	// The CSRF token of the *current* Frappe session: every mutation of the
-	// P1 pages sends it in the `X-Frappe-CSRF-Token` header.
+	// P1 pages sends it in the `X-Frappe-CSRF-Token` header. The header object
+	// is the single source of truth of the token, the browser code reads it
+	// from here (`window.cskhCsrfHeader`) and the Frappe web client reads it
+	// from `window.frappe.csrf_token`.
+	window.cskhCsrfHeader = {{ cskh_csrf_header | tojson }}
 	window.frappe = window.frappe || {}
-	window.frappe.csrf_token = {{ csrf_token | tojson }}
+	window.frappe.csrf_token = window.cskhCsrfHeader["X-Frappe-CSRF-Token"]
 </script>
 <script src="/assets/crm_cskh/cskh/cskh.js?v={{ cskh_asset_version | default('') }}"></script>
 <link rel="stylesheet" href="/assets/crm_cskh/cskh/cskh.css?v={{ cskh_asset_version | default('') }}">

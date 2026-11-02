@@ -158,6 +158,10 @@ def build_context(
 
 	context.no_cache = 1
 	context.csrf_token = frappe.sessions.get_csrf_token()
+	# The CSRF header of the current session, published as a JSON object so
+	# the browser sends exactly the same token on every mutation and the
+	# direct-HTTP CI probe can read the token out of the rendered page.
+	context.cskh_csrf_header = {"X-Frappe-CSRF-Token": context.csrf_token}
 	context.cskh_user = frappe.session.user
 	context.cskh_route = route
 	context.cskh_page_title = title
