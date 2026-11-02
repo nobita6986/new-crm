@@ -1,0 +1,207 @@
+"""Eligibility rules for campaigns and assignees (P1 7.1, 7.2).
+
+The rules are evaluated again at execute time, not only at preview time
+(P1 7.1 #5), so a lead that became ineligible between preview and execute is
+skipped with a recorded reason instead of being assigned.
+
+The campaign selection resolves to the **customer pool** (the canonical leads
+of `CSKH Identity Index`), not to the existing work items: a lead that already
+has a work item in the campaign is *excluded* by `_lead_exclusion_reason`, so
+selecting the work items themselves would make every campaign ineligible.
+"""
+
+import json
+
+import frappe
+
+from crm_cskh.p1_models import ACTIVE_WORK_ITEM_STATES
+
+# Reasons are stable strings so the UI can group them.
+REASON_NO_IDENTITY = "no_canonical_identity"
+REASON_WORK_ITEM_EXISTS = "work_item_exists_in_campaign"
+REASON_ACTIVE_CLAIM = "active_claim_in_other_campaign"
+REASON_OWNED_OUTSIDE = "owned_outside_cskh"
+REASON_RULE_MISSING = "no_assignment_rule"
+REASON_USER_DISABLED = "user_disabled"
+REASON_USER_WRONG_TEAM = "user_out_of_team_scope"
+REASON_USER_NOT_SALES = "user_is_not_sales_user"
+REASON_NO_WEIGHT = "no_positive_weight"
+REASON_CAPACITY_FULL = "capacity_full"
+
+
+def campaign_rules(campaign, version=None):
+	"""Return the enabled rules of a campaign as allocator-shaped dicts."""
+	filters = {"campaign": campaign, "enabled": 1}
+	if version is not None:
+		filters["version"] = version
+	rules = frappe.get_all(
+		"CSKH Assignment Rule",
+		filters=filters,
+		fields=["name", "user", "team", "weight", "capacity_limit", "version", "enabled"],
+		order_by="user asc",
+	)
+	return [
+		{
+			"rule": rule.name,
+			"user": rule.user,
+			"team": rule.team,
+			"weight": int(rule.weight or 0),
+			"capacity": int(rule.capacity_limit or 0),
+			"version": int(rule.version or 1),
+			"enabled": bool(rule.enabled),
+		}
+		for rule in rules
+	]
+
+
+def current_rule_version(campaign):
+	"""The highest rule version configured for a campaign."""
+	versions = frappe.db.get_all(
+		"CSKH Assignment Rule",
+		filters={"campaign": campaign},
+		fields=["version"],
+		pluck="version",
+	)
+	return max([int(v or 1) for v in versions], default=1)
+
+
+def capacity_usage(campaign, user):
+	"""Active assigned work items of `user` in `campaign` (P1 1.3)."""
+	return frappe.db.count(
+		"CSKH Work Item",
+		{"campaign": campaign, "assigned_to": user, "status": "assigned"},
+	)
+
+
+def eligible_assignees(campaign, team_scope=None, version=None):
+	"""Return the assignees that may receive a work item right now.
+
+	Each returned entry carries the reason it is eligible so the UI can explain
+	the plan.
+	"""
+	rules = campaign_rules(campaign, version=version)
+	eligible = []
+	excluded = []
+	for rule in rules:
+		reason = _assignee_exclusion_reason(rule, team_scope, campaign)
+		if reason:
+			excluded.append({"user": rule["user"], "weight": rule["weight"], "reason": reason})
+			continue
+		rule["used"] = capacity_usage(campaign, rule["user"])
+		rule["remaining"] = (rule["capacity"] - rule["used"]) if rule["capacity"] else None
+		eligible.append(rule)
+	return eligible, excluded
+
+
+def _assignee_exclusion_reason(rule, team_scope, campaign):
+	user = rule["user"]
+	if not frappe.db.get_value("User", user, "enabled"):
+		return REASON_USER_DISABLED
+	if "Sales User" not in frappe.get_roles(user):
+		return REASON_USER_NOT_SALES
+	if not rule["weight"] or rule["weight"] <= 0:
+		return REASON_NO_WEIGHT
+	if team_scope and rule["team"] and rule["team"] != team_scope:
+		return REASON_USER_WRONG_TEAM
+	if rule["capacity"] and capacity_usage(campaign, user) >= rule["capacity"]:
+		return REASON_CAPACITY_FULL
+	return None
+
+
+def eligible_leads(campaign, limit=None):
+	"""Return the leads that can enter the campaign, with the reason for exclusion.
+
+	Returns a dict with `eligible` (list of lead names), `excluded` (list of
+	`{lead, reason}`) and `counts`.
+	"""
+	campaign_doc = frappe.db.get_value(
+		"CSKH Campaign", campaign, ["name", "team_scope", "status"], as_dict=True
+	)
+	if not campaign_doc:
+		return {"eligible": [], "excluded": [], "counts": {}}
+
+	selection = frappe.db.get_value("CSKH Campaign", campaign, "selection_json")
+	leads = _selection_leads(campaign, selection)
+
+	eligible = []
+	excluded = []
+	for lead in leads:
+		reason = _lead_exclusion_reason(campaign, lead)
+		if reason:
+			excluded.append({"lead": lead, "reason": reason})
+		else:
+			eligible.append(lead)
+		if limit and len(eligible) >= limit:
+			break
+
+	return {
+		"eligible": eligible,
+		"excluded": excluded,
+		"counts": {
+			"considered": len(leads),
+			"eligible": len(eligible),
+			"excluded": len(excluded),
+		},
+	}
+
+
+def _selection_leads(campaign, selection_json):
+	"""Resolve the campaign selection into a list of lead names.
+
+	Supported `selection_json` shapes (all optional):
+
+	* `{"leads": ["CRM-LEAD-0001", ...]}` — an explicit list;
+	* `{"source": "Facebook"}` — every canonical lead of that source;
+	* `{}` (empty) — the whole customer pool of the site.
+
+	The pool is the set of canonical leads known to `CSKH Identity Index`
+	(ADR-P1-01). It is deliberately *not* derived from the work items: a lead
+	that already has a work item in this campaign is excluded from the
+	selection by `_lead_exclusion_reason`.
+	"""
+	selection = {}
+	if selection_json:
+		try:
+			selection = json.loads(selection_json)
+		except (ValueError, TypeError):
+			selection = {}
+	if not isinstance(selection, dict):
+		selection = {}
+
+	if selection.get("leads"):
+		return list(selection["leads"])
+
+	source = selection.get("source")
+	if source:
+		rows = frappe.db.sql(
+			"""select ii.canonical_lead as lead
+			   from `tabCSKH Identity Index` ii
+			   inner join `tabCRM Lead` l on l.name = ii.canonical_lead
+			   where l.source = %s
+			   order by ii.canonical_lead asc""",
+			(source,),
+			pluck=True,
+		)
+		return list(rows)
+
+	return frappe.db.sql(
+		"select canonical_lead as lead from `tabCSKH Identity Index` order by canonical_lead asc",
+		pluck=True,
+	)
+
+
+def _lead_exclusion_reason(campaign, lead):
+	from crm_cskh.services import identity as identity_service
+
+	if not identity_service.find_by_lead(lead):
+		return REASON_NO_IDENTITY
+	if frappe.db.exists("CSKH Work Item", {"campaign": campaign, "lead": lead}):
+		return REASON_WORK_ITEM_EXISTS
+	claim = frappe.db.get_value("CSKH Active Claim", {"lead": lead}, ["campaign", "work_item"], as_dict=True)
+	if claim and claim.campaign != campaign:
+		return REASON_ACTIVE_CLAIM
+	if claim and claim.campaign == campaign:
+		item = frappe.db.get_value("CSKH Work Item", claim.work_item, "status")
+		if item not in ACTIVE_WORK_ITEM_STATES:
+			return REASON_WORK_ITEM_EXISTS
+	return None
