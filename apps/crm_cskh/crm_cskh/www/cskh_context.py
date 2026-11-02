@@ -150,15 +150,11 @@ def build_context(
 
 	if require_admin and not is_admin():
 		frappe.response["status_code"] = 403
-		frappe.throw(
-			_("You do not have permission to access this page."), frappe.PermissionError
-		)
+		frappe.throw(_("You do not have permission to access this page."), frappe.PermissionError)
 
 	if allowed_roles is not None and not has_role_grant(allowed_roles):
 		frappe.response["status_code"] = 403
-		frappe.throw(
-			_("You do not have permission to access this page."), frappe.PermissionError
-		)
+		frappe.throw(_("You do not have permission to access this page."), frappe.PermissionError)
 
 	context.no_cache = 1
 	context.csrf_token = frappe.sessions.get_csrf_token()
@@ -166,9 +162,7 @@ def build_context(
 	context.cskh_route = route
 	context.cskh_page_title = title
 	context.cskh_page_subtitle = subtitle
-	context.cskh_navigation = [
-		item for item in NAV_ITEMS if item["key"] in _visible_keys()
-	]
+	context.cskh_navigation = [item for item in NAV_ITEMS if item["key"] in _visible_keys()]
 	context.cskh_capabilities = {
 		"admin": is_admin(),
 		"bod": is_bod(),
