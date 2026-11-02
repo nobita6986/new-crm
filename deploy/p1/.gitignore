@@ -8,3 +8,5 @@ workspace/
 dumps/
 backups/
 *.log
+proxy.log
+proxy.err

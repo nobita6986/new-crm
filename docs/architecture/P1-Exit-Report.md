@@ -258,3 +258,217 @@ Workflow mới: [`.github/workflows/p1.yml`](../../.github/workflows/p1.yml). C�
 * [`../../deploy/dev/seed/p1_test_inventory.json`](../../deploy/dev/seed/p1_test_inventory.json)
   — inventory 174 method, sinh từ source
 * Bằng chứng: [`../../deploy/dev/evidence/p1-t1b-20261102/`](../../deploy/dev/evidence/p1-t1b-20261102/)
+
+<!-- T1A-UI-CHAPTER -->
+
+---
+
+## 7. Chương T1A — Giao diện P1 (5 màn hình P1 §9)
+
+**Ngày:** 2026-11-02
+**Vai trò:** T1A — CSKH P1 UI
+**Nhánh:** `codex/p1-ui` — worktree `D:/HRP-app/p1-ui`
+**Kế hoạch:** [`docs/root-plan/P1.md`](../root-plan/P1.md) §9 (UI/UX), §12 (Nghiệm thu)
+**Báo cáo đầu vào:** [`deploy/dev/evidence/t1c-p1-verification-baseline-2026-11-02.md`](../../deploy/dev/evidence/t1c-p1-verification-baseline-2026-11-02.md) (L-01 … L-15)
+**Báo cáo backend:** chương 0–6 ở trên (T1B, `codex/p1-foundation`)
+
+> **Trạng thái:** **DRAFT** — chương này ghi những gì **đã đo** trên nhánh đã merge
+> T1A + T1B. Các ô còn để trống là phần **chưa** có bằng chứng, không phải phần
+> đã đạt.
+
+### 7.1. Môi trường kiểm định
+
+| Hạng mục | Giá trị |
+|---|---|
+| Stack | `deploy/p1/docker-compose.yml` — project `crm-cskh-p1`, **cổng riêng** 8120 (web) / 9120 (socketio) / 8201 (vite) |
+| Site | `p1.localhost` (DB `_d59d8d1a9b1021cb`, `default_language = vi`) |
+| Reverse proxy | `deploy/p1/host_proxy.py` trên `127.0.0.1:8130` — chỉ ghi lại header `Host: p1.localhost` về `127.0.0.1:8120` |
+| Container | `crm-cskh-p1-bench-1` (`frappe/bench`), MariaDB 11.8, Redis cache + queue |
+| Stack DEV P0 | **không đụng** — `dev.localhost:8091` / `8010` / `9010` không được restart, không đổi config |
+
+> Vì máy chủ Windows không sửa được `C:\Windows\System32\drivers\etc\hosts`
+> (không có quyền admin), proxy `8130` **không tạo backend hay SPA thứ hai**: nó
+> chỉ chuyển tiếp **cùng một** request tới **cùng một** Frappe site `p1.localhost`
+> (ADR-P1-06). Session, cookie và dữ liệu là của site kiểm định.
+
+### 7.2. Năm màn hình P1 §9
+
+| Màn | Đường dẫn | Mã nguồn | Screenshot |
+|---|---|---|---|
+| Trang 1 — Kho khách hàng | `/cskh/pool` | `www/cskh/pool.html` + `public/cskh/pool.js` | [`01-pool.png`](../../deploy/p1/evidence/screenshots/01-pool.png) |
+| Trang 2 — Nhập danh sách | `/cskh/import` | `www/cskh/import.html` + `public/cskh/import.js` | [`02-import.png`](../../deploy/p1/evidence/screenshots/02-import.png) |
+| Trang 3 — Chiến dịch và quy tắc | `/cskh/campaigns` | `www/cskh/campaigns.html` + `public/cskh/campaigns.js` | [`03-campaigns.png`](../../deploy/p1/evidence/screenshots/03-campaigns.png) |
+| Trang 4 — Khách được giao | `/cskh/my-customers` | `www/cskh/my-customers.html` + `public/cskh/my-customers.js` | [`04-my-customers.png`](../../deploy/p1/evidence/screenshots/04-my-customers.png) |
+| Trang 5 — Bảng điều khiển phân phối | `/cskh/dashboard` | `www/cskh/dashboard.html` + `public/cskh/dashboard.js` | [`05-dashboard.png`](../../deploy/p1/evidence/screenshots/05-dashboard.png) |
+
+Cả 5 màn dùng chung một shell (`templates/cskh/_shell.html`): điều hướng tiếng Việt,
+thanh người dùng, nút "Về danh sách khách hàng tiềm năng" và bảng màu trạng thái
+(`public/cskh/cskh.css`).
+
+### 7.3. HTTP runtime evidence (không phải gọi hàm service trong Python)
+
+Probe: [`deploy/p1/probe_flows.py`](../../deploy/p1/probe_flows.py) — đăng nhập thật
+qua `/api/method/login`, đọc CSRF token, gọi đúng endpoint của hợp đồng.
+
+| Bước | Kết quả đo |
+|---|---|
+| HTTP của 6 trang (`/cskh`, `/cskh/pool`, `/cskh/import`, `/cskh/campaigns`, `/cskh/my-customers`, `/cskh/dashboard`) | **200 / 200 / 200 / 200 / 200 / 200** — không banner lỗi |
+| Import: upload file **private** | `200`, `is_private = 1`, `size = 112` byte |
+| Import: `create_preview` | `200`, batch `9gg5e47dcl`, trạng thái `DRY_RUN`, `total_rows = 5`, `valid_rows = 3`, `new_rows = 3`, `duplicate_rows = 1`, `error_rows = 1` |
+| Import: `confirm` | `200`, trạng thái `QUEUED` (đi qua `DRY_RUN → CONFIRMED → QUEUED`) |
+| Import: `get_status` | `200`, trạng thái `COMPLETED_WITH_ERRORS`, tổng khớp preview (không đếm hai lần) |
+| Phân phối: tạo campaign + 3 rule (50 / 30 / 20) | `200` |
+| Phân phối: `preview` | `200`, `eligible_count = 628`, `excluded_count = 339`, `planned = 315 / 188 / 125` — đúng tỷ lệ |
+| Phân phối: `execute` | `200`, `run_id = 9huepgufo7`, `created = 300`, `assigned = 100 / 100 / 100`, phần lỗi là lead đã có claim (đúng hành vi) |
+
+Bản ghi đầy đủ: [`deploy/p1/probe_flows.py`](../../deploy/p1/probe_flows.py) (chạy lại
+được trên bất kỳ site P1 nào có dữ liệu seed).
+
+### 7.4. Số liệu dashboard đối chiếu DB (actor `CSKH CRM Admin`)
+
+| Card | Giá trị HTTP | Nguồn |
+|---|---|---|
+| `scope` | `system` | Admin có phạm vi toàn hệ thống theo P1 §8.1 |
+| `unique_customers` | 1175 | `count(distinct lead)` của work item trong scope |
+| `eligible_unassigned` | 155 | work item `queued` |
+| `assigned_work_items` | 1307 | work item `assigned` |
+| `active_claims` | 671 | `CSKH Active Claim` |
+| `active_campaigns` | 581 | `CSKH Campaign` `status = Active` |
+| `failed_batches` / `failed_runs` | 6 / 6 | batch và run lỗi |
+
+Các card **không cộng lẫn**: `unique_customers` (lead) và `assigned_work_items`
+(work item) là hai số khác nhau (P1 §9.1: "không cộng lẫn gây số ảo"), và
+`current owners` được đọc từ `CSKH Work Item` chứ không phải từ lịch sử
+(P1 §12.5).
+
+### 7.5. Kho khách hàng — trạng thái phân phối **suy ra**
+
+`pool_list` trả về trạng thái **suy ra** cho từng lead, đọc từ work item và
+active claim, **không** ghi vào `CRM Lead.status`:
+
+| Trạng thái | Nguồn |
+|---|---|
+| `Chưa phân phối` (eligible) | lead không có work item nào |
+| `Đã giao` (assigned) | work item `assigned` có `assigned_to` |
+| `Chờ giao` (queued) | work item `queued` chưa có `assigned_to` |
+| `Xung đột` (conflict) | active claim của campaign khác |
+| `Đã thu hồi` / `Đã đóng` | work item `revoked` / `closed` |
+
+Hai bộ đếm được giữ riêng: **số khách hàng duy nhất** (`unique_customers`, đếm
+lead) và **số công việc** (`work_items`, đếm work item).
+
+### 7.6. Việt hóa (P1 §9.6, T1-20)
+
+* `apps/crm_cskh/crm_cskh/translations/vi.csv` — **446 dòng**, trong đó **204 dòng**
+  là mục P1 (shell, 5 màn, mã lỗi ổn định).
+* Kiểm tra: **232/232** chuỗi dùng trong `p1_strings` **có** bản dịch — không
+  còn chuỗi P1 nào thiếu.
+* File được dựng lại bằng `csv.writer`, nên một nguồn có dấu phẩy được **nhúng
+  đúng** (Frappe đọc `source,target[,context]`).
+* Kiểm tra lại: [`deploy/p1/check_translations.py`](../../deploy/p1/check_translations.py),
+  dựng lại: [`deploy/p1/rebuild_translations.py`](../../deploy/p1/rebuild_translations.py).
+
+### 7.7. Lớp lỗi ổn định trong transport (P1 §10.1)
+
+`crm_cskh.p1_errors` bọc `normalize_p1_error_response` để **chèn mã lỗi ổn định**
+(`p1_code`) và `exc_type` vào body của câu trả lời lỗi, đồng thời **ghi đè HTTP
+status** theo hợp đồng (400 / 403 / 404 / 409 / 413).
+
+Mã lỗi được **ghi lại theo từng request** (`frappe.local.p1_error_code`) khi
+exception được ném, nên `Conflict` ném với `NO_ELIGIBLE_LEADS` vẫn tới trình
+duyệt với mã `NO_ELIGIBLE_LEADS` chứ không bị đổi thành `CONFLICT` chung chung.
+
+### 7.8. Kết quả kiểm thử trên nhánh đã merge T1A + T1B
+
+Lệnh: [`deploy/p1/run_suites.py`](../../deploy/p1/run_suites.py) — chạy **tuần tự**
+(trên cùng site, hai suite song song sẽ tranh chấp DB và sinh lỗi giả).
+
+| Suite | Module | Method | Kết quả |
+|---|---|---|---|
+| P1 | `test_p1_api_permissions` | 30 | OK |
+| P1 | `test_p1_concurrency` | 10 | OK |
+| P1 | `test_p1_distribution` | 17 | OK |
+| P1 | `test_p1_identity` | 13 | OK |
+| P1 | `test_p1_imports` | 16 | OK |
+| P1 | `test_p1_ownership` | 17 | OK |
+| P1 | `test_p1_regressions` | 71 | OK |
+| **P0 core** | `test_permissions` | 18 | OK |
+| **P0 core** | `test_security_remediation` | 12 | OK |
+| **P0 core** | `test_security_remediation_v2` | 32 | OK |
+| **P0 core** | `test_docshare_lifecycle` | 10 | OK |
+| **P0 core** | `test_bt1c5_matrix_gaps` | 27 | OK |
+
+Tổng P1 = **174 method OK**; P0 core inventory 99 = **99 method OK**.
+
+### 7.9. Lỗi L-01 … L-15 trong phạm vi UI
+
+| Mã | Phạm vi UI | Kết quả |
+|---|---|---|
+| **L-11** | `P1-Exit-Report.md` | ✅ Chương này (tài liệu) |
+| **L-12** | `vi.csv` thiếu mục P1 | ✅ 204 dòng P1, 232/232 chuỗi có bản dịch |
+| **L-01** | `reconcile()` lỗi SQL | ✅ Đã sửa ở nhánh backend (T1B) — `TestL01Reconcile` |
+| **L-02 / L-03** | Import pipeline hỏng | ✅ Đã sửa (T1B) — preview và worker dùng chung hàm dò cột |
+| **L-04 / L-14** | `pool_list` lỗi SQL, `total` lộ scope | ✅ Đã sửa (T1B) — `TestL04PoolQuery` |
+| **L-05** | Dashboard rò scope | ✅ Đã sửa (T1B) — `TestL05DashboardScope` (10 method) |
+| **L-06** | Bộ lọc campaign/ngày bị bỏ qua | ✅ Đã sửa (T1B) — `TestL06CampaignFilter` |
+| **L-07** | Leader không đọc được Rule/Run | ✅ Đã sửa (T1B) — `TestL07LeaderRead` |
+| **L-08 / L-09 / L-10 / L-13 / L-15** | Backend | ✅ Đã sửa (T1B) — có test hồi quy riêng |
+
+### 7.10. Điều chỉnh của T1A trên nền backend của T1B
+
+Hai chỗ T1A chỉnh lại để giữ đúng ý P1 §9.1 mà **không** phá test hồi quy của T1B:
+
+1. **`_scope` — vai trò `CSKH CRM Admin`** (`services/reporting.py`).
+   T1B không có nhánh này, nên Admin rơi vào `self` và **dashboard trả về 0 ở
+   mọi card** — đúng vai trò duy nhất được phép phân phối lại không thấy gì.
+   P1 §8.1 ghi rõ *"BOD Viewer: Toàn hệ thống, Admin: Toàn hệ thống"*, nên Admin
+   có phạm vi toàn hệ thống (nhưng **giữ quyền đọc PII**).
+2. **`pool_list` — trạng thái phân phối suy ra** (`services/reporting.py`).
+   `total` **giữ** nguyên giá trị hợp đồng (số work item của pool, bằng số phần tử
+   của `items`) và **thêm** `unique_customers` (số lead duy nhất) cùng
+   `work_items`; mỗi lead mang `state`, `owner`, `source`, `created_at`.
+   Bộ lọc scope của T1B (`_pool_scope_filter`, theo `team_scope` của campaign)
+   được giữ nguyên.
+
+Cả hai đều **không** đổi kỳ vọng của `test_p1_regressions` (71/71 vẫn xanh).
+
+### 7.11. Phần còn lại / giới hạn đã biết (phần UI)
+
+1. **Chưa có CI riêng cho UI.** Workflow `p1.yml` của T1B chạy suite và lint
+   Python; **chưa** có bước kiểm tra screenshot hay smoke test 5 màn. Cần một
+   job `ui` để chụp và so khớp 5 màn trước khi merge.
+2. **Chưa có test tự động cho DOM của UI.** Kiểm chứng hiện tại là **HTTP +
+   screenshot thủ công**; chưa có assertion tự động trên nội dung bảng.
+3. **Chưa đo hiệu năng import 10.000 dòng** từ phía UI (ADR-001 còn mở).
+4. **Chưa có màn "lịch sử batch" và tải file lỗi** (P1 §9.2 nêu). Phần `error_artifact`
+   đã có ở backend (L-13, file private đã sanitize) nhưng UI **chưa** có nút tải.
+5. **Chưa có nút "retry job thất bại"** và tra cứu bằng run ID (P1 §9.3 nêu).
+6. **Bộ lọc ngày** của dashboard dùng `creation` của work item cho các card và
+   `event_at` của sự kiện cho lịch sử — hai cột khác nhau **có chủ ý**, đã ghi ở
+   `api-contract-p1.md` §6.
+7. **Bộ lọc "team" và "user"** của dashboard (P1 §9.5) **chưa** có trong UI:
+   endpoint chỉ nhận `campaign` / `date_from` / `date_to`.
+8. **PR chưa merge.** Nhánh `codex/p1-ui` chờ T1C kiểm định độc lập.
+
+### 7.12. Tóm tắt trạng thái nghiệm thu (T1A)
+
+| Mục | Trạng thái | Bằng chứng |
+|---|---|---|
+| 5 màn P1 render và dùng được | ✅ | 6/6 HTTP 200 + 5 screenshot |
+| Luồng import end-to-end | ✅ | upload → `DRY_RUN` → `QUEUED` → `COMPLETED_WITH_ERRORS` |
+| Luồng phân phối end-to-end | ✅ | campaign + 3 rule → preview 50/30/20 → execute 300 lead |
+| Trạng thái phân phối suy ra (không ghi vào `CRM Lead.status`) | ✅ | `_pool_state` + screenshot `01-pool.png` |
+| Số lead và số work item tách biệt | ✅ | `unique_customers` / `work_items` |
+| Mã lỗi ổn định + HTTP status đúng hợp đồng | ✅ | `p1_errors` + `services/errors.py` |
+| Việt hóa 100 % chuỗi P1 | ✅ | 232/232, `vi.csv` 446 dòng |
+| Suite P1 + P0 core xanh trên nhánh merge | ✅ | 174 + 99 method |
+| CI có bước kiểm tra UI | ❌ | Xem §7.11 mục 1 |
+| Test tự động cho DOM | ❌ | Xem §7.11 mục 2 |
+| Màn lịch sử batch + tải lỗi | ❌ | Xem §7.11 mục 4 |
+| Retry job + tra cứu run ID | ❌ | Xem §7.11 mục 5 |
+| Bộ lọc team/user của dashboard | ❌ | Xem §7.11 mục 7 |
+
+> **Kết luận của T1A:** phần **UI** của P1 (§9) đã đủ 5 màn, chạy end-to-end trên
+> site kiểm định riêng, tiếng Việt đầy đủ và **không** làm hỏng suite P1/P0.
+> Bốn mục còn lại (§7.11) là **khoản nợ của UI** và được nêu rõ ở đây, **không**
+> được coi là đã đạt. Quyết định GO P2 thuộc T0/Owner.

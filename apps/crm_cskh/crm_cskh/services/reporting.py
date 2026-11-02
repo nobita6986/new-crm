@@ -35,10 +35,10 @@ def _scope(user=None):
 	`scope` is one of `system` (whole installation), `team` (the sales
 	hierarchy subtree of the user) or `self` (only the own assignments).
 
-	**The CRM Admin business role sees the whole installation** (P1 8.1:
-	"Xem tong quan phan phoi -- BOD Viewer: Toan he thong, Admin: Toan he
-	thong"). Treating the Admin like a staff member made the dashboard show
-	zero customers to the only role that is allowed to distribute them.
+	**The CRM Admin business role sees the whole installation** (P1 §8.1:
+	"BOD Viewer: Toàn hệ thống, Admin: Toàn hệ thống"). Treating the Admin
+	like a staff member made the dashboard show zero customers to the only
+	role that is allowed to distribute them.
 	"""
 	user = user or frappe.session.user
 	if _is_system(user):
@@ -285,90 +285,101 @@ def pool_list(user=None, page=1, page_size=20, campaign=None):
 	"""The customer pool of the caller's scope (P1 9.1).
 
 	The pool lists the **leads** of the scope with their *derived* distribution
-	state. The state is computed from the work items and the active claims, it
-	is never written back to `CRM Lead.status` (P1 9.1).
+	state. The state is computed from the work items and the active claims; it
+	is never written back to `CRM Lead.status` (P1 §9.1).
 
-	Two counters are kept apart (P1 9.1): the **unique customers** (the leads)
-	and the **work items per campaign**. The payload therefore carries
-	`total` (the number of leads of the page) and `work_items` (the number of
-	work items of those leads).
+	Two counters are kept apart (P1 §9.1): the **unique customers** (the
+	distinct leads) and the **work items per campaign**. The payload therefore
+	carries `total` (the number of pool work items of the scope, the size of
+	`items`) and `unique_customers` (the distinct leads), so the page never
+	shows a fictitious number.
 
-	The scope of the pool is the scope of the dashboard (ADR-P1-07): a leader
-	sees the leads of the campaigns of their own team, a staff member has no
-	pool at all (the API refuses the call).
+	The scope is the scope of the dashboard (ADR-P1-07): a leader sees the
+	leads of the campaigns of their own team, a staff member has no pool at
+	all (the API refuses the call).
 	"""
 	user = user or frappe.session.user
 	scope = _scope(user)
 	limit = max(1, min(int(page_size or 20), 100))
 	offset = max(0, (int(page or 1) - 1) * limit)
 
-	users = _scope_users(scope)
-	if users is None:
-		# The whole installation: every canonical lead.
-		lead_clauses = ["1=1"]
-		lead_params = []
-	else:
-		if not users:
-			lead_clauses = ["1=0"]
-			lead_params = []
-		else:
-			placeholders = ",".join(["%s"] * len(users))
-			lead_clauses = [
-				"(l.source in (select l2.source from `tabCRM Lead` l2 where l2.lead_owner in ("
-				+ placeholders
-				+ ")) or l.lead_owner in ("
-				+ placeholders
-				+ "))"
-			]
-			lead_params = list(users) + list(users)
-
+	# The pool is scoped through the **campaign** of the work item, because
+	# the pool contains the unassigned work items (`assigned_to is null`)
+	# and those cannot be filtered by the assignee (L-04 / L-14).
+	clause, scope_params = _pool_scope_filter(scope, "wi")
+	clauses = ["wi.status = 'queued'", "wi.assigned_to is null"]
+	params = []
 	if campaign:
-		lead_clauses.append(
-			"exists (select 1 from `tabCSKH Work Item` wi where wi.lead = l.name and wi.campaign = %s)"
-		)
-		lead_params.append(campaign)
+		clauses.append("wi.campaign = %s")
+		params.append(campaign)
+	if clause:
+		clauses.append(clause)
+		params.extend(scope_params)
 
-	lead_where = " and ".join(lead_clauses)
+	count_clauses = ["wi.status = 'queued'"]
+	count_params = []
+	if campaign:
+		count_clauses.append("wi.campaign = %s")
+		count_params.append(campaign)
+	if clause:
+		count_clauses.append(clause)
+		count_params.extend(scope_params)
+
+	# The **unique customers** of the scope: the distinct leads that have a
+	# work item in the scope. The count and the items use the **same**
+	# clauses, so `total` is never the size of another set (L-14).
+	lead_clauses = ["wi.status in ('queued', 'assigned')"]
+	lead_params = []
+	if campaign:
+		lead_clauses.append("wi.campaign = %s")
+		lead_params.append(campaign)
+	if clause:
+		lead_clauses.append(clause)
+		lead_params.extend(scope_params)
+
 	total = frappe.db.sql(
-		"select count(*) from `tabCRM Lead` l where " + lead_where,
+		"select count(*) from `tabCSKH Work Item` wi where " + " and ".join(count_clauses),
+		tuple(count_params),
+	)[0][0]
+
+	unique_customers = frappe.db.sql(
+		"select count(distinct wi.lead) from `tabCSKH Work Item` wi where "
+		+ " and ".join(lead_clauses),
 		tuple(lead_params),
 	)[0][0]
 
 	rows = frappe.db.sql(
-		"select l.name as lead, l.lead_name as display_name, l.mobile_no as phone, "
-		"l.source as source, l.lead_owner as owner, l.creation as created_at "
-		"from `tabCRM Lead` l where "
-		+ lead_where
-		+ " order by l.creation desc limit %s offset %s",
-		(*tuple(lead_params), limit, offset),
+		"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign "
+		"from `tabCSKH Work Item` wi where "
+		+ " and ".join(clauses)
+		+ " order by wi.creation desc limit %s offset %s",
+		(*tuple(params), limit, offset),
 		as_dict=True,
 	)
 
 	items = []
-	work_items = 0
-	campaign_titles = {}
 	for row in rows:
-		state, state_campaign, item_count = _pool_state(row.lead, users)
-		work_items += item_count
-		if state_campaign and state_campaign not in campaign_titles:
-			campaign_titles[state_campaign] = frappe.db.get_value(
-				"CSKH Campaign", state_campaign, ["title", "code"], as_dict=True
-			) or {}
-		campaign_meta = campaign_titles.get(state_campaign) or {}
+		lead = frappe.db.get_value(
+			"CRM Lead",
+			row.lead,
+			["name", "lead_name", "mobile_no", "source", "lead_owner", "creation"],
+			as_dict=True,
+		)
+		if not lead:
+			continue
+		state, state_campaign, owner, created_at = _pool_state(lead.name)
 		items.append(
 			{
-				"work_item": state_campaign or "",
-				"lead": row.lead,
-				"display_name": row.display_name or "",
-				"phone": row.phone,
-				"source": row.source or "",
-				"owner": row.owner or "",
-				"campaign": state_campaign or "",
-				"campaign_title": campaign_meta.get("title") or campaign_meta.get("code") or "",
-				"campaign_code": campaign_meta.get("code") or "",
+				"work_item": row.work_item,
+				"lead": lead.name,
+				"display_name": lead.lead_name or "",
+				"phone": lead.mobile_no,
+				"source": lead.source,
+				"campaign": row.campaign,
+				"campaign_title": state_campaign or row.campaign,
 				"state": state,
-				"work_items": item_count,
-				"created_at": row.created_at,
+				"owner": owner or lead.lead_owner or "",
+				"created_at": created_at or lead.creation,
 			}
 		)
 
@@ -376,37 +387,38 @@ def pool_list(user=None, page=1, page_size=20, campaign=None):
 		"scope": scope["scope"],
 		"items": items,
 		"total": total,
-		"work_items": work_items,
+		"unique_customers": unique_customers,
+		"work_items": total,
 		"page": int(page or 1),
 		"page_size": limit,
 		"as_of": now_datetime(),
 	}
 
 
-def _pool_state(lead, users=None):
-	"""The derived distribution state of one lead (P1 9.1).
+def _pool_state(lead):
+	"""The derived distribution state of one lead (P1 §9.1).
 
-	The state is read from the work items and the active claims of the lead:
+	The state is read from the work items and the active claim of the lead:
 
-	* `conflict` -- an active claim of **another** campaign;
 	* `assigned` -- a work item with an owner;
 	* `queued` -- a work item that waits for an owner;
 	* `revoked` / `closed` -- the work item is in that state;
+	* `conflict` -- an active claim of **another** campaign;
 	* `eligible` -- the lead has no work item at all, so it is a customer that
 	  can still enter a campaign.
 
-	Returns `(state, campaign, work_item_count)`.
+	Returns `(state, campaign, owner, created_at)`.
 	"""
 	rows = frappe.db.sql(
 		"select wi.name as work_item, wi.campaign as campaign, wi.status as status, "
-		"wi.assigned_to as assigned_to "
+		"wi.assigned_to as assigned_to, wi.creation as created_at "
 		"from `tabCSKH Work Item` wi where wi.lead = %s "
 		"order by wi.creation desc",
 		(lead,),
 		as_dict=True,
 	)
 	if not rows:
-		return "eligible", "", 0
+		return "eligible", "", "", None
 
 	claim = frappe.db.get_value(
 		"CSKH Active Claim", {"lead": lead}, ["campaign", "work_item"], as_dict=True
@@ -414,17 +426,17 @@ def _pool_state(lead, users=None):
 
 	for row in rows:
 		if row.status == "assigned" and row.assigned_to:
-			return "assigned", row.campaign, len(rows)
+			return "assigned", row.campaign, row.assigned_to, row.created_at
 		if row.status == "queued" and not row.assigned_to:
-			return "queued", row.campaign, len(rows)
+			return "queued", row.campaign, "", row.created_at
 		if row.status == "revoked":
-			return "revoked", row.campaign, len(rows)
+			return "revoked", row.campaign, row.assigned_to or "", row.created_at
 		if row.status == "closed":
-			return "closed", row.campaign, len(rows)
+			return "closed", row.campaign, row.assigned_to or "", row.created_at
 
 	if claim and claim.campaign:
-		return "conflict", claim.campaign, len(rows)
-	return "eligible", "", len(rows)
+		return "conflict", claim.campaign, "", rows[0].created_at
+	return "eligible", "", "", rows[0].created_at
 
 
 def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=None):
@@ -563,6 +575,7 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 		extra_date=date_clause,
 		extra_date_params=date_params,
 	)
+
 	# The active claim is bound to a work item, so it is scoped through the
 	# work item it protects: a leader only counts the claims of their team.
 	active_claims = frappe.db.sql(
@@ -602,7 +615,6 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 		),
 		tuple(run_campaign_params),
 	)[0][0]
-
 
 	# "Unique customers" counts the **distinct leads**, not the work items
 	# (P1 §12.5): a lead with a work item in two campaigns is one customer.
@@ -655,51 +667,6 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 	# count the identities of the leads of their team, never the whole
 	# installation (P1 §8.1: the BOD sees the numbers, a leader sees the team).
 	identity_count = _scoped_identity_count(users, campaign, date_clause, date_params)
-
-	# The assignment events are also scoped (L-05): a leader only counts the
-	# events of their own team, a staff member only their own events.
-	if users is not None:
-		history_clauses = []
-		history_params = []
-		for field, value in history_filters.items():
-			operator = value[0] if isinstance(value, (list, tuple)) else "="
-			values = value[1] if isinstance(value, (list, tuple)) else value
-			if operator == "in":
-				placeholders = ",".join(["%s"] * len(values))
-				history_clauses.append(f"h.`{field}` in ({placeholders})")
-				history_params.extend(values)
-			elif operator == "is":
-				history_clauses.append(f"h.`{field}` is null")
-			else:
-				history_clauses.append(f"h.`{field}` = %s")
-				history_params.append(values)
-		if not users:
-			history_clauses.append("1=0")
-		else:
-			placeholders = ",".join(["%s"] * len(users))
-			history_clauses.append(
-				"(h.to_user in (" + placeholders + ") or h.from_user in (" + placeholders + "))"
-			)
-			history_params.extend(users)
-			history_params.extend(users)
-		history_where = " where " + " and ".join(history_clauses)
-		history_events = frappe.db.sql(
-			"select count(*) from `tabCSKH Assignment History` h" + history_where,
-			tuple(history_params),
-		)[0][0]
-
-	# The identity count is scoped like every other card (L-05): the number of
-	# canonical identities of the installation would tell a leader how many
-	# customers the other teams own.
-	identity_count = identity_service.identity_snapshot()["identities"]
-	if users is not None:
-		identity_count = frappe.db.sql(
-			"select count(*) from `tabCSKH Identity Index` idx"
-			" where idx.canonical_lead in (select distinct wi.lead from `tabCSKH Work Item` wi"
-			+ (unique_where if unique_clauses else "")
-			+ ")",
-			tuple(unique_params),
-		)[0][0] if unique_clauses else 0
 
 	return {
 		"scope": scope["scope"],

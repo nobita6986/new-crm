@@ -129,7 +129,10 @@
 		cskh.clear(box)
 		box.appendChild(
 			cskh.el('div', { class: 'cskh-grid' }, [
-				metric(cskh.t('Unique customers'), data && data.total),
+				metric(
+					cskh.t('Unique customers'),
+					data && data.unique_customers !== undefined ? data.unique_customers : data && data.total
+				),
 				metric(cskh.t('Work items'), data && data.work_items),
 				metric(cskh.t('Scope'), data && data.scope),
 			])
