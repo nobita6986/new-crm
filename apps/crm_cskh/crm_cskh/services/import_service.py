@@ -342,19 +342,37 @@ def _classify(rows, mapping, phone_column):
 
 
 def confirm(batch_name, actor=None):
-	"""Confirm a preview and enqueue the import worker."""
+	"""Confirm a preview and enqueue the import worker.
+
+	The state machine of P1 §6.2 is `DRY_RUN -> CONFIRMED -> QUEUED ->
+	RUNNING -> COMPLETED`. The transition table of
+	`crm_cskh.p1_models.IMPORT_STATUS_TRANSITIONS` only allows one step per
+	save, so the confirmation walks the two first steps explicitly:
+
+	* `DRY_RUN -> CONFIRMED` records the operator's confirmation;
+	* `CONFIRMED -> QUEUED` records that the job is enqueued.
+
+	Leaving the batch in `CONFIRMED` (the previous behaviour) made the worker
+	crash: it tried to move `CONFIRMED -> RUNNING`, a transition the state
+	machine does not allow, so **every** import died in the background job and
+	the batch stayed `CONFIRMED` forever.
+	"""
 	actor = actor or frappe.session.user
 	batch = frappe.get_doc("CSKH Import Batch", batch_name)
 	if not batch:
 		raise InvalidRequest("The import batch does not exist.")
 	if batch.status in ("QUEUED", "RUNNING", "COMPLETED", "COMPLETED_WITH_ERRORS"):
 		return _status_response(batch.name)
-	if batch.status == "FAILED":
-		batch.status = "QUEUED"
-	elif batch.status == "CONFIRMED":
-		batch.status = "QUEUED"
-	elif batch.status == "DRY_RUN":
+
+	if batch.status == "DRY_RUN":
+		# One step per save: the state machine only allows one transition at a
+		# time, so `DRY_RUN -> CONFIRMED -> QUEUED` needs two saves.
 		batch.status = "CONFIRMED"
+		batch.save(ignore_permissions=True)
+		batch.reload()
+
+	if batch.status in ("CONFIRMED", "FAILED"):
+		batch.status = "QUEUED"
 	batch.save(ignore_permissions=True)
 
 	from crm_cskh.jobs import import_worker

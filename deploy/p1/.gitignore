@@ -1,0 +1,10 @@
+# deploy/p1/.gitignore
+# KH├öNG commit file .env thß║¡t hay dß╗» liß╗çu sinh ra khi chß║íy stack P1.
+.env
+.env.local
+*.env
+!*.env.example
+workspace/
+dumps/
+backups/
+*.log

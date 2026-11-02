@@ -1,0 +1,45 @@
+﻿{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Distribution dashboard") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Total pool, assigned, unassigned, per team, per user and per campaign.") }}{% endblock %}
+
+{% block cskh_body %}
+<div class="cskh-card">
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Campaign") }}
+			<select id="dash-campaign" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+			</select>
+		</label>
+		<button id="dash-refresh" class="cskh-btn is-primary" type="button">
+			{{ _("Refresh") }}
+		</button>
+		<span id="dash-generated" class="cskh-muted"></span>
+	</div>
+</div>
+
+<div id="dash-alert" aria-live="polite"></div>
+
+<div class="cskh-card">
+	<div id="dash-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="dash-cards" class="cskh-grid"></div>
+</div>
+
+<div class="cskh-card">
+	<h2>{{ _("Current owners") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Current owners are counted from work items; assignment events come from the audit trail.") }}
+	</p>
+	<div id="dash-table-wrap"></div>
+</div>
+
+<div class="cskh-card">
+	<h2>{{ _("Per campaign") }}</h2>
+	<div id="dash-campaigns"></div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/dashboard.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}

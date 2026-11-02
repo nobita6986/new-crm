@@ -1,0 +1,55 @@
+﻿{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Customer pool") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Leads in your scope, with the derived distribution state.") }}{% endblock %}
+
+{% block cskh_body %}
+<div class="cskh-card">
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Campaign") }}
+			<select id="pool-campaign" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+			</select>
+		</label>
+		<button id="pool-refresh" class="cskh-btn is-primary" type="button">
+			{{ _("Apply filters") }}
+		</button>
+	</div>
+</div>
+
+<div id="pool-alert" aria-live="polite"></div>
+
+<div id="pool-counters" class="cskh-card"></div>
+
+<div class="cskh-card">
+	<div id="pool-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="pool-empty" class="cskh-alert is-empty" hidden>
+		{{ _("No customers match the current filters.") }}
+	</div>
+	<table id="pool-table" class="cskh-table" hidden>
+		<thead>
+			<tr>
+				<th>{{ _("Customer") }}</th>
+				<th>{{ _("Phone number") }}</th>
+				<th>{{ _("Source") }}</th>
+				<th>{{ _("Campaign") }}</th>
+				<th>{{ _("Distribution state") }}</th>
+				<th>{{ _("Owner") }}</th>
+				<th>{{ _("Created at") }}</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody id="pool-rows"></tbody>
+	</table>
+	<div class="cskh-pager">
+		<button id="pool-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
+		<span id="pool-range"></span>
+		<button id="pool-next" class="cskh-btn" type="button">{{ _("Next") }}</button>
+	</div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/pool.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}

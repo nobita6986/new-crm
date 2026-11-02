@@ -1,0 +1,44 @@
+﻿{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Import list") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Upload a private file, map the phone column, preview, then confirm.") }}{% endblock %}
+
+{% block cskh_body %}
+<div id="import-alert" aria-live="polite"></div>
+
+<div class="cskh-card">
+	<div class="cskh-step is-active" id="step-upload">
+		<h3>{{ _("1. Upload a private file") }}</h3>
+		<p class="cskh-muted">
+			{{ _("CSV or XLSX, up to 10 MB. Keep the phone column as text so the leading zero is not lost.") }}
+		</p>
+		<div class="cskh-actions">
+			<input id="import-file" class="cskh-input" type="file" accept=".csv,.xlsx">
+			<label class="cskh-field">
+				{{ _("Phone column") }}
+				<input id="import-phone-column" class="cskh-input" type="text"
+					placeholder="{{ _('Phone column') }}">
+			</label>
+			<button id="import-preview" class="cskh-btn is-primary" type="button" disabled>
+				{{ _("Preview") }}
+			</button>
+		</div>
+	</div>
+
+	<div class="cskh-step" id="step-preview" hidden>
+		<h3>{{ _("2. Preview and confirm") }}</h3>
+		<div id="import-summary"></div>
+		<div id="import-rows"></div>
+		<div class="cskh-actions">
+			<button id="import-confirm" class="cskh-btn is-primary" type="button">
+				{{ _("Confirm import") }}
+			</button>
+			<button id="import-reset" class="cskh-btn" type="button">{{ _("Start over") }}</button>
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/import.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}
