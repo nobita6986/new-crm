@@ -1,0 +1,184 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestImportIdempotency-2[REDACTED_PHONE]33" tests="6" file="crm_cskh/tests/test_p1_regressions.py" time="2.240" timestamp="2026-11-02T16:21:36" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestImportIdempotency" name="test_a_duplicate_import_does_not_change_the_owner_or_the_status" time="1.802" timestamp="2026-11-02T16:21:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1122">
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestImportIdempotency" name="test_a_duplicate_import_does_not_distribute_the_lead" time="0.151" timestamp="2026-11-02T16:21:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1137">
+			<!--The import never creates a work item on its own.-->
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestImportIdempotency" name="test_an_empty_or_numeric_or_scientific_cell_is_an_error_not_a_lead" time="0.065" timestamp="2026-11-02T16:21:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1160">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestImportIdempotency" name="test_the_canonical_phone_is_shared_by_the_zero_and_84_forms" time="0.071" timestamp="2026-11-02T16:21:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1148">
+			<!--`0…`, `84…` and `+84…` are the same customer.-->
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestImportIdempotency" name="test_the_same_file_and_key_returns_the_same_batch" time="0.071" timestamp="2026-11-02T16:21:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1101">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestImportIdempotency" name="test_the_same_file_in_another_mode_creates_a_second_batch" time="0.080" timestamp="2026-11-02T16:21:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1110">
+			<!--T1-04: the same file in another mode must be a distinct batch.-->
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL01Reconcile-2[REDACTED_PHONE]33" tests="3" file="crm_cskh/tests/test_p1_regressions.py" time="3.304" timestamp="2026-11-02T16:21:40" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL01Reconcile" name="test_reconcile_does_not_raise_and_reports_the_five_numbers" time="1.606" timestamp="2026-11-02T16:21:39" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="78"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL01Reconcile" name="test_the_current_owner_is_read_from_the_work_item" time="0.676" timestamp="2026-11-02T16:21:39" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="115">
+			<!--The current owner and the event counter are independent numbers.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL01Reconcile" name="test_the_events_are_scoped_to_the_campaign" time="1.023" timestamp="2026-11-02T16:21:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="95">
+			<!--The events of another campaign never enter this reconciliation.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL02Checksum-2[REDACTED_PHONE]33" tests="4" file="crm_cskh/tests/test_p1_regressions.py" time="0.383" timestamp="2026-11-02T16:21:41" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL02Checksum" name="test_a_file_flushed_to_disk_is_importable" time="0.091" timestamp="2026-11-02T16:21:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="141">
+			<!--The real path: the file is written to disk and read back.-->
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL02Checksum" name="test_a_real_xlsx_is_importable" time="0.226" timestamp="2026-11-02T16:21:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="190">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL02Checksum" name="test_a_utf8_bom_csv_is_importable" time="0.061" timestamp="2026-11-02T16:21:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="170">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL02Checksum" name="test_the_checksum_is_identical_for_bytes_and_str" time="0.006" timestamp="2026-11-02T16:21:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="134"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL03ColumnResolution-2[REDACTED_PHONE]33" tests="5" file="crm_cskh/tests/test_p1_regressions.py" time="0.018" timestamp="2026-11-02T16:21:42" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL03ColumnResolution" name="test_a_mapping_without_a_phone_field_falls_back_to_a_phone_header" time="0.004" timestamp="2026-11-02T16:21:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="239"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL03ColumnResolution" name="test_a_mapping_without_any_phone_column_yields_no_column" time="0.003" timestamp="2026-11-02T16:21:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="244"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL03ColumnResolution" name="test_the_classification_reads_the_phone_of_the_resolved_column" time="0.005" timestamp="2026-11-02T16:21:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="249"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL03ColumnResolution" name="test_the_mapping_with_several_fields_prefers_the_phone_column" time="0.003" timestamp="2026-11-02T16:21:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="232">
+			<!--A mapping of several fields must not read the *name* column.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL03ColumnResolution" name="test_the_resolution_returns_a_column_name_not_a_value" time="0.003" timestamp="2026-11-02T16:21:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="224"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL04PoolQuery-2[REDACTED_PHONE]33" tests="4" file="crm_cskh/tests/test_p1_regressions.py" time="1.194" timestamp="2026-11-02T16:21:43" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL04PoolQuery" name="test_a_staff_member_reads_a_bounded_pool" time="0.185" timestamp="2026-11-02T16:21:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="321">
+			<!--A staff member has no hierarchy scope: the pool stays closed.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL04PoolQuery" name="test_pool_list_does_not_raise_for_any_actor" time="0.406" timestamp="2026-11-02T16:21:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="281"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL04PoolQuery" name="test_the_total_is_scoped_like_the_items" time="0.351" timestamp="2026-11-02T16:21:43" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="300"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL04PoolQuery" name="test_the_total_never_exceeds_the_scoped_truth" time="0.253" timestamp="2026-11-02T16:21:43" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="312"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope-2[REDACTED_PHONE]33" tests="11" file="crm_cskh/tests/test_p1_regressions.py" time="7.979" timestamp="2026-11-02T16:21:51" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_a_campaign_filter_narrows_the_cards" time="0.304" timestamp="2026-11-02T16:21:44" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="520"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_a_staff_member_sees_only_its_own_work_items" time="0.316" timestamp="2026-11-02T16:21:44" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="396"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_the_active_claims_counter_is_scoped" time="0.412" timestamp="2026-11-02T16:21:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="410"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_the_bod_sees_the_whole_installation" time="0.328" timestamp="2026-11-02T16:21:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="404"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_the_campaign_summary_counts_work_items_not_users" time="2.087" timestamp="2026-11-02T16:21:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="501">
+			<!--`campaign_summary.assigned` counts the work items, not the users.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_the_campaign_summary_hides_the_campaign_of_another_team" time="2.429" timestamp="2026-11-02T16:21:49" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="514"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_the_failed_counters_are_scoped" time="0.465" timestamp="2026-11-02T16:21:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="444">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_the_identity_count_is_scoped_not_global" time="0.431" timestamp="2026-11-02T16:21:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="495">
+			<!--The identity index is system-only; only an aggregate is reported.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_the_leader_card_counts_the_team_only" time="0.418" timestamp="2026-11-02T16:21:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="373"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_the_leader_per_user_has_no_foreign_user" time="0.334" timestamp="2026-11-02T16:21:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="382"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL05DashboardScope" name="test_the_per_user_breakdown_matches_the_card" time="0.454" timestamp="2026-11-02T16:21:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="391"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL06CampaignFilter-2[REDACTED_PHONE]33" tests="5" file="crm_cskh/tests/test_p1_regressions.py" time="2.290" timestamp="2026-11-02T16:21:54" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL06CampaignFilter" name="test_a_campaign_without_a_run_reports_zero_events" time="0.501" timestamp="2026-11-02T16:21:53" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="555">
+			<!--The whole-site history is never substituted for a campaign.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL06CampaignFilter" name="test_reconcile_with_a_campaign_does_not_raise" time="0.557" timestamp="2026-11-02T16:21:53" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="591"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL06CampaignFilter" name="test_the_campaign_filter_does_not_raise" time="0.398" timestamp="2026-11-02T16:21:54" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="551"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL06CampaignFilter" name="test_the_date_filter_is_applied" time="0.407" timestamp="2026-11-02T16:21:54" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="562"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL06CampaignFilter" name="test_the_date_filter_narrows_the_cards_and_not_only_the_events" time="0.427" timestamp="2026-11-02T16:21:54" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="570">
+			<!--A filter the contract accepts must not be accepted-and-ignored.
+
+Before the fix the `date_from` / `date_to` were only applied to the
+assignment events, so the cards kept the numbers of the whole period
+while the events were filtered: the dashboard showed two different
+periods at the same time (L-06).
+-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL07LeaderRead-2[REDACTED_PHONE]33" tests="6" file="crm_cskh/tests/test_p1_regressions.py" time="0.520" timestamp="2026-11-02T16:21:55" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL07LeaderRead" name="test_a_shared_campaign_hides_the_rule_of_another_team" time="0.122" timestamp="2026-11-02T16:21:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="646">
+			<!--A shared campaign is visible, but the assignee still has a team.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL07LeaderRead" name="test_the_admin_role_still_reads_every_rule" time="0.071" timestamp="2026-11-02T16:21:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="655">
+			<!--The CRM Admin is a business role with the full read scope.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL07LeaderRead" name="test_the_api_rules_endpoint_works_for_a_leader" time="0.143" timestamp="2026-11-02T16:21:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="663"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL07LeaderRead" name="test_the_leader_does_not_read_the_rules_of_another_team" time="0.061" timestamp="2026-11-02T16:21:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="634"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL07LeaderRead" name="test_the_leader_reads_the_rules_of_their_campaign" time="0.057" timestamp="2026-11-02T16:21:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="626"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL07LeaderRead" name="test_the_leader_reads_the_runs_of_their_campaign" time="0.066" timestamp="2026-11-02T16:21:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="641"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL08AuditTrail-2[REDACTED_PHONE]33" tests="5" file="crm_cskh/tests/test_p1_regressions.py" time="1.342" timestamp="2026-11-02T16:21:57" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL08AuditTrail" name="test_a_distribution_run_writes_the_run_in_every_event" time="0.475" timestamp="2026-11-02T16:21:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="710"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL08AuditTrail" name="test_a_manual_reassign_keeps_the_source_of_the_original_assignment" time="0.249" timestamp="2026-11-02T16:21:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="725">
+			<!--A manual transfer must not claim that a run caused it.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL08AuditTrail" name="test_a_manual_reassign_of_a_manual_assignment_has_no_run" time="0.231" timestamp="2026-11-02T16:21:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="757"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL08AuditTrail" name="test_a_manual_revoke_keeps_the_source_of_the_original_assignment" time="0.175" timestamp="2026-11-02T16:21:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="781"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL08AuditTrail" name="test_the_assignment_event_carries_the_run" time="0.211" timestamp="2026-11-02T16:21:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="697"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL09PlaceholderField-2[REDACTED_PHONE]33" tests="4" file="crm_cskh/tests/test_p1_regressions.py" time="0.287" timestamp="2026-11-02T16:21:58" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL09PlaceholderField" name="test_the_column_exists_in_the_database" time="0.011" timestamp="2026-11-02T16:21:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="819"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL09PlaceholderField" name="test_the_custom_field_exists" time="0.010" timestamp="2026-11-02T16:21:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="814"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL09PlaceholderField" name="test_the_patch_is_idempotent" time="0.125" timestamp="2026-11-02T16:21:58" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="823">
+			<!--Running the patch twice must not create a second field.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL09PlaceholderField" name="test_the_worker_marks_the_lead_it_creates" time="0.141" timestamp="2026-11-02T16:21:58" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="834">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL10Capacity-2[REDACTED_PHONE]33" tests="6" file="crm_cskh/tests/test_p1_regressions.py" time="1.496" timestamp="2026-11-02T16:22:00" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL10Capacity" name="test_a_positive_capacity_is_enforced" time="0.103" timestamp="2026-11-02T16:21:58" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="893"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL10Capacity" name="test_a_positive_capacity_is_never_exceeded_by_a_distribution" time="0.526" timestamp="2026-11-02T16:21:59" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="902"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL10Capacity" name="test_a_positive_capacity_is_never_exceeded_by_a_manual_reassign" time="0.355" timestamp="2026-11-02T16:21:59" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="913"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL10Capacity" name="test_a_zero_capacity_is_unlimited_in_the_eligibility" time="0.048" timestamp="2026-11-02T16:21:59" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="878"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL10Capacity" name="test_a_zero_capacity_stays_eligible_after_many_assignments" time="0.288" timestamp="2026-11-02T16:21:59" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="884"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL10Capacity" name="test_the_dashboard_reports_an_unlimited_capacity_as_null" time="0.176" timestamp="2026-11-02T16:22:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="936"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL13Sanitization-2[REDACTED_PHONE]33" tests="6" file="crm_cskh/tests/test_p1_regressions.py" time="0.118" timestamp="2026-11-02T16:22:00" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL13Sanitization" name="test_a_formula_is_neutralized" time="0.010" timestamp="2026-11-02T16:22:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="954"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL13Sanitization" name="test_a_valid_plus84_phone_is_not_broken" time="0.008" timestamp="2026-11-02T16:22:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="962">
+			<!--A `+84` phone is a number, not a formula.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL13Sanitization" name="test_html_is_removed" time="0.009" timestamp="2026-11-02T16:22:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="959"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL13Sanitization" name="test_the_error_artifact_is_private_and_sanitized" time="0.083" timestamp="2026-11-02T16:22:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="973">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL13Sanitization" name="test_the_preview_never_stores_a_formula" time="0.005" timestamp="2026-11-02T16:22:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="966">
+			<!--The preview only keeps the canonical phone, never a raw cell.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL13Sanitization" name="test_the_stored_error_of_a_failed_batch_carries_no_phone_number" time="0.003" timestamp="2026-11-02T16:22:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1016">
+			<!--The error message is redacted: no PII reaches the batch.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_regressions.TestL15NoPermissionBypass-2[REDACTED_PHONE]33" tests="6" file="crm_cskh/tests/test_p1_regressions.py" time="0.669" timestamp="2026-11-02T16:22:01" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL15NoPermissionBypass" name="test_the_campaigns_api_does_not_use_get_all" time="0.011" timestamp="2026-11-02T16:22:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1043"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL15NoPermissionBypass" name="test_the_eligibility_service_does_not_use_get_all" time="0.010" timestamp="2026-11-02T16:22:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1040"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL15NoPermissionBypass" name="test_the_history_endpoint_respects_the_row_level_permission" time="0.381" timestamp="2026-11-02T16:22:01" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1049">
+			<!--The history of a work item of another team stays unreadable.-->
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL15NoPermissionBypass" name="test_the_leader_only_sees_the_history_of_their_team" time="0.252" timestamp="2026-11-02T16:22:01" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1067">
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL15NoPermissionBypass" name="test_the_ownership_api_does_not_use_get_all" time="0.007" timestamp="2026-11-02T16:22:01" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1046"/>
+		<testcase classname="crm_cskh.tests.test_p1_regressions.TestL15NoPermissionBypass" name="test_the_reporting_service_does_not_use_get_all" time="0.008" timestamp="2026-11-02T16:22:01" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_regressions.py" line="1037"/>
+	</testsuite>
+</testsuites>

@@ -1,0 +1,15 @@
+{
+  "mode": "distribution",
+  "workers": 2,
+  "lead": "CRM-LEAD-2026-01660",
+  "campaign": "7oae3b96iq",
+  "claims": 1,
+  "work_items": 1,
+  "duplicate_items": 0,
+  "winners": 1,
+  "errors": [
+    "UniqueValidationError: ('CSKH Work Item', '7p3nebau7c', IntegrityError(1062, \"Duplicate entry '7oae3b96iq-CRM-LEAD-2026-01660' for key 'cskh_domain_unique'\"))"
+  ],
+  "ok": true
+}
+{"mode": "distribution", "workers": 2, "lead": "CRM-LEAD-2026-01660", "campaign": "7oae3b96iq", "claims": 1, "work_items": 1, "duplicate_items": 0, "winners": 1, "errors": ["UniqueValidationError: ('CSKH Work Item', '7p3nebau7c', IntegrityError(1062, \"Duplicate entry '7oae3b96iq-CRM-LEAD-2026-01660' for key 'cskh_domain_unique'\"))"], "ok": true}

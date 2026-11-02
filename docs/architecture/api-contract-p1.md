@@ -91,6 +91,12 @@ Nguồn: `apps/crm_cskh/crm_cskh/services/errors.py`.
 | `PARTIAL_SUCCESS` | 200 | Run/batch hoàn tất **có** lỗi cục bộ (xem `errors`, `skipped`) | import, distribution |
 | `RETRYABLE_FAILURE` | 200 | Lỗi có thể retry (job chưa commit được) | import, distribution |
 
+**Mapping sang HTTP status.** `P1Error` (và các lớp con) expose **cả** `http_status` và
+`http_status_code`. Frappe đọc `getattr(e, "http_status_code", 500)` trong
+`frappe.app.handle_exception`, nên chỉ khai báo `http_status` sẽ khiến mọi lỗi P1 trả
+HTTP 500. Vì vậy `http_status_code` là thuộc tính **bắt buộc**: 400 / 403 / 404 / 409 / 413
+đều được trả đúng, và UI có thể branch theo HTTP status lẫn theo `code`.
+
 **Envelope lỗi** (Frappe chuẩn, đã chuẩn hóa qua `crm_cskh.errors.normalize_error_response`):
 
 ```json
@@ -116,7 +122,7 @@ tiếng Việt.
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
 | `file_name` | string | ✔ | Tên `File` đã upload (bắt buộc `is_private`) |
-| `mapping` | object \| string | ✖ | `{field: tên_cột}`; `field` = `mobile_no` (chỉ cần SĐT) |
+| `mapping` | object \| string | ✖ | `{field: tên_cột}`; field chuẩn của số điện thoại là `phone` |
 | `idempotency_key` | string | ✖ | Mặc định `import:{sha256(file)}:{import_mode}` |
 | `import_mode` | string | ✖ | `standard` (mặc định) |
 
@@ -146,6 +152,25 @@ tiếng Việt.
 `class` trong `preview` là một trong: `valid`, `duplicate_in_file`, `duplicate_in_crm`,
 `conflict_active_campaign`, `invalid`. `preview` bị cắt còn **200 dòng đầu**
 (`preview_truncated: true` khi có nhiều hơn).
+
+**`mapping` ánh xạ *tên cột*, không phải *giá trị ô*.** Giá trị của `mapping[phone]` là
+**tên** của cột trong file (ví dụ `{"phone": "Số điện thoại"}`), không phải số điện thoại.
+Khi `mapping` có nhiều field, cột của field chuẩn `phone` được ưu tiên; nếu `mapping`
+không có field `phone`, chỉ một cột đã map mà **tên** của nó là một header điện thoại
+được nhận, và nếu không có cột nào như vậy thì pipeline dùng header điện thoại của file.
+Preview và worker dùng **cùng** quy tắc này và **cùng** giới hạn/validation, nên một file
+mà preview chấp nhận thì worker không thể từ chối.
+
+**Checksum.** `checksum` là SHA-256 của **nội dung file**, đã chuẩn hóa về `bytes` trước khi
+băm: `File.get_content()` trả `str` khi file đã flush xuống disk và `bytes` khi file còn
+trong bộ nhớ. Cùng một file ⇒ cùng `checksum` ⇒ cùng `idempotency_key` ⇒ cùng `batch`.
+
+**Chuẩn hóa số điện thoại.** `0912345678`, `84912345678` và `+84912345678` là **cùng một**
+khách hàng: canonical E.164 `+84912345678`. Ô trống, ô chỉ có số, và ô ghi bằng ký hiệu
+khoa học (`9.12345678E+08`) là **dòng lỗi**, không phải một khách hàng.
+
+**Idempotency của import.** Import lại cùng một file **không** đổi `owner`, `status` hay
+ghi chú của lead đã có, và **không** tự phân phối lead đó.
 
 **Lỗi:** `FORBIDDEN`, `INVALID_REQUEST` (file không tồn tại / không private),
 `UNSUPPORTED_FORMAT`, `FILE_TOO_LARGE`, `TOO_MANY_ROWS`, `CONFLICT`
@@ -351,6 +376,7 @@ không phải chia đều mỗi lần.
   "campaign": "…",
   "current_owners": { "staff.a@dev.local": 500 },
   "assignment_events": { "staff.a@dev.local": 520 },
+  "distinct_leads": 1000,
   "active_work_items": 500,
   "active_claims": 500,
   "as_of": "…"
@@ -360,6 +386,16 @@ không phải chia đều mỗi lần.
 `current_owners` đếm từ `CSKH Work Item` (sự thật hiện tại), `assignment_events` đếm từ
 `CSKH Assignment History` ⇒ **hai số khác nhau là bình thường** khi có chuyển giao
 (P1 §12.5).
+
+**Phạm vi của sự kiện.** `assignment_events` đếm **riêng** campaign được hỏi: sự kiện được
+lấy từ `CSKH Assignment History` **nối** `CSKH Work Item` theo `work_item`, lọc
+`wi.campaign = <campaign>`. Lịch sử của toàn hệ thống **không** được cộng vào, và một
+campaign không có work item (hoặc không có run) trả **0** sự kiện — không phải lịch sử của
+site. Cột của lịch sử là `to_user` (không phải `assigned_to`).
+
+**Năm số đối soát riêng biệt** (P1 §12.5): `distinct_leads` (khách), `active_work_items`
+(công việc), `active_claims` (claim), `current_owners` (chủ hiện tại) và
+`assignment_events` (sự kiện kiểm toán) là năm con số **không suy ra được lẫn nhau**.
 
 ### 3.12 `crm_cskh.api.ownership.assign` — POST
 
@@ -523,6 +559,40 @@ Pool là work item `status='queued'` **và** `assigned_to is null`; scope của 
 - `identity_count` = số dòng `CSKH Identity Index` (không lộ số điện thoại).
 - Mọi card đều **đã áp scope** của actor trong SQL ⇒ leader chỉ thấy nhánh của mình (SEC-04).
 
+**Phạm vi (scope) của từng card.** Không có card nào là phép đếm toàn hệ thống:
+
+| Card / biến | Nguồn | Cách áp scope |
+|---|---|---|
+| `unique_customers`, `assigned_work_items`, `unassigned_work_items`, `revoked_work_items`, `closed_work_items` | `CSKH Work Item` | `assigned_to ∈ scope` (với hàng chưa giao thì scope theo `campaign.team_scope`) |
+| `active_claims` | `CSKH Active Claim` ⋈ `CSKH Work Item` | theo work item bảo vệ claim |
+| `active_campaigns` | `CSKH Campaign` | `team_scope` của campaign ∈ scope (campaign chung `team_scope = null` luôn thấy) |
+| `failed_batches` | `CSKH Import Batch` | `owner` của batch ∈ scope |
+| `failed_runs` | `CSKH Distribution Run` | `campaign` của run ∈ scope |
+| `per_user` | `CSKH Work Item` group by `(assigned_to, campaign)` | chỉ user trong scope; weight/capacity đọc theo **từng (campaign, user)** |
+| `assignment_events` | `CSKH Assignment History` ⋈ `CSKH Work Item` | work item của campaign / của scope |
+| `identity_count` | `CSKH Identity Index` ⋈ lead qua `CSKH Work Item` | chỉ identity của lead trong scope |
+
+**Bộ lọc.** `campaign` lọc **mọi** card và mọi dòng `per_user`. `date_from` / `date_to` lọc
+theo `CSKH Work Item.creation` và **cũng** áp cho `assignment_events` (theo `event_at`) và
+`identity_count`. Một bộ lọc **được nhận** thì **phải** được áp — không có trường hợp nhận
+rồi bỏ qua.
+
+**Ngữ nghĩa capacity trong `per_user` (P1 §7.2).** `capacity_limit = 0` là **không giới hạn**:
+
+* `capacity` và `remaining_capacity` là `null` khi người dùng có ít nhất một campaign không
+  giới hạn;
+* nếu không, `capacity` là **tổng** capacity của các campaign mà người dùng đang hoạt động,
+  và `remaining_capacity = capacity - current_total` (có thể âm khi vượt ⇒ dữ liệu bất thường);
+* `campaigns[]` là chi tiết **theo từng campaign**: `{campaign, weight, current_total,
+  capacity, remaining_capacity}` với `capacity = null` cho campaign không giới hạn.
+
+Vì rule gắn **một (campaign, user)**, không thể gộp bằng `max(capacity_limit)` qua các
+campaign: một campaign không giới hạn không được bị campaign khác giới hạn làm mất.
+
+`scope` trả một trong `system` | `all` | `team` | `self`: `system` = Administrator/System
+Manager, `all` = `CSKH BOD Viewer` (aggregate toàn hệ thống, **không** PII), `team` =
+leader đọc được cây con của mình, `self` = staff chỉ thấy phần của mình.
+
 ### 3.19 `crm_cskh.api.dashboard.campaigns` — GET
 
 **Response 200**
@@ -579,8 +649,9 @@ phải lỗi.
 1. **Chưa có endpoint download file lỗi.** `error_artifact` trả **tên** `File`; UI tải qua
    route `File` chuẩn của Frappe (file private ⇒ cần quyền đọc file).
 2. **Chưa có `PUT`/`DELETE` generic cho campaign/rule.** Tất cả qua `campaigns.save*`.
-3. **`date_from` / `date_to` của dashboard chưa được dùng để lọc** (tham số được nhận để giữ
-   ổn định contract, hiện scope theo campaign + trạng thái).
+3. **Bộ lọc ngày của dashboard lọc theo `creation` của work item** (`date_from` / `date_to`),
+   còn `assignment_events` lọc theo `event_at` của sự kiện. Hai cột khác nhau theo thiết kế
+   (sự kiện diễn ra sau khi công việc được tạo); UI nên hiển thị rõ phạm vi.
 4. **Chưa có pagination sâu** (`offset` không có cursor).
 5. **Chưa có bulk operation** cho assign/reassign (P1 §10.1 cấm nhận danh sách ID tuỳ ý).
 

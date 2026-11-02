@@ -106,6 +106,30 @@ def _capacity_limit(campaign, user):
 	return max(int(limit or 0) for limit in limits)
 
 
+def _original_distribution_run(work_item):
+	"""Return the distribution run that produced the **original** assignment.
+
+	A manual transfer has no run of its own. The audit trail must then keep
+	the source of the *original* assignment, so the history never claims that
+	a manual transfer came from a run it did not belong to (L-08).
+
+	The source is read from the **first `assign` event** of the work item: the
+	`CSKH Work Item.allocation_run` field is only written by the distribution
+	engine, so a work item that was assigned through the ownership service
+	would otherwise lose its source (L-08).
+	"""
+	row = frappe.db.get_value(
+		"CSKH Assignment History",
+		{"work_item": work_item, "action": ASSIGN},
+		["distribution_run", "event_at", "creation"],
+		order_by="event_at asc",
+		as_dict=True,
+	)
+	if row and row.distribution_run:
+		return row.distribution_run
+	return frappe.db.get_value("CSKH Work Item", work_item, "allocation_run")
+
+
 def _event_id(request_id, work_item, action):
 	"""A deterministic, unique event id so a retry is idempotent."""
 	return f"{action}:{work_item}:{request_id}"
@@ -305,8 +329,22 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 	return {"work_item": work_item, "status": "assigned", "owner": target_user}
 
 
-def reassign(work_item, expected_owner, target_user, actor=None, reason=None, request_id=None):
-	"""Move the ownership of a work item from `expected_owner` to `target_user`."""
+def reassign(
+	work_item,
+	expected_owner,
+	target_user,
+	actor=None,
+	reason=None,
+	request_id=None,
+	distribution_run=None,
+):
+	"""Move the ownership of a work item from `expected_owner` to `target_user`.
+
+	`distribution_run` records the run that caused the transfer. A **manual**
+	reassign has no run: the event then keeps the source of the *original*
+	assignment, so the audit never claims that a manual transfer came from a
+	run it did not belong to (L-08).
+	"""
 	actor = actor or frappe.session.user
 	_require_actor_permission(actor, REASSIGN)
 	if not request_id:
@@ -373,6 +411,10 @@ def reassign(work_item, expected_owner, target_user, actor=None, reason=None, re
 			"ownership_start": now,
 			"ownership_end": None,
 			"event_id": event_id,
+			# A manual reassign keeps the source of the **original**
+			# assignment, so the audit never claims that a manual transfer
+			# came from a run it did not belong to (L-08).
+			"distribution_run": distribution_run or _original_distribution_run(work_item),
 		}
 	)
 
@@ -391,8 +433,20 @@ def reassign(work_item, expected_owner, target_user, actor=None, reason=None, re
 	return {"work_item": work_item, "status": "reassigned", "owner": target_user, "ledger": ledger}
 
 
-def revoke(work_item, expected_owner, actor=None, reason=None, request_id=None, return_to_pool=True):
-	"""Revoke the ownership of a work item and return it to the pool."""
+def revoke(
+	work_item,
+	expected_owner,
+	actor=None,
+	reason=None,
+	request_id=None,
+	return_to_pool=True,
+	distribution_run=None,
+):
+	"""Revoke the ownership of a work item and return it to the pool.
+
+	A **manual** revoke has no distribution run: the event keeps the source of
+	the *original* assignment, so the audit trail stays truthful (L-08).
+	"""
 	actor = actor or frappe.session.user
 	_require_actor_permission(actor, REVOKE)
 	if not request_id:
@@ -444,6 +498,9 @@ def revoke(work_item, expected_owner, actor=None, reason=None, request_id=None, 
 			"ownership_start": None,
 			"ownership_end": now,
 			"event_id": event_id,
+			# A manual revoke keeps the source of the **original**
+			# assignment, so the audit stays truthful (L-08).
+			"distribution_run": distribution_run or _original_distribution_run(work_item),
 		}
 	)
 

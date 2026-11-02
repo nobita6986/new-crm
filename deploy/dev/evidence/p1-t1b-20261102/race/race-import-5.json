@@ -1,0 +1,13 @@
+{
+  "mode": "import",
+  "workers": 5,
+  "phone": "[REDACTED_PHONE]",
+  "canonical": "[REDACTED_PHONE]",
+  "identity_rows": 1,
+  "lead_rows": 1,
+  "duplicate_leads": 0,
+  "winners": 5,
+  "errors": [],
+  "ok": true
+}
+{"mode": "import", "workers": 5, "phone": "[REDACTED_PHONE]", "canonical": "[REDACTED_PHONE]", "identity_rows": 1, "lead_rows": 1, "duplicate_leads": 0, "winners": 5, "errors": [], "ok": true}

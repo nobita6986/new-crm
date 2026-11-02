@@ -45,7 +45,7 @@ def list(status=None, campaign=None):
 	filters = {}
 	if status:
 		filters["status"] = status
-	rows = frappe.get_all(
+	rows = frappe.get_list(
 		"CSKH Campaign",
 		filters=filters,
 		fields=[
@@ -60,6 +60,7 @@ def list(status=None, campaign=None):
 			"ended_at",
 		],
 		order_by="code asc",
+		limit_page_length=0,
 	)
 	items = []
 	for row in rows:

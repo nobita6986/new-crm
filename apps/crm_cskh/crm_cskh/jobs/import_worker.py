@@ -15,7 +15,7 @@ import frappe
 from frappe.utils import now_datetime
 
 from crm_cskh.services import identity as identity_service
-from crm_cskh.services.errors import Conflict
+from crm_cskh.services.errors import Conflict, FileTooLarge
 from crm_cskh.services.import_service import (
 	_cell_value,
 	_classify,
@@ -23,6 +23,7 @@ from crm_cskh.services.import_service import (
 	_phone_candidates,
 	_read_rows,
 	_resolve_column_name,
+	_settings,
 	write_error_artifact,
 )
 from crm_cskh.services.phone_identity import InvalidPhone, normalize_vn_phone
@@ -73,7 +74,14 @@ def _process(batch):
 	if isinstance(content, str):
 		content = content.encode("utf-8")
 	extension = _detect_extension(file_doc)
-	header, rows = _read_rows(content, extension, 500000)
+
+	limits = _settings()
+	if file_doc.file_size and file_doc.file_size > limits["max_import_file_bytes"]:
+		raise FileTooLarge("The file is larger than the configured limit.")
+
+	# The worker applies the **same** limits as the preview, so a file that
+	# the preview accepted can never be rejected by the worker (ADR-P1-08).
+	header, rows = _read_rows(content, extension, limits["max_import_rows"])
 
 	mapping = {}
 	if batch.mapping_json:
@@ -82,6 +90,9 @@ def _process(batch):
 		except (ValueError, TypeError):
 			mapping = {}
 
+	# The worker applies the **same** mapping, the same phone column and the
+	# same validation as the preview: the preview is a dry run of this exact
+	# pipeline (P1 §6.2).
 	phone_column = _resolve_column_name(rows[0]["cells"] if rows else {}, mapping, _phone_candidates(header))
 	classification = _classify(rows, mapping, phone_column)
 	valid_rows = [row for row in classification["preview"]["rows"] if row.get("class") == "valid"]
