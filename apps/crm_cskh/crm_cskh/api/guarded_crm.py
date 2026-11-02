@@ -207,11 +207,11 @@ def _filter_linked_calls_for_scope(result: dict) -> dict:
 		if not _call_log_in_scope(call):
 			continue
 		clean = dict(call)
-		# `recording_url` có thể trỏ file local private — URL đó là đường đọc file
-		# không cần quyền, cùng lý do SEC-26 chặn `file_url` của file private. Chỉ
-		# gỡ URL private; URL public hoặc URL ngoài (https://) giữ nguyên.
+		# Dùng cùng nhận diện URL private như payload hoạt động, kể cả URL
+		# tuyệt đối/protocol-relative. Tải file vẫn cần authorization riêng;
+		# redaction ở đây bảo toàn chính sách URL của custom CRM endpoint.
 		recording_url = clean.get("recording_url")
-		if isinstance(recording_url, str) and recording_url.startswith("/private/files/"):
+		if isinstance(recording_url, str) and _PRIVATE_FILE_URL_RE.search(recording_url):
 			clean.pop("recording_url", None)
 		kept_calls.append(clean)
 
@@ -291,8 +291,8 @@ def get_linked_calls(name):
 	#   - `notes`/`tasks`: giữ lại Note/Task mà caller đọc được (dùng
 	#     `frappe.has_permission` với `throw=False` ⇒ cùng tiêu chí với hook
 	#     `linked_lead_has_permission` đang áp cho `frappe.client.get_list`).
-	#   - `recording_url`: với Call Log được giữ lại, gỡ URL file local private
-	#     (đường đọc file không cần quyền, xem SEC-26); URL public giữ nguyên.
+	#   - `recording_url`: với Call Log được giữ lại, gỡ URL file private
+	#     (tương đối hoặc tuyệt đối, theo SEC-26); URL public giữ nguyên.
 	return _filter_linked_calls_for_scope(result)
 
 

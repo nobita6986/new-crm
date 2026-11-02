@@ -1,13 +1,11 @@
 # deploy/dev — Môi trường DEV cục bộ (WP-01 / P0-A)
 
-Cấu hình DEV cho Frappe CRM + Frappe Framework + (sau này) app `crm_cskh`.
+Cấu hình DEV cho Frappe CRM + Frappe Framework + app `crm_cskh` chứa permission/API guards.
 Mọi phiên bản được **ghim tag + full SHA / tag@digest** — xem [`../../docs/architecture/version-lock.md`](../../docs/architecture/version-lock.md).
 
 > ⚠️ **Chỉ dùng cho DEV với DỮ LIỆU GIẢ.** Không dùng cho staging/production.
-> ✅ **WP-01 đã chạy trên máy DEV hiện tại:** Docker/WSL2, bootstrap, migrate, seed và HTTP/API smoke thành công.
-> **P0-A chưa hoàn tất:** hot reload/source-edit, clean-machine setup/restore và MariaDB compatibility còn mở. Xem evidence ở
-> [`../../docs/operations/dev-setup.md`](../../docs/operations/dev-setup.md) §9 và
-> [`evidence/wp01-runtime.md`](evidence/wp01-runtime.md).
+> **P0 đã nghiệm thu GO P1:** DEV/Vite/CSRF/Socket.IO, bộ ảnh tiếng Việt và CI clean bootstrap/migration/restore đã đạt trong phạm vi baseline DEV. Xem [quyết định nghiệm thu](../../docs/architecture/p0-exit-report.md); `wp01-runtime.md` và các snapshot đầu kỳ là lịch sử.
+> **`INSTALL_CSKH=1` bắt buộc.** `.env` cũ có giá trị `0` sẽ bị bootstrap từ chối trước khi gọi Bench/DB; không chạy DEV thiếu app chứa các guard.
 
 ## Nội dung
 
@@ -19,7 +17,7 @@ Mọi phiên bản được **ghim tag + full SHA / tag@digest** — xem [`../..
 | `bootstrap.sh` | Khởi tạo bench + lấy app theo SHA ghim + tạo site + install + migrate. **Idempotent** |
 | `seed/seed_demo.py` | Seed dữ liệu giả (user/team/lead/call/task/note/file). **Idempotent, deterministic** |
 | `seed/run-seed.sh` | Wrapper chạy seed trong container `bench` |
-| `evidence/` | Bằng chứng dò môi trường và (sau này) log chạy thật |
+| `evidence/` | Hồ sơ nghiệm thu, log kiểm chứng và manifest ảnh P0 |
 
 ## Quickstart (sau khi đã có Docker Linux container — xem điều kiện ở dev-setup §2)
 
@@ -39,8 +37,13 @@ docker compose exec bench bash /src/deploy/dev/seed/run-seed.sh
 
 # 4) Chạy server DEV
 docker compose exec bench bash -lc 'cd /workspace/frappe-bench && bench start'
-# UI: http://dev.localhost:8000/crm   (đăng nhập Administrator / mật khẩu trong .env)
+# 5) Terminal thứ hai, cùng thư mục deploy/dev: chạy Vite
+docker compose exec bench bash -lc 'cd /workspace/frappe-bench/apps/crm/frontend && node node_modules/.bin/vite --host 0.0.0.0 --port "$VITE_DEV_PORT"'
+# UI DEV: http://dev.localhost:8080/crm/leads/view/list (VITE_PORT trong .env)
+# Sau seed: staff.a@dev.local / DevSeed-Only-2026! (dữ liệu giả)
 ```
+
+Các lệnh trên dùng Bash/WSL hoặc terminal tương đương. `.env.example` mặc định cài đủ `frappe`, `crm`, `crm_cskh`; kiểm tra bằng `bench --site dev.localhost list-apps --format json` trong bench. Bootstrap áp các helper Vite/i18n có ghim revision; không sửa tay upstream để thay cho helper.
 
 ## Cổng DEV — quy tắc nhất quán host ↔ container
 
@@ -67,6 +70,8 @@ và chạy Vite với `VITE_DEV_PORT` tương ứng:
 WEB_PORT=8010 SOCKETIO_PORT=9010 VITE_PORT=8091 docker compose up -d --force-recreate bench
 docker compose exec bench bash -lc 'cd /workspace/frappe-bench/apps/crm/frontend && VITE_DEV_PORT=8091 node node_modules/.bin/vite --host 0.0.0.0 --port 8091'
 ```
+
+Sau khi recreate container, chạy lại `bench start` ở terminal riêng. Để giữ cấu hình qua những lần `up`, lưu cả ba cổng vào `.env`; ví dụ trên chỉ đặt biến cho một lệnh Bash. URL tương ứng là `http://dev.localhost:8091/crm/leads/view/list`.
 
 > `frappe-ui` tự tính cổng Vite từ `webserver_port` và ghi đè cờ `--port`; helper
 > [`apply-crm-vite-dev-patch.py`](apply-crm-vite-dev-patch.py) đã chèn
@@ -97,7 +102,8 @@ Vite DEV lấy CSRF từ trang Desk cùng site, không phụ thuộc quyền đ�
 `apply-crm-vite-dev-patch.py` rồi tải lại trang Chrome. Cảnh báo HTTP localhost
 và log Workbox không thay thế lỗi bootstrap thực tế trong Console.
 
-Kiểm tra hồi quy riêng cho luồng này: `node --test deploy/dev/test-crm-vite-bootstrap.cjs`.
+Từ repo root: `node --test deploy/dev/test-crm-vite-bootstrap.cjs`.
+Các kiểm tra bootstrap fail-closed và redaction chạy trong bench bằng `python -m unittest -v deploy.dev.test_bootstrap_contract deploy.dev.test_guarded_crm_payloads` từ `/src`; CI thực thi chúng ngoài inventory 99 method.
 
 ## Nguyên tắc bất biến
 
@@ -105,4 +111,4 @@ Kiểm tra hồi quy riêng cho luồng này: `node --test deploy/dev/test-crm-v
 2. Không dùng tag trôi (`latest`, `main`, `develop`) — chỉ tag@digest / SHA trong `.env.example`.
 3. Không trỏ DEV vào DB/volume production.
 4. Không dùng dữ liệu khách hàng thật trong seed.
-5. Không sửa source `frappe`/`crm` trong container; dùng custom app `crm_cskh` (WP-02).
+5. Logic nghiệp vụ/quyền nằm trong `crm_cskh`. Chỉ dùng helper DEV đã ghim revision cho những patch Vite/i18n được quản lý trong repo; không sửa tay hoặc mở rộng patch upstream tùy ý.
