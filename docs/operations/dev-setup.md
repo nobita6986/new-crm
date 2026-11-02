@@ -2,17 +2,13 @@
 
 > **Dự án:** CRM-CSKH
 > **Tài liệu:** `docs/operations/dev-setup.md`
-> **Phiên bản:** 1.6 — 19/10/2026 (T1A: sửa version sort; thêm §7.6 checklist runtime cho G0-02/G0-09 với lệnh curl/post verification)
+> **Phiên bản:** 1.7 — 02/11/2026 (đối chiếu P0 đã nghiệm thu, bắt buộc security app, sửa lệnh Vite/CSRF/Socket.IO)
 > **Tài liệu cha:** [`../root-plan/P0.md`](../root-plan/P0.md) (§3 P0-A) · [`../architecture/version-lock.md`](../architecture/version-lock.md)
 > **Đối tượng:** người thứ hai cần setup lại từ repo mà không cần hướng dẫn miệng.
 
-> **TRẠNG THÁI:** WP-01 runtime có bootstrap trên volume rỗng, migrate, seed, UI/API và backup/restore; WP-02/P0 suite chạy trên test site sạch.
-> **P0-A còn PARTIAL:** Python reload đã xác minh; Vite page hiện trắng nên chưa chứng minh Vue hot reload. MariaDB 11.8 có cảnh báo Framework >10.8 chưa được kiểm thử; xem [`p0-exit-report.md`](../architecture/p0-exit-report.md).
-> **T1A (2026-10-19):** phiên Codex không có Docker/Python/Yarn; chỉ cập nhật metadata.
-> Bằng chứng runtime mới cho G0-02 (Vite hot reload) và G0-09 (screenshot) chưa có; xem
-> [`t1a-g002-vite-csrf-blocker.md`](../../deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md) và
-> [`t1a-g009-vi-checklist.md`](../../deploy/dev/evidence/t1a-g009-vi-checklist.md) để biết
-> kế hoạch chạy và checklist.
+> **TRẠNG THÁI HIỆN HÀNH:** P0 đã nghiệm thu GO P1 ngày 2026-11-01, PR #2 merge `584cbc2`; CI main [#41320842991](https://github.com/nobita6986/new-crm/actions/runs/41320842991) PASS. DEV/Vite/CSRF/Socket.IO và 10 ảnh tiếng Việt đã được kiểm chứng; xem [P0 exit report](../architecture/p0-exit-report.md).
+> **Bắt buộc:** `INSTALL_CSKH=1` và đủ ba app `frappe`, `crm`, `crm_cskh`. Bootstrap từ chối cấu hình bỏ security app hoặc source app bị thiếu trước khi gọi Bench/DB.
+> **Giới hạn:** chỉ baseline DEV/dữ liệu giả; tương thích production, proxy/CORS mới và hiệu năng import/index thuộc backlog riêng. Các snapshot §9/§11/§12 giữ lịch sử WP-01, không thay verdict hiện hành.
 
 ---
 
@@ -28,7 +24,7 @@ thấy kết quả mà **không cần deploy VPS**. Stack:
                                           |-- redis-queue   (Redis 8.6)
 ```
 
-- App cài trên site: `frappe` (Framework), `crm` (Frappe CRM). `crm_cskh` thêm ở WP-02.
+- App bắt buộc trên site: `frappe` (Framework), `crm` (Frappe CRM), `crm_cskh` (permission/API guards).
 - Phiên bản **ghim** ở [`version-lock.md`](../architecture/version-lock.md) §2/§5 và trong `deploy/dev/.env.example`.
 
 ---
@@ -108,11 +104,11 @@ docker compose exec bench bash /src/deploy/dev/bootstrap.sh
 4. `bench get-app --branch <CRM_TAG> https://github.com/frappe/crm.git` rồi `git checkout <CRM_SHA>` + đối chiếu.
 5. `bench new-site <SITE> --no-mariadb-socket --mariadb-user-host-login-scope=% ...`.
 6. `developer_mode=1`, `time_zone=Asia/Ho_Chi_Minh` cho site DEV.
-7. `install-app crm`; nếu `INSTALL_CSKH=1`: symlink `/src/apps/crm_cskh` → `apps/crm_cskh` rồi `install-app crm_cskh`.
+7. `install-app crm`; bắt buộc `INSTALL_CSKH=1`: symlink `/src/apps/crm_cskh` → `apps/crm_cskh`, cài editable package rồi `install-app crm_cskh`.
 8. `bench migrate`.
 9. In ra SHA thực tế của `frappe`/`crm` + `list-apps` để đối chiếu version-lock.
 
-**Kỳ vọng sau bước này**: `bench --site dev.localhost list-apps` in ra `frappe` và `crm`.
+**Kỳ vọng sau bước này**: `bench --site dev.localhost list-apps --format json` chứa đủ `frappe`, `crm`, `crm_cskh`. `.env` cũ có `INSTALL_CSKH=0` cần đổi thành `1`; không chạy seed/server khi thiếu guard app.
 
 ---
 
@@ -151,6 +147,9 @@ docker compose exec bench bash /src/deploy/dev/seed/run-seed.sh
 # START server DEV (giữ container, chạy honcho)
 docker compose exec bench bash -lc 'cd /workspace/frappe-bench && bench start'
 
+# Terminal thứ hai: Vite trên frontend CRM đã ghim
+docker compose exec bench bash -lc 'cd /workspace/frappe-bench/apps/crm/frontend && node node_modules/.bin/vite --host 0.0.0.0 --port "$VITE_DEV_PORT"'
+
 # STOP server DEV: Ctrl+C trong phiên bench start
 # STOP toàn bộ container (giữ dữ liệu)
 docker compose stop
@@ -177,7 +176,10 @@ docker compose logs -f bench
 ### 7.1. UI
 
 ```
-http://dev.localhost:8000/crm      (đăng nhập: Administrator / mật khẩu trong .env)
+http://dev.localhost:8080/crm/leads/view/list  (Vite: VITE_PORT trong .env)
+http://dev.localhost:8000/cskh                 (Jinja, cần quyền đọc CRM Lead)
+
+Sau seed: staff.a@dev.local / DevSeed-Only-2026! (dữ liệu giả)
 ```
 
 Nếu `dev.localhost` không resolve trên Windows, thêm bằng quyền admin vào `C:\Windows\System32\drivers\etc\hosts`:
@@ -186,7 +188,7 @@ Nếu `dev.localhost` không resolve trên Windows, thêm bằng quyền admin v
 127.0.0.1 dev.localhost
 ```
 
-Trên máy DEV hiện tại, `dev.localhost` chưa resolve ở host; thao tác hosts-file cần quyền admin.
+Khả năng resolve `*.localhost` tùy browser/công cụ. Chỉ xử lý hosts khi thực sự không resolve; với CLI có thể gọi `127.0.0.1` và đặt đúng Host header. Nếu cổng mặc định đã dùng, đặt `WEB_PORT=8010`, `SOCKETIO_PORT=9010`, `VITE_PORT=8091` trong `.env`, recreate bench rồi chạy lại cả hai tiến trình; xem [quy tắc cổng DEV](../../deploy/dev/README.md).
 
 Các màn hình cần kiểm (P0-A §A3): Login, `/crm` (Lead List), Lead Detail, Tasks, Call Logs, Dashboard,
 Preferences (đổi ngôn ngữ/timezone — nền tảng cho P0-F).
@@ -198,7 +200,7 @@ curl -sS -o /dev/null -w '%{http_code}\n' -H 'Host: dev.localhost' http://127.0.
 # kỳ vọng: 200; /crm cần đăng nhập trước
 ```
 
-Guest gọi `/crm` nhận HTTP 403. Sau khi đăng nhập, `/crm` trả HTTP 200; API login và `frappe.auth.get_logged_user` được kiểm tra ở runtime evidence §9.
+Vite SPA chuyển Guest tới `/login` rồi quay lại route CRM sau đăng nhập. Guest gọi trang Jinja `/cskh` hoặc API app có auth vẫn bị 403; không dùng `/cskh` làm bootstrap CSRF cho mọi role. Các số đo Guest `/crm` tại §9 là lịch sử của đường web server, không phải flow Vite hiện hành.
 
 ### 7.3. Kiểm tra API có xác thực
 
@@ -248,91 +250,25 @@ Test hiện có của `crm_cskh` (WP-02): `crm_cskh/crm_cskh/tests/test_health.p
 `crm_cskh/crm_cskh/tests/test_poc_custom_field.py`,
 `crm_cskh/crm_cskh/crm_cskh/doctype/cskh_app_settings/test_cskh_app_settings.py`.
 
-### 7.6. Frontend hot reload (Vue) + CSRF retention
+### 7.6. Frontend hot reload, CSRF và Socket.IO
 
-> **Trạng thái hiện tại (T1A, 2026-10-19):** CHƯA có bằng chứng runtime. Phiên Codex
-> không có Docker/Python/Yarn/browser. Phần dưới là **lệnh Owner cần chạy trên máy có
-> Docker/WSL2 + browser thật**, dựa trên phân tích tĩnh ở
-> [`t1a-g002-vite-csrf-blocker.md`](../../deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md).
+Bootstrap áp [helper Vite DEV](../../deploy/dev/apply-crm-vite-dev-patch.py) lên CRM SHA đã ghim. Không tạo `crm_cskh/frontend` hoặc dùng service `backend`: frontend nằm ở `/workspace/frappe-bench/apps/crm/frontend`, service Compose là `bench`.
 
-#### 7.6.1. Cấu hình đề xuất (V-A: Vite proxy same-origin)
-
-- **KHÔNG bật `ignore_csrf=1` ở bất kỳ đâu** — cấu hình này tạo lỗ hổng CSRF, bị cấm.
-- Cập nhật `crm_cskh/frontend/vite.config.js` (snippet xem `t1a-g002-vite-csrf-blocker.md` §2.4):
-  thêm block `server.proxy` cho `/api`, `/files`, `/assets`, `/socket.io` trỏ về
-  `http://127.0.0.1:8000`, `changeOrigin: true`, `secure: false`, bật `server.cors.origin: ['http://127.0.0.1:8000']`.
-- Cập nhật `sites/dev.localhost/site_config.json` (chỉ dev):
-  `"host_name": "http://127.0.0.1:8080"`.
-
-#### 7.6.2. Lệnh chạy Vite dev
+1. Chạy `bench start` và Vite như §6. `VITE_PORT` host phải bằng `VITE_DEV_PORT` trong container; URL browser dùng `dev.localhost` và đúng cổng Vite.
+2. Proxy `/socket.io` phải giữ `changeOrigin: false`. Namespace xác thực Host/Origin; handshake 200 hoặc Engine.IO polling 200 chưa chứng minh namespace join.
+3. Không bật `ignore_csrf`, không mở wildcard Origin/CORS để sửa lỗi DEV. Helper lấy CSRF sau đăng nhập qua `/desk`, giữ token cho context POST; thiếu/sai token phải bị 400 `CSRFTokenError`, token đúng 200 trên case đã đo.
+4. `/cskh` là Jinja, không có Vue `$socket`. SPA gắn socket ở `app.config.globalProperties.$socket`, không phải `window.$socket`.
+5. Kiểm chứng namespace bằng công cụ hiện có, chạy trong container từ thư mục frontend (default ports):
 
 ```bash
-# Trên host có Docker
-docker compose -f deploy/dev/docker-compose.yml up -d
-docker compose exec backend bench --site dev.localhost install-app crm_cskh
-docker compose exec backend bench --site dev.localhost migrate
-
-docker compose exec backend bash -lc '
-  cd /home/frappe/frappe-bench/apps/crm_cskh/frontend &&
-  yarn install --frozen-lockfile &&
-  yarn dev --host 0.0.0.0 --port 8080
-'
-# kỳ vọng: "VITE vX.Y.Z  ready in NNN ms  ➜  Local: http://localhost:8080/"
+docker compose exec bench bash -lc 'cd /workspace/frappe-bench/apps/crm/frontend && node /src/deploy/dev/verify-socket-namespace.mjs --origin "http://dev.localhost:$VITE_DEV_PORT" --web http://dev.localhost:8000'
 ```
 
-#### 7.6.3. Verify bằng curl (ghi log vào `deploy/dev/evidence/logs/t1a-g002-*.txt`)
+PASS cần `connected=true`, namespace `/dev.localhost`, transport `websocket` và `pong=true`. `--web` dùng cổng bên trong container 8000, không phải cổng publish host 8010. Helper lấy dependency từ frontend; có thể đặt `CRM_FRONTEND` nếu chạy từ thư mục khác.
 
-```bash
-# (a) Lấy CSRF token qua Vite proxy
-TOKEN=$(curl -s -c /tmp/cookies.txt http://127.0.0.1:8080/api/method/frappe.sessions.get_csrf_token \
-  -H 'X-Requested-With: XMLHttpRequest' \
-  | python -c 'import json,sys;print(json.load(sys.stdin)["message"])')
+Regression bootstrap Guest chạy từ repo root: `node --test deploy/dev/test-crm-vite-bootstrap.cjs`. Tests bootstrap/redaction bổ sung chạy từ `/src` trong bench: `python -m unittest -v deploy.dev.test_bootstrap_contract deploy.dev.test_guarded_crm_payloads`; đây không phải thêm method vào inventory 99.
 
-# (b) Login
-curl -s -b /tmp/cookies.txt -c /tmp/cookies.txt -X POST \
-  http://127.0.0.1:8080/api/method/login \
-  -H "X-Frappe-CSRF-Token: $TOKEN" -H "Content-Type: application/json" \
-  -d '{"usr":"Administrator","pwd":"admin"}' | tee /tmp/login.json
-
-# (c) POST hợp lệ — kỳ vọng 200
-curl -s -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/frappe.ping \
-  -H "X-Frappe-CSRF-Token: $TOKEN" -w "\nHTTP %{http_code}\n" | tee /tmp/ping-ok.txt
-
-# (d) POST thiếu token — kỳ vọng 403
-curl -s -o /dev/null -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/frappe.ping \
-  -w "HTTP %{http_code}\n" | tee /tmp/ping-no-token.txt
-
-# (e) POST sai token — kỳ vọng 403
-curl -s -o /dev/null -b /tmp/cookies.txt -X POST http://127.0.0.1:8080/api/method/frappe.ping \
-  -H "X-Frappe-CSRF-Token: WRONG-TOKEN-12345" \
-  -w "HTTP %{http_code}\n" | tee /tmp/ping-bad-token.txt
-```
-
-**Kỳ vọng:**
-- `/tmp/ping-ok.txt` kết thúc bằng `HTTP 200` và body `{"message":"pong"}`.
-- `/tmp/ping-no-token.txt` = `HTTP 403`.
-- `/tmp/ping-bad-token.txt` = `HTTP 403`.
-
-#### 7.6.4. Verify hot reload
-
-1. Mở Chrome, truy cập `http://127.0.0.1:8080/cskh`. Screenshot lưu
-   `deploy/dev/evidence/screenshots/t1a-g002-01-vite-initial.png`.
-2. Trong container, thêm 1 component probe (xem `t1a-g002-vite-csrf-blocker.md` §3.4).
-3. Trong browser DevTools Network, xác nhận có message `WebSocket message: 'update'`.
-   Screenshot lưu `t1a-g002-02-hmr-update.png`.
-
-#### 7.6.5. Checklist PASS/FAIL
-
-Sau khi chạy xong, điền 9 mục trong `t1a-g002-vite-csrf-blocker.md` §4 và cập nhật
-`p0-exit-report.md`. Nếu bất kỳ mục nào FAIL → G0-02 vẫn PARTIAL.
-
-**Tuyên bố hiện tại:** G0-02 = ⛔ BLOCKER runtime, **KHÔNG** đánh dấu PASS.
-- Nếu sau này thêm Vue SPA riêng cho `crm_cskh`, cần Vite config riêng (entry point,
-  manifest) và quyết định có proxy chung `/api` hay tách.
-
-**Trạng thái G0-02 (T1A):** không chạy được Vite ở phiên Codex này (thiếu Docker/Yarn);
-xem blocker chi tiết và đề xuất V-A ở `t1a-g002-vite-csrf-blocker.md`. **Không** tuyên bố
-G0-02 PASS cho tới khi chạy được runtime và có output thật ở các bước 1–4.
+HMR và checklist 14/14 đã được nghiệm thu ở [evidence G0-02](../../deploy/dev/evidence/t1a-g002-vite-csrf-blocker.md). Chỉ đổi nhãn thử/hoàn tác và ghi evidence mới khi thực sự thay code/frontend hoặc cần tái hiện regression; không reset verdict chỉ vì đọc snapshot cũ.
 
 ---
 
@@ -354,9 +290,11 @@ Reset nhanh nhất khi cần sạch: `docker compose down -v` rồi chạy lại
 
 ---
 
-## 9. TRẠNG THÁI CHẠY THẬT & BLOCKER
+## 9. Snapshot lịch sử WP-01 — 2026-10-15
 
-### 9.1. Môi trường hiện tại
+> Phần này giữ kết quả và các blocker tại thời điểm WP-01. Những trạng thái Vite/SEC/ảnh còn thiếu bên dưới đã được hồ sơ nghiệm thu P0 thay thế; không dùng như checklist hiện hành.
+
+### 9.1. Môi trường tại thời điểm WP-01
 
 | Hạng mục | Kết quả ngày 2026-10-15 |
 |---|---|
@@ -372,7 +310,7 @@ Reset nhanh nhất khi cần sạch: `docker compose down -v` rồi chạy lại
 
 Chi tiết command/evidence: [`wp01-runtime.md`](../../deploy/dev/evidence/wp01-runtime.md) và [`environment-probe.md`](../../deploy/dev/evidence/environment-probe.md) §8.
 
-### 9.2. Còn mở trước khi P0-A hoàn tất
+### 9.2. Các mục từng còn mở ở WP-01
 
 - Bootstrap trên volume bench rỗng, clean test site, repeated migration và backup/restore đã chạy; xem [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md).
 - Python source reload đã xác minh trên `bench start`; Vue build pass nhưng Vite route hiển thị trắng nên chưa chứng minh hot reload.
@@ -398,7 +336,9 @@ Chi tiết command/evidence: [`wp01-runtime.md`](../../deploy/dev/evidence/wp01-
 
 ---
 
-## 11. Còn lại ngoài WP-01
+## 11. Snapshot lịch sử công việc ngoài WP-01
+
+> Các trạng thái NO-GO/chưa chạy trong mục này là lịch sử, đã được [quyết định nghiệm thu P0](../architecture/p0-exit-report.md) thay thế.
 
 - WP-02 app, fixture và 28 Frappe tests chạy trên clean site; xem [`wp-02-p0b.md`](../../deploy/dev/evidence/wp-02-p0b.md) và [`p0-isolated-verification.md`](../../deploy/dev/evidence/p0-isolated-verification.md).
 - WP-03 primitives đã chạy; CSV import và SLA apply follow-up đạt. XLSX, SLA calendar/holiday semantics, dedup/canonical phone thuộc phần còn lại.
@@ -410,7 +350,9 @@ Chi tiết command/evidence: [`wp01-runtime.md`](../../deploy/dev/evidence/wp01-
 
 ---
 
-## 12. Bàn giao
+## 12. Bàn giao WP-01 — lịch sử
+
+> Bàn giao P0 hiện hành: 10/10 gate PASS, GO P1; các mục fail-closed và hiệu năng được phân owner trong P0 exit report. Các dòng dưới giữ nguyên bàn giao WP-01 ban đầu.
 
 - **WP-01 runtime: PASS** cho bootstrap, migrate, seed, clean volume, restore và HTTP/API smoke. P0-A tổng thể: **PARTIAL** vì Vue hot reload chưa được xác minh.
 - Bằng chứng tổng hợp: [`wp01-runtime.md`](../../deploy/dev/evidence/wp01-runtime.md). Raw logs ở `deploy/dev/evidence/*.log` bị loại khỏi Git theo `.gitignore`.
