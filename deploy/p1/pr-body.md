@@ -41,12 +41,12 @@ PR #4 (backend P1 của T1B) **chưa merge**. PR này mang **toàn bộ** P1: ba
 * Suite P1 **174/174 OK**, P0 core inventory **99/99 OK**.
 * `ruff check` + `ruff format --check` (0.14.0) pass.
 
-## CI (SHA `ec5b4f7`)
+## CI (HEAD `4e203f2`)
 
 | Workflow | Run | Kết quả |
 |---|---|---|
-| `P0 DEV verification` | [41455932205](https://github.com/nobita6986/new-crm/actions/runs/41455932205) | **SUCCESS** — probe HTTP trực tiếp 18/18 PASS |
-| `P1 backend verification` | [41455932165](https://github.com/nobita6986/new-crm/actions/runs/41455932165) | **SUCCESS** — 174 method P1 + lint/format + schema |
+| `P0 DEV verification` | [41457500256](https://github.com/nobita6986/new-crm/actions/runs/41457500256) | **SUCCESS** — probe HTTP trực tiếp 18/18 PASS |
+| `P1 backend verification` | [41457500309](https://github.com/nobita6986/new-crm/actions/runs/41457500309) | **SUCCESS** — 174 method P1 + lint/format + schema |
 
 `ec5b4f7` sửa lỗi khiến `P0 DEV verification` fail: trang `/cskh` chỉ xuất
 `frappe.csrf_token = "…"` nên probe trực tiếp không đọc được token ⇒ `csrf-page`,

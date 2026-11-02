@@ -8,8 +8,8 @@
 **PR backend:** [#4 — feat(p1): CSKH P1 backend](https://github.com/nobita6986/new-crm/pull/4) — **OPEN, KHÔNG merge**
 **PR UI (đầy đủ P1):** [#5 — feat(p1): CSKH P1 UI](https://github.com/nobita6986/new-crm/pull/5) — **OPEN, KHÔNG merge**
 **SHA bàn giao backend:** `96ef842` — `fix(p1): close L-01..L-15 verification findings of the P1 backend` (HEAD của `codex/p1-foundation`, đã push lên `origin/codex/p1-foundation`)
-**SHA bàn giao UI:** `ec5b4f7` — `fix(p1): publish the CSRF header of the session so the direct-HTTP probe can read the token` (HEAD của `codex/p1-ui`, đã push lên `origin/codex/p1-ui`)
-**CI (PR #5, SHA `ec5b4f7`):** `P0 DEV verification` = run [`41455932205`](https://github.com/nobita6986/new-crm/actions/runs/41455932205) — **SUCCESS** (probe HTTP 18/18 PASS) · `P1 backend verification` = run [`41455932165`](https://github.com/nobita6986/new-crm/actions/runs/41455932165) — **SUCCESS**
+**SHA bàn giao UI:** `ec5b4f7` — `fix(p1): publish the CSRF header of the session so the direct-HTTP probe can read the token` (mã nguồn bàn giao, đã push lên `origin/codex/p1-ui`; HEAD nhánh = `4e203f2` — commit tài liệu)
+**CI (PR #5, HEAD `4e203f2`):** `P0 DEV verification` = run [`41457500256`](https://github.com/nobita6986/new-crm/actions/runs/41457500256) — **SUCCESS** (probe HTTP 18/18 PASS) · `P1 backend verification` = run [`41457500309`](https://github.com/nobita6986/new-crm/actions/runs/41457500309) — **SUCCESS**
 **Dữ liệu:** chỉ dữ liệu giả trên site kiểm định; không dùng production.
 
 ---
@@ -230,12 +230,12 @@ Workflow mới: [`.github/workflows/p1.yml`](../../.github/workflows/p1.yml). C�
 > Suite P1 **không** được trộn vào inventory 99 của P0: `p1_test_inventory.json` và
 > `g007_test_inventory.json` là hai file riêng, hai gate riêng, hai thư mục evidence riêng.
 
-### 4.1. CI của PR #5 (nhánh `codex/p1-ui`, SHA `ec5b4f7`)
+### 4.1. CI của PR #5 (nhánh `codex/p1-ui`, HEAD `4e203f2`)
 
 | Workflow | Run | Kết quả | Ghi chú |
 |---|---|---|---|
-| `P0 DEV verification` | [`41455932205`](https://github.com/nobita6986/new-crm/actions/runs/41455932205) | **SUCCESS** | probe HTTP trực tiếp **18/18 PASS** (`probe_result=PASS`, `failed_cases=[]`); 99 method P0 vẫn xanh |
-| `P1 backend verification` | [`41455932165`](https://github.com/nobita6986/new-crm/actions/runs/41455932165) | **SUCCESS** | per-method gate 174 method P1 + lint/format + schema |
+| `P0 DEV verification` | [`41457500256`](https://github.com/nobita6986/new-crm/actions/runs/41457500256) | **SUCCESS** | probe HTTP trực tiếp **18/18 PASS** (`probe_result=PASS`, `failed_cases=[]`); 99 method P0 vẫn xanh |
+| `P1 backend verification` | [`41457500309`](https://github.com/nobita6986/new-crm/actions/runs/41457500309) | **SUCCESS** | per-method gate 174 method P1 + lint/format + schema |
 
 Run `P0 DEV verification` trước đó (`41450325670`, SHA `c32e48f`) **FAIL** ở
 case `csrf-page`: trang `/cskh` chỉ xuất `frappe.csrf_token = "…"`, còn probe
@@ -484,7 +484,7 @@ Cả hai đều **không** đổi kỳ vọng của `test_p1_regressions` (71/71
 | Mã lỗi ổn định + HTTP status đúng hợp đồng | ✅ | `p1_errors` + `services/errors.py` |
 | Việt hóa 100 % chuỗi P1 | ✅ | 232/232, `vi.csv` 446 dòng |
 | Suite P1 + P0 core xanh trên nhánh merge | ✅ | 174 + 99 method |
-| CI P0 DEV (probe HTTP 18/18) + CI P1 đều xanh | ✅ | run `41455932205` · `41455932165` (SHA `ec5b4f7`) |
+| CI P0 DEV (probe HTTP 18/18) + CI P1 đều xanh | ✅ | run `41457500256` · `41457500309` (HEAD `4e203f2`) |
 | CI có bước kiểm tra UI | ❌ | Xem §7.11 mục 1 |
 | Test tự động cho DOM | ❌ | Xem §7.11 mục 2 |
 | Màn lịch sử batch + tải lỗi | ❌ | Xem §7.11 mục 4 |
