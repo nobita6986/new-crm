@@ -1,0 +1,150 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Distribution Run",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "label": "Campaign",
+   "options": "CSKH Campaign",
+   "reqd": 1
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "rule_version",
+   "fieldtype": "Int",
+   "label": "Rule Version",
+   "reqd": 1,
+   "default": "1"
+  },
+  {
+   "fieldname": "selection_fingerprint",
+   "fieldtype": "Data",
+   "label": "Selection Fingerprint",
+   "reqd": 1,
+   "length": 64
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "planned\nrunning\ncompleted\ncompleted_with_errors\nfailed",
+   "default": "planned",
+   "reqd": 1
+  },
+  {
+   "fieldname": "preview_json",
+   "fieldtype": "Long Text",
+   "label": "Preview Json"
+  },
+  {
+   "fieldname": "actual_json",
+   "fieldtype": "Long Text",
+   "label": "Actual Json"
+  },
+  {
+   "fieldname": "state_json",
+   "fieldtype": "Long Text",
+   "label": "State Json"
+  },
+  {
+   "fieldname": "expires_at",
+   "fieldtype": "Datetime",
+   "label": "Expires At"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At"
+  },
+  {
+   "fieldname": "finished_at",
+   "fieldtype": "Datetime",
+   "label": "Finished At"
+  },
+  {
+   "fieldname": "error",
+   "fieldtype": "Small Text",
+   "label": "Error"
+  }
+ ],
+ "field_order": [
+  "campaign",
+  "idempotency_key",
+  "rule_version",
+  "selection_fingerprint",
+  "status",
+  "preview_json",
+  "actual_json",
+  "state_json",
+  "expires_at",
+  "started_at",
+  "finished_at",
+  "error"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH BOD Viewer",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "modified": "2026-11-02 00:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}
