@@ -41,7 +41,7 @@ PR #4 (backend P1 của T1B) **chưa merge**. PR này mang **toàn bộ** P1: ba
 * Suite P1 **174/174 OK**, P0 core inventory **99/99 OK**.
 * `ruff check` + `ruff format --check` (0.14.0) pass.
 
-## CI (HEAD `33f199a`)
+## CI (mã nguồn bàn giao `ec5b4f7`)
 
 | Workflow | Run | Kết quả |
 |---|---|---|
