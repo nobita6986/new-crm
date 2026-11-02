@@ -40,6 +40,36 @@ Kết quả đo được trên site `p1fresh.localhost` (site đã seed dữ li�
 | Backup → restore sang site mới | counts **khớp 100%** | [`evidence/p1-t1b-20261102/restore/counts-after-restore.txt`](../../deploy/dev/evidence/p1-t1b-20261102/restore/counts-after-restore.txt) |
 | Lint + format (ruff 0.14.0) | pass | bước `lint` của `.github/workflows/p1.yml` |
 
+### 0.1. Chạy lại trên SHA bàn giao (`1f17d33`)
+
+Toàn bộ suite đã được **chạy lại trên đúng SHA bàn giao** (không chỉ dựa vào bằng chứng
+cũ), trên site `p1fresh.localhost`, **tuần tự** (không chạy song song — chạy song song hai
+suite trên cùng site gây tranh chấp DB và sinh lỗi giả):
+
+| Suite | Module | Method | Kết quả |
+|---|---|---|---|
+| P1 | `test_p1_api_permissions` | 30 | OK |
+| P1 | `test_p1_concurrency` | 10 | OK |
+| P1 | `test_p1_distribution` | 17 | OK |
+| P1 | `test_p1_identity` | 13 | OK |
+| P1 | `test_p1_imports` | 16 | OK |
+| P1 | `test_p1_ownership` | 17 | OK |
+| P1 | `test_p1_regressions` | 71 | OK |
+| **P1 tổng** | 7 module | **174** | **OK** |
+| P0 core | `test_permissions` | 18 | OK |
+| P0 core | `test_security_remediation` | 12 | OK |
+| P0 core | `test_security_remediation_v2` | 32 | OK |
+| P0 core | `test_docshare_lifecycle` | 10 | OK |
+| P0 core | `test_bt1c5_matrix_gaps` | 27 | OK |
+| **P0 core tổng** | 5 module | **99** | **OK** |
+| Auxiliary | `test_health` | 4 | OK |
+| Auxiliary | `test_poc_custom_field` | 3 | OK |
+| Auxiliary | `test_error_response_normalization` | 8 | OK |
+| **Auxiliary tổng** | 3 module | **15** | **OK** |
+
+Mã nguồn trong container được đối chiếu bằng **md5** với worktree cho
+`test_p1_regressions.py`, `services/reporting.py`, `services/import_service.py` — **khớp**.
+
 ---
 
 ## 1. Bảng đóng lỗi L-01 … L-15
