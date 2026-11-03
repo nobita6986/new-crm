@@ -11,7 +11,8 @@ from crm_cskh.p2_models import ensure_p2_custom_fields, ensure_p2_indexes, ensur
 
 def execute():
 	ensure_p2_custom_fields()
-	ensure_indexes("CSKH Work Item")
+	if frappe.db.table_exists("CSKH Work Item"):
+		ensure_indexes("CSKH Work Item")
 	ensure_p2_indexes()
 	if frappe.db.table_exists("CSKH Work Item") and frappe.db.has_column("CSKH Work Item", "revision"):
 		frappe.db.sql(
