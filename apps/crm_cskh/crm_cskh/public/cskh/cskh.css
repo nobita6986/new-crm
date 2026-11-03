@@ -263,6 +263,12 @@
 	color: #8a5a00;
 }
 
+.cskh-alert.is-info {
+	background: #eef4ff;
+	border-color: #bfd4ff;
+	color: #1d4ed8;
+}
+
 .cskh-alert.is-success {
 	background: #e7f6ee;
 	border-color: #b7e4cd;

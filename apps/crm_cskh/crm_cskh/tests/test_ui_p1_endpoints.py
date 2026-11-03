@@ -224,15 +224,33 @@ class TestUiP1Endpoints(P1TestCase):
 			ownership_ui.assignees()
 
 	def test_run_history_and_navigation_match_role_capabilities(self):
+		run_b = frappe.get_doc(
+			{
+				"doctype": "CSKH Distribution Run",
+				"campaign": self.campaign_b,
+				"status": "running",
+				"rule_version": 1,
+				"selection_fingerprint": self.unique_key("fp"),
+				"idempotency_key": self.unique_key("run-b"),
+				"progress": 4,
+				"preview_json": '{"eligible_count": 10}',
+			}
+		)
+		run_b.insert(ignore_permissions=True)
+
 		frappe.set_user(self.admin_user)
-		admin_runs = run_history.runs()
+		admin_runs = run_history.runs(run_id=run_b.name)
 		self.assertTrue(admin_runs["can_lookup"])
 		self.assertTrue(admin_runs["can_distribute"])
+		self.assertEqual(len(admin_runs["items"]), 1)
+		self.assertEqual(admin_runs["items"][0]["progress"], 4)
+		self.assertEqual(admin_runs["items"][0]["total"], 10)
 
 		frappe.set_user(self.bod_user)
-		bod_runs = run_history.runs()
+		bod_runs = run_history.runs(run_id=run_b.name)
 		self.assertTrue(bod_runs["can_lookup"])
 		self.assertFalse(bod_runs["can_distribute"])
+		self.assertEqual(len(bod_runs["items"]), 1)
 		ctx = frappe._dict()
 		cskh_context.build_context(
 			ctx, route="/cskh/campaigns", allowed_roles=cskh_context.CAMPAIGN_READ_ROLES
@@ -242,9 +260,10 @@ class TestUiP1Endpoints(P1TestCase):
 		self.assertFalse(ctx.cskh_capabilities["pii"])
 
 		frappe.set_user(self.leader_a)
-		leader_runs = run_history.runs()
+		leader_runs = run_history.runs(run_id=run_b.name)
 		self.assertFalse(leader_runs["can_lookup"])
 		self.assertFalse(leader_runs["can_distribute"])
+		self.assertEqual(leader_runs["items"], [])
 
 		frappe.set_user(self.staff_a)
 		with self.assertRaises(Forbidden):

@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "description": "Canonical inventory of the P1 UI endpoint test methods (`test_ui_p1_*.py`). Enforced in CI via `deploy/dev/seed/ci_junit_gate.py` alongside the backend P1 inventory (`deploy/dev/seed/p1_test_inventory.json`).",
+  "expected_total": 6,
+  "modules": {
+    "crm_cskh.tests.test_ui_p1_endpoints": [
+      "TestUiP1Endpoints.test_ui_endpoints_do_not_accept_scope_widening_parameters",
+      "TestUiP1Endpoints.test_error_file_download_allows_admin_and_denies_other_roles",
+      "TestUiP1Endpoints.test_import_history_and_batch_detail_expose_reconciled_counters_to_admin_only",
+      "TestUiP1Endpoints.test_pool_ui_derives_states_isolates_teams_and_omits_bod_pii",
+      "TestUiP1Endpoints.test_ownership_ui_scopes_team_blocks_widening_and_restricts_assignees",
+      "TestUiP1Endpoints.test_run_history_and_navigation_match_role_capabilities"
+    ]
+  }
+}
