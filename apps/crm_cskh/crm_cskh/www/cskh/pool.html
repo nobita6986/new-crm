@@ -1,4 +1,4 @@
-﻿{% extends "templates/cskh/_shell.html" %}
+{% extends "templates/cskh/_shell.html" %}
 
 {% block cskh_title %}{{ _("Customer pool") }}{% endblock %}
 {% block cskh_subtitle %}{{ _("Leads in your scope, with the derived distribution state.") }}{% endblock %}
@@ -11,6 +11,31 @@
 			<select id="pool-campaign" class="cskh-select">
 				<option value="">{{ _("All") }}</option>
 			</select>
+		</label>
+		<label class="cskh-field">
+			{{ _("Distribution state") }}
+			<select id="pool-state" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+				<option value="eligible">{{ _("Not distributed") }}</option>
+				<option value="queued">{{ _("Queued") }}</option>
+				<option value="assigned">{{ _("Assigned") }}</option>
+				<option value="conflict">{{ _("Conflict") }}</option>
+				<option value="revoked">{{ _("Revoked") }}</option>
+				<option value="closed">{{ _("Closed") }}</option>
+				<option value="invalid">{{ _("Data error") }}</option>
+			</select>
+		</label>
+		<label class="cskh-field">
+			{{ _("Source") }}
+			<input id="pool-source" class="cskh-input" type="text" placeholder="{{ _('Source') }}">
+		</label>
+		<label class="cskh-field">
+			{{ _("Batch") }}
+			<input id="pool-batch" class="cskh-input" type="text" placeholder="{{ _('Batch') }}">
+		</label>
+		<label class="cskh-field" id="pool-search-wrap">
+			{{ _("Search") }}
+			<input id="pool-search" class="cskh-input" type="search" placeholder="{{ _('Name or phone number') }}">
 		</label>
 		<button id="pool-refresh" class="cskh-btn is-primary" type="button">
 			{{ _("Apply filters") }}

@@ -1,0 +1,233 @@
+{
+  "site": "p1.localhost",
+  "base_url": "http://127.0.0.1:8120",
+  "backend_baseline_sha": "3025495f58bc0391c3f8d092af500b0566a5f038",
+  "worktree_base_sha": "9ec881f72d4305a607e0868a85ef6361bb095e97",
+  "checks": [
+    {
+      "id": "E2E-01-page-role-matrix",
+      "status": "PASS",
+      "details": {
+        "routes": [
+          "/cskh",
+          "/cskh/pool",
+          "/cskh/import",
+          "/cskh/campaigns",
+          "/cskh/my-customers",
+          "/cskh/dashboard"
+        ],
+        "statuses": {
+          "admin": [
+            200,
+            200,
+            200,
+            200,
+            200,
+            200
+          ],
+          "bod": [
+            200,
+            200,
+            403,
+            200,
+            200,
+            200
+          ],
+          "leader_a": [
+            200,
+            200,
+            403,
+            200,
+            200,
+            200
+          ],
+          "leader_b": [
+            200,
+            200,
+            403,
+            200,
+            200,
+            200
+          ],
+          "staff_a": [
+            200,
+            403,
+            403,
+            403,
+            200,
+            403
+          ],
+          "staff_b": [
+            200,
+            403,
+            403,
+            403,
+            200,
+            403
+          ],
+          "outside": [
+            200,
+            403,
+            403,
+            403,
+            200,
+            403
+          ],
+          "guest": [
+            403,
+            403,
+            403,
+            403,
+            403,
+            403
+          ]
+        }
+      }
+    },
+    {
+      "id": "E2E-02-csv-import-and-error-download-policy",
+      "status": "PASS",
+      "details": {
+        "batch": "94verhtrbr",
+        "status": "COMPLETED_WITH_ERRORS",
+        "totals": {
+          "total_rows": 10,
+          "valid_rows": 6,
+          "new_rows": 6,
+          "duplicate_rows": 1,
+          "error_rows": 3,
+          "created_rows": 6,
+          "reused_rows": 0,
+          "skipped_rows": 3
+        },
+        "admin_download_status": 200,
+        "admin_download_bytes": 195,
+        "denied_actors": {
+          "leader_a": {
+            "download_endpoint": 403,
+            "raw_private_url": 403
+          },
+          "leader_b": {
+            "download_endpoint": 403,
+            "raw_private_url": 403
+          },
+          "staff_a": {
+            "download_endpoint": 403,
+            "raw_private_url": 403
+          },
+          "staff_b": {
+            "download_endpoint": 403,
+            "raw_private_url": 403
+          },
+          "bod": {
+            "download_endpoint": 403,
+            "raw_private_url": 403
+          },
+          "outside": {
+            "download_endpoint": 403,
+            "raw_private_url": 403
+          },
+          "guest": {
+            "download_endpoint": 403,
+            "raw_private_url": 403
+          }
+        }
+      }
+    },
+    {
+      "id": "E2E-03-xlsx-import-and-failed-batch-retry",
+      "status": "PASS",
+      "details": {
+        "xlsx_batch": "95mcvkdtl3",
+        "xlsx_status": "COMPLETED",
+        "xlsx_totals": {
+          "total_rows": 5,
+          "valid_rows": 4,
+          "new_rows": 4,
+          "duplicate_rows": 1,
+          "error_rows": 0
+        },
+        "retried_failed_batch": "8su90uog95",
+        "retried_status": "COMPLETED"
+      }
+    },
+    {
+      "id": "E2E-04-campaign-rules-stale-preview-and-execute",
+      "status": "PASS",
+      "details": {
+        "campaign_a": "96pghvq6ob",
+        "stale_rule_changed": {
+          "http": 409,
+          "code": "RULE_CHANGED"
+        },
+        "stale_preview_expired": {
+          "http": 409,
+          "code": "PREVIEW_EXPIRED"
+        },
+        "run_id": "987d9fhg0k",
+        "assigned": {
+          "cskh-p1-staff-a@example.test": 7,
+          "cskh-p1-staff-b@example.test": 4
+        },
+        "staff_a_my_list_total": 7,
+        "staff_b_my_list_total": 4
+      }
+    },
+    {
+      "id": "E2E-05-reassign-revoke-conflict-and-reconciliation",
+      "status": "PASS",
+      "details": {
+        "reassigned_work_item": "98edamb3sf",
+        "staff_a_lead_http_before_after": [
+          200,
+          403
+        ],
+        "staff_b_lead_http_before_after": [
+          403,
+          200
+        ],
+        "stale_owner_conflict": {
+          "http": 409,
+          "code": "CONFLICT"
+        },
+        "live_assigned_after_transfer": 11,
+        "audit_events_after_transfer": 12,
+        "revoked_work_item": "98d0f5tf3t",
+        "staff_b_lead_http_after_revoke": 403
+      }
+    },
+    {
+      "id": "E2E-06-team-isolation-bod-pii-csrf-and-404",
+      "status": "PASS",
+      "details": {
+        "campaign_b": "97b6un011k",
+        "leader_a_per_user": {
+          "cskh-p1-staff-a@example.test": 6,
+          "cskh-p1-staff-b@example.test": 4
+        },
+        "leader_b_per_user": {
+          "cskh-p1-staff-c@example.test": 2
+        },
+        "bod_assigned_total": 12,
+        "bod_pool_pii_leaked": 0,
+        "bod_search_http": 403,
+        "csrf_invalid_http": 400,
+        "run_not_found_http": 404,
+        "failed_ui_demo": {
+          "failed_batch": "9968tbmk2u",
+          "failed_run": "997g4udopn"
+        }
+      }
+    }
+  ],
+  "final_ids": {
+    "campaign_a": "96pghvq6ob",
+    "campaign_b": "97b6un011k",
+    "csv_batch": "94verhtrbr",
+    "xlsx_batch": "95mcvkdtl3",
+    "run_a": "987d9fhg0k",
+    "reassigned_work_item": "98edamb3sf",
+    "failed_batch_demo": "9968tbmk2u",
+    "failed_run_demo": "997g4udopn"
+  }
+}

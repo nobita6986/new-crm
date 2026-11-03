@@ -23,6 +23,19 @@ from crm_cskh.services import errors as p1_errors
 ROLE_ADMIN = "CSKH CRM Admin"
 ROLE_BOD = "CSKH BOD Viewer"
 
+# The language of the P1 screens (P1 §9.6).
+#
+# The P1 screens are a **Vietnamese** product: every label of the catalogue
+# has a Vietnamese translation in `crm_cskh/translations/vi.csv`. The pages
+# therefore pin the language to `vi` instead of relying on the language of
+# the site or of the user, so the operator never sees a half-translated
+# screen (a mixed English/Vietnamese screen is the smell P1 §9.6 forbids).
+#
+# The pin is a **UI** decision of the CSKH app: it changes no permission,
+# no contract and no data. A user that wants another language still gets
+# the Frappe CRM pages in their own language.
+LANGUAGE = "vi"
+
 # The role grants of the frozen P1 APIs (P1 §8.1).
 #
 # P1 §8.1, row "Xem tổng quan phân phối": BOD = toàn hệ thống, Admin = toàn
@@ -53,7 +66,7 @@ NAV_ITEMS = (
 # permission of the matching API (P1 §8.1).
 NAV_BY_ROLE = {
 	ROLE_ADMIN: {"pool", "import", "campaigns", "my-customers", "dashboard"},
-	ROLE_BOD: {"pool", "my-customers", "dashboard"},
+	ROLE_BOD: {"pool", "campaigns", "my-customers", "dashboard"},
 	"Sales Manager": {"pool", "campaigns", "my-customers", "dashboard"},
 	"Sales User": {"my-customers"},
 }
@@ -144,6 +157,20 @@ def build_context(
 	actor may not use answers with the Frappe permission page (HTTP 403)
 	instead of rendering a broken screen.
 	"""
+	# Pin the language of the page **before** anything else: the `_(...)` of
+	# the template, of the catalogue and of the permission message all read
+	# `frappe.local.lang` (P1 §9.6).
+	#
+	# The pin happens **before** the permission check, so the permission page
+	# of a caller without the role is Vietnamese too and not the English
+	# default of Frappe.
+	frappe.local.lang = LANGUAGE
+	if frappe.local.form_dict is not None:
+		frappe.local.form_dict.lang = LANGUAGE
+	context.lang = LANGUAGE
+	if isinstance(getattr(context, "boot", None), dict):
+		context.boot["lang"] = LANGUAGE
+
 	if frappe.session.user == "Guest":
 		frappe.response["status_code"] = 403
 		frappe.throw(_("Log in to access this page."), frappe.PermissionError)
@@ -157,6 +184,13 @@ def build_context(
 		frappe.throw(_("You do not have permission to access this page."), frappe.PermissionError)
 
 	context.no_cache = 1
+	# The browser tab title: the Vietnamese title of the screen, so the tab
+	# is not the English name of a doctype (P1 §9.6).
+	#
+	# The title is translated **here**, at request time, because the page
+	# module evaluates `_("...")` at import time, when the language of the
+	# session is not known yet.
+	context.title = _(title) if title else _("CSKH")
 	context.csrf_token = frappe.sessions.get_csrf_token()
 	# The CSRF header of the current session, published as a JSON object so
 	# the browser sends exactly the same token on every mutation and the

@@ -8,6 +8,8 @@
      * every mutation is a POST with the Frappe CSRF token;
      * every user-facing string comes from `window.cskhI18n` (the Frappe
        i18n pipeline), never from a hard-coded literal;
+     * every DOM element is built via `textContent` / `createTextNode` (never
+       `innerHTML`), so untrusted cell values cannot execute HTML/JS;
      * every failure is mapped to a stable business error code so the page
        can show loading / empty / error / conflict / permission-denied.
    */
@@ -29,6 +31,11 @@ window.cskh = (function () {
 		return fallback === undefined ? message : fallback
 	}
 
+	function hasTranslation(message) {
+		const catalogue = window.cskhI18n || {}
+		return Object.prototype.hasOwnProperty.call(catalogue, message)
+	}
+
 	function currentUser() {
 		return window.cskhUser || ''
 	}
@@ -43,15 +50,21 @@ window.cskh = (function () {
 		if (Object.prototype.hasOwnProperty.call(catalogue, code)) {
 			return catalogue[code]
 		}
+		if (code === 'CSRF_ERROR') {
+			return t('Invalid or expired session/CSRF token. Reload the page and try again.')
+		}
 		return ''
 	}
 
 	/** Map an HTTP response body to the stable contract code. */
 	function errorCode(body, status) {
-		if (!body) return 'HTTP_' + status
-		if (body.p1_code) return body.p1_code
-		if (body.exc_type) return body.exc_type
-		if (body.code) return body.code
+		if (body && body.p1_code) return body.p1_code
+		if (body && body.exc_type === 'CSRFTokenError') return 'CSRF_ERROR'
+		if ((body && body.exc_type === 'PermissionError') || status === 403) return 'FORBIDDEN'
+		if ((body && body.exc_type === 'DoesNotExistError') || status === 404) return 'NOT_FOUND'
+		if (body && body.exc_type === 'ValidationError') return 'INVALID_REQUEST'
+		if (body && body.exc_type) return body.exc_type
+		if (body && body.code) return body.code
 		return 'HTTP_' + status
 	}
 
@@ -60,7 +73,18 @@ window.cskh = (function () {
 		if (body._server_messages) {
 			try {
 				const parsed = JSON.parse(body._server_messages)
-				if (Array.isArray(parsed) && parsed.length) return parsed[0]
+				if (Array.isArray(parsed) && parsed.length) {
+					const first = parsed[0]
+					if (typeof first === 'string' && first.charAt(0) === '{') {
+						try {
+							const inner = JSON.parse(first)
+							if (inner && inner.message) return String(inner.message)
+						} catch (err2) {
+							/* fall through */
+						}
+					}
+					return String(first)
+				}
 			} catch (err) {
 				/* fall through */
 			}
@@ -137,7 +161,6 @@ window.cskh = (function () {
 		Object.keys(attrs || {}).forEach(function (key) {
 			if (key === 'class') node.className = attrs[key]
 			else if (key === 'text') node.textContent = attrs[key]
-			else if (key === 'html') node.innerHTML = attrs[key]
 			else if (key.indexOf('on') === 0 && typeof attrs[key] === 'function') {
 				node.addEventListener(key.slice(2).toLowerCase(), attrs[key])
 			} else if (attrs[key] !== undefined && attrs[key] !== null) {
@@ -217,6 +240,56 @@ window.cskh = (function () {
 		return formatNumber(value)
 	}
 
+	/**
+	 * The label of a scope.
+	 *
+	 * The backend returns the scope as a stable code (`system`, `team`,
+	 * `self`, `all`); the page shows the Vietnamese label of the code so the
+	 * screen never mixes an English identifier into a Vietnamese sentence
+	 * (P1 §9.6).
+	 */
+	function scopeLabel(value) {
+		const map = {
+			system: 'Whole installation',
+			all: 'Whole installation',
+			team: 'Team scope',
+			self: 'Only my own data',
+		}
+		return map[value] ? t(map[value]) : value || '—'
+	}
+
+	/**
+	 * The label of a campaign state.
+	 *
+	 * The four states of a campaign are shown in Vietnamese; the raw code is
+	 * never rendered as an English word (P1 §9.6).
+	 */
+	function campaignStatusLabel(value) {
+		const map = {
+			Draft: 'Campaign draft',
+			Active: 'Campaign active',
+			Paused: 'Campaign paused',
+			Closed: 'Campaign closed',
+		}
+		return map[value] ? t(map[value]) : value || '—'
+	}
+
+	/**
+	 * A guard against **interleaved reads**.
+	 */
+	function sequencer() {
+		let token = 0
+		return {
+			next: function () {
+				token += 1
+				return token
+			},
+			current: function () {
+				return token
+			},
+		}
+	}
+
 	/** Render an alert box (error / warning / success / empty). */
 	function alert(container, kind, message, extra) {
 		clear(container)
@@ -231,17 +304,20 @@ window.cskh = (function () {
 	 * `FORBIDDEN` becomes the permission-denied state, the conflict codes
 	 * become the conflict state, everything else the generic error state.
 	 *
-	 * The branch always uses the **raw** code (the frozen contract of
-	 * P1 §10.1); only the text shown to the operator is translated.
+	 * Untranslated raw technical exceptions are never leaked as English text:
+	 * the page shows the translated Vietnamese message or the Vietnamese
+	 * explanation of the stable contract code, plus `[CODE]`.
 	 */
 	function renderError(container, error) {
 		const code = error && error.code ? error.code : 'ERROR'
-		const message = error && error.message ? error.message : String(error)
-		// The page shows the **Vietnamese** explanation of the situation and
-		// keeps the stable code visible, because the code is the contract the
-		// frontend branches on (P1 §10.1).
+		const rawMessage = error && error.message ? String(error.message) : ''
+		const translated = rawMessage && hasTranslation(rawMessage) ? t(rawMessage) : ''
 		const explanation = errorText(code)
-		const label = explanation ? explanation + ' [' + code + ']' : code
+		const message = translated || explanation || t('An error occurred while processing the request.')
+		const label =
+			translated && explanation && translated !== explanation
+				? explanation + ' [' + code + ']'
+				: '[' + code + ']'
 		if (code === 'FORBIDDEN') {
 			alert(container, 'warning', message, label)
 			return code
@@ -276,11 +352,6 @@ window.cskh = (function () {
 			total: function () {
 				return total
 			},
-			/**
-			 * Set the server total and keep the current page inside the
-			 * range. The list pages call it after every read, so the pager
-			 * never shows a stale "0 / 0".
-			 */
 			setTotal: function (value) {
 				total = Number(value || 0)
 				const last = pages()
@@ -308,7 +379,7 @@ window.cskh = (function () {
 
 	/** Poll a GET endpoint until `done(state)` returns true. */
 	async function poll(options) {
-		const interval = options.interval || 1500
+		const interval = options.interval || 1200
 		const timeout = options.timeout || 120000
 		const started = Date.now()
 		while (Date.now() - started < timeout) {
@@ -323,12 +394,6 @@ window.cskh = (function () {
 
 	/**
 	 * Upload a file as a **private** Frappe file for the import pipeline.
-	 *
-	 * The standard `upload_file` endpoint is not used: the P0 guard makes a
-	 * `File` reachable only through the `CRM Lead` it is attached to, and an
-	 * import source file is attached to no lead. The P1 endpoint accepts the
-	 * file only from the `CSKH CRM Admin` role and always stores it private
-	 * (P1 §6.1, ADR-P1-03).
 	 */
 	async function uploadPrivateFile(file) {
 		const base64 = await new Promise(function (resolve, reject) {
@@ -338,7 +403,7 @@ window.cskh = (function () {
 				resolve(result.indexOf(',') >= 0 ? result.split(',')[1] : result)
 			}
 			reader.onerror = function () {
-				reject(new Error('read_failed'))
+				reject(new Error('The upload failed.'))
 			}
 			reader.readAsDataURL(file)
 		})
@@ -380,9 +445,12 @@ window.cskh = (function () {
 		formatDate: formatDate,
 		formatNumber: formatNumber,
 		capacityLabel: capacityLabel,
+		scopeLabel: scopeLabel,
+		campaignStatusLabel: campaignStatusLabel,
 		maskPhone: maskPhone,
 		alert: alert,
 		renderError: renderError,
+		sequencer: sequencer,
 		pager: pager,
 		poll: poll,
 		uploadPrivateFile: uploadPrivateFile,

@@ -366,13 +366,14 @@ def pool_list(user=None, page=1, page_size=20, campaign=None):
 		)
 		if not lead:
 			continue
+		allow_pii = scope.get("pii", True)
 		state, state_campaign, owner, created_at = _pool_state(lead.name)
 		items.append(
 			{
 				"work_item": row.work_item,
 				"lead": lead.name,
-				"display_name": lead.lead_name or "",
-				"phone": lead.mobile_no,
+				"display_name": (lead.lead_name or "") if allow_pii else "",
+				"phone": lead.mobile_no if allow_pii else None,
 				"source": lead.source,
 				"campaign": row.campaign,
 				"campaign_title": state_campaign or row.campaign,

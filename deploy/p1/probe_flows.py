@@ -29,6 +29,14 @@ BASE = os.environ.get("P1_BASE", "http://127.0.0.1:8120")
 HOST = os.environ.get("P1_HOST", "p1.localhost")
 PASSWORD = os.environ.get("P1_PASSWORD", "P1Seed-Only-2026!")
 
+# The `CRM Sales Hierarchy` node of the **probe team** (the leader of
+# `staff.a@p1.local` / `staff.b@p1.local` / `staff.c@p1.local`).
+#
+# Every campaign the probe creates is scoped to this node: a campaign
+# without a team scope is a *shared* campaign, so its runs and its failures
+# would be counted in the scope of **every** team of the site.
+PROBE_TEAM_SCOPE = os.environ.get("P1_TEAM_SCOPE", "")
+
 PAGES = [
     "/cskh",
     "/cskh/pool",
@@ -88,9 +96,21 @@ def get_with(op, path):
 
 
 def csrf(op, path="/cskh"):
+    """Read the CSRF token of the session out of a rendered P1 page.
+
+    The page publishes the token twice: as the JSON header object
+    `window.cskhCsrfHeader = {"X-Frappe-CSRF-Token": "..."}` and as the
+    Frappe web alias `window.frappe.csrf_token = "..."`. Both are parsed
+    here, so the probe keeps working whichever form the page uses.
+    """
     status, body = get_with(op, path)
     text = body.decode("utf-8", errors="replace")
-    match = re.search(r'window\.frappe\.csrf_token = "([^"]+)"', text)
+    match = re.search(r'window\.frappe\.csrf_token\s*=\s*"([^"]+)"', text)
+    if match:
+        return match.group(1)
+    match = re.search(
+        r'window\.cskhCsrfHeader\s*=\s*\{\s*"X-Frappe-CSRF-Token":\s*"([^"]+)"', text
+    )
     if match:
         return match.group(1)
     match = re.search(r'csrf-token" content="([^"]+)"', text)
@@ -273,6 +293,11 @@ def probe_distribution(op, token):
     reproducible: a campaign whose leads are already assigned has nothing
     left to distribute, and the preview would be refused with
     `NO_ELIGIBLE_LEADS`.
+
+    The campaign is scoped to the **probe team** (`PROBE_TEAM_SCOPE`): a
+    campaign without a team scope is a *shared* campaign, and its runs would
+    then land in the counters of **every** team of the site (the scope
+    assertion of the regression suite counts the failed runs of a leader).
     """
     out = {}
     suffix = f"{int(time.time() * 1000) % 100000:05d}"
@@ -285,6 +310,7 @@ def probe_distribution(op, token):
             "code": code,
             "title": "Probe campaign " + code,
             "status": "Active",
+            "team_scope": PROBE_TEAM_SCOPE,
             "selection": {"source": None},
         },
         token=token,

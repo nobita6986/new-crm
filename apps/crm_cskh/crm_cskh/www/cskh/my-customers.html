@@ -1,4 +1,4 @@
-﻿{% extends "templates/cskh/_shell.html" %}
+{% extends "templates/cskh/_shell.html" %}
 
 {% block cskh_title %}{{ _("My customers") }}{% endblock %}
 {% block cskh_subtitle %}{{ _("Customers assigned to me.") }}{% endblock %}
@@ -10,6 +10,18 @@
 			{{ _("Campaign") }}
 			<select id="mine-campaign" class="cskh-select">
 				<option value="">{{ _("All") }}</option>
+			</select>
+		</label>
+		<label class="cskh-field" id="mine-search-wrap">
+			{{ _("Search") }}
+			<input id="mine-search" class="cskh-input" type="search"
+				placeholder="{{ _('Search by name or phone number.') }}">
+		</label>
+		<label class="cskh-field">
+			{{ _("Assigned at") }}
+			<select id="mine-sort" class="cskh-select">
+				<option value="desc">{{ _("Newest first") }}</option>
+				<option value="asc">{{ _("Oldest first") }}</option>
 			</select>
 		</label>
 		<button id="mine-refresh" class="cskh-btn is-primary" type="button">
@@ -34,7 +46,7 @@
 				<th>{{ _("Source") }}</th>
 				<th>{{ _("Assigned at") }}</th>
 				<th>{{ _("Work item status") }}</th>
-				<th></th>
+				<th>{{ _("Actions") }}</th>
 			</tr>
 		</thead>
 		<tbody id="mine-rows"></tbody>
@@ -44,6 +56,48 @@
 		<span id="mine-range"></span>
 		<button id="mine-next" class="cskh-btn" type="button">{{ _("Next") }}</button>
 	</div>
+</div>
+
+<div class="cskh-card" id="mine-scope-card" hidden>
+	<h2>{{ _("Customers assigned in the scope") }}</h2>
+	<p class="cskh-muted">
+		{{ _("The scope is resolved by the server. Only the CRM Admin may transfer or revoke an ownership.") }}
+	</p>
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Current owner") }}
+			<input id="mine-scope-owner" class="cskh-input" type="text"
+				placeholder="{{ _('Current owner') }}">
+		</label>
+		<button id="mine-scope-refresh" class="cskh-btn" type="button">
+			{{ _("Refresh") }}
+		</button>
+	</div>
+	<div id="mine-scope-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="mine-scope-empty" class="cskh-alert is-empty" hidden>
+		{{ _("No data in the current scope.") }}
+	</div>
+	<table id="mine-scope-table" class="cskh-table" hidden>
+		<thead>
+			<tr>
+				<th>{{ _("Customer") }}</th>
+				<th>{{ _("Phone number") }}</th>
+				<th>{{ _("Campaign") }}</th>
+				<th>{{ _("Current owner") }}</th>
+				<th>{{ _("Assigned at") }}</th>
+				<th>{{ _("Actions") }}</th>
+			</tr>
+		</thead>
+		<tbody id="mine-scope-rows"></tbody>
+	</table>
+</div>
+
+<div class="cskh-card" id="mine-detail-card" hidden>
+	<div class="cskh-actions" style="justify-content: space-between; align-items: center;">
+		<h2 style="margin: 0;">{{ _("Ownership detail") }}</h2>
+		<button id="mine-detail-close" class="cskh-btn is-small" type="button">{{ _("Close") }}</button>
+	</div>
+	<div id="mine-detail"></div>
 </div>
 {% endblock %}
 

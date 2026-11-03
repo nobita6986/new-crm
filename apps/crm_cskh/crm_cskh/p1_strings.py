@@ -38,6 +38,9 @@ SHELL = (
 	"Search",
 	"No data",
 	"Error",
+	"Timeout",
+	"An error occurred while processing the request.",
+	"Invalid or expired session/CSRF token. Reload the page and try again.",
 )
 
 # --- Page titles and subtitles ----------------------------------------------
@@ -61,39 +64,120 @@ TITLES = (
 	"You do not have permission to access this page.",
 )
 
-# --- Error messages of the frozen backend contract ---------------------------
+# --- Error messages of the frozen backend contract & API helpers -------------
 # The API answers with these English messages; the browser shows them, so they
 # have to be part of the Vietnamese catalogue as well.
 BACKEND_MESSAGES = (
+	"A phone number is required.",
+	"A phone number must be a short text value.",
+	"A phone number must be supplied as a text value.",
 	"A queued, revoked or closed work item must not have an assignee.",
+	"A reason is required to revoke a customer.",
+	"A reason is required to transfer a customer.",
+	"A request id is required so the action stays idempotent.",
 	"A revocation event must not have a target user.",
+	"A target user is required.",
 	"An assigned work item requires an assignee.",
 	"An assigned work item requires an assignment timestamp.",
 	"An assignment event requires a target user.",
 	"Assignment history is append-only; use a compensating event.",
 	"Column mapping must be a JSON object.",
+	"Distributing the customers requires the CRM Admin business role.",
 	"Import counters must not be negative.",
 	"Import source files must be private.",
+	"Importing the customer pool requires the CRM Admin business role.",
+	"Managing the campaigns requires the CRM Admin business role.",
+	"No assignee is eligible for this campaign.",
+	"No lead is eligible for this campaign.",
+	"Only CSV and XLSX files are supported.",
+	"Only Vietnamese numbers are supported.",
+	"Only a queued work item can be assigned.",
 	"Only an active work item may hold an active claim.",
+	"Only the CRM Admin may list all sales assignees.",
+	"Only the CRM Admin may read an import batch.",
 	"Resolve the active work items before closing the campaign; nothing is released implicitly.",
 	"The active claim must reference the same lead and campaign as its work item.",
 	"The actual payload must be valid JSON.",
 	"The allocator state must be a JSON object.",
 	"The allocator state must be valid JSON.",
 	"The assignee must be an enabled Sales User.",
+	"The assignment rules changed after the preview.",
+	"The batch status filter must be a string.",
+	"The campaign and the assignee are required.",
+	"The campaign code is required.",
+	"The campaign does not exist.",
+	"The campaign is not open for distribution.",
+	"The campaign is required.",
+	"The campaign must be a string.",
+	"The campaign status is not supported.",
+	"The campaign title is required.",
+	"The canonical lead does not exist.",
 	"The canonical lead must have a mobile number.",
+	"The capacity must be an integer.",
+	"The capacity must not be negative.",
+	"The current owner is not the expected owner.",
 	"The distribution run",
+	"The distribution run does not exist.",
+	"The distribution run is already executing.",
+	"The distribution run is already owned by another executor.",
+	"The distribution state changed after the preview.",
+	"The eligible lead set changed after the preview.",
 	"The end date must not precede the start date.",
+	"The error file does not exist for this import batch.",
 	"The event id is required so the event stays idempotent.",
+	"The file has more rows than the configured limit.",
+	"The file is larger than the configured limit.",
 	"The import batch",
+	"The import batch does not exist.",
+	"The import batch is required.",
+	"The import file must be private.",
+	"The lead is already claimed by another campaign.",
+	"The lead owner does not match the intended owner.",
+	"The phone cell contains more than one number.",
+	"The phone cell contains unsupported characters.",
+	"The phone cell looks like scientific notation and cannot be trusted.",
 	"The phone identity must be a canonical Vietnamese mobile number.",
 	"The phone identity must match the canonical lead mobile number.",
+	"The phone number is already bound to another canonical lead.",
+	"The phone number is already used by another lead.",
+	"The phone number is outside the supported Vietnamese mobile format.",
+	"The phone number must start with 0, 84 or +84.",
+	"The preview does not exist.",
+	"The preview has expired; run the preview again.",
+	"The preview id is required.",
 	"The preview payload must be valid JSON.",
 	"The rule version must be positive.",
+	"The run id is required.",
 	"The selection fingerprint is required.",
 	"The selection must be a JSON object.",
+	"The target user has no remaining capacity.",
+	"The target user is disabled.",
+	"The target user must be a Sales User.",
+	"The uploaded file could not be decoded.",
+	"The uploaded file does not exist.",
+	"The uploaded file is required.",
+	"The weight must be an integer.",
+	"The weight must be positive.",
+	"The work item already belongs to the target user.",
+	"The work item and the target user are required.",
+	"The work item does not exist.",
+	"The work item is not currently assigned.",
+	"The work item is required.",
+	"This action requires the CRM Admin business role.",
 	"This campaign, assignee and version already has a rule.",
+	"This idempotency key was already used with a different file.",
+	"Transferring a customer requires the CRM Admin business role.",
+	"Unexpected share holders remain after the ownership change.",
 	"Weight and version must be positive; capacity must not be negative.",
+	"You may not read a distribution run.",
+	"You may not read the assigned customers.",
+	"You may not read the campaign list.",
+	"You may not read the campaigns.",
+	"You may not read the customer list.",
+	"You may not read the customer pool.",
+	"You may not read the distribution dashboard.",
+	"You may not read this assignment history.",
+	"You may not reconcile a campaign.",
 	"{0} cannot move from {1} to {2}.",
 )
 
@@ -106,6 +190,7 @@ POOL = (
 	"Revoked",
 	"Closed",
 	"Conflict",
+	"Data error",
 	"Campaign",
 	"Customer",
 	"Phone number",
@@ -134,11 +219,16 @@ IMPORT = (
 	"File",
 	"Column mapping",
 	"Phone column",
+	"Name column",
+	"Source column",
 	"Total rows",
 	"Valid rows",
 	"New rows",
 	"Duplicate rows",
 	"Error rows",
+	"Created rows",
+	"Reused rows",
+	"Skipped rows",
 	"Row",
 	"Classification",
 	"Reason",
@@ -167,6 +257,8 @@ CAMPAIGNS = (
 	"Rule version",
 	"Team scope",
 	"Create campaign",
+	"Edit campaign",
+	"Close campaign",
 	"New campaign",
 	"Assignee",
 	"Team",
@@ -208,6 +300,8 @@ CAMPAIGNS = (
 MY_CUSTOMERS = (
 	"Display name",
 	"Assigned at",
+	"Newest first",
+	"Oldest first",
 	"Work item status",
 	"You have not been assigned any customer yet.",
 	"Search by name or phone number.",
@@ -219,8 +313,10 @@ DASHBOARD = (
 	"Eligible in the pool",
 	"Assigned work items",
 	"Unassigned or conflicted work items",
+	"Active claims",
 	"Active campaigns",
 	"Failed batches",
+	"Failed runs",
 	"Assignment events",
 	"Current owners",
 	"Per assignee",
@@ -253,6 +349,7 @@ ERROR_CODES = (
 	"PREVIEW_EXPIRED",
 	"NO_ELIGIBLE_LEADS",
 	"CAPACITY_FULL",
+	"CSRF_ERROR",
 )
 
 # --- Operator-facing explanation of each error code -------------------------
@@ -277,6 +374,7 @@ ERROR_EXPLANATIONS = {
 	"PREVIEW_EXPIRED": "The preview has expired. Run the preview again.",
 	"NO_ELIGIBLE_LEADS": "No customer is eligible for this campaign.",
 	"CAPACITY_FULL": "The capacity of the assignee is exhausted.",
+	"CSRF_ERROR": "Invalid or expired session/CSRF token. Reload the page and try again.",
 }
 
 # --- Eligibility reasons of the frozen backend contract ----------------------
@@ -293,6 +391,8 @@ ELIGIBILITY_REASONS = (
 	"capacity_full",
 	"no_eligible_assignee",
 	"assignment_failed",
+	"no_phone_column",
+	"invalid_row",
 )
 
 # --- Import row classifications ---------------------------------------------
@@ -304,6 +404,59 @@ IMPORT_CLASSES = (
 	"invalid",
 )
 
+# --- Additional labels of the P1 screens -----------------------------------
+ADDITIONAL = (
+	# Campaigns: run history and run lookup.
+	"Look up run",
+	"Running",
+	"Completed",
+	"Completed with errors",
+	# Import: batch history and the error artifact.
+	"Confirmed",
+	"Error file",
+	"Download error file",
+	# Import and campaigns: the retry of a failed job (P1 §9.2, §9.3).
+	"Retry the failed job",
+	# My customers: the manual ownership actions.
+	"Action",
+	"Actions",
+	"Actor",
+	"Assign",
+	"Revoke",
+	"Transfer owner",
+	"Transfer the ownership",
+	"Revoke the ownership",
+	"Transferred",
+	"Current owner",
+	"New owner",
+	"From owner",
+	"To owner",
+	"Event at",
+	"Ownership detail",
+	"Ownership history",
+	"Customers assigned in the scope",
+	"The scope is resolved by the server. Only the CRM Admin may transfer or revoke an ownership.",
+	# Dashboard: the date filters and the separation of the two counters.
+	"From date",
+	"To date",
+	"Clear date filter",
+	"Current ownership (live work items)",
+	"Assignment events (audit trail)",
+	"A transfer adds one event but the number of owned work items stays the same.",
+	"The start date must not be after the end date.",
+	# The validation of the manual ownership form.
+	"A reason is required to transfer or revoke an ownership.",
+	"Select the new owner of the work item.",
+	# The states of a campaign and the scopes of the data.
+	"Campaign draft",
+	"Campaign active",
+	"Campaign paused",
+	"Campaign closed",
+	"Whole installation",
+	"Team scope",
+	"Only my own data",
+)
+
 ALL_STRINGS = (
 	SHELL
 	+ TITLES
@@ -312,6 +465,7 @@ ALL_STRINGS = (
 	+ CAMPAIGNS
 	+ MY_CUSTOMERS
 	+ DASHBOARD
+	+ ADDITIONAL
 	+ ERROR_CODES
 	+ tuple(ERROR_EXPLANATIONS.values())
 	+ ELIGIBILITY_REASONS
@@ -321,15 +475,7 @@ ALL_STRINGS = (
 
 
 def translated_map():
-	"""Return `{english message id: translated text}` for the current language.
-
-	The map is injected into the page as `window.cskhI18n`, so the JavaScript
-	never carries a hard-coded label.
-
-	Besides the labels, the map carries the **error explanation** of every
-	stable code of the contract: `window.cskhErrorTexts[code]` is the
-	operator-facing Vietnamese text of the situation.
-	"""
+	"""Return `{english message id: translated text}` for the current language."""
 	language = frappe.local.lang or "en"
 	result = {}
 	for message in ALL_STRINGS:
@@ -338,11 +484,6 @@ def translated_map():
 
 
 def translated_error_texts():
-	"""Return `{stable error code: operator-facing text}`.
-
-	The backend answers with a stable code (P1 §10.1) and an English technical
-	message. The page shows the **Vietnamese** explanation of the situation,
-	because the operator has to act on it (P1 §9.6).
-	"""
+	"""Return `{stable error code: operator-facing text}`."""
 	language = frappe.local.lang or "en"
 	return {code: frappe._(message, lang=language) for code, message in ERROR_EXPLANATIONS.items()}
