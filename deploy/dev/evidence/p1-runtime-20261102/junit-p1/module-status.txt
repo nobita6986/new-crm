@@ -6,3 +6,4 @@ crm_cskh.tests.test_p1_api_permissions exit=0
 crm_cskh.tests.test_p1_concurrency exit=0
 crm_cskh.tests.test_p1_regressions exit=0
 crm_cskh.tests.test_p1_chaos exit=0
+p1 per-method gate exit=0

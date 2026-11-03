@@ -805,40 +805,95 @@ def setup_probe_fixtures() -> dict[str, object]:
             return_to_pool=False,
         )
 
-        # 3) `l23_pool_return_b`: returned to pool (`return_to_pool=True` -> `queued`) in Team 1,
-        #    then claimed & assigned to `staff.c@dev.local` in Team 2 (`pool_list` L-23 check).
-        l23_pool_return_b = create_canonical_lead(f"L23-PoolRetToTeam2-{run_tag}")
-        wi_l23_pr_a = frappe.get_doc(
+        # 3) Dedicated Team 1 pool campaign `l23_camp_q` for pre-pagination + all-Pool-APIs L-23 verification:
+        #    - 2 valid Team 1 `queued` positive controls (`l23_pos_q1`, `l23_pos_q2`)
+        #    - `l23_pool_return_b`: `revoke(return_to_pool=True)` in `l23_camp_q` + `camp_t1` -> assigned to `staff.c` in `camp_t2`
+        #    - `l23_rf_q`: `revoke(return_to_pool=False)` in `l23_camp_q` -> assigned to `staff.c` in `camp_t2`
+        #    - `l23_closed_b`: `closed` in `l23_camp_q` -> assigned to `staff.c` in `camp_t2`
+        l23_camp_q = frappe.get_doc(
             {
-                "doctype": "CSKH Work Item",
-                "campaign": camp_t1.name,
-                "lead": l23_pool_return_b,
-                "status": "queued",
+                "doctype": "CSKH Campaign",
+                "code": f"P1-L23-Q-{run_tag}",
+                "title": f"P1 HTTP L-23 Pool Queue {run_tag}",
+                "status": "Active",
+                "team_scope": team1_node,
             }
         ).insert(ignore_permissions=True)
-        frappe.get_doc(
-            {
-                "doctype": "CSKH Active Claim",
-                "lead": l23_pool_return_b,
-                "campaign": camp_t1.name,
-                "work_item": wi_l23_pr_a.name,
+
+        def _tag_l23_lead(label_tag: str) -> dict[str, str]:
+            lid = create_canonical_lead(f"L23-{label_tag}-{run_tag}")
+            ph = str(frappe.db.get_value("CRM Lead", lid, "mobile_no") or "")
+            loc_ph = "0" + ph[3:] if ph.startswith("+84") else ph
+            nm = f"Khach {label_tag} {run_tag}"
+            src = f"L23Src-{label_tag}-{run_tag}"
+            frappe.db.set_value(
+                "CRM Lead",
+                lid,
+                {"first_name": nm, "lead_name": nm, "source": src},
+                update_modified=False,
+            )
+            return {
+                "lead": lid,
+                "phone": ph,
+                "local_phone": loc_ph,
+                "name": nm,
+                "source": src,
             }
-        ).insert(ignore_permissions=True)
-        ownership.assign(
-            wi_l23_pr_a.name,
-            "staff.a@dev.local",
-            actor="crm.admin@dev.local",
-            reason="L-23 pool return initial",
-            request_id=f"http-l23-pr-asg-a-{run_tag}",
-        )
-        ownership.revoke(
-            wi_l23_pr_a.name,
-            expected_owner="staff.a@dev.local",
-            actor="crm.admin@dev.local",
-            reason="L-23 pool return Team1",
-            request_id=f"http-l23-pr-rev-a-{run_tag}",
-            return_to_pool=True,
-        )
+
+        l23_pos_q1 = _tag_l23_lead("PosQ1A")
+        l23_pos_q2 = _tag_l23_lead("PosQ2A")
+        for pos_rec in (l23_pos_q1, l23_pos_q2):
+            wi_pos = frappe.get_doc(
+                {
+                    "doctype": "CSKH Work Item",
+                    "campaign": l23_camp_q.name,
+                    "lead": pos_rec["lead"],
+                    "status": "queued",
+                }
+            ).insert(ignore_permissions=True)
+            frappe.get_doc(
+                {
+                    "doctype": "CSKH Active Claim",
+                    "lead": pos_rec["lead"],
+                    "campaign": l23_camp_q.name,
+                    "work_item": wi_pos.name,
+                }
+            ).insert(ignore_permissions=True)
+
+        l23_pr_rec = _tag_l23_lead("PoolRetToTeam2")
+        l23_pool_return_b = l23_pr_rec["lead"]
+        for c_src_idx, c_src_name in enumerate((camp_t1.name, l23_camp_q.name)):
+            wi_l23_pr_a = frappe.get_doc(
+                {
+                    "doctype": "CSKH Work Item",
+                    "campaign": c_src_name,
+                    "lead": l23_pool_return_b,
+                    "status": "queued",
+                }
+            ).insert(ignore_permissions=True)
+            frappe.get_doc(
+                {
+                    "doctype": "CSKH Active Claim",
+                    "lead": l23_pool_return_b,
+                    "campaign": c_src_name,
+                    "work_item": wi_l23_pr_a.name,
+                }
+            ).insert(ignore_permissions=True)
+            ownership.assign(
+                wi_l23_pr_a.name,
+                "staff.a@dev.local",
+                actor="crm.admin@dev.local",
+                reason="L-23 pool return initial",
+                request_id=f"http-l23-pr-asg-a-{c_src_idx}-{run_tag}",
+            )
+            ownership.revoke(
+                wi_l23_pr_a.name,
+                expected_owner="staff.a@dev.local",
+                actor="crm.admin@dev.local",
+                reason="L-23 pool return Team1",
+                request_id=f"http-l23-pr-rev-a-{c_src_idx}-{run_tag}",
+                return_to_pool=True,
+            )
         wi_l23_pr_b = frappe.get_doc(
             {
                 "doctype": "CSKH Work Item",
@@ -861,6 +916,128 @@ def setup_probe_fixtures() -> dict[str, object]:
             actor="crm.admin@dev.local",
             reason="L-23 pool return Team2 claim",
             request_id=f"http-l23-pr-asg-b-{run_tag}",
+        )
+
+        l23_rf_rec = _tag_l23_lead("RevFalseToTeam2")
+        wi_l23_rf_a = frappe.get_doc(
+            {
+                "doctype": "CSKH Work Item",
+                "campaign": l23_camp_q.name,
+                "lead": l23_rf_rec["lead"],
+                "status": "queued",
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": l23_rf_rec["lead"],
+                "campaign": l23_camp_q.name,
+                "work_item": wi_l23_rf_a.name,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            wi_l23_rf_a.name,
+            "staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 rf initial",
+            request_id=f"http-l23-rf-asg-a-{run_tag}",
+        )
+        ownership.revoke(
+            wi_l23_rf_a.name,
+            expected_owner="staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 rf permanent",
+            request_id=f"http-l23-rf-rev-a-{run_tag}",
+            return_to_pool=False,
+        )
+        wi_l23_rf_b = frappe.get_doc(
+            {
+                "doctype": "CSKH Work Item",
+                "campaign": camp_t2.name,
+                "lead": l23_rf_rec["lead"],
+                "status": "queued",
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": l23_rf_rec["lead"],
+                "campaign": camp_t2.name,
+                "work_item": wi_l23_rf_b.name,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            wi_l23_rf_b.name,
+            "staff.c@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 rf Team2 claim",
+            request_id=f"http-l23-rf-asg-b-{run_tag}",
+        )
+
+        l23_cl_rec = _tag_l23_lead("ClosedToTeam2")
+        wi_l23_cl_a = frappe.get_doc(
+            {
+                "doctype": "CSKH Work Item",
+                "campaign": l23_camp_q.name,
+                "lead": l23_cl_rec["lead"],
+                "status": "queued",
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": l23_cl_rec["lead"],
+                "campaign": l23_camp_q.name,
+                "work_item": wi_l23_cl_a.name,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            wi_l23_cl_a.name,
+            "staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 closed initial",
+            request_id=f"http-l23-cl-asg-a-{run_tag}",
+        )
+        ownership.revoke(
+            wi_l23_cl_a.name,
+            expected_owner="staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 release before close",
+            request_id=f"http-l23-cl-rev-a-{run_tag}",
+            return_to_pool=False,
+        )
+        frappe.db.set_value(
+            "CSKH Work Item",
+            wi_l23_cl_a.name,
+            "status",
+            "closed",
+            update_modified=False,
+        )
+        wi_l23_cl_b = frappe.get_doc(
+            {
+                "doctype": "CSKH Work Item",
+                "campaign": camp_t2.name,
+                "lead": l23_cl_rec["lead"],
+                "status": "queued",
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": l23_cl_rec["lead"],
+                "campaign": camp_t2.name,
+                "work_item": wi_l23_cl_b.name,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            wi_l23_cl_b.name,
+            "staff.c@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 closed Team2 claim",
+            request_id=f"http-l23-cl-asg-b-{run_tag}",
+        )
+        has_pool_ui = bool(
+            __import__("importlib.util").util.find_spec("crm_cskh.api.pool_ui")
         )
 
         # L-29 fixture: private Team1/Team2 + shared campaign/rules/runs with raw JSON markers.
@@ -1188,6 +1365,13 @@ def setup_probe_fixtures() -> dict[str, object]:
                 "lead_stay_a": l23_stay_a,
                 "src_a": l23_src_a,
                 "lead_pool_return_b": l23_pool_return_b,
+                "camp_q": l23_camp_q.name,
+                "pos_q1": l23_pos_q1,
+                "pos_q2": l23_pos_q2,
+                "pr_rec": l23_pr_rec,
+                "rf_rec": l23_rf_rec,
+                "cl_rec": l23_cl_rec,
+                "has_pool_ui": has_pool_ui,
             },
             "l29": {
                 "lead_a": l29_lead_a,
@@ -3067,8 +3251,27 @@ def run() -> int:
         actor="crm.admin@dev.local",
     )
 
-    # -- 14b. L-23 residual: `customers.pool_list` after `return_to_pool=True` -> Team2 claim
+    # -- 14b. L-23 complete Pool APIs: `pool_list` + `customer_pool` (+ `pool_ui.list` if present)
+    #         across `revoke(True) -> B`, `revoke(False) -> B`, `closed -> B`, pre-pagination, positive controls & BOD 0 PII
     l23_pool_ret_b = str(l23_fx.get("lead_pool_return_b") or "")
+    l23_camp_q = str(l23_fx.get("camp_q") or "")
+    l23_pos_q1 = dict(l23_fx.get("pos_q1") or {})
+    l23_pos_q2 = dict(l23_fx.get("pos_q2") or {})
+    l23_pr_rec = dict(l23_fx.get("pr_rec") or {})
+    l23_rf_rec = dict(l23_fx.get("rf_rec") or {})
+    l23_cl_rec = dict(l23_fx.get("cl_rec") or {})
+    l23_has_pool_ui = bool(l23_fx.get("has_pool_ui"))
+
+    l23_foreign_tokens = [
+        "staff.c@dev.local",
+        camp_t2,
+    ]
+    for f_rec in (l23_pr_rec, l23_rf_rec, l23_cl_rec):
+        for tk_key in ("lead", "phone", "local_phone", "name", "source"):
+            val = str(f_rec.get(tk_key) or "")
+            if val:
+                l23_foreign_tokens.append(val)
+
     l23_plist_t1 = get(
         "p1-http-l23-pool-list-leader1-excludes-reclaimed-team2",
         leader,
@@ -3085,10 +3288,118 @@ def run() -> int:
         l23_plist_t1["status"] == 200
         and l23_pool_ret_b not in l23_plist_leads
         and int(l23_plist_payload.get("total", 0)) >= 1
-        and "staff.c@dev.local" not in l23_plist_raw,
-        "GET customers.pool_list?campaign=<Team1> excludes return_to_pool lead now claimed by Team2 while keeping Team1 queued item",
+        and int(l23_plist_payload.get("total", -1))
+        == int(l23_plist_payload.get("unique_customers", -2))
+        and all(tok not in l23_plist_raw for tok in l23_foreign_tokens),
+        "GET customers.pool_list?campaign=<Team1> excludes return_to_pool lead now claimed by Team2 with unified total==unique_customers",
         actor="team1.leader@dev.local",
     )
+
+    # Pre-pagination (`page=1&page_size=1` and `page=2&page_size=1`) on `l23_camp_q` across Pool APIs
+    l23_pool_endpoints = [
+        ("pool-list", "crm_cskh.api.customers.pool_list"),
+        ("customer-pool", "crm_cskh.api.customers.customer_pool"),
+    ]
+    if l23_has_pool_ui:
+        l23_pool_endpoints.append(("pool-ui", "crm_cskh.api.pool_ui.list"))
+
+    for ep_slug, ep_method in l23_pool_endpoints:
+        p1_resp = get(
+            f"p1-http-l23-{ep_slug}-leader1-prepagination-p1",
+            leader,
+            f"/api/method/{ep_method}?campaign={l23_camp_q}&page=1&page_size=1",
+        )
+        p2_resp = get(
+            f"p1-http-l23-{ep_slug}-leader1-prepagination-p2",
+            leader,
+            f"/api/method/{ep_method}?campaign={l23_camp_q}&page=2&page_size=1",
+        )
+        p1_body = body_payload(p1_resp)
+        p2_body = body_payload(p2_resp)
+        p1_raw = json.dumps(p1_body, ensure_ascii=False, default=str)
+        p2_raw = json.dumps(p2_body, ensure_ascii=False, default=str)
+        combined_rows = [
+            *(p1_body.get("items") or []),
+            *(p2_body.get("items") or []),
+        ]
+        combined_leads = {str(r.get("lead")) for r in combined_rows}
+        expected_pos_leads = {
+            str(l23_pos_q1.get("lead")),
+            str(l23_pos_q2.get("lead")),
+        }
+        check(
+            f"p1-http-l23-{ep_slug}-leader1-prepagination-p1",
+            p1_resp,
+            p1_resp["status"] == 200
+            and len(p1_body.get("items") or []) == 1
+            and int(p1_body.get("total", -1)) == 2
+            and int(p1_body.get("unique_customers", -1)) == 2
+            and int(p1_body.get("work_items", -1)) == 2
+            and all(tok not in p1_raw for tok in l23_foreign_tokens),
+            f"GET {ep_method}?campaign=<L23-Team1>&page=1&page_size=1 enforces unified pre-pagination total=unique_customers=work_items=2 and excludes revoke(True)/revoke(False)/closed->Team2",
+            actor="team1.leader@dev.local",
+        )
+        check(
+            f"p1-http-l23-{ep_slug}-leader1-prepagination-p2",
+            p2_resp,
+            p2_resp["status"] == 200
+            and len(p2_body.get("items") or []) == 1
+            and combined_leads == expected_pos_leads
+            and all(tok not in p2_raw for tok in l23_foreign_tokens),
+            f"GET {ep_method}?campaign=<L23-Team1>&page=2&page_size=1 returns exact 2nd Team1 positive control with zero Team2 leak",
+            actor="team1.leader@dev.local",
+        )
+
+        bod_resp = get(
+            f"p1-http-l23-{ep_slug}-bod-zero-pii",
+            bod,
+            f"/api/method/{ep_method}?campaign={l23_camp_q}&page=1&page_size=100",
+        )
+        bod_body = body_payload(bod_resp)
+        bod_rows = bod_body.get("items") or []
+        bod_raw = json.dumps(bod_body, ensure_ascii=False, default=str)
+        bod_pii_tokens = [
+            str(rec.get(k) or "")
+            for rec in (l23_pos_q1, l23_pos_q2, l23_pr_rec, l23_rf_rec, l23_cl_rec)
+            for k in ("phone", "local_phone", "name")
+            if rec.get(k)
+        ]
+        check(
+            f"p1-http-l23-{ep_slug}-bod-zero-pii",
+            bod_resp,
+            bod_resp["status"] == 200
+            and bod_body.get("scope") == "all"
+            and len(bod_rows) >= 2
+            and all(
+                r.get("phone") is None and r.get("display_name") == "" for r in bod_rows
+            )
+            and all(tok not in bod_raw for tok in bod_pii_tokens),
+            f"GET {ep_method} returns 0 PII (phone=None, display_name='') for CSKH BOD Viewer",
+            actor="bod.viewer@dev.local",
+        )
+
+    for tr_slug, tr_rec in (
+        ("return-true", l23_pr_rec),
+        ("return-false", l23_rf_rec),
+        ("closed", l23_cl_rec),
+    ):
+        tr_search = get(
+            f"p1-http-l23-customer-pool-leader1-search-{tr_slug}-zero",
+            leader,
+            f"/api/method/crm_cskh.api.customers.customer_pool?search={urllib.parse.quote(str(tr_rec.get('local_phone') or ''))}",
+        )
+        tr_body = body_payload(tr_search)
+        check(
+            f"p1-http-l23-customer-pool-leader1-search-{tr_slug}-zero",
+            tr_search,
+            tr_search["status"] == 200
+            and tr_body.get("items") == []
+            and int(tr_body.get("total", -1)) == 0
+            and int(tr_body.get("unique_customers", -1)) == 0
+            and int(tr_body.get("work_items", -1)) == 0,
+            f"GET customers.customer_pool?search=<{tr_slug}-phone> returns 0 items/counts for Team1 Leader",
+            actor="team1.leader@dev.local",
+        )
 
     # -- 16. L-29: Generic Frappe REST, `frappe.client.*`, Desk & raw Run protection --
     l29_camp_a = str(l29_fx.get("camp_a") or "")

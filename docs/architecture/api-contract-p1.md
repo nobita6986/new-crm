@@ -578,14 +578,22 @@ với `owner=null` khi `status=queued`).
   "scope": "system"|"all"|"team",
   "items": [ { "work_item": "…", "lead": "…", "display_name": "…", "phone": "…", "campaign": "…" } ],
   "total": 87,
+  "unique_customers": 87,
+  "work_items": 87,
   "page": 1,
   "page_size": 20,
   "as_of": "…"
 }
 ```
 
-Pool là work item `status='queued'` **và** `assigned_to is null`; scope của leader áp đồng thời
-`team_scope` của campaign **và** `_team_lead_authorization_clauses(scope, "l")` (`L-23` — nếu lead có `Work Item` `queued` từ `revoke(return_to_pool=True)` ở Đội A nhưng sau đó đã được claim/assign/sở hữu sang Đội B thì bị loại hoàn toàn khỏi `pool_list` của `Leader A`, không lộ SĐT hay nhân sự Đội B; trạng thái phụ `_pool_state` cũng được giới hạn trong scope của actor); `CSKH BOD Viewer` được che `phone = null` và `display_name = ""`. Input `page`/`page_size` không hợp lệ trả HTTP `400 INVALID_REQUEST` (`L-26`).
+Pool là work item `status='queued'` **và** `assigned_to is null`. Tại tầng SQL chọn `CSKH Work Item`,
+`reporting.pool_list` nối trực tiếp `INNER JOIN tabCRM Lead l ON l.name = wi.lead` và dùng **một tập mệnh đề
+`WHERE` đồng nhất duy nhất** (gồm `_pool_scope_filter(scope, "wi")` với bí danh subquery riêng `c_psf`,
+`work_item_in_batch_clause`, và `_team_lead_authorization_clauses(scope, "l")`) cho **cả ba giá trị `rows`,
+`total` và `unique_customers` trước khi phân trang `LIMIT`/`OFFSET`** (`L-23` — không chỉ che `owner`/`campaign`
+sau khi lấy dữ liệu). Nếu khách từng `revoke(return_to_pool=True)` ở Đội A nhưng sau đó đã được claim/assign/sở hữu
+sang Đội B, khách đó bị loại hoàn toàn ngay từ truy vấn SQL của `Leader A` (không lộ SĐT, tên, `lead`, `work_item`,
+metadata hay làm tăng `total`/`unique_customers` trước phân trang). `CSKH BOD Viewer` nhận `phone = null` và `display_name = ""` (`0` PII). Input `page`/`page_size` không hợp lệ trả HTTP `400 INVALID_REQUEST` (`L-26`).
 
 ### 3.17b `crm_cskh.api.customers.customer_pool` — GET (`L-23`, `L-25`, `L-26`)
 
@@ -894,8 +902,9 @@ và tham số request, đồng thời bổ sung các cập nhật contract sau �
    - Các API UI trên PR #5 (`run_history.runs`, `distribution.get_run`, `campaigns.list`, `campaigns.rules`, `dashboard.*`) chạy bằng cơ chế projection theo scope của server nên **tương thích 100%**, không cần đổi tham số gọi từ frontend `/cskh/*`.
    - `GET crm_cskh.api.campaigns.rules` hiện kiểm tra chặt quyền đọc document `CSKH Campaign` (`403 FORBIDDEN` cho `Leader` ngoài team, `404 NOT_FOUND` nếu mã campaign không tồn tại).
    - Khi cập nhật môi trường tích hợp, chạy `bench --site <site> migrate` (và `set_p1_permissions.py` nếu site đã seed cũ) để đồng bộ `permlevel = 1` trên `CSKH Campaign` (`selection_json`) và `CSKH Distribution Run` (`preview_json`, `actual_json`, `state_json`, `progress`, `error`, `lease_expires_at`).
-2. **`L-23` bổ sung trên `reporting.pool_list` (`customers.pool_list`):**
-   - Áp thêm `_team_lead_authorization_clauses(scope, "l")` trên `pool_list` để chặn cả trường hợp khách từng `revoke(return_to_pool=True)` ở Đội A nhưng đã chuyển sang Đội B.
+2. **`L-23` hoàn tất tại `reporting.pool_list` (`customers.pool_list`) & tinh chỉnh `_team_lead_authorization_clauses`:**
+   - `reporting.pool_list` nối `INNER JOIN tabCRM Lead l ON l.name = wi.lead`, áp `_team_lead_authorization_clauses(scope, "l")` ngay trong truy vấn SQL và dùng **chung một mệnh đề `FROM ... WHERE` duy nhất** cho cả `rows`, `total` và `unique_customers` trước khi phân trang `LIMIT`/`OFFSET` (không dùng cơ chế che `owner`/`campaign` hậu kiểm; bí danh subquery `_pool_scope_filter` tách riêng thành `c_psf` tránh đụng độ).
+   - Đồng thời tại mệnh đề số 3 của `reporting._team_lead_authorization_clauses`: khi khách từng `revoke(return_to_pool=True)` để lại một `Work Item` `queued` cũ (không còn `Active Claim`) ở Đội A rồi được giao `assigned` hoặc giữ `CSKH Active Claim` hợp lệ ở Đội B, `Leader A` vẫn bị chặn tuyệt đối ở cả 4 lớp SQL trong khi `Leader B` (chủ sở hữu hiện tại) vẫn nhìn thấy đầy đủ khách đó trong kho Đội B. *(Gợi ý tùy chọn cho T1A: `pool_ui.py` có thể import trực tiếp `reporting._team_lead_authorization_clauses` thay cho bản sao cục bộ để hưởng luôn tinh chỉnh positive-control này cho `Leader B`).*
 3. **Kiểm tra trực tiếp điều kiện giao/chuyển giao (`ownership.assign` & `ownership.reassign`):**
    - Backend hiện kiểm tra trực tiếp tại `services/ownership.py` (không phụ thuộc dropdown UI `ownership_ui.assignees`): từ chối `campaign` đã `Closed` (`409 CONFLICT`), `target_user` ngoài `campaign.team_scope` (`400 INVALID_REQUEST`), rule mới nhất của `(campaign, target_user)` bị tắt / `weight <= 0` / lệch `rule.team` (`400 INVALID_REQUEST`), vượt `capacity_limit` của rule mới nhất (`409 CAPACITY_EXCEEDED`), và lead đang được claim/assign ở campaign khác (`409 ALREADY_ASSIGNED`).
 
@@ -908,9 +917,9 @@ giữa lời gọi hàm trong tiến trình test (`service_unit_test`) và giao 
 
 | Hạng mục | Lớp bằng chứng | Phạm vi kiểm chứng | Kết quả | Bằng chứng |
 |---|---|---|---|---|
-| Suite P1 (8 module) | `service_unit_test` | Per-method JUnit gate trên inventory P1 riêng (`208` method) | **208/208 PASS** | [`evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json) |
+| Suite P1 (8 module) | `service_unit_test` | Per-method JUnit gate trên inventory P1 riêng (`209` method) | **209/209 PASS** | [`evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json) |
 | Chaos / rollback / retry (unit + child process) | `service_unit_test` + `os_process_crash` | `unittest.mock.patch` + tiến trình con `os._exit(137)` cho cả `import_worker` và `distribution_worker`; 0 nhánh gây lỗi trong code production | **11/11 PASS** (unit) & **4/4 PASS** (harness) | [`evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml), [`evidence/p1-runtime-20261102/chaos/p1-chaos-report.json`](../../deploy/dev/evidence/p1-runtime-20261102/chaos/p1-chaos-report.json) |
-| HTTP transport P1 + RQ workers | `http` | HTTP thật tới `bench serve` + RQ worker `short`/`long` thật, cookie phiên + CSRF thật, 6 actor đã seed (`Admin`, `BOD`, `Leader 1/2`, `Staff A/B`) + `Guest`, đối chiếu SQL trực tiếp cho `L-16..L-23`, `L-25`, `L-26`, `L-29` (REST + `frappe.client.*` + Desk), direct mutation eligibility và phân phối nền RQ | **158/158 PASS** | [`evidence/p1-runtime-20261102/http/p1-http-transport.json`](../../deploy/dev/evidence/p1-runtime-20261102/http/p1-http-transport.json) |
+| HTTP transport P1 + RQ workers | `http` | HTTP thật tới `bench serve` + RQ worker `short`/`long` thật, cookie phiên + CSRF thật, 6 actor đã seed (`Admin`, `BOD`, `Leader 1/2`, `Staff A/B`) + `Guest`, đối chiếu SQL trực tiếp cho `L-16..L-23`, `L-25`, `L-26`, `L-29` (REST + `frappe.client.*` + Desk), direct mutation eligibility và phân phối nền RQ | **167/167 PASS** | [`evidence/p1-runtime-20261102/http/p1-http-transport.json`](../../deploy/dev/evidence/p1-runtime-20261102/http/p1-http-transport.json) |
 | Benchmark 10k import + 10k phân phối + RQ enqueue | `runtime_benchmark` | 2 đợt × 10.000 dòng (`0 → 10k`, `10k → 20k`) + lô hỗn hợp & RQ capacity `30/42/28` (`api_enqueue_seconds = 0,222s`) trên `p1bench.localhost` | **Số đo thực tế (0 lỗi, 0 trùng)** | [`evidence/p1-runtime-20261102/benchmark/`](../../deploy/dev/evidence/p1-runtime-20261102/benchmark/) |
 
 > **Giới hạn:** probe HTTP phủ giao vận trực tiếp tới `bench serve` của Frappe; tầng reverse
