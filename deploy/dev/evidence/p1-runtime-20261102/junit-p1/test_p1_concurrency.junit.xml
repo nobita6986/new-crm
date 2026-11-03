@@ -1,19 +1,19 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-	<testsuite name="crm_cskh.tests.test_p1_concurrency.TestConcurrentDistribution-2[REDACTED_PHONE]51" tests="3" file="crm_cskh/tests/test_p1_concurrency.py" time="1.531" timestamp="2026-11-03T15:23:53" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentDistribution" name="test_a_lead_cannot_be_claimed_by_two_different_campaigns" time="1.189" timestamp="2026-11-03T15:23:53" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="230"/>
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentDistribution" name="test_five_parallel_runs_cannot_claim_the_same_lead_twice" time="0.228" timestamp="2026-11-03T15:23:53" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="216"/>
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentDistribution" name="test_two_parallel_runs_cannot_claim_the_same_lead_twice" time="0.114" timestamp="2026-11-03T15:23:53" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="198"/>
+	<testsuite name="crm_cskh.tests.test_p1_concurrency.TestConcurrentDistribution-20261103160844" tests="3" file="crm_cskh/tests/test_p1_concurrency.py" time="1.589" timestamp="2026-11-03T16:08:47" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentDistribution" name="test_a_lead_cannot_be_claimed_by_two_different_campaigns" time="1.158" timestamp="2026-11-03T16:08:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="230"/>
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentDistribution" name="test_five_parallel_runs_cannot_claim_the_same_lead_twice" time="0.244" timestamp="2026-11-03T16:08:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="216"/>
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentDistribution" name="test_two_parallel_runs_cannot_claim_the_same_lead_twice" time="0.186" timestamp="2026-11-03T16:08:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="198"/>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_p1_concurrency.TestConcurrentIdentity-2[REDACTED_PHONE]51" tests="3" file="crm_cskh/tests/test_p1_concurrency.py" time="1.082" timestamp="2026-11-03T15:23:55" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentIdentity" name="test_five_parallel_writers_leave_one_canonical_lead" time="0.652" timestamp="2026-11-03T15:23:54" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="124"/>
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentIdentity" name="test_two_parallel_import_jobs_on_the_same_phone" time="0.223" timestamp="2026-11-03T15:23:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="134">
+	<testsuite name="crm_cskh.tests.test_p1_concurrency.TestConcurrentIdentity-20261103160844" tests="3" file="crm_cskh/tests/test_p1_concurrency.py" time="1.019" timestamp="2026-11-03T16:08:49" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentIdentity" name="test_five_parallel_writers_leave_one_canonical_lead" time="0.553" timestamp="2026-11-03T16:08:48" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="124"/>
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentIdentity" name="test_two_parallel_import_jobs_on_the_same_phone" time="0.220" timestamp="2026-11-03T16:08:48" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="134">
 			<!--The import worker path: the phone is claimed once, the lead is reused.-->
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentIdentity" name="test_two_parallel_writers_leave_one_canonical_lead" time="0.206" timestamp="2026-11-03T15:23:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="114"/>
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestConcurrentIdentity" name="test_two_parallel_writers_leave_one_canonical_lead" time="0.246" timestamp="2026-11-03T16:08:49" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="114"/>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry-2[REDACTED_PHONE]51" tests="4" file="crm_cskh/tests/test_p1_concurrency.py" time="1.182" timestamp="2026-11-03T15:23:56" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry" name="test_a_failure_after_the_work_item_creation_leaves_no_orphan" time="0.111" timestamp="2026-11-03T15:23:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="282">
+	<testsuite name="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry-20261103160844" tests="4" file="crm_cskh/tests/test_p1_concurrency.py" time="1.267" timestamp="2026-11-03T16:08:50" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry" name="test_a_failure_after_the_work_item_creation_leaves_no_orphan" time="0.110" timestamp="2026-11-03T16:08:49" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="282">
 			<!--The artificial failure of P1 §12.4.
 
 The work item is created, then the ownership transfer fails. The
@@ -21,10 +21,10 @@ savepoint rollback must remove the work item, the claim and the audit
 event together.
 -->
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry" name="test_a_retry_after_a_committed_assignment_does_not_double_apply" time="0.579" timestamp="2026-11-03T15:23:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="317">
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry" name="test_a_retry_after_a_committed_assignment_does_not_double_apply" time="0.666" timestamp="2026-11-03T16:08:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="317">
 			<!--A notification retry must not create a second assignment event.-->
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry" name="test_a_revoked_work_item_frees_the_lead_for_another_campaign" time="0.263" timestamp="2026-11-03T15:23:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="331"/>
-		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry" name="test_an_expected_owner_conflict_keeps_the_current_owner" time="0.228" timestamp="2026-11-03T15:23:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="356"/>
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry" name="test_a_revoked_work_item_frees_the_lead_for_another_campaign" time="0.274" timestamp="2026-11-03T16:08:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="331"/>
+		<testcase classname="crm_cskh.tests.test_p1_concurrency.TestRollbackAndRetry" name="test_an_expected_owner_conflict_keeps_the_current_owner" time="0.216" timestamp="2026-11-03T16:08:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_concurrency.py" line="356"/>
 	</testsuite>
 </testsuites>
