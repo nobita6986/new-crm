@@ -192,13 +192,40 @@ def _read_rows(content, extension, max_rows):
 		workbook.close()
 
 
-# The canonical field of the mapping that holds the phone number. The
-# mapping may carry several fields (name, source, …); the phone column is
-# the one of `PHONE_FIELD`, never simply the first mapped column (L-03).
+# The canonical fields of the import mapping (L-03, L-25).
 PHONE_FIELD = "phone"
+NAME_FIELD = "name"
+SOURCE_FIELD = "source"
+NAME_MAPPING_KEYS = ("name", "lead_name", "first_name", "full_name")
+SOURCE_MAPPING_KEYS = ("source", "lead_source")
 
 
-def _resolve_column_name(cells, mapping, candidates):
+def _canonical_mapping(mapping):
+	"""Normalize a mapping dict for deterministic storage and conflict comparison."""
+	if not mapping or not isinstance(mapping, dict):
+		return {}
+	cleaned = {}
+	for key, val in mapping.items():
+		if val is None:
+			continue
+		text = str(val).strip()
+		if text:
+			cleaned[str(key).strip()] = text
+	return cleaned
+
+
+def _available_columns(header=None, cells=None):
+	"""Return ordered list of column names from `header` and/or first row `cells`."""
+	ordered = []
+	seen = set()
+	for col in list(header or []) + list((cells or {}).keys()):
+		if col and col not in seen:
+			seen.add(col)
+			ordered.append(col)
+	return ordered
+
+
+def _resolve_column_name(cells, mapping, candidates, header=None):
 	"""Return the **name** of the column that holds the phone number.
 
 	ADR-P1-03: the mapping maps a canonical field to a *column name*. The
@@ -209,35 +236,107 @@ def _resolve_column_name(cells, mapping, candidates):
 	`phone` field wins: taking the first mapped column would read the name
 	column as a phone number (L-03).
 	"""
+	available = set(_available_columns(header=header, cells=cells))
+	lowered_candidates = {(c or "").strip().lower() for c in (candidates or ())}
 	if mapping:
 		mapped = mapping.get(PHONE_FIELD)
-		if mapped and mapped in cells:
+		if mapped and mapped in available:
 			return mapped
+		if mapped:
+			mapped_norm = str(mapped).strip().lower()
+			for col in _available_columns(header=header, cells=cells):
+				if col.strip().lower() == mapped_norm:
+					return col
 		# A mapping without an explicit phone field: accept a mapped column
 		# only when it is one of the recognised phone headers, otherwise the
 		# mapping is incomplete and the **header** is used to find the phone
 		# column. The candidates come from the header of the file, never from
 		# the client, so the fallback cannot be abused (L-03).
 		for _field, column in mapping.items():
-			if column and column in cells and (column or "").strip().lower() in candidates:
+			if column and column in available and (column or "").strip().lower() in lowered_candidates:
 				return column
 		# No mapped column is a phone column: fall back to the phone header
 		# of the file, exactly like the unmapped path.
 		for candidate in candidates:
-			if candidate in cells:
+			if candidate in available:
 				return candidate
-		for key in cells:
-			if (key or "").strip().lower() in candidates:
+		for key in _available_columns(header=header, cells=cells):
+			if (key or "").strip().lower() in lowered_candidates:
 				return key
 		return None
 	for candidate in candidates:
-		if candidate in cells:
+		if candidate in available:
 			return candidate
-	for key in cells:
+	for key in _available_columns(header=header, cells=cells):
 		normalized = (key or "").strip().lower()
-		if normalized in candidates:
+		if normalized in lowered_candidates:
 			return key
 	return None
+
+
+def _resolve_optional_column_name(header, cells, mapping, field_keys, candidates, exclude=()):
+	"""Resolve an optional mapped column (`name` or `source`) safely (L-25).
+
+	* When the caller explicitly maps one of `field_keys` (e.g. `mapping["name"]`),
+	  match that exact or case-folded column in the file header (never falling back
+	  to a random column if the explicit column does not exist, and never reusing
+	  an excluded column such as `phone_column`).
+	* When `mapping` omits `field_keys`, auto-detect from `candidates` in `header`.
+	"""
+	excluded = {col for col in (exclude or ()) if col}
+	columns = [col for col in _available_columns(header=header, cells=cells) if col not in excluded]
+	available = set(columns)
+
+	if isinstance(mapping, dict):
+		explicit_specified = False
+		for key in field_keys:
+			raw_target = mapping.get(key)
+			if raw_target is not None and str(raw_target).strip() != "":
+				explicit_specified = True
+				target = str(raw_target).strip()
+				if target in available:
+					return target
+				target_lower = target.lower()
+				for col in columns:
+					if col.strip().lower() == target_lower:
+						return col
+		if explicit_specified:
+			return None
+
+	lowered_candidates = {(c or "").strip().lower() for c in (candidates or ())}
+	for candidate in candidates or ():
+		if candidate in available:
+			return candidate
+	for col in columns:
+		if col.strip().lower() in lowered_candidates:
+			return col
+	return None
+
+
+def resolve_import_columns(header, cells, mapping):
+	"""Resolve canonical `phone`, `name` and `source` column names for an import (L-25)."""
+	phone_column = _resolve_column_name(cells, mapping, _phone_candidates(header), header=header)
+	name_column = _resolve_optional_column_name(
+		header,
+		cells,
+		mapping,
+		NAME_MAPPING_KEYS,
+		_name_candidates(header),
+		exclude=(phone_column,),
+	)
+	source_column = _resolve_optional_column_name(
+		header,
+		cells,
+		mapping,
+		SOURCE_MAPPING_KEYS,
+		_source_candidates(header),
+		exclude=(phone_column, name_column),
+	)
+	return {
+		"phone": phone_column,
+		"name": name_column,
+		"source": source_column,
+	}
 
 
 def _cell_value(cells, column):
@@ -250,6 +349,9 @@ def _cell_value(cells, column):
 def create_preview(file_name, mapping=None, actor=None, idempotency_key=None, import_mode="standard"):
 	"""Parse the file and produce the import preview (P1 6.2, 6.5)."""
 	actor = actor or frappe.session.user
+	if mapping is not None and not isinstance(mapping, dict):
+		raise InvalidRequest("Column mapping must be a JSON object.")
+
 	limits = _settings()
 	file_doc, content = _file_content(file_name)
 
@@ -261,10 +363,22 @@ def create_preview(file_name, mapping=None, actor=None, idempotency_key=None, im
 		raise UnsupportedFormat("Only CSV and XLSX files are supported.")
 
 	checksum = _checksum(content)
-	key = idempotency_key or f"import:{checksum}:{import_mode}"
+	normalized_mapping = _canonical_mapping(mapping)
+	if idempotency_key:
+		key = idempotency_key
+	elif normalized_mapping:
+		mapping_digest = hashlib.sha256(
+			json.dumps(normalized_mapping, sort_keys=True, ensure_ascii=False).encode("utf-8")
+		).hexdigest()[:12]
+		key = f"import:{checksum}:{import_mode}:{mapping_digest}"
+	else:
+		key = f"import:{checksum}:{import_mode}"
 
 	existing = frappe.db.get_value(
-		"CSKH Import Batch", {"idempotency_key": key}, ["name", "checksum", "status"], as_dict=True
+		"CSKH Import Batch",
+		{"idempotency_key": key},
+		["name", "checksum", "status", "mapping_json"],
+		as_dict=True,
 	)
 	if existing:
 		if existing.checksum != checksum:
@@ -272,12 +386,28 @@ def create_preview(file_name, mapping=None, actor=None, idempotency_key=None, im
 				"This idempotency key was already used with a different file.",
 				code="CONFLICT",
 			)
+		try:
+			existing_mapping = _canonical_mapping(json.loads(existing.mapping_json or "{}"))
+		except (ValueError, TypeError):
+			existing_mapping = {}
+		if existing_mapping != normalized_mapping:
+			raise Conflict(
+				"This idempotency key was already used with a different column mapping.",
+				code="CONFLICT",
+			)
 		return _status_response(existing.name)
 
 	header, rows = _read_rows(content, extension, limits["max_import_rows"])
-	phone_column = _resolve_column_name(rows[0]["cells"] if rows else {}, mapping, _phone_candidates(header))
+	resolved = resolve_import_columns(header, rows[0]["cells"] if rows else {}, normalized_mapping)
+	phone_column = resolved["phone"]
 
-	classification = _classify(rows, mapping, phone_column)
+	classification = _classify(
+		rows,
+		normalized_mapping,
+		phone_column,
+		name_column=resolved["name"],
+		source_column=resolved["source"],
+	)
 
 	batch = frappe.get_doc(
 		{
@@ -286,13 +416,19 @@ def create_preview(file_name, mapping=None, actor=None, idempotency_key=None, im
 			"checksum": checksum,
 			"idempotency_key": key,
 			"status": "DRY_RUN",
-			"mapping_json": json.dumps(mapping or {}, ensure_ascii=False),
+			"mapping_json": json.dumps(normalized_mapping, ensure_ascii=False),
 			"total_rows": classification["total_rows"],
 			"valid_rows": classification["valid_rows"],
 			"new_rows": classification["new_rows"],
 			"duplicate_rows": classification["duplicate_rows"],
 			"error_rows": classification["error_rows"],
-			"preview_json": json.dumps(classification["preview"], ensure_ascii=False),
+			"preview_json": json.dumps(
+				{
+					**classification["preview"],
+					"resolved_mapping": resolved,
+				},
+				ensure_ascii=False,
+			),
 		}
 	)
 	batch.insert(ignore_permissions=True)
@@ -317,7 +453,54 @@ def _phone_candidates(header):
 	return candidates or set()
 
 
-def _classify(rows, mapping, phone_column):
+def _name_candidates(header):
+	candidates = []
+	for column in header or []:
+		normalized = (column or "").strip().lower()
+		if normalized in (
+			"name",
+			"full_name",
+			"fullname",
+			"lead_name",
+			"first_name",
+			"customer_name",
+			"tên",
+			"ten",
+			"họ tên",
+			"ho ten",
+			"ho_ten",
+			"họ và tên",
+			"ho va ten",
+			"ho_va_ten",
+			"tên khách hàng",
+			"ten khach hang",
+			"ten_khach_hang",
+		):
+			candidates.append(column)
+	return candidates
+
+
+def _source_candidates(header):
+	candidates = []
+	for column in header or []:
+		normalized = (column or "").strip().lower()
+		if normalized in (
+			"source",
+			"lead_source",
+			"nguồn",
+			"nguon",
+			"nguồn khách",
+			"nguon khach",
+			"nguon_khach",
+			"nguồn khách hàng",
+			"kênh",
+			"kenh",
+		):
+			candidates.append(column)
+	return candidates
+
+
+def _classify(rows, mapping, phone_column, name_column=None, source_column=None):
 	"""Classify every row and compute the preview statistics (P1 6.5)."""
 	seen_in_file = set()
 	counts = {
@@ -349,15 +532,32 @@ def _classify(rows, mapping, phone_column):
 			)
 			continue
 
+		extra = {}
+		if name_column:
+			safe_name = sanitize_cell(_cell_value(row["cells"], name_column))[:140].strip()
+			if safe_name:
+				extra["name"] = safe_name
+		if source_column:
+			safe_source = sanitize_cell(_cell_value(row["cells"], source_column))[:140].strip()
+			if safe_source:
+				extra["source"] = safe_source
+
 		if canonical in seen_in_file:
 			counts["duplicate_rows"] += 1
 			preview_rows.append(
-				{"row_number": row["row_number"], "class": CLASS_DUPLICATE_IN_FILE, "canonical": canonical}
+				{
+					"row_number": row["row_number"],
+					"class": CLASS_DUPLICATE_IN_FILE,
+					"canonical": canonical,
+					**extra,
+				}
 			)
 			continue
 		seen_in_file.add(canonical)
 
 		existing_lead = identity_service.find_by_phone(canonical)
+		if not existing_lead:
+			existing_lead = identity_service.find_lead_by_phone(canonical)
 		if existing_lead:
 			counts["duplicate_rows"] += 1
 			duplicate_in_crm += 1
@@ -367,13 +567,21 @@ def _classify(rows, mapping, phone_column):
 					"class": CLASS_DUPLICATE_IN_CRM,
 					"canonical": canonical,
 					"lead": existing_lead,
+					**extra,
 				}
 			)
 			continue
 
 		counts["valid_rows"] += 1
 		counts["new_rows"] += 1
-		preview_rows.append({"row_number": row["row_number"], "class": CLASS_VALID, "canonical": canonical})
+		preview_rows.append(
+			{
+				"row_number": row["row_number"],
+				"class": CLASS_VALID,
+				"canonical": canonical,
+				**extra,
+			}
+		)
 
 	return {
 		"total_rows": counts["total_rows"],
@@ -470,11 +678,19 @@ def _status_response(batch_name):
 			preview_payload = json.loads(batch.preview_json)
 		except (ValueError, TypeError):
 			preview_payload = {}
+	mapping_payload = {}
+	if batch.mapping_json:
+		try:
+			mapping_payload = json.loads(batch.mapping_json)
+		except (ValueError, TypeError):
+			mapping_payload = {}
 	return {
 		"batch": batch.name,
 		"status": batch.status,
 		"checksum": batch.checksum,
 		"idempotency_key": batch.idempotency_key,
+		"mapping": mapping_payload,
+		"resolved_mapping": preview_payload.get("resolved_mapping") or {},
 		"totals": {
 			"total_rows": batch.total_rows,
 			"valid_rows": batch.valid_rows,
