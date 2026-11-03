@@ -108,6 +108,7 @@ def _index_inventory():
 		"tabCSKH Assignment History",
 		"tabCSKH Identity Index",
 		"tabCSKH Import Batch",
+		"tabCSKH Import Batch Lead",
 		"tabCSKH Distribution Run",
 	):
 		rows = frappe.db.sql(f"show index from `{table}`")

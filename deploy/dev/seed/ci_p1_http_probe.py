@@ -634,6 +634,57 @@ def setup_probe_fixtures() -> dict[str, object]:
         )
         rq_camp.insert(ignore_permissions=True)
 
+        # Two private CSV files with custom headers for L-25 (name/source mapping, placeholder,
+        # non-overwrite on canonical Lead reuse, and Import Batch <-> Lead pool filtering).
+        l25_p_named = fresh_phone()
+        l25_p_missing = fresh_phone()
+        l25_p_b2 = fresh_phone()
+
+        def _csv_bytes(header: tuple[str, ...], rows: list[tuple[str, ...]]) -> bytes:
+            buf = io.StringIO()
+            writer = csv.writer(buf, lineterminator="\n")
+            writer.writerow(header)
+            for r in rows:
+                writer.writerow(r)
+            return buf.getvalue().encode("utf-8")
+
+        l25_b1_file = frappe.get_doc(
+            {
+                "doctype": "File",
+                "file_name": f"p1-http-l25-b1-{frappe.generate_hash(length=6)}.csv",
+                "is_private": 1,
+                "content": _csv_bytes(
+                    ("SDT_KH", "TEN_KH", "KENH_KH"),
+                    [
+                        (l25_p_named, "Nguyễn Văn L25", "Zalo L25"),
+                        (l25_p_missing, "", '=HYPERLINK("http://evil")'),
+                        (l25_p_named, "Duplicate In File", "Other"),
+                    ],
+                ),
+            }
+        )
+        l25_b1_file.insert(ignore_permissions=True)
+
+        l25_b2_file = frappe.get_doc(
+            {
+                "doctype": "File",
+                "file_name": f"p1-http-l25-b2-{frappe.generate_hash(length=6)}.csv",
+                "is_private": 1,
+                "content": _csv_bytes(
+                    ("SDT_KH", "TEN_KH", "KENH_KH"),
+                    [
+                        (
+                            l25_p_named,
+                            "ATTEMPT OVERWRITE NAME",
+                            "ATTEMPT OVERWRITE SOURCE",
+                        ),
+                        (l25_p_b2, "<b>Trần Thị L25B</b>", "TikTok L25"),
+                    ],
+                ),
+            }
+        )
+        l25_b2_file.insert(ignore_permissions=True)
+
         frappe.db.commit()
         return {
             "campaign": campaign.name,
@@ -646,6 +697,13 @@ def setup_probe_fixtures() -> dict[str, object]:
             "camp_t1": camp_t1.name,
             "camp_t2": camp_t2.name,
             "rq_campaign": rq_camp.name,
+            "l25_batch1_file": l25_b1_file.name,
+            "l25_batch2_file": l25_b2_file.name,
+            "l25_canonicals": {
+                "named": normalize_vn_phone(l25_p_named),
+                "missing": normalize_vn_phone(l25_p_missing),
+                "b2": normalize_vn_phone(l25_p_b2),
+            },
             "admin_roles": frappe.get_roles("crm.admin@dev.local"),
         }
 
@@ -752,6 +810,99 @@ def verify_large_import_db_truth(
         if row_nums != sorted(expected_invalid_rows):
             return False, f"artifact row_numbers {row_nums} != {expected_invalid_rows}"
         return True, "245 identities and 5 artifact error rows verified"
+
+    return _with_frappe(_inspect)
+
+
+def verify_l25_db_truth(
+    batch1_name: str, batch2_name: str, canonicals: dict[str, str]
+) -> tuple[bool, str, dict[str, str]]:
+    """Verify L-25 mapped Lead fields, placeholder flag, non-overwrite, and batch-lead links."""
+
+    def _inspect(frappe):
+        leads: dict[str, str] = {}
+        for key, phone in canonicals.items():
+            lead_id = frappe.db.get_value(
+                "CSKH Identity Index", {"normalized_phone": phone}, "canonical_lead"
+            )
+            if not lead_id:
+                return False, f"missing canonical_lead for {key}", {}
+            leads[key] = str(lead_id)
+
+        named = frappe.db.get_value(
+            "CRM Lead",
+            leads["named"],
+            ["first_name", "lead_name", "cskh_is_placeholder_name", "source"],
+            as_dict=True,
+        )
+        if (
+            named.first_name != "Nguyễn Văn L25"
+            or named.lead_name != "Nguyễn Văn L25"
+            or int(named.cskh_is_placeholder_name or 0) != 0
+            or named.source != "Zalo L25"
+        ):
+            return False, f"named lead mutated or wrong: {named}", leads
+
+        missing = frappe.db.get_value(
+            "CRM Lead",
+            leads["missing"],
+            ["first_name", "lead_name", "cskh_is_placeholder_name", "source"],
+            as_dict=True,
+        )
+        if (
+            missing.first_name != "Chưa rõ tên"
+            or missing.lead_name != "Chưa rõ tên"
+            or int(missing.cskh_is_placeholder_name or 0) != 1
+            or missing.source != '\'=HYPERLINK("http://evil")'
+        ):
+            return False, f"placeholder/formula lead wrong: {missing}", leads
+
+        b2 = frappe.db.get_value(
+            "CRM Lead",
+            leads["b2"],
+            ["first_name", "lead_name", "cskh_is_placeholder_name", "source"],
+            as_dict=True,
+        )
+        if (
+            b2.first_name != "Trần Thị L25B"
+            or b2.lead_name != "Trần Thị L25B"
+            or int(b2.cskh_is_placeholder_name or 0) != 0
+            or b2.source != "TikTok L25"
+        ):
+            return False, f"batch2 HTML-sanitized lead wrong: {b2}", leads
+
+        wi_count = frappe.db.count(
+            "CSKH Work Item", {"lead": ["in", list(leads.values())]}
+        )
+        if wi_count != 0:
+            return False, f"expected 0 work items on L-25 leads, got {wi_count}", leads
+
+        b1_links = {
+            r.lead: r.outcome
+            for r in frappe.get_all(
+                "CSKH Import Batch Lead",
+                filters={"import_batch": batch1_name},
+                fields=["lead", "outcome"],
+            )
+        }
+        b2_links = {
+            r.lead: r.outcome
+            for r in frappe.get_all(
+                "CSKH Import Batch Lead",
+                filters={"import_batch": batch2_name},
+                fields=["lead", "outcome"],
+            )
+        }
+        if b1_links != {leads["named"]: "created", leads["missing"]: "created"}:
+            return False, f"unexpected batch1 links: {b1_links}", leads
+        if b2_links != {leads["named"]: "reused", leads["b2"]: "created"}:
+            return False, f"unexpected batch2 links: {b2_links}", leads
+
+        return (
+            True,
+            "L-25 leads, sanitization, non-overwrite, and batch links match DB truth",
+            leads,
+        )
 
     return _with_frappe(_inspect)
 
@@ -1013,8 +1164,18 @@ def run() -> int:
     large_invalid_rows = list(fixtures.get("large_invalid_rows") or [])
     l21_items = list(fixtures.get("l21_items") or [])
     rq_campaign = str(fixtures.get("rq_campaign") or "")
+    l25_batch1_file = str(fixtures.get("l25_batch1_file") or "")
+    l25_batch2_file = str(fixtures.get("l25_batch2_file") or "")
+    l25_canonicals = dict(fixtures.get("l25_canonicals") or {})
     admin_roles = set(fixtures.get("admin_roles") or [])
-    if not campaign or not import_file or not large_import_file or len(l21_items) != 8:
+    if (
+        not campaign
+        or not import_file
+        or not large_import_file
+        or len(l21_items) != 8
+        or not l25_batch1_file
+        or not l25_batch2_file
+    ):
         failures.append("p1-http-fixture-setup")
         write_evidence()
         return 1
@@ -1927,6 +2088,274 @@ def run() -> int:
         and "deadbeef00missing" not in str(file_oracle_missing["text"]),
         "P0 File-oracle protection remains byte-identical on real vs missing File routes alongside L-16",
         actor="staff.b@dev.local",
+    )
+
+    # -- 13. L-25: Import mapping, non-overwrite, batch↔lead link & customer_pool
+    l25_mapping = {"phone": "SDT_KH", "name": "TEN_KH", "source": "KENH_KH"}
+    l25_b1_idem = f"http-l25-b1-{secrets.token_hex(4)}"
+    l25_b1_prev = post_json(
+        "p1-http-l25-batch1-preview",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.imports.create_preview",
+        {
+            "file_name": l25_batch1_file,
+            "mapping": l25_mapping,
+            "idempotency_key": l25_b1_idem,
+        },
+    )
+    l25_b1_prev_body = body_payload(l25_b1_prev)
+    l25_b1_name = str(l25_b1_prev_body.get("batch") or "")
+    l25_b1_rows = list(l25_b1_prev_body.get("preview") or [])
+    check(
+        "p1-http-l25-batch1-preview",
+        l25_b1_prev,
+        l25_b1_prev["status"] == 200
+        and bool(l25_b1_name)
+        and l25_b1_prev_body.get("resolved_mapping") == l25_mapping
+        and l25_b1_prev_body.get("totals")
+        == {
+            "total_rows": 3,
+            "valid_rows": 2,
+            "new_rows": 2,
+            "duplicate_rows": 1,
+            "error_rows": 0,
+        }
+        and len(l25_b1_rows) == 3
+        and l25_b1_rows[2].get("class") == "duplicate_in_file"
+        and str(l25_b1_rows[1].get("source") or "").startswith("'="),
+        "POST imports.create_preview resolves custom name/source mapping and sanitizes formula cells in preview",
+        actor="crm.admin@dev.local",
+    )
+
+    l25_map_conflict = post_json(
+        "p1-http-l25-mapping-conflict-409",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.imports.create_preview",
+        {
+            "file_name": l25_batch1_file,
+            "mapping": {"phone": "SDT_KH", "name": "KENH_KH"},
+            "idempotency_key": l25_b1_idem,
+        },
+    )
+    check(
+        "p1-http-l25-mapping-conflict-409",
+        l25_map_conflict,
+        l25_map_conflict["status"] == 409
+        and error_envelope(l25_map_conflict).get("code") == "CONFLICT"
+        and error_envelope(l25_map_conflict).get("p1_code") == "CONFLICT",
+        "Reusing idempotency_key with a different mapping returns HTTP 409 CONFLICT (P1 §6.4)",
+        actor="crm.admin@dev.local",
+    )
+
+    l25_b1_confirm = post_json(
+        "p1-http-l25-batch1-confirm",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.imports.confirm",
+        {"batch": l25_b1_name},
+    )
+    check(
+        "p1-http-l25-batch1-confirm",
+        l25_b1_confirm,
+        l25_b1_confirm["status"] == 200
+        and body_payload(l25_b1_confirm).get("status")
+        in ("QUEUED", "RUNNING", "COMPLETED"),
+        "POST imports.confirm enqueues L-25 Batch 1 to RQ worker",
+        actor="crm.admin@dev.local",
+    )
+
+    poll_until(
+        lambda: get(
+            "poll-l25-b1",
+            admin,
+            f"/api/method/crm_cskh.api.imports.get_status?batch={l25_b1_name}",
+            record=False,
+        ),
+        lambda r: body_payload(r).get("status")
+        in ("COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED"),
+        timeout_s=60.0,
+    )
+
+    l25_b1_done = get(
+        "p1-http-l25-batch1-completed",
+        admin,
+        f"/api/method/crm_cskh.api.imports.get_status?batch={l25_b1_name}",
+    )
+    l25_b1_done_body = body_payload(l25_b1_done)
+    check(
+        "p1-http-l25-batch1-completed",
+        l25_b1_done,
+        l25_b1_done["status"] == 200
+        and l25_b1_done_body.get("status") == "COMPLETED"
+        and int(l25_b1_done_body.get("created_rows", -1)) == 2
+        and int(l25_b1_done_body.get("reused_rows", -1)) == 0
+        and int(l25_b1_done_body.get("skipped_rows", -1)) == 0
+        and int(l25_b1_done_body.get("totals", {}).get("duplicate_rows", -1)) == 1,
+        "RQ worker completes L-25 Batch 1 with created_rows=2, reused_rows=0, duplicate_rows=1, skipped_rows=0",
+        actor="crm.admin@dev.local",
+    )
+
+    l25_b2_prev = post_json(
+        "p1-http-l25-batch2-preview",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.imports.create_preview",
+        {
+            "file_name": l25_batch2_file,
+            "mapping": l25_mapping,
+            "idempotency_key": f"http-l25-b2-{secrets.token_hex(4)}",
+        },
+    )
+    l25_b2_prev_body = body_payload(l25_b2_prev)
+    l25_b2_name = str(l25_b2_prev_body.get("batch") or "")
+    l25_b2_rows = list(l25_b2_prev_body.get("preview") or [])
+    check(
+        "p1-http-l25-batch2-preview",
+        l25_b2_prev,
+        l25_b2_prev["status"] == 200
+        and bool(l25_b2_name)
+        and int(l25_b2_prev_body.get("totals", {}).get("duplicate_rows", 0)) == 1
+        and int(l25_b2_prev_body.get("totals", {}).get("new_rows", 0)) == 1
+        and len(l25_b2_rows) == 2
+        and l25_b2_rows[0].get("class") == "duplicate_in_crm"
+        and l25_b2_rows[1].get("name") == "Trần Thị L25B",
+        "POST imports.create_preview on L-25 Batch 2 classifies 1 duplicate_in_crm + 1 sanitized HTML new_row",
+        actor="crm.admin@dev.local",
+    )
+
+    l25_b2_confirm = post_json(
+        "p1-http-l25-batch2-confirm",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.imports.confirm",
+        {"batch": l25_b2_name},
+    )
+    check(
+        "p1-http-l25-batch2-confirm",
+        l25_b2_confirm,
+        l25_b2_confirm["status"] == 200
+        and body_payload(l25_b2_confirm).get("status")
+        in ("QUEUED", "RUNNING", "COMPLETED"),
+        "POST imports.confirm enqueues L-25 Batch 2 to RQ worker",
+        actor="crm.admin@dev.local",
+    )
+
+    poll_until(
+        lambda: get(
+            "poll-l25-b2",
+            admin,
+            f"/api/method/crm_cskh.api.imports.get_status?batch={l25_b2_name}",
+            record=False,
+        ),
+        lambda r: body_payload(r).get("status")
+        in ("COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED"),
+        timeout_s=60.0,
+    )
+
+    l25_b2_done = get(
+        "p1-http-l25-batch2-completed",
+        admin,
+        f"/api/method/crm_cskh.api.imports.get_status?batch={l25_b2_name}",
+    )
+    l25_b2_done_body = body_payload(l25_b2_done)
+    l25_db_ok, l25_db_msg, l25_leads = verify_l25_db_truth(
+        l25_b1_name, l25_b2_name, l25_canonicals
+    )
+    check(
+        "p1-http-l25-batch2-completed",
+        l25_b2_done,
+        l25_b2_done["status"] == 200
+        and l25_b2_done_body.get("status") == "COMPLETED"
+        and int(l25_b2_done_body.get("created_rows", -1)) == 1
+        and int(l25_b2_done_body.get("reused_rows", -1)) == 1
+        and int(l25_b2_done_body.get("skipped_rows", -1)) == 0
+        and l25_db_ok,
+        f"RQ worker completes L-25 Batch 2 without overwriting existing canonical Lead ({l25_db_msg})",
+        actor="crm.admin@dev.local",
+    )
+
+    pool_b1_admin = get(
+        "p1-http-l25-customer-pool-batch1-admin",
+        admin,
+        f"/api/method/crm_cskh.api.customers.customer_pool?batch={l25_b1_name}",
+    )
+    pool_b1_items = {
+        str(row.get("lead")): row
+        for row in (body_payload(pool_b1_admin).get("items") or [])
+    }
+    check(
+        "p1-http-l25-customer-pool-batch1-admin",
+        pool_b1_admin,
+        pool_b1_admin["status"] == 200
+        and int(body_payload(pool_b1_admin).get("total", -1)) == 2
+        and set(pool_b1_items) == {l25_leads.get("named"), l25_leads.get("missing")}
+        and pool_b1_items.get(l25_leads.get("named", ""), {}).get("work_item") is None
+        and pool_b1_items.get(l25_leads.get("named", ""), {}).get("state") == "eligible"
+        and pool_b1_items.get(l25_leads.get("named", ""), {}).get("display_name")
+        == "Nguyễn Văn L25"
+        and pool_b1_items.get(l25_leads.get("named", ""), {}).get("source")
+        == "Zalo L25",
+        "GET customers.customer_pool?batch=<batch1> returns imported customers without Work Items",
+        actor="crm.admin@dev.local",
+    )
+
+    pool_b2_admin = get(
+        "p1-http-l25-customer-pool-batch2-admin",
+        admin,
+        f"/api/method/crm_cskh.api.customers.customer_pool?batch={l25_b2_name}",
+    )
+    pool_b2_items = {
+        str(row.get("lead")): row
+        for row in (body_payload(pool_b2_admin).get("items") or [])
+    }
+    check(
+        "p1-http-l25-customer-pool-batch2-admin",
+        pool_b2_admin,
+        pool_b2_admin["status"] == 200
+        and int(body_payload(pool_b2_admin).get("total", -1)) == 2
+        and set(pool_b2_items) == {l25_leads.get("named"), l25_leads.get("b2")}
+        and pool_b2_items.get(l25_leads.get("named", ""), {}).get("display_name")
+        == "Nguyễn Văn L25"
+        and pool_b2_items.get(l25_leads.get("b2", ""), {}).get("display_name")
+        == "Trần Thị L25B",
+        "GET customers.customer_pool?batch=<batch2> returns both newly created and multi-batch reused canonical Lead",
+        actor="crm.admin@dev.local",
+    )
+
+    pool_b1_bod = get(
+        "p1-http-l25-customer-pool-batch1-bod",
+        bod,
+        f"/api/method/crm_cskh.api.customers.customer_pool?batch={l25_b1_name}",
+    )
+    pool_b1_bod_items = list(body_payload(pool_b1_bod).get("items") or [])
+    check(
+        "p1-http-l25-customer-pool-batch1-bod",
+        pool_b1_bod,
+        pool_b1_bod["status"] == 200
+        and int(body_payload(pool_b1_bod).get("total", -1)) == 2
+        and len(pool_b1_bod_items) == 2
+        and all(
+            r.get("phone") is None and r.get("display_name") == ""
+            for r in pool_b1_bod_items
+        ),
+        "GET customers.customer_pool?batch=<batch1> redacts phone and display_name for BOD Viewer",
+        actor="bod.viewer@dev.local",
+    )
+
+    pool_denied_staff = get(
+        "p1-http-l25-customer-pool-denied-staff",
+        staff_a,
+        f"/api/method/crm_cskh.api.customers.customer_pool?batch={l25_b1_name}",
+    )
+    check(
+        "p1-http-l25-customer-pool-denied-staff",
+        pool_denied_staff,
+        pool_denied_staff["status"] == 403
+        and error_envelope(pool_denied_staff).get("code") == "FORBIDDEN",
+        "GET customers.customer_pool rejects plain Sales User with HTTP 403 FORBIDDEN",
+        actor="staff.a@dev.local",
     )
 
     write_evidence()

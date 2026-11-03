@@ -24,6 +24,27 @@ def find_by_phone(normalized_phone):
 	)
 
 
+def find_by_phone_current(normalized_phone):
+	"""Return the latest committed canonical lead for `normalized_phone`.
+
+	Under MariaDB `REPEATABLE READ`, a worker whose MVCC snapshot opened before
+	another concurrent worker committed `CSKH Identity Index` may get `None` on
+	a plain `SELECT` right after hitting `1062 Duplicate entry`. Falling back to
+	`LOCK IN SHARE MODE` reads the latest committed index row reliably.
+	"""
+	if not normalized_phone:
+		return None
+	lead = find_by_phone(normalized_phone)
+	if lead:
+		return lead
+	rows = frappe.db.sql(
+		"select canonical_lead from `tabCSKH Identity Index` "
+		"where normalized_phone = %s limit 1 lock in share mode",
+		(normalized_phone,),
+	)
+	return rows[0][0] if rows else None
+
+
 def find_by_lead(lead):
 	"""Return the identity row of a lead, or None."""
 	if not lead:
@@ -94,13 +115,18 @@ def claim_canonical_identity(normalized_phone, canonical_lead, allow_adopt=True)
 			"canonical_lead": canonical_lead,
 		}
 	)
+	sp_name = f"cskh_id_{frappe.generate_hash(length=8)}"
+	frappe.db.savepoint(sp_name)
 	try:
 		identity.insert(ignore_permissions=True)
 	except Exception as exc:
+		if _is_transient_tx_abort(exc):
+			raise
+		_rollback_savepoint_quietly(sp_name)
 		if not _is_duplicate_error(exc):
 			raise
 		# Two concurrent writers reached the unique index. The database wins.
-		winner = find_by_phone(normalized_phone)
+		winner = find_by_phone_current(normalized_phone)
 		if winner:
 			return winner
 		raise
@@ -111,6 +137,23 @@ def claim_canonical_identity(normalized_phone, canonical_lead, allow_adopt=True)
 def _is_duplicate_error(exc):
 	text = str(exc)
 	return "Duplicate" in text or "1062" in text or "unique" in text.lower()
+
+
+def _is_transient_tx_abort(exc):
+	text = str(exc)
+	return (
+		isinstance(exc, frappe.QueryDeadlockError)
+		or "Deadlock" in type(exc).__name__
+		or "1213" in text
+		or "1020" in text
+	)
+
+
+def _rollback_savepoint_quietly(sp_name):
+	try:
+		frappe.db.rollback(save_point=sp_name)
+	except Exception:
+		pass
 
 
 def _find_lead_by_raw_phone(normalized_phone):

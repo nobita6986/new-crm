@@ -1,25 +1,25 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-	<testsuite name="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity-2[REDACTED_PHONE]38" tests="7" file="crm_cskh/tests/test_p1_identity.py" time="0.662" timestamp="2026-11-03T11:24:40" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_adopt_policy_links_a_lead_created_outside_p1" time="0.411" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="115">
+	<testsuite name="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity-20261103130545" tests="7" file="crm_cskh/tests/test_p1_identity.py" time="0.798" timestamp="2026-11-03T13:05:47" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_adopt_policy_links_a_lead_created_outside_p1" time="0.427" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="115">
 			<!--A lead that already carries the number is adopted, never duplicated.-->
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_claim_is_idempotent_for_the_same_lead" time="0.029" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="92"/>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_claim_rejects_a_phone_owned_by_another_lead" time="0.038" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="100"/>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_duplicate_normalized_phone_is_blocked_by_the_database" time="0.043" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="66">
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_claim_is_idempotent_for_the_same_lead" time="0.057" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="92"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_claim_rejects_a_phone_owned_by_another_lead" time="0.068" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="100"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_duplicate_normalized_phone_is_blocked_by_the_database" time="0.077" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="66">
 			<system-out><![CDATA[Message: Normalized Phone must be unique
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_ensure_identity_for_lead_is_idempotent" time="0.031" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="126"/>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_lookup_by_phone_and_by_lead" time="0.045" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="108"/>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_release_removes_the_identity_claim" time="0.066" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="134"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_ensure_identity_for_lead_is_idempotent" time="0.056" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="126"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_lookup_by_phone_and_by_lead" time="0.054" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="108"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestCanonicalIdentity" name="test_release_removes_the_identity_claim" time="0.059" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="134"/>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_p1_identity.TestPhoneNormalization-2[REDACTED_PHONE]38" tests="6" file="crm_cskh/tests/test_p1_identity.py" time="0.020" timestamp="2026-11-03T11:24:40" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_equivalent_formats_normalize_to_the_same_canonical_phone" time="0.008" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="25"/>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_error_code_is_stable" time="0.004" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="50"/>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_invalid_forms_are_rejected" time="0.002" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="30"/>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_non_string_input_is_rejected" time="0.001" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="46"/>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_scientific_notation_is_never_trusted" time="0.002" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="36"/>
-		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_two_numbers_in_one_cell_are_not_guessed" time="0.003" timestamp="2026-11-03T11:24:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="42"/>
+	<testsuite name="crm_cskh.tests.test_p1_identity.TestPhoneNormalization-20261103130545" tests="6" file="crm_cskh/tests/test_p1_identity.py" time="0.032" timestamp="2026-11-03T13:05:47" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_equivalent_formats_normalize_to_the_same_canonical_phone" time="0.008" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="25"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_error_code_is_stable" time="0.006" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="50"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_invalid_forms_are_rejected" time="0.004" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="30"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_non_string_input_is_rejected" time="0.004" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="46"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_scientific_notation_is_never_trusted" time="0.005" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="36"/>
+		<testcase classname="crm_cskh.tests.test_p1_identity.TestPhoneNormalization" name="test_two_numbers_in_one_cell_are_not_guessed" time="0.005" timestamp="2026-11-03T13:05:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_identity.py" line="42"/>
 	</testsuite>
 </testsuites>
