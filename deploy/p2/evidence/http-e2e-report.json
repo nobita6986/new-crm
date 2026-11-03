@@ -2,7 +2,7 @@
   "site": "p2.localhost",
   "base_url": "http://127.0.0.1:8220",
   "timezone": "Asia/Ho_Chi_Minh",
-  "worktree_head_sha": "7babf0b91c079cfd6c93c3c1f5876f2f55376918",
+  "worktree_head_sha": "d3da46b16a6d800d5d8cf866fc06415f9f02253f",
   "checks": [
     {
       "id": "P2-E2E-01-page-role-matrix",
@@ -136,8 +136,8 @@
       "id": "P2-E2E-02-import-and-distribute",
       "status": "PASS",
       "details": {
-        "campaign_a": "5sjd7d2np3",
-        "campaign_b": "5tuc6361m9",
+        "campaign_a": "mju93sc06a",
+        "campaign_b": "mlera935tr",
         "team_a_items": 11,
         "team_b_items": 2
       }
@@ -146,11 +146,11 @@
       "id": "P2-E2E-03-lifecycle-honesty-correction-dnc",
       "status": "PASS",
       "details": {
-        "wi_http": "5t8ss9gk3g",
-        "wi_dnc": "5t2m701abq",
+        "wi_http": "mkl6re4isf",
+        "wi_dnc": "mkfchvttfi",
         "attempt_count": 3,
         "connected_attempt_count": 1,
-        "correction_id": "5ve7rshq0v"
+        "correction_id": "mn6pfr0t3f"
       }
     },
     {
@@ -186,16 +186,16 @@
           "interval_violations": [],
           "counter_drifts": [],
           "checked_work_items_with_attempts": 3,
-          "as_of": "2026-11-04 02:27:29.466980"
+          "as_of": "2026-11-04 02:56:03.287850"
         }
       }
     }
   ],
   "fixtures": {
-    "campaign_a": "5sjd7d2np3",
-    "campaign_b": "5tuc6361m9",
-    "team_a": "5doc0avhpm",
-    "team_b": "5dpequ8vr9",
+    "campaign_a": "mju93sc06a",
+    "campaign_b": "mlera935tr",
+    "team_a": "m4nd63vsn5",
+    "team_b": "m4nnc5j1kk",
     "users": {
       "admin": "cskh-p2-admin@example.test",
       "bod": "cskh-p2-bod@example.test",
@@ -206,32 +206,32 @@
       "staff_c": "cskh-p2-staff-c@example.test",
       "outside": "cskh-p2-outside@example.test"
     },
-    "wi_happy": "5te41g17ac",
-    "lead_happy": "CRM-LEAD-2026-02360",
-    "wi_honesty": "5tdgihm05f",
-    "lead_honesty": "CRM-LEAD-2026-02361",
+    "wi_happy": "mkqfuu1e3l",
+    "lead_happy": "CRM-LEAD-2026-02478",
+    "wi_honesty": "mkqce8osi1",
+    "lead_honesty": "CRM-LEAD-2026-02479",
     "honesty_call_logs": [
-      "p2-e2e-call-CRM-LEAD-2026-02361-1",
-      "p2-e2e-call-CRM-LEAD-2026-02361-2"
+      "p2-e2e-call-CRM-LEAD-2026-02479-1",
+      "p2-e2e-call-CRM-LEAD-2026-02479-2"
     ],
-    "wi_conflict": "5tc1nb00kc",
-    "wi_transfer": "5tc6u890l0",
-    "transfer_task_id": "161",
-    "transfer_due_at": "2026-11-05 04:26:23",
-    "wi_correction": "5tbun1lrrn",
-    "correction_seed_attempt_id": "60hh1q83rd",
-    "wi_2359": "5ta091c5ot",
-    "task_2359": "162",
+    "wi_conflict": "mkp0nlktj5",
+    "wi_transfer": "mkovg8fd1m",
+    "transfer_task_id": "186",
+    "transfer_due_at": "2026-11-05 04:54:55",
+    "wi_correction": "mkon5fmtng",
+    "correction_seed_attempt_id": "mo6thqqh6t",
+    "wi_2359": "mkngc4hhar",
+    "task_2359": "187",
     "due_2359": "2026-11-04 23:59:59",
-    "wi_0000": "5tabc8n808",
-    "task_0000": "163",
+    "wi_0000": "mkm0t20ab3",
+    "task_0000": "188",
     "due_0000": "2026-11-05 00:00:00",
-    "wi_overdue": "5t9hjlvu8u",
-    "task_overdue": "164",
+    "wi_overdue": "mkmoossel3",
+    "task_overdue": "189",
     "due_overdue": "2026-11-03 15:00:00",
-    "wi_staff_b": "5t8joqoadk",
-    "wi_dnc": "5t2m701abq",
-    "wi_team_b": "5ueanfk52i",
-    "wi_closed_http": "5t8ss9gk3g"
+    "wi_staff_b": "mklnshltoo",
+    "wi_dnc": "mkfchvttfi",
+    "wi_team_b": "mltt51rjlm",
+    "wi_closed_http": "mkl6re4isf"
   }
 }

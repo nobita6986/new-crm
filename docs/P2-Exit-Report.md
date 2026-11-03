@@ -5,8 +5,8 @@
 > **Kế hoạch gốc:** [`docs/root-plan/P2.md`](./root-plan/P2.md) (§14, §15, §16, §17, §18) & ADR giao diện [`docs/architecture/ui-strategy-p1.md`](./architecture/ui-strategy-p1.md)
 > **Ngày đóng gói hồ sơ tích hợp:** 04/11/2026
 > **Thực hiện bởi:**
-> - **T1B (AI Coding — Backend):** `P2-WP00..WP06` & phần Backend/CI/Benchmark/Restore của `P2-WP10` (commit `23a782bd58edaaef3e406fbc2b7e43622fb98d58`, nhánh `codex/p2-foundation`)
-> - **T1A (AI Coding — UI, i18n, Browser E2E & WP11):** `P2-WP07..WP09`, E2E HTTP/Chromium thực tế & đóng gói tích hợp `P2-WP11` (code commit `7babf0b91c079cfd6c93c3c1f5876f2f55376918`, nhánh `codex/p2-ui`, worktree `D:/HRP-app/p2-ui`)
+> - **T1B (AI Coding — Backend):** `P2-WP00..WP06` & phần Backend/CI/Benchmark/Restore của `P2-WP10` (commit `6ef2e2e21c9e8265efe43fd5413074b70849a674`, nhánh `codex/p2-foundation`)
+> - **T1A (AI Coding — UI, i18n, Browser E2E & WP11):** `P2-WP07..WP09`, E2E HTTP/Chromium thực tế & đóng gói tích hợp `P2-WP11` (code commit `d3da46b16a6d800d5d8cf866fc06415f9f02253f`, nhánh `codex/p2-ui`, worktree `D:/HRP-app/p2-ui`)
 > **Baseline xuất phát (`main`):** `1913d2bd5ebfdc894eaa492b46be502dbdf44808` (CI P0 `#41658199683` `success`, CI P1 `#41658199861` `success`)
 > **Trạng thái cổng nghiệm thu:** **ĐÃ BÀN GIAO HỒ SƠ KỸ THUẬT CHO T1C — CHƯA MERGE VÀO `main`, CHƯA KÝ `GO P3`**
 
@@ -17,14 +17,14 @@
 | Hạng mục quản trị | Tài liệu / Đầu mối liên kết | Trạng thái hiện tại |
 |---|---|---|
 | **Báo cáo kiểm định độc lập của T1C** | `docs/audits/P2-T1C-Verification-Report.md` *(sẽ do **T1C** xuất bản và ký độc lập sau khi kiểm định nhánh tích hợp)* | **CHỜ T1C KIỂM ĐỊNH ĐỘC LẬP (`PENDING`)** — *T1A/T1B không tự điền `PASS` thay cho T1C* |
-| **Truy vết bằng chứng kỹ thuật chi tiết (`T1B + T1A`)** | [`docs/test-evidence-p2.md`](./test-evidence-p2.md), [`deploy/p2/evidence/http-e2e-report.json`](../deploy/p2/evidence/http-e2e-report.json), [`deploy/p2/evidence/browser-manifest.json`](../deploy/p2/evidence/browser-manifest.json) | Đã đo và lưu đầy đủ trên commit mã `7babf0b91c079cfd6c93c3c1f5876f2f55376918` (`0` SĐT thô, `0` secret) |
+| **Truy vết bằng chứng kỹ thuật chi tiết (`T1B + T1A`)** | [`docs/test-evidence-p2.md`](./test-evidence-p2.md), [`deploy/p2/evidence/http-e2e-report.json`](../deploy/p2/evidence/http-e2e-report.json), [`deploy/p2/evidence/browser-manifest.json`](../deploy/p2/evidence/browser-manifest.json) | Đã đo và lưu đầy đủ trên commit mã `d3da46b16a6d800d5d8cf866fc06415f9f02253f` (`0` SĐT thô, `0` secret) |
 | **Quyết định chuyển pha (`GO P3` / `NO-GO P3`)** | Thẩm quyền phê duyệt của **T0 / Owner** trên cơ sở báo cáo độc lập của **T1C** | **CHƯA KÝ `GO P3`** |
 
 ---
 
 ## Tóm tắt Điều hành
 
-Trên nhánh tích hợp `codex/p2-ui` (hợp nhất có kiểm soát commit Backend `23a782bd58edaaef3e406fbc2b7e43622fb98d58` của **T1B** với các màn hình UI/Việt hóa/E2E `7babf0b91c079cfd6c93c3c1f5876f2f55376918` của **T1A**, **`0` dòng thay đổi lên bất kỳ module phân quyền hay dịch vụ backend nào của T1B**), hệ thống CRM-CSKH Giai đoạn P2 đã hoàn tất đồng bộ từ tầng dữ liệu đến trải nghiệm trình duyệt tiếng Việt:
+Trên nhánh tích hợp `codex/p2-ui` (hợp nhất có kiểm soát commit Backend `6ef2e2e21c9e8265efe43fd5413074b70849a674` của **T1B** với các màn hình UI/Việt hóa/E2E `d3da46b16a6d800d5d8cf866fc06415f9f02253f` của **T1A**, **`0` dòng thay đổi lên bất kỳ module phân quyền hay dịch vụ backend nào của T1B**), hệ thống CRM-CSKH Giai đoạn P2 đã hoàn tất đồng bộ từ tầng dữ liệu đến trải nghiệm trình duyệt tiếng Việt:
 
 1. **Bảo toàn khóa phiên bản & chiến lược giao diện cùng Frappe site `/cskh/*`:** Giữ nguyên Frappe Framework `v15.123.1` (`d2efa79657ba5c1abf96098b3bfacc199517d57e`) và Frappe CRM `v1.87.0` (`0d3910b456ef4fb913e77b29db011b3debc4f778`); **`0` tệp vá core/upstream mới** trong P2, không dựng SPA tách rời và không sửa `Activities.vue` của upstream. Kết nối từ trang chi tiết `CRM Lead` sang hồ sơ CSKH dùng điểm mở rộng chuẩn `CRM Form Script` (`"CSKH - Open Lead CSKH Workspace"` → `/cskh/work-item?lead=<lead_id>`).
 2. **Mô hình sự kiện liên hệ bất biến, trung thực & giao diện thao tác nguyên tử:**
@@ -233,7 +233,7 @@ sequenceDiagram
 
 ### 11. Tổng hợp Hồ sơ Kỹ thuật `15` Cổng Nghiệm thu (`G2-01 .. G2-15`)
 
-> **Nguyên tắc phân quyền kiểm định:** Cột `Hồ sơ kỹ thuật (T1B + T1A)` ghi nhận các bằng chứng tự đo đã hoàn thành trên mã nguồn `7babf0b91c079cfd6c93c3c1f5876f2f55376918`. Cột `Phán quyết T1C` để trống có chủ đích cho **T1C** điền độc lập (xem truy vết đầy đủ tại [`docs/test-evidence-p2.md`](./test-evidence-p2.md) §6).
+> **Nguyên tắc phân quyền kiểm định:** Cột `Hồ sơ kỹ thuật (T1B + T1A)` ghi nhận các bằng chứng tự đo đã hoàn thành trên mã nguồn `d3da46b16a6d800d5d8cf866fc06415f9f02253f`. Cột `Phán quyết T1C` để trống có chủ đích cho **T1C** điền độc lập (xem truy vết đầy đủ tại [`docs/test-evidence-p2.md`](./test-evidence-p2.md) §6).
 
 | Cổng | Hồ sơ kỹ thuật tích hợp (`T1B` + `T1A`) | Phán quyết độc lập `T1C` |
 |---|---|---|
