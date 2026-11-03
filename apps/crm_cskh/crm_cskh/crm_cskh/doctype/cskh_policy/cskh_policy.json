@@ -1,0 +1,193 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Policy",
+ "module": "CRM CSKH",
+ "autoname": "field:policy_code",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "policy_code",
+   "fieldtype": "Data",
+   "label": "Policy Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "title",
+   "fieldtype": "Data",
+   "label": "Title",
+   "reqd": 1
+  },
+  {
+   "fieldname": "scope_type",
+   "fieldtype": "Select",
+   "label": "Scope Type",
+   "options": "Global\nTeam\nCampaign",
+   "default": "Global",
+   "reqd": 1
+  },
+  {
+   "fieldname": "team",
+   "fieldtype": "Link",
+   "label": "Team",
+   "options": "CRM Sales Hierarchy"
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "label": "Campaign",
+   "options": "CSKH Campaign"
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Int",
+   "label": "Version",
+   "default": "1",
+   "reqd": 1
+  },
+  {
+   "fieldname": "allowed_backdate_minutes",
+   "fieldtype": "Int",
+   "label": "Allowed Backdate Minutes",
+   "default": "120",
+   "reqd": 1
+  },
+  {
+   "fieldname": "max_open_followup_tasks_per_item",
+   "fieldtype": "Int",
+   "label": "Max Open Followup Tasks Per Item",
+   "default": "1",
+   "reqd": 1
+  },
+  {
+   "fieldname": "require_attempt_before_close",
+   "fieldtype": "Check",
+   "label": "Require Attempt Before Close",
+   "default": "1"
+  },
+  {
+   "fieldname": "allow_close_without_contact_for_invalid",
+   "fieldtype": "Check",
+   "label": "Allow Close Without Contact For Invalid",
+   "default": "1"
+  },
+  {
+   "fieldname": "do_not_contact_behavior",
+   "fieldtype": "Select",
+   "label": "Do Not Contact Behavior",
+   "options": "block_and_auto_close\nblock_future_outreach",
+   "default": "block_and_auto_close",
+   "reqd": 1
+  },
+  {
+   "fieldname": "enabled_channels",
+   "fieldtype": "Data",
+   "label": "Enabled Channels",
+   "default": "phone_call,sms,zalo,facebook,other",
+   "reqd": 1
+  },
+  {
+   "fieldname": "allow_leader_reopen",
+   "fieldtype": "Check",
+   "label": "Allow Leader Reopen",
+   "default": "1"
+  },
+  {
+   "fieldname": "allow_leader_review_correction",
+   "fieldtype": "Check",
+   "label": "Allow Leader Review Correction",
+   "default": "1"
+  }
+ ],
+ "field_order": [
+  "policy_code",
+  "title",
+  "scope_type",
+  "team",
+  "campaign",
+  "enabled",
+  "version",
+  "allowed_backdate_minutes",
+  "max_open_followup_tasks_per_item",
+  "require_attempt_before_close",
+  "allow_close_without_contact_for_invalid",
+  "do_not_contact_behavior",
+  "enabled_channels",
+  "allow_leader_reopen",
+  "allow_leader_review_correction"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH BOD Viewer",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "title_field": "title",
+ "modified": "2026-11-03 23:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}

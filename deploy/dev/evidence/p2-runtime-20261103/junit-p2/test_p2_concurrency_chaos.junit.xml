@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p2_concurrency_chaos.TestP2IdempotencyAndStaleRevision-2[REDACTED_PHONE]06" tests="2" file="crm_cskh/tests/test_p2_concurrency_chaos.py" time="1.827" timestamp="2026-11-04T00:57:09" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_concurrency_chaos.TestP2IdempotencyAndStaleRevision" name="test_idempotent_replay_and_payload_mismatch_across_all_p2_mutations" time="1.668" timestamp="2026-11-04T00:57:09" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_concurrency_chaos.py" line="73">
+			<!--`T2-08`, `T2-09`: Exact replay returns `idempotent_replay=True`; different payload raises `IDEMPOTENCY_CONFLICT`.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_concurrency_chaos.TestP2IdempotencyAndStaleRevision" name="test_two_tab_expected_revision_mismatch_returns_409_stale_work_item" time="0.159" timestamp="2026-11-04T00:57:09" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_concurrency_chaos.py" line="242">
+			<!--`T2-10`: Tab 2 submitting an older `expected_revision` gets `409 STALE_WORK_ITEM`.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p2_concurrency_chaos.TestP2RealMariaDbRacesAndRollbackChaos-2[REDACTED_PHONE]06" tests="2" file="crm_cskh/tests/test_p2_concurrency_chaos.py" time="0.951" timestamp="2026-11-04T00:57:11" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_concurrency_chaos.TestP2RealMariaDbRacesAndRollbackChaos" name="test_mid_transaction_fault_rolls_back_savepoint_and_post_commit_notification_fault_preserves_state" time="0.449" timestamp="2026-11-04T00:57:10" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_concurrency_chaos.py" line="394">
+			<!--`P2.md` §15.3-§15.4: Savepoint rollback leaves 0 orphans; post-commit notification failure never rolls back DB.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_concurrency_chaos.TestP2RealMariaDbRacesAndRollbackChaos" name="test_parallel_double_submit_and_record_attempt_vs_reassign_race_preserve_invariants" time="0.502" timestamp="2026-11-04T00:57:11" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_concurrency_chaos.py" line="294">
+			<!--`T2-11`: Parallel DB connections never duplicate attempts or break interval/callback invariants.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p2_concurrency_chaos.TestZeroProductionFaultInjectionP2-2[REDACTED_PHONE]06" tests="1" file="crm_cskh/tests/test_p2_concurrency_chaos.py" time="0.422" timestamp="2026-11-04T00:57:11" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_concurrency_chaos.TestZeroProductionFaultInjectionP2" name="test_no_fault_injection_symbols_in_production_modules" time="0.422" timestamp="2026-11-04T00:57:11" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_concurrency_chaos.py" line="493"/>
+	</testsuite>
+</testsuites>

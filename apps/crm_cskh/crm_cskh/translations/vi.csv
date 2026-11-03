@@ -612,9 +612,40 @@ You may not reconcile a campaign.,Bạn không có quyền đối soát chiến 
 already_claimed,Đã được giữ bởi chiến dịch khác
 invalid_row,Dòng dữ liệu không hợp lệ
 no_phone_column,Thiếu cột số điện thoại
+do_not_contact,Khách từ chối liên hệ tiếp
+An active owned work item requires an assignee.,Công việc đang chăm sóc bắt buộc có người phụ trách.
+An active owned work item requires an assignment timestamp.,Công việc đang chăm sóc bắt buộc có thời điểm phân công.
+Work items cannot be deleted; revoke or close them instead.,Không được xóa công việc; hãy thu hồi hoặc đóng công việc.
+Contact Attempt,Lần liên hệ
+CSKH Contact Attempt,Nhật ký liên hệ CSKH
+CSKH Attempt Correction,Hiệu chỉnh nhật ký liên hệ CSKH
+CSKH Outcome Code,Mã kết quả liên hệ CSKH
+CSKH Policy,Chính sách chăm sóc CSKH
+Outcome,Kết quả liên hệ
+Unreachable,Không liên lạc được
+Connected,Đã kết nối
+Follow-up,Hẹn liên hệ lại
+On Hold,Chờ chăm sóc lại
+Due,Đến hạn
+Self-reported,Nhân viên tự báo cáo
+Verified,Đã xác minh
+Do Not Contact,Không liên hệ nữa
+Close Work Item,Hoàn tất chăm sóc
+OWNERSHIP_CHANGED,OWNERSHIP_CHANGED
+WORK_ITEM_NOT_ACTIVE,WORK_ITEM_NOT_ACTIVE
+STALE_WORK_ITEM,STALE_WORK_ITEM
+POLICY_CHANGED,POLICY_CHANGED
+IDEMPOTENCY_CONFLICT,IDEMPOTENCY_CONFLICT
+ALREADY_LINKED,ALREADY_LINKED
+DO_NOT_CONTACT,DO_NOT_CONTACT
+INVALID_CHANNEL,INVALID_CHANNEL
+INVALID_OUTCOME,INVALID_OUTCOME
+NOTE_REQUIRED,NOTE_REQUIRED
+FOLLOWUP_REQUIRED,FOLLOWUP_REQUIRED
+INVALID_FOLLOWUP_TIME,INVALID_FOLLOWUP_TIME
+OUTCOME_NOT_COMPATIBLE,OUTCOME_NOT_COMPATIBLE
 A contact note is required for the selected outcome.,Kết quả đã chọn bắt buộc phải có ghi chú.
 A follow-up callback time is required for the selected outcome.,Kết quả đã chọn bắt buộc phải có thời điểm hẹn lại.
-ALREADY_LINKED,ALREADY_LINKED
 Active assigned work items,Công việc đang phụ trách
 Add clarification,Bổ sung giải trình
 All timeline items,Tất cả mục
@@ -669,7 +700,6 @@ Completing a callback without a contact attempt requires a cancellation reason.,
 Completing callback task,Thực hiện cho lịch hẹn
 Completion reason,Lý do hoàn tất
 Configure contact outcome codes and versioned customer care policies.,Cấu hình danh mục mã kết quả liên hệ và chính sách chăm sóc theo phiên bản.
-Connected,Đã kết nối
 Connected work items,Khách đã kết nối (hiệu lực)
 Contact attempt (CSKH),Lần liên hệ CSKH
 Contact attempt counters (effective attempts),Số liệu theo lần liên hệ hiệu lực (không tính bản đã vô hiệu)
@@ -695,7 +725,6 @@ Counts as connected,Tính là đã kết nối
 Customer care workspace,Hồ sơ chăm sóc khách hàng
 Customer ownership has changed to another staff member. Refresh your list.,Khách hàng này đã được chuyển giao cho nhân viên khác. Vui lòng làm mới danh sách.
 "Customer pool, imports, campaigns, distribution and customer care workflow.","Kho khách hàng, nhập danh sách, chiến dịch, phân phối và nghiệp vụ chăm sóc khách hàng."
-DO_NOT_CONTACT,DO_NOT_CONTACT
 Data scope,Phạm vi dữ liệu
 Default follow-up delay (hours),Khoảng cách hẹn lại mặc định (giờ)
 Direct modification or deletion of contact attempts is prohibited.,Không được phép sửa hoặc xóa trực tiếp lịch sử lần liên hệ.
@@ -704,7 +733,6 @@ Do not contact,Không liên hệ nữa
 Do-not-contact (DNC) work items,Khách từ chối liên hệ (DNC)
 Does not count as connected,Không tính là đã kết nối
 Done,Đã hoàn tất
-Due,Đến hạn
 Due status,Tình trạng hạn
 Due today,Đến hạn hôm nay
 Duration (s),Thời lượng (giây)
@@ -716,14 +744,9 @@ Enabled,Đang bật
 Enforce Do Not Contact (DNC),Chặn liên hệ khi khách từ chối (DNC)
 Enter contact summary or customer feedback...,Nhập nội dung trao đổi hoặc phản hồi của khách hàng...
 Enter the reason for requesting this correction or void...,Nhập lý do cụ thể cho yêu cầu hiệu chỉnh hoặc vô hiệu...
-FOLLOWUP_REQUIRED,FOLLOWUP_REQUIRED
 Facebook channel,Kênh Facebook
 "Follow-up callbacks in your scope, classified by site/user timezone.","Danh sách lịch hẹn chăm sóc lại trong phạm vi quyền, phân loại theo múi giờ chuẩn hệ thống/người dùng."
 Global,Toàn hệ thống (Global)
-IDEMPOTENCY_CONFLICT,IDEMPOTENCY_CONFLICT
-INVALID_CHANNEL,INVALID_CHANNEL
-INVALID_FOLLOWUP_TIME,INVALID_FOLLOWUP_TIME
-INVALID_OUTCOME,INVALID_OUTCOME
 In progress,Đang chăm sóc
 Inbound,Gọi đến
 Interested,Quan tâm
@@ -741,7 +764,6 @@ Max attempts before terminal / review,Số lần thử tối đa khuyến nghị
 Max backdate window (minutes),Khoảng lùi giờ ghi nhận tối đa (phút)
 "Message sent, no reply","Đã gửi tin, chưa phản hồi"
 Message without reply is never counted as connected.,Gửi tin nhắn chưa có phản hồi không được tính là đã kết nối.
-NOTE_REQUIRED,NOTE_REQUIRED
 Native call logs,Nhật ký cuộc gọi
 Needs follow-up,Cần chăm sóc lại
 New / edit outcome code,Thêm mới / cập nhật mã kết quả
@@ -761,8 +783,6 @@ Not interested (call),Chưa có nhu cầu (qua cuộc gọi)
 Note is required for this outcome.,Kết quả này bắt buộc nhập ghi chú.
 Note — excluded from attempt count,Ghi chú nội bộ — không tính vào số lần liên hệ
 Notice: This view reports scoped operational counts only. It is not a quality KPI score or formal P3 SLA grade.,"Lưu ý: Màn hình này chỉ thống kê số lượng hoạt động cơ bản trong phạm vi quyền (tách biệt số công việc/khách với số lần liên hệ, và tự báo cáo với đã xác minh) — không phải điểm chất lượng CSKH hay xếp loại SLA."
-OUTCOME_NOT_COMPATIBLE,OUTCOME_NOT_COMPATIBLE
-OWNERSHIP_CHANGED,OWNERSHIP_CHANGED
 Occurred at,Thời điểm liên hệ
 On hold,Chờ chăm sóc lại
 On-hold work items (awaiting callback),Đang chờ chăm sóc lại
@@ -780,7 +800,6 @@ Outcome code catalog,Danh mục mã kết quả liên hệ
 Outcome code saved.,Đã lưu cấu hình mã kết quả.
 Outcome codes cannot be deleted once created; disable unused codes instead.,Không được xóa mã kết quả đã tạo để bảo toàn lịch sử; hãy tắt kích hoạt nếu ngừng sử dụng.
 Overdue callbacks,Lịch hẹn quá hạn
-POLICY_CHANGED,POLICY_CHANGED
 Pending correction review,Đang chờ duyệt hiệu chỉnh
 Performed by,Người thực hiện
 Phone call,Gọi điện thoại
@@ -832,7 +851,6 @@ Review note,Ghi chú phê duyệt
 Reviewed by,Người duyệt
 Revision,Phiên bản cập nhật
 SMS message,Tin nhắn SMS
-STALE_WORK_ITEM,STALE_WORK_ITEM
 Save callback,Lưu lịch hẹn
 Save contact result,Lưu kết quả liên hệ
 Save new policy version,Lưu phiên bản chính sách mới
@@ -841,7 +859,6 @@ Saving...,Đang lưu...
 Schedule / update callback,Đặt / đổi lịch hẹn lại
 Schedule follow-up callback,Đặt lịch hẹn liên hệ lại
 Select outcome...,Chọn kết quả liên hệ...
-Self-reported,Nhân viên tự báo cáo
 Self-reported attempts,Lần liên hệ tự báo cáo
 Sets Do Not Contact (DNC),Đặt trạng thái Không liên hệ nữa
 Site/user timezone,Múi giờ áp dụng
@@ -875,14 +892,11 @@ Unanswered message attempts (not connected),Gửi tin chưa phản hồi (chưa 
 Uncontacted work items,Khách chưa liên hệ
 Unified care timeline,Dòng thời gian chăm sóc hợp nhất
 Unlinked call log (not counted as attempt),Chưa gắn lần liên hệ (không tự tính số lần liên hệ)
-Unreachable,Không liên lạc được
 Upcoming,Sắp đến hạn
-Verified,Đã xác minh
 Verified attempts,Lần liên hệ đã xác minh
 Vietnamese label,Nhãn hiển thị tiếng Việt
 Void attempt,Vô hiệu lần liên hệ (loại khỏi bộ đếm)
 Voided — excluded from counts,Đã vô hiệu — không tính vào bộ đếm
-WORK_ITEM_NOT_ACTIVE,WORK_ITEM_NOT_ACTIVE
 Work item closed.,Đã hoàn tất công việc chăm sóc.
 Work item counters (distinct work items),Số liệu theo công việc chăm sóc (không trùng theo số lần gọi)
 Work item reopened.,Đã mở lại công việc chăm sóc.

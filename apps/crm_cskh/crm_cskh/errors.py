@@ -38,6 +38,11 @@ _DENIAL_MARKERS = (
 	"File -",
 	"CRM Lead -",
 	"CRM-LEAD-",
+	"CSKH Work Item -",
+	"CSKH Contact Attempt -",
+	"CSKH Attempt Correction -",
+	"CRM Task -",
+	"CRM Call Log -",
 )
 
 _ID_PATTERNS = (

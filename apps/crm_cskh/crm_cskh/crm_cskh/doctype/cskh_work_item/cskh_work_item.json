@@ -23,9 +23,17 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "queued\nassigned\nrevoked\nclosed",
+   "options": "queued\nassigned\nin_progress\non_hold\nrevoked\nclosed",
    "default": "queued",
    "reqd": 1
+  },
+  {
+   "fieldname": "revision",
+   "fieldtype": "Int",
+   "label": "Revision",
+   "default": "1",
+   "reqd": 1,
+   "read_only": 1
   },
   {
    "fieldname": "assigned_to",
@@ -54,17 +62,147 @@
    "fieldname": "last_transfer_at",
    "fieldtype": "Datetime",
    "label": "Last Transfer At"
+  },
+  {
+   "fieldname": "first_attempt_at",
+   "fieldtype": "Datetime",
+   "label": "First Attempt At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_attempt_at",
+   "fieldtype": "Datetime",
+   "label": "Last Attempt At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_outcome_code",
+   "fieldtype": "Link",
+   "label": "Last Outcome Code",
+   "options": "CSKH Outcome Code",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_outcome_label",
+   "fieldtype": "Data",
+   "label": "Last Outcome Label",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_connected_at",
+   "fieldtype": "Datetime",
+   "label": "Last Connected At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "attempt_count",
+   "fieldtype": "Int",
+   "label": "Attempt Count",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "connected_attempt_count",
+   "fieldtype": "Int",
+   "label": "Connected Attempt Count",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "open_callback_task",
+   "fieldtype": "Link",
+   "label": "Open Callback Task",
+   "options": "CRM Task",
+   "read_only": 1
+  },
+  {
+   "fieldname": "next_action_due",
+   "fieldtype": "Datetime",
+   "label": "Next Action Due",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_activity_by",
+   "fieldtype": "Link",
+   "label": "Last Activity By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_at",
+   "fieldtype": "Datetime",
+   "label": "Closed At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_by",
+   "fieldtype": "Link",
+   "label": "Closed By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "completion_reason",
+   "fieldtype": "Small Text",
+   "label": "Completion Reason",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "reopened_at",
+   "fieldtype": "Datetime",
+   "label": "Reopened At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reopened_by",
+   "fieldtype": "Link",
+   "label": "Reopened By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "reopen_reason",
+   "fieldtype": "Small Text",
+   "label": "Reopen Reason",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "policy_version",
+   "fieldtype": "Int",
+   "label": "Policy Version",
+   "default": "1",
+   "read_only": 1
   }
  ],
  "field_order": [
   "campaign",
   "lead",
   "status",
+  "revision",
   "assigned_to",
   "assigned_at",
   "import_batch",
   "allocation_run",
-  "last_transfer_at"
+  "last_transfer_at",
+  "first_attempt_at",
+  "last_attempt_at",
+  "last_outcome_code",
+  "last_outcome_label",
+  "last_connected_at",
+  "attempt_count",
+  "connected_attempt_count",
+  "open_callback_task",
+  "next_action_due",
+  "last_activity_by",
+  "closed_at",
+  "closed_by",
+  "completion_reason",
+  "reopened_at",
+  "reopened_by",
+  "reopen_reason",
+  "policy_version"
  ],
  "permissions": [
   {
@@ -79,6 +217,12 @@
    "print": 0
   },
   {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1
+  },
+  {
    "role": "CSKH CRM Admin",
    "read": 1,
    "create": 0,
@@ -88,6 +232,12 @@
    "export": 0,
    "email": 0,
    "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "permlevel": 1,
+   "read": 1,
+   "write": 0
   },
   {
    "role": "CSKH BOD Viewer",
@@ -112,6 +262,12 @@
    "print": 0
   },
   {
+   "role": "Sales Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 0
+  },
+  {
    "role": "Sales User",
    "read": 1,
    "create": 0,
@@ -121,13 +277,19 @@
    "export": 0,
    "email": 0,
    "print": 0
+  },
+  {
+   "role": "Sales User",
+   "permlevel": 1,
+   "read": 1,
+   "write": 0
   }
  ],
  "allow_rename": 0,
  "track_changes": 0,
  "sort_field": "creation",
  "sort_order": "DESC",
- "modified": "2026-11-02 00:00:00.000000",
+ "modified": "2026-11-03 00:00:00.000000",
  "owner": "Administrator",
  "modified_by": "Administrator",
  "links": [],

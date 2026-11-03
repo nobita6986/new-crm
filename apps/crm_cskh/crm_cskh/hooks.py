@@ -21,13 +21,45 @@ P1_DOCTYPES = (
 	"CSKH Active Claim",
 )
 
+P2_DOCTYPES = (
+	"CSKH Outcome Code",
+	"CSKH Policy",
+	"CSKH Contact Attempt",
+	"CSKH Attempt Correction",
+)
+
 # Fixtures
 # ------------------
-# Metadata do crm_cskh quản lý qua file (P0-B §B2).
+# Metadata do crm_cskh quản lý qua file (P0-B §B2, P1 §6.2, P2 §6).
 fixtures = [
-	{"doctype": "Custom Field", "filters": [["name", "=", "CRM Lead-cskh_poc_marker"]]},
-	{"doctype": "Custom Field", "filters": [["name", "=", "CRM Lead-cskh_is_placeholder_name"]]},
-	{"doctype": "CRM Form Script", "filters": [["name", "=", "CSKH - Open CSKH Page"]]},
+	{
+		"doctype": "Custom Field",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"CRM Lead-cskh_poc_marker",
+					"CRM Lead-cskh_is_placeholder_name",
+					"CRM Lead-cskh_do_not_contact",
+					"CRM Lead-cskh_dnc_reason",
+					"CRM Lead-cskh_dnc_at",
+					"CRM Lead-cskh_dnc_work_item",
+					"CRM Task-cskh_work_item",
+					"CRM Task-cskh_is_followup",
+					"CRM Task-cskh_source_attempt",
+					"CRM Task-cskh_completed_attempt",
+					"CRM Task-cskh_completion_reason",
+					"CRM Task-cskh_reschedule_count",
+					"CRM Task-cskh_task_history_json",
+				],
+			]
+		],
+	},
+	{
+		"doctype": "CRM Form Script",
+		"filters": [["name", "in", ["CSKH - Open CSKH Page", "CSKH - Open Lead CSKH Workspace"]]],
+	},
 ]
 
 # Apps
@@ -187,6 +219,10 @@ doc_events = {
 		"on_update": "crm_cskh.permissions.clear_stale_lead_shares",
 	},
 	"ToDo": {"validate": "crm_cskh.permissions.validate_lead_assignment"},
+	"CRM Task": {
+		"validate": "crm_cskh.p2_models.validate_cskh_followup_task",
+		"on_trash": "crm_cskh.p2_models.prevent_cskh_followup_task_trash",
+	},
 }
 
 override_whitelisted_methods = {
@@ -349,6 +385,10 @@ permission_query_conditions.update(
 		"CSKH Distribution Run": "crm_cskh.p1_permissions.distribution_run_query_conditions",
 		"CSKH Identity Index": "crm_cskh.p1_permissions.system_only_query_conditions",
 		"CSKH Active Claim": "crm_cskh.p1_permissions.system_only_query_conditions",
+		"CSKH Outcome Code": "crm_cskh.p2_permissions.outcome_code_query_conditions",
+		"CSKH Policy": "crm_cskh.p2_permissions.policy_query_conditions",
+		"CSKH Contact Attempt": "crm_cskh.p2_permissions.contact_attempt_query_conditions",
+		"CSKH Attempt Correction": "crm_cskh.p2_permissions.attempt_correction_query_conditions",
 	}
 )
 
@@ -363,5 +403,9 @@ has_permission.update(
 		"CSKH Distribution Run": "crm_cskh.p1_permissions.distribution_run_has_permission",
 		"CSKH Identity Index": "crm_cskh.p1_permissions.system_only_has_permission",
 		"CSKH Active Claim": "crm_cskh.p1_permissions.system_only_has_permission",
+		"CSKH Outcome Code": "crm_cskh.p2_permissions.outcome_code_has_permission",
+		"CSKH Policy": "crm_cskh.p2_permissions.policy_has_permission",
+		"CSKH Contact Attempt": "crm_cskh.p2_permissions.contact_attempt_has_permission",
+		"CSKH Attempt Correction": "crm_cskh.p2_permissions.attempt_correction_has_permission",
 	}
 )

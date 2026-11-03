@@ -1,0 +1,278 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Contact Attempt",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "work_item",
+   "fieldtype": "Link",
+   "label": "Work Item",
+   "options": "CSKH Work Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "label": "Lead",
+   "options": "CRM Lead",
+   "reqd": 1
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "label": "Campaign",
+   "options": "CSKH Campaign",
+   "reqd": 1
+  },
+  {
+   "fieldname": "ownership_event",
+   "fieldtype": "Link",
+   "label": "Ownership Event",
+   "options": "CSKH Assignment History",
+   "reqd": 1
+  },
+  {
+   "fieldname": "owner_at_attempt",
+   "fieldtype": "Link",
+   "label": "Owner At Attempt",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "performed_by",
+   "fieldtype": "Link",
+   "label": "Performed By",
+   "options": "User",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "occurred_at",
+   "fieldtype": "Datetime",
+   "label": "Occurred At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "recorded_at",
+   "fieldtype": "Datetime",
+   "label": "Recorded At",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "channel",
+   "fieldtype": "Select",
+   "label": "Channel",
+   "options": "phone_call\nsms\nzalo\nfacebook\nother",
+   "default": "phone_call",
+   "reqd": 1
+  },
+  {
+   "fieldname": "outcome_code",
+   "fieldtype": "Link",
+   "label": "Outcome Code",
+   "options": "CSKH Outcome Code",
+   "reqd": 1
+  },
+  {
+   "fieldname": "outcome_version_snapshot",
+   "fieldtype": "Int",
+   "label": "Outcome Version Snapshot",
+   "default": "1",
+   "reqd": 1
+  },
+  {
+   "fieldname": "outcome_label_snapshot",
+   "fieldtype": "Data",
+   "label": "Outcome Label Snapshot",
+   "reqd": 1
+  },
+  {
+   "fieldname": "outcome_group_snapshot",
+   "fieldtype": "Data",
+   "label": "Outcome Group Snapshot",
+   "reqd": 1
+  },
+  {
+   "fieldname": "contact_attempt_snapshot",
+   "fieldtype": "Check",
+   "label": "Contact Attempt Snapshot",
+   "default": "1"
+  },
+  {
+   "fieldname": "connected_snapshot",
+   "fieldtype": "Check",
+   "label": "Connected Snapshot",
+   "default": "0"
+  },
+  {
+   "fieldname": "interested_snapshot",
+   "fieldtype": "Check",
+   "label": "Interested Snapshot",
+   "default": "0"
+  },
+  {
+   "fieldname": "terminal_snapshot",
+   "fieldtype": "Check",
+   "label": "Terminal Snapshot",
+   "default": "0"
+  },
+  {
+   "fieldname": "dnc_snapshot",
+   "fieldtype": "Check",
+   "label": "DNC Snapshot",
+   "default": "0"
+  },
+  {
+   "fieldname": "policy_name_snapshot",
+   "fieldtype": "Link",
+   "label": "Policy Name Snapshot",
+   "options": "CSKH Policy",
+   "reqd": 1
+  },
+  {
+   "fieldname": "policy_version_snapshot",
+   "fieldtype": "Int",
+   "label": "Policy Version Snapshot",
+   "default": "1",
+   "reqd": 1
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Text",
+   "label": "Note"
+  },
+  {
+   "fieldname": "verification_status",
+   "fieldtype": "Select",
+   "label": "Verification Status",
+   "options": "self_reported\nverified\ndisputed",
+   "default": "self_reported",
+   "reqd": 1
+  },
+  {
+   "fieldname": "call_log",
+   "fieldtype": "Link",
+   "label": "Call Log",
+   "options": "CRM Call Log"
+  },
+  {
+   "fieldname": "callback_task",
+   "fieldtype": "Link",
+   "label": "Callback Task",
+   "options": "CRM Task"
+  },
+  {
+   "fieldname": "resolved_callback_task",
+   "fieldtype": "Link",
+   "label": "Resolved Callback Task",
+   "options": "CRM Task"
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "reqd": 1
+  },
+  {
+   "fieldname": "payload_hash",
+   "fieldtype": "Data",
+   "label": "Payload Hash",
+   "reqd": 1
+  },
+  {
+   "fieldname": "work_item_revision",
+   "fieldtype": "Int",
+   "label": "Work Item Revision",
+   "reqd": 1
+  }
+ ],
+ "field_order": [
+  "work_item",
+  "lead",
+  "campaign",
+  "ownership_event",
+  "owner_at_attempt",
+  "performed_by",
+  "occurred_at",
+  "recorded_at",
+  "channel",
+  "outcome_code",
+  "outcome_version_snapshot",
+  "outcome_label_snapshot",
+  "outcome_group_snapshot",
+  "contact_attempt_snapshot",
+  "connected_snapshot",
+  "interested_snapshot",
+  "terminal_snapshot",
+  "dnc_snapshot",
+  "policy_name_snapshot",
+  "policy_version_snapshot",
+  "note",
+  "verification_status",
+  "call_log",
+  "callback_task",
+  "resolved_callback_task",
+  "idempotency_key",
+  "payload_hash",
+  "work_item_revision"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "occurred_at",
+ "sort_order": "DESC",
+ "modified": "2026-11-03 23:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}
