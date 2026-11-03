@@ -506,8 +506,8 @@ với `owner=null` khi `status=queued`).
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `work_item` | string | ✔ | |
-| `limit` | int | ✖ | Mặc định 50, tối đa 200 |
+| `work_item` | string | ✔ | Chuỗi không rỗng (`parse_optional_str`) |
+| `limit` | int | ✖ | Mặc định `50`, miền hợp lệ `1..200` (`parse_int`, `L-26`) |
 
 **Response 200**
 
@@ -522,14 +522,14 @@ với `owner=null` khi `status=queued`).
 }
 ```
 
-**Lỗi:** `FORBIDDEN` (không có quyền read work item), `INVALID_REQUEST`.
+**Lỗi:** `FORBIDDEN` (không có quyền read work item), `INVALID_REQUEST` (HTTP `400`, `code = "INVALID_REQUEST"`, `p1_code = "INVALID_REQUEST"` khi thiếu `work_item` hoặc `limit` không hợp lệ như `"abc"`, `"1.5"`, `true`/`false`, `<= 0`, `> 200` — tuyệt đối không để `int(...)` sinh HTTP `500`, `L-26`).
 
 ### 3.16 `crm_cskh.api.customers.my_list` — GET
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `page` | int | ✖ | Mặc định 1 |
-| `page_size` | int | ✖ | Mặc định 20, tối đa 100 |
+| `page` | int | ✖ | Mặc định `1`, miền hợp lệ `1..1000000` (`parse_pagination`, `L-26`) |
+| `page_size` | int | ✖ | Mặc định `20`, miền hợp lệ `1..100` (`parse_pagination`, `L-26`) |
 | `status` | string | ✖ | Mặc định `assigned` |
 | `campaign` | string | ✖ | Lọc campaign |
 
@@ -549,14 +549,14 @@ với `owner=null` khi `status=queued`).
 }
 ```
 
-`scope` luôn là `"self"` — danh sách của chính actor, không mở rộng được bằng tham số.
+`scope` luôn là `"self"` — danh sách của chính actor, không mở rộng được bằng tham số. Input `page`/`page_size` sai định dạng hoặc ngoài miền trả HTTP `400 INVALID_REQUEST` (`L-26`).
 
 ### 3.17 `crm_cskh.api.customers.pool_list` — GET
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `page` | int | ✖ | Mặc định 1 |
-| `page_size` | int | ✖ | Mặc định 20, tối đa 100 |
+| `page` | int | ✖ | Mặc định `1`, miền hợp lệ `1..1000000` (`parse_pagination`, `L-26`) |
+| `page_size` | int | ✖ | Mặc định `20`, miền hợp lệ `1..100` (`parse_pagination`, `L-26`) |
 | `campaign` | string | ✖ | Lọc theo chiến dịch |
 | `batch` | string | ✖ | Lọc theo `CSKH Import Batch` (qua cả `wi.import_batch` lẫn `CSKH Import Batch Lead` — `L-25`) |
 
@@ -574,21 +574,21 @@ với `owner=null` khi `status=queued`).
 ```
 
 Pool là work item `status='queued'` **và** `assigned_to is null`; scope của leader áp qua
-`team_scope` của campaign; `CSKH BOD Viewer` được che `phone = null` và `display_name = ""`.
+`team_scope` của campaign (trạng thái phụ `_pool_state` cũng được giới hạn trong scope của actor, không rò owner/campaign ngoài team); `CSKH BOD Viewer` được che `phone = null` và `display_name = ""`. Input `page`/`page_size` không hợp lệ trả HTTP `400 INVALID_REQUEST` (`L-26`).
 
-### 3.17b `crm_cskh.api.customers.customer_pool` — GET (`L-25`)
+### 3.17b `crm_cskh.api.customers.customer_pool` — GET (`L-23`, `L-25`, `L-26`)
 
-Endpoint kho khách hàng đầy đủ cho màn hình `/cskh/pool` (tương thích 1-1 với `crm_cskh.api.pool_ui.list` của PR #5):
+Endpoint kho khách hàng đầy đủ cho màn hình `/cskh/pool` (dùng chung 100% policy quyền, SQL phân trang `LIMIT`/`OFFSET` và response shape với `crm_cskh.api.pool_ui.list` của PR #5):
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
-| `page` | int | ✖ | Mặc định 1 |
-| `page_size` | int | ✖ | Mặc định 20, tối đa 100 |
-| `campaign` | string | ✖ | Lọc theo chiến dịch |
-| `state` | string | ✖ | `eligible` / `queued` / `assigned` / `revoked` / `closed` |
+| `page` | int | ✖ | Mặc định `1`, miền hợp lệ `1..1000000` (`parse_pagination`, `L-26`) |
+| `page_size` | int | ✖ | Mặc định `20`, miền hợp lệ `1..100` (`parse_pagination`, `L-26`) |
+| `campaign` | string | ✖ | Lọc theo chiến dịch (`derived_campaign`) |
+| `state` | string | ✖ | `eligible` / `queued` / `assigned` / `conflict` / `revoked` / `closed` / `invalid` |
 | `source` | string | ✖ | Lọc `CRM Lead.source` |
-| `batch` | string | ✖ | Lọc theo `CSKH Import Batch` qua `CSKH Import Batch Lead` (kể cả khách chưa có `Work Item` và khách được reuse qua nhiều batch) |
-| `search` | string | ✖ | Tìm theo tên/SĐT/mã lead (bị từ chối `403 FORBIDDEN` đối với `CSKH BOD Viewer`) |
+| `batch` | string | ✖ | Lọc theo `CSKH Import Batch` qua `CSKH Import Batch Lead` (kể cả khách chưa có `Work Item` và khách được reuse qua nhiều batch) hoặc `CSKH Distribution Run` |
+| `search` | string | ✖ | Tìm theo tên/SĐT (`0...` hoặc `+84...`)/mã lead (bị từ chối `403 FORBIDDEN` đối với `CSKH BOD Viewer`) |
 
 **Response 200**
 
@@ -600,28 +600,34 @@ Endpoint kho khách hàng đầy đủ cho màn hình `/cskh/pool` (tương thí
       "work_item": null,
       "lead": "CRM-LEAD-2026-00001",
       "display_name": "Nguyễn Thị Mai",
-      "is_placeholder_name": false,
       "phone": "+84900000010",
       "source": "Zalo Official",
-      "lead_status": "New",
+      "campaign": "",
+      "campaign_title": "",
       "state": "eligible",
-      "campaign": null,
-      "campaign_title": null,
-      "campaign_code": null,
-      "assigned_to": null,
-      "assigned_at": null
+      "owner": "",
+      "created_at": "2026-11-03 10:00:00.000000"
     }
   ],
   "total": 1,
+  "unique_customers": 1,
+  "work_items": 0,
   "page": 1,
   "page_size": 20,
   "as_of": "…"
 }
 ```
 
-- Với `CSKH CRM Admin` (`scope = "system"`) và `CSKH BOD Viewer` (`scope = "all"`): duyệt từ `CSKH Identity Index ⋈ CRM Lead`, nối Work Item mới nhất (nếu có) ⇒ hiển thị đầy đủ cả khách mới import chưa có `Work Item` (`work_item = null`, `state = "eligible"`), và với `CSKH BOD Viewer` luôn ẩn `phone = null`, `display_name = ""`.
-- Với `Sales Manager` (`scope = "team"`): chỉ trả các `CSKH Work Item` thuộc nhánh team / campaign được đọc của Leader, kết hợp lọc `batch` qua `CSKH Import Batch Lead`.
+- Với `CSKH CRM Admin` (`scope = "system"`) và `CSKH BOD Viewer` (`scope = "all"`): hiển thị đầy đủ cả khách mới import chưa có `Work Item` (`work_item = null`, `state = "eligible"`), và với `CSKH BOD Viewer` luôn ẩn `phone = null`, `display_name = ""`.
+- Với `Sales Manager` (`scope = "team"`, **`L-23`**): áp đồng thời `_team_lead_authorization_clauses`, `_scoped_wi_predicate` và `_scoped_ac_predicate`:
+  1. Lead phải thuộc phạm vi team hiện tại (có `Work Item` trong scope team hoặc `lead_owner ∈ team_users`);
+  2. Lead **không** có bất kỳ `Work Item` `assigned` nào ngoài `team_users`;
+  3. Lead **không** có `Work Item` `queued` trong campaign riêng (`team_scope IS NOT NULL`) ngoài `team_nodes`;
+  4. Lead **không** có `CSKH Active Claim` ngoài `team_nodes` / `team_users`;
+  5. `CRM Lead.lead_owner` trống / `'Administrator'` hoặc thuộc `team_users`.
+  Nhờ đó lịch sử `revoked`/`closed` cũ tại Đội A **tuyệt đối không** cho phép `Leader A` thấy khách đang active/queued/claimed/owned ở Đội B qua bất kỳ đường `items`, `total`, `unique_customers`, `work_items`, `search`, `campaign`, `source` hay `batch`.
 - Với `Sales User`: từ chối `403 FORBIDDEN`.
+- Input `page`/`page_size`/`state` không hợp lệ trả ổn định HTTP `400 INVALID_REQUEST` (`L-26`).
 
 ### 3.18 `crm_cskh.api.dashboard.distribution` — GET
 
@@ -845,6 +851,15 @@ và tham số request, đồng thời bổ sung các cập nhật contract sau �
    - Hoặc nếu giữ SQL riêng trong `pool_ui.py`, có thể gọi trực tiếp 2 helper đã export sẵn tại `crm_cskh.services.reporting`: `lead_in_batch_clause(batch, lead_expr="l.name")` (nhánh Admin/BOD) và `work_item_in_batch_clause(batch, alias="wi")` (nhánh Leader).
 3. **Migration khi cập nhật môi trường tích hợp:** Chạy `bench --site <site> migrate` (tạo bảng + index `tabCSKH Import Batch Lead`) và chạy lại seed phân quyền (`set_p1_permissions.py` / `seed_demo.py`) nếu site đã tạo trước đó.
 
+### 6.3. Bàn giao đồng bộ `L-23` & `L-26` trên Backend để T1A tích hợp vào PR #5
+
+1. **`L-23` tại `reporting.customer_pool` và `customers.customer_pool`:**
+   - [`services/reporting.py`](../../apps/crm_cskh/crm_cskh/services/reporting.py) đã bổ sung đầy đủ `_scoped_wi_predicate`, `_scoped_ac_predicate`, `_team_lead_authorization_clauses`, `filter_team_authorized_leads` và cập nhật `reporting.customer_pool` phân trang trực tiếp bằng SQL (`LIMIT`/`OFFSET`), dùng **đúng 100% policy quyền hiện hành của `pool_ui.list` trên PR #5 (`3f07b9b`)**.
+   - Khi merge vào PR #5: không có bất kỳ xung đột file nào với `pool_ui.py` hoặc `_ui_params.py`; cả đường gọi UI (`pool_ui.list`) lẫn đường gọi trực tiếp backend (`customers.customer_pool` / `reporting.customer_pool`) đều bảo vệ chặt `L-23`. (Tùy chọn: `pool_ui.py` có thể giữ nguyên hoặc tái sử dụng trực tiếp các hàm `reporting._team_lead_authorization_clauses` / `reporting.filter_team_authorized_leads` / `reporting.customer_pool`).
+2. **`L-26` trên các đường Backend (`api/_params.py`, `ownership.history`, `customers.pool_list`, `customers.customer_pool`, `customers.my_list`):**
+   - [`api/_params.py`](../../apps/crm_cskh/crm_cskh/api/_params.py) đã bổ sung `parse_int`, `parse_pagination` (`page ∈ 1..1_000_000`, `page_size ∈ 1..100`) và `parse_optional_str` (cùng quy ước với `_ui_params.py` của PR #5: từ chối `bool`, số thực `"1.5"`, chuỗi chữ `"abc"`, `<= 0`, vượt trần bằng `InvalidRequest` → HTTP `400` kèm `code = "INVALID_REQUEST"`, `p1_code = "INVALID_REQUEST"`).
+   - Áp dụng trực tiếp tại cả tầng API và tầng service cho `ownership.history(limit ∈ 1..200)`, `customers.pool_list`, `customers.customer_pool`, `customers.my_list` (cùng `campaigns.save_rule` `version` và `distribution.enqueue_run` `expected_rule_version`).
+
 ---
 
 ## 7. Bằng chứng runtime đã kiểm chứng
@@ -854,9 +869,9 @@ giữa lời gọi hàm trong tiến trình test (`service_unit_test`) và giao 
 
 | Hạng mục | Lớp bằng chứng | Phạm vi kiểm chứng | Kết quả | Bằng chứng |
 |---|---|---|---|---|
-| Suite P1 (8 module) | `service_unit_test` | Per-method JUnit gate trên inventory P1 riêng (`199` method) | **199/199 PASS** | [`evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json) |
+| Suite P1 (8 module) | `service_unit_test` | Per-method JUnit gate trên inventory P1 riêng (`205` method) | **205/205 PASS** | [`evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json) |
 | Chaos / rollback / retry (unit + child process) | `service_unit_test` + `os_process_crash` | `unittest.mock.patch` + tiến trình con `os._exit(137)` cho cả `import_worker` và `distribution_worker`; 0 nhánh gây lỗi trong code production | **11/11 PASS** (unit) & **4/4 PASS** (harness) | [`evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml), [`evidence/p1-runtime-20261102/chaos/p1-chaos-report.json`](../../deploy/dev/evidence/p1-runtime-20261102/chaos/p1-chaos-report.json) |
-| HTTP transport P1 + RQ workers | `http` | HTTP thật tới `bench serve` + RQ worker `short`/`long` thật, cookie phiên + CSRF thật, 5 actor đã seed + `Guest`, đối chiếu SQL trực tiếp cho `L-16..L-22` và phân phối nền RQ | **75/75 PASS** | [`evidence/p1-runtime-20261102/http/p1-http-transport.json`](../../deploy/dev/evidence/p1-runtime-20261102/http/p1-http-transport.json) |
+| HTTP transport P1 + RQ workers | `http` | HTTP thật tới `bench serve` + RQ worker `short`/`long` thật, cookie phiên + CSRF thật, 6 actor đã seed (`Admin`, `BOD`, `Leader 1/2`, `Staff A/B`) + `Guest`, đối chiếu SQL trực tiếp cho `L-16..L-23`, `L-25`, `L-26` và phân phối nền RQ | **103/103 PASS** | [`evidence/p1-runtime-20261102/http/p1-http-transport.json`](../../deploy/dev/evidence/p1-runtime-20261102/http/p1-http-transport.json) |
 | Benchmark 10k import + 10k phân phối + RQ enqueue | `runtime_benchmark` | 2 đợt × 10.000 dòng (`0 → 10k`, `10k → 20k`) + lô hỗn hợp & RQ capacity `30/42/28` (`api_enqueue_seconds = 0,222s`) trên `p1bench.localhost` | **Số đo thực tế (0 lỗi, 0 trùng)** | [`evidence/p1-runtime-20261102/benchmark/`](../../deploy/dev/evidence/p1-runtime-20261102/benchmark/) |
 
 > **Giới hạn:** probe HTTP phủ giao vận trực tiếp tới `bench serve` của Frappe; tầng reverse

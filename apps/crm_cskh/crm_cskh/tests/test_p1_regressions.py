@@ -28,7 +28,9 @@ motivated it.
 | L-19 / L-20 | Import `>200` rows truncated worker input / missed error artifact rows / double-counted errors | `TestL19L20LargeImportAndErrorArtifact` |
 | L-21 | `api.ownership.revoke` used `bool(return_to_pool)`, turning `"false"`/`"0"` into `True` | `TestL21RevokeBooleanParsing` |
 | L-22 | Leader dashboard missed unassigned (`assigned_to IS NULL`) `revoked`/`closed`/`active_claims` and diverged on `unique_customers` | `TestL22LeaderUnassignedAndUniqueCustomers` |
+| L-23 | `reporting.customer_pool` / `customers.customer_pool` admitted historical `revoked`/`closed` Team A leads now active/owned in Team B | `TestL23BackendCustomerPoolCrossTeamIsolation` |
 | L-25 | Import ignored `name`/`source` mapping, lacked `Import Batch ↔ Lead` relation for pool filtering without Work Items / across reused batches | `TestL25ImportMappingAndBatchLink` |
+| L-26 | `ownership.history`, `customers.pool_list`, `customers.customer_pool`, `customers.my_list` raised HTTP 500 `ValueError` on invalid `page`/`page_size`/`limit` | `TestL26BackendPaginationAndLimitValidation` |
 """
 
 import csv
@@ -2167,12 +2169,20 @@ class TestL25ImportMappingAndBatchLink(P1TestCase):
 		with self.assertRaises(Forbidden):
 			customers_api.customer_pool(batch=prev_b1["batch"])
 
-		frappe.set_user(self.leader_a)
+		frappe.set_user(self.leader_b)
 		self.assertEqual(customers_api.customer_pool(batch=prev_b2["batch"])["total"], 0)
+
+		frappe.set_user(self.leader_a)
+		leader_b2_before = customers_api.customer_pool(batch=prev_b2["batch"], page_size=50)
+		self.assertEqual({item["lead"] for item in leader_b2_before["items"]}, {lead_shared, lead_ph})
+		self.assertNotIn(lead_only_b2, {item["lead"] for item in leader_b2_before["items"]})
 		camp_a = self.make_campaign(team_scope=self.team_a)
 		self.make_work_item(camp_a, lead_only_b2, status="queued")
 		leader_b2_after = customers_api.customer_pool(batch=prev_b2["batch"], page_size=50)
-		self.assertEqual([item["lead"] for item in leader_b2_after["items"]], [lead_only_b2])
+		self.assertEqual(
+			{item["lead"] for item in leader_b2_after["items"]},
+			{lead_shared, lead_ph, lead_only_b2},
+		)
 
 	def test_retry_and_concurrent_multi_batch_race_keep_non_duplicate_links_and_counters(self):
 		from crm_cskh.tests.test_p1_concurrency import _run_in_thread
@@ -2340,6 +2350,400 @@ class TestL25ImportMappingAndBatchLink(P1TestCase):
 					(f"Contender R2-{idx}", "Source R2"),
 				},
 			)
+
+
+class TestL23BackendCustomerPoolCrossTeamIsolation(P1TestCase):
+	"""L-23 — `reporting.customer_pool` and `customers.customer_pool` must never
+	let historical `revoked`/`closed` Work Items in Team A leak a lead currently
+	active, queued in another team's private campaign, claimed, or owned outside
+	Team A (matching `pool_ui.list` policy 100%).
+	"""
+
+	def test_revoked_or_closed_team_a_history_never_leaks_foreign_active_lead_in_reporting_or_api(self):
+		from crm_cskh.api import customers as customers_api
+		from crm_cskh.services import ownership as ownership_service
+		from crm_cskh.services.errors import Forbidden
+
+		frappe.set_user("Administrator")
+		campaign_a = self.make_campaign(title="Chiến dịch Đội A L23", team_scope=self.team_a)
+		campaign_b = self.make_campaign(title="Chiến dịch Riêng Đội B L23", team_scope=self.team_b)
+		campaign_shared = self.make_campaign(title="Chiến dịch Chung L23", team_scope=None)
+
+		# Baseline Team A positive leads: 1 assigned (`staff_a`), 1 queued (`campaign_a`), 1 revoked-only (`campaign_a`).
+		lead_active_a = self.make_canonical_lead()
+		wi_active_a = self.make_work_item(campaign_a, lead_active_a, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_active_a,
+				"campaign": campaign_a,
+				"work_item": wi_active_a,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_active_a,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="L-23 baseline Team A",
+			request_id=self.unique_key("l23-base-a"),
+		)
+
+		lead_queued_a = self.make_canonical_lead()
+		wi_queued_a = self.make_work_item(campaign_a, lead_queued_a, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_queued_a,
+				"campaign": campaign_a,
+				"work_item": wi_queued_a,
+			}
+		).insert(ignore_permissions=True)
+
+		lead_revoked_stay_a = self.make_canonical_lead()
+		stay_a_phone = frappe.db.get_value("CRM Lead", lead_revoked_stay_a, "mobile_no")
+		self.make_work_item(campaign_a, lead_revoked_stay_a, status="revoked")
+
+		frappe.set_user(self.leader_a)
+		baseline_a = customers_api.customer_pool(page=1, page_size=100)
+		baseline_total_a = baseline_a["total"]
+		baseline_wi_a = baseline_a["work_items"]
+
+		# 1. T1C exact reproduction: assigned in Team A -> permanently revoked (`return_to_pool=False`)
+		#    -> assigned to `staff_c` in Team B's private campaign `campaign_b`, plus linked to an Import Batch.
+		frappe.set_user("Administrator")
+		src_b = self.unique_key("L23SrcTeamB")
+		name_b = f"Khách Bí Mật Đội B {self.unique_key('nm')}"
+		lead_revoked_to_b = self.make_canonical_lead()
+		raw_phone_b = frappe.db.get_value("CRM Lead", lead_revoked_to_b, "mobile_no")
+		alt_phone_b = "0" + raw_phone_b[3:] if raw_phone_b.startswith("+84") else raw_phone_b
+		frappe.db.set_value(
+			"CRM Lead",
+			lead_revoked_to_b,
+			{"first_name": name_b, "lead_name": name_b, "source": src_b},
+			update_modified=False,
+		)
+		l23_file = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": f"l23-{self.unique_key('csv')}.csv",
+				"is_private": 1,
+				"content": f"phone\n{raw_phone_b}\n".encode(),
+			}
+		).insert(ignore_permissions=True)
+		batch_doc = frappe.get_doc(
+			{
+				"doctype": "CSKH Import Batch",
+				"source_file": l23_file.name,
+				"checksum": self.unique_key("l23-sha"),
+				"status": "COMPLETED",
+				"idempotency_key": self.unique_key("l23-batch"),
+				"total_rows": 1,
+				"valid_rows": 1,
+				"created_rows": 1,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Import Batch Lead",
+				"import_batch": batch_doc.name,
+				"lead": lead_revoked_to_b,
+				"outcome": "created",
+			}
+		).insert(ignore_permissions=True)
+
+		wi_a_old = self.make_work_item(campaign_a, lead_revoked_to_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_revoked_to_b,
+				"campaign": campaign_a,
+				"work_item": wi_a_old,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_a_old,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="Initial Team A",
+			request_id=self.unique_key("l23-asg-a"),
+		)
+		ownership_service.revoke(
+			wi_a_old,
+			expected_owner=self.staff_a,
+			actor=self.admin_user,
+			reason="Permanent revoke from Team A",
+			request_id=self.unique_key("l23-rev-a"),
+			return_to_pool=False,
+		)
+		wi_b_now = self.make_work_item(campaign_b, lead_revoked_to_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_revoked_to_b,
+				"campaign": campaign_b,
+				"work_item": wi_b_now,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_b_now,
+			self.staff_c,
+			actor=self.admin_user,
+			reason="Assign to Team B",
+			request_id=self.unique_key("l23-asg-b"),
+		)
+
+		# 2. Lead closed in Team A, now queued with Active Claim in Team B's private campaign.
+		lead_closed_to_b_queued = self.make_canonical_lead()
+		self.make_work_item(campaign_a, lead_closed_to_b_queued, status="closed")
+		wi_b_queued = self.make_work_item(campaign_b, lead_closed_to_b_queued, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_closed_to_b_queued,
+				"campaign": campaign_b,
+				"work_item": wi_b_queued,
+			}
+		).insert(ignore_permissions=True)
+
+		# 3. Lead revoked in Team A, now assigned to `staff_c` in a shared campaign (`team_scope=None`).
+		lead_revoked_to_shared_b = self.make_canonical_lead()
+		self.make_work_item(campaign_a, lead_revoked_to_shared_b, status="revoked")
+		wi_shared_b = self.make_work_item(
+			campaign_shared, lead_revoked_to_shared_b, status="assigned", assigned_to=self.staff_c
+		)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_revoked_to_shared_b,
+				"campaign": campaign_shared,
+				"work_item": wi_shared_b,
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value(
+			"CRM Lead", lead_revoked_to_shared_b, "lead_owner", self.staff_c, update_modified=False
+		)
+
+		# 4. Lead revoked in Team A whose `lead_owner` was set externally to `staff_c`.
+		lead_revoked_ext_owner = self.make_canonical_lead()
+		self.make_work_item(campaign_a, lead_revoked_ext_owner, status="revoked")
+		frappe.db.set_value(
+			"CRM Lead", lead_revoked_ext_owner, "lead_owner", self.staff_c, update_modified=False
+		)
+
+		# --- Verify BOTH `reporting.customer_pool` AND `customers_api.customer_pool` as Leader A ---
+		frappe.set_user(self.leader_a)
+		for pool_a in (
+			reporting.customer_pool(self.leader_a, page=1, page_size=100),
+			customers_api.customer_pool(page=1, page_size=100),
+		):
+			leads_a = {row["lead"]: row for row in pool_a["items"]}
+			self.assertNotIn(lead_revoked_to_b, leads_a)
+			self.assertNotIn(lead_closed_to_b_queued, leads_a)
+			self.assertNotIn(lead_revoked_to_shared_b, leads_a)
+			self.assertNotIn(lead_revoked_ext_owner, leads_a)
+
+			serialized_a = json.dumps(pool_a, default=str)
+			self.assertNotIn(raw_phone_b, serialized_a)
+			self.assertNotIn(alt_phone_b, serialized_a)
+			self.assertNotIn(self.staff_c, serialized_a)
+			self.assertNotIn(campaign_b, serialized_a)
+			self.assertNotIn("Chiến dịch Riêng Đội B L23", serialized_a)
+
+			# Positive controls for Leader A remain intact and exact.
+			self.assertEqual(leads_a[lead_active_a]["state"], "assigned")
+			self.assertEqual(leads_a[lead_active_a]["owner"], self.staff_a)
+			self.assertEqual(leads_a[lead_queued_a]["state"], "queued")
+			self.assertEqual(leads_a[lead_revoked_stay_a]["state"], "revoked")
+			self.assertEqual(pool_a["total"], baseline_total_a)
+			self.assertEqual(pool_a["unique_customers"], baseline_total_a)
+			self.assertEqual(pool_a["work_items"], baseline_wi_a)
+
+		camp_a_pool = customers_api.customer_pool(page=1, page_size=100, campaign=campaign_a)
+		self.assertEqual(camp_a_pool["total"], 3)
+		self.assertEqual(camp_a_pool["unique_customers"], 3)
+		self.assertEqual(camp_a_pool["work_items"], 3)
+
+		# Search & filter oracles as Leader A (`search`, `campaign`, `source`, `batch`) all return 0.
+		for q in (raw_phone_b, alt_phone_b, name_b, lead_revoked_to_b):
+			res_q = customers_api.customer_pool(page=1, page_size=20, search=q)
+			self.assertEqual(res_q["items"], [])
+			self.assertEqual(res_q["total"], 0)
+			self.assertEqual(res_q["unique_customers"], 0)
+			self.assertEqual(res_q["work_items"], 0)
+
+		for kwargs in (
+			{"campaign": campaign_b},
+			{"source": src_b},
+			{"campaign": campaign_a, "source": src_b},
+			{"batch": batch_doc.name},
+		):
+			res_f = customers_api.customer_pool(page=1, page_size=20, **kwargs)
+			self.assertEqual(res_f["items"], [])
+			self.assertEqual(res_f["total"], 0)
+			self.assertEqual(res_f["unique_customers"], 0)
+			self.assertEqual(res_f["work_items"], 0)
+
+		stay_search = customers_api.customer_pool(page=1, page_size=20, search=stay_a_phone)
+		self.assertEqual([r["lead"] for r in stay_search["items"]], [lead_revoked_stay_a])
+		self.assertEqual(stay_search["total"], 1)
+
+		# --- Positive controls for Leader B, CRM Admin, BOD Viewer, and Staff denial ---
+		frappe.set_user(self.leader_b)
+		pool_b = customers_api.customer_pool(page=1, page_size=100)
+		leads_b = {row["lead"]: row for row in pool_b["items"]}
+		self.assertEqual(leads_b[lead_revoked_to_b]["state"], "assigned")
+		self.assertEqual(leads_b[lead_revoked_to_b]["owner"], self.staff_c)
+		self.assertEqual(leads_b[lead_revoked_to_b]["campaign"], campaign_b)
+		self.assertEqual(leads_b[lead_closed_to_b_queued]["state"], "queued")
+		self.assertEqual(leads_b[lead_closed_to_b_queued]["campaign"], campaign_b)
+		self.assertEqual(leads_b[lead_revoked_to_shared_b]["state"], "assigned")
+		self.assertEqual(leads_b[lead_revoked_to_shared_b]["owner"], self.staff_c)
+		self.assertNotIn(lead_active_a, leads_b)
+		self.assertNotIn(lead_revoked_stay_a, leads_b)
+		pool_b_batch = customers_api.customer_pool(batch=batch_doc.name)
+		self.assertEqual(pool_b_batch["total"], 1)
+		self.assertEqual(pool_b_batch["work_items"], 1)
+
+		frappe.set_user(self.admin_user)
+		pool_admin = customers_api.customer_pool(page=1, page_size=100, source=src_b)
+		self.assertEqual(pool_admin["total"], 1)
+		self.assertEqual(pool_admin["items"][0]["lead"], lead_revoked_to_b)
+		self.assertEqual(pool_admin["items"][0]["state"], "assigned")
+		self.assertEqual(pool_admin["items"][0]["campaign"], campaign_b)
+		self.assertEqual(pool_admin["items"][0]["owner"], self.staff_c)
+		self.assertEqual(pool_admin["items"][0]["phone"], raw_phone_b)
+
+		frappe.set_user(self.bod_user)
+		pool_bod = customers_api.customer_pool(page=1, page_size=100, source=src_b)
+		self.assertEqual(pool_bod["total"], 1)
+		self.assertEqual(pool_bod["items"][0]["state"], "assigned")
+		self.assertIsNone(pool_bod["items"][0]["phone"])
+		self.assertEqual(pool_bod["items"][0]["display_name"], "")
+		with self.assertRaises(Forbidden):
+			customers_api.customer_pool(search=raw_phone_b)
+
+		frappe.set_user(self.staff_a)
+		with self.assertRaises(Forbidden):
+			customers_api.customer_pool()
+		self.assertEqual(reporting.customer_pool(self.staff_a)["total"], 0)
+
+
+class TestL26BackendPaginationAndLimitValidation(P1TestCase):
+	"""L-26 — Backend endpoints `ownership.history`, `customers.pool_list`,
+	`customers.customer_pool`, and `customers.my_list` (plus `campaigns.save_rule`
+	and `distribution.enqueue_run`) must validate integer parameters strictly and
+	return HTTP 400 `INVALID_REQUEST`, never HTTP 500 `ValueError`.
+	"""
+
+	def test_invalid_pagination_and_limit_raise_400_invalid_request_on_backend_endpoints(self):
+		from crm_cskh.api import campaigns as campaigns_api
+		from crm_cskh.api import customers as customers_api
+		from crm_cskh.api import ownership as ownership_api
+		from crm_cskh.services.errors import InvalidRequest
+
+		frappe.set_user("Administrator")
+		campaign = self.make_campaign(team_scope=self.team_a)
+		lead = self.make_canonical_lead()
+		wi = self.make_work_item(campaign, lead, status="queued")
+		frappe.get_doc(
+			{"doctype": "CSKH Active Claim", "lead": lead, "campaign": campaign, "work_item": wi}
+		).insert(ignore_permissions=True)
+		ownership_assign(
+			wi,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="L-26 history seed",
+			request_id=self.unique_key("l26-hist"),
+		)
+
+		frappe.set_user(self.admin_user)
+		invalid_pagination_cases = [
+			{"page": "abc", "page_size": 20},
+			{"page": 1, "page_size": "xyz"},
+			{"page": 0, "page_size": 20},
+			{"page": -1, "page_size": 20},
+			{"page": 1, "page_size": 0},
+			{"page": 1, "page_size": -5},
+			{"page": 1, "page_size": 101},
+			{"page": 1_000_001, "page_size": 20},
+			{"page": "1.5", "page_size": 20},
+			{"page": True, "page_size": 20},
+			{"page": 1, "page_size": False},
+		]
+
+		for fn in (
+			customers_api.pool_list,
+			customers_api.customer_pool,
+			customers_api.my_list,
+			lambda **kw: reporting.pool_list(self.admin_user, **kw),
+			lambda **kw: reporting.customer_pool(self.admin_user, **kw),
+			lambda **kw: reporting.my_list(self.staff_a, **kw),
+		):
+			for bad_kwargs in invalid_pagination_cases:
+				with self.assertRaises(InvalidRequest) as ctx:
+					fn(**bad_kwargs)
+				self.assertEqual(ctx.exception.http_status, 400)
+				self.assertEqual(ctx.exception.code, "INVALID_REQUEST")
+
+			ok_res = fn(page="1", page_size="5")
+			self.assertEqual(ok_res["page"], 1)
+			self.assertEqual(ok_res["page_size"], 5)
+			empty_res = fn(page="", page_size="")
+			self.assertEqual(empty_res["page"], 1)
+			self.assertEqual(empty_res["page_size"], 20)
+
+		# Direct `ownership.history` validation on `limit` and `work_item`.
+		for bad_limit in ("abc", "1.5", 0, "0", -1, "-5", 201, "201", True, False, [10]):
+			with self.assertRaises(InvalidRequest) as lim_ctx:
+				ownership_api.history(work_item=wi, limit=bad_limit)
+			self.assertEqual(lim_ctx.exception.http_status, 400)
+			self.assertEqual(lim_ctx.exception.code, "INVALID_REQUEST")
+
+		for bad_wi in (None, "", "   ", 123):
+			with self.assertRaises(InvalidRequest) as wi_ctx:
+				ownership_api.history(work_item=bad_wi, limit=50)
+			self.assertEqual(wi_ctx.exception.http_status, 400)
+			self.assertEqual(wi_ctx.exception.code, "INVALID_REQUEST")
+
+		ok_hist = ownership_api.history(work_item=wi, limit="10")
+		self.assertEqual(ok_hist["work_item"], wi)
+		self.assertGreaterEqual(ok_hist["total"], 1)
+		default_hist = ownership_api.history(work_item=wi, limit="")
+		self.assertEqual(default_hist["total"], ok_hist["total"])
+
+		# Verify P1 HTTP response normalizer produces HTTP 400 + stable `INVALID_REQUEST` envelope.
+		clear_p1_error_context()
+		with self.assertRaises(InvalidRequest) as http_ctx:
+			ownership_api.history(work_item=wi, limit="abc")
+		exc = http_ctx.exception
+		resp = _DummyResponse(
+			exc.http_status_code,
+			{
+				"exc_type": type(exc).__name__,
+				"_error_message": str(exc),
+			},
+		)
+		req = _DummyRequest(path="/api/method/crm_cskh.api.ownership.history")
+		out = normalize_p1_error_response(normalize_error_response(resp, req), req)
+		self.assertEqual(out.status_code, 400)
+		set_body = json.loads(
+			out.data.decode("utf-8") if isinstance(out.data, (bytes, bytearray)) else out.data
+		)
+		self.assertEqual(set_body["code"], "INVALID_REQUEST")
+		self.assertEqual(set_body["p1_code"], "INVALID_REQUEST")
+		self.assertEqual(set_body["exc_type"], "INVALID_REQUEST")
+
+		# Bonus hardening: `campaigns.save_rule` rejects booleans and invalid `version`.
+		for bad_rule_kwargs in (
+			{"campaign": campaign, "user": self.staff_a, "weight": True},
+			{"campaign": campaign, "user": self.staff_a, "weight": 10, "capacity_limit": True},
+			{"campaign": campaign, "user": self.staff_a, "weight": 10, "version": "abc"},
+			{"campaign": campaign, "user": self.staff_a, "weight": 10, "version": 0},
+		):
+			with self.assertRaises(InvalidRequest) as rule_ctx:
+				campaigns_api.save_rule(**bad_rule_kwargs)
+			self.assertEqual(rule_ctx.exception.http_status, 400)
+			self.assertEqual(rule_ctx.exception.code, "INVALID_REQUEST")
 
 
 if __name__ == "__main__":

@@ -685,6 +685,126 @@ def setup_probe_fixtures() -> dict[str, object]:
         )
         l25_b2_file.insert(ignore_permissions=True)
 
+        # L-23 cross-team fixture:
+        # 1) `l23_lead_b` assigned in Team 1 (`camp_t1`) -> permanently revoked (`return_to_pool=False`)
+        #    -> assigned to `staff.c@dev.local` in Team 2 (`camp_t2`).
+        # 2) `l23_stay_a` assigned in Team 1 (`camp_t1`) -> permanently revoked (`return_to_pool=False`)
+        #    and NOT active anywhere else (positive control for Team 1).
+        l23_src_b = f"L23HttpSrcB-{run_tag}"
+        l23_src_a = f"L23HttpSrcA-{run_tag}"
+        l23_lead_b = create_canonical_lead(f"L23-ToTeam2-{run_tag}")
+        l23_raw_phone_b = str(
+            frappe.db.get_value("CRM Lead", l23_lead_b, "mobile_no") or ""
+        )
+        l23_local_phone_b = (
+            "0" + l23_raw_phone_b[3:]
+            if l23_raw_phone_b.startswith("+84")
+            else l23_raw_phone_b
+        )
+        frappe.db.set_value(
+            "CRM Lead",
+            l23_lead_b,
+            {
+                "first_name": f"Khach Doi2 {run_tag}",
+                "lead_name": f"Khach Doi2 {run_tag}",
+                "source": l23_src_b,
+            },
+            update_modified=False,
+        )
+        wi_l23_a = frappe.get_doc(
+            {
+                "doctype": "CSKH Work Item",
+                "campaign": camp_t1.name,
+                "lead": l23_lead_b,
+                "status": "queued",
+            }
+        )
+        wi_l23_a.insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": l23_lead_b,
+                "campaign": camp_t1.name,
+                "work_item": wi_l23_a.name,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            wi_l23_a.name,
+            "staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 HTTP Team1 initial",
+            request_id=f"http-l23-asg-a-{run_tag}",
+        )
+        ownership.revoke(
+            wi_l23_a.name,
+            expected_owner="staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 HTTP Team1 permanent revoke",
+            request_id=f"http-l23-rev-a-{run_tag}",
+            return_to_pool=False,
+        )
+        wi_l23_b = frappe.get_doc(
+            {
+                "doctype": "CSKH Work Item",
+                "campaign": camp_t2.name,
+                "lead": l23_lead_b,
+                "status": "queued",
+            }
+        )
+        wi_l23_b.insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": l23_lead_b,
+                "campaign": camp_t2.name,
+                "work_item": wi_l23_b.name,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            wi_l23_b.name,
+            "staff.c@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 HTTP Team2 active",
+            request_id=f"http-l23-asg-b-{run_tag}",
+        )
+
+        l23_stay_a = create_canonical_lead(f"L23-StayTeam1-{run_tag}")
+        frappe.db.set_value(
+            "CRM Lead", l23_stay_a, "source", l23_src_a, update_modified=False
+        )
+        wi_l23_stay = frappe.get_doc(
+            {
+                "doctype": "CSKH Work Item",
+                "campaign": camp_t1.name,
+                "lead": l23_stay_a,
+                "status": "queued",
+            }
+        )
+        wi_l23_stay.insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": l23_stay_a,
+                "campaign": camp_t1.name,
+                "work_item": wi_l23_stay.name,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            wi_l23_stay.name,
+            "staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 HTTP stay Team1 assign",
+            request_id=f"http-l23-stay-asg-{run_tag}",
+        )
+        ownership.revoke(
+            wi_l23_stay.name,
+            expected_owner="staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 HTTP stay Team1 revoke",
+            request_id=f"http-l23-stay-rev-{run_tag}",
+            return_to_pool=False,
+        )
+
         frappe.db.commit()
         return {
             "campaign": campaign.name,
@@ -703,6 +823,13 @@ def setup_probe_fixtures() -> dict[str, object]:
                 "named": normalize_vn_phone(l25_p_named),
                 "missing": normalize_vn_phone(l25_p_missing),
                 "b2": normalize_vn_phone(l25_p_b2),
+            },
+            "l23": {
+                "lead_b": l23_lead_b,
+                "local_phone_b": l23_local_phone_b,
+                "src_b": l23_src_b,
+                "lead_stay_a": l23_stay_a,
+                "src_a": l23_src_a,
             },
             "admin_roles": frappe.get_roles("crm.admin@dev.local"),
         }
@@ -1020,6 +1147,7 @@ def run() -> int:
     admin = login("admin", "crm.admin@dev.local", SEED_PASSWORD)
     bod = login("bod", "bod.viewer@dev.local", SEED_PASSWORD)
     leader = login("leader", "team1.leader@dev.local", SEED_PASSWORD)
+    leader_2 = login("leader-2", "team2.leader@dev.local", SEED_PASSWORD)
     staff_a = login("staff-a", "staff.a@dev.local", SEED_PASSWORD)
     staff_b = login("staff-b", "staff.b@dev.local", SEED_PASSWORD)
 
@@ -1167,6 +1295,9 @@ def run() -> int:
     l25_batch1_file = str(fixtures.get("l25_batch1_file") or "")
     l25_batch2_file = str(fixtures.get("l25_batch2_file") or "")
     l25_canonicals = dict(fixtures.get("l25_canonicals") or {})
+    camp_t1 = str(fixtures.get("camp_t1") or "")
+    camp_t2 = str(fixtures.get("camp_t2") or "")
+    l23_fx = dict(fixtures.get("l23") or {})
     admin_roles = set(fixtures.get("admin_roles") or [])
     if (
         not campaign
@@ -1175,6 +1306,9 @@ def run() -> int:
         or len(l21_items) != 8
         or not l25_batch1_file
         or not l25_batch2_file
+        or not camp_t1
+        or not camp_t2
+        or not l23_fx.get("lead_b")
     ):
         failures.append("p1-http-fixture-setup")
         write_evidence()
@@ -2356,6 +2490,198 @@ def run() -> int:
         and error_envelope(pool_denied_staff).get("code") == "FORBIDDEN",
         "GET customers.customer_pool rejects plain Sales User with HTTP 403 FORBIDDEN",
         actor="staff.a@dev.local",
+    )
+
+    # -- 14. L-23: Direct `customers.customer_pool` cross-team isolation ----
+    l23_lead_b = str(l23_fx.get("lead_b") or "")
+    l23_local_phone_b = str(l23_fx.get("local_phone_b") or "")
+    l23_src_b = str(l23_fx.get("src_b") or "")
+    l23_lead_stay_a = str(l23_fx.get("lead_stay_a") or "")
+    l23_src_a = str(l23_fx.get("src_a") or "")
+
+    l23_t1_src_b = get(
+        "p1-http-l23-customer-pool-leader1-foreign-source-zero",
+        leader,
+        f"/api/method/crm_cskh.api.customers.customer_pool?source={urllib.parse.quote(l23_src_b)}",
+    )
+    l23_t1_src_b_payload = body_payload(l23_t1_src_b)
+    check(
+        "p1-http-l23-customer-pool-leader1-foreign-source-zero",
+        l23_t1_src_b,
+        l23_t1_src_b["status"] == 200
+        and l23_t1_src_b_payload.get("items") == []
+        and int(l23_t1_src_b_payload.get("total", -1)) == 0
+        and int(l23_t1_src_b_payload.get("unique_customers", -1)) == 0
+        and int(l23_t1_src_b_payload.get("work_items", -1)) == 0,
+        "GET customers.customer_pool?source=<Team2-source> returns 0 items/totals for Team1 Leader despite old Team1 revoked history",
+        actor="team1.leader@dev.local",
+    )
+
+    l23_t1_search_b = get(
+        "p1-http-l23-customer-pool-leader1-foreign-phone-zero",
+        leader,
+        f"/api/method/crm_cskh.api.customers.customer_pool?search={l23_local_phone_b}",
+    )
+    l23_t1_search_b_payload = body_payload(l23_t1_search_b)
+    check(
+        "p1-http-l23-customer-pool-leader1-foreign-phone-zero",
+        l23_t1_search_b,
+        l23_t1_search_b["status"] == 200
+        and l23_t1_search_b_payload.get("items") == []
+        and int(l23_t1_search_b_payload.get("total", -1)) == 0
+        and int(l23_t1_search_b_payload.get("work_items", -1)) == 0,
+        "GET customers.customer_pool?search=<Team2-phone> returns 0 items/totals for Team1 Leader (zero PII/owner/campaign leak)",
+        actor="team1.leader@dev.local",
+    )
+
+    l23_t1_camp_a = get(
+        "p1-http-l23-customer-pool-leader1-own-campaign",
+        leader,
+        f"/api/method/crm_cskh.api.customers.customer_pool?campaign={camp_t1}&page_size=100",
+    )
+    l23_t1_camp_a_payload = body_payload(l23_t1_camp_a)
+    l23_t1_camp_a_leads = {
+        str(r.get("lead")): r for r in (l23_t1_camp_a_payload.get("items") or [])
+    }
+    l23_t1_raw_json = json.dumps(l23_t1_camp_a_payload, ensure_ascii=False, default=str)
+    check(
+        "p1-http-l23-customer-pool-leader1-own-campaign",
+        l23_t1_camp_a,
+        l23_t1_camp_a["status"] == 200
+        and l23_lead_b not in l23_t1_camp_a_leads
+        and l23_lead_stay_a in l23_t1_camp_a_leads
+        and l23_t1_camp_a_leads[l23_lead_stay_a].get("state") == "revoked"
+        and "staff.c@dev.local" not in l23_t1_raw_json
+        and camp_t2 not in l23_t1_raw_json,
+        "GET customers.customer_pool?campaign=<Team1> excludes lead now active in Team2 while keeping Team1 revoked-only lead",
+        actor="team1.leader@dev.local",
+    )
+
+    l23_t1_stay_pos = get(
+        "p1-http-l23-customer-pool-leader1-own-revoked-positive",
+        leader,
+        f"/api/method/crm_cskh.api.customers.customer_pool?source={urllib.parse.quote(l23_src_a)}",
+    )
+    l23_t1_stay_payload = body_payload(l23_t1_stay_pos)
+    check(
+        "p1-http-l23-customer-pool-leader1-own-revoked-positive",
+        l23_t1_stay_pos,
+        l23_t1_stay_pos["status"] == 200
+        and int(l23_t1_stay_payload.get("total", -1)) == 1
+        and (l23_t1_stay_payload.get("items") or [{}])[0].get("lead") == l23_lead_stay_a
+        and (l23_t1_stay_payload.get("items") or [{}])[0].get("state") == "revoked",
+        "GET customers.customer_pool positive control returns Team1 revoked-only lead for Team1 Leader",
+        actor="team1.leader@dev.local",
+    )
+
+    l23_t2_pos = get(
+        "p1-http-l23-customer-pool-leader2-positive",
+        leader_2,
+        f"/api/method/crm_cskh.api.customers.customer_pool?source={urllib.parse.quote(l23_src_b)}",
+    )
+    l23_t2_payload = body_payload(l23_t2_pos)
+    l23_t2_item = (l23_t2_payload.get("items") or [{}])[0]
+    check(
+        "p1-http-l23-customer-pool-leader2-positive",
+        l23_t2_pos,
+        l23_t2_pos["status"] == 200
+        and int(l23_t2_payload.get("total", -1)) == 1
+        and int(l23_t2_payload.get("work_items", -1)) == 1
+        and l23_t2_item.get("lead") == l23_lead_b
+        and l23_t2_item.get("state") == "assigned"
+        and l23_t2_item.get("owner") == "staff.c@dev.local"
+        and l23_t2_item.get("campaign") == camp_t2,
+        "GET customers.customer_pool positive control returns reassigned lead with work_items=1 for Team2 Leader",
+        actor="team2.leader@dev.local",
+    )
+
+    # -- 15. L-26: Direct backend 400 INVALID_REQUEST on bad pagination/limit
+    for cid, opener, actor_email, url in (
+        (
+            "p1-http-l26-ownership-history-bad-limit-alpha",
+            admin,
+            "crm.admin@dev.local",
+            f"/api/method/crm_cskh.api.ownership.history?work_item={target_work_item}&limit=abc",
+        ),
+        (
+            "p1-http-l26-ownership-history-bad-limit-zero",
+            admin,
+            "crm.admin@dev.local",
+            f"/api/method/crm_cskh.api.ownership.history?work_item={target_work_item}&limit=0",
+        ),
+        (
+            "p1-http-l26-ownership-history-bad-limit-over-max",
+            admin,
+            "crm.admin@dev.local",
+            f"/api/method/crm_cskh.api.ownership.history?work_item={target_work_item}&limit=201",
+        ),
+        (
+            "p1-http-l26-pool-list-bad-page-alpha",
+            admin,
+            "crm.admin@dev.local",
+            "/api/method/crm_cskh.api.customers.pool_list?page=abc",
+        ),
+        (
+            "p1-http-l26-pool-list-bad-page-size-alpha",
+            leader,
+            "team1.leader@dev.local",
+            "/api/method/crm_cskh.api.customers.pool_list?page_size=xyz",
+        ),
+        (
+            "p1-http-l26-pool-list-bad-page-size-over-max",
+            bod,
+            "bod.viewer@dev.local",
+            "/api/method/crm_cskh.api.customers.pool_list?page=1&page_size=101",
+        ),
+        (
+            "p1-http-l26-customer-pool-bad-page-alpha",
+            admin,
+            "crm.admin@dev.local",
+            "/api/method/crm_cskh.api.customers.customer_pool?page=abc",
+        ),
+        (
+            "p1-http-l26-customer-pool-bad-page-size-zero",
+            leader,
+            "team1.leader@dev.local",
+            "/api/method/crm_cskh.api.customers.customer_pool?page=1&page_size=0",
+        ),
+        (
+            "p1-http-l26-customer-pool-bad-page-float",
+            bod,
+            "bod.viewer@dev.local",
+            "/api/method/crm_cskh.api.customers.customer_pool?page=1.5&page_size=20",
+        ),
+        (
+            "p1-http-l26-my-list-bad-page-alpha",
+            staff_a,
+            "staff.a@dev.local",
+            "/api/method/crm_cskh.api.customers.my_list?page=abc",
+        ),
+    ):
+        bad_resp = get(cid, opener, url)
+        bad_env = error_envelope(bad_resp)
+        check(
+            cid,
+            bad_resp,
+            bad_resp["status"] == 400
+            and bad_env.get("code") == "INVALID_REQUEST"
+            and bad_env.get("p1_code") == "INVALID_REQUEST",
+            f"GET {url.split('/api/method/')[-1]} returns HTTP 400 INVALID_REQUEST (never 500 ValueError)",
+            actor=actor_email,
+        )
+
+    l26_hist_ok = get(
+        "p1-http-l26-ownership-history-valid-limit",
+        admin,
+        f"/api/method/crm_cskh.api.ownership.history?work_item={target_work_item}&limit=10",
+    )
+    check(
+        "p1-http-l26-ownership-history-valid-limit",
+        l26_hist_ok,
+        l26_hist_ok["status"] == 200
+        and int(body_payload(l26_hist_ok).get("total", 0)) >= 2,
+        "GET ownership.history?limit=10 returns HTTP 200 positive control",
+        actor="crm.admin@dev.local",
     )
 
     write_evidence()
