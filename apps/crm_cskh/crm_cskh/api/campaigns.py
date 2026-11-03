@@ -10,6 +10,7 @@ import json
 import frappe
 from frappe.utils import now_datetime
 
+from crm_cskh.api._params import parse_bool
 from crm_cskh.services import eligibility
 from crm_cskh.services.errors import Forbidden, InvalidRequest, NotFound
 
@@ -158,6 +159,7 @@ def save_rule(campaign=None, user=None, weight=None, capacity_limit=0, team=None
 		raise InvalidRequest("The capacity must be an integer.") from exc
 	if capacity_limit < 0:
 		raise InvalidRequest("The capacity must not be negative.")
+	enabled_flag = parse_bool(enabled, default=True, field="enabled")
 
 	existing = frappe.db.get_value(
 		"CSKH Assignment Rule",
@@ -178,7 +180,7 @@ def save_rule(campaign=None, user=None, weight=None, capacity_limit=0, team=None
 	doc.weight = weight
 	doc.capacity_limit = capacity_limit
 	doc.team = team
-	doc.enabled = 1 if enabled else 0
+	doc.enabled = 1 if enabled_flag else 0
 	doc.save(ignore_permissions=True)
 
 	# The rule version of the campaign is bumped so an old preview is refused.
@@ -192,6 +194,6 @@ def save_rule(campaign=None, user=None, weight=None, capacity_limit=0, team=None
 		"user": user,
 		"weight": weight,
 		"capacity_limit": capacity_limit,
-		"enabled": bool(enabled),
+		"enabled": enabled_flag,
 		"campaign_rule_version": campaign_doc.rule_version,
 	}

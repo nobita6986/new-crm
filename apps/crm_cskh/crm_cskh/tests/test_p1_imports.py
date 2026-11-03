@@ -6,18 +6,21 @@ The invariants under test:
   documented size / row limits;
 * the preview classifies every row (valid / duplicate in file / duplicate in
   CRM / invalid) and never trusts a client-supplied preview;
-* the confirm step enqueues the worker and the worker re-reads and
-  re-normalizes the file;
+* the confirm step walks the legal state machine (`DRY_RUN -> CONFIRMED ->
+  QUEUED`) on the **first** call, enqueues the RQ worker, and the worker
+  re-reads and re-normalizes the full file;
 * the worker is idempotent: running it twice does not create a second lead;
 * an existing lead is reused as-is: the import never changes its owner or
   status;
 * a formula / HTML cell is neutralized (SEC-08);
-* the failed rows are written into a **private** error artifact.
+* the failed rows (including rows beyond the 200-row preview truncation) are
+  written into a **private** error artifact without double-counting.
 """
 
 import csv
 import io
 import unittest
+from unittest import mock
 
 import frappe
 
@@ -26,6 +29,7 @@ from crm_cskh.services import identity as identity_service
 from crm_cskh.services import import_service
 from crm_cskh.services.errors import InvalidRequest, TooManyRows, UnsupportedFormat
 from crm_cskh.services.import_service import (
+	confirm,
 	create_preview,
 	looks_like_formula,
 	sanitize_cell,
@@ -185,17 +189,16 @@ class TestImportWorker(P1TestCase):
 		return file_doc.name
 
 	def queue(self, batch_name):
-		"""Move a preview into the QUEUED state the worker accepts.
-
-		`frappe.enqueue` runs the worker **inline** in a test site, so the
-		status is written directly here and the worker is invoked explicitly.
-		The direct write keeps the transition legal for the state machine
-		(`DRY_RUN -> CONFIRMED -> QUEUED`).
-		"""
-		batch_doc = frappe.get_doc("CSKH Import Batch", batch_name)
-		frappe.db.set_value("CSKH Import Batch", batch_name, "status", "QUEUED")
-		batch_doc.reload()
-		return batch_doc
+		"""Confirm the preview once via the real service (`DRY_RUN -> CONFIRMED -> QUEUED`)."""
+		with mock.patch("frappe.enqueue") as mocked_enqueue:
+			response = confirm(batch_name, actor=self.admin_user)
+			self.assertEqual(response["status"], "QUEUED")
+			mocked_enqueue.assert_called_once()
+			kwargs = mocked_enqueue.call_args.kwargs
+			self.assertTrue(kwargs.get("enqueue_after_commit"))
+			self.assertTrue(kwargs.get("deduplicate"))
+			self.assertEqual(kwargs.get("batch_name"), batch_name)
+		return frappe.get_doc("CSKH Import Batch", batch_name)
 
 	def test_the_worker_creates_the_canonical_leads(self):
 		phone_a = self.unique_phone()
@@ -271,9 +274,58 @@ class TestImportWorker(P1TestCase):
 		batch_doc = frappe.get_doc("CSKH Import Batch", batch["batch"])
 		batch_doc.status = "FAILED"
 		batch_doc.save(ignore_permissions=True)
-		from crm_cskh.services.import_service import confirm
 
-		response = confirm(batch["batch"], actor=self.admin_user)
-		self.assertIn(response["status"], ("QUEUED", "RUNNING", "COMPLETED"))
+		with mock.patch("frappe.enqueue"):
+			response = confirm(batch["batch"], actor=self.admin_user)
+		self.assertEqual(response["status"], "QUEUED")
 		import_worker.run_batch(batch["batch"])
 		self.assertEqual(frappe.db.get_value("CSKH Import Batch", batch["batch"], "status"), "COMPLETED")
+
+	def test_over_200_rows_imports_every_valid_row_and_records_every_error(self):
+		valid_phones = [self.unique_phone() for _ in range(245)]
+		rows = []
+		valid_idx = 0
+		invalid_row_numbers = set()
+		# Total 250 CSV data rows (row_number 2..251): 3 invalid <= 200, 2 invalid > 200.
+		for csv_idx in range(1, 251):
+			row_number = csv_idx + 1
+			if row_number in (15, 90, 180, 220, 251):
+				rows.append((f"bad-phone-{row_number}",))
+				invalid_row_numbers.add(str(row_number))
+			else:
+				rows.append((valid_phones[valid_idx],))
+				valid_idx += 1
+
+		file_name = self.upload(build_csv(rows), file_name="worker-250.csv")
+		preview = create_preview(
+			file_name, actor=self.admin_user, idempotency_key=self.unique_key("worker-250")
+		)
+		self.assertTrue(preview["preview_truncated"])
+		self.assertEqual(len(preview["preview"]), 200)
+		self.assertEqual(preview["totals"]["total_rows"], 250)
+		self.assertEqual(preview["totals"]["valid_rows"], 245)
+		self.assertEqual(preview["totals"]["error_rows"], 5)
+
+		self.queue(preview["batch"])
+		import_worker.run_batch(preview["batch"])
+
+		batch_doc = frappe.get_doc("CSKH Import Batch", preview["batch"])
+		self.assertEqual(batch_doc.status, "COMPLETED_WITH_ERRORS")
+		self.assertEqual(int(batch_doc.created_rows), 245)
+		self.assertEqual(int(batch_doc.error_rows), 5)
+		self.assertTrue(batch_doc.error_artifact)
+
+		canonicals = [normalize_vn_phone(p) for p in valid_phones]
+		self.assertEqual(
+			frappe.db.count("CSKH Identity Index", {"normalized_phone": ["in", canonicals]}),
+			245,
+		)
+
+		artifact = frappe.get_doc("File", batch_doc.error_artifact)
+		self.assertEqual(artifact.is_private, 1)
+		raw = artifact.get_content()
+		if isinstance(raw, bytes):
+			raw = raw.decode("utf-8")
+		parsed = list(csv.DictReader(io.StringIO(raw)))
+		self.assertEqual(len(parsed), 5)
+		self.assertEqual({entry["row_number"] for entry in parsed}, invalid_row_numbers)

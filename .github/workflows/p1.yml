@@ -159,10 +159,15 @@ jobs:
           fi
 
           # The probe authenticates **real business actors** over real HTTP,
-          # so the site must serve. `bench serve` is started in the background
-          # and polled until the socket accepts a connection.
+          # and exercises background RQ jobs (`imports.confirm` and
+          # `distribution.execute`), so both `bench serve` and `bench worker`
+          # must run in the background.
           if ! "${compose[@]}" exec -d bench bash -lc 'cd /workspace/frappe-bench && nohup bench --site p1-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p1-http-serve.log 2>&1 </dev/null &'; then
             echo 'Could not start bench serve for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+          if ! "${compose[@]}" exec -d bench bash -lc 'cd /workspace/frappe-bench && nohup bench worker --queue short >/tmp/p1-rq-short.log 2>&1 </dev/null & nohup bench worker --queue long >/tmp/p1-rq-long.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench RQ workers for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
             exit 1
           fi
 
