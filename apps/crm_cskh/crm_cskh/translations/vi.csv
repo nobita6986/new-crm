@@ -471,6 +471,9 @@ Failed runs,Đợt phân phối lỗi
 From date,Từ ngày
 From owner,Người phụ trách trước
 Importing the customer pool requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép nhập kho khách hàng.
+Invalid boolean value for enabled.,Giá trị đúng/sai cho trạng thái kích hoạt không hợp lệ.
+Invalid boolean value for return_to_pool.,Giá trị đúng/sai cho tùy chọn trả về kho chờ không hợp lệ.
+Invalid boolean value for value.,Giá trị đúng/sai không hợp lệ.
 Invalid or expired session/CSRF token. Reload the page and try again.,Phiên đăng nhập hoặc mã CSRF không hợp lệ hoặc đã hết hạn. Hãy tải lại trang và thử lại.
 "Leads in your scope, with the derived distribution state.","Khách hàng tiềm năng trong phạm vi của bạn, kèm trạng thái phân phối."
 Look up run,Tra cứu đợt chạy
@@ -500,6 +503,7 @@ Select the new owner of the work item.,Hãy chọn người phụ trách mới c
 "Set up the target set and the weights, then preview before distributing.","Thiết lập tập mục tiêu và trọng số, rồi xem trước trước khi phân phối."
 Skipped rows,Số dòng bỏ qua
 Source column,Cột nguồn
+The actor account is disabled.,Tài khoản thực hiện đang bị vô hiệu hóa.
 The assignment rules changed after the preview.,Quy tắc phân công đã thay đổi sau khi xem trước.
 The batch status filter must be a string.,Bộ lọc trạng thái lô nhập phải là chuỗi văn bản.
 The campaign and the assignee are required.,Cần chọn chiến dịch và người được giao.

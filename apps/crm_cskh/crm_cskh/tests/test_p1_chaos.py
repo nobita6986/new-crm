@@ -1,6 +1,7 @@
 """P1 — runtime chaos: crash, rollback and retry (P1 §12.4, T1-13).
 
-P1 §12.4 demands the **runtime** proof of three failure modes:
+P1 §12.4 demands the **runtime** proof of failure modes across both import and
+distribution pipelines:
 
 * an artificial failure **after** the work item was created but **before** the
   ownership completed ⇒ the transaction must roll back and leave zero orphan
@@ -8,9 +9,10 @@ P1 §12.4 demands the **runtime** proof of three failure modes:
 * a failure **after** the DB commit but **before** the notification ⇒ the
   committed assignment survives and retrying does not create duplicate
   assignments, history events, ToDos or notifications;
-* a worker stopped **in the middle** of a batch (including hard process exit
-  `os._exit(137)`) ⇒ recovery / retry completes the batch with zero duplicates
-  verified by database post-checks.
+* an import or distribution RQ worker stopped **in the middle** of a batch
+  (including hard process exit `os._exit(137)`) ⇒ DB lease & checkpoint
+  recovery completes the batch with zero duplicates verified by database
+  post-checks.
 
 Every fault injection lives strictly inside this test module (via `unittest.mock`
 wrappers and an isolated child process); production `api/`, `services/` and
@@ -25,16 +27,16 @@ import json
 import os
 import subprocess
 import sys
-import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 import frappe
+from frappe.utils import add_to_date, now_datetime
 
-from crm_cskh.jobs import import_worker
+from crm_cskh.jobs import distribution_worker, import_worker
 from crm_cskh.services import distribution, notifications, ownership
-from crm_cskh.services.import_service import create_preview
+from crm_cskh.services.import_service import confirm, create_preview
 from crm_cskh.services.phone_identity import normalize_vn_phone
 from crm_cskh.tests.p1_base import P1TestCase
 
@@ -74,6 +76,46 @@ def commit_then_hard_kill(*args, **kwargs):
 with mock.patch.object(import_worker, "CHUNK_SIZE", chunk_size):
 	with mock.patch.object(frappe.db, "commit", side_effect=commit_then_hard_kill):
 		import_worker.run_batch(batch_name)
+"""
+
+CHILD_DISTRIBUTION_CRASH_SCRIPT = """
+import json
+import os
+import sys
+from unittest import mock
+
+sys.path.insert(0, os.getcwd())
+
+import frappe
+from crm_cskh.jobs import distribution_worker
+from crm_cskh.services import distribution
+
+payload = json.loads(os.environ["CSKH_CHAOS_DIST_PAYLOAD"])
+frappe.init(payload["site"], sites_path=payload["sites_path"], force=True)
+frappe.connect()
+frappe.set_user("Administrator")
+
+run_id = payload["run_id"]
+actor = payload["actor"]
+chunk_size = int(payload["chunk_size"])
+kill_after_progress = int(payload["kill_after_progress"])
+
+real_commit = frappe.db.commit
+
+def commit_then_hard_kill(*args, **kwargs):
+	real_commit(*args, **kwargs)
+	row = frappe.db.get_value(
+		"CSKH Distribution Run",
+		run_id,
+		["status", "progress"],
+		as_dict=True,
+	)
+	if row and row.status == "running" and int(row.progress or 0) >= kill_after_progress:
+		os._exit(137)
+
+with mock.patch.object(distribution, "CHUNK_SIZE", chunk_size):
+	with mock.patch.object(frappe.db, "commit", side_effect=commit_then_hard_kill):
+		distribution_worker.run_distribution(run_id, actor=actor)
 """
 
 
@@ -523,6 +565,11 @@ class TestImportWorkerCrashAndRecovery(ChaosTestCase):
 		lines = ["Số điện thoại", *phones]
 		return ("\n".join(lines) + "\n").encode("utf-8")
 
+	def queue_batch(self, batch_name):
+		with mock.patch("frappe.enqueue"):
+			resp = confirm(batch_name, actor=self.admin_user)
+		self.assertEqual(resp["status"], "QUEUED")
+
 	def test_worker_hard_kill_os_exit_mid_batch_recovers_with_zero_duplicates(self):
 		phones = [self.unique_phone() for _ in range(7)]
 		canonicals = [normalize_vn_phone(p) for p in phones]
@@ -531,7 +578,7 @@ class TestImportWorkerCrashAndRecovery(ChaosTestCase):
 			file_name, actor=self.admin_user, idempotency_key=self.unique_key("chaos-hard-kill")
 		)
 		batch_name = batch["batch"]
-		frappe.db.set_value("CSKH Import Batch", batch_name, "status", "QUEUED")
+		self.queue_batch(batch_name)
 		frappe.db.commit()
 
 		payload = {
@@ -603,7 +650,7 @@ class TestImportWorkerCrashAndRecovery(ChaosTestCase):
 			file_name, actor=self.admin_user, idempotency_key=self.unique_key("chaos-blocked-at")
 		)
 		batch_name = batch["batch"]
-		frappe.db.set_value("CSKH Import Batch", batch_name, "status", "QUEUED")
+		self.queue_batch(batch_name)
 
 		real_ensure = import_worker._ensure_lead
 		failed_once = {"done": False}
@@ -627,8 +674,8 @@ class TestImportWorkerCrashAndRecovery(ChaosTestCase):
 		self.assertEqual(int(after_first.progress), 2)
 		self.assertEqual(frappe.db.count("CSKH Identity Index", {"normalized_phone": target_fail_phone}), 0)
 
-		# Re-queue and retry: row 3 is retried and created, rows 4..7 are adopted without duplication.
-		frappe.db.set_value("CSKH Import Batch", batch_name, "status", "QUEUED")
+		# Re-queue via confirm() and retry: row 3 is retried and created, rows 4..7 are adopted without duplication.
+		self.queue_batch(batch_name)
 		with mock.patch.object(import_worker, "CHUNK_SIZE", 2):
 			import_worker.run_batch(batch_name)
 
@@ -659,7 +706,7 @@ class TestImportWorkerCrashAndRecovery(ChaosTestCase):
 			file_name, actor=self.admin_user, idempotency_key=self.unique_key("chaos-mixed-counts")
 		)
 		batch_name = batch["batch"]
-		frappe.db.set_value("CSKH Import Batch", batch_name, "status", "QUEUED")
+		self.queue_batch(batch_name)
 		import_worker.run_batch(batch_name)
 
 		batch_doc = frappe.get_doc("CSKH Import Batch", batch_name)
@@ -672,6 +719,98 @@ class TestImportWorkerCrashAndRecovery(ChaosTestCase):
 		self.assertEqual(int(batch_doc.created_rows), 2)
 		self.assertEqual(int(batch_doc.reused_rows), 1)
 		self.assertTrue(batch_doc.error_artifact)
+
+
+class TestDistributionWorkerCrashAndRecovery(ChaosTestCase):
+	"""Distribution RQ worker hard-kill (`os._exit(137)`) mid-batch + DB lease recovery."""
+
+	def setUp(self):
+		super().setUp()
+		self.campaign = self.make_campaign()
+		self.make_rule(self.campaign, self.staff_a, weight=50)
+		self.make_rule(self.campaign, self.staff_b, weight=30)
+		self.make_rule(self.campaign, self.staff_c, weight=20)
+
+	def test_distribution_worker_hard_kill_os_exit_mid_batch_and_lease_recovery(self):
+		leads = [self.make_canonical_lead() for _ in range(10)]
+		frappe.db.set_value(
+			"CSKH Campaign", self.campaign, "selection_json", frappe.as_json({"leads": leads})
+		)
+		preview = distribution.preview(self.campaign, actor=self.admin_user)
+		queued = distribution.enqueue_run(preview["preview_id"], actor=self.admin_user, enqueue_job=False)
+		run_id = queued["run_id"]
+		self.assertEqual(queued["status"], "queued")
+		frappe.db.commit()
+
+		payload = {
+			"site": getattr(frappe.local, "site", None),
+			"sites_path": getattr(frappe.local, "sites_path", None),
+			"run_id": run_id,
+			"actor": self.admin_user,
+			"chunk_size": 3,
+			"kill_after_progress": 6,
+		}
+		completed = subprocess.run(
+			[sys.executable, "-c", CHILD_DISTRIBUTION_CRASH_SCRIPT],
+			capture_output=True,
+			text=True,
+			timeout=120,
+			env={**os.environ, "CSKH_CHAOS_DIST_PAYLOAD": json.dumps(payload)},
+		)
+		self.assertEqual(completed.returncode, 137, f"expected hard exit 137, stderr={completed.stderr}")
+
+		# Refresh MVCC snapshot to observe child worker's committed chunks.
+		frappe.db.commit()
+		mid_poll = distribution.get_run(run_id, actor=self.admin_user)
+		self.assertEqual(mid_poll["status"], "running")
+		self.assertEqual(mid_poll["progress"], 6)
+		self.assertEqual(mid_poll["created"], 6)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": self.campaign}), 6)
+		self.assertEqual(frappe.db.count("CSKH Active Claim", {"campaign": self.campaign}), 6)
+
+		# While lease is active, neither double-submit nor duplicate worker steals the run.
+		with mock.patch("frappe.enqueue") as mocked_enqueue:
+			active_double = distribution.enqueue_run(run_id, actor=self.admin_user, enqueue_job=True)
+			mocked_enqueue.assert_not_called()
+		self.assertEqual(active_double["status"], "running")
+		noop_while_leased = distribution_worker.run_distribution(run_id, actor=self.admin_user)
+		self.assertEqual(noop_while_leased["created"], 6)
+
+		# Expire lease (simulating crash lease timeout) and recover cleanly from progress=6.
+		frappe.db.set_value(
+			"CSKH Distribution Run",
+			run_id,
+			"lease_expires_at",
+			add_to_date(now_datetime(), seconds=-60),
+		)
+		frappe.db.commit()
+
+		with mock.patch("frappe.enqueue") as mocked_recovery_enqueue:
+			recovered_enqueue = distribution.enqueue_run(run_id, actor=self.admin_user, enqueue_job=True)
+			mocked_recovery_enqueue.assert_called_once()
+		self.assertEqual(recovered_enqueue["status"], "queued")
+		frappe.db.commit()
+
+		with mock.patch.object(distribution, "CHUNK_SIZE", 3):
+			final = distribution_worker.run_distribution(run_id, actor=self.admin_user)
+			# Calling worker again on completed run is a strict no-op.
+			distribution_worker.run_distribution(run_id, actor=self.admin_user)
+
+		self.assertEqual(final["status"], "completed")
+		self.assertEqual(final["progress"], 10)
+		self.assertEqual(final["created"], 10)
+		self.assertEqual(final["errors"], 0)
+		self.assertEqual(final["assigned"], {self.staff_a: 5, self.staff_b: 3, self.staff_c: 2})
+
+		for lead in leads:
+			self.assertNoOrphan(self.campaign, lead)
+
+		reconciled = distribution.reconcile(self.campaign, actor=self.admin_user)
+		self.assertEqual(reconciled["distinct_leads"], 10)
+		self.assertEqual(reconciled["active_work_items"], 10)
+		self.assertEqual(reconciled["active_claims"], 10)
+		self.assertEqual(reconciled["current_owners"], {self.staff_a: 5, self.staff_b: 3, self.staff_c: 2})
+		self.assertEqual(reconciled["assignment_events"], {self.staff_a: 5, self.staff_b: 3, self.staff_c: 2})
 
 
 class TestZeroProductionFaultInjection(unittest.TestCase):

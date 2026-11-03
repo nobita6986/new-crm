@@ -32,6 +32,7 @@ result is asserted before the transaction commits.
 import frappe
 from frappe.utils import now_datetime
 
+from crm_cskh.api._params import parse_bool
 from crm_cskh.services.errors import Conflict, Forbidden, InvalidRequest, NotFound
 
 REASSIGN = "reassign"
@@ -453,6 +454,7 @@ def revoke(
 		raise InvalidRequest("A request id is required so the action stays idempotent.")
 	if not reason:
 		raise InvalidRequest("A reason is required to revoke a customer.")
+	return_to_pool = parse_bool(return_to_pool, default=True, field="return_to_pool")
 
 	event_id = _event_id(request_id, work_item, REVOKE)
 	existing = _find_history_event(event_id)

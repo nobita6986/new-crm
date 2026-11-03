@@ -1,9 +1,10 @@
-"""P1 API: distribution preview, execution and run status.
+"""P1 API: distribution preview, background execution and run status.
 
 P1 10.1: `preview` returns `preview_id`, `selection_fingerprint`, `rule_version`,
 `expires_at` and a summary; `execute` takes `preview_id`, `expected_rule_version`
-and `idempotency_key`. A stale preview is refused with `RULE_CHANGED` or
-`PREVIEW_EXPIRED` instead of distributing stale numbers.
+and `idempotency_key`, enqueues the background RQ worker and returns `run_id`
+and early status (`queued`) immediately. A stale preview is refused with
+`RULE_CHANGED` or `PREVIEW_EXPIRED` instead of distributing stale numbers.
 """
 
 import frappe
@@ -44,17 +45,18 @@ def preview(campaign=None, idempotency_key=None):
 
 @frappe.whitelist(methods=["POST"])
 def execute(preview_id=None, expected_rule_version=None, idempotency_key=None):
-	"""Execute a preview."""
+	"""Accept a distribution job onto RQ and return `run_id` + early status."""
 	actor = frappe.session.user
 	_require_distribute(actor)
 	if not preview_id:
 		raise InvalidRequest("The preview id is required.")
 	try:
-		return distribution.execute(
+		return distribution.enqueue_run(
 			preview_id,
 			expected_rule_version=expected_rule_version,
 			idempotency_key=idempotency_key,
 			actor=actor,
+			enqueue_job=True,
 		)
 	except P1Error:
 		raise
@@ -64,7 +66,7 @@ def execute(preview_id=None, expected_rule_version=None, idempotency_key=None):
 
 @frappe.whitelist(methods=["GET"])
 def get_run(run_id=None):
-	"""Return the progress and result of a distribution run."""
+	"""Return the live progress, cumulative totals and errors of a distribution run."""
 	actor = frappe.session.user
 	if not run_id:
 		raise InvalidRequest("The run id is required.")

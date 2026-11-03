@@ -34,11 +34,12 @@ IMPORT_STATUS_TRANSITIONS = {
 }
 
 RUN_STATUS_TRANSITIONS = {
-	"planned": ("running", "failed"),
-	"running": ("completed", "completed_with_errors", "failed"),
+	"planned": ("queued", "running", "failed"),
+	"queued": ("running", "failed"),
+	"running": ("queued", "completed", "completed_with_errors", "failed"),
 	"completed": (),
-	"completed_with_errors": ("planned",),
-	"failed": ("planned",),
+	"completed_with_errors": ("planned", "queued"),
+	"failed": ("planned", "queued"),
 }
 
 

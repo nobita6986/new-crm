@@ -39,14 +39,25 @@ def run_batch(batch_name):
 	therefore leaves the batch in `RUNNING` with a known progress, and the
 	next attempt resumes **after** that progress instead of starting over.
 	"""
-	batch = frappe.get_doc("CSKH Import Batch", batch_name)
-	if not batch:
+	if not batch_name:
 		return
-	if batch.status in ("COMPLETED", "COMPLETED_WITH_ERRORS"):
+	locked = frappe.db.sql(
+		"select name, status from `tabCSKH Import Batch` where name = %s for update",
+		(batch_name,),
+		as_dict=True,
+	)
+	if not locked:
 		return
-	if batch.status not in ("QUEUED", "CONFIRMED", "RUNNING"):
+	current_status = locked[0].status
+	if current_status in ("COMPLETED", "COMPLETED_WITH_ERRORS"):
+		return
+	if current_status not in ("QUEUED", "CONFIRMED", "RUNNING"):
 		return
 
+	batch = frappe.get_doc("CSKH Import Batch", batch_name)
+	if batch.status == "CONFIRMED":
+		batch.status = "QUEUED"
+		batch.save(ignore_permissions=True)
 	batch.status = "RUNNING"
 	batch.attempts = int(batch.attempts or 0) + 1
 	batch.save(ignore_permissions=True)
@@ -108,8 +119,8 @@ def _process(batch):
 	error_rows = []
 
 	# The rows the preview already rejected are part of the error report
-	# (SEC-08): the operator downloads one file with every failed row, even
-	# beyond the 200-row UI preview slice.
+	# (SEC-08, L-20): the operator downloads one file with every failed row,
+	# including rows beyond the 200-row UI preview slice.
 	preview_invalid_rows = set()
 	for entry in classification["rows"]:
 		if entry.get("class") == "invalid":
@@ -121,11 +132,11 @@ def _process(batch):
 				}
 			)
 
-	# The **distinct** canonical phones of the file. The reconciliation works
-	# on this list, not on the preview classes: after the first attempt of a
-	# resumed batch the rows the worker itself created are classified
-	# `duplicate_in_crm`, so a reconciliation based on the classes would lose
-	# them (P1 §6.4).
+	# The **distinct** canonical phones of the file (L-19: built from the full
+	# `resolvable` list, never from the 200-row UI preview slice). After the
+	# first attempt of a resumed batch the rows the worker itself created are
+	# classified `duplicate_in_crm`, so a reconciliation based on the classes
+	# would lose them (P1 §6.4).
 	targets = _distinct_targets(classification)
 
 	# **Resume point (P1 §6.4):** the rows that a previous, crashed attempt
@@ -205,17 +216,23 @@ def _process(batch):
 		error_rows.append({"row_number": entry["row_number"], "reason": "lead_not_created"})
 	# One **row** produces at most one line in the error report: the failed
 	# row is reported once, with the reason of the failure that actually
-	# happened (SEC-08: the operator gets one row per failed line).
+	# happened (SEC-08, L-20: the operator gets one row per failed line).
 	error_rows = _dedupe_error_rows(error_rows)
+	preview_error_count = len(preview_invalid_rows)
+	worker_error_count = sum(1 for row in error_rows if row.get("row_number") not in preview_invalid_rows)
+
 	batch.created_rows = created
 	batch.reused_rows = reused
-	batch.skipped_rows = skipped + classification["error_rows"]
-	batch.valid_rows = classification["valid_rows"]
-	batch.new_rows = classification["new_rows"]
-	batch.duplicate_rows = classification["duplicate_rows"]
-	worker_error_count = sum(1 for row in error_rows if row.get("row_number") not in preview_invalid_rows)
-	batch.error_rows = classification["error_rows"] + worker_error_count
-	batch.total_rows = classification["total_rows"]
+	batch.skipped_rows = skipped + preview_error_count
+	# Preserve the original preview classification counters (`valid_rows`,
+	# `new_rows`, `duplicate_rows`) across crash-resume attempts: on a resumed
+	# attempt `_classify` sees leads created by attempt #1 as `duplicate_in_crm`.
+	if not int(batch.total_rows or 0):
+		batch.total_rows = classification["total_rows"]
+		batch.valid_rows = classification["valid_rows"]
+		batch.new_rows = classification["new_rows"]
+		batch.duplicate_rows = classification["duplicate_rows"]
+	batch.error_rows = preview_error_count + worker_error_count
 	batch.status = "COMPLETED_WITH_ERRORS" if batch.error_rows else "COMPLETED"
 	batch.committed_at = now_datetime()
 	if blocked_at is not None:
@@ -227,6 +244,9 @@ def _process(batch):
 		)
 	if error_rows:
 		batch.error_artifact = write_error_artifact(batch.name, error_rows)
+	else:
+		batch.error_artifact = None
+		batch.error = None
 	batch.save(ignore_permissions=True)
 	frappe.db.commit()
 	return {"created": created, "reused": reused, "skipped": skipped}
