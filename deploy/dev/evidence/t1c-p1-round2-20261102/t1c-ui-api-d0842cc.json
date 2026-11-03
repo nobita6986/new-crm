@@ -1,0 +1,521 @@
+{
+  "target_sha": "d0842cc1c822c1b138ed4d030f2c7daaa706e586",
+  "backend_ancestor_sha": "64b7486f29ad712106d167dfaea50e3b060a6845",
+  "site": "t1c.localhost",
+  "mounted_source_lf_sha256": {
+    "api/import_files.py": "b42fca2ddf775634f2a91d61c64a01774ecc33aecdbeb79c419bf87a0420588c",
+    "api/import_history.py": "6b1adb2a9ce988f4676aa9bc56508a1d2043d1cf39dc59a5bc9355c94e0e9471",
+    "api/ownership_ui.py": "d376315251fa2744febe90bfa6e801ad1d05e1e1248b7e6e27d5dbef3f3ad537",
+    "api/pool_ui.py": "fac04c300633ef37326db3a350f0e31c1641b91024933436b9452564a53a2625",
+    "api/run_history.py": "e6cee88babd4b762eaddba472571237de4757c61c3e6b10dd32c5b016407c258",
+    "www/cskh_context.py": "235c41c7f3b4e2b70bda963228696360bb558e17c65481aa1a6debf743a6aa7d",
+    "services/reporting.py": "7a5e2b87b87902933307705cfdb12b952c2ff8f78275b88801e714175da9de64",
+    "services/import_service.py": "eed487bb84ec65ce35c40de78d708542ddd04d168082f45f165f9adbdc25c9ec",
+    "jobs/import_worker.py": "2de398a209dfadb879fa91e68e390a43255337d6dad8cb58da36a3196cf486f1",
+    "hooks.py": "75aebaf41161405e28b0809d8446f5519ea887a645e6f1b2427c6e29ce875acf",
+    "p1_errors.py": "b085b431cdb87c8505e0a551d20b6a154e7b191b54fc8fabf50b2e92db74dd4d"
+  },
+  "sections": {
+    "html_routes_and_assets": {
+      "routes": [
+        "/cskh",
+        "/cskh/pool",
+        "/cskh/import",
+        "/cskh/campaigns",
+        "/cskh/my-customers",
+        "/cskh/dashboard"
+      ],
+      "matrix": {
+        "admin": [
+          200,
+          200,
+          200,
+          200,
+          200,
+          200
+        ],
+        "bod": [
+          200,
+          200,
+          403,
+          200,
+          200,
+          200
+        ],
+        "leader_a": [
+          200,
+          200,
+          403,
+          200,
+          200,
+          200
+        ],
+        "leader_b": [
+          200,
+          200,
+          403,
+          200,
+          200,
+          200
+        ],
+        "staff_a": [
+          200,
+          403,
+          403,
+          403,
+          200,
+          403
+        ],
+        "staff_b": [
+          200,
+          403,
+          403,
+          403,
+          200,
+          403
+        ],
+        "staff_c": [
+          200,
+          403,
+          403,
+          403,
+          200,
+          403
+        ],
+        "outside": [
+          200,
+          403,
+          403,
+          403,
+          200,
+          403
+        ],
+        "guest": [
+          403,
+          403,
+          403,
+          403,
+          403,
+          403
+        ]
+      },
+      "i18n_checks": {
+        "all_200_lang_vi": true,
+        "zero_lead_chi": true,
+        "vi_403_verified": true
+      },
+      "assets": {
+        "/assets/crm_cskh/cskh/cskh.css": {
+          "http": 200,
+          "bytes": 6879
+        },
+        "/assets/crm_cskh/cskh/cskh.js": {
+          "http": 200,
+          "bytes": 14231
+        },
+        "/assets/crm_cskh/cskh/pool.js": {
+          "http": 200,
+          "bytes": 7593
+        },
+        "/assets/crm_cskh/cskh/import.js": {
+          "http": 200,
+          "bytes": 18269
+        },
+        "/assets/crm_cskh/cskh/campaigns.js": {
+          "http": 200,
+          "bytes": 34605
+        },
+        "/assets/crm_cskh/cskh/my-customers.js": {
+          "http": 200,
+          "bytes": 18352
+        },
+        "/assets/crm_cskh/cskh/dashboard.js": {
+          "http": 200,
+          "bytes": 16576
+        }
+      }
+    },
+    "import_files_and_history": {
+      "get_on_post_only_upload": {
+        "http": 403,
+        "exc_type": "PermissionError"
+      },
+      "forged_csrf_upload": {
+        "http": 400,
+        "exc_type": "CSRFTokenError"
+      },
+      "missing_csrf_upload": {
+        "http": 400,
+        "exc_type": "CSRFTokenError"
+      },
+      "unsupported_format": {
+        "http": 400,
+        "p1_code": "UNSUPPORTED_FORMAT"
+      },
+      "oversize_file": {
+        "http": 413,
+        "p1_code": "FILE_TOO_LARGE"
+      },
+      "upload_response_omits_file_url": true,
+      "upload_role_denials": {
+        "bod": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "leader_a": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "leader_b": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "staff_a": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "staff_b": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "outside": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "guest": {
+          "http": 403,
+          "p1_code": null
+        }
+      },
+      "batch_255_single_confirm": {
+        "batch": "gg5v9dccgb",
+        "confirm_initial_status": "QUEUED",
+        "observed_statuses": [
+          "QUEUED",
+          "RUNNING",
+          "COMPLETED_WITH_ERRORS"
+        ],
+        "final_status": "COMPLETED_WITH_ERRORS",
+        "totals": {
+          "total_rows": 255,
+          "valid_rows": 245,
+          "new_rows": 245,
+          "duplicate_rows": 5,
+          "error_rows": 5,
+          "created_rows": 245,
+          "reused_rows": 0,
+          "skipped_rows": 5
+        },
+        "error_csv_line_count": 6,
+        "error_csv_rows_beyond_200_present": true
+      },
+      "import_history_role_denials": {
+        "bod": {
+          "history_http": 403,
+          "batch_detail_http": 403,
+          "download_error_http": 403
+        },
+        "leader_a": {
+          "history_http": 403,
+          "batch_detail_http": 403,
+          "download_error_http": 403
+        },
+        "leader_b": {
+          "history_http": 403,
+          "batch_detail_http": 403,
+          "download_error_http": 403
+        },
+        "staff_a": {
+          "history_http": 403,
+          "batch_detail_http": 403,
+          "download_error_http": 403
+        },
+        "staff_b": {
+          "history_http": 403,
+          "batch_detail_http": 403,
+          "download_error_http": 403
+        },
+        "outside": {
+          "history_http": 403,
+          "batch_detail_http": 403,
+          "download_error_http": 403
+        },
+        "guest": {
+          "history_http": 403,
+          "batch_detail_http": 403,
+          "download_error_http": 403
+        }
+      },
+      "direct_private_file_matrix": {
+        "admin": {
+          "raw_import_file_http": 200,
+          "raw_error_file_http": 200
+        },
+        "bod": {
+          "raw_import_file_http": 403,
+          "raw_error_file_http": 403
+        },
+        "leader_a": {
+          "raw_import_file_http": 403,
+          "raw_error_file_http": 403
+        },
+        "leader_b": {
+          "raw_import_file_http": 403,
+          "raw_error_file_http": 403
+        },
+        "staff_a": {
+          "raw_import_file_http": 403,
+          "raw_error_file_http": 403
+        },
+        "staff_b": {
+          "raw_import_file_http": 403,
+          "raw_error_file_http": 403
+        },
+        "staff_c": {
+          "raw_import_file_http": 403,
+          "raw_error_file_http": 403
+        },
+        "outside": {
+          "raw_import_file_http": 403,
+          "raw_error_file_http": 403
+        },
+        "guest": {
+          "raw_import_file_http": 403,
+          "raw_error_file_http": 403
+        }
+      },
+      "history_pagination_disjoint": true
+    },
+    "findings_and_scope_probes": {
+      "L16_error_envelope_d0842cc": {
+        "no_eligible_leads_409": {
+          "http": 409,
+          "p1_code": "NO_ELIGIBLE_LEADS",
+          "exc_type": "NO_ELIGIBLE_LEADS"
+        },
+        "rule_changed_409": {
+          "http": 409,
+          "p1_code": "RULE_CHANGED",
+          "exc_type": "RULE_CHANGED"
+        },
+        "preview_expired_409": {
+          "http": 409,
+          "p1_code": "PREVIEW_EXPIRED",
+          "exc_type": "PREVIEW_EXPIRED"
+        },
+        "not_found_404": {
+          "http": 404,
+          "p1_code": null,
+          "exc_type": "DoesNotExistError"
+        }
+      },
+      "L17_admin_system_scope_d0842cc": {
+        "admin_scope": "system",
+        "admin_cards": {
+          "unique_customers": 16,
+          "eligible_unassigned": 1,
+          "assigned_work_items": 15,
+          "unassigned_work_items": 1,
+          "revoked_work_items": 1,
+          "closed_work_items": 0,
+          "active_claims": 15,
+          "active_campaigns": 3,
+          "failed_batches": 1,
+          "failed_runs": 0
+        },
+        "bod_cards": {
+          "unique_customers": 16,
+          "eligible_unassigned": 1,
+          "assigned_work_items": 15,
+          "unassigned_work_items": 1,
+          "revoked_work_items": 1,
+          "closed_work_items": 0,
+          "active_claims": 15,
+          "active_campaigns": 3,
+          "failed_batches": 1,
+          "failed_runs": 0
+        },
+        "sql_snapshot": {
+          "total_leads": 249,
+          "total_identities": 247,
+          "total_assigned": 15,
+          "total_revoked": 1,
+          "total_queued": 1,
+          "total_claims": 15,
+          "team_a_campaigns_revoked_sql": 1
+        },
+        "admin_equals_bod_and_sql": true
+      },
+      "L21_form_urlencoded_revoke_d0842cc": {
+        "sent_return_to_pool": "false",
+        "actual_resulting_status": "queued",
+        "still_reproducible": true
+      },
+      "L22_leader_dashboard_revoked_d0842cc": {
+        "sql_team_a_revoked": 1,
+        "leader_a_dashboard_revoked_card": 0,
+        "still_reproducible": true
+      },
+      "L23_pool_ui_cross_team_leak_d0842cc": {
+        "leaked_count_to_leader_a": 1,
+        "leaked_rows": [
+          {
+            "lead": "CRM-LEAD-2026-00290",
+            "state": "assigned",
+            "campaign": "gomb4g1bht",
+            "campaign_title": "Chiến dịch Nội Bộ Đội B",
+            "owner": "cskh-p1-staff-c@example.test",
+            "work_item": "gopl2v74ac",
+            "has_raw_unmasked_phone": true,
+            "phone_redacted": "******0007"
+          }
+        ],
+        "reproducible": true
+      },
+      "L24_run_history_shared_campaign_leak_d0842cc": {
+        "leader_a_saw_team_b_staff_c_counts": true,
+        "leader_a_shared_runs": [
+          {
+            "run_id": "gou5jdkuo6",
+            "campaign": "gos7k7t16k",
+            "campaign_title": "Chiến dịch Liên Đội",
+            "campaign_code": "T1C-CAMP-SHARED",
+            "status": "completed",
+            "rule_version": 1,
+            "idempotency_key": "t1c-psh",
+            "selection_fingerprint": "c3239b9199c42e84012892b913bec37ae05e5861267f87ada073b507fd084f8d",
+            "created": 4,
+            "errors": 0,
+            "assigned": {
+              "cskh-p1-staff-a@example.test": 2,
+              "cskh-p1-staff-c@example.test": 2
+            },
+            "skipped": [],
+            "created_at": "2026-11-03 09:47:19.891826",
+            "started_at": "2026-11-03 09:47:19.938156",
+            "finished_at": "2026-11-03 09:47:20.304682",
+            "error": null
+          }
+        ],
+        "reproducible": true
+      },
+      "L25_import_mapping_and_pool_batch_source_filters_d0842cc": {
+        "pool_filter_by_import_batch_total": 0,
+        "pool_filter_by_mapped_source_total": 0,
+        "pool_search_by_mapped_name_total": 0,
+        "sample_imported_lead_display_name": "Chưa rõ tên",
+        "sample_imported_lead_source": null,
+        "reproducible": true
+      },
+      "L26_malformed_pagination_500_d0842cc": {
+        "crm_cskh.api.pool_ui.list": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        },
+        "crm_cskh.api.ownership_ui.assigned_list": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        },
+        "crm_cskh.api.import_history.history": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        },
+        "crm_cskh.api.run_history.runs": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        }
+      },
+      "bod_zero_pii_and_search_403": {
+        "pool_ui_and_legacy_zero_pii": true,
+        "assigned_list_zero_pii": true,
+        "bod_search_http": 403
+      },
+      "ownership_ui_checks": {
+        "assignees_role_denials": {
+          "bod": {
+            "http": 403,
+            "p1_code": "FORBIDDEN"
+          },
+          "leader_a": {
+            "http": 403,
+            "p1_code": "FORBIDDEN"
+          },
+          "leader_b": {
+            "http": 403,
+            "p1_code": "FORBIDDEN"
+          },
+          "staff_a": {
+            "http": 403,
+            "p1_code": "FORBIDDEN"
+          },
+          "staff_b": {
+            "http": 403,
+            "p1_code": "FORBIDDEN"
+          },
+          "outside": {
+            "http": 403,
+            "p1_code": "FORBIDDEN"
+          },
+          "guest": {
+            "http": 403,
+            "p1_code": null
+          }
+        },
+        "assignees_ignores_campaign_team_scope": true,
+        "admin_assigned_total": 15,
+        "leader_a_assigned_total": 10,
+        "leader_a_widen_staff_c_total": 0,
+        "staff_a_assigned_total": 8,
+        "staff_a_widen_staff_b_total": 0
+      },
+      "pool_ui_denials": {
+        "staff_a": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "staff_b": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "staff_c": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "outside": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "guest": {
+          "http": 403,
+          "p1_code": null
+        }
+      },
+      "run_history_denials": {
+        "staff_a": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "staff_b": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "staff_c": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "outside": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "guest": {
+          "http": 403,
+          "p1_code": null
+        }
+      }
+    }
+  }
+}

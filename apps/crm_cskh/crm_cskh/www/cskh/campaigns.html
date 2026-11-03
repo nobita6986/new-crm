@@ -1,0 +1,135 @@
+{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Campaigns and distribution rules") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Set up the target set and the weights, then preview before distributing.") }}{% endblock %}
+
+{% block cskh_body %}
+<div id="campaign-alert" aria-live="polite"></div>
+
+<div class="cskh-card">
+	<h2>{{ _("Campaigns") }}</h2>
+	<div id="campaign-list-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="campaign-list"></div>
+</div>
+
+<div class="cskh-card" id="campaign-form-card">
+	<h2 id="campaign-form-heading">{{ _("New campaign") }}</h2>
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Code") }}
+			<input id="campaign-code" class="cskh-input" type="text">
+		</label>
+		<label class="cskh-field">
+			{{ _("Title") }}
+			<input id="campaign-title" class="cskh-input" type="text">
+		</label>
+		<label class="cskh-field">
+			{{ _("Description") }}
+			<input id="campaign-description" class="cskh-input" type="text">
+		</label>
+		<label class="cskh-field">
+			{{ _("Status") }}
+			<select id="campaign-status" class="cskh-select">
+				<option value="Draft">{{ _("Campaign draft") }}</option>
+				<option value="Active">{{ _("Campaign active") }}</option>
+				<option value="Paused">{{ _("Campaign paused") }}</option>
+				<option value="Closed">{{ _("Campaign closed") }}</option>
+			</select>
+		</label>
+		<label class="cskh-field">
+			{{ _("Team scope") }}
+			<input id="campaign-team" class="cskh-input" type="text">
+		</label>
+		<button id="campaign-create" class="cskh-btn is-primary" type="button">
+			{{ _("Create campaign") }}
+		</button>
+		<button id="campaign-cancel-edit" class="cskh-btn" type="button" hidden>
+			{{ _("Cancel") }}
+		</button>
+	</div>
+</div>
+
+<div class="cskh-card">
+	<h2>{{ _("Assignment rules") }}</h2>
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Campaign") }}
+			<select id="rule-campaign" class="cskh-select"></select>
+		</label>
+	</div>
+	<div id="rule-list-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="rule-list"></div>
+</div>
+
+<div class="cskh-card" id="dist-card">
+	<h2>{{ _("Distribution") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Preview first. Executing is a separate, explicitly confirmed action.") }}
+	</p>
+	<div class="cskh-actions">
+		<button id="dist-preview" class="cskh-btn is-primary" type="button">
+			{{ _("Preview distribution") }}
+		</button>
+		<button id="dist-execute" class="cskh-btn" type="button" disabled>
+			{{ _("Confirm distribution") }}
+		</button>
+	</div>
+	<div id="dist-summary"></div>
+	<div id="dist-targets"></div>
+	<div id="dist-results"></div>
+</div>
+
+<div class="cskh-card">
+	<h2>{{ _("Distribution runs") }}</h2>
+	<div class="cskh-actions">
+		<label class="cskh-field" id="dist-run-id-wrap">
+			{{ _("Run ID") }}
+			<input id="dist-run-id" class="cskh-input" type="text"
+				placeholder="{{ _('Run ID') }}">
+		</label>
+		<label class="cskh-field">
+			{{ _("Status") }}
+			<select id="dist-runs-status" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+				<option value="planned">{{ _("Preview") }}</option>
+				<option value="queued">{{ _("Queued") }}</option>
+				<option value="running">{{ _("Running") }}</option>
+				<option value="completed">{{ _("Completed") }}</option>
+				<option value="completed_with_errors">{{ _("Completed with errors") }}</option>
+				<option value="failed">{{ _("Failed") }}</option>
+			</select>
+		</label>
+		<button id="dist-run-lookup" class="cskh-btn" type="button">
+			{{ _("Look up run") }}
+		</button>
+	</div>
+	<div id="dist-run-lookup-result"></div>
+	<div id="dist-runs-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="dist-runs-empty" class="cskh-alert is-empty" hidden>
+		{{ _("No data in the current scope.") }}
+	</div>
+	<table id="dist-runs-table" class="cskh-table" hidden>
+		<thead>
+			<tr>
+				<th>{{ _("Run ID") }}</th>
+				<th>{{ _("Campaign") }}</th>
+				<th>{{ _("Status") }}</th>
+				<th class="num">{{ _("Assigned in this run") }}</th>
+				<th class="num">{{ _("Failed") }}</th>
+				<th>{{ _("Created") }}</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody id="dist-runs-rows"></tbody>
+	</table>
+	<div class="cskh-pager">
+		<button id="dist-runs-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
+		<span id="dist-runs-range"></span>
+		<button id="dist-runs-next" class="cskh-btn" type="button">{{ _("Next") }}</button>
+	</div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/campaigns.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}

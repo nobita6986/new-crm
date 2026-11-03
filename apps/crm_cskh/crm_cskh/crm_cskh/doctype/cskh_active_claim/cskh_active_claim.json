@@ -1,0 +1,60 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Active Claim",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "label": "Lead",
+   "options": "CRM Lead",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "label": "Campaign",
+   "options": "CSKH Campaign",
+   "reqd": 1
+  },
+  {
+   "fieldname": "work_item",
+   "fieldtype": "Link",
+   "label": "Work Item",
+   "options": "CSKH Work Item",
+   "reqd": 1,
+   "unique": 1
+  }
+ ],
+ "field_order": [
+  "lead",
+  "campaign",
+  "work_item"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "modified": "2026-11-02 00:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}

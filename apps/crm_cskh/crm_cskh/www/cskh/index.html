@@ -1,0 +1,53 @@
+{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("CSKH") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Customer pool, imports, campaigns and distribution.") }}{% endblock %}
+
+{% block cskh_body %}
+{% set nav_keys = (cskh_navigation | default([])) | map(attribute='key') | list %}
+{% if 'pool' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Customer pool") }}</h2>
+	<p class="cskh-muted">{{ _("Leads in your scope, with the derived distribution state.") }}</p>
+	<a class="cskh-btn is-primary" href="/cskh/pool">{{ _("Customer pool") }}</a>
+</div>
+{% endif %}
+
+{% if 'import' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Import list") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Upload a private file, map the phone column, preview, then confirm.") }}
+	</p>
+	<a class="cskh-btn" href="/cskh/import">{{ _("Import list") }}</a>
+</div>
+{% endif %}
+
+{% if 'campaigns' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Campaigns and distribution rules") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Set up the target set and the weights, then preview before distributing.") }}
+	</p>
+	<a class="cskh-btn" href="/cskh/campaigns">{{ _("Campaigns and rules") }}</a>
+</div>
+{% endif %}
+
+{% if 'my-customers' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("My customers") }}</h2>
+	<p class="cskh-muted">{{ _("Only the customers that are currently assigned to you.") }}</p>
+	<a class="cskh-btn" href="/cskh/my-customers">{{ _("My customers") }}</a>
+</div>
+{% endif %}
+
+{% if 'dashboard' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Distribution dashboard") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Total pool, assigned, unassigned, per team, per user and per campaign.") }}
+	</p>
+	<a class="cskh-btn" href="/cskh/dashboard">{{ _("Distribution dashboard") }}</a>
+</div>
+{% endif %}
+{% endblock %}

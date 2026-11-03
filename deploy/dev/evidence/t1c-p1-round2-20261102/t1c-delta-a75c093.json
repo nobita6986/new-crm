@@ -1,0 +1,666 @@
+{
+  "generated_at_utc": "2026-11-03T06:07:01Z",
+  "site": "t1c.localhost",
+  "http_base_url": "http://127.0.0.1:18095",
+  "repo_head": "a75c093c79c38c80b9fd3c21758a5bbad09cb3a1",
+  "code_sha": "63510483a0aa1ed4238b630ba384c5a362659450",
+  "mounted_source_lf_sha256": {
+    "api/_params.py": "3b3fe91d75ae3f3b33f9407df8823bf3368c1d89003d081c1b547cae2d4c2c4b",
+    "api/distribution.py": "f6d2a35d7890ab6786552679a522efca617c814e4b1b4a195b27fc34e81582c3",
+    "api/ownership.py": "f1bb87e33f9041e7458c9a82078fecd0419424fd8c5e9c1bab9ede1e486fcc79",
+    "api/ownership_ui.py": "d376315251fa2744febe90bfa6e801ad1d05e1e1248b7e6e27d5dbef3f3ad537",
+    "api/pool_ui.py": "fac04c300633ef37326db3a350f0e31c1641b91024933436b9452564a53a2625",
+    "api/run_history.py": "79ff70af3d75e215a55e8156aeecfbb96aa59608aa3322ea9f2229d1d5cb7212",
+    "jobs/distribution_worker.py": "74bbf6bd30288cfd6642afddcbddcc59f9ed9ef3310679404eb71a8e2d253a5c",
+    "jobs/import_worker.py": "b378d4515bfe151f03da2ed925fab6418fa362a21de8217bff56103163d5f1d6",
+    "p1_errors.py": "765466f7c7ada49df532147ceb3cadd1a1cedcbb80f12af4ba06c65d95bb10af",
+    "p1_models.py": "dcbdf10f456325050cb23ab075be685940c346dcae5e8807a97d92bc7bad2593",
+    "public/cskh/campaigns.js": "018e7d9dfcc7dad87157beed4136278496373f87b83f6fa91f5572a18150e21d",
+    "services/distribution.py": "e93fb54e6b202617fb77985cccd81def18749ab7c6d41bc6d1052696c3d4f7c1",
+    "services/import_service.py": "9d6c04498810e110b3cccb19885387be511f62cdeac75a3e350deef8951b4c65",
+    "services/reporting.py": "63c55e10828887b07cd8a7b535da86462225700e9ee9783de29ed9553ea5e81e"
+  },
+  "schema_checks": {
+    "distribution_run_has_lease_expires_at": true,
+    "crm_admin_has_system_manager": false,
+    "crm_admin_has_cskh_crm_admin": true
+  },
+  "tasks": {
+    "import_l18_l19_l20_and_l25": {
+      "batch": "h1u3rf3485",
+      "preview_truncated": true,
+      "preview_len": 200,
+      "preview_totals": {
+        "total_rows": 255,
+        "valid_rows": 250,
+        "new_rows": 250,
+        "duplicate_rows": 0,
+        "error_rows": 5
+      },
+      "first_confirm_http": 200,
+      "first_confirm_status": "QUEUED",
+      "final_status": "COMPLETED_WITH_ERRORS",
+      "created_rows": 250,
+      "final_totals": {
+        "total_rows": 255,
+        "valid_rows": 250,
+        "new_rows": 250,
+        "duplicate_rows": 0,
+        "error_rows": 5
+      },
+      "reconfirm_after_completion_status": "COMPLETED_WITH_ERRORS",
+      "db_identity_count_for_250_valid": 250,
+      "db_lead_count_for_250_valid": 250,
+      "error_csv_admin_http": 200,
+      "error_csv_staff_http": 403,
+      "error_csv_bod_http": 403,
+      "error_csv_row_count": 5,
+      "error_csv_row_numbers": [
+        10,
+        150,
+        215,
+        240,
+        256
+      ],
+      "l18_l19_l20_verdict": "FIXED_VERIFIED",
+      "l25_mapping_and_batch_filter_check": {
+        "sample_lead_first_names": [
+          "Chưa rõ tên"
+        ],
+        "sample_lead_sources": [
+          null
+        ],
+        "sample_placeholder_flags": [
+          1
+        ],
+        "pool_ui_filter_by_batch_total": 0,
+        "pool_ui_filter_by_source_facebook_total": 0,
+        "l25_still_open": true
+      }
+    },
+    "async_distribution_120_multi_chunk": {
+      "campaign": "h4d3eh2d38",
+      "run_id": "h4kjn78m2o",
+      "enqueue_http": 200,
+      "enqueue_payload": {
+        "run_id": "h4kjn78m2o",
+        "campaign": "h4d3eh2d38",
+        "status": "queued",
+        "rule_version": 1,
+        "selection_fingerprint": "d98620b388c8c1633a9d005d42495add6f6911e31883e3444709a2f4c626ddc8",
+        "total": 120,
+        "progress": 0,
+        "assigned": {},
+        "created": 0,
+        "errors": 0,
+        "skipped": [],
+        "excluded_assignees": [],
+        "error": null,
+        "started_at": null,
+        "finished_at": null
+      },
+      "double_submit_while_queued_http": 200,
+      "double_submit_while_queued_run_id_same": true,
+      "double_submit_while_queued_status": "queued",
+      "polling_matrix_while_queued": {
+        "admin_get_run": {
+          "http": 200,
+          "status": "queued"
+        },
+        "bod_get_run": {
+          "http": 200,
+          "status": "queued",
+          "has_raw_phone": false
+        },
+        "leader_a_get_run": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "leader_b_get_run": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "staff_a_get_run": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        },
+        "guest_get_run": {
+          "http": 403
+        },
+        "leader_a_run_history_by_run_id": {
+          "http": 200,
+          "count": 1
+        },
+        "leader_b_run_history_private_camp_a": {
+          "http": 200,
+          "count": 0
+        },
+        "staff_a_run_history": {
+          "http": 403,
+          "p1_code": "FORBIDDEN"
+        }
+      },
+      "reload_route_http": 200,
+      "reload_route_serves_campaigns_js": true,
+      "observed_statuses": [
+        "queued",
+        "running",
+        "completed"
+      ],
+      "completed_payload": {
+        "run_id": "h4kjn78m2o",
+        "campaign": "h4d3eh2d38",
+        "status": "completed",
+        "rule_version": 1,
+        "selection_fingerprint": "d98620b388c8c1633a9d005d42495add6f6911e31883e3444709a2f4c626ddc8",
+        "total": 120,
+        "progress": 120,
+        "assigned": {
+          "cskh-p1-staff-a@example.test": 72,
+          "cskh-p1-staff-b@example.test": 48
+        },
+        "created": 120,
+        "errors": 0,
+        "skipped": [],
+        "excluded_assignees": [],
+        "error": null,
+        "started_at": "2026-11-03 11:37:14.592301",
+        "finished_at": "2026-11-03 11:37:24.683289"
+      },
+      "bod_completed_get_run_has_raw_phone": false,
+      "double_submit_after_completed_created": 120,
+      "reconcile": {
+        "campaign": "h4d3eh2d38",
+        "current_owners": {
+          "cskh-p1-staff-a@example.test": 72,
+          "cskh-p1-staff-b@example.test": 48
+        },
+        "assignment_events": {
+          "cskh-p1-staff-a@example.test": 72,
+          "cskh-p1-staff-b@example.test": 48
+        },
+        "distinct_leads": 120,
+        "active_work_items": 120,
+        "active_claims": 120,
+        "as_of": "2026-11-03 11:37:24.759824"
+      },
+      "sql_truth": {
+        "assigned_work_items": 120,
+        "active_claims": 120,
+        "open_todos": 120,
+        "docshares": 120,
+        "crm_notifications": 120
+      }
+    },
+    "async_recheck_and_crash_recovery": {
+      "rule_changed_while_queued": {
+        "run_id": "h91tqmbg9c",
+        "final": {
+          "run_id": "h91tqmbg9c",
+          "campaign": "h90mv8vmgq",
+          "status": "failed",
+          "rule_version": 1,
+          "selection_fingerprint": "06cd3909d88ae22096ef902d590f18f473b33d5af27229948e7121ea5f5e6c54",
+          "total": 4,
+          "progress": 0,
+          "assigned": {},
+          "created": 0,
+          "errors": 0,
+          "skipped": [],
+          "excluded_assignees": [],
+          "error": "RULE_CHANGED: The assignment rules changed after the preview.",
+          "started_at": "2026-11-03 11:37:27.675368",
+          "finished_at": "2026-11-03 11:37:28.156307"
+        }
+      },
+      "capacity_exhausted_then_resumed": {
+        "run_id": "ha3s89ljdc",
+        "partial": {
+          "run_id": "ha3s89ljdc",
+          "campaign": "ha2m5hkrt3",
+          "status": "completed_with_errors",
+          "rule_version": 1,
+          "selection_fingerprint": "5be2fdae86735f0a9f924a6f9785d11831b8ffba3633d84b089a192df253ac93",
+          "total": 3,
+          "progress": 3,
+          "assigned": {
+            "cskh-p1-staff-c@example.test": 2
+          },
+          "created": 2,
+          "errors": 1,
+          "skipped": [
+            {
+              "lead": "CRM-LEAD-2026-01937",
+              "reason": "no_eligible_assignee"
+            }
+          ],
+          "excluded_assignees": [],
+          "error": null,
+          "started_at": "2026-11-03 11:37:28.983604",
+          "finished_at": "2026-11-03 11:37:30.261620"
+        },
+        "revoke_to_free_slot_http": 200,
+        "revoke_to_free_slot_status": "revoked",
+        "resume_enqueue_status": "completed_with_errors",
+        "resumed_final": null
+      },
+      "worker_exit_137_and_lease_recovery": {
+        "run_id": "hg5ajo5jo9",
+        "child_exit_code": 137,
+        "mid_crash_poll": {
+          "run_id": "hg5ajo5jo9",
+          "campaign": "hfqoaj0i3b",
+          "status": "running",
+          "rule_version": 1,
+          "selection_fingerprint": "24504868606f6efec2a1dca2004431a4872f8f25f9d5a974c7fcd9d94a5f0963",
+          "total": 10,
+          "progress": 6,
+          "assigned": {
+            "cskh-p1-staff-a@example.test": 3,
+            "cskh-p1-staff-b@example.test": 3
+          },
+          "created": 6,
+          "errors": 0,
+          "skipped": [],
+          "excluded_assignees": [],
+          "error": null,
+          "started_at": "2026-11-03 11:37:48.239253",
+          "finished_at": null
+        },
+        "execute_while_lease_active_status": "running",
+        "execute_after_lease_expired_status": "queued",
+        "recovered_final": {
+          "run_id": "hg5ajo5jo9",
+          "campaign": "hfqoaj0i3b",
+          "status": "completed",
+          "rule_version": 1,
+          "selection_fingerprint": "24504868606f6efec2a1dca2004431a4872f8f25f9d5a974c7fcd9d94a5f0963",
+          "total": 10,
+          "progress": 10,
+          "assigned": {
+            "cskh-p1-staff-a@example.test": 5,
+            "cskh-p1-staff-b@example.test": 5
+          },
+          "created": 10,
+          "errors": 0,
+          "skipped": [],
+          "excluded_assignees": [],
+          "error": null,
+          "started_at": "2026-11-03 11:37:48.239253",
+          "finished_at": "2026-11-03 11:37:53.406281"
+        },
+        "reconcile": {
+          "campaign": "hfqoaj0i3b",
+          "current_owners": {
+            "cskh-p1-staff-a@example.test": 5,
+            "cskh-p1-staff-b@example.test": 5
+          },
+          "assignment_events": {
+            "cskh-p1-staff-a@example.test": 5,
+            "cskh-p1-staff-b@example.test": 5
+          },
+          "distinct_leads": 10,
+          "active_work_items": 10,
+          "active_claims": 10,
+          "as_of": "2026-11-03 11:37:53.622107"
+        }
+      }
+    },
+    "l16_and_l21_http": {
+      "l16_not_found": {
+        "http": 404,
+        "code": "NOT_FOUND",
+        "p1_code": "NOT_FOUND"
+      },
+      "l16_invalid_request": {
+        "http": 400,
+        "code": "INVALID_REQUEST",
+        "p1_code": "INVALID_REQUEST"
+      },
+      "p0_file_oracle_preserved": {
+        "real_status": 404,
+        "missing_status": 404,
+        "bodies_byte_identical": true
+      },
+      "l21_variants": [
+        {
+          "variant": "json_bool_false",
+          "http": 200,
+          "status": "revoked",
+          "expected": "revoked",
+          "pass": true
+        },
+        {
+          "variant": "json_str_false",
+          "http": 200,
+          "status": "revoked",
+          "expected": "revoked",
+          "pass": true
+        },
+        {
+          "variant": "json_int_0",
+          "http": 200,
+          "status": "revoked",
+          "expected": "revoked",
+          "pass": true
+        },
+        {
+          "variant": "form_str_false",
+          "http": 200,
+          "status": "revoked",
+          "expected": "revoked",
+          "pass": true
+        },
+        {
+          "variant": "form_str_0",
+          "http": 200,
+          "status": "revoked",
+          "expected": "revoked",
+          "pass": true
+        },
+        {
+          "variant": "json_bool_true",
+          "http": 200,
+          "status": "queued",
+          "expected": "queued",
+          "pass": true
+        },
+        {
+          "variant": "form_str_true",
+          "http": 200,
+          "status": "queued",
+          "expected": "queued",
+          "pass": true
+        },
+        {
+          "variant": "form_str_1",
+          "http": 200,
+          "status": "queued",
+          "expected": "queued",
+          "pass": true
+        }
+      ],
+      "l21_all_8_variants_pass": true,
+      "l21_invalid_json": {
+        "http": 400,
+        "p1_code": "INVALID_REQUEST"
+      },
+      "l21_invalid_form": {
+        "http": 400,
+        "p1_code": "INVALID_REQUEST"
+      }
+    },
+    "l23_and_l24_recheck": {
+      "l23_pool_ui_cross_team_leak": {
+        "lead": "CRM-LEAD-2026-01930",
+        "private_team_b_campaign": "hi7fqsbi53",
+        "leader_a_returned_count": 1,
+        "leader_a_returned_item": {
+          "work_item": "hijbq7njee",
+          "lead": "CRM-LEAD-2026-01930",
+          "display_name": "Chưa rõ tên",
+          "phone": "[REDACTED_PHONE]",
+          "source": null,
+          "campaign": "hi7fqsbi53",
+          "campaign_title": "Chiến dịch Riêng Đội B L23",
+          "state": "assigned",
+          "owner": "cskh-p1-staff-c@example.test",
+          "created_at": "2026-11-03 11:37:55.585663"
+        },
+        "leader_a_sees_staff_c_and_private_camp_b": true,
+        "bod_has_zero_pii": true,
+        "l23_still_open": true
+      },
+      "l24_run_history_shared_campaign_leak_and_polling_paths": {
+        "shared_campaign": "hip9g7263k",
+        "run_id": "hisq0euf3h",
+        "leader_a_list_http": 200,
+        "leader_a_list_item": {
+          "run_id": "hisq0euf3h",
+          "campaign": "hip9g7263k",
+          "campaign_title": "Chiến dịch Chung Toàn Hệ Thống L24",
+          "campaign_code": "T1C-L24-SHARED",
+          "status": "completed",
+          "rule_version": 1,
+          "idempotency_key": "t1c-ex-l24",
+          "selection_fingerprint": "dd576de687468e718b4c5910ccfca4c1f040c7c31cfec65112275d58652b07f2",
+          "progress": 4,
+          "total": 4,
+          "created": 4,
+          "errors": 0,
+          "assigned": {
+            "cskh-p1-staff-a@example.test": 2,
+            "cskh-p1-staff-c@example.test": 2
+          },
+          "skipped": [],
+          "created_at": "2026-11-03 11:37:56.456120",
+          "started_at": "2026-11-03 11:37:56.984686",
+          "finished_at": "2026-11-03 11:37:58.500917",
+          "error": null
+        },
+        "leader_a_by_run_id_http": 200,
+        "leader_a_by_run_id_item": {
+          "run_id": "hisq0euf3h",
+          "campaign": "hip9g7263k",
+          "campaign_title": "Chiến dịch Chung Toàn Hệ Thống L24",
+          "campaign_code": "T1C-L24-SHARED",
+          "status": "completed",
+          "rule_version": 1,
+          "idempotency_key": "t1c-ex-l24",
+          "selection_fingerprint": "dd576de687468e718b4c5910ccfca4c1f040c7c31cfec65112275d58652b07f2",
+          "progress": 4,
+          "total": 4,
+          "created": 4,
+          "errors": 0,
+          "assigned": {
+            "cskh-p1-staff-a@example.test": 2,
+            "cskh-p1-staff-c@example.test": 2
+          },
+          "skipped": [],
+          "created_at": "2026-11-03 11:37:56.456120",
+          "started_at": "2026-11-03 11:37:56.984686",
+          "finished_at": "2026-11-03 11:37:58.500917",
+          "error": null
+        },
+        "leader_a_distribution_get_run_http": 403,
+        "leader_a_distribution_get_run_code": "FORBIDDEN",
+        "bod_distribution_get_run_http": 200,
+        "bod_distribution_get_run_payload": {
+          "run_id": "hisq0euf3h",
+          "campaign": "hip9g7263k",
+          "status": "completed",
+          "rule_version": 1,
+          "selection_fingerprint": "dd576de687468e718b4c5910ccfca4c1f040c7c31cfec65112275d58652b07f2",
+          "total": 4,
+          "progress": 4,
+          "assigned": {
+            "cskh-p1-staff-a@example.test": 2,
+            "cskh-p1-staff-c@example.test": 2
+          },
+          "created": 4,
+          "errors": 0,
+          "skipped": [],
+          "excluded_assignees": [],
+          "error": null,
+          "started_at": "2026-11-03 11:37:56.984686",
+          "finished_at": "2026-11-03 11:37:58.500917"
+        },
+        "bod_get_run_has_raw_phone": false,
+        "bod_run_history_has_raw_phone": false,
+        "l24_still_open_on_list": true,
+        "l24_still_open_on_run_id_lookup": true
+      }
+    },
+    "l17_and_l22_dashboard_vs_sql": {
+      "actors": {
+        "CRM-ADMIN": {
+          "http": 200,
+          "scope": "system",
+          "cards": {
+            "unique_customers": 136,
+            "eligible_unassigned": 3,
+            "assigned_work_items": 128,
+            "unassigned_work_items": 3,
+            "revoked_work_items": 5,
+            "closed_work_items": 1,
+            "active_claims": 128,
+            "active_campaigns": 6,
+            "failed_batches": 0,
+            "failed_runs": 1
+          },
+          "sql_expected_work_item_cards": {
+            "unique_customers": 136,
+            "assigned_work_items": 128,
+            "unassigned_work_items": 3,
+            "revoked_work_items": 5,
+            "closed_work_items": 1,
+            "active_claims": 128
+          },
+          "matches_sql": true,
+          "has_raw_phone": false
+        },
+        "BOD": {
+          "http": 200,
+          "scope": "all",
+          "cards": {
+            "unique_customers": 136,
+            "eligible_unassigned": 3,
+            "assigned_work_items": 128,
+            "unassigned_work_items": 3,
+            "revoked_work_items": 5,
+            "closed_work_items": 1,
+            "active_claims": 128,
+            "active_campaigns": 6,
+            "failed_batches": 0,
+            "failed_runs": 1
+          },
+          "sql_expected_work_item_cards": {
+            "unique_customers": 136,
+            "assigned_work_items": 128,
+            "unassigned_work_items": 3,
+            "revoked_work_items": 5,
+            "closed_work_items": 1,
+            "active_claims": 128
+          },
+          "matches_sql": true,
+          "has_raw_phone": false
+        },
+        "Leader A": {
+          "http": 200,
+          "scope": "team",
+          "cards": {
+            "unique_customers": 132,
+            "eligible_unassigned": 3,
+            "assigned_work_items": 124,
+            "unassigned_work_items": 3,
+            "revoked_work_items": 4,
+            "closed_work_items": 1,
+            "active_claims": 124,
+            "active_campaigns": 4,
+            "failed_batches": 0,
+            "failed_runs": 1
+          },
+          "sql_expected_work_item_cards": {
+            "unique_customers": 132,
+            "assigned_work_items": 124,
+            "unassigned_work_items": 3,
+            "revoked_work_items": 4,
+            "closed_work_items": 1,
+            "active_claims": 124
+          },
+          "matches_sql": true,
+          "has_raw_phone": false
+        },
+        "Leader B": {
+          "http": 200,
+          "scope": "team",
+          "cards": {
+            "unique_customers": 5,
+            "eligible_unassigned": 0,
+            "assigned_work_items": 4,
+            "unassigned_work_items": 0,
+            "revoked_work_items": 1,
+            "closed_work_items": 0,
+            "active_claims": 4,
+            "active_campaigns": 3,
+            "failed_batches": 0,
+            "failed_runs": 0
+          },
+          "sql_expected_work_item_cards": {
+            "unique_customers": 5,
+            "assigned_work_items": 4,
+            "unassigned_work_items": 0,
+            "revoked_work_items": 1,
+            "closed_work_items": 0,
+            "active_claims": 4
+          },
+          "matches_sql": true,
+          "has_raw_phone": false
+        }
+      },
+      "staff_a_denied_http": 403,
+      "staff_a_p1_code": "FORBIDDEN",
+      "all_actors_match_sql": true
+    },
+    "l26_validation_and_eligibility": {
+      "malformed_int_probes": {
+        "pool_ui.list_page_abc": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        },
+        "ownership_ui.assigned_list_page_abc": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        },
+        "import_history.history_page_abc": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        },
+        "run_history.runs_page_abc": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        },
+        "ownership.history_limit_abc": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        },
+        "customers.pool_list_page_abc": {
+          "http": 500,
+          "exc_type": "ValueError",
+          "p1_code": null
+        }
+      },
+      "any_500_on_malformed_int": true,
+      "assignees_for_team_a_campaign": {
+        "campaign": "h4d3eh2d38",
+        "campaign_team_scope": "gtmrkrg5m2",
+        "returned_users": [
+          "Administrator",
+          "crm.admin@example.com",
+          "crm.user5@example.com",
+          "crm.rep2@example.com",
+          "crm.user2@example.com",
+          "crm.user1@example.com",
+          "crm.supervisor@example.com",
+          "crm.user3@example.com",
+          "cskh-p1-staff-a@example.test",
+          "cskh-p1-staff-b@example.test",
+          "cskh-p1-staff-c@example.test",
+          "cskh-p1-outside@example.test",
+          "crm.rep1@example.com",
+          "crm.manager@example.com",
+          "crm.user4@example.com",
+          "cskh-p1-leader-a@example.test",
+          "cskh-p1-leader-b@example.test"
+        ],
+        "includes_team_b_staff_c": true,
+        "includes_outside_hierarchy_user": true
+      }
+    }
+  }
+}

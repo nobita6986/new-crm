@@ -1,0 +1,311 @@
+{
+  "target_sha": "64b7486f29ad712106d167dfaea50e3b060a6845",
+  "manifest_entries": 30,
+  "git_blob_matches": 30,
+  "git_blob_mismatches": [],
+  "windows_checkout_crlf_normalized_matches": [
+    "benchmark/p1-benchmark-10k-fresh.json",
+    "benchmark/p1-benchmark-10k-on-20k.json",
+    "benchmark/p1-benchmark-mixed-capacity.json",
+    "chaos/p1-chaos-report.json",
+    "http/p1-http-transport.json",
+    "junit-p1/migrate-1.txt",
+    "junit-p1/migrate-2.txt",
+    "junit-p1/module-status.txt",
+    "junit-p1/p1-per-method-gate.json",
+    "junit-p1/p1-per-method-gate.txt",
+    "junit-p1/test_p1_api_permissions.junit.xml",
+    "junit-p1/test_p1_chaos.junit.xml",
+    "junit-p1/test_p1_concurrency.junit.xml",
+    "junit-p1/test_p1_distribution.junit.xml",
+    "junit-p1/test_p1_identity.junit.xml",
+    "junit-p1/test_p1_imports.junit.xml",
+    "junit-p1/test_p1_ownership.junit.xml",
+    "junit-p1/test_p1_regressions.junit.xml",
+    "p0/auxiliary/module-status.txt",
+    "p0/auxiliary/test_error_response_normalization.junit.xml",
+    "p0/auxiliary/test_health.junit.xml",
+    "p0/auxiliary/test_poc_custom_field.junit.xml",
+    "p0/g007-per-method-gate.json",
+    "p0/g007-per-method-gate.txt",
+    "p0/module-status.txt",
+    "p0/test_bt1c5_matrix_gaps.junit.xml",
+    "p0/test_docshare_lifecycle.junit.xml",
+    "p0/test_permissions.junit.xml",
+    "p0/test_security_remediation.junit.xml",
+    "p0/test_security_remediation_v2.junit.xml"
+  ],
+  "pii_or_secret_leaks": [],
+  "files": [
+    {
+      "file": "benchmark/p1-benchmark-10k-fresh.json",
+      "expected_sha256": "5be8c439c834421205bddff89942bc41f0aec0503627db71a446afc949ab2f8a",
+      "git_blob_sha256": "5be8c439c834421205bddff89942bc41f0aec0503627db71a446afc949ab2f8a",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 16942
+    },
+    {
+      "file": "benchmark/p1-benchmark-10k-on-20k.json",
+      "expected_sha256": "39ee681920806c5dc656fd48f867e6f6b4e7e9bfc773f4484ccdcc1db6ec5663",
+      "git_blob_sha256": "39ee681920806c5dc656fd48f867e6f6b4e7e9bfc773f4484ccdcc1db6ec5663",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 6067
+    },
+    {
+      "file": "benchmark/p1-benchmark-mixed-capacity.json",
+      "expected_sha256": "93f9f10681ba4e5bed14900c9707fd7d374eb0162fb93f2e9e0306be7cff7968",
+      "git_blob_sha256": "93f9f10681ba4e5bed14900c9707fd7d374eb0162fb93f2e9e0306be7cff7968",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 6745
+    },
+    {
+      "file": "chaos/p1-chaos-report.json",
+      "expected_sha256": "a7e916ad92ab1da3632fbd5eb8224b236324e463fc2ac233f98cd11c755bd0e3",
+      "git_blob_sha256": "a7e916ad92ab1da3632fbd5eb8224b236324e463fc2ac233f98cd11c755bd0e3",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 3402
+    },
+    {
+      "file": "http/p1-http-transport.json",
+      "expected_sha256": "e1ac5cc7ab75d2fa0f76750569c415ac611a8b17d415c79bec09b37a1b6c0179",
+      "git_blob_sha256": "e1ac5cc7ab75d2fa0f76750569c415ac611a8b17d415c79bec09b37a1b6c0179",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 115294
+    },
+    {
+      "file": "junit-p1/migrate-1.txt",
+      "expected_sha256": "67f35169f316d006ea1b840a8969e61b03be124a13d5f0c596672c82905ee87a",
+      "git_blob_sha256": "67f35169f316d006ea1b840a8969e61b03be124a13d5f0c596672c82905ee87a",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 34433
+    },
+    {
+      "file": "junit-p1/migrate-2.txt",
+      "expected_sha256": "67f35169f316d006ea1b840a8969e61b03be124a13d5f0c596672c82905ee87a",
+      "git_blob_sha256": "67f35169f316d006ea1b840a8969e61b03be124a13d5f0c596672c82905ee87a",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 34433
+    },
+    {
+      "file": "junit-p1/module-status.txt",
+      "expected_sha256": "87316b80f3b72c8f067159ad2d9143d44bb93746cc366e6e4aadeb538a1a595b",
+      "git_blob_sha256": "87316b80f3b72c8f067159ad2d9143d44bb93746cc366e6e4aadeb538a1a595b",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 326
+    },
+    {
+      "file": "junit-p1/p1-per-method-gate.json",
+      "expected_sha256": "34cb89bc65c8b8f0914345e34b67a7c80a2fde97b3bde203f4b17abb3eea069c",
+      "git_blob_sha256": "34cb89bc65c8b8f0914345e34b67a7c80a2fde97b3bde203f4b17abb3eea069c",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 66082
+    },
+    {
+      "file": "junit-p1/p1-per-method-gate.txt",
+      "expected_sha256": "2aefbdb6ba5eed777f41ac49174d0f7c5efc6fac6d6ad01fe883d8e9d042932f",
+      "git_blob_sha256": "2aefbdb6ba5eed777f41ac49174d0f7c5efc6fac6d6ad01fe883d8e9d042932f",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 112
+    },
+    {
+      "file": "junit-p1/test_p1_api_permissions.junit.xml",
+      "expected_sha256": "36c879cf3f5f85c4335430c3fcb3fc7e398fe0847ce3767d2b5bfac78114a929",
+      "git_blob_sha256": "36c879cf3f5f85c4335430c3fcb3fc7e398fe0847ce3767d2b5bfac78114a929",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 14889
+    },
+    {
+      "file": "junit-p1/test_p1_chaos.junit.xml",
+      "expected_sha256": "eae0044b92fe1c8165f897006990074e3ed3424176098f4d0c42aecd17a2691b",
+      "git_blob_sha256": "eae0044b92fe1c8165f897006990074e3ed3424176098f4d0c42aecd17a2691b",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 4108
+    },
+    {
+      "file": "junit-p1/test_p1_concurrency.junit.xml",
+      "expected_sha256": "00b7bc8c1542b9f57b5e1e71d228e8d97d0e7a4f7f868a3fc7415d2671352f10",
+      "git_blob_sha256": "00b7bc8c1542b9f57b5e1e71d228e8d97d0e7a4f7f868a3fc7415d2671352f10",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 3883
+    },
+    {
+      "file": "junit-p1/test_p1_distribution.junit.xml",
+      "expected_sha256": "75bec76d81ce647a163fa312aeafb74ccce3c8d433f4719648de9e30bd0da67c",
+      "git_blob_sha256": "75bec76d81ce647a163fa312aeafb74ccce3c8d433f4719648de9e30bd0da67c",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 5259
+    },
+    {
+      "file": "junit-p1/test_p1_identity.junit.xml",
+      "expected_sha256": "9310d101731e59db794b3855734bb3a77801ce9dff92568c1d568de18239003b",
+      "git_blob_sha256": "9310d101731e59db794b3855734bb3a77801ce9dff92568c1d568de18239003b",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 3945
+    },
+    {
+      "file": "junit-p1/test_p1_imports.junit.xml",
+      "expected_sha256": "94c2b86e6dd4af9a183590f17bf0f85d7dc5584c92165ca148b79fc4ae42cdb3",
+      "git_blob_sha256": "94c2b86e6dd4af9a183590f17bf0f85d7dc5584c92165ca148b79fc4ae42cdb3",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 5882
+    },
+    {
+      "file": "junit-p1/test_p1_ownership.junit.xml",
+      "expected_sha256": "01f3cf582b4c819b624d32bd5aec539fbfc7d3a0afaf3cb3a8daccb1565563dc",
+      "git_blob_sha256": "01f3cf582b4c819b624d32bd5aec539fbfc7d3a0afaf3cb3a8daccb1565563dc",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 4779
+    },
+    {
+      "file": "junit-p1/test_p1_regressions.junit.xml",
+      "expected_sha256": "d3100e4f16bafc4ce398a4f877d0e980ae120d7dd330351c94ad2a6184bd60c4",
+      "git_blob_sha256": "d3100e4f16bafc4ce398a4f877d0e980ae120d7dd330351c94ad2a6184bd60c4",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 24847
+    },
+    {
+      "file": "p0/auxiliary/module-status.txt",
+      "expected_sha256": "65f9336a9784359a4197adf3e83db3f843cd6881542d9233e9280cb4b61c2963",
+      "git_blob_sha256": "65f9336a9784359a4197adf3e83db3f843cd6881542d9233e9280cb4b61c2963",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 152
+    },
+    {
+      "file": "p0/auxiliary/test_error_response_normalization.junit.xml",
+      "expected_sha256": "c7d39c8fdbf40b29b27e937330953ecb06efc1aca5ff260beb4fad178c30b6ec",
+      "git_blob_sha256": "c7d39c8fdbf40b29b27e937330953ecb06efc1aca5ff260beb4fad178c30b6ec",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 2634
+    },
+    {
+      "file": "p0/auxiliary/test_health.junit.xml",
+      "expected_sha256": "2242ed05792e2b3180c3b514016067b1bd3ad64162a08d526c3ccd0fc15fd451",
+      "git_blob_sha256": "2242ed05792e2b3180c3b514016067b1bd3ad64162a08d526c3ccd0fc15fd451",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 1895
+    },
+    {
+      "file": "p0/auxiliary/test_poc_custom_field.junit.xml",
+      "expected_sha256": "ff2a092f4ca45d7ee96b3b2ec82a2c6eb18aa195326cda8e944b3f6a435341c3",
+      "git_blob_sha256": "ff2a092f4ca45d7ee96b3b2ec82a2c6eb18aa195326cda8e944b3f6a435341c3",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 1429
+    },
+    {
+      "file": "p0/g007-per-method-gate.json",
+      "expected_sha256": "80c9b6cc928d1c827b7d64591468911d93dc29be94002594716f20381b5cea07",
+      "git_blob_sha256": "80c9b6cc928d1c827b7d64591468911d93dc29be94002594716f20381b5cea07",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 37887
+    },
+    {
+      "file": "p0/g007-per-method-gate.txt",
+      "expected_sha256": "f066bab951f6f50b861b09d87d0ecb9f49afe73db41ef2127eb4b777c4432fd8",
+      "git_blob_sha256": "f066bab951f6f50b861b09d87d0ecb9f49afe73db41ef2127eb4b777c4432fd8",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 108
+    },
+    {
+      "file": "p0/module-status.txt",
+      "expected_sha256": "3bb58e30353b1fe9132aaab05d313096d39c7c50d3c68ad6dfc5f9449da81fcd",
+      "git_blob_sha256": "3bb58e30353b1fe9132aaab05d313096d39c7c50d3c68ad6dfc5f9449da81fcd",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 229
+    },
+    {
+      "file": "p0/test_bt1c5_matrix_gaps.junit.xml",
+      "expected_sha256": "ca6d1e6f4d633f826165a2018d4384468bdc3ebdc7c22eb9e2569577bee1c327",
+      "git_blob_sha256": "ca6d1e6f4d633f826165a2018d4384468bdc3ebdc7c22eb9e2569577bee1c327",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 16754
+    },
+    {
+      "file": "p0/test_docshare_lifecycle.junit.xml",
+      "expected_sha256": "2e73682c74a7d5203e65df0488757409e581fa9857dd60bd2e88df50476441aa",
+      "git_blob_sha256": "2e73682c74a7d5203e65df0488757409e581fa9857dd60bd2e88df50476441aa",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 13947
+    },
+    {
+      "file": "p0/test_permissions.junit.xml",
+      "expected_sha256": "204b4676613ae05ff58add2e3217bfc867b1edbabcbc9a3a6f62c270efd96aac",
+      "git_blob_sha256": "204b4676613ae05ff58add2e3217bfc867b1edbabcbc9a3a6f62c270efd96aac",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 18551
+    },
+    {
+      "file": "p0/test_security_remediation.junit.xml",
+      "expected_sha256": "58c2b54103f71634b477a7a221f5a309ea3facdb3948a82833207813ca1da829",
+      "git_blob_sha256": "58c2b54103f71634b477a7a221f5a309ea3facdb3948a82833207813ca1da829",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 7583
+    },
+    {
+      "file": "p0/test_security_remediation_v2.junit.xml",
+      "expected_sha256": "04dbd09ed1479e511d30b18df59b9970360f257c96df4b7d5925cecf59a14c3d",
+      "git_blob_sha256": "04dbd09ed1479e511d30b18df59b9970360f257c96df4b7d5925cecf59a14c3d",
+      "git_blob_match": true,
+      "worktree_raw_match": false,
+      "worktree_lf_normalized_match": true,
+      "blob_bytes": 35982
+    }
+  ]
+}

@@ -1,0 +1,107 @@
+{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Import list") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Upload a private file, map the phone column, preview, then confirm.") }}{% endblock %}
+
+{% block cskh_body %}
+<div id="import-alert" aria-live="polite"></div>
+
+<div class="cskh-card">
+	<div class="cskh-step is-active" id="step-upload">
+		<h3>{{ _("1. Upload a private file") }}</h3>
+		<p class="cskh-muted">
+			{{ _("CSV or XLSX, up to 10 MB. Keep the phone column as text so the leading zero is not lost.") }}
+		</p>
+		<div class="cskh-actions">
+			<input id="import-file" class="cskh-input" type="file" accept=".csv,.xlsx">
+			<label class="cskh-field">
+				{{ _("Phone column") }}
+				<input id="import-phone-column" class="cskh-input" type="text"
+					placeholder="{{ _('Phone column') }}">
+			</label>
+			<label class="cskh-field">
+				{{ _("Name column") }}
+				<input id="import-name-column" class="cskh-input" type="text"
+					placeholder="{{ _('Name column') }}">
+			</label>
+			<label class="cskh-field">
+				{{ _("Source column") }}
+				<input id="import-source-column" class="cskh-input" type="text"
+					placeholder="{{ _('Source column') }}">
+			</label>
+			<button id="import-preview" class="cskh-btn is-primary" type="button" disabled>
+				{{ _("Preview") }}
+			</button>
+		</div>
+	</div>
+
+	<div class="cskh-step" id="step-preview" hidden>
+		<h3>{{ _("2. Preview and confirm") }}</h3>
+		<div id="import-summary"></div>
+		<div id="import-rows"></div>
+		<div class="cskh-actions">
+			<button id="import-confirm" class="cskh-btn is-primary" type="button">
+				{{ _("Confirm import") }}
+			</button>
+			<button id="import-reset" class="cskh-btn" type="button">{{ _("Start over") }}</button>
+		</div>
+	</div>
+
+	<div class="cskh-step" id="step-progress" hidden>
+		<h3>{{ _("3. Follow the progress") }}</h3>
+		<div id="import-progress"></div>
+	</div>
+</div>
+
+<div class="cskh-card">
+	<h2>{{ _("Import history") }}</h2>
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Status") }}
+			<select id="import-history-status" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+				<option value="DRY_RUN">{{ _("Preview") }}</option>
+				<option value="CONFIRMED">{{ _("Confirmed") }}</option>
+				<option value="QUEUED">{{ _("Queued") }}</option>
+				<option value="RUNNING">{{ _("Running") }}</option>
+				<option value="COMPLETED">{{ _("Completed") }}</option>
+				<option value="COMPLETED_WITH_ERRORS">{{ _("Completed with errors") }}</option>
+				<option value="FAILED">{{ _("Failed") }}</option>
+			</select>
+		</label>
+		<button id="import-history-refresh" class="cskh-btn is-primary" type="button">
+			{{ _("Refresh") }}
+		</button>
+	</div>
+	<div id="import-history-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="import-history-empty" class="cskh-alert is-empty" hidden>
+		{{ _("No import batch yet.") }}
+	</div>
+	<table id="import-history-table" class="cskh-table" hidden>
+		<thead>
+			<tr>
+				<th>{{ _("Batch") }}</th>
+				<th>{{ _("Status") }}</th>
+				<th class="num">{{ _("Total rows") }}</th>
+				<th class="num">{{ _("Created rows") }}</th>
+				<th class="num">{{ _("Reused rows") }}</th>
+				<th class="num">{{ _("Skipped rows") }}</th>
+				<th class="num">{{ _("Error rows") }}</th>
+				<th>{{ _("Committed at") }}</th>
+				<th>{{ _("Error file") }}</th>
+				<th>{{ _("Actions") }}</th>
+			</tr>
+		</thead>
+		<tbody id="import-history-rows"></tbody>
+	</table>
+	<div class="cskh-pager">
+		<button id="import-history-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
+		<span id="import-history-range"></span>
+		<button id="import-history-next" class="cskh-btn" type="button">{{ _("Next") }}</button>
+	</div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/import.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}

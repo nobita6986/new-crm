@@ -1,0 +1,170 @@
+{
+  "generated_at": "2026-11-03T13:56:20.131Z",
+  "round": 4,
+  "site": "http://p1.localhost:8120",
+  "git_sha": "a7cdd0f3da7f09c42c00e473e22b01cd857e24b3",
+  "apps_tree_sha": "d512baa9e390e6c45243c2310d949dc6c674a952",
+  "parent_ui_sha": "5c37bf3dc464a0d8e2b9bd94ba55df40da469559",
+  "parent_backend_l26_sha": "2235757b79bb9f1a7fb3ae2957b28deb088185b9",
+  "parent_backend_l29_sha": "77e07dac7948c156039bc6a9746fe5d451fc0d71",
+  "parent_backend_pool_list_l23_sha": "6c457b327e59eead47cc9d0982c4ee1df4fe9e64",
+  "baseline_ui_sha": "0d3f2bcbbf9715a4c0c783903ce750de8646583d",
+  "passed_checks": 4,
+  "total_checks": 4,
+  "all_passed": true,
+  "checks": [
+    {
+      "id": "L29-HTTP-DOCTYPE-PERMLEVEL-LOCKDOWN",
+      "passed": true,
+      "details": {
+        "admin_direct_put_status": 403,
+        "leader_a_foreign_camp_status": 403,
+        "leader_a_foreign_run_status": 403,
+        "leader_a_filter_oracle_status": 403,
+        "leader_a_search_link_identity_status": 403,
+        "bod_search_link_crm_lead_status": 403,
+        "bod_filter_oracle_status": 403,
+        "staff_a_camp_read_status": 403
+      }
+    },
+    {
+      "id": "LEADER-UI-FULL-SCREEN-AUDIT",
+      "passed": true,
+      "details": {
+        "landing_cards": [
+          "/cskh/pool",
+          "/cskh/campaigns",
+          "/cskh/my-customers",
+          "/cskh/dashboard"
+        ],
+        "import_http_status": 403,
+        "campaigns_controls": {
+          "formHidden": true,
+          "distHidden": true,
+          "lookupWrapHidden": true,
+          "lookupBtnHidden": true,
+          "options": [
+            "",
+            "3n0t3l6ag5",
+            "3msb6mc16h"
+          ]
+        },
+        "l23_pool_check": {
+          "inUi": false,
+          "inCust": false,
+          "inLegacy": false,
+          "seesStayQueuedA": true,
+          "prePaginationA": {
+            "pool_ui": {
+              "items_len": 1,
+              "total": 4,
+              "unique_customers": 4,
+              "work_items": 4
+            },
+            "customer_pool": {
+              "items_len": 1,
+              "total": 4,
+              "unique_customers": 4,
+              "work_items": 4
+            },
+            "pool_list": {
+              "items_len": 1,
+              "total": 2,
+              "unique_customers": 2,
+              "work_items": 2
+            }
+          },
+          "campBBlockedTotals": [
+            0,
+            0,
+            0
+          ]
+        },
+        "l24_shared_run_created": 2,
+        "ownership_detail_verified": "3os84da6v9"
+      }
+    },
+    {
+      "id": "BOD-UI-FULL-SCREEN-AUDIT-ZERO-PII",
+      "passed": true,
+      "details": {
+        "landing_cards": [
+          "/cskh/pool",
+          "/cskh/campaigns",
+          "/cskh/my-customers",
+          "/cskh/dashboard"
+        ],
+        "import_http_status": 403,
+        "lookup_visibility": {
+          "formHidden": true,
+          "distHidden": true,
+          "lookupWrapHidden": false,
+          "lookupBtnHidden": false
+        },
+        "run_lookup_verified": "3n70u107np",
+        "ownership_detail_verified": "3os84da6v9"
+      }
+    },
+    {
+      "id": "STAFF-ZERO-403-AND-L26-ALL-8-ENDPOINTS-AND-DIRECT-MUTATION",
+      "passed": true,
+      "details": {
+        "staff_landing_cards": [
+          "/cskh/my-customers"
+        ],
+        "staff_my_customers_background_403_count": 0,
+        "l26_endpoints": [
+          {
+            "endpoint": "crm_cskh.api.pool_ui.list",
+            "status": 400,
+            "p1_code": "INVALID_REQUEST"
+          },
+          {
+            "endpoint": "crm_cskh.api.customers.customer_pool",
+            "status": 400,
+            "p1_code": "INVALID_REQUEST"
+          },
+          {
+            "endpoint": "crm_cskh.api.customers.pool_list",
+            "status": 400,
+            "p1_code": "INVALID_REQUEST"
+          },
+          {
+            "endpoint": "crm_cskh.api.customers.my_list",
+            "status": 400,
+            "p1_code": "INVALID_REQUEST"
+          },
+          {
+            "endpoint": "crm_cskh.api.ownership.history",
+            "status": 400,
+            "p1_code": "INVALID_REQUEST"
+          },
+          {
+            "endpoint": "crm_cskh.api.ownership_ui.assigned_list",
+            "status": 400,
+            "p1_code": "INVALID_REQUEST"
+          },
+          {
+            "endpoint": "crm_cskh.api.import_history.history",
+            "status": 400,
+            "p1_code": "INVALID_REQUEST"
+          },
+          {
+            "endpoint": "crm_cskh.api.run_history.runs",
+            "status": 400,
+            "p1_code": "INVALID_REQUEST"
+          }
+        ],
+        "direct_cross_team_reassign": {
+          "status": 400,
+          "code": "INVALID_REQUEST"
+        },
+        "camp_a_assignees": [
+          "cskh-p1-staff-a@example.test",
+          "cskh-p1-staff-b@example.test",
+          "cskh-p1-leader-a@example.test"
+        ]
+      }
+    }
+  ]
+}
