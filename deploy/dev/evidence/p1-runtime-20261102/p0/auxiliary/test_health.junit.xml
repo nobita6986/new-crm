@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-	<testsuite name="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIAuthorization-2[REDACTED_PHONE]04" tests="3" file="crm_cskh/crm_cskh/tests/test_health.py" time="0.083" timestamp="2026-11-03T09:25:04" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIAuthorization" name="test_guest_is_denied" time="0.067" timestamp="2026-11-03T09:25:04" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_health.py" line="25">
+	<testsuite name="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIAuthorization-2[REDACTED_PHONE]07" tests="3" file="crm_cskh/crm_cskh/tests/test_health.py" time="0.105" timestamp="2026-11-03T15:31:07" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIAuthorization" name="test_guest_is_denied" time="0.096" timestamp="2026-11-03T15:31:07" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_health.py" line="25">
 			<!--Guest gọi API yêu cầu đăng nhập → bị từ chối.-->
 			<system-out><![CDATA[Message: You are not permitted to access this resource. Login to accessFunction crm_cskh.api.health.ping is not whitelisted.
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIAuthorization" name="test_logged_in_user_is_allowed" time="0.009" timestamp="2026-11-03T09:25:04" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_health.py" line="31"/>
-		<testcase classname="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIAuthorization" name="test_ping_not_registered_as_guest_method" time="0.007" timestamp="2026-11-03T09:25:04" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_health.py" line="20">
+		<testcase classname="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIAuthorization" name="test_logged_in_user_is_allowed" time="0.004" timestamp="2026-11-03T15:31:07" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_health.py" line="31"/>
+		<testcase classname="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIAuthorization" name="test_ping_not_registered_as_guest_method" time="0.005" timestamp="2026-11-03T15:31:07" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_health.py" line="20">
 			<!--Endpoint không được đăng ký cho Guest.-->
 		</testcase>
 	</testsuite>
-	<testsuite name="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIResponseShape-2[REDACTED_PHONE]04" tests="1" file="crm_cskh/crm_cskh/tests/test_health.py" time="0.006" timestamp="2026-11-03T09:25:04" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIResponseShape" name="test_response_exposes_no_sensitive_fields" time="0.006" timestamp="2026-11-03T09:25:04" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_health.py" line="43"/>
+	<testsuite name="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIResponseShape-2[REDACTED_PHONE]07" tests="1" file="crm_cskh/crm_cskh/tests/test_health.py" time="0.004" timestamp="2026-11-03T15:31:07" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.crm_cskh.tests.test_health.TestHealthAPIResponseShape" name="test_response_exposes_no_sensitive_fields" time="0.004" timestamp="2026-11-03T15:31:07" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_health.py" line="43"/>
 	</testsuite>
 </testsuites>

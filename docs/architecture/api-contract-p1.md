@@ -41,7 +41,7 @@
 | 7 | POST | `crm_cskh.api.campaigns.save_rule` | `CSKH CRM Admin` | Tạo/sửa rule (weight, capacity) |
 | 8 | POST | `crm_cskh.api.distribution.preview` | `CSKH CRM Admin` | Dry-run phân phối |
 | 9 | POST | `crm_cskh.api.distribution.execute` | `CSKH CRM Admin` | Đưa preview vào hàng đợi nền RQ (trả ngay `run_id` + trạng thái sớm; hỗ trợ resume) |
-| 10 | GET | `crm_cskh.api.distribution.get_run` | `CSKH CRM Admin` / `CSKH BOD Viewer` / `Sales Manager` (trong team) | Polling tiến độ (`progress`/`total`), kết quả cộng dồn và lỗi của run |
+| 10 | GET | `crm_cskh.api.distribution.get_run` | `CSKH CRM Admin` / `CSKH BOD Viewer` | Polling tiến độ (`progress`/`total`), kết quả cộng dồn và lỗi của run |
 | 11 | GET | `crm_cskh.api.distribution.reconcile` | `CSKH CRM Admin` | Đối soát state với DB |
 | 12 | POST | `crm_cskh.api.ownership.assign` | `CSKH CRM Admin` | Giao work item queued |
 | 13 | POST | `crm_cskh.api.ownership.reassign` | `CSKH CRM Admin` | Chuyển owner (expected-owner) |
@@ -232,8 +232,8 @@ preview đánh dấu `invalid`).
 
 | Tham số | Kiểu | Mô tả |
 |---|---|---|
-| `status` | string | Lọc theo `Draft`/`Active`/`Paused`/`Closed` |
-| `campaign` | string | Dự trữ (contract P0 không dùng) |
+| `status` | string | Lọc theo `Draft`/`Active`/`Paused`/`Closed` (`parse_optional_str`) |
+| `campaign` | string | Lọc chính xác theo mã `CSKH Campaign.name` trong scope của actor (`parse_optional_str`) |
 
 **Response 200**
 
@@ -247,7 +247,7 @@ preview đánh dấu `invalid`).
 }
 ```
 
-**Lỗi:** `FORBIDDEN`.
+**Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`.
 
 ### 3.5 `crm_cskh.api.campaigns.save` — POST
 
@@ -288,7 +288,9 @@ preview đánh dấu `invalid`).
 `reason` là một trong: `user_disabled`, `user_is_not_sales_user`, `no_positive_weight`,
 `user_out_of_team_scope`, `capacity_full`.
 
-**Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`.
+Kiểm tra quyền đọc **document-level** thật trên `CSKH Campaign` (`frappe.has_permission("CSKH Campaign", "read", doc=campaign, user=actor, throw=False)`): `Sales Manager` truy vấn campaign riêng của team khác bị từ chối `403 FORBIDDEN`; campaign không tồn tại trả `404 NOT_FOUND`.
+
+**Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`, `NOT_FOUND`.
 
 ### 3.7 `crm_cskh.api.campaigns.save_rule` — POST
 
@@ -406,12 +408,11 @@ không phải chia đều mỗi lần.
 |---|---|---|
 | `run_id` | string | ✔ |
 
-**Vai trò:** `CSKH CRM Admin`, `CSKH BOD Viewer`, hoặc `Sales Manager` có quyền đọc run thuộc nhánh team của mình.
+**Vai trò:** `CSKH CRM Admin` hoặc `CSKH BOD Viewer` (`Sales Manager` dùng projection lịch sử theo team tại `run_history.runs` trên PR #5 và `campaigns.*` / `dashboard.*`).
 
 **Response 200:** cùng shape với §3.9 (`run_id`, `campaign`, `status`, `rule_version`,
 `selection_fingerprint`, `total`, `progress`, `assigned`, `created`, `errors`, `skipped`,
-`error`, `started_at`, `finished_at`). Khi `status == "completed"`, trả đúng số liệu cuối ví dụ:
-`progress = 1000`, `total = 1000`, `assigned = {"staff.a@dev.local": 500, ...}`, `created = 1000`.
+`error`, `started_at`, `finished_at`). Nhờ endpoint projection này, `CSKH BOD Viewer` vẫn xem được tiến độ/kết quả tổng hợp của đợt phân phối dù các trường JSON thô (`preview_json`, `actual_json`, `state_json`, ...) trên `CSKH Distribution Run` đã khoá `permlevel = 1` (`L-29`).
 
 **Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`, `NOT_FOUND`.
 
@@ -454,15 +455,23 @@ site. Cột của lịch sử là `to_user` (không phải `assigned_to`).
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
 | `work_item` | string | ✔ | |
-| `target_user` | string | ✔ | Phải là `Sales User` enabled |
+| `target_user` | string | ✔ | Phải là `Sales User` enabled và đủ điều kiện theo campaign |
 | `reason` | string | ✖ | Mặc định `Initial assignment` |
 | `request_id` | string | ✔ | Khóa idempotency của event |
 
 **Response 200:** `{ "work_item": "…", "status": "assigned", "owner": "staff.a@dev.local" }`
 hoặc `{ "work_item": "…", "status": "already_applied", "event": "<history name>" }` khi retry.
 
-**Lỗi:** `FORBIDDEN`, `INVALID_REQUEST` (thiếu `request_id`, target không hợp lệ),
-`ALREADY_ASSIGNED` (work item không `queued`), `CONFLICT`.
+**Kiểm tra eligibility trực tiếp tại tầng service (`_require_campaign_target_eligibility` — P1 §7.1, §7.2, §7.6):**
+1. `target_user` phải tồn tại, `enabled == 1` và có vai trò `Sales User` (`400 INVALID_REQUEST`).
+2. Nếu `work_item` gắn `campaign`:
+   - `campaign.status == "Closed"` ⇒ từ chối `409 CONFLICT`;
+   - nếu `campaign.team_scope` khác rỗng, `target_user` bắt buộc thuộc cây con `team_scope` (`400 INVALID_REQUEST`);
+   - nếu `(campaign, target_user)` có `CSKH Assignment Rule`, bản ghi có `version` mới nhất của user đó phải đang `enabled == 1`, `weight > 0`, và `rule.team` (nếu có) chứa `target_user` trong subtree (`400 INVALID_REQUEST`);
+   - nếu rule mới nhất có `capacity_limit > 0` và số `Work Item` `assigned` hiện tại của `(campaign, target_user)` đã đạt/vượt `capacity_limit` ⇒ từ chối `409 CAPACITY_EXCEEDED` (tính đúng trên `version` mới nhất của user, không lấy `max()` lịch sử).
+3. Chống xung đột chéo campaign: nếu `lead` đang có `CSKH Active Claim` của campaign khác / đã gán owner khác, hoặc đang có `CSKH Work Item` `status='assigned'` khác ⇒ từ chối `409 ALREADY_ASSIGNED`.
+
+**Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`, `ALREADY_ASSIGNED`, `CAPACITY_EXCEEDED`, `CONFLICT`.
 
 ### 3.13 `crm_cskh.api.ownership.reassign` — POST
 
@@ -470,15 +479,17 @@ hoặc `{ "work_item": "…", "status": "already_applied", "event": "<history na
 |---|---|---|---|
 | `work_item` | string | ✔ | |
 | `expected_owner` | string | ✖ | Nếu khác owner hiện tại ⇒ `CONFLICT` |
-| `target_user` | string | ✔ | |
+| `target_user` | string | ✔ | Phải là `Sales User` enabled và đủ điều kiện theo campaign |
 | `reason` | string | ✔ | Bắt buộc |
 | `request_id` | string | ✔ | |
 
 **Response 200:** `{ "work_item": "…", "status": "reassigned", "owner": "…",
 "ledger": { "owner": "…", "shares": ["…"] } }`
 
-**Lỗi:** `FORBIDDEN`, `INVALID_REQUEST` (thiếu `reason`/`request_id`),
-`ALREADY_ASSIGNED`, `CONFLICT` (expected-owner lệch; còn share thừa sau giao dịch),
+Áp dụng đầy đủ cùng bộ kiểm tra `_require_campaign_target_eligibility(campaign, target_user)` như §3.12 (`campaign.status != "Closed"`, `team_scope` subtree, trạng thái `enabled`/`weight > 0`/`rule.team` và `capacity_limit` trên `version` rule mới nhất của `target_user`).
+
+**Lỗi:** `FORBIDDEN`, `INVALID_REQUEST` (thiếu `reason`/`request_id`, `target_user` ngoài `team_scope` hoặc rule bị tắt),
+`ALREADY_ASSIGNED`, `CONFLICT` (`expected_owner` lệch; campaign `Closed`; còn share thừa sau giao dịch),
 `CAPACITY_EXCEEDED`.
 
 ### 3.14 `crm_cskh.api.ownership.revoke` — POST
@@ -573,8 +584,8 @@ với `owner=null` khi `status=queued`).
 }
 ```
 
-Pool là work item `status='queued'` **và** `assigned_to is null`; scope của leader áp qua
-`team_scope` của campaign (trạng thái phụ `_pool_state` cũng được giới hạn trong scope của actor, không rò owner/campaign ngoài team); `CSKH BOD Viewer` được che `phone = null` và `display_name = ""`. Input `page`/`page_size` không hợp lệ trả HTTP `400 INVALID_REQUEST` (`L-26`).
+Pool là work item `status='queued'` **và** `assigned_to is null`; scope của leader áp đồng thời
+`team_scope` của campaign **và** `_team_lead_authorization_clauses(scope, "l")` (`L-23` — nếu lead có `Work Item` `queued` từ `revoke(return_to_pool=True)` ở Đội A nhưng sau đó đã được claim/assign/sở hữu sang Đội B thì bị loại hoàn toàn khỏi `pool_list` của `Leader A`, không lộ SĐT hay nhân sự Đội B; trạng thái phụ `_pool_state` cũng được giới hạn trong scope của actor); `CSKH BOD Viewer` được che `phone = null` và `display_name = ""`. Input `page`/`page_size` không hợp lệ trả HTTP `400 INVALID_REQUEST` (`L-26`).
 
 ### 3.17b `crm_cskh.api.customers.customer_pool` — GET (`L-23`, `L-25`, `L-26`)
 
@@ -723,7 +734,7 @@ campaign: một campaign không giới hạn không được bị campaign khác
 | `campaigns.list` / `rules` | ❌ | ✔ (trong team) | ✔ | ✔ |
 | `campaigns.save` / `save_rule` | ❌ | ❌ | ✔ | ❌ |
 | `distribution.preview` / `execute` / `reconcile` | ❌ | ❌ | ✔ | ❌ |
-| `distribution.get_run` | ❌ | ✔ (trong team) | ✔ | ✔ |
+| `distribution.get_run` | ❌ | ❌ (dùng `run_history.runs` theo team) | ✔ | ✔ |
 | `ownership.assign` / `reassign` / `revoke` | ❌ | ❌ | ✔ | ❌ |
 | `ownership.history` | ✔ (work item của mình) | ✔ (trong team) | ✔ | ✔ |
 | `customers.my_list` | ✔ (của mình) | ✔ (của mình) | ✔ | ✔ |
@@ -732,6 +743,23 @@ campaign: một campaign không giới hạn không được bị campaign khác
 
 > `CSKH BOD Viewer` **không** có `System Manager` và **không** đọc được `CRM Lead` role-wide.
 > Dashboard BOD là aggregate; drill-down PII đi qua `customers.my_list` với scope của actor.
+
+### 4.1. Bảo vệ Generic Frappe API, Desk & Quyền Field `permlevel = 1` (`L-29`)
+
+Ngoài các endpoint nghiệp vụ `crm_cskh.api.*`, backend P1 cưỡng chế quyền thực chất ở tầng **DocType + Document (`has_permission`) + Query (`permission_query_conditions`) + Field (`permlevel = 1`)** cho toàn bộ đường đọc/ghi generic của Frappe (`/api/resource/*`, `/api/v2/document/*`, `frappe.client.get` / `get_list` / `get_value` / `validate_link`, `frappe.desk.form.load.getdoc`, `frappe.desk.reportview.get`, `frappe.desk.search.search_link` / `search_widget`):
+
+1. **Kiểm tra quyền cấp DocType và cấp Document (`crm_cskh.p1_permissions`):**
+   - Xử lý đầy đủ cả khi `doc is None` (kiểm tra quyền cấp DocType, chặn `Sales User` & `Guest` ngay từ cửa, chặn mọi `ptype` ghi `write`/`create`/`delete`/`submit`/`cancel`/`amend`/`import`/`export`/`share` đối với mọi actor không phải `System Manager`/`Administrator`) lẫn khi `doc` là tên chuỗi, `dict` hoặc `Document` đã nạp (kiểm tra quyền cấp bản ghi, kể cả `ptype=None` của `get_doc_permissions`).
+   - `CSKH Campaign`: `Sales Manager` chỉ đọc được campaign có `team_scope IS NULL` (campaign chung) hoặc `team_scope` nằm trong cây con `CRM Sales Hierarchy` của mình; bị từ chối `403` khi đọc trực tiếp campaign của team khác.
+   - `CSKH Assignment Rule`: `Sales Manager` chỉ đọc được rule mà **cả** `campaign` nằm trong scope của Leader **và** nhân sự `user` (cùng `rule.team` nếu có) thuộc nhánh team của Leader — rule của nhân sự team khác trong campaign chung cũng bị ẩn và bị từ chối `403` khi đọc trực tiếp.
+   - `CSKH Distribution Run`: `Sales Manager` chỉ đọc được run của campaign nằm trong scope team của mình; bị từ chối `403` trên run của team khác.
+2. **Bảo vệ dữ liệu raw nhạy cảm bằng `permlevel = 1` (`DocPerm` chỉ mở `read` cho `CSKH CRM Admin` và `read/write` cho `System Manager`):**
+   - Trên `CSKH Distribution Run`: các trường `preview_json`, `actual_json`, `state_json`, `progress`, `error`, `lease_expires_at` đặt `permlevel = 1`.
+   - Trên `CSKH Campaign`: trường `selection_json` đặt `permlevel = 1`.
+   - Nhờ cơ chế `permlevel = 1` gốc của Frappe (kết hợp `auth_hooks` `enforce_p1_filter_field_permissions` chặn filter-oracle `filters=[["preview_json","like",...]]` với HTTP `403`), `Sales Manager` và `CSKH BOD Viewer` đọc được metadata của campaign chung / run trong scope nhưng **tuyệt đối không đọc hay dò lọc được JSON phân phối thô** chứa danh sách mã lead hoặc nhân sự team khác trên bất kỳ đường REST, `frappe.client.*` hay Desk nào. Chức năng xem tiến độ/kết quả hợp lệ của `Leader` và `BOD` đi qua các API projection theo scope (`distribution.get_run`, `run_history.runs`, `campaigns.*`, `dashboard.*`).
+3. **Chặn bypass qua Desk Search & Link Validation (`crm_cskh.api.guarded_crm`):**
+   - Ghi đè `frappe.desk.search.search_link` và `frappe.desk.search.search_widget`: ép `ignore_user_permissions = False` và kiểm tra quyền filter `permlevel` đối với các DocType bảo vệ cho mọi non-system caller.
+   - Ghi đè `frappe.client.validate_link`: kiểm tra `frappe.has_permission(doctype, "read", doc=docname)` trước khi đọc field, trả `{}` im lặng (không bắn `msgprint` tiết lộ sự tồn tại của bản ghi ngoài team).
 
 ---
 
@@ -860,6 +888,17 @@ và tham số request, đồng thời bổ sung các cập nhật contract sau �
    - [`api/_params.py`](../../apps/crm_cskh/crm_cskh/api/_params.py) đã bổ sung `parse_int`, `parse_pagination` (`page ∈ 1..1_000_000`, `page_size ∈ 1..100`) và `parse_optional_str` (cùng quy ước với `_ui_params.py` của PR #5: từ chối `bool`, số thực `"1.5"`, chuỗi chữ `"abc"`, `<= 0`, vượt trần bằng `InvalidRequest` → HTTP `400` kèm `code = "INVALID_REQUEST"`, `p1_code = "INVALID_REQUEST"`).
    - Áp dụng trực tiếp tại cả tầng API và tầng service cho `ownership.history(limit ∈ 1..200)`, `customers.pool_list`, `customers.customer_pool`, `customers.my_list` (cùng `campaigns.save_rule` `version` và `distribution.enqueue_run` `expected_rule_version`).
 
+### 6.4. Bàn giao `L-29`, `L-23` (`pool_list`) & Direct Mutation Eligibility cho T1A tích hợp vào PR #5
+
+1. **`L-29` (Quyền Document/Field `permlevel = 1` trên `CSKH Campaign`, `CSKH Assignment Rule`, `CSKH Distribution Run`):**
+   - Các API UI trên PR #5 (`run_history.runs`, `distribution.get_run`, `campaigns.list`, `campaigns.rules`, `dashboard.*`) chạy bằng cơ chế projection theo scope của server nên **tương thích 100%**, không cần đổi tham số gọi từ frontend `/cskh/*`.
+   - `GET crm_cskh.api.campaigns.rules` hiện kiểm tra chặt quyền đọc document `CSKH Campaign` (`403 FORBIDDEN` cho `Leader` ngoài team, `404 NOT_FOUND` nếu mã campaign không tồn tại).
+   - Khi cập nhật môi trường tích hợp, chạy `bench --site <site> migrate` (và `set_p1_permissions.py` nếu site đã seed cũ) để đồng bộ `permlevel = 1` trên `CSKH Campaign` (`selection_json`) và `CSKH Distribution Run` (`preview_json`, `actual_json`, `state_json`, `progress`, `error`, `lease_expires_at`).
+2. **`L-23` bổ sung trên `reporting.pool_list` (`customers.pool_list`):**
+   - Áp thêm `_team_lead_authorization_clauses(scope, "l")` trên `pool_list` để chặn cả trường hợp khách từng `revoke(return_to_pool=True)` ở Đội A nhưng đã chuyển sang Đội B.
+3. **Kiểm tra trực tiếp điều kiện giao/chuyển giao (`ownership.assign` & `ownership.reassign`):**
+   - Backend hiện kiểm tra trực tiếp tại `services/ownership.py` (không phụ thuộc dropdown UI `ownership_ui.assignees`): từ chối `campaign` đã `Closed` (`409 CONFLICT`), `target_user` ngoài `campaign.team_scope` (`400 INVALID_REQUEST`), rule mới nhất của `(campaign, target_user)` bị tắt / `weight <= 0` / lệch `rule.team` (`400 INVALID_REQUEST`), vượt `capacity_limit` của rule mới nhất (`409 CAPACITY_EXCEEDED`), và lead đang được claim/assign ở campaign khác (`409 ALREADY_ASSIGNED`).
+
 ---
 
 ## 7. Bằng chứng runtime đã kiểm chứng
@@ -869,9 +908,9 @@ giữa lời gọi hàm trong tiến trình test (`service_unit_test`) và giao 
 
 | Hạng mục | Lớp bằng chứng | Phạm vi kiểm chứng | Kết quả | Bằng chứng |
 |---|---|---|---|---|
-| Suite P1 (8 module) | `service_unit_test` | Per-method JUnit gate trên inventory P1 riêng (`205` method) | **205/205 PASS** | [`evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json) |
+| Suite P1 (8 module) | `service_unit_test` | Per-method JUnit gate trên inventory P1 riêng (`208` method) | **208/208 PASS** | [`evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json) |
 | Chaos / rollback / retry (unit + child process) | `service_unit_test` + `os_process_crash` | `unittest.mock.patch` + tiến trình con `os._exit(137)` cho cả `import_worker` và `distribution_worker`; 0 nhánh gây lỗi trong code production | **11/11 PASS** (unit) & **4/4 PASS** (harness) | [`evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml), [`evidence/p1-runtime-20261102/chaos/p1-chaos-report.json`](../../deploy/dev/evidence/p1-runtime-20261102/chaos/p1-chaos-report.json) |
-| HTTP transport P1 + RQ workers | `http` | HTTP thật tới `bench serve` + RQ worker `short`/`long` thật, cookie phiên + CSRF thật, 6 actor đã seed (`Admin`, `BOD`, `Leader 1/2`, `Staff A/B`) + `Guest`, đối chiếu SQL trực tiếp cho `L-16..L-23`, `L-25`, `L-26` và phân phối nền RQ | **103/103 PASS** | [`evidence/p1-runtime-20261102/http/p1-http-transport.json`](../../deploy/dev/evidence/p1-runtime-20261102/http/p1-http-transport.json) |
+| HTTP transport P1 + RQ workers | `http` | HTTP thật tới `bench serve` + RQ worker `short`/`long` thật, cookie phiên + CSRF thật, 6 actor đã seed (`Admin`, `BOD`, `Leader 1/2`, `Staff A/B`) + `Guest`, đối chiếu SQL trực tiếp cho `L-16..L-23`, `L-25`, `L-26`, `L-29` (REST + `frappe.client.*` + Desk), direct mutation eligibility và phân phối nền RQ | **158/158 PASS** | [`evidence/p1-runtime-20261102/http/p1-http-transport.json`](../../deploy/dev/evidence/p1-runtime-20261102/http/p1-http-transport.json) |
 | Benchmark 10k import + 10k phân phối + RQ enqueue | `runtime_benchmark` | 2 đợt × 10.000 dòng (`0 → 10k`, `10k → 20k`) + lô hỗn hợp & RQ capacity `30/42/28` (`api_enqueue_seconds = 0,222s`) trên `p1bench.localhost` | **Số đo thực tế (0 lỗi, 0 trùng)** | [`evidence/p1-runtime-20261102/benchmark/`](../../deploy/dev/evidence/p1-runtime-20261102/benchmark/) |
 
 > **Giới hạn:** probe HTTP phủ giao vận trực tiếp tới `bench serve` của Frappe; tầng reverse

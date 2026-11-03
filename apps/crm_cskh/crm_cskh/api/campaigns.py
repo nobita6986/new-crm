@@ -10,7 +10,7 @@ import json
 import frappe
 from frappe.utils import now_datetime
 
-from crm_cskh.api._params import parse_bool, parse_int
+from crm_cskh.api._params import parse_bool, parse_int, parse_optional_str
 from crm_cskh.services import eligibility
 from crm_cskh.services.errors import Forbidden, InvalidRequest, NotFound
 
@@ -43,9 +43,13 @@ def list(status=None, campaign=None):
 	"""List the campaigns visible to the caller."""
 	actor = frappe.session.user
 	_require_read(actor)
+	status_val = parse_optional_str(status, "The status must be a string.")
+	campaign_val = parse_optional_str(campaign, "The campaign must be a string.")
 	filters = {}
-	if status:
-		filters["status"] = status
+	if status_val:
+		filters["status"] = status_val
+	if campaign_val:
+		filters["name"] = campaign_val
 	rows = frappe.get_list(
 		"CSKH Campaign",
 		filters=filters,
@@ -124,13 +128,20 @@ def rules(campaign=None):
 	"""List the assignment rules of a campaign with their eligibility status."""
 	actor = frappe.session.user
 	_require_read(actor)
-	if not campaign:
+	campaign_val = parse_optional_str(campaign, "The campaign must be a string.")
+	if not campaign_val:
 		raise InvalidRequest("The campaign is required.")
-	team_scope = frappe.db.get_value("CSKH Campaign", campaign, "team_scope")
-	version = eligibility.current_rule_version(campaign)
-	eligible, excluded = eligibility.eligible_assignees(campaign, team_scope, version)
+	if not frappe.db.exists("CSKH Campaign", campaign_val):
+		raise NotFound("The campaign does not exist.")
+	if not _is_system(actor) and not frappe.has_permission(
+		"CSKH Campaign", "read", doc=campaign_val, user=actor, throw=False
+	):
+		raise Forbidden("You may not read this campaign.")
+	team_scope = frappe.db.get_value("CSKH Campaign", campaign_val, "team_scope")
+	version = eligibility.current_rule_version(campaign_val)
+	eligible, excluded = eligibility.eligible_assignees(campaign_val, team_scope, version)
 	return {
-		"campaign": campaign,
+		"campaign": campaign_val,
 		"rule_version": version,
 		"eligible": eligible,
 		"excluded": excluded,

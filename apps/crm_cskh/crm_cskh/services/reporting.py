@@ -528,6 +528,9 @@ def pool_list(user=None, page=1, page_size=20, campaign=None, batch=None):
 	batch_val = parse_optional_str(batch)
 
 	clause, scope_params = _pool_scope_filter(scope, "wi")
+	auth_clauses, auth_params = _team_lead_authorization_clauses(scope, "l")
+	if auth_clauses == ["1=0"]:
+		return _empty_pool_response(scope["scope"], page_num, limit)
 	batch_clause, batch_params = work_item_in_batch_clause(batch_val, "wi")
 
 	clauses = ["wi.status = 'queued'", "wi.assigned_to is null"]
@@ -541,6 +544,9 @@ def pool_list(user=None, page=1, page_size=20, campaign=None, batch=None):
 	if clause:
 		clauses.append(clause)
 		params.extend(scope_params)
+	if auth_clauses:
+		clauses.extend(auth_clauses)
+		params.extend(auth_params)
 
 	count_clauses = ["wi.status = 'queued'"]
 	count_params = []
@@ -553,6 +559,9 @@ def pool_list(user=None, page=1, page_size=20, campaign=None, batch=None):
 	if clause:
 		count_clauses.append(clause)
 		count_params.extend(scope_params)
+	if auth_clauses:
+		count_clauses.extend(auth_clauses)
+		count_params.extend(auth_params)
 
 	lead_clauses = ["wi.status in ('queued', 'assigned')"]
 	lead_params = []
@@ -565,20 +574,26 @@ def pool_list(user=None, page=1, page_size=20, campaign=None, batch=None):
 	if clause:
 		lead_clauses.append(clause)
 		lead_params.extend(scope_params)
+	if auth_clauses:
+		lead_clauses.extend(auth_clauses)
+		lead_params.extend(auth_params)
 
 	total = frappe.db.sql(
-		"select count(*) from `tabCSKH Work Item` wi where " + " and ".join(count_clauses),
+		"select count(*) from `tabCSKH Work Item` wi "
+		"inner join `tabCRM Lead` l on l.name = wi.lead where " + " and ".join(count_clauses),
 		tuple(count_params),
 	)[0][0]
 
 	unique_customers = frappe.db.sql(
-		"select count(distinct wi.lead) from `tabCSKH Work Item` wi where " + " and ".join(lead_clauses),
+		"select count(distinct wi.lead) from `tabCSKH Work Item` wi "
+		"inner join `tabCRM Lead` l on l.name = wi.lead where " + " and ".join(lead_clauses),
 		tuple(lead_params),
 	)[0][0]
 
 	rows = frappe.db.sql(
 		"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign "
-		"from `tabCSKH Work Item` wi where "
+		"from `tabCSKH Work Item` wi "
+		"inner join `tabCRM Lead` l on l.name = wi.lead where "
 		+ " and ".join(clauses)
 		+ " order by wi.creation desc limit %s offset %s",
 		(*tuple(params), limit, offset),

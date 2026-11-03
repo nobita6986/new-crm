@@ -396,14 +396,15 @@ Updating DocTypes for crm           : [======================================  ]
 Updating DocTypes for crm           : [======================================= ] 97%
 Updating DocTypes for crm           : [========================================] 100%
 
-Updating DocTypes for crm_cskh      : [====                                    ] 11%
-Updating DocTypes for crm_cskh      : [========                                ] 22%
-Updating DocTypes for crm_cskh      : [=============                           ] 33%
-Updating DocTypes for crm_cskh      : [=================                       ] 44%
-Updating DocTypes for crm_cskh      : [======================                  ] 55%
-Updating DocTypes for crm_cskh      : [==========================              ] 66%
-Updating DocTypes for crm_cskh      : [===============================         ] 77%
-Updating DocTypes for crm_cskh      : [===================================     ] 88%
+Updating DocTypes for crm_cskh      : [====                                    ] 10%
+Updating DocTypes for crm_cskh      : [========                                ] 20%
+Updating DocTypes for crm_cskh      : [============                            ] 30%
+Updating DocTypes for crm_cskh      : [================                        ] 40%
+Updating DocTypes for crm_cskh      : [====================                    ] 50%
+Updating DocTypes for crm_cskh      : [========================                ] 60%
+Updating DocTypes for crm_cskh      : [============================            ] 70%
+Updating DocTypes for crm_cskh      : [================================        ] 80%
+Updating DocTypes for crm_cskh      : [====================================    ] 90%
 Updating DocTypes for crm_cskh      : [========================================] 100%
 Updating Dashboard for frappe
 Updating Dashboard for crm

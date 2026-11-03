@@ -462,7 +462,7 @@ class TestBackgroundDistributionRQ(P1TestCase):
 		frappe.set_user("Administrator")
 		temp_admin = "p1-temp-dist-admin@example.test"
 		self.ensure_user(temp_admin, "CSKH CRM Admin")
-		camp_a = self._track_campaign(team_scope=self.team_b)
+		camp_a = self._track_campaign(team_scope=self.team_a)
 		self.make_rule(camp_a, self.staff_a, weight=100)
 		self.make_pool(3, campaign=camp_a)
 		frappe.set_user(temp_admin)
@@ -480,7 +480,7 @@ class TestBackgroundDistributionRQ(P1TestCase):
 		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp_a}), 0)
 
 		# Case B: `rule_version` changes while queued -> worker aborts with RULE_CHANGED.
-		camp_b = self._track_campaign(team_scope=self.team_b)
+		camp_b = self._track_campaign(team_scope=self.team_a)
 		self.make_rule(camp_b, self.staff_a, weight=100)
 		self.make_pool(3, campaign=camp_b)
 		frappe.set_user(self.admin_user)
