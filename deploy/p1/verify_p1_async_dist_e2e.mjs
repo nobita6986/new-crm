@@ -676,8 +676,8 @@ async function main() {
 			assert(
 				l21And22.revokeFalseHttp === 200 &&
 					l21And22.revokeFalseResult &&
-					l21And22.revokeFalseResult.status === 'closed',
-				`L-21 form-urlencoded return_to_pool=false must yield status='closed', got: ${JSON.stringify(l21And22)}`
+					l21And22.revokeFalseResult.status === 'revoked',
+				`L-21 form-urlencoded return_to_pool=false must yield status='revoked' (not 'queued'), got: ${JSON.stringify(l21And22)}`
 			)
 
 			const [dashA, dashB] = await Promise.all([
@@ -695,13 +695,13 @@ async function main() {
 				}),
 			])
 
-			// Team A closed 1 work item and revoked 0; Team B revoked 1 work item and closed 0!
+			// Team A had 1 work item revoked with return_to_pool=false (`revoked_work_items = 1`)
+			// and Team B had 1 work item revoked with return_to_pool=true (`unassigned_work_items = 1`, `active_claims = 1`, `revoked_work_items = 0`)!
 			assert(
-				dashA.cards.closed_work_items === 1 &&
-					dashA.cards.revoked_work_items === 0 &&
-					dashB.cards.closed_work_items === 0 &&
-					dashB.cards.revoked_work_items === 1 &&
-					dashB.cards.active_claims === 0,
+				dashA.cards.revoked_work_items === 1 &&
+					dashB.cards.revoked_work_items === 0 &&
+					dashB.cards.unassigned_work_items === 1 &&
+					dashB.cards.active_claims === 1,
 				`L-22 Leader dashboard cross-team leak: dashA=${JSON.stringify(dashA.cards)} dashB=${JSON.stringify(dashB.cards)}`
 			)
 
