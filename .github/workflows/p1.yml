@@ -243,7 +243,7 @@ jobs:
           set -u
           artifact_dir="$RUNNER_TEMP/p1-evidence"
           compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT")
-          "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p1-test.localhost mariadb -e "SHOW INDEX FROM \`tabCSKH Identity Index\`; SHOW INDEX FROM \`tabCSKH Active Claim\`; SHOW INDEX FROM \`tabCSKH Work Item\`; SHOW INDEX FROM \`tabCSKH Assignment Rule\`; SHOW INDEX FROM \`tabCSKH Assignment History\`; SHOW INDEX FROM \`tabCSKH Import Batch\`; SHOW INDEX FROM \`tabCSKH Distribution Run\`; SHOW INDEX FROM \`tabCSKH Campaign\`;"' > "$artifact_dir/p1-schema-indexes.txt"
+          "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p1-test.localhost mariadb -e "SHOW INDEX FROM \`tabCSKH Identity Index\`; SHOW INDEX FROM \`tabCSKH Active Claim\`; SHOW INDEX FROM \`tabCSKH Work Item\`; SHOW INDEX FROM \`tabCSKH Assignment Rule\`; SHOW INDEX FROM \`tabCSKH Assignment History\`; SHOW INDEX FROM \`tabCSKH Import Batch\`; SHOW INDEX FROM \`tabCSKH Import Batch Lead\`; SHOW INDEX FROM \`tabCSKH Distribution Run\`; SHOW INDEX FROM \`tabCSKH Campaign\`;"' > "$artifact_dir/p1-schema-indexes.txt"
           status=$?
           echo "p1 schema index dump exit=$status" >> "$artifact_dir/module-status.txt"
           exit "$status"

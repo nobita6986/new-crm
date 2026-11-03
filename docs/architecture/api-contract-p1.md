@@ -48,9 +48,10 @@
 | 14 | POST | `crm_cskh.api.ownership.revoke` | `CSKH CRM Admin` | Thu hồi owner, trả về kho |
 | 15 | GET | `crm_cskh.api.ownership.history` | theo quyền read của work item | Lịch sử append-only |
 | 16 | GET | `crm_cskh.api.customers.my_list` | `Sales User` / `Sales Manager` / `CSKH CRM Admin` / `CSKH BOD Viewer` | Khách đang được giao |
-| 17 | GET | `crm_cskh.api.customers.pool_list` | `Sales Manager` / `CSKH CRM Admin` / `CSKH BOD Viewer` | Kho chưa giao trong scope |
-| 18 | GET | `crm_cskh.api.dashboard.distribution` | `CSKH BOD Viewer` / `CSKH CRM Admin` / `Sales Manager` | Dashboard BOD (aggregate) |
-| 19 | GET | `crm_cskh.api.dashboard.campaigns` | `CSKH BOD Viewer` / `CSKH CRM Admin` / `Sales Manager` | Bộ lọc campaign của dashboard |
+| 17 | GET | `crm_cskh.api.customers.pool_list` | `Sales Manager` / `CSKH CRM Admin` / `CSKH BOD Viewer` | Kho work item `queued` chưa giao trong scope (hỗ trợ `campaign`, `batch`) |
+| 18 | GET | `crm_cskh.api.customers.customer_pool` | `Sales Manager` / `CSKH CRM Admin` / `CSKH BOD Viewer` | Kho khách hàng canonical theo scope, gồm cả khách chưa có Work Item (`eligible`) và lọc theo `batch` (`L-25`) |
+| 19 | GET | `crm_cskh.api.dashboard.distribution` | `CSKH BOD Viewer` / `CSKH CRM Admin` / `Sales Manager` | Dashboard BOD (aggregate) |
+| 20 | GET | `crm_cskh.api.dashboard.campaigns` | `CSKH BOD Viewer` / `CSKH CRM Admin` / `Sales Manager` | Bộ lọc campaign của dashboard |
 
 > **Lưu ý:** `crm_cskh.api.customers.my_list` và `crm_cskh.api.customers.pool_list` **không** có bản
 > `frappe.client.get_list` tương đương. Đọc `CSKH Work Item` bằng generic API vẫn bị giới hạn
@@ -127,8 +128,8 @@ theo `code` mà không cần parse chuỗi thông báo. Các truy vấn trực t
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
 | `file_name` | string | ✔ | Tên `File` đã upload (bắt buộc `is_private`) |
-| `mapping` | object \| string | ✖ | `{field: tên_cột}`; field chuẩn của số điện thoại là `phone` |
-| `idempotency_key` | string | ✖ | Mặc định `import:{sha256(file)}:{import_mode}` |
+| `mapping` | object \| string | ✖ | `{field: tên_cột}` cho các khóa chuẩn `phone`, `name`, `source` (`L-25`) |
+| `idempotency_key` | string | ✖ | Mặc định `import:{sha256(file)}:{import_mode}` (kèm hash `mapping` nếu có truyền `mapping`) |
 | `import_mode` | string | ✖ | `standard` (mặc định) |
 
 **Response 200**
@@ -139,6 +140,8 @@ theo `code` mà không cần parse chuỗi thông báo. Các truy vấn trực t
   "status": "DRY_RUN",
   "checksum": "…sha256…",
   "idempotency_key": "import:…",
+  "mapping": { "phone": "Số điện thoại", "name": "Họ và tên", "source": "Nguồn" },
+  "resolved_mapping": { "phone": "Số điện thoại", "name": "Họ và tên", "source": "Nguồn" },
   "totals": {
     "total_rows": 1200,
     "valid_rows": 1000,
@@ -146,7 +149,15 @@ theo `code` mà không cần parse chuỗi thông báo. Các truy vấn trực t
     "duplicate_rows": 200,
     "error_rows": 20
   },
-  "preview": [ { "row_number": 3, "class": "valid", "canonical": "+84900000010" } ],
+  "preview": [
+    {
+      "row_number": 3,
+      "class": "valid",
+      "canonical": "+84900000010",
+      "name": "Nguyễn Thị Mai",
+      "source": "Zalo Official"
+    }
+  ],
   "preview_truncated": false,
   "committed_at": null,
   "error_artifact": null,
@@ -159,17 +170,19 @@ theo `code` mà không cần parse chuỗi thông báo. Các truy vấn trực t
 (`preview_truncated: true` khi có nhiều hơn); khi thực thi thật, `import_worker` đọc lại
 toàn bộ file gốc từ `classification["rows"]` nên không bị giới hạn 200 dòng của `preview`.
 
-**`mapping` ánh xạ *tên cột*, không phải *giá trị ô*.** Giá trị của `mapping[phone]` là
-**tên** của cột trong file (ví dụ `{"phone": "Số điện thoại"}`), không phải số điện thoại.
-Khi `mapping` có nhiều field, cột của field chuẩn `phone` được ưu tiên; nếu `mapping`
-không có field `phone`, chỉ một cột đã map mà **tên** của nó là một header điện thoại
-được nhận, và nếu không có cột nào như vậy thì pipeline dùng header điện thoại của file.
-Preview và worker dùng **cùng** quy tắc này và **cùng** giới hạn/validation, nên một file
-mà preview chấp nhận thì worker không thể từ chối.
+**`mapping` ánh xạ *tên cột*, không phải *giá trị ô* (`L-03` + `L-25`).**
+- `mapping` nhận tối đa 3 khóa nghiệp vụ chuẩn: `phone`, `name`, `source` (ví dụ `{"phone": "SDT_KH", "name": "TEN_KH", "source": "KENH_KH"}`).
+- Nếu người dùng không truyền `mapping` (hoặc để trống từng khóa), `resolve_import_columns(header, cells, mapping)` tự nhận diện từ dòng tiêu đề tiếng Việt/tiếng Anh của CSV/XLSX (kể cả file XLSX thưa có dòng dữ liệu đầu tiên để trống `None` ở cột `name`/`source`).
+- **Áp `name` / `source` & quy tắc Placeholder khi tạo `CRM Lead` mới (`L-25`):**
+  - Mọi giá trị `name` và `source` đều đi qua `sanitize_cell` (vô hiệu hóa công thức `=`, `+`, `-`, `@` bằng dấu nháy đơn `'`; gỡ thẻ HTML/script; giới hạn 140 ký tự).
+  - **Placeholder `"Chưa rõ tên"` (`cskh_is_placeholder_name = 1`) CHỈ dùng khi thiếu tên hợp lệ** (ô rỗng, chỉ khoảng trắng, thẻ HTML rỗng, chuỗi `"Chưa rõ tên"`, hoặc gõ nhầm số điện thoại vào cột tên theo P1 §5.5). Khi có tên hợp lệ sau sanitize, `first_name` và `lead_name` lưu tên thật và đặt `cskh_is_placeholder_name = 0`.
+  - Khi có `source` hợp lệ sau sanitize, worker đảm bảo bản ghi `CRM Lead Source` tương ứng một cách an toàn dưới savepoint (chống race `1062`) và gán `CRM Lead.source`.
+- **Không ghi đè canonical `CRM Lead` đã tồn tại (`L-25`):** Khi số điện thoại đã thuộc về một `CRM Lead` canonical có sẵn (`duplicate_in_crm`, import lặp ở batch sau, hoặc thua race đồng thời), worker **tuyệt đối không ghi đè** `first_name`, `lead_name`, `cskh_is_placeholder_name`, `source`, `lead_owner`, `status` hay ghi chú/dữ liệu nghiệp vụ của lead đó.
+- **Ghi quan hệ `Import Batch ↔ Lead` (`CSKH Import Batch Lead`):** Mọi dòng hợp lệ được tạo mới (`outcome = "created"`) hoặc reuse canonical lead có sẵn (`outcome = "reused"`) đều được ghi idempotent vào `CSKH Import Batch Lead` (`UNIQUE (import_batch, lead)`), đảm bảo lọc kho theo `batch` chính xác cho cả khách chưa có `Work Item` lẫn khách được reuse qua nhiều batch.
 
 **Checksum.** `checksum` là SHA-256 của **nội dung file**, đã chuẩn hóa về `bytes` trước khi
 băm: `File.get_content()` trả `str` khi file đã flush xuống disk và `bytes` khi file còn
-trong bộ nhớ. Cùng một file ⇒ cùng `checksum` ⇒ cùng `idempotency_key` ⇒ cùng `batch`.
+trong bộ nhớ. Cùng một file + cùng `mapping` ⇒ cùng `idempotency_key` ⇒ cùng `batch`.
 
 **Chuẩn hóa số điện thoại.** `0912345678`, `84912345678` và `+84912345678` là **cùng một**
 khách hàng: canonical E.164 `+84912345678`. Ô trống, ô chỉ có số, và ô ghi bằng ký hiệu
@@ -180,7 +193,7 @@ ghi chú của lead đã có, và **không** tự phân phối lead đó.
 
 **Lỗi:** `FORBIDDEN`, `INVALID_REQUEST` (file không tồn tại / không private),
 `UNSUPPORTED_FORMAT`, `FILE_TOO_LARGE`, `TOO_MANY_ROWS`, `CONFLICT`
-(cùng `idempotency_key` nhưng checksum khác).
+(tái sử dụng cùng `idempotency_key` nhưng `checksum` hoặc `mapping` khác — P1 §6.4).
 
 > **Không** dùng endpoint này để upload file. File được upload qua `File` API chuẩn của
 > Frappe với `is_private=1`; server từ chối file không private.
@@ -540,17 +553,18 @@ với `owner=null` khi `status=queued`).
 
 ### 3.17 `crm_cskh.api.customers.pool_list` — GET
 
-| Tham số | Kiểu | Bắt buộc |
-|---|---|---|
-| `page` | int | ✖ |
-| `page_size` | int | ✖ |
-| `campaign` | string | ✖ |
+| Tham số | Kiểu | Bắt buộc | Mô tả |
+|---|---|---|---|
+| `page` | int | ✖ | Mặc định 1 |
+| `page_size` | int | ✖ | Mặc định 20, tối đa 100 |
+| `campaign` | string | ✖ | Lọc theo chiến dịch |
+| `batch` | string | ✖ | Lọc theo `CSKH Import Batch` (qua cả `wi.import_batch` lẫn `CSKH Import Batch Lead` — `L-25`) |
 
 **Response 200**
 
 ```json
 {
-  "scope": "system"|"all"|"team"|"self",
+  "scope": "system"|"all"|"team",
   "items": [ { "work_item": "…", "lead": "…", "display_name": "…", "phone": "…", "campaign": "…" } ],
   "total": 87,
   "page": 1,
@@ -560,7 +574,54 @@ với `owner=null` khi `status=queued`).
 ```
 
 Pool là work item `status='queued'` **và** `assigned_to is null`; scope của leader áp qua
-`team_scope` của campaign.
+`team_scope` của campaign; `CSKH BOD Viewer` được che `phone = null` và `display_name = ""`.
+
+### 3.17b `crm_cskh.api.customers.customer_pool` — GET (`L-25`)
+
+Endpoint kho khách hàng đầy đủ cho màn hình `/cskh/pool` (tương thích 1-1 với `crm_cskh.api.pool_ui.list` của PR #5):
+
+| Tham số | Kiểu | Bắt buộc | Mô tả |
+|---|---|---|---|
+| `page` | int | ✖ | Mặc định 1 |
+| `page_size` | int | ✖ | Mặc định 20, tối đa 100 |
+| `campaign` | string | ✖ | Lọc theo chiến dịch |
+| `state` | string | ✖ | `eligible` / `queued` / `assigned` / `revoked` / `closed` |
+| `source` | string | ✖ | Lọc `CRM Lead.source` |
+| `batch` | string | ✖ | Lọc theo `CSKH Import Batch` qua `CSKH Import Batch Lead` (kể cả khách chưa có `Work Item` và khách được reuse qua nhiều batch) |
+| `search` | string | ✖ | Tìm theo tên/SĐT/mã lead (bị từ chối `403 FORBIDDEN` đối với `CSKH BOD Viewer`) |
+
+**Response 200**
+
+```json
+{
+  "scope": "system"|"all"|"team",
+  "items": [
+    {
+      "work_item": null,
+      "lead": "CRM-LEAD-2026-00001",
+      "display_name": "Nguyễn Thị Mai",
+      "is_placeholder_name": false,
+      "phone": "+84900000010",
+      "source": "Zalo Official",
+      "lead_status": "New",
+      "state": "eligible",
+      "campaign": null,
+      "campaign_title": null,
+      "campaign_code": null,
+      "assigned_to": null,
+      "assigned_at": null
+    }
+  ],
+  "total": 1,
+  "page": 1,
+  "page_size": 20,
+  "as_of": "…"
+}
+```
+
+- Với `CSKH CRM Admin` (`scope = "system"`) và `CSKH BOD Viewer` (`scope = "all"`): duyệt từ `CSKH Identity Index ⋈ CRM Lead`, nối Work Item mới nhất (nếu có) ⇒ hiển thị đầy đủ cả khách mới import chưa có `Work Item` (`work_item = null`, `state = "eligible"`), và với `CSKH BOD Viewer` luôn ẩn `phone = null`, `display_name = ""`.
+- Với `Sales Manager` (`scope = "team"`): chỉ trả các `CSKH Work Item` thuộc nhánh team / campaign được đọc của Leader, kết hợp lọc `batch` qua `CSKH Import Batch Lead`.
+- Với `Sales User`: từ chối `403 FORBIDDEN`.
 
 ### 3.18 `crm_cskh.api.dashboard.distribution` — GET
 
@@ -660,7 +721,7 @@ campaign: một campaign không giới hạn không được bị campaign khác
 | `ownership.assign` / `reassign` / `revoke` | ❌ | ❌ | ✔ | ❌ |
 | `ownership.history` | ✔ (work item của mình) | ✔ (trong team) | ✔ | ✔ |
 | `customers.my_list` | ✔ (của mình) | ✔ (của mình) | ✔ | ✔ |
-| `customers.pool_list` | ❌ | ✔ (trong team) | ✔ | ✔ |
+| `customers.pool_list` / `customers.customer_pool` | ❌ | ✔ (trong team) | ✔ | ✔ (ẩn PII) |
 | `dashboard.distribution` / `campaigns` | ❌ | ✔ (trong team) | ✔ | ✔ (aggregate toàn hệ thống) |
 
 > `CSKH BOD Viewer` **không** có `System Manager` và **không** đọc được `CRM Lead` role-wide.
@@ -747,6 +808,42 @@ và tham số request, đồng thời bổ sung các cập nhật contract sau �
    `Leader` (`scope = "team"`) đếm đầy đủ `revoked_work_items`, `closed_work_items`, `active_claims` của các
    Work Item chưa gán người trong campaign thuộc team, và `unique_customers` thống nhất là `COUNT(DISTINCT lead)`
    trên toàn bộ Work Item trong scope.
+
+### 6.2. Bàn giao `L-25` để T1A tích hợp vào PR #5 (`codex/p1-ui`)
+
+Để tránh xung đột merge `add/add` với PR #5, PR #4 **không** tạo file `apps/crm_cskh/crm_cskh/api/pool_ui.py` mà cung cấp sẵn toàn bộ logic backend trong [`services/reporting.py`](../../apps/crm_cskh/crm_cskh/services/reporting.py) và [`api/customers.py`](../../apps/crm_cskh/crm_cskh/api/customers.py):
+
+1. **Màn hình Import (`import.js` trên PR #5):**
+   - `import.js` hiện đã gửi `mapping: { phone, name, source }` tới `POST crm_cskh.api.imports.create_preview`. Sau khi merge PR #4, backend tự động áp `name` / `source` (đã sanitize formula/HTML) khi tạo `CRM Lead` mới, chỉ gán `"Chưa rõ tên"` (`cskh_is_placeholder_name = 1`) khi thiếu tên hợp lệ, không ghi đè `CRM Lead` canonical đã tồn tại, và ghi đầy đủ `CSKH Import Batch Lead`.
+   - Response của `create_preview` / `confirm` / `get_status` nay có thêm `mapping` và `resolved_mapping` (`{"phone": ..., "name": ..., "source": ...}`) cùng các trường preview `name` / `source` đã sanitize.
+   - Lưu ý: nếu tái sử dụng cùng `idempotency_key` nhưng người dùng đổi `mapping`, API trả `409 CONFLICT` (`code = "CONFLICT"`). Nếu để trống `idempotency_key`, backend tự băm `mapping` vào key mặc định nên đổi cột map trên cùng file sẽ tạo preview batch mới mượt mà.
+2. **Màn hình Kho khách hàng (`pool_ui.py` / `pool.js` trên PR #5):**
+   - Trong `apps/crm_cskh/crm_cskh/api/pool_ui.py` của PR #5, hàm `list(...)` trước đây chỉ lọc `wi.import_batch = %s` nên bỏ sót hoàn toàn khách mới import chưa có `Work Item` (`state == "eligible"`) và khách canonical được reuse ở batch sau.
+   - Sau khi merge PR #4 vào PR #5, **T1A chỉ cần ủy quyền trực tiếp `pool_ui.list` sang `reporting.customer_pool`** (cùng chữ ký tham số và cùng payload 100%, giữ nguyên `pool_ui.filter_options`):
+     ```python
+     @frappe.whitelist(methods=["GET"])
+     def list(
+         page=1,
+         page_size=20,
+         campaign=None,
+         state=None,
+         source=None,
+         batch=None,
+         search=None,
+     ):
+         return reporting.customer_pool(
+             user=frappe.session.user,
+             page=page,
+             page_size=page_size,
+             campaign=campaign,
+             state=state,
+             source=source,
+             batch=batch,
+             search=search,
+         )
+     ```
+   - Hoặc nếu giữ SQL riêng trong `pool_ui.py`, có thể gọi trực tiếp 2 helper đã export sẵn tại `crm_cskh.services.reporting`: `lead_in_batch_clause(batch, lead_expr="l.name")` (nhánh Admin/BOD) và `work_item_in_batch_clause(batch, alias="wi")` (nhánh Leader).
+3. **Migration khi cập nhật môi trường tích hợp:** Chạy `bench --site <site> migrate` (tạo bảng + index `tabCSKH Import Batch Lead`) và chạy lại seed phân quyền (`set_p1_permissions.py` / `seed_demo.py`) nếu site đã tạo trước đó.
 
 ---
 

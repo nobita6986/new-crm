@@ -278,6 +278,17 @@ def import_batch_has_permission(doc, ptype, user, **kwargs):
 	return False
 
 
+def import_batch_lead_has_permission(doc, ptype, user, **kwargs):
+	"""Import batch lead links are read-only for the CRM Admin and closed to other business roles."""
+	if _is_system(user):
+		return None
+	if ptype in ("create", "write", "delete", "submit", "cancel", "share", "export"):
+		return False
+	if ptype in ("read", "select", "email", "print") and ROLE_ADMIN in _roles(user):
+		return None
+	return False
+
+
 def distribution_run_has_permission(doc, ptype, user, **kwargs):
 	"""Runs are read-only for the BOD and the leaders."""
 	if _is_system(user):
@@ -320,6 +331,7 @@ PERMISSION_QUERY_CONDITIONS = {
 	"CSKH Work Item": "crm_cskh.p1_permissions.work_item_query_conditions",
 	"CSKH Assignment History": "crm_cskh.p1_permissions.assignment_history_query_conditions",
 	"CSKH Import Batch": "crm_cskh.p1_permissions.import_batch_query_conditions",
+	"CSKH Import Batch Lead": "crm_cskh.p1_permissions.import_batch_query_conditions",
 	"CSKH Distribution Run": "crm_cskh.p1_permissions.distribution_run_query_conditions",
 	"CSKH Identity Index": "crm_cskh.p1_permissions.system_only_query_conditions",
 	"CSKH Active Claim": "crm_cskh.p1_permissions.system_only_query_conditions",
@@ -331,6 +343,7 @@ HAS_PERMISSION = {
 	"CSKH Work Item": "crm_cskh.p1_permissions.work_item_has_permission",
 	"CSKH Assignment History": "crm_cskh.p1_permissions.assignment_history_has_permission",
 	"CSKH Import Batch": "crm_cskh.p1_permissions.import_batch_has_permission",
+	"CSKH Import Batch Lead": "crm_cskh.p1_permissions.import_batch_lead_has_permission",
 	"CSKH Distribution Run": "crm_cskh.p1_permissions.distribution_run_has_permission",
 	"CSKH Identity Index": "crm_cskh.p1_permissions.system_only_has_permission",
 	"CSKH Active Claim": "crm_cskh.p1_permissions.system_only_has_permission",

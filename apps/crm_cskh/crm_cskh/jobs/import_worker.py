@@ -1,13 +1,15 @@
-"""Background worker that commits a confirmed import batch (P1 6.2, 6.4).
+"""Background worker that commits a confirmed import batch (P1 6.2, 6.4, L-25).
 
 The worker re-reads the file, re-normalizes every phone number and re-checks
 the canonical identity under a transaction. Counters are reconciled from the
-database, never summed from non-idempotent events, so a retry after a crash
-cannot inflate the totals (P1 6.4).
+database (`CSKH Import Batch Lead` + `CSKH Identity Index`), never summed from
+non-idempotent events, so a retry after a crash or a concurrent race cannot
+inflate the totals (P1 6.4).
 """
 
 import json
 import re
+import time
 
 import frappe
 from frappe.utils import now_datetime
@@ -18,16 +20,17 @@ from crm_cskh.services.import_service import (
 	_cell_value,
 	_classify,
 	_detect_extension,
-	_phone_candidates,
 	_read_rows,
-	_resolve_column_name,
 	_settings,
+	resolve_import_columns,
+	sanitize_cell,
 	write_error_artifact,
 )
 from crm_cskh.services.phone_identity import InvalidPhone, normalize_vn_phone
 
 CHUNK_SIZE = 200
 PLACEHOLDER_FIRST_NAME = "Chưa rõ tên"
+MAX_DATA_FIELD_LENGTH = 140
 
 
 def run_batch(batch_name):
@@ -107,11 +110,20 @@ def _process(batch):
 		except (ValueError, TypeError):
 			mapping = {}
 
-	# The worker applies the **same** mapping, the same phone column and the
+	# The worker applies the **same** mapping, the same columns and the
 	# same validation as the preview: the preview is a dry run of this exact
-	# pipeline (P1 §6.2).
-	phone_column = _resolve_column_name(rows[0]["cells"] if rows else {}, mapping, _phone_candidates(header))
-	classification = _classify(rows, mapping, phone_column)
+	# pipeline (P1 §6.2, L-25).
+	resolved = resolve_import_columns(header, rows[0]["cells"] if rows else {}, mapping)
+	phone_column = resolved["phone"]
+	name_column = resolved["name"]
+	source_column = resolved["source"]
+	classification = _classify(
+		rows,
+		mapping,
+		phone_column,
+		name_column=name_column,
+		source_column=source_column,
+	)
 
 	created = 0
 	reused = 0
@@ -150,44 +162,69 @@ def _process(batch):
 	safe_progress = resume_from
 	# The earliest row that blocked the progress (`None` while everything is fine).
 	blocked_at = None
-	row_lookup = {row["row_number"]: row for row in rows}
+	row_lookup = {}
+	for row in rows:
+		enriched = dict(row)
+		if name_column:
+			enriched["_mapped_name"] = _cell_value(row["cells"], name_column)
+		if source_column:
+			enriched["_mapped_source"] = _cell_value(row["cells"], source_column)
+		row_lookup[row["row_number"]] = enriched
 
 	for start in range(0, len(targets), CHUNK_SIZE):
 		chunk = targets[start : start + CHUNK_SIZE]
+		chunk_error_rows = []
 		failed_rows = []
-		for entry in chunk:
-			row = row_lookup.get(entry["row_number"])
-			if row is None:
-				continue
-			if int(entry["row_number"]) <= resume_from:
-				# Already committed by a previous attempt: skip it.
-				continue
-			savepoint = f"cskh_import_{entry['row_number']}"
-			frappe.db.savepoint(savepoint)
+		for chunk_attempt in range(5):
+			chunk_error_rows = []
+			failed_rows = []
 			try:
-				raw = _cell_value(row["cells"], phone_column)
-				if raw is None:
-					continue
-				canonical = normalize_vn_phone(str(raw))
-				_lead, _is_new = _ensure_lead(canonical, row)
-			except InvalidPhone as exc:
-				frappe.db.rollback(save_point=savepoint)
-				row_num = int(entry["row_number"])
-				blocked_at = min(blocked_at, row_num) if blocked_at is not None else row_num
-				failed_rows.append(row_num)
-				error_rows.append({"row_number": entry["row_number"], "reason": str(exc)[:160]})
+				for entry in chunk:
+					row = row_lookup.get(entry["row_number"])
+					if row is None:
+						continue
+					if int(entry["row_number"]) <= resume_from:
+						# Already committed by a previous attempt: skip it.
+						continue
+					savepoint = f"cskh_import_{entry['row_number']}"
+					frappe.db.savepoint(savepoint)
+					try:
+						raw = _cell_value(row["cells"], phone_column)
+						if raw is None:
+							continue
+						canonical = normalize_vn_phone(str(raw))
+						lead_name, is_new = _ensure_lead(canonical, row)
+						_record_batch_lead(
+							batch.name,
+							lead_name,
+							is_new=is_new,
+							row_number=int(entry["row_number"]),
+						)
+					except InvalidPhone as exc:
+						_rollback_savepoint_quietly(savepoint)
+						row_num = int(entry["row_number"])
+						failed_rows.append(row_num)
+						chunk_error_rows.append({"row_number": entry["row_number"], "reason": str(exc)[:160]})
+					except Exception as exc:
+						if _is_transient_db_conflict(exc) and chunk_attempt < 4:
+							raise
+						_rollback_savepoint_quietly(savepoint)
+						row_num = int(entry["row_number"])
+						failed_rows.append(row_num)
+						chunk_error_rows.append({"row_number": entry["row_number"], "reason": str(exc)[:200]})
+				break
 			except Exception as exc:
-				frappe.db.rollback(save_point=savepoint)
-				row_num = int(entry["row_number"])
-				blocked_at = min(blocked_at, row_num) if blocked_at is not None else row_num
-				failed_rows.append(row_num)
-				error_rows.append({"row_number": entry["row_number"], "reason": str(exc)[:200]})
+				if not (_is_transient_db_conflict(exc) and chunk_attempt < 4):
+					raise
+				frappe.db.rollback()
+				batch.reload()
+				time.sleep(0.03 * (chunk_attempt + 1))
 
+		error_rows.extend(chunk_error_rows)
 		# **Chunk commit (P1 §6.4, P1 §7.5):** the progress of the batch is
 		# committed after every chunk, so a worker that dies later resumes
 		# from the last committed chunk instead of reprocessing the whole
-		# file. The commit also bounds the size of the transaction (P1 §7.5:
-		# "với batches lớn chia transaction thành chunks có kiểm soát").
+		# file.
 		batch.reload()
 		if failed_rows:
 			first_failed = min(failed_rows)
@@ -208,7 +245,7 @@ def _process(batch):
 
 	# Reconcile the counters from the database instead of trusting the events.
 	# The counts are read from the **database**, so a resumed batch reports
-	# the same totals as an uninterrupted one (P1 §6.4).
+	# the same totals as an uninterrupted one (P1 §6.4, L-25).
 	batch.reload()
 	created, reused, failed, missing = _reconcile_counts(targets, batch)
 	skipped = failed
@@ -253,13 +290,7 @@ def _process(batch):
 
 
 def _dedupe_error_rows(error_rows):
-	"""Keep **one** line per failed row in the error report (SEC-08).
-
-	A row can fail twice in the same attempt: the row itself failed, and the
-	reconciliation then reports that the lead was not created. The operator
-	must see one line per failed row, with the reason of the failure that
-	actually happened — never two lines for the same row.
-	"""
+	"""Keep **one** line per failed row in the error report (SEC-08)."""
 	seen = {}
 	order = []
 	for entry in error_rows:
@@ -290,61 +321,223 @@ def _distinct_targets(classification):
 	return targets
 
 
-def _reconcile_counts(targets, batch):
-	"""Reconcile the created/reused/failed counters from the **database**.
+def _is_transient_db_conflict(exc):
+	text = str(exc)
+	return (
+		isinstance(exc, frappe.QueryDeadlockError)
+		or "Deadlock" in type(exc).__name__
+		or "1213" in text
+		or "1020" in text
+	)
 
-	P1 §6.4 forbids counting the success by summing non-idempotent events:
-	the counters have to be read from the database, so a crash and a retry
-	cannot inflate them.
 
-	Whether a lead was **created by this batch** is read from the creation
-	timestamp of the lead: a lead that was created **after** the batch existed
-	was created by this batch (in this attempt or in an earlier one), a lead
-	that existed before belongs to another batch and is therefore **reused**.
+def _rollback_savepoint_quietly(sp_name):
+	try:
+		frappe.db.rollback(save_point=sp_name)
+	except Exception:
+		pass
 
-	The placeholder marker (P1 §6.2) alone is not enough: a lead created by an
-	*earlier* batch is also a placeholder, so counting it as "created" would
-	inflate the counter of the second batch.
+
+def _record_batch_lead(batch_name, lead_name, is_new, row_number=0):
+	"""Idempotently persist the `(import_batch, lead)` relation (L-25).
+
+	* Preserves the initial `outcome` (`created` vs `reused`) if `(batch_name, lead_name)`
+	  was already recorded by an earlier attempt before a crash or retry.
+	* Avoids `LOCK IN SHARE MODE` before `INSERT` so non-existent keys never acquire
+	  InnoDB `S-gap` locks; uses `LOCK IN SHARE MODE` only when confirming a row
+	  already committed in a newer MVCC snapshot.
 	"""
-	from crm_cskh.services import identity as identity_service
+	if not batch_name or not lead_name:
+		return None
+	existing_outcome = frappe.db.get_value(
+		"CSKH Import Batch Lead", {"import_batch": batch_name, "lead": lead_name}, "outcome"
+	)
+	if existing_outcome:
+		return existing_outcome
 
+	snapshot_has_lead = bool(frappe.db.exists("CRM Lead", lead_name))
+	if not snapshot_has_lead:
+		lead_committed = frappe.db.sql(
+			"select name from `tabCRM Lead` where name = %s limit 1 lock in share mode",
+			(lead_name,),
+		)
+		if not lead_committed:
+			raise frappe.DoesNotExistError(f"CRM Lead {lead_name} does not exist.")
+
+	outcome = "created" if is_new else "reused"
+	sp_name = f"cskh_ibl_{frappe.generate_hash(length=8)}"
+	frappe.db.savepoint(sp_name)
+	try:
+		doc = frappe.get_doc(
+			{
+				"doctype": "CSKH Import Batch Lead",
+				"import_batch": batch_name,
+				"lead": lead_name,
+				"outcome": outcome,
+				"row_number": max(0, int(row_number or 0)),
+			}
+		)
+		if not (snapshot_has_lead and frappe.db.exists("CSKH Import Batch", batch_name)):
+			doc.flags.ignore_links = True
+		doc.insert(ignore_permissions=True)
+		return outcome
+	except Exception as exc:
+		if _is_transient_db_conflict(exc):
+			raise
+		_rollback_savepoint_quietly(sp_name)
+		text = str(exc)
+		if (
+			"Duplicate" in text
+			or "1062" in text
+			or "already exists" in text
+			or isinstance(exc, frappe.ValidationError)
+		):
+			rows = frappe.db.sql(
+				"select outcome from `tabCSKH Import Batch Lead` "
+				"where import_batch = %s and lead = %s limit 1 lock in share mode",
+				(batch_name, lead_name),
+			)
+			if rows:
+				return rows[0][0]
+		raise
+
+
+def _reconcile_counts(targets, batch):
+	"""Reconcile the created/reused/failed counters from the **database** (P1 §6.4, L-25).
+
+	Reads canonical identity resolution (`CSKH Identity Index`) together with
+	the persisted `CSKH Import Batch Lead` relation (`outcome = created | reused`):
+	* Newly created leads with mapped real names (`cskh_is_placeholder_name = 0`)
+	  AND newly created leads with placeholder names (`cskh_is_placeholder_name = 1`)
+	  are both counted accurately as `created`.
+	* Existing canonical leads reused by subsequent batches (or adopted after a
+	  concurrent multi-batch race) are counted as `reused`, never inflating `created`.
+	* Crash-resume retries read the persisted `(import_batch, lead)` outcome and
+	  never double-count.
+	"""
 	batch_created = frappe.db.get_value("CSKH Import Batch", batch.name, "creation")
+	linked_rows = frappe.db.sql(
+		"select lead, outcome from `tabCSKH Import Batch Lead` where import_batch = %s lock in share mode",
+		(batch.name,),
+		as_dict=True,
+	)
+	linked = {row.lead: row.outcome for row in linked_rows}
+
 	created = 0
 	reused = 0
 	failed = 0
 	missing = []
 	for entry in targets:
-		lead = identity_service.find_by_phone(entry["canonical"])
+		lead = identity_service.find_by_phone_current(entry["canonical"])
 		if not lead:
 			lead = identity_service.find_lead_by_phone(entry["canonical"])
 		if not lead:
 			failed += 1
 			missing.append({"row_number": entry["row_number"]})
 			continue
-		lead_creation = frappe.db.get_value("CRM Lead", lead, "creation")
-		is_placeholder = frappe.db.get_value("CRM Lead", lead, "cskh_is_placeholder_name")
-		if is_placeholder and batch_created and lead_creation and lead_creation >= batch_created:
+
+		outcome = linked.get(lead)
+		if not outcome:
+			lead_creation = frappe.db.get_value("CRM Lead", lead, "creation")
+			is_new_fallback = bool(batch_created and lead_creation and lead_creation >= batch_created)
+			outcome = _record_batch_lead(
+				batch.name,
+				lead,
+				is_new=is_new_fallback,
+				row_number=int(entry["row_number"]),
+			)
+			linked[lead] = outcome
+
+		if outcome == "created":
 			created += 1
 		else:
 			reused += 1
 	return created, reused, failed, missing
 
 
+def _normalize_new_lead_name(raw_name):
+	"""Sanitize mapped `name` and decide `(first_name, is_placeholder)` (P1 §5.5, L-25).
+
+	* Strips HTML tags and neutralises spreadsheet formula prefixes (`sanitize_cell`).
+	* Falls back to `PLACEHOLDER_FIRST_NAME` (`cskh_is_placeholder_name = 1`) ONLY
+	  when a valid name is missing: empty/whitespace/empty-HTML, explicit
+	  placeholder text, or a phone number placed into the name column (P1 §5.5).
+	"""
+	sanitized = sanitize_cell(raw_name)[:MAX_DATA_FIELD_LENGTH].strip()
+	if not sanitized or sanitized == PLACEHOLDER_FIRST_NAME:
+		return PLACEHOLDER_FIRST_NAME, 1
+	# P1 §5.5: never store a phone number in `first_name` as if it were a real name.
+	probe = sanitized[1:] if sanitized.startswith("'") else sanitized
+	try:
+		normalize_vn_phone(probe)
+		return PLACEHOLDER_FIRST_NAME, 1
+	except InvalidPhone:
+		pass
+	return sanitized, 0
+
+
+def _resolve_lead_source(raw_source):
+	"""Sanitize mapped `source` and ensure its `CRM Lead Source` target exists (L-25).
+
+	`CRM Lead.source` is a `Link` to `CRM Lead Source` (`autoname = field:source_name`).
+	Sanitizing before lookup/insert guarantees no HTML or raw formula prefix enters
+	either `tabCRM Lead Source` or `tabCRM Lead`, while creating missing sources
+	under an inner savepoint avoids both `LinkValidationError` and race failures.
+	"""
+	sanitized = sanitize_cell(raw_source)[:MAX_DATA_FIELD_LENGTH].strip()
+	if not sanitized:
+		return None
+	existing = frappe.db.get_value("CRM Lead Source", {"name": sanitized}, "name")
+	if existing:
+		return existing
+
+	sp_name = f"cskh_src_{frappe.generate_hash(length=8)}"
+	frappe.db.savepoint(sp_name)
+	try:
+		src_doc = frappe.get_doc({"doctype": "CRM Lead Source", "source_name": sanitized})
+		src_doc.insert(ignore_permissions=True)
+		return src_doc.name
+	except Exception as exc:
+		if _is_transient_db_conflict(exc):
+			raise
+		_rollback_savepoint_quietly(sp_name)
+		if "Duplicate" in str(exc) or "1062" in str(exc):
+			locked = frappe.db.sql(
+				"select name from `tabCRM Lead Source` where name = %s limit 1 lock in share mode",
+				(sanitized,),
+			)
+			if locked:
+				return locked[0][0]
+		raise
+
+
+def _extract_row_mapped_values(row):
+	"""Read raw mapped `(name, source)` from an enriched worker row or test dict."""
+	if not isinstance(row, dict):
+		return None, None
+	raw_name = row.get("_mapped_name")
+	if raw_name is None and "name" in row:
+		raw_name = row.get("name")
+	raw_source = row.get("_mapped_source")
+	if raw_source is None and "source" in row:
+		raw_source = row.get("source")
+	return raw_name, raw_source
+
+
 def _ensure_lead(canonical_phone, row):
-	"""Return the canonical lead for a phone number, creating it when needed.
+	"""Return the canonical lead for a phone number, creating it when needed (L-25).
 
-	An existing lead is reused as-is: the import never overwrites the owner,
-	the status or any manual field of a lead that already exists (P1 6.3, T1-06).
-
-	The lookup covers the leads that are **not** registered in the identity
-	index yet: a customer that entered the CRM before P1 must be adopted, not
-	duplicated.
-
-	**Race safety (P1 12.4):** two workers may create a lead for the same phone
-	at the same time. The `CSKH Identity Index` unique index on
-	`normalized_phone` is the arbiter: the loser of the race deletes the lead
-	it created and adopts the winner's lead, so exactly one canonical lead
-	survives.
+	* **Existing canonical lead:** reused strictly as-is. Import never overwrites
+	  `first_name`, `lead_name`, `cskh_is_placeholder_name`, `source`,
+	  `lead_owner`, `status`, or notes of a canonical lead that already exists
+	  (P1 §5.5, §6.3, T1-06, L-25).
+	* **New canonical lead:** applies sanitized `name` / `source` mapping, using
+	  `PLACEHOLDER_FIRST_NAME` (`cskh_is_placeholder_name = 1`) only when a valid
+	  name is missing.
+	* **Race safety (P1 §12.4):** two workers may attempt to create a lead for
+	  the same phone simultaneously. `CSKH Identity Index` (`normalized_phone`
+	  unique) arbitrates; the loser rolls back its provisional lead via savepoint
+	  and adopts the winner's canonical lead untouched (`is_new = False`).
 	"""
 	existing_lead = identity_service.find_by_phone(canonical_phone)
 	if not existing_lead:
@@ -353,22 +546,35 @@ def _ensure_lead(canonical_phone, row):
 		identity_service.ensure_identity_for_lead(existing_lead)
 		return existing_lead, False
 
-	lead = frappe.get_doc(
-		{
-			"doctype": "CRM Lead",
-			"first_name": PLACEHOLDER_FIRST_NAME,
-			"mobile_no": canonical_phone,
-			"lead_owner": None,
-			"cskh_is_placeholder_name": 1,
-		}
-	)
+	raw_name, raw_source = _extract_row_mapped_values(row)
+	first_name, is_placeholder = _normalize_new_lead_name(raw_name)
+	resolved_source = _resolve_lead_source(raw_source)
+
+	sp_lead = f"cskh_lead_{frappe.generate_hash(length=8)}"
+	frappe.db.savepoint(sp_lead)
+
+	lead_payload = {
+		"doctype": "CRM Lead",
+		"first_name": first_name,
+		"mobile_no": canonical_phone,
+		"lead_owner": None,
+		"cskh_is_placeholder_name": is_placeholder,
+	}
+	if resolved_source:
+		lead_payload["source"] = resolved_source
+
+	lead = frappe.get_doc(lead_payload)
+	if resolved_source and not frappe.db.exists("CRM Lead Source", resolved_source):
+		lead.flags.ignore_links = True
 	try:
 		lead.insert(ignore_permissions=True)
 	except Exception as exc:
+		if _is_transient_db_conflict(exc):
+			raise
+		_rollback_savepoint_quietly(sp_lead)
 		if "Duplicate" not in str(exc) and "1062" not in str(exc):
 			raise
-		# Another worker won the race; reuse its canonical lead.
-		winner = identity_service.find_by_phone(canonical_phone)
+		winner = identity_service.find_by_phone_current(canonical_phone)
 		if not winner:
 			raise
 		return winner, False
@@ -376,13 +582,19 @@ def _ensure_lead(canonical_phone, row):
 	try:
 		winner = identity_service.claim_canonical_identity(canonical_phone, lead.name, allow_adopt=False)
 	except Conflict:
-		# Another writer claimed the phone while this lead was being created.
-		winner = identity_service.find_by_phone(canonical_phone)
+		_rollback_savepoint_quietly(sp_lead)
+		winner = identity_service.find_by_phone_current(canonical_phone)
 		if not winner:
 			raise
+		return winner, False
+	except Exception as exc:
+		if _is_transient_db_conflict(exc):
+			raise
+		_rollback_savepoint_quietly(sp_lead)
+		raise
+
 	if winner != lead.name:
-		# The duplicate lead is removed; the canonical one is kept.
-		frappe.delete_doc("CRM Lead", lead.name, force=True, ignore_permissions=True)
+		_rollback_savepoint_quietly(sp_lead)
 		return winner, False
 
 	return lead.name, True

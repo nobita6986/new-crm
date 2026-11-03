@@ -53,7 +53,7 @@ class TestApiContract(P1TestCase):
 			"campaigns": ["list", "save", "rules", "save_rule"],
 			"distribution": ["preview", "execute", "get_run", "reconcile"],
 			"ownership": ["assign", "reassign", "revoke", "history"],
-			"customers": ["my_list", "pool_list"],
+			"customers": ["my_list", "pool_list", "customer_pool"],
 			"dashboard": ["distribution", "campaigns"],
 		}
 		modules = {
@@ -82,9 +82,9 @@ class TestApiContract(P1TestCase):
 		# The pool is not readable by a staff member (P1 §8.1); the leader reads
 		# the pool of their own scope.
 		frappe.set_user(self.leader_a)
-		payload = customers_api.pool_list()
-		for key in ("scope", "items", "total", "page", "page_size", "as_of"):
-			self.assertIn(key, payload)
+		for payload in (customers_api.pool_list(), customers_api.customer_pool()):
+			for key in ("scope", "items", "total", "page", "page_size", "as_of"):
+				self.assertIn(key, payload)
 
 	def test_the_dashboard_returns_the_p1_cards(self):
 		frappe.set_user(self.bod_user)
@@ -381,6 +381,7 @@ class TestSecurityNegatives(P1TestCase):
 		for endpoint in (
 			customers_api.my_list,
 			customers_api.pool_list,
+			customers_api.customer_pool,
 			dashboard_api.distribution,
 			dashboard_api.campaigns,
 		):
@@ -440,6 +441,39 @@ class TestSecurityNegatives(P1TestCase):
 
 	def test_sec_09_the_import_batch_is_not_readable_by_a_foreign_role(self):
 		batch = self._make_batch("sec-09-batch")
+		link = frappe.get_doc(
+			{
+				"doctype": "CSKH Import Batch Lead",
+				"import_batch": batch.name,
+				"lead": self.lead_a,
+				"outcome": "created",
+				"row_number": 2,
+			}
+		)
+		link.insert(ignore_permissions=True)
+
+		frappe.set_user(self.admin_user)
+		self.assertEqual(
+			[
+				row["name"]
+				for row in client_get_list("CSKH Import Batch Lead", filters={"import_batch": batch.name})
+			],
+			[link.name],
+		)
+		self.assertFalse(
+			frappe.has_permission(
+				"CSKH Import Batch Lead", "write", doc=link.name, user=self.admin_user, throw=False
+			)
+		)
+
+		for denied_user in (self.staff_outside, self.leader_a, self.bod_user):
+			frappe.set_user(denied_user)
+			self.assertFalse(
+				frappe.has_permission(
+					"CSKH Import Batch Lead", "read", doc=link.name, user=denied_user, throw=False
+				)
+			)
+
 		frappe.set_user(self.staff_outside)
 		with self.assertRaises(Forbidden):
 			imports_api.get_status(batch=batch.name)

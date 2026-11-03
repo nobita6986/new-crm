@@ -22,6 +22,7 @@ P1_DOCTYPES = (
 	"CSKH Work Item",
 	"CSKH Assignment History",
 	"CSKH Import Batch",
+	"CSKH Import Batch Lead",
 	"CSKH Distribution Run",
 	"CSKH Identity Index",
 	"CSKH Active Claim",

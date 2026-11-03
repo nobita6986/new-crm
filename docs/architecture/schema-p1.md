@@ -1,16 +1,16 @@
-# Schema P1 — 8 DocType, constraint và index
+# Schema P1 — 9 DocType, constraint và index
 
 > **Dự án:** CRM-CSKH
 > **Tài liệu:** `docs/architecture/schema-p1.md`
-> **Ngày:** 2026-11-02
-> **Trạng thái:** **Đã hiện thực và verify trên DB cô lập** (`p1c.localhost`)
+> **Ngày:** 2026-11-03
+> **Trạng thái:** **Đã hiện thực và verify trên DB cô lập** (`p1fresh.localhost`, `p1http.localhost`)
 > **Tài liệu liên quan:** [`../root-plan/P1.md`](../root-plan/P1.md) §5, [`api-contract-p1.md`](./api-contract-p1.md), [`adr-p1-01-identity-index.md`](./adr-p1-01-identity-index.md), [`adr-p1-02-active-claim.md`](./adr-p1-02-active-claim.md)
 
 ---
 
 ## 1. Tổng quan
 
-P1 thêm **8 DocType** mới, tất cả đặt tên `CSKH *`, không đụng core CRM
+P1 thêm **9 DocType** mới, tất cả đặt tên `CSKH *`, không đụng core CRM
 (ngoại trừ **một** custom field nghiệp vụ trên `CRM Lead`: `cskh_is_placeholder_name`).
 
 | DocType | Mục đích | Autoname | Ghi chú |
@@ -20,7 +20,8 @@ P1 thêm **8 DocType** mới, tất cả đặt tên `CSKH *`, không đụng co
 | `CSKH Work Item` | 1 lead × 1 campaign = 1 công việc | hash | unique `(campaign,lead)` |
 | `CSKH Assignment History` | Audit append-only ownership | hash | `event_id` unique |
 | `CSKH Import Batch` | 1 lần import (preview → commit) | hash | `idempotency_key` unique |
-| `CSKH Distribution Run` | 1 lần phân phối (preview + state) | hash | `idempotency_key` unique |
+| `CSKH Import Batch Lead` | Quan hệ N-N `Import Batch ↔ Canonical Lead` (`L-25`) | hash | unique `(import_batch,lead)` |
+| `CSKH Distribution Run` | 1 lần phân phối nền RQ (preview + state + lease) | hash | `idempotency_key` unique |
 | `CSKH Identity Index` | `normalized_phone` → `canonical_lead` | hash | 2 unique index |
 | `CSKH Active Claim` | Chống 1 lead active ở 2 campaign | hash | unique `lead`, unique `work_item` |
 
@@ -218,6 +219,26 @@ FAILED → QUEUED                      (retry)
 **`error_artifact`:** tên `File` **private** (`is_private=1`) chứa CSV dòng lỗi đã sanitize
 (công thức Excel bị vô hiệu hoá bằng `'`; HTML bị gỡ). Không attach vào lead nào.
 
+### 6.1. `CSKH Import Batch Lead` (`L-25` — Justification theo P1 §5.2)
+
+| Field | Type | Options | Reqd | Default |
+|---|---|---|---|---|
+| `import_batch` | Link | `CSKH Import Batch` | ✔ | — |
+| `lead` | Link | `CRM Lead` | ✔ | — |
+| `outcome` | Select | `created` / `reused` | ✔ | `created` |
+| `row_number` | Int | — | | `0` |
+
+**Lý giải thiết kế & quy mô (P1 §5.2):**
+- **Bài toán nghiệp vụ (`L-25`):** Khách mới import vào kho chưa có `CSKH Work Item` (`state = "eligible"`), và một `CRM Lead` canonical có thể xuất hiện lại ở nhiều đợt import (`outcome = "reused"`). Chỉ lưu cột đơn `import_batch` trên `CSKH Work Item` (hoặc trên `CRM Lead`) không thể lọc đúng theo từng batch khi khách chưa vào chiến dịch hoặc khi khách được reuse qua Batch 1, Batch 2, ... Đồng thời, lưu `outcome` giúp `import_worker._reconcile_counts` đối soát chính xác `created_rows` và `reused_rows` từ DB kể cả khi lead mới có tên thật (`cskh_is_placeholder_name = 0`) hoặc hai batch chạy song song.
+- **Vì sao là DocType độc lập (`istable = 0`) thay vì Child Table trên `CSKH Import Batch`:** Mỗi batch cho phép tới **50.000 dòng** (ADR-P1-08). Nếu dùng Child Table của Frappe trên `CSKH Import Batch`, mỗi lần `batch.save()` ở điểm checkpoint 200 dòng sẽ nạp và ghi lại tới 50.000 bản ghi con trong bộ nhớ (`O(N^2)` truy vấn). DocType độc lập giữ chi phí checkpoint `O(1)` và hỗ trợ truy vấn `EXISTS` index-only khi lọc kho khách hàng.
+
+**DB constraint & lookup index:**
+- UNIQUE `cskh_domain_unique (import_batch, lead)` ⇒ idempotent tuyệt đối khi worker retry/crash-resume hoặc gặp dòng trùng trong file.
+- INDEX `cskh_lookup_0 (lead, import_batch)` ⇒ phục vụ mệnh đề `EXISTS (SELECT 1 FROM tabCSKH Import Batch Lead bl WHERE bl.lead = l.name AND bl.import_batch = %s)` trong `reporting.customer_pool` / `reporting.pool_list`.
+- INDEX `cskh_lookup_1 (import_batch, outcome)` ⇒ phục vụ đối soát nhanh `created_rows` / `reused_rows` theo batch.
+
+**Phân quyền (`p1_permissions.py`):** chỉ đọc (`read-only`) đối với `CSKH CRM Admin` (và `System Manager`); đóng hoàn toàn (`0=1` / `False`) với `CSKH BOD Viewer`, `Sales Manager`, `Sales User`. Mutation chỉ đi qua `import_worker._record_batch_lead`.
+
 ---
 
 ## 7. `CSKH Distribution Run`
@@ -338,9 +359,11 @@ phân biệt "khách chưa rõ tên" mà không sửa `first_name` của lead c�
 
 | Vị trí | Nội dung |
 |---|---|
-| `apps/crm_cskh/crm_cskh/patches.txt` | 2 patch P1 dưới `[post_model_sync]` |
+| `apps/crm_cskh/crm_cskh/patches.txt` | 4 patch P1 dưới `[post_model_sync]` |
 | `crm_cskh.patches.v1_0.p1_schema_constraints` | Tạo lại composite unique + lookup index (idempotent) |
 | `crm_cskh.patches.v1_0.p1_placeholder_name_field` | Tạo custom field `cskh_is_placeholder_name` |
+| `crm_cskh.patches.v1_0.p1_distribution_rq_fields` | Đảm bảo index/metadata cho `CSKH Distribution Run` nền RQ |
+| `crm_cskh.patches.v1_0.p1_import_batch_lead_constraints` | Tạo composite unique `(import_batch, lead)` + 2 lookup index trên `CSKH Import Batch Lead` (`L-25`) |
 | `crm_cskh.p1_models.ensure_indexes` | **Cùng định nghĩa** constraint/index cho đường `on_doctype_update` (fresh install) |
 
 > **Vì sao không chỉ dựa vào DocType JSON:** `unique: 1` trên DocField tạo unique index
@@ -369,6 +392,7 @@ an toàn bằng cách rollback code; dữ liệu `CSKH *` phải được xoá c
 | `tabCSKH Active Claim` | `lead`, `work_item` | — |
 | `tabCSKH Assignment History` | `event_id` | `cskh_lookup_0/1` |
 | `tabCSKH Import Batch` | `idempotency_key` | — |
+| `tabCSKH Import Batch Lead` | `cskh_domain_unique (import_batch, lead)` | `cskh_lookup_0 (lead, import_batch)`, `cskh_lookup_1 (import_batch, outcome)` |
 | `tabCSKH Distribution Run` | `idempotency_key` | `cskh_lookup_0` |
 | `tabCSKH Campaign` | `code` | — |
 
