@@ -805,6 +805,363 @@ def setup_probe_fixtures() -> dict[str, object]:
             return_to_pool=False,
         )
 
+        # 3) `l23_pool_return_b`: returned to pool (`return_to_pool=True` -> `queued`) in Team 1,
+        #    then claimed & assigned to `staff.c@dev.local` in Team 2 (`pool_list` L-23 check).
+        l23_pool_return_b = create_canonical_lead(f"L23-PoolRetToTeam2-{run_tag}")
+        wi_l23_pr_a = frappe.get_doc(
+            {
+                "doctype": "CSKH Work Item",
+                "campaign": camp_t1.name,
+                "lead": l23_pool_return_b,
+                "status": "queued",
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": l23_pool_return_b,
+                "campaign": camp_t1.name,
+                "work_item": wi_l23_pr_a.name,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            wi_l23_pr_a.name,
+            "staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 pool return initial",
+            request_id=f"http-l23-pr-asg-a-{run_tag}",
+        )
+        ownership.revoke(
+            wi_l23_pr_a.name,
+            expected_owner="staff.a@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 pool return Team1",
+            request_id=f"http-l23-pr-rev-a-{run_tag}",
+            return_to_pool=True,
+        )
+        wi_l23_pr_b = frappe.get_doc(
+            {
+                "doctype": "CSKH Work Item",
+                "campaign": camp_t2.name,
+                "lead": l23_pool_return_b,
+                "status": "queued",
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": l23_pool_return_b,
+                "campaign": camp_t2.name,
+                "work_item": wi_l23_pr_b.name,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            wi_l23_pr_b.name,
+            "staff.c@dev.local",
+            actor="crm.admin@dev.local",
+            reason="L-23 pool return Team2 claim",
+            request_id=f"http-l23-pr-asg-b-{run_tag}",
+        )
+
+        # L-29 fixture: private Team1/Team2 + shared campaign/rules/runs with raw JSON markers.
+        l29_lead_a = create_canonical_lead(f"L29-A-{run_tag}")
+        l29_lead_b = create_canonical_lead(f"L29-B-{run_tag}")
+        l29_lead_sh_a = create_canonical_lead(f"L29-ShA-{run_tag}")
+        l29_lead_sh_b = create_canonical_lead(f"L29-ShB-{run_tag}")
+
+        l29_camp_a = frappe.get_doc(
+            {
+                "doctype": "CSKH Campaign",
+                "code": f"P1-L29-A-{run_tag}",
+                "title": f"L29 Private Team1 {run_tag}",
+                "status": "Active",
+                "team_scope": team1_node,
+                "selection_json": json.dumps(
+                    {"leads": [l29_lead_a], "secret": "L29_HTTP_SEL_A"},
+                    ensure_ascii=False,
+                ),
+            }
+        ).insert(ignore_permissions=True)
+        l29_camp_b = frappe.get_doc(
+            {
+                "doctype": "CSKH Campaign",
+                "code": f"P1-L29-B-{run_tag}",
+                "title": f"L29 Private Team2 {run_tag}",
+                "status": "Active",
+                "team_scope": team2_node,
+                "selection_json": json.dumps(
+                    {"leads": [l29_lead_b], "secret": "L29_HTTP_SEL_B"},
+                    ensure_ascii=False,
+                ),
+            }
+        ).insert(ignore_permissions=True)
+        l29_camp_shared = frappe.get_doc(
+            {
+                "doctype": "CSKH Campaign",
+                "code": f"P1-L29-SH-{run_tag}",
+                "title": f"L29 Shared {run_tag}",
+                "status": "Active",
+                "team_scope": None,
+                "selection_json": json.dumps(
+                    {
+                        "leads": [l29_lead_sh_a, l29_lead_sh_b],
+                        "secret": "L29_HTTP_SEL_SHARED",
+                    },
+                    ensure_ascii=False,
+                ),
+            }
+        ).insert(ignore_permissions=True)
+
+        def _mk_rule(camp_name: str, usr: str, tm: str | None, wt: int) -> str:
+            return (
+                frappe.get_doc(
+                    {
+                        "doctype": "CSKH Assignment Rule",
+                        "campaign": camp_name,
+                        "user": usr,
+                        "team": tm,
+                        "weight": wt,
+                        "capacity_limit": 0,
+                        "version": 1,
+                        "enabled": 1,
+                    }
+                )
+                .insert(ignore_permissions=True)
+                .name
+            )
+
+        l29_rule_a = _mk_rule(l29_camp_a.name, "staff.a@dev.local", team1_node, 50)
+        l29_rule_b = _mk_rule(l29_camp_b.name, "staff.c@dev.local", team2_node, 50)
+        l29_rule_sh_a = _mk_rule(
+            l29_camp_shared.name, "staff.a@dev.local", team1_node, 60
+        )
+        l29_rule_sh_b = _mk_rule(
+            l29_camp_shared.name, "staff.c@dev.local", team2_node, 40
+        )
+
+        def _mk_run(
+            camp_name: str,
+            tag: str,
+            preview_obj: dict[str, object],
+            actual_obj: dict[str, object],
+            state_obj: dict[str, object],
+            err_msg: str | None = None,
+        ) -> str:
+            return (
+                frappe.get_doc(
+                    {
+                        "doctype": "CSKH Distribution Run",
+                        "campaign": camp_name,
+                        "idempotency_key": f"l29-http-{tag}-{run_tag}",
+                        "rule_version": 1,
+                        "selection_fingerprint": f"fp-{tag}-{run_tag}",
+                        "status": "completed",
+                        "progress": 2,
+                        "preview_json": json.dumps(preview_obj, ensure_ascii=False),
+                        "actual_json": json.dumps(actual_obj, ensure_ascii=False),
+                        "state_json": json.dumps(state_obj, ensure_ascii=False),
+                        "error": err_msg,
+                    }
+                )
+                .insert(ignore_permissions=True)
+                .name
+            )
+
+        l29_run_a = _mk_run(
+            l29_camp_a.name,
+            "a",
+            {
+                "eligible_count": 1,
+                "excluded_count": 0,
+                "targets": [{"user": "staff.a@dev.local", "weight": 50, "planned": 1}],
+                "simulated": {"staff.a@dev.local": 1},
+                "leads": [l29_lead_a],
+                "secret": "L29_HTTP_PREVIEW_A",
+            },
+            {
+                "total": 1,
+                "created": 1,
+                "errors": 0,
+                "assigned": {"staff.a@dev.local": 1},
+                "skipped": [],
+                "secret": "L29_HTTP_ACTUAL_A",
+            },
+            {"epoch": 1, "total": 1, "secret": "L29_HTTP_STATE_A"},
+        )
+        l29_run_b = _mk_run(
+            l29_camp_b.name,
+            "b",
+            {
+                "eligible_count": 1,
+                "excluded_count": 0,
+                "targets": [{"user": "staff.c@dev.local", "weight": 50, "planned": 1}],
+                "simulated": {"staff.c@dev.local": 1},
+                "leads": [l29_lead_b],
+                "secret": "L29_HTTP_PREVIEW_B",
+            },
+            {
+                "total": 1,
+                "created": 1,
+                "errors": 0,
+                "assigned": {"staff.c@dev.local": 1},
+                "skipped": [],
+                "secret": "L29_HTTP_ACTUAL_B",
+            },
+            {"epoch": 1, "total": 1, "secret": "L29_HTTP_STATE_B"},
+            err_msg="L29_HTTP_ERR_B",
+        )
+        l29_run_shared = _mk_run(
+            l29_camp_shared.name,
+            "sh",
+            {
+                "eligible_count": 2,
+                "excluded_count": 0,
+                "targets": [
+                    {"user": "staff.a@dev.local", "weight": 60, "planned": 1},
+                    {"user": "staff.c@dev.local", "weight": 40, "planned": 1},
+                ],
+                "simulated": {"staff.a@dev.local": 1, "staff.c@dev.local": 1},
+                "leads": [l29_lead_sh_a, l29_lead_sh_b],
+                "secret": "L29_HTTP_PREVIEW_SHARED",
+            },
+            {
+                "total": 2,
+                "created": 2,
+                "errors": 0,
+                "assigned": {"staff.a@dev.local": 1, "staff.c@dev.local": 1},
+                "skipped": [{"lead": l29_lead_b, "reason": "already_claimed"}],
+                "secret": "L29_HTTP_ACTUAL_SHARED",
+            },
+            {"epoch": 1, "total": 2, "secret": "L29_HTTP_STATE_SHARED"},
+            err_msg="L29_HTTP_ERR_SHARED",
+        )
+
+        # Direct ownership mutation eligibility fixture (`assign` & `reassign`).
+        mut_camp_t1 = frappe.get_doc(
+            {
+                "doctype": "CSKH Campaign",
+                "code": f"P1-MUT-T1-{run_tag}",
+                "title": f"Direct Mut T1 {run_tag}",
+                "status": "Active",
+                "team_scope": team1_node,
+            }
+        ).insert(ignore_permissions=True)
+        mut_camp_t2 = frappe.get_doc(
+            {
+                "doctype": "CSKH Campaign",
+                "code": f"P1-MUT-T2-{run_tag}",
+                "title": f"Direct Mut T2 {run_tag}",
+                "status": "Active",
+                "team_scope": team2_node,
+            }
+        ).insert(ignore_permissions=True)
+        mut_camp_closed = frappe.get_doc(
+            {
+                "doctype": "CSKH Campaign",
+                "code": f"P1-MUT-CL-{run_tag}",
+                "title": f"Direct Mut Closed {run_tag}",
+                "status": "Closed",
+                "team_scope": team1_node,
+            }
+        ).insert(ignore_permissions=True)
+
+        # `staff.a@dev.local`: v1 cap=3 -> v2 cap=1; `staff.b@dev.local`: v1 enabled=1 -> v2 enabled=0.
+        for usr, ver, cap, en in (
+            ("staff.a@dev.local", 1, 3, 1),
+            ("staff.a@dev.local", 2, 1, 1),
+            ("staff.b@dev.local", 1, 5, 1),
+            ("staff.b@dev.local", 2, 5, 0),
+        ):
+            frappe.get_doc(
+                {
+                    "doctype": "CSKH Assignment Rule",
+                    "campaign": mut_camp_t1.name,
+                    "user": usr,
+                    "team": team1_node,
+                    "weight": 50,
+                    "capacity_limit": cap,
+                    "version": ver,
+                    "enabled": en,
+                }
+            ).insert(ignore_permissions=True)
+
+        mut_wi_1 = (
+            frappe.get_doc(
+                {
+                    "doctype": "CSKH Work Item",
+                    "campaign": mut_camp_t1.name,
+                    "lead": create_canonical_lead(f"Mut1-{run_tag}"),
+                    "status": "queued",
+                }
+            )
+            .insert(ignore_permissions=True)
+            .name
+        )
+        mut_wi_2 = (
+            frappe.get_doc(
+                {
+                    "doctype": "CSKH Work Item",
+                    "campaign": mut_camp_t1.name,
+                    "lead": create_canonical_lead(f"Mut2-{run_tag}"),
+                    "status": "queued",
+                }
+            )
+            .insert(ignore_permissions=True)
+            .name
+        )
+        mut_wi_closed = (
+            frappe.get_doc(
+                {
+                    "doctype": "CSKH Work Item",
+                    "campaign": mut_camp_closed.name,
+                    "lead": create_canonical_lead(f"MutClosed-{run_tag}"),
+                    "status": "queued",
+                }
+            )
+            .insert(ignore_permissions=True)
+            .name
+        )
+        mut_cross_lead = create_canonical_lead(f"MutCross-{run_tag}")
+        mut_wi_cross_t1 = (
+            frappe.get_doc(
+                {
+                    "doctype": "CSKH Work Item",
+                    "campaign": mut_camp_t1.name,
+                    "lead": mut_cross_lead,
+                    "status": "queued",
+                }
+            )
+            .insert(ignore_permissions=True)
+            .name
+        )
+        mut_wi_cross_t2 = (
+            frappe.get_doc(
+                {
+                    "doctype": "CSKH Work Item",
+                    "campaign": mut_camp_t2.name,
+                    "lead": mut_cross_lead,
+                    "status": "queued",
+                }
+            )
+            .insert(ignore_permissions=True)
+            .name
+        )
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Active Claim",
+                "lead": mut_cross_lead,
+                "campaign": mut_camp_t2.name,
+                "work_item": mut_wi_cross_t2,
+            }
+        ).insert(ignore_permissions=True)
+        ownership.assign(
+            mut_wi_cross_t2,
+            "staff.c@dev.local",
+            actor="crm.admin@dev.local",
+            reason="Mut cross-campaign claim T2",
+            request_id=f"http-mut-cross-t2-{run_tag}",
+        )
+
         frappe.db.commit()
         return {
             "campaign": campaign.name,
@@ -830,6 +1187,29 @@ def setup_probe_fixtures() -> dict[str, object]:
                 "src_b": l23_src_b,
                 "lead_stay_a": l23_stay_a,
                 "src_a": l23_src_a,
+                "lead_pool_return_b": l23_pool_return_b,
+            },
+            "l29": {
+                "lead_a": l29_lead_a,
+                "lead_b": l29_lead_b,
+                "lead_sh_a": l29_lead_sh_a,
+                "lead_sh_b": l29_lead_sh_b,
+                "camp_a": l29_camp_a.name,
+                "camp_b": l29_camp_b.name,
+                "camp_shared": l29_camp_shared.name,
+                "rule_a": l29_rule_a,
+                "rule_b": l29_rule_b,
+                "rule_sh_a": l29_rule_sh_a,
+                "rule_sh_b": l29_rule_sh_b,
+                "run_a": l29_run_a,
+                "run_b": l29_run_b,
+                "run_shared": l29_run_shared,
+            },
+            "direct_mut": {
+                "wi_1": mut_wi_1,
+                "wi_2": mut_wi_2,
+                "wi_closed": mut_wi_closed,
+                "wi_cross_t1": mut_wi_cross_t1,
             },
             "admin_roles": frappe.get_roles("crm.admin@dev.local"),
         }
@@ -1154,6 +1534,7 @@ def run() -> int:
     admin_token = csrf_token("admin", admin, "crm.admin@dev.local")
     bod_token = csrf_token("bod", bod, "bod.viewer@dev.local")
     leader_token = csrf_token("leader", leader, "team1.leader@dev.local")
+    leader_2_token = csrf_token("leader-2", leader_2, "team2.leader@dev.local")
     staff_a_token = csrf_token("staff-a", staff_a, "staff.a@dev.local")
     staff_b_token = csrf_token("staff-b", staff_b, "staff.b@dev.local")
 
@@ -1298,6 +1679,8 @@ def run() -> int:
     camp_t1 = str(fixtures.get("camp_t1") or "")
     camp_t2 = str(fixtures.get("camp_t2") or "")
     l23_fx = dict(fixtures.get("l23") or {})
+    l29_fx = dict(fixtures.get("l29") or {})
+    direct_mut_fx = dict(fixtures.get("direct_mut") or {})
     admin_roles = set(fixtures.get("admin_roles") or [])
     if (
         not campaign
@@ -2681,6 +3064,940 @@ def run() -> int:
         l26_hist_ok["status"] == 200
         and int(body_payload(l26_hist_ok).get("total", 0)) >= 2,
         "GET ownership.history?limit=10 returns HTTP 200 positive control",
+        actor="crm.admin@dev.local",
+    )
+
+    # -- 14b. L-23 residual: `customers.pool_list` after `return_to_pool=True` -> Team2 claim
+    l23_pool_ret_b = str(l23_fx.get("lead_pool_return_b") or "")
+    l23_plist_t1 = get(
+        "p1-http-l23-pool-list-leader1-excludes-reclaimed-team2",
+        leader,
+        f"/api/method/crm_cskh.api.customers.pool_list?campaign={camp_t1}&page_size=100",
+    )
+    l23_plist_payload = body_payload(l23_plist_t1)
+    l23_plist_leads = {
+        str(r.get("lead")) for r in (l23_plist_payload.get("items") or [])
+    }
+    l23_plist_raw = json.dumps(l23_plist_payload, ensure_ascii=False, default=str)
+    check(
+        "p1-http-l23-pool-list-leader1-excludes-reclaimed-team2",
+        l23_plist_t1,
+        l23_plist_t1["status"] == 200
+        and l23_pool_ret_b not in l23_plist_leads
+        and int(l23_plist_payload.get("total", 0)) >= 1
+        and "staff.c@dev.local" not in l23_plist_raw,
+        "GET customers.pool_list?campaign=<Team1> excludes return_to_pool lead now claimed by Team2 while keeping Team1 queued item",
+        actor="team1.leader@dev.local",
+    )
+
+    # -- 16. L-29: Generic Frappe REST, `frappe.client.*`, Desk & raw Run protection --
+    l29_camp_a = str(l29_fx.get("camp_a") or "")
+    l29_camp_b = str(l29_fx.get("camp_b") or "")
+    l29_camp_sh = str(l29_fx.get("camp_shared") or "")
+    l29_rule_a = str(l29_fx.get("rule_a") or "")
+    l29_rule_b = str(l29_fx.get("rule_b") or "")
+    l29_rule_sh_a = str(l29_fx.get("rule_sh_a") or "")
+    l29_rule_sh_b = str(l29_fx.get("rule_sh_b") or "")
+    l29_run_a = str(l29_fx.get("run_a") or "")
+    l29_run_b = str(l29_fx.get("run_b") or "")
+    l29_run_sh = str(l29_fx.get("run_shared") or "")
+    l29_lead_b = str(l29_fx.get("lead_b") or "")
+    l29_lead_sh_b = str(l29_fx.get("lead_sh_b") or "")
+    l29_lead_sh_a = str(l29_fx.get("lead_sh_a") or "")
+
+    raw_run_fields = (
+        "preview_json",
+        "actual_json",
+        "state_json",
+        "progress",
+        "error",
+        "lease_expires_at",
+    )
+    non_int_raw_run_fields = (
+        "preview_json",
+        "actual_json",
+        "state_json",
+        "error",
+        "lease_expires_at",
+    )
+
+    def _rest_url(
+        dt: str, docname: str = "", query: dict[str, object] | None = None
+    ) -> str:
+        base = f"/api/resource/{urllib.parse.quote(dt)}"
+        if docname:
+            base += f"/{urllib.parse.quote(docname)}"
+        if query:
+            base += "?" + urllib.parse.urlencode(query)
+        return base
+
+    def _rest_data(resp: dict[str, object]):
+        js = resp.get("json")
+        return js.get("data") if isinstance(js, dict) else None
+
+    def _no_raw_run_leak(doc_or_row: dict[str, object], raw_text: str) -> bool:
+        if any(doc_or_row.get(k) is not None for k in non_int_raw_run_fields):
+            return False
+        if doc_or_row.get("progress") not in (None, 0):
+            return False
+        return "L29_HTTP_" not in raw_text
+
+    # 16a. Leader 1 negative direct REST GETs (foreign Campaign, foreign Rule, foreign Rule in shared Campaign, foreign Run)
+    for slug, dt, dname in (
+        ("camp-b", "CSKH Campaign", l29_camp_b),
+        ("rule-b", "CSKH Assignment Rule", l29_rule_b),
+        ("rule-sh-b", "CSKH Assignment Rule", l29_rule_sh_b),
+        ("run-b", "CSKH Distribution Run", l29_run_b),
+    ):
+        cid = f"p1-http-l29-rest-get-denied-leader1-{slug}"
+        r_den = get(cid, leader, _rest_url(dt, dname))
+        check(
+            cid,
+            r_den,
+            r_den["status"] == 403
+            and "L29_HTTP_" not in r_den["text"]
+            and "staff.c@dev.local" not in r_den["text"],
+            f"GET /api/resource/{dt}/{dname} denies Team1 Leader with HTTP 403",
+            actor="team1.leader@dev.local",
+        )
+
+    # 16b. Leader 1 positive direct REST GETs (own & shared Campaign/Rule/Run) with raw JSON stripped
+    for slug, cid_doc in (("camp-a", l29_camp_a), ("camp-sh", l29_camp_sh)):
+        cid = f"p1-http-l29-rest-get-leader1-{slug}"
+        r_ok = get(cid, leader, _rest_url("CSKH Campaign", cid_doc))
+        r_doc = _rest_data(r_ok)
+        check(
+            cid,
+            r_ok,
+            r_ok["status"] == 200
+            and isinstance(r_doc, dict)
+            and r_doc.get("name") == cid_doc
+            and r_doc.get("selection_json") is None
+            and "L29_HTTP_SEL" not in r_ok["text"],
+            f"GET /api/resource/CSKH Campaign/{cid_doc} allows Team1 Leader metadata while stripping selection_json",
+            actor="team1.leader@dev.local",
+        )
+
+    for slug, rid in (("rule-a", l29_rule_a), ("rule-sh-a", l29_rule_sh_a)):
+        cid = f"p1-http-l29-rest-get-leader1-{slug}"
+        r_ok = get(cid, leader, _rest_url("CSKH Assignment Rule", rid))
+        r_doc = _rest_data(r_ok)
+        check(
+            cid,
+            r_ok,
+            r_ok["status"] == 200
+            and isinstance(r_doc, dict)
+            and r_doc.get("name") == rid
+            and r_doc.get("user") == "staff.a@dev.local",
+            f"GET /api/resource/CSKH Assignment Rule/{rid} allows Team1 Leader own-team rule",
+            actor="team1.leader@dev.local",
+        )
+
+    for slug, run_id in (("run-a", l29_run_a), ("run-sh", l29_run_sh)):
+        cid = f"p1-http-l29-rest-get-leader1-{slug}"
+        r_ok = get(cid, leader, _rest_url("CSKH Distribution Run", run_id))
+        r_doc = _rest_data(r_ok)
+        check(
+            cid,
+            r_ok,
+            r_ok["status"] == 200
+            and isinstance(r_doc, dict)
+            and r_doc.get("name") == run_id
+            and _no_raw_run_leak(r_doc, r_ok["text"])
+            and "staff.c@dev.local" not in r_ok["text"]
+            and l29_lead_b not in r_ok["text"]
+            and l29_lead_sh_b not in r_ok["text"],
+            f"GET /api/resource/CSKH Distribution Run/{run_id} strips preview/actual/state/progress/error for Team1 Leader",
+            actor="team1.leader@dev.local",
+        )
+
+    # 16c. Leader 1 REST list GET with explicit `fields=[...]` across all 3 DocTypes
+    rest_camp_list_l1 = get(
+        "p1-http-l29-rest-list-campaigns-leader1",
+        leader,
+        _rest_url(
+            "CSKH Campaign",
+            query={
+                "fields": json.dumps(["name", "title", "team_scope", "selection_json"]),
+                "filters": json.dumps(
+                    [["name", "in", [l29_camp_a, l29_camp_b, l29_camp_sh]]]
+                ),
+            },
+        ),
+    )
+    rc_rows = _rest_data(rest_camp_list_l1) or []
+    check(
+        "p1-http-l29-rest-list-campaigns-leader1",
+        rest_camp_list_l1,
+        rest_camp_list_l1["status"] == 200
+        and isinstance(rc_rows, list)
+        and {r.get("name") for r in rc_rows} == {l29_camp_a, l29_camp_sh}
+        and all("selection_json" not in r for r in rc_rows)
+        and "L29_HTTP_SEL" not in rest_camp_list_l1["text"],
+        "GET /api/resource/CSKH Campaign?fields=[...,selection_json] hides Team2 campaign and strips selection_json",
+        actor="team1.leader@dev.local",
+    )
+
+    rest_rule_list_l1 = get(
+        "p1-http-l29-rest-list-rules-leader1",
+        leader,
+        _rest_url(
+            "CSKH Assignment Rule",
+            query={
+                "fields": json.dumps(["name", "campaign", "user", "team", "weight"]),
+                "filters": json.dumps(
+                    [
+                        [
+                            "name",
+                            "in",
+                            [l29_rule_a, l29_rule_b, l29_rule_sh_a, l29_rule_sh_b],
+                        ]
+                    ]
+                ),
+            },
+        ),
+    )
+    rr_rows = _rest_data(rest_rule_list_l1) or []
+    check(
+        "p1-http-l29-rest-list-rules-leader1",
+        rest_rule_list_l1,
+        rest_rule_list_l1["status"] == 200
+        and isinstance(rr_rows, list)
+        and {r.get("name") for r in rr_rows} == {l29_rule_a, l29_rule_sh_a}
+        and "staff.c@dev.local" not in rest_rule_list_l1["text"],
+        "GET /api/resource/CSKH Assignment Rule?fields=[...] returns only Team1 rules (even inside shared campaign)",
+        actor="team1.leader@dev.local",
+    )
+
+    rest_run_list_l1 = get(
+        "p1-http-l29-rest-list-runs-leader1",
+        leader,
+        _rest_url(
+            "CSKH Distribution Run",
+            query={
+                "fields": json.dumps(["name", "campaign", "status", *raw_run_fields]),
+                "filters": json.dumps(
+                    [["name", "in", [l29_run_a, l29_run_b, l29_run_sh]]]
+                ),
+            },
+        ),
+    )
+    rrun_rows = _rest_data(rest_run_list_l1) or []
+    check(
+        "p1-http-l29-rest-list-runs-leader1",
+        rest_run_list_l1,
+        rest_run_list_l1["status"] == 200
+        and isinstance(rrun_rows, list)
+        and {r.get("name") for r in rrun_rows} == {l29_run_a, l29_run_sh}
+        and all(all(f not in r for f in raw_run_fields) for r in rrun_rows)
+        and "L29_HTTP_" not in rest_run_list_l1["text"]
+        and "staff.c@dev.local" not in rest_run_list_l1["text"],
+        "GET /api/resource/CSKH Distribution Run?fields=[...,preview_json,actual_json,state_json] hides Team2 run and strips raw JSON",
+        actor="team1.leader@dev.local",
+    )
+
+    # 16d. Generic REST write/create/delete denials (CRM-ADMIN & Leader 1) + filter-oracle denials
+    rest_post_admin = post_json(
+        "p1-http-l29-rest-post-denied-admin",
+        admin,
+        admin_token,
+        _rest_url("CSKH Campaign"),
+        {"code": "P1-REST-BYPASS", "title": "Bypass attempt", "status": "Draft"},
+    )
+    check(
+        "p1-http-l29-rest-post-denied-admin",
+        rest_post_admin,
+        rest_post_admin["status"] == 403,
+        "POST /api/resource/CSKH Campaign rejects direct generic creation even for CSKH CRM Admin",
+        actor="crm.admin@dev.local",
+    )
+
+    rest_put_l1 = request(
+        "p1-http-l29-rest-put-denied-leader1",
+        leader,
+        "PUT",
+        _rest_url("CSKH Campaign", l29_camp_a),
+        json.dumps({"title": "Tampered"}).encode("utf-8"),
+        {"Content-Type": "application/json", "X-Frappe-CSRF-Token": leader_token},
+    )
+    check(
+        "p1-http-l29-rest-put-denied-leader1",
+        rest_put_l1,
+        rest_put_l1["status"] == 403,
+        "PUT /api/resource/CSKH Campaign/<own> rejects direct generic update for Team1 Leader",
+        actor="team1.leader@dev.local",
+    )
+
+    rest_del_admin = request(
+        "p1-http-l29-rest-delete-denied-admin",
+        admin,
+        "DELETE",
+        _rest_url("CSKH Distribution Run", l29_run_a),
+        None,
+        {"X-Frappe-CSRF-Token": admin_token},
+    )
+    check(
+        "p1-http-l29-rest-delete-denied-admin",
+        rest_del_admin,
+        rest_del_admin["status"] == 403,
+        "DELETE /api/resource/CSKH Distribution Run/<id> rejects direct generic delete for CSKH CRM Admin",
+        actor="crm.admin@dev.local",
+    )
+
+    for cid, op, actor_email, url in (
+        (
+            "p1-http-l29-filter-oracle-run-actual-leader1",
+            leader,
+            "team1.leader@dev.local",
+            _rest_url(
+                "CSKH Distribution Run",
+                query={"filters": json.dumps([["actual_json", "like", "%staff%"]])},
+            ),
+        ),
+        (
+            "p1-http-l29-filter-oracle-camp-selection-leader1",
+            leader,
+            "team1.leader@dev.local",
+            _rest_url(
+                "CSKH Campaign",
+                query={"filters": json.dumps([["selection_json", "like", "%L29%"]])},
+            ),
+        ),
+        (
+            "p1-http-l29-filter-oracle-run-preview-bod",
+            bod,
+            "bod.viewer@dev.local",
+            "/api/method/frappe.client.get_list?"
+            + urllib.parse.urlencode(
+                {
+                    "doctype": "CSKH Distribution Run",
+                    "filters": json.dumps([["preview_json", "like", "%L29%"]]),
+                }
+            ),
+        ),
+    ):
+        fo_resp = get(cid, op, url)
+        check(
+            cid,
+            fo_resp,
+            fo_resp["status"] == 403,
+            "Filtering on permlevel=1 raw JSON field returns HTTP 403 (blocks blind filter oracle)",
+            actor=actor_email,
+        )
+
+    # 16e. `frappe.client.get`, `frappe.client.get_list`, `frappe.client.get_value`, `frappe.client.validate_link`
+    fc_get_den_l1 = get(
+        "p1-http-l29-client-get-denied-leader1-run-b",
+        leader,
+        "/api/method/frappe.client.get?"
+        + urllib.parse.urlencode(
+            {"doctype": "CSKH Distribution Run", "name": l29_run_b}
+        ),
+    )
+    check(
+        "p1-http-l29-client-get-denied-leader1-run-b",
+        fc_get_den_l1,
+        fc_get_den_l1["status"] == 403 and "L29_HTTP_" not in fc_get_den_l1["text"],
+        "GET frappe.client.get(CSKH Distribution Run, <Team2>) returns HTTP 403 for Team1 Leader",
+        actor="team1.leader@dev.local",
+    )
+
+    fc_get_sh_l1 = get(
+        "p1-http-l29-client-get-leader1-shared-run-scrubbed",
+        leader,
+        "/api/method/frappe.client.get?"
+        + urllib.parse.urlencode(
+            {"doctype": "CSKH Distribution Run", "name": l29_run_sh}
+        ),
+    )
+    fc_sh_doc = body_payload(fc_get_sh_l1)
+    check(
+        "p1-http-l29-client-get-leader1-shared-run-scrubbed",
+        fc_get_sh_l1,
+        fc_get_sh_l1["status"] == 200
+        and fc_sh_doc.get("name") == l29_run_sh
+        and _no_raw_run_leak(fc_sh_doc, fc_get_sh_l1["text"])
+        and "staff.c@dev.local" not in fc_get_sh_l1["text"],
+        "GET frappe.client.get(CSKH Distribution Run, <shared>) strips permlevel=1 raw JSON for Team1 Leader",
+        actor="team1.leader@dev.local",
+    )
+
+    fc_list_l1 = get(
+        "p1-http-l29-client-get-list-leader1-runs",
+        leader,
+        "/api/method/frappe.client.get_list?"
+        + urllib.parse.urlencode(
+            {
+                "doctype": "CSKH Distribution Run",
+                "fields": json.dumps(["name", "status", *raw_run_fields]),
+                "filters": json.dumps(
+                    [["name", "in", [l29_run_a, l29_run_b, l29_run_sh]]]
+                ),
+            }
+        ),
+    )
+    fc_list_rows = (fc_list_l1.get("json") or {}).get("message") or []
+    check(
+        "p1-http-l29-client-get-list-leader1-runs",
+        fc_list_l1,
+        fc_list_l1["status"] == 200
+        and isinstance(fc_list_rows, list)
+        and {r.get("name") for r in fc_list_rows} == {l29_run_a, l29_run_sh}
+        and all(all(f not in r for f in raw_run_fields) for r in fc_list_rows)
+        and "L29_HTTP_" not in fc_list_l1["text"],
+        "GET frappe.client.get_list(CSKH Distribution Run, fields=[...,raw]) scopes rows and strips raw JSON",
+        actor="team1.leader@dev.local",
+    )
+
+    fc_val_den_l1 = get(
+        "p1-http-l29-client-get-value-leader1-foreign-camp",
+        leader,
+        "/api/method/frappe.client.get_value?"
+        + urllib.parse.urlencode(
+            {
+                "doctype": "CSKH Campaign",
+                "fieldname": json.dumps(["name", "title", "selection_json"]),
+                "filters": l29_camp_b,
+            }
+        ),
+    )
+    check(
+        "p1-http-l29-client-get-value-leader1-foreign-camp",
+        fc_val_den_l1,
+        fc_val_den_l1["status"] == 200
+        and body_payload(fc_val_den_l1) == {}
+        and l29_camp_b not in json.dumps(body_payload(fc_val_den_l1)),
+        "GET frappe.client.get_value(CSKH Campaign, <Team2>) returns empty dict for Team1 Leader",
+        actor="team1.leader@dev.local",
+    )
+
+    vlink_den_l1 = get(
+        "p1-http-l29-validate-link-leader1-foreign-camp",
+        leader,
+        "/api/method/frappe.client.validate_link?"
+        + urllib.parse.urlencode(
+            {
+                "doctype": "CSKH Campaign",
+                "docname": l29_camp_b,
+                "fields": json.dumps(["title", "selection_json"]),
+            }
+        ),
+    )
+    check(
+        "p1-http-l29-validate-link-leader1-foreign-camp",
+        vlink_den_l1,
+        vlink_den_l1["status"] == 200
+        and body_payload(vlink_den_l1) == {}
+        and l29_camp_b not in vlink_den_l1["text"],
+        "GET frappe.client.validate_link(CSKH Campaign, <Team2>) returns {} without leaking existence or title",
+        actor="team1.leader@dev.local",
+    )
+
+    # 16f. Desk HTTP paths (`getdoc`, `reportview.get`, `search_link` with `ignore_user_permissions=1`)
+    desk_getdoc_den_l1 = get(
+        "p1-http-l29-desk-getdoc-denied-leader1-camp-b",
+        leader,
+        "/api/method/frappe.desk.form.load.getdoc?"
+        + urllib.parse.urlencode({"doctype": "CSKH Campaign", "name": l29_camp_b}),
+    )
+    check(
+        "p1-http-l29-desk-getdoc-denied-leader1-camp-b",
+        desk_getdoc_den_l1,
+        desk_getdoc_den_l1["status"] == 403
+        and "L29_HTTP_" not in desk_getdoc_den_l1["text"],
+        "GET frappe.desk.form.load.getdoc(CSKH Campaign, <Team2>) denies Team1 Leader with HTTP 403",
+        actor="team1.leader@dev.local",
+    )
+
+    desk_getdoc_sh_l1 = get(
+        "p1-http-l29-desk-getdoc-leader1-shared-run",
+        leader,
+        "/api/method/frappe.desk.form.load.getdoc?"
+        + urllib.parse.urlencode(
+            {"doctype": "CSKH Distribution Run", "name": l29_run_sh}
+        ),
+    )
+    gd_docs = ((desk_getdoc_sh_l1.get("json") or {}).get("docs")) or []
+    check(
+        "p1-http-l29-desk-getdoc-leader1-shared-run",
+        desk_getdoc_sh_l1,
+        desk_getdoc_sh_l1["status"] == 200
+        and len(gd_docs) == 1
+        and gd_docs[0].get("name") == l29_run_sh
+        and _no_raw_run_leak(gd_docs[0], desk_getdoc_sh_l1["text"])
+        and "staff.c@dev.local" not in desk_getdoc_sh_l1["text"],
+        "GET frappe.desk.form.load.getdoc(CSKH Distribution Run, <shared>) strips raw JSON for Team1 Leader",
+        actor="team1.leader@dev.local",
+    )
+
+    desk_rv_l1 = post(
+        "p1-http-l29-desk-reportview-leader1-runs",
+        leader,
+        leader_token,
+        "/api/method/frappe.desk.reportview.get",
+        {
+            "doctype": "CSKH Distribution Run",
+            "fields": json.dumps(["name", "status", *raw_run_fields]),
+            "filters": json.dumps(
+                [
+                    [
+                        "CSKH Distribution Run",
+                        "name",
+                        "in",
+                        [l29_run_a, l29_run_b, l29_run_sh],
+                    ]
+                ]
+            ),
+            "limit_page_length": "20",
+        },
+    )
+    rv_msg = body_payload(desk_rv_l1)
+    rv_keys = rv_msg.get("keys") or []
+    rv_vals = rv_msg.get("values") or []
+    rv_rows = [dict(zip(rv_keys, row)) for row in rv_vals]
+    check(
+        "p1-http-l29-desk-reportview-leader1-runs",
+        desk_rv_l1,
+        desk_rv_l1["status"] == 200
+        and {r.get("name") for r in rv_rows} == {l29_run_a, l29_run_sh}
+        and all(f not in rv_keys for f in raw_run_fields)
+        and "L29_HTTP_" not in desk_rv_l1["text"],
+        "POST frappe.desk.reportview.get(CSKH Distribution Run) scopes rows and strips permlevel=1 columns",
+        actor="team1.leader@dev.local",
+    )
+
+    desk_rv_l2 = post(
+        "p1-http-l29-desk-reportview-leader2-runs",
+        leader_2,
+        leader_2_token,
+        "/api/method/frappe.desk.reportview.get",
+        {
+            "doctype": "CSKH Distribution Run",
+            "fields": json.dumps(["name", "status", *raw_run_fields]),
+            "filters": json.dumps(
+                [
+                    [
+                        "CSKH Distribution Run",
+                        "name",
+                        "in",
+                        [l29_run_a, l29_run_b, l29_run_sh],
+                    ]
+                ]
+            ),
+            "limit_page_length": "20",
+        },
+    )
+    rv2_msg = body_payload(desk_rv_l2)
+    rv2_keys = rv2_msg.get("keys") or []
+    rv2_vals = rv2_msg.get("values") or []
+    rv2_rows = [dict(zip(rv2_keys, row)) for row in rv2_vals]
+    check(
+        "p1-http-l29-desk-reportview-leader2-runs",
+        desk_rv_l2,
+        desk_rv_l2["status"] == 200
+        and {r.get("name") for r in rv2_rows} == {l29_run_b, l29_run_sh}
+        and all(f not in rv2_keys for f in raw_run_fields)
+        and "L29_HTTP_" not in desk_rv_l2["text"],
+        "POST frappe.desk.reportview.get(CSKH Distribution Run) scopes rows and strips permlevel=1 columns for Team2 Leader",
+        actor="team2.leader@dev.local",
+    )
+
+    desk_sl_l1 = post(
+        "p1-http-l29-desk-search-link-ignore-user-perms-leader1",
+        leader,
+        leader_token,
+        "/api/method/frappe.desk.search.search_link",
+        {
+            "doctype": "CSKH Campaign",
+            "txt": "",
+            "filters": json.dumps(
+                [["name", "in", [l29_camp_a, l29_camp_b, l29_camp_sh]]]
+            ),
+            "ignore_user_permissions": "1",
+        },
+    )
+    sl_rows = (desk_sl_l1.get("json") or {}).get("message") or []
+    check(
+        "p1-http-l29-desk-search-link-ignore-user-perms-leader1",
+        desk_sl_l1,
+        desk_sl_l1["status"] == 200
+        and isinstance(sl_rows, list)
+        and {r.get("value") for r in sl_rows} == {l29_camp_a, l29_camp_sh},
+        "POST frappe.desk.search.search_link(ignore_user_permissions=1) still enforces Team1 scope",
+        actor="team1.leader@dev.local",
+    )
+
+    # 16g. Leader 2 symmetric positive/negative controls + Shared campaign rule/run isolation
+    l2_den_camp_a = get(
+        "p1-http-l29-rest-get-denied-leader2-camp-a",
+        leader_2,
+        _rest_url("CSKH Campaign", l29_camp_a),
+    )
+    check(
+        "p1-http-l29-rest-get-denied-leader2-camp-a",
+        l2_den_camp_a,
+        l2_den_camp_a["status"] == 403,
+        "GET /api/resource/CSKH Campaign/<Team1> denies Team2 Leader with HTTP 403",
+        actor="team2.leader@dev.local",
+    )
+
+    l2_den_rule_sh_a = get(
+        "p1-http-l29-rest-get-denied-leader2-rule-sh-a",
+        leader_2,
+        _rest_url("CSKH Assignment Rule", l29_rule_sh_a),
+    )
+    check(
+        "p1-http-l29-rest-get-denied-leader2-rule-sh-a",
+        l2_den_rule_sh_a,
+        l2_den_rule_sh_a["status"] == 403,
+        "GET /api/resource/CSKH Assignment Rule/<shared-Team1-rule> denies Team2 Leader with HTTP 403",
+        actor="team2.leader@dev.local",
+    )
+
+    l2_ok_run_b = get(
+        "p1-http-l29-rest-get-leader2-run-b",
+        leader_2,
+        _rest_url("CSKH Distribution Run", l29_run_b),
+    )
+    l2_run_b_doc = _rest_data(l2_ok_run_b)
+    check(
+        "p1-http-l29-rest-get-leader2-run-b",
+        l2_ok_run_b,
+        l2_ok_run_b["status"] == 200
+        and isinstance(l2_run_b_doc, dict)
+        and l2_run_b_doc.get("name") == l29_run_b
+        and _no_raw_run_leak(l2_run_b_doc, l2_ok_run_b["text"]),
+        "GET /api/resource/CSKH Distribution Run/<Team2> allows Team2 Leader metadata while stripping raw JSON",
+        actor="team2.leader@dev.local",
+    )
+
+    l2_ok_run_sh = get(
+        "p1-http-l29-desk-getdoc-leader2-shared-run",
+        leader_2,
+        "/api/method/frappe.desk.form.load.getdoc?"
+        + urllib.parse.urlencode(
+            {"doctype": "CSKH Distribution Run", "name": l29_run_sh}
+        ),
+    )
+    l2_sh_docs = ((l2_ok_run_sh.get("json") or {}).get("docs")) or []
+    check(
+        "p1-http-l29-desk-getdoc-leader2-shared-run",
+        l2_ok_run_sh,
+        l2_ok_run_sh["status"] == 200
+        and len(l2_sh_docs) == 1
+        and _no_raw_run_leak(l2_sh_docs[0], l2_ok_run_sh["text"])
+        and "staff.a@dev.local" not in l2_ok_run_sh["text"]
+        and l29_lead_sh_a not in l2_ok_run_sh["text"],
+        "GET Desk getdoc on shared Run as Team2 Leader strips Team1 assignee/lead raw JSON",
+        actor="team2.leader@dev.local",
+    )
+
+    # 16h. BOD, CRM-ADMIN, Staff A, and Guest across generic APIs + permitted projection APIs
+    bod_rest_runs = get(
+        "p1-http-l29-rest-list-runs-bod-scrubbed",
+        bod,
+        _rest_url(
+            "CSKH Distribution Run",
+            query={
+                "fields": json.dumps(["name", "status", *raw_run_fields]),
+                "filters": json.dumps(
+                    [["name", "in", [l29_run_a, l29_run_b, l29_run_sh]]]
+                ),
+            },
+        ),
+    )
+    bod_rr_rows = _rest_data(bod_rest_runs) or []
+    check(
+        "p1-http-l29-rest-list-runs-bod-scrubbed",
+        bod_rest_runs,
+        bod_rest_runs["status"] == 200
+        and {r.get("name") for r in bod_rr_rows} == {l29_run_a, l29_run_b, l29_run_sh}
+        and all(all(f not in r for f in raw_run_fields) for r in bod_rr_rows)
+        and "L29_HTTP_" not in bod_rest_runs["text"],
+        "GET /api/resource/CSKH Distribution Run?fields=[...] lets BOD read all run rows while stripping raw JSON",
+        actor="bod.viewer@dev.local",
+    )
+
+    bod_proj_run = get(
+        "p1-http-l29-projection-get-run-bod",
+        bod,
+        f"/api/method/crm_cskh.api.distribution.get_run?run_id={l29_run_sh}",
+    )
+    bod_proj_payload = body_payload(bod_proj_run)
+    check(
+        "p1-http-l29-projection-get-run-bod",
+        bod_proj_run,
+        bod_proj_run["status"] == 200
+        and bod_proj_payload.get("run_id") == l29_run_sh
+        and bod_proj_payload.get("assigned")
+        == {"staff.a@dev.local": 1, "staff.c@dev.local": 1}
+        and "L29_HTTP_STATE" not in bod_proj_run["text"]
+        and "L29_HTTP_PREVIEW" not in bod_proj_run["text"],
+        "GET distribution.get_run preserves permitted summary projection for BOD without leaking state_json/leads",
+        actor="bod.viewer@dev.local",
+    )
+
+    l1_rules_den = get(
+        "p1-http-l29-campaigns-rules-denied-leader1-foreign",
+        leader,
+        f"/api/method/crm_cskh.api.campaigns.rules?campaign={l29_camp_b}",
+    )
+    check(
+        "p1-http-l29-campaigns-rules-denied-leader1-foreign",
+        l1_rules_den,
+        l1_rules_den["status"] == 403
+        and error_envelope(l1_rules_den).get("code") == "FORBIDDEN",
+        "GET campaigns.rules?campaign=<Team2> denies Team1 Leader with HTTP 403 FORBIDDEN",
+        actor="team1.leader@dev.local",
+    )
+
+    l1_rules_sh = get(
+        "p1-http-l29-campaigns-rules-leader1-shared-scoped",
+        leader,
+        f"/api/method/crm_cskh.api.campaigns.rules?campaign={l29_camp_sh}",
+    )
+    l1_sh_elig = body_payload(l1_rules_sh).get("eligible") or []
+    check(
+        "p1-http-l29-campaigns-rules-leader1-shared-scoped",
+        l1_rules_sh,
+        l1_rules_sh["status"] == 200
+        and [r.get("user") for r in l1_sh_elig] == ["staff.a@dev.local"],
+        "GET campaigns.rules?campaign=<shared> returns only Team1 rules to Team1 Leader",
+        actor="team1.leader@dev.local",
+    )
+
+    admin_rest_run = get(
+        "p1-http-l29-rest-get-admin-run-b",
+        admin,
+        _rest_url("CSKH Distribution Run", l29_run_b),
+    )
+    admin_run_doc = _rest_data(admin_rest_run)
+    check(
+        "p1-http-l29-rest-get-admin-run-b",
+        admin_rest_run,
+        admin_rest_run["status"] == 200
+        and isinstance(admin_run_doc, dict)
+        and "L29_HTTP_ACTUAL_B" in str(admin_run_doc.get("actual_json") or "")
+        and int(admin_run_doc.get("progress") or 0) == 2,
+        "GET /api/resource/CSKH Distribution Run/<Team2> grants read-only permlevel=1 access to CSKH CRM Admin",
+        actor="crm.admin@dev.local",
+    )
+
+    for actor_slug, op, actor_email in (
+        ("staff", staff_a, "staff.a@dev.local"),
+        ("guest", guest, "Guest"),
+    ):
+        for dt_slug, dt, doc_id in (
+            ("camp", "CSKH Campaign", l29_camp_a),
+            ("rule", "CSKH Assignment Rule", l29_rule_a),
+            ("run", "CSKH Distribution Run", l29_run_a),
+        ):
+            cid = f"p1-http-l29-rest-denied-{actor_slug}-{dt_slug}"
+            den_resp = get(cid, op, _rest_url(dt, doc_id))
+            check(
+                cid,
+                den_resp,
+                den_resp["status"] in (401, 403)
+                and "L29_HTTP_" not in den_resp["text"],
+                f"GET /api/resource/{dt}/{doc_id} denies {actor_email} with HTTP 401/403",
+                actor=actor_email,
+            )
+
+    # -- 17. Direct HTTP mutation eligibility (`ownership.assign` & `ownership.reassign`) --
+    mut_wi_1 = str(direct_mut_fx.get("wi_1") or "")
+    mut_wi_2 = str(direct_mut_fx.get("wi_2") or "")
+    mut_wi_closed = str(direct_mut_fx.get("wi_closed") or "")
+    mut_wi_cross_t1 = str(direct_mut_fx.get("wi_cross_t1") or "")
+
+    mut_asg_wrong_team = post_json(
+        "p1-http-mut-assign-denied-wrong-team",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.ownership.assign",
+        {
+            "work_item": mut_wi_1,
+            "target_user": "staff.c@dev.local",
+            "reason": "wrong team direct HTTP assign",
+            "request_id": f"http-mut-wt-asg-{run_token}",
+        },
+    )
+    check(
+        "p1-http-mut-assign-denied-wrong-team",
+        mut_asg_wrong_team,
+        mut_asg_wrong_team["status"] == 400
+        and error_envelope(mut_asg_wrong_team).get("code") == "INVALID_REQUEST",
+        "POST ownership.assign rejects target_user outside campaign team_scope with HTTP 400 INVALID_REQUEST",
+        actor="crm.admin@dev.local",
+    )
+
+    mut_asg_disabled_rule = post_json(
+        "p1-http-mut-assign-denied-disabled-rule",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.ownership.assign",
+        {
+            "work_item": mut_wi_1,
+            "target_user": "staff.b@dev.local",
+            "reason": "disabled v2 rule direct HTTP assign",
+            "request_id": f"http-mut-dis-asg-{run_token}",
+        },
+    )
+    check(
+        "p1-http-mut-assign-denied-disabled-rule",
+        mut_asg_disabled_rule,
+        mut_asg_disabled_rule["status"] == 400
+        and error_envelope(mut_asg_disabled_rule).get("code") == "INVALID_REQUEST",
+        "POST ownership.assign rejects target_user whose latest rule version is disabled with HTTP 400 INVALID_REQUEST",
+        actor="crm.admin@dev.local",
+    )
+
+    mut_asg_ok = post_json(
+        "p1-http-mut-assign-positive-within-capacity",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.ownership.assign",
+        {
+            "work_item": mut_wi_1,
+            "target_user": "staff.a@dev.local",
+            "reason": "valid Team1 direct HTTP assign",
+            "request_id": f"http-mut-ok-asg-{run_token}",
+        },
+    )
+    check(
+        "p1-http-mut-assign-positive-within-capacity",
+        mut_asg_ok,
+        mut_asg_ok["status"] == 200
+        and body_payload(mut_asg_ok).get("owner") == "staff.a@dev.local",
+        "POST ownership.assign succeeds for eligible in-team assignee with remaining v2 capacity",
+        actor="crm.admin@dev.local",
+    )
+
+    mut_asg_cap = post_json(
+        "p1-http-mut-assign-denied-capacity-exceeded",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.ownership.assign",
+        {
+            "work_item": mut_wi_2,
+            "target_user": "staff.a@dev.local",
+            "reason": "exceeds v2 capacity=1",
+            "request_id": f"http-mut-cap-asg-{run_token}",
+        },
+    )
+    check(
+        "p1-http-mut-assign-denied-capacity-exceeded",
+        mut_asg_cap,
+        mut_asg_cap["status"] == 409
+        and error_envelope(mut_asg_cap).get("code") == "CAPACITY_EXCEEDED",
+        "POST ownership.assign rejects full latest-version capacity with HTTP 409 CAPACITY_EXCEEDED",
+        actor="crm.admin@dev.local",
+    )
+
+    mut_reasg_wrong_team = post_json(
+        "p1-http-mut-reassign-denied-wrong-team",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.ownership.reassign",
+        {
+            "work_item": mut_wi_1,
+            "expected_owner": "staff.a@dev.local",
+            "target_user": "staff.c@dev.local",
+            "reason": "wrong team direct HTTP reassign",
+            "request_id": f"http-mut-wt-reasg-{run_token}",
+        },
+    )
+    check(
+        "p1-http-mut-reassign-denied-wrong-team",
+        mut_reasg_wrong_team,
+        mut_reasg_wrong_team["status"] == 400
+        and error_envelope(mut_reasg_wrong_team).get("code") == "INVALID_REQUEST",
+        "POST ownership.reassign rejects target_user outside campaign team_scope with HTTP 400 INVALID_REQUEST",
+        actor="crm.admin@dev.local",
+    )
+
+    mut_reasg_dis = post_json(
+        "p1-http-mut-reassign-denied-disabled-rule",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.ownership.reassign",
+        {
+            "work_item": mut_wi_1,
+            "expected_owner": "staff.a@dev.local",
+            "target_user": "staff.b@dev.local",
+            "reason": "disabled v2 rule direct HTTP reassign",
+            "request_id": f"http-mut-dis-reasg-{run_token}",
+        },
+    )
+    check(
+        "p1-http-mut-reassign-denied-disabled-rule",
+        mut_reasg_dis,
+        mut_reasg_dis["status"] == 400
+        and error_envelope(mut_reasg_dis).get("code") == "INVALID_REQUEST",
+        "POST ownership.reassign rejects target_user whose latest rule version is disabled with HTTP 400 INVALID_REQUEST",
+        actor="crm.admin@dev.local",
+    )
+
+    mut_reasg_ok = post_json(
+        "p1-http-mut-reassign-positive-in-team",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.ownership.reassign",
+        {
+            "work_item": mut_wi_1,
+            "expected_owner": "staff.a@dev.local",
+            "target_user": "team1.leader@dev.local",
+            "reason": "escalate to Team1 leader",
+            "request_id": f"http-mut-ok-reasg-{run_token}",
+        },
+    )
+    check(
+        "p1-http-mut-reassign-positive-in-team",
+        mut_reasg_ok,
+        mut_reasg_ok["status"] == 200
+        and body_payload(mut_reasg_ok).get("owner") == "team1.leader@dev.local",
+        "POST ownership.reassign succeeds for eligible in-team Sales User",
+        actor="crm.admin@dev.local",
+    )
+
+    mut_closed = post_json(
+        "p1-http-mut-assign-denied-closed-campaign",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.ownership.assign",
+        {
+            "work_item": mut_wi_closed,
+            "target_user": "staff.a@dev.local",
+            "reason": "closed campaign assign",
+            "request_id": f"http-mut-closed-asg-{run_token}",
+        },
+    )
+    check(
+        "p1-http-mut-assign-denied-closed-campaign",
+        mut_closed,
+        mut_closed["status"] == 409
+        and error_envelope(mut_closed).get("code") == "CONFLICT",
+        "POST ownership.assign rejects Closed campaign with HTTP 409 CONFLICT",
+        actor="crm.admin@dev.local",
+    )
+
+    mut_cross_claim = post_json(
+        "p1-http-mut-assign-denied-cross-campaign-claim",
+        admin,
+        admin_token,
+        "/api/method/crm_cskh.api.ownership.assign",
+        {
+            "work_item": mut_wi_cross_t1,
+            "target_user": "staff.a@dev.local",
+            "reason": "attempt assign lead claimed by Team2",
+            "request_id": f"http-mut-cross-asg-{run_token}",
+        },
+    )
+    check(
+        "p1-http-mut-assign-denied-cross-campaign-claim",
+        mut_cross_claim,
+        mut_cross_claim["status"] == 409
+        and error_envelope(mut_cross_claim).get("code") == "ALREADY_ASSIGNED",
+        "POST ownership.assign rejects queued item whose lead holds an Active Claim in another campaign with HTTP 409 ALREADY_ASSIGNED",
         actor="crm.admin@dev.local",
     )
 

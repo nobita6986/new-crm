@@ -2,11 +2,11 @@
   "schema_version": 2,
   "gate": "g007-per-method-junit",
   "gate_passed": true,
-  "expected_total": 205,
-  "observed_total": 205,
-  "passing_total": 205,
+  "expected_total": 208,
+  "observed_total": 208,
+  "passing_total": 208,
   "counts": {
-    "PASS": 205
+    "PASS": 208
   },
   "xml_files": [
     "test_p1_api_permissions.junit.xml",
@@ -1881,6 +1881,33 @@
       "status": "PASS",
       "source_xml": "test_p1_regressions.junit.xml",
       "raw_name": "test_invalid_pagination_and_limit_raise_400_invalid_request_on_backend_endpoints",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL29GenericFrappeApiPermissionAndRawRunProtection",
+      "method": "test_doctype_and_document_level_has_permission_across_all_actors",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_doctype_and_document_level_has_permission_across_all_actors",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL29GenericFrappeApiPermissionAndRawRunProtection",
+      "method": "test_frappe_client_and_desk_paths_enforce_team_scope_and_strip_raw_json",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_frappe_client_and_desk_paths_enforce_team_scope_and_strip_raw_json",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestDirectOwnershipMutationEligibility",
+      "method": "test_direct_assign_and_reassign_enforce_team_scope_rule_state_capacity_and_claims",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_direct_assign_and_reassign_enforce_team_scope_rule_state_capacity_and_claims",
       "match_reason": "exact"
     }
   ]

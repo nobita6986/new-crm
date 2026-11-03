@@ -194,6 +194,9 @@ override_whitelisted_methods = {
 	"frappe.desk.reportview.export_query": "crm_cskh.api.guarded_reporting.reportview_export_query",
 	"frappe.desk.query_report.run": "crm_cskh.api.guarded_reporting.query_report_run",
 	"frappe.desk.query_report.export_query": "crm_cskh.api.guarded_reporting.query_report_export_query",
+	"frappe.desk.search.search_link": "crm_cskh.api.guarded_crm.search_link",
+	"frappe.desk.search.search_widget": "crm_cskh.api.guarded_crm.search_widget",
+	"frappe.client.validate_link": "crm_cskh.api.guarded_crm.validate_link",
 	"crm.api.dashboard.get_dashboard": "crm_cskh.api.guarded_reporting.crm_manager_dashboard",
 	"crm.api.dashboard.get_chart": "crm_cskh.api.guarded_reporting.crm_manager_chart",
 	"crm.integrations.api.get_contact_by_phone_number": "crm_cskh.api.guarded_crm.get_contact_by_phone_number",
@@ -318,9 +321,7 @@ after_request = ["crm_cskh.errors.normalize_error_response", "crm_cskh.p1_errors
 # Authentication and authorization
 # --------------------------------
 
-# auth_hooks = [
-# 	"crm_cskh.auth.validate"
-# ]
+auth_hooks = ["crm_cskh.p1_permissions.enforce_p1_filter_field_permissions"]
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True

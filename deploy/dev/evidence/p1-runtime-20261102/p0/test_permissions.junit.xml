@@ -1,21 +1,21 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-	<testsuite name="crm_cskh.tests.test_permissions.TestPermissionBoundaries-2[REDACTED_PHONE]15" tests="18" file="crm_cskh/tests/test_permissions.py" time="14.369" timestamp="2026-11-03T09:22:30" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_bod_viewer_cannot_read_leads_or_manage_users" time="1.373" timestamp="2026-11-03T09:22:17" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="528">
+	<testsuite name="crm_cskh.tests.test_permissions.TestPermissionBoundaries-2[REDACTED_PHONE]49" tests="18" file="crm_cskh/tests/test_permissions.py" time="19.154" timestamp="2026-11-03T15:27:10" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_bod_viewer_cannot_read_leads_or_manage_users" time="1.605" timestamp="2026-11-03T15:26:52" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="528">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: User cskh-sec-bod@example.test does not have doctype access via role permission for document CRM Lead
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_bulk_delete_and_unlink_cannot_touch_cross_scope_records" time="0.560" timestamp="2026-11-03T09:22:18" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="437">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_bulk_delete_and_unlink_cannot_touch_cross_scope_records" time="0.683" timestamp="2026-11-03T15:26:53" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="437">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05601
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12787
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_child_lists_and_activity_reads_stay_with_parent_scope" time="1.978" timestamp="2026-11-03T09:22:20" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="261">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_child_lists_and_activity_reads_stay_with_parent_scope" time="2.509" timestamp="2026-11-03T15:26:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="261">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
@@ -23,44 +23,44 @@ Message: User cskh-sec-a@example.test does not have doctype access via role perm
 Message: Not permitted
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_child_records_and_direct_private_file_are_record_scoped" time="0.707" timestamp="2026-11-03T09:22:20" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="356">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_child_records_and_direct_private_file_are_record_scoped" time="0.936" timestamp="2026-11-03T15:26:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="356">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05607Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Call Log - 416528c77ce0
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05607Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: FCRM Note - dcte9pl04l
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05607Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Task - 358
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05607Not allowed via controller permission checkUser cskh-sec-a@example.test does not have doctype access via role permission for document CommentUser cskh-sec-a@example.test does not have access to this document
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12793Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Call Log - 745b78af6a45
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12793Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: FCRM Note - 312ulhnohm
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12793Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Task - 415
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12793Not allowed via controller permission checkUser cskh-sec-a@example.test does not have doctype access via role permission for document CommentUser cskh-sec-a@example.test does not have access to this document
 Message: User cskh-sec-a@example.test does not have doctype access via role permission for document Comment
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05607Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: File - 8086a76ac4
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12793Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: File - 638d8c1d92
 Message: Not permitted
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Call Log - 416528c77ce0
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: FCRM Note - dcte9pl04l
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Task - 358
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Call Log - 745b78af6a45
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: FCRM Note - 312ulhnohm
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Task - 415
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_crm_admin_role_fails_closed_until_controlled_service_exists" time="0.583" timestamp="2026-11-03T09:22:21" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="537">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_crm_admin_role_fails_closed_until_controlled_service_exists" time="0.731" timestamp="2026-11-03T15:26:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="537">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_cross_team_transfer_blocks_old_owner_and_leader" time="0.908" timestamp="2026-11-03T09:22:22" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="474">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_cross_team_transfer_blocks_old_owner_and_leader" time="1.291" timestamp="2026-11-03T15:26:58" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="474">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-sec-tl2@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05614
+Message: Not allowed via controller permission checkUser cskh-sec-tl2@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12800
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_direct_todo_assignment_is_denied_even_with_ignore_permissions" time="0.530" timestamp="2026-11-03T09:22:22" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="490">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_direct_todo_assignment_is_denied_even_with_ignore_permissions" time="0.761" timestamp="2026-11-03T15:26:59" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="490">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Lead assignment changes are disabled until the controlled ownership service is available.
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_export_and_unscoped_reporting_are_blocked_for_staff_and_managers" time="0.600" timestamp="2026-11-03T09:22:23" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="319">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_export_and_unscoped_reporting_are_blocked_for_staff_and_managers" time="0.777" timestamp="2026-11-03T15:27:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="319">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
@@ -92,20 +92,20 @@ Message: Phone lookup is disabled until it can be restricted to the user's scope
 Message: Phone lookup is disabled until it can be restricted to the user's scope.
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_get_data_does_not_return_permlevel_fields" time="1.307" timestamp="2026-11-03T09:22:24" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="227">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_get_data_does_not_return_permlevel_fields" time="1.615" timestamp="2026-11-03T15:27:01" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="227">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_lead_list_and_get_data_only_return_owner_scope" time="0.602" timestamp="2026-11-03T09:22:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="206">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_lead_list_and_get_data_only_return_owner_scope" time="0.885" timestamp="2026-11-03T15:27:02" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="206">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05625
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12811
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_linked_activity_endpoints_check_parent_before_returning_data" time="0.614" timestamp="2026-11-03T09:22:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="403">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_linked_activity_endpoints_check_parent_before_returning_data" time="0.846" timestamp="2026-11-03T15:27:03" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="403">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
@@ -117,46 +117,46 @@ Message: Not permitted
 Message: Not permitted
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_owner_change_and_assignment_bypass_are_denied" time="0.547" timestamp="2026-11-03T09:22:26" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="423">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_owner_change_and_assignment_bypass_are_denied" time="0.756" timestamp="2026-11-03T15:27:04" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="423">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Lead assignment changes are disabled until the controlled ownership service is available.
 Message: Lead assignment changes are not available for this role.
-Message: No permission to share CRM Lead CRM-LEAD-2026-05630
+Message: No permission to share CRM Lead CRM-LEAD-2026-12816
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_private_file_download_and_stale_docshare_are_revoked" time="1.137" timestamp="2026-11-03T09:22:27" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="285">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_private_file_download_and_stale_docshare_are_revoked" time="1.613" timestamp="2026-11-03T15:27:05" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="285">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05633
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05633
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05633Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Call Log - 21cee96e7e47
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05633Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Task - 377
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05633Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: FCRM Note - des0r6f2hk
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05633Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: File - b5422cdd34
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12819
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12819
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12819Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Call Log - 5d93c1afb19e
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12819Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Task - 434
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12819Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: FCRM Note - 33n43u80s4
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12819Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: File - 448bb5b433
 Message: Not permitted
 Message: Not permitted
 Message: Not permitted
 Message: Not permitted
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_sales_manager_without_hierarchy_is_denied" time="0.509" timestamp="2026-11-03T09:22:28" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="397">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_sales_manager_without_hierarchy_is_denied" time="0.708" timestamp="2026-11-03T15:27:06" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="397">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-sec-outside@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05636
+Message: Not allowed via controller permission checkUser cskh-sec-outside@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12822
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_seed_owner_scope_and_hierarchy_are_applied" time="0.484" timestamp="2026-11-03T09:22:28" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="543">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_seed_owner_scope_and_hierarchy_are_applied" time="0.698" timestamp="2026-11-03T15:27:07" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="543">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_staff_cannot_duplicate_assignment_rules" time="0.640" timestamp="2026-11-03T09:22:29" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="504">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_staff_cannot_duplicate_assignment_rules" time="0.848" timestamp="2026-11-03T15:27:08" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="504">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
@@ -164,20 +164,20 @@ Message: User cskh-sec-a@example.test does not have doctype access via role perm
 Message: User cskh-sec-a@example.test does not have doctype access via role permission for document Assignment Rule
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_stale_todo_cannot_restore_access_after_owner_changes" time="0.773" timestamp="2026-11-03T09:22:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="450">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_stale_todo_cannot_restore_access_after_owner_changes" time="1.187" timestamp="2026-11-03T15:27:09" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="450">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05645
-Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05645Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: ToDo - dfp8ou0bn5
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12831
+Message: Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12831Not allowed via controller permission checkUser cskh-sec-a@example.test does not have access to this document: ToDo - 351ncp0gcn
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_team_leader_sees_team_but_not_other_team" time="0.519" timestamp="2026-11-03T09:22:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="388">
+		<testcase classname="crm_cskh.tests.test_permissions.TestPermissionBoundaries" name="test_team_leader_sees_team_but_not_other_team" time="0.705" timestamp="2026-11-03T15:27:10" file="/src/apps/crm_cskh/crm_cskh/tests/test_permissions.py" line="388">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-05650
+Message: Not allowed via controller permission checkUser cskh-sec-tl1@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12836
 ]]></system-out>
 		</testcase>
 	</testsuite>

@@ -58,6 +58,7 @@
    "fieldname": "selection_json",
    "fieldtype": "Long Text",
    "label": "Selection Json",
+   "permlevel": 1,
    "description": "Filter that defines the eligible lead pool of this campaign."
   }
  ],
@@ -85,11 +86,31 @@
    "print": 0
   },
   {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
    "role": "CSKH CRM Admin",
    "read": 1,
    "create": 0,
    "write": 0,
    "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "permlevel": 1,
+   "read": 1,
+   "write": 0,
    "share": 0,
    "export": 0,
    "email": 0,
@@ -122,7 +143,7 @@
  "track_changes": 0,
  "sort_field": "creation",
  "sort_order": "DESC",
- "modified": "2026-11-02 00:00:00.000000",
+ "modified": "2026-11-03 15:00:00.000000",
  "owner": "Administrator",
  "modified_by": "Administrator",
  "links": [],

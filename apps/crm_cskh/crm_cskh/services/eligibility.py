@@ -29,6 +29,29 @@ REASON_NO_WEIGHT = "no_positive_weight"
 REASON_CAPACITY_FULL = "capacity_full"
 
 
+def campaign_team_scope_members(team_scope):
+	"""Return `(allowed_users, allowed_nodes)` inside `team_scope`'s hierarchy subtree."""
+	if not team_scope:
+		return None, None
+	node = frappe.db.get_value(
+		"CRM Sales Hierarchy",
+		team_scope,
+		["name", "lft", "rgt"],
+		as_dict=True,
+	)
+	if not node:
+		return set(), set()
+	rows = frappe.db.sql(
+		"""select name, user from `tabCRM Sales Hierarchy`
+		   where lft >= %s and rgt <= %s""",
+		(node.lft, node.rgt),
+		as_dict=True,
+	)
+	users = {row.user for row in rows if row.user}
+	nodes = {row.name for row in rows if row.name}
+	return users, nodes
+
+
 def campaign_rules(campaign, version=None):
 	"""Return the enabled rules of a campaign as allocator-shaped dicts.
 
@@ -87,10 +110,13 @@ def eligible_assignees(campaign, team_scope=None, version=None):
 	the plan.
 	"""
 	rules = campaign_rules(campaign, version=version)
+	allowed_users, allowed_nodes = campaign_team_scope_members(team_scope)
 	eligible = []
 	excluded = []
 	for rule in rules:
-		reason = _assignee_exclusion_reason(rule, team_scope, campaign)
+		reason = _assignee_exclusion_reason(
+			rule, team_scope, campaign, allowed_users=allowed_users, allowed_nodes=allowed_nodes
+		)
 		if reason:
 			excluded.append({"user": rule["user"], "weight": rule["weight"], "reason": reason})
 			continue
@@ -100,7 +126,7 @@ def eligible_assignees(campaign, team_scope=None, version=None):
 	return eligible, excluded
 
 
-def _assignee_exclusion_reason(rule, team_scope, campaign):
+def _assignee_exclusion_reason(rule, team_scope, campaign, allowed_users=None, allowed_nodes=None):
 	user = rule["user"]
 	if not frappe.db.get_value("User", user, "enabled"):
 		return REASON_USER_DISABLED
@@ -108,8 +134,13 @@ def _assignee_exclusion_reason(rule, team_scope, campaign):
 		return REASON_USER_NOT_SALES
 	if not rule["weight"] or rule["weight"] <= 0:
 		return REASON_NO_WEIGHT
-	if team_scope and rule["team"] and rule["team"] != team_scope:
-		return REASON_USER_WRONG_TEAM
+	if team_scope:
+		if allowed_users is None or allowed_nodes is None:
+			allowed_users, allowed_nodes = campaign_team_scope_members(team_scope)
+		if user not in allowed_users:
+			return REASON_USER_WRONG_TEAM
+		if rule.get("team") and rule["team"] not in allowed_nodes:
+			return REASON_USER_WRONG_TEAM
 	if rule["capacity"] and capacity_usage(campaign, user) >= rule["capacity"]:
 		return REASON_CAPACITY_FULL
 	return None
@@ -224,4 +255,6 @@ def _lead_exclusion_reason(campaign, lead):
 		item = frappe.db.get_value("CSKH Work Item", claim.work_item, "status")
 		if item not in ACTIVE_WORK_ITEM_STATES:
 			return REASON_WORK_ITEM_EXISTS
+	if frappe.db.exists("CSKH Work Item", {"lead": lead, "campaign": ["!=", campaign], "status": "assigned"}):
+		return REASON_ACTIVE_CLAIM
 	return None

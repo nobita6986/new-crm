@@ -2,7 +2,11 @@ import re
 
 import frappe
 
+from crm_cskh.hooks import P1_DOCTYPES
+from crm_cskh.p1_permissions import validate_p1_filter_fields
 from crm_cskh.permissions import LEAD_LINKS, _is_system, user_in_scope
+
+GUARDED_SEARCH_DOCTYPES = frozenset((*P1_DOCTYPES, "CRM Lead", "CRM Deal", *LEAD_LINKS))
 
 
 def _check_read(doctype, name):
@@ -381,3 +385,84 @@ def get_call_log(name: str):
 				frappe.PermissionError,
 			)
 	return frappe.get_attr("crm.fcrm.doctype.crm_call_log.crm_call_log.get_call_log")(name)
+
+
+@frappe.whitelist()
+def search_link(
+	doctype: str,
+	txt: str,
+	query: str | None = None,
+	filters: str | dict | list | None = None,
+	page_length: int = 10,
+	searchfield: str | None = None,
+	reference_doctype: str | None = None,
+	ignore_user_permissions: bool = False,
+):
+	"""Guard `frappe.desk.search.search_link` against `ignore_user_permissions=1` bypass (`L-29`)."""
+	if not _is_system(frappe.session.user):
+		validate_p1_filter_fields(doctype, filters=filters)
+		if doctype in GUARDED_SEARCH_DOCTYPES:
+			ignore_user_permissions = False
+	return frappe.get_attr("frappe.desk.search.search_link")(
+		doctype=doctype,
+		txt=txt,
+		query=query,
+		filters=filters,
+		page_length=page_length,
+		searchfield=searchfield,
+		reference_doctype=reference_doctype,
+		ignore_user_permissions=ignore_user_permissions,
+	)
+
+
+@frappe.whitelist()
+def search_widget(
+	doctype: str,
+	txt: str,
+	query: str | None = None,
+	searchfield: str | None = None,
+	start: int = 0,
+	page_length: int = 10,
+	filters: str | None | dict | list = None,
+	filter_fields: str | None = None,
+	as_dict: bool = False,
+	reference_doctype: str | None = None,
+	ignore_user_permissions: bool = False,
+):
+	"""Guard `frappe.desk.search.search_widget` against `ignore_user_permissions=1` bypass (`L-29`)."""
+	if not _is_system(frappe.session.user):
+		validate_p1_filter_fields(doctype, filters=filters)
+		if doctype in GUARDED_SEARCH_DOCTYPES:
+			ignore_user_permissions = False
+	return frappe.get_attr("frappe.desk.search.search_widget")(
+		doctype=doctype,
+		txt=txt,
+		query=query,
+		searchfield=searchfield,
+		start=start,
+		page_length=page_length,
+		filters=filters,
+		filter_fields=filter_fields,
+		as_dict=as_dict,
+		reference_doctype=reference_doctype,
+		ignore_user_permissions=ignore_user_permissions,
+	)
+
+
+@frappe.whitelist()
+def validate_link(doctype: str, docname: str, fields: list[str] | str | None = None):
+	"""Guard `frappe.client.validate_link` against leaking foreign document names (`L-29`)."""
+	upstream = frappe.get_attr("frappe.client.validate_link")
+	if _is_system(frappe.session.user) or doctype not in GUARDED_SEARCH_DOCTYPES:
+		return upstream(doctype, docname, fields=fields)
+	if not isinstance(doctype, str) or not isinstance(docname, str):
+		return upstream(doctype, docname, fields=fields)
+	if not (
+		frappe.has_permission(doctype, "select", throw=False)
+		or frappe.has_permission(doctype, "read", throw=False)
+	):
+		return upstream(doctype, docname, fields=fields)
+	existing_name = frappe.db.get_value(doctype, docname, cache=True)
+	if not existing_name or not frappe.has_permission(doctype, "read", doc=existing_name, throw=False):
+		return frappe._dict()
+	return upstream(doctype, docname, fields=fields)
