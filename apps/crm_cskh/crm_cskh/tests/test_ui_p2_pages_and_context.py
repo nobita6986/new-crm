@@ -11,6 +11,7 @@ from unittest import mock
 import frappe
 
 from crm_cskh import p2_strings
+from crm_cskh.api import ownership_ui
 from crm_cskh.tests.p1_base import P1TestCase
 from crm_cskh.www import cskh_context
 from crm_cskh.www.cskh import (
@@ -157,3 +158,21 @@ class TestUiP2PagesAndContext(P1TestCase):
 		self.assertEqual(lead_script["view"], "Form")
 		self.assertEqual(lead_script["enabled"], 1)
 		self.assertIn("/cskh/work-item?lead=", lead_script["script"])
+
+	def test_o02_ownership_ui_assignees_respects_per_user_latest_rule_version(self):
+		camp = self.make_campaign(title="Chiến dịch đa version O-02", team_scope=self.team_a)
+		lead_a = self.make_canonical_lead()
+		self.make_work_item(camp, lead_a, status="assigned", assigned_to=self.staff_a)
+
+		# staff_a has historical v1 (cap=5, enabled=1) superseded by v2 (cap=1, enabled=1) -> full at 1/1
+		self.make_rule(camp, self.staff_a, weight=50, capacity=5, version=1, enabled=1, team=self.team_a)
+		self.make_rule(camp, self.staff_a, weight=50, capacity=1, version=2, enabled=1, team=self.team_a)
+
+		# staff_b remains at v1 (cap=5, enabled=1) -> still eligible even though staff_a is at v2
+		self.make_rule(camp, self.staff_b, weight=50, capacity=5, version=1, enabled=1, team=self.team_a)
+
+		frappe.set_user(self.admin_user)
+		res = ownership_ui.assignees(campaign=camp)
+		eligible_users = {row["user"] for row in res["items"]}
+		self.assertNotIn(self.staff_a, eligible_users)
+		self.assertIn(self.staff_b, eligible_users)
