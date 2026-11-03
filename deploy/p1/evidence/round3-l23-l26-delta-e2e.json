@@ -1,0 +1,54 @@
+{
+  "generated_at": "2026-11-03T06:39:59.363Z",
+  "site": "http://p1.localhost:8120",
+  "integrated_git_sha": "3f07b9b3f2e68f9bf3eea005c634c7a11393ec8b",
+  "baseline_evidence_sha_preserved": "0d3f2bcbbf9715a4c0c783903ce750de8646583d",
+  "checks": [
+    {
+      "id": "ROUND3-L23-AND-L25-POOL-ISOLATION-AND-BATCH-FILTER",
+      "passed": true,
+      "batch1_admin_total": 2,
+      "batch2_admin_total": 2,
+      "xss_executed": false,
+      "leader_a_cross_team_probes_zero": true,
+      "leader_a_batch1_scoped_total": 1,
+      "leader_b_positive_control_total": 1,
+      "bod_zero_pii_verified": true
+    },
+    {
+      "id": "ROUND3-L24-SHARED-CAMPAIGN-SCOPED-RUN-HISTORY-AND-POLLING",
+      "passed": true,
+      "queued_leader_a_total": 2,
+      "queued_leader_b_total": 2,
+      "completed_leader_a_created": 2,
+      "completed_leader_b_created": 2,
+      "completed_admin_created": 4,
+      "completed_bod_created": 4,
+      "leader_a_zero_team_b_leak": true,
+      "leader_b_zero_team_a_leak": true
+    },
+    {
+      "id": "ROUND3-L26-PAGINATION-400-AND-CAMPAIGN-ASSIGNEES",
+      "passed": true,
+      "invalid_pagination_probes": 24,
+      "all_returned_400_invalid_request": true,
+      "assignees_team_a": [
+        "cskh-p1-staff-a@example.test",
+        "cskh-p1-staff-b@example.test",
+        "cskh-p1-leader-a@example.test"
+      ],
+      "assignees_team_b": [
+        "cskh-p1-staff-c@example.test",
+        "cskh-p1-leader-b@example.test"
+      ],
+      "unknown_campaign_response": {
+        "status": 404,
+        "code": "NOT_FOUND",
+        "p1_code": "NOT_FOUND"
+      },
+      "ui_transfer_dropdown_team_b_options": [
+        "cskh-p1-leader-b@example.test"
+      ]
+    }
+  ]
+}
