@@ -314,15 +314,15 @@ Chi tiết đầy đủ đã cập nhật tại [`api-contract-p1.md` §2, §3.2
 **Ngày cập nhật:** 2026-11-03
 **Vai trò:** T1A — CSKH P1 UI (cùng Frappe site/session với CRM theo ADR-UI-001 & ADR-P1-06)
 **Nhánh:** `codex/p1-ui` — worktree `D:/HRP-app/p1-ui` ([PR #5](https://github.com/nobita6986/new-crm/pull/5))
-**Revision mã nguồn tích hợp cuối (Đợt 4 — Hiện hành):** `9fdbb8dfdd9ad443ffe05057a969a1e039473989` (hợp nhất UI/docs `5c37bf3dc464a0d8e2b9bd94ba55df40da469559` + backend PR #4 `2235757b79bb9f1a7fb3ae2957b28deb088185b9` + `77e07dac7948c156039bc6a9746fe5d451fc0d71` — **`327/327` method PASS** qua `run_suites.py`: `208` P1 + `12` UI + `99` P0 + `8` transport; P1 HTTP probe `158/158`; `vi.csv` `613` dòng dịch / `409` khai báo, `0` lỗi — chi tiết tại **§7.11**)
+**Revision mã nguồn tích hợp cuối (Đợt 4 — Hiện hành):** `7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9` (hợp nhất UI/docs `5c37bf3dc464a0d8e2b9bd94ba55df40da469559` + mốc tích hợp local `5e2e350` + backend PR #4 `2235757b79bb9f1a7fb3ae2957b28deb088185b9` + `77e07dac7948c156039bc6a9746fe5d451fc0d71` + `6c457b327e59eead47cc9d0982c4ee1df4fe9e64` — **`328/328` method PASS** qua `run_suites.py`: `209` P1 + `12` UI + `99` P0 + `8` transport; P1 HTTP probe `167/167`; `vi.csv` `613` dòng dịch / `409` khai báo, `0` lỗi — chi tiết tại **§7.11**)
 **Backend baseline lịch sử Đợt 1 (bảo toàn đối chiếu):** `3025495f58bc0391c3f8d092af500b0566a5f038` (baseline ban đầu 174/174 P1, 99/99 P0) + `64b7486f29ad712106d167dfaea50e3b060a6845` (184/184 P1 PASS, 52/52 HTTP probe PASS, 99/99 P0 PASS)
 **Kế hoạch:** [`docs/root-plan/P1.md`](../root-plan/P1.md) §9 (UI/UX), §10 (Contract), §12 (Nghiệm thu)
 **Hợp đồng API:** [`docs/architecture/api-contract-p1.md`](./api-contract-p1.md)
-**Báo cáo backend:** chương 0–5 ở trên (do T1B biên soạn tại `77e07da` — giữ nguyên 100%, không chỉnh sửa chồng chéo)
+**Báo cáo backend:** chương 0–5 ở trên (do T1B biên soạn tại `6c457b3` — giữ nguyên 100%, không chỉnh sửa chồng chéo)
 
 > [!IMPORTANT]
 > **Quy ước phân biệt số liệu lịch sử và số liệu hiện hành (`L-28`):**
-> * **Số liệu hiện hành (Đợt 4 — Bản tích hợp cuối `9fdbb8d`):** xem **§7.11** ở cuối chương này (`208` P1 + `12` UI + `99` P0 + `8` transport = **`327/327`**; P1 HTTP probe **`158/158`**; `translations/vi.csv` **`613` dòng dịch** / `614` dòng tệp, **`409` chuỗi khai báo**, `210` chuỗi sử dụng, `0` lỗi; đã đóng đủ `L-23..L-29` trên cả UI lẫn Backend).
+> * **Số liệu hiện hành (Đợt 4 — Bản tích hợp cuối `7bd7185`):** xem **§7.11** ở cuối chương này (`209` P1 + `12` UI + `99` P0 + `8` transport = **`328/328`**; P1 HTTP probe **`167/167`**; `translations/vi.csv` **`613` dòng dịch** / `614` dòng tệp, **`409` chuỗi khai báo**, `210` chuỗi sử dụng, `0` lỗi; đã đóng đủ `L-23..L-29` trên cả UI lẫn Backend).
 > * **Số liệu lịch sử được giữ nguyên trạng để truy vết kiểm toán (không sửa số cũ):** **§7.0–§7.8** là *Mốc lịch sử Đợt 1* (`0d3f2bc` / `d0842cc`); **§7.9** là *Mốc lịch sử Đợt 2* (`6351048` / `a75c093`, giữ nguyên văn UTF-8); **§7.10** là *Mốc lịch sử Đợt 3* (`3f07b9b` / `5c37bf3`).
 
 ### 7.0. Nguyên văn đề bài T1A ban đầu [Mốc lịch sử Đợt 1 — `0d3f2bc` / `d0842cc`]
@@ -486,7 +486,7 @@ Toàn bộ 11 lượt chụp đều đạt: `console_errors = 0`, `page_errors =
   * `used strings = 204`, `declared strings = 372`, `missing declaration = 0`, `missing translation = 0`, `untranslated (EN) = 0`, `orphan declaration = 0`.
 * Shell CSKH (`cskh_context.py`) ghim `frappe.local.lang = "vi"` và `context.boot["lang"] = "vi"` trước cả bước kiểm tra quyền truy cập, bảo đảm cả `<html lang="vi">` lẫn trang từ chối quyền `403` đều hiển thị tiếng Việt đồng nhất.
 
-### 7.6. Kết quả bộ test đơn vị & tích hợp [Số liệu lịch sử Đợt 1: `297/297` — hiện hành xem §7.11: `327/327`]
+### 7.6. Kết quả bộ test đơn vị & tích hợp [Số liệu lịch sử Đợt 1: `297/297` — hiện hành xem §7.11: `328/328`]
 
 Lệnh chạy tuần tự: [`deploy/p1/run_suites.py`](../../deploy/p1/run_suites.py) — **15/15 module PASS (`297/297` method)**:
 
@@ -581,7 +581,7 @@ Không merge, không tự ký GO P2, không gọi agent khác.
 
 ### 7.10. Bổ sung bàn giao Đợt 3 — Đóng `L-23`, `L-24`, `L-25` (filter Import Batch), `L-26`, Đính chính Provenance & Regression `11/11` [Mốc lịch sử Đợt 3 — `3f07b9b` / `5c37bf3`; hiện hành xem §7.11]
 
-> *[Mốc lịch sử Đợt 3 — `3f07b9b` / `5c37bf3`]*: Mục §7.10 giữ nguyên văn số liệu và danh sách các endpoint chờ backend T1B tại thời điểm kết thúc Đợt 3. Ở bản tích hợp cuối hiện hành (**§7.11**), toàn bộ các endpoint backend còn chờ (`L-23` `pool_list`, `L-26` phân trang/limit backend, direct ownership mutation eligibility, và `L-29` khóa quyền DocType/Document/`permlevel = 1`/`search_link`) đã được tích hợp từ `2235757` + `77e07da` và kiểm chứng đầy đủ.
+> *[Mốc lịch sử Đợt 3 — `3f07b9b` / `5c37bf3`]*: Mục §7.10 giữ nguyên văn số liệu và danh sách các endpoint chờ backend T1B tại thời điểm kết thúc Đợt 3. Ở bản tích hợp cuối hiện hành (**§7.11**), toàn bộ các endpoint backend còn chờ (`L-23` SQL trước phân trang trên `pool_list` & `customer_pool`, `L-26` phân trang/limit backend, direct ownership mutation eligibility, và `L-29` khóa quyền DocType/Document/`permlevel = 1`/`search_link`) đã được tích hợp từ `2235757` + `77e07da` + `6c457b3` và kiểm chứng đầy đủ.
 
 #### Nguyên văn yêu cầu bổ sung (Verbatim Prompt Đợt 3 & Hoàn tất bàn giao)
 
@@ -672,9 +672,9 @@ Không merge, không tự ký GO P2, không gọi agent khác.
    * Sửa [`deploy/p1/verify_p1_async_dist_e2e.mjs`](../../deploy/p1/verify_p1_async_dist_e2e.mjs) lấy SHA từ `git rev-parse --verify 0d3f2bcbbf9715a4c0c783903ce750de8646583d^{commit}` (thay vì chuỗi cứng sai `0d3f2bc9da3e3e497a999baeb9a4dd19129224fb`).
    * Ghi đính chính `baseline_evidence_sha_preserved = "0d3f2bcbbf9715a4c0c783903ce750de8646583d"` kèm khối `provenance_erratum` trong [`deploy/p1/evidence/async-distribution-delta-e2e.json`](../../deploy/p1/evidence/async-distribution-delta-e2e.json), bảo toàn nguyên vẹn `generated_at`, `integrated_git_sha` và toàn bộ kết quả đo `checks[]`.
 
-### 7.11. Bàn giao Tích hợp Cuối (Đợt 4 — Hiện hành: UI `5c37bf3` + Backend `2235757` + `77e07da` / `L-29`)
+### 7.11. Bàn giao Tích hợp Cuối (Đợt 4 — Hiện hành: UI `5c37bf3` + Local `5e2e350` + Backend `2235757` + `77e07da` + `6c457b3`)
 
-#### Nguyên văn yêu cầu bàn giao cuối (Verbatim Prompt Đợt 4)
+#### Nguyên văn yêu cầu bàn giao cuối (Verbatim Prompts Đợt 4)
 
 ```text
 T1A, chuẩn bị bản tích hợp cuối gồm:
@@ -691,50 +691,61 @@ Bàn giao một SHA code tích hợp cùng CI/artifact cho T1C.
 Không merge PR vào main, không gọi agent khác.
 ```
 
+```text
+T1A, giữ bản tích hợp local 5e2e350 và các thay đổi đang làm.
+Chờ nhận bản sửa bổ sung pool_list + L-29 từ T1B rồi hợp nhất
+có kiểm soát vào cùng revision nghiệm thu.
+
+Bàn giao một SHA tích hợp sạch với CI và evidence delta;
+không tự sửa song song cùng phần quyền backend của T1B.
+Không merge PR vào main, không gọi agent khác.
+```
+
 #### Bảng tổng hợp phân biệt các mốc lịch sử (Đợt 1–3) và mốc hiện hành (Đợt 4)
 
 | Hạng mục / Chỉ số | Đợt 1 — Lịch sử (§7.0–§7.8) | Đợt 2 — Lịch sử (§7.9) | Đợt 3 — Lịch sử (§7.10) | **Đợt 4 — Hiện hành (§7.11)** |
 |---|---|---|---|---|
-| SHA mã ứng dụng / tích hợp | `0d3f2bcbbf9715a4c0c783903ce750de8646583d` (docs `d0842cc`) | `63510483a0aa1ed4238b630ba384c5a362659450` (docs `a75c093`) | `3f07b9b3f2e68f9bf3eea005c634c7a11393ec8b` (docs `5c37bf3`) | **`9fdbb8dfdd9ad443ffe05057a969a1e039473989`** |
-| Nguồn gốc commit hợp nhất | Backend `3025495` + `64b7486` | Backend `c49f7f8` (`6ce0341` + `c49f7f8`) | Backend `c997df7` (`L-25`) | **UI/docs `5c37bf3` + Backend `2235757` + `77e07da` (`L-29`)** |
-| Suite `run_suites.py` (`15` module) | `297/297` (`184` P1 + `6` UI + `99` P0 + `8` transport) | `312/312` (`199` P1 + `6` UI + `99` P0 + `8` transport) | `321/321` (`203` P1 + `11` UI + `99` P0 + `8` transport) | **`327/327` (`208` P1 + `12` UI + `99` P0 + `8` transport)** |
-| Cổng CI inventory (`p1` / `ui` / `p0`) | `184` P1 / chưa gắn UI CI / `99` P0 | `199` P1 / `6` UI / `99` P0 | `203` P1 / `11` UI / `99` P0 | **`208` P1 / `12` UI / `99` P0** (`ci_p1_http_probe` **`158/158`**) |
+| SHA mã ứng dụng / tích hợp | `0d3f2bcbbf9715a4c0c783903ce750de8646583d` (docs `d0842cc`) | `63510483a0aa1ed4238b630ba384c5a362659450` (docs `a75c093`) | `3f07b9b3f2e68f9bf3eea005c634c7a11393ec8b` (docs `5c37bf3`) | **`7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9`** |
+| Nguồn gốc commit hợp nhất | Backend `3025495` + `64b7486` | Backend `c49f7f8` (`6ce0341` + `c49f7f8`) | Backend `c997df7` (`L-25`) | **UI/docs `5c37bf3` + Local `5e2e350` + Backend `2235757` + `77e07da` + `6c457b3` (`pool_list` + `L-29`)** |
+| Suite `run_suites.py` (`15` module) | `297/297` (`184` P1 + `6` UI + `99` P0 + `8` transport) | `312/312` (`199` P1 + `6` UI + `99` P0 + `8` transport) | `321/321` (`203` P1 + `11` UI + `99` P0 + `8` transport) | **`328/328` (`209` P1 + `12` UI + `99` P0 + `8` transport)** |
+| Cổng CI inventory (`p1` / `ui` / `p0`) | `184` P1 / chưa gắn UI CI / `99` P0 | `199` P1 / `6` UI / `99` P0 | `203` P1 / `11` UI / `99` P0 | **`209` P1 / `12` UI / `99` P0** (`ci_p1_http_probe` **`167/167`**) |
 | Bản dịch `translations/vi.csv` | `577` dòng (`372` khai báo) | `587` dòng (`383` khai báo) | `588` dòng (`384` khai báo, `210` dùng) | **`613` dòng dịch (`614` dòng tệp; `409` khai báo, `210` dùng, `0` lỗi)** |
 | Bằng chứng lưu trữ (không ghi đè lịch sử) | `screenshots/*.png`, `browser-manifest.json`, `http-e2e-report.json` | `async-distribution-delta-e2e.json` (đã đính chính SHA baseline), `http-e2e-delta-report.json` | `round3-l23-l26-delta-e2e.json`, `round3-http-e2e-report.json` | **`round4-final-integration-e2e.json`**, **`round4-http-e2e-report.json`** |
 
-#### Kết quả thực hiện & kiểm chứng trên SHA tích hợp cuối `9fdbb8dfdd9ad443ffe05057a969a1e039473989`
+#### Kết quả thực hiện & kiểm chứng trên SHA tích hợp cuối `7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9`
 
-1. **Hợp nhất Git sạch một mốc mã nguồn tích hợp (`9fdbb8dfdd9ad443ffe05057a969a1e039473989`):**
-   * Merge trực tiếp commit backend PR #4 **`77e07dac7948c156039bc6a9746fe5d451fc0d71`** (đã bao gồm cha **`2235757b79bb9f1a7fb3ae2957b28deb088185b9`**) lên trên **`5c37bf3dc464a0d8e2b9bd94ba55df40da469559`**:
-     * **`0` dòng thay đổi** so với `77e07dac7948c156039bc6a9746fe5d451fc0d71` trên toàn bộ tệp phân quyền và schema DocType backend (`apps/crm_cskh/crm_cskh/permissions.py`, `apps/crm_cskh/crm_cskh/p1_permissions.py`, `apps/crm_cskh/crm_cskh/crm_cskh/doctype/**/*.json`); kiểm tra trực tiếp MariaDB xác nhận `tabCustom DocPerm = 0 dòng`, đủ `7` trường `permlevel = 1` (`CSKH Campaign.selection_json` và `CSKH Distribution Run.{actual_json, error, lease_expires_at, preview_json, progress, state_json}`), và `write = 0 / create = 0 / delete = 0` cho toàn bộ business role trên các DocType P1.
-     * **`0` dòng thay đổi** so với `5c37bf3dc464a0d8e2b9bd94ba55df40da469559` trên các bản sửa cô lập dữ liệu UI `L-23` (`apps/crm_cskh/crm_cskh/api/pool_ui.py`), `L-24` (`apps/crm_cskh/crm_cskh/api/run_history.py`), cùng toàn bộ tệp bằng chứng lịch sử Đợt 1 / Đợt 2 / Đợt 3 (bao gồm bản đính chính provenance `0d3f2bcbbf9715a4c0c783903ce750de8646583d` trong `async-distribution-delta-e2e.json` và nguyên văn tiếng Việt UTF-8 của **§7.9**).
-     * Hợp nhất có chủ đích `apps/crm_cskh/crm_cskh/hooks.py`: giữ đồng thời toàn bộ P0/UI hooks (`website_route_rules`, `before_request`, `after_request = normalize_p1_error_response`) và toàn bộ `L-29` hooks từ `77e07dac7948c156039bc6a9746fe5d451fc0d71` (`permission_query_conditions`, `has_permission`, `override_whitelisted_methods` khóa `frappe.client.get_list`/`get_count`/`frappe.desk.reportview.*`, `auth_hooks = enforce_p1_http_filter_guard`).
-2. **Đóng trọn vẹn các mục từng chờ T1B ở §7.10 (`L-23` backend, `L-26` backend, Direct Ownership Mutation & `L-29`):**
-   * **Phân trang & tham số giới hạn (`L-26` toàn diện cả UI lẫn Backend — `8/8` endpoint):** ngoài `4` endpoint UI (`pool_ui.list`, `ownership_ui.assigned_list`, `import_history.history`, `run_history.runs`), cả `4` endpoint backend (`customers.my_list`, `customers.pool_list`, `customers.customer_pool`, `ownership.history`) nay đều dùng `parse_strict_int` và trả HTTP `400` với `code = "INVALID_REQUEST"`, `p1_code = "INVALID_REQUEST"` ổn định.
-   * **Cô lập đội trên mọi endpoint kho (`L-23` toàn diện):** cả `pool_ui.list`, `customers.customer_pool` và `customers.pool_list` đều áp điều kiện ủy quyền theo quyền hiện tại, không lộ Lead đang hoạt động ở Đội B qua lịch sử `revoked`/`closed` của Đội A.
+1. **Hợp nhất Git sạch một mốc mã nguồn tích hợp (`7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9`):**
+   * Bảo toàn đầy đủ nội dung bản tích hợp local `5e2e350e0368b9352a8d467dc2f123ada8b555a2` (`5c37bf3` + `2235757` cùng các chỉnh sửa UI/dịch đang làm tại `9fdbb8dfdd9ad443ffe05057a969a1e039473989`), và hợp nhất trực tiếp từ Git chuỗi commit backend PR #4 **`2235757b79bb9f1a7fb3ae2957b28deb088185b9`** (`2235757`), **`77e07dac7948c156039bc6a9746fe5d451fc0d71`** (`77e07da` — `L-29`) và **`6c457b327e59eead47cc9d0982c4ee1df4fe9e64`** (`6c457b3` — bản sửa bổ sung SQL `L-23` trước phân trang trên `pool_list` + `L-29`):
+     * **`0` dòng sửa song song vào phần quyền/service backend của T1B:** `0` diff so với `6c457b327e59eead47cc9d0982c4ee1df4fe9e64` trên toàn bộ `apps/crm_cskh/crm_cskh/permissions.py`, `apps/crm_cskh/crm_cskh/p1_permissions.py`, `apps/crm_cskh/crm_cskh/services/reporting.py`, `apps/crm_cskh/crm_cskh/crm_cskh/doctype/**/*.json`, `deploy/dev/` và `docs/architecture/api-contract-p1.md`; kiểm tra trực tiếp MariaDB xác nhận `tabCustom DocPerm = 0 dòng`, đủ `7` trường `permlevel = 1` (`CSKH Campaign.selection_json` và `CSKH Distribution Run.{actual_json, error, lease_expires_at, preview_json, progress, state_json}`), và `write = 0 / create = 0 / delete = 0` cho toàn bộ business role trên các DocType P1.
+     * **Đồng bộ 100% mệnh đề SQL `L-23` giữa `pool_ui` và `reporting`:** theo đúng ghi chú kỹ thuật của T1B tại `api-contract-p1.md`, `pool_ui._team_lead_authorization_clauses` và `pool_ui.filter_team_authorized_leads` ủy quyền trực tiếp cho `reporting._team_lead_authorization_clauses` và `reporting.filter_team_authorized_leads` (xử lý chuẩn cả kịch bản `revoke(return_to_pool=True)` để lại `queued` Work Item cũ ở Đội A rồi chuyển Lead sang hoạt động ở Đội B); đồng thời giữ nguyên **`0` dòng thay đổi** so với `5c37bf3dc464a0d8e2b9bd94ba55df40da469559` trên `apps/crm_cskh/crm_cskh/api/run_history.py` (`L-24`) cùng toàn bộ tệp bằng chứng lịch sử Đợt 1 / Đợt 2 / Đợt 3 (bao gồm bản đính chính provenance `0d3f2bcbbf9715a4c0c783903ce750de8646583d` trong `async-distribution-delta-e2e.json` và nguyên văn tiếng Việt UTF-8 của **§7.9**).
+     * Hợp nhất có chủ đích `apps/crm_cskh/crm_cskh/hooks.py`: giữ đồng thời toàn bộ P0/UI hooks (`website_route_rules`, `before_request`, `after_request = normalize_p1_error_response`) và toàn bộ `L-29` hooks từ `6c457b327e59eead47cc9d0982c4ee1df4fe9e64` (`permission_query_conditions`, `has_permission`, `override_whitelisted_methods` khóa `frappe.client.get_list`/`get_count`/`frappe.desk.reportview.*`, `auth_hooks = enforce_p1_http_filter_guard`).
+2. **Đóng trọn vẹn các mục từng chờ T1B ở §7.10 (`L-23` SQL trước phân trang trên cả 3 API kho, `L-26` backend, Direct Ownership Mutation & `L-29`):**
+   * **Phân trang & tham số giới hạn (`L-26` toàn diện cả UI lẫn Backend — `8/8` endpoint):** ngoài `4` endpoint UI (`pool_ui.list`, `ownership_ui.assigned_list`, `import_history.history`, `run_history.runs`), cả `4` endpoint backend (`customers.my_list`, `customers.pool_list`, `customers.customer_pool`, `ownership.history`) đều dùng `parse_strict_int` và trả HTTP `400` với `code = "INVALID_REQUEST"`, `p1_code = "INVALID_REQUEST"` ổn định.
+   * **Cô lập đội bằng SQL trước phân trang trên cả 3 endpoint kho (`L-23` toàn diện — `6c457b3`):** `pool_ui.list`, `customers.customer_pool` và `customers.pool_list` dùng chung mệnh đề SQL `_team_lead_authorization_clauses(scope, "l")` trước `LIMIT`/`OFFSET`, đồng nhất giữa `items`, `total` và `unique_customers` (kể cả khi Đội A từng `revoke(return_to_pool=True)` rồi Lead được claim/giao sang Đội B: `Leader A` không thấy, `Leader B` thấy đầy đủ).
    * **Mutation sở hữu trực tiếp (`ownership.assign` & `ownership.reassign`):** kiểm tra trực tiếp `campaign.status == "Active"`, cây `campaign.team_scope`, phiên bản mới nhất của `CSKH Assignment Rule` (`enabled = 1`, khớp `team`, còn sức chứa `capacity_limit`) và `CSKH Active Claim` chéo chiến dịch.
 3. **Kiểm tra toàn diện giao diện `Sales Manager` (Leader A / Leader B), `CSKH BOD Viewer` (BOD) & `Sales User` (Staff) sau khóa quyền `L-29` (tuyệt đối không nới quyền backend):**
    * Rà soát toàn bộ `www/cskh/*.py`, `www/cskh/*.html` và `public/cskh/*.js` sau khi `L-29` khóa cứng `has_permission`, `permlevel = 1` và `search_link`:
      * Mọi màn hình CSKH gọi qua các API kiểm soát (`pool_ui.list`, `campaigns.list`, `campaigns.rules`, `run_history.runs`, `distribution.get_run`, `ownership_ui.assigned_list`, `ownership.history`, `dashboard.distribution`, `dashboard.campaigns`) — không phụ thuộc đọc thô `selection_json` hay `preview_json`/`actual_json`/`state_json` từ `/api/resource`.
      * **Tinh chỉnh sạch phía UI (0 thay đổi quyền backend):**
        1. `www/cskh/index.html`: đồng bộ các thẻ điều hướng trên trang chủ `/cskh` theo đúng `cskh_navigation` của từng vai trò (ẩn thẻ `/cskh/import` đối với `Leader` & `BOD`, và chỉ hiển thị thẻ `/cskh/my-customers` đối với `Staff`, khớp 100% thanh điều hướng `_shell.html`).
-       2. `public/cskh/campaigns.js`: khởi tạo `canLookup` ngay từ `cskh.capabilities().admin || cskh.capabilities().bod` để ẩn tức thì ô `Mã đợt chạy` / nút `Tra cứu đợt chạy` đối với `Leader` ngay từ khung hình đầu tiên (không nhấp nháy UI trái quyền trước khi `loadRuns()` trả về), đồng thời hiển thị & polling lịch sử đợt chạy theo phạm vi đội (`L-24`) cho `Leader` và giữ nguyên chức năng `Tra cứu đợt chạy` (`distribution.get_run`) cho `BOD` & `Admin`; bổ sung fallback tạo preview mới khi bấm chạy lại đợt `completed_with_errors`.
+       2. `public/cskh/campaigns.js`: khởi tạo `canLookup` ngay từ `cskh.capabilities().admin || cskh.capabilities().bod` để ẩn tức thì ô `Mã đợt chạy` / nút `Tra cứu đợt chạy` đối với `Leader` ngay từ khung hình đầu tiên (không nhấp nháy UI trái quyền trước khi `loadRuns()` trả về), đồng thời giữ nút `Xem` theo phạm vi đội (`L-24`) cho `Leader` và giữ nguyên chức năng `Tra cứu đợt chạy` (`distribution.get_run`) cho `BOD` & `Admin`; bổ sung fallback tạo preview mới khi bấm chạy lại đợt `completed_with_errors`.
        3. `public/cskh/my-customers.js`: chỉ gọi `dashboard.campaigns` và `ownership_ui.assigned_list` khi actor có quyền phạm vi (`admin || bod || leader`), còn `Sales User` (`Staff`) tự tổng hợp danh sách lọc chiến dịch từ các công việc của chính mình — loại bỏ hoàn toàn request nền bị `403` trên trình duyệt của nhân viên.
-       4. `p1_strings.py`, `p1_translations.py`, `translations/vi.csv`: bổ sung đầy đủ **25** thông điệp ngoại lệ mới từ `2235757` + `77e07da` (`613` dòng dịch / `614` dòng tệp, `409` khai báo, `210` sử dụng, `0` thiếu / `0` tiếng Anh sót / `0` dư).
-4. **Kết quả kiểm định thực tế trên `9fdbb8dfdd9ad443ffe05057a969a1e039473989`:**
-   * **Ruff + Inventories + Audit dịch Việt:** `ruff==0.14.0 check` + `format --check` **PASS** (`105 + 3 = 108` tệp); `p1_test_inventory.py --check` **PASS** (`208` method); `ui_test_inventory.py --check` **PASS** (`12` method — thêm `test_l27_l29_leader_and_bod_ui_flows_under_strict_doctype_and_permlevel_rules`); `check_translations_audit.py` **PASS** (`0` lỗi).
-   * **Suite tuần tự [`deploy/p1/run_suites.py`](../../deploy/p1/run_suites.py):** **`15/15` module PASS (`327/327` method)** — P1 backend `208/208` + P1 UI `12/12` + P0 core `99/99` + P0 transport `8/8`.
-   * **E2E Chromium + HTTP + RQ Đợt 4 ([`deploy/p1/verify_p1_round4_final_e2e.mjs`](../../deploy/p1/verify_p1_round4_final_e2e.mjs) → [`deploy/p1/evidence/round4-final-integration-e2e.json`](../../deploy/p1/evidence/round4-final-integration-e2e.json)):** **`4/4` nhóm lớn PASS** (`L29-HTTP-DOCTYPE-PERMLEVEL-LOCKDOWN`, `LEADER-UI-FULL-SCREEN-AUDIT`, `BOD-UI-FULL-SCREEN-AUDIT-ZERO-PII`, `STAFF-ZERO-403-AND-L26-ALL-8-ENDPOINTS-AND-DIRECT-MUTATION`) với `console_errors = 0`, `page_errors = 0`, `http_500 = 0`, `xss_triggered = false`, `staff_background_403 = 0`, `unmasked_phones = 0`.
+       4. `p1_strings.py`, `p1_translations.py`, `translations/vi.csv`: bổ sung đầy đủ **25** thông điệp ngoại lệ mới từ `2235757` + `77e07da` + `6c457b3` (`613` dòng dịch / `614` dòng tệp, `409` khai báo, `210` sử dụng, `0` thiếu / `0` tiếng Anh sót / `0` dư).
+4. **Kết quả kiểm định thực tế trên `7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9`:**
+   * **Ruff + Inventories + Audit dịch Việt:** `ruff==0.14.0 check` + `format --check` **PASS** (`105 + 3 = 108` tệp); `p1_test_inventory.py --check` **PASS** (`209` method); `ui_test_inventory.py --check` **PASS** (`12` method — gồm `test_l27_l29_leader_and_bod_ui_flows_under_strict_doctype_and_permlevel_rules` mở rộng kiểm tra cả `return_to_pool=True` chéo đội trên đủ 3 API kho); `check_translations_audit.py` **PASS** (`0` lỗi).
+   * **Suite tuần tự [`deploy/p1/run_suites.py`](../../deploy/p1/run_suites.py):** **`15/15` module PASS (`328/328` method)** — P1 backend `209/209` + P1 UI `12/12` + P0 core `99/99` + P0 transport `8/8`.
+   * **E2E Chromium + HTTP + RQ Đợt 4 ([`deploy/p1/verify_p1_round4_final_e2e.mjs`](../../deploy/p1/verify_p1_round4_final_e2e.mjs) → [`deploy/p1/evidence/round4-final-integration-e2e.json`](../../deploy/p1/evidence/round4-final-integration-e2e.json)):** **`4/4` nhóm lớn PASS** (`L29-HTTP-DOCTYPE-PERMLEVEL-LOCKDOWN`, `LEADER-UI-FULL-SCREEN-AUDIT`, `BOD-UI-FULL-SCREEN-AUDIT-ZERO-PII`, `STAFF-ZERO-403-AND-L26-ALL-8-ENDPOINTS-AND-DIRECT-MUTATION`) với `console_errors = 0`, `page_errors = 0`, `http_500 = 0`, `xss_triggered = false`, `staff_background_403 = 0`, `unmasked_phones = 0`, kèm đối chứng trực tiếp cả `movedLead` lẫn `retPoolLead` (`6c457b3`) trên `pool_ui.list`, `customers.customer_pool` và `customers.pool_list`.
    * **HTTP E2E đa vai trò Đợt 4 ([`deploy/p1/verify_p1_http_e2e.py`](../../deploy/p1/verify_p1_http_e2e.py) → [`deploy/p1/evidence/round4-http-e2e-report.json`](../../deploy/p1/evidence/round4-http-e2e-report.json)):** **`6/6` nhóm PASS** và giữ nguyên ứng dụng + dữ liệu mẫu sạch trên `http://p1.localhost:8120` để Owner xem trực tiếp.
 
 #### Lệnh dựng & tái hiện bản tích hợp cuối cho T1C
 
 ```bash
-git fetch origin codex/p1-foundation codex/p1-ui
+git fetch origin codex/p1-foundation:refs/remotes/origin/codex/p1-foundation codex/p1-ui:refs/remotes/origin/codex/p1-ui
 git checkout codex/p1-ui
 git merge-base --is-ancestor 5c37bf3dc464a0d8e2b9bd94ba55df40da469559 HEAD
 git merge-base --is-ancestor 2235757b79bb9f1a7fb3ae2957b28deb088185b9 HEAD
 git merge-base --is-ancestor 77e07dac7948c156039bc6a9746fe5d451fc0d71 HEAD
+git merge-base --is-ancestor 6c457b327e59eead47cc9d0982c4ee1df4fe9e64 HEAD
 
 cp -n deploy/p1/.env.example deploy/p1/.env
 docker compose -f deploy/p1/docker-compose.yml --env-file deploy/p1/.env -p crm-cskh-p1 up -d
@@ -752,10 +763,10 @@ P1_REPORT_OUT=deploy/p1/evidence/round4-http-e2e-report.json python -X utf8 depl
 
 | Hạng mục nghiệm thu cuối | Trạng thái | Bằng chứng đối chiếu |
 |---|---|---|
-| Tích hợp đầy đủ UI/docs `5c37bf3` + backend `2235757` + bản sửa `L-29` (`77e07da`) vào một SHA code tích hợp | ✅ ĐẠT | `9fdbb8dfdd9ad443ffe05057a969a1e039473989` (`git rev-list --parents -n 1 9fdbb8dfdd9ad443ffe05057a969a1e039473989`) |
-| Không nới quyền DocType/field/row backend để chữa lỗi hiển thị UI | ✅ ĐẠT | `0` diff so với `77e07da` trên `permissions.py`, `p1_permissions.py`, `doctype/*.json`; `tabCustom DocPerm = 0` |
-| Bảo toàn `L-23` / `L-24` ở UI và các bản sửa UTF-8 (`§7.9`) / provenance (`0d3f2bcbbf9715a4c0c783903ce750de8646583d`) | ✅ ĐẠT | `0` diff so với `5c37bf3` trên `pool_ui.py`, `run_history.py`, `§7.9` và toàn bộ evidence Đợt 1–3 |
+| Giữ bản tích hợp local `5e2e350` + UI/docs `5c37bf3` + hợp nhất có kiểm soát backend `2235757` + `77e07da` + `6c457b3` (`pool_list` + `L-29`) vào một SHA code sạch | ✅ ĐẠT | `7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9` (`git merge-base --is-ancestor` PASS trên cả 4 mốc cha) |
+| Không tự sửa song song hay nới phần quyền/service backend của T1B | ✅ ĐẠT | `0` diff so với `6c457b3` trên `permissions.py`, `p1_permissions.py`, `services/reporting.py`, `doctype/*.json`; `tabCustom DocPerm = 0` |
+| Bảo toàn `L-23` / `L-24` ở UI (đồng bộ SQL `L-23` `pool_ui` với `reporting`) và các bản sửa UTF-8 (`§7.9`) / provenance (`0d3f2bcbbf9715a4c0c783903ce750de8646583d`) | ✅ ĐẠT | `pool_ui` ủy quyền trực tiếp `reporting._team_lead_authorization_clauses`; `0` diff so với `5c37bf3` trên `run_history.py`, `§7.9` và toàn bộ evidence Đợt 1–3 |
 | Giao diện `Leader` (`Sales Manager` A/B), `BOD` (`CSKH BOD Viewer`) & `Staff` hoạt động chuẩn sau khóa quyền `L-29` | ✅ ĐẠT | `test_ui_p1_endpoints` (`12/12`), `round4-final-integration-e2e.json` (`4/4` nhóm PASS, `0` lỗi console/500/403 nền) |
-| Gắn nhãn rõ các số liệu lịch sử trong `P1-Exit-Report.md` (`L-28`), giữ nguyên chương 0–5 của T1B | ✅ ĐẠT | Chương 0–5 khớp 100% `77e07da`; nhãn lịch sử rõ trên §7.0–§7.10; bảng tổng hợp Đợt 1–4 tại §7.11 |
-| Cổng CI GitHub Actions (`P0 DEV verification` + `P1 backend verification` gồm `208` P1 + `12` UI + `158` HTTP probe) | ✅ ĐẠT | PR #5 (`codex/p1-ui`), `run_suites.py` **`327/327` PASS** |
+| Gắn nhãn rõ các số liệu lịch sử trong `P1-Exit-Report.md` (`L-28`), giữ nguyên chương 0–5 của T1B tại `6c457b3` | ✅ ĐẠT | Chương 0–5 khớp 100% `6c457b3`; nhãn lịch sử rõ trên §7.0–§7.10; bảng tổng hợp Đợt 1–4 tại §7.11 |
+| Cổng CI GitHub Actions (`P0 DEV verification` + `P1 backend verification` gồm `209` P1 + `12` UI + `167` HTTP probe) | ✅ ĐẠT | PR #5 (`codex/p1-ui`), `run_suites.py` **`328/328` PASS** |
 | Giữ ứng dụng đang chạy cho Owner & không merge PR vào `main` | ✅ ĐẠT | `http://p1.localhost:8120` (`HTTP 200`, `bench serve` + `bench worker` chạy nền) |

@@ -1,12 +1,13 @@
 {
-  "generated_at": "2026-11-03T09:16:08.545Z",
+  "generated_at": "2026-11-03T09:41:58.275Z",
   "round": 4,
   "site": "http://p1.localhost:8120",
-  "git_sha": "9fdbb8dfdd9ad443ffe05057a969a1e039473989",
-  "apps_tree_sha": "1a829496f4718aa65db885b77350fc11daccec47",
+  "git_sha": "7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9",
+  "apps_tree_sha": "0f32c67d4486bc4cad88aca74b58744ca0ace537",
   "parent_ui_sha": "5c37bf3dc464a0d8e2b9bd94ba55df40da469559",
   "parent_backend_l26_sha": "2235757b79bb9f1a7fb3ae2957b28deb088185b9",
   "parent_backend_l29_sha": "77e07dac7948c156039bc6a9746fe5d451fc0d71",
+  "parent_backend_pool_list_l23_sha": "6c457b327e59eead47cc9d0982c4ee1df4fe9e64",
   "baseline_ui_sha": "0d3f2bcbbf9715a4c0c783903ce750de8646583d",
   "passed_checks": 4,
   "total_checks": 4,
@@ -44,18 +45,19 @@
           "lookupBtnHidden": true,
           "options": [
             "",
-            "vi238gd46h",
-            "vi0g4i8kr1"
+            "em1g7j65vt",
+            "elthcre1no"
           ]
         },
         "l23_pool_check": {
           "inUi": false,
           "inCust": false,
           "inLegacy": false,
+          "legacyTotalMatchesItems": true,
           "uiCount": 3
         },
         "l24_shared_run_created": 2,
-        "ownership_detail_verified": "vjhive7nvg"
+        "ownership_detail_verified": "ennqs5gvn5"
       }
     },
     {
@@ -75,8 +77,8 @@
           "lookupWrapHidden": false,
           "lookupBtnHidden": false
         },
-        "run_lookup_verified": "vi5k76iann",
-        "ownership_detail_verified": "vjhive7nvg"
+        "run_lookup_verified": "em8bkvim53",
+        "ownership_detail_verified": "ennqs5gvn5"
       }
     },
     {

@@ -3,7 +3,7 @@
   "base_url": "http://127.0.0.1:8120",
   "initial_backend_baseline_sha": "3025495f58bc0391c3f8d092af500b0566a5f038",
   "backend_baseline_sha": "64b7486f29ad712106d167dfaea50e3b060a6845",
-  "worktree_base_sha": "9fdbb8dfdd9ad443ffe05057a969a1e******3989",
+  "worktree_base_sha": "7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9",
   "checks": [
     {
       "id": "E2E-01-page-role-matrix",
@@ -89,7 +89,7 @@
       "id": "E2E-02-csv-import-and-error-download-policy",
       "status": "PASS",
       "details": {
-        "batch": "07emjl6je2",
+        "batch": "fbuum3jkqn",
         "status": "COMPLETED_WITH_ERRORS",
         "totals": {
           "total_rows": 10,
@@ -139,7 +139,7 @@
       "id": "E2E-03-xlsx-import-and-failed-batch-retry",
       "status": "PASS",
       "details": {
-        "xlsx_batch": "08h37pubro",
+        "xlsx_batch": "fd1fkuugg3",
         "xlsx_status": "COMPLETED",
         "xlsx_totals": {
           "total_rows": 5,
@@ -148,7 +148,7 @@
           "duplicate_rows": 1,
           "error_rows": 0
         },
-        "retried_failed_batch": "vssb1m49kf",
+        "retried_failed_batch": "f14g6tph7a",
         "retried_status": "COMPLETED"
       }
     },
@@ -156,7 +156,7 @@
       "id": "E2E-04-campaign-rules-stale-preview-and-execute",
       "status": "PASS",
       "details": {
-        "campaign_a": "0a6p7tk1sq",
+        "campaign_a": "felv99vs41",
         "stale_rule_changed": {
           "http": 409,
           "code": "RULE_CHANGED"
@@ -165,7 +165,7 @@
           "http": 409,
           "code": "PREVIEW_EXPIRED"
         },
-        "run_id": "0chioe0guo",
+        "run_id": "fhijivi98q",
         "assigned": {
           "cskh-p1-staff-a@example.test": 7,
           "cskh-p1-staff-b@example.test": 4
@@ -178,7 +178,7 @@
       "id": "E2E-05-reassign-revoke-conflict-and-reconciliation",
       "status": "PASS",
       "details": {
-        "reassigned_work_item": "0dff1jpsab",
+        "reassigned_work_item": "fiia61u8hs",
         "staff_a_lead_http_before_after": [
           200,
           403
@@ -193,7 +193,7 @@
         },
         "live_assigned_after_transfer": 11,
         "audit_events_after_transfer": 12,
-        "revoked_work_item": "0depsefu6e",
+        "revoked_work_item": "figphjq2e0",
         "staff_b_lead_http_after_revoke": 403
       }
     },
@@ -201,7 +201,7 @@
       "id": "E2E-06-team-isolation-bod-pii-csrf-and-404",
       "status": "PASS",
       "details": {
-        "campaign_b": "0aovdfkbcp",
+        "campaign_b": "ffgklijjfo",
         "leader_a_per_user": {
           "cskh-p1-staff-a@example.test": 6,
           "cskh-p1-staff-b@example.test": 4
@@ -215,20 +215,20 @@
         "csrf_invalid_http": 400,
         "run_not_found_http": 404,
         "failed_ui_demo": {
-          "failed_batch": "0ejb6pmg97",
-          "failed_run": "0ekek14oke"
+          "failed_batch": "fjkadt2ruv",
+          "failed_run": "fjl9i5pgpe"
         }
       }
     }
   ],
   "final_ids": {
-    "campaign_a": "0a6p7tk1sq",
-    "campaign_b": "0aovdfkbcp",
-    "csv_batch": "07emjl6je2",
-    "xlsx_batch": "08h37pubro",
-    "run_a": "0chioe0guo",
-    "reassigned_work_item": "0dff1jpsab",
-    "failed_batch_demo": "0ejb6pmg97",
-    "failed_run_demo": "0ekek14oke"
+    "campaign_a": "felv99vs41",
+    "campaign_b": "ffgklijjfo",
+    "csv_batch": "fbuum3jkqn",
+    "xlsx_batch": "fd1fkuugg3",
+    "run_a": "fhijivi98q",
+    "reassigned_work_item": "fiia61u8hs",
+    "failed_batch_demo": "fjkadt2ruv",
+    "failed_run_demo": "fjl9i5pgpe"
   }
 }
