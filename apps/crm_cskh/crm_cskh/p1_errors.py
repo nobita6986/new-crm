@@ -12,6 +12,7 @@ import json
 
 from crm_cskh.errors import _request_targets_file
 from crm_cskh.services import errors as p1_error_codes
+from crm_cskh.services.sanitizer import redact_pii_text
 
 CODE_BY_EXCEPTION = {
 	"P1Error": p1_error_codes.INVALID_REQUEST,
@@ -26,6 +27,20 @@ CODE_BY_EXCEPTION = {
 	"UnsupportedFormat": p1_error_codes.UNSUPPORTED_FORMAT,
 	"FileTooLarge": p1_error_codes.FILE_TOO_LARGE,
 	"TooManyRows": p1_error_codes.TOO_MANY_ROWS,
+	"OwnershipChanged": p1_error_codes.OWNERSHIP_CHANGED,
+	"WorkItemNotActive": p1_error_codes.WORK_ITEM_NOT_ACTIVE,
+	"StaleWorkItem": p1_error_codes.STALE_WORK_ITEM,
+	"PolicyChanged": p1_error_codes.POLICY_CHANGED,
+	"IdempotencyConflict": p1_error_codes.IDEMPOTENCY_CONFLICT,
+	"AlreadyLinked": p1_error_codes.ALREADY_LINKED,
+	"DoNotContactError": p1_error_codes.DO_NOT_CONTACT,
+	"DoNotContact": p1_error_codes.DO_NOT_CONTACT,
+	"InvalidChannel": p1_error_codes.INVALID_CHANNEL,
+	"InvalidOutcome": p1_error_codes.INVALID_OUTCOME,
+	"NoteRequired": p1_error_codes.NOTE_REQUIRED,
+	"FollowupRequired": p1_error_codes.FOLLOWUP_REQUIRED,
+	"InvalidFollowupTime": p1_error_codes.INVALID_FOLLOWUP_TIME,
+	"OutcomeNotCompatible": p1_error_codes.OUTCOME_NOT_COMPATIBLE,
 }
 
 
@@ -98,6 +113,11 @@ def normalize_p1_error_response(response=None, request=None):
 		payload["code"] = code
 		payload["p1_code"] = code
 		payload["exc_type"] = code
+		if isinstance(payload.get("exc"), str):
+			payload["exc"] = "[]"
+		for str_key in ("message", "exception", "_server_messages"):
+			if isinstance(payload.get(str_key), str):
+				payload[str_key] = redact_pii_text(payload[str_key])
 		if recorded_details and "details" not in payload:
 			payload["details"] = recorded_details
 		response.data = json.dumps(payload, ensure_ascii=False, separators=(",", ":"))

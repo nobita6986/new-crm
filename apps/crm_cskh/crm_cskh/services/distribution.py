@@ -24,6 +24,7 @@ import json
 import frappe
 from frappe.utils import add_to_date, get_datetime, now_datetime
 
+from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
 from crm_cskh.services import eligibility, ownership
 from crm_cskh.services.errors import Conflict, Forbidden, InvalidRequest, NotFound, RuleChanged
 from crm_cskh.services.weighted_allocator import allocate, planned_distribution
@@ -104,11 +105,13 @@ def _run_preview_payload(run):
 
 
 def _campaign_loads(campaign):
-	"""Current active assigned work items per user (capacity accounting)."""
+	"""Current active owned work items (`assigned`, `in_progress`, `on_hold`) per user."""
 	rows = frappe.db.sql(
 		"""select assigned_to as user, count(*) as total
 		   from `tabCSKH Work Item`
-		   where campaign = %s and status = 'assigned' and assigned_to is not null
+		   where campaign = %s
+		     and status in ('assigned', 'in_progress', 'on_hold')
+		     and assigned_to is not null
 		   group by assigned_to""",
 		(campaign,),
 		as_dict=True,
@@ -122,7 +125,8 @@ def _reconcile_run_db_counts(campaign, run_name):
 		"""select assigned_to as user, count(*) as total
 		   from `tabCSKH Work Item`
 		   where campaign = %s and allocation_run = %s
-		     and status = 'assigned' and assigned_to is not null
+		     and status in ('assigned', 'in_progress', 'on_hold')
+		     and assigned_to is not null
 		   group by assigned_to""",
 		(campaign, run_name),
 		as_dict=True,
@@ -718,7 +722,12 @@ def run_distribution_worker(run_id, actor=None):
 					frappe.db.rollback(save_point=savepoint)
 					state = state_before
 					loads = loads_before
-					reason_code = "already_claimed" if exc.code == "ALREADY_ASSIGNED" else "assignment_failed"
+					if exc.code == "ALREADY_ASSIGNED":
+						reason_code = "already_claimed"
+					elif exc.code == "DO_NOT_CONTACT":
+						reason_code = "do_not_contact"
+					else:
+						reason_code = "assignment_failed"
 					new_skipped.append({"lead": lead, "reason": reason_code, "detail": str(exc)[:200]})
 				except Exception as exc:
 					frappe.db.rollback(save_point=savepoint)
@@ -986,7 +995,10 @@ def reconcile(campaign, actor=None):
 		"current_owners": loads,
 		"assignment_events": {row.user: int(row.total) for row in counts if row.user},
 		"distinct_leads": int(distinct_leads),
-		"active_work_items": frappe.db.count("CSKH Work Item", {"campaign": campaign, "status": "assigned"}),
+		"active_work_items": frappe.db.count(
+			"CSKH Work Item",
+			{"campaign": campaign, "status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)]},
+		),
 		"active_claims": frappe.db.count("CSKH Active Claim", {"campaign": campaign}),
 		"as_of": now_datetime(),
 	}

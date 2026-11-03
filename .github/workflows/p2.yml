@@ -1,0 +1,362 @@
+name: P2 workflow verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p2-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      P2_PROJECT: p2-ci-${{ github.run_id }}
+      P2_ENV: p2.env
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CI evidence directory
+        run: mkdir -p "$RUNNER_TEMP/p2-evidence"
+
+      - name: Create isolated DEV configuration
+        shell: bash
+        run: |
+          cp deploy/dev/.env.example "$P2_ENV"
+          sed -i \
+            -e "s/^COMPOSE_PROJECT_NAME=.*/COMPOSE_PROJECT_NAME=$P2_PROJECT/" \
+            -e 's/^SITE_NAME=.*/SITE_NAME=p2-ci.localhost/' \
+            -e "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$(openssl rand -hex 24)/" \
+            -e "s/^DB_ROOT_PASSWORD=.*/DB_ROOT_PASSWORD=$(openssl rand -hex 24)/" \
+            -e 's/^WEB_PORT=.*/WEB_PORT=18200/' \
+            -e 's/^SOCKETIO_PORT=.*/SOCKETIO_PORT=19200/' \
+            "$P2_ENV"
+
+      - name: Start pinned stack
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT" up -d
+
+      - name: Bootstrap from empty volumes
+        id: bootstrap
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT" exec -T -u root bench chown -R frappe:frappe /workspace
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT" exec -T bench bash /src/deploy/dev/bootstrap.sh
+
+      - name: Lint and format Python app and CI scripts
+        id: lint
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/p2_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py /src/deploy/dev/seed/ci_p2_http_probe.py /src/deploy/p1/ui_test_inventory.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/p2_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py /src/deploy/dev/seed/ci_p2_http_probe.py /src/deploy/p1/ui_test_inventory.py'
+
+      - name: Verify test inventories and Vietnamese translations match source
+        id: inventory
+        run: |
+          python3 deploy/dev/seed/p1_test_inventory.py --check deploy/dev/seed/p1_test_inventory.json
+          python3 deploy/p1/ui_test_inventory.py --check deploy/p1/ui_test_inventory.json
+          python3 deploy/dev/seed/p2_test_inventory.py --check deploy/dev/seed/p2_test_inventory.json
+          python3 deploy/p1/check_translations_audit.py
+
+      - name: Seed and repeat migration on seeded site
+        id: seed
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT" exec -T bench bash /src/deploy/dev/seed/run-seed.sh
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site "$SITE_NAME" migrate'
+
+      - name: Install fresh test site and run P2 suite per module
+        id: per_method
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p2-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT")
+
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench setup requirements --dev && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p2-test.localhost && bench --site p2-test.localhost set-config allow_tests true && bench --site p2-test.localhost migrate'; then
+            echo 'Fresh-site setup or Bench dev dependency installation failed.' | tee "$artifact_dir/site-setup-failed.txt"
+            exit 1
+          fi
+
+          overall_status=0
+          for module in \
+            crm_cskh.tests.test_p2_lifecycle \
+            crm_cskh.tests.test_p2_outcomes_policy \
+            crm_cskh.tests.test_p2_calllog_followup \
+            crm_cskh.tests.test_p2_corrections \
+            crm_cskh.tests.test_p2_permissions_sec \
+            crm_cskh.tests.test_p2_concurrency_chaos \
+            crm_cskh.tests.test_p2_reconciliation_perf
+          do
+            slug="${module##*.}"
+            container_log="/tmp/p2-evidence/${slug}.log"
+            container_xml="/tmp/p2-evidence/${slug}.junit.xml"
+            echo "=== Running module: $module ==="
+            if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p /tmp/p2-evidence && set +e; bench --site p2-test.localhost --verbose run-tests --module '$module' --junit-xml-output '$container_xml' > '$container_log' 2>&1; rc=\$?; exit \$rc"; then
+              module_status=0
+            else
+              module_status=$?
+              overall_status=1
+            fi
+            printf '%s exit=%s\n' "$module" "$module_status" >> "$artifact_dir/module-status.txt"
+          done
+
+          # Repeat `bench migrate` on `p2-test.localhost` to enforce idempotent P2 patches & indexes (`G2-02`).
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p2-test.localhost migrate'; then
+            echo 'Post-test migration failed (the P2 migration is not idempotent).' >> "$artifact_dir/module-status.txt"
+            overall_status=1
+          fi
+
+          container_id=$("${compose[@]}" ps -q bench)
+          if [ -n "$container_id" ] && "${compose[@]}" exec -T bench test -d /tmp/p2-evidence; then
+            docker cp "$container_id:/tmp/p2-evidence/." "$artifact_dir/"
+          else
+            echo 'Per-module evidence directory was not created in the bench container.' >> "$artifact_dir/module-status.txt"
+            overall_status=1
+          fi
+          exit "$overall_status"
+
+      - name: Enforce per-method JUnit coverage gate (P2 backend inventory)
+        id: per_method_gate
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p2-evidence"
+          mkdir -p "$artifact_dir"
+          python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
+            --inventory "$GITHUB_WORKSPACE/deploy/dev/seed/p2_test_inventory.json" \
+            --xml-dir "$artifact_dir" \
+            --out "$artifact_dir/p2-per-method-gate.json" \
+            | tee "$artifact_dir/p2-per-method-gate.txt"
+          gate_status=${PIPESTATUS[0]}
+          echo "p2 per-method gate exit=$gate_status" >> "$artifact_dir/module-status.txt"
+          test "$gate_status" -eq 0
+
+      - name: Run P2 HTTP transport probe against bench serve
+        id: p2_http_transport
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p2-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT")
+          container_id=$("${compose[@]}" ps -q bench)
+          mkdir -p "$artifact_dir/http"
+
+          if [ -z "$container_id" ]; then
+            echo 'Bench container is unavailable; the P2 HTTP probe could not start.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          "${compose[@]}" exec -T bench mkdir -p /workspace/frappe-bench/logs
+          if ! "${compose[@]}" exec -d -w /workspace/frappe-bench bench bash -lc 'nohup bench --site p2-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p2-http-serve.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench serve for the seeded P2 site.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          ready=0
+          for attempt in $(seq 1 45); do
+            if "${compose[@]}" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import socket; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close()' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            "${compose[@]}" exec -T bench cat /tmp/p2-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
+            echo 'The HTTP server did not become ready within 45 seconds.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          if "${compose[@]}" exec -T -e GITHUB_SHA="$GITHUB_SHA" -e P2_HTTP_SITE=p2-ci.localhost -e BENCH_DIR=/workspace/frappe-bench bench bash -lc 'cd /workspace/frappe-bench && FRAPPE_STREAM_LOGGING=1 /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_p2_http_probe.py'; then
+            probe_status=0
+          else
+            probe_status=$?
+            "${compose[@]}" exec -T bench cat /tmp/p2-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
+          fi
+          if ! docker cp "$container_id:/tmp/p2-http/." "$artifact_dir/http/"; then
+            echo 'Could not copy the sanitized P2 HTTP evidence from the bench container.' > "$artifact_dir/http/evidence-copy-failed.txt"
+            exit 1
+          fi
+          exit "$probe_status"
+
+      - name: Verify P2 DB constraints, indexes and invariant reconciliation
+        id: schema
+        if: always() && steps.per_method.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p2-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT")
+          "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p2-test.localhost mariadb -e "SHOW INDEX FROM \`tabCSKH Outcome Code\`; SHOW INDEX FROM \`tabCSKH Policy\`; SHOW INDEX FROM \`tabCSKH Contact Attempt\`; SHOW INDEX FROM \`tabCSKH Attempt Correction\`; SHOW INDEX FROM \`tabCSKH Work Item\`; SHOW INDEX FROM \`tabCSKH Assignment History\`; SHOW INDEX FROM \`tabCRM Task\`; SHOW INDEX FROM \`tabCRM Lead\`;"' > "$artifact_dir/p2-schema-indexes.txt"
+          idx_status=$?
+          echo "p2 schema index dump exit=$idx_status" >> "$artifact_dir/module-status.txt"
+
+          "${compose[@]}" exec -T -w /workspace/frappe-bench/sites bench /workspace/frappe-bench/env/bin/python -c '
+          import json, sys, frappe
+          out = {}
+          ok_all = True
+          for site in ("p2-test.localhost", "p2-ci.localhost"):
+              frappe.init(site=site, sites_path=".")
+              frappe.connect()
+              try:
+                  from crm_cskh.services.read_model import reconcile_p2_invariants
+                  res = reconcile_p2_invariants()
+                  out[site] = res
+                  if not res.get("ok"):
+                      ok_all = False
+              finally:
+                  frappe.destroy()
+          print(json.dumps(out, indent=2, default=str))
+          sys.exit(0 if ok_all else 1)
+          ' > "$artifact_dir/p2-reconcile-gate.json"
+          rec_status=$?
+          echo "p2 reconcile gate exit=$rec_status" >> "$artifact_dir/module-status.txt"
+          test "$idx_status" -eq 0 && test "$rec_status" -eq 0
+
+      - name: Sanitize evidence, hash manifest and record environment metadata
+        if: always()
+        shell: bash
+        env:
+          BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          INVENTORY_OUTCOME: ${{ steps.inventory.outcome }}
+          SEED_OUTCOME: ${{ steps.seed.outcome }}
+          PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
+          PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.p2_http_transport.outcome }}
+          SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/p2-evidence"
+          export P2_EVIDENCE_DIR="$RUNNER_TEMP/p2-evidence"
+          export P2_ENV_FILE="$P2_ENV"
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ["P2_EVIDENCE_DIR"])
+          env_file = Path(os.environ["P2_ENV_FILE"])
+          env_values = {}
+          for line in env_file.read_text(encoding="utf-8").splitlines():
+              if "=" in line and not line.lstrip().startswith("#"):
+                  key, value = line.split("=", 1)
+                  env_values[key] = value
+          secrets = [env_values.get(key, "") for key in ("ADMIN_PASSWORD", "DB_ROOT_PASSWORD")]
+          patterns = [
+              (re.compile(r"(?im)(set-cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?im)(cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(/private/files/)[^\s\"'<>\\]+"), r"\1[REDACTED_FILE_URL]"),
+              (re.compile(r"(?i)(/files/)[^\s\"'<>\\]+"), r"\1[REDACTED_FILE_URL]"),
+              (re.compile(r"(?i)(x-frappe-csrf-token[\"'=:\s]+)[^\"'&\s<,}]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(sid=)[^;\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(pwd=)[^&\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(password=)[^&\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r'(?i)("file_url"\s*:\s*)"[^"]*"'), r'\1"[REDACTED_FILE_URL]"'),
+              (re.compile(r"(?:\+?84|0)\d{8,10}"), "[REDACTED_PHONE]"),
+          ]
+          redactions = 0
+          for path in root.rglob("*"):
+              if not path.is_file() or path.suffix.lower() not in {".log", ".xml", ".json", ".txt"}:
+                  continue
+              content = path.read_text(encoding="utf-8", errors="replace")
+              for secret in secrets:
+                  if secret and secret in content:
+                      content = content.replace(secret, "[REDACTED]")
+                      redactions += 1
+              for pattern, replacement in patterns:
+                  content, count = pattern.subn(replacement, content)
+                  redactions += count
+              path.write_text(content, encoding="utf-8")
+
+          metadata = {
+              "commit_sha": os.environ.get("GITHUB_SHA", "unknown"),
+              "run_id": os.environ.get("GITHUB_RUN_ID", "unknown"),
+              "event_name": os.environ.get("GITHUB_EVENT_NAME", "unknown"),
+              "site_seeded": "p2-ci.localhost",
+              "site_fresh_test": "p2-test.localhost",
+              "frappe_sha": env_values.get("FRAPPE_SHA", "unknown"),
+              "crm_sha": env_values.get("CRM_SHA", "unknown"),
+              "bench_image_ref": env_values.get("BENCH_IMAGE", "unknown"),
+              "p2_inventory": "deploy/dev/seed/p2_test_inventory.json",
+              "workflow_outcomes": {
+                  "bootstrap": os.environ.get("BOOTSTRAP_OUTCOME"),
+                  "lint": os.environ.get("LINT_OUTCOME"),
+                  "inventory": os.environ.get("INVENTORY_OUTCOME"),
+                  "seed": os.environ.get("SEED_OUTCOME"),
+                  "per_method": os.environ.get("PER_METHOD_OUTCOME"),
+                  "per_method_gate": os.environ.get("PER_METHOD_GATE_OUTCOME"),
+                  "p2_http_transport": os.environ.get("HTTP_TRANSPORT_OUTCOME"),
+                  "schema": os.environ.get("SCHEMA_OUTCOME"),
+              },
+              "redaction_replacements": redactions,
+          }
+          (root / "workflow-metadata.json").write_text(
+              json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
+          )
+
+          manifest_lines = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              rel = path.relative_to(root).as_posix()
+              manifest_lines.append(f"{digest}  {rel}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload sanitized P2 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p2-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/p2-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce the P2 CI gates
+        if: always()
+        shell: bash
+        env:
+          BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          INVENTORY_OUTCOME: ${{ steps.inventory.outcome }}
+          SEED_OUTCOME: ${{ steps.seed.outcome }}
+          PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
+          PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.p2_http_transport.outcome }}
+          SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
+        run: |
+          printf 'bootstrap=%s\n' "$BOOTSTRAP_OUTCOME"
+          printf 'lint=%s\n' "$LINT_OUTCOME"
+          printf 'inventory=%s\n' "$INVENTORY_OUTCOME"
+          printf 'seed=%s\n' "$SEED_OUTCOME"
+          printf 'per_method=%s\n' "$PER_METHOD_OUTCOME"
+          printf 'per_method_gate=%s\n' "$PER_METHOD_GATE_OUTCOME"
+          printf 'p2_http_transport=%s\n' "$HTTP_TRANSPORT_OUTCOME"
+          printf 'schema=%s\n' "$SCHEMA_OUTCOME"
+          test "$BOOTSTRAP_OUTCOME" = success && \
+            test "$LINT_OUTCOME" = success && \
+            test "$INVENTORY_OUTCOME" = success && \
+            test "$SEED_OUTCOME" = success && \
+            test "$PER_METHOD_OUTCOME" = success && \
+            test "$PER_METHOD_GATE_OUTCOME" = success && \
+            test "$HTTP_TRANSPORT_OUTCOME" = success && \
+            test "$SCHEMA_OUTCOME" = success
+
+      - name: Show stack logs if a gate fails
+        if: failure()
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT" logs --no-color
+
+      - name: Remove isolated stack
+        if: always()
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT" down --volumes --remove-orphans

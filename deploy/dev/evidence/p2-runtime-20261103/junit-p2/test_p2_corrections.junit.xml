@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p2_corrections.TestP2AttemptImmutabilityAndCorrections-2[REDACTED_PHONE]54" tests="3" file="crm_cskh/tests/test_p2_corrections.py" time="2.015" timestamp="2026-11-04T00:56:57" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_corrections.TestP2AttemptImmutabilityAndCorrections" name="test_contact_attempt_and_correction_docs_enforce_orm_immutability_and_no_delete" time="1.236" timestamp="2026-11-04T00:56:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_corrections.py" line="21">
+			<!--`T2-19`, `SEC2-03`: Direct insert, business-field edit, or delete on `CSKH Contact Attempt` fails closed.-->
+			<system-out><![CDATA[Message: Nhật ký liên hệ chỉ được tạo qua dịch vụ điều phối CSKH.
+Message: Nhật ký liên hệ là bất biến (append-only); vui lòng dùng yêu cầu hiệu chỉnh.
+Message: Nhật ký liên hệ là bất biến (append-only); không được phép xóa.
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_corrections.TestP2AttemptImmutabilityAndCorrections" name="test_correction_request_reject_approve_void_and_admin_restore_recompute_read_model" time="0.389" timestamp="2026-11-04T00:56:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_corrections.py" line="61">
+			<!--`T2-20`: Full pending -> reject/approve -> void -> restore flow preserving raw attempt truth.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_corrections.TestP2AttemptImmutabilityAndCorrections" name="test_policy_disabling_leader_correction_review_enforced_fail_closed" time="0.390" timestamp="2026-11-04T00:56:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_corrections.py" line="204">
+			<!--When Campaign Policy sets `allow_leader_review_correction=False`, Leader cannot approve corrections.-->
+		</testcase>
+	</testsuite>
+</testsuites>

@@ -24,6 +24,21 @@ PREVIEW_EXPIRED = "PREVIEW_EXPIRED"
 NO_ELIGIBLE_LEADS = "NO_ELIGIBLE_LEADS"
 CAPACITY_FULL = "CAPACITY_FULL"
 
+# --- P2 workflow & policy error codes (P2 §10.2) -----------------------------
+OWNERSHIP_CHANGED = "OWNERSHIP_CHANGED"
+WORK_ITEM_NOT_ACTIVE = "WORK_ITEM_NOT_ACTIVE"
+STALE_WORK_ITEM = "STALE_WORK_ITEM"
+POLICY_CHANGED = "POLICY_CHANGED"
+IDEMPOTENCY_CONFLICT = "IDEMPOTENCY_CONFLICT"
+ALREADY_LINKED = "ALREADY_LINKED"
+DO_NOT_CONTACT = "DO_NOT_CONTACT"
+INVALID_CHANNEL = "INVALID_CHANNEL"
+INVALID_OUTCOME = "INVALID_OUTCOME"
+NOTE_REQUIRED = "NOTE_REQUIRED"
+FOLLOWUP_REQUIRED = "FOLLOWUP_REQUIRED"
+INVALID_FOLLOWUP_TIME = "INVALID_FOLLOWUP_TIME"
+OUTCOME_NOT_COMPATIBLE = "OUTCOME_NOT_COMPATIBLE"
+
 ALL_CODES = (
 	INVALID_PHONE,
 	DUPLICATE,
@@ -42,6 +57,19 @@ ALL_CODES = (
 	PREVIEW_EXPIRED,
 	NO_ELIGIBLE_LEADS,
 	CAPACITY_FULL,
+	OWNERSHIP_CHANGED,
+	WORK_ITEM_NOT_ACTIVE,
+	STALE_WORK_ITEM,
+	POLICY_CHANGED,
+	IDEMPOTENCY_CONFLICT,
+	ALREADY_LINKED,
+	DO_NOT_CONTACT,
+	INVALID_CHANNEL,
+	INVALID_OUTCOME,
+	NOTE_REQUIRED,
+	FOLLOWUP_REQUIRED,
+	INVALID_FOLLOWUP_TIME,
+	OUTCOME_NOT_COMPATIBLE,
 )
 
 
@@ -151,3 +179,84 @@ class TooManyRows(P1Error):
 	code = TOO_MANY_ROWS
 	http_status = 413
 	http_status_code = 413
+
+
+class OwnershipChanged(P1Error):
+	code = OWNERSHIP_CHANGED
+	http_status = 409
+	http_status_code = 409
+
+
+class WorkItemNotActive(P1Error):
+	code = WORK_ITEM_NOT_ACTIVE
+	http_status = 409
+	http_status_code = 409
+
+
+class StaleWorkItem(P1Error):
+	code = STALE_WORK_ITEM
+	http_status = 409
+	http_status_code = 409
+
+
+class PolicyChanged(P1Error):
+	code = POLICY_CHANGED
+	http_status = 409
+	http_status_code = 409
+
+
+class IdempotencyConflict(P1Error):
+	code = IDEMPOTENCY_CONFLICT
+	http_status = 409
+	http_status_code = 409
+
+
+class AlreadyLinked(P1Error):
+	code = ALREADY_LINKED
+	http_status = 409
+	http_status_code = 409
+
+
+class DoNotContactError(P1Error):
+	code = DO_NOT_CONTACT
+	http_status = 409
+	http_status_code = 409
+
+
+DoNotContact = DoNotContactError
+
+
+class InvalidChannel(P1Error):
+	code = INVALID_CHANNEL
+	http_status = 400
+	http_status_code = 400
+
+
+class InvalidOutcome(P1Error):
+	code = INVALID_OUTCOME
+	http_status = 422
+	http_status_code = 422
+
+
+class NoteRequired(P1Error):
+	code = NOTE_REQUIRED
+	http_status = 422
+	http_status_code = 422
+
+
+class FollowupRequired(P1Error):
+	code = FOLLOWUP_REQUIRED
+	http_status = 422
+	http_status_code = 422
+
+
+class InvalidFollowupTime(P1Error):
+	code = INVALID_FOLLOWUP_TIME
+	http_status = 422
+	http_status_code = 422
+
+
+class OutcomeNotCompatible(P1Error):
+	code = OUTCOME_NOT_COMPATIBLE
+	http_status = 422
+	http_status_code = 422

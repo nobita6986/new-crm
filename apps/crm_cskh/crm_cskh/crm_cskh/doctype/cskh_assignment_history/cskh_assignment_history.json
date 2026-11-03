@@ -16,7 +16,7 @@
    "fieldname": "action",
    "fieldtype": "Select",
    "label": "Action",
-   "options": "assign\nreassign\nrevoke\nclose",
+   "options": "assign\nreassign\nrevoke\nclose\nreopen",
    "default": "assign",
    "reqd": 1
   },

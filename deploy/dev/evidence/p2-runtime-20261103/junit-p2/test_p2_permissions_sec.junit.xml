@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p2_permissions_sec.TestP2AntiSpoofingSanitizationBackdateAndSummary-2[REDACTED_PHONE]59" tests="3" file="crm_cskh/tests/test_p2_permissions_sec.py" time="3.213" timestamp="2026-11-04T00:57:03" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_permissions_sec.TestP2AntiSpoofingSanitizationBackdateAndSummary" name="test_client_spoofed_identity_or_verification_fields_rejected_with_403" time="0.989" timestamp="2026-11-04T00:57:01" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_permissions_sec.py" line="264">
+			<!--`SEC2-03`, `SEC2-04`: Supplying `performed_by`, `verification_status`, `actor`, `closed_by`, `reviewed_by` fails closed.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_permissions_sec.TestP2AntiSpoofingSanitizationBackdateAndSummary" name="test_progress_summary_reconciles_10_leads_15_attempts_without_double_counting" time="1.976" timestamp="2026-11-04T00:57:03" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_permissions_sec.py" line="351">
+			<!--`T2-22`: 10 Leads, 15 raw attempts (1 voided -> 14 effective), reassign A -> B, exact DB match & 0 PII.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_permissions_sec.TestP2AntiSpoofingSanitizationBackdateAndSummary" name="test_xss_formula_sanitization_backdate_bounds_and_pii_error_redaction" time="0.248" timestamp="2026-11-04T00:57:03" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_permissions_sec.py" line="294">
+			<!--`SEC2-10`, `SEC2-13`, `SEC2-15`: Strips `<script>`/event handlers, neutralizes `=CMD`, enforces backdate window, and scrubs phone numbers from errors.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p2_permissions_sec.TestP2PermissionsAndGenericApiGuards-2[REDACTED_PHONE]59" tests="2" file="crm_cskh/tests/test_p2_permissions_sec.py" time="1.280" timestamp="2026-11-04T00:57:05" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_permissions_sec.TestP2PermissionsAndGenericApiGuards" name="test_actor_matrix_across_workflow_rpc_and_generic_frappe_surfaces" time="0.565" timestamp="2026-11-04T00:57:04" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_permissions_sec.py" line="39">
+			<!--`SEC2-01`, `SEC2-02`, `SEC2-08`, `SEC2-09`: Staff, Leader, BOD, Admin, Outside, and Guest boundaries.-->
+			<system-out><![CDATA[Message: Not allowed via controller permission checkUser cskh-p2-staff-a@example.test does not have access to this document: CSKH Contact Attempt - h319i2n12p
+Message: Not allowed via controller permission checkUser cskh-p2-staff-a@example.test does not have access to this document: CSKH Contact Attempt - h319i2n12p
+Message: Not allowed via controller permission checkUser cskh-p2-leader-a@example.test does not have access to this document: CSKH Attempt Correction - h325lnlo24
+Message: User cskh-p2-bod@example.test does not have doctype access via role permission for document CSKH Contact Attempt
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_permissions_sec.TestP2PermissionsAndGenericApiGuards" name="test_post_reassign_and_post_close_cross_team_total_pii_revocation" time="0.715" timestamp="2026-11-04T00:57:05" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_permissions_sec.py" line="162">
+			<!--`SEC2-06`, `SEC2-07`, `L-23`: Old owner loses all access on `reassign(A -> B)`, and Team A loses closed-item access once Lead moves to Team B.-->
+		</testcase>
+	</testsuite>
+</testsuites>

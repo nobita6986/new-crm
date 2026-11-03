@@ -50,6 +50,8 @@ PERMLEVEL_PROTECTED_FIELDS = {
 		("preview_json", "actual_json", "state_json", "progress", "error", "lease_expires_at")
 	),
 	"CSKH Campaign": frozenset(("selection_json",)),
+	"CSKH Work Item": frozenset(("completion_reason", "reopen_reason")),
+	"CRM Task": frozenset(("cskh_task_history_json",)),
 }
 
 
@@ -215,21 +217,29 @@ def work_item_query_conditions(user=None, **kwargs):
 	if _is_system(user) or ROLE_ADMIN in _roles(user) or ROLE_BOD in _roles(user):
 		return ""
 	if _is_leader(user):
-		return _team_user_condition(user, "assigned_to")
+		from crm_cskh.p2_permissions import leader_authorized_work_item_sql
+
+		return leader_authorized_work_item_sql(user, "tabCSKH Work Item")
 	if _is_staff(user):
 		return f"`assigned_to` = {_escape(user)}"
 	return "1=0"
 
 
 def assignment_history_query_conditions(user=None, **kwargs):
-	"""The history follows the current owner, not the historical one."""
+	"""The history follows the current owner/scope of the work item, not historical `to_user` (`SEC2-04`)."""
 	user = user or frappe.session.user
 	if _is_system(user) or ROLE_ADMIN in _roles(user) or ROLE_BOD in _roles(user):
 		return ""
 	if _is_leader(user):
-		return _team_user_condition(user, "to_user")
+		from crm_cskh.p2_permissions import leader_authorized_work_item_sql
+
+		wi_pred = leader_authorized_work_item_sql(user, "wi_ah")
+		return f"`work_item` in (select `wi_ah`.`name` from `tabCSKH Work Item` `wi_ah` where {wi_pred})"
 	if _is_staff(user):
-		return f"`to_user` = {_escape(user)}"
+		return (
+			f"`work_item` in (select `wi_ah`.`name` from `tabCSKH Work Item` `wi_ah` "
+			f"where `wi_ah`.`assigned_to` = {_escape(user)})"
+		)
 	return "1=0"
 
 
@@ -335,14 +345,16 @@ def work_item_has_permission(doc, ptype="read", user=None, **kwargs):
 		if resolved is None:
 			return False
 		if _is_leader(user):
-			return resolved.get("assigned_to") == user or _in_team(user, resolved.get("assigned_to"))
+			from crm_cskh.p2_permissions import is_work_item_readable_for_workflow
+
+			return None if is_work_item_readable_for_workflow(resolved, user=user) else False
 		if _is_staff(user):
-			return resolved.get("assigned_to") == user
+			return None if resolved.get("assigned_to") == user else False
 	return False
 
 
 def assignment_history_has_permission(doc, ptype="read", user=None, **kwargs):
-	"""The history is append-only for everyone, including the administrator."""
+	"""The history is append-only and follows current work-item authorization (`SEC2-04`)."""
 	user = user or frappe.session.user
 	if _is_system(user):
 		return None
@@ -357,10 +369,10 @@ def assignment_history_has_permission(doc, ptype="read", user=None, **kwargs):
 			return None if (_is_leader(user) or _is_staff(user)) else False
 		if resolved is None:
 			return False
-		if _is_leader(user):
-			return resolved.get("to_user") == user or _in_team(user, resolved.get("to_user"))
-		if _is_staff(user):
-			return resolved.get("to_user") == user
+		work_item_name = resolved.get("work_item")
+		if not work_item_name:
+			return False
+		return work_item_has_permission(work_item_name, ptype="read", user=user)
 	return False
 
 
@@ -502,19 +514,25 @@ def _request_target_doctype():
 def validate_p1_filter_fields(doctype, filters=None, or_filters=None, user=None):
 	"""Reject filters on `permlevel = 1` fields when `user` lacks `permlevel = 1` read access."""
 	user = user or frappe.session.user
-	if _is_system(user) or ROLE_ADMIN in _roles(user):
+	if _is_system(user):
 		return
+	roles = _roles(user)
 	for raw in (filters, or_filters):
 		for dt, field in _extract_filter_pairs(raw, doctype):
 			protected = PERMLEVEL_PROTECTED_FIELDS.get(dt)
-			if protected and field in protected:
-				frappe.throw("Not permitted to filter on restricted field.", frappe.PermissionError)
+			if not protected or field not in protected:
+				continue
+			if dt == "CSKH Work Item" and bool({ROLE_ADMIN, "Sales Manager", "Sales User"} & roles):
+				continue
+			if dt in ("CSKH Distribution Run", "CSKH Campaign") and ROLE_ADMIN in roles:
+				continue
+			frappe.throw("Not permitted to filter on restricted field.", frappe.PermissionError)
 
 
 def enforce_p1_filter_field_permissions():
 	"""`auth_hooks` callback blocking `permlevel = 1` filter oracles across HTTP endpoints."""
 	user = getattr(getattr(frappe.local, "session", None), "user", None) or "Guest"
-	if _is_system(user) or ROLE_ADMIN in _roles(user):
+	if _is_system(user):
 		return
 	form_dict = getattr(frappe.local, "form_dict", None) or {}
 	filters = form_dict.get("filters")
