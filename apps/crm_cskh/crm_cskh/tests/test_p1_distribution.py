@@ -314,15 +314,57 @@ class TestBackgroundDistributionRQ(P1TestCase):
 
 	def setUp(self):
 		super().setUp()
-		self.campaign = self.make_campaign()
+		self._tracked_campaigns = []
+		self._tracked_leads = []
+		self.campaign = self._track_campaign()
 		self.make_rule(self.campaign, self.staff_a, weight=50)
 		self.make_rule(self.campaign, self.staff_b, weight=30)
 		self.make_rule(self.campaign, self.staff_c, weight=20)
 		frappe.set_user(self.admin_user)
 
+	def tearDown(self):
+		# `distribution_worker.run_distribution` commits chunks/aborts by design, so
+		# clean up tracked campaigns and leads explicitly to avoid leaking committed
+		# records into subsequent modules running on the same CI test site.
+		frappe.set_user("Administrator")
+		frappe.db.rollback()
+		frappe.db.set_value("User", self.staff_c, "enabled", 1)
+		if self._tracked_campaigns:
+			work_items = frappe.get_all(
+				"CSKH Work Item",
+				filters={"campaign": ["in", self._tracked_campaigns]},
+				pluck="name",
+			)
+			if work_items:
+				frappe.db.delete("CSKH Assignment History", {"work_item": ["in", work_items]})
+			frappe.db.delete("CSKH Active Claim", {"campaign": ["in", self._tracked_campaigns]})
+			frappe.db.delete("CSKH Work Item", {"campaign": ["in", self._tracked_campaigns]})
+			frappe.db.delete("CSKH Distribution Run", {"campaign": ["in", self._tracked_campaigns]})
+			frappe.db.delete("CSKH Assignment Rule", {"campaign": ["in", self._tracked_campaigns]})
+			frappe.db.delete("CSKH Campaign", {"name": ["in", self._tracked_campaigns]})
+		if self._tracked_leads:
+			frappe.db.delete(
+				"ToDo",
+				{"reference_type": "CRM Lead", "reference_name": ["in", self._tracked_leads]},
+			)
+			frappe.db.delete(
+				"DocShare",
+				{"share_doctype": "CRM Lead", "share_name": ["in", self._tracked_leads]},
+			)
+			frappe.db.delete("CSKH Identity Index", {"canonical_lead": ["in", self._tracked_leads]})
+			frappe.db.delete("CRM Lead", {"name": ["in", self._tracked_leads]})
+		frappe.db.commit()
+		super().tearDown()
+
+	def _track_campaign(self, **kwargs):
+		name = self.make_campaign(**kwargs)
+		self._tracked_campaigns.append(name)
+		return name
+
 	def make_pool(self, count, campaign=None):
 		campaign = campaign or self.campaign
 		leads = [self.make_canonical_lead() for _ in range(count)]
+		self._tracked_leads.extend(leads)
 		frappe.db.set_value("CSKH Campaign", campaign, "selection_json", frappe.as_json({"leads": leads}))
 		return leads
 
@@ -420,7 +462,7 @@ class TestBackgroundDistributionRQ(P1TestCase):
 		frappe.set_user("Administrator")
 		temp_admin = "p1-temp-dist-admin@example.test"
 		self.ensure_user(temp_admin, "CSKH CRM Admin")
-		camp_a = self.make_campaign()
+		camp_a = self._track_campaign(team_scope=self.team_b)
 		self.make_rule(camp_a, self.staff_a, weight=100)
 		self.make_pool(3, campaign=camp_a)
 		frappe.set_user(temp_admin)
@@ -438,7 +480,7 @@ class TestBackgroundDistributionRQ(P1TestCase):
 		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp_a}), 0)
 
 		# Case B: `rule_version` changes while queued -> worker aborts with RULE_CHANGED.
-		camp_b = self.make_campaign()
+		camp_b = self._track_campaign(team_scope=self.team_b)
 		self.make_rule(camp_b, self.staff_a, weight=100)
 		self.make_pool(3, campaign=camp_b)
 		frappe.set_user(self.admin_user)
@@ -463,7 +505,7 @@ class TestBackgroundDistributionRQ(P1TestCase):
 			"capacity_limit",
 			1,
 		)
-		other_campaign = self.make_campaign()
+		other_campaign = self._track_campaign(team_scope=self.team_b)
 		preview = distribution_api.preview(campaign=self.campaign)
 		with mock.patch("frappe.enqueue"):
 			queued = distribution_api.execute(preview_id=preview["preview_id"])
