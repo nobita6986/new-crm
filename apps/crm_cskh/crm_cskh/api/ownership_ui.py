@@ -97,16 +97,10 @@ def _campaign_ineligible_users(campaign_name, allowed_nodes):
 	if not rules:
 		return set()
 
-	max_version = max((int(row.version or 1) for row in rules), default=1)
-	latest_by_user = {}
-	enabled_by_user = {}
+	by_user = {}
 	for row in rules:
-		if not row.user:
-			continue
-		if int(row.version or 1) == max_version:
-			latest_by_user.setdefault(row.user, []).append(row)
-		if int(row.enabled or 0):
-			enabled_by_user.setdefault(row.user, []).append(row)
+		if row.user:
+			by_user.setdefault(row.user, []).append(row)
 
 	load_rows = frappe.db.sql(
 		"""select assigned_to as user, count(*) as total
@@ -121,8 +115,10 @@ def _campaign_ineligible_users(campaign_name, allowed_nodes):
 	loads = {row.user: int(row.total or 0) for row in load_rows if row.user}
 
 	ineligible = set()
-	for user, user_latest in latest_by_user.items():
-		enabled_latest = [row for row in user_latest if int(row.enabled or 0)]
+	for user, user_rules in by_user.items():
+		latest_version = max((int(row.version or 1) for row in user_rules), default=1)
+		latest_rows = [row for row in user_rules if int(row.version or 1) == latest_version]
+		enabled_latest = [row for row in latest_rows if int(row.enabled or 0)]
 		if not enabled_latest:
 			ineligible.add(user)
 			continue
@@ -130,13 +126,10 @@ def _campaign_ineligible_users(campaign_name, allowed_nodes):
 			ineligible.add(user)
 			continue
 		if allowed_nodes is not None:
-			for row in enabled_latest:
-				if row.team and row.team not in allowed_nodes:
-					ineligible.add(user)
-					break
-
-	for user, user_enabled in enabled_by_user.items():
-		cap_limit = max((int(row.capacity_limit or 0) for row in user_enabled), default=0)
+			if any(row.team and row.team not in allowed_nodes for row in enabled_latest):
+				ineligible.add(user)
+				continue
+		cap_limit = max((int(row.capacity_limit or 0) for row in enabled_latest), default=0)
 		if cap_limit > 0 and loads.get(user, 0) >= cap_limit:
 			ineligible.add(user)
 
