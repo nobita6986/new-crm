@@ -170,6 +170,7 @@ BACKEND_MESSAGES = (
 	"The work item is required.",
 	"This action requires the CRM Admin business role.",
 	"This campaign, assignee and version already has a rule.",
+	"This idempotency key was already used with a different column mapping.",
 	"This idempotency key was already used with a different file.",
 	"This idempotency key was already used by another distribution run.",
 	"Transferring a customer requires the CRM Admin business role.",

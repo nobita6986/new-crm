@@ -275,10 +275,11 @@
 		])
 	}
 
-	async function loadAssignees() {
+	async function loadAssignees(campaign) {
 		if (!isAdmin) return
 		try {
-			const data = await cskh.get(API_ASSIGNEES)
+			const params = campaign ? { campaign: campaign } : {}
+			const data = await cskh.get(API_ASSIGNEES, params)
 			assignees = (data && data.items) || []
 		} catch (error) {
 			assignees = []
@@ -297,8 +298,12 @@
 		box.appendChild(cskh.el('p', { class: 'cskh-loading', text: cskh.t('Loading...') }))
 
 		try {
-			const history = await cskh.get(API_HISTORY, { work_item: item.work_item })
-			renderDetail(item, mode, history)
+			const tasks = [cskh.get(API_HISTORY, { work_item: item.work_item })]
+			if (isAdmin || canManage) {
+				tasks.push(loadAssignees((item && item.campaign) || ''))
+			}
+			const results = await Promise.all(tasks)
+			renderDetail(item, mode, results[0])
 		} catch (error) {
 			cskh.clear(box)
 			cskh.renderError(box, error)

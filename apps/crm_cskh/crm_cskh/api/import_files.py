@@ -48,7 +48,7 @@ def upload_import_file(file_name=None, content=None):
 	_require_import_permission(actor)
 
 	raw = None
-	uploads = getattr(frappe.request, "files", None) or {}
+	uploads = getattr(getattr(frappe.local, "request", None), "files", None) or {}
 	upload = uploads.get("file") if hasattr(uploads, "get") else None
 	if upload is not None:
 		raw = upload.stream.read()

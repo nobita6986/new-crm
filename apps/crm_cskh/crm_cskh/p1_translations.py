@@ -345,6 +345,7 @@ TRANSLATIONS = {
 	"The work item is required.": "Cần chọn công việc.",
 	"This action requires the CRM Admin business role.": "Thao tác này yêu cầu vai trò Quản trị CRM.",
 	"This campaign, assignee and version already has a rule.": "Chiến dịch, người được giao và phiên bản này đã có quy tắc.",
+	"This idempotency key was already used with a different column mapping.": "Khóa idempotency này đã được dùng với cấu hình ánh xạ cột khác.",
 	"This idempotency key was already used with a different file.": "Khóa idempotency này đã được dùng với một tệp khác.",
 	"This idempotency key was already used by another distribution run.": "Khóa idempotency này đã được dùng cho một đợt phân phối khác.",
 	"Transferring a customer requires the CRM Admin business role.": "Chỉ vai trò Quản trị CRM mới được phép chuyển giao khách hàng.",
