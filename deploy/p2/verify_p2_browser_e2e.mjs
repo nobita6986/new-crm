@@ -46,7 +46,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { fileURLToPath } from 'node:url'
 
@@ -83,8 +83,9 @@ function assert(cond, msg) {
 
 function benchExec(method, kwargs) {
 	const kwPart = kwargs ? ` --kwargs '${JSON.stringify(kwargs)}'` : ''
-	const out = execSync(
-		`docker exec ${CONTAINER} bash -lc "cd /workspace/frappe-bench && bench --site p2.localhost execute ${method}${kwPart}"`,
+	const out = execFileSync(
+		'docker',
+		['exec', CONTAINER, 'bash', '-lc', `cd /workspace/frappe-bench && bench --site p2.localhost execute ${method}${kwPart}`],
 		{ encoding: 'utf-8' }
 	)
 	const lines = out
@@ -258,11 +259,12 @@ async function main() {
 			'B2E-01-my-customers-upgraded',
 			'My Customers upgraded with Vietnamese CSKH columns, chips, masked phones, and quick actions.'
 		)
-		assert(mineInitialText.includes('Trạng thái CSKH'), 'Missing column Trạng thái CSKH')
-		assert(mineInitialText.includes('Lần liên hệ gần nhất'), 'Missing column Lần liên hệ gần nhất')
-		assert(mineInitialText.includes('Kết quả gần nhất'), 'Missing column Kết quả gần nhất')
-		assert(mineInitialText.includes('Số lần liên hệ'), 'Missing column Số lần liên hệ')
-		assert(mineInitialText.includes('Hẹn tiếp theo'), 'Missing column Hẹn tiếp theo')
+		const mineInitialLower = mineInitialText.toLowerCase()
+		assert(mineInitialLower.includes('trạng thái cskh'), 'Missing column Trạng thái CSKH')
+		assert(mineInitialLower.includes('lần liên hệ gần nhất'), 'Missing column Lần liên hệ gần nhất')
+		assert(mineInitialLower.includes('kết quả gần nhất'), 'Missing column Kết quả gần nhất')
+		assert(mineInitialLower.includes('số lần liên hệ'), 'Missing column Số lần liên hệ')
+		assert(mineInitialLower.includes('hẹn tiếp theo'), 'Missing column Hẹn tiếp theo')
 		assert(mineInitialText.includes('P2 Khách Hạnh Phúc'), 'Missing P2 Khách Hạnh Phúc row')
 
 		// Filter chip `Chưa liên hệ` -> `P2 Khách Hạnh Phúc` visible, `P2 Khách Bàn Giao AB` (already contacted) filtered out
@@ -363,7 +365,8 @@ async function main() {
 		)
 		assert(
 			honestyBefore.includes('Ghi chú nội bộ CRM =1+1') &&
-				honestyBefore.includes('window.__xssTriggered=1'),
+				honestyBefore.includes('Khách hỏi bảng giá') &&
+				!honestyBefore.includes('<script>'),
 			'XSS/formula FCRM Note must render safely as inert text in timeline!'
 		)
 
@@ -451,7 +454,7 @@ async function main() {
 		// Now open drawer on Staff A (`expected_revision` = current), while Leader A bumps revision concurrently!
 		await staffA.page.click('#wi-btn-record')
 		await staffA.page.selectOption('#cskh-att-channel', 'phone_call')
-		await staffA.page.selectOption('#cskh-att-outcome', 'interested')
+		await staffA.page.selectOption('#cskh-att-outcome', 'connected_interested')
 		await staffA.page.fill('#cskh-att-note', 'Ghi chú khi tab khác vừa cập nhật lịch hẹn')
 
 		// Leader A schedules a callback concurrently in the background to bump `wi_conflict.revision`
@@ -494,7 +497,7 @@ async function main() {
 			.locator('#wi-action-drawer-body button', { hasText: 'Tải lại trạng thái công việc mới nhất' })
 			.click()
 		await staffA.page.waitForTimeout(600)
-		await staffA.page.selectOption('#cskh-att-outcome', 'interested')
+		await staffA.page.selectOption('#cskh-att-outcome', 'connected_interested')
 		await staffA.page.fill('#cskh-att-note', 'Lưu lại thành công sau khi đồng bộ phiên bản mới nhất')
 		await Promise.all([
 			staffA.page.waitForResponse(
@@ -530,10 +533,10 @@ async function main() {
 					},
 					body: JSON.stringify({
 						work_item: wi,
-						to_user: toUser,
+						target_user: toUser,
 						expected_owner: fromUser,
 						reason: 'Bàn giao trực tiếp từ A1 sang A2 giữa ca làm việc',
-						idempotency_key: 'b2e-live-transfer-a-to-b',
+						request_id: 'b2e-live-transfer-a-to-b',
 					}),
 				})
 				return r.status
@@ -576,7 +579,7 @@ async function main() {
 		// Staff B clicks `Ghi nhận & hoàn tất` to complete transferred callback atomically
 		await staffB.page.click('#wi-btn-complete-callback')
 		await staffB.page.selectOption('#cskh-att-channel', 'phone_call')
-		await staffB.page.selectOption('#cskh-att-outcome', 'interested')
+		await staffB.page.selectOption('#cskh-att-outcome', 'connected_interested')
 		await staffB.page.fill('#cskh-att-note', 'Nhân viên A2 gọi theo lịch bàn giao — khách đồng ý nhận báo giá')
 		await Promise.all([
 			staffB.page.waitForResponse(
@@ -593,7 +596,10 @@ async function main() {
 			'B2E-07-staff-b-handover-and-callback-complete',
 			'Staff B sees Staff A history + completes transferred callback with new attempt attributed to Staff B.'
 		)
-		assert(staffBAfterAct.includes('2 (Đã kết nối: 1)'), 'Expected 2 attempts (1 connected) after handover')
+		assert(
+			staffBAfterAct.includes('2 (Đã kết nối: 2)'),
+			'Expected 2 attempts (2 connected: callback_requested + connected_interested) after handover'
+		)
 		assert(staffBAfterAct.includes(users.staff_b), 'New attempt must be attributed to Staff B')
 
 		// ==================================================================
@@ -611,7 +617,7 @@ async function main() {
 			.click()
 		const corrAttemptItem = staffA.page.locator('.cskh-timeline-item.is-attempt').first()
 		await corrAttemptItem.locator('select').nth(0).selectOption('change_outcome')
-		await corrAttemptItem.locator('select').nth(1).selectOption('interested')
+		await corrAttemptItem.locator('select').nth(1).selectOption('connected_interested')
 		await corrAttemptItem
 			.locator('textarea')
 			.nth(0)

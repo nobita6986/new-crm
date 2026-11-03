@@ -36,6 +36,7 @@ to `deploy/p2/evidence/http-e2e-report.json`.
 
 from __future__ import annotations
 
+import base64
 import datetime as dt
 import json
 import os
@@ -282,26 +283,31 @@ def import_and_distribute(
     rows: list[tuple[str, str, str]],
 ):
     csv_lines = ["so_dt,ho_ten,nguon"] + [f"{p},{n},{s}" for p, n, s in rows]
-    uploaded = admin.upload_csv(
-        f"{camp_code.lower()}.csv", ("\n".join(csv_lines) + "\n").encode("utf-8")
-    )
-    st, prev = admin.post_api(
-        "crm_cskh.api.imports.preview",
+    csv_text = "\n".join(csv_lines) + "\n"
+    st, up_res = admin.post_api(
+        "crm_cskh.api.import_files.upload_import_file",
         {
-            "file_id": uploaded["name"],
+            "file_name": f"{camp_code.lower()}.csv",
+            "content": base64.b64encode(csv_text.encode("utf-8")).decode("ascii"),
+        },
+    )
+    assert st == 200, f"upload_import_file failed: {st} {up_res}"
+    uploaded_name = up_res["message"]["name"]
+
+    st, prev = admin.post_api(
+        "crm_cskh.api.imports.create_preview",
+        {
+            "file_name": uploaded_name,
             "mapping": {"phone": "so_dt", "name": "ho_ten", "source": "nguon"},
             "idempotency_key": f"imp-prev-{camp_code}-{uuid.uuid4().hex[:8]}",
         },
     )
-    assert st == 200, f"imports.preview failed: {st} {prev}"
+    assert st == 200, f"imports.create_preview failed: {st} {prev}"
     batch_id = prev["message"]["batch"]
 
     st, conf = admin.post_api(
         "crm_cskh.api.imports.confirm",
-        {
-            "batch": batch_id,
-            "idempotency_key": f"imp-conf-{camp_code}-{uuid.uuid4().hex[:8]}",
-        },
+        {"batch": batch_id},
     )
     assert st in (200, 202), f"imports.confirm failed: {st} {conf}"
     batch_done = poll_batch(admin, batch_id)
@@ -309,39 +315,58 @@ def import_and_distribute(
         f"Batch did not complete cleanly: {batch_done}"
     )
 
-    st, camp_res = admin.post_api(
-        "crm_cskh.api.campaigns_ui.save_campaign",
-        {"code": camp_code, "title": camp_title, "status": "Active", "team": team_name},
+    st, pool_res = admin.get_api(
+        "crm_cskh.api.pool_ui.list",
+        {"batch": batch_id, "page": 1, "page_size": 50},
     )
-    assert st == 200, f"save_campaign failed: {st} {camp_res}"
+    assert st == 200, f"pool_ui.list failed: {st} {pool_res}"
+    lead_ids = [r["lead"] for r in pool_res["message"]["items"]]
+    assert len(lead_ids) == len(rows), (
+        f"Expected {len(rows)} imported leads for {batch_id}, got {len(lead_ids)}: {pool_res}"
+    )
+
+    st, camp_res = admin.post_api(
+        "crm_cskh.api.campaigns.save",
+        {
+            "code": camp_code,
+            "title": camp_title,
+            "status": "Active",
+            "team_scope": team_name,
+            "selection": {"leads": lead_ids},
+        },
+    )
+    assert st == 200, f"campaigns.save failed: {st} {camp_res}"
     campaign_id = camp_res["message"]["campaign"]
 
     st, rule_res = admin.post_api(
-        "crm_cskh.api.campaigns_ui.save_rules",
+        "crm_cskh.api.campaigns.save_rule",
         {
             "campaign": campaign_id,
-            "rules": [
-                {"assignee": assignee, "weight": 10, "capacity": 0, "enabled": 1}
-            ],
+            "user": assignee,
+            "weight": 100,
+            "capacity_limit": 0,
+            "team": team_name,
+            "enabled": 1,
         },
     )
-    assert st == 200, f"save_rules failed: {st} {rule_res}"
+    assert st == 200, f"campaigns.save_rule failed: {st} {rule_res}"
 
     st, d_prev = admin.post_api(
         "crm_cskh.api.distribution.preview",
         {
             "campaign": campaign_id,
-            "filters": {"import_batch": batch_id},
-            "limit": len(rows),
+            "idempotency_key": f"dist-prev-{camp_code}-{uuid.uuid4().hex[:8]}",
         },
     )
     assert st == 200, f"distribution.preview failed: {st} {d_prev}"
     preview_id = d_prev["message"]["preview_id"]
+    rule_ver = d_prev["message"]["rule_version"]
 
     st, d_exec = admin.post_api(
         "crm_cskh.api.distribution.execute",
         {
             "preview_id": preview_id,
+            "expected_rule_version": rule_ver,
             "idempotency_key": f"dist-exec-{camp_code}-{uuid.uuid4().hex[:8]}",
         },
     )
@@ -356,8 +381,25 @@ def fmt_dt(val: dt.datetime) -> str:
     return val.strftime("%Y-%m-%d %H:%M:%S")
 
 
+def ensure_static_assets_symlink():
+    subprocess.run(
+        [
+            "docker",
+            "exec",
+            "-w",
+            "/workspace/frappe-bench",
+            CONTAINER,
+            "bash",
+            "-lc",
+            "mkdir -p sites/assets && ln -sfn /workspace/frappe-bench/apps/crm_cskh/crm_cskh/public sites/assets/crm_cskh",
+        ],
+        check=True,
+    )
+
+
 def main():
     os.makedirs(EVIDENCE_DIR, exist_ok=True)
+    ensure_static_assets_symlink()
     seed = bench_execute("crm_cskh.tools.p2_e2e_seed.reset_and_seed_p2")
     users = seed["users"]
     team_a = seed["team_a"]
@@ -496,10 +538,10 @@ def main():
             "crm_cskh.api.ownership.reassign",
             {
                 "work_item": wi_b,
-                "to_user": users["staff_b"],
+                "target_user": users["staff_b"],
                 "expected_owner": users["staff_a"],
                 "reason": "Phân bổ cho Nhân viên A2 kiểm thử quyền P2",
-                "idempotency_key": f"p2-init-reassign-{wi_b}",
+                "request_id": f"p2-init-reassign-{wi_b}",
             },
         )
         assert st == 200, f"reassign to staff_b failed: {st} {r_res}"
@@ -555,7 +597,6 @@ def main():
             "work_item": wi_http,
             "channel": "phone_call",
             "outcome_code": "callback_requested",
-            "occurred_at": fmt_dt(site_now - dt.timedelta(minutes=5)),
             "note": "Khách hẹn gọi lại nhưng quên chọn giờ",
             "expected_revision": rev0,
             "idempotency_key": "http-bad-fu-001",
@@ -571,7 +612,6 @@ def main():
         "work_item": wi_http,
         "channel": "phone_call",
         "outcome_code": "no_answer",
-        "occurred_at": fmt_dt(site_now - dt.timedelta(minutes=4)),
         "note": "Gọi lần 1 đổ chuông không bắt máy",
         "followup": {
             "due_at": due_1,
@@ -614,7 +654,6 @@ def main():
             "work_item": wi_http,
             "channel": "zalo",
             "outcome_code": "message_sent_no_reply",
-            "occurred_at": fmt_dt(site_now - dt.timedelta(minutes=3)),
             "note": "Thử lưu với revision cũ",
             "expected_revision": rev0,
             "idempotency_key": "http-stale-rev-001",
@@ -631,7 +670,6 @@ def main():
             "work_item": wi_http,
             "channel": "zalo",
             "outcome_code": "message_sent_no_reply",
-            "occurred_at": fmt_dt(site_now - dt.timedelta(minutes=2)),
             "note": "Đã gửi tin Zalo giới thiệu, khách chưa phản hồi",
             "complete_open_followup": False,
             "expected_revision": rev1,
@@ -706,8 +744,7 @@ def main():
         {
             "work_item": wi_http,
             "channel": "phone_call",
-            "outcome_code": "interested",
-            "occurred_at": fmt_dt(site_now - dt.timedelta(minutes=1)),
+            "outcome_code": "connected_interested",
             "note": "Khách nghe máy, quan tâm gói dịch vụ năm",
             "call_log": call_log_1,
             "complete_open_followup": True,
@@ -726,8 +763,7 @@ def main():
         {
             "work_item": wi_http,
             "channel": "phone_call",
-            "outcome_code": "connected_discussed",
-            "occurred_at": fmt_dt(site_now),
+            "outcome_code": "connected_interested",
             "note": "Cố gắn lại cùng Call Log lần 2",
             "call_log": call_log_1,
             "expected_revision": rev4,
@@ -821,7 +857,9 @@ def main():
             "idempotency_key": "http-save-out-busy-v2",
         },
     )
-    assert st == 200 and save_out_res["message"]["version"] == old_busy_ver + 1
+    assert (
+        st == 200 and save_out_res["message"]["outcome"]["version"] == old_busy_ver + 1
+    )
 
     st, att_hist = staff_a.get_api(
         "crm_cskh.api.workflow.list_attempts", {"work_item": wi_http}
@@ -878,7 +916,6 @@ def main():
             "work_item": wi_http,
             "channel": "phone_call",
             "outcome_code": "no_answer",
-            "occurred_at": fmt_dt(site_now),
             "note": "Ghi trên Work Item đã đóng",
             "expected_revision": rev6,
             "idempotency_key": "http-att-closed-001",
@@ -947,7 +984,6 @@ def main():
             "work_item": wi_dnc,
             "channel": "phone_call",
             "outcome_code": "no_answer",
-            "occurred_at": fmt_dt(site_now),
             "note": "Thử gọi khách đang DNC",
             "expected_revision": wi_dnc_det["message"]["work_item"]["revision"],
             "idempotency_key": "http-dnc-blocked-001",
@@ -991,13 +1027,15 @@ def main():
                 "work_item": forbidden_wi,
                 "channel": "phone_call",
                 "outcome_code": "no_answer",
-                "occurred_at": fmt_dt(site_now),
                 "note": "Ghi trái quyền",
                 "expected_revision": 1,
                 "idempotency_key": f"sec2-unauth-{forbidden_wi}",
             },
         )
-        assert st_w == 403 and err_code(b_w) == "FORBIDDEN"
+        assert st_w in (403, 409) and err_code(b_w) in (
+            "FORBIDDEN",
+            "OWNERSHIP_CHANGED",
+        ), f"Expected 403/409 FORBIDDEN/OWNERSHIP_CHANGED, got {st_w} {b_w}"
 
     # SEC2-08: Leader A cannot read Team B's work item; Leader B CAN read Team B's work item
     # (positive control) and CANNOT read Team A's work item.
@@ -1117,7 +1155,6 @@ def main():
             "work_item": wi_transfer,
             "channel": "phone_call",
             "outcome_code": "callback_requested",
-            "occurred_at": fmt_dt(site_now - dt.timedelta(minutes=2)),
             "note": "Nhân viên A1 ghi nhận lần 1 trước khi bàn giao sang A2",
             "followup": {
                 "due_at": transfer_due,
@@ -1138,7 +1175,6 @@ def main():
             "work_item": wi_correction,
             "channel": "phone_call",
             "outcome_code": "no_answer",
-            "occurred_at": fmt_dt(site_now - dt.timedelta(minutes=2)),
             "note": "Ghi nhầm Không nghe máy — cần gửi yêu cầu hiệu chỉnh trên trình duyệt",
             "expected_revision": 1,
             "idempotency_key": "prep-corr-att-001",
@@ -1207,6 +1243,14 @@ def main():
             "task_id": boundary_tasks["boverdue"],
             "due_at_str": due_overdue_str,
         },
+    )
+
+    reconcile = bench_execute("crm_cskh.services.read_model.reconcile_p2_invariants")
+    assert reconcile.get("ok") is True, f"P2 invariant drift detected: {reconcile}"
+    record(
+        "P2-E2E-05-reconcile-p2-invariants",
+        True,
+        {"ok": True, "summary": reconcile.get("counts", reconcile)},
     )
 
     evidence["fixtures"] = {

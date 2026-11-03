@@ -984,10 +984,14 @@
 								? cskh.t('Correction rejected')
 								: cskh.t('Pending correction review'),
 				})
-				const summaryParts = [
+				const corrActionLabel =
 					corr.action === 'void'
 						? cskh.t('Void attempt')
-						: corr.action,
+						: corr.action === 'restore'
+							? cskh.t('Restore voided attempt')
+							: cskh.t('Corrected')
+				const summaryParts = [
+					corrActionLabel,
 					cskh.t('Requested by') + ': ' + (corr.requested_by || '—'),
 					cskh.formatDate(corr.requested_at),
 				]
@@ -1356,6 +1360,18 @@
 					text: cskh.t('Unlinked call log (not counted as attempt)'),
 				})
 
+		const rawStatus = String(cl.status || '').trim()
+		const statusLabel =
+			rawStatus === 'Completed'
+				? cskh.t('Done')
+				: rawStatus === 'No Answer'
+					? cskh.t('No answer')
+					: rawStatus === 'Busy'
+						? cskh.t('Line busy')
+						: rawStatus === 'Canceled'
+							? cskh.t('Canceled')
+							: rawStatus || '—'
+
 		return cskh.el('div', { class: 'cskh-timeline-item is-call-log' }, [
 			cskh.el('div', { class: 'cskh-timeline-head' }, [
 				cskh.el('div', { class: 'cskh-badge-stack' }, [
@@ -1371,7 +1387,7 @@
 				class: 'cskh-muted',
 				text: [
 					cskh.t('Call direction') + ': ' + dirLabel,
-					cskh.t('Status') + ': ' + (cl.status || '—'),
+					cskh.t('Status') + ': ' + statusLabel,
 					cl.duration !== undefined && cl.duration !== null
 						? cskh.t('Duration (s)') + ': ' + cl.duration
 						: null,

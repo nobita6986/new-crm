@@ -38,6 +38,7 @@ window.cskhAttemptForm = (function () {
 		let pendingKey = 'ui-att-' + cskh.uuid()
 		let inFlight = false
 		let lockedByConflict = false
+		let occurredUserEdited = false
 
 		function bumpIdempotencyKey() {
 			if (!inFlight) {
@@ -424,7 +425,7 @@ window.cskhAttemptForm = (function () {
 				work_item: workItem.work_item_id,
 				channel: channel,
 				outcome_code: out.code,
-				occurred_at: cskh.datetimeLocalToServer(occurredLocal),
+				occurred_at: occurredUserEdited ? cskh.datetimeLocalToServer(occurredLocal) : null,
 				note: note,
 				call_log: channel === 'phone_call' && callLogSelect.value ? callLogSelect.value : null,
 				followup: followupLocal
@@ -554,6 +555,12 @@ window.cskhAttemptForm = (function () {
 
 		channelSelect.addEventListener('change', populateOutcomes)
 		outcomeSelect.addEventListener('change', syncOutcomeConstraints)
+		occurredInput.addEventListener('input', function () {
+			occurredUserEdited = true
+		})
+		occurredInput.addEventListener('change', function () {
+			occurredUserEdited = true
+		})
 		followupToggle.addEventListener('change', function () {
 			followupInput.disabled = !followupToggle.checked
 			followupTitleInput.disabled = !followupToggle.checked

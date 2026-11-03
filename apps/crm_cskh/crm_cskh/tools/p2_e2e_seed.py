@@ -122,19 +122,9 @@ def reset_and_seed_p2():
 		if frappe.db.table_exists(cat_dt):
 			frappe.db.sql(f"delete from `tab{cat_dt}`")
 
-	for seed_mod_fn in (
-		("crm_cskh.patches.v2_0.seed_p2_defaults", "execute"),
-		("crm_cskh.services.outcome_catalog", "seed_default_outcomes_and_policy"),
-		("crm_cskh.services.lifecycle", "ensure_default_catalog"),
-	):
-		try:
-			mod = __import__(seed_mod_fn[0], fromlist=[seed_mod_fn[1]])
-			fn = getattr(mod, seed_mod_fn[1], None)
-			if callable(fn):
-				fn()
-				break
-		except Exception:
-			continue
+	from crm_cskh.p2_models import ensure_p2_seeds
+
+	ensure_p2_seeds()
 
 	# 3. Ensure business roles and strict user accounts (zero System Manager on Admin/BOD).
 	_ensure_role("CSKH CRM Admin")
@@ -177,24 +167,25 @@ def seed_native_activities(lead, caller_user, phone="0912340002"):
 	_assert_p2_site()
 	frappe.set_user("Administrator")
 
+	e164_to = ("+84" + phone[1:]) if phone.startswith("0") else phone
 	call_logs = []
 	for idx, duration in enumerate((0, 42), start=1):
-		cl = frappe.get_doc(
-			{
-				"doctype": "CRM Call Log",
-				"id": f"p2-e2e-call-{lead}-{idx}",
-				"type": "Outgoing",
-				"from": caller_user,
-				"to": phone,
-				"caller": caller_user,
-				"status": "No Answer" if duration == 0 else "Completed",
-				"duration": duration,
-				"start_time": now_datetime(),
-				"reference_doctype": "CRM Lead",
-				"reference_docname": lead,
-				"note": f"Nhật ký tổng đài giả lập #{idx} ({duration}s)",
-			}
-		)
+		cl_dict = {
+			"doctype": "CRM Call Log",
+			"id": f"p2-e2e-call-{lead}-{idx}",
+			"type": "Outgoing",
+			"from": "+842873001100",
+			"to": e164_to,
+			"caller": caller_user,
+			"status": "No Answer" if duration == 0 else "Completed",
+			"duration": duration,
+			"start_time": now_datetime(),
+			"reference_doctype": "CRM Lead",
+			"reference_docname": lead,
+		}
+		if frappe.db.has_column("CRM Call Log", "telephony_medium"):
+			cl_dict["telephony_medium"] = "Manual"
+		cl = frappe.get_doc(cl_dict)
 		cl.insert(ignore_permissions=True)
 		call_logs.append(cl.name)
 
