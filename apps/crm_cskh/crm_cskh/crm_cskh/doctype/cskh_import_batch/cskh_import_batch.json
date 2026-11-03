@@ -1,0 +1,176 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Import Batch",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "source_file",
+   "fieldtype": "Link",
+   "label": "Source File",
+   "options": "File",
+   "reqd": 1
+  },
+  {
+   "fieldname": "checksum",
+   "fieldtype": "Data",
+   "label": "Checksum",
+   "reqd": 1,
+   "length": 64
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "DRY_RUN\nCONFIRMED\nQUEUED\nRUNNING\nCOMPLETED\nCOMPLETED_WITH_ERRORS\nFAILED",
+   "default": "DRY_RUN",
+   "reqd": 1
+  },
+  {
+   "fieldname": "mapping_json",
+   "fieldtype": "Long Text",
+   "label": "Mapping Json"
+  },
+  {
+   "fieldname": "preview_json",
+   "fieldtype": "Long Text",
+   "label": "Preview Json",
+   "read_only": 1
+  },
+  {
+   "fieldname": "committed_at",
+   "fieldtype": "Datetime",
+   "label": "Committed At"
+  },
+  {
+   "fieldname": "error_artifact",
+   "fieldtype": "Link",
+   "label": "Error Artifact",
+   "options": "File"
+  },
+  {
+   "fieldname": "total_rows",
+   "fieldtype": "Int",
+   "label": "Total Rows",
+   "default": "0"
+  },
+  {
+   "fieldname": "valid_rows",
+   "fieldtype": "Int",
+   "label": "Valid Rows",
+   "default": "0"
+  },
+  {
+   "fieldname": "new_rows",
+   "fieldtype": "Int",
+   "label": "New Rows",
+   "default": "0"
+  },
+  {
+   "fieldname": "duplicate_rows",
+   "fieldtype": "Int",
+   "label": "Duplicate Rows",
+   "default": "0"
+  },
+  {
+   "fieldname": "error_rows",
+   "fieldtype": "Int",
+   "label": "Error Rows",
+   "default": "0"
+  },
+  {
+   "fieldname": "created_rows",
+   "fieldtype": "Int",
+   "label": "Created Rows",
+   "default": "0"
+  },
+  {
+   "fieldname": "reused_rows",
+   "fieldtype": "Int",
+   "label": "Reused Rows",
+   "default": "0"
+  },
+  {
+   "fieldname": "skipped_rows",
+   "fieldtype": "Int",
+   "label": "Skipped Rows",
+   "default": "0"
+  },
+  {
+   "fieldname": "progress",
+   "fieldtype": "Int",
+   "label": "Progress",
+   "default": "0",
+   "description": "Số dòng tuần tự đã được commit của batch (điểm resume khi worker bị gián đoạn)."
+  },
+  {
+   "fieldname": "attempts",
+   "fieldtype": "Int",
+   "label": "Attempts",
+   "default": "0",
+   "description": "Số lần worker đã thử chạy batch này (P1 §6.4: crash/retry giữa batch)."
+  }
+ ],
+ "field_order": [
+  "source_file",
+  "checksum",
+  "idempotency_key",
+  "status",
+  "mapping_json",
+  "preview_json",
+  "committed_at",
+  "error_artifact",
+  "total_rows",
+  "valid_rows",
+  "new_rows",
+  "duplicate_rows",
+  "error_rows",
+  "created_rows",
+  "reused_rows",
+  "skipped_rows",
+  "progress",
+  "attempts"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "modified": "2026-11-02 00:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}

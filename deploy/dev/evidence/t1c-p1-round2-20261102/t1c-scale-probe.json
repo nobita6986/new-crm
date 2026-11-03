@@ -1,0 +1,64 @@
+{
+ "results": [
+  {
+   "case": "S01_create_1000_canonical_leads",
+   "ok": true,
+   "detail": "leads=1000 seconds=29.37"
+  },
+  {
+   "case": "S02_preview_1000_leads",
+   "ok": false,
+   "detail": "eligible=None planned=None targets={} seconds=3.44"
+  },
+  {
+   "case": "S03_execute_1000_leads",
+   "ok": true,
+   "detail": "assigned={'scale-user-0-eac3a5@example.test': 500, 'scale-user-1-08ab59@example.test': 300, 'scale-user-2-8ba74f@example.test': 200} total=1000 seconds=121.13 status=completed"
+  },
+  {
+   "case": "S04_fairness_500_300_200",
+   "ok": true,
+   "detail": "assigned={'scale-user-0-eac3a5@example.test': 500, 'scale-user-1-08ab59@example.test': 300, 'scale-user-2-8ba74f@example.test': 200} expected={'scale-user-0-eac3a5@example.test': 500, 'scale-user-1-08ab59@example.test': 300, 'scale-user-2-8ba74f@example.test': 200}"
+  },
+  {
+   "case": "S05_db_truth_matches_plan",
+   "ok": true,
+   "detail": "db={'scale-user-0-eac3a5@example.test': 500, 'scale-user-1-08ab59@example.test': 300, 'scale-user-2-8ba74f@example.test': 200} expected={'scale-user-0-eac3a5@example.test': 500, 'scale-user-1-08ab59@example.test': 300, 'scale-user-2-8ba74f@example.test': 200}"
+  },
+  {
+   "case": "S06_reconcile_works",
+   "ok": false,
+   "detail": "exception=TypeError('Object of type datetime is not JSON serializable')"
+  },
+  {
+   "case": "S07_no_duplicate_work_item",
+   "ok": true,
+   "detail": "duplicates=()"
+  },
+  {
+   "case": "S08_no_duplicate_active_claim",
+   "ok": true,
+   "detail": "duplicates=()"
+  },
+  {
+   "case": "S09_no_lead_two_owners",
+   "ok": true,
+   "detail": "violations=()"
+  },
+  {
+   "case": "S10_history_carries_run",
+   "ok": true,
+   "detail": "history_events=1000 expected=1000"
+  },
+  {
+   "case": "S11_dashboard_matches_db",
+   "ok": true,
+   "detail": "cards={\"unique_customers\": 1000, \"eligible_unassigned\": 0, \"assigned_work_items\": 1000, \"unassigned_work_items\": 0, \"revoked_work_items\": 0, \"closed_work_items\": 0, \"active_claims\": 1000, \"active_campaigns\": 878, \"failed_batches\": 7, \"failed_runs\": 7}"
+  },
+  {
+   "case": "S12_cumulative_fairness_second_run",
+   "ok": true,
+   "detail": "assigned={'scale-user-0-eac3a5@example.test': 100, 'scale-user-1-08ab59@example.test': 60, 'scale-user-2-8ba74f@example.test': 40} total=200"
+  }
+ ]
+}

@@ -1,0 +1,48 @@
+{% extends "templates/web.html" %}
+
+{% block page_content %}
+<div class="cskh-shell" id="cskh-root" data-route="{{ cskh_route | default('') }}">
+	<nav class="cskh-nav" aria-label="{{ _('CSKH') }}">
+		{% for item in cskh_navigation %}
+		<a href="{{ item.route }}"
+			class="{{ 'is-active' if item.route == cskh_route else '' }}">{{ _(item.label) }}</a>
+		{% endfor %}
+	</nav>
+
+	{% block cskh_head %}
+	<div class="cskh-head">
+		<div>
+			<h1 class="cskh-title">{% block cskh_title %}{{ _("CSKH") }}{% endblock %}</h1>
+			<p class="cskh-subtitle">{% block cskh_subtitle %}{% endblock %}</p>
+		</div>
+		<div class="cskh-actions">{% block cskh_actions %}{% endblock %}</div>
+	</div>
+	{% endblock %}
+
+	<p class="cskh-session">
+		{{ _("Signed in as") }} <strong>{{ cskh_user }}</strong>
+		&middot; <a href="/crm/leads/view/list">{{ _("Return to CRM Leads") }}</a>
+	</p>
+
+	{% block cskh_body %}{% endblock %}
+</div>
+
+<script>
+	window.cskhUser = {{ cskh_user | tojson }}
+	window.cskhCapabilities = {{ cskh_capabilities | tojson }}
+	window.cskhI18n = {{ cskh_i18n | tojson }}
+	window.cskhErrorCodes = {{ cskh_error_codes | tojson }}
+	window.cskhErrorTexts = {{ cskh_error_texts | tojson }}
+	// The CSRF token of the *current* Frappe session: every mutation of the
+	// P1 pages sends it in the `X-Frappe-CSRF-Token` header. The header object
+	// is the single source of truth of the token, the browser code reads it
+	// from here (`window.cskhCsrfHeader`) and the Frappe web client reads it
+	// from `window.frappe.csrf_token`.
+	window.cskhCsrfHeader = {{ cskh_csrf_header | tojson }}
+	window.frappe = window.frappe || {}
+	window.frappe.csrf_token = window.cskhCsrfHeader["X-Frappe-CSRF-Token"]
+</script>
+<script src="/assets/crm_cskh/cskh/cskh.js?v={{ cskh_asset_version | default('') }}"></script>
+<link rel="stylesheet" href="/assets/crm_cskh/cskh/cskh.css?v={{ cskh_asset_version | default('') }}">
+{% block cskh_script %}{% endblock %}
+{% endblock %}

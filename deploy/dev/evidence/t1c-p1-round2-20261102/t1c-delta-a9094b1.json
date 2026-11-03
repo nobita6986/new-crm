@@ -1,0 +1,747 @@
+{
+  "generated_at_utc": "2026-11-03T07:05:38Z",
+  "site": "t1c.localhost",
+  "http_base_url": "http://127.0.0.1:18095",
+  "repo_head": "a9094b13bcefacccb274f45a01337ef943ccf59c",
+  "code_sha": "3f07b9b3f2e68f9bf3eea005c634c7a11393ec8b",
+  "backend_ancestor": "c997df76b9a29a9f8d8be4a4ffd0875035762672",
+  "mounted_source_lf_sha256": {
+    "api/_ui_params.py": "9064790573b5f6f8025ec1098c0337149840845350645c67885a1106d7cdb49c",
+    "api/customers.py": "d89b87b957ddb1ed77a415b484b276060f88f78e3b6abab60f2047e2f97b8569",
+    "api/import_history.py": "57fdf959ee3ec5ce82819ecce3af3a729e8d825c157163a20be5aea6d783e250",
+    "api/ownership.py": "f1bb87e33f9041e7458c9a82078fecd0419424fd8c5e9c1bab9ede1e486fcc79",
+    "api/ownership_ui.py": "62dadd86bd1419c50a93fabb8d019e4848424d76818af9f6f00f6d3da34f92e9",
+    "api/pool_ui.py": "6e125582b2451591bd2ccd526fdeddb5323878e1d890f340bb0fc92af8a90dc0",
+    "api/run_history.py": "6c4506de0a511c8dd28916a48482e58ca180e733c52a39b756ee6ca52bd42eb6",
+    "crm_cskh/doctype/cskh_import_batch_lead/cskh_import_batch_lead.json": "742a6cf47bc119abcb493ba561cf93b970dff04880f223efa3b152993cb3a773",
+    "crm_cskh/doctype/cskh_import_batch_lead/cskh_import_batch_lead.py": "5a341fb6cdb51d38dcb48e31254ad27e12cb2aa0db2ae2313bc3d27a4b2f1b7c",
+    "hooks.py": "9321db730857467a8812c20d2732e402204904101ecef6e02c85d08e251efdbc",
+    "jobs/import_worker.py": "c532a78b38bdedd688ede4707b0e50b84f1c55835fd77a9c908bed9bb8ca34d8",
+    "p1_models.py": "f86873251ce2be8d558651d1764b64b2f62012cf3504db5587c172a151e06047",
+    "p1_permissions.py": "7e11f319f3baa35dafe27d906345d5355a58b5174b2d8727f02762307c7e7fa8",
+    "patches/v1_0/p1_import_batch_lead_constraints.py": "6940914c65a7afd5657d28c91673806b4073fcb46d65c8148c702dce0c635e9e",
+    "services/distribution.py": "e93fb54e6b202617fb77985cccd81def18749ab7c6d41bc6d1052696c3d4f7c1",
+    "services/eligibility.py": "f5191f2948a0f509ef85abde9e53b414e392813ccb2d6a8ba3ce9c28ed687ecd",
+    "services/import_service.py": "706485ba2b5147495ac664b7d6107adce165890a0d7855718864361e9b0f1755",
+    "services/ownership.py": "22b504cb73c6a1aa16b8be09d0706f8e04cd7d37dd2aeab5c37ab0cc5048ea67",
+    "services/reporting.py": "552ca33a73e231d95f53542a4ef9f7f9a3859f41101f17fa92bd19f4e672976c",
+    "tests/test_ui_p1_endpoints.py": "3db844883ea2e6ae79e2d76eb5be7a8454389d8124884b25cdebea90d4c078cb"
+  },
+  "mounted_source_mismatch_count": 0,
+  "tasks": {
+    "l25_import_mapping_and_batch_lead_doctype": {
+      "schema_indexes": {
+        "PRIMARY": {
+          "non_unique": 0,
+          "columns": [
+            "name"
+          ]
+        },
+        "cskh_domain_unique": {
+          "non_unique": 0,
+          "columns": [
+            "import_batch",
+            "lead"
+          ]
+        },
+        "modified": {
+          "non_unique": 1,
+          "columns": [
+            "modified"
+          ]
+        },
+        "cskh_lookup_0": {
+          "non_unique": 1,
+          "columns": [
+            "lead",
+            "import_batch"
+          ]
+        },
+        "cskh_lookup_1": {
+          "non_unique": 1,
+          "columns": [
+            "import_batch",
+            "outcome"
+          ]
+        }
+      },
+      "patch_logged_in_db": true,
+      "unique_constraint_db_duplicate_rejected": true,
+      "unique_constraint_exception_type": "ValidationError",
+      "mapping_conflict_same_idempotency_key": {
+        "http": 409,
+        "p1_code": "CONFLICT"
+      },
+      "batch_1": {
+        "batch": "jd41qv253n",
+        "status": "COMPLETED",
+        "totals": {
+          "total_rows": 6,
+          "valid_rows": 6,
+          "new_rows": 6,
+          "duplicate_rows": 0,
+          "error_rows": 0
+        },
+        "created_rows": 6,
+        "reused_rows": 0,
+        "link_count": 6,
+        "outcomes": {
+          "CRM-LEAD-2026-02163": "created",
+          "CRM-LEAD-2026-02164": "created",
+          "CRM-LEAD-2026-02165": "created",
+          "CRM-LEAD-2026-02166": "created",
+          "CRM-LEAD-2026-02167": "created",
+          "CRM-LEAD-2026-02168": "created"
+        }
+      },
+      "batch_2": {
+        "batch": "je47lb3bme",
+        "status": "COMPLETED",
+        "totals": {
+          "total_rows": 5,
+          "valid_rows": 3,
+          "new_rows": 3,
+          "duplicate_rows": 2,
+          "error_rows": 0
+        },
+        "created_rows": 3,
+        "reused_rows": 2,
+        "link_count": 5,
+        "outcomes": {
+          "CRM-LEAD-2026-02163": "reused",
+          "CRM-LEAD-2026-02168": "reused",
+          "CRM-LEAD-2026-02169": "created",
+          "CRM-LEAD-2026-02170": "created",
+          "CRM-LEAD-2026-02171": "created"
+        }
+      },
+      "canonical_leads_verification": {
+        "p1": {
+          "name": "CRM-LEAD-2026-02163",
+          "first_name": "Nguyễn Văn A1",
+          "lead_name": "Nguyễn Văn A1",
+          "source": "Facebook",
+          "cskh_is_placeholder_name": 0
+        },
+        "p2": {
+          "name": "CRM-LEAD-2026-02164",
+          "first_name": "Trần Thị A2",
+          "lead_name": "Trần Thị A2",
+          "source": "Zalo",
+          "cskh_is_placeholder_name": 0
+        },
+        "p3": {
+          "name": "CRM-LEAD-2026-02165",
+          "first_name": "Lê Văn A3",
+          "lead_name": "Lê Văn A3",
+          "source": "Website",
+          "cskh_is_placeholder_name": 0
+        },
+        "p4": {
+          "name": "CRM-LEAD-2026-02166",
+          "first_name": "'=SUM(1;2)",
+          "lead_name": "'=SUM(1;2)",
+          "source": "'@Tiktok",
+          "cskh_is_placeholder_name": 0
+        },
+        "p5": {
+          "name": "CRM-LEAD-2026-02167",
+          "first_name": "alert(1)Hoàng Bảo",
+          "lead_name": "alert(1)Hoàng Bảo",
+          "source": "Hội thảo",
+          "cskh_is_placeholder_name": 0
+        },
+        "p6": {
+          "name": "CRM-LEAD-2026-02168",
+          "first_name": "Chưa rõ tên",
+          "lead_name": "Chưa rõ tên",
+          "source": "Hotline",
+          "cskh_is_placeholder_name": 1
+        },
+        "p7": {
+          "name": "CRM-LEAD-2026-02169",
+          "first_name": "Đỗ Minh B7",
+          "lead_name": "Đỗ Minh B7",
+          "source": "Landing",
+          "cskh_is_placeholder_name": 0
+        },
+        "p8": {
+          "name": "CRM-LEAD-2026-02170",
+          "first_name": "Vũ Hải B8",
+          "lead_name": "Vũ Hải B8",
+          "source": "Referral",
+          "cskh_is_placeholder_name": 0
+        },
+        "p9": {
+          "name": "CRM-LEAD-2026-02171",
+          "first_name": "Phan Thanh B9",
+          "lead_name": "Phan Thanh B9",
+          "source": "Zalo",
+          "cskh_is_placeholder_name": 0
+        }
+      },
+      "pool_filter_before_work_items": {
+        "admin_batch_1_total": 6,
+        "admin_batch_1_leads": [
+          "CRM-LEAD-2026-02163",
+          "CRM-LEAD-2026-02164",
+          "CRM-LEAD-2026-02165",
+          "CRM-LEAD-2026-02166",
+          "CRM-LEAD-2026-02167",
+          "CRM-LEAD-2026-02168"
+        ],
+        "admin_batch_2_total": 5,
+        "admin_batch_2_leads": [
+          "CRM-LEAD-2026-02163",
+          "CRM-LEAD-2026-02168",
+          "CRM-LEAD-2026-02169",
+          "CRM-LEAD-2026-02170",
+          "CRM-LEAD-2026-02171"
+        ],
+        "leader_a_batch_2_total_before_wi": 0
+      },
+      "http_crud_rbac_import_batch_lead": {
+        "CRM-ADMIN": {
+          "list_http": 200,
+          "list_count": 11,
+          "get_doc_http": 200,
+          "post_create_http": 403,
+          "put_write_http": 403,
+          "delete_http": 403
+        },
+        "BOD": {
+          "list_http": 403,
+          "list_count": 0,
+          "get_doc_http": 403,
+          "post_create_http": 403,
+          "put_write_http": 403,
+          "delete_http": 403
+        },
+        "Leader A": {
+          "list_http": 403,
+          "list_count": 0,
+          "get_doc_http": 403,
+          "post_create_http": 403,
+          "put_write_http": 403,
+          "delete_http": 403
+        },
+        "Staff A": {
+          "list_http": 403,
+          "list_count": 0,
+          "get_doc_http": 403,
+          "post_create_http": 403,
+          "put_write_http": 403,
+          "delete_http": 403
+        },
+        "Guest": {
+          "list_http": 403,
+          "list_count": 0,
+          "get_doc_http": 403,
+          "post_create_http": 403,
+          "put_write_http": 403,
+          "delete_http": 403
+        }
+      },
+      "l25_verdict": "PASS"
+    },
+    "l23_all_three_pool_endpoints": {
+      "fixture_leads": {
+        "a1_revoked_drop_then_team_b": "CRM-LEAD-2026-02163",
+        "a2_revoked_pool_then_team_b": "CRM-LEAD-2026-02164",
+        "a3_closed_then_team_b": "CRM-LEAD-2026-02165",
+        "pos_a_assigned": "CRM-LEAD-2026-02166",
+        "pos_a_queued": "CRM-LEAD-2026-02167",
+        "pos_a_revoked_only": "CRM-LEAD-2026-02168",
+        "pure_team_b": "CRM-LEAD-2026-02169",
+        "private_team_b_campaign": "jgkeba4af4"
+      },
+      "pool_ui_list": {
+        "leader_a_http": 200,
+        "leader_a_total": 3,
+        "leader_a_returned_leads": [
+          "CRM-LEAD-2026-02166",
+          "CRM-LEAD-2026-02167",
+          "CRM-LEAD-2026-02168"
+        ],
+        "leader_a_expected_leads": [
+          "CRM-LEAD-2026-02166",
+          "CRM-LEAD-2026-02167",
+          "CRM-LEAD-2026-02168"
+        ],
+        "leaked_team_b_leads": [],
+        "leader_a_search_p1_total": 0,
+        "leader_a_filter_camp_b_total": 0,
+        "leader_a_filter_batch_1_total": 3,
+        "leader_a_raw_mentions_staff_c_or_camp_b": false,
+        "bod_zero_raw_phone": true,
+        "staff_a_http": 403,
+        "verdict": "PASS"
+      },
+      "customers_customer_pool": {
+        "leader_a_http": 200,
+        "leader_a_total": 6,
+        "leader_a_unique_customers": 6,
+        "leader_a_returned_leads": [
+          "CRM-LEAD-2026-02163",
+          "CRM-LEAD-2026-02164",
+          "CRM-LEAD-2026-02165",
+          "CRM-LEAD-2026-02166",
+          "CRM-LEAD-2026-02167",
+          "CRM-LEAD-2026-02168"
+        ],
+        "leaked_team_b_leads": [
+          "CRM-LEAD-2026-02163",
+          "CRM-LEAD-2026-02164",
+          "CRM-LEAD-2026-02165"
+        ],
+        "leaked_team_b_items_redacted": [
+          {
+            "work_item": "jhc10o9n9u",
+            "lead": "CRM-LEAD-2026-02165",
+            "display_name": "Lê Văn A3",
+            "phone": "[REDACTED_PHONE]",
+            "source": "Website",
+            "campaign": "jgkeba4af4",
+            "campaign_title": "Chiến dịch Bí Mật Đội B",
+            "state": "assigned",
+            "owner": "cskh-p1-staff-c@example.test",
+            "created_at": "2026-11-03 12:35:53.271402"
+          },
+          {
+            "work_item": "jhb28dgij2",
+            "lead": "CRM-LEAD-2026-02164",
+            "display_name": "Trần Thị A2",
+            "phone": "[REDACTED_PHONE]",
+            "source": "Zalo",
+            "campaign": "jgkeba4af4",
+            "campaign_title": "Chiến dịch Bí Mật Đội B",
+            "state": "assigned",
+            "owner": "cskh-p1-staff-c@example.test",
+            "created_at": "2026-11-03 12:35:53.186240"
+          },
+          {
+            "work_item": "jh5f5ucgou",
+            "lead": "CRM-LEAD-2026-02163",
+            "display_name": "Nguyễn Văn A1",
+            "phone": "[REDACTED_PHONE]",
+            "source": "Facebook",
+            "campaign": "jgkeba4af4",
+            "campaign_title": "Chiến dịch Bí Mật Đội B",
+            "state": "assigned",
+            "owner": "cskh-p1-staff-c@example.test",
+            "created_at": "2026-11-03 12:35:52.579040"
+          }
+        ],
+        "leaks_raw_phone_of_team_b_customer": true,
+        "leaks_staff_c_owner_and_private_camp_b": true,
+        "leader_a_search_p1_total": 1,
+        "leader_a_source_facebook_total": 1,
+        "leader_a_filter_camp_b_total": 0,
+        "bod_zero_raw_phone": true,
+        "staff_a_http": 403,
+        "verdict": "FAIL"
+      },
+      "customers_pool_list": {
+        "leader_a_http": 200,
+        "leader_a_total": 2,
+        "leader_a_items_redacted": [
+          {
+            "work_item": "jgbvvdoajm",
+            "lead": "CRM-LEAD-2026-02167",
+            "display_name": "alert(1)Hoàng Bảo",
+            "phone": "[REDACTED_PHONE]",
+            "source": "Hội thảo",
+            "campaign": "jfaqq2k1bp",
+            "campaign_title": "jfaqq2k1bp",
+            "state": "queued",
+            "owner": "",
+            "created_at": "2026-11-03 12:35:49.941346"
+          },
+          {
+            "work_item": "jg99lsghmf",
+            "lead": "CRM-LEAD-2026-02164",
+            "display_name": "Trần Thị A2",
+            "phone": "[REDACTED_PHONE]",
+            "source": "Zalo",
+            "campaign": "jfaqq2k1bp",
+            "campaign_title": "jgkeba4af4",
+            "state": "assigned",
+            "owner": "cskh-p1-staff-c@example.test",
+            "created_at": "2026-11-03 12:35:53.186240"
+          }
+        ],
+        "leaked_team_b_items_redacted": [
+          {
+            "work_item": "jg99lsghmf",
+            "lead": "CRM-LEAD-2026-02164",
+            "display_name": "Trần Thị A2",
+            "phone": "[REDACTED_PHONE]",
+            "source": "Zalo",
+            "campaign": "jfaqq2k1bp",
+            "campaign_title": "jgkeba4af4",
+            "state": "assigned",
+            "owner": "cskh-p1-staff-c@example.test",
+            "created_at": "2026-11-03 12:35:53.186240"
+          }
+        ],
+        "leaks_raw_phone_and_staff_c_via_unscoped_pool_state": true,
+        "bod_zero_raw_phone": true,
+        "staff_a_http": 403,
+        "verdict": "FAIL"
+      }
+    },
+    "l24_run_history_polling_and_rest_resource": {
+      "shared_campaign": "jho78vhbfi",
+      "run_shared": "jhr6n5891t",
+      "admin_full_item": {
+        "run_id": "jhr6n5891t",
+        "campaign": "jho78vhbfi",
+        "campaign_title": "Chiến dịch Chung L24",
+        "campaign_code": "T1C-SHARED-L24",
+        "status": "completed",
+        "rule_version": 1,
+        "idempotency_key": "t1c-a909-ex-sh",
+        "selection_fingerprint": "c704e1bba1a3b54808bfc2831a8489658d006840d70cc618c2735409140b0eca",
+        "progress": 3,
+        "total": 3,
+        "created": 3,
+        "errors": 0,
+        "assigned": {
+          "cskh-p1-staff-a@example.test": 2,
+          "cskh-p1-staff-c@example.test": 1
+        },
+        "skipped": [],
+        "preview": {
+          "eligible_count": 3,
+          "excluded_count": 1,
+          "targets": [
+            {
+              "user": "cskh-p1-staff-a@example.test",
+              "weight": 50,
+              "planned": 2
+            },
+            {
+              "user": "cskh-p1-staff-c@example.test",
+              "weight": 50,
+              "planned": 1
+            }
+          ],
+          "simulated": {
+            "cskh-p1-staff-a@example.test": 2,
+            "cskh-p1-staff-c@example.test": 1
+          },
+          "excluded_assignees": []
+        },
+        "created_at": "2026-11-03 12:35:54.716706",
+        "started_at": "2026-11-03 12:35:58.257380",
+        "finished_at": "2026-11-03 12:36:00.185486",
+        "error": null
+      },
+      "leader_a_while_queued_item": {
+        "run_id": "jhr6n5891t",
+        "campaign": "jho78vhbfi",
+        "campaign_title": "Chiến dịch Chung L24",
+        "campaign_code": "T1C-SHARED-L24",
+        "status": "queued",
+        "rule_version": 1,
+        "idempotency_key": "t1c-a909-ex-sh",
+        "selection_fingerprint": "c704e1bba1a3b54808bfc2831a8489658d006840d70cc618c2735409140b0eca",
+        "progress": 0,
+        "total": 2,
+        "created": 0,
+        "errors": 0,
+        "assigned": {},
+        "skipped": [],
+        "preview": {
+          "eligible_count": 2,
+          "excluded_count": 0,
+          "targets": [
+            {
+              "user": "cskh-p1-staff-a@example.test",
+              "weight": 50,
+              "planned": 2
+            }
+          ],
+          "simulated": {
+            "cskh-p1-staff-a@example.test": 2
+          },
+          "excluded_assignees": []
+        },
+        "created_at": "2026-11-03 12:35:54.716706",
+        "started_at": null,
+        "finished_at": null,
+        "error": null
+      },
+      "leader_a_after_completion_list_item": {
+        "run_id": "jhr6n5891t",
+        "campaign": "jho78vhbfi",
+        "campaign_title": "Chiến dịch Chung L24",
+        "campaign_code": "T1C-SHARED-L24",
+        "status": "completed",
+        "rule_version": 1,
+        "idempotency_key": "t1c-a909-ex-sh",
+        "selection_fingerprint": "c704e1bba1a3b54808bfc2831a8489658d006840d70cc618c2735409140b0eca",
+        "progress": 2,
+        "total": 2,
+        "created": 2,
+        "errors": 0,
+        "assigned": {
+          "cskh-p1-staff-a@example.test": 2
+        },
+        "skipped": [],
+        "preview": {
+          "eligible_count": 2,
+          "excluded_count": 0,
+          "targets": [
+            {
+              "user": "cskh-p1-staff-a@example.test",
+              "weight": 50,
+              "planned": 2
+            }
+          ],
+          "simulated": {
+            "cskh-p1-staff-a@example.test": 2
+          },
+          "excluded_assignees": []
+        },
+        "created_at": "2026-11-03 12:35:54.716706",
+        "started_at": "2026-11-03 12:35:58.257380",
+        "finished_at": "2026-11-03 12:36:00.185486",
+        "error": null
+      },
+      "leader_a_after_completion_by_run_id_item": {
+        "run_id": "jhr6n5891t",
+        "campaign": "jho78vhbfi",
+        "campaign_title": "Chiến dịch Chung L24",
+        "campaign_code": "T1C-SHARED-L24",
+        "status": "completed",
+        "rule_version": 1,
+        "idempotency_key": "t1c-a909-ex-sh",
+        "selection_fingerprint": "c704e1bba1a3b54808bfc2831a8489658d006840d70cc618c2735409140b0eca",
+        "progress": 2,
+        "total": 2,
+        "created": 2,
+        "errors": 0,
+        "assigned": {
+          "cskh-p1-staff-a@example.test": 2
+        },
+        "skipped": [],
+        "preview": {
+          "eligible_count": 2,
+          "excluded_count": 0,
+          "targets": [
+            {
+              "user": "cskh-p1-staff-a@example.test",
+              "weight": 50,
+              "planned": 2
+            }
+          ],
+          "simulated": {
+            "cskh-p1-staff-a@example.test": 2
+          },
+          "excluded_assignees": []
+        },
+        "created_at": "2026-11-03 12:35:54.716706",
+        "started_at": "2026-11-03 12:35:58.257380",
+        "finished_at": "2026-11-03 12:36:00.185486",
+        "error": null
+      },
+      "leader_b_after_completion_by_run_id_item": {
+        "run_id": "jhr6n5891t",
+        "campaign": "jho78vhbfi",
+        "campaign_title": "Chiến dịch Chung L24",
+        "campaign_code": "T1C-SHARED-L24",
+        "status": "completed",
+        "rule_version": 1,
+        "idempotency_key": "t1c-a909-ex-sh",
+        "selection_fingerprint": "c704e1bba1a3b54808bfc2831a8489658d006840d70cc618c2735409140b0eca",
+        "progress": 1,
+        "total": 1,
+        "created": 1,
+        "errors": 0,
+        "assigned": {
+          "cskh-p1-staff-c@example.test": 1
+        },
+        "skipped": [],
+        "preview": {
+          "eligible_count": 1,
+          "excluded_count": 0,
+          "targets": [
+            {
+              "user": "cskh-p1-staff-c@example.test",
+              "weight": 50,
+              "planned": 1
+            }
+          ],
+          "simulated": {
+            "cskh-p1-staff-c@example.test": 1
+          },
+          "excluded_assignees": []
+        },
+        "created_at": "2026-11-03 12:35:54.716706",
+        "started_at": "2026-11-03 12:35:58.257380",
+        "finished_at": "2026-11-03 12:36:00.185486",
+        "error": null
+      },
+      "leader_a_distribution_get_run": {
+        "queued_http": 403,
+        "done_http": 403,
+        "p1_code": "FORBIDDEN"
+      },
+      "bod_polling_zero_pii": {
+        "get_run_queued_http": 200,
+        "get_run_done_http": 200,
+        "get_run_zero_raw_phone": true,
+        "run_history_zero_raw_phone": true
+      },
+      "whitelisted_run_history_and_get_run_verdict": "PASS",
+      "frappe_rest_resource_bypass_probe_as_leader_a": {
+        "get_private_team_b_run_http": 200,
+        "private_team_b_run_exposes_staff_c_and_leads": true,
+        "get_shared_run_doc_http": 200,
+        "shared_run_doc_exposes_unfiltered_actual_and_preview_json": true,
+        "list_shared_run_raw_json_fields_http": 200,
+        "list_shared_run_exposes_staff_c_in_raw_json": true,
+        "get_private_team_b_campaign_doc_http": 200,
+        "private_team_b_campaign_title_exposed": "Chiến dịch Bí Mật Đội B",
+        "get_private_team_b_rule_doc_http": 200,
+        "get_shared_camp_team_b_rule_doc_http": 200,
+        "rest_resource_has_cross_team_leak": true
+      }
+    },
+    "l26_validation_and_assignees": {
+      "pagination_and_limit_probes": {
+        "pool_ui.list_page_abc": {
+          "actor": "CRM-ADMIN",
+          "http": 400,
+          "p1_code": "INVALID_REQUEST",
+          "exc_type": "INVALID_REQUEST",
+          "pass_400": true
+        },
+        "pool_ui.list_page_0": {
+          "actor": "CRM-ADMIN",
+          "http": 400,
+          "p1_code": "INVALID_REQUEST",
+          "exc_type": "INVALID_REQUEST",
+          "pass_400": true
+        },
+        "pool_ui.list_page_size_101": {
+          "actor": "CRM-ADMIN",
+          "http": 400,
+          "p1_code": "INVALID_REQUEST",
+          "exc_type": "INVALID_REQUEST",
+          "pass_400": true
+        },
+        "ownership_ui.assigned_list_page_abc": {
+          "actor": "CRM-ADMIN",
+          "http": 400,
+          "p1_code": "INVALID_REQUEST",
+          "exc_type": "INVALID_REQUEST",
+          "pass_400": true
+        },
+        "ownership_ui.assigned_list_page_size_xyz": {
+          "actor": "CRM-ADMIN",
+          "http": 400,
+          "p1_code": "INVALID_REQUEST",
+          "exc_type": "INVALID_REQUEST",
+          "pass_400": true
+        },
+        "import_history.history_page_abc": {
+          "actor": "CRM-ADMIN",
+          "http": 400,
+          "p1_code": "INVALID_REQUEST",
+          "exc_type": "INVALID_REQUEST",
+          "pass_400": true
+        },
+        "run_history.runs_page_abc": {
+          "actor": "CRM-ADMIN",
+          "http": 400,
+          "p1_code": "INVALID_REQUEST",
+          "exc_type": "INVALID_REQUEST",
+          "pass_400": true
+        },
+        "customers.my_list_page_abc": {
+          "actor": "Staff A",
+          "http": 500,
+          "p1_code": null,
+          "exc_type": "ValueError",
+          "pass_400": false
+        },
+        "customers.my_list_page_size_xyz": {
+          "actor": "Staff A",
+          "http": 500,
+          "p1_code": null,
+          "exc_type": "ValueError",
+          "pass_400": false
+        },
+        "customers.pool_list_page_abc": {
+          "actor": "CRM-ADMIN",
+          "http": 500,
+          "p1_code": null,
+          "exc_type": "ValueError",
+          "pass_400": false
+        },
+        "customers.pool_list_page_size_xyz": {
+          "actor": "CRM-ADMIN",
+          "http": 500,
+          "p1_code": null,
+          "exc_type": "ValueError",
+          "pass_400": false
+        },
+        "customers.customer_pool_page_abc": {
+          "actor": "CRM-ADMIN",
+          "http": 500,
+          "p1_code": null,
+          "exc_type": "ValueError",
+          "pass_400": false
+        },
+        "customers.customer_pool_page_size_xyz": {
+          "actor": "CRM-ADMIN",
+          "http": 500,
+          "p1_code": null,
+          "exc_type": "ValueError",
+          "pass_400": false
+        },
+        "ownership.history_limit_abc": {
+          "actor": "CRM-ADMIN",
+          "http": 500,
+          "p1_code": null,
+          "exc_type": "ValueError",
+          "pass_400": false
+        }
+      },
+      "ui_4_endpoints_all_400": true,
+      "backend_4_endpoints_returning_500": [
+        "customers.my_list_page_abc",
+        "customers.my_list_page_size_xyz",
+        "customers.pool_list_page_abc",
+        "customers.pool_list_page_size_xyz",
+        "customers.customer_pool_page_abc",
+        "customers.customer_pool_page_size_xyz",
+        "ownership.history_limit_abc"
+      ],
+      "ownership_ui_assignees": {
+        "camp_a_http": 200,
+        "camp_a_eligible_users": [
+          "cskh-p1-staff-a@example.test",
+          "cskh-p1-staff-b@example.test",
+          "cskh-p1-leader-a@example.test"
+        ],
+        "camp_a_excludes_full_capacity_staff_a": false,
+        "camp_a_excludes_team_b_staff_c_and_outside": true,
+        "camp_b_http": 200,
+        "camp_b_eligible_users": [
+          "cskh-p1-staff-c@example.test",
+          "cskh-p1-leader-b@example.test"
+        ],
+        "unknown_campaign_http": 404,
+        "unknown_campaign_p1_code": "NOT_FOUND",
+        "empty_campaign_http": 200,
+        "empty_campaign_p1_code": null,
+        "leader_a_forbidden_http": 403,
+        "assignees_verdict": "FAIL"
+      },
+      "l26_overall_verdict": "FAIL"
+    }
+  }
+}

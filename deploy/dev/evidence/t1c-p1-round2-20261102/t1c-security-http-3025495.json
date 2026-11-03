@@ -1,0 +1,610 @@
+[
+ {
+  "case": "SEC-02: the setup upload of the import file succeeds",
+  "actor": "system(setup)",
+  "expected": 200,
+  "actual": 200,
+  "ok": true,
+  "detail": "{\"message\":{\"name\":\"d56beb624b\",\"owner\":\"Administrator\",\"creation\":\"2026-11-02 23:58:37.949098\",\"modified\":\"2026-11-02 2"
+ },
+ {
+  "case": "SEC-02: the upload returns a private file_url",
+  "actor": "admin",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "url=/private/files/t1c-sec-import.csv"
+ },
+ {
+  "case": "SEC-02: staff_a cannot download the raw import file",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "<!doctype html>\n<html lang=en>\n<title>403 Forbidden</title>\n<h1>Forbidden</h1>\n<p>You don&#39;t have"
+ },
+ {
+  "case": "SEC-02: bod cannot download the raw import file",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "<!doctype html>\n<html lang=en>\n<title>403 Forbidden</title>\n<h1>Forbidden</h1>\n<p>You don&#39;t have"
+ },
+ {
+  "case": "SEC-02: leader_b cannot download the raw import file",
+  "actor": "leader_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "<!doctype html>\n<html lang=en>\n<title>403 Forbidden</title>\n<h1>Forbidden</h1>\n<p>You don&#39;t have"
+ },
+ {
+  "case": "SEC-02: the guest cannot download the raw import file",
+  "actor": "guest",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "<!doctype html>\n<html lang=en>\n<title>403 Forbidden</title>\n<h1>Forbidden</h1>\n<p>Bạn không có quyền"
+ },
+ {
+  "case": "SEC-01: staff B has work items of its own",
+  "actor": "staff_b",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "n=4"
+ },
+ {
+  "case": "SEC-01: staff A cannot read staff B's work item via generic API",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"frappe.exceptions.PermissionError\",\"exc_type\":\"PermissionError\",\"exc\":\"[\\\"Traceback (m"
+ },
+ {
+  "case": "SEC-01: staff A cannot read staff B's assignment history",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: You may not read this assignment history.\",\"exc_ty"
+ },
+ {
+  "case": "SEC-01: staff B reads its own assignment history (control)",
+  "actor": "staff_b",
+  "expected": 200,
+  "actual": 200,
+  "ok": true,
+  "detail": "{\"message\":{\"work_item\":\"hdvgf8oiek\",\"items\":[{\"name\":\"hdv48mlnmv\",\"action\":\"assign\",\"from_user\":nul"
+ },
+ {
+  "case": "SEC-05: the BOD cannot save a campaign",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns requires the CRM Admin busi"
+ },
+ {
+  "case": "SEC-05: the BOD cannot set_value a campaign",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exc_type\":\"PermissionError\",\"_server_messages\":\"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"User <strong>t1c-r3-bod@e"
+ },
+ {
+  "case": "SEC-03: staff_a is refused distribution.execute",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Distributing the customers req"
+ },
+ {
+  "case": "SEC-03: staff_a is refused ownership.reassign",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: staff_a is refused ownership.revoke",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: staff_a is refused ownership.assign",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: staff_a is refused imports.create_preview",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: staff_a is refused imports.confirm",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: staff_a is refused campaigns.save",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: staff_a is refused campaigns.save_rule",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: staff_b is refused distribution.execute",
+  "actor": "staff_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Distributing the customers req"
+ },
+ {
+  "case": "SEC-03: staff_b is refused ownership.reassign",
+  "actor": "staff_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: staff_b is refused ownership.revoke",
+  "actor": "staff_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: staff_b is refused ownership.assign",
+  "actor": "staff_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: staff_b is refused imports.create_preview",
+  "actor": "staff_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: staff_b is refused imports.confirm",
+  "actor": "staff_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: staff_b is refused campaigns.save",
+  "actor": "staff_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: staff_b is refused campaigns.save_rule",
+  "actor": "staff_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: staff_c is refused distribution.execute",
+  "actor": "staff_c",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Distributing the customers req"
+ },
+ {
+  "case": "SEC-03: staff_c is refused ownership.reassign",
+  "actor": "staff_c",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: staff_c is refused ownership.revoke",
+  "actor": "staff_c",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: staff_c is refused ownership.assign",
+  "actor": "staff_c",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: staff_c is refused imports.create_preview",
+  "actor": "staff_c",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: staff_c is refused imports.confirm",
+  "actor": "staff_c",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: staff_c is refused campaigns.save",
+  "actor": "staff_c",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: staff_c is refused campaigns.save_rule",
+  "actor": "staff_c",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: leader_a is refused distribution.execute",
+  "actor": "leader_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Distributing the customers req"
+ },
+ {
+  "case": "SEC-03: leader_a is refused ownership.reassign",
+  "actor": "leader_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: leader_a is refused ownership.revoke",
+  "actor": "leader_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: leader_a is refused ownership.assign",
+  "actor": "leader_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: leader_a is refused imports.create_preview",
+  "actor": "leader_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: leader_a is refused imports.confirm",
+  "actor": "leader_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: leader_a is refused campaigns.save",
+  "actor": "leader_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: leader_a is refused campaigns.save_rule",
+  "actor": "leader_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: leader_b is refused distribution.execute",
+  "actor": "leader_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Distributing the customers req"
+ },
+ {
+  "case": "SEC-03: leader_b is refused ownership.reassign",
+  "actor": "leader_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: leader_b is refused ownership.revoke",
+  "actor": "leader_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: leader_b is refused ownership.assign",
+  "actor": "leader_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: leader_b is refused imports.create_preview",
+  "actor": "leader_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: leader_b is refused imports.confirm",
+  "actor": "leader_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: leader_b is refused campaigns.save",
+  "actor": "leader_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: leader_b is refused campaigns.save_rule",
+  "actor": "leader_b",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: bod is refused distribution.execute",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Distributing the customers req"
+ },
+ {
+  "case": "SEC-03: bod is refused ownership.reassign",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: bod is refused ownership.revoke",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: bod is refused ownership.assign",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Transferring a customer requir"
+ },
+ {
+  "case": "SEC-03: bod is refused imports.create_preview",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: bod is refused imports.confirm",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Importing the customer pool re"
+ },
+ {
+  "case": "SEC-03: bod is refused campaigns.save",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-03: bod is refused campaigns.save_rule",
+  "actor": "bod",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: Managing the campaigns require"
+ },
+ {
+  "case": "SEC-07: staff_a my_list ignores user",
+  "actor": "staff_a",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "owners=[]"
+ },
+ {
+  "case": "SEC-07: staff_a my_list ignores team",
+  "actor": "staff_a",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "owners=[]"
+ },
+ {
+  "case": "SEC-07: staff_a my_list ignores assigned_to",
+  "actor": "staff_a",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "owners=[]"
+ },
+ {
+  "case": "SEC-07: staff_a my_list ignores campaign",
+  "actor": "staff_a",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "owners=[]"
+ },
+ {
+  "case": "SEC-07: staff_a cannot read the dashboard at all",
+  "actor": "staff_a",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: You may not read the distribut"
+ },
+ {
+  "case": "SEC-07: staff_c my_list ignores user",
+  "actor": "staff_c",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "owners=[]"
+ },
+ {
+  "case": "SEC-07: staff_c my_list ignores team",
+  "actor": "staff_c",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "owners=[]"
+ },
+ {
+  "case": "SEC-07: staff_c my_list ignores assigned_to",
+  "actor": "staff_c",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "owners=[]"
+ },
+ {
+  "case": "SEC-07: staff_c my_list ignores campaign",
+  "actor": "staff_c",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "owners=[]"
+ },
+ {
+  "case": "SEC-07: staff_c cannot read the dashboard at all",
+  "actor": "staff_c",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Forbidden: You may not read the distribut"
+ },
+ {
+  "case": "SEC-09: staff_a cannot list CSKH Identity Index",
+  "actor": "staff_a",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "n=0"
+ },
+ {
+  "case": "SEC-09: staff_a cannot list CSKH Active Claim",
+  "actor": "staff_a",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "n=0"
+ },
+ {
+  "case": "SEC-09: leader_a cannot list CSKH Identity Index",
+  "actor": "leader_a",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "n=0"
+ },
+ {
+  "case": "SEC-09: leader_a cannot list CSKH Active Claim",
+  "actor": "leader_a",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "n=0"
+ },
+ {
+  "case": "SEC-09: bod cannot list CSKH Identity Index",
+  "actor": "bod",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "n=0"
+ },
+ {
+  "case": "SEC-09: bod cannot list CSKH Active Claim",
+  "actor": "bod",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "n=0"
+ }
+]

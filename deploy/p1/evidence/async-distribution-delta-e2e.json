@@ -1,0 +1,86 @@
+{
+  "generated_at": "2026-11-03T05:20:56.208Z",
+  "site": "http://p1.localhost:8120",
+  "integrated_git_sha": "63510483a0aa1ed4238b630ba384c5a362659450",
+  "baseline_evidence_sha_preserved": "0d3f2bcbbf9715a4c0c783903ce750de8646583d",
+  "provenance_erratum": {
+    "corrected_field": "baseline_evidence_sha_preserved",
+    "previous_erroneous_sha": "0d3f2bc9da3e3e497a999baeb9a4dd19129224fb",
+    "actual_baseline_commit_sha": "0d3f2bcbbf9715a4c0c783903ce750de8646583d",
+    "note": "Corrected full 40-char SHA for baseline commit 0d3f2bc; generated_at, integrated_git_sha and all measured checks[] results are preserved unchanged."
+  },
+  "checks": [
+    {
+      "id": "ASYNC-01-enqueue-polling-and-reload-recovery",
+      "passed": true,
+      "run_id": "lnpke19njc",
+      "enqueue_status": "queued",
+      "premature_success_on_enqueue": false,
+      "recovered_after_reload": true,
+      "final_progress": "4 / 4 (100%)",
+      "staff_a_assigned": 2,
+      "staff_b_assigned": 2
+    },
+    {
+      "id": "ASYNC-02-completed-with-errors-rendering",
+      "passed": true,
+      "campaign": "lqivu25eid",
+      "has_warning_banner": true,
+      "has_vietnamese_skip_reason": true,
+      "has_retry_button": true
+    },
+    {
+      "id": "ASYNC-03-failed-background-run-rendering",
+      "passed": true,
+      "campaign": "lsf6oc6st9",
+      "error_banner_code": "RULE_CHANGED",
+      "vietnamese_detail_verified": true
+    },
+    {
+      "id": "BACKEND-DELTA-L20-L21-L22",
+      "passed": true,
+      "l20_over_200_error_rows": {
+        "expectedErrors": 13,
+        "status": "COMPLETED_WITH_ERRORS",
+        "totals": {
+          "total_rows": 215,
+          "valid_rows": 202,
+          "new_rows": 202,
+          "duplicate_rows": 0,
+          "error_rows": 13,
+          "created_rows": 202,
+          "reused_rows": 0,
+          "skipped_rows": 13
+        },
+        "downloadStatus": 200,
+        "csvDataRows": 13,
+        "hasRowOver200": true
+      },
+      "l21_form_revoke_false_status": "revoked",
+      "l22_leader_a_cards": {
+        "unique_customers": 4,
+        "eligible_unassigned": 0,
+        "assigned_work_items": 3,
+        "unassigned_work_items": 0,
+        "revoked_work_items": 1,
+        "closed_work_items": 0,
+        "active_claims": 3,
+        "active_campaigns": 2,
+        "failed_batches": 0,
+        "failed_runs": 1
+      },
+      "l22_leader_b_cards": {
+        "unique_customers": 3,
+        "eligible_unassigned": 1,
+        "assigned_work_items": 2,
+        "unassigned_work_items": 1,
+        "revoked_work_items": 0,
+        "closed_work_items": 0,
+        "active_claims": 2,
+        "active_campaigns": 2,
+        "failed_batches": 0,
+        "failed_runs": 0
+      }
+    }
+  ]
+}

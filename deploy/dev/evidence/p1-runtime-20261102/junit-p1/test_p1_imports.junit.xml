@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p1_imports.TestImportPreview-20261103160754" tests="8" file="crm_cskh/tests/test_p1_imports.py" time="1.567" timestamp="2026-11-03T16:07:57" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportPreview" name="test_a_public_file_is_rejected" time="0.377" timestamp="2026-11-03T16:07:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="86">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportPreview" name="test_an_unsupported_format_is_rejected" time="0.046" timestamp="2026-11-03T16:07:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="91">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportPreview" name="test_an_xlsx_file_is_parsed" time="0.343" timestamp="2026-11-03T16:07:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="158">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportPreview" name="test_the_preview_classifies_every_row" time="0.463" timestamp="2026-11-03T16:07:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="96">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportPreview" name="test_the_preview_never_creates_a_lead" time="0.079" timestamp="2026-11-03T16:07:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="126">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportPreview" name="test_the_row_limit_is_enforced" time="0.070" timestamp="2026-11-03T16:07:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="149">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportPreview" name="test_the_same_file_and_key_returns_the_same_batch" time="0.090" timestamp="2026-11-03T16:07:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="135">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportPreview" name="test_the_same_file_with_a_different_key_creates_a_second_batch" time="0.099" timestamp="2026-11-03T16:07:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="143">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_imports.TestImportSanitizer-20261103160754" tests="3" file="crm_cskh/tests/test_p1_imports.py" time="0.021" timestamp="2026-11-03T16:07:57" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportSanitizer" name="test_a_formula_is_neutralized" time="0.008" timestamp="2026-11-03T16:07:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="54"/>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportSanitizer" name="test_a_plain_value_is_untouched" time="0.006" timestamp="2026-11-03T16:07:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="63"/>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportSanitizer" name="test_html_is_removed" time="0.006" timestamp="2026-11-03T16:07:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="60"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_imports.TestImportWorker-20261103160754" tests="6" file="crm_cskh/tests/test_p1_imports.py" time="19.518" timestamp="2026-11-03T16:08:17" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportWorker" name="test_a_confirmed_batch_can_be_retried" time="0.364" timestamp="2026-11-03T16:07:58" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="270">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportWorker" name="test_an_existing_lead_is_reused_and_not_modified" time="0.807" timestamp="2026-11-03T16:07:58" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="241">
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportWorker" name="test_over_200_rows_imports_every_valid_row_and_records_every_error" time="17.494" timestamp="2026-11-03T16:08:16" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="284">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportWorker" name="test_the_failed_rows_are_written_into_a_private_artifact" time="0.284" timestamp="2026-11-03T16:08:16" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="257">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportWorker" name="test_the_worker_creates_the_canonical_leads" time="0.270" timestamp="2026-11-03T16:08:16" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="203">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_imports.TestImportWorker" name="test_the_worker_is_idempotent" time="0.299" timestamp="2026-11-03T16:08:17" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_imports.py" line="225">
+			<system-out><![CDATA[Message: CRM Lead Administrator not found
+]]></system-out>
+		</testcase>
+	</testsuite>
+</testsuites>

@@ -1,0 +1,9 @@
+crm_cskh.tests.test_p1_identity exit=0
+crm_cskh.tests.test_p1_ownership exit=0
+crm_cskh.tests.test_p1_distribution exit=0
+crm_cskh.tests.test_p1_imports exit=0
+crm_cskh.tests.test_p1_api_permissions exit=0
+crm_cskh.tests.test_p1_concurrency exit=0
+crm_cskh.tests.test_p1_regressions exit=0
+crm_cskh.tests.test_p1_chaos exit=0
+p1 per-method gate exit=0

@@ -7,11 +7,26 @@ app_email = "noreply@example.com"
 # Chưa kết luận pháp lý về nghĩa vụ nguồn mở của bản triển khai; xem P0 §4.3 (B1).
 app_license = "agpl-3.0"
 
+# The P1 DocTypes. Their role permissions are declared in the DocType JSON and
+# their row-level scope is enforced by `crm_cskh.p1_permissions` (ADR-P1-07).
+P1_DOCTYPES = (
+	"CSKH Campaign",
+	"CSKH Assignment Rule",
+	"CSKH Work Item",
+	"CSKH Assignment History",
+	"CSKH Import Batch",
+	"CSKH Import Batch Lead",
+	"CSKH Distribution Run",
+	"CSKH Identity Index",
+	"CSKH Active Claim",
+)
+
 # Fixtures
 # ------------------
 # Metadata do crm_cskh quản lý qua file (P0-B §B2).
 fixtures = [
 	{"doctype": "Custom Field", "filters": [["name", "=", "CRM Lead-cskh_poc_marker"]]},
+	{"doctype": "Custom Field", "filters": [["name", "=", "CRM Lead-cskh_is_placeholder_name"]]},
 	{"doctype": "CRM Form Script", "filters": [["name", "=", "CSKH - Open CSKH Page"]]},
 ]
 
@@ -179,6 +194,9 @@ override_whitelisted_methods = {
 	"frappe.desk.reportview.export_query": "crm_cskh.api.guarded_reporting.reportview_export_query",
 	"frappe.desk.query_report.run": "crm_cskh.api.guarded_reporting.query_report_run",
 	"frappe.desk.query_report.export_query": "crm_cskh.api.guarded_reporting.query_report_export_query",
+	"frappe.desk.search.search_link": "crm_cskh.api.guarded_crm.search_link",
+	"frappe.desk.search.search_widget": "crm_cskh.api.guarded_crm.search_widget",
+	"frappe.client.validate_link": "crm_cskh.api.guarded_crm.validate_link",
 	"crm.api.dashboard.get_dashboard": "crm_cskh.api.guarded_reporting.crm_manager_dashboard",
 	"crm.api.dashboard.get_chart": "crm_cskh.api.guarded_reporting.crm_manager_chart",
 	"crm.integrations.api.get_contact_by_phone_number": "crm_cskh.api.guarded_crm.get_contact_by_phone_number",
@@ -267,9 +285,9 @@ override_whitelisted_methods = {
 
 # Request Events
 # ----------------
-before_request = ["crm_cskh.i18n.set_guest_language"]
+before_request = ["crm_cskh.i18n.set_guest_language", "crm_cskh.p1_errors.clear_p1_error_context"]
 update_website_context = ["crm_cskh.i18n.update_website_context"]
-after_request = ["crm_cskh.errors.normalize_error_response"]
+after_request = ["crm_cskh.errors.normalize_error_response", "crm_cskh.p1_errors.normalize_p1_error_response"]
 
 # Job Events
 # ----------
@@ -303,9 +321,7 @@ after_request = ["crm_cskh.errors.normalize_error_response"]
 # Authentication and authorization
 # --------------------------------
 
-# auth_hooks = [
-# 	"crm_cskh.auth.validate"
-# ]
+auth_hooks = ["crm_cskh.p1_permissions.enforce_p1_filter_field_permissions"]
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True
@@ -318,3 +334,34 @@ after_request = ["crm_cskh.errors.normalize_error_response"]
 # ------------
 # List of apps whose translatable strings should be excluded from this app's translations.
 # ignore_translatable_strings_from = []
+
+
+# The P1 DocTypes get their row-level scope from `crm_cskh.p1_permissions`
+# (ADR-P1-07). The role permissions themselves live in the DocType JSON.
+permission_query_conditions.update(
+	{
+		"CSKH Campaign": "crm_cskh.p1_permissions.campaign_query_conditions",
+		"CSKH Assignment Rule": "crm_cskh.p1_permissions.rule_query_conditions",
+		"CSKH Work Item": "crm_cskh.p1_permissions.work_item_query_conditions",
+		"CSKH Assignment History": "crm_cskh.p1_permissions.assignment_history_query_conditions",
+		"CSKH Import Batch": "crm_cskh.p1_permissions.import_batch_query_conditions",
+		"CSKH Import Batch Lead": "crm_cskh.p1_permissions.import_batch_query_conditions",
+		"CSKH Distribution Run": "crm_cskh.p1_permissions.distribution_run_query_conditions",
+		"CSKH Identity Index": "crm_cskh.p1_permissions.system_only_query_conditions",
+		"CSKH Active Claim": "crm_cskh.p1_permissions.system_only_query_conditions",
+	}
+)
+
+has_permission.update(
+	{
+		"CSKH Campaign": "crm_cskh.p1_permissions.campaign_has_permission",
+		"CSKH Assignment Rule": "crm_cskh.p1_permissions.rule_has_permission",
+		"CSKH Work Item": "crm_cskh.p1_permissions.work_item_has_permission",
+		"CSKH Assignment History": "crm_cskh.p1_permissions.assignment_history_has_permission",
+		"CSKH Import Batch": "crm_cskh.p1_permissions.import_batch_has_permission",
+		"CSKH Import Batch Lead": "crm_cskh.p1_permissions.import_batch_lead_has_permission",
+		"CSKH Distribution Run": "crm_cskh.p1_permissions.distribution_run_has_permission",
+		"CSKH Identity Index": "crm_cskh.p1_permissions.system_only_has_permission",
+		"CSKH Active Claim": "crm_cskh.p1_permissions.system_only_has_permission",
+	}
+)

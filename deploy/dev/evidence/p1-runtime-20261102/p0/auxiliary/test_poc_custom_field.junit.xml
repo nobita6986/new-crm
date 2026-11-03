@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.crm_cskh.tests.test_poc_custom_field.TestPOCCustomField-2[REDACTED_PHONE]09" tests="3" file="crm_cskh/crm_cskh/tests/test_poc_custom_field.py" time="1.027" timestamp="2026-11-03T15:31:10" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.crm_cskh.tests.test_poc_custom_field.TestPOCCustomField" name="test_crm_lead_list_has_cskh_page_action" time="0.042" timestamp="2026-11-03T15:31:09" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_poc_custom_field.py" line="18"/>
+		<testcase classname="crm_cskh.crm_cskh.tests.test_poc_custom_field.TestPOCCustomField" name="test_custom_field_exists_on_crm_lead" time="0.045" timestamp="2026-11-03T15:31:09" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_poc_custom_field.py" line="23">
+			<!--Metadata: Custom Field PoC phải tồn tại trên CRM Lead sau migrate.-->
+		</testcase>
+		<testcase classname="crm_cskh.crm_cskh.tests.test_poc_custom_field.TestPOCCustomField" name="test_custom_field_is_writable_and_readable" time="0.940" timestamp="2026-11-03T15:31:10" file="/src/apps/crm_cskh/crm_cskh/crm_cskh/tests/test_poc_custom_field.py" line="31">
+			<!--Lưu trữ: field PoC đọc/ghi được trên một record giả (không phải dữ liệu thật).
+
+Dùng quyền nâng cao nên KHÔNG chứng minh quyền theo role.
+-->
+		</testcase>
+	</testsuite>
+</testsuites>

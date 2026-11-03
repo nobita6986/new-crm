@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "description": "Canonical inventory of the P1 UI endpoint test methods (`test_ui_p1_*.py`). Enforced in CI via `deploy/dev/seed/ci_junit_gate.py` alongside the backend P1 inventory (`deploy/dev/seed/p1_test_inventory.json`).",
+  "expected_total": 12,
+  "modules": {
+    "crm_cskh.tests.test_ui_p1_endpoints": [
+      "TestUiP1Endpoints.test_ui_endpoints_do_not_accept_scope_widening_parameters",
+      "TestUiP1Endpoints.test_error_file_download_allows_admin_and_denies_other_roles",
+      "TestUiP1Endpoints.test_import_history_and_batch_detail_expose_reconciled_counters_to_admin_only",
+      "TestUiP1Endpoints.test_pool_ui_derives_states_isolates_teams_and_omits_bod_pii",
+      "TestUiP1Endpoints.test_ownership_ui_scopes_team_blocks_widening_and_restricts_assignees",
+      "TestUiP1Endpoints.test_run_history_and_navigation_match_role_capabilities",
+      "TestUiP1Endpoints.test_l23_pool_ui_blocks_revoked_or_closed_history_leak_to_active_other_team",
+      "TestUiP1Endpoints.test_l24_run_history_shared_campaign_scopes_assigned_skipped_preview_counters_and_polling",
+      "TestUiP1Endpoints.test_l26_invalid_pagination_returns_400_and_assignees_applies_campaign_eligibility",
+      "TestUiP1Endpoints.test_upload_import_file_enforces_admin_role_private_flag_extension_and_size",
+      "TestUiP1Endpoints.test_l27_l29_leader_and_bod_ui_flows_under_strict_doctype_and_permlevel_rules",
+      "TestUiP1ImportBatchPoolFilter.test_l25_pool_ui_import_batch_source_and_name_filters_match_persisted_import_links"
+    ]
+  }
+}

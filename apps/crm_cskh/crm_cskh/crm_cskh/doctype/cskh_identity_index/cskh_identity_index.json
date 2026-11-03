@@ -1,0 +1,52 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Identity Index",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "normalized_phone",
+   "fieldtype": "Data",
+   "label": "Normalized Phone",
+   "reqd": 1,
+   "unique": 1,
+   "length": 16
+  },
+  {
+   "fieldname": "canonical_lead",
+   "fieldtype": "Link",
+   "label": "Canonical Lead",
+   "options": "CRM Lead",
+   "reqd": 1,
+   "unique": 1
+  }
+ ],
+ "field_order": [
+  "normalized_phone",
+  "canonical_lead"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "modified": "2026-11-02 00:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}

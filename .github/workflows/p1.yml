@@ -1,0 +1,381 @@
+name: P1 backend verification
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p1-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p1:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      P1_PROJECT: p1-ci-${{ github.run_id }}
+      P1_ENV: p1.env
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CI evidence directory
+        run: mkdir -p "$RUNNER_TEMP/p1-evidence"
+
+      - name: Create isolated DEV configuration
+        shell: bash
+        run: |
+          cp deploy/dev/.env.example "$P1_ENV"
+          sed -i \
+            -e "s/^COMPOSE_PROJECT_NAME=.*/COMPOSE_PROJECT_NAME=$P1_PROJECT/" \
+            -e 's/^SITE_NAME=.*/SITE_NAME=p1-ci.localhost/' \
+            -e "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$(openssl rand -hex 24)/" \
+            -e "s/^DB_ROOT_PASSWORD=.*/DB_ROOT_PASSWORD=$(openssl rand -hex 24)/" \
+            -e 's/^WEB_PORT=.*/WEB_PORT=18100/' \
+            -e 's/^SOCKETIO_PORT=.*/SOCKETIO_PORT=19100/' \
+            "$P1_ENV"
+
+      - name: Start pinned stack
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" up -d
+
+      - name: Bootstrap from empty volumes
+        id: bootstrap
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" exec -T -u root bench chown -R frappe:frappe /workspace
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" exec -T bench bash /src/deploy/dev/bootstrap.sh
+
+      - name: Lint and format Python app
+        id: lint
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py /src/deploy/p1/ui_test_inventory.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py /src/deploy/p1/ui_test_inventory.py'
+
+      # The P1 backend and UI inventories are generated FROM the source, and
+      # P1 Vietnamese translations are audited fail-closed.
+      - name: Verify the P1 test inventories and translations match the source
+        id: inventory
+        run: |
+          python3 deploy/dev/seed/p1_test_inventory.py --check deploy/dev/seed/p1_test_inventory.json
+          python3 deploy/p1/ui_test_inventory.py --check deploy/p1/ui_test_inventory.json
+          python3 deploy/p1/check_translations_audit.py
+
+      - name: Seed and repeat migration
+        id: seed
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" exec -T bench bash /src/deploy/dev/seed/run-seed.sh
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site "$SITE_NAME" migrate'
+
+      - name: Install fresh test site and run the P1 suite per module
+        id: per_method
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p1-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT")
+
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench setup requirements --dev && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p1-test.localhost && bench --site p1-test.localhost set-config allow_tests true && bench --site p1-test.localhost migrate'; then
+            echo 'Fresh-site setup or Bench dev dependency installation failed.' | tee "$artifact_dir/site-setup-failed.txt"
+            exit 1
+          fi
+
+          overall_status=0
+          for module in \
+            crm_cskh.tests.test_p1_identity \
+            crm_cskh.tests.test_p1_ownership \
+            crm_cskh.tests.test_p1_distribution \
+            crm_cskh.tests.test_p1_imports \
+            crm_cskh.tests.test_p1_api_permissions \
+            crm_cskh.tests.test_p1_concurrency \
+            crm_cskh.tests.test_p1_regressions \
+            crm_cskh.tests.test_p1_chaos
+          do
+            slug="${module##*.}"
+            container_log="/tmp/p1-evidence/${slug}.log"
+            container_xml="/tmp/p1-evidence/${slug}.junit.xml"
+            echo "=== Running module: $module ==="
+            if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p /tmp/p1-evidence && set +e; bench --site p1-test.localhost --verbose run-tests --module '$module' --junit-xml-output '$container_xml' > '$container_log' 2>&1; rc=\$?; exit \$rc"; then
+              module_status=0
+            else
+              module_status=$?
+              overall_status=1
+            fi
+            printf '%s exit=%s\n' "$module" "$module_status" >> "$artifact_dir/module-status.txt"
+          done
+
+          # Run P1 UI endpoint tests into `/tmp/p1-evidence/ui/` so its JUnit XML
+          # is gated against `deploy/p1/ui_test_inventory.json` (12 methods) without
+          # colliding with `deploy/dev/seed/p1_test_inventory.json` in `/tmp/p1-evidence/`.
+          ui_module="crm_cskh.tests.test_ui_p1_endpoints"
+          ui_log="/tmp/p1-evidence/ui/test_ui_p1_endpoints.log"
+          ui_xml="/tmp/p1-evidence/ui/test_ui_p1_endpoints.junit.xml"
+          echo "=== Running UI module: $ui_module ==="
+          if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p /tmp/p1-evidence/ui && set +e; bench --site p1-test.localhost --verbose run-tests --module '$ui_module' --junit-xml-output '$ui_xml' > '$ui_log' 2>&1; rc=\$?; exit \$rc"; then
+            ui_module_status=0
+          else
+            ui_module_status=$?
+            overall_status=1
+          fi
+          printf '%s exit=%s\n' "$ui_module" "$ui_module_status" >> "$artifact_dir/module-status.txt"
+
+          # `bench migrate` runs a SECOND time on a site that already ran the
+          # P1 patches. P1 5.6 requires the migration to be idempotent: the
+          # composite unique constraints and the lookup indexes must not fail
+          # or be duplicated on the second run.
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p1-test.localhost migrate'; then
+            echo 'Post-test migration failed (the P1 migration is not idempotent).' >> "$artifact_dir/module-status.txt"
+            overall_status=1
+          fi
+
+          container_id=$("${compose[@]}" ps -q bench)
+          if [ -n "$container_id" ] && "${compose[@]}" exec -T bench test -d /tmp/p1-evidence; then
+            docker cp "$container_id:/tmp/p1-evidence/." "$artifact_dir/"
+          else
+            echo 'Per-module evidence directory was not created in the bench container.' >> "$artifact_dir/module-status.txt"
+            overall_status=1
+          fi
+          exit "$overall_status"
+
+      - name: Enforce per-method JUnit coverage gate (P1 backend + UI inventories)
+        id: per_method_gate
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p1-evidence"
+          mkdir -p "$artifact_dir" "$artifact_dir/ui"
+          python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
+            --inventory "$GITHUB_WORKSPACE/deploy/dev/seed/p1_test_inventory.json" \
+            --xml-dir "$artifact_dir" \
+            --out "$artifact_dir/p1-per-method-gate.json" \
+            | tee "$artifact_dir/p1-per-method-gate.txt"
+          gate_status=${PIPESTATUS[0]}
+          echo "p1 per-method gate exit=$gate_status" >> "$artifact_dir/module-status.txt"
+
+          python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
+            --inventory "$GITHUB_WORKSPACE/deploy/p1/ui_test_inventory.json" \
+            --xml-dir "$artifact_dir/ui" \
+            --out "$artifact_dir/ui/ui-per-method-gate.json" \
+            | tee "$artifact_dir/ui/ui-per-method-gate.txt"
+          ui_gate_status=${PIPESTATUS[0]}
+          echo "p1 ui per-method gate exit=$ui_gate_status" >> "$artifact_dir/module-status.txt"
+
+          test "$gate_status" -eq 0 && test "$ui_gate_status" -eq 0
+
+      - name: Run the P1 HTTP transport probe against bench serve
+        id: p1_http_transport
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p1-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT")
+          container_id=$("${compose[@]}" ps -q bench)
+          mkdir -p "$artifact_dir/http"
+
+          if [ -z "$container_id" ]; then
+            echo 'Bench container is unavailable; the P1 HTTP probe could not start.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          # The probe authenticates **real business actors** over real HTTP,
+          # and exercises background RQ jobs (`imports.confirm` and
+          # `distribution.execute`), so both `bench serve` and separate `short`
+          # and `long` RQ workers must run in `/workspace/frappe-bench`.
+          "${compose[@]}" exec -T bench mkdir -p /workspace/frappe-bench/logs
+          "${compose[@]}" exec -T -w /workspace/frappe-bench/sites bench /workspace/frappe-bench/env/bin/python -c 'import frappe; frappe.init("p1-ci.localhost", sites_path="."); from rq import Queue; from frappe.utils.background_jobs import generate_qname, get_redis_conn; conn=get_redis_conn(); [Queue(generate_qname(q), connection=conn).empty() for q in ("default", "short", "long")]'
+          if ! "${compose[@]}" exec -d -w /workspace/frappe-bench bench bash -lc 'nohup bench --site p1-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p1-http-serve.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench serve for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+          if ! "${compose[@]}" exec -d -w /workspace/frappe-bench -e FRAPPE_STREAM_LOGGING=1 bench bash -lc 'nohup bench worker --queue short >/tmp/p1-rq-short.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench short RQ worker for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+          if ! "${compose[@]}" exec -d -w /workspace/frappe-bench -e FRAPPE_STREAM_LOGGING=1 bench bash -lc 'nohup bench worker --queue long >/tmp/p1-rq-long.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench long RQ worker for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          ready=0
+          for attempt in $(seq 1 45); do
+            if "${compose[@]}" exec -T -w /workspace/frappe-bench/sites bench /workspace/frappe-bench/env/bin/python -c 'import socket, sys, frappe; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close(); frappe.init("p1-ci.localhost", sites_path="."); from rq import Worker; from frappe.utils.background_jobs import generate_qname, get_redis_conn; conn=get_redis_conn(); queues={q for w in Worker.all(connection=conn) for q in w.queue_names()}; sys.exit(0 if {generate_qname("short"), generate_qname("long")}.issubset(queues) else 1)' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            "${compose[@]}" exec -T bench cat /tmp/p1-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
+            "${compose[@]}" exec -T bench cat /tmp/p1-rq-short.log > "$artifact_dir/http/rq-short.log" 2>/dev/null || true
+            "${compose[@]}" exec -T bench cat /tmp/p1-rq-long.log > "$artifact_dir/http/rq-long.log" 2>/dev/null || true
+            echo 'The HTTP server or RQ workers did not become ready within 45 seconds.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          # `FRAPPE_STREAM_LOGGING=1` makes Frappe write its logs to stdout
+          # instead of creating the log files (the same rule as run-seed.sh).
+          if "${compose[@]}" exec -T -e GITHUB_SHA="$GITHUB_SHA" -e P1_HTTP_SITE=p1-ci.localhost -e BENCH_DIR=/workspace/frappe-bench bench bash -lc 'cd /workspace/frappe-bench && FRAPPE_STREAM_LOGGING=1 /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_p1_http_probe.py'; then
+            probe_status=0
+          else
+            probe_status=$?
+            "${compose[@]}" exec -T bench cat /tmp/p1-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
+            "${compose[@]}" exec -T bench cat /tmp/p1-rq-short.log > "$artifact_dir/http/rq-short.log" 2>/dev/null || true
+            "${compose[@]}" exec -T bench cat /tmp/p1-rq-long.log > "$artifact_dir/http/rq-long.log" 2>/dev/null || true
+          fi
+          if ! docker cp "$container_id:/tmp/p1-http/." "$artifact_dir/http/"; then
+            echo 'Could not copy the sanitized HTTP evidence from the bench container.' > "$artifact_dir/http/evidence-copy-failed.txt"
+            exit 1
+          fi
+          exit "$probe_status"
+
+      - name: Verify the P1 DB constraints and indexes
+        id: schema
+        if: always() && steps.per_method.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p1-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT")
+          "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p1-test.localhost mariadb -e "SHOW INDEX FROM \`tabCSKH Identity Index\`; SHOW INDEX FROM \`tabCSKH Active Claim\`; SHOW INDEX FROM \`tabCSKH Work Item\`; SHOW INDEX FROM \`tabCSKH Assignment Rule\`; SHOW INDEX FROM \`tabCSKH Assignment History\`; SHOW INDEX FROM \`tabCSKH Import Batch\`; SHOW INDEX FROM \`tabCSKH Import Batch Lead\`; SHOW INDEX FROM \`tabCSKH Distribution Run\`; SHOW INDEX FROM \`tabCSKH Campaign\`;"' > "$artifact_dir/p1-schema-indexes.txt"
+          status=$?
+          echo "p1 schema index dump exit=$status" >> "$artifact_dir/module-status.txt"
+          exit "$status"
+
+      - name: Sanitize evidence and record environment metadata
+        if: always()
+        shell: bash
+        env:
+          BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          INVENTORY_OUTCOME: ${{ steps.inventory.outcome }}
+          SEED_OUTCOME: ${{ steps.seed.outcome }}
+          PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
+          PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.p1_http_transport.outcome }}
+          SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/p1-evidence"
+          export P1_EVIDENCE_DIR="$RUNNER_TEMP/p1-evidence"
+          export P1_ENV_FILE="$P1_ENV"
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ["P1_EVIDENCE_DIR"])
+          env_file = Path(os.environ["P1_ENV_FILE"])
+          env_values = {}
+          for line in env_file.read_text(encoding="utf-8").splitlines():
+              if "=" in line and not line.lstrip().startswith("#"):
+                  key, value = line.split("=", 1)
+                  env_values[key] = value
+          secrets = [env_values.get(key, "") for key in ("ADMIN_PASSWORD", "DB_ROOT_PASSWORD")]
+          patterns = [
+              (re.compile(r"(?im)(set-cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?im)(cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(/private/files/)[^\s\"'<>\\]+"), r"\1[REDACTED_FILE_URL]"),
+              (re.compile(r"(?i)(/files/)[^\s\"'<>\\]+"), r"\1[REDACTED_FILE_URL]"),
+              (re.compile(r"(?i)(x-frappe-csrf-token[\"'=:\s]+)[^\"'&\s<,}]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(sid=)[^;\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(pwd=)[^&\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(password=)[^&\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r'(?i)("file_url"\s*:\s*)"[^"]*"'), r'\1"[REDACTED_FILE_URL]"'),
+              # P1 imports carry phone numbers; they must never reach an artifact.
+              (re.compile(r"(?:\+?84|0)\d{8,10}"), "[REDACTED_PHONE]"),
+          ]
+          redactions = 0
+          for path in root.rglob("*"):
+              if not path.is_file() or path.suffix.lower() not in {".log", ".xml", ".json", ".txt"}:
+                  continue
+              content = path.read_text(encoding="utf-8", errors="replace")
+              for secret in secrets:
+                  if secret and secret in content:
+                      content = content.replace(secret, "[REDACTED]")
+                      redactions += 1
+              for pattern, replacement in patterns:
+                  content, count = pattern.subn(replacement, content)
+                  redactions += count
+              path.write_text(content, encoding="utf-8")
+
+          metadata = {
+              "commit_sha": os.environ.get("GITHUB_SHA", "unknown"),
+              "run_id": os.environ.get("GITHUB_RUN_ID", "unknown"),
+              "event_name": os.environ.get("GITHUB_EVENT_NAME", "unknown"),
+              "site_seeded": "p1-ci.localhost",
+              "site_fresh_test": "p1-test.localhost",
+              "frappe_sha": env_values.get("FRAPPE_SHA", "unknown"),
+              "crm_sha": env_values.get("CRM_SHA", "unknown"),
+              "bench_image_ref": env_values.get("BENCH_IMAGE", "unknown"),
+              "p1_inventory": "deploy/dev/seed/p1_test_inventory.json",
+              "ui_inventory": "deploy/p1/ui_test_inventory.json",
+              "workflow_outcomes": {
+                  "bootstrap": os.environ.get("BOOTSTRAP_OUTCOME"),
+                  "lint": os.environ.get("LINT_OUTCOME"),
+                  "inventory": os.environ.get("INVENTORY_OUTCOME"),
+                  "seed": os.environ.get("SEED_OUTCOME"),
+                  "per_method": os.environ.get("PER_METHOD_OUTCOME"),
+                  "per_method_gate": os.environ.get("PER_METHOD_GATE_OUTCOME"),
+                  "p1_http_transport": os.environ.get("HTTP_TRANSPORT_OUTCOME"),
+                  "schema": os.environ.get("SCHEMA_OUTCOME"),
+              },
+              "redaction_replacements": redactions,
+          }
+          (root / "workflow-metadata.json").write_text(
+              json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Upload sanitized P1 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p1-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/p1-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce the P1 CI gates
+        if: always()
+        shell: bash
+        env:
+          BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          INVENTORY_OUTCOME: ${{ steps.inventory.outcome }}
+          SEED_OUTCOME: ${{ steps.seed.outcome }}
+          PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
+          PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.p1_http_transport.outcome }}
+          SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
+        run: |
+          printf 'bootstrap=%s\n' "$BOOTSTRAP_OUTCOME"
+          printf 'lint=%s\n' "$LINT_OUTCOME"
+          printf 'inventory=%s\n' "$INVENTORY_OUTCOME"
+          printf 'seed=%s\n' "$SEED_OUTCOME"
+          printf 'per_method=%s\n' "$PER_METHOD_OUTCOME"
+          printf 'per_method_gate=%s\n' "$PER_METHOD_GATE_OUTCOME"
+          printf 'p1_http_transport=%s\n' "$HTTP_TRANSPORT_OUTCOME"
+          printf 'schema=%s\n' "$SCHEMA_OUTCOME"
+          test "$BOOTSTRAP_OUTCOME" = success && \
+            test "$LINT_OUTCOME" = success && \
+            test "$INVENTORY_OUTCOME" = success && \
+            test "$SEED_OUTCOME" = success && \
+            test "$PER_METHOD_OUTCOME" = success && \
+            test "$PER_METHOD_GATE_OUTCOME" = success && \
+            test "$HTTP_TRANSPORT_OUTCOME" = success && \
+            test "$SCHEMA_OUTCOME" = success
+
+      - name: Show stack logs if a gate fails
+        if: failure()
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" logs --no-color
+
+      - name: Remove isolated stack
+        if: always()
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" down --volumes --remove-orphans

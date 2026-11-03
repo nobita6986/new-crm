@@ -1,0 +1,608 @@
+{
+  "revision_label": "64b7486f29ad712106d167dfaea50e3b060a6845",
+  "site": "t1cr3.localhost",
+  "recorded_at_utc": "2026-11-03T03:46:25Z",
+  "mounted_source_lf_sha256": {
+    "crm_cskh/jobs/import_worker.py": "2de398a209dfadb879fa91e68e390a43255337d6dad8cb58da36a3196cf486f1",
+    "crm_cskh/services/import_service.py": "82235a44f7a499f10e012c43b140649416776feade23a3de04c594b2d715906d",
+    "crm_cskh/services/distribution.py": "19191d71166023c22108d175d2da7b1ebdb22663a55f55c17b344c1d70898012",
+    "crm_cskh/services/reporting.py": "1ca82540eb173bac77a8c67c47c809195773163a36cb3dea618d10bf36179dea",
+    "crm_cskh/api/ownership.py": "dfcb34949376723e42d70e5ac82204047abbc8e163a255f5020825d4b5e6c6aa"
+  },
+  "migrate_twice_on_64b7486": {
+    "run1_exit_code": 0,
+    "run2_exit_code": 0,
+    "column_count_after_1": 164,
+    "column_count_after_2": 164,
+    "index_count": 34,
+    "schema_digest_identical": true
+  },
+  "task2_chaos_independent_verification": {
+    "test_p1_chaos_exit_code": 0,
+    "test_p1_chaos_method_count": 10,
+    "test_p1_chaos_failures": 0,
+    "test_p1_chaos_methods": [
+      {
+        "name": "test_fault_after_work_item_before_ownership_leaves_no_orphan",
+        "passed": true
+      },
+      {
+        "name": "test_fault_mid_ownership_after_history_and_todo_rolls_back_all_artifacts",
+        "passed": true
+      },
+      {
+        "name": "test_fault_mid_reassign_rolls_back_to_original_owner_and_open_interval",
+        "passed": true
+      },
+      {
+        "name": "test_resumed_run_retries_only_failed_leads_sums_counts_and_keeps_fairness",
+        "passed": true
+      },
+      {
+        "name": "test_failed_row_in_early_chunk_blocks_progress_advance_and_recovers_on_retry",
+        "passed": true
+      },
+      {
+        "name": "test_mixed_batch_does_not_double_count_preview_invalid_rows",
+        "passed": true
+      },
+      {
+        "name": "test_worker_hard_kill_os_exit_mid_batch_recovers_with_zero_duplicates",
+        "passed": true
+      },
+      {
+        "name": "test_fault_after_commit_before_notification_and_idempotent_retry",
+        "passed": true
+      },
+      {
+        "name": "test_chaos_module_does_not_exist_in_production_services",
+        "passed": true
+      },
+      {
+        "name": "test_production_modules_contain_no_fault_injection_hooks_or_hard_exit",
+        "passed": true
+      }
+    ],
+    "chaos_harness_exit_code": 0,
+    "chaos_harness_summary": {
+      "overall_result": "PASS",
+      "production_hooks_present": false,
+      "scenarios": [
+        {
+          "id": "S1_work_item_and_mid_ownership_rollback_then_resume",
+          "passed": true,
+          "child_exit": null
+        },
+        {
+          "id": "S2_post_commit_notification_failure_and_idempotent_retry",
+          "passed": true,
+          "child_exit": null
+        },
+        {
+          "id": "S3_worker_hard_kill_exit_137_mid_batch_and_recovery",
+          "passed": true,
+          "child_exit": 137
+        }
+      ]
+    },
+    "set_value_queued_bypass_line_numbers": {
+      "apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py": [
+        534,
+        606,
+        631,
+        662
+      ],
+      "apps/crm_cskh/crm_cskh/tools/p1_chaos_harness.py": [
+        435
+      ],
+      "apps/crm_cskh/crm_cskh/tools/p1_benchmark.py": [
+        187,
+        327,
+        342
+      ]
+    }
+  },
+  "task3_import_260_rows_real_worker": {
+    "used_db_set_value": false,
+    "worker_type": "real_rq_worker_subprocess",
+    "preview_http_status": 200,
+    "preview_totals": {
+      "total_rows": 260,
+      "valid_rows": 220,
+      "new_rows": 220,
+      "duplicate_rows": 20,
+      "error_rows": 20
+    },
+    "preview_rows_returned_in_ui_slice": 200,
+    "preview_truncated": true,
+    "confirm_1_http_status": 200,
+    "confirm_1_immediate_status": "CONFIRMED",
+    "confirm_1_post_worker_status": "CONFIRMED",
+    "confirm_1_real_worker_error": "frappe.exceptions.ValidationError: The import batch cannot move from CONFIRMED to RUNNING.",
+    "confirm_1_leads_created_in_db": 0,
+    "confirm_2_immediate_status": "QUEUED",
+    "final_batch_status": "COMPLETED_WITH_ERRORS",
+    "batch_counters": {
+      "total_rows": 260,
+      "valid_rows": 220,
+      "new_rows": 220,
+      "duplicate_rows": 20,
+      "error_rows": 20,
+      "created_rows": 220,
+      "reused_rows": 10,
+      "skipped_rows": 20,
+      "attempts": 1,
+      "progress": 260
+    },
+    "db_reconciliation": {
+      "expected_pre200_new_leads": 178,
+      "actual_pre200_identities_in_db": 178,
+      "expected_post200_new_leads": 42,
+      "actual_post200_identities_in_db": 42,
+      "expected_total_new_leads": 220,
+      "actual_total_placeholder_crm_leads": 220,
+      "silently_dropped_valid_rows": 0,
+      "existing_10_crm_leads_owner_and_name_preserved": true
+    },
+    "error_artifact_reconciliation": {
+      "is_private": 1,
+      "csv_error_row_count": 20,
+      "expected_error_row_count": 20,
+      "pre200_error_rows_present": [
+        2,
+        3,
+        4,
+        20,
+        40,
+        60,
+        80,
+        100,
+        120,
+        140,
+        160,
+        180
+      ],
+      "post200_error_rows_present": [
+        205,
+        212,
+        220,
+        231,
+        240,
+        248,
+        255,
+        261
+      ],
+      "expected_post200_error_rows": [
+        205,
+        212,
+        220,
+        231,
+        240,
+        248,
+        255,
+        261
+      ],
+      "exact_row_set_match": true
+    }
+  },
+  "http_actor_reconciliation": {
+    "crm_admin": {
+      "http_statuses": {
+        "dashboard_distribution": 200,
+        "dashboard_campaigns": 200,
+        "pool_list": 200,
+        "my_list": 200,
+        "history_team_a_item": 200,
+        "history_team_b_item": 200
+      },
+      "my_list_reconcile": {
+        "http_total": 0,
+        "sql_total": 0
+      },
+      "dashboard_reconcile": {
+        "http_scope": "self",
+        "expected_scope": "system",
+        "scope_ok": false,
+        "cards": {
+          "assigned_work_items": {
+            "http": 0,
+            "sql": 363,
+            "match": false
+          },
+          "unassigned_work_items": {
+            "http": 0,
+            "sql": 50,
+            "match": false
+          },
+          "revoked_work_items": {
+            "http": 0,
+            "sql": 2,
+            "match": false
+          },
+          "closed_work_items": {
+            "http": 0,
+            "sql": 1,
+            "match": false
+          },
+          "unique_customers": {
+            "http": 0,
+            "sql": 363,
+            "match": false
+          },
+          "active_claims": {
+            "http": 0,
+            "sql": 214,
+            "match": false
+          },
+          "active_campaigns": {
+            "http": 0,
+            "sql": 165,
+            "match": false
+          },
+          "failed_batches": {
+            "http": 0,
+            "sql": 3,
+            "match": false
+          },
+          "failed_runs": {
+            "http": 0,
+            "sql": 3,
+            "match": false
+          }
+        },
+        "unique_customers_all_statuses_sql": 415,
+        "identity_count": {
+          "http": 0,
+          "sql": 1083
+        },
+        "campaign_summary_count": 119,
+        "campaign_summary_has_team_a": false,
+        "campaign_summary_has_team_b": false
+      },
+      "pool_reconcile": {
+        "http_scope": "self",
+        "http_total": 0,
+        "sql_total": 50,
+        "page_size_1_total": 0
+      }
+    },
+    "bod": {
+      "http_statuses": {
+        "dashboard_distribution": 200,
+        "dashboard_campaigns": 200,
+        "pool_list": 200,
+        "my_list": 200,
+        "history_team_a_item": 200,
+        "history_team_b_item": 200
+      },
+      "my_list_reconcile": {
+        "http_total": 0,
+        "sql_total": 0
+      },
+      "dashboard_reconcile": {
+        "http_scope": "all",
+        "expected_scope": "all",
+        "scope_ok": true,
+        "cards": {
+          "assigned_work_items": {
+            "http": 363,
+            "sql": 363,
+            "match": true
+          },
+          "unassigned_work_items": {
+            "http": 50,
+            "sql": 50,
+            "match": true
+          },
+          "revoked_work_items": {
+            "http": 2,
+            "sql": 2,
+            "match": true
+          },
+          "closed_work_items": {
+            "http": 1,
+            "sql": 1,
+            "match": true
+          },
+          "unique_customers": {
+            "http": 415,
+            "sql": 363,
+            "match": false
+          },
+          "active_claims": {
+            "http": 214,
+            "sql": 214,
+            "match": true
+          },
+          "active_campaigns": {
+            "http": 165,
+            "sql": 165,
+            "match": true
+          },
+          "failed_batches": {
+            "http": 3,
+            "sql": 3,
+            "match": true
+          },
+          "failed_runs": {
+            "http": 3,
+            "sql": 3,
+            "match": true
+          }
+        },
+        "unique_customers_all_statuses_sql": 415,
+        "identity_count": {
+          "http": 1083,
+          "sql": 1083
+        },
+        "campaign_summary_count": 166,
+        "campaign_summary_has_team_a": true,
+        "campaign_summary_has_team_b": true
+      },
+      "pool_reconcile": {
+        "http_scope": "all",
+        "http_total": 50,
+        "sql_total": 50,
+        "page_size_1_total": 50
+      }
+    },
+    "leader_a": {
+      "http_statuses": {
+        "dashboard_distribution": 200,
+        "dashboard_campaigns": 200,
+        "pool_list": 200,
+        "my_list": 200,
+        "history_team_a_item": 200,
+        "history_team_b_item": 403
+      },
+      "my_list_reconcile": {
+        "http_total": 0,
+        "sql_total": 0
+      },
+      "dashboard_reconcile": {
+        "http_scope": "team",
+        "expected_scope": "team",
+        "scope_ok": true,
+        "cards": {
+          "assigned_work_items": {
+            "http": 13,
+            "sql": 13,
+            "match": true
+          },
+          "unassigned_work_items": {
+            "http": 29,
+            "sql": 29,
+            "match": true
+          },
+          "revoked_work_items": {
+            "http": 0,
+            "sql": 2,
+            "match": false
+          },
+          "closed_work_items": {
+            "http": 0,
+            "sql": 1,
+            "match": false
+          },
+          "unique_customers": {
+            "http": 13,
+            "sql": 13,
+            "match": true
+          },
+          "active_claims": {
+            "http": 13,
+            "sql": 21,
+            "match": false
+          },
+          "active_campaigns": {
+            "http": 120,
+            "sql": 120,
+            "match": true
+          },
+          "failed_batches": {
+            "http": 1,
+            "sql": 1,
+            "match": true
+          },
+          "failed_runs": {
+            "http": 1,
+            "sql": 1,
+            "match": true
+          }
+        },
+        "unique_customers_all_statuses_sql": 13,
+        "identity_count": {
+          "http": 13,
+          "sql": 13
+        },
+        "campaign_summary_count": 121,
+        "campaign_summary_has_team_a": true,
+        "campaign_summary_has_team_b": false
+      },
+      "pool_reconcile": {
+        "http_scope": "team",
+        "http_total": 29,
+        "sql_total": 29,
+        "page_size_1_total": 29
+      }
+    },
+    "leader_b": {
+      "http_statuses": {
+        "dashboard_distribution": 200,
+        "dashboard_campaigns": 200,
+        "pool_list": 200,
+        "my_list": 200,
+        "history_team_a_item": 403,
+        "history_team_b_item": 200
+      },
+      "my_list_reconcile": {
+        "http_total": 0,
+        "sql_total": 0
+      },
+      "dashboard_reconcile": {
+        "http_scope": "team",
+        "expected_scope": "team",
+        "scope_ok": true,
+        "cards": {
+          "assigned_work_items": {
+            "http": 2,
+            "sql": 2,
+            "match": true
+          },
+          "unassigned_work_items": {
+            "http": 28,
+            "sql": 28,
+            "match": true
+          },
+          "revoked_work_items": {
+            "http": 0,
+            "sql": 0,
+            "match": true
+          },
+          "closed_work_items": {
+            "http": 0,
+            "sql": 0,
+            "match": true
+          },
+          "unique_customers": {
+            "http": 2,
+            "sql": 2,
+            "match": true
+          },
+          "active_claims": {
+            "http": 2,
+            "sql": 10,
+            "match": false
+          },
+          "active_campaigns": {
+            "http": 119,
+            "sql": 119,
+            "match": true
+          },
+          "failed_batches": {
+            "http": 1,
+            "sql": 1,
+            "match": true
+          },
+          "failed_runs": {
+            "http": 1,
+            "sql": 1,
+            "match": true
+          }
+        },
+        "unique_customers_all_statuses_sql": 2,
+        "identity_count": {
+          "http": 2,
+          "sql": 2
+        },
+        "campaign_summary_count": 120,
+        "campaign_summary_has_team_a": false,
+        "campaign_summary_has_team_b": true
+      },
+      "pool_reconcile": {
+        "http_scope": "team",
+        "http_total": 28,
+        "sql_total": 28,
+        "page_size_1_total": 28
+      }
+    },
+    "staff_a": {
+      "http_statuses": {
+        "dashboard_distribution": 403,
+        "dashboard_campaigns": 403,
+        "pool_list": 403,
+        "my_list": 200,
+        "history_team_a_item": 200,
+        "history_team_b_item": 403
+      },
+      "my_list_reconcile": {
+        "http_total": 6,
+        "sql_total": 6
+      },
+      "error_envelope": {
+        "exc_type": "Forbidden",
+        "code": null,
+        "p1_code": null
+      }
+    },
+    "staff_b": {
+      "http_statuses": {
+        "dashboard_distribution": 403,
+        "dashboard_campaigns": 403,
+        "pool_list": 403,
+        "my_list": 200,
+        "history_team_a_item": 403,
+        "history_team_b_item": 403
+      },
+      "my_list_reconcile": {
+        "http_total": 7,
+        "sql_total": 7
+      },
+      "error_envelope": {
+        "exc_type": "Forbidden",
+        "code": null,
+        "p1_code": null
+      }
+    },
+    "guest": {
+      "dashboard_http_status": 403,
+      "exc_type": "PermissionError",
+      "code": null
+    }
+  },
+  "l16_http_error_envelope": {
+    "400_invalid_request": {
+      "http_status": 400,
+      "exc_type": "InvalidRequest",
+      "code": null,
+      "p1_code": null
+    },
+    "403_forbidden": {
+      "http_status": 403,
+      "exc_type": "Forbidden",
+      "code": null,
+      "p1_code": null
+    },
+    "404_not_found": {
+      "http_status": 404,
+      "exc_type": "NotFound",
+      "code": null,
+      "p1_code": null
+    },
+    "409_conflict": {
+      "http_status": 409,
+      "exc_type": "Conflict",
+      "code": null,
+      "p1_code": null
+    }
+  },
+  "l21_revoke_transport_coercion": {
+    "form_urlencoded_false": {
+      "http_status": 200,
+      "resulting_status": "queued",
+      "expected": "revoked"
+    },
+    "form_urlencoded_zero": {
+      "http_status": 200,
+      "resulting_status": "queued",
+      "expected": "revoked"
+    },
+    "json_boolean_false": {
+      "http_status": 200,
+      "resulting_status": "revoked",
+      "expected": "revoked"
+    }
+  },
+  "task5_distribution_execution_model": {
+    "api_endpoints_present": [
+      "execute",
+      "get_run",
+      "preview",
+      "reconcile"
+    ],
+    "execute_http_status": 200,
+    "execute_immediate_run_status": "completed",
+    "execute_created_synchronously_in_http_call": 2,
+    "background_enqueue_implemented": false
+  }
+}
