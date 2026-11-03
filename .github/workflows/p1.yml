@@ -160,20 +160,26 @@ jobs:
 
           # The probe authenticates **real business actors** over real HTTP,
           # and exercises background RQ jobs (`imports.confirm` and
-          # `distribution.execute`), so both `bench serve` and `bench worker`
-          # must run in the background.
-          if ! "${compose[@]}" exec -d bench bash -lc 'cd /workspace/frappe-bench && nohup bench --site p1-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p1-http-serve.log 2>&1 </dev/null &'; then
+          # `distribution.execute`), so both `bench serve` and separate `short`
+          # and `long` RQ workers must run in `/workspace/frappe-bench`.
+          "${compose[@]}" exec -T bench mkdir -p /workspace/frappe-bench/logs
+          "${compose[@]}" exec -T -w /workspace/frappe-bench/sites bench /workspace/frappe-bench/env/bin/python -c 'import frappe; frappe.init("p1-ci.localhost", sites_path="."); from rq import Queue; from frappe.utils.background_jobs import generate_qname, get_redis_conn; conn=get_redis_conn(); [Queue(generate_qname(q), connection=conn).empty() for q in ("default", "short", "long")]'
+          if ! "${compose[@]}" exec -d -w /workspace/frappe-bench bench bash -lc 'nohup bench --site p1-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p1-http-serve.log 2>&1 </dev/null &'; then
             echo 'Could not start bench serve for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
             exit 1
           fi
-          if ! "${compose[@]}" exec -d bench bash -lc 'cd /workspace/frappe-bench && nohup bench worker --queue short >/tmp/p1-rq-short.log 2>&1 </dev/null & nohup bench worker --queue long >/tmp/p1-rq-long.log 2>&1 </dev/null &'; then
-            echo 'Could not start bench RQ workers for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
+          if ! "${compose[@]}" exec -d -w /workspace/frappe-bench -e FRAPPE_STREAM_LOGGING=1 bench bash -lc 'nohup bench worker --queue short >/tmp/p1-rq-short.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench short RQ worker for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+          if ! "${compose[@]}" exec -d -w /workspace/frappe-bench -e FRAPPE_STREAM_LOGGING=1 bench bash -lc 'nohup bench worker --queue long >/tmp/p1-rq-long.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench long RQ worker for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
             exit 1
           fi
 
           ready=0
           for attempt in $(seq 1 45); do
-            if "${compose[@]}" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import socket; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close()' >/dev/null 2>&1; then
+            if "${compose[@]}" exec -T -w /workspace/frappe-bench/sites bench /workspace/frappe-bench/env/bin/python -c 'import socket, sys, frappe; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close(); frappe.init("p1-ci.localhost", sites_path="."); from rq import Worker; from frappe.utils.background_jobs import generate_qname, get_redis_conn; conn=get_redis_conn(); queues={q for w in Worker.all(connection=conn) for q in w.queue_names()}; sys.exit(0 if {generate_qname("short"), generate_qname("long")}.issubset(queues) else 1)' >/dev/null 2>&1; then
               ready=1
               break
             fi
@@ -181,7 +187,9 @@ jobs:
           done
           if [ "$ready" -ne 1 ]; then
             "${compose[@]}" exec -T bench cat /tmp/p1-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
-            echo 'The HTTP server did not become ready within 45 seconds.' > "$artifact_dir/http/probe-start-failed.txt"
+            "${compose[@]}" exec -T bench cat /tmp/p1-rq-short.log > "$artifact_dir/http/rq-short.log" 2>/dev/null || true
+            "${compose[@]}" exec -T bench cat /tmp/p1-rq-long.log > "$artifact_dir/http/rq-long.log" 2>/dev/null || true
+            echo 'The HTTP server or RQ workers did not become ready within 45 seconds.' > "$artifact_dir/http/probe-start-failed.txt"
             exit 1
           fi
 
@@ -191,6 +199,9 @@ jobs:
             probe_status=0
           else
             probe_status=$?
+            "${compose[@]}" exec -T bench cat /tmp/p1-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
+            "${compose[@]}" exec -T bench cat /tmp/p1-rq-short.log > "$artifact_dir/http/rq-short.log" 2>/dev/null || true
+            "${compose[@]}" exec -T bench cat /tmp/p1-rq-long.log > "$artifact_dir/http/rq-long.log" 2>/dev/null || true
           fi
           if ! docker cp "$container_id:/tmp/p1-http/." "$artifact_dir/http/"; then
             echo 'Could not copy the sanitized HTTP evidence from the bench container.' > "$artifact_dir/http/evidence-copy-failed.txt"
