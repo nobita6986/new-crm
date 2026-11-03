@@ -36,7 +36,7 @@ window.cskhP2Api = (function () {
 		listOutcomes: 'crm_cskh.api.settings.list_outcomes',
 		saveOutcome: 'crm_cskh.api.settings.save_outcome',
 		setLeadDnc: 'crm_cskh.api.settings.set_lead_dnc',
-		linkedActivities: 'crm.api.activities.get_linked_calls',
+		linkedActivities: 'crm.api.activities.get_activities',
 	}
 
 	function toBool(value, defaultValue) {
@@ -671,7 +671,14 @@ window.cskhP2Api = (function () {
 		const attemptsData = results[0] || {}
 		const followupsData = results[1] || {}
 		const unlinkedData = results[2] || {}
-		const linkedAct = results[3] || {}
+		const rawAct = results[3] || {}
+		const linkedAct = Array.isArray(rawAct)
+			? {
+					calls: rawAct[1] || [],
+					notes: rawAct[2] || [],
+					tasks: rawAct[3] || [],
+				}
+			: rawAct
 
 		const attempts = ((attemptsData && (attemptsData.items || attemptsData.attempts)) || [])
 			.map(normalizeAttempt)

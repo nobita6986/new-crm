@@ -53,13 +53,14 @@
 	}
 
 	function mapFilterToQuery(careFilter) {
+		const sameTz = cskh.effectiveTimeZone() === cskh.siteTimeZone()
 		switch (careFilter) {
 			case 'not_contacted':
 				return { status: 'assigned' }
 			case 'on_hold':
 				return { status: 'on_hold' }
 			case 'followup_due':
-				return { status: 'active', followup_filter: 'today' }
+				return sameTz ? { status: 'active', followup_filter: 'today' } : { status: 'on_hold' }
 			case 'followup_overdue':
 				return { status: 'active', followup_filter: 'overdue' }
 			case 'closed':

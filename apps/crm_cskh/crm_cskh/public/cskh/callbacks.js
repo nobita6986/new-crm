@@ -28,20 +28,21 @@
 	if (assigneeWrap && canFilterAssignee) assigneeWrap.hidden = false
 
 	function mapBucketQuery(bucketKey) {
+		const sameTz = cskh.effectiveTimeZone() === cskh.siteTimeZone()
 		switch (bucketKey) {
 			case 'due_today':
-				return { status: 'open', bucket: 'today' }
+				return { status: 'open', bucket: sameTz ? 'today' : 'all', clientBucket: sameTz ? '' : 'due_today' }
 			case 'overdue':
-				return { status: 'open', bucket: 'overdue' }
+				return { status: 'open', bucket: 'overdue', clientBucket: '' }
 			case 'upcoming':
-				return { status: 'open', bucket: 'upcoming' }
+				return { status: 'open', bucket: sameTz ? 'upcoming' : 'all', clientBucket: sameTz ? '' : 'upcoming' }
 			case 'done':
-				return { status: 'done', bucket: 'all' }
+				return { status: 'done', bucket: 'all', clientBucket: '' }
 			case 'canceled':
-				return { status: 'canceled', bucket: 'all' }
+				return { status: 'canceled', bucket: 'all', clientBucket: '' }
 			case 'open':
 			default:
-				return { status: 'open', bucket: 'all' }
+				return { status: 'open', bucket: 'all', clientBucket: '' }
 		}
 	}
 
@@ -473,13 +474,18 @@
 		try {
 			const res = await cskhP2Api.listFollowups(query)
 			if (token !== reads.current()) return
-			pager.setTotal(res.total)
+			const visibleItems = mapped.clientBucket
+				? res.items.filter(function (t) {
+						return (t.followup_state || cskh.classifyDueAt(t.due_at, t.status)) === mapped.clientBucket
+				  })
+				: res.items
+			pager.setTotal(mapped.clientBucket ? visibleItems.length : res.total)
 			pager.render()
-			if (!res.items.length) {
+			if (!visibleItems.length) {
 				empty.hidden = false
 				return
 			}
-			res.items.forEach(function (t) {
+			visibleItems.forEach(function (t) {
 				rows.appendChild(renderRow(t))
 			})
 			table.hidden = false
