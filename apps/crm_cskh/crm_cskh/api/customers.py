@@ -6,6 +6,7 @@ parameter that could widen it (ADR-P1-07, P1 10.1).
 
 import frappe
 
+from crm_cskh.api._params import parse_optional_str, parse_pagination
 from crm_cskh.services import reporting
 from crm_cskh.services.errors import Forbidden
 
@@ -24,7 +25,16 @@ def my_list(page=1, page_size=20, status=None, campaign=None):
 	if actor != "Administrator" and "System Manager" not in _roles(actor):
 		if not _roles(actor) & READ_ROLES:
 			raise Forbidden("You may not read the customer list.")
-	return reporting.my_list(actor, page=page, page_size=page_size, status=status, campaign=campaign)
+	page_num, limit, _ = parse_pagination(page, page_size)
+	status_val = parse_optional_str(status)
+	campaign_val = parse_optional_str(campaign, "The campaign must be a string.")
+	return reporting.my_list(
+		actor,
+		page=page_num,
+		page_size=limit,
+		status=status_val or None,
+		campaign=campaign_val or None,
+	)
 
 
 @frappe.whitelist(methods=["GET"])
@@ -34,7 +44,16 @@ def pool_list(page=1, page_size=20, campaign=None, batch=None):
 	if actor != "Administrator" and "System Manager" not in _roles(actor):
 		if not _roles(actor) & POOL_ROLES:
 			raise Forbidden("You may not read the customer pool.")
-	return reporting.pool_list(actor, page=page, page_size=page_size, campaign=campaign, batch=batch)
+	page_num, limit, _ = parse_pagination(page, page_size)
+	campaign_val = parse_optional_str(campaign, "The campaign must be a string.")
+	batch_val = parse_optional_str(batch)
+	return reporting.pool_list(
+		actor,
+		page=page_num,
+		page_size=limit,
+		campaign=campaign_val or None,
+		batch=batch_val or None,
+	)
 
 
 @frappe.whitelist(methods=["GET"])
@@ -47,18 +66,24 @@ def customer_pool(
 	batch=None,
 	search=None,
 ):
-	"""The scoped Customer Pool view with derived states and `batch` filtering (P1 §9.1, L-25)."""
+	"""The scoped Customer Pool view with derived states and `batch` filtering (P1 §9.1, L-23, L-25, L-26)."""
 	actor = frappe.session.user
 	if actor != "Administrator" and "System Manager" not in _roles(actor):
 		if not _roles(actor) & POOL_ROLES:
 			raise Forbidden("You may not read the customer pool.")
+	page_num, limit, _ = parse_pagination(page, page_size)
+	campaign_val = parse_optional_str(campaign, "The campaign must be a string.")
+	state_val = parse_optional_str(state)
+	source_val = parse_optional_str(source)
+	batch_val = parse_optional_str(batch)
+	search_val = parse_optional_str(search)
 	return reporting.customer_pool(
 		actor,
-		page=page,
-		page_size=page_size,
-		campaign=campaign,
-		state=state,
-		source=source,
-		batch=batch,
-		search=search,
+		page=page_num,
+		page_size=limit,
+		campaign=campaign_val or None,
+		state=state_val or None,
+		source=source_val or None,
+		batch=batch_val or None,
+		search=search_val or None,
 	)

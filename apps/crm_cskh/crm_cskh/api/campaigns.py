@@ -10,7 +10,7 @@ import json
 import frappe
 from frappe.utils import now_datetime
 
-from crm_cskh.api._params import parse_bool
+from crm_cskh.api._params import parse_bool, parse_int
 from crm_cskh.services import eligibility
 from crm_cskh.services.errors import Forbidden, InvalidRequest, NotFound
 
@@ -147,23 +147,28 @@ def save_rule(campaign=None, user=None, weight=None, capacity_limit=0, team=None
 		raise InvalidRequest("The campaign and the assignee are required.")
 	if not frappe.db.exists("CSKH Campaign", campaign):
 		raise NotFound("The campaign does not exist.")
+	if isinstance(weight, bool):
+		raise InvalidRequest("The weight must be an integer.")
 	try:
 		weight = int(weight)
 	except (TypeError, ValueError) as exc:
 		raise InvalidRequest("The weight must be an integer.") from exc
 	if weight <= 0:
 		raise InvalidRequest("The weight must be positive.")
+	if isinstance(capacity_limit, bool):
+		raise InvalidRequest("The capacity must be an integer.")
 	try:
 		capacity_limit = int(capacity_limit or 0)
 	except (TypeError, ValueError) as exc:
 		raise InvalidRequest("The capacity must be an integer.") from exc
 	if capacity_limit < 0:
 		raise InvalidRequest("The capacity must not be negative.")
+	rule_version = parse_int(version, default=1, minimum=1, field="version")
 	enabled_flag = parse_bool(enabled, default=True, field="enabled")
 
 	existing = frappe.db.get_value(
 		"CSKH Assignment Rule",
-		{"campaign": campaign, "user": user, "version": int(version or 1)},
+		{"campaign": campaign, "user": user, "version": rule_version},
 		"name",
 	)
 	if existing:
@@ -174,7 +179,7 @@ def save_rule(campaign=None, user=None, weight=None, capacity_limit=0, team=None
 				"doctype": "CSKH Assignment Rule",
 				"campaign": campaign,
 				"user": user,
-				"version": int(version or 1),
+				"version": rule_version,
 			}
 		)
 	doc.weight = weight
