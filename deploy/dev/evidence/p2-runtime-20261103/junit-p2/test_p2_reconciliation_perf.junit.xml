@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p2_reconciliation_perf.TestP2ReconciliationTimelineAndSchema-2[REDACTED_PHONE]13" tests="3" file="crm_cskh/tests/test_p2_reconciliation_perf.py" time="15.437" timestamp="2026-11-04T00:57:29" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_reconciliation_perf.TestP2ReconciliationTimelineAndSchema" name="test_lead_journey_a_to_b_to_a_across_campaigns_and_105_work_items_reconcile" time="11.494" timestamp="2026-11-04T00:57:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_reconciliation_perf.py" line="30">
+			<!--`P2.md` §15.2: Lead moves `A -> closed -> B -> closed -> A` plus 105 mixed Work Items with `ok=True`.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_reconciliation_perf.TestP2ReconciliationTimelineAndSchema" name="test_p2_migration_seeds_and_mariadb_indexes_are_idempotent" time="0.077" timestamp="2026-11-04T00:57:26" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_reconciliation_perf.py" line="180">
+			<!--`P2.md` §15.4: Running P2 schema/index/seed helpers twice is idempotent and preserves required indexes.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_reconciliation_perf.TestP2ReconciliationTimelineAndSchema" name="test_single_work_item_with_120_attempts_paginates_cleanly_and_detects_counter_drift" time="3.866" timestamp="2026-11-04T00:57:29" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_reconciliation_perf.py" line="142">
+			<!--`P2.md` §15.4-§15.5: 120-attempt timeline paginates boundedly; `reconcile_p2_invariants` catches drift.-->
+		</testcase>
+	</testsuite>
+</testsuites>

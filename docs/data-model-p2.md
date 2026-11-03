@@ -228,5 +228,6 @@ Giữ nguyên toàn bộ trường P1 (`lead`, `campaign`, `status`, `assigned_t
    - Bổ sung `INDEX (assigned_to, status, next_action_due)` — phục vụ hàng đợi `My Customers` & callback quá hạn/hôm nay
    - Bổ sung `INDEX (campaign, status, last_attempt_at)` — phục vụ `progress_summary`
 6. **`tabCRM Task` (bổ sung cho P2):**
-   - `INDEX (cskh_work_item, cskh_is_followup, status)` — tra cứu tức thời callback đang mở của Work Item
-   - `INDEX (assigned_to, cskh_is_followup, status, due_date)` — danh sách lịch hẹn của nhân viên/team
+   - `INDEX cskh_task_wi_open_idx (cskh_work_item, cskh_is_followup, status)` — tra cứu tức thời callback đang mở của Work Item
+   - `INDEX cskh_task_assignee_due_idx (assigned_to, cskh_is_followup, status, due_date)` — danh sách lịch hẹn của nhân viên
+   - `INDEX cskh_task_followup_due_idx (cskh_is_followup, status, due_date)` — danh sách lịch hẹn quá hạn / hôm nay / sắp tới cấp Team & Hệ thống

@@ -140,3 +140,77 @@ def _ensure_notification(work_item, lead, to_user, actor):
 	)
 	notification.insert(ignore_permissions=True)
 	return notification.name
+
+
+def deliver_followup_notification(work_item, task_id, owner, event_id, actor=None):
+	"""Post-commit, idempotent `CRM Notification` delivery for CSKH follow-up `CRM Task`s (`P2.md` §15.3).
+
+	Never raises and never rolls back the already-committed attempt/follow-up transaction.
+	"""
+	from crm_cskh.services.sanitizer import redact_pii_text
+
+	actor = actor or frappe.session.user
+	if not task_id or not owner:
+		return {"work_item": work_item, "delivered": False, "reason": "missing_target"}
+	task_ref = str(task_id)
+	try:
+		lead = frappe.db.get_value("CSKH Work Item", work_item, "lead")
+		existing = frappe.db.get_value(
+			"CRM Notification",
+			{
+				"notification_type_doctype": "CRM Task",
+				"notification_type_doc": task_ref,
+				"to_user": owner,
+				"type": NOTIFICATION_TYPE,
+			},
+			"name",
+		) or frappe.db.get_value(
+			"CRM Notification",
+			{
+				"reference_doctype": "CRM Task",
+				"reference_name": task_ref,
+				"to_user": owner,
+				"type": NOTIFICATION_TYPE,
+			},
+			"name",
+		)
+		if not existing:
+			doc = frappe.get_doc(
+				{
+					"doctype": "CRM Notification",
+					"from_user": actor,
+					"to_user": owner,
+					"type": NOTIFICATION_TYPE,
+					"message": f"Bạn có lịch hẹn chăm sóc lại #{task_ref}.",
+					"notification_type_doctype": "CRM Task",
+					"notification_type_doc": task_ref,
+					"reference_doctype": "CRM Lead" if lead else "CRM Task",
+					"reference_name": lead or task_ref,
+				}
+			)
+			doc.insert(ignore_permissions=True)
+			existing = doc.name
+			frappe.db.commit()
+		return {
+			"work_item": work_item,
+			"task_id": task_ref,
+			"delivered": True,
+			"event_id": event_id,
+			"notification": existing,
+		}
+	except Exception as exc:
+		frappe.db.rollback()
+		safe_err = redact_pii_text(f"{type(exc).__name__}: {exc}")
+		try:
+			frappe.log_error(
+				title="P2 followup notification failed",
+				message=f"{safe_err}\nwork_item={work_item} task_id={task_ref} event_id={event_id}",
+			)
+		except Exception:
+			pass
+		return {
+			"work_item": work_item,
+			"task_id": task_ref,
+			"delivered": False,
+			"error": safe_err,
+		}

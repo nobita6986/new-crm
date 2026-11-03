@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p2_outcomes_policy.TestP2OutcomesAndChannelSemantics-2[REDACTED_PHONE]42" tests="3" file="crm_cskh/tests/test_p2_outcomes_policy.py" time="1.630" timestamp="2026-11-04T00:56:45" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_outcomes_policy.TestP2OutcomesAndChannelSemantics" name="test_channel_compatibility_and_policy_enabled_channels" time="1.058" timestamp="2026-11-04T00:56:44" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_outcomes_policy.py" line="127">
+			<!--`T2-04`: Rejects incompatible channel/outcome pairs and channels disabled by Policy.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_outcomes_policy.TestP2OutcomesAndChannelSemantics" name="test_seeded_vietnamese_outcome_catalog_and_unreached_invariant" time="0.057" timestamp="2026-11-04T00:56:44" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_outcomes_policy.py" line="30">
+			<!--`T2-02`, `T2-24`: All 12 seeded codes exist in Vietnamese and unreached codes never count as connected.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_outcomes_policy.TestP2OutcomesAndChannelSemantics" name="test_unreached_vs_connected_outcomes_and_mandatory_fields" time="0.515" timestamp="2026-11-04T00:56:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_outcomes_policy.py" line="55">
+			<!--`T2-02`, `T2-03`, `T2-04`: `no_answer`/`busy`/`message_sent_no_reply` vs `connected_interested`, `NOTE_REQUIRED`, `FOLLOWUP_REQUIRED`.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p2_outcomes_policy.TestP2PolicyInheritanceAndSnapshotVersioning-2[REDACTED_PHONE]42" tests="2" file="crm_cskh/tests/test_p2_outcomes_policy.py" time="0.518" timestamp="2026-11-04T00:56:46" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_outcomes_policy.TestP2PolicyInheritanceAndSnapshotVersioning" name="test_campaign_overrides_team_overrides_global_policy_and_guards_stale_policy_version" time="0.257" timestamp="2026-11-04T00:56:46" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_outcomes_policy.py" line="172">
+			<!--`T2-18`: Resolves `Global -> Team -> Campaign` precedence and enforces `expected_policy_version`.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_outcomes_policy.TestP2PolicyInheritanceAndSnapshotVersioning" name="test_outcome_rename_or_disable_never_drifts_historical_attempt_snapshots" time="0.260" timestamp="2026-11-04T00:56:46" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_outcomes_policy.py" line="255">
+			<!--`T2-18`: Custom Outcome v1 snapshot stays frozen on historical attempt after rename (v2) and disable (v3).-->
+		</testcase>
+	</testsuite>
+</testsuites>

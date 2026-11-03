@@ -30,11 +30,12 @@ result is asserted before the transaction commits.
 """
 
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import cint, now_datetime
 
 from crm_cskh.api._params import parse_bool, parse_optional_str
+from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
 from crm_cskh.services import eligibility
-from crm_cskh.services.errors import Conflict, Forbidden, InvalidRequest, NotFound
+from crm_cskh.services.errors import Conflict, DoNotContact, Forbidden, InvalidRequest, NotFound
 
 REASSIGN = "reassign"
 REVOKE = "revoke"
@@ -79,7 +80,8 @@ def _require_target_eligibility(target_user):
 def _lock_work_item(work_item):
 	"""Row-lock the work item so two mutators cannot interleave."""
 	rows = frappe.db.sql(
-		"select name, campaign, lead, status, assigned_to, assigned_at "
+		"select name, campaign, lead, status, revision, assigned_to, assigned_at, "
+		"open_callback_task, next_action_due "
 		"from `tabCSKH Work Item` where name = %s for update",
 		(work_item,),
 		as_dict=True,
@@ -90,10 +92,10 @@ def _lock_work_item(work_item):
 
 
 def _capacity_usage(campaign, user):
-	"""Number of active assigned work items of `user` inside `campaign`."""
+	"""Number of active owned work items (`assigned`, `in_progress`, `on_hold`) of `user` inside `campaign`."""
 	return frappe.db.count(
 		"CSKH Work Item",
-		{"campaign": campaign, "assigned_to": user, "status": "assigned"},
+		{"campaign": campaign, "assigned_to": user, "status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)]},
 	)
 
 
@@ -353,6 +355,10 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 			code="ALREADY_ASSIGNED",
 			details={"status": item.status},
 		)
+	if frappe.db.has_column("CRM Lead", "cskh_do_not_contact") and cint(
+		frappe.db.get_value("CRM Lead", item.lead, "cskh_do_not_contact")
+	):
+		raise DoNotContact("Khách hàng đang ở trạng thái ngừng liên hệ (DNC); không được giao chăm sóc.")
 	claim = frappe.db.get_value(
 		"CSKH Active Claim",
 		{"lead": item.lead},
@@ -367,7 +373,11 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 		)
 	other_assigned = frappe.db.get_value(
 		"CSKH Work Item",
-		{"lead": item.lead, "status": "assigned", "name": ["!=", work_item]},
+		{
+			"lead": item.lead,
+			"status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)],
+			"name": ["!=", work_item],
+		},
 		["name", "campaign"],
 		as_dict=True,
 	)
@@ -380,10 +390,16 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 	target_user = _require_campaign_target_eligibility(item.campaign, target_user)
 
 	now = now_datetime()
+	next_revision = max(cint(item.get("revision") or 1), 1)
 	frappe.db.set_value(
 		"CSKH Work Item",
 		work_item,
-		{"status": "assigned", "assigned_to": target_user, "assigned_at": now},
+		{
+			"status": "assigned",
+			"assigned_to": target_user,
+			"assigned_at": now,
+			"revision": next_revision,
+		},
 		update_modified=False,
 	)
 
@@ -452,7 +468,7 @@ def reassign(
 		return {"work_item": work_item, "status": "already_applied", "event": existing}
 
 	item = _lock_work_item(work_item)
-	if item.status != "assigned" or not item.assigned_to:
+	if item.status not in OWNED_ACTIVE_WORK_ITEM_STATES or not item.assigned_to:
 		raise Conflict(
 			"The work item is not currently assigned.",
 			code="ALREADY_ASSIGNED",
@@ -476,10 +492,33 @@ def reassign(
 	old_owner = item.assigned_to
 	_close_open_interval(work_item, now)
 
+	from crm_cskh.services.followup import reassign_open_followup_in_tx
+
+	transferred_task = reassign_open_followup_in_tx(
+		work_item=work_item,
+		lead=item.lead,
+		from_user=old_owner,
+		to_user=target_user,
+		actor=actor,
+		reason=reason,
+		now=now,
+	)
+
+	next_revision = cint(item.get("revision") or 1) + 1
+	wi_updates = {
+		# Preserve sub-state (`assigned` | `in_progress` | `on_hold`) on transfer (`ADR-P2-01`).
+		"status": item.status,
+		"assigned_to": target_user,
+		"assigned_at": now,
+		"last_transfer_at": now,
+		"revision": next_revision,
+	}
+	if transferred_task:
+		wi_updates["open_callback_task"] = transferred_task
 	frappe.db.set_value(
 		"CSKH Work Item",
 		work_item,
-		{"status": "assigned", "assigned_to": target_user, "assigned_at": now, "last_transfer_at": now},
+		wi_updates,
 		update_modified=False,
 	)
 
@@ -515,7 +554,15 @@ def reassign(
 	_sync_lead_owner(item.lead, target_user)
 
 	ledger = _assert_final_owner(item.lead, target_user)
-	return {"work_item": work_item, "status": "reassigned", "owner": target_user, "ledger": ledger}
+	return {
+		"work_item": work_item,
+		"status": "reassigned",
+		"work_item_status": item.status,
+		"owner": target_user,
+		"revision": next_revision,
+		"transferred_callback_task": transferred_task,
+		"ledger": ledger,
+	}
 
 
 def revoke(
@@ -546,7 +593,7 @@ def revoke(
 		return {"work_item": work_item, "status": "already_applied", "event": existing}
 
 	item = _lock_work_item(work_item)
-	if item.status != "assigned" or not item.assigned_to:
+	if item.status not in OWNED_ACTIVE_WORK_ITEM_STATES or not item.assigned_to:
 		raise Conflict(
 			"The work item is not currently assigned.",
 			code="ALREADY_ASSIGNED",
@@ -563,11 +610,29 @@ def revoke(
 	old_owner = item.assigned_to
 	_close_open_interval(work_item, now)
 
+	from crm_cskh.services.followup import cancel_open_followup_in_tx
+
+	canceled_task = cancel_open_followup_in_tx(
+		work_item=work_item,
+		actor=actor,
+		reason=f"Thu hồi phân công: {reason}",
+		now=now,
+	)
+
 	new_status = "queued" if return_to_pool else "revoked"
+	next_revision = cint(item.get("revision") or 1) + 1
 	frappe.db.set_value(
 		"CSKH Work Item",
 		work_item,
-		{"status": new_status, "assigned_to": None, "assigned_at": None, "last_transfer_at": now},
+		{
+			"status": new_status,
+			"assigned_to": None,
+			"assigned_at": None,
+			"open_callback_task": None,
+			"next_action_due": None,
+			"last_transfer_at": now,
+			"revision": next_revision,
+		},
 		update_modified=False,
 	)
 
@@ -600,4 +665,10 @@ def revoke(
 	# back in the pool and may join another campaign (ADR-P1-02 §2.2).
 	frappe.db.delete("CSKH Active Claim", {"lead": item.lead})
 
-	return {"work_item": work_item, "status": new_status, "owner": None}
+	return {
+		"work_item": work_item,
+		"status": new_status,
+		"owner": None,
+		"revision": next_revision,
+		"canceled_callback_task": canceled_task,
+	}

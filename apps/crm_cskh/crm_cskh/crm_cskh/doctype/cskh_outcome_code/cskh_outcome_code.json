@@ -1,0 +1,211 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Outcome Code",
+ "module": "CRM CSKH",
+ "autoname": "field:code",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "code",
+   "fieldtype": "Data",
+   "label": "Code",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "label_vi",
+   "fieldtype": "Data",
+   "label": "Label VI",
+   "reqd": 1
+  },
+  {
+   "fieldname": "description",
+   "fieldtype": "Small Text",
+   "label": "Description"
+  },
+  {
+   "fieldname": "result_group",
+   "fieldtype": "Select",
+   "label": "Result Group",
+   "options": "unreached\nengaged\npositive\nnegative\nconverted\ninvalid_contact\ncompliance\nother",
+   "default": "unreached",
+   "reqd": 1
+  },
+  {
+   "fieldname": "is_contact_attempt",
+   "fieldtype": "Check",
+   "label": "Is Contact Attempt",
+   "default": "1"
+  },
+  {
+   "fieldname": "is_connected",
+   "fieldtype": "Check",
+   "label": "Is Connected",
+   "default": "0"
+  },
+  {
+   "fieldname": "is_interested",
+   "fieldtype": "Check",
+   "label": "Is Interested",
+   "default": "0"
+  },
+  {
+   "fieldname": "is_terminal",
+   "fieldtype": "Check",
+   "label": "Is Terminal",
+   "default": "0"
+  },
+  {
+   "fieldname": "is_do_not_contact",
+   "fieldtype": "Check",
+   "label": "Is Do Not Contact",
+   "default": "0"
+  },
+  {
+   "fieldname": "requires_note",
+   "fieldtype": "Check",
+   "label": "Requires Note",
+   "default": "0"
+  },
+  {
+   "fieldname": "requires_followup",
+   "fieldtype": "Check",
+   "label": "Requires Followup",
+   "default": "0"
+  },
+  {
+   "fieldname": "allows_followup",
+   "fieldtype": "Check",
+   "label": "Allows Followup",
+   "default": "1"
+  },
+  {
+   "fieldname": "requires_completion_reason",
+   "fieldtype": "Check",
+   "label": "Requires Completion Reason",
+   "default": "0"
+  },
+  {
+   "fieldname": "allowed_channels",
+   "fieldtype": "Data",
+   "label": "Allowed Channels",
+   "default": "phone_call,sms,zalo,facebook,other",
+   "reqd": 1
+  },
+  {
+   "fieldname": "suggested_next_status",
+   "fieldtype": "Select",
+   "label": "Suggested Next Status",
+   "options": "in_progress\non_hold\nclosed",
+   "default": "in_progress",
+   "reqd": 1
+  },
+  {
+   "fieldname": "version",
+   "fieldtype": "Int",
+   "label": "Version",
+   "default": "1",
+   "reqd": 1
+  },
+  {
+   "fieldname": "enabled",
+   "fieldtype": "Check",
+   "label": "Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "sort_order",
+   "fieldtype": "Int",
+   "label": "Sort Order",
+   "default": "100"
+  }
+ ],
+ "field_order": [
+  "code",
+  "label_vi",
+  "description",
+  "result_group",
+  "is_contact_attempt",
+  "is_connected",
+  "is_interested",
+  "is_terminal",
+  "is_do_not_contact",
+  "requires_note",
+  "requires_followup",
+  "allows_followup",
+  "requires_completion_reason",
+  "allowed_channels",
+  "suggested_next_status",
+  "version",
+  "enabled",
+  "sort_order"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH BOD Viewer",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "sort_order",
+ "sort_order": "ASC",
+ "title_field": "label_vi",
+ "modified": "2026-11-03 23:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}
