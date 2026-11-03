@@ -612,3 +612,35 @@ You may not reconcile a campaign.,Bạn không có quyền đối soát chiến 
 already_claimed,Đã được giữ bởi chiến dịch khác
 invalid_row,Dòng dữ liệu không hợp lệ
 no_phone_column,Thiếu cột số điện thoại
+do_not_contact,Khách từ chối liên hệ tiếp
+An active owned work item requires an assignee.,Công việc đang chăm sóc bắt buộc có người phụ trách.
+An active owned work item requires an assignment timestamp.,Công việc đang chăm sóc bắt buộc có thời điểm phân công.
+Work items cannot be deleted; revoke or close them instead.,Không được xóa công việc; hãy thu hồi hoặc đóng công việc.
+Contact Attempt,Lần liên hệ
+CSKH Contact Attempt,Nhật ký liên hệ CSKH
+CSKH Attempt Correction,Hiệu chỉnh nhật ký liên hệ CSKH
+CSKH Outcome Code,Mã kết quả liên hệ CSKH
+CSKH Policy,Chính sách chăm sóc CSKH
+Outcome,Kết quả liên hệ
+Unreachable,Không liên lạc được
+Connected,Đã kết nối
+Follow-up,Hẹn liên hệ lại
+On Hold,Chờ chăm sóc lại
+Due,Đến hạn
+Self-reported,Nhân viên tự báo cáo
+Verified,Đã xác minh
+Do Not Contact,Không liên hệ nữa
+Close Work Item,Hoàn tất chăm sóc
+OWNERSHIP_CHANGED,OWNERSHIP_CHANGED
+WORK_ITEM_NOT_ACTIVE,WORK_ITEM_NOT_ACTIVE
+STALE_WORK_ITEM,STALE_WORK_ITEM
+POLICY_CHANGED,POLICY_CHANGED
+IDEMPOTENCY_CONFLICT,IDEMPOTENCY_CONFLICT
+ALREADY_LINKED,ALREADY_LINKED
+DO_NOT_CONTACT,DO_NOT_CONTACT
+INVALID_CHANNEL,INVALID_CHANNEL
+INVALID_OUTCOME,INVALID_OUTCOME
+NOTE_REQUIRED,NOTE_REQUIRED
+FOLLOWUP_REQUIRED,FOLLOWUP_REQUIRED
+INVALID_FOLLOWUP_TIME,INVALID_FOLLOWUP_TIME
+OUTCOME_NOT_COMPATIBLE,OUTCOME_NOT_COMPATIBLE

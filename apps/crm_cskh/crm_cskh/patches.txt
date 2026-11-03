@@ -17,3 +17,7 @@ crm_cskh.patches.v1_0.p1_placeholder_name_field
 # P1 (L-25): composite unique `(import_batch, lead)` and covering lookup
 # indexes on `CSKH Import Batch Lead`.
 crm_cskh.patches.v1_0.p1_import_batch_lead_constraints
+
+# P2: Custom Fields on `CRM Lead` & `CRM Task`, P2 unique/lookup indexes,
+# Work Item revision backfill, and 12 Vietnamese Outcome Codes + GLOBAL-DEFAULT Policy.
+crm_cskh.patches.v2_0.p2_schema_and_seeds

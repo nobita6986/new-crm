@@ -2,11 +2,11 @@ import re
 
 import frappe
 
-from crm_cskh.hooks import P1_DOCTYPES
+from crm_cskh.hooks import P1_DOCTYPES, P2_DOCTYPES
 from crm_cskh.p1_permissions import validate_p1_filter_fields
 from crm_cskh.permissions import LEAD_LINKS, _is_system, user_in_scope
 
-GUARDED_SEARCH_DOCTYPES = frozenset((*P1_DOCTYPES, "CRM Lead", "CRM Deal", *LEAD_LINKS))
+GUARDED_SEARCH_DOCTYPES = frozenset((*P1_DOCTYPES, *P2_DOCTYPES, "CRM Lead", "CRM Deal", *LEAD_LINKS))
 
 
 def _check_read(doctype, name):

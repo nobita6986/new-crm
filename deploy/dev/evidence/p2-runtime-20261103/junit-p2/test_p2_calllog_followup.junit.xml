@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p2_calllog_followup.TestP2CallLogReuseAndSideArtifactIsolation-2[REDACTED_PHONE]48" tests="2" file="crm_cskh/tests/test_p2_calllog_followup.py" time="1.719" timestamp="2026-11-04T00:56:50" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_calllog_followup.TestP2CallLogReuseAndSideArtifactIsolation" name="test_fcrm_note_general_crm_task_and_standalone_call_log_never_inflate_counters" time="1.289" timestamp="2026-11-04T00:56:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_calllog_followup.py" line="113">
+			<!--`T2-12`, `T2-17`: Creating `FCRM Note`, general `CRM Task`, or unlinked `CRM Call Log` keeps `attempt_count=0`.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_calllog_followup.TestP2CallLogReuseAndSideArtifactIsolation" name="test_link_existing_call_log_create_manual_call_log_and_block_duplicate_linking" time="0.430" timestamp="2026-11-04T00:56:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_calllog_followup.py" line="28">
+			<!--`T2-16`: 1:1 `CRM Call Log` linking, manual `call_log_data`, foreign Lead block, and `409 ALREADY_LINKED`.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p2_calllog_followup.TestP2FollowupInvariantsAndTimezoneBuckets-2[REDACTED_PHONE]48" tests="2" file="crm_cskh/tests/test_p2_calllog_followup.py" time="0.680" timestamp="2026-11-04T00:56:52" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_calllog_followup.TestP2FollowupInvariantsAndTimezoneBuckets" name="test_single_open_callback_reschedule_and_block_empty_completion_or_direct_bypass" time="0.319" timestamp="2026-11-04T00:56:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_calllog_followup.py" line="156">
+			<!--`T2-06`, `T2-07`: Rescheduling updates the same `CRM Task`; empty Done and direct ORM bypass are rejected.-->
+			<system-out><![CDATA[Message: Tác vụ hẹn lại CSKH chỉ được tạo hoặc cập nhật qua quy trình nghiệp vụ CSKH.
+Message: Không được xóa tác vụ hẹn lại CSKH; hãy hủy có lý do qua quy trình nghiệp vụ.
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_calllog_followup.TestP2FollowupInvariantsAndTimezoneBuckets" name="test_timezone_consistent_overdue_today_upcoming_buckets_at_day_boundaries" time="0.361" timestamp="2026-11-04T00:56:52" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_calllog_followup.py" line="248">
+			<!--`T2-21`: `overdue` / `today` / `upcoming` buckets classify `09:59`, `23:59`, and `tomorrow 00:01` accurately.-->
+		</testcase>
+	</testsuite>
+</testsuites>
