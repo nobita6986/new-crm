@@ -1,0 +1,57 @@
+{
+  "import-2": {
+    "mode": "import",
+    "workers": 2,
+    "phone": "******3347",
+    "canonical": "******3347",
+    "identity_rows": 1,
+    "lead_rows": 1,
+    "duplicate_leads": 0,
+    "winners": 2,
+    "errors": [],
+    "ok": true
+  },
+  "import-5": {
+    "mode": "import",
+    "workers": 5,
+    "phone": "******8318",
+    "canonical": "******8318",
+    "identity_rows": 1,
+    "lead_rows": 1,
+    "duplicate_leads": 0,
+    "winners": 5,
+    "errors": [],
+    "ok": true
+  },
+  "distribution-2": {
+    "mode": "distribution",
+    "workers": 2,
+    "lead": "CRM-LEAD-2026-00063",
+    "campaign": "pt58e553gs",
+    "claims": 1,
+    "work_items": 1,
+    "duplicate_items": 0,
+    "winners": 1,
+    "errors": [
+      "UniqueValidationError: ('CSKH Work Item', 'pu21ig45np', IntegrityError(1062, \"Duplicate entry 'pt58e553gs-CRM-LEAD-2026-00063' for key 'cskh_domain_unique'\"))"
+    ],
+    "ok": true
+  },
+  "distribution-5": {
+    "mode": "distribution",
+    "workers": 5,
+    "lead": "CRM-LEAD-2026-00064",
+    "campaign": "pu5h8an39p",
+    "claims": 1,
+    "work_items": 1,
+    "duplicate_items": 0,
+    "winners": 1,
+    "errors": [
+      "UniqueValidationError: ('CSKH Work Item', 'putgufv02n', IntegrityError(1062, \"Duplicate entry 'pu5h8an39p-CRM-LEAD-2026-00064' for key 'cskh_domain_unique'\"))",
+      "UniqueValidationError: ('CSKH Work Item', 'pva9eslgmo', IntegrityError(1062, \"Duplicate entry 'pu5h8an39p-CRM-LEAD-2026-00064' for key 'cskh_domain_unique'\"))",
+      "UniqueValidationError: ('CSKH Work Item', 'pvoipklktd', IntegrityError(1062, \"Duplicate entry 'pu5h8an39p-CRM-LEAD-2026-00064' for key 'cskh_domain_unique'\"))",
+      "UniqueValidationError: ('CSKH Work Item', 'q056qih92l', IntegrityError(1062, \"Duplicate entry 'pu5h8an39p-CRM-LEAD-2026-00064' for key 'cskh_domain_unique'\"))"
+    ],
+    "ok": true
+  }
+}

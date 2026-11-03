@@ -1,0 +1,122 @@
+[
+ {
+  "case": "SEC-05: the CRM Admin can read the assignment history",
+  "actor": "admin",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "n=1"
+ },
+ {
+  "case": "SEC-05: the CRM Admin cannot rewrite the history row",
+  "actor": "admin",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exc_type\":\"PermissionError\",\"_server_messages\":\"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"User <strong>t1c-r3-admin@example.test</strong> does not have doctype access via role"
+ },
+ {
+  "case": "SEC-05: the CRM Admin cannot delete the history row",
+  "actor": "admin",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": "{\"exception\":\"frappe.exceptions.PermissionError: User not allowed to delete CSKH Assignment History: he0s4r6lvd\",\"exc_type\":\"PermissionError\",\"exc\":\"[\\\"Tracebac"
+ },
+ {
+  "case": "SEC-05: the rewrite is still refused (idempotent)",
+  "actor": "admin",
+  "expected": 403,
+  "actual": 403,
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "case": "SEC-08: the setup upload of the formula file succeeds",
+  "actor": "system(setup)",
+  "expected": 200,
+  "actual": 200,
+  "ok": true,
+  "detail": "{\"message\":{\"name\":\"0474bff8dc\",\"owner\":\"Administrator\",\"creation\":\"2026-11-02 23:59:57.891372\",\"mod"
+ },
+ {
+  "case": "SEC-08: the CRM Admin creates a preview of the formula file",
+  "actor": "admin",
+  "expected": 200,
+  "actual": 200,
+  "ok": true,
+  "detail": "{\"message\":{\"batch\":\"3sbosdtmgl\",\"status\":\"DRY_RUN\",\"checksum\":\"be41fc52956db6531621329d121f1aeeabd3acd5bcf8ca5c61025d6cf5707ada\",\"idempotency_key\":\"t"
+ },
+ {
+  "case": "SEC-08: the preview returns a batch",
+  "actor": "admin",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "keys=['as_of', 'batch', 'checksum', 'committed_at', 'error_artifact', 'idempotency_key', 'preview', 'preview_truncated', 'status', 'totals']"
+ },
+ {
+  "case": "SEC-08: the preview payload contains no raw formula",
+  "actor": "admin",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "clean"
+ },
+ {
+  "case": "SEC-08: the preview payload contains no raw HTML",
+  "actor": "admin",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": ""
+ },
+ {
+  "case": "SEC-08: the CRM Admin reads the batch status",
+  "actor": "admin",
+  "expected": 200,
+  "actual": 200,
+  "ok": true,
+  "detail": "{\"message\":{\"batch\":\"3sbosdtmgl\",\"status\":\"DRY_RUN\",\"checksum\":\"be41fc52956db6531621329d121f1aeeabd3acd5bcf8ca5c61025d6cf5707ada\",\"idempotency_key\":\"t"
+ },
+ {
+  "case": "SEC-08: the stored batch carries no formula / HTML",
+  "actor": "admin",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "clean"
+ },
+ {
+  "case": "SEC-10: a stale expected_owner is refused (no overwrite)",
+  "actor": "admin",
+  "expected": 409,
+  "actual": 409,
+  "ok": true,
+  "detail": "{\"exception\":\"crm_cskh.services.errors.Conflict: The current owner is not the expected owner.\",\"exc_type\":\"Conflict\",\"_exc_source\":\"crm_cskh (app)\",\"e"
+ },
+ {
+  "case": "SEC-10: the current owner keeps the work item after the refusal",
+  "actor": "staff_a",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "items=7"
+ },
+ {
+  "case": "SEC-10: the first reassign with the right owner succeeds",
+  "actor": "admin",
+  "expected": 200,
+  "actual": 200,
+  "ok": true,
+  "detail": "{\"message\":{\"work_item\":\"he0c8h3ueh\",\"status\":\"reassigned\",\"owner\":\"t1c-r3-staff-b@example.test\",\"ledger\":{\"owner\":\"t1c-r3-staff-b@example.test\",\"shar"
+ },
+ {
+  "case": "SEC-10: the retry with the same request_id does not fail nor double apply",
+  "actor": "admin",
+  "expected": true,
+  "actual": true,
+  "ok": true,
+  "detail": "status=200"
+ }
+]
