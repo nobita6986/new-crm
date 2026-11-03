@@ -12,7 +12,7 @@ import frappe
 
 from crm_cskh import p2_strings
 from crm_cskh.api import ownership_ui
-from crm_cskh.tests.p1_base import P1TestCase
+from crm_cskh.tests.p2_base import P2TestCase
 from crm_cskh.www import cskh_context
 from crm_cskh.www.cskh import (
 	callbacks as callbacks_page,
@@ -34,7 +34,7 @@ from crm_cskh.www.cskh import (
 )
 
 
-class TestUiP2PagesAndContext(P1TestCase):
+class TestUiP2PagesAndContext(P2TestCase):
 	"""Verify P2 `/cskh/*` role gates, BOD PII exclusion, timezone context, and Form Scripts."""
 
 	def tearDown(self):
@@ -161,8 +161,6 @@ class TestUiP2PagesAndContext(P1TestCase):
 
 	def test_o02_ownership_ui_assignees_respects_per_user_latest_rule_version(self):
 		camp = self.make_campaign(title="Chiến dịch đa version O-02", team_scope=self.team_a)
-		lead_a = self.make_canonical_lead()
-		self.make_work_item(camp, lead_a, status="assigned", assigned_to=self.staff_a)
 
 		# staff_a has historical v1 (cap=5, enabled=1) superseded by v2 (cap=1, enabled=1) -> full at 1/1
 		self.make_rule(camp, self.staff_a, weight=50, capacity=5, version=1, enabled=1, team=self.team_a)
@@ -170,6 +168,9 @@ class TestUiP2PagesAndContext(P1TestCase):
 
 		# staff_b remains at v1 (cap=5, enabled=1) -> still eligible even though staff_a is at v2
 		self.make_rule(camp, self.staff_b, weight=50, capacity=5, version=1, enabled=1, team=self.team_a)
+
+		# Assign via canonical P2 helper so Active Claim + open Assignment History interval stay reconciled
+		self.make_assigned_work_item(camp, self.staff_a)
 
 		frappe.set_user(self.admin_user)
 		res = ownership_ui.assignees(campaign=camp)

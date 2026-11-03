@@ -44,6 +44,7 @@ from crm_cskh.services.errors import (
 	OwnershipChanged,
 	StaleWorkItem,
 	WorkItemNotActive,
+	rollback_savepoint_safely,
 )
 from crm_cskh.services.sanitizer import sanitize_note_text
 
@@ -662,7 +663,7 @@ def schedule_followup(
 			update_modified=True,
 		)
 	except Exception:
-		frappe.db.rollback(save_point=savepoint)
+		rollback_savepoint_safely(savepoint)
 		raise
 
 	frappe.db.commit()
@@ -806,7 +807,7 @@ def complete_followup(
 			update_modified=True,
 		)
 	except Exception:
-		frappe.db.rollback(save_point=savepoint)
+		rollback_savepoint_safely(savepoint)
 		raise
 
 	frappe.db.commit()

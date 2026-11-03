@@ -247,6 +247,73 @@ jobs:
           echo "p2 reconcile gate exit=$rec_status" >> "$artifact_dir/module-status.txt"
           test "$idx_status" -eq 0 && test "$rec_status" -eq 0
 
+      - name: Backup, restore to a new site, and verify P2 invariants
+        id: backup_restore
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p2-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P2_ENV" -p "$P2_PROJECT")
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site "$SITE_NAME" backup --with-files && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p2-restore.localhost && db=$(find "sites/$SITE_NAME/private/backups" -name "*-database.sql.gz" -print | sort | tail -n 1) && public=$(find "sites/$SITE_NAME/private/backups" -name "*-files.tar" ! -name "*-private-files.tar" -print | sort | tail -n 1) && private=$(find "sites/$SITE_NAME/private/backups" -name "*-private-files.tar" -print | sort | tail -n 1) && test -n "$db" && test -n "$public" && test -n "$private" && bench --site p2-restore.localhost --force restore "$db" --db-root-password "$DB_ROOT_PASSWORD" --with-public-files "$public" --with-private-files "$private" && bench --site p2-restore.localhost migrate'; then
+            echo 'p2 backup_restore command failed' >> "$artifact_dir/module-status.txt"
+            exit 1
+          fi
+          "${compose[@]}" exec -T -w /workspace/frappe-bench/sites bench /workspace/frappe-bench/env/bin/python -c '
+          import json, sys, frappe
+          from datetime import datetime, timezone
+          doctypes = (
+              "CRM Lead",
+              "CRM Call Log",
+              "CRM Task",
+              "CSKH Campaign",
+              "CSKH Work Item",
+              "CSKH Assignment History",
+              "CSKH Outcome Code",
+              "CSKH Policy",
+              "CSKH Contact Attempt",
+              "CSKH Attempt Correction",
+          )
+          def snap(site):
+              frappe.init(site=site, sites_path=".")
+              frappe.connect()
+              try:
+                  from crm_cskh.services.read_model import reconcile_p2_invariants
+                  counts = {dt: int(frappe.db.count(dt)) for dt in doctypes}
+                  rec = reconcile_p2_invariants()
+                  has_idem = bool(
+                      frappe.db.sql(
+                          "select name from `tabCSKH Contact Attempt` where char_length(coalesce(idempotency_key, %s)) > 0 and char_length(coalesce(payload_hash, %s)) > 0 limit 1",
+                          ("", ""),
+                      )
+                  )
+                  return {"counts": counts, "reconcile_ok": bool(rec.get("ok")), "has_idempotency_record": has_idem}
+              finally:
+                  frappe.destroy()
+          src = snap("p2-ci.localhost")
+          dst = snap("p2-restore.localhost")
+          ok = (
+              src["counts"] == dst["counts"]
+              and dst["counts"]["CSKH Outcome Code"] >= 12
+              and dst["counts"]["CSKH Contact Attempt"] >= 1
+              and dst["reconcile_ok"]
+              and dst["has_idempotency_record"]
+          )
+          report = {
+              "status": "PASS" if ok else "FAIL",
+              "checked_at_utc": datetime.now(timezone.utc).isoformat(),
+              "counts_match": src["counts"] == dst["counts"],
+              "source": src,
+              "restored": dst,
+          }
+          print(json.dumps(report, indent=2, default=str))
+          sys.exit(0 if ok else 1)
+          ' > "$artifact_dir/p2-backup-restore-smoke.json"
+          br_status=$?
+          echo "p2 backup_restore exit=$br_status" >> "$artifact_dir/module-status.txt"
+          exit "$br_status"
+
       - name: Sanitize evidence, hash manifest and record environment metadata
         if: always()
         shell: bash
@@ -259,11 +326,14 @@ jobs:
           PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
           HTTP_TRANSPORT_OUTCOME: ${{ steps.p2_http_transport.outcome }}
           SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
+          BACKUP_RESTORE_OUTCOME: ${{ steps.backup_restore.outcome }}
         run: |
           mkdir -p "$RUNNER_TEMP/p2-evidence"
           export P2_EVIDENCE_DIR="$RUNNER_TEMP/p2-evidence"
           export P2_ENV_FILE="$P2_ENV"
+          export P2_SEED_SOURCE="$GITHUB_WORKSPACE/deploy/dev/seed/seed_demo.py"
           python3 - <<'PY'
+          import ast
           import hashlib
           import json
           import os
@@ -272,12 +342,22 @@ jobs:
 
           root = Path(os.environ["P2_EVIDENCE_DIR"])
           env_file = Path(os.environ["P2_ENV_FILE"])
+          seed_file = Path(os.environ["P2_SEED_SOURCE"])
           env_values = {}
           for line in env_file.read_text(encoding="utf-8").splitlines():
               if "=" in line and not line.lstrip().startswith("#"):
                   key, value = line.split("=", 1)
                   env_values[key] = value
           secrets = [env_values.get(key, "") for key in ("ADMIN_PASSWORD", "DB_ROOT_PASSWORD")]
+          seed_tree = ast.parse(seed_file.read_text(encoding="utf-8"), filename=str(seed_file))
+          for node in seed_tree.body:
+              if isinstance(node, ast.Assign) and any(
+                  isinstance(target, ast.Name) and target.id == "SEED_PASSWORD"
+                  for target in node.targets
+              ):
+                  value = ast.literal_eval(node.value)
+                  if isinstance(value, str) and value:
+                      secrets.append(value)
           patterns = [
               (re.compile(r"(?im)(set-cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
               (re.compile(r"(?im)(cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
@@ -323,6 +403,7 @@ jobs:
                   "per_method_gate": os.environ.get("PER_METHOD_GATE_OUTCOME"),
                   "p2_http_transport": os.environ.get("HTTP_TRANSPORT_OUTCOME"),
                   "schema": os.environ.get("SCHEMA_OUTCOME"),
+                  "backup_restore": os.environ.get("BACKUP_RESTORE_OUTCOME"),
               },
               "redaction_replacements": redactions,
           }
@@ -361,6 +442,7 @@ jobs:
           PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
           HTTP_TRANSPORT_OUTCOME: ${{ steps.p2_http_transport.outcome }}
           SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
+          BACKUP_RESTORE_OUTCOME: ${{ steps.backup_restore.outcome }}
         run: |
           printf 'bootstrap=%s\n' "$BOOTSTRAP_OUTCOME"
           printf 'lint=%s\n' "$LINT_OUTCOME"
@@ -370,6 +452,7 @@ jobs:
           printf 'per_method_gate=%s\n' "$PER_METHOD_GATE_OUTCOME"
           printf 'p2_http_transport=%s\n' "$HTTP_TRANSPORT_OUTCOME"
           printf 'schema=%s\n' "$SCHEMA_OUTCOME"
+          printf 'backup_restore=%s\n' "$BACKUP_RESTORE_OUTCOME"
           test "$BOOTSTRAP_OUTCOME" = success && \
             test "$LINT_OUTCOME" = success && \
             test "$INVENTORY_OUTCOME" = success && \
@@ -377,7 +460,8 @@ jobs:
             test "$PER_METHOD_OUTCOME" = success && \
             test "$PER_METHOD_GATE_OUTCOME" = success && \
             test "$HTTP_TRANSPORT_OUTCOME" = success && \
-            test "$SCHEMA_OUTCOME" = success
+            test "$SCHEMA_OUTCOME" = success && \
+            test "$BACKUP_RESTORE_OUTCOME" = success
 
       - name: Show stack logs if a gate fails
         if: failure()
