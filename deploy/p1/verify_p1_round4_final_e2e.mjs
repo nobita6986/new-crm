@@ -293,14 +293,25 @@ async function main() {
 				{ phone: '0918840201', name: 'Pham R4 TeamA 1', source: 'R4TeamASrc' },
 				{ phone: '0918840202', name: 'Doan R4 TeamA 2', source: 'R4TeamASrc' },
 				{ phone: '0918840203', name: 'Hoang R4 TeamA 3', source: 'R4TeamASrc' },
+				{ phone: '0918840204', name: 'Bui R4 TeamA 4', source: 'R4TeamASrc' },
+				{ phone: '0918840205', name: 'Dang R4 TeamA 5', source: 'R4TeamASrc' },
 			])
 			assert(
 				batchTeamA.status === 'COMPLETED',
 				`Expected batchTeamA COMPLETED, got ${batchTeamA.status}`
 			)
 
+			const batchTeamB = await importBatchCsv(adminS.page, 'r4-batch-tb', [
+				{ phone: '0918840301', name: 'Ngo R4 TeamB 1', source: 'R4TeamBSrc' },
+				{ phone: '0918840302', name: 'Ly R4 TeamB 2', source: 'R4TeamBSrc' },
+			])
+			assert(
+				batchTeamB.status === 'COMPLETED',
+				`Expected batchTeamB COMPLETED, got ${batchTeamB.status}`
+			)
+
 			const setupData = await adminS.page.evaluate(
-				async ({ bSh, bTa, tA, tB, staffA, staffB, staffC }) => {
+				async ({ bSh, bTa, bTb, tA, tB, staffA, staffB, staffC }) => {
 					const shRows = await window.cskh.get('crm_cskh.api.pool_ui.list', {
 						batch: bSh,
 						page_size: 20,
@@ -309,8 +320,13 @@ async function main() {
 						batch: bTa,
 						page_size: 20,
 					})
+					const tbRows = await window.cskh.get('crm_cskh.api.pool_ui.list', {
+						batch: bTb,
+						page_size: 20,
+					})
 					const sharedLeads = shRows.items.map((x) => x.lead).sort()
 					const taLeads = taRows.items.map((x) => x.lead).sort()
+					const tbLeads = tbRows.items.map((x) => x.lead).sort()
 
 					const campA = await window.cskh.post('crm_cskh.api.campaigns.save', {
 						code: `R4-TA-${Date.now()}`,
@@ -387,6 +403,7 @@ async function main() {
 					return {
 						campA: campA.campaign,
 						campShared: campShared.campaign,
+						tbLeads,
 						runA: execA.run_id || prevA.preview_id,
 						runShared: execSh.run_id || prevSh.preview_id,
 					}
@@ -394,6 +411,7 @@ async function main() {
 				{
 					bSh: batchShared.batch,
 					bTa: batchTeamA.batch,
+					bTb: batchTeamB.batch,
 					tA: teamA,
 					tB: teamB,
 					staffA: users.staff_a,
@@ -408,11 +426,13 @@ async function main() {
 			assert(doneShared.status === 'completed', `runShared expected completed, got ${doneShared.status}`)
 
 			// Reassign 1 Team A item (`wiKeepA`: `staffA -> staffB`) to generate >= 2 history events,
-			// AND revoke 1 Team A item (`wiMoveToB`) -> distribute to `campB` (`staffC`) for L-23 check!
-			// Also revoke 1 `campA` item with `return_to_pool: 1` (leaving a stale `queued` Work Item in `campA`)
-			// and distribute BOTH `movedLead` and `retPoolLead` to `campB` (`staffC`) to verify `6c457b3` SQL `pool_list` L-23!
+			// revoke 1 Team A item (`wiMoveToB`) -> distribute to `campB` (`staffC`),
+			// revoke 2 `campA` items with `return_to_pool: 1` that STAY in Team A (`stayQueuedALeads`),
+			// AND revoke 1 `campA` item with `return_to_pool: 1` (`retPoolLead`) -> distribute to `campB`
+			// alongside 2 `tbLeads` (which are then returned to `campB` queued pool) so BOTH Team A and
+			// Team B have >= 2 queued + >= 2 assigned items for pre-pagination `totals` checks across all 3 Pool APIs!
 			const ownershipSetup = await adminS.page.evaluate(
-				async ({ campA, campShared, tB, staffA, staffB, staffC }) => {
+				async ({ campA, campShared, tbLeads, tB, staffA, staffB, staffC }) => {
 					const asgAll = await window.cskh.get('crm_cskh.api.ownership_ui.assigned_list', {
 						campaign: campShared,
 						page_size: 50,
@@ -426,9 +446,16 @@ async function main() {
 						campaign: campA,
 						page_size: 50,
 					})
-					const wiRetPoolA =
-						asgCampA.items.find((x) => x.assigned_to === staffB) ||
-						asgCampA.items[asgCampA.items.length - 1]
+					// Keep at least 1 `staffA` item assigned in `campA` (`keepStaffAItem`) + 1 more assigned item (`keepSecondAItem`),
+					// while 3 items are returned to `campA` pool (`2` stay in Team A queued, `1` moves to Team B).
+					const staffACampAItems = asgCampA.items.filter((x) => x.assigned_to === staffA)
+					const keepStaffAItem = staffACampAItems[0]
+					const remainingCampA = asgCampA.items.filter(
+						(x) => x.work_item !== keepStaffAItem.work_item
+					)
+					const wiStayQueuedA1 = remainingCampA[0]
+					const wiStayQueuedA2 = remainingCampA[1]
+					const wiRetPoolA = remainingCampA[2]
 					const retPoolLead = wiRetPoolA.lead
 
 					await window.cskh.post('crm_cskh.api.ownership.reassign', {
@@ -445,6 +472,15 @@ async function main() {
 						return_to_pool: 0,
 						request_id: `r4-rev-${Date.now()}`,
 					})
+					for (const [idx, wiStay] of [wiStayQueuedA1, wiStayQueuedA2].entries()) {
+						await window.cskh.post('crm_cskh.api.ownership.revoke', {
+							work_item: wiStay.work_item,
+							expected_owner: wiStay.assigned_to,
+							reason: `Trả về hàng đợi Đội A kiểm thử phân trang #${idx + 1}`,
+							return_to_pool: 1,
+							request_id: `r4-stayq-a-${idx}-${Date.now()}`,
+						})
+					}
 					await window.cskh.post('crm_cskh.api.ownership.revoke', {
 						work_item: wiRetPoolA.work_item,
 						expected_owner: wiRetPoolA.assigned_to,
@@ -458,13 +494,16 @@ async function main() {
 						title: 'Chiến dịch Đội B R4',
 						status: 'Active',
 						team_scope: tB,
-						selection: { leads: [movedLead, retPoolLead], secret_marker: 'L29_SECRET_TB' },
+						selection: {
+							leads: [movedLead, retPoolLead, ...tbLeads],
+							secret_marker: 'L29_SECRET_TB',
+						},
 					})
 					await window.cskh.post('crm_cskh.api.campaigns.save_rule', {
 						campaign: campB.campaign,
 						user: staffC,
 						weight: 100,
-						capacity_limit: 5,
+						capacity_limit: 10,
 						enabled: 1,
 						team: tB,
 						version: 1,
@@ -484,12 +523,15 @@ async function main() {
 						wiMoveToB,
 						movedLead,
 						retPoolLead,
+						stayQueuedALeads: [wiStayQueuedA1.lead, wiStayQueuedA2.lead],
+						tbQueuedLeads: tbLeads,
 						runB: execB.run_id || prevB.preview_id,
 					}
 				},
 				{
 					campA: setupData.campA,
 					campShared: setupData.campShared,
+					tbLeads: setupData.tbLeads,
 					tB: teamB,
 					staffA: users.staff_a,
 					staffB: users.staff_b,
@@ -499,6 +541,32 @@ async function main() {
 			const doneB = await waitDistComplete(adminS.page, ownershipSetup.runB)
 			assert(doneB.status === 'completed', `runB expected completed, got ${doneB.status}`)
 			setupData.campB = ownershipSetup.campB
+
+			// Return `tbQueuedLeads` in `campB` to queued pool (`return_to_pool: 1`) so `campB` has
+			// 2 `assigned` leads (`movedLead`, `retPoolLead`) + 2 `queued` leads (`tbQueuedLeads`)!
+			await adminS.page.evaluate(
+				async ({ campB, tbQueuedLeads, staffC }) => {
+					const asgB = await window.cskh.get('crm_cskh.api.ownership_ui.assigned_list', {
+						campaign: campB,
+						page_size: 50,
+					})
+					const qSet = new Set(tbQueuedLeads)
+					for (const [idx, row] of asgB.items.filter((x) => qSet.has(x.lead)).entries()) {
+						await window.cskh.post('crm_cskh.api.ownership.revoke', {
+							work_item: row.work_item,
+							expected_owner: staffC,
+							reason: `Đưa vào hàng đợi Đội B kiểm thử phân trang #${idx + 1}`,
+							return_to_pool: 1,
+							request_id: `r4-stayq-b-${idx}-${Date.now()}`,
+						})
+					}
+				},
+				{
+					campB: setupData.campB,
+					tbQueuedLeads: ownershipSetup.tbQueuedLeads,
+					staffC: users.staff_c,
+				}
+			)
 
 			// =================================================================
 			// 2. Check L-29 Real-HTTP DocType / Document / Field (`permlevel=1`)
@@ -740,58 +808,180 @@ async function main() {
 			)
 
 			const l23PoolCheck = await leaderAS.page.evaluate(
-				async ({ movedLead, retPoolLead, campA }) => {
+				async ({ movedLead, retPoolLead, tbQueuedLeads, stayQueuedALeads, campA, campB }) => {
 					const pUi = await window.cskh.get('crm_cskh.api.pool_ui.list', { page_size: 100 })
 					const pCust = await window.cskh.get('crm_cskh.api.customers.customer_pool', {
 						page_size: 100,
 					})
 					const pLegacy = await window.cskh.get('crm_cskh.api.customers.pool_list', {
-						campaign: campA,
 						page_size: 100,
 					})
-					const forbiddenSet = new Set([movedLead, retPoolLead])
+					// Pre-pagination (`page=1, page_size=1`) on `campA` across ALL 3 Pool APIs:
+					// `campA` has 2 valid queued + 2 valid assigned (= 4 total, 2 queued), plus 1 stale queued moved to Team B!
+					const pUiP1 = await window.cskh.get('crm_cskh.api.pool_ui.list', {
+						campaign: campA,
+						page: 1,
+						page_size: 1,
+					})
+					const pCustP1 = await window.cskh.get('crm_cskh.api.customers.customer_pool', {
+						campaign: campA,
+						page: 1,
+						page_size: 1,
+					})
+					const pLegacyP1 = await window.cskh.get('crm_cskh.api.customers.pool_list', {
+						campaign: campA,
+						page: 1,
+						page_size: 1,
+					})
+					// Foreign `campB` filter for Leader A must return 0 across ALL 3 Pool APIs:
+					const pUiCampB = await window.cskh.get('crm_cskh.api.pool_ui.list', { campaign: campB })
+					const pCustCampB = await window.cskh.get('crm_cskh.api.customers.customer_pool', {
+						campaign: campB,
+					})
+					const pLegacyCampB = await window.cskh.get('crm_cskh.api.customers.pool_list', {
+						campaign: campB,
+					})
+
+					const forbiddenSet = new Set([movedLead, retPoolLead, ...tbQueuedLeads])
+					const legacyASet = new Set(pLegacy.items.map((x) => x.lead))
 					return {
 						inUi: pUi.items.some((x) => forbiddenSet.has(x.lead)),
 						inCust: pCust.items.some((x) => forbiddenSet.has(x.lead)),
 						inLegacy: pLegacy.items.some((x) => forbiddenSet.has(x.lead)),
-						legacyTotalMatchesItems: pLegacy.total === pLegacy.items.length,
-						uiCount: pUi.total,
+						seesStayQueuedA: stayQueuedALeads.every((l) => legacyASet.has(l)),
+						prePaginationA: {
+							pool_ui: {
+								items_len: pUiP1.items.length,
+								total: pUiP1.total,
+								unique_customers: pUiP1.unique_customers,
+								work_items: pUiP1.work_items,
+							},
+							customer_pool: {
+								items_len: pCustP1.items.length,
+								total: pCustP1.total,
+								unique_customers: pCustP1.unique_customers,
+								work_items: pCustP1.work_items,
+							},
+							pool_list: {
+								items_len: pLegacyP1.items.length,
+								total: pLegacyP1.total,
+								unique_customers: pLegacyP1.unique_customers,
+								work_items: pLegacyP1.work_items,
+							},
+						},
+						campBBlockedTotals: [pUiCampB.total, pCustCampB.total, pLegacyCampB.total],
 					}
 				},
 				{
 					movedLead: ownershipSetup.movedLead,
 					retPoolLead: ownershipSetup.retPoolLead,
+					tbQueuedLeads: ownershipSetup.tbQueuedLeads,
+					stayQueuedALeads: ownershipSetup.stayQueuedALeads,
 					campA: setupData.campA,
+					campB: setupData.campB,
 				}
 			)
 			assert(
 				!l23PoolCheck.inUi &&
 					!l23PoolCheck.inCust &&
 					!l23PoolCheck.inLegacy &&
-					l23PoolCheck.legacyTotalMatchesItems,
-				`Leader A must NOT see movedLead or retPoolLead (active in Team B) on any pool endpoint: ${JSON.stringify(l23PoolCheck)}`
+					l23PoolCheck.seesStayQueuedA &&
+					l23PoolCheck.campBBlockedTotals.every((t) => t === 0) &&
+					l23PoolCheck.prePaginationA.pool_ui.items_len === 1 &&
+					l23PoolCheck.prePaginationA.pool_ui.total === 4 &&
+					l23PoolCheck.prePaginationA.pool_ui.unique_customers === 4 &&
+					l23PoolCheck.prePaginationA.customer_pool.items_len === 1 &&
+					l23PoolCheck.prePaginationA.customer_pool.total === 4 &&
+					l23PoolCheck.prePaginationA.customer_pool.unique_customers === 4 &&
+					l23PoolCheck.prePaginationA.pool_list.items_len === 1 &&
+					l23PoolCheck.prePaginationA.pool_list.total === 2 &&
+					l23PoolCheck.prePaginationA.pool_list.unique_customers === 2,
+				`Leader A isolation or pre-pagination totals failed across the 3 Pool APIs: ${JSON.stringify(l23PoolCheck)}`
 			)
+
 			const lbSeesMoved = await leaderBS.page.evaluate(
-				async ({ movedLead, retPoolLead }) => {
-					const pUi = await window.cskh.get('crm_cskh.api.pool_ui.list', { page_size: 100 })
-					const pCust = await window.cskh.get('crm_cskh.api.customers.customer_pool', {
+				async ({ movedLead, retPoolLead, tbQueuedLeads, stayQueuedALeads, campB }) => {
+					const pUi = await window.cskh.get('crm_cskh.api.pool_ui.list', {
+						campaign: campB,
 						page_size: 100,
 					})
+					const pCust = await window.cskh.get('crm_cskh.api.customers.customer_pool', {
+						campaign: campB,
+						page_size: 100,
+					})
+					const pLegacy = await window.cskh.get('crm_cskh.api.customers.pool_list', {
+						campaign: campB,
+						page_size: 100,
+					})
+					// Pre-pagination (`page=1, page_size=1`) on `campB` across ALL 3 Pool APIs:
+					const pUiP1 = await window.cskh.get('crm_cskh.api.pool_ui.list', {
+						campaign: campB,
+						page: 1,
+						page_size: 1,
+					})
+					const pCustP1 = await window.cskh.get('crm_cskh.api.customers.customer_pool', {
+						campaign: campB,
+						page: 1,
+						page_size: 1,
+					})
+					const pLegacyP1 = await window.cskh.get('crm_cskh.api.customers.pool_list', {
+						campaign: campB,
+						page: 1,
+						page_size: 1,
+					})
+					const uiSet = new Set(pUi.items.map((x) => x.lead))
+					const custSet = new Set(pCust.items.map((x) => x.lead))
+					const legacySet = new Set(pLegacy.items.map((x) => x.lead))
+					const expectedAllB = [movedLead, retPoolLead, ...tbQueuedLeads]
 					return {
-						inUiMoved: pUi.items.some((x) => x.lead === movedLead),
-						inUiRetPool: pUi.items.some((x) => x.lead === retPoolLead),
-						inCustMoved: pCust.items.some((x) => x.lead === movedLead),
-						inCustRetPool: pCust.items.some((x) => x.lead === retPoolLead),
+						uiSeesAll4: expectedAllB.every((l) => uiSet.has(l)),
+						custSeesAll4: expectedAllB.every((l) => custSet.has(l)),
+						legacySeesQueued2: tbQueuedLeads.every((l) => legacySet.has(l)),
+						leaksTeamA: stayQueuedALeads.some(
+							(l) => uiSet.has(l) || custSet.has(l) || legacySet.has(l)
+						),
+						prePaginationB: {
+							pool_ui: {
+								items_len: pUiP1.items.length,
+								total: pUiP1.total,
+								unique_customers: pUiP1.unique_customers,
+							},
+							customer_pool: {
+								items_len: pCustP1.items.length,
+								total: pCustP1.total,
+								unique_customers: pCustP1.unique_customers,
+							},
+							pool_list: {
+								items_len: pLegacyP1.items.length,
+								total: pLegacyP1.total,
+								unique_customers: pLegacyP1.unique_customers,
+							},
+						},
 					}
 				},
-				{ movedLead: ownershipSetup.movedLead, retPoolLead: ownershipSetup.retPoolLead }
+				{
+					movedLead: ownershipSetup.movedLead,
+					retPoolLead: ownershipSetup.retPoolLead,
+					tbQueuedLeads: ownershipSetup.tbQueuedLeads,
+					stayQueuedALeads: ownershipSetup.stayQueuedALeads,
+					campB: setupData.campB,
+				}
 			)
 			assert(
-				lbSeesMoved.inUiMoved &&
-					lbSeesMoved.inUiRetPool &&
-					lbSeesMoved.inCustMoved &&
-					lbSeesMoved.inCustRetPool,
-				`Leader B positive control must see both movedLead and retPoolLead owned by Team B: ${JSON.stringify(lbSeesMoved)}`
+				lbSeesMoved.uiSeesAll4 &&
+					lbSeesMoved.custSeesAll4 &&
+					lbSeesMoved.legacySeesQueued2 &&
+					!lbSeesMoved.leaksTeamA &&
+					lbSeesMoved.prePaginationB.pool_ui.items_len === 1 &&
+					lbSeesMoved.prePaginationB.pool_ui.total === 4 &&
+					lbSeesMoved.prePaginationB.pool_ui.unique_customers === 4 &&
+					lbSeesMoved.prePaginationB.customer_pool.items_len === 1 &&
+					lbSeesMoved.prePaginationB.customer_pool.total === 4 &&
+					lbSeesMoved.prePaginationB.customer_pool.unique_customers === 4 &&
+					lbSeesMoved.prePaginationB.pool_list.items_len === 1 &&
+					lbSeesMoved.prePaginationB.pool_list.total === 2 &&
+					lbSeesMoved.prePaginationB.pool_list.unique_customers === 2,
+				`Leader B positive control or pre-pagination totals failed across the 3 Pool APIs: ${JSON.stringify(lbSeesMoved)}`
 			)
 
 			// 3c. `/cskh/campaigns` for Leader A & Leader B (rules, hidden Admin/lookup controls, L-24 shared run history)

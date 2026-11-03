@@ -1066,10 +1066,36 @@ class TestUiP1Endpoints(P1TestCase):
 		)
 
 		# 4. `return_to_pool=True` in Team A leaving a queued Work Item in `campaign_a`
-		#    then claimed & assigned in `campaign_b` (`6c457b3`): Leader A is blocked
-		#    across all 3 pool endpoints (`items`, `total`, `unique_customers`), while
-		#    Leader B sees the lead in both `pool_ui.list` and `customers.customer_pool`!
+		#    then claimed & assigned in `campaign_b` (`6c457b3`): verify across ALL 3 Pool
+		#    APIs (`pool_ui.list`, `customers.customer_pool`, `customers.pool_list`) that:
+		#    - Leader A is blocked from Team B's leads (`items`, `total`, `unique_customers`),
+		#    - Leader B sees its own leads (`queued` and `assigned`), AND
+		#    - `total` / `unique_customers` / `work_items` are computed BEFORE pagination (`page_size=1`).
 		frappe.set_user("Administrator")
+		lead_a_q1 = self.make_canonical_lead()
+		lead_a_q2 = self.make_canonical_lead()
+		for l_aq in (lead_a_q1, lead_a_q2):
+			wi_aq = self.make_work_item(self.campaign_a, l_aq, status="queued")
+			frappe.get_doc(
+				{
+					"doctype": "CSKH Active Claim",
+					"lead": l_aq,
+					"campaign": self.campaign_a,
+					"work_item": wi_aq,
+				}
+			).insert(ignore_permissions=True)
+
+		lead_b_q2 = self.make_canonical_lead()
+		wi_b_q2 = self.make_work_item(self.campaign_b, lead_b_q2, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_b_q2,
+				"campaign": self.campaign_b,
+				"work_item": wi_b_q2,
+			}
+		).insert(ignore_permissions=True)
+
 		lead_ret_pool = self.make_canonical_lead()
 		wi_ret_a = self.make_work_item(self.campaign_a, lead_ret_pool, status="queued")
 		frappe.set_user(self.admin_user)
@@ -1100,22 +1126,48 @@ class TestUiP1Endpoints(P1TestCase):
 		).insert(ignore_permissions=True)
 		frappe.db.commit()
 
-		# While `wi_ret_b` is `queued` with `Active Claim` in Team B:
-		# Leader A must NOT see `lead_ret_pool` even in `customers.pool_list(campaign=self.campaign_a)`,
-		# whereas Leader B DOES see `lead_ret_pool` in `customers.pool_list(campaign=self.campaign_b)`!
+		# Pre-pagination totals + isolation while `wi_ret_b` & `wi_b_q2` are `queued` in `campaign_b`:
 		frappe.set_user(self.leader_a)
-		la_pool_list_a = customers_api.pool_list(campaign=self.campaign_a)
-		self.assertNotIn(lead_ret_pool, {row["lead"] for row in la_pool_list_a["items"]})
-		self.assertEqual(la_pool_list_a["total"], len(la_pool_list_a["items"]))
-		self.assertNotIn(lead_ret_pool, {row["lead"] for row in pool_ui.list()["items"]})
-		self.assertNotIn(lead_ret_pool, {row["lead"] for row in customers_api.customer_pool()["items"]})
+		la_full_ui = pool_ui.list(campaign=self.campaign_a, page=1, page_size=100)
+		la_full_cust = customers_api.customer_pool(campaign=self.campaign_a, page=1, page_size=100)
+		la_full_legacy = customers_api.pool_list(campaign=self.campaign_a, page=1, page_size=100)
+		for payload in (la_full_ui, la_full_cust, la_full_legacy):
+			self.assertNotIn(lead_ret_pool, {row["lead"] for row in payload["items"]})
+			self.assertNotIn(lead_b_q2, {row["lead"] for row in payload["items"]})
+			self.assertGreaterEqual(payload["total"], 2)
+
+		for pool_fn, expected_total in (
+			(pool_ui.list, la_full_ui["total"]),
+			(customers_api.customer_pool, la_full_cust["total"]),
+			(customers_api.pool_list, la_full_legacy["total"]),
+		):
+			paged = pool_fn(campaign=self.campaign_a, page=1, page_size=1)
+			self.assertEqual(len(paged["items"]), 1)
+			self.assertEqual(paged["total"], expected_total)
+			self.assertEqual(paged["unique_customers"], expected_total)
 
 		frappe.set_user(self.leader_b)
-		lb_pool_list_b = customers_api.pool_list(campaign=self.campaign_b)
-		self.assertIn(lead_ret_pool, {row["lead"] for row in lb_pool_list_b["items"]})
-		self.assertIn(lead_ret_pool, {row["lead"] for row in pool_ui.list()["items"]})
+		lb_full_ui = pool_ui.list(campaign=self.campaign_b, page=1, page_size=100)
+		lb_full_cust = customers_api.customer_pool(campaign=self.campaign_b, page=1, page_size=100)
+		lb_full_legacy = customers_api.pool_list(campaign=self.campaign_b, page=1, page_size=100)
+		for payload in (lb_full_ui, lb_full_cust, lb_full_legacy):
+			seen_b = {row["lead"] for row in payload["items"]}
+			self.assertIn(lead_ret_pool, seen_b)
+			self.assertIn(lead_b_q2, seen_b)
+			self.assertNotIn(lead_a_q1, seen_b)
+			self.assertGreaterEqual(payload["total"], 2)
 
-		# Now assign `wi_ret_b` to `staff_c` in Team B and re-verify both teams:
+		for pool_fn, expected_total in (
+			(pool_ui.list, lb_full_ui["total"]),
+			(customers_api.customer_pool, lb_full_cust["total"]),
+			(customers_api.pool_list, lb_full_legacy["total"]),
+		):
+			paged_b = pool_fn(campaign=self.campaign_b, page=1, page_size=1)
+			self.assertEqual(len(paged_b["items"]), 1)
+			self.assertEqual(paged_b["total"], expected_total)
+			self.assertEqual(paged_b["unique_customers"], expected_total)
+
+		# Now assign `wi_ret_b` to `staff_c` in Team B and re-verify both teams across all 3 Pool APIs:
 		frappe.set_user(self.admin_user)
 		ownership_service.assign(
 			work_item=wi_ret_b,
@@ -1126,10 +1178,19 @@ class TestUiP1Endpoints(P1TestCase):
 		)
 		frappe.set_user(self.leader_a)
 		for pool_fn in (pool_ui.list, customers_api.customer_pool, customers_api.pool_list):
-			self.assertNotIn(lead_ret_pool, {row["lead"] for row in pool_fn()["items"]})
+			res_a_after = pool_fn(page=1, page_size=100)
+			self.assertNotIn(lead_ret_pool, {row["lead"] for row in res_a_after["items"]})
+			self.assertNotIn(lead_b_q2, {row["lead"] for row in res_a_after["items"]})
 		frappe.set_user(self.leader_b)
-		self.assertIn(lead_ret_pool, {row["lead"] for row in pool_ui.list()["items"]})
-		self.assertIn(lead_ret_pool, {row["lead"] for row in customers_api.customer_pool()["items"]})
+		self.assertIn(lead_ret_pool, {row["lead"] for row in pool_ui.list(page=1, page_size=100)["items"]})
+		self.assertIn(
+			lead_ret_pool,
+			{row["lead"] for row in customers_api.customer_pool(page=1, page_size=100)["items"]},
+		)
+		self.assertIn(
+			lead_b_q2,
+			{row["lead"] for row in customers_api.pool_list(campaign=self.campaign_b)["items"]},
+		)
 
 
 class TestUiP1ImportBatchPoolFilter(P1TestCase):
