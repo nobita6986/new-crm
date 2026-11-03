@@ -470,10 +470,19 @@ Event at,Thời điểm sự kiện
 Failed runs,Đợt phân phối lỗi
 From date,Từ ngày
 From owner,Người phụ trách trước
+Identity mismatch,Định danh không khớp.
+Import batch lead outcome must be created or reused.,Kết quả liên kết khách hàng của lô nhập phải là tạo mới hoặc dùng lại.
+Import batch lead row number must not be negative.,Số thứ tự dòng khách hàng của lô nhập không được là số âm.
 Importing the customer pool requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép nhập kho khách hàng.
 Invalid boolean value for enabled.,Giá trị đúng/sai cho trạng thái kích hoạt không hợp lệ.
 Invalid boolean value for return_to_pool.,Giá trị đúng/sai cho tùy chọn trả về kho chờ không hợp lệ.
 Invalid boolean value for value.,Giá trị đúng/sai không hợp lệ.
+Invalid integer value for expected_rule_version.,Giá trị số nguyên cho phiên bản quy tắc dự kiến không hợp lệ.
+Invalid integer value for limit.,Giá trị số nguyên cho giới hạn số dòng không hợp lệ.
+Invalid integer value for page.,Giá trị số nguyên cho số trang không hợp lệ.
+Invalid integer value for page_size.,Giá trị số nguyên cho kích thước trang không hợp lệ.
+Invalid integer value for value.,Giá trị số nguyên không hợp lệ.
+Invalid integer value for version.,Giá trị số nguyên cho phiên bản quy tắc không hợp lệ.
 Invalid or expired session/CSRF token. Reload the page and try again.,Phiên đăng nhập hoặc mã CSRF không hợp lệ hoặc đã hết hạn. Hãy tải lại trang và thử lại.
 "Leads in your scope, with the derived distribution state.","Khách hàng tiềm năng trong phạm vi của bạn, kèm trạng thái phân phối."
 Look up run,Tra cứu đợt chạy
@@ -483,6 +492,7 @@ New owner,Người phụ trách mới
 Newest first,Mới nhất trước
 No assignee is eligible for this campaign.,Không có nhân viên nào đủ điều kiện nhận phân phối cho chiến dịch này.
 No lead is eligible for this campaign.,Không có khách hàng nào đủ điều kiện cho chiến dịch này.
+Not permitted to filter on restricted field.,Bạn không có quyền lọc trên trường dữ liệu bị hạn chế.
 Oldest first,Cũ nhất trước
 Only CSV and XLSX files are supported.,Chỉ hỗ trợ tệp CSV và XLSX.
 Only Vietnamese numbers are supported.,Chỉ hỗ trợ số điện thoại Việt Nam.
@@ -509,6 +519,7 @@ The batch status filter must be a string.,Bộ lọc trạng thái lô nhập ph
 The campaign and the assignee are required.,Cần chọn chiến dịch và người được giao.
 The campaign code is required.,Cần nhập mã chiến dịch.
 The campaign does not exist.,Chiến dịch không tồn tại.
+The campaign is closed and cannot accept ownership changes.,Chiến dịch đã đóng nên không thể thay đổi quyền phụ trách.
 The campaign is not open for distribution.,Chiến dịch hiện không mở để phân phối.
 The campaign is required.,Cần chọn chiến dịch.
 The campaign must be a string.,Mã chiến dịch phải là chuỗi văn bản.
@@ -518,12 +529,15 @@ The canonical lead does not exist.,Khách hàng chuẩn không tồn tại.
 The capacity must be an integer.,Sức chứa phải là số nguyên.
 The capacity must not be negative.,Sức chứa không được là số âm.
 The current owner is not the expected owner.,"Người đang phụ trách đã thay đổi, không khớp với người phụ trách dự kiến."
+The customer already has an active claim.,Khách hàng đã có quyền sở hữu đang hoạt động.
+The customer is already assigned in another work item.,Khách hàng đang được giao trong một công việc khác.
 The distribution run does not exist.,Đợt phân phối không tồn tại.
 The distribution run is already executing.,Đợt phân phối đang được thực thi.
 The distribution run is already owned by another executor.,Đợt phân phối đang thuộc quyền xử lý của bộ thực thi khác.
 The distribution state changed after the preview.,Trạng thái phân phối đã thay đổi sau khi xem trước.
 The eligible lead set changed after the preview.,Tập khách hàng đủ điều kiện đã thay đổi sau khi xem trước.
 The error file does not exist for this import batch.,Không có tệp lỗi cho lô nhập này.
+The expected owner must be a string.,Người phụ trách dự kiến phải là chuỗi văn bản.
 The file has more rows than the configured limit.,Tệp có nhiều dòng hơn giới hạn cấu hình.
 The file is larger than the configured limit.,Tệp vượt quá dung lượng tối đa cấu hình.
 The import batch does not exist.,Lô nhập dữ liệu không tồn tại.
@@ -541,13 +555,21 @@ The phone number is outside the supported Vietnamese mobile format.,Số điện
 The preview does not exist.,Bản xem trước không tồn tại.
 The preview has expired; run the preview again.,Bản xem trước đã hết hạn; hãy chạy lại xem trước.
 The preview id is required.,Cần có mã xem trước.
+The reason must be a string.,Lý do phải là chuỗi văn bản.
+The request id must be a string.,Mã yêu cầu phải là chuỗi văn bản.
 The run id is required.,Cần nhập mã đợt chạy.
 The run id must be a string.,Mã đợt chạy phải là chuỗi văn bản.
 The scope is resolved by the server. Only the CRM Admin may transfer or revoke an ownership.,Phạm vi do máy chủ xác định. Chỉ Quản trị CRM được chuyển hoặc thu hồi quyền phụ trách.
 The start date must not be after the end date.,Ngày bắt đầu không được sau ngày kết thúc.
+The status must be a string.,Trạng thái phải là chuỗi văn bản.
+The target user has no positive assignment weight in this campaign.,Người nhận không có trọng số phân công dương trong chiến dịch này.
 The target user has no remaining capacity.,Người nhận đã hết sức chứa còn lại.
 The target user is disabled.,Tài khoản người nhận đang bị vô hiệu hóa.
+The target user is outside the campaign team scope.,Người nhận nằm ngoài phạm vi đội của chiến dịch.
 The target user must be a Sales User.,Người nhận phải có vai trò Nhân viên bán hàng.
+The target user must be a string.,Người nhận phải là chuỗi văn bản.
+The target user's assignment rule is disabled in this campaign.,Quy tắc phân công của người nhận đang bị tắt trong chiến dịch này.
+The target user's assignment rule is outside the campaign team scope.,Quy tắc phân công của người nhận nằm ngoài phạm vi đội của chiến dịch.
 The uploaded file could not be decoded.,Không thể giải mã nội dung tệp tải lên.
 The uploaded file does not exist.,Tệp tải lên không tồn tại.
 The uploaded file is required.,Cần chọn tệp để tải lên.
@@ -558,11 +580,13 @@ The work item and the target user are required.,Cần chọn công việc và ng
 The work item does not exist.,Công việc không tồn tại.
 The work item is not currently assigned.,Công việc hiện không có người phụ trách.
 The work item is required.,Cần chọn công việc.
+The work item must be a string.,Mã công việc phải là chuỗi văn bản.
 This action requires the CRM Admin business role.,Thao tác này yêu cầu vai trò Quản trị CRM.
 "This campaign, assignee and version already has a rule.","Chiến dịch, người được giao và phiên bản này đã có quy tắc."
 This idempotency key was already used by another distribution run.,Khóa idempotency này đã được dùng cho một đợt phân phối khác.
 This idempotency key was already used with a different column mapping.,Khóa idempotency này đã được dùng với cấu hình ánh xạ cột khác.
 This idempotency key was already used with a different file.,Khóa idempotency này đã được dùng với một tệp khác.
+This import batch and lead link already exists.,Liên kết giữa lô nhập và khách hàng này đã tồn tại.
 Timeout,Quá thời gian chờ phản hồi từ máy chủ.
 To date,Đến ngày
 To owner,Người phụ trách sau
@@ -583,6 +607,7 @@ You may not read the customer list.,Bạn không có quyền xem danh sách khá
 You may not read the customer pool.,Bạn không có quyền xem kho khách hàng.
 You may not read the distribution dashboard.,Bạn không có quyền xem bảng điều khiển phân phối.
 You may not read this assignment history.,Bạn không có quyền xem lịch sử phân công này.
+You may not read this campaign.,Bạn không có quyền xem chiến dịch này.
 You may not reconcile a campaign.,Bạn không có quyền đối soát chiến dịch.
 already_claimed,Đã được giữ bởi chiến dịch khác
 invalid_row,Dòng dữ liệu không hợp lệ

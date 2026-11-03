@@ -23,6 +23,10 @@
 
 	const isAdmin = !!(cskh.capabilities() && cskh.capabilities().admin)
 	const allowPii = !!(cskh.capabilities() && cskh.capabilities().pii)
+	const canReadScope = !!(
+		cskh.capabilities() &&
+		(cskh.capabilities().admin || cskh.capabilities().bod || cskh.capabilities().leader)
+	)
 
 	const pager = cskh.pager({
 		pageSize: PAGE_SIZE,
@@ -160,6 +164,7 @@
 			pager.setTotal(data && data.total)
 			pager.render()
 			lastMineItems = (data && data.items) || []
+			if (!canReadScope) syncMineCampaignFilter(lastMineItems)
 			renderMineTable()
 		} catch (error) {
 			lastMineItems = []
@@ -181,6 +186,10 @@
 		const loading = document.getElementById('mine-scope-loading')
 		const alertBox = document.getElementById('mine-alert')
 		if (!card) return
+		if (!canReadScope) {
+			card.hidden = true
+			return
+		}
 
 		loading.hidden = false
 		table.hidden = true
@@ -544,7 +553,27 @@
 		])
 	}
 
+	function syncMineCampaignFilter(items) {
+		const select = document.getElementById('mine-campaign')
+		if (!select) return
+		const known = {}
+		Array.from(select.options).forEach(function (opt) {
+			if (opt.value) known[opt.value] = true
+		})
+		;(items || []).forEach(function (item) {
+			if (!item.campaign || known[item.campaign]) return
+			known[item.campaign] = true
+			select.appendChild(
+				cskh.el('option', {
+					value: item.campaign,
+					text: item.campaign_title || item.campaign_code || item.campaign,
+				})
+			)
+		})
+	}
+
 	async function loadCampaigns() {
+		if (!canReadScope) return
 		const select = document.getElementById('mine-campaign')
 		try {
 			const data = await cskh.get('crm_cskh.api.dashboard.campaigns')

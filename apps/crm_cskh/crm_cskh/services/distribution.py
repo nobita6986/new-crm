@@ -289,6 +289,8 @@ def _lease_is_active(lease_expires_at, now=None):
 
 
 def _validate_rule_version_and_campaign(run, expected_rule_version=None):
+	from crm_cskh.api._params import parse_int
+
 	campaign_doc = frappe.db.get_value(
 		"CSKH Campaign", run.campaign, ["name", "status", "team_scope"], as_dict=True
 	)
@@ -297,11 +299,15 @@ def _validate_rule_version_and_campaign(run, expected_rule_version=None):
 	if campaign_doc.status not in ("Active", "Draft"):
 		raise Conflict("The campaign is not open for distribution.", code="CONFLICT")
 	version = _db_rule_version(run.campaign)
-	if expected_rule_version is not None and int(expected_rule_version) != int(run.rule_version):
-		raise RuleChanged(
-			"The assignment rules changed after the preview.",
-			details={"expected": expected_rule_version, "current": version},
-		)
+	if expected_rule_version is not None and not (
+		isinstance(expected_rule_version, str) and expected_rule_version.strip() == ""
+	):
+		parsed_expected = parse_int(expected_rule_version, minimum=1, field="expected_rule_version")
+		if parsed_expected != int(run.rule_version):
+			raise RuleChanged(
+				"The assignment rules changed after the preview.",
+				details={"expected": parsed_expected, "current": version},
+			)
 	if int(version) != int(run.rule_version):
 		raise RuleChanged(
 			"The assignment rules changed after the preview.",

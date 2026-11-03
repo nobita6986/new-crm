@@ -17,6 +17,7 @@ scope with a `user` or `team` parameter (ADR-P1-07).
 import frappe
 from frappe.utils import now_datetime
 
+from crm_cskh.api._params import parse_optional_str, parse_pagination
 from crm_cskh.services.errors import Forbidden, InvalidRequest
 
 ALLOWED_POOL_STATES = {"eligible", "queued", "assigned", "conflict", "revoked", "closed", "invalid"}
@@ -242,12 +243,15 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 	The filter is applied on the backend, not in the browser.
 	"""
 	user = user or frappe.session.user
-	limit = max(1, min(int(page_size or 20), 100))
-	offset = max(0, (int(page or 1) - 1) * limit)
+	page_num, limit, offset = parse_pagination(page, page_size)
+	status_val = parse_optional_str(status)
+	campaign_val = parse_optional_str(campaign, "The campaign must be a string.")
+	if search is not None:
+		parse_optional_str(search)
 
-	filters = {"assigned_to": user, "status": status or "assigned"}
-	if campaign:
-		filters["campaign"] = campaign
+	filters = {"assigned_to": user, "status": status_val or "assigned"}
+	if campaign_val:
+		filters["campaign"] = campaign_val
 
 	rows = frappe.db.sql(
 		*_my_list_query(filters, user, limit, offset),
@@ -286,7 +290,7 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 		"scope": "self",
 		"items": items,
 		"total": total,
-		"page": int(page or 1),
+		"page": page_num,
 		"page_size": limit,
 		"as_of": now_datetime(),
 	}
@@ -346,65 +350,250 @@ def work_item_in_batch_clause(batch, alias="wi"):
 	)
 
 
+def _scoped_wi_predicate(scope, alias="wi"):
+	"""Return `(sql, params)` restricting `tabCSKH Work Item` `alias` to `scope` (`L-23`)."""
+	if scope["scope"] in ("system", "all"):
+		return "1=1", []
+	if scope["scope"] != "team":
+		return "1=0", []
+
+	team_nodes = _scope_team_nodes(scope)
+	team_users = _team_users(scope["user"])
+	if not team_nodes or not team_users:
+		return "1=0", []
+
+	user_ph = ",".join(["%s"] * len(team_users))
+	node_ph = ",".join(["%s"] * len(team_nodes))
+	sql = (
+		f"(({alias}.status = 'assigned' and {alias}.assigned_to in ({user_ph})) "
+		f"or ({alias}.status = 'queued' and {alias}.assigned_to is null "
+		f"and {alias}.campaign in (select c_wq.name from `tabCSKH Campaign` c_wq "
+		f"where c_wq.team_scope is null or c_wq.team_scope in ({node_ph}))) "
+		f"or ({alias}.status in ('revoked', 'closed') and {alias}.assigned_to is null "
+		f"and ({alias}.campaign in (select c_wt.name from `tabCSKH Campaign` c_wt "
+		f"where c_wt.team_scope in ({node_ph})) "
+		f"or ({alias}.campaign in (select c_ws.name from `tabCSKH Campaign` c_ws "
+		f"where c_ws.team_scope is null) "
+		f"and coalesce((select coalesce(h_ws.from_user, h_ws.to_user) "
+		f"from `tabCSKH Assignment History` h_ws "
+		f"where h_ws.work_item = {alias}.name "
+		f"order by h_ws.event_at desc, h_ws.creation desc limit 1), '') in ({user_ph})))))"
+	)
+	params = [*team_users, *team_nodes, *team_nodes, *team_users]
+	return sql, params
+
+
+def _scoped_ac_predicate(scope, alias="ac"):
+	"""Return `(sql, params)` restricting `tabCSKH Active Claim` `alias` to `scope` (`L-23`)."""
+	if scope["scope"] in ("system", "all"):
+		return "1=1", []
+	if scope["scope"] != "team":
+		return "1=0", []
+
+	team_nodes = _scope_team_nodes(scope)
+	team_users = _team_users(scope["user"])
+	if not team_nodes or not team_users:
+		return "1=0", []
+
+	node_ph = ",".join(["%s"] * len(team_nodes))
+	user_ph = ",".join(["%s"] * len(team_users))
+	sql = (
+		f"(exists (select 1 from `tabCSKH Campaign` c_acs "
+		f"where c_acs.name = {alias}.campaign "
+		f"and (c_acs.team_scope is null or c_acs.team_scope in ({node_ph}))) "
+		f"and not exists (select 1 from `tabCSKH Work Item` wi_acs "
+		f"where wi_acs.name = {alias}.work_item "
+		f"and wi_acs.assigned_to is not null "
+		f"and wi_acs.assigned_to not in ({user_ph})))"
+	)
+	params = [*team_nodes, *team_users]
+	return sql, params
+
+
+def _team_lead_authorization_clauses(scope, lead_alias="l"):
+	"""Return `(clauses, params)` enforcing current team authorization on `CRM Lead` (`L-23`).
+
+	A team leader (`scope == "team"`) may only read a lead in the Customer Pool if:
+	  1. The lead belongs to the team's scope (has a scoped work item or is
+	     currently owned by a member of `team_users`), AND
+	  2. The lead has NO active `assigned` work item outside `team_users`, AND
+	  3. The lead has NO `queued` work item in a private campaign outside
+	     `team_nodes`, AND
+	  4. The lead has NO `CSKH Active Claim` outside `team_nodes`/`team_users`, AND
+	  5. `CRM Lead.lead_owner` is empty/`Administrator` or inside `team_users`.
+	"""
+	if scope["scope"] in ("system", "all"):
+		return [], []
+	if scope["scope"] != "team":
+		return ["1=0"], []
+
+	team_nodes = _scope_team_nodes(scope)
+	team_users = _team_users(scope["user"])
+	if not team_nodes or not team_users:
+		return ["1=0"], []
+
+	user_ph = ",".join(["%s"] * len(team_users))
+	node_ph = ",".join(["%s"] * len(team_nodes))
+	wi_s_sql, wi_s_params = _scoped_wi_predicate(scope, "wi_s")
+
+	clauses = [
+		(
+			f"(exists (select 1 from `tabCSKH Work Item` wi_s "
+			f"where wi_s.lead = {lead_alias}.name and {wi_s_sql}) "
+			f"or {lead_alias}.lead_owner in ({user_ph}))"
+		),
+		(
+			f"not exists (select 1 from `tabCSKH Work Item` wi_out "
+			f"where wi_out.lead = {lead_alias}.name and wi_out.status = 'assigned' "
+			f"and (wi_out.assigned_to is null or wi_out.assigned_to not in ({user_ph})))"
+		),
+		(
+			f"not exists (select 1 from `tabCSKH Work Item` wi_q_out "
+			f"where wi_q_out.lead = {lead_alias}.name and wi_q_out.status = 'queued' "
+			f"and exists (select 1 from `tabCSKH Campaign` c_q_out "
+			f"where c_q_out.name = wi_q_out.campaign "
+			f"and c_q_out.team_scope is not null "
+			f"and c_q_out.team_scope not in ({node_ph})))"
+		),
+		(
+			f"not exists (select 1 from `tabCSKH Active Claim` ac_out "
+			f"left join `tabCSKH Campaign` c_ac_out on c_ac_out.name = ac_out.campaign "
+			f"left join `tabCSKH Work Item` wi_ac_out on wi_ac_out.name = ac_out.work_item "
+			f"where ac_out.lead = {lead_alias}.name "
+			f"and ((c_ac_out.team_scope is not null and c_ac_out.team_scope not in ({node_ph})) "
+			f"or (wi_ac_out.assigned_to is not null and wi_ac_out.assigned_to not in ({user_ph}))))"
+		),
+		(
+			f"({lead_alias}.lead_owner is null "
+			f"or {lead_alias}.lead_owner in ('', 'Administrator') "
+			f"or {lead_alias}.lead_owner in ({user_ph}))"
+		),
+	]
+	params = [
+		*wi_s_params,
+		*team_users,
+		*team_users,
+		*team_nodes,
+		*team_nodes,
+		*team_users,
+		*team_users,
+	]
+	return clauses, params
+
+
+def filter_team_authorized_leads(scope, candidate_leads):
+	"""Return the subset of `candidate_leads` currently authorized for `scope` (`L-23`)."""
+	if not candidate_leads:
+		return set()
+	unique_leads = sorted({str(lead) for lead in candidate_leads if lead})
+	if not unique_leads:
+		return set()
+	if scope["scope"] in ("system", "all"):
+		return set(unique_leads)
+	if scope["scope"] != "team":
+		return set()
+
+	auth_clauses, auth_params = _team_lead_authorization_clauses(scope, "l")
+	if auth_clauses == ["1=0"]:
+		return set()
+
+	lead_ph = ",".join(["%s"] * len(unique_leads))
+	rows = frappe.db.sql(
+		f"select l.name from `tabCRM Lead` l where l.name in ({lead_ph}) and " + " and ".join(auth_clauses),
+		(*unique_leads, *auth_params),
+		pluck=True,
+	)
+	return set(rows or [])
+
+
+def _empty_pool_response(scope_name, page_num, limit):
+	return {
+		"scope": scope_name,
+		"items": [],
+		"total": 0,
+		"unique_customers": 0,
+		"work_items": 0,
+		"page": page_num,
+		"page_size": limit,
+		"as_of": now_datetime(),
+	}
+
+
 def pool_list(user=None, page=1, page_size=20, campaign=None, batch=None):
 	"""The customer pool of queued work items inside the caller's scope (P1 9.1)."""
 	user = user or frappe.session.user
 	scope = _scope(user)
-	limit = max(1, min(int(page_size or 20), 100))
-	offset = max(0, (int(page or 1) - 1) * limit)
+	page_num, limit, offset = parse_pagination(page, page_size)
+	campaign_val = parse_optional_str(campaign, "The campaign must be a string.")
+	batch_val = parse_optional_str(batch)
 
 	clause, scope_params = _pool_scope_filter(scope, "wi")
-	batch_clause, batch_params = work_item_in_batch_clause(batch, "wi")
+	auth_clauses, auth_params = _team_lead_authorization_clauses(scope, "l")
+	if auth_clauses == ["1=0"]:
+		return _empty_pool_response(scope["scope"], page_num, limit)
+	batch_clause, batch_params = work_item_in_batch_clause(batch_val, "wi")
 
 	clauses = ["wi.status = 'queued'", "wi.assigned_to is null"]
 	params = []
-	if campaign:
+	if campaign_val:
 		clauses.append("wi.campaign = %s")
-		params.append(campaign)
+		params.append(campaign_val)
 	if batch_clause:
 		clauses.append(batch_clause)
 		params.extend(batch_params)
 	if clause:
 		clauses.append(clause)
 		params.extend(scope_params)
+	if auth_clauses:
+		clauses.extend(auth_clauses)
+		params.extend(auth_params)
 
 	count_clauses = ["wi.status = 'queued'"]
 	count_params = []
-	if campaign:
+	if campaign_val:
 		count_clauses.append("wi.campaign = %s")
-		count_params.append(campaign)
+		count_params.append(campaign_val)
 	if batch_clause:
 		count_clauses.append(batch_clause)
 		count_params.extend(batch_params)
 	if clause:
 		count_clauses.append(clause)
 		count_params.extend(scope_params)
+	if auth_clauses:
+		count_clauses.extend(auth_clauses)
+		count_params.extend(auth_params)
 
 	lead_clauses = ["wi.status in ('queued', 'assigned')"]
 	lead_params = []
-	if campaign:
+	if campaign_val:
 		lead_clauses.append("wi.campaign = %s")
-		lead_params.append(campaign)
+		lead_params.append(campaign_val)
 	if batch_clause:
 		lead_clauses.append(batch_clause)
 		lead_params.extend(batch_params)
 	if clause:
 		lead_clauses.append(clause)
 		lead_params.extend(scope_params)
+	if auth_clauses:
+		lead_clauses.extend(auth_clauses)
+		lead_params.extend(auth_params)
 
 	total = frappe.db.sql(
-		"select count(*) from `tabCSKH Work Item` wi where " + " and ".join(count_clauses),
+		"select count(*) from `tabCSKH Work Item` wi "
+		"inner join `tabCRM Lead` l on l.name = wi.lead where " + " and ".join(count_clauses),
 		tuple(count_params),
 	)[0][0]
 
 	unique_customers = frappe.db.sql(
-		"select count(distinct wi.lead) from `tabCSKH Work Item` wi where " + " and ".join(lead_clauses),
+		"select count(distinct wi.lead) from `tabCSKH Work Item` wi "
+		"inner join `tabCRM Lead` l on l.name = wi.lead where " + " and ".join(lead_clauses),
 		tuple(lead_params),
 	)[0][0]
 
 	rows = frappe.db.sql(
 		"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign "
-		"from `tabCSKH Work Item` wi where "
+		"from `tabCSKH Work Item` wi "
+		"inner join `tabCRM Lead` l on l.name = wi.lead where "
 		+ " and ".join(clauses)
 		+ " order by wi.creation desc limit %s offset %s",
 		(*tuple(params), limit, offset),
@@ -413,6 +602,7 @@ def pool_list(user=None, page=1, page_size=20, campaign=None, batch=None):
 
 	items = []
 	allow_pii = scope.get("pii", True)
+	team_user_set = set(_team_users(scope["user"])) if scope["scope"] == "team" else None
 	for row in rows:
 		lead = frappe.db.get_value(
 			"CRM Lead",
@@ -422,7 +612,14 @@ def pool_list(user=None, page=1, page_size=20, campaign=None, batch=None):
 		)
 		if not lead:
 			continue
-		state, state_campaign, owner, created_at = _pool_state(lead.name)
+		state, state_campaign, owner, created_at = _pool_state(lead.name, scope=scope)
+		fallback_owner = lead.lead_owner or ""
+		if (
+			team_user_set is not None
+			and fallback_owner not in ("", "Administrator")
+			and fallback_owner not in team_user_set
+		):
+			fallback_owner = ""
 		items.append(
 			{
 				"work_item": row.work_item,
@@ -433,7 +630,7 @@ def pool_list(user=None, page=1, page_size=20, campaign=None, batch=None):
 				"campaign": row.campaign,
 				"campaign_title": state_campaign or row.campaign,
 				"state": state,
-				"owner": owner or lead.lead_owner or "",
+				"owner": owner or fallback_owner,
 				"created_at": created_at or lead.creation,
 			}
 		)
@@ -444,26 +641,49 @@ def pool_list(user=None, page=1, page_size=20, campaign=None, batch=None):
 		"total": total,
 		"unique_customers": unique_customers,
 		"work_items": total,
-		"page": int(page or 1),
+		"page": page_num,
 		"page_size": limit,
 		"as_of": now_datetime(),
 	}
 
 
-def _pool_state(lead):
-	"""The derived distribution state of one lead (P1 §9.1)."""
-	rows = frappe.db.sql(
-		"select wi.name as work_item, wi.campaign as campaign, wi.status as status, "
-		"wi.assigned_to as assigned_to, wi.creation as created_at "
-		"from `tabCSKH Work Item` wi where wi.lead = %s "
-		"order by wi.creation desc",
-		(lead,),
-		as_dict=True,
-	)
+def _pool_state(lead, scope=None):
+	"""The derived distribution state of one lead within `scope` (P1 §9.1, L-23)."""
+	if scope is not None:
+		wi_sql, wi_params = _scoped_wi_predicate(scope, "wi")
+		rows = frappe.db.sql(
+			"select wi.name as work_item, wi.campaign as campaign, wi.status as status, "
+			"wi.assigned_to as assigned_to, wi.creation as created_at "
+			f"from `tabCSKH Work Item` wi where wi.lead = %s and {wi_sql} "
+			"order by wi.creation desc",
+			(lead, *wi_params),
+			as_dict=True,
+		)
+	else:
+		rows = frappe.db.sql(
+			"select wi.name as work_item, wi.campaign as campaign, wi.status as status, "
+			"wi.assigned_to as assigned_to, wi.creation as created_at "
+			"from `tabCSKH Work Item` wi where wi.lead = %s "
+			"order by wi.creation desc",
+			(lead,),
+			as_dict=True,
+		)
 	if not rows:
 		return "eligible", "", "", None
 
-	claim = frappe.db.get_value("CSKH Active Claim", {"lead": lead}, ["campaign", "work_item"], as_dict=True)
+	if scope is not None:
+		ac_sql, ac_params = _scoped_ac_predicate(scope, "ac")
+		claim_rows = frappe.db.sql(
+			f"select ac.campaign as campaign, ac.work_item as work_item "
+			f"from `tabCSKH Active Claim` ac where ac.lead = %s and {ac_sql} limit 1",
+			(lead, *ac_params),
+			as_dict=True,
+		)
+		claim = claim_rows[0] if claim_rows else None
+	else:
+		claim = frappe.db.get_value(
+			"CSKH Active Claim", {"lead": lead}, ["campaign", "work_item"], as_dict=True
+		)
 
 	for row in rows:
 		if row.status == "assigned" and row.assigned_to:
@@ -480,56 +700,6 @@ def _pool_state(lead):
 	return "eligible", "", "", rows[0].created_at
 
 
-def _derive_customer_pool_state(lead_row, wi_rows, claim, campaign_titles):
-	"""Compute `(state, campaign, campaign_title, owner, work_item, created_at)` in memory."""
-	has_identity = bool(lead_row.has_identity)
-
-	if not wi_rows and not claim and lead_row.lead_owner and lead_row.lead_owner not in ("", "Administrator"):
-		return "conflict", "", "", lead_row.lead_owner, None, lead_row.creation
-
-	if not has_identity and not wi_rows:
-		return "invalid", "", "", lead_row.lead_owner or "", None, lead_row.creation
-
-	for row in wi_rows:
-		c_title = campaign_titles.get(row.campaign, row.campaign or "")
-		if row.status == "assigned" and row.assigned_to:
-			return "assigned", row.campaign or "", c_title, row.assigned_to, row.work_item, row.created_at
-		if row.status == "queued" and not row.assigned_to:
-			return "queued", row.campaign or "", c_title, "", row.work_item, row.created_at
-		if row.status == "revoked":
-			return (
-				"revoked",
-				row.campaign or "",
-				c_title,
-				row.assigned_to or "",
-				row.work_item,
-				row.created_at,
-			)
-		if row.status == "closed":
-			return (
-				"closed",
-				row.campaign or "",
-				c_title,
-				row.assigned_to or "",
-				row.work_item,
-				row.created_at,
-			)
-
-	if claim and claim.campaign:
-		c_title = campaign_titles.get(claim.campaign, claim.campaign)
-		created = wi_rows[0].created_at if wi_rows else lead_row.creation
-		return "conflict", claim.campaign, c_title, lead_row.lead_owner or "", claim.work_item, created
-
-	if lead_row.lead_owner and lead_row.lead_owner not in ("", "Administrator"):
-		return "conflict", "", "", lead_row.lead_owner, None, lead_row.creation
-
-	if not has_identity:
-		return "invalid", "", "", lead_row.lead_owner or "", None, lead_row.creation
-
-	created = wi_rows[0].created_at if wi_rows else lead_row.creation
-	return "eligible", "", "", "", None, created
-
-
 def customer_pool(
 	user=None,
 	page=1,
@@ -540,108 +710,60 @@ def customer_pool(
 	batch=None,
 	search=None,
 ):
-	"""Scoped Customer Pool view with derived states and `Import Batch ↔ Lead` filtering (P1 §9.1, L-25).
+	"""Scoped Customer Pool view with derived states and `Import Batch ↔ Lead` filtering (P1 §9.1, L-23, L-25, L-26).
 
-	Supports filtering by `campaign`, `state`, `source`, `batch` (both `CSKH Import Batch`
-	via `CSKH Import Batch Lead` — including leads without a `CSKH Work Item` and
-	canonical leads reused across multiple batches — and `CSKH Distribution Run`),
-	and `search` (with PII omitted and `search` blocked when `scope['pii']` is False).
+	Enforces identical team authorization policy (`_team_lead_authorization_clauses`,
+	`_scoped_wi_predicate`, `_scoped_ac_predicate`) as `crm_cskh.api.pool_ui.list`:
+	for a team leader (`scope == "team"`), historical `revoked`/`closed` work items
+	in Team A never grant access to a lead currently active, queued in another team's
+	private campaign, claimed, or owned outside Team A (`L-23`), and pagination runs
+	in SQL (`LIMIT`/`OFFSET`) with strict `400 INVALID_REQUEST` validation (`L-26`).
 	"""
 	user = user or frappe.session.user
 	scope = _scope(user)
 	allow_pii = bool(scope.get("pii", True))
 
-	limit = max(1, min(int(page_size or 20), 100))
-	page_num = max(1, int(page or 1))
-	offset = (page_num - 1) * limit
+	page_num, limit, offset = parse_pagination(page, page_size)
 
-	campaign_val = (campaign or "").strip() if isinstance(campaign, str) else ""
-	state_val = (state or "").strip() if isinstance(state, str) else ""
-	source_val = (source or "").strip() if isinstance(source, str) else ""
-	batch_val = (batch or "").strip() if isinstance(batch, str) else ""
-	search_val = (search or "").strip() if isinstance(search, str) else ""
+	campaign_val = parse_optional_str(campaign, "The campaign must be a string.")
+	state_val = parse_optional_str(state)
+	source_val = parse_optional_str(source)
+	batch_val = parse_optional_str(batch)
+	search_val = parse_optional_str(search)
 
 	if state_val and state_val not in ALLOWED_POOL_STATES:
 		raise InvalidRequest("The request is invalid.")
 	if search_val and not allow_pii:
 		raise Forbidden("You do not have permission to perform this operation.")
 
-	lead_clauses = ["1=1"]
-	lead_params = []
-	wi_clauses = ["1=1"]
-	wi_params = []
+	if scope["scope"] not in ("system", "all", "team"):
+		return _empty_pool_response(scope["scope"], page_num, limit)
 
-	if scope["scope"] in ("system", "all"):
-		if campaign_val:
-			lead_clauses.append(
-				"exists (select 1 from `tabCSKH Work Item` wi_f where wi_f.lead = l.name and wi_f.campaign = %s)"
-			)
-			lead_params.append(campaign_val)
-			wi_clauses.append("wi.campaign = %s")
-			wi_params.append(campaign_val)
-		if batch_val:
-			b_lead_clause, b_lead_params = lead_in_batch_clause(batch_val, "l.name")
-			lead_clauses.append(b_lead_clause)
-			lead_params.extend(b_lead_params)
-			b_wi_clause, b_wi_params = work_item_in_batch_clause(batch_val, "wi")
-			wi_clauses.append(b_wi_clause)
-			wi_params.extend(b_wi_params)
-	elif scope["scope"] == "team":
-		pool_clause, pool_params = _pool_scope_filter(scope, "wi_s")
-		team_users = _team_users(scope["user"])
-		if not pool_clause or pool_clause == "1=0" or not team_users:
-			return {
-				"scope": scope["scope"],
-				"items": [],
-				"total": 0,
-				"unique_customers": 0,
-				"work_items": 0,
-				"page": page_num,
-				"page_size": limit,
-				"as_of": now_datetime(),
-			}
-		user_ph = ",".join(["%s"] * len(team_users))
-		sub_clauses = [
-			"wi_s.lead = l.name",
-			f"({pool_clause})",
-			f"(wi_s.assigned_to is null or wi_s.assigned_to in ({user_ph}))",
-		]
-		sub_params = [*pool_params, *team_users]
+	auth_clauses, auth_params = _team_lead_authorization_clauses(scope, "l")
+	if auth_clauses == ["1=0"]:
+		return _empty_pool_response(scope["scope"], page_num, limit)
 
-		wi_pool_clause, wi_pool_params = _pool_scope_filter(scope, "wi")
-		wi_clauses.append(f"({wi_pool_clause})")
-		wi_params.extend(wi_pool_params)
-		wi_clauses.append(f"(wi.assigned_to is null or wi.assigned_to in ({user_ph}))")
-		wi_params.extend(team_users)
-
-		if campaign_val:
-			sub_clauses.append("wi_s.campaign = %s")
-			sub_params.append(campaign_val)
-			wi_clauses.append("wi.campaign = %s")
-			wi_params.append(campaign_val)
-		if batch_val:
-			b_sub_clause, b_sub_params = work_item_in_batch_clause(batch_val, "wi_s")
-			sub_clauses.append(b_sub_clause)
-			sub_params.extend(b_sub_params)
-			b_wi_clause, b_wi_params = work_item_in_batch_clause(batch_val, "wi")
-			wi_clauses.append(b_wi_clause)
-			wi_params.extend(b_wi_params)
-
-		lead_clauses.append(
-			"exists (select 1 from `tabCSKH Work Item` wi_s where " + " and ".join(sub_clauses) + ")"
+	if scope["scope"] == "team" and campaign_val:
+		team_nodes = _scope_team_nodes(scope)
+		if not team_nodes:
+			return _empty_pool_response(scope["scope"], page_num, limit)
+		node_ph = ",".join(["%s"] * len(team_nodes))
+		readable = frappe.db.sql(
+			f"select name from `tabCSKH Campaign` where name = %s "
+			f"and (team_scope is null or team_scope in ({node_ph}))",
+			(campaign_val, *team_nodes),
+			pluck=True,
 		)
-		lead_params.extend(sub_params)
-	else:
-		return {
-			"scope": scope["scope"],
-			"items": [],
-			"total": 0,
-			"unique_customers": 0,
-			"work_items": 0,
-			"page": page_num,
-			"page_size": limit,
-			"as_of": now_datetime(),
-		}
+		if not readable:
+			return _empty_pool_response(scope["scope"], page_num, limit)
+
+	lead_clauses = ["1=1", *auth_clauses]
+	lead_params = [*auth_params]
+
+	if batch_val:
+		b_sql, b_params = lead_in_batch_clause(batch_val, "l.name")
+		lead_clauses.append(b_sql)
+		lead_params.extend(b_params)
 
 	if source_val:
 		lead_clauses.append("coalesce(l.source, '') like %s")
@@ -669,118 +791,158 @@ def customer_pool(
 			)
 			lead_params.extend([like, like, like, like])
 
-	candidate_rows = frappe.db.sql(
-		"""select l.name as name, l.lead_name as lead_name, l.first_name as first_name,
-		          l.mobile_no as mobile_no, l.source as source, l.lead_owner as lead_owner,
-		          l.creation as creation,
-		          exists(select 1 from `tabCSKH Identity Index` ii where ii.canonical_lead = l.name) as has_identity
-		   from `tabCRM Lead` l
-		   where """
-		+ " and ".join(lead_clauses)
-		+ " order by l.creation desc",
-		tuple(lead_params),
+	wi_p_sql, wi_p_params = _scoped_wi_predicate(scope, "wi_p")
+	ac_sql, ac_params = _scoped_ac_predicate(scope, "ac")
+
+	pool_subquery = (
+		"select "
+		"l_pick.name as lead, "
+		"l_pick.lead_name as lead_name, "
+		"l_pick.first_name as first_name, "
+		"l_pick.mobile_no as mobile_no, "
+		"l_pick.source as source, "
+		"l_pick.lead_owner as lead_owner, "
+		"l_pick.creation as lead_creation, "
+		"wi_cur.name as wi_name, "
+		"wi_cur.campaign as wi_campaign, "
+		"wi_cur.status as wi_status, "
+		"wi_cur.assigned_to as wi_assigned_to, "
+		"wi_cur.creation as wi_created_at, "
+		"c_wi.title as wi_campaign_title, "
+		"c_wi.code as wi_campaign_code, "
+		"ac.campaign as ac_campaign, "
+		"ac.work_item as ac_work_item, "
+		"c_ac.title as ac_campaign_title, "
+		"c_ac.code as ac_campaign_code, "
+		"case "
+		"when wi_cur.status = 'assigned' and coalesce(wi_cur.assigned_to, '') != '' then 'assigned' "
+		"when wi_cur.status = 'queued' and coalesce(wi_cur.assigned_to, '') = '' then 'queued' "
+		"when wi_cur.status = 'revoked' then 'revoked' "
+		"when wi_cur.status = 'closed' then 'closed' "
+		"when wi_cur.name is null and ac.name is null "
+		"and coalesce(l_pick.lead_owner, '') not in ('', 'Administrator') then 'conflict' "
+		"when wi_cur.name is null and ii.name is null then 'invalid' "
+		"when coalesce(ac.campaign, '') != '' then 'conflict' "
+		"when coalesce(l_pick.lead_owner, '') not in ('', 'Administrator') then 'conflict' "
+		"when ii.name is null then 'invalid' "
+		"else 'eligible' "
+		"end as derived_state, "
+		"case "
+		"when wi_cur.status = 'assigned' and coalesce(wi_cur.assigned_to, '') != '' then coalesce(wi_cur.campaign, '') "
+		"when wi_cur.status = 'queued' and coalesce(wi_cur.assigned_to, '') = '' then coalesce(wi_cur.campaign, '') "
+		"when wi_cur.status in ('revoked', 'closed') then coalesce(wi_cur.campaign, '') "
+		"when wi_cur.name is null and ac.name is null "
+		"and coalesce(l_pick.lead_owner, '') not in ('', 'Administrator') then '' "
+		"when wi_cur.name is null and ii.name is null then '' "
+		"when coalesce(ac.campaign, '') != '' then coalesce(ac.campaign, '') "
+		"else '' "
+		"end as derived_campaign "
+		"from ("
+		"select l.name, l.lead_name, l.first_name, l.mobile_no, l.source, l.lead_owner, l.creation, "
+		"(select wi_p.name from `tabCSKH Work Item` wi_p "
+		f"where wi_p.lead = l.name and {wi_p_sql} "
+		"order by case "
+		"when wi_p.status = 'assigned' and coalesce(wi_p.assigned_to, '') != '' then 0 "
+		"when wi_p.status = 'queued' and coalesce(wi_p.assigned_to, '') = '' then 1 "
+		"when wi_p.status = 'revoked' then 2 "
+		"when wi_p.status = 'closed' then 3 "
+		"else 4 end asc, "
+		"wi_p.modified desc, wi_p.creation desc, wi_p.name desc limit 1) as primary_wi_name "
+		"from `tabCRM Lead` l "
+		"where " + " and ".join(lead_clauses) + ") l_pick "
+		"left join `tabCSKH Identity Index` ii on ii.canonical_lead = l_pick.name "
+		"left join `tabCSKH Work Item` wi_cur on wi_cur.name = l_pick.primary_wi_name "
+		"left join `tabCSKH Campaign` c_wi on c_wi.name = wi_cur.campaign "
+		f"left join `tabCSKH Active Claim` ac on ac.lead = l_pick.name and {ac_sql} "
+		"left join `tabCSKH Campaign` c_ac on c_ac.name = ac.campaign"
+	)
+	pool_params = [*wi_p_params, *lead_params, *ac_params]
+
+	outer_clauses = ["1=1"]
+	outer_params = []
+	if campaign_val:
+		outer_clauses.append("pool.derived_campaign = %s")
+		outer_params.append(campaign_val)
+	if state_val:
+		outer_clauses.append("pool.derived_state = %s")
+		outer_params.append(state_val)
+	outer_where = " and ".join(outer_clauses)
+
+	unique_customers = int(
+		frappe.db.sql(
+			f"select count(*) from ({pool_subquery}) pool where {outer_where}",
+			(*pool_params, *outer_params),
+		)[0][0]
+		or 0
+	)
+	if unique_customers == 0:
+		return _empty_pool_response(scope["scope"], page_num, limit)
+
+	rows = frappe.db.sql(
+		f"select * from ({pool_subquery}) pool where {outer_where} "
+		"order by pool.lead_creation desc, pool.lead desc limit %s offset %s",
+		(*pool_params, *outer_params, limit, offset),
 		as_dict=True,
 	)
 
-	if not candidate_rows:
-		return {
-			"scope": scope["scope"],
-			"items": [],
-			"total": 0,
-			"unique_customers": 0,
-			"work_items": 0,
-			"page": page_num,
-			"page_size": limit,
-			"as_of": now_datetime(),
-		}
+	page_items = []
+	for row in rows:
+		state_code = row.derived_state
+		item_campaign = row.derived_campaign or ""
+		if state_code in ("assigned", "queued", "revoked", "closed") and row.wi_name:
+			item_campaign_title = row.wi_campaign_title or row.wi_campaign_code or item_campaign
+			work_item = row.wi_name
+			created_at = row.wi_created_at or row.lead_creation
+			if state_code == "queued":
+				owner = ""
+			else:
+				owner = row.wi_assigned_to or ""
+		elif state_code == "conflict" and item_campaign:
+			item_campaign_title = row.ac_campaign_title or row.ac_campaign_code or item_campaign
+			work_item = row.ac_work_item
+			owner = row.lead_owner or ""
+			created_at = row.wi_created_at or row.lead_creation
+		else:
+			item_campaign_title = ""
+			work_item = None
+			owner = (row.lead_owner or "") if state_code in ("conflict", "invalid") else ""
+			created_at = row.wi_created_at or row.lead_creation
 
-	campaign_rows = frappe.db.sql(
-		"select name, title, code from `tabCSKH Campaign`",
-		as_dict=True,
-	)
-	campaign_titles = {row.name: (row.title or row.code or row.name) for row in campaign_rows}
-
-	candidate_names = [row.name for row in candidate_rows]
-	wi_by_lead = {}
-	claim_by_lead = {}
-	for start in range(0, len(candidate_names), 1000):
-		chunk_names = tuple(candidate_names[start : start + 1000])
-		wi_rows = frappe.db.sql(
-			"""select wi.lead as lead, wi.name as work_item, wi.campaign as campaign,
-			          wi.status as status, wi.assigned_to as assigned_to, wi.creation as created_at
-			   from `tabCSKH Work Item` wi
-			   where wi.lead in %s
-			   order by wi.creation desc""",
-			(chunk_names,),
-			as_dict=True,
-		)
-		for row in wi_rows:
-			wi_by_lead.setdefault(row.lead, []).append(row)
-
-		claim_rows = frappe.db.sql(
-			"select lead, campaign, work_item from `tabCSKH Active Claim` where lead in %s",
-			(chunk_names,),
-			as_dict=True,
-		)
-		for row in claim_rows:
-			claim_by_lead[row.lead] = row
-
-	matched = []
-	for lead_row in candidate_rows:
-		derived_state, item_campaign, item_campaign_title, owner, work_item, created_at = (
-			_derive_customer_pool_state(
-				lead_row,
-				wi_by_lead.get(lead_row.name, []),
-				claim_by_lead.get(lead_row.name),
-				campaign_titles,
-			)
-		)
-		if state_val and derived_state != state_val:
-			continue
-		display = lead_row.lead_name or lead_row.first_name or ""
-		matched.append(
+		display = row.lead_name or row.first_name or ""
+		page_items.append(
 			{
 				"work_item": work_item,
-				"lead": lead_row.name,
+				"lead": row.lead,
 				"display_name": display if allow_pii else "",
-				"phone": lead_row.mobile_no if allow_pii else None,
-				"source": lead_row.source,
+				"phone": row.mobile_no if allow_pii else None,
+				"source": row.source,
 				"campaign": item_campaign,
 				"campaign_title": item_campaign_title,
-				"state": derived_state,
+				"state": state_code,
 				"owner": owner,
-				"created_at": created_at or lead_row.creation,
+				"created_at": created_at,
 			}
 		)
 
-	unique_customers = len(matched)
-	page_items = matched[offset : offset + limit]
+	wi_cnt_sql, wi_cnt_params = _scoped_wi_predicate(scope, "wi")
+	wi_cnt_clauses = [wi_cnt_sql]
+	if campaign_val:
+		wi_cnt_clauses.append("wi.campaign = %s")
+		wi_cnt_params.append(campaign_val)
+	if batch_val:
+		bw_sql, bw_params = work_item_in_batch_clause(batch_val, "wi")
+		wi_cnt_clauses.append(bw_sql)
+		wi_cnt_params.extend(bw_params)
+	wi_cnt_clauses.append(f"wi.lead in (select pool.lead from ({pool_subquery}) pool where {outer_where})")
+	wi_cnt_params.extend([*pool_params, *outer_params])
 
-	if state_val or source_val or search_val:
-		lead_names = [row["lead"] for row in matched]
-		if lead_names:
-			work_items_count = 0
-			for start in range(0, len(lead_names), 1000):
-				chunk_leads = lead_names[start : start + 1000]
-				lead_ph = ",".join(["%s"] * len(chunk_leads))
-				work_items_count += int(
-					frappe.db.sql(
-						"select count(*) from `tabCSKH Work Item` wi where "
-						+ " and ".join([*wi_clauses, f"wi.lead in ({lead_ph})"]),
-						(*wi_params, *chunk_leads),
-					)[0][0]
-					or 0
-				)
-		else:
-			work_items_count = 0
-	else:
-		work_items_count = int(
-			frappe.db.sql(
-				"select count(*) from `tabCSKH Work Item` wi where " + " and ".join(wi_clauses),
-				tuple(wi_params),
-			)[0][0]
-			or 0
-		)
+	work_items_count = int(
+		frappe.db.sql(
+			"select count(*) from `tabCSKH Work Item` wi where " + " and ".join(wi_cnt_clauses),
+			tuple(wi_cnt_params),
+		)[0][0]
+		or 0
+	)
 
 	return {
 		"scope": scope["scope"],

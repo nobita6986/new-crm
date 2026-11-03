@@ -44,17 +44,20 @@
   {
    "fieldname": "preview_json",
    "fieldtype": "Long Text",
-   "label": "Preview Json"
+   "label": "Preview Json",
+   "permlevel": 1
   },
   {
    "fieldname": "actual_json",
    "fieldtype": "Long Text",
-   "label": "Actual Json"
+   "label": "Actual Json",
+   "permlevel": 1
   },
   {
    "fieldname": "state_json",
    "fieldtype": "Long Text",
-   "label": "State Json"
+   "label": "State Json",
+   "permlevel": 1
   },
   {
    "fieldname": "expires_at",
@@ -74,12 +77,14 @@
   {
    "fieldname": "error",
    "fieldtype": "Small Text",
-   "label": "Error"
+   "label": "Error",
+   "permlevel": 1
   },
   {
    "fieldname": "lease_expires_at",
    "fieldtype": "Datetime",
    "label": "Lease Expires At",
+   "permlevel": 1,
    "description": "Lease của executor hiện tại. Khi lease hết hạn, một executor khác được phép tiếp quản run (P1 §7.5 crash recovery)."
   },
   {
@@ -87,6 +92,7 @@
    "fieldtype": "Int",
    "label": "Progress",
    "default": "0",
+   "permlevel": 1,
    "description": "Số lead trong danh sách tuyển chọn đã xử lý (điểm resume của một run bị gián đoạn)."
   }
  ],
@@ -119,11 +125,31 @@
    "print": 0
   },
   {
+   "role": "System Manager",
+   "permlevel": 1,
+   "read": 1,
+   "write": 1,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
    "role": "CSKH CRM Admin",
    "read": 1,
    "create": 0,
    "write": 0,
    "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "permlevel": 1,
+   "read": 1,
+   "write": 0,
    "share": 0,
    "export": 0,
    "email": 0,
@@ -156,7 +182,7 @@
  "track_changes": 0,
  "sort_field": "creation",
  "sort_order": "DESC",
- "modified": "2026-11-03 00:00:00.000000",
+ "modified": "2026-11-03 15:00:00.000000",
  "owner": "Administrator",
  "modified_by": "Administrator",
  "links": [],

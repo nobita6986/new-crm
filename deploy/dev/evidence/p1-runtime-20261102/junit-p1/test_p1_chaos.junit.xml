@@ -1,33 +1,33 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-	<testsuite name="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume-20261103130716" tests="4" file="crm_cskh/tests/test_p1_chaos.py" time="4.160" timestamp="2026-11-03T13:07:20" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume" name="test_fault_after_work_item_before_ownership_leaves_no_orphan" time="1.624" timestamp="2026-11-03T13:07:18" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="208"/>
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume" name="test_fault_mid_ownership_after_history_and_todo_rolls_back_all_artifacts" time="0.500" timestamp="2026-11-03T13:07:18" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="262"/>
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume" name="test_fault_mid_reassign_rolls_back_to_original_owner_and_open_interval" time="0.522" timestamp="2026-11-03T13:07:19" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="326"/>
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume" name="test_resumed_run_retries_only_failed_leads_sums_counts_and_keeps_fairness" time="1.514" timestamp="2026-11-03T13:07:20" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="365"/>
+	<testsuite name="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume-2[REDACTED_PHONE]31" tests="4" file="crm_cskh/tests/test_p1_chaos.py" time="5.776" timestamp="2026-11-03T15:25:38" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume" name="test_fault_after_work_item_before_ownership_leaves_no_orphan" time="2.311" timestamp="2026-11-03T15:25:35" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="208"/>
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume" name="test_fault_mid_ownership_after_history_and_todo_rolls_back_all_artifacts" time="0.628" timestamp="2026-11-03T15:25:35" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="262"/>
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume" name="test_fault_mid_reassign_rolls_back_to_original_owner_and_open_interval" time="0.500" timestamp="2026-11-03T15:25:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="326"/>
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionRollbackAndResume" name="test_resumed_run_retries_only_failed_leads_sums_counts_and_keeps_fairness" time="2.336" timestamp="2026-11-03T15:25:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="365"/>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_p1_chaos.TestDistributionWorkerCrashAndRecovery-20261103130716" tests="1" file="crm_cskh/tests/test_p1_chaos.py" time="3.208" timestamp="2026-11-03T13:07:24" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionWorkerCrashAndRecovery" name="test_distribution_worker_hard_kill_os_exit_mid_batch_and_lease_recovery" time="3.208" timestamp="2026-11-03T13:07:24" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="734"/>
+	<testsuite name="crm_cskh.tests.test_p1_chaos.TestDistributionWorkerCrashAndRecovery-2[REDACTED_PHONE]31" tests="1" file="crm_cskh/tests/test_p1_chaos.py" time="4.931" timestamp="2026-11-03T15:25:43" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestDistributionWorkerCrashAndRecovery" name="test_distribution_worker_hard_kill_os_exit_mid_batch_and_lease_recovery" time="4.931" timestamp="2026-11-03T15:25:43" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="734"/>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_p1_chaos.TestImportWorkerCrashAndRecovery-20261103130716" tests="3" file="crm_cskh/tests/test_p1_chaos.py" time="3.240" timestamp="2026-11-03T13:07:27" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestImportWorkerCrashAndRecovery" name="test_failed_row_in_early_chunk_blocks_progress_advance_and_recovers_on_retry" time="0.854" timestamp="2026-11-03T13:07:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="645">
+	<testsuite name="crm_cskh.tests.test_p1_chaos.TestImportWorkerCrashAndRecovery-2[REDACTED_PHONE]31" tests="3" file="crm_cskh/tests/test_p1_chaos.py" time="4.706" timestamp="2026-11-03T15:25:48" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestImportWorkerCrashAndRecovery" name="test_failed_row_in_early_chunk_blocks_progress_advance_and_recovers_on_retry" time="1.256" timestamp="2026-11-03T15:25:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="645">
 			<system-out><![CDATA[Message: CRM Lead Administrator not found
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestImportWorkerCrashAndRecovery" name="test_mixed_batch_does_not_double_count_preview_invalid_rows" time="0.444" timestamp="2026-11-03T13:07:26" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="692">
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestImportWorkerCrashAndRecovery" name="test_mixed_batch_does_not_double_count_preview_invalid_rows" time="0.375" timestamp="2026-11-03T15:25:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="692">
 			<system-out><![CDATA[Message: CRM Lead Administrator not found
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestImportWorkerCrashAndRecovery" name="test_worker_hard_kill_os_exit_mid_batch_recovers_with_zero_duplicates" time="1.942" timestamp="2026-11-03T13:07:27" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="573">
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestImportWorkerCrashAndRecovery" name="test_worker_hard_kill_os_exit_mid_batch_recovers_with_zero_duplicates" time="3.075" timestamp="2026-11-03T15:25:48" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="573">
 			<system-out><![CDATA[Message: CRM Lead Administrator not found
 ]]></system-out>
 		</testcase>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_p1_chaos.TestPostCommitNotificationRetry-20261103130716" tests="1" file="crm_cskh/tests/test_p1_chaos.py" time="0.619" timestamp="2026-11-03T13:07:28" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestPostCommitNotificationRetry" name="test_fault_after_commit_before_notification_and_idempotent_retry" time="0.619" timestamp="2026-11-03T13:07:28" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="430"/>
+	<testsuite name="crm_cskh.tests.test_p1_chaos.TestPostCommitNotificationRetry-2[REDACTED_PHONE]31" tests="1" file="crm_cskh/tests/test_p1_chaos.py" time="0.811" timestamp="2026-11-03T15:25:50" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestPostCommitNotificationRetry" name="test_fault_after_commit_before_notification_and_idempotent_retry" time="0.811" timestamp="2026-11-03T15:25:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="430"/>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_p1_chaos.TestZeroProductionFaultInjection-20261103130716" tests="2" file="crm_cskh/tests/test_p1_chaos.py" time="0.204" timestamp="2026-11-03T13:07:29" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestZeroProductionFaultInjection" name="test_chaos_module_does_not_exist_in_production_services" time="0.021" timestamp="2026-11-03T13:07:28" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="819"/>
-		<testcase classname="crm_cskh.tests.test_p1_chaos.TestZeroProductionFaultInjection" name="test_production_modules_contain_no_fault_injection_hooks_or_hard_exit" time="0.183" timestamp="2026-11-03T13:07:29" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="824"/>
+	<testsuite name="crm_cskh.tests.test_p1_chaos.TestZeroProductionFaultInjection-2[REDACTED_PHONE]31" tests="2" file="crm_cskh/tests/test_p1_chaos.py" time="0.266" timestamp="2026-11-03T15:25:50" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestZeroProductionFaultInjection" name="test_chaos_module_does_not_exist_in_production_services" time="0.017" timestamp="2026-11-03T15:25:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="819"/>
+		<testcase classname="crm_cskh.tests.test_p1_chaos.TestZeroProductionFaultInjection" name="test_production_modules_contain_no_fault_injection_hooks_or_hard_exit" time="0.249" timestamp="2026-11-03T15:25:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_chaos.py" line="824"/>
 	</testsuite>
 </testsuites>
