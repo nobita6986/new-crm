@@ -11,12 +11,20 @@ The invariants under test:
 * A stale preview (changed rules or changed fairness state) is refused.
 * The capacity limit cuts the distribution off instead of over-assigning.
 * The `CSKH Active Claim` unique index keeps a lead out of two campaigns.
+* The HTTP API enqueues distribution runs onto RQ (`status='queued'`),
+  deduplicates double-submits, checkpoints progress per chunk for live
+  `get_run` polling, and re-verifies actor permission, `rule_version`, and
+  assignee/lead eligibility & capacity at execution time.
 """
 
 import unittest
+from unittest import mock
 
 import frappe
+from frappe.utils import add_to_date, now_datetime
 
+from crm_cskh.api import distribution as distribution_api
+from crm_cskh.jobs import distribution_worker
 from crm_cskh.services import distribution, eligibility
 from crm_cskh.services import identity as identity_service
 from crm_cskh.services.errors import Conflict, RuleChanged
@@ -299,3 +307,212 @@ class TestPersistedFairness(P1TestCase):
 		self.assertEqual(actual.get(self.staff_a, 0), 50)
 		self.assertEqual(actual.get(self.staff_b, 0), 30)
 		self.assertEqual(actual.get(self.staff_c, 0), 20)
+
+
+class TestBackgroundDistributionRQ(P1TestCase):
+	"""Background RQ distribution: early response, chunk polling, rechecks, deduplication."""
+
+	def setUp(self):
+		super().setUp()
+		self.campaign = self.make_campaign()
+		self.make_rule(self.campaign, self.staff_a, weight=50)
+		self.make_rule(self.campaign, self.staff_b, weight=30)
+		self.make_rule(self.campaign, self.staff_c, weight=20)
+		frappe.set_user(self.admin_user)
+
+	def make_pool(self, count, campaign=None):
+		campaign = campaign or self.campaign
+		leads = [self.make_canonical_lead() for _ in range(count)]
+		frappe.db.set_value("CSKH Campaign", campaign, "selection_json", frappe.as_json({"leads": leads}))
+		return leads
+
+	def test_api_execute_enqueues_rq_and_returns_early_queued_state(self):
+		self.make_pool(10)
+		preview = distribution_api.preview(campaign=self.campaign)
+
+		with mock.patch("frappe.enqueue") as mocked_enqueue:
+			first = distribution_api.execute(
+				preview_id=preview["preview_id"],
+				expected_rule_version=preview["rule_version"],
+			)
+			# Double-submit while `queued` with an active lease MUST NOT enqueue again.
+			second = distribution_api.execute(
+				preview_id=preview["preview_id"],
+				expected_rule_version=preview["rule_version"],
+			)
+			self.assertEqual(mocked_enqueue.call_count, 1)
+			kwargs = mocked_enqueue.call_args.kwargs
+			self.assertEqual(kwargs.get("queue"), "long")
+			self.assertTrue(kwargs.get("enqueue_after_commit"))
+			self.assertTrue(kwargs.get("deduplicate"))
+			self.assertEqual(kwargs.get("job_id"), f"cskh-dist-{first['run_id']}")
+			self.assertEqual(kwargs.get("run_id"), first["run_id"])
+			self.assertEqual(kwargs.get("actor"), self.admin_user)
+
+		self.assertEqual(first["run_id"], preview["preview_id"])
+		self.assertEqual(first["status"], "queued")
+		self.assertEqual(first["total"], 10)
+		self.assertEqual(first["progress"], 0)
+		self.assertEqual(first["created"], 0)
+		self.assertEqual(second["run_id"], first["run_id"])
+		self.assertEqual(second["status"], "queued")
+		# Zero work items created before the RQ worker executes.
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": self.campaign}), 0)
+
+		# Execute the RQ worker job and verify completion + post-completion idempotency.
+		done = distribution_worker.run_distribution(first["run_id"], actor=self.admin_user)
+		self.assertEqual(done["status"], "completed")
+		self.assertEqual(done["progress"], 10)
+		self.assertEqual(done["created"], 10)
+		self.assertEqual(done["assigned"], {self.staff_a: 5, self.staff_b: 3, self.staff_c: 2})
+
+		with mock.patch("frappe.enqueue") as mocked_after:
+			third = distribution_api.execute(preview_id=preview["preview_id"])
+			mocked_after.assert_not_called()
+		self.assertEqual(third["status"], "completed")
+		self.assertEqual(third["created"], 10)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": self.campaign}), 10)
+
+	def test_chunked_worker_persists_progress_and_polling_reads_cumulative_counts(self):
+		self.make_pool(10)
+		preview = distribution_api.preview(campaign=self.campaign)
+		with mock.patch("frappe.enqueue"):
+			queued = distribution_api.execute(preview_id=preview["preview_id"])
+		frappe.db.commit()
+
+		observed_polls = []
+		real_commit = frappe.db.commit
+
+		def observe_chunk_commits(*args, **kwargs):
+			real_commit(*args, **kwargs)
+			snapshot = distribution_api.get_run(run_id=queued["run_id"])
+			if snapshot["status"] == "running" and snapshot["progress"] > 0:
+				observed_polls.append(
+					(
+						snapshot["status"],
+						snapshot["progress"],
+						snapshot["created"],
+						sum(snapshot["assigned"].values()),
+					)
+				)
+
+		with mock.patch.object(distribution, "CHUNK_SIZE", 3):
+			with mock.patch.object(frappe.db, "commit", side_effect=observe_chunk_commits):
+				final = distribution_worker.run_distribution(queued["run_id"], actor=self.admin_user)
+
+		progress_steps = [entry[1] for entry in observed_polls]
+		self.assertIn(3, progress_steps)
+		self.assertIn(6, progress_steps)
+		self.assertIn(9, progress_steps)
+		for status_val, prog_val, created_val, sum_assigned in observed_polls:
+			self.assertEqual(status_val, "running")
+			self.assertEqual(created_val, prog_val)
+			self.assertEqual(sum_assigned, prog_val)
+
+		self.assertEqual(final["status"], "completed")
+		self.assertEqual(final["progress"], 10)
+		self.assertEqual(final["total"], 10)
+		self.assertEqual(final["created"], 10)
+		self.assertEqual(final["assigned"], {self.staff_a: 5, self.staff_b: 3, self.staff_c: 2})
+
+	def test_worker_rechecks_actor_permission_and_rule_version_at_execution_time(self):
+		# Case A: actor loses `CSKH CRM Admin` after enqueue -> worker aborts with FORBIDDEN.
+		frappe.set_user("Administrator")
+		temp_admin = "p1-temp-dist-admin@example.test"
+		self.ensure_user(temp_admin, "CSKH CRM Admin")
+		camp_a = self.make_campaign()
+		self.make_rule(camp_a, self.staff_a, weight=100)
+		self.make_pool(3, campaign=camp_a)
+		frappe.set_user(temp_admin)
+		prev_a = distribution_api.preview(campaign=camp_a)
+		with mock.patch("frappe.enqueue"):
+			queued_a = distribution_api.execute(preview_id=prev_a["preview_id"])
+		frappe.set_user("Administrator")
+		frappe.get_doc("User", temp_admin).remove_roles("CSKH CRM Admin")
+		frappe.db.commit()
+
+		aborted_perm = distribution_worker.run_distribution(queued_a["run_id"])
+		self.assertEqual(aborted_perm["status"], "failed")
+		self.assertTrue(str(aborted_perm["error"]).startswith("FORBIDDEN:"))
+		self.assertEqual(aborted_perm["created"], 0)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp_a}), 0)
+
+		# Case B: `rule_version` changes while queued -> worker aborts with RULE_CHANGED.
+		camp_b = self.make_campaign()
+		self.make_rule(camp_b, self.staff_a, weight=100)
+		self.make_pool(3, campaign=camp_b)
+		frappe.set_user(self.admin_user)
+		prev_b = distribution_api.preview(campaign=camp_b)
+		with mock.patch("frappe.enqueue"):
+			queued_b = distribution_api.execute(preview_id=prev_b["preview_id"])
+		self.make_rule(camp_b, self.staff_b, weight=50, version=2)
+		frappe.db.commit()
+
+		aborted_rule = distribution_worker.run_distribution(queued_b["run_id"], actor=self.admin_user)
+		self.assertEqual(aborted_rule["status"], "failed")
+		self.assertTrue(str(aborted_rule["error"]).startswith("RULE_CHANGED:"))
+		self.assertEqual(aborted_rule["created"], 0)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp_b}), 0)
+
+	def test_worker_rechecks_assignee_and_lead_eligibility_and_capacity_mid_run(self):
+		leads = self.make_pool(6)
+		# Cap `staff_b` at 1 item so capacity is enforced dynamically across chunks.
+		frappe.db.set_value(
+			"CSKH Assignment Rule",
+			{"campaign": self.campaign, "user": self.staff_b},
+			"capacity_limit",
+			1,
+		)
+		other_campaign = self.make_campaign()
+		preview = distribution_api.preview(campaign=self.campaign)
+		with mock.patch("frappe.enqueue"):
+			queued = distribution_api.execute(preview_id=preview["preview_id"])
+		frappe.db.commit()
+
+		self.addCleanup(frappe.db.set_value, "User", self.staff_c, "enabled", 1)
+		mutated_mid_run = {"done": False}
+		real_commit = frappe.db.commit
+
+		def mutate_after_first_chunk(*args, **kwargs):
+			real_commit(*args, **kwargs)
+			if not mutated_mid_run["done"]:
+				prog = int(frappe.db.get_value("CSKH Distribution Run", queued["run_id"], "progress") or 0)
+				if prog >= 2:
+					mutated_mid_run["done"] = True
+					# Disable `staff_c` and claim `leads[4]` in another campaign before chunk 2/3!
+					frappe.db.set_value("User", self.staff_c, "enabled", 0)
+					other_wi = self.make_work_item(other_campaign, leads[4], status="queued")
+					frappe.get_doc(
+						{
+							"doctype": "CSKH Active Claim",
+							"lead": leads[4],
+							"campaign": other_campaign,
+							"work_item": other_wi,
+						}
+					).insert(ignore_permissions=True)
+					real_commit()
+
+		with mock.patch.object(distribution, "CHUNK_SIZE", 2):
+			with mock.patch.object(frappe.db, "commit", side_effect=mutate_after_first_chunk):
+				result = distribution_worker.run_distribution(queued["run_id"], actor=self.admin_user)
+
+		self.assertTrue(mutated_mid_run["done"])
+		self.assertEqual(result["status"], "completed_with_errors")
+		self.assertEqual(result["created"], 5)
+		self.assertEqual(result["errors"], 1)
+		self.assertLessEqual(result["assigned"].get(self.staff_b, 0), 1)
+		# `staff_c` was disabled after chunk 1 (progress=2) so it received 0 items in chunks 2 & 3.
+		self.assertEqual(result["assigned"].get(self.staff_c, 0), 0)
+		self.assertEqual(result["skipped"][0]["lead"], leads[4])
+		self.assertEqual(result["skipped"][0]["reason"], "active_claim_in_other_campaign")
+
+		# Double-submit while active lease is held is a no-op as well.
+		frappe.db.set_value(
+			"CSKH Distribution Run",
+			queued["run_id"],
+			"lease_expires_at",
+			add_to_date(now_datetime(), seconds=300),
+		)
+		reconciled = distribution.reconcile(self.campaign, actor=self.admin_user)
+		self.assertEqual(reconciled["active_work_items"], 5)
+		self.assertEqual(reconciled["active_claims"], 5)

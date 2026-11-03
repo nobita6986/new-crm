@@ -1,10 +1,11 @@
-"""P1 — Regression suite for the T1C baseline findings L-01..L-15.
+"""P1 — Regression suite for the T1C baseline & round-2 findings L-01..L-22.
 
 Every test in this module **reproduces one finding of the T1C verification
-baseline** (`deploy/dev/evidence/t1c-p1-verification-baseline-2026-11-02.md`)
-and pins the fixed behaviour. The module is deliberately separate from the
-functional P1 suites so a regression in a *fix* cannot be masked by the
-functional test that motivated it.
+reports** (`deploy/dev/evidence/t1c-p1-verification-baseline-2026-11-02.md` and
+`deploy/dev/evidence/t1c-p1-verification-report-round2-2026-11-02.md`) and pins
+the fixed behaviour. The module is deliberately separate from the functional P1
+suites so a regression in a *fix* cannot be masked by the functional test that
+motivated it.
 
 | Finding | Symptom before the fix | Test |
 |---|---|---|
@@ -21,16 +22,26 @@ functional test that motivated it.
 | L-13 | No formula / HTML sanitization on the import cells and on the error artifact | `TestL13Sanitization` |
 | L-14 | `pool_list` `total` was not scoped like `items` | `TestL04PoolQuery` |
 | L-15 | `frappe.get_all` bypassed the row-level permission | `TestL15NoPermissionBypass` |
+| L-16 | HTTP error envelope lacked stable `code`/`p1_code` while File-oracle must stay byte-identical | `TestL16ErrorEnvelopeAndFileOracle` |
+| L-17 | `CSKH CRM Admin` fell back to `scope="self"` in `services/reporting.py::_scope()` | `TestL17CrmAdminReportingScope` |
+| L-18 | First-time `imports.confirm()` left batch at `CONFIRMED`, breaking `CONFIRMED -> RUNNING` in worker | `TestL18FirstConfirmToWorker` |
+| L-19 / L-20 | Import `>200` rows truncated worker input / missed error artifact rows / double-counted errors | `TestL19L20LargeImportAndErrorArtifact` |
+| L-21 | `api.ownership.revoke` used `bool(return_to_pool)`, turning `"false"`/`"0"` into `True` | `TestL21RevokeBooleanParsing` |
+| L-22 | Leader dashboard missed unassigned (`assigned_to IS NULL`) `revoked`/`closed`/`active_claims` and diverged on `unique_customers` | `TestL22LeaderUnassignedAndUniqueCustomers` |
 """
 
 import csv
 import io
+import json
 import os
 import unittest
+from unittest import mock
 
 import frappe
 
+from crm_cskh.errors import _canonical_not_found_body, normalize_error_response
 from crm_cskh.jobs import import_worker
+from crm_cskh.p1_errors import clear_p1_error_context, normalize_p1_error_response
 from crm_cskh.services import distribution, eligibility, import_service, reporting
 from crm_cskh.services.import_service import (
 	_classify,
@@ -364,8 +375,8 @@ class TestL05DashboardScope(P1TestCase):
 			"""select name from `tabCSKH Campaign`
 			   where team_scope is null or team_scope in (
 			     select name from `tabCRM Sales Hierarchy`
-			     where lft >= (select lft from `tabCRM Sales Hierarchy` where `user` = %s)
-			       and rgt <= (select rgt from `tabCRM Sales Hierarchy` where `user` = %s))""",
+			     where lft >= (select lft from `tabCRM Sales Hierarchy` where user = %s)
+			       and rgt <= (select rgt from `tabCRM Sales Hierarchy` where user = %s))""",
 			(self.leader_a, self.leader_a),
 			pluck=True,
 		)
@@ -417,7 +428,28 @@ class TestL05DashboardScope(P1TestCase):
 					"work_item": item,
 				}
 			).insert(ignore_permissions=True)
-		# A claim of the other team.
+		# Also a queued (unassigned) active claim in Team A's campaign and Team B's campaign (L-22).
+		queued_lead_a = self.make_canonical_lead()
+		queued_item_a = self.make_work_item(self.campaign_a, queued_lead_a, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": queued_lead_a,
+				"campaign": self.campaign_a,
+				"work_item": queued_item_a,
+			}
+		).insert(ignore_permissions=True)
+		queued_lead_b = self.make_canonical_lead()
+		queued_item_b = self.make_work_item(self.campaign_b, queued_lead_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": queued_lead_b,
+				"campaign": self.campaign_b,
+				"work_item": queued_item_b,
+			}
+		).insert(ignore_permissions=True)
+		# An assigned claim of the other team.
 		foreign_lead = frappe.db.get_value("CSKH Work Item", self.team_b_items[0], "lead")
 		frappe.get_doc(
 			{
@@ -430,14 +462,18 @@ class TestL05DashboardScope(P1TestCase):
 
 		payload = reporting.distribution_dashboard(self.leader_a)
 		team_a_users = self._team_a_users()
+		team_a_campaigns = self._team_a_campaigns()
 		expected = frappe.db.sql(
 			"""select count(*) from `tabCSKH Active Claim` ac
 			   inner join `tabCSKH Work Item` wi on wi.name = ac.work_item
 			   where wi.status in ('queued', 'assigned')
-			     and wi.assigned_to in ({})""".format(",".join(["%s"] * len(team_a_users))),
-			tuple(team_a_users),
+			     and (wi.assigned_to in ({}) or (wi.assigned_to is null and wi.campaign in ({})))""".format(
+				",".join(["%s"] * len(team_a_users)),
+				",".join(["%s"] * len(team_a_campaigns)),
+			),
+			(*team_a_users, *team_a_campaigns),
 		)[0][0]
-		self.assertEqual(payload["cards"]["active_claims"], expected)
+		self.assertEqual(payload["cards"]["active_claims"], int(expected))
 		bod = reporting.distribution_dashboard(self.bod_user)
 		self.assertEqual(bod["cards"]["active_claims"], frappe.db.count("CSKH Active Claim"))
 
@@ -845,7 +881,9 @@ class TestL09PlaceholderField(P1TestCase):
 		)
 		file_doc.insert(ignore_permissions=True)
 		batch = create_preview(file_doc.name, actor=self.admin_user, idempotency_key=self.unique_key("l09"))
-		frappe.db.set_value("CSKH Import Batch", batch["batch"], "status", "QUEUED")
+		with mock.patch("frappe.enqueue"):
+			confirmed = import_service.confirm(batch["batch"], actor=self.admin_user)
+		self.assertEqual(confirmed["status"], "QUEUED")
 		import_worker.run_batch(batch["batch"])
 
 		# The import stores the **canonical** number (E.164), not the raw cell
@@ -1127,7 +1165,8 @@ class TestImportIdempotency(P1TestCase):
 
 		file_name = self._upload(build_csv([(phone,)]))
 		batch = create_preview(file_name, actor=self.admin_user, idempotency_key=self.unique_key("dup-owner"))
-		frappe.db.set_value("CSKH Import Batch", batch["batch"], "status", "QUEUED")
+		with mock.patch("frappe.enqueue"):
+			import_service.confirm(batch["batch"], actor=self.admin_user)
 		import_worker.run_batch(batch["batch"])
 
 		self.assertEqual(frappe.db.count("CRM Lead", {"mobile_no": phone}), 1)
@@ -1140,7 +1179,8 @@ class TestImportIdempotency(P1TestCase):
 		self.make_lead(phone=phone)
 		file_name = self._upload(build_csv([(phone,)]))
 		batch = create_preview(file_name, actor=self.admin_user, idempotency_key=self.unique_key("dup-dist"))
-		frappe.db.set_value("CSKH Import Batch", batch["batch"], "status", "QUEUED")
+		with mock.patch("frappe.enqueue"):
+			import_service.confirm(batch["batch"], actor=self.admin_user)
 		import_worker.run_batch(batch["batch"])
 		lead = frappe.db.get_value("CRM Lead", {"mobile_no": phone}, "name")
 		self.assertEqual(frappe.db.count("CSKH Work Item", {"lead": lead}), 0)
@@ -1173,6 +1213,624 @@ class TestImportIdempotency(P1TestCase):
 		self.assertGreaterEqual(batch["totals"]["error_rows"], 2)
 		self.assertEqual(batch["totals"]["valid_rows"], 1)
 		self.assertEqual(frappe.db.count("CRM Lead"), leads_before)
+
+
+class _DummyResponse:
+	def __init__(self, status_code, payload=None, mimetype="application/json"):
+		self.status_code = status_code
+		self.mimetype = mimetype
+		self.data = json.dumps(payload, ensure_ascii=False).encode("utf-8") if payload is not None else b""
+
+
+class _DummyRequest:
+	def __init__(self, path="", args=None):
+		self.path = path
+		self.args = args or {}
+
+
+class TestL16ErrorEnvelopeAndFileOracle(P1TestCase):
+	"""L-16 — stable `code`/`p1_code` on P1Error HTTP envelope while preserving P0 File-oracle."""
+
+	def tearDown(self):
+		clear_p1_error_context()
+		super().tearDown()
+
+	def test_every_p1_error_subclass_emits_stable_code_and_clears_context(self):
+		from crm_cskh.services import errors
+
+		cases = [
+			(errors.InvalidRequest("bad param"), 400, "INVALID_REQUEST"),
+			(errors.Forbidden("denied"), 403, "FORBIDDEN"),
+			(errors.NotFound("missing"), 404, "NOT_FOUND"),
+			(errors.Conflict("already owned", code="ALREADY_ASSIGNED"), 409, "ALREADY_ASSIGNED"),
+			(errors.RuleChanged("rule changed", details={"expected": 1, "current": 2}), 409, "RULE_CHANGED"),
+			(errors.PreviewExpired("expired"), 409, "PREVIEW_EXPIRED"),
+			(errors.CapacityExceeded("cap"), 409, "CAPACITY_EXCEEDED"),
+			(errors.UnsupportedFormat("bad ext"), 400, "UNSUPPORTED_FORMAT"),
+			(errors.FileTooLarge("big"), 413, "FILE_TOO_LARGE"),
+			(errors.TooManyRows("many"), 413, "TOO_MANY_ROWS"),
+		]
+		for factory_exc, expected_status, expected_code in cases:
+			with self.subTest(code=expected_code):
+				clear_p1_error_context()
+				# Constructing `P1Error` records `p1_error_code` on `frappe.local`.
+				exc = type(factory_exc)(
+					str(factory_exc),
+					code=factory_exc.code,
+					details=factory_exc.details,
+				)
+				self.assertEqual(exc.http_status_code, expected_status)
+				resp = _DummyResponse(
+					expected_status,
+					{
+						"exc_type": type(exc).__name__,
+						"_error_message": str(exc),
+					},
+				)
+				req = _DummyRequest(path="/api/method/crm_cskh.api.distribution.execute")
+				out = normalize_error_response(resp, req)
+				out = normalize_p1_error_response(out, req)
+				raw = out.data.decode("utf-8") if isinstance(out.data, (bytes, bytearray)) else out.data
+				parsed = json.loads(raw)
+				self.assertEqual(parsed["code"], expected_code)
+				self.assertEqual(parsed["p1_code"], expected_code)
+				self.assertEqual(parsed["exc_type"], expected_code)
+				if factory_exc.details:
+					self.assertEqual(parsed["details"], factory_exc.details)
+				# Context is cleared after normalization so a subsequent request cannot inherit it.
+				self.assertIsNone(getattr(frappe.local, "p1_error_code", None))
+
+	def test_chained_normalizers_keep_file_oracle_byte_identical_even_after_p1_error(self):
+		from crm_cskh.services import errors
+
+		# Pollute `frappe.local` with a P1Error right beforehand to prove File routes ignore it.
+		errors.Forbidden("polluted before file route")
+		real_denied = _DummyResponse(
+			403,
+			{
+				"exc_type": "PermissionError",
+				"exception": "frappe.exceptions.PermissionError: ('read', 'File', 'secret99')",
+				"_error_message": "No permission for File secret99",
+			},
+		)
+		random_missing = _DummyResponse(
+			404,
+			{
+				"exc_type": "DoesNotExistError",
+				"_server_messages": json.dumps([json.dumps({"message": "File missing00 not found"})]),
+			},
+		)
+		for path, args in (
+			("/api/resource/File/secret99", {}),
+			("/api/method/frappe.client.get", {"doctype": "File"}),
+		):
+			with self.subTest(path=path):
+				req = _DummyRequest(path=path, args=args)
+				r_real = normalize_p1_error_response(
+					normalize_error_response(
+						_DummyResponse(403, json.loads(real_denied.data.decode("utf-8"))), req
+					),
+					req,
+				)
+				r_rand = normalize_p1_error_response(
+					normalize_error_response(
+						_DummyResponse(404, json.loads(random_missing.data.decode("utf-8"))), req
+					),
+					req,
+				)
+				self.assertEqual(r_real.status_code, 404)
+				self.assertEqual(r_rand.status_code, 404)
+				body_real = (
+					r_real.data.decode("utf-8")
+					if isinstance(r_real.data, (bytes, bytearray))
+					else r_real.data
+				)
+				body_rand = (
+					r_rand.data.decode("utf-8")
+					if isinstance(r_rand.data, (bytes, bytearray))
+					else r_rand.data
+				)
+				self.assertEqual(body_real, body_rand)
+				self.assertEqual(body_real, _canonical_not_found_body())
+
+
+class TestL17CrmAdminReportingScope(P1TestCase):
+	"""L-17 — `CSKH CRM Admin` gets `scope='system'` without `System Manager`."""
+
+	def setUp(self):
+		super().setUp()
+		self.campaign_a = self.make_campaign(team_scope=self.team_a)
+		self.campaign_b = self.make_campaign(team_scope=self.team_b)
+		self.lead_assigned = self.make_canonical_lead()
+		self.lead_queued = self.make_canonical_lead()
+		self.wi_assigned = self.make_work_item(
+			self.campaign_a, self.lead_assigned, status="assigned", assigned_to=self.staff_a
+		)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": self.lead_assigned,
+				"campaign": self.campaign_a,
+				"work_item": self.wi_assigned,
+			}
+		).insert(ignore_permissions=True)
+		self.wi_queued = self.make_work_item(self.campaign_b, self.lead_queued, status="queued")
+
+	def test_crm_admin_has_no_system_manager_yet_reads_full_system_scope_matching_db(self):
+		from crm_cskh.api import customers as customers_api
+		from crm_cskh.api import dashboard as dashboard_api
+
+		self.assertNotIn("System Manager", frappe.get_roles(self.admin_user))
+		self.assertIn("CSKH CRM Admin", frappe.get_roles(self.admin_user))
+
+		frappe.set_user(self.admin_user)
+		dash = dashboard_api.distribution()
+		self.assertEqual(dash["scope"], "system")
+		cards = dash["cards"]
+		self.assertGreater(cards["assigned_work_items"], 0)
+		self.assertGreater(cards["unassigned_work_items"], 0)
+		self.assertGreater(cards["unique_customers"], 0)
+		self.assertEqual(
+			cards["assigned_work_items"], frappe.db.count("CSKH Work Item", {"status": "assigned"})
+		)
+		self.assertEqual(
+			cards["unassigned_work_items"],
+			frappe.db.count("CSKH Work Item", {"status": "queued"}),
+		)
+		self.assertEqual(cards["active_claims"], frappe.db.count("CSKH Active Claim"))
+		expected_unique = int(frappe.db.sql("select count(distinct lead) from `tabCSKH Work Item`")[0][0])
+		self.assertEqual(cards["unique_customers"], expected_unique)
+
+		camp_summary = dashboard_api.campaigns()
+		camp_ids = {row["campaign"] for row in camp_summary["campaigns"]}
+		self.assertIn(self.campaign_a, camp_ids)
+		self.assertIn(self.campaign_b, camp_ids)
+
+		pool = customers_api.pool_list(page_size=100)
+		self.assertEqual(pool["scope"], "system")
+		self.assertGreater(pool["total"], 0)
+		self.assertEqual(
+			pool["total"],
+			frappe.db.count("CSKH Work Item", {"status": "queued", "assigned_to": ["is", "not set"]}),
+		)
+
+
+class TestL18FirstConfirmToWorker(P1TestCase):
+	"""L-18 — first-time `imports.confirm()` reaches `QUEUED` and completes in worker cleanly."""
+
+	def test_first_confirm_reaches_queued_without_db_set_value_or_second_confirm(self):
+		from crm_cskh.api import imports as imports_api
+
+		phones = [self.unique_phone(), self.unique_phone(), self.unique_phone()]
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "l18-first-confirm.csv",
+				"is_private": 1,
+				"attached_to_doctype": "CRM Lead",
+				"attached_to_name": "Administrator",
+				"content": build_csv([(p,) for p in phones]),
+			}
+		)
+		file_doc.insert(ignore_permissions=True)
+
+		frappe.set_user(self.admin_user)
+		preview = imports_api.create_preview(
+			file_name=file_doc.name,
+			idempotency_key=self.unique_key("l18-first"),
+		)
+		batch_name = preview["batch"]
+		self.assertEqual(preview["status"], "DRY_RUN")
+
+		with mock.patch("frappe.enqueue") as mocked_enqueue:
+			confirmed = imports_api.confirm(batch=batch_name)
+			# Double-submit on an already QUEUED batch does not enqueue twice.
+			double_confirmed = imports_api.confirm(batch=batch_name)
+			self.assertEqual(mocked_enqueue.call_count, 1)
+
+		self.assertEqual(confirmed["status"], "QUEUED")
+		self.assertEqual(double_confirmed["status"], "QUEUED")
+		self.assertEqual(frappe.db.get_value("CSKH Import Batch", batch_name, "status"), "QUEUED")
+
+		# Worker runs directly on the batch produced by the SINGLE confirm call.
+		import_worker.run_batch(batch_name)
+
+		status_after = imports_api.get_status(batch=batch_name)
+		self.assertEqual(status_after["status"], "COMPLETED")
+		self.assertEqual(status_after["created_rows"], 3)
+		self.assertEqual(status_after["totals"]["error_rows"], 0)
+		for p in phones:
+			self.assertEqual(
+				frappe.db.count("CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p)}),
+				1,
+			)
+
+
+class TestL19L20LargeImportAndErrorArtifact(P1TestCase):
+	"""L-19 / L-20 — `>200` row import loses zero data, writes full error artifact, never double-counts."""
+
+	def test_260_row_import_commits_all_valid_rows_and_preserves_exact_error_counts_across_resume(self):
+		from crm_cskh.api import imports as imports_api
+
+		valid_phones = [self.unique_phone() for _ in range(254)]
+		invalid_positions = {10, 88, 199, 205, 240, 261}  # CSV row_number 2..261 (3 <= 200, 3 > 200)
+		rows = []
+		v_idx = 0
+		for row_number in range(2, 262):
+			if row_number in invalid_positions:
+				rows.append((f"invalid-cell-{row_number}",))
+			else:
+				rows.append((valid_phones[v_idx],))
+				v_idx += 1
+
+		file_doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "l19-l20-260rows.csv",
+				"is_private": 1,
+				"attached_to_doctype": "CRM Lead",
+				"attached_to_name": "Administrator",
+				"content": build_csv(rows),
+			}
+		)
+		file_doc.insert(ignore_permissions=True)
+
+		frappe.set_user(self.admin_user)
+		preview = imports_api.create_preview(
+			file_name=file_doc.name,
+			idempotency_key=self.unique_key("l19-l20-260"),
+		)
+		batch_name = preview["batch"]
+		self.assertTrue(preview["preview_truncated"])
+		self.assertEqual(len(preview["preview"]), 200)
+		self.assertEqual(preview["totals"]["total_rows"], 260)
+		self.assertEqual(preview["totals"]["valid_rows"], 254)
+		self.assertEqual(preview["totals"]["new_rows"], 254)
+		self.assertEqual(preview["totals"]["error_rows"], 6)
+
+		with mock.patch("frappe.enqueue"):
+			confirmed = imports_api.confirm(batch=batch_name)
+		self.assertEqual(confirmed["status"], "QUEUED")
+
+		import_worker.run_batch(batch_name)
+		status = imports_api.get_status(batch=batch_name)
+		self.assertEqual(status["status"], "COMPLETED_WITH_ERRORS")
+		self.assertEqual(status["created_rows"], 254)
+		self.assertEqual(status["totals"]["valid_rows"], 254)
+		self.assertEqual(status["totals"]["new_rows"], 254)
+		self.assertEqual(status["totals"]["error_rows"], 6)
+		self.assertTrue(status["error_artifact"])
+
+		# Double-confirm on COMPLETED_WITH_ERRORS where all 254 new_rows were created is idempotent.
+		with mock.patch("frappe.enqueue") as mocked_reconfirm:
+			reconfirmed = imports_api.confirm(batch=batch_name)
+			mocked_reconfirm.assert_not_called()
+		self.assertEqual(reconfirmed["status"], "COMPLETED_WITH_ERRORS")
+
+		artifact_doc = frappe.get_doc("File", status["error_artifact"])
+		self.assertEqual(artifact_doc.is_private, 1)
+		raw_csv = artifact_doc.get_content()
+		if isinstance(raw_csv, bytes):
+			raw_csv = raw_csv.decode("utf-8")
+		artifact_rows = list(csv.DictReader(io.StringIO(raw_csv)))
+		self.assertEqual(len(artifact_rows), 6)
+		self.assertEqual(
+			{int(r["row_number"]) for r in artifact_rows},
+			invalid_positions,
+		)
+
+
+class TestL21RevokeBooleanParsing(P1TestCase):
+	"""L-21 — strict boolean parsing on `ownership.revoke` (`return_to_pool`) and `campaigns.save_rule` (`enabled`)."""
+
+	def setUp(self):
+		super().setUp()
+		self.campaign = self.make_campaign()
+		frappe.set_user(self.admin_user)
+
+	def _assigned_item_with_claim(self, tag):
+		lead = self.make_canonical_lead()
+		wi = self.make_work_item(self.campaign, lead, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead,
+				"campaign": self.campaign,
+				"work_item": wi,
+			}
+		).insert(ignore_permissions=True)
+		ownership_assign(
+			wi,
+			self.staff_a,
+			actor=self.admin_user,
+			request_id=self.unique_key(f"l21-assign-{tag}"),
+		)
+		return lead, wi
+
+	def test_revoke_parses_all_false_and_true_variants_and_syncs_db_artifacts(self):
+		from crm_cskh.api import ownership as ownership_api
+
+		false_variants = [False, "false", 0, "0"]
+		true_variants = [True, "true", 1, "1"]
+
+		for idx, raw_val in enumerate(false_variants):
+			with self.subTest(kind="false", raw=raw_val):
+				lead, wi = self._assigned_item_with_claim(f"f{idx}")
+				res = ownership_api.revoke(
+					work_item=wi,
+					expected_owner=self.staff_a,
+					reason=f"L-21 false variant {raw_val!r}",
+					request_id=self.unique_key(f"l21-rev-f{idx}"),
+					return_to_pool=raw_val,
+				)
+				self.assertEqual(res["status"], "revoked")
+				self.assertIsNone(res["owner"])
+				self._assert_revoked_db_truth(lead, wi, expected_status="revoked")
+
+		for idx, raw_val in enumerate(true_variants):
+			with self.subTest(kind="true", raw=raw_val):
+				lead, wi = self._assigned_item_with_claim(f"t{idx}")
+				res = ownership_api.revoke(
+					work_item=wi,
+					expected_owner=self.staff_a,
+					reason=f"L-21 true variant {raw_val!r}",
+					request_id=self.unique_key(f"l21-rev-t{idx}"),
+					return_to_pool=raw_val,
+				)
+				self.assertEqual(res["status"], "queued")
+				self.assertIsNone(res["owner"])
+				self._assert_revoked_db_truth(lead, wi, expected_status="queued")
+
+	def _assert_revoked_db_truth(self, lead, wi, expected_status):
+		wi_row = frappe.db.get_value("CSKH Work Item", wi, ["status", "assigned_to"], as_dict=True)
+		self.assertEqual(wi_row.status, expected_status)
+		self.assertIsNone(wi_row.assigned_to)
+		self.assertIsNone(frappe.db.get_value("CRM Lead", lead, "lead_owner"))
+		self.assertEqual(frappe.db.count("CSKH Active Claim", {"lead": lead}), 0)
+		self.assertEqual(
+			frappe.db.count("ToDo", {"reference_type": "CRM Lead", "reference_name": lead, "status": "Open"}),
+			0,
+		)
+		self.assertGreaterEqual(
+			frappe.db.count(
+				"ToDo", {"reference_type": "CRM Lead", "reference_name": lead, "status": "Cancelled"}
+			),
+			1,
+		)
+		self.assertEqual(
+			frappe.db.count("DocShare", {"share_doctype": "CRM Lead", "share_name": lead}),
+			0,
+		)
+		events = frappe.get_all(
+			"CSKH Assignment History",
+			filters={"work_item": wi},
+			fields=["action", "from_user", "to_user", "ownership_end"],
+			order_by="event_at asc",
+		)
+		self.assertEqual([e.action for e in events], ["assign", "revoke"])
+		self.assertIsNotNone(events[0].ownership_end)
+		self.assertEqual(events[1].from_user, self.staff_a)
+		self.assertIsNone(events[1].to_user)
+
+	def test_invalid_boolean_strings_fail_closed_with_invalid_request(self):
+		from crm_cskh.api import campaigns as campaigns_api
+		from crm_cskh.api import ownership as ownership_api
+		from crm_cskh.services.errors import InvalidRequest
+
+		_, wi = self._assigned_item_with_claim("invalid")
+		for bad in ("maybe", "yes", "2"):
+			with self.subTest(bad=bad):
+				with self.assertRaises(InvalidRequest) as ctx:
+					ownership_api.revoke(
+						work_item=wi,
+						expected_owner=self.staff_a,
+						reason="invalid bool",
+						request_id=self.unique_key(f"l21-bad-{bad}"),
+						return_to_pool=bad,
+					)
+				self.assertEqual(ctx.exception.code, "INVALID_REQUEST")
+				self.assertEqual(ctx.exception.http_status, 400)
+
+		# Also verify `campaigns.save_rule` boolean parsing on `enabled`.
+		saved_false = campaigns_api.save_rule(
+			campaign=self.campaign, user=self.staff_a, weight=50, enabled="false"
+		)
+		self.assertFalse(saved_false["enabled"])
+		saved_zero = campaigns_api.save_rule(
+			campaign=self.campaign, user=self.staff_b, weight=30, enabled="0"
+		)
+		self.assertFalse(saved_zero["enabled"])
+		saved_true = campaigns_api.save_rule(
+			campaign=self.campaign, user=self.staff_c, weight=20, enabled="true"
+		)
+		self.assertTrue(saved_true["enabled"])
+		with self.assertRaises(InvalidRequest):
+			campaigns_api.save_rule(
+				campaign=self.campaign, user=self.staff_a, weight=50, enabled="not-a-bool"
+			)
+
+
+class TestL22LeaderUnassignedAndUniqueCustomers(P1TestCase):
+	"""L-22 — Leader counts unassigned `revoked`/`closed`/`active_claims` in readable campaigns, and `unique_customers` is unified across roles."""
+
+	def setUp(self):
+		super().setUp()
+		self.camp_a = self.make_campaign(team_scope=self.team_a)
+		self.camp_b = self.make_campaign(team_scope=self.team_b)
+		self.camp_shared = self.make_campaign()
+
+		# Shared customer appearing in both `camp_a` (assigned to staff_a) and `camp_shared` (revoked)
+		# to prove `COUNT(DISTINCT wi.lead)` does not double-count multi-campaign customers.
+		self.multi_lead = self.make_canonical_lead()
+		wi_multi_a = self.make_work_item(
+			self.camp_a, self.multi_lead, status="assigned", assigned_to=self.staff_a
+		)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": self.multi_lead,
+				"campaign": self.camp_a,
+				"work_item": wi_multi_a,
+			}
+		).insert(ignore_permissions=True)
+		self.make_work_item(self.camp_shared, self.multi_lead, status="revoked")
+
+		# Unassigned `queued` work item WITH Active Claim in `camp_a` (must be counted by Leader A, NOT Leader B).
+		self.lead_qa = self.make_canonical_lead()
+		wi_qa = self.make_work_item(self.camp_a, self.lead_qa, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": self.lead_qa,
+				"campaign": self.camp_a,
+				"work_item": wi_qa,
+			}
+		).insert(ignore_permissions=True)
+
+		# Unassigned `revoked` and `closed` work items in `camp_a` (`assigned_to IS NULL`).
+		self.lead_rev_a = self.make_canonical_lead()
+		self.make_work_item(self.camp_a, self.lead_rev_a, status="revoked")
+		self.lead_cls_a = self.make_canonical_lead()
+		self.make_work_item(self.camp_a, self.lead_cls_a, status="closed")
+
+		# Foreign Team B items (`assigned`, `queued`+claim, `revoked`, `closed`) — MUST NOT leak into Leader A.
+		self.lead_asg_b = self.make_canonical_lead()
+		wi_asg_b = self.make_work_item(
+			self.camp_b, self.lead_asg_b, status="assigned", assigned_to=self.staff_c
+		)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": self.lead_asg_b,
+				"campaign": self.camp_b,
+				"work_item": wi_asg_b,
+			}
+		).insert(ignore_permissions=True)
+		self.lead_qb = self.make_canonical_lead()
+		wi_qb = self.make_work_item(self.camp_b, self.lead_qb, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": self.lead_qb,
+				"campaign": self.camp_b,
+				"work_item": wi_qb,
+			}
+		).insert(ignore_permissions=True)
+		self.make_work_item(self.camp_b, self.make_canonical_lead(), status="revoked")
+		self.make_work_item(self.camp_b, self.make_canonical_lead(), status="closed")
+
+	def _leader_users_and_campaigns(self, leader):
+		users = frappe.db.sql(
+			"""select `user` from `tabCRM Sales Hierarchy`
+			   where lft >= (select lft from `tabCRM Sales Hierarchy` where `user` = %s)
+			     and rgt <= (select rgt from `tabCRM Sales Hierarchy` where `user` = %s)""",
+			(leader, leader),
+			pluck=True,
+		)
+		campaigns = frappe.db.sql(
+			"""select name from `tabCSKH Campaign`
+			   where team_scope is null or team_scope in (
+			     select name from `tabCRM Sales Hierarchy`
+			     where lft >= (select lft from `tabCRM Sales Hierarchy` where `user` = %s)
+			       and rgt <= (select rgt from `tabCRM Sales Hierarchy` where `user` = %s))""",
+			(leader, leader),
+			pluck=True,
+		)
+		return users, campaigns
+
+	def test_leader_counts_unassigned_revoked_closed_and_claims_without_cross_team_leak(self):
+		dash_leader_a = reporting.distribution_dashboard(self.leader_a)
+		cards_a = dash_leader_a["cards"]
+		users_a, camps_a = self._leader_users_and_campaigns(self.leader_a)
+
+		u_ph = ",".join(["%s"] * len(users_a))
+		c_ph = ",".join(["%s"] * len(camps_a))
+		scope_pred = f"(wi.assigned_to in ({u_ph}) or (wi.assigned_to is null and wi.campaign in ({c_ph})))"
+		params = (*users_a, *camps_a)
+
+		exp_revoked = int(
+			frappe.db.sql(
+				f"select count(*) from `tabCSKH Work Item` wi where wi.status = 'revoked' and {scope_pred}",
+				params,
+			)[0][0]
+		)
+		exp_closed = int(
+			frappe.db.sql(
+				f"select count(*) from `tabCSKH Work Item` wi where wi.status = 'closed' and {scope_pred}",
+				params,
+			)[0][0]
+		)
+		exp_claims = int(
+			frappe.db.sql(
+				f"""select count(*) from `tabCSKH Active Claim` ac
+				    inner join `tabCSKH Work Item` wi on wi.name = ac.work_item
+				    where wi.status in ('queued', 'assigned') and {scope_pred}""",
+				params,
+			)[0][0]
+		)
+		exp_unique = int(
+			frappe.db.sql(
+				f"select count(distinct wi.lead) from `tabCSKH Work Item` wi where {scope_pred}",
+				params,
+			)[0][0]
+		)
+
+		self.assertGreaterEqual(exp_revoked, 2)  # `camp_a` revoked + `camp_shared` revoked
+		self.assertGreaterEqual(exp_closed, 1)  # `camp_a` closed
+		self.assertGreaterEqual(exp_claims, 2)  # `camp_a` assigned + `camp_a` queued
+		self.assertEqual(cards_a["revoked_work_items"], exp_revoked)
+		self.assertEqual(cards_a["closed_work_items"], exp_closed)
+		self.assertEqual(cards_a["active_claims"], exp_claims)
+		self.assertEqual(cards_a["unique_customers"], exp_unique)
+
+		# Narrowing to `camp_a` verifies `multi_lead`, `lead_qa`, `lead_rev_a`, `lead_cls_a` = 4 unique customers!
+		dash_camp_a = reporting.distribution_dashboard(self.leader_a, campaign=self.camp_a)
+		self.assertEqual(dash_camp_a["cards"]["assigned_work_items"], 1)
+		self.assertEqual(dash_camp_a["cards"]["unassigned_work_items"], 1)
+		self.assertEqual(dash_camp_a["cards"]["revoked_work_items"], 1)
+		self.assertEqual(dash_camp_a["cards"]["closed_work_items"], 1)
+		self.assertEqual(dash_camp_a["cards"]["active_claims"], 2)
+		self.assertEqual(dash_camp_a["cards"]["unique_customers"], 4)
+
+		# Foreign campaign `camp_b` returns 0 across every work-item card for Leader A.
+		dash_foreign = reporting.distribution_dashboard(self.leader_a, campaign=self.camp_b)
+		for key in (
+			"unique_customers",
+			"assigned_work_items",
+			"unassigned_work_items",
+			"revoked_work_items",
+			"closed_work_items",
+			"active_claims",
+		):
+			self.assertEqual(dash_foreign["cards"][key], 0, f"foreign leak in {key}")
+
+	def test_unique_customers_definition_is_unified_across_admin_bod_leader_and_staff(self):
+		dash_admin = reporting.distribution_dashboard(self.admin_user)
+		dash_bod = reporting.distribution_dashboard(self.bod_user)
+		dash_staff = reporting.distribution_dashboard(self.staff_a)
+
+		expected_global_unique = int(
+			frappe.db.sql("select count(distinct lead) from `tabCSKH Work Item`")[0][0]
+		)
+		# Site also has canonical leads without any Work Item (e.g. an extra lead created now) ->
+		# `unique_customers` MUST equal `COUNT(DISTINCT wi.lead)` for both Admin and BOD, NOT `Identity Index`.
+		extra_unworked_lead = self.make_canonical_lead()
+		self.assertTrue(extra_unworked_lead)
+
+		dash_admin_after = reporting.distribution_dashboard(self.admin_user)
+		dash_bod_after = reporting.distribution_dashboard(self.bod_user)
+		self.assertEqual(dash_admin["cards"]["unique_customers"], expected_global_unique)
+		self.assertEqual(dash_bod["cards"]["unique_customers"], expected_global_unique)
+		self.assertEqual(dash_admin_after["cards"]["unique_customers"], expected_global_unique)
+		self.assertEqual(dash_bod_after["cards"]["unique_customers"], expected_global_unique)
+
+		expected_staff_unique = int(
+			frappe.db.sql(
+				"select count(distinct lead) from `tabCSKH Work Item` where assigned_to = %s",
+				(self.staff_a,),
+			)[0][0]
+		)
+		self.assertEqual(dash_staff["cards"]["unique_customers"], expected_staff_unique)
 
 
 if __name__ == "__main__":

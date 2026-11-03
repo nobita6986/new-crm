@@ -281,9 +281,9 @@ override_whitelisted_methods = {
 
 # Request Events
 # ----------------
-before_request = ["crm_cskh.i18n.set_guest_language"]
+before_request = ["crm_cskh.i18n.set_guest_language", "crm_cskh.p1_errors.clear_p1_error_context"]
 update_website_context = ["crm_cskh.i18n.update_website_context"]
-after_request = ["crm_cskh.errors.normalize_error_response"]
+after_request = ["crm_cskh.errors.normalize_error_response", "crm_cskh.p1_errors.normalize_p1_error_response"]
 
 # Job Events
 # ----------

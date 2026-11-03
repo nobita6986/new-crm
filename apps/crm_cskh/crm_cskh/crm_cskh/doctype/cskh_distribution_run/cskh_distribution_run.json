@@ -37,7 +37,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "planned\nrunning\ncompleted\ncompleted_with_errors\nfailed",
+   "options": "planned\nqueued\nrunning\ncompleted\ncompleted_with_errors\nfailed",
    "default": "planned",
    "reqd": 1
   },
@@ -156,7 +156,7 @@
  "track_changes": 0,
  "sort_field": "creation",
  "sort_order": "DESC",
- "modified": "2026-11-02 00:00:00.000000",
+ "modified": "2026-11-03 00:00:00.000000",
  "owner": "Administrator",
  "modified_by": "Administrator",
  "links": [],

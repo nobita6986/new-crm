@@ -1,10 +1,10 @@
 {
   "site": "p1bench.localhost",
-  "recorded_at": "2026-11-03 07:46:46.522489",
+  "recorded_at": "2026-11-03 10:00:34.632638",
   "mixed_import": {
     "file_bytes": 1151,
-    "preview_seconds": 0.234,
-    "worker_seconds": 2.646,
+    "preview_seconds": 0.352,
+    "worker_seconds": 2.976,
     "status": "COMPLETED_WITH_ERRORS",
     "total_rows": 100,
     "valid_rows": 50,
@@ -17,7 +17,7 @@
     "has_error_artifact": true
   },
   "capacity_distribution": {
-    "campaign": "a18keva64i",
+    "campaign": "odokl2apab",
     "pool_size": 100,
     "rules": [
       {
@@ -36,8 +36,12 @@
         "capacity_limit": 0
       }
     ],
-    "execute_seconds": 9.786,
+    "api_enqueue_seconds": 0.222,
+    "api_initial_status": "queued",
+    "execute_seconds": 10.169,
     "status": "completed",
+    "progress": 100,
+    "total": 100,
     "created": 100,
     "errors": 0,
     "assigned": {
@@ -62,24 +66,24 @@
     }
   },
   "global_site_postcheck": {
-    "total_crm_leads": 20200,
-    "total_identities": 20200,
-    "total_work_items": 20200,
-    "total_active_claims": 20200,
-    "total_assignment_history": 20200,
+    "total_crm_leads": 20300,
+    "total_identities": 20300,
+    "total_work_items": 20300,
+    "total_active_claims": 20300,
+    "total_assignment_history": 20300,
     "duplicate_identities": 0,
     "duplicate_active_claims": 0,
     "duplicate_campaign_work_items": 0
   },
   "database": {
-    "questions_delta": 8449,
-    "queries_delta": 8449,
+    "questions_delta": 18265,
+    "queries_delta": 18265,
     "row_lock_waits_delta": 0,
     "row_lock_time_ms_delta": 0
   },
   "memory": {
-    "rss_before_mb": 67.3,
-    "peak_rss_mb": 131.5
+    "rss_before_mb": 90.2,
+    "peak_rss_mb": 138.1
   },
   "indexes": {
     "tabCRM Lead": [

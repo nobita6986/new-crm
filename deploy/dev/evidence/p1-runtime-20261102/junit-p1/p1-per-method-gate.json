@@ -2,11 +2,11 @@
   "schema_version": 2,
   "gate": "g007-per-method-junit",
   "gate_passed": true,
-  "expected_total": 184,
-  "observed_total": 184,
-  "passing_total": 184,
+  "expected_total": 199,
+  "observed_total": 199,
+  "passing_total": 199,
   "counts": {
-    "PASS": 184
+    "PASS": 199
   },
   "xml_files": [
     "test_p1_api_permissions.junit.xml",
@@ -382,6 +382,15 @@
     },
     {
       "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestDistributionWorkerCrashAndRecovery",
+      "method": "test_distribution_worker_hard_kill_os_exit_mid_batch_and_lease_recovery",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_distribution_worker_hard_kill_os_exit_mid_batch_and_lease_recovery",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
       "class": "TestZeroProductionFaultInjection",
       "method": "test_chaos_module_does_not_exist_in_production_services",
       "status": "PASS",
@@ -639,6 +648,42 @@
       "status": "PASS",
       "source_xml": "test_p1_distribution.junit.xml",
       "raw_name": "test_100_single_lead_batches_keep_the_cumulative_ratio",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestBackgroundDistributionRQ",
+      "method": "test_api_execute_enqueues_rq_and_returns_early_queued_state",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_api_execute_enqueues_rq_and_returns_early_queued_state",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestBackgroundDistributionRQ",
+      "method": "test_chunked_worker_persists_progress_and_polling_reads_cumulative_counts",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_chunked_worker_persists_progress_and_polling_reads_cumulative_counts",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestBackgroundDistributionRQ",
+      "method": "test_worker_rechecks_actor_permission_and_rule_version_at_execution_time",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_worker_rechecks_actor_permission_and_rule_version_at_execution_time",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestBackgroundDistributionRQ",
+      "method": "test_worker_rechecks_assignee_and_lead_eligibility_and_capacity_mid_run",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_worker_rechecks_assignee_and_lead_eligibility_and_capacity_mid_run",
       "match_reason": "exact"
     },
     {
@@ -900,6 +945,15 @@
       "status": "PASS",
       "source_xml": "test_p1_imports.junit.xml",
       "raw_name": "test_a_confirmed_batch_can_be_retried",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportWorker",
+      "method": "test_over_200_rows_imports_every_valid_row_and_records_every_error",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_over_200_rows_imports_every_valid_row_and_records_every_error",
       "match_reason": "exact"
     },
     {
@@ -1692,6 +1746,87 @@
       "status": "PASS",
       "source_xml": "test_p1_regressions.junit.xml",
       "raw_name": "test_an_empty_or_numeric_or_scientific_cell_is_an_error_not_a_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL16ErrorEnvelopeAndFileOracle",
+      "method": "test_every_p1_error_subclass_emits_stable_code_and_clears_context",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_every_p1_error_subclass_emits_stable_code_and_clears_context",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL16ErrorEnvelopeAndFileOracle",
+      "method": "test_chained_normalizers_keep_file_oracle_byte_identical_even_after_p1_error",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_chained_normalizers_keep_file_oracle_byte_identical_even_after_p1_error",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL17CrmAdminReportingScope",
+      "method": "test_crm_admin_has_no_system_manager_yet_reads_full_system_scope_matching_db",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_crm_admin_has_no_system_manager_yet_reads_full_system_scope_matching_db",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL18FirstConfirmToWorker",
+      "method": "test_first_confirm_reaches_queued_without_db_set_value_or_second_confirm",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_first_confirm_reaches_queued_without_db_set_value_or_second_confirm",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL19L20LargeImportAndErrorArtifact",
+      "method": "test_260_row_import_commits_all_valid_rows_and_preserves_exact_error_counts_across_resume",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_260_row_import_commits_all_valid_rows_and_preserves_exact_error_counts_across_resume",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL21RevokeBooleanParsing",
+      "method": "test_revoke_parses_all_false_and_true_variants_and_syncs_db_artifacts",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_revoke_parses_all_false_and_true_variants_and_syncs_db_artifacts",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL21RevokeBooleanParsing",
+      "method": "test_invalid_boolean_strings_fail_closed_with_invalid_request",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_invalid_boolean_strings_fail_closed_with_invalid_request",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL22LeaderUnassignedAndUniqueCustomers",
+      "method": "test_leader_counts_unassigned_revoked_closed_and_claims_without_cross_team_leak",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_leader_counts_unassigned_revoked_closed_and_claims_without_cross_team_leak",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL22LeaderUnassignedAndUniqueCustomers",
+      "method": "test_unique_customers_definition_is_unified_across_admin_bod_leader_and_staff",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_unique_customers_definition_is_unified_across_admin_bod_leader_and_staff",
       "match_reason": "exact"
     }
   ]

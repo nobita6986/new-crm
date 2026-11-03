@@ -40,8 +40,8 @@
 | 6 | GET | `crm_cskh.api.campaigns.rules` | `CSKH CRM Admin` / `CSKH BOD Viewer` / `Sales Manager` | Rules + trạng thái eligibility |
 | 7 | POST | `crm_cskh.api.campaigns.save_rule` | `CSKH CRM Admin` | Tạo/sửa rule (weight, capacity) |
 | 8 | POST | `crm_cskh.api.distribution.preview` | `CSKH CRM Admin` | Dry-run phân phối |
-| 9 | POST | `crm_cskh.api.distribution.execute` | `CSKH CRM Admin` | Thực thi preview (hỗ trợ resume khi partial failure) |
-| 10 | GET | `crm_cskh.api.distribution.get_run` | `CSKH CRM Admin` / `CSKH BOD Viewer` | Tiến độ / kết quả run |
+| 9 | POST | `crm_cskh.api.distribution.execute` | `CSKH CRM Admin` | Đưa preview vào hàng đợi nền RQ (trả ngay `run_id` + trạng thái sớm; hỗ trợ resume) |
+| 10 | GET | `crm_cskh.api.distribution.get_run` | `CSKH CRM Admin` / `CSKH BOD Viewer` / `Sales Manager` (trong team) | Polling tiến độ (`progress`/`total`), kết quả cộng dồn và lỗi của run |
 | 11 | GET | `crm_cskh.api.distribution.reconcile` | `CSKH CRM Admin` | Đối soát state với DB |
 | 12 | POST | `crm_cskh.api.ownership.assign` | `CSKH CRM Admin` | Giao work item queued |
 | 13 | POST | `crm_cskh.api.ownership.reassign` | `CSKH CRM Admin` | Chuyển owner (expected-owner) |
@@ -97,19 +97,24 @@ Nguồn: `apps/crm_cskh/crm_cskh/services/errors.py`.
 HTTP 500. Vì vậy `http_status_code` là thuộc tính **bắt buộc**: 400 / 403 / 404 / 409 / 413
 đều được trả đúng, và UI có thể branch theo HTTP status lẫn theo `code`.
 
-**Envelope lỗi** (Frappe chuẩn, đã chuẩn hóa qua `crm_cskh.errors.normalize_error_response`):
+**Envelope lỗi** (`L-16` — chuẩn hóa qua `crm_cskh.errors.normalize_error_response` của P0 nối tiếp
+`crm_cskh.p1_errors.normalize_p1_error_response` của P1):
 
 ```json
 {
+  "code": "FORBIDDEN",
+  "p1_code": "FORBIDDEN",
   "exc_type": "PermissionError",
   "message": "Distributing the customers requires the CRM Admin business role.",
   "_server_messages": "[\"Distributing the customers requires the CRM Admin business role.\"]"
 }
 ```
 
-`code` ổn định được nhúng trong **message** và, khi ném từ service, trong
-`P1Error.as_dict()`. UI **phải** map theo message đã map sẵn ở tầng client, không theo chuỗi
-tiếng Việt.
+Khi lỗi được ném từ `P1Error` (400 / 403 / 404 / 409 / 413), JSON HTTP trả về luôn có khóa ổn định
+ở top-level: `code` và `p1_code` (khớp bảng trên), kèm `exc_type` chuẩn để client branch trực tiếp
+theo `code` mà không cần parse chuỗi thông báo. Các truy vấn trực tiếp tới tài nguyên `File`
+(`/api/resource/File/*`, `/private/files/*`, `frappe.client.*` trên `doctype="File"`) được giữ nguyên
+100% lớp bảo vệ File-oracle P0 (trả HTTP `404` đồng nhất byte-for-byte, không gắn `p1_code`).
 
 ---
 
@@ -186,8 +191,11 @@ ghi chú của lead đã có, và **không** tự phân phối lead đó.
 |---|---|---|
 | `batch` | string | ✔ |
 
-**Response 200:** giống shape `get_status` với `status` = `QUEUED` (worker được enqueue
-qua `frappe.enqueue(..., enqueue_after_commit=True)`).
+**Response 200:** giống shape `get_status` với `status` = `QUEUED` ngay từ **lần gọi `confirm` đầu tiên** (`L-18`).
+Server khóa dòng batch (`SELECT ... FOR UPDATE`), đi qua đúng state machine hợp lệ
+`DRY_RUN → CONFIRMED → QUEUED` (hoặc `COMPLETED_WITH_ERRORS` / `FAILED → QUEUED` khi retry) rồi
+đưa job vào RQ `short` qua `frappe.enqueue(..., deduplicate=True, enqueue_after_commit=True)`.
+Gọi lặp khi batch đang `QUEUED` / `RUNNING` hoặc đã `COMPLETED` trả lại trạng thái hiện tại một cách idempotent.
 
 **Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`.
 
@@ -278,7 +286,7 @@ preview đánh dấu `invalid`).
 | `weight` | int | ✔ | > 0 |
 | `capacity_limit` | int | ✖ | 0 = không giới hạn |
 | `team` | string | ✖ | |
-| `enabled` | 0/1 | ✖ | mặc định 1 |
+| `enabled` | bool \| 0/1 \| `"true"`/`"false"` | ✖ | Mặc định `1`; parse chặt cho cả JSON và `x-www-form-urlencoded` (`L-21`) |
 | `version` | int | ✖ | mặc định 1 |
 
 **Response 200:** `{ "rule": "…", "campaign": "…", "user": "…", "weight": 50,
@@ -323,7 +331,7 @@ không phải chia đều mỗi lần.
 **Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`, `NOT_FOUND`, `CONFLICT` (campaign không mở),
 `NO_ELIGIBLE_LEADS`, `CAPACITY_FULL`.
 
-### 3.9 `crm_cskh.api.distribution.execute` — POST
+### 3.9 `crm_cskh.api.distribution.execute` — POST (Phân phối nền qua RQ)
 
 | Tham số | Kiểu | Bắt buộc | Mô tả |
 |---|---|---|---|
@@ -331,39 +339,53 @@ không phải chia đều mỗi lần.
 | `expected_rule_version` | int | ✖ | Nếu khác version hiện tại ⇒ `RULE_CHANGED` |
 | `idempotency_key` | string | ✖ | Ghi đè key của run |
 
-**Response 200** (shape của `get_run`)
+**Response 200 (trả sớm ngay sau khi enqueue job nền vào RQ `long` — shape đồng nhất với `get_run`):**
 
 ```json
 {
   "run_id": "9a8b7c…",
   "campaign": "…",
-  "status": "completed",
+  "status": "queued",
   "rule_version": 3,
   "selection_fingerprint": "…",
-  "assigned": { "staff.a@dev.local": 500, "staff.b@dev.local": 300, "staff.c@dev.local": 200 },
-  "created": 1000,
+  "total": 1000,
+  "progress": 0,
+  "assigned": {},
+  "created": 0,
   "errors": 0,
   "skipped": [],
-  "started_at": "…",
-  "finished_at": "…"
+  "error": null,
+  "started_at": null,
+  "finished_at": null
 }
 ```
 
-`status` = `completed` | `completed_with_errors` (khi `errors > 0` ⇒ partial success).
-`skipped` là danh sách `{lead, reason, detail}` với `reason` ∈ `no_eligible_assignee` |
-`assignment_failed`.
+**Vòng đời trạng thái (`status`):**
+`planned → queued → running → completed | completed_with_errors | failed`
+(khi worker bị dừng cứng và hết hạn `lease_expires_at`, gọi lại `execute` cho phép thu hồi `running → queued`).
 
-**Resume an toàn và thông báo sau commit:**
-- Khi run đã `completed`: gọi lại `execute` với cùng `preview_id` trả kết quả đã lưu và đồng bộ
-  idempotent các thông báo (`CRM Notification` + `ToDo`) còn thiếu nếu bước thông báo sau commit
-  của lần trước bị lỗi.
-- Khi run ở trạng thái `completed_with_errors`: gọi lại `execute` với cùng `preview_id` sẽ khóa
-  dòng run (`SELECT ... FOR UPDATE`), kiểm tra lại `rule_version` (nếu đổi ⇒ `RULE_CHANGED`),
-  chỉ thực thi các lead chưa được giao, cộng dồn chính xác `assigned` theo từng user
-  (`previous + resumed`) và giữ nguyên các mục `no_eligible_assignee` vĩnh viễn.
+**Cơ chế thực thi nền, checkpoint, chống double-submit và phục hồi:**
+1. **Nhận job & trả sớm (`enqueue`):** API khóa dòng `CSKH Distribution Run` bằng `SELECT ... FOR UPDATE`,
+   kiểm tra quyền `CSKH CRM Admin`, hạn preview (`PREVIEW_EXPIRED`), `rule_version` + con trỏ fairness +
+   `selection_fingerprint` (`RULE_CHANGED`), đặt `status = "queued"` kèm `lease_expires_at`, và gọi
+   `frappe.enqueue("crm_cskh.jobs.distribution_worker.run_distribution", queue="long", deduplicate=True, enqueue_after_commit=True)`.
+2. **Xử lý theo chunk & tiến độ bền vững:** Worker nền xử lý theo lô (`CHUNK_SIZE = 50`), sau mỗi chunk
+   đều `commit` tiến độ `progress`, con trỏ fairness `state_json`, số liệu đối soát từ DB (`assigned`,
+   `created`), danh sách `skipped` (`{lead, reason, detail}`) và gia hạn `lease_expires_at`.
+3. **Recheck tại thời điểm thực thi nền:** Trước khi chạy và ở đầu mỗi chunk, worker kiểm tra lại:
+   - Quyền `CSKH CRM Admin` và trạng thái `enabled` của actor kích hoạt (nếu mất quyền ⇒ dừng run với `error = "FORBIDDEN: ..."`),
+   - Trạng thái `Active` và `rule_version` hiện hành của campaign (nếu đổi sau khi enqueue ⇒ dừng an toàn với `error = "RULE_CHANGED: ..."`),
+   - Tính hợp lệ và `capacity_limit` trực tiếp của từng nhân sự cũng như trạng thái chưa bị claim của từng lead.
+4. **Double-submit / Retry / Crash recovery:**
+   - Khi run đang `queued` hoặc `running` và `lease_expires_at` còn hiệu lực: gọi lặp `execute` trả nguyên
+     snapshot hiện tại, **không** enqueue job thứ hai và **không** phân phối trùng.
+   - Khi run đã `completed`: gọi lại `execute` trả kết quả đã lưu (idempotent).
+   - Khi worker chết cứng giữa batch (`os._exit(137)`) và `lease_expires_at` đã hết hạn, hoặc khi run ở
+     trạng thái `completed_with_errors` / `failed`: gọi lại `execute` kiểm tra lại `rule_version`, chuyển
+     run về `queued` và chỉ xử lý tiếp các lead chưa được giao, giữ nguyên tỷ lệ fairness tích lũy.
 
-**Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`, `NOT_FOUND`, `RULE_CHANGED`,
-`PREVIEW_EXPIRED`, `CONFLICT` (run đang chạy / bị executor khác giữ).
+**Lỗi đồng bộ lúc enqueue:** `FORBIDDEN`, `INVALID_REQUEST`, `NOT_FOUND`, `RULE_CHANGED`,
+`PREVIEW_EXPIRED`, `CONFLICT` (`idempotency_key` trùng với run khác).
 
 ### 3.10 `crm_cskh.api.distribution.get_run` — GET
 
@@ -371,7 +393,12 @@ không phải chia đều mỗi lần.
 |---|---|---|
 | `run_id` | string | ✔ |
 
-**Response 200:** shape như §3.9.
+**Vai trò:** `CSKH CRM Admin`, `CSKH BOD Viewer`, hoặc `Sales Manager` có quyền đọc run thuộc nhánh team của mình.
+
+**Response 200:** cùng shape với §3.9 (`run_id`, `campaign`, `status`, `rule_version`,
+`selection_fingerprint`, `total`, `progress`, `assigned`, `created`, `errors`, `skipped`,
+`error`, `started_at`, `finished_at`). Khi `status == "completed"`, trả đúng số liệu cuối ví dụ:
+`progress = 1000`, `total = 1000`, `assigned = {"staff.a@dev.local": 500, ...}`, `created = 1000`.
 
 **Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`, `NOT_FOUND`.
 
@@ -449,12 +476,16 @@ hoặc `{ "work_item": "…", "status": "already_applied", "event": "<history na
 | `expected_owner` | string | ✖ | |
 | `reason` | string | ✔ | |
 | `request_id` | string | ✔ | |
-| `return_to_pool` | 0/1 | ✖ | Mặc định `1` → `status=queued`; `0` → `status=revoked` |
+| `return_to_pool` | bool \| 0/1 \| `"true"`/`"false"` | ✖ | Mặc định `1`/`true` → `status=queued`; `0`/`false`/`"false"`/`"0"` → `status=revoked` (`L-21`) |
 
 **Response 200:** `{ "work_item": "…", "status": "queued"|"revoked", "owner": null }`
 
+`return_to_pool` được parse chặt qua `crm_cskh.api._params.parse_bool` cho cả JSON lẫn
+`application/x-www-form-urlencoded`: `true`/`"true"`/`1`/`"1"` → `True` (`queued`),
+`false`/`"false"`/`0`/`"0"` → `False` (`revoked`), chuỗi lạ → HTTP `400 INVALID_REQUEST`.
 Side-effect: `CRM Lead.lead_owner` = trống, `ToDo` cũ `Cancelled`, **mọi `DocShare` của lead
-bị xoá**, `CSKH Active Claim` của lead bị release.
+bị xoá**, `CSKH Active Claim` của lead bị release khi `status=revoked` (và giữ claim của campaign
+với `owner=null` khi `status=queued`).
 
 **Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`, `ALREADY_ASSIGNED`, `CONFLICT`.
 
@@ -575,8 +606,8 @@ Pool là work item `status='queued'` **và** `assigned_to is null`; scope của 
 
 | Card / biến | Nguồn | Cách áp scope |
 |---|---|---|
-| `unique_customers`, `assigned_work_items`, `unassigned_work_items`, `revoked_work_items`, `closed_work_items` | `CSKH Work Item` | `assigned_to ∈ scope` (với hàng chưa giao thì scope theo `campaign.team_scope`) |
-| `active_claims` | `CSKH Active Claim` ⋈ `CSKH Work Item` | theo work item bảo vệ claim |
+| `unique_customers`, `assigned_work_items`, `unassigned_work_items`, `revoked_work_items`, `closed_work_items` | `CSKH Work Item` | Thống nhất qua `_work_item_scope_clause`: `assigned_to ∈ scope` **hoặc** (`assigned_to IS NULL` và `campaign` thuộc campaign đọc được của Leader — `L-22`); `unique_customers = COUNT(DISTINCT wi.lead)` đồng nhất cho mọi vai trò |
+| `active_claims` | `CSKH Active Claim` ⋈ `CSKH Work Item` | Theo `_work_item_scope_clause` của work item bảo vệ claim (bao gồm cả hàng `queued` chưa gán người trong campaign của Leader — `L-22`) |
 | `active_campaigns` | `CSKH Campaign` | `team_scope` của campaign ∈ scope (campaign chung `team_scope = null` luôn thấy) |
 | `failed_batches` | `CSKH Import Batch` | `owner` của batch ∈ scope |
 | `failed_runs` | `CSKH Distribution Run` | `campaign` của run ∈ scope |
@@ -601,9 +632,7 @@ rồi bỏ qua.
 Vì rule gắn **một (campaign, user)**, không thể gộp bằng `max(capacity_limit)` qua các
 campaign: một campaign không giới hạn không được bị campaign khác giới hạn làm mất.
 
-`scope` trả một trong `system` | `all` | `team` | `self`: `system` = Administrator/System
-Manager, `all` = `CSKH BOD Viewer` (aggregate toàn hệ thống, **không** PII), `team` =
-leader đọc được cây con của mình, `self` = staff chỉ thấy phần của mình.
+`scope` trả một trong `system` | `all` | `team` | `self`: `system` = `CSKH CRM Admin` (quyền nghiệp vụ P1, **không** cần cấp `System Manager` — `L-17`) hoặc `Administrator`/`System Manager`, `all` = `CSKH BOD Viewer` (aggregate toàn hệ thống, **không** PII), `team` = leader đọc được cây con của mình, `self` = staff chỉ thấy phần của mình.
 
 ### 3.19 `crm_cskh.api.dashboard.campaigns` — GET
 
@@ -627,7 +656,7 @@ leader đọc được cây con của mình, `self` = staff chỉ thấy phần 
 | `campaigns.list` / `rules` | ❌ | ✔ (trong team) | ✔ | ✔ |
 | `campaigns.save` / `save_rule` | ❌ | ❌ | ✔ | ❌ |
 | `distribution.preview` / `execute` / `reconcile` | ❌ | ❌ | ✔ | ❌ |
-| `distribution.get_run` | ❌ | ❌ | ✔ | ✔ |
+| `distribution.get_run` | ❌ | ✔ (trong team) | ✔ | ✔ |
 | `ownership.assign` / `reassign` / `revoke` | ❌ | ❌ | ✔ | ❌ |
 | `ownership.history` | ✔ (work item của mình) | ✔ (trong team) | ✔ | ✔ |
 | `customers.my_list` | ✔ (của mình) | ✔ (của mình) | ✔ | ✔ |
@@ -671,34 +700,53 @@ phải lỗi.
    `distribution.execute` và `ownership.assign` **luôn** trả về success khi assignment đã
    commit, kể cả khi thông báo thất bại — UI không được coi là lỗi nghiệp vụ. Thông báo là
    idempotent (`ToDo` và `CRM Notification` được tra cứu trước khi tạo), nên retry là an toàn.
-7. **Một run `completed_with_errors` có thể resume.** Gọi lại `distribution.execute`
-   với cùng `preview_id` sẽ **tiếp tục** những dòng chưa được giao, cộng dồn đúng số lượng
-   `assigned` theo từng user, giữ nguyên tỉ lệ fairness của các dòng đã commit và **không**
+7. **Một run `completed_with_errors` / `failed` hoặc hết hạn lease có thể resume.** Gọi lại
+   `distribution.execute` với cùng `preview_id` sẽ khóa dòng run, kiểm tra lại `rule_version`,
+   đưa run về `queued` để worker **tiếp tục** những dòng chưa được giao, cộng dồn đúng số lượng
+   `assigned` theo từng user từ DB, giữ nguyên tỉ lệ fairness của các dòng đã commit và **không**
    tạo thêm work item / claim / event cho các dòng đã giao.
-8. **`distribution.execute` hiện chạy đồng bộ theo từng dòng.** Với tập lớn (10.000 Work Item,
-   đo thực tế `~4802–4880s` ≈ `~2.0–2.1 items/s`), gọi trực tiếp một lần qua HTTP sẽ chạm
-   timeout của reverse proxy / Gunicorn (`60–120s`). UI/vận hành nên giới hạn phạm vi
-   `selection` cho mỗi đợt thực thi đồng bộ (ví dụ theo lô vài chục đến vài trăm dòng) cho
-   tới khi có cơ chế thực thi bất đồng bộ qua RQ worker.
+8. **Thông lượng thực thi nền của worker phân phối lớn (`distribution_worker`).** `POST distribution.execute`
+   qua HTTP hiện chỉ làm nhiệm vụ kiểm tra + khóa dòng + enqueue vào RQ `long` nên phản hồi rất nhanh
+   (`~0,22s` đo thực tế), không còn rủi ro chạm timeout HTTP `60–120s`. Ở phía nền, worker xử lý từng
+   Work Item qua đầy đủ vòng đời Frappe ORM với tốc độ thực tế `~2,0–2,1 items/s` (`~80–81 phút` cho
+   10.000 Work Item trên máy DEV, `CHUNK_SIZE = 50`), nên UI cần hiển thị thanh tiến độ `progress / total`
+   qua `distribution.get_run`.
 
-### 6.1. Ghi chú bàn giao cho T1A (UI)
+### 6.1. Ghi chú bàn giao thay đổi contract cho T1A (UI)
 
-Revision hoàn tất runtime/chaos/benchmark **không thay đổi bất kỳ dotted path, tham số đầu vào,
-mã lỗi hay schema JSON trả về** của cả 19 endpoint P1 (0 breaking change cho UI). Ba tinh chỉnh
-hành vi phía server mà T1A cần lưu ý khi hiển thị trạng thái:
+Revision xử lý `L-16..L-22` và chuyển **phân phối sang chạy nền bằng RQ** giữ nguyên toàn bộ 19 dotted path
+và tham số request, đồng thời bổ sung các cập nhật contract sau để **T1A** tích hợp UI:
 
-1. **Resume phân phối (`crm_cskh.api.distribution.execute`):** Khi một run trả
-   `status = "completed_with_errors"`, UI có thể cho phép `CRM Admin` bấm thực thi lại với
-   cùng `preview_id` (miễn `rule_version` của campaign chưa đổi); server chỉ chạy phần còn lại
-   và trả `assigned` là tổng cộng dồn đầy đủ của cả run. Nếu rule đã đổi trong lúc đó, server
-   trả `409 RULE_CHANGED` — UI cần yêu cầu tạo `preview` mới.
-2. **Import > 200 dòng (`crm_cskh.api.imports.*`):** `create_preview` vẫn cắt mảng `preview`
-   tối đa 200 dòng (`preview_truncated = true`) để giữ payload nhẹ, nhưng worker phía sau đọc
-   và xử lý đầy đủ toàn bộ file gốc (đã kiểm chứng ở mức 10.000 dòng) và không nhân đôi
-   `totals.error_rows` cho các dòng đã bị preview đánh dấu `invalid`.
-3. **Thông báo sau commit:** Việc giao `CRM Notification` / `ToDo` tách khỏi transaction
-   ownership chính; nếu bước thông báo gặp sự cố tạm thời, trạng thái ownership đã commit vẫn
-   bền vững và tự bù idempotent khi gọi lại.
+1. **Chuyển `POST crm_cskh.api.distribution.execute` sang bất đồng bộ qua RQ + polling `get_run` (QUAN TRỌNG):**
+   - `POST distribution.execute` **không còn chặn đồng bộ đến khi giao xong toàn bộ danh sách**. API trả
+     ngay HTTP `200` với `status = "queued"` (hoặc trạng thái hiện tại nếu double-submit), kèm các trường
+     mới trong payload của cả `execute` lẫn `get_run`:
+     - `status`: `"planned" | "queued" | "running" | "completed" | "completed_with_errors" | "failed"`
+     - `total`: tổng số khách mục tiêu của đợt phân phối (`int`)
+     - `progress`: số dòng đã xử lý và checkpoint xuống DB (`int`, tăng theo từng chunk `50` dòng)
+     - `assigned`: `dict[user, count]` cộng dồn trực tiếp từ DB tại thời điểm poll
+     - `created`: tổng số Work Item đã giao thành công tính đến hiện tại (`int`)
+     - `errors`, `skipped`: số lỗi và danh sách dòng bị bỏ qua
+     - `error`: chuỗi mã lỗi ổn định nếu worker dừng sớm do recheck (`"FORBIDDEN: ..."`, `"RULE_CHANGED: ..."`) hoặc `null`.
+   - **Hành động phía UI (T1A):** Sau khi gọi `POST distribution.execute`, nếu `status` là `"queued"` hoặc
+     `"running"`, UI **phải poll `GET crm_cskh.api.distribution.get_run?run_id=<run_id>`** (ví dụ mỗi `1,5–3s`),
+     hiển thị tiến độ `progress / total`, khóa nút bấm lặp (server cũng đã chống double-submit), và dừng poll
+     khi `status` đạt `"completed"`, `"completed_with_errors"`, hoặc `"failed"`.
+2. **Envelope mã lỗi ổn định trên HTTP `4xx` (`L-16`):** Mọi lỗi `P1Error` trả qua HTTP hiện có sẵn trường
+   top-level `code` và `p1_code` (ví dụ `"FORBIDDEN"`, `"INVALID_REQUEST"`, `"RULE_CHANGED"`, `"NOT_FOUND"`,
+   `"CAPACITY_EXCEEDED"`). UI có thể đọc trực tiếp `res.code` (hoặc `res.p1_code`) thay vì dò chuỗi message.
+   Các route `File` trực tiếp vẫn trả `404` đồng nhất theo bảo vệ File-oracle P0.
+3. **Confirm import lần đầu (`L-18`) & lô > 200 dòng (`L-19`, `L-20`):** `POST imports.confirm` chuyển thẳng
+   batch sang `status = "QUEUED"` ngay ở lần gọi đầu tiên và tự chạy RQ worker nền; `create_preview` vẫn cắt
+   mảng `preview` ở 200 dòng (`preview_truncated = true`) nhưng worker xử lý đủ 100% dòng của file và xuất đủ
+   mọi dòng lỗi (kể cả sau dòng 200) vào `error_artifact` mà không đếm đúp `totals.error_rows`.
+4. **Parse boolean chặt (`L-21`):** `ownership.revoke(return_to_pool=...)` và `campaigns.save_rule(enabled=...)`
+   nhận nhất quán `true`/`"true"`/`1`/`"1"` và `false`/`"false"`/`0`/`"0"` trên cả JSON lẫn form-urlencoded.
+5. **Scope `CRM-ADMIN` & Dashboard `Leader` (`L-17`, `L-22`):** Tài khoản `CSKH CRM Admin` nhận `scope = "system"`
+   trên `dashboard.distribution`, `dashboard.campaigns`, `customers.pool_list` mà không cần `System Manager`;
+   `Leader` (`scope = "team"`) đếm đầy đủ `revoked_work_items`, `closed_work_items`, `active_claims` của các
+   Work Item chưa gán người trong campaign thuộc team, và `unique_customers` thống nhất là `COUNT(DISTINCT lead)`
+   trên toàn bộ Work Item trong scope.
 
 ---
 
@@ -709,10 +757,10 @@ giữa lời gọi hàm trong tiến trình test (`service_unit_test`) và giao 
 
 | Hạng mục | Lớp bằng chứng | Phạm vi kiểm chứng | Kết quả | Bằng chứng |
 |---|---|---|---|---|
-| Suite P1 (8 module) | `service_unit_test` | Per-method JUnit gate trên inventory P1 riêng (`184` method) | **184/184 PASS** | [`evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json) |
-| Chaos / rollback / retry (unit + child process) | `service_unit_test` + `os_process_crash` | `unittest.mock.patch` + tiến trình con `os._exit(137)`; 0 nhánh gây lỗi trong code production | **10/10 PASS** (unit) & **3/3 PASS** (harness) | [`evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml), [`evidence/p1-runtime-20261102/chaos/p1-chaos-report.json`](../../deploy/dev/evidence/p1-runtime-20261102/chaos/p1-chaos-report.json) |
-| HTTP transport P1 | `http` | HTTP thật tới `bench serve`, cookie phiên + CSRF thật, 5 actor đã seed + `Guest`, phủ đủ 7 nhóm API P1 | **52/52 PASS** | [`evidence/p1-runtime-20261102/http/p1-http-transport.json`](../../deploy/dev/evidence/p1-runtime-20261102/http/p1-http-transport.json) |
-| Benchmark 10k import + 10k phân phối | `runtime_benchmark` | 2 đợt × 10.000 dòng (`0 → 10k`, `10k → 20k`) + lô hỗn hợp & capacity `30/42/28` trên `p1bench.localhost` | **Số đo thực tế (0 lỗi, 0 trùng)** | [`evidence/p1-runtime-20261102/benchmark/`](../../deploy/dev/evidence/p1-runtime-20261102/benchmark/) |
+| Suite P1 (8 module) | `service_unit_test` | Per-method JUnit gate trên inventory P1 riêng (`199` method) | **199/199 PASS** | [`evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json) |
+| Chaos / rollback / retry (unit + child process) | `service_unit_test` + `os_process_crash` | `unittest.mock.patch` + tiến trình con `os._exit(137)` cho cả `import_worker` và `distribution_worker`; 0 nhánh gây lỗi trong code production | **11/11 PASS** (unit) & **4/4 PASS** (harness) | [`evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml), [`evidence/p1-runtime-20261102/chaos/p1-chaos-report.json`](../../deploy/dev/evidence/p1-runtime-20261102/chaos/p1-chaos-report.json) |
+| HTTP transport P1 + RQ workers | `http` | HTTP thật tới `bench serve` + RQ worker `short`/`long` thật, cookie phiên + CSRF thật, 5 actor đã seed + `Guest`, đối chiếu SQL trực tiếp cho `L-16..L-22` và phân phối nền RQ | **75/75 PASS** | [`evidence/p1-runtime-20261102/http/p1-http-transport.json`](../../deploy/dev/evidence/p1-runtime-20261102/http/p1-http-transport.json) |
+| Benchmark 10k import + 10k phân phối + RQ enqueue | `runtime_benchmark` | 2 đợt × 10.000 dòng (`0 → 10k`, `10k → 20k`) + lô hỗn hợp & RQ capacity `30/42/28` (`api_enqueue_seconds = 0,222s`) trên `p1bench.localhost` | **Số đo thực tế (0 lỗi, 0 trùng)** | [`evidence/p1-runtime-20261102/benchmark/`](../../deploy/dev/evidence/p1-runtime-20261102/benchmark/) |
 
 > **Giới hạn:** probe HTTP phủ giao vận trực tiếp tới `bench serve` của Frappe; tầng reverse
 > proxy (Nginx/TLS) và CORS giữa các origin **không** nằm trong phạm vi của probe này.

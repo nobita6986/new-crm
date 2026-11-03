@@ -2,7 +2,8 @@
 
 The benchmark measures the **runtime** cost of the P1 pipeline on a DEV site:
 
-* the wall time of the import (preview + worker) and of the distribution;
+* the wall time of the import (preview + confirm + worker) and of the
+  distribution (API enqueue latency + chunked RQ worker execution);
 * the peak RSS of the worker process;
 * the number of database queries;
 * the lock waiting time (InnoDB `Innodb_row_lock_time` / `Innodb_row_lock_waits`);
@@ -25,13 +26,14 @@ import json
 import os
 import resource
 import time
+from unittest import mock
 
 import frappe
 from frappe.utils import now_datetime
 
-from crm_cskh.jobs import import_worker
+from crm_cskh.jobs import distribution_worker, import_worker
 from crm_cskh.services import distribution
-from crm_cskh.services.import_service import create_preview
+from crm_cskh.services.import_service import confirm, create_preview
 
 ROW_COUNT = int(os.environ.get("P1_BENCH_ROWS", "10000"))
 HEADER = "Số điện thoại"
@@ -184,7 +186,9 @@ def run_benchmark():
 	preview_seconds = time.perf_counter() - t0
 	_log(f"[bench] preview done in {preview_seconds:.3f}s (batch={batch['batch']})")
 
-	frappe.db.set_value("CSKH Import Batch", batch["batch"], "status", "QUEUED")
+	with mock.patch("frappe.enqueue"):
+		confirm(batch["batch"], actor="Administrator")
+	frappe.db.commit()
 	t0 = time.perf_counter()
 	import_worker.run_batch(batch["batch"])
 	worker_seconds = time.perf_counter() - t0
@@ -208,7 +212,7 @@ def run_benchmark():
 		"rows_per_second": round(batch_doc.created_rows / worker_seconds, 1) if worker_seconds else None,
 	}
 
-	# -- 3. the distribution ---------------------------------------------
+	# -- 3. the distribution (async enqueue + chunked RQ worker) ----------
 	leads = frappe.db.sql(
 		"select canonical_lead as lead from `tabCSKH Identity Index` order by canonical_lead asc"
 	)
@@ -230,16 +234,30 @@ def run_benchmark():
 
 	preview = distribution.preview(campaign.name, actor="Administrator")
 	_log(f"[bench] preview of the distribution done (id={preview['preview_id']})")
+	t_enq = time.perf_counter()
+	with mock.patch("frappe.enqueue"):
+		queued = distribution.enqueue_run(preview["preview_id"], actor="Administrator", enqueue_job=True)
+	frappe.db.commit()
+	enqueue_seconds = time.perf_counter() - t_enq
+	_log(
+		f"[bench] distribution enqueue done in {enqueue_seconds:.3f}s "
+		f"status={queued['status']} total={queued['total']}"
+	)
+
 	t0 = time.perf_counter()
-	result = distribution.execute(preview["preview_id"], actor="Administrator")
+	result = distribution_worker.run_distribution(queued["run_id"], actor="Administrator")
 	execute_seconds = time.perf_counter() - t0
-	_log(f"[bench] distribution done in {execute_seconds:.3f}s status={result['status']}")
+	_log(f"[bench] distribution worker done in {execute_seconds:.3f}s status={result['status']}")
 
 	report["distribution"] = {
 		"campaign": campaign.name,
 		"rules": rules,
+		"api_enqueue_seconds": round(enqueue_seconds, 3),
+		"api_initial_status": queued["status"],
 		"seconds": round(execute_seconds, 3),
 		"status": result["status"],
+		"progress": result["progress"],
+		"total": result["total"],
 		"created": result["created"],
 		"errors": result["errors"],
 		"assigned": result["assigned"],
@@ -299,7 +317,7 @@ def run_benchmark():
 
 
 def run_supplementary_checks():
-	"""Verify mixed import classes, capacity-capped 50/30/20 distribution, and global DB integrity."""
+	"""Verify mixed import classes, capacity-capped RQ distribution, and global DB integrity."""
 	frappe.set_user("Administrator")
 	counters_before = _db_counters()
 	rss_before = _rss_mb()
@@ -324,7 +342,9 @@ def run_supplementary_checks():
 	)
 	mixed_preview_s = time.perf_counter() - t0
 
-	frappe.db.set_value("CSKH Import Batch", mixed_preview["batch"], "status", "QUEUED")
+	with mock.patch("frappe.enqueue"):
+		confirm(mixed_preview["batch"], actor="Administrator")
+	frappe.db.commit()
 	t0 = time.perf_counter()
 	import_worker.run_batch(mixed_preview["batch"])
 	mixed_worker_s = time.perf_counter() - t0
@@ -339,7 +359,9 @@ def run_supplementary_checks():
 		actor="Administrator",
 		idempotency_key=f"p1-bench-cap-{frappe.generate_hash(length=8)}",
 	)
-	frappe.db.set_value("CSKH Import Batch", cap_imp["batch"], "status", "QUEUED")
+	with mock.patch("frappe.enqueue"):
+		confirm(cap_imp["batch"], actor="Administrator")
+	frappe.db.commit()
 	import_worker.run_batch(cap_imp["batch"])
 
 	# 2. Capacity-capped 50/30/20 distribution over 100 unclaimed leads (cap=30 on 50-weight user).
@@ -366,8 +388,14 @@ def run_supplementary_checks():
 	cap_rules = _ensure_users(cap_campaign.name, capacities=(30, 0, 0))
 
 	cap_prev = distribution.preview(cap_campaign.name, actor="Administrator")
+	t_enq = time.perf_counter()
+	with mock.patch("frappe.enqueue"):
+		cap_queued = distribution.enqueue_run(cap_prev["preview_id"], actor="Administrator", enqueue_job=True)
+	frappe.db.commit()
+	cap_enq_s = time.perf_counter() - t_enq
+
 	t0 = time.perf_counter()
-	cap_res = distribution.execute(cap_prev["preview_id"], actor="Administrator")
+	cap_res = distribution_worker.run_distribution(cap_queued["run_id"], actor="Administrator")
 	cap_exec_s = time.perf_counter() - t0
 	cap_reconcile = distribution.reconcile(cap_campaign.name, actor="Administrator")
 
@@ -405,8 +433,12 @@ def run_supplementary_checks():
 			"campaign": cap_campaign.name,
 			"pool_size": len(pool_leads),
 			"rules": cap_rules,
+			"api_enqueue_seconds": round(cap_enq_s, 3),
+			"api_initial_status": cap_queued["status"],
 			"execute_seconds": round(cap_exec_s, 3),
 			"status": cap_res["status"],
+			"progress": cap_res["progress"],
+			"total": cap_res["total"],
 			"created": cap_res["created"],
 			"errors": cap_res["errors"],
 			"assigned": cap_res["assigned"],

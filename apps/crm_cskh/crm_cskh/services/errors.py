@@ -45,6 +45,18 @@ ALL_CODES = (
 )
 
 
+def _record_p1_error(code, details=None):
+	try:
+		import frappe
+
+		local = getattr(frappe, "local", None)
+		if local is not None:
+			local.p1_error_code = code
+			local.p1_error_details = dict(details or {})
+	except Exception:
+		pass
+
+
 class P1Error(Exception):
 	"""Base error carrying a stable machine-readable code.
 
@@ -68,6 +80,7 @@ class P1Error(Exception):
 			self.http_status = http_status
 			self.http_status_code = http_status
 		self.details = details or {}
+		_record_p1_error(self.code, self.details)
 		super().__init__(message or self.code)
 
 	def as_dict(self):
