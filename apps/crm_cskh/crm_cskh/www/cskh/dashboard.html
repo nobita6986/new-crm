@@ -1,4 +1,4 @@
-﻿{% extends "templates/cskh/_shell.html" %}
+{% extends "templates/cskh/_shell.html" %}
 
 {% block cskh_title %}{{ _("Distribution dashboard") }}{% endblock %}
 {% block cskh_subtitle %}{{ _("Total pool, assigned, unassigned, per team, per user and per campaign.") }}{% endblock %}
@@ -12,8 +12,37 @@
 				<option value="">{{ _("All") }}</option>
 			</select>
 		</label>
+		<label class="cskh-field">
+			{{ _("From date") }}
+			<input id="dash-date-from" class="cskh-input" type="date">
+		</label>
+		<label class="cskh-field">
+			{{ _("To date") }}
+			<input id="dash-date-to" class="cskh-input" type="date">
+		</label>
+		<label class="cskh-field">
+			{{ _("Team") }}
+			<select id="dash-team" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+			</select>
+		</label>
+		<label class="cskh-field">
+			{{ _("Assignee") }}
+			<select id="dash-user" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+			</select>
+		</label>
+		<label class="cskh-field">
+			{{ _("Run ID") }}
+			<select id="dash-run" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+			</select>
+		</label>
 		<button id="dash-refresh" class="cskh-btn is-primary" type="button">
 			{{ _("Refresh") }}
+		</button>
+		<button id="dash-clear-dates" class="cskh-btn" type="button">
+			{{ _("Clear date filter") }}
 		</button>
 		<span id="dash-generated" class="cskh-muted"></span>
 	</div>
@@ -27,16 +56,26 @@
 </div>
 
 <div class="cskh-card">
-	<h2>{{ _("Current owners") }}</h2>
-	<p class="cskh-muted">
-		{{ _("Current owners are counted from work items; assignment events come from the audit trail.") }}
-	</p>
+	<div class="cskh-actions" style="justify-content: space-between; align-items: center;">
+		<div>
+			<h2 style="margin-bottom: 4px;">{{ _("Current owners") }}</h2>
+			<p class="cskh-muted" style="margin: 0;">
+				{{ _("Current owners are counted from work items; assignment events come from the audit trail.") }}
+			</p>
+		</div>
+		<a class="cskh-btn is-small" href="/cskh/campaigns">{{ _("Distribution runs") }}</a>
+	</div>
 	<div id="dash-table-wrap"></div>
 </div>
 
 <div class="cskh-card">
 	<h2>{{ _("Per campaign") }}</h2>
 	<div id="dash-campaigns"></div>
+</div>
+
+<div class="cskh-card">
+	<h2>{{ _("Distribution runs") }}</h2>
+	<div id="dash-runs"></div>
 </div>
 {% endblock %}
 

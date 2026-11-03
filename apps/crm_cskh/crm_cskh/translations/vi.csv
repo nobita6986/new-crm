@@ -134,7 +134,7 @@ Won,Thành công
 Lost,Thất bại
 No Answer,Không trả lời
 Busy,Máy bận
-Completed,Hoàn thành
+Completed,Đã hoàn tất
 Cancelled,Đã hủy
 Pending,Đang chờ
 Working,Đang xử lý
@@ -219,9 +219,8 @@ Search or type a command ({0}),Tìm kiếm hoặc nhập lệnh ({0})
 1. Upload a private file,1. Tải lên tệp riêng tư
 2. Preview and confirm,2. Xem trước và xác nhận
 3. Follow the progress,3. Theo dõi tiến độ
-A queued, revoked or closed work item must not have an assignee.
 A revocation event must not have a target user.,Sự kiện thu hồi không được có người nhận.
-ALREADY_ASSIGNED,Đã được giao (ALREADY_ASSIGNED)
+ALREADY_ASSIGNED,ALREADY_ASSIGNED
 Active campaigns,Chiến dịch đang hoạt động
 An assigned work item requires an assignee.,Công việc đã giao bắt buộc có người phụ trách.
 An assigned work item requires an assignment timestamp.,Công việc đã giao bắt buộc có thời điểm phân công.
@@ -238,10 +237,9 @@ Assignment events,Số sự kiện phân công
 Assignment history is append-only; use a compensating event.,Lịch sử phân công chỉ được ghi thêm; hãy dùng sự kiện bù trừ.
 Assignment rules,Quy tắc phân công
 Batch,Lô
-CAPACITY_EXCEEDED,Vượt quá sức chứa (CAPACITY_EXCEEDED)
-CAPACITY_FULL,Đã đầy sức chứa (CAPACITY_FULL)
-CONFLICT,Xung đột (CONFLICT)
-CSV or XLSX, up to 10 MB. Keep the phone column as text so the leading zero is not lost.
+CAPACITY_EXCEEDED,CAPACITY_EXCEEDED
+CAPACITY_FULL,CAPACITY_FULL
+CONFLICT,CONFLICT
 Campaign,Chiến dịch
 Campaigns,Chiến dịch
 Campaigns and distribution rules,Chiến dịch và quy tắc phân phối
@@ -270,7 +268,7 @@ Customer pool,Kho khách hàng
 Customers assigned to me,Khách hàng được giao cho tôi
 Customers assigned to me.,Khách hàng được giao cho tôi.
 Customers currently assigned to you.,Những khách hàng hiện đang được giao cho bạn.
-DUPLICATE,Trùng lặp (DUPLICATE)
+DUPLICATE,DUPLICATE
 Data as of,Dữ liệu tính đến
 Description,Mô tả
 Display name,Tên hiển thị
@@ -291,22 +289,21 @@ Errors,Số lỗi
 Excluded,Bị loại
 Excluded customers,Khách hàng bị loại
 Expires at,Hết hạn lúc
-FILE_TOO_LARGE,Tệp quá lớn (FILE_TOO_LARGE)
-FORBIDDEN,Không có quyền (FORBIDDEN)
+FILE_TOO_LARGE,FILE_TOO_LARGE
+FORBIDDEN,FORBIDDEN
 Failed batches,Lô nhập lỗi
 File,Tệp
-INVALID_PHONE,Số điện thoại không hợp lệ (INVALID_PHONE)
-INVALID_REQUEST,Yêu cầu không hợp lệ (INVALID_REQUEST)
+INVALID_PHONE,INVALID_PHONE
+INVALID_REQUEST,INVALID_REQUEST
 Import counters must not be negative.,Bộ đếm nhập dữ liệu không được âm.
 Import history,Lịch sử nhập
 Import list,Nhập danh sách
 Import source files must be private.,Tệp nguồn nhập dữ liệu phải là riêng tư.
-Leads in your scope, with the derived distribution state.
 Loading...,Đang tải...
 Log in to access this page.,Hãy đăng nhập để truy cập trang này.
 My customers,Khách được giao
-NOT_FOUND,Không tìm thấy (NOT_FOUND)
-NO_ELIGIBLE_LEADS,Không có khách hàng đủ điều kiện (NO_ELIGIBLE_LEADS)
+NOT_FOUND,NOT_FOUND
+NO_ELIGIBLE_LEADS,NO_ELIGIBLE_LEADS
 Name or phone number,Tên hoặc số điện thoại
 New campaign,Chiến dịch mới
 New rows,Số dòng mới
@@ -324,8 +321,8 @@ Only the customers that are currently assigned to you.,Chỉ những khách hàn
 Open in CRM,Mở trong CRM
 Operational distribution figures for your scope.,Số liệu phân phối trong phạm vi của bạn.
 Owner,Người phụ trách
-PARTIAL_SUCCESS,Thành công một phần (PARTIAL_SUCCESS)
-PREVIEW_EXPIRED,Bản xem trước đã hết hạn (PREVIEW_EXPIRED)
+PARTIAL_SUCCESS,PARTIAL_SUCCESS
+PREVIEW_EXPIRED,PREVIEW_EXPIRED
 Per assignee,Theo người được giao
 Per campaign,Theo chiến dịch
 Phone column,Cột số điện thoại
@@ -334,12 +331,11 @@ Planned,Dự kiến
 Preview,Xem trước
 Preview ID,Mã xem trước
 Preview distribution,Xem trước phân phối
-Preview first. Executing is a separate, explicitly confirmed action.
 Preview is ready. Review the numbers before confirming.,Đã sẵn sàng xem trước. Hãy rà soát các con số trước khi xác nhận.
 Previous,Trang trước
 Queued,Trong hàng đợi
-RETRYABLE_FAILURE,Lỗi có thể thử lại (RETRYABLE_FAILURE)
-RULE_CHANGED,Quy tắc đã thay đổi (RULE_CHANGED)
+RETRYABLE_FAILURE,RETRYABLE_FAILURE
+RULE_CHANGED,RULE_CHANGED
 Refresh,Làm mới
 Remaining capacity,Sức chứa còn lại
 Resolve the active work items before closing the campaign; nothing is released implicitly.,Hãy xử lý các công việc đang hoạt động trước khi đóng chiến dịch; không có gì được giải phóng ngầm.
@@ -352,12 +348,11 @@ Scope,Phạm vi
 Search,Tìm kiếm
 Search by name or phone number.,Tìm theo tên hoặc số điện thoại.
 Selection fingerprint,Vân tay lựa chọn
-Set up the target set and the weights, then preview before distributing.
 Share,Tỷ lệ
 Source,Nguồn
 Start over,Bắt đầu lại
 Started at,Bắt đầu lúc
-TOO_MANY_ROWS,Quá nhiều dòng (TOO_MANY_ROWS)
+TOO_MANY_ROWS,TOO_MANY_ROWS
 Team,Đội
 Team scope,Phạm vi đội
 The active claim must reference the same lead and campaign as its work item.,Quyền sở hữu đang hoạt động phải trỏ tới cùng khách hàng và chiến dịch với công việc của nó.
@@ -376,22 +371,19 @@ The import batch,Lô nhập dữ liệu
 The phone column was not found. Map the column that holds the phone number.,Không tìm thấy cột số điện thoại. Hãy ánh xạ cột chứa số điện thoại.
 The phone identity must be a canonical Vietnamese mobile number.,Định danh số điện thoại phải là số di động Việt Nam chuẩn hóa.
 The phone identity must match the canonical lead mobile number.,Định danh số điện thoại phải khớp với số di động của khách hàng chuẩn.
-The preview has expired. Run the preview again.,Bản xem trước đã hết hạn. Hãy xem trước lại.
+The preview has expired. Run the preview again.,Bản xem trước đã hết hạn. Hãy chạy lại xem trước.
 The preview payload must be valid JSON.,Dữ liệu xem trước phải là JSON hợp lệ.
 The rule version must be positive.,Phiên bản quy tắc phải là số dương.
 The rules changed after the preview. Run the preview again.,Quy tắc đã thay đổi sau khi xem trước. Hãy chạy lại xem trước.
 The selection fingerprint is required.,Cần có vân tay lựa chọn.
 The selection must be a JSON object.,Tập lựa chọn phải là một đối tượng JSON.
 The upload failed.,Tải lên thất bại.
-This campaign, assignee and version already has a rule.
 Title,Tiêu đề
-Total pool, assigned
 Total rows,Tổng số dòng
-UNSUPPORTED_FORMAT,Định dạng không được hỗ trợ (UNSUPPORTED_FORMAT)
+UNSUPPORTED_FORMAT,UNSUPPORTED_FORMAT
 Unassigned or conflicted work items,Công việc chưa giao hoặc xung đột
 Unique customers,Số khách hàng duy nhất
 Unique customers in scope,Khách hàng duy nhất trong phạm vi
-Upload a private file, map the phone column
 Valid rows,Số dòng hợp lệ
 Weight,Trọng số
 Weight and version must be positive; capacity must not be negative.,Trọng số và phiên bản phải là số dương; sức chứa không được âm.
@@ -434,13 +426,152 @@ The request is invalid.,Yêu cầu không hợp lệ.
 The requested data does not exist.,Dữ liệu yêu cầu không tồn tại.
 No customer is eligible for this campaign.,Không có khách hàng nào đủ điều kiện cho chiến dịch này.
 The capacity of the assignee is exhausted.,Sức chứa của người được giao đã cạn.
+A phone number is required.,Cần nhập số điện thoại.
+A phone number must be a short text value.,Số điện thoại phải là chuỗi ngắn.
+A phone number must be supplied as a text value.,Số điện thoại phải ở định dạng văn bản.
 "A queued, revoked or closed work item must not have an assignee.","Công việc đang chờ, đã thu hồi hoặc đã đóng không được có người phụ trách."
+A reason is required to revoke a customer.,Cần nhập lý do khi thu hồi khách hàng.
+A reason is required to transfer a customer.,Cần nhập lý do khi chuyển giao khách hàng.
+A reason is required to transfer or revoke an ownership.,Cần nhập lý do để chuyển hoặc thu hồi quyền phụ trách.
+A request id is required so the action stays idempotent.,Cần có mã yêu cầu để thao tác giữ tính idempotent.
+A target user is required.,Cần chọn người nhận.
+A transfer adds one event but the number of owned work items stays the same.,Một lần chuyển giao thêm một sự kiện nhưng số công việc đang phụ trách không thay đổi.
+Action,Hành động
+Actions,Hành động
+Active claims,Quyền sở hữu đang hoạt động
+Actor,Người thực hiện
+An error occurred while processing the request.,Đã xảy ra lỗi khi xử lý yêu cầu.
+Assign,Phân công
+Assignment events (audit trail),Sự kiện phân công (nhật ký kiểm toán)
+CSRF_ERROR,CSRF_ERROR
 "CSV or XLSX, up to 10 MB. Keep the phone column as text so the leading zero is not lost.","CSV hoặc XLSX, tối đa 10 MB. Giữ cột số điện thoại ở dạng văn bản để không mất số 0 ở đầu."
+Campaign active,Đang hoạt động
+Campaign closed,Đã đóng
+Campaign draft,Nháp
+Campaign paused,Tạm dừng
+Clear date filter,Xóa bộ lọc ngày
+Close campaign,Đóng chiến dịch
+Completed with errors,Đã hoàn tất nhưng có lỗi
+Confirmed,Đã xác nhận
+Created rows,Số dòng tạo mới
+Current owner,Người đang phụ trách
+Current ownership (live work items),Quyền phụ trách hiện tại (công việc đang hoạt động)
 "Customer pool, imports, campaigns and distribution.","Kho khách hàng, nhập danh sách, chiến dịch và phân phối."
+Customers assigned in the scope,Khách hàng được giao trong phạm vi
+Data error,Lỗi dữ liệu
+Distributing the customers requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép phân phối khách hàng.
+Download error file,Tải tệp lỗi
+Edit campaign,Sửa chiến dịch
+Error file,Tệp lỗi
+Event at,Thời điểm sự kiện
+Failed runs,Đợt phân phối lỗi
+From date,Từ ngày
+From owner,Người phụ trách trước
+Importing the customer pool requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép nhập kho khách hàng.
+Invalid or expired session/CSRF token. Reload the page and try again.,Phiên đăng nhập hoặc mã CSRF không hợp lệ hoặc đã hết hạn. Hãy tải lại trang và thử lại.
 "Leads in your scope, with the derived distribution state.","Khách hàng tiềm năng trong phạm vi của bạn, kèm trạng thái phân phối."
+Look up run,Tra cứu đợt chạy
+Managing the campaigns requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép quản lý chiến dịch.
+Name column,Cột họ tên
+New owner,Người phụ trách mới
+Newest first,Mới nhất trước
+No assignee is eligible for this campaign.,Không có nhân viên nào đủ điều kiện nhận phân phối cho chiến dịch này.
+No lead is eligible for this campaign.,Không có khách hàng nào đủ điều kiện cho chiến dịch này.
+Oldest first,Cũ nhất trước
+Only CSV and XLSX files are supported.,Chỉ hỗ trợ tệp CSV và XLSX.
+Only Vietnamese numbers are supported.,Chỉ hỗ trợ số điện thoại Việt Nam.
+Only a queued work item can be assigned.,Chỉ công việc trong hàng đợi mới có thể được phân công.
+Only my own data,Chỉ dữ liệu của tôi
+Only the CRM Admin may list all sales assignees.,Chỉ Quản trị CRM mới được phép xem toàn bộ danh sách nhân viên nhận giao.
+Only the CRM Admin may read an import batch.,Chỉ Quản trị CRM mới được phép xem lô nhập dữ liệu.
+Ownership detail,Chi tiết quyền phụ trách
+Ownership history,Lịch sử phụ trách
 "Preview first. Executing is a separate, explicitly confirmed action.",Phải xem trước trước. Thực thi là hành động riêng biệt và phải được xác nhận rõ ràng.
+Retry the failed job,Chạy lại công việc thất bại
+Reused rows,Số dòng dùng lại
+Revoke,Thu hồi
+Revoke the ownership,Thu hồi quyền phụ trách
+Running,Đang chạy
+Select the new owner of the work item.,Hãy chọn người phụ trách mới của công việc.
 "Set up the target set and the weights, then preview before distributing.","Thiết lập tập mục tiêu và trọng số, rồi xem trước trước khi phân phối."
+Skipped rows,Số dòng bỏ qua
+Source column,Cột nguồn
+The assignment rules changed after the preview.,Quy tắc phân công đã thay đổi sau khi xem trước.
+The batch status filter must be a string.,Bộ lọc trạng thái lô nhập phải là chuỗi văn bản.
+The campaign and the assignee are required.,Cần chọn chiến dịch và người được giao.
+The campaign code is required.,Cần nhập mã chiến dịch.
+The campaign does not exist.,Chiến dịch không tồn tại.
+The campaign is not open for distribution.,Chiến dịch hiện không mở để phân phối.
+The campaign is required.,Cần chọn chiến dịch.
+The campaign must be a string.,Mã chiến dịch phải là chuỗi văn bản.
+The campaign status is not supported.,Trạng thái chiến dịch không được hỗ trợ.
+The campaign title is required.,Cần nhập tiêu đề chiến dịch.
+The canonical lead does not exist.,Khách hàng chuẩn không tồn tại.
+The capacity must be an integer.,Sức chứa phải là số nguyên.
+The capacity must not be negative.,Sức chứa không được là số âm.
+The current owner is not the expected owner.,"Người đang phụ trách đã thay đổi, không khớp với người phụ trách dự kiến."
+The distribution run does not exist.,Đợt phân phối không tồn tại.
+The distribution run is already executing.,Đợt phân phối đang được thực thi.
+The distribution run is already owned by another executor.,Đợt phân phối đang thuộc quyền xử lý của bộ thực thi khác.
+The distribution state changed after the preview.,Trạng thái phân phối đã thay đổi sau khi xem trước.
+The eligible lead set changed after the preview.,Tập khách hàng đủ điều kiện đã thay đổi sau khi xem trước.
+The error file does not exist for this import batch.,Không có tệp lỗi cho lô nhập này.
+The file has more rows than the configured limit.,Tệp có nhiều dòng hơn giới hạn cấu hình.
+The file is larger than the configured limit.,Tệp vượt quá dung lượng tối đa cấu hình.
+The import batch does not exist.,Lô nhập dữ liệu không tồn tại.
+The import batch is required.,Cần chọn lô nhập dữ liệu.
+The import file must be private.,Tệp nhập dữ liệu bắt buộc là tệp riêng tư.
+The lead is already claimed by another campaign.,Khách hàng đang được giữ bởi chiến dịch khác.
+The lead owner does not match the intended owner.,Người phụ trách trên hồ sơ khách hàng không khớp với người dự kiến.
+The phone cell contains more than one number.,Ô số điện thoại chứa nhiều hơn một số.
+The phone cell contains unsupported characters.,Ô số điện thoại chứa ký tự không hợp lệ.
+The phone cell looks like scientific notation and cannot be trusted.,Ô số điện thoại ở dạng ký hiệu khoa học của Excel nên không thể tin cậy.
+The phone number is already bound to another canonical lead.,Số điện thoại đã gắn với một khách hàng chuẩn khác.
+The phone number is already used by another lead.,Số điện thoại đã được sử dụng bởi khách hàng khác.
+The phone number is outside the supported Vietnamese mobile format.,Số điện thoại không đúng định dạng di động Việt Nam được hỗ trợ.
+"The phone number must start with 0, 84 or +84.","Số điện thoại phải bắt đầu bằng 0, 84 hoặc +84."
+The preview does not exist.,Bản xem trước không tồn tại.
+The preview has expired; run the preview again.,Bản xem trước đã hết hạn; hãy chạy lại xem trước.
+The preview id is required.,Cần có mã xem trước.
+The run id is required.,Cần nhập mã đợt chạy.
+The scope is resolved by the server. Only the CRM Admin may transfer or revoke an ownership.,Phạm vi do máy chủ xác định. Chỉ Quản trị CRM được chuyển hoặc thu hồi quyền phụ trách.
+The start date must not be after the end date.,Ngày bắt đầu không được sau ngày kết thúc.
+The target user has no remaining capacity.,Người nhận đã hết sức chứa còn lại.
+The target user is disabled.,Tài khoản người nhận đang bị vô hiệu hóa.
+The target user must be a Sales User.,Người nhận phải có vai trò Nhân viên bán hàng.
+The uploaded file could not be decoded.,Không thể giải mã nội dung tệp tải lên.
+The uploaded file does not exist.,Tệp tải lên không tồn tại.
+The uploaded file is required.,Cần chọn tệp để tải lên.
+The weight must be an integer.,Trọng số phải là số nguyên.
+The weight must be positive.,Trọng số phải là số dương.
+The work item already belongs to the target user.,Công việc này đã thuộc về người nhận được chọn.
+The work item and the target user are required.,Cần chọn công việc và người nhận.
+The work item does not exist.,Công việc không tồn tại.
+The work item is not currently assigned.,Công việc hiện không có người phụ trách.
+The work item is required.,Cần chọn công việc.
+This action requires the CRM Admin business role.,Thao tác này yêu cầu vai trò Quản trị CRM.
 "This campaign, assignee and version already has a rule.","Chiến dịch, người được giao và phiên bản này đã có quy tắc."
+This idempotency key was already used with a different file.,Khóa idempotency này đã được dùng với một tệp khác.
+Timeout,Quá thời gian chờ phản hồi từ máy chủ.
+To date,Đến ngày
+To owner,Người phụ trách sau
 "Total pool, assigned, unassigned, per team, per user and per campaign.","Tổng kho, đã giao, chưa giao, theo đội, theo người và theo chiến dịch."
+Transfer owner,Chuyển người phụ trách
+Transfer the ownership,Chuyển quyền phụ trách
+Transferred,Đã chuyển
+Transferring a customer requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép chuyển giao khách hàng.
+Unexpected share holders remain after the ownership change.,Vẫn còn quyền chia sẻ ngoài dự kiến sau khi đổi người phụ trách.
 Unlimited,Không giới hạn
 "Upload a private file, map the phone column, preview, then confirm.","Tải lên tệp riêng tư, ánh xạ cột số điện thoại, xem trước rồi xác nhận."
+Whole installation,Toàn hệ thống
+You may not read a distribution run.,Bạn không có quyền xem đợt phân phối này.
+You may not read the assigned customers.,Bạn không có quyền xem danh sách khách được giao.
+You may not read the campaign list.,Bạn không có quyền xem danh sách chiến dịch.
+You may not read the campaigns.,Bạn không có quyền xem thông tin chiến dịch.
+You may not read the customer list.,Bạn không có quyền xem danh sách khách hàng.
+You may not read the customer pool.,Bạn không có quyền xem kho khách hàng.
+You may not read the distribution dashboard.,Bạn không có quyền xem bảng điều khiển phân phối.
+You may not read this assignment history.,Bạn không có quyền xem lịch sử phân công này.
+You may not reconcile a campaign.,Bạn không có quyền đối soát chiến dịch.
+invalid_row,Dòng dữ liệu không hợp lệ
+no_phone_column,Thiếu cột số điện thoại

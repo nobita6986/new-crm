@@ -322,3 +322,64 @@
 	flex-wrap: wrap;
 	gap: 8px;
 }
+
+/* A small inline form panel: the reason and the target of a manual
+   ownership action (P1 §4.4). It is a normal block of the page, not a
+   modal, so it stays usable with the keyboard and with a screen reader. */
+.cskh-panel {
+	border: 1px solid var(--cskh-border);
+	border-radius: 8px;
+	padding: 14px;
+	margin-top: 12px;
+	background: #fbfbfc;
+}
+
+.cskh-panel h3 {
+	margin: 0 0 8px;
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.cskh-panel .cskh-actions {
+	margin-top: 10px;
+}
+
+.cskh-inline-field {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	font-size: 12px;
+	color: var(--cskh-muted);
+}
+
+.cskh-inline-field .cskh-input,
+.cskh-inline-field .cskh-select {
+	color: var(--cskh-text);
+	min-width: 200px;
+}
+
+/* A link that downloads a private file: it is a real anchor, so the
+   browser handles the download and the session of the Frappe site. */
+.cskh-download {
+	color: var(--cskh-primary);
+	font-size: 12px;
+	font-weight: 600;
+	text-decoration: none;
+	white-space: nowrap;
+}
+
+.cskh-download:hover {
+	text-decoration: underline;
+}
+
+/* The row of an action cell: the buttons of one work item. */
+.cskh-row-actions {
+	display: flex;
+	gap: 6px;
+	flex-wrap: wrap;
+}
+
+.cskh-btn.is-small {
+	padding: 4px 9px;
+	font-size: 12px;
+}

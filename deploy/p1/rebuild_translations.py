@@ -1,19 +1,15 @@
 #!/usr/bin/env python3
 """Rebuild `translations/vi.csv` from the authoritative sources.
 
-The merge of the two branches left rows whose source and target were split
-by the conflict resolver, and both branches had rows that were written
-unquoted (a source with a comma). The file is rebuilt here:
-
 * every row of the **P0 base** (`2cd4f60`) is kept verbatim, including the
-  optional context column;
-* every row of the **backend branch** (`codex/p1-foundation`) is added when
-  it is a well-formed two-column row;
+  optional 3rd `context` column;
+* every well-formed row of the **backend baseline**
+  (`3025495f58bc0391c3f8d092af500b0566a5f038`) is merged without overwriting
+  contextual P0 rows;
 * every message of `crm_cskh.p1_translations.TRANSLATIONS` is added (or
-  replaced) with the Vietnamese text of that mapping — it is the mapping the
-  UI actually uses;
-* the result is written with the CSV writer, so a message that contains a
-  comma is quoted and the file stays parseable by Frappe.
+  updated in-place on its 2-column row);
+* the result is written with standard CSV quoting + LF line endings so messages
+  containing commas stay parseable by Frappe.
 """
 
 import csv
@@ -30,7 +26,7 @@ sys.path.insert(0, os.path.join(ROOT, "apps", "crm_cskh"))
 from crm_cskh import p1_translations  # noqa: E402
 
 BASE = "2cd4f60"
-BACKEND = "codex/p1-foundation"
+BACKEND = "3025495f58bc0391c3f8d092af500b0566a5f038"
 
 
 def rows_of(revision):
@@ -43,10 +39,8 @@ def rows_of(revision):
 		return []
 	rows = []
 	for row in csv.reader(io.StringIO(raw.decode("utf-8"))):
-		if not row:
+		if not row or not row[0]:
 			continue
-		# Frappe reads `source,target[,context]`: the context column scopes
-		# the translation to one doctype, so it must be preserved.
 		if len(row) == 1:
 			rows.append([row[0], ""])
 		elif len(row) == 2:
@@ -58,37 +52,51 @@ def rows_of(revision):
 
 def main():
 	rows = rows_of(BASE)
-	index = {row[0]: row[1] for row in rows}
+	# Track index of 2-column (non-contextual) rows in `rows` so updates mutate `rows` in-place.
+	two_col_pos = {}
+	for idx, row in enumerate(rows):
+		if len(row) == 2:
+			two_col_pos[row[0]] = idx
 
 	added = 0
+	updated = 0
+
 	for row in rows_of(BACKEND):
 		source, target = row[0], row[1]
 		if not target:
 			continue
-		if source not in index:
+		# Skip the unquoted comma split ("Customer pool, imports, ...") from 3025495.
+		if source == "Customer pool" and target.startswith(" "):
+			continue
+		if len(row) >= 3 and row[2]:
+			continue
+		if source in two_col_pos:
+			pos = two_col_pos[source]
+			if rows[pos][1] != target:
+				rows[pos][1] = target
+				updated += 1
+		else:
+			two_col_pos[source] = len(rows)
 			rows.append([source, target])
-			index[source] = target
 			added += 1
-		elif index[source] != target and len(source) > 0:
-			# The backend branch owns the P1 wording of the error codes.
-			index[source] = target
 
 	for message, target in sorted(p1_translations.TRANSLATIONS.items()):
-		if index.get(message) == target:
-			continue
-		if message in index:
-			index[message] = target
+		if message in two_col_pos:
+			pos = two_col_pos[message]
+			if rows[pos][1] != target:
+				rows[pos][1] = target
+				updated += 1
 		else:
+			two_col_pos[message] = len(rows)
 			rows.append([message, target])
-			index[message] = target
 			added += 1
 
 	buffer = io.StringIO()
 	writer = csv.writer(buffer, lineterminator="\n")
 	writer.writerows(rows)
-	with io.open(PATH, "w", encoding="utf-8", newline="") as handle:
+	with open(PATH, "w", encoding="utf-8", newline="") as handle:
 		handle.write(buffer.getvalue())
-	print({"rows": len(rows), "added": added})
+	print({"rows": len(rows), "added": added, "updated": updated})
 
 
 if __name__ == "__main__":
