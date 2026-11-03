@@ -111,7 +111,9 @@ def _campaign_ineligible_users(campaign_name, allowed_nodes):
 	load_rows = frappe.db.sql(
 		"""select assigned_to as user, count(*) as total
 		   from `tabCSKH Work Item`
-		   where campaign = %s and status = 'assigned' and assigned_to is not null
+		   where campaign = %s
+		     and status in ('assigned', 'in_progress', 'on_hold')
+		     and assigned_to is not null
 		   group by assigned_to""",
 		(campaign_name,),
 		as_dict=True,
@@ -159,7 +161,7 @@ def assigned_list(page=1, page_size=20, campaign=None, owner=None):
 	users = reporting._scope_users(scope)
 	allow_pii = scope.get("pii", True)
 
-	clauses = ["wi.status = 'assigned'"]
+	clauses = ["wi.status in ('assigned', 'in_progress', 'on_hold')"]
 	params = []
 	if campaign_val:
 		clauses.append("wi.campaign = %s")
@@ -194,7 +196,7 @@ def assigned_list(page=1, page_size=20, campaign=None, owner=None):
 	)[0][0]
 	rows = frappe.db.sql(
 		"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
-		"wi.assigned_to as assigned_to, wi.assigned_at as assigned_at, "
+		"wi.status as status, wi.assigned_to as assigned_to, wi.assigned_at as assigned_at, "
 		"c.title as campaign_title, c.code as campaign_code "
 		"from `tabCSKH Work Item` wi "
 		"left join `tabCSKH Campaign` c on c.name = wi.campaign "
@@ -223,6 +225,8 @@ def assigned_list(page=1, page_size=20, campaign=None, owner=None):
 				"campaign_title": row.campaign_title,
 				"campaign_code": row.campaign_code,
 				"source": lead.source,
+				"status": row.status,
+				"work_item_status": row.status,
 				"assigned_to": row.assigned_to,
 				"assigned_at": row.assigned_at,
 			}

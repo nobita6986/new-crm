@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "description": "Canonical inventory of the P2 UI test methods (`test_ui_p2_*.py`). Enforced in CI via `deploy/dev/seed/ci_junit_gate.py`.",
+  "expected_total": 7,
+  "modules": {
+    "crm_cskh.tests.test_ui_p2_pages_and_context": [
+      "TestUiP2PagesAndContext.test_guest_is_denied_on_all_p2_pages",
+      "TestUiP2PagesAndContext.test_staff_page_grants_and_navigation",
+      "TestUiP2PagesAndContext.test_bod_is_denied_on_pii_p2_pages_and_allowed_on_zero_pii_pages",
+      "TestUiP2PagesAndContext.test_leader_and_admin_page_capabilities",
+      "TestUiP2PagesAndContext.test_timezone_context_respects_site_and_user_timezone_with_safe_fallback",
+      "TestUiP2PagesAndContext.test_p2_error_codes_and_vietnamese_explanations_published_to_browser",
+      "TestUiP2PagesAndContext.test_lead_form_script_fixture_declares_open_care_workspace"
+    ]
+  }
+}

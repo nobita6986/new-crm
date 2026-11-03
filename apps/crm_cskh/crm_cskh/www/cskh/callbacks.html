@@ -1,0 +1,88 @@
+{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Callbacks schedule") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Follow-up callbacks in your scope, classified by site/user timezone.") }}{% endblock %}
+
+{% block cskh_body %}
+<div class="cskh-banner-notice">
+	{{ _("Task completion without a contact attempt never counts as connected or successful care.") }}
+</div>
+
+<div class="cskh-card">
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Campaign") }}
+			<select id="cb-campaign" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+			</select>
+		</label>
+		<label class="cskh-field">
+			{{ _("Due status") }}
+			<select id="cb-bucket" class="cskh-select">
+				<option value="open">{{ _("Open") }}</option>
+				<option value="due_today">{{ _("Due today") }}</option>
+				<option value="overdue">{{ _("Overdue") }}</option>
+				<option value="upcoming">{{ _("Upcoming") }}</option>
+				<option value="done">{{ _("Done") }}</option>
+				<option value="canceled">{{ _("Canceled") }}</option>
+			</select>
+		</label>
+		<label class="cskh-field" id="cb-assignee-wrap" hidden>
+			{{ _("Current owner") }}
+			<input id="cb-assignee" class="cskh-input" type="text" placeholder="{{ _('Current owner') }}">
+		</label>
+		<button id="cb-refresh" class="cskh-btn is-primary" type="button">
+			{{ _("Apply filters") }}
+		</button>
+	</div>
+	<div class="cskh-chip-bar" id="cb-chips" role="group" aria-label="{{ _('Due status') }}" style="margin-top: 10px;">
+		<button type="button" class="cskh-chip is-active" data-bucket="open">{{ _("Open") }}</button>
+		<button type="button" class="cskh-chip" data-bucket="due_today">{{ _("Due today") }}</button>
+		<button type="button" class="cskh-chip" data-bucket="overdue">{{ _("Overdue") }}</button>
+		<button type="button" class="cskh-chip" data-bucket="upcoming">{{ _("Upcoming") }}</button>
+		<button type="button" class="cskh-chip" data-bucket="done">{{ _("Done") }}</button>
+		<button type="button" class="cskh-chip" data-bucket="canceled">{{ _("Canceled") }}</button>
+	</div>
+</div>
+
+<div id="cb-alert" aria-live="polite"></div>
+
+<div class="cskh-card" id="cb-action-card" hidden>
+	<div id="cb-action-body"></div>
+</div>
+
+<div class="cskh-card">
+	<div id="cb-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+	<div id="cb-empty" class="cskh-alert is-empty" hidden>
+		{{ _("No follow-up callbacks match the current filter.") }}
+	</div>
+	<div style="overflow-x: auto;">
+		<table id="cb-table" class="cskh-table" hidden>
+			<thead>
+				<tr>
+					<th>{{ _("Customer") }}</th>
+					<th>{{ _("Phone number") }}</th>
+					<th>{{ _("Campaign") }}</th>
+					<th>{{ _("Current owner") }}</th>
+					<th>{{ _("Callback due at") }}</th>
+					<th>{{ _("Due status") }}</th>
+					<th>{{ _("Linked attempt") }}</th>
+					<th>{{ _("Actions") }}</th>
+				</tr>
+			</thead>
+			<tbody id="cb-rows"></tbody>
+		</table>
+	</div>
+	<div class="cskh-pager">
+		<button id="cb-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
+		<span id="cb-range"></span>
+		<button id="cb-next" class="cskh-btn" type="button">{{ _("Next") }}</button>
+	</div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/p2-api.js?v={{ cskh_asset_version | default('') }}"></script>
+<script src="/assets/crm_cskh/cskh/p2-attempt-form.js?v={{ cskh_asset_version | default('') }}"></script>
+<script src="/assets/crm_cskh/cskh/callbacks.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}

@@ -1,15 +1,39 @@
 {% extends "templates/cskh/_shell.html" %}
 
 {% block cskh_title %}{{ _("CSKH") }}{% endblock %}
-{% block cskh_subtitle %}{{ _("Customer pool, imports, campaigns and distribution.") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Customer pool, imports, campaigns, distribution and customer care workflow.") }}{% endblock %}
 
 {% block cskh_body %}
 {% set nav_keys = (cskh_navigation | default([])) | map(attribute='key') | list %}
+{% if 'my-customers' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("My customers") }}</h2>
+	<p class="cskh-muted">{{ _("Only the customers that are currently assigned to you.") }}</p>
+	<a class="cskh-btn is-primary" href="/cskh/my-customers">{{ _("My customers") }}</a>
+</div>
+{% endif %}
+
+{% if 'callbacks' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Callbacks schedule") }}</h2>
+	<p class="cskh-muted">{{ _("Follow-up callbacks in your scope, classified by site/user timezone.") }}</p>
+	<a class="cskh-btn" href="/cskh/callbacks">{{ _("Callbacks schedule") }}</a>
+</div>
+{% endif %}
+
+{% if 'progress' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Care progress") }}</h2>
+	<p class="cskh-muted">{{ _("Basic customer care activity counts in your scope (not a quality or SLA score).") }}</p>
+	<a class="cskh-btn" href="/cskh/progress">{{ _("Care progress") }}</a>
+</div>
+{% endif %}
+
 {% if 'pool' in nav_keys %}
 <div class="cskh-card">
 	<h2>{{ _("Customer pool") }}</h2>
 	<p class="cskh-muted">{{ _("Leads in your scope, with the derived distribution state.") }}</p>
-	<a class="cskh-btn is-primary" href="/cskh/pool">{{ _("Customer pool") }}</a>
+	<a class="cskh-btn" href="/cskh/pool">{{ _("Customer pool") }}</a>
 </div>
 {% endif %}
 
@@ -33,14 +57,6 @@
 </div>
 {% endif %}
 
-{% if 'my-customers' in nav_keys %}
-<div class="cskh-card">
-	<h2>{{ _("My customers") }}</h2>
-	<p class="cskh-muted">{{ _("Only the customers that are currently assigned to you.") }}</p>
-	<a class="cskh-btn" href="/cskh/my-customers">{{ _("My customers") }}</a>
-</div>
-{% endif %}
-
 {% if 'dashboard' in nav_keys %}
 <div class="cskh-card">
 	<h2>{{ _("Distribution dashboard") }}</h2>
@@ -48,6 +64,16 @@
 		{{ _("Total pool, assigned, unassigned, per team, per user and per campaign.") }}
 	</p>
 	<a class="cskh-btn" href="/cskh/dashboard">{{ _("Distribution dashboard") }}</a>
+</div>
+{% endif %}
+
+{% if 'settings' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Outcome and policy settings") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Configure contact outcome codes and versioned customer care policies.") }}
+	</p>
+	<a class="cskh-btn" href="/cskh/settings">{{ _("Outcome and policy settings") }}</a>
 </div>
 {% endif %}
 {% endblock %}

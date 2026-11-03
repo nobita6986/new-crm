@@ -1,0 +1,65 @@
+{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Care progress") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Basic customer care activity counts in your scope (not a quality or SLA score).") }}{% endblock %}
+
+{% block cskh_body %}
+<div class="cskh-banner-notice" id="prog-non-kpi-banner">
+	{{ _("Notice: This view reports scoped operational counts only. It is not a quality KPI score or formal P3 SLA grade.") }}
+</div>
+
+<div class="cskh-card">
+	<div class="cskh-actions">
+		<label class="cskh-field">
+			{{ _("Campaign") }}
+			<select id="prog-campaign" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+			</select>
+		</label>
+		<label class="cskh-field">
+			{{ _("From date") }}
+			<input id="prog-date-from" class="cskh-input" type="date">
+		</label>
+		<label class="cskh-field">
+			{{ _("To date") }}
+			<input id="prog-date-to" class="cskh-input" type="date">
+		</label>
+		<button id="prog-refresh" class="cskh-btn is-primary" type="button">
+			{{ _("Refresh") }}
+		</button>
+		<button id="prog-clear-dates" class="cskh-btn" type="button">
+			{{ _("Clear date filter") }}
+		</button>
+		<span id="prog-scope-badge" class="cskh-muted"></span>
+	</div>
+</div>
+
+<div id="prog-alert" aria-live="polite"></div>
+<div id="prog-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+
+<div class="cskh-card" id="prog-wi-card" hidden>
+	<h2>{{ _("Work item counters (distinct work items)") }}</h2>
+	<div id="prog-wi-metrics" class="cskh-grid"></div>
+</div>
+
+<div class="cskh-card" id="prog-att-card" hidden>
+	<h2>{{ _("Contact attempt counters (effective attempts)") }}</h2>
+	<div id="prog-att-metrics" class="cskh-grid"></div>
+	<div id="prog-channel-breakdown" style="margin-top: 12px;"></div>
+</div>
+
+<div class="cskh-card" id="prog-cb-card" hidden>
+	<h2>{{ _("Callback task counters") }}</h2>
+	<div id="prog-cb-metrics" class="cskh-grid"></div>
+</div>
+
+<div class="cskh-card" id="prog-users-card" hidden>
+	<h2>{{ _("Breakdown by assignee in scope") }}</h2>
+	<div id="prog-users-wrap" style="overflow-x: auto;"></div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/p2-api.js?v={{ cskh_asset_version | default('') }}"></script>
+<script src="/assets/crm_cskh/cskh/progress.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}

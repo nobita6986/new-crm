@@ -1,0 +1,233 @@
+{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Outcome and policy settings") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Configure contact outcome codes and versioned customer care policies.") }}{% endblock %}
+
+{% block cskh_body %}
+<div class="cskh-banner-notice" id="set-readonly-banner" hidden>
+	{{ _("Read-only mode: only CRM Admin may modify outcome codes or policies.") }}
+</div>
+
+<div id="set-alert" aria-live="polite"></div>
+<div id="set-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+
+<div class="cskh-card" id="set-outcomes-card" hidden>
+	<div class="cskh-actions" style="justify-content: space-between; align-items: center;">
+		<div>
+			<h2 style="margin-bottom: 4px;">{{ _("Outcome code catalog") }}</h2>
+			<p class="cskh-muted" style="margin: 0;">
+				{{ _("Outcome codes cannot be deleted once created; disable unused codes instead.") }}
+			</p>
+		</div>
+		<button id="set-refresh" class="cskh-btn is-small" type="button">{{ _("Refresh") }}</button>
+	</div>
+
+	<div style="overflow-x: auto; margin-top: 12px;">
+		<table class="cskh-table" id="set-outcomes-table">
+			<thead>
+				<tr>
+					<th>{{ _("Outcome code") }}</th>
+					<th>{{ _("Vietnamese label") }}</th>
+					<th>{{ _("Result group") }}</th>
+					<th>{{ _("Allowed channels") }}</th>
+					<th>{{ _("Connected") }}</th>
+					<th>{{ _("Requires note") }}</th>
+					<th>{{ _("Requires callback") }}</th>
+					<th>{{ _("Terminal outcome") }}</th>
+					<th>{{ _("Status") }}</th>
+					<th id="set-outcome-actions-th" hidden>{{ _("Actions") }}</th>
+				</tr>
+			</thead>
+			<tbody id="set-outcomes-rows"></tbody>
+		</table>
+	</div>
+
+	<div id="set-outcome-form-wrap" class="cskh-panel" style="margin-top: 14px;" hidden>
+		<h3 style="margin-top: 0;">{{ _("New / edit outcome code") }}</h3>
+		<div id="set-outcome-alert" aria-live="polite"></div>
+		<div class="cskh-form-grid">
+			<label class="cskh-field">
+				<span>{{ _("Outcome code") }} *</span>
+				<input id="out-code" class="cskh-input cskh-mono" type="text" placeholder="custom_callback">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Vietnamese label") }} *</span>
+				<input id="out-label-vi" class="cskh-input" type="text" placeholder="{{ _('Vietnamese label') }}">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Result group") }} *</span>
+				<select id="out-group" class="cskh-select">
+					<option value="unreached">{{ _("Attempted, not connected") }}</option>
+					<option value="engaged">{{ _("Needs follow-up") }}</option>
+					<option value="positive">{{ _("Interested") }}</option>
+					<option value="negative">{{ _("Not interested") }}</option>
+					<option value="converted">{{ _("Converted / closed") }}</option>
+					<option value="invalid_contact">{{ _("Wrong number") }}</option>
+					<option value="compliance">{{ _("Do not contact") }}</option>
+					<option value="other">{{ _("Other") }}</option>
+				</select>
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Allowed channels") }} *</span>
+				<input id="out-channels" class="cskh-input cskh-mono" type="text" value="phone_call,sms,zalo,facebook,other">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Care status") }}</span>
+				<select id="out-next-status" class="cskh-select">
+					<option value="in_progress">{{ _("In progress") }}</option>
+					<option value="on_hold">{{ _("On hold") }}</option>
+					<option value="closed">{{ _("Completed care") }}</option>
+				</select>
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Sort order") }}</span>
+				<input id="out-sort" class="cskh-input" type="number" value="100">
+			</label>
+		</div>
+		<div class="cskh-inline-list" style="margin-top: 10px;">
+			<label class="cskh-checkbox-row">
+				<input id="out-connected" type="checkbox">
+				<span>{{ _("Counts as connected") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="out-interested" type="checkbox">
+				<span>{{ _("Interested") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="out-req-note" type="checkbox">
+				<span>{{ _("Requires note") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="out-req-followup" type="checkbox">
+				<span>{{ _("Requires callback") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="out-allow-followup" type="checkbox" checked>
+				<span>{{ _("Schedule follow-up callback") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="out-terminal" type="checkbox">
+				<span>{{ _("Terminal outcome") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="out-dnc" type="checkbox">
+				<span>{{ _("Sets Do Not Contact (DNC)") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="out-enabled" type="checkbox" checked>
+				<span>{{ _("Enabled") }}</span>
+			</label>
+		</div>
+		<div class="cskh-actions" style="margin-top: 12px;">
+			<button id="out-save-btn" class="cskh-btn is-primary" type="button">
+				{{ _("Save outcome code") }}
+			</button>
+			<button id="out-reset-btn" class="cskh-btn" type="button">
+				{{ _("Reset form") }}
+			</button>
+		</div>
+	</div>
+</div>
+
+<div class="cskh-card" id="set-policies-card" hidden>
+	<h2>{{ _("Policy configuration (versioned)") }}</h2>
+	<div style="overflow-x: auto;">
+		<table class="cskh-table" id="set-policies-table">
+			<thead>
+				<tr>
+					<th>{{ _("Policy code") }}</th>
+					<th>{{ _("Policy title") }}</th>
+					<th>{{ _("Policy scope") }}</th>
+					<th>{{ _("Policy version") }}</th>
+					<th>{{ _("Max backdate window (minutes)") }}</th>
+					<th>{{ _("Allowed channels") }}</th>
+					<th>{{ _("Status") }}</th>
+					<th id="set-policy-actions-th" hidden>{{ _("Actions") }}</th>
+				</tr>
+			</thead>
+			<tbody id="set-policies-rows"></tbody>
+		</table>
+	</div>
+
+	<div id="set-policy-form-wrap" class="cskh-panel" style="margin-top: 14px;" hidden>
+		<h3 style="margin-top: 0;">{{ _("Save new policy version") }}</h3>
+		<div id="set-policy-alert" aria-live="polite"></div>
+		<div class="cskh-form-grid">
+			<label class="cskh-field">
+				<span>{{ _("Policy code") }} *</span>
+				<input id="pol-code" class="cskh-input cskh-mono" type="text" placeholder="GLOBAL-DEFAULT">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Policy title") }} *</span>
+				<input id="pol-title" class="cskh-input" type="text" placeholder="{{ _('Policy title') }}">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Policy scope") }} *</span>
+				<select id="pol-scope" class="cskh-select">
+					<option value="Global">{{ _("Global") }}</option>
+					<option value="Team">{{ _("Team") }}</option>
+					<option value="Campaign">{{ _("Campaign") }}</option>
+				</select>
+			</label>
+			<label class="cskh-field" id="pol-team-wrap" hidden>
+				<span>{{ _("Target team") }} *</span>
+				<input id="pol-team" class="cskh-input" type="text" placeholder="CRM-SH-0001">
+			</label>
+			<label class="cskh-field" id="pol-campaign-wrap" hidden>
+				<span>{{ _("Target campaign") }} *</span>
+				<input id="pol-campaign" class="cskh-input" type="text" placeholder="CAMP-001">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Max backdate window (minutes)") }}</span>
+				<input id="pol-backdate" class="cskh-input" type="number" min="0" value="120">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Allowed channels") }}</span>
+				<input id="pol-channels" class="cskh-input cskh-mono" type="text" value="phone_call,sms,zalo,facebook,other">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Enforce Do Not Contact (DNC)") }}</span>
+				<select id="pol-dnc-behavior" class="cskh-select">
+					<option value="block_and_auto_close">{{ _("Block outreach and auto-close work item") }}</option>
+					<option value="block_future_outreach">{{ _("Block future outreach") }}</option>
+				</select>
+			</label>
+		</div>
+		<div class="cskh-inline-list" style="margin-top: 10px;">
+			<label class="cskh-checkbox-row">
+				<input id="pol-req-attempt-close" type="checkbox" checked>
+				<span>{{ _("Require attempt before close") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="pol-allow-invalid-close" type="checkbox" checked>
+				<span>{{ _("Allow close without contact for invalid/DNC") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="pol-leader-reopen" type="checkbox" checked>
+				<span>{{ _("Allow leader reopen") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="pol-leader-review" type="checkbox" checked>
+				<span>{{ _("Allow leader review correction") }}</span>
+			</label>
+			<label class="cskh-checkbox-row">
+				<input id="pol-enabled" type="checkbox" checked>
+				<span>{{ _("Enabled") }}</span>
+			</label>
+		</div>
+		<div class="cskh-actions" style="margin-top: 12px;">
+			<button id="pol-save-btn" class="cskh-btn is-primary" type="button">
+				{{ _("Save new policy version") }}
+			</button>
+			<button id="pol-reset-btn" class="cskh-btn" type="button">
+				{{ _("Reset form") }}
+			</button>
+		</div>
+	</div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/p2-api.js?v={{ cskh_asset_version | default('') }}"></script>
+<script src="/assets/crm_cskh/cskh/settings.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}
