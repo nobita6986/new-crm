@@ -3,12 +3,12 @@
 ## Bối cảnh & nguồn gốc tích hợp cuối (Đợt 4 — Hiện hành)
 
 * **Nguồn yêu cầu:** `docs/root-plan/P1.md` §9 (UI/UX), §10 (Contract), §12 (Nghiệm thu).
-* **Một mốc mã nguồn tích hợp cuối (`7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9`):** Bảo toàn đầy đủ nội dung bản tích hợp local `5e2e350e0368b9352a8d467dc2f123ada8b555a2` + các chỉnh sửa UI/dịch tại `9fdbb8dfdd9ad443ffe05057a969a1e039473989`, hợp nhất trực tiếp từ Git giữa:
+* **Một mốc mã nguồn tích hợp cuối (`a7cdd0f3da7f09c42c00e473e22b01cd857e24b3`):** Bảo toàn đầy đủ nội dung bản tích hợp local `5e2e350e0368b9352a8d467dc2f123ada8b555a2` + các chỉnh sửa UI/dịch tại `9fdbb8dfdd9ad443ffe05057a969a1e039473989`, hợp nhất trực tiếp từ Git giữa:
   * UI/docs Đợt 3: **`5c37bf3dc464a0d8e2b9bd94ba55df40da469559`** (`5c37bf3`);
   * Backend PR #4 (`codex/p1-foundation`): **`2235757b79bb9f1a7fb3ae2957b28deb088185b9`** (`2235757` — đóng `L-23` + `L-26` phía backend), **`77e07dac7948c156039bc6a9746fe5d451fc0d71`** (`77e07da` — đóng `L-29` khóa quyền DocType/Document/`permlevel = 1`/`search_link` + direct ownership mutation eligibility) và **`6c457b327e59eead47cc9d0982c4ee1df4fe9e64`** (`6c457b3` — bản sửa bổ sung thống nhất SQL `L-23` trước phân trang trên `pool_list` + `L-29`).
 * **Không tự sửa song song hay nới quyền backend:**
   * **`0` dòng thay đổi** so với `6c457b327e59eead47cc9d0982c4ee1df4fe9e64` trên `permissions.py`, `p1_permissions.py`, `services/reporting.py`, `deploy/dev/`, `docs/architecture/api-contract-p1.md` và toàn bộ `doctype/**/*.json` (`tabCustom DocPerm = 0 dòng`).
-  * `pool_ui._team_lead_authorization_clauses` và `pool_ui.filter_team_authorized_leads` ủy quyền trực tiếp sang `reporting._team_lead_authorization_clauses` / `reporting.filter_team_authorized_leads` để đồng nhất 100% giữa 3 API kho (`pool_ui.list`, `customers.customer_pool`, `customers.pool_list`).
+  * `pool_ui.py` dùng chung hoàn toàn các helper quyền và truy vấn của `crm_cskh.services.reporting` (`_scoped_wi_predicate`, `_scoped_ac_predicate`, `_team_lead_authorization_clauses`, `filter_team_authorized_leads`, `lead_in_batch_clause`, `work_item_in_batch_clause` và `pool_ui.list -> reporting.customer_pool`), loại bỏ toàn bộ bản sao SQL cũ để đồng nhất 100% giữa cả 3 API kho (`pool_ui.list`, `customers.customer_pool`, `customers.pool_list`) và bảo toàn đầy đủ positive control cho `Leader B` cùng `totals` trước phân trang.
   * Giữ nguyên 100% chương 0–5 của T1B tại `6c457b327e59eead47cc9d0982c4ee1df4fe9e64` và gắn nhãn phân biệt rõ toàn bộ các mốc lịch sử Đợt 1–3 (`L-28`) trong `docs/architecture/P1-Exit-Report.md` (giữ nguyên văn tiếng Việt UTF-8 của **§7.9** khớp 100% `5c37bf3dc464a0d8e2b9bd94ba55df40da469559`).
 * **Bảo toàn lịch sử & Provenance SHA baseline:**
   * **`0` dòng thay đổi** trên toàn bộ tệp bằng chứng lịch sử Đợt 1 (`screenshots/*.png`, `browser-manifest.json`, `http-e2e-report.json`), Đợt 2 (`async-distribution-delta-e2e.json` kèm đính chính `provenance_erratum` về commit thật **`0d3f2bcbbf9715a4c0c783903ce750de8646583d`**, `http-e2e-delta-report.json`) và Đợt 3 (`round3-l23-l26-delta-e2e.json`, `round3-http-e2e-report.json`).
@@ -16,7 +16,7 @@
 
 ## Phân biệt số liệu lịch sử (Đợt 1–3) và số liệu hiện hành (Đợt 4)
 
-| Chỉ số đối soát | Đợt 1 — Lịch sử (`0d3f2bc` / `d0842cc`) | Đợt 2 — Lịch sử (`6351048` / `a75c093`) | Đợt 3 — Lịch sử (`3f07b9b` / `5c37bf3`) | **Đợt 4 — Hiện hành (`7bd7185`)** |
+| Chỉ số đối soát | Đợt 1 — Lịch sử (`0d3f2bc` / `d0842cc`) | Đợt 2 — Lịch sử (`6351048` / `a75c093`) | Đợt 3 — Lịch sử (`3f07b9b` / `5c37bf3`) | **Đợt 4 — Hiện hành (`a7cdd0f`)** |
 |---|---|---|---|---|
 | Nguồn gốc backend PR #4 | `3025495` + `64b7486` | `c49f7f8` | `c997df7` (`L-25`) | **`2235757` + `77e07da` + `6c457b3` (`pool_list` + `L-29`)** |
 | `run_suites.py` (`15` module) | `297/297` (`184` P1 + `6` UI + `99` P0 + `8` transport) | `312/312` (`199` P1 + `6` UI + `99` P0 + `8` transport) | `321/321` (`203` P1 + `11` UI + `99` P0 + `8` transport) | **`328/328` (`209` P1 + `12` UI + `99` P0 + `8` transport)** |
@@ -43,7 +43,7 @@
 * **`L-28` (Gắn nhãn rõ số liệu lịch sử vs hiện hành trong `P1-Exit-Report.md`):** Đã gắn nhãn rõ toàn bộ các mục lịch sử Đợt 1–3 (§7.0–§7.10) và tổng hợp đối chiếu tại §7.11.
 * **`L-29` (Khóa quyền DocType/Document/`permlevel = 1`/`search_link`):** Đã đóng tại `77e07dac7948c156039bc6a9746fe5d451fc0d71` + `6c457b327e59eead47cc9d0982c4ee1df4fe9e64` và kiểm chứng thực tế trên toàn bộ màn hình `Leader` / `BOD` / `Staff` / `Admin` với **`0` nới quyền backend**.
 
-## Kết quả kiểm chứng trên mã nguồn tích hợp `7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9`
+## Kết quả kiểm chứng trên mã nguồn tích hợp `a7cdd0f3da7f09c42c00e473e22b01cd857e24b3`
 
 * **Kiểm toán tĩnh & Cổng CI (`.github/workflows/p1.yml` & `.github/workflows/p0.yml`):**
   * `ruff==0.14.0 check` + `format --check`: **PASS** (`108` tệp Python chuẩn format).
