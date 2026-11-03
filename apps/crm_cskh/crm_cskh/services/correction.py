@@ -50,6 +50,7 @@ from crm_cskh.services.errors import (
 	OutcomeNotCompatible,
 	OwnershipChanged,
 	StaleWorkItem,
+	rollback_savepoint_safely,
 )
 from crm_cskh.services.policies import resolve_effective_policy, serialize_outcome
 from crm_cskh.services.read_model import compute_effective_attempts, recompute_work_item_read_model
@@ -468,7 +469,7 @@ def request_correction(
 			final_status = locked.status
 			final_rev = current_rev
 	except Exception:
-		frappe.db.rollback(save_point=savepoint)
+		rollback_savepoint_safely(savepoint)
 		raise
 
 	frappe.db.commit()
@@ -642,7 +643,7 @@ def review_correction(
 			final_status = locked.status
 			final_rev = current_rev
 	except Exception:
-		frappe.db.rollback(save_point=savepoint)
+		rollback_savepoint_safely(savepoint)
 		raise
 
 	frappe.db.commit()

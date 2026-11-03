@@ -19,7 +19,11 @@ from crm_cskh.services import (
 	policies,
 	read_model,
 )
-from crm_cskh.services.errors import IdempotencyConflict, StaleWorkItem
+from crm_cskh.services.errors import (
+	IdempotencyConflict,
+	StaleWorkItem,
+	is_transient_tx_abort,
+)
 from crm_cskh.tests.p2_base import P2TestCase
 
 
@@ -36,12 +40,12 @@ def _run_db_thread(site: str, sites_path: str, fn, results: dict, key: str):
 				results[key] = {"ok": out}
 				return
 			except Exception as exc:
-				retryable = "1020" in str(exc) or "1213" in str(exc) or "Deadlock" in type(exc).__name__
+				retryable = is_transient_tx_abort(exc)
 				try:
 					frappe.db.rollback()
 				except Exception:
 					pass
-				if retryable and attempt < 4:
+				if retryable and attempt < 6:
 					attempt += 1
 					continue
 				results[key] = {
@@ -386,7 +390,11 @@ class TestP2RealMariaDbRacesAndRollbackChaos(P2TestCase):
 			task_id = race_results["attempt"]["ok"]["callback_task"]
 			self.assertEqual(frappe.db.get_value("CRM Task", task_id, "assigned_to"), self.staff_b)
 		else:
-			self.assertEqual(race_results["attempt"]["code"], "OWNERSHIP_CHANGED")
+			self.assertEqual(
+				race_results["attempt"]["code"],
+				"OWNERSHIP_CHANGED",
+				f"unexpected race_results: {race_results}",
+			)
 			self.assertEqual(frappe.db.count("CSKH Contact Attempt", {"work_item": wi_race}), 0)
 
 		self.assertTrue(read_model.reconcile_p2_invariants(self.campaign)["ok"])
