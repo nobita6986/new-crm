@@ -1,0 +1,1843 @@
+{
+  "site": "p1http.localhost",
+  "base_url": "http://127.0.0.1:18089",
+  "recorded_at_utc": "2026-11-03T02:20:09.235227+00:00",
+  "commit_sha": "3025495f58bc0391c3f8d092af500b0566a5f038",
+  "evidence_class": "http",
+  "coverage_scope": "direct HTTP against bench serve with real session cookies and CSRF validation across P1 health, campaigns, distribution, ownership, customers, dashboard and imports endpoints; reverse-proxy/TLS/CORS termination is outside this probe",
+  "total_cases": 52,
+  "cases": [
+    {
+      "id": "p1-http-login-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=crm.admin%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:00 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "66",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/app\", \"full_name\": \"CRM Admin\"}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-login-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=bod.viewer%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:00 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "67",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/app\", \"full_name\": \"BOD Viewer\"}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-login-leader",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=team1.leader%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:01 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "69",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/crm\", \"full_name\": \"Team1 Leader\"}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-login-staff-a",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=staff.a%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:01 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "64",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/crm\", \"full_name\": \"Staff A\"}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-login-staff-b",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=staff.b%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:01 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "64",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/crm\", \"full_name\": \"Staff B\"}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-csrf-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:02 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "895711",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.JBHTN5ST.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.6DELQQ46.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-csrf-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:02 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "895656",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.JBHTN5ST.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.6DELQQ46.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-csrf-leader",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:03 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "905215",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.JBHTN5ST.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.6DELQQ46.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-csrf-staff-a",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:03 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "902630",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.JBHTN5ST.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.6DELQQ46.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-csrf-staff-b",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:04 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "902630",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.JBHTN5ST.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.6DELQQ46.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793591312.6298034>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-guest-campaigns-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.list",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:04 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "2205",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError: <details><summary>You are not permitted to access this resource. Login to access</summary>Function <strong>crm_cskh.api.campaigns.list</strong> is not whitelisted.</details>\", \"exc_type\": \"PermissionError\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 83, in execute_cmd\\\\n    is_whitelisted(method)\\\\n    ~~~~~~~~~~~~~~^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 886, in is_whitelisted\\\\n    throw(msg, PermissionError, title=_(\\\\\\\"Method Not Allowed\\\\\\\"))\\\\n    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 621, in throw\\\\n    msgprint(\\\\n    ~~~~~~~~^\\\\n    \\\\tmsg,\\\\n     ^^^^\\\\n    ...<6 lines>...\\\\n    \\\\tprimary_action=primary_action,\\\\n     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n    )\\\\n    ^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 586, in msgprint\\\\n    _raise_exception()\\\\n    ~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 537, in _raise_exception\\\\n    raise exc\\\\nfrappe.exceptions.PermissionError: <details><summary>You are not permitted to access this resource. Login to access</summary>Function <strong>crm_cskh.api.campaigns.list</strong> is not whitelisted.</details>\\\\n\\\"]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"<details><summary>You are not permitted to access this resource. Login to access</summary>Function <strong>crm_cskh.api.campaigns.list</strong> is not whitelisted.</details>\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Method Not Allowed\\\\\\\", \\\\\\\"indicator\\\\\\\": \\\\\\\"red\\\\\\\", \\\\\\\"raise_exception\\\\\\\": 1, \\\\\\\"__frappe_exc_id\\\\\\\": \\\\\\\"f3395401cf982b257977b1abbd553715b35275cedea2f2d32b3cc93a\\\\\\\"}\\\"]\"}",
+        "exc_type": "PermissionError",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET campaigns.list rejects unauthenticated Guest with HTTP 401/403",
+        "actor": "Guest",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-csrf-invalid-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.save",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "code=P1-BAD-CSRF&title=Rejected+CSRF"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:04 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "336",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exc_type\": \"CSRFTokenError\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Y\\\\\\\\u00eau c\\\\\\\\u1ea7u kh\\\\\\\\u00f4ng h\\\\\\\\u1ee3p l\\\\\\\\u1ec7\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nh\\\\\\\\u1eafn\\\\\\\", \\\\\\\"indicator\\\\\\\": \\\\\\\"red\\\\\\\", \\\\\\\"raise_exception\\\\\\\": 1, \\\\\\\"__frappe_exc_id\\\\\\\": \\\\\\\"064e8be214d35b8e0737f2db7adf3e463073c04ee3639a84146a014f\\\\\\\"}\\\"]\"}",
+        "exc_type": "CSRFTokenError",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST campaigns.save with invalid CSRF token returns HTTP 400/403",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-health-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.health.ping",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:04 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "95",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"app\": \"crm_cskh\", \"status\": \"ok\", \"app_version\": \"0.0.1\", \"user\": \"crm.admin@dev.local\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET health.ping returns HTTP 200 for CSKH CRM Admin",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-campaigns-save-denied-staff",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.save",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "code=P1-HTTP-DENY-STAFF&title=denied"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:04 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1501",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Managing the campaigns requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/campaigns.py\\\\\\\", line 89, in save\\\\n    _require_write(actor)\\\\n    ~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/campaigns.py\\\\\\\", line 37, in _require_write\\\\n    raise Forbidden(\\\\\\\"Managing the campaigns requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Managing the campaigns requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST campaigns.save returns HTTP 403 for staff.a@dev.local",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-campaigns-save-denied-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.save",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "code=P1-HTTP-DENY-BOD&title=denied"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:04 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1501",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Managing the campaigns requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/campaigns.py\\\\\\\", line 89, in save\\\\n    _require_write(actor)\\\\n    ~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/campaigns.py\\\\\\\", line 37, in _require_write\\\\n    raise Forbidden(\\\\\\\"Managing the campaigns requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Managing the campaigns requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST campaigns.save returns HTTP 403 for bod.viewer@dev.local",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-campaigns-save-denied-leader",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.save",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "code=P1-HTTP-DENY-LEADER&title=denied"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:04 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1501",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Managing the campaigns requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/campaigns.py\\\\\\\", line 89, in save\\\\n    _require_write(actor)\\\\n    ~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/campaigns.py\\\\\\\", line 37, in _require_write\\\\n    raise Forbidden(\\\\\\\"Managing the campaigns requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Managing the campaigns requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST campaigns.save returns HTTP 403 for team1.leader@dev.local",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-campaigns-save-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.save",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "code=P1-HTTP-1793672404-b2c4fa&title=P1+HTTP+evidence&status=Active"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:05 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "107",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"campaign\": \"c2hqcd6mg3\", \"code\": \"P1-HTTP-1793672404-b2c4fa\", \"status\": \"Active\", \"rule_version\": 1}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST campaigns.save returns HTTP 200 and campaign id for CRM Admin",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-campaigns-list-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.list",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:05 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "3373",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"items\": [{\"campaign\": \"10kj34e0sb\", \"code\": \"P1-HTTP-1793645057-1c11b2\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"bdrhrr9rm2\", \"code\": \"P1-HTTP-1793672338-662e7e\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"c2hqcd6mg3\", \"code\": \"P1-HTTP-1793672404-b2c4fa\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"rrmtn0b9dp\", \"code\": \"P1-HTTP-local\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"bekj7badnm\", \"code\": \"P1-HTTP-local-4a9d\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"09kikcelch\", \"code\": \"P1-HTTP-local-9e23\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1126l2o4rp\", \"code\": \"P1-HTTP-local-eccb\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"27p57tq14l\", \"code\": \"P1-HTTP-r10\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"2dou7pj1pc\", \"code\": \"P1-HTTP-r11\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"2e7b24h63k\", \"code\": \"P1-HTTP-r11-400e\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"v3qfolllrc\", \"code\": \"P1-HTTP-r2\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"12vi05g00p\", \"code\": \"P1-HTTP-r3\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"19qv58er4i\", \"code\": \"P1-HTTP-r4\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1h4pafvt89\", \"code\": \"P1-HTTP-r5\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1l90g8m211\", \"code\": \"P1-HTTP-r6\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1o1dpqr2dm\", \"code\": \"P1-HTTP-r7\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1rl72bltrp\", \"code\": \"P1-HTTP-r8\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1vnum82ao1\", \"code\": \"P1-HTTP-r9\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}], \"total\": 18, \"as_of\": \"2026-11-03 09:20:05.027715\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET campaigns.list returns HTTP 200 with >= 1 campaign for CSKH BOD Viewer",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-campaigns-list-leader",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.list",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:05 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "3373",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"items\": [{\"campaign\": \"10kj34e0sb\", \"code\": \"P1-HTTP-1793645057-1c11b2\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"bdrhrr9rm2\", \"code\": \"P1-HTTP-1793672338-662e7e\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"c2hqcd6mg3\", \"code\": \"P1-HTTP-1793672404-b2c4fa\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"rrmtn0b9dp\", \"code\": \"P1-HTTP-local\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"bekj7badnm\", \"code\": \"P1-HTTP-local-4a9d\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"09kikcelch\", \"code\": \"P1-HTTP-local-9e23\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1126l2o4rp\", \"code\": \"P1-HTTP-local-eccb\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"27p57tq14l\", \"code\": \"P1-HTTP-r10\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"2dou7pj1pc\", \"code\": \"P1-HTTP-r11\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"2e7b24h63k\", \"code\": \"P1-HTTP-r11-400e\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"v3qfolllrc\", \"code\": \"P1-HTTP-r2\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 2, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"12vi05g00p\", \"code\": \"P1-HTTP-r3\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"19qv58er4i\", \"code\": \"P1-HTTP-r4\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1h4pafvt89\", \"code\": \"P1-HTTP-r5\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1l90g8m211\", \"code\": \"P1-HTTP-r6\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1o1dpqr2dm\", \"code\": \"P1-HTTP-r7\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1rl72bltrp\", \"code\": \"P1-HTTP-r8\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}, {\"campaign\": \"1vnum82ao1\", \"code\": \"P1-HTTP-r9\", \"title\": \"P1 HTTP evidence\", \"description\": null, \"status\": \"Active\", \"team_scope\": null, \"rule_version\": 1, \"started_at\": null, \"ended_at\": null}], \"total\": 18, \"as_of\": \"2026-11-03 09:20:05.042717\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET campaigns.list returns HTTP 200 with >= 1 campaign for Sales Manager",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-campaigns-list-denied-staff",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.list",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:05 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1411",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: You may not read the campaigns.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/campaigns.py\\\\\\\", line 44, in list\\\\n    _require_read(actor)\\\\n    ~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/campaigns.py\\\\\\\", line 28, in _require_read\\\\n    raise Forbidden(\\\\\\\"You may not read the campaigns.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: You may not read the campaigns.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET campaigns.list returns HTTP 403 for plain Sales User",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-save-rule-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.save_rule",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "campaign=c35peni5uk&user=staff.a%40dev.local&weight=100"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:07 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "157",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"rule\": \"c37e3om459\", \"campaign\": \"c35peni5uk\", \"user\": \"staff.a@dev.local\", \"weight\": 100, \"capacity_limit\": 0, \"enabled\": true, \"campaign_rule_version\": 2}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST campaigns.save_rule returns HTTP 200 for CRM Admin",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-rules-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.campaigns.rules?campaign=c35peni5uk",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:07 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "258",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"campaign\": \"c35peni5uk\", \"rule_version\": 1, \"eligible\": [{\"rule\": \"c37e3om459\", \"user\": \"staff.a@dev.local\", \"team\": null, \"weight\": 100, \"capacity\": 0, \"version\": 1, \"enabled\": true, \"used\": 0, \"remaining\": null}], \"excluded\": [], \"as_of\": \"2026-11-03 09:20:07.222638\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET campaigns.rules returns HTTP 200 with >= 1 eligible assignee for BOD Viewer",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-distribution-preview-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.distribution.preview",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "campaign=c35peni5uk"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:07 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "389",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"preview_id\": \"c3a208pju5\", \"campaign\": \"c35peni5uk\", \"selection_fingerprint\": \"dd9716ab944b032a1588559a4a4e3b305aae049eccee50927c8f00ed8464a856\", \"rule_version\": 1, \"expires_at\": \"2026-11-03 09:50:07.370339\", \"summary\": {\"eligible_count\": 2, \"excluded_count\": 0, \"targets\": [{\"user\": \"staff.a@dev.local\", \"weight\": 100, \"planned\": 2}], \"simulated\": {\"staff.a@dev.local\": 2}, \"excluded_assignees\": []}}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST distribution.preview returns HTTP 200 with eligible_count == 2",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-distribution-execute-denied-staff",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.distribution.execute",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "preview_id=c3a208pju5"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:07 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1537",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Distributing the customers requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/distribution.py\\\\\\\", line 49, in execute\\\\n    _require_distribute(actor)\\\\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/distribution.py\\\\\\\", line 27, in _require_distribute\\\\n    raise Forbidden(\\\\\\\"Distributing the customers requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Distributing the customers requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST distribution.execute returns HTTP 403 for staff.a@dev.local",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-distribution-execute-denied-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.distribution.execute",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "preview_id=c3a208pju5"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:07 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1537",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Distributing the customers requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/distribution.py\\\\\\\", line 49, in execute\\\\n    _require_distribute(actor)\\\\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/distribution.py\\\\\\\", line 27, in _require_distribute\\\\n    raise Forbidden(\\\\\\\"Distributing the customers requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Distributing the customers requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST distribution.execute returns HTTP 403 for bod.viewer@dev.local",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-distribution-execute-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.distribution.execute",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "preview_id=c3a208pju5"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:07 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "344",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"run_id\": \"c3a208pju5\", \"campaign\": \"c35peni5uk\", \"status\": \"completed\", \"rule_version\": 1, \"selection_fingerprint\": \"dd9716ab944b032a1588559a4a4e3b305aae049eccee50927c8f00ed8464a856\", \"assigned\": {\"staff.a@dev.local\": 2}, \"created\": 2, \"errors\": 0, \"skipped\": [], \"started_at\": \"2026-11-03 09:20:07.477471\", \"finished_at\": \"2026-11-03 09:20:07.884006\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST distribution.execute returns HTTP 200 and creates 2 work items",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-distribution-get-run-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.distribution.get_run?run_id=c3a208pju5",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:07 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "344",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"run_id\": \"c3a208pju5\", \"campaign\": \"c35peni5uk\", \"status\": \"completed\", \"rule_version\": 1, \"selection_fingerprint\": \"dd9716ab944b032a1588559a4a4e3b305aae049eccee50927c8f00ed8464a856\", \"assigned\": {\"staff.a@dev.local\": 2}, \"created\": 2, \"errors\": 0, \"skipped\": [], \"started_at\": \"2026-11-03 09:20:07.477471\", \"finished_at\": \"2026-11-03 09:20:07.884006\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET distribution.get_run returns HTTP 200 with status == completed",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-distribution-reconcile-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.distribution.reconcile?campaign=c35peni5uk",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:07 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "218",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"campaign\": \"c35peni5uk\", \"current_owners\": {\"staff.a@dev.local\": 2}, \"assignment_events\": {\"staff.a@dev.local\": 2}, \"distinct_leads\": 2, \"active_work_items\": 2, \"active_claims\": 2, \"as_of\": \"2026-11-03 09:20:07.985693\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET distribution.reconcile returns HTTP 200 with 2 active claims and work items",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-customers-my-list-staff-a",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.customers.my_list?campaign=c35peni5uk",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "743",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"self\", \"items\": [{\"work_item\": \"c3e9s0c67r\", \"lead\": \"CRM-LEAD-2026-00008\", \"display_name\": \"P1 HTTP Target 2\", \"phone\": \"[REDACTED_PHONE]\", \"campaign\": \"c35peni5uk\", \"campaign_title\": \"P1 HTTP evidence\", \"campaign_code\": \"P1-HTTP-local-26da\", \"source\": null, \"lead_status\": \"New\", \"work_item_status\": \"assigned\", \"assigned_at\": \"2026-11-03 09:20:07.824253\"}, {\"work_item\": \"c3b6sr7uqr\", \"lead\": \"CRM-LEAD-2026-00007\", \"display_name\": \"P1 HTTP Target 1\", \"phone\": \"[REDACTED_PHONE]\", \"campaign\": \"c35peni5uk\", \"campaign_title\": \"P1 HTTP evidence\", \"campaign_code\": \"P1-HTTP-local-26da\", \"source\": null, \"lead_status\": \"New\", \"work_item_status\": \"assigned\", \"assigned_at\": \"2026-11-03 09:20:07.605942\"}], \"total\": 2, \"page\": 1, \"page_size\": 20, \"as_of\": \"2026-11-03 09:20:08.065659\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET customers.my_list returns HTTP 200 with the 2 assigned items for staff.a",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-customers-my-list-staff-b-before-transfer",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.customers.my_list?campaign=c35peni5uk",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "110",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"self\", \"items\": [], \"total\": 0, \"page\": 1, \"page_size\": 20, \"as_of\": \"2026-11-03 09:20:08.093987\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET customers.my_list for staff.b shows 0 items in campaign before transfer",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-ownership-reassign-denied-staff",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.ownership.reassign",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "work_item=c3e9s0c67r&expected_owner=staff.a%40dev.local&target_user=staff.b%40dev.local&reason=Denied+HTTP+probe+transfer&request_id=http-deny-staff-b3a13f3c"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1541",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Transferring a customer requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/ownership.py\\\\\\\", line 42, in reassign\\\\n    _require_owner_permission(actor)\\\\n    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/ownership.py\\\\\\\", line 20, in _require_owner_permission\\\\n    raise Forbidden(\\\\\\\"Transferring a customer requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Transferring a customer requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST ownership.reassign returns HTTP 403 for staff.a@dev.local",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-ownership-reassign-denied-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.ownership.reassign",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "work_item=c3e9s0c67r&expected_owner=staff.a%40dev.local&target_user=staff.b%40dev.local&reason=Denied+HTTP+probe+transfer&request_id=http-deny-bod-18967932"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1541",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Transferring a customer requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/ownership.py\\\\\\\", line 42, in reassign\\\\n    _require_owner_permission(actor)\\\\n    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/ownership.py\\\\\\\", line 20, in _require_owner_permission\\\\n    raise Forbidden(\\\\\\\"Transferring a customer requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Transferring a customer requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST ownership.reassign returns HTTP 403 for bod.viewer@dev.local",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-ownership-reassign-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.ownership.reassign",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "work_item=c3e9s0c67r&expected_owner=staff.a%40dev.local&target_user=staff.b%40dev.local&reason=HTTP+probe+transfer+to+staff.b&request_id=http-reassign-4d44a050"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "158",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"work_item\": \"c3e9s0c67r\", \"status\": \"reassigned\", \"owner\": \"staff.b@dev.local\", \"ledger\": {\"owner\": \"staff.b@dev.local\", \"shares\": [\"staff.b@dev.local\"]}}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST ownership.reassign returns HTTP 200 and transfers work item to staff.b",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-customers-my-list-staff-b-after-transfer",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.customers.my_list?campaign=c35peni5uk",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "426",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"self\", \"items\": [{\"work_item\": \"c3e9s0c67r\", \"lead\": \"CRM-LEAD-2026-00008\", \"display_name\": \"P1 HTTP Target 2\", \"phone\": \"[REDACTED_PHONE]\", \"campaign\": \"c35peni5uk\", \"campaign_title\": \"P1 HTTP evidence\", \"campaign_code\": \"P1-HTTP-local-26da\", \"source\": null, \"lead_status\": \"New\", \"work_item_status\": \"assigned\", \"assigned_at\": \"2026-11-03 09:20:08.174651\"}], \"total\": 1, \"page\": 1, \"page_size\": 20, \"as_of\": \"2026-11-03 09:20:08.329507\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET customers.my_list for staff.b shows 1 transferred item immediately",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-ownership-history-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.ownership.history?work_item=c3e9s0c67r",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "816",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"work_item\": \"c3e9s0c67r\", \"items\": [{\"name\": \"c3e2r91dol\", \"action\": \"assign\", \"from_user\": null, \"to_user\": \"staff.a@dev.local\", \"actor\": \"crm.admin@dev.local\", \"event_at\": \"2026-11-03 09:20:07.824253\", \"reason\": \"Distribution run c3a208pju5\", \"distribution_run\": \"c3a208pju5\", \"ownership_start\": \"2026-11-03 09:20:07.824253\", \"ownership_end\": \"2026-11-03 09:20:08.174651\", \"event_id\": \"assign:c3e9s0c67r:run:c3a208pju5:CRM-LEAD-2026-00008\"}, {\"name\": \"c3hharom5h\", \"action\": \"reassign\", \"from_user\": \"staff.a@dev.local\", \"to_user\": \"staff.b@dev.local\", \"actor\": \"crm.admin@dev.local\", \"event_at\": \"2026-11-03 09:20:08.174651\", \"reason\": \"HTTP probe transfer to staff.b\", \"distribution_run\": \"c3a208pju5\", \"ownership_start\": \"2026-11-03 09:20:08.174651\", \"ownership_end\": null, \"event_id\": \"reassign:c3e9s0c67r:http-reassign-4d44a050\"}], \"total\": 2}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET ownership.history returns HTTP 200 with >= 2 events (assign + reassign)",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-ownership-revoke-denied-staff",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.ownership.revoke",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "work_item=c3e9s0c67r&expected_owner=staff.b%40dev.local&reason=Denied+revoke&request_id=http-revoke-deny-b660ebd2"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1539",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Transferring a customer requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/ownership.py\\\\\\\", line 64, in revoke\\\\n    _require_owner_permission(actor)\\\\n    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/ownership.py\\\\\\\", line 20, in _require_owner_permission\\\\n    raise Forbidden(\\\\\\\"Transferring a customer requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Transferring a customer requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST ownership.revoke returns HTTP 403 for Sales User",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-ownership-revoke-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.ownership.revoke",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "work_item=c3e9s0c67r&expected_owner=staff.b%40dev.local&reason=HTTP+probe+revoke+back+to+queued&request_id=http-revoke-25f19a4c"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "69",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"work_item\": \"c3e9s0c67r\", \"status\": \"queued\", \"owner\": null}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST ownership.revoke returns HTTP 200 and sets status == queued",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-customers-pool-list-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.customers.pool_list?campaign=c35peni5uk",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "245",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"all\", \"items\": [{\"work_item\": \"c3e9s0c67r\", \"lead\": \"CRM-LEAD-2026-00008\", \"display_name\": \"P1 HTTP Target 2\", \"phone\": \"[REDACTED_PHONE]\", \"campaign\": \"c35peni5uk\"}], \"total\": 1, \"page\": 1, \"page_size\": 20, \"as_of\": \"2026-11-03 09:20:08.460011\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET customers.pool_list returns HTTP 200 with >= 1 revoked queued item for BOD",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-ownership-assign-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.ownership.assign",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "work_item=c3e9s0c67r&target_user=staff.a%40dev.local&reason=HTTP+probe+assign+queued+item&request_id=http-assign-1169f164"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "86",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"work_item\": \"c3e9s0c67r\", \"status\": \"assigned\", \"owner\": \"staff.a@dev.local\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST ownership.assign returns HTTP 200 and assigns queued item to staff.a",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-customers-pool-list-denied-staff",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.customers.pool_list",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1285",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: You may not read the customer pool.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/customers.py\\\\\\\", line 36, in pool_list\\\\n    raise Forbidden(\\\\\\\"You may not read the customer pool.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: You may not read the customer pool.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET customers.pool_list returns HTTP 403 for plain Sales User",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-dashboard-distribution-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.dashboard.distribution?campaign=c35peni5uk",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "344",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"self\", \"cards\": {\"unique_customers\": 0, \"eligible_unassigned\": 0, \"assigned_work_items\": 0, \"unassigned_work_items\": 0, \"revoked_work_items\": 0, \"closed_work_items\": 0, \"active_claims\": 0, \"active_campaigns\": 0, \"failed_batches\": 0, \"failed_runs\": 0}, \"per_user\": [], \"assignment_events\": 0, \"identity_count\": 0, \"as_of\": \"2026-11-03 09:20:08.662676\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET dashboard.distribution returns HTTP 200 with cards for crm.admin@dev.local",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-dashboard-distribution-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.dashboard.distribution?campaign=c35peni5uk",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "558",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"all\", \"cards\": {\"unique_customers\": 2, \"eligible_unassigned\": 0, \"assigned_work_items\": 2, \"unassigned_work_items\": 0, \"revoked_work_items\": 0, \"closed_work_items\": 0, \"active_claims\": 1, \"active_campaigns\": 19, \"failed_batches\": 0, \"failed_runs\": 0}, \"per_user\": [{\"user\": \"staff.a@dev.local\", \"weight\": 100, \"current_total\": 2, \"capacity\": null, \"remaining_capacity\": null, \"campaigns\": [{\"campaign\": \"c35peni5uk\", \"weight\": 100, \"current_total\": 2, \"capacity\": null, \"remaining_capacity\": null}]}], \"assignment_events\": 5, \"identity_count\": 9, \"as_of\": \"2026-11-03 09:20:08.677648\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET dashboard.distribution returns HTTP 200 with cards for bod.viewer@dev.local",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-dashboard-distribution-leader",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.dashboard.distribution?campaign=c35peni5uk",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "559",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"team\", \"cards\": {\"unique_customers\": 2, \"eligible_unassigned\": 0, \"assigned_work_items\": 2, \"unassigned_work_items\": 0, \"revoked_work_items\": 0, \"closed_work_items\": 0, \"active_claims\": 1, \"active_campaigns\": 19, \"failed_batches\": 0, \"failed_runs\": 0}, \"per_user\": [{\"user\": \"staff.a@dev.local\", \"weight\": 100, \"current_total\": 2, \"capacity\": null, \"remaining_capacity\": null, \"campaigns\": [{\"campaign\": \"c35peni5uk\", \"weight\": 100, \"current_total\": 2, \"capacity\": null, \"remaining_capacity\": null}]}], \"assignment_events\": 4, \"identity_count\": 2, \"as_of\": \"2026-11-03 09:20:08.697334\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET dashboard.distribution returns HTTP 200 with cards for team1.leader@dev.local",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-dashboard-campaigns-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.dashboard.campaigns",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "2660",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"campaigns\": [{\"campaign\": \"10kj34e0sb\", \"code\": \"P1-HTTP-1793645057-1c11b2\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"bdrhrr9rm2\", \"code\": \"P1-HTTP-1793672338-662e7e\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"c2hqcd6mg3\", \"code\": \"P1-HTTP-1793672404-b2c4fa\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"rrmtn0b9dp\", \"code\": \"P1-HTTP-local\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"c35peni5uk\", \"code\": \"P1-HTTP-local-26da\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 2, \"assigned\": 2, \"queued\": 0}, {\"campaign\": \"bekj7badnm\", \"code\": \"P1-HTTP-local-4a9d\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 2, \"assigned\": 2, \"queued\": 0}, {\"campaign\": \"09kikcelch\", \"code\": \"P1-HTTP-local-9e23\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 2, \"assigned\": 1, \"queued\": 0}, {\"campaign\": \"1126l2o4rp\", \"code\": \"P1-HTTP-local-eccb\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 2, \"assigned\": 1, \"queued\": 0}, {\"campaign\": \"27p57tq14l\", \"code\": \"P1-HTTP-r10\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"2dou7pj1pc\", \"code\": \"P1-HTTP-r11\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"2e7b24h63k\", \"code\": \"P1-HTTP-r11-400e\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 2, \"assigned\": 1, \"queued\": 0}, {\"campaign\": \"v3qfolllrc\", \"code\": \"P1-HTTP-r2\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 2, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"12vi05g00p\", \"code\": \"P1-HTTP-r3\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"19qv58er4i\", \"code\": \"P1-HTTP-r4\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"1h4pafvt89\", \"code\": \"P1-HTTP-r5\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"1l90g8m211\", \"code\": \"P1-HTTP-r6\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"1o1dpqr2dm\", \"code\": \"P1-HTTP-r7\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"1rl72bltrp\", \"code\": \"P1-HTTP-r8\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}, {\"campaign\": \"1vnum82ao1\", \"code\": \"P1-HTTP-r9\", \"title\": \"P1 HTTP evidence\", \"status\": \"Active\", \"rule_version\": 1, \"assigned\": 0, \"queued\": 0}], \"as_of\": \"2026-11-03 09:20:08.750105\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET dashboard.campaigns returns HTTP 200 with >= 1 campaign for BOD Viewer",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-dashboard-distribution-denied-staff",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.dashboard.distribution",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1315",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: You may not read the distribution dashboard.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/dashboard.py\\\\\\\", line 26, in distribution\\\\n    raise Forbidden(\\\\\\\"You may not read the distribution dashboard.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: You may not read the distribution dashboard.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET dashboard.distribution returns HTTP 403 for plain Sales User",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-imports-create-preview-denied-staff",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.imports.create_preview",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "file_name=3cd2104422"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1558",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Importing the customer pool requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/imports.py\\\\\\\", line 28, in create_preview\\\\n    _require_import_permission(actor)\\\\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/imports.py\\\\\\\", line 21, in _require_import_permission\\\\n    raise Forbidden(\\\\\\\"Importing the customer pool requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Importing the customer pool requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST imports.create_preview returns HTTP 403 for staff.a@dev.local",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-imports-create-preview-denied-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.imports.create_preview",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "file_name=3cd2104422"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:08 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1558",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Importing the customer pool requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/imports.py\\\\\\\", line 28, in create_preview\\\\n    _require_import_permission(actor)\\\\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/imports.py\\\\\\\", line 21, in _require_import_permission\\\\n    raise Forbidden(\\\\\\\"Importing the customer pool requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Importing the customer pool requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST imports.create_preview returns HTTP 403 for bod.viewer@dev.local",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-imports-create-preview-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.imports.create_preview",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "file_name=3cd2104422&idempotency_key=http-imp-4b09debe4821"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:09 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "498",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"batch\": \"c3q751k9sb\", \"status\": \"DRY_RUN\", \"checksum\": \"1140ec904aa49bb063edd6dc267993bb11750c65a897ec75a8f44c3556a5d271\", \"idempotency_key\": \"http-imp-4b09debe4821\", \"totals\": {\"total_rows\": 2, \"valid_rows\": 2, \"new_rows\": 2, \"duplicate_rows\": 0, \"error_rows\": 0}, \"preview\": [{\"row_number\": 2, \"class\": \"valid\", \"canonical\": \"[REDACTED_PHONE]\"}, {\"row_number\": 3, \"class\": \"valid\", \"canonical\": \"[REDACTED_PHONE]\"}], \"preview_truncated\": false, \"committed_at\": null, \"error_artifact\": null, \"as_of\": \"2026-11-03 09:20:09.037224\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST imports.create_preview returns HTTP 200 with valid_rows == 2 for CRM Admin",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-imports-confirm-denied-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.imports.confirm",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "batch=c3q751k9sb"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:09 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1551",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Importing the customer pool requires the CRM Admin business role.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/imports.py\\\\\\\", line 50, in confirm\\\\n    _require_import_permission(actor)\\\\n    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/imports.py\\\\\\\", line 21, in _require_import_permission\\\\n    raise Forbidden(\\\\\\\"Importing the customer pool requires the CRM Admin business role.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Importing the customer pool requires the CRM Admin business role.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST imports.confirm returns HTTP 403 for CSKH BOD Viewer",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-imports-confirm-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.imports.confirm",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "batch=c3q751k9sb"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:09 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "500",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"batch\": \"c3q751k9sb\", \"status\": \"CONFIRMED\", \"checksum\": \"1140ec904aa49bb063edd6dc267993bb11750c65a897ec75a8f44c3556a5d271\", \"idempotency_key\": \"http-imp-4b09debe4821\", \"totals\": {\"total_rows\": 2, \"valid_rows\": 2, \"new_rows\": 2, \"duplicate_rows\": 0, \"error_rows\": 0}, \"preview\": [{\"row_number\": 2, \"class\": \"valid\", \"canonical\": \"[REDACTED_PHONE]\"}, {\"row_number\": 3, \"class\": \"valid\", \"canonical\": \"[REDACTED_PHONE]\"}], \"preview_truncated\": false, \"committed_at\": null, \"error_artifact\": null, \"as_of\": \"2026-11-03 09:20:09.176358\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST imports.confirm returns HTTP 200 and transitions batch status",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-imports-get-status-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.imports.get_status?batch=c3q751k9sb",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:09 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "500",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"batch\": \"c3q751k9sb\", \"status\": \"CONFIRMED\", \"checksum\": \"1140ec904aa49bb063edd6dc267993bb11750c65a897ec75a8f44c3556a5d271\", \"idempotency_key\": \"http-imp-4b09debe4821\", \"totals\": {\"total_rows\": 2, \"valid_rows\": 2, \"new_rows\": 2, \"duplicate_rows\": 0, \"error_rows\": 0}, \"preview\": [{\"row_number\": 2, \"class\": \"valid\", \"canonical\": \"[REDACTED_PHONE]\"}, {\"row_number\": 3, \"class\": \"valid\", \"canonical\": \"[REDACTED_PHONE]\"}], \"preview_truncated\": false, \"committed_at\": null, \"error_artifact\": null, \"as_of\": \"2026-11-03 09:20:09.200763\"}}",
+        "exc_type": null,
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET imports.get_status returns HTTP 200 and batch metadata for CRM Admin",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p1-http-imports-get-status-denied-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:18089/api/method/crm_cskh.api.imports.get_status?batch=c3q751k9sb",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p1http.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 02:20:09 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1311",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Only the CRM Admin may read an import batch.\", \"exc_type\": \"Forbidden\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"/src/apps/crm_cskh/crm_cskh/api/imports.py\\\\\\\", line 64, in get_status\\\\n    raise Forbidden(\\\\\\\"Only the CRM Admin may read an import batch.\\\\\\\")\\\\ncrm_cskh.services.errors.Forbidden: Only the CRM Admin may read an import batch.\\\\n\\\"]\"}",
+        "exc_type": "Forbidden",
+        "error_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET imports.get_status returns HTTP 403 for CSKH BOD Viewer",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    }
+  ],
+  "failed_cases": [],
+  "probe_result": "PASS"
+}

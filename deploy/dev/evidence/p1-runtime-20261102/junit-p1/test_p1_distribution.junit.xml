@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p1_distribution.TestAllocatorFairness-2[REDACTED_PHONE]30" tests="5" file="crm_cskh/tests/test_p1_distribution.py" time="0.018" timestamp="2026-11-03T09:20:30" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestAllocatorFairness" name="test_1000_leads_are_split_500_300_200" time="0.009" timestamp="2026-11-03T09:20:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="32"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestAllocatorFairness" name="test_100_batches_of_one_keep_the_cumulative_ratio" time="0.004" timestamp="2026-11-03T09:20:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="41"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestAllocatorFairness" name="test_a_changed_user_set_starts_a_new_epoch" time="0.002" timestamp="2026-11-03T09:20:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="77"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestAllocatorFairness" name="test_capacity_exhaustion_stops_the_allocation" time="0.002" timestamp="2026-11-03T09:20:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="59"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestAllocatorFairness" name="test_the_allocation_is_deterministic" time="0.002" timestamp="2026-11-03T09:20:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="53"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_distribution.TestDistributionFlow-2[REDACTED_PHONE]30" tests="11" file="crm_cskh/tests/test_p1_distribution.py" time="7.062" timestamp="2026-11-03T09:20:38" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_a_changed_fairness_state_makes_the_preview_stale" time="1.750" timestamp="2026-11-03T09:20:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="173"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_a_changed_rule_version_makes_the_preview_stale" time="0.192" timestamp="2026-11-03T09:20:33" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="165"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_a_lead_cannot_be_claimed_twice_in_the_same_campaign" time="0.087" timestamp="2026-11-03T09:20:33" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="218">
+			<system-out><![CDATA[Message: Lead must be unique
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_a_lead_claimed_in_another_campaign_is_excluded" time="0.405" timestamp="2026-11-03T09:20:33" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="201"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_an_exhausted_campaign_is_rejected" time="0.588" timestamp="2026-11-03T09:20:34" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="248"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_execute_assigns_every_lead_and_creates_the_claims" time="1.323" timestamp="2026-11-03T09:20:35" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="132"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_execute_is_idempotent" time="0.603" timestamp="2026-11-03T09:20:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="156"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_preview_is_a_dry_run" time="0.402" timestamp="2026-11-03T09:20:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="112"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_preview_is_idempotent_for_the_same_selection" time="0.250" timestamp="2026-11-03T09:20:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="126"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_reconcile_reports_the_database_truth" time="0.665" timestamp="2026-11-03T09:20:37" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="239"/>
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestDistributionFlow" name="test_the_capacity_limit_cuts_the_distribution_off" time="0.796" timestamp="2026-11-03T09:20:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="188"/>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p1_distribution.TestPersistedFairness-2[REDACTED_PHONE]30" tests="1" file="crm_cskh/tests/test_p1_distribution.py" time="18.706" timestamp="2026-11-03T09:20:57" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_distribution.TestPersistedFairness" name="test_100_single_lead_batches_keep_the_cumulative_ratio" time="18.706" timestamp="2026-11-03T09:20:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_distribution.py" line="270"/>
+	</testsuite>
+</testsuites>
