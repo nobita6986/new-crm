@@ -1,0 +1,177 @@
+{
+  "generated_at": "2026-11-03T20:57:49+07:00",
+  "pr5_head_sha": "65dd639c0a63011dee54bc2b973595dd69d7560a",
+  "pr5_code_sha": "7bd7185a35680d4f716cfe0b0dc1d6b7bfb46cb9",
+  "backend_target_sha": "6c457b327e59eead47cc9d0982c4ee1df4fe9e64",
+  "isolated_site": "t1c.localhost",
+  "http_port": 18195,
+  "mounted_file_lf_sha256": {
+    "api/_params.py": "9572e4aa93c331d79f0f692029174f2658e1bd0c65e2455722e36c5cd8363f4e",
+    "api/_ui_params.py": "9064790573b5f6f8025ec1098c0337149840845350645c67885a1106d7cdb49c",
+    "api/campaigns.py": "4494b455afeb396b4fedc3d811a893ea69be07bb605876e58c7e8a6e9c5557d7",
+    "api/customers.py": "12622ed7acf794a30371a03a06afbed1dd4151cb66f6f6e56417a56d5cb635a2",
+    "api/guarded_crm.py": "f5715a7e4e17a9feb22faf39224c8947645a1d46166750ed94892179d02b27f3",
+    "api/import_history.py": "57fdf959ee3ec5ce82819ecce3af3a729e8d825c157163a20be5aea6d783e250",
+    "api/ownership.py": "5dd4663f973702a7d39ab1b26f461fc8d29264a16a31916900dc089ec26a74d9",
+    "api/ownership_ui.py": "62dadd86bd1419c50a93fabb8d019e4848424d76818af9f6f00f6d3da34f92e9",
+    "api/pool_ui.py": "51bc561dbf0054bd778e15ca8012436552571202854aa7ee610985632836c8d0",
+    "api/run_history.py": "6c4506de0a511c8dd28916a48482e58ca180e733c52a39b756ee6ca52bd42eb6",
+    "crm_cskh/doctype/cskh_campaign/cskh_campaign.json": "5e8bab7334e049c12691c89375897d8a253f94d19d234b46f2dc7e4ed8a85bbe",
+    "crm_cskh/doctype/cskh_distribution_run/cskh_distribution_run.json": "ddd5674d84dea4bc0b66f6bf620da02a9f2eddb271f7f693c87cbad40563391b",
+    "crm_cskh/doctype/cskh_import_batch_lead/cskh_import_batch_lead.json": "742a6cf47bc119abcb493ba561cf93b970dff04880f223efa3b152993cb3a773",
+    "hooks.py": "25ab7973697d08e06a127ebc8bb4f5b2936f49a9e5063b00d497e790bdf4a1e7",
+    "p1_permissions.py": "8ce11796ee242729e525bc54f7d216e933ef1bfffe9e626bb250c78db21c31a5",
+    "services/distribution.py": "57f22f21e9bd2ee17081aadea6de7a19096fb6510be8b942534f971e4932c94b",
+    "services/eligibility.py": "aaf0d548dbf0cece0dc2de4c356c14a4da3928ea6a4aa6d9276cbdaf69939ef0",
+    "services/ownership.py": "d68a17a03d3330fb10bc60b19caf9b4c8f18a3be4c2cfda8e8fae3ea65a6ebe2",
+    "services/reporting.py": "2c8e14f7e9fc175e35015594ca3d3a9b7ff242d912686f851572adee38a8b6e9",
+    "tests/test_p1_regressions.py": "170b8794ad34c6796540163ad5df6c9281db2f66e280ede8f2375ef15b1ecb79",
+    "tests/test_ui_p1_endpoints.py": "1919e38ebf85c588b0d2d338d5e3e2be21a9a01600b6d2260fbef9fde00ca2dd",
+    "translations/vi.csv": "3258b23e5df3e87b6b1d0fe80fee644e015772b954b6146ab9bacff2ab088b98"
+  },
+  "schema_docperm_audit": {
+    "custom_docperm_rows": 0,
+    "permlevel_1_fields": [
+      {
+        "parent": "CSKH Campaign",
+        "fieldname": "selection_json",
+        "permlevel": 1
+      },
+      {
+        "parent": "CSKH Distribution Run",
+        "fieldname": "actual_json",
+        "permlevel": 1
+      },
+      {
+        "parent": "CSKH Distribution Run",
+        "fieldname": "error",
+        "permlevel": 1
+      },
+      {
+        "parent": "CSKH Distribution Run",
+        "fieldname": "lease_expires_at",
+        "permlevel": 1
+      },
+      {
+        "parent": "CSKH Distribution Run",
+        "fieldname": "preview_json",
+        "permlevel": 1
+      },
+      {
+        "parent": "CSKH Distribution Run",
+        "fieldname": "progress",
+        "permlevel": 1
+      },
+      {
+        "parent": "CSKH Distribution Run",
+        "fieldname": "state_json",
+        "permlevel": 1
+      }
+    ],
+    "docperm_summary_count": 18
+  },
+  "sections": {
+    "item1_l23_all_pool_apis": {
+      "verdict": "PASS",
+      "stage1_a2_queued_in_b": {
+        "pool_ui.list": {
+          "leader_a_pre_pagination_total": 4,
+          "leader_a_unique_customers": 4,
+          "leader_a_work_items": 4,
+          "leader_b_visible_count": 7,
+          "a2_visible_to_leader_b_while_queued": true,
+          "a2_hidden_from_leader_a": true
+        },
+        "customers.customer_pool": {
+          "leader_a_pre_pagination_total": 4,
+          "leader_a_unique_customers": 4,
+          "leader_a_work_items": 4,
+          "leader_b_visible_count": 7,
+          "a2_visible_to_leader_b_while_queued": true,
+          "a2_hidden_from_leader_a": true
+        },
+        "customers.pool_list": {
+          "leader_a_pre_pagination_total": 2,
+          "leader_a_unique_customers": 2,
+          "leader_a_work_items": 2,
+          "leader_b_visible_count": 3,
+          "a2_visible_to_leader_b_while_queued": true,
+          "a2_hidden_from_leader_a": true
+        }
+      },
+      "stage2_all_transitions_assigned_in_b": {
+        "pool_ui.list": {
+          "leader_a_unfiltered_total": 11,
+          "leader_a_batch_total": 1,
+          "leader_b_batch_total": 4,
+          "bod_scope": "all",
+          "bod_zero_pii": true,
+          "staff_a_status": 403
+        },
+        "customers.customer_pool": {
+          "leader_a_unfiltered_total": 11,
+          "leader_a_batch_total": 1,
+          "leader_b_batch_total": 4,
+          "bod_scope": "all",
+          "bod_zero_pii": true,
+          "staff_a_status": 403
+        },
+        "customers.pool_list": {
+          "leader_a_unfiltered_total": 7,
+          "leader_a_batch_total": 1,
+          "leader_b_batch_total": 0,
+          "bod_scope": "all",
+          "bod_zero_pii": true,
+          "staff_a_status": 403
+        }
+      },
+      "filters_and_search": {
+        "pool_ui.list": "PASS (search +84/0/name, source, batch, campaign, state, BOD search=403)",
+        "customers.customer_pool": "PASS (search +84/0/name, source, batch, campaign, state, BOD search=403)"
+      }
+    },
+    "item2_l29_and_scoped_apis": {
+      "verdict": "PASS",
+      "rest_single_and_explicit_fields": "PASS",
+      "rest_write_create_delete_denied_all_business_roles": "PASS",
+      "frappe_client_get_list_value_count_validate_link": "PASS",
+      "desk_getdoc_reportview_search_link_search_widget": "PASS",
+      "permlevel_1_filter_oracle_blocked_403": "PASS",
+      "scoped_apis_and_async_rq_g1_05_g1_11": {
+        "rq_run_status": "completed",
+        "admin_bod_assigned": {
+          "cskh-p1-staff-a@example.test": 3,
+          "cskh-p1-staff-c@example.test": 3
+        },
+        "leader_a_scoped_assigned": {
+          "cskh-p1-staff-a@example.test": 3
+        }
+      }
+    },
+    "item3_direct_mutation_and_l26": {
+      "verdict": "PASS",
+      "direct_assign_reassign_matrix": {
+        "wrong_team_json_and_form": 400,
+        "disabled_user": 400,
+        "non_sales_user_outside_and_bod": 400,
+        "disabled_latest_rule_version": 400,
+        "zero_weight_rule": 400,
+        "mismatched_rule_team": 400,
+        "capacity_limit_exceeded_assign_and_reassign": 409,
+        "capacity_zero_unlimited_positive_control": 200,
+        "closed_campaign_assign_reassign_preview_execute": 409,
+        "cross_campaign_active_claim": 409,
+        "non_admin_callers_denied": 403
+      },
+      "l26_all_8_list_history_and_mutation_endpoints": "PASS (16/16 invalid inputs -> 400 INVALID_REQUEST, 0 HTTP 500)",
+      "ownership_ui_assignees_v1_campaign": [
+        "cskh-p1-leader-a@example.test"
+      ],
+      "ownership_ui_assignees_multiversion_campaign": [
+        "cskh-p1-staff-a@example.test",
+        "cskh-p1-staff-b@example.test",
+        "cskh-p1-leader-a@example.test"
+      ]
+    }
+  }
+}
