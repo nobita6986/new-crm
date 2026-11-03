@@ -512,48 +512,99 @@ Lệnh chạy tuần tự: [`deploy/p1/run_suites.py`](../../deploy/p1/run_suite
 | Gắn job Playwright UI vào `.github/workflows/` | ⏳ Chưa gắn workflow CI | Có sẵn script tự động `verify_p1_browser_e2e.mjs` để T1C chạy trực tiếp; chưa sửa `.github/workflows/p1.yml` của T1B |
 
 > **Kết luận bàn giao của T1A:** Toàn bộ 5 màn hình P1 §9, bản dịch tiếng Việt 100%, bộ kiểm thử endpoint UI, E2E HTTP đa vai trò và E2E trình duyệt Chromium thật đã hoàn tất trên nhánh `codex/p1-ui` (PR #5) trên nền backend `3025495f58bc0391c3f8d092af500b0566a5f038` + `64b7486f29ad712106d167dfaea50e3b060a6845`, sẵn sàng để **T1C** kiểm định độc lập và để **Owner** trực tiếp duyệt trên `http://p1.localhost:8120`. Quyết định merge và ký GO P2 thuộc T0/Owner.
-### 7.9. B? sung b?n giao ??t 2 ? T?ch h?p ph?n ph?i n?n RQ, b?n s?a `L-16..L-22` & C?ng CI `test_ui_p1_endpoints`
+### 7.9. Bổ sung bàn giao Đợt 2 — Tích hợp phân phối nền RQ, bản sửa `L-16..L-22` & Cổng CI `test_ui_p1_endpoints`
 
-#### Nguy?n v?n y?u c?u b? sung (Verbatim Prompt ??t 2)
+#### Nguyên văn yêu cầu bổ sung (Verbatim Prompt Đợt 2)
 
 ```text
-T1A, ?? nh?n b?n giao d0842cc tr?n PR #5.
-Gi? b? evidence hi?n t?i l?m baseline, kh?ng ch?p l?i ch? ?? ??i SHA.
+T1A, đã nhận bàn giao d0842cc trên PR #5.
+Giữ bộ evidence hiện tại làm baseline, không chụp lại chỉ để đổi SHA.
 
-Vi?c c?n l?i:
-1. Ph?i h?p T1B t?ch h?p ph?n ph?i n?n:
-   execute tr? run_id/tr?ng th?i; UI polling ti?n ??,
-   ph?c h?i theo d?i sau reload v? x? l? failed/completed_with_errors.
-   Kh?ng coi enqueue th?nh c?ng l? ph?n ph?i ho?n t?t.
-2. T?ch h?p c?c b?n s?a backend c?n l?i v?o PR #5 c? ki?m so?t.
-3. Ph?i h?p ??a 6 test_ui_p1_endpoints v?o CI;
-   th?ng nh?t ng??i s?a workflow v?i T1B.
-4. Ch?y l?i E2E ph?n b? ?nh h??ng, b?n giao SHA t?ch h?p cu?i.
-5. Gi? ?ng d?ng ?ang ch?y cho Owner.
+Việc còn lại:
+1. Phối hợp T1B tích hợp phân phối nền:
+   execute trả run_id/trạng thái; UI polling tiến độ,
+   phục hồi theo dõi sau reload và xử lý failed/completed_with_errors.
+   Không coi enqueue thành công là phân phối hoàn tất.
+2. Tích hợp các bản sửa backend còn lại vào PR #5 có kiểm soát.
+3. Phối hợp đưa 6 test_ui_p1_endpoints vào CI;
+   thống nhất người sửa workflow với T1B.
+4. Chạy lại E2E phần bị ảnh hưởng, bàn giao SHA tích hợp cuối.
+5. Giữ ứng dụng đang chạy cho Owner.
 
-Evidence ghi revision 0d3f2bc l? h?p l?: T0 ?? ??i chi?u,
-d0842cc ch? c?p nh?t evidence/docs, kh?ng ??i code app so v?i m?c ??.
+Evidence ghi revision 0d3f2bc là hợp lý: T0 đã đối chiếu,
+d0842cc chỉ cập nhật evidence/docs, không đổi code app so với mốc đó.
 
-Kh?ng merge, kh?ng t? k? GO P2, kh?ng g?i agent kh?c.
+Không merge, không tự ký GO P2, không gọi agent khác.
 ```
 
-#### K?t qu? th?c hi?n & ??i so?t tr?n revision t?ch h?p `63510483a0aa1ed4238b630ba384c5a362659450`
+#### Kết quả thực hiện & đối soát trên revision tích hợp `63510483a0aa1ed4238b630ba384c5a362659450`
 
-1. **B?o to?n b? b?ng ch?ng baseline (`0d3f2bc` / `d0842cc`):**
-   * Gi? nguy?n `0` thay ??i tr?n to?n b? `deploy/p1/evidence/screenshots/*.png` (11 ?nh + 5 alias chu?n), `deploy/p1/evidence/browser-manifest.json` v? `deploy/p1/evidence/http-e2e-report.json`.
-   * C?c b?o c?o E2E ch?y l?i cho ph?n thay ??i ???c xu?t ri?ng ra [`deploy/p1/evidence/async-distribution-delta-e2e.json`](../../deploy/p1/evidence/async-distribution-delta-e2e.json) v? [`deploy/p1/evidence/http-e2e-delta-report.json`](../../deploy/p1/evidence/http-e2e-delta-report.json).
-2. **UI Ph?n ph?i n?n RQ (`/cskh/campaigns`, `/cskh/dashboard`, `run_history.py`):**
-   * Khi `POST crm_cskh.api.distribution.execute` tr? s?m `run_id` k?m `status = "queued"` (ho?c `"running"`), `campaigns.js` hi?n th? khung th?ng tin `.cskh-alert.is-info` (`?? x?p h?ng ??i ph?n ph?i. ?ang ch? ti?n tr?nh n?n...` / `?ang th?c thi ph?n ph?i n?n...`) k?m `M? ??t ch?y`, `Ti?n ??` (`progress / total (pct%)`), `?? giao trong ??t n?y`, `Th?t b?i` v? n?t `L?m m?i` ? **tuy?t ??i kh?ng b?o `?? ph?n ph?i xong.` khi m?i enqueue**.
-   * Single-flight polling `crm_cskh.api.distribution.get_run` m?i `1000ms` cho t?i khi ??t ch?y sang tr?ng th?i k?t th?c (`completed`, `completed_with_errors`, `failed`).
-   * **Ph?c h?i theo d?i sau reload (`recoverActiveRun`):** l?u ??t ch?y ?ang ho?t ??ng v?o `sessionStorage` (`cskh_active_dist_run`) v? query `?run_id=<id>`, ??ng th?i t? g?n l?i t? `run_history.runs` n?u trong ph?m vi c? ??t ch?y `queued`/`running`; khi F5/reload gi?a l?c job ?ang ch? ho?c ?ang ch?y, UI t? n?i l?i polling t?i khi ho?n t?t.
-   * **X? l? tr?ng th?i k?t th?c c? l?i / th?t b?i:** `completed_with_errors` hi?n th? c?nh b?o v?ng `.is-warning` k?m b?ng l? do b? qua ti?ng Vi?t v? n?t `Ch?y l?i c?ng vi?c th?t b?i`; `failed` hi?n th? c?nh b?o ?? `.is-error` k?m th?ng ?i?p l?i ti?ng Vi?t chu?n h?a + `[M?_L?I]` (v? d? `[RULE_CHANGED]`) v? n?t `Ch?y l?i c?ng vi?c th?t b?i`.
-   * B? sung t?y ch?n l?c `Trong h?ng ??i` (`queued`) ? l?ch s? ??t ch?y v? c?p nh?t nh?n/badge tr?n `/cskh/dashboard`; b? sung ??y ?? chu?i m?i v?o `p1_strings.py`, `p1_translations.py` v? `translations/vi.csv` (**587 d?ng**, `383` chu?i khai b?o, `0` thi?u, `0` ti?ng Anh s?t).
-3. **T?ch h?p c? ki?m so?t backend `c49f7f89d18cfbc3c21a3970d66b07c5d6c11279` (`6ce0341` + `c49f7f8` t? PR #4):**
-   * Merge tr?c ti?p t? Git (`git merge --no-ff c49f7f89d18cfbc3c21a3970d66b07c5d6c11279`) th?nh SHA m? ngu?n t?ch h?p **`63510483a0aa1ed4238b630ba384c5a362659450`**; `0` d?ng thay ??i tr?n `permissions.py` v? `p1_permissions.py`; gi? nguy?n 100% ch??ng 0?5 c?a T1B ? tr?n.
-   * H?p nh?t c? ch? ??ch c?c t?p d?ng chung: gi? `hooks.py`, `p1_errors.py`, `services/errors.py`, `services/import_service.py` c?a T1B (`L-16`, `L-18`, `L-19`, `L-20`), h?p nh?t `services/reporting.py` ?? gi? ??ng th?i `L-17` + `L-22` c?a T1B v? ph?n m? r?ng kh?ng l? PII BOD tr?n `pool_list` c?a UI.
-4. **??a ?? `6` method `test_ui_p1_endpoints` v?o c?ng CI (`.github/workflows/p1.yml`):**
-   * Ph?n chia r? ph?n s?a `.github/workflows/p1.yml` kh?ng ch?ng ch?o v?i T1B: T1B c?p nh?t b??c `p1_http_transport` (kh?i ch?y RQ workers `short` + `long`), T1A b? sung [`deploy/p1/ui_test_inventory.py`](../../deploy/p1/ui_test_inventory.py) + [`deploy/p1/ui_test_inventory.json`](../../deploy/p1/ui_test_inventory.json) (`expected_total = 6`), ki?m tra `check_translations_audit.py` ? b??c `inventory`, ch?y `crm_cskh.tests.test_ui_p1_endpoints` xu?t JUnit XML ri?ng v?o `/tmp/p1-evidence/ui/` v? kh?a c?ng `ci_junit_gate.py` song song v?i `p1_test_inventory.json` (`199` method).
-5. **??i so?t to?n b? suite & E2E ph?n b? ?nh h??ng tr?n SHA `63510483a0aa1ed4238b630ba384c5a362659450`:**
-   * `run_suites.py`: **`15/15` module PASS (`312/312` method)** ? P1 backend `199/199` + P1 UI `6/6` + P0 core `99/99` + P0 transport `8/8`.
-   * `verify_p1_async_dist_e2e.mjs` ? [`async-distribution-delta-e2e.json`](../../deploy/p1/evidence/async-distribution-delta-e2e.json): **`4/4` nh?m PASS** tr?n Chromium th?t + HTTP th?t (`ASYNC-01` enqueue tr? `queued` kh?ng b?o xong s?m + F5 reload ph?c h?i theo d?i + polling t?i `4 / 4 (100%)`; `ASYNC-02` `completed_with_errors`; `ASYNC-03` `failed` `[RULE_CHANGED]` ti?ng Vi?t; `BACKEND-DELTA` ki?m ch?ng `L-20` CSV >200 d?ng t?i ?? 13 d?ng l?i, `L-21` `revoke(return_to_pool=false)` form-urlencoded ? `revoked`, `L-22` c? l?p th? dashboard `Leader A` vs `Leader B`).
-   * `verify_p1_http_e2e.py` ? [`http-e2e-delta-report.json`](../../deploy/p1/evidence/http-e2e-delta-report.json): **`6/6` nh?m HTTP E2E PASS** (?? c?p nh?t `poll_run` cho `distribution.execute` b?t ??ng b?) v? ?? l?i d? li?u gi? s?ch tr?n `http://p1.localhost:8120` ?? Owner ki?m tra tr?c ti?p.
+1. **Bảo toàn bộ bằng chứng baseline (`0d3f2bcbbf9715a4c0c783903ce750de8646583d` / `d0842cc`):**
+   * Giữ nguyên `0` thay đổi trên toàn bộ `deploy/p1/evidence/screenshots/*.png` (11 ảnh + 5 alias chuẩn), `deploy/p1/evidence/browser-manifest.json` và `deploy/p1/evidence/http-e2e-report.json`.
+   * Các báo cáo E2E chạy lại cho phần thay đổi được xuất riêng ra [`deploy/p1/evidence/async-distribution-delta-e2e.json`](../../deploy/p1/evidence/async-distribution-delta-e2e.json) và [`deploy/p1/evidence/http-e2e-delta-report.json`](../../deploy/p1/evidence/http-e2e-delta-report.json).
+2. **UI Phân phối nền RQ (`/cskh/campaigns`, `/cskh/dashboard`, `run_history.py`):**
+   * Khi `POST crm_cskh.api.distribution.execute` trả sớm `run_id` kèm `status = "queued"` (hoặc `"running"`), `campaigns.js` hiển thị khung thông tin `.cskh-alert.is-info` (`Đã xếp hàng đợi phân phối. Đang chờ tiến trình nền...` / `Đang thực thi phân phối nền...`) kèm `Mã đợt chạy`, `Tiến độ` (`progress / total (pct%)`), `Đã giao trong đợt này`, `Thất bại` và nút `Làm mới` — **tuyệt đối không báo `Đã phân phối xong.` khi mới enqueue**.
+   * Single-flight polling `crm_cskh.api.distribution.get_run` (với `Admin`/`BOD`) và `crm_cskh.api.run_history.runs` (với `Sales Manager`) mỗi `1000ms` cho tới khi đợt chạy sang trạng thái kết thúc (`completed`, `completed_with_errors`, `failed`).
+   * **Phục hồi theo dõi sau reload (`recoverActiveRun`):** lưu đợt chạy đang hoạt động vào `sessionStorage` (`cskh_active_dist_run`) và query `?run_id=<id>`, đồng thời tự gắn lại từ `run_history.runs` nếu trong phạm vi có đợt chạy `queued`/`running`; khi F5/reload giữa lúc job đang chờ hoặc đang chạy, UI tự nối lại polling tới khi hoàn tất.
+   * **Xử lý trạng thái kết thúc có lỗi / thất bại:** `completed_with_errors` hiển thị cảnh báo vàng `.is-warning` kèm bảng lý do bỏ qua tiếng Việt và nút `Chạy lại công việc thất bại`; `failed` hiển thị cảnh báo đỏ `.is-error` kèm thông điệp lỗi tiếng Việt chuẩn hóa + `[MÃ_LỖI]` (ví dụ `[RULE_CHANGED]`) và nút `Chạy lại công việc thất bại`.
+3. **Tích hợp có kiểm soát backend `c49f7f89d18cfbc3c21a3970d66b07c5d6c11279` (`6ce0341` + `c49f7f8` từ PR #4):**
+   * Merge trực tiếp từ Git (`git merge --no-ff c49f7f89d18cfbc3c21a3970d66b07c5d6c11279`) thành SHA mã nguồn tích hợp **`63510483a0aa1ed4238b630ba384c5a362659450`**; `0` dòng thay đổi trên `permissions.py` và `p1_permissions.py`; giữ nguyên 100% chương 0–6 của T1B ở trên.
+4. **Đưa `test_ui_p1_endpoints` vào cổng CI (`.github/workflows/p1.yml`):**
+   * Bổ sung [`deploy/p1/ui_test_inventory.py`](../../deploy/p1/ui_test_inventory.py) + [`deploy/p1/ui_test_inventory.json`](../../deploy/p1/ui_test_inventory.json), kiểm tra `check_translations_audit.py` ở bước `inventory`, chạy `crm_cskh.tests.test_ui_p1_endpoints` xuất JUnit XML riêng vào `/tmp/p1-evidence/ui/` và khóa cổng `ci_junit_gate.py` song song với `p1_test_inventory.json`.
+5. **Đối soát toàn bộ suite & E2E phần bị ảnh hưởng trên SHA `63510483a0aa1ed4238b630ba384c5a362659450`:**
+   * `run_suites.py`: **`15/15` module PASS (`312/312` method)**.
+   * `verify_p1_async_dist_e2e.mjs` → [`async-distribution-delta-e2e.json`](../../deploy/p1/evidence/async-distribution-delta-e2e.json): **`4/4` nhóm PASS**.
+   * `verify_p1_http_e2e.py` → [`http-e2e-delta-report.json`](../../deploy/p1/evidence/http-e2e-delta-report.json): **`6/6` nhóm HTTP E2E PASS**.
+
+### 7.10. Bổ sung bàn giao Đợt 3 — Đóng `L-23`, `L-24`, `L-25` (filter Import Batch), `L-26`, Đính chính Provenance & Regression `11/11`
+
+#### Nguyên văn yêu cầu bổ sung (Verbatim Prompt Đợt 3)
+
+```text
+T1A, tiếp tục PR #5 từ a75c093. Giữ các bản sửa async/polling/CI đã đạt.
+
+Ưu tiên:
+1. Đóng L-23: pool_ui không được dùng lịch sử revoked/closed của Đội A
+   để lộ Lead đang active ở Đội B. Kiểm tra cả phone, owner, campaign,
+   items, total, search và filter theo quyền hiện tại.
+2. Đóng L-24: run_history của campaign chung phải giới hạn dữ liệu
+   theo actor, gồm assigned, skipped, preview, counters và polling.
+3. Đóng L-26: pagination sai trả 400 có mã ổn định; assignees(campaign)
+   áp eligibility/team đúng contract.
+4. Phối hợp T1B nối filter Import Batch với quan hệ dữ liệu thực tế.
+5. Thêm regression có dữ liệu hai team và positive control;
+   cập nhật UI inventory/CI theo số method thực tế.
+
+Provenance cần đính chính:
+async-distribution-delta-e2e.json và generator ghi sai full SHA baseline:
+0d3f2bc9da3e3e497a999baeb9a4dd19129224fb.
+Commit thực tế là:
+0d3f2bcbbf9715a4c0c783903ce750de8646583d.
+Sửa generator và ghi đính chính, giữ nguyên kết quả đo đã lưu.
+
+Bàn giao commit và evidence cho T1C.
+Không merge, không gọi agent khác.
+```
+
+#### Kết quả thực hiện & đối soát trên revision mã ứng dụng `3f07b9b3f2e68f9bf3eea005c634c7a11393ec8b` (tích hợp backend `c997df76b9a29a9f8d8be4a4ffd0875035762672`)
+
+1. **Đóng `L-23` (`apps/crm_cskh/crm_cskh/api/pool_ui.py`):**
+   * Áp 5 mệnh đề ủy quyền cấp SQL theo quyền **hiện tại** (`_team_lead_authorization_clauses`) cho `scope == "team"`: loại bỏ tuyệt đối mọi `CRM Lead` đang có `Work Item` trạng thái `assigned` ngoài `team_users`, đang `queued` trong chiến dịch riêng ngoài `team_nodes`, đang giữ `CSKH Active Claim` ngoài `team_nodes`/`team_users`, hoặc có `CRM Lead.lead_owner` ngoài `team_users`; đồng thời với `Work Item` trạng thái `revoked`/`closed` thuộc chiến dịch chung (`team_scope IS NULL`), chỉ nhận khi `CSKH Assignment History` xác nhận từng giao cho thành viên thuộc `team_users`.
+   * Suy diễn trạng thái chính (`wi_cur`), đếm `total` / `unique_customers` / `work_items`, tìm kiếm `search` (`0...` & `+84...`) và phân trang `LIMIT %s OFFSET %s` trực tiếp trên MariaDB — **0 rò rỉ** `phone`, `display_name`, `owner`, `campaign`, `campaign_title`, `work_item`, `items`, `total`, `unique_customers`, `work_items` hay oracle `search`/filter từ lịch sử `revoked`/`closed` cũ của Đội A sang Lead đang hoạt động ở Đội B.
+2. **Đóng `L-24` (`apps/crm_cskh/crm_cskh/api/run_history.py`, `apps/crm_cskh/crm_cskh/public/cskh/campaigns.js`):**
+   * Trên cả chiến dịch chung (`team_scope IS NULL`) lẫn chiến dịch đội, khi `scope == "team"`, `run_history.runs` giới hạn chặt theo `team_users` / `team_nodes`: `assigned` (chỉ nhân sự thuộc đội, có đối chiếu fallback từ `tabCSKH Work Item`), `skipped` (lọc qua `filter_team_authorized_leads`), `preview` (`targets`, `simulated`, `excluded_assignees` theo đội, `eligible_count` theo tổng mục tiêu đội, `excluded_count = 0` trên chiến dịch chung và không bao giờ trả `preview_json["leads"]`), cùng toàn bộ bộ đếm `progress`, `total`, `created`, `errors` ở mọi trạng thái `planned` / `queued` / `running` / `completed` / `completed_with_errors`.
+   * Trên `/cskh/campaigns`, `campaigns.js` dùng `fetchRunForActor(runId)` để `Admin`/`BOD` poll `distribution.get_run` còn `Sales Manager` poll `run_history.runs(run_id=...)` kèm tự động gắn lại và phục hồi sau F5/reload cho đúng phạm vi đội.
+3. **Đóng `L-26` (`apps/crm_cskh/crm_cskh/api/_ui_params.py`, `ownership_ui.py`, `pool_ui.py`, `import_history.py`, `run_history.py`, `campaigns.js`, `my-customers.js`):**
+   * Bổ sung `parse_pagination(page, page_size)` từ chối boolean, chuỗi không phải số nguyên, `page < 1`, `page > 1_000_000`, `page_size < 1`, `page_size > 100` bằng `InvalidRequest` → HTTP `400` với `code = "INVALID_REQUEST"`, `p1_code = "INVALID_REQUEST"` ổn định trên cả 4 endpoint phân trang UI.
+   * `ownership_ui.assignees(campaign=None)` kiểm tra chiến dịch tồn tại (`404 NOT_FOUND` nếu sai mã), giới hạn trong cây `CRM Sales Hierarchy` của `campaign.team_scope`, chỉ giữ tài khoản `User.enabled = 1` có role `Sales User`, và loại trừ các nhân sự bị quy tắc của chiến dịch vô hiệu hóa (`enabled = 0`), trọng số `<= 0`, lệch `team`, hoặc đã chạm trần `capacity_limit > 0`. Đã nối truyền `campaign` trên cả `/cskh/campaigns` và hộp thoại `Chuyển người phụ trách` trên `/cskh/my-customers`.
+4. **Phối hợp T1B đóng `L-25` & nối bộ lọc `Import Batch` (`c997df76b9a29a9f8d8be4a4ffd0875035762672` + `pool_ui.py`):**
+   * Hợp nhất có kiểm soát commit `c997df76b9a29a9f8d8be4a4ffd0875035762672` từ `origin/codex/p1-foundation` (bổ sung DocType `CSKH Import Batch Lead`, ánh xạ `phone`/`name`/`source` có sanitize công thức/HTML, không ghi đè `CRM Lead` canonical đã tồn tại).
+   * Nối trực tiếp `_batch_lead_predicate` và `_batch_wi_predicate` trong `pool_ui.py` tới `reporting.lead_in_batch_clause` và `reporting.work_item_in_batch_clause`, giúp bộ lọc `Lô` (`#pool-batch` → `batch=`) khớp chính xác cả khách mới import chưa có `Work Item` (`state = "eligible"`), khách canonical được reuse qua nhiều lô (`outcome = "reused"`), và khách đã phân phối sang chiến dịch đội mà vẫn giữ nguyên lớp chắn cô lập `L-23`.
+5. **Regression hai đội + positive control & cập nhật Inventory/CI (`11` method UI + `203` method P1):**
+   * Mở rộng [`test_ui_p1_endpoints.py`](../../apps/crm_cskh/crm_cskh/tests/test_ui_p1_endpoints.py) từ `6` lên **`11` method** (`test_l23_...`, `test_l24_...`, `test_l25_...`, `test_l26_...`, `test_upload_import_file_...`) có đủ dữ liệu Đội A, Đội B, chiến dịch chung, và positive control cho `Leader A`, `Leader B`, `CRM Admin`, `BOD`.
+   * Cập nhật [`deploy/p1/ui_test_inventory.json`](../../deploy/p1/ui_test_inventory.json) (`expected_total = 11`), `.github/workflows/p1.yml` (`11 methods` + kiểm tra index `tabCSKH Import Batch Lead`) và `translations/vi.csv` (**588 dòng**, `declared = 384`, `0` thiếu / `0` tiếng Anh sót).
+   * `run_suites.py`: **`15/15` module PASS (`321/321` method)** — P1 backend `203/203` + P1 UI `11/11` + P0 core `99/99` + P0 transport `8/8`.
+   * `verify_p1_round3_l23_l26_e2e.mjs` → [`deploy/p1/evidence/round3-l23-l26-delta-e2e.json`](../../deploy/p1/evidence/round3-l23-l26-delta-e2e.json): kiểm chứng E2E trình duyệt Chromium + HTTP + RQ thật cho toàn bộ `L-23..L-26`.
+6. **Đính chính Provenance (`0d3f2bcbbf9715a4c0c783903ce750de8646583d`):**
+   * Sửa [`deploy/p1/verify_p1_async_dist_e2e.mjs`](../../deploy/p1/verify_p1_async_dist_e2e.mjs) lấy SHA từ `git rev-parse --verify 0d3f2bcbbf9715a4c0c783903ce750de8646583d^{commit}` (thay vì chuỗi cứng sai).
+   * Ghi đính chính `baseline_evidence_sha_preserved = "0d3f2bcbbf9715a4c0c783903ce750de8646583d"` kèm khối `provenance_erratum` trong [`deploy/p1/evidence/async-distribution-delta-e2e.json`](../../deploy/p1/evidence/async-distribution-delta-e2e.json), bảo toàn nguyên vẹn `generated_at`, `integrated_git_sha` và toàn bộ kết quả đo `checks[]`.

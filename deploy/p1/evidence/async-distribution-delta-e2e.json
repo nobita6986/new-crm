@@ -2,7 +2,13 @@
   "generated_at": "2026-11-03T05:20:56.208Z",
   "site": "http://p1.localhost:8120",
   "integrated_git_sha": "63510483a0aa1ed4238b630ba384c5a362659450",
-  "baseline_evidence_sha_preserved": "0d3f2bc9da3e3e497a999baeb9a4dd19129224fb",
+  "baseline_evidence_sha_preserved": "0d3f2bcbbf9715a4c0c783903ce750de8646583d",
+  "provenance_erratum": {
+    "corrected_field": "baseline_evidence_sha_preserved",
+    "previous_erroneous_sha": "0d3f2bc9da3e3e497a999baeb9a4dd19129224fb",
+    "actual_baseline_commit_sha": "0d3f2bcbbf9715a4c0c783903ce750de8646583d",
+    "note": "Corrected full 40-char SHA for baseline commit 0d3f2bc; generated_at, integrated_git_sha and all measured checks[] results are preserved unchanged."
+  },
   "checks": [
     {
       "id": "ASYNC-01-enqueue-polling-and-reload-recovery",
