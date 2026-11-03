@@ -17,8 +17,6 @@ scope with a `user` or `team` parameter (ADR-P1-07).
 import frappe
 from frappe.utils import now_datetime
 
-from crm_cskh.services import identity as identity_service
-
 
 def _is_system(user=None):
 	user = user or frappe.session.user
@@ -32,20 +30,16 @@ def _has_role(user, *roles):
 def _scope(user=None):
 	"""Return the scope descriptor of an actor.
 
-	`scope` is one of `system` (whole installation), `team` (the sales
-	hierarchy subtree of the user) or `self` (only the own assignments).
-
-	**The CRM Admin business role sees the whole installation** (P1 §8.1:
-	"BOD Viewer: Toàn hệ thống, Admin: Toàn hệ thống"). Treating the Admin
-	like a staff member made the dashboard show zero customers to the only
-	role that is allowed to distribute them.
+	`scope` is one of `system` (whole installation), `all` (read-only whole
+	installation without PII), `team` (the sales hierarchy subtree of the user)
+	or `self` (only the own assignments).
 	"""
 	user = user or frappe.session.user
 	if _is_system(user):
-		return {"scope": "system", "users": None, "teams": None}
+		return {"scope": "system", "users": None, "teams": None, "pii": True}
 	if _has_role(user, "CSKH CRM Admin"):
-		# The Admin has the full business scope, but keeps the PII: the Admin
-		# is the role that manages the campaigns and the import.
+		# ADR-P1-07 / L-17: `CSKH CRM Admin` is the business administrator of
+		# CSKH campaigns, pool and distribution without granting `System Manager`.
 		return {"scope": "system", "users": None, "teams": None, "pii": True}
 	if _has_role(user, "CSKH BOD Viewer"):
 		# The BOD sees the aggregated numbers of the whole installation, but
@@ -184,6 +178,37 @@ def _scoped_campaign_name_clause(nodes, alias=""):
 		f"({prefix}team_scope is null or {prefix}team_scope in ({placeholders}))",
 		list(nodes),
 	)
+
+
+def _work_item_scope_clause(scope, alias="wi"):
+	"""Unified work-item scope predicate across assigned and unassigned rows (L-22).
+
+	`WorkItem.validate()` enforces `assigned_to IS NULL` for `queued`, `revoked`
+	and `closed` rows (`p1_models.py`). Filtering those statuses or `Active Claim`
+	by `assigned_to IN (team_users)` alone would always drop unassigned rows for
+	a `Sales Manager` (`scope == 'team'`).
+
+	* `system` / `all` (`Administrator`, `System Manager`, `CSKH CRM Admin`,
+	  `CSKH BOD Viewer`): unrestricted (`""`).
+	* `team` (`Sales Manager`): `(assigned_to IS NOT NULL AND assigned_to IN team)`
+	  OR `(assigned_to IS NULL AND campaign IN readable_campaigns)`.
+	* `self` (`Sales User`): `assigned_to = actor` (never sees unassigned pool /
+	  revoked / closed items).
+	"""
+	if scope["scope"] in ("system", "all"):
+		return "", []
+	prefix = f"{alias}." if alias else ""
+	if scope["scope"] == "team":
+		users = _scope_users(scope)
+		nodes = _scope_team_nodes(scope)
+		user_clause, user_params = _scoped_users_clause(users, f"{prefix}assigned_to")
+		camp_clause, camp_params = _scoped_campaign_clause(nodes, alias)
+		return (
+			f"(({prefix}assigned_to is not null and {user_clause}) "
+			f"or ({prefix}assigned_to is null and {camp_clause}))",
+			list(user_params) + list(camp_params),
+		)
+	return f"{prefix}assigned_to = %s", [scope["user"]]
 
 
 def _pool_scope_filter(scope, alias="wi"):
@@ -466,11 +491,15 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 	# their own. The BOD and the system see the whole installation.
 	# The clause is built **per alias**: a bare `assigned_to` would be
 	# ambiguous in a joined query (L-04).
-	assigned_to_clause, assigned_to_params = _scoped_users_clause(users, "assigned_to")
 	assigned_to_clause_wi, assigned_to_params_wi = _scoped_users_clause(users, "wi.assigned_to")
 
 	# The queue is unassigned, so it is scoped through the campaign scope.
-	queue_clause, queue_params = _scoped_campaign_clause(nodes)
+	queue_clause_wi, queue_params_wi = _scoped_campaign_clause(nodes, "wi")
+
+	# Unified work-item scope across assigned and unassigned rows (L-22):
+	# `assigned_to IN team` when assigned, `campaign IN readable_campaigns`
+	# when `assigned_to IS NULL` (`queued`, `revoked`, `closed`).
+	work_item_scope_clause, work_item_scope_params = _work_item_scope_clause(scope, "wi")
 
 	# The date filter is applied to **every** card, so a filter the contract
 	# accepts is never accepted-and-ignored (L-06). The window is the
@@ -540,8 +569,8 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 	assigned = scoped_count(
 		"CSKH Work Item",
 		{**campaign_filters, "status": "assigned"},
-		assigned_to_clause,
-		assigned_to_params,
+		assigned_to_clause_wi,
+		assigned_to_params_wi,
 		alias="wi",
 		extra_date=date_clause,
 		extra_date_params=date_params,
@@ -549,8 +578,8 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 	queued = scoped_count(
 		"CSKH Work Item",
 		{**campaign_filters, "status": "queued"},
-		queue_clause,
-		queue_params,
+		queue_clause_wi,
+		queue_params_wi,
 		alias="wi",
 		extra_date=date_clause,
 		extra_date_params=date_params,
@@ -558,8 +587,8 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 	revoked = scoped_count(
 		"CSKH Work Item",
 		{**campaign_filters, "status": "revoked"},
-		assigned_to_clause,
-		assigned_to_params,
+		work_item_scope_clause,
+		work_item_scope_params,
 		alias="wi",
 		extra_date=date_clause,
 		extra_date_params=date_params,
@@ -567,24 +596,25 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 	closed = scoped_count(
 		"CSKH Work Item",
 		{**campaign_filters, "status": "closed"},
-		assigned_to_clause,
-		assigned_to_params,
+		work_item_scope_clause,
+		work_item_scope_params,
 		alias="wi",
 		extra_date=date_clause,
 		extra_date_params=date_params,
 	)
 
 	# The active claim is bound to a work item, so it is scoped through the
-	# work item it protects: a leader only counts the claims of their team.
+	# work item it protects (both `assigned` items of the team and `queued`
+	# unassigned items in the leader's readable campaigns — L-22).
 	active_claims = frappe.db.sql(
 		"""select count(*) from `tabCSKH Active Claim` ac
 		   inner join `tabCSKH Work Item` wi on wi.name = ac.work_item
 		   where wi.status in ('queued', 'assigned') {campaign_clause} {scope_clause} {date_clause}""".format(
 			campaign_clause="and ac.campaign = %s" if campaign else "",
-			scope_clause=("and " + assigned_to_clause_wi) if assigned_to_clause_wi else "",
+			scope_clause=("and " + work_item_scope_clause) if work_item_scope_clause else "",
 			date_clause=("and " + date_clause) if date_clause else "",
 		),
-		((campaign,) if campaign else ()) + tuple(assigned_to_params_wi) + tuple(date_params),
+		((campaign,) if campaign else ()) + tuple(work_item_scope_params) + tuple(date_params),
 	)[0][0]
 
 	# The campaigns the actor may see: the ones in scope, or all of them for
@@ -614,16 +644,18 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 		tuple(run_campaign_params),
 	)[0][0]
 
-	# "Unique customers" counts the **distinct leads**, not the work items
-	# (P1 §12.5): a lead with a work item in two campaigns is one customer.
+	# "Unique customers" counts the **distinct leads** across all work items
+	# in the actor's scope (`assigned`, `queued`, `revoked`, `closed` — P1
+	# §12.5, contract §3.18, L-22): one unified definition for system, BOD,
+	# leader and staff.
 	unique_clauses = []
 	unique_params = []
 	for field, value in (campaign_filters or {}).items():
-		unique_clauses.append(f"`{field}` = %s")
+		unique_clauses.append(f"wi.`{field}` = %s")
 		unique_params.append(value)
-	if assigned_to_clause:
-		unique_clauses.append(assigned_to_clause)
-		unique_params.extend(assigned_to_params)
+	if work_item_scope_clause:
+		unique_clauses.append(work_item_scope_clause)
+		unique_params.extend(work_item_scope_params)
 	if date_clause:
 		unique_clauses.append(date_clause)
 		unique_params.extend(date_params)
@@ -664,7 +696,9 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 	# The identity index holds the canonical phone numbers. A leader may only
 	# count the identities of the leads of their team, never the whole
 	# installation (P1 §8.1: the BOD sees the numbers, a leader sees the team).
-	identity_count = _scoped_identity_count(users, campaign, date_clause, date_params)
+	identity_count = _scoped_identity_count(
+		scope, campaign=campaign, date_clause=date_clause, date_params=date_params
+	)
 
 	return {
 		"scope": scope["scope"],
@@ -850,7 +884,7 @@ def _campaign_assignment_events(campaign, users=None, date_from=None, date_to=No
 	)[0][0]
 
 
-def _scoped_identity_count(users, campaign=None, date_clause=None, date_params=()):
+def _scoped_identity_count(scope, campaign=None, date_clause=None, date_params=()):
 	"""Count the canonical identities the actor may see.
 
 	The identity index is system-only (ADR-P1-07 §3.4), so its **rows** are
@@ -859,21 +893,22 @@ def _scoped_identity_count(users, campaign=None, date_clause=None, date_params=(
 	installation for the BOD and the system, the subtree of the team for a
 	leader, the own identities for a staff member.
 	"""
-	if users is None:
-		if date_clause:
-			return frappe.db.sql(
-				"select count(distinct ii.name) from `tabCSKH Identity Index` ii "
-				"where ii.canonical_lead in (select wi.lead from `tabCSKH Work Item` wi where "
-				+ date_clause
-				+ ")",
-				tuple(date_params),
-			)[0][0]
-		return frappe.db.count("CSKH Identity Index")
-	if not users:
-		return 0
+	if isinstance(scope, dict):
+		is_unrestricted = scope.get("scope") in ("system", "all")
+		wi_clause, wi_params = _work_item_scope_clause(scope, "wi")
+	else:
+		# Backward-compatible signature when a caller passes a `users` list/None.
+		is_unrestricted = scope is None
+		wi_clause, wi_params = _scoped_users_clause(scope, "wi.assigned_to")
 
-	inner_clauses = ["wi.assigned_to in ({})".format(",".join(["%s"] * len(users)))]
-	params = list(users)
+	if is_unrestricted and not campaign and not date_clause:
+		return frappe.db.count("CSKH Identity Index")
+
+	inner_clauses = []
+	params = []
+	if wi_clause:
+		inner_clauses.append(wi_clause)
+		params.extend(wi_params)
 	if campaign:
 		inner_clauses.append("wi.campaign = %s")
 		params.append(campaign)

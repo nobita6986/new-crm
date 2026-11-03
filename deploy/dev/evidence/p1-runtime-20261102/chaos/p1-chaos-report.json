@@ -1,13 +1,13 @@
 {
   "site": "p1chaos.localhost",
-  "recorded_at": "2026-11-03 07:37:53.533955",
+  "recorded_at": "2026-11-03 10:00:14.302066",
   "injection_mechanism": "pure_test_harness_mock_and_child_os_exit_137",
   "production_hooks_present": false,
   "overall_result": "PASS",
   "scenarios": [
     {
       "id": "S1_work_item_and_mid_ownership_rollback_then_resume",
-      "campaign": "4sbpi9t8gg",
+      "campaign": "o7su1vvoq1",
       "pool_size": 10,
       "attempt_1": {
         "status": "completed_with_errors",
@@ -61,7 +61,7 @@
     },
     {
       "id": "S2_post_commit_notification_failure_and_idempotent_retry",
-      "campaign": "4t3f2bp03c",
+      "campaign": "o8pp6t86mg",
       "pool_size": 3,
       "after_failed_notification": {
         "run_status": "completed",
@@ -88,7 +88,8 @@
     },
     {
       "id": "S3_worker_hard_kill_exit_137_mid_batch_and_recovery",
-      "batch": "4tapetmjt1",
+      "batch": "o953f29839",
+      "first_confirm_status": "QUEUED",
       "total_rows": 9,
       "chunk_size": 3,
       "child_process_exit_code": 137,
@@ -109,6 +110,56 @@
         "crm_lead_count": 9,
         "duplicate_identities": 0,
         "duplicate_leads": 0
+      },
+      "passed": true
+    },
+    {
+      "id": "S4_distribution_worker_hard_kill_exit_137_mid_batch_and_lease_recovery",
+      "campaign": "o9rlt281o3",
+      "run_id": "o9s9hf1irh",
+      "pool_size": 10,
+      "chunk_size": 3,
+      "initial_enqueue_status": "queued",
+      "child_process_exit_code": 137,
+      "active_lease_blocked_duplicate_enqueue": true,
+      "mid_crash_db_state": {
+        "status": "running",
+        "progress": 6,
+        "created": 6
+      },
+      "post_recovery_db_state": {
+        "status": "completed",
+        "progress": 10,
+        "created": 10,
+        "errors": 0,
+        "assigned_by_user": {
+          "p1-chaos-staff-a@example.test": 5,
+          "p1-chaos-staff-b@example.test": 3,
+          "p1-chaos-staff-c@example.test": 2
+        },
+        "reconcile": {
+          "distinct_leads": 10,
+          "active_work_items": 10,
+          "active_claims": 10,
+          "current_owners": {
+            "p1-chaos-staff-a@example.test": 5,
+            "p1-chaos-staff-b@example.test": 3,
+            "p1-chaos-staff-c@example.test": 2
+          },
+          "assignment_events": {
+            "p1-chaos-staff-a@example.test": 5,
+            "p1-chaos-staff-b@example.test": 3,
+            "p1-chaos-staff-c@example.test": 2
+          }
+        },
+        "db_postcheck": {
+          "orphan_work_items": 0,
+          "orphan_active_claims": 0,
+          "owner_mismatches": 0,
+          "todo_mismatches": 0,
+          "docshare_mismatches": 0,
+          "partial_history_rows": 0
+        }
       },
       "passed": true
     }

@@ -402,6 +402,10 @@ TRANSLATIONS = {
 	"Campaign closed": "Đã đóng",
 	"Whole installation": "Toàn hệ thống",
 	"Only my own data": "Chỉ dữ liệu của tôi",
+	"The actor account is disabled.": "Tài khoản thực hiện đang bị vô hiệu hóa.",
+	"Invalid boolean value for enabled.": "Giá trị đúng/sai cho trạng thái kích hoạt không hợp lệ.",
+	"Invalid boolean value for return_to_pool.": "Giá trị đúng/sai cho tùy chọn trả về kho chờ không hợp lệ.",
+	"Invalid boolean value for value.": "Giá trị đúng/sai không hợp lệ.",
 }
 
 

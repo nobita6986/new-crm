@@ -7,6 +7,7 @@ the audit trail (P1 7.6, 7.7).
 
 import frappe
 
+from crm_cskh.api._params import parse_bool
 from crm_cskh.services import ownership
 from crm_cskh.services.errors import Forbidden, InvalidRequest, P1Error
 
@@ -64,6 +65,7 @@ def revoke(work_item=None, expected_owner=None, reason=None, request_id=None, re
 	_require_owner_permission(actor)
 	if not work_item:
 		raise InvalidRequest("The work item is required.")
+	parsed_return_to_pool = parse_bool(return_to_pool, default=True, field="return_to_pool")
 	try:
 		return ownership.revoke(
 			work_item,
@@ -71,7 +73,7 @@ def revoke(work_item=None, expected_owner=None, reason=None, request_id=None, re
 			actor=actor,
 			reason=reason,
 			request_id=request_id,
-			return_to_pool=bool(return_to_pool),
+			return_to_pool=parsed_return_to_pool,
 		)
 	except P1Error:
 		raise

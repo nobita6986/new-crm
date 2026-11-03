@@ -1,8 +1,9 @@
 """Runtime crash / rollback / retry verification harness for P1 §12.4.
 
 Executes the P1 runtime fault-injection scenarios on an isolated site using
-test-harness `unittest.mock` wrappers and a real child process `os._exit(137)`,
-and writes a sanitized, PII-free JSON report with database post-checks.
+test-harness `unittest.mock` wrappers and real child processes `os._exit(137)`
+(both import worker and distribution RQ worker), and writes a sanitized,
+PII-free JSON report with database post-checks.
 
 Usage (inside the bench container on an isolated chaos site):
 
@@ -18,14 +19,14 @@ import sys
 from unittest import mock
 
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import add_to_date, now_datetime
 
-from crm_cskh.jobs import import_worker
+from crm_cskh.jobs import distribution_worker, import_worker
 from crm_cskh.services import distribution, notifications, ownership
 from crm_cskh.services import identity as identity_service
-from crm_cskh.services.import_service import create_preview
+from crm_cskh.services.import_service import confirm, create_preview
 from crm_cskh.services.phone_identity import normalize_vn_phone
-from crm_cskh.tests.test_p1_chaos import CHILD_CRASH_SCRIPT
+from crm_cskh.tests.test_p1_chaos import CHILD_CRASH_SCRIPT, CHILD_DISTRIBUTION_CRASH_SCRIPT
 
 OUTPUT_PATH = os.environ.get("P1_CHAOS_OUTPUT", "/tmp/p1-chaos-report.json")
 
@@ -432,7 +433,8 @@ def run_all():
 		idempotency_key=f"p1-chaos-hardkill-{frappe.generate_hash(length=8)}",
 	)
 	s3_batch = s3_preview["batch"]
-	frappe.db.set_value("CSKH Import Batch", s3_batch, "status", "QUEUED")
+	with mock.patch("frappe.enqueue"):
+		s3_confirmed = confirm(s3_batch, actor=actors["admin"])
 	frappe.db.commit()
 
 	child_payload = {
@@ -486,6 +488,7 @@ def run_all():
 		{
 			"id": "S3_worker_hard_kill_exit_137_mid_batch_and_recovery",
 			"batch": s3_batch,
+			"first_confirm_status": s3_confirmed["status"],
 			"total_rows": 9,
 			"chunk_size": 3,
 			"child_process_exit_code": child_proc.returncode,
@@ -508,7 +511,8 @@ def run_all():
 				"duplicate_leads": len(dup_leads),
 			},
 			"passed": (
-				child_proc.returncode == 137
+				s3_confirmed["status"] == "QUEUED"
+				and child_proc.returncode == 137
 				and mid_batch.status == "RUNNING"
 				and int(mid_batch.attempts) == 1
 				and int(mid_batch.progress) == 4
@@ -522,6 +526,105 @@ def run_all():
 				and final_lead_count == 9
 				and len(dup_identities) == 0
 				and len(dup_leads) == 0
+			),
+		}
+	)
+
+	# Scenario 4: Real OS child process hard kill (`os._exit(137)`) mid-distribution RQ worker + lease recovery.
+	s4_leads = [_make_canonical_lead() for _ in range(10)]
+	frappe.db.commit()
+	s4_campaign = _make_campaign(s4_leads, actors)
+	s4_preview = distribution.preview(s4_campaign, actor=actors["admin"])
+	s4_queued = distribution.enqueue_run(s4_preview["preview_id"], actor=actors["admin"], enqueue_job=False)
+	s4_run_id = s4_queued["run_id"]
+	frappe.db.commit()
+
+	dist_child_payload = {
+		"site": getattr(frappe.local, "site", None),
+		"sites_path": getattr(frappe.local, "sites_path", None),
+		"run_id": s4_run_id,
+		"actor": actors["admin"],
+		"chunk_size": 3,
+		"kill_after_progress": 6,
+	}
+	dist_child_proc = subprocess.run(
+		[sys.executable, "-c", CHILD_DISTRIBUTION_CRASH_SCRIPT],
+		capture_output=True,
+		text=True,
+		timeout=120,
+		env={**os.environ, "CSKH_CHAOS_DIST_PAYLOAD": json.dumps(dist_child_payload)},
+	)
+	frappe.db.commit()
+	s4_mid = distribution.get_run(s4_run_id, actor=actors["admin"])
+
+	# Verify active lease blocks duplicate enqueue/takeover before lease expiry.
+	with mock.patch("frappe.enqueue") as s4_active_enq:
+		distribution.enqueue_run(s4_run_id, actor=actors["admin"], enqueue_job=True)
+		active_lease_blocked_enqueue = s4_active_enq.call_count == 0
+
+	# Expire lease and recover remaining chunks cleanly.
+	frappe.db.set_value(
+		"CSKH Distribution Run",
+		s4_run_id,
+		"lease_expires_at",
+		add_to_date(now_datetime(), seconds=-60),
+	)
+	frappe.db.commit()
+	distribution.enqueue_run(s4_run_id, actor=actors["admin"], enqueue_job=False)
+	frappe.db.commit()
+	with mock.patch.object(distribution, "CHUNK_SIZE", 3):
+		s4_final = distribution_worker.run_distribution(s4_run_id, actor=actors["admin"])
+		distribution_worker.run_distribution(s4_run_id, actor=actors["admin"])
+
+	s4_reconcile = distribution.reconcile(s4_campaign, actor=actors["admin"])
+	s4_postcheck = _campaign_orphan_postcheck(s4_campaign, s4_leads)
+
+	scenarios.append(
+		{
+			"id": "S4_distribution_worker_hard_kill_exit_137_mid_batch_and_lease_recovery",
+			"campaign": s4_campaign,
+			"run_id": s4_run_id,
+			"pool_size": 10,
+			"chunk_size": 3,
+			"initial_enqueue_status": s4_queued["status"],
+			"child_process_exit_code": dist_child_proc.returncode,
+			"active_lease_blocked_duplicate_enqueue": active_lease_blocked_enqueue,
+			"mid_crash_db_state": {
+				"status": s4_mid["status"],
+				"progress": s4_mid["progress"],
+				"created": s4_mid["created"],
+			},
+			"post_recovery_db_state": {
+				"status": s4_final["status"],
+				"progress": s4_final["progress"],
+				"created": s4_final["created"],
+				"errors": s4_final["errors"],
+				"assigned_by_user": s4_final["assigned"],
+				"reconcile": {
+					"distinct_leads": s4_reconcile["distinct_leads"],
+					"active_work_items": s4_reconcile["active_work_items"],
+					"active_claims": s4_reconcile["active_claims"],
+					"current_owners": s4_reconcile["current_owners"],
+					"assignment_events": s4_reconcile["assignment_events"],
+				},
+				"db_postcheck": s4_postcheck,
+			},
+			"passed": (
+				s4_queued["status"] == "queued"
+				and dist_child_proc.returncode == 137
+				and active_lease_blocked_enqueue
+				and s4_mid["status"] == "running"
+				and s4_mid["progress"] == 6
+				and s4_mid["created"] == 6
+				and s4_final["status"] == "completed"
+				and s4_final["progress"] == 10
+				and s4_final["created"] == 10
+				and s4_final["errors"] == 0
+				and s4_final["assigned"] == {actors["staff_a"]: 5, actors["staff_b"]: 3, actors["staff_c"]: 2}
+				and s4_reconcile["active_work_items"] == 10
+				and s4_reconcile["active_claims"] == 10
+				and sum(s4_reconcile["assignment_events"].values()) == 10
+				and all(v == 0 for v in s4_postcheck.values())
 			),
 		}
 	)

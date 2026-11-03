@@ -1,28 +1,65 @@
-"""Weighted distribution engine: preview, execute, reconciliation.
+"""Weighted distribution engine: preview, RQ enqueue, chunked worker & reconciliation.
 
-P1 7.5 requires DB level locking, not an in-memory lock: a `CSKH Distribution
-Run` is claimed with a conditional state transition, the allocator state is
-persisted in the run, and the `CSKH Active Claim` unique index is the final
-guarantee that one lead can never have two active owners.
-
-The whole execution happens inside one Frappe transaction per chunk so a
-failure rolls back the work items, claims, history events and counters
-together (P1 12.4: artificial failure after creating a work item must not leave
-an orphan).
+P1 7.5 requires DB-level locking, chunked transactions, post-commit notifications
+and crash recovery:
+  * `api.distribution.execute` validates the preview, acquires a DB row lock on
+    `CSKH Distribution Run`, moves the run to `queued` with a bounded lease,
+    enqueues `crm_cskh.jobs.distribution_worker.run_distribution` onto Frappe's
+    existing RQ `long` queue (`enqueue_after_commit=True, deduplicate=True`),
+    and returns early with `run_id` and status;
+  * `run_distribution_worker` claims `running` under `SELECT ... FOR UPDATE`,
+    re-checks actor permission, campaign status, `rule_version` and assignee
+    eligibility/capacity before every chunk, commits `progress`, `state_json`
+    and DB-reconciled `actual_json` after every chunk, and delivers notifications
+    only after commit;
+  * double-submit / retry on an already `queued`, `running` (with active lease)
+    or `completed` run never enqueues a duplicate RQ job and never creates a
+    duplicate assignment; an expired lease (`lease_expires_at <= now`) allows a
+    recovery worker to take over cleanly from `run.progress`.
 """
 
 import hashlib
 import json
 
 import frappe
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from crm_cskh.services import eligibility, ownership
-from crm_cskh.services.errors import Conflict, InvalidRequest, NotFound, RuleChanged
+from crm_cskh.services.errors import Conflict, Forbidden, InvalidRequest, NotFound, RuleChanged
 from crm_cskh.services.weighted_allocator import allocate, planned_distribution
 
 CHUNK_SIZE = 100
 PREVIEW_TTL_MINUTES = 30
+LEASE_SECONDS = 300
+
+
+def _is_system(user=None):
+	user = user or frappe.session.user
+	return user == "Administrator" or "System Manager" in frappe.get_roles(user)
+
+
+def _require_distribute_actor(actor):
+	"""Verify that `actor` is enabled and holds `CSKH CRM Admin` (or system)."""
+	actor = actor or frappe.session.user
+	if not actor or actor == "Guest":
+		raise Forbidden("Distributing the customers requires the CRM Admin business role.")
+	if actor == "Administrator":
+		return
+	if not frappe.db.get_value("User", actor, "enabled"):
+		raise Forbidden("The actor account is disabled.")
+	roles = set(frappe.get_roles(actor))
+	if "System Manager" in roles or "CSKH CRM Admin" in roles:
+		return
+	raise Forbidden("Distributing the customers requires the CRM Admin business role.")
+
+
+def _db_rule_version(campaign):
+	"""Read the authoritative rule version directly from MariaDB."""
+	row = frappe.db.sql(
+		"select coalesce(max(version), 1) from `tabCSKH Assignment Rule` where campaign = %s",
+		(campaign,),
+	)
+	return int(row[0][0] or 1) if row else 1
 
 
 def _fingerprint(leads):
@@ -56,6 +93,16 @@ def _run_state(run):
 	return state if isinstance(state, dict) else {}
 
 
+def _run_preview_payload(run):
+	if not run.preview_json:
+		return {}
+	try:
+		payload = json.loads(run.preview_json)
+	except (ValueError, TypeError):
+		return {}
+	return payload if isinstance(payload, dict) else {}
+
+
 def _campaign_loads(campaign):
 	"""Current active assigned work items per user (capacity accounting)."""
 	rows = frappe.db.sql(
@@ -67,6 +114,22 @@ def _campaign_loads(campaign):
 		as_dict=True,
 	)
 	return {row.user: int(row.total) for row in rows}
+
+
+def _reconcile_run_db_counts(campaign, run_name):
+	"""Reconcile per-user `assigned` and `created` for `run_name` from DB truth."""
+	rows = frappe.db.sql(
+		"""select assigned_to as user, count(*) as total
+		   from `tabCSKH Work Item`
+		   where campaign = %s and allocation_run = %s
+		     and status = 'assigned' and assigned_to is not null
+		   group by assigned_to""",
+		(campaign, run_name),
+		as_dict=True,
+	)
+	assigned = {row.user: int(row.total) for row in rows if row.user}
+	created = sum(assigned.values())
+	return assigned, created
 
 
 def preview(campaign, actor=None, idempotency_key=None, selection=None):
@@ -138,6 +201,7 @@ def preview(campaign, actor=None, idempotency_key=None, selection=None):
 					"targets": plan["targets"],
 					"simulated": actual_preview,
 					"excluded_assignees": excluded_assignees,
+					"leads": list(leads),
 				},
 				ensure_ascii=False,
 			),
@@ -197,12 +261,7 @@ def _parse_state(state_json):
 
 
 def _preview_response(run):
-	preview_payload = {}
-	if run.preview_json:
-		try:
-			preview_payload = json.loads(run.preview_json)
-		except (ValueError, TypeError):
-			preview_payload = {}
+	preview_payload = _run_preview_payload(run)
 	return {
 		"preview_id": run.name,
 		"campaign": run.campaign,
@@ -219,26 +278,25 @@ def _preview_response(run):
 	}
 
 
-def execute(preview_id, expected_rule_version=None, idempotency_key=None, actor=None):
-	"""Execute a previously computed preview."""
-	actor = actor or frappe.session.user
-	run = frappe.get_doc("CSKH Distribution Run", preview_id)
-	if not run:
-		raise NotFound("The preview does not exist.")
+def _lease_is_active(lease_expires_at, now=None):
+	if not lease_expires_at:
+		return False
+	now = now or now_datetime()
+	try:
+		return get_datetime(lease_expires_at) > get_datetime(now)
+	except Exception:
+		return False
 
-	if run.status == "completed":
-		return _run_response(run)
-	if run.status == "completed_with_errors":
-		# A run that committed some rows and failed others is **resumable**
-		# (P1 §12.4: the retry must not create a second assignment). The
-		# resume only processes the rows that are still unassigned.
-		return _resume_run(run, actor, expected_rule_version=expected_rule_version)
-	if run.status == "running":
-		raise Conflict("The distribution run is already executing.", code="CONFLICT")
-	if run.expires_at and run.expires_at < now_datetime():
-		raise Conflict("The preview has expired; run the preview again.", code="PREVIEW_EXPIRED")
 
-	version = eligibility.current_rule_version(run.campaign)
+def _validate_rule_version_and_campaign(run, expected_rule_version=None):
+	campaign_doc = frappe.db.get_value(
+		"CSKH Campaign", run.campaign, ["name", "status", "team_scope"], as_dict=True
+	)
+	if not campaign_doc:
+		raise NotFound("The campaign does not exist.")
+	if campaign_doc.status not in ("Active", "Draft"):
+		raise Conflict("The campaign is not open for distribution.", code="CONFLICT")
+	version = _db_rule_version(run.campaign)
 	if expected_rule_version is not None and int(expected_rule_version) != int(run.rule_version):
 		raise RuleChanged(
 			"The assignment rules changed after the preview.",
@@ -249,11 +307,127 @@ def execute(preview_id, expected_rule_version=None, idempotency_key=None, actor=
 			"The assignment rules changed after the preview.",
 			details={"expected": run.rule_version, "current": version},
 		)
+	return campaign_doc, version
 
-	# The preview also freezes the **fairness counters** it was computed from.
-	# If another run committed assignments in the meantime, the preview is
-	# stale and must not be executed (P1 §7.4: a stale preview is refused
-	# instead of distributing stale numbers).
+
+def _target_leads_for_run(run):
+	preview_payload = _run_preview_payload(run)
+	stored_leads = preview_payload.get("leads")
+	if isinstance(stored_leads, list) and stored_leads:
+		return list(stored_leads)
+	return list(eligibility.selection_leads(run.campaign))
+
+
+def _enqueue_distribution_job(run_id, actor):
+	from crm_cskh.jobs import distribution_worker
+
+	frappe.enqueue(
+		distribution_worker.run_distribution,
+		queue="long",
+		timeout=7200,
+		enqueue_after_commit=True,
+		job_id=f"cskh-dist-{run_id}",
+		deduplicate=True,
+		run_id=run_id,
+		actor=actor,
+	)
+
+
+def enqueue_run(preview_id, expected_rule_version=None, idempotency_key=None, actor=None, enqueue_job=True):
+	"""Validate and enqueue a distribution preview onto RQ (or return idempotently).
+
+	Used directly by `crm_cskh.api.distribution.execute` so HTTP callers receive
+	`run_id` and `status='queued'` immediately instead of blocking on 10k items.
+	"""
+	actor = actor or frappe.session.user
+	_require_distribute_actor(actor)
+	if not preview_id or not frappe.db.exists("CSKH Distribution Run", preview_id):
+		raise NotFound("The preview does not exist.")
+
+	if idempotency_key:
+		other_run = frappe.db.get_value("CSKH Distribution Run", {"idempotency_key": idempotency_key}, "name")
+		if other_run and other_run != preview_id:
+			raise Conflict(
+				"This idempotency key was already used by another distribution run.",
+				code="CONFLICT",
+			)
+
+	locked = frappe.db.sql(
+		"select name, status, lease_expires_at, progress from `tabCSKH Distribution Run` where name = %s for update",
+		(preview_id,),
+		as_dict=True,
+	)
+	if not locked:
+		raise NotFound("The preview does not exist.")
+
+	run = frappe.get_doc("CSKH Distribution Run", preview_id)
+	now = now_datetime()
+
+	if run.status == "completed":
+		return _run_response(run)
+
+	if run.status in ("queued", "running"):
+		if _lease_is_active(run.lease_expires_at, now):
+			# Double-submit / retry while job is already queued or actively owned:
+			# return current status and progress without enqueueing a second job.
+			return _run_response(run)
+		# Lease expired (worker crashed): re-verify rules/campaign, transition
+		# back to `queued` with a fresh lease, and re-enqueue recovery from `run.progress`.
+		_validate_rule_version_and_campaign(run, expected_rule_version=expected_rule_version)
+		actual = _run_actual(run)
+		actual["actor"] = actor
+		run.actual_json = json.dumps(actual, ensure_ascii=False)
+		run.status = "queued"
+		run.lease_expires_at = add_to_date(now, seconds=LEASE_SECONDS)
+		run.save(ignore_permissions=True)
+		if enqueue_job:
+			_enqueue_distribution_job(run.name, actor)
+		return _run_response(run)
+
+	if run.status in ("completed_with_errors", "failed"):
+		_validate_rule_version_and_campaign(run, expected_rule_version=expected_rule_version)
+		target_leads = _target_leads_for_run(run)
+		assigned_leads = {
+			row.lead
+			for row in frappe.db.get_all(
+				"CSKH Work Item",
+				filters={"campaign": run.campaign, "allocation_run": run.name},
+				fields=["lead"],
+			)
+		}
+		prior_skipped = _run_skipped(run)
+		retryable_failed = {
+			entry.get("lead")
+			for entry in prior_skipped
+			if entry.get("reason") == "assignment_failed"
+			and entry.get("lead")
+			and entry.get("lead") not in assigned_leads
+		}
+		unprocessed = [lead for lead in target_leads[int(run.progress or 0) :] if lead not in assigned_leads]
+		if not retryable_failed and not unprocessed:
+			return _run_response(run)
+
+		actual = _run_actual(run)
+		actual["actor"] = actor
+		actual["retry_failed"] = True
+		actual.setdefault("total", len(target_leads))
+		run.actual_json = json.dumps(actual, ensure_ascii=False)
+		run.status = "queued"
+		run.error = None
+		run.finished_at = None
+		run.lease_expires_at = add_to_date(now, seconds=LEASE_SECONDS)
+		run.save(ignore_permissions=True)
+		if enqueue_job:
+			_enqueue_distribution_job(run.name, actor)
+		return _run_response(run)
+
+	# `status == "planned"`
+	if run.expires_at and get_datetime(run.expires_at) < get_datetime(now):
+		raise Conflict("The preview has expired; run the preview again.", code="PREVIEW_EXPIRED")
+
+	_validate_rule_version_and_campaign(run, expected_rule_version=expected_rule_version)
+
+	# Verify fairness cursor has not moved since the preview was computed.
 	base_state = _run_state(run)
 	latest_state = _latest_state(run.campaign, run.rule_version)
 	if _state_cursor(base_state) != _state_cursor(latest_state):
@@ -262,129 +436,375 @@ def execute(preview_id, expected_rule_version=None, idempotency_key=None, actor=
 			details={"expected": _state_cursor(base_state), "current": _state_cursor(latest_state)},
 		)
 
-	if idempotency_key and idempotency_key != run.idempotency_key:
-		run.idempotency_key = idempotency_key
-
-	# Only one executor may own the run (P1 7.5). The row is locked with
-	# `SELECT ... FOR UPDATE`, so the check and the transition are one atomic
-	# step: a second executor blocks on the lock and then observes the
-	# already-running status.
-	locked = frappe.db.sql(
-		"select status from `tabCSKH Distribution Run` where name = %s for update",
-		(run.name,),
-		as_dict=True,
-	)
-	if not locked or locked[0].status != "planned":
-		raise Conflict("The distribution run is already owned by another executor.", code="CONFLICT")
-	frappe.db.sql(
-		"""update `tabCSKH Distribution Run`
-		   set status = 'running', started_at = %s
-		   where name = %s and status = 'planned'""",
-		(now_datetime(), run.name),
-	)
-	frappe.db.commit()
-
-	return _execute_chunks(run, actor)
-
-
-def _execute_chunks(run, actor):
-	campaign = run.campaign
-	campaign_doc = frappe.db.get_value("CSKH Campaign", campaign, ["name", "team_scope"], as_dict=True)
-	version = eligibility.current_rule_version(campaign)
-	eligible_assignees, excluded_assignees = eligibility.eligible_assignees(
-		campaign, campaign_doc.team_scope, version
-	)
-	selection_result = eligibility.eligible_leads(campaign)
-	leads = selection_result["eligible"]
-
-	fingerprint = _fingerprint(leads)
-	if fingerprint != run.selection_fingerprint:
-		run.reload()
+	current_eligible = eligibility.eligible_leads(run.campaign)["eligible"]
+	if _fingerprint(current_eligible) != run.selection_fingerprint:
 		run.status = "failed"
-		run.error = "The eligible lead set changed after the preview."
-		run.finished_at = now_datetime()
+		run.error = "RULE_CHANGED: The eligible lead set changed after the preview."
+		run.finished_at = now
+		run.lease_expires_at = None
 		run.save(ignore_permissions=True)
 		frappe.db.commit()
 		raise RuleChanged("The eligible lead set changed after the preview.")
 
-	rules = [
-		{"user": rule["user"], "weight": rule["weight"], "capacity": rule["capacity"], "enabled": True}
-		for rule in eligible_assignees
-	]
-	state = _run_state(run)
-	loads = _campaign_loads(campaign)
+	if idempotency_key and idempotency_key != run.idempotency_key:
+		run.idempotency_key = idempotency_key
 
-	assigned = {}
-	skipped = []
-	created = 0
-	errors = 0
-	# The (work item, owner) pairs whose notification is delivered **after**
-	# the commit. The list is collected during the loop so the post-commit
-	# phase never has to re-read the work items (no N+1 query at 10k scale).
-	pending_notifications = []
+	preview_payload = _run_preview_payload(run)
+	if not preview_payload.get("leads"):
+		preview_payload["leads"] = list(current_eligible)
+		run.preview_json = json.dumps(preview_payload, ensure_ascii=False)
 
-	for start in range(0, len(leads), CHUNK_SIZE):
-		chunk = leads[start : start + CHUNK_SIZE]
-		for index, lead in enumerate(chunk):
-			# One savepoint per row: a failing row rolls back only itself and
-			# never leaves an orphan work item (P1 12.4).
-			savepoint = f"cskh_dist_{start}_{index}"
-			# The fairness counters are rolled back with the row: a failed row
-			# must not consume a "slot" of the cumulative target.
-			state_before = json.loads(json.dumps(state))
-			loads_before = dict(loads)
-			frappe.db.savepoint(savepoint)
-			try:
-				owner, state, loads = _pick_owner(rules, state, loads)
-				if owner is None:
-					errors += 1
-					skipped.append({"lead": lead, "reason": "no_eligible_assignee"})
-					continue
-				work_item = _create_work_item(campaign, lead, run)
-				ownership.assign(
-					work_item,
-					owner,
-					actor=actor,
-					reason=f"Distribution run {run.name}",
-					request_id=f"run:{run.name}:{lead}",
-					distribution_run=run.name,
-				)
-				assigned[owner] = assigned.get(owner, 0) + 1
-				pending_notifications.append((work_item, owner))
-				created += 1
-			except Exception as exc:
-				frappe.db.rollback(save_point=savepoint)
-				# Restore the fairness counters: the rolled back row never
-				# consumed a slot of the cumulative target.
-				state = state_before
-				loads = loads_before
-				errors += 1
-				skipped.append({"lead": lead, "reason": "assignment_failed", "detail": str(exc)[:200]})
+	run.actual_json = json.dumps(
+		{
+			"actor": actor,
+			"total": len(current_eligible),
+			"assigned": {},
+			"created": 0,
+			"errors": 0,
+			"skipped": [],
+			"excluded_assignees": preview_payload.get("excluded_assignees", []),
+		},
+		ensure_ascii=False,
+	)
+	run.progress = 0
+	run.error = None
+	run.finished_at = None
+	run.status = "queued"
+	run.lease_expires_at = add_to_date(now, seconds=LEASE_SECONDS)
+	run.save(ignore_permissions=True)
+	if enqueue_job:
+		_enqueue_distribution_job(run.name, actor)
+	return _run_response(run)
 
+
+def execute(preview_id, expected_rule_version=None, idempotency_key=None, actor=None):
+	"""Synchronous service entry point: enqueue in-DB then run chunked worker inline."""
+	actor = actor or frappe.session.user
+	queued = enqueue_run(
+		preview_id,
+		expected_rule_version=expected_rule_version,
+		idempotency_key=idempotency_key,
+		actor=actor,
+		enqueue_job=False,
+	)
+	if queued["status"] != "queued":
+		return queued
+	frappe.db.commit()
+	return run_distribution_worker(queued["run_id"], actor=actor)
+
+
+def _abort_run(run, actor, code_prefix, message):
+	"""Persist a clean terminal failure/partial status when execution-time rechecks fail."""
 	run.reload()
+	actual = _run_actual(run)
+	assigned, created = _reconcile_run_db_counts(run.campaign, run.name)
+	skipped = actual.get("skipped", []) or []
+	actual["assigned"] = assigned
+	actual["created"] = created
+	actual["errors"] = len(skipped)
+	actual["actor"] = actor
+	actual.pop("retry_failed", None)
+	run.actual_json = json.dumps(actual, ensure_ascii=False)
+	run.status = "completed_with_errors" if created > 0 else "failed"
+	run.error = f"{code_prefix}: {message}"[:500]
+	run.finished_at = now_datetime()
+	run.lease_expires_at = None
+	run.save(ignore_permissions=True)
+	frappe.db.commit()
+	return _run_response(run)
+
+
+def _eligible_assignees_for_worker(campaign, team_scope, version, effective_actor):
+	previous_user = getattr(frappe.session, "user", None)
+	try:
+		if effective_actor and previous_user != effective_actor:
+			frappe.set_user(effective_actor)
+		return eligibility.eligible_assignees(campaign, team_scope, version)
+	finally:
+		if previous_user and getattr(frappe.session, "user", None) != previous_user:
+			frappe.set_user(previous_user)
+
+
+def run_distribution_worker(run_id, actor=None):
+	"""Chunked RQ worker execution with DB row lock, lease renewal, and recovery."""
+	if not run_id:
+		return None
+
+	locked = frappe.db.sql(
+		"select name, status, lease_expires_at, progress from `tabCSKH Distribution Run` where name = %s for update",
+		(run_id,),
+		as_dict=True,
+	)
+	if not locked:
+		return None
+
+	row = locked[0]
+	now = now_datetime()
+	if row.status in ("completed", "completed_with_errors", "failed"):
+		return _run_response(frappe.get_doc("CSKH Distribution Run", run_id))
+	if row.status == "running" and _lease_is_active(row.lease_expires_at, now):
+		# Another live worker currently holds an unexpired lease on this run.
+		return _run_response(frappe.get_doc("CSKH Distribution Run", run_id))
+	if row.status not in ("planned", "queued", "running"):
+		return _run_response(frappe.get_doc("CSKH Distribution Run", run_id))
+
+	run = frappe.get_doc("CSKH Distribution Run", run_id)
+	actual = _run_actual(run)
+	effective_actor = actor or actual.get("actor") or frappe.session.user
+
+	# Claim ownership of the run and commit the lease before processing chunks.
+	run.status = "running"
+	if not run.started_at:
+		run.started_at = now
+	run.lease_expires_at = add_to_date(now, seconds=LEASE_SECONDS)
+	run.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	# Execution-time recheck #1: actor permission & enabled status.
+	try:
+		_require_distribute_actor(effective_actor)
+	except Forbidden as exc:
+		return _abort_run(run, effective_actor, "FORBIDDEN", str(exc))
+
+	# Execution-time recheck #2: campaign status & rule_version.
+	try:
+		campaign_doc, version = _validate_rule_version_and_campaign(run)
+	except RuleChanged as exc:
+		return _abort_run(run, effective_actor, "RULE_CHANGED", str(exc))
+	except (Conflict, NotFound) as exc:
+		return _abort_run(run, effective_actor, exc.code, str(exc))
+
+	campaign = run.campaign
+	_initial_assigned, initial_created = _reconcile_run_db_counts(campaign, run.name)
+	initial_progress = int(run.progress or 0)
+
+	# Execution-time recheck #3: if zero items have been processed yet, verify
+	# that the eligible lead set still matches the preview's selection_fingerprint.
+	if initial_progress == 0 and initial_created == 0:
+		current_eligible = eligibility.eligible_leads(campaign)["eligible"]
+		if _fingerprint(current_eligible) != run.selection_fingerprint:
+			return _abort_run(
+				run,
+				effective_actor,
+				"RULE_CHANGED",
+				"The eligible lead set changed after the preview.",
+			)
+		target_leads = list(current_eligible)
+	else:
+		target_leads = _target_leads_for_run(run)
+
+	total_targets = len(target_leads)
+	already_assigned_leads = {
+		item.lead
+		for item in frappe.db.get_all(
+			"CSKH Work Item",
+			filters={"campaign": campaign, "allocation_run": run.name},
+			fields=["lead"],
+		)
+	}
+
+	retry_failed_mode = bool(actual.get("retry_failed"))
+	prior_skipped = _run_skipped(run)
+	if retry_failed_mode:
+		carried_skipped = [
+			entry
+			for entry in prior_skipped
+			if entry.get("reason") != "assignment_failed" and entry.get("lead") not in already_assigned_leads
+		]
+		retryable_leads = {
+			entry.get("lead")
+			for entry in prior_skipped
+			if entry.get("reason") == "assignment_failed"
+			and entry.get("lead")
+			and entry.get("lead") not in already_assigned_leads
+		}
+	else:
+		carried_skipped = [
+			entry for entry in prior_skipped if entry.get("lead") not in already_assigned_leads
+		]
+		retryable_leads = set()
+
+	# Build work queue of `(target_index, lead)`:
+	#   * any retryable failed lead from earlier attempts (`idx < initial_progress`);
+	#   * every unprocessed lead from `initial_progress .. total_targets - 1`.
+	work_entries = []
+	for idx, lead in enumerate(target_leads):
+		if lead in already_assigned_leads:
+			continue
+		if idx < initial_progress:
+			if lead in retryable_leads:
+				work_entries.append((idx, lead))
+		else:
+			work_entries.append((idx, lead))
+
+	state = _run_state(run)
+	new_skipped = []
+	excluded_assignees = actual.get("excluded_assignees", [])
+
+	try:
+		for chunk_offset in range(0, len(work_entries), CHUNK_SIZE):
+			# Re-verify actor permission, campaign status & rule_version before EVERY chunk.
+			try:
+				_require_distribute_actor(effective_actor)
+				campaign_doc, version = _validate_rule_version_and_campaign(run)
+			except Forbidden as exc:
+				return _abort_run(run, effective_actor, "FORBIDDEN", str(exc))
+			except RuleChanged as exc:
+				return _abort_run(run, effective_actor, "RULE_CHANGED", str(exc))
+			except (Conflict, NotFound) as exc:
+				return _abort_run(run, effective_actor, exc.code, str(exc))
+
+			# Execution-time recheck #4: re-evaluate assignee eligibility & DB loads per chunk.
+			eligible_assignees, excluded_assignees = _eligible_assignees_for_worker(
+				campaign, campaign_doc.team_scope, version, effective_actor
+			)
+			rules = [
+				{
+					"user": rule["user"],
+					"weight": rule["weight"],
+					"capacity": rule["capacity"],
+					"enabled": True,
+				}
+				for rule in eligible_assignees
+			]
+			loads = _campaign_loads(campaign)
+
+			chunk = work_entries[chunk_offset : chunk_offset + CHUNK_SIZE]
+			pending_notifications = []
+			highest_index = initial_progress
+
+			for row_pos, (target_idx, lead) in enumerate(chunk):
+				highest_index = max(highest_index, target_idx + 1)
+				# Idempotency guard if a lead was already committed by an earlier attempt.
+				if frappe.db.exists(
+					"CSKH Work Item",
+					{"campaign": campaign, "lead": lead, "allocation_run": run.name},
+				):
+					continue
+
+				# Re-check lead eligibility at execution time (P1 §7.1 #5).
+				lead_exclusion = eligibility._lead_exclusion_reason(campaign, lead)
+				if lead_exclusion:
+					new_skipped.append({"lead": lead, "reason": lead_exclusion})
+					continue
+
+				savepoint = f"cskh_dist_{chunk_offset}_{row_pos}"
+				state_before = json.loads(json.dumps(state))
+				loads_before = dict(loads)
+				frappe.db.savepoint(savepoint)
+				try:
+					owner, state, loads = _pick_owner(rules, state, loads)
+					if owner is None:
+						frappe.db.rollback(save_point=savepoint)
+						new_skipped.append({"lead": lead, "reason": "no_eligible_assignee"})
+						continue
+					work_item = _create_work_item(campaign, lead, run)
+					ownership.assign(
+						work_item,
+						owner,
+						actor=effective_actor,
+						reason=f"Distribution run {run.name}",
+						request_id=f"run:{run.name}:{lead}",
+						distribution_run=run.name,
+					)
+					pending_notifications.append((work_item, owner))
+				except Conflict as exc:
+					frappe.db.rollback(save_point=savepoint)
+					state = state_before
+					loads = loads_before
+					reason_code = "already_claimed" if exc.code == "ALREADY_ASSIGNED" else "assignment_failed"
+					new_skipped.append({"lead": lead, "reason": reason_code, "detail": str(exc)[:200]})
+				except Exception as exc:
+					frappe.db.rollback(save_point=savepoint)
+					state = state_before
+					loads = loads_before
+					new_skipped.append(
+						{"lead": lead, "reason": "assignment_failed", "detail": str(exc)[:200]}
+					)
+
+			# Checkpoint after every chunk: reconcile DB truth, update `progress`,
+			# renew `lease_expires_at`, and commit before delivering notifications.
+			run.reload()
+			db_assigned, db_created = _reconcile_run_db_counts(campaign, run.name)
+			combined_skipped = _dedupe_skipped(carried_skipped + new_skipped, campaign, run.name)
+			initial_progress = max(int(run.progress or 0), highest_index)
+			run.progress = min(total_targets, initial_progress)
+			run.lease_expires_at = add_to_date(now_datetime(), seconds=LEASE_SECONDS)
+			run.state_json = json.dumps(state, ensure_ascii=False)
+			run.actual_json = json.dumps(
+				{
+					"actor": effective_actor,
+					"total": total_targets,
+					"assigned": db_assigned,
+					"created": db_created,
+					"errors": len(combined_skipped),
+					"skipped": combined_skipped,
+					"excluded_assignees": excluded_assignees,
+				},
+				ensure_ascii=False,
+			)
+			run.save(ignore_permissions=True)
+			frappe.db.commit()
+
+			if pending_notifications:
+				_deliver_notifications(run, pending_notifications, effective_actor)
+	except Exception as exc:
+		frappe.db.rollback()
+		return _abort_run(run, effective_actor, "RETRYABLE_FAILURE", str(exc))
+
+	# Finalize run status from DB truth.
+	run.reload()
+	if not work_entries:
+		_, excluded_assignees = _eligible_assignees_for_worker(
+			campaign, campaign_doc.team_scope, version, effective_actor
+		)
+	db_assigned, db_created = _reconcile_run_db_counts(campaign, run.name)
+	combined_skipped = _dedupe_skipped(carried_skipped + new_skipped, campaign, run.name)
+	total_errors = len(combined_skipped)
+
+	run.progress = total_targets
 	run.state_json = json.dumps(state, ensure_ascii=False)
 	run.actual_json = json.dumps(
 		{
-			"assigned": assigned,
-			"created": created,
-			"errors": errors,
-			"skipped": skipped,
+			"actor": effective_actor,
+			"total": total_targets,
+			"assigned": db_assigned,
+			"created": db_created,
+			"errors": total_errors,
+			"skipped": combined_skipped,
 			"excluded_assignees": excluded_assignees,
 		},
 		ensure_ascii=False,
 	)
-	run.status = "completed_with_errors" if errors else "completed"
+	run.status = "completed_with_errors" if total_errors else "completed"
+	run.error = None
 	run.finished_at = now_datetime()
+	run.lease_expires_at = None
 	run.save(ignore_permissions=True)
 	frappe.db.commit()
-
-	# The notifications are delivered **after** the commit (P1 §7.5): the
-	# assignment is the durable fact, the notification is a best-effort side
-	# effect. A delivery failure never undoes the assignment and never
-	# produces a second assignment event.
-	_deliver_notifications(run, pending_notifications, actor)
-
 	return _run_response(run)
+
+
+def _dedupe_skipped(entries, campaign, run_name):
+	"""Keep at most one skipped record per lead, excluding leads now assigned by `run_name`."""
+	assigned_leads = {
+		row.lead
+		for row in frappe.db.get_all(
+			"CSKH Work Item",
+			filters={"campaign": campaign, "allocation_run": run_name},
+			fields=["lead"],
+		)
+	}
+	by_lead = {}
+	order = []
+	for entry in entries or []:
+		lead = entry.get("lead")
+		if not lead or lead in assigned_leads:
+			continue
+		if lead not in by_lead:
+			order.append(lead)
+		by_lead[lead] = entry
+	return [by_lead[lead] for lead in order]
 
 
 def _deliver_notifications(run, pending, actor=None):
@@ -422,8 +842,8 @@ def _pick_owner(rules, state, loads):
 	more (all capacities are exhausted).
 
 	`loads` is the **database truth** (the active assigned work items per
-	user). It is re-read from the DB on every call so a capacity consumed by a
-	concurrent run is respected immediately (P1 §7.2).
+	user). It is re-read from the DB on every chunk and updated per row so a
+	capacity consumed by a concurrent run is respected immediately (P1 §7.2).
 	"""
 	result = allocate(1, rules, state=state, loads=loads)
 	if not result["assignments"]:
@@ -469,167 +889,6 @@ def _create_work_item(campaign, lead, run):
 	return work_item.name
 
 
-def _resume_run(run, actor, expected_rule_version=None):
-	"""Resume a run that committed some rows and failed others (P1 §12.4).
-
-	A run whose status is `completed_with_errors` holds **committed**
-	assignments and a list of rows that failed. The retry must:
-
-	* **not** create a second work item, claim, history event or ToDo for the
-	  rows that were already assigned — the `request_id` of the ownership
-	  service and the `CSKH Active Claim` unique index are the arbiters;
-	* **retry** the rows that failed transiently (`assignment_failed`), so a
-	  transient failure does not lose a customer;
-	* keep the fairness counters of the committed rows, so the resumed run
-	  continues the same 50/30/20 ratio instead of restarting it.
-
-	The resume works on the **unfiltered** selection: a lead that was already
-	assigned by the first attempt is excluded from the *new* work, but it must
-	still be visible so the resume can recognise it.
-	"""
-	campaign = run.campaign
-	version = eligibility.current_rule_version(campaign)
-	if expected_rule_version is not None and int(expected_rule_version) != int(run.rule_version):
-		raise RuleChanged(
-			"The assignment rules changed after the preview.",
-			details={"expected": expected_rule_version, "current": version},
-		)
-	if int(version) != int(run.rule_version):
-		raise RuleChanged(
-			"The assignment rules changed after the preview.",
-			details={"expected": run.rule_version, "current": version},
-		)
-
-	locked = frappe.db.sql(
-		"select status from `tabCSKH Distribution Run` where name = %s for update",
-		(run.name,),
-		as_dict=True,
-	)
-	if not locked:
-		raise NotFound("The distribution run does not exist.")
-	if locked[0].status == "completed":
-		run.reload()
-		return _run_response(run)
-	if locked[0].status != "completed_with_errors":
-		raise Conflict("The distribution run is already owned by another executor.", code="CONFLICT")
-
-	run.reload()
-	campaign_doc = frappe.db.get_value("CSKH Campaign", campaign, ["name", "team_scope"], as_dict=True)
-	eligible_assignees, excluded_assignees = eligibility.eligible_assignees(
-		campaign, campaign_doc.team_scope, version
-	)
-	selection = eligibility.selection_leads(campaign)
-
-	# The rows that are already assigned by this run: they must not be
-	# assigned a second time.
-	assigned_leads = {
-		row.lead
-		for row in frappe.db.get_all(
-			"CSKH Work Item",
-			filters={"campaign": campaign, "allocation_run": run.name},
-			fields=["lead"],
-		)
-	}
-
-	# The rows that failed transiently and must be retried. A row that failed
-	# for a permanent reason (no eligible assignee, or claimed elsewhere) stays
-	# recorded without mutating the run into a stuck `running` state.
-	prior_skipped = _run_skipped(run)
-	permanently_skipped = [entry for entry in prior_skipped if entry.get("reason") != "assignment_failed"]
-	retryable = {
-		entry.get("lead")
-		for entry in prior_skipped
-		if entry.get("reason") == "assignment_failed"
-		and entry.get("lead")
-		and entry.get("lead") not in assigned_leads
-	}
-	pending = [lead for lead in selection if lead in retryable]
-	if not pending:
-		return _run_response(run)
-
-	# The run re-enters the **planned** state before it is executed again:
-	# the status machine of P1 only allows `completed_with_errors -> planned`,
-	# so the resume is an explicit, visible re-execution of the same run.
-	run.status = "planned"
-	run.save(ignore_permissions=True)
-	run.status = "running"
-	run.started_at = now_datetime()
-	run.save(ignore_permissions=True)
-	frappe.db.commit()
-
-	rules = [
-		{"user": rule["user"], "weight": rule["weight"], "capacity": rule["capacity"], "enabled": True}
-		for rule in eligible_assignees
-	]
-	# The fairness counters of the committed rows are the base of the resume:
-	# the resumed run continues the same ratio (ADR-P1-04 §2.4).
-	state = _run_state(run)
-	loads = _campaign_loads(campaign)
-
-	assigned = {}
-	skipped = []
-	created = 0
-	pending_notifications = []
-
-	for start in range(0, len(pending), CHUNK_SIZE):
-		chunk = pending[start : start + CHUNK_SIZE]
-		for index, lead in enumerate(chunk):
-			savepoint = f"cskh_resume_{run.name}_{start}_{index}"
-			state_before = json.loads(json.dumps(state))
-			loads_before = dict(loads)
-			frappe.db.savepoint(savepoint)
-			try:
-				owner, state, loads = _pick_owner(rules, state, loads)
-				if owner is None:
-					skipped.append({"lead": lead, "reason": "no_eligible_assignee"})
-					continue
-				work_item = _create_work_item(campaign, lead, run)
-				ownership.assign(
-					work_item,
-					owner,
-					actor=actor,
-					reason=f"Distribution run {run.name} (resume)",
-					request_id=f"run:{run.name}:{lead}",
-					distribution_run=run.name,
-				)
-				assigned[owner] = assigned.get(owner, 0) + 1
-				pending_notifications.append((work_item, owner))
-				created += 1
-			except Exception as exc:
-				frappe.db.rollback(save_point=savepoint)
-				state = state_before
-				loads = loads_before
-				skipped.append({"lead": lead, "reason": "assignment_failed", "detail": str(exc)[:200]})
-
-	run.reload()
-	previous = _run_actual(run)
-	merged_assigned = {user: int(count) for user, count in (previous.get("assigned") or {}).items()}
-	for user, count in assigned.items():
-		merged_assigned[user] = merged_assigned.get(user, 0) + int(count)
-	all_skipped = permanently_skipped + skipped
-	total_errors = len(all_skipped)
-
-	run.state_json = json.dumps(state, ensure_ascii=False)
-	run.actual_json = json.dumps(
-		{
-			"assigned": merged_assigned,
-			"created": int(previous.get("created", 0)) + created,
-			"errors": total_errors,
-			"skipped": all_skipped,
-			"excluded_assignees": excluded_assignees,
-		},
-		ensure_ascii=False,
-	)
-	run.status = "completed_with_errors" if total_errors else "completed"
-	run.finished_at = now_datetime()
-	run.save(ignore_permissions=True)
-	frappe.db.commit()
-
-	_deliver_notifications(run, pending_notifications, actor)
-
-	return _run_response(run)
-
-
 def _run_actual(run):
 	actual = {}
 	if run.actual_json:
@@ -646,16 +905,23 @@ def _run_skipped(run):
 
 def _run_response(run):
 	actual = _run_actual(run)
+	preview_payload = _run_preview_payload(run)
+	total = int(actual.get("total", preview_payload.get("eligible_count", 0)) or 0)
+	progress = int(run.progress or 0)
 	return {
 		"run_id": run.name,
 		"campaign": run.campaign,
 		"status": run.status,
 		"rule_version": run.rule_version,
 		"selection_fingerprint": run.selection_fingerprint,
+		"total": total,
+		"progress": progress,
 		"assigned": actual.get("assigned", {}),
-		"created": actual.get("created", 0),
-		"errors": actual.get("errors", 0),
+		"created": int(actual.get("created", 0) or 0),
+		"errors": int(actual.get("errors", 0) or 0),
 		"skipped": actual.get("skipped", []),
+		"excluded_assignees": actual.get("excluded_assignees", preview_payload.get("excluded_assignees", [])),
+		"error": run.error,
 		"started_at": run.started_at,
 		"finished_at": run.finished_at,
 	}
@@ -663,9 +929,9 @@ def _run_response(run):
 
 def get_run(run_id, actor=None):
 	"""Return the progress and result of a distribution run."""
-	run = frappe.get_doc("CSKH Distribution Run", run_id)
-	if not run:
+	if not run_id or not frappe.db.exists("CSKH Distribution Run", run_id):
 		raise NotFound("The distribution run does not exist.")
+	run = frappe.get_doc("CSKH Distribution Run", run_id)
 	return _run_response(run)
 
 

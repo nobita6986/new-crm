@@ -5,10 +5,10 @@ ADR-P1-03: the pipeline is a dedicated service around Frappe `File`, stdlib
 re-reads the file, re-normalizes the phone numbers and re-checks the canonical
 identity before every write (P1 6.2).
 
-The preview is a `CSKH Import Batch` in status `DRY_RUN`. Confirming it moves
-the batch to `CONFIRMED` and enqueues the worker; the worker processes the rows
-in chunks and reconciles the counters from the database, never by summing
-non-idempotent events (P1 6.4).
+The preview is a `CSKH Import Batch` in status `DRY_RUN`. Confirming it walks
+the valid state transitions (`DRY_RUN -> CONFIRMED -> QUEUED`) and enqueues the
+worker; the worker processes the rows in chunks and reconciles the counters
+from the database, never by summing non-idempotent events (P1 6.4).
 """
 
 import csv
@@ -110,9 +110,9 @@ def _file_content(file_name):
 	always works on bytes so the checksum and the parser behave identically in
 	both cases.
 	"""
-	file_doc = frappe.get_doc("File", file_name)
-	if not file_doc:
+	if not file_name or not frappe.db.exists("File", file_name):
 		raise InvalidRequest("The uploaded file does not exist.")
+	file_doc = frappe.get_doc("File", file_name)
 	if not file_doc.is_private:
 		raise InvalidRequest("The import file must be private.")
 	content = file_doc.get_content()
@@ -409,46 +409,51 @@ def _classify(rows, mapping, phone_column):
 
 
 def confirm(batch_name, actor=None):
-	"""Confirm a preview and enqueue the import worker.
-
-	The state machine of P1 §6.2 is `DRY_RUN -> CONFIRMED -> QUEUED ->
-	RUNNING -> COMPLETED`. The transition table of
-	`crm_cskh.p1_models.IMPORT_STATUS_TRANSITIONS` only allows one step per
-	save, so the confirmation walks the two first steps explicitly:
-
-	* `DRY_RUN -> CONFIRMED` records the operator's confirmation;
-	* `CONFIRMED -> QUEUED` records that the job is enqueued.
-
-	Leaving the batch in `CONFIRMED` (the previous behaviour) made the worker
-	crash: it tried to move `CONFIRMED -> RUNNING`, a transition the state
-	machine does not allow, so **every** import died in the background job and
-	the batch stayed `CONFIRMED` forever.
-	"""
+	"""Confirm a preview, transition cleanly to `QUEUED`, and enqueue the worker (L-18)."""
 	actor = actor or frappe.session.user
-	batch = frappe.get_doc("CSKH Import Batch", batch_name)
-	if not batch:
-		raise InvalidRequest("The import batch does not exist.")
-	if batch.status in ("QUEUED", "RUNNING", "COMPLETED", "COMPLETED_WITH_ERRORS"):
-		return _status_response(batch.name)
+	if not batch_name:
+		raise InvalidRequest("The import batch is required.")
 
-	if batch.status == "DRY_RUN":
-		# One step per save: the state machine only allows one transition at a
-		# time, so `DRY_RUN -> CONFIRMED -> QUEUED` needs two saves.
+	locked = frappe.db.sql(
+		"select name, status from `tabCSKH Import Batch` where name = %s for update",
+		(batch_name,),
+		as_dict=True,
+	)
+	if not locked:
+		raise InvalidRequest("The import batch does not exist.")
+
+	batch = frappe.get_doc("CSKH Import Batch", batch_name)
+	if batch.status in ("QUEUED", "RUNNING", "COMPLETED"):
+		return _status_response(batch.name)
+	if batch.status == "COMPLETED_WITH_ERRORS":
+		# Only re-queue when valid new rows remain uncreated (transient worker
+		# error). When every valid row was already committed and only input
+		# CSV rows were invalid, double-submit returns idempotently.
+		if int(batch.created_rows or 0) >= int(batch.new_rows or 0):
+			return _status_response(batch.name)
+		batch.status = "QUEUED"
+		batch.save(ignore_permissions=True)
+	elif batch.status == "DRY_RUN":
+		# Walk both valid state-machine steps (`DRY_RUN -> CONFIRMED -> QUEUED`)
+		# before enqueueing so `import_worker.run_batch` transitions legally
+		# from `QUEUED -> RUNNING` on the very first confirm (L-18).
 		batch.status = "CONFIRMED"
 		batch.save(ignore_permissions=True)
-		batch.reload()
-
-	if batch.status in ("CONFIRMED", "FAILED"):
 		batch.status = "QUEUED"
-	batch.save(ignore_permissions=True)
+		batch.save(ignore_permissions=True)
+	elif batch.status in ("CONFIRMED", "FAILED"):
+		batch.status = "QUEUED"
+		batch.save(ignore_permissions=True)
 
 	from crm_cskh.jobs import import_worker
 
 	frappe.enqueue(
 		import_worker.run_batch,
-		queue="short",
-		timeout=1800,
+		queue="long",
+		timeout=3600,
 		enqueue_after_commit=True,
+		job_id=f"cskh-import-{batch.name}",
+		deduplicate=True,
 		batch_name=batch.name,
 	)
 	batch.reload()
@@ -456,6 +461,8 @@ def confirm(batch_name, actor=None):
 
 
 def _status_response(batch_name):
+	if not batch_name or not frappe.db.exists("CSKH Import Batch", batch_name):
+		raise InvalidRequest("The import batch does not exist.")
 	batch = frappe.get_doc("CSKH Import Batch", batch_name)
 	preview_payload = {}
 	if batch.preview_json:
@@ -475,10 +482,16 @@ def _status_response(batch_name):
 			"duplicate_rows": batch.duplicate_rows,
 			"error_rows": batch.error_rows,
 		},
+		"created_rows": int(batch.created_rows or 0),
+		"reused_rows": int(batch.reused_rows or 0),
+		"skipped_rows": int(batch.skipped_rows or 0),
+		"progress": int(batch.progress or 0),
+		"attempts": int(batch.attempts or 0),
 		"preview": preview_payload.get("rows", []),
 		"preview_truncated": preview_payload.get("truncated", False),
 		"committed_at": batch.committed_at,
 		"error_artifact": batch.error_artifact,
+		"error": getattr(batch, "error", None),
 		"as_of": now_datetime(),
 	}
 
