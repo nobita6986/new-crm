@@ -107,7 +107,7 @@ jobs:
           done
 
           # Run P1 UI endpoint tests into `/tmp/p1-evidence/ui/` so its JUnit XML
-          # is gated against `deploy/p1/ui_test_inventory.json` (11 methods) without
+          # is gated against `deploy/p1/ui_test_inventory.json` (12 methods) without
           # colliding with `deploy/dev/seed/p1_test_inventory.json` in `/tmp/p1-evidence/`.
           ui_module="crm_cskh.tests.test_ui_p1_endpoints"
           ui_log="/tmp/p1-evidence/ui/test_ui_p1_endpoints.log"

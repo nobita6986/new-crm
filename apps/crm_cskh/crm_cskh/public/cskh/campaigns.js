@@ -1266,8 +1266,8 @@
 	})
 
 	const runReads = cskh.sequencer()
-	let canLookup = false
-	let canDistribute = false
+	let canLookup = !!(cskh.capabilities() && (cskh.capabilities().admin || cskh.capabilities().bod))
+	let canDistribute = isAdmin
 
 	async function loadRuns() {
 		const loading = document.getElementById('dist-runs-loading')
@@ -1422,11 +1422,35 @@
 			let retryVersion = item.rule_version || null
 
 			if (normStatus === 'completed_with_errors' && item.run_id) {
-				run = await cskh.post(API_EXECUTE, {
-					preview_id: item.run_id,
-					expected_rule_version: item.rule_version,
-					idempotency_key: 'ui-resume-' + uuid(),
-				})
+				try {
+					run = await cskh.post(API_EXECUTE, {
+						preview_id: item.run_id,
+						expected_rule_version: item.rule_version,
+						idempotency_key: 'ui-resume-' + uuid(),
+					})
+				} catch (resumeErr) {
+					const errCode = cskh.errorCode(resumeErr)
+					if (errCode === 'FORBIDDEN') {
+						throw resumeErr
+					}
+					run = null
+				}
+				if (!run || normRunStatus(run.status) === 'completed_with_errors') {
+					const fresh = await cskh.post(API_PREVIEW, {
+						campaign: item.campaign,
+						idempotency_key: 'ui-retry-' + uuid(),
+					})
+					retryTotal =
+						fresh.summary && fresh.summary.eligible_count !== undefined
+							? Number(fresh.summary.eligible_count)
+							: null
+					retryVersion = fresh.rule_version
+					run = await cskh.post(API_EXECUTE, {
+						preview_id: fresh.preview_id,
+						expected_rule_version: fresh.rule_version,
+						idempotency_key: 'ui-retry-' + uuid(),
+					})
+				}
 			} else if (normStatus === 'failed' && item.run_id) {
 				try {
 					run = await cskh.post(API_EXECUTE, {
@@ -1546,8 +1570,12 @@
 
 	const formCard = document.getElementById('campaign-form-card')
 	const distCard = document.getElementById('dist-card')
+	const initLookupBtn = document.getElementById('dist-run-lookup')
+	const initLookupWrap = document.getElementById('dist-run-id-wrap')
 	if (formCard) formCard.hidden = !isAdmin
 	if (distCard) distCard.hidden = !isAdmin
+	if (initLookupBtn) initLookupBtn.hidden = !canLookup
+	if (initLookupWrap) initLookupWrap.hidden = !canLookup
 
 	document.getElementById('campaign-create').addEventListener('click', function () {
 		createCampaign()

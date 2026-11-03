@@ -28,7 +28,9 @@ motivated it.
 | L-19 / L-20 | Import `>200` rows truncated worker input / missed error artifact rows / double-counted errors | `TestL19L20LargeImportAndErrorArtifact` |
 | L-21 | `api.ownership.revoke` used `bool(return_to_pool)`, turning `"false"`/`"0"` into `True` | `TestL21RevokeBooleanParsing` |
 | L-22 | Leader dashboard missed unassigned (`assigned_to IS NULL`) `revoked`/`closed`/`active_claims` and diverged on `unique_customers` | `TestL22LeaderUnassignedAndUniqueCustomers` |
+| L-23 | `reporting.customer_pool` / `customers.customer_pool` admitted historical `revoked`/`closed` Team A leads now active/owned in Team B | `TestL23BackendCustomerPoolCrossTeamIsolation` |
 | L-25 | Import ignored `name`/`source` mapping, lacked `Import Batch ↔ Lead` relation for pool filtering without Work Items / across reused batches | `TestL25ImportMappingAndBatchLink` |
+| L-26 | `ownership.history`, `customers.pool_list`, `customers.customer_pool`, `customers.my_list` raised HTTP 500 `ValueError` on invalid `page`/`page_size`/`limit` | `TestL26BackendPaginationAndLimitValidation` |
 """
 
 import csv
@@ -2167,12 +2169,20 @@ class TestL25ImportMappingAndBatchLink(P1TestCase):
 		with self.assertRaises(Forbidden):
 			customers_api.customer_pool(batch=prev_b1["batch"])
 
-		frappe.set_user(self.leader_a)
+		frappe.set_user(self.leader_b)
 		self.assertEqual(customers_api.customer_pool(batch=prev_b2["batch"])["total"], 0)
+
+		frappe.set_user(self.leader_a)
+		leader_b2_before = customers_api.customer_pool(batch=prev_b2["batch"], page_size=50)
+		self.assertEqual({item["lead"] for item in leader_b2_before["items"]}, {lead_shared, lead_ph})
+		self.assertNotIn(lead_only_b2, {item["lead"] for item in leader_b2_before["items"]})
 		camp_a = self.make_campaign(team_scope=self.team_a)
 		self.make_work_item(camp_a, lead_only_b2, status="queued")
 		leader_b2_after = customers_api.customer_pool(batch=prev_b2["batch"], page_size=50)
-		self.assertEqual([item["lead"] for item in leader_b2_after["items"]], [lead_only_b2])
+		self.assertEqual(
+			{item["lead"] for item in leader_b2_after["items"]},
+			{lead_shared, lead_ph, lead_only_b2},
+		)
 
 	def test_retry_and_concurrent_multi_batch_race_keep_non_duplicate_links_and_counters(self):
 		from crm_cskh.tests.test_p1_concurrency import _run_in_thread
@@ -2340,6 +2350,1189 @@ class TestL25ImportMappingAndBatchLink(P1TestCase):
 					(f"Contender R2-{idx}", "Source R2"),
 				},
 			)
+
+
+class TestL23BackendCustomerPoolCrossTeamIsolation(P1TestCase):
+	"""L-23 — `reporting.customer_pool` and `customers.customer_pool` must never
+	let historical `revoked`/`closed` Work Items in Team A leak a lead currently
+	active, queued in another team's private campaign, claimed, or owned outside
+	Team A (matching `pool_ui.list` policy 100%).
+	"""
+
+	def test_revoked_or_closed_team_a_history_never_leaks_foreign_active_lead_in_reporting_or_api(self):
+		from crm_cskh.api import customers as customers_api
+		from crm_cskh.services import ownership as ownership_service
+		from crm_cskh.services.errors import Forbidden
+
+		frappe.set_user("Administrator")
+		campaign_a = self.make_campaign(title="Chiến dịch Đội A L23", team_scope=self.team_a)
+		campaign_b = self.make_campaign(title="Chiến dịch Riêng Đội B L23", team_scope=self.team_b)
+		campaign_shared = self.make_campaign(title="Chiến dịch Chung L23", team_scope=None)
+
+		# Baseline Team A positive leads: 1 assigned (`staff_a`), 1 queued (`campaign_a`), 1 revoked-only (`campaign_a`).
+		lead_active_a = self.make_canonical_lead()
+		wi_active_a = self.make_work_item(campaign_a, lead_active_a, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_active_a,
+				"campaign": campaign_a,
+				"work_item": wi_active_a,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_active_a,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="L-23 baseline Team A",
+			request_id=self.unique_key("l23-base-a"),
+		)
+
+		lead_queued_a = self.make_canonical_lead()
+		wi_queued_a = self.make_work_item(campaign_a, lead_queued_a, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_queued_a,
+				"campaign": campaign_a,
+				"work_item": wi_queued_a,
+			}
+		).insert(ignore_permissions=True)
+
+		lead_revoked_stay_a = self.make_canonical_lead()
+		stay_a_phone = frappe.db.get_value("CRM Lead", lead_revoked_stay_a, "mobile_no")
+		self.make_work_item(campaign_a, lead_revoked_stay_a, status="revoked")
+
+		frappe.set_user(self.leader_a)
+		baseline_a = customers_api.customer_pool(page=1, page_size=100)
+		baseline_total_a = baseline_a["total"]
+		baseline_wi_a = baseline_a["work_items"]
+
+		# 1. T1C exact reproduction: assigned in Team A -> permanently revoked (`return_to_pool=False`)
+		#    -> assigned to `staff_c` in Team B's private campaign `campaign_b`, plus linked to an Import Batch.
+		frappe.set_user("Administrator")
+		src_b = self.unique_key("L23SrcTeamB")
+		name_b = f"Khách Bí Mật Đội B {self.unique_key('nm')}"
+		lead_revoked_to_b = self.make_canonical_lead()
+		raw_phone_b = frappe.db.get_value("CRM Lead", lead_revoked_to_b, "mobile_no")
+		alt_phone_b = "0" + raw_phone_b[3:] if raw_phone_b.startswith("+84") else raw_phone_b
+		frappe.db.set_value(
+			"CRM Lead",
+			lead_revoked_to_b,
+			{"first_name": name_b, "lead_name": name_b, "source": src_b},
+			update_modified=False,
+		)
+		l23_file = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": f"l23-{self.unique_key('csv')}.csv",
+				"is_private": 1,
+				"content": f"phone\n{raw_phone_b}\n".encode(),
+			}
+		).insert(ignore_permissions=True)
+		batch_doc = frappe.get_doc(
+			{
+				"doctype": "CSKH Import Batch",
+				"source_file": l23_file.name,
+				"checksum": self.unique_key("l23-sha"),
+				"status": "COMPLETED",
+				"idempotency_key": self.unique_key("l23-batch"),
+				"total_rows": 1,
+				"valid_rows": 1,
+				"created_rows": 1,
+			}
+		).insert(ignore_permissions=True)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Import Batch Lead",
+				"import_batch": batch_doc.name,
+				"lead": lead_revoked_to_b,
+				"outcome": "created",
+			}
+		).insert(ignore_permissions=True)
+
+		wi_a_old = self.make_work_item(campaign_a, lead_revoked_to_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_revoked_to_b,
+				"campaign": campaign_a,
+				"work_item": wi_a_old,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_a_old,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="Initial Team A",
+			request_id=self.unique_key("l23-asg-a"),
+		)
+		ownership_service.revoke(
+			wi_a_old,
+			expected_owner=self.staff_a,
+			actor=self.admin_user,
+			reason="Permanent revoke from Team A",
+			request_id=self.unique_key("l23-rev-a"),
+			return_to_pool=False,
+		)
+		wi_b_now = self.make_work_item(campaign_b, lead_revoked_to_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_revoked_to_b,
+				"campaign": campaign_b,
+				"work_item": wi_b_now,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_b_now,
+			self.staff_c,
+			actor=self.admin_user,
+			reason="Assign to Team B",
+			request_id=self.unique_key("l23-asg-b"),
+		)
+
+		# 2. Lead closed in Team A, now queued with Active Claim in Team B's private campaign.
+		lead_closed_to_b_queued = self.make_canonical_lead()
+		self.make_work_item(campaign_a, lead_closed_to_b_queued, status="closed")
+		wi_b_queued = self.make_work_item(campaign_b, lead_closed_to_b_queued, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_closed_to_b_queued,
+				"campaign": campaign_b,
+				"work_item": wi_b_queued,
+			}
+		).insert(ignore_permissions=True)
+
+		# 3. Lead revoked in Team A, now assigned to `staff_c` in a shared campaign (`team_scope=None`).
+		lead_revoked_to_shared_b = self.make_canonical_lead()
+		self.make_work_item(campaign_a, lead_revoked_to_shared_b, status="revoked")
+		wi_shared_b = self.make_work_item(
+			campaign_shared, lead_revoked_to_shared_b, status="assigned", assigned_to=self.staff_c
+		)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_revoked_to_shared_b,
+				"campaign": campaign_shared,
+				"work_item": wi_shared_b,
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value(
+			"CRM Lead", lead_revoked_to_shared_b, "lead_owner", self.staff_c, update_modified=False
+		)
+
+		# 4. Lead revoked in Team A whose `lead_owner` was set externally to `staff_c`.
+		lead_revoked_ext_owner = self.make_canonical_lead()
+		self.make_work_item(campaign_a, lead_revoked_ext_owner, status="revoked")
+		frappe.db.set_value(
+			"CRM Lead", lead_revoked_ext_owner, "lead_owner", self.staff_c, update_modified=False
+		)
+
+		# 5. Lead returned to pool (`return_to_pool=True` -> `queued`) in Team A, then assigned in Team B (`pool_list` L-23).
+		lead_pool_return_to_b = self.make_canonical_lead()
+		raw_phone_pool_b = str(frappe.db.get_value("CRM Lead", lead_pool_return_to_b, "mobile_no") or "")
+		wi_a_pool_return = self.make_work_item(campaign_a, lead_pool_return_to_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_pool_return_to_b,
+				"campaign": campaign_a,
+				"work_item": wi_a_pool_return,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_a_pool_return,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="Initial Team A before return_to_pool",
+			request_id=self.unique_key("l23-poolret-asg-a"),
+		)
+		ownership_service.revoke(
+			wi_a_pool_return,
+			expected_owner=self.staff_a,
+			actor=self.admin_user,
+			reason="Return to pool in Team A",
+			request_id=self.unique_key("l23-poolret-rev-a"),
+			return_to_pool=True,
+		)
+		wi_b_pool_claim = self.make_work_item(campaign_b, lead_pool_return_to_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_pool_return_to_b,
+				"campaign": campaign_b,
+				"work_item": wi_b_pool_claim,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_b_pool_claim,
+			self.staff_c,
+			actor=self.admin_user,
+			reason="Claimed by Team B",
+			request_id=self.unique_key("l23-poolret-asg-b"),
+		)
+
+		# --- Verify BOTH `reporting.customer_pool` AND `customers_api.customer_pool` as Leader A ---
+		frappe.set_user(self.leader_a)
+		for pool_a in (
+			reporting.customer_pool(self.leader_a, page=1, page_size=100),
+			customers_api.customer_pool(page=1, page_size=100),
+		):
+			leads_a = {row["lead"]: row for row in pool_a["items"]}
+			self.assertNotIn(lead_revoked_to_b, leads_a)
+			self.assertNotIn(lead_closed_to_b_queued, leads_a)
+			self.assertNotIn(lead_revoked_to_shared_b, leads_a)
+			self.assertNotIn(lead_revoked_ext_owner, leads_a)
+			self.assertNotIn(lead_pool_return_to_b, leads_a)
+
+			serialized_a = json.dumps(pool_a, default=str)
+			self.assertNotIn(raw_phone_b, serialized_a)
+			self.assertNotIn(raw_phone_pool_b, serialized_a)
+			self.assertNotIn(alt_phone_b, serialized_a)
+			self.assertNotIn(self.staff_c, serialized_a)
+			self.assertNotIn(campaign_b, serialized_a)
+			self.assertNotIn("Chiến dịch Riêng Đội B L23", serialized_a)
+
+			# Positive controls for Leader A remain intact and exact.
+			self.assertEqual(leads_a[lead_active_a]["state"], "assigned")
+			self.assertEqual(leads_a[lead_active_a]["owner"], self.staff_a)
+			self.assertEqual(leads_a[lead_queued_a]["state"], "queued")
+			self.assertEqual(leads_a[lead_revoked_stay_a]["state"], "revoked")
+			self.assertEqual(pool_a["total"], baseline_total_a)
+			self.assertEqual(pool_a["unique_customers"], baseline_total_a)
+			self.assertEqual(pool_a["work_items"], baseline_wi_a)
+
+		for qpool_a in (
+			reporting.pool_list(self.leader_a, page=1, page_size=100, campaign=campaign_a),
+			customers_api.pool_list(page=1, page_size=100, campaign=campaign_a),
+		):
+			qpool_leads_a = {row["lead"]: row for row in qpool_a["items"]}
+			self.assertIn(lead_queued_a, qpool_leads_a)
+			self.assertNotIn(lead_pool_return_to_b, qpool_leads_a)
+			self.assertEqual(qpool_a["total"], 1)
+			self.assertEqual(qpool_a["unique_customers"], 2)
+			qpool_serialized = json.dumps(qpool_a, default=str)
+			self.assertNotIn(raw_phone_pool_b, qpool_serialized)
+			self.assertNotIn(self.staff_c, qpool_serialized)
+
+		camp_a_pool = customers_api.customer_pool(page=1, page_size=100, campaign=campaign_a)
+		self.assertEqual(camp_a_pool["total"], 3)
+		self.assertEqual(camp_a_pool["unique_customers"], 3)
+		self.assertEqual(camp_a_pool["work_items"], 3)
+
+		# Search & filter oracles as Leader A (`search`, `campaign`, `source`, `batch`) all return 0.
+		for q in (raw_phone_b, alt_phone_b, name_b, lead_revoked_to_b):
+			res_q = customers_api.customer_pool(page=1, page_size=20, search=q)
+			self.assertEqual(res_q["items"], [])
+			self.assertEqual(res_q["total"], 0)
+			self.assertEqual(res_q["unique_customers"], 0)
+			self.assertEqual(res_q["work_items"], 0)
+
+		for kwargs in (
+			{"campaign": campaign_b},
+			{"source": src_b},
+			{"campaign": campaign_a, "source": src_b},
+			{"batch": batch_doc.name},
+		):
+			res_f = customers_api.customer_pool(page=1, page_size=20, **kwargs)
+			self.assertEqual(res_f["items"], [])
+			self.assertEqual(res_f["total"], 0)
+			self.assertEqual(res_f["unique_customers"], 0)
+			self.assertEqual(res_f["work_items"], 0)
+
+		stay_search = customers_api.customer_pool(page=1, page_size=20, search=stay_a_phone)
+		self.assertEqual([r["lead"] for r in stay_search["items"]], [lead_revoked_stay_a])
+		self.assertEqual(stay_search["total"], 1)
+
+		# --- Positive controls for Leader B, CRM Admin, BOD Viewer, and Staff denial ---
+		frappe.set_user(self.leader_b)
+		pool_b = customers_api.customer_pool(page=1, page_size=100)
+		leads_b = {row["lead"]: row for row in pool_b["items"]}
+		self.assertEqual(leads_b[lead_revoked_to_b]["state"], "assigned")
+		self.assertEqual(leads_b[lead_revoked_to_b]["owner"], self.staff_c)
+		self.assertEqual(leads_b[lead_revoked_to_b]["campaign"], campaign_b)
+		self.assertEqual(leads_b[lead_closed_to_b_queued]["state"], "queued")
+		self.assertEqual(leads_b[lead_closed_to_b_queued]["campaign"], campaign_b)
+		self.assertEqual(leads_b[lead_revoked_to_shared_b]["state"], "assigned")
+		self.assertEqual(leads_b[lead_revoked_to_shared_b]["owner"], self.staff_c)
+		self.assertNotIn(lead_active_a, leads_b)
+		self.assertNotIn(lead_revoked_stay_a, leads_b)
+		pool_b_batch = customers_api.customer_pool(batch=batch_doc.name)
+		self.assertEqual(pool_b_batch["total"], 1)
+		self.assertEqual(pool_b_batch["work_items"], 1)
+
+		frappe.set_user(self.admin_user)
+		pool_admin = customers_api.customer_pool(page=1, page_size=100, source=src_b)
+		self.assertEqual(pool_admin["total"], 1)
+		self.assertEqual(pool_admin["items"][0]["lead"], lead_revoked_to_b)
+		self.assertEqual(pool_admin["items"][0]["state"], "assigned")
+		self.assertEqual(pool_admin["items"][0]["campaign"], campaign_b)
+		self.assertEqual(pool_admin["items"][0]["owner"], self.staff_c)
+		self.assertEqual(pool_admin["items"][0]["phone"], raw_phone_b)
+
+		frappe.set_user(self.bod_user)
+		pool_bod = customers_api.customer_pool(page=1, page_size=100, source=src_b)
+		self.assertEqual(pool_bod["total"], 1)
+		self.assertEqual(pool_bod["items"][0]["state"], "assigned")
+		self.assertIsNone(pool_bod["items"][0]["phone"])
+		self.assertEqual(pool_bod["items"][0]["display_name"], "")
+		with self.assertRaises(Forbidden):
+			customers_api.customer_pool(search=raw_phone_b)
+
+		frappe.set_user(self.staff_a)
+		with self.assertRaises(Forbidden):
+			customers_api.customer_pool()
+		self.assertEqual(reporting.customer_pool(self.staff_a)["total"], 0)
+
+
+class TestL26BackendPaginationAndLimitValidation(P1TestCase):
+	"""L-26 — Backend endpoints `ownership.history`, `customers.pool_list`,
+	`customers.customer_pool`, and `customers.my_list` (plus `campaigns.save_rule`
+	and `distribution.enqueue_run`) must validate integer parameters strictly and
+	return HTTP 400 `INVALID_REQUEST`, never HTTP 500 `ValueError`.
+	"""
+
+	def test_invalid_pagination_and_limit_raise_400_invalid_request_on_backend_endpoints(self):
+		from crm_cskh.api import campaigns as campaigns_api
+		from crm_cskh.api import customers as customers_api
+		from crm_cskh.api import ownership as ownership_api
+		from crm_cskh.services.errors import InvalidRequest
+
+		frappe.set_user("Administrator")
+		campaign = self.make_campaign(team_scope=self.team_a)
+		lead = self.make_canonical_lead()
+		wi = self.make_work_item(campaign, lead, status="queued")
+		frappe.get_doc(
+			{"doctype": "CSKH Active Claim", "lead": lead, "campaign": campaign, "work_item": wi}
+		).insert(ignore_permissions=True)
+		ownership_assign(
+			wi,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="L-26 history seed",
+			request_id=self.unique_key("l26-hist"),
+		)
+
+		frappe.set_user(self.admin_user)
+		invalid_pagination_cases = [
+			{"page": "abc", "page_size": 20},
+			{"page": 1, "page_size": "xyz"},
+			{"page": 0, "page_size": 20},
+			{"page": -1, "page_size": 20},
+			{"page": 1, "page_size": 0},
+			{"page": 1, "page_size": -5},
+			{"page": 1, "page_size": 101},
+			{"page": 1_000_001, "page_size": 20},
+			{"page": "1.5", "page_size": 20},
+			{"page": True, "page_size": 20},
+			{"page": 1, "page_size": False},
+		]
+
+		for fn in (
+			customers_api.pool_list,
+			customers_api.customer_pool,
+			customers_api.my_list,
+			lambda **kw: reporting.pool_list(self.admin_user, **kw),
+			lambda **kw: reporting.customer_pool(self.admin_user, **kw),
+			lambda **kw: reporting.my_list(self.staff_a, **kw),
+		):
+			for bad_kwargs in invalid_pagination_cases:
+				with self.assertRaises(InvalidRequest) as ctx:
+					fn(**bad_kwargs)
+				self.assertEqual(ctx.exception.http_status, 400)
+				self.assertEqual(ctx.exception.code, "INVALID_REQUEST")
+
+			ok_res = fn(page="1", page_size="5")
+			self.assertEqual(ok_res["page"], 1)
+			self.assertEqual(ok_res["page_size"], 5)
+			empty_res = fn(page="", page_size="")
+			self.assertEqual(empty_res["page"], 1)
+			self.assertEqual(empty_res["page_size"], 20)
+
+		# Direct `ownership.history` validation on `limit` and `work_item`.
+		for bad_limit in ("abc", "1.5", 0, "0", -1, "-5", 201, "201", True, False, [10]):
+			with self.assertRaises(InvalidRequest) as lim_ctx:
+				ownership_api.history(work_item=wi, limit=bad_limit)
+			self.assertEqual(lim_ctx.exception.http_status, 400)
+			self.assertEqual(lim_ctx.exception.code, "INVALID_REQUEST")
+
+		for bad_wi in (None, "", "   ", 123):
+			with self.assertRaises(InvalidRequest) as wi_ctx:
+				ownership_api.history(work_item=bad_wi, limit=50)
+			self.assertEqual(wi_ctx.exception.http_status, 400)
+			self.assertEqual(wi_ctx.exception.code, "INVALID_REQUEST")
+
+		ok_hist = ownership_api.history(work_item=wi, limit="10")
+		self.assertEqual(ok_hist["work_item"], wi)
+		self.assertGreaterEqual(ok_hist["total"], 1)
+		default_hist = ownership_api.history(work_item=wi, limit="")
+		self.assertEqual(default_hist["total"], ok_hist["total"])
+
+		# Verify P1 HTTP response normalizer produces HTTP 400 + stable `INVALID_REQUEST` envelope.
+		clear_p1_error_context()
+		with self.assertRaises(InvalidRequest) as http_ctx:
+			ownership_api.history(work_item=wi, limit="abc")
+		exc = http_ctx.exception
+		resp = _DummyResponse(
+			exc.http_status_code,
+			{
+				"exc_type": type(exc).__name__,
+				"_error_message": str(exc),
+			},
+		)
+		req = _DummyRequest(path="/api/method/crm_cskh.api.ownership.history")
+		out = normalize_p1_error_response(normalize_error_response(resp, req), req)
+		self.assertEqual(out.status_code, 400)
+		set_body = json.loads(
+			out.data.decode("utf-8") if isinstance(out.data, (bytes, bytearray)) else out.data
+		)
+		self.assertEqual(set_body["code"], "INVALID_REQUEST")
+		self.assertEqual(set_body["p1_code"], "INVALID_REQUEST")
+		self.assertEqual(set_body["exc_type"], "INVALID_REQUEST")
+
+		# Bonus hardening: `campaigns.save_rule` rejects booleans and invalid `version`.
+		for bad_rule_kwargs in (
+			{"campaign": campaign, "user": self.staff_a, "weight": True},
+			{"campaign": campaign, "user": self.staff_a, "weight": 10, "capacity_limit": True},
+			{"campaign": campaign, "user": self.staff_a, "weight": 10, "version": "abc"},
+			{"campaign": campaign, "user": self.staff_a, "weight": 10, "version": 0},
+		):
+			with self.assertRaises(InvalidRequest) as rule_ctx:
+				campaigns_api.save_rule(**bad_rule_kwargs)
+			self.assertEqual(rule_ctx.exception.http_status, 400)
+			self.assertEqual(rule_ctx.exception.code, "INVALID_REQUEST")
+
+
+class TestL29GenericFrappeApiPermissionAndRawRunProtection(P1TestCase):
+	"""L-29 — Generic Frappe API (`frappe.client.*`, Desk `getdoc` / `reportview.get` /
+	`search_link` / `search_widget` / `validate_link`) and direct `has_permission`
+	must enforce document-level team scope on `CSKH Campaign`, `CSKH Assignment Rule`,
+	and `CSKH Distribution Run`, and must protect raw distribution/selection JSON
+	(`preview_json`, `actual_json`, `state_json`, `progress`, `error`,
+	`lease_expires_at`, `selection_json`) via `permlevel = 1` while preserving
+	permitted projection APIs (`distribution.get_run`, `campaigns.list`, `campaigns.rules`,
+	`dashboard.distribution`).
+	"""
+
+	RAW_RUN_FIELDS = (
+		"preview_json",
+		"actual_json",
+		"state_json",
+		"progress",
+		"error",
+		"lease_expires_at",
+	)
+
+	def _build_fixture(self):
+		frappe.set_user("Administrator")
+		lead_a = self.make_canonical_lead()
+		lead_b = self.make_canonical_lead()
+		lead_sh_a = self.make_canonical_lead()
+		lead_sh_b = self.make_canonical_lead()
+
+		camp_a = self.make_campaign(
+			title="L29 Private Team A",
+			team_scope=self.team_a,
+			selection={"leads": [lead_a], "marker": "L29_SEL_A_SECRET"},
+		)
+		camp_b = self.make_campaign(
+			title="L29 Private Team B",
+			team_scope=self.team_b,
+			selection={"leads": [lead_b], "marker": "L29_SEL_B_SECRET"},
+		)
+		camp_shared = self.make_campaign(
+			title="L29 Shared Both Teams",
+			team_scope=None,
+			selection={"leads": [lead_sh_a, lead_sh_b], "marker": "L29_SEL_SHARED_SECRET"},
+		)
+
+		rule_a = self.make_rule(camp_a, self.staff_a, weight=50, team=self.team_a)
+		rule_b = self.make_rule(camp_b, self.staff_c, weight=50, team=self.team_b)
+		rule_shared_a = self.make_rule(camp_shared, self.staff_a, weight=60, team=self.team_a)
+		rule_shared_b = self.make_rule(camp_shared, self.staff_c, weight=40, team=self.team_b)
+
+		def _insert_run(campaign, tag, preview_obj, actual_obj, state_obj, err_text=None):
+			doc = frappe.get_doc(
+				{
+					"doctype": "CSKH Distribution Run",
+					"campaign": campaign,
+					"idempotency_key": self.unique_key(f"l29-{tag}"),
+					"rule_version": 1,
+					"selection_fingerprint": f"fp-{tag}",
+					"status": "completed",
+					"progress": 2,
+					"preview_json": json.dumps(preview_obj, ensure_ascii=False),
+					"actual_json": json.dumps(actual_obj, ensure_ascii=False),
+					"state_json": json.dumps(state_obj, ensure_ascii=False),
+					"error": err_text,
+				}
+			)
+			doc.insert(ignore_permissions=True)
+			return doc.name
+
+		run_a = _insert_run(
+			camp_a,
+			"run-a",
+			{
+				"eligible_count": 1,
+				"excluded_count": 0,
+				"targets": [{"user": self.staff_a, "weight": 50, "planned": 1}],
+				"simulated": {self.staff_a: 1},
+				"leads": [lead_a],
+				"secret": "L29_RAW_PREVIEW_A",
+			},
+			{
+				"total": 1,
+				"created": 1,
+				"errors": 0,
+				"assigned": {self.staff_a: 1},
+				"skipped": [],
+				"secret": "L29_RAW_ACTUAL_A",
+			},
+			{"epoch": 1, "total": 1, "secret": "L29_RAW_STATE_A"},
+		)
+		run_b = _insert_run(
+			camp_b,
+			"run-b",
+			{
+				"eligible_count": 1,
+				"excluded_count": 0,
+				"targets": [{"user": self.staff_c, "weight": 50, "planned": 1}],
+				"simulated": {self.staff_c: 1},
+				"leads": [lead_b],
+				"secret": "L29_RAW_PREVIEW_B",
+			},
+			{
+				"total": 1,
+				"created": 1,
+				"errors": 0,
+				"assigned": {self.staff_c: 1},
+				"skipped": [],
+				"secret": "L29_RAW_ACTUAL_B",
+			},
+			{"epoch": 1, "total": 1, "secret": "L29_RAW_STATE_B"},
+			err_text="L29_RAW_ERR_B",
+		)
+		run_shared = _insert_run(
+			camp_shared,
+			"run-shared",
+			{
+				"eligible_count": 2,
+				"excluded_count": 0,
+				"targets": [
+					{"user": self.staff_a, "weight": 60, "planned": 1},
+					{"user": self.staff_c, "weight": 40, "planned": 1},
+				],
+				"simulated": {self.staff_a: 1, self.staff_c: 1},
+				"leads": [lead_sh_a, lead_sh_b],
+				"secret": "L29_RAW_PREVIEW_SHARED",
+			},
+			{
+				"total": 2,
+				"created": 2,
+				"errors": 0,
+				"assigned": {self.staff_a: 1, self.staff_c: 1},
+				"skipped": [{"lead": lead_b, "reason": "already_claimed"}],
+				"secret": "L29_RAW_ACTUAL_SHARED",
+			},
+			{"epoch": 1, "total": 2, "secret": "L29_RAW_STATE_SHARED"},
+			err_text="L29_RAW_ERR_SHARED",
+		)
+		frappe.db.commit()
+		return {
+			"lead_a": lead_a,
+			"lead_b": lead_b,
+			"lead_sh_a": lead_sh_a,
+			"lead_sh_b": lead_sh_b,
+			"camp_a": camp_a,
+			"camp_b": camp_b,
+			"camp_shared": camp_shared,
+			"rule_a": rule_a,
+			"rule_b": rule_b,
+			"rule_shared_a": rule_shared_a,
+			"rule_shared_b": rule_shared_b,
+			"run_a": run_a,
+			"run_b": run_b,
+			"run_shared": run_shared,
+		}
+
+	def test_doctype_and_document_level_has_permission_across_all_actors(self):
+		from frappe.permissions import get_doc_permissions
+
+		fx = self._build_fixture()
+		doctypes = ("CSKH Campaign", "CSKH Assignment Rule", "CSKH Distribution Run")
+
+		# DocType-level read (`doc=None`): Admin, BOD, Leader A/B -> True; Staff & Guest -> False.
+		for dt in doctypes:
+			for allowed_actor in (self.admin_user, self.bod_user, self.leader_a, self.leader_b):
+				self.assertTrue(
+					frappe.has_permission(dt, "read", doc=None, user=allowed_actor, throw=False),
+					f"{allowed_actor} must pass DocType read on {dt}",
+				)
+			for denied_actor in (self.staff_a, "Guest"):
+				self.assertFalse(
+					frappe.has_permission(dt, "read", doc=None, user=denied_actor, throw=False),
+					f"{denied_actor} must be denied DocType read on {dt}",
+				)
+			# Write/create/delete/export/share denied for ALL non-system business roles.
+			for actor in (
+				self.admin_user,
+				self.bod_user,
+				self.leader_a,
+				self.leader_b,
+				self.staff_a,
+				"Guest",
+			):
+				for ptype in ("write", "create", "delete", "export", "share"):
+					self.assertFalse(
+						frappe.has_permission(dt, ptype, doc=None, user=actor, throw=False),
+						f"{actor} must be denied {ptype} on {dt}",
+					)
+
+		# Document-level checks (both string docname AND loaded `Document`, plus `get_doc_permissions`).
+		expectations = [
+			# (doctype, docname, allowed_users, denied_users)
+			(
+				"CSKH Campaign",
+				fx["camp_a"],
+				(self.admin_user, self.bod_user, self.leader_a),
+				(self.leader_b, self.staff_a, "Guest"),
+			),
+			(
+				"CSKH Campaign",
+				fx["camp_b"],
+				(self.admin_user, self.bod_user, self.leader_b),
+				(self.leader_a, self.staff_a, "Guest"),
+			),
+			(
+				"CSKH Campaign",
+				fx["camp_shared"],
+				(self.admin_user, self.bod_user, self.leader_a, self.leader_b),
+				(self.staff_a, "Guest"),
+			),
+			(
+				"CSKH Assignment Rule",
+				fx["rule_a"],
+				(self.admin_user, self.bod_user, self.leader_a),
+				(self.leader_b, self.staff_a, "Guest"),
+			),
+			(
+				"CSKH Assignment Rule",
+				fx["rule_b"],
+				(self.admin_user, self.bod_user, self.leader_b),
+				(self.leader_a, self.staff_a, "Guest"),
+			),
+			(
+				"CSKH Assignment Rule",
+				fx["rule_shared_a"],
+				(self.admin_user, self.bod_user, self.leader_a),
+				(self.leader_b, self.staff_a, "Guest"),
+			),
+			(
+				"CSKH Assignment Rule",
+				fx["rule_shared_b"],
+				(self.admin_user, self.bod_user, self.leader_b),
+				(self.leader_a, self.staff_a, "Guest"),
+			),
+			(
+				"CSKH Distribution Run",
+				fx["run_a"],
+				(self.admin_user, self.bod_user, self.leader_a),
+				(self.leader_b, self.staff_a, "Guest"),
+			),
+			(
+				"CSKH Distribution Run",
+				fx["run_b"],
+				(self.admin_user, self.bod_user, self.leader_b),
+				(self.leader_a, self.staff_a, "Guest"),
+			),
+			(
+				"CSKH Distribution Run",
+				fx["run_shared"],
+				(self.admin_user, self.bod_user, self.leader_a, self.leader_b),
+				(self.staff_a, "Guest"),
+			),
+		]
+		for dt, docname, allowed_users, denied_users in expectations:
+			frappe.set_user("Administrator")
+			doc_obj = frappe.get_doc(dt, docname)
+			for actor in allowed_users:
+				self.assertTrue(
+					frappe.has_permission(dt, "read", doc=docname, user=actor, throw=False),
+					f"{actor} must read {dt} {docname} by name",
+				)
+				self.assertTrue(
+					frappe.has_permission(dt, "read", doc=doc_obj, user=actor, throw=False),
+					f"{actor} must read {dt} {docname} by Document",
+				)
+				self.assertEqual(get_doc_permissions(doc_obj, user=actor).get("read"), 1)
+				self.assertFalse(frappe.has_permission(dt, "write", doc=doc_obj, user=actor, throw=False))
+			for actor in denied_users:
+				self.assertFalse(
+					frappe.has_permission(dt, "read", doc=docname, user=actor, throw=False),
+					f"{actor} must NOT read {dt} {docname} by name",
+				)
+				self.assertFalse(
+					frappe.has_permission(dt, "read", doc=doc_obj, user=actor, throw=False),
+					f"{actor} must NOT read {dt} {docname} by Document",
+				)
+				self.assertFalse(get_doc_permissions(doc_obj, user=actor).get("read"))
+
+	def test_frappe_client_and_desk_paths_enforce_team_scope_and_strip_raw_json(self):
+		import frappe.client as frappe_client
+		import frappe.desk.form.load as desk_load
+		import frappe.desk.reportview as desk_reportview
+
+		from crm_cskh.api import campaigns as campaigns_api
+		from crm_cskh.api import dashboard as dashboard_api
+		from crm_cskh.api import distribution as distribution_api
+		from crm_cskh.api import guarded_crm
+		from crm_cskh.p1_permissions import validate_p1_filter_fields
+		from crm_cskh.services.errors import Forbidden
+
+		fx = self._build_fixture()
+		explicit_run_fields = ["name", "campaign", "status", *self.RAW_RUN_FIELDS]
+		explicit_camp_fields = ["name", "code", "title", "team_scope", "selection_json"]
+		explicit_rule_fields = ["name", "campaign", "user", "team", "weight", "capacity_limit"]
+
+		def _desk_getdoc_dict(dt, name):
+			frappe.local.response = frappe._dict({"docs": []})
+			desk_load.getdoc(dt, name)
+			return frappe.local.response.docs[-1].as_dict()
+
+		def _desk_reportview_rows(dt, fields, filters):
+			prev = dict(getattr(frappe.local, "form_dict", None) or {})
+			try:
+				frappe.local.form_dict = frappe._dict(
+					{
+						"doctype": dt,
+						"fields": json.dumps(fields),
+						"filters": json.dumps(filters),
+						"limit_page_length": 100,
+					}
+				)
+				compressed = desk_reportview.get()
+				if not compressed:
+					return []
+				keys = compressed["keys"]
+				return [dict(zip(keys, vals, strict=False)) for vals in compressed["values"]]
+			finally:
+				frappe.local.form_dict = frappe._dict(prev)
+
+		# --- 1. Leader A: positive own/shared metadata, negative foreign docs + zero raw JSON leak ---
+		frappe.set_user(self.leader_a)
+		for dt, denied_name in (
+			("CSKH Campaign", fx["camp_b"]),
+			("CSKH Assignment Rule", fx["rule_b"]),
+			("CSKH Assignment Rule", fx["rule_shared_b"]),
+			("CSKH Distribution Run", fx["run_b"]),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				frappe_client.get(dt, denied_name)
+			with self.assertRaises(frappe.PermissionError):
+				_desk_getdoc_dict(dt, denied_name)
+			self.assertEqual(frappe_client.get_value(dt, ["name"], denied_name), {})
+			self.assertEqual(guarded_crm.validate_link(dt, denied_name, fields=["status"]), {})
+
+		# Leader A positive `frappe.client.get` + Desk `getdoc` on own & shared campaign/run/rule:
+		for camp_id in (fx["camp_a"], fx["camp_shared"]):
+			c_doc = frappe_client.get("CSKH Campaign", camp_id)
+			self.assertEqual(c_doc["name"], camp_id)
+			self.assertIsNone(c_doc.get("selection_json"))
+			d_doc = _desk_getdoc_dict("CSKH Campaign", camp_id)
+			self.assertEqual(d_doc["name"], camp_id)
+			self.assertIsNone(d_doc.get("selection_json"))
+			self.assertNotIn("L29_SEL_", json.dumps({"c": c_doc, "d": d_doc}, default=str))
+
+		for rule_id in (fx["rule_a"], fx["rule_shared_a"]):
+			r_doc = frappe_client.get("CSKH Assignment Rule", rule_id)
+			self.assertEqual(r_doc["name"], rule_id)
+			self.assertEqual(r_doc["user"], self.staff_a)
+			dr_doc = _desk_getdoc_dict("CSKH Assignment Rule", rule_id)
+			self.assertEqual(dr_doc["name"], rule_id)
+
+		non_int_raw_fields = ("preview_json", "actual_json", "state_json", "error", "lease_expires_at")
+		for run_id in (fx["run_a"], fx["run_shared"]):
+			run_doc = frappe_client.get("CSKH Distribution Run", run_id)
+			self.assertEqual(run_doc["name"], run_id)
+			for f in non_int_raw_fields:
+				self.assertIsNone(
+					run_doc.get(f), f"Leader A must NOT receive {f} value via frappe.client.get"
+				)
+			self.assertIn(run_doc.get("progress"), (None, 0))
+			d_run = _desk_getdoc_dict("CSKH Distribution Run", run_id)
+			for f in non_int_raw_fields:
+				self.assertIsNone(d_run.get(f), f"Leader A must NOT receive {f} value via Desk getdoc")
+			self.assertIn(d_run.get("progress"), (None, 0))
+			raw_str = json.dumps({"c": run_doc, "d": d_run}, default=str)
+			self.assertNotIn(self.staff_c, raw_str)
+			self.assertNotIn(fx["lead_b"], raw_str)
+			self.assertNotIn(fx["lead_sh_b"], raw_str)
+			self.assertNotIn("L29_RAW_", raw_str)
+
+		# Leader A `frappe.client.get_list` & Desk `reportview.get` with explicit `fields=[...]`:
+		camp_list_a = frappe_client.get_list(
+			"CSKH Campaign",
+			fields=explicit_camp_fields,
+			filters={"name": ["in", [fx["camp_a"], fx["camp_b"], fx["camp_shared"]]]},
+			limit_page_length=20,
+		)
+		self.assertEqual({r["name"] for r in camp_list_a}, {fx["camp_a"], fx["camp_shared"]})
+		for row in camp_list_a:
+			self.assertNotIn("selection_json", row)
+
+		rule_list_a = frappe_client.get_list(
+			"CSKH Assignment Rule",
+			fields=explicit_rule_fields,
+			filters={"name": ["in", [fx["rule_a"], fx["rule_b"], fx["rule_shared_a"], fx["rule_shared_b"]]]},
+			limit_page_length=20,
+		)
+		self.assertEqual({r["name"] for r in rule_list_a}, {fx["rule_a"], fx["rule_shared_a"]})
+
+		run_list_a = frappe_client.get_list(
+			"CSKH Distribution Run",
+			fields=explicit_run_fields,
+			filters={"name": ["in", [fx["run_a"], fx["run_b"], fx["run_shared"]]]},
+			limit_page_length=20,
+		)
+		self.assertEqual({r["name"] for r in run_list_a}, {fx["run_a"], fx["run_shared"]})
+		for row in run_list_a:
+			for f in self.RAW_RUN_FIELDS:
+				self.assertNotIn(f, row)
+
+		rv_runs_a = _desk_reportview_rows(
+			"CSKH Distribution Run",
+			explicit_run_fields,
+			[["CSKH Distribution Run", "name", "in", [fx["run_a"], fx["run_b"], fx["run_shared"]]]],
+		)
+		self.assertEqual({r["name"] for r in rv_runs_a}, {fx["run_a"], fx["run_shared"]})
+		for row in rv_runs_a:
+			for f in self.RAW_RUN_FIELDS:
+				self.assertNotIn(f, row)
+
+		# Desk `search_link` / `search_widget` with `ignore_user_permissions=True` cannot bypass scope!
+		sl_camps = guarded_crm.search_link(
+			"CSKH Campaign",
+			"",
+			filters={"name": ["in", [fx["camp_a"], fx["camp_b"], fx["camp_shared"]]]},
+			ignore_user_permissions=True,
+		)
+		self.assertEqual({r["value"] for r in sl_camps}, {fx["camp_a"], fx["camp_shared"]})
+		sw_runs = guarded_crm.search_widget(
+			"CSKH Distribution Run",
+			"",
+			filters={"name": ["in", [fx["run_a"], fx["run_b"], fx["run_shared"]]]},
+			as_dict=True,
+			ignore_user_permissions=True,
+		)
+		self.assertEqual({r["name"] for r in sw_runs}, {fx["run_a"], fx["run_shared"]})
+
+		# Filter oracle on `permlevel = 1` fields rejected with `PermissionError`:
+		for dt, flt in (
+			("CSKH Distribution Run", [["actual_json", "like", "%staff%"]]),
+			("CSKH Distribution Run", {"preview_json": ["like", "%"]}),
+			("CSKH Distribution Run", [["state_json", "like", "%epoch%"]]),
+			("CSKH Campaign", [["selection_json", "like", "%L29%"]]),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				validate_p1_filter_fields(dt, filters=flt, user=self.leader_a)
+			with self.assertRaises(frappe.PermissionError):
+				guarded_crm.search_link(dt, "", filters=flt)
+
+		# `campaigns.rules`: Leader A denied foreign `camp_b`, allowed `camp_a`, and on `camp_shared` sees only own team!
+		with self.assertRaises(Forbidden):
+			campaigns_api.rules(campaign=fx["camp_b"])
+		shared_rules_a = campaigns_api.rules(campaign=fx["camp_shared"])
+		self.assertEqual([r["user"] for r in shared_rules_a["eligible"]], [self.staff_a])
+
+		# --- 2. Leader B: symmetric checks ---
+		frappe.set_user(self.leader_b)
+		for dt, denied_name in (
+			("CSKH Campaign", fx["camp_a"]),
+			("CSKH Assignment Rule", fx["rule_a"]),
+			("CSKH Assignment Rule", fx["rule_shared_a"]),
+			("CSKH Distribution Run", fx["run_a"]),
+		):
+			with self.assertRaises(frappe.PermissionError):
+				frappe_client.get(dt, denied_name)
+			with self.assertRaises(frappe.PermissionError):
+				_desk_getdoc_dict(dt, denied_name)
+		self.assertEqual(frappe_client.get("CSKH Campaign", fx["camp_b"])["name"], fx["camp_b"])
+		self.assertEqual(frappe_client.get("CSKH Assignment Rule", fx["rule_b"])["name"], fx["rule_b"])
+		run_shared_b = frappe_client.get("CSKH Distribution Run", fx["run_shared"])
+		self.assertEqual(run_shared_b["name"], fx["run_shared"])
+		for f in non_int_raw_fields:
+			self.assertIsNone(run_shared_b.get(f))
+		self.assertIn(run_shared_b.get("progress"), (None, 0))
+		self.assertNotIn(self.staff_a, json.dumps(run_shared_b, default=str))
+		self.assertNotIn(fx["lead_sh_a"], json.dumps(run_shared_b, default=str))
+		shared_rules_b = campaigns_api.rules(campaign=fx["camp_shared"])
+		self.assertEqual([r["user"] for r in shared_rules_b["eligible"]], [self.staff_c])
+
+		# --- 3. BOD Viewer: reads metadata across teams, raw JSON stripped on generic APIs, projection APIs work ---
+		frappe.set_user(self.bod_user)
+		bod_runs = frappe_client.get_list(
+			"CSKH Distribution Run",
+			fields=explicit_run_fields,
+			filters={"name": ["in", [fx["run_a"], fx["run_b"], fx["run_shared"]]]},
+			limit_page_length=20,
+		)
+		self.assertEqual({r["name"] for r in bod_runs}, {fx["run_a"], fx["run_b"], fx["run_shared"]})
+		for row in bod_runs:
+			for f in self.RAW_RUN_FIELDS:
+				self.assertNotIn(f, row)
+		bod_getdoc = _desk_getdoc_dict("CSKH Distribution Run", fx["run_shared"])
+		for f in non_int_raw_fields:
+			self.assertIsNone(bod_getdoc.get(f))
+		self.assertIn(bod_getdoc.get("progress"), (None, 0))
+		self.assertNotIn("L29_RAW_", json.dumps(bod_getdoc, default=str))
+		with self.assertRaises(frappe.PermissionError):
+			validate_p1_filter_fields(
+				"CSKH Distribution Run",
+				filters=[["preview_json", "like", "%L29%"]],
+				user=self.bod_user,
+			)
+		# Permitted projection APIs continue to work for BOD:
+		bod_proj = distribution_api.get_run(run_id=fx["run_shared"])
+		self.assertEqual(bod_proj["run_id"], fx["run_shared"])
+		self.assertEqual(bod_proj["assigned"], {self.staff_a: 1, self.staff_c: 1})
+		self.assertNotIn("preview_json", bod_proj)
+		self.assertNotIn("state_json", bod_proj)
+		self.assertEqual(dashboard_api.distribution(campaign=fx["camp_shared"])["scope"], "all")
+
+		# --- 4. CRM-ADMIN: reads all docs + `permlevel = 1` read-only, write still denied ---
+		frappe.set_user(self.admin_user)
+		admin_run_b = frappe_client.get("CSKH Distribution Run", fx["run_b"])
+		self.assertIn("L29_RAW_ACTUAL_B", admin_run_b["actual_json"])
+		self.assertIn("L29_RAW_PREVIEW_B", admin_run_b["preview_json"])
+		self.assertEqual(admin_run_b["progress"], 2)
+		admin_camp_b = _desk_getdoc_dict("CSKH Campaign", fx["camp_b"])
+		self.assertIn("L29_SEL_B_SECRET", admin_camp_b["selection_json"])
+		with self.assertRaises(frappe.PermissionError):
+			frappe_client.set_value("CSKH Campaign", fx["camp_a"], "title", "Tampered")
+
+		# --- 5. Staff A & Guest: denied across all generic client & Desk read paths ---
+		for denied_actor in (self.staff_a, "Guest"):
+			frappe.set_user(denied_actor)
+			for dt, docname in (
+				("CSKH Campaign", fx["camp_a"]),
+				("CSKH Assignment Rule", fx["rule_a"]),
+				("CSKH Distribution Run", fx["run_a"]),
+			):
+				with self.assertRaises(frappe.PermissionError):
+					frappe_client.get(dt, docname)
+				with self.assertRaises(frappe.PermissionError):
+					frappe_client.get_list(dt, fields=["name"])
+				with self.assertRaises(frappe.PermissionError):
+					_desk_getdoc_dict(dt, docname)
+				with self.assertRaises(frappe.PermissionError):
+					guarded_crm.validate_link(dt, docname)
+
+
+class TestDirectOwnershipMutationEligibility(P1TestCase):
+	"""Direct mutation eligibility on `ownership.assign` and `ownership.reassign`
+	(never inferred from UI `assignees` dropdown; P1 §7.1, §7.2, §7.6).
+	"""
+
+	def test_direct_assign_and_reassign_enforce_team_scope_rule_state_capacity_and_claims(self):
+		from crm_cskh.api import ownership as ownership_api
+		from crm_cskh.services.errors import Conflict, InvalidRequest
+
+		frappe.set_user("Administrator")
+		camp_a = self.make_campaign(title="Direct Mut Team A", team_scope=self.team_a, status="Active")
+		camp_b = self.make_campaign(title="Direct Mut Team B", team_scope=self.team_b, status="Active")
+		camp_closed = self.make_campaign(title="Direct Mut Closed", team_scope=self.team_a, status="Closed")
+
+		lead_1 = self.make_canonical_lead()
+		lead_2 = self.make_canonical_lead()
+		lead_3 = self.make_canonical_lead()
+		lead_closed = self.make_canonical_lead()
+		lead_claimed_b = self.make_canonical_lead()
+
+		wi_1 = self.make_work_item(camp_a, lead_1, status="queued")
+		wi_2 = self.make_work_item(camp_a, lead_2, status="queued")
+		wi_3 = self.make_work_item(camp_a, lead_3, status="queued")
+		wi_closed = self.make_work_item(camp_closed, lead_closed, status="queued")
+
+		# Rules on `camp_a`:
+		# - `staff_a`: v1 capacity=3 -> v2 capacity=1 (latest version lowers capacity to 1!)
+		# - `staff_b`: v1 enabled=1 -> v2 enabled=0 (latest version disables `staff_b`!)
+		self.make_rule(camp_a, self.staff_a, weight=50, capacity=3, version=1, enabled=1, team=self.team_a)
+		self.make_rule(camp_a, self.staff_a, weight=50, capacity=1, version=2, enabled=1, team=self.team_a)
+		self.make_rule(camp_a, self.staff_b, weight=50, capacity=5, version=1, enabled=1, team=self.team_a)
+		rule_b_v2 = self.make_rule(
+			camp_a, self.staff_b, weight=50, capacity=5, version=2, enabled=0, team=self.team_a
+		)
+
+		frappe.set_user(self.admin_user)
+
+		# 1. Direct `assign` rejects out-of-team Sales Users (`staff_c` of Team B, `staff_outside`).
+		for wrong_user in (self.staff_c, self.staff_outside):
+			with self.assertRaises(InvalidRequest) as wt_ctx:
+				ownership_api.assign(
+					work_item=wi_1,
+					target_user=wrong_user,
+					reason="wrong team assign",
+					request_id=self.unique_key("mut-wt-asg"),
+				)
+			self.assertEqual(wt_ctx.exception.code, "INVALID_REQUEST")
+		self.assertEqual(frappe.db.get_value("CSKH Work Item", wi_1, "status"), "queued")
+
+		# 2. Direct `assign` rejects target whose latest rule version is disabled (`staff_b` v2 enabled=0).
+		with self.assertRaises(InvalidRequest) as dis_ctx:
+			ownership_api.assign(
+				work_item=wi_1,
+				target_user=self.staff_b,
+				reason="disabled rule assign",
+				request_id=self.unique_key("mut-dis-asg"),
+			)
+		self.assertEqual(dis_ctx.exception.code, "INVALID_REQUEST")
+
+		# 3. Direct `assign` positive control: `staff_a` has capacity=1 in v2 and used=0 -> succeeds.
+		ok_asg = ownership_api.assign(
+			work_item=wi_1,
+			target_user=self.staff_a,
+			reason="valid assign",
+			request_id=self.unique_key("mut-ok-asg"),
+		)
+		self.assertEqual(ok_asg["status"], "assigned")
+		self.assertEqual(ok_asg["owner"], self.staff_a)
+
+		# 4. Direct `assign` rejects `staff_a` on `wi_2` with `CAPACITY_EXCEEDED` (v2 capacity=1 is full,
+		#    historical v1 capacity=3 must NOT bypass v2!).
+		with self.assertRaises(Conflict) as cap_asg_ctx:
+			ownership_api.assign(
+				work_item=wi_2,
+				target_user=self.staff_a,
+				reason="over v2 capacity assign",
+				request_id=self.unique_key("mut-cap-asg"),
+			)
+		self.assertEqual(cap_asg_ctx.exception.code, "CAPACITY_EXCEEDED")
+		self.assertEqual(frappe.db.get_value("CSKH Work Item", wi_2, "status"), "queued")
+
+		# 5. Direct `reassign` from `staff_a` (`wi_1`) rejects out-of-team `staff_c` and disabled-rule `staff_b`.
+		with self.assertRaises(InvalidRequest):
+			ownership_api.reassign(
+				work_item=wi_1,
+				expected_owner=self.staff_a,
+				target_user=self.staff_c,
+				reason="wrong team reassign",
+				request_id=self.unique_key("mut-wt-reasg"),
+			)
+		with self.assertRaises(InvalidRequest):
+			ownership_api.reassign(
+				work_item=wi_1,
+				expected_owner=self.staff_a,
+				target_user=self.staff_b,
+				reason="disabled rule reassign",
+				request_id=self.unique_key("mut-dis-reasg"),
+			)
+		self.assertEqual(frappe.db.get_value("CSKH Work Item", wi_1, "assigned_to"), self.staff_a)
+
+		# 6. Re-enable `staff_b` v2 with capacity=1, assign `wi_2` to `staff_b`, then verify direct `reassign`
+		#    of `wi_1` -> `staff_b` hits `CAPACITY_EXCEEDED`, while `wi_3` -> `leader_a` (in `team_a`, no rule row) succeeds!
+		frappe.db.set_value(
+			"CSKH Assignment Rule", rule_b_v2, {"enabled": 1, "capacity_limit": 1}, update_modified=False
+		)
+		ok_asg_b = ownership_api.assign(
+			work_item=wi_2,
+			target_user=self.staff_b,
+			reason="fill staff_b capacity",
+			request_id=self.unique_key("mut-ok-asg-b"),
+		)
+		self.assertEqual(ok_asg_b["owner"], self.staff_b)
+
+		with self.assertRaises(Conflict) as cap_reasg_ctx:
+			ownership_api.reassign(
+				work_item=wi_1,
+				expected_owner=self.staff_a,
+				target_user=self.staff_b,
+				reason="over v2 capacity reassign",
+				request_id=self.unique_key("mut-cap-reasg"),
+			)
+		self.assertEqual(cap_reasg_ctx.exception.code, "CAPACITY_EXCEEDED")
+
+		# Positive reassign to `leader_a` (enabled `Sales User` inside `team_a` subtree):
+		ok_reasg = ownership_api.reassign(
+			work_item=wi_1,
+			expected_owner=self.staff_a,
+			target_user=self.leader_a,
+			reason="escalate to team A leader",
+			request_id=self.unique_key("mut-ok-reasg"),
+		)
+		self.assertEqual(ok_reasg["status"], "reassigned")
+		self.assertEqual(ok_reasg["owner"], self.leader_a)
+		self.assertEqual(frappe.db.get_value("CRM Lead", lead_1, "lead_owner"), self.leader_a)
+
+		# Also verify `wi_3` -> `leader_a` fails if `leader_a` gets a rule pointing to foreign `team_b`:
+		bad_team_rule = self.make_rule(
+			camp_a, self.leader_a, weight=10, capacity=0, version=2, enabled=1, team=self.team_b
+		)
+		try:
+			with self.assertRaises(InvalidRequest):
+				ownership_api.assign(
+					work_item=wi_3,
+					target_user=self.leader_a,
+					reason="rule team mismatch",
+					request_id=self.unique_key("mut-rule-team"),
+				)
+		finally:
+			frappe.delete_doc("CSKH Assignment Rule", bad_team_rule, force=True, ignore_permissions=True)
+
+		# 7. Closed campaign rejects both `assign` and `reassign` with `Conflict` (`CONFLICT`).
+		with self.assertRaises(Conflict) as closed_asg_ctx:
+			ownership_api.assign(
+				work_item=wi_closed,
+				target_user=self.staff_a,
+				reason="closed campaign assign",
+				request_id=self.unique_key("mut-closed-asg"),
+			)
+		self.assertEqual(closed_asg_ctx.exception.code, "CONFLICT")
+
+		frappe.db.set_value("CSKH Campaign", camp_a, "status", "Closed", update_modified=False)
+		try:
+			with self.assertRaises(Conflict) as closed_reasg_ctx:
+				ownership_api.reassign(
+					work_item=wi_2,
+					expected_owner=self.staff_b,
+					target_user=self.staff_a,
+					reason="closed campaign reassign",
+					request_id=self.unique_key("mut-closed-reasg"),
+				)
+			self.assertEqual(closed_reasg_ctx.exception.code, "CONFLICT")
+		finally:
+			frappe.db.set_value("CSKH Campaign", camp_a, "status", "Active", update_modified=False)
+
+		# 8. Cross-campaign Active Claim guard on `ownership.assign`:
+		#    `wi_claim_a` returned to pool (`queued`) in `camp_a`, then `lead_claimed_b` claimed & assigned in `camp_b`.
+		wi_claim_a = self.make_work_item(camp_a, lead_claimed_b, status="queued")
+		wi_claim_b = self.make_work_item(camp_b, lead_claimed_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_claimed_b,
+				"campaign": camp_b,
+				"work_item": wi_claim_b,
+			}
+		).insert(ignore_permissions=True)
+		ownership_api.assign(
+			work_item=wi_claim_b,
+			target_user=self.staff_c,
+			reason="claimed in camp_b",
+			request_id=self.unique_key("mut-claim-b"),
+		)
+		with self.assertRaises(Conflict) as cross_claim_ctx:
+			ownership_api.assign(
+				work_item=wi_claim_a,
+				target_user=self.staff_a,
+				reason="must not steal active claim from camp_b",
+				request_id=self.unique_key("mut-steal-a"),
+			)
+		self.assertEqual(cross_claim_ctx.exception.code, "ALREADY_ASSIGNED")
+		self.assertEqual(frappe.db.get_value("CRM Lead", lead_claimed_b, "lead_owner"), self.staff_c)
+		self.assertEqual(frappe.db.get_value("CSKH Work Item", wi_claim_a, "status"), "queued")
 
 
 if __name__ == "__main__":

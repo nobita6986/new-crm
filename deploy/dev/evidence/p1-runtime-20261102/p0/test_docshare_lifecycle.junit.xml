@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareAssignAgent-2[REDACTED_PHONE]48" tests="3" file="crm_cskh/tests/test_docshare_lifecycle.py" time="2.117" timestamp="2026-11-03T09:22:51" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareAssignAgent" name="test_docshare_created_by_assign_agent_when_assignee_lacks_permission" time="1.226" timestamp="2026-11-03T09:22:50" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="447">
+	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareAssignAgent-2[REDACTED_PHONE]49" tests="3" file="crm_cskh/tests/test_docshare_lifecycle.py" time="3.243" timestamp="2026-11-03T15:27:53" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareAssignAgent" name="test_docshare_created_by_assign_agent_when_assignee_lacks_permission" time="2.067" timestamp="2026-11-03T15:27:52" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="447">
 			<!--Q2 — generic assignment không được đổi owner hoặc cấp share ngoài scope.
 
 Actor: `Administrator` (system). Assignee: user `c` (Team 2, ngoài scope
@@ -16,7 +16,7 @@ Message: CRM Lead assignments cannot change ownership; use the controlled Lead o
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareAssignAgent" name="test_docshare_flags_after_assign_agent" time="0.420" timestamp="2026-11-03T09:22:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="512">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareAssignAgent" name="test_docshare_flags_after_assign_agent" time="0.574" timestamp="2026-11-03T15:27:52" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="512">
 			<!--Q2/Q4 — System Manager cũng không đổi owner qua generic assignment.
 
 Quyết định: assignment chung không được biến thành đường đổi owner; thay đổi
@@ -27,7 +27,7 @@ Message: CRM Lead assignments cannot change ownership; use the controlled Lead o
 [DocShare characterization] after denied generic assignment — DocShare: None
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareAssignAgent" name="test_docshare_not_created_by_assign_agent_when_assignee_already_in_scope" time="0.471" timestamp="2026-11-03T09:22:51" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="483">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareAssignAgent" name="test_docshare_not_created_by_assign_agent_when_assignee_already_in_scope" time="0.602" timestamp="2026-11-03T15:27:53" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="483">
 			<!--Q2 — assignment cho người trong scope không tạo DocShare phụ.
 
 Assignee: user `a` (owner hiện tại của Lead).
@@ -46,8 +46,8 @@ Message: Already in the following Users ToDo list:cskh-sec-a@example.test
 ]]></system-out>
 		</testcase>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareBaseline-2[REDACTED_PHONE]48" tests="1" file="crm_cskh/tests/test_docshare_lifecycle.py" time="0.404" timestamp="2026-11-03T09:22:52" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareBaseline" name="test_docshare_absent_before_any_assignment" time="0.404" timestamp="2026-11-03T09:22:52" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="427">
+	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareBaseline-2[REDACTED_PHONE]49" tests="1" file="crm_cskh/tests/test_docshare_lifecycle.py" time="0.589" timestamp="2026-11-03T15:27:54" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareBaseline" name="test_docshare_absent_before_any_assignment" time="0.589" timestamp="2026-11-03T15:27:54" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="427">
 			<!--(P) Baseline — Lead vừa tạo (có `lead_owner`) không có `DocShare` nào.
 
 Đây là **tiền đề kỹ thuật** (trung lập với chính sách): cần biết trạng
@@ -58,8 +58,8 @@ thái nền để các test sau diễn giải được. Không liên quan Q1..Q4
 ]]></system-out>
 		</testcase>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareEffectivePermission-2[REDACTED_PHONE]48" tests="2" file="crm_cskh/tests/test_docshare_lifecycle.py" time="2.164" timestamp="2026-11-03T09:22:54" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareEffectivePermission" name="test_effective_permission_before_and_after_reassign" time="1.192" timestamp="2026-11-03T09:22:53" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="666">
+	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareEffectivePermission-2[REDACTED_PHONE]49" tests="2" file="crm_cskh/tests/test_docshare_lifecycle.py" time="2.738" timestamp="2026-11-03T15:27:57" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareEffectivePermission" name="test_effective_permission_before_and_after_reassign" time="1.650" timestamp="2026-11-03T15:27:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="666">
 			<!--Q1 — reassign thu hồi share cũ và không để quyền đọc còn sót.
 
 Chuỗi quan sát:
@@ -72,13 +72,13 @@ Chuỗi quan sát:
 Quyết định P0: mọi DocShare cũ trên Lead được thu hồi khi owner đổi.
 -->
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
-[DocShare characterization] before reassign — has_permission=True in_list=False: {'share': {'name': 'dn1a70olke', 'user': 'cskh-sec-c@example.test', 'read': 1, 'write': 0, 'submit': 0, 'share': 0, 'everyone': 0}}
+[DocShare characterization] before reassign — has_permission=True in_list=False: {'share': {'name': '3je3o0shds', 'user': 'cskh-sec-c@example.test', 'read': 1, 'write': 0, 'submit': 0, 'share': 0, 'everyone': 0}}
 Message: Please setup default outgoing Email Account from Tools > Email Account
 [DocShare characterization] after reassign — DocShare: []
 [DocShare characterization] after reassign — has_permission=False in_list=False: {'share': None}
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareEffectivePermission" name="test_effective_permission_of_shared_child_records" time="0.972" timestamp="2026-11-03T09:22:54" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="711">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareEffectivePermission" name="test_effective_permission_of_shared_child_records" time="1.088" timestamp="2026-11-03T15:27:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="711">
 			<!--Q1 — share trên Lead không cấp quyền cho child ngoài phạm vi.
 
 Đây là nhánh quan trọng: hook `linked_lead_has_permission`
@@ -96,8 +96,8 @@ Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareLeadSave-2[REDACTED_PHONE]48" tests="2" file="crm_cskh/tests/test_docshare_lifecycle.py" time="1.197" timestamp="2026-11-03T09:22:56" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareLeadSave" name="test_docshare_removed_by_lead_save_when_owner_changes" time="0.691" timestamp="2026-11-03T09:22:55" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="537">
+	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareLeadSave-2[REDACTED_PHONE]49" tests="2" file="crm_cskh/tests/test_docshare_lifecycle.py" time="1.438" timestamp="2026-11-03T15:27:59" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareLeadSave" name="test_docshare_removed_by_lead_save_when_owner_changes" time="0.761" timestamp="2026-11-03T15:27:58" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="537">
 			<!--Q1 — đổi `lead_owner` thu hồi mọi DocShare cũ.
 
 Cơ chế: `doc_events["CRM Lead"]["on_update"]` → `clear_stale_lead_shares`
@@ -111,7 +111,7 @@ Message: Please setup default outgoing Email Account from Tools > Email Account
 [DocShare characterization] after lead.save() đổi lead_owner — DocShare: []
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareLeadSave" name="test_docshare_survives_lead_save_when_owner_unchanged" time="0.506" timestamp="2026-11-03T09:22:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="557">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareLeadSave" name="test_docshare_survives_lead_save_when_owner_unchanged" time="0.677" timestamp="2026-11-03T15:27:59" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="557">
 			<!--(PIN Q1) `lead.save()` **không** đổi `lead_owner` ⇒ `DocShare` còn?
 
 Cơ chế: `clear_stale_lead_shares` chỉ chạy khi `doc.has_value_changed(
@@ -120,12 +120,12 @@ Cơ chế: `clear_stale_lead_shares` chỉ chạy khi `doc.has_value_changed(
 Quyết định P0: khi owner không đổi, share hợp lệ hiện có được giữ nguyên.
 -->
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
-[DocShare characterization] after lead.save() KHÔNG đổi lead_owner — DocShare: [{'name': 'do1ahra6d1', 'user': 'cskh-sec-c@example.test', 'read': 1, 'write': 0, 'submit': 0, 'share': 0, 'everyone': 0}]
+[DocShare characterization] after lead.save() KHÔNG đổi lead_owner — DocShare: [{'name': '3kkokbre5e', 'user': 'cskh-sec-c@example.test', 'read': 1, 'write': 0, 'submit': 0, 'share': 0, 'everyone': 0}]
 ]]></system-out>
 		</testcase>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocSharePolicyPinRegistry-2[REDACTED_PHONE]48" tests="1" file="crm_cskh/tests/test_docshare_lifecycle.py" time="0.008" timestamp="2026-11-03T09:22:56" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocSharePolicyPinRegistry" name="test_policy_pin_registry_is_consistent" time="0.008" timestamp="2026-11-03T09:22:56" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="780">
+	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocSharePolicyPinRegistry-2[REDACTED_PHONE]49" tests="1" file="crm_cskh/tests/test_docshare_lifecycle.py" time="0.004" timestamp="2026-11-03T15:27:59" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocSharePolicyPinRegistry" name="test_policy_pin_registry_is_consistent" time="0.004" timestamp="2026-11-03T15:27:59" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="780">
 			<!--Registry `POLICY_DECISIONS` phải nhất quán với code thực tế.-->
 			<system-out><![CDATA[[DocShare characterization] OWNER_DECISIONS_CONFIRMED=True: {'Q1': 'DECIDED', 'Q2': 'DECIDED', 'Q3': 'DECIDED', 'Q4': 'DECIDED'}
 [DocShare characterization] Q1 — Khi `lead_owner` đổi, `DocShare` cũ có nên bị xoá hết, hay giữ lại share đã được cấp hợp lệ?: `clear_stale_lead_shares` (permissions.py L141-143) xoá TOÀN BỘ `DocShare` của Lead khi `lead_owner` đổi; giữ nguyên khi không đổi.
@@ -144,8 +144,8 @@ Quyết định P0: khi owner không đổi, share hợp lệ hiện có đượ
 ]]></system-out>
 		</testcase>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareRemoveAssignments-2[REDACTED_PHONE]48" tests="1" file="crm_cskh/tests/test_docshare_lifecycle.py" time="0.520" timestamp="2026-11-03T09:22:57" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareRemoveAssignments" name="test_docshare_survives_remove_assignments" time="0.520" timestamp="2026-11-03T09:22:57" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="590">
+	<testsuite name="crm_cskh.tests.test_docshare_lifecycle.TestDocShareRemoveAssignments-2[REDACTED_PHONE]49" tests="1" file="crm_cskh/tests/test_docshare_lifecycle.py" time="0.650" timestamp="2026-11-03T15:28:00" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_docshare_lifecycle.TestDocShareRemoveAssignments" name="test_docshare_survives_remove_assignments" time="0.650" timestamp="2026-11-03T15:28:00" file="/src/apps/crm_cskh/crm_cskh/tests/test_docshare_lifecycle.py" line="590">
 			<!--Q3 — hủy assignment phải thu hồi DocShare của assignee đó.
 
 Cơ chế: `crm.api.doc.remove_assignments` (CRM v1.87.0 L589-604 — đã kiểm
@@ -159,7 +159,7 @@ Phần assert về `ToDo.status = Cancelled` là **(P)** — hành vi upstream
 CRM đã xác định, không phải câu hỏi chính sách của `crm_cskh`.
 -->
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
-[DocShare characterization] after remove_assignments — ToDo: [{'name': 'do952v1d3m', 'status': 'Cancelled'}]
+[DocShare characterization] after remove_assignments — ToDo: [{'name': '3ku2pj985o', 'status': 'Cancelled'}]
 [DocShare characterization] after remove_assignments — DocShare: None
 ]]></system-out>
 		</testcase>

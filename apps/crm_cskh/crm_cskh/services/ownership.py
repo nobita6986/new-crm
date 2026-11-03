@@ -32,7 +32,8 @@ result is asserted before the transaction commits.
 import frappe
 from frappe.utils import now_datetime
 
-from crm_cskh.api._params import parse_bool
+from crm_cskh.api._params import parse_bool, parse_optional_str
+from crm_cskh.services import eligibility
 from crm_cskh.services.errors import Conflict, Forbidden, InvalidRequest, NotFound
 
 REASSIGN = "reassign"
@@ -65,12 +66,14 @@ def _require_actor_permission(actor, action):
 
 
 def _require_target_eligibility(target_user):
+	target_user = parse_optional_str(target_user, "The target user must be a string.")
 	if not target_user:
 		raise InvalidRequest("A target user is required.")
 	if not frappe.db.get_value("User", target_user, "enabled"):
 		raise InvalidRequest("The target user is disabled.")
 	if "Sales User" not in frappe.get_roles(target_user):
 		raise InvalidRequest("The target user must be a Sales User.")
+	return target_user
 
 
 def _lock_work_item(work_item):
@@ -95,16 +98,70 @@ def _capacity_usage(campaign, user):
 
 
 def _capacity_limit(campaign, user):
-	limits = frappe.db.get_all(
+	rules = frappe.db.get_all(
 		"CSKH Assignment Rule",
-		filters={"campaign": campaign, "user": user, "enabled": 1},
-		fields=["capacity_limit"],
-		pluck="capacity_limit",
+		filters={"campaign": campaign, "user": user},
+		fields=["capacity_limit", "enabled", "version"],
 	)
-	if not limits:
+	if not rules:
+		return 0
+	latest_version = max((int(row.version or 1) for row in rules), default=1)
+	enabled_latest = [
+		row for row in rules if int(row.version or 1) == latest_version and int(row.enabled or 0)
+	]
+	if not enabled_latest:
 		return 0
 	# 0 means unlimited (P1 5.2).
-	return max(int(limit or 0) for limit in limits)
+	return max(int(row.capacity_limit or 0) for row in enabled_latest)
+
+
+def _require_campaign_target_eligibility(campaign, target_user):
+	"""Enforce campaign status, `team_scope` subtree, latest rule state, and capacity (P1 7.1, 7.2, 7.6)."""
+	target_user = _require_target_eligibility(target_user)
+	campaign_doc = frappe.db.get_value(
+		"CSKH Campaign",
+		campaign,
+		["name", "status", "team_scope"],
+		as_dict=True,
+	)
+	if not campaign_doc:
+		raise NotFound("The campaign does not exist.")
+	if campaign_doc.status == "Closed":
+		raise Conflict("The campaign is closed and cannot accept ownership changes.", code="CONFLICT")
+
+	allowed_users, allowed_nodes = eligibility.campaign_team_scope_members(campaign_doc.team_scope)
+	if allowed_users is not None and target_user not in allowed_users:
+		raise InvalidRequest("The target user is outside the campaign team scope.")
+
+	user_rules = frappe.db.get_all(
+		"CSKH Assignment Rule",
+		filters={"campaign": campaign, "user": target_user},
+		fields=["name", "team", "weight", "capacity_limit", "enabled", "version"],
+	)
+	if user_rules:
+		latest_version = max((int(row.version or 1) for row in user_rules), default=1)
+		latest_rows = [row for row in user_rules if int(row.version or 1) == latest_version]
+		enabled_latest = [row for row in latest_rows if int(row.enabled or 0)]
+		if not enabled_latest:
+			raise InvalidRequest("The target user's assignment rule is disabled in this campaign.")
+		if max((int(row.weight or 0) for row in enabled_latest), default=0) <= 0:
+			raise InvalidRequest("The target user has no positive assignment weight in this campaign.")
+		if allowed_nodes is not None:
+			for row in enabled_latest:
+				if row.team and row.team not in allowed_nodes:
+					raise InvalidRequest(
+						"The target user's assignment rule is outside the campaign team scope."
+					)
+		limit = max((int(row.capacity_limit or 0) for row in enabled_latest), default=0)
+		if limit > 0:
+			used = _capacity_usage(campaign, target_user)
+			if used + 1 > limit:
+				raise Conflict(
+					"The target user has no remaining capacity.",
+					code="CAPACITY_EXCEEDED",
+					details={"capacity_limit": limit, "used": used},
+				)
+	return target_user
 
 
 def _original_distribution_run(work_item):
@@ -276,9 +333,13 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 	"""Assign a queued work item to `target_user`."""
 	actor = actor or frappe.session.user
 	_require_actor_permission(actor, ASSIGN)
+	work_item = parse_optional_str(work_item, "The work item must be a string.")
+	if not work_item:
+		raise InvalidRequest("The work item is required.")
+	request_id = parse_optional_str(request_id, "The request id must be a string.")
 	if not request_id:
 		raise InvalidRequest("A request id is required so the action stays idempotent.")
-	reason = reason or "Initial assignment"
+	reason = parse_optional_str(reason, "The reason must be a string.") or "Initial assignment"
 
 	event_id = _event_id(request_id, work_item, ASSIGN)
 	existing = _find_history_event(event_id)
@@ -292,7 +353,31 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 			code="ALREADY_ASSIGNED",
 			details={"status": item.status},
 		)
-	_require_target_eligibility(target_user)
+	claim = frappe.db.get_value(
+		"CSKH Active Claim",
+		{"lead": item.lead},
+		["work_item", "campaign"],
+		as_dict=True,
+	)
+	if claim and (claim.work_item != work_item or claim.campaign != item.campaign):
+		raise Conflict(
+			"The customer already has an active claim.",
+			code="ALREADY_ASSIGNED",
+			details={"campaign": claim.campaign, "work_item": claim.work_item},
+		)
+	other_assigned = frappe.db.get_value(
+		"CSKH Work Item",
+		{"lead": item.lead, "status": "assigned", "name": ["!=", work_item]},
+		["name", "campaign"],
+		as_dict=True,
+	)
+	if other_assigned:
+		raise Conflict(
+			"The customer is already assigned in another work item.",
+			code="ALREADY_ASSIGNED",
+			details={"campaign": other_assigned.campaign, "work_item": other_assigned.name},
+		)
+	target_user = _require_campaign_target_eligibility(item.campaign, target_user)
 
 	now = now_datetime()
 	frappe.db.set_value(
@@ -348,11 +433,18 @@ def reassign(
 	"""
 	actor = actor or frappe.session.user
 	_require_actor_permission(actor, REASSIGN)
+	work_item = parse_optional_str(work_item, "The work item must be a string.")
+	if not work_item:
+		raise InvalidRequest("The work item is required.")
+	if expected_owner is not None and not isinstance(expected_owner, str):
+		raise InvalidRequest("The expected owner must be a string.")
+	request_id = parse_optional_str(request_id, "The request id must be a string.")
 	if not request_id:
 		raise InvalidRequest("A request id is required so the action stays idempotent.")
+	reason = parse_optional_str(reason, "The reason must be a string.")
 	if not reason:
 		raise InvalidRequest("A reason is required to transfer a customer.")
-	_require_target_eligibility(target_user)
+	target_user = _require_target_eligibility(target_user)
 
 	event_id = _event_id(request_id, work_item, REASSIGN)
 	existing = _find_history_event(event_id)
@@ -378,15 +470,7 @@ def reassign(
 			code="ALREADY_ASSIGNED",
 		)
 
-	limit = _capacity_limit(item.campaign, target_user)
-	if limit:
-		used = _capacity_usage(item.campaign, target_user)
-		if used + 1 > limit:
-			raise Conflict(
-				"The target user has no remaining capacity.",
-				code="CAPACITY_EXCEEDED",
-				details={"capacity_limit": limit, "used": used},
-			)
+	target_user = _require_campaign_target_eligibility(item.campaign, target_user)
 
 	now = now_datetime()
 	old_owner = item.assigned_to

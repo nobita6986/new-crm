@@ -7,7 +7,7 @@ the audit trail (P1 7.6, 7.7).
 
 import frappe
 
-from crm_cskh.api._params import parse_bool
+from crm_cskh.api._params import parse_bool, parse_int, parse_optional_str
 from crm_cskh.services import ownership
 from crm_cskh.services.errors import Forbidden, InvalidRequest, P1Error
 
@@ -85,15 +85,16 @@ def revoke(work_item=None, expected_owner=None, reason=None, request_id=None, re
 def history(work_item=None, limit=50):
 	"""Return the append-only assignment history of a work item."""
 	actor = frappe.session.user
-	if not work_item:
+	work_item_val = parse_optional_str(work_item, "The work item must be a string.")
+	if not work_item_val:
 		raise InvalidRequest("The work item is required.")
-	limit = max(1, min(int(limit or 50), 200))
+	parsed_limit = parse_int(limit, default=50, minimum=1, maximum=200, field="limit")
 	if actor != "Administrator" and "System Manager" not in frappe.get_roles(actor):
-		if not frappe.has_permission("CSKH Work Item", "read", doc=work_item, throw=False):
+		if not frappe.has_permission("CSKH Work Item", "read", doc=work_item_val, throw=False):
 			raise Forbidden("You may not read this assignment history.")
 	rows = frappe.get_list(
 		"CSKH Assignment History",
-		filters={"work_item": work_item},
+		filters={"work_item": work_item_val},
 		fields=[
 			"name",
 			"action",
@@ -108,6 +109,6 @@ def history(work_item=None, limit=50):
 			"event_id",
 		],
 		order_by="event_at asc",
-		limit_page_length=limit,
+		limit_page_length=parsed_limit,
 	)
-	return {"work_item": work_item, "items": rows, "total": len(rows)}
+	return {"work_item": work_item_val, "items": rows, "total": len(rows)}
