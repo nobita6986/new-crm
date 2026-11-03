@@ -1,0 +1,176 @@
+{
+  "site": "p2.localhost",
+  "base_url": "http://p2.localhost:8220",
+  "worktree_head_sha": "7babf0b91c079cfd6c93c3c1f5876f2f55376918",
+  "http_report_sha": "7babf0b91c079cfd6c93c3c1f5876f2f55376918",
+  "total_checks": 17,
+  "all_passed": true,
+  "invariants_verified": {
+    "html_lang_vi": true,
+    "zero_white_screens": true,
+    "zero_console_errors": true,
+    "zero_page_errors": true,
+    "zero_asset_failures": true,
+    "zero_http_500s": true,
+    "zero_raw_phones_in_dom": true,
+    "xss_and_formula_inert": true,
+    "single_post_per_save_action": true,
+    "timezone_2359_0000_across_os_timezones": true,
+    "a_to_b_url_replay_zero_leak": true
+  },
+  "entries": [
+    {
+      "check_id": "B2E-01-my-customers-upgraded",
+      "actor": "cskh-p2-staff-a@example.test",
+      "role": "Sales User (Staff A1)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/my-customers",
+      "screenshot": "deploy/p2/evidence/screenshots/01-staff-a-my-customers-upgraded.png",
+      "notes": "My Customers upgraded with Vietnamese CSKH columns, chips, masked phones, and quick actions."
+    },
+    {
+      "check_id": "B2E-02-quick-record-single-post",
+      "actor": "cskh-p2-staff-a@example.test",
+      "role": "Sales User (Staff A1)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/my-customers",
+      "screenshot": "deploy/p2/evidence/screenshots/02-staff-a-after-quick-record.png",
+      "notes": "Single-POST record_attempt updated My Customers row to Chờ chăm sóc lại + Chưa kết nối."
+    },
+    {
+      "check_id": "B2E-03-work-item-timeline-and-reload",
+      "actor": "cskh-p2-staff-a@example.test",
+      "role": "Sales User (Staff A1)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?id=5te41g17ac",
+      "screenshot": "deploy/p2/evidence/screenshots/03-staff-a-work-item-happy.png",
+      "notes": "Workspace shows Self-reported badge, Chưa kết nối, callback task, and zero direct edit/delete buttons."
+    },
+    {
+      "check_id": "B2E-04-honesty-zalo-calllog-note-cancel",
+      "actor": "cskh-p2-staff-a@example.test",
+      "role": "Sales User (Staff A1)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?id=5tdgihm05f",
+      "screenshot": "deploy/p2/evidence/screenshots/04-staff-a-honesty-and-xss-safe.png",
+      "notes": "Zalo message_sent_no_reply + canceled callback + native Call Log + XSS Note: Connected stays 0, XSS inert."
+    },
+    {
+      "check_id": "B2E-05-stale-revision-conflict-ui",
+      "actor": "cskh-p2-staff-a@example.test",
+      "role": "Sales User (Staff A1)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?id=5tc1nb00kc",
+      "screenshot": "deploy/p2/evidence/screenshots/05-staff-a-stale-revision-conflict.png",
+      "notes": "409 [STALE_WORK_ITEM] rendered in Vietnamese with Reload latest work item recovery button."
+    },
+    {
+      "check_id": "B2E-06-a-to-b-url-replay-zero-leak",
+      "actor": "cskh-p2-staff-a@example.test",
+      "role": "Sales User (Staff A1)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?id=5tc6u890l0",
+      "screenshot": "deploy/p2/evidence/screenshots/06-staff-a-after-transfer-forbidden-zero-leak.png",
+      "notes": "After A->B transfer, Staff A reopening old URL receives [FORBIDDEN] and zero customer PII/timeline."
+    },
+    {
+      "check_id": "B2E-07-staff-b-handover-and-callback-complete",
+      "actor": "cskh-p2-staff-b@example.test",
+      "role": "Sales User (Staff A2)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?id=5tc6u890l0",
+      "screenshot": "deploy/p2/evidence/screenshots/07-staff-b-handover-completed-callback.png",
+      "notes": "Staff B sees Staff A history + completes transferred callback with new attempt attributed to Staff B."
+    },
+    {
+      "check_id": "B2E-08-staff-correction-pending",
+      "actor": "cskh-p2-staff-a@example.test",
+      "role": "Sales User (Staff A1)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?id=5tbun1lrrn",
+      "screenshot": "deploy/p2/evidence/screenshots/08-staff-a-correction-pending.png",
+      "notes": "Staff A submitted append-only correction request; badge shows Đang chờ duyệt hiệu chỉnh while original stays intact."
+    },
+    {
+      "check_id": "B2E-09-leader-correction-approved",
+      "actor": "cskh-p2-leader-a@example.test",
+      "role": "Sales Manager (Team A)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?id=5tbun1lrrn",
+      "screenshot": "deploy/p2/evidence/screenshots/09-leader-a-correction-approved.png",
+      "notes": "Leader A approved correction: timeline shows both Bản ghi gốc (Không nghe máy) and effective Quan tâm."
+    },
+    {
+      "check_id": "B2E-10-admin-void-attempt",
+      "actor": "cskh-p2-admin@example.test",
+      "role": "CSKH CRM Admin",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?id=5tbun1lrrn",
+      "screenshot": "deploy/p2/evidence/screenshots/10-admin-voided-attempt-excluded.png",
+      "notes": "Voided attempt remains visible in audit timeline with Đã vô hiệu — không tính vào bộ đếm while count returns to 1."
+    },
+    {
+      "check_id": "B2E-11-callbacks-schedule-2359-0000",
+      "actor": "cskh-p2-staff-a@example.test",
+      "role": "Sales User (Staff A1)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/callbacks",
+      "screenshot": "deploy/p2/evidence/screenshots/11-staff-a-callbacks-schedule-boundaries.png",
+      "notes": "Callbacks list classifies 23:59 as Đến hạn hôm nay, 00:00 as Sắp đến hạn, and yesterday as Quá hạn."
+    },
+    {
+      "check_id": "B2E-12-bod-progress-zero-pii",
+      "actor": "cskh-p2-bod@example.test",
+      "role": "CSKH BOD Viewer",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/progress",
+      "screenshot": "deploy/p2/evidence/screenshots/12-bod-progress-all-zero-pii.png",
+      "notes": "BOD sees global operational counts separated into Work Items, Effective Attempts, and Callbacks with non-KPI disclaimer and 0 PII."
+    },
+    {
+      "check_id": "B2E-13-leader-progress-team-scope",
+      "actor": "cskh-p2-leader-a@example.test",
+      "role": "Sales Manager (Team A)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/progress",
+      "screenshot": "deploy/p2/evidence/screenshots/13-leader-a-progress-team-scope.png",
+      "notes": "Leader A sees Team A operational counts only (Team B staff_c excluded)."
+    },
+    {
+      "check_id": "B2E-14-bod-pii-route-403",
+      "actor": "cskh-p2-bod@example.test",
+      "role": "CSKH BOD Viewer",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?id=5te41g17ac",
+      "screenshot": "deploy/p2/evidence/screenshots/14-bod-work-item-403-denied.png",
+      "notes": "BOD is denied (HTTP 403) on PII route /cskh/work-item with zero customer data."
+    },
+    {
+      "check_id": "B2E-15-bod-settings-readonly",
+      "actor": "cskh-p2-bod@example.test",
+      "role": "CSKH BOD Viewer",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/settings",
+      "screenshot": "deploy/p2/evidence/screenshots/15-bod-settings-readonly.png",
+      "notes": "BOD views Outcome Codes and Policies in read-only mode (write forms hidden)."
+    },
+    {
+      "check_id": "B2E-16-admin-settings-save-outcome-policy",
+      "actor": "cskh-p2-admin@example.test",
+      "role": "CSKH CRM Admin",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/settings",
+      "screenshot": "deploy/p2/evidence/screenshots/16-admin-settings-outcome-and-policy-saved.png",
+      "notes": "Admin saved new Outcome Code (zalo_replied_demo) and Team Policy (POL-TEAM-A-BROWSER v1) in Vietnamese."
+    },
+    {
+      "check_id": "B2E-17-lead-deeplink-resolution",
+      "actor": "cskh-p2-staff-a@example.test",
+      "role": "Sales User (Staff A1)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/work-item?lead=CRM-LEAD-2026-02360",
+      "screenshot": "deploy/p2/evidence/screenshots/17-staff-a-lead-deeplink-workspace.png",
+      "notes": "Lead deep-link ?lead=<lead_id> resolves active Work Item cleanly in Vietnamese."
+    }
+  ]
+}
