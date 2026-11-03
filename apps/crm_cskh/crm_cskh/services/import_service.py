@@ -381,6 +381,24 @@ def _classify(rows, mapping, phone_column):
 		"new_rows": counts["new_rows"],
 		"duplicate_rows": counts["duplicate_rows"],
 		"error_rows": counts["error_rows"],
+		# The **full** classification. The API response only shows the first
+		# 200 rows (see `preview` below), but the worker needs **every** row:
+		# a truncated list would silently import at most 200 leads out of a
+		# 10.000-row file.
+		"rows": preview_rows,
+		# Every row whose phone number could be normalized, whatever its class.
+		# The list is stable across retries (a lead that the worker itself
+		# created becomes `duplicate_in_crm` on the next attempt), so the
+		# reconciliation of a resumed batch still sees all rows.
+		"resolvable": [
+			{
+				"row_number": row["row_number"],
+				"canonical": row.get("canonical"),
+				"class": row["class"],
+			}
+			for row in preview_rows
+			if row.get("canonical")
+		],
 		"preview": {
 			"rows": preview_rows[:200],
 			"truncated": len(preview_rows) > 200,

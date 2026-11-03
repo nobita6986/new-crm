@@ -1,0 +1,5 @@
+crm_cskh.tests.test_permissions exit=0
+crm_cskh.tests.test_security_remediation exit=0
+crm_cskh.tests.test_security_remediation_v2 exit=0
+crm_cskh.tests.test_docshare_lifecycle exit=0
+crm_cskh.tests.test_bt1c5_matrix_gaps exit=0

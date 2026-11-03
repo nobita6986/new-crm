@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p1_ownership.TestOwnershipService-2[REDACTED_PHONE]23" tests="17" file="crm_cskh/tests/test_p1_ownership.py" time="3.796" timestamp="2026-11-03T09:20:28" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_assign_is_idempotent_for_the_same_request_id" time="1.003" timestamp="2026-11-03T09:20:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="79"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_assign_of_an_already_assigned_item_conflicts" time="0.138" timestamp="2026-11-03T09:20:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="109"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_assign_rejects_a_disabled_target" time="0.054" timestamp="2026-11-03T09:20:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="96"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_assign_rejects_a_non_admin_actor" time="0.048" timestamp="2026-11-03T09:20:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="91"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_assign_rejects_a_target_that_is_not_a_sales_user" time="0.059" timestamp="2026-11-03T09:20:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="104"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_assign_requires_a_request_id" time="0.066" timestamp="2026-11-03T09:20:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="86"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_assign_sets_owner_audit_todo_and_share" time="0.230" timestamp="2026-11-03T09:20:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="61"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_history_cannot_be_deleted" time="0.187" timestamp="2026-11-03T09:20:26" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="259">
+			<system-out><![CDATA[Message: Assignment history is append-only; use a compensating event.
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_history_cannot_be_updated" time="0.189" timestamp="2026-11-03T09:20:26" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="251">
+			<system-out><![CDATA[Message: Assignment history is append-only; use a compensating event.
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_history_records_the_actor" time="0.166" timestamp="2026-11-03T09:20:26" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="266"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_reassign_moves_owner_and_revokes_the_previous_access" time="0.286" timestamp="2026-11-03T09:20:26" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="118"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_reassign_requires_a_reason" time="0.142" timestamp="2026-11-03T09:20:26" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="164"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_reassign_respects_the_capacity_limit" time="0.286" timestamp="2026-11-03T09:20:27" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="176"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_reassign_with_a_stale_expected_owner_is_rejected" time="0.250" timestamp="2026-11-03T09:20:27" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="141"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_revoke_releases_the_active_claim" time="0.320" timestamp="2026-11-03T09:20:27" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="216"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_revoke_returns_the_lead_to_the_pool_and_clears_every_access" time="0.200" timestamp="2026-11-03T09:20:27" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="195"/>
+		<testcase classname="crm_cskh.tests.test_p1_ownership.TestOwnershipService" name="test_revoke_with_a_stale_expected_owner_is_rejected" time="0.172" timestamp="2026-11-03T09:20:28" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_ownership.py" line="236"/>
+	</testsuite>
+</testsuites>

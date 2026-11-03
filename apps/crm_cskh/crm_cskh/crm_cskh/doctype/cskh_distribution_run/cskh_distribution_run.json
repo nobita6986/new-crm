@@ -75,6 +75,19 @@
    "fieldname": "error",
    "fieldtype": "Small Text",
    "label": "Error"
+  },
+  {
+   "fieldname": "lease_expires_at",
+   "fieldtype": "Datetime",
+   "label": "Lease Expires At",
+   "description": "Lease của executor hiện tại. Khi lease hết hạn, một executor khác được phép tiếp quản run (P1 §7.5 crash recovery)."
+  },
+  {
+   "fieldname": "progress",
+   "fieldtype": "Int",
+   "label": "Progress",
+   "default": "0",
+   "description": "Số lead trong danh sách tuyển chọn đã xử lý (điểm resume của một run bị gián đoạn)."
   }
  ],
  "field_order": [
@@ -89,7 +102,9 @@
   "expires_at",
   "started_at",
   "finished_at",
-  "error"
+  "error",
+  "lease_expires_at",
+  "progress"
  ],
  "permissions": [
   {

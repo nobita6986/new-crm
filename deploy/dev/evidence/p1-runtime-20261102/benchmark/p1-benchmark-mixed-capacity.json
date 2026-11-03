@@ -1,0 +1,315 @@
+{
+  "site": "p1bench.localhost",
+  "recorded_at": "2026-11-03 07:46:46.522489",
+  "mixed_import": {
+    "file_bytes": 1151,
+    "preview_seconds": 0.234,
+    "worker_seconds": 2.646,
+    "status": "COMPLETED_WITH_ERRORS",
+    "total_rows": 100,
+    "valid_rows": 50,
+    "new_rows": 50,
+    "duplicate_rows": 35,
+    "error_rows": 15,
+    "created_rows": 50,
+    "reused_rows": 20,
+    "skipped_rows": 15,
+    "has_error_artifact": true
+  },
+  "capacity_distribution": {
+    "campaign": "a18keva64i",
+    "pool_size": 100,
+    "rules": [
+      {
+        "user": "p1-bench-staff-0@example.test",
+        "weight": 50,
+        "capacity_limit": 30
+      },
+      {
+        "user": "p1-bench-staff-1@example.test",
+        "weight": 30,
+        "capacity_limit": 0
+      },
+      {
+        "user": "p1-bench-staff-2@example.test",
+        "weight": 20,
+        "capacity_limit": 0
+      }
+    ],
+    "execute_seconds": 9.786,
+    "status": "completed",
+    "created": 100,
+    "errors": 0,
+    "assigned": {
+      "p1-bench-staff-0@example.test": 30,
+      "p1-bench-staff-1@example.test": 42,
+      "p1-bench-staff-2@example.test": 28
+    },
+    "reconciliation": {
+      "distinct_leads": 100,
+      "active_work_items": 100,
+      "active_claims": 100,
+      "current_owners": {
+        "p1-bench-staff-0@example.test": 30,
+        "p1-bench-staff-1@example.test": 42,
+        "p1-bench-staff-2@example.test": 28
+      },
+      "assignment_events": {
+        "p1-bench-staff-0@example.test": 30,
+        "p1-bench-staff-1@example.test": 42,
+        "p1-bench-staff-2@example.test": 28
+      }
+    }
+  },
+  "global_site_postcheck": {
+    "total_crm_leads": 20200,
+    "total_identities": 20200,
+    "total_work_items": 20200,
+    "total_active_claims": 20200,
+    "total_assignment_history": 20200,
+    "duplicate_identities": 0,
+    "duplicate_active_claims": 0,
+    "duplicate_campaign_work_items": 0
+  },
+  "database": {
+    "questions_delta": 8449,
+    "queries_delta": 8449,
+    "row_lock_waits_delta": 0,
+    "row_lock_time_ms_delta": 0
+  },
+  "memory": {
+    "rss_before_mb": 67.3,
+    "peak_rss_mb": 131.5
+  },
+  "indexes": {
+    "tabCRM Lead": [
+      {
+        "name": "PRIMARY",
+        "column": "name",
+        "unique": true
+      },
+      {
+        "name": "facebook_lead_id",
+        "column": "facebook_lead_id",
+        "unique": true
+      },
+      {
+        "name": "lead_name",
+        "column": "lead_name",
+        "unique": false
+      },
+      {
+        "name": "email",
+        "column": "email",
+        "unique": false
+      },
+      {
+        "name": "status",
+        "column": "status",
+        "unique": false
+      },
+      {
+        "name": "modified",
+        "column": "modified",
+        "unique": false
+      }
+    ],
+    "tabCSKH Work Item": [
+      {
+        "name": "PRIMARY",
+        "column": "name",
+        "unique": true
+      },
+      {
+        "name": "cskh_domain_unique",
+        "column": "campaign",
+        "unique": true
+      },
+      {
+        "name": "cskh_domain_unique",
+        "column": "lead",
+        "unique": true
+      },
+      {
+        "name": "modified",
+        "column": "modified",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_0",
+        "column": "assigned_to",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_0",
+        "column": "status",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_0",
+        "column": "assigned_at",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_1",
+        "column": "campaign",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_1",
+        "column": "status",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_2",
+        "column": "lead",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_2",
+        "column": "status",
+        "unique": false
+      }
+    ],
+    "tabCSKH Active Claim": [
+      {
+        "name": "PRIMARY",
+        "column": "name",
+        "unique": true
+      },
+      {
+        "name": "lead",
+        "column": "lead",
+        "unique": true
+      },
+      {
+        "name": "work_item",
+        "column": "work_item",
+        "unique": true
+      },
+      {
+        "name": "modified",
+        "column": "modified",
+        "unique": false
+      }
+    ],
+    "tabCSKH Assignment History": [
+      {
+        "name": "PRIMARY",
+        "column": "name",
+        "unique": true
+      },
+      {
+        "name": "event_id",
+        "column": "event_id",
+        "unique": true
+      },
+      {
+        "name": "modified",
+        "column": "modified",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_0",
+        "column": "work_item",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_0",
+        "column": "event_at",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_1",
+        "column": "to_user",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_1",
+        "column": "ownership_start",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_1",
+        "column": "ownership_end",
+        "unique": false
+      }
+    ],
+    "tabCSKH Identity Index": [
+      {
+        "name": "PRIMARY",
+        "column": "name",
+        "unique": true
+      },
+      {
+        "name": "normalized_phone",
+        "column": "normalized_phone",
+        "unique": true
+      },
+      {
+        "name": "canonical_lead",
+        "column": "canonical_lead",
+        "unique": true
+      },
+      {
+        "name": "modified",
+        "column": "modified",
+        "unique": false
+      }
+    ],
+    "tabCSKH Import Batch": [
+      {
+        "name": "PRIMARY",
+        "column": "name",
+        "unique": true
+      },
+      {
+        "name": "idempotency_key",
+        "column": "idempotency_key",
+        "unique": true
+      },
+      {
+        "name": "modified",
+        "column": "modified",
+        "unique": false
+      },
+      {
+        "name": "creation",
+        "column": "creation",
+        "unique": false
+      }
+    ],
+    "tabCSKH Distribution Run": [
+      {
+        "name": "PRIMARY",
+        "column": "name",
+        "unique": true
+      },
+      {
+        "name": "idempotency_key",
+        "column": "idempotency_key",
+        "unique": true
+      },
+      {
+        "name": "modified",
+        "column": "modified",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_0",
+        "column": "campaign",
+        "unique": false
+      },
+      {
+        "name": "cskh_lookup_0",
+        "column": "status",
+        "unique": false
+      },
+      {
+        "name": "creation",
+        "column": "creation",
+        "unique": false
+      }
+    ]
+  }
+}
