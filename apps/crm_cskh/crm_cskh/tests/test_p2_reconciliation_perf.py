@@ -179,6 +179,15 @@ class TestP2ReconciliationTimelineAndSchema(P2TestCase):
 
 	def test_p2_migration_seeds_and_mariadb_indexes_are_idempotent(self):
 		"""`P2.md` §15.4: Running P2 schema/index/seed helpers twice is idempotent and preserves required indexes."""
+		app_hooks = frappe.get_hooks(app_name="crm_cskh")
+		self.assertIn(
+			"crm_cskh.patches.v2_0.p2_schema_and_seeds.execute",
+			app_hooks.get("after_install", []),
+		)
+		self.assertIn(
+			"crm_cskh.patches.v2_0.p2_schema_and_seeds.execute",
+			app_hooks.get("after_migrate", []),
+		)
 		ensure_p2_custom_fields()
 		ensure_p2_indexes()
 		ensure_p2_seeds()

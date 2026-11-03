@@ -133,11 +133,11 @@ fixtures = [
 # 	"filters": "crm_cskh.utils.jinja_filters"
 # }
 
-# Installation
-# ------------
+# Installation & Migration
+# ------------------------
 
-# before_install = "crm_cskh.install.before_install"
-# after_install = "crm_cskh.install.after_install"
+after_install = "crm_cskh.patches.v2_0.p2_schema_and_seeds.execute"
+after_migrate = "crm_cskh.patches.v2_0.p2_schema_and_seeds.execute"
 
 # Uninstallation
 # ------------
