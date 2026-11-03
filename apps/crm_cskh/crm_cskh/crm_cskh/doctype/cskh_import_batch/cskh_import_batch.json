@@ -103,6 +103,20 @@
    "fieldtype": "Int",
    "label": "Skipped Rows",
    "default": "0"
+  },
+  {
+   "fieldname": "progress",
+   "fieldtype": "Int",
+   "label": "Progress",
+   "default": "0",
+   "description": "Số dòng tuần tự đã được commit của batch (điểm resume khi worker bị gián đoạn)."
+  },
+  {
+   "fieldname": "attempts",
+   "fieldtype": "Int",
+   "label": "Attempts",
+   "default": "0",
+   "description": "Số lần worker đã thử chạy batch này (P1 §6.4: crash/retry giữa batch)."
   }
  ],
  "field_order": [
@@ -121,7 +135,9 @@
   "error_rows",
   "created_rows",
   "reused_rows",
-  "skipped_rows"
+  "skipped_rows",
+  "progress",
+  "attempts"
  ],
  "permissions": [
   {

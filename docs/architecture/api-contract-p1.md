@@ -2,9 +2,9 @@
 
 > **Dự án:** CRM-CSKH
 > **Tài liệu:** `docs/architecture/api-contract-p1.md`
-> **Ngày:** 2026-11-02
-> **Trạng thái:** **Frozen cho T1A (UI)** — backend đã hiện thực và test trong `codex/p1-foundation`
-> **Phạm vi:** **chỉ backend P1**. Toàn bộ nghiệp vụ P1 nằm ngoài phạm vi tài liệu này.
+> **Ngày cập nhật:** 2026-11-03
+> **Trạng thái:** **Frozen cho T1A (UI)** — backend đã hiện thực và kiểm chứng runtime trên `codex/p1-foundation`
+> **Phạm vi:** **chỉ backend P1**. Toàn bộ UI P1 nằm ngoài phạm vi tài liệu này.
 > **Tài liệu liên quan:** [`../root-plan/P1.md`](../root-plan/P1.md) §10, [`schema-p1.md`](./schema-p1.md), [`adr-p1-07-rbac.md`](./adr-p1-07-rbac.md), [`api-contract.md`](./api-contract.md) (P0)
 
 ---
@@ -40,7 +40,7 @@
 | 6 | GET | `crm_cskh.api.campaigns.rules` | `CSKH CRM Admin` / `CSKH BOD Viewer` / `Sales Manager` | Rules + trạng thái eligibility |
 | 7 | POST | `crm_cskh.api.campaigns.save_rule` | `CSKH CRM Admin` | Tạo/sửa rule (weight, capacity) |
 | 8 | POST | `crm_cskh.api.distribution.preview` | `CSKH CRM Admin` | Dry-run phân phối |
-| 9 | POST | `crm_cskh.api.distribution.execute` | `CSKH CRM Admin` | Thực thi preview |
+| 9 | POST | `crm_cskh.api.distribution.execute` | `CSKH CRM Admin` | Thực thi preview (hỗ trợ resume khi partial failure) |
 | 10 | GET | `crm_cskh.api.distribution.get_run` | `CSKH CRM Admin` / `CSKH BOD Viewer` | Tiến độ / kết quả run |
 | 11 | GET | `crm_cskh.api.distribution.reconcile` | `CSKH CRM Admin` | Đối soát state với DB |
 | 12 | POST | `crm_cskh.api.ownership.assign` | `CSKH CRM Admin` | Giao work item queued |
@@ -52,7 +52,7 @@
 | 18 | GET | `crm_cskh.api.dashboard.distribution` | `CSKH BOD Viewer` / `CSKH CRM Admin` / `Sales Manager` | Dashboard BOD (aggregate) |
 | 19 | GET | `crm_cskh.api.dashboard.campaigns` | `CSKH BOD Viewer` / `CSKH CRM Admin` / `Sales Manager` | Bộ lọc campaign của dashboard |
 
-> **Lưu ý:** `crm_cskh.api.customers.my_list` và `crm_cskh.api.pool_list` **không** có bản
+> **Lưu ý:** `crm_cskh.api.customers.my_list` và `crm_cskh.api.customers.pool_list` **không** có bản
 > `frappe.client.get_list` tương đương. Đọc `CSKH Work Item` bằng generic API vẫn bị giới hạn
 > bởi `permission_query_conditions` (ADR-P1-07), nhưng UI P1 **phải** dùng endpoint scoped ở trên
 > để có `scope` + `total` + `as_of` nhất quán.
@@ -151,7 +151,8 @@ tiếng Việt.
 
 `class` trong `preview` là một trong: `valid`, `duplicate_in_file`, `duplicate_in_crm`,
 `conflict_active_campaign`, `invalid`. `preview` bị cắt còn **200 dòng đầu**
-(`preview_truncated: true` khi có nhiều hơn).
+(`preview_truncated: true` khi có nhiều hơn); khi thực thi thật, `import_worker` đọc lại
+toàn bộ file gốc từ `classification["rows"]` nên không bị giới hạn 200 dòng của `preview`.
 
 **`mapping` ánh xạ *tên cột*, không phải *giá trị ô*.** Giá trị của `mapping[phone]` là
 **tên** của cột trong file (ví dụ `{"phone": "Số điện thoại"}`), không phải số điện thoại.
@@ -200,7 +201,9 @@ qua `frappe.enqueue(..., enqueue_after_commit=True)`).
 `RUNNING` | `COMPLETED` | `COMPLETED_WITH_ERRORS` | `FAILED`.
 
 Khi batch lỗi, `error_artifact` là tên `File` **private** chứa CSV dòng lỗi
-(đã sanitize formula/HTML — SEC-08).
+(đã sanitize formula/HTML — SEC-08). `totals.error_rows` giữ đúng tổng số dòng không hợp lệ
+từ preview cộng số dòng lỗi phát sinh thêm lúc chạy worker (không nhân đôi các dòng đã bị
+preview đánh dấu `invalid`).
 
 **Lỗi:** `FORBIDDEN` (không phải CRM Admin), `INVALID_REQUEST`.
 
@@ -349,6 +352,15 @@ không phải chia đều mỗi lần.
 `status` = `completed` | `completed_with_errors` (khi `errors > 0` ⇒ partial success).
 `skipped` là danh sách `{lead, reason, detail}` với `reason` ∈ `no_eligible_assignee` |
 `assignment_failed`.
+
+**Resume an toàn và thông báo sau commit:**
+- Khi run đã `completed`: gọi lại `execute` với cùng `preview_id` trả kết quả đã lưu và đồng bộ
+  idempotent các thông báo (`CRM Notification` + `ToDo`) còn thiếu nếu bước thông báo sau commit
+  của lần trước bị lỗi.
+- Khi run ở trạng thái `completed_with_errors`: gọi lại `execute` với cùng `preview_id` sẽ khóa
+  dòng run (`SELECT ... FOR UPDATE`), kiểm tra lại `rule_version` (nếu đổi ⇒ `RULE_CHANGED`),
+  chỉ thực thi các lead chưa được giao, cộng dồn chính xác `assigned` theo từng user
+  (`previous + resumed`) và giữ nguyên các mục `no_eligible_assignee` vĩnh viễn.
 
 **Lỗi:** `FORBIDDEN`, `INVALID_REQUEST`, `NOT_FOUND`, `RULE_CHANGED`,
 `PREVIEW_EXPIRED`, `CONFLICT` (run đang chạy / bị executor khác giữ).
@@ -654,12 +666,62 @@ phải lỗi.
    (sự kiện diễn ra sau khi công việc được tạo); UI nên hiển thị rõ phạm vi.
 4. **Chưa có pagination sâu** (`offset` không có cursor).
 5. **Chưa có bulk operation** cho assign/reassign (P1 §10.1 cấm nhận danh sách ID tuỳ ý).
+6. **Thông báo là tác dụng phụ sau commit.** P1 §7.5 yêu cầu thông báo chỉ chạy **sau
+   commit** và không coi việc giao thông báo thành điều kiện lưu assignment. Vì vậy
+   `distribution.execute` và `ownership.assign` **luôn** trả về success khi assignment đã
+   commit, kể cả khi thông báo thất bại — UI không được coi là lỗi nghiệp vụ. Thông báo là
+   idempotent (`ToDo` và `CRM Notification` được tra cứu trước khi tạo), nên retry là an toàn.
+7. **Một run `completed_with_errors` có thể resume.** Gọi lại `distribution.execute`
+   với cùng `preview_id` sẽ **tiếp tục** những dòng chưa được giao, cộng dồn đúng số lượng
+   `assigned` theo từng user, giữ nguyên tỉ lệ fairness của các dòng đã commit và **không**
+   tạo thêm work item / claim / event cho các dòng đã giao.
+8. **`distribution.execute` hiện chạy đồng bộ theo từng dòng.** Với tập lớn (10.000 Work Item,
+   đo thực tế `~4802–4880s` ≈ `~2.0–2.1 items/s`), gọi trực tiếp một lần qua HTTP sẽ chạm
+   timeout của reverse proxy / Gunicorn (`60–120s`). UI/vận hành nên giới hạn phạm vi
+   `selection` cho mỗi đợt thực thi đồng bộ (ví dụ theo lô vài chục đến vài trăm dòng) cho
+   tới khi có cơ chế thực thi bất đồng bộ qua RQ worker.
+
+### 6.1. Ghi chú bàn giao cho T1A (UI)
+
+Revision hoàn tất runtime/chaos/benchmark **không thay đổi bất kỳ dotted path, tham số đầu vào,
+mã lỗi hay schema JSON trả về** của cả 19 endpoint P1 (0 breaking change cho UI). Ba tinh chỉnh
+hành vi phía server mà T1A cần lưu ý khi hiển thị trạng thái:
+
+1. **Resume phân phối (`crm_cskh.api.distribution.execute`):** Khi một run trả
+   `status = "completed_with_errors"`, UI có thể cho phép `CRM Admin` bấm thực thi lại với
+   cùng `preview_id` (miễn `rule_version` của campaign chưa đổi); server chỉ chạy phần còn lại
+   và trả `assigned` là tổng cộng dồn đầy đủ của cả run. Nếu rule đã đổi trong lúc đó, server
+   trả `409 RULE_CHANGED` — UI cần yêu cầu tạo `preview` mới.
+2. **Import > 200 dòng (`crm_cskh.api.imports.*`):** `create_preview` vẫn cắt mảng `preview`
+   tối đa 200 dòng (`preview_truncated = true`) để giữ payload nhẹ, nhưng worker phía sau đọc
+   và xử lý đầy đủ toàn bộ file gốc (đã kiểm chứng ở mức 10.000 dòng) và không nhân đôi
+   `totals.error_rows` cho các dòng đã bị preview đánh dấu `invalid`.
+3. **Thông báo sau commit:** Việc giao `CRM Notification` / `ToDo` tách khỏi transaction
+   ownership chính; nếu bước thông báo gặp sự cố tạm thời, trạng thái ownership đã commit vẫn
+   bền vững và tự bù idempotent khi gọi lại.
 
 ---
 
-## 7. Nguồn
+## 7. Bằng chứng runtime đã kiểm chứng
 
-- P1 §8.1, §8.2, §8.3, §9.1, §9.4, §9.5, §10, §12.5, §16
+Các hành vi được ghi trong tài liệu này đã được kiểm chứng bằng **runtime**, tách biệt rõ
+giữa lời gọi hàm trong tiến trình test (`service_unit_test`) và giao vận HTTP thật (`http`):
+
+| Hạng mục | Lớp bằng chứng | Phạm vi kiểm chứng | Kết quả | Bằng chứng |
+|---|---|---|---|---|
+| Suite P1 (8 module) | `service_unit_test` | Per-method JUnit gate trên inventory P1 riêng (`184` method) | **184/184 PASS** | [`evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/p1-per-method-gate.json) |
+| Chaos / rollback / retry (unit + child process) | `service_unit_test` + `os_process_crash` | `unittest.mock.patch` + tiến trình con `os._exit(137)`; 0 nhánh gây lỗi trong code production | **10/10 PASS** (unit) & **3/3 PASS** (harness) | [`evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml`](../../deploy/dev/evidence/p1-runtime-20261102/junit-p1/test_p1_chaos.junit.xml), [`evidence/p1-runtime-20261102/chaos/p1-chaos-report.json`](../../deploy/dev/evidence/p1-runtime-20261102/chaos/p1-chaos-report.json) |
+| HTTP transport P1 | `http` | HTTP thật tới `bench serve`, cookie phiên + CSRF thật, 5 actor đã seed + `Guest`, phủ đủ 7 nhóm API P1 | **52/52 PASS** | [`evidence/p1-runtime-20261102/http/p1-http-transport.json`](../../deploy/dev/evidence/p1-runtime-20261102/http/p1-http-transport.json) |
+| Benchmark 10k import + 10k phân phối | `runtime_benchmark` | 2 đợt × 10.000 dòng (`0 → 10k`, `10k → 20k`) + lô hỗn hợp & capacity `30/42/28` trên `p1bench.localhost` | **Số đo thực tế (0 lỗi, 0 trùng)** | [`evidence/p1-runtime-20261102/benchmark/`](../../deploy/dev/evidence/p1-runtime-20261102/benchmark/) |
+
+> **Giới hạn:** probe HTTP phủ giao vận trực tiếp tới `bench serve` của Frappe; tầng reverse
+> proxy (Nginx/TLS) và CORS giữa các origin **không** nằm trong phạm vi của probe này.
+
+---
+
+## 8. Nguồn
+
+- P1 §8.1, §8.2, §8.3, §9.1, §9.4, §9.5, §10, §12.4, §12.5, §16
 - [`schema-p1.md`](./schema-p1.md) — 8 DocType, constraint, index
 - [`adr-p1-03-import-engine.md`](./adr-p1-03-import-engine.md),
   [`adr-p1-04-weighted-fair.md`](./adr-p1-04-weighted-fair.md),

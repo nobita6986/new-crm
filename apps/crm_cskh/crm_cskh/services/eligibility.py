@@ -197,6 +197,19 @@ def _selection_leads(campaign, selection_json):
 	)
 
 
+def selection_leads(campaign):
+	"""Return **every** lead of the campaign selection, without any filter.
+
+	The filtered list (`eligible_leads`) is what a **preview** works on. The
+	resume path of a crashed distribution run needs the **unfiltered** list:
+	the leads that a previous attempt already assigned must be visible, so the
+	retry can recognise them and skip them instead of creating a second work
+	item (P1 §12.4).
+	"""
+	campaign_doc = frappe.db.get_value("CSKH Campaign", campaign, "selection_json")
+	return _selection_leads(campaign, campaign_doc)
+
+
 def _lead_exclusion_reason(campaign, lead):
 	from crm_cskh.services import identity as identity_service
 

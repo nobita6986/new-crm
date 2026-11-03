@@ -226,8 +226,13 @@ def execute(preview_id, expected_rule_version=None, idempotency_key=None, actor=
 	if not run:
 		raise NotFound("The preview does not exist.")
 
-	if run.status in ("completed", "completed_with_errors"):
+	if run.status == "completed":
 		return _run_response(run)
+	if run.status == "completed_with_errors":
+		# A run that committed some rows and failed others is **resumable**
+		# (P1 §12.4: the retry must not create a second assignment). The
+		# resume only processes the rows that are still unassigned.
+		return _resume_run(run, actor, expected_rule_version=expected_rule_version)
 	if run.status == "running":
 		raise Conflict("The distribution run is already executing.", code="CONFLICT")
 	if run.expires_at and run.expires_at < now_datetime():
@@ -313,6 +318,10 @@ def _execute_chunks(run, actor):
 	skipped = []
 	created = 0
 	errors = 0
+	# The (work item, owner) pairs whose notification is delivered **after**
+	# the commit. The list is collected during the loop so the post-commit
+	# phase never has to re-read the work items (no N+1 query at 10k scale).
+	pending_notifications = []
 
 	for start in range(0, len(leads), CHUNK_SIZE):
 		chunk = leads[start : start + CHUNK_SIZE]
@@ -341,6 +350,7 @@ def _execute_chunks(run, actor):
 					distribution_run=run.name,
 				)
 				assigned[owner] = assigned.get(owner, 0) + 1
+				pending_notifications.append((work_item, owner))
 				created += 1
 			except Exception as exc:
 				frappe.db.rollback(save_point=savepoint)
@@ -367,7 +377,41 @@ def _execute_chunks(run, actor):
 	run.finished_at = now_datetime()
 	run.save(ignore_permissions=True)
 	frappe.db.commit()
+
+	# The notifications are delivered **after** the commit (P1 §7.5): the
+	# assignment is the durable fact, the notification is a best-effort side
+	# effect. A delivery failure never undoes the assignment and never
+	# produces a second assignment event.
+	_deliver_notifications(run, pending_notifications, actor)
+
 	return _run_response(run)
+
+
+def _deliver_notifications(run, pending, actor=None):
+	"""Deliver the assignment notifications of a committed run.
+
+	The delivery is idempotent (the ToDo and the notification are looked up
+	before they are created), so a retry after a failed delivery re-notifies
+	the assignee without creating a second assignment event (P1 §12.4).
+	"""
+	from crm_cskh.services import notifications
+
+	delivered = 0
+	failed = 0
+	for work_item, owner in pending:
+		result = notifications.deliver_assignment(
+			work_item,
+			owner,
+			event_id=f"assign:{work_item}:run:{run.name}",
+			actor=actor,
+		)
+		if result.get("delivered"):
+			delivered += 1
+		else:
+			failed += 1
+	if delivered:
+		frappe.db.commit()
+	return {"delivered": delivered, "failed": failed}
 
 
 def _pick_owner(rules, state, loads):
@@ -425,13 +469,183 @@ def _create_work_item(campaign, lead, run):
 	return work_item.name
 
 
-def _run_response(run):
+def _resume_run(run, actor, expected_rule_version=None):
+	"""Resume a run that committed some rows and failed others (P1 §12.4).
+
+	A run whose status is `completed_with_errors` holds **committed**
+	assignments and a list of rows that failed. The retry must:
+
+	* **not** create a second work item, claim, history event or ToDo for the
+	  rows that were already assigned — the `request_id` of the ownership
+	  service and the `CSKH Active Claim` unique index are the arbiters;
+	* **retry** the rows that failed transiently (`assignment_failed`), so a
+	  transient failure does not lose a customer;
+	* keep the fairness counters of the committed rows, so the resumed run
+	  continues the same 50/30/20 ratio instead of restarting it.
+
+	The resume works on the **unfiltered** selection: a lead that was already
+	assigned by the first attempt is excluded from the *new* work, but it must
+	still be visible so the resume can recognise it.
+	"""
+	campaign = run.campaign
+	version = eligibility.current_rule_version(campaign)
+	if expected_rule_version is not None and int(expected_rule_version) != int(run.rule_version):
+		raise RuleChanged(
+			"The assignment rules changed after the preview.",
+			details={"expected": expected_rule_version, "current": version},
+		)
+	if int(version) != int(run.rule_version):
+		raise RuleChanged(
+			"The assignment rules changed after the preview.",
+			details={"expected": run.rule_version, "current": version},
+		)
+
+	locked = frappe.db.sql(
+		"select status from `tabCSKH Distribution Run` where name = %s for update",
+		(run.name,),
+		as_dict=True,
+	)
+	if not locked:
+		raise NotFound("The distribution run does not exist.")
+	if locked[0].status == "completed":
+		run.reload()
+		return _run_response(run)
+	if locked[0].status != "completed_with_errors":
+		raise Conflict("The distribution run is already owned by another executor.", code="CONFLICT")
+
+	run.reload()
+	campaign_doc = frappe.db.get_value("CSKH Campaign", campaign, ["name", "team_scope"], as_dict=True)
+	eligible_assignees, excluded_assignees = eligibility.eligible_assignees(
+		campaign, campaign_doc.team_scope, version
+	)
+	selection = eligibility.selection_leads(campaign)
+
+	# The rows that are already assigned by this run: they must not be
+	# assigned a second time.
+	assigned_leads = {
+		row.lead
+		for row in frappe.db.get_all(
+			"CSKH Work Item",
+			filters={"campaign": campaign, "allocation_run": run.name},
+			fields=["lead"],
+		)
+	}
+
+	# The rows that failed transiently and must be retried. A row that failed
+	# for a permanent reason (no eligible assignee, or claimed elsewhere) stays
+	# recorded without mutating the run into a stuck `running` state.
+	prior_skipped = _run_skipped(run)
+	permanently_skipped = [entry for entry in prior_skipped if entry.get("reason") != "assignment_failed"]
+	retryable = {
+		entry.get("lead")
+		for entry in prior_skipped
+		if entry.get("reason") == "assignment_failed"
+		and entry.get("lead")
+		and entry.get("lead") not in assigned_leads
+	}
+	pending = [lead for lead in selection if lead in retryable]
+	if not pending:
+		return _run_response(run)
+
+	# The run re-enters the **planned** state before it is executed again:
+	# the status machine of P1 only allows `completed_with_errors -> planned`,
+	# so the resume is an explicit, visible re-execution of the same run.
+	run.status = "planned"
+	run.save(ignore_permissions=True)
+	run.status = "running"
+	run.started_at = now_datetime()
+	run.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	rules = [
+		{"user": rule["user"], "weight": rule["weight"], "capacity": rule["capacity"], "enabled": True}
+		for rule in eligible_assignees
+	]
+	# The fairness counters of the committed rows are the base of the resume:
+	# the resumed run continues the same ratio (ADR-P1-04 §2.4).
+	state = _run_state(run)
+	loads = _campaign_loads(campaign)
+
+	assigned = {}
+	skipped = []
+	created = 0
+	pending_notifications = []
+
+	for start in range(0, len(pending), CHUNK_SIZE):
+		chunk = pending[start : start + CHUNK_SIZE]
+		for index, lead in enumerate(chunk):
+			savepoint = f"cskh_resume_{run.name}_{start}_{index}"
+			state_before = json.loads(json.dumps(state))
+			loads_before = dict(loads)
+			frappe.db.savepoint(savepoint)
+			try:
+				owner, state, loads = _pick_owner(rules, state, loads)
+				if owner is None:
+					skipped.append({"lead": lead, "reason": "no_eligible_assignee"})
+					continue
+				work_item = _create_work_item(campaign, lead, run)
+				ownership.assign(
+					work_item,
+					owner,
+					actor=actor,
+					reason=f"Distribution run {run.name} (resume)",
+					request_id=f"run:{run.name}:{lead}",
+					distribution_run=run.name,
+				)
+				assigned[owner] = assigned.get(owner, 0) + 1
+				pending_notifications.append((work_item, owner))
+				created += 1
+			except Exception as exc:
+				frappe.db.rollback(save_point=savepoint)
+				state = state_before
+				loads = loads_before
+				skipped.append({"lead": lead, "reason": "assignment_failed", "detail": str(exc)[:200]})
+
+	run.reload()
+	previous = _run_actual(run)
+	merged_assigned = {user: int(count) for user, count in (previous.get("assigned") or {}).items()}
+	for user, count in assigned.items():
+		merged_assigned[user] = merged_assigned.get(user, 0) + int(count)
+	all_skipped = permanently_skipped + skipped
+	total_errors = len(all_skipped)
+
+	run.state_json = json.dumps(state, ensure_ascii=False)
+	run.actual_json = json.dumps(
+		{
+			"assigned": merged_assigned,
+			"created": int(previous.get("created", 0)) + created,
+			"errors": total_errors,
+			"skipped": all_skipped,
+			"excluded_assignees": excluded_assignees,
+		},
+		ensure_ascii=False,
+	)
+	run.status = "completed_with_errors" if total_errors else "completed"
+	run.finished_at = now_datetime()
+	run.save(ignore_permissions=True)
+	frappe.db.commit()
+
+	_deliver_notifications(run, pending_notifications, actor)
+
+	return _run_response(run)
+
+
+def _run_actual(run):
 	actual = {}
 	if run.actual_json:
 		try:
 			actual = json.loads(run.actual_json)
 		except (ValueError, TypeError):
 			actual = {}
+	return actual if isinstance(actual, dict) else {}
+
+
+def _run_skipped(run):
+	return _run_actual(run).get("skipped", []) or []
+
+
+def _run_response(run):
+	actual = _run_actual(run)
 	return {
 		"run_id": run.name,
 		"campaign": run.campaign,
