@@ -397,7 +397,7 @@ Workflow [`.github/workflows/p1.yml`](../../.github/workflows/p1.yml) thực thi
 **Ngày cập nhật:** 2026-11-03
 **Vai trò:** T1A — CSKH P1 UI (cùng Frappe site/session với CRM theo ADR-UI-001 & ADR-P1-06)
 **Nhánh:** `codex/p1-ui` — worktree `D:/HRP-app/p1-ui` ([PR #5](https://github.com/nobita6986/new-crm/pull/5))
-**Backend baseline tích hợp:** `3025495f58bc0391c3f8d092af500b0566a5f038` (PR #4 — `codex/p1-foundation`, 174/174 P1 PASS, 99/99 P0 PASS)
+**Backend baseline tích hợp:** `3025495f58bc0391c3f8d092af500b0566a5f038` (baseline ban đầu 174/174 P1, 99/99 P0) và đã hợp nhất có kiểm soát commit mới nhất qua CI của PR #4: `64b7486f29ad712106d167dfaea50e3b060a6845` (`codex/p1-foundation` — 184/184 P1 PASS, 52/52 HTTP probe PASS, 99/99 P0 PASS)
 **Kế hoạch:** [`docs/root-plan/P1.md`](../root-plan/P1.md) §9 (UI/UX), §10 (Contract), §12 (Nghiệm thu)
 **Hợp đồng API:** [`docs/architecture/api-contract-p1.md`](./api-contract-p1.md)
 **Báo cáo backend:** chương 0–6 ở trên (do T1B biên soạn — giữ nguyên 100%, không chỉnh sửa chồng chéo)
@@ -463,33 +463,39 @@ Không merge, không tự ký GO P2 và không gọi agent khác.
 
 ### 7.1. Đồng bộ backend có kiểm soát & cách dựng lại cho T1C
 
-1. **Nguồn gốc tích hợp:** Nhánh `codex/p1-ui` merge trực tiếp commit backend đã qua CI `3025495f58bc0391c3f8d092af500b0566a5f038` (`origin/codex/p1-foundation`), không sao chép tệp chưa commit giữa các worktree.
+1. **Nguồn gốc tích hợp & kiểm tra contract khi T1B có commit mới:**
+   * Bắt đầu từ baseline `3025495f58bc0391c3f8d092af500b0566a5f038` (`origin/codex/p1-foundation`), sau đó kiểm tra diff hợp đồng `api-contract-p1.md` §6.1 khi PR #4 có commit mới qua CI `64b7486f29ad712106d167dfaea50e3b060a6845` (**0 breaking change** trên toàn bộ 19 endpoint P1) rồi merge trực tiếp từ Git — tuyệt đối không sao chép tệp chưa commit giữa các worktree.
+   * Cập nhật `campaigns.js` tương thích với ghi chú §6.1 của `64b7486`: hỗ trợ bấm chạy lại trực tiếp `distribution.execute` với cùng `preview_id` cho đợt chạy `completed_with_errors` (resume phần chưa giao), giữ `import_worker.py` bản `64b7486` (>200 dòng + crash recovery) kết hợp chuyển trạng thái hai bước `DRY_RUN -> CONFIRMED -> QUEUED` trong `import_service.py::confirm` để RQ worker chạy thật mượt mà.
 2. **Bảo toàn tuyệt đối hợp đồng & phân quyền backend:**
    * `permissions.py` và `p1_permissions.py`: **0 dòng thay đổi**.
    * `hooks.py`: giữ nguyên `normalize_p1_error_response` bọc ngoài bộ chuẩn hóa P0.
-   * `translations/vi.csv`: hợp nhất có chủ đích qua [`deploy/p1/rebuild_translations.py`](../../deploy/p1/rebuild_translations.py) — giữ nguyên toàn bộ dòng 3 cột có `context` từ P0 (`2cd4f60`), toàn bộ dòng backend từ `3025495`, và toàn bộ danh mục P1 UI (**577 dòng**, `0` dòng lỗi cú pháp CSV).
+   * `translations/vi.csv`: hợp nhất có chủ đích qua [`deploy/p1/rebuild_translations.py`](../../deploy/p1/rebuild_translations.py) — giữ nguyên toàn bộ dòng 3 cột có `context` từ P0 (`2cd4f60`), toàn bộ dòng backend từ `3025495` / `64b7486`, và toàn bộ danh mục P1 UI (**577 dòng**, `0` dòng lỗi cú pháp CSV).
+   * `docs/architecture/P1-Exit-Report.md`: giữ nguyên 100% chương 0–6 của `64b7486`, chỉ nối thêm chương 7 phía sau `<!-- T1A-UI-CHAPTER -->`.
 3. **Hướng dẫn dựng và tái hiện đầy đủ cho T1C (trên site cô lập `crm-cskh-p1`):**
 
 ```bash
-# 1. Lấy đúng nhánh tích hợp backend (3025495) + UI (codex/p1-ui)
+# 1. Lấy đúng nhánh tích hợp backend (3025495 + 64b7486) + UI (codex/p1-ui)
 git fetch origin codex/p1-foundation codex/p1-ui
 git checkout codex/p1-ui
 git merge-base --is-ancestor 3025495f58bc0391c3f8d092af500b0566a5f038 HEAD
+git merge-base --is-ancestor 64b7486f29ad712106d167dfaea50e3b060a6845 HEAD
 
 # 2. Khởi chạy stack cô lập P1 (cổng 8120 / 9120, không đụng stack P0 DEV 8010/8091)
 cp -n deploy/p1/.env.example deploy/p1/.env
 docker compose -f deploy/p1/docker-compose.yml --env-file deploy/p1/.env -p crm-cskh-p1 up -d
 docker exec crm-cskh-p1-bench-1 bash -lc "cd /workspace/frappe-bench && bench --site p1.localhost migrate && bench --site p1.localhost clear-cache && bench --site p1.localhost clear-website-cache"
 
-# 3. Chạy kiểm toán tĩnh (ruff 0.14.0 + inventory 174 method + audit dịch Việt 100%)
-docker exec crm-cskh-p1-bench-1 bash -lc "uvx ruff==0.14.0 check --no-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --no-cache /src/apps/crm_cskh"
+# 3. Chạy kiểm toán tĩnh (ruff 0.14.0 + inventory 184 method + audit dịch Việt 100%)
+docker exec crm-cskh-p1-bench-1 bash -lc "uvx ruff==0.14.0 check --no-cache /src/apps/crm_cskh /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py && uvx ruff==0.14.0 format --check --no-cache /src/apps/crm_cskh /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py"
 python -X utf8 deploy/dev/seed/p1_test_inventory.py --check deploy/dev/seed/p1_test_inventory.json
 python -X utf8 deploy/p1/check_translations_audit.py
 
-# 4. Chạy tuần tự toàn bộ suite tích hợp P1 (174) + UI (6) + P0 core (99 + 8) = 287 method
+# 4. Chạy tuần tự toàn bộ suite tích hợp P1 (184) + UI (6) + P0 core (99 + 8) = 297 method
 python -X utf8 deploy/p1/run_suites.py
 
-# 5. Chạy E2E HTTP thật đa vai trò + E2E trình duyệt Chromium thật (sinh báo cáo JSON & 11 screenshot)
+# 5. Khởi chạy bench serve + bench worker rồi chạy E2E HTTP thật & E2E trình duyệt Chromium thật
+docker exec -d crm-cskh-p1-bench-1 bash -lc "cd /workspace/frappe-bench && bench --site p1.localhost serve --port 8000 >/tmp/p1-serve.log 2>&1"
+docker exec -d crm-cskh-p1-bench-1 bash -lc "cd /workspace/frappe-bench && bench worker --queue short,default,long >/tmp/p1-worker.log 2>&1"
 python -X utf8 deploy/p1/verify_p1_http_e2e.py
 node deploy/p1/verify_p1_browser_e2e.mjs
 ```
@@ -559,11 +565,12 @@ Toàn bộ 11 lượt chụp đều đạt: `console_errors = 0`, `page_errors =
 
 ### 7.6. Kết quả bộ test đơn vị & tích hợp trên nhánh `codex/p1-ui`
 
-Lệnh chạy tuần tự: [`deploy/p1/run_suites.py`](../../deploy/p1/run_suites.py) — **14/14 module PASS (`287/287` method)**:
+Lệnh chạy tuần tự: [`deploy/p1/run_suites.py`](../../deploy/p1/run_suites.py) — **15/15 module PASS (`297/297` method)**:
 
 | Nhóm suite | Module | Số method | Kết quả |
 |---|---|---:|---|
 | P1 backend | `test_p1_api_permissions` | 30 | **PASS** |
+| P1 backend | `test_p1_chaos` | 10 | **PASS** |
 | P1 backend | `test_p1_concurrency` | 10 | **PASS** |
 | P1 backend | `test_p1_distribution` | 17 | **PASS** |
 | P1 backend | `test_p1_identity` | 13 | **PASS** |
@@ -580,25 +587,26 @@ Lệnh chạy tuần tự: [`deploy/p1/run_suites.py`](../../deploy/p1/run_suite
 
 ### 7.7. Lưu ý kỹ thuật & giới hạn còn mở ngoài phạm vi UI hiện tại
 
-1. **Điều chỉnh duy nhất trong `services/reporting.py` so với `3025495`:** Bổ sung kiểm tra `allow_pii = scope.get("pii", True)` trong `reporting.pool_list()` để vai trò `CSKH BOD Viewer` không nhận `lead_name` và `mobile_no` (tuân thủ P1 §8.1: BOD xem tổng hợp không lộ PII mặc định), đồng thời giữ nguyên `_scope` cho `CSKH CRM Admin` và giữ xanh 100% `174/174` method P1.
+1. **Điều chỉnh có chủ đích trên dịch vụ dùng chung (0 nới quyền, giữ xanh 184/184 P1 & 99/99 P0):**
+   * `services/reporting.py`: bổ sung kiểm tra `allow_pii = scope.get("pii", True)` trong `reporting.pool_list()` để vai trò `CSKH BOD Viewer` không nhận `lead_name` và `mobile_no` (tuân thủ P1 §8.1), đồng thời giữ `_scope` toàn hệ thống cho `CSKH CRM Admin`.
+   * `services/import_service.py`: trong `confirm()`, bước chuyển `DRY_RUN` đi tuần tự `DRY_RUN -> CONFIRMED -> QUEUED` (1 bước/lần lưu đúng bảng chuyển trạng thái `IMPORT_STATUS_TRANSITIONS`) để RQ background worker thực thi thật không bị chặn ở `CONFIRMED -> RUNNING`.
 2. **Tách `pool_ui.list` cho màn `/cskh/pool`:** Hợp đồng `customers.pool_list` của T1B được khóa cho tập work item `queued` (`SEC-07`). Để màn Kho khách hàng hiển thị cả lead mới nhập chưa phân phối (`Chưa phân phối`), `Đã giao`, `Xung đột` và `Lỗi dữ liệu` kèm bộ lọc server-side mà không phá hợp đồng T1B, T1A bổ sung `crm_cskh.api.pool_ui.list` dùng chung chính hàm giải quyết scope `reporting._scope(actor)` (không nhận tham số `user`/`team`/`scope` từ client).
-3. **CI GitHub Actions cho trình duyệt:** Workflow `.github/workflows/p0.yml` và `.github/workflows/p1.yml` hiện kiểm tra đầy đủ lint/format, inventory, migration idempotency, P0 HTTP probe 18/18 và 174 method P1; job chạy Chromium Playwright (`deploy/p1/verify_p1_browser_e2e.mjs`) hiện chạy trên stack cô lập `crm-cskh-p1` và chưa gắn thành job riêng trong `.github/workflows/` để tránh sửa workflow CI backend của T1B.
-4. **Đo hiệu năng import 10.000 dòng:** Vẫn theo ghi nhận mở tại ADR-001 / chương backend, chưa benchmark tải lớn từ trình duyệt.
+3. **CI GitHub Actions cho trình duyệt:** Workflow `.github/workflows/p0.yml` và `.github/workflows/p1.yml` hiện kiểm tra đầy đủ lint/format, inventory (`184` method P1 / `99` method P0), migration idempotency, P0 HTTP probe `18/18` và P1 HTTP probe `52/52`; job chạy Chromium Playwright (`deploy/p1/verify_p1_browser_e2e.mjs`) hiện chạy trên stack cô lập `crm-cskh-p1` và chưa gắn thành job riêng trong `.github/workflows/` để tránh sửa workflow CI backend của T1B.
 
 ### 7.8. Checklist nghiệm thu bàn giao T1A
 
 | Hạng mục nghiệm thu P1 (phạm vi T1A) | Trạng thái | Bằng chứng đối chiếu |
 |---|---|---|
-| Đồng bộ có kiểm soát từ commit backend `3025495`, không copy bẩn, không nới quyền | ✅ ĐẠT | `git merge-base`, `0` diff trên `permissions.py` / `p1_permissions.py` |
+| Đồng bộ có kiểm soát từ commit backend `3025495` + `64b7486`, không copy bẩn, không nới quyền | ✅ ĐẠT | `git merge-base`, `0` diff trên `permissions.py` / `p1_permissions.py` |
 | Trang 1 — Kho khách hàng (trạng thái suy ra, bộ lọc, tách bộ đếm lead vs work item) | ✅ ĐẠT | `pool_ui.py`, `pool.js`, [`01-pool-admin.png`](../../deploy/p1/evidence/screenshots/01-pool-admin.png), [`11-pool-bod-zero-pii.png`](../../deploy/p1/evidence/screenshots/11-pool-bod-zero-pii.png) |
 | Trang 2 — Nhập danh sách (CSV/XLSX, mapping, preview, confirm, tiến độ Bước 3, lịch sử, tải file lỗi theo quyền, retry lỗi) | ✅ ĐẠT | `import_history.py`, `import.js`, `E2E-02`, `E2E-03`, [`02-import-admin-step3-and-history.png`](../../deploy/p1/evidence/screenshots/02-import-admin-step3-and-history.png) |
-| Trang 3 — Chiến dịch & quy tắc (tạo/sửa/đóng, weight %, `capacity=0` = “Không giới hạn”, preview 5 cột, chống double-submit, stale preview, tra cứu & retry run) | ✅ ĐẠT | `campaigns.js`, `E2E-04`, [`03-campaigns-admin.png`](../../deploy/p1/evidence/screenshots/03-campaigns-admin.png), [`04-campaigns-error-not-found.png`](../../deploy/p1/evidence/screenshots/04-campaigns-error-not-found.png) |
+| Trang 3 — Chiến dịch & quy tắc (tạo/sửa/đóng, weight %, `capacity=0` = “Không giới hạn”, preview 5 cột, chống double-submit, stale preview, tra cứu & retry/resume run) | ✅ ĐẠT | `campaigns.js`, `E2E-04`, [`03-campaigns-admin.png`](../../deploy/p1/evidence/screenshots/03-campaigns-admin.png), [`04-campaigns-error-not-found.png`](../../deploy/p1/evidence/screenshots/04-campaigns-error-not-found.png) |
 | Trang 4 — Khách được giao (danh sách, tìm kiếm/sắp xếp, chi tiết & lịch sử phụ trách, reassign/revoke đúng quyền & `expected_owner`) | ✅ ĐẠT | `ownership_ui.py`, `my-customers.js`, `E2E-05`, [`05-my-customers-admin-ownership-history.png`](../../deploy/p1/evidence/screenshots/05-my-customers-admin-ownership-history.png), [`06-my-customers-staff-a.png`](../../deploy/p1/evidence/screenshots/06-my-customers-staff-a.png), [`08-my-customers-leader-a-team-scope.png`](../../deploy/p1/evidence/screenshots/08-my-customers-leader-a-team-scope.png) |
 | Trang 5 — Dashboard & lịch sử (filter chiến dịch/ngày/đội/nhân viên/run, phân biệt rõ current owner vs assignment events) | ✅ ĐẠT | `dashboard.js`, `E2E-05`, `E2E-06`, [`09-dashboard-leader-b-team-isolation.png`](../../deploy/p1/evidence/screenshots/09-dashboard-leader-b-team-isolation.png), [`10-dashboard-bod-live-vs-events.png`](../../deploy/p1/evidence/screenshots/10-dashboard-bod-live-vs-events.png) |
 | Không biến lỗi backend thành danh sách rỗng, số `0` hay báo thành công giả | ✅ ĐẠT | `cskh.renderError` + `p1_errors`, kiểm chứng `403`/`404`/`409` trên HTTP & Chromium |
 | Việt hóa 100% nhãn, trạng thái, validation, thông báo và lỗi P1 | ✅ ĐẠT | `vi.csv` 577 dòng, `check_translations_audit.py` (`372/372`, `0` chuỗi sót) |
 | Render an toàn (chống XSS/formula injection), CSRF, 0 lỗi console/asset/500 | ✅ ĐẠT | `verify_p1_browser_e2e.mjs` → `browser-manifest.json` (`11/11` PASS) |
-| Toàn bộ suite P1 + UI + P0 xanh tuần tự | ✅ ĐẠT | `run_suites.py` (`287/287` method PASS) |
+| Toàn bộ suite P1 + UI + P0 xanh tuần tự | ✅ ĐẠT | `run_suites.py` (`297/297` method PASS trên 15 module) |
 | Gắn job Playwright UI vào `.github/workflows/` | ⏳ Chưa gắn workflow CI | Có sẵn script tự động `verify_p1_browser_e2e.mjs` để T1C chạy trực tiếp; chưa sửa `.github/workflows/p1.yml` của T1B |
 
-> **Kết luận bàn giao của T1A:** Toàn bộ 5 màn hình P1 §9, bản dịch tiếng Việt 100%, bộ kiểm thử endpoint UI, E2E HTTP đa vai trò và E2E trình duyệt Chromium thật đã hoàn tất trên nhánh `codex/p1-ui` (PR #5) trên nền backend `3025495f58bc0391c3f8d092af500b0566a5f038`, sẵn sàng để **T1C** kiểm định độc lập và để **Owner** trực tiếp duyệt trên `http://p1.localhost:8120`. Quyết định merge và ký GO P2 thuộc T0/Owner.
+> **Kết luận bàn giao của T1A:** Toàn bộ 5 màn hình P1 §9, bản dịch tiếng Việt 100%, bộ kiểm thử endpoint UI, E2E HTTP đa vai trò và E2E trình duyệt Chromium thật đã hoàn tất trên nhánh `codex/p1-ui` (PR #5) trên nền backend `3025495f58bc0391c3f8d092af500b0566a5f038` + `64b7486f29ad712106d167dfaea50e3b060a6845`, sẵn sàng để **T1C** kiểm định độc lập và để **Owner** trực tiếp duyệt trên `http://p1.localhost:8120`. Quyết định merge và ký GO P2 thuộc T0/Owner.
