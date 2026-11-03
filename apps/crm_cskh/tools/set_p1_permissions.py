@@ -67,6 +67,7 @@ PLAN = {
 		perm("Sales User", READ_ONLY),
 	],
 	"cskh_import_batch": [perm("CSKH CRM Admin", READ_ONLY)],
+	"cskh_import_batch_lead": [perm("CSKH CRM Admin", READ_ONLY)],
 	"cskh_distribution_run": [
 		perm("CSKH CRM Admin", READ_ONLY),
 		perm("CSKH BOD Viewer", READ_ONLY),

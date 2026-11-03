@@ -28,6 +28,7 @@ motivated it.
 | L-19 / L-20 | Import `>200` rows truncated worker input / missed error artifact rows / double-counted errors | `TestL19L20LargeImportAndErrorArtifact` |
 | L-21 | `api.ownership.revoke` used `bool(return_to_pool)`, turning `"false"`/`"0"` into `True` | `TestL21RevokeBooleanParsing` |
 | L-22 | Leader dashboard missed unassigned (`assigned_to IS NULL`) `revoked`/`closed`/`active_claims` and diverged on `unique_customers` | `TestL22LeaderUnassignedAndUniqueCustomers` |
+| L-25 | Import ignored `name`/`source` mapping, lacked `Import Batch ↔ Lead` relation for pool filtering without Work Items / across reused batches | `TestL25ImportMappingAndBatchLink` |
 """
 
 import csv
@@ -1831,6 +1832,514 @@ class TestL22LeaderUnassignedAndUniqueCustomers(P1TestCase):
 			)[0][0]
 		)
 		self.assertEqual(dash_staff["cards"]["unique_customers"], expected_staff_unique)
+
+
+class TestL25ImportMappingAndBatchLink(P1TestCase):
+	"""L-25 — apply `name`/`source` mapping on new leads, preserve canonical leads, and persist `Import Batch ↔ Lead`."""
+
+	def _upload(self, content, file_name="l25.csv"):
+		doc = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": file_name,
+				"is_private": 1,
+				"attached_to_doctype": "CRM Lead",
+				"attached_to_name": "Administrator",
+				"content": content,
+			}
+		)
+		doc.insert(ignore_permissions=True)
+		return doc.name
+
+	def _confirm_and_run(self, batch_name):
+		with mock.patch("frappe.enqueue"):
+			resp = import_service.confirm(batch_name, actor=self.admin_user)
+		self.assertEqual(resp["status"], "QUEUED")
+		import_worker.run_batch(batch_name)
+		return frappe.get_doc("CSKH Import Batch", batch_name)
+
+	def test_mapped_name_and_source_apply_to_new_leads_and_placeholder_only_when_missing(self):
+		p_named = self.unique_phone()
+		p_empty = self.unique_phone()
+		p_html_blank = self.unique_phone()
+		p_phone_as_name = self.unique_phone()
+
+		csv_bytes = build_csv(
+			[
+				(p_named, "Nguyễn Thị Mai", "Zalo Official"),
+				(p_empty, "", "Facebook"),
+				(p_html_blank, "  <b>   </b>  ", "TikTok Shop"),
+				(p_phone_as_name, p_phone_as_name, "Website"),
+			],
+			header=("Cột ĐT", "Cột Họ Tên", "Cột Kênh"),
+		)
+		file_name = self._upload(csv_bytes, file_name="l25-mapped.csv")
+		mapping = {"phone": "Cột ĐT", "name": "Cột Họ Tên", "source": "Cột Kênh"}
+		preview = create_preview(
+			file_name,
+			mapping=mapping,
+			actor=self.admin_user,
+			idempotency_key=self.unique_key("l25-map-1"),
+		)
+		self.assertEqual(preview["resolved_mapping"], mapping)
+		batch_doc = self._confirm_and_run(preview["batch"])
+		self.assertEqual(batch_doc.status, "COMPLETED")
+		self.assertEqual(int(batch_doc.created_rows), 4)
+		self.assertEqual(int(batch_doc.reused_rows), 0)
+		self.assertEqual(int(batch_doc.error_rows), 0)
+
+		lead_named = frappe.db.get_value(
+			"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p_named)}, "canonical_lead"
+		)
+		named_doc = frappe.db.get_value(
+			"CRM Lead",
+			lead_named,
+			["first_name", "lead_name", "cskh_is_placeholder_name", "source"],
+			as_dict=True,
+		)
+		self.assertEqual(named_doc.first_name, "Nguyễn Thị Mai")
+		self.assertEqual(named_doc.lead_name, "Nguyễn Thị Mai")
+		self.assertEqual(int(named_doc.cskh_is_placeholder_name or 0), 0)
+		self.assertEqual(named_doc.source, "Zalo Official")
+
+		for raw_p, exp_src in (
+			(p_empty, "Facebook"),
+			(p_html_blank, "TikTok Shop"),
+			(p_phone_as_name, "Website"),
+		):
+			lead_id = frappe.db.get_value(
+				"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(raw_p)}, "canonical_lead"
+			)
+			row_doc = frappe.db.get_value(
+				"CRM Lead",
+				lead_id,
+				["first_name", "lead_name", "cskh_is_placeholder_name", "source"],
+				as_dict=True,
+			)
+			self.assertEqual(row_doc.first_name, import_worker.PLACEHOLDER_FIRST_NAME)
+			self.assertEqual(row_doc.lead_name, import_worker.PLACEHOLDER_FIRST_NAME)
+			self.assertEqual(int(row_doc.cskh_is_placeholder_name or 0), 1)
+			self.assertEqual(row_doc.source, exp_src)
+
+		# Sparse XLSX where the first data row has `None` in name & source, second row has values.
+		openpyxl = __import__("openpyxl")
+		wb = openpyxl.Workbook()
+		sheet = wb.active
+		sheet.append(["Số điện thoại", "Họ và tên", "Nguồn"])
+		p_xlsx_1 = self.unique_phone()
+		p_xlsx_2 = self.unique_phone()
+		sheet.append([p_xlsx_1, None, None])
+		sheet.append([p_xlsx_2, "Lê Văn Hùng", "Hội thảo VIP"])
+		buf = io.BytesIO()
+		wb.save(buf)
+		xlsx_file = self._upload(buf.getvalue(), file_name="l25-sparse.xlsx")
+		xlsx_prev = create_preview(
+			xlsx_file, actor=self.admin_user, idempotency_key=self.unique_key("l25-xlsx")
+		)
+		self._confirm_and_run(xlsx_prev["batch"])
+
+		l_x1 = frappe.db.get_value(
+			"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p_xlsx_1)}, "canonical_lead"
+		)
+		l_x2 = frappe.db.get_value(
+			"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p_xlsx_2)}, "canonical_lead"
+		)
+		self.assertEqual(int(frappe.db.get_value("CRM Lead", l_x1, "cskh_is_placeholder_name") or 0), 1)
+		x2_doc = frappe.db.get_value(
+			"CRM Lead", l_x2, ["first_name", "cskh_is_placeholder_name", "source"], as_dict=True
+		)
+		self.assertEqual(x2_doc.first_name, "Lê Văn Hùng")
+		self.assertEqual(int(x2_doc.cskh_is_placeholder_name or 0), 0)
+		self.assertEqual(x2_doc.source, "Hội thảo VIP")
+
+	def test_formula_and_html_sanitization_and_mapping_conflict_guard(self):
+		from crm_cskh.services.errors import Conflict
+
+		p_formula = self.unique_phone()
+		p_xss = self.unique_phone()
+		csv_bytes = build_csv(
+			[
+				(p_formula, "=cmd|'/c calc'!A0", "@SUM(A1:A5)"),
+				(p_xss, "<script>alert(1)</script>Trần Quốc Bảo", "<img src=x onerror=1>Landing Page"),
+			],
+			header=("PhoneCol", "NameCol", "SourceCol"),
+		)
+		file_name = self._upload(csv_bytes, file_name="l25-sanitize.csv")
+		idem_key = self.unique_key("l25-san")
+		mapping = {"phone": "PhoneCol", "name": "NameCol", "source": "SourceCol"}
+		preview = create_preview(file_name, mapping=mapping, actor=self.admin_user, idempotency_key=idem_key)
+
+		# Reusing the same idempotency_key with a different mapping MUST raise 409 CONFLICT (P1 §6.4).
+		with self.assertRaises(Conflict) as ctx:
+			create_preview(
+				file_name,
+				mapping={"phone": "PhoneCol", "name": "SourceCol"},
+				actor=self.admin_user,
+				idempotency_key=idem_key,
+			)
+		self.assertEqual(ctx.exception.code, "CONFLICT")
+
+		batch_doc = self._confirm_and_run(preview["batch"])
+		self.assertEqual(batch_doc.status, "COMPLETED")
+		self.assertEqual(int(batch_doc.created_rows), 2)
+
+		lead_f = frappe.db.get_value(
+			"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p_formula)}, "canonical_lead"
+		)
+		f_doc = frappe.db.get_value(
+			"CRM Lead", lead_f, ["first_name", "cskh_is_placeholder_name", "source"], as_dict=True
+		)
+		self.assertEqual(f_doc.first_name, "'=cmd|'/c calc'!A0")
+		self.assertFalse(f_doc.first_name.startswith("="))
+		self.assertEqual(int(f_doc.cskh_is_placeholder_name or 0), 0)
+		self.assertEqual(f_doc.source, "'@SUM(A1:A5)")
+		self.assertFalse(f_doc.source.startswith("@"))
+
+		lead_x = frappe.db.get_value(
+			"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p_xss)}, "canonical_lead"
+		)
+		x_doc = frappe.db.get_value(
+			"CRM Lead", lead_x, ["first_name", "cskh_is_placeholder_name", "source"], as_dict=True
+		)
+		self.assertNotIn("<script>", x_doc.first_name)
+		self.assertIn("Trần Quốc Bảo", x_doc.first_name)
+		self.assertEqual(int(x_doc.cskh_is_placeholder_name or 0), 0)
+		self.assertEqual(x_doc.source, "Landing Page")
+
+	def test_existing_canonical_lead_is_never_overwritten_and_links_across_multiple_batches(self):
+		from crm_cskh.api import customers as customers_api
+		from crm_cskh.services.errors import Forbidden
+
+		p_shared = self.unique_phone()
+		p_only_b1 = self.unique_phone()
+		p_only_b2 = self.unique_phone()
+		p_existing_placeholder = self.unique_phone()
+
+		# Batch 1 creates `lead_shared` (named), `lead_only_b1` (named), and `lead_ph` (placeholder).
+		f_b1 = self._upload(
+			build_csv(
+				[
+					(p_shared, "Phạm Minh Tuấn", "Facebook"),
+					(p_only_b1, "Vũ Thu Hà", "Zalo L25"),
+					(p_existing_placeholder, "", ""),
+				],
+				header=("SDT", "HoTen", "Nguon"),
+			),
+			file_name="l25-b1.csv",
+		)
+		map_cols = {"phone": "SDT", "name": "HoTen", "source": "Nguon"}
+		prev_b1 = create_preview(
+			f_b1, mapping=map_cols, actor=self.admin_user, idempotency_key=self.unique_key("l25-b1")
+		)
+		b1_doc = self._confirm_and_run(prev_b1["batch"])
+		self.assertEqual(int(b1_doc.created_rows), 3)
+		self.assertEqual(int(b1_doc.reused_rows), 0)
+
+		lead_shared = frappe.db.get_value(
+			"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p_shared)}, "canonical_lead"
+		)
+		lead_only_b1 = frappe.db.get_value(
+			"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p_only_b1)}, "canonical_lead"
+		)
+		lead_ph = frappe.db.get_value(
+			"CSKH Identity Index",
+			{"normalized_phone": normalize_vn_phone(p_existing_placeholder)},
+			"canonical_lead",
+		)
+
+		# Attach business state (`lead_owner`, `status`, `job_title`) to `lead_shared` and `lead_ph`.
+		frappe.db.set_value(
+			"CRM Lead",
+			lead_shared,
+			{"lead_owner": self.staff_a, "status": "Converted", "job_title": "Giám đốc mua hàng"},
+		)
+		frappe.db.set_value("CRM Lead", lead_ph, {"lead_owner": self.staff_b})
+
+		# Batch 2 re-imports `p_shared` and `p_existing_placeholder` with conflicting name/source + 1 new phone.
+		f_b2 = self._upload(
+			build_csv(
+				[
+					(p_shared, "TÊN GHI ĐÈ SAI", "NGUỒN GHI ĐÈ SAI"),
+					(p_existing_placeholder, "TÊN ĐÈ PLACEHOLDER", "NGUỒN ĐÈ PLACEHOLDER"),
+					(p_only_b2, "Đặng Hoàng Nam", "TikTok L25"),
+				],
+				header=("SDT", "HoTen", "Nguon"),
+			),
+			file_name="l25-b2.csv",
+		)
+		prev_b2 = create_preview(
+			f_b2, mapping=map_cols, actor=self.admin_user, idempotency_key=self.unique_key("l25-b2")
+		)
+		b2_doc = self._confirm_and_run(prev_b2["batch"])
+		self.assertEqual(b2_doc.status, "COMPLETED")
+		self.assertEqual(int(b2_doc.created_rows), 1)
+		self.assertEqual(int(b2_doc.reused_rows), 2)
+		self.assertEqual(int(b2_doc.skipped_rows), 0)
+		self.assertEqual(int(b2_doc.error_rows), 0)
+
+		lead_only_b2 = frappe.db.get_value(
+			"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p_only_b2)}, "canonical_lead"
+		)
+
+		# Business fields on existing canonical leads MUST NOT be overwritten!
+		shared_after = frappe.db.get_value(
+			"CRM Lead",
+			lead_shared,
+			[
+				"first_name",
+				"lead_name",
+				"cskh_is_placeholder_name",
+				"source",
+				"lead_owner",
+				"status",
+				"job_title",
+			],
+			as_dict=True,
+		)
+		self.assertEqual(shared_after.first_name, "Phạm Minh Tuấn")
+		self.assertEqual(shared_after.lead_name, "Phạm Minh Tuấn")
+		self.assertEqual(int(shared_after.cskh_is_placeholder_name or 0), 0)
+		self.assertEqual(shared_after.source, "Facebook")
+		self.assertEqual(shared_after.lead_owner, self.staff_a)
+		self.assertEqual(shared_after.status, "Converted")
+		self.assertEqual(shared_after.job_title, "Giám đốc mua hàng")
+
+		ph_after = frappe.db.get_value(
+			"CRM Lead",
+			lead_ph,
+			["first_name", "cskh_is_placeholder_name", "source", "lead_owner"],
+			as_dict=True,
+		)
+		self.assertEqual(ph_after.first_name, import_worker.PLACEHOLDER_FIRST_NAME)
+		self.assertEqual(int(ph_after.cskh_is_placeholder_name or 0), 1)
+		self.assertFalse(ph_after.source)
+		self.assertEqual(ph_after.lead_owner, self.staff_b)
+
+		# Both `Import Batch ↔ Lead` links exist (`created` in B1, `reused` in B2) with ZERO Work Items!
+		self.assertEqual(
+			frappe.db.get_value(
+				"CSKH Import Batch Lead",
+				{"import_batch": prev_b1["batch"], "lead": lead_shared},
+				"outcome",
+			),
+			"created",
+		)
+		self.assertEqual(
+			frappe.db.get_value(
+				"CSKH Import Batch Lead",
+				{"import_batch": prev_b2["batch"], "lead": lead_shared},
+				"outcome",
+			),
+			"reused",
+		)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"lead": lead_only_b1}), 0)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"lead": lead_only_b2}), 0)
+
+		# Pool filtering by `batch` works WITHOUT Work Items and ACROSS reused batches!
+		frappe.set_user(self.admin_user)
+		pool_b1 = customers_api.customer_pool(batch=prev_b1["batch"], page_size=50)
+		b1_leads = {item["lead"]: item for item in pool_b1["items"]}
+		self.assertEqual(set(b1_leads), {lead_shared, lead_only_b1, lead_ph})
+		self.assertEqual(pool_b1["total"], 3)
+		self.assertIsNone(b1_leads[lead_only_b1]["work_item"])
+		self.assertEqual(b1_leads[lead_only_b1]["state"], "eligible")
+		self.assertEqual(b1_leads[lead_only_b1]["display_name"], "Vũ Thu Hà")
+		self.assertEqual(b1_leads[lead_only_b1]["source"], "Zalo L25")
+
+		pool_b2 = customers_api.customer_pool(batch=prev_b2["batch"], page_size=50)
+		b2_leads = {item["lead"]: item for item in pool_b2["items"]}
+		self.assertEqual(set(b2_leads), {lead_shared, lead_ph, lead_only_b2})
+		self.assertEqual(pool_b2["total"], 3)
+		self.assertIsNone(b2_leads[lead_only_b2]["work_item"])
+		self.assertEqual(b2_leads[lead_only_b2]["state"], "eligible")
+
+		# BOD sees counts without PII; Staff is forbidden; Leader sees only team-scoped items.
+		frappe.set_user(self.bod_user)
+		bod_b1 = customers_api.customer_pool(batch=prev_b1["batch"], page_size=50)
+		self.assertEqual(bod_b1["total"], 3)
+		for row in bod_b1["items"]:
+			self.assertIsNone(row["phone"])
+			self.assertEqual(row["display_name"], "")
+		with self.assertRaises(Forbidden):
+			customers_api.customer_pool(batch=prev_b1["batch"], search="09")
+
+		frappe.set_user(self.staff_a)
+		with self.assertRaises(Forbidden):
+			customers_api.customer_pool(batch=prev_b1["batch"])
+
+		frappe.set_user(self.leader_a)
+		self.assertEqual(customers_api.customer_pool(batch=prev_b2["batch"])["total"], 0)
+		camp_a = self.make_campaign(team_scope=self.team_a)
+		self.make_work_item(camp_a, lead_only_b2, status="queued")
+		leader_b2_after = customers_api.customer_pool(batch=prev_b2["batch"], page_size=50)
+		self.assertEqual([item["lead"] for item in leader_b2_after["items"]], [lead_only_b2])
+
+	def test_retry_and_concurrent_multi_batch_race_keep_non_duplicate_links_and_counters(self):
+		from crm_cskh.tests.test_p1_concurrency import _run_in_thread
+
+		# Part A: Retry after mid-batch failure on mapped real-name rows (`cskh_is_placeholder_name = 0`).
+		retry_phones = [self.unique_phone() for _ in range(6)]
+		retry_canonicals = [normalize_vn_phone(p) for p in retry_phones]
+		retry_rows = [
+			(retry_phones[0], "Khách Retry 1", "Facebook"),
+			(retry_phones[1], "Khách Retry 2", "Zalo Retry"),
+			(retry_phones[2], "", "Website"),
+			(retry_phones[3], "Khách Retry 4", "TikTok Retry"),
+			(retry_phones[4], "Khách Retry 5", "Facebook"),
+			(retry_phones[5], "", ""),
+			(retry_phones[0], "Duplicate In File", "Other"),
+		]
+		f_retry = self._upload(
+			build_csv(retry_rows, header=("Phone", "Name", "Source")),
+			file_name="l25-retry.csv",
+		)
+		prev_retry = create_preview(
+			f_retry,
+			mapping={"phone": "Phone", "name": "Name", "source": "Source"},
+			actor=self.admin_user,
+			idempotency_key=self.unique_key("l25-retry"),
+		)
+		batch_retry = prev_retry["batch"]
+		with mock.patch("frappe.enqueue"):
+			import_service.confirm(batch_retry, actor=self.admin_user)
+
+		real_ensure = import_worker._ensure_lead
+		failed_once = {"done": False}
+		fail_target = retry_canonicals[1]  # Row 3 in Chunk 1 (`CHUNK_SIZE = 2`)
+
+		def fail_once(canonical_phone, row):
+			if canonical_phone == fail_target and not failed_once["done"]:
+				failed_once["done"] = True
+				raise RuntimeError("transient L-25 row failure")
+			return real_ensure(canonical_phone, row)
+
+		with mock.patch.object(import_worker, "CHUNK_SIZE", 2):
+			with mock.patch.object(import_worker, "_ensure_lead", side_effect=fail_once):
+				import_worker.run_batch(batch_retry)
+
+		first_doc = frappe.get_doc("CSKH Import Batch", batch_retry)
+		self.assertEqual(first_doc.status, "COMPLETED_WITH_ERRORS")
+		self.assertEqual(int(first_doc.created_rows), 5)
+		self.assertEqual(int(first_doc.reused_rows), 0)
+		self.assertEqual(int(first_doc.error_rows), 1)
+		self.assertEqual(int(first_doc.progress), 2)
+
+		# Re-confirm and retry, then call `run_batch` an extra time to verify post-completion no-op.
+		with mock.patch("frappe.enqueue"):
+			import_service.confirm(batch_retry, actor=self.admin_user)
+		with mock.patch.object(import_worker, "CHUNK_SIZE", 2):
+			import_worker.run_batch(batch_retry)
+			import_worker.run_batch(batch_retry)
+
+		final_retry = frappe.get_doc("CSKH Import Batch", batch_retry)
+		self.assertEqual(final_retry.status, "COMPLETED")
+		self.assertEqual(int(final_retry.created_rows), 6)
+		self.assertEqual(int(final_retry.reused_rows), 0)
+		self.assertEqual(int(final_retry.error_rows), 0)
+		self.assertEqual(int(final_retry.skipped_rows), 0)
+		self.assertEqual(frappe.db.count("CSKH Import Batch Lead", {"import_batch": batch_retry}), 6)
+		self.assertEqual(
+			frappe.db.count("CSKH Import Batch Lead", {"import_batch": batch_retry, "outcome": "created"}),
+			6,
+		)
+
+		# Part B: Real MariaDB multi-thread race across 2 batches sharing 3 phones + 1 distinct phone each.
+		shared_race = [self.unique_phone() for _ in range(3)]
+		only_r1 = self.unique_phone()
+		only_r2 = self.unique_phone()
+
+		f_r1 = self._upload(
+			build_csv(
+				[
+					(shared_race[0], "Winner R1-0", "Source R1"),
+					(shared_race[1], "Winner R1-1", "Source R1"),
+					(shared_race[2], "Winner R1-2", "Source R1"),
+					(only_r1, "Unique R1", "Source R1"),
+				],
+				header=("Phone", "Name", "Source"),
+			),
+			file_name="l25-race-1.csv",
+		)
+		f_r2 = self._upload(
+			build_csv(
+				[
+					(shared_race[0], "Contender R2-0", "Source R2"),
+					(shared_race[1], "Contender R2-1", "Source R2"),
+					(shared_race[2], "Contender R2-2", "Source R2"),
+					(only_r2, "Unique R2", "Source R2"),
+				],
+				header=("Phone", "Name", "Source"),
+			),
+			file_name="l25-race-2.csv",
+		)
+		prev_r1 = create_preview(
+			f_r1,
+			mapping={"phone": "Phone", "name": "Name", "source": "Source"},
+			actor=self.admin_user,
+			idempotency_key=self.unique_key("l25-r1"),
+		)
+		prev_r2 = create_preview(
+			f_r2,
+			mapping={"phone": "Phone", "name": "Name", "source": "Source"},
+			actor=self.admin_user,
+			idempotency_key=self.unique_key("l25-r2"),
+		)
+		with mock.patch("frappe.enqueue"):
+			import_service.confirm(prev_r1["batch"], actor=self.admin_user)
+			import_service.confirm(prev_r2["batch"], actor=self.admin_user)
+		frappe.db.commit()
+
+		results = {}
+		t1 = _run_in_thread(lambda: import_worker.run_batch(prev_r1["batch"]), results, 0)
+		t2 = _run_in_thread(lambda: import_worker.run_batch(prev_r2["batch"]), results, 1)
+		t1.join()
+		t2.join()
+		frappe.db.commit()
+
+		errors = [val for val in results.values() if "error" in val]
+		self.assertEqual(errors, [], f"parallel multi-batch import race must not error: {results}")
+
+		r1_doc = frappe.get_doc("CSKH Import Batch", prev_r1["batch"])
+		r2_doc = frappe.get_doc("CSKH Import Batch", prev_r2["batch"])
+		self.assertEqual(r1_doc.status, "COMPLETED")
+		self.assertEqual(r2_doc.status, "COMPLETED")
+		self.assertEqual(int(r1_doc.error_rows), 0)
+		self.assertEqual(int(r2_doc.error_rows), 0)
+
+		# 5 distinct canonical phones total across R1 (4) and R2 (4):
+		# sum(created_rows) == 5 and sum(reused_rows) == 3 (zero double-counting!).
+		self.assertEqual(int(r1_doc.created_rows) + int(r2_doc.created_rows), 5)
+		self.assertEqual(int(r1_doc.reused_rows) + int(r2_doc.reused_rows), 3)
+		self.assertEqual(frappe.db.count("CSKH Import Batch Lead", {"import_batch": prev_r1["batch"]}), 4)
+		self.assertEqual(frappe.db.count("CSKH Import Batch Lead", {"import_batch": prev_r2["batch"]}), 4)
+
+		for p in [*shared_race, only_r1, only_r2]:
+			c = normalize_vn_phone(p)
+			self.assertEqual(frappe.db.count("CSKH Identity Index", {"normalized_phone": c}), 1)
+			self.assertEqual(frappe.db.count("CRM Lead", {"mobile_no": c}), 1)
+
+		# Every shared lead is linked to BOTH R1 and R2 (once as `created`, once as `reused`).
+		for idx, p in enumerate(shared_race):
+			lead_id = frappe.db.get_value(
+				"CSKH Identity Index", {"normalized_phone": normalize_vn_phone(p)}, "canonical_lead"
+			)
+			outcomes = sorted(
+				frappe.get_all(
+					"CSKH Import Batch Lead",
+					filters={"import_batch": ["in", [prev_r1["batch"], prev_r2["batch"]]], "lead": lead_id},
+					pluck="outcome",
+				)
+			)
+			self.assertEqual(outcomes, ["created", "reused"])
+			lead_info = frappe.db.get_value("CRM Lead", lead_id, ["first_name", "source"], as_dict=True)
+			# Winner's coherent (name, source) pair survived without partial overwrite.
+			self.assertIn(
+				(lead_info.first_name, lead_info.source),
+				{
+					(f"Winner R1-{idx}", "Source R1"),
+					(f"Contender R2-{idx}", "Source R2"),
+				},
+			)
 
 
 if __name__ == "__main__":

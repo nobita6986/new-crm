@@ -2,11 +2,11 @@
   "schema_version": 2,
   "gate": "g007-per-method-junit",
   "gate_passed": true,
-  "expected_total": 199,
-  "observed_total": 199,
-  "passing_total": 199,
+  "expected_total": 203,
+  "observed_total": 203,
+  "passing_total": 203,
   "counts": {
-    "PASS": 199
+    "PASS": 203
   },
   "xml_files": [
     "test_p1_api_permissions.junit.xml",
@@ -1827,6 +1827,42 @@
       "status": "PASS",
       "source_xml": "test_p1_regressions.junit.xml",
       "raw_name": "test_unique_customers_definition_is_unified_across_admin_bod_leader_and_staff",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL25ImportMappingAndBatchLink",
+      "method": "test_mapped_name_and_source_apply_to_new_leads_and_placeholder_only_when_missing",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_mapped_name_and_source_apply_to_new_leads_and_placeholder_only_when_missing",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL25ImportMappingAndBatchLink",
+      "method": "test_formula_and_html_sanitization_and_mapping_conflict_guard",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_formula_and_html_sanitization_and_mapping_conflict_guard",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL25ImportMappingAndBatchLink",
+      "method": "test_existing_canonical_lead_is_never_overwritten_and_links_across_multiple_batches",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_existing_canonical_lead_is_never_overwritten_and_links_across_multiple_batches",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL25ImportMappingAndBatchLink",
+      "method": "test_retry_and_concurrent_multi_batch_race_keep_non_duplicate_links_and_counters",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_retry_and_concurrent_multi_batch_race_keep_non_duplicate_links_and_counters",
       "match_reason": "exact"
     }
   ]

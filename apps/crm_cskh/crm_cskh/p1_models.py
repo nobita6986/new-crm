@@ -54,6 +54,7 @@ def ensure_indexes(doctype):
 	unique = {
 		"CSKH Work Item": ("campaign", "lead"),
 		"CSKH Assignment Rule": ("campaign", "user", "version"),
+		"CSKH Import Batch Lead": ("import_batch", "lead"),
 	}
 	if doctype in unique:
 		frappe.db.add_unique(doctype, unique[doctype], "cskh_domain_unique")
@@ -68,6 +69,10 @@ def ensure_indexes(doctype):
 			("to_user", "ownership_start", "ownership_end"),
 		),
 		"CSKH Distribution Run": (("campaign", "status"),),
+		"CSKH Import Batch Lead": (
+			("lead", "import_batch"),
+			("import_batch", "outcome"),
+		),
 	}
 	for i, fields in enumerate(indexes.get(doctype, ())):
 		frappe.db.add_index(doctype, fields, f"cskh_lookup_{i}")
@@ -185,6 +190,23 @@ class ImportBatch(Document):
 			if not isinstance(mapping, dict):
 				frappe.throw(_("Column mapping must be a JSON object."))
 		_reject_status_change(self, IMPORT_STATUS_TRANSITIONS, _("The import batch"))
+
+
+class ImportBatchLead(Document):
+	def validate(self):
+		if self.outcome not in ("created", "reused"):
+			frappe.throw(_("Import batch lead outcome must be created or reused."))
+		if int(self.row_number or 0) < 0:
+			frappe.throw(_("Import batch lead row number must not be negative."))
+		if frappe.db.exists(
+			"CSKH Import Batch Lead",
+			{
+				"import_batch": self.import_batch,
+				"lead": self.lead,
+				"name": ["!=", self.name],
+			},
+		):
+			frappe.throw(_("This import batch and lead link already exists."))
 
 
 class DistributionRun(Document):
