@@ -1065,6 +1065,72 @@ class TestUiP1Endpoints(P1TestCase):
 			{row["lead"] for row in customers_api.customer_pool()["items"]},
 		)
 
+		# 4. `return_to_pool=True` in Team A leaving a queued Work Item in `campaign_a`
+		#    then claimed & assigned in `campaign_b` (`6c457b3`): Leader A is blocked
+		#    across all 3 pool endpoints (`items`, `total`, `unique_customers`), while
+		#    Leader B sees the lead in both `pool_ui.list` and `customers.customer_pool`!
+		frappe.set_user("Administrator")
+		lead_ret_pool = self.make_canonical_lead()
+		wi_ret_a = self.make_work_item(self.campaign_a, lead_ret_pool, status="queued")
+		frappe.set_user(self.admin_user)
+		ownership_service.assign(
+			work_item=wi_ret_a,
+			target_user=self.staff_a,
+			reason="Giao Đội A trước khi trả về kho",
+			actor=self.admin_user,
+			request_id=self.unique_key("l23-ret-asg-a"),
+		)
+		ownership_service.revoke(
+			work_item=wi_ret_a,
+			expected_owner=self.staff_a,
+			reason="Trả về kho Đội A rồi chuyển Đội B",
+			actor=self.admin_user,
+			request_id=self.unique_key("l23-ret-rev-a"),
+			return_to_pool=True,
+		)
+		frappe.set_user("Administrator")
+		wi_ret_b = self.make_work_item(self.campaign_b, lead_ret_pool, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_ret_pool,
+				"campaign": self.campaign_b,
+				"work_item": wi_ret_b,
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.commit()
+
+		# While `wi_ret_b` is `queued` with `Active Claim` in Team B:
+		# Leader A must NOT see `lead_ret_pool` even in `customers.pool_list(campaign=self.campaign_a)`,
+		# whereas Leader B DOES see `lead_ret_pool` in `customers.pool_list(campaign=self.campaign_b)`!
+		frappe.set_user(self.leader_a)
+		la_pool_list_a = customers_api.pool_list(campaign=self.campaign_a)
+		self.assertNotIn(lead_ret_pool, {row["lead"] for row in la_pool_list_a["items"]})
+		self.assertEqual(la_pool_list_a["total"], len(la_pool_list_a["items"]))
+		self.assertNotIn(lead_ret_pool, {row["lead"] for row in pool_ui.list()["items"]})
+		self.assertNotIn(lead_ret_pool, {row["lead"] for row in customers_api.customer_pool()["items"]})
+
+		frappe.set_user(self.leader_b)
+		lb_pool_list_b = customers_api.pool_list(campaign=self.campaign_b)
+		self.assertIn(lead_ret_pool, {row["lead"] for row in lb_pool_list_b["items"]})
+		self.assertIn(lead_ret_pool, {row["lead"] for row in pool_ui.list()["items"]})
+
+		# Now assign `wi_ret_b` to `staff_c` in Team B and re-verify both teams:
+		frappe.set_user(self.admin_user)
+		ownership_service.assign(
+			work_item=wi_ret_b,
+			target_user=self.staff_c,
+			reason="Giao Đội B sau khi trả kho Đội A",
+			actor=self.admin_user,
+			request_id=self.unique_key("l23-ret-asg-b"),
+		)
+		frappe.set_user(self.leader_a)
+		for pool_fn in (pool_ui.list, customers_api.customer_pool, customers_api.pool_list):
+			self.assertNotIn(lead_ret_pool, {row["lead"] for row in pool_fn()["items"]})
+		frappe.set_user(self.leader_b)
+		self.assertIn(lead_ret_pool, {row["lead"] for row in pool_ui.list()["items"]})
+		self.assertIn(lead_ret_pool, {row["lead"] for row in customers_api.customer_pool()["items"]})
+
 
 class TestUiP1ImportBatchPoolFilter(P1TestCase):
 	"""Verify `pool_ui.list(batch=...)` against persisted `CSKH Import Batch Lead` links (`L-25` + `L-23`)."""

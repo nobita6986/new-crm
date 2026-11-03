@@ -98,99 +98,13 @@ def _scoped_ac_predicate(scope, alias="ac"):
 
 
 def _team_lead_authorization_clauses(scope, lead_alias="l"):
-	"""Return `(clauses, params)` enforcing current team authorization on `CRM Lead` (`L-23`).
-
-	A team leader may only read a lead if:
-	  1. The lead belongs to the team's scope (has a scoped work item or is
-	     currently owned by a member of `team_users`), AND
-	  2. The lead has NO active `assigned` work item outside `team_users`, AND
-	  3. The lead has NO `queued` work item in a private campaign outside
-	     `team_nodes`, AND
-	  4. The lead has NO `CSKH Active Claim` outside `team_nodes`/`team_users`, AND
-	  5. `CRM Lead.lead_owner` is empty/`Administrator` or inside `team_users`.
-	"""
-	if scope["scope"] in ("system", "all"):
-		return [], []
-	if scope["scope"] != "team":
-		return ["1=0"], []
-
-	team_nodes = reporting._scope_team_nodes(scope)
-	team_users = reporting._team_users(scope["user"])
-	if not team_nodes or not team_users:
-		return ["1=0"], []
-
-	user_ph = ",".join(["%s"] * len(team_users))
-	node_ph = ",".join(["%s"] * len(team_nodes))
-	wi_s_sql, wi_s_params = _scoped_wi_predicate(scope, "wi_s")
-
-	clauses = [
-		(
-			f"(exists (select 1 from `tabCSKH Work Item` wi_s "
-			f"where wi_s.lead = {lead_alias}.name and {wi_s_sql}) "
-			f"or {lead_alias}.lead_owner in ({user_ph}))"
-		),
-		(
-			f"not exists (select 1 from `tabCSKH Work Item` wi_out "
-			f"where wi_out.lead = {lead_alias}.name and wi_out.status = 'assigned' "
-			f"and (wi_out.assigned_to is null or wi_out.assigned_to not in ({user_ph})))"
-		),
-		(
-			f"not exists (select 1 from `tabCSKH Work Item` wi_q_out "
-			f"where wi_q_out.lead = {lead_alias}.name and wi_q_out.status = 'queued' "
-			f"and exists (select 1 from `tabCSKH Campaign` c_q_out "
-			f"where c_q_out.name = wi_q_out.campaign "
-			f"and c_q_out.team_scope is not null "
-			f"and c_q_out.team_scope not in ({node_ph})))"
-		),
-		(
-			f"not exists (select 1 from `tabCSKH Active Claim` ac_out "
-			f"left join `tabCSKH Campaign` c_ac_out on c_ac_out.name = ac_out.campaign "
-			f"left join `tabCSKH Work Item` wi_ac_out on wi_ac_out.name = ac_out.work_item "
-			f"where ac_out.lead = {lead_alias}.name "
-			f"and ((c_ac_out.team_scope is not null and c_ac_out.team_scope not in ({node_ph})) "
-			f"or (wi_ac_out.assigned_to is not null and wi_ac_out.assigned_to not in ({user_ph}))))"
-		),
-		(
-			f"({lead_alias}.lead_owner is null "
-			f"or {lead_alias}.lead_owner in ('', 'Administrator') "
-			f"or {lead_alias}.lead_owner in ({user_ph}))"
-		),
-	]
-	params = [
-		*wi_s_params,
-		*team_users,
-		*team_users,
-		*team_nodes,
-		*team_nodes,
-		*team_users,
-		*team_users,
-	]
-	return clauses, params
+	"""Return `(clauses, params)` enforcing current team authorization on `CRM Lead` (`L-23`)."""
+	return reporting._team_lead_authorization_clauses(scope, lead_alias)
 
 
 def filter_team_authorized_leads(scope, candidate_leads):
-	"""Return the subset of `candidate_leads` currently authorized for `scope`."""
-	if not candidate_leads:
-		return set()
-	unique_leads = sorted({str(lead) for lead in candidate_leads if lead})
-	if not unique_leads:
-		return set()
-	if scope["scope"] in ("system", "all"):
-		return set(unique_leads)
-	if scope["scope"] != "team":
-		return set()
-
-	auth_clauses, auth_params = _team_lead_authorization_clauses(scope, "l")
-	if auth_clauses == ["1=0"]:
-		return set()
-
-	lead_ph = ",".join(["%s"] * len(unique_leads))
-	rows = frappe.db.sql(
-		f"select l.name from `tabCRM Lead` l where l.name in ({lead_ph}) and " + " and ".join(auth_clauses),
-		(*unique_leads, *auth_params),
-		pluck=True,
-	)
-	return set(rows or [])
+	"""Return the subset of `candidate_leads` currently authorized for `scope` (`L-23`)."""
+	return reporting.filter_team_authorized_leads(scope, candidate_leads)
 
 
 def _batch_lead_predicate(batch_val, lead_alias="l"):

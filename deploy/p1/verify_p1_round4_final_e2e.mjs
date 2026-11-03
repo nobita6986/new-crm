@@ -231,6 +231,11 @@ async function main() {
 		['rev-parse', '--verify', '77e07dac7948c156039bc6a9746fe5d451fc0d71^{commit}'],
 		{ cwd: ROOT, encoding: 'utf-8' }
 	).trim()
+	const parentBackendPoolListL23Sha = execFileSync(
+		'git',
+		['rev-parse', '--verify', '6c457b327e59eead47cc9d0982c4ee1df4fe9e64^{commit}'],
+		{ cwd: ROOT, encoding: 'utf-8' }
+	).trim()
 	const baselineSha = execFileSync(
 		'git',
 		['rev-parse', '--verify', '0d3f2bcbbf9715a4c0c783903ce750de8646583d^{commit}'],
@@ -240,6 +245,7 @@ async function main() {
 	execFileSync('git', ['merge-base', '--is-ancestor', parentUiSha, 'HEAD'], { cwd: ROOT })
 	execFileSync('git', ['merge-base', '--is-ancestor', parentBackendL26Sha, 'HEAD'], { cwd: ROOT })
 	execFileSync('git', ['merge-base', '--is-ancestor', parentBackendL29Sha, 'HEAD'], { cwd: ROOT })
+	execFileSync('git', ['merge-base', '--is-ancestor', parentBackendPoolListL23Sha, 'HEAD'], { cwd: ROOT })
 
 	const seed = benchExecute('crm_cskh.tools.e2e_seed.reset_and_seed')
 	const users = seed.users
@@ -286,6 +292,7 @@ async function main() {
 			const batchTeamA = await importBatchCsv(adminS.page, 'r4-batch-ta', [
 				{ phone: '0918840201', name: 'Pham R4 TeamA 1', source: 'R4TeamASrc' },
 				{ phone: '0918840202', name: 'Doan R4 TeamA 2', source: 'R4TeamASrc' },
+				{ phone: '0918840203', name: 'Hoang R4 TeamA 3', source: 'R4TeamASrc' },
 			])
 			assert(
 				batchTeamA.status === 'COMPLETED',
@@ -402,8 +409,10 @@ async function main() {
 
 			// Reassign 1 Team A item (`wiKeepA`: `staffA -> staffB`) to generate >= 2 history events,
 			// AND revoke 1 Team A item (`wiMoveToB`) -> distribute to `campB` (`staffC`) for L-23 check!
+			// Also revoke 1 `campA` item with `return_to_pool: 1` (leaving a stale `queued` Work Item in `campA`)
+			// and distribute BOTH `movedLead` and `retPoolLead` to `campB` (`staffC`) to verify `6c457b3` SQL `pool_list` L-23!
 			const ownershipSetup = await adminS.page.evaluate(
-				async ({ campShared, tB, staffA, staffB, staffC }) => {
+				async ({ campA, campShared, tB, staffA, staffB, staffC }) => {
 					const asgAll = await window.cskh.get('crm_cskh.api.ownership_ui.assigned_list', {
 						campaign: campShared,
 						page_size: 50,
@@ -412,6 +421,15 @@ async function main() {
 					const wiKeepA = teamAItems[0].work_item
 					const wiMoveToB = teamAItems[1].work_item
 					const movedLead = teamAItems[1].lead
+
+					const asgCampA = await window.cskh.get('crm_cskh.api.ownership_ui.assigned_list', {
+						campaign: campA,
+						page_size: 50,
+					})
+					const wiRetPoolA =
+						asgCampA.items.find((x) => x.assigned_to === staffB) ||
+						asgCampA.items[asgCampA.items.length - 1]
+					const retPoolLead = wiRetPoolA.lead
 
 					await window.cskh.post('crm_cskh.api.ownership.reassign', {
 						work_item: wiKeepA,
@@ -427,13 +445,20 @@ async function main() {
 						return_to_pool: 0,
 						request_id: `r4-rev-${Date.now()}`,
 					})
+					await window.cskh.post('crm_cskh.api.ownership.revoke', {
+						work_item: wiRetPoolA.work_item,
+						expected_owner: wiRetPoolA.assigned_to,
+						reason: 'Trả về kho Đội A rồi chuyển Đội B kiểm thử 6c457b3',
+						return_to_pool: 1,
+						request_id: `r4-retpool-${Date.now()}`,
+					})
 
 					const campB = await window.cskh.post('crm_cskh.api.campaigns.save', {
 						code: `R4-TB-${Date.now()}`,
 						title: 'Chiến dịch Đội B R4',
 						status: 'Active',
 						team_scope: tB,
-						selection: { leads: [movedLead], secret_marker: 'L29_SECRET_TB' },
+						selection: { leads: [movedLead, retPoolLead], secret_marker: 'L29_SECRET_TB' },
 					})
 					await window.cskh.post('crm_cskh.api.campaigns.save_rule', {
 						campaign: campB.campaign,
@@ -458,10 +483,12 @@ async function main() {
 						wiKeepA,
 						wiMoveToB,
 						movedLead,
+						retPoolLead,
 						runB: execB.run_id || prevB.preview_id,
 					}
 				},
 				{
+					campA: setupData.campA,
 					campShared: setupData.campShared,
 					tB: teamB,
 					staffA: users.staff_a,
@@ -713,43 +740,58 @@ async function main() {
 			)
 
 			const l23PoolCheck = await leaderAS.page.evaluate(
-				async ({ movedLead }) => {
+				async ({ movedLead, retPoolLead, campA }) => {
 					const pUi = await window.cskh.get('crm_cskh.api.pool_ui.list', { page_size: 100 })
 					const pCust = await window.cskh.get('crm_cskh.api.customers.customer_pool', {
 						page_size: 100,
 					})
 					const pLegacy = await window.cskh.get('crm_cskh.api.customers.pool_list', {
+						campaign: campA,
 						page_size: 100,
 					})
+					const forbiddenSet = new Set([movedLead, retPoolLead])
 					return {
-						inUi: pUi.items.some((x) => x.lead === movedLead),
-						inCust: pCust.items.some((x) => x.lead === movedLead),
-						inLegacy: pLegacy.items.some((x) => x.lead === movedLead),
+						inUi: pUi.items.some((x) => forbiddenSet.has(x.lead)),
+						inCust: pCust.items.some((x) => forbiddenSet.has(x.lead)),
+						inLegacy: pLegacy.items.some((x) => forbiddenSet.has(x.lead)),
+						legacyTotalMatchesItems: pLegacy.total === pLegacy.items.length,
 						uiCount: pUi.total,
 					}
 				},
-				{ movedLead: ownershipSetup.movedLead }
+				{
+					movedLead: ownershipSetup.movedLead,
+					retPoolLead: ownershipSetup.retPoolLead,
+					campA: setupData.campA,
+				}
 			)
 			assert(
-				!l23PoolCheck.inUi && !l23PoolCheck.inCust && !l23PoolCheck.inLegacy,
-				`Leader A must NOT see movedLead (active in Team B) on any pool endpoint: ${JSON.stringify(l23PoolCheck)}`
+				!l23PoolCheck.inUi &&
+					!l23PoolCheck.inCust &&
+					!l23PoolCheck.inLegacy &&
+					l23PoolCheck.legacyTotalMatchesItems,
+				`Leader A must NOT see movedLead or retPoolLead (active in Team B) on any pool endpoint: ${JSON.stringify(l23PoolCheck)}`
 			)
 			const lbSeesMoved = await leaderBS.page.evaluate(
-				async ({ movedLead }) => {
+				async ({ movedLead, retPoolLead }) => {
 					const pUi = await window.cskh.get('crm_cskh.api.pool_ui.list', { page_size: 100 })
 					const pCust = await window.cskh.get('crm_cskh.api.customers.customer_pool', {
 						page_size: 100,
 					})
 					return {
-						inUi: pUi.items.some((x) => x.lead === movedLead),
-						inCust: pCust.items.some((x) => x.lead === movedLead),
+						inUiMoved: pUi.items.some((x) => x.lead === movedLead),
+						inUiRetPool: pUi.items.some((x) => x.lead === retPoolLead),
+						inCustMoved: pCust.items.some((x) => x.lead === movedLead),
+						inCustRetPool: pCust.items.some((x) => x.lead === retPoolLead),
 					}
 				},
-				{ movedLead: ownershipSetup.movedLead }
+				{ movedLead: ownershipSetup.movedLead, retPoolLead: ownershipSetup.retPoolLead }
 			)
 			assert(
-				lbSeesMoved.inUi && lbSeesMoved.inCust,
-				'Leader B positive control must see movedLead now owned by Team B'
+				lbSeesMoved.inUiMoved &&
+					lbSeesMoved.inUiRetPool &&
+					lbSeesMoved.inCustMoved &&
+					lbSeesMoved.inCustRetPool,
+				`Leader B positive control must see both movedLead and retPoolLead owned by Team B: ${JSON.stringify(lbSeesMoved)}`
 			)
 
 			// 3c. `/cskh/campaigns` for Leader A & Leader B (rules, hidden Admin/lookup controls, L-24 shared run history)
@@ -1173,6 +1215,7 @@ async function main() {
 		parent_ui_sha: parentUiSha,
 		parent_backend_l26_sha: parentBackendL26Sha,
 		parent_backend_l29_sha: parentBackendL29Sha,
+		parent_backend_pool_list_l23_sha: parentBackendPoolListL23Sha,
 		baseline_ui_sha: baselineSha,
 		passed_checks: checks.filter((c) => c.passed).length,
 		total_checks: checks.length,

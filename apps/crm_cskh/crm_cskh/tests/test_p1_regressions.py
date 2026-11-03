@@ -28,9 +28,11 @@ motivated it.
 | L-19 / L-20 | Import `>200` rows truncated worker input / missed error artifact rows / double-counted errors | `TestL19L20LargeImportAndErrorArtifact` |
 | L-21 | `api.ownership.revoke` used `bool(return_to_pool)`, turning `"false"`/`"0"` into `True` | `TestL21RevokeBooleanParsing` |
 | L-22 | Leader dashboard missed unassigned (`assigned_to IS NULL`) `revoked`/`closed`/`active_claims` and diverged on `unique_customers` | `TestL22LeaderUnassignedAndUniqueCustomers` |
-| L-23 | `reporting.customer_pool` / `customers.customer_pool` admitted historical `revoked`/`closed` Team A leads now active/owned in Team B | `TestL23BackendCustomerPoolCrossTeamIsolation` |
+| L-23 | `reporting.pool_list` / `reporting.customer_pool` / `customers.*` admitted historical `revoked`/`closed` or `return_to_pool=True` Team A leads now active/owned in Team B or diverged on `total`/`unique_customers` | `TestL23BackendCustomerPoolCrossTeamIsolation` |
 | L-25 | Import ignored `name`/`source` mapping, lacked `Import Batch ↔ Lead` relation for pool filtering without Work Items / across reused batches | `TestL25ImportMappingAndBatchLink` |
 | L-26 | `ownership.history`, `customers.pool_list`, `customers.customer_pool`, `customers.my_list` raised HTTP 500 `ValueError` on invalid `page`/`page_size`/`limit` | `TestL26BackendPaginationAndLimitValidation` |
+| L-29 | Generic Frappe REST / `frappe.client.*` / Desk bypassed campaign/rule/run document permissions or exposed raw Run JSON across teams | `TestL29GenericFrappeApiPermissionAndRawRunProtection` |
+| P1-ELIG | Direct `ownership.assign` / `ownership.reassign` did not enforce `campaign.team_scope` / `CSKH Assignment Rule.enabled` / cross-campaign `CSKH Active Claim` | `TestDirectOwnershipMutationEligibility` |
 """
 
 import csv
@@ -2612,7 +2614,8 @@ class TestL23BackendCustomerPoolCrossTeamIsolation(P1TestCase):
 			self.assertIn(lead_queued_a, qpool_leads_a)
 			self.assertNotIn(lead_pool_return_to_b, qpool_leads_a)
 			self.assertEqual(qpool_a["total"], 1)
-			self.assertEqual(qpool_a["unique_customers"], 2)
+			self.assertEqual(qpool_a["unique_customers"], 1)
+			self.assertEqual(qpool_a["work_items"], 1)
 			qpool_serialized = json.dumps(qpool_a, default=str)
 			self.assertNotIn(raw_phone_pool_b, qpool_serialized)
 			self.assertNotIn(self.staff_c, qpool_serialized)
@@ -2685,6 +2688,485 @@ class TestL23BackendCustomerPoolCrossTeamIsolation(P1TestCase):
 		with self.assertRaises(Forbidden):
 			customers_api.customer_pool()
 		self.assertEqual(reporting.customer_pool(self.staff_a)["total"], 0)
+
+	def test_l23_pool_list_pre_pagination_unified_counts_all_pool_apis_and_bod_zero_pii(self):
+		"""Pin SQL-level `_team_lead_authorization_clauses` on `reporting.pool_list`
+		(rows, `total`, and `unique_customers` unified before pagination) plus
+		`revoke(True) -> B`, `revoke(False) -> B`, and `closed -> B` across all
+		Pool APIs (`customers.pool_list`, `customers.customer_pool`, and
+		`pool_ui.list` when present), preserving Team A `queued` positive controls
+		and `BOD` zero-PII enforcement.
+		"""
+		import importlib.util
+
+		from crm_cskh.api import customers as customers_api
+		from crm_cskh.services import ownership as ownership_service
+		from crm_cskh.services.errors import Forbidden
+
+		pool_ui_mod = None
+		if importlib.util.find_spec("crm_cskh.api.pool_ui") is not None:
+			from crm_cskh.api import pool_ui as pool_ui_mod
+
+		frappe.set_user("Administrator")
+		camp_a_title = f"Chiến dịch Đội A Kho L23 {self.unique_key('ca')}"
+		camp_b_title = f"Chiến dịch Bí Mật Đội B L23 {self.unique_key('cb')}"
+		camp_sh_title = f"Chiến dịch Chung Kho L23 {self.unique_key('cs')}"
+		campaign_a = self.make_campaign(title=camp_a_title, team_scope=self.team_a)
+		campaign_b = self.make_campaign(title=camp_b_title, team_scope=self.team_b)
+		campaign_shared = self.make_campaign(title=camp_sh_title, team_scope=None)
+
+		def _make_tagged_lead(label):
+			lead_id = self.make_canonical_lead()
+			phone = str(frappe.db.get_value("CRM Lead", lead_id, "mobile_no") or "")
+			alt_phone = "0" + phone[3:] if phone.startswith("+84") else phone
+			full_name = f"Khách {label} {self.unique_key('nm')}"
+			src = self.unique_key(f"Src{label}")
+			frappe.db.set_value(
+				"CRM Lead",
+				lead_id,
+				{"first_name": full_name, "lead_name": full_name, "source": src},
+				update_modified=False,
+			)
+			return {
+				"lead": lead_id,
+				"phone": phone,
+				"alt_phone": alt_phone,
+				"name": full_name,
+				"source": src,
+			}
+
+		def _make_batch_with_leads(tag, lead_ids):
+			fdoc = frappe.get_doc(
+				{
+					"doctype": "File",
+					"file_name": f"l23-all-{tag}-{self.unique_key('f')}.csv",
+					"is_private": 1,
+					"content": b"phone\n0900000000\n",
+				}
+			).insert(ignore_permissions=True)
+			bdoc = frappe.get_doc(
+				{
+					"doctype": "CSKH Import Batch",
+					"source_file": fdoc.name,
+					"checksum": self.unique_key(f"sha-{tag}"),
+					"status": "COMPLETED",
+					"idempotency_key": self.unique_key(f"idem-{tag}"),
+					"total_rows": len(lead_ids),
+					"valid_rows": len(lead_ids),
+					"created_rows": len(lead_ids),
+				}
+			).insert(ignore_permissions=True)
+			for lid in lead_ids:
+				frappe.get_doc(
+					{
+						"doctype": "CSKH Import Batch Lead",
+						"import_batch": bdoc.name,
+						"lead": lid,
+						"outcome": "created",
+					}
+				).insert(ignore_permissions=True)
+			return bdoc.name
+
+		# --- Positive controls in Team A (`campaign_a`): 2 valid `queued` + 1 `assigned` ---
+		pos_q1 = _make_tagged_lead("PosQueuedA1")
+		wi_pos_q1 = self.make_work_item(campaign_a, pos_q1["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": pos_q1["lead"],
+				"campaign": campaign_a,
+				"work_item": wi_pos_q1,
+			}
+		).insert(ignore_permissions=True)
+
+		pos_q2 = _make_tagged_lead("PosQueuedA2")
+		wi_pos_q2 = self.make_work_item(campaign_a, pos_q2["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": pos_q2["lead"],
+				"campaign": campaign_a,
+				"work_item": wi_pos_q2,
+			}
+		).insert(ignore_permissions=True)
+
+		pos_active_a = _make_tagged_lead("PosActiveA")
+		wi_pos_act_a = self.make_work_item(campaign_a, pos_active_a["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": pos_active_a["lead"],
+				"campaign": campaign_a,
+				"work_item": wi_pos_act_a,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_pos_act_a,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="L-23 positive assigned in Team A",
+			request_id=self.unique_key("l23-pos-act-a"),
+		)
+		batch_pos_a = _make_batch_with_leads("pos-a", [pos_q1["lead"], pos_q2["lead"]])
+
+		# --- 1a. `revoke(return_to_pool=True)` in Team A -> assigned to `staff_c` in `campaign_b` ---
+		b_ret_true_priv = _make_tagged_lead("RetTruePrivB")
+		wi_a_rt_priv = self.make_work_item(campaign_a, b_ret_true_priv["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": b_ret_true_priv["lead"],
+				"campaign": campaign_a,
+				"work_item": wi_a_rt_priv,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_a_rt_priv,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="Initial Team A before return_to_pool=True",
+			request_id=self.unique_key("l23-rt-priv-a"),
+		)
+		ownership_service.revoke(
+			wi_a_rt_priv,
+			expected_owner=self.staff_a,
+			actor=self.admin_user,
+			reason="Return to pool in Team A",
+			request_id=self.unique_key("l23-rt-priv-rev"),
+			return_to_pool=True,
+		)
+		wi_b_rt_priv = self.make_work_item(campaign_b, b_ret_true_priv["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": b_ret_true_priv["lead"],
+				"campaign": campaign_b,
+				"work_item": wi_b_rt_priv,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_b_rt_priv,
+			self.staff_c,
+			actor=self.admin_user,
+			reason="Assigned in Team B after Team A return_to_pool=True",
+			request_id=self.unique_key("l23-rt-priv-b"),
+		)
+
+		# --- 1b. `revoke(return_to_pool=True)` in Team A -> assigned to `staff_c` in `campaign_shared` ---
+		b_ret_true_sh = _make_tagged_lead("RetTrueSharedB")
+		wi_a_rt_sh = self.make_work_item(campaign_a, b_ret_true_sh["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": b_ret_true_sh["lead"],
+				"campaign": campaign_a,
+				"work_item": wi_a_rt_sh,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_a_rt_sh,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="Initial Team A before shared Team B claim",
+			request_id=self.unique_key("l23-rt-sh-a"),
+		)
+		ownership_service.revoke(
+			wi_a_rt_sh,
+			expected_owner=self.staff_a,
+			actor=self.admin_user,
+			reason="Return to pool in Team A before shared claim",
+			request_id=self.unique_key("l23-rt-sh-rev"),
+			return_to_pool=True,
+		)
+		wi_b_rt_sh = self.make_work_item(campaign_shared, b_ret_true_sh["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": b_ret_true_sh["lead"],
+				"campaign": campaign_shared,
+				"work_item": wi_b_rt_sh,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_b_rt_sh,
+			self.staff_c,
+			actor=self.admin_user,
+			reason="Assigned to Team B in shared campaign",
+			request_id=self.unique_key("l23-rt-sh-b"),
+		)
+
+		# --- 2. `revoke(return_to_pool=False)` in Team A -> assigned to `staff_c` in `campaign_b` ---
+		b_ret_false = _make_tagged_lead("RetFalseB")
+		wi_a_rf = self.make_work_item(campaign_a, b_ret_false["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": b_ret_false["lead"],
+				"campaign": campaign_a,
+				"work_item": wi_a_rf,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_a_rf,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="Initial Team A before permanent revoke",
+			request_id=self.unique_key("l23-rf-a"),
+		)
+		ownership_service.revoke(
+			wi_a_rf,
+			expected_owner=self.staff_a,
+			actor=self.admin_user,
+			reason="Permanent revoke in Team A",
+			request_id=self.unique_key("l23-rf-rev"),
+			return_to_pool=False,
+		)
+		wi_b_rf = self.make_work_item(campaign_b, b_ret_false["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": b_ret_false["lead"],
+				"campaign": campaign_b,
+				"work_item": wi_b_rf,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_b_rf,
+			self.staff_c,
+			actor=self.admin_user,
+			reason="Assigned in Team B after permanent revoke",
+			request_id=self.unique_key("l23-rf-b"),
+		)
+
+		# --- 3a. `closed` in Team A -> assigned to `staff_c` in `campaign_b` ---
+		b_closed_asg = _make_tagged_lead("ClosedAsgB")
+		wi_a_cl_asg = self.make_work_item(campaign_a, b_closed_asg["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": b_closed_asg["lead"],
+				"campaign": campaign_a,
+				"work_item": wi_a_cl_asg,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_a_cl_asg,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="Initial Team A before close",
+			request_id=self.unique_key("l23-cl-a"),
+		)
+		ownership_service.revoke(
+			wi_a_cl_asg,
+			expected_owner=self.staff_a,
+			actor=self.admin_user,
+			reason="Release before closing Team A item",
+			request_id=self.unique_key("l23-cl-rel"),
+			return_to_pool=False,
+		)
+		frappe.db.set_value("CSKH Work Item", wi_a_cl_asg, "status", "closed", update_modified=False)
+		wi_b_cl_asg = self.make_work_item(campaign_b, b_closed_asg["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": b_closed_asg["lead"],
+				"campaign": campaign_b,
+				"work_item": wi_b_cl_asg,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_b_cl_asg,
+			self.staff_c,
+			actor=self.admin_user,
+			reason="Assigned in Team B after closed in Team A",
+			request_id=self.unique_key("l23-cl-b"),
+		)
+
+		# --- 3b. `closed` in Team A -> `queued` with Active Claim in `campaign_b` ---
+		b_closed_q = _make_tagged_lead("ClosedQueuedB")
+		self.make_work_item(campaign_a, b_closed_q["lead"], status="closed")
+		wi_b_cl_q = self.make_work_item(campaign_b, b_closed_q["lead"], status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": b_closed_q["lead"],
+				"campaign": campaign_b,
+				"work_item": wi_b_cl_q,
+			}
+		).insert(ignore_permissions=True)
+
+		foreign_b_records = [
+			b_ret_true_priv,
+			b_ret_true_sh,
+			b_ret_false,
+			b_closed_asg,
+			b_closed_q,
+		]
+		foreign_b_leads = {rec["lead"] for rec in foreign_b_records}
+		batch_b = _make_batch_with_leads("team-b", [rec["lead"] for rec in foreign_b_records])
+
+		forbidden_tokens_for_leader_a = [
+			self.staff_c,
+			campaign_b,
+			camp_b_title,
+			wi_a_rt_priv,
+			wi_b_rt_priv,
+			wi_a_rt_sh,
+			wi_b_rt_sh,
+			wi_b_rf,
+			wi_b_cl_asg,
+			wi_b_cl_q,
+		]
+		for rec in foreign_b_records:
+			forbidden_tokens_for_leader_a.extend(
+				[rec["lead"], rec["phone"], rec["alt_phone"], rec["name"], rec["source"]]
+			)
+
+		# Confirm DB precondition: `campaign_a` physically has 4 `queued` unassigned rows
+		# (2 valid Team A + 2 `return_to_pool=True` now owned by Team B) + 1 `assigned` row.
+		raw_queued_in_camp_a = frappe.db.count(
+			"CSKH Work Item",
+			{"campaign": campaign_a, "status": "queued", "assigned_to": ["is", "not set"]},
+		)
+		self.assertEqual(raw_queued_in_camp_a, 4)
+
+		def _assert_zero_foreign_leak(payload, label):
+			leads_seen = {row["lead"] for row in payload["items"]}
+			self.assertTrue(
+				leads_seen.isdisjoint(foreign_b_leads), f"{label} leaked {leads_seen & foreign_b_leads}"
+			)
+			serialized = json.dumps(payload, ensure_ascii=False, default=str)
+			for tok in forbidden_tokens_for_leader_a:
+				self.assertNotIn(tok, serialized, f"{label} leaked token {tok!r}")
+
+		# --- Verify `reporting.pool_list` & `customers.pool_list` BEFORE & ACROSS pagination ---
+		frappe.set_user(self.leader_a)
+		for fn_label, fn in (
+			("reporting.pool_list", lambda **kw: reporting.pool_list(self.leader_a, **kw)),
+			("customers.pool_list", customers_api.pool_list),
+		):
+			p1 = fn(page=1, page_size=1, campaign=campaign_a)
+			p2 = fn(page=2, page_size=1, campaign=campaign_a)
+			p3 = fn(page=3, page_size=1, campaign=campaign_a)
+			for p in (p1, p2, p3):
+				_assert_zero_foreign_leak(p, fn_label)
+				# Unified pre-pagination counts: 2 valid queued leads/items (never 1 post-limit, never 4 raw queued, never 5 with assigned).
+				self.assertEqual(p["total"], 2)
+				self.assertEqual(p["unique_customers"], 2)
+				self.assertEqual(p["work_items"], 2)
+			self.assertEqual(len(p1["items"]), 1)
+			self.assertEqual(len(p2["items"]), 1)
+			self.assertEqual(p3["items"], [])
+			paged_items = {row["lead"]: row for row in [*p1["items"], *p2["items"]]}
+			self.assertEqual(set(paged_items), {pos_q1["lead"], pos_q2["lead"]})
+			self.assertEqual(paged_items[pos_q1["lead"]]["phone"], pos_q1["phone"])
+			self.assertEqual(paged_items[pos_q1["lead"]]["display_name"], pos_q1["name"])
+			self.assertEqual(paged_items[pos_q1["lead"]]["state"], "queued")
+			self.assertEqual(paged_items[pos_q1["lead"]]["owner"], "")
+
+			# Batch filter on `pool_list`: foreign batch -> 0; Team A positive batch -> 2.
+			res_batch_b = fn(page=1, page_size=20, batch=batch_b)
+			self.assertEqual(res_batch_b["items"], [])
+			self.assertEqual(res_batch_b["total"], 0)
+			self.assertEqual(res_batch_b["unique_customers"], 0)
+			self.assertEqual(res_batch_b["work_items"], 0)
+
+			res_batch_a = fn(page=1, page_size=20, batch=batch_pos_a)
+			_assert_zero_foreign_leak(res_batch_a, f"{fn_label}(batch=pos_a)")
+			self.assertEqual(res_batch_a["total"], 2)
+			self.assertEqual(res_batch_a["unique_customers"], 2)
+			self.assertEqual(res_batch_a["work_items"], 2)
+
+			# Unfiltered `pool_list` for Leader A never includes any Team B lead/PII/metadata.
+			res_all = fn(page=1, page_size=100)
+			_assert_zero_foreign_leak(res_all, f"{fn_label}(unfiltered)")
+
+		# --- Verify all Pool APIs (`customers.pool_list`, `customers.customer_pool`, + `pool_ui.list` if present) ---
+		full_pool_apis = [
+			("reporting.customer_pool", lambda **kw: reporting.customer_pool(self.leader_a, **kw)),
+			("customers.customer_pool", customers_api.customer_pool),
+		]
+		if pool_ui_mod is not None:
+			full_pool_apis.append(("pool_ui.list", pool_ui_mod.list))
+
+		for api_label, api_fn in full_pool_apis:
+			res_unfiltered = api_fn(page=1, page_size=100)
+			_assert_zero_foreign_leak(res_unfiltered, f"{api_label}(unfiltered)")
+			seen_leads = {row["lead"]: row for row in res_unfiltered["items"]}
+			self.assertEqual(seen_leads[pos_q1["lead"]]["state"], "queued")
+			self.assertEqual(seen_leads[pos_q2["lead"]]["state"], "queued")
+			self.assertEqual(seen_leads[pos_active_a["lead"]]["state"], "assigned")
+			self.assertEqual(seen_leads[pos_active_a["lead"]]["owner"], self.staff_a)
+
+			# Pre-pagination check on `campaign_a` (`pos_q1`, `pos_q2`, `pos_active_a` = 3 authorized leads, 0 of the 5 Team B leads).
+			res_camp_p1 = api_fn(page=1, page_size=1, campaign=campaign_a)
+			_assert_zero_foreign_leak(res_camp_p1, f"{api_label}(campaign_a,p1)")
+			self.assertEqual(len(res_camp_p1["items"]), 1)
+			self.assertEqual(res_camp_p1["total"], 3)
+			self.assertEqual(res_camp_p1["unique_customers"], 3)
+			self.assertEqual(res_camp_p1["work_items"], 3)
+
+			res_batch_b = api_fn(page=1, page_size=20, batch=batch_b)
+			self.assertEqual(res_batch_b["items"], [])
+			self.assertEqual(res_batch_b["total"], 0)
+			self.assertEqual(res_batch_b["unique_customers"], 0)
+			self.assertEqual(res_batch_b["work_items"], 0)
+
+			for rec in foreign_b_records:
+				for q in (rec["phone"], rec["alt_phone"], rec["name"], rec["lead"]):
+					res_s = api_fn(page=1, page_size=20, search=q)
+					self.assertEqual(res_s["items"], [])
+					self.assertEqual(res_s["total"], 0)
+					self.assertEqual(res_s["unique_customers"], 0)
+					self.assertEqual(res_s["work_items"], 0)
+				res_src = api_fn(page=1, page_size=20, source=rec["source"])
+				self.assertEqual(res_src["items"], [])
+				self.assertEqual(res_src["total"], 0)
+
+		# --- Positive control for Leader B: sees all 5 Team B leads, 0 Team A private leads ---
+		frappe.set_user(self.leader_b)
+		b_pool = customers_api.customer_pool(page=1, page_size=100, batch=batch_b)
+		self.assertEqual(b_pool["total"], 5)
+		self.assertEqual(b_pool["unique_customers"], 5)
+		b_by_lead = {row["lead"]: row for row in b_pool["items"]}
+		self.assertEqual(set(b_by_lead), foreign_b_leads)
+		self.assertEqual(b_by_lead[b_ret_true_priv["lead"]]["owner"], self.staff_c)
+		self.assertEqual(b_by_lead[b_ret_true_sh["lead"]]["owner"], self.staff_c)
+		self.assertEqual(b_by_lead[b_ret_false["lead"]]["owner"], self.staff_c)
+		self.assertEqual(b_by_lead[b_closed_asg["lead"]]["owner"], self.staff_c)
+		self.assertEqual(b_by_lead[b_closed_q["lead"]]["state"], "queued")
+
+		# --- BOD zero-PII control across ALL Pool APIs (`pool_list`, `customer_pool`, + `pool_ui.list` if present) ---
+		frappe.set_user(self.bod_user)
+		bod_pool_apis = [
+			(
+				"customers.pool_list",
+				lambda: customers_api.pool_list(page=1, page_size=100, campaign=campaign_a),
+			),
+			(
+				"customers.customer_pool",
+				lambda: customers_api.customer_pool(page=1, page_size=100, campaign=campaign_a),
+			),
+		]
+		if pool_ui_mod is not None:
+			bod_pool_apis.append(
+				("pool_ui.list", lambda: pool_ui_mod.list(page=1, page_size=100, campaign=campaign_a))
+			)
+		all_pii_tokens = [rec["phone"] for rec in [pos_q1, pos_q2, pos_active_a, *foreign_b_records]] + [
+			rec["name"] for rec in [pos_q1, pos_q2, pos_active_a, *foreign_b_records]
+		]
+		for bod_label, bod_call in bod_pool_apis:
+			bod_res = bod_call()
+			self.assertEqual(bod_res["scope"], "all")
+			self.assertGreaterEqual(len(bod_res["items"]), 2)
+			for row in bod_res["items"]:
+				self.assertIsNone(row["phone"], f"{bod_label} exposed phone for BOD")
+				self.assertEqual(row["display_name"], "", f"{bod_label} exposed display_name for BOD")
+			bod_json = json.dumps(bod_res, ensure_ascii=False, default=str)
+			for pii_tok in all_pii_tokens:
+				self.assertNotIn(pii_tok, bod_json, f"{bod_label} leaked PII {pii_tok!r} to BOD")
+		with self.assertRaises(Forbidden):
+			customers_api.customer_pool(search=pos_q1["phone"])
 
 
 class TestL26BackendPaginationAndLimitValidation(P1TestCase):
