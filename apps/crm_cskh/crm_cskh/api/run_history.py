@@ -67,8 +67,19 @@ def _parse_actual(run):
 	return actual if isinstance(actual, dict) else {}
 
 
+def _parse_preview(run):
+	"""Return the preview summary of a run, or an empty dict."""
+	if not getattr(run, "preview_json", None):
+		return {}
+	try:
+		preview = json.loads(run.preview_json)
+	except (ValueError, TypeError):
+		return {}
+	return preview if isinstance(preview, dict) else {}
+
+
 @frappe.whitelist(methods=["GET"])
-def runs(page=1, page_size=20, campaign=None, status=None):
+def runs(page=1, page_size=20, campaign=None, status=None, run_id=None):
 	"""The distribution runs of the caller's scope, newest first."""
 	actor = frappe.session.user
 	_require_read(actor)
@@ -76,12 +87,17 @@ def runs(page=1, page_size=20, campaign=None, status=None):
 	offset = max(0, (int(page or 1) - 1) * limit)
 	if campaign and not isinstance(campaign, str):
 		raise InvalidRequest("The campaign must be a string.")
+	if run_id and not isinstance(run_id, str):
+		raise InvalidRequest("The run id must be a string.")
 
 	scope = reporting._scope(actor)
 	nodes = reporting._scope_team_nodes(scope)
 
 	clauses = []
 	params = []
+	if run_id:
+		clauses.append("r.name = %s")
+		params.append(run_id)
 	if campaign:
 		clauses.append("r.campaign = %s")
 		params.append(campaign)
@@ -113,10 +129,10 @@ def runs(page=1, page_size=20, campaign=None, status=None):
 	rows = frappe.db.sql(
 		"select r.name as run_id, r.campaign as campaign, r.status as status, "
 		"r.rule_version as rule_version, r.idempotency_key as idempotency_key, "
-		"r.selection_fingerprint as selection_fingerprint, "
+		"r.selection_fingerprint as selection_fingerprint, r.progress as progress, "
 		"r.creation as created_at, r.started_at as started_at, r.finished_at as finished_at, "
-		"r.actual_json as actual_json, r.error as error, c.title as campaign_title, "
-		"c.code as campaign_code "
+		"r.preview_json as preview_json, r.actual_json as actual_json, r.error as error, "
+		"c.title as campaign_title, c.code as campaign_code "
 		"from `tabCSKH Distribution Run` r "
 		"left join `tabCSKH Campaign` c on c.name = r.campaign"
 		f"{where} order by r.creation desc limit %s offset %s",
@@ -127,6 +143,7 @@ def runs(page=1, page_size=20, campaign=None, status=None):
 	items = []
 	for row in rows:
 		actual = _parse_actual(row)
+		preview = _parse_preview(row)
 		items.append(
 			{
 				"run_id": row.run_id,
@@ -137,6 +154,8 @@ def runs(page=1, page_size=20, campaign=None, status=None):
 				"rule_version": row.rule_version,
 				"idempotency_key": row.idempotency_key,
 				"selection_fingerprint": row.selection_fingerprint,
+				"progress": int(row.progress or 0),
+				"total": int(preview.get("eligible_count", 0) or 0),
 				"created": actual.get("created", 0),
 				"errors": actual.get("errors", 0),
 				"assigned": actual.get("assigned", {}),

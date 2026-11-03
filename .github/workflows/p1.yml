@@ -51,15 +51,16 @@ jobs:
 
       - name: Lint and format Python app
         id: lint
-        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py'
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py /src/deploy/p1/ui_test_inventory.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py /src/deploy/p1/ui_test_inventory.py'
 
-      # The P1 inventory is generated FROM the source. A method that was
-      # renamed or deleted must fail this gate instead of silently shrinking
-      # the verified surface (the same fail-closed rule as the P0 gate).
-      - name: Verify the P1 test inventory matches the source
+      # The P1 backend and UI inventories are generated FROM the source, and
+      # P1 Vietnamese translations are audited fail-closed.
+      - name: Verify the P1 test inventories and translations match the source
         id: inventory
         run: |
           python3 deploy/dev/seed/p1_test_inventory.py --check deploy/dev/seed/p1_test_inventory.json
+          python3 deploy/p1/ui_test_inventory.py --check deploy/p1/ui_test_inventory.json
+          python3 deploy/p1/check_translations_audit.py
 
       - name: Seed and repeat migration
         id: seed
@@ -105,6 +106,21 @@ jobs:
             printf '%s exit=%s\n' "$module" "$module_status" >> "$artifact_dir/module-status.txt"
           done
 
+          # Run P1 UI endpoint tests into `/tmp/p1-evidence/ui/` so its JUnit XML
+          # is gated against `deploy/p1/ui_test_inventory.json` (6 methods) without
+          # colliding with `deploy/dev/seed/p1_test_inventory.json` in `/tmp/p1-evidence/`.
+          ui_module="crm_cskh.tests.test_ui_p1_endpoints"
+          ui_log="/tmp/p1-evidence/ui/test_ui_p1_endpoints.log"
+          ui_xml="/tmp/p1-evidence/ui/test_ui_p1_endpoints.junit.xml"
+          echo "=== Running UI module: $ui_module ==="
+          if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p /tmp/p1-evidence/ui && set +e; bench --site p1-test.localhost --verbose run-tests --module '$ui_module' --junit-xml-output '$ui_xml' > '$ui_log' 2>&1; rc=\$?; exit \$rc"; then
+            ui_module_status=0
+          else
+            ui_module_status=$?
+            overall_status=1
+          fi
+          printf '%s exit=%s\n' "$ui_module" "$ui_module_status" >> "$artifact_dir/module-status.txt"
+
           # `bench migrate` runs a SECOND time on a site that already ran the
           # P1 patches. P1 5.6 requires the migration to be idempotent: the
           # composite unique constraints and the lookup indexes must not fail
@@ -123,7 +139,7 @@ jobs:
           fi
           exit "$overall_status"
 
-      - name: Enforce per-method JUnit coverage gate (P1 inventory)
+      - name: Enforce per-method JUnit coverage gate (P1 backend + UI inventories)
         id: per_method_gate
         if: always()
         continue-on-error: true
@@ -131,7 +147,7 @@ jobs:
         run: |
           set -u
           artifact_dir="$RUNNER_TEMP/p1-evidence"
-          mkdir -p "$artifact_dir"
+          mkdir -p "$artifact_dir" "$artifact_dir/ui"
           python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
             --inventory "$GITHUB_WORKSPACE/deploy/dev/seed/p1_test_inventory.json" \
             --xml-dir "$artifact_dir" \
@@ -139,7 +155,16 @@ jobs:
             | tee "$artifact_dir/p1-per-method-gate.txt"
           gate_status=${PIPESTATUS[0]}
           echo "p1 per-method gate exit=$gate_status" >> "$artifact_dir/module-status.txt"
-          exit "$gate_status"
+
+          python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
+            --inventory "$GITHUB_WORKSPACE/deploy/p1/ui_test_inventory.json" \
+            --xml-dir "$artifact_dir/ui" \
+            --out "$artifact_dir/ui/ui-per-method-gate.json" \
+            | tee "$artifact_dir/ui/ui-per-method-gate.txt"
+          ui_gate_status=${PIPESTATUS[0]}
+          echo "p1 ui per-method gate exit=$ui_gate_status" >> "$artifact_dir/module-status.txt"
+
+          test "$gate_status" -eq 0 && test "$ui_gate_status" -eq 0
 
       - name: Run the P1 HTTP transport probe against bench serve
         id: p1_http_transport
@@ -274,6 +299,7 @@ jobs:
               "crm_sha": env_values.get("CRM_SHA", "unknown"),
               "bench_image_ref": env_values.get("BENCH_IMAGE", "unknown"),
               "p1_inventory": "deploy/dev/seed/p1_test_inventory.json",
+              "ui_inventory": "deploy/p1/ui_test_inventory.json",
               "workflow_outcomes": {
                   "bootstrap": os.environ.get("BOOTSTRAP_OUTCOME"),
                   "lint": os.environ.get("LINT_OUTCOME"),

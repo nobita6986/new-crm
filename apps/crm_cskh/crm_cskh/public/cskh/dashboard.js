@@ -28,20 +28,25 @@
 	const reads = cskh.sequencer()
 
 	function runStatusLabel(value) {
+		const normalized = String(value || '').toLowerCase()
 		const map = {
 			planned: cskh.t('Preview'),
+			queued: cskh.t('Queued'),
 			running: cskh.t('Running'),
 			completed: cskh.t('Completed'),
 			completed_with_errors: cskh.t('Completed with errors'),
 			failed: cskh.t('Failed'),
 		}
-		return map[value] || value || '—'
+		return map[normalized] || value || '—'
 	}
 
 	function runBadgeClass(value) {
-		if (value === 'completed') return cskh.stateBadge('assigned')
-		if (value === 'completed_with_errors') return cskh.stateBadge('queued')
-		if (value === 'failed') return cskh.stateBadge('invalid')
+		const normalized = String(value || '').toLowerCase()
+		if (normalized === 'completed') return cskh.stateBadge('assigned')
+		if (normalized === 'completed_with_errors' || normalized === 'queued' || normalized === 'running') {
+			return cskh.stateBadge('queued')
+		}
+		if (normalized === 'failed') return cskh.stateBadge('invalid')
 		return cskh.stateBadge('eligible')
 	}
 

@@ -460,6 +460,9 @@ Current ownership (live work items),Quyền phụ trách hiện tại (công vi�
 Customers assigned in the scope,Khách hàng được giao trong phạm vi
 Data error,Lỗi dữ liệu
 Distributing the customers requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép phân phối khách hàng.
+Distribution failed.,Phân phối thất bại.
+Distribution is running in the background...,Đang thực thi phân phối nền...
+Distribution queued. Waiting for background worker...,Đã xếp hàng đợi phân phối. Đang chờ tiến trình nền xử lý...
 Download error file,Tải tệp lỗi
 Edit campaign,Sửa chiến dịch
 Error file,Tệp lỗi
@@ -487,6 +490,7 @@ Only the CRM Admin may read an import batch.,Chỉ Quản trị CRM mới đư�
 Ownership detail,Chi tiết quyền phụ trách
 Ownership history,Lịch sử phụ trách
 "Preview first. Executing is a separate, explicitly confirmed action.",Phải xem trước trước. Thực thi là hành động riêng biệt và phải được xác nhận rõ ràng.
+Progress,Tiến độ
 Retry the failed job,Chạy lại công việc thất bại
 Reused rows,Số dòng dùng lại
 Revoke,Thu hồi
@@ -534,6 +538,7 @@ The preview does not exist.,Bản xem trước không tồn tại.
 The preview has expired; run the preview again.,Bản xem trước đã hết hạn; hãy chạy lại xem trước.
 The preview id is required.,Cần có mã xem trước.
 The run id is required.,Cần nhập mã đợt chạy.
+The run id must be a string.,Mã đợt chạy phải là chuỗi văn bản.
 The scope is resolved by the server. Only the CRM Admin may transfer or revoke an ownership.,Phạm vi do máy chủ xác định. Chỉ Quản trị CRM được chuyển hoặc thu hồi quyền phụ trách.
 The start date must not be after the end date.,Ngày bắt đầu không được sau ngày kết thúc.
 The target user has no remaining capacity.,Người nhận đã hết sức chứa còn lại.
@@ -551,6 +556,7 @@ The work item is not currently assigned.,Công việc hiện không có người
 The work item is required.,Cần chọn công việc.
 This action requires the CRM Admin business role.,Thao tác này yêu cầu vai trò Quản trị CRM.
 "This campaign, assignee and version already has a rule.","Chiến dịch, người được giao và phiên bản này đã có quy tắc."
+This idempotency key was already used by another distribution run.,Khóa idempotency này đã được dùng cho một đợt phân phối khác.
 This idempotency key was already used with a different file.,Khóa idempotency này đã được dùng với một tệp khác.
 Timeout,Quá thời gian chờ phản hồi từ máy chủ.
 To date,Đến ngày
@@ -573,5 +579,6 @@ You may not read the customer pool.,Bạn không có quyền xem kho khách hàn
 You may not read the distribution dashboard.,Bạn không có quyền xem bảng điều khiển phân phối.
 You may not read this assignment history.,Bạn không có quyền xem lịch sử phân công này.
 You may not reconcile a campaign.,Bạn không có quyền đối soát chiến dịch.
+already_claimed,Đã được giữ bởi chiến dịch khác
 invalid_row,Dòng dữ liệu không hợp lệ
 no_phone_column,Thiếu cột số điện thoại

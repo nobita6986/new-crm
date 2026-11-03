@@ -39,7 +39,7 @@ from xml.sax.saxutils import escape as xml_escape
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 EVIDENCE_DIR = os.path.join(HERE, "evidence")
-REPORT_PATH = os.path.join(EVIDENCE_DIR, "http-e2e-report.json")
+REPORT_PATH = os.environ.get("P1_REPORT_OUT") or os.path.join(EVIDENCE_DIR, "http-e2e-report.json")
 
 BASE = os.environ.get("P1_BASE", "http://127.0.0.1:8120")
 HOST = os.environ.get("P1_HOST", "p1.localhost")
@@ -237,6 +237,18 @@ def poll_batch(admin, batch_name, timeout=45):
 			return msg
 		time.sleep(0.8)
 	raise AssertionError(f"Batch {batch_name} timed out")
+
+
+def poll_run(admin, run_id, timeout=45):
+	deadline = time.time() + timeout
+	while time.time() < deadline:
+		st, body = admin.get_api("crm_cskh.api.distribution.get_run", {"run_id": run_id})
+		assert st == 200, f"get_run failed: {st} {body}"
+		msg = body["message"]
+		if str(msg.get("status", "")).lower() in ("completed", "completed_with_errors", "failed"):
+			return msg
+		time.sleep(0.6)
+	raise AssertionError(f"Distribution run {run_id} timed out")
 
 
 def main():
@@ -542,7 +554,8 @@ def main():
 			"idempotency_key": "e2e-exec-fresh-b",
 		},
 	)
-	assert dist_exec_b["message"]["created"] == 2, dist_exec_b
+	run_b_done = poll_run(admin, dist_exec_b["message"]["run_id"])
+	assert run_b_done["created"] == 2, run_b_done
 
 	st, c_closed = admin.post_api(
 		"crm_cskh.api.campaigns.save",
@@ -682,8 +695,8 @@ def main():
 			"idempotency_key": "e2e-exec-fresh-a",
 		},
 	)
-	assert st_ex1 == 200 and st_ex2 == 200, (ex1, ex2)
-	run_a = ex1["message"]
+	assert st_ex1 == 200 and st_ex2 in (200, 409), (ex1, ex2)
+	run_a = poll_run(admin, ex1["message"]["run_id"])
 	assert run_a["status"] == "completed" and run_a["created"] == 11, run_a
 	assert run_a["assigned"][users["staff_a"]] == 7, run_a
 	assert run_a["assigned"][users["staff_b"]] == 4, run_a

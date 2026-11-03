@@ -1,6 +1,6 @@
 /* Campaigns, assignment rules and distribution (P1 §9.3).
 
-   Contract (T1B, frozen):
+   Contract (T1B, frozen + async background distribution):
      GET  crm_cskh.api.campaigns.list(status, campaign)
      GET  crm_cskh.api.campaigns.rules(campaign)
      POST crm_cskh.api.campaigns.save(code, title, description, status, team_scope, campaign, selection)
@@ -13,7 +13,12 @@
    confirmed** action that carries the rule version of the preview. A stale
    preview is refused by the backend with `RULE_CHANGED` or `PREVIEW_EXPIRED`
    and the page shows the conflict state instead of distributing stale
-   numbers (P1 §7.4). */
+   numbers (P1 §7.4).
+
+   When `execute` enqueues a background job (`queued` / `running`), enqueue
+   is **never** treated as completion: the UI displays live progress, polls
+   `get_run(run_id)` single-flight, recovers tracking across page reloads,
+   and surfaces `completed`, `completed_with_errors`, or `failed` accurately. */
 (function () {
 	'use strict'
 
@@ -27,6 +32,9 @@
 	const API_RUNS = 'crm_cskh.api.run_history.runs'
 	const API_ASSIGNEES = 'crm_cskh.api.ownership_ui.assignees'
 
+	const ACTIVE_RUN_STORAGE_KEY = 'cskh_active_dist_run'
+	const RUN_POLL_INTERVAL_MS = 1000
+
 	const isAdmin = !!(cskh.capabilities() && cskh.capabilities().admin)
 
 	let preview = null
@@ -36,9 +44,30 @@
 	let currentEligibleRules = []
 	let availableAssignees = []
 
+	let trackedRunId = null
+	let trackedMeta = null
+	let pollGeneration = 0
+	let pollTimer = null
+
 	function uuid() {
 		if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID()
 		return 'cskh-' + Date.now() + '-' + Math.floor(Math.random() * 1e9)
+	}
+
+	function normRunStatus(value) {
+		return String(value || '')
+			.trim()
+			.toLowerCase()
+	}
+
+	function isTerminalRunStatus(value) {
+		const s = normRunStatus(value)
+		return s === 'completed' || s === 'completed_with_errors' || s === 'failed'
+	}
+
+	function isActiveRunStatus(value) {
+		const s = normRunStatus(value)
+		return s === 'queued' || s === 'running' || s === 'in_progress' || s === 'pending'
 	}
 
 	function reasonLabel(reason) {
@@ -55,8 +84,104 @@
 			capacity_full: cskh.t('capacity_full'),
 			no_eligible_assignee: cskh.t('no_eligible_assignee'),
 			assignment_failed: cskh.t('assignment_failed'),
+			already_claimed: cskh.t('already_claimed'),
 		}
 		return map[reason] || reason || '—'
+	}
+
+	function formatRunError(rawError) {
+		const raw = String(rawError || '').trim()
+		if (!raw) return { message: '', code: 'FAILED' }
+		const match = raw.match(/^([A-Z][A-Z0-9_]+):\s*(.+)$/)
+		if (match) {
+			const code = match[1]
+			const msg = match[2].trim()
+			const fallback =
+				(cskh.explainError && cskh.explainError(code)) ||
+				cskh.t('An error occurred while processing the request.')
+			return {
+				message: cskh.t(msg, fallback),
+				code: code,
+			}
+		}
+		return {
+			message: cskh.t(raw, cskh.t('An error occurred while processing the request.')),
+			code: 'FAILED',
+		}
+	}
+
+	function readStoredActiveRun() {
+		try {
+			const params = new URLSearchParams(window.location.search || '')
+			const queryRunId = (params.get('run_id') || '').trim()
+			const raw = window.sessionStorage
+				? window.sessionStorage.getItem(ACTIVE_RUN_STORAGE_KEY)
+				: null
+			const parsed = raw ? JSON.parse(raw) : null
+			if (queryRunId) {
+				if (parsed && parsed.run_id === queryRunId) return parsed
+				return { run_id: queryRunId }
+			}
+			if (parsed && parsed.run_id) return parsed
+		} catch (_err) {
+			// Ignore storage/URL parsing errors.
+		}
+		return null
+	}
+
+	function persistActiveRun(meta) {
+		if (!meta || !meta.run_id) return
+		try {
+			if (window.sessionStorage) {
+				window.sessionStorage.setItem(
+					ACTIVE_RUN_STORAGE_KEY,
+					JSON.stringify({
+						run_id: meta.run_id,
+						campaign: meta.campaign || '',
+						total: meta.total !== undefined ? meta.total : null,
+						rule_version: meta.rule_version !== undefined ? meta.rule_version : null,
+						lookupOnly: !!meta.lookupOnly,
+					})
+				)
+			}
+			if (window.history && window.history.replaceState) {
+				const url = new URL(window.location.href)
+				url.searchParams.set('run_id', meta.run_id)
+				window.history.replaceState(null, '', url.pathname + url.search + url.hash)
+			}
+		} catch (_err) {
+			// Ignore storage/URL update errors.
+		}
+	}
+
+	function clearStoredActiveRun(clearQuery) {
+		try {
+			if (window.sessionStorage) {
+				window.sessionStorage.removeItem(ACTIVE_RUN_STORAGE_KEY)
+			}
+			if (clearQuery && window.history && window.history.replaceState) {
+				const url = new URL(window.location.href)
+				if (url.searchParams.has('run_id')) {
+					url.searchParams.delete('run_id')
+					window.history.replaceState(null, '', url.pathname + url.search + url.hash)
+				}
+			}
+		} catch (_err) {
+			// Ignore storage/URL cleanup errors.
+		}
+	}
+
+	function stopTracking(clearPersistence) {
+		pollGeneration += 1
+		if (pollTimer) {
+			clearTimeout(pollTimer)
+			pollTimer = null
+		}
+		trackedRunId = null
+		trackedMeta = null
+		if (clearPersistence) {
+			clearStoredActiveRun(true)
+		}
 	}
 
 	async function loadAssignees() {
@@ -64,7 +189,7 @@
 		try {
 			const data = await cskh.get(API_ASSIGNEES)
 			availableAssignees = (data && data.items) || []
-		} catch (error) {
+		} catch (_error) {
 			availableAssignees = []
 		}
 	}
@@ -201,7 +326,11 @@
 				status: 'Closed',
 				team_scope: campaign.team_scope || null,
 			})
-			cskh.alert(alertBox, 'success', cskh.t('Campaign closed') + ': ' + (campaign.title || campaign.code))
+			cskh.alert(
+				alertBox,
+				'success',
+				cskh.t('Campaign closed') + ': ' + (campaign.title || campaign.code)
+			)
 			await loadCampaigns()
 			loadRules()
 		} catch (error) {
@@ -393,12 +522,16 @@
 		capacity.type = 'number'
 		capacity.min = '0'
 		capacity.placeholder = cskh.t('Capacity')
-		capacity.value = rule && rule.capacity !== undefined && rule.capacity !== null ? rule.capacity : 0
+		capacity.value =
+			rule && rule.capacity !== undefined && rule.capacity !== null ? rule.capacity : 0
 
 		const liveShare = cskh.el('span', { class: 'cskh-muted cskh-mono' })
 		function updateLiveShare() {
 			const w = Math.max(0, Number(weight.value || 0))
-			const otherWeight = Math.max(0, Number(totalWeight || 0) - Number((rule && rule.weight) || 0))
+			const otherWeight = Math.max(
+				0,
+				Number(totalWeight || 0) - Number((rule && rule.weight) || 0)
+			)
 			const denom = otherWeight + w
 			const pct = denom > 0 ? Math.round((w / denom) * 1000) / 10 : 0
 			const capNum = Number(capacity.value || 0)
@@ -454,7 +587,7 @@
 	}
 
 	/* ------------------------------------------------------------------ */
-	/* Distribution: preview -> confirm -> execute                          */
+	/* Distribution: preview -> confirm -> execute + background polling    */
 	/* ------------------------------------------------------------------ */
 
 	async function runPreview() {
@@ -562,7 +695,10 @@
 					cskh.el('td', { class: 'num', text: pct + '%' }),
 					cskh.el('td', { class: 'num', text: cskh.formatNumber(plannedCount) }),
 					cskh.el('td', { class: 'num', text: cskh.formatNumber(assignedNow) }),
-					cskh.el('td', { class: 'num', text: cskh.capacityLabel(rem !== undefined ? rem : null) }),
+					cskh.el('td', {
+						class: 'num',
+						text: cskh.capacityLabel(rem !== undefined ? rem : null),
+					}),
 				])
 			)
 		})
@@ -594,6 +730,88 @@
 		document.getElementById('dist-execute').disabled = false
 	}
 
+	async function enrichRunFromHistory(run, meta) {
+		if (!run) return run
+		const runId = run.run_id || run.preview_id || run.name
+		if (!runId) return run
+		const s = normRunStatus(run.status)
+		const needsProgress = run.progress === undefined || run.progress === null
+		const needsTotal =
+			run.total === undefined &&
+			run.eligible_count === undefined &&
+			(!meta || meta.total === undefined || meta.total === null)
+		const needsError = (s === 'failed' || s === 'completed_with_errors') && !run.error
+		if (!needsProgress && !needsTotal && !needsError) return run
+
+		try {
+			const hist = await cskh.get(API_RUNS, { run_id: runId, page: 1, page_size: 1 })
+			const item = hist && hist.items && hist.items[0]
+			if (!item || item.run_id !== runId) return run
+			const merged = Object.assign({}, run)
+			if (merged.progress === undefined || merged.progress === null) {
+				merged.progress = item.progress
+			}
+			if (merged.total === undefined || merged.total === null) {
+				merged.total = item.total
+			}
+			if (!merged.error && item.error) {
+				merged.error = item.error
+			}
+			if (!merged.campaign && item.campaign) {
+				merged.campaign = item.campaign
+			}
+			if (!merged.rule_version && item.rule_version) {
+				merged.rule_version = item.rule_version
+			}
+			return merged
+		} catch (_err) {
+			return run
+		}
+	}
+
+	function buildRunMeta(run, baseMeta) {
+		const runId = (run && (run.run_id || run.preview_id || run.name)) || (baseMeta && baseMeta.run_id) || ''
+		const totalCandidate =
+			run && run.total !== undefined && run.total !== null
+				? Number(run.total)
+				: run && run.eligible_count !== undefined && run.eligible_count !== null
+					? Number(run.eligible_count)
+					: baseMeta && baseMeta.total !== undefined && baseMeta.total !== null
+						? Number(baseMeta.total)
+						: null
+		return {
+			run_id: runId,
+			campaign:
+				(run && run.campaign) ||
+				(baseMeta && baseMeta.campaign) ||
+				document.getElementById('rule-campaign').value ||
+				'',
+			total: totalCandidate,
+			rule_version:
+				(run && run.rule_version) || (baseMeta && baseMeta.rule_version) || null,
+			lookupOnly: !!(baseMeta && baseMeta.lookupOnly),
+		}
+	}
+
+	async function handleExecuteResult(rawRun, baseMeta) {
+		const alertBox = document.getElementById('campaign-alert')
+		cskh.clear(alertBox)
+		const meta = buildRunMeta(rawRun, baseMeta)
+		const run = await enrichRunFromHistory(rawRun, meta)
+		const updatedMeta = buildRunMeta(run, meta)
+
+		renderRun(run, updatedMeta)
+		if (isActiveRunStatus(run && run.status)) {
+			persistActiveRun(updatedMeta)
+			trackRun(updatedMeta.run_id, updatedMeta)
+			loadRuns()
+		} else {
+			stopTracking(true)
+			loadRules()
+			loadRuns()
+		}
+	}
+
 	async function runExecute() {
 		const alertBox = document.getElementById('campaign-alert')
 		const results = document.getElementById('dist-results')
@@ -601,6 +819,10 @@
 		cskh.clear(results)
 		if (!preview) return
 		const activePreview = preview
+		const activeTotal =
+			activePreview.summary && activePreview.summary.eligible_count !== undefined
+				? Number(activePreview.summary.eligible_count)
+				: null
 		// Disable immediately to block double-submit while request is in flight (P1 §12.4).
 		executeBtn.disabled = true
 		try {
@@ -609,10 +831,13 @@
 				expected_rule_version: activePreview.rule_version,
 				idempotency_key: 'ui-execute-' + activePreview.preview_id,
 			})
-			renderRun(data)
 			preview = null
-			loadRules()
-			loadRuns()
+			await handleExecuteResult(data, {
+				run_id: (data && data.run_id) || activePreview.preview_id,
+				campaign: activePreview.campaign || document.getElementById('rule-campaign').value,
+				total: activeTotal,
+				rule_version: activePreview.rule_version,
+			})
 		} catch (error) {
 			const code = cskh.renderError(alertBox, error)
 			if (code === 'RULE_CHANGED' || code === 'PREVIEW_EXPIRED') {
@@ -631,51 +856,316 @@
 		}
 	}
 
-	function renderRun(run) {
-		const results = document.getElementById('dist-results')
-		cskh.clear(results)
+	function trackRun(runId, meta) {
+		if (!runId) return
+		if (trackedRunId === runId && pollTimer) {
+			trackedMeta = Object.assign({}, trackedMeta || {}, meta || {})
+			return
+		}
+		if (pollTimer) {
+			clearTimeout(pollTimer)
+			pollTimer = null
+		}
+		trackedRunId = runId
+		trackedMeta = Object.assign({ run_id: runId }, meta || {})
+		pollGeneration += 1
+		const myGen = pollGeneration
+		let lastStatus = null
+		let consecutiveErrors = 0
+
+		async function pollTick() {
+			if (myGen !== pollGeneration || trackedRunId !== runId) return
+			pollTimer = null
+			try {
+				let run = await cskh.get(API_RUN, { run_id: runId })
+				if (myGen !== pollGeneration || trackedRunId !== runId) return
+				run = await enrichRunFromHistory(run, trackedMeta)
+				if (myGen !== pollGeneration || trackedRunId !== runId) return
+
+				consecutiveErrors = 0
+				trackedMeta = buildRunMeta(run, trackedMeta)
+				const targetIsLookup = trackedMeta.lookupOnly || !isAdmin
+				if (targetIsLookup) {
+					const lookupBox = document.getElementById('dist-run-lookup-result')
+					if (lookupBox) renderRunLookup(lookupBox, run, trackedMeta)
+				} else {
+					renderRun(run, trackedMeta)
+				}
+
+				const currentStatus = normRunStatus(run && run.status)
+				if (isActiveRunStatus(currentStatus)) {
+					persistActiveRun(trackedMeta)
+					if (lastStatus && lastStatus !== currentStatus) {
+						loadRuns()
+					}
+					lastStatus = currentStatus
+					pollTimer = setTimeout(pollTick, RUN_POLL_INTERVAL_MS)
+				} else {
+					stopTracking(true)
+					loadRules()
+					loadRuns()
+				}
+			} catch (error) {
+				if (myGen !== pollGeneration || trackedRunId !== runId) return
+				consecutiveErrors += 1
+				const code = cskh.errorCode(error)
+				const alertBox = document.getElementById('campaign-alert')
+				if (code === 'FORBIDDEN' || code === 'NOT_FOUND' || consecutiveErrors >= 3) {
+					stopTracking(true)
+					cskh.renderError(alertBox, error)
+				} else {
+					pollTimer = setTimeout(pollTick, RUN_POLL_INTERVAL_MS * 2)
+				}
+			}
+		}
+
+		pollTimer = setTimeout(pollTick, RUN_POLL_INTERVAL_MS)
+	}
+
+	async function pollTrackedRunNow(runId, baseMeta) {
+		if (!runId) return
+		const alertBox = document.getElementById('campaign-alert')
+		try {
+			let run = await cskh.get(API_RUN, { run_id: runId })
+			const meta = buildRunMeta(run, baseMeta || trackedMeta)
+			run = await enrichRunFromHistory(run, meta)
+			const updatedMeta = buildRunMeta(run, meta)
+			if (updatedMeta.lookupOnly || !isAdmin) {
+				renderRunLookup(document.getElementById('dist-run-lookup-result'), run, updatedMeta)
+			} else {
+				renderRun(run, updatedMeta)
+			}
+			if (isActiveRunStatus(run && run.status)) {
+				persistActiveRun(updatedMeta)
+				trackRun(runId, updatedMeta)
+			} else {
+				stopTracking(true)
+				loadRules()
+				loadRuns()
+			}
+		} catch (error) {
+			cskh.renderError(alertBox, error)
+		}
+	}
+
+	async function recoverActiveRun() {
+		const stored = readStoredActiveRun()
+		if (!stored || !stored.run_id) return
+		try {
+			let run = await cskh.get(API_RUN, { run_id: stored.run_id })
+			const meta = buildRunMeta(run, stored)
+			run = await enrichRunFromHistory(run, meta)
+			const updatedMeta = buildRunMeta(run, meta)
+
+			if (updatedMeta.campaign) {
+				const select = document.getElementById('rule-campaign')
+				if (
+					select &&
+					Array.from(select.options).some(function (opt) {
+						return opt.value === updatedMeta.campaign
+					})
+				) {
+					select.value = updatedMeta.campaign
+				}
+			}
+
+			if (!isAdmin || updatedMeta.lookupOnly) {
+				const input = document.getElementById('dist-run-id')
+				if (input) input.value = updatedMeta.run_id
+				renderRunLookup(
+					document.getElementById('dist-run-lookup-result'),
+					run,
+					updatedMeta
+				)
+			} else {
+				renderRun(run, updatedMeta)
+			}
+
+			if (isActiveRunStatus(run && run.status)) {
+				persistActiveRun(updatedMeta)
+				trackRun(updatedMeta.run_id, updatedMeta)
+			} else {
+				clearStoredActiveRun(true)
+			}
+		} catch (error) {
+			clearStoredActiveRun(true)
+			const targetBox = isAdmin
+				? document.getElementById('campaign-alert')
+				: document.getElementById('dist-run-lookup-result')
+			if (targetBox) cskh.renderError(targetBox, error)
+		}
+	}
+
+	function formatRunProgress(run, meta) {
+		const created = Number((run && run.created) || 0)
+		const errors = Number((run && run.errors) || 0)
+		const rawProgress =
+			run && run.progress !== undefined && run.progress !== null
+				? Number(run.progress)
+				: 0
+		let processed = Math.max(rawProgress, created + errors)
+		const total =
+			run && run.total !== undefined && run.total !== null
+				? Number(run.total)
+				: run && run.eligible_count !== undefined && run.eligible_count !== null
+					? Number(run.eligible_count)
+					: meta && meta.total !== undefined && meta.total !== null
+						? Number(meta.total)
+						: null
+		if (total !== null && total > 0) {
+			if (normRunStatus(run && run.status) === 'completed' && processed < total && created >= total) {
+				processed = total
+			}
+			const clamped = Math.min(processed, total)
+			const pct = Math.min(100, Math.round((clamped / total) * 100))
+			return cskh.formatNumber(clamped) + ' / ' + cskh.formatNumber(total) + ' (' + pct + '%)'
+		}
+		if (total === 0 && isTerminalRunStatus(run && run.status)) {
+			return '0 / 0 (100%)'
+		}
+		return cskh.formatNumber(processed)
+	}
+
+	function renderRunDetails(container, run, meta, includeBanner) {
+		cskh.clear(container)
 		if (!run) return
-		const partial = run.errors > 0
-		const alertWrap = cskh.el('div')
-		cskh.alert(
-			alertWrap,
-			partial ? 'warning' : 'success',
-			partial
-				? cskh.t('Distribution completed with errors.')
-				: cskh.t('Distribution completed.'),
-			runStatusLabel(run.status)
-		)
-		results.appendChild(alertWrap)
-		results.appendChild(
+		const runId = run.run_id || run.preview_id || run.name || '—'
+		const normStatus = normRunStatus(run.status)
+
+		if (includeBanner) {
+			const alertWrap = cskh.el('div')
+			if (normStatus === 'queued') {
+				cskh.alert(
+					alertWrap,
+					'info',
+					cskh.t('Distribution queued. Waiting for background worker...'),
+					runStatusLabel(run.status)
+				)
+			} else if (isActiveRunStatus(normStatus)) {
+				cskh.alert(
+					alertWrap,
+					'info',
+					cskh.t('Distribution is running in the background...'),
+					runStatusLabel(run.status)
+				)
+			} else if (normStatus === 'planned') {
+				cskh.alert(alertWrap, 'info', cskh.t('Preview'), runStatusLabel(run.status))
+			} else if (normStatus === 'failed') {
+				const parsedErr = formatRunError(run.error)
+				cskh.alert(
+					alertWrap,
+					'error',
+					cskh.t('Distribution failed.') +
+						(parsedErr.message ? ' ' + parsedErr.message : ''),
+					'[' + parsedErr.code + ']'
+				)
+			} else if (normStatus === 'completed_with_errors' || Number(run.errors || 0) > 0) {
+				const parsedErr = run.error ? formatRunError(run.error) : null
+				cskh.alert(
+					alertWrap,
+					'warning',
+					cskh.t('Distribution completed with errors.') +
+						(parsedErr && parsedErr.message ? ' ' + parsedErr.message : ''),
+					parsedErr && parsedErr.code !== 'FAILED'
+						? '[' + parsedErr.code + ']'
+						: runStatusLabel(run.status)
+				)
+			} else if (normStatus === 'completed') {
+				cskh.alert(
+					alertWrap,
+					'success',
+					cskh.t('Distribution completed.'),
+					runStatusLabel(run.status)
+				)
+			} else {
+				cskh.alert(alertWrap, 'info', runStatusLabel(run.status), runId)
+			}
+			container.appendChild(alertWrap)
+		}
+
+		container.appendChild(
 			cskh.el('div', { class: 'cskh-grid' }, [
-				metric(cskh.t('Run ID'), run.run_id),
-				metric(cskh.t('Assigned in this run'), cskh.formatNumber(run.created)),
-				metric(cskh.t('Failed'), cskh.formatNumber(run.errors)),
+				metric(cskh.t('Run ID'), runId),
+				metric(cskh.t('Status'), runStatusLabel(run.status)),
+				metric(cskh.t('Progress'), formatRunProgress(run, meta)),
+				metric(cskh.t('Assigned in this run'), cskh.formatNumber(run.created || 0)),
+				metric(cskh.t('Failed'), cskh.formatNumber(run.errors || 0)),
 			])
 		)
-		const assigned = run.assigned || {}
-		const table = cskh.el('table', { class: 'cskh-table' }, [
-			cskh.el('thead', {}, [
-				cskh.el('tr', {}, [
-					cskh.el('th', { text: cskh.t('Assignee') }),
-					cskh.el('th', { class: 'num', text: cskh.t('Assigned in this run') }),
-				]),
-			]),
-		])
-		const body = cskh.el('tbody')
-		Object.keys(assigned).forEach(function (user) {
-			body.appendChild(
-				cskh.el('tr', {}, [
-					cskh.el('td', { text: user }),
-					cskh.el('td', { class: 'num', text: cskh.formatNumber(assigned[user]) }),
-				])
-			)
-		})
-		table.appendChild(body)
-		results.appendChild(table)
 
-		if (run.errors > 0) {
-			const skipped = run.skipped || []
+		const actionButtons = []
+		if (isActiveRunStatus(normStatus) && runId !== '—') {
+			actionButtons.push(
+				cskh.el('button', {
+					class: 'cskh-btn is-small',
+					type: 'button',
+					text: cskh.t('Refresh'),
+					onclick: function () {
+						pollTrackedRunNow(runId, meta)
+					},
+				})
+			)
+		}
+		if (
+			isAdmin &&
+			(normStatus === 'failed' || normStatus === 'completed_with_errors') &&
+			(run.campaign || (meta && meta.campaign))
+		) {
+			const retryBtn = cskh.el('button', {
+				class: 'cskh-btn is-small',
+				type: 'button',
+				text: cskh.t('Retry the failed job'),
+				onclick: function () {
+					retryRun(
+						{
+							run_id: runId,
+							campaign: run.campaign || (meta && meta.campaign),
+							status: run.status,
+							rule_version: run.rule_version || (meta && meta.rule_version),
+							total: meta && meta.total,
+						},
+						retryBtn
+					)
+				},
+			})
+			actionButtons.push(retryBtn)
+		}
+		if (actionButtons.length) {
+			container.appendChild(
+				cskh.el('div', { class: 'cskh-actions', style: 'margin-top: 10px;' }, actionButtons)
+			)
+		}
+
+		const assigned = run.assigned || {}
+		const assignedUsers = Object.keys(assigned)
+		if (
+			assignedUsers.length ||
+			normStatus === 'completed' ||
+			normStatus === 'completed_with_errors'
+		) {
+			const table = cskh.el('table', { class: 'cskh-table' }, [
+				cskh.el('thead', {}, [
+					cskh.el('tr', {}, [
+						cskh.el('th', { text: cskh.t('Assignee') }),
+						cskh.el('th', { class: 'num', text: cskh.t('Assigned in this run') }),
+					]),
+				]),
+			])
+			const body = cskh.el('tbody')
+			assignedUsers.forEach(function (user) {
+				body.appendChild(
+					cskh.el('tr', {}, [
+						cskh.el('td', { text: user }),
+						cskh.el('td', { class: 'num', text: cskh.formatNumber(assigned[user]) }),
+					])
+				)
+			})
+			table.appendChild(body)
+			container.appendChild(table)
+		}
+
+		const skipped = run.skipped || []
+		if (skipped.length || Number(run.errors || 0) > 0) {
 			const failedTable = cskh.el('table', { class: 'cskh-table' }, [
 				cskh.el('thead', {}, [
 					cskh.el('tr', {}, [
@@ -694,8 +1184,14 @@
 				)
 			})
 			failedTable.appendChild(failedBody)
-			results.appendChild(failedTable)
+			container.appendChild(failedTable)
 		}
+	}
+
+	function renderRun(run, meta) {
+		const results = document.getElementById('dist-results')
+		if (!results) return
+		renderRunDetails(results, run, meta, true)
 	}
 
 	function metric(label, value) {
@@ -801,6 +1297,34 @@
 				rows.appendChild(renderRunRow(item))
 			})
 			table.hidden = false
+
+			// Auto-attach background tracking if an active queued/running run exists in scope
+			// and no run is currently tracked (recovers tracking even in a fresh tab).
+			if (!trackedRunId && canLookup && runsPager.page() === 1) {
+				const activeItem = items.find(function (item) {
+					return isActiveRunStatus(item.status)
+				})
+				if (activeItem && activeItem.run_id) {
+					const autoMeta = {
+						run_id: activeItem.run_id,
+						campaign: activeItem.campaign || campaign,
+						total: activeItem.total !== undefined ? Number(activeItem.total) : null,
+						rule_version: activeItem.rule_version || null,
+						lookupOnly: !isAdmin,
+					}
+					if (isAdmin) {
+						renderRun(activeItem, autoMeta)
+					} else {
+						renderRunLookup(
+							document.getElementById('dist-run-lookup-result'),
+							activeItem,
+							autoMeta
+						)
+					}
+					persistActiveRun(autoMeta)
+					trackRun(activeItem.run_id, autoMeta)
+				}
+			}
 		} catch (error) {
 			cskh.renderError(alertBox, error)
 		} finally {
@@ -809,6 +1333,7 @@
 	}
 
 	function renderRunRow(item) {
+		const normStatus = normRunStatus(item.status)
 		const actions = []
 		if (canLookup) {
 			actions.push(
@@ -822,7 +1347,7 @@
 				})
 			)
 		}
-		if ((item.status === 'failed' || item.status === 'completed_with_errors') && canDistribute) {
+		if ((normStatus === 'failed' || normStatus === 'completed_with_errors') && canDistribute) {
 			const retry = cskh.el('button', {
 				class: 'cskh-btn is-small',
 				type: 'button',
@@ -839,11 +1364,19 @@
 				text: runStatusLabel(item.status),
 			}),
 		]
+		if (isActiveRunStatus(normStatus)) {
+			statusChildren.push(
+				cskh.el('div', {
+					class: 'cskh-muted cskh-mono',
+					text: formatRunProgress(item, { total: item.total }),
+				})
+			)
+		}
 		if (item.error) {
 			statusChildren.push(
 				cskh.el('div', {
 					class: 'cskh-muted',
-					text: cskh.t(item.error, cskh.t('An error occurred while processing the request.')),
+					text: formatRunError(item.error).message,
 				})
 			)
 		}
@@ -864,61 +1397,104 @@
 		const alertBox = document.getElementById('campaign-alert')
 		const results = document.getElementById('dist-results')
 		if (!item || !item.campaign) return
-		button.disabled = true
+		if (button) button.disabled = true
 		cskh.clear(alertBox)
 		cskh.clear(results)
 		try {
-			let run
-			if (item.status === 'completed_with_errors' && item.run_id) {
+			const normStatus = normRunStatus(item.status)
+			let run = null
+			let retryTotal = item.total !== undefined ? item.total : null
+			let retryVersion = item.rule_version || null
+
+			if (normStatus === 'completed_with_errors' && item.run_id) {
 				run = await cskh.post(API_EXECUTE, {
 					preview_id: item.run_id,
 					expected_rule_version: item.rule_version,
 					idempotency_key: 'ui-resume-' + uuid(),
 				})
+			} else if (normStatus === 'failed' && item.run_id) {
+				try {
+					run = await cskh.post(API_EXECUTE, {
+						preview_id: item.run_id,
+						expected_rule_version: item.rule_version,
+						idempotency_key: 'ui-resume-' + uuid(),
+					})
+				} catch (resumeErr) {
+					const errCode = cskh.errorCode(resumeErr)
+					if (errCode === 'RULE_CHANGED' || errCode === 'FORBIDDEN') {
+						throw resumeErr
+					}
+					run = null
+				}
+				if (!run || normRunStatus(run.status) === 'failed') {
+					const fresh = await cskh.post(API_PREVIEW, {
+						campaign: item.campaign,
+						idempotency_key: 'ui-retry-' + uuid(),
+					})
+					retryTotal =
+						fresh.summary && fresh.summary.eligible_count !== undefined
+							? Number(fresh.summary.eligible_count)
+							: null
+					retryVersion = fresh.rule_version
+					run = await cskh.post(API_EXECUTE, {
+						preview_id: fresh.preview_id,
+						expected_rule_version: fresh.rule_version,
+						idempotency_key: 'ui-retry-' + uuid(),
+					})
+				}
 			} else {
 				const fresh = await cskh.post(API_PREVIEW, {
 					campaign: item.campaign,
 					idempotency_key: 'ui-retry-' + uuid(),
 				})
+				retryTotal =
+					fresh.summary && fresh.summary.eligible_count !== undefined
+						? Number(fresh.summary.eligible_count)
+						: null
+				retryVersion = fresh.rule_version
 				run = await cskh.post(API_EXECUTE, {
 					preview_id: fresh.preview_id,
 					expected_rule_version: fresh.rule_version,
 					idempotency_key: 'ui-retry-' + uuid(),
 				})
 			}
-			renderRun(run)
-			cskh.alert(
-				alertBox,
-				run.errors > 0 ? 'warning' : 'success',
-				run.errors > 0
-					? cskh.t('Distribution completed with errors.')
-					: cskh.t('Distribution completed.'),
-				run.run_id
-			)
-			loadRules()
-			loadRuns()
+
+			await handleExecuteResult(run, {
+				run_id: (run && run.run_id) || item.run_id,
+				campaign: item.campaign,
+				total: retryTotal,
+				rule_version: retryVersion,
+			})
 		} catch (error) {
 			cskh.renderError(alertBox, error)
 		} finally {
-			button.disabled = false
+			if (button) button.disabled = false
 		}
 	}
 
 	function runStatusLabel(value) {
+		const key = normRunStatus(value)
 		const map = {
 			planned: cskh.t('Preview'),
+			queued: cskh.t('Queued'),
+			pending: cskh.t('Queued'),
 			running: cskh.t('Running'),
+			in_progress: cskh.t('Running'),
 			completed: cskh.t('Completed'),
 			completed_with_errors: cskh.t('Completed with errors'),
 			failed: cskh.t('Failed'),
 		}
-		return map[value] || value || '—'
+		return map[key] || value || '—'
 	}
 
 	function runBadgeClass(value) {
-		if (value === 'completed') return cskh.stateBadge('assigned')
-		if (value === 'completed_with_errors') return cskh.stateBadge('queued')
-		if (value === 'failed') return cskh.stateBadge('invalid')
+		const key = normRunStatus(value)
+		if (key === 'completed') return cskh.stateBadge('assigned')
+		if (key === 'completed_with_errors') return cskh.stateBadge('queued')
+		if (key === 'queued' || key === 'running' || key === 'in_progress' || key === 'pending') {
+			return cskh.stateBadge('queued')
+		}
+		if (key === 'failed') return cskh.stateBadge('conflict')
 		return cskh.stateBadge('eligible')
 	}
 
@@ -931,67 +1507,26 @@
 			cskh.alert(alertBox, 'warning', cskh.t('Run ID'))
 			return
 		}
+		const input = document.getElementById('dist-run-id')
+		if (input) input.value = id
 		try {
-			const run = await cskh.get(API_RUN, { run_id: id })
-			renderRunLookup(box, run)
+			let run = await cskh.get(API_RUN, { run_id: id })
+			const meta = buildRunMeta(run, { run_id: id, lookupOnly: true })
+			run = await enrichRunFromHistory(run, meta)
+			const updatedMeta = buildRunMeta(run, meta)
+			renderRunLookup(box, run, updatedMeta)
+			if (isActiveRunStatus(run && run.status)) {
+				persistActiveRun(updatedMeta)
+				trackRun(id, updatedMeta)
+			}
 		} catch (error) {
 			cskh.renderError(box, error)
 		}
 	}
 
-	function renderRunLookup(box, run) {
-		cskh.clear(box)
-		box.appendChild(
-			cskh.el('div', { class: 'cskh-grid' }, [
-				metric(cskh.t('Run ID'), run.run_id),
-				metric(cskh.t('Status'), runStatusLabel(run.status)),
-				metric(cskh.t('Assigned in this run'), cskh.formatNumber(run.created)),
-				metric(cskh.t('Failed'), cskh.formatNumber(run.errors)),
-			])
-		)
-		const assigned = run.assigned || {}
-		const table = cskh.el('table', { class: 'cskh-table' }, [
-			cskh.el('thead', {}, [
-				cskh.el('tr', {}, [
-					cskh.el('th', { text: cskh.t('Assignee') }),
-					cskh.el('th', { class: 'num', text: cskh.t('Assigned in this run') }),
-				]),
-			]),
-		])
-		const body = cskh.el('tbody')
-		Object.keys(assigned).forEach(function (user) {
-			body.appendChild(
-				cskh.el('tr', {}, [
-					cskh.el('td', { text: user }),
-					cskh.el('td', { class: 'num', text: cskh.formatNumber(assigned[user]) }),
-				])
-			)
-		})
-		table.appendChild(body)
-		box.appendChild(table)
-
-		const skipped = run.skipped || []
-		if (skipped.length) {
-			const failedTable = cskh.el('table', { class: 'cskh-table' }, [
-				cskh.el('thead', {}, [
-					cskh.el('tr', {}, [
-						cskh.el('th', { text: cskh.t('Row') }),
-						cskh.el('th', { text: cskh.t('Reason') }),
-					]),
-				]),
-			])
-			const failedBody = cskh.el('tbody')
-			skipped.forEach(function (row) {
-				failedBody.appendChild(
-					cskh.el('tr', {}, [
-						cskh.el('td', { text: row.lead }),
-						cskh.el('td', { text: reasonLabel(row.reason) }),
-					])
-				)
-			})
-			failedTable.appendChild(failedBody)
-			box.appendChild(failedTable)
-		}
+	function renderRunLookup(box, run, meta) {
+		if (!box) return
+		renderRunDetails(box, run, meta, true)
 	}
 
 	const formCard = document.getElementById('campaign-form-card')
@@ -1036,10 +1571,15 @@
 		loadRuns()
 	})
 
-	loadAssignees().then(function () {
-		return loadCampaigns()
-	}).then(function () {
-		loadRules()
-		loadRuns()
-	})
+	loadAssignees()
+		.then(function () {
+			return loadCampaigns()
+		})
+		.then(function () {
+			return recoverActiveRun()
+		})
+		.then(function () {
+			loadRules()
+			loadRuns()
+		})
 })()
