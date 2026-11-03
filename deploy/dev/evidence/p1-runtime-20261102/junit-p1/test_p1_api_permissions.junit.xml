@@ -1,134 +1,134 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <testsuites>
-	<testsuite name="crm_cskh.tests.test_p1_api_permissions.TestApiContract-2[REDACTED_PHONE]29" tests="8" file="crm_cskh/tests/test_p1_api_permissions.py" time="3.463" timestamp="2026-11-03T15:23:33" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_a_forbidden_response_carries_the_forbidden_code" time="0.720" timestamp="2026-11-03T15:23:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="152"/>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_every_planned_endpoint_exists" time="0.057" timestamp="2026-11-03T15:23:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="50"/>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_business_roles_are_not_system_roles" time="0.097" timestamp="2026-11-03T15:23:31" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="159">
+	<testsuite name="crm_cskh.tests.test_p1_api_permissions.TestApiContract-20261103160820" tests="8" file="crm_cskh/tests/test_p1_api_permissions.py" time="3.314" timestamp="2026-11-03T16:08:25" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_a_forbidden_response_carries_the_forbidden_code" time="0.718" timestamp="2026-11-03T16:08:22" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="152"/>
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_every_planned_endpoint_exists" time="0.074" timestamp="2026-11-03T16:08:22" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="50"/>
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_business_roles_are_not_system_roles" time="0.103" timestamp="2026-11-03T16:08:22" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="159">
 			<!--`CSKH CRM Admin` is a business role, not a backdoor to the system.-->
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_dashboard_returns_the_p1_cards" time="0.177" timestamp="2026-11-03T15:23:31" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="89"/>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_error_codes_are_stable" time="0.050" timestamp="2026-11-03T15:23:31" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="136"/>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_list_endpoints_return_the_scope_total_and_timestamp" time="1.524" timestamp="2026-11-03T15:23:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="76"/>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_mutations_require_an_idempotency_key" time="0.054" timestamp="2026-11-03T15:23:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="130"/>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_preview_contract_carries_the_frozen_keys" time="0.784" timestamp="2026-11-03T15:23:33" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="109"/>
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_dashboard_returns_the_p1_cards" time="0.202" timestamp="2026-11-03T16:08:22" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="89"/>
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_error_codes_are_stable" time="0.083" timestamp="2026-11-03T16:08:22" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="136"/>
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_list_endpoints_return_the_scope_total_and_timestamp" time="1.395" timestamp="2026-11-03T16:08:24" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="76"/>
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_mutations_require_an_idempotency_key" time="0.074" timestamp="2026-11-03T16:08:24" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="130"/>
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestApiContract" name="test_the_preview_contract_carries_the_frozen_keys" time="0.665" timestamp="2026-11-03T16:08:25" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="109"/>
 	</testsuite>
-	<testsuite name="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives-2[REDACTED_PHONE]29" tests="22" file="crm_cskh/tests/test_p1_api_permissions.py" time="13.626" timestamp="2026-11-03T15:23:47" failures="0" errors="0" skipped="0">
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_01_a_staff_member_cannot_read_the_lead_of_another_user" time="1.006" timestamp="2026-11-03T15:23:35" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="187">
+	<testsuite name="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives-20261103160820" tests="22" file="crm_cskh/tests/test_p1_api_permissions.py" time="16.235" timestamp="2026-11-03T16:08:41" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_01_a_staff_member_cannot_read_the_lead_of_another_user" time="1.303" timestamp="2026-11-03T16:08:26" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="187">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-p1-staff-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12194
+Message: Not allowed via controller permission checkUser cskh-p1-staff-a@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-13378
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_01_a_staff_member_cannot_widen_the_lead_list" time="0.540" timestamp="2026-11-03T15:23:35" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="195">
-			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Please setup default outgoing Email Account from Tools > Email Account
-]]></system-out>
-		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_02_a_staff_member_cannot_read_an_import_batch" time="0.618" timestamp="2026-11-03T15:23:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="216">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_01_a_staff_member_cannot_widen_the_lead_list" time="0.652" timestamp="2026-11-03T16:08:27" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="195">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_02_a_staff_member_cannot_read_the_raw_import_file" time="0.564" timestamp="2026-11-03T15:23:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="225">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_02_a_staff_member_cannot_read_an_import_batch" time="0.866" timestamp="2026-11-03T16:08:28" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="216">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_02_a_staff_member_cannot_read_the_work_item_of_another_user" time="0.500" timestamp="2026-11-03T15:23:37" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="208">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_02_a_staff_member_cannot_read_the_raw_import_file" time="0.659" timestamp="2026-11-03T16:08:28" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="225">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_03_a_staff_member_cannot_execute_a_distribution" time="0.430" timestamp="2026-11-03T15:23:37" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="232">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_02_a_staff_member_cannot_read_the_work_item_of_another_user" time="0.572" timestamp="2026-11-03T16:08:29" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="208">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_03_a_staff_member_cannot_transfer_or_revoke_an_ownership" time="0.495" timestamp="2026-11-03T15:23:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="237">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_03_a_staff_member_cannot_execute_a_distribution" time="0.587" timestamp="2026-11-03T16:08:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="232">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_04_a_leader_cannot_see_the_work_items_of_another_team" time="0.912" timestamp="2026-11-03T15:23:39" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="294">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_03_a_staff_member_cannot_transfer_or_revoke_an_ownership" time="0.566" timestamp="2026-11-03T16:08:30" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="237">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_04_a_leader_cannot_transfer_the_customer_of_another_team" time="0.741" timestamp="2026-11-03T15:23:39" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="276">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_04_a_leader_cannot_see_the_work_items_of_another_team" time="1.065" timestamp="2026-11-03T16:08:31" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="294">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_04_a_leader_only_reads_the_aggregate_of_their_own_team" time="0.826" timestamp="2026-11-03T15:23:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="258">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_04_a_leader_cannot_transfer_the_customer_of_another_team" time="1.069" timestamp="2026-11-03T16:08:32" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="276">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_05_the_bod_viewer_cannot_change_a_campaign_or_a_rule" time="0.484" timestamp="2026-11-03T15:23:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="308">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_04_a_leader_only_reads_the_aggregate_of_their_own_team" time="0.915" timestamp="2026-11-03T16:08:33" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="258">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-p1-bod@example.test does not have access to this document: CSKH Campaign - 13v1qa1n1d
+Message: Please setup default outgoing Email Account from Tools > Email Account
+]]></system-out>
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_05_the_bod_viewer_cannot_change_a_campaign_or_a_rule" time="0.603" timestamp="2026-11-03T16:08:34" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="308">
+			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: Please setup default outgoing Email Account from Tools > Email Account
+Message: Not allowed via controller permission checkUser cskh-p1-bod@example.test does not have access to this document: CSKH Campaign - rdhjej1i41
 Message: User cskh-p1-bod@example.test does not have doctype access via role permission for document CSKH Campaign
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_05_the_bod_viewer_cannot_change_the_assignment_history" time="0.511" timestamp="2026-11-03T15:23:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="318">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_05_the_bod_viewer_cannot_change_the_assignment_history" time="0.600" timestamp="2026-11-03T16:08:34" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="318">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-p1-bod@example.test does not have access to this document: CSKH Assignment History - 14813dg9pa
+Message: Not allowed via controller permission checkUser cskh-p1-bod@example.test does not have access to this document: CSKH Assignment History - rdra9bqrer
 Message: User cskh-p1-bod@example.test does not have doctype access via role permission for document CSKH Assignment History
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_05_the_bod_viewer_cannot_mutate_an_ownership" time="0.516" timestamp="2026-11-03T15:23:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="332">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_05_the_bod_viewer_cannot_mutate_an_ownership" time="0.593" timestamp="2026-11-03T16:08:35" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="332">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_06_the_revoked_owner_loses_every_access_path" time="0.537" timestamp="2026-11-03T15:23:42" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="344">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_06_the_revoked_owner_loses_every_access_path" time="0.582" timestamp="2026-11-03T16:08:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="344">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_07_a_staff_member_cannot_widen_the_scope_with_a_query_parameter" time="0.481" timestamp="2026-11-03T15:23:43" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="393">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_07_a_staff_member_cannot_widen_the_scope_with_a_query_parameter" time="0.485" timestamp="2026-11-03T16:08:36" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="393">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_07_the_endpoints_do_not_accept_a_scope_parameter" time="0.515" timestamp="2026-11-03T15:23:43" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="377">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_07_the_endpoints_do_not_accept_a_scope_parameter" time="0.692" timestamp="2026-11-03T16:08:37" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="377">
 			<!--The scope is derived on the server, never from a request parameter.-->
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_07_the_pool_of_a_leader_stays_inside_the_scope" time="0.837" timestamp="2026-11-03T15:23:44" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="402">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_07_the_pool_of_a_leader_stays_inside_the_scope" time="0.911" timestamp="2026-11-03T16:08:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="402">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_08_a_formula_cell_is_neutralized_in_the_error_artifact" time="0.592" timestamp="2026-11-03T15:23:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="411">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_08_a_formula_cell_is_neutralized_in_the_error_artifact" time="0.646" timestamp="2026-11-03T16:08:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="411">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_09_the_import_batch_is_not_readable_by_a_foreign_role" time="0.734" timestamp="2026-11-03T15:23:45" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="442">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_09_the_import_batch_is_not_readable_by_a_foreign_role" time="0.753" timestamp="2026-11-03T16:08:39" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="442">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_09_the_raw_file_is_not_reachable_without_permission" time="0.568" timestamp="2026-11-03T15:23:46" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="433">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_09_the_raw_file_is_not_reachable_without_permission" time="0.619" timestamp="2026-11-03T16:08:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="433">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
-Message: Not allowed via controller permission checkUser cskh-p1-outside@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-12235Not allowed via controller permission checkUser cskh-p1-outside@example.test does not have access to this document: File - 2afb37ea12
+Message: Not allowed via controller permission checkUser cskh-p1-outside@example.test does not have access to this document: CRM Lead - CRM-LEAD-2026-13419Not allowed via controller permission checkUser cskh-p1-outside@example.test does not have access to this document: File - a2ad703744
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_10_a_retry_with_the_same_request_id_does_not_double_apply" time="0.648" timestamp="2026-11-03T15:23:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="507">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_10_a_retry_with_the_same_request_id_does_not_double_apply" time="0.709" timestamp="2026-11-03T16:08:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="507">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>
 		</testcase>
-		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_10_a_stale_expected_owner_does_not_overwrite_a_new_owner" time="0.571" timestamp="2026-11-03T15:23:47" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="483">
+		<testcase classname="crm_cskh.tests.test_p1_api_permissions.TestSecurityNegatives" name="test_sec_10_a_stale_expected_owner_does_not_overwrite_a_new_owner" time="0.788" timestamp="2026-11-03T16:08:41" file="/src/apps/crm_cskh/crm_cskh/tests/test_p1_api_permissions.py" line="483">
 			<system-out><![CDATA[Message: Please setup default outgoing Email Account from Tools > Email Account
 Message: Please setup default outgoing Email Account from Tools > Email Account
 ]]></system-out>

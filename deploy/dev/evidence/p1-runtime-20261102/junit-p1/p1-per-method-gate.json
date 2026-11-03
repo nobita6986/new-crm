@@ -2,11 +2,11 @@
   "schema_version": 2,
   "gate": "g007-per-method-junit",
   "gate_passed": true,
-  "expected_total": 208,
-  "observed_total": 208,
-  "passing_total": 208,
+  "expected_total": 209,
+  "observed_total": 209,
+  "passing_total": 209,
   "counts": {
-    "PASS": 208
+    "PASS": 209
   },
   "xml_files": [
     "test_p1_api_permissions.junit.xml",
@@ -1872,6 +1872,15 @@
       "status": "PASS",
       "source_xml": "test_p1_regressions.junit.xml",
       "raw_name": "test_revoked_or_closed_team_a_history_never_leaks_foreign_active_lead_in_reporting_or_api",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL23BackendCustomerPoolCrossTeamIsolation",
+      "method": "test_l23_pool_list_pre_pagination_unified_counts_all_pool_apis_and_bod_zero_pii",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_l23_pool_list_pre_pagination_unified_counts_all_pool_apis_and_bod_zero_pii",
       "match_reason": "exact"
     },
     {
