@@ -19,7 +19,7 @@ import frappe
 from crm_cskh.api._params import parse_optional_str
 from crm_cskh.p2_permissions import ROLE_ADMIN, ROLE_BOD, _is_system, _roles
 from crm_cskh.services import call_log_adapter, contact_attempt, correction, followup, policies, read_model
-from crm_cskh.services.errors import Forbidden, InvalidRequest
+from crm_cskh.services.errors import Forbidden, InvalidRequest, is_transient_tx_abort
 
 SPOOFED_IDENTITY_KEYS = frozenset(
 	(
@@ -39,6 +39,20 @@ def _require_post() -> None:
 	req = getattr(frappe.local, "request", None)
 	if req is not None and getattr(req, "method", "POST").upper() != "POST":
 		raise InvalidRequest("Thao tác cập nhật dữ liệu chỉ chấp nhận phương thức HTTP POST.")
+
+
+def _run_with_tx_retry(fn, max_retries: int = 3):
+	"""Retry top-level RPC mutations on transient MariaDB `1213` deadlock / `1020` snapshot conflict."""
+	attempt = 0
+	while True:
+		try:
+			return fn()
+		except Exception as exc:
+			if is_transient_tx_abort(exc) and attempt < max_retries:
+				attempt += 1
+				frappe.db.rollback()
+				continue
+			raise
 
 
 def _reject_spoofed_identity_fields(extra_kwargs: dict | None = None) -> None:
@@ -133,25 +147,27 @@ def record_attempt(
 	"""Record an immutable `CSKH Contact Attempt` atomically (`docs/api-contract-p2.md` §4.5)."""
 	_require_post()
 	_reject_spoofed_identity_fields(kwargs)
-	return contact_attempt.record_attempt(
-		work_item=work_item,
-		channel=channel,
-		outcome_code=outcome_code,
-		occurred_at=occurred_at,
-		note=note,
-		call_log=call_log,
-		call_log_data=call_log_data,
-		followup=followup,
-		followup_due_at=followup_due_at,
-		followup_title=followup_title,
-		followup_note=followup_note,
-		complete_open_followup=complete_open_followup,
-		close_work_item=close_work_item,
-		completion_reason=completion_reason,
-		expected_revision=expected_revision,
-		expected_policy_version=expected_policy_version,
-		idempotency_key=idempotency_key,
-		actor=frappe.session.user,
+	return _run_with_tx_retry(
+		lambda: contact_attempt.record_attempt(
+			work_item=work_item,
+			channel=channel,
+			outcome_code=outcome_code,
+			occurred_at=occurred_at,
+			note=note,
+			call_log=call_log,
+			call_log_data=call_log_data,
+			followup=followup,
+			followup_due_at=followup_due_at,
+			followup_title=followup_title,
+			followup_note=followup_note,
+			complete_open_followup=complete_open_followup,
+			close_work_item=close_work_item,
+			completion_reason=completion_reason,
+			expected_revision=expected_revision,
+			expected_policy_version=expected_policy_version,
+			idempotency_key=idempotency_key,
+			actor=frappe.session.user,
+		)
 	)
 
 
@@ -181,15 +197,17 @@ def schedule_followup(
 	"""Create or reschedule the open callback `CRM Task` on `work_item` (`docs/api-contract-p2.md` §4.7)."""
 	_require_post()
 	_reject_spoofed_identity_fields(kwargs)
-	return followup.schedule_followup(
-		work_item=work_item,
-		due_at=due_at,
-		title=title,
-		note=note,
-		reason=reason,
-		expected_revision=expected_revision,
-		idempotency_key=idempotency_key,
-		actor=frappe.session.user,
+	return _run_with_tx_retry(
+		lambda: followup.schedule_followup(
+			work_item=work_item,
+			due_at=due_at,
+			title=title,
+			note=note,
+			reason=reason,
+			expected_revision=expected_revision,
+			idempotency_key=idempotency_key,
+			actor=frappe.session.user,
+		)
 	)
 
 
@@ -230,15 +248,17 @@ def complete_followup(
 	"""Complete (linked to `attempt_id`) or cancel (with `completion_reason`) a callback (`docs/api-contract-p2.md` §4.9)."""
 	_require_post()
 	_reject_spoofed_identity_fields(kwargs)
-	return followup.complete_followup(
-		work_item=work_item,
-		task_id=task_id,
-		action=action,
-		attempt_id=attempt_id,
-		completion_reason=completion_reason,
-		expected_revision=expected_revision,
-		idempotency_key=idempotency_key,
-		actor=frappe.session.user,
+	return _run_with_tx_retry(
+		lambda: followup.complete_followup(
+			work_item=work_item,
+			task_id=task_id,
+			action=action,
+			attempt_id=attempt_id,
+			completion_reason=completion_reason,
+			expected_revision=expected_revision,
+			idempotency_key=idempotency_key,
+			actor=frappe.session.user,
+		)
 	)
 
 
@@ -254,13 +274,15 @@ def close_work_item(
 	"""Close an active `CSKH Work Item` atomically (`docs/api-contract-p2.md` §4.10)."""
 	_require_post()
 	_reject_spoofed_identity_fields(kwargs)
-	return contact_attempt.close_work_item(
-		work_item=work_item,
-		completion_reason=completion_reason,
-		close_category=close_category,
-		expected_revision=expected_revision,
-		idempotency_key=idempotency_key,
-		actor=frappe.session.user,
+	return _run_with_tx_retry(
+		lambda: contact_attempt.close_work_item(
+			work_item=work_item,
+			completion_reason=completion_reason,
+			close_category=close_category,
+			expected_revision=expected_revision,
+			idempotency_key=idempotency_key,
+			actor=frappe.session.user,
+		)
 	)
 
 
@@ -277,14 +299,16 @@ def reopen_work_item(
 	"""Audited reopen of a `closed` `CSKH Work Item` (`docs/api-contract-p2.md` §4.11)."""
 	_require_post()
 	_reject_spoofed_identity_fields(kwargs)
-	return contact_attempt.reopen_work_item(
-		work_item=work_item,
-		target_user=target_user,
-		reason=reason,
-		override_dnc=override_dnc,
-		expected_revision=expected_revision,
-		idempotency_key=idempotency_key,
-		actor=frappe.session.user,
+	return _run_with_tx_retry(
+		lambda: contact_attempt.reopen_work_item(
+			work_item=work_item,
+			target_user=target_user,
+			reason=reason,
+			override_dnc=override_dnc,
+			expected_revision=expected_revision,
+			idempotency_key=idempotency_key,
+			actor=frappe.session.user,
+		)
 	)
 
 
@@ -302,15 +326,17 @@ def request_correction(
 	"""Submit an audited `CSKH Attempt Correction` (`docs/api-contract-p2.md` §4.12)."""
 	_require_post()
 	_reject_spoofed_identity_fields(kwargs)
-	return correction.request_correction(
-		attempt=attempt,
-		action=action,
-		corrected_fields=corrected_fields,
-		reason=reason,
-		auto_approve=auto_approve,
-		expected_revision=expected_revision,
-		idempotency_key=idempotency_key,
-		actor=frappe.session.user,
+	return _run_with_tx_retry(
+		lambda: correction.request_correction(
+			attempt=attempt,
+			action=action,
+			corrected_fields=corrected_fields,
+			reason=reason,
+			auto_approve=auto_approve,
+			expected_revision=expected_revision,
+			idempotency_key=idempotency_key,
+			actor=frappe.session.user,
+		)
 	)
 
 
@@ -326,13 +352,15 @@ def review_correction(
 	"""Approve or reject a pending `CSKH Attempt Correction` (`docs/api-contract-p2.md` §4.12)."""
 	_require_post()
 	_reject_spoofed_identity_fields(kwargs)
-	return correction.review_correction(
-		correction_id=correction_id,
-		decision=decision,
-		review_note=review_note,
-		expected_revision=expected_revision,
-		idempotency_key=idempotency_key,
-		actor=frappe.session.user,
+	return _run_with_tx_retry(
+		lambda: correction.review_correction(
+			correction_id=correction_id,
+			decision=decision,
+			review_note=review_note,
+			expected_revision=expected_revision,
+			idempotency_key=idempotency_key,
+			actor=frappe.session.user,
+		)
 	)
 
 

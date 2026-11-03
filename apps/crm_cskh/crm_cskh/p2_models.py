@@ -541,6 +541,8 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 def ensure_p2_custom_fields() -> None:
 	"""Idempotently create or sync all P2 Custom Fields on `CRM Lead` and `CRM Task`."""
 	for spec in P2_CUSTOM_FIELDS:
+		if not frappe.db.exists("DocType", spec["dt"]):
+			continue
 		cf_name = f"{spec['dt']}-{spec['fieldname']}"
 		existing = frappe.db.exists("Custom Field", cf_name) or frappe.db.exists(
 			"Custom Field", {"dt": spec["dt"], "fieldname": spec["fieldname"]}

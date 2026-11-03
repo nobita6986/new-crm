@@ -45,6 +45,7 @@ from crm_cskh.services.errors import (
 	PolicyChanged,
 	StaleWorkItem,
 	WorkItemNotActive,
+	rollback_savepoint_safely,
 )
 from crm_cskh.services.followup import (
 	_parse_due_datetime,
@@ -641,7 +642,7 @@ def record_attempt(
 			final_status = recomputed["status"]
 			final_callback = new_task_id or recomputed["open_callback_task"]
 	except Exception:
-		frappe.db.rollback(save_point=savepoint)
+		rollback_savepoint_safely(savepoint)
 		raise
 
 	frappe.db.commit()
@@ -854,7 +855,7 @@ def close_work_item(
 			update_modified=False,
 		)
 	except Exception:
-		frappe.db.rollback(save_point=savepoint)
+		rollback_savepoint_safely(savepoint)
 		raise
 
 	frappe.db.commit()
@@ -1079,7 +1080,7 @@ def reopen_work_item(
 		ownership._sync_lead_owner(locked.lead, target_val)
 		ownership._assert_final_owner(locked.lead, target_val)
 	except Exception:
-		frappe.db.rollback(save_point=savepoint)
+		rollback_savepoint_safely(savepoint)
 		raise
 
 	frappe.db.commit()

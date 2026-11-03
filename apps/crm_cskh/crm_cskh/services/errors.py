@@ -85,6 +85,27 @@ def _record_p1_error(code, details=None):
 		pass
 
 
+def is_transient_tx_abort(exc: BaseException) -> bool:
+	"""Return True for MariaDB InnoDB deadlock (`1213`) or snapshot-isolation conflict (`1020`)."""
+	text = str(exc)
+	return (
+		"Deadlock" in type(exc).__name__
+		or "1213" in text
+		or "1020" in text
+		or "Record has changed since last read" in text
+	)
+
+
+def rollback_savepoint_safely(savepoint: str) -> None:
+	"""Roll back `savepoint` without clobbering `1213`/`1020` with `1305 SAVEPOINT does not exist`."""
+	import frappe
+
+	try:
+		frappe.db.rollback(save_point=savepoint)
+	except Exception:
+		pass
+
+
 class P1Error(Exception):
 	"""Base error carrying a stable machine-readable code.
 
