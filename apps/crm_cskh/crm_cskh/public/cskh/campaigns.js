@@ -184,10 +184,11 @@
 		}
 	}
 
-	async function loadAssignees() {
+	async function loadAssignees(campaign) {
 		if (!isAdmin) return
 		try {
-			const data = await cskh.get(API_ASSIGNEES)
+			const params = campaign ? { campaign: campaign } : {}
+			const data = await cskh.get(API_ASSIGNEES, params)
 			availableAssignees = (data && data.items) || []
 		} catch (_error) {
 			availableAssignees = []
@@ -381,8 +382,11 @@
 			return
 		}
 		try {
-			const data = await cskh.get(API_RULES, { campaign: campaign })
-			renderRules(data)
+			const results = await Promise.all([
+				cskh.get(API_RULES, { campaign: campaign }),
+				loadAssignees(campaign),
+			])
+			renderRules(results[0])
 		} catch (error) {
 			cskh.renderError(alertBox, error)
 		} finally {
@@ -473,7 +477,7 @@
 					cskh.el('div', { class: 'cskh-muted', text: reasonLabel(rule.reason) }),
 				]),
 			]
-			if (isAdmin) cells.push(cskh.el('td', {}))
+			if (isAdmin) cells.push(cskh.el('td', {}, [ruleForm(rule, totalWeight)]))
 			body.appendChild(cskh.el('tr', {}, cells))
 		})
 
@@ -856,6 +860,23 @@
 		}
 	}
 
+	async function fetchRunForActor(runId, baseMeta) {
+		if (isAdmin || canLookup) {
+			const raw = await cskh.get(API_RUN, { run_id: runId })
+			const meta = buildRunMeta(raw, baseMeta)
+			return enrichRunFromHistory(raw, meta)
+		}
+		const hist = await cskh.get(API_RUNS, { run_id: runId, page: 1, page_size: 1 })
+		const item = hist && hist.items && hist.items[0]
+		if (!item || item.run_id !== runId) {
+			const err = new Error(cskh.t('The distribution run does not exist.'))
+			err.status = 404
+			err.code = 'NOT_FOUND'
+			throw err
+		}
+		return item
+	}
+
 	function trackRun(runId, meta) {
 		if (!runId) return
 		if (trackedRunId === runId && pollTimer) {
@@ -877,9 +898,7 @@
 			if (myGen !== pollGeneration || trackedRunId !== runId) return
 			pollTimer = null
 			try {
-				let run = await cskh.get(API_RUN, { run_id: runId })
-				if (myGen !== pollGeneration || trackedRunId !== runId) return
-				run = await enrichRunFromHistory(run, trackedMeta)
+				const run = await fetchRunForActor(runId, trackedMeta)
 				if (myGen !== pollGeneration || trackedRunId !== runId) return
 
 				consecutiveErrors = 0
@@ -926,10 +945,8 @@
 		if (!runId) return
 		const alertBox = document.getElementById('campaign-alert')
 		try {
-			let run = await cskh.get(API_RUN, { run_id: runId })
-			const meta = buildRunMeta(run, baseMeta || trackedMeta)
-			run = await enrichRunFromHistory(run, meta)
-			const updatedMeta = buildRunMeta(run, meta)
+			const run = await fetchRunForActor(runId, baseMeta || trackedMeta)
+			const updatedMeta = buildRunMeta(run, baseMeta || trackedMeta)
 			if (updatedMeta.lookupOnly || !isAdmin) {
 				renderRunLookup(document.getElementById('dist-run-lookup-result'), run, updatedMeta)
 			} else {
@@ -952,10 +969,8 @@
 		const stored = readStoredActiveRun()
 		if (!stored || !stored.run_id) return
 		try {
-			let run = await cskh.get(API_RUN, { run_id: stored.run_id })
-			const meta = buildRunMeta(run, stored)
-			run = await enrichRunFromHistory(run, meta)
-			const updatedMeta = buildRunMeta(run, meta)
+			const run = await fetchRunForActor(stored.run_id, stored)
+			const updatedMeta = buildRunMeta(run, stored)
 
 			if (updatedMeta.campaign) {
 				const select = document.getElementById('rule-campaign')
@@ -1300,7 +1315,7 @@
 
 			// Auto-attach background tracking if an active queued/running run exists in scope
 			// and no run is currently tracked (recovers tracking even in a fresh tab).
-			if (!trackedRunId && canLookup && runsPager.page() === 1) {
+			if (!trackedRunId && !readStoredActiveRun() && runsPager.page() === 1) {
 				const activeItem = items.find(function (item) {
 					return isActiveRunStatus(item.status)
 				})
@@ -1571,15 +1586,23 @@
 		loadRuns()
 	})
 
-	loadAssignees()
+	loadCampaigns()
 		.then(function () {
-			return loadCampaigns()
+			const stored = readStoredActiveRun()
+			if (stored && stored.campaign) {
+				const select = document.getElementById('rule-campaign')
+				if (
+					select &&
+					Array.from(select.options).some(function (opt) {
+						return opt.value === stored.campaign
+					})
+				) {
+					select.value = stored.campaign
+				}
+			}
+			return Promise.all([loadRules(), loadRuns()])
 		})
 		.then(function () {
 			return recoverActiveRun()
-		})
-		.then(function () {
-			loadRules()
-			loadRuns()
 		})
 })()

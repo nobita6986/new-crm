@@ -4,14 +4,29 @@ Named `test_ui_p1_endpoints.py` (not `test_p1_*.py`) so the frozen T1B
 174-method inventory (`deploy/dev/seed/p1_test_inventory.json`) stays untouched.
 """
 
+import base64
 import inspect
+import json
+from unittest import mock
 
 import frappe
 
 from crm_cskh.api import customers as customers_api
-from crm_cskh.api import import_history, ownership_ui, pool_ui, run_history
-from crm_cskh.services.errors import Forbidden, InvalidRequest, NotFound
+from crm_cskh.api import (
+	import_files,
+	import_history,
+	ownership_ui,
+	pool_ui,
+	run_history,
+)
+from crm_cskh.api import (
+	imports as imports_api,
+)
+from crm_cskh.jobs import import_worker
+from crm_cskh.services import ownership as ownership_service
+from crm_cskh.services.errors import Forbidden, InvalidRequest, NotFound, P1Error
 from crm_cskh.services.import_service import write_error_artifact
+from crm_cskh.services.phone_identity import normalize_vn_phone
 from crm_cskh.tests.p1_base import P1TestCase
 from crm_cskh.www import cskh_context
 
@@ -268,3 +283,651 @@ class TestUiP1Endpoints(P1TestCase):
 		frappe.set_user(self.staff_a)
 		with self.assertRaises(Forbidden):
 			run_history.runs()
+
+	def test_l23_pool_ui_blocks_revoked_or_closed_history_leak_to_active_other_team(self):
+		frappe.set_user(self.leader_a)
+		baseline_pool_a = pool_ui.list(page=1, page_size=100)
+		baseline_total_a = baseline_pool_a["total"]
+		baseline_wi_a = baseline_pool_a["work_items"]
+		frappe.set_user("Administrator")
+
+		campaign_shared = self.make_campaign(title="Chiến dịch Chung L23", team_scope=None)
+
+		# 1. Lead revoked in Team A, now active (`assigned`) in Team B (`staff_c`).
+		lead_revoked_to_b = self.make_canonical_lead()
+		raw_phone_b = frappe.db.get_value("CRM Lead", lead_revoked_to_b, "mobile_no")
+		alt_phone_b = "+84" + raw_phone_b[1:] if raw_phone_b.startswith("0") else raw_phone_b
+		src_b = self.unique_key("L23SourceB")
+		name_b = self.unique_key("KhachL23DoiB")
+		frappe.db.set_value(
+			"CRM Lead",
+			lead_revoked_to_b,
+			{"first_name": name_b, "lead_name": name_b, "source": src_b},
+			update_modified=False,
+		)
+		wi_a_old = self.make_work_item(self.campaign_a, lead_revoked_to_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_revoked_to_b,
+				"campaign": self.campaign_a,
+				"work_item": wi_a_old,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_a_old,
+			self.staff_a,
+			actor=self.admin_user,
+			reason="Initial Team A",
+			request_id=self.unique_key("l23-assign-a"),
+		)
+		ownership_service.revoke(
+			wi_a_old,
+			expected_owner=self.staff_a,
+			actor=self.admin_user,
+			reason="Revoke from Team A",
+			request_id=self.unique_key("l23-revoke-a"),
+			return_to_pool=False,
+		)
+		wi_b_now = self.make_work_item(self.campaign_b, lead_revoked_to_b, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_revoked_to_b,
+				"campaign": self.campaign_b,
+				"work_item": wi_b_now,
+			}
+		).insert(ignore_permissions=True)
+		ownership_service.assign(
+			wi_b_now,
+			self.staff_c,
+			actor=self.admin_user,
+			reason="Assign to Team B",
+			request_id=self.unique_key("l23-assign-b"),
+		)
+
+		# 2. Lead closed in Team A, now `queued` with active claim in Team B.
+		lead_closed_to_b_queued = self.make_canonical_lead()
+		self.make_work_item(self.campaign_a, lead_closed_to_b_queued, status="closed")
+		wi_b_queued = self.make_work_item(self.campaign_b, lead_closed_to_b_queued, status="queued")
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_closed_to_b_queued,
+				"campaign": self.campaign_b,
+				"work_item": wi_b_queued,
+			}
+		).insert(ignore_permissions=True)
+
+		# 3. Lead revoked in Team A, now `assigned` to `staff_c` in a shared campaign.
+		lead_revoked_to_shared_b = self.make_canonical_lead()
+		self.make_work_item(self.campaign_a, lead_revoked_to_shared_b, status="revoked")
+		wi_shared_b = self.make_work_item(
+			campaign_shared, lead_revoked_to_shared_b, status="assigned", assigned_to=self.staff_c
+		)
+		frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": lead_revoked_to_shared_b,
+				"campaign": campaign_shared,
+				"work_item": wi_shared_b,
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.set_value(
+			"CRM Lead", lead_revoked_to_shared_b, "lead_owner", self.staff_c, update_modified=False
+		)
+
+		# 4. Positive control for Team A: lead revoked in Team A and NOT active anywhere else.
+		lead_revoked_stay_a = self.make_canonical_lead()
+		stay_a_phone = frappe.db.get_value("CRM Lead", lead_revoked_stay_a, "mobile_no")
+		self.make_work_item(self.campaign_a, lead_revoked_stay_a, status="revoked")
+
+		# --- Verify Leader A sees ZERO data/counts/search/filter oracle for Team B leads ---
+		frappe.set_user(self.leader_a)
+		pool_a = pool_ui.list(page=1, page_size=100)
+		leads_a = {row["lead"]: row for row in pool_a["items"]}
+		self.assertNotIn(lead_revoked_to_b, leads_a)
+		self.assertNotIn(lead_closed_to_b_queued, leads_a)
+		self.assertNotIn(lead_revoked_to_shared_b, leads_a)
+		self.assertNotIn(self.lead_team_b, leads_a)
+
+		serialized_a = json.dumps(pool_a, default=str)
+		self.assertNotIn(raw_phone_b, serialized_a)
+		self.assertNotIn(alt_phone_b, serialized_a)
+		self.assertNotIn(self.staff_c, serialized_a)
+		self.assertNotIn(self.campaign_b, serialized_a)
+		self.assertNotIn("Chiến dịch Đội B", serialized_a)
+
+		# Positive controls for Leader A: active, queued, and legitimately revoked-only in Team A.
+		self.assertEqual(leads_a[self.lead_team_a]["state"], "assigned")
+		self.assertEqual(leads_a[self.lead_team_a]["owner"], self.staff_a)
+		self.assertEqual(leads_a[self.lead_queued_a]["state"], "queued")
+		self.assertEqual(leads_a[lead_revoked_stay_a]["state"], "revoked")
+		self.assertEqual(pool_a["total"], baseline_total_a + 1)
+		self.assertEqual(pool_a["unique_customers"], baseline_total_a + 1)
+		self.assertEqual(pool_a["work_items"], baseline_wi_a + 1)
+
+		camp_a_pool = pool_ui.list(page=1, page_size=100, campaign=self.campaign_a)
+		self.assertEqual(camp_a_pool["total"], 3)
+		self.assertEqual(camp_a_pool["unique_customers"], 3)
+		self.assertEqual(camp_a_pool["work_items"], 3)
+
+		# Search & filter probes as Leader A must return 0 across items, total, unique_customers, work_items.
+		for q in (raw_phone_b, alt_phone_b, name_b, lead_revoked_to_b):
+			res_q = pool_ui.list(page=1, page_size=20, search=q)
+			self.assertEqual(res_q["items"], [])
+			self.assertEqual(res_q["total"], 0)
+			self.assertEqual(res_q["unique_customers"], 0)
+			self.assertEqual(res_q["work_items"], 0)
+
+		for kwargs in (
+			{"campaign": self.campaign_b},
+			{"source": src_b},
+			{"campaign": self.campaign_a, "source": src_b},
+		):
+			res_f = pool_ui.list(page=1, page_size=20, **kwargs)
+			self.assertEqual(res_f["items"], [])
+			self.assertEqual(res_f["total"], 0)
+			self.assertEqual(res_f["unique_customers"], 0)
+			self.assertEqual(res_f["work_items"], 0)
+
+		# Positive search control for Leader A on Team A's own revoked lead.
+		stay_search = pool_ui.list(page=1, page_size=20, search=stay_a_phone)
+		self.assertEqual([r["lead"] for r in stay_search["items"]], [lead_revoked_stay_a])
+		self.assertEqual(stay_search["total"], 1)
+
+		# --- Positive controls for Leader B, Admin, and BOD ---
+		frappe.set_user(self.leader_b)
+		pool_b = pool_ui.list(page=1, page_size=100)
+		leads_b = {row["lead"]: row for row in pool_b["items"]}
+		self.assertEqual(leads_b[lead_revoked_to_b]["state"], "assigned")
+		self.assertEqual(leads_b[lead_revoked_to_b]["owner"], self.staff_c)
+		self.assertEqual(leads_b[lead_revoked_to_b]["campaign"], self.campaign_b)
+		self.assertEqual(leads_b[lead_closed_to_b_queued]["state"], "queued")
+		self.assertEqual(leads_b[lead_closed_to_b_queued]["campaign"], self.campaign_b)
+		self.assertEqual(leads_b[lead_revoked_to_shared_b]["state"], "assigned")
+		self.assertEqual(leads_b[lead_revoked_to_shared_b]["owner"], self.staff_c)
+		self.assertNotIn(self.lead_team_a, leads_b)
+		self.assertNotIn(lead_revoked_stay_a, leads_b)
+
+		frappe.set_user(self.admin_user)
+		pool_admin = pool_ui.list(page=1, page_size=100, source=src_b)
+		self.assertEqual(pool_admin["total"], 1)
+		self.assertEqual(pool_admin["items"][0]["lead"], lead_revoked_to_b)
+		self.assertEqual(pool_admin["items"][0]["state"], "assigned")
+		self.assertEqual(pool_admin["items"][0]["campaign"], self.campaign_b)
+		self.assertEqual(pool_admin["items"][0]["owner"], self.staff_c)
+		self.assertEqual(pool_admin["items"][0]["phone"], raw_phone_b)
+
+		frappe.set_user(self.bod_user)
+		pool_bod = pool_ui.list(page=1, page_size=100, source=src_b)
+		self.assertEqual(pool_bod["total"], 1)
+		self.assertEqual(pool_bod["items"][0]["state"], "assigned")
+		self.assertIsNone(pool_bod["items"][0]["phone"])
+		self.assertEqual(pool_bod["items"][0]["display_name"], "")
+
+	def test_l24_run_history_shared_campaign_scopes_assigned_skipped_preview_counters_and_polling(self):
+		campaign_shared = self.make_campaign(title="Chiến dịch Liên Đội L24", team_scope=None)
+
+		lead_skip_a = self.make_canonical_lead()
+		self.make_work_item(self.campaign_a, lead_skip_a, status="assigned", assigned_to=self.staff_a)
+
+		lead_skip_b = self.make_canonical_lead()
+		self.make_work_item(self.campaign_b, lead_skip_b, status="assigned", assigned_to=self.staff_c)
+
+		lead_skip_global = self.make_canonical_lead()
+
+		preview_payload = {
+			"eligible_count": 7,
+			"excluded_count": 3,
+			"targets": [
+				{"user": self.staff_a, "weight": 60, "planned": 4},
+				{"user": self.staff_c, "weight": 40, "planned": 3},
+			],
+			"simulated": {self.staff_a: 4, self.staff_c: 3},
+			"excluded_assignees": [
+				{"user": self.staff_b, "weight": 0, "reason": "no_positive_weight"},
+				{"user": self.staff_outside, "weight": 10, "reason": "user_disabled"},
+			],
+			"leads": [self.lead_team_a, self.lead_team_b, lead_skip_global],
+		}
+
+		# 1. Active `running` run mid-progress (polling check via `run_id`).
+		run_running = frappe.get_doc(
+			{
+				"doctype": "CSKH Distribution Run",
+				"campaign": campaign_shared,
+				"status": "running",
+				"rule_version": 1,
+				"selection_fingerprint": self.unique_key("fp-l24-run"),
+				"idempotency_key": self.unique_key("l24-running"),
+				"progress": 5,
+				"preview_json": json.dumps(preview_payload),
+				"actual_json": json.dumps(
+					{
+						"created": 4,
+						"errors": 1,
+						"assigned": {self.staff_a: 2, self.staff_c: 2},
+						"skipped": [{"lead": lead_skip_b, "reason": "active_claim_in_other_campaign"}],
+					}
+				),
+			}
+		)
+		run_running.insert(ignore_permissions=True)
+
+		# 2. Terminal `completed_with_errors` run with mixed two-team assigned & skipped items.
+		run_done = frappe.get_doc(
+			{
+				"doctype": "CSKH Distribution Run",
+				"campaign": campaign_shared,
+				"status": "completed_with_errors",
+				"rule_version": 1,
+				"selection_fingerprint": self.unique_key("fp-l24-done"),
+				"idempotency_key": self.unique_key("l24-done"),
+				"progress": 7,
+				"preview_json": json.dumps(preview_payload),
+				"actual_json": json.dumps(
+					{
+						"created": 4,
+						"errors": 3,
+						"assigned": {self.staff_a: 3, self.staff_c: 1},
+						"skipped": [
+							{"lead": lead_skip_a, "reason": "active_claim_in_other_campaign"},
+							{"lead": lead_skip_b, "reason": "active_claim_in_other_campaign"},
+							{"lead": lead_skip_global, "reason": "capacity_full"},
+						],
+					}
+				),
+			}
+		)
+		run_done.insert(ignore_permissions=True)
+
+		# --- Leader A polling & history ---
+		frappe.set_user(self.leader_a)
+		poll_a = run_history.runs(run_id=run_running.name, page=1, page_size=1)
+		self.assertEqual(len(poll_a["items"]), 1)
+		item_run_a = poll_a["items"][0]
+		self.assertEqual(item_run_a["assigned"], {self.staff_a: 2})
+		self.assertEqual(item_run_a["skipped"], [])
+		self.assertEqual(item_run_a["created"], 2)
+		self.assertEqual(item_run_a["errors"], 0)
+		self.assertEqual(item_run_a["total"], 4)
+		self.assertEqual(item_run_a["progress"], 2)
+		self.assertEqual(item_run_a["preview"]["eligible_count"], 4)
+		self.assertEqual(item_run_a["preview"]["excluded_count"], 0)
+		self.assertEqual(item_run_a["preview"]["simulated"], {self.staff_a: 4})
+		self.assertEqual([t["user"] for t in item_run_a["preview"]["targets"]], [self.staff_a])
+		self.assertEqual([e["user"] for e in item_run_a["preview"]["excluded_assignees"]], [self.staff_b])
+		self.assertNotIn(self.staff_c, json.dumps(poll_a, default=str))
+		self.assertNotIn(lead_skip_b, json.dumps(poll_a, default=str))
+
+		done_a = run_history.runs(run_id=run_done.name, page=1, page_size=1)["items"][0]
+		self.assertEqual(done_a["assigned"], {self.staff_a: 3})
+		self.assertEqual([s["lead"] for s in done_a["skipped"]], [lead_skip_a])
+		self.assertEqual(done_a["created"], 3)
+		self.assertEqual(done_a["errors"], 1)
+		self.assertEqual(done_a["total"], 4)
+		self.assertEqual(done_a["progress"], 4)
+		self.assertNotIn(self.staff_c, json.dumps(done_a, default=str))
+		self.assertNotIn(lead_skip_b, json.dumps(done_a, default=str))
+		self.assertNotIn(lead_skip_global, json.dumps(done_a, default=str))
+
+		# --- Leader B polling & history (positive control for Team B) ---
+		frappe.set_user(self.leader_b)
+		poll_b = run_history.runs(run_id=run_running.name, page=1, page_size=1)["items"][0]
+		self.assertEqual(poll_b["assigned"], {self.staff_c: 2})
+		self.assertEqual([s["lead"] for s in poll_b["skipped"]], [lead_skip_b])
+		self.assertEqual(poll_b["created"], 2)
+		self.assertEqual(poll_b["errors"], 1)
+		self.assertEqual(poll_b["total"], 3)
+		self.assertEqual(poll_b["progress"], 3)
+		self.assertEqual(poll_b["preview"]["simulated"], {self.staff_c: 3})
+		self.assertEqual(poll_b["preview"]["excluded_assignees"], [])
+		self.assertNotIn(self.staff_a, json.dumps(poll_b, default=str))
+		self.assertNotIn(self.staff_b, json.dumps(poll_b, default=str))
+
+		done_b = run_history.runs(run_id=run_done.name, page=1, page_size=1)["items"][0]
+		self.assertEqual(done_b["assigned"], {self.staff_c: 1})
+		self.assertEqual([s["lead"] for s in done_b["skipped"]], [lead_skip_b])
+		self.assertEqual(done_b["created"], 1)
+		self.assertEqual(done_b["errors"], 1)
+		self.assertEqual(done_b["total"], 3)
+		self.assertEqual(done_b["progress"], 2)
+		self.assertNotIn(lead_skip_a, json.dumps(done_b, default=str))
+		self.assertNotIn(lead_skip_global, json.dumps(done_b, default=str))
+
+		# --- Admin & BOD positive controls ---
+		for full_actor in (self.admin_user, self.bod_user):
+			frappe.set_user(full_actor)
+			full_done = run_history.runs(run_id=run_done.name, page=1, page_size=1)["items"][0]
+			self.assertEqual(full_done["assigned"], {self.staff_a: 3, self.staff_c: 1})
+			self.assertEqual(full_done["created"], 4)
+			self.assertEqual(full_done["errors"], 3)
+			self.assertEqual(full_done["total"], 7)
+			self.assertEqual(full_done["progress"], 7)
+			self.assertEqual(full_done["preview"]["eligible_count"], 7)
+			self.assertNotIn("leads", full_done["preview"])
+
+	def test_l26_invalid_pagination_returns_400_and_assignees_applies_campaign_eligibility(self):
+		frappe.set_user(self.admin_user)
+		invalid_cases = [
+			{"page": "abc", "page_size": 20},
+			{"page": 1, "page_size": "xyz"},
+			{"page": 0, "page_size": 20},
+			{"page": -1, "page_size": 20},
+			{"page": 1, "page_size": 0},
+			{"page": 1, "page_size": -5},
+			{"page": 1, "page_size": 101},
+			{"page": "1.5", "page_size": 20},
+			{"page": True, "page_size": 20},
+			{"page": 1, "page_size": False},
+		]
+		for fn in (pool_ui.list, ownership_ui.assigned_list, import_history.history, run_history.runs):
+			for bad_kwargs in invalid_cases:
+				with self.assertRaises(InvalidRequest) as ctx:
+					fn(**bad_kwargs)
+				self.assertEqual(ctx.exception.http_status, 400)
+				self.assertEqual(ctx.exception.code, "INVALID_REQUEST")
+
+			# Positive control: string digits and empty strings parse cleanly.
+			ok_res = fn(page="1", page_size="2")
+			self.assertEqual(ok_res["page"], 1)
+			self.assertEqual(ok_res["page_size"], 2)
+			empty_res = fn(page="", page_size="")
+			self.assertEqual(empty_res["page"], 1)
+			self.assertEqual(empty_res["page_size"], 20)
+
+		# Campaign-scoped `assignees(campaign)`: team_scope + capacity/rule eligibility.
+		res_a = ownership_ui.assignees(campaign=self.campaign_a)
+		users_a = {u["user"] for u in res_a["items"]}
+		self.assertIn(self.staff_a, users_a)
+		self.assertIn(self.staff_b, users_a)
+		self.assertNotIn(self.staff_c, users_a)
+		self.assertNotIn(self.staff_outside, users_a)
+		self.assertNotIn(self.admin_user, users_a)
+		self.assertNotIn(self.bod_user, users_a)
+
+		res_b = ownership_ui.assignees(campaign=self.campaign_b)
+		users_b = {u["user"] for u in res_b["items"]}
+		self.assertIn(self.staff_c, users_b)
+		self.assertNotIn(self.staff_a, users_b)
+		self.assertNotIn(self.staff_b, users_b)
+		self.assertNotIn(self.staff_outside, users_b)
+
+		# Capacity full on `staff_a` (already holds `self.wi_team_a` in `self.campaign_a`) excludes `staff_a`
+		# while keeping `staff_b` (`capacity=5`) eligible.
+		self.make_rule(self.campaign_a, self.staff_a, weight=1, capacity=1, team=self.team_a)
+		self.make_rule(self.campaign_a, self.staff_b, weight=1, capacity=5, team=self.team_a)
+		res_a_cap = ownership_ui.assignees(campaign=self.campaign_a)
+		users_a_cap = {u["user"] for u in res_a_cap["items"]}
+		self.assertNotIn(self.staff_a, users_a_cap)
+		self.assertIn(self.staff_b, users_a_cap)
+
+		# Shared campaign (`team_scope=None`) allows eligible Sales Users across teams.
+		campaign_shared = self.make_campaign(title="Chiến dịch Chung L26", team_scope=None)
+		res_shared = ownership_ui.assignees(campaign=campaign_shared)
+		users_shared = {u["user"] for u in res_shared["items"]}
+		self.assertIn(self.staff_a, users_shared)
+		self.assertIn(self.staff_b, users_shared)
+		self.assertIn(self.staff_c, users_shared)
+
+		with self.assertRaises(NotFound) as nf_ctx:
+			ownership_ui.assignees(campaign="CAMP-DOES-NOT-EXIST")
+		self.assertEqual(nf_ctx.exception.http_status, 404)
+		self.assertEqual(nf_ctx.exception.code, "NOT_FOUND")
+
+		with self.assertRaises(InvalidRequest) as bad_camp_ctx:
+			ownership_ui.assignees(campaign=123)
+		self.assertEqual(bad_camp_ctx.exception.http_status, 400)
+		self.assertEqual(bad_camp_ctx.exception.code, "INVALID_REQUEST")
+
+	def test_upload_import_file_enforces_admin_role_private_flag_extension_and_size(self):
+		payload_b64 = base64.b64encode(b"phone,name\n0912345678,Nguyen Van A\n").decode("ascii")
+
+		for denied in (self.leader_a, self.leader_b, self.staff_a, self.bod_user, self.staff_outside):
+			frappe.set_user(denied)
+			with self.assertRaises(Forbidden):
+				import_files.upload_import_file(file_name="batch.csv", content=payload_b64)
+
+		frappe.set_user(self.admin_user)
+		uploaded = import_files.upload_import_file(file_name="batch.csv", content=payload_b64)
+		self.assertEqual(uploaded["is_private"], 1)
+		self.assertNotIn("file_url", uploaded)
+		meta = frappe.db.get_value(
+			"File",
+			uploaded["name"],
+			["is_private", "attached_to_doctype", "attached_to_name"],
+			as_dict=True,
+		)
+		self.assertEqual(int(meta.is_private or 0), 1)
+		self.assertFalse(meta.attached_to_doctype)
+		self.assertFalse(meta.attached_to_name)
+
+		with self.assertRaises(P1Error) as ext_ctx:
+			import_files.upload_import_file(file_name="bad.txt", content=payload_b64)
+		self.assertEqual(ext_ctx.exception.http_status, 400)
+		self.assertEqual(ext_ctx.exception.code, "UNSUPPORTED_FORMAT")
+
+		with self.assertRaises(InvalidRequest):
+			import_files.upload_import_file(file_name="empty.csv", content="")
+
+		oversized_b64 = base64.b64encode(b"a" * (import_files.MAX_FILE_BYTES + 1)).decode("ascii")
+		with self.assertRaises(P1Error) as size_ctx:
+			import_files.upload_import_file(file_name="huge.csv", content=oversized_b64)
+		self.assertEqual(size_ctx.exception.http_status, 413)
+		self.assertEqual(size_ctx.exception.code, "FILE_TOO_LARGE")
+
+
+class TestUiP1ImportBatchPoolFilter(P1TestCase):
+	"""Verify `pool_ui.list(batch=...)` against persisted `CSKH Import Batch Lead` links (`L-25` + `L-23`)."""
+
+	def _run_csv_import(self, csv_text, mapping, key_prefix, file_name="l25-ui.csv"):
+		frappe.set_user(self.admin_user)
+		b64 = base64.b64encode(csv_text.encode("utf-8")).decode("ascii")
+		uploaded = import_files.upload_import_file(file_name=file_name, content=b64)
+		preview = imports_api.create_preview(
+			file_name=uploaded["name"],
+			mapping=mapping,
+			idempotency_key=self.unique_key(key_prefix),
+		)
+		with mock.patch("frappe.enqueue"):
+			confirmed = imports_api.confirm(batch=preview["batch"])
+		self.assertEqual(confirmed["status"], "QUEUED")
+		frappe.set_user("Administrator")
+		import_worker.run_batch(preview["batch"])
+		return preview["batch"], uploaded["name"]
+
+	def test_l25_pool_ui_import_batch_source_and_name_filters_match_persisted_import_links(self):
+		p1 = self.unique_phone()
+		p2 = self.unique_phone()
+		p3 = self.unique_phone()
+		p4 = self.unique_phone()
+		canonicals = [normalize_vn_phone(p) for p in (p1, p2, p3, p4)]
+		src_alpha = self.unique_key("L25SrcAlpha")
+		src_beta = self.unique_key("L25SrcBeta")
+		src_gamma = self.unique_key("L25SrcGamma")
+		src_delta = self.unique_key("L25SrcDelta")
+
+		created_batches = []
+		created_files = []
+		created_campaigns = []
+
+		try:
+			csv_b1 = (
+				"so_dt,ho_ten_kh,kenh_nguon\n"
+				f"{p1},=SUM(1;2) Nguyễn L25 Một,{src_alpha}\n"
+				f"{p2},Trần L25 Hai,{src_beta}\n"
+				f"{p3},,{src_gamma}\n"
+			)
+			batch_1, file_1 = self._run_csv_import(
+				csv_b1,
+				{"phone": "so_dt", "name": "ho_ten_kh", "source": "kenh_nguon"},
+				"l25-ui-b1",
+			)
+			created_batches.append(batch_1)
+			created_files.append(file_1)
+
+			# Batch 2 reuses p1 (must NOT overwrite canonical name/source) and adds p4.
+			csv_b2 = (
+				"so_dt,ho_ten_kh,kenh_nguon\n"
+				f"{p1},Tên Ghi Đè Trái Phép,{src_delta}\n"
+				f"{p4},Phạm L25 Bốn,{src_delta}\n"
+			)
+			batch_2, file_2 = self._run_csv_import(
+				csv_b2,
+				{"phone": "so_dt", "name": "ho_ten_kh", "source": "kenh_nguon"},
+				"l25-ui-b2",
+			)
+			created_batches.append(batch_2)
+			created_files.append(file_2)
+
+			lead_1 = frappe.db.get_value(
+				"CSKH Identity Index", {"normalized_phone": canonicals[0]}, "canonical_lead"
+			)
+			lead_2 = frappe.db.get_value(
+				"CSKH Identity Index", {"normalized_phone": canonicals[1]}, "canonical_lead"
+			)
+			lead_3 = frappe.db.get_value(
+				"CSKH Identity Index", {"normalized_phone": canonicals[2]}, "canonical_lead"
+			)
+			lead_4 = frappe.db.get_value(
+				"CSKH Identity Index", {"normalized_phone": canonicals[3]}, "canonical_lead"
+			)
+			self.assertTrue(all([lead_1, lead_2, lead_3, lead_4]))
+
+			# Verify persisted CSKH Import Batch Lead outcomes (`created` vs `reused`).
+			self.assertEqual(
+				frappe.db.get_value(
+					"CSKH Import Batch Lead", {"import_batch": batch_1, "lead": lead_1}, "outcome"
+				),
+				"created",
+			)
+			self.assertEqual(
+				frappe.db.get_value(
+					"CSKH Import Batch Lead", {"import_batch": batch_2, "lead": lead_1}, "outcome"
+				),
+				"reused",
+			)
+
+			# Admin (`scope = "system"`): batch filter finds newly imported leads BEFORE any Work Item exists,
+			# preserves formula sanitization + placeholder rules, and matches reused canonical leads across batches.
+			frappe.set_user(self.admin_user)
+			admin_b1 = pool_ui.list(batch=batch_1)
+			self.assertEqual(admin_b1["total"], 3)
+			self.assertEqual(admin_b1["unique_customers"], 3)
+			self.assertEqual(admin_b1["work_items"], 0)
+			by_lead_b1 = {row["lead"]: row for row in admin_b1["items"]}
+			self.assertEqual(set(by_lead_b1), {lead_1, lead_2, lead_3})
+			self.assertTrue(all(row["state"] == "eligible" for row in admin_b1["items"]))
+			self.assertTrue(by_lead_b1[lead_1]["display_name"].startswith("'"))
+			self.assertNotIn("Tên Ghi Đè", by_lead_b1[lead_1]["display_name"])
+			self.assertEqual(by_lead_b1[lead_1]["source"], src_alpha)
+			self.assertEqual(by_lead_b1[lead_2]["display_name"], "Trần L25 Hai")
+			self.assertEqual(by_lead_b1[lead_3]["display_name"], "Chưa rõ tên")
+
+			admin_b2 = pool_ui.list(batch=batch_2)
+			self.assertEqual(admin_b2["total"], 2)
+			self.assertEqual(admin_b2["unique_customers"], 2)
+			self.assertEqual({row["lead"] for row in admin_b2["items"]}, {lead_1, lead_4})
+
+			admin_b1_beta = pool_ui.list(batch=batch_1, source=src_beta)
+			self.assertEqual(admin_b1_beta["total"], 1)
+			self.assertEqual(admin_b1_beta["items"][0]["lead"], lead_2)
+
+			# BOD (`scope = "all"`): sees batch counts with zero PII.
+			frappe.set_user(self.bod_user)
+			bod_b1 = pool_ui.list(batch=batch_1)
+			self.assertEqual(bod_b1["total"], 3)
+			for row in bod_b1["items"]:
+				self.assertIsNone(row["phone"])
+				self.assertEqual(row["display_name"], "")
+
+			# Two-team + positive control: create Campaign A (Team A) & Campaign B (Team B) with Work Items
+			# that do NOT set `wi.import_batch` (matching distribution_worker), proving `CSKH Import Batch Lead`
+			# powers Leader batch filtering while respecting team isolation and L-23.
+			frappe.set_user("Administrator")
+			camp_a = self.make_campaign(title="Chiến dịch L25 Đội A", team_scope=self.team_a)
+			camp_b = self.make_campaign(title="Chiến dịch L25 Đội B", team_scope=self.team_b)
+			created_campaigns.extend([camp_a, camp_b])
+			wi_a = self.make_work_item(camp_a, lead_2, status="assigned", assigned_to=self.staff_a)
+			self.make_work_item(camp_b, lead_4, status="assigned", assigned_to=self.staff_c)
+			frappe.db.commit()
+
+			frappe.set_user(self.leader_a)
+			la_b1 = pool_ui.list(batch=batch_1)
+			self.assertEqual(la_b1["total"], 1)
+			self.assertEqual(la_b1["work_items"], 1)
+			self.assertEqual(la_b1["items"][0]["lead"], lead_2)
+			self.assertEqual(la_b1["items"][0]["owner"], self.staff_a)
+			la_b2 = pool_ui.list(batch=batch_2)
+			self.assertEqual(la_b2["total"], 0)
+			self.assertEqual(la_b2["work_items"], 0)
+
+			frappe.set_user(self.leader_b)
+			lb_b2 = pool_ui.list(batch=batch_2)
+			self.assertEqual(lb_b2["total"], 1)
+			self.assertEqual(lb_b2["work_items"], 1)
+			self.assertEqual(lb_b2["items"][0]["lead"], lead_4)
+			self.assertEqual(lb_b2["items"][0]["owner"], self.staff_c)
+			lb_b1 = pool_ui.list(batch=batch_1)
+			self.assertEqual(lb_b1["total"], 0)
+
+			# L-23 + L-25 combined: revoke lead_2 in Team A (`revoked`), then assign lead_2 in Team B.
+			# Leader A filtering `batch=batch_1` MUST NOT see lead_2 via old revoked history,
+			# while Leader B filtering `batch=batch_1` sees lead_2 as positive control.
+			frappe.set_user(self.admin_user)
+			ownership_service.revoke(
+				work_item=wi_a,
+				expected_owner=self.staff_a,
+				reason="Thu hồi Đội A chuyển sang Đội B",
+				actor=self.admin_user,
+				request_id=self.unique_key("l25-l23-revoke"),
+				return_to_pool=False,
+			)
+			frappe.set_user("Administrator")
+			self.make_work_item(camp_b, lead_2, status="assigned", assigned_to=self.staff_c)
+			frappe.db.commit()
+
+			frappe.set_user(self.leader_a)
+			la_after = pool_ui.list(batch=batch_1)
+			self.assertEqual(la_after["total"], 0)
+			self.assertEqual(la_after["work_items"], 0)
+			self.assertEqual(la_after["items"], [])
+
+			frappe.set_user(self.leader_b)
+			lb_after = pool_ui.list(batch=batch_1)
+			self.assertEqual(lb_after["total"], 1)
+			self.assertEqual(lb_after["work_items"], 1)
+			self.assertEqual(lb_after["items"][0]["lead"], lead_2)
+			self.assertEqual(lb_after["items"][0]["owner"], self.staff_c)
+		finally:
+			frappe.set_user("Administrator")
+			lead_ids = frappe.get_all(
+				"CSKH Identity Index",
+				filters={"normalized_phone": ["in", canonicals]},
+				pluck="canonical_lead",
+			)
+			if lead_ids:
+				wi_ids = frappe.get_all("CSKH Work Item", filters={"lead": ["in", lead_ids]}, pluck="name")
+				if wi_ids:
+					frappe.db.delete("CSKH Assignment History", {"work_item": ["in", wi_ids]})
+					frappe.db.delete(
+						"ToDo", {"reference_type": "CRM Lead", "reference_name": ["in", lead_ids]}
+					)
+					frappe.db.delete(
+						"DocShare", {"share_doctype": "CRM Lead", "share_name": ["in", lead_ids]}
+					)
+				frappe.db.delete("CSKH Active Claim", {"lead": ["in", lead_ids]})
+				frappe.db.delete("CSKH Work Item", {"lead": ["in", lead_ids]})
+				frappe.db.delete("CSKH Import Batch Lead", {"lead": ["in", lead_ids]})
+				frappe.db.delete("CSKH Identity Index", {"normalized_phone": ["in", canonicals]})
+				frappe.db.delete("CRM Lead", {"name": ["in", lead_ids]})
+			if created_batches:
+				frappe.db.delete("CSKH Import Batch Lead", {"import_batch": ["in", created_batches]})
+				frappe.db.delete("CSKH Import Batch", {"name": ["in", created_batches]})
+			if created_campaigns:
+				frappe.db.delete("CSKH Campaign", {"name": ["in", created_campaigns]})
+			for fid in created_files:
+				if frappe.db.exists("File", fid):
+					frappe.delete_doc("File", fid, force=True, ignore_permissions=True)
+			frappe.db.commit()

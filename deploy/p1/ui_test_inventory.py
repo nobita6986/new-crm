@@ -86,15 +86,18 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.check:
         expected = json.loads(Path(args.check).read_text(encoding="utf-8"))
-        if expected.get("modules") != inventory["modules"]:
+        if (
+            expected.get("modules") != inventory["modules"]
+            or expected.get("expected_total") != inventory["expected_total"]
+        ):
             print("P1 UI inventory does NOT match the source:", file=sys.stderr)
             print(
-                json.dumps(inventory["modules"], indent=2, ensure_ascii=False),
+                json.dumps(inventory, indent=2, ensure_ascii=False),
                 file=sys.stderr,
             )
             return 1
         print(
-            f"P1 UI inventory matches the source: {inventory['expected_total']} method "
+            f"P1 UI inventory matches the source: {inventory['expected_total']} methods "
             f"in {len(inventory['modules'])} module."
         )
         return 0

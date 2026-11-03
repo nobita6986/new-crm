@@ -24,6 +24,7 @@ from urllib.parse import quote
 import frappe
 from frappe.utils import now_datetime
 
+from crm_cskh.api._ui_params import parse_optional_str, parse_pagination
 from crm_cskh.services.errors import Forbidden, InvalidRequest, NotFound
 
 ROLE_ADMIN = "CSKH CRM Admin"
@@ -193,28 +194,25 @@ def history(page=1, page_size=20, status=None):
 	actor = frappe.session.user
 	_require_admin(actor)
 
-	limit = max(1, min(int(page_size or 20), 100))
-	offset = max(0, (int(page or 1) - 1) * limit)
-	if status:
-		if not isinstance(status, str):
-			raise InvalidRequest("The batch status filter must be a string.")
+	page_num, limit, offset = parse_pagination(page, page_size)
+	status_val = parse_optional_str(status, "The batch status filter must be a string.")
 
 	rows = frappe.get_list(
 		"CSKH Import Batch",
-		filters={"status": status} if status else None,
+		filters={"status": status_val} if status_val else None,
 		fields=_batch_fields(),
 		order_by="creation desc",
 		limit_start=offset,
 		limit_page_length=limit,
 	)
-	total = frappe.db.count("CSKH Import Batch", {"status": status} if status else None)
+	total = frappe.db.count("CSKH Import Batch", {"status": status_val} if status_val else None)
 
 	items = [_serialize_batch(row) for row in rows]
 
 	return {
 		"items": items,
 		"total": total,
-		"page": int(page or 1),
+		"page": page_num,
 		"page_size": limit,
 		"as_of": now_datetime(),
 	}

@@ -22,7 +22,9 @@ const __filename = fileURLToPath(import.meta.url)
 const HERE = path.dirname(__filename)
 const ROOT = path.resolve(HERE, '..', '..')
 const EVIDENCE_DIR = path.join(HERE, 'evidence')
-const OUT_PATH = path.join(EVIDENCE_DIR, 'async-distribution-delta-e2e.json')
+const OUT_PATH = process.env.P1_ASYNC_REPORT_OUT
+	? path.resolve(process.env.P1_ASYNC_REPORT_OUT)
+	: path.join(EVIDENCE_DIR, 'async-distribution-delta-e2e.json')
 
 const BASE_URL = process.env.P1_BROWSER_URL || 'http://p1.localhost:8120'
 const PASSWORD = process.env.P1_SEED_PASSWORD || 'P1Seed-Only-2026!'
@@ -744,11 +746,17 @@ async function main() {
 		await browser.close()
 	}
 
+	const baselineEvidenceSha = execFileSync(
+		'git',
+		['rev-parse', '--verify', '0d3f2bcbbf9715a4c0c783903ce750de8646583d^{commit}'],
+		{ cwd: ROOT, encoding: 'utf-8' }
+	).trim()
+
 	const report = redactObj({
 		generated_at: new Date().toISOString(),
 		site: BASE_URL,
 		integrated_git_sha: gitSha,
-		baseline_evidence_sha_preserved: '0d3f2bc9da3e3e497a999baeb9a4dd19129224fb',
+		baseline_evidence_sha_preserved: baselineEvidenceSha,
 		checks,
 	})
 	fs.writeFileSync(OUT_PATH, JSON.stringify(report, null, 2) + '\n', 'utf-8')

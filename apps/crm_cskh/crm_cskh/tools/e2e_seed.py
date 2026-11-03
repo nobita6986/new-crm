@@ -75,6 +75,8 @@ def reset_and_seed():
 	password = os.environ.get("P1_SEED_PASSWORD", "P1Seed-Only-2026!")
 
 	# 1. Clean P1 transactional tables and synthetic leads so counts reconcile deterministically from zero.
+	if frappe.db.table_exists("CSKH Import Batch Lead"):
+		frappe.db.sql("delete from `tabCSKH Import Batch Lead`")
 	for table in (
 		"tabCSKH Active Claim",
 		"tabCSKH Assignment History",
