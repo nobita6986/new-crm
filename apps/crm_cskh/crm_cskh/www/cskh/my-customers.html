@@ -12,45 +12,81 @@
 				<option value="">{{ _("All") }}</option>
 			</select>
 		</label>
+		<label class="cskh-field">
+			{{ _("Care filter") }}
+			<select id="mine-care-filter" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+				<option value="not_contacted">{{ _("Not contacted") }}</option>
+				<option value="attempted">{{ _("Attempted") }}</option>
+				<option value="attempted_not_connected">{{ _("Attempted, not connected") }}</option>
+				<option value="connected">{{ _("Connected") }}</option>
+				<option value="on_hold">{{ _("On hold") }}</option>
+				<option value="followup_due">{{ _("Due today") }}</option>
+				<option value="followup_overdue">{{ _("Overdue") }}</option>
+				<option value="closed">{{ _("Completed care") }}</option>
+				<option value="do_not_contact">{{ _("Do not contact") }}</option>
+			</select>
+		</label>
 		<label class="cskh-field" id="mine-search-wrap">
 			{{ _("Search") }}
 			<input id="mine-search" class="cskh-input" type="search"
 				placeholder="{{ _('Search by name or phone number.') }}">
 		</label>
 		<label class="cskh-field">
-			{{ _("Assigned at") }}
+			{{ _("Sort by") }}
 			<select id="mine-sort" class="cskh-select">
 				<option value="desc">{{ _("Newest first") }}</option>
 				<option value="asc">{{ _("Oldest first") }}</option>
+				<option value="last_contact_desc">{{ _("Last contact (newest)") }}</option>
+				<option value="next_due_asc">{{ _("Next callback (earliest)") }}</option>
 			</select>
 		</label>
 		<button id="mine-refresh" class="cskh-btn is-primary" type="button">
 			{{ _("Apply filters") }}
 		</button>
 	</div>
+	<div class="cskh-chip-bar" id="mine-filter-chips" role="group" aria-label="{{ _('Care filter') }}" style="margin-top: 10px;">
+		<button type="button" class="cskh-chip is-active" data-filter="">{{ _("All") }}</button>
+		<button type="button" class="cskh-chip" data-filter="not_contacted">{{ _("Not contacted") }}</button>
+		<button type="button" class="cskh-chip" data-filter="attempted">{{ _("Attempted") }}</button>
+		<button type="button" class="cskh-chip" data-filter="attempted_not_connected">{{ _("Attempted, not connected") }}</button>
+		<button type="button" class="cskh-chip" data-filter="connected">{{ _("Connected") }}</button>
+		<button type="button" class="cskh-chip" data-filter="followup_due">{{ _("Due today") }}</button>
+		<button type="button" class="cskh-chip" data-filter="followup_overdue">{{ _("Overdue") }}</button>
+		<button type="button" class="cskh-chip" data-filter="closed">{{ _("Completed care") }}</button>
+		<button type="button" class="cskh-chip" data-filter="do_not_contact">{{ _("Do not contact") }}</button>
+	</div>
 </div>
 
 <div id="mine-alert" aria-live="polite"></div>
+
+<div class="cskh-card" id="mine-quick-record-card" hidden>
+	<div id="mine-quick-record-body"></div>
+</div>
 
 <div class="cskh-card">
 	<div id="mine-loading" class="cskh-loading">{{ _("Loading...") }}</div>
 	<div id="mine-empty" class="cskh-alert is-empty" hidden>
 		{{ _("You have not been assigned any customer yet.") }}
 	</div>
-	<table id="mine-table" class="cskh-table" hidden>
-		<thead>
-			<tr>
-				<th>{{ _("Customer") }}</th>
-				<th>{{ _("Phone number") }}</th>
-				<th>{{ _("Campaign") }}</th>
-				<th>{{ _("Source") }}</th>
-				<th>{{ _("Assigned at") }}</th>
-				<th>{{ _("Work item status") }}</th>
-				<th>{{ _("Actions") }}</th>
-			</tr>
-		</thead>
-		<tbody id="mine-rows"></tbody>
-	</table>
+	<div style="overflow-x: auto;">
+		<table id="mine-table" class="cskh-table" hidden>
+			<thead>
+				<tr>
+					<th>{{ _("Customer") }}</th>
+					<th>{{ _("Phone number") }}</th>
+					<th>{{ _("Campaign") }}</th>
+					<th>{{ _("Care status") }}</th>
+					<th>{{ _("Last contact at") }}</th>
+					<th>{{ _("Last outcome") }}</th>
+					<th>{{ _("Contact count") }}</th>
+					<th>{{ _("Next callback") }}</th>
+					<th>{{ _("Actions") }}</th>
+				</tr>
+			</thead>
+			<tbody id="mine-rows"></tbody>
+		</table>
+	</div>
 	<div class="cskh-pager">
 		<button id="mine-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
 		<span id="mine-range"></span>
@@ -77,19 +113,24 @@
 	<div id="mine-scope-empty" class="cskh-alert is-empty" hidden>
 		{{ _("No data in the current scope.") }}
 	</div>
-	<table id="mine-scope-table" class="cskh-table" hidden>
-		<thead>
-			<tr>
-				<th>{{ _("Customer") }}</th>
-				<th>{{ _("Phone number") }}</th>
-				<th>{{ _("Campaign") }}</th>
-				<th>{{ _("Current owner") }}</th>
-				<th>{{ _("Assigned at") }}</th>
-				<th>{{ _("Actions") }}</th>
-			</tr>
-		</thead>
-		<tbody id="mine-scope-rows"></tbody>
-	</table>
+	<div style="overflow-x: auto;">
+		<table id="mine-scope-table" class="cskh-table" hidden>
+			<thead>
+				<tr>
+					<th>{{ _("Customer") }}</th>
+					<th>{{ _("Phone number") }}</th>
+					<th>{{ _("Campaign") }}</th>
+					<th>{{ _("Current owner") }}</th>
+					<th>{{ _("Care status") }}</th>
+					<th>{{ _("Last outcome") }}</th>
+					<th>{{ _("Next callback") }}</th>
+					<th>{{ _("Assigned at") }}</th>
+					<th>{{ _("Actions") }}</th>
+				</tr>
+			</thead>
+			<tbody id="mine-scope-rows"></tbody>
+		</table>
+	</div>
 </div>
 
 <div class="cskh-card" id="mine-detail-card" hidden>
@@ -102,5 +143,7 @@
 {% endblock %}
 
 {% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/p2-api.js?v={{ cskh_asset_version | default('') }}"></script>
+<script src="/assets/crm_cskh/cskh/p2-attempt-form.js?v={{ cskh_asset_version | default('') }}"></script>
 <script src="/assets/crm_cskh/cskh/my-customers.js?v={{ cskh_asset_version | default('') }}"></script>
 {% endblock %}

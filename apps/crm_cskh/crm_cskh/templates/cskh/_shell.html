@@ -21,8 +21,11 @@
 
 	<p class="cskh-session">
 		{{ _("Signed in as") }} <strong>{{ cskh_user }}</strong>
+		&middot; {{ _("Site/user timezone") }}: <code>{{ (cskh_timezone or {}).get("effective", "Asia/Ho_Chi_Minh") }}</code>
 		&middot; <a href="/crm/leads/view/list">{{ _("Return to CRM Leads") }}</a>
 	</p>
+
+	<div id="cskh-toast-host" class="cskh-toast-host" aria-live="polite"></div>
 
 	{% block cskh_body %}{% endblock %}
 </div>
@@ -30,14 +33,12 @@
 <script>
 	window.cskhUser = {{ cskh_user | tojson }}
 	window.cskhCapabilities = {{ cskh_capabilities | tojson }}
+	window.cskhTimezone = {{ cskh_timezone | default({}) | tojson }}
 	window.cskhI18n = {{ cskh_i18n | tojson }}
 	window.cskhErrorCodes = {{ cskh_error_codes | tojson }}
 	window.cskhErrorTexts = {{ cskh_error_texts | tojson }}
 	// The CSRF token of the *current* Frappe session: every mutation of the
-	// P1 pages sends it in the `X-Frappe-CSRF-Token` header. The header object
-	// is the single source of truth of the token, the browser code reads it
-	// from here (`window.cskhCsrfHeader`) and the Frappe web client reads it
-	// from `window.frappe.csrf_token`.
+	// P1/P2 pages sends it in the `X-Frappe-CSRF-Token` header.
 	window.cskhCsrfHeader = {{ cskh_csrf_header | tojson }}
 	window.frappe = window.frappe || {}
 	window.frappe.csrf_token = window.cskhCsrfHeader["X-Frappe-CSRF-Token"]

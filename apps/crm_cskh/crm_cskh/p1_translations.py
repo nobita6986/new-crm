@@ -435,6 +435,23 @@ TRANSLATIONS = {
 }
 
 
+def _merge_p2_translations():
+	try:
+		from crm_cskh import p2_translations as mod
+	except ImportError:
+		import importlib.util
+		import os
+
+		path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "p2_translations.py")
+		spec = importlib.util.spec_from_file_location("crm_cskh_p2_translations", path)
+		mod = importlib.util.module_from_spec(spec)
+		spec.loader.exec_module(mod)
+	TRANSLATIONS.update(mod.P2_TRANSLATIONS)
+
+
+_merge_p2_translations()
+
+
 def translation_rows():
 	"""Return the CSV rows of the P1 translations."""
 	buffer = io.StringIO()

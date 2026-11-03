@@ -1,0 +1,59 @@
+{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Customer care workspace") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Customer care detail, unified timeline, callbacks and append-only corrections.") }}{% endblock %}
+
+{% block cskh_body %}
+<div class="cskh-actions" style="margin-bottom: 12px;">
+	<a class="cskh-btn is-small" href="/cskh/my-customers">{{ _("Back to my customers") }}</a>
+	<a class="cskh-btn is-small" href="/cskh/callbacks">{{ _("Callbacks schedule") }}</a>
+	<button id="wi-refresh" class="cskh-btn is-small" type="button">{{ _("Refresh") }}</button>
+</div>
+
+<div id="wi-alert" aria-live="polite"></div>
+<div id="wi-loading" class="cskh-loading">{{ _("Loading...") }}</div>
+
+<div class="cskh-card" id="wi-summary-card" hidden>
+	<div id="wi-summary-header"></div>
+	<div id="wi-summary-metrics" class="cskh-grid" style="margin-top: 12px;"></div>
+	<div id="wi-summary-actions" class="cskh-actions" style="margin-top: 12px;"></div>
+</div>
+
+<div class="cskh-card" id="wi-action-drawer" hidden>
+	<div id="wi-action-drawer-body"></div>
+</div>
+
+<div class="cskh-card" id="wi-timeline-card" hidden>
+	<div class="cskh-actions" style="justify-content: space-between; align-items: center;">
+		<h2 style="margin: 0;">{{ _("Unified care timeline") }}</h2>
+		<span id="wi-timeline-tz" class="cskh-muted cskh-mono"></span>
+	</div>
+	<div class="cskh-banner-notice" style="margin-top: 10px;">
+		{{ _("Attempts are append-only: direct editing or deletion is disabled. Submit a correction or void request instead.") }}
+		<br>
+		<span class="cskh-muted">{{ _("Task completion without a contact attempt never counts as connected or successful care.") }}</span>
+	</div>
+	<div class="cskh-chip-bar" id="wi-timeline-chips" role="group" aria-label="{{ _('Timeline filter') }}">
+		<button type="button" class="cskh-chip is-active" data-kind="all">{{ _("All timeline items") }}</button>
+		<button type="button" class="cskh-chip" data-kind="attempt">{{ _("Contact attempts only") }}</button>
+		<button type="button" class="cskh-chip" data-kind="call_log">{{ _("Native call logs") }}</button>
+		<button type="button" class="cskh-chip" data-kind="task">{{ _("Callbacks / tasks") }}</button>
+		<button type="button" class="cskh-chip" data-kind="note">{{ _("Internal notes") }}</button>
+	</div>
+	<div id="wi-timeline-empty" class="cskh-alert is-empty" hidden>
+		{{ _("No timeline activity recorded for this work item yet.") }}
+	</div>
+	<div id="wi-timeline-list" class="cskh-timeline"></div>
+	<div class="cskh-pager">
+		<button id="wi-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
+		<span id="wi-range"></span>
+		<button id="wi-next" class="cskh-btn" type="button">{{ _("Next") }}</button>
+	</div>
+</div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/p2-api.js?v={{ cskh_asset_version | default('') }}"></script>
+<script src="/assets/crm_cskh/cskh/p2-attempt-form.js?v={{ cskh_asset_version | default('') }}"></script>
+<script src="/assets/crm_cskh/cskh/work-item.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}
