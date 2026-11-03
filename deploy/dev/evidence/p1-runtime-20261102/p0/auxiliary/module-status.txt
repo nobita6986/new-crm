@@ -1,0 +1,3 @@
+crm_cskh.crm_cskh.tests.test_health exit=0
+crm_cskh.crm_cskh.tests.test_poc_custom_field exit=0
+crm_cskh.tests.test_error_response_normalization exit=0

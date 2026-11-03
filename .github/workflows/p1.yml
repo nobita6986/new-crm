@@ -51,7 +51,7 @@ jobs:
 
       - name: Lint and format Python app
         id: lint
-        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py'
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/ci_p1_http_probe.py'
 
       # The P1 inventory is generated FROM the source. A method that was
       # renamed or deleted must fail this gate instead of silently shrinking
@@ -89,7 +89,8 @@ jobs:
             crm_cskh.tests.test_p1_imports \
             crm_cskh.tests.test_p1_api_permissions \
             crm_cskh.tests.test_p1_concurrency \
-            crm_cskh.tests.test_p1_regressions
+            crm_cskh.tests.test_p1_regressions \
+            crm_cskh.tests.test_p1_chaos
           do
             slug="${module##*.}"
             container_log="/tmp/p1-evidence/${slug}.log"
@@ -140,6 +141,58 @@ jobs:
           echo "p1 per-method gate exit=$gate_status" >> "$artifact_dir/module-status.txt"
           exit "$gate_status"
 
+      - name: Run the P1 HTTP transport probe against bench serve
+        id: p1_http_transport
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p1-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P1_ENV" -p "$P1_PROJECT")
+          container_id=$("${compose[@]}" ps -q bench)
+          mkdir -p "$artifact_dir/http"
+
+          if [ -z "$container_id" ]; then
+            echo 'Bench container is unavailable; the P1 HTTP probe could not start.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          # The probe authenticates **real business actors** over real HTTP,
+          # so the site must serve. `bench serve` is started in the background
+          # and polled until the socket accepts a connection.
+          if ! "${compose[@]}" exec -d bench bash -lc 'cd /workspace/frappe-bench && nohup bench --site p1-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p1-http-serve.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench serve for the seeded site.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          ready=0
+          for attempt in $(seq 1 45); do
+            if "${compose[@]}" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import socket; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close()' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            "${compose[@]}" exec -T bench cat /tmp/p1-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
+            echo 'The HTTP server did not become ready within 45 seconds.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          # `FRAPPE_STREAM_LOGGING=1` makes Frappe write its logs to stdout
+          # instead of creating the log files (the same rule as run-seed.sh).
+          if "${compose[@]}" exec -T -e GITHUB_SHA="$GITHUB_SHA" -e P1_HTTP_SITE=p1-ci.localhost -e BENCH_DIR=/workspace/frappe-bench bench bash -lc 'cd /workspace/frappe-bench && FRAPPE_STREAM_LOGGING=1 /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_p1_http_probe.py'; then
+            probe_status=0
+          else
+            probe_status=$?
+          fi
+          if ! docker cp "$container_id:/tmp/p1-http/." "$artifact_dir/http/"; then
+            echo 'Could not copy the sanitized HTTP evidence from the bench container.' > "$artifact_dir/http/evidence-copy-failed.txt"
+            exit 1
+          fi
+          exit "$probe_status"
+
       - name: Verify the P1 DB constraints and indexes
         id: schema
         if: always() && steps.per_method.outcome == 'success'
@@ -164,6 +217,7 @@ jobs:
           SEED_OUTCOME: ${{ steps.seed.outcome }}
           PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
           PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.p1_http_transport.outcome }}
           SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
         run: |
           mkdir -p "$RUNNER_TEMP/p1-evidence"
@@ -190,6 +244,8 @@ jobs:
               (re.compile(r"(?i)(/files/)[^\s\"'<>\\]+"), r"\1[REDACTED_FILE_URL]"),
               (re.compile(r"(?i)(x-frappe-csrf-token[\"'=:\s]+)[^\"'&\s<,}]+"), r"\1[REDACTED]"),
               (re.compile(r"(?i)(sid=)[^;\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(pwd=)[^&\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(password=)[^&\s\"']+"), r"\1[REDACTED]"),
               (re.compile(r'(?i)("file_url"\s*:\s*)"[^"]*"'), r'\1"[REDACTED_FILE_URL]"'),
               # P1 imports carry phone numbers; they must never reach an artifact.
               (re.compile(r"(?:\+?84|0)\d{8,10}"), "[REDACTED_PHONE]"),
@@ -225,6 +281,7 @@ jobs:
                   "seed": os.environ.get("SEED_OUTCOME"),
                   "per_method": os.environ.get("PER_METHOD_OUTCOME"),
                   "per_method_gate": os.environ.get("PER_METHOD_GATE_OUTCOME"),
+                  "p1_http_transport": os.environ.get("HTTP_TRANSPORT_OUTCOME"),
                   "schema": os.environ.get("SCHEMA_OUTCOME"),
               },
               "redaction_replacements": redactions,
@@ -253,6 +310,7 @@ jobs:
           SEED_OUTCOME: ${{ steps.seed.outcome }}
           PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
           PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.p1_http_transport.outcome }}
           SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
         run: |
           printf 'bootstrap=%s\n' "$BOOTSTRAP_OUTCOME"
@@ -261,6 +319,7 @@ jobs:
           printf 'seed=%s\n' "$SEED_OUTCOME"
           printf 'per_method=%s\n' "$PER_METHOD_OUTCOME"
           printf 'per_method_gate=%s\n' "$PER_METHOD_GATE_OUTCOME"
+          printf 'p1_http_transport=%s\n' "$HTTP_TRANSPORT_OUTCOME"
           printf 'schema=%s\n' "$SCHEMA_OUTCOME"
           test "$BOOTSTRAP_OUTCOME" = success && \
             test "$LINT_OUTCOME" = success && \
@@ -268,6 +327,7 @@ jobs:
             test "$SEED_OUTCOME" = success && \
             test "$PER_METHOD_OUTCOME" = success && \
             test "$PER_METHOD_GATE_OUTCOME" = success && \
+            test "$HTTP_TRANSPORT_OUTCOME" = success && \
             test "$SCHEMA_OUTCOME" = success
 
       - name: Show stack logs if a gate fails

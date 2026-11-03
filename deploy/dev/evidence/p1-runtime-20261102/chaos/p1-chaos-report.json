@@ -1,0 +1,116 @@
+{
+  "site": "p1chaos.localhost",
+  "recorded_at": "2026-11-03 07:37:53.533955",
+  "injection_mechanism": "pure_test_harness_mock_and_child_os_exit_137",
+  "production_hooks_present": false,
+  "overall_result": "PASS",
+  "scenarios": [
+    {
+      "id": "S1_work_item_and_mid_ownership_rollback_then_resume",
+      "campaign": "4sbpi9t8gg",
+      "pool_size": 10,
+      "attempt_1": {
+        "status": "completed_with_errors",
+        "created": 7,
+        "errors": 3,
+        "faulted_savepoint_observations": 3,
+        "rolled_back_work_items_surviving_in_db": 0,
+        "db_postcheck": {
+          "orphan_work_items": 0,
+          "orphan_active_claims": 0,
+          "owner_mismatches": 0,
+          "todo_mismatches": 0,
+          "docshare_mismatches": 0,
+          "partial_history_rows": 0
+        }
+      },
+      "attempt_2_resume": {
+        "status": "completed",
+        "created": 10,
+        "errors": 0,
+        "assigned_by_user": {
+          "p1-chaos-staff-a@example.test": 5,
+          "p1-chaos-staff-b@example.test": 3,
+          "p1-chaos-staff-c@example.test": 2
+        },
+        "reconcile": {
+          "distinct_leads": 10,
+          "active_work_items": 10,
+          "active_claims": 10,
+          "current_owners": {
+            "p1-chaos-staff-a@example.test": 5,
+            "p1-chaos-staff-b@example.test": 3,
+            "p1-chaos-staff-c@example.test": 2
+          },
+          "assignment_events": {
+            "p1-chaos-staff-a@example.test": 5,
+            "p1-chaos-staff-b@example.test": 3,
+            "p1-chaos-staff-c@example.test": 2
+          }
+        },
+        "db_postcheck": {
+          "orphan_work_items": 0,
+          "orphan_active_claims": 0,
+          "owner_mismatches": 0,
+          "todo_mismatches": 0,
+          "docshare_mismatches": 0,
+          "partial_history_rows": 0
+        }
+      },
+      "passed": true
+    },
+    {
+      "id": "S2_post_commit_notification_failure_and_idempotent_retry",
+      "campaign": "4t3f2bp03c",
+      "pool_size": 3,
+      "after_failed_notification": {
+        "run_status": "completed",
+        "committed_work_items": 3,
+        "crm_notifications_in_db": 0
+      },
+      "after_double_retry": {
+        "crm_notifications_in_db": 3,
+        "open_todos_in_db": 3,
+        "distinct_leads": 3,
+        "active_work_items": 3,
+        "active_claims": 3,
+        "assignment_events_total": 3,
+        "db_postcheck": {
+          "orphan_work_items": 0,
+          "orphan_active_claims": 0,
+          "owner_mismatches": 0,
+          "todo_mismatches": 0,
+          "docshare_mismatches": 0,
+          "partial_history_rows": 0
+        }
+      },
+      "passed": true
+    },
+    {
+      "id": "S3_worker_hard_kill_exit_137_mid_batch_and_recovery",
+      "batch": "4tapetmjt1",
+      "total_rows": 9,
+      "chunk_size": 3,
+      "child_process_exit_code": 137,
+      "mid_crash_db_state": {
+        "status": "RUNNING",
+        "attempts": 1,
+        "progress_row_marker": 4,
+        "committed_identities_before_crash": 3
+      },
+      "post_recovery_db_state": {
+        "status": "COMPLETED",
+        "attempts": 2,
+        "created_rows": 9,
+        "reused_rows": 0,
+        "error_rows": 0,
+        "skipped_rows": 0,
+        "identity_index_count": 9,
+        "crm_lead_count": 9,
+        "duplicate_identities": 0,
+        "duplicate_leads": 0
+      },
+      "passed": true
+    }
+  ]
+}
