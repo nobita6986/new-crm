@@ -709,6 +709,17 @@ def record_attempt(
 			)
 			final_status = recomputed["status"]
 			final_callback = new_task_id or recomputed["open_callback_task"]
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		schedule_post_commit_dirty_invalidation(
+			work_item=wi_val,
+			campaign=locked.campaign,
+			owner_user=actor,
+			event_dt=occurred_dt,
+			reason="attempt_recorded",
+			trigger_reference=attempt_id,
+		)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
 		raise
@@ -925,6 +936,16 @@ def close_work_item(
 			payload_hash=req_hash,
 			close_category=cat_val,
 			is_dnc=bool(lead_dnc),
+		)
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		schedule_post_commit_dirty_invalidation(
+			work_item=wi_val,
+			campaign=locked.campaign,
+			owner_user=old_owner_at_close,
+			event_dt=now_dt,
+			reason="work_item_closed",
 		)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
@@ -1181,6 +1202,16 @@ def reopen_work_item(
 			ownership._create_todo(locked.lead, target_val, f"CSKH assignment ({wi_val})")
 		ownership._sync_lead_owner(locked.lead, target_val)
 		ownership._assert_final_owner(locked.lead, target_val)
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		schedule_post_commit_dirty_invalidation(
+			work_item=wi_val,
+			campaign=locked.campaign,
+			owner_user=target_val,
+			event_dt=now_dt,
+			reason="work_item_reopened",
+		)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
 		raise

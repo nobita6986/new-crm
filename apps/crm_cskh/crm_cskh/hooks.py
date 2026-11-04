@@ -33,6 +33,10 @@ P3_DOCTYPES = (
 	"CSKH Working Calendar",
 	"CSKH Working Shift",
 	"CSKH SLA Obligation",
+	"CSKH Dirty Scope",
+	"CSKH KPI Run",
+	"CSKH KPI Snapshot",
+	"CSKH QA Review",
 )
 
 # Fixtures
@@ -411,8 +415,12 @@ scheduler_events = {
 	"cron": {
 		"*/5 * * * *": [
 			"crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations",
+			"crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes",
 		],
 	},
+	"daily": [
+		"crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods",
+	],
 }
 
 # The P1 DocTypes get their row-level scope from `crm_cskh.p1_permissions`
@@ -435,6 +443,10 @@ permission_query_conditions.update(
 		"CSKH Working Calendar": "crm_cskh.p3_permissions.working_calendar_query_conditions",
 		"CSKH Team Membership History": "crm_cskh.p3_permissions.team_membership_history_query_conditions",
 		"CSKH SLA Obligation": "crm_cskh.p3_permissions.sla_obligation_query_conditions",
+		"CSKH Dirty Scope": "crm_cskh.p3_permissions.dirty_scope_query_conditions",
+		"CSKH KPI Run": "crm_cskh.p3_permissions.kpi_run_query_conditions",
+		"CSKH KPI Snapshot": "crm_cskh.p3_permissions.kpi_snapshot_query_conditions",
+		"CSKH QA Review": "crm_cskh.p3_permissions.qa_review_query_conditions",
 	}
 )
 
@@ -456,5 +468,9 @@ has_permission.update(
 		"CSKH Working Calendar": "crm_cskh.p3_permissions.working_calendar_has_permission",
 		"CSKH Team Membership History": "crm_cskh.p3_permissions.team_membership_history_has_permission",
 		"CSKH SLA Obligation": "crm_cskh.p3_permissions.sla_obligation_has_permission",
+		"CSKH Dirty Scope": "crm_cskh.p3_permissions.dirty_scope_has_permission",
+		"CSKH KPI Run": "crm_cskh.p3_permissions.kpi_run_has_permission",
+		"CSKH KPI Snapshot": "crm_cskh.p3_permissions.kpi_snapshot_has_permission",
+		"CSKH QA Review": "crm_cskh.p3_permissions.qa_review_has_permission",
 	}
 )
