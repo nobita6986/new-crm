@@ -39,7 +39,7 @@ import frappe
 import frappe.client
 from frappe.desk.form.load import getdoc
 from frappe.desk.form.save import savedocs
-from frappe.utils import add_days, add_to_date, getdate, now_datetime
+from frappe.utils import add_days, add_to_date, get_datetime, getdate, now_datetime
 from werkzeug.test import EnvironBuilder
 from werkzeug.wrappers import Request
 
@@ -936,10 +936,11 @@ class TestP2T1cRegressions(P2TestCase):
 				idempotency_key=self.unique_key("f04-nc"),
 				actor=self.staff_a,
 			)
-		end_of_today = now_dt.replace(hour=23, minute=59, second=0, microsecond=0)
-		due_today_dt = min(add_to_date(now_dt, hours=5), end_of_today)
-		if due_today_dt <= now_dt:
-			due_today_dt = add_to_date(now_dt, seconds=30)
+		next_day_midnight = get_datetime(f"{add_days(getdate(now_dt), 1)} 00:00:00")
+		due_today_dt = min(
+			add_to_date(now_dt, hours=5),
+			max(add_to_date(now_dt, seconds=30), add_to_date(next_day_midnight, minutes=-1)),
+		)
 		followup.schedule_followup(
 			work_item=wi_due,
 			due_at=str(due_today_dt),
