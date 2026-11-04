@@ -3,66 +3,142 @@
   "owner": "T1C",
   "pinned_revisions": {
     "entry_main": "1913d2bd5ebfdc894eaa492b46be502dbdf44808",
-    "pr7_head": "ffe74df22b85c1d5ecda9dc2f1bdc3015b5bae10",
+    "pr7_prior_baseline": "ffe74df22b85c1d5ecda9dc2f1bdc3015b5bae10",
     "pr7_initial_runtime_head": "26b02379adbc8a50a2bee6eb3bd91ec5d5b6b6ce",
-    "apps_tree_sha": "4a395ae619f95a1feb0fbf9ec189063af2938f76",
-    "backend_initial": "6ef2e2e21c9e8265efe43fd5413074b70849a674",
-    "backend_http_fix": "580a45f0d823267f6845fec083d56ead00d29681",
-    "ui_e2e_code_sha": "d3da46b16a6d800d5d8cf866fc06415f9f02253f",
-    "ci_synthetic_merge": "faa6dfb33e4972a9aa5488858cfd0a46e0e45b04"
+    "backend_remediation_sha": "16e69438a30deaa8de723594e3beaea92e91fecd",
+    "backend_apps_tree_sha": "3c3a8a6e8c29cfca49e8628ba104bec1dd2aec99",
+    "ui_e2e_code_sha": "0f3c7311c75aa3c49c3953a9b8cd64e45809d008",
+    "pr7_head": "7e789eb1137fd8ee6c07a1971bf6b3151287b8e4",
+    "apps_tree_sha": "f3b6db3ff80b3371ea5b991d7e5aaa408533007b",
+    "ci_synthetic_merge": "634606710626aa389b1a5e2af846ea03ff91b421",
+    "live_container_crm_cskh_195_files_sha256": "13fa30f831c4d149602e3aa09e89884a54b44415fa2cbad8b4b177b11f42b7d9"
+  },
+  "ci_runs": {
+    "p0_gate": {
+      "run_id": 41784039800,
+      "artifact_id": 13301205353,
+      "bytes": 157529,
+      "sha256": "3d1e72170f6f81a1bd970bfc4e348d77f2242ef05c76a5a0482d06ef398f40e7",
+      "junit_pass": 107
+    },
+    "p1_gate": {
+      "run_id": 41784039850,
+      "artifact_id": 13300257742,
+      "bytes": 61296,
+      "sha256": "d8962c07eb9df2c5c3ecdab0c92d71cf7c2c77094f953484a6d262c98052d1ce",
+      "junit_pass": 221,
+      "http_assertions_pass": 170
+    },
+    "p2_gate": {
+      "run_id": 41784039795,
+      "artifact_id": 13300721301,
+      "bytes": 46905,
+      "sha256": "2baa6e5a97a7c168ffbe288027a4932239095050329d5f4e0e1ae343e73ac0bd",
+      "backend_junit_pass": 38,
+      "ui_junit_pass": 9,
+      "http_assertions_pass": 81,
+      "setup_observation": 0,
+      "unasserted_records": 0,
+      "manifest_files_verified": 30
+    }
   },
   "gate_summary": {
     "passed": [
       "G2-01",
       "G2-02",
+      "G2-03",
+      "G2-04",
       "G2-05",
       "G2-06",
       "G2-07",
       "G2-08",
       "G2-09",
       "G2-10",
-      "G2-11"
-    ],
-    "failed": [
-      "G2-03",
-      "G2-04",
+      "G2-11",
       "G2-12",
       "G2-13",
       "G2-14",
       "G2-15"
     ],
-    "open_findings": [
-      "F-P2-01",
-      "F-P2-06",
-      "F-P2-02",
-      "F-P2-04",
-      "F-P2-05"
+    "failed": [],
+    "test_matrix_passed": [
+      "T2-01",
+      "T2-02",
+      "T2-03",
+      "T2-04",
+      "T2-05",
+      "T2-06",
+      "T2-07",
+      "T2-08",
+      "T2-09",
+      "T2-10",
+      "T2-11",
+      "T2-12",
+      "T2-13",
+      "T2-14",
+      "T2-15",
+      "T2-16",
+      "T2-17",
+      "T2-18",
+      "T2-19",
+      "T2-20",
+      "T2-21",
+      "T2-22",
+      "T2-23",
+      "T2-24"
     ],
+    "security_matrix_passed": [
+      "SEC2-01",
+      "SEC2-02",
+      "SEC2-03",
+      "SEC2-04",
+      "SEC2-05",
+      "SEC2-06",
+      "SEC2-07",
+      "SEC2-08",
+      "SEC2-09",
+      "SEC2-10",
+      "SEC2-11",
+      "SEC2-12",
+      "SEC2-13",
+      "SEC2-14",
+      "SEC2-15",
+      "SEC2-16"
+    ],
+    "open_findings": [],
     "closed_findings": [
-      "F-P2-03"
+      "F-P2-01",
+      "F-P2-02",
+      "F-P2-03",
+      "F-P2-04",
+      "F-P2-05",
+      "F-P2-06"
+    ],
+    "resolved_observations": [
+      "OBS-P2-01"
     ],
     "non_blocking_observations": [
-      "OBS-P2-01",
       "OBS-P2-02",
       "OBS-P2-03"
     ],
-    "go_p3_recommendation": "NO-GO"
+    "go_p3_recommendation": "RECOMMEND_GO_P3",
+    "owner_go_p3_signoff": "UNSIGNED_PENDING_OWNER"
   },
   "files": [
     {
       "path": "t1c-p2-verification-report.md",
-      "bytes": 40260,
-      "sha256": "910614bed97bb3488e1f4376cebb29f47813f554075c535d2fe45eeef6ce180e"
+      "bytes": 33302,
+      "sha256": "239f3eef5d9d2605229970e0e81c23b6b996485cf3391bad85679e2ecfc9dc05"
     },
     {
       "path": "security-matrix-p2.md",
-      "bytes": 17811,
-      "sha256": "2b887312adafa76f89498941d19982af4dbe223eefd28dac0f5ccb46ca5d2a45"
+      "bytes": 19018,
+      "sha256": "661f88c18d38fc53635e1c891bfa0dda20700663bb4db25e136b0eb066e45ee5"
     },
     {
       "path": "test-evidence-p2.md",
-      "bytes": 26125,
-      "sha256": "80861027e1dda4b02c9c4bbe4f6628993aa7288f4ca43c3f06626db01da07fe8"
+      "bytes": 23550,
+      "sha256": "4b1f4ef6af221470cfb328e186e63bf8fdae5d0b2434dc8811a10004f42c8329"
     },
     {
       "path": "artifacts/t1c-p2-entry-baseline-1913d2b.json",
@@ -78,6 +154,11 @@
       "path": "artifacts/t1c-p2-ffe74df-audit.json",
       "bytes": 5900,
       "sha256": "a7ffb33f4a0c534f012a9110a7361c9941ada7b2f97308cf3a57b7bf502abe60"
+    },
+    {
+      "path": "artifacts/t1c-p2-delta-runtime-7e789eb.json",
+      "bytes": 10606,
+      "sha256": "232e4b0e75c5c6ae95325489d7ed708739e1a57e92970d26c47d8f39253015a4"
     }
   ]
 }
