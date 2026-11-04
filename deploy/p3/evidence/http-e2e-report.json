@@ -1,0 +1,1916 @@
+{
+  "suite": "p3_http_e2e",
+  "site": "p3ui.localhost",
+  "base_url": "http://127.0.0.1:8320",
+  "git_sha": "707bb2fec7efccb32e5040ec507f6ad3891d02d6",
+  "apps_tree": "bd4b30056f7d16d184713fe5046e79a2575c7853",
+  "started_at": "2026-11-04T14:55:35.707892+00:00",
+  "completed_at": "2026-11-04T14:58:17.090063+00:00",
+  "total_assertions": 186,
+  "passed": 186,
+  "failed": 0,
+  "seed_summary": {
+    "site": "p3ui.localhost",
+    "timezone": "Asia/Ho_Chi_Minh",
+    "server_now": "2026-11-04 21:58:16.523308",
+    "period_key": "2026-11",
+    "daily_key": "2026-11-04",
+    "campaign_id": "juq7ukhitd",
+    "team_a": "julnmpc0pf",
+    "team_b": "juoo09mm59",
+    "users": {
+      "admin": "cskh-p3-admin@example.test",
+      "bod": "cskh-p3-bod@example.test",
+      "leader_a": "cskh-p3-leader-a@example.test",
+      "leader_b": "cskh-p3-leader-b@example.test",
+      "staff_a": "cskh-p3-staff-a@example.test",
+      "staff_b": "cskh-p3-staff-b@example.test",
+      "staff_c": "cskh-p3-staff-c@example.test",
+      "staff_d": "cskh-p3-staff-d@example.test",
+      "outside": "cskh-p3-outside@example.test"
+    },
+    "golden_employee": "cskh-p3-staff-b@example.test",
+    "zero_denominator_employee": "cskh-p3-staff-c@example.test",
+    "transferred_employee": "cskh-p3-staff-d@example.test",
+    "transferred_work_item": "k1frrt076m",
+    "aba_work_item": "k1jqid16rs",
+    "sample_obligation_id": "k1cfkq2fu5"
+  },
+  "assertions": [
+    {
+      "id": "LOGIN-admin",
+      "status": "PASS",
+      "detail": "Actor admin logged in cleanly",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "LOGIN-bod",
+      "status": "PASS",
+      "detail": "Actor bod logged in cleanly",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "LOGIN-leader_a",
+      "status": "PASS",
+      "detail": "Actor leader_a logged in cleanly",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "LOGIN-leader_b",
+      "status": "PASS",
+      "detail": "Actor leader_b logged in cleanly",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "LOGIN-staff_a",
+      "status": "PASS",
+      "detail": "Actor staff_a logged in cleanly",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "LOGIN-staff_b",
+      "status": "PASS",
+      "detail": "Actor staff_b logged in cleanly",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "LOGIN-staff_c",
+      "status": "PASS",
+      "detail": "Actor staff_c logged in cleanly",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "LOGIN-outside",
+      "status": "PASS",
+      "detail": "Actor outside logged in cleanly",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh",
+      "status": "PASS",
+      "detail": "admin GET /cskh -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/pool",
+      "status": "PASS",
+      "detail": "admin GET /cskh/pool -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/import",
+      "status": "PASS",
+      "detail": "admin GET /cskh/import -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/campaigns",
+      "status": "PASS",
+      "detail": "admin GET /cskh/campaigns -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/my-customers",
+      "status": "PASS",
+      "detail": "admin GET /cskh/my-customers -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/dashboard",
+      "status": "PASS",
+      "detail": "admin GET /cskh/dashboard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/work-item",
+      "status": "PASS",
+      "detail": "admin GET /cskh/work-item -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/callbacks",
+      "status": "PASS",
+      "detail": "admin GET /cskh/callbacks -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/progress",
+      "status": "PASS",
+      "detail": "admin GET /cskh/progress -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/settings",
+      "status": "PASS",
+      "detail": "admin GET /cskh/settings -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "admin GET /cskh/quality-overview -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "admin GET /cskh/team-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "admin GET /cskh/employee-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "admin GET /cskh/campaign-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "admin GET /cskh/sla-operations -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-admin-/cskh/scorecard",
+      "status": "PASS",
+      "detail": "admin GET /cskh/scorecard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh",
+      "status": "PASS",
+      "detail": "bod GET /cskh -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/pool",
+      "status": "PASS",
+      "detail": "bod GET /cskh/pool -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/import",
+      "status": "PASS",
+      "detail": "bod GET /cskh/import -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/campaigns",
+      "status": "PASS",
+      "detail": "bod GET /cskh/campaigns -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/my-customers",
+      "status": "PASS",
+      "detail": "bod GET /cskh/my-customers -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/dashboard",
+      "status": "PASS",
+      "detail": "bod GET /cskh/dashboard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/work-item",
+      "status": "PASS",
+      "detail": "bod GET /cskh/work-item -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/callbacks",
+      "status": "PASS",
+      "detail": "bod GET /cskh/callbacks -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/progress",
+      "status": "PASS",
+      "detail": "bod GET /cskh/progress -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/settings",
+      "status": "PASS",
+      "detail": "bod GET /cskh/settings -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "bod GET /cskh/quality-overview -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "bod GET /cskh/team-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "bod GET /cskh/employee-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "bod GET /cskh/campaign-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "bod GET /cskh/sla-operations -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-bod-/cskh/scorecard",
+      "status": "PASS",
+      "detail": "bod GET /cskh/scorecard -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/pool",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/pool -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/import",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/import -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/campaigns",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/campaigns -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/my-customers",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/my-customers -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/dashboard",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/dashboard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/work-item",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/work-item -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/callbacks",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/callbacks -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/progress",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/progress -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/settings",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/settings -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/quality-overview -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/team-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/employee-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/campaign-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/sla-operations -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_a-/cskh/scorecard",
+      "status": "PASS",
+      "detail": "leader_a GET /cskh/scorecard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/pool",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/pool -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/import",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/import -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/campaigns",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/campaigns -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/my-customers",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/my-customers -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/dashboard",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/dashboard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/work-item",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/work-item -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/callbacks",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/callbacks -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/progress",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/progress -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/settings",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/settings -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/quality-overview -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/team-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/employee-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/campaign-quality -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/sla-operations -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-leader_b-/cskh/scorecard",
+      "status": "PASS",
+      "detail": "leader_b GET /cskh/scorecard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/pool",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/pool -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/import",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/import -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/campaigns",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/campaigns -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/my-customers",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/my-customers -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/dashboard",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/dashboard -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/work-item",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/work-item -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/callbacks",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/callbacks -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/progress",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/progress -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/settings",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/settings -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/quality-overview -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/team-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/employee-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/campaign-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/sla-operations -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_a-/cskh/scorecard",
+      "status": "PASS",
+      "detail": "staff_a GET /cskh/scorecard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/pool",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/pool -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/import",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/import -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/campaigns",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/campaigns -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/my-customers",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/my-customers -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/dashboard",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/dashboard -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/work-item",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/work-item -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/callbacks",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/callbacks -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/progress",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/progress -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/settings",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/settings -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/quality-overview -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/team-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/employee-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/campaign-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/sla-operations -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_b-/cskh/scorecard",
+      "status": "PASS",
+      "detail": "staff_b GET /cskh/scorecard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/pool",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/pool -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/import",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/import -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/campaigns",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/campaigns -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/my-customers",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/my-customers -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/dashboard",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/dashboard -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/work-item",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/work-item -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/callbacks",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/callbacks -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/progress",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/progress -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/settings",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/settings -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/quality-overview -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/team-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/employee-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/campaign-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/sla-operations -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-staff_c-/cskh/scorecard",
+      "status": "PASS",
+      "detail": "staff_c GET /cskh/scorecard -> 200 with lang='vi'",
+      "evidence": {
+        "http": 200
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh",
+      "status": "PASS",
+      "detail": "outside GET /cskh -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/pool",
+      "status": "PASS",
+      "detail": "outside GET /cskh/pool -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/import",
+      "status": "PASS",
+      "detail": "outside GET /cskh/import -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/campaigns",
+      "status": "PASS",
+      "detail": "outside GET /cskh/campaigns -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/my-customers",
+      "status": "PASS",
+      "detail": "outside GET /cskh/my-customers -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/dashboard",
+      "status": "PASS",
+      "detail": "outside GET /cskh/dashboard -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/work-item",
+      "status": "PASS",
+      "detail": "outside GET /cskh/work-item -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/callbacks",
+      "status": "PASS",
+      "detail": "outside GET /cskh/callbacks -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/progress",
+      "status": "PASS",
+      "detail": "outside GET /cskh/progress -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/settings",
+      "status": "PASS",
+      "detail": "outside GET /cskh/settings -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "outside GET /cskh/quality-overview -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "outside GET /cskh/team-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "outside GET /cskh/employee-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "outside GET /cskh/campaign-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "outside GET /cskh/sla-operations -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-outside-/cskh/scorecard",
+      "status": "PASS",
+      "detail": "outside GET /cskh/scorecard -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh",
+      "status": "PASS",
+      "detail": "guest GET /cskh -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/pool",
+      "status": "PASS",
+      "detail": "guest GET /cskh/pool -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/import",
+      "status": "PASS",
+      "detail": "guest GET /cskh/import -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/campaigns",
+      "status": "PASS",
+      "detail": "guest GET /cskh/campaigns -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/my-customers",
+      "status": "PASS",
+      "detail": "guest GET /cskh/my-customers -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/dashboard",
+      "status": "PASS",
+      "detail": "guest GET /cskh/dashboard -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/work-item",
+      "status": "PASS",
+      "detail": "guest GET /cskh/work-item -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/callbacks",
+      "status": "PASS",
+      "detail": "guest GET /cskh/callbacks -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/progress",
+      "status": "PASS",
+      "detail": "guest GET /cskh/progress -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/settings",
+      "status": "PASS",
+      "detail": "guest GET /cskh/settings -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "guest GET /cskh/quality-overview -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "guest GET /cskh/team-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "guest GET /cskh/employee-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "guest GET /cskh/campaign-quality -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "guest GET /cskh/sla-operations -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "GATE-guest-/cskh/scorecard",
+      "status": "PASS",
+      "detail": "guest GET /cskh/scorecard -> 403 denied",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "P3-OV-BOD-200",
+      "status": "PASS",
+      "detail": "BOD executive overview returns 200 with 0 raw customer PII",
+      "evidence": {
+        "freshness": {
+          "run_id": "ilknj8fjld",
+          "run_mode": "restated",
+          "snapshot_status": "fresh",
+          "as_of": "2026-11-04T21:55:52+07:00",
+          "source_watermark": "2026-11-04T21:55:52+07:00",
+          "is_restated": true,
+          "restated_from_run": "ilcjbq5f7v",
+          "dirty_pending": false,
+          "metric_version": "cskh-metrics-v1"
+        },
+        "actor_scope": {
+          "user": "cskh-p3-bod@example.test",
+          "role_profile": "bod",
+          "pii_allowed": false,
+          "qa_enabled": false,
+          "p3_sla_enabled": true,
+          "p3_reporting_enabled": true
+        }
+      }
+    },
+    {
+      "id": "P3-QA-DISABLED-NA",
+      "status": "PASS",
+      "detail": "QA_PASS_RATE is null / disabled (never 0%) when qa_enabled=false",
+      "evidence": {
+        "metric_code": "QA_PASS_RATE",
+        "label_vi": "Tỷ lệ đạt kiểm định chất lượng QA",
+        "value": null,
+        "numerator": 0,
+        "denominator": 0,
+        "unit": "percent",
+        "status": "disabled",
+        "reason": "qa_disabled_by_policy",
+        "informational_only": false,
+        "drilldown_supported": false
+      }
+    },
+    {
+      "id": "P3-PROCESS-SCORE-PROVISIONAL",
+      "status": "PASS",
+      "detail": "PROCESS_SCORE is provisional over valid weights when qa_enabled=false",
+      "evidence": {
+        "metric_code": "PROCESS_SCORE",
+        "label_vi": "Điểm tuân thủ quy trình tổng hợp (0-100)",
+        "value": 86.69,
+        "numerator": 7368.35,
+        "denominator": 85.0,
+        "unit": "score_100",
+        "status": "provisional",
+        "reason": "qa_component_excluded_reweighted",
+        "valid_weight": 85,
+        "total_configured_weight": 100,
+        "missing_components": [
+          "C5_QA_QUALITY"
+        ],
+        "informational_only": false,
+        "drilldown_supported": false
+      }
+    },
+    {
+      "id": "P3-CAMPAIGN-GRAIN-ABA",
+      "status": "PASS",
+      "detail": "Campaign distinct_work_items < ownership_intervals_count under A -> B -> A transfer",
+      "evidence": {
+        "campaign_id": "ihtpr0du1g",
+        "campaign_name": "Chiến dịch Chăm sóc Khách hàng P3",
+        "distinct_work_items": 26,
+        "ownership_intervals_count": 29,
+        "work_items_touched": 24,
+        "contact_attempt_count": 34,
+        "attempt_breakdown": {
+          "attempted": 34,
+          "connected": 29,
+          "self_reported": 34,
+          "verified": 0,
+          "disputed": 0
+        },
+        "metrics": {
+          "WORK_ITEM_FIRST_ATTEMPT_SLA_RATE": {
+            "metric_code": "WORK_ITEM_FIRST_ATTEMPT_SLA_RATE",
+            "label_vi": "Tỷ lệ đạt SLA liên hệ lần đầu (Cấp Hồ sơ khách hàng)",
+            "value": 84.62,
+            "numerator": 22,
+            "denominator": 26,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "FIRST_ATTEMPT_SLA_RATE": {
+            "metric_code": "FIRST_ATTEMPT_SLA_RATE",
+            "label_vi": "Tỷ lệ đạt SLA liên hệ lần đầu (Khoảng trách nhiệm)",
+            "value": 85.19,
+            "numerator": 23,
+            "denominator": 27,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "FOLLOWUP_SLA_RATE": {
+            "metric_code": "FOLLOWUP_SLA_RATE",
+            "label_vi": "Tỷ lệ đạt SLA lịch hẹn gọi lại (Callback)",
+            "value": 70.0,
+            "numerator": 7,
+            "denominator": 10,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "FIRST_CONNECTED_TRACKING_RATE": {
+            "metric_code": "FIRST_CONNECTED_TRACKING_RATE",
+            "label_vi": "Tỷ lệ kết nối trong ngưỡng theo dõi (Tham khảo)",
+            "value": 73.08,
+            "numerator": 19,
+            "denominator": 26,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": true,
+            "drilldown_supported": true
+          },
+          "MIN_ATTEMPTS_COMPLIANCE_RATE": {
+            "metric_code": "MIN_ATTEMPTS_COMPLIANCE_RATE",
+            "label_vi": "Tỷ lệ tuân thủ số lần liên hệ tối thiểu",
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "unit": "percent",
+            "status": "disabled",
+            "reason": "policy_disabled_or_no_eligible_records",
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "CONTACT_ATTEMPT_COUNT": {
+            "metric_code": "CONTACT_ATTEMPT_COUNT",
+            "label_vi": "Tổng lượt liên hệ hợp lệ (Effective Attempts)",
+            "value": 34,
+            "numerator": 34,
+            "denominator": 1,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true,
+            "attempt_breakdown": {
+              "attempted": 34,
+              "connected": 29,
+              "self_reported": 34,
+              "verified": 0,
+              "disputed": 0
+            }
+          },
+          "CONNECTED_ATTEMPT_COUNT": {
+            "metric_code": "CONNECTED_ATTEMPT_COUNT",
+            "label_vi": "Tổng lượt kết nối thành công",
+            "value": 29,
+            "numerator": 29,
+            "denominator": 1,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": false
+          },
+          "CONNECTED_RATE": {
+            "metric_code": "CONNECTED_RATE",
+            "label_vi": "Tỷ lệ kết nối thành công",
+            "value": 85.29,
+            "numerator": 29,
+            "denominator": 34,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "WORK_ITEMS_TOUCHED": {
+            "metric_code": "WORK_ITEMS_TOUCHED",
+            "label_vi": "Số hồ sơ công việc đã tác nghiệp",
+            "value": 24,
+            "numerator": 24,
+            "denominator": 1,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": false,
+            "intervals_touched": 24
+          },
+          "VALID_OUTCOME_LOGGING_RATE": {
+            "metric_code": "VALID_OUTCOME_LOGGING_RATE",
+            "label_vi": "Tỷ lệ ghi nhận kết quả chuẩn xác (Data Hygiene)",
+            "value": 97.06,
+            "numerator": 33,
+            "denominator": 34,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "CORRECTION_RATE": {
+            "metric_code": "CORRECTION_RATE",
+            "label_vi": "Tỷ lệ bản ghi phải đính chính / hủy",
+            "value": 2.94,
+            "numerator": 1,
+            "denominator": 34,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "VOID_ATTEMPT_RATE": {
+            "metric_code": "VOID_ATTEMPT_RATE",
+            "label_vi": "Tỷ lệ bản ghi liên hệ bị hủy (Void)",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 34,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "CALLBACK_COMPLETION_RATE": {
+            "metric_code": "CALLBACK_COMPLETION_RATE",
+            "label_vi": "Tỷ lệ hoàn tất lịch hẹn hợp lệ",
+            "value": 80.0,
+            "numerator": 8,
+            "denominator": 10,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "RESCHEDULE_RATE": {
+            "metric_code": "RESCHEDULE_RATE",
+            "label_vi": "Tỷ lệ dời lịch hẹn (Reschedule)",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 10,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": false
+          },
+          "DNC_COMPLIANCE_RATE": {
+            "metric_code": "DNC_COMPLIANCE_RATE",
+            "label_vi": "Tỷ lệ tuân thủ DNC & kỷ luật đóng hồ sơ",
+            "value": 100.0,
+            "numerator": 29,
+            "denominator": 29,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "QA_PASS_RATE": {
+            "metric_code": "QA_PASS_RATE",
+            "label_vi": "Tỷ lệ đạt kiểm định chất lượng QA",
+            "value": null,
+            "numerator": 0,
+            "denominator": 0,
+            "unit": "percent",
+            "status": "disabled",
+            "reason": "qa_disabled_by_policy",
+            "informational_only": false,
+            "drilldown_supported": false
+          },
+          "PROCESS_SCORE": {
+            "metric_code": "PROCESS_SCORE",
+            "label_vi": "Điểm tuân thủ quy trình tổng hợp (0-100)",
+            "value": 86.69,
+            "numerator": 7368.35,
+            "denominator": 85.0,
+            "unit": "score_100",
+            "status": "provisional",
+            "reason": "qa_component_excluded_reweighted",
+            "valid_weight": 85,
+            "total_configured_weight": 100,
+            "missing_components": [
+              "C5_QA_QUALITY"
+            ],
+            "informational_only": false,
+            "drilldown_supported": false
+          }
+        }
+      }
+    },
+    {
+      "id": "P3-EMP-BOD-ZERO-PII",
+      "status": "PASS",
+      "detail": "BOD employee quality table returns 200 with 0 customer PII",
+      "evidence": {
+        "row_count": 6
+      }
+    },
+    {
+      "id": "P3-GOLDEN-8647",
+      "status": "PASS",
+      "detail": "Golden employee PROCESS_SCORE equals 86.47 (7350/85) provisional",
+      "evidence": {
+        "metric_code": "PROCESS_SCORE",
+        "label_vi": "Điểm tuân thủ quy trình tổng hợp (0-100)",
+        "value": 86.47,
+        "numerator": 7350.0,
+        "denominator": 85.0,
+        "unit": "score_100",
+        "status": "provisional",
+        "reason": "qa_component_excluded_reweighted",
+        "valid_weight": 85,
+        "total_configured_weight": 100,
+        "missing_components": [
+          "C5_QA_QUALITY"
+        ],
+        "informational_only": false,
+        "drilldown_supported": false
+      }
+    },
+    {
+      "id": "P3-ZERO-DENOM-NA",
+      "status": "PASS",
+      "detail": "Employee with denominator=0 has value=None & status='insufficient_data' (never 0%)",
+      "evidence": {
+        "metric_code": "FIRST_ATTEMPT_SLA_RATE",
+        "label_vi": "Tỷ lệ đạt SLA liên hệ lần đầu (Khoảng trách nhiệm)",
+        "value": null,
+        "numerator": 0,
+        "denominator": 0,
+        "unit": "percent",
+        "status": "insufficient_data",
+        "reason": "no_eligible_records",
+        "informational_only": false,
+        "drilldown_supported": true
+      }
+    },
+    {
+      "id": "SEC-S01",
+      "status": "PASS",
+      "detail": "Staff A denied reading Staff B employee quality",
+      "evidence": {
+        "http": 403,
+        "code": "FORBIDDEN_SCOPE"
+      }
+    },
+    {
+      "id": "SEC-S02-get_team_comparison",
+      "status": "PASS",
+      "detail": "Staff A denied on get_team_comparison",
+      "evidence": {
+        "http": 403,
+        "code": "FORBIDDEN_SCOPE"
+      }
+    },
+    {
+      "id": "SEC-S02-get_executive_overview",
+      "status": "PASS",
+      "detail": "Staff A denied on get_executive_overview",
+      "evidence": {
+        "http": 403,
+        "code": "FORBIDDEN_SCOPE"
+      }
+    },
+    {
+      "id": "SEC-S02-get_campaign_quality",
+      "status": "PASS",
+      "detail": "Staff A denied on get_campaign_quality",
+      "evidence": {
+        "http": 403,
+        "code": "FORBIDDEN_SCOPE"
+      }
+    },
+    {
+      "id": "SEC-S04",
+      "status": "PASS",
+      "detail": "Leader A denied reading Team B employee quality",
+      "evidence": {
+        "http": 403,
+        "code": "FORBIDDEN_SCOPE"
+      }
+    },
+    {
+      "id": "SEC-S05",
+      "status": "PASS",
+      "detail": "Staff A denied waiving SLA obligation",
+      "evidence": {
+        "http": 403,
+        "code": "FORBIDDEN_SCOPE"
+      }
+    },
+    {
+      "id": "SEC-S09",
+      "status": "PASS",
+      "detail": "BOD denied PII drill-down and raw CSKH SLA Obligation table access",
+      "evidence": {
+        "drilldown_pii_http": 403,
+        "resource_http": 403,
+        "code": "FORBIDDEN_SCOPE"
+      }
+    },
+    {
+      "id": "SEC-S13",
+      "status": "PASS",
+      "detail": "Staff denied reading CSKH Dirty Scope",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "SEC-S17",
+      "status": "PASS",
+      "detail": "Staff denied probing company run_id",
+      "evidence": {
+        "http": 403,
+        "code": "FORBIDDEN_SCOPE"
+      }
+    },
+    {
+      "id": "DRILL-FIRST_ATTEMPT_SLA_RATE",
+      "status": "PASS",
+      "detail": "Drilldown FIRST_ATTEMPT_SLA_RATE reconciles cohort total (27 == 23 + 4) with snapshot denominator (27)",
+      "evidence": {
+        "all": 27,
+        "met": 23,
+        "unmet": 4,
+        "snapshot_denominator": 27
+      }
+    },
+    {
+      "id": "DRILL-WORK_ITEM_FIRST_ATTEMPT_SLA_RATE",
+      "status": "PASS",
+      "detail": "Drilldown WORK_ITEM_FIRST_ATTEMPT_SLA_RATE reconciles cohort total (26 == 22 + 4) with snapshot denominator (26)",
+      "evidence": {
+        "all": 26,
+        "met": 22,
+        "unmet": 4,
+        "snapshot_denominator": 26
+      }
+    },
+    {
+      "id": "DRILL-FOLLOWUP_SLA_RATE",
+      "status": "PASS",
+      "detail": "Drilldown FOLLOWUP_SLA_RATE reconciles cohort total (10 == 7 + 3) with snapshot denominator (10)",
+      "evidence": {
+        "all": 10,
+        "met": 7,
+        "unmet": 3,
+        "snapshot_denominator": 10
+      }
+    },
+    {
+      "id": "DRILL-CONNECTED_RATE",
+      "status": "PASS",
+      "detail": "Drilldown CONNECTED_RATE reconciles cohort total (34 == 29 + 5) with snapshot denominator (34)",
+      "evidence": {
+        "all": 34,
+        "met": 29,
+        "unmet": 5,
+        "snapshot_denominator": 34
+      }
+    },
+    {
+      "id": "DRILL-VALID_OUTCOME_LOGGING_RATE",
+      "status": "PASS",
+      "detail": "Drilldown VALID_OUTCOME_LOGGING_RATE reconciles cohort total (34 == 33 + 1) with snapshot denominator (34)",
+      "evidence": {
+        "all": 34,
+        "met": 33,
+        "unmet": 1,
+        "snapshot_denominator": 34
+      }
+    },
+    {
+      "id": "DRILL-CALLBACK_COMPLETION_RATE",
+      "status": "PASS",
+      "detail": "Drilldown CALLBACK_COMPLETION_RATE reconciles cohort total (10 == 8 + 2) with snapshot denominator (10)",
+      "evidence": {
+        "all": 10,
+        "met": 8,
+        "unmet": 2,
+        "snapshot_denominator": 10
+      }
+    },
+    {
+      "id": "DRILL-DNC_COMPLIANCE_RATE",
+      "status": "PASS",
+      "detail": "Drilldown DNC_COMPLIANCE_RATE reconciles cohort total (29 == 29 + 0) with snapshot denominator (29)",
+      "evidence": {
+        "all": 29,
+        "met": 29,
+        "unmet": 0,
+        "snapshot_denominator": 29
+      }
+    },
+    {
+      "id": "SEC-S03-TRANSFER-REDACTION",
+      "status": "PASS",
+      "detail": "Staff A retains historical KPI row after handover with customer PII redacted",
+      "evidence": {
+        "record_type": "sla_obligation",
+        "record_id": "ikkjjotfcf",
+        "obligation_id": "ikkjjotfcf",
+        "obligation_type": "FIRST_ATTEMPT",
+        "work_item": "ikk1onr7on",
+        "campaign": "ihtpr0du1g",
+        "owner_user": "cskh-p3-staff-a@example.test",
+        "team_id": "ihp5bvfjel",
+        "status": "fulfilled_on_time",
+        "in_numerator": true,
+        "started_at": "2026-11-04T18:55:40+07:00",
+        "original_due_at": "2026-11-04T19:20:40+07:00",
+        "effective_due_at": "2026-11-04T19:20:40+07:00",
+        "fulfilled_at": "2026-11-04T19:03:40+07:00",
+        "lead": null,
+        "customer_name": null,
+        "phone": null,
+        "note_excerpt": null,
+        "pii_redacted": true,
+        "pii_redacted_due_to_transfer": true
+      }
+    },
+    {
+      "id": "P3-TEAM-AS-OF",
+      "status": "PASS",
+      "detail": "Team comparison attributes obligations by historical team-as-of across Team A and Team B",
+      "evidence": {
+        "teams": [
+          "ihra8v1isb",
+          "ihp5bvfjel"
+        ]
+      }
+    },
+    {
+      "id": "P3-RECOMPUTE-ADMIN",
+      "status": "PASS",
+      "detail": "Admin KPI recompute succeeds cleanly",
+      "evidence": {
+        "message": {
+          "run_id": "jpv2ts513u",
+          "run_mode": "incremental",
+          "dry_run": false,
+          "status": "completed",
+          "period": {
+            "period_type": "monthly",
+            "period_key": "2026-11",
+            "from_date": "2026-11-01",
+            "to_date": "2026-11-30",
+            "timezone": "Asia/Ho_Chi_Minh"
+          },
+          "as_of": "2026-11-04T21:57:48+07:00",
+          "source_watermark": "2026-11-04T21:55:52+07:00",
+          "is_restated": false,
+          "restated_from_run": null,
+          "snapshots_written": 10,
+          "reconciliation": {
+            "ok": true,
+            "company_contact_attempts": 34,
+            "company_connected_attempts": 29,
+            "company_first_attempt_sla": "23/27",
+            "company_distinct_work_items": 26,
+            "company_ownership_intervals": 29,
+            "snapshots_verified": 10
+          }
+        }
+      }
+    },
+    {
+      "id": "P3-EXPORT-ENQUEUE",
+      "status": "PASS",
+      "detail": "Leader A queued authorized export",
+      "evidence": {
+        "ok": true,
+        "export_id": "EXP-E68AF507BA87",
+        "status": "queued",
+        "expires_in_seconds": 3600,
+        "expires_at": "2026-11-04T22:57:48+07:00"
+      }
+    },
+    {
+      "id": "P3-EXPORT-READY",
+      "status": "PASS",
+      "detail": "Export job completed with expires_at populated",
+      "evidence": {
+        "ok": true,
+        "export_id": "EXP-E68AF507BA87",
+        "report_type": "team_comparison",
+        "status": "completed",
+        "row_count": 1,
+        "requested_at": "2026-11-04T21:57:48+07:00",
+        "completed_at": "2026-11-04T21:57:51+07:00",
+        "expires_at": "2026-11-04T22:57:48+07:00",
+        "download_endpoint": "/api/method/crm_cskh.api.p3_reporting.download_export?export_id=EXP-E68AF507BA87"
+      }
+    },
+    {
+      "id": "P3-EXPORT-DOWNLOAD-S18",
+      "status": "PASS",
+      "detail": "Authorized CSV download succeeds and escapes formula-injection cells",
+      "evidence": {
+        "http": 200,
+        "bytes": 277
+      }
+    },
+    {
+      "id": "SEC-S11-API-staff_b",
+      "status": "PASS",
+      "detail": "staff_b denied on download_export",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "SEC-S11-FILE-staff_b",
+      "status": "PASS",
+      "detail": "staff_b denied on direct /private/files/... URL",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "SEC-S11-API-guest",
+      "status": "PASS",
+      "detail": "guest denied on download_export",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "SEC-S11-FILE-guest",
+      "status": "PASS",
+      "detail": "guest denied on direct /private/files/... URL",
+      "evidence": {
+        "http": 403
+      }
+    },
+    {
+      "id": "SEC-S12-POST-REVOCATION",
+      "status": "PASS",
+      "detail": "Revoked Leader A immediately blocked on BOTH download_export AND old /private/files/... URL",
+      "evidence": {
+        "download_export_http": 403,
+        "private_file_http": 403
+      }
+    }
+  ]
+}
