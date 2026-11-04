@@ -31,6 +31,7 @@ from crm_cskh.p2_permissions import (
 	assert_work_item_workflow_access,
 	assert_workflow_actor,
 )
+from crm_cskh.p3_models import DEFAULT_P3_POLICY_FIELDS
 from crm_cskh.services.errors import (
 	IdempotencyConflict,
 	InvalidChannel,
@@ -47,9 +48,40 @@ def _payload_hash(payload: dict) -> str:
 	return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+_P3_BOOL_POLICY_KEYS = (
+	"p3_sla_enabled",
+	"p3_reporting_enabled",
+	"qa_enabled",
+	"track_first_connected",
+	"min_attempts_enabled",
+	"allow_leader_waive_sla",
+	"allow_leader_pause_sla",
+)
+
+_P3_INT_POLICY_KEYS = (
+	"first_attempt_sla_minutes",
+	"followup_grace_minutes",
+	"handoff_min_grace_minutes",
+	"max_handoff_grace_resets",
+	"due_soon_warning_minutes",
+	"first_connected_target_minutes",
+	"min_attempts_before_close",
+	"min_attempt_gap_minutes",
+	"max_reschedules_without_approval",
+	"weight_first_attempt_sla",
+	"weight_followup_sla",
+	"weight_data_hygiene",
+	"weight_callback_discipline",
+	"weight_qa_quality",
+	"min_valid_score_weight",
+	"min_eligible_events_for_score",
+	"min_qa_sample_size",
+)
+
+
 def serialize_policy(row_or_doc) -> dict:
 	channels = [ch.strip() for ch in str(row_or_doc.get("enabled_channels") or "").split(",") if ch.strip()]
-	return {
+	payload = {
 		"name": row_or_doc.get("name") or row_or_doc.get("policy_code"),
 		"policy_code": row_or_doc.get("policy_code") or row_or_doc.get("name"),
 		"title": row_or_doc.get("title") or "",
@@ -68,7 +100,21 @@ def serialize_policy(row_or_doc) -> dict:
 		"enabled_channels": channels,
 		"allow_leader_reopen": bool(cint(row_or_doc.get("allow_leader_reopen", 1))),
 		"allow_leader_review_correction": bool(cint(row_or_doc.get("allow_leader_review_correction", 1))),
+		"working_calendar": row_or_doc.get("working_calendar")
+		or DEFAULT_P3_POLICY_FIELDS["working_calendar"],
+		"is_dev_configurable_policy": True,
 	}
+	for b_key in _P3_BOOL_POLICY_KEYS:
+		raw_b = row_or_doc.get(b_key)
+		if raw_b is None:
+			raw_b = DEFAULT_P3_POLICY_FIELDS[b_key]
+		payload[b_key] = bool(cint(raw_b))
+	for i_key in _P3_INT_POLICY_KEYS:
+		raw_i = row_or_doc.get(i_key)
+		if raw_i is None:
+			raw_i = DEFAULT_P3_POLICY_FIELDS[i_key]
+		payload[i_key] = cint(raw_i)
+	return payload
 
 
 def serialize_outcome(row_or_doc) -> dict:
@@ -96,7 +142,7 @@ def serialize_outcome(row_or_doc) -> dict:
 
 
 def _policy_fields() -> list[str]:
-	return [
+	base = [
 		"name",
 		"policy_code",
 		"title",
@@ -114,6 +160,11 @@ def _policy_fields() -> list[str]:
 		"allow_leader_reopen",
 		"allow_leader_review_correction",
 	]
+	if frappe.db.table_exists("CSKH Policy"):
+		for col in ("working_calendar", *_P3_BOOL_POLICY_KEYS, *_P3_INT_POLICY_KEYS):
+			if frappe.db.has_column("CSKH Policy", col):
+				base.append(col)
+	return base
 
 
 def _resolve_team_policy_along_ancestors(leaf_node: str | None) -> dict | None:
@@ -303,6 +354,25 @@ def list_policies(
 	return {"items": items, "total": len(items), "as_of": now_datetime()}
 
 
+def _parse_p3_policy_overrides(p3_options: dict) -> dict:
+	overrides: dict = {}
+	if not p3_options:
+		return overrides
+	if "working_calendar" in p3_options and p3_options["working_calendar"] is not None:
+		cal_val = parse_optional_str(p3_options["working_calendar"], "Mã lịch làm việc không hợp lệ.")
+		if cal_val and frappe.db.table_exists("CSKH Working Calendar"):
+			if not frappe.db.exists("CSKH Working Calendar", cal_val):
+				raise InvalidRequest(f"Lịch làm việc không tồn tại: {cal_val}")
+		overrides["working_calendar"] = cal_val
+	for b_key in _P3_BOOL_POLICY_KEYS:
+		if b_key in p3_options and p3_options[b_key] is not None:
+			overrides[b_key] = 1 if parse_bool(p3_options[b_key], field=b_key) else 0
+	for i_key in _P3_INT_POLICY_KEYS:
+		if i_key in p3_options and p3_options[i_key] is not None and str(p3_options[i_key]).strip() != "":
+			overrides[i_key] = parse_int(p3_options[i_key], minimum=0, maximum=100800, field=i_key)
+	return overrides
+
+
 def save_policy(
 	policy_code: str,
 	title: str,
@@ -319,6 +389,7 @@ def save_policy(
 	allow_leader_review_correction=True,
 	idempotency_key: str | None = None,
 	actor: str | None = None,
+	**p3_options,
 ) -> dict:
 	actor = assert_settings_admin(actor)
 	code_val = parse_optional_str(policy_code, "Mã chính sách không hợp lệ.")
@@ -360,6 +431,7 @@ def save_policy(
 	if not channels_list:
 		raise InvalidChannel("Chính sách phải bật ít nhất một kênh liên hệ.")
 	channels_csv = ",".join(channels_list)
+	p3_overrides = _parse_p3_policy_overrides(p3_options)
 
 	prev_flag = getattr(frappe.flags, "cskh_in_settings_service", False)
 	frappe.flags.cskh_in_settings_service = True
@@ -381,6 +453,9 @@ def save_policy(
 				"allow_leader_reopen": 1 if leader_reopen_b else 0,
 				"allow_leader_review_correction": 1 if leader_rev_b else 0,
 			}
+			for k, v in p3_overrides.items():
+				if frappe.db.has_column("CSKH Policy", k):
+					target_fields[k] = v
 			changed = any(
 				(cint(doc.get(k)) != cint(v) if isinstance(v, int) else (doc.get(k) or None) != (v or None))
 				for k, v in target_fields.items()
@@ -395,26 +470,33 @@ def save_policy(
 					raise InvalidRequest(str(exc)) from exc
 			status_str = "updated" if changed else "unchanged"
 		else:
-			doc = frappe.get_doc(
-				{
-					"doctype": "CSKH Policy",
-					"policy_code": code_val,
-					"title": title_val,
-					"scope_type": scope_val,
-					"team": team_val if scope_val == "Team" else None,
-					"campaign": camp_val if scope_val == "Campaign" else None,
-					"enabled": 1 if enabled_b else 0,
-					"version": 1,
-					"allowed_backdate_minutes": backdate_i,
-					"max_open_followup_tasks_per_item": 1,
-					"require_attempt_before_close": 1 if req_att_b else 0,
-					"allow_close_without_contact_for_invalid": 1 if allow_inv_b else 0,
-					"do_not_contact_behavior": do_not_contact_behavior,
-					"enabled_channels": channels_csv,
-					"allow_leader_reopen": 1 if leader_reopen_b else 0,
-					"allow_leader_review_correction": 1 if leader_rev_b else 0,
-				}
-			)
+			create_fields = {
+				"doctype": "CSKH Policy",
+				"policy_code": code_val,
+				"title": title_val,
+				"scope_type": scope_val,
+				"team": team_val if scope_val == "Team" else None,
+				"campaign": camp_val if scope_val == "Campaign" else None,
+				"enabled": 1 if enabled_b else 0,
+				"version": 1,
+				"allowed_backdate_minutes": backdate_i,
+				"max_open_followup_tasks_per_item": 1,
+				"require_attempt_before_close": 1 if req_att_b else 0,
+				"allow_close_without_contact_for_invalid": 1 if allow_inv_b else 0,
+				"do_not_contact_behavior": do_not_contact_behavior,
+				"enabled_channels": channels_csv,
+				"allow_leader_reopen": 1 if leader_reopen_b else 0,
+				"allow_leader_review_correction": 1 if leader_rev_b else 0,
+			}
+			for k, default_v in DEFAULT_P3_POLICY_FIELDS.items():
+				if frappe.db.has_column("CSKH Policy", k):
+					if k == "working_calendar" and not frappe.db.exists("CSKH Working Calendar", default_v):
+						continue
+					create_fields[k] = default_v
+			for k, v in p3_overrides.items():
+				if frappe.db.has_column("CSKH Policy", k):
+					create_fields[k] = v
+			doc = frappe.get_doc(create_fields)
 			try:
 				doc.insert(ignore_permissions=True)
 			except frappe.ValidationError as exc:
@@ -644,6 +726,15 @@ def set_lead_dnc(
 		},
 		update_modified=True,
 	)
+	if dnc_b:
+		from crm_cskh.services import sla_engine
+
+		sla_engine.on_lead_dnc_set_in_tx(
+			lead=lead_val,
+			dnc_at=now_dt,
+			actor=actor,
+			reason=clean_reason,
+		)
 	frappe.get_doc(
 		{
 			"doctype": "Comment",

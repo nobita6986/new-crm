@@ -911,3 +911,63 @@ You do not have permission to modify outcome codes or policies.,Bạn không có
 You do not have permission to review correction requests.,Bạn không có quyền xét duyệt yêu cầu hiệu chỉnh.
 You do not have permission to view this work item.,Bạn không có quyền xem hồ sơ công việc chăm sóc này.
 Zalo channel,Kênh Zalo
+INVALID_DATE_RANGE,INVALID_DATE_RANGE
+INVALID_DIMENSION,INVALID_DIMENSION
+INVALID_METRIC_KEY,INVALID_METRIC_KEY
+FORBIDDEN_SCOPE,FORBIDDEN_SCOPE
+SNAPSHOT_NOT_READY,SNAPSHOT_NOT_READY
+RECOMPUTE_IN_PROGRESS,RECOMPUTE_IN_PROGRESS
+EXPORT_EXPIRED,EXPORT_EXPIRED
+EXPORT_TOO_LARGE,EXPORT_TOO_LARGE
+QA_DISABLED,QA_DISABLED
+QA_CONFLICT,QA_CONFLICT
+CALENDAR_INVALID,CALENDAR_INVALID
+POLICY_CONFLICT,POLICY_CONFLICT
+The requested reporting date range or period grain is invalid.,Khoảng thời gian hoặc chu kỳ báo cáo yêu cầu không hợp lệ.
+The requested grouping dimension or filter parameter is invalid.,Chiều phân tích hoặc bộ lọc báo cáo yêu cầu không hợp lệ.
+The requested KPI metric key is not supported by the current metric version.,Mã chỉ số KPI yêu cầu không thuộc danh mục chỉ số hiện hành.
+"You do not have permission to access this reporting scope, SLA obligation or export job.","Bạn không có quyền truy cập phạm vi báo cáo, nghĩa vụ SLA hoặc yêu cầu xuất dữ liệu này."
+The KPI snapshot for this period is still being computed. Please retry shortly.,Dữ liệu tổng hợp KPI của kỳ này đang được tính toán. Vui lòng thử lại sau ít phút.
+A KPI recomputation run is already in progress for the requested period.,Đang có một tiến trình tính toán lại KPI chạy cho kỳ báo cáo này.
+This export file has expired or was revoked.,Tệp xuất dữ liệu đã hết hạn hiệu lực hoặc đã bị thu hồi quyền truy cập.
+The requested export exceeds the permitted row limit; please narrow your filters.,Số dòng yêu cầu xuất vượt quá giới hạn cho phép; vui lòng thu hẹp bộ lọc.
+QA review is currently disabled in the active policy configuration.,Chức năng chấm kiểm định chất lượng (QA) hiện đang tắt theo cấu hình chính sách.
+This QA review conflicts with self-review or scoring rules.,Phiếu chấm QA vi phạm quy tắc chống tự chấm hoặc quy tắc thang điểm.
+The working calendar or shift configuration is invalid.,Cấu hình lịch làm việc hoặc ca làm việc không hợp lệ.
+The action conflicts with the active SLA or operational policy.,Thao tác xung đột với chính sách SLA hoặc quy định vận hành hiện hành.
+Working calendar,Lịch làm việc
+Working shift,Ca làm việc
+Team membership history,Lịch sử thành viên đội nhóm
+SLA obligation,Nghĩa vụ SLA
+First attempt SLA,SLA liên hệ lần đầu
+Follow-up SLA,SLA chăm sóc hẹn lại
+First connected tracker (informational),Theo dõi kết nối lần đầu (tham khảo)
+Minimum attempts policy,Chính sách số lần thử tối thiểu
+Original due at,Hạn gốc ban đầu
+Effective due at,Hạn hiệu lực
+Fulfilled on time,Hoàn thành đúng hạn
+Fulfilled late,Hoàn thành trễ hạn
+Breached (open),Quá hạn chưa xử lý
+Breached before handoff,Đã vi phạm trước khi chuyển giao
+Closed on handoff (within SLA),Đóng khi chuyển giao (còn hạn SLA)
+Superseded by valid reschedule,Thay thế bởi dời lịch hợp lệ
+Waived with audit,Miễn trừ có kiểm toán
+Canceled validly,Hủy hợp lệ
+Pause SLA clock,Tạm dừng đồng hồ SLA
+Resume SLA clock,Tiếp tục đồng hồ SLA
+Waive SLA obligation,Miễn trừ nghĩa vụ SLA
+Historical attribution unknown,Chưa xác định đội nhóm lịch sử (trước P3)
+Authoritative team attribution,Đội nhóm xác thực theo thời điểm
+Process compliance score,Điểm tuân thủ quy trình
+Provisional score (QA disabled),Điểm tạm tính (QA đang tắt)
+Insufficient data,Chưa đủ dữ liệu tính điểm
+DEV / configurable policy (pending BOD sign-off),Cấu hình DEV có thể điều chỉnh (chờ BOD phê duyệt chính thức)
+CSKH Working Calendar,Lịch làm việc CSKH
+CSKH Working Shift,Ca làm việc CSKH
+CSKH Team Membership History,Lịch sử thành viên đội nhóm CSKH
+CSKH SLA Obligation,Nghĩa vụ SLA CSKH
+CSKH KPI Run,Đợt tính toán KPI CSKH
+CSKH KPI Snapshot,Bản chụp chỉ số KPI CSKH
+CSKH Dirty Scope,Phạm vi cần tính lại KPI CSKH
+CSKH QA Review,Phiếu kiểm định chất lượng CSKH
+CSKH Export Job,Tiến trình xuất báo cáo CSKH
