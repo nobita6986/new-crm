@@ -154,6 +154,17 @@ jobs:
             exit 1
           fi
 
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/test_ci_p2_http_probe.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/deploy/dev/seed/test_ci_p2_http_probe.py'; then
+            echo 'Lint/format check failed for test_ci_p2_http_probe.py.' > "$artifact_dir/http/probe-selftest-lint-failed.txt"
+            exit 1
+          fi
+
+          python3 "$GITHUB_WORKSPACE/deploy/dev/seed/test_ci_p2_http_probe.py" -v 2>&1 | tee "$artifact_dir/http/p2-http-probe-selftest.txt"
+          selftest_status=${PIPESTATUS[0]}
+          if [ "$selftest_status" -ne 0 ]; then
+            exit "$selftest_status"
+          fi
+
           "${compose[@]}" exec -T bench mkdir -p /workspace/frappe-bench/logs
           if ! "${compose[@]}" exec -d -w /workspace/frappe-bench bench bash -lc 'nohup bench --site p2-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p2-http-serve.log 2>&1 </dev/null &'; then
             echo 'Could not start bench serve for the seeded P2 site.' > "$artifact_dir/http/probe-start-failed.txt"
@@ -184,7 +195,80 @@ jobs:
             echo 'Could not copy the sanitized P2 HTTP evidence from the bench container.' > "$artifact_dir/http/evidence-copy-failed.txt"
             exit 1
           fi
-          exit "$probe_status"
+
+          python3 - "$artifact_dir/http/p2-http-transport.json" "$artifact_dir/http/p2-http-completeness-gate.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          src = Path(sys.argv[1])
+          out = Path(sys.argv[2])
+          data = json.loads(src.read_text(encoding="utf-8"))
+          cases = data.get("cases") or []
+          counts = data.get("counts") or {}
+
+          verification = [c for c in cases if c.get("record_role") == "assertion"]
+          setup_obs = [c for c in cases if c.get("record_role") == "setup_observation"]
+          unknown_role = [c.get("id") for c in cases if c.get("record_role") not in ("assertion", "setup_observation")]
+          unasserted = [
+              c.get("id")
+              for c in verification
+              if not isinstance(c.get("assertion"), dict)
+              or c["assertion"].get("result") not in ("PASS", "FAIL")
+              or not str(c["assertion"].get("expected") or "").strip()
+          ]
+          failed = [
+              c.get("id")
+              for c in verification
+              if isinstance(c.get("assertion"), dict)
+              and (c["assertion"].get("result") != "PASS" or c.get("transport_error") is not None)
+          ]
+          final_close_entries = [c for c in verification if c.get("id") == "p2-http-staff-b-close-wi-final"]
+          final_close_ok = (
+              len(final_close_entries) == 1
+              and isinstance(final_close_entries[0].get("assertion"), dict)
+              and final_close_entries[0]["assertion"].get("result") == "PASS"
+              and final_close_entries[0].get("transport_error") is None
+          )
+
+          gate_ok = (
+              data.get("probe_result") == "PASS"
+              and len(cases) == len(verification) + len(setup_obs)
+              and not unknown_role
+              and not unasserted
+              and not failed
+              and len(verification) >= 61
+              and counts.get("total_records") == len(cases)
+              and counts.get("verification_records") == len(verification)
+              and counts.get("setup_observation_records") == len(setup_obs)
+              and counts.get("asserted_cases") == len(verification)
+              and counts.get("passed_assertions") == len(verification)
+              and counts.get("unasserted_cases") == 0
+              and counts.get("failed_assertions") == 0
+              and data.get("unasserted_cases") == []
+              and data.get("failed_cases") == []
+              and data.get("gate_failures") == []
+              and final_close_ok
+          )
+          report = {
+              "status": "PASS" if gate_ok else "FAIL",
+              "probe_result": data.get("probe_result"),
+              "total_records": len(cases),
+              "verification_records": len(verification),
+              "setup_observation_records": len(setup_obs),
+              "asserted_cases": len(verification) - len(unasserted),
+              "passed_assertions": len(verification) - len(unasserted) - len(failed),
+              "unasserted_cases": unasserted,
+              "failed_cases": failed,
+              "unknown_role_cases": unknown_role,
+              "final_close_case_asserted_pass": final_close_ok,
+          }
+          out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          print(json.dumps(report, ensure_ascii=False))
+          sys.exit(0 if gate_ok else 1)
+          PY
+          completeness_status=$?
+          test "$probe_status" -eq 0 && test "$completeness_status" -eq 0
 
       - name: Verify P2 DB constraints, indexes and invariant reconciliation
         id: schema
