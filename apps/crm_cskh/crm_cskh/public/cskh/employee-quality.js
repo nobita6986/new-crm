@@ -109,7 +109,7 @@
 					}),
 					el('td', {
 						class: 'num',
-						text: w.formatInlineRateCell(row.eligible_contact_coverage, 'percent'),
+						text: w.formatInlineRateCell(row.callback_completion_rate, 'percent'),
 					}),
 					el('td', {
 						class: 'num',
@@ -129,7 +129,7 @@
 					}),
 					el('td', {
 						class: 'num',
-						text: w.formatInlineRateCell(row.verified_result_rate, 'percent'),
+						text: w.formatInlineRateCell(row.dnc_compliance_rate, 'percent'),
 					}),
 					el('td', {}, [
 						el('button', {
@@ -138,7 +138,7 @@
 							text: t('Drill down'),
 							onclick: function () {
 								const m = api.normalizeMetric(
-									'first_touch_on_time_rate',
+									'FIRST_ATTEMPT_SLA_RATE',
 									row.first_touch_on_time_rate || {},
 									{}
 								)
@@ -171,12 +171,12 @@
 							el('th', { class: 'num', text: t('Process compliance score') }),
 							el('th', { class: 'num', text: t('First-touch on-time rate') }),
 							el('th', { class: 'num', text: t('Follow-up on-time rate') }),
-							el('th', { class: 'num', text: t('Eligible contact coverage') }),
+							el('th', { class: 'num', text: t('Callback completion rate') }),
 							el('th', { class: 'num', text: t('Assigned intervals') }),
 							el('th', { class: 'num', text: t('Effective attempts (activity reference)') }),
 							el('th', { class: 'num', text: t('Connected rate') }),
 							el('th', { class: 'num', text: t('Outcome completeness rate') }),
-							el('th', { class: 'num', text: t('Verified result rate') }),
+							el('th', { class: 'num', text: t('DNC & closure compliance rate') }),
 							el('th', { text: t('Actions') }),
 						]),
 					]),

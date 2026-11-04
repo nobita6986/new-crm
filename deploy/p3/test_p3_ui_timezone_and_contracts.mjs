@@ -171,7 +171,9 @@ function loadP3Sandbox(timezoneConfig, i18nOverrides) {
 	const { cskh } = sb
 
 	// Default anchor at 23:59:30 ICT must still be 2026-11-04 (NOT 2026-11-05 UTC or 2026-11-04 LA morning)
-	const dayDefault = cskh.computePeriodBounds('day', '', '', 'Asia/Ho_Chi_Minh')
+	const dayDefault = cskh.computePeriodBounds('daily', '', '', 'Asia/Ho_Chi_Minh')
+	assert.equal(dayDefault.periodType, 'daily')
+	assert.equal(dayDefault.periodKey, '2026-11-04')
 	assert.equal(dayDefault.fromDate, '2026-11-04')
 	assert.equal(dayDefault.toDateExclusive, '2026-11-05')
 	assert.equal(dayDefault.fromIso, '2026-11-04T00:00:00+07:00')
@@ -183,28 +185,33 @@ function loadP3Sandbox(timezoneConfig, i18nOverrides) {
 	assert.ok(ms2359 >= dayDefault.fromEpochMs && ms2359 < dayDefault.toExclusiveEpochMs)
 	assert.ok(!(ms0000 >= dayDefault.fromEpochMs && ms0000 < dayDefault.toExclusiveEpochMs))
 
-	// ISO week: 2026-11-04 (Wednesday) -> Monday 2026-11-02 to Monday 2026-11-09
-	const wk = cskh.computePeriodBounds('week', '2026-11-04', '', 'Asia/Ho_Chi_Minh')
+	// ISO week: 2026-11-04 (Wednesday) -> 2026-W45 (Monday 2026-11-02 to Monday 2026-11-09)
+	const wk = cskh.computePeriodBounds('weekly', '2026-11-04', '', 'Asia/Ho_Chi_Minh')
+	assert.equal(wk.periodKey, '2026-W45')
 	assert.equal(wk.fromDate, '2026-11-02')
 	assert.equal(wk.toDateExclusive, '2026-11-09')
 
 	// Month: leap-year Feb 2028 -> [2028-02-01, 2028-03-01) and Dec 2026 -> [2026-12-01, 2027-01-01)
-	const leapFeb = cskh.computePeriodBounds('month', '2028-02', '', 'Asia/Ho_Chi_Minh')
+	const leapFeb = cskh.computePeriodBounds('monthly', '2028-02', '', 'Asia/Ho_Chi_Minh')
+	assert.equal(leapFeb.periodKey, '2028-02')
 	assert.equal(leapFeb.fromDate, '2028-02-01')
 	assert.equal(leapFeb.toDateInclusive, '2028-02-29')
 	assert.equal(leapFeb.toDateExclusive, '2028-03-01')
 
-	const dec = cskh.computePeriodBounds('month', '2026-12', '', 'Asia/Ho_Chi_Minh')
+	const dec = cskh.computePeriodBounds('monthly', '2026-12', '', 'Asia/Ho_Chi_Minh')
+	assert.equal(dec.periodKey, '2026-12')
 	assert.equal(dec.fromDate, '2026-12-01')
 	assert.equal(dec.toDateExclusive, '2027-01-01')
 
 	// Quarter: Q4 2026 -> [2026-10-01, 2027-01-01)
-	const q4 = cskh.computePeriodBounds('quarter', '2026-Q4', '', 'Asia/Ho_Chi_Minh')
+	const q4 = cskh.computePeriodBounds('quarterly', '2026-Q4', '', 'Asia/Ho_Chi_Minh')
+	assert.equal(q4.periodKey, '2026-Q4')
 	assert.equal(q4.fromDate, '2026-10-01')
 	assert.equal(q4.toDateExclusive, '2027-01-01')
 
 	// Year: 2026 -> [2026-01-01, 2027-01-01)
-	const yr = cskh.computePeriodBounds('year', '2026', '', 'Asia/Ho_Chi_Minh')
+	const yr = cskh.computePeriodBounds('yearly', '2026', '', 'Asia/Ho_Chi_Minh')
+	assert.equal(yr.periodKey, '2026')
 	assert.equal(yr.fromDate, '2026-01-01')
 	assert.equal(yr.toDateExclusive, '2027-01-01')
 
@@ -264,13 +271,19 @@ if (!process.env.CSKH_P3_SUBPROCESS_TZ_CHECK) {
 	assert.equal(validZeroDisp.main, '0%')
 	assert.equal(validZeroDisp.ratio, '0 / 12')
 
-	// QA disabled (`qa_enabled = false`) Process Compliance Score (`7350 / 85 = 86.47`)
+	// QA disabled (`qa_enabled = false`) Process Compliance Score (`7350 / 85 = 86.47` per `report-api-contract.md` §1.4)
 	const provScore = api.normalizeMetric(
-		'process_compliance_score',
+		'PROCESS_SCORE',
 		{
+			metric_code: 'PROCESS_SCORE',
 			value: 86.47,
-			valid_weight_sum: 85,
+			numerator: 7350.0,
+			denominator: 85.0,
+			unit: 'score_100',
 			status: 'provisional',
+			reason: 'qa_component_excluded_reweighted',
+			valid_weight: 85,
+			missing_components: ['C5_QA_QUALITY'],
 		},
 		{ qa_enabled: false }
 	)
@@ -280,10 +293,10 @@ if (!process.env.CSKH_P3_SUBPROCESS_TZ_CHECK) {
 	assert.equal(provScoreDisp.main, '86,47 — Tạm tính; thiếu mẫu QA')
 	assert.equal(provScoreDisp.ratio, 'Tổng trọng số thành phần hợp lệ: 85')
 
-	// QA pass rate when QA disabled -> N/A — Phân hệ QA đang tắt
+	// QA pass rate when QA disabled -> N/A — Phân hệ QA đang tắt (`status: "disabled"`)
 	const qaMetric = api.normalizeMetric(
-		'qa_pass_rate',
-		{ value: null, numerator: 0, denominator: 0, status: 'insufficient_data' },
+		'QA_PASS_RATE',
+		{ value: null, numerator: 0, denominator: 0, status: 'disabled', reason: 'qa_disabled_by_policy' },
 		{ qa_enabled: false }
 	)
 	assert.equal(qaMetric.is_na, true)

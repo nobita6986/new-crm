@@ -38,8 +38,8 @@ IMPORT_ROLES = {ROLE_ADMIN}
 CAMPAIGN_READ_ROLES = {ROLE_ADMIN, ROLE_BOD, "Sales Manager"}
 SETTINGS_READ_ROLES = {ROLE_ADMIN, ROLE_BOD, "Sales Manager"}
 
-# P3 quality, SLA & scorecard page role grants (P3.md §10.1-§10.6 & §12.1).
-P3_EXECUTIVE_ROLES = {ROLE_BOD, ROLE_ADMIN}
+# P3 quality, SLA & scorecard page role grants (docs/p3/report-api-contract.md §2).
+P3_EXECUTIVE_ROLES = {ROLE_BOD, ROLE_ADMIN, "Sales Manager"}
 P3_TEAM_QUALITY_ROLES = {ROLE_BOD, ROLE_ADMIN, "Sales Manager"}
 P3_EMPLOYEE_QUALITY_ROLES = {ROLE_BOD, ROLE_ADMIN, "Sales Manager"}
 P3_CAMPAIGN_QUALITY_ROLES = {ROLE_BOD, ROLE_ADMIN, "Sales Manager"}
@@ -125,6 +125,7 @@ NAV_BY_ROLE = {
 		"callbacks",
 		"progress",
 		"dashboard",
+		"quality-overview",
 		"team-quality",
 		"employee-quality",
 		"campaign-quality",
@@ -154,7 +155,7 @@ def _flag_bool(value, default):
 def is_p3_enabled():
 	"""Feature flag controlling P3 quality/SLA screens for safe rollback (P3.md §15.3)."""
 	conf = getattr(frappe, "conf", None) or {}
-	for key in ("cskh_p3_enabled", "p3_enabled"):
+	for key in ("cskh_p3_enabled", "p3_sla_enabled", "p3_enabled"):
 		if key in conf and conf.get(key) is not None:
 			return _flag_bool(conf.get(key), True)
 	return True
@@ -341,7 +342,7 @@ def build_context(
 		"can_review_correction": is_admin() or is_leader(),
 		"p3_enabled": is_p3_enabled(),
 		"qa_enabled": is_qa_enabled(),
-		"can_recompute_kpi": is_admin(),
+		"can_recompute_kpi": is_admin() or is_leader(),
 		"can_waive_sla": is_admin() or is_leader(),
 		"can_export_report": has_role_grant(READ_ROLES),
 	}

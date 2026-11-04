@@ -1154,6 +1154,27 @@ Ownership intervals active in period (employee accountability grain).,Số kho�
 Effective non-voided contact attempts in period (activity reference only).,Tổng số lần liên hệ hiệu lực không bị hủy hiệu lực trong kỳ (chỉ số hoạt động tham khảo).
 Distinct work items with >= 1 effective connected attempt in period.,Số đầu việc duy nhất có ít nhất 1 lần liên hệ kết nối hai chiều hiệu lực trong kỳ.
 Informational FIRST_CONNECTED tracking rate (never penalizes Process Score).,Tỷ lệ theo dõi kết nối lần đầu mang tính thông tin (không cộng phạt vào Điểm tuân thủ quy trình).
+First-touch on-time rate (Work Item),Tỷ lệ đạt SLA liên hệ lần đầu (cấp Đầu việc)
+Callback completion rate,Tỷ lệ hoàn thành lịch hẹn gọi lại
+Callback reschedule rate,Tỷ lệ dời lịch hẹn gọi lại
+DNC & closure compliance rate,Tỷ lệ tuân thủ DNC & đóng hồ sơ hợp lệ
+Unique touched work items,Số đầu việc đã tác nghiệp duy nhất
+Connected attempts,Số lần liên hệ kết nối thành công
+Void attempt rate,Tỷ lệ lần liên hệ bị hủy hiệu lực (Void)
+Breached before handoff,Vi phạm SLA trước khi bàn giao
+Closed validly on handoff,Đóng hợp lệ khi bàn giao trước hạn
+N/A — Module disabled,N/A — Phân hệ đang tạm tắt
+Callbacks resolved by an effective contact attempt divided by due callbacks in period.,Số lịch hẹn được giải quyết bằng lần liên hệ hiệu lực chia cho tổng lịch hẹn đến hạn trong kỳ.
+Reschedule events divided by active or newly created callbacks in period.,Số lần dời lịch chia cho tổng số lịch hẹn tạo mới hoặc hoạt động trong kỳ.
+Ownership intervals respecting DNC and valid closure rules divided by evaluated intervals.,Số khoảng phụ trách tuân thủ quy tắc DNC và đóng hồ sơ hợp lệ chia cho tổng khoảng phụ trách đánh giá.
+DISTINCT Work Items with >= 1 effective contact attempt in period.,Số đầu việc duy nhất có ít nhất 1 lần liên hệ hiệu lực trong kỳ.
+Effective contact attempts with effective_is_connected = 1 in period.,Số lần liên hệ hiệu lực đạt kết nối hai chiều trong kỳ.
+Connected effective attempts divided by total effective attempts in period.,Số lần liên hệ kết nối hiệu lực chia cho tổng lần liên hệ hiệu lực trong kỳ.
+Effective attempts satisfying required fields without error correction/void divided by raw attempts.,Số lần liên hệ đủ thông tin và không bị sửa/hủy do lỗi nhập liệu chia cho tổng lần liên hệ gốc.
+Approved corrected or voided attempts divided by raw attempts in period.,Số lần liên hệ bị duyệt hiệu chỉnh hoặc hủy hiệu lực chia cho tổng lần liên hệ gốc trong kỳ.
+Approved voided attempts divided by raw attempts in period.,Số lần liên hệ bị duyệt hủy hiệu lực (void) chia cho tổng lần liên hệ gốc trong kỳ.
+QA_DISABLED,QA_DISABLED
+QA review module is currently disabled by feature flag.,Phân hệ kiểm định chất lượng QA hiện đang tạm tắt theo cờ tính năng.
 FORBIDDEN_SCOPE,FORBIDDEN_SCOPE
 INVALID_PERIOD,INVALID_PERIOD
 INVALID_METRIC,INVALID_METRIC

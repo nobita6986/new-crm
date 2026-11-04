@@ -41,12 +41,17 @@ window.cskhP3Widgets = (function () {
 		const s = String(status || 'fresh').toLowerCase()
 		const map = {
 			fresh: t('Fresh'),
+			ok: t('Fresh'),
 			calculating: t('Calculating'),
+			stale_recomputing: t('Calculating'),
+			empty_not_computed: t('Insufficient data (N/A)'),
 			stale: t('Stale — recompute needed'),
 			provisional: t('Provisional'),
+			final: t('Finalized'),
 			finalized: t('Finalized'),
 			restated: t('Restated (prior period adjusted)'),
 			insufficient_data: t('Insufficient data (N/A)'),
+			disabled: t('N/A — Module disabled'),
 			na: t('N/A'),
 			failed: t('Calculation / reconciliation failed'),
 		}
@@ -102,12 +107,16 @@ window.cskhP3Widgets = (function () {
 	function slaStatusLabel(status) {
 		const s = String(status || '').toLowerCase()
 		const map = {
+			open: t('Pending (not yet due)'),
 			pending: t('Pending (not yet due)'),
 			fulfilled_on_time: t('Fulfilled on time'),
 			fulfilled_late: t('Fulfilled late'),
 			breached_open: t('Breached (open)'),
+			breached_handoff: t('Breached before handoff'),
+			handoff_closed: t('Closed validly on handoff'),
 			waived: t('Waived (approved)'),
 			canceled_valid: t('Canceled validly'),
+			canceled_validly: t('Canceled validly'),
 			superseded: t('Superseded (rescheduled)'),
 			escalated: t('Escalated'),
 			needs_review: t('Needs review'),
@@ -123,6 +132,7 @@ window.cskhP3Widgets = (function () {
 			ready: t('Ready to download'),
 			completed: t('Ready to download'),
 			expired: t('Expired'),
+			revoked: t('Access denied'),
 			forbidden: t('Access denied'),
 			failed: t('Failed'),
 		}
@@ -254,7 +264,7 @@ window.cskhP3Widgets = (function () {
 			)
 		}
 
-		if (m.freshness_status === 'stale') {
+		if (m.freshness_status === 'stale' || m.freshness_status === 'stale_recomputing' || m.dirty_pending) {
 			container.appendChild(
 				el('div', { class: 'cskh-alert is-warning', 'data-banner': 'snapshot-stale' }, [
 					el('span', {
@@ -351,14 +361,14 @@ window.cskhP3Widgets = (function () {
 		const pad = function (n) {
 			return String(n).padStart(2, '0')
 		}
-		if (periodType === 'day' || periodType === 'custom' || periodType === 'week') {
+		if (periodType === 'daily' || periodType === 'custom' || periodType === 'weekly') {
 			return siteNow.dateKey
 		}
-		if (periodType === 'quarter') {
+		if (periodType === 'quarterly') {
 			const q = Math.floor((siteNow.month - 1) / 3) + 1
 			return siteNow.year + '-Q' + q
 		}
-		if (periodType === 'year') {
+		if (periodType === 'yearly') {
 			return String(siteNow.year)
 		}
 		return siteNow.year + '-' + pad(siteNow.month)
@@ -369,9 +379,9 @@ window.cskhP3Widgets = (function () {
 		const opts = options || {}
 		const state = Object.assign(
 			{
-				period_type: 'month',
-				anchor: defaultAnchorForPeriod('month'),
-				custom_to: defaultAnchorForPeriod('day'),
+				period_type: 'monthly',
+				anchor: defaultAnchorForPeriod('monthly'),
+				custom_to: defaultAnchorForPeriod('daily'),
 				campaign: '',
 				lead_source: '',
 				team: '',
@@ -406,7 +416,7 @@ window.cskhP3Widgets = (function () {
 
 		function renderAnchorInput() {
 			const pType = state.period_type
-			if (pType === 'day') {
+			if (pType === 'daily') {
 				return el('label', { class: 'cskh-field' }, [
 					t('Select date'),
 					el('input', {
@@ -421,7 +431,7 @@ window.cskhP3Widgets = (function () {
 					}),
 				])
 			}
-			if (pType === 'week') {
+			if (pType === 'weekly') {
 				return el('label', { class: 'cskh-field' }, [
 					t('Select week'),
 					el('input', {
@@ -430,7 +440,7 @@ window.cskhP3Widgets = (function () {
 						id: 'p3-filter-anchor',
 						value: /^\d{4}-\d{2}-\d{2}$/.test(state.anchor)
 							? state.anchor
-							: defaultAnchorForPeriod('day'),
+							: defaultAnchorForPeriod('daily'),
 						onchange: function (e) {
 							state.anchor = e.target.value
 							emitChange()
@@ -438,9 +448,9 @@ window.cskhP3Widgets = (function () {
 					}),
 				])
 			}
-			if (pType === 'quarter') {
+			if (pType === 'quarterly') {
 				const qMatch = /^(\d{4})-Q([1-4])$/i.exec(state.anchor)
-				const curYear = qMatch ? qMatch[1] : defaultAnchorForPeriod('year')
+				const curYear = qMatch ? qMatch[1] : defaultAnchorForPeriod('yearly')
 				const curQ = qMatch ? 'Q' + qMatch[2] : 'Q1'
 				const qSelect = el(
 					'select',
@@ -478,7 +488,7 @@ window.cskhP3Widgets = (function () {
 					el('label', { class: 'cskh-field' }, [t('Select year'), yInput]),
 				])
 			}
-			if (pType === 'year') {
+			if (pType === 'yearly') {
 				return el('label', { class: 'cskh-field' }, [
 					t('Select year'),
 					el('input', {
@@ -490,7 +500,7 @@ window.cskhP3Widgets = (function () {
 						style: 'min-width: 110px;',
 						value: /^\d{4}$/.test(state.anchor)
 							? state.anchor
-							: defaultAnchorForPeriod('year'),
+							: defaultAnchorForPeriod('yearly'),
 						onchange: function (e) {
 							state.anchor = e.target.value
 							emitChange()
@@ -508,7 +518,7 @@ window.cskhP3Widgets = (function () {
 							id: 'p3-filter-from',
 							value: /^\d{4}-\d{2}-\d{2}$/.test(state.anchor)
 								? state.anchor
-								: defaultAnchorForPeriod('day'),
+								: defaultAnchorForPeriod('daily'),
 							onchange: function (e) {
 								state.anchor = e.target.value
 								emitChange()
@@ -521,7 +531,7 @@ window.cskhP3Widgets = (function () {
 							type: 'date',
 							class: 'cskh-input',
 							id: 'p3-filter-to',
-							value: state.custom_to || defaultAnchorForPeriod('day'),
+							value: state.custom_to || defaultAnchorForPeriod('daily'),
 							onchange: function (e) {
 								state.custom_to = e.target.value
 								emitChange()
@@ -530,7 +540,7 @@ window.cskhP3Widgets = (function () {
 					]),
 				])
 			}
-			// Default `month`
+			// Default `monthly`
 			return el('label', { class: 'cskh-field' }, [
 				t('Select month'),
 				el('input', {
@@ -539,7 +549,7 @@ window.cskhP3Widgets = (function () {
 					id: 'p3-filter-anchor',
 					value: /^\d{4}-\d{2}$/.test(state.anchor)
 						? state.anchor
-						: defaultAnchorForPeriod('month'),
+						: defaultAnchorForPeriod('monthly'),
 					onchange: function (e) {
 						state.anchor = e.target.value
 						emitChange()
@@ -587,11 +597,11 @@ window.cskhP3Widgets = (function () {
 					},
 				},
 				[
-					el('option', { value: 'day', text: t('Daily') }),
-					el('option', { value: 'week', text: t('Weekly') }),
-					el('option', { value: 'month', text: t('Monthly') }),
-					el('option', { value: 'quarter', text: t('Quarterly') }),
-					el('option', { value: 'year', text: t('Yearly') }),
+					el('option', { value: 'daily', text: t('Daily') }),
+					el('option', { value: 'weekly', text: t('Weekly') }),
+					el('option', { value: 'monthly', text: t('Monthly') }),
+					el('option', { value: 'quarterly', text: t('Quarterly') }),
+					el('option', { value: 'yearly', text: t('Yearly') }),
 					el('option', { value: 'custom', text: t('Custom range') }),
 				]
 			)
@@ -1012,7 +1022,7 @@ window.cskhP3Widgets = (function () {
 
 			if (isNa) {
 				insufficient.push(row)
-			} else if (status === 'finalized') {
+			} else if (status === 'finalized' || status === 'final' || status === 'ok') {
 				finalized.push(row)
 			} else {
 				provisional.push(row)
@@ -1411,10 +1421,7 @@ window.cskhP3Widgets = (function () {
 		const formatSelect = el(
 			'select',
 			{ class: 'cskh-select', id: 'p3-export-format' },
-			[
-				el('option', { value: 'csv', text: t('CSV (.csv)') }),
-				el('option', { value: 'xlsx', text: t('Excel (.xlsx)') }),
-			]
+			[el('option', { value: 'csv', text: t('CSV (.csv)') })]
 		)
 		const purposeInput = el('textarea', {
 			class: 'cskh-textarea',
