@@ -477,6 +477,27 @@ def request_correction(
 		else:
 			final_status = locked.status
 			final_rev = current_rev
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		dirty_reason = "prior_period_correction" if corr_status == "approved" else "correction_requested"
+		schedule_post_commit_dirty_invalidation(
+			work_item=wi_val,
+			campaign=locked.campaign,
+			owner_user=att_row.performed_by or att_row.owner_at_attempt,
+			event_dt=att_row.occurred_at,
+			reason=dirty_reason,
+			trigger_reference=corr_doc.name,
+		)
+		if enriched_patch.get("occurred_at"):
+			schedule_post_commit_dirty_invalidation(
+				work_item=wi_val,
+				campaign=locked.campaign,
+				owner_user=att_row.performed_by or att_row.owner_at_attempt,
+				event_dt=enriched_patch["occurred_at"],
+				reason=dirty_reason,
+				trigger_reference=corr_doc.name,
+			)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
 		raise
@@ -660,6 +681,39 @@ def review_correction(
 		else:
 			final_status = locked.status
 			final_rev = current_rev
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		orig_att_meta = frappe.db.get_value(
+			"CSKH Contact Attempt",
+			corr_doc.attempt,
+			["occurred_at", "performed_by", "owner_at_attempt"],
+			as_dict=True,
+		)
+		dirty_reason = "prior_period_correction" if target_status == "approved" else "correction_rejected"
+		if orig_att_meta and orig_att_meta.occurred_at:
+			schedule_post_commit_dirty_invalidation(
+				work_item=wi_val,
+				campaign=locked.campaign,
+				owner_user=orig_att_meta.performed_by or orig_att_meta.owner_at_attempt,
+				event_dt=orig_att_meta.occurred_at,
+				reason=dirty_reason,
+				trigger_reference=corr_doc.name,
+			)
+		if corr_doc.corrected_fields_json:
+			try:
+				patched_occ = json.loads(corr_doc.corrected_fields_json).get("occurred_at")
+				if patched_occ:
+					schedule_post_commit_dirty_invalidation(
+						work_item=wi_val,
+						campaign=locked.campaign,
+						owner_user=(orig_att_meta.performed_by if orig_att_meta else None),
+						event_dt=patched_occ,
+						reason=dirty_reason,
+						trigger_reference=corr_doc.name,
+					)
+			except Exception:
+				pass
 	except Exception:
 		rollback_savepoint_safely(savepoint)
 		raise
