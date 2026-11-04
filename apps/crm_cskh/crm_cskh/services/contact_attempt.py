@@ -1005,20 +1005,13 @@ def reopen_work_item(
 			if not (target_val == actor or _in_team(actor, target_val)):
 				raise Forbidden("Team Leader chỉ được giao mở lại cho nhân viên thuộc team của mình.")
 
+		dnc_overridden = False
 		if frappe.db.has_column("CRM Lead", "cskh_do_not_contact") and cint(
 			frappe.db.get_value("CRM Lead", locked.lead, "cskh_do_not_contact")
 		):
 			if not (is_admin and override_dnc_b):
 				raise DoNotContact("Khách hàng đang có cờ ngừng liên hệ (DNC); không được mở lại.")
-			set_lead_dnc_fields(
-				locked.lead,
-				{
-					"cskh_do_not_contact": 0,
-					"cskh_dnc_reason": f"Gỡ DNC khi Admin mở lại {wi_val}: {clean_reason}",
-					"cskh_dnc_at": None,
-				},
-				update_modified=True,
-			)
+			dnc_overridden = True
 
 		# Ensure no other active claim or active owned work item holds this Lead
 		other_claim = frappe.db.get_value(
@@ -1048,6 +1041,27 @@ def reopen_work_item(
 			)
 
 		target_val = ownership._require_campaign_target_eligibility(locked.campaign, target_val)
+
+		if dnc_overridden:
+			set_lead_dnc_fields(
+				locked.lead,
+				{
+					"cskh_do_not_contact": 0,
+					"cskh_dnc_reason": f"Gỡ DNC khi Admin mở lại {wi_val}: {clean_reason}",
+					"cskh_dnc_at": None,
+				},
+				update_modified=True,
+			)
+			frappe.get_doc(
+				{
+					"doctype": "Comment",
+					"comment_type": "Info",
+					"reference_doctype": "CRM Lead",
+					"reference_name": locked.lead,
+					"comment_email": actor,
+					"content": f"[CSKH_DNC_OVERRIDE:{wi_val}:{idem_val}:{req_hash}] Gỡ cờ DNC khi mở lại Work Item: {clean_reason}",
+				}
+			).insert(ignore_permissions=True)
 
 		summary = summarize_effective_attempts(compute_effective_attempts(wi_val))
 		new_status = "in_progress" if summary["attempt_count"] > 0 else "assigned"
