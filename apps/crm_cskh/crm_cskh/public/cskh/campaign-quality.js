@@ -1,5 +1,6 @@
 /* P3 Screen 4 — Campaign & Lead Source Performance (`/cskh/campaign-quality`).
-   Separates Lead Source Quality (invalid/DNC) from Staff SLA Execution across versioned policies.
+   Explicitly contrasts `DISTINCT Work Item` vs `Ownership Interval` (`A -> B -> A`)
+   and separates DNC/closure compliance from SLA execution (`report-api-contract.md` §3.4).
 */
 
 ;(function () {
@@ -21,7 +22,7 @@
 
 	const filterBar = w.mountFilterBar(filterHost, {
 		showCampaign: true,
-		showLeadSource: true,
+		showTeam: true,
 		onChange: function () {
 			loadPage()
 		},
@@ -72,7 +73,7 @@
 							: null,
 					]),
 					el('td', {}, [
-						el('span', { class: 'cskh-pill-subtle', text: row.policy_version || 'DEV-DEFAULT' }),
+						el('span', { class: 'cskh-pill-subtle', text: row.policy_version || 'DEV_CONFIGURABLE' }),
 					]),
 					el('td', {
 						class: 'num',
@@ -80,7 +81,11 @@
 					}),
 					el('td', {
 						class: 'num',
-						text: w.formatInlineRateCell(row.invalid_or_dnc_rate, 'percent'),
+						text: w.formatInlineRateCell(row.ownership_intervals_count, 'count'),
+					}),
+					el('td', {
+						class: 'num',
+						text: w.formatInlineRateCell(row.work_item_first_touch_rate, 'percent'),
 					}),
 					el('td', {
 						class: 'num',
@@ -92,19 +97,15 @@
 					}),
 					el('td', {
 						class: 'num',
-						text: w.formatInlineRateCell(row.eligible_contact_coverage, 'percent'),
-					}),
-					el('td', {
-						class: 'num',
 						text: w.formatInlineRateCell(row.connected_rate, 'percent'),
 					}),
 					el('td', {
 						class: 'num',
-						text: w.formatInlineRateCell(row.campaign_conversion_rate, 'percent'),
+						text: w.formatInlineRateCell(row.first_connected_rate, 'percent'),
 					}),
 					el('td', {
 						class: 'num',
-						text: w.formatInlineRateCell(row.avg_attempts_per_work_item, 'score'),
+						text: w.formatInlineRateCell(row.dnc_compliance_rate, 'percent'),
 					}),
 					el('td', {}, [
 						el('button', {
@@ -113,8 +114,8 @@
 							text: t('Drill down'),
 							onclick: function () {
 								const m = api.normalizeMetric(
-									'campaign_conversion_rate',
-									row.campaign_conversion_rate || {},
+									'WORK_ITEM_FIRST_ATTEMPT_SLA_RATE',
+									row.work_item_first_touch_rate || {},
 									{}
 								)
 								w.openDrilldownModal(
@@ -130,7 +131,16 @@
 
 		mainHost.appendChild(
 			el('div', { class: 'cskh-card' }, [
-				el('h2', { text: t('Campaign & lead source breakdown') }),
+				el('div', { class: 'cskh-pillar-head' }, [
+					el('h2', { text: t('Campaign & lead source breakdown') }),
+					el('span', {
+						class: 'cskh-muted',
+						style: 'font-size: 12px;',
+						text: t(
+							'Note: Company totals count distinct Work Items, whereas employee accountability counts Ownership Intervals (e.g., A -> B -> A creates 3 intervals on 1 Work Item).'
+						),
+					}),
+				]),
 				el('div', { class: 'cskh-table-scroll' }, [
 					el('table', { class: 'cskh-table', id: 'p3-campaign-table' }, [
 						el('thead', {}, [
@@ -138,13 +148,16 @@
 								el('th', { text: t('Campaign') }),
 								el('th', { text: t('Policy version') }),
 								el('th', { class: 'num', text: t('Unique assigned work items') }),
-								el('th', { class: 'num', text: t('Invalid phone / DNC rate') }),
+								el('th', { class: 'num', text: t('Assigned intervals') }),
+								el('th', { class: 'num', text: t('First-touch on-time rate (Work Item)') }),
 								el('th', { class: 'num', text: t('First-touch on-time rate') }),
 								el('th', { class: 'num', text: t('Follow-up on-time rate') }),
-								el('th', { class: 'num', text: t('Eligible contact coverage') }),
 								el('th', { class: 'num', text: t('Connected rate') }),
-								el('th', { class: 'num', text: t('Campaign conversion rate') }),
-								el('th', { class: 'num', text: t('Avg attempts per work item (reference)') }),
+								el('th', {
+									class: 'num',
+									text: t('First-connected tracking (informational, non-penalizing)'),
+								}),
+								el('th', { class: 'num', text: t('DNC & closure compliance rate') }),
 								el('th', { text: t('Actions') }),
 							]),
 						]),

@@ -394,37 +394,69 @@ window.cskh = (function () {
 		}
 	}
 
+	function civilDateToIsoWeekKey(year, month, day) {
+		const dt = new Date(Date.UTC(year, month - 1, day, 12, 0, 0))
+		const dow = dt.getUTCDay() || 7
+		dt.setUTCDate(dt.getUTCDate() + 4 - dow)
+		const isoYear = dt.getUTCFullYear()
+		const yearStart = new Date(Date.UTC(isoYear, 0, 1, 12, 0, 0))
+		const weekNo = Math.ceil(((dt.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+		return isoYear + '-W' + pad2(weekNo)
+	}
+
+	function normalizePeriodType(rawType) {
+		const s = String(rawType || 'monthly').trim().toLowerCase()
+		const aliases = {
+			day: 'daily',
+			daily: 'daily',
+			week: 'weekly',
+			weekly: 'weekly',
+			month: 'monthly',
+			monthly: 'monthly',
+			quarter: 'quarterly',
+			quarterly: 'quarterly',
+			year: 'yearly',
+			yearly: 'yearly',
+			custom: 'custom',
+		}
+		return aliases[s] || 'monthly'
+	}
+
 	/**
 	 * Compute authoritative half-open `[from, to_exclusive)` period boundaries
-	 * in `tz` (default `siteTimeZone()`, i.e. `Asia/Ho_Chi_Minh` per P3.md §4.1),
-	 * completely independent of browser host OS timezone.
+	 * and canonical `period_key` in `tz` (default `siteTimeZone()`, `Asia/Ho_Chi_Minh`
+	 * per `docs/p3/report-api-contract.md` §1.1), independent of browser OS timezone.
 	 *
-	 * Supported `periodType`: `day`, `week`, `month`, `quarter`, `year`, `custom`.
+	 * Supported `periodType`: `daily`, `weekly`, `monthly`, `quarterly`, `yearly`, `custom`
+	 * (plus aliases `day`, `week`, `month`, `quarter`, `year`).
 	 */
 	function computePeriodBounds(periodType, anchorValue, customToValue, tz) {
 		const zone = tz || siteTimeZone() || 'Asia/Ho_Chi_Minh'
 		const nowParts = partsAtEpochInTz(serverNow().getTime(), zone)
-		const pType = String(periodType || 'month').trim().toLowerCase()
+		const pType = normalizePeriodType(periodType)
 		const rawAnchor = String(anchorValue || '').trim()
 
 		let startY = nowParts.year
 		let startM = nowParts.month
 		let startD = 1
 		let endExcl = null
+		let periodKey = ''
 
-		if (pType === 'day') {
+		if (pType === 'daily') {
 			const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawAnchor)
 			startY = m ? Number(m[1]) : nowParts.year
 			startM = m ? Number(m[2]) : nowParts.month
 			startD = m ? Number(m[3]) : nowParts.day
 			endExcl = addCivilDays(startY, startM, startD, 1)
-		} else if (pType === 'week') {
+			periodKey = formatCivilDate(startY, startM, startD)
+		} else if (pType === 'weekly') {
 			const wm = /^(\d{4})-W(\d{2})$/i.exec(rawAnchor)
 			if (wm) {
 				const mon = isoWeekMonday(Number(wm[1]), Number(wm[2]))
 				startY = mon.year
 				startM = mon.month
 				startD = mon.day
+				periodKey = wm[1] + '-W' + wm[2]
 			} else {
 				const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawAnchor)
 				const cy = dm ? Number(dm[1]) : nowParts.year
@@ -436,9 +468,10 @@ window.cskh = (function () {
 				startY = mon.year
 				startM = mon.month
 				startD = mon.day
+				periodKey = civilDateToIsoWeekKey(startY, startM, startD)
 			}
 			endExcl = addCivilDays(startY, startM, startD, 7)
-		} else if (pType === 'quarter') {
+		} else if (pType === 'quarterly') {
 			const qm = /^(\d{4})-Q([1-4])$/i.exec(rawAnchor)
 			let qNum = Math.floor((nowParts.month - 1) / 3) + 1
 			if (qm) {
@@ -458,12 +491,14 @@ window.cskh = (function () {
 				nextQM > 12
 					? { year: startY + 1, month: nextQM - 12, day: 1 }
 					: { year: startY, month: nextQM, day: 1 }
-		} else if (pType === 'year') {
+			periodKey = startY + '-Q' + qNum
+		} else if (pType === 'yearly') {
 			const ym = /^(\d{4})/.exec(rawAnchor)
 			startY = ym ? Number(ym[1]) : nowParts.year
 			startM = 1
 			startD = 1
 			endExcl = { year: startY + 1, month: 1, day: 1 }
+			periodKey = String(startY)
 		} else if (pType === 'custom') {
 			const fm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawAnchor)
 			const tm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(customToValue || '').trim())
@@ -474,8 +509,9 @@ window.cskh = (function () {
 			const incM = tm ? Number(tm[2]) : nowParts.month
 			const incD = tm ? Number(tm[3]) : nowParts.day
 			endExcl = addCivilDays(incY, incM, incD, 1)
+			periodKey = ''
 		} else {
-			// Default `month`
+			// Default `monthly`
 			const mm = /^(\d{4})-(\d{2})/.exec(rawAnchor)
 			startY = mm ? Number(mm[1]) : nowParts.year
 			startM = mm ? Number(mm[2]) : nowParts.month
@@ -484,6 +520,7 @@ window.cskh = (function () {
 				startM >= 12
 					? { year: startY + 1, month: 1, day: 1 }
 					: { year: startY, month: startM + 1, day: 1 }
+			periodKey = startY + '-' + pad2(startM)
 		}
 
 		const fromEpochMs = tzWallClockToEpochMs(startY, startM, startD, 0, 0, 0, zone)
@@ -505,6 +542,7 @@ window.cskh = (function () {
 
 		return {
 			periodType: pType,
+			periodKey: periodKey,
 			timeZone: zone,
 			fromDate: fromDate,
 			toDateInclusive: toDateInclusive,
@@ -694,19 +732,28 @@ window.cskh = (function () {
 			eligible: 'is-assigned',
 			// P3 freshness / confidence & SLA obligation states
 			fresh: 'is-assigned',
+			ok: 'is-assigned',
+			final: 'is-assigned',
 			finalized: 'is-assigned',
 			calculating: 'is-info',
+			stale_recomputing: 'is-queued',
+			empty_not_computed: 'is-invalid',
 			provisional: 'is-queued',
 			stale: 'is-queued',
 			restated: 'is-info',
 			insufficient_data: 'is-invalid',
+			disabled: 'is-invalid',
 			na: 'is-invalid',
 			failed: 'is-conflict',
+			open: 'is-info',
 			fulfilled_on_time: 'is-assigned',
 			fulfilled_late: 'is-queued',
 			breached_open: 'is-conflict',
+			breached_handoff: 'is-conflict',
+			handoff_closed: 'is-invalid',
 			waived: 'is-info',
 			canceled_valid: 'is-invalid',
+			canceled_validly: 'is-invalid',
 			superseded: 'is-invalid',
 			escalated: 'is-conflict',
 			needs_review: 'is-queued',
@@ -889,6 +936,7 @@ window.cskh = (function () {
 		SNAPSHOT_STALE: true,
 		POLICY_CONFLICT: true,
 		DATA_RECONCILIATION_FAILED: true,
+		QA_DISABLED: true,
 		QA_CONFLICT: true,
 		RECOMPUTE_IN_PROGRESS: true,
 		EXPORT_EXPIRED: true,

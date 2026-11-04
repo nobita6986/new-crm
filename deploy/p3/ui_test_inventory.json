@@ -6,7 +6,7 @@
     "crm_cskh.tests.test_ui_p3_pages_and_context": [
       "TestUiP3PagesAndContext.test_guest_is_denied_on_all_six_p3_pages",
       "TestUiP3PagesAndContext.test_staff_only_accesses_personal_scorecard_among_p3_pages",
-      "TestUiP3PagesAndContext.test_leader_accesses_team_employee_campaign_sla_and_scorecard_not_bod_overview",
+      "TestUiP3PagesAndContext.test_leader_accesses_all_six_p3_pages_in_team_scope_with_waive_and_recompute",
       "TestUiP3PagesAndContext.test_bod_accesses_five_management_p3_pages_with_zero_pii_and_denied_scorecard",
       "TestUiP3PagesAndContext.test_crm_admin_accesses_all_six_p3_pages_with_recompute_and_waive_capabilities",
       "TestUiP3PagesAndContext.test_p3_feature_flag_rollback_hides_p3_nav_and_blocks_p3_routes_cleanly",

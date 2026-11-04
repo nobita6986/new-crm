@@ -88,21 +88,12 @@ class TestUiP3PagesAndContext(P2TestCase):
 			with self.assertRaises(frappe.PermissionError):
 				denied_mod.get_context(self._fresh_ctx())
 
-	def test_leader_accesses_team_employee_campaign_sla_and_scorecard_not_bod_overview(self):
+	def test_leader_accesses_all_six_p3_pages_in_team_scope_with_waive_and_recompute(self):
 		frappe.set_user(self.leader_a)
-		for allowed_mod in (
-			team_quality_page,
-			employee_quality_page,
-			campaign_quality_page,
-			sla_operations_page,
-			scorecard_page,
-		):
+		for allowed_mod in ALL_P3_PAGES:
 			page_ctx = allowed_mod.get_context(self._fresh_ctx())
 			self.assertTrue(page_ctx.cskh_capabilities["can_waive_sla"])
-			self.assertFalse(page_ctx.cskh_capabilities["can_recompute_kpi"])
-
-		with self.assertRaises(frappe.PermissionError):
-			quality_overview_page.get_context(self._fresh_ctx())
+			self.assertTrue(page_ctx.cskh_capabilities["can_recompute_kpi"])
 
 	def test_bod_accesses_five_management_p3_pages_with_zero_pii_and_denied_scorecard(self):
 		frappe.set_user(self.bod_user)
