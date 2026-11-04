@@ -681,7 +681,19 @@ def enforce_p1_filter_field_permissions():
 	group_by = args.get("group_by")
 	request = getattr(frappe.local, "request", None)
 	path = getattr(request, "path", "") or ""
-	explicit_fields = args.get("fieldname") if "get_value" in path else None
+	raw_explicit = args.get("fieldname") if "get_value" in path else args.get("fields")
+	if isinstance(raw_explicit, str) and raw_explicit.strip().startswith("["):
+		try:
+			raw_explicit = frappe.parse_json(raw_explicit)
+		except Exception:
+			pass
+	explicit_fields = None
+	if isinstance(raw_explicit, str) and "(" in raw_explicit:
+		explicit_fields = raw_explicit
+	elif isinstance(raw_explicit, list | tuple | set):
+		func_items = [f for f in raw_explicit if isinstance(f, str) and "(" in f]
+		if func_items:
+			explicit_fields = func_items
 	if all(
 		v is None
 		for v in (filters, or_filters, searchfield, filter_fields, order_by, group_by, explicit_fields)

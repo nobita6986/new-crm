@@ -1035,8 +1035,28 @@ def setup_probe_fixtures() -> dict[str, str]:
         # Dedicated T1C remediation fixtures (`F-P2-01`, `F-P2-02`, `F-P2-04`, `F-P2-05`, `F-P2-06`)
         from crm_cskh.services import contact_attempt as ca_service
 
+        camp_f06 = frappe.get_doc(
+            {
+                "doctype": "CSKH Campaign",
+                "code": f"P2H-F06-{secrets.token_hex(3).upper()}",
+                "title": "Chiến dịch HTTP F-P2-01 & F-P2-06",
+                "status": "Active",
+                "team_scope": team1_node,
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Assignment Rule",
+                "campaign": camp_f06.name,
+                "user": "staff.a@dev.local",
+                "weight": 100,
+                "capacity_limit": 20,
+                "version": 1,
+                "enabled": 1,
+            }
+        ).insert(ignore_permissions=True)
         lead_dnc_http = make_lead("DNC-F06")
-        wi_dnc_http = assign_item(camp_t1.name, lead_dnc_http, "staff.a@dev.local")
+        wi_dnc_http = assign_item(camp_f06.name, lead_dnc_http, "staff.a@dev.local")
 
         camp_f02 = frappe.get_doc(
             {
@@ -2089,7 +2109,7 @@ def main() -> int:
         "p2-http-f06-staff-a-record-dnc-attempt",
         r,
         r["status"] == 200
-        and dnc_body.get("dnc_marked") is True
+        and dnc_body.get("do_not_contact") is True
         and dnc_body.get("work_item_status") == "closed"
         and db_dnc_after == 1,
         "Authorized workflow.record_attempt DNC auto-closes Work Item and marks Lead DNC=1",
@@ -2260,13 +2280,15 @@ def main() -> int:
         f"/api/method/crm_cskh.api.workflow.list_attempts?work_item={urllib.parse.quote(fx['wi_dnc_http'], safe='')}&include_milestones=true",
     )
     ldr_att_txt = str(r.get("text") or "")
+    ldr_milestones = body_payload(r).get("ownership_milestones", [])
     check(
         "p2-http-f01-leader-a-attempts-milestones-clean",
         r,
         r["status"] == 200
-        and len(body_payload(r).get("milestones", [])) >= 1
+        and len(ldr_milestones) >= 2
+        and "Trần Bí Mật" not in json.dumps(ldr_milestones, ensure_ascii=False)
         and hash_tag_re.search(ldr_att_txt) is None,
-        "Authorized Leader A reads workflow.list_attempts milestones with 0 [H:<16hex>] display tags",
+        "Authorized Leader A reads workflow.list_attempts ownership_milestones with 0 customer note and 0 [H:<16hex>] display tags",
         "team1.leader@dev.local",
     )
 

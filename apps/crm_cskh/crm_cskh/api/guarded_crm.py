@@ -478,36 +478,81 @@ def validate_link(doctype: str, docname: str, fields: list[str] | str | None = N
 	return upstream(doctype, docname, fields=fields)
 
 
-def _check_protected_fieldnames_for_read(doctype: str, fieldname) -> None:
+def _is_field_readable_by_user(doctype: str | None, fieldname: str, user: str) -> bool:
+	if not doctype:
+		return True
 	protected = PERMLEVEL_PROTECTED_FIELDS.get(doctype)
-	if not protected or _is_system(frappe.session.user):
-		return
+	if not protected:
+		return True
+	base = fieldname.split(".", 1)[-1].strip("` ")
+	if base == "*":
+		return False
+	if base in protected and not can_read_protected_field(doctype, base, user):
+		return False
+	return True
+
+
+def _sanitize_get_value_fieldname(doctype: str, parent: str | None, fieldname):
+	user = frappe.session.user
+	if _is_system(user):
+		return fieldname, True
+	has_protected = bool(PERMLEVEL_PROTECTED_FIELDS.get(doctype)) or bool(
+		isinstance(parent, str) and PERMLEVEL_PROTECTED_FIELDS.get(parent)
+	)
+	if not has_protected:
+		return fieldname, True
+
 	parsed = fieldname
+	was_list = isinstance(fieldname, list | tuple | set)
 	if isinstance(parsed, str) and parsed.strip().startswith("["):
 		try:
-			parsed = frappe.parse_json(parsed)
+			maybe_list = frappe.parse_json(parsed)
+			if isinstance(maybe_list, list):
+				parsed = maybe_list
+				was_list = True
 		except Exception:
 			parsed = fieldname
+
 	candidates: list[str] = []
 	if isinstance(parsed, str):
 		candidates.append(parsed.strip())
 	elif isinstance(parsed, list | tuple | set):
 		candidates.extend(str(item).strip() for item in parsed if item is not None)
+	else:
+		return fieldname, True
+
+	allowed: list[str] = []
 	for raw in candidates:
-		base = raw.split(".", 1)[-1].strip("` ")
-		if base in protected and not can_read_protected_field(doctype, base, frappe.session.user):
-			frappe.throw("Not permitted", frappe.PermissionError)
+		if not raw:
+			continue
+		if "(" in raw:
+			validate_p1_filter_fields(doctype, explicit_fields=raw, user=user)
+			if isinstance(parent, str):
+				validate_p1_filter_fields(parent, explicit_fields=raw, user=user)
+		if _is_field_readable_by_user(doctype, raw, user) and _is_field_readable_by_user(parent, raw, user):
+			allowed.append(raw)
+
+	if candidates and not allowed:
+		return ([] if was_list else ""), False
+	return (allowed if was_list else allowed[0]), True
 
 
 @frappe.whitelist()
 def client_get_value(doctype, fieldname, filters=None, as_dict=True, debug=False, parent=None):
-	"""Guard `frappe.client.get_value` against permlevel field oracles (`F-P2-01`, `L-29`)."""
-	if isinstance(doctype, str) and not _is_system(frappe.session.user):
-		validate_p1_filter_fields(doctype, filters=filters)
-		_check_protected_fieldnames_for_read(doctype, fieldname)
+	"""Guard `frappe.client.get_value` against permlevel field leaks & filter oracles (`F-P2-01`, `L-29`)."""
+	user = frappe.session.user
+	if isinstance(doctype, str) and not _is_system(user):
+		validate_p1_filter_fields(doctype, filters=filters, user=user)
 		if isinstance(parent, str):
-			_check_protected_fieldnames_for_read(parent, fieldname)
-	return frappe.get_attr("frappe.client.get_value")(
+			validate_p1_filter_fields(parent, filters=filters, user=user)
+		sanitized_fieldname, has_any = _sanitize_get_value_fieldname(
+			doctype, parent if isinstance(parent, str) else None, fieldname
+		)
+		if not has_any:
+			want_dict = bool(frappe.parse_json(as_dict)) if isinstance(as_dict, str) else bool(as_dict)
+			return frappe._dict() if want_dict else None
+		fieldname = sanitized_fieldname
+	res = frappe.get_attr("frappe.client.get_value")(
 		doctype,
 		fieldname,
 		filters=filters,
@@ -515,6 +560,13 @@ def client_get_value(doctype, fieldname, filters=None, as_dict=True, debug=False
 		debug=debug,
 		parent=parent,
 	)
+	if isinstance(res, dict) and isinstance(doctype, str) and not _is_system(user):
+		for key in list(res.keys()):
+			if not _is_field_readable_by_user(doctype, str(key), user) or (
+				isinstance(parent, str) and not _is_field_readable_by_user(parent, str(key), user)
+			):
+				res.pop(key, None)
+	return res
 
 
 @frappe.whitelist()

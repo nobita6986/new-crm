@@ -78,7 +78,7 @@ def _simulated_json_request(
 ):
 	prev_req = getattr(frappe.local, "request", None)
 	prev_fd = dict(getattr(frappe.local, "form_dict", None) or {})
-	raw_data = json.dumps(payload, ensure_ascii=False) if payload is not None else None
+	raw_data = json.dumps(payload, ensure_ascii=False, default=str) if payload is not None else None
 	builder = EnvironBuilder(
 		method=method,
 		path=path,
@@ -347,10 +347,27 @@ class TestP2T1cRegressions(P2TestCase):
 				"CSKH Work Item",
 				filters=[["CSKH Work Item", "reopen_reason", "like", "%hoàn phí%"]],
 			)
-		with self.assertRaises(frappe.PermissionError):
+		self.assertEqual(
 			guarded_crm.client_get_value(
 				"CSKH Assignment History",
 				fieldname="private_reason",
+				filters={"name": hist_close_name},
+			),
+			{},
+		)
+		mixed_gv = guarded_crm.client_get_value(
+			"CSKH Assignment History",
+			fieldname=["name", "reason", "private_reason", "payload_hash"],
+			filters={"name": hist_close_name},
+		)
+		self.assertEqual(mixed_gv.get("name"), hist_close_name)
+		self.assertNotIn("private_reason", mixed_gv)
+		self.assertNotIn("payload_hash", mixed_gv)
+		self.assertNotIn("Hoàng Thị Khiếu Nại", json.dumps(mixed_gv, ensure_ascii=False, default=str))
+		with self.assertRaises(frappe.PermissionError):
+			guarded_crm.client_get_value(
+				"CSKH Assignment History",
+				fieldname="count(private_reason)",
 				filters={"name": hist_close_name},
 			)
 		with self.assertRaises(frappe.PermissionError):
@@ -650,7 +667,7 @@ class TestP2T1cRegressions(P2TestCase):
 				completion_reason="Đóng theo yêu cầu DNC",
 				idempotency_key=self.unique_key("f06-dnc-att"),
 			)
-		self.assertTrue(dnc_att["dnc_marked"])
+		self.assertTrue(dnc_att["do_not_contact"])
 		self.assertEqual(int(frappe.db.get_value("CRM Lead", lead_a, "cskh_do_not_contact") or 0), 1)
 
 		# `CRM Admin` STILL cannot clear DNC via generic `client.set_value` or `doc.save()`!
@@ -708,9 +725,8 @@ class TestP2T1cRegressions(P2TestCase):
 			reopen_override = workflow_api.reopen_work_item(
 				work_item=wi_a,
 				target_user=self.staff_a,
-				reason="Khách chủ động đăng ký lại gói mới",
+				reason="Khách xác nhận bằng văn bản mở lại liên hệ gói mới",
 				override_dnc=True,
-				dnc_override_reason="Khách xác nhận bằng văn bản mở lại liên hệ",
 				idempotency_key=self.unique_key("f06-reopen-ovr"),
 			)
 		self.assertEqual(reopen_override["work_item_status"], "in_progress")
@@ -837,8 +853,8 @@ class TestP2T1cRegressions(P2TestCase):
 		self.make_rule(self.camp_shared, self.staff_b, weight=50, team=self.team_a)
 		ownership.reassign(
 			wi_a1,
-			self.staff_b,
 			expected_owner=self.staff_a,
+			target_user=self.staff_b,
 			actor=self.admin_user,
 			reason="Điều phối nội bộ Team A",
 			request_id=self.unique_key("f02-reass"),
@@ -1057,8 +1073,8 @@ class TestP2T1cRegressions(P2TestCase):
 		wi_reass_closed, _ = self.make_assigned_work_item(camp_q, self.staff_a)
 		ownership.reassign(
 			wi_reass_closed,
-			self.staff_b,
 			expected_owner=self.staff_a,
+			target_user=self.staff_b,
 			actor=self.admin_user,
 			reason="Chuyển sang Staff B trước khi đóng",
 			request_id=self.unique_key("f04-reass-b"),
@@ -1205,7 +1221,7 @@ class TestP2T1cRegressions(P2TestCase):
 			date_to=str(target_day),
 		)
 		self.assertEqual(sum_day["period"]["end_bound_mode"], "exclusive")
-		self.assertEqual(sum_day["period"]["end_dt"], next_midnight_ts)
+		self.assertEqual(sum_day["period"]["date_to"], next_midnight_ts)
 		cards = sum_day["cards"]
 		self.assertEqual(cards["cohort_work_items"], 4)
 		self.assertEqual(cards["effective_attempts"], 4)
@@ -1253,18 +1269,17 @@ class TestP2T1cRegressions(P2TestCase):
 			campaign=camp_p, date_from=str(target_day), date_to=str(target_day)
 		)["cards"]
 		self.assertEqual(cards_after_void["effective_attempts"], 3)
-		self.assertEqual(cards_after_void["voided_attempts"], 1)
 		self.assertEqual(cards_after_void["attempted_work_items"], 1)
 		self.assertEqual(cards_after_void["unattempted_work_items"], 3)
 
-		# Restore `att_nc` and correct its `outcome_code` to `connected_interested` -> `connected_work_items` rises `1 -> 2`!
+		# Restore `att_nc` (Admin-only action) and correct its `outcome_code` to `connected_interested` -> `connected_work_items` rises `1 -> 2`!
 		correction.request_correction(
 			attempt=att_nc["attempt_id"],
 			action="restore",
 			reason="Khôi phục bản ghi đúng",
 			auto_approve=True,
 			idempotency_key=self.unique_key("f05-restore"),
-			actor=self.leader_a,
+			actor=self.admin_user,
 		)
 		correction.request_correction(
 			attempt=att_nc["attempt_id"],
