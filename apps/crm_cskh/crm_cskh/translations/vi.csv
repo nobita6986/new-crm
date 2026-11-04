@@ -1239,3 +1239,8 @@ CSKH KPI Snapshot,Bản chụp chỉ số KPI CSKH
 CSKH Dirty Scope,Phạm vi cần tính lại KPI CSKH
 CSKH QA Review,Phiếu kiểm định chất lượng CSKH
 CSKH Export Job,Tiến trình xuất báo cáo CSKH
+The requested reporting period format or date range is invalid.,Định dạng kỳ báo cáo hoặc khoảng ngày yêu cầu không hợp lệ.
+The requested KPI metric does not exist or does not support drill-down.,Mã chỉ số KPI yêu cầu không tồn tại hoặc không hỗ trợ xem chi tiết.
+The KPI snapshot has pending updates and has not completed recomputation.,Bản chụp KPI đang có dữ liệu phát sinh mới chờ tính toán lại.
+Post-computation KPI reconciliation detected a discrepancy and aborted publication.,Đối soát KPI sau tính toán phát hiện sai lệch nên đã chặn công bố bản chụp.
+There is insufficient eligible data to compute a valid KPI rate or score.,Chưa đủ dữ liệu hợp lệ để tính tỷ lệ hoặc điểm KPI.

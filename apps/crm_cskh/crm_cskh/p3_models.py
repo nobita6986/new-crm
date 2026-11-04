@@ -98,24 +98,53 @@ _AUTHORIZED_SLA_WRITE: contextvars.ContextVar[bool] = contextvars.ContextVar(
 	"_AUTHORIZED_SLA_WRITE",
 	default=False,
 )
+_AUTHORIZED_KPI_WRITE: contextvars.ContextVar[bool] = contextvars.ContextVar(
+	"_AUTHORIZED_KPI_WRITE",
+	default=False,
+)
+_AUTHORIZED_QA_WRITE: contextvars.ContextVar[bool] = contextvars.ContextVar(
+	"_AUTHORIZED_QA_WRITE",
+	default=False,
+)
 
 
-class _AuthorizedSlaContext:
+class _AuthorizedFlagContext:
+	def __init__(self, var: contextvars.ContextVar[bool]):
+		self._var = var
+		self._token = None
+
 	def __enter__(self):
-		self._token = _AUTHORIZED_SLA_WRITE.set(True)
+		self._token = self._var.set(True)
 		return self
 
 	def __exit__(self, exc_type, exc_val, exc_tb):
-		_AUTHORIZED_SLA_WRITE.reset(self._token)
+		if self._token is not None:
+			self._var.reset(self._token)
 		return False
 
 
-def authorized_sla_write() -> _AuthorizedSlaContext:
-	return _AuthorizedSlaContext()
+def authorized_sla_write() -> _AuthorizedFlagContext:
+	return _AuthorizedFlagContext(_AUTHORIZED_SLA_WRITE)
 
 
 def is_authorized_sla_write() -> bool:
 	return bool(_AUTHORIZED_SLA_WRITE.get())
+
+
+def authorized_kpi_write() -> _AuthorizedFlagContext:
+	return _AuthorizedFlagContext(_AUTHORIZED_KPI_WRITE)
+
+
+def is_authorized_kpi_write() -> bool:
+	return bool(_AUTHORIZED_KPI_WRITE.get())
+
+
+def authorized_qa_write() -> _AuthorizedFlagContext:
+	return _AuthorizedFlagContext(_AUTHORIZED_QA_WRITE)
+
+
+def is_authorized_qa_write() -> bool:
+	return bool(_AUTHORIZED_QA_WRITE.get())
 
 
 def _is_cskh_admin_or_system(user: str | None = None) -> bool:
@@ -222,6 +251,87 @@ class SLAObligation(Document):
 		frappe.throw(_("Nghĩa vụ SLA là dữ liệu kiểm toán, không được phép xóa."), frappe.PermissionError)
 
 
+class DirtyScope(Document):
+	def validate(self):
+		if not (
+			is_authorized_kpi_write()
+			or getattr(frappe.flags, "in_migrate", False)
+			or getattr(frappe.flags, "in_install", False)
+		):
+			frappe.throw(
+				_("Bảng CSKH Dirty Scope chỉ được ghi bởi dịch vụ KPI nội bộ."),
+				frappe.PermissionError,
+			)
+
+	def on_trash(self):
+		frappe.throw(_("Không được xóa bản ghi kiểm toán CSKH Dirty Scope."), frappe.PermissionError)
+
+
+class KPIRun(Document):
+	def validate(self):
+		if not (
+			is_authorized_kpi_write()
+			or getattr(frappe.flags, "in_migrate", False)
+			or getattr(frappe.flags, "in_install", False)
+		):
+			frappe.throw(
+				_("Bản ghi CSKH KPI Run là bất biến và chỉ được tạo bởi tiến trình tính KPI."),
+				frappe.PermissionError,
+			)
+
+	def on_trash(self):
+		frappe.throw(
+			_("Bản ghi CSKH KPI Run là dữ liệu kiểm toán append-only, không được phép xóa."),
+			frappe.PermissionError,
+		)
+
+
+class KPISnapshot(Document):
+	def validate(self):
+		if not (
+			is_authorized_kpi_write()
+			or getattr(frappe.flags, "in_migrate", False)
+			or getattr(frappe.flags, "in_install", False)
+		):
+			frappe.throw(
+				_("Bản chụp CSKH KPI Snapshot là bất biến và chỉ được tạo bởi tiến trình tính KPI."),
+				frappe.PermissionError,
+			)
+		if not self.is_new():
+			frappe.throw(
+				_("Không được sửa trực tiếp dữ liệu trên CSKH KPI Snapshot đã ghi."),
+				frappe.PermissionError,
+			)
+
+	def on_trash(self):
+		frappe.throw(
+			_("Bản chụp CSKH KPI Snapshot là dữ liệu kiểm toán append-only, không được phép xóa."),
+			frappe.PermissionError,
+		)
+
+
+class QAReview(Document):
+	def validate(self):
+		if not (
+			is_authorized_qa_write()
+			or getattr(frappe.flags, "in_migrate", False)
+			or getattr(frappe.flags, "in_install", False)
+		):
+			frappe.throw(
+				_("Bản ghi chấm điểm QA chỉ được phép tạo hoặc cập nhật thông qua dịch vụ QA."),
+				frappe.PermissionError,
+			)
+		if self.reviewer and self.reviewed_staff and self.reviewer == self.reviewed_staff:
+			from crm_cskh.services.errors import QaConflict
+
+			raise QaConflict("Người chấm QA không được phép tự chấm bản ghi liên hệ của chính mình.")
+
+	def on_trash(self):
+		frappe.throw(
+			_("Bản ghi chấm điểm QA là dữ liệu kiểm toán, không được phép xóa."), frappe.PermissionError
+		)
+
+
 def _index_exists(table_name: str, index_name: str) -> bool:
 	clean_table = table_name.replace("`", "")
 	rows = frappe.db.sql(f"show index from `{clean_table}` where Key_name = %s", (index_name,))
@@ -300,6 +410,48 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			"CSKH SLA Obligation",
 			("campaign", "evaluation_anchor_at", "status"),
 			"idx_cskh_sla_camp_anchor",
+			False,
+		),
+		(
+			"CSKH Contact Attempt",
+			("occurred_at", "recorded_at"),
+			"idx_cskh_attempt_occ_rec",
+			False,
+		),
+		(
+			"CSKH Dirty Scope",
+			("status", "dirty_date"),
+			"idx_cskh_dirty_status_date",
+			False,
+		),
+		(
+			"CSKH KPI Run",
+			("period_type", "period_key", "campaign_filter", "is_latest_published"),
+			"idx_cskh_kpirun_period_pub",
+			False,
+		),
+		(
+			"CSKH KPI Snapshot",
+			("is_latest_published", "period_type", "period_key", "campaign_filter", "scope_type", "scope_id"),
+			"idx_cskh_kpisnap_lookup",
+			False,
+		),
+		(
+			"CSKH KPI Snapshot",
+			("is_latest_published", "period_type", "period_key", "scope_type", "process_score_sort"),
+			"idx_cskh_kpisnap_rank",
+			False,
+		),
+		(
+			"CSKH KPI Snapshot",
+			("kpi_run", "scope_type"),
+			"idx_cskh_kpisnap_run_scope",
+			False,
+		),
+		(
+			"CSKH QA Review",
+			("reviewed_staff", "reviewed_at", "status"),
+			"idx_cskh_qa_staff_date",
 			False,
 		),
 	]
