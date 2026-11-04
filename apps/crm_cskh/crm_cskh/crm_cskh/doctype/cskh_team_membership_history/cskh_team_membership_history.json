@@ -1,0 +1,135 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Team Membership History",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "user",
+   "fieldtype": "Link",
+   "label": "User",
+   "options": "User",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "hierarchy_node",
+   "fieldtype": "Data",
+   "label": "Hierarchy Node"
+  },
+  {
+   "fieldname": "team_node",
+   "fieldtype": "Data",
+   "label": "Team Node",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "team_name_snapshot",
+   "fieldtype": "Data",
+   "label": "Team Name Snapshot"
+  },
+  {
+   "fieldname": "effective_from",
+   "fieldtype": "Datetime",
+   "label": "Effective From",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "effective_to",
+   "fieldtype": "Datetime",
+   "label": "Effective To",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "hierarchy_hook\nadmin_assignment\nmigration_cutover",
+   "default": "hierarchy_hook",
+   "reqd": 1
+  },
+  {
+   "fieldname": "recorded_by",
+   "fieldtype": "Link",
+   "label": "Recorded By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "event_key",
+   "fieldtype": "Data",
+   "label": "Event Key",
+   "reqd": 1,
+   "unique": 1
+  }
+ ],
+ "field_order": [
+  "user",
+  "hierarchy_node",
+  "team_node",
+  "team_name_snapshot",
+  "effective_from",
+  "effective_to",
+  "source_type",
+  "recorded_by",
+  "event_key"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "effective_from",
+ "sort_order": "DESC",
+ "modified": "2026-11-04 16:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}

@@ -55,6 +55,9 @@ PERMLEVEL_PROTECTED_FIELDS = {
 	"CSKH Work Item": frozenset(("completion_reason", "reopen_reason")),
 	"CSKH Assignment History": frozenset(("private_reason", "payload_hash")),
 	"CRM Task": frozenset(("cskh_task_history_json",)),
+	"CSKH SLA Obligation": frozenset(
+		("waive_reason", "policy_snapshot_json", "calendar_snapshot_json", "audit_events_json")
+	),
 }
 
 
