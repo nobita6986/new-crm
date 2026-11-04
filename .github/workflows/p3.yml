@@ -85,7 +85,14 @@ jobs:
               f"Inventories verified: P0=99, P1=209, P2=38, P3={p3['expected_total']}; golden fixture OK."
           )
           PY
-          docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" exec -T bench bash -lc 'test "$(git -C /workspace/frappe-bench/apps/frappe rev-parse HEAD)" = "$FRAPPE_SHA" && test -z "$(git -C /workspace/frappe-bench/apps/frappe status --porcelain)" && test "$(git -C /workspace/frappe-bench/apps/crm rev-parse HEAD)" = "$CRM_SHA" && test -z "$(git -C /workspace/frappe-bench/apps/crm status --porcelain)"'
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" exec -T bench /workspace/frappe-bench/env/bin/python -c '
+          import os, subprocess
+          f_head = subprocess.check_output(["git", "-C", "/workspace/frappe-bench/apps/frappe", "rev-parse", "HEAD"], text=True).strip()
+          c_head = subprocess.check_output(["git", "-C", "/workspace/frappe-bench/apps/crm", "rev-parse", "HEAD"], text=True).strip()
+          assert f_head == os.environ["FRAPPE_SHA"] == "d2efa79657ba5c1abf96098b3bfacc199517d57e", f_head
+          assert c_head == os.environ["CRM_SHA"] == "0d3910b456ef4fb913e77b29db011b3debc4f778", c_head
+          print("Upstream SHA lock verified:", f_head, c_head)
+          '
 
       - name: Seed and repeat migration x2 on seeded site
         id: seed
