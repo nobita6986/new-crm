@@ -21,13 +21,45 @@ P1_DOCTYPES = (
 	"CSKH Active Claim",
 )
 
+P2_DOCTYPES = (
+	"CSKH Outcome Code",
+	"CSKH Policy",
+	"CSKH Contact Attempt",
+	"CSKH Attempt Correction",
+)
+
 # Fixtures
 # ------------------
-# Metadata do crm_cskh quản lý qua file (P0-B §B2).
+# Metadata do crm_cskh quản lý qua file (P0-B §B2, P1 §6.2, P2 §6).
 fixtures = [
-	{"doctype": "Custom Field", "filters": [["name", "=", "CRM Lead-cskh_poc_marker"]]},
-	{"doctype": "Custom Field", "filters": [["name", "=", "CRM Lead-cskh_is_placeholder_name"]]},
-	{"doctype": "CRM Form Script", "filters": [["name", "=", "CSKH - Open CSKH Page"]]},
+	{
+		"doctype": "Custom Field",
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"CRM Lead-cskh_poc_marker",
+					"CRM Lead-cskh_is_placeholder_name",
+					"CRM Lead-cskh_do_not_contact",
+					"CRM Lead-cskh_dnc_reason",
+					"CRM Lead-cskh_dnc_at",
+					"CRM Lead-cskh_dnc_work_item",
+					"CRM Task-cskh_work_item",
+					"CRM Task-cskh_is_followup",
+					"CRM Task-cskh_source_attempt",
+					"CRM Task-cskh_completed_attempt",
+					"CRM Task-cskh_completion_reason",
+					"CRM Task-cskh_reschedule_count",
+					"CRM Task-cskh_task_history_json",
+				],
+			]
+		],
+	},
+	{
+		"doctype": "CRM Form Script",
+		"filters": [["name", "in", ["CSKH - Open CSKH Page", "CSKH - Open Lead CSKH Workspace"]]],
+	},
 ]
 
 # Apps
@@ -104,11 +136,11 @@ fixtures = [
 # 	"filters": "crm_cskh.utils.jinja_filters"
 # }
 
-# Installation
-# ------------
+# Installation & Migration
+# ------------------------
 
-# before_install = "crm_cskh.install.before_install"
-# after_install = "crm_cskh.install.after_install"
+after_install = "crm_cskh.patches.v2_0.p2_schema_and_seeds.execute"
+after_migrate = "crm_cskh.patches.v2_0.p2_schema_and_seeds.execute"
 
 # Uninstallation
 # ------------
@@ -183,20 +215,39 @@ has_permission = {
 
 doc_events = {
 	"CRM Lead": {
-		"validate": "crm_cskh.permissions.validate_lead_owner",
-		"on_update": "crm_cskh.permissions.clear_stale_lead_shares",
+		"before_insert": "crm_cskh.p2_models.validate_crm_lead_dnc_fields",
+		"validate": [
+			"crm_cskh.permissions.validate_lead_owner",
+			"crm_cskh.p2_models.validate_crm_lead_dnc_fields",
+		],
+		"before_save": "crm_cskh.p2_models.validate_crm_lead_dnc_fields",
+		"on_update": [
+			"crm_cskh.p2_models.validate_crm_lead_dnc_fields",
+			"crm_cskh.permissions.clear_stale_lead_shares",
+		],
 	},
 	"ToDo": {"validate": "crm_cskh.permissions.validate_lead_assignment"},
+	"CRM Task": {
+		"validate": "crm_cskh.p2_models.validate_cskh_followup_task",
+		"on_trash": "crm_cskh.p2_models.prevent_cskh_followup_task_trash",
+	},
 }
 
 override_whitelisted_methods = {
 	"frappe.core.doctype.data_export.exporter.export_data": "crm_cskh.api.guarded_reporting.data_export",
+	"frappe.desk.reportview.get": "crm_cskh.api.guarded_reporting.reportview_get",
+	"frappe.desk.reportview.get_count": "crm_cskh.api.guarded_reporting.reportview_get_count",
+	"frappe.desk.reportview.get_list": "crm_cskh.api.guarded_reporting.reportview_get_list",
 	"frappe.desk.reportview.export_query": "crm_cskh.api.guarded_reporting.reportview_export_query",
 	"frappe.desk.query_report.run": "crm_cskh.api.guarded_reporting.query_report_run",
 	"frappe.desk.query_report.export_query": "crm_cskh.api.guarded_reporting.query_report_export_query",
 	"frappe.desk.search.search_link": "crm_cskh.api.guarded_crm.search_link",
 	"frappe.desk.search.search_widget": "crm_cskh.api.guarded_crm.search_widget",
 	"frappe.client.validate_link": "crm_cskh.api.guarded_crm.validate_link",
+	"frappe.client.get_value": "crm_cskh.api.guarded_crm.client_get_value",
+	"frappe.client.get_count": "crm_cskh.api.guarded_crm.client_get_count",
+	"frappe.client.set_value": "crm_cskh.api.guarded_crm.client_set_value",
+	"frappe.client.bulk_update": "crm_cskh.api.guarded_crm.client_bulk_update",
 	"crm.api.dashboard.get_dashboard": "crm_cskh.api.guarded_reporting.crm_manager_dashboard",
 	"crm.api.dashboard.get_chart": "crm_cskh.api.guarded_reporting.crm_manager_chart",
 	"crm.integrations.api.get_contact_by_phone_number": "crm_cskh.api.guarded_crm.get_contact_by_phone_number",
@@ -321,7 +372,10 @@ after_request = ["crm_cskh.errors.normalize_error_response", "crm_cskh.p1_errors
 # Authentication and authorization
 # --------------------------------
 
-auth_hooks = ["crm_cskh.p1_permissions.enforce_p1_filter_field_permissions"]
+auth_hooks = [
+	"crm_cskh.p1_permissions.enforce_p1_filter_field_permissions",
+	"crm_cskh.p2_models.enforce_lead_dnc_request_guard",
+]
 
 # Automatically update python controller files with type annotations for this app.
 # export_python_type_annotations = True
@@ -349,6 +403,10 @@ permission_query_conditions.update(
 		"CSKH Distribution Run": "crm_cskh.p1_permissions.distribution_run_query_conditions",
 		"CSKH Identity Index": "crm_cskh.p1_permissions.system_only_query_conditions",
 		"CSKH Active Claim": "crm_cskh.p1_permissions.system_only_query_conditions",
+		"CSKH Outcome Code": "crm_cskh.p2_permissions.outcome_code_query_conditions",
+		"CSKH Policy": "crm_cskh.p2_permissions.policy_query_conditions",
+		"CSKH Contact Attempt": "crm_cskh.p2_permissions.contact_attempt_query_conditions",
+		"CSKH Attempt Correction": "crm_cskh.p2_permissions.attempt_correction_query_conditions",
 	}
 )
 
@@ -363,5 +421,9 @@ has_permission.update(
 		"CSKH Distribution Run": "crm_cskh.p1_permissions.distribution_run_has_permission",
 		"CSKH Identity Index": "crm_cskh.p1_permissions.system_only_has_permission",
 		"CSKH Active Claim": "crm_cskh.p1_permissions.system_only_has_permission",
+		"CSKH Outcome Code": "crm_cskh.p2_permissions.outcome_code_has_permission",
+		"CSKH Policy": "crm_cskh.p2_permissions.policy_has_permission",
+		"CSKH Contact Attempt": "crm_cskh.p2_permissions.contact_attempt_has_permission",
+		"CSKH Attempt Correction": "crm_cskh.p2_permissions.attempt_correction_has_permission",
 	}
 )

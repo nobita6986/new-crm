@@ -1,0 +1,12 @@
+# deploy/p2/.gitignore
+# KHÔNG commit file .env thật hay dữ liệu sinh ra khi chạy stack P2.
+.env
+.env.local
+*.env
+!*.env.example
+workspace/
+dumps/
+backups/
+*.log
+proxy.log
+proxy.err

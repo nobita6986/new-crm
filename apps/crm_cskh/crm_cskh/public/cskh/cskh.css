@@ -1,4 +1,4 @@
-/* CSKH pages — same site/session as Frappe CRM.
+/* CSKH pages — same site/session as Frappe CRM (P1 + P2).
    Deliberately dependency-free: no second SPA, no second backend. */
 
 :root {
@@ -11,10 +11,11 @@
 	--cskh-danger: #e5484d;
 	--cskh-warning: #f5a524;
 	--cskh-success: #30a46c;
+	--cskh-info: #2563eb;
 }
 
 .cskh-shell {
-	max-width: 1180px;
+	max-width: 1240px;
 	margin: 0 auto;
 	padding: 24px 20px 64px;
 	color: var(--cskh-text);
@@ -72,6 +73,12 @@
 	margin: 4px 0 0;
 }
 
+.cskh-session {
+	font-size: 12px;
+	color: var(--cskh-muted);
+	margin: 0 0 16px;
+}
+
 .cskh-card {
 	background: var(--cskh-card);
 	border: 1px solid var(--cskh-border);
@@ -106,8 +113,13 @@
 }
 
 .cskh-metric .value {
-	font-size: 24px;
+	font-size: 22px;
 	font-weight: 600;
+}
+
+.cskh-table-scroll {
+	width: 100%;
+	overflow-x: auto;
 }
 
 .cskh-table {
@@ -143,6 +155,34 @@
 	flex-wrap: wrap;
 	gap: 8px;
 	align-items: center;
+}
+
+.cskh-filter-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 10px;
+}
+
+.cskh-chip {
+	padding: 5px 11px;
+	border-radius: 999px;
+	border: 1px solid var(--cskh-border);
+	background: #fff;
+	color: var(--cskh-text);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.cskh-chip:hover {
+	border-color: var(--cskh-primary);
+	color: var(--cskh-primary);
+}
+
+.cskh-chip.is-active {
+	background: var(--cskh-primary);
+	border-color: var(--cskh-primary);
+	color: #fff;
 }
 
 .cskh-btn {
@@ -185,7 +225,8 @@
 }
 
 .cskh-input,
-.cskh-select {
+.cskh-select,
+.cskh-textarea {
 	padding: 7px 10px;
 	border: 1px solid var(--cskh-border);
 	border-radius: 6px;
@@ -193,6 +234,13 @@
 	background: #fff;
 	color: var(--cskh-text);
 	min-width: 150px;
+}
+
+.cskh-textarea {
+	min-height: 76px;
+	width: 100%;
+	resize: vertical;
+	font-family: inherit;
 }
 
 .cskh-field {
@@ -204,8 +252,25 @@
 }
 
 .cskh-field .cskh-input,
-.cskh-field .cskh-select {
+.cskh-field .cskh-select,
+.cskh-field .cskh-textarea {
 	color: var(--cskh-text);
+}
+
+.cskh-form-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 12px;
+	margin-bottom: 12px;
+}
+
+.cskh-checkbox-row {
+	display: inline-flex;
+	align-items: center;
+	gap: 7px;
+	font-size: 13px;
+	color: var(--cskh-text);
+	cursor: pointer;
 }
 
 .cskh-state {
@@ -224,6 +289,12 @@
 	color: #1f7a4d;
 }
 
+.cskh-state.is-info {
+	background: #eef4ff;
+	border-color: #bfd4ff;
+	color: #1d4ed8;
+}
+
 .cskh-state.is-queued {
 	background: #fff4e0;
 	border-color: #f3d5a0;
@@ -240,6 +311,13 @@
 	background: #f0f0f3;
 	border-color: #d5d5dd;
 	color: #55555f;
+}
+
+.cskh-badge-stack {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+	align-items: center;
 }
 
 .cskh-alert {
@@ -278,6 +356,44 @@
 .cskh-alert.is-empty {
 	background: #f7f8fa;
 	color: var(--cskh-muted);
+}
+
+.cskh-toast-host {
+	position: fixed;
+	right: 20px;
+	bottom: 20px;
+	z-index: 9999;
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+	max-width: 380px;
+}
+
+.cskh-toast {
+	padding: 10px 14px;
+	border-radius: 8px;
+	font-size: 13px;
+	border: 1px solid var(--cskh-border);
+	background: #fff;
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+
+.cskh-toast.is-success {
+	background: #e7f6ee;
+	border-color: #b7e4cd;
+	color: #1f7a4d;
+}
+
+.cskh-toast.is-warning {
+	background: #fff4e0;
+	border-color: #f3d5a0;
+	color: #8a5a00;
+}
+
+.cskh-toast.is-error {
+	background: #fdecec;
+	border-color: #f3bcbc;
+	color: #a32226;
 }
 
 .cskh-loading {
@@ -329,9 +445,6 @@
 	gap: 8px;
 }
 
-/* A small inline form panel: the reason and the target of a manual
-   ownership action (P1 §4.4). It is a normal block of the page, not a
-   modal, so it stays usable with the keyboard and with a screen reader. */
 .cskh-panel {
 	border: 1px solid var(--cskh-border);
 	border-radius: 8px;
@@ -364,8 +477,79 @@
 	min-width: 200px;
 }
 
-/* A link that downloads a private file: it is a real anchor, so the
-   browser handles the download and the session of the Frappe site. */
+/* Unified Timeline items — visually distinct per source type (P2 §12.2) */
+.cskh-timeline {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.cskh-tl-item {
+	border: 1px solid var(--cskh-border);
+	border-left-width: 4px;
+	border-radius: 8px;
+	padding: 13px 15px;
+	background: #fff;
+}
+
+.cskh-tl-item.is-attempt {
+	border-left-color: var(--cskh-primary);
+}
+
+.cskh-tl-item.is-void {
+	border-left-color: #9ca3af;
+	background: #f9fafb;
+	opacity: 0.86;
+}
+
+.cskh-tl-item.is-call-log {
+	border-left-color: #0ea5e9;
+	background: #fcfdff;
+}
+
+.cskh-tl-item.is-task {
+	border-left-color: var(--cskh-warning);
+	background: #fffdf9;
+}
+
+.cskh-tl-item.is-note {
+	border-left-color: #8b5cf6;
+	background: #fdfcff;
+}
+
+.cskh-tl-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: flex-start;
+	gap: 10px;
+	flex-wrap: wrap;
+	margin-bottom: 6px;
+}
+
+.cskh-tl-note {
+	margin: 8px 0 0;
+	padding: 8px 10px;
+	border-radius: 6px;
+	background: #f7f8fa;
+	font-size: 13px;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.cskh-correction-box {
+	margin-top: 10px;
+	padding: 9px 11px;
+	border-radius: 6px;
+	border: 1px dashed var(--cskh-border);
+	background: #f8fafc;
+	font-size: 12px;
+}
+
+.cskh-strike {
+	text-decoration: line-through;
+	color: var(--cskh-muted);
+}
+
 .cskh-download {
 	color: var(--cskh-primary);
 	font-size: 12px;
@@ -378,7 +562,6 @@
 	text-decoration: underline;
 }
 
-/* The row of an action cell: the buttons of one work item. */
 .cskh-row-actions {
 	display: flex;
 	gap: 6px;

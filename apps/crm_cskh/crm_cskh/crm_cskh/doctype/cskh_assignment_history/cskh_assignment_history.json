@@ -16,7 +16,7 @@
    "fieldname": "action",
    "fieldtype": "Select",
    "label": "Action",
-   "options": "assign\nreassign\nrevoke\nclose",
+   "options": "assign\nreassign\nrevoke\nclose\nreopen",
    "default": "assign",
    "reqd": 1
   },
@@ -50,6 +50,21 @@
    "fieldtype": "Small Text",
    "label": "Reason",
    "reqd": 1
+  },
+  {
+   "fieldname": "private_reason",
+   "fieldtype": "Small Text",
+   "label": "Private Reason",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "payload_hash",
+   "fieldtype": "Data",
+   "hidden": 1,
+   "label": "Payload Hash",
+   "permlevel": 1,
+   "read_only": 1
   },
   {
    "fieldname": "distribution_run",
@@ -89,6 +104,8 @@
   "actor",
   "event_at",
   "reason",
+  "private_reason",
+  "payload_hash",
   "distribution_run",
   "ownership_start",
   "ownership_end",
@@ -108,6 +125,12 @@
    "print": 0
   },
   {
+   "permlevel": 1,
+   "role": "System Manager",
+   "read": 1,
+   "write": 1
+  },
+  {
    "role": "CSKH CRM Admin",
    "read": 1,
    "create": 0,
@@ -117,6 +140,12 @@
    "export": 0,
    "email": 0,
    "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "write": 0
   },
   {
    "role": "CSKH BOD Viewer",
@@ -141,6 +170,12 @@
    "print": 0
   },
   {
+   "permlevel": 1,
+   "role": "Sales Manager",
+   "read": 1,
+   "write": 0
+  },
+  {
    "role": "Sales User",
    "read": 1,
    "create": 0,
@@ -150,6 +185,12 @@
    "export": 0,
    "email": 0,
    "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "Sales User",
+   "read": 1,
+   "write": 0
   }
  ],
  "allow_rename": 0,

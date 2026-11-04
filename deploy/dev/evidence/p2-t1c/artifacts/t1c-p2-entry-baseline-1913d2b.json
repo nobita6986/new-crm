@@ -1,0 +1,240 @@
+{
+  "probe": "t1c_p2_entry_and_fixture_probe",
+  "recorded_at_utc": "2026-11-03T15:45:13.464299+00:00",
+  "baseline_main_sha": "1913d2bd5ebfdc894eaa492b46be502dbdf44808",
+  "frappe_sha": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+  "crm_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+  "site": "t1cp2.localhost",
+  "compose_project": "crm-cskh-t1c-p2",
+  "schema_and_versions": {
+    "versions": {
+      "frappe": "15.123.1",
+      "crm": "1.87.0",
+      "crm_cskh": "0.0.1",
+      "mariadb": "11.8.9-MariaDB-ubu2404",
+      "system_time_zone": "Asia/Ho_Chi_Minh"
+    },
+    "cskh_doctypes_on_baseline": [
+      "CSKH Active Claim",
+      "CSKH App Settings",
+      "CSKH Assignment History",
+      "CSKH Assignment Rule",
+      "CSKH Campaign",
+      "CSKH Distribution Run",
+      "CSKH Identity Index",
+      "CSKH Import Batch",
+      "CSKH Import Batch Lead",
+      "CSKH Work Item"
+    ],
+    "work_item_status_options_on_baseline": [
+      "queued",
+      "assigned",
+      "revoked",
+      "closed"
+    ],
+    "p2_doctypes_present_on_baseline": [],
+    "crm_custom_fields_on_baseline": [
+      {
+        "name": "CRM Lead-cskh_is_placeholder_name",
+        "dt": "CRM Lead",
+        "fieldname": "cskh_is_placeholder_name",
+        "fieldtype": "Check"
+      },
+      {
+        "name": "CRM Lead-cskh_poc_marker",
+        "dt": "CRM Lead",
+        "fieldname": "cskh_poc_marker",
+        "fieldtype": "Data"
+      }
+    ],
+    "crm_cskh_patches_applied": [
+      "crm_cskh.patches.v1_0.p1_schema_constraints",
+      "crm_cskh.patches.v1_0.p1_placeholder_name_field",
+      "crm_cskh.patches.v1_0.p1_import_batch_lead_constraints"
+    ]
+  },
+  "seed_summary": {
+    "hierarchy": {
+      "root": "3lgtk3rft8",
+      "team_a": "3lhjld5l98",
+      "team_b": "3lh5v035sp",
+      "team_c": "3lid6o7reb"
+    },
+    "batch": "3lieio2df7",
+    "campaigns": {
+      "camp_a": "3livobrij2",
+      "camp_b": "3lj7027vc9",
+      "camp_shared": "3ljoc1mm5k"
+    },
+    "special": {
+      "wi_aba": "3m02vv41am",
+      "lead_aba": "CRM-LEAD-2026-00001",
+      "wi_ab": "3m0pt6gra7",
+      "lead_ab": "CRM-LEAD-2026-00002",
+      "wi_rev": "3m0nbis6mt",
+      "wi_ret": "3m0qnu3th2",
+      "wi_closed": "3m2vedc67p",
+      "wi_queued_a": "3m3ra5jn2k",
+      "task_ab": 1,
+      "note_ab": "3nt1pilrdd",
+      "call_ab": "p2-seed-call-ab-001",
+      "file_ab": "30971c1444"
+    },
+    "aba_history_count": 3,
+    "aba_open_intervals": 1,
+    "aba_final_owner": "staff.a1@example.test",
+    "aba_docshares": [
+      "staff.a1@example.test"
+    ],
+    "work_item_status_counts": {
+      "assigned": 76,
+      "closed": 1,
+      "queued": 30,
+      "revoked": 1
+    },
+    "total_work_items": 108,
+    "total_leads": 108,
+    "total_identities": 108,
+    "total_active_claims": 105
+  },
+  "http_entry_verification": {
+    "total_checks": 21,
+    "passed_checks": 21,
+    "failed_checks": [],
+    "checks": [
+      {
+        "id": "E2-06-rest-wi-write-staff",
+        "passed": true,
+        "http_status": 403,
+        "summary": "Staff direct PUT CSKH Work Item denied"
+      },
+      {
+        "id": "E2-06-rest-wi-write-crm-admin",
+        "passed": true,
+        "http_status": 403,
+        "summary": "CRM Admin direct PUT CSKH Work Item denied"
+      },
+      {
+        "id": "E2-06-assign-to-add-staff",
+        "passed": true,
+        "http_status": 403,
+        "summary": "frappe.desk.form.assign_to.add Lead bypass denied"
+      },
+      {
+        "id": "E2-06-leader-ownership-reassign-denied",
+        "passed": true,
+        "http_status": 403,
+        "summary": "Leader cannot call ownership.reassign"
+      },
+      {
+        "id": "E2-06-disabled-user-assign-rejected",
+        "passed": true,
+        "http_status": 400,
+        "summary": "CRM Admin cannot assign to disabled user"
+      },
+      {
+        "id": "E2-07-former-owner-lead-denied",
+        "passed": true,
+        "http_status": 403,
+        "summary": "Former owner Staff A1 denied CRM Lead"
+      },
+      {
+        "id": "E2-07-former-owner-task-denied",
+        "passed": true,
+        "http_status": 403,
+        "summary": "Former owner Staff A1 denied CRM Task"
+      },
+      {
+        "id": "E2-07-former-owner-call-denied",
+        "passed": true,
+        "http_status": 403,
+        "summary": "Former owner Staff A1 denied CRM Call Log"
+      },
+      {
+        "id": "E2-07-former-owner-note-denied",
+        "passed": true,
+        "http_status": 403,
+        "summary": "Former owner Staff A1 denied FCRM Note"
+      },
+      {
+        "id": "E2-07-former-owner-file-denied",
+        "passed": true,
+        "http_status": 404,
+        "summary": "Former owner Staff A1 denied File"
+      },
+      {
+        "id": "E2-07-current-owner-lead-allowed",
+        "passed": true,
+        "http_status": 200,
+        "summary": "Current owner Staff B1 reads CRM Lead (positive control)"
+      },
+      {
+        "id": "E2-07-current-owner-task-allowed",
+        "passed": true,
+        "http_status": 200,
+        "summary": "Current owner Staff B1 reads CRM Task (positive control)"
+      },
+      {
+        "id": "E2-07-current-owner-call-allowed",
+        "passed": true,
+        "http_status": 200,
+        "summary": "Current owner Staff B1 reads CRM Call Log (positive control)"
+      },
+      {
+        "id": "E2-07-current-owner-note-allowed",
+        "passed": true,
+        "http_status": 200,
+        "summary": "Current owner Staff B1 reads FCRM Note (positive control)"
+      },
+      {
+        "id": "E2-07-direct-rest-task-create-denied",
+        "passed": true,
+        "http_status": 403,
+        "summary": "Generic POST /api/resource/CRM Task denied"
+      },
+      {
+        "id": "E2-07-direct-rest-call-create-denied",
+        "passed": true,
+        "http_status": 403,
+        "summary": "Generic POST /api/resource/CRM Call Log denied"
+      },
+      {
+        "id": "E2-07-private-attachment-url-redacted",
+        "passed": true,
+        "http_status": 200,
+        "summary": "get_attachments redacts /private/files/ URL for non-system caller"
+      },
+      {
+        "id": "E2-08-ui-my-customers-staff",
+        "passed": true,
+        "http_status": 200,
+        "summary": "GET /cskh/my-customers renders 200 for Staff A1"
+      },
+      {
+        "id": "E2-08-api-my-list-staff-a1",
+        "passed": true,
+        "http_status": 200,
+        "summary": "Staff A1 my_list has wi_aba=True, wi_ab=False, count=22"
+      },
+      {
+        "id": "E2-08-bod-assigned-list-zero-pii",
+        "passed": true,
+        "http_status": 200,
+        "summary": "BOD assigned_list returns 20 items with 0 PII"
+      },
+      {
+        "id": "E2-08-guest-denied",
+        "passed": true,
+        "http_status": 403,
+        "summary": "Guest denied on customers.my_list"
+      }
+    ],
+    "watchpoint_observations": {
+      "former_owner_ownership_history_custom_api_status": 403,
+      "former_owner_generic_assignment_history_rest_status": 200,
+      "former_owner_generic_assignment_history_rows_count": 1,
+      "note": "Custom API ownership.history denies former owner (403) via work_item_has_permission, whereas generic REST CSKH Assignment History filters by historical `to_user = user`. In P2, CSKH Care Attempt MUST authorize via current Work Item ownership (`work_item.assigned_to`), NEVER via historical `performer = user` (SEC2-04 / ADR-P2-08)."
+    }
+  },
+  "p1_baseline_backup_created": true
+}

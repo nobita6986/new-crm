@@ -1,0 +1,33 @@
+{
+  "source_site": "p2dev.localhost",
+  "restored_site": "p2restore.localhost",
+  "recorded_at": "2026-11-03T17:53:21.965891+00:00",
+  "counts_match": true,
+  "source_counts": {
+    "CRM Lead": 25,
+    "CSKH Campaign": 8,
+    "CSKH Work Item": 12,
+    "CSKH Active Claim": 10,
+    "CSKH Assignment History": 16,
+    "CSKH Outcome Code": 12,
+    "CSKH Policy": 2,
+    "CSKH Contact Attempt": 4,
+    "CSKH Attempt Correction": 2,
+    "CRM Task": 4
+  },
+  "restored_counts": {
+    "CRM Lead": 25,
+    "CSKH Campaign": 8,
+    "CSKH Work Item": 12,
+    "CSKH Active Claim": 10,
+    "CSKH Assignment History": 16,
+    "CSKH Outcome Code": 12,
+    "CSKH Policy": 2,
+    "CSKH Contact Attempt": 4,
+    "CSKH Attempt Correction": 2,
+    "CRM Task": 4
+  },
+  "restored_reconcile_ok": true,
+  "restored_has_idempotency_record": true,
+  "status": "PASS"
+}

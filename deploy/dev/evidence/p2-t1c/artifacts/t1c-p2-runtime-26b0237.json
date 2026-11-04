@@ -1,0 +1,643 @@
+{
+  "probe": "t1c-p2-independent-runtime-26b0237",
+  "site": "t1cp2.localhost",
+  "code_revisions": {
+    "main_entry_baseline": "1913d2bd5ebfdc894eaa492b46be502dbdf44808",
+    "backend_head": "6ef2e2e21c9e8265efe43fd5413074b70849a674",
+    "ui_e2e_code_sha": "d3da46b16a6d800d5d8cf866fc06415f9f02253f",
+    "pr7_head": "26b02379adbc8a50a2bee6eb3bd91ec5d5b6b6ce",
+    "ci_synthetic_merge": "6b27fa38b46bc85bc876bc6b0afcc205de9326b2"
+  },
+  "executed_at_vn": "2026-11-04 10:09:27.297123",
+  "sections": {
+    "actor_fidelity": {
+      "roles_verified": {
+        "cskh.admin@example.test": {
+          "enabled": 1,
+          "roles": [
+            "CSKH CRM Admin"
+          ]
+        },
+        "cskh.bod@example.test": {
+          "enabled": 1,
+          "roles": [
+            "CSKH BOD Viewer"
+          ]
+        },
+        "leader.a@example.test": {
+          "enabled": 1,
+          "roles": [
+            "Sales Manager",
+            "Sales User"
+          ]
+        },
+        "leader.b@example.test": {
+          "enabled": 1,
+          "roles": [
+            "Sales Manager",
+            "Sales User"
+          ]
+        },
+        "leader.c@example.test": {
+          "enabled": 1,
+          "roles": [
+            "Sales Manager",
+            "Sales User"
+          ]
+        },
+        "staff.a1@example.test": {
+          "enabled": 1,
+          "roles": [
+            "Sales User"
+          ]
+        },
+        "staff.a2@example.test": {
+          "enabled": 1,
+          "roles": [
+            "Sales User"
+          ]
+        },
+        "staff.b1@example.test": {
+          "enabled": 1,
+          "roles": [
+            "Sales User"
+          ]
+        },
+        "staff.b2@example.test": {
+          "enabled": 1,
+          "roles": [
+            "Sales User"
+          ]
+        },
+        "staff.c1@example.test": {
+          "enabled": 1,
+          "roles": [
+            "Sales User"
+          ]
+        },
+        "staff.disabled@example.test": {
+          "enabled": 0,
+          "roles": [
+            "Sales User"
+          ]
+        },
+        "staff.outside@example.test": {
+          "enabled": 1,
+          "roles": [
+            "Sales User"
+          ]
+        }
+      },
+      "crm_admin_zero_system_manager": true,
+      "bod_zero_system_manager": true,
+      "disabled_user_login_http": 401,
+      "pass": true
+    },
+    "wp_static_01_and_l23_pool": {
+      "l23_pool_leader_a_zero_leak_on_hold": true,
+      "pool_checks": {
+        "crm_cskh.api.pool_ui.list": {
+          "http": 200,
+          "contains_transferred_lead_while_on_hold": false
+        },
+        "crm_cskh.api.customers.customer_pool": {
+          "http": 200,
+          "contains_transferred_lead_while_on_hold": false
+        },
+        "crm_cskh.api.customers.pool_list": {
+          "http": 200,
+          "contains_transferred_lead_while_on_hold": false
+        }
+      },
+      "capacity_usage_matches_owned_active_states": true,
+      "cap_b1": 17,
+      "sql_b1_active": 17
+    },
+    "mariadb_1020_1213_retry": {
+      "case_1213": {
+        "invocations": 2,
+        "attempts_written": 1,
+        "tasks_written": 1,
+        "final_revision": 2,
+        "status": "on_hold"
+      },
+      "case_1020": {
+        "invocations": 2,
+        "attempts_written": 1,
+        "final_revision": 2,
+        "status": "in_progress"
+      },
+      "case_exhausted": {
+        "invocations": 4,
+        "raised_after_max_retries": true,
+        "partial_attempts_left": 0,
+        "partial_tasks_left": 0,
+        "service_flags_reset": true
+      },
+      "pass": true
+    },
+    "vi_i18n_and_html_routes": {
+      "total_p2_strings": 282,
+      "missing_vi_translations": [],
+      "route_matrix": {
+        "staff_a1": {
+          "/cskh/my-customers": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/work-item": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/callbacks": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/progress": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/settings": {
+            "http": 403,
+            "html_lang_vi": null
+          }
+        },
+        "leader_a": {
+          "/cskh/my-customers": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/work-item": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/callbacks": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/progress": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/settings": {
+            "http": 200,
+            "html_lang_vi": true
+          }
+        },
+        "bod": {
+          "/cskh/my-customers": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/work-item": {
+            "http": 403,
+            "html_lang_vi": null
+          },
+          "/cskh/callbacks": {
+            "http": 403,
+            "html_lang_vi": null
+          },
+          "/cskh/progress": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/settings": {
+            "http": 200,
+            "html_lang_vi": true
+          }
+        },
+        "admin": {
+          "/cskh/my-customers": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/work-item": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/callbacks": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/progress": {
+            "http": 200,
+            "html_lang_vi": true
+          },
+          "/cskh/settings": {
+            "http": 200,
+            "html_lang_vi": true
+          }
+        },
+        "guest": {
+          "/cskh/my-customers": {
+            "http": 403,
+            "html_lang_vi": null
+          },
+          "/cskh/work-item": {
+            "http": 403,
+            "html_lang_vi": null
+          },
+          "/cskh/callbacks": {
+            "http": 403,
+            "html_lang_vi": null
+          },
+          "/cskh/progress": {
+            "http": 403,
+            "html_lang_vi": null
+          },
+          "/cskh/settings": {
+            "http": 403,
+            "html_lang_vi": null
+          }
+        }
+      },
+      "pass": true
+    },
+    "source_reconcile": {
+      "reconcile": {
+        "ok": true,
+        "campaign": null,
+        "orphan_claims": [],
+        "duplicate_owned_leads": [],
+        "multi_open_callbacks": [],
+        "callback_status_mismatches": [],
+        "ownership_mismatches": [],
+        "due_projection_mismatches": [],
+        "duplicate_call_log_links": [],
+        "interval_violations": [],
+        "counter_drifts": [],
+        "checked_work_items_with_attempts": 143,
+        "as_of": "2026-11-04 10:10:00.413094"
+      },
+      "counts": {
+        "CRM Lead": 203,
+        "CSKH Identity Index": 203,
+        "CSKH Campaign": 3,
+        "CSKH Work Item": 209,
+        "CSKH Active Claim": 176,
+        "CSKH Assignment History": 284,
+        "CSKH Outcome Code": 18,
+        "CSKH Policy": 2,
+        "CSKH Contact Attempt": 843,
+        "CRM Task": 87,
+        "CSKH Attempt Correction": 25
+      }
+    },
+    "backup_and_restore_g2_13": {
+      "backup_archive_name": "20261104_101000-t1cp2_localhost-database.sql.gz",
+      "backup_archive_bytes": 525007,
+      "counts_match_1_to_1": true,
+      "restored_counts": {
+        "CRM Lead": 203,
+        "CSKH Identity Index": 203,
+        "CSKH Campaign": 3,
+        "CSKH Work Item": 209,
+        "CSKH Active Claim": 176,
+        "CSKH Assignment History": 284,
+        "CSKH Outcome Code": 18,
+        "CSKH Policy": 2,
+        "CSKH Contact Attempt": 843,
+        "CRM Task": 87,
+        "CSKH Attempt Correction": 25
+      },
+      "restored_reconcile_ok": true,
+      "post_restore_idempotent_replay": true,
+      "pass": true
+    }
+  },
+  "findings_reproduced": {
+    "F-P2-01_bod_assignment_history_pii_and_reason_leak": {
+      "work_item_dnc": "kqi4jaem0m",
+      "work_item_close_reopen": "kqjmldeo4o",
+      "ownership_history_api": {
+        "http_dnc": 200,
+        "leaked_customer_note_and_phone_on_dnc_auto_close": true,
+        "http_close_reopen": 200,
+        "leaked_permlevel1_completion_reason": true,
+        "leaked_permlevel1_reopen_reason": true
+      },
+      "rest_v1_assignment_history": {
+        "http": 200,
+        "leaked_pii": true
+      },
+      "frappe_client_get_list": {
+        "http": 200,
+        "leaked_pii": true
+      },
+      "desk_reportview_get": {
+        "http": 200,
+        "leaked_pii": true
+      },
+      "desk_getdoc": {
+        "http": 200,
+        "leaked_pii": true
+      },
+      "raw_hash_prefix_in_timeline_and_history": true
+    },
+    "F-P2-02_run_history_assigned_only_fallback": {
+      "run_id": "kqs84ad2lq",
+      "work_item": "g4vi138jdr",
+      "leader_assigned_map_when_status_assigned": {
+        "staff.a2@example.test": 1
+      },
+      "leader_assigned_map_when_status_in_progress": {},
+      "dropped_in_progress_count": true
+    },
+    "F-P2-04_my_customers_client_side_care_filter_pagination": {
+      "total_active_work_items_for_staff_a1": 72,
+      "target_connected_work_item": "7mikecehjd",
+      "present_on_page_1": false,
+      "present_on_page_2": true,
+      "page_1_connected_count": 18,
+      "page_2_connected_count": 17,
+      "client_side_filter_hides_page_2_and_caps_pager_total_to_page_1_matches": true,
+      "leader_closed_without_assignee_total": 18,
+      "leader_closed_with_assignee_a1_total": 0,
+      "assignee_filter_drops_100pct_of_closed_work_items": true
+    },
+    "F-P2-06_staff_direct_crm_lead_dnc_bypass": {
+      "lead": "CRM-LEAD-2026-00193",
+      "actor": "staff.a1@example.test",
+      "rest_put_set_dnc_http": 200,
+      "db_dnc_after_staff_direct_set": 1,
+      "rest_put_clear_dnc_http": 200,
+      "db_dnc_after_staff_direct_clear": 0,
+      "bypassed_workflow_and_admin_override_gate": true
+    },
+    "F-P2-05_progress_summary_date_only_filter_drops_same_day_and_missing_wi_connected_counts": {
+      "http": 200,
+      "query_params": {
+        "date_from": "2026-11-04",
+        "date_to": "2026-11-04"
+      },
+      "sql_attempts_recorded_today": 843,
+      "api_effective_attempts_returned_for_today_date_only": 0,
+      "dropped_same_day_attempts_when_date_without_time": true,
+      "cards_keys_returned": [
+        "assigned",
+        "closed",
+        "connected_attempts",
+        "dnc_leads",
+        "due_today_followups",
+        "effective_attempts",
+        "in_progress",
+        "on_hold",
+        "open_followups",
+        "overdue_followups",
+        "pending_corrections",
+        "queued",
+        "revoked",
+        "total_active_owned",
+        "unreached_attempts"
+      ],
+      "missing_distinct_work_item_attempted_and_connected_counters": true
+    }
+  },
+  "requirements_t2": {
+    "T2-01": {
+      "step1_in_progress": true,
+      "step2_on_hold": true,
+      "step3_closed": true,
+      "lead_status_isolated": true,
+      "active_claim_released_on_close": true,
+      "pass": true
+    },
+    "T2-02_T2-03_T2-04_T2-17": {
+      "side_artifacts_attempt_count": 0,
+      "after_5_unreached_attempt_count": 5,
+      "after_5_unreached_connected_count": 0,
+      "zero_fake_call_logs_for_sms_zalo": true,
+      "after_connected_interested_connected_count": 1,
+      "pass": true
+    },
+    "T2-05": {
+      "followup_required": {
+        "http": 422,
+        "code": "FOLLOWUP_REQUIRED"
+      },
+      "note_required": {
+        "http": 422,
+        "code": "NOTE_REQUIRED"
+      },
+      "channel_incompatible": {
+        "http": 422,
+        "code": "OUTCOME_NOT_COMPATIBLE"
+      },
+      "zero_attempts_created_on_422": true,
+      "pass": true
+    },
+    "T2-06": {
+      "mid_tx_exception_caught": true,
+      "orphan_attempts_after_rollback": 0,
+      "revision_unchanged_after_rollback": true,
+      "status_unchanged_after_rollback": true,
+      "post_commit_notification_isolated": true,
+      "pass": true
+    },
+    "T2-07": {
+      "reschedule_no_reason": {
+        "http": 422,
+        "code": "NOTE_REQUIRED"
+      },
+      "reschedule_ok": {
+        "http": 200,
+        "reschedule_count": 1
+      },
+      "complete_without_attempt": {
+        "http": 422,
+        "code": "OUTCOME_NOT_COMPATIBLE"
+      },
+      "cancel_without_reason": {
+        "http": 422,
+        "code": "NOTE_REQUIRED"
+      },
+      "cancel_with_reason": {
+        "http": 200,
+        "work_item_status": "in_progress",
+        "connected_unchanged_after_cancel": true,
+        "attempts_unchanged_after_cancel": true
+      },
+      "pass": true
+    },
+    "T2-08_T2-09": {
+      "concurrent_6_statuses": [
+        200,
+        200,
+        200,
+        200,
+        200,
+        200
+      ],
+      "sequential_replay_http": 200,
+      "sequential_replay_flag": true,
+      "modified_payload_http": 409,
+      "modified_payload_code": "IDEMPOTENCY_CONFLICT",
+      "db_attempts_count": 1,
+      "db_tasks_count": 1,
+      "pass": true
+    },
+    "T2-10": {
+      "tab1_http": 200,
+      "tab2_stale_http": 409,
+      "tab2_stale_code": "STALE_WORK_ITEM",
+      "policy_mismatch_http": 409,
+      "policy_mismatch_code": "POLICY_CHANGED",
+      "pass": true
+    },
+    "T2-11_T2-12_WP-OBS-01": {
+      "live_race_valid": true,
+      "race_staff_http": 200,
+      "race_admin_http": 400,
+      "race_admin_code": "INVALID_REQUEST",
+      "race_admin_idempotent_retry_http": 200,
+      "attempt_owner_at_attempt_preserved_as_a1": true,
+      "callback_transferred_to_b1_with_exact_due_date": true,
+      "former_owner_and_former_leader_zero_access_all_planes": true,
+      "former_plane_details": {
+        "staff_a1": {
+          "get_work_item": 403,
+          "list_attempts": 403,
+          "record_attempt": 409,
+          "rest_attempt_doc": 403,
+          "rest_attempt_list_len": 0,
+          "rest_correction_doc": 403,
+          "rest_correction_list_len": 0,
+          "rest_task_doc": 403,
+          "rest_call_log_doc": 403,
+          "rest_lead_doc": 403,
+          "v2_attempt_doc": 403,
+          "desk_getdoc_attempt": 403,
+          "desk_reportview_attempt_len": 0,
+          "validate_link_attempt_empty_or_403": true,
+          "rest_file_doc": 404,
+          "private_file_http": 403
+        },
+        "leader_a": {
+          "get_work_item": 403,
+          "list_attempts": 403,
+          "record_attempt": 409,
+          "rest_attempt_doc": 403,
+          "rest_attempt_list_len": 0,
+          "rest_correction_doc": 403,
+          "rest_correction_list_len": 0,
+          "rest_task_doc": 403,
+          "rest_call_log_doc": 403,
+          "rest_lead_doc": 403,
+          "v2_attempt_doc": 403,
+          "desk_getdoc_attempt": 403,
+          "desk_reportview_attempt_len": 0,
+          "validate_link_attempt_empty_or_403": true,
+          "rest_file_doc": 404,
+          "private_file_http": 403
+        }
+      },
+      "new_owner_b1_access_ok": true,
+      "new_leader_b_review_correction_ok": true,
+      "wi_aba_backdate_into_b1_interval_rejected": true,
+      "pass": true
+    },
+    "T2-13_T2-14_T2-15": {
+      "close_zero_attempts_normal_422": true,
+      "close_zero_attempts_invalid_200": true,
+      "reopen_staff_403": true,
+      "reopen_missing_reason_422": true,
+      "reopen_former_team_leader_after_lead_moved_403": true,
+      "reopen_active_claim_collision_409": true,
+      "wrong_number_closes_without_setting_dnc": true,
+      "dnc_sets_lead_flag_blocks_leader_allows_admin_override": true,
+      "pass": true
+    },
+    "T2-16": {
+      "foreign_call_log_rejected": true,
+      "native_call_log_verified": true,
+      "duplicate_call_log_409": true,
+      "manual_call_log_self_reported": true,
+      "pass": true
+    },
+    "T2-18": {
+      "outcome_bumped_to_v2": true,
+      "historical_label_preserved": true,
+      "historical_connected_preserved": true,
+      "disabled_outcome_blocked_422": true,
+      "campaign_policy_saved": true,
+      "pass": true
+    },
+    "T2-19_T2-20": {
+      "admin_direct_put_403": true,
+      "admin_direct_delete_403": true,
+      "staff_auto_approve_403": true,
+      "after_approve_connected": 1,
+      "after_void_attempt_count": 0,
+      "leader_restore_403": true,
+      "after_admin_restore_connected": 1,
+      "raw_sql_attempt_row_100pct_unchanged": true,
+      "pass": true
+    },
+    "T2-21_T2-22_G2-12": {
+      "utc7_day_boundaries": {
+        "235955_in_today_only": true,
+        "000005_in_upcoming_only": true,
+        "yesterday_235955_in_overdue_only": true
+      },
+      "timeline_125_pagination": {
+        "total_collected": 125,
+        "unique_collected": 125,
+        "exact_125_disjoint": true
+      },
+      "progress_sql_reconciliation": {
+        "bod_http": 200,
+        "bod_zero_pii_keys": true,
+        "cards": {
+          "total_active_owned": 169,
+          "assigned": 31,
+          "in_progress": 88,
+          "on_hold": 50,
+          "closed": 31,
+          "revoked": 1,
+          "queued": 8,
+          "effective_attempts": 843,
+          "connected_attempts": 257,
+          "unreached_attempts": 586,
+          "open_followups": 50,
+          "overdue_followups": 5,
+          "due_today_followups": 39,
+          "pending_corrections": 0,
+          "dnc_leads": 13
+        },
+        "sql_expected": {
+          "total_active_owned": 169,
+          "assigned": 31,
+          "in_progress": 88,
+          "on_hold": 50,
+          "closed": 31,
+          "dnc_leads": 13,
+          "pending_corrections": 0,
+          "open_followups": 50
+        },
+        "staff_c1_self_on_hold_matches_sql": true,
+        "all_sql_counters_match_1_to_1": true
+      },
+      "pass": true
+    }
+  },
+  "security_sec2": {
+    "SEC2-01_staff_a_get_attempts_of_b_denied": true,
+    "SEC2-02_staff_a_post_foreign_or_closed_wi_denied": true,
+    "SEC2-03_spoofed_performed_by_rejected": true,
+    "SEC2-04_spoofed_verification_status_rejected": true,
+    "SEC2-05_p2_doctypes_and_task_direct_bypass_blocked": true,
+    "SEC2-05_direct_doctype_bypass_FAIL_via_crm_lead_dnc_fields": false,
+    "SEC2-06_foreign_call_log_link_blocked": true,
+    "SEC2-07_former_owner_revoked_all_planes": true,
+    "SEC2-08_leader_cross_team_isolated": true,
+    "SEC2-09_bod_mutations_blocked": true,
+    "SEC2-09_bod_zero_pii_FAIL_via_assignment_history": false,
+    "SEC2-10_xss_and_formula_sanitized": true,
+    "SEC2-11_csrf_and_post_method_enforced": true,
+    "SEC2-12_private_file_guarded": true,
+    "SEC2-13_error_responses_and_logs_redacted": true,
+    "SEC2-14_staff_progress_scope_locked_to_self": true,
+    "SEC2-15_timestamp_bounds_enforced": true,
+    "SEC2-16_admin_direct_attempt_mutation_and_permlevel1_oracle_blocked": true
+  }
+}

@@ -494,6 +494,26 @@ ADDITIONAL = (
 	"Only my own data",
 )
 
+
+def _load_p2_strings():
+	try:
+		from crm_cskh import p2_strings as mod
+
+		return mod
+	except ImportError:
+		import importlib.util
+		import os
+
+		path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "p2_strings.py")
+		spec = importlib.util.spec_from_file_location("crm_cskh_p2_strings", path)
+		mod = importlib.util.module_from_spec(spec)
+		spec.loader.exec_module(mod)
+		return mod
+
+
+_p2 = _load_p2_strings()
+ERROR_EXPLANATIONS.update(_p2.P2_ERROR_EXPLANATIONS)
+
 ALL_STRINGS = (
 	SHELL
 	+ TITLES
@@ -508,6 +528,7 @@ ALL_STRINGS = (
 	+ ELIGIBILITY_REASONS
 	+ IMPORT_CLASSES
 	+ BACKEND_MESSAGES
+	+ _p2.ALL_P2_STRINGS
 )
 
 

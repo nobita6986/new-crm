@@ -17,10 +17,12 @@ from frappe.utils import get_datetime, now_datetime
 
 from crm_cskh.services.phone_identity import InvalidPhone, normalize_vn_phone
 
-# P1 §1.3: the states actually used by P1 are only queued / assigned / revoked /
-# closed. `in_progress` and `on_hold` are reserved for P2 and MUST NOT be used
-# by P1 code, otherwise the "one active work item" invariant becomes ambiguous.
-ACTIVE_WORK_ITEM_STATES = ("queued", "assigned")
+# P2 (`ADR-P2-01`, `docs/state-machine.md`): active work items include `queued`,
+# `assigned`, `in_progress`, and `on_hold`. Owned active states (`assigned`,
+# `in_progress`, `on_hold`) require `assigned_to` + `assigned_at` and count
+# toward assignee capacity.
+OWNED_ACTIVE_WORK_ITEM_STATES = ("assigned", "in_progress", "on_hold")
+ACTIVE_WORK_ITEM_STATES = ("queued", "assigned", "in_progress", "on_hold")
 TERMINAL_WORK_ITEM_STATES = ("revoked", "closed")
 
 IMPORT_STATUS_TRANSITIONS = {
@@ -140,12 +142,18 @@ class AssignmentRule(Document):
 
 class WorkItem(Document):
 	def validate(self):
-		if self.status == "assigned" and not self.assigned_to:
+		if not getattr(self, "revision", None) or int(self.revision or 0) < 1:
+			self.revision = 1
+		if self.status in OWNED_ACTIVE_WORK_ITEM_STATES and not self.assigned_to:
 			frappe.throw(_("An assigned work item requires an assignee."))
 		if self.status in ("queued", "revoked", "closed") and self.assigned_to:
 			frappe.throw(_("A queued, revoked or closed work item must not have an assignee."))
-		if self.status == "assigned" and not self.assigned_at:
+		if self.status in OWNED_ACTIVE_WORK_ITEM_STATES and not self.assigned_at:
 			frappe.throw(_("An assigned work item requires an assignment timestamp."))
+		if self.status == "on_hold" and not getattr(self, "open_callback_task", None):
+			frappe.throw(_("An on-hold work item requires an open callback task."))
+		if self.status in ("queued", "revoked", "closed") and getattr(self, "open_callback_task", None):
+			frappe.throw(_("A queued, revoked or closed work item must not hold an open callback task."))
 
 
 class ActiveClaim(Document):
@@ -250,9 +258,9 @@ class AssignmentHistory(Document):
 		if self.ownership_start and self.ownership_end:
 			if get_datetime(self.ownership_end) < get_datetime(self.ownership_start):
 				frappe.throw(_("The end date must not precede the start date."))
-		if self.action == "assign" and not self.to_user:
+		if self.action in ("assign", "reassign", "reopen") and not self.to_user:
 			frappe.throw(_("An assignment event requires a target user."))
-		if self.action == "revoke" and self.to_user:
+		if self.action in ("revoke", "close") and self.to_user:
 			frappe.throw(_("A revocation event must not have a target user."))
 
 	def on_trash(self):

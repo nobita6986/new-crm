@@ -1,0 +1,735 @@
+{
+  "benchmark_scope": "P2.md §15.4 & §15.5 synthetic scale, pagination, index & 25-worker load",
+  "sla_disclaimer": "Recorded numbers are measured DEV container baselines only; no artificial SLA threshold is invented.",
+  "site": "p2bench.localhost",
+  "recorded_at": "2026-11-04 00:59:53.103188",
+  "total_wall_seconds": 82.61,
+  "dataset": {
+    "seed_wall_seconds": 22.089,
+    "total_work_items": 10000,
+    "total_contact_attempts": 50000,
+    "total_open_callback_tasks": 2020,
+    "total_approved_corrections": 520,
+    "deep_timeline_work_item": "P2B-WI-00000",
+    "deep_timeline_attempt_count": 120
+  },
+  "service_write_microbenchmark": {
+    "work_items_seeded": 25,
+    "record_attempt_100": {
+      "count": 100,
+      "min_ms": 40.844,
+      "p50_ms": 51.054,
+      "p95_ms": 88.301,
+      "max_ms": 349.347,
+      "mean_ms": 59.714
+    },
+    "schedule_or_reschedule_followup_40": {
+      "count": 40,
+      "min_ms": 28.724,
+      "p50_ms": 39.231,
+      "p95_ms": 51.963,
+      "max_ms": 115.879,
+      "mean_ms": 40.19
+    },
+    "request_and_approve_correction_20": {
+      "count": 20,
+      "min_ms": 83.321,
+      "p50_ms": 94.05,
+      "p95_ms": 138.19,
+      "max_ms": 222.107,
+      "mean_ms": 104.259
+    }
+  },
+  "read_and_pagination_benchmarks": {
+    "staff_list_work_items_default_p1": {
+      "latency": {
+        "count": 5,
+        "min_ms": 10.434,
+        "p50_ms": 14.858,
+        "p95_ms": 20.312,
+        "max_ms": 21.456,
+        "mean_ms": 15.397
+      },
+      "sql_queries_per_call": 2,
+      "payload_bytes": 17449
+    },
+    "staff_list_work_items_overdue": {
+      "latency": {
+        "count": 5,
+        "min_ms": 6.684,
+        "p50_ms": 8.712,
+        "p95_ms": 11.334,
+        "max_ms": 11.825,
+        "mean_ms": 8.83
+      },
+      "sql_queries_per_call": 2,
+      "payload_bytes": 17448
+    },
+    "leader_list_work_items_in_progress": {
+      "latency": {
+        "count": 5,
+        "min_ms": 71.021,
+        "p50_ms": 77.076,
+        "p95_ms": 85.034,
+        "max_ms": 85.939,
+        "mean_ms": 78.102
+      },
+      "sql_queries_per_call": 4,
+      "payload_bytes": 16855
+    },
+    "admin_list_work_items_due_today": {
+      "latency": {
+        "count": 5,
+        "min_ms": 13.091,
+        "p50_ms": 13.772,
+        "p95_ms": 20.375,
+        "max_ms": 21.621,
+        "mean_ms": 15.415
+      },
+      "sql_queries_per_call": 2,
+      "payload_bytes": 17694
+    },
+    "staff_get_work_item_detail": {
+      "latency": {
+        "count": 5,
+        "min_ms": 22.393,
+        "p50_ms": 26.1,
+        "p95_ms": 36.877,
+        "max_ms": 38.906,
+        "mean_ms": 27.728
+      },
+      "sql_queries_per_call": 13,
+      "payload_bytes": 2059
+    },
+    "timeline_120_attempts_page_1_size_20": {
+      "latency": {
+        "count": 5,
+        "min_ms": 20.86,
+        "p50_ms": 22.192,
+        "p95_ms": 53.559,
+        "max_ms": 60.429,
+        "mean_ms": 30.141
+      },
+      "sql_queries_per_call": 4,
+      "payload_bytes": 26983
+    },
+    "timeline_120_attempts_page_6_size_20": {
+      "latency": {
+        "count": 5,
+        "min_ms": 21.285,
+        "p50_ms": 21.991,
+        "p95_ms": 28.435,
+        "max_ms": 29.476,
+        "mean_ms": 23.669
+      },
+      "sql_queries_per_call": 4,
+      "payload_bytes": 26881
+    },
+    "leader_list_followups_overdue": {
+      "latency": {
+        "count": 5,
+        "min_ms": 11.317,
+        "p50_ms": 11.717,
+        "p95_ms": 12.601,
+        "max_ms": 12.74,
+        "mean_ms": 11.848
+      },
+      "sql_queries_per_call": 4,
+      "payload_bytes": 11489
+    },
+    "leader_list_followups_today": {
+      "latency": {
+        "count": 5,
+        "min_ms": 11.277,
+        "p50_ms": 11.602,
+        "p95_ms": 12.555,
+        "max_ms": 12.76,
+        "mean_ms": 11.773
+      },
+      "sql_queries_per_call": 4,
+      "payload_bytes": 11529
+    },
+    "staff_progress_summary": {
+      "latency": {
+        "count": 3,
+        "min_ms": 113.286,
+        "p50_ms": 118.532,
+        "p95_ms": 119.316,
+        "max_ms": 119.403,
+        "mean_ms": 117.074
+      },
+      "sql_queries_per_call": 11,
+      "payload_bytes": 872
+    },
+    "leader_team_progress_summary_25k_attempts": {
+      "latency": {
+        "count": 3,
+        "min_ms": 1254.399,
+        "p50_ms": 1321.96,
+        "p95_ms": 1323.481,
+        "max_ms": 1323.65,
+        "mean_ms": 1300.003
+      },
+      "sql_queries_per_call": 41,
+      "payload_bytes": 3414
+    },
+    "bod_system_progress_summary_50k_attempts": {
+      "latency": {
+        "count": 3,
+        "min_ms": 2476.78,
+        "p50_ms": 2519.388,
+        "p95_ms": 2728.906,
+        "max_ms": 2752.186,
+        "mean_ms": 2582.785
+      },
+      "sql_queries_per_call": 58,
+      "payload_bytes": 6418
+    }
+  },
+  "concurrency_25_workers": {
+    "concurrent_workers": 25,
+    "total_operations": 100,
+    "error_count": 0,
+    "errors": [],
+    "wall_seconds": 10.762,
+    "cpu_user_seconds_delta": 9.652,
+    "cpu_system_seconds_delta": 3.085,
+    "rss_before_mb": 278.25,
+    "peak_rss_mb": 326.0,
+    "per_operation_latency": {
+      "list_work_items": {
+        "count": 25,
+        "min_ms": 158.247,
+        "p50_ms": 638.867,
+        "p95_ms": 790.688,
+        "max_ms": 933.217,
+        "mean_ms": 583.947
+      },
+      "record_attempt_with_followup": {
+        "count": 25,
+        "min_ms": 7510.721,
+        "p50_ms": 8864.387,
+        "p95_ms": 9088.9,
+        "max_ms": 9137.01,
+        "mean_ms": 8691.023
+      },
+      "list_attempts_timeline": {
+        "count": 25,
+        "min_ms": 277.614,
+        "p50_ms": 591.949,
+        "p95_ms": 859.362,
+        "max_ms": 902.152,
+        "mean_ms": 604.354
+      },
+      "list_followups": {
+        "count": 25,
+        "min_ms": 30.609,
+        "p50_ms": 126.665,
+        "p95_ms": 247.785,
+        "max_ms": 317.262,
+        "mean_ms": 140.322
+      }
+    },
+    "database_deltas": {
+      "questions_delta": 2240,
+      "queries_delta": 2240,
+      "slow_queries_delta": 0,
+      "innodb_row_lock_waits_delta": 0,
+      "innodb_row_lock_time_ms_delta": 0
+    }
+  },
+  "explain_plans": {
+    "work_item_queue_by_assignee_status_due": [
+      {
+        "table": "tabCSKH Work Item",
+        "type": "range",
+        "possible_keys": "cskh_lookup_0,cskh_wi_queue_due_idx",
+        "key": "cskh_wi_queue_due_idx",
+        "rows": "399",
+        "Extra": "Using where; Using index; Using filesort"
+      }
+    ],
+    "attempt_timeline_by_work_item_occurred": [
+      {
+        "table": "tabCSKH Contact Attempt",
+        "type": "ref",
+        "possible_keys": "cskh_attempt_idem_uq,cskh_attempt_wi_occ_idx",
+        "key": "cskh_attempt_wi_occ_idx",
+        "rows": "120",
+        "Extra": "Using index condition; Using where"
+      }
+    ],
+    "attempt_summary_by_campaign_occurred": [
+      {
+        "table": "tabCSKH Contact Attempt",
+        "type": "ALL",
+        "possible_keys": "cskh_attempt_camp_occ_idx",
+        "key": null,
+        "rows": "48650",
+        "Extra": "Using where"
+      }
+    ],
+    "approved_corrections_by_attempt_status": [
+      {
+        "table": "tabCSKH Attempt Correction",
+        "type": "ref",
+        "possible_keys": "cskh_corr_attempt_status_idx",
+        "key": "cskh_corr_attempt_status_idx",
+        "rows": "1",
+        "Extra": "Using index condition"
+      }
+    ],
+    "followup_tasks_by_flag_status_due": [
+      {
+        "table": "tabCRM Task",
+        "type": "range",
+        "possible_keys": "cskh_task_followup_due_idx",
+        "key": "cskh_task_followup_due_idx",
+        "rows": "650",
+        "Extra": "Using index condition"
+      }
+    ]
+  },
+  "reconciliation_postcheck": {
+    "ok": true,
+    "reconcile_seconds": 11.321,
+    "checked_work_items_with_attempts": 9000,
+    "orphan_claims_count": 0,
+    "duplicate_owned_leads_count": 0,
+    "multi_open_callbacks_count": 0,
+    "callback_status_mismatches_count": 0,
+    "ownership_mismatches_count": 0,
+    "due_projection_mismatches_count": 0,
+    "duplicate_call_log_links_count": 0,
+    "interval_violations_count": 0,
+    "counter_drifts_count": 0
+  },
+  "resources_overall": {
+    "rss_start_mb": 128.28,
+    "peak_rss_mb": 326.0,
+    "python_tracemalloc_peak_mb": 105.45,
+    "cpu_user_seconds_total": 66.938,
+    "cpu_system_seconds_total": 4.479,
+    "questions_delta": 14284,
+    "queries_delta": 14284,
+    "slow_queries_delta": 0,
+    "innodb_row_lock_waits_delta": 0,
+    "innodb_row_lock_time_ms_delta": 0
+  },
+  "indexes": {
+    "tabCSKH Outcome Code": [
+      {
+        "key_name": "PRIMARY",
+        "column_name": "name",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "code",
+        "column_name": "code",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "modified",
+        "column_name": "modified",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_outcome_enabled_sort_idx",
+        "column_name": "enabled",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_outcome_enabled_sort_idx",
+        "column_name": "sort_order",
+        "seq_in_index": 2,
+        "unique": false
+      }
+    ],
+    "tabCSKH Policy": [
+      {
+        "key_name": "PRIMARY",
+        "column_name": "name",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "policy_code",
+        "column_name": "policy_code",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "modified",
+        "column_name": "modified",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_policy_scope_idx",
+        "column_name": "scope_type",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_policy_scope_idx",
+        "column_name": "enabled",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_policy_scope_idx",
+        "column_name": "campaign",
+        "seq_in_index": 3,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_policy_scope_idx",
+        "column_name": "team",
+        "seq_in_index": 4,
+        "unique": false
+      }
+    ],
+    "tabCSKH Contact Attempt": [
+      {
+        "key_name": "PRIMARY",
+        "column_name": "name",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "cskh_attempt_idem_uq",
+        "column_name": "work_item",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "cskh_attempt_idem_uq",
+        "column_name": "performed_by",
+        "seq_in_index": 2,
+        "unique": true
+      },
+      {
+        "key_name": "cskh_attempt_idem_uq",
+        "column_name": "idempotency_key",
+        "seq_in_index": 3,
+        "unique": true
+      },
+      {
+        "key_name": "cskh_attempt_call_log_uq",
+        "column_name": "call_log",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "modified",
+        "column_name": "modified",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_wi_occ_idx",
+        "column_name": "work_item",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_wi_occ_idx",
+        "column_name": "occurred_at",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_lead_occ_idx",
+        "column_name": "lead",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_lead_occ_idx",
+        "column_name": "occurred_at",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_camp_occ_idx",
+        "column_name": "campaign",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_camp_occ_idx",
+        "column_name": "occurred_at",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_perf_occ_idx",
+        "column_name": "performed_by",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_perf_occ_idx",
+        "column_name": "occurred_at",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_out_occ_idx",
+        "column_name": "outcome_code",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_attempt_out_occ_idx",
+        "column_name": "occurred_at",
+        "seq_in_index": 2,
+        "unique": false
+      }
+    ],
+    "tabCSKH Attempt Correction": [
+      {
+        "key_name": "PRIMARY",
+        "column_name": "name",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "cskh_corr_req_idem_uq",
+        "column_name": "requested_by",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "cskh_corr_req_idem_uq",
+        "column_name": "idempotency_key",
+        "seq_in_index": 2,
+        "unique": true
+      },
+      {
+        "key_name": "modified",
+        "column_name": "modified",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_corr_attempt_status_idx",
+        "column_name": "attempt",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_corr_attempt_status_idx",
+        "column_name": "status",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_corr_attempt_status_idx",
+        "column_name": "creation",
+        "seq_in_index": 3,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_corr_wi_status_idx",
+        "column_name": "work_item",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_corr_wi_status_idx",
+        "column_name": "status",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_corr_wi_status_idx",
+        "column_name": "creation",
+        "seq_in_index": 3,
+        "unique": false
+      }
+    ],
+    "tabCSKH Work Item": [
+      {
+        "key_name": "PRIMARY",
+        "column_name": "name",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "cskh_domain_unique",
+        "column_name": "campaign",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "cskh_domain_unique",
+        "column_name": "lead",
+        "seq_in_index": 2,
+        "unique": true
+      },
+      {
+        "key_name": "modified",
+        "column_name": "modified",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_lookup_0",
+        "column_name": "assigned_to",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_lookup_0",
+        "column_name": "status",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_lookup_0",
+        "column_name": "assigned_at",
+        "seq_in_index": 3,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_lookup_1",
+        "column_name": "campaign",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_lookup_1",
+        "column_name": "status",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_lookup_2",
+        "column_name": "lead",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_lookup_2",
+        "column_name": "status",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_wi_queue_due_idx",
+        "column_name": "assigned_to",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_wi_queue_due_idx",
+        "column_name": "status",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_wi_queue_due_idx",
+        "column_name": "next_action_due",
+        "seq_in_index": 3,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_wi_camp_last_idx",
+        "column_name": "campaign",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_wi_camp_last_idx",
+        "column_name": "status",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_wi_camp_last_idx",
+        "column_name": "last_attempt_at",
+        "seq_in_index": 3,
+        "unique": false
+      }
+    ],
+    "tabCRM Task": [
+      {
+        "key_name": "PRIMARY",
+        "column_name": "name",
+        "seq_in_index": 1,
+        "unique": true
+      },
+      {
+        "key_name": "modified",
+        "column_name": "modified",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_wi_open_idx",
+        "column_name": "cskh_work_item",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_wi_open_idx",
+        "column_name": "cskh_is_followup",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_wi_open_idx",
+        "column_name": "status",
+        "seq_in_index": 3,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_assignee_due_idx",
+        "column_name": "assigned_to",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_assignee_due_idx",
+        "column_name": "cskh_is_followup",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_assignee_due_idx",
+        "column_name": "status",
+        "seq_in_index": 3,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_assignee_due_idx",
+        "column_name": "due_date",
+        "seq_in_index": 4,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_followup_due_idx",
+        "column_name": "cskh_is_followup",
+        "seq_in_index": 1,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_followup_due_idx",
+        "column_name": "status",
+        "seq_in_index": 2,
+        "unique": false
+      },
+      {
+        "key_name": "cskh_task_followup_due_idx",
+        "column_name": "due_date",
+        "seq_in_index": 3,
+        "unique": false
+      }
+    ]
+  }
+}

@@ -97,21 +97,17 @@ def _campaign_ineligible_users(campaign_name, allowed_nodes):
 	if not rules:
 		return set()
 
-	max_version = max((int(row.version or 1) for row in rules), default=1)
-	latest_by_user = {}
-	enabled_by_user = {}
+	by_user = {}
 	for row in rules:
-		if not row.user:
-			continue
-		if int(row.version or 1) == max_version:
-			latest_by_user.setdefault(row.user, []).append(row)
-		if int(row.enabled or 0):
-			enabled_by_user.setdefault(row.user, []).append(row)
+		if row.user:
+			by_user.setdefault(row.user, []).append(row)
 
 	load_rows = frappe.db.sql(
 		"""select assigned_to as user, count(*) as total
 		   from `tabCSKH Work Item`
-		   where campaign = %s and status = 'assigned' and assigned_to is not null
+		   where campaign = %s
+		     and status in ('assigned', 'in_progress', 'on_hold')
+		     and assigned_to is not null
 		   group by assigned_to""",
 		(campaign_name,),
 		as_dict=True,
@@ -119,8 +115,10 @@ def _campaign_ineligible_users(campaign_name, allowed_nodes):
 	loads = {row.user: int(row.total or 0) for row in load_rows if row.user}
 
 	ineligible = set()
-	for user, user_latest in latest_by_user.items():
-		enabled_latest = [row for row in user_latest if int(row.enabled or 0)]
+	for user, user_rules in by_user.items():
+		latest_version = max((int(row.version or 1) for row in user_rules), default=1)
+		latest_rows = [row for row in user_rules if int(row.version or 1) == latest_version]
+		enabled_latest = [row for row in latest_rows if int(row.enabled or 0)]
 		if not enabled_latest:
 			ineligible.add(user)
 			continue
@@ -128,13 +126,10 @@ def _campaign_ineligible_users(campaign_name, allowed_nodes):
 			ineligible.add(user)
 			continue
 		if allowed_nodes is not None:
-			for row in enabled_latest:
-				if row.team and row.team not in allowed_nodes:
-					ineligible.add(user)
-					break
-
-	for user, user_enabled in enabled_by_user.items():
-		cap_limit = max((int(row.capacity_limit or 0) for row in user_enabled), default=0)
+			if any(row.team and row.team not in allowed_nodes for row in enabled_latest):
+				ineligible.add(user)
+				continue
+		cap_limit = max((int(row.capacity_limit or 0) for row in enabled_latest), default=0)
 		if cap_limit > 0 and loads.get(user, 0) >= cap_limit:
 			ineligible.add(user)
 
@@ -159,7 +154,7 @@ def assigned_list(page=1, page_size=20, campaign=None, owner=None):
 	users = reporting._scope_users(scope)
 	allow_pii = scope.get("pii", True)
 
-	clauses = ["wi.status = 'assigned'"]
+	clauses = ["wi.status in ('assigned', 'in_progress', 'on_hold')"]
 	params = []
 	if campaign_val:
 		clauses.append("wi.campaign = %s")
@@ -194,7 +189,7 @@ def assigned_list(page=1, page_size=20, campaign=None, owner=None):
 	)[0][0]
 	rows = frappe.db.sql(
 		"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
-		"wi.assigned_to as assigned_to, wi.assigned_at as assigned_at, "
+		"wi.status as status, wi.assigned_to as assigned_to, wi.assigned_at as assigned_at, "
 		"c.title as campaign_title, c.code as campaign_code "
 		"from `tabCSKH Work Item` wi "
 		"left join `tabCSKH Campaign` c on c.name = wi.campaign "
@@ -223,6 +218,8 @@ def assigned_list(page=1, page_size=20, campaign=None, owner=None):
 				"campaign_title": row.campaign_title,
 				"campaign_code": row.campaign_code,
 				"source": lead.source,
+				"status": row.status,
+				"work_item_status": row.status,
 				"assigned_to": row.assigned_to,
 				"assigned_at": row.assigned_at,
 			}

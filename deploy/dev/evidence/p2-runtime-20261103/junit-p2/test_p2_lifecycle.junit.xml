@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p2_lifecycle.TestP2CloseReopenDncAndCompatibility-2[REDACTED_PHONE]34" tests="4" file="crm_cskh/tests/test_p2_lifecycle.py" time="3.342" timestamp="2026-11-04T00:56:39" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_lifecycle.TestP2CloseReopenDncAndCompatibility" name="test_close_blocks_zero_attempts_by_default_but_allows_invalid_duplicate_with_reason" time="1.411" timestamp="2026-11-04T00:56:37" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_lifecycle.py" line="229">
+			<!--`T2-23`: `require_attempt_before_close=True` blocks normal close at 0 attempts.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_lifecycle.TestP2CloseReopenDncAndCompatibility" name="test_dnc_persists_on_lead_blocks_future_campaigns_and_requires_admin_override" time="0.706" timestamp="2026-11-04T00:56:37" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_lifecycle.py" line="327">
+			<!--`T2-05`: `do_not_contact` marks `CRM Lead.cskh_do_not_contact=1`, auto-closes, and blocks new campaigns.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_lifecycle.TestP2CloseReopenDncAndCompatibility" name="test_p1_capacity_distribution_reporting_and_my_list_recognize_in_progress_and_on_hold" time="0.849" timestamp="2026-11-04T00:56:38" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_lifecycle.py" line="393">
+			<!--P1 audit proof: `capacity_limit=2` counts `in_progress` + `on_hold`, and `customers.my_list` returns P2 fields.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_lifecycle.TestP2CloseReopenDncAndCompatibility" name="test_reopen_audit_permissions_and_active_claim_collision_guard" time="0.376" timestamp="2026-11-04T00:56:39" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_lifecycle.py" line="259">
+			<!--`T2-23`: Staff cannot reopen; Leader reopens with reason; collision with new campaign raises `ALREADY_ASSIGNED`.-->
+		</testcase>
+	</testsuite>
+	<testsuite name="crm_cskh.tests.test_p2_lifecycle.TestP2WorkItemLifecycle-2[REDACTED_PHONE]34" tests="4" file="crm_cskh/tests/test_p2_lifecycle.py" time="1.369" timestamp="2026-11-04T00:56:40" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p2_lifecycle.TestP2WorkItemLifecycle" name="test_full_state_lifecycle_assigned_in_progress_on_hold_closed" time="0.382" timestamp="2026-11-04T00:56:39" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_lifecycle.py" line="30">
+			<!--`T2-01`: `assigned -> in_progress -> on_hold -> in_progress -> closed` with single Active Claim.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_lifecycle.TestP2WorkItemLifecycle" name="test_reassign_preserves_in_progress_and_on_hold_and_interval_attribution" time="0.323" timestamp="2026-11-04T00:56:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_lifecycle.py" line="126">
+			<!--`T2-14`: `ownership.reassign(A -> B)` keeps `in_progress`/`on_hold` and `performed_by = A`.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_lifecycle.TestP2WorkItemLifecycle" name="test_revoke_from_on_hold_cancels_callback_and_handles_return_to_pool" time="0.410" timestamp="2026-11-04T00:56:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_lifecycle.py" line="168">
+			<!--`T2-15`: `revoke(return_to_pool=False/True)` cancels open callback and clears ownership.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p2_lifecycle.TestP2WorkItemLifecycle" name="test_work_item_status_and_crm_lead_status_remain_isolated" time="0.255" timestamp="2026-11-04T00:56:40" file="/src/apps/crm_cskh/crm_cskh/tests/test_p2_lifecycle.py" line="96">
+			<!--`T2-13`: P2 `Work Item` workflow never mutates `CRM Lead.status`, and vice versa.-->
+		</testcase>
+	</testsuite>
+</testsuites>

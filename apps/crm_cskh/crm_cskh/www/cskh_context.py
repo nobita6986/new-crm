@@ -1,74 +1,84 @@
 """Shared helpers for the CSKH pages (same Frappe site/session as CRM).
 
 The pages are rendered by the Frappe web engine of the SAME site and session
-as CRM (ADR-UI-001 P0, ADR-P1-06 P1). There is no second SPA and no second
-backend: every list comes from the whitelisted P1 APIs and every mutation is
-a POST with the Frappe CSRF token.
+as CRM (ADR-UI-001 P0, ADR-P1-06 P1, ADR-P2-01 P2). There is no second SPA and
+no second backend: every list comes from the whitelisted P1/P2 APIs and every
+mutation is a POST with the Frappe CSRF token.
 
 The navigation is a **convenience only**. Hiding a link never replaces the
 server-side permission check: each API resolves the actor's scope itself.
 
-The page gate mirrors the role grant of the matching API (P1 §8.1). It is
-never *stricter* than the API, otherwise the UI would contradict the frozen
+The page gate mirrors the role grant of the matching API (P1 §8.1, P2 §11.1).
+It is never *stricter* than the API, otherwise the UI would contradict the
 contract, and never *looser*: a deep link to a page the actor may not use
 answers with the permission-denied page instead of a crash.
 """
 
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+
 import frappe
 from frappe import _
 
-from crm_cskh import p1_strings
+from crm_cskh import p1_strings, p2_strings
 from crm_cskh.services import errors as p1_errors
 
 ROLE_ADMIN = "CSKH CRM Admin"
 ROLE_BOD = "CSKH BOD Viewer"
 
-# The language of the P1 screens (P1 §9.6).
-#
-# The P1 screens are a **Vietnamese** product: every label of the catalogue
-# has a Vietnamese translation in `crm_cskh/translations/vi.csv`. The pages
-# therefore pin the language to `vi` instead of relying on the language of
-# the site or of the user, so the operator never sees a half-translated
-# screen (a mixed English/Vietnamese screen is the smell P1 §9.6 forbids).
-#
-# The pin is a **UI** decision of the CSKH app: it changes no permission,
-# no contract and no data. A user that wants another language still gets
-# the Frappe CRM pages in their own language.
+# The language of the CSKH screens (P1 §9.6, P2 §12.5).
 LANGUAGE = "vi"
 
-# The role grants of the frozen P1 APIs (P1 §8.1).
-#
-# P1 §8.1, row "Xem tổng quan phân phối": BOD = toàn hệ thống, Admin = toàn
-# hệ thống, Leader = đội mình. The frozen API contract
-# (`docs/architecture/api-contract-p1.md` §4) grants the dashboard to
-# `CSKH BOD Viewer` / `CSKH CRM Admin` / `Sales Manager` only: a staff member
-# is **not** a dashboard reader, and the page gate mirrors the API exactly.
-#
-# A page gate must never be *looser* than the API, otherwise the operator
-# opens a screen that answers `FORBIDDEN` on every read.
+# Role grants mirroring backend APIs (P1 §8.1, P2 §10 & §11.1).
 READ_ROLES = {"Sales User", "Sales Manager", ROLE_ADMIN, ROLE_BOD}
+WORKFLOW_PII_ROLES = {"Sales User", "Sales Manager", ROLE_ADMIN}
 POOL_ROLES = {"Sales Manager", ROLE_ADMIN, ROLE_BOD}
 DASHBOARD_ROLES = {ROLE_BOD, ROLE_ADMIN, "Sales Manager"}
 IMPORT_ROLES = {ROLE_ADMIN}
 CAMPAIGN_READ_ROLES = {ROLE_ADMIN, ROLE_BOD, "Sales Manager"}
+SETTINGS_READ_ROLES = {ROLE_ADMIN, ROLE_BOD, "Sales Manager"}
 
-# Navigation entries per role. The keys are English message ids; the template
-# translates them with the Frappe i18n pipeline.
+# Navigation entries per role. Keys are English message ids translated via Frappe i18n.
 NAV_ITEMS = (
 	{"key": "pool", "route": "/cskh/pool", "label": "Customer pool"},
 	{"key": "import", "route": "/cskh/import", "label": "Import list"},
 	{"key": "campaigns", "route": "/cskh/campaigns", "label": "Campaigns and rules"},
 	{"key": "my-customers", "route": "/cskh/my-customers", "label": "My customers"},
+	{"key": "callbacks", "route": "/cskh/callbacks", "label": "Callbacks schedule"},
+	{"key": "progress", "route": "/cskh/progress", "label": "Care progress"},
 	{"key": "dashboard", "route": "/cskh/dashboard", "label": "Distribution dashboard"},
+	{"key": "settings", "route": "/cskh/settings", "label": "Outcome and policy settings"},
 )
 
-# Which navigation entries a role may see. The keys mirror the backend
-# permission of the matching API (P1 §8.1).
 NAV_BY_ROLE = {
-	ROLE_ADMIN: {"pool", "import", "campaigns", "my-customers", "dashboard"},
-	ROLE_BOD: {"pool", "campaigns", "my-customers", "dashboard"},
-	"Sales Manager": {"pool", "campaigns", "my-customers", "dashboard"},
-	"Sales User": {"my-customers"},
+	ROLE_ADMIN: {
+		"pool",
+		"import",
+		"campaigns",
+		"my-customers",
+		"callbacks",
+		"progress",
+		"dashboard",
+		"settings",
+	},
+	ROLE_BOD: {
+		"pool",
+		"campaigns",
+		"my-customers",
+		"progress",
+		"dashboard",
+		"settings",
+	},
+	"Sales Manager": {
+		"pool",
+		"campaigns",
+		"my-customers",
+		"callbacks",
+		"progress",
+		"dashboard",
+		"settings",
+	},
+	"Sales User": {"my-customers", "callbacks", "progress"},
 }
 
 
@@ -108,11 +118,7 @@ def has_role_grant(grants, user=None):
 
 
 def _visible_keys():
-	"""Navigation keys visible to the actor.
-
-	Union of the role grants: a user may hold several roles (a team leader is
-	usually also a sales user). The server still enforces the real scope.
-	"""
+	"""Navigation keys visible to the actor."""
 	if is_system():
 		return {item["key"] for item in NAV_ITEMS}
 	keys = set()
@@ -123,13 +129,7 @@ def _visible_keys():
 
 
 def _asset_version():
-	"""A cache-busting version of the P1 assets.
-
-	Frappe serves `/assets/<app>/...` with `Cache-Control: max-age=43200`,
-	so a browser that already loaded a page keeps the **old** JavaScript for
-	twelve hours. The version is the newest modification time of the asset
-	files, so a new deployment invalidates the cache of the browser.
-	"""
+	"""A cache-busting version of the CSKH static assets."""
 	import os
 
 	folder = os.path.join(os.path.dirname(__file__), "..", "public", "cskh")
@@ -143,6 +143,53 @@ def _asset_version():
 	return str(newest)
 
 
+def timezone_context(user=None):
+	"""Resolve site/user timezone and authoritative server timestamp (P2 §12.5).
+
+	Never relies on browser host OS timezone: publishes both `site` timezone
+	(used to interpret Frappe naive datetimes) and `effective` user/site
+	timezone (used to render timestamps and compute 23:59 / 00:00 boundaries).
+	"""
+	user = user or frappe.session.user
+	site_tz = "Asia/Ho_Chi_Minh"
+	try:
+		site_tz = frappe.utils.get_system_timezone() or site_tz
+	except Exception:
+		site_tz = "Asia/Ho_Chi_Minh"
+
+	user_tz = ""
+	if user and user != "Guest":
+		try:
+			user_tz = frappe.db.get_value("User", user, "time_zone") or ""
+		except Exception:
+			user_tz = ""
+
+	effective_tz = user_tz or site_tz or "Asia/Ho_Chi_Minh"
+	try:
+		tz_obj = ZoneInfo(effective_tz)
+	except Exception:
+		effective_tz = "Asia/Ho_Chi_Minh"
+		tz_obj = ZoneInfo("Asia/Ho_Chi_Minh")
+
+	try:
+		site_obj = ZoneInfo(site_tz)
+	except Exception:
+		site_tz = "Asia/Ho_Chi_Minh"
+		site_obj = ZoneInfo("Asia/Ho_Chi_Minh")
+
+	now_utc = datetime.now(timezone.utc)
+	server_now = now_utc.astimezone(tz_obj)
+	site_now = now_utc.astimezone(site_obj)
+	return {
+		"site": site_tz,
+		"user": user_tz,
+		"effective": effective_tz,
+		"server_now_iso": server_now.isoformat(timespec="seconds"),
+		"site_offset": site_now.strftime("%z"),
+		"effective_offset": server_now.strftime("%z"),
+	}
+
+
 def build_context(
 	context,
 	route="",
@@ -151,19 +198,7 @@ def build_context(
 	allowed_roles=None,
 	require_admin=False,
 ):
-	"""Common context for every CSKH page.
-
-	`allowed_roles` mirrors the role grant of the matching API. A page the
-	actor may not use answers with the Frappe permission page (HTTP 403)
-	instead of rendering a broken screen.
-	"""
-	# Pin the language of the page **before** anything else: the `_(...)` of
-	# the template, of the catalogue and of the permission message all read
-	# `frappe.local.lang` (P1 §9.6).
-	#
-	# The pin happens **before** the permission check, so the permission page
-	# of a caller without the role is Vietnamese too and not the English
-	# default of Frappe.
+	"""Common context for every CSKH page."""
 	frappe.local.lang = LANGUAGE
 	if frappe.local.form_dict is not None:
 		frappe.local.form_dict.lang = LANGUAGE
@@ -184,17 +219,8 @@ def build_context(
 		frappe.throw(_("You do not have permission to access this page."), frappe.PermissionError)
 
 	context.no_cache = 1
-	# The browser tab title: the Vietnamese title of the screen, so the tab
-	# is not the English name of a doctype (P1 §9.6).
-	#
-	# The title is translated **here**, at request time, because the page
-	# module evaluates `_("...")` at import time, when the language of the
-	# session is not known yet.
 	context.title = _(title) if title else _("CSKH")
 	context.csrf_token = frappe.sessions.get_csrf_token()
-	# The CSRF header of the current session, published as a JSON object so
-	# the browser sends exactly the same token on every mutation and the
-	# direct-HTTP CI probe can read the token out of the rendered page.
 	context.cskh_csrf_header = {"X-Frappe-CSRF-Token": context.csrf_token}
 	context.cskh_user = frappe.session.user
 	context.cskh_route = route
@@ -206,18 +232,13 @@ def build_context(
 		"bod": is_bod(),
 		"leader": is_leader(),
 		"staff": is_staff(),
-		# The BOD viewer is an aggregated read-only role: it must not see the
-		# phone number of a lead by default (P1 §8.1).
 		"pii": not is_bod() or is_admin(),
+		"can_manage_settings": is_admin(),
+		"can_review_correction": is_admin() or is_leader(),
 	}
-	# The stable business error codes of the frozen contract (P1 §10.1). The
-	# browser uses them to show the right conflict / permission state.
-	context.cskh_error_codes = list(p1_errors.ALL_CODES)
-	# The translated label catalogue: the JavaScript never carries a hard-coded
-	# user-facing string (P1 §9.6).
+	context.cskh_timezone = timezone_context(frappe.session.user)
+	context.cskh_error_codes = list(p1_errors.ALL_CODES) + list(p2_strings.P2_ERROR_CODES)
 	context.cskh_i18n = p1_strings.translated_map()
-	# The operator-facing text of every stable error code (P1 §10.1).
 	context.cskh_error_texts = p1_strings.translated_error_texts()
-	# The cache-busting version of the P1 assets (see `_asset_version`).
 	context.cskh_asset_version = _asset_version()
 	return context
