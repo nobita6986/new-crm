@@ -1,0 +1,8 @@
+{% if cskh_p3_subnav and (cskh_p3_subnav | length) > 1 %}
+<nav class="cskh-p3-subnav" aria-label="{{ _('Quality overview') }}">
+	{% for item in cskh_p3_subnav %}
+	<a href="{{ item.route }}"
+		class="{{ 'is-active' if item.route == cskh_route else '' }}">{{ _(item.label) }}</a>
+	{% endfor %}
+</nav>
+{% endif %}

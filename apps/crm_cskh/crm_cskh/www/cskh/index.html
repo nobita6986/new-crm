@@ -1,7 +1,7 @@
 {% extends "templates/cskh/_shell.html" %}
 
 {% block cskh_title %}{{ _("CSKH") }}{% endblock %}
-{% block cskh_subtitle %}{{ _("Customer pool, imports, campaigns, distribution and customer care workflow.") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Customer pool, imports, campaigns, care workflow and SLA/KPI quality.") }}{% endblock %}
 
 {% block cskh_body %}
 {% set nav_keys = (cskh_navigation | default([])) | map(attribute='key') | list %}
@@ -74,6 +74,66 @@
 		{{ _("Configure contact outcome codes and versioned customer care policies.") }}
 	</p>
 	<a class="cskh-btn" href="/cskh/settings">{{ _("Outcome and policy settings") }}</a>
+</div>
+{% endif %}
+
+{% if 'quality-overview' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Executive quality overview (BOD)") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Company-wide SLA compliance, connection effectiveness, data reliability and drill-down.") }}
+	</p>
+	<a class="cskh-btn is-primary" href="/cskh/quality-overview">{{ _("Quality overview") }}</a>
+</div>
+{% endif %}
+
+{% if 'team-quality' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Team quality comparison") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Compare teams by historical team-as-of attribution, SLA compliance, connection and data confidence.") }}
+	</p>
+	<a class="cskh-btn" href="/cskh/team-quality">{{ _("Team comparison") }}</a>
+</div>
+{% endif %}
+
+{% if 'employee-quality' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Employee quality & compliance") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Evaluate staff across process compliance, connection and data reliability without mixing provisional and finalized ranks.") }}
+	</p>
+	<a class="cskh-btn" href="/cskh/employee-quality">{{ _("Employee quality") }}</a>
+</div>
+{% endif %}
+
+{% if 'campaign-quality' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Campaign & lead source performance") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Separate lead source quality (invalid/DNC) from staff SLA execution across versioned policies.") }}
+	</p>
+	<a class="cskh-btn" href="/cskh/campaign-quality">{{ _("Campaign & source quality") }}</a>
+</div>
+{% endif %}
+
+{% if 'sla-operations' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("SLA & QA operations center") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Inspect overdue, breached, waived and escalated SLA obligations, QA status and audit actions.") }}
+	</p>
+	<a class="cskh-btn" href="/cskh/sla-operations">{{ _("SLA & QA operations") }}</a>
+</div>
+{% endif %}
+
+{% if 'scorecard' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("My quality scorecard") }}</h2>
+	<p class="cskh-muted">
+		{{ _("Personal SLA obligations, component breakdown and progress in your own scope.") }}
+	</p>
+	<a class="cskh-btn is-primary" href="/cskh/scorecard">{{ _("Personal scorecard") }}</a>
 </div>
 {% endif %}
 {% endblock %}
