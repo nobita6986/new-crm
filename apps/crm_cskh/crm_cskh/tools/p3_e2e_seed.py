@@ -921,3 +921,50 @@ def temporarily_revoke_leader_team(user: str, team: str, revoke: bool = True) ->
 	frappe.clear_cache()
 	frappe.db.commit()
 	return {"user": user, "team": team, "revoked": bool(revoke)}
+
+
+def wipe_p3_site_clean() -> dict:
+	"""Wipe transactional P1/P2/P3 records while preserving P2/P3 catalog seeds (for isolated JUnit suite runs)."""
+	site = _assert_p3_site()
+	frappe.set_user("Administrator")
+	wipe_doctypes = (
+		"CSKH Export Job",
+		"CSKH Dirty Scope",
+		"CSKH KPI Snapshot",
+		"CSKH KPI Run",
+		"CSKH QA Review",
+		"CSKH SLA Obligation",
+		"CSKH Team Membership History",
+		"CSKH Attempt Correction",
+		"CSKH Contact Attempt",
+		"CSKH Workflow Idempotency",
+		"CSKH Idempotency Key",
+		"CSKH Import Batch Lead",
+		"CSKH Active Claim",
+		"CSKH Assignment History",
+		"CSKH Work Item",
+		"CSKH Distribution Run",
+		"CSKH Assignment Rule",
+		"CSKH Campaign",
+		"CSKH Import Batch",
+		"CSKH Identity Index",
+	)
+	for dt_name in wipe_doctypes:
+		if frappe.db.table_exists(dt_name):
+			frappe.db.sql(f"delete from `tab{dt_name}`")
+	for native_dt in ("CRM Call Log", "CRM Task", "FCRM Note"):
+		if frappe.db.table_exists(native_dt):
+			frappe.db.sql(f"delete from `tab{native_dt}`")
+	frappe.db.sql("delete from `tabToDo` where reference_type in ('CRM Lead', 'CRM Task')")
+	frappe.db.sql("delete from `tabDocShare` where share_doctype in ('CRM Lead', 'CRM Call Log', 'CRM Task')")
+	frappe.db.sql("delete from `tabCRM Lead`")
+
+	from crm_cskh.p2_models import ensure_p2_seeds
+	from crm_cskh.p3_models import ensure_p3_indexes, ensure_p3_seeds
+
+	ensure_p2_seeds()
+	ensure_p3_indexes()
+	ensure_p3_seeds()
+	frappe.clear_cache()
+	frappe.db.commit()
+	return {"site": site, "wiped": True}

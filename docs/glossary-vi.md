@@ -168,27 +168,27 @@ Tài liệu này khóa chuẩn thuật ngữ tiếng Việt dùng thống nhất
 
 ---
 
-## 10. Danh mục Chỉ số KPI Chuẩn P3 & Phân nhóm Ba Trụ cột (`P3.md` §7.2, §7.5)
+## 10. Danh mục 17 Chỉ số KPI Chuẩn P3 (`cskh-metrics-v1`) & Phân nhóm Ba Trụ cột (`kpi-dictionary.md`)
 
-| Mã KPI (`metric_key`) | Nhãn Tiếng Việt Chuẩn | Trụ cột Hiển thị | Đơn vị (`Grain`) & Quy tắc Hiển thị |
+| Mã KPI (`metric_code`) | Nhãn Tiếng Việt Chuẩn | Trụ cột Hiển thị | Đơn vị (`Grain`) & Quy tắc Hiển thị |
 |---|---|---|---|
-| `process_score` | Điểm tuân thủ quy trình (`0–100`) | Tuân thủ quy trình & SLA | Thang `0–100`; khi tắt QA hoặc thiếu mẫu QA bắt buộc gắn **`Tạm tính; thiếu mẫu QA` (`provisional`)** và **không xếp chung** với điểm `Đã chốt` (`finalized`). |
-| `first_touch_on_time` | Tỷ lệ liên hệ lần đầu đúng hạn | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `FIRST_ATTEMPT` đến hạn; mẫu `= 0` hiển thị `N/A`. |
-| `followup_on_time` | Tỷ lệ chăm sóc đúng lịch hẹn | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `FOLLOWUP` đến hạn; mẫu `= 0` hiển thị `N/A`. |
-| `eligible_coverage` | Tỷ lệ phủ liên hệ khách được giao | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên khoảng phụ trách (`Ownership Interval`) đủ thời gian xử lý. |
-| `outcome_completeness` | Tỷ lệ cập nhật kết quả đầy đủ | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên các lần liên hệ hiệu lực đáp ứng đủ trường bắt buộc. |
-| `assigned_intervals` | Số lượt nhận phụ trách | Tuân thủ quy trình & SLA | Số lượng khoảng phụ trách bắt đầu trong kỳ (có thể lớn hơn số khách duy nhất khi có bàn giao). |
-| `unique_assigned_items` | Số đầu việc được giao duy nhất | Tuân thủ quy trình & SLA | Số `CSKH Work Item` phân biệt (`DISTINCT`) trong kỳ và phạm vi. |
-| `overdue_backlog` | Đầu việc tồn đọng quá hạn | Tuân thủ quy trình & SLA | Ảnh chụp số `Work Item` đang hoạt động có nghĩa vụ quá hạn mở tại `as_of`. |
-| `open_followups_overdue` | Lịch hẹn đang quá hạn | Tuân thủ quy trình & SLA | Ảnh chụp số nghĩa vụ `FOLLOWUP` đang mở quá hạn tại `as_of`. |
-| `breach_count` | Số vi phạm SLA trong kỳ | Tuân thủ quy trình & SLA | Số nghĩa vụ phát sinh vi phạm trong kỳ (`breached_open` → `fulfilled_late` chỉ tính `1` lần). |
-| `sla_waiver_count` | Số ca miễn trừ SLA hợp lệ | Tuân thủ quy trình & SLA | Số nghĩa vụ được duyệt miễn trừ có lý do kiểm toán. |
-| `connected_rate` | Tỷ lệ kết nối thành công | Hiệu quả kết nối & chuyển đổi | `%` kèm `tử/mẫu` trên khoảng phụ trách đã thử liên hệ (khác với tổng số cuộc gọi). |
-| `connected_items` | Số đầu việc đã kết nối | Hiệu quả kết nối & chuyển đổi | Số `Work Item` phân biệt có ít nhất 1 lần liên hệ kết nối hai chiều hiệu lực trong kỳ. |
-| `conversion_rate` | Tỷ lệ chuyển đổi đạt mục tiêu | Hiệu quả kết nối & chuyển đổi | `%` kèm `tử/mẫu` theo định nghĩa chuyển đổi của chiến dịch; không trộn vào điểm quy trình mặc định. |
-| `attempts_count` | Số lần thử liên hệ hiệu lực *(tham khảo)* | Hiệu quả kết nối & chuyển đổi | Bộ đếm hoạt động từ `CSKH Contact Attempt` hiệu lực (không cộng trùng `CRM Call Log`, không dùng để xếp hạng). |
-| `verification_rate` | Tỷ lệ kết quả đã xác minh | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` lần liên hệ `Đã xác minh` (`verified`); tách riêng `Nhân viên tự báo cáo` và `Đang tranh chấp`. |
-| `qa_pass_rate` | Tỷ lệ kiểm định QA đạt chuẩn | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` phiếu QA đủ điều kiện; hiển thị `N/A (Chưa bật QA)` khi `qa_enabled = false`. |
+| `PROCESS_SCORE` | Điểm tuân thủ quy trình (`0–100`) | Tuân thủ quy trình & SLA | Thang `0–100`; khi tắt QA hoặc thiếu mẫu QA bắt buộc gắn **`Tạm tính; thiếu mẫu QA` (`provisional`)** và **không xếp chung** với điểm `Đã chốt` (`finalized`). |
+| `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE` | Tỷ lệ liên hệ lần đầu đúng hạn (`Work Item`) | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên `DISTINCT Work Item` đến hạn nghĩa vụ đầu tiên; tách bạch với số `Ownership Interval` khi có bàn giao. |
+| `FIRST_ATTEMPT_SLA_RATE` | Tỷ lệ liên hệ lần đầu đúng hạn (`Interval`) | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `FIRST_ATTEMPT` đến hạn; mẫu `= 0` hiển thị `N/A`. |
+| `FOLLOWUP_SLA_RATE` | Tỷ lệ chăm sóc đúng lịch hẹn | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `FOLLOWUP` đến hạn; mẫu `= 0` hiển thị `N/A`. |
+| `MIN_ATTEMPTS_COMPLIANCE_RATE` | Tỷ lệ tuân thủ số lần thử tối thiểu | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `MIN_ATTEMPTS` đến hạn (chỉ phát sinh khi chính sách bật `min_attempts_enabled`). |
+| `CALLBACK_COMPLETION_RATE` | Tỷ lệ hoàn tất lịch hẹn chăm sóc lại | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `FOLLOWUP` đến hạn được giải quyết bằng lần liên hệ hợp lệ. |
+| `RESCHEDULE_RATE` | Tỷ lệ dời lịch hẹn chăm sóc lại | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` số lượt dời lịch trên tổng lịch hẹn hoạt động trong kỳ. |
+| `DNC_COMPLIANCE_RATE` | Tỷ lệ tuân thủ DNC & đóng hợp lệ | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` khoảng phụ trách tuân thủ quy tắc chặn DNC và đóng hợp lệ. |
+| `WORK_ITEMS_TOUCHED` | Số đầu việc duy nhất đã tác động | Hiệu quả kết nối & chuyển đổi | Số `CSKH Work Item` phân biệt (`DISTINCT`) có ít nhất 1 lần liên hệ hợp lệ trong kỳ. |
+| `CONTACT_ATTEMPT_COUNT` | Số lần thử liên hệ hiệu lực *(tham khảo)* | Hiệu quả kết nối & chuyển đổi | Bộ đếm hoạt động từ `CSKH Contact Attempt` hiệu lực (kèm `attempt_breakdown`, không cộng trùng `CRM Call Log`, không dùng để xếp hạng). |
+| `CONNECTED_ATTEMPT_COUNT` | Số lần liên hệ đã kết nối | Hiệu quả kết nối & chuyển đổi | Số `CSKH Contact Attempt` hiệu lực có kết nối hai chiều (`is_connected = 1`). |
+| `CONNECTED_RATE` | Tỷ lệ kết nối thành công | Hiệu quả kết nối & chuyển đổi | `%` kèm `tử/mẫu` lần liên hệ kết nối hai chiều trên tổng lần thử liên hệ hiệu lực (gửi tin chưa phản hồi không tính `Connected`). |
+| `FIRST_CONNECTED_TRACKING_RATE` | Theo dõi kết nối lần đầu *(không tính phạt)* | Hiệu quả kết nối & chuyển đổi | `%` kèm `tử/mẫu` (`informational_only: true`); theo dõi kết nối thực tế, **không trừ điểm quy trình** khi khách không bắt máy. |
+| `VALID_OUTCOME_LOGGING_RATE` | Tỷ lệ cập nhật kết quả đầy đủ | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` lần liên hệ đáp ứng đủ trường bắt buộc và không bị hiệu chỉnh/vô hiệu do lỗi ghi nhận. |
+| `CORRECTION_RATE` | Tỷ lệ hiệu chỉnh / vô hiệu | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` lần liên hệ phát sinh phiếu hiệu chỉnh hoặc vô hiệu được duyệt. |
+| `VOID_ATTEMPT_RATE` | Tỷ lệ lần liên hệ bị vô hiệu | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` lần liên hệ bị vô hiệu được duyệt trên tổng bản ghi gốc. |
+| `QA_PASS_RATE` | Tỷ lệ kiểm định QA đạt chuẩn | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` phiếu QA đủ điều kiện; hiển thị `N/A — Phân hệ QA đang tắt` (`status: "disabled"`) khi `qa_enabled = false`. |
 
 ---
 

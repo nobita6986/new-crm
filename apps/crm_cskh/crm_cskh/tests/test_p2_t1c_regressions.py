@@ -936,9 +936,13 @@ class TestP2T1cRegressions(P2TestCase):
 				idempotency_key=self.unique_key("f04-nc"),
 				actor=self.staff_a,
 			)
+		end_of_today = now_dt.replace(hour=23, minute=59, second=0, microsecond=0)
+		due_today_dt = min(add_to_date(now_dt, hours=5), end_of_today)
+		if due_today_dt <= now_dt:
+			due_today_dt = add_to_date(now_dt, seconds=30)
 		followup.schedule_followup(
 			work_item=wi_due,
-			due_at=str(add_to_date(now_dt, hours=5)),
+			due_at=str(due_today_dt),
 			title="Hẹn chưa quá hạn",
 			idempotency_key=self.unique_key("f04-due"),
 			actor=self.staff_a,

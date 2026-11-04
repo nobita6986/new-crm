@@ -643,8 +643,20 @@ async function main() {
 		await selectSeededMonthIfNeeded(leaderA.page, periodKey, 'get_executive_overview')
 		await leaderA.page.locator('#p3-sla-table').waitFor({ state: 'visible', timeout: 10000 })
 
+		// Filter to `breached_open` via server `list_obligations(status="breached_open")`
+		await Promise.all([
+			leaderA.page.waitForResponse(
+				(r) =>
+					r.url().includes('crm_cskh.api.sla.list_obligations') &&
+					r.url().includes('status=breached_open') &&
+					r.status() === 200
+			),
+			leaderA.page.selectOption('#p3-filter-sla-status', 'breached_open'),
+		])
+		await leaderA.page.locator('.cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
+
 		const waiveBtn = leaderA.page.locator('[data-waive-obligation]').first()
-		assert((await waiveBtn.count()) === 1, 'Expected at least 1 waivable SLA obligation for Leader A')
+		assert((await waiveBtn.count()) === 1, 'Expected at least 1 waivable breached_open SLA obligation for Leader A')
 		const targetObId = await waiveBtn.getAttribute('data-waive-obligation')
 		await waiveBtn.click()
 		await leaderA.page.locator('#p3-waive-reason').waitFor({ state: 'visible', timeout: 5000 })
@@ -670,15 +682,26 @@ async function main() {
 		])
 		await leaderA.page.locator('.cskh-loading').waitFor({ state: 'detached', timeout: 15000 }).catch(() => {})
 
+		// Switch server status filter to `waived` and verify the audited waived row
+		await Promise.all([
+			leaderA.page.waitForResponse(
+				(r) =>
+					r.url().includes('crm_cskh.api.sla.list_obligations') &&
+					r.url().includes('status=waived') &&
+					r.status() === 200
+			),
+			leaderA.page.selectOption('#p3-filter-sla-status', 'waived'),
+		])
+		await leaderA.page.locator('.cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
+
 		const waivedRow = leaderA.page.locator(`#p3-sla-table tr[data-obligation-id="${targetObId}"]`)
-		if ((await waivedRow.count()) === 1) {
-			const waivedText = await waivedRow.innerText()
-			recordAssert(
-				'B3E-16-waive-audited-row',
-				waivedText.includes('Đã miễn trừ') || waivedText.includes('kiểm toán'),
-				`Obligation ${targetObId} updated to Waived in DOM`
-			)
-		}
+		assert((await waivedRow.count()) === 1, `Expected waived obligation ${targetObId} under status=waived`)
+		const waivedText = await waivedRow.innerText()
+		recordAssert(
+			'B3E-16-waive-audited-row',
+			waivedText.includes('Đã miễn trừ') && waivedText.includes('kiểm toán'),
+			`Obligation ${targetObId} updated to Waived with audit reason in DOM`
+		)
 
 		await captureShot(
 			leaderA,
@@ -1027,8 +1050,26 @@ async function main() {
 			)
 
 			// 3. Quarterly `2026-Q4` -> `[2026-10-01, 2027-01-01)`
-			await tzSession.page.selectOption('#p3-filter-period-type', 'quarterly')
-			await tzSession.page.selectOption('#p3-filter-quarter', 'Q4')
+			await Promise.all([
+				tzSession.page.waitForResponse(
+					(r) =>
+						r.url().includes('get_executive_overview') &&
+						r.url().includes('period_type=quarterly') &&
+						r.status() === 200
+				),
+				tzSession.page.selectOption('#p3-filter-period-type', 'quarterly'),
+			])
+			if ((await tzSession.page.locator('#p3-filter-quarter').inputValue()) !== 'Q4') {
+				await Promise.all([
+					tzSession.page.waitForResponse(
+						(r) =>
+							r.url().includes('get_executive_overview') &&
+							r.url().includes('period_key=2026-Q4') &&
+							r.status() === 200
+					),
+					tzSession.page.selectOption('#p3-filter-quarter', 'Q4'),
+				])
+			}
 			const qPreview = await tzSession.page.locator('#p3-period-bounds-preview').innerText()
 			recordAssert(
 				`B3E-31-tz-quarterly-${tzLabel}`,

@@ -12,7 +12,7 @@
 
 - [ ] **UAT-STAFF-01 (Điều hướng gọn đúng vai trò `Sales User`):** Trên thanh điều hướng `/cskh/*`, Nhân viên thấy đúng các mục tác nghiệp cá nhân (`Khách được giao`, `Lịch hẹn chăm sóc lại`, `Tiến độ CSKH`, `Bảng điểm cá nhân`) và liên kết chuyển nhanh từ `Bảng điểm cá nhân` sang `/cskh/my-customers` & `/cskh/callbacks`.
 - [ ] **UAT-STAFF-02 (Hiển thị minh bạch Điểm cá nhân, Tử/Mẫu số & Công thức):**
-  - Màn `/cskh/scorecard` hiển thị rõ từng thành phần tạo nên `Điểm tuân thủ quy trình`: `Liên hệ lần đầu đúng hạn`, `Phủ liên hệ khách được giao`, `Cập nhật kết quả đầy đủ`, `Chăm sóc đúng lịch hẹn`, `Kiểm định QA` kèm phân số `tử / mẫu` và trọng số từng phần.
+  - Màn `/cskh/scorecard` hiển thị rõ từng thành phần tạo nên `Điểm tuân thủ quy trình` (`PROCESS_SCORE`): `C1_FIRST_ATTEMPT_SLA` (`FIRST_ATTEMPT_SLA_RATE`), `C2_FOLLOWUP_SLA` (`FOLLOWUP_SLA_RATE`), `C3_DATA_HYGIENE` (`VALID_OUTCOME_LOGGING_RATE`), `C4_CALLBACK_DNC_DISCIPLINE` (`Hoàn tất lịch hẹn & tuân thủ DNC`), `C5_QA_QUALITY` (`QA_PASS_RATE`) kèm phân số `tử / mẫu` và trọng số từng phần.
   - Khi `qa_enabled = false` hoặc chưa đủ mẫu QA, hiển thị rõ nhãn **`Tạm tính; thiếu mẫu QA`** (không tính `QA = 0` làm tụt điểm oan của nhân viên — `F22`, `G09`).
   - Khi nhân viên mới nhận việc chưa có nghĩa vụ nào đến hạn (`denominator = 0`), hiển thị **`N/A — Chưa có mẫu đủ điều kiện`**, không hiển thị `0%` (`F21`).
 - [ ] **UAT-STAFF-03 (Tách biệt nghĩa vụ sắp đến hạn / quá hạn & Liên hệ thực tế):**
