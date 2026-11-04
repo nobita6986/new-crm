@@ -1,21 +1,30 @@
-/* Shared CSKH page helpers.
+/* Shared CSKH page helpers (P1 + P2).
 
-   Same Frappe site and session as CRM (ADR-UI-001 P0, ADR-P1-06 P1):
+   Same Frappe site and session as CRM (ADR-UI-001 P0, ADR-P1-06 P1, ADR-P2-01 P2):
    there is no second SPA and no second backend.
 
    Rules enforced here:
-     * every read is a GET on the whitelisted P1 API;
+     * every read is a GET on the whitelisted P1/P2 API;
      * every mutation is a POST with the Frappe CSRF token;
      * every user-facing string comes from `window.cskhI18n` (the Frappe
        i18n pipeline), never from a hard-coded literal;
      * every DOM element is built via `textContent` / `createTextNode` (never
-       `innerHTML`), so untrusted cell values cannot execute HTML/JS;
+       `innerHTML`), so untrusted cell/note values cannot execute HTML/JS;
+     * every timestamp and day boundary (23:59 / 00:00) is parsed and formatted
+       in the authoritative Frappe site/user timezone (`window.cskhTimezone`),
+       never in the arbitrary host OS timezone of the browser;
      * every failure is mapped to a stable business error code so the page
        can show loading / empty / error / conflict / permission-denied.
    */
 
 window.cskh = (function () {
 	'use strict'
+
+	const bootPerfMs =
+		typeof window.performance !== 'undefined' && window.performance.now
+			? window.performance.now()
+			: 0
+	const bootWallMs = Date.now()
 
 	function csrfToken() {
 		if (window.frappe && window.frappe.csrf_token) return window.frappe.csrf_token
@@ -44,7 +53,322 @@ window.cskh = (function () {
 		return window.cskhCapabilities || {}
 	}
 
-	/** The operator-facing text of a stable error code (P1 §10.1). */
+	function uuid() {
+		if (window.crypto && window.crypto.randomUUID) return window.crypto.randomUUID()
+		return 'cskh-' + Date.now() + '-' + Math.floor(Math.random() * 1e9)
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Authoritative Site/User Timezone Engine (P2 §12.5, 23:59 / 00:00)  */
+	/* ------------------------------------------------------------------ */
+
+	function timezoneInfo() {
+		const raw = window.cskhTimezone || {}
+		const site = raw.site || 'Asia/Ho_Chi_Minh'
+		const effective = raw.effective || raw.user || site || 'Asia/Ho_Chi_Minh'
+		return {
+			site: site,
+			user: raw.user || '',
+			effective: effective,
+			serverNowIso: raw.server_now_iso || '',
+		}
+	}
+
+	function effectiveTimeZone() {
+		return timezoneInfo().effective
+	}
+
+	function siteTimeZone() {
+		return timezoneInfo().site
+	}
+
+	function partsAtEpochInTz(epochMs, tz) {
+		const zone = tz || effectiveTimeZone()
+		let fmt
+		try {
+			fmt = new Intl.DateTimeFormat('en-CA', {
+				timeZone: zone,
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				hourCycle: 'h23',
+			})
+		} catch (_err) {
+			fmt = new Intl.DateTimeFormat('en-CA', {
+				timeZone: 'Asia/Ho_Chi_Minh',
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				hourCycle: 'h23',
+			})
+		}
+		const map = {}
+		fmt.formatToParts(new Date(epochMs)).forEach(function (part) {
+			if (part.type !== 'literal') map[part.type] = part.value
+		})
+		const year = Number(map.year)
+		const month = Number(map.month)
+		const day = Number(map.day)
+		const hour = Number(map.hour === '24' ? '0' : map.hour)
+		const minute = Number(map.minute)
+		const second = Number(map.second)
+		const asUtc = Date.UTC(year, month - 1, day, hour, minute, second)
+		const offsetMin = Math.round((asUtc - epochMs) / 60000)
+		const sign = offsetMin >= 0 ? '+' : '-'
+		const absMin = Math.abs(offsetMin)
+		const offH = String(Math.floor(absMin / 60)).padStart(2, '0')
+		const offM = String(absMin % 60).padStart(2, '0')
+		const pad = function (n) {
+			return String(n).padStart(2, '0')
+		}
+		return {
+			year: year,
+			month: month,
+			day: day,
+			hour: hour,
+			minute: minute,
+			second: second,
+			dateKey: year + '-' + pad(month) + '-' + pad(day),
+			timeKey: pad(hour) + ':' + pad(minute),
+			offsetIso: sign + offH + ':' + offM,
+		}
+	}
+
+	/**
+	 * Convert a wall-clock tuple `(year, month, day, hour, minute, second)` in `tz`
+	 * into exact UTC epoch milliseconds without consulting the browser OS timezone.
+	 */
+	function tzWallClockToEpochMs(year, month, day, hour, minute, second, tz) {
+		const zone = tz || effectiveTimeZone()
+		const targetUtc = Date.UTC(year, month - 1, day, hour || 0, minute || 0, second || 0)
+		const p1 = partsAtEpochInTz(targetUtc, zone)
+		const p1Utc = Date.UTC(p1.year, p1.month - 1, p1.day, p1.hour, p1.minute, p1.second)
+		const refined = targetUtc - (p1Utc - targetUtc)
+		const p2 = partsAtEpochInTz(refined, zone)
+		const p2Utc = Date.UTC(p2.year, p2.month - 1, p2.day, p2.hour, p2.minute, p2.second)
+		return refined - (p2Utc - targetUtc)
+	}
+
+	/**
+	 * Parse an ISO-8601 or Frappe naive datetime string into a `Date` instant.
+	 * Naive strings (`YYYY-MM-DD HH:MM:SS`) are interpreted in `siteTimeZone()`,
+	 * never in the browser OS local timezone.
+	 */
+	function parseServerDate(value, defaultTz) {
+		if (!value && value !== 0) return null
+		if (value instanceof Date) return isNaN(value.getTime()) ? null : value
+		if (typeof value === 'number') {
+			const d = new Date(value)
+			return isNaN(d.getTime()) ? null : d
+		}
+		const text = String(value).trim()
+		if (!text) return null
+
+		// Explicit ISO-8601 offset (`Z`, `+07:00`, `-0500`)
+		if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+			const normalized = text.replace(' ', 'T')
+			const d = new Date(normalized)
+			return isNaN(d.getTime()) ? null : d
+		}
+
+		// Date-only `YYYY-MM-DD` -> 00:00:00 in target timezone
+		const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text)
+		if (dateOnly) {
+			const ms = tzWallClockToEpochMs(
+				Number(dateOnly[1]),
+				Number(dateOnly[2]),
+				Number(dateOnly[3]),
+				0,
+				0,
+				0,
+				defaultTz || effectiveTimeZone()
+			)
+			return new Date(ms)
+		}
+
+		// Naive Frappe datetime `YYYY-MM-DD[ T]HH:MM(:SS(.ffffff))?` -> site timezone
+		const naive =
+			/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2})(?:\.\d+)?)?$/.exec(text)
+		if (naive) {
+			const ms = tzWallClockToEpochMs(
+				Number(naive[1]),
+				Number(naive[2]),
+				Number(naive[3]),
+				Number(naive[4]),
+				Number(naive[5]),
+				Number(naive[6] || 0),
+				defaultTz || siteTimeZone()
+			)
+			return new Date(ms)
+		}
+
+		const fallback = new Date(text)
+		return isNaN(fallback.getTime()) ? null : fallback
+	}
+
+	/** Current server-anchored Date instant (immune to skewed client OS clock). */
+	function serverNow() {
+		const info = timezoneInfo()
+		const base = info.serverNowIso ? parseServerDate(info.serverNowIso) : null
+		if (!base) return new Date()
+		const elapsed =
+			typeof window.performance !== 'undefined' && window.performance.now
+				? Math.max(0, window.performance.now() - bootPerfMs)
+				: Math.max(0, Date.now() - bootWallMs)
+		return new Date(base.getTime() + elapsed)
+	}
+
+	function formatDate(value) {
+		if (!value) return '—'
+		const date = parseServerDate(value)
+		if (!date) return String(value)
+		return new Intl.DateTimeFormat('vi-VN', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			hour12: false,
+			timeZone: effectiveTimeZone(),
+		}).format(date)
+	}
+
+	function formatDateOnly(value) {
+		if (!value) return '—'
+		const text = String(value).trim()
+		if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+			const parts = text.split('-')
+			return parts[2] + '/' + parts[1] + '/' + parts[0]
+		}
+		const date = parseServerDate(value)
+		if (!date) return text
+		return new Intl.DateTimeFormat('vi-VN', {
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			timeZone: effectiveTimeZone(),
+		}).format(date)
+	}
+
+	function dateKeyInTz(value, tz) {
+		const text = String(value || '').trim()
+		if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
+		const date = parseServerDate(value)
+		if (!date) return ''
+		return partsAtEpochInTz(date.getTime(), tz || effectiveTimeZone()).dateKey
+	}
+
+	/** Format an instant as `YYYY-MM-DDTHH:mm` in the effective site/user timezone. */
+	function toDatetimeLocalValue(value, tz) {
+		const date = value ? parseServerDate(value) : serverNow()
+		if (!date) return ''
+		const p = partsAtEpochInTz(date.getTime(), tz || effectiveTimeZone())
+		return p.dateKey + 'T' + p.timeKey
+	}
+
+	/**
+	 * Convert a `<input type="datetime-local">` value (`YYYY-MM-DDTHH:mm`) in the
+	 * effective site/user timezone into an explicit ISO-8601 string with offset.
+	 */
+	function datetimeLocalToIso(localValue, tz) {
+		const text = String(localValue || '').trim()
+		if (!text) return ''
+		if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) return text
+		const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(text)
+		if (!m) return text
+		const zone = tz || effectiveTimeZone()
+		const sec = Number(m[6] || 0)
+		const ms = tzWallClockToEpochMs(
+			Number(m[1]),
+			Number(m[2]),
+			Number(m[3]),
+			Number(m[4]),
+			Number(m[5]),
+			sec,
+			zone
+		)
+		const p = partsAtEpochInTz(ms, zone)
+		const pad = function (n) {
+			return String(n).padStart(2, '0')
+		}
+		return p.dateKey + 'T' + p.timeKey + ':' + pad(p.second) + p.offsetIso
+	}
+
+	/**
+	 * Convert a `<input type="datetime-local">` value (`YYYY-MM-DDTHH:mm`) from the
+	 * effective user/site timezone into Frappe's canonical site-timezone naive string
+	 * (`YYYY-MM-DD HH:mm:ss`), avoiding naive-vs-aware comparison errors on backend.
+	 */
+	function datetimeLocalToServer(localValue, tz) {
+		const text = String(localValue || '').trim()
+		if (!text) return ''
+		let ms = null
+		if (/(?:Z|[+-]\d{2}:?\d{2})$/i.test(text)) {
+			const parsed = parseServerDate(text)
+			if (!parsed) return text
+			ms = parsed.getTime()
+		} else {
+			const m = /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2})(?::(\d{2}))?$/.exec(text)
+			if (!m) return text
+			const zone = tz || effectiveTimeZone()
+			const sec = Number(m[6] || 0)
+			ms = tzWallClockToEpochMs(
+				Number(m[1]),
+				Number(m[2]),
+				Number(m[3]),
+				Number(m[4]),
+				Number(m[5]),
+				sec,
+				zone
+			)
+		}
+		const siteParts = partsAtEpochInTz(ms, siteTimeZone())
+		const pad = function (n) {
+			return String(n).padStart(2, '0')
+		}
+		return siteParts.dateKey + ' ' + siteParts.timeKey + ':' + pad(siteParts.second)
+	}
+
+	/**
+	 * Classify a callback due timestamp/date strictly in the effective timezone,
+	 * preserving 23:59 vs 00:00 midnight boundaries.
+	 */
+	function classifyDueAt(dueValue, taskStatus, refNow, tz) {
+		const st = String(taskStatus || '').trim().toLowerCase()
+		if (st === 'done' || st === 'closed' || st === 'completed') return 'done'
+		if (st === 'cancelled' || st === 'canceled') return 'canceled'
+		if (!dueValue) return ''
+
+		const zone = tz || effectiveTimeZone()
+		const nowDate = refNow ? parseServerDate(refNow) : serverNow()
+		const nowMs = nowDate ? nowDate.getTime() : Date.now()
+		const todayKey = partsAtEpochInTz(nowMs, zone).dateKey
+
+		const rawText = String(dueValue).trim()
+		if (/^\d{4}-\d{2}-\d{2}$/.test(rawText)) {
+			if (rawText < todayKey) return 'overdue'
+			if (rawText === todayKey) return 'due_today'
+			return 'upcoming'
+		}
+
+		const dueDate = parseServerDate(dueValue)
+		if (!dueDate) return ''
+		if (dueDate.getTime() < nowMs) return 'overdue'
+		const dueKey = partsAtEpochInTz(dueDate.getTime(), zone).dateKey
+		if (dueKey <= todayKey) return 'due_today'
+		return 'upcoming'
+	}
+
+	/* ------------------------------------------------------------------ */
+	/* Error codes, HTTP transport & Safe DOM                             */
+	/* ------------------------------------------------------------------ */
+
 	function errorText(code) {
 		const catalogue = window.cskhErrorTexts || {}
 		if (Object.prototype.hasOwnProperty.call(catalogue, code)) {
@@ -56,15 +380,16 @@ window.cskh = (function () {
 		return ''
 	}
 
-	/** Map an HTTP response body to the stable contract code. */
 	function errorCode(body, status) {
+		if (body && body.p2_code) return body.p2_code
 		if (body && body.p1_code) return body.p1_code
+		if (body && body.error_code) return body.error_code
+		if (body && body.code && typeof body.code === 'string') return body.code
 		if (body && body.exc_type === 'CSRFTokenError') return 'CSRF_ERROR'
 		if ((body && body.exc_type === 'PermissionError') || status === 403) return 'FORBIDDEN'
 		if ((body && body.exc_type === 'DoesNotExistError') || status === 404) return 'NOT_FOUND'
 		if (body && body.exc_type === 'ValidationError') return 'INVALID_REQUEST'
 		if (body && body.exc_type) return body.exc_type
-		if (body && body.code) return body.code
 		return 'HTTP_' + status
 	}
 
@@ -79,13 +404,13 @@ window.cskh = (function () {
 						try {
 							const inner = JSON.parse(first)
 							if (inner && inner.message) return String(inner.message)
-						} catch (err2) {
+						} catch (_err2) {
 							/* fall through */
 						}
 					}
 					return String(first)
 				}
-			} catch (err) {
+			} catch (_err) {
 				/* fall through */
 			}
 		}
@@ -93,13 +418,6 @@ window.cskh = (function () {
 		return body.message || body.exc_type || ''
 	}
 
-	/**
-	 * Call a Frappe whitelisted method.
-	 *
-	 * GET is used for reads, POST (with CSRF) for every mutation. The caller
-	 * never decides the verb from the data: `cskh.get` and `cskh.post` are
-	 * the only two entry points.
-	 */
 	async function request(method, args, verb) {
 		const payload = Object.assign({}, args || {})
 		const url = '/api/method/' + method
@@ -134,7 +452,7 @@ window.cskh = (function () {
 		let body = null
 		try {
 			body = await response.json()
-		} catch (err) {
+		} catch (_err) {
 			body = null
 		}
 
@@ -161,7 +479,12 @@ window.cskh = (function () {
 		Object.keys(attrs || {}).forEach(function (key) {
 			if (key === 'class') node.className = attrs[key]
 			else if (key === 'text') node.textContent = attrs[key]
-			else if (key.indexOf('on') === 0 && typeof attrs[key] === 'function') {
+			else if (key === 'checked') node.checked = !!attrs[key]
+			else if (key === 'disabled') node.disabled = !!attrs[key]
+			else if (key === 'hidden') node.hidden = !!attrs[key]
+			else if (key === 'value' && (tag === 'input' || tag === 'textarea' || tag === 'select')) {
+				node.value = attrs[key]
+			} else if (key.indexOf('on') === 0 && typeof attrs[key] === 'function') {
 				node.addEventListener(key.slice(2).toLowerCase(), attrs[key])
 			} else if (attrs[key] !== undefined && attrs[key] !== null) {
 				node.setAttribute(key, attrs[key])
@@ -178,13 +501,34 @@ window.cskh = (function () {
 		while (node && node.firstChild) node.removeChild(node.firstChild)
 	}
 
-	/** The visual state of a work item / import row. */
 	function stateBadge(kind) {
 		const map = {
 			assigned: 'is-assigned',
+			in_progress: 'is-info',
+			on_hold: 'is-queued',
 			queued: 'is-queued',
 			revoked: 'is-conflict',
 			closed: 'is-invalid',
+			completed: 'is-assigned',
+			done: 'is-invalid',
+			canceled: 'is-invalid',
+			connected: 'is-assigned',
+			not_connected: 'is-queued',
+			attempted_not_connected: 'is-queued',
+			not_contacted: 'is-info',
+			due_today: 'is-queued',
+			followup_due: 'is-queued',
+			upcoming: 'is-info',
+			overdue: 'is-conflict',
+			followup_overdue: 'is-conflict',
+			do_not_contact: 'is-conflict',
+			dnc: 'is-conflict',
+			self_reported: 'is-queued',
+			verified: 'is-assigned',
+			corrected: 'is-info',
+			void: 'is-invalid',
+			pending: 'is-queued',
+			rejected: 'is-conflict',
 			valid: 'is-assigned',
 			duplicate_in_file: 'is-queued',
 			duplicate_in_crm: 'is-queued',
@@ -197,15 +541,75 @@ window.cskh = (function () {
 		return 'cskh-state ' + (map[kind] || '')
 	}
 
-	function formatDate(value) {
-		if (!value) return '—'
-		const date = new Date(value)
-		if (isNaN(date.getTime())) return String(value)
-		return new Intl.DateTimeFormat('vi-VN', {
-			dateStyle: 'short',
-			timeStyle: 'short',
-			timeZone: 'Asia/Ho_Chi_Minh',
-		}).format(date)
+	function workItemStateLabel(value) {
+		const map = {
+			assigned: t('Newly assigned'),
+			in_progress: t('In progress'),
+			on_hold: t('On hold'),
+			queued: t('Queued'),
+			revoked: t('Revoked'),
+			closed: t('Completed care'),
+			not_contacted: t('Not contacted'),
+			attempted: t('Attempted'),
+			attempted_not_connected: t('Attempted, not connected'),
+			connected: t('Connected'),
+			followup_due: t('Due today'),
+			followup_overdue: t('Overdue'),
+			do_not_contact: t('Do not contact'),
+		}
+		return map[value] || value || '—'
+	}
+
+	function dueStateLabel(value) {
+		const map = {
+			due_today: t('Due today'),
+			upcoming: t('Upcoming'),
+			overdue: t('Overdue'),
+			done: t('Done'),
+			canceled: t('Canceled'),
+			open: t('Open'),
+		}
+		return map[value] || value || '—'
+	}
+
+	function channelLabel(value) {
+		const map = {
+			phone_call: t('Phone call'),
+			call: t('Phone call'),
+			zalo: t('Zalo channel'),
+			sms: t('SMS message'),
+			facebook: t('Facebook channel'),
+			other: t('Other channel'),
+		}
+		return map[value] || value || '—'
+	}
+
+	function outcomeLabel(code, snapshotLabel) {
+		if (snapshotLabel && hasTranslation(snapshotLabel)) return t(snapshotLabel)
+		if (snapshotLabel && !/^[a-z0-9_]+$/.test(snapshotLabel)) return String(snapshotLabel)
+		const map = {
+			connected_interested: t('Interested (call)'),
+			connected_needs_followup: t('Needs follow-up'),
+			interested: t('Interested'),
+			connected_not_interested: t('Not interested (call)'),
+			not_interested: t('Not interested'),
+			connected_callback_requested: t('Callback requested'),
+			callback_requested: t('Callback requested'),
+			connected_converted: t('Converted / closed'),
+			converted: t('Converted / closed'),
+			no_answer: t('No answer'),
+			busy: t('Line busy'),
+			unreachable: t('Unreachable'),
+			wrong_number: t('Wrong number'),
+			do_not_contact: t('Refused / Do not contact'),
+			dnc: t('Refused / Do not contact'),
+			message_sent_no_reply: t('Message sent, no reply'),
+			message_replied_interested: t('Replied — interested'),
+			message_replied_not_interested: t('Replied — not interested'),
+			message_replied_callback: t('Replied — callback requested'),
+			other: t('Other'),
+		}
+		return map[code] || snapshotLabel || code || '—'
 	}
 
 	function formatNumber(value) {
@@ -213,11 +617,6 @@ window.cskh = (function () {
 		return new Intl.NumberFormat('vi-VN').format(value)
 	}
 
-	/**
-	 * Mask a phone number for the evidence screenshots: only the last four
-	 * digits are shown, so no real phone number ever reaches an image or a
-	 * log file (P1 delivery rule).
-	 */
 	function maskPhone(value) {
 		if (!value) return ''
 		const digits = String(value).replace(/\D/g, '')
@@ -225,14 +624,6 @@ window.cskh = (function () {
 		return '*'.repeat(digits.length - 4) + digits.slice(-4)
 	}
 
-	/**
-	 * The label of a capacity value.
-	 *
-	 * `capacity_limit = 0` means **no limit** (P1 §7.2, ADR-P1-04 §2.6). The
-	 * contract of T1B sends `0` for the limit of an unlimited rule and `null`
-	 * for its remaining capacity, so both are rendered with the dedicated
-	 * "Không giới hạn" label instead of a dash.
-	 */
 	function capacityLabel(value) {
 		if (value === undefined) return '—'
 		if (value === null) return t('Unlimited')
@@ -240,14 +631,6 @@ window.cskh = (function () {
 		return formatNumber(value)
 	}
 
-	/**
-	 * The label of a scope.
-	 *
-	 * The backend returns the scope as a stable code (`system`, `team`,
-	 * `self`, `all`); the page shows the Vietnamese label of the code so the
-	 * screen never mixes an English identifier into a Vietnamese sentence
-	 * (P1 §9.6).
-	 */
 	function scopeLabel(value) {
 		const map = {
 			system: 'Whole installation',
@@ -258,12 +641,6 @@ window.cskh = (function () {
 		return map[value] ? t(map[value]) : value || '—'
 	}
 
-	/**
-	 * The label of a campaign state.
-	 *
-	 * The four states of a campaign are shown in Vietnamese; the raw code is
-	 * never rendered as an English word (P1 §9.6).
-	 */
 	function campaignStatusLabel(value) {
 		const map = {
 			Draft: 'Campaign draft',
@@ -274,9 +651,6 @@ window.cskh = (function () {
 		return map[value] ? t(map[value]) : value || '—'
 	}
 
-	/**
-	 * A guard against **interleaved reads**.
-	 */
 	function sequencer() {
 		let token = 0
 		return {
@@ -290,25 +664,52 @@ window.cskh = (function () {
 		}
 	}
 
-	/** Render an alert box (error / warning / success / empty). */
-	function alert(container, kind, message, extra) {
+	function alert(container, kind, message, extra, actionNodes) {
+		if (!container) return
 		clear(container)
 		if (!message) return
-		const children = [cskh.el('span', { text: message })]
-		if (extra) children.push(cskh.el('span', { class: 'cskh-muted', text: ' · ' + extra }))
-		container.appendChild(cskh.el('div', { class: 'cskh-alert is-' + kind }, children))
+		const textWrap = el('div', {}, [
+			el('span', { text: message }),
+			extra ? el('span', { class: 'cskh-muted', text: ' · ' + extra }) : null,
+		])
+		const children = [textWrap]
+		if (actionNodes && actionNodes.length) {
+			children.push(el('div', { class: 'cskh-actions', style: 'margin-top: 8px;' }, actionNodes))
+		}
+		container.appendChild(el('div', { class: 'cskh-alert is-' + kind }, children))
 	}
 
-	/**
-	 * Turn a business error into the right page state.
-	 * `FORBIDDEN` becomes the permission-denied state, the conflict codes
-	 * become the conflict state, everything else the generic error state.
-	 *
-	 * Untranslated raw technical exceptions are never leaked as English text:
-	 * the page shows the translated Vietnamese message or the Vietnamese
-	 * explanation of the stable contract code, plus `[CODE]`.
-	 */
-	function renderError(container, error) {
+	function toast(kind, message) {
+		const host = document.getElementById('cskh-toast-host')
+		if (!host || !message) return
+		const item = el('div', { class: 'cskh-toast is-' + (kind || 'info') }, [
+			el('span', { text: message }),
+		])
+		host.appendChild(item)
+		setTimeout(function () {
+			if (item.parentNode) item.parentNode.removeChild(item)
+		}, 4200)
+	}
+
+	const CONFLICT_CODES = {
+		CONFLICT: true,
+		RULE_CHANGED: true,
+		PREVIEW_EXPIRED: true,
+		ALREADY_ASSIGNED: true,
+		CAPACITY_FULL: true,
+		CAPACITY_EXCEEDED: true,
+		NO_ELIGIBLE_LEADS: true,
+		PARTIAL_SUCCESS: true,
+		OWNERSHIP_CHANGED: true,
+		WORK_ITEM_NOT_ACTIVE: true,
+		STALE_WORK_ITEM: true,
+		ALREADY_LINKED: true,
+		IDEMPOTENCY_CONFLICT: true,
+		DO_NOT_CONTACT: true,
+		POLICY_CHANGED: true,
+	}
+
+	function renderError(container, error, recoveryActions) {
 		const code = error && error.code ? error.code : 'ERROR'
 		const rawMessage = error && error.message ? String(error.message) : ''
 		const translated = rawMessage && hasTranslation(rawMessage) ? t(rawMessage) : ''
@@ -318,28 +719,79 @@ window.cskh = (function () {
 			translated && explanation && translated !== explanation
 				? explanation + ' [' + code + ']'
 				: '[' + code + ']'
-		if (code === 'FORBIDDEN') {
-			alert(container, 'warning', message, label)
+
+		const actions = []
+		if (recoveryActions) {
+			if (code === 'STALE_WORK_ITEM' && typeof recoveryActions.onReloadWorkItem === 'function') {
+				actions.push(
+					el('button', {
+						class: 'cskh-btn is-small is-primary',
+						type: 'button',
+						text: t('Reload latest work item'),
+						onclick: recoveryActions.onReloadWorkItem,
+					})
+				)
+			}
+			if (code === 'POLICY_CHANGED' && typeof recoveryActions.onReloadPolicy === 'function') {
+				actions.push(
+					el('button', {
+						class: 'cskh-btn is-small is-primary',
+						type: 'button',
+						text: t('Reload policy and form'),
+						onclick: recoveryActions.onReloadPolicy,
+					})
+				)
+			}
+			if (
+				(code === 'OWNERSHIP_CHANGED' || code === 'FORBIDDEN' || code === 'NOT_FOUND') &&
+				recoveryActions.showBackLink
+			) {
+				actions.push(
+					el('a', {
+						class: 'cskh-btn is-small',
+						href: '/cskh/my-customers',
+						text: t('Back to my customers'),
+					})
+				)
+			}
+			if (
+				(code === 'RETRYABLE_FAILURE' || (error && error.status >= 500)) &&
+				typeof recoveryActions.onSafeRetry === 'function'
+			) {
+				actions.push(
+					el('button', {
+						class: 'cskh-btn is-small is-primary',
+						type: 'button',
+						text: t('Retry with same request key'),
+						onclick: recoveryActions.onSafeRetry,
+					})
+				)
+			}
+		}
+
+		if (code === 'FORBIDDEN' || CONFLICT_CODES[code]) {
+			alert(container, 'warning', message, label, actions)
 			return code
 		}
-		if (
-			code === 'CONFLICT' ||
-			code === 'RULE_CHANGED' ||
-			code === 'PREVIEW_EXPIRED' ||
-			code === 'ALREADY_ASSIGNED' ||
-			code === 'CAPACITY_FULL' ||
-			code === 'CAPACITY_EXCEEDED' ||
-			code === 'NO_ELIGIBLE_LEADS' ||
-			code === 'PARTIAL_SUCCESS'
-		) {
-			alert(container, 'warning', message, label)
-			return code
-		}
-		alert(container, 'error', message, label)
+		alert(container, 'error', message, label, actions)
 		return code
 	}
 
-	/** Build a pager and keep it in sync with the server total. */
+	async function copyPhone(phoneValue) {
+		if (!phoneValue) return false
+		try {
+			if (navigator.clipboard && navigator.clipboard.writeText) {
+				await navigator.clipboard.writeText(String(phoneValue))
+				toast('success', t('Phone number copied to clipboard.'))
+				return true
+			}
+		} catch (_err) {
+			/* fall through */
+		}
+		toast('warning', t('Could not copy phone number in this browser.'))
+		return false
+	}
+
 	function pager(options) {
 		const state = { page: 1, pageSize: options.pageSize || 20 }
 		let total = options.total || 0
@@ -377,7 +829,6 @@ window.cskh = (function () {
 		}
 	}
 
-	/** Poll a GET endpoint until `done(state)` returns true. */
 	async function poll(options) {
 		const interval = options.interval || 1200
 		const timeout = options.timeout || 120000
@@ -392,9 +843,6 @@ window.cskh = (function () {
 		throw new Error('Timeout')
 	}
 
-	/**
-	 * Upload a file as a **private** Frappe file for the import pipeline.
-	 */
 	async function uploadPrivateFile(file) {
 		const base64 = await new Promise(function (resolve, reject) {
 			const reader = new FileReader()
@@ -421,7 +869,7 @@ window.cskh = (function () {
 		let body = null
 		try {
 			body = await response.json()
-		} catch (err) {
+		} catch (_err) {
 			body = null
 		}
 		if (!response.ok) {
@@ -441,14 +889,32 @@ window.cskh = (function () {
 		},
 		el: el,
 		clear: clear,
+		uuid: uuid,
 		stateBadge: stateBadge,
+		workItemStateLabel: workItemStateLabel,
+		dueStateLabel: dueStateLabel,
+		channelLabel: channelLabel,
+		outcomeLabel: outcomeLabel,
+		timezoneInfo: timezoneInfo,
+		effectiveTimeZone: effectiveTimeZone,
+		siteTimeZone: siteTimeZone,
+		parseServerDate: parseServerDate,
+		serverNow: serverNow,
 		formatDate: formatDate,
+		formatDateOnly: formatDateOnly,
+		dateKeyInTz: dateKeyInTz,
+		toDatetimeLocalValue: toDatetimeLocalValue,
+		datetimeLocalToIso: datetimeLocalToIso,
+		datetimeLocalToServer: datetimeLocalToServer,
+		classifyDueAt: classifyDueAt,
 		formatNumber: formatNumber,
 		capacityLabel: capacityLabel,
 		scopeLabel: scopeLabel,
 		campaignStatusLabel: campaignStatusLabel,
 		maskPhone: maskPhone,
+		copyPhone: copyPhone,
 		alert: alert,
+		toast: toast,
 		renderError: renderError,
 		sequencer: sequencer,
 		pager: pager,

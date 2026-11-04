@@ -1,0 +1,196 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Attempt Correction",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "attempt",
+   "fieldtype": "Link",
+   "label": "Attempt",
+   "options": "CSKH Contact Attempt",
+   "reqd": 1
+  },
+  {
+   "fieldname": "work_item",
+   "fieldtype": "Link",
+   "label": "Work Item",
+   "options": "CSKH Work Item",
+   "reqd": 1
+  },
+  {
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "label": "Lead",
+   "options": "CRM Lead",
+   "reqd": 1
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "label": "Campaign",
+   "options": "CSKH Campaign",
+   "reqd": 1
+  },
+  {
+   "fieldname": "action",
+   "fieldtype": "Select",
+   "label": "Action",
+   "options": "correct\nvoid\nrestore",
+   "default": "correct",
+   "reqd": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "pending\napproved\nrejected",
+   "default": "pending",
+   "reqd": 1
+  },
+  {
+   "fieldname": "original_snapshot_json",
+   "fieldtype": "Long Text",
+   "label": "Original Snapshot Json"
+  },
+  {
+   "fieldname": "corrected_fields_json",
+   "fieldtype": "Long Text",
+   "label": "Corrected Fields Json"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Small Text",
+   "label": "Reason",
+   "reqd": 1
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "User",
+   "reqd": 1
+  },
+  {
+   "fieldname": "requested_at",
+   "fieldtype": "Datetime",
+   "label": "Requested At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "reviewed_by",
+   "fieldtype": "Link",
+   "label": "Reviewed By",
+   "options": "User"
+  },
+  {
+   "fieldname": "reviewed_at",
+   "fieldtype": "Datetime",
+   "label": "Reviewed At"
+  },
+  {
+   "fieldname": "review_note",
+   "fieldtype": "Small Text",
+   "label": "Review Note"
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "reqd": 1
+  },
+  {
+   "fieldname": "payload_hash",
+   "fieldtype": "Data",
+   "label": "Payload Hash",
+   "reqd": 1
+  },
+  {
+   "fieldname": "review_idempotency_key",
+   "fieldtype": "Data",
+   "label": "Review Idempotency Key"
+  },
+  {
+   "fieldname": "applied_revision",
+   "fieldtype": "Int",
+   "label": "Applied Revision"
+  }
+ ],
+ "field_order": [
+  "attempt",
+  "work_item",
+  "lead",
+  "campaign",
+  "action",
+  "status",
+  "original_snapshot_json",
+  "corrected_fields_json",
+  "reason",
+  "requested_by",
+  "requested_at",
+  "reviewed_by",
+  "reviewed_at",
+  "review_note",
+  "idempotency_key",
+  "payload_hash",
+  "review_idempotency_key",
+  "applied_revision"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "modified": "2026-11-03 23:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}

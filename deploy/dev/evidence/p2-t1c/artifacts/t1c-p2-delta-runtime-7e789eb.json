@@ -1,0 +1,350 @@
+{
+  "probe": "t1c-p2-delta-runtime-7e789eb",
+  "site": "t1cp2.localhost",
+  "executed_at_utc": "2026-11-04T07:14:19.815128+00:00",
+  "blocks": {
+    "01_provenance_and_migration": {
+      "status": "PASS",
+      "crm_cskh_realpath": "/workspace/frappe-bench/apps/crm_cskh/crm_cskh/__init__.py",
+      "src_tree": {
+        "files": 195,
+        "sha256": "13fa30f831c4d149602e3aa09e89884a54b44415fa2cbad8b4b177b11f42b7d9"
+      },
+      "live_tree": {
+        "files": 195,
+        "sha256": "13fa30f831c4d149602e3aa09e89884a54b44415fa2cbad8b4b177b11f42b7d9"
+      },
+      "parity_match": true,
+      "admin_has_zero_system_manager": true,
+      "bod_has_zero_system_manager": true,
+      "disabled_user_login_http": 401,
+      "pre_migration_snapshot": {
+        "backup_file": "20261104_134426-t1cp2_localhost-database.sql.gz",
+        "backup_sha256": "cf721bd307948760901934f34ffb345f3b939ac5d5583b0b225eba4f3838aab4",
+        "counts": {
+          "leads": 203,
+          "work_items": 209,
+          "attempts": 843,
+          "history": 284
+        },
+        "legacy_hash_prefix_rows": 39,
+        "legacy_raw_phone_rows": 40
+      },
+      "post_migration_x2": {
+        "private_reason_col": true,
+        "payload_hash_col": true,
+        "owner_at_close_col": true,
+        "any_hash_marker_remaining": 0,
+        "any_phone_in_public_reason": 0,
+        "closed_wis_backfilled": 31,
+        "reconcile_ok": true
+      }
+    },
+    "02_f_p2_01_privacy_and_migration": {
+      "status": "PASS",
+      "legacy_idempotency": {
+        "close_modified_payload_http": 409,
+        "reopen_modified_payload_http": 409,
+        "reopen_exact_payload_replay_http": 200
+      },
+      "fresh_dnc_and_close_reopen": {
+        "dnc_customer_note_copied_to_history_or_wi_or_lead": false,
+        "reopen_replay_http": 200,
+        "reopen_conflict_http": 409,
+        "close_replay_http": 200,
+        "close_conflict_http": 409
+      },
+      "bod_planes_verified": {
+        "plane1_ownership_history": 200,
+        "plane2_rest_v1_list_and_docs": 200,
+        "plane3_rest_v2_list_and_docs": 200,
+        "plane4_frappe_client": 200,
+        "plane5_desk_reportview_getdoc_and_exports": {
+          "reportview_get": 200,
+          "getdoc": 200,
+          "export_query": 403,
+          "data_export": 403
+        }
+      },
+      "bod_oracles_all_403": {
+        "rest_v1_filter_private_reason": 403,
+        "rest_v2_filter_payload_hash": 403,
+        "client_get_list_filter_private_reason": 403,
+        "client_get_list_or_filters_private_reason": 403,
+        "client_get_list_order_by_private_reason": 403,
+        "client_get_list_group_by_private_reason": 403,
+        "client_get_value_filter_private_reason": 403,
+        "client_get_count_filter_private_reason": 403,
+        "reportview_filter_private_reason": 403,
+        "reportview_agg_private_reason": 403,
+        "search_link_private_reason": 403,
+        "search_widget_private_reason": 403
+      },
+      "positive_controls": {
+        "admin": {
+          "ownership_history_http": 200,
+          "list_attempts_milestones_http": 200,
+          "sees_operator_reasons": true,
+          "zero_hash_prefix_fresh_and_legacy": true
+        },
+        "leader_a": {
+          "ownership_history_http": 200,
+          "list_attempts_milestones_http": 200,
+          "sees_operator_reasons": true,
+          "zero_hash_prefix_fresh_and_legacy": true
+        },
+        "staff_a1": {
+          "ownership_history_http": 200,
+          "list_attempts_milestones_http": 200,
+          "sees_operator_reasons": true,
+          "zero_hash_prefix_fresh_and_legacy": true
+        }
+      }
+    },
+    "03_f_p2_06_dnc_lockdown_and_lead_writes": {
+      "status": "PASS",
+      "actors_tested_all_403": [
+        "staff_a1",
+        "leader_a",
+        "bod",
+        "admin",
+        "sys_admin"
+      ],
+      "bypass_vectors_per_actor": 15,
+      "unauthorized_db_mutations": 0,
+      "normal_crm_lead_writes_preserved": {
+        "non_dnc_lead": {
+          "rest_put_partial": 200,
+          "rest_put_full_roundtrip": 200,
+          "client_set_value": 200,
+          "desk_savedocs_full_roundtrip": 200
+        },
+        "active_dnc_lead": {
+          "rest_put_partial": 200,
+          "rest_put_full_roundtrip": 200,
+          "client_set_value": 200,
+          "desk_savedocs_full_roundtrip": 200
+        }
+      },
+      "admin_audited_set_and_clear_lead_dnc": {
+        "set_http": 200,
+        "clear_http": 200
+      }
+    },
+    "04_f_p2_02_run_history": {
+      "status": "PASS",
+      "private_db_fallback_run": {
+        "historical_assigned": {
+          "staff.a1@example.test": 3,
+          "staff.a2@example.test": 1
+        },
+        "live_active_owned": {
+          "staff.a1@example.test": 2
+        },
+        "live_active_owned_total": 2
+      },
+      "shared_campaign_run": {
+        "admin_historical_assigned": {
+          "staff.a1@example.test": 2,
+          "staff.b1@example.test": 2
+        },
+        "admin_live_active_owned": {
+          "staff.a1@example.test": 1,
+          "staff.b1@example.test": 3
+        },
+        "leader_a_scoped": {
+          "assigned": {
+            "staff.a1@example.test": 2
+          },
+          "active_owned": {
+            "staff.a1@example.test": 1
+          }
+        },
+        "leader_b_scoped": {
+          "assigned": {
+            "staff.b1@example.test": 2
+          },
+          "active_owned": {
+            "staff.b1@example.test": 3
+          }
+        }
+      }
+    },
+    "05_f_p2_04_care_state_and_closed_filtering": {
+      "status": "PASS",
+      "multipage_care_state_reconciliation": {
+        "all": {
+          "total": 126,
+          "pages_fetched": 7,
+          "unique_items_matched_total": true
+        },
+        "unattempted": {
+          "total": 23,
+          "pages_fetched": 2,
+          "unique_items_matched_total": true
+        },
+        "not_contacted": {
+          "total": 23,
+          "pages_fetched": 2,
+          "unique_items_matched_total": true
+        },
+        "attempted": {
+          "total": 103,
+          "pages_fetched": 6,
+          "unique_items_matched_total": true
+        },
+        "attempted_not_connected": {
+          "total": 17,
+          "pages_fetched": 1,
+          "unique_items_matched_total": true
+        },
+        "connected": {
+          "total": 86,
+          "pages_fetched": 5,
+          "unique_items_matched_total": true
+        },
+        "on_hold": {
+          "total": 21,
+          "pages_fetched": 2,
+          "unique_items_matched_total": true
+        },
+        "followup_due": {
+          "total": 14,
+          "pages_fetched": 1,
+          "unique_items_matched_total": true
+        },
+        "followup_overdue": {
+          "total": 1,
+          "pages_fetched": 1,
+          "unique_items_matched_total": true
+        },
+        "closed": {
+          "total": 44,
+          "pages_fetched": 3,
+          "unique_items_matched_total": true
+        },
+        "do_not_contact": {
+          "total": 25,
+          "pages_fetched": 2,
+          "unique_items_matched_total": true
+        }
+      },
+      "multipage_item_7mikecehjd_found_in_connected_pages": true,
+      "invalid_care_state_http": 400,
+      "closed_owner_at_close_vs_closed_by_verified": true,
+      "former_owner_before_close_denied_http": 403,
+      "post_close_cross_team_move_denials": {
+        "staff_a2": {
+          "get_work_item": 403,
+          "list_attempts": 403,
+          "ownership_history": 403,
+          "rest_work_item": 403,
+          "rest_crm_lead": 403
+        },
+        "leader_a": {
+          "get_work_item": 403,
+          "list_attempts": 403,
+          "ownership_history": 403,
+          "rest_work_item": 403,
+          "rest_crm_lead": 403
+        }
+      }
+    },
+    "06_f_p2_05_progress_summary": {
+      "status": "PASS",
+      "same_day_half_open_period": {
+        "timezone": "Asia/Ho_Chi_Minh",
+        "date_from": "2026-10-15 00:00:00",
+        "date_to": "2026-10-16 00:00:00",
+        "end_bound_mode": "exclusive",
+        "cohort_basis": "allocated_or_active_or_attempted_in_period"
+      },
+      "staff_a1_cards_initial": {
+        "total_active_owned": 5,
+        "assigned": 1,
+        "in_progress": 4,
+        "on_hold": 0,
+        "closed": 0,
+        "revoked": 0,
+        "queued": 0,
+        "cohort_work_items": 5,
+        "attempted_work_items": 3,
+        "unattempted_work_items": 2,
+        "connected_work_items": 2,
+        "effective_attempts": 4,
+        "connected_attempts": 2,
+        "unreached_attempts": 2,
+        "open_followups": 0,
+        "overdue_followups": 0,
+        "due_today_followups": 0,
+        "pending_corrections": 0,
+        "dnc_leads": 0,
+        "dnc_work_items": 0
+      },
+      "bod_cards_initial": {
+        "total_active_owned": 6,
+        "assigned": 1,
+        "in_progress": 5,
+        "on_hold": 0,
+        "closed": 0,
+        "revoked": 0,
+        "queued": 0,
+        "cohort_work_items": 6,
+        "attempted_work_items": 4,
+        "unattempted_work_items": 2,
+        "connected_work_items": 3,
+        "effective_attempts": 5,
+        "connected_attempts": 3,
+        "unreached_attempts": 2,
+        "open_followups": 0,
+        "overdue_followups": 0,
+        "due_today_followups": 0,
+        "pending_corrections": 0,
+        "dnc_leads": 0,
+        "dnc_work_items": 0
+      },
+      "explicit_datetime_inclusive_verified": true,
+      "invalid_dates_rejected_400": true,
+      "dnc_leads_distinct_from_dnc_work_items": {
+        "dnc_leads": 24,
+        "dnc_work_items": 27
+      },
+      "overlay_reconciliation": {
+        "after_outcome_flip_connected_wis": 3,
+        "after_void_attempted_wis": 2,
+        "after_restore_attempted_wis": 3
+      }
+    },
+    "07_collateral_concurrency_and_restore": {
+      "status": "PASS",
+      "attempt_orm_immutability": {
+        "put_http": 403,
+        "delete_http": 403
+      },
+      "mid_tx_savepoint_rollback_zero_orphans": true,
+      "concurrent_n6_same_key": {
+        "fresh_200": 1,
+        "idempotent_replay_200": 5,
+        "db_rows": 1
+      },
+      "concurrent_attempt_vs_reassign_obs_p2_01": [
+        {
+          "attempt_http": 409,
+          "reassign_http": 200
+        },
+        {
+          "attempt_http": 409,
+          "reassign_http": 200
+        },
+        {
+          "attempt_http": 200,
+          "reassign_http": 200
+        }
+      ],
+      "a_to_b_to_a_backdate_blocked_http": 422,
+      "reconcile_p2_invariants_ok": true,
+      "backup_restore_on_7e789eb_schema_ok": true
+    }
+  },
+  "all_passed": true
+}

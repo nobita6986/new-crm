@@ -29,18 +29,140 @@ result is asserted before the transaction commits.
 > performs the same operations itself inside its own transaction.
 """
 
+import re
+
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import cint, now_datetime
 
 from crm_cskh.api._params import parse_bool, parse_optional_str
+from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
+from crm_cskh.p2_models import sanitize_note_text
 from crm_cskh.services import eligibility
-from crm_cskh.services.errors import Conflict, Forbidden, InvalidRequest, NotFound
+from crm_cskh.services.errors import Conflict, DoNotContact, Forbidden, InvalidRequest, NotFound
 
 REASSIGN = "reassign"
 REVOKE = "revoke"
 ASSIGN = "assign"
 
 ROLE_ADMIN = "CSKH CRM Admin"
+
+_LEGACY_HASH_PREFIX_RE = re.compile(r"^\[H:([0-9a-fA-F]{16})\]\s*")
+_DIST_RUN_LABEL_RE = re.compile(r"^Distribution run [A-Za-z0-9._:-]+$")
+_STATIC_NEUTRAL_REASONS = frozenset(
+	(
+		"Giao phụ trách",
+		"Initial assignment",
+		"Chuyển người phụ trách",
+		"Thu hồi về hàng đợi",
+		"Thu hồi phân công",
+		"Tự động đóng Work Item do khách yêu cầu ngừng liên hệ (DNC)",
+		"Đóng Work Item (dữ liệu sai/trùng)",
+		"Đóng Work Item",
+		"Mở lại Work Item (ghi đè DNC có phê duyệt)",
+		"Mở lại Work Item",
+	)
+)
+
+
+def extract_legacy_hash_prefix(text: str | None) -> tuple[str, str]:
+	"""Split any legacy `[H:<16hex>] ` idempotency tag out of a display string (`F-P2-01`)."""
+	raw = (text or "").strip()
+	if not raw:
+		return "", ""
+	match = _LEGACY_HASH_PREFIX_RE.match(raw)
+	if not match:
+		return "", raw
+	return match.group(1).lower(), raw[match.end() :].strip()
+
+
+def strip_legacy_hash_prefix(text: str | None) -> str:
+	"""Return `text` guaranteed free of any `[H:<16hex>]` idempotency prefix."""
+	return extract_legacy_hash_prefix(text)[1]
+
+
+def is_neutral_public_history_reason(text: str | None) -> bool:
+	"""True when `text` is a non-PII neutral public action label safe at `permlevel = 0`."""
+	val = (text or "").strip()
+	if not val:
+		return False
+	return val in _STATIC_NEUTRAL_REASONS or bool(_DIST_RUN_LABEL_RE.match(val))
+
+
+def public_history_reason(
+	action: str,
+	*,
+	distribution_run: str | None = None,
+	return_to_pool: bool = True,
+	is_dnc: bool = False,
+	close_category: str = "normal",
+	override_dnc: bool = False,
+) -> str:
+	"""Canonical neutral `permlevel = 0` label for `CSKH Assignment History.reason` (`F-P2-01`)."""
+	act = (action or ASSIGN).strip().lower()
+	if act == ASSIGN:
+		if distribution_run:
+			return f"Distribution run {distribution_run}"
+		return "Giao phụ trách"
+	if act == REASSIGN:
+		return "Chuyển người phụ trách"
+	if act == REVOKE:
+		return "Thu hồi về hàng đợi" if return_to_pool else "Thu hồi phân công"
+	if act == "close":
+		if is_dnc:
+			return "Tự động đóng Work Item do khách yêu cầu ngừng liên hệ (DNC)"
+		if close_category == "invalid_or_duplicate":
+			return "Đóng Work Item (dữ liệu sai/trùng)"
+		return "Đóng Work Item"
+	if act == "reopen":
+		if override_dnc:
+			return "Mở lại Work Item (ghi đè DNC có phê duyệt)"
+		return "Mở lại Work Item"
+	return "Cập nhật phân công"
+
+
+def public_history_reason_from_row(row: dict) -> str:
+	"""Project a guaranteed neutral public `reason` for `CSKH BOD Viewer` (`F-P2-01`)."""
+	raw_reason = (row.get("reason") or "").strip()
+	if is_neutral_public_history_reason(raw_reason):
+		return raw_reason
+	act = (row.get("action") or ASSIGN).strip().lower()
+	dist_run = row.get("distribution_run") if act == ASSIGN else None
+	event_id = str(row.get("event_id") or "")
+	return public_history_reason(
+		act,
+		distribution_run=dist_run,
+		is_dnc=event_id.startswith("close-att:") and "DNC" in raw_reason,
+	)
+
+
+def display_history_reason(row: dict) -> str:
+	"""Project operator-readable audit reason for authorized actors (`Admin` / `Leader` / `Staff`)."""
+	priv = strip_legacy_hash_prefix(row.get("private_reason"))
+	if priv:
+		return priv
+	pub = strip_legacy_hash_prefix(row.get("reason"))
+	if pub:
+		return pub
+	return public_history_reason_from_row(row)
+
+
+def matches_history_payload_hash(existing_row: dict, req_hash: str) -> bool:
+	"""Compare `req_hash` against `payload_hash` (64-hex or migrated 16-hex prefix) or legacy `[H:...]`.
+
+	Preserves `409 IDEMPOTENCY_CONFLICT` across both new rows and migrated pre-fix rows (`F-P2-01`).
+	"""
+	stored_hash = str(existing_row.get("payload_hash") or "").strip().lower()
+	if stored_hash:
+		if len(stored_hash) == 64:
+			return stored_hash == req_hash.lower()
+		if len(stored_hash) == 16:
+			return req_hash.lower().startswith(stored_hash)
+		return stored_hash == req_hash.lower()
+	for candidate in (existing_row.get("private_reason"), existing_row.get("reason")):
+		legacy_hex, _ = extract_legacy_hash_prefix(candidate)
+		if legacy_hex:
+			return req_hash.lower().startswith(legacy_hex)
+	return True
 
 
 def _is_system(user=None):
@@ -79,7 +201,8 @@ def _require_target_eligibility(target_user):
 def _lock_work_item(work_item):
 	"""Row-lock the work item so two mutators cannot interleave."""
 	rows = frappe.db.sql(
-		"select name, campaign, lead, status, assigned_to, assigned_at "
+		"select name, campaign, lead, status, revision, assigned_to, assigned_at, "
+		"open_callback_task, next_action_due "
 		"from `tabCSKH Work Item` where name = %s for update",
 		(work_item,),
 		as_dict=True,
@@ -90,10 +213,10 @@ def _lock_work_item(work_item):
 
 
 def _capacity_usage(campaign, user):
-	"""Number of active assigned work items of `user` inside `campaign`."""
+	"""Number of active owned work items (`assigned`, `in_progress`, `on_hold`) of `user` inside `campaign`."""
 	return frappe.db.count(
 		"CSKH Work Item",
-		{"campaign": campaign, "assigned_to": user, "status": "assigned"},
+		{"campaign": campaign, "assigned_to": user, "status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)]},
 	)
 
 
@@ -339,7 +462,12 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 	request_id = parse_optional_str(request_id, "The request id must be a string.")
 	if not request_id:
 		raise InvalidRequest("A request id is required so the action stays idempotent.")
-	reason = parse_optional_str(reason, "The reason must be a string.") or "Initial assignment"
+	raw_reason = parse_optional_str(reason, "The reason must be a string.")
+	clean_reason = sanitize_note_text(raw_reason, max_length=1000) if raw_reason else ""
+	pub_reason = public_history_reason(ASSIGN, distribution_run=distribution_run)
+	priv_reason = (
+		clean_reason if clean_reason and not is_neutral_public_history_reason(clean_reason) else None
+	)
 
 	event_id = _event_id(request_id, work_item, ASSIGN)
 	existing = _find_history_event(event_id)
@@ -353,6 +481,10 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 			code="ALREADY_ASSIGNED",
 			details={"status": item.status},
 		)
+	if frappe.db.has_column("CRM Lead", "cskh_do_not_contact") and cint(
+		frappe.db.get_value("CRM Lead", item.lead, "cskh_do_not_contact")
+	):
+		raise DoNotContact("Khách hàng đang ở trạng thái ngừng liên hệ (DNC); không được giao chăm sóc.")
 	claim = frappe.db.get_value(
 		"CSKH Active Claim",
 		{"lead": item.lead},
@@ -367,7 +499,11 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 		)
 	other_assigned = frappe.db.get_value(
 		"CSKH Work Item",
-		{"lead": item.lead, "status": "assigned", "name": ["!=", work_item]},
+		{
+			"lead": item.lead,
+			"status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)],
+			"name": ["!=", work_item],
+		},
 		["name", "campaign"],
 		as_dict=True,
 	)
@@ -380,10 +516,16 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 	target_user = _require_campaign_target_eligibility(item.campaign, target_user)
 
 	now = now_datetime()
+	next_revision = max(cint(item.get("revision") or 1), 1)
 	frappe.db.set_value(
 		"CSKH Work Item",
 		work_item,
-		{"status": "assigned", "assigned_to": target_user, "assigned_at": now},
+		{
+			"status": "assigned",
+			"assigned_to": target_user,
+			"assigned_at": now,
+			"revision": next_revision,
+		},
 		update_modified=False,
 	)
 
@@ -396,7 +538,8 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 			"to_user": target_user,
 			"actor": actor,
 			"event_at": now,
-			"reason": reason,
+			"reason": pub_reason,
+			"private_reason": priv_reason,
 			"ownership_start": now,
 			"ownership_end": None,
 			"event_id": event_id,
@@ -442,7 +585,8 @@ def reassign(
 	if not request_id:
 		raise InvalidRequest("A request id is required so the action stays idempotent.")
 	reason = parse_optional_str(reason, "The reason must be a string.")
-	if not reason:
+	clean_reason = sanitize_note_text(reason, max_length=1000) if reason else ""
+	if not clean_reason:
 		raise InvalidRequest("A reason is required to transfer a customer.")
 	target_user = _require_target_eligibility(target_user)
 
@@ -452,7 +596,7 @@ def reassign(
 		return {"work_item": work_item, "status": "already_applied", "event": existing}
 
 	item = _lock_work_item(work_item)
-	if item.status != "assigned" or not item.assigned_to:
+	if item.status not in OWNED_ACTIVE_WORK_ITEM_STATES or not item.assigned_to:
 		raise Conflict(
 			"The work item is not currently assigned.",
 			code="ALREADY_ASSIGNED",
@@ -476,10 +620,33 @@ def reassign(
 	old_owner = item.assigned_to
 	_close_open_interval(work_item, now)
 
+	from crm_cskh.services.followup import reassign_open_followup_in_tx
+
+	transferred_task = reassign_open_followup_in_tx(
+		work_item=work_item,
+		lead=item.lead,
+		from_user=old_owner,
+		to_user=target_user,
+		actor=actor,
+		reason=clean_reason,
+		now=now,
+	)
+
+	next_revision = cint(item.get("revision") or 1) + 1
+	wi_updates = {
+		# Preserve sub-state (`assigned` | `in_progress` | `on_hold`) on transfer (`ADR-P2-01`).
+		"status": item.status,
+		"assigned_to": target_user,
+		"assigned_at": now,
+		"last_transfer_at": now,
+		"revision": next_revision,
+	}
+	if transferred_task:
+		wi_updates["open_callback_task"] = transferred_task
 	frappe.db.set_value(
 		"CSKH Work Item",
 		work_item,
-		{"status": "assigned", "assigned_to": target_user, "assigned_at": now, "last_transfer_at": now},
+		wi_updates,
 		update_modified=False,
 	)
 
@@ -492,7 +659,8 @@ def reassign(
 			"to_user": target_user,
 			"actor": actor,
 			"event_at": now,
-			"reason": reason,
+			"reason": public_history_reason(REASSIGN),
+			"private_reason": clean_reason,
 			"ownership_start": now,
 			"ownership_end": None,
 			"event_id": event_id,
@@ -515,7 +683,15 @@ def reassign(
 	_sync_lead_owner(item.lead, target_user)
 
 	ledger = _assert_final_owner(item.lead, target_user)
-	return {"work_item": work_item, "status": "reassigned", "owner": target_user, "ledger": ledger}
+	return {
+		"work_item": work_item,
+		"status": "reassigned",
+		"work_item_status": item.status,
+		"owner": target_user,
+		"revision": next_revision,
+		"transferred_callback_task": transferred_task,
+		"ledger": ledger,
+	}
 
 
 def revoke(
@@ -536,7 +712,9 @@ def revoke(
 	_require_actor_permission(actor, REVOKE)
 	if not request_id:
 		raise InvalidRequest("A request id is required so the action stays idempotent.")
-	if not reason:
+	raw_reason = parse_optional_str(reason, "The reason must be a string.")
+	clean_reason = sanitize_note_text(raw_reason, max_length=1000) if raw_reason else ""
+	if not clean_reason:
 		raise InvalidRequest("A reason is required to revoke a customer.")
 	return_to_pool = parse_bool(return_to_pool, default=True, field="return_to_pool")
 
@@ -546,7 +724,7 @@ def revoke(
 		return {"work_item": work_item, "status": "already_applied", "event": existing}
 
 	item = _lock_work_item(work_item)
-	if item.status != "assigned" or not item.assigned_to:
+	if item.status not in OWNED_ACTIVE_WORK_ITEM_STATES or not item.assigned_to:
 		raise Conflict(
 			"The work item is not currently assigned.",
 			code="ALREADY_ASSIGNED",
@@ -563,11 +741,29 @@ def revoke(
 	old_owner = item.assigned_to
 	_close_open_interval(work_item, now)
 
+	from crm_cskh.services.followup import cancel_open_followup_in_tx
+
+	canceled_task = cancel_open_followup_in_tx(
+		work_item=work_item,
+		actor=actor,
+		reason=f"Thu hồi phân công: {clean_reason}",
+		now=now,
+	)
+
 	new_status = "queued" if return_to_pool else "revoked"
+	next_revision = cint(item.get("revision") or 1) + 1
 	frappe.db.set_value(
 		"CSKH Work Item",
 		work_item,
-		{"status": new_status, "assigned_to": None, "assigned_at": None, "last_transfer_at": now},
+		{
+			"status": new_status,
+			"assigned_to": None,
+			"assigned_at": None,
+			"open_callback_task": None,
+			"next_action_due": None,
+			"last_transfer_at": now,
+			"revision": next_revision,
+		},
 		update_modified=False,
 	)
 
@@ -580,7 +776,8 @@ def revoke(
 			"to_user": None,
 			"actor": actor,
 			"event_at": now,
-			"reason": reason,
+			"reason": public_history_reason(REVOKE, return_to_pool=return_to_pool),
+			"private_reason": clean_reason,
 			"ownership_start": None,
 			"ownership_end": now,
 			"event_id": event_id,
@@ -600,4 +797,10 @@ def revoke(
 	# back in the pool and may join another campaign (ADR-P1-02 §2.2).
 	frappe.db.delete("CSKH Active Claim", {"lead": item.lead})
 
-	return {"work_item": work_item, "status": new_status, "owner": None}
+	return {
+		"work_item": work_item,
+		"status": new_status,
+		"owner": None,
+		"revision": next_revision,
+		"canceled_callback_task": canceled_task,
+	}

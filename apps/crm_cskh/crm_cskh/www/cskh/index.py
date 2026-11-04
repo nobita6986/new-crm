@@ -1,8 +1,4 @@
-"""Context of the CSKH landing page (P1).
-
-The landing page only links to the P1 business screens. Every list is served
-by the scoped P1 APIs; the page itself shows no business data.
-"""
+"""Context of the CSKH landing page (P1 + P2)."""
 
 from frappe import _
 
@@ -14,6 +10,6 @@ def get_context(context):
 		context,
 		route="/cskh",
 		title=_("CSKH"),
-		subtitle=_("Customer pool, imports, campaigns and distribution."),
+		subtitle=_("Customer pool, imports, campaigns, distribution and customer care workflow."),
 		allowed_roles=READ_ROLES,
 	)

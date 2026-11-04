@@ -1,0 +1,2214 @@
+{
+  "site": "p2dev.localhost",
+  "base_url": "http://127.0.0.1:8000",
+  "recorded_at_utc": "2026-11-03T17:39:56.444091+00:00",
+  "commit_sha": "unknown",
+  "evidence_class": "http",
+  "coverage_scope": "direct HTTP against bench serve with session cookies and CSRF validation across P2 workflow.*, settings.*, P1 ownership.reassign handover, generic /api/resource/* & frappe.client.* guards, BOD 0-PII summary, and P0 File-oracle 404 non-regression",
+  "total_cases": 61,
+  "cases": [
+    {
+      "id": "p2-http-login-staff-a",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=staff.a%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:48 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "64",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/crm\", \"full_name\": \"Staff A\"}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-csrf-staff-a",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:49 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "927028",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.V3USVWDO.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.IYRGXGPH.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-login-staff-b",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=staff.b%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:49 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "64",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/crm\", \"full_name\": \"Staff B\"}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-csrf-staff-b",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:50 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "927028",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.V3USVWDO.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.IYRGXGPH.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-login-staff-c",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=staff.c%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:50 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "64",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/crm\", \"full_name\": \"Staff C\"}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "staff.c@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-csrf-staff-c",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:50 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "927028",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.V3USVWDO.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.IYRGXGPH.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "staff.c@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-login-leader-a",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=team1.leader%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:51 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "69",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/crm\", \"full_name\": \"Team1 Leader\"}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-csrf-leader-a",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:51 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "929613",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.V3USVWDO.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.IYRGXGPH.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-login-leader-b",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=team2.leader%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:51 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "69",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/crm\", \"full_name\": \"Team2 Leader\"}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "team2.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-csrf-leader-b",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:52 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "929613",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.V3USVWDO.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.IYRGXGPH.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "team2.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-login-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=bod.viewer%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:52 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "67",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/app\", \"full_name\": \"BOD Viewer\"}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-csrf-bod",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:52 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "919883",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.V3USVWDO.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.IYRGXGPH.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-login-crm-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/login",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        "cookie": "[REDACTED]",
+        "body": "usr=crm.admin%40dev.local&pwd=[REDACTED]"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:53 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "66",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": \"Logged In\", \"home_page\": \"/app\", \"full_name\": \"CRM Admin\"}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST /api/method/login returns HTTP 200",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-csrf-crm-admin",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/app",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:53 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "920196",
+          "X-Page-Name": "app",
+          "X-From-Cache": "False",
+          "Link": "</assets/frappe/dist/css/desk.bundle.V3USVWDO.css>; rel=preload; as=style,</assets/frappe/dist/css/report.bundle.IYRGXGPH.css>; rel=preload; as=style,</assets/frappe/dist/js/libs.bundle.BN7HV5JO.js>; rel=preload; as=script,</assets/frappe/dist/js/desk.bundle.73LZCYLF.js>; rel=preload; as=script,</assets/frappe/dist/js/list.bundle.JIGYNXJ7.js>; rel=preload; as=script,</assets/frappe/dist/js/form.bundle.CLXPFSLO.js>; rel=preload; as=script,</assets/frappe/dist/js/controls.bundle.GZMUR6H7.js>; rel=preload; as=script,</assets/frappe/dist/js/report.bundle.BDTYVS6E.js>; rel=preload; as=script,</assets/frappe/dist/js/telemetry.bundle.3ICFTNWB.js>; rel=preload; as=script,</assets/frappe/dist/js/billing.bundle.QQE2RPCA.js>; rel=preload; as=script,</assets/frappe/icons/timeless/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin,</assets/frappe/icons/espresso/icons.svg?v=1793720276.648619>; rel=preload; as=fetch; crossorigin",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "<!DOCTYPE html>\n<html data-theme-mode=\"light\" data-theme=\"light\" dir=ltr lang=\"vi\">\n\t<head>\n\t\t<meta charset=\"UTF-8\">\n\t\t<!-- Chrome, Firefox OS and Opera -->\n\t\t<meta name=\"theme-color\" content=\"#0089FF\">\n\t\t<!-- Windows Phone -->\n\t\t<meta name=\"msapplication-navbutton-color\" content=\"#0089FF\">\n\t\t<!-- iOS Safari -->\n\t\t<meta name=\"apple-mobile-web-app-status-bar-style\" content=\"#0089FF\">\n\t\t<meta content=\"text/html;charset=utf-8\" http-equiv=\"Content-Type\">\n\t\t<meta content=\"utf-8\" http-equiv=\"encoding\">\n\t\t<meta name=\"author\" content=\"\">\n\t\t<meta name=\"viewport\" content=\"width=device-width, initial-sca",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /app yields HTTP 200 and a non-empty CSRF token",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-guest-queue-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.list_work_items",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:53 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "2777",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError: <details><summary>Bạn không được phép truy cập tài nguyên này. Đăng nhập để truy cập</summary>Chức năng <strong>crm_cskh.api.workflow.list_work_items</strong> không có trong danh sách trắng.</details>\", \"exc_type\": \"PermissionError\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 83, in execute_cmd\\\\n    is_whitelisted(method)\\\\n    ~~~~~~~~~~~~~~^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 886, in is_whitelisted\\\\n    throw(msg, PermissionError, title=_(\\\\\\\"Method Not Allowed\\\\\\\"))\\\\n    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 621, in throw\\\\n    msgprint(\\\\n    ~~~~~~~~^\\\\n    \\\\tmsg,\\\\n     ^^^^\\\\n    ...<6 lines>...\\\\n    \\\\tprimary_action=primary_action,\\\\n     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n    )\\\\n    ^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 586, in msgprint\\\\n    _raise_exception()\\\\n    ~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 537, in _raise_exception\\\\n    raise exc\\\\nfrappe.exceptions.PermissionError: <details><summary>B\\\\u1ea1n kh\\\\u00f4ng \\\\u0111\\\\u01b0\\\\u1ee3c ph\\\\u00e9p truy c\\\\u1eadp t\\\\u00e0i nguy\\\\u00ean n\\\\u00e0y. \\\\u0110\\\\u0103ng nh\\\\u1eadp \\\\u0111\\\\u1ec3 truy c\\\\u1eadp</summary>Ch\\\\u1ee9c n\\\\u0103ng <strong>crm_cskh.api.workflow.list_work_items</strong> kh\\\\u00f4ng c\\\\u00f3 trong danh s\\\\u00e1ch tr\\\\u1eafng.</details>\\\\n\\\"]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"<details><summary>B\\\\\\\\u1ea1n kh\\\\\\\\u00f4ng \\\\\\\\u0111\\\\\\\\u01b0\\\\\\\\u1ee3c ph\\\\\\\\u00e9p truy c\\\\\\\\u1eadp t\\\\\\\\u00e0i nguy\\\\\\\\u00ean n\\\\\\\\u00e0y. \\\\\\\\u0110\\\\\\\\u0103ng nh\\\\\\\\u1eadp \\\\\\\\u0111\\\\\\\\u1ec3 truy c\\\\\\\\u1eadp</summary>Ch\\\\\\\\u1ee9c n\\\\\\\\u0103ng <strong>crm_cskh.api.workflow.list_work_items</strong> kh\\\\\\\\u00f4ng c\\\\\\\\u00f3 trong danh s\\\\\\\\u00e1ch tr\\\\\\\\u1eafng.</details>\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Ph\\\\\\\\u01b0\\\\\\\\u01a1ng ph\\\\\\\\u00e1p kh\\\\\\\\u00f4ng \\\\\\\\u0111\\\\\\\\u01b0\\\\\\\\u1ee3c ph\\\\\\\\u00e9p\\\\\\\", \\\\\\\"indicator\\\\\\\": \\\\\\\"red\\\\\\\", \\\\\\\"raise_exception\\\\\\\": 1, \\\\\\\"__frappe_exc_id\\\\\\\": \\\\\\\"b5bd01c0aa48701e29c4ac5320a6ee814ef930f960be5777ee2f1534\\\\\\\"}\\\"]\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Guest denied on list_work_items",
+        "actor": "Guest",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-guest-summary-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.progress_summary",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:53 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "2780",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError: <details><summary>Bạn không được phép truy cập tài nguyên này. Đăng nhập để truy cập</summary>Chức năng <strong>crm_cskh.api.workflow.progress_summary</strong> không có trong danh sách trắng.</details>\", \"exc_type\": \"PermissionError\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 83, in execute_cmd\\\\n    is_whitelisted(method)\\\\n    ~~~~~~~~~~~~~~^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 886, in is_whitelisted\\\\n    throw(msg, PermissionError, title=_(\\\\\\\"Method Not Allowed\\\\\\\"))\\\\n    ~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 621, in throw\\\\n    msgprint(\\\\n    ~~~~~~~~^\\\\n    \\\\tmsg,\\\\n     ^^^^\\\\n    ...<6 lines>...\\\\n    \\\\tprimary_action=primary_action,\\\\n     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n    )\\\\n    ^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 586, in msgprint\\\\n    _raise_exception()\\\\n    ~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 537, in _raise_exception\\\\n    raise exc\\\\nfrappe.exceptions.PermissionError: <details><summary>B\\\\u1ea1n kh\\\\u00f4ng \\\\u0111\\\\u01b0\\\\u1ee3c ph\\\\u00e9p truy c\\\\u1eadp t\\\\u00e0i nguy\\\\u00ean n\\\\u00e0y. \\\\u0110\\\\u0103ng nh\\\\u1eadp \\\\u0111\\\\u1ec3 truy c\\\\u1eadp</summary>Ch\\\\u1ee9c n\\\\u0103ng <strong>crm_cskh.api.workflow.progress_summary</strong> kh\\\\u00f4ng c\\\\u00f3 trong danh s\\\\u00e1ch tr\\\\u1eafng.</details>\\\\n\\\"]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"<details><summary>B\\\\\\\\u1ea1n kh\\\\\\\\u00f4ng \\\\\\\\u0111\\\\\\\\u01b0\\\\\\\\u1ee3c ph\\\\\\\\u00e9p truy c\\\\\\\\u1eadp t\\\\\\\\u00e0i nguy\\\\\\\\u00ean n\\\\\\\\u00e0y. \\\\\\\\u0110\\\\\\\\u0103ng nh\\\\\\\\u1eadp \\\\\\\\u0111\\\\\\\\u1ec3 truy c\\\\\\\\u1eadp</summary>Ch\\\\\\\\u1ee9c n\\\\\\\\u0103ng <strong>crm_cskh.api.workflow.progress_summary</strong> kh\\\\\\\\u00f4ng c\\\\\\\\u00f3 trong danh s\\\\\\\\u00e1ch tr\\\\\\\\u1eafng.</details>\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Ph\\\\\\\\u01b0\\\\\\\\u01a1ng ph\\\\\\\\u00e1p kh\\\\\\\\u00f4ng \\\\\\\\u0111\\\\\\\\u01b0\\\\\\\\u1ee3c ph\\\\\\\\u00e9p\\\\\\\", \\\\\\\"indicator\\\\\\\": \\\\\\\"red\\\\\\\", \\\\\\\"raise_exception\\\\\\\": 1, \\\\\\\"__frappe_exc_id\\\\\\\": \\\\\\\"9e5fd5c749ac50a118ed38fa979fb14008e36629eb78b019271aea10\\\\\\\"}\\\"]\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Guest denied on progress_summary",
+        "actor": "Guest",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-missing-csrf-rejected",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.record_attempt",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"channel\": \"phone_call\", \"outcome_code\": \"no_answer\", \"idempotency_key\": \"no-csrf\"}"
+      },
+      "response": {
+        "status": 400,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:53 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "336",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exc_type\": \"CSRFTokenError\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Y\\\\\\\\u00eau c\\\\\\\\u1ea7u kh\\\\\\\\u00f4ng h\\\\\\\\u1ee3p l\\\\\\\\u1ec7\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nh\\\\\\\\u1eafn\\\\\\\", \\\\\\\"indicator\\\\\\\": \\\\\\\"red\\\\\\\", \\\\\\\"raise_exception\\\\\\\": 1, \\\\\\\"__frappe_exc_id\\\\\\\": \\\\\\\"3ef5a641138dd2873fb9be14df5dd7beb80d0f19b624118798392728\\\\\\\"}\\\"]\"}",
+        "exc_type": "CSRFTokenError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "POST without CSRF token is rejected over real HTTP",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-get-on-post-mutation-rejected",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.record_attempt?work_item=6utcfikbgg&channel=phone_call&outcome_code=no_answer&idempotency_key=get-mut",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:53 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1983",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError: Không được phép\", \"exc_type\": \"PermissionError\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 84, in execute_cmd\\\\n    is_valid_http_method(method)\\\\n    ~~~~~~~~~~~~~~~~~~~~^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 110, in is_valid_http_method\\\\n    throw_permission_error()\\\\n    ~~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 114, in throw_permission_error\\\\n    frappe.throw(_(\\\\\\\"Not permitted\\\\\\\"), frappe.PermissionError)\\\\n    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 621, in throw\\\\n    msgprint(\\\\n    ~~~~~~~~^\\\\n    \\\\tmsg,\\\\n     ^^^^\\\\n    ...<6 lines>...\\\\n    \\\\tprimary_action=primary_action,\\\\n     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n    )\\\\n    ^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 586, in msgprint\\\\n    _raise_exception()\\\\n    ~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 537, in _raise_exception\\\\n    raise exc\\\\nfrappe.exceptions.PermissionError: Kh\\\\u00f4ng \\\\u0111\\\\u01b0\\\\u1ee3c ph\\\\u00e9p\\\\n\\\"]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Kh\\\\\\\\u00f4ng \\\\\\\\u0111\\\\\\\\u01b0\\\\\\\\u1ee3c ph\\\\\\\\u00e9p\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nh\\\\\\\\u1eafn\\\\\\\", \\\\\\\"indicator\\\\\\\": \\\\\\\"red\\\\\\\", \\\\\\\"raise_exception\\\\\\\": 1, \\\\\\\"__frappe_exc_id\\\\\\\": \\\\\\\"b3abdc2bc779fd104adaa15ad92c993aac96ffed79f6edc16b1ab2a7\\\\\\\"}\\\"]\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET on POST-only workflow.record_attempt is rejected",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-outcomes",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.get_outcome_codes",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "8123",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"items\": [{\"code\": \"no_answer\", \"label_vi\": \"Không nghe máy\", \"description\": \"Cuộc gọi đổ chuông hết hồi nhưng khách hàng không bắt máy.\", \"result_group\": \"unreached\", \"is_contact_attempt\": true, \"is_connected\": false, \"is_interested\": false, \"is_terminal\": false, \"is_do_not_contact\": false, \"requires_note\": false, \"requires_followup\": false, \"allows_followup\": true, \"requires_completion_reason\": false, \"allowed_channels\": [\"phone_call\"], \"suggested_next_status\": \"in_progress\", \"version\": 1, \"enabled\": true, \"sort_order\": 10}, {\"code\": \"busy\", \"label_vi\": \"Máy bận\", \"description\": \"Khách hàng đang bận đường dây hoặc từ chối cuộc gọi tức thời.\", \"result_group\": \"unreached\", \"is_contact_attempt\": true, \"is_connected\": false, \"is_interested\": false, \"is_terminal\": false, \"is_do_not_contact\": false, \"requires_note\": false, \"requires_followup\": false, \"allows_followup\": true, \"requires_completion_reason\": false, \"allowed_channels\": [\"phone_call\"], \"suggested_next_status\": \"in_progress\", \"version\": 1, \"enabled\": true, \"sort_order\": 20}, {\"code\": \"unreachable\", \"label_vi\": \"Thuê bao không liên lạc được\", \"description\": \"Thuê bao tắt máy, ngoài vùng phủ sóng hoặc tạm khóa.\", \"result_group\": \"unreached\", \"is_contact_attempt\": true, \"is_connected\": false, \"is_interested\": false, \"is_terminal\": false, \"is_do_not_contact\": false, \"requires_note\": false, \"requires_followup\": false, \"allows_followup\": true, \"requires_completion_reason\": false, \"allowed_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"suggested_next_status\": \"in_progress\", \"version\": 1, \"enabled\": true, \"sort_order\": 30}, {\"code\": \"message_sent_no_reply\", \"label_vi\": \"Đã gửi tin nhắn, chưa phản hồi\", \"description\": \"Đã gửi tin nhắn qua SMS/Zalo/MXH nhưng khách chưa phản hồi hai chiều.\", \"result_group\": \"unreached\", \"is_contact_attempt\": true, \"is_connected\": false, \"is_interested\": false, \"is_terminal\": false, \"is_do_not_contact\": false, \"requires_note\": false, \"requires_followup\": false, \"allows_followup\": true, \"requires_completion_reason\": false, \"allowed_channels\": [\"sms\", \"zalo\", \"facebook\", \"other\"], \"suggested_next_status\": \"in_progress\", \"version\": 1, \"enabled\": true, \"sort_order\": 40}, {\"code\": \"wrong_number\", \"label_vi\": \"Sai số / Không đúng người\", \"description\": \"Số điện thoại không thuộc về khách hàng mục tiêu hoặc không tồn tại.\", \"result_group\": \"invalid_contact\", \"is_contact_attempt\": true, \"is_connected\": false, \"is_interested\": false, \"is_terminal\": true, \"is_do_not_contact\": false, \"requires_note\": true, \"requires_followup\": false, \"allows_followup\": false, \"requires_completion_reason\": true, \"allowed_channels\": [\"phone_call\", \"sms\", \"zalo\", \"other\"], \"suggested_next_status\": \"closed\", \"version\": 1, \"enabled\": true, \"sort_order\": 50}, {\"code\": \"connected_needs_followup\", \"label_vi\": \"Đã trao đổi — Cần chăm sóc tiếp\", \"description\": \"Đã trao đổi hai chiều với khách, cần theo dõi hoặc gửi thêm thông tin.\", \"result_group\": \"engaged\", \"is_contact_attempt\": true, \"is_connected\": true, \"is_interested\": false, \"is_terminal\": false, \"is_do_not_contact\": false, \"requires_note\": true, \"requires_followup\": true, \"allows_followup\": true, \"requires_completion_reason\": false, \"allowed_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"suggested_next_status\": \"on_hold\", \"version\": 1, \"enabled\": true, \"sort_order\": 60}, {\"code\": \"connected_interested\", \"label_vi\": \"Đã trao đổi — Quan tâm\", \"description\": \"Khách hàng phản hồi tích cực và thể hiện sự quan tâm rõ ràng.\", \"result_group\": \"positive\", \"is_contact_attempt\": true, \"is_connected\": true, \"is_interested\": true, \"is_terminal\": false, \"is_do_not_contact\": false, \"requires_note\": true, \"requires_followup\": false, \"allows_followup\": true, \"requires_completion_reason\": false, \"allowed_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"suggested_next_status\": \"in_progress\", \"version\": 1, \"enabled\": true, \"sort_order\": 70}, {\"code\": \"callback_requested\", \"label_vi\": \"Khách hẹn gọi / liên hệ lại\", \"description\": \"Khách xác nhận bận tại thời điểm liên hệ và chủ động hẹn khung giờ gọi lại.\", \"result_group\": \"engaged\", \"is_contact_attempt\": true, \"is_connected\": true, \"is_interested\": false, \"is_terminal\": false, \"is_do_not_contact\": false, \"requires_note\": false, \"requires_followup\": true, \"allows_followup\": true, \"requires_completion_reason\": false, \"allowed_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"suggested_next_status\": \"on_hold\", \"version\": 1, \"enabled\": true, \"sort_order\": 80}, {\"code\": \"connected_not_interested\", \"label_vi\": \"Đã trao đổi — Không nhu cầu\", \"description\": \"Khách hàng đã nghe tư vấn và xác nhận hiện chưa có nhu cầu.\", \"result_group\": \"negative\", \"is_contact_attempt\": true, \"is_connected\": true, \"is_interested\": false, \"is_terminal\": true, \"is_do_not_contact\": false, \"requires_note\": false, \"requires_followup\": false, \"allows_followup\": false, \"requires_completion_reason\": false, \"allowed_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"suggested_next_status\": \"closed\", \"version\": 1, \"enabled\": true, \"sort_order\": 90}, {\"code\": \"converted\", \"label_vi\": \"Hoàn tất mục tiêu chiến dịch\", \"description\": \"Đã đạt mục tiêu chăm sóc / chốt thành công theo tiêu chí chiến dịch.\", \"result_group\": \"converted\", \"is_contact_attempt\": true, \"is_connected\": true, \"is_interested\": true, \"is_terminal\": true, \"is_do_not_contact\": false, \"requires_note\": true, \"requires_followup\": false, \"allows_followup\": false, \"requires_completion_reason\": false, \"allowed_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"suggested_next_status\": \"closed\", \"version\": 1, \"enabled\": true, \"sort_order\": 100}, {\"code\": \"do_not_contact\", \"label_vi\": \"Yêu cầu ngừng liên hệ (DNC)\", \"description\": \"Khách hàng yêu cầu ngừng liên hệ; gắn cờ tuân thủ DNC toàn cục trên Lead.\", \"result_group\": \"compliance\", \"is_contact_attempt\": true, \"is_connected\": true, \"is_interested\": false, \"is_terminal\": true, \"is_do_not_contact\": true, \"requires_note\": true, \"requires_followup\": false, \"allows_followup\": false, \"requires_completion_reason\": true, \"allowed_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"suggested_next_status\": \"closed\", \"version\": 1, \"enabled\": true, \"sort_order\": 110}, {\"code\": \"other\", \"label_vi\": \"Khác (ghi rõ nội dung)\", \"description\": \"Trường hợp ngoại lệ khác, bắt buộc ghi rõ chi tiết trong ghi chú.\", \"result_group\": \"other\", \"is_contact_attempt\": true, \"is_connected\": false, \"is_interested\": false, \"is_terminal\": false, \"is_do_not_contact\": false, \"requires_note\": true, \"requires_followup\": false, \"allows_followup\": true, \"requires_completion_reason\": false, \"allowed_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"suggested_next_status\": \"in_progress\", \"version\": 1, \"enabled\": true, \"sort_order\": 120}], \"effective_policy\": {\"name\": \"GLOBAL-DEFAULT\", \"policy_code\": \"GLOBAL-DEFAULT\", \"title\": \"Chính sách Vận hành CSKH Mặc định\", \"scope_type\": \"Global\", \"team\": null, \"campaign\": null, \"enabled\": true, \"version\": 1, \"allowed_backdate_minutes\": 120, \"max_open_followup_tasks_per_item\": 1, \"require_attempt_before_close\": true, \"allow_close_without_contact_for_invalid\": true, \"do_not_contact_behavior\": \"block_and_auto_close\", \"enabled_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"allow_leader_reopen\": true, \"allow_leader_review_correction\": true}, \"total\": 12, \"as_of\": \"2026-11-04 00:39:54.051534\"}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "get_outcome_codes returns >=12 Vietnamese outcomes with no_answer.is_connected=False",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-queue",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.list_work_items?campaign=6uket390n7",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "810",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"self\", \"items\": [{\"work_item\": \"6utcfikbgg\", \"lead\": \"CRM-LEAD-2026-00009\", \"display_name\": \"Khách HTTP P2 A1\", \"phone\": \"[REDACTED_PHONE]\", \"source\": null, \"lead_status\": \"New\", \"campaign\": \"6uket390n7\", \"campaign_title\": \"Chiến dịch HTTP Team 1\", \"campaign_code\": \"P2H-T1-E11763\", \"status\": \"assigned\", \"work_item_status\": \"assigned\", \"revision\": 1, \"assigned_to\": \"staff.a@dev.local\", \"assigned_at\": \"2026-11-04 00:39:47.083244\", \"attempt_count\": 0, \"connected_attempt_count\": 0, \"first_attempt_at\": null, \"last_attempt_at\": null, \"last_outcome_code\": null, \"last_outcome_label\": null, \"last_connected_at\": null, \"open_callback_task\": null, \"next_action_due\": null, \"is_followup_overdue\": false, \"closed_at\": null, \"closed_by\": null, \"do_not_contact\": false}], \"total\": 1, \"page\": 1, \"page_size\": 20, \"as_of\": \"2026-11-04 00:39:54.061379\"}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Staff A sees only own wi_a1 in camp_t1, never Staff B's wi_b1",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-spoof-assignee",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.list_work_items?assignee=staff.c%40dev.local",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "110",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"self\", \"items\": [], \"total\": 0, \"page\": 1, \"page_size\": 20, \"as_of\": \"2026-11-04 00:39:54.072789\"}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Staff A passing assignee=staff.c@dev.local gets 0 rows (SEC2-08)",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-foreign-wi-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.get_work_item?work_item=6v3dvpvsvl",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "234",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Bạn không có quyền truy cập Work Item ngoài phạm vi phụ trách.\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Staff A denied on Team 2 wi_c1 with 403 FORBIDDEN",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-anti-spoof-performed-by",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.record_attempt",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"channel\": \"phone_call\", \"outcome_code\": \"no_answer\", \"performed_by\": \"staff.b@dev.local\", \"idempotency_key\": \"spoof-perf-c90995f6\"}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "266",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Không được phép giả mạo danh tính thực hiện hoặc trạng thái xác minh từ phía client.\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Spoofing performed_by returns 403 FORBIDDEN",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-anti-spoof-verification-status",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.record_attempt",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"channel\": \"phone_call\", \"outcome_code\": \"no_answer\", \"verification_status\": \"verified\", \"idempotency_key\": \"spoof-ver-3e54ea4a\"}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "266",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Không được phép giả mạo danh tính thực hiện hoặc trạng thái xác minh từ phía client.\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Spoofing verification_status returns 403 FORBIDDEN",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-record-attempt-form",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.record_attempt",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/x-www-form-urlencoded",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "work_item=6utcfikbgg&channel=phone_call&outcome_code=no_answer&note=%3Cscript%3Ealert%281%29%3C%2Fscript%3E+G%E1%BB%8Di+l%E1%BA%A7n+1+chu%C3%B4ng+%C4%91%E1%BB%95+kh%C3%B4ng+nghe&close_work_item=false&idempotency_key=http-att1-fcb52e81f4"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "292",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"recorded\", \"idempotent_replay\": false, \"attempt_id\": \"7169irrlba\", \"work_item\": \"6utcfikbgg\", \"work_item_status\": \"in_progress\", \"revision\": 2, \"attempt_count\": 1, \"connected_attempt_count\": 0, \"call_log\": null, \"callback_task\": null, \"resolved_callback_task\": null, \"do_not_contact\": false}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Form-urlencoded record_attempt moves to in_progress (connected=0) and strips <script> in DB",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-record-attempt-replay",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.record_attempt",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"channel\": \"phone_call\", \"outcome_code\": \"no_answer\", \"note\": \"<script>alert(1)</script> Gọi lần 1 chuông đổ không nghe\", \"close_work_item\": false, \"idempotency_key\": \"http-att1-fcb52e81f4\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "291",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"recorded\", \"idempotent_replay\": true, \"attempt_id\": \"7169irrlba\", \"work_item\": \"6utcfikbgg\", \"work_item_status\": \"in_progress\", \"revision\": 2, \"attempt_count\": 1, \"connected_attempt_count\": 0, \"call_log\": null, \"callback_task\": null, \"resolved_callback_task\": null, \"do_not_contact\": false}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Idempotent replay over HTTP returns idempotent_replay=True and same attempt_id",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-record-attempt-idem-conflict",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.record_attempt",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"channel\": \"phone_call\", \"outcome_code\": \"busy\", \"idempotency_key\": \"http-att1-fcb52e81f4\"}"
+      },
+      "response": {
+        "status": 409,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "295",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.IdempotencyConflict: Khóa idempotency_key đã được sử dụng với dữ liệu nhật ký liên hệ khác.\", \"exc_type\": \"IDEMPOTENCY_CONFLICT\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"IDEMPOTENCY_CONFLICT\", \"p1_code\": \"IDEMPOTENCY_CONFLICT\"}",
+        "exc_type": "IDEMPOTENCY_CONFLICT",
+        "error_code": "IDEMPOTENCY_CONFLICT",
+        "p1_code": "IDEMPOTENCY_CONFLICT"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Reusing idempotency_key with mutated payload returns 409 IDEMPOTENCY_CONFLICT",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-schedule-followup-stale-rev",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.schedule_followup",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"due_at\": \"2026-11-04 04:39:47.823437\", \"title\": \"Hẹn gọi lại chiều\", \"expected_revision\": 1, \"idempotency_key\": \"fu-stale-75950dcb\"}"
+      },
+      "response": {
+        "status": 409,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "338",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.StaleWorkItem: Dữ liệu Work Item đã thay đổi (lệch revision); vui lòng tải lại trước khi thao tác.\", \"exc_type\": \"STALE_WORK_ITEM\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"STALE_WORK_ITEM\", \"p1_code\": \"STALE_WORK_ITEM\", \"details\": {\"expected_revision\": 1, \"current_revision\": 2}}",
+        "exc_type": "STALE_WORK_ITEM",
+        "error_code": "STALE_WORK_ITEM",
+        "p1_code": "STALE_WORK_ITEM"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Stale expected_revision=1 returns 409 STALE_WORK_ITEM",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-schedule-followup-ok",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.schedule_followup",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"due_at\": \"2026-11-04 04:39:47.823437\", \"title\": \"Hẹn gọi lại chiều\", \"expected_revision\": 2, \"idempotency_key\": \"fu-ok-b6bfacc1\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "200",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"scheduled\", \"idempotent_replay\": false, \"task_id\": \"7\", \"work_item\": \"6utcfikbgg\", \"work_item_status\": \"on_hold\", \"due_at\": \"2026-11-04 04:39:47.823437\", \"reschedule_count\": 0, \"revision\": 3}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "schedule_followup moves Work Item to on_hold and creates callback CRM Task",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-complete-followup-without-attempt-blocked",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.complete_followup",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"task_id\": \"7\", \"action\": \"complete\", \"idempotency_key\": \"fu-empty-94e1c736\"}"
+      },
+      "response": {
+        "status": 422,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "314",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.OutcomeNotCompatible: Không được đánh dấu hoàn tất lịch hẹn suông; bắt buộc truyền attempt_id hợp lệ.\", \"exc_type\": \"OUTCOME_NOT_COMPATIBLE\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"OUTCOME_NOT_COMPATIBLE\", \"p1_code\": \"OUTCOME_NOT_COMPATIBLE\"}",
+        "exc_type": "OUTCOME_NOT_COMPATIBLE",
+        "error_code": "OUTCOME_NOT_COMPATIBLE",
+        "p1_code": "OUTCOME_NOT_COMPATIBLE"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Marking callback Done without attempt_id is rejected with 422 OUTCOME_NOT_COMPATIBLE",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-admin-reassign-a-to-b",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.ownership.reassign",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"expected_owner\": \"staff.a@dev.local\", \"target_user\": \"staff.b@dev.local\", \"reason\": \"Điều phối ca chiều qua HTTP\", \"request_id\": \"http-reass-bcf770ce5b\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "232",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"work_item\": \"6utcfikbgg\", \"status\": \"reassigned\", \"work_item_status\": \"on_hold\", \"owner\": \"staff.b@dev.local\", \"revision\": 4, \"transferred_callback_task\": \"7\", \"ledger\": {\"owner\": \"staff.b@dev.local\", \"shares\": [\"staff.b@dev.local\"]}}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "ownership.reassign preserves on_hold status and transfers open callback to Staff B",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-revoked-wi",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.get_work_item?work_item=6utcfikbgg",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "234",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Bạn không có quyền truy cập Work Item ngoài phạm vi phụ trách.\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Former owner Staff A loses read access (wi) immediately after reassign",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-revoked-att-rest",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/resource/CSKH%20Contact%20Attempt/7169irrlba",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1009",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError\", \"exc_type\": \"PermissionError\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 80, in read_doc\\\\n    raise frappe.PermissionError\\\\nfrappe.exceptions.PermissionError\\\\n\\\"]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Kh\\\\\\\\u00f4ng \\\\\\\\u0111\\\\\\\\u01b0\\\\\\\\u1ee3c ph\\\\\\\\u00e9p th\\\\\\\\u00f4ng qua ki\\\\\\\\u1ec3m tra quy\\\\\\\\u1ec1n truy c\\\\\\\\u1eadp c\\\\\\\\u1ee7a b\\\\\\\\u1ed9 \\\\\\\\u0111i\\\\\\\\u1ec1u khi\\\\\\\\u1ec3n<br>Ng\\\\\\\\u01b0\\\\\\\\u1eddi d\\\\\\\\u00f9ng <strong>staff.a@dev.local</strong> kh\\\\\\\\u00f4ng c\\\\\\\\u00f3 quy\\\\\\\\u1ec1n truy c\\\\\\\\u1eadp v\\\\\\\\u00e0o t\\\\\\\\u00e0i li\\\\\\\\u1ec7u n\\\\\\\\u00e0y: Nh\\\\\\\\u1eadt k\\\\\\\\u00fd li\\\\\\\\u00ean h\\\\\\\\u1ec7 CSKH - 7169irrlba\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nh\\\\\\\\u1eafn\\\\\\\"}\\\"]\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Former owner Staff A loses read access (att-rest) immediately after reassign",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-revoked-task-rest",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/resource/CRM%20Task/7",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:54 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "228",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError\", \"exc_type\": \"PermissionError\", \"exc\": \"[]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Không đủ quyền truy cập tài liệu này.\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nhắn\\\\\\\"}\\\"]\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Former owner Staff A loses read access (task-rest) immediately after reassign",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-revoked-calllog-rest",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/resource/CRM%20Call%20Log/P2HCL-fce2d0a209",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "228",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError\", \"exc_type\": \"PermissionError\", \"exc\": \"[]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Không đủ quyền truy cập tài liệu này.\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nhắn\\\\\\\"}\\\"]\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Former owner Staff A loses read access (calllog-rest) immediately after reassign",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-a-stale-owner-attempt-blocked",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.record_attempt",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"channel\": \"phone_call\", \"outcome_code\": \"no_answer\", \"idempotency_key\": \"stale-own-0f78823d\"}"
+      },
+      "response": {
+        "status": 409,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "261",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.OwnershipChanged: Work Item đã được chuyển người phụ trách hoặc thu hồi.\", \"exc_type\": \"OWNERSHIP_CHANGED\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"OWNERSHIP_CHANGED\", \"p1_code\": \"OWNERSHIP_CHANGED\"}",
+        "exc_type": "OWNERSHIP_CHANGED",
+        "error_code": "OWNERSHIP_CHANGED",
+        "p1_code": "OWNERSHIP_CHANGED"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Former owner Staff A attempting record_attempt receives 409 OWNERSHIP_CHANGED",
+        "actor": "staff.a@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-b-unlinked-call-logs",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.list_unlinked_call_logs?work_item=6utcfikbgg",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "416",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"work_item\": \"6utcfikbgg\", \"lead\": \"CRM-LEAD-2026-00009\", \"items\": [{\"name\": \"P2HCL-fce2d0a209\", \"id\": \"P2HCL-fce2d0a209\", \"type\": \"Outgoing\", \"status\": \"Completed\", \"caller_number\": \"[REDACTED_PHONE]\", \"receiver_number\": \"[REDACTED_PHONE]\", \"duration\": 52.0, \"start_time\": \"2026-11-04 00:36:47.650040\", \"end_time\": \"2026-11-04 00:37:47.650126\", \"creation\": \"2026-11-04 00:39:47.714144\"}], \"total\": 1, \"as_of\": \"2026-11-04 00:39:55.078856\"}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "New owner Staff B sees unlinked CRM Call Log cl_a1",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-b-record-connected-attempt",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.record_attempt",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"channel\": \"phone_call\", \"outcome_code\": \"connected_interested\", \"call_log\": \"P2HCL-fce2d0a209\", \"note\": \"Đã trao đổi với khách sau bàn giao, khách quan tâm\", \"complete_open_followup\": true, \"idempotency_key\": \"att-b-e1c33a25e5\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "305",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"recorded\", \"idempotent_replay\": false, \"attempt_id\": \"71f7v1es4h\", \"work_item\": \"6utcfikbgg\", \"work_item_status\": \"in_progress\", \"revision\": 5, \"attempt_count\": 2, \"connected_attempt_count\": 1, \"call_log\": \"P2HCL-fce2d0a209\", \"callback_task\": null, \"resolved_callback_task\": \"7\", \"do_not_contact\": false}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Staff B links cl_a1, resolves callback CRM Task to Done, and updates connected_attempt_count=1",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-b-self-approve-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.request_correction",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"attempt\": \"71f7v1es4h\", \"action\": \"correct\", \"corrected_fields\": {\"note\": \"Tự duyệt\"}, \"reason\": \"Thử auto_approve\", \"auto_approve\": true, \"idempotency_key\": \"corr-self-cca7d575\"}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "234",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Nhân viên không được tự phê duyệt hiệu chỉnh (auto_approve).\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Staff B passing auto_approve=True gets 403 FORBIDDEN",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-b-request-correction",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.request_correction",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"attempt\": \"71f7v1es4h\", \"action\": \"correct\", \"corrected_fields\": {\"note\": \"Khách quan tâm gói doanh nghiệp\"}, \"reason\": \"Bổ sung chính xác tên gói dịch vụ\", \"idempotency_key\": \"corr-ok-3532fb84\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "181",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"pending\", \"idempotent_replay\": false, \"correction_id\": \"71hoc5citp\", \"attempt\": \"71f7v1es4h\", \"work_item\": \"6utcfikbgg\", \"work_item_status\": \"in_progress\", \"revision\": 5}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Staff B creates pending CSKH Attempt Correction",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-leader-b-foreign-correction-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.review_correction",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"correction_id\": \"71hoc5citp\", \"decision\": \"approve\", \"review_note\": \"Leader B duyệt chéo team\", \"idempotency_key\": \"rev-ldrb-99dde1f6\"}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "234",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Bạn không có quyền truy cập Work Item ngoài phạm vi phụ trách.\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Leader B (Team 2) denied reviewing Team 1 correction",
+        "actor": "team2.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-leader-a-approve-correction",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.review_correction",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"correction_id\": \"71hoc5citp\", \"decision\": \"approve\", \"review_note\": \"Đồng ý bổ sung nội dung tư vấn\", \"idempotency_key\": \"rev-ldra-3d58fe81\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "182",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"approved\", \"idempotent_replay\": false, \"correction_id\": \"71hoc5citp\", \"attempt\": \"71f7v1es4h\", \"work_item\": \"6utcfikbgg\", \"work_item_status\": \"in_progress\", \"revision\": 6}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Leader A approves Team 1 correction",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-leader-a-rest-read-team1-attempt",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/resource/CSKH%20Contact%20Attempt/71f7v1es4h",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1229",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"data\": {\"name\": \"71f7v1es4h\", \"owner\": \"staff.b@dev.local\", \"creation\": \"2026-11-04 00:39:55.119241\", \"modified\": \"2026-11-04 00:39:55.119241\", \"modified_by\": \"staff.b@dev.local\", \"docstatus\": 0, \"idx\": 0, \"work_item\": \"6utcfikbgg\", \"lead\": \"CRM-LEAD-2026-00009\", \"campaign\": \"6uket390n7\", \"ownership_event\": \"71bs2j9bn5\", \"owner_at_attempt\": \"staff.b@dev.local\", \"performed_by\": \"staff.b@dev.local\", \"occurred_at\": \"2026-11-04 00:39:55.113658\", \"recorded_at\": \"2026-11-04 00:39:55.113658\", \"channel\": \"phone_call\", \"outcome_code\": \"connected_interested\", \"outcome_version_snapshot\": 1, \"outcome_label_snapshot\": \"Đã trao đổi — Quan tâm\", \"outcome_group_snapshot\": \"positive\", \"contact_attempt_snapshot\": 1, \"connected_snapshot\": 1, \"interested_snapshot\": 1, \"terminal_snapshot\": 0, \"dnc_snapshot\": 0, \"policy_name_snapshot\": \"GLOBAL-DEFAULT\", \"policy_version_snapshot\": 1, \"note\": \"Đã trao đổi với khách sau bàn giao, khách quan tâm\", \"verification_status\": \"self_reported\", \"call_log\": \"P2HCL-fce2d0a209\", \"resolved_callback_task\": \"7\", \"idempotency_key\": \"att-b-e1c33a25e5\", \"payload_hash\": \"060cd293ed2e8cb568d59a9fa4ca0b6c9ec76a09272a9e8afa5f6075853cb816\", \"work_item_revision\": 5, \"doctype\": \"CSKH Contact Attempt\"}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Leader A positive control: reads Team 1 CSKH Contact Attempt via /api/resource",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-leader-b-rest-denied-team1-attempt",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/resource/CSKH%20Contact%20Attempt/71f7v1es4h",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1014",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError\", \"exc_type\": \"PermissionError\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 80, in read_doc\\\\n    raise frappe.PermissionError\\\\nfrappe.exceptions.PermissionError\\\\n\\\"]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Kh\\\\\\\\u00f4ng \\\\\\\\u0111\\\\\\\\u01b0\\\\\\\\u1ee3c ph\\\\\\\\u00e9p th\\\\\\\\u00f4ng qua ki\\\\\\\\u1ec3m tra quy\\\\\\\\u1ec1n truy c\\\\\\\\u1eadp c\\\\\\\\u1ee7a b\\\\\\\\u1ed9 \\\\\\\\u0111i\\\\\\\\u1ec1u khi\\\\\\\\u1ec3n<br>Ng\\\\\\\\u01b0\\\\\\\\u1eddi d\\\\\\\\u00f9ng <strong>team2.leader@dev.local</strong> kh\\\\\\\\u00f4ng c\\\\\\\\u00f3 quy\\\\\\\\u1ec1n truy c\\\\\\\\u1eadp v\\\\\\\\u00e0o t\\\\\\\\u00e0i li\\\\\\\\u1ec7u n\\\\\\\\u00e0y: Nh\\\\\\\\u1eadt k\\\\\\\\u00fd li\\\\\\\\u00ean h\\\\\\\\u1ec7 CSKH - 71f7v1es4h\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nh\\\\\\\\u1eafn\\\\\\\"}\\\"]\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Leader B negative control: denied Team 1 CSKH Contact Attempt via /api/resource",
+        "actor": "team2.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-leader-a-rest-denied-team2-policy",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/resource/CSKH%20Policy/POL-T2-176D72",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1021",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError\", \"exc_type\": \"PermissionError\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 80, in read_doc\\\\n    raise frappe.PermissionError\\\\nfrappe.exceptions.PermissionError\\\\n\\\"]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Kh\\\\\\\\u00f4ng \\\\\\\\u0111\\\\\\\\u01b0\\\\\\\\u1ee3c ph\\\\\\\\u00e9p th\\\\\\\\u00f4ng qua ki\\\\\\\\u1ec3m tra quy\\\\\\\\u1ec1n truy c\\\\\\\\u1eadp c\\\\\\\\u1ee7a b\\\\\\\\u1ed9 \\\\\\\\u0111i\\\\\\\\u1ec1u khi\\\\\\\\u1ec3n<br>Ng\\\\\\\\u01b0\\\\\\\\u1eddi d\\\\\\\\u00f9ng <strong>team1.leader@dev.local</strong> kh\\\\\\\\u00f4ng c\\\\\\\\u00f3 quy\\\\\\\\u1ec1n truy c\\\\\\\\u1eadp v\\\\\\\\u00e0o t\\\\\\\\u00e0i li\\\\\\\\u1ec7u n\\\\\\\\u00e0y: Ch\\\\\\\\u00ednh s\\\\\\\\u00e1ch ch\\\\\\\\u0103m s\\\\\\\\u00f3c CSKH - POL-T2-176D72\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nh\\\\\\\\u1eafn\\\\\\\"}\\\"]\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Leader A denied Team 2 CSKH Policy via /api/resource",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-leader-b-getdoc-denied-team1-correction",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/frappe.desk.form.load.getdoc?doctype=CSKH%20Attempt%20Correction&name=71hoc5citp",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1974",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"frappe.exceptions.PermissionError: ('read', 'CSKH Attempt Correction', '71hoc5citp')\", \"exc_type\": \"PermissionError\", \"exc\": \"[\\\"Traceback (most recent call last):\\\\n  File \\\\\\\"apps/frappe/frappe/app.py\\\\\\\", line 157, in application\\\\n    response = frappe.api.handle(request)\\\\n  File \\\\\\\"apps/frappe/frappe/api/__init__.py\\\\\\\", line 52, in handle\\\\n    data = endpoint(**arguments)\\\\n  File \\\\\\\"apps/frappe/frappe/api/v1.py\\\\\\\", line 40, in handle_rpc_call\\\\n    return frappe.handler.handle()\\\\n           ~~~~~~~~~~~~~~~~~~~~~^^\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 53, in handle\\\\n    data = execute_cmd(cmd)\\\\n  File \\\\\\\"apps/frappe/frappe/handler.py\\\\\\\", line 86, in execute_cmd\\\\n    return frappe.call(method, **frappe.form_dict)\\\\n           ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^\\\\n  File \\\\\\\"apps/frappe/frappe/__init__.py\\\\\\\", line 1772, in call\\\\n    return fn(*args, **newargs)\\\\n  File \\\\\\\"apps/frappe/frappe/utils/typing_validations.py\\\\\\\", line 32, in wrapper\\\\n    return func(*args, **kwargs)\\\\n  File \\\\\\\"apps/frappe/frappe/desk/form/load.py\\\\\\\", line 45, in getdoc\\\\n    raise frappe.PermissionError((\\\\\\\"read\\\\\\\", doctype, name))\\\\nfrappe.exceptions.PermissionError: ('read', 'CSKH Attempt Correction', '71hoc5citp')\\\\n\\\"]\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Kh\\\\\\\\u00f4ng \\\\\\\\u0111\\\\\\\\u01b0\\\\\\\\u1ee3c ph\\\\\\\\u00e9p th\\\\\\\\u00f4ng qua ki\\\\\\\\u1ec3m tra quy\\\\\\\\u1ec1n truy c\\\\\\\\u1eadp c\\\\\\\\u1ee7a b\\\\\\\\u1ed9 \\\\\\\\u0111i\\\\\\\\u1ec1u khi\\\\\\\\u1ec3n<br>Ng\\\\\\\\u01b0\\\\\\\\u1eddi d\\\\\\\\u00f9ng <strong>team2.leader@dev.local</strong> kh\\\\\\\\u00f4ng c\\\\\\\\u00f3 quy\\\\\\\\u1ec1n truy c\\\\\\\\u1eadp v\\\\\\\\u00e0o t\\\\\\\\u00e0i li\\\\\\\\u1ec7u n\\\\\\\\u00e0y: Hi\\\\\\\\u1ec7u ch\\\\\\\\u1ec9nh nh\\\\\\\\u1eadt k\\\\\\\\u00fd li\\\\\\\\u00ean h\\\\\\\\u1ec7 CSKH - 71hoc5citp\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nh\\\\\\\\u1eafn\\\\\\\"}\\\"]\", \"_error_message\": \"Không đủ quyền cho <strong>Hiệu chỉnh nhật ký liên hệ CSKH 71hoc5citp</strong>\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Leader B denied Team 1 CSKH Attempt Correction via Desk getdoc",
+        "actor": "team2.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-direct-rest-insert-attempt-blocked",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/resource/CSKH%20Contact%20Attempt",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"lead\": \"CRM-LEAD-2026-00009\", \"campaign\": \"6uket390n7\", \"channel\": \"phone_call\", \"outcome_code\": \"no_answer\", \"idempotency_key\": \"rest-bypass\"}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "588",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exc_type\": \"PermissionError\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Ng\\\\\\\\u01b0\\\\\\\\u1eddi d\\\\\\\\u00f9ng <strong>staff.b@dev.local</strong> kh\\\\\\\\u00f4ng c\\\\\\\\u00f3 quy\\\\\\\\u1ec1n truy c\\\\\\\\u1eadp lo\\\\\\\\u1ea1i t\\\\\\\\u00e0i li\\\\\\\\u1ec7u th\\\\\\\\u00f4ng qua quy\\\\\\\\u1ec1n vai tr\\\\\\\\u00f2 \\\\\\\\u0111\\\\\\\\u1ed1i v\\\\\\\\u1edbi t\\\\\\\\u00e0i li\\\\\\\\u1ec7u <strong>Nh\\\\\\\\u1eadt k\\\\\\\\u00fd li\\\\\\\\u00ean h\\\\\\\\u1ec7 CSKH</strong>\\\\\\\", \\\\\\\"title\\\\\\\": \\\\\\\"Tin nh\\\\\\\\u1eafn\\\\\\\"}\\\"]\", \"_error_message\": \"Không được phép đối với Nhật ký liên hệ CSKH\"}",
+        "exc_type": "PermissionError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Direct POST /api/resource/CSKH Contact Attempt is blocked",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-b-close-wi",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.close_work_item",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"completion_reason\": \"Hoàn tất chăm sóc đợt 1\", \"idempotency_key\": \"close-b-92fa0763\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "226",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"closed\", \"idempotent_replay\": false, \"work_item\": \"6utcfikbgg\", \"work_item_status\": \"closed\", \"closed_at\": \"2026-11-04 00:39:55.598671\", \"closed_by\": \"staff.b@dev.local\", \"canceled_followup_task\": null, \"revision\": 7}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Staff B closes wi_a1 cleanly over HTTP",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-b-reopen-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.reopen_work_item",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"target_user\": \"staff.b@dev.local\", \"reason\": \"Nhân viên tự mở lại\", \"idempotency_key\": \"reopen-sb-553c7e12\"}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "224",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Nhân viên không được tự mở lại Work Item đã đóng.\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Staff B denied reopening closed Work Item",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-leader-a-reopen-wi",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.reopen_work_item",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"target_user\": \"staff.b@dev.local\", \"reason\": \"Khách gọi lại hỏi hợp đồng\", \"idempotency_key\": \"reopen-ldra-a3aa50e4\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "164",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"reopened\", \"idempotent_replay\": false, \"work_item\": \"6utcfikbgg\", \"work_item_status\": \"in_progress\", \"assigned_to\": \"staff.b@dev.local\", \"revision\": 8}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Leader A reopens wi_a1 with audit reason",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-staff-b-close-wi-final",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.close_work_item",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"work_item\": \"6utcfikbgg\", \"completion_reason\": \"Kết thúc tại Team 1\", \"idempotency_key\": \"close-b2-2cdcb41d\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:55 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "226",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"closed\", \"idempotent_replay\": false, \"work_item\": \"6utcfikbgg\", \"work_item_status\": \"closed\", \"closed_at\": \"2026-11-04 00:39:55.857229\", \"closed_by\": \"staff.b@dev.local\", \"canceled_followup_task\": null, \"revision\": 9}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null
+    },
+    {
+      "id": "p2-http-l23-leader-a-closed-wi-denied-after-team2-claim",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.get_work_item?work_item=6utcfikbgg",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "234",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Bạn không có quyền truy cập Work Item ngoài phạm vi phụ trách.\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Leader A loses read access to closed wi_a1 once Lead is claimed by Team 2 (L-23 / SEC2-07)",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-bod-progress-summary",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.progress_summary",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "1123",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"scope\": \"all\", \"cards\": {\"total_active_owned\": 6, \"assigned\": 6, \"in_progress\": 0, \"on_hold\": 0, \"closed\": 2, \"revoked\": 0, \"queued\": 4, \"effective_attempts\": 4, \"connected_attempts\": 2, \"unreached_attempts\": 2, \"open_followups\": 0, \"overdue_followups\": 0, \"due_today_followups\": 0, \"pending_corrections\": 0, \"dnc_leads\": 0}, \"by_outcome_group\": {\"unreached\": 2, \"engaged\": 0, \"positive\": 2, \"negative\": 0, \"converted\": 0, \"invalid_contact\": 0, \"compliance\": 0, \"other\": 0}, \"by_channel\": {\"phone_call\": 4, \"sms\": 0, \"zalo\": 0, \"facebook\": 0, \"other\": 0}, \"per_user\": [{\"user\": \"staff.a@dev.local\", \"team\": \"3ucmja1ltv\", \"assigned\": 0, \"in_progress\": 0, \"on_hold\": 0, \"closed\": 0, \"effective_attempts\": 2, \"connected_attempts\": 0, \"open_followups\": 0, \"overdue_followups\": 0}, {\"user\": \"staff.b@dev.local\", \"team\": \"3uc62ai6a2\", \"assigned\": 2, \"in_progress\": 0, \"on_hold\": 0, \"closed\": 2, \"effective_attempts\": 2, \"connected_attempts\": 2, \"open_followups\": 0, \"overdue_followups\": 0}, {\"user\": \"staff.c@dev.local\", \"team\": \"3uc6r1dljm\", \"assigned\": 4, \"in_progress\": 0, \"on_hold\": 0, \"closed\": 0, \"effective_attempts\": 0, \"connected_attempts\": 0, \"open_followups\": 0, \"overdue_followups\": 0}], \"as_of\": \"2026-11-04 00:39:56.168352\"}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "BOD progress_summary returns live aggregate counts with 0 PII (no phones, Lead IDs, or names)",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-bod-queue-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.list_work_items",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "261",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Vai trò BOD chỉ được xem số liệu tổng hợp, không truy cập dữ liệu chi tiết PII.\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "BOD Viewer is denied PII-bearing list_work_items",
+        "actor": "bod.viewer@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-leader-a-save-policy-denied",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.settings.save_policy",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"policy_code\": \"LDR-HACK\", \"title\": \"Trái phép\", \"scope_type\": \"Global\", \"idempotency_key\": \"ldr-pol-20651e52\"}"
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "216",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exception\": \"crm_cskh.services.errors.Forbidden: Thao tác cấu hình này chỉ dành cho CSKH CRM Admin.\", \"exc_type\": \"FORBIDDEN\", \"_exc_source\": \"crm_cskh (app)\", \"exc\": \"[]\", \"code\": \"FORBIDDEN\", \"p1_code\": \"FORBIDDEN\"}",
+        "exc_type": "FORBIDDEN",
+        "error_code": "FORBIDDEN",
+        "p1_code": "FORBIDDEN"
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Leader A denied mutating CSKH Policy",
+        "actor": "team1.leader@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-admin-save-policy",
+      "evidence_class": "http",
+      "request": {
+        "method": "POST",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.settings.save_policy",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost",
+          "Content-Type": "application/json",
+          "X-Frappe-CSRF-Token": "[REDACTED]"
+        },
+        "cookie": "[REDACTED]",
+        "body": "{\"policy_code\": \"POL-T2-176D72\", \"title\": \"Chính sách riêng Team 2 (v2)\", \"scope_type\": \"Team\", \"team\": \"3ucec1j1ua\", \"allowed_backdate_minutes\": 90, \"idempotency_key\": \"adm-pol-1cdaa35b\"}"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "602",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"status\": \"unchanged\", \"policy\": {\"name\": \"POL-T2-176D72\", \"policy_code\": \"POL-T2-176D72\", \"title\": \"Chính sách riêng Team 2 (v2)\", \"scope_type\": \"Team\", \"team\": \"3ucec1j1ua\", \"campaign\": null, \"enabled\": true, \"version\": 2, \"allowed_backdate_minutes\": 90, \"max_open_followup_tasks_per_item\": 1, \"require_attempt_before_close\": true, \"allow_close_without_contact_for_invalid\": true, \"do_not_contact_behavior\": \"block_and_auto_close\", \"enabled_channels\": [\"phone_call\", \"sms\", \"zalo\", \"facebook\", \"other\"], \"allow_leader_reopen\": true, \"allow_leader_review_correction\": true}, \"idempotency_key\": \"adm-pol-1cdaa35b\"}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "CRM Admin updates CSKH Policy and increments version",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-admin-reconcile",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/method/crm_cskh.api.workflow.reconcile",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "349",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"message\": {\"ok\": true, \"campaign\": null, \"orphan_claims\": [], \"duplicate_owned_leads\": [], \"multi_open_callbacks\": [], \"callback_status_mismatches\": [], \"ownership_mismatches\": [], \"due_projection_mismatches\": [], \"duplicate_call_log_links\": [], \"interval_violations\": [], \"counter_drifts\": [], \"checked_work_items_with_attempts\": 2, \"as_of\": \"2026-11-04 00:39:56.318186\"}}",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "workflow.reconcile confirms 0 P2 invariant violations across DB",
+        "actor": "crm.admin@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-file-oracle-resource-real",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/resource/File/fa33a7cb86",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "118",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exc_type\": \"DoesNotExistError\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Không tìm thấy tài liệu.\\\\\\\"}\\\"]\"}",
+        "exc_type": "DoesNotExistError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "GET /api/resource/File/<real_private> returns 404 without leaking docname",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-file-oracle-resource-missing",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/api/resource/File/deadbeef00missing",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 404,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "application/json",
+          "Content-Length": "118",
+          "Set-Cookie": "[REDACTED]",
+          "Connection": "close"
+        },
+        "body": "{\"exc_type\": \"DoesNotExistError\", \"_server_messages\": \"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Không tìm thấy tài liệu.\\\\\\\"}\\\"]\"}",
+        "exc_type": "DoesNotExistError",
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "P0 File-oracle returns byte-identical 404 on real vs missing /api/resource/File routes",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-file-oracle-existing-private",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/private/files/[REDACTED_FILE_URL]",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "137",
+          "Connection": "close"
+        },
+        "body": "<!doctype html>\n<html lang=en>\n<title>403 Forbidden</title>\n<h1>Forbidden</h1>\n<p>Bạn không có quyền truy cập tập tin này</p>\n",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Unauthorized actor (Staff B after Lead moved to Team 2) is denied private file download",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    },
+    {
+      "id": "p2-http-file-oracle-nonexistent-private",
+      "evidence_class": "http",
+      "request": {
+        "method": "GET",
+        "url": "http://127.0.0.1:8000/private/files/[REDACTED_FILE_URL]",
+        "headers": {
+          "Accept": "application/json",
+          "X-Frappe-Site-Name": "p2dev.localhost"
+        },
+        "cookie": "[REDACTED]",
+        "body": ""
+      },
+      "response": {
+        "status": 403,
+        "headers": {
+          "Server": "Werkzeug/3.1.6 Python/3.14.8",
+          "Date": "Tue, 03 Nov 2026 17:39:56 GMT",
+          "Content-Type": "text/html; charset=utf-8",
+          "Content-Length": "137",
+          "Connection": "close"
+        },
+        "body": "<!doctype html>\n<html lang=en>\n<title>403 Forbidden</title>\n<h1>Forbidden</h1>\n<p>Bạn không có quyền truy cập tập tin này</p>\n",
+        "exc_type": null,
+        "error_code": null,
+        "p1_code": null
+      },
+      "transport_error": null,
+      "assertion": {
+        "expected": "Non-existent /private/files/[REDACTED_FILE_URL] returns byte-identical denial (no File existence oracle)",
+        "actor": "staff.b@dev.local",
+        "result": "PASS"
+      }
+    }
+  ],
+  "failed_cases": [],
+  "probe_result": "PASS"
+}

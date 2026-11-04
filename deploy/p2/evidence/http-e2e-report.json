@@ -1,0 +1,259 @@
+{
+  "site": "p2.localhost",
+  "base_url": "http://127.0.0.1:8220",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "worktree_head_sha": "0f3c7311c75aa3c49c3953a9b8cd64e45809d008",
+  "checks": [
+    {
+      "id": "P2-E2E-01-page-role-matrix",
+      "status": "PASS",
+      "details": {
+        "routes": [
+          "/cskh",
+          "/cskh/pool",
+          "/cskh/import",
+          "/cskh/campaigns",
+          "/cskh/my-customers",
+          "/cskh/dashboard",
+          "/cskh/work-item",
+          "/cskh/callbacks",
+          "/cskh/progress",
+          "/cskh/settings"
+        ],
+        "statuses": {
+          "admin": [
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200
+          ],
+          "bod": [
+            200,
+            200,
+            403,
+            200,
+            200,
+            200,
+            403,
+            403,
+            200,
+            200
+          ],
+          "leader_a": [
+            200,
+            200,
+            403,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200
+          ],
+          "leader_b": [
+            200,
+            200,
+            403,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200,
+            200
+          ],
+          "staff_a": [
+            200,
+            403,
+            403,
+            403,
+            200,
+            403,
+            200,
+            200,
+            200,
+            403
+          ],
+          "staff_b": [
+            200,
+            403,
+            403,
+            403,
+            200,
+            403,
+            200,
+            200,
+            200,
+            403
+          ],
+          "staff_c": [
+            200,
+            403,
+            403,
+            403,
+            200,
+            403,
+            200,
+            200,
+            200,
+            403
+          ],
+          "outside": [
+            200,
+            403,
+            403,
+            403,
+            200,
+            403,
+            200,
+            200,
+            200,
+            403
+          ],
+          "guest": [
+            403,
+            403,
+            403,
+            403,
+            403,
+            403,
+            403,
+            403,
+            403,
+            403
+          ]
+        }
+      }
+    },
+    {
+      "id": "P2-E2E-02-import-and-distribute",
+      "status": "PASS",
+      "details": {
+        "campaign_a": "fg1a9jbkt0",
+        "campaign_b": "fhf8usfg8c",
+        "team_a_items": 11,
+        "team_b_items": 2
+      }
+    },
+    {
+      "id": "P2-E2E-03-lifecycle-honesty-correction-dnc",
+      "status": "PASS",
+      "details": {
+        "wi_http": "fgmmule51o",
+        "wi_dnc": "fgfa84grbp",
+        "attempt_count": 3,
+        "connected_attempt_count": 1,
+        "correction_id": "fj3aimjid6"
+      }
+    },
+    {
+      "id": "P2-E2E-04-security-and-scoped-progress",
+      "status": "PASS",
+      "details": {
+        "bod_pii_endpoints_403": true,
+        "cross_team_403": true,
+        "csrf_enforced": true,
+        "backdate_enforced": true,
+        "progress_scopes_verified": [
+          "self",
+          "team",
+          "all"
+        ]
+      }
+    },
+    {
+      "id": "P2-E2E-05-remediation-f-p2-01-02-04-05-06",
+      "status": "PASS",
+      "details": {
+        "f_p2_01_bod_5_planes_zero_leak": true,
+        "f_p2_01_zero_hash_prefix_milestones": true,
+        "f_p2_02_leader_run_history_preserved": true,
+        "f_p2_04a_multipage_page2_connected_found": true,
+        "f_p2_04b_closed_assignee_filter_found": true,
+        "f_p2_05_sameday_and_2359_0000_and_wi_counts": true,
+        "f_p2_06_direct_lead_dnc_put_blocked": true
+      }
+    },
+    {
+      "id": "P2-E2E-06-reconcile-p2-invariants",
+      "status": "PASS",
+      "details": {
+        "ok": true,
+        "summary": {
+          "ok": true,
+          "campaign": null,
+          "orphan_claims": [],
+          "duplicate_owned_leads": [],
+          "multi_open_callbacks": [],
+          "callback_status_mismatches": [],
+          "ownership_mismatches": [],
+          "due_projection_mismatches": [],
+          "duplicate_call_log_links": [],
+          "interval_violations": [],
+          "counter_drifts": [],
+          "checked_work_items_with_attempts": 10,
+          "as_of": "2026-11-04 12:45:27.031872"
+        }
+      }
+    }
+  ],
+  "fixtures": {
+    "campaign_a": "fg1a9jbkt0",
+    "campaign_b": "fhf8usfg8c",
+    "campaign_fill": "fnflfngp2o",
+    "campaign_page2": "fvbvpdd54g",
+    "campaign_runhist": "flufudadpb",
+    "today_iso": "2026-11-04",
+    "yesterday_iso": "2026-11-03",
+    "two_days_ago_iso": "2026-11-02",
+    "wi_page2_conn_a": "fvv9nnkjmj",
+    "wi_page2_conn_b": "fvu04ofv3i",
+    "wi_dnc_f01": "fm948lb9gr",
+    "team_a": "f12on8gvvh",
+    "team_b": "f13dflcc6a",
+    "users": {
+      "admin": "cskh-p2-admin@example.test",
+      "bod": "cskh-p2-bod@example.test",
+      "leader_a": "cskh-p2-leader-a@example.test",
+      "leader_b": "cskh-p2-leader-b@example.test",
+      "staff_a": "cskh-p2-staff-a@example.test",
+      "staff_b": "cskh-p2-staff-b@example.test",
+      "staff_c": "cskh-p2-staff-c@example.test",
+      "outside": "cskh-p2-outside@example.test"
+    },
+    "wi_happy": "fgrdn37s26",
+    "lead_happy": "CRM-LEAD-2026-04107",
+    "wi_honesty": "fgqfl0v8p0",
+    "lead_honesty": "CRM-LEAD-2026-04108",
+    "honesty_call_logs": [
+      "p2-e2e-call-CRM-LEAD-2026-04108-1",
+      "p2-e2e-call-CRM-LEAD-2026-04108-2"
+    ],
+    "wi_conflict": "fgqgrv4c99",
+    "wi_transfer": "fgpslqkguc",
+    "transfer_task_id": "312",
+    "transfer_due_at": "2026-11-05 14:43:31",
+    "wi_correction": "fgo294mv8n",
+    "correction_seed_attempt_id": "fk41150n1e",
+    "wi_2359": "fgo074bl0u",
+    "task_2359": "313",
+    "due_2359": "2026-11-04 23:59:59",
+    "wi_0000": "fgn0jan3o3",
+    "task_0000": "314",
+    "due_0000": "2026-11-05 00:00:00",
+    "wi_overdue": "fgnmipqu9v",
+    "task_overdue": "315",
+    "due_overdue": "2026-11-03 15:00:00",
+    "wi_staff_b": "fgldo82m7p",
+    "wi_dnc": "fgfa84grbp",
+    "wi_team_b": "fhvfebqc0r",
+    "wi_closed_http": "fgmmule51o"
+  }
+}

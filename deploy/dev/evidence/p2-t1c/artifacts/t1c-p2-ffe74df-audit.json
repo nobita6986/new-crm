@@ -1,0 +1,163 @@
+{
+  "audit_id": "t1c-p2-pinned-ffe74df-delta-and-ci-audit",
+  "revisions": {
+    "main_entry": "1913d2bd5ebfdc894eaa492b46be502dbdf44808",
+    "backend_initial": "6ef2e2e21c9e8265efe43fd5413074b70849a674",
+    "backend_http_fix": "580a45f0d823267f6845fec083d56ead00d29681",
+    "ui_e2e_code": "d3da46b16a6d800d5d8cf866fc06415f9f02253f",
+    "pr7_prev_head": "26b02379adbc8a50a2bee6eb3bd91ec5d5b6b6ce",
+    "pr7_pinned_head": "ffe74df22b85c1d5ecda9dc2f1bdc3015b5bae10",
+    "ci_synthetic_merge": "faa6dfb33e4972a9aa5488858cfd0a46e0e45b04",
+    "ci_synthetic_merge_parents": [
+      "1913d2bd5ebfdc894eaa492b46be502dbdf44808",
+      "ffe74df22b85c1d5ecda9dc2f1bdc3015b5bae10"
+    ],
+    "apps_tree_26b0237": "4a395ae619f95a1feb0fbf9ec189063af2938f76",
+    "apps_tree_ffe74df": "4a395ae619f95a1feb0fbf9ec189063af2938f76",
+    "apps_tree_6ef2e2e": "21f2fc434a031d50256d5302a0c8247c12a788b8",
+    "apps_tree_580a45f": "21f2fc434a031d50256d5302a0c8247c12a788b8",
+    "diff_26b0237_to_ffe74df_files": [
+      ".github/workflows/p2.yml",
+      "deploy/dev/evidence/p2-t1c/artifacts/t1c-p2-entry-baseline-1913d2b.json",
+      "deploy/dev/evidence/p2-t1c/security-matrix-p2.md",
+      "deploy/dev/evidence/p2-t1c/t1c-p2-verification-report.md",
+      "deploy/dev/evidence/p2-t1c/test-evidence-p2.md",
+      "deploy/dev/seed/ci_p2_http_probe.py",
+      "deploy/dev/seed/test_ci_p2_http_probe.py",
+      "docs/P2-Exit-Report.md",
+      "docs/test-evidence-p2.md"
+    ],
+    "diff_26b0237_to_ffe74df_apps_bytes": 0
+  },
+  "apps_tree_identical_to_t1c_runtime_26b0237": true,
+  "local_static_and_probe_selftests": {
+    "p1_backend_inventory": {
+      "exit_code": 0,
+      "stdout_tail": [
+        "P1 inventory matches the source: 209 method trong 8 module."
+      ],
+      "stderr_tail": []
+    },
+    "p1_ui_inventory": {
+      "exit_code": 0,
+      "stdout_tail": [
+        "P1 UI inventory matches the source: 12 methods in 1 module."
+      ],
+      "stderr_tail": []
+    },
+    "p2_backend_inventory": {
+      "exit_code": 0,
+      "stdout_tail": [
+        "P2 inventory matches the source: 33 methods in 7 modules."
+      ],
+      "stderr_tail": []
+    },
+    "p2_ui_inventory": {
+      "exit_code": 0,
+      "stdout_tail": [
+        "P2 UI inventory matches the source: 8 methods in 1 module."
+      ],
+      "stderr_tail": []
+    },
+    "translations_audit": {
+      "exit_code": 0,
+      "stdout_tail": [
+        "vi.csv rows         : 907",
+        "missing declaration : 0",
+        "missing translation : 0",
+        "untranslated (EN)   : 0",
+        "orphan declaration  : 0"
+      ],
+      "stderr_tail": []
+    },
+    "ui_timezone_and_contracts_node": {
+      "exit_code": 0,
+      "stdout_tail": [
+        "ALL P2 UI TIMEZONE (23:59 / 00:00) & CONTRACT NORMALIZER TESTS PASSED"
+      ],
+      "stderr_tail": []
+    },
+    "probe_selftest_9_methods": {
+      "exit_code": 0,
+      "stdout_tail": [
+        "p2-http-asserted-58: PASS",
+        "p2-http-asserted-59: PASS",
+        "p2-http-staff-b-close-wi-final: PASS",
+        "p2-http-verify-1: PASS",
+        "p2-http-verify-2: PASS"
+      ],
+      "stderr_tail": [
+        "",
+        "----------------------------------------------------------------------",
+        "Ran 9 tests in 8.700s",
+        "",
+        "OK"
+      ]
+    }
+  },
+  "ci_p2_run_41759646273": {
+    "artifact_id": 13289404489,
+    "size_in_bytes": 36781,
+    "sha256": "f57b251d58b46c7cc2f092c26459be9858142efdb69b8724be0986ebf4784193",
+    "github_digest_match": true,
+    "internal_sha256sums_mismatches": 0,
+    "workflow_metadata": {
+      "commit_sha": "faa6dfb33e4972a9aa5488858cfd0a46e0e45b04",
+      "run_id": "41759646273",
+      "event_name": "pull_request",
+      "site_seeded": "p2-ci.localhost",
+      "site_fresh_test": "p2-test.localhost",
+      "frappe_sha": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+      "crm_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "bench_image_ref": "frappe/bench:v5.31.0@sha256:3b75943bf00a1db92723d99ec34fbfa92f4b67b9b643ae1e96750899b7fbd980",
+      "p2_inventory": "deploy/dev/seed/p2_test_inventory.json",
+      "workflow_outcomes": {
+        "bootstrap": "success",
+        "lint": "success",
+        "inventory": "success",
+        "seed": "success",
+        "per_method": "success",
+        "per_method_gate": "success",
+        "p2_http_transport": "success",
+        "schema": "success",
+        "backup_restore": "success"
+      },
+      "redaction_replacements": 49
+    },
+    "backend_junit_gate": {
+      "status": null,
+      "expected_total": 33,
+      "executed_passed": null
+    },
+    "ui_junit_gate": {
+      "status": null,
+      "expected_total": 8,
+      "executed_passed": null
+    },
+    "http_completeness_gate": {
+      "status": "PASS",
+      "probe_result": "PASS",
+      "total_records": 61,
+      "verification_records": 61,
+      "setup_observation_records": 0,
+      "asserted_cases": 61,
+      "passed_assertions": 61,
+      "unasserted_cases": [],
+      "failed_cases": [],
+      "unknown_role_cases": [],
+      "final_close_case_asserted_pass": true
+    },
+    "final_close_case_assertion": {
+      "expected": "POST close_work_item returns HTTP 200 contract status=closed and DB confirms oh1h82pkp6 closed with 0 open callbacks, 0 active claims, and 0 open intervals",
+      "actor": "staff.b@dev.local",
+      "result": "PASS"
+    },
+    "final_close_http_status": 200,
+    "reconcile_gate_ok": {
+      "p2-test.localhost": true,
+      "p2-ci.localhost": true
+    },
+    "backup_restore_status": "PASS",
+    "probe_selftest_separation_note": "9 methods in test_ci_p2_http_probe.py validate only the measurement harness (mock HTTP + mock DB fetcher) and are strictly separated from P2 business runtime coverage."
+  }
+}

@@ -15,9 +15,11 @@ scope with a `user` or `team` parameter (ADR-P1-07).
 """
 
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import get_datetime, now_datetime
 
 from crm_cskh.api._params import parse_optional_str, parse_pagination
+from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
+from crm_cskh.p2_models import ALL_WORK_ITEM_STATES
 from crm_cskh.services.errors import Forbidden, InvalidRequest
 
 ALLOWED_POOL_STATES = {"eligible", "queued", "assigned", "conflict", "revoked", "closed", "invalid"}
@@ -238,51 +240,89 @@ def _pool_scope_filter(scope, alias="wi"):
 
 
 def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=None):
-	"""The customers currently assigned to the caller (P1 9.4).
+	"""The customers currently assigned to the caller (P1 §9.4, P2 §10).
 
-	The filter is applied on the backend, not in the browser.
+	Defaults to all owned active states (`assigned`, `in_progress`, `on_hold`),
+	preserving 100% of P1 keys while exposing P2 read-model fields.
 	"""
 	user = user or frappe.session.user
 	page_num, limit, offset = parse_pagination(page, page_size)
 	status_val = parse_optional_str(status)
+	if status_val and status_val not in ALL_WORK_ITEM_STATES:
+		raise InvalidRequest("The request is invalid.")
 	campaign_val = parse_optional_str(campaign, "The campaign must be a string.")
-	if search is not None:
-		parse_optional_str(search)
+	search_val = parse_optional_str(search) if search is not None else None
 
-	filters = {"assigned_to": user, "status": status_val or "assigned"}
-	if campaign_val:
-		filters["campaign"] = campaign_val
+	now = now_datetime()
+	from_sql, where_sql, params = _my_list_where(user, status_val, campaign_val, search_val)
+
+	total = int(frappe.db.sql(f"select count(*) {from_sql} where {where_sql}", tuple(params))[0][0] or 0)
+	if total == 0:
+		return {
+			"scope": "self",
+			"items": [],
+			"total": 0,
+			"page": page_num,
+			"page_size": limit,
+			"as_of": now,
+		}
+
+	has_dnc = frappe.db.has_column("CRM Lead", "cskh_do_not_contact")
+	dnc_col = "coalesce(l.cskh_do_not_contact, 0) as do_not_contact" if has_dnc else "0 as do_not_contact"
 
 	rows = frappe.db.sql(
-		*_my_list_query(filters, user, limit, offset),
+		f"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
+		f"wi.status as status, coalesce(wi.revision, 1) as revision, wi.assigned_at as assigned_at, "
+		f"coalesce(wi.attempt_count, 0) as attempt_count, "
+		f"coalesce(wi.connected_attempt_count, 0) as connected_attempt_count, "
+		f"wi.first_attempt_at as first_attempt_at, wi.last_attempt_at as last_attempt_at, "
+		f"wi.last_outcome_code as last_outcome_code, wi.last_outcome_label as last_outcome_label, "
+		f"wi.last_connected_at as last_connected_at, "
+		f"wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due, "
+		f"c.title as campaign_title, c.code as campaign_code, "
+		f"l.lead_name as lead_name, l.first_name as first_name, "
+		f"l.mobile_no as mobile_no, l.source as source, l.status as lead_status, {dnc_col} "
+		f"{from_sql} where {where_sql} "
+		f"order by case when wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc, "
+		f"wi.assigned_at desc, wi.name desc limit %s offset %s",
+		(*tuple(params), now, limit, offset),
 		as_dict=True,
 	)
 
-	total = frappe.db.count("CSKH Work Item", filters)
-
 	items = []
 	for row in rows:
-		lead = frappe.db.get_value(
-			"CRM Lead",
-			row.lead,
-			["name", "lead_name", "first_name", "mobile_no", "source", "status"],
-			as_dict=True,
-		)
-		if not lead:
-			continue
+		is_overdue = False
+		if row.status == "on_hold" and row.next_action_due:
+			try:
+				is_overdue = get_datetime(row.next_action_due) < get_datetime(now)
+			except Exception:
+				is_overdue = False
 		items.append(
 			{
 				"work_item": row.work_item,
-				"lead": lead.name,
-				"display_name": lead.lead_name or lead.first_name or "",
-				"phone": lead.mobile_no,
+				"lead": row.lead,
+				"display_name": row.lead_name or row.first_name or "",
+				"phone": row.mobile_no,
 				"campaign": row.campaign,
 				"campaign_title": row.campaign_title,
 				"campaign_code": row.campaign_code,
-				"source": lead.source,
-				"lead_status": lead.status,
+				"source": row.source,
+				"lead_status": row.lead_status,
 				"work_item_status": row.status,
+				"status": row.status,
+				"revision": int(row.revision or 1),
 				"assigned_at": row.assigned_at,
+				"attempt_count": int(row.attempt_count or 0),
+				"connected_attempt_count": int(row.connected_attempt_count or 0),
+				"first_attempt_at": row.first_attempt_at,
+				"last_attempt_at": row.last_attempt_at,
+				"last_outcome_code": row.last_outcome_code,
+				"last_outcome_label": row.last_outcome_label,
+				"last_connected_at": row.last_connected_at,
+				"open_callback_task": row.open_callback_task,
+				"next_action_due": row.next_action_due,
+				"is_followup_overdue": is_overdue,
+				"do_not_contact": bool(int(row.do_not_contact or 0)),
 			}
 		)
 
@@ -292,26 +332,48 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 		"total": total,
 		"page": page_num,
 		"page_size": limit,
-		"as_of": now_datetime(),
+		"as_of": now,
 	}
 
 
-def _my_list_query(filters, user, limit, offset):
-	clauses = ["wi.assigned_to = %s", "wi.status = %s"]
-	params = [user, filters["status"]]
-	if filters.get("campaign"):
-		clauses.append("wi.campaign = %s")
-		params.append(filters["campaign"])
-	return (
-		"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
-		"wi.status as status, wi.assigned_at as assigned_at, "
-		"c.title as campaign_title, c.code as campaign_code "
+def _my_list_where(user, status_val, campaign_val, search_val):
+	from_sql = (
 		"from `tabCSKH Work Item` wi "
-		"left join `tabCSKH Campaign` c on c.name = wi.campaign "
-		"where " + " and ".join(clauses) + " "
-		"order by wi.assigned_at desc limit %s offset %s",
-		(*tuple(params), limit, offset),
+		"inner join `tabCRM Lead` l on l.name = wi.lead "
+		"left join `tabCSKH Campaign` c on c.name = wi.campaign"
 	)
+	clauses = ["wi.assigned_to = %s"]
+	params = [user]
+	if status_val:
+		clauses.append("wi.status = %s")
+		params.append(status_val)
+	else:
+		clauses.append("wi.status in ('assigned', 'in_progress', 'on_hold')")
+	if campaign_val:
+		clauses.append("wi.campaign = %s")
+		params.append(campaign_val)
+	if search_val:
+		like = f"%{search_val}%"
+		digits = search_val.lstrip("0") if search_val.startswith("0") and search_val[1:].isdigit() else ""
+		if digits:
+			alt_like = f"%+84{digits}%"
+			clauses.append(
+				"(coalesce(l.lead_name, '') like %s "
+				"or coalesce(l.first_name, '') like %s "
+				"or coalesce(l.mobile_no, '') like %s "
+				"or coalesce(l.mobile_no, '') like %s "
+				"or l.name like %s)"
+			)
+			params.extend([like, like, like, alt_like, like])
+		else:
+			clauses.append(
+				"(coalesce(l.lead_name, '') like %s "
+				"or coalesce(l.first_name, '') like %s "
+				"or coalesce(l.mobile_no, '') like %s "
+				"or l.name like %s)"
+			)
+			params.extend([like, like, like, like])
+	return from_sql, " and ".join(clauses), params
 
 
 def lead_in_batch_clause(batch, lead_expr="l.name"):
@@ -365,7 +427,7 @@ def _scoped_wi_predicate(scope, alias="wi"):
 	user_ph = ",".join(["%s"] * len(team_users))
 	node_ph = ",".join(["%s"] * len(team_nodes))
 	sql = (
-		f"(({alias}.status = 'assigned' and {alias}.assigned_to in ({user_ph})) "
+		f"(({alias}.status in ('assigned', 'in_progress', 'on_hold') and {alias}.assigned_to in ({user_ph})) "
 		f"or ({alias}.status = 'queued' and {alias}.assigned_to is null "
 		f"and {alias}.campaign in (select c_wq.name from `tabCSKH Campaign` c_wq "
 		f"where c_wq.team_scope is null or c_wq.team_scope in ({node_ph}))) "
@@ -444,12 +506,14 @@ def _team_lead_authorization_clauses(scope, lead_alias="l"):
 		),
 		(
 			f"not exists (select 1 from `tabCSKH Work Item` wi_out "
-			f"where wi_out.lead = {lead_alias}.name and wi_out.status = 'assigned' "
+			f"where wi_out.lead = {lead_alias}.name "
+			f"and wi_out.status in ('assigned', 'in_progress', 'on_hold') "
 			f"and (wi_out.assigned_to is null or wi_out.assigned_to not in ({user_ph})))"
 		),
 		(
 			f"(exists (select 1 from `tabCSKH Work Item` wi_in_asg "
-			f"where wi_in_asg.lead = {lead_alias}.name and wi_in_asg.status = 'assigned' "
+			f"where wi_in_asg.lead = {lead_alias}.name "
+			f"and wi_in_asg.status in ('assigned', 'in_progress', 'on_hold') "
 			f"and wi_in_asg.assigned_to in ({user_ph})) "
 			f"or exists (select 1 from `tabCSKH Active Claim` ac_in "
 			f"inner join `tabCSKH Campaign` c_ac_in on c_ac_in.name = ac_in.campaign "
@@ -667,7 +731,7 @@ def _pool_state(lead, scope=None):
 		)
 
 	for row in rows:
-		if row.status == "assigned" and row.assigned_to:
+		if row.status in OWNED_ACTIVE_WORK_ITEM_STATES and row.assigned_to:
 			return "assigned", row.campaign, row.assigned_to, row.created_at
 		if row.status == "queued" and not row.assigned_to:
 			return "queued", row.campaign, "", row.created_at
@@ -796,7 +860,7 @@ def customer_pool(
 		"c_ac.title as ac_campaign_title, "
 		"c_ac.code as ac_campaign_code, "
 		"case "
-		"when wi_cur.status = 'assigned' and coalesce(wi_cur.assigned_to, '') != '' then 'assigned' "
+		"when wi_cur.status in ('assigned', 'in_progress', 'on_hold') and coalesce(wi_cur.assigned_to, '') != '' then 'assigned' "
 		"when wi_cur.status = 'queued' and coalesce(wi_cur.assigned_to, '') = '' then 'queued' "
 		"when wi_cur.status = 'revoked' then 'revoked' "
 		"when wi_cur.status = 'closed' then 'closed' "
@@ -809,7 +873,7 @@ def customer_pool(
 		"else 'eligible' "
 		"end as derived_state, "
 		"case "
-		"when wi_cur.status = 'assigned' and coalesce(wi_cur.assigned_to, '') != '' then coalesce(wi_cur.campaign, '') "
+		"when wi_cur.status in ('assigned', 'in_progress', 'on_hold') and coalesce(wi_cur.assigned_to, '') != '' then coalesce(wi_cur.campaign, '') "
 		"when wi_cur.status = 'queued' and coalesce(wi_cur.assigned_to, '') = '' then coalesce(wi_cur.campaign, '') "
 		"when wi_cur.status in ('revoked', 'closed') then coalesce(wi_cur.campaign, '') "
 		"when wi_cur.name is null and ac.name is null "
@@ -823,7 +887,7 @@ def customer_pool(
 		"(select wi_p.name from `tabCSKH Work Item` wi_p "
 		f"where wi_p.lead = l.name and {wi_p_sql} "
 		"order by case "
-		"when wi_p.status = 'assigned' and coalesce(wi_p.assigned_to, '') != '' then 0 "
+		"when wi_p.status in ('assigned', 'in_progress', 'on_hold') and coalesce(wi_p.assigned_to, '') != '' then 0 "
 		"when wi_p.status = 'queued' and coalesce(wi_p.assigned_to, '') = '' then 1 "
 		"when wi_p.status = 'revoked' then 2 "
 		"when wi_p.status = 'closed' then 3 "
@@ -1041,7 +1105,7 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 			tuple(values),
 		)[0][0]
 
-	assigned = scoped_count(
+	assigned_fresh = scoped_count(
 		"CSKH Work Item",
 		{**campaign_filters, "status": "assigned"},
 		assigned_to_clause_wi,
@@ -1050,6 +1114,25 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 		extra_date=date_clause,
 		extra_date_params=date_params,
 	)
+	in_progress_cnt = scoped_count(
+		"CSKH Work Item",
+		{**campaign_filters, "status": "in_progress"},
+		assigned_to_clause_wi,
+		assigned_to_params_wi,
+		alias="wi",
+		extra_date=date_clause,
+		extra_date_params=date_params,
+	)
+	on_hold_cnt = scoped_count(
+		"CSKH Work Item",
+		{**campaign_filters, "status": "on_hold"},
+		assigned_to_clause_wi,
+		assigned_to_params_wi,
+		alias="wi",
+		extra_date=date_clause,
+		extra_date_params=date_params,
+	)
+	assigned = int(assigned_fresh or 0) + int(in_progress_cnt or 0) + int(on_hold_cnt or 0)
 	queued = scoped_count(
 		"CSKH Work Item",
 		{**campaign_filters, "status": "queued"},
@@ -1084,7 +1167,7 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 	active_claims = frappe.db.sql(
 		"""select count(*) from `tabCSKH Active Claim` ac
 		   inner join `tabCSKH Work Item` wi on wi.name = ac.work_item
-		   where wi.status in ('queued', 'assigned') {campaign_clause} {scope_clause} {date_clause}""".format(
+		   where wi.status in ('queued', 'assigned', 'in_progress', 'on_hold') {campaign_clause} {scope_clause} {date_clause}""".format(
 			campaign_clause="and ac.campaign = %s" if campaign else "",
 			scope_clause=("and " + work_item_scope_clause) if work_item_scope_clause else "",
 			date_clause=("and " + date_clause) if date_clause else "",
@@ -1149,7 +1232,7 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 	per_user_rows = frappe.db.sql(
 		"""select wi.assigned_to as user, wi.campaign as campaign, count(*) as current_total
 		   from `tabCSKH Work Item` wi
-		   where wi.status = 'assigned' {campaign_clause} {scope_clause} {date_clause}
+		   where wi.status in ('assigned', 'in_progress', 'on_hold') {campaign_clause} {scope_clause} {date_clause}
 		   group by wi.assigned_to, wi.campaign
 		   order by wi.assigned_to asc""".format(
 			campaign_clause="and wi.campaign = %s" if campaign else "",
@@ -1181,6 +1264,8 @@ def distribution_dashboard(user=None, campaign=None, date_from=None, date_to=Non
 			"unique_customers": unique_leads,
 			"eligible_unassigned": queued,
 			"assigned_work_items": assigned,
+			"in_progress_work_items": int(in_progress_cnt or 0),
+			"on_hold_work_items": int(on_hold_cnt or 0),
 			"unassigned_work_items": queued,
 			"revoked_work_items": revoked,
 			"closed_work_items": closed,
@@ -1428,7 +1513,7 @@ def campaign_summary(user=None, campaign=None):
 
 	summary = []
 	for row in campaign_rows:
-		filters = {"campaign": row.name, "status": "assigned"}
+		filters = {"campaign": row.name, "status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)]}
 		if users is not None:
 			filters["assigned_to"] = ["in", list(users)]
 		assigned = frappe.db.count("CSKH Work Item", filters)

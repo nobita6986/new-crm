@@ -14,12 +14,13 @@ import json
 
 import frappe
 
-from crm_cskh.p1_models import ACTIVE_WORK_ITEM_STATES
+from crm_cskh.p1_models import ACTIVE_WORK_ITEM_STATES, OWNED_ACTIVE_WORK_ITEM_STATES
 
 # Reasons are stable strings so the UI can group them.
 REASON_NO_IDENTITY = "no_canonical_identity"
 REASON_WORK_ITEM_EXISTS = "work_item_exists_in_campaign"
 REASON_ACTIVE_CLAIM = "active_claim_in_other_campaign"
+REASON_DO_NOT_CONTACT = "do_not_contact"
 REASON_OWNED_OUTSIDE = "owned_outside_cskh"
 REASON_RULE_MISSING = "no_assignment_rule"
 REASON_USER_DISABLED = "user_disabled"
@@ -96,10 +97,10 @@ def current_rule_version(campaign):
 
 
 def capacity_usage(campaign, user):
-	"""Active assigned work items of `user` in `campaign` (P1 1.3)."""
+	"""Active owned work items (`assigned`, `in_progress`, `on_hold`) of `user` in `campaign`."""
 	return frappe.db.count(
 		"CSKH Work Item",
-		{"campaign": campaign, "assigned_to": user, "status": "assigned"},
+		{"campaign": campaign, "assigned_to": user, "status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)]},
 	)
 
 
@@ -246,6 +247,10 @@ def _lead_exclusion_reason(campaign, lead):
 
 	if not identity_service.find_by_lead(lead):
 		return REASON_NO_IDENTITY
+	if frappe.db.has_column("CRM Lead", "cskh_do_not_contact") and int(
+		frappe.db.get_value("CRM Lead", lead, "cskh_do_not_contact") or 0
+	):
+		return REASON_DO_NOT_CONTACT
 	if frappe.db.exists("CSKH Work Item", {"campaign": campaign, "lead": lead}):
 		return REASON_WORK_ITEM_EXISTS
 	claim = frappe.db.get_value("CSKH Active Claim", {"lead": lead}, ["campaign", "work_item"], as_dict=True)
@@ -255,6 +260,13 @@ def _lead_exclusion_reason(campaign, lead):
 		item = frappe.db.get_value("CSKH Work Item", claim.work_item, "status")
 		if item not in ACTIVE_WORK_ITEM_STATES:
 			return REASON_WORK_ITEM_EXISTS
-	if frappe.db.exists("CSKH Work Item", {"lead": lead, "campaign": ["!=", campaign], "status": "assigned"}):
+	if frappe.db.exists(
+		"CSKH Work Item",
+		{
+			"lead": lead,
+			"campaign": ["!=", campaign],
+			"status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)],
+		},
+	):
 		return REASON_ACTIVE_CLAIM
 	return None
