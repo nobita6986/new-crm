@@ -14,7 +14,7 @@ from frappe.utils import add_to_date, cint, get_datetime, now_datetime
 
 from crm_cskh.api._params import parse_bool, parse_int, parse_optional_str
 from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
-from crm_cskh.p2_models import VALID_CHANNELS
+from crm_cskh.p2_models import VALID_CHANNELS, set_lead_dnc_fields
 from crm_cskh.p2_permissions import (
 	ROLE_ADMIN,
 	_in_team,
@@ -68,12 +68,24 @@ def _payload_hash(payload: dict) -> str:
 	return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
+def _wi_preview_fields() -> list[str]:
+	fields = ["name", "lead", "campaign", "status", "assigned_to", "closed_by", "last_activity_by"]
+	if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
+		fields.append("owner_at_close")
+	return fields
+
+
 def _lock_work_item(work_item: str) -> dict:
+	owner_close_col = (
+		"owner_at_close"
+		if frappe.db.has_column("CSKH Work Item", "owner_at_close")
+		else "null as owner_at_close"
+	)
 	rows = frappe.db.sql(
-		"""
+		f"""
 		select name, campaign, lead, status, revision, assigned_to, assigned_at,
 		       attempt_count, connected_attempt_count, open_callback_task, next_action_due,
-		       closed_by, last_activity_by
+		       closed_by, {owner_close_col}, last_activity_by
 		from `tabCSKH Work Item`
 		where name = %s
 		for update
@@ -124,6 +136,14 @@ def _parse_followup_spec(
 	}
 
 
+def _history_idempotency_fields() -> list[str]:
+	fields = ["name", "reason", "from_user", "to_user", "event_at"]
+	for col in ("private_reason", "payload_hash"):
+		if frappe.db.has_column("CSKH Assignment History", col):
+			fields.append(col)
+	return fields
+
+
 def _close_work_item_in_tx(
 	*,
 	locked: dict,
@@ -133,16 +153,20 @@ def _close_work_item_in_tx(
 	event_id: str,
 	next_revision: int,
 	policy_version: int,
+	public_reason: str | None = None,
+	payload_hash: str | None = None,
 	extra_wi_fields: dict | None = None,
 ) -> str | None:
 	"""Close an active `CSKH Work Item` atomically inside an existing transaction/savepoint."""
 	work_item_val = locked["name"]
 	old_owner = locked["assigned_to"]
+	priv_reason = (clean_reason or "").strip() or "Hoàn tất mục tiêu chăm sóc"
+	pub_reason = (public_reason or "").strip() or ownership.public_history_reason("close")
 
 	canceled_task = cancel_open_followup_in_tx(
 		work_item=work_item_val,
 		actor=actor,
-		reason=f"Đóng Work Item: {clean_reason or 'Hoàn tất chăm sóc'}",
+		reason=f"Đóng Work Item: {priv_reason}",
 		now=now_dt,
 	)
 
@@ -156,7 +180,9 @@ def _close_work_item_in_tx(
 			"to_user": None,
 			"actor": actor,
 			"event_at": now_dt,
-			"reason": clean_reason or "Hoàn tất mục tiêu chăm sóc",
+			"reason": pub_reason,
+			"private_reason": priv_reason,
+			"payload_hash": payload_hash,
 			"ownership_start": None,
 			"ownership_end": now_dt,
 			"event_id": event_id,
@@ -184,6 +210,8 @@ def _close_work_item_in_tx(
 		"policy_version": policy_version,
 		"revision": next_revision,
 	}
+	if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
+		wi_updates["owner_at_close"] = old_owner
 	if extra_wi_fields:
 		wi_updates.update(extra_wi_fields)
 	frappe.db.set_value("CSKH Work Item", work_item_val, wi_updates, update_modified=True)
@@ -250,7 +278,7 @@ def record_attempt(
 	wi_preview = frappe.db.get_value(
 		"CSKH Work Item",
 		wi_val,
-		["name", "lead", "campaign", "status", "assigned_to", "closed_by", "last_activity_by"],
+		_wi_preview_fields(),
 		as_dict=True,
 	)
 	if not wi_preview:
@@ -489,11 +517,18 @@ def record_attempt(
 		if should_close:
 			if close_item_b and outcome["requires_completion_reason"] and not clean_comp_reason:
 				raise NoteRequired("Kết quả này bắt buộc nhập lý do hoàn tất (completion_reason) khi đóng.")
-			effective_close_reason = (
-				clean_comp_reason or clean_note or f"Hoàn tất theo kết quả {outcome['code']}"
+			# F-P2-01: never copy customer `note` into `completion_reason` or `CSKH Assignment History`.
+			effective_close_reason = clean_comp_reason or (
+				f"Tự động đóng theo kết quả {outcome['label_vi']}"
+				if outcome["is_do_not_contact"]
+				else f"Hoàn tất theo kết quả {outcome['label_vi']}"
+			)
+			close_public_reason = ownership.public_history_reason(
+				"close", is_dnc=bool(outcome["is_do_not_contact"])
 			)
 		else:
 			effective_close_reason = ""
+			close_public_reason = ""
 
 		# 8. `CRM Call Log` link / creation
 		linked_call_log, verification_status = resolve_or_create_call_log_in_tx(
@@ -597,12 +632,11 @@ def record_attempt(
 		dnc_active = False
 		if outcome["is_do_not_contact"] and frappe.db.has_column("CRM Lead", "cskh_do_not_contact"):
 			dnc_active = True
-			frappe.db.set_value(
-				"CRM Lead",
+			set_lead_dnc_fields(
 				locked.lead,
 				{
 					"cskh_do_not_contact": 1,
-					"cskh_dnc_reason": clean_comp_reason or clean_note or outcome["label_vi"],
+					"cskh_dnc_reason": clean_comp_reason or outcome["label_vi"],
 					"cskh_dnc_at": now_dt,
 					"cskh_dnc_work_item": wi_val,
 				},
@@ -625,6 +659,8 @@ def record_attempt(
 				event_id=f"close-att:{wi_val}:{actor}:{idem_val}",
 				next_revision=next_rev,
 				policy_version=policy["version"],
+				public_reason=close_public_reason,
+				payload_hash=req_hash,
 			)
 			final_status = "closed"
 			final_callback = None
@@ -710,13 +746,12 @@ def close_work_item(
 		}
 	)
 	event_id = f"close:{wi_val}:{actor}:{idem_val}"
-	hash_prefix = f"[H:{req_hash[:16]}] "
 
 	# Pre-check scope
 	wi_preview = frappe.db.get_value(
 		"CSKH Work Item",
 		wi_val,
-		["name", "lead", "campaign", "status", "assigned_to", "closed_by", "last_activity_by"],
+		_wi_preview_fields(),
 		as_dict=True,
 	)
 	if not wi_preview:
@@ -731,16 +766,16 @@ def close_work_item(
 		existing_hist = frappe.db.get_value(
 			"CSKH Assignment History",
 			{"event_id": event_id},
-			["name", "reason", "event_at"],
+			_history_idempotency_fields(),
 			as_dict=True,
 		)
 		if existing_hist:
-			stored_reason = existing_hist.reason or ""
-			if stored_reason.startswith("[H:") and not stored_reason.startswith(hash_prefix):
+			if not ownership.matches_history_payload_hash(existing_hist, req_hash):
 				raise IdempotencyConflict("Khóa idempotency_key đã được dùng với thông tin đóng khác.")
-			wi_closed = frappe.db.get_value(
-				"CSKH Work Item", wi_val, ["status", "closed_at", "closed_by", "revision"], as_dict=True
-			)
+			closed_fields = ["status", "closed_at", "closed_by", "revision"]
+			if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
+				closed_fields.append("owner_at_close")
+			wi_closed = frappe.db.get_value("CSKH Work Item", wi_val, closed_fields, as_dict=True)
 			return {
 				"status": "closed",
 				"idempotent_replay": True,
@@ -748,6 +783,10 @@ def close_work_item(
 				"work_item_status": wi_closed.status,
 				"closed_at": wi_closed.closed_at or existing_hist.event_at,
 				"closed_by": wi_closed.closed_by or actor,
+				"owner_at_close": wi_closed.get("owner_at_close")
+				or existing_hist.get("from_user")
+				or wi_closed.closed_by
+				or actor,
 				"canceled_followup_task": None,
 				"revision": cint(wi_closed.revision or 1),
 			}
@@ -836,6 +875,12 @@ def close_work_item(
 		now_dt = now_datetime()
 		next_rev = current_rev + 1
 		recompute_work_item_read_model(wi_val, bump_revision=False, update_status_when_active=False)
+		close_pub_reason = ownership.public_history_reason(
+			"close",
+			is_dnc=bool(lead_dnc and summary["attempt_count"] == 0),
+			close_category=cat_val,
+		)
+		old_owner_at_close = locked.assigned_to
 		canceled_task = _close_work_item_in_tx(
 			locked=locked,
 			actor=actor,
@@ -844,15 +889,8 @@ def close_work_item(
 			event_id=event_id,
 			next_revision=next_rev,
 			policy_version=policy["version"],
-		)
-		# Tag history reason internally with hash prefix? Keep human-readable reason on Work Item,
-		# and store hash prefix on history row for strict payload-mismatch detection!
-		frappe.db.set_value(
-			"CSKH Assignment History",
-			{"event_id": event_id},
-			"reason",
-			f"{hash_prefix}{clean_reason or 'Hoàn tất mục tiêu chăm sóc'}"[:500],
-			update_modified=False,
+			public_reason=close_pub_reason,
+			payload_hash=req_hash,
 		)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
@@ -866,6 +904,7 @@ def close_work_item(
 		"work_item_status": "closed",
 		"closed_at": now_dt,
 		"closed_by": actor,
+		"owner_at_close": old_owner_at_close,
 		"canceled_followup_task": canceled_task,
 		"revision": next_rev,
 	}
@@ -923,7 +962,6 @@ def reopen_work_item(
 		}
 	)
 	event_id = f"reopen:{wi_val}:{actor}:{idem_val}"
-	hash_prefix = f"[H:{req_hash[:16]}] "
 
 	savepoint = f"cskh_reopen_wi_{frappe.generate_hash(length=6)}"
 	frappe.db.savepoint(savepoint)
@@ -932,12 +970,11 @@ def reopen_work_item(
 		existing_hist = frappe.db.get_value(
 			"CSKH Assignment History",
 			{"event_id": event_id},
-			["name", "reason", "to_user"],
+			_history_idempotency_fields(),
 			as_dict=True,
 		)
 		if existing_hist:
-			stored_reason = existing_hist.reason or ""
-			if stored_reason.startswith("[H:") and not stored_reason.startswith(hash_prefix):
+			if not ownership.matches_history_payload_hash(existing_hist, req_hash):
 				raise IdempotencyConflict("Khóa idempotency_key đã được dùng với thông tin mở lại khác.")
 			return {
 				"status": "reopened",
@@ -973,8 +1010,7 @@ def reopen_work_item(
 		):
 			if not (is_admin and override_dnc_b):
 				raise DoNotContact("Khách hàng đang có cờ ngừng liên hệ (DNC); không được mở lại.")
-			frappe.db.set_value(
-				"CRM Lead",
+			set_lead_dnc_fields(
 				locked.lead,
 				{
 					"cskh_do_not_contact": 0,
@@ -1018,25 +1054,28 @@ def reopen_work_item(
 		now_dt = now_datetime()
 		next_rev = current_rev + 1
 
+		reopen_updates = {
+			**summary,
+			"status": new_status,
+			"assigned_to": target_val,
+			"assigned_at": now_dt,
+			"open_callback_task": None,
+			"next_action_due": None,
+			"closed_at": None,
+			"closed_by": None,
+			"reopened_at": now_dt,
+			"reopened_by": actor,
+			"reopen_reason": clean_reason,
+			"last_activity_by": actor,
+			"policy_version": policy["version"],
+			"revision": next_rev,
+		}
+		if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
+			reopen_updates["owner_at_close"] = None
 		frappe.db.set_value(
 			"CSKH Work Item",
 			wi_val,
-			{
-				**summary,
-				"status": new_status,
-				"assigned_to": target_val,
-				"assigned_at": now_dt,
-				"open_callback_task": None,
-				"next_action_due": None,
-				"closed_at": None,
-				"closed_by": None,
-				"reopened_at": now_dt,
-				"reopened_by": actor,
-				"reopen_reason": clean_reason,
-				"last_activity_by": actor,
-				"policy_version": policy["version"],
-				"revision": next_rev,
-			},
+			reopen_updates,
 			update_modified=True,
 		)
 
@@ -1065,7 +1104,9 @@ def reopen_work_item(
 				"to_user": target_val,
 				"actor": actor,
 				"event_at": now_dt,
-				"reason": f"{hash_prefix}{clean_reason}"[:500],
+				"reason": ownership.public_history_reason("reopen", override_dnc=override_dnc_b),
+				"private_reason": clean_reason,
+				"payload_hash": req_hash,
 				"ownership_start": now_dt,
 				"ownership_end": None,
 				"event_id": event_id,

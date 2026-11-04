@@ -26,8 +26,11 @@ from frappe.utils import now_datetime
 
 from crm_cskh.api._ui_params import parse_optional_str, parse_pagination
 from crm_cskh.api.pool_ui import filter_team_authorized_leads
+from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
 from crm_cskh.services import reporting
 from crm_cskh.services.errors import Forbidden
+
+ALLOCATED_RUN_WORK_ITEM_STATES = (*OWNED_ACTIVE_WORK_ITEM_STATES, "closed", "revoked")
 
 READ_ROLES = {"CSKH CRM Admin", "CSKH BOD Viewer", "Sales Manager"}
 
@@ -85,30 +88,155 @@ def _parse_preview(run):
 	return preview if isinstance(preview, dict) else {}
 
 
+def _db_historical_assigned_by_run(run_ids, scope_users=None):
+	"""Reconstruct historical per-`(run_id, user)` allocation counts (`F-P2-02`).
+
+	`assigned` (and `created`) in `run_history.runs` represents the **historical
+	distribution result** of each run (`allocation_semantics = "historical_run_allocation"`),
+	not merely items still sitting in `status = 'assigned'`. When `actual_json` is
+	not populated (e.g. an in-flight checkpoint or legacy/fixture run row), we
+	reconstruct each `(run_id, work_item)` initial assignee from:
+	  1. Earliest `CSKH Assignment History` (`action = 'assign'`) tied to `distribution_run`,
+	     falling back to earliest `action = 'assign'` on that `work_item` when `distribution_run`
+	     was omitted;
+	  2. Fallback to `CSKH Work Item` (`assigned_to`, `owner_at_close`, `closed_by`,
+	     `last_activity_by`) across all post-allocation states (`assigned`, `in_progress`,
+	     `on_hold`, `closed`, `revoked`).
+
+	When `scope_users` is supplied (`Sales Manager` team scope), counts are strictly
+	filtered to `scope_users` so foreign-team data on shared campaigns never leaks (`L-24`).
+	"""
+	if not run_ids:
+		return {}
+	scope_set = None
+	if scope_users is not None:
+		scope_set = {u for u in scope_users if u}
+		if not scope_set:
+			return {}
+
+	unique_run_ids = list(dict.fromkeys(r for r in run_ids if r))
+	if not unique_run_ids:
+		return {}
+	run_ph = ",".join(["%s"] * len(unique_run_ids))
+
+	# 1. Explicit `(distribution_run, work_item)` initial `assign` events
+	initial_by_run_wi: dict[tuple[str, str], str] = {}
+	if frappe.db.table_exists("CSKH Assignment History"):
+		hist_rows = frappe.db.sql(
+			f"select distribution_run as run_id, work_item, to_user "
+			f"from `tabCSKH Assignment History` "
+			f"where distribution_run in ({run_ph}) and action = 'assign' "
+			f"order by event_at asc, creation asc, name asc",
+			tuple(unique_run_ids),
+			as_dict=True,
+		)
+		for h in hist_rows:
+			if h.run_id and h.work_item and h.to_user:
+				initial_by_run_wi.setdefault((h.run_id, h.work_item), h.to_user)
+
+	# 2. `CSKH Work Item` rows with `allocation_run in (...)` across all allocated states
+	state_ph = ",".join(["%s"] * len(ALLOCATED_RUN_WORK_ITEM_STATES))
+	has_owner_at_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
+	owner_close_col = "owner_at_close" if has_owner_at_close else "null as owner_at_close"
+	wi_rows = frappe.db.sql(
+		f"select name, allocation_run as run_id, assigned_to, {owner_close_col}, "
+		f"closed_by, last_activity_by "
+		f"from `tabCSKH Work Item` "
+		f"where allocation_run in ({run_ph}) and status in ({state_ph})",
+		(*unique_run_ids, *ALLOCATED_RUN_WORK_ITEM_STATES),
+		as_dict=True,
+	)
+
+	missing_wi_names = [
+		w.name for w in wi_rows if w.run_id and w.name and (w.run_id, w.name) not in initial_by_run_wi
+	]
+	earliest_assign_by_wi: dict[str, str] = {}
+	if missing_wi_names and frappe.db.table_exists("CSKH Assignment History"):
+		wi_ph = ",".join(["%s"] * len(missing_wi_names))
+		wi_hist_rows = frappe.db.sql(
+			f"select work_item, to_user "
+			f"from `tabCSKH Assignment History` "
+			f"where work_item in ({wi_ph}) and action = 'assign' "
+			f"and (distribution_run is null or distribution_run = '') "
+			f"order by event_at asc, creation asc, name asc",
+			tuple(missing_wi_names),
+			as_dict=True,
+		)
+		for h in wi_hist_rows:
+			if h.work_item and h.to_user:
+				earliest_assign_by_wi.setdefault(h.work_item, h.to_user)
+
+	for w in wi_rows:
+		key = (w.run_id, w.name)
+		if not w.run_id or not w.name or key in initial_by_run_wi:
+			continue
+		resolved_user = (
+			earliest_assign_by_wi.get(w.name)
+			or w.assigned_to
+			or w.owner_at_close
+			or w.closed_by
+			or w.last_activity_by
+		)
+		if resolved_user:
+			initial_by_run_wi[key] = resolved_user
+
+	out: dict[str, dict[str, int]] = {}
+	for (r_id, _wi_name), user in initial_by_run_wi.items():
+		if scope_set is not None and user not in scope_set:
+			continue
+		run_bucket = out.setdefault(r_id, {})
+		run_bucket[user] = run_bucket.get(user, 0) + 1
+	return out
+
+
 def _db_team_assigned_by_run(run_ids, team_users):
-	"""Fallback DB counts per `(run_id, assigned_to)` within `team_users`."""
+	"""Fallback historical DB allocation counts per `(run_id, user)` within `team_users` (`F-P2-02`)."""
 	if not run_ids or not team_users:
 		return {}
-	run_ph = ",".join(["%s"] * len(run_ids))
-	user_ph = ",".join(["%s"] * len(team_users))
+	return _db_historical_assigned_by_run(run_ids, scope_users=team_users)
+
+
+def _db_active_owned_by_run(run_ids, scope_users=None):
+	"""Live count of currently owned active Work Items (`assigned`, `in_progress`, `on_hold`) per run."""
+	if not run_ids:
+		return {}
+	unique_run_ids = list(dict.fromkeys(r for r in run_ids if r))
+	if not unique_run_ids:
+		return {}
+	params: list = [*unique_run_ids, *OWNED_ACTIVE_WORK_ITEM_STATES]
+	run_ph = ",".join(["%s"] * len(unique_run_ids))
+	state_ph = ",".join(["%s"] * len(OWNED_ACTIVE_WORK_ITEM_STATES))
+	user_clause = ""
+	if scope_users is not None:
+		clean_users = [u for u in scope_users if u]
+		if not clean_users:
+			return {}
+		user_ph = ",".join(["%s"] * len(clean_users))
+		user_clause = f" and assigned_to in ({user_ph})"
+		params.extend(clean_users)
+
 	rows = frappe.db.sql(
 		f"select allocation_run as run_id, assigned_to as user, count(*) as total "
 		f"from `tabCSKH Work Item` "
-		f"where allocation_run in ({run_ph}) and status = 'assigned' "
-		f"and assigned_to in ({user_ph}) "
+		f"where allocation_run in ({run_ph}) and status in ({state_ph}) "
+		f"and assigned_to is not null and assigned_to != ''{user_clause} "
 		f"group by allocation_run, assigned_to",
-		(*run_ids, *team_users),
+		tuple(params),
 		as_dict=True,
 	)
-	out = {}
+	out: dict[str, dict[str, int]] = {}
 	for row in rows:
 		if row.run_id and row.user:
 			out.setdefault(row.run_id, {})[row.user] = int(row.total or 0)
 	return out
 
 
-def _serialize_full_run_item(row, actual, preview):
+def _serialize_full_run_item(row, actual, preview, db_assigned_by_run=None, active_owned_by_run=None):
 	raw_assigned = actual.get("assigned") if isinstance(actual.get("assigned"), dict) else {}
+	assigned_map = {u: int(cnt or 0) for u, cnt in raw_assigned.items()}
+	if not assigned_map and not raw_assigned and db_assigned_by_run and row.run_id in db_assigned_by_run:
+		assigned_map = dict(db_assigned_by_run[row.run_id])
+	active_owned_map = dict((active_owned_by_run or {}).get(row.run_id) or {})
 	raw_skipped = actual.get("skipped") if isinstance(actual.get("skipped"), list) else []
 	raw_targets = preview.get("targets") if isinstance(preview.get("targets"), list) else []
 	raw_simulated = preview.get("simulated") if isinstance(preview.get("simulated"), dict) else {}
@@ -117,6 +245,11 @@ def _serialize_full_run_item(row, actual, preview):
 	)
 	eligible_count = int(preview.get("eligible_count", 0) or 0)
 	excluded_count = int(preview.get("excluded_count", 0) or 0)
+	created_val = (
+		int(actual.get("created", 0) or 0)
+		if raw_assigned or "created" in actual
+		else sum(assigned_map.values())
+	)
 
 	return {
 		"run_id": row.run_id,
@@ -127,11 +260,14 @@ def _serialize_full_run_item(row, actual, preview):
 		"rule_version": row.rule_version,
 		"idempotency_key": row.idempotency_key,
 		"selection_fingerprint": row.selection_fingerprint,
+		"allocation_semantics": "historical_run_allocation",
 		"progress": int(row.progress or 0),
 		"total": eligible_count,
-		"created": int(actual.get("created", 0) or 0),
+		"created": created_val,
 		"errors": int(actual.get("errors", 0) or 0),
-		"assigned": {u: int(cnt or 0) for u, cnt in raw_assigned.items()},
+		"assigned": assigned_map,
+		"active_owned": active_owned_map,
+		"active_owned_total": sum(active_owned_map.values()),
 		"skipped": [
 			{"lead": entry.get("lead"), "reason": entry.get("reason")}
 			for entry in raw_skipped
@@ -159,11 +295,17 @@ def _serialize_team_run_item(
 	team_nodes_set,
 	authorized_skipped_leads,
 	db_assigned_by_run,
+	active_owned_by_run=None,
 ):
 	raw_assigned = actual.get("assigned") if isinstance(actual.get("assigned"), dict) else {}
 	scoped_assigned = {u: int(cnt or 0) for u, cnt in raw_assigned.items() if u in team_users_set}
 	if not scoped_assigned and not raw_assigned and row.run_id in db_assigned_by_run:
 		scoped_assigned = dict(db_assigned_by_run[row.run_id])
+	scoped_active_owned = {
+		u: int(cnt or 0)
+		for u, cnt in ((active_owned_by_run or {}).get(row.run_id) or {}).items()
+		if u in team_users_set
+	}
 
 	raw_skipped = actual.get("skipped") if isinstance(actual.get("skipped"), list) else []
 	scoped_skipped = [
@@ -234,11 +376,14 @@ def _serialize_team_run_item(
 		"rule_version": row.rule_version,
 		"idempotency_key": row.idempotency_key,
 		"selection_fingerprint": row.selection_fingerprint,
+		"allocation_semantics": "historical_run_allocation",
 		"progress": progress_val,
 		"total": total_val,
 		"created": created,
 		"errors": errors,
 		"assigned": scoped_assigned,
+		"active_owned": scoped_active_owned,
+		"active_owned_total": sum(scoped_active_owned.values()),
 		"skipped": scoped_skipped,
 		"preview": scoped_preview,
 		"created_at": row.created_at,
@@ -315,6 +460,7 @@ def runs(page=1, page_size=20, campaign=None, status=None, run_id=None):
 	)
 
 	parsed_rows = [(row, _parse_actual(row), _parse_preview(row)) for row in rows]
+	page_run_ids = [row.run_id for row, _actual, _preview in parsed_rows if row.run_id]
 
 	items = []
 	if scope["scope"] == "team":
@@ -335,6 +481,7 @@ def runs(page=1, page_size=20, campaign=None, status=None, run_id=None):
 
 		authorized_skipped_leads = filter_team_authorized_leads(scope, candidate_skipped_leads)
 		db_assigned_by_run = _db_team_assigned_by_run(fallback_run_ids, team_users)
+		active_owned_by_run = _db_active_owned_by_run(page_run_ids, scope_users=team_users)
 
 		for row, actual, preview in parsed_rows:
 			items.append(
@@ -346,11 +493,28 @@ def runs(page=1, page_size=20, campaign=None, status=None, run_id=None):
 					team_nodes_set,
 					authorized_skipped_leads,
 					db_assigned_by_run,
+					active_owned_by_run=active_owned_by_run,
 				)
 			)
 	else:
+		fallback_run_ids = [
+			row.run_id
+			for row, actual, _preview in parsed_rows
+			if not (isinstance(actual.get("assigned"), dict) and actual.get("assigned"))
+			and str(row.status or "").strip().lower() != "planned"
+		]
+		db_assigned_by_run = _db_historical_assigned_by_run(fallback_run_ids, scope_users=None)
+		active_owned_by_run = _db_active_owned_by_run(page_run_ids, scope_users=None)
 		for row, actual, preview in parsed_rows:
-			items.append(_serialize_full_run_item(row, actual, preview))
+			items.append(
+				_serialize_full_run_item(
+					row,
+					actual,
+					preview,
+					db_assigned_by_run=db_assigned_by_run,
+					active_owned_by_run=active_owned_by_run,
+				)
+			)
 
 	return {
 		"items": items,

@@ -20,6 +20,7 @@ from crm_cskh.p2_models import (
 	UNREACHED_DISCONNECTED_CODES,
 	VALID_CHANNELS,
 	parse_channels_csv,
+	set_lead_dnc_fields,
 )
 from crm_cskh.p2_permissions import (
 	ROLE_ADMIN,
@@ -631,8 +632,7 @@ def set_lead_dnc(
 		}
 
 	now_dt = now_datetime()
-	frappe.db.set_value(
-		"CRM Lead",
+	set_lead_dnc_fields(
 		lead_val,
 		{
 			"cskh_do_not_contact": 1 if dnc_b else 0,

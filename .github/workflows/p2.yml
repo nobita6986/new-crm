@@ -89,7 +89,8 @@ jobs:
             crm_cskh.tests.test_p2_corrections \
             crm_cskh.tests.test_p2_permissions_sec \
             crm_cskh.tests.test_p2_concurrency_chaos \
-            crm_cskh.tests.test_p2_reconciliation_perf
+            crm_cskh.tests.test_p2_reconciliation_perf \
+            crm_cskh.tests.test_p2_t1c_regressions
           do
             slug="${module##*.}"
             container_log="/tmp/p2-evidence/${slug}.log"
