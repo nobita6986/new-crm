@@ -28,6 +28,7 @@ SPOOFED_IDENTITY_KEYS = frozenset(
 		"verification_status",
 		"actor",
 		"closed_by",
+		"owner_at_close",
 		"reopened_by",
 		"requested_by",
 		"reviewed_by",
@@ -77,19 +78,25 @@ def list_work_items(
 	page=1,
 	page_size=20,
 	status=None,
+	care_state=None,
 	campaign=None,
 	followup_filter=None,
 	assignee=None,
+	owner_at_close=None,
+	closed_by=None,
 	search=None,
 ):
-	"""Scoped CSKH work queue (`docs/api-contract-p2.md` §4.2)."""
+	"""Scoped CSKH work queue with server-side care-state & closed-owner filtering (`docs/api-contract-p2.md` §4.2)."""
 	return read_model.list_work_items(
 		page=page,
 		page_size=page_size,
 		status=status,
+		care_state=care_state,
 		campaign=campaign,
 		followup_filter=followup_filter,
 		assignee=assignee,
+		owner_at_close=owner_at_close,
+		closed_by=closed_by,
 		search=search,
 		actor=frappe.session.user,
 	)

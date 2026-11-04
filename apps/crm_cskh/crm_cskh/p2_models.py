@@ -6,8 +6,10 @@ and `docs/attempt-immutability-correction.md` (`ADR-P2-01..11`).
 
 from __future__ import annotations
 
+import contextvars
 import json
 import re
+from urllib.parse import unquote
 
 import frappe
 from frappe import _
@@ -15,6 +17,18 @@ from frappe.model.document import Document
 from frappe.utils import cint, get_datetime, now_datetime
 
 from crm_cskh.services.sanitizer import sanitize_note_text
+
+LEAD_DNC_FIELDS = (
+	"cskh_do_not_contact",
+	"cskh_dnc_reason",
+	"cskh_dnc_at",
+	"cskh_dnc_work_item",
+)
+_LEAD_DNC_FIELD_SET = frozenset(LEAD_DNC_FIELDS)
+_CSKH_AUTHORIZED_LEAD_DNC_MUTATION: contextvars.ContextVar[bool] = contextvars.ContextVar(
+	"_CSKH_AUTHORIZED_LEAD_DNC_MUTATION",
+	default=False,
+)
 
 OWNED_ACTIVE_WORK_ITEM_STATES = ("assigned", "in_progress", "on_hold")
 ACTIVE_WORK_ITEM_STATES = ("queued", "assigned", "in_progress", "on_hold")
@@ -320,7 +334,7 @@ DEFAULT_GLOBAL_POLICY = {
 }
 
 P2_CUSTOM_FIELDS = (
-	# --- CRM Lead DNC compliance fields (`docs/data-model-p2.md` §3.3) ---
+	# --- CRM Lead DNC compliance fields (`docs/data-model-p2.md` §3.3, `F-P2-06`) ---
 	{
 		"dt": "CRM Lead",
 		"fieldname": "cskh_do_not_contact",
@@ -328,6 +342,7 @@ P2_CUSTOM_FIELDS = (
 		"label": "CSKH Do Not Contact",
 		"insert_after": "cskh_is_placeholder_name",
 		"default": "0",
+		"read_only": 1,
 		"print_hide": 1,
 		"no_copy": 1,
 		"description": "Cờ tuân thủ ngừng liên hệ toàn cục (DNC); không bị xóa khi import lại hoặc tạo chiến dịch mới.",
@@ -338,6 +353,7 @@ P2_CUSTOM_FIELDS = (
 		"fieldtype": "Small Text",
 		"label": "CSKH DNC Reason",
 		"insert_after": "cskh_do_not_contact",
+		"read_only": 1,
 		"print_hide": 1,
 		"no_copy": 1,
 		"description": "Lý do khách hàng yêu cầu ngừng liên hệ hoặc Admin cập nhật.",
@@ -348,6 +364,7 @@ P2_CUSTOM_FIELDS = (
 		"fieldtype": "Datetime",
 		"label": "CSKH DNC At",
 		"insert_after": "cskh_dnc_reason",
+		"read_only": 1,
 		"print_hide": 1,
 		"no_copy": 1,
 		"description": "Thời điểm đánh dấu DNC gần nhất.",
@@ -359,6 +376,7 @@ P2_CUSTOM_FIELDS = (
 		"options": "CSKH Work Item",
 		"label": "CSKH DNC Work Item",
 		"insert_after": "cskh_dnc_at",
+		"read_only": 1,
 		"print_hide": 1,
 		"no_copy": 1,
 		"description": "Work Item phát sinh yêu cầu DNC.",
@@ -516,6 +534,8 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 		elif dt == "CSKH Work Item":
 			frappe.db.add_index(dt, ["assigned_to", "status", "next_action_due"], "cskh_wi_queue_due_idx")
 			frappe.db.add_index(dt, ["campaign", "status", "last_attempt_at"], "cskh_wi_camp_last_idx")
+			if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
+				frappe.db.add_index(dt, ["status", "owner_at_close", "closed_at"], "cskh_wi_owner_close_idx")
 		elif dt == "CRM Task":
 			# Only create indexes once the Custom Fields exist as columns on `tabCRM Task`.
 			if frappe.db.has_column("CRM Task", "cskh_work_item") and frappe.db.has_column(
@@ -540,6 +560,7 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 
 def ensure_p2_custom_fields() -> None:
 	"""Idempotently create or sync all P2 Custom Fields on `CRM Lead` and `CRM Task`."""
+	cleared_dts: set[str] = set()
 	for spec in P2_CUSTOM_FIELDS:
 		if not frappe.db.exists("DocType", spec["dt"]):
 			continue
@@ -548,9 +569,17 @@ def ensure_p2_custom_fields() -> None:
 			"Custom Field", {"dt": spec["dt"], "fieldname": spec["fieldname"]}
 		)
 		if existing:
+			desired_ro = cint(spec.get("read_only", 0))
+			current_ro = cint(frappe.db.get_value("Custom Field", existing, "read_only") or 0)
+			if current_ro != desired_ro:
+				frappe.db.set_value("Custom Field", existing, "read_only", desired_ro, update_modified=False)
+				cleared_dts.add(spec["dt"])
 			continue
 		doc = frappe.get_doc({"doctype": "Custom Field", **spec})
 		doc.insert(ignore_permissions=True)
+		cleared_dts.add(spec["dt"])
+	for dt in cleared_dts:
+		frappe.clear_cache(doctype=dt)
 
 
 def ensure_p2_seeds() -> None:
@@ -829,3 +858,198 @@ def prevent_cskh_followup_task_trash(doc, method=None):
 			_("Không được xóa tác vụ hẹn lại CSKH; hãy hủy có lý do qua quy trình nghiệp vụ."),
 			frappe.PermissionError,
 		)
+
+
+def _normalize_lead_dnc_tuple(mapping) -> tuple:
+	if not mapping:
+		return (0, "", None, "")
+	getter = mapping.get if hasattr(mapping, "get") else lambda k: getattr(mapping, k, None)
+	dnc_flag = 1 if cint(getter("cskh_do_not_contact") or 0) else 0
+	dnc_reason = str(getter("cskh_dnc_reason") or "").strip()
+	raw_at = getter("cskh_dnc_at")
+	dnc_at = get_datetime(raw_at).replace(microsecond=0) if raw_at else None
+	dnc_wi = str(getter("cskh_dnc_work_item") or "").strip()
+	return (dnc_flag, dnc_reason, dnc_at, dnc_wi)
+
+
+def set_lead_dnc_fields(lead_name: str, values: dict, *, update_modified: bool = True) -> None:
+	"""Authorized internal gateway for updating `CRM Lead` DNC compliance fields (`F-P2-06`).
+
+	Uses a module-private `ContextVar` (never settable from HTTP payloads or `frappe.flags`)
+	and may ONLY be called by audited CSKH domain services (`record_attempt`, `reopen_work_item`
+	with Admin `override_dnc`, and `policies.set_lead_dnc`).
+	"""
+	if not lead_name:
+		raise ValueError("lead_name is required")
+	unknown = set(values) - _LEAD_DNC_FIELD_SET
+	if unknown:
+		raise ValueError(f"Unsupported DNC fields: {sorted(unknown)}")
+	clean_values = {field: val for field, val in values.items() if frappe.db.has_column("CRM Lead", field)}
+	if not clean_values:
+		return
+	token = _CSKH_AUTHORIZED_LEAD_DNC_MUTATION.set(True)
+	try:
+		frappe.db.set_value("CRM Lead", lead_name, clean_values, update_modified=update_modified)
+	finally:
+		_CSKH_AUTHORIZED_LEAD_DNC_MUTATION.reset(token)
+
+
+def validate_crm_lead_dnc_fields(doc, method=None) -> None:
+	"""`doc_events["CRM Lead"]` guard blocking direct DNC mutations across ORM/REST/Desk (`F-P2-06`)."""
+	if _CSKH_AUTHORIZED_LEAD_DNC_MUTATION.get():
+		return
+	cur_tuple = _normalize_lead_dnc_tuple(doc)
+	empty_tuple = (0, "", None, "")
+
+	if method == "before_insert" or doc.is_new() or not getattr(doc, "name", None):
+		if cur_tuple != empty_tuple:
+			frappe.throw(
+				_(
+					"Trạng thái ngừng liên hệ (DNC) chỉ được thiết lập hoặc thay đổi qua dịch vụ nghiệp vụ CSKH được ủy quyền."
+				),
+				frappe.PermissionError,
+			)
+		return
+
+	if method == "on_update":
+		prev_doc = doc.get_doc_before_save()
+		baseline = _normalize_lead_dnc_tuple(prev_doc) if prev_doc is not None else empty_tuple
+		if cur_tuple != baseline:
+			frappe.throw(
+				_(
+					"Trạng thái ngừng liên hệ (DNC) chỉ được thiết lập hoặc thay đổi qua dịch vụ nghiệp vụ CSKH được ủy quyền."
+				),
+				frappe.PermissionError,
+			)
+		return
+
+	existing_cols = [col for col in LEAD_DNC_FIELDS if frappe.db.has_column("CRM Lead", col)]
+	if not existing_cols or not frappe.db.exists("CRM Lead", doc.name):
+		if cur_tuple != empty_tuple:
+			frappe.throw(
+				_(
+					"Trạng thái ngừng liên hệ (DNC) chỉ được thiết lập hoặc thay đổi qua dịch vụ nghiệp vụ CSKH được ủy quyền."
+				),
+				frappe.PermissionError,
+			)
+		return
+
+	db_row = frappe.db.get_value("CRM Lead", doc.name, existing_cols, as_dict=True) or {}
+	if cur_tuple != _normalize_lead_dnc_tuple(db_row):
+		frappe.throw(
+			_(
+				"Trạng thái ngừng liên hệ (DNC) chỉ được thiết lập hoặc thay đổi qua dịch vụ nghiệp vụ CSKH được ủy quyền."
+			),
+			frappe.PermissionError,
+		)
+
+
+def _payload_touches_lead_dnc(raw) -> bool:
+	if raw is None:
+		return False
+	if isinstance(raw, str):
+		stripped = raw.strip()
+		if stripped in _LEAD_DNC_FIELD_SET:
+			return True
+		if stripped.startswith(("{", "[")):
+			try:
+				parsed = json.loads(stripped)
+			except (TypeError, ValueError):
+				return False
+			return _payload_touches_lead_dnc(parsed)
+		return False
+	if isinstance(raw, dict):
+		for k in raw:
+			if str(k).strip() in _LEAD_DNC_FIELD_SET:
+				return True
+		return False
+	if isinstance(raw, list | tuple | set):
+		return any(_payload_touches_lead_dnc(item) for item in raw)
+	return False
+
+
+def assert_no_lead_dnc_mutation_fields(doctype: str | None, payload_or_fields) -> None:
+	"""Fail closed with `PermissionError` if `doctype == 'CRM Lead'` and `payload_or_fields` touches DNC."""
+	if (doctype or "").strip() != "CRM Lead":
+		return
+	if _CSKH_AUTHORIZED_LEAD_DNC_MUTATION.get():
+		return
+	if _payload_touches_lead_dnc(payload_or_fields):
+		frappe.throw(
+			_(
+				"Trạng thái ngừng liên hệ (DNC) chỉ được thiết lập hoặc thay đổi qua dịch vụ nghiệp vụ CSKH được ủy quyền."
+			),
+			frappe.PermissionError,
+		)
+
+
+def enforce_lead_dnc_request_guard() -> None:
+	"""`auth_hooks` callback rejecting generic HTTP writes to `CRM Lead` DNC fields (`F-P2-06`)."""
+	request = getattr(frappe.local, "request", None)
+	if request is None:
+		return
+	http_method = (getattr(request, "method", "") or "").upper()
+	if http_method not in ("POST", "PUT", "PATCH"):
+		return
+
+	path = getattr(request, "path", "") or ""
+	form_dict = getattr(frappe.local, "form_dict", None) or {}
+	try:
+		json_body = request.get_json(silent=True)
+	except Exception:
+		json_body = None
+
+	merged: dict = {}
+	if isinstance(json_body, dict):
+		merged.update(json_body)
+	if isinstance(form_dict, dict):
+		merged.update(form_dict)
+
+	# 1. REST v1 (`/api/resource/CRM Lead...`) & REST v2 (`/api/v2/document/CRM Lead...`)
+	for prefix in ("/api/resource/", "/api/v2/document/"):
+		if path.startswith(prefix):
+			rest = path[len(prefix) :].strip("/")
+			parts = rest.split("/", 1) if rest else [""]
+			target_dt = unquote(parts[0])
+			if target_dt == "CRM Lead":
+				payload = merged.get("data") if "data" in merged else merged
+				if isinstance(payload, str):
+					try:
+						payload = json.loads(payload)
+					except (TypeError, ValueError):
+						payload = merged
+				if isinstance(payload, dict) and _payload_touches_lead_dnc(payload):
+					is_full_roundtrip_doc = (
+						http_method in ("PUT", "PATCH")
+						and len(parts) > 1
+						and "doctype" in payload
+						and "creation" in payload
+					)
+					if not is_full_roundtrip_doc:
+						assert_no_lead_dnc_mutation_fields("CRM Lead", payload)
+			return
+
+	# 2. Generic partial-write / batch RPCs (`set_value`, `bulk_update`, `insert_many`)
+	if path.startswith("/api/method/"):
+		cmd = unquote(path[len("/api/method/") :].strip("/"))
+	else:
+		cmd = str(merged.get("cmd") or "")
+
+	if cmd.endswith("set_value"):
+		dt = merged.get("doctype")
+		dt_str = dt if isinstance(dt, str) else None
+		assert_no_lead_dnc_mutation_fields(dt_str, merged.get("fieldname"))
+		assert_no_lead_dnc_mutation_fields(dt_str, merged.get("data"))
+		assert_no_lead_dnc_mutation_fields(dt_str, merged)
+	elif cmd.endswith(("bulk_update", "insert_many")):
+		docs_raw = merged.get("docs")
+		parsed_docs = docs_raw
+		if isinstance(parsed_docs, str):
+			try:
+				parsed_docs = json.loads(parsed_docs)
+			except (TypeError, ValueError):
+				parsed_docs = None
+		if isinstance(parsed_docs, list):
+			for entry in parsed_docs:
+				if isinstance(entry, dict) and entry.get("doctype") == "CRM Lead":
+					assert_no_lead_dnc_mutation_fields("CRM Lead", entry)

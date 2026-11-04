@@ -71,11 +71,16 @@ def leader_authorized_work_item_sql(user: str, wi_alias: str = "wi") -> str:
 		f"(select `n`.`name` from `tabCRM Sales Hierarchy` `n` "
 		f"where `n`.`lft` >= {lft_sql} and `n`.`rgt` <= {rgt_sql})"
 	)
+	owner_close_pred = (
+		f"`{wi_alias}`.`owner_at_close` in {team_users_subq} or "
+		if frappe.db.has_column("CSKH Work Item", "owner_at_close")
+		else ""
+	)
 	return (
 		f"((`{wi_alias}`.`status` in ('assigned', 'in_progress', 'on_hold') "
 		f"and `{wi_alias}`.`assigned_to` in {team_users_subq}) "
 		f"or (`{wi_alias}`.`status` = 'closed' and `{wi_alias}`.`assigned_to` is null "
-		f"and (`{wi_alias}`.`closed_by` in {team_users_subq} "
+		f"and ({owner_close_pred}`{wi_alias}`.`closed_by` in {team_users_subq} "
 		f"or `{wi_alias}`.`last_activity_by` in {team_users_subq} "
 		f"or `{wi_alias}`.`campaign` in (select `c_cl`.`name` from `tabCSKH Campaign` `c_cl` "
 		f"where `c_cl`.`team_scope` in {team_nodes_subq})) "
@@ -101,15 +106,24 @@ def staff_authorized_work_item_sql(user: str, wi_alias: str = "wi") -> str:
 
 	Grants read access when:
 	  1. `wi.status in ('assigned', 'in_progress', 'on_hold')` and `wi.assigned_to = user`; OR
-	  2. `wi.status = 'closed'`, `wi.assigned_to is null`, `wi.closed_by = user`, AND the underlying
-	     `CRM Lead` has NOT moved to any other user or active claim (`SEC2-07`, `docs/api-contract-p2.md` §3).
+	  2. `wi.status = 'closed'`, `wi.assigned_to is null`, `user` was the owner at the time of close
+	     (`coalesce(nullif(wi.owner_at_close, ''), wi.closed_by) = user` or `wi.closed_by = user`),
+	     AND the underlying `CRM Lead` has NOT moved to any other user or active claim
+	     (`SEC2-07`, `F-P2-04`, `docs/api-contract-p2.md` §3).
 	"""
 	u_sql = _escape(user)
+	if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
+		closed_owner_pred = (
+			f"(coalesce(nullif(`{wi_alias}`.`owner_at_close`, ''), `{wi_alias}`.`closed_by`) = {u_sql} "
+			f"or `{wi_alias}`.`closed_by` = {u_sql})"
+		)
+	else:
+		closed_owner_pred = f"`{wi_alias}`.`closed_by` = {u_sql}"
 	return (
 		f"((`{wi_alias}`.`status` in ('assigned', 'in_progress', 'on_hold') "
 		f"and `{wi_alias}`.`assigned_to` = {u_sql}) "
 		f"or (`{wi_alias}`.`status` = 'closed' and `{wi_alias}`.`assigned_to` is null "
-		f"and `{wi_alias}`.`closed_by` = {u_sql} "
+		f"and {closed_owner_pred} "
 		f"and not exists (select 1 from `tabCSKH Work Item` `wi_for` "
 		f"where `wi_for`.`lead` = `{wi_alias}`.`lead` "
 		f"and `wi_for`.`status` in ('assigned', 'in_progress', 'on_hold') "
@@ -134,19 +148,23 @@ def is_work_item_readable_for_workflow(work_item_doc_or_name, user: str | None =
 	if ROLE_BOD in _roles(user) and not (_is_leader(user) or _is_staff(user)):
 		return False
 
+	has_owner_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
 	if isinstance(work_item_doc_or_name, str):
+		wi_fields = [
+			"name",
+			"lead",
+			"campaign",
+			"status",
+			"assigned_to",
+			"closed_by",
+			"last_activity_by",
+		]
+		if has_owner_close:
+			wi_fields.append("owner_at_close")
 		wi = frappe.db.get_value(
 			"CSKH Work Item",
 			work_item_doc_or_name,
-			[
-				"name",
-				"lead",
-				"campaign",
-				"status",
-				"assigned_to",
-				"closed_by",
-				"last_activity_by",
-			],
+			wi_fields,
 			as_dict=True,
 		)
 	else:
@@ -156,6 +174,9 @@ def is_work_item_readable_for_workflow(work_item_doc_or_name, user: str | None =
 
 	status = wi.get("status")
 	assigned_to = wi.get("assigned_to")
+	owner_at_close = wi.get("owner_at_close")
+	if status == "closed" and owner_at_close is None and has_owner_close and wi.get("name"):
+		owner_at_close = frappe.db.get_value("CSKH Work Item", wi.get("name"), "owner_at_close")
 
 	if _is_leader(user):
 		if status in OWNED_ACTIVE_WORK_ITEM_STATES and assigned_to:
@@ -163,7 +184,11 @@ def is_work_item_readable_for_workflow(work_item_doc_or_name, user: str | None =
 		if status == "closed" and not assigned_to:
 			camp_team = frappe.db.get_value("CSKH Campaign", wi.get("campaign"), "team_scope")
 			affiliated = (
-				(wi.get("closed_by") and (wi.get("closed_by") == user or _in_team(user, wi.get("closed_by"))))
+				(owner_at_close and (owner_at_close == user or _in_team(user, owner_at_close)))
+				or (
+					wi.get("closed_by")
+					and (wi.get("closed_by") == user or _in_team(user, wi.get("closed_by")))
+				)
 				or (
 					wi.get("last_activity_by")
 					and (wi.get("last_activity_by") == user or _in_team(user, wi.get("last_activity_by")))
@@ -180,7 +205,12 @@ def is_work_item_readable_for_workflow(work_item_doc_or_name, user: str | None =
 	if _is_staff(user):
 		if status in OWNED_ACTIVE_WORK_ITEM_STATES and assigned_to == user:
 			return True
-		if status == "closed" and not assigned_to and wi.get("closed_by") == user:
+		effective_close_owner = owner_at_close or wi.get("closed_by")
+		if (
+			status == "closed"
+			and not assigned_to
+			and (effective_close_owner == user or wi.get("closed_by") == user)
+		):
 			lead_name = wi.get("lead")
 			if not lead_name:
 				return False
@@ -229,24 +259,27 @@ def assert_work_item_workflow_access(
 	or `Forbidden` when `user` has no scope over `work_item` (avoiding cross-team existence leaks).
 	"""
 	user = assert_workflow_actor(user, allow_bod=False)
+	wi_fields = [
+		"name",
+		"lead",
+		"campaign",
+		"status",
+		"revision",
+		"assigned_to",
+		"assigned_at",
+		"open_callback_task",
+		"next_action_due",
+		"attempt_count",
+		"connected_attempt_count",
+		"closed_by",
+		"last_activity_by",
+	]
+	if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
+		wi_fields.append("owner_at_close")
 	wi = frappe.db.get_value(
 		"CSKH Work Item",
 		work_item,
-		[
-			"name",
-			"lead",
-			"campaign",
-			"status",
-			"revision",
-			"assigned_to",
-			"assigned_at",
-			"open_callback_task",
-			"next_action_due",
-			"attempt_count",
-			"connected_attempt_count",
-			"closed_by",
-			"last_activity_by",
-		],
+		wi_fields,
 		as_dict=True,
 	)
 	if not wi:

@@ -501,6 +501,56 @@ def post_json(
     )
 
 
+def put_json(
+    case_id: str,
+    opener: urllib.request.OpenerDirector,
+    token: str,
+    path: str,
+    payload: dict[str, object],
+    record: bool = True,
+    record_role: str = "assertion",
+) -> dict[str, object]:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-Frappe-CSRF-Token"] = token
+    return request(
+        case_id,
+        opener,
+        "PUT",
+        path,
+        body,
+        headers,
+        record=record,
+        record_role=record_role,
+    )
+
+
+def patch_json(
+    case_id: str,
+    opener: urllib.request.OpenerDirector,
+    token: str,
+    path: str,
+    payload: dict[str, object],
+    record: bool = True,
+    record_role: str = "assertion",
+) -> dict[str, object]:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    if token:
+        headers["X-Frappe-CSRF-Token"] = token
+    return request(
+        case_id,
+        opener,
+        "PATCH",
+        path,
+        body,
+        headers,
+        record=record,
+        record_role=record_role,
+    )
+
+
 def get(
     case_id: str,
     opener: urllib.request.OpenerDirector,
@@ -982,18 +1032,122 @@ def setup_probe_fixtures() -> dict[str, str]:
             }
         ).insert(ignore_permissions=True)
 
+        # Dedicated T1C remediation fixtures (`F-P2-01`, `F-P2-02`, `F-P2-04`, `F-P2-05`, `F-P2-06`)
+        from crm_cskh.services import contact_attempt as ca_service
+
+        lead_dnc_http = make_lead("DNC-F06")
+        wi_dnc_http = assign_item(camp_t1.name, lead_dnc_http, "staff.a@dev.local")
+
+        camp_f02 = frappe.get_doc(
+            {
+                "doctype": "CSKH Campaign",
+                "code": f"P2H-F02-{secrets.token_hex(3).upper()}",
+                "title": "Chiến dịch HTTP F-P2-02 & F-P2-04",
+                "status": "Active",
+                "team_scope": team1_node,
+            }
+        ).insert(ignore_permissions=True)
+        frappe.get_doc(
+            {
+                "doctype": "CSKH Assignment Rule",
+                "campaign": camp_f02.name,
+                "user": "staff.a@dev.local",
+                "weight": 100,
+                "capacity_limit": 20,
+                "version": 1,
+                "enabled": 1,
+            }
+        ).insert(ignore_permissions=True)
+        run_f02 = frappe.get_doc(
+            {
+                "doctype": "CSKH Distribution Run",
+                "campaign": camp_f02.name,
+                "status": "completed",
+                "rule_version": 1,
+                "selection_fingerprint": f"fp-p2h-{secrets.token_hex(4)}",
+                "idempotency_key": f"idem-p2h-{secrets.token_hex(4)}",
+                "progress": 3,
+                "preview_json": json.dumps(
+                    {
+                        "eligible_count": 3,
+                        "excluded_count": 0,
+                        "targets": [
+                            {"user": "staff.a@dev.local", "weight": 100, "planned": 3}
+                        ],
+                        "simulated": {"staff.a@dev.local": 3},
+                        "excluded_assignees": [],
+                    }
+                ),
+                "actual_json": None,
+            }
+        ).insert(ignore_permissions=True)
+
+        def alloc_run_item(label: str) -> str:
+            ld = make_lead(label)
+            wi_doc = frappe.get_doc(
+                {
+                    "doctype": "CSKH Work Item",
+                    "campaign": camp_f02.name,
+                    "lead": ld,
+                    "status": "queued",
+                    "allocation_run": run_f02.name,
+                }
+            ).insert(ignore_permissions=True)
+            frappe.get_doc(
+                {
+                    "doctype": "CSKH Active Claim",
+                    "lead": ld,
+                    "campaign": camp_f02.name,
+                    "work_item": wi_doc.name,
+                }
+            ).insert(ignore_permissions=True)
+            ownership.assign(
+                wi_doc.name,
+                "staff.a@dev.local",
+                actor="crm.admin@dev.local",
+                reason=f"Distribution run {run_f02.name}",
+                request_id=f"p2h-f02-{secrets.token_hex(4)}",
+                distribution_run=run_f02.name,
+            )
+            return wi_doc.name
+
+        wi_q1 = alloc_run_item("Q1-CONN")
+        ca_service.record_attempt(
+            work_item=wi_q1,
+            channel="phone_call",
+            outcome_code="connected_interested",
+            note="Khách nghe máy quan tâm trên trang sau",
+            idempotency_key=f"p2h-q1-att-{secrets.token_hex(4)}",
+            actor="staff.a@dev.local",
+        )
+        older_ts = add_to_date(now_datetime(), hours=-2)
+        frappe.db.sql(
+            "update `tabCSKH Work Item` set modified = %s, assigned_at = %s where name = %s",
+            (older_ts, older_ts, wi_q1),
+        )
+        wi_q2 = alloc_run_item("Q2-UNATT")
+        wi_q3 = alloc_run_item("Q3-UNATT")
+
         frappe.db.commit()
         return {
             "team1_node": team1_node,
             "team2_node": team2_node,
             "camp_t1": camp_t1.name,
             "camp_t2": camp_t2.name,
+            "camp_f02": camp_f02.name,
+            "run_f02": run_f02.name,
             "lead_a1": lead_a1,
             "lead_b1": lead_b1,
             "lead_c1": lead_c1,
+            "lead_dnc_http": lead_dnc_http,
             "wi_a1": wi_a1,
             "wi_b1": wi_b1,
             "wi_c1": wi_c1,
+            "wi_dnc_http": wi_dnc_http,
+            "wi_q1": wi_q1,
+            "wi_q2": wi_q2,
+            "wi_q3": wi_q3,
+            "system_today": str(now_datetime().date()),
             "cl_a1": cl_a1.name,
             "pol_t2": pol_t2_code,
             "private_file_name": file_doc.name,
@@ -1025,7 +1179,7 @@ def main() -> int:
     tok_leader_b = csrf_token("leader-b", leader_b, "team2.leader@dev.local")
 
     bod = login("bod", "bod.viewer@dev.local", SEED_PASSWORD)
-    _ = csrf_token("bod", bod, "bod.viewer@dev.local")
+    tok_bod = csrf_token("bod", bod, "bod.viewer@dev.local")
 
     admin = login("crm-admin", "crm.admin@dev.local", SEED_PASSWORD)
     tok_admin = csrf_token("crm-admin", admin, "crm.admin@dev.local")
@@ -1832,6 +1986,423 @@ def main() -> int:
         r["status"] == 200 and body_payload(r).get("policy", {}).get("version", 0) >= 2,
         "CRM Admin updates CSKH Policy and increments version",
         "crm.admin@dev.local",
+    )
+
+    # 11B. T1C Remediations over live HTTP (`F-P2-06`, `F-P2-01`, `F-P2-04`, `F-P2-02`, `F-P2-05`)
+    hash_tag_re = re.compile(r"\[H:[0-9a-fA-F]{16,64}\]")
+    lead_dnc_q = urllib.parse.quote(fx["lead_dnc_http"], safe="")
+
+    # `F-P2-06`: Generic REST v1/v2 & `frappe.client.set_value` DNC mutations blocked, normal Lead PUT works
+    r = put_json(
+        "p2-http-f06-staff-a-put-lead-dnc-blocked",
+        staff_a,
+        tok_staff_a,
+        f"/api/resource/CRM%20Lead/{lead_dnc_q}",
+        {"cskh_do_not_contact": 1, "ignore_permissions": 1},
+    )
+    db_dnc_flag = _with_frappe(
+        lambda f: int(
+            f.db.get_value("CRM Lead", fx["lead_dnc_http"], "cskh_do_not_contact") or 0
+        )
+    )
+    check(
+        "p2-http-f06-staff-a-put-lead-dnc-blocked",
+        r,
+        r["status"] == 403 and db_dnc_flag == 0,
+        "Staff A (with DocShare write=1) denied mutating cskh_do_not_contact via PUT /api/resource/CRM Lead",
+        "staff.a@dev.local",
+    )
+
+    r = patch_json(
+        "p2-http-f06-staff-a-v2-patch-lead-dnc-blocked",
+        staff_a,
+        tok_staff_a,
+        f"/api/v2/document/CRM%20Lead/{lead_dnc_q}",
+        {"cskh_dnc_reason": "Giả mạo qua REST v2"},
+    )
+    check(
+        "p2-http-f06-staff-a-v2-patch-lead-dnc-blocked",
+        r,
+        r["status"] == 403,
+        "Staff A denied mutating cskh_dnc_reason via PATCH /api/v2/document/CRM Lead",
+        "staff.a@dev.local",
+    )
+
+    r = post_json(
+        "p2-http-f06-admin-set-value-dnc-blocked",
+        admin,
+        tok_admin,
+        "/api/method/frappe.client.set_value",
+        {
+            "doctype": "CRM Lead",
+            "name": fx["lead_dnc_http"],
+            "fieldname": "cskh_do_not_contact",
+            "value": 1,
+        },
+    )
+    check(
+        "p2-http-f06-admin-set-value-dnc-blocked",
+        r,
+        r["status"] == 403,
+        "CRM Admin denied setting cskh_do_not_contact via generic frappe.client.set_value",
+        "crm.admin@dev.local",
+    )
+
+    r = put_json(
+        "p2-http-f06-staff-a-put-lead-normal-edit-ok",
+        staff_a,
+        tok_staff_a,
+        f"/api/resource/CRM%20Lead/{lead_dnc_q}",
+        {"first_name": "Khách HTTP Đã Sửa Hợp Lệ"},
+    )
+    db_first_name = _with_frappe(
+        lambda f: f.db.get_value("CRM Lead", fx["lead_dnc_http"], "first_name")
+    )
+    check(
+        "p2-http-f06-staff-a-put-lead-normal-edit-ok",
+        r,
+        r["status"] == 200 and db_first_name == "Khách HTTP Đã Sửa Hợp Lệ",
+        "Normal non-DNC Lead field edit via PUT /api/resource/CRM Lead succeeds",
+        "staff.a@dev.local",
+    )
+
+    r = post_json(
+        "p2-http-f06-staff-a-record-dnc-attempt",
+        staff_a,
+        tok_staff_a,
+        "/api/method/crm_cskh.api.workflow.record_attempt",
+        {
+            "work_item": fx["wi_dnc_http"],
+            "channel": "phone_call",
+            "outcome_code": "do_not_contact",
+            "note": "Khách Trần Bí Mật yêu cầu ngừng gọi khẩn",
+            "idempotency_key": f"http-dnc-{secrets.token_hex(4)}",
+        },
+    )
+    dnc_body = body_payload(r)
+    db_dnc_after = _with_frappe(
+        lambda f: int(
+            f.db.get_value("CRM Lead", fx["lead_dnc_http"], "cskh_do_not_contact") or 0
+        )
+    )
+    check(
+        "p2-http-f06-staff-a-record-dnc-attempt",
+        r,
+        r["status"] == 200
+        and dnc_body.get("dnc_marked") is True
+        and dnc_body.get("work_item_status") == "closed"
+        and db_dnc_after == 1,
+        "Authorized workflow.record_attempt DNC auto-closes Work Item and marks Lead DNC=1",
+        "staff.a@dev.local",
+    )
+
+    r = post_json(
+        "p2-http-f06-admin-set-value-clear-dnc-blocked",
+        admin,
+        tok_admin,
+        "/api/method/frappe.client.set_value",
+        {
+            "doctype": "CRM Lead",
+            "name": fx["lead_dnc_http"],
+            "fieldname": "cskh_do_not_contact",
+            "value": 0,
+        },
+    )
+    db_dnc_still_set = _with_frappe(
+        lambda f: int(
+            f.db.get_value("CRM Lead", fx["lead_dnc_http"], "cskh_do_not_contact") or 0
+        )
+    )
+    check(
+        "p2-http-f06-admin-set-value-clear-dnc-blocked",
+        r,
+        r["status"] == 403 and db_dnc_still_set == 1,
+        "CRM Admin cannot clear cskh_do_not_contact=0 via generic frappe.client.set_value",
+        "crm.admin@dev.local",
+    )
+
+    # `F-P2-01`: 5-plane `BOD` privacy + filter oracle block + positive milestone check without `[H:<16hex>]`
+    dnc_hist_name = str(
+        _with_frappe(
+            lambda f: f.db.get_value(
+                "CSKH Assignment History",
+                {"work_item": fx["wi_dnc_http"], "action": "close"},
+                "name",
+            )
+        )
+        or ""
+    )
+
+    r = get(
+        "p2-http-f01-bod-ownership-history-no-leak",
+        bod,
+        f"/api/method/crm_cskh.api.ownership.history?work_item={urllib.parse.quote(fx['wi_dnc_http'], safe='')}",
+    )
+    raw_txt = str(r.get("text") or "")
+    check(
+        "p2-http-f01-bod-ownership-history-no-leak",
+        r,
+        r["status"] == 200
+        and len(body_payload(r).get("items", [])) >= 2
+        and "Trần Bí Mật" not in raw_txt
+        and "private_reason" not in raw_txt
+        and hash_tag_re.search(raw_txt) is None,
+        "BOD ownership.history returns neutral public reason only (0 customer note, 0 private_reason, 0 [H:<16hex>])",
+        "bod.viewer@dev.local",
+    )
+
+    hist_flt_q = urllib.parse.quote(
+        json.dumps([["CSKH Assignment History", "work_item", "=", fx["wi_dnc_http"]]]),
+        safe="",
+    )
+    hist_flds_q = urllib.parse.quote(
+        json.dumps(["name", "action", "reason", "private_reason", "payload_hash"]),
+        safe="",
+    )
+    r = get(
+        "p2-http-f01-bod-rest-history-fields-no-leak",
+        bod,
+        f"/api/resource/CSKH%20Assignment%20History?filters={hist_flt_q}&fields={hist_flds_q}",
+    )
+    raw_rest_txt = str(r.get("text") or "")
+    check(
+        "p2-http-f01-bod-rest-history-fields-no-leak",
+        r,
+        r["status"] == 200
+        and "Trần Bí Mật" not in raw_rest_txt
+        and "private_reason" not in raw_rest_txt
+        and "payload_hash" not in raw_rest_txt,
+        "BOD /api/resource/CSKH Assignment History strips permlevel=1 fields and hides customer note",
+        "bod.viewer@dev.local",
+    )
+
+    r = get(
+        "p2-http-f01-bod-client-get-list-no-leak",
+        bod,
+        f"/api/method/frappe.client.get_list?doctype=CSKH%20Assignment%20History&filters={hist_flt_q}&fields={hist_flds_q}",
+    )
+    raw_cgl_txt = str(r.get("text") or "")
+    check(
+        "p2-http-f01-bod-client-get-list-no-leak",
+        r,
+        r["status"] == 200
+        and "Trần Bí Mật" not in raw_cgl_txt
+        and "private_reason" not in raw_cgl_txt,
+        "BOD frappe.client.get_list strips private_reason and hides customer note",
+        "bod.viewer@dev.local",
+    )
+
+    r = post_json(
+        "p2-http-f01-bod-reportview-no-leak",
+        bod,
+        tok_bod,
+        "/api/method/frappe.desk.reportview.get_list",
+        {
+            "doctype": "CSKH Assignment History",
+            "fields": ["name", "action", "reason"],
+            "filters": [
+                ["CSKH Assignment History", "work_item", "=", fx["wi_dnc_http"]]
+            ],
+        },
+    )
+    raw_rv_txt = str(r.get("text") or "")
+    check(
+        "p2-http-f01-bod-reportview-no-leak",
+        r,
+        r["status"] == 200
+        and "Trần Bí Mật" not in raw_rv_txt
+        and hash_tag_re.search(raw_rv_txt) is None,
+        "BOD reportview.get_list returns neutral public reason with 0 customer note and 0 [H:<16hex>]",
+        "bod.viewer@dev.local",
+    )
+
+    r = get(
+        "p2-http-f01-bod-getdoc-history-no-leak",
+        bod,
+        f"/api/method/frappe.desk.form.load.getdoc?doctype=CSKH%20Assignment%20History&name={urllib.parse.quote(dnc_hist_name, safe='')}",
+    )
+    raw_gd_txt = str(r.get("text") or "")
+    gd_docs = (
+        (r.get("json") or {}).get("docs") if isinstance(r.get("json"), dict) else []
+    )
+    check(
+        "p2-http-f01-bod-getdoc-history-no-leak",
+        r,
+        r["status"] == 200
+        and isinstance(gd_docs, list)
+        and len(gd_docs) == 1
+        and gd_docs[0].get("private_reason") is None
+        and "Trần Bí Mật" not in raw_gd_txt,
+        "BOD Desk getdoc on CSKH Assignment History hides private_reason and customer note",
+        "bod.viewer@dev.local",
+    )
+
+    oracle_flt_q = urllib.parse.quote(
+        json.dumps([["CSKH Assignment History", "private_reason", "like", "%"]]),
+        safe="",
+    )
+    r = get(
+        "p2-http-f01-bod-filter-private-reason-denied",
+        bod,
+        f"/api/resource/CSKH%20Assignment%20History?filters={oracle_flt_q}",
+    )
+    check(
+        "p2-http-f01-bod-filter-private-reason-denied",
+        r,
+        r["status"] == 403,
+        "BOD filtering on restricted private_reason over HTTP returns 403",
+        "bod.viewer@dev.local",
+    )
+
+    r = get(
+        "p2-http-f01-leader-a-attempts-milestones-clean",
+        leader_a,
+        f"/api/method/crm_cskh.api.workflow.list_attempts?work_item={urllib.parse.quote(fx['wi_dnc_http'], safe='')}&include_milestones=true",
+    )
+    ldr_att_txt = str(r.get("text") or "")
+    check(
+        "p2-http-f01-leader-a-attempts-milestones-clean",
+        r,
+        r["status"] == 200
+        and len(body_payload(r).get("milestones", [])) >= 1
+        and hash_tag_re.search(ldr_att_txt) is None,
+        "Authorized Leader A reads workflow.list_attempts milestones with 0 [H:<16hex>] display tags",
+        "team1.leader@dev.local",
+    )
+
+    # `F-P2-04`: Off-first-page SQL `care_state` filter + `owner_at_close` vs `closed_by`
+    r = get(
+        "p2-http-f04-staff-a-care-state-connected-off-page1",
+        staff_a,
+        f"/api/method/crm_cskh.api.workflow.list_work_items?campaign={urllib.parse.quote(fx['camp_f02'], safe='')}&care_state=connected&page=1&page_size=1",
+    )
+    f04_conn_payload = body_payload(r)
+    check(
+        "p2-http-f04-staff-a-care-state-connected-off-page1",
+        r,
+        r["status"] == 200
+        and f04_conn_payload.get("total") == 1
+        and [x.get("work_item") for x in f04_conn_payload.get("items", [])]
+        == [fx["wi_q1"]],
+        "SQL care_state=connected finds wi_q1 on page=1&page_size=1 despite 2 newer unattempted items",
+        "staff.a@dev.local",
+    )
+
+    r = get(
+        "p2-http-f04-staff-a-invalid-care-state-400",
+        staff_a,
+        "/api/method/crm_cskh.api.workflow.list_work_items?care_state=invalid_care_state",
+    )
+    check(
+        "p2-http-f04-staff-a-invalid-care-state-400",
+        r,
+        r["status"] == 400 and error_envelope(r).get("code") == "INVALID_REQUEST",
+        "Invalid care_state returns 400 INVALID_REQUEST",
+        "staff.a@dev.local",
+    )
+
+    r = post_json(
+        "p2-http-f04-leader-a-close-staff-a-wi",
+        leader_a,
+        tok_leader_a,
+        "/api/method/crm_cskh.api.workflow.close_work_item",
+        {
+            "work_item": fx["wi_q1"],
+            "completion_reason": "Leader A duyệt đóng hồ sơ của Staff A qua HTTP",
+            "idempotency_key": f"f04-ldr-close-{secrets.token_hex(4)}",
+        },
+    )
+    f04_close_body = body_payload(r)
+    check(
+        "p2-http-f04-leader-a-close-staff-a-wi",
+        r,
+        r["status"] == 200
+        and f04_close_body.get("owner_at_close") == "staff.a@dev.local"
+        and f04_close_body.get("closed_by") == "team1.leader@dev.local",
+        "Leader A closing Staff A's Work Item records owner_at_close=staff.a != closed_by=team1.leader",
+        "team1.leader@dev.local",
+    )
+
+    r = get(
+        "p2-http-f04-leader-a-filter-closed-owner-vs-actor",
+        leader_a,
+        f"/api/method/crm_cskh.api.workflow.list_work_items?campaign={urllib.parse.quote(fx['camp_f02'], safe='')}&status=closed&owner_at_close=staff.a%40dev.local&closed_by=team1.leader%40dev.local",
+    )
+    f04_closed_q = body_payload(r)
+    check(
+        "p2-http-f04-leader-a-filter-closed-owner-vs-actor",
+        r,
+        r["status"] == 200
+        and f04_closed_q.get("total") == 1
+        and [x.get("work_item") for x in f04_closed_q.get("items", [])]
+        == [fx["wi_q1"]],
+        "Leader A filters closed Work Items distinguishing owner_at_close vs closed_by",
+        "team1.leader@dev.local",
+    )
+
+    # `F-P2-02`: `run_history.runs` preserves historical allocation count (`3`) after `wi_q1` became `in_progress` -> `closed`
+    r = get(
+        "p2-http-f02-leader-a-run-history-preserves-p2-states",
+        leader_a,
+        f"/api/method/crm_cskh.api.run_history.runs?run_id={urllib.parse.quote(fx['run_f02'], safe='')}",
+    )
+    f02_items = body_payload(r).get("items", [])
+    f02_row = f02_items[0] if f02_items else {}
+    check(
+        "p2-http-f02-leader-a-run-history-preserves-p2-states",
+        r,
+        r["status"] == 200
+        and f02_row.get("allocation_semantics") == "historical_run_allocation"
+        and f02_row.get("assigned") == {"staff.a@dev.local": 3}
+        and f02_row.get("created") == 3
+        and f02_row.get("active_owned") == {"staff.a@dev.local": 2}
+        and f02_row.get("active_owned_total") == 2,
+        "run_history.runs preserves historical assigned=3 while reporting live active_owned=2",
+        "team1.leader@dev.local",
+    )
+
+    # `F-P2-05`: Same-day date-only `progress_summary` (`[start_of_day, start_of_next_day)`) + DISTINCT Work Item counters + 400 validation
+    r = get(
+        "p2-http-f05-bod-same-day-progress-summary",
+        bod,
+        f"/api/method/crm_cskh.api.workflow.progress_summary?date_from={fx['system_today']}&date_to={fx['system_today']}",
+    )
+    f05_sum = body_payload(r)
+    f05_cards = f05_sum.get("cards") if isinstance(f05_sum.get("cards"), dict) else {}
+    f05_period = (
+        f05_sum.get("period") if isinstance(f05_sum.get("period"), dict) else {}
+    )
+    raw_f05_txt = str(r.get("text") or "")
+    check(
+        "p2-http-f05-bod-same-day-progress-summary",
+        r,
+        r["status"] == 200
+        and f05_period.get("end_bound_mode") == "exclusive"
+        and int(f05_cards.get("effective_attempts", 0)) >= 3
+        and int(f05_cards.get("attempted_work_items", 0)) >= 2
+        and int(f05_cards.get("attempted_work_items", -1))
+        + int(f05_cards.get("unattempted_work_items", -1))
+        == int(f05_cards.get("cohort_work_items", -999))
+        and int(f05_cards.get("connected_work_items", 0)) >= 1
+        and int(f05_cards.get("dnc_work_items", 0))
+        >= int(f05_cards.get("dnc_leads", 0))
+        >= 1
+        and PHONE_RE.search(raw_f05_txt) is None,
+        "Same-day date_from=date_to progress_summary uses half-open exclusive end bound and returns reconciled DISTINCT Work Item counters with 0 PII",
+        "bod.viewer@dev.local",
+    )
+
+    r = get(
+        "p2-http-f05-bod-invalid-date-range-400",
+        bod,
+        "/api/method/crm_cskh.api.workflow.progress_summary?date_from=2026-12-10&date_to=2026-12-01",
+    )
+    check(
+        "p2-http-f05-bod-invalid-date-range-400",
+        r,
+        r["status"] == 400 and error_envelope(r).get("code") == "INVALID_REQUEST",
+        "Inverted date_from > date_to on progress_summary returns 400 INVALID_REQUEST",
+        "bod.viewer@dev.local",
     )
 
     r = get(

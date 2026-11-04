@@ -83,6 +83,10 @@ def linked_lead_query_conditions(user=None, doctype=None, **kwargs):
 	user = user or frappe.session.user
 	if _is_system(user):
 		return ""
+	if doctype == "CRM Task":
+		from crm_cskh.p1_permissions import _check_active_db_query_oracles
+
+		_check_active_db_query_oracles("CRM Task", user)
 
 	link_doctype, link_name = LEAD_LINKS[doctype]
 	parent_condition = _owner_scope_condition(user, "cskh_lead", "lead_owner")
