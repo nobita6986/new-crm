@@ -692,8 +692,6 @@ class TestP2T1cRegressions(P2TestCase):
 				"doctype": "File",
 				"file_name": "reimport-dnc.csv",
 				"is_private": 1,
-				"attached_to_doctype": "CRM Lead",
-				"attached_to_name": "Administrator",
 				"content": csv_buf.getvalue().encode("utf-8"),
 			}
 		).insert(ignore_permissions=True)
