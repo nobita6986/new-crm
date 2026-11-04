@@ -112,12 +112,46 @@ def redact(obj):
     return obj
 
 
-def bench_execute(method: str, kwargs: dict | None = None):
-    cmd = f"cd /workspace/frappe-bench && bench --site {SITE} execute {method}"
-    if kwargs:
-        cmd += f" --kwargs '{json.dumps(kwargs)}'"
+def git_rev(spec: str) -> str:
     res = subprocess.run(
-        ["docker", "exec", CONTAINER, "bash", "-lc", cmd],
+        ["git", "-C", str(ROOT), "rev-parse", spec],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    return res.stdout.strip()
+
+
+def bench_execute(method: str, kwargs: dict | None = None):
+    py_code = (
+        "import json, os, frappe; "
+        "frappe.init(site=os.environ['P3_EXEC_SITE'], sites_path='.'); "
+        "frappe.connect(); "
+        "res = frappe.get_attr(os.environ['P3_EXEC_METHOD'])("
+        "**json.loads(os.environ.get('P3_EXEC_KWARGS') or '{}')"
+        "); "
+        "frappe.db.commit(); "
+        "print(json.dumps(res)); "
+        "frappe.destroy()"
+    )
+    res = subprocess.run(
+        [
+            "docker",
+            "exec",
+            "-w",
+            "/workspace/frappe-bench/sites",
+            "-e",
+            f"P3_EXEC_SITE={SITE}",
+            "-e",
+            f"P3_EXEC_METHOD={method}",
+            "-e",
+            f"P3_EXEC_KWARGS={json.dumps(kwargs or {})}",
+            CONTAINER,
+            "/workspace/frappe-bench/env/bin/python",
+            "-c",
+            py_code,
+        ],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -831,6 +865,8 @@ def main() -> int:
         "suite": "p3_http_e2e",
         "site": SITE,
         "base_url": BASE,
+        "git_sha": git_rev("HEAD"),
+        "apps_tree": git_rev("HEAD:apps"),
         "started_at": started_at,
         "completed_at": dt.datetime.now(dt.timezone.utc).isoformat(),
         "total_assertions": len(rec.records),

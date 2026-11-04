@@ -100,15 +100,31 @@ function assert(cond, msg) {
 }
 
 function benchExec(method, kwargs) {
-	const kwPart = kwargs ? ` --kwargs '${JSON.stringify(kwargs)}'` : ''
+	const pyCode = [
+		'import json, os, frappe',
+		"frappe.init(site=os.environ['P3_EXEC_SITE'], sites_path='.')",
+		'frappe.connect()',
+		"res = frappe.get_attr(os.environ['P3_EXEC_METHOD'])(**json.loads(os.environ.get('P3_EXEC_KWARGS') or '{}'))",
+		'frappe.db.commit()',
+		'print(json.dumps(res))',
+		'frappe.destroy()',
+	].join('; ')
 	const out = execFileSync(
 		'docker',
 		[
 			'exec',
+			'-w',
+			'/workspace/frappe-bench/sites',
+			'-e',
+			`P3_EXEC_SITE=${SITE}`,
+			'-e',
+			`P3_EXEC_METHOD=${method}`,
+			'-e',
+			`P3_EXEC_KWARGS=${JSON.stringify(kwargs || {})}`,
 			CONTAINER,
-			'bash',
-			'-lc',
-			`cd /workspace/frappe-bench && bench --site ${SITE} execute ${method}${kwPart}`,
+			'/workspace/frappe-bench/env/bin/python',
+			'-c',
+			pyCode,
 		],
 		{ encoding: 'utf-8' }
 	)
@@ -275,6 +291,7 @@ async function main() {
 	const teamA = seed.team_a
 	const teamB = seed.team_b
 	const revisionSha = execSync('git rev-parse HEAD', { cwd: ROOT }).toString().trim()
+	const appsTreeSha = execSync('git rev-parse HEAD:apps', { cwd: ROOT }).toString().trim()
 
 	const hostUrl = new URL(BASE_URL)
 	const browser = await chromium.launch({
@@ -1140,6 +1157,7 @@ async function main() {
 			site: SITE,
 			base_url: BASE_URL,
 			git_sha: revisionSha,
+			apps_tree: appsTreeSha,
 			completed_at: new Date().toISOString(),
 			total_screenshots: entries.length,
 			total_assertions: assertions.length,
