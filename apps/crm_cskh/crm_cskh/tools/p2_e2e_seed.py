@@ -215,3 +215,44 @@ def set_task_due_exact(work_item, task_id, due_at_str):
 	frappe.db.set_value("CSKH Work Item", work_item, "next_action_due", due_at_str, update_modified=False)
 	frappe.db.commit()
 	return {"work_item": work_item, "task_id": task_id, "due_at": due_at_str}
+
+
+def set_work_item_assigned_at_exact(work_item, assigned_at_str):
+	"""Pin `assigned_at` & open `ownership_start` on `p2.localhost` for deterministic page-2 ordering."""
+	_assert_p2_site()
+	frappe.db.sql(
+		"""
+		update `tabCSKH Work Item`
+		set assigned_at = %s, creation = %s
+		where name = %s
+		""",
+		(assigned_at_str, assigned_at_str, work_item),
+	)
+	frappe.db.sql(
+		"""
+		update `tabCSKH Assignment History`
+		set event_at = %s, ownership_start = %s, creation = %s
+		where work_item = %s and ownership_end is null
+		""",
+		(assigned_at_str, assigned_at_str, assigned_at_str, work_item),
+	)
+	frappe.db.commit()
+	return {"work_item": work_item, "assigned_at": assigned_at_str}
+
+
+def set_attempt_occurred_exact(attempt_id, work_item, occurred_at_str):
+	"""Pin exact `occurred_at` (`23:59:59` / `00:00:00`) on `p2.localhost` and recompute read model."""
+	_assert_p2_site()
+	from crm_cskh.services.read_model import recompute_work_item_read_model
+
+	frappe.db.sql(
+		"""
+		update `tabCSKH Contact Attempt`
+		set occurred_at = %s
+		where name = %s and work_item = %s
+		""",
+		(occurred_at_str, attempt_id, work_item),
+	)
+	recompute_work_item_read_model(work_item)
+	frappe.db.commit()
+	return {"attempt_id": attempt_id, "work_item": work_item, "occurred_at": occurred_at_str}

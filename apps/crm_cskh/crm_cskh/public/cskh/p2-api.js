@@ -311,7 +311,7 @@ window.cskhP2Api = (function () {
 			can_reassign_or_revoke:
 				rawCaps.can_reassign_or_revoke !== undefined
 					? toBool(rawCaps.can_reassign_or_revoke, false)
-					: !!globalCaps.admin,
+					: !!(globalCaps.admin && activeStatuses[wiStatus]),
 		}
 
 		return {
@@ -328,6 +328,9 @@ window.cskhP2Api = (function () {
 			campaign_code: wiObj.campaign_code || '',
 			campaign_status: wiObj.campaign_status || '',
 			assigned_to: assignedTo,
+			owner_at_close: wiObj.owner_at_close || '',
+			last_owner:
+				wiObj.owner_at_close || wiObj.last_owner || wiObj.last_activity_by || wiObj.closed_by || '',
 			assigned_at: wiObj.assigned_at || null,
 			first_attempt_at: wiObj.first_attempt_at || null,
 			work_item_status: wiStatus,
@@ -570,6 +573,118 @@ window.cskhP2Api = (function () {
 	/* Read operations (GET)                                              */
 	/* ------------------------------------------------------------------ */
 
+	function buildWorkItemsQuery(options) {
+		const opts = options || {}
+		const careFilter = String(opts.careFilter || opts.care_filter || opts.care_state || '').trim()
+		const query = {
+			page: Number(opts.page || 1),
+			page_size: Number(opts.pageSize || opts.page_size || 20),
+			status: opts.status || 'active',
+		}
+		if (opts.campaign) query.campaign = String(opts.campaign).trim()
+		if (opts.assignee) query.assignee = String(opts.assignee).trim()
+		if (opts.search) query.search = String(opts.search).trim()
+
+		switch (careFilter) {
+			case 'not_contacted':
+				query.status = 'active'
+				query.care_state = 'not_contacted'
+				break
+			case 'attempted':
+				query.status = 'active'
+				query.care_state = 'attempted'
+				break
+			case 'attempted_not_connected':
+				query.status = 'active'
+				query.care_state = 'attempted_not_connected'
+				break
+			case 'connected':
+				query.status = 'active'
+				query.care_state = 'connected'
+				break
+			case 'on_hold':
+				query.status = 'on_hold'
+				break
+			case 'followup_due':
+				query.status = 'active'
+				query.followup_filter = 'today'
+				break
+			case 'followup_overdue':
+				query.status = 'active'
+				query.followup_filter = 'overdue'
+				break
+			case 'closed':
+				query.status = 'closed'
+				break
+			case 'do_not_contact':
+				query.status = 'all'
+				query.care_state = 'do_not_contact'
+				break
+			default:
+				break
+		}
+		return query
+	}
+
+	function normalizeProgressSummary(raw) {
+		const data = raw || {}
+		const rawCards = data.cards || {}
+		const unattemptedWi = Number(
+			rawCards.unattempted_work_items !== undefined
+				? rawCards.unattempted_work_items
+				: rawCards.not_contacted_work_items !== undefined
+					? rawCards.not_contacted_work_items
+					: 0
+		)
+		const attemptedWi = Number(
+			rawCards.attempted_work_items !== undefined ? rawCards.attempted_work_items : 0
+		)
+		const connectedWi = Number(
+			rawCards.connected_work_items !== undefined ? rawCards.connected_work_items : 0
+		)
+		const attemptedUnconnectedWi = Number(
+			rawCards.attempted_unconnected_work_items !== undefined
+				? rawCards.attempted_unconnected_work_items
+				: rawCards.unconnected_work_items !== undefined
+					? rawCards.unconnected_work_items
+					: rawCards.unreached_work_items !== undefined
+						? rawCards.unreached_work_items
+						: Math.max(0, attemptedWi - connectedWi)
+		)
+		const cards = Object.assign({}, rawCards, {
+			total_active_owned: Number(rawCards.total_active_owned || 0),
+			assigned: Number(rawCards.assigned || 0),
+			in_progress: Number(rawCards.in_progress || 0),
+			on_hold: Number(rawCards.on_hold || 0),
+			closed: Number(rawCards.closed || 0),
+			revoked: Number(rawCards.revoked || 0),
+			queued: Number(rawCards.queued || 0),
+			cohort_work_items: Number(rawCards.cohort_work_items || 0),
+			unattempted_work_items: unattemptedWi,
+			attempted_work_items: attemptedWi,
+			connected_work_items: connectedWi,
+			attempted_unconnected_work_items: attemptedUnconnectedWi,
+			dnc_leads: Number(rawCards.dnc_leads || 0),
+			dnc_work_items: Number(rawCards.dnc_work_items || 0),
+			effective_attempts: Number(rawCards.effective_attempts || 0),
+			connected_attempts: Number(rawCards.connected_attempts || 0),
+			unreached_attempts: Number(rawCards.unreached_attempts || 0),
+			open_followups: Number(rawCards.open_followups || 0),
+			due_today_followups: Number(rawCards.due_today_followups || 0),
+			overdue_followups: Number(rawCards.overdue_followups || 0),
+			pending_corrections: Number(rawCards.pending_corrections || 0),
+		})
+		return Object.assign({}, data, {
+			scope: data.scope || 'self',
+			timezone:
+				data.timezone || (data.period && data.period.timezone) || cskh.siteTimeZone() || 'Asia/Ho_Chi_Minh',
+			cards: cards,
+			by_channel: data.by_channel || {},
+			by_outcome_group: data.by_outcome_group || {},
+			per_user: Array.isArray(data.per_user) ? data.per_user : [],
+		})
+	}
+
 	async function listMyCustomers(params) {
 		const data = await cskh.get(ENDPOINTS.myCustomers, params || {})
 		const items = ((data && data.items) || []).map(normalizeWorkItemRow).filter(Boolean)
@@ -780,7 +895,8 @@ window.cskhP2Api = (function () {
 	}
 
 	async function getProgressSummary(params) {
-		return cskh.get(ENDPOINTS.progressSummary, params || {})
+		const raw = await cskh.get(ENDPOINTS.progressSummary, params || {})
+		return normalizeProgressSummary(raw)
 	}
 
 	async function getSettingsSnapshot() {
@@ -854,6 +970,8 @@ window.cskhP2Api = (function () {
 
 	return {
 		ENDPOINTS: ENDPOINTS,
+		buildWorkItemsQuery: buildWorkItemsQuery,
+		normalizeProgressSummary: normalizeProgressSummary,
 		normalizeOutcome: normalizeOutcome,
 		normalizePolicy: normalizePolicy,
 		normalizeWorkItemRow: normalizeWorkItemRow,

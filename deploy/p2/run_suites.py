@@ -27,6 +27,7 @@ P2_MODULES = [
     "test_p2_permissions_sec",
     "test_p2_concurrency_chaos",
     "test_p2_reconciliation_perf",
+    "test_p2_t1c_regressions",
 ]
 P2_UI_MODULES = [
     "test_ui_p2_pages_and_context",

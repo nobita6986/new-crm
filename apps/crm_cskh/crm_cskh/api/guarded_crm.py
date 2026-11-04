@@ -3,7 +3,12 @@ import re
 import frappe
 
 from crm_cskh.hooks import P1_DOCTYPES, P2_DOCTYPES
-from crm_cskh.p1_permissions import validate_p1_filter_fields
+from crm_cskh.p1_permissions import (
+	PERMLEVEL_PROTECTED_FIELDS,
+	can_read_protected_field,
+	validate_p1_filter_fields,
+)
+from crm_cskh.p2_models import assert_no_lead_dnc_mutation_fields
 from crm_cskh.permissions import LEAD_LINKS, _is_system, user_in_scope
 
 GUARDED_SEARCH_DOCTYPES = frozenset((*P1_DOCTYPES, *P2_DOCTYPES, "CRM Lead", "CRM Deal", *LEAD_LINKS))
@@ -400,7 +405,7 @@ def search_link(
 ):
 	"""Guard `frappe.desk.search.search_link` against `ignore_user_permissions=1` bypass (`L-29`)."""
 	if not _is_system(frappe.session.user):
-		validate_p1_filter_fields(doctype, filters=filters)
+		validate_p1_filter_fields(doctype, filters=filters, searchfield=searchfield)
 		if doctype in GUARDED_SEARCH_DOCTYPES:
 			ignore_user_permissions = False
 	return frappe.get_attr("frappe.desk.search.search_link")(
@@ -431,7 +436,12 @@ def search_widget(
 ):
 	"""Guard `frappe.desk.search.search_widget` against `ignore_user_permissions=1` bypass (`L-29`)."""
 	if not _is_system(frappe.session.user):
-		validate_p1_filter_fields(doctype, filters=filters)
+		validate_p1_filter_fields(
+			doctype,
+			filters=filters,
+			searchfield=searchfield,
+			filter_fields=filter_fields,
+		)
 		if doctype in GUARDED_SEARCH_DOCTYPES:
 			ignore_user_permissions = False
 	return frappe.get_attr("frappe.desk.search.search_widget")(
@@ -466,3 +476,126 @@ def validate_link(doctype: str, docname: str, fields: list[str] | str | None = N
 	if not existing_name or not frappe.has_permission(doctype, "read", doc=existing_name, throw=False):
 		return frappe._dict()
 	return upstream(doctype, docname, fields=fields)
+
+
+def _is_field_readable_by_user(doctype: str | None, fieldname: str, user: str) -> bool:
+	if not doctype:
+		return True
+	protected = PERMLEVEL_PROTECTED_FIELDS.get(doctype)
+	if not protected:
+		return True
+	base = fieldname.split(".", 1)[-1].strip("` ")
+	if base == "*":
+		return False
+	if base in protected and not can_read_protected_field(doctype, base, user):
+		return False
+	return True
+
+
+def _sanitize_get_value_fieldname(doctype: str, parent: str | None, fieldname):
+	user = frappe.session.user
+	if _is_system(user):
+		return fieldname, True
+	has_protected = bool(PERMLEVEL_PROTECTED_FIELDS.get(doctype)) or bool(
+		isinstance(parent, str) and PERMLEVEL_PROTECTED_FIELDS.get(parent)
+	)
+	if not has_protected:
+		return fieldname, True
+
+	parsed = fieldname
+	was_list = isinstance(fieldname, list | tuple | set)
+	if isinstance(parsed, str) and parsed.strip().startswith("["):
+		try:
+			maybe_list = frappe.parse_json(parsed)
+			if isinstance(maybe_list, list):
+				parsed = maybe_list
+				was_list = True
+		except Exception:
+			parsed = fieldname
+
+	candidates: list[str] = []
+	if isinstance(parsed, str):
+		candidates.append(parsed.strip())
+	elif isinstance(parsed, list | tuple | set):
+		candidates.extend(str(item).strip() for item in parsed if item is not None)
+	else:
+		return fieldname, True
+
+	allowed: list[str] = []
+	for raw in candidates:
+		if not raw:
+			continue
+		if "(" in raw:
+			validate_p1_filter_fields(doctype, explicit_fields=raw, user=user)
+			if isinstance(parent, str):
+				validate_p1_filter_fields(parent, explicit_fields=raw, user=user)
+		if _is_field_readable_by_user(doctype, raw, user) and _is_field_readable_by_user(parent, raw, user):
+			allowed.append(raw)
+
+	if candidates and not allowed:
+		return ([] if was_list else ""), False
+	return (allowed if was_list else allowed[0]), True
+
+
+@frappe.whitelist()
+def client_get_value(doctype, fieldname, filters=None, as_dict=True, debug=False, parent=None):
+	"""Guard `frappe.client.get_value` against permlevel field leaks & filter oracles (`F-P2-01`, `L-29`)."""
+	user = frappe.session.user
+	if isinstance(doctype, str) and not _is_system(user):
+		validate_p1_filter_fields(doctype, filters=filters, user=user)
+		if isinstance(parent, str):
+			validate_p1_filter_fields(parent, filters=filters, user=user)
+		sanitized_fieldname, has_any = _sanitize_get_value_fieldname(
+			doctype, parent if isinstance(parent, str) else None, fieldname
+		)
+		if not has_any:
+			want_dict = bool(frappe.parse_json(as_dict)) if isinstance(as_dict, str) else bool(as_dict)
+			return frappe._dict() if want_dict else None
+		fieldname = sanitized_fieldname
+	res = frappe.get_attr("frappe.client.get_value")(
+		doctype,
+		fieldname,
+		filters=filters,
+		as_dict=as_dict,
+		debug=debug,
+		parent=parent,
+	)
+	if isinstance(res, dict) and isinstance(doctype, str) and not _is_system(user):
+		for key in list(res.keys()):
+			if not _is_field_readable_by_user(doctype, str(key), user) or (
+				isinstance(parent, str) and not _is_field_readable_by_user(parent, str(key), user)
+			):
+				res.pop(key, None)
+	return res
+
+
+@frappe.whitelist()
+def client_get_count(doctype, filters=None, debug=False, cache=False):
+	"""Guard `frappe.client.get_count` against permlevel filter oracles (`F-P2-01`, `L-29`)."""
+	if isinstance(doctype, str) and not _is_system(frappe.session.user):
+		validate_p1_filter_fields(doctype, filters=filters)
+	return frappe.get_attr("frappe.client.get_count")(
+		doctype,
+		filters=filters,
+		debug=debug,
+		cache=cache,
+	)
+
+
+@frappe.whitelist()
+def client_set_value(doctype, name, fieldname, value=None):
+	"""Guard `frappe.client.set_value` against direct `CRM Lead` DNC mutations (`F-P2-06`)."""
+	if isinstance(doctype, str):
+		assert_no_lead_dnc_mutation_fields(doctype, fieldname)
+	return frappe.get_attr("frappe.client.set_value")(doctype, name, fieldname, value=value)
+
+
+@frappe.whitelist()
+def client_bulk_update(docs):
+	"""Guard `frappe.client.bulk_update` against direct `CRM Lead` DNC mutations (`F-P2-06`)."""
+	parsed = frappe.parse_json(docs) if isinstance(docs, str) else docs
+	if isinstance(parsed, list):
+		for entry in parsed:
+			if isinstance(entry, dict) and entry.get("doctype") == "CRM Lead":
+				assert_no_lead_dnc_mutation_fields("CRM Lead", entry)
+	return frappe.get_attr("frappe.client.bulk_update")(docs)

@@ -27,7 +27,9 @@ raw distribution/selection JSON fields live at `permlevel = 1` (restricted to
 > therefore escaped with `frappe.db.escape` before it is interpolated.
 """
 
+import inspect
 import json
+import re
 from urllib.parse import unquote
 
 import frappe
@@ -51,6 +53,7 @@ PERMLEVEL_PROTECTED_FIELDS = {
 	),
 	"CSKH Campaign": frozenset(("selection_json",)),
 	"CSKH Work Item": frozenset(("completion_reason", "reopen_reason")),
+	"CSKH Assignment History": frozenset(("private_reason", "payload_hash")),
 	"CRM Task": frozenset(("cskh_task_history_json",)),
 }
 
@@ -193,6 +196,7 @@ def _is_staff(user):
 def campaign_query_conditions(user=None, **kwargs):
 	"""Campaign visibility in list queries."""
 	user = user or frappe.session.user
+	_check_active_db_query_oracles("CSKH Campaign", user)
 	if _is_system(user) or ROLE_ADMIN in _roles(user) or ROLE_BOD in _roles(user):
 		return ""
 	if _is_leader(user):
@@ -212,8 +216,9 @@ def rule_query_conditions(user=None, **kwargs):
 
 
 def work_item_query_conditions(user=None, **kwargs):
-	"""A work item is visible to the leader of its team and to its owner."""
+	"""A work item is visible to the leader of its team and to its authorized owner."""
 	user = user or frappe.session.user
+	_check_active_db_query_oracles("CSKH Work Item", user)
 	if _is_system(user) or ROLE_ADMIN in _roles(user) or ROLE_BOD in _roles(user):
 		return ""
 	if _is_leader(user):
@@ -221,13 +226,16 @@ def work_item_query_conditions(user=None, **kwargs):
 
 		return leader_authorized_work_item_sql(user, "tabCSKH Work Item")
 	if _is_staff(user):
-		return f"`assigned_to` = {_escape(user)}"
+		from crm_cskh.p2_permissions import staff_authorized_work_item_sql
+
+		return staff_authorized_work_item_sql(user, "tabCSKH Work Item")
 	return "1=0"
 
 
 def assignment_history_query_conditions(user=None, **kwargs):
 	"""The history follows the current owner/scope of the work item, not historical `to_user` (`SEC2-04`)."""
 	user = user or frappe.session.user
+	_check_active_db_query_oracles("CSKH Assignment History", user)
 	if _is_system(user) or ROLE_ADMIN in _roles(user) or ROLE_BOD in _roles(user):
 		return ""
 	if _is_leader(user):
@@ -236,10 +244,10 @@ def assignment_history_query_conditions(user=None, **kwargs):
 		wi_pred = leader_authorized_work_item_sql(user, "wi_ah")
 		return f"`work_item` in (select `wi_ah`.`name` from `tabCSKH Work Item` `wi_ah` where {wi_pred})"
 	if _is_staff(user):
-		return (
-			f"`work_item` in (select `wi_ah`.`name` from `tabCSKH Work Item` `wi_ah` "
-			f"where `wi_ah`.`assigned_to` = {_escape(user)})"
-		)
+		from crm_cskh.p2_permissions import staff_authorized_work_item_sql
+
+		wi_pred = staff_authorized_work_item_sql(user, "wi_ah")
+		return f"`work_item` in (select `wi_ah`.`name` from `tabCSKH Work Item` `wi_ah` where {wi_pred})"
 	return "1=0"
 
 
@@ -254,6 +262,7 @@ def import_batch_query_conditions(user=None, **kwargs):
 def distribution_run_query_conditions(user=None, **kwargs):
 	"""Runs are visible to the admin, the BOD and the leader of the team."""
 	user = user or frappe.session.user
+	_check_active_db_query_oracles("CSKH Distribution Run", user)
 	if _is_system(user) or ROLE_ADMIN in _roles(user) or ROLE_BOD in _roles(user):
 		return ""
 	if _is_leader(user):
@@ -344,12 +353,10 @@ def work_item_has_permission(doc, ptype="read", user=None, **kwargs):
 			return None if (_is_leader(user) or _is_staff(user)) else False
 		if resolved is None:
 			return False
-		if _is_leader(user):
+		if _is_leader(user) or _is_staff(user):
 			from crm_cskh.p2_permissions import is_work_item_readable_for_workflow
 
 			return None if is_work_item_readable_for_workflow(resolved, user=user) else False
-		if _is_staff(user):
-			return None if resolved.get("assigned_to") == user else False
 	return False
 
 
@@ -451,8 +458,28 @@ def _in_team(manager, member):
 
 
 # ---------------------------------------------------------------------------
-# Field-level (`permlevel > 0`) filter protection (`L-29`)
+# Field-level (`permlevel > 0`) filter/search/sort protection (`L-29`, `F-P2-01`)
 # ---------------------------------------------------------------------------
+
+_QUALIFIED_TAB_COL_RE = re.compile(r"`?tab([^`.]+)`?\s*\.\s*`?([A-Za-z_][A-Za-z0-9_]*)`?")
+_BARE_IDENT_RE = re.compile(r"`?([A-Za-z_][A-Za-z0-9_]*)`?")
+_SQL_CLAUSE_KEYWORDS = frozenset(("asc", "desc", "nulls", "first", "last", "distinct"))
+
+
+def can_read_protected_field(doctype, field, user=None) -> bool:
+	"""True when `user` may read/filter/sort on `permlevel = 1` `field` of `doctype`."""
+	user = user or frappe.session.user
+	if _is_system(user):
+		return True
+	protected = PERMLEVEL_PROTECTED_FIELDS.get(doctype)
+	if not protected or field not in protected:
+		return True
+	roles = _roles(user)
+	if doctype in ("CSKH Work Item", "CSKH Assignment History", "CRM Task"):
+		return bool({ROLE_ADMIN, "Sales Manager", "Sales User"} & roles)
+	if doctype in ("CSKH Distribution Run", "CSKH Campaign"):
+		return ROLE_ADMIN in roles
+	return False
 
 
 def _normalize_filter_field(raw_field):
@@ -462,6 +489,15 @@ def _normalize_filter_field(raw_field):
 	if "." in cleaned:
 		cleaned = cleaned.rsplit(".", 1)[-1].strip()
 	return cleaned
+
+
+def _extract_qualified_doctype_and_field(raw_field, default_doctype):
+	if not isinstance(raw_field, str):
+		return default_doctype, ""
+	match = _QUALIFIED_TAB_COL_RE.search(raw_field)
+	if match:
+		return match.group(1).strip(), match.group(2).strip()
+	return default_doctype, _normalize_filter_field(raw_field)
 
 
 def _extract_filter_pairs(raw_filters, default_doctype):
@@ -477,9 +513,9 @@ def _extract_filter_pairs(raw_filters, default_doctype):
 
 	if isinstance(parsed, dict):
 		for key in parsed:
-			field = _normalize_filter_field(key)
-			if field and default_doctype:
-				yield default_doctype, field
+			dt, field = _extract_qualified_doctype_and_field(key, default_doctype)
+			if field and dt:
+				yield dt, field
 		return
 
 	if isinstance(parsed, list | tuple):
@@ -489,16 +525,71 @@ def _extract_filter_pairs(raw_filters, default_doctype):
 		if isinstance(parsed[0], str):
 			if len(parsed) >= 4 and isinstance(parsed[1], str):
 				yield parsed[0].strip(), _normalize_filter_field(parsed[1])
-			elif default_doctype:
-				yield default_doctype, _normalize_filter_field(parsed[0])
+			else:
+				dt, field = _extract_qualified_doctype_and_field(parsed[0], default_doctype)
+				if field and dt:
+					yield dt, field
 			return
 		for entry in parsed:
 			yield from _extract_filter_pairs(entry, default_doctype)
 
 
-def _request_target_doctype():
+def _extract_clause_fields(raw_clause, default_doctype):
+	"""Yield `(doctype, fieldname)` referenced in `searchfield`, `filter_fields`, `order_by`, `group_by`."""
+	if raw_clause is None or raw_clause == "":
+		return
+	if isinstance(raw_clause, dict):
+		for key in raw_clause:
+			yield from _extract_clause_fields(key, default_doctype)
+		return
+	if isinstance(raw_clause, list | tuple | set):
+		for item in raw_clause:
+			yield from _extract_clause_fields(item, default_doctype)
+		return
+	if not isinstance(raw_clause, str):
+		return
+	stripped = raw_clause.strip()
+	if not stripped:
+		return
+	if stripped[0] in "[{":
+		try:
+			parsed = json.loads(stripped)
+		except (TypeError, ValueError):
+			parsed = None
+		if parsed is not None and not isinstance(parsed, str):
+			yield from _extract_clause_fields(parsed, default_doctype)
+			return
+
+	for match in _QUALIFIED_TAB_COL_RE.finditer(stripped):
+		yield match.group(1).strip(), match.group(2).strip()
+
+	unqualified = _QUALIFIED_TAB_COL_RE.sub(" ", stripped)
+	if default_doctype:
+		for token_match in _BARE_IDENT_RE.finditer(unqualified):
+			ident = token_match.group(1)
+			if ident.lower() not in _SQL_CLAUSE_KEYWORDS:
+				yield default_doctype, ident
+
+
+def _merged_request_args() -> dict:
+	merged: dict = {}
+	request = getattr(frappe.local, "request", None)
+	if request is not None:
+		try:
+			json_body = request.get_json(silent=True)
+		except Exception:
+			json_body = None
+		if isinstance(json_body, dict):
+			merged.update(json_body)
 	form_dict = getattr(frappe.local, "form_dict", None) or {}
-	dt = form_dict.get("doctype")
+	if isinstance(form_dict, dict):
+		merged.update(form_dict)
+	return merged
+
+
+def _request_target_doctype(args: dict | None = None):
+	args = args if args is not None else _merged_request_args()
+	dt = args.get("doctype")
 	if isinstance(dt, str) and dt.strip():
 		return dt.strip()
 	request = getattr(frappe.local, "request", None)
@@ -511,36 +602,115 @@ def _request_target_doctype():
 	return None
 
 
-def validate_p1_filter_fields(doctype, filters=None, or_filters=None, user=None):
-	"""Reject filters on `permlevel = 1` fields when `user` lacks `permlevel = 1` read access."""
+def validate_p1_filter_fields(
+	doctype,
+	filters=None,
+	or_filters=None,
+	user=None,
+	*,
+	searchfield=None,
+	filter_fields=None,
+	order_by=None,
+	group_by=None,
+	explicit_fields=None,
+):
+	"""Reject filters/search/sort on `permlevel = 1` fields when `user` lacks `permlevel = 1` read."""
 	user = user or frappe.session.user
 	if _is_system(user):
 		return
-	roles = _roles(user)
 	for raw in (filters, or_filters):
 		for dt, field in _extract_filter_pairs(raw, doctype):
-			protected = PERMLEVEL_PROTECTED_FIELDS.get(dt)
-			if not protected or field not in protected:
-				continue
-			if dt == "CSKH Work Item" and bool({ROLE_ADMIN, "Sales Manager", "Sales User"} & roles):
-				continue
-			if dt in ("CSKH Distribution Run", "CSKH Campaign") and ROLE_ADMIN in roles:
-				continue
-			frappe.throw("Not permitted to filter on restricted field.", frappe.PermissionError)
+			if not can_read_protected_field(dt, field, user=user):
+				frappe.throw("Not permitted to filter on restricted field.", frappe.PermissionError)
+	for clause in (searchfield, filter_fields, order_by, group_by, explicit_fields):
+		for dt, field in _extract_clause_fields(clause, doctype):
+			if not can_read_protected_field(dt, field, user=user):
+				frappe.throw("Not permitted to query or sort on restricted field.", frappe.PermissionError)
+
+
+def _check_active_db_query_oracles(doctype: str, user: str) -> None:
+	"""Enforce `permlevel = 1` filter/search/sort blocks inside `DatabaseQuery` (both HTTP & Python)."""
+	if _is_system(user):
+		return
+	frame = inspect.currentframe()
+	try:
+		cur = frame.f_back if frame is not None else None
+		steps = 0
+		while cur is not None and steps < 8:
+			obj = cur.f_locals.get("self")
+			if (
+				obj is not None
+				and obj.__class__.__name__ == "DatabaseQuery"
+				and getattr(obj, "doctype", None) == doctype
+				and not getattr(obj, "ignore_permissions", False)
+			):
+				raw_fields = getattr(obj, "fields", None)
+				func_fields = None
+				if isinstance(raw_fields, list | tuple | set):
+					func_fields = [f for f in raw_fields if isinstance(f, str) and "(" in f]
+				elif isinstance(raw_fields, str) and "(" in raw_fields:
+					func_fields = raw_fields
+				validate_p1_filter_fields(
+					doctype,
+					filters=getattr(obj, "filters", None),
+					or_filters=getattr(obj, "or_filters", None),
+					user=user,
+					searchfield=getattr(obj, "searchfield", None),
+					order_by=getattr(obj, "order_by", None),
+					group_by=getattr(obj, "group_by", None),
+					explicit_fields=func_fields,
+				)
+				break
+			cur = cur.f_back
+			steps += 1
+	finally:
+		del frame
 
 
 def enforce_p1_filter_field_permissions():
-	"""`auth_hooks` callback blocking `permlevel = 1` filter oracles across HTTP endpoints."""
+	"""`auth_hooks` callback blocking `permlevel = 1` filter/search/sort oracles across HTTP endpoints."""
 	user = getattr(getattr(frappe.local, "session", None), "user", None) or "Guest"
 	if _is_system(user):
 		return
-	form_dict = getattr(frappe.local, "form_dict", None) or {}
-	filters = form_dict.get("filters")
-	or_filters = form_dict.get("or_filters")
-	if filters is None and or_filters is None:
+	args = _merged_request_args()
+	filters = args.get("filters")
+	or_filters = args.get("or_filters")
+	searchfield = args.get("searchfield")
+	filter_fields = args.get("filter_fields")
+	order_by = args.get("order_by")
+	group_by = args.get("group_by")
+	request = getattr(frappe.local, "request", None)
+	path = getattr(request, "path", "") or ""
+	raw_explicit = args.get("fieldname") if "get_value" in path else args.get("fields")
+	if isinstance(raw_explicit, str) and raw_explicit.strip().startswith("["):
+		try:
+			raw_explicit = frappe.parse_json(raw_explicit)
+		except Exception:
+			pass
+	explicit_fields = None
+	if isinstance(raw_explicit, str) and "(" in raw_explicit:
+		explicit_fields = raw_explicit
+	elif isinstance(raw_explicit, list | tuple | set):
+		func_items = [f for f in raw_explicit if isinstance(f, str) and "(" in f]
+		if func_items:
+			explicit_fields = func_items
+	if all(
+		v is None
+		for v in (filters, or_filters, searchfield, filter_fields, order_by, group_by, explicit_fields)
+	):
 		return
-	target_doctype = _request_target_doctype()
-	validate_p1_filter_fields(target_doctype, filters=filters, or_filters=or_filters, user=user)
+	target_doctype = _request_target_doctype(args)
+	validate_p1_filter_fields(
+		target_doctype,
+		filters=filters,
+		or_filters=or_filters,
+		user=user,
+		searchfield=searchfield,
+		filter_fields=filter_fields,
+		order_by=order_by,
+		group_by=group_by,
+		explicit_fields=explicit_fields,
+	)
 
 
 # ---------------------------------------------------------------------------

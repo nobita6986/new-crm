@@ -1468,6 +1468,16 @@
 		])
 	}
 
+	function formatMilestoneReason(value) {
+		if (!value) return ''
+		const text = String(value)
+		const prefix = 'Distribution run '
+		if (text.indexOf(prefix) === 0) {
+			return cskh.t('The distribution run') + ' ' + text.slice(prefix.length)
+		}
+		return cskh.t(text, text)
+	}
+
 	function renderMilestoneItem(ms) {
 		const actionMap = {
 			assign: cskh.t('Assign'),
@@ -1476,6 +1486,7 @@
 			close: cskh.t('Close work item'),
 			reopen: cskh.t('Reopen work item'),
 		}
+		const reasonText = formatMilestoneReason(ms.reason)
 		return cskh.el('div', { class: 'cskh-timeline-item' }, [
 			cskh.el('div', { class: 'cskh-timeline-head' }, [
 				cskh.el('div', { class: 'cskh-badge-stack' }, [
@@ -1492,7 +1503,7 @@
 					ms.from_user ? cskh.t('From owner') + ': ' + ms.from_user : null,
 					ms.to_user ? cskh.t('To owner') + ': ' + ms.to_user : null,
 					ms.actor ? cskh.t('Actor') + ': ' + ms.actor : null,
-					ms.reason ? cskh.t('Reason') + ': ' + ms.reason : null,
+					reasonText ? cskh.t('Reason') + ': ' + reasonText : null,
 				]
 					.filter(Boolean)
 					.join(' · '),

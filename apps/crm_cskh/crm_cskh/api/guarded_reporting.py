@@ -1,6 +1,52 @@
 import frappe
 
+from crm_cskh.p1_permissions import _merged_request_args, validate_p1_filter_fields
 from crm_cskh.permissions import _is_system
+
+
+def _guard_reportview_params(kwargs: dict) -> None:
+	if _is_system(frappe.session.user):
+		return
+	args = _merged_request_args()
+	args.update(kwargs)
+	doctype = args.get("doctype")
+	raw_fields = args.get("fields")
+	func_fields = None
+	if isinstance(raw_fields, list | tuple | set):
+		func_fields = [f for f in raw_fields if isinstance(f, str) and "(" in f]
+	elif isinstance(raw_fields, str) and "(" in raw_fields:
+		func_fields = raw_fields
+	validate_p1_filter_fields(
+		doctype,
+		filters=args.get("filters"),
+		or_filters=args.get("or_filters"),
+		searchfield=args.get("searchfield"),
+		filter_fields=args.get("filter_fields"),
+		order_by=args.get("order_by"),
+		group_by=args.get("group_by"),
+		explicit_fields=func_fields,
+	)
+
+
+@frappe.whitelist()
+@frappe.read_only()
+def reportview_get(*args, **kwargs):
+	_guard_reportview_params(kwargs)
+	return frappe.get_attr("frappe.desk.reportview.get")(*args, **kwargs)
+
+
+@frappe.whitelist()
+@frappe.read_only()
+def reportview_get_count(*args, **kwargs):
+	_guard_reportview_params(kwargs)
+	return frappe.get_attr("frappe.desk.reportview.get_count")(*args, **kwargs)
+
+
+@frappe.whitelist()
+@frappe.read_only()
+def reportview_get_list(*args, **kwargs):
+	_guard_reportview_params(kwargs)
+	return frappe.get_attr("frappe.desk.reportview.get_list")(*args, **kwargs)
 
 
 def _require_system_manager():

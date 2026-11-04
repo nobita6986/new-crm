@@ -122,23 +122,83 @@
 
 ### 4.2. `GET crm_cskh.api.workflow.list_work_items`
 
-Hàng đợi công việc CSKH theo scope (`self` / `team` / `all`), hỗ trợ bộ lọc trạng thái P2, tình trạng lịch hẹn và tìm kiếm an toàn.
+Hàng đợi công việc CSKH theo scope (`self` / `team` / `all`), thực thi **100% lọc trạng thái chăm sóc (`care_state`) và lọc hồ sơ đóng (`owner_at_close` vs `closed_by`) ở tầng SQL trước `COUNT(*)` và `LIMIT/OFFSET`** (`F-P2-04`). `COUNT(*)` và `items` luôn dùng chung một điều kiện `WHERE`.
 
 - **Query params:**
   - `page` (`int`, default `1`), `page_size` (`int`, default `20`, max `100`)
-  - `status` (`str`, optional): `active` (mặc định: `assigned,in_progress,on_hold`) hoặc một trong `assigned | in_progress | on_hold | closed | queued | revoked | all`
+  - `status` (`str`, optional): `active` (`assigned,in_progress,on_hold`) hoặc `assigned | in_progress | on_hold | closed | queued | revoked | all`.
+    - Khi `status` bỏ trống: tự động mặc định `"closed"` nếu `care_state == "closed"` hoặc có truyền `owner_at_close` / `closed_by`; `"on_hold"` nếu `care_state in ("on_hold", "followup_due", "followup_overdue")`; `"all"` nếu `care_state == "do_not_contact"`; `"active"` cho các trường hợp còn lại.
+  - `care_state` (`str`, optional — giá trị ngoài danh mục trả `400 INVALID_REQUEST`):
+    - `all` (mặc định): không áp thêm điều kiện care-state.
+    - `unattempted` *(alias `not_contacted`)*: `attempt_count = 0`
+    - `attempted`: `attempt_count > 0`
+    - `attempted_not_connected` *(alias `unconnected`)*: `attempt_count > 0 AND connected_attempt_count = 0`
+    - `connected`: `connected_attempt_count > 0`
+    - `on_hold` *(alias `callback_pending`)*: `status = 'on_hold' AND open_callback_task IS NOT NULL`
+    - `followup_due`: `status = 'on_hold' AND next_action_due < start_of_next_day`
+    - `followup_overdue`: `status = 'on_hold' AND next_action_due < now_datetime()`
+    - `closed`: `status = 'closed'`
+    - `do_not_contact` *(alias `dnc`)*: `CRM Lead.cskh_do_not_contact = 1`
   - `campaign` (`str`, optional)
   - `followup_filter` (`str`, optional): `overdue | today | upcoming | has_open | none`
-  - `assignee` (`str`, optional): chỉ thu hẹp trong phạm vi `team`/`all`; không bao giờ mở rộng scope
-  - `search` (`str`, optional): tìm theo SĐT chuẩn hóa, tên hiển thị, hoặc mã Lead/Work Item trong phạm vi được phép
+  - `assignee` (`str`, optional): thu hẹp trong phạm vi `self`/`team`/`all` (không bao giờ mở rộng scope):
+    - Khi `status == "closed"`: lọc theo **owner tại thời điểm đóng** (`coalesce(nullif(wi.owner_at_close, ''), wi.closed_by) = assignee`).
+    - Khi `status == "all"`: khớp `wi.assigned_to = assignee` hoặc `(wi.status = 'closed' AND coalesce(nullif(wi.owner_at_close, ''), wi.closed_by) = assignee)`.
+    - Khi `status` là trạng thái active: khớp `wi.assigned_to = assignee`.
+  - `owner_at_close` (`str`, optional): lọc hồ sơ `closed` theo **nhân sự phụ trách tại thời điểm đóng** (`coalesce(nullif(wi.owner_at_close, ''), wi.closed_by)`), tách biệt với người bấm nút đóng.
+  - `closed_by` (`str`, optional): lọc hồ sơ `closed` theo **actor thực hiện thao tác đóng** (`wi.closed_by`, ví dụ Team Leader hoặc Admin đóng thay nhân viên).
+  - **Bảo vệ quyền PII (`L-23` / `SEC2-07`):** Cựu owner đã bị `reassign` trước khi đóng không có quyền đọc hồ sơ `closed`; ngay khi `CRM Lead` của hồ sơ `closed` phát sinh sở hữu/claim sang nhân sự hoặc đội khác, quyền đọc PII của owner/đội cũ lập tức chấm dứt (`0` dòng / `403 FORBIDDEN` trên detail).
+  - `search` (`str`, optional): tìm theo SĐT chuẩn hóa, tên hiển thị, hoặc mã Lead/Work Item trong phạm vi được phép.
 - **Response (`200`):**
   ```json
   {
     "scope": "self",
-    "items": [ /* cùng cấu trúc mở rộng như my_list + assigned_to + closed_at */ ],
+    "items": [
+      {
+        "work_item": "a1b2c3d4e5",
+        "lead": "CRM-LEAD-2026-00001",
+        "display_name": "Nguyễn Văn An",
+        "phone": "0912345678",
+        "source": "Website",
+        "lead_status": "New",
+        "campaign": "CAMP-001",
+        "campaign_title": "Chiến dịch Q4",
+        "campaign_code": "P2-Q4",
+        "status": "closed",
+        "work_item_status": "closed",
+        "care_state": "closed",
+        "revision": 5,
+        "assigned_to": null,
+        "assigned_at": null,
+        "attempt_count": 2,
+        "connected_attempt_count": 1,
+        "has_connected": true,
+        "first_attempt_at": "2026-11-03 09:15:00",
+        "last_attempt_at": "2026-11-03 14:40:00",
+        "last_outcome_code": "converted",
+        "last_outcome_label": "Hoàn tất mục tiêu chiến dịch",
+        "last_connected_at": "2026-11-03 14:40:00",
+        "open_callback_task": null,
+        "next_action_due": null,
+        "is_followup_overdue": false,
+        "closed_at": "2026-11-03 15:00:00",
+        "closed_by": "leader.a@dev.local",
+        "owner_at_close": "staff.a@dev.local",
+        "do_not_contact": false
+      }
+    ],
     "total": 12,
     "page": 1,
     "page_size": 20,
+    "filters": {
+      "status": "closed",
+      "care_state": "all",
+      "followup_filter": null,
+      "campaign": null,
+      "assignee": "staff.a@dev.local",
+      "owner_at_close": null,
+      "closed_by": null
+    },
     "as_of": "2026-11-03 22:30:00"
   }
   ```
@@ -173,6 +233,7 @@ Hàng đợi công việc CSKH theo scope (`self` / `team` / `all`), hỗ trợ 
       "last_activity_by": "staff.a@dev.local",
       "closed_at": null,
       "closed_by": null,
+      "owner_at_close": null,
       "completion_reason": null,
       "reopened_at": null,
       "reopened_by": null,
@@ -446,7 +507,8 @@ Tạo mới (nếu chưa có callback mở) hoặc dời lịch (reschedule trê
     "work_item": "a1b2c3d4e5",
     "work_item_status": "closed",
     "closed_at": "2026-11-03 15:00:00",
-    "closed_by": "staff.b@dev.local",
+    "closed_by": "leader.a@dev.local",
+    "owner_at_close": "staff.b@dev.local",
     "canceled_followup_task": null,
     "revision": 5
   }
@@ -516,13 +578,39 @@ Tạo mới (nếu chưa có callback mở) hoặc dời lịch (reschedule trê
 
 ### 4.13. `GET crm_cskh.api.workflow.progress_summary`
 
-Thống kê vận hành P2 theo scope (`self` / `team` / `all`), **0 PII**, **không chấm điểm KPI/SLA P3**.
+Thống kê vận hành P2 theo scope (`self` / `team` / `all`), **0 PII**, **không chấm điểm KPI/SLA P3** (`F-P2-05`).
 
-- **Query params:** `campaign=None`, `date_from=None`, `date_to=None`
+- **Query params:**
+  - `campaign` (`str`, optional)
+  - `date_from` (`str`, optional):
+    - Chuỗi ngày không giờ `YYYY-MM-DD` → chuẩn hóa thành đầu ngày `YYYY-MM-DD 00:00:00` (`>=`) theo timezone hệ thống (`Asia/Ho_Chi_Minh`).
+    - Chuỗi datetime tường minh `YYYY-MM-DD HH:MM[:SS[.ffffff]]` hoặc ISO-8601 (`T`, `Z`, `+HH:MM`) → chuẩn hóa về timezone hệ thống và so sánh `>= date_from`.
+  - `date_to` (`str`, optional):
+    - Chuỗi ngày không giờ `YYYY-MM-DD` → **khoảng nửa mở trọn ngày** `< (YYYY-MM-DD + 1 day) 00:00:00` (`end_bound_mode = "exclusive"`), bao phủ trọn 24h đến hết `23:59:59.999999` của ngày `date_to`.
+    - Chuỗi datetime tường minh → giữ nguyên semantics cận đóng `<= date_to` (`end_bound_mode = "inclusive"`).
+    - Ngày không hợp lệ (`2026-02-30`, chuỗi rác) hoặc khoảng đảo (`date_from > date_to` / `start_dt >= end_dt` nửa mở) trả lỗi ổn định **`400 INVALID_REQUEST`**.
+- **Tập mẫu (`cohort_work_items`) & công thức theo kỳ:**
+  - **Không truyền ngày (`cohort_basis = "allocated_care_work_items"`):** tập mẫu `C` gồm toàn bộ `CSKH Work Item` trong scope (`self` / `team` / `all`, tách biệt tuyệt đối giữa các đội trên chiến dịch chung) có `status IN ('assigned', 'in_progress', 'on_hold', 'closed')`.
+  - **Có truyền khoảng kỳ `P` (`cohort_basis = "allocated_or_active_or_attempted_in_period"`):** tập mẫu `C(P)` gồm các `CSKH Work Item` trong scope đang active trước cuối kỳ `P`, hoặc có mốc vòng đời (`creation`, `assigned_at`, `closed_at`, `reopened_at`) nằm trong `P`, hoặc có `>= 1` `CSKH Contact Attempt` hiệu lực có `effective.occurred_at` rơi vào `P`.
+  - **Xử lý hiệu chỉnh (`correct` / `void` / `restore`):** mọi bộ đếm Attempt và Work Item đều tính trên tập Attempt hiệu lực sau khi áp overlay đã duyệt (`status = 'approved'`), bao gồm cả trường hợp hiệu chỉnh `occurred_at` hoặc `outcome_code`.
+  - **Các bộ đếm `DISTINCT Work Item` vs lượt `Attempt` vs `Lead DNC`:**
+    - `cohort_work_items`: tổng số `DISTINCT CSKH Work Item` thuộc tập mẫu `C` / `C(P)`.
+    - `attempted_work_items`: số `DISTINCT CSKH Work Item` trong tập mẫu có `>= 1` Attempt hiệu lực (trong kỳ `P` nếu lọc ngày).
+    - `unattempted_work_items`: `cohort_work_items - attempted_work_items` (số `DISTINCT CSKH Work Item` trong tập mẫu chưa có Attempt hiệu lực nào trong kỳ). Luôn thỏa `attempted_work_items + unattempted_work_items == cohort_work_items`.
+    - `connected_work_items`: số `DISTINCT CSKH Work Item` trong tập mẫu có `>= 1` Attempt hiệu lực `is_connected = true` (`connected_work_items <= attempted_work_items`).
+    - `dnc_leads`: số **`DISTINCT CRM Lead`** đang có `cskh_do_not_contact = 1` trong phạm vi.
+    - `dnc_work_items`: số **`DISTINCT CSKH Work Item`** trong tập mẫu có `CRM Lead.cskh_do_not_contact = 1` (khác `dnc_leads` khi 1 khách hàng DNC xuất hiện ở nhiều chiến dịch / Work Item).
 - **Response (`200`):**
   ```json
   {
     "scope": "all",
+    "period": {
+      "timezone": "Asia/Ho_Chi_Minh",
+      "date_from": "2026-11-04 00:00:00",
+      "date_to": "2026-11-05 00:00:00",
+      "end_bound_mode": "exclusive",
+      "cohort_basis": "allocated_or_active_or_attempted_in_period"
+    },
     "cards": {
       "total_active_owned": 18,
       "assigned": 6,
@@ -531,6 +619,10 @@ Thống kê vận hành P2 theo scope (`self` / `team` / `all`), **0 PII**, **kh
       "closed": 5,
       "revoked": 1,
       "queued": 2,
+      "cohort_work_items": 23,
+      "attempted_work_items": 15,
+      "unattempted_work_items": 8,
+      "connected_work_items": 11,
       "effective_attempts": 34,
       "connected_attempts": 14,
       "unreached_attempts": 20,
@@ -538,7 +630,8 @@ Thống kê vận hành P2 theo scope (`self` / `team` / `all`), **0 PII**, **kh
       "overdue_followups": 1,
       "due_today_followups": 2,
       "pending_corrections": 1,
-      "dnc_leads": 1
+      "dnc_leads": 1,
+      "dnc_work_items": 2
     },
     "by_outcome_group": {
       "unreached": 20,
@@ -577,10 +670,17 @@ Thống kê vận hành P2 theo scope (`self` / `team` / `all`), **0 PII**, **kh
 
 ---
 
-### 4.14. Endpoints Quản trị Cấu hình (`crm_cskh.api.settings.*`)
+### 4.14. Endpoints Quản trị Cấu hình (`crm_cskh.api.settings.*`) & Bảo vệ DNC / Lịch sử (`F-P2-01`, `F-P2-02`, `F-P2-06`)
 
 1. **`GET crm_cskh.api.settings.list_policies(scope_type=None, campaign=None, team=None)`**
 2. **`POST crm_cskh.api.settings.save_policy(policy_code, title, scope_type="Global", team=None, campaign=None, enabled=True, allowed_backdate_minutes=120, require_attempt_before_close=True, allow_close_without_contact_for_invalid=True, do_not_contact_behavior="block_and_auto_close", enabled_channels="phone_call,sms,zalo,facebook,other", allow_leader_reopen=True, allow_leader_review_correction=True, idempotency_key=None)`** — chỉ `CSKH CRM Admin`; mỗi lần lưu thay đổi tăng `version += 1`.
 3. **`GET crm_cskh.api.settings.list_outcomes(include_disabled=True)`**
 4. **`POST crm_cskh.api.settings.save_outcome(code, label_vi, result_group, description=None, is_contact_attempt=True, is_connected=False, is_interested=False, is_terminal=False, is_do_not_contact=False, requires_note=False, requires_followup=False, allows_followup=True, requires_completion_reason=False, allowed_channels="phone_call,sms,zalo,facebook,other", suggested_next_status="in_progress", enabled=True, sort_order=100, idempotency_key=None)`** — chỉ `CSKH CRM Admin`; mỗi lần lưu thay đổi tăng `version += 1`.
 5. **`POST crm_cskh.api.settings.set_lead_dnc(lead, do_not_contact, reason, idempotency_key)`** — chỉ `CSKH CRM Admin`; ghi/gỡ cờ `CRM Lead.cskh_do_not_contact` kèm lý do kiểm toán bắt buộc.
+6. **Khóa ghi trực tiếp 4 trường DNC trên `CRM Lead` (`F-P2-06`):** `cskh_do_not_contact`, `cskh_dnc_reason`, `cskh_dnc_at`, `cskh_dnc_work_item` bị khóa ở `read_only = 1` + `doc_events["CRM Lead"]` + `auth_hooks`. Mọi thao tác insert/update trực tiếp 4 trường này qua REST v1/v2, `frappe.client.set_value`/`save`/`insert`/`bulk_update`, Desk `savedocs` hoặc ORM ngoài service CSKH được ủy quyền đều bị từ chối `403 FORBIDDEN`. Các thao tác cập nhật trường thông thường của `CRM Lead` giữ nguyên.
+7. **Tách lý do nhạy cảm & hash idempotency trên `CSKH Assignment History` (`F-P2-01`):**
+   - Cột `reason` (`permlevel = 0`) chỉ lưu nhãn trạng thái trung lập; lý do nghiệp vụ do nhân sự/quản lý nhập lưu tại `private_reason` (`permlevel = 1`, `CSKH BOD Viewer` không có quyền đọc hoặc lọc/tìm kiếm/sắp xếp); hash chống ghi trùng lưu riêng tại `payload_hash` (`permlevel = 1`, `hidden = 1`).
+   - `ownership.history` và `workflow.list_attempts` (`ownership_milestones`) không bao giờ trả tiền tố `[H:<16hex>]`; `BOD` chỉ nhận nhãn công khai trung lập (`0` note khách hàng, `0` SĐT, `0` lý do riêng tư).
+8. **Semantics `GET crm_cskh.api.run_history.runs` với trạng thái P2 (`F-P2-02`):**
+   - `assigned` (`{user: count}`) và `created` phản ánh **kết quả phân phối lịch sử của đợt chạy** (`allocation_semantics = "historical_run_allocation"`), giữ nguyên số lượng khi Work Item chuyển sang `in_progress`, `on_hold`, `closed`, `reassign` hoặc `revoke`.
+   - Bổ sung `active_owned` (`{user: count}`) và `active_owned_total` (`int`) phản ánh **số Work Item của đợt chạy hiện đang được phụ trách thực tế** (`status IN ('assigned', 'in_progress', 'on_hold')`), giới hạn chặt theo `team_users` đối với `Sales Manager` (`L-24`).

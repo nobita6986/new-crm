@@ -27,6 +27,12 @@
 		const byChannel = (data && data.by_channel) || {}
 		const perUser = (data && data.per_user) || []
 
+		const tzBadge = document.getElementById('prog-tz-badge')
+		if (tzBadge) {
+			tzBadge.textContent =
+				cskh.t('Site/user timezone') + ': ' + cskh.effectiveTimeZone()
+		}
+
 		const scopeBadge = document.getElementById('prog-scope-badge')
 		if (scopeBadge) {
 			scopeBadge.textContent =
@@ -36,7 +42,7 @@
 				(data && data.as_of ? ' · ' + cskh.formatDate(data.as_of) : '')
 		}
 
-		// 1. Work item counters
+		// 1. Work item counters (status + distinct work item care coverage)
 		const wiMetrics = document.getElementById('prog-wi-metrics')
 		cskh.clear(wiMetrics)
 		wiMetrics.appendChild(
@@ -48,8 +54,38 @@
 			metric(cskh.t('On-hold work items (awaiting callback)'), cards.on_hold)
 		)
 		wiMetrics.appendChild(metric(cskh.t('Completed work items'), cards.closed))
-		wiMetrics.appendChild(metric(cskh.t('Do-not-contact (DNC) work items'), cards.dnc_leads))
+
+		const wiCoverageMetrics = document.getElementById('prog-wi-coverage-metrics')
+		if (wiCoverageMetrics) {
+			cskh.clear(wiCoverageMetrics)
+			wiCoverageMetrics.appendChild(
+				metric(cskh.t('Uncontacted work items'), cards.unattempted_work_items)
+			)
+			wiCoverageMetrics.appendChild(
+				metric(cskh.t('Attempted work items'), cards.attempted_work_items)
+			)
+			wiCoverageMetrics.appendChild(
+				metric(
+					cskh.t('Attempted, not connected work items'),
+					cards.attempted_unconnected_work_items
+				)
+			)
+			wiCoverageMetrics.appendChild(
+				metric(cskh.t('Connected work items'), cards.connected_work_items)
+			)
+		}
 		document.getElementById('prog-wi-card').hidden = false
+
+		// 1b. Customer compliance counters (distinct CRM Leads — never labeled as Work Item)
+		const dncCard = document.getElementById('prog-dnc-card')
+		const dncMetrics = document.getElementById('prog-dnc-metrics')
+		if (dncCard && dncMetrics) {
+			cskh.clear(dncMetrics)
+			dncMetrics.appendChild(
+				metric(cskh.t('Do-not-contact (DNC) customers'), cards.dnc_leads)
+			)
+			dncCard.hidden = false
+		}
 
 		// 2. Contact attempt counters
 		const attMetrics = document.getElementById('prog-att-metrics')
@@ -57,9 +93,11 @@
 		attMetrics.appendChild(
 			metric(cskh.t('Effective contact attempts'), cards.effective_attempts)
 		)
-		attMetrics.appendChild(metric(cskh.t('Connected'), cards.connected_attempts))
 		attMetrics.appendChild(
-			metric(cskh.t('Attempted, not connected'), cards.unreached_attempts)
+			metric(cskh.t('Connected contact attempts'), cards.connected_attempts)
+		)
+		attMetrics.appendChild(
+			metric(cskh.t('Unconnected contact attempts'), cards.unreached_attempts)
 		)
 		attMetrics.appendChild(
 			metric(cskh.t('Pending correction review'), cards.pending_corrections)
@@ -139,7 +177,7 @@
 							cskh.el('th', { text: cskh.t('On hold') }),
 							cskh.el('th', { text: cskh.t('Completed care') }),
 							cskh.el('th', { text: cskh.t('Effective contact attempts') }),
-							cskh.el('th', { text: cskh.t('Connected') }),
+							cskh.el('th', { text: cskh.t('Connected contact attempts') }),
 							cskh.el('th', { text: cskh.t('Open callbacks') }),
 							cskh.el('th', { text: cskh.t('Overdue callbacks') }),
 						]),
@@ -178,13 +216,29 @@
 	}
 
 	async function loadCampaigns() {
-		if (!canLoadCampaignList) return
 		const select = document.getElementById('prog-campaign')
+		const known = {}
 		try {
-			const data = await cskh.get('crm_cskh.api.dashboard.campaigns')
-			;((data && data.campaigns) || []).forEach(function (c) {
-				select.appendChild(cskh.el('option', { value: c.campaign, text: c.title || c.code }))
-			})
+			if (canLoadCampaignList) {
+				const data = await cskh.get('crm_cskh.api.dashboard.campaigns')
+				;((data && data.campaigns) || []).forEach(function (c) {
+					if (!c.campaign || known[c.campaign]) return
+					known[c.campaign] = true
+					select.appendChild(cskh.el('option', { value: c.campaign, text: c.title || c.code }))
+				})
+			} else {
+				const data = await cskhP2Api.listWorkItems({ page: 1, page_size: 100, status: 'all' })
+				;((data && data.items) || []).forEach(function (item) {
+					if (!item.campaign || known[item.campaign]) return
+					known[item.campaign] = true
+					select.appendChild(
+						cskh.el('option', {
+							value: item.campaign,
+							text: item.campaign_title || item.campaign_code || item.campaign,
+						})
+					)
+				})
+			}
 		} catch (_err) {
 			/* optional */
 		}
@@ -192,6 +246,8 @@
 
 	document.getElementById('prog-refresh').addEventListener('click', load)
 	document.getElementById('prog-campaign').addEventListener('change', load)
+	document.getElementById('prog-date-from').addEventListener('change', load)
+	document.getElementById('prog-date-to').addEventListener('change', load)
 	document.getElementById('prog-clear-dates').addEventListener('click', function () {
 		document.getElementById('prog-date-from').value = ''
 		document.getElementById('prog-date-to').value = ''

@@ -263,4 +263,130 @@ function loadCskhSandbox(timezoneConfig) {
 	)
 }
 
+// 4. F-P2-04A & F-P2-05 & F-P2-01 UI Contract & Anti-Workaround Guards
+{
+	const ctx = loadCskhSandbox({
+		site: 'Asia/Ho_Chi_Minh',
+		user: '',
+		effective: 'Asia/Ho_Chi_Minh',
+		server_now_iso: '2026-11-04T10:00:00+07:00',
+	})
+	const { cskh, cskhP2Api } = ctx
+
+	// Server-side care filter query builder (`F-P2-04A`)
+	const qConn = cskhP2Api.buildWorkItemsQuery({
+		page: 2,
+		pageSize: 20,
+		careFilter: 'connected',
+		campaign: 'CAMP-A',
+		assignee: 'staff.a@example.test',
+		search: '091234',
+	})
+	assert.equal(qConn.page, 2)
+	assert.equal(qConn.page_size, 20)
+	assert.equal(qConn.status, 'active')
+	assert.equal(qConn.care_state, 'connected')
+	assert.equal(qConn.campaign, 'CAMP-A')
+	assert.equal(qConn.assignee, 'staff.a@example.test')
+	assert.equal(qConn.search, '091234')
+
+	assert.equal(
+		cskhP2Api.buildWorkItemsQuery({ careFilter: 'not_contacted' }).care_state,
+		'not_contacted'
+	)
+	assert.equal(cskhP2Api.buildWorkItemsQuery({ careFilter: 'attempted' }).care_state, 'attempted')
+	assert.equal(
+		cskhP2Api.buildWorkItemsQuery({ careFilter: 'attempted_not_connected' }).care_state,
+		'attempted_not_connected'
+	)
+	assert.equal(
+		cskhP2Api.buildWorkItemsQuery({ careFilter: 'do_not_contact' }).care_state,
+		'do_not_contact'
+	)
+	assert.equal(cskhP2Api.buildWorkItemsQuery({ careFilter: 'closed' }).status, 'closed')
+	assert.equal(
+		cskhP2Api.buildWorkItemsQuery({ careFilter: 'followup_due' }).followup_filter,
+		'today'
+	)
+	assert.equal(
+		cskhP2Api.buildWorkItemsQuery({ careFilter: 'followup_overdue' }).followup_filter,
+		'overdue'
+	)
+
+	// Pager multi-page server total & range (`F-P2-04A`)
+	const rangeNode = { textContent: '' }
+	const prevBtn = { disabled: false }
+	const nextBtn = { disabled: false }
+	const pgr = cskh.pager({ pageSize: 20, range: rangeNode, prev: prevBtn, next: nextBtn })
+	pgr.setTotal(45)
+	pgr.render()
+	assert.equal(rangeNode.textContent, '1–20 / 45')
+	assert.equal(prevBtn.disabled, true)
+	assert.equal(nextBtn.disabled, false)
+
+	pgr.goto(2)
+	pgr.render()
+	assert.equal(rangeNode.textContent, '21–40 / 45')
+	assert.equal(prevBtn.disabled, false)
+	assert.equal(nextBtn.disabled, false)
+
+	pgr.goto(3)
+	pgr.render()
+	assert.equal(rangeNode.textContent, '41–45 / 45')
+	assert.equal(prevBtn.disabled, false)
+	assert.equal(nextBtn.disabled, true)
+
+	// Progress summary normalizer (`F-P2-05`: distinct Work Items vs Attempts vs DNC Customers)
+	const normProg = cskhP2Api.normalizeProgressSummary({
+		scope: 'team',
+		cards: {
+			total_active_owned: 10,
+			assigned: 3,
+			in_progress: 5,
+			on_hold: 2,
+			closed: 4,
+			unattempted_work_items: 3,
+			attempted_work_items: 11,
+			connected_work_items: 6,
+			dnc_leads: 2,
+			effective_attempts: 27,
+			connected_attempts: 9,
+			unreached_attempts: 18,
+		},
+	})
+	assert.equal(normProg.cards.unattempted_work_items, 3)
+	assert.equal(normProg.cards.attempted_work_items, 11)
+	assert.equal(normProg.cards.connected_work_items, 6)
+	assert.equal(normProg.cards.attempted_unconnected_work_items, 5)
+	assert.equal(normProg.cards.dnc_leads, 2)
+	assert.equal(normProg.cards.effective_attempts, 27)
+	assert.equal(normProg.cards.connected_attempts, 9)
+	assert.equal(normProg.cards.unreached_attempts, 18)
+
+	// Static guards on `my-customers.js`, `progress.js`, `work-item.js`
+	const myCustomersSrc = fs.readFileSync(path.join(PUBLIC_CSKH, 'my-customers.js'), 'utf8')
+	const progressSrc = fs.readFileSync(path.join(PUBLIC_CSKH, 'progress.js'), 'utf8')
+	const workItemSrc = fs.readFileSync(path.join(PUBLIC_CSKH, 'work-item.js'), 'utf8')
+
+	assert(
+		!myCustomersSrc.includes('matchesClientCareFilter') &&
+			!myCustomersSrc.includes('filteredCount'),
+		'F-P2-04A regression: my-customers.js must never filter care-state client-side or set pager total from filteredCount'
+	)
+	assert(
+		!progressSrc.includes('Do-not-contact (DNC) work items') &&
+			progressSrc.includes('Do-not-contact (DNC) customers'),
+		'F-P2-05 regression: progress.js must label dnc_leads as customers, never work items'
+	)
+	for (const [name, src] of [
+		['my-customers.js', myCustomersSrc],
+		['work-item.js', workItemSrc],
+	]) {
+		assert(
+			!/\[H:/i.test(src),
+			`F-P2-01 anti-workaround guard: ${name} must not strip [H:<16hex>] on the client`
+		)
+	}
+}
+
 console.log('ALL P2 UI TIMEZONE (23:59 / 00:00) & CONTRACT NORMALIZER TESTS PASSED')

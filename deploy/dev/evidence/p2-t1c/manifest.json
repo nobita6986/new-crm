@@ -1,0 +1,83 @@
+{
+  "dossier": "p2-t1c",
+  "owner": "T1C",
+  "pinned_revisions": {
+    "entry_main": "1913d2bd5ebfdc894eaa492b46be502dbdf44808",
+    "pr7_head": "ffe74df22b85c1d5ecda9dc2f1bdc3015b5bae10",
+    "pr7_initial_runtime_head": "26b02379adbc8a50a2bee6eb3bd91ec5d5b6b6ce",
+    "apps_tree_sha": "4a395ae619f95a1feb0fbf9ec189063af2938f76",
+    "backend_initial": "6ef2e2e21c9e8265efe43fd5413074b70849a674",
+    "backend_http_fix": "580a45f0d823267f6845fec083d56ead00d29681",
+    "ui_e2e_code_sha": "d3da46b16a6d800d5d8cf866fc06415f9f02253f",
+    "ci_synthetic_merge": "faa6dfb33e4972a9aa5488858cfd0a46e0e45b04"
+  },
+  "gate_summary": {
+    "passed": [
+      "G2-01",
+      "G2-02",
+      "G2-05",
+      "G2-06",
+      "G2-07",
+      "G2-08",
+      "G2-09",
+      "G2-10",
+      "G2-11"
+    ],
+    "failed": [
+      "G2-03",
+      "G2-04",
+      "G2-12",
+      "G2-13",
+      "G2-14",
+      "G2-15"
+    ],
+    "open_findings": [
+      "F-P2-01",
+      "F-P2-06",
+      "F-P2-02",
+      "F-P2-04",
+      "F-P2-05"
+    ],
+    "closed_findings": [
+      "F-P2-03"
+    ],
+    "non_blocking_observations": [
+      "OBS-P2-01",
+      "OBS-P2-02",
+      "OBS-P2-03"
+    ],
+    "go_p3_recommendation": "NO-GO"
+  },
+  "files": [
+    {
+      "path": "t1c-p2-verification-report.md",
+      "bytes": 40260,
+      "sha256": "910614bed97bb3488e1f4376cebb29f47813f554075c535d2fe45eeef6ce180e"
+    },
+    {
+      "path": "security-matrix-p2.md",
+      "bytes": 17811,
+      "sha256": "2b887312adafa76f89498941d19982af4dbe223eefd28dac0f5ccb46ca5d2a45"
+    },
+    {
+      "path": "test-evidence-p2.md",
+      "bytes": 26125,
+      "sha256": "80861027e1dda4b02c9c4bbe4f6628993aa7288f4ca43c3f06626db01da07fe8"
+    },
+    {
+      "path": "artifacts/t1c-p2-entry-baseline-1913d2b.json",
+      "bytes": 7413,
+      "sha256": "1c024218c07dac41951e2819bf2ee4e44793eacfb8c898eca568562c741c06e4"
+    },
+    {
+      "path": "artifacts/t1c-p2-runtime-26b0237.json",
+      "bytes": 18887,
+      "sha256": "030f4e49c889de724124c058845c83dcb2ed7568f295a49bf167d452aba4f3b2"
+    },
+    {
+      "path": "artifacts/t1c-p2-ffe74df-audit.json",
+      "bytes": 5900,
+      "sha256": "a7ffb33f4a0c534f012a9110a7361c9941ada7b2f97308cf3a57b7bf502abe60"
+    }
+  ]
+}

@@ -7,9 +7,12 @@ Implements `docs/data-model-p2.md`, `docs/attempt-immutability-correction.md`,
 from __future__ import annotations
 
 import json
+import re
+from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import frappe
-from frappe.utils import cint, get_datetime, getdate, now_datetime
+from frappe.utils import cint, get_datetime, get_system_timezone, getdate, now_datetime
 
 from crm_cskh.api._params import parse_bool, parse_optional_str, parse_pagination
 from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
@@ -350,35 +353,39 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 	actor = assert_workflow_actor(actor, allow_bod=False)
 	assert_work_item_workflow_access(wi_val, user=actor, require_active_mutation=False)
 
+	has_owner_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
+	wi_detail_fields = [
+		"name",
+		"campaign",
+		"lead",
+		"status",
+		"revision",
+		"assigned_to",
+		"assigned_at",
+		"first_attempt_at",
+		"last_attempt_at",
+		"last_outcome_code",
+		"last_outcome_label",
+		"last_connected_at",
+		"attempt_count",
+		"connected_attempt_count",
+		"open_callback_task",
+		"next_action_due",
+		"last_activity_by",
+		"closed_at",
+		"closed_by",
+		"completion_reason",
+		"reopened_at",
+		"reopened_by",
+		"reopen_reason",
+		"policy_version",
+	]
+	if has_owner_close:
+		wi_detail_fields.append("owner_at_close")
 	wi = frappe.db.get_value(
 		"CSKH Work Item",
 		wi_val,
-		[
-			"name",
-			"campaign",
-			"lead",
-			"status",
-			"revision",
-			"assigned_to",
-			"assigned_at",
-			"first_attempt_at",
-			"last_attempt_at",
-			"last_outcome_code",
-			"last_outcome_label",
-			"last_connected_at",
-			"attempt_count",
-			"connected_attempt_count",
-			"open_callback_task",
-			"next_action_due",
-			"last_activity_by",
-			"closed_at",
-			"closed_by",
-			"completion_reason",
-			"reopened_at",
-			"reopened_by",
-			"reopen_reason",
-			"policy_version",
-		],
+		wi_detail_fields,
 		as_dict=True,
 	)
 	camp = (
@@ -408,6 +415,7 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 
 	policy = resolve_effective_policy(campaign=wi.campaign, owner_user=wi.assigned_to)
 	capabilities = _capabilities_for_work_item(wi, policy, actor)
+	effective_owner_close = wi.get("owner_at_close") or (wi.closed_by if wi.status == "closed" else None)
 
 	return {
 		"work_item": {
@@ -432,6 +440,7 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 			"last_activity_by": wi.last_activity_by,
 			"closed_at": wi.closed_at,
 			"closed_by": wi.closed_by,
+			"owner_at_close": effective_owner_close,
 			"completion_reason": wi.completion_reason,
 			"reopened_at": wi.reopened_at,
 			"reopened_by": wi.reopened_by,
@@ -465,20 +474,83 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 	}
 
 
+_CARE_STATE_ALIASES = {
+	"all": "all",
+	"unattempted": "unattempted",
+	"not_contacted": "unattempted",
+	"attempted": "attempted",
+	"attempted_not_connected": "attempted_not_connected",
+	"unconnected": "attempted_not_connected",
+	"connected": "connected",
+	"on_hold": "on_hold",
+	"callback_pending": "on_hold",
+	"followup_due": "followup_due",
+	"followup_overdue": "followup_overdue",
+	"closed": "closed",
+	"do_not_contact": "do_not_contact",
+	"dnc": "do_not_contact",
+}
+
+
+def _derive_row_care_state(row) -> str:
+	if int(row.do_not_contact or 0):
+		return "do_not_contact"
+	if row.status == "closed":
+		return "closed"
+	if row.status == "on_hold":
+		return "on_hold"
+	if int(row.connected_attempt_count or 0) > 0:
+		return "connected"
+	if int(row.attempt_count or 0) > 0:
+		return "attempted_not_connected"
+	return "unattempted"
+
+
 def list_work_items(
 	page=1,
 	page_size=20,
 	status: str | None = None,
+	care_state: str | None = None,
 	campaign: str | None = None,
 	followup_filter: str | None = None,
 	assignee: str | None = None,
+	owner_at_close: str | None = None,
+	closed_by: str | None = None,
 	search: str | None = None,
 	actor: str | None = None,
 ) -> dict:
-	"""Scoped CSKH work queue (`docs/api-contract-p2.md` §4.2)."""
+	"""Scoped CSKH work queue with SQL care-state & closed-owner filtering (`docs/api-contract-p2.md` §4.2, `F-P2-04`)."""
 	actor = assert_workflow_actor(actor, allow_bod=False)
 	page_num, limit, offset = parse_pagination(page, page_size)
-	status_val = (parse_optional_str(status, "Bộ lọc status không hợp lệ.") or "active").lower()
+
+	care_raw = parse_optional_str(care_state, "Tham số care_state không hợp lệ.")
+	care_val = "all"
+	if care_raw:
+		care_key = care_raw.lower()
+		if care_key not in _CARE_STATE_ALIASES:
+			raise InvalidRequest(
+				"Tham số care_state không hợp lệ (chấp nhận all | unattempted | attempted | "
+				"attempted_not_connected | connected | on_hold | followup_due | followup_overdue | "
+				"closed | do_not_contact)."
+			)
+		care_val = _CARE_STATE_ALIASES[care_key]
+
+	owner_close_val = parse_optional_str(owner_at_close, "Tham số owner_at_close không hợp lệ.")
+	closed_by_val = parse_optional_str(closed_by, "Tham số closed_by không hợp lệ.")
+	assignee_val = parse_optional_str(assignee, "Tham số assignee không hợp lệ.")
+
+	raw_status = parse_optional_str(status, "Bộ lọc status không hợp lệ.")
+	if raw_status:
+		status_val = raw_status.lower()
+	elif care_val == "closed" or owner_close_val or closed_by_val:
+		status_val = "closed"
+	elif care_val in ("on_hold", "followup_due", "followup_overdue"):
+		status_val = "on_hold"
+	elif care_val == "do_not_contact":
+		status_val = "all"
+	else:
+		status_val = "active"
+
 	if status_val not in ("active", "all", *ALL_WORK_ITEM_STATES):
 		raise InvalidRequest("Tham số status không hợp lệ.")
 	camp_val = parse_optional_str(campaign, "Mã chiến dịch không hợp lệ.")
@@ -489,7 +561,6 @@ def list_work_items(
 			raise InvalidRequest(
 				"Tham số followup_filter chỉ chấp nhận overdue | today | upcoming | has_open | none."
 			)
-	assignee_val = parse_optional_str(assignee, "Tham số assignee không hợp lệ.")
 	search_val = parse_optional_str(search, "Tham số search không hợp lệ.")
 
 	scope = reporting._scope(actor)
@@ -497,7 +568,32 @@ def list_work_items(
 	now_dt = now_datetime()
 	today = getdate(now_dt)
 	day_start = f"{today} 00:00:00"
-	day_end = f"{today} 23:59:59"
+	next_day_start = f"{today + timedelta(days=1)} 00:00:00"
+
+	has_owner_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
+	owner_close_sql = (
+		"coalesce(nullif(wi.owner_at_close, ''), wi.closed_by)" if has_owner_close else "wi.closed_by"
+	)
+	has_dnc = frappe.db.has_column("CRM Lead", "cskh_do_not_contact")
+
+	def _empty_response() -> dict:
+		return {
+			"scope": scope_label,
+			"items": [],
+			"total": 0,
+			"page": page_num,
+			"page_size": limit,
+			"filters": {
+				"status": status_val,
+				"care_state": care_val,
+				"followup_filter": fu_val,
+				"campaign": camp_val,
+				"assignee": assignee_val,
+				"owner_at_close": owner_close_val,
+				"closed_by": closed_by_val,
+			},
+			"as_of": now_dt,
+		}
 
 	clauses: list[str] = ["1=1"]
 	params: list = []
@@ -509,19 +605,29 @@ def list_work_items(
 	else:
 		clauses.append(staff_authorized_work_item_sql(actor, "wi"))
 
+	allowed_users = reporting._scope_users(scope)
 	if assignee_val:
-		allowed_users = reporting._scope_users(scope)
 		if allowed_users is not None and assignee_val not in allowed_users:
-			return {
-				"scope": scope_label,
-				"items": [],
-				"total": 0,
-				"page": page_num,
-				"page_size": limit,
-				"as_of": now_dt,
-			}
-		clauses.append("wi.assigned_to = %s")
-		params.append(assignee_val)
+			return _empty_response()
+		if status_val == "closed":
+			clauses.append(f"({owner_close_sql} = %s)")
+			params.append(assignee_val)
+		elif status_val == "all":
+			clauses.append(f"(wi.assigned_to = %s or (wi.status = 'closed' and {owner_close_sql} = %s))")
+			params.extend([assignee_val, assignee_val])
+		else:
+			clauses.append("wi.assigned_to = %s")
+			params.append(assignee_val)
+
+	if owner_close_val:
+		if allowed_users is not None and owner_close_val not in allowed_users:
+			return _empty_response()
+		clauses.append(f"(wi.status = 'closed' and {owner_close_sql} = %s)")
+		params.append(owner_close_val)
+
+	if closed_by_val:
+		clauses.append("(wi.status = 'closed' and wi.closed_by = %s)")
+		params.append(closed_by_val)
 
 	if status_val == "active":
 		clauses.append("wi.status in ('assigned', 'in_progress', 'on_hold')")
@@ -533,15 +639,47 @@ def list_work_items(
 		clauses.append("wi.campaign = %s")
 		params.append(camp_val)
 
+	# Server-side `care_state` SQL predicate applied identically to `COUNT(*)` and `LIMIT/OFFSET` (`F-P2-04`)
+	if care_val == "unattempted":
+		if has_dnc:
+			clauses.append(
+				"wi.status in ('assigned', 'in_progress') "
+				"and coalesce(wi.attempt_count, 0) = 0 "
+				"and coalesce(l.cskh_do_not_contact, 0) = 0"
+			)
+		else:
+			clauses.append("wi.status in ('assigned', 'in_progress') and coalesce(wi.attempt_count, 0) = 0")
+	elif care_val == "attempted":
+		clauses.append("coalesce(wi.attempt_count, 0) > 0")
+	elif care_val == "attempted_not_connected":
+		clauses.append("coalesce(wi.attempt_count, 0) > 0 and coalesce(wi.connected_attempt_count, 0) = 0")
+	elif care_val == "connected":
+		clauses.append("coalesce(wi.connected_attempt_count, 0) > 0")
+	elif care_val == "on_hold":
+		clauses.append("wi.status = 'on_hold' and wi.open_callback_task is not null")
+	elif care_val == "followup_due":
+		clauses.append("wi.status = 'on_hold' and wi.next_action_due is not null and wi.next_action_due < %s")
+		params.append(next_day_start)
+	elif care_val == "followup_overdue":
+		clauses.append("wi.status = 'on_hold' and wi.next_action_due is not null and wi.next_action_due < %s")
+		params.append(now_dt)
+	elif care_val == "closed":
+		clauses.append("wi.status = 'closed'")
+	elif care_val == "do_not_contact":
+		if has_dnc:
+			clauses.append("coalesce(l.cskh_do_not_contact, 0) = 1")
+		else:
+			clauses.append("1=0")
+
 	if fu_val == "overdue":
 		clauses.append("wi.status = 'on_hold' and wi.next_action_due is not null and wi.next_action_due < %s")
 		params.append(now_dt)
 	elif fu_val == "today":
-		clauses.append("wi.status = 'on_hold' and wi.next_action_due >= %s and wi.next_action_due <= %s")
-		params.extend([day_start, day_end])
+		clauses.append("wi.status = 'on_hold' and wi.next_action_due >= %s and wi.next_action_due < %s")
+		params.extend([day_start, next_day_start])
 	elif fu_val == "upcoming":
-		clauses.append("wi.status = 'on_hold' and wi.next_action_due > %s")
-		params.append(day_end)
+		clauses.append("wi.status = 'on_hold' and wi.next_action_due >= %s")
+		params.append(next_day_start)
 	elif fu_val == "has_open":
 		clauses.append("wi.status = 'on_hold' and wi.open_callback_task is not null")
 	elif fu_val == "none":
@@ -579,17 +717,12 @@ def list_work_items(
 	)
 	total = int(frappe.db.sql(f"select count(*) {from_where}", tuple(params))[0][0] or 0)
 	if total == 0:
-		return {
-			"scope": scope_label,
-			"items": [],
-			"total": 0,
-			"page": page_num,
-			"page_size": limit,
-			"as_of": now_dt,
-		}
+		return _empty_response()
 
-	has_dnc = frappe.db.has_column("CRM Lead", "cskh_do_not_contact")
 	dnc_col = "coalesce(l.cskh_do_not_contact, 0) as do_not_contact" if has_dnc else "0 as do_not_contact"
+	owner_close_select = (
+		"wi.owner_at_close as owner_at_close" if has_owner_close else "null as owner_at_close"
+	)
 
 	rows = frappe.db.sql(
 		f"""
@@ -602,14 +735,14 @@ def list_work_items(
 		       wi.last_outcome_code as last_outcome_code, wi.last_outcome_label as last_outcome_label,
 		       wi.last_connected_at as last_connected_at,
 		       wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due,
-		       wi.closed_at as closed_at, wi.closed_by as closed_by,
+		       wi.closed_at as closed_at, wi.closed_by as closed_by, {owner_close_select},
 		       c.title as campaign_title, c.code as campaign_code,
 		       l.lead_name as lead_name, l.first_name as first_name,
 		       l.mobile_no as mobile_no, l.source as source, l.status as lead_status,
 		       {dnc_col}
 		{from_where}
 		order by case when wi.status = 'on_hold' and wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc,
-		         coalesce(wi.next_action_due, wi.assigned_at, wi.creation) desc,
+		         coalesce(wi.next_action_due, wi.closed_at, wi.assigned_at, wi.creation) desc,
 		         wi.name desc
 		limit %s offset %s
 		""",
@@ -625,6 +758,8 @@ def list_work_items(
 				is_overdue = get_datetime(row.next_action_due) < get_datetime(now_dt)
 			except Exception:
 				is_overdue = False
+		conn_cnt = int(row.connected_attempt_count or 0)
+		eff_owner_close = row.owner_at_close or (row.closed_by if row.status == "closed" else None)
 		items.append(
 			{
 				"work_item": row.work_item,
@@ -638,11 +773,13 @@ def list_work_items(
 				"campaign_code": row.campaign_code,
 				"status": row.status,
 				"work_item_status": row.status,
+				"care_state": _derive_row_care_state(row),
 				"revision": int(row.revision or 1),
 				"assigned_to": row.assigned_to,
 				"assigned_at": row.assigned_at,
 				"attempt_count": int(row.attempt_count or 0),
-				"connected_attempt_count": int(row.connected_attempt_count or 0),
+				"connected_attempt_count": conn_cnt,
+				"has_connected": conn_cnt > 0,
 				"first_attempt_at": row.first_attempt_at,
 				"last_attempt_at": row.last_attempt_at,
 				"last_outcome_code": row.last_outcome_code,
@@ -653,6 +790,7 @@ def list_work_items(
 				"is_followup_overdue": is_overdue,
 				"closed_at": row.closed_at,
 				"closed_by": row.closed_by,
+				"owner_at_close": eff_owner_close,
 				"do_not_contact": bool(int(row.do_not_contact or 0)),
 			}
 		)
@@ -663,6 +801,15 @@ def list_work_items(
 		"total": total,
 		"page": page_num,
 		"page_size": limit,
+		"filters": {
+			"status": status_val,
+			"care_state": care_val,
+			"followup_filter": fu_val,
+			"campaign": camp_val,
+			"assignee": assignee_val,
+			"owner_at_close": owner_close_val,
+			"closed_by": closed_by_val,
+		},
 		"as_of": now_dt,
 	}
 
@@ -689,23 +836,32 @@ def list_attempts_timeline(
 
 	milestones = []
 	if inc_milestones:
+		from crm_cskh.services import ownership as ownership_svc
+
+		milestone_fields = [
+			"event_id",
+			"action",
+			"from_user",
+			"to_user",
+			"actor",
+			"event_at",
+			"ownership_start",
+			"ownership_end",
+			"reason",
+		]
+		if frappe.db.has_column("CSKH Assignment History", "private_reason"):
+			milestone_fields.append("private_reason")
 		hist_rows = frappe.db.get_all(
 			"CSKH Assignment History",
 			filters={"work_item": wi_val},
-			fields=[
-				"event_id",
-				"action",
-				"from_user",
-				"to_user",
-				"actor",
-				"event_at",
-				"ownership_start",
-				"ownership_end",
-				"reason",
-			],
+			fields=milestone_fields,
 			order_by="event_at asc, creation asc",
 		)
-		milestones = list(hist_rows)
+		for h_row in hist_rows:
+			entry = dict(h_row)
+			entry["reason"] = ownership_svc.display_history_reason(entry)
+			entry.pop("private_reason", None)
+			milestones.append(entry)
 
 	return {
 		"work_item": wi_val,
@@ -718,22 +874,182 @@ def list_attempts_timeline(
 	}
 
 
-def _effective_attempt_rows_for_summary(
-	wi_where: str,
-	wi_params: list,
-	date_from: str | None = None,
-	date_to: str | None = None,
-) -> list[dict]:
-	"""Compute effective non-voided attempts across scoped Work Items for `progress_summary`."""
-	date_clauses = []
-	date_params = []
+_DATE_ONLY_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+_HAS_TIME_RE = re.compile(r"^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}")
+
+
+def _parse_single_summary_bound(raw: str, *, field: str, is_end: bool) -> tuple[datetime, bool]:
+	"""Parse `date_from` / `date_to` in system timezone (`F-P2-05`).
+
+	- Date-only `YYYY-MM-DD`:
+	    * `date_from` -> `(YYYY-MM-DD 00:00:00, True)` (`>= start_of_day`)
+	    * `date_to`   -> `(next_day 00:00:00, False)` (`< start_of_next_day`, half-open full day)
+	- Explicit datetime (`YYYY-MM-DD HH:MM[:SS[.ffffff]]` or ISO-8601 with `T` / offset):
+	    * Normalized to system timezone (`Asia/Ho_Chi_Minh`) and evaluated inclusively (`<=` on `date_to`).
+	"""
+	s = raw.strip()
+	if _DATE_ONLY_RE.match(s):
+		try:
+			d = date.fromisoformat(s)
+		except ValueError as exc:
+			raise InvalidRequest(f"Tham số {field} là ngày không hợp lệ.") from exc
+		start_of_day = datetime(d.year, d.month, d.day, 0, 0, 0)
+		if is_end:
+			return start_of_day + timedelta(days=1), False
+		return start_of_day, True
+
+	if not _HAS_TIME_RE.match(s):
+		raise InvalidRequest(f"Tham số {field} không đúng định dạng ngày (YYYY-MM-DD) hoặc datetime ISO.")
+	try:
+		dt = datetime.fromisoformat(s.replace("Z", "+00:00"))
+	except ValueError as exc:
+		raise InvalidRequest(f"Tham số {field} không đúng định dạng thời gian.") from exc
+
+	if dt.tzinfo is not None:
+		sys_tz_name = get_system_timezone() or "Asia/Ho_Chi_Minh"
+		dt = dt.astimezone(ZoneInfo(sys_tz_name)).replace(tzinfo=None)
+	return dt, True
+
+
+def _parse_summary_bounds(
+	date_from: str | None,
+	date_to: str | None,
+) -> tuple[datetime | None, datetime | None, bool]:
+	start_dt = None
+	end_dt = None
+	end_inclusive = True
 	if date_from:
-		date_clauses.append("att.occurred_at >= %s")
-		date_params.append(date_from)
+		start_dt, _ = _parse_single_summary_bound(date_from, field="date_from", is_end=False)
 	if date_to:
-		date_clauses.append("att.occurred_at <= %s")
-		date_params.append(date_to)
-	extra_dt = (" and " + " and ".join(date_clauses)) if date_clauses else ""
+		end_dt, end_inclusive = _parse_single_summary_bound(date_to, field="date_to", is_end=True)
+
+	if start_dt is not None and end_dt is not None:
+		if end_inclusive and start_dt > end_dt:
+			raise InvalidRequest("Khoảng thời gian không hợp lệ: date_from lớn hơn date_to.")
+		if not end_inclusive and start_dt >= end_dt:
+			raise InvalidRequest("Khoảng thời gian không hợp lệ: date_from vượt quá date_to.")
+	return start_dt, end_dt, end_inclusive
+
+
+def _ts_in_period_check(
+	ts_val, start_dt: datetime | None, end_dt: datetime | None, end_inclusive: bool
+) -> bool:
+	if ts_val is None:
+		return False
+	dt = ts_val if isinstance(ts_val, datetime) else get_datetime(ts_val)
+	if start_dt is not None and dt < start_dt:
+		return False
+	if end_dt is not None:
+		if end_inclusive and dt > end_dt:
+			return False
+		if not end_inclusive and dt >= end_dt:
+			return False
+	return True
+
+
+def _col_in_period_sql(
+	col: str,
+	start_dt: datetime | None,
+	end_dt: datetime | None,
+	end_inclusive: bool,
+) -> tuple[str, list]:
+	parts = [f"{col} is not null"]
+	params: list = []
+	if start_dt is not None:
+		parts.append(f"{col} >= %s")
+		params.append(start_dt)
+	if end_dt is not None:
+		op = "<=" if end_inclusive else "<"
+		parts.append(f"{col} {op} %s")
+		params.append(end_dt)
+	return "(" + " and ".join(parts) + ")", params
+
+
+def _progress_work_item_scope_clause(scope: dict, alias: str = "wi") -> tuple[str, list]:
+	"""Scope predicate for `progress_summary` isolating shared campaigns & closed items (`F-P2-05`)."""
+	kind = scope["scope"]
+	if kind in ("system", "all"):
+		return "", []
+
+	has_owner_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
+	if kind == "self":
+		actor = scope["user"]
+		if has_owner_close:
+			return (
+				f"(({alias}.status in ('assigned', 'in_progress', 'on_hold') and {alias}.assigned_to = %s) "
+				f"or ({alias}.status = 'closed' and (coalesce(nullif({alias}.owner_at_close, ''), {alias}.closed_by) = %s "
+				f"or {alias}.closed_by = %s)))",
+				[actor, actor, actor],
+			)
+		return (
+			f"(({alias}.status in ('assigned', 'in_progress', 'on_hold') and {alias}.assigned_to = %s) "
+			f"or ({alias}.status = 'closed' and {alias}.closed_by = %s))",
+			[actor, actor],
+		)
+
+	users = reporting._team_users(scope["user"])
+	nodes = reporting._scope_team_nodes(scope) or []
+	if not users and not nodes:
+		return "1=0", []
+
+	branches: list[str] = []
+	params: list = []
+	if users:
+		u_ph = ",".join(["%s"] * len(users))
+		branches.append(
+			f"({alias}.status in ('assigned', 'in_progress', 'on_hold') and {alias}.assigned_to in ({u_ph}))"
+		)
+		params.extend(users)
+
+		if has_owner_close:
+			branches.append(
+				f"({alias}.status = 'closed' and coalesce(nullif({alias}.owner_at_close, ''), "
+				f"nullif({alias}.closed_by, ''), {alias}.last_activity_by) in ({u_ph}))"
+			)
+		else:
+			branches.append(
+				f"({alias}.status = 'closed' and coalesce(nullif({alias}.closed_by, ''), {alias}.last_activity_by) in ({u_ph}))"
+			)
+		params.extend(users)
+
+		branches.append(
+			f"({alias}.status = 'revoked' and ({alias}.last_activity_by in ({u_ph}) "
+			f"or exists (select 1 from `tabCSKH Assignment History` h_rev "
+			f"where h_rev.work_item = {alias}.name and h_rev.action = 'revoke' and h_rev.from_user in ({u_ph}))))"
+		)
+		params.extend(users)
+		params.extend(users)
+
+	if nodes:
+		n_ph = ",".join(["%s"] * len(nodes))
+		branches.append(
+			f"({alias}.status in ('queued', 'closed', 'revoked') and {alias}.campaign in "
+			f"(select c_prog.name from `tabCSKH Campaign` c_prog where c_prog.team_scope in ({n_ph})))"
+		)
+		params.extend(nodes)
+
+	return "(" + " or ".join(branches) + ")", params
+
+
+def _effective_attempt_rows_for_summary(
+	where_sql: str,
+	where_params: list,
+	start_dt: datetime | None = None,
+	end_dt: datetime | None = None,
+	end_inclusive: bool = True,
+) -> list[dict]:
+	"""Compute effective non-voided attempts with overlay `occurred_at` & period filtering (`F-P2-05`)."""
+	date_filter_sql = ""
+	date_params: list = []
+	if start_dt is not None or end_dt is not None:
+		raw_bounds, raw_params = _col_in_period_sql("att.occurred_at", start_dt, end_dt, end_inclusive)
+		# Also fetch any attempt that has an approved `correct` overlay in case `occurred_at` was patched
+		date_filter_sql = (
+			f" and ({raw_bounds} or exists ("
+			"select 1 from `tabCSKH Attempt Correction` corr_dt "
+			"where corr_dt.attempt = att.name and corr_dt.status = 'approved' and corr_dt.action = 'correct'))"
+		)
+		date_params.extend(raw_params)
 
 	att_rows = frappe.db.sql(
 		f"""
@@ -743,9 +1059,9 @@ def _effective_attempt_rows_for_summary(
 		       att.connected_snapshot as is_connected
 		from `tabCSKH Contact Attempt` att
 		inner join `tabCSKH Work Item` wi on wi.name = att.work_item
-		where {wi_where}{extra_dt}
+		where {where_sql}{date_filter_sql}
 		""",
-		(*wi_params, *date_params),
+		(*where_params, *date_params),
 		as_dict=True,
 	)
 	if not att_rows:
@@ -753,7 +1069,6 @@ def _effective_attempt_rows_for_summary(
 
 	att_names = [r.name for r in att_rows]
 	corr_map: dict[str, list[dict]] = {}
-	# Fetch approved corrections ONLY for attempts that have at least one approved correction
 	for chunk_start in range(0, len(att_names), 1000):
 		chunk = att_names[chunk_start : chunk_start + 1000]
 		ph = ",".join(["%s"] * len(chunk))
@@ -777,6 +1092,7 @@ def _effective_attempt_rows_for_summary(
 		group = r.outcome_group or "other"
 		is_att = bool(cint(r.is_contact_attempt))
 		is_conn = bool(cint(r.is_connected))
+		eff_occurred_at = r.occurred_at
 		for c in corr_map.get(r.name, ()):
 			if c.action == "void":
 				is_voided = True
@@ -788,19 +1104,28 @@ def _effective_attempt_rows_for_summary(
 					channel = patch["channel"]
 				if patch.get("outcome_group"):
 					group = patch["outcome_group"]
+				if patch.get("occurred_at"):
+					eff_occurred_at = patch["occurred_at"]
 				if "is_contact_attempt" in patch:
 					is_att = bool(cint(patch["is_contact_attempt"]))
 				if "is_connected" in patch:
 					is_conn = bool(cint(patch["is_connected"]))
-		if not is_voided and is_att:
-			effective_list.append(
-				{
-					"performed_by": r.performed_by,
-					"channel": channel,
-					"outcome_group": group,
-					"is_connected": is_conn,
-				}
-			)
+		if is_voided or not is_att:
+			continue
+		if (start_dt is not None or end_dt is not None) and not _ts_in_period_check(
+			eff_occurred_at, start_dt, end_dt, end_inclusive
+		):
+			continue
+		effective_list.append(
+			{
+				"work_item": r.work_item,
+				"performed_by": r.performed_by,
+				"occurred_at": eff_occurred_at,
+				"channel": channel,
+				"outcome_group": group,
+				"is_connected": is_conn,
+			}
+		)
 	return effective_list
 
 
@@ -810,74 +1135,119 @@ def progress_summary(
 	date_to: str | None = None,
 	actor: str | None = None,
 ) -> dict:
-	"""Scoped P2 operational summary with strictly ZERO PII (`docs/api-contract-p2.md` §4.13)."""
+	"""Scoped P2 operational summary with strictly ZERO PII (`docs/api-contract-p2.md` §4.13, `F-P2-05`)."""
 	actor = assert_workflow_actor(actor, allow_bod=True)
 	camp_val = parse_optional_str(campaign, "Mã chiến dịch không hợp lệ.")
 	df_val = parse_optional_str(date_from, "Tham số date_from không hợp lệ.")
 	dt_val = parse_optional_str(date_to, "Tham số date_to không hợp lệ.")
-	if df_val:
-		try:
-			get_datetime(df_val)
-		except Exception as exc:
-			raise InvalidRequest("Tham số date_from không đúng định dạng thời gian.") from exc
-	if dt_val:
-		try:
-			get_datetime(dt_val)
-		except Exception as exc:
-			raise InvalidRequest("Tham số date_to không đúng định dạng thời gian.") from exc
+	start_dt, end_dt, end_inclusive = _parse_summary_bounds(df_val, dt_val)
+	has_period = start_dt is not None or end_dt is not None
+	sys_tz_name = get_system_timezone() or "Asia/Ho_Chi_Minh"
 
 	scope = reporting._scope(actor)
 	scope_label = "all" if scope["scope"] in ("system", "all") else scope["scope"]
+	allowed_scope_users = reporting._scope_users(scope)
 	now_dt = now_datetime()
 	today = getdate(now_dt)
 	day_start = f"{today} 00:00:00"
-	day_end = f"{today} 23:59:59"
+	next_day_start = f"{today + timedelta(days=1)} 00:00:00"
 
-	wi_scope_sql, wi_scope_params = reporting._work_item_scope_clause(scope, "wi")
-	wi_clauses = [wi_scope_sql] if wi_scope_sql else ["1=1"]
-	wi_params = list(wi_scope_params)
+	wi_scope_sql, wi_scope_params = _progress_work_item_scope_clause(scope, "wi")
+	base_wi_clauses = [wi_scope_sql] if wi_scope_sql else ["1=1"]
+	base_wi_params = list(wi_scope_params)
 	if camp_val:
-		wi_clauses.append("wi.campaign = %s")
-		wi_params.append(camp_val)
-	if df_val:
-		wi_clauses.append("wi.creation >= %s")
-		wi_params.append(df_val)
-	if dt_val:
-		wi_clauses.append("wi.creation <= %s")
-		wi_params.append(dt_val)
+		base_wi_clauses.append("wi.campaign = %s")
+		base_wi_params.append(camp_val)
+	base_wi_where = " and ".join(base_wi_clauses)
+
+	# 1. Effective attempts on scoped Work Items in period -> DISTINCT Work Item coverage metrics
+	wi_scoped_attempts = _effective_attempt_rows_for_summary(
+		base_wi_where,
+		base_wi_params,
+		start_dt=start_dt,
+		end_dt=end_dt,
+		end_inclusive=end_inclusive,
+	)
+	attempted_wi_ids = {att["work_item"] for att in wi_scoped_attempts if att.get("work_item")}
+	connected_wi_ids = {
+		att["work_item"] for att in wi_scoped_attempts if att.get("work_item") and att.get("is_connected")
+	}
+
+	# 2. Period-aware Work Item predicate `wi_where`
+	wi_clauses = list(base_wi_clauses)
+	wi_params = list(base_wi_params)
+	if has_period:
+		period_or_parts: list[str] = []
+		period_or_params: list = []
+
+		if end_dt is not None:
+			end_op = "<=" if end_inclusive else "<"
+			period_or_parts.append(
+				f"(wi.status in ('assigned', 'in_progress', 'on_hold') and wi.creation {end_op} %s)"
+			)
+			period_or_params.append(end_dt)
+		else:
+			period_or_parts.append("wi.status in ('assigned', 'in_progress', 'on_hold')")
+
+		for ts_col in ("wi.creation", "wi.assigned_at", "wi.closed_at", "wi.reopened_at"):
+			col_sql, col_p = _col_in_period_sql(ts_col, start_dt, end_dt, end_inclusive)
+			period_or_parts.append(col_sql)
+			period_or_params.extend(col_p)
+
+		if attempted_wi_ids:
+			sorted_att_wis = sorted(attempted_wi_ids)
+			att_wi_ph = ",".join(["%s"] * len(sorted_att_wis))
+			period_or_parts.append(f"wi.name in ({att_wi_ph})")
+			period_or_params.extend(sorted_att_wis)
+
+		wi_clauses.append("(" + " or ".join(period_or_parts) + ")")
+		wi_params.extend(period_or_params)
+
 	wi_where = " and ".join(wi_clauses)
 
-	status_rows = frappe.db.sql(
-		f"select wi.status, count(*) as cnt from `tabCSKH Work Item` wi where {wi_where} group by wi.status",
+	# 3. Care Cohort `C(P)`: allocated care Work Items (`assigned`, `in_progress`, `on_hold`, `closed`)
+	#    plus any Work Item in `wi_where` that actually recorded an effective attempt in period.
+	cohort_rows = frappe.db.sql(
+		f"select wi.name, wi.status from `tabCSKH Work Item` wi where {wi_where}",
 		tuple(wi_params),
 		as_dict=True,
 	)
 	status_counts = {st: 0 for st in ALL_WORK_ITEM_STATES}
-	for row in status_rows:
+	cohort_wi_ids: set[str] = set()
+	for row in cohort_rows:
 		if row.status in status_counts:
-			status_counts[row.status] = int(row.cnt or 0)
+			status_counts[row.status] += 1
+		if row.status in ("assigned", "in_progress", "on_hold", "closed") or (
+			has_period and row.name in attempted_wi_ids
+		):
+			cohort_wi_ids.add(row.name)
 
-	# Open follow-ups & overdue / due_today counts
+	cohort_work_items = len(cohort_wi_ids)
+	attempted_work_items = len(attempted_wi_ids & cohort_wi_ids)
+	connected_work_items = len(connected_wi_ids & cohort_wi_ids)
+	unattempted_work_items = cohort_work_items - attempted_work_items
+
+	# 4. Open follow-ups & overdue / due_today counts
 	fu_row = frappe.db.sql(
 		f"""
 		select
 			count(*) as open_total,
 			sum(case when t.due_date < %s then 1 else 0 end) as overdue_total,
-			sum(case when t.due_date >= %s and t.due_date <= %s then 1 else 0 end) as today_total
+			sum(case when t.due_date >= %s and t.due_date < %s then 1 else 0 end) as today_total
 		from `tabCRM Task` t
 		inner join `tabCSKH Work Item` wi on wi.name = t.cskh_work_item
 		where coalesce(t.cskh_is_followup, 0) = 1
 		  and t.status in ('Backlog', 'Todo', 'In Progress')
 		  and {wi_where}
 		""",
-		(now_dt, day_start, day_end, *wi_params),
+		(now_dt, day_start, next_day_start, *wi_params),
 		as_dict=True,
 	)[0]
 	open_followups = int(fu_row.open_total or 0)
 	overdue_followups = int(fu_row.overdue_total or 0)
 	due_today_followups = int(fu_row.today_total or 0)
 
-	# Pending corrections in scope
+	# 5. Pending corrections in scope
 	pending_corrections = int(
 		frappe.db.sql(
 			f"""
@@ -891,34 +1261,47 @@ def progress_summary(
 		or 0
 	)
 
-	# DNC leads in scope
+	# 6. Distinct DNC Leads (`dnc_leads`) vs distinct DNC Work Items (`dnc_work_items`) (`F-P2-05`)
 	dnc_leads = 0
+	dnc_work_items = 0
 	if frappe.db.has_column("CRM Lead", "cskh_do_not_contact"):
-		if scope["scope"] in ("system", "all") and not camp_val and not df_val and not dt_val:
+		dnc_wi_row = frappe.db.sql(
+			f"""
+			select count(distinct wi.name) as wi_cnt, count(distinct wi.lead) as lead_cnt
+			from `tabCSKH Work Item` wi
+			inner join `tabCRM Lead` l on l.name = wi.lead
+			where coalesce(l.cskh_do_not_contact, 0) = 1 and {wi_where}
+			""",
+			tuple(wi_params),
+			as_dict=True,
+		)[0]
+		dnc_work_items = int(dnc_wi_row.wi_cnt or 0)
+		if scope["scope"] in ("system", "all") and not camp_val and not has_period:
 			dnc_leads = frappe.db.count("CRM Lead", {"cskh_do_not_contact": 1})
 		else:
-			dnc_leads = int(
-				frappe.db.sql(
-					f"""
-					select count(distinct wi.lead)
-					from `tabCSKH Work Item` wi
-					inner join `tabCRM Lead` l on l.name = wi.lead
-					where coalesce(l.cskh_do_not_contact, 0) = 1 and {wi_where}
-					""",
-					tuple(wi_params),
-				)[0][0]
-				or 0
-			)
+			dnc_leads = int(dnc_wi_row.lead_cnt or 0)
 
-	# Effective attempts (excluding date filter on wi.creation so date_from/date_to applies to occurred_at)
-	att_wi_clauses = [wi_scope_sql] if wi_scope_sql else ["1=1"]
-	att_wi_params = list(wi_scope_params)
-	if camp_val:
-		att_wi_clauses.append("wi.campaign = %s")
-		att_wi_params.append(camp_val)
-	effective_attempts_list = _effective_attempt_rows_for_summary(
-		" and ".join(att_wi_clauses), att_wi_params, date_from=df_val, date_to=dt_val
-	)
+	# 7. Effective attempts performed by actors in scope (reconciles 1-to-1 with `per_user`)
+	if allowed_scope_users is None:
+		effective_attempts_list = wi_scoped_attempts
+	elif not allowed_scope_users:
+		effective_attempts_list = []
+	else:
+		perf_clauses: list[str] = []
+		perf_params: list = []
+		u_ph = ",".join(["%s"] * len(allowed_scope_users))
+		perf_clauses.append(f"att.performed_by in ({u_ph})")
+		perf_params.extend(allowed_scope_users)
+		if camp_val:
+			perf_clauses.append("wi.campaign = %s")
+			perf_params.append(camp_val)
+		effective_attempts_list = _effective_attempt_rows_for_summary(
+			" and ".join(perf_clauses),
+			perf_params,
+			start_dt=start_dt,
+			end_dt=end_dt,
+			end_inclusive=end_inclusive,
+		)
 
 	by_outcome_group = {grp: 0 for grp in RESULT_GROUPS}
 	by_channel = {ch: 0 for ch in VALID_CHANNELS}
@@ -941,18 +1324,24 @@ def progress_summary(
 	eff_total = len(effective_attempts_list)
 	unreached_total = eff_total - connected_total
 
-	# Per-user breakdown
+	# 8. Per-user breakdown (`owner_at_close` prioritized for closed items)
+	has_owner_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
+	user_group_expr = (
+		"coalesce(nullif(wi.assigned_to, ''), nullif(wi.owner_at_close, ''), nullif(wi.closed_by, ''))"
+		if has_owner_close
+		else "coalesce(nullif(wi.assigned_to, ''), nullif(wi.closed_by, ''))"
+	)
 	per_user_wi_rows = frappe.db.sql(
 		f"""
 		select
-			coalesce(wi.assigned_to, wi.closed_by) as user_id,
+			{user_group_expr} as user_id,
 			sum(case when wi.status = 'assigned' and wi.assigned_to is not null then 1 else 0 end) as assigned_cnt,
 			sum(case when wi.status = 'in_progress' and wi.assigned_to is not null then 1 else 0 end) as in_progress_cnt,
 			sum(case when wi.status = 'on_hold' and wi.assigned_to is not null then 1 else 0 end) as on_hold_cnt,
 			sum(case when wi.status = 'closed' then 1 else 0 end) as closed_cnt
 		from `tabCSKH Work Item` wi
-		where coalesce(wi.assigned_to, wi.closed_by) is not null and {wi_where}
-		group by coalesce(wi.assigned_to, wi.closed_by)
+		where {user_group_expr} is not null and {wi_where}
+		group by {user_group_expr}
 		""",
 		tuple(wi_params),
 		as_dict=True,
@@ -980,7 +1369,6 @@ def progress_summary(
 	}
 	wi_by_user = {r.user_id: r for r in per_user_wi_rows}
 
-	allowed_scope_users = reporting._scope_users(scope)
 	all_users = sorted(
 		u
 		for u in (set(wi_by_user) | set(fu_by_user) | set(user_att_stats))
@@ -1019,6 +1407,15 @@ def progress_summary(
 	total_active_owned = status_counts["assigned"] + status_counts["in_progress"] + status_counts["on_hold"]
 	return {
 		"scope": scope_label,
+		"period": {
+			"timezone": sys_tz_name,
+			"date_from": str(start_dt) if start_dt else None,
+			"date_to": str(end_dt) if end_dt else None,
+			"end_bound_mode": ("exclusive" if not end_inclusive else "inclusive") if end_dt else None,
+			"cohort_basis": (
+				"allocated_or_active_or_attempted_in_period" if has_period else "allocated_care_work_items"
+			),
+		},
 		"cards": {
 			"total_active_owned": total_active_owned,
 			"assigned": status_counts["assigned"],
@@ -1027,6 +1424,10 @@ def progress_summary(
 			"closed": status_counts["closed"],
 			"revoked": status_counts["revoked"],
 			"queued": status_counts["queued"],
+			"cohort_work_items": cohort_work_items,
+			"attempted_work_items": attempted_work_items,
+			"unattempted_work_items": unattempted_work_items,
+			"connected_work_items": connected_work_items,
 			"effective_attempts": eff_total,
 			"connected_attempts": connected_total,
 			"unreached_attempts": unreached_total,
@@ -1035,6 +1436,7 @@ def progress_summary(
 			"due_today_followups": due_today_followups,
 			"pending_corrections": pending_corrections,
 			"dnc_leads": dnc_leads,
+			"dnc_work_items": dnc_work_items,
 		},
 		"by_outcome_group": by_outcome_group,
 		"by_channel": by_channel,
