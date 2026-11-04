@@ -1,0 +1,383 @@
+{
+  "schema_version": 1,
+  "generated_at_utc": "2026-11-04T13:37:20.913929+00:00",
+  "disclaimer": "DEV single-host Docker synthetic benchmark on isolated site; numbers measure architectural scaling and index usage (OBS-P2-02) and are NOT production SLA commitments.",
+  "environment": {
+    "site": "p3bench.localhost",
+    "python_version": "3.14.8",
+    "platform": "Linux-6.18.54.1-microsoft-standard-WSL2-x86_64-with-glibc2.41",
+    "cpu_count": 12,
+    "mariadb_version": "11.8.9-MariaDB-ubu2404",
+    "frappe_version": "15.123.1",
+    "total_benchmark_wall_seconds": 739.36
+  },
+  "obs_p2_02_verified_zero_attempt_scans_on_dashboard": true,
+  "tiers": {
+    "10k": {
+      "tier": "10k_work_items",
+      "row_counts": {
+        "work_items": 10000,
+        "leads": 10000,
+        "ownership_intervals": 11000,
+        "contact_attempts": 25000,
+        "sla_obligations": 20000
+      },
+      "recompute": {
+        "monthly_full": {
+          "wall_ms": 5143.83,
+          "tracemalloc_peak_mib": 144.92,
+          "rss_before_mib": 145.49,
+          "rss_after_mib": 256.72,
+          "rss_hwm_mib": 301.92,
+          "snapshots_written": 34,
+          "reconciliation_ok": true
+        },
+        "monthly_single_campaign": {
+          "wall_ms": 981.66,
+          "tracemalloc_peak_mib": null,
+          "rss_before_mib": 339.83,
+          "rss_after_mib": 339.84,
+          "rss_hwm_mib": 434.74,
+          "snapshots_written": 30,
+          "reconciliation_ok": true
+        },
+        "daily_single_day_incremental": {
+          "wall_ms": 420.4,
+          "tracemalloc_peak_mib": 7.87,
+          "rss_before_mib": 339.84,
+          "rss_after_mib": 338.84,
+          "rss_hwm_mib": 434.74,
+          "snapshots_written": 34,
+          "reconciliation_ok": true
+        },
+        "dirty_scope_multi_grain_drain": {
+          "wall_ms": 16301.53,
+          "tracemalloc_peak_mib": null,
+          "rss_before_mib": 338.84,
+          "rss_after_mib": 382.85,
+          "rss_hwm_mib": 434.74,
+          "periods_recomputed": 5
+        }
+      },
+      "endpoints": {
+        "get_executive_overview": {
+          "iterations": 20,
+          "min_ms": 7.707,
+          "p50_ms": 9.919,
+          "p95_ms": 12.044,
+          "mean_ms": 9.944,
+          "max_ms": 12.189,
+          "sql_query_count": 5,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_team_comparison": {
+          "iterations": 20,
+          "min_ms": 11.264,
+          "p50_ms": 13.762,
+          "p95_ms": 16.44,
+          "mean_ms": 13.908,
+          "max_ms": 17.945,
+          "sql_query_count": 6,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_employee_quality": {
+          "iterations": 20,
+          "min_ms": 10.548,
+          "p50_ms": 16.198,
+          "p95_ms": 25.08,
+          "mean_ms": 18.273,
+          "max_ms": 33.403,
+          "sql_query_count": 5,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_campaign_quality": {
+          "iterations": 20,
+          "min_ms": 6.872,
+          "p50_ms": 12.571,
+          "p95_ms": 17.192,
+          "mean_ms": 12.564,
+          "max_ms": 17.483,
+          "sql_query_count": 5,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_my_scorecard": {
+          "iterations": 20,
+          "min_ms": 7.515,
+          "p50_ms": 8.361,
+          "p95_ms": 9.574,
+          "mean_ms": 8.424,
+          "max_ms": 10.228,
+          "sql_query_count": 6,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_metric_drilldown_daily_company": {
+          "iterations": 20,
+          "min_ms": 236.433,
+          "p50_ms": 248.75,
+          "p95_ms": 270.632,
+          "mean_ms": 255.627,
+          "max_ms": 387.382,
+          "sql_query_count": 19,
+          "touches_contact_attempt_table": true,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_metric_drilldown_monthly_campaign": {
+          "iterations": 10,
+          "min_ms": 679.878,
+          "p50_ms": 728.629,
+          "p95_ms": 870.945,
+          "mean_ms": 757.15,
+          "max_ms": 913.208,
+          "sql_query_count": 21,
+          "touches_contact_attempt_table": true,
+          "touches_kpi_snapshot_table": true
+        }
+      },
+      "explain_plans": {
+        "dashboard_snapshot_lookup": [
+          {
+            "table": "tabCSKH KPI Snapshot",
+            "type": "ref",
+            "possible_keys": "idx_cskh_kpisnap_lookup,idx_cskh_kpisnap_rank",
+            "key": "idx_cskh_kpisnap_lookup",
+            "key_len": "2256",
+            "rows": "24",
+            "Extra": "Using index condition"
+          }
+        ],
+        "dashboard_snapshot_rank": [
+          {
+            "table": "tabCSKH KPI Snapshot",
+            "type": "ref",
+            "possible_keys": "idx_cskh_kpisnap_lookup,idx_cskh_kpisnap_rank",
+            "key": "idx_cskh_kpisnap_rank",
+            "key_len": "1693",
+            "rows": "48",
+            "Extra": "Using where"
+          }
+        ],
+        "recompute_attempt_daily_range": [
+          {
+            "table": "tabCSKH Contact Attempt",
+            "type": "range",
+            "possible_keys": "idx_cskh_attempt_occ_rec",
+            "key": "idx_cskh_attempt_occ_rec",
+            "key_len": "18",
+            "rows": "925",
+            "Extra": "Using index condition"
+          }
+        ],
+        "recompute_sla_due_evaluator": [
+          {
+            "table": "tabCSKH SLA Obligation",
+            "type": "range",
+            "possible_keys": "idx_cskh_sla_status_due",
+            "key": "idx_cskh_sla_status_due",
+            "key_len": "572",
+            "rows": "1",
+            "Extra": "Using index condition; Using where"
+          }
+        ],
+        "recompute_sla_campaign_anchor": [
+          {
+            "table": "tabCSKH SLA Obligation",
+            "type": "range",
+            "possible_keys": "idx_cskh_sla_camp_anchor",
+            "key": "idx_cskh_sla_camp_anchor",
+            "key_len": "572",
+            "rows": "7866",
+            "Extra": "Using where; Using index"
+          }
+        ]
+      }
+    },
+    "100k": {
+      "tier": "100k_work_items",
+      "row_counts": {
+        "work_items": 100000,
+        "leads": 100000,
+        "ownership_intervals": 110000,
+        "contact_attempts": 250000,
+        "sla_obligations": 200000
+      },
+      "recompute": {
+        "monthly_full": {
+          "wall_ms": 52079.85,
+          "tracemalloc_peak_mib": 1431.67,
+          "rss_before_mib": 273.94,
+          "rss_after_mib": 685.45,
+          "rss_hwm_mib": 1791.96,
+          "snapshots_written": 34,
+          "reconciliation_ok": true
+        },
+        "monthly_single_campaign": {
+          "wall_ms": 10491.68,
+          "tracemalloc_peak_mib": null,
+          "rss_before_mib": 976.25,
+          "rss_after_mib": 1038.23,
+          "rss_hwm_mib": 3043.16,
+          "snapshots_written": 30,
+          "reconciliation_ok": true
+        },
+        "daily_single_day_incremental": {
+          "wall_ms": 5622.11,
+          "tracemalloc_peak_mib": 75.89,
+          "rss_before_mib": 984.24,
+          "rss_after_mib": 984.25,
+          "rss_hwm_mib": 3043.16,
+          "snapshots_written": 34,
+          "reconciliation_ok": true
+        },
+        "dirty_scope_multi_grain_drain": {
+          "wall_ms": 173234.06,
+          "tracemalloc_peak_mib": null,
+          "rss_before_mib": 983.25,
+          "rss_after_mib": 1086.24,
+          "rss_hwm_mib": 3043.16,
+          "periods_recomputed": 5
+        }
+      },
+      "endpoints": {
+        "get_executive_overview": {
+          "iterations": 20,
+          "min_ms": 6.798,
+          "p50_ms": 7.528,
+          "p95_ms": 8.498,
+          "mean_ms": 7.687,
+          "max_ms": 8.511,
+          "sql_query_count": 5,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_team_comparison": {
+          "iterations": 20,
+          "min_ms": 8.871,
+          "p50_ms": 10.48,
+          "p95_ms": 11.933,
+          "mean_ms": 10.461,
+          "max_ms": 12.772,
+          "sql_query_count": 6,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_employee_quality": {
+          "iterations": 20,
+          "min_ms": 9.349,
+          "p50_ms": 13.363,
+          "p95_ms": 17.776,
+          "mean_ms": 13.363,
+          "max_ms": 20.857,
+          "sql_query_count": 5,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_campaign_quality": {
+          "iterations": 20,
+          "min_ms": 7.639,
+          "p50_ms": 8.951,
+          "p95_ms": 11.659,
+          "mean_ms": 9.335,
+          "max_ms": 12.211,
+          "sql_query_count": 5,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_my_scorecard": {
+          "iterations": 20,
+          "min_ms": 7.069,
+          "p50_ms": 9.446,
+          "p95_ms": 13.293,
+          "mean_ms": 9.623,
+          "max_ms": 13.485,
+          "sql_query_count": 6,
+          "touches_contact_attempt_table": false,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_metric_drilldown_daily_company": {
+          "iterations": 20,
+          "min_ms": 3611.048,
+          "p50_ms": 4003.514,
+          "p95_ms": 4247.462,
+          "mean_ms": 3993.308,
+          "max_ms": 4386.729,
+          "sql_query_count": 33,
+          "touches_contact_attempt_table": true,
+          "touches_kpi_snapshot_table": true
+        },
+        "get_metric_drilldown_monthly_campaign": {
+          "iterations": 10,
+          "min_ms": 7150.99,
+          "p50_ms": 7408.398,
+          "p95_ms": 7599.389,
+          "mean_ms": 7394.243,
+          "max_ms": 7673.916,
+          "sql_query_count": 52,
+          "touches_contact_attempt_table": true,
+          "touches_kpi_snapshot_table": true
+        }
+      },
+      "explain_plans": {
+        "dashboard_snapshot_lookup": [
+          {
+            "table": "tabCSKH KPI Snapshot",
+            "type": "ref",
+            "possible_keys": "idx_cskh_kpisnap_lookup,idx_cskh_kpisnap_rank",
+            "key": "idx_cskh_kpisnap_lookup",
+            "key_len": "2256",
+            "rows": "24",
+            "Extra": "Using index condition"
+          }
+        ],
+        "dashboard_snapshot_rank": [
+          {
+            "table": "tabCSKH KPI Snapshot",
+            "type": "ref",
+            "possible_keys": "idx_cskh_kpisnap_lookup,idx_cskh_kpisnap_rank",
+            "key": "idx_cskh_kpisnap_rank",
+            "key_len": "1693",
+            "rows": "48",
+            "Extra": "Using where"
+          }
+        ],
+        "recompute_attempt_daily_range": [
+          {
+            "table": "tabCSKH Contact Attempt",
+            "type": "range",
+            "possible_keys": "idx_cskh_attempt_occ_rec",
+            "key": "idx_cskh_attempt_occ_rec",
+            "key_len": "18",
+            "rows": "18962",
+            "Extra": "Using index condition"
+          }
+        ],
+        "recompute_sla_due_evaluator": [
+          {
+            "table": "tabCSKH SLA Obligation",
+            "type": "range",
+            "possible_keys": "idx_cskh_sla_status_due",
+            "key": "idx_cskh_sla_status_due",
+            "key_len": "572",
+            "rows": "1",
+            "Extra": "Using index condition; Using where"
+          }
+        ],
+        "recompute_sla_campaign_anchor": [
+          {
+            "table": "tabCSKH SLA Obligation",
+            "type": "range",
+            "possible_keys": "idx_cskh_sla_camp_anchor",
+            "key": "idx_cskh_sla_camp_anchor",
+            "key_len": "572",
+            "rows": "75962",
+            "Extra": "Using where; Using index"
+          }
+        ]
+      }
+    }
+  }
+}

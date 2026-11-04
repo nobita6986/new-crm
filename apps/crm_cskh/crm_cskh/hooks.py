@@ -37,6 +37,7 @@ P3_DOCTYPES = (
 	"CSKH KPI Run",
 	"CSKH KPI Snapshot",
 	"CSKH QA Review",
+	"CSKH Export Job",
 )
 
 # Fixtures
@@ -418,6 +419,9 @@ scheduler_events = {
 			"crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes",
 		],
 	},
+	"hourly": [
+		"crm_cskh.jobs.run_export.expire_stale_exports",
+	],
 	"daily": [
 		"crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods",
 	],
@@ -447,6 +451,7 @@ permission_query_conditions.update(
 		"CSKH KPI Run": "crm_cskh.p3_permissions.kpi_run_query_conditions",
 		"CSKH KPI Snapshot": "crm_cskh.p3_permissions.kpi_snapshot_query_conditions",
 		"CSKH QA Review": "crm_cskh.p3_permissions.qa_review_query_conditions",
+		"CSKH Export Job": "crm_cskh.p3_permissions.export_job_query_conditions",
 	}
 )
 
@@ -472,5 +477,6 @@ has_permission.update(
 		"CSKH KPI Run": "crm_cskh.p3_permissions.kpi_run_has_permission",
 		"CSKH KPI Snapshot": "crm_cskh.p3_permissions.kpi_snapshot_has_permission",
 		"CSKH QA Review": "crm_cskh.p3_permissions.qa_review_has_permission",
+		"CSKH Export Job": "crm_cskh.p3_permissions.export_job_has_permission",
 	}
 )

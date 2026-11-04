@@ -407,3 +407,156 @@ def qa_review_has_permission(doc=None, ptype="read", user=None) -> bool:
 	if _is_staff(user):
 		return bool(staff_u == user and resolved.get("status") == "published")
 	return False
+
+
+# --- 8. `CSKH Export Job` + 3-Stage Live Export Revalidation (`S10`..`S12`) ---
+
+
+def is_export_job_currently_authorized(job_row: dict, user: str | None = None) -> tuple[bool, str]:
+	"""Revalidate `user`'s LIVE roles & `CRM Sales Hierarchy` scope against `job_row`.
+
+	Used at Stage 2 (`jobs/run_export.py` worker) and Stage 3 (`download_export` + `/private/files/...`).
+	Returns `(authorized, reason_code)`.
+	"""
+	user = user or frappe.session.user
+	if not user or user == "Guest":
+		return False, "FORBIDDEN_SCOPE"
+	enabled = frappe.db.get_value("User", user, "enabled")
+	if enabled is not None and not cint(enabled):
+		return False, "FORBIDDEN_SCOPE"
+
+	roles = _roles(user)
+	if _is_system(user) or ROLE_ADMIN in roles:
+		return True, "OK"
+
+	req_by = job_row.get("requested_by")
+	if not req_by or req_by != user:
+		return False, "FORBIDDEN_SCOPE"
+
+	report_type = job_row.get("report_type") or ""
+	scope_type = job_row.get("scope_type") or "company"
+	scope_id = job_row.get("scope_id") or ""
+	includes_pii = bool(cint(job_row.get("includes_pii")))
+
+	is_bod = ROLE_BOD in roles
+	is_leader = _is_leader(user)
+	is_staff = _is_staff(user)
+
+	if not (is_bod or is_leader or is_staff):
+		return False, "FORBIDDEN_SCOPE"
+
+	# BOD: aggregate only (`0` PII, no `my_scorecard`)
+	if is_bod and not (is_leader or is_staff):
+		if includes_pii or report_type == "my_scorecard":
+			return False, "FORBIDDEN_SCOPE"
+		return True, "OK"
+
+	# Team Leader: must STILL hold `Sales Manager` + active subtree covering `scope_id`
+	if is_leader:
+		bounds = _team_bounds(user)
+		if not bounds:
+			return False, "FORBIDDEN_SCOPE"
+		if report_type == "my_scorecard":
+			return (scope_type == "employee" and scope_id == user), "FORBIDDEN_SCOPE"
+		if scope_type == "team":
+			if scope_id and _node_in_subtree(user, scope_id):
+				return True, "OK"
+			return False, "FORBIDDEN_SCOPE"
+		if scope_type == "employee":
+			if scope_id and (scope_id == user or _in_team(user, scope_id)):
+				return True, "OK"
+			return False, "FORBIDDEN_SCOPE"
+		if scope_type == "campaign":
+			camp_doc = (
+				frappe.db.get_value("CSKH Campaign", scope_id, ["name", "team_scope"], as_dict=True)
+				if scope_id
+				else None
+			)
+			if camp_doc and (not camp_doc.team_scope or _node_in_subtree(user, camp_doc.team_scope)):
+				return True, "OK"
+			return False, "FORBIDDEN_SCOPE"
+		return False, "FORBIDDEN_SCOPE"
+
+	# Staff (`Sales User` without Leader/BOD/Admin): ONLY `my_scorecard` (or self `employee_quality`) with `0` PII!
+	if is_staff:
+		if includes_pii:
+			return False, "FORBIDDEN_SCOPE"
+		if (
+			report_type in ("my_scorecard", "employee_quality")
+			and scope_type == "employee"
+			and scope_id == user
+		):
+			return True, "OK"
+		return False, "FORBIDDEN_SCOPE"
+
+	return False, "FORBIDDEN_SCOPE"
+
+
+def is_export_file_downloadable(export_job_name: str, user: str | None = None) -> bool:
+	"""Enforce Stage 3 live authorization + `status == 'completed'` + TTL `now < expires_at` for raw `File` routes."""
+	from frappe.utils import get_datetime, now_datetime
+
+	user = user or frappe.session.user
+	if not export_job_name or not user or user == "Guest":
+		return False
+	job_row = frappe.db.get_value(
+		"CSKH Export Job",
+		export_job_name,
+		[
+			"name",
+			"report_type",
+			"scope_type",
+			"scope_id",
+			"includes_pii",
+			"requested_by",
+			"status",
+			"expires_at",
+		],
+		as_dict=True,
+	)
+	if not job_row:
+		return False
+	if job_row.status != "completed":
+		return False
+	if not job_row.expires_at or now_datetime() >= get_datetime(job_row.expires_at):
+		return False
+	ok, _ = is_export_job_currently_authorized(job_row, user=user)
+	return ok
+
+
+def export_job_query_conditions(user=None, doctype=None) -> str:
+	user = user or frappe.session.user
+	_check_active_db_query_oracles("CSKH Export Job", user)
+	roles = _roles(user)
+	if _is_system(user) or ROLE_ADMIN in roles:
+		return ""
+	if roles & {ROLE_BOD, "Sales Manager", "Sales User"}:
+		return (
+			f"`tabCSKH Export Job`.`requested_by` = {_escape(user)} "
+			"and `tabCSKH Export Job`.`status` not in ('revoked', 'expired')"
+		)
+	return "1=0"
+
+
+def export_job_has_permission(doc=None, ptype="read", user=None) -> bool:
+	from frappe.utils import get_datetime, now_datetime
+
+	user = user or frappe.session.user
+	if _is_system(user):
+		return True
+	if ptype in WRITE_PTYPES or ptype not in READ_PTYPES:
+		return False
+	roles = _roles(user)
+	if ROLE_ADMIN in roles:
+		return True
+	resolved, is_doctype_level = _resolve_doc("CSKH Export Job", doc)
+	if is_doctype_level:
+		return bool(roles & {ROLE_BOD, "Sales Manager", "Sales User"})
+	if not resolved:
+		return False
+	if resolved.get("status") in ("revoked", "expired"):
+		return False
+	if resolved.get("expires_at") and now_datetime() >= get_datetime(resolved.get("expires_at")):
+		return False
+	ok, _ = is_export_job_currently_authorized(resolved, user=user)
+	return ok
