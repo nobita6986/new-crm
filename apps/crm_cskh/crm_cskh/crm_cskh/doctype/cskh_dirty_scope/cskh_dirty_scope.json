@@ -1,0 +1,136 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH Dirty Scope",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "scope_key",
+   "fieldtype": "Data",
+   "label": "Scope Key",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "dirty_date",
+   "fieldtype": "Date",
+   "label": "Dirty Date",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "period_month",
+   "fieldtype": "Data",
+   "label": "Period Month",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Data",
+   "label": "Campaign"
+  },
+  {
+   "fieldname": "team_node",
+   "fieldtype": "Data",
+   "label": "Team Node"
+  },
+  {
+   "fieldname": "owner_user",
+   "fieldtype": "Data",
+   "label": "Owner User"
+  },
+  {
+   "fieldname": "reason",
+   "fieldtype": "Data",
+   "label": "Reason",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "is_prior_period",
+   "fieldtype": "Check",
+   "label": "Is Prior Period",
+   "default": "0"
+  },
+  {
+   "fieldname": "trigger_reference",
+   "fieldtype": "Data",
+   "label": "Trigger Reference"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "pending\nprocessing\nprocessed",
+   "default": "pending",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "first_dirtied_at",
+   "fieldtype": "Datetime",
+   "label": "First Dirtied At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "last_dirtied_at",
+   "fieldtype": "Datetime",
+   "label": "Last Dirtied At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "processed_by_run",
+   "fieldtype": "Data",
+   "label": "Processed By Run"
+  },
+  {
+   "fieldname": "processed_at",
+   "fieldtype": "Datetime",
+   "label": "Processed At"
+  }
+ ],
+ "field_order": [
+  "scope_key",
+  "dirty_date",
+  "period_month",
+  "campaign",
+  "team_node",
+  "owner_user",
+  "reason",
+  "is_prior_period",
+  "trigger_reference",
+  "status",
+  "first_dirtied_at",
+  "last_dirtied_at",
+  "processed_by_run",
+  "processed_at"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "sort_field": "last_dirtied_at",
+ "sort_order": "DESC",
+ "track_changes": 0
+}
