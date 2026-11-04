@@ -372,22 +372,23 @@ async function main() {
 
 		// Toggle Formula & Provenance on FIRST_ATTEMPT_SLA_RATE and verify all 9 metadata attributes
 		const firstTouchCard = bod.page.locator('[data-metric-key="FIRST_ATTEMPT_SLA_RATE"]')
-		await firstTouchCard.locator('button', { hasText: 'Công thức & nguồn gốc' }).click()
+		await firstTouchCard.locator('button', { hasText: 'Công thức & nguồn dữ liệu' }).click()
 		const provNode = firstTouchCard.locator('.cskh-kpi-provenance')
 		await provNode.waitFor({ state: 'visible', timeout: 5000 })
 		const provText = await provNode.innerText()
 		for (const requiredTerm of [
 			'Mã chỉ số',
-			'Đơn vị đo (hạt độ)',
+			'Đơn vị thống kê (Grain)',
 			'Tử số / Mẫu số',
-			'Công thức',
+			'Công thức tính',
 			'Kỳ báo cáo',
 			'Phạm vi',
 			'Loại trừ hợp lệ',
-			'Chốt dữ liệu lúc',
-			'Mốc nguồn dữ liệu',
+			'Mốc chốt dữ liệu (as-of)',
+			'Thời điểm tính toán',
+			'Mốc dữ liệu nguồn (Watermark)',
 			'Phiên bản công thức & chính sách',
-			'Trạng thái độ tin cậy dữ liệu',
+			'Trạng thái độ tin cậy',
 			'cskh-metrics-v1',
 		]) {
 			recordAssert(
@@ -611,7 +612,7 @@ async function main() {
 				const goldenText = await goldenRow.innerText()
 				recordAssert(
 					'B3E-13-golden-8647-vi',
-					goldenText.includes('86,47') && goldenText.includes('Tạm tính') && goldenText.includes('Chưa xếp hạng'),
+					goldenText.includes('86,47') && goldenText.includes('Tạm tính') && goldenText.includes('Không xếp hạng'),
 					`Golden employee renders 86,47 Provisional & Unranked`
 				)
 			}
@@ -716,7 +717,7 @@ async function main() {
 		const waivedText = await waivedRow.innerText()
 		recordAssert(
 			'B3E-16-waive-audited-row',
-			waivedText.includes('Đã miễn trừ') && waivedText.includes('kiểm toán'),
+			waivedText.includes('Được miễn trừ hợp lệ') && waivedText.includes('kiểm toán'),
 			`Obligation ${targetObId} updated to Waived with audit reason in DOM`
 		)
 
@@ -771,7 +772,7 @@ async function main() {
 		)
 		recordAssert(
 			'B3E-19-staff-scorecard-no-peers',
-			!scorecardText.includes(users.staff_b) && !scorecardText.includes('Xếp hạng (trong nhóm)'),
+			!scorecardText.includes(users.staff_b) && !scorecardText.includes('Thứ tự (trong nội bộ nhóm)'),
 			'Staff A Personal Scorecard never exposes peer emails or peer leaderboard'
 		)
 
@@ -801,7 +802,8 @@ async function main() {
 				`${BASE_URL}/cskh/work-item?id=${encodeURIComponent(seed.transferred_work_item)}`,
 				{ waitUntil: 'networkidle' }
 			)
-			const wiAlert = await staffA.page.locator('#wi-page-alert').innerText()
+			await staffA.page.locator('#wi-alert .cskh-alert').waitFor({ state: 'visible', timeout: 10000 })
+			const wiAlert = await staffA.page.locator('#wi-alert').innerText()
 			const summaryHidden = await staffA.page.locator('#wi-summary-card').isHidden()
 			const timelineHidden = await staffA.page.locator('#wi-timeline-card').isHidden()
 			recordAssert(

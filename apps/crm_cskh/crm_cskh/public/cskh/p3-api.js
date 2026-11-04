@@ -22,7 +22,7 @@ window.cskhP3Api = (function () {
 	'use strict'
 
 	const ENDPOINTS = {
-		campaignsList: 'crm_cskh.api.campaigns.list_campaigns',
+		campaignsList: 'crm_cskh.api.campaigns.list',
 		executiveOverview: 'crm_cskh.api.p3_reporting.get_executive_overview',
 		teamComparison: 'crm_cskh.api.p3_reporting.get_team_comparison',
 		employeeQuality: 'crm_cskh.api.p3_reporting.get_employee_quality',
@@ -548,12 +548,12 @@ window.cskhP3Api = (function () {
 			let campaigns = []
 			if (caps.admin || caps.bod || caps.leader) {
 				try {
-					const res = await window.cskh.get(ENDPOINTS.campaignsList, { page: 1, page_size: 100 })
+					const res = await window.cskh.get(ENDPOINTS.campaignsList, {})
 					const rows = toArray(res && (res.items || res.rows || res.campaigns || res))
 					campaigns = rows.map(function (c) {
 						return {
-							value: c.name || c.campaign_id || '',
-							label: c.campaign_name || c.title || c.name || '',
+							value: c.campaign || c.name || c.campaign_id || '',
+							label: c.title || c.campaign_name || c.code || c.campaign || c.name || '',
 						}
 					})
 				} catch (_err) {
