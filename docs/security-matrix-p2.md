@@ -1,24 +1,28 @@
 # P2 — Ma trận Phân quyền, Bảo vệ PII & Khóa Generic API (`Security Matrix P2`)
 
 > **Tài liệu:** `docs/security-matrix-p2.md`
-> **Phụ thuộc:** [`docs/root-plan/P2.md`](./root-plan/P2.md) (§11, §15.2 `SEC2-01..SEC2-16`), [`docs/architecture/permission-matrix.md`](./architecture/permission-matrix.md), [`docs/adr/ADR-P2-10.md`](./adr/ADR-P2-10.md)
+> **Phụ thuộc:** [`docs/root-plan/P2.md`](./root-plan/P2.md) (§11, §15.3 `SEC2-01..SEC2-16`), [`docs/architecture/permission-matrix.md`](./architecture/permission-matrix.md), [`docs/adr/ADR-P2-10.md`](./adr/ADR-P2-10.md)
+> **Đối chiếu kiểm định độc lập của T1C:** [`deploy/dev/evidence/p2-t1c/security-matrix-p2.md`](../deploy/dev/evidence/p2-t1c/security-matrix-p2.md) *(phán quyết hiện hành trên `ffe74df`: `9 PASS / 6 FAIL`, chờ T1C tái kiểm delta trên bản sửa tích hợp `0f3c731`)*
 
 ---
 
 ## 1. Nguyên tắc Bảo mật Cốt lõi
 
-1. **Ba lớp bảo vệ đồng thời:** (a) `permission_query_conditions` cho danh sách/báo cáo/tìm kiếm, (b) `has_permission` cho truy cập tài liệu trực tiếp (`GET /api/resource`, `frappe.client.get`, `frappe.desk.form.load.getdoc`), và (c) kiểm tra vai trò + khoảng sở hữu ngay trong tầng `services/*` kèm `doc_events` chặn ghi tắt.
+1. **Ba lớp bảo vệ đồng thời:** (a) `permission_query_conditions` cho danh sách/báo cáo/tìm kiếm, (b) `has_permission` cho truy cập tài liệu trực tiếp (`GET /api/resource`, `frappe.client.get`, `frappe.desk.form.load.getdoc`), và (c) kiểm tra vai trò + khoảng sở hữu ngay trong tầng `services/*` kèm `doc_events` + `auth_hooks` chặn ghi tắt/lộ filter-oracle.
 2. **Quyền theo người sở hữu hiện tại (Current-Owner Revocation):**
    - Sau khi `CSKH Work Item` chuyển từ `A -> B` (`reassign`) hoặc bị thu hồi (`revoke`) hay đóng rồi giao sang đội khác:
-     - `A` mất ngay quyền đọc `CRM Lead`, `CSKH Work Item`, `CSKH Contact Attempt`, `CSKH Attempt Correction`, `CSKH Assignment History`, `CRM Task`, `CRM Call Log`, `FCRM Note`, và `File` đính kèm trên cả API tùy chỉnh lẫn generic Frappe REST/RPC/Desk!
+     - `A` mất ngay quyền đọc `CRM Lead`, `CSKH Work Item`, `CSKH Contact Attempt`, `CSKH Attempt Correction`, `CSKH Assignment History`, `CRM Task`, `CRM Call Log`, `FCRM Note`, và `File` đính kèm trên cả API tùy chỉnh lẫn generic Frappe REST/RPC/Desk.
      - Trong DB, các bản ghi `CSKH Contact Attempt` cũ vẫn giữ nguyên `performed_by = A` và `owner_at_attempt = A` để phục vụ đối soát lịch sử/KPI công bằng ở P3.
 3. **Cô lập Đội nhóm chuẩn `L-23` cho Team Leader (`Sales Manager`):**
    - `Leader A` chỉ đọc/tác nghiệp trên `Work Item`, `Attempt`, `Correction`, `CRM Task`, `CRM Call Log` thuộc nhân viên dưới cây `CRM Sales Hierarchy` của Đội A **và** khách hàng chưa bị chuyển giao sang Đội B.
-4. **BOD Viewer (`CSKH BOD Viewer`) 0 PII & Read-Only Tuyệt đối:**
+4. **BOD Viewer (`CSKH BOD Viewer`) 0 PII & Read-Only Tuyệt đối (`F-P2-01` remediation):**
    - Được đọc `workflow.progress_summary`, `workflow.get_outcome_codes`, `settings.list_policies`, `settings.list_outcomes` (**0 PII**).
    - Bị từ chối `403 FORBIDDEN` (hoặc `PermissionError` / `1=0` trên generic API) đối với `CSKH Work Item`, `CSKH Contact Attempt`, `CSKH Attempt Correction`, `CRM Lead`, `CRM Task`, `CRM Call Log`, `FCRM Note`, `File` và mọi endpoint mutation.
-5. **Chống XSS, CSV Formula Injection & Rò rỉ PII qua Lỗi:**
-   - Trường `note`, `reason`, `completion_reason`, `review_note` được làm sạch thẻ nguy hiểm (`<script>`, `<iframe>`, `<object>`, `javascript:`, event handlers `on*=`) ở tầng server trước khi lưu DB và trung hòa tiền tố công thức (`=`, `+`, `-`, `@`) khi xuất CSV/artifact.
+   - Trên `CSKH Assignment History`: trường `reason` (`permlevel=0`) chỉ lưu nhãn hệ thống trung tính không chứa PII/ghi chú tự do; nội dung lý do nhạy cảm nằm ở `private_reason` (`permlevel=1`) và khóa chống trùng nằm ở `payload_hash` (`permlevel=1, hidden=1`), kết hợp `p1_permissions.py` + `guarded_crm.py` + `guarded_reporting.py` + `api/ownership.py` chặn `CSKH BOD Viewer` đọc/lọc/sắp xếp/gom nhóm `private_reason` và `payload_hash` trên cả 5 mặt phẳng (`ownership.history`, `/api/resource`, `frappe.client`, `reportview`, `getdoc`). Giao diện không dùng thao tác ẩn DOM để thay thế kiểm soát backend.
+5. **Khóa cứng cờ tuân thủ `DNC` trên `CRM Lead` (`F-P2-06` remediation):**
+   - Bốn trường `cskh_do_not_contact`, `cskh_dnc_reason`, `cskh_dnc_at`, `cskh_dnc_work_item` trên `CRM Lead` được khóa `read_only=1` kèm `doc_events["CRM Lead"]["validate"]` (`validate_cskh_lead_dnc_fields`) và `auth_hooks` (`enforce_lead_dnc_request_guard`), trả `403 FORBIDDEN` với mọi nỗ lực sửa trực tiếp qua REST v1/v2, `frappe.client.*`, Desk `savedocs` hay ORM ngoài các service CSKH được ủy quyền (`contact_attempt.record_attempt`, `reopen_work_item(override_dnc=True)` của `CSKH CRM Admin`, hoặc `settings.set_lead_dnc`).
+6. **Chống XSS, CSV Formula Injection & Rò rỉ PII qua Lỗi:**
+   - Trường `note`, `reason`, `private_reason`, `completion_reason`, `review_note` được làm sạch thẻ nguy hiểm (`<script>`, `<iframe>`, `<object>`, `javascript:`, event handlers `on*=`) ở tầng server trước khi lưu DB và trung hòa tiền tố công thức (`=`, `+`, `-`, `@`) khi xuất CSV/artifact.
    - Không phản chiếu SĐT, nội dung ghi chú hoặc đường dẫn file riêng tư trong thông báo lỗi hay log hệ thống; bảo toàn 100% cơ chế File-oracle `404` byte-identical của P0.
 
 ---
@@ -27,10 +31,11 @@
 
 | DocType | `Guest` | `Sales User` (Staff) | `Sales Manager` (Leader) | `CSKH BOD Viewer` | `CSKH CRM Admin` | Ghi chú Cưỡng chế |
 |---|---|---|---|---|---|---|
-| `CSKH Work Item` | Chặn (`403`) | Đọc: chỉ `assigned_to == user` hiện tại. Ghi/Tạo/Xóa: **Chặn** | Đọc: chỉ phạm vi `team` hiện tại. Ghi/Tạo/Xóa: **Chặn** | **Chặn (`1=0` / `False`)** | Đọc: `all`. Ghi trực tiếp: **Chặn** (chỉ qua service) | Mọi thay đổi trạng thái phải qua `ownership` / `workflow` service. |
+| `CRM Lead` *(trường `cskh_do_not_contact`, `cskh_dnc_*`)* | Chặn (`403`) | Đọc theo owner hiện tại (`DocShare`). Ghi trực tiếp `cskh_do_not_contact` / `cskh_dnc_*`: **Chặn (`403`)** | Đọc theo phạm vi `team`. Ghi trực tiếp `cskh_do_not_contact` / `cskh_dnc_*`: **Chặn (`403`)** | **Chặn (`403`)** | Đọc: `all`. Ghi trực tiếp qua generic API: **Chặn (`403`)**; gỡ/đặt DNC chỉ qua `reopen_work_item(override_dnc=True)` hoặc `settings.set_lead_dnc` có `Comment` kiểm toán | `read_only=1` + `validate_cskh_lead_dnc_fields` + `enforce_lead_dnc_request_guard` (`F-P2-06`). |
+| `CSKH Work Item` | Chặn (`403`) | Đọc: chỉ `assigned_to == user` hiện tại (hoặc `owner_at_close` khi lọc `closed` hợp lệ qua `workflow.list_work_items`). Ghi/Tạo/Xóa: **Chặn** | Đọc: chỉ phạm vi `team` hiện tại. Ghi/Tạo/Xóa: **Chặn** | **Chặn (`1=0` / `False`)** | Đọc: `all`. Ghi trực tiếp: **Chặn** (chỉ qua service) | Mọi thay đổi trạng thái phải qua `ownership` / `workflow` service. |
 | `CSKH Contact Attempt` | Chặn (`403`) | Đọc: chỉ của `Work Item` đang sở hữu hiện tại. Tạo/Sửa/Xóa trực tiếp: **Chặn** | Đọc: chỉ `Work Item` thuộc `team` hiện tại. Tạo/Sửa/Xóa trực tiếp: **Chặn** | **Chặn (`1=0` / `False`)** | Đọc: `all`. Tạo/Sửa/Xóa trực tiếp: **Chặn** | Append-only cứng ở `before_save` & `on_trash`; chỉ chèn qua `contact_attempt` service. |
-| `CSKH Attempt Correction` | Chặn (`403`) | Đọc: yêu cầu trên `Work Item` đang sở hữu hiện tại. Ghi trực tiếp: **Chặn** | Đọc: phạm vi `team` hiện tại. Ghi trực tiếp: **Chặn** | **Chặn (`1=0` / `False`)** | Đọc: `all`. Ghi trực tiếp: **Chặn** | Chỉ tạo/duyệt qua `correction` service; `cskh_task_history_json` / metadata nhạy cảm kiểm soát chặt. |
-| `CSKH Assignment History` | Chặn (`403`) | Đọc: chỉ khi đang có quyền đọc `CSKH Work Item` tương ứng. Ghi/Xóa: **Chặn** | Đọc: chỉ của `Work Item` thuộc `team` hiện tại. Ghi/Xóa: **Chặn** | Đọc: metadata không PII (SĐT/tên không nằm trên bảng này). Ghi/Xóa: **Chặn** | Đọc: `all`. Ghi/Xóa: **Chặn** | Cắt hoàn toàn quyền đọc lịch sử của `Staff A` sau khi `Work Item` đã chuyển sang `Staff B`. |
+| `CSKH Attempt Correction` | Chặn (`403`) | Đọc: yêu cầu trên `Work Item` đang sở hữu hiện tại. Ghi trực tiếp: **Chặn** | Đọc: phạm vi `team` hiện tại. Ghi trực tiếp: **Chặn** | **Chặn (`1=0` / `False`)** | Đọc: `all`. Ghi trực tiếp: **Chặn** | Chỉ tạo/duyệt qua `correction` service; metadata nhạy cảm kiểm soát chặt. |
+| `CSKH Assignment History` | Chặn (`403`) | Đọc: chỉ khi đang có quyền đọc `CSKH Work Item` tương ứng (`payload_hash` ẩn). Ghi/Xóa: **Chặn** | Đọc: chỉ của `Work Item` thuộc `team` hiện tại (`private_reason` trong quyền, `payload_hash` ẩn). Ghi/Xóa: **Chặn** | Đọc: chỉ metadata hệ thống `permlevel=0` (`reason` trung tính, **0 PII**); **`private_reason` & `payload_hash` bị chặn trên cả 5 mặt phẳng**. Ghi/Xóa: **Chặn** | Đọc: `all`. Ghi/Xóa: **Chặn** | Tách `reason` trung tính / `private_reason` (`permlevel=1`) / `payload_hash` (`permlevel=1, hidden=1`); migration làm sạch dữ liệu cũ (`F-P2-01`). |
 | `CSKH Outcome Code` | Chặn (`403`) | Đọc (`enabled=1`). Ghi/Xóa: **Chặn** | Đọc (`enabled=1`). Ghi/Xóa: **Chặn** | Đọc. Ghi/Xóa: **Chặn** | Đọc: `all`. Ghi qua `settings.save_outcome` | Không chứa PII. |
 | `CSKH Policy` | Chặn (`403`) | Đọc (Global / scope áp dụng). Ghi/Xóa: **Chặn** | Đọc (Global + Team mình). Ghi/Xóa: **Chặn** | Đọc. Ghi/Xóa: **Chặn** | Đọc: `all`. Ghi qua `settings.save_policy` | Không chứa PII. |
 | `CRM Task` | Chặn (`403`) | Đọc: chỉ Task gắn `CRM Lead` đang sở hữu. Tạo/Sửa/Xóa Task `cskh_is_followup=1` trực tiếp: **Chặn** | Đọc: Task gắn `CRM Lead` thuộc `team`. Tạo/Sửa/Xóa Task `cskh_is_followup=1` trực tiếp: **Chặn** | **Chặn** | Giữ nguyên lưới P0 trên generic API; thao tác callback qua `workflow` / `ownership` | Khóa bằng cả `linked_lead_has_permission` lẫn `doc_events["CRM Task"]`. |

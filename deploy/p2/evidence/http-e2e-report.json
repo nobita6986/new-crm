@@ -2,7 +2,7 @@
   "site": "p2.localhost",
   "base_url": "http://127.0.0.1:8220",
   "timezone": "Asia/Ho_Chi_Minh",
-  "worktree_head_sha": "d3da46b16a6d800d5d8cf866fc06415f9f02253f",
+  "worktree_head_sha": "0f3c7311c75aa3c49c3953a9b8cd64e45809d008",
   "checks": [
     {
       "id": "P2-E2E-01-page-role-matrix",
@@ -136,8 +136,8 @@
       "id": "P2-E2E-02-import-and-distribute",
       "status": "PASS",
       "details": {
-        "campaign_a": "mju93sc06a",
-        "campaign_b": "mlera935tr",
+        "campaign_a": "fg1a9jbkt0",
+        "campaign_b": "fhf8usfg8c",
         "team_a_items": 11,
         "team_b_items": 2
       }
@@ -146,11 +146,11 @@
       "id": "P2-E2E-03-lifecycle-honesty-correction-dnc",
       "status": "PASS",
       "details": {
-        "wi_http": "mkl6re4isf",
-        "wi_dnc": "mkfchvttfi",
+        "wi_http": "fgmmule51o",
+        "wi_dnc": "fgfa84grbp",
         "attempt_count": 3,
         "connected_attempt_count": 1,
-        "correction_id": "mn6pfr0t3f"
+        "correction_id": "fj3aimjid6"
       }
     },
     {
@@ -169,7 +169,20 @@
       }
     },
     {
-      "id": "P2-E2E-05-reconcile-p2-invariants",
+      "id": "P2-E2E-05-remediation-f-p2-01-02-04-05-06",
+      "status": "PASS",
+      "details": {
+        "f_p2_01_bod_5_planes_zero_leak": true,
+        "f_p2_01_zero_hash_prefix_milestones": true,
+        "f_p2_02_leader_run_history_preserved": true,
+        "f_p2_04a_multipage_page2_connected_found": true,
+        "f_p2_04b_closed_assignee_filter_found": true,
+        "f_p2_05_sameday_and_2359_0000_and_wi_counts": true,
+        "f_p2_06_direct_lead_dnc_put_blocked": true
+      }
+    },
+    {
+      "id": "P2-E2E-06-reconcile-p2-invariants",
       "status": "PASS",
       "details": {
         "ok": true,
@@ -185,17 +198,26 @@
           "duplicate_call_log_links": [],
           "interval_violations": [],
           "counter_drifts": [],
-          "checked_work_items_with_attempts": 3,
-          "as_of": "2026-11-04 02:56:03.287850"
+          "checked_work_items_with_attempts": 10,
+          "as_of": "2026-11-04 12:45:27.031872"
         }
       }
     }
   ],
   "fixtures": {
-    "campaign_a": "mju93sc06a",
-    "campaign_b": "mlera935tr",
-    "team_a": "m4nd63vsn5",
-    "team_b": "m4nnc5j1kk",
+    "campaign_a": "fg1a9jbkt0",
+    "campaign_b": "fhf8usfg8c",
+    "campaign_fill": "fnflfngp2o",
+    "campaign_page2": "fvbvpdd54g",
+    "campaign_runhist": "flufudadpb",
+    "today_iso": "2026-11-04",
+    "yesterday_iso": "2026-11-03",
+    "two_days_ago_iso": "2026-11-02",
+    "wi_page2_conn_a": "fvv9nnkjmj",
+    "wi_page2_conn_b": "fvu04ofv3i",
+    "wi_dnc_f01": "fm948lb9gr",
+    "team_a": "f12on8gvvh",
+    "team_b": "f13dflcc6a",
     "users": {
       "admin": "cskh-p2-admin@example.test",
       "bod": "cskh-p2-bod@example.test",
@@ -206,32 +228,32 @@
       "staff_c": "cskh-p2-staff-c@example.test",
       "outside": "cskh-p2-outside@example.test"
     },
-    "wi_happy": "mkqfuu1e3l",
-    "lead_happy": "CRM-LEAD-2026-02478",
-    "wi_honesty": "mkqce8osi1",
-    "lead_honesty": "CRM-LEAD-2026-02479",
+    "wi_happy": "fgrdn37s26",
+    "lead_happy": "CRM-LEAD-2026-04107",
+    "wi_honesty": "fgqfl0v8p0",
+    "lead_honesty": "CRM-LEAD-2026-04108",
     "honesty_call_logs": [
-      "p2-e2e-call-CRM-LEAD-2026-02479-1",
-      "p2-e2e-call-CRM-LEAD-2026-02479-2"
+      "p2-e2e-call-CRM-LEAD-2026-04108-1",
+      "p2-e2e-call-CRM-LEAD-2026-04108-2"
     ],
-    "wi_conflict": "mkp0nlktj5",
-    "wi_transfer": "mkovg8fd1m",
-    "transfer_task_id": "186",
-    "transfer_due_at": "2026-11-05 04:54:55",
-    "wi_correction": "mkon5fmtng",
-    "correction_seed_attempt_id": "mo6thqqh6t",
-    "wi_2359": "mkngc4hhar",
-    "task_2359": "187",
+    "wi_conflict": "fgqgrv4c99",
+    "wi_transfer": "fgpslqkguc",
+    "transfer_task_id": "312",
+    "transfer_due_at": "2026-11-05 14:43:31",
+    "wi_correction": "fgo294mv8n",
+    "correction_seed_attempt_id": "fk41150n1e",
+    "wi_2359": "fgo074bl0u",
+    "task_2359": "313",
     "due_2359": "2026-11-04 23:59:59",
-    "wi_0000": "mkm0t20ab3",
-    "task_0000": "188",
+    "wi_0000": "fgn0jan3o3",
+    "task_0000": "314",
     "due_0000": "2026-11-05 00:00:00",
-    "wi_overdue": "mkmoossel3",
-    "task_overdue": "189",
+    "wi_overdue": "fgnmipqu9v",
+    "task_overdue": "315",
     "due_overdue": "2026-11-03 15:00:00",
-    "wi_staff_b": "mklnshltoo",
-    "wi_dnc": "mkfchvttfi",
-    "wi_team_b": "mltt51rjlm",
-    "wi_closed_http": "mkl6re4isf"
+    "wi_staff_b": "fgldo82m7p",
+    "wi_dnc": "fgfa84grbp",
+    "wi_team_b": "fhvfebqc0r",
+    "wi_closed_http": "fgmmule51o"
   }
 }
