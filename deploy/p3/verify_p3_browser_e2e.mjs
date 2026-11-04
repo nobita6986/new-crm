@@ -1042,7 +1042,7 @@ async function main() {
 			const dailyPreview = await tzSession.page.locator('#p3-period-bounds-preview').innerText()
 			recordAssert(
 				`B3E-29-tz-daily-${tzLabel}`,
-				dailyPreview.includes('[2026-11-01 00:00, 2026-11-02 00:00) (Asia/Ho_Chi_Minh)'),
+				dailyPreview.includes('[2026-11-01 00:00, 2026-11-02 00:00) Asia/Ho_Chi_Minh'),
 				`${tzLabel} daily bounds stay anchored to Asia/Ho_Chi_Minh: "${dailyPreview}"`
 			)
 
@@ -1064,7 +1064,7 @@ async function main() {
 			const weeklyPreview = await tzSession.page.locator('#p3-period-bounds-preview').innerText()
 			recordAssert(
 				`B3E-30-tz-weekly-${tzLabel}`,
-				weeklyPreview.includes('[2026-11-02 00:00, 2026-11-09 00:00) (Asia/Ho_Chi_Minh)'),
+				weeklyPreview.includes('[2026-11-02 00:00, 2026-11-09 00:00) Asia/Ho_Chi_Minh'),
 				`${tzLabel} weekly bounds stay anchored to Asia/Ho_Chi_Minh: "${weeklyPreview}"`
 			)
 
@@ -1092,7 +1092,7 @@ async function main() {
 			const qPreview = await tzSession.page.locator('#p3-period-bounds-preview').innerText()
 			recordAssert(
 				`B3E-31-tz-quarterly-${tzLabel}`,
-				qPreview.includes('00:00, ') && qPreview.includes('(Asia/Ho_Chi_Minh)'),
+				qPreview.includes('[2026-10-01 00:00, 2027-01-01 00:00) Asia/Ho_Chi_Minh'),
 				`${tzLabel} quarterly bounds stay anchored to Asia/Ho_Chi_Minh: "${qPreview}"`
 			)
 
@@ -1114,7 +1114,7 @@ async function main() {
 			const yPreview = await tzSession.page.locator('#p3-period-bounds-preview').innerText()
 			recordAssert(
 				`B3E-32-tz-yearly-${tzLabel}`,
-				yPreview.includes('[2026-01-01 00:00, 2027-01-01 00:00) (Asia/Ho_Chi_Minh)'),
+				yPreview.includes('[2026-01-01 00:00, 2027-01-01 00:00) Asia/Ho_Chi_Minh'),
 				`${tzLabel} yearly bounds stay anchored to Asia/Ho_Chi_Minh: "${yPreview}"`
 			)
 
@@ -1141,7 +1141,7 @@ async function main() {
 			const customPreview = await tzSession.page.locator('#p3-period-bounds-preview').innerText()
 			recordAssert(
 				`B3E-33-tz-custom-${tzLabel}`,
-				customPreview.includes('[2026-11-01 00:00, 2026-12-01 00:00) (Asia/Ho_Chi_Minh)'),
+				customPreview.includes('[2026-11-01 00:00, 2026-12-01 00:00) Asia/Ho_Chi_Minh'),
 				`${tzLabel} custom bounds stay anchored to Asia/Ho_Chi_Minh: "${customPreview}"`
 			)
 		}
