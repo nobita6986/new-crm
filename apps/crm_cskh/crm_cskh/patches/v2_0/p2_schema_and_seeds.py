@@ -96,17 +96,15 @@ def migrate_p2_assignment_history_privacy() -> int:
 	for h in rows:
 		raw_reason = str(h.reason or "").strip()
 		raw_priv = str(h.private_reason or "").strip()
-		legacy_hash = ownership.extract_legacy_hash_prefix(raw_reason)
-		priv_legacy_hash = ownership.extract_legacy_hash_prefix(raw_priv)
+		legacy_hash, stripped = ownership.extract_legacy_hash_prefix(raw_reason)
+		priv_legacy_hash, clean_priv_existing = ownership.extract_legacy_hash_prefix(raw_priv)
 		if (
-			legacy_hash is None
-			and priv_legacy_hash is None
+			not legacy_hash
+			and not priv_legacy_hash
 			and ownership.is_neutral_public_history_reason(raw_reason)
 		):
 			continue
 
-		stripped = ownership.strip_legacy_hash_prefix(raw_reason)
-		clean_priv_existing = ownership.strip_legacy_hash_prefix(raw_priv)
 		new_hash = str(h.payload_hash or "").strip() or legacy_hash or priv_legacy_hash or None
 		event_id = str(h.event_id or "")
 

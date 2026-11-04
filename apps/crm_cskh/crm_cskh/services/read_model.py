@@ -641,7 +641,14 @@ def list_work_items(
 
 	# Server-side `care_state` SQL predicate applied identically to `COUNT(*)` and `LIMIT/OFFSET` (`F-P2-04`)
 	if care_val == "unattempted":
-		clauses.append("coalesce(wi.attempt_count, 0) = 0")
+		if has_dnc:
+			clauses.append(
+				"wi.status in ('assigned', 'in_progress') "
+				"and coalesce(wi.attempt_count, 0) = 0 "
+				"and coalesce(l.cskh_do_not_contact, 0) = 0"
+			)
+		else:
+			clauses.append("wi.status in ('assigned', 'in_progress') and coalesce(wi.attempt_count, 0) = 0")
 	elif care_val == "attempted":
 		clauses.append("coalesce(wi.attempt_count, 0) > 0")
 	elif care_val == "attempted_not_connected":
