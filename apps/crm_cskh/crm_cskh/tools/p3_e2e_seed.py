@@ -48,8 +48,8 @@ USERS = {
 	),
 	"outside": (
 		"cskh-p3-outside@example.test",
-		"Nhân viên Ngoài Cây",
-		("Sales User",),
+		"Người dùng Ngoài Hệ thống CSKH",
+		("Desk User",),
 	),
 }
 
@@ -250,6 +250,15 @@ def reset_and_seed_p3() -> dict:
 	"""Reset transactional P1/P2/P3 data on isolated P3 site and seed deterministic SLA/KPI/QA scenarios."""
 	site = _assert_p3_site()
 	frappe.set_user("Administrator")
+	prev_suppress = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+	frappe.flags.cskh_suppress_dirty_enqueue = True
+	try:
+		return _reset_and_seed_p3_inner(site)
+	finally:
+		frappe.flags.cskh_suppress_dirty_enqueue = prev_suppress
+
+
+def _reset_and_seed_p3_inner(site: str) -> dict:
 	password = os.environ.get("P3_SEED_PASSWORD", "P2Seed-Only-2026!")
 
 	frappe.db.set_single_value("System Settings", "time_zone", "Asia/Ho_Chi_Minh")
@@ -862,11 +871,16 @@ def mark_period_dirty_for_test(period_key: str | None = None) -> dict:
 	else:
 		target_d = today_hcm()
 
-	schedule_post_commit_dirty_invalidation(
-		event_dt=target_d,
-		reason="e2e_stale_banner_check",
-	)
-	frappe.db.commit()
+	prev_suppress = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+	frappe.flags.cskh_suppress_dirty_enqueue = True
+	try:
+		schedule_post_commit_dirty_invalidation(
+			event_dt=target_d,
+			reason="e2e_stale_banner_check",
+		)
+		frappe.db.commit()
+	finally:
+		frappe.flags.cskh_suppress_dirty_enqueue = prev_suppress
 	return {"ok": True, "dirty_date": target_d.isoformat()}
 
 

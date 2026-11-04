@@ -5,6 +5,21 @@ from __future__ import annotations
 import frappe
 
 from crm_cskh.services import qa as qa_svc
+from crm_cskh.services.errors import ForbiddenScope
+from crm_cskh.services.report_query import resolve_report_actor
+
+
+@frappe.whitelist(methods=["GET", "POST"])
+def get_qa_config(campaign: str | None = None) -> dict:
+	resolve_report_actor()
+	enabled = qa_svc.is_qa_enabled(campaign=campaign)
+	return {
+		"ok": True,
+		"qa_enabled": enabled,
+		"status": "enabled" if enabled else "disabled",
+		"rubric_version": "qa-rubric-v1",
+		"config_stage": "DEV_CONFIGURABLE",
+	}
 
 
 @frappe.whitelist(methods=["GET", "POST"])
@@ -15,6 +30,8 @@ def list_reviews(
 	page=1,
 	page_size=20,
 ) -> dict:
+	if not frappe.session.user or frappe.session.user == "Guest":
+		raise ForbiddenScope("Yêu cầu đăng nhập để xem thông tin kiểm định chất lượng QA.")
 	return qa_svc.list_reviews(
 		reviewed_staff=reviewed_staff,
 		campaign=campaign,
@@ -60,3 +77,4 @@ def submit_review(
 list_qa_reviews = frappe.whitelist(methods=["GET", "POST"])(list_reviews)
 create_qa_sample = frappe.whitelist(methods=["POST"])(create_sample)
 submit_qa_review = frappe.whitelist(methods=["POST"])(submit_review)
+create_review = frappe.whitelist(methods=["POST"])(submit_review)

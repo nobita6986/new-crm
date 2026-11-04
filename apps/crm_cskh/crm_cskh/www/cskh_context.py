@@ -322,6 +322,15 @@ def build_context(
 	nav_items = [item for item in NAV_ITEMS if item["key"] in visible]
 	p3_subnav = [item for item in nav_items if item.get("phase") == "p3"]
 
+	leader_root_team = ""
+	if is_leader() and not is_admin() and frappe.session.user and frappe.session.user != "Guest":
+		try:
+			leader_root_team = (
+				frappe.db.get_value("CRM Sales Hierarchy", {"user": frappe.session.user}, "name") or ""
+			)
+		except Exception:
+			leader_root_team = ""
+
 	context.no_cache = 1
 	context.title = _(title) if title else _("CSKH")
 	context.csrf_token = frappe.sessions.get_csrf_token()
@@ -337,6 +346,7 @@ def build_context(
 		"bod": is_bod(),
 		"leader": is_leader(),
 		"staff": is_staff(),
+		"leader_root_team": leader_root_team,
 		"pii": not is_bod() or is_admin(),
 		"can_manage_settings": is_admin(),
 		"can_review_correction": is_admin() or is_leader(),

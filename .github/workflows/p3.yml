@@ -1,0 +1,565 @@
+name: P3 quality & reporting verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, 'codex/p3-*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p3-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p3:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    env:
+      P3_PROJECT: p3-ci-${{ github.run_id }}
+      P3_ENV: p3.env
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Initialize CI evidence directory
+        run: mkdir -p "$RUNNER_TEMP/p3-evidence"
+
+      - name: Create isolated DEV configuration
+        shell: bash
+        run: |
+          cp deploy/dev/.env.example "$P3_ENV"
+          sed -i \
+            -e "s/^COMPOSE_PROJECT_NAME=.*/COMPOSE_PROJECT_NAME=$P3_PROJECT/" \
+            -e 's/^SITE_NAME=.*/SITE_NAME=p3-ci.localhost/' \
+            -e "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$(openssl rand -hex 24)/" \
+            -e "s/^DB_ROOT_PASSWORD=.*/DB_ROOT_PASSWORD=$(openssl rand -hex 24)/" \
+            -e 's/^WEB_PORT=.*/WEB_PORT=18300/' \
+            -e 's/^SOCKETIO_PORT=.*/SOCKETIO_PORT=19300/' \
+            "$P3_ENV"
+
+      - name: Start pinned stack
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" up -d
+
+      - name: Bootstrap from empty volumes
+        id: bootstrap
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" exec -T -u root bench chown -R frappe:frappe /workspace
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" exec -T bench bash /src/deploy/dev/bootstrap.sh
+
+      - name: Lint and format Python app and P3 CI scripts
+        id: lint
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && uvx ruff==0.14.0 check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/p2_test_inventory.py /src/deploy/dev/seed/p3_test_inventory.py /src/deploy/dev/seed/ci_p3_http_probe.py /src/deploy/dev/seed/test_ci_p3_http_probe.py /src/deploy/p3/ui_test_inventory.py /src/deploy/p3/verify_p3_http_e2e.py /src/deploy/p3/run_suites.py && uvx ruff==0.14.0 format --check --cache-dir /tmp/ruff-cache /src/apps/crm_cskh /src/deploy/dev/seed/p1_test_inventory.py /src/deploy/dev/seed/p2_test_inventory.py /src/deploy/dev/seed/p3_test_inventory.py /src/deploy/dev/seed/ci_p3_http_probe.py /src/deploy/dev/seed/test_ci_p3_http_probe.py /src/deploy/p3/ui_test_inventory.py /src/deploy/p3/verify_p3_http_e2e.py /src/deploy/p3/run_suites.py'
+
+      - name: Verify test inventories, independent golden fixture, upstream lock, and Vietnamese translations
+        id: inventory
+        run: |
+          python3 deploy/dev/seed/p1_test_inventory.py --check deploy/dev/seed/p1_test_inventory.json
+          python3 deploy/dev/seed/p2_test_inventory.py --check deploy/dev/seed/p2_test_inventory.json
+          python3 deploy/dev/seed/p3_test_inventory.py --check deploy/dev/seed/p3_test_inventory.json
+          python3 deploy/p3/ui_test_inventory.py --check deploy/p3/ui_test_inventory.json
+          node deploy/p3/test_p3_ui_timezone_and_contracts.mjs
+          python3 deploy/p1/check_translations_audit.py
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          g007 = json.loads(Path("deploy/dev/seed/g007_test_inventory.json").read_text(encoding="utf-8"))
+          p1 = json.loads(Path("deploy/dev/seed/p1_test_inventory.json").read_text(encoding="utf-8"))
+          p2 = json.loads(Path("deploy/dev/seed/p2_test_inventory.json").read_text(encoding="utf-8"))
+          p3 = json.loads(Path("deploy/dev/seed/p3_test_inventory.json").read_text(encoding="utf-8"))
+          p3_ui = json.loads(Path("deploy/p3/ui_test_inventory.json").read_text(encoding="utf-8"))
+          golden = json.loads(
+              Path("apps/crm_cskh/crm_cskh/tests/fixtures/p3_golden_expectations.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          assert g007.get("expected_total") == 99, f"P0 inventory mutated: {g007.get('expected_total')}"
+          assert p1.get("expected_total") == 209, f"P1 inventory mutated: {p1.get('expected_total')}"
+          assert p2.get("expected_total") == 38, f"P2 inventory mutated: {p2.get('expected_total')}"
+          assert p3.get("expected_total") >= 31, f"P3 inventory too small: {p3.get('expected_total')}"
+          assert p3_ui.get("expected_total") == 7, f"P3 UI inventory mutated: {p3_ui.get('expected_total')}"
+          assert golden["golden_process_score_qa_disabled"]["expected"]["value"] == 86.47
+          assert golden["golden_process_score_qa_disabled"]["expected"]["status"] == "provisional"
+          assert golden["golden_process_score_qa_enabled_final"]["expected"]["value"] == 87.0
+          print(
+              f"Inventories verified: P0=99, P1=209, P2=38, P3={p3['expected_total']}, P3-UI={p3_ui['expected_total']}; golden fixture OK."
+          )
+          PY
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" exec -T bench /workspace/frappe-bench/env/bin/python -c '
+          import os, subprocess
+          f_head = subprocess.check_output(["git", "-C", "/workspace/frappe-bench/apps/frappe", "rev-parse", "HEAD"], text=True).strip()
+          c_head = subprocess.check_output(["git", "-C", "/workspace/frappe-bench/apps/crm", "rev-parse", "HEAD"], text=True).strip()
+          assert f_head == os.environ["FRAPPE_SHA"] == "d2efa79657ba5c1abf96098b3bfacc199517d57e", f_head
+          assert c_head == os.environ["CRM_SHA"] == "0d3910b456ef4fb913e77b29db011b3debc4f778", c_head
+          print("Upstream SHA lock verified:", f_head, c_head)
+          '
+
+      - name: Seed and repeat migration x2 on seeded site
+        id: seed
+        run: |
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" exec -T bench bash /src/deploy/dev/seed/run-seed.sh
+          docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site "$SITE_NAME" migrate && bench --site "$SITE_NAME" migrate'
+
+      - name: Install fresh test site and run P3 suite per module + migrate x2
+        id: per_method
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p3-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT")
+
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench setup requirements --dev && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p3-test.localhost && bench --site p3-test.localhost set-config allow_tests true && bench --site p3-test.localhost migrate && bench --site p3-test.localhost migrate'; then
+            echo 'Fresh-site setup or double-migrate failed.' | tee "$artifact_dir/site-setup-failed.txt"
+            exit 1
+          fi
+
+          overall_status=0
+          for module in \
+            crm_cskh.tests.test_p3_calendar \
+            crm_cskh.tests.test_p3_sla_and_attribution \
+            crm_cskh.tests.test_p3_kpi_and_snapshots \
+            crm_cskh.tests.test_p3_reporting_and_security \
+            crm_cskh.tests.test_ui_p3_pages_and_context
+          do
+            slug="${module##*.}"
+            container_log="/tmp/p3-evidence/${slug}.log"
+            container_xml="/tmp/p3-evidence/${slug}.junit.xml"
+            echo "=== Running module: $module ==="
+            if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p /tmp/p3-evidence && set +e; bench --site p3-test.localhost --verbose run-tests --module '$module' --junit-xml-output '$container_xml' > '$container_log' 2>&1; rc=\$?; exit \$rc"; then
+              module_status=0
+            else
+              module_status=$?
+              overall_status=1
+            fi
+            printf '%s exit=%s\n' "$module" "$module_status" >> "$artifact_dir/module-status.txt"
+          done
+
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p3-test.localhost migrate && bench --site p3-test.localhost migrate'; then
+            echo 'Post-test double migration failed (P3 migration is not idempotent).' >> "$artifact_dir/module-status.txt"
+            overall_status=1
+          fi
+
+          container_id=$("${compose[@]}" ps -q bench)
+          if [ -n "$container_id" ] && "${compose[@]}" exec -T bench test -d /tmp/p3-evidence; then
+            docker cp "$container_id:/tmp/p3-evidence/." "$artifact_dir/"
+          else
+            echo 'Per-module evidence directory was not created in the bench container.' >> "$artifact_dir/module-status.txt"
+            overall_status=1
+          fi
+          exit "$overall_status"
+
+      - name: Enforce fail-closed per-method JUnit coverage gate (P3 backend & UI inventories)
+        id: per_method_gate
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p3-evidence"
+          mkdir -p "$artifact_dir"
+          python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
+            --inventory "$GITHUB_WORKSPACE/deploy/dev/seed/p3_test_inventory.json" \
+            --xml-dir "$artifact_dir" \
+            --out "$artifact_dir/p3-per-method-gate.json" \
+            | tee "$artifact_dir/p3-per-method-gate.txt"
+          gate_status=${PIPESTATUS[0]}
+          python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
+            --inventory "$GITHUB_WORKSPACE/deploy/p3/ui_test_inventory.json" \
+            --xml-dir "$artifact_dir" \
+            --out "$artifact_dir/p3-ui-per-method-gate.json" \
+            | tee "$artifact_dir/p3-ui-per-method-gate.txt"
+          ui_gate_status=${PIPESTATUS[0]}
+          echo "p3 per-method gate exit=$gate_status ui_gate=$ui_gate_status" >> "$artifact_dir/module-status.txt"
+          test "$gate_status" -eq 0 && test "$ui_gate_status" -eq 0
+
+      - name: Run P3 HTTP transport probe & fail-closed completeness gate against bench serve
+        id: p3_http_transport
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p3-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT")
+          container_id=$("${compose[@]}" ps -q bench)
+          mkdir -p "$artifact_dir/http"
+
+          if [ -z "$container_id" ]; then
+            echo 'Bench container is unavailable; the P3 HTTP probe could not start.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          python3 "$GITHUB_WORKSPACE/deploy/dev/seed/test_ci_p3_http_probe.py" -v 2>&1 | tee "$artifact_dir/http/p3-http-probe-selftest.txt"
+          selftest_status=${PIPESTATUS[0]}
+          if [ "$selftest_status" -ne 0 ]; then
+            exit "$selftest_status"
+          fi
+
+          "${compose[@]}" exec -T bench mkdir -p /workspace/frappe-bench/logs
+          if ! "${compose[@]}" exec -d -w /workspace/frappe-bench bench bash -lc 'nohup bench --site p3-ci.localhost serve --port 8000 --noreload --nothreading >/tmp/p3-http-serve.log 2>&1 </dev/null &'; then
+            echo 'Could not start bench serve for the seeded P3 site.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          ready=0
+          for attempt in $(seq 1 45); do
+            if "${compose[@]}" exec -T bench /workspace/frappe-bench/env/bin/python -c 'import socket; s=socket.create_connection(("127.0.0.1", 8000), timeout=1); s.close()' >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            "${compose[@]}" exec -T bench cat /tmp/p3-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
+            echo 'The HTTP server did not become ready within 45 seconds.' > "$artifact_dir/http/probe-start-failed.txt"
+            exit 1
+          fi
+
+          if "${compose[@]}" exec -T -e GITHUB_SHA="$GITHUB_SHA" -e P3_HTTP_SITE=p3-ci.localhost -e BENCH_DIR=/workspace/frappe-bench bench bash -lc 'cd /workspace/frappe-bench && FRAPPE_STREAM_LOGGING=1 /workspace/frappe-bench/env/bin/python /src/deploy/dev/seed/ci_p3_http_probe.py'; then
+            probe_status=0
+          else
+            probe_status=$?
+            "${compose[@]}" exec -T bench cat /tmp/p3-http-serve.log > "$artifact_dir/http/serve.log" 2>/dev/null || true
+          fi
+          if ! docker cp "$container_id:/tmp/p3-http/." "$artifact_dir/http/"; then
+            echo 'Could not copy the sanitized P3 HTTP evidence from the bench container.' > "$artifact_dir/http/evidence-copy-failed.txt"
+            exit 1
+          fi
+
+          python3 - "$artifact_dir/http/p3-http-transport.json" "$artifact_dir/http/p3-http-completeness-gate.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          src = Path(sys.argv[1])
+          out = Path(sys.argv[2])
+          data = json.loads(src.read_text(encoding="utf-8"))
+          cases = data.get("cases") or []
+          counts = data.get("counts") or {}
+
+          verification = [c for c in cases if c.get("record_role") == "assertion"]
+          setup_obs = [c for c in cases if c.get("record_role") == "setup_observation"]
+          unknown_role = [
+              c.get("id")
+              for c in cases
+              if c.get("record_role") not in ("assertion", "setup_observation")
+          ]
+          unasserted = [
+              c.get("id")
+              for c in verification
+              if not isinstance(c.get("assertion"), dict)
+              or c["assertion"].get("result") not in ("PASS", "FAIL")
+              or not str(c["assertion"].get("expected") or "").strip()
+          ]
+          failed = [
+              c.get("id")
+              for c in verification
+              if isinstance(c.get("assertion"), dict)
+              and (c["assertion"].get("result") != "PASS" or c.get("transport_error") is not None)
+          ]
+
+          gate_ok = (
+              data.get("probe_result") == "PASS"
+              and len(cases) == len(verification) + len(setup_obs)
+              and not unknown_role
+              and not unasserted
+              and not failed
+              and len(verification) >= 50
+              and counts.get("total_records") == len(cases)
+              and counts.get("verification_records") == len(verification)
+              and counts.get("setup_observation_records") == len(setup_obs)
+              and counts.get("asserted_cases") == len(verification)
+              and counts.get("passed_assertions") == len(verification)
+              and counts.get("unasserted_cases") == 0
+              and counts.get("failed_assertions") == 0
+              and data.get("unasserted_cases") == []
+              and data.get("failed_cases") == []
+              and data.get("gate_failures") == []
+          )
+          report = {
+              "status": "PASS" if gate_ok else "FAIL",
+              "probe_result": data.get("probe_result"),
+              "total_records": len(cases),
+              "verification_records": len(verification),
+              "setup_observation_records": len(setup_obs),
+              "asserted_cases": len(verification) - len(unasserted),
+              "passed_assertions": len(verification) - len(unasserted) - len(failed),
+              "unasserted_cases": unasserted,
+              "failed_cases": failed,
+              "unknown_role_cases": unknown_role,
+          }
+          out.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          print(json.dumps(report, ensure_ascii=False))
+          sys.exit(0 if gate_ok else 1)
+          PY
+          completeness_status=$?
+          test "$probe_status" -eq 0 && test "$completeness_status" -eq 0
+
+      - name: Verify P3 DB indexes and P2+P3 invariant reconciliation
+        id: schema
+        if: always() && steps.per_method.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p3-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT")
+          "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p3-test.localhost mariadb -e "SHOW INDEX FROM \`tabCSKH Team Membership History\`; SHOW INDEX FROM \`tabCSKH Working Calendar\`; SHOW INDEX FROM \`tabCSKH SLA Obligation\`; SHOW INDEX FROM \`tabCSKH Dirty Scope\`; SHOW INDEX FROM \`tabCSKH KPI Run\`; SHOW INDEX FROM \`tabCSKH KPI Snapshot\`; SHOW INDEX FROM \`tabCSKH QA Review\`; SHOW INDEX FROM \`tabCSKH Export Job\`; SHOW INDEX FROM \`tabCSKH Contact Attempt\`;"' > "$artifact_dir/p3-schema-indexes.txt"
+          idx_status=$?
+          echo "p3 schema index dump exit=$idx_status" >> "$artifact_dir/module-status.txt"
+
+          "${compose[@]}" exec -T -w /workspace/frappe-bench/sites bench /workspace/frappe-bench/env/bin/python -c '
+          import json, sys, frappe
+          out = {}
+          ok_all = True
+          for site in ("p3-test.localhost", "p3-ci.localhost"):
+              frappe.init(site=site, sites_path=".")
+              frappe.connect()
+              try:
+                  from crm_cskh.services.read_model import reconcile_p2_invariants
+                  res = reconcile_p2_invariants()
+                  qa_cnt = int(frappe.db.count("CSKH QA Review"))
+                  cal_ok = bool(frappe.db.exists("CSKH Working Calendar", "VN-OFFICE-DEFAULT"))
+                  out[site] = {
+                      "p2_reconcile": res,
+                      "qa_review_count": qa_cnt,
+                      "default_calendar_seeded": cal_ok,
+                  }
+                  if not res.get("ok") or not cal_ok:
+                      ok_all = False
+                  if site == "p3-ci.localhost" and qa_cnt != 0:
+                      ok_all = False
+              finally:
+                  frappe.destroy()
+          print(json.dumps(out, indent=2, default=str))
+          sys.exit(0 if ok_all else 1)
+          ' > "$artifact_dir/p3-reconcile-gate.json"
+          rec_status=$?
+          echo "p3 reconcile gate exit=$rec_status" >> "$artifact_dir/module-status.txt"
+          test "$idx_status" -eq 0 && test "$rec_status" -eq 0
+
+      - name: Backup, restore to a new site, and verify P2+P3 invariants
+        id: backup_restore
+        if: always() && steps.seed.outcome == 'success'
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -u
+          artifact_dir="$RUNNER_TEMP/p3-evidence"
+          compose=(docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT")
+          if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site "$SITE_NAME" backup --with-files && bench new-site --db-root-password "$DB_ROOT_PASSWORD" --admin-password "$ADMIN_PASSWORD" --mariadb-user-host-login-scope=% --install-app crm --install-app crm_cskh p3-restore.localhost && db=$(find "sites/$SITE_NAME/private/backups" -name "*-database.sql.gz" -print | sort | tail -n 1) && public=$(find "sites/$SITE_NAME/private/backups" -name "*-files.tar" ! -name "*-private-files.tar" -print | sort | tail -n 1) && private=$(find "sites/$SITE_NAME/private/backups" -name "*-private-files.tar" -print | sort | tail -n 1) && test -n "$db" && test -n "$public" && test -n "$private" && bench --site p3-restore.localhost --force restore "$db" --db-root-password "$DB_ROOT_PASSWORD" --with-public-files "$public" --with-private-files "$private" && bench --site p3-restore.localhost migrate'; then
+            echo 'p3 backup_restore command failed' >> "$artifact_dir/module-status.txt"
+            exit 1
+          fi
+          "${compose[@]}" exec -T -w /workspace/frappe-bench/sites bench /workspace/frappe-bench/env/bin/python -c '
+          import json, sys, frappe
+          from datetime import datetime, timezone
+          doctypes = (
+              "CRM Lead",
+              "CSKH Campaign",
+              "CSKH Work Item",
+              "CSKH Outcome Code",
+              "CSKH Policy",
+              "CSKH Contact Attempt",
+              "CSKH Team Membership History",
+              "CSKH Working Calendar",
+              "CSKH SLA Obligation",
+              "CSKH KPI Run",
+              "CSKH KPI Snapshot",
+              "CSKH Export Job",
+          )
+          def snap(site):
+              frappe.init(site=site, sites_path=".")
+              frappe.connect()
+              try:
+                  from crm_cskh.services.read_model import reconcile_p2_invariants
+                  counts = {dt: int(frappe.db.count(dt)) for dt in doctypes}
+                  rec = reconcile_p2_invariants()
+                  return {"counts": counts, "reconcile_ok": bool(rec.get("ok"))}
+              finally:
+                  frappe.destroy()
+          src = snap("p3-ci.localhost")
+          dst = snap("p3-restore.localhost")
+          ok = (
+              src["counts"] == dst["counts"]
+              and dst["counts"]["CSKH Working Calendar"] >= 1
+              and dst["counts"]["CSKH Team Membership History"] >= 5
+              and dst["counts"]["CSKH KPI Run"] >= 1
+              and dst["counts"]["CSKH KPI Snapshot"] >= 1
+              and dst["reconcile_ok"]
+          )
+          report = {
+              "status": "PASS" if ok else "FAIL",
+              "checked_at_utc": datetime.now(timezone.utc).isoformat(),
+              "counts_match": src["counts"] == dst["counts"],
+              "source": src,
+              "restored": dst,
+          }
+          print(json.dumps(report, indent=2, default=str))
+          sys.exit(0 if ok else 1)
+          ' > "$artifact_dir/p3-backup-restore-smoke.json"
+          br_status=$?
+          echo "p3 backup_restore exit=$br_status" >> "$artifact_dir/module-status.txt"
+          exit "$br_status"
+
+      - name: Sanitize evidence, hash manifest and record environment metadata
+        if: always()
+        shell: bash
+        env:
+          BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          INVENTORY_OUTCOME: ${{ steps.inventory.outcome }}
+          SEED_OUTCOME: ${{ steps.seed.outcome }}
+          PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
+          PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.p3_http_transport.outcome }}
+          SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
+          BACKUP_RESTORE_OUTCOME: ${{ steps.backup_restore.outcome }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/p3-evidence"
+          export P3_EVIDENCE_DIR="$RUNNER_TEMP/p3-evidence"
+          export P3_ENV_FILE="$P3_ENV"
+          export P3_SEED_SOURCE="$GITHUB_WORKSPACE/deploy/dev/seed/seed_demo.py"
+          python3 - <<'PY'
+          import ast
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          root = Path(os.environ["P3_EVIDENCE_DIR"])
+          env_file = Path(os.environ["P3_ENV_FILE"])
+          seed_file = Path(os.environ["P3_SEED_SOURCE"])
+          env_values = {}
+          for line in env_file.read_text(encoding="utf-8").splitlines():
+              if "=" in line and not line.lstrip().startswith("#"):
+                  key, value = line.split("=", 1)
+                  env_values[key] = value
+          secrets = [env_values.get(key, "") for key in ("ADMIN_PASSWORD", "DB_ROOT_PASSWORD")]
+          seed_tree = ast.parse(seed_file.read_text(encoding="utf-8"), filename=str(seed_file))
+          for node in seed_tree.body:
+              if isinstance(node, ast.Assign) and any(
+                  isinstance(target, ast.Name) and target.id == "SEED_PASSWORD"
+                  for target in node.targets
+              ):
+                  value = ast.literal_eval(node.value)
+                  if isinstance(value, str) and value:
+                      secrets.append(value)
+          patterns = [
+              (re.compile(r"(?im)(set-cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?im)(cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(/private/files/)[^\s\"'<>\\]+"), r"\1[REDACTED_FILE_URL]"),
+              (re.compile(r"(?i)(/files/)[^\s\"'<>\\]+"), r"\1[REDACTED_FILE_URL]"),
+              (re.compile(r"(?i)(x-frappe-csrf-token[\"'=:\s]+)[^\"'&\s<,}]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(sid=)[^;\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(pwd=)[^&\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(password=)[^&\s\"']+"), r"\1[REDACTED]"),
+              (re.compile(r'(?i)("file_url"\s*:\s*)"[^"]*"'), r'\1"[REDACTED_FILE_URL]"'),
+              (re.compile(r"(?:\+?84|0)\d{8,10}"), "[REDACTED_PHONE]"),
+          ]
+          redactions = 0
+          for path in root.rglob("*"):
+              if not path.is_file() or path.suffix.lower() not in {".log", ".xml", ".json", ".txt"}:
+                  continue
+              content = path.read_text(encoding="utf-8", errors="replace")
+              for secret in secrets:
+                  if secret and secret in content:
+                      content = content.replace(secret, "[REDACTED]")
+                      redactions += 1
+              for pattern, replacement in patterns:
+                  content, count = pattern.subn(replacement, content)
+                  redactions += count
+              path.write_text(content, encoding="utf-8")
+
+          metadata = {
+              "commit_sha": os.environ.get("GITHUB_SHA", "unknown"),
+              "run_id": os.environ.get("GITHUB_RUN_ID", "unknown"),
+              "event_name": os.environ.get("GITHUB_EVENT_NAME", "unknown"),
+              "site_seeded": "p3-ci.localhost",
+              "site_fresh_test": "p3-test.localhost",
+              "frappe_sha": env_values.get("FRAPPE_SHA", "unknown"),
+              "crm_sha": env_values.get("CRM_SHA", "unknown"),
+              "bench_image_ref": env_values.get("BENCH_IMAGE", "unknown"),
+              "p3_inventory": "deploy/dev/seed/p3_test_inventory.json",
+              "workflow_outcomes": {
+                  "bootstrap": os.environ.get("BOOTSTRAP_OUTCOME"),
+                  "lint": os.environ.get("LINT_OUTCOME"),
+                  "inventory": os.environ.get("INVENTORY_OUTCOME"),
+                  "seed": os.environ.get("SEED_OUTCOME"),
+                  "per_method": os.environ.get("PER_METHOD_OUTCOME"),
+                  "per_method_gate": os.environ.get("PER_METHOD_GATE_OUTCOME"),
+                  "p3_http_transport": os.environ.get("HTTP_TRANSPORT_OUTCOME"),
+                  "schema": os.environ.get("SCHEMA_OUTCOME"),
+                  "backup_restore": os.environ.get("BACKUP_RESTORE_OUTCOME"),
+              },
+              "redaction_replacements": redactions,
+          }
+          (root / "workflow-metadata.json").write_text(
+              json.dumps(metadata, indent=2) + "\n", encoding="utf-8"
+          )
+
+          manifest_lines = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              rel = path.relative_to(root).as_posix()
+              manifest_lines.append(f"{digest}  {rel}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(manifest_lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Upload sanitized P3 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: p3-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/p3-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Enforce the P3 CI gates
+        if: always()
+        shell: bash
+        env:
+          BOOTSTRAP_OUTCOME: ${{ steps.bootstrap.outcome }}
+          LINT_OUTCOME: ${{ steps.lint.outcome }}
+          INVENTORY_OUTCOME: ${{ steps.inventory.outcome }}
+          SEED_OUTCOME: ${{ steps.seed.outcome }}
+          PER_METHOD_OUTCOME: ${{ steps.per_method.outcome }}
+          PER_METHOD_GATE_OUTCOME: ${{ steps.per_method_gate.outcome }}
+          HTTP_TRANSPORT_OUTCOME: ${{ steps.p3_http_transport.outcome }}
+          SCHEMA_OUTCOME: ${{ steps.schema.outcome }}
+          BACKUP_RESTORE_OUTCOME: ${{ steps.backup_restore.outcome }}
+        run: |
+          printf 'bootstrap=%s\n' "$BOOTSTRAP_OUTCOME"
+          printf 'lint=%s\n' "$LINT_OUTCOME"
+          printf 'inventory=%s\n' "$INVENTORY_OUTCOME"
+          printf 'seed=%s\n' "$SEED_OUTCOME"
+          printf 'per_method=%s\n' "$PER_METHOD_OUTCOME"
+          printf 'per_method_gate=%s\n' "$PER_METHOD_GATE_OUTCOME"
+          printf 'p3_http_transport=%s\n' "$HTTP_TRANSPORT_OUTCOME"
+          printf 'schema=%s\n' "$SCHEMA_OUTCOME"
+          printf 'backup_restore=%s\n' "$BACKUP_RESTORE_OUTCOME"
+          test "$BOOTSTRAP_OUTCOME" = success && \
+            test "$LINT_OUTCOME" = success && \
+            test "$INVENTORY_OUTCOME" = success && \
+            test "$SEED_OUTCOME" = success && \
+            test "$PER_METHOD_OUTCOME" = success && \
+            test "$PER_METHOD_GATE_OUTCOME" = success && \
+            test "$HTTP_TRANSPORT_OUTCOME" = success && \
+            test "$SCHEMA_OUTCOME" = success && \
+            test "$BACKUP_RESTORE_OUTCOME" = success
+
+      - name: Show stack logs if a gate fails
+        if: failure()
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" logs --no-color
+
+      - name: Remove isolated stack
+        if: always()
+        run: docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" down --volumes --remove-orphans
