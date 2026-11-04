@@ -529,7 +529,7 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 		update_modified=False,
 	)
 
-	_insert_history(
+	hist = _insert_history(
 		{
 			"doctype": "CSKH Assignment History",
 			"work_item": work_item,
@@ -545,6 +545,18 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 			"event_id": event_id,
 			"distribution_run": distribution_run,
 		}
+	)
+
+	from crm_cskh.services import sla_engine
+
+	sla_engine.on_interval_opened_in_tx(
+		work_item=work_item,
+		lead=item.lead,
+		campaign=item.campaign,
+		interval_event=hist.name,
+		owner_user=target_user,
+		started_at=now,
+		actor=actor,
 	)
 
 	_sync_lead_owner(item.lead, target_user)
@@ -618,7 +630,7 @@ def reassign(
 
 	now = now_datetime()
 	old_owner = item.assigned_to
-	_close_open_interval(work_item, now)
+	closed_ev = _close_open_interval(work_item, now)
 
 	from crm_cskh.services.followup import reassign_open_followup_in_tx
 
@@ -650,7 +662,7 @@ def reassign(
 		update_modified=False,
 	)
 
-	_insert_history(
+	new_hist = _insert_history(
 		{
 			"doctype": "CSKH Assignment History",
 			"work_item": work_item,
@@ -669,6 +681,21 @@ def reassign(
 			# came from a run it did not belong to (L-08).
 			"distribution_run": distribution_run or _original_distribution_run(work_item),
 		}
+	)
+
+	from crm_cskh.services import sla_engine
+
+	sla_engine.on_interval_transferred_in_tx(
+		work_item=work_item,
+		lead=item.lead,
+		campaign=item.campaign,
+		old_interval_event=closed_ev.name if closed_ev else None,
+		new_interval_event=new_hist.name,
+		from_user=old_owner,
+		to_user=target_user,
+		transferred_at=now,
+		actor=actor,
+		transferred_task=transferred_task,
 	)
 
 	_sync_lead_owner(item.lead, target_user)
@@ -741,13 +768,27 @@ def revoke(
 	old_owner = item.assigned_to
 	_close_open_interval(work_item, now)
 
+	from crm_cskh.services import sla_engine
 	from crm_cskh.services.followup import cancel_open_followup_in_tx
 
-	canceled_task = cancel_open_followup_in_tx(
+	prev_sys_cancel = getattr(frappe.flags, "cskh_system_cancel_followup", False)
+	frappe.flags.cskh_system_cancel_followup = True
+	try:
+		canceled_task = cancel_open_followup_in_tx(
+			work_item=work_item,
+			actor=actor,
+			reason=f"Thu hồi phân công: {clean_reason}",
+			now=now,
+		)
+	finally:
+		frappe.flags.cskh_system_cancel_followup = prev_sys_cancel
+
+	sla_engine.on_interval_revoked_in_tx(
 		work_item=work_item,
+		from_user=old_owner,
+		revoked_at=now,
 		actor=actor,
-		reason=f"Thu hồi phân công: {clean_reason}",
-		now=now,
+		reason=clean_reason,
 	)
 
 	new_status = "queued" if return_to_pool else "revoked"

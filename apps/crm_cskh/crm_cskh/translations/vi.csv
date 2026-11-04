@@ -213,8 +213,7 @@ Add Source...,Thêm nguồn...
 Select {0}...,Chọn {0}...
 Convert to Deal,Chuyển thành Cơ hội
 created this lead,đã tạo khách hàng tiềm năng này
-Due Date,Hạn chót,CRM Task
-Lead Name,Tên khách hàng,CRM Lead
+Lead Name,Tên khách hàng
 Search or type a command ({0}),Tìm kiếm hoặc nhập lệnh ({0})
 1. Upload a private file,1. Tải lên tệp riêng tư
 2. Preview and confirm,2. Xem trước và xác nhận
@@ -1196,3 +1195,47 @@ Insufficient eligible sample size to compute a rate or rank (N/A).,Chưa có đ�
 "Invalid QA review action (self-review is forbidden, duplicate round, or QA is disabled).","Thao tác kiểm định QA không hợp lệ (cấm tự duyệt phiếu của chính mình, trùng vòng kiểm định hoặc QA đang tắt)."
 A KPI recompute job is already running for this scope and period.,Đang có tiến trình tính lại KPI chạy cho cùng phạm vi và kỳ báo cáo này; vui lòng chờ hoàn tất.
 This export download link has expired; please request a new authorized export.,Liên kết tải tệp xuất báo cáo đã hết hạn hiệu lực; vui lòng tạo yêu cầu xuất mới.
+INVALID_DATE_RANGE,INVALID_DATE_RANGE
+INVALID_DIMENSION,INVALID_DIMENSION
+INVALID_METRIC_KEY,INVALID_METRIC_KEY
+SNAPSHOT_NOT_READY,SNAPSHOT_NOT_READY
+EXPORT_TOO_LARGE,EXPORT_TOO_LARGE
+CALENDAR_INVALID,CALENDAR_INVALID
+The requested reporting date range or period grain is invalid.,Khoảng thời gian hoặc chu kỳ báo cáo yêu cầu không hợp lệ.
+The requested grouping dimension or filter parameter is invalid.,Chiều phân tích hoặc bộ lọc báo cáo yêu cầu không hợp lệ.
+The requested KPI metric key is not supported by the current metric version.,Mã chỉ số KPI yêu cầu không thuộc danh mục chỉ số hiện hành.
+"You do not have permission to access this reporting scope, SLA obligation or export job.","Bạn không có quyền truy cập phạm vi báo cáo, nghĩa vụ SLA hoặc yêu cầu xuất dữ liệu này."
+The KPI snapshot for this period is still being computed. Please retry shortly.,Dữ liệu tổng hợp KPI của kỳ này đang được tính toán. Vui lòng thử lại sau ít phút.
+A KPI recomputation run is already in progress for the requested period.,Đang có một tiến trình tính toán lại KPI chạy cho kỳ báo cáo này.
+This export file has expired or was revoked.,Tệp xuất dữ liệu đã hết hạn hiệu lực hoặc đã bị thu hồi quyền truy cập.
+The requested export exceeds the permitted row limit; please narrow your filters.,Số dòng yêu cầu xuất vượt quá giới hạn cho phép; vui lòng thu hẹp bộ lọc.
+QA review is currently disabled in the active policy configuration.,Chức năng chấm kiểm định chất lượng (QA) hiện đang tắt theo cấu hình chính sách.
+This QA review conflicts with self-review or scoring rules.,Phiếu chấm QA vi phạm quy tắc chống tự chấm hoặc quy tắc thang điểm.
+The working calendar or shift configuration is invalid.,Cấu hình lịch làm việc hoặc ca làm việc không hợp lệ.
+The action conflicts with the active SLA or operational policy.,Thao tác xung đột với chính sách SLA hoặc quy định vận hành hiện hành.
+Working calendar,Lịch làm việc
+Working shift,Ca làm việc
+Team membership history,Lịch sử thành viên đội nhóm
+SLA obligation,Nghĩa vụ SLA
+First attempt SLA,SLA liên hệ lần đầu
+Follow-up SLA,SLA chăm sóc hẹn lại
+First connected tracker (informational),Theo dõi kết nối lần đầu (tham khảo)
+Minimum attempts policy,Chính sách số lần thử tối thiểu
+Closed on handoff (within SLA),Đóng khi chuyển giao (còn hạn SLA)
+Superseded by valid reschedule,Thay thế bởi dời lịch hợp lệ
+Waived with audit,Miễn trừ có kiểm toán
+Pause SLA clock,Tạm dừng đồng hồ SLA
+Resume SLA clock,Tiếp tục đồng hồ SLA
+Authoritative team attribution,Đội nhóm xác thực theo thời điểm
+Provisional score (QA disabled),Điểm tạm tính (QA đang tắt)
+Insufficient data,Chưa đủ dữ liệu tính điểm
+DEV / configurable policy (pending BOD sign-off),Cấu hình DEV có thể điều chỉnh (chờ BOD phê duyệt chính thức)
+CSKH Working Calendar,Lịch làm việc CSKH
+CSKH Working Shift,Ca làm việc CSKH
+CSKH Team Membership History,Lịch sử thành viên đội nhóm CSKH
+CSKH SLA Obligation,Nghĩa vụ SLA CSKH
+CSKH KPI Run,Đợt tính toán KPI CSKH
+CSKH KPI Snapshot,Bản chụp chỉ số KPI CSKH
+CSKH Dirty Scope,Phạm vi cần tính lại KPI CSKH
+CSKH QA Review,Phiếu kiểm định chất lượng CSKH
+CSKH Export Job,Tiến trình xuất báo cáo CSKH

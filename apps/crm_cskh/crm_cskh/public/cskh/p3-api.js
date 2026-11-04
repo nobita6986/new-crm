@@ -971,7 +971,8 @@ window.cskhP3Api = (function () {
 			fulfilled_at: row.fulfilled_at || '',
 			breached_at: row.breached_at || '',
 			sla_status: row.status || row.sla_status || '',
-			waiver_reason: row.waiver_reason || row.exclusion_reason || row.reason || '',
+			waiver_reason:
+				row.waive_reason || row.waiver_reason || row.exclusion_reason || row.reason || '',
 		}
 	}
 })()

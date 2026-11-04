@@ -733,14 +733,15 @@ window.cskhP3Widgets = (function () {
 						t('SLA status'),
 						state.sla_status,
 						[
+							{ value: 'open', label: t('Pending (not yet due)') },
 							{ value: 'breached_open', label: t('Breached (open)') },
 							{ value: 'fulfilled_late', label: t('Fulfilled late') },
 							{ value: 'fulfilled_on_time', label: t('Fulfilled on time') },
-							{ value: 'pending', label: t('Pending (not yet due)') },
+							{ value: 'breached_handoff', label: t('Breached before handoff') },
+							{ value: 'handoff_closed', label: t('Closed validly on handoff') },
 							{ value: 'waived', label: t('Waived (approved)') },
 							{ value: 'superseded', label: t('Superseded (rescheduled)') },
-							{ value: 'canceled_valid', label: t('Canceled validly') },
-							{ value: 'escalated', label: t('Escalated') },
+							{ value: 'canceled_validly', label: t('Canceled validly') },
 						],
 						t('All'),
 						function (val) {

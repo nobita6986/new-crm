@@ -21,3 +21,7 @@ crm_cskh.patches.v1_0.p1_import_batch_lead_constraints
 # P2: Custom Fields on `CRM Lead` & `CRM Task`, P2 unique/lookup indexes,
 # Work Item revision backfill, and 12 Vietnamese Outcome Codes + GLOBAL-DEFAULT Policy.
 crm_cskh.patches.v2_0.p2_schema_and_seeds
+
+# P3: Working Calendar & Holiday List seeds, P3 SLA/attribution indexes,
+# pre-P3 `historical_attribution_unknown` marking, and cutover team membership baseline.
+crm_cskh.patches.v3_0.p3_schema_and_seeds
