@@ -93,11 +93,26 @@ def linked_lead_query_conditions(user=None, doctype=None, **kwargs):
 	if parent_condition:
 		parent_condition = f" AND ({parent_condition})"
 
-	return (
+	lead_exists_sql = (
 		"EXISTS (SELECT 1 FROM `tabCRM Lead` `cskh_lead` "
 		f"WHERE `cskh_lead`.`name` = `tab{doctype}`.`{link_name}` "
 		f"AND `tab{doctype}`.`{link_doctype}` = 'CRM Lead'{parent_condition})"
 	)
+	if doctype == "File":
+		from frappe.utils import now_datetime
+
+		user_sql = frappe.db.escape(user, percent=False)
+		now_sql = frappe.db.escape(str(now_datetime()), percent=False)
+		export_exists_sql = (
+			"EXISTS (SELECT 1 FROM `tabCSKH Export Job` `cskh_exp` "
+			"WHERE `cskh_exp`.`name` = `tabFile`.`attached_to_name` "
+			"AND `tabFile`.`attached_to_doctype` = 'CSKH Export Job' "
+			"AND `cskh_exp`.`status` = 'completed' "
+			f"AND `cskh_exp`.`expires_at` > {now_sql} "
+			f"AND `cskh_exp`.`requested_by` = {user_sql})"
+		)
+		return f"({lead_exists_sql} OR {export_exists_sql})"
+	return lead_exists_sql
 
 
 def lead_has_permission(doc, ptype, user, **kwargs):
@@ -121,6 +136,15 @@ def deal_has_permission(doc, ptype, user, **kwargs):
 
 
 def linked_lead_has_permission(doc, ptype, user, **kwargs):
+	if doc.doctype == "File" and doc.get("attached_to_doctype") == "CSKH Export Job":
+		if ptype not in ("read", "select", "print"):
+			return False
+		from crm_cskh.p3_permissions import is_export_file_downloadable
+
+		if not is_export_file_downloadable(doc.get("attached_to_name"), user=user):
+			return False
+		return None
+
 	if _is_system(user):
 		return None
 

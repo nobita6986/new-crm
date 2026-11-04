@@ -60,6 +60,7 @@ PERMLEVEL_PROTECTED_FIELDS = {
 	),
 	"CSKH KPI Run": frozenset(("reconciliation_json", "checkpoint_json", "error_message")),
 	"CSKH QA Review": frozenset(("internal_note", "scores_json")),
+	"CSKH Export Job": frozenset(("file_doc", "file_url", "filter_payload_json", "error_summary")),
 }
 
 

@@ -106,6 +106,10 @@ _AUTHORIZED_QA_WRITE: contextvars.ContextVar[bool] = contextvars.ContextVar(
 	"_AUTHORIZED_QA_WRITE",
 	default=False,
 )
+_AUTHORIZED_EXPORT_WRITE: contextvars.ContextVar[bool] = contextvars.ContextVar(
+	"_AUTHORIZED_EXPORT_WRITE",
+	default=False,
+)
 
 
 class _AuthorizedFlagContext:
@@ -145,6 +149,14 @@ def authorized_qa_write() -> _AuthorizedFlagContext:
 
 def is_authorized_qa_write() -> bool:
 	return bool(_AUTHORIZED_QA_WRITE.get())
+
+
+def authorized_export_write() -> _AuthorizedFlagContext:
+	return _AuthorizedFlagContext(_AUTHORIZED_EXPORT_WRITE)
+
+
+def is_authorized_export_write() -> bool:
+	return bool(_AUTHORIZED_EXPORT_WRITE.get())
 
 
 def _is_cskh_admin_or_system(user: str | None = None) -> bool:
@@ -332,6 +344,29 @@ class QAReview(Document):
 		)
 
 
+class ExportJob(Document):
+	def autoname(self):
+		if not self.name:
+			self.name = f"EXP-{frappe.generate_hash(length=12).upper()}"
+
+	def validate(self):
+		if not (
+			is_authorized_export_write()
+			or getattr(frappe.flags, "in_migrate", False)
+			or getattr(frappe.flags, "in_install", False)
+		):
+			frappe.throw(
+				_("Export jobs may only be created or updated through the export service."),
+				frappe.PermissionError,
+			)
+
+	def on_trash(self):
+		frappe.throw(
+			_("Export jobs are audit records and cannot be deleted."),
+			frappe.PermissionError,
+		)
+
+
 def _index_exists(table_name: str, index_name: str) -> bool:
 	clean_table = table_name.replace("`", "")
 	rows = frappe.db.sql(f"show index from `{clean_table}` where Key_name = %s", (index_name,))
@@ -452,6 +487,18 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			"CSKH QA Review",
 			("reviewed_staff", "reviewed_at", "status"),
 			"idx_cskh_qa_staff_date",
+			False,
+		),
+		(
+			"CSKH Export Job",
+			("requested_by", "status", "expires_at"),
+			"idx_cskh_exp_req_status",
+			False,
+		),
+		(
+			"CSKH Export Job",
+			("status", "expires_at"),
+			"idx_cskh_exp_status_exp",
 			False,
 		),
 	]
