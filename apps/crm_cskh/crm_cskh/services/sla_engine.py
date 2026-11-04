@@ -55,6 +55,14 @@ def _p3_sla_ready() -> bool:
 	return bool(frappe.db.table_exists("CSKH SLA Obligation"))
 
 
+def is_p3_sla_enabled(campaign: str | None = None, owner_user: str | None = None) -> bool:
+	"""Return whether P3 SLA evaluation is enabled in the effective global/campaign CSKH Policy."""
+	from crm_cskh.services.policies import resolve_effective_policy
+
+	pol = _policy_with_p3_defaults(resolve_effective_policy(campaign=campaign, owner_user=owner_user))
+	return bool(cint(pol.get("p3_sla_enabled", 1)))
+
+
 def _notify_dirty_post_commit(
 	*,
 	work_item: str | None = None,
