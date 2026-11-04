@@ -1,0 +1,438 @@
+{
+  "suite": "p3_browser_e2e",
+  "site": "p3ui.localhost",
+  "base_url": "http://p3ui.localhost:8320",
+  "git_sha": "707bb2fec7efccb32e5040ec507f6ad3891d02d6",
+  "apps_tree": "bd4b30056f7d16d184713fe5046e79a2575c7853",
+  "completed_at": "2026-11-04T14:59:40.208Z",
+  "total_screenshots": 13,
+  "total_assertions": 61,
+  "passed": 61,
+  "failed": 0,
+  "screenshots": [
+    {
+      "check_id": "B3E-01-bod-quality-overview",
+      "actor": "cskh-p3-bod@example.test",
+      "role": "CSKH BOD Viewer",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/quality-overview",
+      "screenshot": "deploy/p3/evidence/screenshots/01-bod-quality-overview-3-pillars.png",
+      "notes": "BOD Executive Quality Overview with 3 separated pillars, qa_enabled=false banner, N/A QA card, provisional Process Score, and expanded formula/provenance."
+    },
+    {
+      "check_id": "B3E-05-bod-drilldown-redacted",
+      "actor": "cskh-p3-bod@example.test",
+      "role": "CSKH BOD Viewer",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/quality-overview#bod-drilldown",
+      "screenshot": "deploy/p3/evidence/screenshots/02-bod-drilldown-redacted.png",
+      "notes": "BOD drill-down reconciles cohort counts while redacting all customer PII and Work Item links."
+    },
+    {
+      "check_id": "B3E-06-admin-drilldown-first-attempt",
+      "actor": "cskh-p3-admin@example.test",
+      "role": "CSKH CRM Admin",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/quality-overview#drilldown-FIRST_ATTEMPT_SLA_RATE",
+      "screenshot": "deploy/p3/evidence/screenshots/03-admin-drilldown-reconciliation.png",
+      "notes": "Interactive server-side drill-down modal reconciling cohort segments (all = met + unmet) and breached_only filter."
+    },
+    {
+      "check_id": "B3E-08-bod-team-quality",
+      "actor": "cskh-p3-bod@example.test",
+      "role": "CSKH BOD Viewer",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/team-quality",
+      "screenshot": "deploy/p3/evidence/screenshots/04-bod-team-quality-comparison.png",
+      "notes": "Team Comparison screen preserving historical team-as-of attribution across Team A and Team B."
+    },
+    {
+      "check_id": "B3E-11-bod-employee-quality",
+      "actor": "cskh-p3-bod@example.test",
+      "role": "CSKH BOD Viewer",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/employee-quality",
+      "screenshot": "deploy/p3/evidence/screenshots/05-bod-employee-quality-groups-and-na.png",
+      "notes": "Employee Quality separating Provisional vs Insufficient Data (N/A) groups with 0 customer PII."
+    },
+    {
+      "check_id": "B3E-14-bod-campaign-quality",
+      "actor": "cskh-p3-bod@example.test",
+      "role": "CSKH BOD Viewer",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/campaign-quality",
+      "screenshot": "deploy/p3/evidence/screenshots/06-bod-campaign-quality-grain.png",
+      "notes": "Campaign & Lead Source Performance contrasting DISTINCT Work Items vs Ownership Intervals and non-penalizing FIRST_CONNECTED."
+    },
+    {
+      "check_id": "B3E-16-leader-sla-operations",
+      "actor": "cskh-p3-leader-a@example.test",
+      "role": "Sales Manager (Team A)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/sla-operations",
+      "screenshot": "deploy/p3/evidence/screenshots/07-leader-a-sla-operations-waiver.png",
+      "notes": "Leader A SLA & QA Operations table after audited SLA obligation waiver."
+    },
+    {
+      "check_id": "B3E-19-staff-a-scorecard",
+      "actor": "cskh-p3-staff-a@example.test",
+      "role": "Sales User (Staff A)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/scorecard",
+      "screenshot": "deploy/p3/evidence/screenshots/08-staff-a-personal-scorecard.png",
+      "notes": "Staff A Personal Scorecard showing own Process Score components, 3 pillars, and active owned SLA obligations (0 peer ranks)."
+    },
+    {
+      "check_id": "B3E-24-admin-stale-banner",
+      "actor": "cskh-p3-admin@example.test",
+      "role": "CSKH CRM Admin",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/quality-overview#stale",
+      "screenshot": "deploy/p3/evidence/screenshots/09-admin-stale-snapshot-banner.png",
+      "notes": "Transparent stale/dirty KPI snapshot warning banner before recompute."
+    },
+    {
+      "check_id": "B3E-25-admin-revisions-modal",
+      "actor": "cskh-p3-admin@example.test",
+      "role": "CSKH CRM Admin",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/quality-overview#revisions",
+      "screenshot": "deploy/p3/evidence/screenshots/10-admin-revisions-and-restatement.png",
+      "notes": "KPI Revision & Restatement history modal showing Run ID, status, as-of, and restatement lineage."
+    },
+    {
+      "check_id": "B3E-26-leader-export-ready",
+      "actor": "cskh-p3-leader-a@example.test",
+      "role": "Sales Manager (Team A)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/team-quality#export-ready",
+      "screenshot": "deploy/p3/evidence/screenshots/11-leader-a-authorized-export-ready.png",
+      "notes": "Authorized server export modal showing Export ID, Ready status, row count, expiry timestamp, and download link."
+    },
+    {
+      "check_id": "B3E-28-leader-export-revoked-403",
+      "actor": "cskh-p3-leader-a@example.test",
+      "role": "Sales Manager (Team A)",
+      "browser_timezone": "Asia/Ho_Chi_Minh",
+      "route": "/cskh/team-quality#export-revoked",
+      "screenshot": "deploy/p3/evidence/screenshots/12-leader-a-export-revoked-403.png",
+      "notes": "Post-revocation export status refresh surfaces clear Vietnamese access-denied error and disables download."
+    },
+    {
+      "check_id": "B3E-33-cross-tz-los-angeles",
+      "actor": "cskh-p3-bod@example.test",
+      "role": "CSKH BOD Viewer (Browser TZ America/Los_Angeles)",
+      "browser_timezone": "America/Los_Angeles",
+      "route": "/cskh/quality-overview#tz-america-los-angeles",
+      "screenshot": "deploy/p3/evidence/screenshots/13-bod-cross-timezone-los-angeles.png",
+      "notes": "Cross-timezone browser context (America/Los_Angeles vs site Asia/Ho_Chi_Minh) showing zero period boundary drift."
+    }
+  ],
+  "assertions": [
+    {
+      "id": "B3E-01-pillar-compliance",
+      "status": "PASS",
+      "detail": "Executive overview renders distinct pillar section[data-pillar=\"compliance\"]"
+    },
+    {
+      "id": "B3E-01-pillar-connection",
+      "status": "PASS",
+      "detail": "Executive overview renders distinct pillar section[data-pillar=\"connection\"]"
+    },
+    {
+      "id": "B3E-01-pillar-reliability",
+      "status": "PASS",
+      "detail": "Executive overview renders distinct pillar section[data-pillar=\"reliability\"]"
+    },
+    {
+      "id": "B3E-02-qa-disabled-na",
+      "status": "PASS",
+      "detail": "QA_PASS_RATE renders \"N/A\" (N/A — Chưa bật kiểm định QA), never 0%"
+    },
+    {
+      "id": "B3E-03-process-score-provisional",
+      "status": "PASS",
+      "detail": "PROCESS_SCORE renders provisional label: \"86,69 — Tạm tính; thiếu mẫu QA\""
+    },
+    {
+      "id": "B3E-04-provenance-Mã chỉ số",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Mã chỉ số\""
+    },
+    {
+      "id": "B3E-04-provenance-Đơn vị thống kê (Grain)",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Đơn vị thống kê (Grain)\""
+    },
+    {
+      "id": "B3E-04-provenance-Tử số / Mẫu số",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Tử số / Mẫu số\""
+    },
+    {
+      "id": "B3E-04-provenance-Công thức tính",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Công thức tính\""
+    },
+    {
+      "id": "B3E-04-provenance-Kỳ báo cáo",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Kỳ báo cáo\""
+    },
+    {
+      "id": "B3E-04-provenance-Phạm vi",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Phạm vi\""
+    },
+    {
+      "id": "B3E-04-provenance-Loại trừ hợp lệ",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Loại trừ hợp lệ\""
+    },
+    {
+      "id": "B3E-04-provenance-Mốc chốt dữ liệu (as-of)",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Mốc chốt dữ liệu (as-of)\""
+    },
+    {
+      "id": "B3E-04-provenance-Thời điểm tính toán",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Thời điểm tính toán\""
+    },
+    {
+      "id": "B3E-04-provenance-Mốc dữ liệu nguồn (Watermark)",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Mốc dữ liệu nguồn (Watermark)\""
+    },
+    {
+      "id": "B3E-04-provenance-Phiên bản công thức & chính sách",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Phiên bản công thức & chính sách\""
+    },
+    {
+      "id": "B3E-04-provenance-Trạng thái độ tin cậy",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"Trạng thái độ tin cậy\""
+    },
+    {
+      "id": "B3E-04-provenance-cskh-metrics-v1",
+      "status": "PASS",
+      "detail": "Provenance <dl> displays \"cskh-metrics-v1\""
+    },
+    {
+      "id": "B3E-05-bod-drilldown-zero-pii",
+      "status": "PASS",
+      "detail": "BOD drill-down modal contains 0 clickable Work Item PII links"
+    },
+    {
+      "id": "B3E-06-drill-FIRST_ATTEMPT_SLA_RATE",
+      "status": "PASS",
+      "detail": "Drilldown FIRST_ATTEMPT_SLA_RATE reconciles cohort chips (27 == 23 + 4)"
+    },
+    {
+      "id": "B3E-07-drilldown-page2",
+      "status": "PASS",
+      "detail": "Drilldown multi-page server pager advances cleanly to page 2: \"Trang trước\n21–27 / 27\nTrang sau\""
+    },
+    {
+      "id": "B3E-06-drill-WORK_ITEM_FIRST_ATTEMPT_SLA_RATE",
+      "status": "PASS",
+      "detail": "Drilldown WORK_ITEM_FIRST_ATTEMPT_SLA_RATE reconciles cohort chips (26 == 22 + 4)"
+    },
+    {
+      "id": "B3E-06-drill-FOLLOWUP_SLA_RATE",
+      "status": "PASS",
+      "detail": "Drilldown FOLLOWUP_SLA_RATE reconciles cohort chips (10 == 7 + 3)"
+    },
+    {
+      "id": "B3E-06-drill-CONNECTED_RATE",
+      "status": "PASS",
+      "detail": "Drilldown CONNECTED_RATE reconciles cohort chips (34 == 29 + 5)"
+    },
+    {
+      "id": "B3E-06-drill-VALID_OUTCOME_LOGGING_RATE",
+      "status": "PASS",
+      "detail": "Drilldown VALID_OUTCOME_LOGGING_RATE reconciles cohort chips (34 == 33 + 1)"
+    },
+    {
+      "id": "B3E-06-drill-CALLBACK_COMPLETION_RATE",
+      "status": "PASS",
+      "detail": "Drilldown CALLBACK_COMPLETION_RATE reconciles cohort chips (10 == 8 + 2)"
+    },
+    {
+      "id": "B3E-08-team-as-of-bod",
+      "status": "PASS",
+      "detail": "BOD /cskh/team-quality renders both k4aoptc2lc and k4deik8g8d with inline SVG bar chart"
+    },
+    {
+      "id": "B3E-09-leader-team-scope",
+      "status": "PASS",
+      "detail": "Leader A sees own Team A (true) and 0 rows of Team B (false)"
+    },
+    {
+      "id": "B3E-10-leader-cross-team-403",
+      "status": "PASS",
+      "detail": "Leader A deep-linking Team B gets Vietnamese forbidden banner and 0 rows: \"Bạn không có quyền truy cập phạm vi báo cáo, đội nhóm, nhân viên hoặc tệp xuất này. · [FORBIDDEN_SCOPE]\""
+    },
+    {
+      "id": "B3E-11-non-mixed-score-groups",
+      "status": "PASS",
+      "detail": "Provisional and insufficient_data employees are strictly separated into distinct sections (never ranked with finalized)"
+    },
+    {
+      "id": "B3E-12-zero-denominator-renders-na",
+      "status": "PASS",
+      "detail": "Zero-denominator employee (cskh-p3-staff-c@example.test) renders N/A, never 0%: \"Không xếp hạng Nhân viên B1 (Mẫu số 0) cskh-p3-staff-c@example.test Nhóm CSKH Miền Nam N/A 0 / 0 N/A (0 / 0) N/A (0 / 0) N/A (0 / 0) 0 0 N/A (0 / 0) N/A (0 / 0) N/A (0 / 0) Truy vết\""
+    },
+    {
+      "id": "B3E-13-golden-8647-vi",
+      "status": "PASS",
+      "detail": "Golden employee renders 86,47 Provisional & Unranked"
+    },
+    {
+      "id": "B3E-14-campaign-distinct-vs-intervals",
+      "status": "PASS",
+      "detail": "Campaign table contrasts DISTINCT Work Items (26) < Ownership Intervals (29) under A->B->A transfer"
+    },
+    {
+      "id": "B3E-15-waive-empty-reason-guard",
+      "status": "PASS",
+      "detail": "Waiver modal requires non-empty audit reason before POST"
+    },
+    {
+      "id": "B3E-16-waive-audited-row",
+      "status": "PASS",
+      "detail": "Obligation k71b2uir1o updated to Waived with audit reason in DOM"
+    },
+    {
+      "id": "B3E-17-bod-no-waive-buttons",
+      "status": "PASS",
+      "detail": "BOD sees 0 waive buttons on /cskh/sla-operations"
+    },
+    {
+      "id": "B3E-18-staff-403-/cskh/quality-overview",
+      "status": "PASS",
+      "detail": "Staff A denied on /cskh/quality-overview with HTTP 403"
+    },
+    {
+      "id": "B3E-18-staff-403-/cskh/team-quality",
+      "status": "PASS",
+      "detail": "Staff A denied on /cskh/team-quality with HTTP 403"
+    },
+    {
+      "id": "B3E-18-staff-403-/cskh/employee-quality",
+      "status": "PASS",
+      "detail": "Staff A denied on /cskh/employee-quality with HTTP 403"
+    },
+    {
+      "id": "B3E-18-staff-403-/cskh/campaign-quality",
+      "status": "PASS",
+      "detail": "Staff A denied on /cskh/campaign-quality with HTTP 403"
+    },
+    {
+      "id": "B3E-18-staff-403-/cskh/sla-operations",
+      "status": "PASS",
+      "detail": "Staff A denied on /cskh/sla-operations with HTTP 403"
+    },
+    {
+      "id": "B3E-19-staff-scorecard-no-peers",
+      "status": "PASS",
+      "detail": "Staff A Personal Scorecard never exposes peer emails or peer leaderboard"
+    },
+    {
+      "id": "B3E-20-staff-post-transfer-redaction",
+      "status": "PASS",
+      "detail": "Staff A drill-down preserves historical KPI row while redacting transferred Lead PII"
+    },
+    {
+      "id": "B3E-21-transferred-work-item-url-forbidden",
+      "status": "PASS",
+      "detail": "Staff A replaying transferred Work Item URL sees forbidden alert & hidden cards (0 PII leaked)"
+    },
+    {
+      "id": "B3E-22-staff-c-scorecard-na",
+      "status": "PASS",
+      "detail": "Zero-denominator Staff C scorecard renders FIRST_ATTEMPT_SLA_RATE as \"N/A\", never 0%"
+    },
+    {
+      "id": "B3E-23-bod-scorecard-403",
+      "status": "PASS",
+      "detail": "BOD denied on /cskh/scorecard with HTTP 403"
+    },
+    {
+      "id": "B3E-24-stale-banner-visible",
+      "status": "PASS",
+      "detail": "Stale/dirty KPI snapshot warning banner displayed transparently before recompute"
+    },
+    {
+      "id": "B3E-25-revisions-history-modal",
+      "status": "PASS",
+      "detail": "Revision & restatement modal lists 1 KPI run revision(s)"
+    },
+    {
+      "id": "B3E-26-export-ready-with-expiry",
+      "status": "PASS",
+      "detail": "Authorized export EXP-3CDD11178228 ready with download_export URL and expiry timestamp"
+    },
+    {
+      "id": "B3E-27-export-browser-download-200",
+      "status": "PASS",
+      "detail": "Browser CSV download succeeded (HTTP 200, 272 chars, formula-safe)"
+    },
+    {
+      "id": "B3E-28-export-post-revocation-403",
+      "status": "PASS",
+      "detail": "Post-revocation browser download blocked on BOTH download_export (403) AND /private/files/... (403)"
+    },
+    {
+      "id": "B3E-29-tz-daily-America/Los_Angeles",
+      "status": "PASS",
+      "detail": "America/Los_Angeles daily bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-11-01 00:00, 2026-11-02 00:00) Asia/Ho_Chi_Minh\""
+    },
+    {
+      "id": "B3E-30-tz-weekly-America/Los_Angeles",
+      "status": "PASS",
+      "detail": "America/Los_Angeles weekly bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-11-02 00:00, 2026-11-09 00:00) Asia/Ho_Chi_Minh\""
+    },
+    {
+      "id": "B3E-31-tz-quarterly-America/Los_Angeles",
+      "status": "PASS",
+      "detail": "America/Los_Angeles quarterly bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-10-01 00:00, 2027-01-01 00:00) Asia/Ho_Chi_Minh\""
+    },
+    {
+      "id": "B3E-32-tz-yearly-America/Los_Angeles",
+      "status": "PASS",
+      "detail": "America/Los_Angeles yearly bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-01-01 00:00, 2027-01-01 00:00) Asia/Ho_Chi_Minh\""
+    },
+    {
+      "id": "B3E-33-tz-custom-America/Los_Angeles",
+      "status": "PASS",
+      "detail": "America/Los_Angeles custom bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-11-01 00:00, 2026-12-01 00:00) Asia/Ho_Chi_Minh\""
+    },
+    {
+      "id": "B3E-29-tz-daily-Asia/Tokyo",
+      "status": "PASS",
+      "detail": "Asia/Tokyo daily bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-11-01 00:00, 2026-11-02 00:00) Asia/Ho_Chi_Minh\""
+    },
+    {
+      "id": "B3E-30-tz-weekly-Asia/Tokyo",
+      "status": "PASS",
+      "detail": "Asia/Tokyo weekly bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-11-02 00:00, 2026-11-09 00:00) Asia/Ho_Chi_Minh\""
+    },
+    {
+      "id": "B3E-31-tz-quarterly-Asia/Tokyo",
+      "status": "PASS",
+      "detail": "Asia/Tokyo quarterly bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-10-01 00:00, 2027-01-01 00:00) Asia/Ho_Chi_Minh\""
+    },
+    {
+      "id": "B3E-32-tz-yearly-Asia/Tokyo",
+      "status": "PASS",
+      "detail": "Asia/Tokyo yearly bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-01-01 00:00, 2027-01-01 00:00) Asia/Ho_Chi_Minh\""
+    },
+    {
+      "id": "B3E-33-tz-custom-Asia/Tokyo",
+      "status": "PASS",
+      "detail": "Asia/Tokyo custom bounds stay anchored to Asia/Ho_Chi_Minh: \"Khoảng nửa mở [từ, đến_loại_trừ): [2026-11-01 00:00, 2026-12-01 00:00) Asia/Ho_Chi_Minh\""
+    }
+  ]
+}
