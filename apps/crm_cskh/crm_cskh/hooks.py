@@ -150,8 +150,14 @@ fixtures = [
 # Installation & Migration
 # ------------------------
 
-after_install = "crm_cskh.patches.v3_0.p3_schema_and_seeds.execute"
-after_migrate = "crm_cskh.patches.v3_0.p3_schema_and_seeds.execute"
+after_install = [
+	"crm_cskh.patches.v2_0.p2_schema_and_seeds.execute",
+	"crm_cskh.patches.v3_0.p3_schema_and_seeds.execute",
+]
+after_migrate = [
+	"crm_cskh.patches.v2_0.p2_schema_and_seeds.execute",
+	"crm_cskh.patches.v3_0.p3_schema_and_seeds.execute",
+]
 
 # Uninstallation
 # ------------
