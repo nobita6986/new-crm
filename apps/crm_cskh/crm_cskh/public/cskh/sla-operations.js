@@ -94,7 +94,7 @@
 					el('td', {}, [
 						canOpenPii && wi !== '—' && !row.pii_redacted
 							? el('a', {
-									href: '/cskh/work-item?name=' + encodeURIComponent(wi),
+									href: '/cskh/work-item?id=' + encodeURIComponent(wi),
 									class: 'cskh-mono',
 									text: wi,
 								})

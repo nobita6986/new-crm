@@ -28,10 +28,17 @@
 		},
 	})
 
+	function getSelfFilters() {
+		return Object.assign({}, filterBar.getState(), {
+			scope_type: 'employee',
+			scope_id: cskh.currentUser(),
+		})
+	}
+
 	w.bindHeaderActions(
 		'personal_scorecard',
 		function () {
-			return filterBar.getState()
+			return getSelfFilters()
 		},
 		function () {
 			loadPage()
@@ -59,7 +66,7 @@
 				scoreCard.appendChild(
 					w.renderMetricCard(data.score, {
 						onDrilldown: function (m) {
-							w.openDrilldownModal(m, filterBar.getState())
+							w.openDrilldownModal(m, getSelfFilters())
 						},
 					})
 				)
@@ -117,7 +124,7 @@
 		if (data.metrics && data.metrics.length) {
 			w.renderThreePillars(mainHost, data.metrics, {
 				onDrilldown: function (metric) {
-					w.openDrilldownModal(metric, filterBar.getState())
+					w.openDrilldownModal(metric, getSelfFilters())
 				},
 			})
 		}
@@ -153,7 +160,7 @@
 									el('td', {}, [
 										canOpen
 											? el('a', {
-													href: '/cskh/work-item?name=' + encodeURIComponent(wi),
+													href: '/cskh/work-item?id=' + encodeURIComponent(wi),
 													class: 'cskh-mono',
 													text: wi,
 												})

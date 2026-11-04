@@ -1309,7 +1309,7 @@ window.cskhP3Widgets = (function () {
 							cskh.capabilities().pii && wi && wi !== '—' && !row.pii_redacted
 						const wiCell = canOpenWorkItem
 							? el('a', {
-									href: '/cskh/work-item?name=' + encodeURIComponent(wi),
+									href: '/cskh/work-item?id=' + encodeURIComponent(wi),
 									class: 'cskh-mono',
 									text: wi,
 								})

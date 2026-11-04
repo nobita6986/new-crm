@@ -198,32 +198,49 @@
 			return
 		}
 
+		const selectedGroup = (filterBar.getState().score_group || '').toLowerCase()
 		const partitioned = w.partitionScoreGroups(data.rows)
 		const sections = [
-			renderScoreGroupCard(
-				'finalized',
-				t('Finalized score group (ranked within finalized only)'),
-				'is-finalized',
-				partitioned.finalized,
-				true
-			),
-			renderScoreGroupCard(
-				'provisional',
-				t('Provisional score group (not ranked with finalized)'),
-				'is-provisional',
-				partitioned.provisional,
-				false
-			),
-			renderScoreGroupCard(
-				'insufficient_data',
-				t('Insufficient data group (N/A — unranked)'),
-				'is-na',
-				partitioned.insufficient_data,
-				false
-			),
+			!selectedGroup || selectedGroup === 'finalized'
+				? renderScoreGroupCard(
+						'finalized',
+						t('Finalized score group (ranked within finalized only)'),
+						'is-finalized',
+						partitioned.finalized,
+						true
+					)
+				: null,
+			!selectedGroup || selectedGroup === 'provisional'
+				? renderScoreGroupCard(
+						'provisional',
+						t('Provisional score group (not ranked with finalized)'),
+						'is-provisional',
+						partitioned.provisional,
+						false
+					)
+				: null,
+			!selectedGroup || selectedGroup === 'insufficient_data'
+				? renderScoreGroupCard(
+						'insufficient_data',
+						t('Insufficient data group (N/A — unranked)'),
+						'is-na',
+						partitioned.insufficient_data,
+						false
+					)
+				: null,
 		]
-		sections.forEach(function (sec) {
-			if (sec) mainHost.appendChild(sec)
+		const visibleSections = sections.filter(Boolean)
+		if (!visibleSections.length) {
+			mainHost.appendChild(
+				el('div', {
+					class: 'cskh-alert is-empty',
+					text: t('No employees match the current filters.'),
+				})
+			)
+			return
+		}
+		visibleSections.forEach(function (sec) {
+			mainHost.appendChild(sec)
 		})
 	}
 
