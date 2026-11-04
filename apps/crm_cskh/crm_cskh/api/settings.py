@@ -45,6 +45,12 @@ def save_policy(
 	"""Create or update a `CSKH Policy` (`version += 1` on change) (`docs/api-contract-p2.md` §4.14)."""
 	_require_post()
 	_reject_spoofed_identity_fields(kwargs)
+	allowed_p3_keys = {
+		"working_calendar",
+		*policies._P3_BOOL_POLICY_KEYS,
+		*policies._P3_INT_POLICY_KEYS,
+	}
+	p3_opts = {k: v for k, v in kwargs.items() if k in allowed_p3_keys}
 	return policies.save_policy(
 		policy_code=policy_code,
 		title=title,
@@ -61,6 +67,7 @@ def save_policy(
 		allow_leader_review_correction=allow_leader_review_correction,
 		idempotency_key=idempotency_key,
 		actor=frappe.session.user,
+		**p3_opts,
 	)
 
 

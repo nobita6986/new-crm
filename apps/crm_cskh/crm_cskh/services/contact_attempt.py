@@ -156,6 +156,8 @@ def _close_work_item_in_tx(
 	public_reason: str | None = None,
 	payload_hash: str | None = None,
 	extra_wi_fields: dict | None = None,
+	close_category: str = "normal",
+	is_dnc: bool = False,
 ) -> str | None:
 	"""Close an active `CSKH Work Item` atomically inside an existing transaction/savepoint."""
 	work_item_val = locked["name"]
@@ -163,11 +165,29 @@ def _close_work_item_in_tx(
 	priv_reason = (clean_reason or "").strip() or "Hoàn tất mục tiêu chăm sóc"
 	pub_reason = (public_reason or "").strip() or ownership.public_history_reason("close")
 
-	canceled_task = cancel_open_followup_in_tx(
+	prev_sys_cancel = getattr(frappe.flags, "cskh_system_cancel_followup", False)
+	frappe.flags.cskh_system_cancel_followup = True
+	try:
+		canceled_task = cancel_open_followup_in_tx(
+			work_item=work_item_val,
+			actor=actor,
+			reason=f"Đóng Work Item: {priv_reason}",
+			now=now_dt,
+		)
+	finally:
+		frappe.flags.cskh_system_cancel_followup = prev_sys_cancel
+
+	from crm_cskh.services import sla_engine
+
+	sla_engine.on_work_item_closed_in_tx(
 		work_item=work_item_val,
+		lead=locked["lead"],
+		campaign=locked.get("campaign"),
+		owner_user=old_owner,
+		closed_at=now_dt,
 		actor=actor,
-		reason=f"Đóng Work Item: {priv_reason}",
-		now=now_dt,
+		close_category=close_category,
+		is_dnc=is_dnc,
 	)
 
 	ownership._close_open_interval(work_item_val, now_dt)
@@ -581,7 +601,7 @@ def record_attempt(
 
 		attempt_id = attempt_doc.name
 
-		# 10. Resolve existing open callback `CRM Task` (if any) & create new follow-up `CRM Task`
+		# 10. Resolve existing open callback `CRM Task` (if any), fulfill SLA obligations, & create new follow-up `CRM Task`
 		resolved_task_id = None
 		open_task_before = get_open_followup_task(wi_val)
 		if open_task_before:
@@ -591,6 +611,7 @@ def record_attempt(
 					attempt_id=attempt_id,
 					actor=actor,
 					now=now_dt,
+					occurred_at=occurred_dt,
 					reason=f"Đã thực hiện liên hệ ({outcome['label_vi']})",
 				)
 				if resolved_task_id:
@@ -606,6 +627,16 @@ def record_attempt(
 					"Work Item đang có lịch hẹn mở; cần bật complete_open_followup=true khi tạo lịch hẹn mới.",
 					code="CONFLICT",
 				)
+
+		from crm_cskh.services import sla_engine
+
+		sla_engine.on_attempt_recorded_in_tx(
+			work_item=wi_val,
+			attempt_id=attempt_id,
+			occurred_at=occurred_dt,
+			outcome=outcome,
+			actor=actor,
+		)
 
 		if followup_spec:
 			new_task_id = create_followup_in_tx(
@@ -661,6 +692,7 @@ def record_attempt(
 				policy_version=policy["version"],
 				public_reason=close_public_reason,
 				payload_hash=req_hash,
+				is_dnc=bool(outcome["is_do_not_contact"]),
 			)
 			final_status = "closed"
 			final_callback = None
@@ -891,6 +923,8 @@ def close_work_item(
 			policy_version=policy["version"],
 			public_reason=close_pub_reason,
 			payload_hash=req_hash,
+			close_category=cat_val,
+			is_dnc=bool(lead_dnc),
 		)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
@@ -1109,7 +1143,7 @@ def reopen_work_item(
 					code="ALREADY_ASSIGNED",
 				) from exc
 
-		ownership._insert_history(
+		reopen_hist = ownership._insert_history(
 			{
 				"doctype": "CSKH Assignment History",
 				"work_item": wi_val,
@@ -1126,6 +1160,19 @@ def reopen_work_item(
 				"event_id": event_id,
 				"distribution_run": ownership._original_distribution_run(wi_val),
 			}
+		)
+
+		from crm_cskh.services import sla_engine
+
+		sla_engine.on_interval_opened_in_tx(
+			work_item=wi_val,
+			lead=locked.lead,
+			campaign=locked.campaign,
+			interval_event=reopen_hist.name,
+			owner_user=target_val,
+			started_at=now_dt,
+			actor=actor,
+			is_reopen=True,
 		)
 
 		ownership._sync_lead_owner(locked.lead, target_val)

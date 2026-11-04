@@ -269,6 +269,19 @@ def create_followup_in_tx(
 		task_id = str(task.name)
 		frappe.db.set_value("CRM Task", task_id, "assigned_to", owner, update_modified=False)
 		_ensure_task_todo(task_id, owner, clean_title)
+
+		from crm_cskh.services import sla_engine
+
+		sla_engine.on_followup_created_in_tx(
+			work_item=work_item,
+			lead=lead,
+			campaign=work_item_row.get("campaign"),
+			owner_user=owner,
+			task_id=task_id,
+			due_dt=due_dt,
+			actor=actor,
+			now_dt=now_dt,
+		)
 		return task_id
 	finally:
 		frappe.flags.cskh_in_followup_service = prev_flag
@@ -324,6 +337,18 @@ def reschedule_followup_in_tx(
 				doc.description = clean_note
 		doc.cskh_reschedule_count = new_count
 		doc.cskh_task_history_json = json.dumps(history, ensure_ascii=False)
+
+		from crm_cskh.services import sla_engine
+
+		sla_engine.on_followup_rescheduled_in_tx(
+			work_item=doc.cskh_work_item,
+			task_id=task_id,
+			new_due_dt=due_dt,
+			new_reschedule_count=new_count,
+			actor=actor,
+			reason=clean_reason,
+			now_dt=now_dt,
+		)
 		doc.save(ignore_permissions=True)
 		return task_id, new_count
 	finally:
@@ -335,6 +360,7 @@ def resolve_open_followup_in_tx(
 	attempt_id: str,
 	actor: str,
 	now=None,
+	occurred_at=None,
 	reason: str | None = None,
 	task_id: str | None = None,
 	idempotency_key: str | None = None,
@@ -353,6 +379,9 @@ def resolve_open_followup_in_tx(
 
 	resolved_id = str(open_task["name"])
 	now_dt = get_datetime(now or now_datetime())
+	att_occ_dt = get_datetime(
+		occurred_at or frappe.db.get_value("CSKH Contact Attempt", attempt_id, "occurred_at") or now_dt
+	)
 	clean_reason = sanitize_note_text(reason, max_length=1000) or f"Hoàn tất qua lần liên hệ {attempt_id}"
 
 	prev_flag = getattr(frappe.flags, "cskh_in_followup_service", False)
@@ -377,6 +406,16 @@ def resolve_open_followup_in_tx(
 		doc.cskh_task_history_json = json.dumps(history, ensure_ascii=False)
 		doc.save(ignore_permissions=True)
 		_cancel_task_todos(resolved_id)
+
+		from crm_cskh.services import sla_engine
+
+		sla_engine.on_followup_resolved_in_tx(
+			work_item=work_item,
+			task_id=resolved_id,
+			attempt_id=attempt_id,
+			occurred_at=att_occ_dt,
+			actor=actor,
+		)
 		return resolved_id
 	finally:
 		frappe.flags.cskh_in_followup_service = prev_flag
@@ -417,10 +456,13 @@ def cancel_open_followup_in_tx(
 		raise Conflict("Mã lịch hẹn không khớp với lịch hẹn đang mở của Work Item.", code="CONFLICT")
 
 	now_dt = get_datetime(now or now_datetime())
+	is_sys_cancel = bool(getattr(frappe.flags, "cskh_system_cancel_followup", False))
 	prev_flag = getattr(frappe.flags, "cskh_in_followup_service", False)
 	frappe.flags.cskh_in_followup_service = True
 	first_canceled = None
 	try:
+		from crm_cskh.services import sla_engine
+
 		for row in open_rows:
 			tid = str(row.name)
 			doc = frappe.get_doc("CRM Task", tid)
@@ -440,6 +482,14 @@ def cancel_open_followup_in_tx(
 			doc.cskh_task_history_json = json.dumps(history, ensure_ascii=False)
 			doc.save(ignore_permissions=True)
 			_cancel_task_todos(tid)
+			sla_engine.on_followup_canceled_in_tx(
+				work_item=work_item,
+				task_id=tid,
+				canceled_at=now_dt,
+				actor=actor,
+				reason=clean_reason,
+				is_valid_system_cancel=is_sys_cancel,
+			)
 			if first_canceled is None:
 				first_canceled = tid
 		return first_canceled
