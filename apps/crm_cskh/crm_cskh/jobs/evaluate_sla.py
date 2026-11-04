@@ -65,6 +65,17 @@ def evaluate_sla_obligations(as_of: datetime | str | None = None, batch_size: in
 	"""Scan `open` non-paused obligations, transition overdue rows to `breached_open`, and send deduped alerts."""
 	if not frappe.db.table_exists("CSKH SLA Obligation"):
 		return {"evaluated": 0, "breached": 0, "warned_due_soon": 0, "notifications_created": 0}
+	from crm_cskh.services.sla_engine import is_p3_sla_enabled
+
+	if not is_p3_sla_enabled():
+		return {
+			"evaluated": 0,
+			"breached": 0,
+			"warned_due_soon": 0,
+			"notifications_created": 0,
+			"skipped": True,
+			"reason": "p3_sla_disabled",
+		}
 
 	eval_dt = get_datetime(as_of or now_datetime())
 	candidates = frappe.db.sql(

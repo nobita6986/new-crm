@@ -513,6 +513,9 @@ window.cskhP3Api = (function () {
 		if (s.team) return { scope_type: 'team', scope_id: s.team }
 		if (s.campaign) return { scope_type: 'campaign', scope_id: s.campaign }
 		const caps = window.cskh.capabilities()
+		if (!caps.admin && !caps.bod && caps.leader) {
+			return { scope_type: 'team', scope_id: caps.leader_root_team || '' }
+		}
 		if (!caps.admin && !caps.bod && !caps.leader && window.cskh.currentUser()) {
 			return { scope_type: 'employee', scope_id: window.cskh.currentUser() }
 		}
@@ -600,7 +603,12 @@ window.cskhP3Api = (function () {
 					is_unattributed_bucket: !!hasUnattr,
 					eligible_staff_count:
 						r.active_staff_count !== undefined ? r.active_staff_count : r.eligible_staff_count,
-					assigned_intervals: r.intervals_count !== undefined ? r.intervals_count : r.assigned_intervals,
+					assigned_intervals:
+						r.ownership_intervals_count !== undefined
+							? r.ownership_intervals_count
+							: r.intervals_count !== undefined
+								? r.intervals_count
+								: r.assigned_intervals,
 					first_touch_on_time_rate:
 						rowMetrics.FIRST_ATTEMPT_SLA_RATE || r.first_touch_on_time_rate,
 					followup_on_time_rate: rowMetrics.FOLLOWUP_SLA_RATE || r.followup_on_time_rate,
@@ -853,9 +861,19 @@ window.cskhP3Api = (function () {
 			const meta = extractEnvelopeMeta(raw)
 			const pag = raw.pagination || {}
 			const bucketCounts = raw.bucket_counts || raw.segment_counts || {}
-			const metricObj = raw.metric
-				? normalizeMetric(params.metric_code, raw.metric, meta)
+			const ddCtx = raw.drilldown_context || {}
+			const snapMetric =
+				ddCtx.snapshot_metric ||
+				(raw.metrics && raw.metrics[params.metric_code]) ||
+				raw.metric ||
+				null
+			const metricObj = snapMetric
+				? normalizeMetric(params.metric_code, snapMetric, meta)
 				: normalizeMetric(params.metric_code, raw, meta)
+			const isDefectMetric =
+				params.metric_code === 'CORRECTION_RATE' ||
+				params.metric_code === 'VOID_ATTEMPT_RATE' ||
+				params.metric_code === 'RESCHEDULE_RATE'
 
 			return {
 				meta: meta,
@@ -873,9 +891,11 @@ window.cskhP3Api = (function () {
 					unmet:
 						bucketCounts.breached_only !== undefined
 							? Number(bucketCounts.breached_only)
-							: metricObj.denominator !== null && metricObj.numerator !== null
-								? Math.max(0, metricObj.denominator - metricObj.numerator)
-								: null,
+							: isDefectMetric
+								? metricObj.numerator
+								: metricObj.denominator !== null && metricObj.numerator !== null
+									? Math.max(0, metricObj.denominator - metricObj.numerator)
+									: null,
 					excluded:
 						bucketCounts.excluded !== undefined ? Number(bucketCounts.excluded) : null,
 				},
@@ -1059,20 +1079,26 @@ window.cskhP3Api = (function () {
 		const teamVal =
 			row.attribution_status === 'historical_attribution_unknown' ||
 			row.team_at_obligation === '__unattributed_historical_team__' ||
+			row.team_id === '__unattributed_historical_team__' ||
 			row.team_at_event === 'historical_attribution_unknown'
 				? 'historical_attribution_unknown'
-				: row.team_name || row.team_at_obligation || row.team_at_event || row.team || ''
+				: row.team_name ||
+					row.team_at_obligation ||
+					row.team_at_event ||
+					row.team_id ||
+					row.team ||
+					''
 		return {
-			obligation_id: row.obligation_id || row.name || row.attempt_id || '',
+			obligation_id: row.obligation_id || row.record_id || row.name || row.attempt_id || '',
 			work_item: row.work_item || row.work_item_id || '',
-			obligation_type: row.obligation_type || '',
+			obligation_type: row.obligation_type || row.record_type || '',
 			responsible_user: row.responsible_user || row.employee || row.owner_user || '',
 			team_at_event: teamVal,
 			pii_redacted: piiRedacted,
 			customer_ref: row.customer_name || row.lead_ref || row.lead || row.customer_ref || '',
-			original_due_at: row.original_due_at || '',
-			effective_due_at: row.effective_due_at || row.due_at || row.attempt_at || '',
-			fulfilled_at: row.fulfilled_at || '',
+			original_due_at: row.original_due_at || row.started_at || '',
+			effective_due_at: row.effective_due_at || row.due_at || row.occurred_at || row.attempt_at || '',
+			fulfilled_at: row.fulfilled_at || row.occurred_at || '',
 			breached_at: row.breached_at || '',
 			sla_status: row.status || row.sla_status || '',
 			waiver_reason:
