@@ -174,6 +174,10 @@ async function verifyCleanDomAndTelemetry(session, routeLabel, expectCardVisible
 		rawPhones.length === 0,
 		`${actor.user} ${routeLabel}: raw unmasked phone in DOM: ${rawPhones.join(', ')}`
 	)
+	assert(
+		!/\[H:[0-9a-f]{6,}\]/i.test(bodyText),
+		`${actor.user} ${routeLabel}: internal [H:<hex>] prefix leaked in DOM!`
+	)
 
 	if (expectCardVisible) {
 		const card = page.locator('.cskh-card:visible').first()
@@ -267,19 +271,239 @@ async function main() {
 		assert(mineInitialLower.includes('hẹn tiếp theo'), 'Missing column Hẹn tiếp theo')
 		assert(mineInitialText.includes('P2 Khách Hạnh Phúc'), 'Missing P2 Khách Hạnh Phúc row')
 
+		// ==================================================================
+		// F-P2-04A + F-P2-04B: Multi-Page Server Filter, Pager Total,
+		// Page Reset on Filter/Search/Campaign, and Closed ("Hoàn tất") Filter
+		// ==================================================================
+		const initialRangeText = (await staffA.page.locator('#mine-range').innerText()).trim()
+		assert(
+			initialRangeText === '1–20 / 31',
+			`F-P2-04A: expected Page 1 server pager range "1–20 / 31", got "${initialRangeText}"`
+		)
+		const page1RowsText = await staffA.page.locator('#mine-rows').innerText()
+		assert(
+			!page1RowsText.includes('P2 Khách Kết Nối Trang 2A') &&
+				!page1RowsText.includes('P2 Khách Kết Nối Trang 2B'),
+			'Page 1 must NOT contain Page-2 connected leads!'
+		)
+
+		// Navigate to Page 2 (`21–31 / 31`) -> Page-2 connected leads appear there
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) => r.url().includes('crm_cskh.api.workflow.list_work_items') && r.status() === 200
+			),
+			staffA.page.click('#mine-next'),
+		])
+		await staffA.page.waitForTimeout(300)
+		const page2RangeText = (await staffA.page.locator('#mine-range').innerText()).trim()
+		assert(
+			page2RangeText === '21–31 / 31',
+			`F-P2-04A: expected Page 2 server pager range "21–31 / 31", got "${page2RangeText}"`
+		)
+		const page2BodyText = await captureShot(
+			staffA,
+			'/cskh/my-customers#page2',
+			'18-staff-a-multipage-page2.png',
+			'B2E-18-f-p2-04a-multipage-page2',
+			'Multi-page server pagination shows 21–31 / 31 with Page-2 connected leads.'
+		)
+		assert(
+			page2BodyText.includes('P2 Khách Kết Nối Trang 2A') &&
+				page2BodyText.includes('P2 Khách Kết Nối Trang 2B'),
+			'Page 2 must display P2 Khách Kết Nối Trang 2A and Trang 2B'
+		)
+
+		// While on Page 2, click `Đã kết nối` (`connected`) -> resets to Page 1 AND finds Page-2 connected items via server!
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) =>
+					r.url().includes('crm_cskh.api.workflow.list_work_items') &&
+					r.url().includes('care_state=connected') &&
+					r.status() === 200
+			),
+			staffA.page.locator('#mine-filter-chips button[data-filter="connected"]').click(),
+		])
+		await staffA.page.waitForTimeout(300)
+		const connectedRangeText = (await staffA.page.locator('#mine-range').innerText()).trim()
+		assert(
+			connectedRangeText === '1–2 / 2',
+			`F-P2-04A: connected filter from Page 2 must reset to Page 1 with server total "1–2 / 2", got "${connectedRangeText}"`
+		)
+		const connectedBodyText = await captureShot(
+			staffA,
+			'/cskh/my-customers#connected-across-pages',
+			'19-staff-a-connected-filter-finds-page2.png',
+			'B2E-19-f-p2-04a-connected-across-pages',
+			'Server-side connected filter resets from Page 2 to Page 1 and finds Page-2 connected items (1–2 / 2).'
+		)
+		assert(
+			connectedBodyText.includes('P2 Khách Kết Nối Trang 2A') &&
+				connectedBodyText.includes('P2 Khách Kết Nối Trang 2B'),
+			'F-P2-04A regression: connected filter failed to find Page-2 connected items!'
+		)
+
+		// Verify search from Page 2 resets page to 1 and queries server
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) => r.url().includes('crm_cskh.api.workflow.list_work_items') && r.status() === 200
+			),
+			staffA.page.locator('#mine-filter-chips button[data-filter=""]').click(),
+		])
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) => r.url().includes('crm_cskh.api.workflow.list_work_items') && r.status() === 200
+			),
+			staffA.page.click('#mine-next'),
+		])
+		await staffA.page.fill('#mine-search', 'Trang 2B')
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) =>
+					r.url().includes('crm_cskh.api.workflow.list_work_items') &&
+					r.url().includes('search=') &&
+					r.status() === 200
+			),
+			staffA.page.locator('#mine-search').press('Enter'),
+		])
+		await staffA.page.waitForTimeout(250)
+		assert(
+			(await staffA.page.locator('#mine-range').innerText()).trim() === '1–1 / 1',
+			'F-P2-04A: search from Page 2 must reset to Page 1 (1–1 / 1)'
+		)
+		assert(
+			(await staffA.page.locator('#mine-rows').innerText()).includes('P2 Khách Kết Nối Trang 2B'),
+			'F-P2-04A: server search did not return P2 Khách Kết Nối Trang 2B'
+		)
+		await staffA.page.fill('#mine-search', '')
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) => r.url().includes('crm_cskh.api.workflow.list_work_items') && r.status() === 200
+			),
+			staffA.page.locator('#mine-search').press('Enter'),
+		])
+
+		// Verify campaign change from Page 2 resets page to 1
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) => r.url().includes('crm_cskh.api.workflow.list_work_items') && r.status() === 200
+			),
+			staffA.page.click('#mine-next'),
+		])
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) => r.url().includes('crm_cskh.api.workflow.list_work_items') && r.status() === 200
+			),
+			staffA.page.selectOption('#mine-campaign', fx.campaign_page2),
+		])
+		await staffA.page.waitForTimeout(250)
+		assert(
+			(await staffA.page.locator('#mine-range').innerText()).trim() === '1–6 / 6',
+			'F-P2-04A: campaign filter change from Page 2 must reset to Page 1 (1–6 / 6)'
+		)
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) => r.url().includes('crm_cskh.api.workflow.list_work_items') && r.status() === 200
+			),
+			staffA.page.selectOption('#mine-campaign', ''),
+		])
+
+		// Verify "Hoàn tất" (`closed`) filter (`F-P2-04B`) on Staff A AND Leader A scope
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) =>
+					r.url().includes('crm_cskh.api.workflow.list_work_items') &&
+					r.url().includes('status=closed') &&
+					r.status() === 200
+			),
+			staffA.page.locator('#mine-filter-chips button[data-filter="closed"]').click(),
+		])
+		await staffA.page.waitForTimeout(300)
+		assert(
+			(await staffA.page.locator('#mine-range').innerText()).trim() === '1–1 / 1',
+			'F-P2-04B: Staff A closed filter must return 1–1 / 1'
+		)
+		const closedStaffText = await captureShot(
+			staffA,
+			'/cskh/my-customers#closed',
+			'20-staff-a-closed-completed-filter.png',
+			'B2E-20-f-p2-04b-closed-filter',
+			'Completed care (Hoàn tất / closed) filter returns Staff A closed Work Item via historical last_owner.'
+		)
+		assert(
+			closedStaffText.includes('P2 Khách Vòng Đời HTTP'),
+			'F-P2-04B: closed filter must display P2 Khách Vòng Đời HTTP'
+		)
+
+		// Also verify Leader A scope table (`#mine-scope-card`) closed + assignee filter (`F-P2-04B`)
+		await leaderA.page.goto(`${BASE_URL}/cskh/my-customers`, { waitUntil: 'networkidle' })
+		await leaderA.page.locator('#mine-scope-card').waitFor({ state: 'visible', timeout: 10000 })
+		await leaderA.page.fill('#mine-scope-owner', users.staff_a)
+		await Promise.all([
+			leaderA.page.waitForResponse(
+				(r) =>
+					r.url().includes('crm_cskh.api.workflow.list_work_items') &&
+					r.url().includes('status=closed') &&
+					r.status() === 200
+			),
+			leaderA.page.selectOption('#mine-scope-care-filter', 'closed'),
+		])
+		await leaderA.page.waitForTimeout(300)
+		const leaderScopeClosedText = await leaderA.page.locator('#mine-scope-rows').innerText()
+		assert(
+			leaderScopeClosedText.includes('P2 Khách Vòng Đời HTTP'),
+			'F-P2-04B: Leader A scope closed + assignee=staff_a filter must display P2 Khách Vòng Đời HTTP'
+		)
+
 		// Filter chip `Chưa liên hệ` -> `P2 Khách Hạnh Phúc` visible, `P2 Khách Bàn Giao AB` (already contacted) filtered out
-		await staffA.page.locator('#mine-filter-chips button[data-filter="not_contacted"]').click()
-		await staffA.page.waitForTimeout(500)
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) =>
+					r.url().includes('crm_cskh.api.workflow.list_work_items') &&
+					r.url().includes('care_state=not_contacted') &&
+					r.status() === 200
+			),
+			staffA.page.locator('#mine-filter-chips button[data-filter="not_contacted"]').click(),
+		])
+		await staffA.page.waitForTimeout(300)
 		const notContactedText = await staffA.page.locator('#mine-rows').innerText()
 		assert(notContactedText.includes('P2 Khách Hạnh Phúc'), 'not_contacted filter missed uncontacted lead')
 		assert(
 			!notContactedText.includes('P2 Khách Bàn Giao AB'),
 			'not_contacted filter leaked already-contacted lead'
 		)
+		assert(
+			(await staffA.page.locator('#mine-range').innerText()).trim() === '1–20 / 21',
+			'F-P2-04A: not_contacted server filter must show Page 1 of 2 (1–20 / 21)'
+		)
+		// Page 2 of `not_contacted` (`21–21 / 21` = `P2 Khách Chưa Gọi Trang 2`)
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) =>
+					r.url().includes('crm_cskh.api.workflow.list_work_items') &&
+					r.url().includes('care_state=not_contacted') &&
+					r.url().includes('page=2') &&
+					r.status() === 200
+			),
+			staffA.page.click('#mine-next'),
+		])
+		await staffA.page.waitForTimeout(250)
+		assert(
+			(await staffA.page.locator('#mine-range').innerText()).trim() === '21–21 / 21',
+			'F-P2-04A: not_contacted Page 2 must show 21–21 / 21'
+		)
+		assert(
+			(await staffA.page.locator('#mine-rows').innerText()).includes('P2 Khách Chưa Gọi Trang 2'),
+			'F-P2-04A: not_contacted Page 2 must display P2 Khách Chưa Gọi Trang 2'
+		)
 
 		// Reset filter to `All` and click inline `Ghi nhận kết quả` on `P2 Khách Hạnh Phúc`
-		await staffA.page.locator('#mine-filter-chips button[data-filter=""]').click()
-		await staffA.page.waitForTimeout(500)
+		await Promise.all([
+			staffA.page.waitForResponse(
+				(r) => r.url().includes('crm_cskh.api.workflow.list_work_items') && r.status() === 200
+			),
+			staffA.page.locator('#mine-filter-chips button[data-filter=""]').click(),
+		])
+		await staffA.page.waitForTimeout(300)
 		staffA.telemetry.apiPosts = []
 
 		const happyRow = staffA.page.locator('#mine-rows tr', { hasText: 'P2 Khách Hạnh Phúc' })
@@ -597,8 +821,8 @@ async function main() {
 			'Staff B sees Staff A history + completes transferred callback with new attempt attributed to Staff B.'
 		)
 		assert(
-			staffBAfterAct.includes('2 (Đã kết nối: 2)'),
-			'Expected 2 attempts (2 connected: callback_requested + connected_interested) after handover'
+			staffBAfterAct.includes('2 (Đã kết nối: 1)'),
+			'Expected 2 attempts (1 connected: no_answer by Staff A + connected_interested by Staff B) after handover'
 		)
 		assert(staffBAfterAct.includes(users.staff_b), 'New attempt must be attributed to Staff B')
 
@@ -805,6 +1029,108 @@ async function main() {
 			'Progress page must state non-KPI/non-SLA P2 boundary'
 		)
 		assert(bodProgText.includes('Toàn hệ thống'), 'BOD scope badge must be Toàn hệ thống')
+		assert(
+			bodProgText.includes('Công việc chưa thử liên hệ') &&
+				bodProgText.includes('Công việc đã thử liên hệ') &&
+				bodProgText.includes('Công việc đã thử, chưa kết nối') &&
+				bodProgText.includes('Công việc đã kết nối'),
+			'F-P2-05: Progress must separately display unattempted/attempted/attempted-unconnected/connected Work Item counters'
+		)
+		assert(
+			bodProgText.includes('Tổng số lần liên hệ hiệu lực') &&
+				bodProgText.includes('Số lần liên hệ đã kết nối') &&
+				bodProgText.includes('Số lần liên hệ chưa kết nối'),
+			'F-P2-05: Progress must explicitly label Contact Attempt counters separately from Work Items'
+		)
+		assert(
+			bodProgText.includes('Số khách hàng ngừng liên hệ (DNC)') &&
+				!bodProgText.includes('Do-not-contact (DNC) work items') &&
+				!bodProgText.includes('Công việc ngừng liên hệ'),
+			'F-P2-05: dnc_leads must be labeled as DNC customers, NEVER as Work Items'
+		)
+
+		// F-P2-05: Verify same-day `date_from == date_to` with real data + `23:59`/`00:00`
+		// midnight boundaries on `/cskh/progress` when browser timezone (`America/Los_Angeles`,
+		// UTC-08:00) differs from site timezone (`Asia/Ho_Chi_Minh`, UTC+07:00)!
+		const staffALaProg = await createActorPage(
+			browser,
+			users.staff_a,
+			'Sales User (Progress OS TZ America/Los_Angeles)',
+			'America/Los_Angeles'
+		)
+		await staffALaProg.page.goto(`${BASE_URL}/cskh/progress`, { waitUntil: 'networkidle' })
+		await staffALaProg.page.locator('#prog-wi-card').waitFor({ state: 'visible', timeout: 10000 })
+		await staffALaProg.page
+			.locator(`#prog-campaign option[value="${fx.campaign_page2}"]`)
+			.waitFor({ state: 'attached', timeout: 10000 })
+		const camp2AllRespP = staffALaProg.page.waitForResponse(
+			(r) =>
+				r.url().includes('crm_cskh.api.workflow.progress_summary') &&
+				r.url().includes(`campaign=${encodeURIComponent(fx.campaign_page2)}`) &&
+				r.status() === 200
+		)
+		await staffALaProg.page.selectOption('#prog-campaign', fx.campaign_page2)
+		const camp2AllJson = await (await camp2AllRespP).json()
+		assert(
+			camp2AllJson.message.cards.unattempted_work_items === 1 &&
+				camp2AllJson.message.cards.attempted_work_items === 5 &&
+				camp2AllJson.message.cards.connected_work_items === 2 &&
+				camp2AllJson.message.cards.effective_attempts === 5,
+			`F-P2-05 unfiltered campaign_page2 distinct WI coverage mismatch: ${JSON.stringify(camp2AllJson.message.cards)}`
+		)
+		// Yesterday (`date_from == date_to == yesterday_iso`): includes `yesterday 00:00:00` + `yesterday 23:59:59` (2 attempts),
+		// excludes `two_days_ago 23:59:59` and `today`!
+		await staffALaProg.page.fill('#prog-date-from', fx.yesterday_iso)
+		await staffALaProg.page.fill('#prog-date-to', fx.yesterday_iso)
+		const yestProgRespP = staffALaProg.page.waitForResponse(
+			(r) =>
+				r.url().includes('crm_cskh.api.workflow.progress_summary') &&
+				r.url().includes(`date_from=${fx.yesterday_iso}`) &&
+				r.url().includes(`date_to=${fx.yesterday_iso}`) &&
+				r.status() === 200
+		)
+		await staffALaProg.page.click('#prog-refresh')
+		const yestProgJson = await (await yestProgRespP).json()
+		assert(
+			yestProgJson.message.cards.effective_attempts === 2,
+			`F-P2-05 cross-TZ yesterday boundary expected 2 attempts (00:00:00 + 23:59:59), got ${JSON.stringify(yestProgJson.message.cards)}`
+		)
+		await staffALaProg.page.waitForTimeout(250)
+
+		// Today same-day (`date_from == date_to == today_iso`): real connected data (2 effective, 2 connected)!
+		await staffALaProg.page.fill('#prog-date-from', fx.today_iso)
+		await staffALaProg.page.fill('#prog-date-to', fx.today_iso)
+		const todayProgRespP = staffALaProg.page.waitForResponse(
+			(r) =>
+				r.url().includes('crm_cskh.api.workflow.progress_summary') &&
+				r.url().includes(`date_from=${fx.today_iso}`) &&
+				r.url().includes(`date_to=${fx.today_iso}`) &&
+				r.status() === 200
+		)
+		await staffALaProg.page.click('#prog-refresh')
+		const todayProgJson = await (await todayProgRespP).json()
+		assert(
+			todayProgJson.message.cards.effective_attempts === 2 &&
+				todayProgJson.message.cards.connected_attempts === 2,
+			`F-P2-05 same-day today expected 2 effective & 2 connected attempts, got ${JSON.stringify(todayProgJson.message.cards)}`
+		)
+		assert(
+			todayProgJson.message.cards.cohort_work_items === 6 &&
+				todayProgJson.message.cards.attempted_work_items === 2 &&
+				todayProgJson.message.cards.unattempted_work_items === 4 &&
+				todayProgJson.message.cards.connected_work_items === 2,
+			`F-P2-05 period-scoped distinct Work Item coverage mismatch: ${JSON.stringify(todayProgJson.message.cards)}`
+		)
+		await staffALaProg.page.waitForTimeout(250)
+		const laProgText = await captureShot(
+			staffALaProg,
+			'/cskh/progress#sameday-cross-tz',
+			'21-staff-a-progress-sameday-cross-tz.png',
+			'B2E-21-f-p2-05-progress-sameday-cross-tz',
+			'America/Los_Angeles browser on Asia/Ho_Chi_Minh site: same-day filter + 23:59/00:00 boundaries + distinct WI vs Attempt vs DNC customer labels.'
+		)
+		assert(laProgText.includes('Asia/Ho_Chi_Minh'), 'Progress must display applied site/user timezone')
+		await staffALaProg.context.close()
 
 		// Leader A Team-scoped Progress (`/cskh/progress`)
 		await leaderA.page.goto(`${BASE_URL}/cskh/progress`, { waitUntil: 'networkidle' })
@@ -916,6 +1242,61 @@ async function main() {
 		)
 		assert(deepLinkText.includes('P2 Khách Hạnh Phúc'), 'Lead deep-link did not resolve P2 Khách Hạnh Phúc')
 
+		// ==================================================================
+		// SCENARIO 9: `F-P2-01` — Clean Lifecycle Milestones (Zero `[H:<hex>]`)
+		// & Server-Side BOD Private-Reason Protection (No Client DOM-Hiding)
+		// ==================================================================
+		await leaderA.page.goto(`${BASE_URL}/cskh/work-item?id=${encodeURIComponent(fx.wi_closed_http)}`, {
+			waitUntil: 'networkidle',
+		})
+		await leaderA.page.locator('#wi-summary-card').waitFor({ state: 'visible', timeout: 10000 })
+		const closedMilestoneText = await captureShot(
+			leaderA,
+			`/cskh/work-item?id=${fx.wi_closed_http}`,
+			'22-leader-a-closed-reopened-milestones-clean.png',
+			'B2E-22-f-p2-01-clean-milestones-no-hash',
+			'Closed/reopened Work Item timeline renders lifecycle milestones cleanly with zero [H:<16hex>] internal prefix.'
+		)
+		assert(
+			!/\[H:[0-9a-f]{6,}\]/i.test(closedMilestoneText),
+			'F-P2-01: [H:<hex>] leaked on closed/reopened Work Item timeline!'
+		)
+		assert(
+			closedMilestoneText.includes('Đóng công việc') || closedMilestoneText.includes('Mở lại công việc'),
+			'Expected close/reopen lifecycle milestone on wi_closed_http timeline'
+		)
+
+		// Verify in BOD's browser session that `crm_cskh.api.ownership.history` HTTP payload
+		// itself never delivers private DNC/close/reopen notes to BOD (backend protection, not DOM hiding)
+		await bod.page.goto(`${BASE_URL}/cskh/my-customers`, { waitUntil: 'networkidle' })
+		const bodHistoryCheck = await bod.page.evaluate(
+			async ({ wiDncF01, wiClosedHttp }) => {
+				const out = {}
+				for (const [k, wi] of [
+					['dnc', wiDncF01],
+					['closed', wiClosedHttp],
+				]) {
+					const r = await fetch(
+						`/api/method/crm_cskh.api.ownership.history?work_item=${encodeURIComponent(wi)}`,
+						{ credentials: 'same-origin', headers: { Accept: 'application/json' } }
+					)
+					out[k] = { status: r.status, raw: await r.text() }
+				}
+				return out
+			},
+			{ wiDncF01: fx.wi_dnc_f01, wiClosedHttp: fx.wi_closed_http }
+		)
+		for (const payloadInfo of [bodHistoryCheck.dnc, bodHistoryCheck.closed]) {
+			assert(
+				!/BI-MAT-DNC-F01|Nguyen Mat|0912359999|chốt gói dịch vụ|chi nhánh/i.test(payloadInfo.raw),
+				`F-P2-01 BOD HTTP payload leaked private reason: ${payloadInfo.raw}`
+			)
+			assert(
+				!/\[H:[0-9a-f]{6,}\]/i.test(payloadInfo.raw),
+				`F-P2-01 [H:<hex>] leaked in BOD ownership.history payload: ${payloadInfo.raw}`
+			)
+		}
+
 		await staffA.context.close()
 		await staffB.context.close()
 		await leaderA.context.close()
@@ -941,6 +1322,10 @@ async function main() {
 				single_post_per_save_action: true,
 				timezone_2359_0000_across_os_timezones: true,
 				a_to_b_url_replay_zero_leak: true,
+				f_p2_01_zero_hash_prefix_and_bod_server_redacted: true,
+				f_p2_04a_multipage_server_filter_and_pager_reset: true,
+				f_p2_04b_closed_completed_filter_staff_and_leader: true,
+				f_p2_05_distinct_wi_vs_attempt_vs_dnc_customer_sameday_tz: true,
 			},
 			entries,
 		}

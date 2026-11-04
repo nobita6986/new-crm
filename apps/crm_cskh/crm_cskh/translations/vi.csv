@@ -656,8 +656,9 @@ Allowed channels,Kênh cho phép
 Approve correction,Duyệt áp dụng
 Attempted,Đã thử
 Attempted but not connected,Đã thử nhưng chưa kết nối
-Attempted work items,Khách đã có lần liên hệ
+Attempted work items,Công việc đã thử liên hệ
 "Attempted, not connected",Đã thử nhưng chưa kết nối
+"Attempted, not connected work items","Công việc đã thử, chưa kết nối"
 Attempts are append-only: direct editing or deletion is disabled. Submit a correction or void request instead.,Lần liên hệ là bất biến (append-only): không được sửa hoặc xóa trực tiếp. Hãy gửi yêu cầu hiệu chỉnh hoặc vô hiệu có lý do.
 Back to my customers,Về danh sách khách được giao
 Basic customer care activity counts in your scope (not a quality or SLA score).,Số liệu hoạt động chăm sóc cơ bản trong phạm vi của bạn (không phải điểm chất lượng hay SLA).
@@ -680,6 +681,7 @@ Callbacks schedule,Lịch hẹn chăm sóc
 Cancel callback,Hủy lịch hẹn
 Cancel reason,Lý do hủy hẹn
 Canceled,Đã hủy
+Care coverage by work item,Độ phủ liên hệ theo công việc (Work Item)
 Care filter,Bộ lọc CSKH
 Care progress,Tiến độ chăm sóc
 Care status,Trạng thái CSKH
@@ -700,7 +702,8 @@ Completing a callback without a contact attempt requires a cancellation reason.,
 Completing callback task,Thực hiện cho lịch hẹn
 Completion reason,Lý do hoàn tất
 Configure contact outcome codes and versioned customer care policies.,Cấu hình danh mục mã kết quả liên hệ và chính sách chăm sóc theo phiên bản.
-Connected work items,Khách đã kết nối (hiệu lực)
+Connected contact attempts,Số lần liên hệ đã kết nối
+Connected work items,Công việc đã kết nối
 Contact attempt (CSKH),Lần liên hệ CSKH
 Contact attempt counters (effective attempts),Số liệu theo lần liên hệ hiệu lực (không tính bản đã vô hiệu)
 Contact attempts are immutable; submit a correction request instead.,Lần liên hệ là bất biến; hãy gửi yêu cầu hiệu chỉnh có kiểm toán.
@@ -723,6 +726,7 @@ Could not copy phone number in this browser.,Trình duyệt không cho phép sao
 Counts as connected,Tính là đã kết nối
 "Customer care detail, unified timeline, callbacks and append-only corrections.","Chi tiết chăm sóc khách hàng, dòng thời gian hợp nhất, lịch hẹn và hiệu chỉnh bất biến."
 Customer care workspace,Hồ sơ chăm sóc khách hàng
+Customer compliance counters (distinct customers),Chỉ số tuân thủ theo khách hàng
 Customer ownership has changed to another staff member. Refresh your list.,Khách hàng này đã được chuyển giao cho nhân viên khác. Vui lòng làm mới danh sách.
 "Customer pool, imports, campaigns, distribution and customer care workflow.","Kho khách hàng, nhập danh sách, chiến dịch, phân phối và nghiệp vụ chăm sóc khách hàng."
 Data scope,Phạm vi dữ liệu
@@ -730,14 +734,14 @@ Default follow-up delay (hours),Khoảng cách hẹn lại mặc định (giờ)
 Direct modification or deletion of contact attempts is prohibited.,Không được phép sửa hoặc xóa trực tiếp lịch sử lần liên hệ.
 Disabled,Đã tắt
 Do not contact,Không liên hệ nữa
-Do-not-contact (DNC) work items,Khách từ chối liên hệ (DNC)
+Do-not-contact (DNC) customers,Số khách hàng ngừng liên hệ (DNC)
 Does not count as connected,Không tính là đã kết nối
 Done,Đã hoàn tất
 Due status,Tình trạng hạn
 Due today,Đến hạn hôm nay
 Duration (s),Thời lượng (giây)
 Edit,Chỉnh sửa
-Effective contact attempts,Tổng lần liên hệ hiệu lực
+Effective contact attempts,Tổng số lần liên hệ hiệu lực
 Effective policy,Chính sách áp dụng
 Effective value,Giá trị hiệu lực
 Enabled,Đang bật
@@ -889,7 +893,8 @@ This request key was already used with a different payload.,Mã yêu cầu (requ
 This work item was updated in another tab or session. Reload the latest state and review before saving.,Công việc vừa được cập nhật ở tab hoặc phiên làm việc khác. Hãy tải lại dữ liệu mới nhất trước khi lưu.
 Timeline filter,Lọc dòng thời gian
 Unanswered message attempts (not connected),Gửi tin chưa phản hồi (chưa kết nối)
-Uncontacted work items,Khách chưa liên hệ
+Unconnected contact attempts,Số lần liên hệ chưa kết nối
+Uncontacted work items,Công việc chưa thử liên hệ
 Unified care timeline,Dòng thời gian chăm sóc hợp nhất
 Unlinked call log (not counted as attempt),Chưa gắn lần liên hệ (không tự tính số lần liên hệ)
 Upcoming,Sắp đến hạn

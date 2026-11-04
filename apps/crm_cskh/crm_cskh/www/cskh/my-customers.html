@@ -105,6 +105,21 @@
 			<input id="mine-scope-owner" class="cskh-input" type="text"
 				placeholder="{{ _('Current owner') }}">
 		</label>
+		<label class="cskh-field" id="mine-scope-care-wrap">
+			{{ _("Care filter") }}
+			<select id="mine-scope-care-filter" class="cskh-select">
+				<option value="">{{ _("All") }}</option>
+				<option value="not_contacted">{{ _("Not contacted") }}</option>
+				<option value="attempted">{{ _("Attempted") }}</option>
+				<option value="attempted_not_connected">{{ _("Attempted, not connected") }}</option>
+				<option value="connected">{{ _("Connected") }}</option>
+				<option value="on_hold">{{ _("On hold") }}</option>
+				<option value="followup_due">{{ _("Due today") }}</option>
+				<option value="followup_overdue">{{ _("Overdue") }}</option>
+				<option value="closed">{{ _("Completed care") }}</option>
+				<option value="do_not_contact">{{ _("Do not contact") }}</option>
+			</select>
+		</label>
 		<button id="mine-scope-refresh" class="cskh-btn" type="button">
 			{{ _("Refresh") }}
 		</button>
@@ -130,6 +145,11 @@
 			</thead>
 			<tbody id="mine-scope-rows"></tbody>
 		</table>
+	</div>
+	<div class="cskh-pager">
+		<button id="mine-scope-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
+		<span id="mine-scope-range"></span>
+		<button id="mine-scope-next" class="cskh-btn" type="button">{{ _("Next") }}</button>
 	</div>
 </div>
 

@@ -591,7 +591,14 @@ class TestCiP2HttpProbeGate(unittest.TestCase):
         )
         assert isinstance(main_fn, ast.FunctionDef)
 
-        raw_http_helpers = {"request", "get", "post", "post_json"}
+        raw_http_helpers = {
+            "request",
+            "get",
+            "post",
+            "post_json",
+            "put_json",
+            "patch_json",
+        }
         discarded_calls: list[int] = []
         close_helper_case_ids: list[str] = []
 

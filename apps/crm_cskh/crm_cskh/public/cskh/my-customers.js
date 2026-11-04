@@ -31,6 +31,12 @@
 		prev: document.getElementById('mine-prev'),
 		next: document.getElementById('mine-next'),
 	})
+	const scopePager = cskh.pager({
+		pageSize: PAGE_SIZE,
+		range: document.getElementById('mine-scope-range'),
+		prev: document.getElementById('mine-scope-prev'),
+		next: document.getElementById('mine-scope-next'),
+	})
 
 	const reads = cskh.sequencer()
 	const scopeReads = cskh.sequencer()
@@ -39,6 +45,8 @@
 	let assignees = []
 	let canManage = false
 	let cachedOutcomes = null
+	let searchDebounceTimer = null
+	let scopeOwnerDebounceTimer = null
 
 	function stateLabel(value) {
 		const map = {
@@ -50,55 +58,6 @@
 			closed: cskh.t('Completed care'),
 		}
 		return map[value] || cskh.workItemStateLabel(value) || '—'
-	}
-
-	function mapFilterToQuery(careFilter) {
-		const sameTz = cskh.effectiveTimeZone() === cskh.siteTimeZone()
-		switch (careFilter) {
-			case 'not_contacted':
-				return { status: 'assigned' }
-			case 'on_hold':
-				return { status: 'on_hold' }
-			case 'followup_due':
-				return sameTz ? { status: 'active', followup_filter: 'today' } : { status: 'on_hold' }
-			case 'followup_overdue':
-				return { status: 'active', followup_filter: 'overdue' }
-			case 'closed':
-				return { status: 'closed' }
-			case 'connected':
-			case 'do_not_contact':
-				return { status: 'all' }
-			case 'attempted':
-			case 'attempted_not_connected':
-			default:
-				return { status: 'active' }
-		}
-	}
-
-	function matchesClientCareFilter(item, careFilter) {
-		if (!careFilter) return true
-		switch (careFilter) {
-			case 'not_contacted':
-				return item.attempt_count === 0 && !item.do_not_contact && item.work_item_status !== 'closed'
-			case 'attempted':
-				return item.attempt_count > 0 && item.work_item_status !== 'closed'
-			case 'attempted_not_connected':
-				return item.attempt_count > 0 && !item.has_connected && item.work_item_status !== 'closed'
-			case 'connected':
-				return !!item.has_connected
-			case 'on_hold':
-				return item.work_item_status === 'on_hold'
-			case 'followup_due':
-				return item.followup_state === 'due_today'
-			case 'followup_overdue':
-				return item.followup_state === 'overdue'
-			case 'closed':
-				return item.work_item_status === 'closed'
-			case 'do_not_contact':
-				return !!item.do_not_contact
-			default:
-				return true
-		}
 	}
 
 	function syncFilterChips(selected) {
@@ -178,31 +137,14 @@
 	/* My customers                                                        */
 	/* ------------------------------------------------------------------ */
 
-	function filterAndSortMine(items) {
-		const searchEl = document.getElementById('mine-search')
+	function sortMine(items) {
 		const sortEl = document.getElementById('mine-sort')
-		const careEl = document.getElementById('mine-care-filter')
-		const query = searchEl ? searchEl.value.trim().toLowerCase() : ''
 		const sortMode = sortEl ? sortEl.value : 'desc'
-		const careFilter = careEl ? careEl.value : ''
-
-		const filtered = (items || []).filter(function (item) {
-			if (!matchesClientCareFilter(item, careFilter)) return false
-			if (!query) return true
-			const haystack = [
-				item.display_name,
-				item.lead,
-				item.work_item,
-				item.phone,
-				item.campaign_title,
-			]
-				.filter(Boolean)
-				.join(' ')
-				.toLowerCase()
-			return haystack.indexOf(query) >= 0
-		})
-
-		filtered.sort(function (a, b) {
+		const list = (items || []).slice()
+		if (!sortMode || sortMode === 'desc') {
+			return list
+		}
+		list.sort(function (a, b) {
 			if (sortMode === 'last_contact_desc') {
 				const la = a.last_attempt_at ? cskh.parseServerDate(a.last_attempt_at)?.getTime() || 0 : 0
 				const lb = b.last_attempt_at ? cskh.parseServerDate(b.last_attempt_at)?.getTime() || 0 : 0
@@ -221,7 +163,7 @@
 			const tb = b.assigned_at ? cskh.parseServerDate(b.assigned_at)?.getTime() || 0 : 0
 			return sortMode === 'asc' ? ta - tb : tb - ta
 		})
-		return filtered
+		return list
 	}
 
 	function renderMineTable() {
@@ -229,7 +171,7 @@
 		const empty = document.getElementById('mine-empty')
 		const rows = document.getElementById('mine-rows')
 		cskh.clear(rows)
-		const items = filterAndSortMine(lastMineItems)
+		const items = sortMine(lastMineItems)
 		if (!items.length) {
 			table.hidden = true
 			empty.hidden = false
@@ -397,46 +339,43 @@
 		const campaign = document.getElementById('mine-campaign').value
 		const careFilter = careEl ? careEl.value : ''
 		const search = searchEl ? searchEl.value.trim() : ''
+		const requestedPage = pager.page()
 		const mine = reads.next()
 
 		try {
 			let data
 			if (allowPii) {
-				const mapped = mapFilterToQuery(careFilter)
-				const query = {
-					page: pager.page(),
-					page_size: PAGE_SIZE,
-					status: mapped.status,
+				const query = cskhP2Api.buildWorkItemsQuery({
+					page: requestedPage,
+					pageSize: PAGE_SIZE,
+					careFilter: careFilter,
 					campaign: campaign,
 					assignee: cskh.currentUser(),
-				}
-				if (mapped.followup_filter) query.followup_filter = mapped.followup_filter
-				if (search) query.search = search
+					search: search,
+				})
 				data = await cskhP2Api.listWorkItems(query)
 			} else {
 				data = await cskhP2Api.listMyCustomers({
-					page: pager.page(),
+					page: requestedPage,
 					page_size: PAGE_SIZE,
 					campaign: campaign,
 				})
 			}
 			if (mine !== reads.current()) return
 			const rawItems = (data && data.items) || []
+			const serverTotal = Number((data && data.total) || 0)
+			pager.setTotal(serverTotal)
+			if (requestedPage > pager.page()) {
+				return load()
+			}
 			lastMineItems = rawItems
-			const filteredCount = filterAndSortMine(rawItems).length
-			pager.setTotal(
-				careFilter === 'attempted' ||
-					careFilter === 'attempted_not_connected' ||
-					careFilter === 'connected' ||
-					careFilter === 'do_not_contact'
-					? filteredCount
-					: data && data.total
-			)
 			pager.render()
 			if (!canReadScope) syncMineCampaignFilter(lastMineItems)
 			renderMineTable()
 		} catch (error) {
 			lastMineItems = []
+			pager.setTotal(0)
+			pager.render()
 			cskh.renderError(alertBox, error)
 		} finally {
 			loading.hidden = true
@@ -467,24 +406,29 @@
 
 		const campaign = document.getElementById('mine-campaign').value
 		const ownerInput = document.getElementById('mine-scope-owner')
+		const scopeCareSelect = document.getElementById('mine-scope-care-filter')
 		const owner = ownerInput ? ownerInput.value.trim() : ''
+		const scopeCare = scopeCareSelect ? scopeCareSelect.value : ''
+		const requestedPage = scopePager.page()
 		const mine = scopeReads.next()
 		try {
 			let data
 			if (allowPii) {
-				const wiData = await cskhP2Api.listWorkItems({
-					page: 1,
-					page_size: PAGE_SIZE,
-					status: 'active',
-					campaign: campaign,
-					assignee: owner,
-				})
+				const wiData = await cskhP2Api.listWorkItems(
+					cskhP2Api.buildWorkItemsQuery({
+						page: requestedPage,
+						pageSize: PAGE_SIZE,
+						careFilter: scopeCare,
+						campaign: campaign,
+						assignee: owner,
+					})
+				)
 				data = Object.assign({}, wiData, {
 					can_manage: isAdmin,
 				})
 			} else {
 				data = await cskhP2Api.listScopedCustomers({
-					page: 1,
+					page: requestedPage,
 					page_size: PAGE_SIZE,
 					campaign: campaign,
 					owner: owner,
@@ -500,6 +444,12 @@
 				return
 			}
 			card.hidden = false
+			const scopeTotal = Number((data && data.total) || 0)
+			scopePager.setTotal(scopeTotal)
+			if (requestedPage > scopePager.page()) {
+				return loadScope()
+			}
+			scopePager.render()
 			const items = (data && data.items) || []
 			if (!items.length) {
 				empty.hidden = false
@@ -540,7 +490,7 @@
 				})
 			)
 		}
-		if (canManage) {
+		if (canManage && (!item.capabilities || item.capabilities.can_reassign_or_revoke)) {
 			actions.push(
 				cskh.el('button', {
 					class: 'cskh-btn is-small is-primary',
@@ -569,11 +519,11 @@
 				text: allowPii && item.phone ? cskh.maskPhone(item.phone) : '—',
 			}),
 			cskh.el('td', { text: item.campaign_title || item.campaign_code || item.campaign || '—' }),
-			cskh.el('td', { text: item.assigned_to || '—' }),
+			cskh.el('td', { text: item.assigned_to || item.last_owner || item.closed_by || '—' }),
 			cskh.el('td', {}, [renderCareStatusCell(item)]),
 			cskh.el('td', {}, [renderLastOutcomeCell(item)]),
 			cskh.el('td', {}, [renderNextCallbackCell(item)]),
-			cskh.el('td', { text: cskh.formatDate(item.assigned_at) }),
+			cskh.el('td', { text: cskh.formatDate(item.assigned_at || item.closed_at) }),
 			cskh.el('td', {}, [cskh.el('div', { class: 'cskh-row-actions' }, actions)]),
 		])
 	}
@@ -896,8 +846,11 @@
 
 	const searchWrap = document.getElementById('mine-search-wrap')
 	const chipBar = document.getElementById('mine-filter-chips')
+	const scopeCareWrap = document.getElementById('mine-scope-care-wrap')
+	const scopeCareSelect = document.getElementById('mine-scope-care-filter')
 	if (searchWrap && !allowPii) searchWrap.hidden = true
 	if (chipBar && !allowPii) chipBar.hidden = true
+	if (scopeCareWrap && !allowPii) scopeCareWrap.hidden = true
 
 	const careSelect = document.getElementById('mine-care-filter')
 	if (careSelect) {
@@ -920,25 +873,99 @@
 		})
 	}
 
-	document.getElementById('mine-refresh').addEventListener('click', function () {
+	const searchInput = document.getElementById('mine-search')
+	function runSearchNow() {
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer)
+			searchDebounceTimer = null
+		}
 		pager.goto(1)
+		load()
+	}
+	if (searchInput) {
+		searchInput.addEventListener('input', function () {
+			if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+			searchDebounceTimer = setTimeout(function () {
+				searchDebounceTimer = null
+				pager.goto(1)
+				load()
+			}, 220)
+		})
+		searchInput.addEventListener('search', runSearchNow)
+		searchInput.addEventListener('keydown', function (ev) {
+			if (ev.key === 'Enter') {
+				ev.preventDefault()
+				runSearchNow()
+			}
+		})
+	}
+
+	document.getElementById('mine-refresh').addEventListener('click', function () {
+		if (searchDebounceTimer) {
+			clearTimeout(searchDebounceTimer)
+			searchDebounceTimer = null
+		}
+		pager.goto(1)
+		scopePager.goto(1)
 		load()
 		loadScope()
 	})
 	document.getElementById('mine-campaign').addEventListener('change', function () {
 		pager.goto(1)
+		scopePager.goto(1)
 		load()
 		loadScope()
-	})
-	document.getElementById('mine-search').addEventListener('input', function () {
-		renderMineTable()
 	})
 	document.getElementById('mine-sort').addEventListener('change', function () {
 		renderMineTable()
 	})
+	if (scopeCareSelect) {
+		if (!allowPii) scopeCareSelect.disabled = true
+		scopeCareSelect.addEventListener('change', function () {
+			scopePager.goto(1)
+			loadScope()
+		})
+	}
+	const scopeOwnerInput = document.getElementById('mine-scope-owner')
+	if (scopeOwnerInput) {
+		scopeOwnerInput.addEventListener('input', function () {
+			if (scopeOwnerDebounceTimer) clearTimeout(scopeOwnerDebounceTimer)
+			scopeOwnerDebounceTimer = setTimeout(function () {
+				scopeOwnerDebounceTimer = null
+				scopePager.goto(1)
+				loadScope()
+			}, 250)
+		})
+		scopeOwnerInput.addEventListener('keydown', function (ev) {
+			if (ev.key === 'Enter') {
+				ev.preventDefault()
+				if (scopeOwnerDebounceTimer) {
+					clearTimeout(scopeOwnerDebounceTimer)
+					scopeOwnerDebounceTimer = null
+				}
+				scopePager.goto(1)
+				loadScope()
+			}
+		})
+	}
 	document.getElementById('mine-scope-refresh').addEventListener('click', function () {
+		scopePager.goto(1)
 		loadScope()
 	})
+	const scopePrevBtn = document.getElementById('mine-scope-prev')
+	const scopeNextBtn = document.getElementById('mine-scope-next')
+	if (scopePrevBtn) {
+		scopePrevBtn.addEventListener('click', function () {
+			scopePager.goto(Math.max(1, scopePager.page() - 1))
+			loadScope()
+		})
+	}
+	if (scopeNextBtn) {
+		scopeNextBtn.addEventListener('click', function () {
+			scopePager.goto(scopePager.page() + 1)
+			loadScope()
+		})
+	}
 	document.getElementById('mine-detail-close').addEventListener('click', function () {
 		document.getElementById('mine-detail-card').hidden = true
 	})

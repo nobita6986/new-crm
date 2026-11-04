@@ -210,6 +210,51 @@ class Session:
             body = {"raw": raw.decode("utf-8", errors="replace")[:400]}
         return status, body
 
+    def get_resource(self, doctype: str, params: dict | None = None):
+        qs = ""
+        if params:
+            clean = {
+                k: (json.dumps(v) if isinstance(v, (dict, list)) else v)
+                for k, v in params.items()
+                if v is not None
+            }
+            if clean:
+                qs = "?" + urllib.parse.urlencode(clean)
+        enc_dt = urllib.parse.quote(doctype)
+        status, raw = self.raw_get(f"/api/resource/{enc_dt}{qs}")
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except Exception:
+            body = {"raw": raw.decode("utf-8", errors="replace")[:400]}
+        return status, body
+
+    def put_resource(self, doctype: str, docname: str, payload: dict):
+        headers = {
+            "Host": HOST,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+        if self.csrf:
+            headers["X-Frappe-CSRF-Token"] = self.csrf
+        enc_dt = urllib.parse.quote(doctype)
+        enc_name = urllib.parse.quote(docname)
+        req = urllib.request.Request(
+            f"{BASE}/api/resource/{enc_dt}/{enc_name}",
+            data=json.dumps(payload or {}).encode("utf-8"),
+            headers=headers,
+            method="PUT",
+        )
+        try:
+            with self.opener.open(req, timeout=30) as resp:
+                status, raw = resp.status, resp.read()
+        except urllib.error.HTTPError as exc:
+            status, raw = exc.code, exc.read()
+        try:
+            body = json.loads(raw.decode("utf-8"))
+        except Exception:
+            body = {"raw": raw.decode("utf-8", errors="replace")[:400]}
+        return status, body
+
     def upload_csv(self, file_name: str, csv_bytes: bytes):
         boundary = "----CSKHP2Boundary" + uuid.uuid4().hex
         parts = [
@@ -1154,7 +1199,7 @@ def main():
         {
             "work_item": wi_transfer,
             "channel": "phone_call",
-            "outcome_code": "callback_requested",
+            "outcome_code": "no_answer",
             "note": "Nhân viên A1 ghi nhận lần 1 trước khi bàn giao sang A2",
             "followup": {
                 "due_at": transfer_due,
@@ -1245,10 +1290,473 @@ def main():
         },
     )
 
+    # ------------------------------------------------------------------
+    # 6. Post-Audit Remediation Verification (`F-P2-01`, `F-P2-02`,
+    #    `F-P2-04A`, `F-P2-04B`, `F-P2-05`, `F-P2-06`)
+    # ------------------------------------------------------------------
+    # 6a. `F-P2-02`: `run_history.runs` for Team Leader retains assigned map
+    #     when Work Item transitions `assigned -> in_progress -> on_hold`.
+    camp_rh, _batch_rh, run_rh = import_and_distribute(
+        admin,
+        "P2-CAMP-RUNHIST",
+        "Chiến dịch Kiểm thử RunHistory Leader",
+        team_a,
+        users["staff_b"],
+        [
+            ("0912350001", "P2 Khách RunHistory Leader", "Website"),
+            ("0912350002", "P2 Khách DNC AutoClose F01", "Website"),
+        ],
+    )
+    st_rh_wi, rh_wi_res = staff_b.get_api(
+        "crm_cskh.api.workflow.list_work_items",
+        {"campaign": camp_rh, "status": "active", "page": 1, "page_size": 20},
+    )
+    assert st_rh_wi == 200 and rh_wi_res["message"]["total"] == 2
+    rh_by_name = {r["display_name"]: r for r in rh_wi_res["message"]["items"]}
+    wi_runhist = rh_by_name["P2 Khách RunHistory Leader"]["work_item"]
+    wi_dnc_f01 = rh_by_name["P2 Khách DNC AutoClose F01"]["work_item"]
+
+    st_rh0, b_rh0 = leader_a.get_api(
+        "crm_cskh.api.run_history.runs", {"campaign": camp_rh, "run_id": run_rh}
+    )
+    assert st_rh0 == 200
+    rh_row0 = next(r for r in b_rh0["message"]["items"] if r["run_id"] == run_rh)
+    assert rh_row0["assigned"].get(users["staff_b"]) == 2
+
+    # Transition `wi_runhist` -> `in_progress`, then `on_hold`
+    st_rh_att, rh_att = staff_b.post_api(
+        "crm_cskh.api.workflow.record_attempt",
+        {
+            "work_item": wi_runhist,
+            "channel": "phone_call",
+            "outcome_code": "no_answer",
+            "note": "Chuyển trạng thái sang in_progress để kiểm F-P2-02",
+            "expected_revision": 1,
+            "idempotency_key": "f-p2-02-in-progress-001",
+        },
+    )
+    assert st_rh_att == 200 and rh_att["message"]["work_item_status"] == "in_progress"
+
+    st_rh1, b_rh1 = leader_a.get_api(
+        "crm_cskh.api.run_history.runs", {"campaign": camp_rh, "run_id": run_rh}
+    )
+    assert st_rh1 == 200
+    rh_row1 = next(r for r in b_rh1["message"]["items"] if r["run_id"] == run_rh)
+    assert rh_row1["assigned"].get(users["staff_b"]) == 2, (
+        f"F-P2-02 regression: assigned count dropped on in_progress: {rh_row1}"
+    )
+
+    st_rh_fu, _ = staff_b.post_api(
+        "crm_cskh.api.workflow.schedule_followup",
+        {
+            "work_item": wi_runhist,
+            "due_at": fmt_dt(site_now + dt.timedelta(days=1, hours=3)),
+            "title": "Hẹn gọi lại kiểm F-P2-02 on_hold",
+            "note": "Chuyển sang on_hold",
+            "reason": "Khách bận",
+            "expected_revision": rh_att["message"]["revision"],
+            "idempotency_key": "f-p2-02-on-hold-001",
+        },
+    )
+    assert st_rh_fu == 200
+    st_rh2, b_rh2 = leader_a.get_api(
+        "crm_cskh.api.run_history.runs", {"campaign": camp_rh, "run_id": run_rh}
+    )
+    rh_row2 = next(r for r in b_rh2["message"]["items"] if r["run_id"] == run_rh)
+    assert rh_row2["assigned"].get(users["staff_b"]) == 2, (
+        f"F-P2-02 regression: assigned count dropped on on_hold: {rh_row2}"
+    )
+
+    # 6b. `F-P2-01`: DNC auto-close + close/reopen private reasons NEVER leak to BOD
+    #     across all 5 planes, and `[H:<16hex>]` NEVER appears on timeline/history!
+    secret_dnc_note = "BI-MAT-DNC-F01 Khach Nguyen Mat 0912359999 yeu cau ngung goi"
+    st_dnc_f01, b_dnc_f01 = staff_b.post_api(
+        "crm_cskh.api.workflow.record_attempt",
+        {
+            "work_item": wi_dnc_f01,
+            "channel": "phone_call",
+            "outcome_code": "do_not_contact",
+            "note": secret_dnc_note,
+            "expected_revision": 1,
+            "idempotency_key": "f-p2-01-dnc-autoclose-001",
+        },
+    )
+    assert st_dnc_f01 == 200, f"DNC auto-close attempt failed: {st_dnc_f01} {b_dnc_f01}"
+
+    forbidden_bod_substrings = (
+        "BI-MAT-DNC-F01",
+        "Nguyen Mat",
+        "0912359999",
+        "chốt gói dịch vụ",
+        "chi nhánh thứ 2",
+        "chi nhánh 2",
+    )
+    hash_prefix_re = re.compile(r"\[H:[0-9a-fA-F]{6,}\]")
+
+    for target_wi in (wi_dnc_f01, wi_http):
+        # Plane 1: `crm_cskh.api.ownership.history`
+        st_p1, b_p1 = bod.get_api(
+            "crm_cskh.api.ownership.history", {"work_item": target_wi}
+        )
+        raw_p1 = json.dumps(b_p1, ensure_ascii=False)
+        for secret_tok in forbidden_bod_substrings:
+            assert secret_tok not in raw_p1, (
+                f"F-P2-01 Plane 1 BOD leak ({secret_tok}): {raw_p1}"
+            )
+        assert not hash_prefix_re.search(raw_p1), (
+            f"F-P2-01 [H:...] prefix leaked on ownership.history: {raw_p1}"
+        )
+
+    # Plane 2: `/api/resource/CSKH Assignment History`
+    st_p2, b_p2 = bod.get_resource(
+        "CSKH Assignment History",
+        {
+            "fields": ["name", "work_item", "action", "reason"],
+            "filters": [["work_item", "in", [wi_dnc_f01, wi_http]]],
+            "limit_page_length": 50,
+        },
+    )
+    raw_p2 = json.dumps(b_p2, ensure_ascii=False)
+    for secret_tok in forbidden_bod_substrings:
+        assert secret_tok not in raw_p2, f"F-P2-01 Plane 2 REST BOD leak: {raw_p2}"
+
+    # Plane 3: `frappe.client.get_list`
+    st_p3, b_p3 = bod.get_api(
+        "frappe.client.get_list",
+        {
+            "doctype": "CSKH Assignment History",
+            "fields": ["name", "work_item", "action", "reason"],
+            "filters": [["work_item", "in", [wi_dnc_f01, wi_http]]],
+            "limit_page_length": 50,
+        },
+    )
+    raw_p3 = json.dumps(b_p3, ensure_ascii=False)
+    for secret_tok in forbidden_bod_substrings:
+        assert secret_tok not in raw_p3, f"F-P2-01 Plane 3 get_list BOD leak: {raw_p3}"
+
+    # Plane 4: `frappe.desk.reportview.get`
+    st_p4, b_p4 = bod.post_api(
+        "frappe.desk.reportview.get",
+        {
+            "doctype": "CSKH Assignment History",
+            "fields": ["name", "work_item", "action", "reason"],
+            "filters": [
+                ["CSKH Assignment History", "work_item", "in", [wi_dnc_f01, wi_http]]
+            ],
+            "page_length": 50,
+        },
+    )
+    raw_p4 = json.dumps(b_p4, ensure_ascii=False)
+    for secret_tok in forbidden_bod_substrings:
+        assert secret_tok not in raw_p4, (
+            f"F-P2-01 Plane 4 reportview BOD leak: {raw_p4}"
+        )
+
+    # Plane 5: `frappe.desk.form.load.getdoc` on close/reopen history row
+    _, admin_hist_res = admin.get_resource(
+        "CSKH Assignment History",
+        {
+            "fields": ["name", "action"],
+            "filters": [
+                ["work_item", "in", [wi_dnc_f01, wi_http]],
+                ["action", "in", ["close", "reopen"]],
+            ],
+            "limit_page_length": 10,
+        },
+    )
+    for hist_row in admin_hist_res.get("data", []):
+        st_p5, b_p5 = bod.get_api(
+            "frappe.desk.form.load.getdoc",
+            {"doctype": "CSKH Assignment History", "name": hist_row["name"]},
+        )
+        raw_p5 = json.dumps(b_p5, ensure_ascii=False)
+        for secret_tok in forbidden_bod_substrings:
+            assert secret_tok not in raw_p5, (
+                f"F-P2-01 Plane 5 getdoc BOD leak on {hist_row['name']}: {raw_p5}"
+            )
+
+    # Verify zero `[H:<16hex>]` on `list_attempts(include_milestones=1)` and `ownership.history` for Staff/Leader/Admin
+    for sess_check in (staff_a, leader_a, admin):
+        st_ms, b_ms = sess_check.get_api(
+            "crm_cskh.api.workflow.list_attempts",
+            {"work_item": wi_http, "include_milestones": 1},
+        )
+        assert st_ms == 200
+        raw_ms = json.dumps(b_ms, ensure_ascii=False)
+        assert not hash_prefix_re.search(raw_ms), (
+            f"F-P2-01 [H:...] prefix leaked in list_attempts milestones: {raw_ms}"
+        )
+        st_oh, b_oh = sess_check.get_api(
+            "crm_cskh.api.ownership.history", {"work_item": wi_http}
+        )
+        assert st_oh == 200
+        raw_oh = json.dumps(b_oh, ensure_ascii=False)
+        assert not hash_prefix_re.search(raw_oh), (
+            f"F-P2-01 [H:...] prefix leaked in ownership.history: {raw_oh}"
+        )
+
+    # 6c. `F-P2-06`: Direct `PUT /api/resource/CRM Lead/<id>` attempting to set or
+    #     clear `cskh_do_not_contact` / `cskh_dnc_reason` by Staff/Leader is REJECTED!
+    lead_happy_id = by_name["P2 Khách Hạnh Phúc"]["lead"]
+    st_put_set, b_put_set = staff_a.put_resource(
+        "CRM Lead",
+        lead_happy_id,
+        {
+            "cskh_do_not_contact": 1,
+            "cskh_dnc_reason": "Staff bypassed workflow via REST PUT",
+        },
+    )
+    assert st_put_set in (403, 417, 422), (
+        f"F-P2-06 regression: Staff PUT setting DNC succeeded ({st_put_set}): {b_put_set}"
+    )
+    _, wi_happy_check = staff_a.get_api(
+        "crm_cskh.api.workflow.get_work_item", {"work_item": wi_happy}
+    )
+    assert wi_happy_check["message"]["lead"]["do_not_contact"] is False
+
+    st_put_clear, b_put_clear = staff_b.put_resource(
+        "CRM Lead",
+        lead_dnc,
+        {
+            "cskh_do_not_contact": 0,
+            "cskh_dnc_reason": "Staff cleared DNC without Admin",
+        },
+    )
+    assert st_put_clear in (403, 417, 422), (
+        f"F-P2-06 regression: Staff PUT clearing DNC succeeded ({st_put_clear}): {b_put_clear}"
+    )
+    _, wi_dnc_check = staff_b.get_api(
+        "crm_cskh.api.workflow.get_work_item", {"work_item": wi_dnc}
+    )
+    assert wi_dnc_check["message"]["lead"]["do_not_contact"] is True
+
+    # 6d. `F-P2-04A` + `F-P2-04B` + `F-P2-05`: Multi-page (`> 20` active items on `staff_a`)
+    #     where `connected` active items ONLY exist on Page 2 (`26..31`), plus `closed` filter
+    #     by `assignee`, plus same-day `date_from == date_to` & `23:59:59`/`00:00:00` boundaries!
+    fill_rows = [
+        (f"09123600{idx:02d}", f"P2 Khách Đệm Trang 1-{idx:02d}", "Website")
+        for idx in range(1, 18)
+    ]
+    camp_fill, _batch_fill, _run_fill = import_and_distribute(
+        admin,
+        "P2-CAMP-FILL",
+        "Chiến dịch Đệm Phân Trang P2",
+        team_a,
+        users["staff_a"],
+        fill_rows,
+    )
+    _, fill_list = staff_a.get_api(
+        "crm_cskh.api.workflow.list_work_items",
+        {"campaign": camp_fill, "status": "active", "page": 1, "page_size": 50},
+    )
+    fill_assigned_str = f"{yesterday_date.isoformat()} 10:00:00"
+    for r in fill_list["message"]["items"]:
+        bench_execute(
+            "crm_cskh.tools.p2_e2e_seed.set_work_item_assigned_at_exact",
+            {"work_item": r["work_item"], "assigned_at_str": fill_assigned_str},
+        )
+
+    page2_rows = [
+        ("0912370001", "P2 Khách Kết Nối Trang 2A", "Website"),
+        ("0912370002", "P2 Khách Kết Nối Trang 2B", "Website"),
+        ("0912370003", "P2 Khách Đêm Hôm Kia 2359", "Website"),
+        ("0912370004", "P2 Khách Đêm Hôm Qua 0000", "Website"),
+        ("0912370005", "P2 Khách Đêm Hôm Qua 2359", "Website"),
+        ("0912370006", "P2 Khách Chưa Gọi Trang 2", "Website"),
+    ]
+    camp_page2, _batch_page2, _run_page2 = import_and_distribute(
+        admin,
+        "P2-CAMP-PAGE2",
+        "Chiến dịch Trang 2 & Biên Múi Giờ",
+        team_a,
+        users["staff_a"],
+        page2_rows,
+    )
+    _, p2_list = staff_a.get_api(
+        "crm_cskh.api.workflow.list_work_items",
+        {"campaign": camp_page2, "status": "active", "page": 1, "page_size": 20},
+    )
+    three_days_ago = today_date - dt.timedelta(days=3)
+    two_days_ago = today_date - dt.timedelta(days=2)
+    p2_assigned_str = f"{three_days_ago.isoformat()} 09:00:00"
+    p2_by_name = {}
+    for r in p2_list["message"]["items"]:
+        bench_execute(
+            "crm_cskh.tools.p2_e2e_seed.set_work_item_assigned_at_exact",
+            {"work_item": r["work_item"], "assigned_at_str": p2_assigned_str},
+        )
+        p2_by_name[r["display_name"]] = r
+
+    # Record `connected_interested` (no followup -> stays on Page 2!) on Trang 2A & Trang 2B
+    for conn_key, conn_label in (
+        ("2a", "P2 Khách Kết Nối Trang 2A"),
+        ("2b", "P2 Khách Kết Nối Trang 2B"),
+    ):
+        st_c, b_c = staff_a.post_api(
+            "crm_cskh.api.workflow.record_attempt",
+            {
+                "work_item": p2_by_name[conn_label]["work_item"],
+                "channel": "phone_call",
+                "outcome_code": "connected_interested",
+                "note": f"Khách kết nối ở trang 2 ({conn_key}) kiểm F-P2-04A",
+                "expected_revision": 1,
+                "idempotency_key": f"f-p2-04a-conn-{conn_key}",
+            },
+        )
+        assert st_c == 200, f"Page-2 connected attempt {conn_key} failed: {st_c} {b_c}"
+
+    # Record 3 boundary `no_answer` attempts and pin to `two_days_ago 23:59:59`,
+    # `yesterday 00:00:00`, and `yesterday 23:59:59` for `F-P2-05`!
+    boundary_att_specs = [
+        (
+            "prev2359",
+            "P2 Khách Đêm Hôm Kia 2359",
+            f"{two_days_ago.isoformat()} 23:59:59",
+        ),
+        (
+            "yest0000",
+            "P2 Khách Đêm Hôm Qua 0000",
+            f"{yesterday_date.isoformat()} 00:00:00",
+        ),
+        (
+            "yest2359",
+            "P2 Khách Đêm Hôm Qua 2359",
+            f"{yesterday_date.isoformat()} 23:59:59",
+        ),
+    ]
+    for b_code, b_name, exact_ts in boundary_att_specs:
+        wi_b_id = p2_by_name[b_name]["work_item"]
+        st_ba, b_ba = staff_a.post_api(
+            "crm_cskh.api.workflow.record_attempt",
+            {
+                "work_item": wi_b_id,
+                "channel": "phone_call",
+                "outcome_code": "no_answer",
+                "note": f"Kiểm biên ngày {exact_ts}",
+                "expected_revision": 1,
+                "idempotency_key": f"f-p2-05-bound-{b_code}",
+            },
+        )
+        assert st_ba == 200
+        bench_execute(
+            "crm_cskh.tools.p2_e2e_seed.set_attempt_occurred_exact",
+            {
+                "attempt_id": b_ba["message"]["attempt_id"],
+                "work_item": wi_b_id,
+                "occurred_at_str": exact_ts,
+            },
+        )
+
+    # Verify `F-P2-04A` multi-page HTTP contract:
+    # Page 1 (`1..20`) has 0 connected items; Page 2 (`21..31`) has Trang 2A & Trang 2B;
+    # Server-side `care_state='connected'` finds them immediately on Page 1!
+    st_mp1, mp1 = staff_a.get_api(
+        "crm_cskh.api.workflow.list_work_items",
+        {"page": 1, "page_size": 20, "status": "active", "assignee": users["staff_a"]},
+    )
+    assert st_mp1 == 200 and mp1["message"]["total"] == 31
+    assert len(mp1["message"]["items"]) == 20
+    assert all(r["connected_attempt_count"] == 0 for r in mp1["message"]["items"]), (
+        "Page 1 must have ZERO connected items so Page-2 server filter is proven!"
+    )
+
+    st_mp2, mp2 = staff_a.get_api(
+        "crm_cskh.api.workflow.list_work_items",
+        {"page": 2, "page_size": 20, "status": "active", "assignee": users["staff_a"]},
+    )
+    assert st_mp2 == 200 and mp2["message"]["total"] == 31
+    mp2_names = {r["display_name"] for r in mp2["message"]["items"]}
+    assert "P2 Khách Kết Nối Trang 2A" in mp2_names
+    assert "P2 Khách Kết Nối Trang 2B" in mp2_names
+
+    st_conn_flt, conn_flt = staff_a.get_api(
+        "crm_cskh.api.workflow.list_work_items",
+        {
+            "page": 1,
+            "page_size": 20,
+            "status": "active",
+            "care_state": "connected",
+            "assignee": users["staff_a"],
+        },
+    )
+    assert st_conn_flt == 200, f"care_state=connected failed: {st_conn_flt} {conn_flt}"
+    conn_flt_names = {r["display_name"] for r in conn_flt["message"]["items"]}
+    assert conn_flt_names == {"P2 Khách Kết Nối Trang 2A", "P2 Khách Kết Nối Trang 2B"}
+    assert conn_flt["message"]["total"] == 2
+
+    # Verify `F-P2-04B` closed + assignee filter for BOTH `staff_a` and `leader_a`!
+    for closed_actor in (staff_a, leader_a):
+        st_cl_flt, cl_flt = closed_actor.get_api(
+            "crm_cskh.api.workflow.list_work_items",
+            {
+                "page": 1,
+                "page_size": 20,
+                "status": "closed",
+                "assignee": users["staff_a"],
+            },
+        )
+        assert st_cl_flt == 200 and cl_flt["message"]["total"] >= 1, (
+            f"F-P2-04B regression: status=closed&assignee=staff_a returned 0: {cl_flt}"
+        )
+        assert any(r["work_item"] == wi_http for r in cl_flt["message"]["items"])
+
+    # Verify `F-P2-05` `progress_summary` same-day `date_from == date_to`, `23:59:59`/`00:00:00`
+    # midnight boundaries, and distinct Work Item coverage counters (`unattempted_work_items`,
+    # `attempted_work_items`, `connected_work_items`)!
+    st_pr_yest, pr_yest = staff_a.get_api(
+        "crm_cskh.api.workflow.progress_summary",
+        {
+            "campaign": camp_page2,
+            "date_from": yesterday_date.isoformat(),
+            "date_to": yesterday_date.isoformat(),
+        },
+    )
+    assert st_pr_yest == 200
+    assert pr_yest["message"]["cards"]["effective_attempts"] == 2, (
+        f"F-P2-05 boundary error on yesterday ({yesterday_date}): expected 2 (00:00:00 + 23:59:59, excluding prev 23:59:59 & today), got {pr_yest['message']['cards']}"
+    )
+
+    st_pr_today, pr_today = staff_a.get_api(
+        "crm_cskh.api.workflow.progress_summary",
+        {
+            "campaign": camp_page2,
+            "date_from": today_date.isoformat(),
+            "date_to": today_date.isoformat(),
+        },
+    )
+    assert st_pr_today == 200
+    assert pr_today["message"]["cards"]["effective_attempts"] == 2
+    assert pr_today["message"]["cards"]["connected_attempts"] == 2
+
+    st_pr_camp2, pr_camp2 = staff_a.get_api(
+        "crm_cskh.api.workflow.progress_summary",
+        {"campaign": camp_page2},
+    )
+    assert st_pr_camp2 == 200
+    c2_cards = pr_camp2["message"]["cards"]
+    assert c2_cards["unattempted_work_items"] == 1
+    assert c2_cards["attempted_work_items"] == 5
+    assert c2_cards["connected_work_items"] == 2
+    assert c2_cards["effective_attempts"] == 5
+
+    record(
+        "P2-E2E-05-remediation-f-p2-01-02-04-05-06",
+        True,
+        {
+            "f_p2_01_bod_5_planes_zero_leak": True,
+            "f_p2_01_zero_hash_prefix_milestones": True,
+            "f_p2_02_leader_run_history_preserved": True,
+            "f_p2_04a_multipage_page2_connected_found": True,
+            "f_p2_04b_closed_assignee_filter_found": True,
+            "f_p2_05_sameday_and_2359_0000_and_wi_counts": True,
+            "f_p2_06_direct_lead_dnc_put_blocked": True,
+        },
+    )
+
     reconcile = bench_execute("crm_cskh.services.read_model.reconcile_p2_invariants")
     assert reconcile.get("ok") is True, f"P2 invariant drift detected: {reconcile}"
     record(
-        "P2-E2E-05-reconcile-p2-invariants",
+        "P2-E2E-06-reconcile-p2-invariants",
         True,
         {"ok": True, "summary": reconcile.get("counts", reconcile)},
     )
@@ -1256,6 +1764,15 @@ def main():
     evidence["fixtures"] = {
         "campaign_a": camp_a,
         "campaign_b": camp_b,
+        "campaign_fill": camp_fill,
+        "campaign_page2": camp_page2,
+        "campaign_runhist": camp_rh,
+        "today_iso": today_date.isoformat(),
+        "yesterday_iso": yesterday_date.isoformat(),
+        "two_days_ago_iso": two_days_ago.isoformat(),
+        "wi_page2_conn_a": p2_by_name["P2 Khách Kết Nối Trang 2A"]["work_item"],
+        "wi_page2_conn_b": p2_by_name["P2 Khách Kết Nối Trang 2B"]["work_item"],
+        "wi_dnc_f01": wi_dnc_f01,
         "team_a": team_a,
         "team_b": team_b,
         "users": users,

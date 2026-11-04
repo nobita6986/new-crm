@@ -177,3 +177,41 @@ class TestUiP2PagesAndContext(P2TestCase):
 		eligible_users = {row["user"] for row in res["items"]}
 		self.assertNotIn(self.staff_a, eligible_users)
 		self.assertIn(self.staff_b, eligible_users)
+
+	def test_remediation_ui_templates_and_static_contracts_f_p2_01_04a_05(self):
+		base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+		with open(os.path.join(base_dir, "www", "cskh", "my-customers.html"), encoding="utf-8") as fh:
+			mine_html = fh.read()
+		with open(os.path.join(base_dir, "www", "cskh", "progress.html"), encoding="utf-8") as fh:
+			prog_html = fh.read()
+		with open(os.path.join(base_dir, "public", "cskh", "my-customers.js"), encoding="utf-8") as fh:
+			mine_js = fh.read()
+		with open(os.path.join(base_dir, "public", "cskh", "progress.js"), encoding="utf-8") as fh:
+			prog_js = fh.read()
+		with open(os.path.join(base_dir, "public", "cskh", "work-item.js"), encoding="utf-8") as fh:
+			wi_js = fh.read()
+
+		# F-P2-04A: server-side care filter & pagination on My Customers + Scope table (no client-only 20-row filter)
+		self.assertIn('id="mine-scope-care-filter"', mine_html)
+		self.assertIn('id="mine-scope-prev"', mine_html)
+		self.assertIn('id="mine-scope-next"', mine_html)
+		self.assertNotIn("matchesClientCareFilter", mine_js)
+		self.assertNotIn("filteredCount", mine_js)
+
+		# F-P2-05: separate Work Item coverage vs Contact Attempts vs DNC Customer compliance
+		self.assertIn('id="prog-wi-coverage-metrics"', prog_html)
+		self.assertIn('id="prog-dnc-card"', prog_html)
+		self.assertIn('id="prog-tz-badge"', prog_html)
+		self.assertIn("Do-not-contact (DNC) customers", prog_js)
+		self.assertNotIn("Do-not-contact (DNC) work items", prog_js)
+
+		# F-P2-01: zero client-side DOM hiding or [H:...] regex stripping in timeline/history JS
+		for js_src in (mine_js, wi_js):
+			self.assertNotIn("[H:", js_src)
+		self.assertNotIn("caps.bod", wi_js)
+		history_table_slice = mine_js[
+			mine_js.index("const events = (history && history.items)") : mine_js.index("if (canManage)")
+		]
+		self.assertIn("formatHistoryReason(event.reason)", history_table_slice)
+		self.assertNotIn("caps.bod", history_table_slice)
+		self.assertNotIn("allowPii", history_table_slice)

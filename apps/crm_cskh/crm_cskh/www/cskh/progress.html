@@ -30,6 +30,7 @@
 		<button id="prog-clear-dates" class="cskh-btn" type="button">
 			{{ _("Clear date filter") }}
 		</button>
+		<span id="prog-tz-badge" class="cskh-muted cskh-mono"></span>
 		<span id="prog-scope-badge" class="cskh-muted"></span>
 	</div>
 </div>
@@ -40,6 +41,13 @@
 <div class="cskh-card" id="prog-wi-card" hidden>
 	<h2>{{ _("Work item counters (distinct work items)") }}</h2>
 	<div id="prog-wi-metrics" class="cskh-grid"></div>
+	<h3 style="margin: 16px 0 10px; font-size: 14px;">{{ _("Care coverage by work item") }}</h3>
+	<div id="prog-wi-coverage-metrics" class="cskh-grid"></div>
+</div>
+
+<div class="cskh-card" id="prog-dnc-card" hidden>
+	<h2>{{ _("Customer compliance counters (distinct customers)") }}</h2>
+	<div id="prog-dnc-metrics" class="cskh-grid"></div>
 </div>
 
 <div class="cskh-card" id="prog-att-card" hidden>
