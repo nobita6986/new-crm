@@ -59,12 +59,12 @@ Qua khảo sát thực tế cây mã nguồn `apps/crm_cskh/crm_cskh` trên base
 9. **Trạng thái độ tin cậy (`status` / `freshness`):** Huy hiệu phân biệt rõ `fresh` (`Mới cập nhật`), `calculating` (`Đang tính toán`), `stale` (`Cần tính lại`), `provisional` (`Tạm tính`), `finalized` (`Đã chốt`), `restated` (`Đã tính lại kỳ cũ`), `insufficient_data` (`Chưa đủ dữ liệu — N/A`), `failed` (`Lỗi đối soát`).
 
 ### 3.2. Tách bạch Ba Trụ cột, Chế độ `qa_enabled = false` & Bảng Xếp hạng Không Trộn
-1. **Ba trụ cột hiển thị tách rời trên mọi màn hình:**
-   - **Nhóm A — Tuân thủ quy trình & SLA:** `process_score`, `first_touch_on_time`, `followup_on_time`, `eligible_coverage`, `outcome_completeness`, `overdue_backlog`, `open_followups_overdue`, `breach_count`, `sla_waiver_count`.
-   - **Nhóm B — Hiệu quả kết nối & chuyển đổi:** `connected_rate` (trên khoảng phụ trách đã thử), `connected_items`, `first_connected` (theo dõi riêng, **không phạt vi phạm SLA** khi khách không nghe máy), `conversion_rate`, `attempts_count` (chỉ số hoạt động tham khảo).
-   - **Nhóm C — Độ tin cậy dữ liệu & Kiểm định QA:** Tách riêng `verified` (`Đã xác minh`), `self_reported` (`Nhân viên tự báo cáo`), `disputed` (`Đang tranh chấp`), tỷ lệ hiệu chỉnh/vô hiệu (`correction/void`), và `qa_pass_rate`.
+1. **Ba trụ cột hiển thị tách rời trên mọi màn hình (`cskh-metrics-v1`):**
+   - **Nhóm A — Tuân thủ quy trình & SLA:** `PROCESS_SCORE`, `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE`, `FIRST_ATTEMPT_SLA_RATE`, `FOLLOWUP_SLA_RATE`, `MIN_ATTEMPTS_COMPLIANCE_RATE`, `CALLBACK_COMPLETION_RATE`, `RESCHEDULE_RATE`, `DNC_COMPLIANCE_RATE`.
+   - **Nhóm B — Hiệu quả kết nối & chuyển đổi:** `WORK_ITEMS_TOUCHED`, `CONTACT_ATTEMPT_COUNT` (chỉ số hoạt động tham khảo kèm phân rã `attempted / connected / self_reported / verified / disputed`), `CONNECTED_ATTEMPT_COUNT`, `CONNECTED_RATE`, `FIRST_CONNECTED_TRACKING_RATE` (theo dõi riêng, `informational_only: true`, **không phạt vi phạm SLA** khi khách không nghe máy).
+   - **Nhóm C — Độ tin cậy dữ liệu & Kiểm định QA:** `VALID_OUTCOME_LOGGING_RATE`, `CORRECTION_RATE`, `VOID_ATTEMPT_RATE`, và `QA_PASS_RATE` (tách riêng `verified`, `self_reported`, `disputed`).
 2. **Chế độ `qa_enabled = false` (`F22`, `G09`, `G10`):**
-   - Hiển thị hộp thông báo minh bạch khi backend trả `qa_enabled: false`: không sinh phiếu QA hay trạng thái `Đã xác minh` giả; `qa_pass_rate` hiển thị `N/A (Chưa bật kiểm định QA)`; `PROCESS_SCORE` hiển thị rõ **`86,47 — Tạm tính; thiếu mẫu QA`** (kèm tổng trọng số hợp lệ `85/100`).
+   - Hiển thị hộp thông báo minh bạch khi backend trả `qa_enabled: false`: không sinh phiếu QA hay trạng thái `Đã xác minh` giả; `QA_PASS_RATE` hiển thị `N/A — Phân hệ QA đang tắt` (`status: "disabled"`); `PROCESS_SCORE` hiển thị rõ **`86,47 — Tạm tính; thiếu mẫu QA`** (kèm tổng trọng số hợp lệ `85/100`).
 3. **Không xếp chung `provisional` với `finalized` (`P3.md` §0.12, §7.5, §10.3):**
    - Trên màn `/cskh/employee-quality` và `/cskh/team-quality`, các dòng được phân nhóm rõ ràng thành:
      1. **Nhóm Đã chốt (`finalized`)** — chỉ sắp xếp thứ tự trong nội bộ nhóm Đã chốt;
@@ -76,14 +76,14 @@ Qua khảo sát thực tế cây mã nguồn `apps/crm_cskh/crm_cskh` trên base
 ## 4. Hợp đồng Luồng Drill-Down (`>= 5` Chỉ số Trọng yếu) & Xuất Báo cáo (`P3-08`)
 
 ### 4.1. Luồng Drill-Down Phân trang Server-Side (`p3-drilldown` trong `p3-widgets.js`)
-- Hỗ trợ mở danh sách bản ghi gốc có thẩm quyền cho tối thiểu **7 nhóm chỉ số trọng yếu**:
-  1. `first_touch_on_time` (Cohort `FIRST_ATTEMPT` obligations đến hạn: `Tất cả đủ điều kiện` = `Đúng hạn` + `Trễ hạn / Đang quá hạn`; ví dụ `80/100` mở đúng `100` nghĩa vụ gồm `80` đạt và `20` không đạt, kèm tab xem riêng các ca `Miễn trừ / Loại trừ`).
-  2. `followup_on_time` (Cohort `FOLLOWUP` callback obligations đến hạn: `Tất cả`, `Đúng hạn`, `Trễ / Quá hạn`, `Đã miễn trừ / Dời lịch`).
-  3. `eligible_coverage` (Cohort `Ownership Intervals` đủ điều kiện: `Tất cả`, `Đã có liên hệ hiệu lực`, `Chưa liên hệ`).
-  4. `connected_rate` / `connected_items` (`Tất cả khoảng đã thử / đầu việc`, `Đã kết nối hai chiều`, `Đã thử chưa kết nối`).
-  5. `overdue_backlog` & `breach_count` (`Đầu việc đang quá hạn tại mốc chốt` / `Nghĩa vụ phát sinh vi phạm SLA`).
-  6. `outcome_completeness` & `verification_rate` (`Effective Attempts`: `Đã xác minh`, `Nhân viên tự báo cáo`, `Đang tranh chấp`, `Đầy đủ / Thiếu thông tin`).
-  7. `sla_waiver_count` / `exclusions` (`Nghĩa vụ được miễn trừ / loại trừ kèm người duyệt & lý do`).
+- Hỗ trợ mở danh sách bản ghi gốc có thẩm quyền trên đầy đủ các chỉ số cốt lõi của `report-api-contract.md` §3.6 (`DRILLDOWN_SUPPORTED_METRICS`):
+  1. `FIRST_ATTEMPT_SLA_RATE` & `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE` (Cohort `FIRST_ATTEMPT` obligations đến hạn: `all_denominator` = `numerator_only` + `breached_only`; ví dụ `80/100` mở đúng `100` nghĩa vụ gồm `80` đạt và `20` không đạt, kèm phân lớp `excluded`).
+  2. `FOLLOWUP_SLA_RATE` (Cohort `FOLLOWUP` callback obligations đến hạn: `all_denominator`, `numerator_only`, `breached_only`, `excluded`).
+  3. `FIRST_CONNECTED_TRACKING_RATE` (Theo dõi kết nối lần đầu, `informational_only: true`).
+  4. `CONTACT_ATTEMPT_COUNT` & `CONNECTED_RATE` (`Effective Attempts`: tổng lần thử hợp lệ vs đã kết nối hai chiều vs chưa kết nối).
+  5. `VALID_OUTCOME_LOGGING_RATE`, `CORRECTION_RATE` & `VOID_ATTEMPT_RATE` (`Raw/Effective Attempts`: đạt chuẩn cập nhật vs đã hiệu chỉnh / vô hiệu).
+  6. `CALLBACK_COMPLETION_RATE` (`Due FOLLOWUP obligations` đã hoàn tất bằng lần liên hệ hợp lệ).
+  7. `DNC_COMPLIANCE_RATE` (`Ownership Intervals` tuân thủ quy tắc DNC và đóng hợp lệ).
 - **Ràng buộc kỹ thuật bắt buộc:**
   - Mọi thao tác chuyển trang (`page`, `page_size`), chọn phân lớp cohort (`segment`: `all | met | unmet | excluded`), hoặc đổi sắp xếp (`sort_by`, `sort_dir`) đều gửi tham số lên API drill-down của server để lọc/sắp xếp **trước `LIMIT/OFFSET`**.
   - Hiển thị cột theo đúng dữ liệu đã được backend kiểm quyền/che mặt nạ (BOD `0` PII thô; Staff sau bàn giao `0` PII khách cũ).

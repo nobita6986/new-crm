@@ -94,26 +94,19 @@ def run(module: str):
     return module, ok, count, output.strip()
 
 
-def reset_site() -> None:
-    cmd = (
-        f'cd {BENCH} && python3 -c "'
-        f"import frappe; frappe.init(site='{SITE}'); frappe.connect(); "
-        "import importlib.util; "
-        "m = ('crm_cskh.tools.p3_e2e_seed' if importlib.util.find_spec('crm_cskh.tools.p3_e2e_seed') else None); "
-        'frappe.destroy()"'
-    )
-    subprocess.run(["docker", "exec", CONTAINER, "bash", "-lc", cmd], check=False)
-    seed_cmd = (
-        f"cd {BENCH} && ("
-        f"bench --site {SITE} execute crm_cskh.tools.p3_e2e_seed.reset_and_seed_p3 >/dev/null 2>&1 || true"
-        ")"
-    )
-    subprocess.run(["docker", "exec", CONTAINER, "bash", "-lc", seed_cmd], check=False)
+def wipe_site() -> None:
+    cmd = f"cd {BENCH} && bench --site {SITE} execute crm_cskh.tools.p3_e2e_seed.wipe_p3_site_clean >/dev/null"
+    subprocess.run(["docker", "exec", CONTAINER, "bash", "-lc", cmd], check=True)
+
+
+def seed_p3_site() -> None:
+    cmd = f"cd {BENCH} && bench --site {SITE} execute crm_cskh.tools.p3_e2e_seed.reset_and_seed_p3 >/dev/null"
+    subprocess.run(["docker", "exec", CONTAINER, "bash", "-lc", cmd], check=True)
 
 
 def main() -> None:
     p3_backend_modules = discover_p3_backend_modules()
-    reset_site()
+    wipe_site()
     modules = (
         [("P0", m) for m in P0_MODULES]
         + [("P1", m) for m in P1_MODULES]
@@ -124,7 +117,17 @@ def main() -> None:
         + [("P3-UI", m) for m in P3_UI_MODULES]
     )
     report = []
+    prev_group = None
     for group, mod in modules:
+        if prev_group == "P0" and group == "P1":
+            wipe_site()
+        elif prev_group == "P1-UI" and group == "P2":
+            wipe_site()
+        elif prev_group == "P2-UI" and group == "P3":
+            wipe_site()
+        elif prev_group == "P3" and group == "P3-UI":
+            seed_p3_site()
+        prev_group = group
         name, ok, count, output = run(mod)
         report.append({"group": group, "module": name, "methods": count, "ok": ok})
         print(
