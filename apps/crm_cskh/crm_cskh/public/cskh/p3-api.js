@@ -201,6 +201,23 @@ window.cskhP3Api = (function () {
 			formula: 'Approved passing QA reviews divided by completed eligible QA reviews in cohort.',
 			drillable: false,
 		},
+		C4_CALLBACK_DNC_DISCIPLINE: {
+			label: 'Callback completion & DNC discipline',
+			pillar: 'compliance',
+			unit: 'percent',
+			grain: 'ownership_interval',
+			time_basis: 'event_time',
+			formula: 'Ownership intervals respecting DNC and valid closure rules divided by evaluated intervals.',
+			drillable: false,
+		},
+	}
+
+	const SCORE_COMPONENT_METRIC_MAP = {
+		C1_FIRST_ATTEMPT_SLA: 'FIRST_ATTEMPT_SLA_RATE',
+		C2_FOLLOWUP_SLA: 'FOLLOWUP_SLA_RATE',
+		C3_DATA_HYGIENE: 'VALID_OUTCOME_LOGGING_RATE',
+		C4_CALLBACK_DNC_DISCIPLINE: 'C4_CALLBACK_DNC_DISCIPLINE',
+		C5_QA_QUALITY: 'QA_PASS_RATE',
 	}
 
 	// Lowercase compatibility aliases
@@ -772,7 +789,38 @@ window.cskhP3Api = (function () {
 			const meta = extractEnvelopeMeta(raw)
 			meta.scope = 'self'
 			const metrics = normalizeMetricsCollection(raw.metrics || {}, meta)
-			const rawComps = toArray(raw.score_components || raw.components)
+			const rawComps = toArray(raw.score_components || raw.components).map(function (c) {
+				const code = c.component_code || c.metric_key || c.key || ''
+				const mappedMetricKey = SCORE_COMPONENT_METRIC_MAP[code] || code
+				const linked = metrics.byKey[mappedMetricKey] || null
+				return {
+					key: code,
+					metric_key: mappedMetricKey,
+					value: c.rate_value !== undefined ? c.rate_value : c.value,
+					unit: 'percent',
+					numerator:
+						c.numerator !== undefined
+							? c.numerator
+							: linked
+								? linked.numerator
+								: null,
+					denominator:
+						c.denominator !== undefined
+							? c.denominator
+							: linked
+								? linked.denominator
+								: null,
+					weight:
+						c.configured_weight !== undefined
+							? c.configured_weight
+							: c.weight,
+					weighted_contribution:
+						c.weighted_points !== undefined
+							? c.weighted_points
+							: c.weighted_contribution,
+					status: c.status,
+				}
+			})
 			const activeObs = toArray(
 				raw.active_obligations || raw.actionable_obligations || raw.obligations
 			).map(normalizeObligationRow)
@@ -850,42 +898,98 @@ window.cskhP3Api = (function () {
 		},
 
 		listRevisions: async function (filterState, currentRunId) {
-			if (currentRunId) {
-				try {
-					const runInfo = await window.cskh.get(ENDPOINTS.getRunStatus, {
-						run_id: currentRunId,
-					})
-					if (runInfo) {
-						const rows = Array.isArray(runInfo.rows || runInfo.history)
-							? runInfo.rows || runInfo.history
-							: [runInfo]
-						return { rows: rows }
-					}
-				} catch (_err) {
-					/* fall back to overview freshness snapshot */
+			const t = window.cskh ? window.cskh.t : function (s) { return s }
+			function normalizeRunRow(r, idx) {
+				const isRestated = toBool(r.is_restated, false) || r.run_mode === 'restated'
+				const modeLabel =
+					r.run_mode === 'restated'
+						? t('Restated after prior-period adjustment')
+						: r.run_mode === 'backfill'
+							? t('Historical backfill')
+							: t('Incremental recompute')
+				return {
+					run_id: r.run_id || r.name || '—',
+					revision: r.revision || (idx !== undefined ? 'v' + (idx + 1) : r.run_mode || '1'),
+					status: isRestated
+						? 'restated'
+						: r.status === 'completed' || r.status === 'ok'
+							? 'fresh'
+							: r.status || 'fresh',
+					as_of: r.as_of || null,
+					finished_at: r.completed_at || r.finished_at || r.as_of || null,
+					triggered_by: r.requested_by || r.triggered_by || t('System / Automated'),
+					delta_note: r.restated_from_run
+						? t('Restated from run') + ': ' + r.restated_from_run
+						: r.delta_note || modeLabel,
 				}
 			}
-			const ov = await window.cskh.get(
-				ENDPOINTS.executiveOverview,
-				buildPeriodParams(filterState)
-			)
-			const f = (ov && ov.freshness) || {}
-			if (!f.run_id) return { rows: [] }
-			return {
-				rows: [
-					{
-						run_id: f.run_id,
-						revision: f.run_mode || 'latest',
-						status: f.is_restated ? 'restated' : f.snapshot_status || 'fresh',
-						as_of: f.as_of,
-						finished_at: f.as_of,
-						triggered_by: 'system',
-						delta_note: f.restated_from_run
-							? 'Restated from ' + f.restated_from_run
-							: f.run_mode || '—',
-					},
-				],
+
+			let seedRunId = currentRunId || ''
+			let fallbackFreshness = null
+			if (!seedRunId) {
+				try {
+					const ov = await window.cskh.get(
+						ENDPOINTS.executiveOverview,
+						buildPeriodParams(filterState)
+					)
+					fallbackFreshness = (ov && ov.freshness) || null
+					if (fallbackFreshness && fallbackFreshness.run_id) {
+						seedRunId = fallbackFreshness.run_id
+					}
+				} catch (_err) {
+					/* ignore */
+				}
 			}
+
+			if (seedRunId) {
+				const chain = []
+				const seen = {}
+				let nextId = seedRunId
+				while (nextId && !seen[nextId] && chain.length < 5) {
+					seen[nextId] = true
+					try {
+						const runInfo = await window.cskh.get(ENDPOINTS.getRunStatus, {
+							run_id: nextId,
+						})
+						if (!runInfo) break
+						if (Array.isArray(runInfo.rows || runInfo.history)) {
+							const arr = runInfo.rows || runInfo.history
+							return { rows: arr.map(normalizeRunRow) }
+						}
+						chain.push(runInfo)
+						nextId = runInfo.restated_from_run || ''
+					} catch (_err) {
+						break
+					}
+				}
+				if (chain.length) {
+					return {
+						rows: chain.map(function (r, idx) {
+							return normalizeRunRow(r, chain.length - 1 - idx)
+						}),
+					}
+				}
+			}
+
+			if (fallbackFreshness && fallbackFreshness.run_id) {
+				return {
+					rows: [
+						normalizeRunRow(
+							{
+								run_id: fallbackFreshness.run_id,
+								run_mode: fallbackFreshness.run_mode,
+								is_restated: fallbackFreshness.is_restated,
+								status: fallbackFreshness.snapshot_status || 'fresh',
+								as_of: fallbackFreshness.as_of,
+								completed_at: fallbackFreshness.as_of,
+								restated_from_run: fallbackFreshness.restated_from_run,
+							},
+							0
+						),
+					],
+				}
+			}
+			return { rows: [] }
 		},
 
 		createExport: async function (payload) {
