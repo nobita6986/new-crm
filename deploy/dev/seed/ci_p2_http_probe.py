@@ -26,16 +26,27 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 
 BASE_URL = os.environ.get("P2_HTTP_BASE_URL", "http://127.0.0.1:8000").rstrip("/")
 SITE_NAME = os.environ.get("P2_HTTP_SITE", "p2-ci.localhost")
 OUTPUT = Path(os.environ.get("P2_HTTP_EVIDENCE_DIR", "/tmp/p2-http"))
+_CONTAINER_SEED_SOURCE = Path("/src/deploy/dev/seed/seed_demo.py")
 SEED_SOURCE = Path(
-    os.environ.get("P2_SEED_SOURCE", "/src/deploy/dev/seed/seed_demo.py")
+    os.environ.get(
+        "P2_SEED_SOURCE",
+        str(
+            _CONTAINER_SEED_SOURCE
+            if _CONTAINER_SEED_SOURCE.exists()
+            else Path(__file__).resolve().with_name("seed_demo.py")
+        ),
+    )
 )
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")
+
+VALID_RECORD_ROLES = ("assertion", "setup_observation")
 
 SENSITIVE_KEYS = {
     "authorization",
@@ -117,8 +128,120 @@ def sanitize(value: object, key: str = "") -> object:
     return value
 
 
-def write_evidence() -> None:
+def _append_unique(items: list[str], value: str) -> None:
+    if value and value not in items:
+        items.append(value)
+
+
+def summarize_probe_records(
+    records_list: list[dict[str, object]],
+    explicit_failures: list[str] | tuple[str, ...] = (),
+) -> dict[str, object]:
+    """Classify recorded HTTP entries and enforce 100% assertion completeness on verification cases."""
+    seen_ids: set[str] = set()
+    duplicate_case_ids: list[str] = []
+    invalid_role_cases: list[str] = []
+    setup_transport_error_cases: list[str] = []
+    unasserted_cases: list[str] = []
+    failed_assertion_cases: list[str] = []
+
+    verification_records = 0
+    setup_observation_records = 0
+    asserted_cases = 0
+    passed_assertions = 0
+    failed_assertions = 0
+
+    for index, entry in enumerate(records_list):
+        raw_id = entry.get("id") if isinstance(entry, dict) else None
+        case_id = (
+            raw_id.strip()
+            if isinstance(raw_id, str) and raw_id.strip()
+            else f"<unnamed-{index}>"
+        )
+        if case_id in seen_ids:
+            _append_unique(duplicate_case_ids, case_id)
+        seen_ids.add(case_id)
+
+        role = entry.get("record_role") if isinstance(entry, dict) else None
+        if role not in VALID_RECORD_ROLES:
+            _append_unique(invalid_role_cases, case_id)
+            continue
+
+        if role == "setup_observation":
+            setup_observation_records += 1
+            if entry.get("transport_error") is not None:
+                _append_unique(setup_transport_error_cases, case_id)
+            if entry.get("assertion") is not None:
+                _append_unique(invalid_role_cases, case_id)
+            continue
+
+        verification_records += 1
+        assertion = entry.get("assertion")
+        has_valid_verdict = (
+            isinstance(assertion, dict)
+            and assertion.get("result") in ("PASS", "FAIL")
+            and isinstance(assertion.get("expected"), str)
+            and bool(assertion["expected"].strip())
+        )
+        if not has_valid_verdict:
+            _append_unique(unasserted_cases, case_id)
+            continue
+
+        asserted_cases += 1
+        assert isinstance(assertion, dict)
+        if assertion.get("result") == "PASS" and entry.get("transport_error") is None:
+            passed_assertions += 1
+        else:
+            failed_assertions += 1
+            _append_unique(failed_assertion_cases, case_id)
+
+    gate_failures: list[str] = []
+    for item in explicit_failures:
+        _append_unique(gate_failures, str(item))
+    for cid in failed_assertion_cases:
+        _append_unique(gate_failures, cid)
+    for cid in unasserted_cases:
+        _append_unique(gate_failures, f"unasserted:{cid}")
+    for cid in duplicate_case_ids:
+        _append_unique(gate_failures, f"duplicate_id:{cid}")
+    for cid in invalid_role_cases:
+        _append_unique(gate_failures, f"invalid_role:{cid}")
+    for cid in setup_transport_error_cases:
+        _append_unique(gate_failures, f"setup_transport_error:{cid}")
+    if verification_records == 0 or asserted_cases == 0:
+        _append_unique(gate_failures, "no_asserted_verification_cases")
+
+    probe_ok = (
+        not gate_failures
+        and verification_records > 0
+        and asserted_cases == verification_records
+        and passed_assertions == asserted_cases
+        and failed_assertions == 0
+        and not unasserted_cases
+    )
+    return {
+        "counts": {
+            "total_records": len(records_list),
+            "verification_records": verification_records,
+            "setup_observation_records": setup_observation_records,
+            "asserted_cases": asserted_cases,
+            "unasserted_cases": len(unasserted_cases),
+            "passed_assertions": passed_assertions,
+            "failed_assertions": failed_assertions,
+        },
+        "unasserted_cases": unasserted_cases,
+        "failed_assertion_cases": failed_assertion_cases,
+        "duplicate_case_ids": duplicate_case_ids,
+        "gate_failures": gate_failures,
+        "probe_result": "PASS" if probe_ok else "FAIL",
+    }
+
+
+def write_evidence(*, final: bool = False) -> dict[str, object]:
     OUTPUT.mkdir(parents=True, exist_ok=True)
+    summary = summarize_probe_records(records, failures)
+    counts = summary["counts"]
+    assert isinstance(counts, dict)
     payload = {
         "site": SITE_NAME,
         "base_url": BASE_URL,
@@ -130,15 +253,19 @@ def write_evidence() -> None:
             "P2 workflow.*, settings.*, P1 ownership.reassign handover, generic /api/resource/* & "
             "frappe.client.* guards, BOD 0-PII summary, and P0 File-oracle 404 non-regression"
         ),
-        "total_cases": len(records),
+        "total_cases": counts["total_records"],
+        "counts": counts,
         "cases": records,
-        "failed_cases": failures,
-        "probe_result": "FAIL" if failures else "PASS",
+        "unasserted_cases": summary["unasserted_cases"],
+        "failed_cases": summary["failed_assertion_cases"],
+        "gate_failures": summary["gate_failures"],
+        "probe_result": summary["probe_result"] if final else "IN_PROGRESS",
     }
     (OUTPUT / "p2-http-transport.json").write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+    return summary
 
 
 def make_opener() -> tuple[urllib.request.OpenerDirector, http.cookiejar.CookieJar]:
@@ -154,7 +281,10 @@ def request(
     body: bytes | None = None,
     headers: dict[str, str] | None = None,
     record: bool = True,
+    record_role: str = "assertion",
 ) -> dict[str, object]:
+    if record_role not in VALID_RECORD_ROLES:
+        raise ValueError(f"Unsupported record_role: {record_role!r}")
     url = BASE_URL + path
     request_headers = {
         "Accept": "application/json",
@@ -194,7 +324,8 @@ def request(
 
     entry: dict[str, object] = {
         "id": case_id,
-        "evidence_class": "http",
+        "record_role": record_role,
+        "evidence_class": "http" if record_role == "assertion" else "setup_observation",
         "request": {
             "method": method,
             "url": redact_text(url),
@@ -230,7 +361,7 @@ def request(
     }
     if record:
         records.append(entry)
-        write_evidence()
+        write_evidence(final=False)
     return {
         "status": status,
         "json": parsed_response,
@@ -259,16 +390,20 @@ def check(
     detail: str,
     actor: str = "",
 ) -> bool:
-    passed = bool(condition) and response.get("transport_error") is None
     entry = response.get("entry")
+    if isinstance(entry, dict) and entry.get("record_role") == "setup_observation":
+        raise ValueError(
+            f"Cannot attach check() assertion to setup_observation record {case_id!r}"
+        )
+    passed = bool(condition) and response.get("transport_error") is None
     if isinstance(entry, dict):
         entry["assertion"] = {
-            "expected": detail,
+            "expected": redact_text(detail),
             "actor": actor,
             "result": "PASS" if passed else "FAIL",
         }
     if not passed:
-        failures.append(case_id)
+        _append_unique(failures, case_id)
     print(f"{case_id}: {'PASS' if passed else 'FAIL'}")
     return passed
 
@@ -323,12 +458,22 @@ def post(
     path: str,
     payload: dict[str, object],
     record: bool = True,
+    record_role: str = "assertion",
 ) -> dict[str, object]:
     body = urllib.parse.urlencode(payload).encode("utf-8")
     headers = {"Content-Type": "application/x-www-form-urlencoded"}
     if token:
         headers["X-Frappe-CSRF-Token"] = token
-    return request(case_id, opener, "POST", path, body, headers, record=record)
+    return request(
+        case_id,
+        opener,
+        "POST",
+        path,
+        body,
+        headers,
+        record=record,
+        record_role=record_role,
+    )
 
 
 def post_json(
@@ -338,12 +483,22 @@ def post_json(
     path: str,
     payload: dict[str, object],
     record: bool = True,
+    record_role: str = "assertion",
 ) -> dict[str, object]:
     body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
     headers = {"Content-Type": "application/json"}
     if token:
         headers["X-Frappe-CSRF-Token"] = token
-    return request(case_id, opener, "POST", path, body, headers, record=record)
+    return request(
+        case_id,
+        opener,
+        "POST",
+        path,
+        body,
+        headers,
+        record=record,
+        record_role=record_role,
+    )
 
 
 def get(
@@ -351,8 +506,298 @@ def get(
     opener: urllib.request.OpenerDirector,
     path: str,
     record: bool = True,
+    record_role: str = "assertion",
 ) -> dict[str, object]:
-    return request(case_id, opener, "GET", path, record=record)
+    return request(
+        case_id,
+        opener,
+        "GET",
+        path,
+        record=record,
+        record_role=record_role,
+    )
+
+
+def fetch_close_work_item_db_state(
+    frappe, work_item_name: str, lead_name: str
+) -> dict[str, object]:
+    """Query MariaDB ground truth for a closed `CSKH Work Item` and its linked invariants."""
+    wi_row = frappe.db.get_value(
+        "CSKH Work Item",
+        work_item_name,
+        [
+            "name",
+            "lead",
+            "status",
+            "assigned_to",
+            "assigned_at",
+            "open_callback_task",
+            "next_action_due",
+            "closed_at",
+            "closed_by",
+            "completion_reason",
+            "revision",
+        ],
+        as_dict=True,
+    )
+    open_callback_count = int(
+        frappe.db.sql(
+            """
+            select count(*)
+            from `tabCRM Task`
+            where cskh_work_item = %s
+              and coalesce(cskh_is_followup, 0) = 1
+              and status in ('Backlog', 'Todo', 'In Progress')
+            """,
+            (work_item_name,),
+        )[0][0]
+        or 0
+    )
+    active_claim_for_work_item = int(
+        frappe.db.sql(
+            "select count(*) from `tabCSKH Active Claim` where work_item = %s",
+            (work_item_name,),
+        )[0][0]
+        or 0
+    )
+    active_claim_for_lead = int(
+        frappe.db.sql(
+            "select count(*) from `tabCSKH Active Claim` where lead = %s",
+            (lead_name,),
+        )[0][0]
+        or 0
+    )
+    open_interval_count = int(
+        frappe.db.sql(
+            """
+            select count(*)
+            from `tabCSKH Assignment History`
+            where work_item = %s
+              and ownership_end is null
+            """,
+            (work_item_name,),
+        )[0][0]
+        or 0
+    )
+    close_events = frappe.db.sql(
+        """
+        select actor, ownership_start, ownership_end
+        from `tabCSKH Assignment History`
+        where work_item = %s
+          and action = 'close'
+        order by creation desc, name desc
+        """,
+        (work_item_name,),
+        as_dict=True,
+    )
+    lead_owner = frappe.db.get_value("CRM Lead", lead_name, "lead_owner")
+    open_lead_todo_count = int(
+        frappe.db.sql(
+            """
+            select count(*)
+            from `tabToDo`
+            where reference_type = 'CRM Lead'
+              and reference_name = %s
+              and status = 'Open'
+            """,
+            (lead_name,),
+        )[0][0]
+        or 0
+    )
+    return {
+        "work_item": dict(wi_row) if wi_row else None,
+        "open_callback_count": open_callback_count,
+        "active_claim_for_work_item": active_claim_for_work_item,
+        "active_claim_for_lead": active_claim_for_lead,
+        "open_interval_count": open_interval_count,
+        "close_events": [dict(row) for row in close_events],
+        "lead_owner": lead_owner,
+        "open_lead_todo_count": open_lead_todo_count,
+    }
+
+
+def verify_close_work_item_outcome(
+    response: dict[str, object],
+    db_state: dict[str, object] | None,
+    *,
+    expected_work_item: str,
+    expected_actor: str,
+    expected_reason: str | None = None,
+    min_revision: int = 1,
+) -> tuple[bool, str]:
+    """Validate `workflow.close_work_item` HTTP contract (§4.10) + MariaDB invariant truth."""
+    violations: list[str] = []
+
+    if response.get("transport_error") is not None:
+        violations.append(f"transport_error={response.get('transport_error')}")
+    if response.get("status") != 200:
+        violations.append(f"http_status={response.get('status')}")
+
+    raw_json = response.get("json")
+    if not isinstance(raw_json, dict) or not isinstance(raw_json.get("message"), dict):
+        violations.append("missing_json_message_envelope")
+    payload = body_payload(response)
+
+    if payload.get("status") != "closed":
+        violations.append(f"payload.status={payload.get('status')!r}")
+    if payload.get("idempotent_replay") is not False:
+        violations.append(
+            f"payload.idempotent_replay={payload.get('idempotent_replay')!r}"
+        )
+    if payload.get("work_item") != expected_work_item:
+        violations.append(f"payload.work_item={payload.get('work_item')!r}")
+    if payload.get("work_item_status") != "closed":
+        violations.append(
+            f"payload.work_item_status={payload.get('work_item_status')!r}"
+        )
+    if payload.get("closed_by") != expected_actor:
+        violations.append(f"payload.closed_by={payload.get('closed_by')!r}")
+
+    closed_at_val = payload.get("closed_at")
+    if not isinstance(closed_at_val, str) or not closed_at_val.strip():
+        violations.append("payload.closed_at_empty")
+
+    if "canceled_followup_task" not in payload or not (
+        payload.get("canceled_followup_task") is None
+        or isinstance(payload.get("canceled_followup_task"), str)
+    ):
+        violations.append("payload.canceled_followup_task_invalid")
+
+    rev_val = payload.get("revision")
+    valid_rev = (
+        not isinstance(rev_val, bool)
+        and isinstance(rev_val, int)
+        and rev_val >= min_revision
+    )
+    if not valid_rev:
+        violations.append(f"payload.revision={rev_val!r}<{min_revision}")
+
+    if not isinstance(db_state, dict):
+        violations.append("db_state_missing")
+    else:
+        wi = db_state.get("work_item")
+        if not isinstance(wi, dict):
+            violations.append("db.work_item_missing")
+        else:
+            if wi.get("status") != "closed":
+                violations.append(f"db.wi.status={wi.get('status')!r}")
+            if wi.get("assigned_to") not in (None, ""):
+                violations.append(f"db.wi.assigned_to={wi.get('assigned_to')!r}")
+            if wi.get("assigned_at") is not None:
+                violations.append("db.wi.assigned_at_not_null")
+            if wi.get("open_callback_task") not in (None, ""):
+                violations.append(
+                    f"db.wi.open_callback_task={wi.get('open_callback_task')!r}"
+                )
+            if wi.get("next_action_due") is not None:
+                violations.append("db.wi.next_action_due_not_null")
+            if wi.get("closed_by") != expected_actor:
+                violations.append(f"db.wi.closed_by={wi.get('closed_by')!r}")
+            if not wi.get("closed_at"):
+                violations.append("db.wi.closed_at_empty")
+            if (
+                expected_reason is not None
+                and wi.get("completion_reason") != expected_reason
+            ):
+                violations.append(
+                    f"db.wi.completion_reason={wi.get('completion_reason')!r}"
+                )
+            if valid_rev and int(wi.get("revision") or 0) != rev_val:
+                violations.append(
+                    f"db.wi.revision={wi.get('revision')!r}!=payload.revision={rev_val!r}"
+                )
+
+        if int(db_state.get("open_callback_count", -1)) != 0:
+            violations.append(
+                f"db.open_callback_count={db_state.get('open_callback_count')!r}"
+            )
+        if int(db_state.get("active_claim_for_work_item", -1)) != 0:
+            violations.append(
+                f"db.active_claim_for_work_item={db_state.get('active_claim_for_work_item')!r}"
+            )
+        if int(db_state.get("active_claim_for_lead", -1)) != 0:
+            violations.append(
+                f"db.active_claim_for_lead={db_state.get('active_claim_for_lead')!r}"
+            )
+        if int(db_state.get("open_interval_count", -1)) != 0:
+            violations.append(
+                f"db.open_interval_count={db_state.get('open_interval_count')!r}"
+            )
+
+        close_events = db_state.get("close_events")
+        has_close_event = isinstance(close_events, list) and any(
+            isinstance(ev, dict)
+            and ev.get("actor") == expected_actor
+            and ev.get("ownership_end") is not None
+            for ev in close_events
+        )
+        if not has_close_event:
+            violations.append("db.close_history_event_missing")
+
+        if db_state.get("lead_owner") not in (None, ""):
+            violations.append(f"db.lead_owner={db_state.get('lead_owner')!r}")
+        if int(db_state.get("open_lead_todo_count", -1)) != 0:
+            violations.append(
+                f"db.open_lead_todo_count={db_state.get('open_lead_todo_count')!r}"
+            )
+
+    if violations:
+        return (
+            False,
+            f"POST close_work_item failed for {expected_work_item}: "
+            + ", ".join(violations),
+        )
+    return (
+        True,
+        f"POST close_work_item returns HTTP 200 contract status=closed and DB confirms "
+        f"{expected_work_item} closed with 0 open callbacks, 0 active claims, and 0 open intervals",
+    )
+
+
+def run_close_work_item_case(
+    case_id: str,
+    opener: urllib.request.OpenerDirector,
+    token: str,
+    *,
+    work_item: str,
+    lead: str,
+    actor: str,
+    completion_reason: str,
+    idempotency_key: str,
+    db_state_fetcher: Callable[[str, str], dict[str, object]],
+    min_revision: int = 1,
+) -> dict[str, object]:
+    """Execute `workflow.close_work_item` over HTTP and check both contract payload & DB invariants."""
+    response = post_json(
+        case_id,
+        opener,
+        token,
+        "/api/method/crm_cskh.api.workflow.close_work_item",
+        {
+            "work_item": work_item,
+            "completion_reason": completion_reason,
+            "idempotency_key": idempotency_key,
+        },
+    )
+    db_state: dict[str, object] | None = None
+    db_fetch_error: str | None = None
+    try:
+        db_state = db_state_fetcher(work_item, lead)
+    except Exception as error:
+        db_fetch_error = type(error).__name__
+    ok, detail = verify_close_work_item_outcome(
+        response,
+        db_state,
+        expected_work_item=work_item,
+        expected_actor=actor,
+        expected_reason=completion_reason,
+        min_revision=min_revision,
+    )
+    if db_fetch_error is not None:
+        ok = False
+        detail = f"{detail}; db_fetch_error={db_fetch_error}"
+    check(case_id, response, ok, detail, actor)
+    return response
 
 
 def _with_frappe(fn):
@@ -1174,23 +1619,27 @@ def main() -> int:
     )
 
     # 9. Close, Reopen & `L-23` cross-team closed-item protection over HTTP
-    r = post_json(
+    def _fetch_close_db_state(work_item_name: str, lead_name: str) -> dict[str, object]:
+        return _with_frappe(
+            lambda fr: fetch_close_work_item_db_state(fr, work_item_name, lead_name)
+        )
+
+    r = run_close_work_item_case(
         "p2-http-staff-b-close-wi",
         staff_b,
         tok_staff_b,
-        "/api/method/crm_cskh.api.workflow.close_work_item",
-        {
-            "work_item": fx["wi_a1"],
-            "completion_reason": "Hoàn tất chăm sóc đợt 1",
-            "idempotency_key": f"close-b-{secrets.token_hex(4)}",
-        },
+        work_item=fx["wi_a1"],
+        lead=fx["lead_a1"],
+        actor="staff.b@dev.local",
+        completion_reason="Hoàn tất chăm sóc đợt 1",
+        idempotency_key=f"close-b-{secrets.token_hex(4)}",
+        db_state_fetcher=_fetch_close_db_state,
+        min_revision=2,
     )
-    check(
-        "p2-http-staff-b-close-wi",
-        r,
-        r["status"] == 200 and body_payload(r).get("work_item_status") == "closed",
-        "Staff B closes wi_a1 cleanly over HTTP",
-        "staff.b@dev.local",
+    close1_rev = (
+        body_payload(r).get("revision")
+        if isinstance(body_payload(r).get("revision"), int)
+        else 2
     )
 
     r = post_json(
@@ -1225,6 +1674,12 @@ def main() -> int:
             "idempotency_key": f"reopen-ldra-{secrets.token_hex(4)}",
         },
     )
+    reopen_rev_raw = body_payload(r).get("revision")
+    reopen_rev = (
+        reopen_rev_raw
+        if isinstance(reopen_rev_raw, int) and not isinstance(reopen_rev_raw, bool)
+        else int(close1_rev) + 1
+    )
     check(
         "p2-http-leader-a-reopen-wi",
         r,
@@ -1233,17 +1688,19 @@ def main() -> int:
         "team1.leader@dev.local",
     )
 
-    # Close `wi_a1` again, then transfer `lead_a1` into Team 2 (`camp_t2`, `staff.c@dev.local`) -> Team 1 loses read access (`L-23`)
-    post_json(
+    # Close `wi_a1` again (verifying full contract + DB closed/claim/callback invariants),
+    # then transfer `lead_a1` into Team 2 (`camp_t2`, `staff.c@dev.local`) -> Team 1 loses read access (`L-23`)
+    r = run_close_work_item_case(
         "p2-http-staff-b-close-wi-final",
         staff_b,
         tok_staff_b,
-        "/api/method/crm_cskh.api.workflow.close_work_item",
-        {
-            "work_item": fx["wi_a1"],
-            "completion_reason": "Kết thúc tại Team 1",
-            "idempotency_key": f"close-b2-{secrets.token_hex(4)}",
-        },
+        work_item=fx["wi_a1"],
+        lead=fx["lead_a1"],
+        actor="staff.b@dev.local",
+        completion_reason="Kết thúc tại Team 1",
+        idempotency_key=f"close-b2-{secrets.token_hex(4)}",
+        db_state_fetcher=_fetch_close_db_state,
+        min_revision=max(reopen_rev + 1, 2),
     )
 
     def _move_lead_to_team2(frappe):
@@ -1275,7 +1732,17 @@ def main() -> int:
         frappe.db.commit()
         return wi_t2.name
 
-    _ = _with_frappe(_move_lead_to_team2)
+    try:
+        _ = _with_frappe(_move_lead_to_team2)
+    except Exception as error:
+        _append_unique(
+            failures,
+            f"p2-http-move-lead-to-team2-setup:{type(error).__name__}",
+        )
+        print(
+            f"p2-http-move-lead-to-team2-setup: FAIL ({type(error).__name__})",
+            file=sys.stderr,
+        )
 
     r = get(
         "p2-http-l23-leader-a-closed-wi-denied-after-team2-claim",
@@ -1433,13 +1900,34 @@ def main() -> int:
         "staff.b@dev.local",
     )
 
-    write_evidence()
-    print(f"\nP2 HTTP probe summary: {len(records)} cases, {len(failures)} failures.")
-    return 1 if failures else 0
+    final_summary = write_evidence(final=True)
+    counts = final_summary["counts"]
+    assert isinstance(counts, dict)
+    print(
+        "\nP2 HTTP probe summary: "
+        f"total_records={counts['total_records']}, "
+        f"verification_records={counts['verification_records']}, "
+        f"setup_observation_records={counts['setup_observation_records']}, "
+        f"asserted_cases={counts['asserted_cases']}, "
+        f"passed_assertions={counts['passed_assertions']}, "
+        f"failed_assertions={counts['failed_assertions']}, "
+        f"unasserted_cases={counts['unasserted_cases']}, "
+        f"probe_result={final_summary['probe_result']}"
+    )
+    return 0 if final_summary["probe_result"] == "PASS" else 1
+
+
+def run_cli() -> int:
+    try:
+        return main()
+    except Exception as error:
+        _append_unique(failures, f"unhandled_exception:{type(error).__name__}")
+        write_evidence(final=True)
+        raise
 
 
 if __name__ == "__main__":
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8", errors="replace")
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-    sys.exit(main())
+    sys.exit(run_cli())
