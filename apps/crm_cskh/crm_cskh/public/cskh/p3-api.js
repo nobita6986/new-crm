@@ -479,6 +479,7 @@ window.cskhP3Api = (function () {
 		if (s.campaign) params.campaign = s.campaign
 		if (s.team) params.team = s.team
 		if (s.employee) params.employee = s.employee
+		if (s.include_inactive) params.include_inactive = 1
 		if (s.sort_by) params.sort_by = s.sort_by
 		if (s.sort_dir) params.sort_dir = s.sort_dir
 		if (s.page) params.page = Number(s.page)
@@ -488,9 +489,16 @@ window.cskhP3Api = (function () {
 
 	function resolveScopePair(filterState) {
 		const s = filterState || {}
+		if (s.scope_type) {
+			return { scope_type: s.scope_type, scope_id: s.scope_id || '' }
+		}
 		if (s.employee) return { scope_type: 'employee', scope_id: s.employee }
 		if (s.team) return { scope_type: 'team', scope_id: s.team }
 		if (s.campaign) return { scope_type: 'campaign', scope_id: s.campaign }
+		const caps = window.cskh.capabilities()
+		if (!caps.admin && !caps.bod && !caps.leader && window.cskh.currentUser()) {
+			return { scope_type: 'employee', scope_id: window.cskh.currentUser() }
+		}
 		return { scope_type: 'company', scope_id: '' }
 	}
 
