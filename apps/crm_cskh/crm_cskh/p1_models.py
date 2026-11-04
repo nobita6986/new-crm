@@ -251,6 +251,21 @@ class AssignmentHistory(Document):
 			self.event_at = now_datetime()
 		if not self.event_id:
 			frappe.throw(_("The event id is required so the event stays idempotent."))
+		if (
+			self.action in ("assign", "reassign", "reopen")
+			and self.to_user
+			and frappe.db.has_column("CSKH Assignment History", "attribution_status")
+			and not getattr(self, "attribution_status", None)
+		):
+			from crm_cskh.services.attribution import resolve_team_for_user_at
+
+			team_node, attr_status = resolve_team_for_user_at(
+				self.to_user,
+				self.ownership_start or self.event_at,
+				allow_live_capture_for_current_tx=True,
+			)
+			self.team_at_assignment = team_node
+			self.attribution_status = attr_status
 
 	def before_save(self):
 		if not self.is_new():

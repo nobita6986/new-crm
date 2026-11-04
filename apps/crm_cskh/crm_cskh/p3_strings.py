@@ -1,9 +1,9 @@
-"""Vietnamese string catalogue for the P3 SLA, KPI, QA & Quality Dashboard UI (P3-07..P3-09).
+"""Vietnamese string catalogue for P3 SLA, KPI, QA & Quality Reporting (`P3-00..P3-09`).
 
 Imported by `crm_cskh.p1_strings` (with standalone file-import fallback so CI
 offline translation audits work without a Frappe runtime). Every user-visible
-string on `/cskh/*` P3 screens is declared here and translated in
-`crm_cskh/translations/vi.csv`.
+string on `/cskh/*` P3 screens and backend P3 error/label definitions is
+declared here and translated in `crm_cskh/translations/vi.csv`.
 """
 
 P3_NAV_AND_TITLES = (
@@ -299,6 +299,26 @@ P3_SCORECARD_AND_CHARTS = (
 	"Approved voided attempts divided by raw attempts in period.",
 )
 
+P3_SLA_AND_KPI_LABELS = (
+	"Working calendar",
+	"Working shift",
+	"Team membership history",
+	"SLA obligation",
+	"First attempt SLA",
+	"Follow-up SLA",
+	"First connected tracker (informational)",
+	"Minimum attempts policy",
+	"Closed on handoff (within SLA)",
+	"Superseded by valid reschedule",
+	"Waived with audit",
+	"Pause SLA clock",
+	"Resume SLA clock",
+	"Authoritative team attribution",
+	"Provisional score (QA disabled)",
+	"Insufficient data",
+	"DEV / configurable policy (pending BOD sign-off)",
+)
+
 P3_ERROR_EXPLANATIONS = {
 	"FORBIDDEN_SCOPE": "You are not permitted to access this reporting scope, team, employee or export.",
 	"INVALID_PERIOD": "The selected reporting period or date range is invalid or exceeds the allowed window.",
@@ -312,6 +332,12 @@ P3_ERROR_EXPLANATIONS = {
 	"RECOMPUTE_IN_PROGRESS": "A KPI recompute job is already running for this scope and period.",
 	"EXPORT_EXPIRED": "This export download link has expired; please request a new authorized export.",
 	"P3_DISABLED": "P3 quality and SLA screens are currently disabled by site configuration.",
+	"INVALID_DATE_RANGE": "The requested reporting date range or period grain is invalid.",
+	"INVALID_DIMENSION": "The requested grouping dimension or filter parameter is invalid.",
+	"INVALID_METRIC_KEY": "The requested KPI metric key is not supported by the current metric version.",
+	"SNAPSHOT_NOT_READY": "The KPI snapshot for this period is still being computed. Please retry shortly.",
+	"EXPORT_TOO_LARGE": "The requested export exceeds the permitted row limit; please narrow your filters.",
+	"CALENDAR_INVALID": "The working calendar or shift configuration is invalid.",
 }
 
 P3_ERROR_CODES = tuple(P3_ERROR_EXPLANATIONS.keys())
@@ -324,6 +350,7 @@ ALL_P3_STRINGS = (
 	+ P3_DRILLDOWN_AND_SLA_OPS
 	+ P3_RECOMPUTE_REVISION_EXPORT
 	+ P3_SCORECARD_AND_CHARTS
+	+ P3_SLA_AND_KPI_LABELS
 	+ P3_ERROR_CODES
 	+ tuple(P3_ERROR_EXPLANATIONS.values())
 )

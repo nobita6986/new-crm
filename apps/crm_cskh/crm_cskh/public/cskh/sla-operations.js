@@ -84,10 +84,19 @@
 			data.rows.map(function (row) {
 				const obId = row.obligation_id || row.name || '—'
 				const wi = row.work_item || row.work_item_id || '—'
-				const st = String(row.sla_status || row.status || 'pending').toLowerCase()
+				const st = String(row.sla_status || row.status || 'open').toLowerCase()
+				const isOwnObligation =
+					!cskh.capabilities().admin &&
+					row.responsible_user &&
+					row.responsible_user === cskh.currentUser()
 				const eligibleForWaive =
 					canWaive &&
-					(st === 'pending' || st === 'breached_open' || st === 'fulfilled_late' || st === 'escalated')
+					!isOwnObligation &&
+					(st === 'open' ||
+						st === 'pending' ||
+						st === 'breached_open' ||
+						st === 'fulfilled_late' ||
+						st === 'breached_handoff')
 
 				return el('tr', { 'data-obligation-id': obId }, [
 					el('td', { class: 'cskh-mono', text: obId }),
