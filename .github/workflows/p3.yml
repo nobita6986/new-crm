@@ -78,7 +78,9 @@ jobs:
           assert p1.get("expected_total") == 209, f"P1 inventory mutated: {p1.get('expected_total')}"
           assert p2.get("expected_total") == 38, f"P2 inventory mutated: {p2.get('expected_total')}"
           assert p3.get("expected_total") >= 31, f"P3 inventory too small: {p3.get('expected_total')}"
-          assert golden["process_score_golden"]["qa_disabled_provisional"]["expected_score"] == 86.47
+          assert golden["golden_process_score_qa_disabled"]["expected"]["value"] == 86.47
+          assert golden["golden_process_score_qa_disabled"]["expected"]["status"] == "provisional"
+          assert golden["golden_process_score_qa_enabled_final"]["expected"]["value"] == 87.0
           print(
               f"Inventories verified: P0=99, P1=209, P2=38, P3={p3['expected_total']}; golden fixture OK."
           )
