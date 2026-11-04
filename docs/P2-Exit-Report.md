@@ -11,7 +11,7 @@
 > **Baseline xuất phát (`main`):** `1913d2bd5ebfdc894eaa492b46be502dbdf44808` (CI P0 `#41658199683` `success`, CI P1 `#41658199861` `success`)
 > **Mốc nghiệm thu kỹ thuật cố định đã được T1C xác nhận:** `7e789eb1137fd8ee6c07a1971bf6b3151287b8e4` (`apps/` tree `f3b6db3ff80b3371ea5b991d7e5aaa408533007b`, CI merge `634606710626aa389b1a5e2af846ea03ff91b421`: P0 `#41784039800`, P1 `#41784039850`, P2 `#41784039795` đều `success`)
 > **Kết luận kiểm định độc lập của T1C:** **`G2-01..G2-15 = 15/15 PASS` · `T2-01..24 = 24/24 PASS` · `SEC2-01..16 = 16/16 PASS` · `F-P2-01..06 = 6/6 CLOSED` · `OBS-P2-01 = RESOLVED` (`OBS-P2-02`, `OBS-P2-03` giữ ghi chú phạm vi & backlog P3) → T1C đề nghị `RECOMMEND GO P3`**
-> **Quyết định điều hành (`T0 / Owner`):** **CHƯA KÝ `GO P3` — PR #7 ĐANG `OPEN`, CHƯA MERGE VÀO `main`** *(tách biệt nghiêm ngặt phán quyết kiểm định kỹ thuật của T1C với quyết định điều hành của T0/Owner)*
+> **Quyết định điều hành (`T0 / Owner`, 04/11/2026):** **P2 HOÀN TẤT — GO P3**. Owner phê duyệt trong phiên làm việc bằng xác nhận “tiến hành luôn nhé”; T0/Codex ghi nhận theo ủy quyền. PR #7 đã merge vào `main` tại `3ccbffa860f117dad57470d02ad9861ef0ff2bcf`.
 
 ---
 
@@ -21,7 +21,7 @@
 |---|---|---|
 | **Bộ hồ sơ kiểm định độc lập đã ký của T1C (`9` tệp nguyên bản, `0` biên tập)** | [`deploy/dev/evidence/p2-t1c/t1c-p2-verification-report.md`](../deploy/dev/evidence/p2-t1c/t1c-p2-verification-report.md), [`security-matrix-p2.md`](../deploy/dev/evidence/p2-t1c/security-matrix-p2.md), [`test-evidence-p2.md`](../deploy/dev/evidence/p2-t1c/test-evidence-p2.md), [`manifest.json`](../deploy/dev/evidence/p2-t1c/manifest.json), [`SHA256SUMS.txt`](../deploy/dev/evidence/p2-t1c/SHA256SUMS.txt) + `4` JSON artifacts: [`t1c-p2-entry-baseline-1913d2b.json`](../deploy/dev/evidence/p2-t1c/artifacts/t1c-p2-entry-baseline-1913d2b.json), [`t1c-p2-runtime-26b0237.json`](../deploy/dev/evidence/p2-t1c/artifacts/t1c-p2-runtime-26b0237.json), [`t1c-p2-ffe74df-audit.json`](../deploy/dev/evidence/p2-t1c/artifacts/t1c-p2-ffe74df-audit.json), [`t1c-p2-delta-runtime-7e789eb.json`](../deploy/dev/evidence/p2-t1c/artifacts/t1c-p2-delta-runtime-7e789eb.json) (`sha256:232e4b0e75c5c6ae95325489d7ed708739e1a57e92970d26c47d8f39253015a4`) | Đã xác minh độc lập trên `7e789eb1137fd8ee6c07a1971bf6b3151287b8e4`: **`15/15` cổng `PASS`**, **`24/24` `T2` `PASS`**, **`16/16` `SEC2` `PASS`**, **`6/6` finding `CLOSED`**, `OBS-P2-01 RESOLVED`; **T1C đề nghị `GO P3`** |
 | **Truy vết bảo mật & bằng chứng kỹ thuật (`T1B + T1A`)** | [`docs/security-matrix-p2.md`](./security-matrix-p2.md), [`docs/test-evidence-p2.md`](./test-evidence-p2.md), [`deploy/p2/evidence/http-e2e-report.json`](../deploy/p2/evidence/http-e2e-report.json), [`deploy/p2/evidence/browser-manifest.json`](../deploy/p2/evidence/browser-manifest.json) | Ghim đúng vào Source SHA thực chạy `0f3c7311c75aa3c49c3953a9b8cd64e45809d008` và mốc nghiệm thu `7e789eb1137fd8ee6c07a1971bf6b3151287b8e4` (`apps` tree `f3b6db3ff80b3371ea5b991d7e5aaa408533007b` không đổi): `6/6` cụm HTTP E2E `PASS` + `22/22` kịch bản Chromium `B2E-01..B2E-22` `PASS` (`0` SĐT thô, `0` secret) |
-| **Quyết định điều hành chuyển pha (`GO P3` / `NO-GO P3`)** | Thẩm quyền phê duyệt điều hành của **T0 / Owner** trên cơ sở đề nghị `RECOMMEND GO P3` của **T1C** | **CHƯA KÝ QUYẾT ĐỊNH ĐIỀU HÀNH `GO P3` (CHỜ T0 / OWNER PHÊ DUYỆT & MERGE)** |
+| **Quyết định điều hành chuyển pha (`GO P3` / `NO-GO P3`)** | Thẩm quyền phê duyệt điều hành của **T0 / Owner** trên cơ sở đề nghị `RECOMMEND GO P3` của **T1C** | **ĐÃ PHÊ DUYỆT: P2 HOÀN TẤT — GO P3 (Owner, 04/11/2026); PR #7 MERGED** |
 
 ### Bảng Truy vết Revision Thực tế (`Runtime SHA`, `Verified Milestone SHA`, `Final Docs Packaging SHA`, `App Tree SHA` & `CI Merge SHA`)
 
@@ -272,7 +272,7 @@ sequenceDiagram
 
 ### 11. Tổng hợp Phán quyết `15/15 PASS` của T1C trên `15` Cổng Nghiệm thu (`G2-01 .. G2-15` — Đánh số chuẩn `P2.md` §17)
 
-> **Nguyên tắc phân quyền nghiệm thu:** Cột `Phán quyết độc lập T1C (trên 7e789eb)` trích nguyên bản kết luận đã ký của **T1C** tại [`t1c-p2-verification-report.md`](../deploy/dev/evidence/p2-t1c/t1c-p2-verification-report.md) (**`15/15 PASS`, `6/6` finding `CLOSED`, đề nghị `RECOMMEND GO P3`**). Quyết định điều hành ký mở **`GO P3`** và merge PR thuộc thẩm quyền riêng của **T0 / Owner** (hiện chưa ký).
+> **Nguyên tắc phân quyền nghiệm thu:** Cột `Phán quyết độc lập T1C (trên 7e789eb)` trích nguyên bản kết luận đã ký của **T1C** tại [`t1c-p2-verification-report.md`](../deploy/dev/evidence/p2-t1c/t1c-p2-verification-report.md) (**`15/15 PASS`, `6/6` finding `CLOSED`, đề nghị `RECOMMEND GO P3`**). Quyết định điều hành **`GO P3`** đã được **Owner phê duyệt ngày 04/11/2026**; T0 đã merge PR #7 và ghi nhận quyết định tại mục nghiệm thu sau merge bên dưới.
 
 | Cổng (`P2.md` §17) | Hồ sơ kỹ thuật tích hợp (`T1B` `16e69438` + `T1A` `0f3c731` / `7e789eb`) | Phán quyết độc lập `T1C` (`7e789eb`) |
 |---|---|---|
@@ -290,7 +290,7 @@ sequenceDiagram
 | **G2-12 — Permissions & PII** | **`SEC2-01..SEC2-16 = 16/16 PASS`**; đóng cả 2 finding `HIGH` `F-P2-01` (`BOD` `0` PII / `0` `private_reason` / `12/12` oracles `403`) & `F-P2-06` (`75/75` vectors `403`); bảo toàn P0 `107/107` & P1 `221/221` + `170` HTTP | **`PASS`** *(`F-P2-01` & `F-P2-06` `CLOSED`)* |
 | **G2-13 — UI tiếng Việt** | `vi.csv` `912` dòng (`0` lỗi), đóng `F-P2-04A` (`11/11` `care_state` phân trang SQL nhiều trang khớp `COUNT(*)`, `B2E-18..20`) & `F-P2-01` (`0` `[H:<16hex>]` trên dữ liệu cũ/mới, `B2E-22`) | **`PASS`** *(`F-P2-04A` & `F-P2-01` `CLOSED`)* |
 | **G2-14 — Progress basic** | Đóng `F-P2-05`: biên ngày nửa mở `[00:00:00, next_day 00:00:00)` theo `Asia/Ho_Chi_Minh`, tách bạch `Work Item` đã/chưa thử/đã kết nối vs `effective_attempts` và `dnc_leads` vs `dnc_work_items` (`B2E-12`, `B2E-21`) | **`PASS`** *(`F-P2-05` `CLOSED`)* |
-| **G2-15 — Handoff P3** | CI P0 `#41784039800`, P1 `#41784039850`, P2 `#41784039795` (`38+9` XML, `81/81` HTTP assertions, `30/30` SHA-256) `success`; đóng `6/6` finding (`F-P2-01..06`); đầy đủ hồ sơ T1C + tài liệu §18.2 | **`PASS`** *(T1C đề nghị `RECOMMEND GO P3`; chờ `T0 / Owner` ký duyệt)* |
+| **G2-15 — Handoff P3** | CI P0 `#41784039800`, P1 `#41784039850`, P2 `#41784039795` (`38+9` XML, `81/81` HTTP assertions, `30/30` SHA-256) `success`; đóng `6/6` finding (`F-P2-01..06`); đầy đủ hồ sơ T1C + tài liệu §18.2 | **`PASS`** *(T1C đề nghị `RECOMMEND GO P3`; Owner đã phê duyệt `GO P3` ngày 04/11/2026)* |
 
 ---
 
@@ -315,6 +315,11 @@ sequenceDiagram
   - **`O-02` (`CLOSED` trên `7e789eb`):** Đã xử lý tại [`api/ownership_ui.py`](../apps/crm_cskh/crm_cskh/api/ownership_ui.py) (`_campaign_ineligible_users` xét `latest_version` theo từng `user` và tính tải theo `('assigned', 'in_progress', 'on_hold')`; `assigned_list` gọi `reporting._scope` & `reporting._scope_users`, còn `assignees` dùng các hàm nội bộ trong `ownership_ui.py`).
   - **`O-01` (Backlog không chặn từ P1):** Tối ưu import chunking P1 giữ nguyên trong backlog kỹ thuật không chặn.
 
-#### 12.3. Hành động tiếp theo dành cho T0 / Owner
+#### 12.3. Quyết định nghiệm thu sau merge — 04/11/2026
 - Hồ sơ kiểm định độc lập đã ký của **T1C** (`15/15 PASS`, `6/6` finding `CLOSED`, `RECOMMEND GO P3`) cùng toàn bộ bằng chứng trên mốc nghiệm thu `7e789eb1137fd8ee6c07a1971bf6b3151287b8e4` đã được đóng gói nguyên vẹn vào **PR #7**.
-- Kính trình **T0 / Owner** xem xét phê duyệt điều hành, thực hiện merge theo quy trình quản trị nhánh và ký mở Giai đoạn P3 (`GO P3`).
+- **Owner phê duyệt nghiệm thu P2 và mở Giai đoạn P3 (`GO P3`)** theo xác nhận “tiến hành luôn nhé” trong phiên làm việc ngày **04/11/2026**. **T0/Codex** thực thi và ghi nhận theo ủy quyền này.
+- **PR #7 đã merge** ngày `2026-11-04T08:25:43Z` vào `main` tại [`3ccbffa860f117dad57470d02ad9861ef0ff2bcf`](https://github.com/nobita6986/new-crm/commit/3ccbffa860f117dad57470d02ad9861ef0ff2bcf), từ HEAD đã duyệt `9a8650bace661eb80f421f4ceadcd20e14f2d86a`; tree nội dung merge khớp synthetic merge đã qua CI `6dcc60525d9250dbda4b4c169a5a8905363cbc15`.
+- **PR #6 được GitHub tự đánh dấu MERGED** sau PR #7 vì toàn bộ backend đã nằm trong nhánh tích hợp; không thực hiện một lần merge backend riêng.
+- **Điều kiện hậu kiểm phát hành:** CI P0/P1/P2 trên revision `main` áp dụng quyết định này phải đạt `success`; đối chiếu commit SHA, artifact digest và kết quả JUnit/HTTP tại [GitHub Actions trên main](https://github.com/nobita6986/new-crm/actions?query=branch%3Amain). Commit ghi quyết định chỉ thay đổi tài liệu, giữ nguyên app/test/probe/workflow đã nghiệm thu.
+- **Mốc nghiệm thu kỹ thuật giữ cố định `7e789eb`** và app tree `f3b6db3ff80b3371ea5b991d7e5aaa408533007b`: `15/15` gate PASS, `24/24` T2 PASS, `16/16` SEC2 PASS, `6/6` finding CLOSED. Các trường chờ Owner trong bộ hồ sơ T1C nguyên bản phản ánh thời điểm trước phê duyệt; quyết định điều hành hiện hành được ghi tại mục này.
+- **Backlog P3 được bảo toàn:** `OBS-P2-02` (benchmark tầng service/tối ưu báo cáo), `OBS-P2-03` (phạm vi File.owner theo baseline Frappe/P1), và `O-01` (import chunking). Các giới hạn này không được suy rộng thành tính năng hoặc độ phủ đã triển khai ngoài phạm vi nghiệm thu.
