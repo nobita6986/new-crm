@@ -911,3 +911,267 @@ You do not have permission to modify outcome codes or policies.,Bạn không có
 You do not have permission to review correction requests.,Bạn không có quyền xét duyệt yêu cầu hiệu chỉnh.
 You do not have permission to view this work item.,Bạn không có quyền xem hồ sơ công việc chăm sóc này.
 Zalo channel,Kênh Zalo
+Quality overview,Tổng quan chất lượng
+Team comparison,So sánh đội nhóm
+Employee quality,Chất lượng nhân viên
+Campaign & source quality,Chiến dịch & nguồn khách
+SLA & QA operations,Vận hành SLA & QA
+Personal scorecard,Bảng điểm cá nhân
+Executive quality overview (BOD),Tổng quan chất lượng CSKH (BOD)
+"Company-wide SLA compliance, connection effectiveness, data reliability and drill-down.","Toàn cảnh tuân thủ SLA, hiệu quả kết nối, độ tin cậy dữ liệu và truy vết nguồn toàn công ty."
+Team quality comparison,So sánh chất lượng giữa các đội nhóm
+"Compare teams by historical team-as-of attribution, SLA compliance, connection and data confidence.","Đối chiếu các đội theo quy gán đội nhóm tại thời điểm sự kiện (team-as-of), tuân thủ SLA, kết nối và độ tin cậy dữ liệu."
+Employee quality & compliance,Chất lượng & mức độ tuân thủ theo nhân viên
+"Evaluate staff across process compliance, connection and data reliability without mixing provisional and finalized ranks.","Đánh giá nhân viên theo 3 trụ cột tuân thủ, kết nối và độ tin cậy dữ liệu; không xếp chung điểm tạm tính với điểm đã chốt."
+Campaign & lead source performance,Hiệu quả theo chiến dịch & nguồn khách hàng
+Separate lead source quality (invalid/DNC) from staff SLA execution across versioned policies.,Tách bạch chất lượng dữ liệu đầu vào (sai số/DNC) với kỷ luật thực thi SLA trên từng phiên bản chính sách.
+SLA & QA operations center,Trung tâm vận hành SLA & kiểm định QA
+"Inspect overdue, breached, waived and escalated SLA obligations, QA status and audit actions.","Theo dõi nghĩa vụ quá hạn, vi phạm, miễn trừ, cảnh báo leo thang, trạng thái QA và thao tác kiểm toán."
+My quality scorecard,Bảng điểm chất lượng cá nhân
+"Personal SLA obligations, component breakdown and progress in your own scope.","Điểm thành phần, nghĩa vụ SLA cần xử lý và tiến bộ chất lượng trong phạm vi cá nhân của bạn."
+"Customer pool, imports, campaigns, care workflow and SLA/KPI quality.","Kho khách hàng, nhập danh sách, chiến dịch, tác nghiệp chăm sóc và chất lượng SLA/KPI."
+P3 quality and SLA screens are currently disabled by site configuration.,Các màn hình chất lượng và SLA giai đoạn P3 hiện đang tạm tắt theo cấu hình hệ thống.
+Period type,Loại kỳ báo cáo
+Daily,Theo ngày
+Weekly,Theo tuần
+Monthly,Theo tháng
+Quarterly,Theo quý
+Yearly,Theo năm
+Custom range,Khoảng tùy chọn
+Select date,Chọn ngày
+Select week,Ngày trong tuần
+Select month,Chọn tháng
+Select quarter,Chọn quý
+Select year,Chọn năm
+Quarter 1 (Jan-Mar),Quý 1 (Tháng 01–03)
+Quarter 2 (Apr-Jun),Quý 2 (Tháng 04–06)
+Quarter 3 (Jul-Sep),Quý 3 (Tháng 07–09)
+Quarter 4 (Oct-Dec),Quý 4 (Tháng 10–12)
+Time basis,Cơ sở thời gian
+Deadline cohort,Theo hạn nghĩa vụ (Deadline cohort)
+Event time,Theo thời điểm sự kiện (Event time)
+Point-in-time at as-of,Ảnh chụp tồn kho tại mốc chốt (as-of)
+Snapshot revision,Phiên bản bản chụp
+Latest published snapshot,Bản chụp xuất bản mới nhất
+"Half-open interval [from, to_exclusive)","Khoảng nửa mở [từ, đến_loại_trừ)"
+Lead source,Nguồn khách hàng
+Employee,Nhân viên
+Active employees only,Chỉ nhân viên đang hoạt động
+Include inactive employees,Bao gồm nhân viên ngưng hoạt động
+Score group,Nhóm trạng thái điểm
+All score groups,Tất cả nhóm trạng thái điểm
+Ascending,Tăng dần
+Descending,Giảm dần
+Filter by work item ID...,Tìm theo mã đầu việc (Work Item)...
+1. Process & SLA compliance,1. Tuân thủ quy trình & SLA
+2. Connection & conversion effectiveness,2. Hiệu quả kết nối & chuyển đổi
+3. Data reliability & QA,3. Độ tin cậy dữ liệu & kiểm định QA
+Metric unit (grain),Đơn vị thống kê (Grain)
+Distinct work item,Đầu việc duy nhất (Work Item)
+Ownership interval,Khoảng phụ trách (Ownership Interval)
+Due SLA obligation,Nghĩa vụ SLA đến hạn
+Effective contact attempt,Lần liên hệ hiệu lực
+Eligible QA review,Phiếu kiểm định QA đủ điều kiện
+Process score (0-100),Điểm tuân thủ quy trình (0–100)
+Minutes (business hours),Phút giờ làm việc
+Minutes (wall clock),Phút thực tế (Wall clock)
+Percentage (%),Tỷ lệ phần trăm (%)
+"Note: Company totals count distinct Work Items, whereas employee accountability counts Ownership Intervals (e.g., A -> B -> A creates 3 intervals on 1 Work Item).","Lưu ý đơn vị: Tổng toàn công ty đếm Đầu việc duy nhất (DISTINCT Work Item), trong khi trách nhiệm từng nhân viên đếm theo Khoảng phụ trách (ví dụ bàn giao A -> B -> A tạo 3 khoảng phụ trách trên 1 đầu việc)."
+Process compliance score,Điểm tuân thủ quy trình
+Assigned intervals,Số lượt nhận phụ trách
+Unique assigned work items,Số đầu việc được giao duy nhất
+Eligible contact coverage,Tỷ lệ phủ liên hệ khách được giao
+Effective attempts (activity reference),Số lần thử liên hệ hiệu lực (tham khảo)
+Connected rate,Tỷ lệ kết nối thành công
+First-touch on-time rate,Tỷ lệ liên hệ lần đầu đúng hạn
+Follow-up on-time rate,Tỷ lệ chăm sóc đúng lịch hẹn
+"First-connected tracking (informational, non-penalizing)","Theo dõi kết nối lần đầu (tham khảo, không phạt SLA)"
+Minimum attempts compliance,Tỷ lệ đạt số lần thử tối thiểu
+Outcome completeness rate,Tỷ lệ cập nhật kết quả đầy đủ
+Overdue work item backlog,Đầu việc tồn đọng quá hạn
+Overdue open follow-up obligations,Lịch hẹn đang quá hạn
+QA pass rate,Tỷ lệ kiểm định QA đạt chuẩn
+Verified result rate,Tỷ lệ kết quả đã xác minh
+Campaign conversion rate,Tỷ lệ chuyển đổi đạt mục tiêu
+SLA breach count,Số vi phạm SLA trong kỳ
+Valid SLA waiver count,Số ca miễn trừ SLA hợp lệ
+"First-touch latency (business minutes, p50 / p90)","Thời gian phản hồi lần đầu (phút làm việc, trung vị / p90)"
+"First-touch latency (wall minutes, p50 / p90)","Thời gian phản hồi lần đầu (phút thực tế, trung vị / p90)"
+Formula & provenance,Công thức & nguồn dữ liệu
+Metric key,Mã chỉ số
+Numerator / Denominator,Tử số / Mẫu số
+Formula,Công thức tính
+Reporting period,Kỳ báo cáo
+Valid exclusions,Loại trừ hợp lệ
+Snapshot as-of,Mốc chốt dữ liệu (as-of)
+Calculated at,Thời điểm tính toán
+Source watermark,Mốc dữ liệu nguồn (Watermark)
+Formula & policy version,Phiên bản công thức & chính sách
+Data confidence status,Trạng thái độ tin cậy
+Fresh,Mới cập nhật
+Calculating,Đang tính toán
+Stale — recompute needed,Cần tính lại (Dữ liệu cũ)
+Provisional,Tạm tính
+Provisional — missing QA sample,Tạm tính — thiếu mẫu QA
+Finalized,Đã chốt kỳ
+Restated (prior period adjusted),Đã tính lại kỳ cũ (Có điều chỉnh)
+Insufficient data (N/A),Chưa đủ dữ liệu (N/A)
+Calculation / reconciliation failed,Lỗi đối soát / tính toán
+N/A,N/A
+N/A — No eligible denominator (0/0),N/A — Chưa có mẫu đủ điều kiện (0/0)
+N/A — QA disabled,N/A — Chưa bật kiểm định QA
+N/A — Insufficient sample,N/A — Chưa đủ cỡ mẫu tối thiểu
+Finalized score group (ranked within finalized only),Nhóm điểm đã chốt (chỉ xếp thứ tự trong nhóm đã chốt)
+Provisional score group (not ranked with finalized),Nhóm điểm tạm tính (không xếp chung với điểm đã chốt)
+Insufficient data group (N/A — unranked),Nhóm chưa đủ dữ liệu (N/A — không xếp hạng)
+Provisional; missing QA sample,Tạm tính; thiếu mẫu QA
+Valid weight sum,Tổng trọng số hợp lệ
+QA review module is currently disabled by feature flag (qa_enabled = false). No synthetic QA reviews or verified flags are generated; QA pass rate is N/A and Process Score is computed as Provisional over valid component weights.,Mô-đun kiểm định mẫu QA hiện đang tắt theo cấu hình (qa_enabled = false). Hệ thống không tạo phiếu QA hay trạng thái Đã xác minh giả lập; Tỷ lệ QA hiển thị N/A và Điểm tuân thủ quy trình được tính Tạm tính trên tổng trọng số các thành phần đủ dữ liệu.
+SLA thresholds and scoring weights shown here are configurable DEV defaults and must not be treated as BOD-approved production policy.,Ngưỡng thời hạn SLA và bộ trọng số chấm điểm đang hiển thị là cấu hình DEV có thể điều chỉnh — không mặc định coi là chính sách vận hành chính thức đã được BOD phê duyệt.
+"Data freshness notice: Snapshot figures are evaluated up to the published watermark, not recomputed inside live customer-care transactions.","Lưu ý độ tươi dữ liệu: Số liệu báo cáo được chốt đến mốc watermark đã xuất bản, không tính lại trực tiếp bên trong giao dịch ghi nhận liên hệ của nhân viên."
+Historical attribution warning: Some legacy records lack verifiable team/owner-at-event evidence and are isolated as historical_attribution_unknown rather than guessed from current lead_owner.,"Cảnh báo quy gán lịch sử: Có bản ghi cũ thiếu chứng cứ đội/người phụ trách tại thời điểm sự kiện và được tách riêng là Chưa xác định quy gán lịch sử (historical_attribution_unknown), không tự suy đoán từ người sở hữu hiện tại."
+Policy comparison notice: Rows using different policy versions are annotated; do not compare raw scores across distinct policies without reviewing policy parameters.,Lưu ý so sánh chính sách: Các dòng áp dụng phiên bản chính sách khác nhau được gắn nhãn riêng; không so sánh ngang điểm số thô giữa hai chính sách khác tham số.
+Metric drill-down,Truy vết bản ghi nguồn (Drill-down)
+Drill down,Truy vết
+Drill down source records,Mở danh sách bản ghi nguồn
+Cohort breakdown,Phân rã tập mẫu (Cohort)
+All eligible,Tất cả đủ điều kiện
+Met / On-time,Đạt / Đúng hạn
+Unmet / Late or breached,Không đạt / Trễ hoặc vi phạm
+Excluded / Waived,Loại trừ / Miễn trừ
+Obligation ID,Mã nghĩa vụ SLA
+Interval ID,Mã khoảng phụ trách
+Obligation type,Loại nghĩa vụ
+Responsible user,Người chịu trách nhiệm
+Team at event,Đội tại thời điểm sự kiện
+Original due at,Hạn gốc bất biến
+Effective due at,Hạn hiệu lực
+Fulfilled at,Hoàn thành lúc
+Breached at,Vi phạm lúc
+SLA status,Trạng thái SLA
+Exemption / waiver reason,Lý do miễn trừ / loại trừ
+Approved by,Người phê duyệt
+Customer ref,Mã tham chiếu khách
+Verification status,Trạng thái xác minh
+Disputed,Đang tranh chấp
+Historical attribution unknown,Chưa xác định quy gán lịch sử
+PII redacted after handover or by role policy,Đã ẩn PII sau bàn giao hoặc theo chính sách vai trò
+No source records match the selected cohort segment.,Không có bản ghi nguồn nào thuộc phân lớp đã chọn.
+First-touch SLA,Liên hệ lần đầu (FIRST_ATTEMPT)
+Follow-up callback SLA,Chăm sóc đúng hẹn (FOLLOWUP)
+Minimum attempts SLA,Số lần thử tối thiểu (MIN_ATTEMPTS)
+First-connected tracking,Kết nối lần đầu (FIRST_CONNECTED)
+Pending (not yet due),Chưa đến hạn (Đang chờ)
+Fulfilled on time,Hoàn thành đúng hạn
+Fulfilled late,Hoàn thành trễ hạn
+Breached (open),Quá hạn chưa xử lý
+Waived (approved),Được miễn trừ hợp lệ
+Canceled validly,Hủy hợp lệ theo sự kiện
+Superseded (rescheduled),Đã thay thế (Dời lịch hợp lệ)
+Escalated,Đã cảnh báo leo thang
+Needs review,Cần kiểm tra
+Waive SLA obligation,Miễn trừ nghĩa vụ SLA
+Waiver reason,Lý do miễn trừ SLA
+Submit SLA waiver,Xác nhận miễn trừ SLA
+Please enter an audit reason to waive this SLA obligation.,Vui lòng nhập lý do kiểm toán để miễn trừ nghĩa vụ SLA này.
+SLA obligation waived with audit trail.,Đã ghi nhận miễn trừ nghĩa vụ SLA kèm nhật ký kiểm toán.
+No SLA obligations match the current filter.,Không có nghĩa vụ SLA nào khớp với bộ lọc hiện tại.
+Request KPI recompute,Yêu cầu tính lại KPI
+Recompute reason,Lý do tính lại KPI
+Trigger recompute,Thực hiện tính lại
+Please enter a reason for KPI recompute.,Vui lòng nhập lý do kiểm toán trước khi yêu cầu tính lại KPI.
+KPI recompute job queued.,Đã đưa yêu cầu tính lại KPI vào hàng đợi xử lý.
+Revision & restatement history,Lịch sử phiên bản & tính lại kỳ cũ
+Delta / restatement note,Ghi chú chênh lệch / điều chỉnh
+Triggered by,Người kích hoạt
+Finished at,Kết thúc lúc
+No revision history found for this scope and period.,Chưa có lịch sử phiên bản tính toán cho phạm vi và kỳ này.
+Export report,Xuất báo cáo
+Request authorized export,Tạo yêu cầu xuất báo cáo có phân quyền
+Export format,Định dạng tệp xuất
+CSV (.csv),Tệp CSV (.csv)
+Excel (.xlsx),Bảng tính Excel (.xlsx)
+Export purpose / audit note,Mục đích xuất báo cáo (ghi nhận kiểm toán)
+Enter reason or business purpose for export...,Nhập mục đích sử dụng báo cáo để lưu nhật ký kiểm toán...
+Queue export job,Gửi yêu cầu xuất tệp
+Authorized export jobs,Danh sách tệp xuất trong phiên
+Export ID,Mã tệp xuất
+Row count,Số dòng
+Download file,Tải tệp xuống
+Ready to download,Sẵn sàng tải
+Expired,Đã hết hạn
+Access denied,Từ chối quyền tải
+Export is generated and authorized on the server; client-side bulk export is disabled.,Tệp xuất được tạo và kiểm tra quyền trực tiếp trên máy chủ; chức năng xuất cục bộ trên trình duyệt đã bị vô hiệu hóa.
+Export job submitted.,Đã gửi yêu cầu xuất báo cáo.
+No export jobs requested in this session yet.,Chưa có yêu cầu xuất báo cáo nào trong phiên làm việc này.
+Please enter an export purpose.,Vui lòng nhập mục đích xuất báo cáo.
+My process score & components,Điểm tuân thủ quy trình & chi tiết thành phần của tôi
+Component,Thành phần đánh giá
+My rate,Tỷ lệ đạt
+Weighted contribution,Điểm quy đổi theo trọng số
+Actionable SLA obligations & callbacks,Nghĩa vụ SLA & lịch hẹn cần xử lý
+Go to My Customers,Mở Khách được giao
+Go to Callbacks Schedule,Mở Lịch hẹn chăm sóc lại
+Trend over period,Xu hướng biến động theo kỳ
+Team comparison summary,Tóm tắt đối chiếu đội nhóm
+Top overdue obligations,Các nghĩa vụ quá hạn cần ưu tiên xử lý
+Campaign & lead source breakdown,Phân bổ theo chiến dịch & nguồn khách
+SLA & data quality alerts,Cảnh báo SLA & chất lượng dữ liệu
+Invalid phone / DNC rate,Tỷ lệ sai số / từ chối liên hệ (DNC)
+Avg attempts per work item (reference),Số lần thử bình quân / đầu việc (tham khảo)
+Correction / void rate,Tỷ lệ hiệu chỉnh / vô hiệu nhật ký
+Disputed attempts,Lần liên hệ đang tranh chấp
+Metric version,Phiên bản công thức
+Eligible staff with due obligations,Nhân sự có nghĩa vụ đến hạn
+Data confidence,Độ tin cậy dữ liệu
+Rank (within group),Thứ tự (trong nội bộ nhóm)
+Unranked,Không xếp hạng
+Open employee detail,Xem chi tiết nhân viên
+Open team employees,Xem nhân viên trong đội
+No teams match the current filters.,Không có đội nhóm nào khớp với bộ lọc hiện tại.
+No employees match the current filters.,Không có nhân viên nào khớp với bộ lọc hiện tại.
+No campaigns match the current filters.,Không có chiến dịch nào khớp với bộ lọc hiện tại.
+No active alerts or anomalies in this period.,Không có cảnh báo SLA hoặc bất thường dữ liệu trong kỳ này.
+Weighted sum over valid components divided by active weight sum.,Tổng (Trọng số × Tỷ lệ thành phần hợp lệ) chia cho Tổng trọng số các thành phần có đủ mẫu.
+On-time FIRST_ATTEMPT obligations divided by due eligible FIRST_ATTEMPT obligations in period.,Số nghĩa vụ liên hệ lần đầu hoàn thành đúng hạn chia cho tổng nghĩa vụ FIRST_ATTEMPT đủ điều kiện đến hạn trong kỳ.
+On-time FOLLOWUP obligations divided by due eligible FOLLOWUP obligations in period.,Số nghĩa vụ lịch hẹn hoàn thành đúng hạn chia cho tổng nghĩa vụ FOLLOWUP đủ điều kiện đến hạn trong kỳ.
+Eligible ownership intervals with >= 1 effective attempt divided by mature eligible intervals.,Số khoảng phụ trách đủ điều kiện có ít nhất 1 lần liên hệ hiệu lực chia cho tổng khoảng phụ trách đã đủ thời gian xử lý.
+Effective attempts satisfying required fields divided by total effective attempts in period.,Số lần liên hệ hiệu lực điền đủ trường bắt buộc theo chính sách chia cho tổng lần liên hệ hiệu lực trong kỳ.
+Eligible intervals with >= 1 connected attempt divided by eligible intervals with >= 1 attempt.,Số khoảng phụ trách có kết nối hai chiều chia cho số khoảng phụ trách đã thử liên hệ (không chia cho tổng số cuộc gọi).
+Approved passing QA reviews divided by completed eligible QA reviews in cohort.,Số phiếu kiểm định QA đạt chuẩn được duyệt chia cho tổng phiếu QA hoàn tất đủ điều kiện.
+Verified effective attempts divided by total effective attempts in period.,Số lần liên hệ hiệu lực ở trạng thái Đã xác minh chia cho tổng lần liên hệ hiệu lực trong kỳ.
+Distinct work items achieving campaign conversion divided by campaign eligible cohort.,Số đầu việc duy nhất đạt mục tiêu chuyển đổi của chiến dịch chia cho tập mẫu chiến dịch tương ứng.
+Active distinct work items holding >= 1 open overdue SLA obligation at as_of.,Ảnh chụp số đầu việc đang hoạt động có ít nhất 1 nghĩa vụ SLA đang quá hạn tại mốc chốt as-of.
+No data to display.,Chưa có dữ liệu để hiển thị.
+Fulfilled MIN_ATTEMPTS obligations divided by due MIN_ATTEMPTS obligations.,Số nghĩa vụ số lần liên hệ tối thiểu đạt chuẩn chia cho tổng nghĩa vụ MIN_ATTEMPTS đến hạn trong kỳ.
+Open overdue FOLLOWUP SLA obligations at as_of.,Số nghĩa vụ SLA hẹn gọi lại đang mở và đã quá hạn tại mốc chốt as-of.
+Obligations in breached_open or fulfilled_late within period.,Số nghĩa vụ SLA bị vi phạm đang mở hoặc hoàn thành trễ hạn trong kỳ.
+Approved waived SLA obligations within period.,Số nghĩa vụ SLA được phê duyệt miễn trừ hợp lệ kèm lý do kiểm toán trong kỳ.
+p50 / p90 business-hour minutes from interval start to first effective attempt.,Phân vị p50 / p90 số phút làm việc hành chính từ lúc bắt đầu khoảng phụ trách đến lần liên hệ hiệu lực đầu tiên.
+p50 / p90 wall-clock minutes from interval start to first effective attempt.,Phân vị p50 / p90 số phút thực tế từ lúc bắt đầu khoảng phụ trách đến lần liên hệ hiệu lực đầu tiên.
+DISTINCT Work Items active in period (company/campaign grain).,Số đầu việc duy nhất hoạt động trong kỳ (đơn vị thống kê cấp toàn công ty hoặc chiến dịch).
+Ownership intervals active in period (employee accountability grain).,Số khoảng phụ trách hoạt động trong kỳ (đơn vị thống kê trách nhiệm cấp nhân viên).
+Effective non-voided contact attempts in period (activity reference only).,Tổng số lần liên hệ hiệu lực không bị hủy hiệu lực trong kỳ (chỉ số hoạt động tham khảo).
+Distinct work items with >= 1 effective connected attempt in period.,Số đầu việc duy nhất có ít nhất 1 lần liên hệ kết nối hai chiều hiệu lực trong kỳ.
+Informational FIRST_CONNECTED tracking rate (never penalizes Process Score).,Tỷ lệ theo dõi kết nối lần đầu mang tính thông tin (không cộng phạt vào Điểm tuân thủ quy trình).
+FORBIDDEN_SCOPE,FORBIDDEN_SCOPE
+INVALID_PERIOD,INVALID_PERIOD
+INVALID_METRIC,INVALID_METRIC
+SNAPSHOT_STALE,SNAPSHOT_STALE
+POLICY_CONFLICT,POLICY_CONFLICT
+DATA_RECONCILIATION_FAILED,DATA_RECONCILIATION_FAILED
+INSUFFICIENT_DATA,INSUFFICIENT_DATA
+QA_CONFLICT,QA_CONFLICT
+RECOMPUTE_IN_PROGRESS,RECOMPUTE_IN_PROGRESS
+EXPORT_EXPIRED,EXPORT_EXPIRED
+P3_DISABLED,P3_DISABLED
+"You are not permitted to access this reporting scope, team, employee or export.","Bạn không có quyền truy cập phạm vi báo cáo, đội nhóm, nhân viên hoặc tệp xuất này."
+The selected reporting period or date range is invalid or exceeds the allowed window.,Kỳ báo cáo hoặc khoảng ngày đã chọn không hợp lệ hoặc vượt quá giới hạn cho phép.
+The requested KPI metric key or drill-down segment is not valid.,Mã chỉ số KPI hoặc phân lớp truy vết dữ liệu nguồn không hợp lệ.
+The KPI snapshot is older than recent source changes; refresh or request a recompute.,Bản chụp KPI hiện cũ hơn thay đổi dữ liệu nguồn mới nhất; vui lòng làm mới hoặc yêu cầu tính lại.
+Conflicting active SLA/KPI policies were detected for the same scope.,Phát hiện cấu hình chính sách SLA/KPI chồng chéo hoặc mâu thuẫn hiệu lực trong cùng phạm vi.
+KPI/SLA invariant reconciliation failed; publication was halted for audit.,Đối soát bất biến dữ liệu KPI/SLA không khớp; hệ thống dừng xuất bản số liệu để kiểm tra.
+Insufficient eligible sample size to compute a rate or rank (N/A).,Chưa có đủ cỡ mẫu hợp lệ để tính tỷ lệ hoặc xếp hạng cho kỳ và phạm vi này (N/A).
+"Invalid QA review action (self-review is forbidden, duplicate round, or QA is disabled).","Thao tác kiểm định QA không hợp lệ (cấm tự duyệt phiếu của chính mình, trùng vòng kiểm định hoặc QA đang tắt)."
+A KPI recompute job is already running for this scope and period.,Đang có tiến trình tính lại KPI chạy cho cùng phạm vi và kỳ báo cáo này; vui lòng chờ hoàn tất.
+This export download link has expired; please request a new authorized export.,Liên kết tải tệp xuất báo cáo đã hết hạn hiệu lực; vui lòng tạo yêu cầu xuất mới.

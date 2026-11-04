@@ -1,0 +1,124 @@
+# Khảo sát Giao diện P1/P2, Luồng Nghiệp vụ UI P3 & Hợp đồng Kết nối API (`P3-07`, `P3-08`, `P3-09`)
+
+> **Dự án:** CRM-CSKH — Quản trị kho khách hàng, phân phối lead và chất lượng chăm sóc khách hàng
+> **Tài liệu:** `docs/p3/ui-contract-and-flows.md`
+> **Chủ sở hữu:** **T1A** (Giao diện `/cskh/*`, Việt hóa `vi_VN`, Drill-down/Export UI, HTTP/Browser E2E & Đóng gói `P3-09`)
+> **Baseline xuất phát (`main`):** `449fbc26374c3540b07ad86219fa0f33fc84feba` (P2 đã đạt `GO P3` tại [`docs/P2-Exit-Report.md`](../P2-Exit-Report.md) §12.3)
+> **Tham chiếu gốc:** [`docs/root-plan/P3.md`](../root-plan/P3.md) (§0, §4, §7, §8, §9, §10, §11, §12, §14, §15.3, §16, §17), [`docs/architecture/adr-ui-001.md`](../architecture/adr-ui-001.md), [`docs/architecture/adr-p1-06-ui-integration.md`](../architecture/adr-p1-06-ui-integration.md)
+
+---
+
+## 1. Khảo sát Thành phần & Điều hướng Hiện có từ P0–P2 (`ADR-P3-09`)
+
+### 1.1. Kiến trúc giao diện cùng Frappe site (`/cskh/*`) được giữ nguyên
+Qua khảo sát thực tế cây mã nguồn `apps/crm_cskh/crm_cskh` trên baseline `449fbc26`:
+- **Không dựng SPA thứ hai, không thêm backend/database thứ hai, không sửa mã nguồn upstream `apps/frappe` hay `apps/crm`:** Frappe CRM `v1.87.0` chỉ gọi cứng `get_<chart>` trong `crm.api.dashboard` và chưa có hook `crm_dashboard_charts` ổn định. Do đó P3 tiếp tục dùng chiến lược trang web Frappe cùng site `/cskh/*` (`ADR-UI-001`, `ADR-P1-06`, `ADR-P3-09`), chia sẻ cùng phiên đăng nhập cookie `sid` và token `X-Frappe-CSRF-Token`.
+- **Các thành phần nền tảng tái sử dụng trực tiếp từ P1/P2:**
+  1. [`www/cskh_context.py`](../../apps/crm_cskh/crm_cskh/www/cskh_context.py): Cổng kiểm tra vai trò phía máy chủ trước khi render HTML (`Guest` và vai trò ngoài danh mục nhận HTTP `403 PermissionError`), xuất `window.cskhCapabilities`, `window.cskhTimezone` (`site`, `user`, `effective`, `server_now_iso`), `window.cskhI18n` và `window.cskhErrorTexts`.
+  2. [`templates/cskh/_shell.html`](../../apps/crm_cskh/crm_cskh/templates/cskh/_shell.html): Khung trang thống nhất hiển thị thanh điều hướng theo quyền, phiên người dùng, múi giờ hiệu lực, lối quay về CRM Leads và vùng thông báo nổi (`#cskh-toast-host`).
+  3. [`public/cskh/cskh.js`](../../apps/crm_cskh/crm_cskh/public/cskh/cskh.js) & [`public/cskh/cskh.css`](../../apps/crm_cskh/crm_cskh/public/cskh/cskh.css): Bộ hàm dựng DOM an toàn chống XSS (`cskh.el` dùng `textContent`/`createTextNode`, tuyệt đối không dùng `innerHTML` cho dữ liệu), bộ chuyển đổi múi giờ chuẩn `Intl.DateTimeFormat(..., { timeZone })`, `cskh.get`/`cskh.post` kèm CSRF, `cskh.pager` phân trang từ `total` của server, `cskh.poll` và `cskh.renderError`.
+  4. [`p1_strings.py`](../../apps/crm_cskh/crm_cskh/p1_strings.py), [`p2_strings.py`](../../apps/crm_cskh/crm_cskh/p2_strings.py), [`translations/vi.csv`](../../apps/crm_cskh/crm_cskh/translations/vi.csv) & cổng kiểm toán tĩnh fail-closed [`deploy/p1/check_translations_audit.py`](../../deploy/p1/check_translations_audit.py).
+
+### 1.2. Phân tách ranh giới màn hình P2 vs P3
+- Màn `/cskh/dashboard` (P1) giữ nguyên vai trò **Bảng điều hành phân phối Lead**.
+- Màn `/cskh/progress` (P2) giữ nguyên vai trò **Tiến độ hoạt động cơ bản trong ca** (bộ đếm vận hành P2).
+- Hệ thống **6 màn hình Chất lượng, SLA & Bảng điểm P3** được bổ sung thành các route độc lập có kiểm quyền server-side rõ ràng, kèm thanh điều hướng phụ (`templates/cskh/_p3_subnav.html`) và cờ tính năng thu hồi an toàn `cskh_p3_enabled` (`P3.md` §15.3).
+
+---
+
+## 2. Ma trận Route, Điều hướng & Cổng Quyền Cấp Trang P3
+
+| Route `/cskh/*` | Màn hình (`P3.md` §10) | `Sales User` (Staff) | `Sales Manager` (Leader) | `CSKH CRM Admin` | `CSKH BOD Viewer` | Quy tắc Bảo vệ Cấp Trang & Dữ liệu |
+|---|---|:---:|:---:|:---:|:---:|---|
+| `/cskh/quality-overview` | **1. Tổng quan chất lượng (BOD)** (§10.1) | Chặn (`403`) | Chặn (`403`) | Cho phép | Cho phép | Chỉ số toàn công ty (`0` PII thô); Staff/Leader bị từ chối `403` (`S02`). |
+| `/cskh/team-quality` | **2. So sánh đội nhóm** (§10.2) | Chặn (`403`) | Cho phép *(chỉ cây đội mình)* | Cho phép | Cho phép | Team-as-of theo kỳ; Leader không xem được đội khác (`S03`). |
+| `/cskh/employee-quality` | **3. Chất lượng nhân viên** (§10.3) | Chặn (`403` — dùng `/cskh/scorecard`) | Cho phép *(nhân viên thuộc scope)* | Cho phép | Cho phép | Tách nhóm `Đã chốt` vs `Tạm tính` vs `N/A`; Staff không xem bảng đồng nghiệp (`S01`). |
+| `/cskh/campaign-quality` | **4. Chiến dịch & Nguồn khách** (§10.4) | Chặn (`403`) | Cho phép *(campaign thuộc scope)* | Cho phép | Cho phép | Tách chất lượng nguồn khách khỏi điểm tuân thủ nhân viên; gắn nhãn `policy_version`. |
+| `/cskh/sla-operations` | **5. Vận hành SLA & Kiểm định QA** (§10.5) | Chặn (`403`) | Cho phép *(scope đội)* | Cho phép | Cho phép *(0 PII thô, chỉ đọc / theo quyền)* | Tra cứu nghĩa vụ quá hạn/vi phạm/miễn trừ/cảnh báo; thao tác miễn trừ/tính lại kiểm quyền + lý do kiểm toán; QA hiển thị chế độ `qa_enabled=false` minh bạch. |
+| `/cskh/scorecard` | **6. Bảng điểm cá nhân** (§10.6) | Cho phép *(chỉ chính mình)* | Cho phép *(cá nhân)* | Cho phép | Chặn (`403`) | Scope khóa cứng từ phiên đăng nhập; không lộ PII khách đã chuyển giao cho người khác (`S04`). |
+
+- **Cờ thu hồi (`Rollback Feature Flag` — `cskh_p3_enabled`):** Mặc định `True`; khi cấu hình site đặt `cskh_p3_enabled = false`, toàn bộ mục điều hướng P3 tự ẩn và các route P3 trả thông báo tạm ngưng an toàn (`403`), bảo toàn nguyên vẹn toàn bộ luồng P1/P2.
+
+---
+
+## 3. Quy ước Hiển thị Bắt buộc Trên Mọi Chỉ số P3 (`P3.md` §4, §7, §8, §10)
+
+**Nguyên tắc bất biến của Frontend P3:** Trình duyệt **tuyệt đối không tự định nghĩa hay tự tính công thức KPI/SLA**, không tải toàn bộ bản ghi về lọc cục bộ, và không tạo CSV/XLSX cục bộ từ mảng dữ liệu trên trình duyệt. Mọi con số, tử số, mẫu số, trạng thái độ tin cậy và danh sách drill-down đều đọc từ payload có thẩm quyền của Backend (`T1B`).
+
+### 3.1. Chín thuộc tính hiển thị bắt buộc trên mỗi thẻ/ô chỉ số (`p3-widgets.js`)
+1. **Đơn vị thống kê (`grain` / `unit`):** Ghi nhãn tường minh `Đầu việc duy nhất (Work Item)` vs `Khoảng phụ trách (Ownership Interval)` vs `Nghĩa vụ SLA (SLA Obligation)` vs `Lần liên hệ hiệu lực (Effective Attempt)` vs `Phiếu kiểm định QA` vs `Điểm quy trình (0–100)`. Hiển thị chú thích rõ: *Tổng khoảng phụ trách của các nhân viên không bằng số khách hàng/đầu việc duy nhất toàn công ty khi có bàn giao*.
+2. **Giá trị & Tử số / Mẫu số (`numerator / denominator`):**
+   - Mọi tỷ lệ luôn hiển thị kèm phân số gốc ngay cạnh phần trăm, ví dụ **`80,0%` (`80 / 100`)**.
+   - **Quy tắc `Denominator = 0` (`F21`):** Khi `denominator === 0` hoặc `value === null` hoặc `status === "insufficient_data"`, giao diện bắt buộc hiển thị **`N/A` (`0 / 0 — Chưa có mẫu đủ điều kiện`)**, **tuyệt đối không hiển thị `0%`, `0,0%` hay `100%`**.
+3. **Công thức tiếng Việt (`formula`):** Tra cứu được ngay qua nút `Công thức & Nguồn` trên từng thẻ/cột bảng.
+4. **Kỳ báo cáo & Cơ sở thời gian (`period` & `time_basis`):** Khoảng nửa mở `[from, to_exclusive)` theo `Asia/Ho_Chi_Minh` kèm nhãn cơ sở (`Theo hạn nghĩa vụ — Deadline cohort`, `Theo thời điểm sự kiện — Event time`, hoặc `Ảnh chụp tồn kho tại mốc chốt — Point-in-time as_of`).
+5. **Phạm vi (`scope`):** `Toàn công ty` / `Đội nhóm (team-as-of)` / `Nhân viên` / `Chiến dịch`.
+6. **Loại trừ & Miễn trừ (`exclusions` / `excluded_count` / `waiver_count` / `historical_attribution_unknown`):** Hiển thị rõ số lượng loại trừ hợp lệ và cảnh báo chất lượng dữ liệu nếu có bản ghi thiếu chứng cứ lịch sử (`historical_attribution_unknown`).
+7. **Mốc chốt & Độ tươi (`as_of`, `calculated_at`, `source_watermark`):** Luôn hiển thị trên thanh trạng thái báo cáo và hộp chi tiết chỉ số (*“Dữ liệu chốt đến ... · Tính lúc ...”*).
+8. **Phiên bản công thức & chính sách (`metric_version`, `policy_version`):** Hiển thị kèm thông báo cấu hình: *“Ngưỡng SLA & trọng số đang hiển thị là cấu hình DEV/có thể điều chỉnh — không mặc định là chính sách Production đã được BOD phê duyệt”*.
+9. **Trạng thái độ tin cậy (`status` / `freshness`):** Huy hiệu phân biệt rõ `fresh` (`Mới cập nhật`), `calculating` (`Đang tính toán`), `stale` (`Cần tính lại`), `provisional` (`Tạm tính`), `finalized` (`Đã chốt`), `restated` (`Đã tính lại kỳ cũ`), `insufficient_data` (`Chưa đủ dữ liệu — N/A`), `failed` (`Lỗi đối soát`).
+
+### 3.2. Tách bạch Ba Trụ cột, Chế độ `qa_enabled = false` & Bảng Xếp hạng Không Trộn
+1. **Ba trụ cột hiển thị tách rời trên mọi màn hình:**
+   - **Nhóm A — Tuân thủ quy trình & SLA:** `process_score`, `first_touch_on_time`, `followup_on_time`, `eligible_coverage`, `outcome_completeness`, `overdue_backlog`, `open_followups_overdue`, `breach_count`, `sla_waiver_count`.
+   - **Nhóm B — Hiệu quả kết nối & chuyển đổi:** `connected_rate` (trên khoảng phụ trách đã thử), `connected_items`, `first_connected` (theo dõi riêng, **không phạt vi phạm SLA** khi khách không nghe máy), `conversion_rate`, `attempts_count` (chỉ số hoạt động tham khảo).
+   - **Nhóm C — Độ tin cậy dữ liệu & Kiểm định QA:** Tách riêng `verified` (`Đã xác minh`), `self_reported` (`Nhân viên tự báo cáo`), `disputed` (`Đang tranh chấp`), tỷ lệ hiệu chỉnh/vô hiệu (`correction/void`), và `qa_pass_rate`.
+2. **Chế độ `qa_enabled = false` (`F22`, `G09`, `G10`):**
+   - Hiển thị hộp thông báo minh bạch khi backend trả `qa_enabled: false`: không sinh phiếu QA hay trạng thái `Đã xác minh` giả; `qa_pass_rate` hiển thị `N/A (Chưa bật kiểm định QA)`; `PROCESS_SCORE` hiển thị rõ **`86,47 — Tạm tính; thiếu mẫu QA`** (kèm tổng trọng số hợp lệ `85/100`).
+3. **Không xếp chung `provisional` với `finalized` (`P3.md` §0.12, §7.5, §10.3):**
+   - Trên màn `/cskh/employee-quality` và `/cskh/team-quality`, các dòng được phân nhóm rõ ràng thành:
+     1. **Nhóm Đã chốt (`finalized`)** — chỉ sắp xếp thứ tự trong nội bộ nhóm Đã chốt;
+     2. **Nhóm Tạm tính (`provisional`)** — hiển thị tách nhóm riêng với nhãn `Tạm tính`, không gán hạng chung với nhóm Đã chốt;
+     3. **Nhóm Chưa đủ dữ liệu (`insufficient_data` / `N/A`)** — không hiển thị điểm số và không xếp hạng.
+
+---
+
+## 4. Hợp đồng Luồng Drill-Down (`>= 5` Chỉ số Trọng yếu) & Xuất Báo cáo (`P3-08`)
+
+### 4.1. Luồng Drill-Down Phân trang Server-Side (`p3-drilldown` trong `p3-widgets.js`)
+- Hỗ trợ mở danh sách bản ghi gốc có thẩm quyền cho tối thiểu **7 nhóm chỉ số trọng yếu**:
+  1. `first_touch_on_time` (Cohort `FIRST_ATTEMPT` obligations đến hạn: `Tất cả đủ điều kiện` = `Đúng hạn` + `Trễ hạn / Đang quá hạn`; ví dụ `80/100` mở đúng `100` nghĩa vụ gồm `80` đạt và `20` không đạt, kèm tab xem riêng các ca `Miễn trừ / Loại trừ`).
+  2. `followup_on_time` (Cohort `FOLLOWUP` callback obligations đến hạn: `Tất cả`, `Đúng hạn`, `Trễ / Quá hạn`, `Đã miễn trừ / Dời lịch`).
+  3. `eligible_coverage` (Cohort `Ownership Intervals` đủ điều kiện: `Tất cả`, `Đã có liên hệ hiệu lực`, `Chưa liên hệ`).
+  4. `connected_rate` / `connected_items` (`Tất cả khoảng đã thử / đầu việc`, `Đã kết nối hai chiều`, `Đã thử chưa kết nối`).
+  5. `overdue_backlog` & `breach_count` (`Đầu việc đang quá hạn tại mốc chốt` / `Nghĩa vụ phát sinh vi phạm SLA`).
+  6. `outcome_completeness` & `verification_rate` (`Effective Attempts`: `Đã xác minh`, `Nhân viên tự báo cáo`, `Đang tranh chấp`, `Đầy đủ / Thiếu thông tin`).
+  7. `sla_waiver_count` / `exclusions` (`Nghĩa vụ được miễn trừ / loại trừ kèm người duyệt & lý do`).
+- **Ràng buộc kỹ thuật bắt buộc:**
+  - Mọi thao tác chuyển trang (`page`, `page_size`), chọn phân lớp cohort (`segment`: `all | met | unmet | excluded`), hoặc đổi sắp xếp (`sort_by`, `sort_dir`) đều gửi tham số lên API drill-down của server để lọc/sắp xếp **trước `LIMIT/OFFSET`**.
+  - Hiển thị cột theo đúng dữ liệu đã được backend kiểm quyền/che mặt nạ (BOD `0` PII thô; Staff sau bàn giao `0` PII khách cũ).
+
+### 4.2. Luồng Xuất Dữ liệu Qua Job/API Được Phân quyền (`p3-export` trong `p3-widgets.js`)
+1. Người dùng bấm **Xuất báo cáo**, chọn định dạng được backend cho phép (`CSV` / `XLSX`) và nhập mục đích kiểm toán (nếu yêu cầu) → UI gửi `1` POST `request_export` kèm CSRF + `idempotency_key`.
+2. Hộp trạng thái xuất hiển thị mã tác vụ (`job_id` / `export_id`), trạng thái (`queued | running | completed | expired | forbidden | failed`), số dòng (`row_count`), danh sách cột cho phép theo vai trò, và thời điểm hết hạn `expires_at` (`Asia/Ho_Chi_Minh`).
+3. Nút **Tải tệp** gọi endpoint tải có thẩm quyền của backend (tái kiểm tra phiên, vai trò, phạm vi đội/nhân viên và hạn `expires_at` ngay tại thời điểm tải). Nếu quyền đã bị thu hồi hoặc tệp hết hạn, UI hiển thị rõ thông báo lỗi tiếng Việt tương ứng (`[FORBIDDEN]` / `[FORBIDDEN_SCOPE]` / `[EXPORT_EXPIRED]`).
+
+---
+
+## 5. Ma trận Nhu cầu API Backend (`p3-api.js` — Tích hợp Từ SHA Đã Commit của T1B)
+
+Bộ điều hợp [`public/cskh/p3-api.js`](../../apps/crm_cskh/crm_cskh/public/cskh/p3-api.js) chỉ đóng vai trò kết nối giao thức HTTP/CSRF và chuẩn hóa cấu trúc hiển thị (tuyệt đối không tính toán lại tử số/mẫu số/điểm số), sẵn sàng khớp trực tiếp với `docs/p3/report-api-contract.md` của **T1B**:
+
+| Nhóm chức năng UI | Endpoint Backend dự kiến (`P3.md` §11.1) | Phương thức | Tham số chính UI truyền lên | Dữ liệu UI nhận từ Server |
+|---|---|---|---|---|
+| **Tổng quan BOD** | `crm_cskh.api.reporting_p3.get_executive_overview` *(hoặc `reporting.get_executive_overview` theo contract T1B)* | `GET` | `period_type`, `date_from`, `date_to`, `campaign`, `source`, `snapshot_mode`/`run_id` | Metadata phiên chụp (`as_of`, `calculated_at`, `source_watermark`, `status`, `qa_enabled`, `metric_version`, `policy_version`), thẻ KPI 3 trụ cột, chuỗi xu hướng, tóm tắt đội/chiến dịch, cảnh báo SLA & exclusions |
+| **So sánh đội nhóm** | `...get_team_comparison` | `GET` | `period_type`, `date_from`, `date_to`, `campaign`, `source`, `sort_by`, `sort_dir` | Danh sách đội (`team-as-of`), từng metric kèm `numerator`/`denominator`/`value`/`status`, `exclusions` |
+| **Chất lượng nhân viên** | `...get_employee_quality` | `GET` | `period_type`, `date_from`, `date_to`, `team`, `campaign`, `source`, `active_only`, `score_band` (`finalized`/`provisional`/`insufficient_data`), `sort_by`, `sort_dir`, `page`, `page_size` | `total`, `items` (tách rõ `score.status` để không trộn `provisional` với `finalized`), `capabilities` |
+| **Chiến dịch & nguồn** | `...get_campaign_quality` | `GET` | `period_type`, `date_from`, `date_to`, `campaign`, `source`, `sort_by`, `sort_dir`, `page`, `page_size` | `total`, `items` gồm chất lượng nguồn (`invalid_phone`, `dnc`), kết nối, SLA, `policy_version` |
+| **Bảng điểm cá nhân** | `...get_my_scorecard` | `GET` | `period_type`, `date_from`, `date_to`, `campaign` *(không truyền `user` — server tự lấy từ session)* | Điểm cá nhân + thành phần trọng số, KPI của mình, hàng đợi nghĩa vụ sắp đến hạn/quá hạn, xu hướng cá nhân |
+| **Drill-down chỉ số** | `...get_metric_drilldown` | `GET` | `metric_key`, `scope_type`, `scope_id`, `period_type`, `date_from`, `date_to`, `run_id`/`as_of`, `segment` (`all`/`met`/`unmet`/`excluded`), `campaign`, `source`, `sort_by`, `sort_dir`, `page`, `page_size` | Định nghĩa metric, `cohort_summary` (`eligible_total`, `met_count`, `unmet_count`, `excluded_count`), `columns` theo quyền, `total`, `items` đã phân trang & che PII |
+| **Vận hành SLA & Miễn trừ** | `crm_cskh.api.sla.list_obligations`, `crm_cskh.api.sla.waive_obligation` | `GET` / `POST` | Lọc `status` (`overdue`/`breached_open`/`fulfilled_late`/`waived`/`escalated`/`pending`), `obligation_type`, `campaign`, `search`, `page`, `page_size`; POST `waive` kèm `obligation_id`, `reason`, `idempotency_key` | Danh sách nghĩa vụ SLA (`original_due_at`, `effective_due_at`, khoảng phụ trách, cảnh báo), kết quả miễn trừ có kiểm toán |
+| **Tính lại & Lịch sử Revision** | `...request_recompute`, `...get_run_status`, `...list_kpi_runs` | `POST` / `GET` | `scope_type`, `scope_id`, `date_from`, `date_to`, `reason`, `idempotency_key`; hoặc `run_id` | Trạng thái `KPI Run`, danh sách phiên bản (`revision`, `restated`, lý do tính lại, chênh lệch trước/sau) |
+| **Xuất báo cáo phân quyền** | `...request_export`, `...get_export_status`, `...download_export` | `POST` / `GET` | `report_type`, `metric_key`, `scope_type`, `scope_id`, `date_from`, `date_to`, `filters`, `format`, `purpose`, `idempotency_key` | `export_id`, `status`, `expires_at`, `row_count`, `columns`, `download_url` được kiểm quyền lại lúc tải |
+
+---
+
+## 6. Chuẩn Múi giờ & Biên Kỳ Báo cáo (`Asia/Ho_Chi_Minh`)
+
+Hàm thuần `cskh.computePeriodBounds(periodType, anchorValue, customToValue, tz)` trong [`public/cskh/cskh.js`](../../apps/crm_cskh/crm_cskh/public/cskh/cskh.js) tính khoảng nửa mở `[from, to_exclusive)` (`YYYY-MM-DD`) theo múi giờ chuẩn của site (`Asia/Ho_Chi_Minh`), độc lập hoàn toàn với múi giờ hệ điều hành trình duyệt:
+- **Ngày (`day`):** `[YYYY-MM-DD, nextDay(YYYY-MM-DD))` (ví dụ `2026-10-15` → `["2026-10-15", "2026-10-16")`).
+- **Tuần (`week` — Thứ Hai đến Chủ Nhật):** `[mondayOfWeek, addDays(mondayOfWeek, 7))`.
+- **Tháng (`month`):** `[YYYY-MM-01, firstDayOfNextMonth)` (xử lý chính xác tháng 28/29/30/31 ngày và chuyển năm `12 -> 01`).
+- **Quý (`quarter`):** `Q1: [YYYY-01-01, YYYY-04-01)`, `Q2: [YYYY-04-01, YYYY-07-01)`, `Q3: [YYYY-07-01, YYYY-10-01)`, `Q4: [YYYY-10-01, (YYYY+1)-01-01)`.
+- **Năm (`year`):** `[YYYY-01-01, (YYYY+1)-01-01)`.
+- **Tùy chọn (`custom`):** Người dùng chọn từ ngày `D1` đến hết ngày `D2` → chuẩn hóa thành khoảng nửa mở `[D1, nextDay(D2))` (không tự cộng giờ `23:59:59` gây hở mili-giây cuối ngày).

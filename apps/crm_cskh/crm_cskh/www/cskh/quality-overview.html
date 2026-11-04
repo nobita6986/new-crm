@@ -1,0 +1,34 @@
+{% extends "templates/cskh/_shell.html" %}
+
+{% block cskh_title %}{{ _("Executive quality overview (BOD)") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Company-wide SLA compliance, connection effectiveness, data reliability and drill-down.") }}{% endblock %}
+{% block cskh_actions %}
+	<button type="button" id="p3-btn-revisions" class="cskh-btn">{{ _("Revision & restatement history") }}</button>
+	{% if cskh_capabilities.get("can_recompute_kpi") %}
+	<button type="button" id="p3-btn-recompute" class="cskh-btn">{{ _("Request KPI recompute") }}</button>
+	{% endif %}
+	{% if cskh_capabilities.get("can_export_report") %}
+	<button type="button" id="p3-btn-export" class="cskh-btn is-primary">{{ _("Export report") }}</button>
+	{% endif %}
+{% endblock %}
+
+{% block cskh_body %}
+{% include "templates/cskh/_p3_subnav.html" %}
+
+<div id="p3-banners" class="cskh-banner-stack"></div>
+<div id="p3-filter-host" class="cskh-card"></div>
+<div id="p3-watermark-host"></div>
+<div id="p3-state-alert"></div>
+
+<div id="p3-main-content">
+	<div class="cskh-loading">{{ _("Loading...") }}</div>
+</div>
+
+<div id="p3-modal-host"></div>
+{% endblock %}
+
+{% block cskh_script %}
+<script src="/assets/crm_cskh/cskh/p3-api.js?v={{ cskh_asset_version | default('') }}"></script>
+<script src="/assets/crm_cskh/cskh/p3-widgets.js?v={{ cskh_asset_version | default('') }}"></script>
+<script src="/assets/crm_cskh/cskh/quality-overview.js?v={{ cskh_asset_version | default('') }}"></script>
+{% endblock %}
