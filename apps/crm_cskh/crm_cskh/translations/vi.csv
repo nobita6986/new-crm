@@ -1244,3 +1244,9 @@ The requested KPI metric does not exist or does not support drill-down.,Mã ch�
 The KPI snapshot has pending updates and has not completed recomputation.,Bản chụp KPI đang có dữ liệu phát sinh mới chờ tính toán lại.
 Post-computation KPI reconciliation detected a discrepancy and aborted publication.,Đối soát KPI sau tính toán phát hiện sai lệch nên đã chặn công bố bản chụp.
 There is insufficient eligible data to compute a valid KPI rate or score.,Chưa đủ dữ liệu hợp lệ để tính tỷ lệ hoặc điểm KPI.
+Callback completion & DNC discipline,Kỷ luật hoàn tất lịch hẹn & tuân thủ DNC
+Restated after prior-period adjustment,Tính lại có đính chính kỳ trước (Restated)
+Historical backfill,Tính bù dữ liệu lịch sử (Backfill)
+Incremental recompute,Tính lại tăng trưởng theo phạm vi (Incremental)
+System / Automated,Hệ thống / Tự động
+Restated from run,Đính chính từ đợt chạy

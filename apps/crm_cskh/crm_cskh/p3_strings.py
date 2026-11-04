@@ -297,6 +297,12 @@ P3_SCORECARD_AND_CHARTS = (
 	"Effective attempts satisfying required fields without error correction/void divided by raw attempts.",
 	"Approved corrected or voided attempts divided by raw attempts in period.",
 	"Approved voided attempts divided by raw attempts in period.",
+	"Callback completion & DNC discipline",
+	"Restated after prior-period adjustment",
+	"Historical backfill",
+	"Incremental recompute",
+	"System / Automated",
+	"Restated from run",
 )
 
 P3_SLA_AND_KPI_LABELS = (
