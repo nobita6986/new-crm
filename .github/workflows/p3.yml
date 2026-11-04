@@ -123,8 +123,7 @@ jobs:
             crm_cskh.tests.test_p3_calendar \
             crm_cskh.tests.test_p3_sla_and_attribution \
             crm_cskh.tests.test_p3_kpi_and_snapshots \
-            crm_cskh.tests.test_p3_reporting_and_security \
-            crm_cskh.tests.test_ui_p3_pages_and_context
+            crm_cskh.tests.test_p3_reporting_and_security
           do
             slug="${module##*.}"
             container_log="/tmp/p3-evidence/${slug}.log"
@@ -138,6 +137,18 @@ jobs:
             fi
             printf '%s exit=%s\n' "$module" "$module_status" >> "$artifact_dir/module-status.txt"
           done
+
+          ui_module="crm_cskh.tests.test_ui_p3_pages_and_context"
+          ui_log="/tmp/p3-evidence/ui/test_ui_p3_pages_and_context.log"
+          ui_xml="/tmp/p3-evidence/ui/test_ui_p3_pages_and_context.junit.xml"
+          echo "=== Running P3 UI module: $ui_module ==="
+          if "${compose[@]}" exec -T -e CI=true bench bash -lc "cd /workspace/frappe-bench && mkdir -p /tmp/p3-evidence/ui && set +e; bench --site p3-test.localhost --verbose run-tests --module '$ui_module' --junit-xml-output '$ui_xml' > '$ui_log' 2>&1; rc=\$?; exit \$rc"; then
+            ui_module_status=0
+          else
+            ui_module_status=$?
+            overall_status=1
+          fi
+          printf '%s exit=%s\n' "$ui_module" "$ui_module_status" >> "$artifact_dir/module-status.txt"
 
           if ! "${compose[@]}" exec -T bench bash -lc 'cd /workspace/frappe-bench && bench --site p3-test.localhost migrate && bench --site p3-test.localhost migrate'; then
             echo 'Post-test double migration failed (P3 migration is not idempotent).' >> "$artifact_dir/module-status.txt"
@@ -161,7 +172,7 @@ jobs:
         run: |
           set -u
           artifact_dir="$RUNNER_TEMP/p3-evidence"
-          mkdir -p "$artifact_dir"
+          mkdir -p "$artifact_dir" "$artifact_dir/ui"
           python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
             --inventory "$GITHUB_WORKSPACE/deploy/dev/seed/p3_test_inventory.json" \
             --xml-dir "$artifact_dir" \
@@ -170,9 +181,9 @@ jobs:
           gate_status=${PIPESTATUS[0]}
           python3 "$GITHUB_WORKSPACE/deploy/dev/seed/ci_junit_gate.py" \
             --inventory "$GITHUB_WORKSPACE/deploy/p3/ui_test_inventory.json" \
-            --xml-dir "$artifact_dir" \
-            --out "$artifact_dir/p3-ui-per-method-gate.json" \
-            | tee "$artifact_dir/p3-ui-per-method-gate.txt"
+            --xml-dir "$artifact_dir/ui" \
+            --out "$artifact_dir/ui/p3-ui-per-method-gate.json" \
+            | tee "$artifact_dir/ui/p3-ui-per-method-gate.txt"
           ui_gate_status=${PIPESTATUS[0]}
           echo "p3 per-method gate exit=$gate_status ui_gate=$ui_gate_status" >> "$artifact_dir/module-status.txt"
           test "$gate_status" -eq 0 && test "$ui_gate_status" -eq 0
