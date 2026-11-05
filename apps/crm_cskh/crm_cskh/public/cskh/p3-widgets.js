@@ -927,7 +927,7 @@ window.cskhP3Widgets = (function () {
 			[
 				el('div', {}, [
 					el('div', { class: 'cskh-kpi-top' }, [
-						el('div', { class: 'cskh-kpi-label', text: t(m.label) }),
+						el('div', { class: 'cskh-kpi-label', text: m.label_vi || t(m.label) }),
 						el('span', {
 							class: cskh.stateBadge(m.status),
 							text: confidenceLabel(m.status),

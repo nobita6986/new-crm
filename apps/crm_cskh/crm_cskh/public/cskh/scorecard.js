@@ -54,6 +54,14 @@
 		}
 	})()
 
+	function formatPoints2(val) {
+		if (val === undefined || val === null || val === '' || isNaN(Number(val))) return '—'
+		return new Intl.NumberFormat('vi-VN', {
+			minimumFractionDigits: 2,
+			maximumFractionDigits: 2,
+		}).format(Number(val))
+	}
+
 	function renderScorecard(data) {
 		cskh.clear(mainHost)
 
@@ -81,7 +89,7 @@
 						: '—'
 				const rawSumText =
 					data.raw_points_total !== null && data.raw_points_total !== undefined
-						? w.formatDecimal(data.raw_points_total, 2) +
+						? formatPoints2(data.raw_points_total) +
 							(data.score && data.score.valid_weight_sum
 								? ' / ' + w.formatDecimal(data.score.valid_weight_sum, 0)
 								: '')
@@ -133,7 +141,7 @@
 											el('td', {
 												class: 'num',
 												text: hasRaw
-													? w.formatDecimal(comp.raw_weighted_points, 2) +
+													? formatPoints2(comp.raw_weighted_points) +
 														' / ' +
 														w.formatDecimal(comp.weight, 0)
 													: t('N/A'),
@@ -141,7 +149,7 @@
 											el('td', {
 												class: 'num',
 												text: hasNorm
-													? w.formatDecimal(comp.normalized_contribution, 2)
+													? formatPoints2(comp.normalized_contribution)
 													: t('N/A'),
 											}),
 											el('td', {}, [

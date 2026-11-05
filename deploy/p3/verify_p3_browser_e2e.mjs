@@ -431,7 +431,7 @@ async function main() {
 			'Mốc dữ liệu nguồn (Watermark)',
 			'Phiên bản công thức & chính sách',
 			'Trạng thái độ tin cậy',
-			'cskh-metrics-v1',
+			'cskh-metrics-v2',
 		]) {
 			recordAssert(
 				`B3E-04-provenance-${requiredTerm}`,
@@ -442,20 +442,23 @@ async function main() {
 		const ddBox = await provNode.locator('dd').first().boundingBox()
 		recordAssert(
 			'B3E-04b-provenance-dd-readable-width',
-			ddBox && ddBox.width >= 140 && !/\bbod\b/i.test(provText),
+			ddBox &&
+				ddBox.width >= 140 &&
+				provText.includes('Toàn công ty') &&
+				!/\bcrm_admin\b|\bteam_leader\b|^\s*bod\s*$/m.test(provText),
 			`Provenance <dd> width (${Math.round(ddBox?.width || 0)}px >= 140px) renders horizontally with Vietnamese scope label`
 		)
 
-		// Verify CONNECTED_RATE grain in UI provenance is `ownership_interval` (`F-P3-01` / `F-P3-06`)
+		// Verify CONNECTED_RATE grain in UI provenance is `ownership_interval` (`Khoảng phụ trách (Ownership Interval)`) (`F-P3-01` / `F-P3-06`)
 		const connCard = bod.page.locator('[data-metric-key="CONNECTED_RATE"]')
 		await connCard.locator('button', { hasText: 'Công thức & nguồn dữ liệu' }).click()
 		const connProvText = await connCard.locator('.cskh-kpi-provenance').innerText()
 		recordAssert(
 			'B3E-04c-connected-rate-grain-interval',
-			connProvText.includes('ownership_interval') && !connProvText.includes('Lượt liên hệ hợp lệ'),
-			'CONNECTED_RATE provenance displays ownership_interval grain'
+			connProvText.includes('Khoảng phụ trách') && !connProvText.includes('Lần liên hệ hiệu lực'),
+			'CONNECTED_RATE provenance displays Ownership Interval grain (not Effective Attempt)'
 		)
-		await connCard.locator('button', { hasText: 'Ẩn công thức' }).click()
+		await connCard.locator('button', { hasText: 'Công thức & nguồn dữ liệu' }).click()
 
 		// Trend card, Teams summary card & Alerts card (`F-P3-10`)
 		const trendCard = bod.page.locator('#p3-overview-trend-card')
@@ -526,9 +529,11 @@ async function main() {
 		])
 		await bod.page.locator('.cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
 
-		// Re-open FIRST_ATTEMPT_SLA_RATE provenance for screenshot `01`
+		// Ensure FIRST_ATTEMPT_SLA_RATE provenance is open after filter re-renders for screenshot `01`
 		const finalFirstTouchCard = bod.page.locator('[data-metric-key="FIRST_ATTEMPT_SLA_RATE"]')
-		await finalFirstTouchCard.locator('button', { hasText: 'Công thức & nguồn dữ liệu' }).click()
+		if (await finalFirstTouchCard.locator('.cskh-kpi-provenance').isHidden()) {
+			await finalFirstTouchCard.locator('button', { hasText: 'Công thức & nguồn dữ liệu' }).click()
+		}
 		await captureShot(
 			bod,
 			'/cskh/quality-overview',
@@ -861,7 +866,13 @@ async function main() {
 		])
 		await leaderA.page.locator('.cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
 
-		const waiveBtn = leaderA.page.locator('[data-waive-obligation]').first()
+		const preferredWaiveBtn = seed.sample_obligation_id
+			? leaderA.page.locator(`[data-waive-obligation="${seed.sample_obligation_id}"]`)
+			: leaderA.page.locator(`#p3-sla-table tr:has-text("${users.staff_a}") [data-waive-obligation]`).first()
+		const waiveBtn =
+			(await preferredWaiveBtn.count()) >= 1
+				? preferredWaiveBtn.first()
+				: leaderA.page.locator('[data-waive-obligation]').first()
 		assert((await waiveBtn.count()) === 1, 'Expected at least 1 waivable breached_open SLA obligation for Leader A')
 		const targetObId = await waiveBtn.getAttribute('data-waive-obligation')
 		await waiveBtn.click()
@@ -917,12 +928,12 @@ async function main() {
 			'Leader A SLA & QA Operations table after audited SLA obligation waiver.'
 		)
 
-		// BOD on `/cskh/sla-operations`: POSITIVE CONTROL (`200` on `list_obligations`, 0 API errors,
-		// `[data-banner="bod-sla-readonly"]` visible, `>=1` redacted row rendered) BEFORE asserting `bodWaiveBtns === 0`!
+		// BOD on `/cskh/sla-operations`: POSITIVE CONTROL (`200` on `get_executive_overview` + `get_metric_drilldown`, 0 API errors,
+		// `[data-banner="bod-sla-readonly"]` visible, `>=1` redacted row rendered, `0` PII links) BEFORE asserting `bodWaiveBtns === 0`!
 		bod.telemetry.apiErrors.length = 0
-		const [bodSlaListResp] = await Promise.all([
+		const [bodSlaDrillResp] = await Promise.all([
 			bod.page.waitForResponse(
-				(r) => r.url().includes('crm_cskh.api.sla.list_obligations') && r.status() === 200
+				(r) => r.url().includes('get_metric_drilldown') && r.status() === 200
 			),
 			bod.page.goto(`${BASE_URL}/cskh/sla-operations`, { waitUntil: 'networkidle' }),
 		])
@@ -931,17 +942,19 @@ async function main() {
 		await bod.page.locator('#p3-sla-table').waitFor({ state: 'visible', timeout: 10000 })
 		const bodSlaErrAlerts = await bod.page.locator('#p3-state-alert .cskh-alert').count()
 		const bodSlaRowsCount = await bod.page.locator('#p3-sla-table tbody tr').count()
+		const bodSlaLinks = await bod.page.locator('#p3-sla-table a[href*="/cskh/work-item"]').count()
 		const bodSlaTableText = await bod.page.locator('#p3-sla-table').innerText()
 		const bodWaiveBtns = await bod.page.locator('[data-waive-obligation]').count()
 		recordAssert(
 			'B3E-17-bod-no-waive-buttons',
-			bodSlaListResp.status() === 200 &&
+			bodSlaDrillResp.status() === 200 &&
 				bod.telemetry.apiErrors.length === 0 &&
 				bodSlaErrAlerts === 0 &&
 				bodSlaRowsCount >= 1 &&
+				bodSlaLinks === 0 &&
 				!bodSlaTableText.includes(teamA) &&
 				bodWaiveBtns === 0,
-			`BOD /cskh/sla-operations loads ${bodSlaRowsCount} non-PII SLA rows (HTTP 200, 0 errors, read-only banner) and renders 0 waive buttons`
+			`BOD /cskh/sla-operations loads ${bodSlaRowsCount} non-PII SLA rows (HTTP 200, 0 errors, 0 PII links, read-only banner) and renders 0 waive buttons`
 		)
 		await captureShot(
 			bod,
@@ -1004,9 +1017,10 @@ async function main() {
 					name: tds[0] || '',
 					weightText: tds[1] || '',
 					rateText: tds[2] || '',
-					rawText: tds[3] || '',
-					normText: tds[4] || '',
-					statusText: tds[5] || '',
+					ratioText: tds[3] || '',
+					rawText: tds[4] || '',
+					normText: tds[5] || '',
+					statusText: tds[6] || '',
 				}
 			})
 			const foot = document.getElementById('p3-scorecard-totals')
@@ -1421,6 +1435,33 @@ async function main() {
 			'B3E-33-cross-tz-los-angeles',
 			'Cross-timezone browser context (America/Los_Angeles vs site Asia/Ho_Chi_Minh) showing zero period boundary drift.'
 		)
+
+		// ==================================================================
+		// SCENARIO 11: Unified Feature-Flag Rollback (`F-P3-08`) in Browser
+		// ==================================================================
+		benchExec('crm_cskh.tools.p3_e2e_seed.set_p3_feature_flags_for_test', { enabled: false })
+		try {
+			const rbMgmtResp = await bod.page.goto(`${BASE_URL}/cskh/quality-overview`, {
+				waitUntil: 'domcontentloaded',
+			})
+			const rbP2Resp = await staffA.page.goto(`${BASE_URL}/cskh/my-customers`, {
+				waitUntil: 'networkidle',
+			})
+			const rbScorecardNavCount = await staffA.page.locator('nav a[href="/cskh/scorecard"]').count()
+			recordAssert(
+				'B3E-34-feature-flag-rollback-browser',
+				Boolean(rbMgmtResp) &&
+					rbMgmtResp.status() === 403 &&
+					Boolean(rbP2Resp) &&
+					rbP2Resp.status() === 200 &&
+					rbScorecardNavCount === 0,
+				`Unified P3 feature-flag rollback returns HTTP ${rbMgmtResp?.status()} on /cskh/quality-overview while keeping P2 /cskh/my-customers HTTP ${rbP2Resp?.status()} with 0 P3 nav links`
+			)
+		} finally {
+			benchExec('crm_cskh.tools.p3_e2e_seed.set_p3_feature_flags_for_test', { enabled: true })
+			bod.telemetry.apiErrors.length = 0
+			staffA.telemetry.apiErrors.length = 0
+		}
 
 		const manifest = {
 			suite: 'p3_browser_e2e',

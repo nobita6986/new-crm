@@ -667,14 +667,28 @@ def main() -> int:
         {"http": st, "code": extract_code(s05)},
     )
 
-    # BOD SLA positive control (`200`, `>=1` row, `0` PII) + BOD waive `403`
-    st_bod_sla, b_bod_sla = actors["bod"].request(
+    # BOD SLA contract (`F-P3-10` / `S09`): `sla.list_obligations` & `waive_obligation` deny BOD (`403`),
+    # while BOD's `/cskh/sla-operations` backing APIs (`get_executive_overview` + `get_metric_drilldown`)
+    # return `200` with `>=1` redacted row and `0` PII!
+    st_bod_raw_sla, _ = actors["bod"].request(
         "GET",
         "/api/method/crm_cskh.api.sla.list_obligations",
         {"page": 1, "page_size": 20},
     )
-    bod_sla_msg = (b_bod_sla or {}).get("message") or {}
-    bod_sla_rows = bod_sla_msg.get("rows") or bod_sla_msg.get("obligations") or []
+    st_bod_sla_dd, b_bod_sla_dd = actors["bod"].request(
+        "GET",
+        "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown",
+        {
+            "metric_code": "FIRST_ATTEMPT_SLA_RATE",
+            "scope_type": "company",
+            "period_type": "monthly",
+            "period_key": period_key,
+            "page": 1,
+            "page_size": 20,
+        },
+    )
+    bod_sla_msg = (b_bod_sla_dd or {}).get("message") or {}
+    bod_sla_rows = bod_sla_msg.get("rows") or []
     st_bod_waive, _ = actors["bod"].request(
         "POST",
         "/api/method/crm_cskh.api.sla.waive_obligation",
@@ -685,13 +699,15 @@ def main() -> int:
     )
     rec.check(
         "SEC-BOD-SLA-READONLY-ZERO-PII",
-        st_bod_sla == 200
+        st_bod_raw_sla == 403
+        and st_bod_sla_dd == 200
         and len(bod_sla_rows) >= 1
         and not contains_raw_pii(bod_sla_msg)
         and st_bod_waive == 403,
-        "BOD receives 200 with redacted non-empty SLA rows (0 PII) and 403 on waive_obligation",
+        "BOD denied raw list_obligations & waive_obligation (403) while receiving 200 zero-PII SLA drilldown rows",
         {
-            "list_http": st_bod_sla,
+            "raw_list_http": st_bod_raw_sla,
+            "drilldown_http": st_bod_sla_dd,
             "row_count": len(bod_sla_rows),
             "waive_http": st_bod_waive,
         },
@@ -796,10 +812,14 @@ def main() -> int:
     # 5. Filter Options, Lead Source Filtering, & Drill-Down Reconciliation + Search/Sort (`F-P3-10`)
     # ------------------------------------------------------------------
     st_fo_bod, b_fo_bod = actors["bod"].request(
-        "GET", "/api/method/crm_cskh.api.p3_reporting.get_filter_options"
+        "GET",
+        "/api/method/crm_cskh.api.p3_reporting.get_filter_options",
+        {"period_type": "monthly", "period_key": period_key},
     )
     st_fo_la, b_fo_la = actors["leader_a"].request(
-        "GET", "/api/method/crm_cskh.api.p3_reporting.get_filter_options"
+        "GET",
+        "/api/method/crm_cskh.api.p3_reporting.get_filter_options",
+        {"period_type": "monthly", "period_key": period_key},
     )
     fo_bod = (b_fo_bod or {}).get("message") or {}
     fo_la = (b_fo_la or {}).get("message") or {}
