@@ -163,6 +163,8 @@ DEFAULT_OUTCOME_CODES = (
 		"is_interested": 0,
 		"is_terminal": 1,
 		"is_do_not_contact": 0,
+		"is_conversion": 0,
+		"is_invalid_phone": 1,
 		"requires_note": 1,
 		"requires_followup": 0,
 		"allows_followup": 0,
@@ -263,6 +265,8 @@ DEFAULT_OUTCOME_CODES = (
 		"is_interested": 1,
 		"is_terminal": 1,
 		"is_do_not_contact": 0,
+		"is_conversion": 1,
+		"is_invalid_phone": 0,
 		"requires_note": 1,
 		"requires_followup": 0,
 		"allows_followup": 0,
@@ -349,6 +353,7 @@ DEFAULT_GLOBAL_POLICY = {
 	"allow_leader_waive_sla": 1,
 	"allow_leader_pause_sla": 1,
 	"weight_first_attempt_sla": 25,
+	"weight_eligible_coverage": 20,
 	"weight_followup_sla": 20,
 	"weight_data_hygiene": 20,
 	"weight_callback_discipline": 20,
@@ -356,6 +361,7 @@ DEFAULT_GLOBAL_POLICY = {
 	"min_valid_score_weight": 60,
 	"min_eligible_events_for_score": 1,
 	"min_qa_sample_size": 5,
+	"min_exposure_business_minutes": 60,
 }
 
 P2_CUSTOM_FIELDS = (

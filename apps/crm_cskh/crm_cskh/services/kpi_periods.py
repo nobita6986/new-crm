@@ -37,6 +37,10 @@ class PeriodSpec:
 	def end_dt(self) -> datetime:
 		return datetime.combine(self.to_date, time(23, 59, 59, 999999))
 
+	@property
+	def end_dt_exclusive(self) -> datetime:
+		return datetime.combine(self.to_date + timedelta(days=1), time.min)
+
 	def to_dict(self) -> dict:
 		return {
 			"period_type": self.period_type,

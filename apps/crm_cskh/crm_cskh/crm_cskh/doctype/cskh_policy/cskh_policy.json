@@ -253,6 +253,18 @@
    "fieldtype": "Int",
    "label": "Min QA Sample Size",
    "default": "5"
+  },
+  {
+   "fieldname": "min_exposure_business_minutes",
+   "fieldtype": "Int",
+   "label": "Min Exposure Business Minutes",
+   "default": "60"
+  },
+  {
+   "fieldname": "weight_eligible_coverage",
+   "fieldtype": "Int",
+   "label": "Weight Eligible Coverage",
+   "default": "20"
   }
  ],
  "field_order": [
@@ -295,7 +307,9 @@
   "weight_qa_quality",
   "min_valid_score_weight",
   "min_eligible_events_for_score",
-  "min_qa_sample_size"
+  "min_qa_sample_size",
+  "min_exposure_business_minutes",
+  "weight_eligible_coverage"
  ],
  "permissions": [
   {

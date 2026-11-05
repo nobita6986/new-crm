@@ -76,14 +76,46 @@ def leader_authorized_work_item_sql(user: str, wi_alias: str = "wi") -> str:
 		if frappe.db.has_column("CSKH Work Item", "owner_at_close")
 		else ""
 	)
+	legacy_closed_affil = (
+		f"({owner_close_pred}`{wi_alias}`.`closed_by` in {team_users_subq} "
+		f"or `{wi_alias}`.`last_activity_by` in {team_users_subq} "
+		f"or `{wi_alias}`.`campaign` in (select `c_cl`.`name` from `tabCSKH Campaign` `c_cl` "
+		f"where `c_cl`.`team_scope` in {team_nodes_subq}))"
+	)
+	if frappe.db.has_column("CSKH Assignment History", "team_at_assignment"):
+		lat_stat_subq = (
+			f"(select `ah_lat`.`attribution_status` from `tabCSKH Assignment History` `ah_lat` "
+			f"where `ah_lat`.`work_item` = `{wi_alias}`.`name` "
+			f"and `ah_lat`.`action` in ('assign', 'reassign', 'reopen') "
+			f"order by coalesce(`ah_lat`.`ownership_start`, `ah_lat`.`event_at`) desc, "
+			f"`ah_lat`.`creation` desc, `ah_lat`.`name` desc limit 1)"
+		)
+		lat_team_subq = (
+			f"(select `ah_lat2`.`team_at_assignment` from `tabCSKH Assignment History` `ah_lat2` "
+			f"where `ah_lat2`.`work_item` = `{wi_alias}`.`name` "
+			f"and `ah_lat2`.`action` in ('assign', 'reassign', 'reopen') "
+			f"order by coalesce(`ah_lat2`.`ownership_start`, `ah_lat2`.`event_at`) desc, "
+			f"`ah_lat2`.`creation` desc, `ah_lat2`.`name` desc limit 1)"
+		)
+		closed_affil_sql = (
+			f"((coalesce({lat_stat_subq}, '') = 'authoritative' "
+			f"and coalesce({lat_team_subq}, '') != '' "
+			f"and {lat_team_subq} in {team_nodes_subq}) "
+			f"or ((coalesce({lat_stat_subq}, '') != 'authoritative' or coalesce({lat_team_subq}, '') = '') "
+			f"and {legacy_closed_affil}))"
+		)
+	else:
+		closed_affil_sql = legacy_closed_affil
+
 	return (
 		f"((`{wi_alias}`.`status` in ('assigned', 'in_progress', 'on_hold') "
 		f"and `{wi_alias}`.`assigned_to` in {team_users_subq}) "
 		f"or (`{wi_alias}`.`status` = 'closed' and `{wi_alias}`.`assigned_to` is null "
-		f"and ({owner_close_pred}`{wi_alias}`.`closed_by` in {team_users_subq} "
-		f"or `{wi_alias}`.`last_activity_by` in {team_users_subq} "
-		f"or `{wi_alias}`.`campaign` in (select `c_cl`.`name` from `tabCSKH Campaign` `c_cl` "
-		f"where `c_cl`.`team_scope` in {team_nodes_subq})) "
+		f"and not exists (select 1 from `tabCSKH Campaign` `c_for` "
+		f"where `c_for`.`name` = `{wi_alias}`.`campaign` "
+		f"and `c_for`.`team_scope` is not null and `c_for`.`team_scope` != '' "
+		f"and `c_for`.`team_scope` not in {team_nodes_subq}) "
+		f"and {closed_affil_sql} "
 		f"and not exists (select 1 from `tabCSKH Work Item` `wi_for` "
 		f"where `wi_for`.`lead` = `{wi_alias}`.`lead` "
 		f"and `wi_for`.`status` in ('assigned', 'in_progress', 'on_hold') "
@@ -182,19 +214,49 @@ def is_work_item_readable_for_workflow(work_item_doc_or_name, user: str | None =
 		if status in OWNED_ACTIVE_WORK_ITEM_STATES and assigned_to:
 			return assigned_to == user or _in_team(user, assigned_to)
 		if status == "closed" and not assigned_to:
-			camp_team = frappe.db.get_value("CSKH Campaign", wi.get("campaign"), "team_scope")
-			affiliated = (
-				(owner_at_close and (owner_at_close == user or _in_team(user, owner_at_close)))
-				or (
-					wi.get("closed_by")
-					and (wi.get("closed_by") == user or _in_team(user, wi.get("closed_by")))
-				)
-				or (
-					wi.get("last_activity_by")
-					and (wi.get("last_activity_by") == user or _in_team(user, wi.get("last_activity_by")))
-				)
-				or (camp_team and _node_in_subtree(user, camp_team))
+			camp_team = (
+				frappe.db.get_value("CSKH Campaign", wi.get("campaign"), "team_scope")
+				if wi.get("campaign")
+				else None
 			)
+			if camp_team and not _node_in_subtree(user, camp_team):
+				return False
+
+			latest_ah = None
+			if wi.get("name") and frappe.db.has_column("CSKH Assignment History", "team_at_assignment"):
+				ah_rows = frappe.db.sql(
+					"""
+					select team_at_assignment, attribution_status
+					from `tabCSKH Assignment History`
+					where work_item = %s
+					  and action in ('assign', 'reassign', 'reopen')
+					order by coalesce(ownership_start, event_at) desc, creation desc, name desc
+					limit 1
+					""",
+					(wi.get("name"),),
+					as_dict=True,
+				)
+				latest_ah = ah_rows[0] if ah_rows else None
+
+			if (
+				latest_ah
+				and latest_ah.get("attribution_status") == "authoritative"
+				and latest_ah.get("team_at_assignment")
+			):
+				affiliated = _node_in_subtree(user, latest_ah.get("team_at_assignment"))
+			else:
+				affiliated = (
+					(owner_at_close and (owner_at_close == user or _in_team(user, owner_at_close)))
+					or (
+						wi.get("closed_by")
+						and (wi.get("closed_by") == user or _in_team(user, wi.get("closed_by")))
+					)
+					or (
+						wi.get("last_activity_by")
+						and (wi.get("last_activity_by") == user or _in_team(user, wi.get("last_activity_by")))
+					)
+					or (camp_team and _node_in_subtree(user, camp_team))
+				)
 			if not affiliated:
 				return False
 			scope = reporting._scope(user)

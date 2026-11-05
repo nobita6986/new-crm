@@ -137,7 +137,7 @@ class TestP3KPIAndSnapshots(P3TestCase):
 		self.assertEqual(m_zero["status"], zd["expected_status"])
 		self.assertEqual(m_zero["reason"], zd["expected_reason"])
 
-		# 2. Golden `qa_enabled = false`: `7350 / 85 = 86.47` (`provisional`, `QA_PASS_RATE` `disabled`, NOT `0%`)
+		# 2. Golden `qa_enabled = false`: `90/80/100/75` -> `7350 / 85 = 86.47` (`provisional`, `QA_PASS_RATE` `disabled`, NOT `0%`)
 		g_prov = golden["golden_process_score_qa_disabled"]
 		inp = g_prov["inputs"]
 		exp = g_prov["expected"]
@@ -146,15 +146,20 @@ class TestP3KPIAndSnapshots(P3TestCase):
 			inp["first_attempt_sla"]["numerator"],
 			inp["first_attempt_sla"]["denominator"],
 		)
-		fu = make_rate_metric(
-			"FOLLOWUP_SLA_RATE",
-			inp["followup_sla"]["numerator"],
-			inp["followup_sla"]["denominator"],
+		ec = make_rate_metric(
+			"ELIGIBLE_COVERAGE",
+			inp["eligible_coverage"]["numerator"],
+			inp["eligible_coverage"]["denominator"],
 		)
 		dh = make_rate_metric(
 			"VALID_OUTCOME_LOGGING_RATE",
 			inp["data_hygiene"]["numerator"],
 			inp["data_hygiene"]["denominator"],
+		)
+		fu = make_rate_metric(
+			"FOLLOWUP_SLA_RATE",
+			inp["followup_sla"]["numerator"],
+			inp["followup_sla"]["denominator"],
 		)
 		qa_disabled = make_rate_metric(
 			"QA_PASS_RATE",
@@ -168,41 +173,44 @@ class TestP3KPIAndSnapshots(P3TestCase):
 
 		score_prov, comps_prov = compute_process_score_from_components(
 			first_attempt_sla=fa,
-			followup_sla=fu,
+			eligible_coverage=ec,
 			data_hygiene=dh,
-			callback_dnc_discipline_rate=80.0,
-			callback_dnc_eligible_count=inp["callback_dnc_discipline"]["denominator"],
+			followup_sla=fu,
 			qa_pass_rate=qa_disabled,
 			qa_enabled=False,
 			qa_sample_count=0,
-			eligible_events_total=35,
+			eligible_events_total=32,
 			policy_cfg=inp["weights"],
 		)
-		self.assertEqual(score_prov["numerator"], exp["weighted_numerator"])
+		self.assertEqual(score_prov["raw_weight_rate_product"], exp["weighted_numerator"])
+		self.assertEqual(score_prov["numerator"], 73.5)
 		self.assertEqual(score_prov["valid_weight"], exp["valid_weight"])
 		self.assertEqual(score_prov["value"], exp["value"])
 		self.assertEqual(score_prov["status"], exp["status"])
 		self.assertEqual(score_prov["reason"], exp["reason"])
 		self.assertEqual(score_prov["missing_components"], exp["missing_components"])
 		self.assertEqual(len(comps_prov), 5)
+		for comp_row in comps_prov:
+			if comp_row["weighted_points"] is not None:
+				self.assertGreaterEqual(comp_row["weighted_points"], 0.0)
+				self.assertLessEqual(comp_row["weighted_points"], float(comp_row["weight"]))
 
-		# 3. Golden `qa_enabled = true` with `>= 5` samples -> `8700 / 100 = 87.0` (`final`)
+		# 3. Golden `qa_enabled = true` with `>= 5` random_sample reviews -> `8550 / 100 = 85.5` (`final`)
 		g_fin = golden["golden_process_score_qa_enabled_final"]
 		qa_ok = make_rate_metric(
 			"QA_PASS_RATE",
-			g_fin["inputs"]["qa_points"]["numerator"],
-			g_fin["inputs"]["qa_points"]["denominator"],
+			g_fin["inputs"]["qa_pass"]["numerator"],
+			g_fin["inputs"]["qa_pass"]["denominator"],
 		)
 		score_fin, _ = compute_process_score_from_components(
 			first_attempt_sla=fa,
-			followup_sla=fu,
+			eligible_coverage=ec,
 			data_hygiene=dh,
-			callback_dnc_discipline_rate=80.0,
-			callback_dnc_eligible_count=5,
+			followup_sla=fu,
 			qa_pass_rate=qa_ok,
 			qa_enabled=True,
 			qa_sample_count=g_fin["inputs"]["qa_sample_count"],
-			eligible_events_total=35,
+			eligible_events_total=32,
 		)
 		self.assertEqual(score_fin["value"], g_fin["expected"]["value"])
 		self.assertEqual(score_fin["status"], g_fin["expected"]["status"])
@@ -211,10 +219,9 @@ class TestP3KPIAndSnapshots(P3TestCase):
 		# 4. Insufficient valid weight (`< 60`) -> `value: None, status: "insufficient_data"`
 		score_insuf, _ = compute_process_score_from_components(
 			first_attempt_sla=make_rate_metric("FIRST_ATTEMPT_SLA_RATE", 0, 0),
-			followup_sla=make_rate_metric("FOLLOWUP_SLA_RATE", 0, 0),
+			eligible_coverage=make_rate_metric("ELIGIBLE_COVERAGE", 0, 0),
 			data_hygiene=dh,
-			callback_dnc_discipline_rate=None,
-			callback_dnc_eligible_count=0,
+			followup_sla=make_rate_metric("FOLLOWUP_SLA_RATE", 0, 0),
 			qa_pass_rate=qa_disabled,
 			qa_enabled=False,
 			qa_sample_count=0,
@@ -284,14 +291,22 @@ class TestP3KPIAndSnapshots(P3TestCase):
 			actor=self.admin_user,
 		)
 
-		# Record a 2nd attempt as `staff_a` (`connected_interested`) and open a `pending` correction on `att1`
-		contact_attempt.record_attempt(
+		# Record a 2nd attempt as `staff_a` (`connected_interested`), mark P2 `verification_status` (`verified` + `disputed` check),
+		# and open a `pending` correction on `att1` (pending correction must NOT alter effective fields or `verification_status` before review)
+		att2 = contact_attempt.record_attempt(
 			work_item=wi_aba,
 			channel="phone_call",
 			outcome_code="connected_interested",
 			note="Khách nghe máy và quan tâm gói dịch vụ",
 			idempotency_key=f"kpi-aba-2-{frappe.generate_hash(length=6)}",
 			actor=self.staff_a,
+		)
+		frappe.db.set_value(
+			"CSKH Contact Attempt",
+			att2["attempt_id"],
+			"verification_status",
+			"verified",
+			update_modified=False,
 		)
 		correction.request_correction(
 			attempt=att1["attempt_id"],
@@ -316,6 +331,7 @@ class TestP3KPIAndSnapshots(P3TestCase):
 		camp = self._get_published_snapshot("daily", cur_d.isoformat(), "campaign", self.campaign)
 
 		# 2 CSKH Contact Attempts (despite 2 CRM Call Logs existing: 1 unlinked + 1 linked -> ZERO double count!)
+		# Pending correction on `att1` stays `self_reported`; P2 `verified` on `att2` is preserved even with `qa_enabled=false` (`F-P3-03`)!
 		self.assertEqual(comp["contact_attempt_count"], 2)
 		self.assertEqual(comp["connected_attempt_count"], 1)
 		self.assertEqual(
@@ -324,10 +340,12 @@ class TestP3KPIAndSnapshots(P3TestCase):
 				"attempted": 2,
 				"connected": 1,
 				"self_reported": 1,
-				"verified": 0,
-				"disputed": 1,
+				"verified": 1,
+				"disputed": 0,
 			},
 		)
+		self.assertEqual(comp["metrics"]["VERIFICATION_RATE"]["numerator"], 1)
+		self.assertEqual(comp["metrics"]["VERIFICATION_RATE"]["denominator"], 2)
 
 		# `A -> B -> A` grain invariant: 1 distinct Work Item vs 3 ownership intervals!
 		self.assertEqual(comp["distinct_work_items"], 1)
@@ -349,10 +367,12 @@ class TestP3KPIAndSnapshots(P3TestCase):
 		t_day2 = datetime(d2.year, d2.month, d2.day, 10, 0, 0)
 
 		wi_a, _ = self.make_assigned_work_item(self.campaign, self.staff_a)
-		wi_b, _ = self.make_assigned_work_item(self.campaign, self.staff_b)
+		wi_b1, _ = self.make_assigned_work_item(self.campaign, self.staff_b)
+		wi_b2, _ = self.make_assigned_work_item(self.campaign, self.staff_b)
+		wi_b3, _ = self.make_assigned_work_item(self.campaign, self.staff_b)
 
-		# Backdate ownership start to `t_day1 - 10m` so attempts on `d1` and `d2` are valid
-		for wi in (wi_a, wi_b):
+		# Backdate ownership start to `t_day1 - 10m` so attempts on `d1` and `d2` fall in assigned_intervals
+		for wi in (wi_a, wi_b1, wi_b2, wi_b3):
 			frappe.db.set_value(
 				"CSKH Work Item", wi, "assigned_at", add_to_date(t_day1, minutes=-10), update_modified=False
 			)
@@ -360,13 +380,22 @@ class TestP3KPIAndSnapshots(P3TestCase):
 				"update `tabCSKH Assignment History` set ownership_start = %s, event_at = %s where work_item = %s",
 				(add_to_date(t_day1, minutes=-10), add_to_date(t_day1, minutes=-10), wi),
 			)
+			frappe.db.sql(
+				"update `tabCSKH SLA Obligation` set started_at = %s, original_due_at = %s, effective_due_at = %s where work_item = %s",
+				(
+					add_to_date(t_day1, minutes=-10),
+					add_to_date(t_day1, minutes=20),
+					add_to_date(t_day1, minutes=20),
+					wi,
+				),
+			)
 		frappe.db.commit()
 
 		# Temporarily widen `allowed_backdate_minutes` across enabled policies so historical `occurred_at` records cleanly
 		orig_pols = self._set_enabled_policies({"allowed_backdate_minutes": 60 * 24 * 30})
 		try:
-			# `staff_a`: 1/1 connected (`100.0%`) on `d1`;
-			# `staff_b`: 1/3 connected (`33.33%`: 1 connected on `d1`, 2 non-connected on `d2` on the SAME `wi_b`!).
+			# `staff_a`: 1/1 connected interval (`100.0%`) on `d1`;
+			# `staff_b`: 1/3 connected intervals (`33.33%`: `wi_b1` connected on `d1` + retried on `d2`, `wi_b2` & `wi_b3` non-connected on `d2`).
 			contact_attempt.record_attempt(
 				work_item=wi_a,
 				channel="phone_call",
@@ -377,29 +406,38 @@ class TestP3KPIAndSnapshots(P3TestCase):
 				actor=self.staff_a,
 			)
 			contact_attempt.record_attempt(
-				work_item=wi_b,
+				work_item=wi_b1,
 				channel="phone_call",
 				outcome_code="connected_interested",
 				occurred_at=str(t_day1),
-				note="Khách B nghe máy ngày 1",
+				note="Khách B1 nghe máy ngày 1",
 				idempotency_key=f"rollup-b1-{frappe.generate_hash(length=6)}",
 				actor=self.staff_b,
 			)
 			contact_attempt.record_attempt(
-				work_item=wi_b,
+				work_item=wi_b1,
 				channel="phone_call",
 				outcome_code="no_answer",
 				occurred_at=str(t_day2),
-				note="Khách B không bắt máy lần 2",
+				note="Khách B1 gọi lại ngày 2 không bắt máy",
+				idempotency_key=f"rollup-b1-d2-{frappe.generate_hash(length=6)}",
+				actor=self.staff_b,
+			)
+			contact_attempt.record_attempt(
+				work_item=wi_b2,
+				channel="phone_call",
+				outcome_code="no_answer",
+				occurred_at=str(add_to_date(t_day2, minutes=10)),
+				note="Khách B2 không bắt máy",
 				idempotency_key=f"rollup-b2-{frappe.generate_hash(length=6)}",
 				actor=self.staff_b,
 			)
 			contact_attempt.record_attempt(
-				work_item=wi_b,
+				work_item=wi_b3,
 				channel="phone_call",
 				outcome_code="busy",
 				occurred_at=str(add_to_date(t_day2, minutes=15)),
-				note="Khách B máy bận lần 3",
+				note="Khách B3 máy bận",
 				idempotency_key=f"rollup-b3-{frappe.generate_hash(length=6)}",
 				actor=self.staff_b,
 			)
@@ -411,15 +449,20 @@ class TestP3KPIAndSnapshots(P3TestCase):
 		ob_leg_name = frappe.db.get_value(
 			"CSKH SLA Obligation", {"work_item": wi_leg, "obligation_type": "FIRST_ATTEMPT"}, "name"
 		)
-		with authorized_sla_write():
-			ob_doc = frappe.get_doc("CSKH SLA Obligation", ob_leg_name)
-			ob_doc.team_at_obligation = None
-			ob_doc.attribution_status = UNKNOWN_HISTORICAL
-			ob_doc.status = "fulfilled_on_time"
-			ob_doc.started_at = add_to_date(t_day1, minutes=-20)
-			ob_doc.fulfilled_at = t_day1
-			ob_doc.flags.ignore_links = True
-			ob_doc.save(ignore_permissions=True)
+		frappe.db.set_value(
+			"CSKH SLA Obligation",
+			ob_leg_name,
+			{
+				"team_at_obligation": None,
+				"attribution_status": UNKNOWN_HISTORICAL,
+				"status": "fulfilled_on_time",
+				"started_at": add_to_date(t_day1, minutes=-20),
+				"original_due_at": t_day1,
+				"effective_due_at": t_day1,
+				"fulfilled_at": t_day1,
+			},
+			update_modified=False,
+		)
 		frappe.db.commit()
 
 		# Recompute `d1`, `d2`, and their `monthly` container scoped to `self.campaign`
@@ -451,15 +494,15 @@ class TestP3KPIAndSnapshots(P3TestCase):
 		self.assertEqual(snap_team_a["metrics"]["CONNECTED_RATE"]["denominator"], 4)
 		self.assertEqual(snap_team_a["metrics"]["CONNECTED_RATE"]["value"], 50.0)
 
-		# Daily `work_items_touched` for `staff_b`: 1 on `d1` + 1 on `d2` = 2 daily touches, but Monthly `DISTINCT work_item` == 1!
+		# Daily `work_items_touched` for `staff_b`: 1 on `d1` + 3 on `d2` = 4 daily touches, but Monthly `DISTINCT work_item` == 3 (`wi_b1` deduped)!
 		b_d1 = self._get_published_snapshot(
 			"daily", d1.isoformat(), "employee", self.staff_b, campaign_filter=self.campaign
 		)
 		b_d2 = self._get_published_snapshot(
 			"daily", d2.isoformat(), "employee", self.staff_b, campaign_filter=self.campaign
 		)
-		self.assertEqual(b_d1["work_items_touched"] + b_d2["work_items_touched"], 2)
-		self.assertEqual(snap_b["work_items_touched"], 1)
+		self.assertEqual(b_d1["work_items_touched"] + b_d2["work_items_touched"], 4)
+		self.assertEqual(snap_b["work_items_touched"], 3)
 
 		# Verify `__unattributed_historical_team__` bucket is emitted and counted transparently
 		snap_unattr = self._get_published_snapshot(
@@ -746,7 +789,7 @@ class TestP3KPIAndSnapshots(P3TestCase):
 			)
 			self.assertTrue(rev_ok["passed"])
 
-			# Recompute today's KPI scoped to `self.campaign` -> `staff_a`'s `QA_PASS_RATE` is `ok` (`92.0%`) and `verified == 1`!
+			# Recompute today's KPI scoped to `self.campaign` -> `staff_a`'s `QA_PASS_RATE` is `ok` (`1/1 = 100.0%` passed, `qa_points_rate == 92.0`) and `verified == 1`!
 			cur_d = today_hcm()
 			execute_kpi_recompute(
 				resolve_period_spec("daily", cur_d.isoformat()),
@@ -758,7 +801,8 @@ class TestP3KPIAndSnapshots(P3TestCase):
 			)
 			self.assertEqual(snap_a["attempt_breakdown"]["verified"], 1)
 			self.assertEqual(snap_a["metrics"]["QA_PASS_RATE"]["status"], "ok")
-			self.assertEqual(snap_a["metrics"]["QA_PASS_RATE"]["value"], 92.0)
+			self.assertEqual(snap_a["metrics"]["QA_PASS_RATE"]["value"], 100.0)
+			self.assertEqual(snap_a["metrics"]["QA_PASS_RATE"]["qa_points_rate"], 92.0)
 
 			# Staff sees own published review WITHOUT `internal_note`!
 			staff_list = qa_svc.list_reviews(actor=self.staff_a)

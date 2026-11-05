@@ -69,6 +69,7 @@ _P3_INT_POLICY_KEYS = (
 	"min_attempt_gap_minutes",
 	"max_reschedules_without_approval",
 	"weight_first_attempt_sla",
+	"weight_eligible_coverage",
 	"weight_followup_sla",
 	"weight_data_hygiene",
 	"weight_callback_discipline",
@@ -76,6 +77,7 @@ _P3_INT_POLICY_KEYS = (
 	"min_valid_score_weight",
 	"min_eligible_events_for_score",
 	"min_qa_sample_size",
+	"min_exposure_business_minutes",
 )
 
 
@@ -129,6 +131,8 @@ def serialize_outcome(row_or_doc) -> dict:
 		"is_interested": bool(cint(row_or_doc.get("is_interested", 0))),
 		"is_terminal": bool(cint(row_or_doc.get("is_terminal", 0))),
 		"is_do_not_contact": bool(cint(row_or_doc.get("is_do_not_contact", 0))),
+		"is_conversion": bool(cint(row_or_doc.get("is_conversion", 0))),
+		"is_invalid_phone": bool(cint(row_or_doc.get("is_invalid_phone", 0))),
 		"requires_note": bool(cint(row_or_doc.get("requires_note", 0))),
 		"requires_followup": bool(cint(row_or_doc.get("requires_followup", 0))),
 		"allows_followup": bool(cint(row_or_doc.get("allows_followup", 0))),
