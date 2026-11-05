@@ -6,8 +6,9 @@
 - **Upstream `frappe_docker` đã ghim:** `v4.0.1` (`2b26e9ab8d751e5ea33bb7b930aea3550bb81ded`)
 - **Trạng thái tổng hợp:**
   - Kiểm định tĩnh cấu hình Compose, phân tách mạng/volume/site/secrets, kiểm toán cổng và 4 negative gates: **`PASS`** (`docker compose v5.6.1`)
+  - Bộ 7 unit test an toàn runner (`LF` secret bytes, cô lập project từng lượt, từ chối tài nguyên sẵn có, khử secret): **`PASS`** (`7/7` OK)
   - Danh mục PII cấp trường theo mã nguồn thực tế (DB, log, attachment, import/export, nơi lưu bản sao): **`COMPLETED`** ([`docs/p4/pii-field-catalog.md`](./pii-field-catalog.md))
-  - Chạy thực tế container smoke trên dữ liệu giả (`P4-01 §4`): **`BLOCKED`** *(chờ `T1B` hoàn tất build & bàn giao `APP_IMAGE` bất biến — kịch bản chạy tự động `run_isolated_smoke.py` đã khớp sẵn cả `<repo>@sha256:<64-hex>` lẫn local image ID `sha256:<64-hex>`)*
+  - Chạy thực tế container smoke trên dữ liệu giả (`P4-01 §4`, lượt `20261106063439-e9059d`): **`PASS`** ([`p4-01-isolated-smoke-report.json`](../../deploy/compose/evidence/p4-01-isolated-smoke-report.json), [`p4-01-isolated-smoke.log`](../../deploy/compose/evidence/p4-01-isolated-smoke.log))
   - Triển khai lên Staging / Production thật: **`BLOCKED`** *(thiếu các đầu vào hạ tầng ngoài kho mã: DNS/TLS, Container Registry, Kho Secret + `encryption_key`, VPS/Firewall và Đích Backup Offsite liệt kê tại Mục 3)*
 
 ---
@@ -26,8 +27,8 @@
 | **Vệ sinh Git & Kịch bản kiểm định** | [`deploy/compose/.gitignore`](../../deploy/compose/.gitignore), [`.gitattributes`](../../deploy/compose/.gitattributes) | Chặn commit `.env` thật, `.secrets/`, `*.key`, `*.pem`, `acme.json`; khóa dòng kết thúc `LF`. |
 | | [`deploy/compose/scripts/validate_compose_config.py`](../../deploy/compose/scripts/validate_compose_config.py) | Kiểm định tĩnh provenance upstream, render `config --services` / `config --format json`, kiểm mạng/volume/secret/port và 4 ca negative fail-closed. |
 | | [`deploy/compose/scripts/run_isolated_smoke.py`](../../deploy/compose/scripts/run_isolated_smoke.py) | Kịch bản chạy smoke cô lập tạo project riêng từng lượt (`crm-cskh-p4-smoke-<run_id>`), từ chối tài nguyên đã tồn tại, giới hạn `down --volumes` vào đúng stack do chính lượt đó tạo, tách báo cáo Socket.IO `polling` và RFC 6455 `websocket`, xuất JSON + log đã khử secret. |
-| | [`deploy/compose/scripts/test_smoke_runner_safety.py`](../../deploy/compose/scripts/test_smoke_runner_safety.py) | Bộ 5 unit test kiểm chứng tự động cơ chế cô lập project từng lượt, từ chối volume/cổng sẵn có mà không gọi `down --volumes`, đọc `status` JSON của preflight và khử secret. |
-| | [`deploy/compose/evidence/`](../../deploy/compose/evidence/) | Thư mục lưu báo cáo JSON và log đã khử secret phục vụ `T1C` đối chiếu. |
+| | [`deploy/compose/scripts/test_smoke_runner_safety.py`](../../deploy/compose/scripts/test_smoke_runner_safety.py) | Bộ 7 unit test kiểm chứng tự động byte `LF` của `db_root_password.txt`, cô lập project từng lượt, từ chối volume/cổng sẵn có mà không gọi `down --volumes`, đọc `status` JSON của preflight và khử secret. |
+| | [`deploy/compose/evidence/`](../../deploy/compose/evidence/) | Báo cáo JSON & log đã khử secret của lượt live smoke `PASS` (`p4-01-isolated-smoke-report.json`, `p4-01-isolated-smoke.log`) và bản preflight đối chứng (`p4-01-preflight-report.json`, `p4-01-preflight.log`). |
 | **Tài liệu kiến trúc & bảo vệ dữ liệu** | [`docs/p4/P4-ADR-01-compose-and-isolation.md`](./P4-ADR-01-compose-and-isolation.md) | Quyết định kiến trúc `P4-ADR-01` & `P4-ADR-04`, hợp đồng biến nhận image phối hợp với `T1B`, bảng reuse/override và ma trận cô lập môi trường. |
 | | [`docs/p4/pii-field-catalog.md`](./pii-field-catalog.md) | Danh mục PII cấp trường kiểm chứng trực tiếp từ mã nguồn (Frappe + `crm` + 23 DocType `CSKH *`, log, attachment, import/export và 9 nơi lưu bản sao). |
 
@@ -100,14 +101,20 @@ Theo yêu cầu `P4.md` (§0.12, §§1–5, §18) và đối chiếu hồ sơ `P
 | **`BLK-INFRA-05`** | **Đích Backup Mã hóa Ngoài VPS & Quyền Restore** | **`BLOCKED`** | Chưa có kho lưu trữ đích ngoài VPS chính (S3 / Backblaze B2 / Cloudflare R2 / SFTP tách biệt vật lý), chưa có khóa mã hóa bản sao lưu (`restic` password / `gpg` key), chưa tách biệt khóa ghi backup hằng ngày với khóa xóa/khôi phục chống ransomware, và chưa có chỉ tiêu **RPO / RTO / lịch giữ bản sao** được Owner phê duyệt. | URI kho offsite, credential phân tách quyền và chữ ký chốt RPO/RTO phục vụ `P4-02`. |
 | **`BLK-GOV-06`** | **Đầu mối Vận hành, Ký UAT & Quyền Go-Live / Rollback** | **`BLOCKED`** | Theo `entry-audit.md` (`be33e6c` §4), chưa ghi nhận danh tính cụ thể của người chịu trách nhiệm vận hành ngày 2, đầu mối ký UAT nghiệp vụ và đầu mối quyết định cutover/rollback. | Danh sách vai trò & đầu mối được Owner/T0 xác nhận trong `P4-00`. |
 
-### 3.2. Điều kiện Tiên quyết Để Thực thi Smoke Cô lập Runtime Cục bộ (`P4-01 §4`)
+### 3.2. Kết quả Thực thi Smoke Cô lập Runtime Cục bộ (`P4-01 §4` — **`PASS`**)
 
-| Mã Blocker | Phụ thuộc phối hợp nội bộ | Trạng thái hiện tại | Ghi nhận thực tế tại thời điểm bàn giao | Điều kiện gỡ để chạy live smoke ngay |
-| :--- | :--- | :---: | :--- | :--- |
-| **`BLK-RUNTIME-01`** | **`T1B` hoàn tất build & bàn giao `APP_IMAGE` bất biến** | **`BLOCKED`** | `T1B` đang thực thi bản dựng trong `codex/p4-01-image` (`deploy/images/`); trên Docker Engine máy trạm (`v29.9.2`) hiện chưa có custom image hoàn tất đóng gói `frappe` + `crm` + `crm_cskh` + assets đã build. Hợp đồng biến `APP_IMAGE` & `PULL_POLICY` giữa `T1A` và `T1B` đã khớp 100%. | `T1B` bàn giao digest `<repo>@sha256:<64-hex>` hoặc local immutable ID `sha256:<64-hex>` (`--app-image <IMMUTABLE_IMAGE>`). |
+Đã thực thi lượt smoke thật trên Docker Engine `v29.9.2` với stack riêng `crm-cskh-p4-smoke-20261106063439-e9059d` và site dữ liệu giả `p4-smoke-20261106063439-e9059d.localhost` (báo cáo đầy đủ tại [`p4-01-isolated-smoke-report.json`](../../deploy/compose/evidence/p4-01-isolated-smoke-report.json) và log [`p4-01-isolated-smoke.log`](../../deploy/compose/evidence/p4-01-isolated-smoke.log)):
 
-> [!IMPORTANT]
-> Docker Engine trên máy trạm hiện đang hoạt động (`v29.9.2`), các container cũ của Owner đều giữ nguyên không can thiệp. Ngay khi `T1B` bàn giao `APP_IMAGE`, lệnh một bước tại Mục 4.2 sẽ tự động dựng stack cô lập `crm-cskh-p4-smoke` trên cổng loopback `127.0.0.1:18080`, nạp dữ liệu giả và xuất báo cáo JSON đầy đủ.
+| Hạng mục nghiệm thu | Kết quả thực tế | Bằng chứng tóm tắt |
+| :--- | :---: | :--- |
+| **Provenance Compose & Image** | **`PASS`** | Compose SHA `85b96482b76240a5ef9326b2d7fe6685281ee47c` (`worktree_clean: true`); Image Git SHA `4de3dc8656b0077cabd4220afc6636da543e34f6`; `app_image` & `image_id` = `sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9` (`crm-cskh@sha256:c56c19f9...`, `pull_policy_used: never`). |
+| **Kiểm byte `LF` secret & tài nguyên sẵn có** | **`PASS`** | `db_root_password.txt`: `ends_with_lf_only: true`, `contains_cr: false` (`33` bytes); tiền kiểm `0` container/volume/network trùng tên, `127.0.0.1:18080` trống. |
+| **Healthcheck toàn bộ 11 service** | **`PASS`** | `configurator` thoát `0`; cả **10/10** service thường trực (`backend`, `db`, `frontend`, `proxy`, `queue-long`, `queue-short`, `redis-cache`, `redis-queue`, `scheduler`, `websocket`) đạt `state: running`, `health: healthy`. |
+| **Kiểm toán cổng host (`Publishers`)** | **`PASS`** | **Chỉ duy nhất `proxy`** mở `127.0.0.1:18080->80/tcp`; toàn bộ 10 service nội bộ có `0` cổng host xuất bản. |
+| **Bootstrap dữ liệu giả & `migrator` ×2** | **`PASS`** | Cài `frappe 15.123.1` + `crm 1.87.0` + `crm_cskh 0.0.1`, tạo `CRM-LEAD-2026-00001` (`0900000123`, `synthetic-smoke@example.invalid`); chạy `migrator` lần 1 (`exit 0`, `19.11s`) & lần 2 (`exit 0`, `19.14s`). |
+| **Chặn Guest, Đăng nhập, UI Việt & CSRF** | **`PASS`** | Guest `/crm`, `/cskh/dashboard`, `/cskh/quality-overview`, `health.ping` đều trả `403`; đăng nhập `Administrator` trả `200`; `/cskh/dashboard` (`<h1>Bảng điều khiển phân phối</h1>`), `/cskh/quality-overview` (`<h1>Tổng quan chất lượng CSKH (BOD)</h1>`) & `/crm` trả `200` kèm `Asia/Ho_Chi_Minh` và 7 nhãn tiếng Việt; CSRF giả mạo trả `400`, thiếu CSRF trả `400`, CSRF hợp lệ trả `200` (`app: crm_cskh`, `status: ok`). |
+| **Socket.IO `polling` & RFC 6455 `websocket`** | **`PASS`** | `polling`: từ chối chưa xác thực `44/p4-smoke-...localhost`, chấp nhận đã xác thực `40/p4-smoke-...localhost`; `websocket`: xác thực cả luồng nâng cấp từ polling lẫn kết nối trực tiếp với `HTTP/1.1 101 Switching Protocols`, khớp `Sec-WebSocket-Accept`, trao đổi frame `2probe` → `3probe` → `5`, `0{...}` → `40/<site>,` → `40/<site>,{"sid":"<REDACTED_SOCKET_SID>"}` và Ping/Pong RFC 6455 `0x9` → `0xA` (`cskh-p4-ping`). |
+| **Dọn dẹp phạm vi hẹp (`teardown_audit`)** | **`PASS`** | `down --volumes --remove-orphans` trên đúng `crm-cskh-p4-smoke-20261106063439-e9059d` trả `exit 0`; hậu kiểm `remaining_resources` = `0` containers, `0` volumes, `0` networks; toàn bộ container của Owner giữ nguyên không chạm. |
 
 ---
 
