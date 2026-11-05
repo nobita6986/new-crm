@@ -11,8 +11,10 @@
 - **Tài liệu liên kết:**
   - [`docs/p4/P4-ADR-02-custom-image-and-lock.md`](./P4-ADR-02-custom-image-and-lock.md)
   - [`docs/p4/p4-02-pipeline-input-contract.md`](./p4-02-pipeline-input-contract.md)
+  - [`docs/p4/staging-migration-backlog.md`](./staging-migration-backlog.md) (`BLG-P4-MIG-01`)
   - [`deploy/images/release-lock.json`](../../deploy/images/release-lock.json)
   - [`deploy/images/Containerfile`](../../deploy/images/Containerfile)
+- **Quy tắc khóa mốc image smoke (`T0` chốt):** Giữ nguyên image đã build tại commit `4de3dc8656b0077cabd4220afc6636da543e34f6` (`4de3dc8`, `APP_IMAGE=sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9`) làm mốc smoke cho `T1A` / `T1C`. Chỉ mở bản sửa image khi `T1A` tái hiện lỗi thuộc phạm vi image (khi đó bàn giao SHA mới, image ID mới và chạy lại [`verify_clean_site.py`](../../deploy/images/verify_clean_site.py)). Remote registry digest tiếp tục giữ trạng thái **`BLOCKED`**.
 
 ---
 
@@ -159,7 +161,7 @@ assert len(non_canonical) == 1 and non_canonical[0] == {"name": "CSKH Export Job
 '
 ```
 
-- **Khuyến nghị xử lý tách biệt (ngoài phạm vi `P4-01`):** Nếu `T0` quyết định chuẩn hóa ở một gói bảo trì schema riêng, chỉ cần đổi `"module": "Crm Cskh"` → `"module": "CRM CSKH"` kèm cập nhật `modified` trong `cskh_export_job.json` (Class A metadata sync khi chạy `bench migrate`, không đổi cấu trúc cột của `tabCSKH Export Job`). Trong `P4-01`, `apps/crm_cskh` được giữ nguyên 100% để bảo toàn chữ ký baseline `92e14af`.
+- **Quyết định điều phối & Backlog Migration Staging (`BLG-P4-MIG-01`):** Sai khác hoa/thường `"module": "Crm Cskh"` vs `"CRM CSKH"` được ghi chính thức vào [`docs/p4/staging-migration-backlog.md`](./staging-migration-backlog.md) (`BLG-P4-MIG-01`) để kiểm chứng trong diễn tập migration Staging (`P4.md §6.3`, cổng `G06`). Trong `P4-01`, `apps/crm_cskh` và mốc image smoke `4de3dc8` (`sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9`) được giữ nguyên 100%.
 
 ---
 
