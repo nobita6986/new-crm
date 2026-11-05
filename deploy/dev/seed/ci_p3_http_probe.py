@@ -1239,6 +1239,7 @@ def run_probe() -> int:
             and bod_ov.get("actor_scope", {}).get("pii_allowed") is False
             and bod_ov.get("metrics", {}).get("QA_PASS_RATE", {}).get("status")
             == "disabled"
+            and "SLA_BREACH_COUNT" in (bod_ov.get("metrics") or {})
             and bod_ov.get("attempt_breakdown", {}).get("verified") == 0,
             "S08: BOD Viewer reads company executive overview without System Manager and 0 fake verified",
             actor="bod.viewer@dev.local",
@@ -1403,6 +1404,66 @@ def run_probe() -> int:
             r_admin_run["status"] == 200
             and body_payload(r_admin_run).get("run_id") == fx["run_id"],
             "CRM Admin reads KPI run status metadata cleanly",
+            actor="crm.admin@dev.local",
+        )
+
+        # F-P3-05: Leader A denied 403 on company-scope CSKH KPI Run (both RPC & generic REST)
+        r_leader_a_comp_run = get(
+            "p3-http-leader-a-company-run-status-403",
+            op_leader_a,
+            f"/api/method/crm_cskh.api.p3_reporting.get_run_status?run_id={urllib.parse.quote(fx['run_id'])}",
+        )
+        check(
+            "p3-http-leader-a-company-run-status-403",
+            r_leader_a_comp_run,
+            r_leader_a_comp_run["status"] == 403
+            and error_envelope(r_leader_a_comp_run).get("code") == "FORBIDDEN_SCOPE",
+            "F-P3-05: Leader A denied 403 FORBIDDEN_SCOPE on company KPI Run get_run_status",
+            actor="team1.leader@dev.local",
+        )
+
+        r_leader_a_rest_comp_run = get(
+            "p3-http-leader-a-rest-company-kpi-run-403",
+            op_leader_a,
+            f"/api/resource/CSKH%20KPI%20Run/{urllib.parse.quote(fx['run_id'])}",
+        )
+        check(
+            "p3-http-leader-a-rest-company-kpi-run-403",
+            r_leader_a_rest_comp_run,
+            r_leader_a_rest_comp_run["status"] == 403,
+            "F-P3-05: Leader A denied 403 on generic REST GET /api/resource/CSKH KPI Run/<company>",
+            actor="team1.leader@dev.local",
+        )
+
+        # F-P3-10: get_filter_options scoped & qa.create_review returns 409 QA_DISABLED (never 500)
+        r_filter_opts = get(
+            "p3-http-leader-a-filter-options-200",
+            op_leader_a,
+            "/api/method/crm_cskh.api.p3_reporting.get_filter_options",
+        )
+        check(
+            "p3-http-leader-a-filter-options-200",
+            r_filter_opts,
+            r_filter_opts["status"] == 200
+            and body_payload(r_filter_opts).get("ok") is True
+            and isinstance(body_payload(r_filter_opts).get("teams"), list),
+            "F-P3-10: Leader A reads scoped get_filter_options cleanly",
+            actor="team1.leader@dev.local",
+        )
+
+        r_qa_create_409 = post_json(
+            "p3-http-admin-qa-create-review-disabled-409",
+            op_admin,
+            tk_admin,
+            "/api/method/crm_cskh.api.qa.create_review",
+            {},
+        )
+        check(
+            "p3-http-admin-qa-create-review-disabled-409",
+            r_qa_create_409,
+            r_qa_create_409["status"] == 409
+            and error_envelope(r_qa_create_409).get("code") == "QA_DISABLED",
+            "F-P3-10: qa.create_review with empty body returns clean 409 QA_DISABLED when QA is off",
             actor="crm.admin@dev.local",
         )
 
@@ -1598,6 +1659,21 @@ def run_probe() -> int:
             actor="team1.leader@dev.local",
         )
 
+        if job_row and job_row.file_doc:
+            r_ok_file_doc = get(
+                "p3-http-leader-a-rest-file-doc-200",
+                op_leader_a,
+                f"/api/resource/File/{urllib.parse.quote(str(job_row.file_doc))}",
+            )
+            check(
+                "p3-http-leader-a-rest-file-doc-200",
+                r_ok_file_doc,
+                r_ok_file_doc["status"] == 200
+                and isinstance((r_ok_file_doc["json"] or {}).get("data"), dict),
+                "F-P3-05 positive control: Authorized Leader A reads GET /api/resource/File/<export>",
+                actor="team1.leader@dev.local",
+            )
+
         # Cross-actor denials on BOTH `download_export` and raw `/private/files/<export>.csv` (`S11`)
         r_lb_dl = get(
             "p3-http-leader-b-cross-team-download-403",
@@ -1667,6 +1743,43 @@ def run_probe() -> int:
                 "S12: Revoking Sales Manager immediately blocks raw GET /private/files/<export>.csv",
                 actor="team1.leader@dev.local",
             )
+
+            if job_row and job_row.file_doc:
+                r_rev_file_doc = get(
+                    "p3-http-leader-a-revoked-rest-file-doc-403",
+                    op_leader_a,
+                    f"/api/resource/File/{urllib.parse.quote(str(job_row.file_doc))}",
+                )
+                # `crm_cskh/errors.py` normalizes 403 PermissionError on `/api/resource/File/<name>` to canonical 404
+                check(
+                    "p3-http-leader-a-revoked-rest-file-doc-403",
+                    r_rev_file_doc,
+                    r_rev_file_doc["status"] in (403, 404)
+                    and "data" not in (r_rev_file_doc["json"] or {})
+                    and "cskh_export_" not in str(r_rev_file_doc["text"]),
+                    "F-P3-05: Revoking Sales Manager immediately blocks GET /api/resource/File/<export> (oracle-closed 404/403)",
+                    actor="team1.leader@dev.local",
+                )
+
+                file_filter_q = urllib.parse.quote(
+                    json.dumps([["File", "name", "=", str(job_row.file_doc)]])
+                )
+                r_rev_file_list = get(
+                    "p3-http-leader-a-revoked-rest-file-list-empty",
+                    op_leader_a,
+                    f"/api/resource/File?filters={file_filter_q}",
+                )
+                check(
+                    "p3-http-leader-a-revoked-rest-file-list-empty",
+                    r_rev_file_list,
+                    r_rev_file_list["status"] == 200
+                    and (
+                        isinstance(r_rev_file_list["json"], dict)
+                        and r_rev_file_list["json"].get("data") == []
+                    ),
+                    "F-P3-05: Revoking Sales Manager filters export File out of GET /api/resource/File list",
+                    actor="team1.leader@dev.local",
+                )
         finally:
             frappe.set_user("Administrator")
             la_user_doc = frappe.get_doc("User", "team1.leader@dev.local")
@@ -1771,6 +1884,125 @@ def run_probe() -> int:
             and "Tệp đính kèm giả lập" not in str(r_p0_file["text"]),
             "P0 non-regression: Staff C blocked from reading Staff A's private Lead attachment",
             actor="staff.c@dev.local",
+        )
+
+        # ------------------------------------------------------------------
+        # 9. Unified Feature-Flag Rollback over Live HTTP (`F-P3-08`)
+        # ------------------------------------------------------------------
+        frappe.set_user("Administrator")
+        saved_pol_flags = frappe.get_all(
+            "CSKH Policy",
+            filters={"enabled": 1},
+            fields=["name", "p3_sla_enabled", "p3_reporting_enabled"],
+        )
+        try:
+            for pr in saved_pol_flags:
+                frappe.db.set_value(
+                    "CSKH Policy",
+                    pr.name,
+                    {"p3_sla_enabled": 0, "p3_reporting_enabled": 0},
+                    update_modified=False,
+                )
+            frappe.db.commit()
+            frappe.clear_cache()
+
+            r_rb_page = get(
+                "p3-http-rollback-bod-quality-overview-page-403",
+                op_bod,
+                "/cskh/quality-overview",
+                headers={"Accept": "text/html, */*"},
+            )
+            check(
+                "p3-http-rollback-bod-quality-overview-page-403",
+                r_rb_page,
+                r_rb_page["status"] == 403,
+                "F-P3-08: Disabling p3_reporting_enabled blocks /cskh/quality-overview with HTTP 403",
+                actor="bod.viewer@dev.local",
+            )
+
+            r_rb_api = get(
+                "p3-http-rollback-bod-exec-overview-api-503",
+                op_bod,
+                f"/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key={month_key}",
+            )
+            check(
+                "p3-http-rollback-bod-exec-overview-api-503",
+                r_rb_api,
+                r_rb_api["status"] == 503
+                and error_envelope(r_rb_api).get("code") == "POLICY_CONFLICT",
+                "F-P3-08: Disabling p3_reporting_enabled rejects get_executive_overview over HTTP with 503 POLICY_CONFLICT",
+                actor="bod.viewer@dev.local",
+            )
+
+            r_rb_sla = get(
+                "p3-http-rollback-leader-a-sla-list-503",
+                op_leader_a,
+                "/api/method/crm_cskh.api.sla.list_obligations",
+            )
+            check(
+                "p3-http-rollback-leader-a-sla-list-503",
+                r_rb_sla,
+                r_rb_sla["status"] == 503
+                and error_envelope(r_rb_sla).get("code") == "POLICY_CONFLICT",
+                "F-P3-08: Disabling p3_sla_enabled rejects sla.list_obligations over HTTP with 503 POLICY_CONFLICT",
+                actor="team1.leader@dev.local",
+            )
+
+            r_rb_p2_page = get(
+                "p3-http-rollback-staff-a-p2-my-customers-page-200",
+                op_staff_a,
+                "/cskh/my-customers",
+                headers={"Accept": "text/html, */*"},
+            )
+            check(
+                "p3-http-rollback-staff-a-p2-my-customers-page-200",
+                r_rb_p2_page,
+                r_rb_p2_page["status"] == 200
+                and 'href="/cskh/scorecard"' not in str(r_rb_p2_page["text"]),
+                "F-P3-08: P2 /cskh/my-customers remains 200 OK and hides P3 scorecard nav link when P3 is disabled",
+                actor="staff.a@dev.local",
+            )
+
+            r_rb_p2_api = get(
+                "p3-http-rollback-staff-a-p2-my-customers-api-200",
+                op_staff_a,
+                "/api/method/crm_cskh.api.customers.my_list",
+            )
+            check(
+                "p3-http-rollback-staff-a-p2-my-customers-api-200",
+                r_rb_p2_api,
+                r_rb_p2_api["status"] == 200
+                and isinstance(body_payload(r_rb_p2_api).get("items"), list),
+                "F-P3-08: P1/P2 crm_cskh.api.customers.my_list continues returning 200 OK during P3 rollback",
+                actor="staff.a@dev.local",
+            )
+        finally:
+            frappe.set_user("Administrator")
+            for pr in saved_pol_flags:
+                frappe.db.set_value(
+                    "CSKH Policy",
+                    pr.name,
+                    {
+                        "p3_sla_enabled": int(pr.p3_sla_enabled or 1),
+                        "p3_reporting_enabled": int(pr.p3_reporting_enabled or 1),
+                    },
+                    update_modified=False,
+                )
+            frappe.db.commit()
+            frappe.clear_cache()
+
+        r_rb_reenabled = get(
+            "p3-http-rollback-reenabled-bod-exec-overview-200",
+            op_bod,
+            f"/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key={month_key}",
+        )
+        check(
+            "p3-http-rollback-reenabled-bod-exec-overview-200",
+            r_rb_reenabled,
+            r_rb_reenabled["status"] == 200
+            and body_payload(r_rb_reenabled).get("ok") is True,
+            "F-P3-08: Re-enabling P3 flags immediately restores HTTP 200 on get_executive_overview",
+            actor="bod.viewer@dev.local",
         )
 
         final_summary = write_evidence(final=True)

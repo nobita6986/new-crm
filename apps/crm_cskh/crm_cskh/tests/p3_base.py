@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import frappe
 
-from crm_cskh.p3_models import ensure_p3_indexes, ensure_p3_seeds
+from crm_cskh.p3_models import DEFAULT_P3_POLICY_FIELDS, ensure_p3_indexes, ensure_p3_seeds
 from crm_cskh.services.attribution import ensure_cutover_membership_baseline
 from crm_cskh.tests.p2_base import P2TestCase
 
@@ -24,5 +24,12 @@ class P3TestCase(P2TestCase):
 		frappe.set_user("Administrator")
 		ensure_p3_indexes()
 		ensure_p3_seeds()
+		if frappe.db.exists("CSKH Policy", "GLOBAL-DEFAULT"):
+			frappe.db.set_value(
+				"CSKH Policy",
+				"GLOBAL-DEFAULT",
+				dict(DEFAULT_P3_POLICY_FIELDS),
+				update_modified=False,
+			)
 		ensure_cutover_membership_baseline()
 		frappe.db.commit()

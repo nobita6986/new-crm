@@ -453,28 +453,32 @@ def record_attempt(
 			raise InvalidChannel("Kênh liên hệ này không được bật trong chính sách hiệu lực.")
 
 		# 5. Outcome Code validation & snapshot
+		outcome_fields = [
+			"name",
+			"code",
+			"label_vi",
+			"result_group",
+			"is_contact_attempt",
+			"is_connected",
+			"is_interested",
+			"is_terminal",
+			"is_do_not_contact",
+			"requires_note",
+			"requires_followup",
+			"allows_followup",
+			"requires_completion_reason",
+			"allowed_channels",
+			"suggested_next_status",
+			"version",
+			"enabled",
+		]
+		for opt_col in ("is_conversion", "is_invalid_phone"):
+			if frappe.db.has_column("CSKH Outcome Code", opt_col):
+				outcome_fields.append(opt_col)
 		outcome_doc = frappe.db.get_value(
 			"CSKH Outcome Code",
 			outcome_val,
-			[
-				"name",
-				"code",
-				"label_vi",
-				"result_group",
-				"is_contact_attempt",
-				"is_connected",
-				"is_interested",
-				"is_terminal",
-				"is_do_not_contact",
-				"requires_note",
-				"requires_followup",
-				"allows_followup",
-				"requires_completion_reason",
-				"allowed_channels",
-				"suggested_next_status",
-				"version",
-				"enabled",
-			],
+			outcome_fields,
 			as_dict=True,
 		)
 		if not outcome_doc or not cint(outcome_doc.enabled):
@@ -561,40 +565,58 @@ def record_attempt(
 		)
 
 		# 9. Insert immutable `CSKH Contact Attempt`
+		is_conv_flag = bool(outcome.get("is_conversion"))
+		if (
+			not is_conv_flag
+			and locked.campaign
+			and frappe.db.has_column("CSKH Campaign", "conversion_outcome_codes")
+		):
+			raw_camp_conv = (
+				frappe.db.get_value("CSKH Campaign", locked.campaign, "conversion_outcome_codes") or ""
+			)
+			camp_conv_codes = {c.strip().lower() for c in str(raw_camp_conv).split(",") if c.strip()}
+			if outcome["code"].lower() in camp_conv_codes:
+				is_conv_flag = True
+
 		prev_att_flag = getattr(frappe.flags, "cskh_in_attempt_service", False)
 		frappe.flags.cskh_in_attempt_service = True
 		try:
-			attempt_doc = frappe.get_doc(
-				{
-					"doctype": "CSKH Contact Attempt",
-					"work_item": wi_val,
-					"lead": locked.lead,
-					"campaign": locked.campaign,
-					"ownership_event": open_event.name,
-					"owner_at_attempt": locked.assigned_to,
-					"performed_by": actor,
-					"occurred_at": occurred_dt,
-					"recorded_at": now_dt,
-					"channel": channel_val,
-					"outcome_code": outcome["code"],
-					"outcome_label_snapshot": outcome["label_vi"],
-					"outcome_group_snapshot": outcome["result_group"],
-					"outcome_version_snapshot": outcome["version"],
-					"contact_attempt_snapshot": 1 if outcome["is_contact_attempt"] else 0,
-					"connected_snapshot": 1 if outcome["is_connected"] else 0,
-					"interested_snapshot": 1 if outcome["is_interested"] else 0,
-					"terminal_snapshot": 1 if outcome["is_terminal"] else 0,
-					"dnc_snapshot": 1 if outcome["is_do_not_contact"] else 0,
-					"note": clean_note,
-					"call_log": linked_call_log,
-					"verification_status": verification_status,
-					"policy_name_snapshot": policy["name"],
-					"policy_version_snapshot": policy["version"],
-					"idempotency_key": idem_val,
-					"payload_hash": req_hash,
-					"work_item_revision": current_rev + 1,
-				}
-			)
+			att_payload = {
+				"doctype": "CSKH Contact Attempt",
+				"work_item": wi_val,
+				"lead": locked.lead,
+				"campaign": locked.campaign,
+				"ownership_event": open_event.name,
+				"owner_at_attempt": locked.assigned_to,
+				"performed_by": actor,
+				"occurred_at": occurred_dt,
+				"recorded_at": now_dt,
+				"channel": channel_val,
+				"outcome_code": outcome["code"],
+				"outcome_label_snapshot": outcome["label_vi"],
+				"outcome_group_snapshot": outcome["result_group"],
+				"outcome_version_snapshot": outcome["version"],
+				"contact_attempt_snapshot": 1 if outcome["is_contact_attempt"] else 0,
+				"connected_snapshot": 1 if outcome["is_connected"] else 0,
+				"interested_snapshot": 1 if outcome["is_interested"] else 0,
+				"terminal_snapshot": 1 if outcome["is_terminal"] else 0,
+				"dnc_snapshot": 1 if outcome["is_do_not_contact"] else 0,
+				"note": clean_note,
+				"call_log": linked_call_log,
+				"verification_status": verification_status,
+				"policy_name_snapshot": policy["name"],
+				"policy_version_snapshot": policy["version"],
+				"idempotency_key": idem_val,
+				"payload_hash": req_hash,
+				"work_item_revision": current_rev + 1,
+			}
+			if frappe.db.has_column("CSKH Contact Attempt", "conversion_snapshot"):
+				att_payload["conversion_snapshot"] = 1 if is_conv_flag else 0
+			if frappe.db.has_column("CSKH Contact Attempt", "invalid_phone_snapshot"):
+				att_payload["invalid_phone_snapshot"] = 1 if outcome.get("is_invalid_phone") else 0
+			if frappe.db.has_column("CSKH Contact Attempt", "complete_fields"):
+				att_payload["complete_fields"] = 1
+			attempt_doc = frappe.get_doc(att_payload)
 			attempt_doc.insert(ignore_permissions=True)
 		finally:
 			frappe.flags.cskh_in_attempt_service = prev_att_flag

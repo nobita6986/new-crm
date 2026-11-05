@@ -426,22 +426,52 @@ def _scoped_wi_predicate(scope, alias="wi"):
 
 	user_ph = ",".join(["%s"] * len(team_users))
 	node_ph = ",".join(["%s"] * len(team_nodes))
+	legacy_shared_closed_sql = (
+		f"coalesce((select coalesce(h_ws.from_user, h_ws.to_user) "
+		f"from `tabCSKH Assignment History` h_ws "
+		f"where h_ws.work_item = {alias}.name "
+		f"order by h_ws.event_at desc, h_ws.creation desc limit 1), '') in ({user_ph})"
+	)
+	if frappe.db.has_column("CSKH Assignment History", "team_at_assignment"):
+		lat_stat_subq = (
+			f"(select ah_s1.attribution_status from `tabCSKH Assignment History` ah_s1 "
+			f"where ah_s1.work_item = {alias}.name "
+			f"and ah_s1.action in ('assign', 'reassign', 'reopen') "
+			f"order by coalesce(ah_s1.ownership_start, ah_s1.event_at) desc, "
+			f"ah_s1.creation desc, ah_s1.name desc limit 1)"
+		)
+		lat_team_subq = (
+			f"(select ah_s2.team_at_assignment from `tabCSKH Assignment History` ah_s2 "
+			f"where ah_s2.work_item = {alias}.name "
+			f"and ah_s2.action in ('assign', 'reassign', 'reopen') "
+			f"order by coalesce(ah_s2.ownership_start, ah_s2.event_at) desc, "
+			f"ah_s2.creation desc, ah_s2.name desc limit 1)"
+		)
+		shared_closed_sql = (
+			f"((coalesce({lat_stat_subq}, '') = 'authoritative' "
+			f"and coalesce({lat_team_subq}, '') != '' "
+			f"and {lat_team_subq} in ({node_ph})) "
+			f"or ((coalesce({lat_stat_subq}, '') != 'authoritative' or coalesce({lat_team_subq}, '') = '') "
+			f"and {legacy_shared_closed_sql}))"
+		)
+		shared_closed_params = [*team_nodes, *team_users]
+	else:
+		shared_closed_sql = legacy_shared_closed_sql
+		shared_closed_params = [*team_users]
+
 	sql = (
 		f"(({alias}.status in ('assigned', 'in_progress', 'on_hold') and {alias}.assigned_to in ({user_ph})) "
 		f"or ({alias}.status = 'queued' and {alias}.assigned_to is null "
 		f"and {alias}.campaign in (select c_wq.name from `tabCSKH Campaign` c_wq "
-		f"where c_wq.team_scope is null or c_wq.team_scope in ({node_ph}))) "
+		f"where c_wq.team_scope is null or c_wq.team_scope = '' or c_wq.team_scope in ({node_ph}))) "
 		f"or ({alias}.status in ('revoked', 'closed') and {alias}.assigned_to is null "
 		f"and ({alias}.campaign in (select c_wt.name from `tabCSKH Campaign` c_wt "
 		f"where c_wt.team_scope in ({node_ph})) "
 		f"or ({alias}.campaign in (select c_ws.name from `tabCSKH Campaign` c_ws "
-		f"where c_ws.team_scope is null) "
-		f"and coalesce((select coalesce(h_ws.from_user, h_ws.to_user) "
-		f"from `tabCSKH Assignment History` h_ws "
-		f"where h_ws.work_item = {alias}.name "
-		f"order by h_ws.event_at desc, h_ws.creation desc limit 1), '') in ({user_ph})))))"
+		f"where c_ws.team_scope is null or c_ws.team_scope = '') "
+		f"and {shared_closed_sql}))))"
 	)
-	params = [*team_users, *team_nodes, *team_nodes, *team_users]
+	params = [*team_users, *team_nodes, *team_nodes, *shared_closed_params]
 	return sql, params
 
 

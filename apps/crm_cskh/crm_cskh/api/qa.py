@@ -42,17 +42,26 @@ def list_reviews(
 
 
 @frappe.whitelist(methods=["POST"])
-def create_sample(contact_attempt: str, rubric_version: str = "qa-rubric-v1") -> dict:
-	return qa_svc.create_sample(contact_attempt=contact_attempt, rubric_version=rubric_version)
+def create_sample(
+	contact_attempt: str | None = None,
+	cohort_type: str = "random_sample",
+	rubric_version: str = "qa-rubric-v1",
+) -> dict:
+	return qa_svc.create_sample(
+		contact_attempt=contact_attempt,
+		cohort_type=cohort_type,
+		rubric_version=rubric_version,
+	)
 
 
 @frappe.whitelist(methods=["POST"])
 def submit_review(
-	contact_attempt: str,
-	points_achieved: float | int,
+	contact_attempt: str | None = None,
+	points_achieved: float | int | None = None,
 	max_points: float | int = 100.0,
 	passed=None,
 	status: str = "published",
+	cohort_type: str = "random_sample",
 	feedback_summary: str | None = None,
 	internal_note: str | None = None,
 	scores=None,
@@ -65,6 +74,7 @@ def submit_review(
 		max_points=max_points,
 		passed=passed,
 		status=status,
+		cohort_type=cohort_type,
 		feedback_summary=feedback_summary,
 		internal_note=internal_note,
 		scores=scores,

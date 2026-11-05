@@ -85,6 +85,28 @@ def _team_bounds(user):
 	return (row.lft, row.rgt)
 
 
+def _leader_node(user):
+	"""Return the `CRM Sales Hierarchy` node name owned by `user`, or `None`."""
+	if not user:
+		return None
+	return frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, "name")
+
+
+def _subtree_nodes(node_name) -> set[str]:
+	"""Return the set of `CRM Sales Hierarchy` node names inside `node_name`'s nested-set subtree."""
+	if not node_name:
+		return set()
+	row = frappe.db.get_value("CRM Sales Hierarchy", node_name, ["lft", "rgt"], as_dict=True)
+	if not row:
+		return set()
+	rows = frappe.db.sql(
+		"select name from `tabCRM Sales Hierarchy` where lft >= %s and rgt <= %s",
+		(row.lft, row.rgt),
+		pluck=True,
+	)
+	return set(rows or ())
+
+
 def _node_in_subtree(user, node_name):
 	"""True when `CRM Sales Hierarchy` node `node_name` lies in `user`'s subtree."""
 	if not node_name:

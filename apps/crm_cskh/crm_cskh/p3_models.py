@@ -70,6 +70,7 @@ DEFAULT_P3_POLICY_FIELDS = {
 	"allow_leader_waive_sla": 1,
 	"allow_leader_pause_sla": 1,
 	"weight_first_attempt_sla": 25,
+	"weight_eligible_coverage": 20,
 	"weight_followup_sla": 20,
 	"weight_data_hygiene": 20,
 	"weight_callback_discipline": 20,
@@ -77,6 +78,7 @@ DEFAULT_P3_POLICY_FIELDS = {
 	"min_valid_score_weight": 60,
 	"min_eligible_events_for_score": 1,
 	"min_qa_sample_size": 5,
+	"min_exposure_business_minutes": 60,
 }
 
 DEFAULT_VN_HOLIDAYS = (
@@ -448,6 +450,36 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			False,
 		),
 		(
+			"CSKH SLA Obligation",
+			("owner_user", "effective_due_at", "status"),
+			"idx_cskh_sla_owner_due",
+			False,
+		),
+		(
+			"CSKH SLA Obligation",
+			("team_at_obligation", "effective_due_at", "status"),
+			"idx_cskh_sla_team_due",
+			False,
+		),
+		(
+			"CSKH SLA Obligation",
+			("campaign", "effective_due_at", "status"),
+			"idx_cskh_sla_camp_due",
+			False,
+		),
+		(
+			"CSKH KPI Snapshot",
+			(
+				"is_latest_published",
+				"period_type",
+				"period_key",
+				"scope_type",
+				"team_filter",
+			),
+			"idx_cskh_kpisnap_emp_team",
+			False,
+		),
+		(
 			"CSKH Contact Attempt",
 			("occurred_at", "recorded_at"),
 			"idx_cskh_attempt_occ_rec",
@@ -583,9 +615,19 @@ def ensure_p3_seeds() -> None:
 	if frappe.db.table_exists("CSKH Policy") and frappe.db.has_column(
 		"CSKH Policy", "first_attempt_sla_minutes"
 	):
-		policies = frappe.db.get_all(
-			"CSKH Policy", fields=["name", "working_calendar", "first_attempt_sla_minutes"]
-		)
+		pol_cols = ["name", "policy_code", "working_calendar", "first_attempt_sla_minutes"]
+		for extra_col in (
+			"min_exposure_business_minutes",
+			"min_eligible_events_for_score",
+			"weight_first_attempt_sla",
+			"weight_eligible_coverage",
+			"weight_data_hygiene",
+			"weight_followup_sla",
+			"weight_qa_quality",
+		):
+			if frappe.db.has_column("CSKH Policy", extra_col):
+				pol_cols.append(extra_col)
+		policies = frappe.db.get_all("CSKH Policy", fields=pol_cols)
 		for pol in policies:
 			updates: dict = {}
 			if not pol.get("working_calendar") and frappe.db.exists(
@@ -596,5 +638,57 @@ def ensure_p3_seeds() -> None:
 				for field, val in DEFAULT_P3_POLICY_FIELDS.items():
 					if frappe.db.has_column("CSKH Policy", field):
 						updates[field] = val
+			else:
+				if frappe.db.has_column("CSKH Policy", "min_exposure_business_minutes") and not cint(
+					pol.get("min_exposure_business_minutes")
+				):
+					updates["min_exposure_business_minutes"] = DEFAULT_P3_POLICY_FIELDS[
+						"min_exposure_business_minutes"
+					]
+				cur_w_sum = (
+					cint(pol.get("weight_first_attempt_sla"))
+					+ cint(pol.get("weight_eligible_coverage"))
+					+ cint(pol.get("weight_data_hygiene"))
+					+ cint(pol.get("weight_followup_sla"))
+					+ cint(pol.get("weight_qa_quality"))
+				)
+				if not cint(pol.get("weight_eligible_coverage")) or cur_w_sum != 100:
+					for w_col in (
+						"weight_first_attempt_sla",
+						"weight_eligible_coverage",
+						"weight_data_hygiene",
+						"weight_followup_sla",
+						"weight_callback_discipline",
+						"weight_qa_quality",
+					):
+						if frappe.db.has_column("CSKH Policy", w_col):
+							updates[w_col] = DEFAULT_P3_POLICY_FIELDS[w_col]
+					if (
+						pol.get("policy_code") == "GLOBAL-DEFAULT"
+						and frappe.db.has_column("CSKH Policy", "min_eligible_events_for_score")
+						and cint(pol.get("min_eligible_events_for_score")) > 1
+					):
+						updates["min_eligible_events_for_score"] = 1
 			if updates:
 				frappe.db.set_value("CSKH Policy", pol["name"], updates, update_modified=False)
+
+	# 5. Backfill `is_conversion` & `is_invalid_phone` on canonical `CSKH Outcome Code` rows
+	if frappe.db.table_exists("CSKH Outcome Code"):
+		if frappe.db.has_column("CSKH Outcome Code", "is_conversion"):
+			frappe.db.sql(
+				"""
+				update `tabCSKH Outcome Code`
+				set is_conversion = 1
+				where (code = 'converted' or result_group = 'converted')
+				  and coalesce(is_conversion, 0) = 0
+				"""
+			)
+		if frappe.db.has_column("CSKH Outcome Code", "is_invalid_phone"):
+			frappe.db.sql(
+				"""
+				update `tabCSKH Outcome Code`
+				set is_invalid_phone = 1
+				where (code in ('wrong_number', 'invalid_phone') or result_group = 'invalid_contact')
+				  and coalesce(is_invalid_phone, 0) = 0
+				"""
+			)

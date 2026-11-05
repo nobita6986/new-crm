@@ -115,34 +115,54 @@ def _validate_and_enrich_patch(
 		code = (
 			parse_optional_str(patch["outcome_code"], "Mã kết quả hiệu chỉnh không hợp lệ.") or ""
 		).lower()
+		out_fields = [
+			"name",
+			"code",
+			"label_vi",
+			"result_group",
+			"is_contact_attempt",
+			"is_connected",
+			"is_interested",
+			"is_terminal",
+			"is_do_not_contact",
+			"requires_note",
+			"requires_followup",
+			"allows_followup",
+			"requires_completion_reason",
+			"allowed_channels",
+			"suggested_next_status",
+			"version",
+			"enabled",
+		]
+		for opt_col in ("is_conversion", "is_invalid_phone"):
+			if frappe.db.has_column("CSKH Outcome Code", opt_col):
+				out_fields.append(opt_col)
 		out_row = frappe.db.get_value(
 			"CSKH Outcome Code",
 			code,
-			[
-				"name",
-				"code",
-				"label_vi",
-				"result_group",
-				"is_contact_attempt",
-				"is_connected",
-				"is_interested",
-				"is_terminal",
-				"is_do_not_contact",
-				"requires_note",
-				"requires_followup",
-				"allows_followup",
-				"requires_completion_reason",
-				"allowed_channels",
-				"suggested_next_status",
-				"version",
-				"enabled",
-			],
+			out_fields,
 			as_dict=True,
 		)
 		if not out_row or not cint(out_row.enabled):
 			raise InvalidOutcome("Mã kết quả hiệu chỉnh không tồn tại hoặc đã ngừng sử dụng.")
 		outcome_obj = serialize_outcome(out_row)
 		eff_outcome_code = outcome_obj["code"]
+		is_conv_patch = bool(outcome_obj.get("is_conversion"))
+		camp_id = (
+			attempt_row.get("campaign")
+			if isinstance(attempt_row, dict)
+			else getattr(attempt_row, "campaign", None)
+		)
+		if (
+			not is_conv_patch
+			and camp_id
+			and frappe.db.has_column("CSKH Campaign", "conversion_outcome_codes")
+		):
+			raw_cc = frappe.db.get_value("CSKH Campaign", camp_id, "conversion_outcome_codes") or ""
+			if outcome_obj["code"].lower() in {
+				c.strip().lower() for c in str(raw_cc).split(",") if c.strip()
+			}:
+				is_conv_patch = True
 		enriched.update(
 			{
 				"outcome_code": outcome_obj["code"],
@@ -154,6 +174,8 @@ def _validate_and_enrich_patch(
 				"is_interested": 1 if outcome_obj["is_interested"] else 0,
 				"is_terminal": 1 if outcome_obj["is_terminal"] else 0,
 				"is_do_not_contact": 1 if outcome_obj["is_do_not_contact"] else 0,
+				"is_conversion": 1 if is_conv_patch else 0,
+				"is_invalid_phone": 1 if outcome_obj.get("is_invalid_phone") else 0,
 			}
 		)
 	else:

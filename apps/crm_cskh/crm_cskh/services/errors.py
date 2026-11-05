@@ -344,6 +344,14 @@ class PolicyConflict(P1Error):
 	http_status_code = 409
 
 
+class P3DisabledError(PolicyConflict):
+	"""Raised over HTTP when P3 SLA/Reporting/Export is disabled via site kill switch or CSKH Policy (`F-P3-08`)."""
+
+	code = POLICY_CONFLICT
+	http_status = 503
+	http_status_code = 503
+
+
 class DataReconciliationFailed(P1Error):
 	code = DATA_RECONCILIATION_FAILED
 	http_status = 422

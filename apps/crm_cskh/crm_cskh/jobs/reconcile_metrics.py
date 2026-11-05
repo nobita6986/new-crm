@@ -51,6 +51,7 @@ def reconcile_published_period(
 		fields=[
 			"scope_type",
 			"scope_id",
+			"team_filter",
 			"contact_attempt_count",
 			"connected_attempt_count",
 			"distinct_work_items",
@@ -58,8 +59,10 @@ def reconcile_published_period(
 			"metrics_json",
 		],
 	)
-	stored_by_scope = {(r.scope_type, r.scope_id): r for r in stored_rows}
-	fresh_by_scope = {(s["scope_type"], s["scope_id"]): s for s in fresh["snapshots"]}
+	stored_by_scope = {(r.scope_type, r.scope_id, str(r.team_filter or "")): r for r in stored_rows}
+	fresh_by_scope = {
+		(s["scope_type"], s["scope_id"], str(s.get("team_filter") or "")): s for s in fresh["snapshots"]
+	}
 
 	mismatches: list[str] = []
 	for skey, fsnap in fresh_by_scope.items():
