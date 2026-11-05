@@ -65,15 +65,25 @@ docker compose \
 
 ## 3. Lệnh Chạy Smoke Cô lập Khi Nhận Image từ `T1B` (`APP_IMAGE`)
 
-```bash
-# 1. Kiểm tra preflight & danh sách blocker hiện tại:
-python deploy/compose/scripts/run_isolated_smoke.py --preflight-only
+> **Lưu ý đọc trạng thái preflight:** Khi dùng cờ `--preflight-only`, mã thoát `exit 0` chỉ phản ánh việc đánh giá preflight đã chạy xong và có thể đi kèm `"status": "BLOCKED"`. Người gọi / script tự động **bắt buộc đọc trường `status` trong JSON** (`"PREFLIGHT_READY"` so với `"BLOCKED"`).
 
-# 2. Chạy full smoke trên site giả lập p4-smoke.localhost (cổng loopback 127.0.0.1:18080)
-#    Chấp nhận cả <repo>@sha256:<64-hex> lẫn local image ID sha256:<64-hex> do T1B bàn giao:
-python deploy/compose/scripts/run_isolated_smoke.py \
+```bash
+# 1. Chạy bộ unit test bảo vệ cô lập runner (project riêng từng lượt, từ chối tài nguyên sẵn có, khử secret):
+python -m unittest discover -s deploy/compose/scripts -p "test_*.py" -v
+
+# 2. Kiểm tra preflight & ghi báo cáo JSON + log đã khử secret (đọc trường `status` trong JSON):
+python -X utf8 deploy/compose/scripts/run_isolated_smoke.py \
+  --preflight-only \
+  --report-out deploy/compose/evidence/p4-01-preflight-report.json \
+  --log-out deploy/compose/evidence/p4-01-preflight.log
+
+# 3. Chạy full smoke trên stack cô lập riêng của lượt chạy (`crm-cskh-p4-smoke-<run_id>`):
+python -X utf8 deploy/compose/scripts/run_isolated_smoke.py \
   --app-image <REPO_AT_SHA256_OR_LOCAL_SHA256_ID_FROM_T1B> \
-  --report-out /tmp/p4-01-isolated-smoke-report.json
+  --image-git-sha <T1B_IMAGE_COMMIT_SHA> \
+  --http-port 18080 \
+  --report-out deploy/compose/evidence/p4-01-isolated-smoke-report.json \
+  --log-out deploy/compose/evidence/p4-01-isolated-smoke.log
 ```
 
 Xem chi tiết kiến trúc, hợp đồng biến nhận image với `T1B`, danh mục PII cấp trường và danh mục blocker hạ tầng tại [`docs/p4/P4-ADR-01-compose-and-isolation.md`](../../docs/p4/P4-ADR-01-compose-and-isolation.md), [`docs/p4/pii-field-catalog.md`](../../docs/p4/pii-field-catalog.md) và [`docs/p4/p4-01-compose-and-blockers.md`](../../docs/p4/p4-01-compose-and-blockers.md).

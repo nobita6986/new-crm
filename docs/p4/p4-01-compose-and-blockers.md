@@ -24,8 +24,10 @@
 | | [`deploy/compose/env/staging.env.example`](../../deploy/compose/env/staging.env.example) | Mẫu biến môi trường Staging (`crm-cskh-staging`, `staging-crm.example.invalid`, mặc định bind `127.0.0.1:8080/8443` và giới hạn tài nguyên chống ảnh hưởng chéo). |
 | | [`deploy/compose/env/isolated-smoke.env.example`](../../deploy/compose/env/isolated-smoke.env.example) | Mẫu biến môi trường Smoke cô lập (`crm-cskh-p4-smoke`, `p4-smoke.localhost`, cổng `127.0.0.1:18080`). |
 | **Vệ sinh Git & Kịch bản kiểm định** | [`deploy/compose/.gitignore`](../../deploy/compose/.gitignore), [`.gitattributes`](../../deploy/compose/.gitattributes) | Chặn commit `.env` thật, `.secrets/`, `*.key`, `*.pem`, `acme.json`; khóa dòng kết thúc `LF`. |
-| | [`deploy/compose/scripts/validate_compose_config.py`](../../deploy/compose/scripts/validate_compose_config.py) | Kiểm định tĩnh provenance upstream, render `config --services` / `config --format json`, kiểm mạng/volume/secret/port và 3 ca negative fail-closed. |
-| | [`deploy/compose/scripts/run_isolated_smoke.py`](../../deploy/compose/scripts/run_isolated_smoke.py) | Kịch bản chạy smoke cô lập đầy đủ ngay khi `T0` chốt `P4-00` và `T1B` bàn giao `APP_IMAGE@sha256`. |
+| | [`deploy/compose/scripts/validate_compose_config.py`](../../deploy/compose/scripts/validate_compose_config.py) | Kiểm định tĩnh provenance upstream, render `config --services` / `config --format json`, kiểm mạng/volume/secret/port và 4 ca negative fail-closed. |
+| | [`deploy/compose/scripts/run_isolated_smoke.py`](../../deploy/compose/scripts/run_isolated_smoke.py) | Kịch bản chạy smoke cô lập tạo project riêng từng lượt (`crm-cskh-p4-smoke-<run_id>`), từ chối tài nguyên đã tồn tại, giới hạn `down --volumes` vào đúng stack do chính lượt đó tạo, tách báo cáo Socket.IO `polling` và RFC 6455 `websocket`, xuất JSON + log đã khử secret. |
+| | [`deploy/compose/scripts/test_smoke_runner_safety.py`](../../deploy/compose/scripts/test_smoke_runner_safety.py) | Bộ 5 unit test kiểm chứng tự động cơ chế cô lập project từng lượt, từ chối volume/cổng sẵn có mà không gọi `down --volumes`, đọc `status` JSON của preflight và khử secret. |
+| | [`deploy/compose/evidence/`](../../deploy/compose/evidence/) | Thư mục lưu báo cáo JSON và log đã khử secret phục vụ `T1C` đối chiếu. |
 | **Tài liệu kiến trúc & bảo vệ dữ liệu** | [`docs/p4/P4-ADR-01-compose-and-isolation.md`](./P4-ADR-01-compose-and-isolation.md) | Quyết định kiến trúc `P4-ADR-01` & `P4-ADR-04`, hợp đồng biến nhận image phối hợp với `T1B`, bảng reuse/override và ma trận cô lập môi trường. |
 | | [`docs/p4/pii-field-catalog.md`](./pii-field-catalog.md) | Danh mục PII cấp trường kiểm chứng trực tiếp từ mã nguồn (Frappe + `crm` + 23 DocType `CSKH *`, log, attachment, import/export và 9 nơi lưu bản sao). |
 
@@ -111,39 +113,44 @@ Theo yêu cầu `P4.md` (§0.12, §§1–5, §18) và đối chiếu hồ sơ `P
 
 ## 4. Lệnh Vận hành & Kiểm thử Đầy đủ
 
-### 4.1. Kiểm định Tĩnh Ngoại tuyến & Preflight (Chạy được ngay, không chạm container Owner)
+### 4.1. Kiểm định Tĩnh Ngoại tuyến, Unit Test An toàn Runner & Preflight (Không chạm container Owner)
+
+> [!WARNING]
+> **Quy tắc đọc kết quả `--preflight-only`:** Khi chạy kèm `--preflight-only`, mã thoát `exit 0` chỉ có nghĩa là bước đánh giá preflight đã thực thi xong và **có thể đi kèm `"status": "BLOCKED"`**. Mọi người gọi / script kiểm chứng **bắt buộc đọc trường `status` trong JSON** (`"PREFLIGHT_READY"` so với `"BLOCKED"`).
 
 ```bash
 # 1. Kiểm định toàn bộ provenance upstream, config --services, mạng, volume, secret, cổng và 4 negative gates:
-python deploy/compose/scripts/validate_compose_config.py
+python -X utf8 deploy/compose/scripts/validate_compose_config.py
 
-# 2. Kiểm tra trạng thái preflight và danh sách blocker runtime hiện thời:
-python deploy/compose/scripts/run_isolated_smoke.py --preflight-only
+# 2. Chạy 5 unit test bảo vệ cô lập project từng lượt, từ chối tài nguyên sẵn có và khử secret:
+python -m unittest discover -s deploy/compose/scripts -p "test_*.py" -v
+
+# 3. Kiểm tra preflight hiện thời và xuất JSON + log đã khử secret (đọc trường `status` trong JSON):
+python -X utf8 deploy/compose/scripts/run_isolated_smoke.py \
+  --preflight-only \
+  --report-out deploy/compose/evidence/p4-01-preflight-report.json \
+  --log-out deploy/compose/evidence/p4-01-preflight.log
 ```
 
-### 4.2. Chạy Kiểm thử Smoke Cô lập Dữ liệu Giả Ngay khi Nhận Image từ `T1B`
+### 4.2. Chạy Kiểm thử Smoke Cô lập Dữ liệu Giả Ngay khi Nhận `APP_IMAGE` từ `T1B`
 
 ```bash
-# Trường hợp A — Nhận local immutable image ID từ T1B (khi chưa push registry, tự động bật PULL_POLICY=never):
-python deploy/compose/scripts/run_isolated_smoke.py \
-  --app-image sha256:<64_HEX_IMAGE_ID_FROM_T1B> \
+python -X utf8 deploy/compose/scripts/run_isolated_smoke.py \
+  --app-image <REPO_AT_SHA256_OR_LOCAL_SHA256_ID_FROM_T1B> \
+  --image-git-sha <T1B_COMMIT_SHA> \
   --http-port 18080 \
-  --report-out /tmp/p4-01-isolated-smoke-report.json
-
-# Trường hợp B — Nhận registry digest từ T1B:
-python deploy/compose/scripts/run_isolated_smoke.py \
-  --app-image <REGISTRY>/<NAMESPACE>/crm-cskh@sha256:<64_HEX_DIGEST_FROM_T1B> \
-  --http-port 18080 \
-  --report-out /tmp/p4-01-isolated-smoke-report.json
+  --report-out deploy/compose/evidence/p4-01-isolated-smoke-report.json \
+  --log-out deploy/compose/evidence/p4-01-isolated-smoke.log
 ```
 
-Kịch bản `run_isolated_smoke.py` thực hiện tuần tự và tự dọn sạch volume tạm khi kết thúc (`down --volumes --remove-orphans`, chỉ tác động project `crm-cskh-p4-smoke`):
+Kịch bản `run_isolated_smoke.py` đảm bảo an toàn tài nguyên tuyệt đối và ghi nhận đầy đủ bằng chứng cho `T1C`:
 
-1. Kết xuất và đối chiếu `docker compose config --services`.
-2. Khởi chạy stack cô lập `crm-cskh-p4-smoke`, chờ `db` / `redis-*` đạt `healthy` và `configurator` thoát `0`, khởi tạo site dữ liệu giả `p4-smoke.localhost` cài `frappe` + `crm` + `crm_cskh` (múi giờ `Asia/Ho_Chi_Minh`, ngôn ngữ `vi`), rồi xác nhận **cả 10 service thường trực đều đạt `health == "healthy"`**.
-3. Kiểm toán `Publishers` thực tế của toàn bộ container đang chạy: khẳng định **chỉ duy nhất `proxy`** mở `127.0.0.1:18080->80/tcp`.
-4. Chạy thử `migrator` có kiểm soát (`--profile migrate`, `MIGRATE_SITES=true`) **2 lần liên tiếp** để xác nhận tính idempotent.
-5. Kiểm tra từ chối truy cập Guest trên `/crm` và `/cskh/quality-overview`; kiểm tra đăng nhập HTTP `POST /api/method/login`, cờ cookie `sid` và `frappe.auth.get_logged_user`.
-6. Kiểm tra giao diện tiếng Việt trên `/cskh/quality-overview` và `/crm`, xác nhận hiện diện nhãn tiếng Việt và cấu hình `Asia/Ho_Chi_Minh`.
-7. Kiểm tra bảo vệ **CSRF**: gửi `POST /api/method/crm_cskh.api.p3_reporting.request_recompute` với `X-Frappe-CSRF-Token` giả mạo bắt buộc bị từ chối (`400`/`403`); gửi request kèm CSRF token thật bắt buộc thành công (`200`).
-8. Kiểm tra **Socket.IO (`EIO=4`)** đi xuyên suốt `proxy` → `frontend` → `websocket` (kèm callback xác thực nội bộ từ `websocket` về alias `p4-smoke.localhost` trên `proxy`): kết nối không xác thực bị từ chối (`44/p4-smoke.localhost`), kết nối kèm phiên đăng nhập hợp lệ được chấp nhận (`40/p4-smoke.localhost`).
+1. **Cô lập từng lượt & từ chối tài nguyên sẵn có:** Sinh định danh riêng cho từng lượt chạy (`crm-cskh-p4-smoke-<run_id>`, `p4-smoke-<run_id>.localhost`). Nếu phát hiện bất kỳ container, volume, network trùng tên hoặc cổng `127.0.0.1:<http_port>` đang bận, runner dừng ngay với `exit 3` (`status: "REFUSED_PREEXISTING_RESOURCES"`, `cleanup_invoked: false`) mà **tuyệt đối không gọi `down --volumes`**. Lệnh `down --volumes --remove-orphans` chỉ chạy khi chính lượt đó đã khởi tạo stack (`owned_stack_created == True`) và kiểm chứng `0` tài nguyên tồn đọng sau khi dọn.
+2. **Truy vết nguồn gốc (`Provenance`):** Ghi rõ `compose_provenance` (`head_sha`, `branch`, `worktree_clean`), `image_provenance` (`image_git_sha`, `app_image`, `image_id`, `repo_digests`, OCI `labels`).
+3. **Khởi tạo dữ liệu giả, Healthcheck & Kiểm toán cổng:** Cài đặt `frappe` + `crm` + `crm_cskh` với `language=vi`, `time_zone=Asia/Ho_Chi_Minh` và bản ghi `CRM Lead` giả lập (`0900000123`, `synthetic-smoke@example.invalid`); xác nhận cả 10 service thường trực đạt `health == "healthy"`, `configurator` thoát `0`, và chỉ duy nhất `proxy` mở `127.0.0.1:<http_port>->80/tcp`.
+4. **Diễn tập `migrator` x2:** Chạy `--profile migrate run --rm migrator` 2 lần liên tiếp (`MIGRATE_SITES=true`), ghi mã thoát `0` và thời gian thực thi từng lượt.
+5. **Đăng nhập, Giao diện tiếng Việt & CSRF:** Kiểm chặn Guest (`302`/`403`), đăng nhập `Administrator`, trích xuất danh sách nhãn tiếng Việt thực tế + `Asia/Ho_Chi_Minh`, kiểm từ chối CSRF giả mạo + thiếu CSRF (`400`/`403`) và chấp nhận CSRF hợp lệ (`200`).
+6. **Báo cáo tách bạch Socket.IO `polling` và RFC 6455 `websocket`:**
+   - `socketio_polling`: kiểm tra `transport=polling` từ chối phiên chưa đăng nhập (`44/<site>`) và chấp nhận phiên hợp lệ (`40/<site>`).
+   - `socketio_websocket`: chỉ ghi `PASS` kèm bằng chứng HTTP `101 Switching Protocols`, xác thực chữ ký `Sec-WebSocket-Accept` và nhật ký trao đổi frame thực tế (`2probe` → `3probe` → `5`, `0{...}` → `40/<site>,` → `40/<site>,{"sid":...}`, và Ping/Pong RFC 6455 `0x9` → `0xA`).
+7. **Khử secret tự động (`SmokeLogger`):** Toàn bộ mật khẩu tạm của DB/Admin, cookie `sid`, token CSRF và mã phiên Socket.IO đều được khử thành `<REDACTED_*>` và kiểm chứng không rò rỉ trước khi ghi JSON & log.
