@@ -1,0 +1,64 @@
+{
+  "upstream_repository": "https://github.com/frappe/frappe_docker",
+  "pinned_tag": "v4.0.1",
+  "pinned_commit_sha": "2b26e9ab8d751e5ea33bb7b930aea3550bb81ded",
+  "license": "MIT",
+  "source_version_lock": "docs/architecture/version-lock.md#L44",
+  "modification_policy": "Strictly unmodified upstream files; all CRM-CSKH customizations live in deploy/compose/overrides/*.yaml.",
+  "files": [
+    {
+      "path": "LICENSE",
+      "git_blob_sha1": "c4e7b3dc6f56a3ca6718b9c00abecc073a7cf57a",
+      "sha256": "4234a14fb0a788985bf429eb9ea73bfb93139967e8dcee191f7d4f621970c800",
+      "size_bytes": 1086
+    },
+    {
+      "path": "compose.yaml",
+      "git_blob_sha1": "6d82ee8f4489347d301ec4e47991e7e7dde77bfe",
+      "sha256": "23639b9216b99956ca77943fd94e98ab8500acc0e0b4693af3e542b1cdcd3016",
+      "size_bytes": 3184
+    },
+    {
+      "path": "overrides/compose.mariadb.yaml",
+      "git_blob_sha1": "94e177c38707a40bdd2715287565c80e41c4f3d3",
+      "sha256": "4e936ef4be168ab28e18126642d044cff69464d9b12cef98153d42d22f403db2",
+      "size_bytes": 675
+    },
+    {
+      "path": "overrides/compose.mariadb-secrets.yaml",
+      "git_blob_sha1": "2e90446319699749b0685a1592171db877cc5a1d",
+      "sha256": "9fdc20e898c7deef86746f62bd2a4345bb0c1208efa3b85bb00dfb5c58f98986",
+      "size_bytes": 248
+    },
+    {
+      "path": "overrides/compose.redis.yaml",
+      "git_blob_sha1": "64bc05ac2e955719822718e5118a62d0c9771e24",
+      "sha256": "ee757a39ca74e3a56409b4b2c0b22e66877c824aa1c9b4ddcb100300ba2a671b",
+      "size_bytes": 389
+    },
+    {
+      "path": "overrides/compose.https.yaml",
+      "git_blob_sha1": "10dbbf587dabdd155c9e5991f4e669c86cac6129",
+      "sha256": "a6cb1eddd87d869639f5e786795127ef6950213a619abc57b0141091f0d5926f",
+      "size_bytes": 1428
+    },
+    {
+      "path": "overrides/compose.proxy.yaml",
+      "git_blob_sha1": "1594ac0e02a35dea867fb74400fdbe571a430f2a",
+      "sha256": "66edc9dcf7a7119411399974d887ea2b6b4f7fc6d291793fc0ca5247d84561c8",
+      "size_bytes": 668
+    },
+    {
+      "path": "overrides/compose.noproxy.yaml",
+      "git_blob_sha1": "e32d76135397c5591244cec678ab2cbcfe3cd353",
+      "sha256": "076e119afc713a535ce7b29f9cffca938f94347c6189195eecdfbe2bda2f5959",
+      "size_bytes": 95
+    },
+    {
+      "path": "overrides/compose.migrator.yaml",
+      "git_blob_sha1": "8a96107faae3ff65d2ecbe8b3c23e8b9fd803ff5",
+      "sha256": "4a75d5c0e4f059cd08d6a3b3c2ffc62883bd7b407063e8569ad51381174fb2a2",
+      "size_bytes": 1538
+    }
+  ]
+}

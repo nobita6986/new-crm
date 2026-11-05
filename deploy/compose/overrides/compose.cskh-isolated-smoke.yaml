@@ -1,0 +1,51 @@
+# deploy/compose/overrides/compose.cskh-isolated-smoke.yaml
+#
+# P4-01 Isolated Local Smoke / Rehearsal Override (synthetic data only).
+# Layered on top of upstream/frappe_docker/overrides/compose.proxy.yaml:
+#   - Preserves the identical 11-service proxy -> frontend -> backend/websocket
+#     topology without requiring public DNS or Let's Encrypt ACME.
+#   - Binds proxy ONLY to loopback 127.0.0.1:${HTTP_PUBLISH_PORT:-18080}:80.
+#   - Replaces wildcard HostRegexp with explicit SITES_RULE and edge_net routing.
+#   - Clears userns_mode: host from upstream compose.proxy.yaml for WSL2/rootful compatibility.
+
+services:
+  frontend:
+    labels: !override
+      - traefik.enable=true
+      - traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+      - traefik.http.services.frontend.loadbalancer.server.port=${NGINX_LISTEN_PORT:-8080}
+      - traefik.http.routers.frontend-http.entrypoints=web
+      - traefik.http.routers.frontend-http.rule=${SITES_RULE:?SITES_RULE not set}
+
+  proxy:
+    image: ${PROXY_IMAGE:?set PROXY_IMAGE to traefik@sha256:digest}
+    pull_policy: ${INFRA_PULL_POLICY:-missing}
+    userns_mode: !reset ""
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: ${LOG_MAX_SIZE:-20m}
+        max-file: "${LOG_MAX_FILE:-5}"
+    command: !override
+      - --ping=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.underscoreHeadersStrategy=delete
+    ports: !override
+      - "127.0.0.1:${HTTP_PUBLISH_PORT:-18080}:80"
+    mem_limit: ${PROXY_MEM_LIMIT:-256m}
+    cpus: ${PROXY_CPUS:-0.5}
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      edge_net:
+        aliases:
+          - ${SITE_NAME:?set SITE_NAME in env}
