@@ -1,0 +1,40 @@
+{
+  "schema_version": "cskh-image-build-manifest-v1",
+  "base_image": "python:3.11.18-slim-bookworm@sha256:6cbe849bdc876ecd413a4a09a919a0d861d908589de9eba61e886c29af793a07",
+  "frappe_docker": {
+    "tag": "v4.0.1",
+    "commit_sha": "2b26e9ab8d751e5ea33bb7b930aea3550bb81ded"
+  },
+  "apps": {
+    "frappe": {
+      "tag": "v15.123.1",
+      "commit_sha": "d2efa79657ba5c1abf96098b3bfacc199517d57e"
+    },
+    "crm": {
+      "tag": "v1.87.0",
+      "commit_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778"
+    },
+    "crm_cskh": {
+      "declared_version": "0.0.1",
+      "baseline_main_sha": "92e14af3532876ad5bc2468bf0e502474cc95a53",
+      "source_commit_sha": "92e14af3532876ad5bc2468bf0e502474cc95a53",
+      "apps_tree_sha": "b37e2cbdd99c88c7bd5620912de4519b53b2c159",
+      "crm_cskh_tree_sha": "da6373a01ad963301877f69c413fdda9a361f718",
+      "files_manifest_sha256": "e0042f63a06d432bd8d75ad77a3c19dcf71d8d135df84b1c578cd4adae0b6957"
+    }
+  },
+  "toolchain": {
+    "python": "Python 3.11.18",
+    "node": "v22.23.3",
+    "yarn": "1.22.22",
+    "bench": "5.31.0"
+  },
+  "locks": {
+    "pip_freeze_sha256": "b95703859aabb0b288b4e72330949c00a3d1e81db0915643a6ee20ca10479f8e",
+    "yarn_locks_sha256": "c35d7b90edc0947e60d5c24f0292159759136535661f9bb4c179711663699995",
+    "dpkg_packages_sha256": "ca7d8013b43b5af77f78e3a2468f3994f630f18b37f1268d93070438a2a79be3",
+    "upstream_patches_diff_sha256": "28ef5d205288bc48cec4f1ce8d09a6daeb203b333419ea70d299f6cceb53260f",
+    "assets_json_sha256": "d5f25ba7ceef8dd337b31db9eb896d53981633d402357c941f578b16a4df1d08",
+    "crm_www_html_sha256": "94b0d51a060966e39538beb0bb01bc0a936c67b7597c0005e9650cda73f45d5c"
+  }
+}
