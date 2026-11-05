@@ -1,23 +1,32 @@
 {
   "suite": "p3_http_e2e",
-  "site": "p3ui.localhost",
-  "base_url": "http://127.0.0.1:8320",
-  "git_sha": "707bb2fec7efccb32e5040ec507f6ad3891d02d6",
-  "apps_tree": "bd4b30056f7d16d184713fe5046e79a2575c7853",
-  "started_at": "2026-11-04T14:55:35.707892+00:00",
-  "completed_at": "2026-11-04T14:58:17.090063+00:00",
-  "total_assertions": 186,
-  "passed": 186,
+  "site": "p3-e2e.localhost",
+  "base_url": "http://127.0.0.1:18420",
+  "git_sha": "c62b1c22136970484a4cb44794235f46bf5f4a7e",
+  "apps_tree": "aa3610a8672d1bdee672f5ac5b02d833de6463b7",
+  "started_at": "2026-11-05T09:22:36.270220+00:00",
+  "completed_at": "2026-11-05T09:24:20.629855+00:00",
+  "total_assertions": 196,
+  "passed": 196,
   "failed": 0,
   "seed_summary": {
-    "site": "p3ui.localhost",
+    "site": "p3-e2e.localhost",
     "timezone": "Asia/Ho_Chi_Minh",
-    "server_now": "2026-11-04 21:58:16.523308",
+    "server_now": "2026-11-05 16:24:20.157474",
     "period_key": "2026-11",
-    "daily_key": "2026-11-04",
-    "campaign_id": "juq7ukhitd",
-    "team_a": "julnmpc0pf",
-    "team_b": "juoo09mm59",
+    "prev_period_key": "2026-10",
+    "daily_key": "2026-11-05",
+    "campaign_id": "s22jtagdei",
+    "private_campaign_a": "s22t6nmmp7",
+    "lead_sources": [
+      "Website",
+      "Facebook",
+      "Hotline"
+    ],
+    "team_a": "s1vg0afula",
+    "team_a_name": "=CMD|' /C calc'!A0 Nhóm CSKH Miền Bắc",
+    "team_b": "s21vabq1dm",
+    "team_b_name": "Nhóm CSKH Miền Nam",
     "users": {
       "admin": "cskh-p3-admin@example.test",
       "bod": "cskh-p3-bod@example.test",
@@ -32,9 +41,13 @@
     "golden_employee": "cskh-p3-staff-b@example.test",
     "zero_denominator_employee": "cskh-p3-staff-c@example.test",
     "transferred_employee": "cskh-p3-staff-d@example.test",
-    "transferred_work_item": "k1frrt076m",
-    "aba_work_item": "k1jqid16rs",
-    "sample_obligation_id": "k1cfkq2fu5"
+    "transferred_work_item": "s42o1ah2pi",
+    "aba_work_item": "s44n6idmj7",
+    "sample_obligation_id": "s3tb17qbe0",
+    "transferred_emp_team_a_obligation": "s49d0i2ora",
+    "private_team_a_lead": "CRM-LEAD-2026-01891",
+    "private_team_a_work_item": "s4am6u9edq",
+    "private_team_a_obligation": "s4as65mm3d"
   },
   "assertions": [
     {
@@ -1259,23 +1272,25 @@
       "detail": "BOD executive overview returns 200 with 0 raw customer PII",
       "evidence": {
         "freshness": {
-          "run_id": "ilknj8fjld",
+          "run_id": "r8p198n13e",
           "run_mode": "restated",
           "snapshot_status": "fresh",
-          "as_of": "2026-11-04T21:55:52+07:00",
-          "source_watermark": "2026-11-04T21:55:52+07:00",
+          "as_of": "2026-11-05T16:22:48+07:00",
+          "source_watermark": "2026-11-05T16:22:48+07:00",
           "is_restated": true,
-          "restated_from_run": "ilcjbq5f7v",
+          "restated_from_run": "r8gfbmgf2c",
           "dirty_pending": false,
-          "metric_version": "cskh-metrics-v1"
+          "metric_version": "cskh-metrics-v2"
         },
         "actor_scope": {
           "user": "cskh-p3-bod@example.test",
           "role_profile": "bod",
           "pii_allowed": false,
+          "p3_enabled": true,
           "qa_enabled": false,
           "p3_sla_enabled": true,
-          "p3_reporting_enabled": true
+          "p3_reporting_enabled": true,
+          "p3_export_enabled": true
         }
       }
     },
@@ -1293,7 +1308,9 @@
         "status": "disabled",
         "reason": "qa_disabled_by_policy",
         "informational_only": false,
-        "drilldown_supported": false
+        "drilldown_supported": false,
+        "sample_count": 0,
+        "targeted_sample_count": 0
       }
     },
     {
@@ -1303,19 +1320,91 @@
       "evidence": {
         "metric_code": "PROCESS_SCORE",
         "label_vi": "Điểm tuân thủ quy trình tổng hợp (0-100)",
-        "value": 86.69,
-        "numerator": 7368.35,
+        "value": 84.82,
+        "numerator": 72.1,
+        "raw_points_total": 72.1,
+        "raw_weight_rate_product": 7209.75,
         "denominator": 85.0,
         "unit": "score_100",
         "status": "provisional",
         "reason": "qa_component_excluded_reweighted",
         "valid_weight": 85,
         "total_configured_weight": 100,
+        "configured_weight_total": 100,
         "missing_components": [
           "C5_QA_QUALITY"
         ],
+        "status_label_vi": "84,82 — Tạm tính; thiếu mẫu QA",
         "informational_only": false,
         "drilldown_supported": false
+      }
+    },
+    {
+      "id": "P3-F01-REQUIRED-METRICS",
+      "status": "PASS",
+      "detail": "Executive overview exposes all mandatory P3.md §7 metrics",
+      "evidence": {
+        "missing": []
+      }
+    },
+    {
+      "id": "P3-F03-VERIFIED-ATTEMPTS-PRESERVED",
+      "status": "PASS",
+      "detail": "System-verified CSKH Contact Attempt count (>0) preserved when qa_enabled=false",
+      "evidence": {
+        "attempt_breakdown": {
+          "attempted": 35,
+          "connected": 28,
+          "self_reported": 30,
+          "verified": 4,
+          "disputed": 1
+        },
+        "verification_rate": {
+          "metric_code": "VERIFICATION_RATE",
+          "label_vi": "Tỷ lệ kết quả đã xác minh (Verified)",
+          "value": 11.43,
+          "numerator": 4,
+          "denominator": 35,
+          "unit": "percent",
+          "status": "ok",
+          "reason": null,
+          "informational_only": false,
+          "drilldown_supported": true
+        }
+      }
+    },
+    {
+      "id": "P3-F10-TREND-SERIES-NON-NULL",
+      "status": "PASS",
+      "detail": "Executive overview trend_series contains real numeric KPI points",
+      "evidence": {
+        "points": 30,
+        "sample": [
+          {
+            "bucket": "2026-11-04",
+            "contact_attempts": 1,
+            "connected_attempts": 1,
+            "tried_intervals": 1,
+            "connected_intervals": 1,
+            "connected_rate": 100.0,
+            "first_attempt_sla_rate": 100.0,
+            "first_touch_on_time_rate": 100.0,
+            "followup_sla_rate": null,
+            "followup_on_time_rate": null
+          },
+          {
+            "bucket": "2026-11-05",
+            "contact_attempts": 34,
+            "connected_attempts": 27,
+            "tried_intervals": 24,
+            "connected_intervals": 17,
+            "connected_rate": 70.83,
+            "first_attempt_sla_rate": 83.33,
+            "first_touch_on_time_rate": 83.33,
+            "followup_sla_rate": 75.0,
+            "followup_on_time_rate": 75.0
+          }
+        ]
       }
     },
     {
@@ -1323,26 +1412,75 @@
       "status": "PASS",
       "detail": "Campaign distinct_work_items < ownership_intervals_count under A -> B -> A transfer",
       "evidence": {
-        "campaign_id": "ihtpr0du1g",
+        "campaign_id": "r5q10intpo",
         "campaign_name": "Chiến dịch Chăm sóc Khách hàng P3",
-        "distinct_work_items": 26,
-        "ownership_intervals_count": 29,
-        "work_items_touched": 24,
+        "lead_source": "Facebook, Hotline, Website",
+        "distinct_work_items": 29,
+        "ownership_intervals_count": 32,
+        "work_items_touched": 25,
         "contact_attempt_count": 34,
+        "campaign_conversion_rate": {
+          "metric_code": "CONVERSION_RATE",
+          "label_vi": "Tỷ lệ chuyển đổi đạt mục tiêu chiến dịch",
+          "value": 0.0,
+          "numerator": 0,
+          "denominator": 29,
+          "unit": "percent",
+          "status": "ok",
+          "reason": null,
+          "informational_only": false,
+          "drilldown_supported": true
+        },
         "attempt_breakdown": {
           "attempted": 34,
-          "connected": 29,
-          "self_reported": 34,
-          "verified": 0,
-          "disputed": 0
+          "connected": 27,
+          "self_reported": 29,
+          "verified": 4,
+          "disputed": 1
         },
         "metrics": {
+          "ASSIGNED_INTERVALS": {
+            "metric_code": "ASSIGNED_INTERVALS",
+            "label_vi": "Lượt nhận khách (Khoảng trách nhiệm)",
+            "value": 32,
+            "numerator": 32,
+            "denominator": null,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": false
+          },
+          "UNIQUE_ASSIGNED_ITEMS": {
+            "metric_code": "UNIQUE_ASSIGNED_ITEMS",
+            "label_vi": "Khách được giao duy nhất",
+            "value": 29,
+            "numerator": 29,
+            "denominator": null,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": false
+          },
+          "ELIGIBLE_COVERAGE": {
+            "metric_code": "ELIGIBLE_COVERAGE",
+            "label_vi": "Tỷ lệ phủ liên hệ trên hồ sơ đủ điều kiện",
+            "value": 80.0,
+            "numerator": 24,
+            "denominator": 30,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
           "WORK_ITEM_FIRST_ATTEMPT_SLA_RATE": {
             "metric_code": "WORK_ITEM_FIRST_ATTEMPT_SLA_RATE",
             "label_vi": "Tỷ lệ đạt SLA liên hệ lần đầu (Cấp Hồ sơ khách hàng)",
-            "value": 84.62,
-            "numerator": 22,
-            "denominator": 26,
+            "value": 82.76,
+            "numerator": 24,
+            "denominator": 29,
             "unit": "percent",
             "status": "ok",
             "reason": null,
@@ -1352,9 +1490,9 @@
           "FIRST_ATTEMPT_SLA_RATE": {
             "metric_code": "FIRST_ATTEMPT_SLA_RATE",
             "label_vi": "Tỷ lệ đạt SLA liên hệ lần đầu (Khoảng trách nhiệm)",
-            "value": 85.19,
-            "numerator": 23,
-            "denominator": 27,
+            "value": 83.33,
+            "numerator": 25,
+            "denominator": 30,
             "unit": "percent",
             "status": "ok",
             "reason": null,
@@ -1364,9 +1502,9 @@
           "FOLLOWUP_SLA_RATE": {
             "metric_code": "FOLLOWUP_SLA_RATE",
             "label_vi": "Tỷ lệ đạt SLA lịch hẹn gọi lại (Callback)",
-            "value": 70.0,
-            "numerator": 7,
-            "denominator": 10,
+            "value": 75.0,
+            "numerator": 3,
+            "denominator": 4,
             "unit": "percent",
             "status": "ok",
             "reason": null,
@@ -1376,9 +1514,9 @@
           "FIRST_CONNECTED_TRACKING_RATE": {
             "metric_code": "FIRST_CONNECTED_TRACKING_RATE",
             "label_vi": "Tỷ lệ kết nối trong ngưỡng theo dõi (Tham khảo)",
-            "value": 73.08,
-            "numerator": 19,
-            "denominator": 26,
+            "value": 60.0,
+            "numerator": 18,
+            "denominator": 30,
             "unit": "percent",
             "status": "ok",
             "reason": null,
@@ -1402,7 +1540,7 @@
             "label_vi": "Tổng lượt liên hệ hợp lệ (Effective Attempts)",
             "value": 34,
             "numerator": 34,
-            "denominator": 1,
+            "denominator": null,
             "unit": "count",
             "status": "ok",
             "reason": null,
@@ -1410,30 +1548,42 @@
             "drilldown_supported": true,
             "attempt_breakdown": {
               "attempted": 34,
-              "connected": 29,
-              "self_reported": 34,
-              "verified": 0,
-              "disputed": 0
+              "connected": 27,
+              "self_reported": 29,
+              "verified": 4,
+              "disputed": 1
             }
           },
           "CONNECTED_ATTEMPT_COUNT": {
             "metric_code": "CONNECTED_ATTEMPT_COUNT",
             "label_vi": "Tổng lượt kết nối thành công",
-            "value": 29,
-            "numerator": 29,
-            "denominator": 1,
+            "value": 27,
+            "numerator": 27,
+            "denominator": null,
             "unit": "count",
             "status": "ok",
             "reason": null,
             "informational_only": false,
             "drilldown_supported": false
           },
+          "CONNECTED_ITEMS": {
+            "metric_code": "CONNECTED_ITEMS",
+            "label_vi": "Khách kết nối thành công duy nhất",
+            "value": 18,
+            "numerator": 18,
+            "denominator": null,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
           "CONNECTED_RATE": {
             "metric_code": "CONNECTED_RATE",
-            "label_vi": "Tỷ lệ kết nối thành công",
-            "value": 85.29,
-            "numerator": 29,
-            "denominator": 34,
+            "label_vi": "Tỷ lệ kết nối thành công (Cấp Khoảng trách nhiệm)",
+            "value": 70.83,
+            "numerator": 17,
+            "denominator": 24,
             "unit": "percent",
             "status": "ok",
             "reason": null,
@@ -1443,22 +1593,46 @@
           "WORK_ITEMS_TOUCHED": {
             "metric_code": "WORK_ITEMS_TOUCHED",
             "label_vi": "Số hồ sơ công việc đã tác nghiệp",
-            "value": 24,
-            "numerator": 24,
-            "denominator": 1,
+            "value": 25,
+            "numerator": 25,
+            "denominator": null,
             "unit": "count",
             "status": "ok",
             "reason": null,
             "informational_only": false,
             "drilldown_supported": false,
-            "intervals_touched": 24
+            "intervals_touched": 25
           },
           "VALID_OUTCOME_LOGGING_RATE": {
             "metric_code": "VALID_OUTCOME_LOGGING_RATE",
-            "label_vi": "Tỷ lệ ghi nhận kết quả chuẩn xác (Data Hygiene)",
-            "value": 97.06,
-            "numerator": 33,
+            "label_vi": "Tỷ lệ cập nhật kết quả đầy đủ (Outcome Completeness)",
+            "value": 100.0,
+            "numerator": 34,
             "denominator": 34,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "VERIFICATION_RATE": {
+            "metric_code": "VERIFICATION_RATE",
+            "label_vi": "Tỷ lệ kết quả đã xác minh (Verified)",
+            "value": 11.76,
+            "numerator": 4,
+            "denominator": 34,
+            "unit": "percent",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "CONVERSION_RATE": {
+            "metric_code": "CONVERSION_RATE",
+            "label_vi": "Tỷ lệ chuyển đổi đạt mục tiêu chiến dịch",
+            "value": 0.0,
+            "numerator": 0,
+            "denominator": 29,
             "unit": "percent",
             "status": "ok",
             "reason": null,
@@ -1492,9 +1666,9 @@
           "CALLBACK_COMPLETION_RATE": {
             "metric_code": "CALLBACK_COMPLETION_RATE",
             "label_vi": "Tỷ lệ hoàn tất lịch hẹn hợp lệ",
-            "value": 80.0,
-            "numerator": 8,
-            "denominator": 10,
+            "value": 100.0,
+            "numerator": 4,
+            "denominator": 4,
             "unit": "percent",
             "status": "ok",
             "reason": null,
@@ -1506,7 +1680,7 @@
             "label_vi": "Tỷ lệ dời lịch hẹn (Reschedule)",
             "value": 0.0,
             "numerator": 0,
-            "denominator": 10,
+            "denominator": 4,
             "unit": "percent",
             "status": "ok",
             "reason": null,
@@ -1517,13 +1691,91 @@
             "metric_code": "DNC_COMPLIANCE_RATE",
             "label_vi": "Tỷ lệ tuân thủ DNC & kỷ luật đóng hồ sơ",
             "value": 100.0,
-            "numerator": 29,
-            "denominator": 29,
+            "numerator": 33,
+            "denominator": 33,
             "unit": "percent",
             "status": "ok",
             "reason": null,
             "informational_only": false,
             "drilldown_supported": true
+          },
+          "OVERDUE_BACKLOG": {
+            "metric_code": "OVERDUE_BACKLOG",
+            "label_vi": "Hồ sơ công việc đang tồn quá hạn",
+            "value": 4,
+            "numerator": 4,
+            "denominator": null,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "OPEN_FOLLOWUPS_OVERDUE": {
+            "metric_code": "OPEN_FOLLOWUPS_OVERDUE",
+            "label_vi": "Lịch hẹn gọi lại đang quá hạn",
+            "value": 0,
+            "numerator": 0,
+            "denominator": null,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "SLA_BREACH_COUNT": {
+            "metric_code": "SLA_BREACH_COUNT",
+            "label_vi": "Tổng số nghĩa vụ vi phạm SLA trong kỳ",
+            "value": 6,
+            "numerator": 6,
+            "denominator": null,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "SLA_WAIVER_COUNT": {
+            "metric_code": "SLA_WAIVER_COUNT",
+            "label_vi": "Số nghĩa vụ được miễn trừ hợp lệ",
+            "value": 1,
+            "numerator": 1,
+            "denominator": null,
+            "unit": "count",
+            "status": "ok",
+            "reason": null,
+            "informational_only": false,
+            "drilldown_supported": true
+          },
+          "FIRST_ATTEMPT_LATENCY_P50_MINUTES": {
+            "metric_code": "FIRST_ATTEMPT_LATENCY_P50_MINUTES",
+            "label_vi": "Trung vị thời gian phản hồi lần đầu (Phút làm việc - P50)",
+            "value": 10.0,
+            "numerator": 10.0,
+            "denominator": null,
+            "sample_count": 24,
+            "unit": "minutes_business",
+            "status": "ok",
+            "reason": null,
+            "informational_only": true,
+            "drilldown_supported": false,
+            "wall_minutes": 10.0,
+            "pending_or_untouched_count": 8
+          },
+          "FIRST_ATTEMPT_LATENCY_P90_MINUTES": {
+            "metric_code": "FIRST_ATTEMPT_LATENCY_P90_MINUTES",
+            "label_vi": "Phân vị P90 thời gian phản hồi lần đầu (Phút làm việc - P90)",
+            "value": 10.0,
+            "numerator": 10.0,
+            "denominator": null,
+            "sample_count": 24,
+            "unit": "minutes_business",
+            "status": "ok",
+            "reason": null,
+            "informational_only": true,
+            "drilldown_supported": false,
+            "wall_minutes": 10.0,
+            "pending_or_untouched_count": 8
           },
           "QA_PASS_RATE": {
             "metric_code": "QA_PASS_RATE",
@@ -1535,22 +1787,28 @@
             "status": "disabled",
             "reason": "qa_disabled_by_policy",
             "informational_only": false,
-            "drilldown_supported": false
+            "drilldown_supported": false,
+            "sample_count": 0,
+            "targeted_sample_count": 0
           },
           "PROCESS_SCORE": {
             "metric_code": "PROCESS_SCORE",
             "label_vi": "Điểm tuân thủ quy trình tổng hợp (0-100)",
-            "value": 86.69,
-            "numerator": 7368.35,
+            "value": 84.51,
+            "numerator": 71.83,
+            "raw_points_total": 71.83,
+            "raw_weight_rate_product": 7183.25,
             "denominator": 85.0,
             "unit": "score_100",
             "status": "provisional",
             "reason": "qa_component_excluded_reweighted",
             "valid_weight": 85,
             "total_configured_weight": 100,
+            "configured_weight_total": 100,
             "missing_components": [
               "C5_QA_QUALITY"
             ],
+            "status_label_vi": "84,51 — Tạm tính; thiếu mẫu QA",
             "informational_only": false,
             "drilldown_supported": false
           }
@@ -1568,23 +1826,152 @@
     {
       "id": "P3-GOLDEN-8647",
       "status": "PASS",
-      "detail": "Golden employee PROCESS_SCORE equals 86.47 (7350/85) provisional",
+      "detail": "Golden employee PROCESS_SCORE equals 86.47 (73.50 / 85) provisional",
       "evidence": {
         "metric_code": "PROCESS_SCORE",
         "label_vi": "Điểm tuân thủ quy trình tổng hợp (0-100)",
         "value": 86.47,
-        "numerator": 7350.0,
+        "numerator": 73.5,
+        "raw_points_total": 73.5,
+        "raw_weight_rate_product": 7350.0,
         "denominator": 85.0,
         "unit": "score_100",
         "status": "provisional",
         "reason": "qa_component_excluded_reweighted",
         "valid_weight": 85,
         "total_configured_weight": 100,
+        "configured_weight_total": 100,
         "missing_components": [
           "C5_QA_QUALITY"
         ],
+        "status_label_vi": "86,47 — Tạm tính; thiếu mẫu QA",
         "informational_only": false,
         "drilldown_supported": false
+      }
+    },
+    {
+      "id": "P3-F01-CONNECTED-RATE-INTERVAL-GRAIN",
+      "status": "PASS",
+      "detail": "CONNECTED_RATE uses ownership_interval grain (7/8 = 87.50%), never divided by total calls",
+      "evidence": {
+        "connected_rate": {
+          "metric_code": "CONNECTED_RATE",
+          "label_vi": "Tỷ lệ kết nối thành công (Cấp Khoảng trách nhiệm)",
+          "value": 87.5,
+          "numerator": 7,
+          "denominator": 8,
+          "unit": "percent",
+          "status": "ok",
+          "reason": null,
+          "informational_only": false,
+          "drilldown_supported": true
+        },
+        "attempts_count": {
+          "metric_code": "CONTACT_ATTEMPT_COUNT",
+          "label_vi": "Tổng lượt liên hệ hợp lệ (Effective Attempts)",
+          "value": 18,
+          "numerator": 18,
+          "denominator": null,
+          "unit": "count",
+          "status": "ok",
+          "reason": null,
+          "informational_only": false,
+          "drilldown_supported": true,
+          "attempt_breakdown": {
+            "attempted": 18,
+            "connected": 17,
+            "self_reported": 14,
+            "verified": 4,
+            "disputed": 0
+          }
+        }
+      }
+    },
+    {
+      "id": "P3-F09-SCORE-COMPONENT-BOUNDS",
+      "status": "PASS",
+      "detail": "Score components use canonical P3.md §7.5 rates (22.50 + 16.00 + 20.00 + 15.00 = 73.50 / 85 = 86.47) with 0 <= raw_points <= weight",
+      "evidence": {
+        "raw_points": [
+          22.5,
+          16.0,
+          20.0,
+          15.0
+        ],
+        "components": [
+          {
+            "component_code": "C1_FIRST_ATTEMPT_SLA",
+            "metric_key": "FIRST_ATTEMPT_SLA_RATE",
+            "label_vi": "SLA liên hệ lần đầu đúng hạn",
+            "weight": 25,
+            "configured_weight": 25,
+            "rate_value": 90.0,
+            "numerator": 9,
+            "denominator": 10,
+            "status": "ok",
+            "participates": true,
+            "scale": "points_0_100",
+            "weighted_points": 22.5,
+            "raw_weighted_points": 22.5,
+            "reweighted_points": 26.47,
+            "normalized_contribution": 26.47,
+            "raw_weight_rate_product": 2250.0
+          },
+          {
+            "component_code": "ELIGIBLE_COVERAGE",
+            "metric_key": "ELIGIBLE_COVERAGE",
+            "label_vi": "Tỷ lệ phủ hồ sơ được giao đủ điều kiện",
+            "weight": 20,
+            "configured_weight": 20,
+            "rate_value": 80.0,
+            "numerator": 8,
+            "denominator": 10,
+            "status": "ok",
+            "participates": true,
+            "scale": "points_0_100",
+            "weighted_points": 16.0,
+            "raw_weighted_points": 16.0,
+            "reweighted_points": 18.82,
+            "normalized_contribution": 18.82,
+            "raw_weight_rate_product": 1600.0
+          },
+          {
+            "component_code": "C3_DATA_HYGIENE",
+            "metric_key": "VALID_OUTCOME_LOGGING_RATE",
+            "label_vi": "Cập nhật kết quả đầy đủ",
+            "weight": 20,
+            "configured_weight": 20,
+            "rate_value": 100.0,
+            "numerator": 18,
+            "denominator": 18,
+            "status": "ok",
+            "participates": true,
+            "scale": "points_0_100",
+            "weighted_points": 20.0,
+            "raw_weighted_points": 20.0,
+            "reweighted_points": 23.53,
+            "normalized_contribution": 23.53,
+            "raw_weight_rate_product": 2000.0
+          },
+          {
+            "component_code": "FOLLOWUP_SLA_RATE",
+            "metric_key": "FOLLOWUP_SLA_RATE",
+            "label_vi": "SLA chăm sóc đúng lịch hẹn",
+            "weight": 20,
+            "configured_weight": 20,
+            "rate_value": 75.0,
+            "numerator": 3,
+            "denominator": 4,
+            "status": "ok",
+            "participates": true,
+            "scale": "points_0_100",
+            "weighted_points": 15.0,
+            "raw_weighted_points": 15.0,
+            "reweighted_points": 17.65,
+            "normalized_contribution": 17.65,
+            "raw_weight_rate_product": 1500.0
+          }
+        ]
       }
     },
     {
@@ -1659,6 +2046,28 @@
       }
     },
     {
+      "id": "SEC-BOD-SLA-READONLY-ZERO-PII",
+      "status": "PASS",
+      "detail": "BOD denied raw list_obligations & waive_obligation (403) while receiving 200 zero-PII SLA drilldown rows",
+      "evidence": {
+        "raw_list_http": 403,
+        "drilldown_http": 200,
+        "row_count": 20,
+        "waive_http": 403
+      }
+    },
+    {
+      "id": "SEC-F04-TRANSFER-TEAM-ISOLATION",
+      "status": "PASS",
+      "detail": "Leader B blocked from Team A historical SLA obligations & closed private Team A Lead after employee transfer",
+      "evidence": {
+        "team_a_ob_in_leader_a": true,
+        "team_a_ob_in_leader_b": false,
+        "leader_b_leaked_team_a_rows": 0,
+        "leader_b_private_lead_http": 403
+      }
+    },
+    {
       "id": "SEC-S09",
       "status": "PASS",
       "detail": "BOD denied PII drill-down and raw CSKH SLA Obligation table access",
@@ -1686,80 +2095,113 @@
       }
     },
     {
+      "id": "P3-F10-FILTER-OPTIONS-SCOPED",
+      "status": "PASS",
+      "detail": "get_filter_options returns real campaigns, teams, and lead_sources strictly scoped per actor",
+      "evidence": {
+        "bod_teams": 2,
+        "bod_sources": [
+          {
+            "value": "Facebook",
+            "label": "Facebook"
+          },
+          {
+            "value": "Hotline",
+            "label": "Hotline"
+          },
+          {
+            "value": "Website",
+            "label": "Website"
+          }
+        ],
+        "leader_a_teams": [
+          "r5nlb01oek"
+        ]
+      }
+    },
+    {
+      "id": "P3-F10-LEAD-SOURCE-FILTER-EFFECT",
+      "status": "PASS",
+      "detail": "lead_source='Website' narrows server FIRST_ATTEMPT denominator (10 < 31)",
+      "evidence": {
+        "website_denominator": 10,
+        "all_denominator": 31
+      }
+    },
+    {
       "id": "DRILL-FIRST_ATTEMPT_SLA_RATE",
       "status": "PASS",
-      "detail": "Drilldown FIRST_ATTEMPT_SLA_RATE reconciles cohort total (27 == 23 + 4) with snapshot denominator (27)",
+      "detail": "Drilldown FIRST_ATTEMPT_SLA_RATE reconciles cohort total (31 == 26 + 5) with snapshot denominator (31)",
       "evidence": {
-        "all": 27,
-        "met": 23,
-        "unmet": 4,
-        "snapshot_denominator": 27
+        "all": 31,
+        "met": 26,
+        "unmet": 5,
+        "snapshot_denominator": 31
       }
     },
     {
       "id": "DRILL-WORK_ITEM_FIRST_ATTEMPT_SLA_RATE",
       "status": "PASS",
-      "detail": "Drilldown WORK_ITEM_FIRST_ATTEMPT_SLA_RATE reconciles cohort total (26 == 22 + 4) with snapshot denominator (26)",
+      "detail": "Drilldown WORK_ITEM_FIRST_ATTEMPT_SLA_RATE reconciles cohort total (30 == 25 + 5) with snapshot denominator (30)",
       "evidence": {
-        "all": 26,
-        "met": 22,
-        "unmet": 4,
-        "snapshot_denominator": 26
+        "all": 30,
+        "met": 25,
+        "unmet": 5,
+        "snapshot_denominator": 30
       }
     },
     {
       "id": "DRILL-FOLLOWUP_SLA_RATE",
       "status": "PASS",
-      "detail": "Drilldown FOLLOWUP_SLA_RATE reconciles cohort total (10 == 7 + 3) with snapshot denominator (10)",
+      "detail": "Drilldown FOLLOWUP_SLA_RATE reconciles cohort total (4 == 3 + 1) with snapshot denominator (4)",
       "evidence": {
-        "all": 10,
-        "met": 7,
-        "unmet": 3,
-        "snapshot_denominator": 10
+        "all": 4,
+        "met": 3,
+        "unmet": 1,
+        "snapshot_denominator": 4
       }
     },
     {
       "id": "DRILL-CONNECTED_RATE",
       "status": "PASS",
-      "detail": "Drilldown CONNECTED_RATE reconciles cohort total (34 == 29 + 5) with snapshot denominator (34)",
+      "detail": "Drilldown CONNECTED_RATE reconciles cohort total (25 == 18 + 7) with snapshot denominator (25)",
       "evidence": {
-        "all": 34,
-        "met": 29,
-        "unmet": 5,
-        "snapshot_denominator": 34
+        "all": 25,
+        "met": 18,
+        "unmet": 7,
+        "snapshot_denominator": 25
       }
     },
     {
       "id": "DRILL-VALID_OUTCOME_LOGGING_RATE",
       "status": "PASS",
-      "detail": "Drilldown VALID_OUTCOME_LOGGING_RATE reconciles cohort total (34 == 33 + 1) with snapshot denominator (34)",
+      "detail": "Drilldown VALID_OUTCOME_LOGGING_RATE reconciles cohort total (35 == 35 + 0) with snapshot denominator (35)",
       "evidence": {
-        "all": 34,
-        "met": 33,
-        "unmet": 1,
-        "snapshot_denominator": 34
-      }
-    },
-    {
-      "id": "DRILL-CALLBACK_COMPLETION_RATE",
-      "status": "PASS",
-      "detail": "Drilldown CALLBACK_COMPLETION_RATE reconciles cohort total (10 == 8 + 2) with snapshot denominator (10)",
-      "evidence": {
-        "all": 10,
-        "met": 8,
-        "unmet": 2,
-        "snapshot_denominator": 10
-      }
-    },
-    {
-      "id": "DRILL-DNC_COMPLIANCE_RATE",
-      "status": "PASS",
-      "detail": "Drilldown DNC_COMPLIANCE_RATE reconciles cohort total (29 == 29 + 0) with snapshot denominator (29)",
-      "evidence": {
-        "all": 29,
-        "met": 29,
+        "all": 35,
+        "met": 35,
         "unmet": 0,
-        "snapshot_denominator": 29
+        "snapshot_denominator": 35
+      }
+    },
+    {
+      "id": "DRILL-ELIGIBLE_COVERAGE",
+      "status": "PASS",
+      "detail": "Drilldown ELIGIBLE_COVERAGE reconciles cohort total (31 == 25 + 6) with snapshot denominator (31)",
+      "evidence": {
+        "all": 31,
+        "met": 25,
+        "unmet": 6,
+        "snapshot_denominator": 31
+      }
+    },
+    {
+      "id": "P3-F10-DRILLDOWN-SEARCH-SORT",
+      "status": "PASS",
+      "detail": "Drilldown server sort_dir (asc vs desc) reorders rows and search narrows cohort",
+      "evidence": {
+        "asc_first_wi": "r7loaip94n",
+        "desc_first_wi": "r85ogoreqp",
+        "search_total": 1
       }
     },
     {
@@ -1768,19 +2210,21 @@
       "detail": "Staff A retains historical KPI row after handover with customer PII redacted",
       "evidence": {
         "record_type": "sla_obligation",
-        "record_id": "ikkjjotfcf",
-        "obligation_id": "ikkjjotfcf",
+        "record_id": "r7oj5tmgqp",
+        "obligation_id": "r7oj5tmgqp",
         "obligation_type": "FIRST_ATTEMPT",
-        "work_item": "ikk1onr7on",
-        "campaign": "ihtpr0du1g",
+        "work_item": "r7nlcfoejr",
+        "campaign": "r5q10intpo",
         "owner_user": "cskh-p3-staff-a@example.test",
-        "team_id": "ihp5bvfjel",
+        "team_id": "r5nlb01oek",
         "status": "fulfilled_on_time",
         "in_numerator": true,
-        "started_at": "2026-11-04T18:55:40+07:00",
-        "original_due_at": "2026-11-04T19:20:40+07:00",
-        "effective_due_at": "2026-11-04T19:20:40+07:00",
-        "fulfilled_at": "2026-11-04T19:03:40+07:00",
+        "started_at": "2026-11-05T13:22:39+07:00",
+        "original_due_at": "2026-11-05T13:47:39+07:00",
+        "effective_due_at": "2026-11-05T13:47:39+07:00",
+        "fulfilled_at": "2026-11-05T13:30:39+07:00",
+        "team_name": "=CMD|' /C calc'!A0 Nhóm CSKH Miền Bắc",
+        "campaign_name": "Chiến dịch Chăm sóc Khách hàng P3",
         "lead": null,
         "customer_name": null,
         "phone": null,
@@ -1792,12 +2236,12 @@
     {
       "id": "P3-TEAM-AS-OF",
       "status": "PASS",
-      "detail": "Team comparison attributes obligations by historical team-as-of across Team A and Team B",
+      "detail": "Team comparison attributes obligations by historical team-as-of and resolves human-readable team_name",
       "evidence": {
-        "teams": [
-          "ihra8v1isb",
-          "ihp5bvfjel"
-        ]
+        "teams": {
+          "r5nlb01oek": "=CMD|' /C calc'!A0 Nhóm CSKH Miền Bắc",
+          "r5p6f1ju34": "Nhóm CSKH Miền Nam"
+        }
       }
     },
     {
@@ -1806,10 +2250,11 @@
       "detail": "Admin KPI recompute succeeds cleanly",
       "evidence": {
         "message": {
-          "run_id": "jpv2ts513u",
+          "run_id": "rt2tvssia1",
           "run_mode": "incremental",
           "dry_run": false,
           "status": "completed",
+          "metric_version": "cskh-metrics-v2",
           "period": {
             "period_type": "monthly",
             "period_key": "2026-11",
@@ -1817,19 +2262,20 @@
             "to_date": "2026-11-30",
             "timezone": "Asia/Ho_Chi_Minh"
           },
-          "as_of": "2026-11-04T21:57:48+07:00",
-          "source_watermark": "2026-11-04T21:55:52+07:00",
+          "as_of": "2026-11-05T16:23:53+07:00",
+          "source_watermark": "2026-11-05T16:22:48+07:00",
           "is_restated": false,
           "restated_from_run": null,
-          "snapshots_written": 10,
+          "snapshots_written": 18,
           "reconciliation": {
             "ok": true,
-            "company_contact_attempts": 34,
-            "company_connected_attempts": 29,
-            "company_first_attempt_sla": "23/27",
-            "company_distinct_work_items": 26,
-            "company_ownership_intervals": 29,
-            "snapshots_verified": 10
+            "company_contact_attempts": 35,
+            "company_connected_attempts": 28,
+            "company_first_attempt_sla": "26/31",
+            "company_connected_rate": "18/25",
+            "company_distinct_work_items": 30,
+            "company_ownership_intervals": 33,
+            "snapshots_verified": 18
           }
         }
       }
@@ -1840,10 +2286,10 @@
       "detail": "Leader A queued authorized export",
       "evidence": {
         "ok": true,
-        "export_id": "EXP-E68AF507BA87",
+        "export_id": "EXP-B717D3BB65DB",
         "status": "queued",
         "expires_in_seconds": 3600,
-        "expires_at": "2026-11-04T22:57:48+07:00"
+        "expires_at": "2026-11-05T17:23:53+07:00"
       }
     },
     {
@@ -1852,14 +2298,14 @@
       "detail": "Export job completed with expires_at populated",
       "evidence": {
         "ok": true,
-        "export_id": "EXP-E68AF507BA87",
+        "export_id": "EXP-B717D3BB65DB",
         "report_type": "team_comparison",
         "status": "completed",
         "row_count": 1,
-        "requested_at": "2026-11-04T21:57:48+07:00",
-        "completed_at": "2026-11-04T21:57:51+07:00",
-        "expires_at": "2026-11-04T22:57:48+07:00",
-        "download_endpoint": "/api/method/crm_cskh.api.p3_reporting.download_export?export_id=EXP-E68AF507BA87"
+        "requested_at": "2026-11-05T16:23:53+07:00",
+        "completed_at": "2026-11-05T16:23:55+07:00",
+        "expires_at": "2026-11-05T17:23:53+07:00",
+        "download_endpoint": "/api/method/crm_cskh.api.p3_reporting.download_export?export_id=EXP-B717D3BB65DB"
       }
     },
     {
@@ -1868,7 +2314,7 @@
       "detail": "Authorized CSV download succeeds and escapes formula-injection cells",
       "evidence": {
         "http": 200,
-        "bytes": 277
+        "bytes": 279
       }
     },
     {
@@ -1910,6 +2356,17 @@
       "evidence": {
         "download_export_http": 403,
         "private_file_http": 403
+      }
+    },
+    {
+      "id": "P3-F08-UNIFIED-FLAG-ROLLBACK",
+      "status": "PASS",
+      "detail": "Disabling CSKH Policy P3 flags blocks P3 routes & APIs while keeping P1/P2 (/cskh/my-customers) 200 and hiding P3 nav",
+      "evidence": {
+        "quality_overview_http": 403,
+        "overview_api_http": 503,
+        "api_code": "POLICY_CONFLICT",
+        "p2_my_customers_http": 200
       }
     }
   ]
