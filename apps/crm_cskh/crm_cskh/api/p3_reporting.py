@@ -5,7 +5,7 @@ from __future__ import annotations
 import frappe
 
 from crm_cskh.services import kpi_runs, p3_export, report_query
-from crm_cskh.services.errors import InvalidRequest, PolicyConflict
+from crm_cskh.services.errors import InvalidRequest, P3DisabledError
 
 
 def _require_post() -> None:
@@ -14,6 +14,19 @@ def _require_post() -> None:
 		raise InvalidRequest(
 			"Thao tác yêu cầu tính lại hoặc xuất báo cáo P3 bắt buộc dùng phương thức HTTP POST."
 		)
+
+
+def _return_or_raise_http_disabled(res: dict) -> dict:
+	"""Preserve `_disabled_report_envelope` for direct Python calls while returning HTTP 503 (`F-P3-08`) over HTTP."""
+	if (
+		isinstance(res, dict)
+		and res.get("status") == "disabled_by_policy"
+		and getattr(frappe.local, "request", None) is not None
+	):
+		raise P3DisabledError(
+			"Hệ thống báo cáo chất lượng CSKH P3 hiện đang tạm tắt theo cờ cấu hình (p3_reporting_enabled=false)."
+		)
+	return res
 
 
 @frappe.whitelist()
@@ -26,14 +39,16 @@ def get_executive_overview(
 	team: str | None = None,
 	lead_source: str | None = None,
 ):
-	return report_query.get_executive_overview(
-		period_type=period_type,
-		period_key=period_key,
-		from_date=from_date,
-		to_date=to_date,
-		campaign=campaign,
-		team=team,
-		lead_source=lead_source,
+	return _return_or_raise_http_disabled(
+		report_query.get_executive_overview(
+			period_type=period_type,
+			period_key=period_key,
+			from_date=from_date,
+			to_date=to_date,
+			campaign=campaign,
+			team=team,
+			lead_source=lead_source,
+		)
 	)
 
 
@@ -51,18 +66,20 @@ def get_team_comparison(
 	page: int | str = 1,
 	page_size: int | str = 20,
 ):
-	return report_query.get_team_comparison(
-		period_type=period_type,
-		period_key=period_key,
-		from_date=from_date,
-		to_date=to_date,
-		campaign=campaign,
-		team=team,
-		lead_source=lead_source,
-		sort_by=sort_by,
-		sort_dir=sort_dir,
-		page=page,
-		page_size=page_size,
+	return _return_or_raise_http_disabled(
+		report_query.get_team_comparison(
+			period_type=period_type,
+			period_key=period_key,
+			from_date=from_date,
+			to_date=to_date,
+			campaign=campaign,
+			team=team,
+			lead_source=lead_source,
+			sort_by=sort_by,
+			sort_dir=sort_dir,
+			page=page,
+			page_size=page_size,
+		)
 	)
 
 
@@ -81,19 +98,21 @@ def get_employee_quality(
 	page: int | str = 1,
 	page_size: int | str = 20,
 ):
-	return report_query.get_employee_quality(
-		period_type=period_type,
-		period_key=period_key,
-		from_date=from_date,
-		to_date=to_date,
-		team=team,
-		employee=employee,
-		campaign=campaign,
-		lead_source=lead_source,
-		sort_by=sort_by,
-		sort_dir=sort_dir,
-		page=page,
-		page_size=page_size,
+	return _return_or_raise_http_disabled(
+		report_query.get_employee_quality(
+			period_type=period_type,
+			period_key=period_key,
+			from_date=from_date,
+			to_date=to_date,
+			team=team,
+			employee=employee,
+			campaign=campaign,
+			lead_source=lead_source,
+			sort_by=sort_by,
+			sort_dir=sort_dir,
+			page=page,
+			page_size=page_size,
+		)
 	)
 
 
@@ -111,18 +130,20 @@ def get_campaign_quality(
 	page: int | str = 1,
 	page_size: int | str = 20,
 ):
-	return report_query.get_campaign_quality(
-		period_type=period_type,
-		period_key=period_key,
-		from_date=from_date,
-		to_date=to_date,
-		campaign=campaign,
-		team=team,
-		lead_source=lead_source,
-		sort_by=sort_by,
-		sort_dir=sort_dir,
-		page=page,
-		page_size=page_size,
+	return _return_or_raise_http_disabled(
+		report_query.get_campaign_quality(
+			period_type=period_type,
+			period_key=period_key,
+			from_date=from_date,
+			to_date=to_date,
+			campaign=campaign,
+			team=team,
+			lead_source=lead_source,
+			sort_by=sort_by,
+			sort_dir=sort_dir,
+			page=page,
+			page_size=page_size,
+		)
 	)
 
 
@@ -135,13 +156,15 @@ def get_my_scorecard(
 	campaign: str | None = None,
 	lead_source: str | None = None,
 ):
-	return report_query.get_my_scorecard(
-		period_type=period_type,
-		period_key=period_key,
-		from_date=from_date,
-		to_date=to_date,
-		campaign=campaign,
-		lead_source=lead_source,
+	return _return_or_raise_http_disabled(
+		report_query.get_my_scorecard(
+			period_type=period_type,
+			period_key=period_key,
+			from_date=from_date,
+			to_date=to_date,
+			campaign=campaign,
+			lead_source=lead_source,
+		)
 	)
 
 
@@ -152,11 +175,13 @@ def get_filter_options(
 	from_date: str | None = None,
 	to_date: str | None = None,
 ):
-	return report_query.get_filter_options(
-		period_type=period_type,
-		period_key=period_key,
-		from_date=from_date,
-		to_date=to_date,
+	return _return_or_raise_http_disabled(
+		report_query.get_filter_options(
+			period_type=period_type,
+			period_key=period_key,
+			from_date=from_date,
+			to_date=to_date,
+		)
 	)
 
 
@@ -181,25 +206,27 @@ def get_metric_drilldown(
 	page: int | str = 1,
 	page_size: int | str = 20,
 ):
-	return report_query.get_metric_drilldown(
-		metric_code=metric_code,
-		period_type=period_type,
-		period_key=period_key,
-		from_date=from_date,
-		to_date=to_date,
-		scope_type=scope_type,
-		scope_id=scope_id,
-		campaign=campaign,
-		team=team,
-		employee=employee,
-		lead_source=lead_source,
-		search=search,
-		sort_by=sort_by,
-		sort_dir=sort_dir,
-		filter_bucket=filter_bucket,
-		include_pii=include_pii,
-		page=page,
-		page_size=page_size,
+	return _return_or_raise_http_disabled(
+		report_query.get_metric_drilldown(
+			metric_code=metric_code,
+			period_type=period_type,
+			period_key=period_key,
+			from_date=from_date,
+			to_date=to_date,
+			scope_type=scope_type,
+			scope_id=scope_id,
+			campaign=campaign,
+			team=team,
+			employee=employee,
+			lead_source=lead_source,
+			search=search,
+			sort_by=sort_by,
+			sort_dir=sort_dir,
+			filter_bucket=filter_bucket,
+			include_pii=include_pii,
+			page=page,
+			page_size=page_size,
+		)
 	)
 
 
@@ -258,7 +285,8 @@ def request_recompute(
 ):
 	_require_post()
 	if not report_query.is_p3_reporting_enabled():
-		raise PolicyConflict(
+		report_query.resolve_report_actor()
+		raise P3DisabledError(
 			"Chức năng tính toán và báo cáo P3 hiện đang tạm tắt theo cờ cấu hình (p3_reporting_enabled=false)."
 		)
 	return kpi_runs.request_scoped_recompute(
@@ -275,4 +303,9 @@ def request_recompute(
 
 @frappe.whitelist()
 def get_run_status(run_id: str = ""):
+	if getattr(frappe.local, "request", None) is not None and not report_query.is_p3_reporting_enabled():
+		report_query.resolve_report_actor()
+		raise P3DisabledError(
+			"Hệ thống báo cáo chất lượng CSKH P3 hiện đang tạm tắt theo cờ cấu hình (p3_reporting_enabled=false)."
+		)
 	return kpi_runs.get_kpi_run_status(run_id=run_id)

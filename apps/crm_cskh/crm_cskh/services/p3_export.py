@@ -34,7 +34,7 @@ from crm_cskh.services.errors import (
 	InvalidMetric,
 	InvalidRequest,
 	NotFound,
-	PolicyConflict,
+	P3DisabledError,
 	TooManyRows,
 )
 from crm_cskh.services.kpi_calculator import (
@@ -111,7 +111,7 @@ def request_export(
 	from crm_cskh.services.p3_flags import is_p3_export_enabled
 
 	if not is_p3_export_enabled():
-		raise PolicyConflict("Chức năng báo cáo và xuất dữ liệu P3 hiện đang tạm tắt theo cờ cấu hình.")
+		raise P3DisabledError("Chức năng báo cáo và xuất dữ liệu P3 hiện đang tạm tắt theo cờ cấu hình.")
 
 	rtype = (parse_optional_str(report_type, "Tham số report_type không hợp lệ.") or "").lower()
 	if rtype not in VALID_EXPORT_REPORT_TYPES:
@@ -190,6 +190,8 @@ def request_export(
 			raise InvalidRequest(f"Bắt buộc truyền scope_id khi scope_type='{stype}'.")
 
 	mcode = (parse_optional_str(metric_code, "Tham số metric_code không hợp lệ.") or "").upper()
+	if mcode == "BREACH_COUNT":
+		mcode = "SLA_BREACH_COUNT"
 	if rtype == "metric_drilldown":
 		supported = DRILLDOWN_SUPPORTED_METRICS | {"CONNECTED_ATTEMPT_COUNT", "RESCHEDULE_RATE"}
 		if not mcode or mcode not in supported:
@@ -657,6 +659,10 @@ def execute_export_job_now(export_id: str) -> dict:
 def get_export_status(export_id: str, *, actor: str | None = None) -> dict:
 	"""Return sanitized job metadata (`0` raw `file_url`) after checking live ownership/scope."""
 	act = report_query.resolve_report_actor(actor)
+	from crm_cskh.services.p3_flags import is_p3_export_enabled
+
+	if not is_p3_export_enabled():
+		raise P3DisabledError("Chức năng báo cáo và xuất dữ liệu P3 hiện đang tạm tắt theo cờ cấu hình.")
 	eid = parse_optional_str(export_id, "Tham số export_id không hợp lệ.")
 	if not eid:
 		raise InvalidRequest("Tham số export_id là bắt buộc.")
@@ -722,7 +728,7 @@ def download_export(export_id: str, *, actor: str | None = None) -> dict:
 	from crm_cskh.services.p3_flags import is_p3_export_enabled
 
 	if not is_p3_export_enabled():
-		raise PolicyConflict("Chức năng báo cáo và xuất dữ liệu P3 hiện đang tạm tắt theo cờ cấu hình.")
+		raise P3DisabledError("Chức năng báo cáo và xuất dữ liệu P3 hiện đang tạm tắt theo cờ cấu hình.")
 
 	eid = parse_optional_str(export_id, "Tham số export_id không hợp lệ.")
 	if not eid:

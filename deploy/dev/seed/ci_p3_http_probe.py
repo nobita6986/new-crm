@@ -1239,6 +1239,7 @@ def run_probe() -> int:
             and bod_ov.get("actor_scope", {}).get("pii_allowed") is False
             and bod_ov.get("metrics", {}).get("QA_PASS_RATE", {}).get("status")
             == "disabled"
+            and "SLA_BREACH_COUNT" in (bod_ov.get("metrics") or {})
             and bod_ov.get("attempt_breakdown", {}).get("verified") == 0,
             "S08: BOD Viewer reads company executive overview without System Manager and 0 fake verified",
             actor="bod.viewer@dev.local",
@@ -1883,6 +1884,125 @@ def run_probe() -> int:
             and "Tệp đính kèm giả lập" not in str(r_p0_file["text"]),
             "P0 non-regression: Staff C blocked from reading Staff A's private Lead attachment",
             actor="staff.c@dev.local",
+        )
+
+        # ------------------------------------------------------------------
+        # 9. Unified Feature-Flag Rollback over Live HTTP (`F-P3-08`)
+        # ------------------------------------------------------------------
+        frappe.set_user("Administrator")
+        saved_pol_flags = frappe.get_all(
+            "CSKH Policy",
+            filters={"enabled": 1},
+            fields=["name", "p3_sla_enabled", "p3_reporting_enabled"],
+        )
+        try:
+            for pr in saved_pol_flags:
+                frappe.db.set_value(
+                    "CSKH Policy",
+                    pr.name,
+                    {"p3_sla_enabled": 0, "p3_reporting_enabled": 0},
+                    update_modified=False,
+                )
+            frappe.db.commit()
+            frappe.clear_cache()
+
+            r_rb_page = get(
+                "p3-http-rollback-bod-quality-overview-page-403",
+                op_bod,
+                "/cskh/quality-overview",
+                headers={"Accept": "text/html, */*"},
+            )
+            check(
+                "p3-http-rollback-bod-quality-overview-page-403",
+                r_rb_page,
+                r_rb_page["status"] == 403,
+                "F-P3-08: Disabling p3_reporting_enabled blocks /cskh/quality-overview with HTTP 403",
+                actor="bod.viewer@dev.local",
+            )
+
+            r_rb_api = get(
+                "p3-http-rollback-bod-exec-overview-api-503",
+                op_bod,
+                f"/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key={month_key}",
+            )
+            check(
+                "p3-http-rollback-bod-exec-overview-api-503",
+                r_rb_api,
+                r_rb_api["status"] == 503
+                and error_envelope(r_rb_api).get("code") == "POLICY_CONFLICT",
+                "F-P3-08: Disabling p3_reporting_enabled rejects get_executive_overview over HTTP with 503 POLICY_CONFLICT",
+                actor="bod.viewer@dev.local",
+            )
+
+            r_rb_sla = get(
+                "p3-http-rollback-leader-a-sla-list-503",
+                op_leader_a,
+                "/api/method/crm_cskh.api.sla.list_obligations",
+            )
+            check(
+                "p3-http-rollback-leader-a-sla-list-503",
+                r_rb_sla,
+                r_rb_sla["status"] == 503
+                and error_envelope(r_rb_sla).get("code") == "POLICY_CONFLICT",
+                "F-P3-08: Disabling p3_sla_enabled rejects sla.list_obligations over HTTP with 503 POLICY_CONFLICT",
+                actor="team1.leader@dev.local",
+            )
+
+            r_rb_p2_page = get(
+                "p3-http-rollback-staff-a-p2-my-customers-page-200",
+                op_staff_a,
+                "/cskh/my-customers",
+                headers={"Accept": "text/html, */*"},
+            )
+            check(
+                "p3-http-rollback-staff-a-p2-my-customers-page-200",
+                r_rb_p2_page,
+                r_rb_p2_page["status"] == 200
+                and 'href="/cskh/scorecard"' not in str(r_rb_p2_page["text"]),
+                "F-P3-08: P2 /cskh/my-customers remains 200 OK and hides P3 scorecard nav link when P3 is disabled",
+                actor="staff.a@dev.local",
+            )
+
+            r_rb_p2_api = get(
+                "p3-http-rollback-staff-a-p2-my-customers-api-200",
+                op_staff_a,
+                "/api/method/crm_cskh.api.customers.my_list",
+            )
+            check(
+                "p3-http-rollback-staff-a-p2-my-customers-api-200",
+                r_rb_p2_api,
+                r_rb_p2_api["status"] == 200
+                and isinstance(body_payload(r_rb_p2_api).get("items"), list),
+                "F-P3-08: P1/P2 crm_cskh.api.customers.my_list continues returning 200 OK during P3 rollback",
+                actor="staff.a@dev.local",
+            )
+        finally:
+            frappe.set_user("Administrator")
+            for pr in saved_pol_flags:
+                frappe.db.set_value(
+                    "CSKH Policy",
+                    pr.name,
+                    {
+                        "p3_sla_enabled": int(pr.p3_sla_enabled or 1),
+                        "p3_reporting_enabled": int(pr.p3_reporting_enabled or 1),
+                    },
+                    update_modified=False,
+                )
+            frappe.db.commit()
+            frappe.clear_cache()
+
+        r_rb_reenabled = get(
+            "p3-http-rollback-reenabled-bod-exec-overview-200",
+            op_bod,
+            f"/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key={month_key}",
+        )
+        check(
+            "p3-http-rollback-reenabled-bod-exec-overview-200",
+            r_rb_reenabled,
+            r_rb_reenabled["status"] == 200
+            and body_payload(r_rb_reenabled).get("ok") is True,
+            "F-P3-08: Re-enabling P3 flags immediately restores HTTP 200 on get_executive_overview",
+            actor="bod.viewer@dev.local",
         )
 
         final_summary = write_evidence(final=True)

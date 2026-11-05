@@ -610,6 +610,8 @@ def _fetch_or_compute_snapshots(
 def _sort_rows_nulls_last(rows: list[dict], sort_by: str, sort_dir: str) -> list[dict]:
 	"""Sort snapshot-derived rows by `metrics[sort_by].value` with `None` ALWAYS last (`NULLS LAST`)."""
 	metric_key = (sort_by or "PROCESS_SCORE").strip().upper()
+	if metric_key == "BREACH_COUNT":
+		metric_key = "SLA_BREACH_COUNT"
 	if metric_key not in ALL_SORTABLE_METRICS:
 		raise InvalidMetric(f"Chỉ số sắp xếp '{metric_key}' không hợp lệ trong {METRIC_VERSION}.")
 	direction = (sort_dir or "desc").strip().lower()
@@ -678,7 +680,9 @@ def _build_aggregate_alerts(metrics: dict, freshness: dict) -> list[dict]:
 				"message_vi": f"Có {fu_val} lịch hẹn gọi lại đang mở bị quá hạn.",
 			}
 		)
-	breach_val = int((metrics.get("BREACH_COUNT") or {}).get("value") or 0)
+	breach_val = int(
+		((metrics.get("SLA_BREACH_COUNT") or metrics.get("BREACH_COUNT")) or {}).get("value") or 0
+	)
 	if breach_val > 0:
 		alerts.append(
 			{
@@ -1497,6 +1501,7 @@ def get_my_scorecard(
 				}
 			)
 
+	ps_cell = (snap["metrics"] or {}).get("PROCESS_SCORE", {}) if snap else {}
 	return {
 		"ok": True,
 		"actor_scope": _actor_scope_dict(act, flags),
@@ -1528,6 +1533,9 @@ def get_my_scorecard(
 			"verified": 0,
 			"disputed": 0,
 		},
+		"raw_points_total": ps_cell.get("raw_points_total"),
+		"valid_weight": ps_cell.get("valid_weight"),
+		"configured_weight_total": ps_cell.get("configured_weight_total"),
 		"score_components": snap["score_components"] if snap else [],
 		"metrics": snap["metrics"] if snap else {},
 		"active_obligations": active_obligations,
@@ -1931,6 +1939,8 @@ def get_metric_drilldown(
 		)
 
 	mcode = (parse_optional_str(metric_code, "Tham số metric_code không hợp lệ.") or "").upper()
+	if mcode == "BREACH_COUNT":
+		mcode = "SLA_BREACH_COUNT"
 	supported = DRILLDOWN_SUPPORTED_METRICS | {"CONNECTED_ATTEMPT_COUNT", "RESCHEDULE_RATE"}
 	if not mcode or mcode not in supported:
 		raise InvalidMetric(
@@ -2648,7 +2658,13 @@ def _extract_drilldown_events(
 		return rows
 
 	# 4. Operational backlog, breach & waiver counts
-	if mcode in ("OVERDUE_BACKLOG", "OPEN_FOLLOWUPS_OVERDUE", "BREACH_COUNT", "SLA_WAIVER_COUNT"):
+	if mcode in (
+		"OVERDUE_BACKLOG",
+		"OPEN_FOLLOWUPS_OVERDUE",
+		"SLA_BREACH_COUNT",
+		"BREACH_COUNT",
+		"SLA_WAIVER_COUNT",
+	):
 		if bucket in ("breached_only", "excluded"):
 			return []
 		if mcode == "OVERDUE_BACKLOG":
@@ -2673,7 +2689,7 @@ def _extract_drilldown_events(
 			]
 			return [_ob_event_dict(ob, in_numerator=True) for ob in fu_over]
 
-		if mcode == "BREACH_COUNT":
+		if mcode in ("SLA_BREACH_COUNT", "BREACH_COUNT"):
 			breached = [
 				ob
 				for ob in obligations

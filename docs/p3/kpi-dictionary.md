@@ -73,9 +73,9 @@
 - **`RESCHEDULE_RATE` (`percent`):** Số `CRM Task` callback có sự kiện dời lịch trên tổng số callback hoạt động trong kỳ.
 - **`FIRST_CONNECTED_TRACKING_RATE` (`percent`, `informational_only: true`):** Chỉ số theo dõi kết nối lần đầu, không phạt nhân viên khi khách không bắt máy.
 - **`MIN_ATTEMPTS_COMPLIANCE_RATE` (`percent`):** Chỉ kích hoạt khi `min_attempts_enabled = 1`; mặc định trả `status: "disabled"`.
-- **`OVERDUE_BACKLOG` (`count`):** `COUNT(DISTINCT work_item)` đang mở quyền sở hữu tại `as_of` và có ít nhất 1 nghĩa vụ thực thi (`!informational_only`) đang ở trạng thái `breached_open` (`effective_due_at < as_of`). Nghĩa vụ lịch sử đã bàn giao và được người nhận sau xử lý xong vẫn giữ `BREACH_COUNT` lịch sử của người trước nhưng **không** còn nằm trong `OVERDUE_BACKLOG` hiện tại.
+- **`OVERDUE_BACKLOG` (`count`):** `COUNT(DISTINCT work_item)` đang mở quyền sở hữu tại `as_of` và có ít nhất 1 nghĩa vụ thực thi (`!informational_only`) đang ở trạng thái `breached_open` (`effective_due_at < as_of`). Nghĩa vụ lịch sử đã bàn giao và được người nhận sau xử lý xong vẫn giữ `SLA_BREACH_COUNT` lịch sử của người trước nhưng **không** còn nằm trong `OVERDUE_BACKLOG` hiện tại.
 - **`OPEN_FOLLOWUPS_OVERDUE` (`count`):** Số nghĩa vụ `FOLLOWUP` đang mở quá hạn (`breached_open`) tại `as_of`.
-- **`BREACH_COUNT` (`count`):** Tổng số nghĩa vụ thực thi (`FIRST_ATTEMPT`, `FOLLOWUP`) đến hạn trong kỳ bị vi phạm (`fulfilled_late`, `breached_open`, `breached_handoff`); `breached_open -> fulfilled_late` chỉ tính **1** vi phạm.
+- **`SLA_BREACH_COUNT` (`count`, alias drill-down/sort tương thích: `BREACH_COUNT`):** Tổng số nghĩa vụ thực thi (`FIRST_ATTEMPT`, `FOLLOWUP`) đến hạn trong kỳ bị vi phạm (`fulfilled_late`, `breached_open`, `breached_handoff`); `breached_open -> fulfilled_late` chỉ tính **1** vi phạm.
 - **`SLA_WAIVER_COUNT` (`count`):** Số nghĩa vụ đến hạn trong kỳ được miễn trừ hợp lệ (`waived`) tại `as_of`.
 - **`FIRST_ATTEMPT_LATENCY_P50_MINUTES` & `FIRST_ATTEMPT_LATENCY_P90_MINUTES` (`minutes`):** Trung vị (`P50`) và phân vị 90 (`P90`) số phút làm việc thực tế từ `ownership_start` đến effective Attempt đầu tiên (kèm metadata `wall_p50_minutes`, `wall_p90_minutes`).
 
