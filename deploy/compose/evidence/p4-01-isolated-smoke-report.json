@@ -1,0 +1,321 @@
+{
+  "status": "PASS",
+  "preflight_only": false,
+  "run_id": "20261106063439-e9059d",
+  "project_name": "crm-cskh-p4-smoke-20261106063439-e9059d",
+  "site_name": "p4-smoke-20261106063439-e9059d.localhost",
+  "p4_00_approved_sha": "be33e6c931337c42b94184b2fe292e094bd51c97",
+  "compose_provenance": {
+    "head_sha": "85b96482b76240a5ef9326b2d7fe6685281ee47c",
+    "branch": "codex/p4-01-compose",
+    "worktree_clean": true
+  },
+  "image_provenance": {
+    "image_git_sha": "4de3dc8656b0077cabd4220afc6636da543e34f6",
+    "app_image": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+    "pull_policy_used": "never",
+    "image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+    "repo_digests": [
+      "crm-cskh@sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9"
+    ],
+    "labels": {
+      "io.cskh.apps_tree_sha": "b37e2cbdd99c88c7bd5620912de4519b53b2c159",
+      "io.cskh.baseline_main_sha": "92e14af3532876ad5bc2468bf0e502474cc95a53",
+      "io.cskh.crm_cskh_tree_sha": "da6373a01ad963301877f69c413fdda9a361f718",
+      "io.cskh.crm_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "io.cskh.crm_tag": "v1.87.0",
+      "io.cskh.frappe_docker_sha": "2b26e9ab8d751e5ea33bb7b930aea3550bb81ded",
+      "io.cskh.frappe_sha": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+      "io.cskh.frappe_tag": "v15.123.1",
+      "org.opencontainers.image.description": "CRM-CSKH immutable production image (Frappe + Frappe CRM + crm_cskh)",
+      "org.opencontainers.image.revision": "92e14af3532876ad5bc2468bf0e502474cc95a53",
+      "org.opencontainers.image.source": "https://github.com/nobita6986/new-crm",
+      "org.opencontainers.image.title": "crm-cskh"
+    }
+  },
+  "preexisting_resources_check": {
+    "passed": true,
+    "found": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    },
+    "port_check": {
+      "port": 18080,
+      "free": true,
+      "detail": "127.0.0.1:18080 free"
+    }
+  },
+  "secret_file_byte_check": {
+    "file_name": "db_root_password.txt",
+    "byte_length": 33,
+    "ends_with_lf_only": true,
+    "contains_cr": false
+  },
+  "config_services": [
+    "db",
+    "redis-cache",
+    "redis-queue",
+    "configurator",
+    "proxy",
+    "queue-short",
+    "scheduler",
+    "websocket",
+    "backend",
+    "frontend",
+    "queue-long"
+  ],
+  "config_services_with_migrate_profile": [
+    "redis-cache",
+    "db",
+    "redis-queue",
+    "configurator",
+    "websocket",
+    "migrator",
+    "queue-long",
+    "scheduler",
+    "backend",
+    "frontend",
+    "proxy",
+    "queue-short"
+  ],
+  "healthchecks": {
+    "backend": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "configurator": {
+      "state": "exited",
+      "health": "",
+      "exit_code": 0
+    },
+    "db": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "frontend": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "proxy": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "queue-long": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "queue-short": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "redis-cache": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "redis-queue": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "scheduler": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "websocket": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    }
+  },
+  "port_exposure_audit": {
+    "proxy": [
+      {
+        "URL": "127.0.0.1",
+        "TargetPort": 80,
+        "PublishedPort": 18080,
+        "Protocol": "tcp"
+      }
+    ]
+  },
+  "site_bootstrap": {
+    "site": "p4-smoke-20261106063439-e9059d.localhost",
+    "installed_apps": [
+      "frappe   15.123.1 HEAD",
+      "crm      1.87.0   HEAD",
+      "crm_cskh 0.0.1    UNVERSIONED"
+    ],
+    "synthetic_data": {
+      "lead_name": "CRM-LEAD-2026-00001",
+      "mobile_no": "0900000123",
+      "email": "synthetic-smoke@example.invalid",
+      "is_synthetic": true
+    }
+  },
+  "migrator_rehearsal_x2": [
+    {
+      "run_number": 1,
+      "exit_code": 0,
+      "duration_sec": 19.11,
+      "output_tail": [
+        "Updating Dashboard for crm_cskh",
+        "Executing `after_migrate` hooks...",
+        "Queued rebuilding of search index for p4-smoke-20261106063439-e9059d.localhost"
+      ]
+    },
+    {
+      "run_number": 2,
+      "exit_code": 0,
+      "duration_sec": 19.14,
+      "output_tail": [
+        "Updating Dashboard for crm_cskh",
+        "Executing `after_migrate` hooks...",
+        "Queued rebuilding of search index for p4-smoke-20261106063439-e9059d.localhost"
+      ]
+    }
+  ],
+  "smoke_verification": {
+    "guest_access": {
+      "crm_status": 403,
+      "cskh_dashboard_status": 403,
+      "cskh_quality_overview_status": 403,
+      "health_ping_api_status": 403
+    },
+    "login": {
+      "status": 200,
+      "logged_user": "Administrator",
+      "sid_cookie_present": true,
+      "sid_httponly": false,
+      "sid_samesite": true
+    },
+    "vietnamese_ui": {
+      "cskh_dashboard_status": 200,
+      "cskh_quality_overview_status": 200,
+      "crm_spa_status": 200,
+      "timezone_present": "Asia/Ho_Chi_Minh",
+      "dashboard_h1": "Bảng điều khiển phân phối",
+      "quality_overview_h1": "Tổng quan chất lượng CSKH (BOD)",
+      "matched_vietnamese_labels": [
+        "Đã đăng nhập với tư cách",
+        "Về danh sách khách hàng tiềm năng",
+        "Tổng quan",
+        "Chất lượng",
+        "Chiến dịch",
+        "Làm mới",
+        "Xuất báo cáo"
+      ]
+    },
+    "csrf": {
+      "forged_token_rejected_status": 400,
+      "missing_token_rejected_status": 400,
+      "valid_token_accepted_status": 200,
+      "health_ping_payload": {
+        "app": "crm_cskh",
+        "status": "ok",
+        "app_version": "0.0.1",
+        "user": "Administrator"
+      }
+    },
+    "socketio_polling": {
+      "status": "PASS",
+      "transport": "polling",
+      "upgrades_advertised": [
+        "websocket"
+      ],
+      "unauthenticated_namespace_status": 200,
+      "unauthenticated_packet": "44/p4-smoke-20261106063439-e9059d.localhost,{\"message\":\"Missing cookie and authorization header. Either one needed for authentication.\"}",
+      "authenticated_namespace_status": 200,
+      "authenticated_packet": "40/p4-smoke-20261106063439-e9059d.localhost,{\"sid\":\"<REDACTED_SOCKET_SID>\"}"
+    },
+    "socketio_websocket": {
+      "status": "PASS",
+      "transport": "websocket",
+      "polling_to_ws_upgrade": {
+        "handshake": {
+          "status_line": "HTTP/1.1 101 Switching Protocols",
+          "upgrade": "websocket",
+          "connection": "upgrade",
+          "sec_websocket_accept_verified": true
+        },
+        "frames_exchanged": [
+          {
+            "direction": "client->server",
+            "opcode": 1,
+            "masked": true,
+            "payload": "2probe"
+          },
+          {
+            "direction": "server->client",
+            "opcode": 1,
+            "masked": false,
+            "payload": "3probe"
+          },
+          {
+            "direction": "client->server",
+            "opcode": 1,
+            "masked": true,
+            "payload": "5"
+          }
+        ]
+      },
+      "direct_ws_namespace": {
+        "handshake": {
+          "status_line": "HTTP/1.1 101 Switching Protocols",
+          "upgrade": "websocket",
+          "connection": "upgrade",
+          "sec_websocket_accept_verified": true
+        },
+        "frames_exchanged": [
+          {
+            "direction": "server->client",
+            "opcode": 1,
+            "masked": false,
+            "payload": "0{\"sid\":\"<REDACTED_SOCKET_SID>\",\"upgrades\":[],\"pingInterval\":25000,\"pingTimeout\":20000,\"maxPayload\":1000000}"
+          },
+          {
+            "direction": "client->server",
+            "opcode": 1,
+            "masked": true,
+            "payload": "40/p4-smoke-20261106063439-e9059d.localhost,"
+          },
+          {
+            "direction": "server->client",
+            "opcode": 1,
+            "masked": false,
+            "payload": "40/p4-smoke-20261106063439-e9059d.localhost,{\"sid\":\"<REDACTED_SOCKET_SID>\"}"
+          },
+          {
+            "direction": "client->server",
+            "opcode": 9,
+            "masked": true,
+            "payload": "cskh-p4-ping"
+          },
+          {
+            "direction": "server->client",
+            "opcode": 10,
+            "masked": false,
+            "payload": "cskh-p4-ping"
+          }
+        ]
+      }
+    }
+  },
+  "teardown_audit": {
+    "executed": true,
+    "scoped_project": "crm-cskh-p4-smoke-20261106063439-e9059d",
+    "exit_code": 0,
+    "remaining_resources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    }
+  }
+}
