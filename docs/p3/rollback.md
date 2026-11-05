@@ -12,18 +12,20 @@
 ### Thứ tự ưu tiên (`Precedence`)
 1. **Site-level Emergency Kill Switch (`site_config.json` / `frappe.conf`):**
    - Các khóa được nhận diện:
-     - Báo cáo/KPI/Export: `cskh_p3_reporting_enabled` *(alias tương thích: `cskh_p3_quality_enabled`)*
-     - Nghĩa vụ SLA: `cskh_p3_sla_enabled`
-     - Kiểm định QA: `cskh_p3_qa_enabled` *(alias tương thích: `cskh_qa_enabled`)*
+     - Toàn bộ P3: `cskh_p3_enabled` (alias `p3_enabled`)
+     - Báo cáo/KPI: `cskh_p3_reporting_enabled` (alias `p3_reporting_enabled`)
+     - Xuất báo cáo: `cskh_p3_export_enabled` (alias `p3_export_enabled`, mặc định theo cờ báo cáo)
+     - Nghĩa vụ SLA: `cskh_p3_sla_enabled` (alias `p3_sla_enabled`)
+     - Kiểm định QA: `cskh_qa_enabled` (alias `qa_enabled`)
    - Khi khóa cấp site được đặt tường minh bằng `false` / `0`, tính năng tương ứng **TẮT NGAY LẬP TỨC trên toàn bộ UI + API + RQ Worker** bất kể cấu hình trong DB `CSKH Policy` đang là `1`.
 2. **Database Policy (`CSKH Policy` hiệu lực hiện hành):**
    - Nếu `site_config.json` không ghi đè khóa tương ứng (`None`), hệ thống đọc từ `CSKH Policy` đang hiệu lực (`p3_reporting_enabled`, `p3_sla_enabled`, `qa_enabled`).
 
 | Nhóm tính năng | Khóa Kill Switch cấp Site | Trường trên `CSKH Policy` | Hành vi nhất quán khi TẮT (`false` / `0`) |
 |---|---|---|---|
-| **Báo cáo KPI & Export** | `cskh_p3_reporting_enabled` | `p3_reporting_enabled` (mặc định `1`) | UI ẩn điều hướng báo cáo P3; API đọc trả envelope an toàn `reporting_enabled: false, status: "disabled_by_policy"` (`0` lỗi 500); `request_export` & `request_recompute` trả `409 POLICY_CONFLICT`; job RQ `run_single_recompute_job` / `run_export_job` đang xếp hàng tự dừng an toàn (`skipped=true` / `aborted_kill_switch`). |
-| **Đồng hồ & Nghĩa vụ SLA** | `cskh_p3_sla_enabled` | `p3_sla_enabled` (mặc định `1`) | UI ẩn mục SLA P3; các hook P1/P2 ngừng tạo/chuyển/đóng `CSKH SLA Obligation`; cron `evaluate_sla_obligations` trả `skipped=true, reason="p3_sla_disabled"`; luồng tác nghiệp P1/P2 hoạt động bình thường `100%`. |
-| **Kiểm định mẫu QA** | `cskh_p3_qa_enabled` | `qa_enabled` (mặc định **`0`**) | UI ẩn thao tác chấm QA; mọi API ghi `crm_cskh.api.qa.*` trả `409 QA_DISABLED`; `PROCESS_SCORE` tự động chuẩn hóa trên tổng trọng số hợp lệ còn lại (`provisional`). |
+| **Báo cáo KPI & Export** | `cskh_p3_reporting_enabled` | `p3_reporting_enabled` (mặc định `1`) | UI ẩn điều hướng báo cáo P3; API báo cáo và tính lại qua HTTP trả `503 POLICY_CONFLICT` khi báo cáo tắt. API xuất báo cáo trả cùng lỗi khi xuất báo cáo tắt. Lời gọi Python nội bộ tới API đọc có thể nhận `reporting_enabled: false, status: "disabled_by_policy"`. Job RQ `run_single_recompute_job` / `run_export_job` đang xếp hàng tự dừng an toàn (`skipped=true` / `aborted_kill_switch`). |
+| **Đồng hồ & Nghĩa vụ SLA** | `cskh_p3_sla_enabled` | `p3_sla_enabled` (mặc định `1`) | UI ẩn mục SLA P3. `list_obligations` và `waive_obligation` qua HTTP trả `503 POLICY_CONFLICT` khi SLA tắt. Các hook P1/P2 ngừng tạo/chuyển/đóng `CSKH SLA Obligation`. Cron `evaluate_sla_obligations` trả `skipped=true, reason="p3_sla_disabled"`. |
+| **Kiểm định mẫu QA** | `cskh_qa_enabled` | `qa_enabled` (mặc định **`0`**) | UI ẩn thao tác chấm QA; mọi API ghi `crm_cskh.api.qa.*` trả `409 QA_DISABLED`; `PROCESS_SCORE` tự động chuẩn hóa trên tổng trọng số hợp lệ còn lại (`provisional`). |
 
 > **Bảo toàn dữ liệu kiểm toán & bù dữ liệu (`Catch-up Preservation`):** Trong suốt thời gian bật kill switch tạm thời, hệ thống vẫn bảo toàn nguyên vẹn `CSKH Team Membership History`, `CSKH Assignment History`, `CSKH Contact Attempt` và `CSKH Dirty Scope` để khi mở lại cờ, tiến trình recompute/backfill bù chính xác `100%` số liệu mà không mất dấu vết chuyển đội hay sửa lỗi.
 
@@ -31,17 +33,23 @@
 
 ## 2. Cấp độ 1A — Tắt Khẩn Cấp Cấp Site (`site_config.json`, tức thời cho cả UI + API + RQ Worker)
 
+Ghi lại cấu hình `cskh_p3_enabled` trước khi thay đổi. Cờ tổng tắt đồng thời các chức năng P3, kể cả xuất báo cáo đã được bật riêng.
+
 ```bash
-bench --site <site-name> set-config cskh_p3_reporting_enabled false
-bench --site <site-name> set-config cskh_p3_sla_enabled false
-bench --site <site-name> set-config cskh_p3_qa_enabled false
+bench --site <site-name> set-config cskh_p3_enabled false
 bench --site <site-name> clear-cache
 ```
 
+### Kiểm tra sau khi tắt cờ
+
+Trong cả ba chế độ rollback của T1C Vòng 2, sáu trang P3 trả `403`. Năm API đã đo (tổng quan, tính lại KPI, xuất báo cáo, danh sách nghĩa vụ SLA, miễn trừ SLA) trả `503 POLICY_CONFLICT`. Kiểm tra `/cskh/my-customers` và ba thao tác P1/P2 (`pool_ui.list`, `workflow.record_attempt`, `workflow.close_work_item`) vẫn trả `200`. Artifact `t1c-p3-r2-migration-backfill-rollback.json`, mục `rollback_verification_F_P3_08`.
+
 ### Mở lại sau khi khắc phục
+
+Khôi phục giá trị cờ tổng đã ghi. Nếu trước đó chưa có khóa `cskh_p3_enabled`, gỡ khóa này để áp lại cơ chế phân giải cờ. Ví dụ dưới đây áp dụng khi giá trị trước đó là `true`.
+
 ```bash
-bench --site <site-name> set-config cskh_p3_reporting_enabled true
-bench --site <site-name> set-config cskh_p3_sla_enabled true
+bench --site <site-name> set-config cskh_p3_enabled true
 bench --site <site-name> clear-cache
 bench --site <site-name> execute crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes
 ```
