@@ -244,7 +244,9 @@ class TestP3ReportingAndSecurity(P3TestCase):
 		self.assertEqual(overview["scope"]["scope_id"], COMPANY_SCOPE_ID)
 		self.assertGreaterEqual(overview["metrics"]["CONTACT_ATTEMPT_COUNT"]["value"], 3)
 		self.assertEqual(overview["metrics"]["QA_PASS_RATE"]["status"], "disabled")
-		self.assertEqual(overview["attempt_breakdown"]["verified"], 0)
+		self.assertIsNone(overview["metrics"]["QA_PASS_RATE"]["value"])
+		# Per `F-P3-03`, `qa_enabled=false` disables QA sampling (`QA_PASS_RATE`) without erasing P2 call-log `verified` status
+		self.assertGreaterEqual(overview["attempt_breakdown"]["verified"], 1)
 		self.assertGreaterEqual(len(teams["rows"]), 2)
 		self.assertGreaterEqual(len(emps["rows"]), 2)
 		self.assertGreaterEqual(len(camps["rows"]), 2)

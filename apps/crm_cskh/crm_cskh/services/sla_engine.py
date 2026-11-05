@@ -56,11 +56,10 @@ def _p3_sla_ready() -> bool:
 
 
 def is_p3_sla_enabled(campaign: str | None = None, owner_user: str | None = None) -> bool:
-	"""Return whether P3 SLA evaluation is enabled in the effective global/campaign CSKH Policy."""
-	from crm_cskh.services.policies import resolve_effective_policy
+	"""Return whether P3 SLA evaluation is enabled via unified P3 flag resolver & effective CSKH Policy."""
+	from crm_cskh.services.p3_flags import is_p3_sla_enabled as _resolve_sla_flag
 
-	pol = _policy_with_p3_defaults(resolve_effective_policy(campaign=campaign, owner_user=owner_user))
-	return bool(cint(pol.get("p3_sla_enabled", 1)))
+	return bool(_resolve_sla_flag(campaign=campaign, owner_user=owner_user))
 
 
 def _notify_dirty_post_commit(
@@ -200,7 +199,7 @@ def on_interval_opened_in_tx(
 	is_reopen: bool = False,
 ) -> list[str]:
 	"""Spawn initial obligations when `assign` or `reopen` opens a new ownership interval."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled(campaign=campaign, owner_user=owner_user):
 		return []
 	start_dt = get_datetime(started_at)
 	policy, calendar = _resolve_policy_and_calendar(campaign=campaign, owner_user=owner_user)
@@ -341,7 +340,7 @@ def on_interval_transferred_in_tx(
 	transferred_task: str | None = None,
 ) -> dict:
 	"""Handle `A -> B` and `A -> B -> A` SLA handoff fairness & anti-gaming reset cap."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled(campaign=campaign, owner_user=to_user):
 		return {"closed": [], "opened": []}
 	tx_dt = get_datetime(transferred_at)
 	policy, calendar = _resolve_policy_and_calendar(campaign=campaign, owner_user=to_user)
@@ -380,11 +379,16 @@ def on_interval_transferred_in_tx(
 
 	for ob in active_obs:
 		ob_type = ob.obligation_type
-		# `FIRST_CONNECTED` is work-item-level informational; keep open with updated owner pointer
+		# `FIRST_CONNECTED` is work-item-level informational; keep open with updated owner & team-as-of pointer
 		if ob_type == "FIRST_CONNECTED":
 			_update_obligation(
 				ob.name,
-				{"owner_user": to_user},
+				{
+					"owner_user": to_user,
+					"interval_event": new_interval_event,
+					"team_at_obligation": team_node_b,
+					"attribution_status": attr_status_b,
+				},
 				{"event": "owner_transferred", "from_user": from_user, "to_user": to_user, "at": str(tx_dt)},
 			)
 			continue
@@ -538,7 +542,7 @@ def on_interval_revoked_in_tx(
 	reason: str,
 ) -> list[str]:
 	"""Close active obligations when ownership is revoked: preserve breach if already overdue, else `canceled_validly`."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled(owner_user=from_user):
 		return []
 	rev_dt = get_datetime(revoked_at)
 	active_obs = frappe.db.sql(
@@ -603,7 +607,7 @@ def on_followup_created_in_tx(
 	now_dt: datetime | str,
 ) -> str | None:
 	"""Spawn a `FOLLOWUP` obligation tied to native `CRM Task` (`task_id`)."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled(campaign=campaign, owner_user=owner_user):
 		return None
 	created_at = get_datetime(now_dt)
 	task_due = get_datetime(due_dt)
@@ -697,6 +701,8 @@ def on_followup_rescheduled_in_tx(
 		as_dict=True,
 	)
 	if not wi_row or not wi_row.assigned_to:
+		return None
+	if not is_p3_sla_enabled(campaign=wi_row.campaign, owner_user=wi_row.assigned_to):
 		return None
 
 	policy, calendar = _resolve_policy_and_calendar(campaign=wi_row.campaign, owner_user=wi_row.assigned_to)
@@ -845,7 +851,7 @@ def on_followup_resolved_in_tx(
 	actor: str,
 ) -> list[str]:
 	"""Fulfill active `FOLLOWUP` obligation using `occurred_at` of the resolving attempt."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled():
 		return []
 	att_dt = get_datetime(occurred_at)
 	active_fu = frappe.db.sql(
@@ -923,7 +929,7 @@ def on_followup_canceled_in_tx(
 	is_valid_system_cancel: bool = False,
 ) -> list[str]:
 	"""Handle callback cancel: preserve breach if already overdue; valid system cancel (DNC/revoke/close) closes cleanly."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled():
 		return []
 	canc_dt = get_datetime(canceled_at)
 	active_fu = frappe.db.sql(
@@ -991,7 +997,7 @@ def on_attempt_recorded_in_tx(
 	actor: str,
 ) -> list[str]:
 	"""Fulfill `FIRST_ATTEMPT` / `FIRST_CONNECTED` and handle DNC termination upon `record_attempt`."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled():
 		return []
 	att_dt = get_datetime(occurred_at)
 	active_obs = frappe.db.sql(
@@ -1153,7 +1159,7 @@ def on_work_item_closed_in_tx(
 	is_dnc: bool = False,
 ) -> list[str]:
 	"""Finalize remaining open obligations and evaluate policy-gated `MIN_ATTEMPTS` upon Work Item close."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled(campaign=campaign, owner_user=owner_user):
 		return []
 	cl_dt = get_datetime(closed_at)
 	policy, calendar = _resolve_policy_and_calendar(campaign=campaign, owner_user=owner_user)
@@ -1297,7 +1303,7 @@ def on_lead_dnc_set_in_tx(
 	reason: str,
 ) -> list[str]:
 	"""Terminate open outreach obligations on all Work Items of `lead` when Admin sets global DNC."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled():
 		return []
 	ts = get_datetime(dnc_at)
 	active_obs = frappe.db.sql(
@@ -1359,7 +1365,7 @@ def on_correction_reviewed_in_tx(
 	actor: str,
 ) -> list[str]:
 	"""Reconcile obligations when an approved correction voids, restores, or updates an attempt."""
-	if not _p3_sla_ready():
+	if not _p3_sla_ready() or not is_p3_sla_enabled():
 		return []
 	rev_dt = get_datetime(reviewed_at)
 	from crm_cskh.services.read_model import compute_effective_attempts
@@ -1551,9 +1557,246 @@ def on_correction_reviewed_in_tx(
 	return touched
 
 
+def on_campaign_status_changed_in_tx(
+	*,
+	campaign: str,
+	previous_status: str | None,
+	new_status: str | None,
+	actor: str | None = None,
+	changed_at: datetime | str | None = None,
+) -> dict:
+	"""Reconcile active SLA obligations when `CSKH Campaign.status` transitions (`Paused`, `Active`, `Closed`) (`F-P3-07`).
+
+	Guarantees:
+	  * `-> Paused`: pauses `open` non-breached obligations (`is_paused=1`, `paused_at=changed_at`);
+	    if an `open` obligation is ALREADY overdue (`changed_at > effective_due_at`), preserves the breach
+	    (`status='breached_open'`, `breached_at=effective_due_at`) instead of retroactively masking it!
+	  * `Paused -> Active`: resumes campaign-paused `open` obligations, shifting `effective_due_at` forward by
+	    exact business minutes paused (`original_due_at` stays immutable).
+	  * `-> Closed`: finalizes remaining active obligations (`breached_handoff` if already breached, else `canceled_validly`).
+	"""
+	if not campaign or not previous_status or not new_status or previous_status == new_status:
+		return {"paused": [], "resumed": [], "closed": [], "breached_preserved": []}
+	if not _p3_sla_ready() or not is_p3_sla_enabled(campaign=campaign):
+		return {"paused": [], "resumed": [], "closed": [], "breached_preserved": []}
+
+	act = actor or frappe.session.user
+	ts = get_datetime(changed_at or now_datetime())
+	paused_ids: list[str] = []
+	resumed_ids: list[str] = []
+	closed_ids: list[str] = []
+	breached_ids: list[str] = []
+
+	if new_status == "Paused" and previous_status != "Paused":
+		obs = frappe.db.sql(
+			"""
+			select name, obligation_type, work_item, owner_user, team_at_obligation,
+			       status, effective_due_at, breached_at, is_paused, paused_at, calendar_snapshot_json
+			from `tabCSKH SLA Obligation`
+			where campaign = %s and status in ('open', 'breached_open')
+			for update
+			""",
+			(campaign,),
+			as_dict=True,
+		)
+		for ob in obs:
+			eff_due = _effective_due_with_active_pause(ob, ts)
+			if ob.obligation_type != "FIRST_CONNECTED" and (ob.status == "breached_open" or ts > eff_due):
+				breach_ts = get_datetime(ob.breached_at) if ob.breached_at else eff_due
+				if ob.status != "breached_open" or cint(ob.is_paused):
+					_update_obligation(
+						ob.name,
+						{
+							"status": "breached_open",
+							"is_paused": 0,
+							"paused_at": None,
+							"breached_at": breach_ts,
+						},
+						{
+							"event": "campaign_pause_skipped_already_breached",
+							"actor": act,
+							"at": str(ts),
+							"breached_at": str(breach_ts),
+							"previous_status": previous_status,
+							"new_status": new_status,
+						},
+					)
+				breached_ids.append(ob.name)
+			elif ob.status == "open" and not cint(ob.is_paused):
+				_update_obligation(
+					ob.name,
+					{"is_paused": 1, "paused_at": ts},
+					{
+						"event": "campaign_paused",
+						"actor": act,
+						"at": str(ts),
+						"previous_status": previous_status,
+						"new_status": new_status,
+					},
+				)
+				paused_ids.append(ob.name)
+
+	elif previous_status == "Paused" and new_status == "Active":
+		obs = frappe.db.sql(
+			"""
+			select name, work_item, owner_user, team_at_obligation,
+			       status, effective_due_at, is_paused, paused_at,
+			       total_paused_business_minutes, calendar_snapshot_json
+			from `tabCSKH SLA Obligation`
+			where campaign = %s and status = 'open' and coalesce(is_paused, 0) = 1
+			for update
+			""",
+			(campaign,),
+			as_dict=True,
+		)
+		for ob in obs:
+			cal = _calendar_from_obligation(ob)
+			paused_biz = business_minutes_between(ob.paused_at, ts, cal) if ob.paused_at else 0.0
+			new_eff_due = add_business_minutes(ob.effective_due_at, paused_biz, cal)
+			new_total = round(flt(ob.total_paused_business_minutes) + paused_biz, 6)
+			_update_obligation(
+				ob.name,
+				{
+					"is_paused": 0,
+					"paused_at": None,
+					"effective_due_at": new_eff_due,
+					"total_paused_business_minutes": new_total,
+				},
+				{
+					"event": "campaign_resumed",
+					"actor": act,
+					"at": str(ts),
+					"paused_business_minutes": round(paused_biz, 4),
+					"new_effective_due_at": str(new_eff_due),
+					"previous_status": previous_status,
+					"new_status": new_status,
+				},
+			)
+			resumed_ids.append(ob.name)
+
+	elif new_status == "Closed" and previous_status != "Closed":
+		obs = frappe.db.sql(
+			"""
+			select name, obligation_type, work_item, owner_user, team_at_obligation,
+			       status, effective_due_at, breached_at, is_paused, paused_at, calendar_snapshot_json
+			from `tabCSKH SLA Obligation`
+			where campaign = %s and status in ('open', 'breached_open')
+			for update
+			""",
+			(campaign,),
+			as_dict=True,
+		)
+		for ob in obs:
+			eff_due = _effective_due_with_active_pause(ob, ts)
+			if ob.obligation_type != "FIRST_CONNECTED" and (ob.status == "breached_open" or ts > eff_due):
+				breach_ts = get_datetime(ob.breached_at) if ob.breached_at else eff_due
+				_update_obligation(
+					ob.name,
+					{
+						"status": "breached_handoff",
+						"is_paused": 0,
+						"paused_at": None,
+						"breached_at": breach_ts,
+						"closed_at": ts,
+					},
+					{
+						"event": "campaign_closed_after_breach",
+						"actor": act,
+						"at": str(ts),
+						"breached_at": str(breach_ts),
+					},
+				)
+				breached_ids.append(ob.name)
+			else:
+				_update_obligation(
+					ob.name,
+					{
+						"status": "canceled_validly",
+						"is_paused": 0,
+						"paused_at": None,
+						"closed_at": ts,
+					},
+					{"event": "campaign_closed_validly", "actor": act, "at": str(ts)},
+				)
+				closed_ids.append(ob.name)
+
+	if paused_ids or resumed_ids or closed_ids or breached_ids:
+		_notify_dirty_post_commit(
+			campaign=campaign,
+			event_dt=ts,
+			reason=f"campaign_status_{str(new_status).lower()}",
+		)
+	return {
+		"paused": paused_ids,
+		"resumed": resumed_ids,
+		"closed": closed_ids,
+		"breached_preserved": breached_ids,
+	}
+
+
 # ---------------------------------------------------------------------------
 # 2. Explicit audited actions (`waive`, `pause`, `resume`) & query APIs
 # ---------------------------------------------------------------------------
+
+ALLOWED_OBLIGATION_SORT_FIELDS = {
+	"effective_due_at": "`tabCSKH SLA Obligation`.`effective_due_at`",
+	"original_due_at": "`tabCSKH SLA Obligation`.`original_due_at`",
+	"started_at": "`tabCSKH SLA Obligation`.`started_at`",
+	"status": "`tabCSKH SLA Obligation`.`status`",
+	"creation": "`tabCSKH SLA Obligation`.`creation`",
+	"fulfilled_at": "`tabCSKH SLA Obligation`.`fulfilled_at`",
+	"breached_at": "`tabCSKH SLA Obligation`.`breached_at`",
+}
+
+
+def _enrich_obligation_labels(rows: list[dict]) -> tuple[dict[str, str], dict[str, str]]:
+	team_ids = sorted({str(r.get("team_at_obligation")) for r in rows if r.get("team_at_obligation")})
+	camp_ids = sorted({str(r.get("campaign")) for r in rows if r.get("campaign")})
+	team_map: dict[str, str] = {}
+	camp_map: dict[str, str] = {}
+	if team_ids and frappe.db.table_exists("CRM Sales Hierarchy"):
+		ph = ", ".join(["%s"] * len(team_ids))
+		h_cols = ["h.name", "h.user"]
+		if frappe.db.has_column("CRM Sales Hierarchy", "full_name"):
+			h_cols.append("h.full_name")
+		for tr in frappe.db.sql(
+			f"""
+			select {", ".join(h_cols)}, u.full_name as user_full_name
+			from `tabCRM Sales Hierarchy` h
+			left join `tabUser` u on u.name = h.user
+			where h.name in ({ph})
+			""",
+			tuple(team_ids),
+			as_dict=True,
+		):
+			team_map[str(tr.name)] = str(
+				tr.get("full_name") or tr.get("user_full_name") or tr.get("user") or tr.name
+			)
+	if team_ids and frappe.db.table_exists("CSKH Team Membership History"):
+		missing_teams = [t for t in team_ids if t not in team_map]
+		if missing_teams:
+			ph = ", ".join(["%s"] * len(missing_teams))
+			for mr in frappe.db.sql(
+				f"""
+				select team_node, max(team_name_snapshot) as team_name_snapshot
+				from `tabCSKH Team Membership History`
+				where team_node in ({ph})
+				group by team_node
+				""",
+				tuple(missing_teams),
+				as_dict=True,
+			):
+				if mr.get("team_name_snapshot"):
+					team_map[str(mr.team_node)] = str(mr.team_name_snapshot)
+	if camp_ids and frappe.db.table_exists("CSKH Campaign"):
+		ph = ", ".join(["%s"] * len(camp_ids))
+		for cr in frappe.db.sql(
+			f"select name, title, code from `tabCSKH Campaign` where name in ({ph})",
+			tuple(camp_ids),
+			as_dict=True,
+		):
+			camp_map[str(cr.name)] = str(cr.title or cr.code or cr.name)
+	return team_map, camp_map
 
 
 def _assert_sla_admin_or_authorized_leader(ob_doc, actor: str, *, action: str) -> dict:
@@ -1562,9 +1805,11 @@ def _assert_sla_admin_or_authorized_leader(ob_doc, actor: str, *, action: str) -
 		return {}
 	if not _is_leader(actor):
 		raise ForbiddenScope("Nhân viên hoặc BOD không có quyền miễn trừ hoặc tạm dừng nghĩa vụ SLA.")
-	# Leader must NOT waive/pause their own personal obligation AND must manage the obligation's owner/team
+	# Leader must NOT waive/pause their own personal obligation AND must be authorized on BOTH the interval team-as-of AND live team!
 	if ob_doc.owner_user == actor:
 		raise ForbiddenScope("Team Leader không được tự miễn trừ hoặc tạm dừng nghĩa vụ SLA của chính mình.")
+	if not sla_obligation_has_permission(ob_doc, ptype="read", user=actor):
+		raise ForbiddenScope("Nghĩa vụ SLA không thuộc phạm vi đội nhóm lịch sử của bạn.")
 	if not (ob_doc.owner_user and _in_team(actor, ob_doc.owner_user)):
 		raise ForbiddenScope("Nghĩa vụ SLA không thuộc phạm vi nhân sự trong team quản lý của bạn.")
 	pol, _ = _resolve_policy_and_calendar(campaign=ob_doc.campaign, owner_user=ob_doc.owner_user)
@@ -1575,16 +1820,26 @@ def _assert_sla_admin_or_authorized_leader(ob_doc, actor: str, *, action: str) -
 	return pol
 
 
-def serialize_obligation(row: dict, *, include_audit: bool = False) -> dict:
+def serialize_obligation(
+	row: dict,
+	*,
+	include_audit: bool = False,
+	team_map: dict[str, str] | None = None,
+	camp_map: dict[str, str] | None = None,
+) -> dict:
 	tz = "Asia/Ho_Chi_Minh"
+	team_id = row.get("team_at_obligation")
+	camp_id = row.get("campaign")
 	payload = {
 		"obligation_id": row.get("name"),
 		"obligation_type": row.get("obligation_type"),
 		"work_item": row.get("work_item"),
-		"campaign": row.get("campaign"),
+		"campaign": camp_id,
+		"campaign_name": (camp_map or {}).get(str(camp_id)) if camp_id else None,
 		"interval_event": row.get("interval_event"),
 		"owner_user": row.get("owner_user"),
-		"team_at_obligation": row.get("team_at_obligation"),
+		"team_at_obligation": team_id,
+		"team_name": (team_map or {}).get(str(team_id)) if team_id else None,
 		"attribution_status": row.get("attribution_status") or AUTHORITATIVE,
 		"followup_task": row.get("followup_task"),
 		"status": row.get("status"),
@@ -1620,6 +1875,8 @@ def waive_obligation(obligation_id: str, reason: str | None, actor: str | None =
 	actor = actor or frappe.session.user
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
+	if not is_p3_sla_enabled():
+		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 	ob_id = parse_optional_str(obligation_id, "Mã nghĩa vụ SLA không hợp lệ.")
 	if not ob_id:
 		raise InvalidRequest("Mã nghĩa vụ SLA (obligation_id) là bắt buộc.")
@@ -1659,18 +1916,21 @@ def waive_obligation(obligation_id: str, reason: str | None, actor: str | None =
 		campaign=ob_doc.campaign,
 		owner_user=ob_doc.owner_user,
 		team_node=ob_doc.team_at_obligation,
-		event_dt=ob_doc.evaluation_anchor_at or now_dt,
+		event_dt=ob_doc.effective_due_at or now_dt,
 		reason="obligation_waived",
 	)
 	frappe.db.commit()
 	refreshed = frappe.get_doc("CSKH SLA Obligation", ob_id).as_dict()
-	return serialize_obligation(refreshed, include_audit=True)
+	t_map, c_map = _enrich_obligation_labels([refreshed])
+	return serialize_obligation(refreshed, include_audit=True, team_map=t_map, camp_map=c_map)
 
 
 def pause_obligation(obligation_id: str, reason: str | None, actor: str | None = None, now=None) -> dict:
 	actor = actor or frappe.session.user
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
+	if not is_p3_sla_enabled():
+		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 	ob_id = parse_optional_str(obligation_id, "Mã nghĩa vụ SLA không hợp lệ.")
 	if not ob_id:
 		raise InvalidRequest("Mã nghĩa vụ SLA (obligation_id) là bắt buộc.")
@@ -1704,7 +1964,9 @@ def pause_obligation(obligation_id: str, reason: str | None, actor: str | None =
 		{"event": "paused", "actor": actor, "at": str(now_dt), "reason": clean_reason},
 	)
 	frappe.db.commit()
-	return serialize_obligation(frappe.get_doc("CSKH SLA Obligation", ob_id).as_dict(), include_audit=True)
+	refreshed = frappe.get_doc("CSKH SLA Obligation", ob_id).as_dict()
+	t_map, c_map = _enrich_obligation_labels([refreshed])
+	return serialize_obligation(refreshed, include_audit=True, team_map=t_map, camp_map=c_map)
 
 
 def resume_obligation(
@@ -1713,6 +1975,8 @@ def resume_obligation(
 	actor = actor or frappe.session.user
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
+	if not is_p3_sla_enabled():
+		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 	ob_id = parse_optional_str(obligation_id, "Mã nghĩa vụ SLA không hợp lệ.")
 	if not ob_id:
 		raise InvalidRequest("Mã nghĩa vụ SLA (obligation_id) là bắt buộc.")
@@ -1755,14 +2019,35 @@ def resume_obligation(
 			"reason": clean_reason,
 		},
 	)
+	_notify_dirty_post_commit(
+		work_item=ob_doc.work_item,
+		campaign=ob_doc.campaign,
+		owner_user=ob_doc.owner_user,
+		team_node=ob_doc.team_at_obligation,
+		event_dt=new_eff_due,
+		reason="obligation_resumed",
+	)
 	frappe.db.commit()
-	return serialize_obligation(frappe.get_doc("CSKH SLA Obligation", ob_id).as_dict(), include_audit=True)
+	refreshed = frappe.get_doc("CSKH SLA Obligation", ob_id).as_dict()
+	t_map, c_map = _enrich_obligation_labels([refreshed])
+	return serialize_obligation(refreshed, include_audit=True, team_map=t_map, camp_map=c_map)
 
 
 def list_obligations(
 	work_item: str | None = None,
 	status: str | None = None,
 	obligation_type: str | None = None,
+	campaign: str | None = None,
+	team: str | None = None,
+	employee: str | None = None,
+	lead_source: str | None = None,
+	period_type: str | None = None,
+	period_key: str | None = None,
+	from_date: str | None = None,
+	to_date: str | None = None,
+	search: str | None = None,
+	sort_by: str | None = None,
+	sort_dir: str | None = None,
 	page=1,
 	page_size=20,
 	actor: str | None = None,
@@ -1770,7 +2055,9 @@ def list_obligations(
 	actor = actor or frappe.session.user
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
-	from crm_cskh.p1_permissions import ROLE_BOD
+	if not is_p3_sla_enabled():
+		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
+	from crm_cskh.p1_permissions import ROLE_BOD, _leader_node, _subtree_nodes
 
 	if ROLE_BOD in _roles(actor) and not (_is_system(actor) or ROLE_ADMIN in _roles(actor)):
 		raise ForbiddenScope(
@@ -1783,6 +2070,21 @@ def list_obligations(
 	wi_filter = parse_optional_str(work_item, "Tham số work_item không hợp lệ.")
 	st_filter = parse_optional_str(status, "Tham số status không hợp lệ.")
 	tp_filter = parse_optional_str(obligation_type, "Tham số obligation_type không hợp lệ.")
+	camp_filter = parse_optional_str(campaign, "Tham số campaign không hợp lệ.")
+	team_filter = parse_optional_str(team, "Tham số team không hợp lệ.")
+	emp_filter = parse_optional_str(employee, "Tham số employee không hợp lệ.")
+	src_filter = parse_optional_str(lead_source, "Tham số lead_source không hợp lệ.")
+	search_q = parse_optional_str(search, "Tham số search không hợp lệ.")
+	sort_field_key = (
+		parse_optional_str(sort_by, "Tham số sort_by không hợp lệ.") or "effective_due_at"
+	).lower()
+	if sort_field_key not in ALLOWED_OBLIGATION_SORT_FIELDS:
+		raise InvalidRequest(
+			f"Tham số sort_by không hợp lệ: '{sort_field_key}'. Chỉ chấp nhận: {', '.join(sorted(ALLOWED_OBLIGATION_SORT_FIELDS))}."
+		)
+	sort_direction = (parse_optional_str(sort_dir, "Tham số sort_dir không hợp lệ.") or "asc").lower()
+	if sort_direction not in ("asc", "desc"):
+		raise InvalidRequest("Tham số sort_dir phải là 'asc' hoặc 'desc'.")
 
 	from crm_cskh.p3_permissions import sla_obligation_query_conditions
 
@@ -1800,8 +2102,51 @@ def list_obligations(
 	if tp_filter:
 		conds.append("`tabCSKH SLA Obligation`.`obligation_type` = %s")
 		params.append(tp_filter)
+	if camp_filter:
+		conds.append("`tabCSKH SLA Obligation`.`campaign` = %s")
+		params.append(camp_filter)
+	if team_filter:
+		is_priv = _is_system(actor) or ROLE_ADMIN in _roles(actor)
+		if not is_priv and _is_leader(actor):
+			leader_root = _leader_node(actor)
+			leader_allowed = _subtree_nodes(leader_root) if leader_root else set()
+			if team_filter not in leader_allowed:
+				raise ForbiddenScope("Đội nhóm lọc nằm ngoài phạm vi quản lý được phép của bạn.")
+		team_nodes = sorted(_subtree_nodes(team_filter) or {team_filter})
+		ph = ", ".join(["%s"] * len(team_nodes))
+		conds.append(f"`tabCSKH SLA Obligation`.`team_at_obligation` in ({ph})")
+		params.extend(team_nodes)
+	if emp_filter:
+		if _is_staff(actor) and not (_is_system(actor) or ROLE_ADMIN in _roles(actor) or _is_leader(actor)):
+			if emp_filter != actor:
+				raise ForbiddenScope("Nhân viên chỉ được xem nghĩa vụ SLA của chính mình.")
+		conds.append("`tabCSKH SLA Obligation`.`owner_user` = %s")
+		params.append(emp_filter)
+	if src_filter:
+		conds.append(
+			"exists (select 1 from `tabCRM Lead` ld_src "
+			"where ld_src.name = `tabCSKH SLA Obligation`.`lead` and ld_src.source = %s)"
+		)
+		params.append(src_filter)
+	if period_type or period_key or from_date or to_date:
+		from crm_cskh.services.kpi_periods import resolve_period_spec
+
+		p_spec = resolve_period_spec(period_type or "monthly", period_key, from_date, to_date)
+		conds.append("`tabCSKH SLA Obligation`.`effective_due_at` >= %s")
+		conds.append("`tabCSKH SLA Obligation`.`effective_due_at` < %s")
+		params.extend([p_spec.start_dt, p_spec.end_dt_exclusive])
+	if search_q:
+		like_val = f"%{search_q}%"
+		conds.append(
+			"(`tabCSKH SLA Obligation`.`work_item` like %s "
+			"or `tabCSKH SLA Obligation`.`name` like %s "
+			"or `tabCSKH SLA Obligation`.`owner_user` like %s "
+			"or `tabCSKH SLA Obligation`.`campaign` like %s)"
+		)
+		params.extend([like_val, like_val, like_val, like_val])
 
 	where_clause = " and ".join(conds)
+	order_col = ALLOWED_OBLIGATION_SORT_FIELDS[sort_field_key]
 	total = int(
 		frappe.db.sql(
 			f"select count(*) from `tabCSKH SLA Obligation` where {where_clause}",
@@ -1814,16 +2159,19 @@ def list_obligations(
 		select *
 		from `tabCSKH SLA Obligation`
 		where {where_clause}
-		order by effective_due_at asc, creation desc
+		order by {order_col} {sort_direction}, `tabCSKH SLA Obligation`.`creation` desc
 		limit %s offset %s
 		""",
 		tuple([*params, size_num, offset]),
 		as_dict=True,
 	)
+	t_map, c_map = _enrich_obligation_labels(rows)
 	include_audit = _is_system(actor) or ROLE_ADMIN in _roles(actor) or _is_leader(actor)
 	return {
 		"ok": True,
-		"rows": [serialize_obligation(r, include_audit=include_audit) for r in rows],
+		"rows": [
+			serialize_obligation(r, include_audit=include_audit, team_map=t_map, camp_map=c_map) for r in rows
+		],
 		"pagination": {
 			"page": page_num,
 			"page_size": size_num,
@@ -1837,6 +2185,8 @@ def get_obligation_detail(obligation_id: str, actor: str | None = None) -> dict:
 	actor = actor or frappe.session.user
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
+	if not is_p3_sla_enabled():
+		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 	ob_id = parse_optional_str(obligation_id, "Mã nghĩa vụ SLA không hợp lệ.")
 	if not ob_id:
 		raise InvalidRequest("Mã nghĩa vụ SLA (obligation_id) là bắt buộc.")
@@ -1847,5 +2197,12 @@ def get_obligation_detail(obligation_id: str, actor: str | None = None) -> dict:
 	doc = frappe.get_doc("CSKH SLA Obligation", ob_id)
 	if not sla_obligation_has_permission(doc, ptype="read", user=actor):
 		raise ForbiddenScope("Bạn không có quyền truy cập nghĩa vụ SLA ngoài phạm vi được phép.")
+	raw_row = doc.as_dict()
+	t_map, c_map = _enrich_obligation_labels([raw_row])
 	include_audit = _is_system(actor) or ROLE_ADMIN in _roles(actor) or _is_leader(actor)
-	return {"ok": True, "obligation": serialize_obligation(doc.as_dict(), include_audit=include_audit)}
+	return {
+		"ok": True,
+		"obligation": serialize_obligation(
+			raw_row, include_audit=include_audit, team_map=t_map, camp_map=c_map
+		),
+	}

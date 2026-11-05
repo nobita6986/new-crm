@@ -83,7 +83,7 @@
    "fieldname": "metric_version",
    "fieldtype": "Data",
    "label": "Metric Version",
-   "default": "cskh-metrics-v1",
+   "default": "cskh-metrics-v2",
    "reqd": 1
   },
   {

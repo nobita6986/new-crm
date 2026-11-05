@@ -1,4 +1,4 @@
-"""Whitelisted RPC endpoints for P3 BOD Quality Dashboard, Scorecards, Drill-downs & Exports (`docs/p3/report-api-contract.md` §3.1-§3.8)."""
+"""Whitelisted RPC endpoints for P3 BOD Quality Dashboard, Scorecards, Drill-downs, Filter Options & Exports (`docs/p3/report-api-contract.md` §3.1-§3.9)."""
 
 from __future__ import annotations
 
@@ -24,6 +24,7 @@ def get_executive_overview(
 	to_date: str | None = None,
 	campaign: str | None = None,
 	team: str | None = None,
+	lead_source: str | None = None,
 ):
 	return report_query.get_executive_overview(
 		period_type=period_type,
@@ -32,6 +33,7 @@ def get_executive_overview(
 		to_date=to_date,
 		campaign=campaign,
 		team=team,
+		lead_source=lead_source,
 	)
 
 
@@ -43,6 +45,7 @@ def get_team_comparison(
 	to_date: str | None = None,
 	campaign: str | None = None,
 	team: str | None = None,
+	lead_source: str | None = None,
 	sort_by: str = "PROCESS_SCORE",
 	sort_dir: str = "desc",
 	page: int | str = 1,
@@ -55,6 +58,7 @@ def get_team_comparison(
 		to_date=to_date,
 		campaign=campaign,
 		team=team,
+		lead_source=lead_source,
 		sort_by=sort_by,
 		sort_dir=sort_dir,
 		page=page,
@@ -71,6 +75,7 @@ def get_employee_quality(
 	team: str | None = None,
 	employee: str | None = None,
 	campaign: str | None = None,
+	lead_source: str | None = None,
 	sort_by: str = "PROCESS_SCORE",
 	sort_dir: str = "desc",
 	page: int | str = 1,
@@ -84,6 +89,7 @@ def get_employee_quality(
 		team=team,
 		employee=employee,
 		campaign=campaign,
+		lead_source=lead_source,
 		sort_by=sort_by,
 		sort_dir=sort_dir,
 		page=page,
@@ -99,6 +105,7 @@ def get_campaign_quality(
 	to_date: str | None = None,
 	campaign: str | None = None,
 	team: str | None = None,
+	lead_source: str | None = None,
 	sort_by: str = "PROCESS_SCORE",
 	sort_dir: str = "desc",
 	page: int | str = 1,
@@ -111,6 +118,7 @@ def get_campaign_quality(
 		to_date=to_date,
 		campaign=campaign,
 		team=team,
+		lead_source=lead_source,
 		sort_by=sort_by,
 		sort_dir=sort_dir,
 		page=page,
@@ -125,6 +133,7 @@ def get_my_scorecard(
 	from_date: str | None = None,
 	to_date: str | None = None,
 	campaign: str | None = None,
+	lead_source: str | None = None,
 ):
 	return report_query.get_my_scorecard(
 		period_type=period_type,
@@ -132,6 +141,22 @@ def get_my_scorecard(
 		from_date=from_date,
 		to_date=to_date,
 		campaign=campaign,
+		lead_source=lead_source,
+	)
+
+
+@frappe.whitelist()
+def get_filter_options(
+	period_type: str = "monthly",
+	period_key: str | None = None,
+	from_date: str | None = None,
+	to_date: str | None = None,
+):
+	return report_query.get_filter_options(
+		period_type=period_type,
+		period_key=period_key,
+		from_date=from_date,
+		to_date=to_date,
 	)
 
 
@@ -145,6 +170,12 @@ def get_metric_drilldown(
 	scope_type: str | None = None,
 	scope_id: str | None = None,
 	campaign: str | None = None,
+	team: str | None = None,
+	employee: str | None = None,
+	lead_source: str | None = None,
+	search: str | None = None,
+	sort_by: str | None = None,
+	sort_dir: str | None = None,
 	filter_bucket: str = "all_denominator",
 	include_pii: int | str | bool | None = None,
 	page: int | str = 1,
@@ -159,6 +190,12 @@ def get_metric_drilldown(
 		scope_type=scope_type,
 		scope_id=scope_id,
 		campaign=campaign,
+		team=team,
+		employee=employee,
+		lead_source=lead_source,
+		search=search,
+		sort_by=sort_by,
+		sort_dir=sort_dir,
 		filter_bucket=filter_bucket,
 		include_pii=include_pii,
 		page=page,

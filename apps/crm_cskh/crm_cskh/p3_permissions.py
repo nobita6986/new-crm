@@ -62,10 +62,10 @@ def _subtree_users_sql(user: str) -> str:
 	return "(" + ", ".join(_escape(u) for u in sorted(users)) + ")"
 
 
-def _subtree_nodes_sql(user: str) -> str:
+def _leader_allowed_nodes(user: str) -> set[str]:
 	bounds = _team_bounds(user)
 	if not bounds:
-		return "('')"
+		return set()
 	rows = frappe.db.sql(
 		"""
 		select name from `tabCRM Sales Hierarchy`
@@ -74,9 +74,14 @@ def _subtree_nodes_sql(user: str) -> str:
 		(bounds[0], bounds[1]),
 		pluck=True,
 	)
-	if not rows:
+	return set(rows or ())
+
+
+def _subtree_nodes_sql(user: str) -> str:
+	nodes = _leader_allowed_nodes(user)
+	if not nodes:
 		return "('')"
-	return "(" + ", ".join(_escape(n) for n in sorted(set(rows))) + ")"
+	return "(" + ", ".join(_escape(n) for n in sorted(nodes)) + ")"
 
 
 # --- 1. `CSKH Working Calendar` ------------------------------------------------
@@ -166,9 +171,13 @@ def sla_obligation_query_conditions(user=None, doctype=None) -> str:
 	if ROLE_BOD in _roles(user) and not (_is_leader(user) or _is_staff(user)):
 		return "1=0"
 	if _is_leader(user):
+		nodes_sql = _subtree_nodes_sql(user)
 		wi_sql = leader_authorized_work_item_sql(user, wi_alias="wi_sla")
 		return (
-			"exists (select 1 from `tabCSKH Work Item` wi_sla "
+			f"(`tabCSKH SLA Obligation`.`team_at_obligation` in {nodes_sql} "
+			"or (coalesce(`tabCSKH SLA Obligation`.`team_at_obligation`, '') = '' "
+			"and `tabCSKH SLA Obligation`.`attribution_status` = 'historical_attribution_unknown')) "
+			"and exists (select 1 from `tabCSKH Work Item` wi_sla "
 			f"where wi_sla.name = `tabCSKH SLA Obligation`.`work_item` and {wi_sql})"
 		)
 	if _is_staff(user):
@@ -205,17 +214,28 @@ def sla_obligation_has_permission(doc=None, ptype="read", user=None) -> bool:
 	wi_row = frappe.db.get_value(
 		"CSKH Work Item",
 		wi_name,
-		["name", "lead", "campaign", "status", "assigned_to", "closed_by", "owner_at_close"],
+		[
+			"name",
+			"lead",
+			"campaign",
+			"status",
+			"assigned_to",
+			"closed_by",
+			"last_activity_by",
+			"owner_at_close",
+		],
 		as_dict=True,
 	)
 	if not wi_row:
 		return False
 	if _is_leader(user):
-		team_at_ob = resolved.get("team_at_obligation")
-		if team_at_ob and _node_in_subtree(user, team_at_ob):
-			lead_owner = frappe.db.get_value("CRM Lead", wi_row.lead, "lead_owner") if wi_row.lead else None
-			if not lead_owner or lead_owner == user or _in_team(user, lead_owner):
-				return True
+		team_at_ob = resolved.get("team_at_obligation") or ""
+		attr_stat = resolved.get("attribution_status") or ""
+		if team_at_ob:
+			if not _node_in_subtree(user, team_at_ob):
+				return False
+		elif attr_stat != "historical_attribution_unknown":
+			return False
 		from crm_cskh.p2_permissions import is_work_item_readable_for_workflow
 
 		return is_work_item_readable_for_workflow(wi_row, user=user)
@@ -266,8 +286,8 @@ def kpi_run_query_conditions(user=None, doctype=None) -> str:
 		nodes_sql = _subtree_nodes_sql(user)
 		users_sql = _subtree_users_sql(user)
 		return (
-			f"(`tabCSKH KPI Run`.`requested_by` = {_escape(user)} "
-			"or (`tabCSKH KPI Run`.`is_latest_published` = 1 and `tabCSKH KPI Run`.`target_scope_type` = 'all') "
+			"`tabCSKH KPI Run`.`target_scope_type` in ('team', 'employee') "
+			f"and (`tabCSKH KPI Run`.`requested_by` = {_escape(user)} "
 			f"or (`tabCSKH KPI Run`.`target_scope_type` = 'team' and `tabCSKH KPI Run`.`target_scope_id` in {nodes_sql}) "
 			f"or (`tabCSKH KPI Run`.`target_scope_type` = 'employee' and `tabCSKH KPI Run`.`target_scope_id` in {users_sql}))"
 		)
@@ -294,12 +314,12 @@ def kpi_run_has_permission(doc=None, ptype="read", user=None) -> bool:
 			and (resolved.get("target_scope_type") or "all") in ("all", "company", "team", "campaign")
 		)
 	if _is_leader(user):
+		t_type = (resolved.get("target_scope_type") or "all").lower()
+		if t_type not in ("team", "employee"):
+			return False
 		if resolved.get("requested_by") == user:
 			return True
-		t_type = resolved.get("target_scope_type") or "all"
 		t_id = resolved.get("target_scope_id") or ""
-		if t_type == "all" and cint(resolved.get("is_latest_published")):
-			return True
 		if t_type == "team" and t_id and _node_in_subtree(user, t_id):
 			return True
 		if t_type == "employee" and t_id and (t_id == user or _in_team(user, t_id)):
@@ -317,14 +337,16 @@ def kpi_snapshot_query_conditions(user=None, doctype=None) -> str:
 	if _is_system(user) or ROLE_ADMIN in roles:
 		return ""
 	if ROLE_BOD in roles:
-		return "`tabCSKH KPI Snapshot`.`is_latest_published` = 1"
+		return (
+			"`tabCSKH KPI Snapshot`.`is_latest_published` = 1 "
+			"and `tabCSKH KPI Snapshot`.`scope_type` in ('company', 'team', 'employee', 'campaign')"
+		)
 	if _is_leader(user):
 		nodes_sql = _subtree_nodes_sql(user)
-		users_sql = _subtree_users_sql(user)
 		return (
 			"`tabCSKH KPI Snapshot`.`is_latest_published` = 1 "
 			f"and ((`tabCSKH KPI Snapshot`.`scope_type` = 'team' and `tabCSKH KPI Snapshot`.`scope_id` in {nodes_sql}) "
-			f"or (`tabCSKH KPI Snapshot`.`scope_type` = 'employee' and `tabCSKH KPI Snapshot`.`scope_id` in {users_sql}))"
+			f"or (`tabCSKH KPI Snapshot`.`scope_type` = 'employee_team' and `tabCSKH KPI Snapshot`.`team_filter` in {nodes_sql}))"
 		)
 	if _is_staff(user):
 		return (
@@ -349,15 +371,16 @@ def kpi_snapshot_has_permission(doc=None, ptype="read", user=None) -> bool:
 		return bool(ROLE_BOD in roles or _is_leader(user) or _is_staff(user))
 	if not resolved or not cint(resolved.get("is_latest_published")):
 		return False
-	if ROLE_BOD in roles:
-		return True
 	stype = resolved.get("scope_type")
 	sid = resolved.get("scope_id") or ""
+	tfilter = resolved.get("team_filter") or ""
+	if ROLE_BOD in roles:
+		return stype in ("company", "team", "employee", "campaign")
 	if _is_leader(user):
 		if stype == "team":
 			return bool(sid and _node_in_subtree(user, sid))
-		if stype == "employee":
-			return bool(sid and (sid == user or _in_team(user, sid)))
+		if stype == "employee_team":
+			return bool(tfilter and _node_in_subtree(user, tfilter))
 		return False
 	if _is_staff(user):
 		return bool(stype == "employee" and sid == user)
@@ -380,7 +403,7 @@ def qa_review_query_conditions(user=None, doctype=None) -> str:
 	if _is_staff(user):
 		return (
 			f"`tabCSKH QA Review`.`reviewed_staff` = {_escape(user)} "
-			"and `tabCSKH QA Review`.`status` = 'published'"
+			"and `tabCSKH QA Review`.`status` in ('published', 'approved')"
 		)
 	return "1=0"
 
@@ -405,7 +428,7 @@ def qa_review_has_permission(doc=None, ptype="read", user=None) -> bool:
 	if _is_leader(user):
 		return bool(staff_u and (staff_u == user or _in_team(user, staff_u)))
 	if _is_staff(user):
-		return bool(staff_u == user and resolved.get("status") == "published")
+		return bool(staff_u == user and resolved.get("status") in ("published", "approved"))
 	return False
 
 
@@ -418,9 +441,13 @@ def is_export_job_currently_authorized(job_row: dict, user: str | None = None) -
 	Used at Stage 2 (`jobs/run_export.py` worker) and Stage 3 (`download_export` + `/private/files/...`).
 	Returns `(authorized, reason_code)`.
 	"""
+	from crm_cskh.services.p3_flags import is_p3_reporting_enabled
+
 	user = user or frappe.session.user
 	if not user or user == "Guest":
 		return False, "FORBIDDEN_SCOPE"
+	if not is_p3_reporting_enabled():
+		return False, "POLICY_CONFLICT"
 	enabled = frappe.db.get_value("User", user, "enabled")
 	if enabled is not None and not cint(enabled):
 		return False, "FORBIDDEN_SCOPE"
@@ -457,7 +484,8 @@ def is_export_job_currently_authorized(job_row: dict, user: str | None = None) -
 		if not bounds:
 			return False, "FORBIDDEN_SCOPE"
 		if report_type == "my_scorecard":
-			return (scope_type == "employee" and scope_id == user), "FORBIDDEN_SCOPE"
+			ok_self = bool(scope_type == "employee" and scope_id == user)
+			return ok_self, ("OK" if ok_self else "FORBIDDEN_SCOPE")
 		if scope_type == "team":
 			if scope_id and _node_in_subtree(user, scope_id):
 				return True, "OK"
@@ -490,6 +518,42 @@ def is_export_job_currently_authorized(job_row: dict, user: str | None = None) -
 		return False, "FORBIDDEN_SCOPE"
 
 	return False, "FORBIDDEN_SCOPE"
+
+
+def authorized_export_job_names_for_user(
+	user: str | None = None,
+	*,
+	completed_only: bool = False,
+) -> list[str]:
+	"""Return `CSKH Export Job` names currently passing LIVE Stage 3 authorization & TTL for `user`."""
+	from frappe.utils import get_datetime, now_datetime
+
+	user = user or frappe.session.user
+	if not user or user == "Guest" or not frappe.db.table_exists("CSKH Export Job"):
+		return []
+	now_dt = now_datetime()
+	status_clause = "`status` = 'completed'" if completed_only else "`status` not in ('revoked', 'expired')"
+	rows = frappe.db.sql(
+		f"""
+		select name, report_type, scope_type, scope_id, includes_pii, requested_by, status, expires_at
+		from `tabCSKH Export Job`
+		where requested_by = %s
+		  and {status_clause}
+		""",
+		(user,),
+		as_dict=True,
+	)
+	valid: list[str] = []
+	for row in rows or []:
+		if completed_only:
+			if not row.expires_at or now_dt >= get_datetime(row.expires_at):
+				continue
+		elif row.expires_at and now_dt >= get_datetime(row.expires_at):
+			continue
+		ok, _ = is_export_job_currently_authorized(row, user=user)
+		if ok:
+			valid.append(str(row.name))
+	return valid
 
 
 def is_export_file_downloadable(export_job_name: str, user: str | None = None) -> bool:
@@ -531,10 +595,11 @@ def export_job_query_conditions(user=None, doctype=None) -> str:
 	if _is_system(user) or ROLE_ADMIN in roles:
 		return ""
 	if roles & {ROLE_BOD, "Sales Manager", "Sales User"}:
-		return (
-			f"`tabCSKH Export Job`.`requested_by` = {_escape(user)} "
-			"and `tabCSKH Export Job`.`status` not in ('revoked', 'expired')"
-		)
+		valid_ids = authorized_export_job_names_for_user(user, completed_only=False)
+		if not valid_ids:
+			return "1=0"
+		in_sql = "(" + ", ".join(_escape(jid) for jid in valid_ids) + ")"
+		return f"`tabCSKH Export Job`.`name` in {in_sql}"
 	return "1=0"
 
 

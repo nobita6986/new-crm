@@ -36,6 +36,7 @@ from crm_cskh.services.errors import (
 	ForbiddenScope,
 	InvalidRequest,
 	NotFound,
+	PolicyConflict,
 	RecomputeInProgress,
 )
 from crm_cskh.services.kpi_calculator import METRIC_VERSION, compute_period_snapshots
@@ -47,6 +48,7 @@ from crm_cskh.services.kpi_periods import (
 	resolve_period_spec,
 	today_hcm,
 )
+from crm_cskh.services.p3_flags import is_p3_reporting_enabled
 
 SNAPSHOT_BULK_FIELDS = [
 	"name",
@@ -91,6 +93,7 @@ RESTATED_TRIGGER_REASONS = frozenset(
 		"correction_approved",
 		"obligation_waived",
 		"historical_backfill_restate",
+		"metric_version_upgrade",
 	)
 )
 
@@ -107,6 +110,56 @@ def unpack_snapshot_metrics(raw_metrics_json: str | dict | None) -> tuple[dict, 
 			dict(parsed.get("attempt_breakdown") or {}),
 		)
 	return parsed, [], {}
+
+
+def unpack_snapshot_extra(raw_metrics_json: str | dict | None) -> dict:
+	"""Return extra metadata (`lead_source`, `qa_cohort_breakdown`) stored alongside `metrics` in `metrics_json`."""
+	if not raw_metrics_json:
+		return {}
+	parsed = json.loads(raw_metrics_json) if isinstance(raw_metrics_json, str) else dict(raw_metrics_json)
+	if isinstance(parsed, dict) and "metrics" in parsed:
+		return {
+			"lead_source": parsed.get("lead_source"),
+			"qa_cohort_breakdown": parsed.get("qa_cohort_breakdown"),
+		}
+	return {}
+
+
+def invalidate_stale_metric_version_snapshots() -> int:
+	"""Mark published `CSKH KPI Run` periods with `metric_version != METRIC_VERSION` dirty (`F-P3-06` append-only)."""
+	if not frappe.db.table_exists("CSKH KPI Run") or not frappe.db.table_exists("CSKH Dirty Scope"):
+		return 0
+	stale_runs = frappe.db.sql(
+		"""
+		select name, period_type, period_key, from_date, to_date, campaign_filter
+		from `tabCSKH KPI Run`
+		where is_latest_published = 1
+		  and coalesce(metric_version, '') != %s
+		""",
+		(METRIC_VERSION,),
+		as_dict=True,
+	)
+	if not stale_runs:
+		return 0
+	prev_suppress = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+	frappe.flags.cskh_suppress_dirty_enqueue = True
+	try:
+		for r in stale_runs:
+			target_d = (
+				_parse_iso_date(str(r.to_date or r.from_date), "to_date")
+				if (r.to_date or r.from_date)
+				else today_hcm()
+			)
+			schedule_post_commit_dirty_invalidation(
+				campaign=r.campaign_filter or None,
+				event_dt=target_d,
+				reason="metric_version_upgrade",
+				trigger_reference=r.name,
+			)
+		_flush_pending_dirty_events()
+	finally:
+		frappe.flags.cskh_suppress_dirty_enqueue = prev_suppress
+	return len(stale_runs)
 
 
 def _clear_pending_dirty_events() -> None:
@@ -242,6 +295,7 @@ def _flush_pending_dirty_events() -> None:
 		wrote_any
 		and not getattr(frappe.flags, "in_test", False)
 		and not getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+		and is_p3_reporting_enabled()
 	):
 		try:
 			cache = frappe.cache
@@ -324,18 +378,21 @@ def execute_kpi_recompute(
 	req_user = actor or frappe.session.user or "Administrator"
 
 	with acquire_recompute_lock(period, camp_val):
-		prev_pub = frappe.db.get_value(
-			"CSKH KPI Run",
-			{
-				"period_type": period.period_type,
-				"period_key": period.period_key,
-				"campaign_filter": camp_val,
-				"is_latest_published": 1,
-			},
-			["name", "as_of", "source_watermark"],
-			order_by="creation desc",
+		prev_rows = frappe.db.sql(
+			"""
+			select name, as_of, source_watermark
+			from `tabCSKH KPI Run`
+			where period_type = %s
+			  and period_key = %s
+			  and coalesce(campaign_filter, '') = %s
+			  and is_latest_published = 1
+			order by creation desc
+			limit 1
+			""",
+			(period.period_type, period.period_key, camp_val),
 			as_dict=True,
 		)
+		prev_pub = prev_rows[0] if prev_rows else None
 
 		is_prior_period = period.to_date < today_hcm(as_of_dt)
 		if dry_run or run_mode == "dry_run":
@@ -414,6 +471,7 @@ def execute_kpi_recompute(
 					"run_mode": "dry_run",
 					"dry_run": True,
 					"status": "completed",
+					"metric_version": METRIC_VERSION,
 					"period": period.to_dict(),
 					"as_of": format_calendar_iso(as_of_dt),
 					"source_watermark": format_calendar_iso(watermark) if watermark else None,
@@ -434,6 +492,8 @@ def execute_kpi_recompute(
 						"metrics": snap["metrics"],
 						"score_components": snap["score_components"],
 						"attempt_breakdown": snap["attempt_breakdown"],
+						"lead_source": snap.get("lead_source"),
+						"qa_cohort_breakdown": snap.get("qa_cohort_breakdown"),
 					},
 					ensure_ascii=False,
 				)
@@ -457,7 +517,7 @@ def execute_kpi_recompute(
 						snap["scope_id"],
 						snap["scope_label"],
 						camp_val,
-						"",
+						snap.get("team_filter") or "",
 						snap.get("parent_team_id") or "",
 						snap.get("parent_team_label") or "",
 						int(snap.get("active_staff_count") or 0),
@@ -544,6 +604,7 @@ def execute_kpi_recompute(
 				"run_mode": eff_mode,
 				"dry_run": False,
 				"status": "completed",
+				"metric_version": METRIC_VERSION,
 				"period": period.to_dict(),
 				"as_of": format_calendar_iso(as_of_dt),
 				"source_watermark": format_calendar_iso(watermark) if watermark else None,
@@ -576,6 +637,8 @@ def process_dirty_scopes(max_scopes: int = 100, as_of: datetime | str | None = N
 	"""Drain `pending` `CSKH Dirty Scope` rows into deduplicated period recomputations."""
 	if not frappe.db.table_exists("CSKH Dirty Scope"):
 		return {"processed_scopes": 0, "runs": []}
+	if not is_p3_reporting_enabled():
+		return {"processed_scopes": 0, "skipped": True, "reason": "p3_reporting_disabled", "runs": []}
 
 	pending_rows = frappe.db.sql(
 		"""
@@ -819,6 +882,9 @@ def request_scoped_recompute(
 	if not (is_admin or is_leader):
 		raise ForbiddenScope("Bạn không có quyền kích hoạt tính lại KPI (request_recompute).")
 
+	if not is_p3_reporting_enabled(campaign=campaign):
+		raise PolicyConflict("Mô-đun báo cáo KPI P3 đang tạm tắt theo cấu hình hệ thống / chính sách.")
+
 	period = resolve_period_spec(period_type, period_key, from_date, to_date)
 	stype = (scope_type or ("team" if is_leader and not is_admin else "all")).strip().lower()
 	sid = str(scope_id or "").strip()
@@ -898,19 +964,16 @@ def get_kpi_run_status(run_id: str, *, actor: str | None = None) -> dict:
 		raise ForbiddenScope("Bạn không có quyền truy cập tiến trình CSKH KPI Run này.")
 
 	if is_leader and not (is_admin or is_bod):
-		# Leader can inspect runs covering company/all aggregate (for dashboard freshness banner) ONLY if published,
-		# OR runs explicitly scoped to their own subtree / requested by themselves; never another team's private run!
-		t_type = row.target_scope_type or "all"
+		t_type = (row.target_scope_type or "all").lower()
 		t_id = row.target_scope_id or ""
 		allowed = False
-		if row.requested_by == user:
-			allowed = True
-		elif t_type == "all" and cint(row.is_latest_published):
-			allowed = True
-		elif t_type == "team" and t_id and _node_in_subtree(user, t_id):
-			allowed = True
-		elif t_type == "employee" and t_id and (t_id == user or _in_team(user, t_id)):
-			allowed = True
+		if t_type in ("team", "employee"):
+			if row.requested_by == user:
+				allowed = True
+			elif t_type == "team" and t_id and _node_in_subtree(user, t_id):
+				allowed = True
+			elif t_type == "employee" and t_id and (t_id == user or _in_team(user, t_id)):
+				allowed = True
 		if not allowed:
 			raise ForbiddenScope("Tiến trình CSKH KPI Run này nằm ngoài phạm vi team của bạn.")
 

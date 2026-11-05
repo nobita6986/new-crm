@@ -101,15 +101,30 @@ def linked_lead_query_conditions(user=None, doctype=None, **kwargs):
 	if doctype == "File":
 		from frappe.utils import now_datetime
 
-		user_sql = frappe.db.escape(user, percent=False)
-		now_sql = frappe.db.escape(str(now_datetime()), percent=False)
+		from crm_cskh.p1_permissions import ROLE_ADMIN
+		from crm_cskh.p3_permissions import authorized_export_job_names_for_user
+		from crm_cskh.services.p3_flags import is_p3_reporting_enabled
+
+		if not is_p3_reporting_enabled():
+			return lead_exists_sql
+		if ROLE_ADMIN in frappe.get_roles(user):
+			now_sql = frappe.db.escape(str(now_datetime()), percent=False)
+			export_exists_sql = (
+				"EXISTS (SELECT 1 FROM `tabCSKH Export Job` `cskh_exp` "
+				"WHERE `cskh_exp`.`name` = `tabFile`.`attached_to_name` "
+				"AND `tabFile`.`attached_to_doctype` = 'CSKH Export Job' "
+				"AND `cskh_exp`.`status` = 'completed' "
+				f"AND `cskh_exp`.`expires_at` > {now_sql})"
+			)
+			return f"({lead_exists_sql} OR {export_exists_sql})"
+
+		valid_export_ids = authorized_export_job_names_for_user(user, completed_only=True)
+		if not valid_export_ids:
+			return lead_exists_sql
+		in_sql = "(" + ", ".join(frappe.db.escape(jid, percent=False) for jid in valid_export_ids) + ")"
 		export_exists_sql = (
-			"EXISTS (SELECT 1 FROM `tabCSKH Export Job` `cskh_exp` "
-			"WHERE `cskh_exp`.`name` = `tabFile`.`attached_to_name` "
-			"AND `tabFile`.`attached_to_doctype` = 'CSKH Export Job' "
-			"AND `cskh_exp`.`status` = 'completed' "
-			f"AND `cskh_exp`.`expires_at` > {now_sql} "
-			f"AND `cskh_exp`.`requested_by` = {user_sql})"
+			"(`tabFile`.`attached_to_doctype` = 'CSKH Export Job' "
+			f"AND `tabFile`.`attached_to_name` IN {in_sql})"
 		)
 		return f"({lead_exists_sql} OR {export_exists_sql})"
 	return lead_exists_sql

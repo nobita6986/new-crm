@@ -52,10 +52,18 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "draft\npublished\ndisputed\nvoided",
+   "options": "draft\npublished\napproved\ndisputed\nvoided",
    "default": "published",
    "reqd": 1,
    "in_list_view": 1
+  },
+  {
+   "fieldname": "cohort_type",
+   "fieldtype": "Select",
+   "label": "Cohort Type",
+   "options": "random_sample\nescalation\ncoaching\ndispute_audit",
+   "default": "random_sample",
+   "reqd": 1
   },
   {
    "fieldname": "rubric_version",
@@ -119,6 +127,7 @@
   "team_at_review",
   "reviewer",
   "status",
+  "cohort_type",
   "rubric_version",
   "points_achieved",
   "max_points",

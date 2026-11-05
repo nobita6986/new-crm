@@ -152,22 +152,18 @@ def _flag_bool(value, default):
 	return default
 
 
-def is_p3_enabled():
+def is_p3_enabled(route=None):
 	"""Feature flag controlling P3 quality/SLA screens for safe rollback (P3.md §15.3)."""
-	conf = getattr(frappe, "conf", None) or {}
-	for key in ("cskh_p3_enabled", "p3_sla_enabled", "p3_enabled"):
-		if key in conf and conf.get(key) is not None:
-			return _flag_bool(conf.get(key), True)
-	return True
+	from crm_cskh.services.p3_flags import is_p3_ui_enabled
+
+	return is_p3_ui_enabled(route=route)
 
 
-def is_qa_enabled():
+def is_qa_enabled(campaign=None):
 	"""Feature flag controlling optional P3 QA review module (default False per P3 scope)."""
-	conf = getattr(frappe, "conf", None) or {}
-	for key in ("cskh_qa_enabled", "qa_enabled"):
-		if key in conf and conf.get(key) is not None:
-			return _flag_bool(conf.get(key), False)
-	return False
+	from crm_cskh.services.p3_flags import is_qa_enabled as _resolve_qa_enabled
+
+	return _resolve_qa_enabled(campaign=campaign)
 
 
 def roles(user=None):
@@ -303,7 +299,7 @@ def build_context(
 		frappe.response["status_code"] = 403
 		frappe.throw(_("Log in to access this page."), frappe.PermissionError)
 
-	if require_p3 and not is_p3_enabled():
+	if require_p3 and not is_p3_enabled(route=route):
 		frappe.response["status_code"] = 403
 		frappe.throw(
 			_("P3 quality and SLA screens are currently disabled by site configuration."),
