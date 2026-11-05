@@ -92,6 +92,16 @@ Danh sách kết xuất từ `docker compose ... config --services` gồm **11 s
 3. [`compose.cskh-isolated-smoke.yaml`](../../deploy/compose/overrides/compose.cskh-isolated-smoke.yaml):
    - Dành cho **Isolated Smoke (`P4-01 §4`)**: giữ nguyên kiến trúc 11 service đi qua `proxy` → `frontend` → `backend`/`websocket`, nhưng chỉ bind cổng loopback `127.0.0.1:${HTTP_PUBLISH_PORT:-18080}:80`, thay `HostRegexp` mở rộng bằng `SITES_RULE` tường minh và gỡ `userns_mode: host` của upstream `compose.proxy.yaml` để chạy tương thích trên mọi Docker Engine chuẩn mà không đòi hỏi DNS công cộng hay ACME.
 
+### 4.4. Hợp đồng Biến Nhận Image Phối hợp với `T1B` (`APP_IMAGE`, `PULL_POLICY`, `ERPNEXT_VERSION`)
+
+Để khớp nối trực tiếp giữa bản dựng image của `T1B` (`deploy/images/release-lock.json`, `deploy/images/build-image.sh`) và lớp triển khai Compose của `T1A` mà không chấp nhận tag trôi nổi:
+
+| Biến môi trường | Vai trò trong `compose.cskh-common.yaml` | Quy ước trên Staging & Production | Quy ước trên Isolated Smoke cục bộ (`P4-01 §4`) |
+| :--- | :--- | :--- | :--- |
+| **`APP_IMAGE`** | Biến duy nhất cấp image cho cả 8 service ứng dụng (`configurator`, `migrator`, `backend`, `frontend`, `websocket`, `queue-short`, `queue-long`, `scheduler`); thay thế hoàn toàn cặp `${CUSTOM_IMAGE}:${CUSTOM_TAG}` của `compose.yaml` gốc. | Bắt buộc định dạng digest từ registry: `<registry>/<namespace>/crm-cskh@sha256:<64-hex>` (kiểm chứng tự động bởi `REMOTE_DIGEST_RE`). | Chấp nhận `<repo>@sha256:<64-hex>` **hoặc** mã định danh image cục bộ bất biến `sha256:<64-hex>` từ trường `APP_IMAGE_for_local_isolated_smoke` của `T1B` khi chưa có registry ngoài; vẫn bác bỏ mọi tag trôi nổi (`:latest`, `:0.0.1-92e14af`). |
+| **`PULL_POLICY`** | Truyền vào thuộc tính `pull_policy` của cả 8 service ứng dụng. | `always` (luôn đối chiếu digest từ registry khi triển khai). | `missing` khi dùng `<repo>@sha256:<64-hex>`, hoặc tự động chuyển sang `never` trong `run_isolated_smoke.py` khi nhận `sha256:<64-hex>` trực tiếp trên Docker daemon máy trạm. |
+| **`ERPNEXT_VERSION`** | Biến phụ trợ thỏa mãn biểu thức nội suy mặc định của `upstream/frappe_docker/compose.yaml` trước khi bị `compose.cskh-common.yaml` ghi đè bằng `APP_IMAGE`. | `unused-overridden-by-app-image` | `unused-overridden-by-app-image` |
+
 ---
 
 ## 5. Thiết kế Mạng 3 Lớp, Định tuyến Socket.IO & Cô lập Môi trường

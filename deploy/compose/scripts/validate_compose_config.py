@@ -26,7 +26,8 @@ UPSTREAM_DIR = COMPOSE_ROOT / "upstream" / "frappe_docker"
 OVERRIDES_DIR = COMPOSE_ROOT / "overrides"
 ENV_DIR = COMPOSE_ROOT / "env"
 
-DIGEST_RE = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
+REMOTE_DIGEST_RE = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
+LOCAL_OR_REMOTE_IMMUTABLE_RE = re.compile(r"^(?:[^@\s]+@)?sha256:[0-9a-f]{64}$")
 PLACEHOLDER_DIGEST = "sha256:" + ("0" * 64)
 
 EXPECTED_DEFAULT_SERVICES = sorted(
@@ -184,8 +185,10 @@ def verify_env_template(
 
     for img_key in ("APP_IMAGE", "MARIADB_IMAGE", "REDIS_IMAGE", "PROXY_IMAGE"):
         val = env_map.get(img_key, "")
-        assert DIGEST_RE.match(val), (
-            f"{stack_name}: {img_key}='{val}' must be pinned by immutable @sha256:<64-hex>"
+        allow_local_id = img_key == "APP_IMAGE" and stack_name == "isolated-smoke"
+        pattern = LOCAL_OR_REMOTE_IMMUTABLE_RE if allow_local_id else REMOTE_DIGEST_RE
+        assert pattern.match(val), (
+            f"{stack_name}: {img_key}='{val}' must be pinned by immutable sha256 digest"
         )
         if img_key != "APP_IMAGE":
             assert PLACEHOLDER_DIGEST not in val, (
@@ -265,7 +268,8 @@ def validate_stack(
     published_ports: dict[str, list[tuple[str, str, int, str]]] = {}
     for sname, sdef in srvs.items():
         img = sdef.get("image", "")
-        assert DIGEST_RE.match(img), f"{stack_name}.{sname}: image '{img}' lacks @sha256 digest"
+        img_re = LOCAL_OR_REMOTE_IMMUTABLE_RE if stack_name == "isolated-smoke" else REMOTE_DIGEST_RE
+        assert img_re.match(img), f"{stack_name}.{sname}: image '{img}' lacks immutable sha256 digest"
 
         s_nets = set(sdef.get("networks", {}).keys())
         assert "default" not in s_nets, f"{stack_name}.{sname} leaked onto default network"
@@ -379,6 +383,26 @@ def verify_negative_fail_closed(tmp_dir: pathlib.Path) -> None:
         failed_floating = True
     assert failed_floating, "Expected digest gate failure on :latest floating tag"
 
+    # Case 4: Local image ID sha256:<64-hex> allowed ONLY in isolated-smoke, rejected in production
+    sample_local_id = "sha256:" + ("a" * 64)
+    env_prod_local = dict(base_env)
+    env_prod_local["APP_IMAGE"] = sample_local_id
+    f4_prod = tmp_dir / "prod_local_id.env"
+    write_env_file(f4_prod, env_prod_local)
+    failed_prod_local = False
+    try:
+        verify_env_template("production", f4_prod, require_real_app_digest=True)
+    except AssertionError:
+        failed_prod_local = True
+    assert failed_prod_local, "Production must require <registry>/<repo>@sha256:<64-hex>, not local ID"
+
+    smoke_env = parse_env_file(STACK_PROFILES["isolated-smoke"]["env_template"])
+    smoke_env["APP_IMAGE"] = sample_local_id
+    smoke_env["PULL_POLICY"] = "never"
+    f4_smoke = tmp_dir / "smoke_local_id.env"
+    write_env_file(f4_smoke, smoke_env)
+    verify_env_template("isolated-smoke", f4_smoke, require_real_app_digest=True)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -441,6 +465,7 @@ def main() -> int:
             "missing_APP_IMAGE_rejected",
             "missing_DB_PASSWORD_SECRETS_FILE_rejected",
             "floating_tag_without_sha256_rejected",
+            "local_sha256_id_allowed_in_smoke_rejected_in_prod",
         ],
     }
     if args.json_out:

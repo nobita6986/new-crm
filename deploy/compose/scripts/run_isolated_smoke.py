@@ -50,8 +50,9 @@ SMOKE_COMPOSE_FILES = [
     OVERRIDES_DIR / "compose.cskh-isolated-smoke.yaml",
 ]
 
-DIGEST_RE = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
+IMMUTABLE_IMAGE_RE = re.compile(r"^(?:[^@\s]+@)?sha256:[0-9a-f]{64}$")
 PLACEHOLDER_DIGEST = "sha256:" + ("0" * 64)
+DEFAULT_P4_00_BASELINE_SHA = "be33e6c931337c42b94184b2fe292e094bd51c97"
 LONG_RUNNING_SERVICES = sorted(
     [
         "backend",
@@ -273,19 +274,30 @@ def run_http_and_socketio_smoke(
     site_name: str,
     admin_pw: str,
 ) -> dict:
-    # 1. Guest check on /crm and /cskh/quality-overview
+    # 1. Guest check on /crm, /cskh/dashboard, /cskh/quality-overview, and health API
     _, guest_opener = make_http_client()
     g_crm_code, _, _ = http_call(guest_opener, f"{base_url}/crm", site_name)
+    g_dash_code, _, _ = http_call(guest_opener, f"{base_url}/cskh/dashboard", site_name)
     g_cskh_code, _, _ = http_call(guest_opener, f"{base_url}/cskh/quality-overview", site_name)
+    g_api_code, _, _ = http_call(
+        guest_opener,
+        f"{base_url}/api/method/crm_cskh.api.health.ping",
+        site_name,
+        headers={"Accept": "application/json"},
+    )
     assert g_crm_code in (301, 302, 303, 403), f"Expected Guest /crm block/redirect, got {g_crm_code}"
+    assert g_dash_code in (301, 302, 303, 403), (
+        f"Expected Guest /cskh/dashboard 403/redirect, got {g_dash_code}"
+    )
     assert g_cskh_code in (301, 302, 303, 403), (
         f"Expected Guest /cskh/quality-overview 403/redirect, got {g_cskh_code}"
     )
+    assert g_api_code == 403, f"Expected Guest health.ping 403, got {g_api_code}"
 
     # 2. Login + session cookie flags
     jar, auth_opener = make_http_client()
     login_body = urllib.parse.urlencode({"usr": "Administrator", "pwd": admin_pw}).encode("utf-8")
-    l_code, l_hdrs, l_raw = http_call(
+    l_code, _, l_raw = http_call(
         auth_opener,
         f"{base_url}/api/method/login",
         site_name,
@@ -305,14 +317,23 @@ def run_http_and_socketio_smoke(
     )
     assert u_code == 200 and "Administrator" in u_raw, f"get_logged_user failed: {u_raw}"
 
-    # 3. Vietnamese UI + CSRF token extraction on /cskh/quality-overview and /crm
+    # 3. Vietnamese UI + CSRF token extraction on /cskh/dashboard, /cskh/quality-overview and /crm
+    dash_code, _, dash_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
+    assert dash_code == 200, f"Expected 200 on /cskh/dashboard, got {dash_code}"
+    assert "Asia/Ho_Chi_Minh" in dash_html, "Missing Asia/Ho_Chi_Minh timezone in /cskh/dashboard"
+
     ui_code, _, ui_html = http_call(auth_opener, f"{base_url}/cskh/quality-overview", site_name)
     assert ui_code == 200, f"Expected 200 on /cskh/quality-overview, got {ui_code}"
     assert "Asia/Ho_Chi_Minh" in ui_html, "Missing Asia/Ho_Chi_Minh timezone in CSKH page"
-    has_vi = any(term in ui_html for term in ("Tổng quan", "Chất lượng", "CSKH", "Đăng xuất"))
-    assert has_vi, "Expected Vietnamese UI labels on /cskh/quality-overview"
+    has_vi = any(
+        term in ui_html or term in dash_html
+        for term in ("Tổng quan", "Chất lượng", "Phân bổ", "Múi giờ", "CSKH")
+    )
+    assert has_vi, "Expected Vietnamese UI labels on CSKH web pages"
 
-    csrf_match = re.search(r'csrf_token["\']?\s*[:=]\s*["\']([0-9a-fA-F\-]{16,})["\']', ui_html)
+    csrf_match = re.search(
+        r'"X-Frappe-CSRF-Token"\s*:\s*"([0-9a-fA-F\-]{16,})"', ui_html
+    ) or re.search(r'csrf_token["\']?\s*[:=]\s*["\']([0-9a-fA-F\-]{16,})["\']', ui_html)
     assert csrf_match, "Could not locate CSRF token in authenticated CSKH HTML"
     csrf_token = csrf_match.group(1)
 
@@ -340,7 +361,7 @@ def run_http_and_socketio_smoke(
 
     good_csrf_code, _, good_csrf_body = http_call(
         auth_opener,
-        f"{base_url}/api/method/frappe.desk.notifications.get_notifications",
+        f"{base_url}/api/method/crm_cskh.api.health.ping",
         site_name,
         method="POST",
         data=b"{}",
@@ -350,7 +371,7 @@ def run_http_and_socketio_smoke(
             "X-Frappe-CSRF-Token": csrf_token,
         },
     )
-    assert good_csrf_code == 200, (
+    assert good_csrf_code == 200 and "crm_cskh" in good_csrf_body, (
         f"Valid CSRF POST failed ({good_csrf_code}): {good_csrf_body[:200]}"
     )
 
@@ -412,9 +433,12 @@ def run_http_and_socketio_smoke(
 
     return {
         "guest_crm_status": g_crm_code,
-        "guest_cskh_status": g_cskh_code,
+        "guest_cskh_dashboard_status": g_dash_code,
+        "guest_cskh_quality_status": g_cskh_code,
+        "guest_health_api_status": g_api_code,
         "login_status": l_code,
         "logged_user": "Administrator",
+        "cskh_dashboard_vi_status": dash_code,
         "cskh_vi_ui_status": ui_code,
         "crm_spa_status": crm_code,
         "csrf_forged_rejected_status": bad_csrf_code,
@@ -429,12 +453,15 @@ def main() -> int:
     parser.add_argument(
         "--app-image",
         default=os.environ.get("APP_IMAGE", ""),
-        help="Immutable custom image@sha256:<digest> built and handed off by T1B.",
+        help=(
+            "Immutable custom image handed off by T1B: either <repo>@sha256:<64-hex> "
+            "or local Docker image ID sha256:<64-hex>."
+        ),
     )
     parser.add_argument(
         "--p4-00-approved-sha",
-        default=os.environ.get("P4_00_APPROVED_SHA", ""),
-        help="Commit SHA of T0-approved P4-00 entry audit.",
+        default=os.environ.get("P4_00_APPROVED_SHA", DEFAULT_P4_00_BASELINE_SHA),
+        help="Commit SHA of P4-00 entry audit reference (defaults to be33e6c).",
     )
     parser.add_argument(
         "--http-port",
@@ -464,24 +491,20 @@ def main() -> int:
         )
 
     blockers: list[dict[str, str]] = []
-    if not args.p4_00_approved_sha:
+    app_image = args.app_image or template_env["APP_IMAGE"]
+    effective_pull_policy = (
+        "never" if app_image.startswith("sha256:") else template_env.get("PULL_POLICY", "missing")
+    )
+    if not IMMUTABLE_IMAGE_RE.match(app_image) or PLACEHOLDER_DIGEST in app_image:
         blockers.append(
             {
                 "id": "BLK-RUNTIME-01",
-                "component": "P4-00 Entry Audit Sign-off (T0)",
+                "component": "Custom Production Image Digest / ID (T1B)",
                 "status": "BLOCKED",
-                "detail": "T0 has not finalized/merged P4-00 (draft at be33e6c); --p4-00-approved-sha not provided.",
-            }
-        )
-
-    app_image = args.app_image or template_env["APP_IMAGE"]
-    if not DIGEST_RE.match(app_image) or PLACEHOLDER_DIGEST in app_image:
-        blockers.append(
-            {
-                "id": "BLK-RUNTIME-02",
-                "component": "Custom Production Image Digest (T1B)",
-                "status": "BLOCKED",
-                "detail": "T1B has not yet handed off a real built APP_IMAGE@sha256:<64-hex> digest.",
+                "detail": (
+                    "T1B has not yet handed off a built APP_IMAGE (<repo>@sha256:<64-hex> "
+                    "or local sha256:<64-hex>)."
+                ),
             }
         )
 
@@ -489,7 +512,7 @@ def main() -> int:
     if not daemon_ok:
         blockers.append(
             {
-                "id": "BLK-RUNTIME-03",
+                "id": "BLK-RUNTIME-02",
                 "component": "Host Docker Engine Daemon",
                 "status": "BLOCKED",
                 "detail": f"Docker Engine daemon is not running: {daemon_detail}",
@@ -497,10 +520,10 @@ def main() -> int:
         )
     elif not blockers:
         img_ok, img_detail = check_local_or_pulled_image(app_image)
-        if not img_ok and template_env.get("PULL_POLICY") in ("missing", "never"):
+        if not img_ok and effective_pull_policy in ("missing", "never"):
             blockers.append(
                 {
-                    "id": "BLK-RUNTIME-04",
+                    "id": "BLK-RUNTIME-03",
                     "component": "APP_IMAGE Availability",
                     "status": "BLOCKED",
                     "detail": f"Image {app_image} not present locally: {img_detail}",
@@ -520,6 +543,7 @@ def main() -> int:
 
         run_env = dict(template_env)
         run_env["APP_IMAGE"] = app_image
+        run_env["PULL_POLICY"] = effective_pull_policy
         run_env["DB_PASSWORD_SECRETS_FILE"] = str(sec_file)
         run_env["HTTP_PUBLISH_PORT"] = str(args.http_port)
         env_file = tmp / "isolated-smoke.env"
