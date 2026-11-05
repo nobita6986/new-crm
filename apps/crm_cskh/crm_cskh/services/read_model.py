@@ -93,6 +93,14 @@ _CORRECTION_PROJECTION_FIELDS = [
 ]
 
 
+def _attempt_projection_fields() -> list[str]:
+	fields = list(_ATTEMPT_PROJECTION_FIELDS)
+	for col in ("conversion_snapshot", "invalid_phone_snapshot", "complete_fields"):
+		if frappe.db.has_column("CSKH Contact Attempt", col):
+			fields.append(col)
+	return fields
+
+
 def _project_attempts_rows(attempts: list, corrections: list) -> list[dict]:
 	if not attempts:
 		return []
@@ -102,6 +110,9 @@ def _project_attempts_rows(attempts: list, corrections: list) -> list[dict]:
 
 	projected: list[dict] = []
 	for att in attempts:
+		raw_conv = getattr(att, "conversion_snapshot", None)
+		raw_inv = getattr(att, "invalid_phone_snapshot", None)
+		raw_comp = getattr(att, "complete_fields", None)
 		original = {
 			"occurred_at": att.occurred_at,
 			"channel": att.channel,
@@ -114,6 +125,17 @@ def _project_attempts_rows(attempts: list, corrections: list) -> list[dict]:
 			"is_interested": bool(cint(att.interested_snapshot)),
 			"is_terminal": bool(cint(att.terminal_snapshot)),
 			"is_do_not_contact": bool(cint(att.dnc_snapshot)),
+			"is_conversion": (
+				bool(cint(raw_conv))
+				if raw_conv is not None
+				else str(att.outcome_code or "").lower() == "converted"
+			),
+			"is_invalid_phone": (
+				bool(cint(raw_inv))
+				if raw_inv is not None
+				else str(att.outcome_code or "").lower() == "wrong_number"
+			),
+			"complete_fields": True if raw_comp is None else bool(cint(raw_comp)),
 			"note": att.note or "",
 			"call_log": att.call_log,
 		}
@@ -162,9 +184,22 @@ def _project_attempts_rows(attempts: list, corrections: list) -> list[dict]:
 						"is_interested",
 						"is_terminal",
 						"is_do_not_contact",
+						"is_conversion",
+						"is_invalid_phone",
 					):
 						if b_key in patch:
 							effective[b_key] = bool(cint(patch[b_key]))
+					if "is_conversion" not in patch:
+						effective["is_conversion"] = (
+							str(effective["outcome_code"] or "").lower() == "converted"
+						)
+					if "is_invalid_phone" not in patch:
+						effective["is_invalid_phone"] = (
+							str(effective["outcome_code"] or "").lower() == "wrong_number"
+						)
+				for extra_b in ("is_conversion", "is_invalid_phone", "complete_fields"):
+					if extra_b in patch:
+						effective[extra_b] = bool(cint(patch[extra_b]))
 
 		serialized_corrs = [
 			{
@@ -223,7 +258,7 @@ def compute_effective_attempts(work_item: str) -> list[dict]:
 	attempts = frappe.db.get_all(
 		"CSKH Contact Attempt",
 		filters={"work_item": work_item},
-		fields=_ATTEMPT_PROJECTION_FIELDS,
+		fields=_attempt_projection_fields(),
 		order_by="occurred_at asc, creation asc, name asc",
 	)
 	if not attempts:
@@ -1615,7 +1650,7 @@ def reconcile_p2_invariants(campaign: str | None = None) -> dict:
 		chunk_attempts = frappe.db.get_all(
 			"CSKH Contact Attempt",
 			filters={"work_item": ["in", wi_names]},
-			fields=_ATTEMPT_PROJECTION_FIELDS,
+			fields=_attempt_projection_fields(),
 			order_by="occurred_at asc, creation asc, name asc",
 			limit_page_length=0,
 		)

@@ -1,10 +1,10 @@
-# Từ điển Thuật ngữ Tiếng Việt Chuẩn CSKH (P0–P2)
+# Từ điển Thuật ngữ Tiếng Việt Chuẩn CSKH (P0–P3)
 
 > **Tài liệu:** `docs/glossary-vi.md`
-> **Chủ sở hữu:** T1A (UI, bản dịch `vi_VN` & đóng gói WP11) phối hợp cùng T1B (danh mục `CSKH Outcome Code` & thực thể Backend)
-> **Nguồn tham chiếu:** [`docs/root-plan/P2.md`](./root-plan/P2.md) (§12.5, §18.2), [`docs/outcome-catalog.md`](./outcome-catalog.md), [`apps/crm_cskh/crm_cskh/p2_strings.py`](../apps/crm_cskh/crm_cskh/p2_strings.py), [`apps/crm_cskh/crm_cskh/p2_translations.py`](../apps/crm_cskh/crm_cskh/p2_translations.py), [`apps/crm_cskh/crm_cskh/translations/vi.csv`](../apps/crm_cskh/crm_cskh/translations/vi.csv)
+> **Chủ sở hữu:** T1A (UI `/cskh/*`, bản dịch `vi_VN` & đóng gói P1/P2/P3) phối hợp cùng T1B (thực thể Backend, SLA/KPI Dictionary & API contracts)
+> **Nguồn tham chiếu:** [`docs/root-plan/P2.md`](./root-plan/P2.md) (§12.5, §18.2), [`docs/root-plan/P3.md`](./root-plan/P3.md) (§0, §4, §5, §7, §8, §9, §10, §11), [`docs/outcome-catalog.md`](./outcome-catalog.md), [`apps/crm_cskh/crm_cskh/p2_strings.py`](../apps/crm_cskh/crm_cskh/p2_strings.py), [`apps/crm_cskh/crm_cskh/p3_strings.py`](../apps/crm_cskh/crm_cskh/p3_strings.py), [`apps/crm_cskh/crm_cskh/translations/vi.csv`](../apps/crm_cskh/crm_cskh/translations/vi.csv)
 
-Tài liệu này khóa chuẩn thuật ngữ tiếng Việt dùng thống nhất giữa **Backend (`crm_cskh`)**, **UI CSKH (`/cskh/*`)**, **thông báo lỗi/validation** và **báo cáo vận hành** từ P0 đến P2.
+Tài liệu này khóa chuẩn thuật ngữ tiếng Việt dùng thống nhất giữa **Backend (`crm_cskh`)**, **UI CSKH (`/cskh/*`)**, **công thức/tooltip chỉ số SLA & KPI**, **cột xuất báo cáo (Export)**, **thông báo lỗi/validation** và **báo cáo điều hành** từ P0 đến P3.
 
 ---
 
@@ -128,3 +128,104 @@ Tài liệu này khóa chuẩn thuật ngữ tiếng Việt dùng thống nhất
 
 - Các chỉ số ở màn hình **Tiến độ CSKH (`workflow.progress_summary`)** trong P2 chỉ dùng thuật ngữ **Số lượng đầu việc**, **Số lần liên hệ hiệu lực**, **Số lần đã kết nối**, **Số lịch hẹn đang mở / đến hạn hôm nay / quá hạn**.
 - **Nghiêm cấm** gọi các bộ đếm tiến độ P2 là *“Điểm chất lượng CSKH”*, *“Tỷ lệ đạt SLA”* hay *“Xếp hạng KPI nhân viên”* — các khái niệm chấm điểm SLA/KPI thuộc phạm vi **P3**.
+
+
+---
+
+## 8. Thực thể, Đơn vị Thống kê & Quy gán Lịch sử Giai đoạn P3 (`P3.md` §4, §5, §6)
+
+| Thuật ngữ Kỹ thuật / Gốc | Nhãn Tiếng Việt Chuẩn | Giải thích & Quy tắc Bất biến |
+|---|---|---|
+| `CSKH SLA Obligation` | Nghĩa vụ SLA | Bản ghi nghĩa vụ thời hạn chăm sóc có `original_due_at` bất biến, `effective_due_at`, người/đội chịu trách nhiệm và snapshot chính sách/lịch làm việc; **không** tạo `CRM Task` thứ hai trùng lặp. |
+| `CSKH KPI Run` | Phiên tính toán KPI | Một lệnh tính hoặc tính lại KPI có `metric_version`, `policy_version`, `source_watermark`, `as_of`, trạng thái và lý do kiểm toán. |
+| `CSKH KPI Snapshot` | Bản chụp chỉ số KPI | Bản báo cáo đóng băng theo phiên bản (append-only revision), không chứa PII thô, liên kết trực tiếp tới `CSKH KPI Run`. |
+| `CSKH QA Review` | Phiếu kiểm định chất lượng (QA) | Bản ghi kiểm định mẫu độc lập (chỉ hoạt động khi bật `qa_enabled = true`; khi `qa_enabled = false`, hệ thống không tạo phiếu giả lập). |
+| `distinct_work_item` / `work_item` | Đầu việc duy nhất (`Work Item`) | Đơn vị khử trùng theo `CSKH Work Item` dùng cho số khách được giao duy nhất toàn công ty, khách đã kết nối và tồn đọng cuối kỳ. |
+| `ownership_interval` | Khoảng phụ trách (`Ownership Interval`) | Một giai đoạn `[start_at, end_at)` nhân viên giữ đầu việc (bàn giao `A → B → A` tạo `3` khoảng phụ trách riêng, không cộng gộp thành số khách duy nhất công ty). |
+| `team_as_of` / `team_at_period` | Đội nhóm tại thời điểm sự kiện | Đội nhóm hiệu lực của nhân viên ngay lúc nghĩa vụ/liên hệ phát sinh; nhân viên chuyển đội về sau không làm đổi số liệu lịch sử của đội cũ. |
+| `historical_attribution_unknown` | Chưa xác định quy gán lịch sử | Nhãn minh bạch cho bản ghi cũ thiếu chứng cứ đội/người phụ trách tại thời điểm sự kiện; hệ thống báo số lượng loại trừ rõ ràng, **không tự đoán từ `lead_owner` hiện tại**. |
+| `deadline_cohort` | Cơ sở hạn nghĩa vụ | Nhóm nghĩa vụ có hạn (`due_at`) rơi vào kỳ `[from, to_exclusive)` dù khách được giao ở cuối kỳ trước. |
+| `event_time` | Cơ sở thời điểm sự kiện | Tính theo thời điểm nghiệp vụ thực tế (`occurred_at`, `event_at`, `completed_at`) rơi vào kỳ `[from, to_exclusive)`. |
+| `point_in_time_as_of` | Ảnh chụp tồn kho tại mốc chốt | Số lượng tồn đọng tại đúng thời điểm `as_of` (tuyệt đối không cộng dồn hàng ngày thành tổng tháng). |
+
+---
+
+## 9. Loại Nghĩa vụ & Trạng thái Chấp hành SLA (`P3.md` §5.1, §5.4)
+
+| Mã Kỹ thuật | Nhãn Tiếng Việt Chuẩn | Ý nghĩa Nghiệp vụ trên UI & Drill-down |
+|---|---|---|
+| `FIRST_ATTEMPT` | Liên hệ lần đầu (`First-touch SLA`) | Nghĩa vụ thực hiện lần liên hệ hợp lệ đầu tiên kể từ khi nhận phụ trách theo lịch làm việc/chính sách đóng băng. |
+| `FOLLOWUP` | Chăm sóc đúng lịch hẹn (`Follow-up SLA`) | Nghĩa vụ hoàn tất lịch hẹn chăm sóc lại (`CRM Task`) đúng hạn thông qua lần liên hệ hợp lệ. |
+| `MIN_ATTEMPTS` | Số lần thử liên hệ tối thiểu | Nghĩa vụ đạt đủ số lần thử tối thiểu cách quãng (chỉ kích hoạt khi chính sách bật rõ ràng). |
+| `FIRST_CONNECTED` | Kết nối hai chiều lần đầu *(theo dõi riêng)* | Chỉ số theo dõi kết quả kết nối thực tế; **không tự phạt vi phạm SLA** khi khách không bắt máy. |
+| `pending` | Chưa đến hạn (`Đang chờ`) | Nghĩa vụ còn trong hạn tại `as_of`; chưa đưa vào mẫu số KPI đến hạn. |
+| `fulfilled_on_time` | Hoàn thành đúng hạn | Đạt yêu cầu tại hoặc trước hạn (`<= effective_due_at`). |
+| `fulfilled_late` | Hoàn thành trễ hạn | Đã hoàn thành sau hạn; vẫn giữ lịch sử từng phát sinh `1` vi phạm SLA. |
+| `breached_open` | Quá hạn chưa xử lý | Đã vượt quá hạn tại `as_of` và chưa hoàn thành; tính vào mẫu số không đạt và tồn đọng quá hạn. |
+| `waived` | Được miễn trừ hợp lệ | Có người duyệt và lý do kiểm toán hợp lệ; tách khỏi mẫu số phạt nhưng hiển thị rõ số lượng miễn trừ. |
+| `canceled_validly` | Hủy hợp lệ theo sự kiện | Đóng nghĩa vụ tương lai do sự kiện hợp lệ (ví dụ khách từ chối `DNC`, chuyển giao trước hạn); không xóa vi phạm đã xảy ra trước đó. |
+| `superseded` | Đã thay thế do dời lịch hợp lệ | Nghĩa vụ cũ được nối tiếp bởi nghĩa vụ mới khi dời lịch hợp lệ trước hạn (dời lịch sau khi đã trễ không xóa vi phạm cũ). |
+
+---
+
+## 10. Danh mục 17 Chỉ số KPI Chuẩn P3 (`cskh-metrics-v1`) & Phân nhóm Ba Trụ cột (`kpi-dictionary.md`)
+
+| Mã KPI (`metric_code`) | Nhãn Tiếng Việt Chuẩn | Trụ cột Hiển thị | Đơn vị (`Grain`) & Quy tắc Hiển thị |
+|---|---|---|---|
+| `PROCESS_SCORE` | Điểm tuân thủ quy trình (`0–100`) | Tuân thủ quy trình & SLA | Thang `0–100`; khi tắt QA hoặc thiếu mẫu QA bắt buộc gắn **`Tạm tính; thiếu mẫu QA` (`provisional`)** và **không xếp chung** với điểm `Đã chốt` (`finalized`). |
+| `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE` | Tỷ lệ liên hệ lần đầu đúng hạn (`Work Item`) | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên `DISTINCT Work Item` đến hạn nghĩa vụ đầu tiên; tách bạch với số `Ownership Interval` khi có bàn giao. |
+| `FIRST_ATTEMPT_SLA_RATE` | Tỷ lệ liên hệ lần đầu đúng hạn (`Interval`) | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `FIRST_ATTEMPT` đến hạn; mẫu `= 0` hiển thị `N/A`. |
+| `FOLLOWUP_SLA_RATE` | Tỷ lệ chăm sóc đúng lịch hẹn | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `FOLLOWUP` đến hạn; mẫu `= 0` hiển thị `N/A`. |
+| `MIN_ATTEMPTS_COMPLIANCE_RATE` | Tỷ lệ tuân thủ số lần thử tối thiểu | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `MIN_ATTEMPTS` đến hạn (chỉ phát sinh khi chính sách bật `min_attempts_enabled`). |
+| `CALLBACK_COMPLETION_RATE` | Tỷ lệ hoàn tất lịch hẹn chăm sóc lại | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` trên nghĩa vụ `FOLLOWUP` đến hạn được giải quyết bằng lần liên hệ hợp lệ. |
+| `RESCHEDULE_RATE` | Tỷ lệ dời lịch hẹn chăm sóc lại | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` số lượt dời lịch trên tổng lịch hẹn hoạt động trong kỳ. |
+| `DNC_COMPLIANCE_RATE` | Tỷ lệ tuân thủ DNC & đóng hợp lệ | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` khoảng phụ trách tuân thủ quy tắc chặn DNC và đóng hợp lệ. |
+| `WORK_ITEMS_TOUCHED` | Số đầu việc duy nhất đã tác động | Hiệu quả kết nối & chuyển đổi | Số `CSKH Work Item` phân biệt (`DISTINCT`) có ít nhất 1 lần liên hệ hợp lệ trong kỳ. |
+| `CONTACT_ATTEMPT_COUNT` | Số lần thử liên hệ hiệu lực *(tham khảo)* | Hiệu quả kết nối & chuyển đổi | Bộ đếm hoạt động từ `CSKH Contact Attempt` hiệu lực (kèm `attempt_breakdown`, không cộng trùng `CRM Call Log`, không dùng để xếp hạng). |
+| `CONNECTED_ATTEMPT_COUNT` | Số lần liên hệ đã kết nối | Hiệu quả kết nối & chuyển đổi | Số `CSKH Contact Attempt` hiệu lực có kết nối hai chiều (`is_connected = 1`). |
+| `CONNECTED_RATE` | Tỷ lệ kết nối thành công | Hiệu quả kết nối & chuyển đổi | `%` kèm `tử/mẫu` theo `Ownership Interval`: số khoảng phụ trách có `>= 1` lần liên hệ kết nối hai chiều trên tổng khoảng phụ trách đã thử liên hệ (`tried_intervals`, ví dụ `41 / 49 = 83,67%`; không chia cho tổng số cuộc gọi; gửi tin chưa phản hồi không tính `Connected`). |
+| `ASSIGNED_INTERVALS` / `UNIQUE_ASSIGNED_ITEMS` | Số lượt nhận phụ trách / Số đầu việc được giao duy nhất | Tuân thủ quy trình & SLA | Số đếm nguyên (`count`, không hiển thị mẫu số `/ 1`); tách biệt rõ `Ownership Interval` của nhân viên với `DISTINCT Work Item` cấp công ty/chiến dịch. |
+| `ELIGIBLE_COVERAGE` | Tỷ lệ phủ liên hệ khách được giao | Tuân thủ quy trình & SLA | `%` kèm `tử/mẫu` khoảng phụ trách đủ điều kiện có `>= 1` lần liên hệ hiệu lực trên tổng khoảng phụ trách đã đủ thời gian xử lý. |
+| `OVERDUE_BACKLOG` / `OPEN_FOLLOWUPS_OVERDUE` | Đầu việc tồn đọng quá hạn / Lịch hẹn đang quá hạn | Tuân thủ quy trình & SLA | Ảnh chụp số lượng tồn đọng quá hạn tại mốc chốt `as_of` (`point_in_time_as_of`). |
+| `SLA_BREACH_COUNT` / `SLA_WAIVER_COUNT` | Số vi phạm SLA trong kỳ / Số ca miễn trừ SLA hợp lệ | Tuân thủ quy trình & SLA | Số nghĩa vụ bị vi phạm (`breached_open` / `fulfilled_late`) và số ca miễn trừ được duyệt có lý do kiểm toán trong kỳ. |
+| `FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES` / `WALL_MINUTES` | Thời gian phản hồi lần đầu (`phút làm việc` / `phút thực tế`, `p50 / p90`) | Tuân thủ quy trình & SLA | Cặp phân vị trung vị `p50` và `p90` từ đầu khoảng phụ trách đến lần liên hệ hiệu lực đầu tiên. |
+| `CONNECTED_ITEMS` / `CONVERSION_RATE` | Công việc đã kết nối / Tỷ lệ chuyển đổi đạt mục tiêu | Hiệu quả kết nối & chuyển đổi | Số đầu việc duy nhất có kết nối hai chiều và tỷ lệ chuyển đổi trên tập mẫu chiến dịch. |
+| `VERIFICATION_RATE` | Tỷ lệ kết quả đã xác minh | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` lần liên hệ hiệu lực ở trạng thái `Đã xác minh` trên tổng lần liên hệ hiệu lực trong kỳ. |
+| `FIRST_CONNECTED_TRACKING_RATE` | Theo dõi kết nối lần đầu *(không tính phạt)* | Hiệu quả kết nối & chuyển đổi | `%` kèm `tử/mẫu` (`informational_only: true`); theo dõi kết nối thực tế, **không trừ điểm quy trình** khi khách không bắt máy. |
+| `VALID_OUTCOME_LOGGING_RATE` | Tỷ lệ cập nhật kết quả đầy đủ | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` lần liên hệ đáp ứng đủ trường bắt buộc và không bị hiệu chỉnh/vô hiệu do lỗi ghi nhận. |
+| `CORRECTION_RATE` | Tỷ lệ hiệu chỉnh / vô hiệu | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` lần liên hệ phát sinh phiếu hiệu chỉnh hoặc vô hiệu được duyệt. |
+| `VOID_ATTEMPT_RATE` | Tỷ lệ lần liên hệ bị vô hiệu | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` lần liên hệ bị vô hiệu được duyệt trên tổng bản ghi gốc. |
+| `QA_PASS_RATE` | Tỷ lệ kiểm định QA đạt chuẩn | Độ tin cậy dữ liệu & QA | `%` kèm `tử/mẫu` phiếu QA đủ điều kiện; hiển thị `N/A — Phân hệ QA đang tắt` (`status: "disabled"`) khi `qa_enabled = false`. |
+
+---
+
+## 11. Trạng thái Độ tươi, Độ tin cậy, Tính lại (`Recompute`) & Xuất Báo cáo (`Export`)
+
+| Mã Trạng thái | Nhãn Tiếng Việt Chuẩn | Cách trình bày trên UI |
+|---|---|---|
+| `fresh` | Mới cập nhật | Dữ liệu bản chụp khớp watermark nguồn mới nhất tại `as_of`. |
+| `calculating` | Đang tính toán | Đang có tiến trình tổng hợp nền chạy cho kỳ/phạm vi này. |
+| `stale` | Cần tính lại (Dữ liệu cũ) | Có sự kiện/hiệu chỉnh mới phát sinh sau `source_watermark`; cảnh báo rõ và không gắn huy hiệu thành tích. |
+| `provisional` | Tạm tính | Đủ dữ liệu quy trình cốt lõi nhưng kỳ chưa đóng hoặc thiếu mẫu QA (`qa_enabled = false`); hiển thị kèm tổng trọng số hợp lệ. |
+| `finalized` | Đã chốt kỳ | Đủ toàn bộ thành phần trọng số và đã qua mốc chốt kỳ. |
+| `restated` | Đã tính lại kỳ cũ (Có điều chỉnh) | Phiên bản mới được sinh do hiệu chỉnh/phúc khảo phát sinh sau khi kỳ cũ đã chốt; giữ liên kết đối chiếu phiên bản trước. |
+| `insufficient_data` | Chưa đủ dữ liệu (`N/A`) | Mẫu số bằng `0` hoặc tổng trọng số hợp lệ thấp hơn ngưỡng tối thiểu; hiển thị **`N/A`**, tuyệt đối không hiển thị `0%`. |
+| `failed` | Lỗi đối soát / tính toán | Phiên tính toán phát hiện bất nhất dữ liệu hoặc lỗi thực thi; hiển thị mã lỗi kiểm toán. |
+| `queued` / `running` / `completed` / `expired` *(Export)* | Đang xếp hàng / Đang xuất tệp / Sẵn sàng tải / Đã hết hạn | Trạng thái tác vụ xuất báo cáo phân quyền trên máy chủ kèm hạn tải `expires_at`. |
+
+---
+
+## 12. Danh mục Mã Lỗi Nghiệp vụ P3 (`vi_VN` — `P3.md` §11.2)
+
+| Mã lỗi ổn định | Giải thích Tiếng Việt hiển thị cho người vận hành |
+|---|---|
+| `FORBIDDEN_SCOPE` | Bạn không có quyền truy cập phạm vi dữ liệu, đội nhóm, nhân viên hoặc tệp xuất này. |
+| `INVALID_PERIOD` | Kỳ báo cáo hoặc khoảng ngày đã chọn không hợp lệ hoặc vượt quá giới hạn truy vấn. |
+| `INVALID_METRIC` | Mã chỉ số KPI hoặc phân lớp truy vết (`drill-down`) không thuộc danh mục hợp lệ. |
+| `SNAPSHOT_STALE` | Bản chụp chỉ số đang cũ hơn dữ liệu nguồn; vui lòng tải bản mới nhất hoặc yêu cầu tính lại. |
+| `POLICY_CONFLICT` | Phát hiện cấu hình chính sách SLA/KPI chồng chéo hoặc mâu thuẫn hiệu lực trong cùng phạm vi. |
+| `DATA_RECONCILIATION_FAILED` | Đối soát bất biến dữ liệu KPI/SLA không khớp; hệ thống dừng xuất bản số liệu để kiểm tra. |
+| `INSUFFICIENT_DATA` | Chưa có đủ mẫu hợp lệ để tính tỷ lệ hoặc xếp hạng cho kỳ và phạm vi này (`N/A`). |
+| `QA_CONFLICT` | Thao tác kiểm định QA không hợp lệ (tự duyệt phiếu của chính mình, trùng vòng kiểm định hoặc tính năng QA đang tắt). |
+| `RECOMPUTE_IN_PROGRESS` | Đang có tiến trình tính lại KPI cho cùng phạm vi và kỳ báo cáo này; vui lòng chờ hoàn tất. |
+| `EXPORT_EXPIRED` | Liên kết tải tệp xuất báo cáo đã hết hạn hiệu lực; vui lòng tạo yêu cầu xuất mới. |

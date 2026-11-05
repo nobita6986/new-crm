@@ -163,6 +163,8 @@ DEFAULT_OUTCOME_CODES = (
 		"is_interested": 0,
 		"is_terminal": 1,
 		"is_do_not_contact": 0,
+		"is_conversion": 0,
+		"is_invalid_phone": 1,
 		"requires_note": 1,
 		"requires_followup": 0,
 		"allows_followup": 0,
@@ -263,6 +265,8 @@ DEFAULT_OUTCOME_CODES = (
 		"is_interested": 1,
 		"is_terminal": 1,
 		"is_do_not_contact": 0,
+		"is_conversion": 1,
+		"is_invalid_phone": 0,
 		"requires_note": 1,
 		"requires_followup": 0,
 		"allows_followup": 0,
@@ -331,6 +335,33 @@ DEFAULT_GLOBAL_POLICY = {
 	"enabled_channels": "phone_call,sms,zalo,facebook,other",
 	"allow_leader_reopen": 1,
 	"allow_leader_review_correction": 1,
+	# DEV / configurable P3 SLA & KPI fields (`working_calendar` linked by `ensure_p3_seeds`)
+	"p3_sla_enabled": 1,
+	"p3_reporting_enabled": 1,
+	"qa_enabled": 0,
+	"first_attempt_sla_minutes": 30,
+	"followup_grace_minutes": 15,
+	"handoff_min_grace_minutes": 15,
+	"max_handoff_grace_resets": 2,
+	"due_soon_warning_minutes": 10,
+	"track_first_connected": 1,
+	"first_connected_target_minutes": 120,
+	"min_attempts_enabled": 0,
+	"min_attempts_before_close": 3,
+	"min_attempt_gap_minutes": 30,
+	"max_reschedules_without_approval": 2,
+	"allow_leader_waive_sla": 1,
+	"allow_leader_pause_sla": 1,
+	"weight_first_attempt_sla": 25,
+	"weight_eligible_coverage": 20,
+	"weight_followup_sla": 20,
+	"weight_data_hygiene": 20,
+	"weight_callback_discipline": 20,
+	"weight_qa_quality": 15,
+	"min_valid_score_weight": 60,
+	"min_eligible_events_for_score": 1,
+	"min_qa_sample_size": 5,
+	"min_exposure_business_minutes": 60,
 }
 
 P2_CUSTOM_FIELDS = (
@@ -685,6 +716,32 @@ class Policy(Document):
 		self.enabled_channels = ",".join(channels)
 		if cint(self.version or 0) < 1:
 			self.version = 1
+
+		for non_neg_field in (
+			"first_attempt_sla_minutes",
+			"followup_grace_minutes",
+			"handoff_min_grace_minutes",
+			"max_handoff_grace_resets",
+			"due_soon_warning_minutes",
+			"first_connected_target_minutes",
+			"min_attempts_before_close",
+			"min_attempt_gap_minutes",
+			"max_reschedules_without_approval",
+			"weight_first_attempt_sla",
+			"weight_followup_sla",
+			"weight_data_hygiene",
+			"weight_callback_discipline",
+			"weight_qa_quality",
+			"min_valid_score_weight",
+			"min_eligible_events_for_score",
+			"min_qa_sample_size",
+		):
+			raw_val = getattr(self, non_neg_field, None)
+			if raw_val is not None and cint(raw_val) < 0:
+				frappe.throw(
+					_("Trường cấu hình chính sách {0} không được nhỏ hơn 0.").format(non_neg_field),
+					frappe.ValidationError,
+				)
 
 		if cint(self.enabled):
 			dup_filters = {

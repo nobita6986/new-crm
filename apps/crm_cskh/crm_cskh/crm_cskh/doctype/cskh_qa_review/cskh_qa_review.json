@@ -1,0 +1,207 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH QA Review",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "contact_attempt",
+   "fieldtype": "Link",
+   "label": "Contact Attempt",
+   "options": "CSKH Contact Attempt",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "work_item",
+   "fieldtype": "Link",
+   "label": "Work Item",
+   "options": "CSKH Work Item",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Data",
+   "label": "Campaign"
+  },
+  {
+   "fieldname": "reviewed_staff",
+   "fieldtype": "Link",
+   "label": "Reviewed Staff",
+   "options": "User",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "team_at_review",
+   "fieldtype": "Data",
+   "label": "Team At Review"
+  },
+  {
+   "fieldname": "reviewer",
+   "fieldtype": "Link",
+   "label": "Reviewer",
+   "options": "User",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "draft\npublished\napproved\ndisputed\nvoided",
+   "default": "published",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cohort_type",
+   "fieldtype": "Select",
+   "label": "Cohort Type",
+   "options": "random_sample\nescalation\ncoaching\ndispute_audit",
+   "default": "random_sample",
+   "reqd": 1
+  },
+  {
+   "fieldname": "rubric_version",
+   "fieldtype": "Data",
+   "label": "Rubric Version",
+   "default": "qa-rubric-v1",
+   "reqd": 1
+  },
+  {
+   "fieldname": "points_achieved",
+   "fieldtype": "Float",
+   "label": "Points Achieved",
+   "default": "0",
+   "reqd": 1
+  },
+  {
+   "fieldname": "max_points",
+   "fieldtype": "Float",
+   "label": "Max Points",
+   "default": "100",
+   "reqd": 1
+  },
+  {
+   "fieldname": "passed",
+   "fieldtype": "Check",
+   "label": "Passed",
+   "default": "0"
+  },
+  {
+   "fieldname": "reviewed_at",
+   "fieldtype": "Datetime",
+   "label": "Reviewed At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "feedback_summary",
+   "fieldtype": "Small Text",
+   "label": "Feedback Summary"
+  },
+  {
+   "fieldname": "internal_note",
+   "fieldtype": "Small Text",
+   "label": "Internal Note",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "scores_json",
+   "fieldtype": "Code",
+   "label": "Scores JSON",
+   "options": "JSON",
+   "permlevel": 1,
+   "read_only": 1
+  }
+ ],
+ "field_order": [
+  "contact_attempt",
+  "work_item",
+  "campaign",
+  "reviewed_staff",
+  "team_at_review",
+  "reviewer",
+  "status",
+  "cohort_type",
+  "rubric_version",
+  "points_achieved",
+  "max_points",
+  "passed",
+  "reviewed_at",
+  "feedback_summary",
+  "internal_note",
+  "scores_json"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "System Manager",
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "write": 0
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "Sales Manager",
+   "read": 1,
+   "write": 0
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "sort_field": "reviewed_at",
+ "sort_order": "DESC",
+ "track_changes": 0
+}

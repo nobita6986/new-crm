@@ -103,6 +103,168 @@
    "fieldtype": "Check",
    "label": "Allow Leader Review Correction",
    "default": "1"
+  },
+  {
+   "fieldname": "p3_sla_enabled",
+   "fieldtype": "Check",
+   "label": "P3 SLA Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "p3_reporting_enabled",
+   "fieldtype": "Check",
+   "label": "P3 Reporting Enabled",
+   "default": "1"
+  },
+  {
+   "fieldname": "qa_enabled",
+   "fieldtype": "Check",
+   "label": "QA Enabled",
+   "default": "0"
+  },
+  {
+   "fieldname": "working_calendar",
+   "fieldtype": "Link",
+   "label": "Working Calendar",
+   "options": "CSKH Working Calendar"
+  },
+  {
+   "fieldname": "first_attempt_sla_minutes",
+   "fieldtype": "Int",
+   "label": "First Attempt SLA Minutes",
+   "default": "30"
+  },
+  {
+   "fieldname": "followup_grace_minutes",
+   "fieldtype": "Int",
+   "label": "Followup Grace Minutes",
+   "default": "15"
+  },
+  {
+   "fieldname": "handoff_min_grace_minutes",
+   "fieldtype": "Int",
+   "label": "Handoff Min Grace Minutes",
+   "default": "15"
+  },
+  {
+   "fieldname": "max_handoff_grace_resets",
+   "fieldtype": "Int",
+   "label": "Max Handoff Grace Resets",
+   "default": "2"
+  },
+  {
+   "fieldname": "due_soon_warning_minutes",
+   "fieldtype": "Int",
+   "label": "Due Soon Warning Minutes",
+   "default": "10"
+  },
+  {
+   "fieldname": "track_first_connected",
+   "fieldtype": "Check",
+   "label": "Track First Connected",
+   "default": "1"
+  },
+  {
+   "fieldname": "first_connected_target_minutes",
+   "fieldtype": "Int",
+   "label": "First Connected Target Minutes",
+   "default": "120"
+  },
+  {
+   "fieldname": "min_attempts_enabled",
+   "fieldtype": "Check",
+   "label": "Min Attempts Enabled",
+   "default": "0"
+  },
+  {
+   "fieldname": "min_attempts_before_close",
+   "fieldtype": "Int",
+   "label": "Min Attempts Before Close",
+   "default": "3"
+  },
+  {
+   "fieldname": "min_attempt_gap_minutes",
+   "fieldtype": "Int",
+   "label": "Min Attempt Gap Minutes",
+   "default": "30"
+  },
+  {
+   "fieldname": "max_reschedules_without_approval",
+   "fieldtype": "Int",
+   "label": "Max Reschedules Without Approval",
+   "default": "2"
+  },
+  {
+   "fieldname": "allow_leader_waive_sla",
+   "fieldtype": "Check",
+   "label": "Allow Leader Waive SLA",
+   "default": "1"
+  },
+  {
+   "fieldname": "allow_leader_pause_sla",
+   "fieldtype": "Check",
+   "label": "Allow Leader Pause SLA",
+   "default": "1"
+  },
+  {
+   "fieldname": "weight_first_attempt_sla",
+   "fieldtype": "Int",
+   "label": "Weight First Attempt SLA",
+   "default": "25"
+  },
+  {
+   "fieldname": "weight_followup_sla",
+   "fieldtype": "Int",
+   "label": "Weight Followup SLA",
+   "default": "20"
+  },
+  {
+   "fieldname": "weight_data_hygiene",
+   "fieldtype": "Int",
+   "label": "Weight Data Hygiene",
+   "default": "20"
+  },
+  {
+   "fieldname": "weight_callback_discipline",
+   "fieldtype": "Int",
+   "label": "Weight Callback Discipline",
+   "default": "20"
+  },
+  {
+   "fieldname": "weight_qa_quality",
+   "fieldtype": "Int",
+   "label": "Weight QA Quality",
+   "default": "15"
+  },
+  {
+   "fieldname": "min_valid_score_weight",
+   "fieldtype": "Int",
+   "label": "Min Valid Score Weight",
+   "default": "60"
+  },
+  {
+   "fieldname": "min_eligible_events_for_score",
+   "fieldtype": "Int",
+   "label": "Min Eligible Events For Score",
+   "default": "1"
+  },
+  {
+   "fieldname": "min_qa_sample_size",
+   "fieldtype": "Int",
+   "label": "Min QA Sample Size",
+   "default": "5"
+  },
+  {
+   "fieldname": "min_exposure_business_minutes",
+   "fieldtype": "Int",
+   "label": "Min Exposure Business Minutes",
+   "default": "60"
+  },
+  {
+   "fieldname": "weight_eligible_coverage",
+   "fieldtype": "Int",
+   "label": "Weight Eligible Coverage",
+   "default": "20"
   }
  ],
  "field_order": [
@@ -120,7 +282,34 @@
   "do_not_contact_behavior",
   "enabled_channels",
   "allow_leader_reopen",
-  "allow_leader_review_correction"
+  "allow_leader_review_correction",
+  "p3_sla_enabled",
+  "p3_reporting_enabled",
+  "qa_enabled",
+  "working_calendar",
+  "first_attempt_sla_minutes",
+  "followup_grace_minutes",
+  "handoff_min_grace_minutes",
+  "max_handoff_grace_resets",
+  "due_soon_warning_minutes",
+  "track_first_connected",
+  "first_connected_target_minutes",
+  "min_attempts_enabled",
+  "min_attempts_before_close",
+  "min_attempt_gap_minutes",
+  "max_reschedules_without_approval",
+  "allow_leader_waive_sla",
+  "allow_leader_pause_sla",
+  "weight_first_attempt_sla",
+  "weight_followup_sla",
+  "weight_data_hygiene",
+  "weight_callback_discipline",
+  "weight_qa_quality",
+  "min_valid_score_weight",
+  "min_eligible_events_for_score",
+  "min_qa_sample_size",
+  "min_exposure_business_minutes",
+  "weight_eligible_coverage"
  ],
  "permissions": [
   {

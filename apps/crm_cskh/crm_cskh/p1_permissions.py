@@ -55,6 +55,12 @@ PERMLEVEL_PROTECTED_FIELDS = {
 	"CSKH Work Item": frozenset(("completion_reason", "reopen_reason")),
 	"CSKH Assignment History": frozenset(("private_reason", "payload_hash")),
 	"CRM Task": frozenset(("cskh_task_history_json",)),
+	"CSKH SLA Obligation": frozenset(
+		("waive_reason", "policy_snapshot_json", "calendar_snapshot_json", "audit_events_json")
+	),
+	"CSKH KPI Run": frozenset(("reconciliation_json", "checkpoint_json", "error_message")),
+	"CSKH QA Review": frozenset(("internal_note", "scores_json")),
+	"CSKH Export Job": frozenset(("file_doc", "file_url", "filter_payload_json", "error_summary")),
 }
 
 
@@ -77,6 +83,28 @@ def _team_bounds(user):
 	if not row:
 		return None
 	return (row.lft, row.rgt)
+
+
+def _leader_node(user):
+	"""Return the `CRM Sales Hierarchy` node name owned by `user`, or `None`."""
+	if not user:
+		return None
+	return frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, "name")
+
+
+def _subtree_nodes(node_name) -> set[str]:
+	"""Return the set of `CRM Sales Hierarchy` node names inside `node_name`'s nested-set subtree."""
+	if not node_name:
+		return set()
+	row = frappe.db.get_value("CRM Sales Hierarchy", node_name, ["lft", "rgt"], as_dict=True)
+	if not row:
+		return set()
+	rows = frappe.db.sql(
+		"select name from `tabCRM Sales Hierarchy` where lft >= %s and rgt <= %s",
+		(row.lft, row.rgt),
+		pluck=True,
+	)
+	return set(rows or ())
 
 
 def _node_in_subtree(user, node_name):
@@ -477,7 +505,9 @@ def can_read_protected_field(doctype, field, user=None) -> bool:
 	roles = _roles(user)
 	if doctype in ("CSKH Work Item", "CSKH Assignment History", "CRM Task"):
 		return bool({ROLE_ADMIN, "Sales Manager", "Sales User"} & roles)
-	if doctype in ("CSKH Distribution Run", "CSKH Campaign"):
+	if doctype == "CSKH QA Review":
+		return bool({ROLE_ADMIN, "Sales Manager"} & roles)
+	if doctype in ("CSKH Distribution Run", "CSKH Campaign", "CSKH SLA Obligation", "CSKH KPI Run"):
 		return ROLE_ADMIN in roles
 	return False
 
