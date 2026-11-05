@@ -577,11 +577,13 @@ if not os.path.exists(site_cfg):
 
 apps = subprocess.check_output(["bench", "--site", site, "list-apps"], text=True).strip().splitlines()
 
+os.chdir("/home/frappe/frappe-bench/sites")
 import frappe
-frappe.init(site=site, sites_path="sites")
+frappe.init(site=site, sites_path=".")
 frappe.connect()
 try:
-    frappe.db.set_single_value("System Settings", {"language": "vi", "time_zone": "Asia/Ho_Chi_Minh"})
+    frappe.db.set_single_value("System Settings", "language", "vi")
+    frappe.db.set_single_value("System Settings", "time_zone", "Asia/Ho_Chi_Minh")
     frappe.db.set_value("User", "Administrator", {"language": "vi", "time_zone": "Asia/Ho_Chi_Minh"})
     synth_lead = frappe.db.get_value("CRM Lead", {"mobile_no": "0900000123"}, "name")
     if not synth_lead:
@@ -611,7 +613,11 @@ print(json.dumps({
 }))
 """
     proc = subprocess.run(
-        compose_cmd(project_name, env_file, ["exec", "-T", "backend", "python3", "-c", py_code]),
+        compose_cmd(
+            project_name,
+            env_file,
+            ["exec", "-T", "backend", "/home/frappe/frappe-bench/env/bin/python", "-c", py_code],
+        ),
         input=json.dumps(
             {"site_name": site_name, "db_root_pw": db_root_pw, "admin_pw": admin_pw}
         ),
