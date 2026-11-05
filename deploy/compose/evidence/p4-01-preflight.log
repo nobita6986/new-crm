@@ -1,0 +1,4 @@
+[2026-11-05T22:12:05+07:00] Starting isolated smoke runner: run_id=20261105221205-16a929, project=crm-cskh-p4-smoke-20261105221205-16a929, site=p4-smoke-20261105221205-16a929.localhost, port=127.0.0.1:18080, preflight_only=True
+[2026-11-05T22:12:05+07:00] Compose git provenance: branch=codex/p4-01-compose, sha=109f02046153cec103efb249caee392778979840, clean=True
+[2026-11-05T22:12:07+07:00] Rendered config --services (11): ['db', 'redis-cache', 'redis-queue', 'configurator', 'backend', 'proxy', 'queue-long', 'queue-short', 'websocket', 'frontend', 'scheduler']
+[2026-11-05T22:12:07+07:00] Preflight completed with status=BLOCKED, blockers=1
