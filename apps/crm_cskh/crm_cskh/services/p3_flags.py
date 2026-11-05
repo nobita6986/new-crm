@@ -49,12 +49,12 @@ def _conf() -> dict:
 
 
 def is_p3_site_enabled() -> bool:
-	"""Master site-level kill switch (`cskh_p3_enabled` / `p3_enabled` in `site_config.json`)."""
+	"""Master site-level kill switch (`cskh_p3_enabled` / `p3_enabled` in `site_config.json` or `CSKH Policy.p3_enabled`)."""
 	conf = _conf()
 	for key in ("cskh_p3_enabled", "p3_enabled"):
 		if key in conf and conf.get(key) is not None:
 			return parse_flag_bool(conf.get(key), True)
-	return True
+	return _resolve_policy_flag("p3_enabled", True)
 
 
 def _resolve_policy_flag(

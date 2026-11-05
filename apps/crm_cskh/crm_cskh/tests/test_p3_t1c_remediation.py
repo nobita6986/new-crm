@@ -873,7 +873,7 @@ class TestP3T1CRemediation(P3TestCase):
 			("CONNECTED_ITEMS", "connected_items"),
 			("OVERDUE_BACKLOG", "overdue_backlog"),
 			("OPEN_FOLLOWUPS_OVERDUE", "open_followups_overdue"),
-			("BREACH_COUNT", "breach_count"),
+			("SLA_BREACH_COUNT", "breach_count"),
 			("SLA_WAIVER_COUNT", "sla_waiver_count"),
 		):
 			cell = m[our_code]
@@ -1014,6 +1014,7 @@ class TestP3T1CRemediation(P3TestCase):
 			("FIRST_ATTEMPT_SLA_RATE", "numerator_only", exp_dd["first_touch_on_time_obligations"]),
 			("FOLLOWUP_SLA_RATE", "all_denominator", exp_dd["followup_eligible_obligations"]),
 			("OVERDUE_BACKLOG", "all_denominator", exp_dd["overdue_backlog_work_items"]),
+			("SLA_BREACH_COUNT", "all_denominator", exp_dd["breached_obligations"]),
 			("BREACH_COUNT", "all_denominator", exp_dd["breached_obligations"]),
 			("SLA_WAIVER_COUNT", "all_denominator", exp_dd["waived_obligations"]),
 		):
@@ -1585,7 +1586,7 @@ class TestP3T1CRemediation(P3TestCase):
 		self.assertEqual(jul_staff_a["metrics"]["FIRST_ATTEMPT_SLA_RATE"]["numerator"], 0)
 		self.assertEqual(jul_staff_a["metrics"]["FIRST_ATTEMPT_SLA_RATE"]["denominator"], 1)
 		self.assertEqual(jul_staff_a["metrics"]["FIRST_ATTEMPT_SLA_RATE"]["value"], 0.0)
-		self.assertEqual(jul_staff_a["metrics"]["BREACH_COUNT"]["value"], 1)
+		self.assertEqual(jul_staff_a["metrics"]["SLA_BREACH_COUNT"]["value"], 1)
 
 		aug_staff_a = self._load_published_snap("monthly", "2026-08", "employee", self.staff_a)
 		self.assertEqual(aug_staff_a["metrics"]["FIRST_ATTEMPT_SLA_RATE"]["denominator"], 0)

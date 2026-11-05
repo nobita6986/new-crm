@@ -46,6 +46,7 @@ from crm_cskh.services.errors import (
 	InvalidRequest,
 	NoteRequired,
 	NotFound,
+	P3DisabledError,
 	PolicyConflict,
 )
 from crm_cskh.services.sanitizer import sanitize_note_text
@@ -1876,7 +1877,7 @@ def waive_obligation(obligation_id: str, reason: str | None, actor: str | None =
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
 	if not is_p3_sla_enabled():
-		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
+		raise P3DisabledError("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 	ob_id = parse_optional_str(obligation_id, "Mã nghĩa vụ SLA không hợp lệ.")
 	if not ob_id:
 		raise InvalidRequest("Mã nghĩa vụ SLA (obligation_id) là bắt buộc.")
@@ -1930,7 +1931,7 @@ def pause_obligation(obligation_id: str, reason: str | None, actor: str | None =
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
 	if not is_p3_sla_enabled():
-		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
+		raise P3DisabledError("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 	ob_id = parse_optional_str(obligation_id, "Mã nghĩa vụ SLA không hợp lệ.")
 	if not ob_id:
 		raise InvalidRequest("Mã nghĩa vụ SLA (obligation_id) là bắt buộc.")
@@ -1976,7 +1977,7 @@ def resume_obligation(
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
 	if not is_p3_sla_enabled():
-		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
+		raise P3DisabledError("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 	ob_id = parse_optional_str(obligation_id, "Mã nghĩa vụ SLA không hợp lệ.")
 	if not ob_id:
 		raise InvalidRequest("Mã nghĩa vụ SLA (obligation_id) là bắt buộc.")
@@ -2055,14 +2056,14 @@ def list_obligations(
 	actor = actor or frappe.session.user
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
-	if not is_p3_sla_enabled():
-		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 	from crm_cskh.p1_permissions import ROLE_BOD, _leader_node, _subtree_nodes
 
 	if ROLE_BOD in _roles(actor) and not (_is_system(actor) or ROLE_ADMIN in _roles(actor)):
 		raise ForbiddenScope(
 			"BOD Viewer chỉ truy cập chỉ số SLA tổng hợp, không đọc danh sách nghĩa vụ chi tiết."
 		)
+	if not is_p3_sla_enabled():
+		raise P3DisabledError("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 
 	page_num, size_num, offset = parse_pagination(
 		page=page, page_size=page_size, default_page_size=20, max_page_size=100
@@ -2186,7 +2187,7 @@ def get_obligation_detail(obligation_id: str, actor: str | None = None) -> dict:
 	if actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập.")
 	if not is_p3_sla_enabled():
-		raise PolicyConflict("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
+		raise P3DisabledError("Chức năng vận hành SLA P3 hiện đang tạm tắt theo cờ cấu hình.")
 	ob_id = parse_optional_str(obligation_id, "Mã nghĩa vụ SLA không hợp lệ.")
 	if not ob_id:
 		raise InvalidRequest("Mã nghĩa vụ SLA (obligation_id) là bắt buộc.")

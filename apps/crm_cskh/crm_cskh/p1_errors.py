@@ -46,6 +46,7 @@ CODE_BY_EXCEPTION = {
 	"InvalidMetric": p1_error_codes.INVALID_METRIC,
 	"SnapshotStale": p1_error_codes.SNAPSHOT_STALE,
 	"PolicyConflict": p1_error_codes.POLICY_CONFLICT,
+	"P3DisabledError": p1_error_codes.POLICY_CONFLICT,
 	"DataReconciliationFailed": p1_error_codes.DATA_RECONCILIATION_FAILED,
 	"InsufficientData": p1_error_codes.INSUFFICIENT_DATA,
 	"QaConflict": p1_error_codes.QA_CONFLICT,

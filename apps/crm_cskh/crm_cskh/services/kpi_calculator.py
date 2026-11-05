@@ -73,7 +73,7 @@ METRIC_LABELS_VI: dict[str, str] = {
 	"DNC_COMPLIANCE_RATE": "Tỷ lệ tuân thủ DNC & kỷ luật đóng hồ sơ",
 	"OVERDUE_BACKLOG": "Hồ sơ công việc đang tồn quá hạn",
 	"OPEN_FOLLOWUPS_OVERDUE": "Lịch hẹn gọi lại đang quá hạn",
-	"BREACH_COUNT": "Tổng số nghĩa vụ vi phạm SLA trong kỳ",
+	"SLA_BREACH_COUNT": "Tổng số nghĩa vụ vi phạm SLA trong kỳ",
 	"SLA_WAIVER_COUNT": "Số nghĩa vụ được miễn trừ hợp lệ",
 	"FIRST_ATTEMPT_LATENCY_P50_MINUTES": "Trung vị thời gian phản hồi lần đầu (Phút làm việc - P50)",
 	"FIRST_ATTEMPT_LATENCY_P90_MINUTES": "Phân vị P90 thời gian phản hồi lần đầu (Phút làm việc - P90)",
@@ -101,7 +101,7 @@ DRILLDOWN_SUPPORTED_METRICS = frozenset(
 		"DNC_COMPLIANCE_RATE",
 		"OVERDUE_BACKLOG",
 		"OPEN_FOLLOWUPS_OVERDUE",
-		"BREACH_COUNT",
+		"SLA_BREACH_COUNT",
 		"SLA_WAIVER_COUNT",
 	)
 )
@@ -396,7 +396,9 @@ def compute_process_score_from_components(
 				"participates": is_participating,
 				"scale": "points_0_100",
 				"weighted_points": norm_pts,
+				"raw_weighted_points": norm_pts,
 				"reweighted_points": reweighted_pts,
+				"normalized_contribution": reweighted_pts,
 				"raw_weight_rate_product": round_half_up_2(raw_prod) if is_participating else None,
 			}
 		)
@@ -410,6 +412,7 @@ def compute_process_score_from_components(
 			"label_vi": METRIC_LABELS_VI["PROCESS_SCORE"],
 			"value": None,
 			"numerator": norm_weighted_sum,
+			"raw_points_total": norm_weighted_sum,
 			"raw_weight_rate_product": raw_weighted_sum,
 			"denominator": float(valid_weight),
 			"unit": "score_100",
@@ -417,6 +420,7 @@ def compute_process_score_from_components(
 			"reason": "insufficient_valid_weight_or_sample",
 			"valid_weight": valid_weight,
 			"total_configured_weight": total_cfg_weight,
+			"configured_weight_total": total_cfg_weight,
 			"missing_components": missing_codes,
 			"status_label_vi": "Chưa đủ dữ liệu công bố điểm",
 			"informational_only": False,
@@ -450,6 +454,7 @@ def compute_process_score_from_components(
 		"label_vi": METRIC_LABELS_VI["PROCESS_SCORE"],
 		"value": score_val,
 		"numerator": norm_weighted_sum,
+		"raw_points_total": norm_weighted_sum,
 		"raw_weight_rate_product": raw_weighted_sum,
 		"denominator": float(valid_weight),
 		"unit": "score_100",
@@ -457,6 +462,7 @@ def compute_process_score_from_components(
 		"reason": reason_code,
 		"valid_weight": valid_weight,
 		"total_configured_weight": total_cfg_weight,
+		"configured_weight_total": total_cfg_weight,
 		"missing_components": missing_codes,
 		"status_label_vi": status_label_vi,
 		"informational_only": False,
@@ -1588,7 +1594,7 @@ def _aggregate_bucket(
 	dnc_num = sum(1 for iv_id in eval_interval_ids if iv_id not in violated_intervals)
 	dnc_compliance = make_rate_metric("DNC_COMPLIANCE_RATE", dnc_num, dnc_den)
 
-	# 11. Operational SLA Inventory & Counts (`OVERDUE_BACKLOG`, `OPEN_FOLLOWUPS_OVERDUE`, `BREACH_COUNT`, `SLA_WAIVER_COUNT`)
+	# 11. Operational SLA Inventory & Counts (`OVERDUE_BACKLOG`, `OPEN_FOLLOWUPS_OVERDUE`, `SLA_BREACH_COUNT`, `SLA_WAIVER_COUNT`)
 	open_overdue_obs = [ob for ob in obligations if ob.get("is_open_overdue_as_of")]
 	overdue_backlog_wis = sorted({ob.work_item for ob in open_overdue_obs if ob.work_item})
 	open_fu_overdue_cnt = sum(1 for ob in open_overdue_obs if ob.obligation_type == "FOLLOWUP")
@@ -1604,7 +1610,7 @@ def _aggregate_bucket(
 
 	overdue_backlog_metric = make_count_metric("OVERDUE_BACKLOG", len(overdue_backlog_wis))
 	open_followups_overdue_metric = make_count_metric("OPEN_FOLLOWUPS_OVERDUE", open_fu_overdue_cnt)
-	breach_count_metric = make_count_metric("BREACH_COUNT", breach_cnt)
+	breach_count_metric = make_count_metric("SLA_BREACH_COUNT", breach_cnt)
 	sla_waiver_count_metric = make_count_metric("SLA_WAIVER_COUNT", waived_cnt)
 
 	# 12. First-Attempt Latency Percentiles (`P3.md` §7.3)
@@ -1738,7 +1744,7 @@ def _aggregate_bucket(
 		"DNC_COMPLIANCE_RATE": dnc_compliance,
 		"OVERDUE_BACKLOG": overdue_backlog_metric,
 		"OPEN_FOLLOWUPS_OVERDUE": open_followups_overdue_metric,
-		"BREACH_COUNT": breach_count_metric,
+		"SLA_BREACH_COUNT": breach_count_metric,
 		"SLA_WAIVER_COUNT": sla_waiver_count_metric,
 		"FIRST_ATTEMPT_LATENCY_P50_MINUTES": latency_p50_metric,
 		"FIRST_ATTEMPT_LATENCY_P90_MINUTES": latency_p90_metric,
