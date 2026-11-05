@@ -116,7 +116,7 @@ def parse_env_file(path: pathlib.Path) -> dict[str, str]:
 
 def write_env_file(path: pathlib.Path, values: dict[str, str]) -> None:
     lines = [f"{k}={v}" for k, v in values.items()]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
 
 
 def git_blob_sha1(data: bytes) -> str:
@@ -217,7 +217,7 @@ def validate_stack(
 
     # Create ephemeral dummy secret file outside repo so Compose secret file resolution succeeds
     secret_file = tmp_dir / f"{stack_name}_db_root_password.txt"
-    secret_file.write_text(f"dummy-ephemeral-secret-{stack_name}\n", encoding="utf-8")
+    secret_file.write_text(f"dummy-ephemeral-secret-{stack_name}\n", encoding="utf-8", newline="\n")
     env_copy = dict(env_map)
     env_copy["DB_PASSWORD_SECRETS_FILE"] = str(secret_file)
     temp_env = tmp_dir / f"{stack_name}.env"
@@ -352,7 +352,7 @@ def verify_negative_fail_closed(tmp_dir: pathlib.Path) -> None:
     spec = STACK_PROFILES["production"]
     base_env = parse_env_file(spec["env_template"])
     secret_file = tmp_dir / "neg_secret.txt"
-    secret_file.write_text("dummy\n", encoding="utf-8")
+    secret_file.write_text("dummy\n", encoding="utf-8", newline="\n")
 
     # Case 1: Missing APP_IMAGE must fail docker compose config
     env_no_img = dict(base_env)

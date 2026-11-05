@@ -137,6 +137,36 @@ class SmokeLogger:
         return scrubbed
 
 
+def verify_lf_secret_file_bytes(sec_file: pathlib.Path, expected_secret: str) -> dict[str, object]:
+    """Byte-level check confirming `sec_file` ends with LF (`\n`) only and has zero CR (`\r`) bytes."""
+    raw_bytes = sec_file.read_bytes()
+    expected_bytes = expected_secret.encode("utf-8") + b"\n"
+    if b"\r" in raw_bytes:
+        raise AssertionError(f"Secret file {sec_file.name} contains CR (\\r) byte")
+    if not raw_bytes.endswith(b"\n") or raw_bytes[:-1].find(b"\n") != -1:
+        raise AssertionError(
+            f"Secret file {sec_file.name} must contain a single line terminated by LF (\\n) only"
+        )
+    if raw_bytes != expected_bytes:
+        raise AssertionError(f"Secret file {sec_file.name} byte content mismatch")
+    return {
+        "file_name": sec_file.name,
+        "byte_length": len(raw_bytes),
+        "ends_with_lf_only": True,
+        "contains_cr": False,
+    }
+
+
+def write_lf_secret_file(sec_file: pathlib.Path, secret_value: str) -> dict[str, object]:
+    """Writes secret file forcing `newline='\\n'` on Windows and verifies raw bytes."""
+    sec_file.write_text(secret_value + "\n", encoding="utf-8", newline="\n")
+    try:
+        os.chmod(sec_file, 0o600)
+    except OSError:
+        pass
+    return verify_lf_secret_file_bytes(sec_file, secret_value)
+
+
 def parse_env_file(path: pathlib.Path) -> dict[str, str]:
     out: dict[str, str] = {}
     for raw in path.read_text(encoding="utf-8").splitlines():
@@ -1077,14 +1107,16 @@ def write_scrubbed_artifacts(
     raw_json = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
     scrubbed_json = logger.scrub(raw_json)
     logger.assert_clean(scrubbed_json)
+    rendered_log = logger.render()
+    logger.assert_clean(rendered_log)
 
     if report_out:
         report_out.parent.mkdir(parents=True, exist_ok=True)
-        report_out.write_text(scrubbed_json, encoding="utf-8")
+        report_out.write_text(scrubbed_json, encoding="utf-8", newline="\n")
 
     if log_out:
         log_out.parent.mkdir(parents=True, exist_ok=True)
-        log_out.write_text(logger.render(), encoding="utf-8")
+        log_out.write_text(rendered_log, encoding="utf-8", newline="\n")
 
     return scrubbed_json
 
@@ -1249,11 +1281,12 @@ def main() -> int:
         logger.register_secret(adm_pw, "<REDACTED_ADMIN_PASSWORD>")
 
         sec_file = tmp / "db_root_password.txt"
-        sec_file.write_text(db_pw + "\n", encoding="utf-8")
-        try:
-            os.chmod(sec_file, 0o600)
-        except OSError:
-            pass
+        secret_byte_check = write_lf_secret_file(sec_file, db_pw)
+        logger.info(
+            "Verified db_root_password.txt raw bytes: "
+            f"ends_with_lf_only={secret_byte_check['ends_with_lf_only']}, "
+            f"contains_cr={secret_byte_check['contains_cr']}"
+        )
 
         run_env = dict(template_env)
         run_env["COMPOSE_PROJECT_NAME"] = project_name
@@ -1265,7 +1298,9 @@ def main() -> int:
         run_env["HTTP_PUBLISH_PORT"] = str(args.http_port)
         env_file = tmp / "isolated-smoke.env"
         env_file.write_text(
-            "\n".join(f"{k}={v}" for k, v in run_env.items()) + "\n", encoding="utf-8"
+            "\n".join(f"{k}={v}" for k, v in run_env.items()) + "\n",
+            encoding="utf-8",
+            newline="\n",
         )
 
         srv_res = subprocess.run(
@@ -1314,6 +1349,7 @@ def main() -> int:
                     "found": preexisting_resources,
                     "port_check": {"port": args.http_port, "free": port_free, "detail": port_detail},
                 },
+                "secret_file_byte_check": secret_byte_check,
                 "config_services": config_services,
                 "config_services_with_migrate_profile": config_services_migrate,
                 "blockers": blockers,
@@ -1327,6 +1363,7 @@ def main() -> int:
         owned_stack_created = False
         teardown_completed = False
         teardown_audit: dict[str, object] = {"executed": False}
+        current_step = "compose_up"
 
         try:
             owned_stack_created = True
@@ -1342,16 +1379,21 @@ def main() -> int:
                     f"docker compose up -d failed ({up_proc.returncode}): {up_proc.stderr}\n{up_proc.stdout}"
                 )
 
+            current_step = "wait_for_bootstrap_ready"
             wait_for_bootstrap_ready(owned_project_name, env_file)
             logger.info("Day-0 infra (db, redis-cache, redis-queue, configurator) ready; bootstrapping synthetic site")
+
+            current_step = "bootstrap_synthetic_site"
             site_info = bootstrap_synthetic_site(
                 owned_project_name, env_file, site_name, db_pw, adm_pw
             )
             logger.info(f"Synthetic site bootstrapped: {json.dumps(site_info, ensure_ascii=False)}")
 
+            current_step = "wait_for_stack_health"
             health_states = wait_for_stack_health(owned_project_name, env_file)
             logger.info("All 10 long-running services reached health='healthy' and configurator exited 0")
 
+            current_step = "port_exposure_audit"
             # Verify published ports on running stack: ONLY proxy 127.0.0.1:<port>->80/tcp
             port_audit: dict[str, list] = {}
             for sname, sstate in sorted(health_states.items()):
@@ -1371,12 +1413,15 @@ def main() -> int:
             ), f"Non-loopback or unexpected port on proxy: {port_audit['proxy']}"
             logger.info(f"Port exposure audit passed: {json.dumps(port_audit)}")
 
+            current_step = "migrator_rehearsal_x2"
             # Controlled migrator idempotency rehearsal (x2)
             mig_env = dict(run_env)
             mig_env["MIGRATE_SITES"] = "true"
             mig_env_file = tmp / "isolated-smoke-migrate.env"
             mig_env_file.write_text(
-                "\n".join(f"{k}={v}" for k, v in mig_env.items()) + "\n", encoding="utf-8"
+                "\n".join(f"{k}={v}" for k, v in mig_env.items()) + "\n",
+                encoding="utf-8",
+                newline="\n",
             )
             migrator_runs: list[dict[str, object]] = []
             for idx in (1, 2):
@@ -1411,10 +1456,12 @@ def main() -> int:
                     f"Migrator rehearsal #{idx} exited 0 in {elapsed}s: {out_lines[-2:]}"
                 )
 
+            current_step = "http_and_socketio_smoke"
             smoke_results = run_http_and_socketio_smoke(
                 args.http_port, site_name, adm_pw, logger
             )
 
+            current_step = "scoped_teardown"
             if not args.keep_running:
                 logger.info(
                     f"Tearing down owned isolated stack '{owned_project_name}' (down --volumes --remove-orphans)"
@@ -1466,6 +1513,7 @@ def main() -> int:
                     "found": preexisting_resources,
                     "port_check": {"port": args.http_port, "free": port_free, "detail": port_detail},
                 },
+                "secret_file_byte_check": secret_byte_check,
                 "config_services": config_services,
                 "config_services_with_migrate_profile": config_services_migrate,
                 "healthchecks": {
@@ -1481,6 +1529,71 @@ def main() -> int:
             scrubbed = write_scrubbed_artifacts(report, logger, args.report_out, args.log_out)
             print(scrubbed, end="")
             return 0
+        except Exception as exc:
+            diag_states = (
+                query_compose_states(owned_project_name, env_file) if owned_stack_created else {}
+            )
+            logs_proc = (
+                subprocess.run(
+                    compose_cmd(
+                        owned_project_name, env_file, ["logs", "--no-color", "--tail", "60"]
+                    ),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                )
+                if owned_stack_created
+                else None
+            )
+            if (
+                owned_stack_created
+                and PROJECT_NAME_RE.match(owned_project_name)
+                and not teardown_completed
+                and not args.keep_running
+            ):
+                down_err = subprocess.run(
+                    compose_cmd(
+                        owned_project_name,
+                        env_file,
+                        ["down", "--volumes", "--remove-orphans"],
+                    ),
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    check=False,
+                )
+                teardown_completed = down_err.returncode == 0
+                teardown_audit = {
+                    "executed": True,
+                    "scoped_project": owned_project_name,
+                    "exit_code": down_err.returncode,
+                    "remaining_resources": inspect_project_resources(owned_project_name),
+                }
+            logger.info(f"FAILED at step='{current_step}': {exc}")
+            if logs_proc and logs_proc.stdout:
+                logger.info("Container logs tail:\n" + logs_proc.stdout[-4000:])
+            fail_report = {
+                "status": "FAIL",
+                "failed_step": current_step,
+                "error": str(exc),
+                "run_id": run_id,
+                "project_name": owned_project_name,
+                "site_name": site_name,
+                "compose_provenance": compose_git,
+                "image_provenance": {
+                    "image_git_sha": args.image_git_sha or None,
+                    "app_image": app_image,
+                    "image_id": image_meta.get("image_id"),
+                },
+                "secret_file_byte_check": secret_byte_check,
+                "service_states_at_failure": diag_states,
+                "teardown_audit": teardown_audit,
+            }
+            scrubbed_fail = write_scrubbed_artifacts(
+                fail_report, logger, args.report_out, args.log_out
+            )
+            print(scrubbed_fail, end="")
+            return 1
         finally:
             if (
                 owned_stack_created
