@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "description": "Canonical inventory of the P3 UI test methods (`test_ui_p3_*.py`). Enforced in CI via `deploy/dev/seed/ci_junit_gate.py`.",
+  "expected_total": 7,
+  "modules": {
+    "crm_cskh.tests.test_ui_p3_pages_and_context": [
+      "TestUiP3PagesAndContext.test_guest_is_denied_on_all_six_p3_pages",
+      "TestUiP3PagesAndContext.test_staff_only_accesses_personal_scorecard_among_p3_pages",
+      "TestUiP3PagesAndContext.test_leader_accesses_all_six_p3_pages_in_team_scope_with_waive_and_recompute",
+      "TestUiP3PagesAndContext.test_bod_accesses_five_management_p3_pages_with_zero_pii_and_denied_scorecard",
+      "TestUiP3PagesAndContext.test_crm_admin_accesses_all_six_p3_pages_with_recompute_and_waive_capabilities",
+      "TestUiP3PagesAndContext.test_p3_feature_flag_rollback_hides_p3_nav_and_blocks_p3_routes_cleanly",
+      "TestUiP3PagesAndContext.test_qa_enabled_flag_defaults_false_and_publishes_p3_vietnamese_catalogue"
+    ]
+  }
+}

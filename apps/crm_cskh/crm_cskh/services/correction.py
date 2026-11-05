@@ -115,34 +115,54 @@ def _validate_and_enrich_patch(
 		code = (
 			parse_optional_str(patch["outcome_code"], "Mã kết quả hiệu chỉnh không hợp lệ.") or ""
 		).lower()
+		out_fields = [
+			"name",
+			"code",
+			"label_vi",
+			"result_group",
+			"is_contact_attempt",
+			"is_connected",
+			"is_interested",
+			"is_terminal",
+			"is_do_not_contact",
+			"requires_note",
+			"requires_followup",
+			"allows_followup",
+			"requires_completion_reason",
+			"allowed_channels",
+			"suggested_next_status",
+			"version",
+			"enabled",
+		]
+		for opt_col in ("is_conversion", "is_invalid_phone"):
+			if frappe.db.has_column("CSKH Outcome Code", opt_col):
+				out_fields.append(opt_col)
 		out_row = frappe.db.get_value(
 			"CSKH Outcome Code",
 			code,
-			[
-				"name",
-				"code",
-				"label_vi",
-				"result_group",
-				"is_contact_attempt",
-				"is_connected",
-				"is_interested",
-				"is_terminal",
-				"is_do_not_contact",
-				"requires_note",
-				"requires_followup",
-				"allows_followup",
-				"requires_completion_reason",
-				"allowed_channels",
-				"suggested_next_status",
-				"version",
-				"enabled",
-			],
+			out_fields,
 			as_dict=True,
 		)
 		if not out_row or not cint(out_row.enabled):
 			raise InvalidOutcome("Mã kết quả hiệu chỉnh không tồn tại hoặc đã ngừng sử dụng.")
 		outcome_obj = serialize_outcome(out_row)
 		eff_outcome_code = outcome_obj["code"]
+		is_conv_patch = bool(outcome_obj.get("is_conversion"))
+		camp_id = (
+			attempt_row.get("campaign")
+			if isinstance(attempt_row, dict)
+			else getattr(attempt_row, "campaign", None)
+		)
+		if (
+			not is_conv_patch
+			and camp_id
+			and frappe.db.has_column("CSKH Campaign", "conversion_outcome_codes")
+		):
+			raw_cc = frappe.db.get_value("CSKH Campaign", camp_id, "conversion_outcome_codes") or ""
+			if outcome_obj["code"].lower() in {
+				c.strip().lower() for c in str(raw_cc).split(",") if c.strip()
+			}:
+				is_conv_patch = True
 		enriched.update(
 			{
 				"outcome_code": outcome_obj["code"],
@@ -154,6 +174,8 @@ def _validate_and_enrich_patch(
 				"is_interested": 1 if outcome_obj["is_interested"] else 0,
 				"is_terminal": 1 if outcome_obj["is_terminal"] else 0,
 				"is_do_not_contact": 1 if outcome_obj["is_do_not_contact"] else 0,
+				"is_conversion": 1 if is_conv_patch else 0,
+				"is_invalid_phone": 1 if outcome_obj.get("is_invalid_phone") else 0,
 			}
 		)
 	else:
@@ -463,11 +485,41 @@ def request_correction(
 				update_status_when_active=True,
 				extra_updates={"last_activity_by": actor},
 			)
+			from crm_cskh.services import sla_engine
+
+			sla_engine.on_correction_reviewed_in_tx(
+				work_item=wi_val,
+				attempt_id=att_val,
+				action=action_val,
+				reviewed_at=now_dt,
+				actor=actor,
+			)
 			final_status = recomputed["status"]
 			final_rev = recomputed["revision"]
 		else:
 			final_status = locked.status
 			final_rev = current_rev
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		dirty_reason = "prior_period_correction" if corr_status == "approved" else "correction_requested"
+		schedule_post_commit_dirty_invalidation(
+			work_item=wi_val,
+			campaign=locked.campaign,
+			owner_user=att_row.performed_by or att_row.owner_at_attempt,
+			event_dt=att_row.occurred_at,
+			reason=dirty_reason,
+			trigger_reference=corr_doc.name,
+		)
+		if enriched_patch.get("occurred_at"):
+			schedule_post_commit_dirty_invalidation(
+				work_item=wi_val,
+				campaign=locked.campaign,
+				owner_user=att_row.performed_by or att_row.owner_at_attempt,
+				event_dt=enriched_patch["occurred_at"],
+				reason=dirty_reason,
+				trigger_reference=corr_doc.name,
+			)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
 		raise
@@ -637,11 +689,53 @@ def review_correction(
 				update_status_when_active=True,
 				extra_updates={"last_activity_by": actor},
 			)
+			from crm_cskh.services import sla_engine
+
+			sla_engine.on_correction_reviewed_in_tx(
+				work_item=wi_val,
+				attempt_id=corr_doc.attempt,
+				action=corr_doc.action,
+				reviewed_at=now_dt,
+				actor=actor,
+			)
 			final_status = recomputed["status"]
 			final_rev = recomputed["revision"]
 		else:
 			final_status = locked.status
 			final_rev = current_rev
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		orig_att_meta = frappe.db.get_value(
+			"CSKH Contact Attempt",
+			corr_doc.attempt,
+			["occurred_at", "performed_by", "owner_at_attempt"],
+			as_dict=True,
+		)
+		dirty_reason = "prior_period_correction" if target_status == "approved" else "correction_rejected"
+		if orig_att_meta and orig_att_meta.occurred_at:
+			schedule_post_commit_dirty_invalidation(
+				work_item=wi_val,
+				campaign=locked.campaign,
+				owner_user=orig_att_meta.performed_by or orig_att_meta.owner_at_attempt,
+				event_dt=orig_att_meta.occurred_at,
+				reason=dirty_reason,
+				trigger_reference=corr_doc.name,
+			)
+		if corr_doc.corrected_fields_json:
+			try:
+				patched_occ = json.loads(corr_doc.corrected_fields_json).get("occurred_at")
+				if patched_occ:
+					schedule_post_commit_dirty_invalidation(
+						work_item=wi_val,
+						campaign=locked.campaign,
+						owner_user=(orig_att_meta.performed_by if orig_att_meta else None),
+						event_dt=patched_occ,
+						reason=dirty_reason,
+						trigger_reference=corr_doc.name,
+					)
+			except Exception:
+				pass
 	except Exception:
 		rollback_savepoint_safely(savepoint)
 		raise

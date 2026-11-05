@@ -94,6 +94,19 @@
    "fieldtype": "Link",
    "label": "Previous Event",
    "options": "CSKH Assignment History"
+  },
+  {
+   "fieldname": "team_at_assignment",
+   "fieldtype": "Data",
+   "label": "Team At Assignment",
+   "read_only": 1
+  },
+  {
+   "fieldname": "attribution_status",
+   "fieldtype": "Select",
+   "label": "Attribution Status",
+   "options": "\nauthoritative\nhistorical_attribution_unknown",
+   "read_only": 1
   }
  ],
  "field_order": [
@@ -110,7 +123,9 @@
   "ownership_start",
   "ownership_end",
   "event_id",
-  "previous_event"
+  "previous_event",
+  "team_at_assignment",
+  "attribution_status"
  ],
  "permissions": [
   {

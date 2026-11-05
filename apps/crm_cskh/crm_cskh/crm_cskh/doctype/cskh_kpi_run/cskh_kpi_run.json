@@ -1,0 +1,258 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH KPI Run",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "run_mode",
+   "fieldtype": "Select",
+   "label": "Run Mode",
+   "options": "full\nincremental\nrestated\nbackfill\ndry_run",
+   "default": "incremental",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "queued\nrunning\ncompleted\nfailed",
+   "default": "queued",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "period_type",
+   "fieldtype": "Select",
+   "label": "Period Type",
+   "options": "daily\nweekly\nmonthly\nquarterly\nyearly\ncustom",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "period_key",
+   "fieldtype": "Data",
+   "label": "Period Key",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "target_scope_type",
+   "fieldtype": "Select",
+   "label": "Target Scope Type",
+   "options": "all\ncompany\nteam\nemployee\ncampaign",
+   "default": "all",
+   "reqd": 1
+  },
+  {
+   "fieldname": "target_scope_id",
+   "fieldtype": "Data",
+   "label": "Target Scope ID"
+  },
+  {
+   "fieldname": "campaign_filter",
+   "fieldtype": "Data",
+   "label": "Campaign Filter"
+  },
+  {
+   "fieldname": "as_of",
+   "fieldtype": "Datetime",
+   "label": "As Of",
+   "reqd": 1
+  },
+  {
+   "fieldname": "source_watermark",
+   "fieldtype": "Datetime",
+   "label": "Source Watermark"
+  },
+  {
+   "fieldname": "metric_version",
+   "fieldtype": "Data",
+   "label": "Metric Version",
+   "default": "cskh-metrics-v2",
+   "reqd": 1
+  },
+  {
+   "fieldname": "is_latest_published",
+   "fieldtype": "Check",
+   "label": "Is Latest Published",
+   "default": "0",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "is_restated",
+   "fieldtype": "Check",
+   "label": "Is Restated",
+   "default": "0"
+  },
+  {
+   "fieldname": "restated_from_run",
+   "fieldtype": "Data",
+   "label": "Restated From Run"
+  },
+  {
+   "fieldname": "trigger_reason",
+   "fieldtype": "Data",
+   "label": "Trigger Reason"
+  },
+  {
+   "fieldname": "trigger_reference",
+   "fieldtype": "Data",
+   "label": "Trigger Reference"
+  },
+  {
+   "fieldname": "requested_by",
+   "fieldtype": "Link",
+   "label": "Requested By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "snapshots_written",
+   "fieldtype": "Int",
+   "label": "Snapshots Written",
+   "default": "0"
+  },
+  {
+   "fieldname": "reconciliation_ok",
+   "fieldtype": "Check",
+   "label": "Reconciliation OK",
+   "default": "0"
+  },
+  {
+   "fieldname": "reconciliation_json",
+   "fieldtype": "Code",
+   "label": "Reconciliation JSON",
+   "options": "JSON",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "checkpoint_json",
+   "fieldtype": "Code",
+   "label": "Checkpoint JSON",
+   "options": "JSON",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "error_message",
+   "fieldtype": "Small Text",
+   "label": "Error Message",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At"
+  },
+  {
+   "fieldname": "completed_at",
+   "fieldtype": "Datetime",
+   "label": "Completed At"
+  }
+ ],
+ "field_order": [
+  "run_mode",
+  "status",
+  "period_type",
+  "period_key",
+  "from_date",
+  "to_date",
+  "target_scope_type",
+  "target_scope_id",
+  "campaign_filter",
+  "as_of",
+  "source_watermark",
+  "metric_version",
+  "is_latest_published",
+  "is_restated",
+  "restated_from_run",
+  "trigger_reason",
+  "trigger_reference",
+  "requested_by",
+  "snapshots_written",
+  "reconciliation_ok",
+  "reconciliation_json",
+  "checkpoint_json",
+  "error_message",
+  "started_at",
+  "completed_at"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "System Manager",
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "write": 0
+  },
+  {
+   "role": "CSKH BOD Viewer",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "track_changes": 0
+}

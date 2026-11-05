@@ -61,7 +61,8 @@ class TestUiP2PagesAndContext(P2TestCase):
 		frappe.set_user(self.staff_a)
 		ctx = index_page.get_context(self._fresh_ctx())
 		nav_keys = {item["key"] for item in ctx.cskh_navigation}
-		self.assertEqual(nav_keys, {"my-customers", "callbacks", "progress"})
+		self.assertTrue({"my-customers", "callbacks", "progress"}.issubset(nav_keys))
+		self.assertTrue(nav_keys.issubset({"my-customers", "callbacks", "progress", "scorecard"}))
 		self.assertTrue(ctx.cskh_capabilities["pii"])
 		self.assertFalse(ctx.cskh_capabilities["can_manage_settings"])
 		self.assertFalse(ctx.cskh_capabilities["can_review_correction"])

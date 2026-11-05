@@ -365,6 +365,198 @@ window.cskh = (function () {
 		return 'upcoming'
 	}
 
+	function pad2(n) {
+		return String(n).padStart(2, '0')
+	}
+
+	function formatCivilDate(year, month, day) {
+		return year + '-' + pad2(month) + '-' + pad2(day)
+	}
+
+	function addCivilDays(year, month, day, deltaDays) {
+		const dt = new Date(Date.UTC(year, month - 1, day + deltaDays, 12, 0, 0))
+		return {
+			year: dt.getUTCFullYear(),
+			month: dt.getUTCMonth() + 1,
+			day: dt.getUTCDate(),
+		}
+	}
+
+	function isoWeekMonday(isoYear, isoWeek) {
+		const jan4 = new Date(Date.UTC(isoYear, 0, 4, 12, 0, 0))
+		const jan4Dow = jan4.getUTCDay() || 7
+		const week1Mon = new Date(Date.UTC(isoYear, 0, 4 - (jan4Dow - 1), 12, 0, 0))
+		const target = new Date(week1Mon.getTime() + (isoWeek - 1) * 7 * 86400000)
+		return {
+			year: target.getUTCFullYear(),
+			month: target.getUTCMonth() + 1,
+			day: target.getUTCDate(),
+		}
+	}
+
+	function civilDateToIsoWeekKey(year, month, day) {
+		const dt = new Date(Date.UTC(year, month - 1, day, 12, 0, 0))
+		const dow = dt.getUTCDay() || 7
+		dt.setUTCDate(dt.getUTCDate() + 4 - dow)
+		const isoYear = dt.getUTCFullYear()
+		const yearStart = new Date(Date.UTC(isoYear, 0, 1, 12, 0, 0))
+		const weekNo = Math.ceil(((dt.getTime() - yearStart.getTime()) / 86400000 + 1) / 7)
+		return isoYear + '-W' + pad2(weekNo)
+	}
+
+	function normalizePeriodType(rawType) {
+		const s = String(rawType || 'monthly').trim().toLowerCase()
+		const aliases = {
+			day: 'daily',
+			daily: 'daily',
+			week: 'weekly',
+			weekly: 'weekly',
+			month: 'monthly',
+			monthly: 'monthly',
+			quarter: 'quarterly',
+			quarterly: 'quarterly',
+			year: 'yearly',
+			yearly: 'yearly',
+			custom: 'custom',
+		}
+		return aliases[s] || 'monthly'
+	}
+
+	/**
+	 * Compute authoritative half-open `[from, to_exclusive)` period boundaries
+	 * and canonical `period_key` in `tz` (default `siteTimeZone()`, `Asia/Ho_Chi_Minh`
+	 * per `docs/p3/report-api-contract.md` §1.1), independent of browser OS timezone.
+	 *
+	 * Supported `periodType`: `daily`, `weekly`, `monthly`, `quarterly`, `yearly`, `custom`
+	 * (plus aliases `day`, `week`, `month`, `quarter`, `year`).
+	 */
+	function computePeriodBounds(periodType, anchorValue, customToValue, tz) {
+		const zone = tz || siteTimeZone() || 'Asia/Ho_Chi_Minh'
+		const nowParts = partsAtEpochInTz(serverNow().getTime(), zone)
+		const pType = normalizePeriodType(periodType)
+		const rawAnchor = String(anchorValue || '').trim()
+
+		let startY = nowParts.year
+		let startM = nowParts.month
+		let startD = 1
+		let endExcl = null
+		let periodKey = ''
+
+		if (pType === 'daily') {
+			const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawAnchor)
+			startY = m ? Number(m[1]) : nowParts.year
+			startM = m ? Number(m[2]) : nowParts.month
+			startD = m ? Number(m[3]) : nowParts.day
+			endExcl = addCivilDays(startY, startM, startD, 1)
+			periodKey = formatCivilDate(startY, startM, startD)
+		} else if (pType === 'weekly') {
+			const wm = /^(\d{4})-W(\d{2})$/i.exec(rawAnchor)
+			if (wm) {
+				const mon = isoWeekMonday(Number(wm[1]), Number(wm[2]))
+				startY = mon.year
+				startM = mon.month
+				startD = mon.day
+				periodKey = wm[1] + '-W' + wm[2]
+			} else {
+				const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawAnchor)
+				const cy = dm ? Number(dm[1]) : nowParts.year
+				const cm = dm ? Number(dm[2]) : nowParts.month
+				const cd = dm ? Number(dm[3]) : nowParts.day
+				const probe = new Date(Date.UTC(cy, cm - 1, cd, 12, 0, 0))
+				const dow = probe.getUTCDay() || 7
+				const mon = addCivilDays(cy, cm, cd, -(dow - 1))
+				startY = mon.year
+				startM = mon.month
+				startD = mon.day
+				periodKey = civilDateToIsoWeekKey(startY, startM, startD)
+			}
+			endExcl = addCivilDays(startY, startM, startD, 7)
+		} else if (pType === 'quarterly') {
+			const qm = /^(\d{4})-Q([1-4])$/i.exec(rawAnchor)
+			let qNum = Math.floor((nowParts.month - 1) / 3) + 1
+			if (qm) {
+				startY = Number(qm[1])
+				qNum = Number(qm[2])
+			} else {
+				const dm = /^(\d{4})-(\d{2})/.exec(rawAnchor)
+				if (dm) {
+					startY = Number(dm[1])
+					qNum = Math.floor((Number(dm[2]) - 1) / 3) + 1
+				}
+			}
+			startM = (qNum - 1) * 3 + 1
+			startD = 1
+			const nextQM = startM + 3
+			endExcl =
+				nextQM > 12
+					? { year: startY + 1, month: nextQM - 12, day: 1 }
+					: { year: startY, month: nextQM, day: 1 }
+			periodKey = startY + '-Q' + qNum
+		} else if (pType === 'yearly') {
+			const ym = /^(\d{4})/.exec(rawAnchor)
+			startY = ym ? Number(ym[1]) : nowParts.year
+			startM = 1
+			startD = 1
+			endExcl = { year: startY + 1, month: 1, day: 1 }
+			periodKey = String(startY)
+		} else if (pType === 'custom') {
+			const fm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(rawAnchor)
+			const tm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(customToValue || '').trim())
+			startY = fm ? Number(fm[1]) : nowParts.year
+			startM = fm ? Number(fm[2]) : nowParts.month
+			startD = fm ? Number(fm[3]) : 1
+			const incY = tm ? Number(tm[1]) : nowParts.year
+			const incM = tm ? Number(tm[2]) : nowParts.month
+			const incD = tm ? Number(tm[3]) : nowParts.day
+			endExcl = addCivilDays(incY, incM, incD, 1)
+			periodKey = ''
+		} else {
+			// Default `monthly`
+			const mm = /^(\d{4})-(\d{2})/.exec(rawAnchor)
+			startY = mm ? Number(mm[1]) : nowParts.year
+			startM = mm ? Number(mm[2]) : nowParts.month
+			startD = 1
+			endExcl =
+				startM >= 12
+					? { year: startY + 1, month: 1, day: 1 }
+					: { year: startY, month: startM + 1, day: 1 }
+			periodKey = startY + '-' + pad2(startM)
+		}
+
+		const fromEpochMs = tzWallClockToEpochMs(startY, startM, startD, 0, 0, 0, zone)
+		const toExclEpochMs = tzWallClockToEpochMs(
+			endExcl.year,
+			endExcl.month,
+			endExcl.day,
+			0,
+			0,
+			0,
+			zone
+		)
+		const incEnd = addCivilDays(endExcl.year, endExcl.month, endExcl.day, -1)
+		const fromParts = partsAtEpochInTz(fromEpochMs, zone)
+		const toExclParts = partsAtEpochInTz(toExclEpochMs, zone)
+		const fromDate = formatCivilDate(startY, startM, startD)
+		const toDateExclusive = formatCivilDate(endExcl.year, endExcl.month, endExcl.day)
+		const toDateInclusive = formatCivilDate(incEnd.year, incEnd.month, incEnd.day)
+
+		return {
+			periodType: pType,
+			periodKey: periodKey,
+			timeZone: zone,
+			fromDate: fromDate,
+			toDateInclusive: toDateInclusive,
+			toDateExclusive: toDateExclusive,
+			fromServer: fromParts.dateKey + ' 00:00:00',
+			toExclusiveServer: toExclParts.dateKey + ' 00:00:00',
+			fromIso: fromParts.dateKey + 'T00:00:00' + fromParts.offsetIso,
+			toExclusiveIso: toExclParts.dateKey + 'T00:00:00' + toExclParts.offsetIso,
+			fromEpochMs: fromEpochMs,
+			toExclusiveEpochMs: toExclEpochMs,
+			label: '[' + fromParts.dateKey + ' 00:00, ' + toExclParts.dateKey + ' 00:00) ' + zone,
+		}
+	}
+
 	/* ------------------------------------------------------------------ */
 	/* Error codes, HTTP transport & Safe DOM                             */
 	/* ------------------------------------------------------------------ */
@@ -381,6 +573,7 @@ window.cskh = (function () {
 	}
 
 	function errorCode(body, status) {
+		if (body && body.p3_code) return body.p3_code
 		if (body && body.p2_code) return body.p2_code
 		if (body && body.p1_code) return body.p1_code
 		if (body && body.error_code) return body.error_code
@@ -537,6 +730,38 @@ window.cskh = (function () {
 			conflict: 'is-conflict',
 			excluded: 'is-invalid',
 			eligible: 'is-assigned',
+			// P3 freshness / confidence & SLA obligation states
+			fresh: 'is-assigned',
+			ok: 'is-assigned',
+			final: 'is-assigned',
+			finalized: 'is-assigned',
+			calculating: 'is-info',
+			stale_recomputing: 'is-queued',
+			empty_not_computed: 'is-invalid',
+			provisional: 'is-queued',
+			stale: 'is-queued',
+			restated: 'is-info',
+			insufficient_data: 'is-invalid',
+			disabled: 'is-invalid',
+			na: 'is-invalid',
+			failed: 'is-conflict',
+			open: 'is-info',
+			fulfilled_on_time: 'is-assigned',
+			fulfilled_late: 'is-queued',
+			breached_open: 'is-conflict',
+			breached_handoff: 'is-conflict',
+			handoff_closed: 'is-invalid',
+			waived: 'is-info',
+			canceled_valid: 'is-invalid',
+			canceled_validly: 'is-invalid',
+			superseded: 'is-invalid',
+			escalated: 'is-conflict',
+			needs_review: 'is-queued',
+			disputed: 'is-conflict',
+			historical_attribution_unknown: 'is-queued',
+			ready: 'is-assigned',
+			running: 'is-info',
+			expired: 'is-invalid',
 		}
 		return 'cskh-state ' + (map[kind] || '')
 	}
@@ -632,13 +857,21 @@ window.cskh = (function () {
 	}
 
 	function scopeLabel(value) {
+		const normalized = String(value || '').trim().toLowerCase()
 		const map = {
-			system: 'Whole installation',
-			all: 'Whole installation',
-			team: 'Team scope',
-			self: 'Only my own data',
+			system: t('Whole installation'),
+			all: t('Whole installation'),
+			company: t('Company-wide'),
+			bod: t('Company-wide (BOD)'),
+			crm_admin: t('CRM system administration'),
+			team: t('Team scope'),
+			team_leader: t('Managed team scope'),
+			employee: t('Employee scope'),
+			campaign: t('Campaign scope'),
+			self: t('Only my own data'),
+			staff: t('Only my own data'),
 		}
-		return map[value] ? t(map[value]) : value || '—'
+		return map[normalized] ? map[normalized] : value || '—'
 	}
 
 	function campaignStatusLabel(value) {
@@ -707,6 +940,14 @@ window.cskh = (function () {
 		IDEMPOTENCY_CONFLICT: true,
 		DO_NOT_CONTACT: true,
 		POLICY_CHANGED: true,
+		FORBIDDEN_SCOPE: true,
+		SNAPSHOT_STALE: true,
+		POLICY_CONFLICT: true,
+		DATA_RECONCILIATION_FAILED: true,
+		QA_DISABLED: true,
+		QA_CONFLICT: true,
+		RECOMPUTE_IN_PROGRESS: true,
+		EXPORT_EXPIRED: true,
 	}
 
 	function renderError(container, error, recoveryActions) {
@@ -898,6 +1139,9 @@ window.cskh = (function () {
 		timezoneInfo: timezoneInfo,
 		effectiveTimeZone: effectiveTimeZone,
 		siteTimeZone: siteTimeZone,
+		partsAtEpochInTz: partsAtEpochInTz,
+		tzWallClockToEpochMs: tzWallClockToEpochMs,
+		computePeriodBounds: computePeriodBounds,
 		parseServerDate: parseServerDate,
 		serverNow: serverNow,
 		formatDate: formatDate,

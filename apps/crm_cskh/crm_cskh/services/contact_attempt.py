@@ -156,6 +156,8 @@ def _close_work_item_in_tx(
 	public_reason: str | None = None,
 	payload_hash: str | None = None,
 	extra_wi_fields: dict | None = None,
+	close_category: str = "normal",
+	is_dnc: bool = False,
 ) -> str | None:
 	"""Close an active `CSKH Work Item` atomically inside an existing transaction/savepoint."""
 	work_item_val = locked["name"]
@@ -163,11 +165,29 @@ def _close_work_item_in_tx(
 	priv_reason = (clean_reason or "").strip() or "Hoàn tất mục tiêu chăm sóc"
 	pub_reason = (public_reason or "").strip() or ownership.public_history_reason("close")
 
-	canceled_task = cancel_open_followup_in_tx(
+	prev_sys_cancel = getattr(frappe.flags, "cskh_system_cancel_followup", False)
+	frappe.flags.cskh_system_cancel_followup = True
+	try:
+		canceled_task = cancel_open_followup_in_tx(
+			work_item=work_item_val,
+			actor=actor,
+			reason=f"Đóng Work Item: {priv_reason}",
+			now=now_dt,
+		)
+	finally:
+		frappe.flags.cskh_system_cancel_followup = prev_sys_cancel
+
+	from crm_cskh.services import sla_engine
+
+	sla_engine.on_work_item_closed_in_tx(
 		work_item=work_item_val,
+		lead=locked["lead"],
+		campaign=locked.get("campaign"),
+		owner_user=old_owner,
+		closed_at=now_dt,
 		actor=actor,
-		reason=f"Đóng Work Item: {priv_reason}",
-		now=now_dt,
+		close_category=close_category,
+		is_dnc=is_dnc,
 	)
 
 	ownership._close_open_interval(work_item_val, now_dt)
@@ -433,28 +453,32 @@ def record_attempt(
 			raise InvalidChannel("Kênh liên hệ này không được bật trong chính sách hiệu lực.")
 
 		# 5. Outcome Code validation & snapshot
+		outcome_fields = [
+			"name",
+			"code",
+			"label_vi",
+			"result_group",
+			"is_contact_attempt",
+			"is_connected",
+			"is_interested",
+			"is_terminal",
+			"is_do_not_contact",
+			"requires_note",
+			"requires_followup",
+			"allows_followup",
+			"requires_completion_reason",
+			"allowed_channels",
+			"suggested_next_status",
+			"version",
+			"enabled",
+		]
+		for opt_col in ("is_conversion", "is_invalid_phone"):
+			if frappe.db.has_column("CSKH Outcome Code", opt_col):
+				outcome_fields.append(opt_col)
 		outcome_doc = frappe.db.get_value(
 			"CSKH Outcome Code",
 			outcome_val,
-			[
-				"name",
-				"code",
-				"label_vi",
-				"result_group",
-				"is_contact_attempt",
-				"is_connected",
-				"is_interested",
-				"is_terminal",
-				"is_do_not_contact",
-				"requires_note",
-				"requires_followup",
-				"allows_followup",
-				"requires_completion_reason",
-				"allowed_channels",
-				"suggested_next_status",
-				"version",
-				"enabled",
-			],
+			outcome_fields,
 			as_dict=True,
 		)
 		if not outcome_doc or not cint(outcome_doc.enabled):
@@ -541,47 +565,65 @@ def record_attempt(
 		)
 
 		# 9. Insert immutable `CSKH Contact Attempt`
+		is_conv_flag = bool(outcome.get("is_conversion"))
+		if (
+			not is_conv_flag
+			and locked.campaign
+			and frappe.db.has_column("CSKH Campaign", "conversion_outcome_codes")
+		):
+			raw_camp_conv = (
+				frappe.db.get_value("CSKH Campaign", locked.campaign, "conversion_outcome_codes") or ""
+			)
+			camp_conv_codes = {c.strip().lower() for c in str(raw_camp_conv).split(",") if c.strip()}
+			if outcome["code"].lower() in camp_conv_codes:
+				is_conv_flag = True
+
 		prev_att_flag = getattr(frappe.flags, "cskh_in_attempt_service", False)
 		frappe.flags.cskh_in_attempt_service = True
 		try:
-			attempt_doc = frappe.get_doc(
-				{
-					"doctype": "CSKH Contact Attempt",
-					"work_item": wi_val,
-					"lead": locked.lead,
-					"campaign": locked.campaign,
-					"ownership_event": open_event.name,
-					"owner_at_attempt": locked.assigned_to,
-					"performed_by": actor,
-					"occurred_at": occurred_dt,
-					"recorded_at": now_dt,
-					"channel": channel_val,
-					"outcome_code": outcome["code"],
-					"outcome_label_snapshot": outcome["label_vi"],
-					"outcome_group_snapshot": outcome["result_group"],
-					"outcome_version_snapshot": outcome["version"],
-					"contact_attempt_snapshot": 1 if outcome["is_contact_attempt"] else 0,
-					"connected_snapshot": 1 if outcome["is_connected"] else 0,
-					"interested_snapshot": 1 if outcome["is_interested"] else 0,
-					"terminal_snapshot": 1 if outcome["is_terminal"] else 0,
-					"dnc_snapshot": 1 if outcome["is_do_not_contact"] else 0,
-					"note": clean_note,
-					"call_log": linked_call_log,
-					"verification_status": verification_status,
-					"policy_name_snapshot": policy["name"],
-					"policy_version_snapshot": policy["version"],
-					"idempotency_key": idem_val,
-					"payload_hash": req_hash,
-					"work_item_revision": current_rev + 1,
-				}
-			)
+			att_payload = {
+				"doctype": "CSKH Contact Attempt",
+				"work_item": wi_val,
+				"lead": locked.lead,
+				"campaign": locked.campaign,
+				"ownership_event": open_event.name,
+				"owner_at_attempt": locked.assigned_to,
+				"performed_by": actor,
+				"occurred_at": occurred_dt,
+				"recorded_at": now_dt,
+				"channel": channel_val,
+				"outcome_code": outcome["code"],
+				"outcome_label_snapshot": outcome["label_vi"],
+				"outcome_group_snapshot": outcome["result_group"],
+				"outcome_version_snapshot": outcome["version"],
+				"contact_attempt_snapshot": 1 if outcome["is_contact_attempt"] else 0,
+				"connected_snapshot": 1 if outcome["is_connected"] else 0,
+				"interested_snapshot": 1 if outcome["is_interested"] else 0,
+				"terminal_snapshot": 1 if outcome["is_terminal"] else 0,
+				"dnc_snapshot": 1 if outcome["is_do_not_contact"] else 0,
+				"note": clean_note,
+				"call_log": linked_call_log,
+				"verification_status": verification_status,
+				"policy_name_snapshot": policy["name"],
+				"policy_version_snapshot": policy["version"],
+				"idempotency_key": idem_val,
+				"payload_hash": req_hash,
+				"work_item_revision": current_rev + 1,
+			}
+			if frappe.db.has_column("CSKH Contact Attempt", "conversion_snapshot"):
+				att_payload["conversion_snapshot"] = 1 if is_conv_flag else 0
+			if frappe.db.has_column("CSKH Contact Attempt", "invalid_phone_snapshot"):
+				att_payload["invalid_phone_snapshot"] = 1 if outcome.get("is_invalid_phone") else 0
+			if frappe.db.has_column("CSKH Contact Attempt", "complete_fields"):
+				att_payload["complete_fields"] = 1
+			attempt_doc = frappe.get_doc(att_payload)
 			attempt_doc.insert(ignore_permissions=True)
 		finally:
 			frappe.flags.cskh_in_attempt_service = prev_att_flag
 
 		attempt_id = attempt_doc.name
 
-		# 10. Resolve existing open callback `CRM Task` (if any) & create new follow-up `CRM Task`
+		# 10. Resolve existing open callback `CRM Task` (if any), fulfill SLA obligations, & create new follow-up `CRM Task`
 		resolved_task_id = None
 		open_task_before = get_open_followup_task(wi_val)
 		if open_task_before:
@@ -591,6 +633,7 @@ def record_attempt(
 					attempt_id=attempt_id,
 					actor=actor,
 					now=now_dt,
+					occurred_at=occurred_dt,
 					reason=f"Đã thực hiện liên hệ ({outcome['label_vi']})",
 				)
 				if resolved_task_id:
@@ -606,6 +649,16 @@ def record_attempt(
 					"Work Item đang có lịch hẹn mở; cần bật complete_open_followup=true khi tạo lịch hẹn mới.",
 					code="CONFLICT",
 				)
+
+		from crm_cskh.services import sla_engine
+
+		sla_engine.on_attempt_recorded_in_tx(
+			work_item=wi_val,
+			attempt_id=attempt_id,
+			occurred_at=occurred_dt,
+			outcome=outcome,
+			actor=actor,
+		)
 
 		if followup_spec:
 			new_task_id = create_followup_in_tx(
@@ -661,6 +714,7 @@ def record_attempt(
 				policy_version=policy["version"],
 				public_reason=close_public_reason,
 				payload_hash=req_hash,
+				is_dnc=bool(outcome["is_do_not_contact"]),
 			)
 			final_status = "closed"
 			final_callback = None
@@ -677,6 +731,17 @@ def record_attempt(
 			)
 			final_status = recomputed["status"]
 			final_callback = new_task_id or recomputed["open_callback_task"]
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		schedule_post_commit_dirty_invalidation(
+			work_item=wi_val,
+			campaign=locked.campaign,
+			owner_user=actor,
+			event_dt=occurred_dt,
+			reason="attempt_recorded",
+			trigger_reference=attempt_id,
+		)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
 		raise
@@ -891,6 +956,18 @@ def close_work_item(
 			policy_version=policy["version"],
 			public_reason=close_pub_reason,
 			payload_hash=req_hash,
+			close_category=cat_val,
+			is_dnc=bool(lead_dnc),
+		)
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		schedule_post_commit_dirty_invalidation(
+			work_item=wi_val,
+			campaign=locked.campaign,
+			owner_user=old_owner_at_close,
+			event_dt=now_dt,
+			reason="work_item_closed",
 		)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
@@ -1109,7 +1186,7 @@ def reopen_work_item(
 					code="ALREADY_ASSIGNED",
 				) from exc
 
-		ownership._insert_history(
+		reopen_hist = ownership._insert_history(
 			{
 				"doctype": "CSKH Assignment History",
 				"work_item": wi_val,
@@ -1128,12 +1205,35 @@ def reopen_work_item(
 			}
 		)
 
+		from crm_cskh.services import sla_engine
+
+		sla_engine.on_interval_opened_in_tx(
+			work_item=wi_val,
+			lead=locked.lead,
+			campaign=locked.campaign,
+			interval_event=reopen_hist.name,
+			owner_user=target_val,
+			started_at=now_dt,
+			actor=actor,
+			is_reopen=True,
+		)
+
 		ownership._sync_lead_owner(locked.lead, target_val)
 		ownership._sync_docshares(locked.lead, [target_val])
 		if not ownership._todo_for(locked.lead, target_val):
 			ownership._create_todo(locked.lead, target_val, f"CSKH assignment ({wi_val})")
 		ownership._sync_lead_owner(locked.lead, target_val)
 		ownership._assert_final_owner(locked.lead, target_val)
+
+		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+
+		schedule_post_commit_dirty_invalidation(
+			work_item=wi_val,
+			campaign=locked.campaign,
+			owner_user=target_val,
+			event_dt=now_dt,
+			reason="work_item_reopened",
+		)
 	except Exception:
 		rollback_savepoint_safely(savepoint)
 		raise

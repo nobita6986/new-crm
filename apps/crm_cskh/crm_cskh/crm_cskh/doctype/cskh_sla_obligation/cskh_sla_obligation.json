@@ -1,0 +1,354 @@
+{
+ "doctype": "DocType",
+ "name": "CSKH SLA Obligation",
+ "module": "CRM CSKH",
+ "autoname": "hash",
+ "engine": "InnoDB",
+ "fields": [
+  {
+   "fieldname": "obligation_type",
+   "fieldtype": "Select",
+   "label": "Obligation Type",
+   "options": "FIRST_ATTEMPT\nFOLLOWUP\nFIRST_CONNECTED\nMIN_ATTEMPTS",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "work_item",
+   "fieldtype": "Link",
+   "label": "Work Item",
+   "options": "CSKH Work Item",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "lead",
+   "fieldtype": "Link",
+   "label": "Lead",
+   "options": "CRM Lead",
+   "reqd": 1
+  },
+  {
+   "fieldname": "campaign",
+   "fieldtype": "Link",
+   "label": "Campaign",
+   "options": "CSKH Campaign"
+  },
+  {
+   "fieldname": "interval_event",
+   "fieldtype": "Link",
+   "label": "Interval Event",
+   "options": "CSKH Assignment History"
+  },
+  {
+   "fieldname": "owner_user",
+   "fieldtype": "Link",
+   "label": "Owner User",
+   "options": "User",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "team_at_obligation",
+   "fieldtype": "Data",
+   "label": "Team At Obligation"
+  },
+  {
+   "fieldname": "attribution_status",
+   "fieldtype": "Select",
+   "label": "Attribution Status",
+   "options": "authoritative\nhistorical_attribution_unknown",
+   "default": "authoritative",
+   "reqd": 1
+  },
+  {
+   "fieldname": "followup_task",
+   "fieldtype": "Link",
+   "label": "Followup Task",
+   "options": "CRM Task"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "open\nfulfilled_on_time\nfulfilled_late\nbreached_open\nbreached_handoff\nhandoff_closed\nsuperseded\nwaived\ncanceled_validly",
+   "default": "open",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "informational_only",
+   "fieldtype": "Check",
+   "label": "Informational Only",
+   "default": "0"
+  },
+  {
+   "fieldname": "is_recovery_obligation",
+   "fieldtype": "Check",
+   "label": "Is Recovery Obligation",
+   "default": "0"
+  },
+  {
+   "fieldname": "handoff_reset_seq",
+   "fieldtype": "Int",
+   "label": "Handoff Reset Seq",
+   "default": "0"
+  },
+  {
+   "fieldname": "handoff_cap_reached",
+   "fieldtype": "Check",
+   "label": "Handoff Cap Reached",
+   "default": "0"
+  },
+  {
+   "fieldname": "reschedule_seq",
+   "fieldtype": "Int",
+   "label": "Reschedule Seq",
+   "default": "0"
+  },
+  {
+   "fieldname": "started_at",
+   "fieldtype": "Datetime",
+   "label": "Started At",
+   "reqd": 1
+  },
+  {
+   "fieldname": "original_due_at",
+   "fieldtype": "Datetime",
+   "label": "Original Due At",
+   "reqd": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "effective_due_at",
+   "fieldtype": "Datetime",
+   "label": "Effective Due At",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "work_item_original_due_at",
+   "fieldtype": "Datetime",
+   "label": "Work Item Original Due At"
+  },
+  {
+   "fieldname": "evaluation_anchor_at",
+   "fieldtype": "Datetime",
+   "label": "Evaluation Anchor At"
+  },
+  {
+   "fieldname": "is_paused",
+   "fieldtype": "Check",
+   "label": "Is Paused",
+   "default": "0"
+  },
+  {
+   "fieldname": "paused_at",
+   "fieldtype": "Datetime",
+   "label": "Paused At"
+  },
+  {
+   "fieldname": "total_paused_business_minutes",
+   "fieldtype": "Float",
+   "label": "Total Paused Business Minutes",
+   "default": "0"
+  },
+  {
+   "fieldname": "fulfilled_at",
+   "fieldtype": "Datetime",
+   "label": "Fulfilled At"
+  },
+  {
+   "fieldname": "fulfilled_by_attempt",
+   "fieldtype": "Link",
+   "label": "Fulfilled By Attempt",
+   "options": "CSKH Contact Attempt"
+  },
+  {
+   "fieldname": "breached_at",
+   "fieldtype": "Datetime",
+   "label": "Breached At"
+  },
+  {
+   "fieldname": "closed_at",
+   "fieldtype": "Datetime",
+   "label": "Closed At"
+  },
+  {
+   "fieldname": "waived_by",
+   "fieldtype": "Link",
+   "label": "Waived By",
+   "options": "User"
+  },
+  {
+   "fieldname": "waived_at",
+   "fieldtype": "Datetime",
+   "label": "Waived At"
+  },
+  {
+   "fieldname": "waive_reason",
+   "fieldtype": "Small Text",
+   "label": "Waive Reason",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "last_alert_stage",
+   "fieldtype": "Data",
+   "label": "Last Alert Stage"
+  },
+  {
+   "fieldname": "alerted_at",
+   "fieldtype": "Datetime",
+   "label": "Alerted At"
+  },
+  {
+   "fieldname": "policy_name_snapshot",
+   "fieldtype": "Data",
+   "label": "Policy Name Snapshot"
+  },
+  {
+   "fieldname": "policy_version_snapshot",
+   "fieldtype": "Int",
+   "label": "Policy Version Snapshot",
+   "default": "1"
+  },
+  {
+   "fieldname": "policy_snapshot_json",
+   "fieldtype": "Long Text",
+   "label": "Policy Snapshot Json",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "calendar_snapshot_json",
+   "fieldtype": "Long Text",
+   "label": "Calendar Snapshot Json",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "audit_events_json",
+   "fieldtype": "Long Text",
+   "label": "Audit Events Json",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "idempotency_key",
+   "fieldtype": "Data",
+   "label": "Idempotency Key",
+   "reqd": 1,
+   "unique": 1
+  }
+ ],
+ "field_order": [
+  "obligation_type",
+  "work_item",
+  "lead",
+  "campaign",
+  "interval_event",
+  "owner_user",
+  "team_at_obligation",
+  "attribution_status",
+  "followup_task",
+  "status",
+  "informational_only",
+  "is_recovery_obligation",
+  "handoff_reset_seq",
+  "handoff_cap_reached",
+  "reschedule_seq",
+  "started_at",
+  "original_due_at",
+  "effective_due_at",
+  "work_item_original_due_at",
+  "evaluation_anchor_at",
+  "is_paused",
+  "paused_at",
+  "total_paused_business_minutes",
+  "fulfilled_at",
+  "fulfilled_by_attempt",
+  "breached_at",
+  "closed_at",
+  "waived_by",
+  "waived_at",
+  "waive_reason",
+  "last_alert_stage",
+  "alerted_at",
+  "policy_name_snapshot",
+  "policy_version_snapshot",
+  "policy_snapshot_json",
+  "calendar_snapshot_json",
+  "audit_events_json",
+  "idempotency_key"
+ ],
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "create": 1,
+   "write": 1,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "System Manager",
+   "read": 1,
+   "write": 1
+  },
+  {
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "CSKH CRM Admin",
+   "read": 1,
+   "write": 0
+  },
+  {
+   "role": "Sales Manager",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  },
+  {
+   "permlevel": 1,
+   "role": "Sales Manager",
+   "read": 1,
+   "write": 0
+  },
+  {
+   "role": "Sales User",
+   "read": 1,
+   "create": 0,
+   "write": 0,
+   "delete": 0,
+   "share": 0,
+   "export": 0,
+   "email": 0,
+   "print": 0
+  }
+ ],
+ "allow_rename": 0,
+ "track_changes": 0,
+ "sort_field": "creation",
+ "sort_order": "DESC",
+ "modified": "2026-11-04 16:00:00.000000",
+ "owner": "Administrator",
+ "modified_by": "Administrator",
+ "links": [],
+ "states": [],
+ "actions": []
+}

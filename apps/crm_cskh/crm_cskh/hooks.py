@@ -28,6 +28,18 @@ P2_DOCTYPES = (
 	"CSKH Attempt Correction",
 )
 
+P3_DOCTYPES = (
+	"CSKH Team Membership History",
+	"CSKH Working Calendar",
+	"CSKH Working Shift",
+	"CSKH SLA Obligation",
+	"CSKH Dirty Scope",
+	"CSKH KPI Run",
+	"CSKH KPI Snapshot",
+	"CSKH QA Review",
+	"CSKH Export Job",
+)
+
 # Fixtures
 # ------------------
 # Metadata do crm_cskh quản lý qua file (P0-B §B2, P1 §6.2, P2 §6).
@@ -139,8 +151,14 @@ fixtures = [
 # Installation & Migration
 # ------------------------
 
-after_install = "crm_cskh.patches.v2_0.p2_schema_and_seeds.execute"
-after_migrate = "crm_cskh.patches.v2_0.p2_schema_and_seeds.execute"
+after_install = [
+	"crm_cskh.patches.v2_0.p2_schema_and_seeds.execute",
+	"crm_cskh.patches.v3_0.p3_schema_and_seeds.execute",
+]
+after_migrate = [
+	"crm_cskh.patches.v2_0.p2_schema_and_seeds.execute",
+	"crm_cskh.patches.v3_0.p3_schema_and_seeds.execute",
+]
 
 # Uninstallation
 # ------------
@@ -230,6 +248,16 @@ doc_events = {
 	"CRM Task": {
 		"validate": "crm_cskh.p2_models.validate_cskh_followup_task",
 		"on_trash": "crm_cskh.p2_models.prevent_cskh_followup_task_trash",
+	},
+	"CRM Sales Hierarchy": {
+		"after_insert": "crm_cskh.services.attribution.on_sales_hierarchy_change",
+		"on_update": "crm_cskh.services.attribution.on_sales_hierarchy_change",
+		"on_trash": "crm_cskh.services.attribution.on_sales_hierarchy_trash",
+	},
+	"CRM Holiday List": {
+		"validate": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
+		"before_save": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
+		"on_trash": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
 	},
 }
 
@@ -390,6 +418,21 @@ auth_hooks = [
 # ignore_translatable_strings_from = []
 
 
+scheduler_events = {
+	"cron": {
+		"*/5 * * * *": [
+			"crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations",
+			"crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes",
+		],
+	},
+	"hourly": [
+		"crm_cskh.jobs.run_export.expire_stale_exports",
+	],
+	"daily": [
+		"crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods",
+	],
+}
+
 # The P1 DocTypes get their row-level scope from `crm_cskh.p1_permissions`
 # (ADR-P1-07). The role permissions themselves live in the DocType JSON.
 permission_query_conditions.update(
@@ -407,6 +450,14 @@ permission_query_conditions.update(
 		"CSKH Policy": "crm_cskh.p2_permissions.policy_query_conditions",
 		"CSKH Contact Attempt": "crm_cskh.p2_permissions.contact_attempt_query_conditions",
 		"CSKH Attempt Correction": "crm_cskh.p2_permissions.attempt_correction_query_conditions",
+		"CSKH Working Calendar": "crm_cskh.p3_permissions.working_calendar_query_conditions",
+		"CSKH Team Membership History": "crm_cskh.p3_permissions.team_membership_history_query_conditions",
+		"CSKH SLA Obligation": "crm_cskh.p3_permissions.sla_obligation_query_conditions",
+		"CSKH Dirty Scope": "crm_cskh.p3_permissions.dirty_scope_query_conditions",
+		"CSKH KPI Run": "crm_cskh.p3_permissions.kpi_run_query_conditions",
+		"CSKH KPI Snapshot": "crm_cskh.p3_permissions.kpi_snapshot_query_conditions",
+		"CSKH QA Review": "crm_cskh.p3_permissions.qa_review_query_conditions",
+		"CSKH Export Job": "crm_cskh.p3_permissions.export_job_query_conditions",
 	}
 )
 
@@ -425,5 +476,13 @@ has_permission.update(
 		"CSKH Policy": "crm_cskh.p2_permissions.policy_has_permission",
 		"CSKH Contact Attempt": "crm_cskh.p2_permissions.contact_attempt_has_permission",
 		"CSKH Attempt Correction": "crm_cskh.p2_permissions.attempt_correction_has_permission",
+		"CSKH Working Calendar": "crm_cskh.p3_permissions.working_calendar_has_permission",
+		"CSKH Team Membership History": "crm_cskh.p3_permissions.team_membership_history_has_permission",
+		"CSKH SLA Obligation": "crm_cskh.p3_permissions.sla_obligation_has_permission",
+		"CSKH Dirty Scope": "crm_cskh.p3_permissions.dirty_scope_has_permission",
+		"CSKH KPI Run": "crm_cskh.p3_permissions.kpi_run_has_permission",
+		"CSKH KPI Snapshot": "crm_cskh.p3_permissions.kpi_snapshot_has_permission",
+		"CSKH QA Review": "crm_cskh.p3_permissions.qa_review_has_permission",
+		"CSKH Export Job": "crm_cskh.p3_permissions.export_job_has_permission",
 	}
 )

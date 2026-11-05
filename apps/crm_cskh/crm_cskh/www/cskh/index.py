@@ -1,4 +1,4 @@
-"""Context of the CSKH landing page (P1 + P2)."""
+"""Context of the CSKH landing page (P1 + P2 + P3)."""
 
 from frappe import _
 
@@ -10,6 +10,6 @@ def get_context(context):
 		context,
 		route="/cskh",
 		title=_("CSKH"),
-		subtitle=_("Customer pool, imports, campaigns, distribution and customer care workflow."),
+		subtitle=_("Customer pool, imports, campaigns, care workflow and SLA/KPI quality."),
 		allowed_roles=READ_ROLES,
 	)

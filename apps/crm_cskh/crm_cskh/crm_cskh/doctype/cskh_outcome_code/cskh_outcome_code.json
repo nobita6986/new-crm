@@ -62,6 +62,18 @@
    "default": "0"
   },
   {
+   "fieldname": "is_conversion",
+   "fieldtype": "Check",
+   "label": "Is Conversion",
+   "default": "0"
+  },
+  {
+   "fieldname": "is_invalid_phone",
+   "fieldtype": "Check",
+   "label": "Is Invalid Phone",
+   "default": "0"
+  },
+  {
    "fieldname": "requires_note",
    "fieldtype": "Check",
    "label": "Requires Note",
@@ -130,6 +142,8 @@
   "is_interested",
   "is_terminal",
   "is_do_not_contact",
+  "is_conversion",
+  "is_invalid_phone",
   "requires_note",
   "requires_followup",
   "allows_followup",

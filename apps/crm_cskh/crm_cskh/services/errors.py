@@ -39,6 +39,19 @@ FOLLOWUP_REQUIRED = "FOLLOWUP_REQUIRED"
 INVALID_FOLLOWUP_TIME = "INVALID_FOLLOWUP_TIME"
 OUTCOME_NOT_COMPATIBLE = "OUTCOME_NOT_COMPATIBLE"
 
+# --- P3 SLA, KPI, QA & reporting error codes (P3 §8.5, report-api-contract) ---
+FORBIDDEN_SCOPE = "FORBIDDEN_SCOPE"
+INVALID_PERIOD = "INVALID_PERIOD"
+INVALID_METRIC = "INVALID_METRIC"
+SNAPSHOT_STALE = "SNAPSHOT_STALE"
+POLICY_CONFLICT = "POLICY_CONFLICT"
+DATA_RECONCILIATION_FAILED = "DATA_RECONCILIATION_FAILED"
+INSUFFICIENT_DATA = "INSUFFICIENT_DATA"
+QA_CONFLICT = "QA_CONFLICT"
+QA_DISABLED = "QA_DISABLED"
+RECOMPUTE_IN_PROGRESS = "RECOMPUTE_IN_PROGRESS"
+EXPORT_EXPIRED = "EXPORT_EXPIRED"
+
 ALL_CODES = (
 	INVALID_PHONE,
 	DUPLICATE,
@@ -70,6 +83,17 @@ ALL_CODES = (
 	FOLLOWUP_REQUIRED,
 	INVALID_FOLLOWUP_TIME,
 	OUTCOME_NOT_COMPATIBLE,
+	FORBIDDEN_SCOPE,
+	INVALID_PERIOD,
+	INVALID_METRIC,
+	SNAPSHOT_STALE,
+	POLICY_CONFLICT,
+	DATA_RECONCILIATION_FAILED,
+	INSUFFICIENT_DATA,
+	QA_CONFLICT,
+	QA_DISABLED,
+	RECOMPUTE_IN_PROGRESS,
+	EXPORT_EXPIRED,
 )
 
 
@@ -99,6 +123,13 @@ def is_transient_tx_abort(exc: BaseException) -> bool:
 def rollback_savepoint_safely(savepoint: str) -> None:
 	"""Roll back `savepoint` without clobbering `1213`/`1020` with `1305 SAVEPOINT does not exist`."""
 	import frappe
+
+	try:
+		local = getattr(frappe, "local", None)
+		if local is not None and hasattr(local, "cskh_pending_dirty_events"):
+			local.cskh_pending_dirty_events = []
+	except Exception:
+		pass
 
 	try:
 		frappe.db.rollback(save_point=savepoint)
@@ -281,3 +312,77 @@ class OutcomeNotCompatible(P1Error):
 	code = OUTCOME_NOT_COMPATIBLE
 	http_status = 422
 	http_status_code = 422
+
+
+class ForbiddenScope(P1Error):
+	code = FORBIDDEN_SCOPE
+	http_status = 403
+	http_status_code = 403
+
+
+class InvalidPeriod(P1Error):
+	code = INVALID_PERIOD
+	http_status = 400
+	http_status_code = 400
+
+
+class InvalidMetric(P1Error):
+	code = INVALID_METRIC
+	http_status = 400
+	http_status_code = 400
+
+
+class SnapshotStale(P1Error):
+	code = SNAPSHOT_STALE
+	http_status = 409
+	http_status_code = 409
+
+
+class PolicyConflict(P1Error):
+	code = POLICY_CONFLICT
+	http_status = 409
+	http_status_code = 409
+
+
+class P3DisabledError(PolicyConflict):
+	"""Raised over HTTP when P3 SLA/Reporting/Export is disabled via site kill switch or CSKH Policy (`F-P3-08`)."""
+
+	code = POLICY_CONFLICT
+	http_status = 503
+	http_status_code = 503
+
+
+class DataReconciliationFailed(P1Error):
+	code = DATA_RECONCILIATION_FAILED
+	http_status = 422
+	http_status_code = 422
+
+
+class InsufficientData(P1Error):
+	code = INSUFFICIENT_DATA
+	http_status = 422
+	http_status_code = 422
+
+
+class QaConflict(P1Error):
+	code = QA_CONFLICT
+	http_status = 403
+	http_status_code = 403
+
+
+class QaDisabled(P1Error):
+	code = QA_DISABLED
+	http_status = 409
+	http_status_code = 409
+
+
+class RecomputeInProgress(P1Error):
+	code = RECOMPUTE_IN_PROGRESS
+	http_status = 409
+	http_status_code = 409
+
+
+class ExportExpired(P1Error):
+	code = EXPORT_EXPIRED
+	http_status = 410
+	http_status_code = 410
