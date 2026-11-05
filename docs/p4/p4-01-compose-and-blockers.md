@@ -5,9 +5,10 @@
 - **Hồ sơ đầu vào đối chiếu:** `P4-00` dự thảo tại `be33e6c931337c42b94184b2fe292e094bd51c97` (`docs/p4/entry-audit.md`, `docs/p4/infra-inventory.md`)
 - **Upstream `frappe_docker` đã ghim:** `v4.0.1` (`2b26e9ab8d751e5ea33bb7b930aea3550bb81ded`)
 - **Trạng thái tổng hợp:**
-  - Kiểm định tĩnh cấu hình Compose, phân tách mạng/volume/site/secrets, kiểm toán cổng và negative gates: **`PASS`** (`docker compose v5.6.1`)
-  - Chạy thực tế container smoke trên dữ liệu giả (`P4-01 §4`): **`BLOCKED`** *(chờ `T0` chốt `P4-00` và chờ `T1B` bàn giao `APP_IMAGE@sha256:...` — kịch bản chạy tự động `run_isolated_smoke.py` đã sẵn sàng)*
-  - Triển khai lên Staging / Production thật: **`BLOCKED`** *(thiếu các đầu vào hạ tầng ngoài kho mã liệt kê tại Mục 3)*
+  - Kiểm định tĩnh cấu hình Compose, phân tách mạng/volume/site/secrets, kiểm toán cổng và 4 negative gates: **`PASS`** (`docker compose v5.6.1`)
+  - Danh mục PII cấp trường theo mã nguồn thực tế (DB, log, attachment, import/export, nơi lưu bản sao): **`COMPLETED`** ([`docs/p4/pii-field-catalog.md`](./pii-field-catalog.md))
+  - Chạy thực tế container smoke trên dữ liệu giả (`P4-01 §4`): **`BLOCKED`** *(chờ `T1B` hoàn tất build & bàn giao `APP_IMAGE` bất biến — kịch bản chạy tự động `run_isolated_smoke.py` đã khớp sẵn cả `<repo>@sha256:<64-hex>` lẫn local image ID `sha256:<64-hex>`)*
+  - Triển khai lên Staging / Production thật: **`BLOCKED`** *(thiếu các đầu vào hạ tầng ngoài kho mã: DNS/TLS, Container Registry, Kho Secret + `encryption_key`, VPS/Firewall và Đích Backup Offsite liệt kê tại Mục 3)*
 
 ---
 
@@ -25,7 +26,8 @@
 | **Vệ sinh Git & Kịch bản kiểm định** | [`deploy/compose/.gitignore`](../../deploy/compose/.gitignore), [`.gitattributes`](../../deploy/compose/.gitattributes) | Chặn commit `.env` thật, `.secrets/`, `*.key`, `*.pem`, `acme.json`; khóa dòng kết thúc `LF`. |
 | | [`deploy/compose/scripts/validate_compose_config.py`](../../deploy/compose/scripts/validate_compose_config.py) | Kiểm định tĩnh provenance upstream, render `config --services` / `config --format json`, kiểm mạng/volume/secret/port và 3 ca negative fail-closed. |
 | | [`deploy/compose/scripts/run_isolated_smoke.py`](../../deploy/compose/scripts/run_isolated_smoke.py) | Kịch bản chạy smoke cô lập đầy đủ ngay khi `T0` chốt `P4-00` và `T1B` bàn giao `APP_IMAGE@sha256`. |
-| **Tài liệu kiến trúc & vận hành** | [`docs/p4/P4-ADR-01-compose-and-isolation.md`](./P4-ADR-01-compose-and-isolation.md) | Quyết định kiến trúc `P4-ADR-01` & `P4-ADR-04`, bảng reuse/override và ma trận cô lập môi trường. |
+| **Tài liệu kiến trúc & bảo vệ dữ liệu** | [`docs/p4/P4-ADR-01-compose-and-isolation.md`](./P4-ADR-01-compose-and-isolation.md) | Quyết định kiến trúc `P4-ADR-01` & `P4-ADR-04`, hợp đồng biến nhận image phối hợp với `T1B`, bảng reuse/override và ma trận cô lập môi trường. |
+| | [`docs/p4/pii-field-catalog.md`](./pii-field-catalog.md) | Danh mục PII cấp trường kiểm chứng trực tiếp từ mã nguồn (Frappe + `crm` + 23 DocType `CSKH *`, log, attachment, import/export và 9 nơi lưu bản sao). |
 
 ---
 
@@ -96,15 +98,14 @@ Theo yêu cầu `P4.md` (§0.12, §§1–5, §18) và đối chiếu hồ sơ `P
 | **`BLK-INFRA-05`** | **Đích Backup Mã hóa Ngoài VPS & Quyền Restore** | **`BLOCKED`** | Chưa có kho lưu trữ đích ngoài VPS chính (S3 / Backblaze B2 / Cloudflare R2 / SFTP tách biệt vật lý), chưa có khóa mã hóa bản sao lưu (`restic` password / `gpg` key), chưa tách biệt khóa ghi backup hằng ngày với khóa xóa/khôi phục chống ransomware, và chưa có chỉ tiêu **RPO / RTO / lịch giữ bản sao** được Owner phê duyệt. | URI kho offsite, credential phân tách quyền và chữ ký chốt RPO/RTO phục vụ `P4-02`. |
 | **`BLK-GOV-06`** | **Đầu mối Vận hành, Ký UAT & Quyền Go-Live / Rollback** | **`BLOCKED`** | Theo `entry-audit.md` (`be33e6c` §4), chưa ghi nhận danh tính cụ thể của người chịu trách nhiệm vận hành ngày 2, đầu mối ký UAT nghiệp vụ và đầu mối quyết định cutover/rollback. | Danh sách vai trò & đầu mối được Owner/T0 xác nhận trong `P4-00`. |
 
-### 3.2. Nhóm Điều kiện Tiên quyết Để Thực thi Smoke Cô lập Runtime (`P4-01 §4`)
+### 3.2. Điều kiện Tiên quyết Để Thực thi Smoke Cô lập Runtime Cục bộ (`P4-01 §4`)
 
 | Mã Blocker | Phụ thuộc phối hợp nội bộ | Trạng thái hiện tại | Ghi nhận thực tế tại thời điểm bàn giao | Điều kiện gỡ để chạy live smoke ngay |
 | :--- | :--- | :---: | :--- | :--- |
-| **`BLK-RUNTIME-01`** | **`T0` chốt hồ sơ `P4-00`** | **`BLOCKED`** | Hồ sơ `P4-00` đang ở bản dự thảo `be33e6c931337c42b94184b2fe292e094bd51c97` trên nhánh `codex/p4-entry-audit` (`P4-00: IN PROGRESS`), chưa được `T0` chốt/merge. | `T0` cung cấp SHA `P4-00` đã chốt (`--p4-00-approved-sha <SHA>`). |
-| **`BLK-RUNTIME-02`** | **`T1B` bàn giao custom image theo `@sha256` digest** | **`BLOCKED`** | Nhánh `codex/p4-01-image` đang ở baseline `92e14af` và trên Docker Engine máy trạm (`v29.9.2`) chưa có image ứng dụng tùy biến đóng gói `frappe` + `crm` + `crm_cskh` + assets đã build. | `T1B` bàn giao digest bất biến `<repo>@sha256:<64-hex>` (`--app-image <DIGEST>`). |
+| **`BLK-RUNTIME-01`** | **`T1B` hoàn tất build & bàn giao `APP_IMAGE` bất biến** | **`BLOCKED`** | `T1B` đang thực thi bản dựng trong `codex/p4-01-image` (`deploy/images/`); trên Docker Engine máy trạm (`v29.9.2`) hiện chưa có custom image hoàn tất đóng gói `frappe` + `crm` + `crm_cskh` + assets đã build. Hợp đồng biến `APP_IMAGE` & `PULL_POLICY` giữa `T1A` và `T1B` đã khớp 100%. | `T1B` bàn giao digest `<repo>@sha256:<64-hex>` hoặc local immutable ID `sha256:<64-hex>` (`--app-image <IMMUTABLE_IMAGE>`). |
 
 > [!IMPORTANT]
-> Docker Engine trên máy trạm hiện đang hoạt động (`v29.9.2`), các container cũ của Owner đều giữ nguyên không can thiệp. Ngay khi `BLK-RUNTIME-01` và `BLK-RUNTIME-02` được cung cấp, lệnh một bước tại Mục 4.2 sẽ tự động dựng stack cô lập `crm-cskh-p4-smoke` trên cổng loopback `127.0.0.1:18080`, nạp dữ liệu giả và xuất báo cáo JSON đầy đủ.
+> Docker Engine trên máy trạm hiện đang hoạt động (`v29.9.2`), các container cũ của Owner đều giữ nguyên không can thiệp. Ngay khi `T1B` bàn giao `APP_IMAGE`, lệnh một bước tại Mục 4.2 sẽ tự động dựng stack cô lập `crm-cskh-p4-smoke` trên cổng loopback `127.0.0.1:18080`, nạp dữ liệu giả và xuất báo cáo JSON đầy đủ.
 
 ---
 
@@ -113,19 +114,25 @@ Theo yêu cầu `P4.md` (§0.12, §§1–5, §18) và đối chiếu hồ sơ `P
 ### 4.1. Kiểm định Tĩnh Ngoại tuyến & Preflight (Chạy được ngay, không chạm container Owner)
 
 ```bash
-# 1. Kiểm định toàn bộ provenance upstream, config --services, mạng, volume, secret, cổng và negative gates:
+# 1. Kiểm định toàn bộ provenance upstream, config --services, mạng, volume, secret, cổng và 4 negative gates:
 python deploy/compose/scripts/validate_compose_config.py
 
 # 2. Kiểm tra trạng thái preflight và danh sách blocker runtime hiện thời:
 python deploy/compose/scripts/run_isolated_smoke.py --preflight-only
 ```
 
-### 4.2. Chạy Kiểm thử Smoke Cô lập Dữ liệu Giả Ngay khi `T0` Chốt `P4-00` & `T1B` Có Image
+### 4.2. Chạy Kiểm thử Smoke Cô lập Dữ liệu Giả Ngay khi Nhận Image từ `T1B`
 
 ```bash
+# Trường hợp A — Nhận local immutable image ID từ T1B (khi chưa push registry, tự động bật PULL_POLICY=never):
 python deploy/compose/scripts/run_isolated_smoke.py \
-  --p4-00-approved-sha <P4_00_APPROVED_SHA> \
-  --app-image <REPO>@sha256:<64_HEX_DIGEST_FROM_T1B> \
+  --app-image sha256:<64_HEX_IMAGE_ID_FROM_T1B> \
+  --http-port 18080 \
+  --report-out /tmp/p4-01-isolated-smoke-report.json
+
+# Trường hợp B — Nhận registry digest từ T1B:
+python deploy/compose/scripts/run_isolated_smoke.py \
+  --app-image <REGISTRY>/<NAMESPACE>/crm-cskh@sha256:<64_HEX_DIGEST_FROM_T1B> \
   --http-port 18080 \
   --report-out /tmp/p4-01-isolated-smoke-report.json
 ```

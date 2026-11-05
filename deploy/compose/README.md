@@ -63,17 +63,17 @@ docker compose \
 
 ---
 
-## 3. Lệnh Chạy Smoke Cô lập Khi Đủ Đầu vào (`P4-00` + `APP_IMAGE@sha256`)
+## 3. Lệnh Chạy Smoke Cô lập Khi Nhận Image từ `T1B` (`APP_IMAGE`)
 
 ```bash
 # 1. Kiểm tra preflight & danh sách blocker hiện tại:
 python deploy/compose/scripts/run_isolated_smoke.py --preflight-only
 
-# 2. Chạy full smoke trên site giả lập p4-smoke.localhost (cổng loopback 127.0.0.1:18080):
+# 2. Chạy full smoke trên site giả lập p4-smoke.localhost (cổng loopback 127.0.0.1:18080)
+#    Chấp nhận cả <repo>@sha256:<64-hex> lẫn local image ID sha256:<64-hex> do T1B bàn giao:
 python deploy/compose/scripts/run_isolated_smoke.py \
-  --p4-00-approved-sha <SHA_P4_00_DA_CHOT> \
-  --app-image <REPO>@sha256:<ACTUAL_64_HEX_DIGEST_FROM_T1B> \
+  --app-image <REPO_AT_SHA256_OR_LOCAL_SHA256_ID_FROM_T1B> \
   --report-out /tmp/p4-01-isolated-smoke-report.json
 ```
 
-Xem chi tiết kiến trúc, bảng reuse/override và danh mục blocker hạ tầng tại [`docs/p4/P4-ADR-01-compose-and-isolation.md`](../../docs/p4/P4-ADR-01-compose-and-isolation.md) và [`docs/p4/p4-01-compose-and-blockers.md`](../../docs/p4/p4-01-compose-and-blockers.md).
+Xem chi tiết kiến trúc, hợp đồng biến nhận image với `T1B`, danh mục PII cấp trường và danh mục blocker hạ tầng tại [`docs/p4/P4-ADR-01-compose-and-isolation.md`](../../docs/p4/P4-ADR-01-compose-and-isolation.md), [`docs/p4/pii-field-catalog.md`](../../docs/p4/pii-field-catalog.md) và [`docs/p4/p4-01-compose-and-blockers.md`](../../docs/p4/p4-01-compose-and-blockers.md).
