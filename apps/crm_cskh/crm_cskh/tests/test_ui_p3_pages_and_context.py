@@ -133,6 +133,46 @@ class TestUiP3PagesAndContext(P2TestCase):
 				with self.assertRaises(frappe.PermissionError):
 					mod.get_context(self._fresh_ctx())
 
+		# Also verify unified `CSKH Policy` flag rollback (`p3_flags.py` single source of truth)
+		pol_name = frappe.db.get_value(
+			"CSKH Policy",
+			{"scope_type": "Global", "enabled": 1},
+			"name",
+			order_by="version desc, modified desc",
+		)
+		self.assertTrue(pol_name)
+		orig_vals = frappe.db.get_value(
+			"CSKH Policy", pol_name, ["p3_reporting_enabled", "p3_sla_enabled"], as_dict=True
+		)
+		try:
+			with mock.patch.dict(frappe.conf, {}, clear=False):
+				frappe.conf.pop("cskh_p3_enabled", None)
+				frappe.conf.pop("p3_enabled", None)
+				frappe.conf.pop("p3_reporting_enabled", None)
+				frappe.conf.pop("p3_sla_enabled", None)
+				frappe.db.set_value(
+					"CSKH Policy",
+					pol_name,
+					{"p3_reporting_enabled": 0, "p3_sla_enabled": 0},
+					update_modified=False,
+				)
+				self.assertFalse(cskh_context.is_p3_enabled("/cskh/quality-overview"))
+				self.assertFalse(cskh_context.is_p3_enabled("/cskh/sla-operations"))
+				with self.assertRaises(frappe.PermissionError):
+					quality_overview_page.get_context(self._fresh_ctx())
+		finally:
+			frappe.db.set_value(
+				"CSKH Policy",
+				pol_name,
+				{
+					"p3_reporting_enabled": 1
+					if orig_vals.p3_reporting_enabled is None
+					else orig_vals.p3_reporting_enabled,
+					"p3_sla_enabled": 1 if orig_vals.p3_sla_enabled is None else orig_vals.p3_sla_enabled,
+				},
+				update_modified=False,
+			)
+
 	def test_qa_enabled_flag_defaults_false_and_publishes_p3_vietnamese_catalogue(self):
 		frappe.set_user(self.bod_user)
 		with mock.patch.dict(frappe.conf, {}, clear=False):

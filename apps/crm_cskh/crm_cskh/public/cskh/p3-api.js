@@ -1,7 +1,7 @@
 /* P3 Reporting, SLA, Drill-Down & Export API Adapter (`window.cskhP3Api`).
 
    Aligned 100% with frozen `docs/p3/report-api-contract.md` and `docs/p3/kpi-dictionary.md`
-   (committed SHA `a50390ae263190a3d27ea71ea9750c0d748407a6`, metric_version `cskh-metrics-v1`).
+   (metric_version `cskh-metrics-v2`).
 
    Invariants enforced here:
      * Frontend NEVER defines or computes KPI formulas, weights, or rates:
@@ -372,6 +372,10 @@ window.cskhP3Api = (function () {
 	METRIC_CATALOG_DEFAULTS.sla_waiver_count = METRIC_CATALOG_DEFAULTS.SLA_WAIVER_COUNT
 	METRIC_CATALOG_DEFAULTS.first_attempt_latency_business_minutes =
 		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES
+	METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_P50_MINUTES =
+		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES
+	METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_P90_MINUTES =
+		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES
 	METRIC_CATALOG_DEFAULTS.first_attempt_latency_wall_minutes =
 		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_WALL_MINUTES
 
@@ -477,7 +481,7 @@ window.cskhP3Api = (function () {
 			calculated_at: fresh.calculated_at || fresh.as_of || r.calculated_at || '',
 			source_watermark: fresh.source_watermark || r.source_watermark || '',
 			freshness_status: freshnessStatus,
-			metric_version: fresh.metric_version || r.metric_version || 'cskh-metrics-v1',
+			metric_version: fresh.metric_version || r.metric_version || 'cskh-metrics-v2',
 			policy_version:
 				policy.policy_version || fresh.policy_version || policy.config_stage || 'DEV_CONFIGURABLE',
 			policy_message_vi: policy.message_vi || '',
@@ -624,7 +628,7 @@ window.cskhP3Api = (function () {
 			as_of: raw.as_of || env.as_of || '',
 			calculated_at: raw.calculated_at || env.calculated_at || env.as_of || '',
 			source_watermark: raw.source_watermark || env.source_watermark || '',
-			metric_version: raw.metric_version || env.metric_version || 'cskh-metrics-v1',
+			metric_version: raw.metric_version || env.metric_version || 'cskh-metrics-v2',
 			policy_version: raw.policy_version || env.policy_version || 'DEV_CONFIGURABLE',
 			status:
 				isNa && (normalizedStatus === 'fresh' || normalizedStatus === 'ok')
@@ -948,7 +952,15 @@ window.cskhP3Api = (function () {
 				}
 			}
 
-			const alerts = toArray(raw.alerts || raw.anomalies).slice()
+			const alerts = toArray(raw.alerts || raw.anomalies).map(function (al) {
+				if (!al || typeof al !== 'object') return { code: '', severity: 'info', message: String(al || '') }
+				return {
+					code: al.code || '',
+					severity: al.severity || 'info',
+					count: al.count !== undefined ? al.count : null,
+					message: al.message || al.message_vi || al.code || '',
+				}
+			})
 			if (!alerts.length) {
 				const backlogM = metrics.byKey.OVERDUE_BACKLOG || metrics.byKey.OVERDUE_WORK_ITEM_BACKLOG
 				const breachM = metrics.byKey.SLA_BREACH_COUNT || metrics.byKey.BREACH_COUNT
@@ -1153,7 +1165,7 @@ window.cskhP3Api = (function () {
 						Object.assign({}, s, {
 							metric_key: targetMetric,
 							segment: targetSegment,
-							sla_status: s.sla_status || '',
+							search: s.search || s.sla_status || '',
 							page: s.page || 1,
 							page_size: s.page_size || 20,
 						})
@@ -1252,14 +1264,16 @@ window.cskhP3Api = (function () {
 				const isIncluded =
 					c.included !== undefined
 						? Boolean(c.included)
-						: c.status !== 'disabled' &&
-							c.status !== 'insufficient_data' &&
-							rateVal !== null &&
-							rateVal !== undefined
+						: c.participates !== undefined
+							? Boolean(c.participates)
+							: c.status !== 'disabled' &&
+								c.status !== 'insufficient_data' &&
+								rateVal !== null &&
+								rateVal !== undefined
 				return {
 					key: code,
 					component_code: code,
-					component_label: c.component_label || c.label || '',
+					component_label: c.component_label || c.label_vi || c.label || '',
 					metric_key: mappedMetricKey,
 					included: isIncluded,
 					value: rateVal,
@@ -1287,38 +1301,49 @@ window.cskhP3Api = (function () {
 				}
 			})
 
+			function pickNonNull(candidates) {
+				for (let i = 0; i < candidates.length; i += 1) {
+					const v = candidates[i]
+					if (v !== undefined && v !== null) return v
+				}
+				return null
+			}
+
 			const rawScorePayload = (raw.metrics && raw.metrics.PROCESS_SCORE) || raw.score || {}
-			const rawPointsTotal =
-				raw.raw_points_total !== undefined
-					? raw.raw_points_total
-					: raw.raw_weighted_points !== undefined
-						? raw.raw_weighted_points
-						: raw.raw_weighted_sum !== undefined
-							? raw.raw_weighted_sum
-							: rawScorePayload.raw_points_total !== undefined
-								? rawScorePayload.raw_points_total
-								: rawScorePayload.raw_weighted_points !== undefined
-									? rawScorePayload.raw_weighted_points
-									: rawScorePayload.raw_weighted_sum !== undefined
-										? rawScorePayload.raw_weighted_sum
-										: rawScorePayload.numerator !== undefined &&
-											  Number(rawScorePayload.numerator) <= 100
-											? rawScorePayload.numerator
-											: null
-			const validWeightSum =
-				raw.valid_weight !== undefined
-					? raw.valid_weight
-					: raw.valid_weight_sum !== undefined
-						? raw.valid_weight_sum
-						: scoreObj && scoreObj.valid_weight_sum !== undefined
-							? scoreObj.valid_weight_sum
-							: null
+			const rawPointsTotal = pickNonNull([
+				raw.raw_points_total,
+				raw.raw_weighted_points,
+				raw.raw_weighted_sum,
+				rawScorePayload.raw_points_total,
+				rawScorePayload.raw_weighted_points,
+				rawScorePayload.raw_weighted_sum,
+				rawScorePayload.numerator !== undefined &&
+				rawScorePayload.numerator !== null &&
+				Number(rawScorePayload.numerator) <= 100
+					? rawScorePayload.numerator
+					: null,
+			])
+			const validWeightSum = pickNonNull([
+				raw.valid_weight,
+				raw.valid_weight_sum,
+				scoreObj && scoreObj.valid_weight_sum,
+				rawScorePayload.valid_weight,
+				rawScorePayload.denominator,
+			])
+			if (
+				scoreObj &&
+				(scoreObj.valid_weight_sum === null || scoreObj.valid_weight_sum === undefined) &&
+				validWeightSum !== null
+			) {
+				scoreObj.valid_weight_sum = Number(validWeightSum)
+			}
 			const configuredWeightTotal =
-				raw.configured_weight_total !== undefined
-					? raw.configured_weight_total
-					: rawScorePayload.configured_weight_total !== undefined
-						? rawScorePayload.configured_weight_total
-						: 100
+				pickNonNull([
+					raw.configured_weight_total,
+					raw.total_configured_weight,
+					rawScorePayload.configured_weight_total,
+					rawScorePayload.total_configured_weight,
+				]) || 100
 
 			const activeObs = toArray(
 				raw.active_obligations || raw.actionable_obligations || raw.obligations
