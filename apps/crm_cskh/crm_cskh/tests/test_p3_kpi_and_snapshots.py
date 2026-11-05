@@ -24,7 +24,7 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import frappe
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_to_date, get_datetime, now_datetime
 
 from crm_cskh.jobs.reconcile_metrics import reconcile_published_period
 from crm_cskh.p3_models import authorized_sla_write
@@ -240,6 +240,7 @@ class TestP3KPIAndSnapshots(P3TestCase):
 
 	def test_effective_attempts_no_call_log_double_count_and_aba_distinct_grain(self):
 		"""`P3-04`: `CRM Call Log` is never double-counted; `A -> B -> A` yields `1` `DISTINCT Work Item` vs `3` intervals."""
+		window_start = today_hcm()
 		wi_aba, lead_aba = self.make_assigned_work_item(self.campaign, self.staff_a)
 
 		# Insert an unlinked native `CRM Call Log` on `lead_aba` -> must NOT count as a CSKH Contact Attempt!
@@ -318,17 +319,27 @@ class TestP3KPIAndSnapshots(P3TestCase):
 			actor=self.staff_a,
 		)
 
-		cur_d = today_hcm()
-		p_daily = resolve_period_spec("daily", cur_d.isoformat())
-		res_global = execute_kpi_recompute(p_daily, actor=self.admin_user)
+		# After hours the SLA deadline falls on a later business day.
+		# Include both the activity and deadline cohorts, regardless of CI start time.
+		deadline = frappe.db.get_value(
+			"CSKH SLA Obligation",
+			{"work_item": wi_aba, "obligation_type": "FIRST_ATTEMPT"},
+			"effective_due_at",
+		)
+		self.assertIsNotNone(deadline, "Expected first-attempt SLA obligation for the test work item")
+		as_of = max(now_datetime(), get_datetime(deadline))
+		period = resolve_period_spec("custom", from_date=window_start, to_date=today_hcm(as_of))
+		res_global = execute_kpi_recompute(period, as_of=as_of, actor=self.admin_user)
 		self.assertEqual(res_global["status"], "completed")
-		res_camp = execute_kpi_recompute(p_daily, campaign_filter=self.campaign, actor=self.admin_user)
+		res_camp = execute_kpi_recompute(
+			period, as_of=as_of, campaign_filter=self.campaign, actor=self.admin_user
+		)
 		self.assertEqual(res_camp["status"], "completed")
 
 		comp = self._get_published_snapshot(
-			"daily", cur_d.isoformat(), "company", COMPANY_SCOPE_ID, campaign_filter=self.campaign
+			period.period_type, period.period_key, "company", COMPANY_SCOPE_ID, campaign_filter=self.campaign
 		)
-		camp = self._get_published_snapshot("daily", cur_d.isoformat(), "campaign", self.campaign)
+		camp = self._get_published_snapshot(period.period_type, period.period_key, "campaign", self.campaign)
 
 		# 2 CSKH Contact Attempts (despite 2 CRM Call Logs existing: 1 unlinked + 1 linked -> ZERO double count!)
 		# Pending correction on `att1` stays `self_reported`; P2 `verified` on `att2` is preserved even with `qa_enabled=false` (`F-P3-03`)!
