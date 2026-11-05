@@ -63,6 +63,12 @@ P3_PERIOD_AND_FILTERS = (
 	"Ascending",
 	"Descending",
 	"Filter by work item ID...",
+	"Company-wide",
+	"Company-wide (BOD)",
+	"CRM system administration",
+	"Managed team scope",
+	"Employee scope",
+	"Campaign scope",
 )
 
 P3_PILLARS_AND_METRICS = (
@@ -128,7 +134,9 @@ P3_CONFIDENCE_AND_BANNERS = (
 	"N/A",
 	"N/A — No eligible denominator (0/0)",
 	"N/A — QA disabled",
+	"N/A — Policy disabled",
 	"N/A — Insufficient sample",
+	"BOD read-only mode: customer PII is redacted and SLA mutation actions are disabled by authorization policy.",
 	"Finalized score group (ranked within finalized only)",
 	"Provisional score group (not ranked with finalized)",
 	"Insufficient data group (N/A — unranked)",
@@ -232,6 +240,10 @@ P3_SCORECARD_AND_CHARTS = (
 	"Weight",
 	"My rate",
 	"Weighted contribution",
+	"Raw weighted points",
+	"Normalized contribution (0-100)",
+	"Open overdue SLA obligations require attention in the selected scope.",
+	"Disputed contact attempts or pending correction requests exist in this period.",
 	"Actionable SLA obligations & callbacks",
 	"Go to My Customers",
 	"Go to Callbacks Schedule",

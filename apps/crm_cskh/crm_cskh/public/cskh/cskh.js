@@ -857,13 +857,21 @@ window.cskh = (function () {
 	}
 
 	function scopeLabel(value) {
+		const normalized = String(value || '').trim().toLowerCase()
 		const map = {
-			system: 'Whole installation',
-			all: 'Whole installation',
-			team: 'Team scope',
-			self: 'Only my own data',
+			system: t('Whole installation'),
+			all: t('Whole installation'),
+			company: t('Company-wide'),
+			bod: t('Company-wide (BOD)'),
+			crm_admin: t('CRM system administration'),
+			team: t('Team scope'),
+			team_leader: t('Managed team scope'),
+			employee: t('Employee scope'),
+			campaign: t('Campaign scope'),
+			self: t('Only my own data'),
+			staff: t('Only my own data'),
 		}
-		return map[value] ? t(map[value]) : value || '—'
+		return map[normalized] ? map[normalized] : value || '—'
 	}
 
 	function campaignStatusLabel(value) {

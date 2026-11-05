@@ -682,7 +682,7 @@
 
 .cskh-kpi-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(265px, 1fr));
 	gap: 12px;
 }
 
@@ -775,18 +775,40 @@
 .cskh-kpi-provenance dl {
 	margin: 0;
 	display: grid;
-	grid-template-columns: auto 1fr;
-	gap: 3px 10px;
+	grid-template-columns: minmax(0, 1fr);
+	gap: 2px;
 }
 
 .cskh-kpi-provenance dt {
 	color: var(--cskh-muted);
 	font-weight: 600;
+	margin-top: 5px;
+}
+
+.cskh-kpi-provenance dt:first-child {
+	margin-top: 0;
 }
 
 .cskh-kpi-provenance dd {
-	margin: 0;
-	word-break: break-word;
+	margin: 0 0 2px;
+	min-width: 0;
+	overflow-wrap: anywhere;
+	word-break: normal;
+}
+
+@media (min-width: 640px) {
+	.cskh-modal .cskh-kpi-provenance dl {
+		grid-template-columns: minmax(160px, 220px) minmax(0, 1fr);
+		gap: 4px 12px;
+	}
+
+	.cskh-modal .cskh-kpi-provenance dt {
+		margin-top: 0;
+	}
+
+	.cskh-modal .cskh-kpi-provenance dd {
+		margin: 0;
+	}
 }
 
 .cskh-kpi-foot {

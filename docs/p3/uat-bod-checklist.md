@@ -25,7 +25,7 @@
 - [ ] **UAT-BOD-08 (Chế độ tắt QA `qa_enabled = false` & Điểm Tạm tính `86,47` — `F22`, `G09`, `G10`):**
   - Màn hình hiển thị thông báo rõ ràng rằng kiểm định mẫu QA đang tắt theo cấu hình (`qa_enabled = false`), không tạo phiếu QA giả và không tự biến `Nhân viên tự báo cáo` thành `Đã xác minh`.
   - Chỉ số `Tỷ lệ kiểm định QA đạt chuẩn` hiển thị `N/A (Chưa bật QA)`.
-  - Với ca mẫu chuẩn (`FIRST_ATTEMPT_SLA_RATE = 90%` × `25`, `FOLLOWUP_SLA_RATE = 70%` × `20`, `VALID_OUTCOME_LOGGING_RATE = 95%` × `20`, `C4_CALLBACK_DNC_DISCIPLINE = 90%` × `20`, `C5_QA_QUALITY` trọng số `15` loại khỏi mẫu số khi tắt QA), `Điểm tuân thủ quy trình` (`PROCESS_SCORE`) hiển thị **`86,47 — Tạm tính; thiếu mẫu QA`** (`7.350 / 85`).
+  - Với vector chuẩn [`P3.md`](../root-plan/P3.md) §7.5 (`FIRST_ATTEMPT_SLA_RATE = 90% [9/10]` × trọng số `25` = `22,50`; `ELIGIBLE_COVERAGE = 80% [8/10]` × `20` = `16,00`; `VALID_OUTCOME_LOGGING_RATE = 100%` × `20` = `20,00`; `FOLLOWUP_SLA_RATE = 75% [3/4]` × `20` = `15,00`; `QA_PASS_RATE` trọng số `15` loại khỏi mẫu số khi tắt QA), tổng điểm trọng số thô đạt **`73,50 / 85`** và `Điểm tuân thủ quy trình` (`PROCESS_SCORE`) hiển thị **`86,47 — Tạm tính; thiếu mẫu QA`** (tách bạch điểm thô `0..weight` với điểm đóng góp sau chuẩn hóa thang `0–100`).
 - [ ] **UAT-BOD-09 (Không xếp chung điểm `Tạm tính` với `Đã chốt` — `G09`, `G12`):** Trên bảng `/cskh/employee-quality`, các nhân viên có điểm `Đã chốt` (`finalized`), `Tạm tính` (`provisional`), và `Chưa đủ dữ liệu` (`insufficient_data` / `N/A`) được tách nhóm riêng biệt, không trộn chung thứ hạng.
 - [ ] **UAT-BOD-10 (Tách riêng Ba Trụ cột & Phân biệt `Nhân viên tự báo cáo` / `Đã xác minh` / `Đang tranh chấp` — `G15`):**
   - Giao diện tách riêng 3 khối: **(1) Tuân thủ quy trình & SLA**, **(2) Hiệu quả kết nối & chuyển đổi**, **(3) Độ tin cậy dữ liệu & QA**.
@@ -40,7 +40,7 @@
 - [ ] **UAT-BOD-12 (Drill-down khớp tuyệt đối tử số/mẫu số trên ít nhất 5 chỉ số trọng yếu — `G13`):**
   1. `Tỷ lệ liên hệ lần đầu đúng hạn` (`FIRST_ATTEMPT_SLA_RATE` / `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE`, ví dụ `80/100`): bấm mở danh sách nghĩa vụ `FIRST_ATTEMPT` đủ điều kiện thấy tổng `100` dòng, lọc tab `Đạt` = `80`, tab `Không đạt` = `20` (phân trang từ server trước `LIMIT/OFFSET`).
   2. `Tỷ lệ chăm sóc đúng lịch hẹn` (`FOLLOWUP_SLA_RATE`): truy được các nghĩa vụ `FOLLOWUP` và đối chiếu hạn `CRM Task`.
-  3. `Tỷ lệ kết nối thành công` (`CONNECTED_RATE` / `CONTACT_ATTEMPT_COUNT`): truy được các lần liên hệ hiệu lực có kết nối hai chiều vs chưa kết nối (gửi Zalo/SMS chưa phản hồi nằm ở nhóm chưa kết nối).
+  3. `Tỷ lệ kết nối thành công` (`CONNECTED_RATE`, đơn vị `Ownership Interval`: `connected_intervals / tried_intervals`, ví dụ `41 / 49 = 83,67%`) & `Số lần thử liên hệ hiệu lực` (`CONTACT_ATTEMPT_COUNT`): truy được các khoảng phụ trách đã kết nối hai chiều vs đã thử nhưng chưa kết nối (không chia cho tổng số cuộc gọi; gửi Zalo/SMS chưa phản hồi nằm ở nhóm chưa kết nối).
   4. `Tỷ lệ cập nhật kết quả đầy đủ` (`VALID_OUTCOME_LOGGING_RATE` / `CORRECTION_RATE`): truy được các lần liên hệ hợp lệ vs đã hiệu chỉnh/vô hiệu.
   5. `Tỷ lệ hoàn tất lịch hẹn` & `Tỷ lệ tuân thủ DNC` (`CALLBACK_COMPLETION_RATE`, `DNC_COMPLIANCE_RATE`): truy được các nghĩa vụ lịch hẹn và khoảng phụ trách tuân thủ quy tắc DNC/đóng hợp lệ.
 - [ ] **UAT-BOD-13 (Tính lại có kiểm toán & Hiển thị `Đã tính lại kỳ cũ — Restated` — `F08`, `F30`, `G11`):**
