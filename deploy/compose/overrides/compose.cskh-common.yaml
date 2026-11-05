@@ -1,0 +1,264 @@
+# deploy/compose/overrides/compose.cskh-common.yaml
+#
+# P4-01 CRM-CSKH Production / Staging / Isolated-Smoke Common Hardening Override.
+# Layered on top of unmodified upstream frappe/frappe_docker@v4.0.1
+# (commit 2b26e9ab8d751e5ea33bb7b930aea3550bb81ded):
+#   - upstream/frappe_docker/compose.yaml
+#   - upstream/frappe_docker/overrides/compose.mariadb.yaml
+#   - upstream/frappe_docker/overrides/compose.mariadb-secrets.yaml
+#   - upstream/frappe_docker/overrides/compose.redis.yaml
+#   - upstream/frappe_docker/overrides/compose.migrator.yaml
+
+name: ${COMPOSE_PROJECT_NAME:?set COMPOSE_PROJECT_NAME in env}
+
+x-cskh-logging: &cskh_logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-20m}
+    max-file: "${LOG_MAX_FILE:-5}"
+
+x-cskh-app-common: &cskh_app_common
+  image: ${APP_IMAGE:?set APP_IMAGE to immutable repo@sha256:digest delivered by T1B}
+  pull_policy: ${PULL_POLICY:-missing}
+  security_opt:
+    - no-new-privileges:true
+  logging: *cskh_logging
+
+services:
+  configurator:
+    <<: *cskh_app_common
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    networks:
+      - data_net
+
+  migrator:
+    <<: *cskh_app_common
+    profiles:
+      - migrate
+    command:
+      - >
+        if [ "$$MIGRATE_SITES" != "true" ]; then
+          echo "[migrator] MIGRATE_SITES!=true; refusing automatic migration.";
+          exit 0;
+        fi;
+        if [ -z "$$SITE_NAME" ] || [ ! -f "sites/$$SITE_NAME/site_config.json" ]; then
+          echo "[migrator] Target site $$SITE_NAME not initialized; aborting.";
+          exit 1;
+        fi;
+        echo "[migrator] Running controlled migration for site $$SITE_NAME";
+        bench --site "$$SITE_NAME" migrate;
+    environment:
+      MIGRATE_SITES: ${MIGRATE_SITES:-false}
+      SITE_NAME: ${SITE_NAME:?set SITE_NAME in env}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    networks:
+      - data_net
+
+  backend:
+    <<: *cskh_app_common
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    mem_limit: ${BACKEND_MEM_LIMIT:-2g}
+    cpus: ${BACKEND_CPUS:-2.0}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS -H "Host:${SITE_NAME}" http://127.0.0.1:8000/api/method/ping | grep -q pong
+      start_period: 60s
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app_net
+      - data_net
+
+  frontend:
+    <<: *cskh_app_common
+    environment:
+      FRAPPE_SITE_NAME_HEADER: ${SITE_NAME:?set SITE_NAME in env}
+      UPSTREAM_REAL_IP_ADDRESS: ${UPSTREAM_REAL_IP_ADDRESS:-172.16.0.0/12}
+      UPSTREAM_REAL_IP_HEADER: ${UPSTREAM_REAL_IP_HEADER:-X-Forwarded-For}
+      UPSTREAM_REAL_IP_RECURSIVE: ${UPSTREAM_REAL_IP_RECURSIVE:-off}
+      CLIENT_MAX_BODY_SIZE: ${CLIENT_MAX_BODY_SIZE:-25m}
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    mem_limit: ${FRONTEND_MEM_LIMIT:-512m}
+    cpus: ${FRONTEND_CPUS:-1.0}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - curl -fsS -H "Host:${SITE_NAME}" http://127.0.0.1:${NGINX_LISTEN_PORT:-8080}/api/method/ping | grep -q pong
+      start_period: 30s
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - edge_net
+      - app_net
+
+  websocket:
+    <<: *cskh_app_common
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    mem_limit: ${WEBSOCKET_MEM_LIMIT:-512m}
+    cpus: ${WEBSOCKET_CPUS:-1.0}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - node -e "const net=require('net');const s=net.connect(9000,'127.0.0.1',()=>{s.end();process.exit(0)});s.on('error',()=>process.exit(1));"
+      start_period: 30s
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      - edge_net
+      - app_net
+      - data_net
+
+  queue-short:
+    <<: *cskh_app_common
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    mem_limit: ${QUEUE_SHORT_MEM_LIMIT:-1g}
+    cpus: ${QUEUE_SHORT_CPUS:-1.0}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - tr '\0' ' ' < /proc/1/cmdline | grep -q 'bench' && wait-for-it -t 3 redis-queue:6379
+      start_period: 30s
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    networks:
+      - data_net
+
+  queue-long:
+    <<: *cskh_app_common
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    mem_limit: ${QUEUE_LONG_MEM_LIMIT:-2g}
+    cpus: ${QUEUE_LONG_CPUS:-1.5}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - tr '\0' ' ' < /proc/1/cmdline | grep -q 'bench' && wait-for-it -t 3 redis-queue:6379
+      start_period: 30s
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    networks:
+      - data_net
+
+  scheduler:
+    <<: *cskh_app_common
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    mem_limit: ${SCHEDULER_MEM_LIMIT:-512m}
+    cpus: ${SCHEDULER_CPUS:-0.5}
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - tr '\0' ' ' < /proc/1/cmdline | grep -q 'bench' && wait-for-it -t 3 redis-queue:6379
+      start_period: 30s
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    networks:
+      - data_net
+
+  db:
+    image: ${MARIADB_IMAGE:?set MARIADB_IMAGE with @sha256 digest}
+    pull_policy: ${INFRA_PULL_POLICY:-missing}
+    security_opt:
+      - no-new-privileges:true
+    logging: *cskh_logging
+    environment:
+      TZ: ${TZ:-Asia/Ho_Chi_Minh}
+    mem_limit: ${DB_MEM_LIMIT:-4g}
+    cpus: ${DB_CPUS:-2.0}
+    networks:
+      - data_net
+
+  redis-cache:
+    image: ${REDIS_IMAGE:?set REDIS_IMAGE with @sha256 digest}
+    pull_policy: ${INFRA_PULL_POLICY:-missing}
+    security_opt:
+      - no-new-privileges:true
+    logging: *cskh_logging
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - ${REDIS_CACHE_MAXMEMORY:-512mb}
+      - --maxmemory-policy
+      - allkeys-lru
+    mem_limit: ${REDIS_CACHE_MEM_LIMIT:-640m}
+    cpus: ${REDIS_CACHE_CPUS:-0.5}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 5s
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - data_net
+
+  redis-queue:
+    image: ${REDIS_IMAGE:?set REDIS_IMAGE with @sha256 digest}
+    pull_policy: ${INFRA_PULL_POLICY:-missing}
+    security_opt:
+      - no-new-privileges:true
+    logging: *cskh_logging
+    command:
+      - redis-server
+      - --appendonly
+      - "yes"
+      - --maxmemory-policy
+      - noeviction
+    mem_limit: ${REDIS_QUEUE_MEM_LIMIT:-1g}
+    cpus: ${REDIS_QUEUE_CPUS:-0.5}
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      start_period: 5s
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - data_net
+
+volumes:
+  sites:
+    name: ${COMPOSE_PROJECT_NAME}_sites
+  db-data:
+    name: ${COMPOSE_PROJECT_NAME}_db_data
+  redis-queue-data:
+    name: ${COMPOSE_PROJECT_NAME}_redis_queue_data
+
+networks:
+  edge_net:
+    name: ${COMPOSE_PROJECT_NAME}_edge_net
+    driver: bridge
+    internal: false
+  app_net:
+    name: ${COMPOSE_PROJECT_NAME}_app_net
+    driver: bridge
+    internal: true
+  data_net:
+    name: ${COMPOSE_PROJECT_NAME}_data_net
+    driver: bridge
+    internal: true
+
+secrets:
+  db_password:
+    name: ${COMPOSE_PROJECT_NAME}_db_password
+    file: ${DB_PASSWORD_SECRETS_FILE:?No db secret file set}
