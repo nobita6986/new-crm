@@ -120,6 +120,16 @@ window.cskhP3Widgets = (function () {
 			superseded: t('Superseded (rescheduled)'),
 			escalated: t('Escalated'),
 			needs_review: t('Needs review'),
+			connected: t('Connected'),
+			not_connected: t('Not connected'),
+			attempted_not_connected: t('Attempted, not connected'),
+			not_contacted: t('Not contacted'),
+			valid: t('Confirmed'),
+			corrected: t('Corrected'),
+			void: t('Voided — excluded from counts'),
+			done: t('Done'),
+			overdue: t('Overdue'),
+			canceled: t('Canceled'),
 		}
 		return map[s] || status || '—'
 	}
@@ -147,7 +157,9 @@ window.cskhP3Widgets = (function () {
 		if (!metric) {
 			return { main: t('N/A'), ratio: '', sub: '' }
 		}
+		const isCount = metric.unit === 'count'
 		const hasNumDen =
+			!isCount &&
 			metric.numerator !== null &&
 			metric.numerator !== undefined &&
 			metric.denominator !== null &&
@@ -161,12 +173,18 @@ window.cskhP3Widgets = (function () {
 			let naSub = t('N/A — Insufficient sample')
 			if (metric.na_reason === 'qa_disabled') {
 				naSub = t('N/A — QA disabled')
+			} else if (metric.na_reason === 'policy_disabled' || metric.status === 'disabled') {
+				naSub = t('N/A — Policy disabled')
 			} else if (metric.denominator === 0 || metric.na_reason === 'zero_denominator') {
 				naSub = t('N/A — No eligible denominator (0/0)')
 			}
+			const hideDisabledRatio =
+				metric.na_reason === 'qa_disabled' ||
+				metric.na_reason === 'policy_disabled' ||
+				metric.status === 'disabled'
 			return {
 				main: t('N/A'),
-				ratio: ratioText,
+				ratio: hideDisabledRatio ? '' : ratioText,
 				sub: naSub,
 			}
 		}
@@ -213,7 +231,7 @@ window.cskhP3Widgets = (function () {
 
 		return {
 			main: cskh.formatNumber(metric.value),
-			ratio: ratioText,
+			ratio: '',
 			sub: '',
 		}
 	}
@@ -1208,16 +1226,38 @@ window.cskhP3Widgets = (function () {
 			}
 		})
 
+		let searchTimer = null
+		function triggerSearch(val) {
+			const trimmed = String(val || '').trim()
+			if (trimmed === state.search) return
+			state.search = trimmed
+			pagerCtrl.goto(1)
+			state.page = 1
+			loadDrilldown()
+		}
+
 		const searchInput = el('input', {
 			type: 'search',
 			class: 'cskh-input',
 			id: 'p3-drilldown-search',
 			placeholder: t('Filter by work item ID...'),
+			oninput: function (e) {
+				const v = e.target.value
+				if (searchTimer) clearTimeout(searchTimer)
+				searchTimer = setTimeout(function () {
+					triggerSearch(v)
+				}, 260)
+			},
 			onchange: function (e) {
-				state.search = e.target.value.trim()
-				pagerCtrl.goto(1)
-				state.page = 1
-				loadDrilldown()
+				if (searchTimer) clearTimeout(searchTimer)
+				triggerSearch(e.target.value)
+			},
+			onkeydown: function (e) {
+				if (e.key === 'Enter') {
+					e.preventDefault()
+					if (searchTimer) clearTimeout(searchTimer)
+					triggerSearch(e.target.value)
+				}
 			},
 		})
 
@@ -1237,6 +1277,7 @@ window.cskhP3Widgets = (function () {
 				el('option', { value: 'effective_due_at', text: t('Effective due at') }),
 				el('option', { value: 'fulfilled_at', text: t('Fulfilled at') }),
 				el('option', { value: 'breached_at', text: t('Breached at') }),
+				el('option', { value: 'work_item', text: t('Work item') }),
 			]
 		)
 
@@ -1322,10 +1363,25 @@ window.cskhP3Widgets = (function () {
 							el('td', { text: row.obligation_type ? obligationTypeLabel(row.obligation_type) : grainLabel(metric.grain) }),
 							el('td', { text: row.responsible_user || row.owner_user || '—' }),
 							el('td', {
-								text:
-									row.team_at_event === 'historical_attribution_unknown'
-										? t('Historical attribution unknown')
-										: row.team_at_event || row.team || '—',
+								text: (function () {
+									const rawTeam = row.team_at_event || row.team || ''
+									if (
+										rawTeam === 'historical_attribution_unknown' ||
+										rawTeam === '__unattributed_historical_team__'
+									) {
+										return t('Historical attribution unknown')
+									}
+									return (
+										row.team_name ||
+										row.team_label ||
+										(window.cskhP3Api &&
+										typeof window.cskhP3Api.resolveTeamLabel === 'function'
+											? window.cskhP3Api.resolveTeamLabel(rawTeam)
+											: '') ||
+										rawTeam ||
+										'—'
+									)
+								})(),
 							}),
 							el('td', {
 								text: row.pii_redacted
@@ -1343,7 +1399,11 @@ window.cskhP3Widgets = (function () {
 							el('td', {}, [
 								el('span', {
 									class: cskh.stateBadge(row.sla_status || row.status || ''),
-									text: row.sla_status ? slaStatusLabel(row.sla_status) : row.status || '—',
+									text: row.sla_status
+										? slaStatusLabel(row.sla_status)
+										: row.status
+											? slaStatusLabel(row.status)
+											: '—',
 								}),
 							]),
 							el('td', { text: row.waiver_reason || row.exclusion_reason || '—' }),

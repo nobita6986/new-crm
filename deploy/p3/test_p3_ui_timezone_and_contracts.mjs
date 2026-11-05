@@ -141,6 +141,10 @@ function loadP3Sandbox(timezoneConfig, i18nOverrides) {
 			'Valid weight sum': 'Tổng trọng số thành phần hợp lệ',
 			'N/A — No eligible denominator (0/0)': 'N/A — Không có mẫu số hợp lệ (0/0)',
 			'N/A — QA disabled': 'N/A — Phân hệ QA đang tắt',
+			'N/A — Policy disabled': 'N/A — Chính sách đang tắt',
+			'Company-wide (BOD)': 'Toàn công ty (BOD)',
+			'CRM system administration': 'Quản trị hệ thống CRM',
+			'Managed team scope': 'Phạm vi đội nhóm quản lý',
 		},
 		i18nOverrides || {}
 	)
@@ -400,6 +404,139 @@ if (!process.env.CSKH_P3_SUBPROCESS_TZ_CHECK) {
 	}
 	assert.ok(htmlFiles.includes('quality-overview.html'))
 	assert.ok(htmlFiles.includes('scorecard.html'))
+}
+
+// 6. T1C remediation regressions: CONNECTED_RATE interval grain, count-card ratio suppression,
+//    policy_disabled N/A distinction, Vietnamese scopeLabel, and raw vs normalized score points
+{
+	const sb = loadP3Sandbox({
+		site: 'Asia/Ho_Chi_Minh',
+		user: '',
+		effective: 'Asia/Ho_Chi_Minh',
+		server_now_iso: '2026-11-05T10:00:00+07:00',
+	})
+	const { cskh, cskhP3Api: api, cskhP3Widgets: w } = sb
+
+	// F-P3-01: CONNECTED_RATE grain MUST be ownership_interval (41/49 = 83,67%)
+	const connMetric = api.normalizeMetric(
+		'CONNECTED_RATE',
+		{ value: 83.67, numerator: 41, denominator: 49, status: 'fresh' },
+		{ qa_enabled: false }
+	)
+	assert.equal(connMetric.grain, 'ownership_interval')
+	assert.equal(w.formatMetricDisplay(connMetric).ratio, '41 / 49')
+
+	// F-P3-10: Count metrics MUST NOT display `(34 / 1)`
+	const countMetric = api.normalizeMetric(
+		'ASSIGNED_INTERVALS',
+		{ value: 34, numerator: 34, denominator: 1, unit: 'count', status: 'fresh' },
+		{ qa_enabled: false }
+	)
+	assert.equal(countMetric.unit, 'count')
+	const countDisp = w.formatMetricDisplay(countMetric)
+	assert.equal(countDisp.main, '34')
+	assert.equal(countDisp.ratio, '')
+
+	// F-P3-10: Disabled MIN_ATTEMPTS policy MUST distinguish `policy_disabled` from `qa_disabled` and suppress `(0 / 0)`
+	const minAttMetric = api.normalizeMetric(
+		'MIN_ATTEMPTS_COMPLIANCE_RATE',
+		{ value: null, numerator: 0, denominator: 0, status: 'disabled', reason: 'policy_disabled' },
+		{ qa_enabled: false }
+	)
+	assert.equal(minAttMetric.is_na, true)
+	assert.equal(minAttMetric.na_reason, 'policy_disabled')
+	const minAttDisp = w.formatMetricDisplay(minAttMetric)
+	assert.equal(minAttDisp.sub, 'N/A — Chính sách đang tắt')
+	assert.equal(minAttDisp.ratio, '')
+
+	// F-P3-10: scopeLabel translates `bod`, `crm_admin`, `team_leader` to Vietnamese
+	assert.equal(cskh.scopeLabel('bod'), 'Toàn công ty (BOD)')
+	assert.equal(cskh.scopeLabel('crm_admin'), 'Quản trị hệ thống CRM')
+	assert.equal(cskh.scopeLabel('team_leader'), 'Phạm vi đội nhóm quản lý')
+
+	// F-P3-09: Personal scorecard distinguishes raw_weighted_points (0..weight, e.g. 22.50 / 25)
+	// from normalized_contribution (0..100, e.g. 26.47), never 2250!
+	sb.fetch = async (url) => {
+		if (String(url).includes('get_my_scorecard')) {
+			return {
+				ok: true,
+				status: 200,
+				json: async () => ({
+					message: {
+						qa_enabled: false,
+						valid_weight: 85,
+						metrics: {
+							PROCESS_SCORE: {
+								metric_code: 'PROCESS_SCORE',
+								value: 86.47,
+								numerator: 73.5,
+								denominator: 85,
+								unit: 'score_100',
+								status: 'provisional',
+								valid_weight: 85,
+							},
+						},
+						score_components: [
+							{
+								component: 'FIRST_ATTEMPT_SLA_RATE',
+								weight: 25,
+								value: 90,
+								raw_weighted_points: 22.5,
+								normalized_contribution: 26.47,
+								included: true,
+							},
+							{
+								component: 'ELIGIBLE_COVERAGE',
+								weight: 20,
+								value: 80,
+								raw_weighted_points: 16.0,
+								normalized_contribution: 18.82,
+								included: true,
+							},
+							{
+								component: 'VALID_OUTCOME_LOGGING_RATE',
+								weight: 20,
+								value: 100,
+								raw_weighted_points: 20.0,
+								normalized_contribution: 23.53,
+								included: true,
+							},
+							{
+								component: 'FOLLOWUP_SLA_RATE',
+								weight: 20,
+								value: 75,
+								raw_weighted_points: 15.0,
+								normalized_contribution: 17.65,
+								included: true,
+							},
+							{
+								component: 'QA_PASS_RATE',
+								weight: 15,
+								value: null,
+								raw_weighted_points: null,
+								normalized_contribution: null,
+								included: false,
+								status: 'disabled',
+							},
+						],
+					},
+				}),
+			}
+		}
+		return { ok: true, status: 200, json: async () => ({ message: { rows: [], total: 0 } }) }
+	}
+	const sc = await api.getPersonalScorecard({ period_type: 'monthly', period_value: '2026-10' })
+	assert.equal(sc.valid_weight_sum, 85)
+	assert.equal(sc.raw_points_total, 73.5)
+	const included = sc.components.filter((c) => c.included)
+	assert.equal(included.length, 4)
+	assert.equal(included[0].raw_weighted_points, 22.5)
+	assert.equal(included[0].normalized_contribution, 26.47)
+	for (const comp of included) {
+		assert.ok(comp.raw_weighted_points >= 0 && comp.raw_weighted_points <= comp.weight)
+	}
+	const normSum = included.reduce((acc, c) => acc + c.normalized_contribution, 0)
+	assert.ok(Math.abs(normSum - 86.47) <= 0.02, `Expected normalized sum ~86.47, got ${normSum}`)
 }
 
 if (!process.env.CSKH_P3_SUBPROCESS_TZ_CHECK) {

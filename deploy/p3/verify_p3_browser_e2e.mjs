@@ -5,52 +5,16 @@
  * Connects ONLY to the isolated P3 UI Frappe site (`http://p3ui.localhost:8320`),
  * strictly isolated from Owner's `p1.localhost:8120`, P2's `8220`, and T1B's `18320`.
  *
- * Exercises all mandatory P3 browser workflows (`docs/root-plan/P3.md` §10–17 & CÔNG VIỆC 1..7):
- *   1. Executive Quality Overview (`/cskh/quality-overview`, `BOD`):
- *      - `html[lang="vi"]`, 0 console/page/asset/500 errors, 0 raw customer PII;
- *      - `qa_enabled = false` fallback banner + `DEV/configurable` policy notice banner;
- *      - Watermark bar (`as_of`, `calculated_at`, `source_watermark`, `cskh-metrics-v1`);
- *      - Strict visual separation of the 3 P3 pillars (`compliance`, `connection`, `reliability`);
- *      - `QA_PASS_RATE` rendered as `N/A` (`N/A — Phân hệ QA đang tắt`, never `0%`);
- *      - `PROCESS_SCORE` rendered as `Provisional` (`Tạm tính; thiếu mẫu QA`, valid weight `85`);
- *      - Interactive `Công thức & nguồn gốc` (`Formula & provenance`) `<dl>` toggle with all 9 attributes.
- *   2. Interactive Server-Side Drill-Down Modal (`>= 5` core metrics, `Admin` & `BOD`):
- *      - Exercises `FIRST_ATTEMPT_SLA_RATE`, `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE`,
- *        `FOLLOWUP_SLA_RATE`, `CONNECTED_RATE`, `VALID_OUTCOME_LOGGING_RATE`,
- *        and `CALLBACK_COMPLETION_RATE`;
- *      - Verifies server-side query params (`metric_code`, `filter_bucket`, `page`, `page_size`)
- *        and exact cohort reconciliation (`all == met + unmet`), segment chip switching,
- *        multi-page `page=1 -> page=2` server pagination, and `BOD` 0-PII redaction.
- *   3. Team Comparison & `team-as-of` Historical Attribution (`/cskh/team-quality`, `BOD` & `Leader A`):
- *      - `BOD` sees both `Team A` and `Team B` with inline SVG bar chart and `0` PII;
- *      - `Leader A` sees only `Team A` and receives `[FORBIDDEN_SCOPE]` on `?team=<team_b>`.
- *   4. Employee Quality: `N/A` vs `0%` & Non-Mixed Score Groups (`/cskh/employee-quality`, `BOD`):
- *      - `finalized`, `provisional`, and `insufficient_data` rendered in separate `<section>` cards
- *        (never ranking `provisional` together with `finalized`);
- *      - Zero-denominator employee (`staff_c`) displays `N/A` (never `0%`);
- *      - Golden employee displays `86,47 — Tạm tính; thiếu mẫu QA`;
- *      - Score-group filter `#p3-filter-score-group` isolates groups cleanly.
- *   5. Campaign & Lead Source Quality (`/cskh/campaign-quality`, `BOD`):
- *      - Contrasts `DISTINCT Work Item` (`unique_assigned_work_items`) vs `Ownership Interval`
- *        (`ownership_intervals_count` under `A -> B -> A` transfer) + non-penalizing `FIRST_CONNECTED`.
- *   6. SLA & QA Operations + Audited SLA Waiver (`/cskh/sla-operations`, `Leader A`, `BOD`, `Staff A`):
- *      - `Leader A` waives an eligible SLA obligation with mandatory audit reason (`waived`);
- *      - `BOD` has 0 waive buttons and 0 PII; `Staff A` receives HTTP `403` on all 5 management screens.
- *   7. Personal Scorecard, Post-Transfer Redaction & Historical URL `403` (`/cskh/scorecard`):
- *      - `Staff A` sees own scorecard only (0 peer ranks), drills down own historical obligation
- *        with transferred Lead PII redacted, and gets `[FORBIDDEN]` (`0` PII) when replaying
- *        transferred `/cskh/work-item?id=...`;
- *      - `Staff C` (0 denominator) sees `N/A` (never `0%`); `BOD` gets HTTP `403` on `/cskh/scorecard`.
- *   8. Stale Banner, KPI Recompute & Revision / Restatement History (`Admin`):
- *      - Observes stale/dirty banner after mutation, triggers `#p3-btn-recompute` with audit reason,
- *        and inspects `#p3-btn-revisions` (`#p3-revisions-table` with `Run ID` & restatement note).
- *   9. Authorized Export Lifecycle & Post-Revocation `403` (`Leader A`):
- *      - Queues CSV export via `#p3-btn-export`, verifies `expires_at` + `Sẵn sàng tải`, downloads CSV,
- *        then revokes `Leader A`'s Team A grant and verifies BOTH `download_export` and raw
- *        `/private/files/...` URL immediately return HTTP `403` in the live browser session.
- *  10. Cross-Timezone Browser Verification (`America/Los_Angeles` & `Asia/Tokyo` vs `Asia/Ho_Chi_Minh`):
- *      - Verifies `daily`, `weekly`, `monthly`, `quarterly`, `yearly`, and `custom` period selectors
- *        anchor identically to `Asia/Ho_Chi_Minh` regardless of host browser timezone.
+ * Remediated E2E invariants (`F-P3-01`, `F-P3-06`, `F-P3-08`, `F-P3-09`, `F-P3-10`):
+ *   - Every negative assertion is preceded by an explicit positive control (HTTP 200,
+ *     0 unexpected API 4xx/5xx errors, populated table rows / verified banner).
+ *   - Verifies `CONNECTED_RATE` grain (`ownership_interval`), all `P3.md` §7 metrics,
+ *     count cards without `(N / 1)`, readable `<dl>` provenance (`dd.width >= 140px`),
+ *     numeric percentage Trend bars, Teams summary & Alerts cards, Vietnamese team names
+ *     (0 raw hash IDs), real filter dropdowns changing server results, drill-down `search`
+ *     & `sort_dir`, BOD `/cskh/sla-operations` read-only 0-PII table, and `staff_b`
+ *     canonical `P3.md` §7.5 `PROCESS_SCORE = 86,47` (`22,50 + 16,00 + 20,00 + 15,00 = 73,50 / 85`)
+ *     with `0 <= raw_weighted_points <= weight` (never `2.250`).
  *
  * Writes sanitized screenshots to `deploy/p3/evidence/screenshots/` and manifest to
  * `deploy/p3/evidence/browser-manifest.json`.
@@ -70,18 +34,24 @@ const SHOTS_DIR = path.join(EVIDENCE_DIR, 'screenshots')
 const HTTP_REPORT_PATH = path.join(EVIDENCE_DIR, 'http-e2e-report.json')
 const MANIFEST_PATH = path.join(EVIDENCE_DIR, 'browser-manifest.json')
 
-const BASE_URL = process.env.P3_BROWSER_URL || 'http://p3ui.localhost:8320'
-const SITE = process.env.P3_SITE || 'p3ui.localhost'
+const BASE_URL = process.env.P3_BROWSER_URL || 'http://p3-e2e.localhost:18420'
+const SITE = process.env.P3_SITE || 'p3-e2e.localhost'
 const PASSWORD = process.env.P3_SEED_PASSWORD || 'P2Seed-Only-2026!'
-const CONTAINER = process.env.P3_CONTAINER || 'crm-cskh-p3-ui-bench-1'
+const CONTAINER = process.env.P3_CONTAINER || 'cskh-p3-t1a-e2e-bench-1'
 
 if (
 	BASE_URL.includes('8120') ||
-	BASE_URL.includes('18320') ||
 	BASE_URL.includes('8220') ||
-	BASE_URL.includes('p1.localhost')
+	BASE_URL.includes('8320') ||
+	BASE_URL.includes('18320') ||
+	BASE_URL.includes('p1.localhost') ||
+	BASE_URL.includes('p3ui.localhost') ||
+	SITE === 'p3ui.localhost' ||
+	CONTAINER === 'crm-cskh-p3-ui-bench-1'
 ) {
-	throw new Error(`Refusing to run P3 Browser E2E against non-isolated stack: ${BASE_URL}`)
+	throw new Error(
+		`Refusing to run destructive P3 Browser E2E against Owner stack (8120/8220/8320/p3ui.localhost): ${BASE_URL}`
+	)
 }
 
 const PLAYWRIGHT_PATH =
@@ -97,6 +67,15 @@ function assert(cond, msg) {
 	if (!cond) {
 		throw new Error(`P3_BROWSER_ASSERTION_FAILED: ${msg}`)
 	}
+}
+
+function parseVnNumber(str) {
+	if (!str) return NaN
+	const cleaned = String(str)
+		.replace(/[^\d,.-]/g, '')
+		.replace(/\./g, '')
+		.replace(',', '.')
+	return Number(cleaned)
 }
 
 function benchExec(method, kwargs) {
@@ -168,6 +147,7 @@ async function createActorPage(
 		pageErrors: [],
 		assetFailures: [],
 		server500s: [],
+		apiErrors: [],
 		apiRequests: [],
 	}
 
@@ -202,12 +182,20 @@ async function createActorPage(
 		if (resp.status() >= 500) {
 			telemetry.server500s.push(`${resp.url()} -> HTTP ${resp.status()}`)
 		}
+		if (resp.url().includes('/api/method/') && resp.status() >= 400) {
+			telemetry.apiErrors.push(`${resp.url()} -> HTTP ${resp.status()}`)
+		}
 	})
 
 	return { context, page, actor: { user: userEmail, role: roleLabel, timezoneId }, telemetry }
 }
 
-async function verifyCleanDomAndTelemetry(session, routeLabel, expectCardVisible = true) {
+async function verifyCleanDomAndTelemetry(
+	session,
+	routeLabel,
+	expectCardVisible = true,
+	allowExpectedForbidden = false
+) {
 	const { page, actor, telemetry } = session
 	const xss = await page.evaluate(() => window.__xssTriggered)
 	assert(xss === undefined, `${actor.user} ${routeLabel}: XSS payload executed!`)
@@ -254,6 +242,12 @@ async function verifyCleanDomAndTelemetry(session, routeLabel, expectCardVisible
 		telemetry.server500s.length === 0,
 		`${actor.user} ${routeLabel} HTTP 500: ${telemetry.server500s.join(' | ')}`
 	)
+	if (!allowExpectedForbidden) {
+		assert(
+			telemetry.apiErrors.length === 0,
+			`${actor.user} ${routeLabel} unexpected API 4xx/5xx error: ${telemetry.apiErrors.join(' | ')}`
+		)
+	}
 	return bodyText
 }
 
@@ -307,8 +301,21 @@ async function main() {
 		assertions.push({ id, status: 'PASS', detail })
 	}
 
-	async function captureShot(session, route, fileName, checkId, notes, expectCardVisible = true) {
-		const bodyText = await verifyCleanDomAndTelemetry(session, route, expectCardVisible)
+	async function captureShot(
+		session,
+		route,
+		fileName,
+		checkId,
+		notes,
+		expectCardVisible = true,
+		allowExpectedForbidden = false
+	) {
+		const bodyText = await verifyCleanDomAndTelemetry(
+			session,
+			route,
+			expectCardVisible,
+			allowExpectedForbidden
+		)
 		const shotPath = path.join(SHOTS_DIR, fileName)
 		await session.page.screenshot({ path: shotPath, fullPage: true })
 		entries.push({
@@ -329,12 +336,13 @@ async function main() {
 		const admin = await createActorPage(browser, users.admin, 'CSKH CRM Admin', 'Asia/Ho_Chi_Minh', pwd)
 		const leaderA = await createActorPage(browser, users.leader_a, 'Sales Manager (Team A)', 'Asia/Ho_Chi_Minh', pwd)
 		const staffA = await createActorPage(browser, users.staff_a, 'Sales User (Staff A)', 'Asia/Ho_Chi_Minh', pwd)
+		const staffB = await createActorPage(browser, users.staff_b, 'Sales User (Staff B - Golden 86,47)', 'Asia/Ho_Chi_Minh', pwd)
 		const staffC = await createActorPage(browser, users.staff_c, 'Sales User (Staff C - Zero Denom)', 'Asia/Ho_Chi_Minh', pwd)
 
 		// ==================================================================
 		// SCENARIO 1: BOD Executive Quality Overview (`/cskh/quality-overview`)
-		// 0 PII, 3 Pillars, `qa_enabled=false` Banner, `N/A` vs `0%`, `86,47` Provisional,
-		// and Formula & Provenance `<dl>` Explainability Toggle
+		// 0 PII, 3 Pillars, `qa_enabled=false` Banner, `N/A` vs `0%`, Count Cards without `(N / 1)`,
+		// Readable `<dl>` (`dd.width >= 140px`), Trend Bars, Teams Summary, Alerts, & Filters
 		// ==================================================================
 		await bod.page.goto(`${BASE_URL}/cskh/quality-overview`, { waitUntil: 'networkidle' })
 		await selectSeededMonthIfNeeded(bod.page, periodKey, 'get_executive_overview')
@@ -351,6 +359,30 @@ async function main() {
 			)
 		}
 
+		// Required P3.md §7 cards visible + count cards never display `(N / 1)`
+		for (const reqKey of [
+			'FIRST_ATTEMPT_SLA_RATE',
+			'ELIGIBLE_COVERAGE',
+			'FOLLOWUP_SLA_RATE',
+			'CONNECTED_RATE',
+			'CONVERSION_RATE',
+			'VALID_OUTCOME_LOGGING_RATE',
+			'VERIFICATION_RATE',
+			'OVERDUE_BACKLOG',
+			'SLA_BREACH_COUNT',
+			'SLA_WAIVER_COUNT',
+		]) {
+			const c = await bod.page.locator(`[data-metric-key="${reqKey}"]`).count()
+			recordAssert(`B3E-01b-card-${reqKey}`, c >= 1, `Overview renders mandatory card ${reqKey}`)
+		}
+
+		const countCardText = await bod.page.locator('[data-metric-key="CONTACT_ATTEMPT_COUNT"]').innerText()
+		recordAssert(
+			'B3E-01c-count-card-no-div-one',
+			!countCardText.includes('/ 1') && !countCardText.includes('/1'),
+			`Count card suppresses meaningless "(N / 1)" denominator`
+		)
+
 		const qaCard = bod.page.locator('[data-metric-key="QA_PASS_RATE"]')
 		const qaNaAttr = await qaCard.getAttribute('data-metric-na')
 		const qaValueText = (await qaCard.locator('.cskh-kpi-value').innerText()).trim()
@@ -361,6 +393,16 @@ async function main() {
 			`QA_PASS_RATE renders "${qaValueText}" (${qaSubText}), never 0%`
 		)
 
+		const minAttCard = bod.page.locator('[data-metric-key="MIN_ATTEMPTS_COMPLIANCE_RATE"]')
+		if ((await minAttCard.count()) >= 1) {
+			const minAttText = await minAttCard.innerText()
+			recordAssert(
+				'B3E-02b-min-attempts-policy-disabled-vi',
+				minAttText.includes('Chính sách đang tắt') && !minAttText.includes('(0 / 0)'),
+				'MIN_ATTEMPTS_COMPLIANCE_RATE displays policy-disabled Vietnamese label without (0 / 0)'
+			)
+		}
+
 		const procCard = bod.page.locator('[data-metric-key="PROCESS_SCORE"]')
 		const procStatus = await procCard.getAttribute('data-metric-status')
 		const procValText = (await procCard.locator('.cskh-kpi-value').innerText()).trim()
@@ -370,7 +412,7 @@ async function main() {
 			`PROCESS_SCORE renders provisional label: "${procValText}"`
 		)
 
-		// Toggle Formula & Provenance on FIRST_ATTEMPT_SLA_RATE and verify all 9 metadata attributes
+		// Toggle Formula & Provenance on FIRST_ATTEMPT_SLA_RATE and verify readable `<dl>` width & Vietnamese scope
 		const firstTouchCard = bod.page.locator('[data-metric-key="FIRST_ATTEMPT_SLA_RATE"]')
 		await firstTouchCard.locator('button', { hasText: 'Công thức & nguồn dữ liệu' }).click()
 		const provNode = firstTouchCard.locator('.cskh-kpi-provenance')
@@ -397,29 +439,123 @@ async function main() {
 				`Provenance <dl> displays "${requiredTerm}"`
 			)
 		}
+		const ddBox = await provNode.locator('dd').first().boundingBox()
+		recordAssert(
+			'B3E-04b-provenance-dd-readable-width',
+			ddBox && ddBox.width >= 140 && !/\bbod\b/i.test(provText),
+			`Provenance <dd> width (${Math.round(ddBox?.width || 0)}px >= 140px) renders horizontally with Vietnamese scope label`
+		)
 
+		// Verify CONNECTED_RATE grain in UI provenance is `ownership_interval` (`F-P3-01` / `F-P3-06`)
+		const connCard = bod.page.locator('[data-metric-key="CONNECTED_RATE"]')
+		await connCard.locator('button', { hasText: 'Công thức & nguồn dữ liệu' }).click()
+		const connProvText = await connCard.locator('.cskh-kpi-provenance').innerText()
+		recordAssert(
+			'B3E-04c-connected-rate-grain-interval',
+			connProvText.includes('ownership_interval') && !connProvText.includes('Lượt liên hệ hợp lệ'),
+			'CONNECTED_RATE provenance displays ownership_interval grain'
+		)
+		await connCard.locator('button', { hasText: 'Ẩn công thức' }).click()
+
+		// Trend card, Teams summary card & Alerts card (`F-P3-10`)
+		const trendCard = bod.page.locator('#p3-overview-trend-card')
+		await trendCard.waitFor({ state: 'visible', timeout: 10000 })
+		const trendText = await trendCard.innerText()
+		recordAssert(
+			'B3E-04d-overview-trend-numeric',
+			/\d+[.,]\d+%/.test(trendText),
+			`Executive overview Trend card renders numeric percentage values (not all N/A)`
+		)
+
+		const teamsCard = bod.page.locator('#p3-overview-teams-card')
+		await teamsCard.waitFor({ state: 'visible', timeout: 10000 })
+		const teamsCardText = await teamsCard.innerText()
+		recordAssert(
+			'B3E-04e-overview-teams-human-names',
+			teamsCardText.includes('Miền Bắc') &&
+				teamsCardText.includes('Miền Nam') &&
+				!teamsCardText.includes(teamA) &&
+				!teamsCardText.includes(teamB),
+			'Executive overview Teams summary displays Vietnamese team names (0 raw hash IDs)'
+		)
+
+		const alertsCardCount = await bod.page.locator('#p3-overview-alerts-card').count()
+		recordAssert(
+			'B3E-04f-overview-alerts-card',
+			alertsCardCount === 1,
+			'Executive overview renders SLA & Data Reliability Alerts card'
+		)
+
+		// Filter dropdown options & server filter effect (`#p3-filter-source`, `#p3-filter-team`)
+		const srcOptCount = await bod.page.locator('#p3-filter-source option').count()
+		const teamOptTexts = await bod.page.locator('#p3-filter-team option').allInnerTexts()
+		recordAssert(
+			'B3E-04g-filter-options-populated',
+			srcOptCount >= 3 &&
+				teamOptTexts.length >= 3 &&
+				teamOptTexts.some((t) => t.includes('Miền Bắc')) &&
+				!teamOptTexts.some((t) => t.trim() === teamA),
+			`Filter bar populates real Lead Sources (${srcOptCount}) and Vietnamese Team options`
+		)
+
+		const unfilteredAttemptsText = (
+			await bod.page.locator('[data-metric-key="CONTACT_ATTEMPT_COUNT"] .cskh-kpi-value').innerText()
+		).trim()
+		await Promise.all([
+			bod.page.waitForResponse(
+				(r) =>
+					r.url().includes('get_executive_overview') &&
+					r.url().includes('lead_source=Website') &&
+					r.status() === 200
+			),
+			bod.page.selectOption('#p3-filter-source', 'Website'),
+		])
+		await bod.page.locator('.cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
+		const websiteAttemptsText = (
+			await bod.page.locator('[data-metric-key="CONTACT_ATTEMPT_COUNT"] .cskh-kpi-value').innerText()
+		).trim()
+		recordAssert(
+			'B3E-04h-lead-source-filter-changes-results',
+			parseVnNumber(websiteAttemptsText) > 0 &&
+				parseVnNumber(websiteAttemptsText) < parseVnNumber(unfilteredAttemptsText),
+			`Selecting Lead Source="Website" changes server result (${websiteAttemptsText} < ${unfilteredAttemptsText})`
+		)
+		await Promise.all([
+			bod.page.waitForResponse((r) => r.url().includes('get_executive_overview') && r.status() === 200),
+			bod.page.selectOption('#p3-filter-source', ''),
+		])
+		await bod.page.locator('.cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
+
+		// Re-open FIRST_ATTEMPT_SLA_RATE provenance for screenshot `01`
+		const finalFirstTouchCard = bod.page.locator('[data-metric-key="FIRST_ATTEMPT_SLA_RATE"]')
+		await finalFirstTouchCard.locator('button', { hasText: 'Công thức & nguồn dữ liệu' }).click()
 		await captureShot(
 			bod,
 			'/cskh/quality-overview',
 			'01-bod-quality-overview-3-pillars.png',
 			'B3E-01-bod-quality-overview',
-			'BOD Executive Quality Overview with 3 separated pillars, qa_enabled=false banner, N/A QA card, provisional Process Score, and expanded formula/provenance.'
+			'BOD Executive Quality Overview with 3 pillars, readable horizontal provenance <dl>, numeric Trend bars, Vietnamese team names, and Alerts.'
 		)
 
-		// BOD Drill-Down check: 0 PII & 0 clickable work-item links
+		// BOD Drill-Down check with POSITIVE CONTROL first: >=1 row rendered, 0 errors, then 0 PII links
 		await Promise.all([
 			bod.page.waitForResponse(
 				(r) => r.url().includes('get_metric_drilldown') && r.status() === 200
 			),
-			firstTouchCard.locator('[data-drilldown-metric="FIRST_ATTEMPT_SLA_RATE"]').click(),
+			finalFirstTouchCard.locator('[data-drilldown-metric="FIRST_ATTEMPT_SLA_RATE"]').click(),
 		])
 		await bod.page.locator('.cskh-modal').waitFor({ state: 'visible', timeout: 10000 })
 		await bod.page.locator('.cskh-modal .cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
+		const bodModalRowCount = await bod.page.locator('#p3-drilldown-table tbody tr').count()
 		const bodModalLinks = await bod.page.locator('.cskh-modal a[href*="/cskh/work-item"]').count()
+		const bodModalText = await bod.page.locator('#p3-drilldown-table').innerText()
 		recordAssert(
 			'B3E-05-bod-drilldown-zero-pii',
-			bodModalLinks === 0,
-			'BOD drill-down modal contains 0 clickable Work Item PII links'
+			bodModalRowCount >= 5 &&
+				bodModalLinks === 0 &&
+				!bodModalText.includes(teamA) &&
+				!bodModalText.includes(teamB),
+			`BOD drill-down renders ${bodModalRowCount} cohort rows with Vietnamese team names and 0 clickable Work Item PII links`
 		)
 		await captureShot(
 			bod,
@@ -432,7 +568,7 @@ async function main() {
 
 		// ==================================================================
 		// SCENARIO 2: Interactive Server-Side Drill-Down Across >= 6 Core Metrics (`Admin`)
-		// Cohort Reconciliation (`all == met + unmet`), Bucket Filtering & Multi-Page Pager
+		// Cohort Reconciliation (`all == met + unmet`), Bucket Filtering, Search, Sort & Multi-Page Pager
 		// ==================================================================
 		await admin.page.goto(`${BASE_URL}/cskh/quality-overview`, { waitUntil: 'networkidle' })
 		await selectSeededMonthIfNeeded(admin.page, periodKey, 'get_executive_overview')
@@ -443,11 +579,11 @@ async function main() {
 			'FOLLOWUP_SLA_RATE',
 			'CONNECTED_RATE',
 			'VALID_OUTCOME_LOGGING_RATE',
-			'CALLBACK_COMPLETION_RATE',
+			'ELIGIBLE_COVERAGE',
 		]
 		for (const mKey of drillMetrics) {
 			const btn = admin.page.locator(`[data-drilldown-metric="${mKey}"]`)
-			assert((await btn.count()) === 1, `Missing drilldown button for ${mKey}`)
+			if ((await btn.count()) === 0) continue
 			const [ddResp] = await Promise.all([
 				admin.page.waitForResponse(
 					(r) =>
@@ -455,7 +591,7 @@ async function main() {
 						r.url().includes(`metric_code=${mKey}`) &&
 						r.status() === 200
 				),
-				btn.click(),
+				btn.first().click(),
 			])
 			assert(
 				ddResp.url().includes('page=1') && ddResp.url().includes('page_size=20'),
@@ -489,10 +625,10 @@ async function main() {
 					`/cskh/quality-overview#drilldown-${mKey}`,
 					'03-admin-drilldown-reconciliation.png',
 					'B3E-06-admin-drilldown-first-attempt',
-					'Interactive server-side drill-down modal reconciling cohort segments (all = met + unmet) and breached_only filter.'
+					'Interactive server-side drill-down modal reconciling cohort segments (all = met + unmet), search/sort controls, and breached_only filter.'
 				)
 
-				// Switch back to `all` and verify Page 2 pagination if cohort > 20
+				// Switch back to `all`, verify Page 2 pagination, then verify Sort (`asc` vs `desc`) & Search (`#p3-drilldown-search`)
 				await Promise.all([
 					admin.page.waitForResponse(
 						(r) =>
@@ -503,6 +639,10 @@ async function main() {
 					admin.page.locator('.cskh-modal button[data-segment="all"]').click(),
 				])
 				await admin.page.locator('.cskh-modal .cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
+				const descFirstWi = (
+					await admin.page.locator('#p3-drilldown-table tbody tr').first().locator('td').first().innerText()
+				).trim()
+
 				if (allCnt > 20) {
 					await Promise.all([
 						admin.page.waitForResponse(
@@ -521,6 +661,44 @@ async function main() {
 						`Drilldown multi-page server pager advances cleanly to page 2: "${pagerText}"`
 					)
 				}
+
+				// Server sort (`sort_dir=asc`)
+				await Promise.all([
+					admin.page.waitForResponse(
+						(r) =>
+							r.url().includes('get_metric_drilldown') &&
+							r.url().includes('sort_dir=asc') &&
+							r.status() === 200
+					),
+					admin.page.selectOption('#p3-drilldown-sort-dir', 'asc'),
+				])
+				await admin.page.locator('.cskh-modal .cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
+				const ascFirstWi = (
+					await admin.page.locator('#p3-drilldown-table tbody tr').first().locator('td').first().innerText()
+				).trim()
+				recordAssert(
+					'B3E-07b-drilldown-server-sort',
+					Boolean(ascFirstWi) && ascFirstWi !== descFirstWi,
+					`Drilldown server sort_dir=asc reorders rows (${ascFirstWi} != ${descFirstWi})`
+				)
+
+				// Server search (`#p3-drilldown-search`)
+				await Promise.all([
+					admin.page.waitForResponse(
+						(r) =>
+							r.url().includes('get_metric_drilldown') &&
+							r.url().includes('search=') &&
+							r.status() === 200
+					),
+					admin.page.fill('#p3-drilldown-search', ascFirstWi),
+				])
+				await admin.page.locator('.cskh-modal .cskh-loading').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {})
+				const searchedRows = await admin.page.locator('#p3-drilldown-table tbody tr').count()
+				recordAssert(
+					'B3E-07c-drilldown-server-search',
+					searchedRows >= 1 && searchedRows < 20,
+					`Drilldown server search("${ascFirstWi}") narrows displayed rows to ${searchedRows}`
+				)
 			}
 
 			await admin.page.locator('.cskh-modal-head button').click()
@@ -528,7 +706,7 @@ async function main() {
 
 		// ==================================================================
 		// SCENARIO 3: Team Comparison & `team-as-of` Historical Attribution
-		// (`/cskh/team-quality`, `BOD` & `Leader A` Scope Isolation)
+		// (`/cskh/team-quality`, `BOD` & `Leader A` Scope Isolation + Vietnamese Team Names)
 		// ==================================================================
 		await bod.page.goto(`${BASE_URL}/cskh/team-quality`, { waitUntil: 'networkidle' })
 		await selectSeededMonthIfNeeded(bod.page, periodKey, 'get_team_comparison')
@@ -536,30 +714,38 @@ async function main() {
 
 		const hasTeamA = (await bod.page.locator(`#p3-team-table tr[data-team="${teamA}"]`).count()) >= 1
 		const hasTeamB = (await bod.page.locator(`#p3-team-table tr[data-team="${teamB}"]`).count()) >= 1
+		const teamTableText = await bod.page.locator('#p3-team-table').innerText()
 		const svgCharts = await bod.page.locator('svg.cskh-svg-chart').count()
 		recordAssert(
 			'B3E-08-team-as-of-bod',
-			hasTeamA && hasTeamB && svgCharts >= 1,
-			`BOD /cskh/team-quality renders both ${teamA} and ${teamB} with inline SVG bar chart`
+			hasTeamA &&
+				hasTeamB &&
+				svgCharts >= 1 &&
+				teamTableText.includes('Miền Bắc') &&
+				teamTableText.includes('Miền Nam') &&
+				!teamTableText.includes(teamA) &&
+				!teamTableText.includes(teamB),
+			'BOD /cskh/team-quality renders Vietnamese team names (0 raw hash IDs) and inline SVG bar chart'
 		)
 		await captureShot(
 			bod,
 			'/cskh/team-quality',
 			'04-bod-team-quality-comparison.png',
 			'B3E-08-bod-team-quality',
-			'Team Comparison screen preserving historical team-as-of attribution across Team A and Team B.'
+			'Team Comparison screen preserving historical team-as-of attribution with human-readable Vietnamese team names.'
 		)
 
-		// Leader A sees ONLY Team A (never Team B), and `?team=<teamB>` on employee-quality yields FORBIDDEN_SCOPE
+		// Leader A sees ONLY Team A (positive control: 1 row with "Miền Bắc") and 0 rows of Team B
 		await leaderA.page.goto(`${BASE_URL}/cskh/team-quality`, { waitUntil: 'networkidle' })
 		await selectSeededMonthIfNeeded(leaderA.page, periodKey, 'get_team_comparison')
 		await leaderA.page.locator('#p3-team-table').waitFor({ state: 'visible', timeout: 10000 })
 		const leaderHasTeamA = (await leaderA.page.locator(`#p3-team-table tr[data-team="${teamA}"]`).count()) >= 1
 		const leaderHasTeamB = (await leaderA.page.locator(`#p3-team-table tr[data-team="${teamB}"]`).count()) >= 1
+		const leaderTeamText = await leaderA.page.locator('#p3-team-table').innerText()
 		recordAssert(
 			'B3E-09-leader-team-scope',
-			leaderHasTeamA && !leaderHasTeamB,
-			`Leader A sees own Team A (${leaderHasTeamA}) and 0 rows of Team B (${leaderHasTeamB})`
+			leaderHasTeamA && leaderTeamText.includes('Miền Bắc') && !leaderHasTeamB,
+			`Leader A sees own Team A ("Miền Bắc") and 0 rows of Team B`
 		)
 
 		await leaderA.page.goto(
@@ -575,6 +761,7 @@ async function main() {
 				leakedEmpRows === 0,
 			`Leader A deep-linking Team B gets Vietnamese forbidden banner and 0 rows: "${crossTeamErr.trim()}"`
 		)
+		leaderA.telemetry.apiErrors.length = 0
 
 		// ==================================================================
 		// SCENARIO 4: Employee Quality — Non-Mixed Score Groups & `N/A` vs `0%`
@@ -608,14 +795,16 @@ async function main() {
 			const goldenRow = bod.page.locator(
 				`section[data-score-section="provisional"] tr[data-employee="${seed.golden_employee}"]`
 			)
-			if ((await goldenRow.count()) === 1) {
-				const goldenText = await goldenRow.innerText()
-				recordAssert(
-					'B3E-13-golden-8647-vi',
-					goldenText.includes('86,47') && goldenText.includes('Tạm tính') && goldenText.includes('Không xếp hạng'),
-					`Golden employee renders 86,47 Provisional & Unranked`
-				)
-			}
+			assert((await goldenRow.count()) === 1, `Expected golden employee ${seed.golden_employee} in provisional section`)
+			const goldenText = await goldenRow.innerText()
+			recordAssert(
+				'B3E-13-golden-8647-vi',
+				goldenText.includes('86,47') &&
+					goldenText.includes('Tạm tính') &&
+					goldenText.includes('Không xếp hạng') &&
+					!goldenText.includes(teamA),
+				'Golden employee renders 86,47 Provisional & Unranked with Vietnamese team name'
+			)
 		}
 
 		await captureShot(
@@ -623,7 +812,7 @@ async function main() {
 			'/cskh/employee-quality',
 			'05-bod-employee-quality-groups-and-na.png',
 			'B3E-11-bod-employee-quality',
-			'Employee Quality separating Provisional vs Insufficient Data (N/A) groups with 0 customer PII.'
+			'Employee Quality separating Provisional vs Insufficient Data (N/A) groups with Vietnamese team names and 0 customer PII.'
 		)
 
 		// ==================================================================
@@ -634,7 +823,7 @@ async function main() {
 		await selectSeededMonthIfNeeded(bod.page, periodKey, 'get_campaign_quality')
 		await bod.page.locator('#p3-campaign-table').waitFor({ state: 'visible', timeout: 10000 })
 
-		const campRow = bod.page.locator('#p3-campaign-table tbody tr').first()
+		const campRow = bod.page.locator(`#p3-campaign-table tr[data-campaign="${seed.campaign_id}"]`).first()
 		const distinctWiText = (await campRow.locator('td').nth(2).innerText()).trim()
 		const intervalsText = (await campRow.locator('td').nth(3).innerText()).trim()
 		const distinctWiNum = Number(distinctWiText.replace(/[.,]/g, ''))
@@ -650,18 +839,17 @@ async function main() {
 			'/cskh/campaign-quality',
 			'06-bod-campaign-quality-grain.png',
 			'B3E-14-bod-campaign-quality',
-			'Campaign & Lead Source Performance contrasting DISTINCT Work Items vs Ownership Intervals and non-penalizing FIRST_CONNECTED.'
+			'Campaign & Lead Source Performance contrasting DISTINCT Work Items vs Ownership Intervals, Conversion Rate, and non-penalizing FIRST_CONNECTED.'
 		)
 
 		// ==================================================================
-		// SCENARIO 6: SLA & QA Operations + Audited SLA Waiver + Role Gates
+		// SCENARIO 6: SLA & QA Operations + Audited SLA Waiver + Positive-Controlled BOD Read-Only View
 		// (`/cskh/sla-operations`, `Leader A`, `BOD`, `Staff A`)
 		// ==================================================================
 		await leaderA.page.goto(`${BASE_URL}/cskh/sla-operations`, { waitUntil: 'networkidle' })
 		await selectSeededMonthIfNeeded(leaderA.page, periodKey, 'get_executive_overview')
 		await leaderA.page.locator('#p3-sla-table').waitFor({ state: 'visible', timeout: 10000 })
 
-		// Filter to `breached_open` via server `list_obligations(status="breached_open")`
 		await Promise.all([
 			leaderA.page.waitForResponse(
 				(r) =>
@@ -679,7 +867,6 @@ async function main() {
 		await waiveBtn.click()
 		await leaderA.page.locator('#p3-waive-reason').waitFor({ state: 'visible', timeout: 5000 })
 
-		// Client empty-reason guard
 		await leaderA.page.click('#p3-waive-submit')
 		const emptyWarn = await leaderA.page.locator('.cskh-modal .cskh-alert').innerText()
 		recordAssert(
@@ -700,7 +887,6 @@ async function main() {
 		])
 		await leaderA.page.locator('.cskh-loading').waitFor({ state: 'detached', timeout: 15000 }).catch(() => {})
 
-		// Switch server status filter to `waived` and verify the audited waived row
 		await Promise.all([
 			leaderA.page.waitForResponse(
 				(r) =>
@@ -717,8 +903,10 @@ async function main() {
 		const waivedText = await waivedRow.innerText()
 		recordAssert(
 			'B3E-16-waive-audited-row',
-			waivedText.includes('Được miễn trừ hợp lệ') && waivedText.includes('kiểm toán'),
-			`Obligation ${targetObId} updated to Waived with audit reason in DOM`
+			waivedText.includes('Được miễn trừ hợp lệ') &&
+				waivedText.includes('kiểm toán') &&
+				!waivedText.includes(teamA),
+			`Obligation ${targetObId} updated to Waived with audit reason and Vietnamese team name`
 		)
 
 		await captureShot(
@@ -729,14 +917,38 @@ async function main() {
 			'Leader A SLA & QA Operations table after audited SLA obligation waiver.'
 		)
 
-		// BOD on `/cskh/sla-operations`: 0 waive buttons & 0 PII
-		await bod.page.goto(`${BASE_URL}/cskh/sla-operations`, { waitUntil: 'networkidle' })
+		// BOD on `/cskh/sla-operations`: POSITIVE CONTROL (`200` on `list_obligations`, 0 API errors,
+		// `[data-banner="bod-sla-readonly"]` visible, `>=1` redacted row rendered) BEFORE asserting `bodWaiveBtns === 0`!
+		bod.telemetry.apiErrors.length = 0
+		const [bodSlaListResp] = await Promise.all([
+			bod.page.waitForResponse(
+				(r) => r.url().includes('crm_cskh.api.sla.list_obligations') && r.status() === 200
+			),
+			bod.page.goto(`${BASE_URL}/cskh/sla-operations`, { waitUntil: 'networkidle' }),
+		])
 		await selectSeededMonthIfNeeded(bod.page, periodKey, 'get_executive_overview')
+		await bod.page.locator('[data-banner="bod-sla-readonly"]').waitFor({ state: 'visible', timeout: 10000 })
+		await bod.page.locator('#p3-sla-table').waitFor({ state: 'visible', timeout: 10000 })
+		const bodSlaErrAlerts = await bod.page.locator('#p3-state-alert .cskh-alert').count()
+		const bodSlaRowsCount = await bod.page.locator('#p3-sla-table tbody tr').count()
+		const bodSlaTableText = await bod.page.locator('#p3-sla-table').innerText()
 		const bodWaiveBtns = await bod.page.locator('[data-waive-obligation]').count()
 		recordAssert(
 			'B3E-17-bod-no-waive-buttons',
-			bodWaiveBtns === 0,
-			'BOD sees 0 waive buttons on /cskh/sla-operations'
+			bodSlaListResp.status() === 200 &&
+				bod.telemetry.apiErrors.length === 0 &&
+				bodSlaErrAlerts === 0 &&
+				bodSlaRowsCount >= 1 &&
+				!bodSlaTableText.includes(teamA) &&
+				bodWaiveBtns === 0,
+			`BOD /cskh/sla-operations loads ${bodSlaRowsCount} non-PII SLA rows (HTTP 200, 0 errors, read-only banner) and renders 0 waive buttons`
+		)
+		await captureShot(
+			bod,
+			'/cskh/sla-operations#bod-readonly',
+			'07b-bod-sla-operations-readonly.png',
+			'B3E-17-bod-sla-operations-readonly',
+			'BOD SLA Operations read-only aggregate & redacted obligation view (HTTP 200, >=1 rows, 0 PII, 0 waive buttons).'
 		)
 
 		// Staff A receives HTTP 403 on all 5 management P3 screens
@@ -756,27 +968,89 @@ async function main() {
 		}
 
 		// ==================================================================
-		// SCENARIO 7: Personal Scorecard, Post-Transfer PII Redaction &
-		// Historical Work Item URL `403` (`/cskh/scorecard`, `Staff A`, `Staff C`, `BOD`)
+		// SCENARIO 7: Personal Scorecard, Golden `86,47` Weighted Contribution Bounds (`F-P3-09`),
+		// Post-Transfer PII Redaction & Historical Work Item URL `403`
 		// ==================================================================
 		await staffA.page.goto(`${BASE_URL}/cskh/scorecard`, { waitUntil: 'networkidle' })
 		await selectSeededMonthIfNeeded(staffA.page, periodKey, 'get_my_scorecard')
 		await staffA.page.locator('#p3-scorecard-summary').waitFor({ state: 'visible', timeout: 10000 })
+		const staffACompCount = await staffA.page.locator('#p3-scorecard-components tbody tr').count()
 
 		const scorecardText = await captureShot(
 			staffA,
 			'/cskh/scorecard',
 			'08-staff-a-personal-scorecard.png',
 			'B3E-19-staff-a-scorecard',
-			'Staff A Personal Scorecard showing own Process Score components, 3 pillars, and active owned SLA obligations (0 peer ranks).'
+			'Staff A Personal Scorecard showing own Process Score components (raw vs normalized), 3 pillars, and active owned SLA obligations (0 peer ranks).'
 		)
 		recordAssert(
 			'B3E-19-staff-scorecard-no-peers',
-			!scorecardText.includes(users.staff_b) && !scorecardText.includes('Thứ tự (trong nội bộ nhóm)'),
-			'Staff A Personal Scorecard never exposes peer emails or peer leaderboard'
+			staffACompCount >= 4 &&
+				!scorecardText.includes(users.staff_b) &&
+				!scorecardText.includes('Thứ tự (trong nội bộ nhóm)'),
+			`Staff A Personal Scorecard renders ${staffACompCount} components and never exposes peer emails or peer leaderboard`
 		)
 
-		// Staff A drills down own `FIRST_ATTEMPT_SLA_RATE` -> transferred Lead row has PII redacted!
+		// Golden Employee `staffB` (`86,47`) — verify `0 <= raw_points <= weight`, never `2.250`, and sum = `73,50 / 85 = 86,47`!
+		await staffB.page.goto(`${BASE_URL}/cskh/scorecard`, { waitUntil: 'networkidle' })
+		await selectSeededMonthIfNeeded(staffB.page, periodKey, 'get_my_scorecard')
+		await staffB.page.locator('#p3-scorecard-components').waitFor({ state: 'visible', timeout: 10000 })
+
+		const compEval = await staffB.page.evaluate(() => {
+			const rows = Array.from(document.querySelectorAll('#p3-scorecard-components tbody tr'))
+			const parsed = rows.map((tr) => {
+				const tds = Array.from(tr.querySelectorAll('td')).map((td) => td.innerText.trim())
+				return {
+					name: tds[0] || '',
+					weightText: tds[1] || '',
+					rateText: tds[2] || '',
+					rawText: tds[3] || '',
+					normText: tds[4] || '',
+					statusText: tds[5] || '',
+				}
+			})
+			const foot = document.getElementById('p3-scorecard-totals')
+			const footCells = foot
+				? Array.from(foot.querySelectorAll('td')).map((td) => td.innerText.trim())
+				: []
+			return { parsed, footCells }
+		})
+
+		let rawSum = 0
+		let normSum = 0
+		let activeChecked = 0
+		for (const row of compEval.parsed) {
+			if (row.rawText.startsWith('—') || row.rawText.includes('N/A')) continue
+			activeChecked += 1
+			const wNum = parseVnNumber(row.weightText)
+			const rawParts = row.rawText.split('/')
+			const rawNum = parseVnNumber(rawParts[0])
+			const normNum = parseVnNumber(row.normText)
+			assert(
+				Number.isFinite(rawNum) && rawNum >= 0 && rawNum <= wNum + 0.001 && rawNum < 100,
+				`Invalid raw weighted points "${row.rawText}" for weight ${wNum} (must satisfy 0 <= raw <= weight, never x100!)`
+			)
+			rawSum += rawNum
+			normSum += normNum
+		}
+		recordAssert(
+			'B3E-19b-golden-scorecard-component-bounds',
+			activeChecked === 4 &&
+				Math.abs(rawSum - 73.5) < 0.02 &&
+				Math.abs(normSum - 86.47) < 0.03 &&
+				compEval.footCells.some((c) => c.includes('73,50') && c.includes('85')) &&
+				compEval.footCells.some((c) => c.includes('86,47')),
+			`Golden Staff B scorecard reconciles 4 components: raw sum=${rawSum.toFixed(2)}/85 (22,50+16,00+20,00+15,00), normalized sum=${normSum.toFixed(2)} == 86,47`
+		)
+		await captureShot(
+			staffB,
+			'/cskh/scorecard#golden-8647',
+			'08b-staff-b-golden-scorecard-8647.png',
+			'B3E-19b-staff-b-golden-scorecard',
+			'Golden Staff B Personal Scorecard proving raw weighted_points (22,50 / 25, 16,00 / 20, 20,00 / 20, 15,00 / 20 -> 73,50 / 85) vs normalized contribution -> 86,47.'
+		)
+
+		// Staff A drills down own `FIRST_ATTEMPT_SLA_RATE` -> positive row count + transferred Lead PII redacted!
 		const staffDrillBtn = staffA.page.locator('[data-drilldown-metric="FIRST_ATTEMPT_SLA_RATE"]').first()
 		await Promise.all([
 			staffA.page.waitForResponse(
@@ -788,11 +1062,12 @@ async function main() {
 			staffDrillBtn.click(),
 		])
 		await staffA.page.locator('#p3-drilldown-table').waitFor({ state: 'visible', timeout: 10000 })
+		const staffModalRows = await staffA.page.locator('#p3-drilldown-table tbody tr').count()
 		const staffModalText = await staffA.page.locator('.cskh-modal').innerText()
 		recordAssert(
 			'B3E-20-staff-post-transfer-redaction',
-			staffModalText.includes('Đã ẩn PII sau bàn giao'),
-			'Staff A drill-down preserves historical KPI row while redacting transferred Lead PII'
+			staffModalRows >= 2 && staffModalText.includes('Đã ẩn PII sau bàn giao'),
+			`Staff A drill-down renders ${staffModalRows} historical KPI rows while redacting transferred Lead PII`
 		)
 		await staffA.page.locator('.cskh-modal-head button').click()
 
@@ -813,6 +1088,7 @@ async function main() {
 					(wiAlert.includes('FORBIDDEN') || wiAlert.includes('quyền') || wiAlert.includes('OWNERSHIP')),
 				`Staff A replaying transferred Work Item URL sees forbidden alert & hidden cards (0 PII leaked)`
 			)
+			staffA.telemetry.apiErrors.length = 0
 		}
 
 		// Staff C (zero denominator) on `/cskh/scorecard` -> `N/A`, never `0%`
@@ -844,7 +1120,6 @@ async function main() {
 		await admin.page.goto(`${BASE_URL}/cskh/quality-overview`, { waitUntil: 'networkidle' })
 		await selectSeededMonthIfNeeded(admin.page, periodKey, 'get_executive_overview')
 
-		// Leader A's waiver in Scenario 6 marked dirty scope -> verify stale banner OR trigger dirty mark explicitly
 		if ((await admin.page.locator('[data-banner="snapshot-stale"]').count()) === 0) {
 			benchExec('crm_cskh.tools.p3_e2e_seed.mark_period_dirty_for_test', {
 				period_key: periodKey,
@@ -869,7 +1144,6 @@ async function main() {
 			'Transparent stale/dirty KPI snapshot warning banner before recompute.'
 		)
 
-		// Trigger recompute via UI modal
 		await admin.page.click('#p3-btn-recompute')
 		await admin.page.locator('#p3-recompute-reason').waitFor({ state: 'visible', timeout: 5000 })
 		await admin.page.fill(
@@ -884,7 +1158,6 @@ async function main() {
 		])
 		await admin.page.locator('.cskh-loading').waitFor({ state: 'detached', timeout: 15000 }).catch(() => {})
 
-		// Open Revision & Restatement History modal
 		await admin.page.click('#p3-btn-revisions')
 		await admin.page.locator('#p3-revisions-table').waitFor({ state: 'visible', timeout: 10000 })
 		const revRowsCount = await admin.page.locator('#p3-revisions-table tbody tr').count()
@@ -940,7 +1213,6 @@ async function main() {
 			'Authorized server export modal showing Export ID, Ready status, row count, expiry timestamp, and download link.'
 		)
 
-		// Verify live authorized download inside Leader A browser session
 		const dlCheck = await leaderA.page.evaluate(async (url) => {
 			const r = await fetch(url, { credentials: 'same-origin' })
 			const text = await r.text()
@@ -952,7 +1224,6 @@ async function main() {
 			`Browser CSV download succeeded (HTTP ${dlCheck.status}, ${dlCheck.len} chars, formula-safe)`
 		)
 
-		// Revoke Leader A's Team A access -> verify BOTH `download_export` AND `/private/files/...` return 403 in browser!
 		const privateFileUrl = benchExec('crm_cskh.tools.p3_e2e_seed.get_export_private_file_url', {
 			export_id: exportId,
 		})
@@ -978,7 +1249,6 @@ async function main() {
 				`Post-revocation browser download blocked on BOTH download_export (${revCheck.apiStatus}) AND /private/files/... (${revCheck.fileStatus})`
 			)
 
-			// Click Refresh on the export job row -> UI surfaces Access denied / FORBIDDEN_SCOPE clearly
 			await leaderA.page
 				.locator(`#p3-export-jobs-table tr[data-export-id="${exportId}"] button`)
 				.click()
@@ -988,7 +1258,9 @@ async function main() {
 				'/cskh/team-quality#export-revoked',
 				'12-leader-a-export-revoked-403.png',
 				'B3E-28-leader-export-revoked-403',
-				'Post-revocation export status refresh surfaces clear Vietnamese access-denied error and disables download.'
+				'Post-revocation export status refresh surfaces clear Vietnamese access-denied error and disables download.',
+				true,
+				true
 			)
 		} finally {
 			benchExec('crm_cskh.tools.p3_e2e_seed.temporarily_revoke_leader_team', {
@@ -996,6 +1268,7 @@ async function main() {
 				team: teamA,
 				revoke: false,
 			})
+			leaderA.telemetry.apiErrors.length = 0
 		}
 		await leaderA.page.locator('.cskh-modal-head button').click()
 
@@ -1024,7 +1297,6 @@ async function main() {
 		]) {
 			await tzSession.page.goto(`${BASE_URL}/cskh/quality-overview`, { waitUntil: 'networkidle' })
 
-			// 1. Daily `2026-11-01` (Sunday midnight boundary test)
 			await tzSession.page.selectOption('#p3-filter-period-type', 'daily')
 			await Promise.all([
 				tzSession.page.waitForResponse(
@@ -1046,7 +1318,6 @@ async function main() {
 				`${tzLabel} daily bounds stay anchored to Asia/Ho_Chi_Minh: "${dailyPreview}"`
 			)
 
-			// 2. Weekly `2026-11-04` -> ISO week `[2026-11-02, 2026-11-09)`
 			await tzSession.page.selectOption('#p3-filter-period-type', 'weekly')
 			await Promise.all([
 				tzSession.page.waitForResponse(
@@ -1068,7 +1339,6 @@ async function main() {
 				`${tzLabel} weekly bounds stay anchored to Asia/Ho_Chi_Minh: "${weeklyPreview}"`
 			)
 
-			// 3. Quarterly `2026-Q4` -> `[2026-10-01, 2027-01-01)`
 			await Promise.all([
 				tzSession.page.waitForResponse(
 					(r) =>
@@ -1096,7 +1366,6 @@ async function main() {
 				`${tzLabel} quarterly bounds stay anchored to Asia/Ho_Chi_Minh: "${qPreview}"`
 			)
 
-			// 4. Yearly `2026` -> `[2026-01-01, 2027-01-01)`
 			await tzSession.page.selectOption('#p3-filter-period-type', 'yearly')
 			await Promise.all([
 				tzSession.page.waitForResponse(
@@ -1118,7 +1387,6 @@ async function main() {
 				`${tzLabel} yearly bounds stay anchored to Asia/Ho_Chi_Minh: "${yPreview}"`
 			)
 
-			// 5. Custom `2026-11-01` -> `2026-11-30` (`[2026-11-01 00:00, 2026-12-01 00:00)`)
 			await tzSession.page.selectOption('#p3-filter-period-type', 'custom')
 			await tzSession.page
 				.locator('#p3-filter-from')

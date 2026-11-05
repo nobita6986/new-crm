@@ -1251,4 +1251,16 @@ Incremental recompute,Tính lại tăng trưởng theo phạm vi (Incremental)
 System / Automated,Hệ thống / Tự động
 Restated from run,Đính chính từ đợt chạy
 Export jobs may only be created or updated through the export service.,Tiến trình xuất báo cáo chỉ được phép tạo hoặc cập nhật thông qua dịch vụ xuất dữ liệu.
-Export jobs are audit records and cannot be deleted.,Tiến trình xuất báo cáo là dữ liệu kiểm toán, không được phép xóa.
+Export jobs are audit records and cannot be deleted.,"Tiến trình xuất báo cáo là dữ liệu kiểm toán, không được phép xóa."
+Company-wide,Toàn công ty
+Company-wide (BOD),Toàn công ty (BOD)
+CRM system administration,Quản trị hệ thống CRM
+Managed team scope,Phạm vi đội nhóm quản lý
+Employee scope,Phạm vi nhân viên
+Campaign scope,Phạm vi chiến dịch
+N/A — Policy disabled,N/A — Chính sách đang tắt
+BOD read-only mode: customer PII is redacted and SLA mutation actions are disabled by authorization policy.,Chế độ chỉ xem dành cho BOD: thông tin định danh khách hàng (PII) được ẩn bảo mật và thao tác cập nhật/miễn trừ SLA bị tắt theo phân quyền.
+Raw weighted points,Điểm trọng số thô
+Normalized contribution (0-100),Điểm đóng góp sau chuẩn hóa (0–100)
+Open overdue SLA obligations require attention in the selected scope.,Đang có nghĩa vụ SLA quá hạn cần xử lý trong phạm vi đã chọn.
+Disputed contact attempts or pending correction requests exist in this period.,Có lần liên hệ đang tranh chấp hoặc chờ duyệt hiệu chỉnh trong kỳ này.

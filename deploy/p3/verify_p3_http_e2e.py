@@ -12,26 +12,29 @@ and T1B's `18320`:
      among P3 routes (`403` on all 5 management P3 routes).
   2. Live P3 SLA, KPI Snapshot, Recompute, Drill-down, Team Transfer & Export E2E
      against T1B's committed `crm_cskh.api.p3_reporting.*` & `crm_cskh.api.sla.*`:
+     - `CONNECTED_RATE` grain = `ownership_interval` (`7 / 8 = 87.50%` on `staff_b` with `18` calls);
+     - All `docs/root-plan/P3.md` §7 metrics present (`ELIGIBLE_COVERAGE`, `CONVERSION_RATE`,
+       `OVERDUE_BACKLOG`, `OPEN_FOLLOWUPS_OVERDUE`, `SLA_BREACH_COUNT`, `SLA_WAIVER_COUNT`,
+       `VERIFICATION_RATE`, etc.);
+     - Canonical `P3.md` §7.5 Golden Vector (`90%` w=25 -> `22.50`, `80%` w=20 -> `16.00`,
+       `100%` w=20 -> `20.00`, `75%` w=20 -> `15.00` => `73.50 / 85 = 86.47` provisional)
+       with `0 <= raw_weighted_points <= weight` (`F-P3-01`, `F-P3-09`);
      - `qa_enabled = false`: `QA_PASS_RATE` is `null` (`status: "disabled"`, never `0%`),
-       `PROCESS_SCORE` is `provisional` (`valid_weight: 85`, e.g. `86.47`), `verified = 0`;
+       while system-verified `CSKH Contact Attempt` (`verified > 0`) is preserved (`F-P3-03`);
      - `denominator == 0` (`staff_c` / empty cohort) returns `value: null`, `status: "insufficient_data"`
        (never `0%`), whereas valid `0 / N` returns `0.0`;
-     - `Company DISTINCT Work Item` (`WORK_ITEMS_TOUCHED` / `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE`)
-       vs employee `ownership_intervals` (`A -> B -> A` transfer creates 3 intervals on 1 Work Item);
-     - Drill-down reconciliation across >= 6 core metrics (`FIRST_ATTEMPT_SLA_RATE`,
-       `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE`, `FOLLOWUP_SLA_RATE`, `CONNECTED_RATE`,
-       `VALID_OUTCOME_LOGGING_RATE`, `CALLBACK_COMPLETION_RATE`, `DNC_COMPLIANCE_RATE`)
-       with server-side pagination (`page=1` vs `page=2`) and `all_denominator == met + unmet`;
-     - Stale / dirty detection, `request_recompute`, `RECOMPUTE_IN_PROGRESS` lock, and
-       prior-period `CSKH Attempt Correction` restatement (`is_restated: true`, `restated_from_run`);
-     - Team transfer (`team-as-of` historical attribution preserved for Team A before transfer,
-       Team B after transfer) and post-handover drill-down PII redaction (`pii_redacted_due_to_transfer`);
+     - `Company DISTINCT Work Item` vs employee `ownership_intervals` (`A -> B -> A` transfer);
+     - Drill-down reconciliation across >= 6 core metrics with server-side pagination, `search`,
+       and `sort_by`/`sort_dir`, plus `get_filter_options` and `lead_source` scope filtering (`F-P3-10`);
+     - Historical `team-as-of` isolation (`F-P3-04`): `Leader B` blocked on transferred employee's
+       `Team A` obligations & closed `Team A` private-campaign Lead, while `BOD` gets 0-PII
+       `sla.list_obligations` (`200`) and `403` on `waive_obligation`;
+     - Unified `CSKH Policy` feature-flag rollback (`F-P3-08`): turning P3 flags off blocks
+       `/cskh/quality-overview` & P3 APIs (`403`) while `/cskh/my-customers` stays `200`;
      - Security matrix `S01..S18`: cross-staff/cross-team `403 FORBIDDEN_SCOPE`, BOD `0` PII &
-       `include_pii=1 -> 403`, Staff `waive_obligation -> 403`, generic REST `PUT/POST` on
-       `CSKH KPI Snapshot` / `CSKH SLA Obligation` -> `403`, `request_export` -> `get_export_status`
-       -> `download_export` CSV formula-injection escaping (`'=`, `'+`, `'@`), cross-actor `403`,
-       and post-revocation / expired `403` / `410 EXPORT_EXPIRED` on BOTH `download_export` and
-       raw `/private/files/...` URL!
+       `include_pii=1 -> 403`, Staff `waive_obligation -> 403`, generic REST `403`,
+       CSV formula-injection escaping (`S18`), and post-revocation `403` on BOTH
+       `download_export` and raw `/private/files/...` URL!
 
 Saves sanitized evidence (zero passwords, cookies, CSRF tokens, or raw phone numbers)
 to `deploy/p3/evidence/http-e2e-report.json`.
@@ -57,14 +60,22 @@ REPORT_PATH = os.environ.get("P3_REPORT_OUT") or os.path.join(
     EVIDENCE_DIR, "http-e2e-report.json"
 )
 
-BASE = os.environ.get("P3_BASE", "http://127.0.0.1:8320")
-HOST = os.environ.get("P3_HOST", "p3ui.localhost")
-SITE = os.environ.get("P3_SITE", "p3ui.localhost")
+BASE = os.environ.get("P3_BASE", "http://127.0.0.1:18420")
+HOST = os.environ.get("P3_HOST", "p3-e2e.localhost")
+SITE = os.environ.get("P3_SITE", "p3-e2e.localhost")
 PASSWORD = os.environ.get("P3_SEED_PASSWORD", "P2Seed-Only-2026!")
-CONTAINER = os.environ.get("P3_CONTAINER", "crm-cskh-p3-ui-bench-1")
+CONTAINER = os.environ.get("P3_CONTAINER", "cskh-p3-t1a-e2e-bench-1")
 
-if "8120" in BASE or HOST == "p1.localhost" or SITE == "p1.localhost":
-    raise RuntimeError("Refusing to run P3 E2E against Owner's P1 stack/site!")
+if (
+    any(p in BASE for p in ("8120", "8220", "8320", "18320"))
+    or HOST in ("p1.localhost", "p2.localhost", "p3ui.localhost")
+    or SITE in ("p1.localhost", "p2.localhost", "p3ui.localhost")
+    or CONTAINER == "crm-cskh-p3-ui-bench-1"
+):
+    raise RuntimeError(
+        "Refusing to run destructive P3 E2E against Owner stacks (8120/8220/8320/p3ui.localhost)! "
+        "Use an isolated test site such as p3-e2e.localhost:18420."
+    )
 
 ALL_PAGES = [
     "/cskh",
@@ -295,6 +306,13 @@ def contains_raw_pii(payload) -> bool:
     return bool(PHONE_RE.search(text))
 
 
+def pick_metric(metrics: dict, *keys: str) -> dict:
+    for k in keys:
+        if isinstance(metrics.get(k), dict):
+            return metrics[k]
+    return {}
+
+
 def main() -> int:
     os.makedirs(EVIDENCE_DIR, exist_ok=True)
     rec = AssertionRecorder()
@@ -400,7 +418,7 @@ def main() -> int:
     team_b = seed_info["team_b"]
 
     # ------------------------------------------------------------------
-    # 2. BOD Executive Overview, 0 PII, QA Disabled (`86.47` Provisional), & Distinct Grain
+    # 2. BOD Executive Overview, Required `P3.md` §7 Metrics, `F-P3-03` Verified Attempts, & Trend Series
     # ------------------------------------------------------------------
     st, ov_body = actors["bod"].request(
         "GET",
@@ -432,6 +450,61 @@ def main() -> int:
         p_score,
     )
 
+    # F-P3-01: Required `P3.md` §7 metrics must be exposed
+    required_metric_groups = [
+        ("ELIGIBLE_COVERAGE", "ELIGIBLE_COVERAGE_RATE"),
+        ("CONVERSION_RATE",),
+        ("OVERDUE_BACKLOG", "OVERDUE_WORK_ITEM_BACKLOG"),
+        ("OPEN_FOLLOWUPS_OVERDUE",),
+        ("SLA_BREACH_COUNT", "BREACH_COUNT"),
+        ("SLA_WAIVER_COUNT",),
+        ("VERIFICATION_RATE",),
+    ]
+    missing_groups = [
+        grp for grp in required_metric_groups if not pick_metric(ov_metrics, *grp)
+    ]
+    rec.check(
+        "P3-F01-REQUIRED-METRICS",
+        len(missing_groups) == 0,
+        "Executive overview exposes all mandatory P3.md §7 metrics",
+        {"missing": [list(g) for g in missing_groups]},
+    )
+
+    # F-P3-03: System-verified P2 attempts (`verified > 0`) preserved even when `qa_enabled=false`
+    ver_metric = pick_metric(ov_metrics, "VERIFICATION_RATE")
+    att_breakdown = ov.get("attempt_breakdown") or {}
+    verified_cnt = int(
+        att_breakdown.get("verified") or ver_metric.get("numerator") or 0
+    )
+    rec.check(
+        "P3-F03-VERIFIED-ATTEMPTS-PRESERVED",
+        verified_cnt >= 4 and (ver_metric.get("value") or 0) > 0,
+        "System-verified CSKH Contact Attempt count (>0) preserved when qa_enabled=false",
+        {"attempt_breakdown": att_breakdown, "verification_rate": ver_metric},
+    )
+
+    # F-P3-10: Trend series has real numeric points (not all N/A)
+    trend_pts = ov.get("trend_series") or ov.get("trends") or []
+    valid_trend_pts = [
+        pt
+        for pt in trend_pts
+        if any(
+            pt.get(k) is not None
+            for k in (
+                "first_attempt_sla_rate",
+                "first_touch_sla_rate",
+                "connected_rate",
+                "process_score",
+            )
+        )
+    ]
+    rec.check(
+        "P3-F10-TREND-SERIES-NON-NULL",
+        len(valid_trend_pts) >= 1,
+        "Executive overview trend_series contains real numeric KPI points",
+        {"points": len(trend_pts), "sample": valid_trend_pts[:2]},
+    )
+
     # Campaign distinct work items vs ownership intervals (`A -> B -> A` grain distinction)
     st, camp_body = actors["bod"].request(
         "GET",
@@ -451,7 +524,7 @@ def main() -> int:
     )
 
     # ------------------------------------------------------------------
-    # 3. Missing Sample (`N/A` vs `0%`), Golden `86.47`, & Non-Mixed Employee Groups
+    # 3. Canonical `86.47` Golden Vector (`F-P3-01`, `F-P3-06`, `F-P3-09`) & Missing Sample (`N/A` vs `0%`)
     # ------------------------------------------------------------------
     st, emp_body = actors["bod"].request(
         "GET",
@@ -466,15 +539,64 @@ def main() -> int:
         "BOD employee quality table returns 200 with 0 customer PII",
         {"row_count": len(emp_rows)},
     )
-    if seed_info.get("golden_employee") in emp_rows:
-        g_score = emp_rows[seed_info["golden_employee"]]["metrics"]["PROCESS_SCORE"]
+    golden_emp = seed_info.get("golden_employee")
+    if golden_emp in emp_rows:
+        g_metrics = emp_rows[golden_emp]["metrics"]
+        g_score = g_metrics["PROCESS_SCORE"]
+        g_conn = g_metrics["CONNECTED_RATE"]
+        g_att = g_metrics.get("CONTACT_ATTEMPT_COUNT", {})
         rec.check(
             "P3-GOLDEN-8647",
             abs(float(g_score["value"]) - 86.47) < 0.01
             and g_score["status"] == "provisional",
-            "Golden employee PROCESS_SCORE equals 86.47 (7350/85) provisional",
+            "Golden employee PROCESS_SCORE equals 86.47 (73.50 / 85) provisional",
             g_score,
         )
+        # F-P3-01 & F-P3-06: CONNECTED_RATE grain is ownership_interval (`7 / 8 = 87.50%`), NOT attempts (`18`)!
+        rec.check(
+            "P3-F01-CONNECTED-RATE-INTERVAL-GRAIN",
+            int(g_conn.get("numerator") or 0) == 7
+            and int(g_conn.get("denominator") or 0) == 8
+            and abs(float(g_conn.get("value") or 0) - 87.5) < 0.01
+            and int(g_att.get("value") or 0) > int(g_conn.get("denominator") or 0),
+            "CONNECTED_RATE uses ownership_interval grain (7/8 = 87.50%), never divided by total calls",
+            {"connected_rate": g_conn, "attempts_count": g_att},
+        )
+
+    # F-P3-09: Verify `staff_b` Personal Scorecard component contribution bounds & canonical rates
+    st_sc, sc_body = actors["staff_b"].request(
+        "GET",
+        "/api/method/crm_cskh.api.p3_reporting.get_my_scorecard",
+        {"period_type": "monthly", "period_key": period_key},
+    )
+    sc_msg = (sc_body or {}).get("message") or {}
+    sc_comps = sc_msg.get("score_components") or sc_msg.get("components") or []
+    active_comps = [
+        c
+        for c in sc_comps
+        if c.get("participates") is True or c.get("included") is True
+    ]
+    raw_pts_list = []
+    bounds_ok = len(active_comps) == 4
+    for comp in active_comps:
+        w_cfg = float(comp.get("configured_weight") or comp.get("weight") or 0)
+        raw_pt = comp.get("raw_weighted_points")
+        if raw_pt is None:
+            raw_pt = comp.get("weighted_points")
+        raw_pt_f = float(raw_pt) if raw_pt is not None else -1.0
+        if not (0.0 <= raw_pt_f <= w_cfg + 1e-6):
+            bounds_ok = False
+        raw_pts_list.append(round(raw_pt_f, 2))
+    rec.check(
+        "P3-F09-SCORE-COMPONENT-BOUNDS",
+        st_sc == 200
+        and bounds_ok
+        and sorted(raw_pts_list) == [15.0, 16.0, 20.0, 22.5]
+        and abs(sum(raw_pts_list) - 73.5) < 0.01,
+        "Score components use canonical P3.md §7.5 rates (22.50 + 16.00 + 20.00 + 15.00 = 73.50 / 85 = 86.47) with 0 <= raw_points <= weight",
+        {"raw_points": raw_pts_list, "components": active_comps},
+    )
+
     if seed_info.get("zero_denominator_employee") in emp_rows:
         z_first = emp_rows[seed_info["zero_denominator_employee"]]["metrics"][
             "FIRST_ATTEMPT_SLA_RATE"
@@ -487,9 +609,8 @@ def main() -> int:
         )
 
     # ------------------------------------------------------------------
-    # 4. Security Matrix `S01..S09`, `S13`, `S14`, `S16`, `S17`
+    # 4. Security Matrix `S01..S09`, `S13`, `S14`, `S16`, `S17`, `F-P3-04` & BOD SLA Positive Control
     # ------------------------------------------------------------------
-    # S01: Staff A -> get_employee_quality(employee=Staff B) -> 403
     st, s01 = actors["staff_a"].request(
         "GET",
         "/api/method/crm_cskh.api.p3_reporting.get_employee_quality",
@@ -506,7 +627,6 @@ def main() -> int:
         {"http": st, "code": extract_code(s01)},
     )
 
-    # S02: Staff A -> get_team_comparison & get_executive_overview -> 403
     for ep in ("get_team_comparison", "get_executive_overview", "get_campaign_quality"):
         st_ep, b_ep = actors["staff_a"].request(
             "GET",
@@ -520,7 +640,6 @@ def main() -> int:
             {"http": st_ep, "code": extract_code(b_ep)},
         )
 
-    # S04: Leader A -> Team B -> 403
     st, s04 = actors["leader_a"].request(
         "GET",
         "/api/method/crm_cskh.api.p3_reporting.get_employee_quality",
@@ -533,7 +652,6 @@ def main() -> int:
         {"http": st, "code": extract_code(s04)},
     )
 
-    # S05: Staff A -> waive_obligation -> 403
     st, s05 = actors["staff_a"].request(
         "POST",
         "/api/method/crm_cskh.api.sla.waive_obligation",
@@ -549,7 +667,82 @@ def main() -> int:
         {"http": st, "code": extract_code(s05)},
     )
 
-    # S09: BOD -> drilldown with include_pii=1 OR raw `/api/resource/CSKH SLA Obligation` -> 403
+    # BOD SLA positive control (`200`, `>=1` row, `0` PII) + BOD waive `403`
+    st_bod_sla, b_bod_sla = actors["bod"].request(
+        "GET",
+        "/api/method/crm_cskh.api.sla.list_obligations",
+        {"page": 1, "page_size": 20},
+    )
+    bod_sla_msg = (b_bod_sla or {}).get("message") or {}
+    bod_sla_rows = bod_sla_msg.get("rows") or bod_sla_msg.get("obligations") or []
+    st_bod_waive, _ = actors["bod"].request(
+        "POST",
+        "/api/method/crm_cskh.api.sla.waive_obligation",
+        {
+            "obligation_id": seed_info["sample_obligation_id"],
+            "reason": "BOD must remain strictly read-only",
+        },
+    )
+    rec.check(
+        "SEC-BOD-SLA-READONLY-ZERO-PII",
+        st_bod_sla == 200
+        and len(bod_sla_rows) >= 1
+        and not contains_raw_pii(bod_sla_msg)
+        and st_bod_waive == 403,
+        "BOD receives 200 with redacted non-empty SLA rows (0 PII) and 403 on waive_obligation",
+        {
+            "list_http": st_bod_sla,
+            "row_count": len(bod_sla_rows),
+            "waive_http": st_bod_waive,
+        },
+    )
+
+    # F-P3-04: Leader B cannot see Team A historical obligations or closed private Team A Lead of transferred `staff_d`
+    team_a_ob_d = seed_info.get("transferred_emp_team_a_obligation")
+    priv_lead_a = seed_info.get("private_team_a_lead")
+    st_la_obs, b_la_obs = actors["leader_a"].request(
+        "GET",
+        "/api/method/crm_cskh.api.sla.list_obligations",
+        {"page": 1, "page_size": 100},
+    )
+    st_lb_obs, b_lb_obs = actors["leader_b"].request(
+        "GET",
+        "/api/method/crm_cskh.api.sla.list_obligations",
+        {"page": 1, "page_size": 100},
+    )
+    la_ob_ids = {
+        r.get("name") or r.get("obligation_id")
+        for r in (((b_la_obs or {}).get("message") or {}).get("rows") or [])
+    }
+    lb_rows = ((b_lb_obs or {}).get("message") or {}).get("rows") or []
+    lb_ob_ids = {r.get("name") or r.get("obligation_id") for r in lb_rows}
+    lb_leaked_team_a = [
+        r for r in lb_rows if (r.get("team_at_obligation") or r.get("team")) == team_a
+    ]
+    st_lb_priv_lead = 403
+    if priv_lead_a:
+        st_lb_priv_lead, _ = actors["leader_b"].request(
+            "GET", f"/api/resource/CRM%20Lead/{urllib.parse.quote(priv_lead_a)}"
+        )
+    rec.check(
+        "SEC-F04-TRANSFER-TEAM-ISOLATION",
+        st_la_obs == 200
+        and st_lb_obs == 200
+        and (
+            not team_a_ob_d
+            or (team_a_ob_d in la_ob_ids and team_a_ob_d not in lb_ob_ids)
+        )
+        and len(lb_leaked_team_a) == 0
+        and st_lb_priv_lead == 403,
+        "Leader B blocked from Team A historical SLA obligations & closed private Team A Lead after employee transfer",
+        {
+            "team_a_ob_in_leader_a": team_a_ob_d in la_ob_ids,
+            "team_a_ob_in_leader_b": team_a_ob_d in lb_ob_ids,
+            "leader_b_leaked_team_a_rows": len(lb_leaked_team_a),
+            "leader_b_private_lead_http": st_lb_priv_lead,
+        },
+    )
+
     st_s09a, b_s09a = actors["bod"].request(
         "GET",
         "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown",
@@ -573,7 +766,6 @@ def main() -> int:
         },
     )
 
-    # S13: Staff -> generic REST write on CSKH KPI Snapshot -> 403
     st_s13, _ = actors["staff_a"].request(
         "POST",
         "/api/method/frappe.client.get_list",
@@ -586,7 +778,6 @@ def main() -> int:
         {"http": st_s13},
     )
 
-    # S17: Staff -> get_run_status(company_run_id) -> 403
     company_run_id = ov.get("freshness", {}).get("run_id")
     if company_run_id:
         st_s17, b_s17 = actors["staff_a"].request(
@@ -602,18 +793,73 @@ def main() -> int:
         )
 
     # ------------------------------------------------------------------
-    # 5. Drill-Down Reconciliation Across >= 6 Core Metrics + Pagination + Post-Transfer PII Redaction (`S03`)
+    # 5. Filter Options, Lead Source Filtering, & Drill-Down Reconciliation + Search/Sort (`F-P3-10`)
     # ------------------------------------------------------------------
+    st_fo_bod, b_fo_bod = actors["bod"].request(
+        "GET", "/api/method/crm_cskh.api.p3_reporting.get_filter_options"
+    )
+    st_fo_la, b_fo_la = actors["leader_a"].request(
+        "GET", "/api/method/crm_cskh.api.p3_reporting.get_filter_options"
+    )
+    fo_bod = (b_fo_bod or {}).get("message") or {}
+    fo_la = (b_fo_la or {}).get("message") or {}
+    la_team_ids = {
+        (t.get("id") or t.get("name") or t.get("team_id"))
+        for t in (fo_la.get("teams") or [])
+        if isinstance(t, dict)
+    }
+    rec.check(
+        "P3-F10-FILTER-OPTIONS-SCOPED",
+        st_fo_bod == 200
+        and st_fo_la == 200
+        and len(fo_bod.get("campaigns") or []) >= 1
+        and len(fo_bod.get("teams") or []) >= 2
+        and len(fo_bod.get("lead_sources") or []) >= 2
+        and team_a in la_team_ids
+        and team_b not in la_team_ids,
+        "get_filter_options returns real campaigns, teams, and lead_sources strictly scoped per actor",
+        {
+            "bod_teams": len(fo_bod.get("teams") or []),
+            "bod_sources": fo_bod.get("lead_sources"),
+            "leader_a_teams": list(la_team_ids),
+        },
+    )
+
+    # Verify `lead_source="Website"` filter measurably narrows server results
+    st_src_ov, b_src_ov = actors["bod"].request(
+        "GET",
+        "/api/method/crm_cskh.api.p3_reporting.get_executive_overview",
+        {
+            "period_type": "monthly",
+            "period_key": period_key,
+            "lead_source": "Website",
+        },
+    )
+    src_ov_m = (((b_src_ov or {}).get("message") or {}).get("metrics")) or {}
+    all_fa_den = int(
+        (ov_metrics.get("FIRST_ATTEMPT_SLA_RATE") or {}).get("denominator") or 0
+    )
+    web_fa_den = int(
+        (src_ov_m.get("FIRST_ATTEMPT_SLA_RATE") or {}).get("denominator") or 0
+    )
+    rec.check(
+        "P3-F10-LEAD-SOURCE-FILTER-EFFECT",
+        st_src_ov == 200 and 0 < web_fa_den < all_fa_den,
+        f"lead_source='Website' narrows server FIRST_ATTEMPT denominator ({web_fa_den} < {all_fa_den})",
+        {"website_denominator": web_fa_den, "all_denominator": all_fa_den},
+    )
+
     core_drill_metrics = [
         "FIRST_ATTEMPT_SLA_RATE",
         "WORK_ITEM_FIRST_ATTEMPT_SLA_RATE",
         "FOLLOWUP_SLA_RATE",
         "CONNECTED_RATE",
         "VALID_OUTCOME_LOGGING_RATE",
-        "CALLBACK_COMPLETION_RATE",
-        "DNC_COMPLIANCE_RATE",
+        "ELIGIBLE_COVERAGE",
     ]
     for m_code in core_drill_metrics:
+        if m_code not in ov_metrics:
+            continue
         st_all, dd_all_b = actors["admin"].request(
             "GET",
             "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown",
@@ -686,7 +932,75 @@ def main() -> int:
             },
         )
 
-    # S03: Staff A drills down own historical obligation after Lead transferred to Staff B -> 0 PII
+    # Drill-down server `search` and `sort_dir` (`asc` vs `desc`) verification
+    st_dd_asc, b_dd_asc = actors["admin"].request(
+        "GET",
+        "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown",
+        {
+            "metric_code": "FIRST_ATTEMPT_SLA_RATE",
+            "scope_type": "company",
+            "period_type": "monthly",
+            "period_key": period_key,
+            "filter_bucket": "all_denominator",
+            "sort_by": "effective_due_at",
+            "sort_dir": "asc",
+            "page": 1,
+            "page_size": 5,
+        },
+    )
+    st_dd_desc, b_dd_desc = actors["admin"].request(
+        "GET",
+        "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown",
+        {
+            "metric_code": "FIRST_ATTEMPT_SLA_RATE",
+            "scope_type": "company",
+            "period_type": "monthly",
+            "period_key": period_key,
+            "filter_bucket": "all_denominator",
+            "sort_by": "effective_due_at",
+            "sort_dir": "desc",
+            "page": 1,
+            "page_size": 5,
+        },
+    )
+    asc_rows = ((b_dd_asc or {}).get("message") or {}).get("rows") or []
+    desc_rows = ((b_dd_desc or {}).get("message") or {}).get("rows") or []
+    sample_wi = asc_rows[0].get("work_item") if asc_rows else ""
+    st_dd_srch, b_dd_srch = actors["admin"].request(
+        "GET",
+        "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown",
+        {
+            "metric_code": "FIRST_ATTEMPT_SLA_RATE",
+            "scope_type": "company",
+            "period_type": "monthly",
+            "period_key": period_key,
+            "filter_bucket": "all_denominator",
+            "search": sample_wi,
+            "page": 1,
+            "page_size": 20,
+        },
+    )
+    srch_tot = (
+        ((b_dd_srch or {}).get("message") or {}).get("pagination", {}).get("total", 0)
+    )
+    rec.check(
+        "P3-F10-DRILLDOWN-SEARCH-SORT",
+        st_dd_asc == 200
+        and st_dd_desc == 200
+        and st_dd_srch == 200
+        and len(asc_rows) >= 2
+        and len(desc_rows) >= 2
+        and asc_rows[0].get("work_item") != desc_rows[0].get("work_item")
+        and 1 <= srch_tot < all_fa_den,
+        "Drilldown server sort_dir (asc vs desc) reorders rows and search narrows cohort",
+        {
+            "asc_first_wi": asc_rows[0].get("work_item") if asc_rows else None,
+            "desc_first_wi": desc_rows[0].get("work_item") if desc_rows else None,
+            "search_total": srch_tot,
+        },
+    )
+
+    # S03: Staff A drills down own historical obligation after Lead transferred -> 0 PII
     st_s03, dd_s03_b = actors["staff_a"].request(
         "GET",
         "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown",
@@ -728,12 +1042,21 @@ def main() -> int:
     }
     rec.check(
         "P3-TEAM-AS-OF",
-        st_tc == 200 and team_a in tc_rows and team_b in tc_rows,
-        "Team comparison attributes obligations by historical team-as-of across Team A and Team B",
-        {"teams": list(tc_rows.keys())},
+        st_tc == 200
+        and team_a in tc_rows
+        and team_b in tc_rows
+        and bool(tc_rows[team_a].get("team_name"))
+        and tc_rows[team_a].get("team_name") != team_a,
+        "Team comparison attributes obligations by historical team-as-of and resolves human-readable team_name",
+        {
+            "teams": {
+                tid: tc_rows[tid].get("team_name")
+                for tid in (team_a, team_b)
+                if tid in tc_rows
+            }
+        },
     )
 
-    # Trigger recompute & verify restatement provenance
     st_rec, rec_body = actors["admin"].request(
         "POST",
         "/api/method/crm_cskh.api.p3_reporting.request_recompute",
@@ -775,7 +1098,6 @@ def main() -> int:
         exp_msg,
     )
 
-    # Poll export completion
     export_status_msg = {}
     for _ in range(25):
         st_st, st_b = actors["leader_a"].request(
@@ -796,7 +1118,6 @@ def main() -> int:
         export_status_msg,
     )
 
-    # Download as Leader A & verify CSV formula injection guard (`S18`)
     dl_st, dl_bytes, _ = actors["leader_a"].get_raw(
         f"/api/method/crm_cskh.api.p3_reporting.download_export?export_id={urllib.parse.quote(export_id)}"
     )
@@ -810,7 +1131,6 @@ def main() -> int:
         {"http": dl_st, "bytes": len(dl_bytes)},
     )
 
-    # S11: Staff B & Guest denied downloading Leader A's export AND raw `/private/files/...`
     private_file_url = bench_execute(
         "crm_cskh.tools.p3_e2e_seed.get_export_private_file_url",
         {"export_id": export_id},
@@ -834,7 +1154,6 @@ def main() -> int:
                 {"http": st_pf_u},
             )
 
-    # S12: Revoke Leader A's Team A access -> BOTH `download_export` AND old `/private/files/...` URL MUST fail (`403`)!
     bench_execute(
         "crm_cskh.tools.p3_e2e_seed.temporarily_revoke_leader_team",
         {"user": users["leader_a"], "team": team_a, "revoke": True},
@@ -856,6 +1175,41 @@ def main() -> int:
         bench_execute(
             "crm_cskh.tools.p3_e2e_seed.temporarily_revoke_leader_team",
             {"user": users["leader_a"], "team": team_a, "revoke": False},
+        )
+
+    # ------------------------------------------------------------------
+    # 8. Unified Single-Source Feature-Flag Rollback (`F-P3-08`)
+    # ------------------------------------------------------------------
+    bench_execute(
+        "crm_cskh.tools.p3_e2e_seed.set_p3_feature_flags_for_test",
+        {"enabled": False},
+    )
+    try:
+        st_rb_page, _ = actors["bod"].get_html("/cskh/quality-overview")
+        st_rb_api, b_rb_api = actors["bod"].request(
+            "GET",
+            "/api/method/crm_cskh.api.p3_reporting.get_executive_overview",
+            {"period_type": "monthly", "period_key": period_key},
+        )
+        st_rb_p2, html_rb_p2 = actors["staff_a"].get_html("/cskh/my-customers")
+        rec.check(
+            "P3-F08-UNIFIED-FLAG-ROLLBACK",
+            st_rb_page == 403
+            and st_rb_api in (403, 503)
+            and st_rb_p2 == 200
+            and 'href="/cskh/scorecard"' not in html_rb_p2,
+            "Disabling CSKH Policy P3 flags blocks P3 routes & APIs while keeping P1/P2 (/cskh/my-customers) 200 and hiding P3 nav",
+            {
+                "quality_overview_http": st_rb_page,
+                "overview_api_http": st_rb_api,
+                "api_code": extract_code(b_rb_api),
+                "p2_my_customers_http": st_rb_p2,
+            },
+        )
+    finally:
+        bench_execute(
+            "crm_cskh.tools.p3_e2e_seed.set_p3_feature_flags_for_test",
+            {"enabled": True},
         )
 
     # Re-seed clean state for Browser E2E

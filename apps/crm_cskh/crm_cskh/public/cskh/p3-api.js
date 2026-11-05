@@ -23,6 +23,7 @@ window.cskhP3Api = (function () {
 
 	const ENDPOINTS = {
 		campaignsList: 'crm_cskh.api.campaigns.list',
+		filterOptions: 'crm_cskh.api.p3_reporting.get_filter_options',
 		executiveOverview: 'crm_cskh.api.p3_reporting.get_executive_overview',
 		teamComparison: 'crm_cskh.api.p3_reporting.get_team_comparison',
 		employeeQuality: 'crm_cskh.api.p3_reporting.get_employee_quality',
@@ -150,10 +151,118 @@ window.cskhP3Api = (function () {
 			label: 'Connected rate',
 			pillar: 'connection',
 			unit: 'percent',
+			grain: 'ownership_interval',
+			time_basis: 'event_time',
+			formula: 'Eligible intervals with >= 1 connected attempt divided by eligible intervals with >= 1 attempt.',
+			drillable: true,
+		},
+		ASSIGNED_INTERVALS: {
+			label: 'Assigned intervals',
+			pillar: 'compliance',
+			unit: 'count',
+			grain: 'ownership_interval',
+			time_basis: 'event_time',
+			formula: 'Ownership intervals active in period (employee accountability grain).',
+			drillable: false,
+		},
+		UNIQUE_ASSIGNED_ITEMS: {
+			label: 'Unique assigned work items',
+			pillar: 'compliance',
+			unit: 'count',
+			grain: 'distinct_work_item',
+			time_basis: 'event_time',
+			formula: 'DISTINCT Work Items active in period (company/campaign grain).',
+			drillable: false,
+		},
+		ELIGIBLE_COVERAGE: {
+			label: 'Eligible contact coverage',
+			pillar: 'compliance',
+			unit: 'percent',
+			grain: 'ownership_interval',
+			time_basis: 'deadline_cohort',
+			formula: 'Eligible ownership intervals with >= 1 effective attempt divided by mature eligible intervals.',
+			drillable: true,
+		},
+		CONNECTED_ITEMS: {
+			label: 'Connected work items',
+			pillar: 'connection',
+			unit: 'count',
+			grain: 'distinct_work_item',
+			time_basis: 'event_time',
+			formula: 'Distinct work items with >= 1 effective connected attempt in period.',
+			drillable: false,
+		},
+		CONVERSION_RATE: {
+			label: 'Campaign conversion rate',
+			pillar: 'connection',
+			unit: 'percent',
+			grain: 'distinct_work_item',
+			time_basis: 'event_time',
+			formula: 'Distinct work items achieving campaign conversion divided by campaign eligible cohort.',
+			drillable: false,
+		},
+		OVERDUE_BACKLOG: {
+			label: 'Overdue work item backlog',
+			pillar: 'compliance',
+			unit: 'count',
+			grain: 'distinct_work_item',
+			time_basis: 'as_of_point_in_time',
+			formula: 'Active distinct work items holding >= 1 open overdue SLA obligation at as_of.',
+			drillable: false,
+		},
+		OPEN_FOLLOWUPS_OVERDUE: {
+			label: 'Overdue open follow-up obligations',
+			pillar: 'compliance',
+			unit: 'count',
+			grain: 'sla_obligation',
+			time_basis: 'as_of_point_in_time',
+			formula: 'Open overdue FOLLOWUP SLA obligations at as_of.',
+			drillable: false,
+		},
+		SLA_BREACH_COUNT: {
+			label: 'SLA breach count',
+			pillar: 'compliance',
+			unit: 'count',
+			grain: 'sla_obligation',
+			time_basis: 'deadline_cohort',
+			formula: 'Obligations in breached_open or fulfilled_late within period.',
+			drillable: false,
+		},
+		SLA_WAIVER_COUNT: {
+			label: 'Valid SLA waiver count',
+			pillar: 'compliance',
+			unit: 'count',
+			grain: 'sla_obligation',
+			time_basis: 'deadline_cohort',
+			formula: 'Approved waived SLA obligations within period.',
+			drillable: false,
+		},
+		VERIFICATION_RATE: {
+			label: 'Verified result rate',
+			pillar: 'reliability',
+			unit: 'percent',
 			grain: 'effective_attempt',
 			time_basis: 'event_time',
-			formula: 'Connected effective attempts divided by total effective attempts in period.',
-			drillable: true,
+			formula: 'Verified effective attempts divided by total effective attempts in period.',
+			drillable: false,
+		},
+		FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES: {
+			label: 'First-touch latency (business minutes, p50 / p90)',
+			pillar: 'compliance',
+			unit: 'minutes_business',
+			grain: 'ownership_interval',
+			time_basis: 'event_time',
+			formula: 'p50 / p90 business-hour minutes from interval start to first effective attempt.',
+			drillable: false,
+		},
+		FIRST_ATTEMPT_LATENCY_WALL_MINUTES: {
+			label: 'First-touch latency (wall minutes, p50 / p90)',
+			pillar: 'compliance',
+			unit: 'minutes_wall',
+			grain: 'ownership_interval',
+			time_basis: 'event_time',
+			formula: 'p50 / p90 wall-clock minutes from interval start to first effective attempt.',
+			drillable: false,
 		},
 		FIRST_CONNECTED_TRACKING_RATE: {
 			label: 'First-connected tracking (informational, non-penalizing)',
@@ -214,20 +323,83 @@ window.cskhP3Api = (function () {
 
 	const SCORE_COMPONENT_METRIC_MAP = {
 		C1_FIRST_ATTEMPT_SLA: 'FIRST_ATTEMPT_SLA_RATE',
+		FIRST_TOUCH_ON_TIME: 'FIRST_ATTEMPT_SLA_RATE',
+		C2_ELIGIBLE_COVERAGE: 'ELIGIBLE_COVERAGE',
+		ELIGIBLE_COVERAGE: 'ELIGIBLE_COVERAGE',
+		ELIGIBLE_CONTACT_COVERAGE: 'ELIGIBLE_COVERAGE',
 		C2_FOLLOWUP_SLA: 'FOLLOWUP_SLA_RATE',
+		C4_FOLLOWUP_SLA: 'FOLLOWUP_SLA_RATE',
+		FOLLOWUP_ON_TIME: 'FOLLOWUP_SLA_RATE',
+		C3_OUTCOME_COMPLETENESS: 'VALID_OUTCOME_LOGGING_RATE',
 		C3_DATA_HYGIENE: 'VALID_OUTCOME_LOGGING_RATE',
+		OUTCOME_COMPLETENESS: 'VALID_OUTCOME_LOGGING_RATE',
 		C4_CALLBACK_DNC_DISCIPLINE: 'C4_CALLBACK_DNC_DISCIPLINE',
 		C5_QA_QUALITY: 'QA_PASS_RATE',
+		QA_PASS_RATE: 'QA_PASS_RATE',
 	}
 
-	// Lowercase compatibility aliases
+	// Compatibility aliases across uppercase & lowercase P3.md §7 keys
+	METRIC_CATALOG_DEFAULTS.DISTINCT_WORK_ITEMS = METRIC_CATALOG_DEFAULTS.UNIQUE_ASSIGNED_ITEMS
+	METRIC_CATALOG_DEFAULTS.UNIQUE_ASSIGNED_WORK_ITEMS = METRIC_CATALOG_DEFAULTS.UNIQUE_ASSIGNED_ITEMS
+	METRIC_CATALOG_DEFAULTS.ELIGIBLE_CONTACT_COVERAGE = METRIC_CATALOG_DEFAULTS.ELIGIBLE_COVERAGE
+	METRIC_CATALOG_DEFAULTS.ATTEMPTS_COUNT = METRIC_CATALOG_DEFAULTS.CONTACT_ATTEMPT_COUNT
+	METRIC_CATALOG_DEFAULTS.CONNECTED_WORK_ITEMS = METRIC_CATALOG_DEFAULTS.CONNECTED_ITEMS
+	METRIC_CATALOG_DEFAULTS.CAMPAIGN_CONVERSION_RATE = METRIC_CATALOG_DEFAULTS.CONVERSION_RATE
+	METRIC_CATALOG_DEFAULTS.OVERDUE_WORK_ITEM_BACKLOG = METRIC_CATALOG_DEFAULTS.OVERDUE_BACKLOG
+	METRIC_CATALOG_DEFAULTS.BREACH_COUNT = METRIC_CATALOG_DEFAULTS.SLA_BREACH_COUNT
+	METRIC_CATALOG_DEFAULTS.OUTCOME_COMPLETENESS = METRIC_CATALOG_DEFAULTS.VALID_OUTCOME_LOGGING_RATE
+	METRIC_CATALOG_DEFAULTS.OUTCOME_COMPLETENESS_RATE = METRIC_CATALOG_DEFAULTS.VALID_OUTCOME_LOGGING_RATE
 	METRIC_CATALOG_DEFAULTS.process_compliance_score = METRIC_CATALOG_DEFAULTS.PROCESS_SCORE
+	METRIC_CATALOG_DEFAULTS.assigned_intervals = METRIC_CATALOG_DEFAULTS.ASSIGNED_INTERVALS
+	METRIC_CATALOG_DEFAULTS.unique_assigned_items = METRIC_CATALOG_DEFAULTS.UNIQUE_ASSIGNED_ITEMS
+	METRIC_CATALOG_DEFAULTS.eligible_coverage = METRIC_CATALOG_DEFAULTS.ELIGIBLE_COVERAGE
+	METRIC_CATALOG_DEFAULTS.attempts_count = METRIC_CATALOG_DEFAULTS.CONTACT_ATTEMPT_COUNT
+	METRIC_CATALOG_DEFAULTS.connected_items = METRIC_CATALOG_DEFAULTS.CONNECTED_ITEMS
+	METRIC_CATALOG_DEFAULTS.first_touch_on_time = METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_SLA_RATE
 	METRIC_CATALOG_DEFAULTS.first_touch_on_time_rate = METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_SLA_RATE
+	METRIC_CATALOG_DEFAULTS.followup_on_time = METRIC_CATALOG_DEFAULTS.FOLLOWUP_SLA_RATE
 	METRIC_CATALOG_DEFAULTS.followup_on_time_rate = METRIC_CATALOG_DEFAULTS.FOLLOWUP_SLA_RATE
 	METRIC_CATALOG_DEFAULTS.connected_rate = METRIC_CATALOG_DEFAULTS.CONNECTED_RATE
+	METRIC_CATALOG_DEFAULTS.outcome_completeness = METRIC_CATALOG_DEFAULTS.VALID_OUTCOME_LOGGING_RATE
 	METRIC_CATALOG_DEFAULTS.outcome_completeness_rate =
 		METRIC_CATALOG_DEFAULTS.VALID_OUTCOME_LOGGING_RATE
+	METRIC_CATALOG_DEFAULTS.overdue_backlog = METRIC_CATALOG_DEFAULTS.OVERDUE_BACKLOG
+	METRIC_CATALOG_DEFAULTS.open_followups_overdue = METRIC_CATALOG_DEFAULTS.OPEN_FOLLOWUPS_OVERDUE
 	METRIC_CATALOG_DEFAULTS.qa_pass_rate = METRIC_CATALOG_DEFAULTS.QA_PASS_RATE
+	METRIC_CATALOG_DEFAULTS.verification_rate = METRIC_CATALOG_DEFAULTS.VERIFICATION_RATE
+	METRIC_CATALOG_DEFAULTS.conversion_rate = METRIC_CATALOG_DEFAULTS.CONVERSION_RATE
+	METRIC_CATALOG_DEFAULTS.breach_count = METRIC_CATALOG_DEFAULTS.SLA_BREACH_COUNT
+	METRIC_CATALOG_DEFAULTS.sla_waiver_count = METRIC_CATALOG_DEFAULTS.SLA_WAIVER_COUNT
+	METRIC_CATALOG_DEFAULTS.first_attempt_latency_business_minutes =
+		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES
+	METRIC_CATALOG_DEFAULTS.first_attempt_latency_wall_minutes =
+		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_WALL_MINUTES
+
+	const teamLabelsById = {}
+
+	function registerTeamLabel(teamId, teamLabel) {
+		const id = String(teamId || '').trim()
+		const lbl = String(teamLabel || '').trim()
+		if (
+			!id ||
+			!lbl ||
+			id === 'historical_attribution_unknown' ||
+			id === '__unattributed_historical_team__'
+		) {
+			return
+		}
+		if (lbl !== id) {
+			teamLabelsById[id] = lbl
+		} else if (!teamLabelsById[id]) {
+			teamLabelsById[id] = lbl
+		}
+	}
+
+	function resolveTeamLabel(teamId) {
+		const id = String(teamId || '').trim()
+		if (!id) return ''
+		return teamLabelsById[id] || ''
+	}
 
 	function toArray(val) {
 		if (Array.isArray(val)) return val
@@ -361,13 +533,24 @@ window.cskhP3Api = (function () {
 		if (rawStatus === 'ok') normalizedStatus = env.freshness_status || 'fresh'
 		if (rawStatus === 'final') normalizedStatus = 'finalized'
 
+		const p50Val =
+			raw.p50 !== undefined && raw.p50 !== null
+				? raw.p50
+				: raw.p50_minutes !== undefined && raw.p50_minutes !== null
+					? raw.p50_minutes
+					: null
+		const p90Val =
+			raw.p90 !== undefined && raw.p90 !== null
+				? raw.p90
+				: raw.p90_minutes !== undefined && raw.p90_minutes !== null
+					? raw.p90_minutes
+					: null
+
 		const isRateOrScore = unit === 'percent' || unit === 'score'
 		const zeroDenominator = denominator !== null && denominator === 0
 		const missingValue = raw.value === undefined || raw.value === null || raw.value === 'N/A'
 		const hasLatencyPair =
-			(unit === 'minutes_business' || unit === 'minutes_wall') &&
-			raw.p50 !== undefined &&
-			raw.p50 !== null
+			(unit === 'minutes_business' || unit === 'minutes_wall') && p50Val !== null
 
 		const isNa =
 			toBool(raw.is_na, false) ||
@@ -383,18 +566,20 @@ window.cskhP3Api = (function () {
 					? Number(raw.valid_weight_sum)
 					: null
 
+		const isQaKey =
+			key === 'QA_PASS_RATE' || key === 'qa_pass_rate' || key === 'C5_QA_QUALITY'
 		let naReason = raw.reason || raw.na_reason || ''
-		if (!naReason && isNa) {
-			if (
-				rawStatus === 'disabled' ||
-				(!env.qa_enabled && (key === 'QA_PASS_RATE' || key === 'qa_pass_rate'))
-			) {
-				naReason = 'qa_disabled'
-			} else if (zeroDenominator) {
-				naReason = 'zero_denominator'
-			}
-		} else if (naReason === 'qa_disabled_by_policy') {
+		if (naReason === 'qa_disabled_by_policy' || (isQaKey && (rawStatus === 'disabled' || !env.qa_enabled))) {
 			naReason = 'qa_disabled'
+		} else if (
+			naReason === 'policy_disabled' ||
+			naReason === 'min_attempts_disabled' ||
+			naReason === 'min_attempts_disabled_by_policy' ||
+			(!isQaKey && rawStatus === 'disabled')
+		) {
+			naReason = 'policy_disabled'
+		} else if (!naReason && isNa && zeroDenominator) {
+			naReason = 'zero_denominator'
 		} else if (naReason === 'no_eligible_records') {
 			naReason = 'zero_denominator'
 		}
@@ -411,8 +596,8 @@ window.cskhP3Api = (function () {
 			unit: unit,
 			grain: raw.grain || defaults.grain || 'ownership_interval',
 			value: isNa ? null : raw.value !== undefined ? raw.value : null,
-			p50: raw.p50 !== undefined ? raw.p50 : null,
-			p90: raw.p90 !== undefined ? raw.p90 : null,
+			p50: p50Val,
+			p90: p90Val,
 			numerator: numerator,
 			denominator: denominator,
 			valid_weight_sum: validWeight,
@@ -494,9 +679,12 @@ window.cskhP3Api = (function () {
 			params.period_key = bounds.periodKey
 		}
 		if (s.campaign) params.campaign = s.campaign
+		if (s.lead_source) params.lead_source = s.lead_source
 		if (s.team) params.team = s.team
 		if (s.employee) params.employee = s.employee
+		if (s.snapshot_revision) params.run_id = s.snapshot_revision
 		if (s.include_inactive) params.include_inactive = 1
+		if (s.search) params.search = s.search
 		if (s.sort_by) params.sort_by = s.sort_by
 		if (s.sort_dir) params.sort_dir = s.sort_dir
 		if (s.page) params.page = Number(s.page)
@@ -535,6 +723,56 @@ window.cskhP3Api = (function () {
 		return map[seg] || 'all_denominator'
 	}
 
+	function mapTeamRow(r, meta) {
+		const rowMetrics = r.metrics || {}
+		const hasUnattr =
+			r.is_unattributed_bucket ||
+			r.team_id === '__unattributed_historical_team__' ||
+			r.team === 'historical_attribution_unknown'
+		if (hasUnattr && meta) meta.has_unknown_historical_attribution = true
+		const rawId = r.team_id || r.team || ''
+		const rawName = r.team_name || r.team_label || ''
+		if (!hasUnattr && rawId && rawName) {
+			registerTeamLabel(rawId, rawName)
+		}
+		return {
+			team: hasUnattr ? 'historical_attribution_unknown' : rawId,
+			team_label: hasUnattr ? '' : rawName || resolveTeamLabel(rawId) || rawId,
+			is_unattributed_bucket: !!hasUnattr,
+			eligible_staff_count:
+				r.active_staff_count !== undefined ? r.active_staff_count : r.eligible_staff_count,
+			assigned_intervals:
+				r.ownership_intervals_count !== undefined
+					? r.ownership_intervals_count
+					: r.intervals_count !== undefined
+						? r.intervals_count
+						: rowMetrics.ASSIGNED_INTERVALS || r.assigned_intervals,
+			first_touch_on_time_rate:
+				rowMetrics.FIRST_ATTEMPT_SLA_RATE || r.first_touch_on_time_rate,
+			followup_on_time_rate: rowMetrics.FOLLOWUP_SLA_RATE || r.followup_on_time_rate,
+			connected_rate: rowMetrics.CONNECTED_RATE || r.connected_rate,
+			outcome_completeness_rate:
+				rowMetrics.VALID_OUTCOME_LOGGING_RATE ||
+				rowMetrics.OUTCOME_COMPLETENESS ||
+				r.outcome_completeness_rate,
+			callback_completion_rate: rowMetrics.CALLBACK_COMPLETION_RATE,
+			dnc_compliance_rate: rowMetrics.DNC_COMPLIANCE_RATE,
+			overdue_work_item_backlog:
+				rowMetrics.OVERDUE_BACKLOG !== undefined
+					? rowMetrics.OVERDUE_BACKLOG
+					: rowMetrics.OVERDUE_WORK_ITEM_BACKLOG !== undefined
+						? rowMetrics.OVERDUE_WORK_ITEM_BACKLOG
+						: r.overdue_work_item_backlog !== undefined
+							? r.overdue_work_item_backlog
+							: r.overdue_backlog,
+			process_compliance_score: rowMetrics.PROCESS_SCORE || r.process_compliance_score,
+			score_status:
+				(rowMetrics.PROCESS_SCORE && rowMetrics.PROCESS_SCORE.status) ||
+				r.score_status ||
+				'provisional',
+		}
+	}
+
 	return {
 		ENDPOINTS: ENDPOINTS,
 		METRIC_CATALOG_DEFAULTS: METRIC_CATALOG_DEFAULTS,
@@ -542,11 +780,70 @@ window.cskhP3Api = (function () {
 		normalizeMetric: normalizeMetric,
 		normalizeMetricsCollection: normalizeMetricsCollection,
 		buildPeriodParams: buildPeriodParams,
+		registerTeamLabel: registerTeamLabel,
+		resolveTeamLabel: resolveTeamLabel,
 
-		getFilterOptions: async function () {
+		getFilterOptions: async function (filterState) {
 			const caps = window.cskh.capabilities()
 			let campaigns = []
-			if (caps.admin || caps.bod || caps.leader) {
+			let teams = []
+			let employees = []
+			let leadSources = []
+			let revisions = []
+
+			// Prefer unified server filter-options endpoint when available
+			try {
+				const optRes = await window.cskh.get(
+					ENDPOINTS.filterOptions,
+					filterState ? buildPeriodParams(filterState) : {}
+				)
+				if (optRes && typeof optRes === 'object') {
+					campaigns = toArray(optRes.campaigns).map(function (c) {
+						return typeof c === 'object'
+							? {
+									value: c.value || c.campaign_id || c.campaign || c.name || '',
+									label: c.label || c.campaign_name || c.title || c.code || c.name || '',
+								}
+							: { value: String(c), label: String(c) }
+					})
+					teams = toArray(optRes.teams).map(function (tm) {
+						const val =
+							typeof tm === 'object' ? tm.value || tm.team_id || tm.name || '' : String(tm)
+						const lbl =
+							typeof tm === 'object' ? tm.label || tm.team_name || tm.full_name || val : String(tm)
+						registerTeamLabel(val, lbl)
+						return { value: val, label: lbl }
+					})
+					employees = toArray(optRes.employees).map(function (em) {
+						return typeof em === 'object'
+							? {
+									value: em.value || em.employee_id || em.user || em.name || '',
+									label: em.label || em.employee_name || em.full_name || em.user || '',
+								}
+							: { value: String(em), label: String(em) }
+					})
+					leadSources = toArray(optRes.lead_sources || optRes.sources).map(function (ls) {
+						return typeof ls === 'object'
+							? {
+									value: ls.value || ls.source || ls.name || '',
+									label: ls.label || ls.source_name || ls.title || ls.name || '',
+								}
+							: { value: String(ls), label: String(ls) }
+					})
+					revisions = toArray(optRes.revisions || optRes.runs).map(function (rv) {
+						return typeof rv === 'object'
+							? {
+									value: rv.value || rv.run_id || rv.name || '',
+									label: rv.label || rv.run_id || rv.name || '',
+								}
+							: { value: String(rv), label: String(rv) }
+					})
+				}
+			} catch (_optErr) {
+				/* fallback to individual scoped endpoints below */
+			}
+
+			if (!campaigns.length && (caps.admin || caps.bod || caps.leader)) {
 				try {
 					const res = await window.cskh.get(ENDPOINTS.campaignsList, {})
 					const rows = toArray(res && (res.items || res.rows || res.campaigns || res))
@@ -560,12 +857,46 @@ window.cskhP3Api = (function () {
 					campaigns = []
 				}
 			}
+
+			if (!teams.length && (caps.admin || caps.bod || caps.leader)) {
+				try {
+					const tcRes = await window.cskh.get(ENDPOINTS.teamComparison, buildPeriodParams(filterState || {}))
+					toArray(tcRes && (tcRes.rows || tcRes.teams)).forEach(function (r) {
+						const tid = r.team_id || r.team || ''
+						if (!tid || tid === '__unattributed_historical_team__' || r.is_unattributed_bucket) return
+						const tname = r.team_name || r.team_label || tid
+						registerTeamLabel(tid, tname)
+						teams.push({ value: tid, label: tname })
+					})
+				} catch (_tcErr) {
+					/* ignore */
+				}
+			}
+
+			if (!employees.length && (caps.admin || caps.bod || caps.leader)) {
+				try {
+					const eqRes = await window.cskh.get(
+						ENDPOINTS.employeeQuality,
+						Object.assign(buildPeriodParams(filterState || {}), { page: 1, page_size: 100 })
+					)
+					toArray(eqRes && (eqRes.rows || eqRes.employees)).forEach(function (r) {
+						const eid = r.employee_id || r.employee || ''
+						if (!eid) return
+						const ename = r.employee_name || r.full_name || eid
+						if (r.team_id && r.team_name) registerTeamLabel(r.team_id, r.team_name)
+						employees.push({ value: eid, label: ename })
+					})
+				} catch (_eqErr) {
+					/* ignore */
+				}
+			}
+
 			return {
 				campaigns: campaigns,
-				teams: [],
-				employees: [],
-				lead_sources: [],
-				revisions: [],
+				teams: teams,
+				employees: employees,
+				lead_sources: leadSources,
+				revisions: revisions,
 			}
 		},
 
@@ -577,13 +908,78 @@ window.cskhP3Api = (function () {
 			const raw = res || {}
 			const meta = extractEnvelopeMeta(raw)
 			const metrics = normalizeMetricsCollection(raw.metrics || {}, meta)
+
+			const trends = toArray(raw.trend_series || raw.trends).map(function (pt) {
+				const rawRate =
+					pt.first_touch_on_time_rate !== undefined
+						? pt.first_touch_on_time_rate
+						: pt.first_attempt_sla_rate !== undefined
+							? pt.first_attempt_sla_rate
+							: pt.FIRST_ATTEMPT_SLA_RATE !== undefined
+								? pt.FIRST_ATTEMPT_SLA_RATE
+								: pt.work_item_first_attempt_sla_rate !== undefined
+									? pt.work_item_first_attempt_sla_rate
+									: pt.value
+				const numericVal =
+					rawRate && typeof rawRate === 'object' ? rawRate.value : rawRate
+				const isNa =
+					Boolean(pt.is_na) ||
+					(rawRate && typeof rawRate === 'object' && Boolean(rawRate.is_na)) ||
+					numericVal === null ||
+					numericVal === undefined
+				return {
+					period_label: pt.period_label || pt.period_key || pt.bucket || pt.date || '—',
+					first_touch_on_time_rate: isNa ? null : Number(numericVal),
+					value: isNa ? null : Number(numericVal),
+					is_na: isNa,
+				}
+			})
+
+			let teamsSummary = toArray(raw.teams_summary || raw.rows).map(function (r) {
+				return mapTeamRow(r, meta)
+			})
+			const caps = window.cskh.capabilities()
+			if (!teamsSummary.length && (caps.admin || caps.bod || caps.leader)) {
+				try {
+					const tc = await this.getTeamComparison(filterState)
+					teamsSummary = tc.rows || []
+				} catch (_tcErr) {
+					teamsSummary = []
+				}
+			}
+
+			const alerts = toArray(raw.alerts || raw.anomalies).slice()
+			if (!alerts.length) {
+				const backlogM = metrics.byKey.OVERDUE_BACKLOG || metrics.byKey.OVERDUE_WORK_ITEM_BACKLOG
+				const breachM = metrics.byKey.SLA_BREACH_COUNT || metrics.byKey.BREACH_COUNT
+				if ((backlogM && Number(backlogM.value || 0) > 0) || (breachM && Number(breachM.value || 0) > 0)) {
+					alerts.push({
+						code: 'SLA_OVERDUE_ATTENTION',
+						severity: 'warning',
+						message: window.cskh.t(
+							'Open overdue SLA obligations require attention in the selected scope.'
+						),
+					})
+				}
+				const attM = metrics.byKey.CONTACT_ATTEMPT_COUNT || metrics.byKey.ATTEMPTS_COUNT
+				if (attM && attM.attempt_breakdown && Number(attM.attempt_breakdown.disputed || 0) > 0) {
+					alerts.push({
+						code: 'DISPUTED_ATTEMPTS_PRESENT',
+						severity: 'warning',
+						message: window.cskh.t(
+							'Disputed contact attempts or pending correction requests exist in this period.'
+						),
+					})
+				}
+			}
+
 			return {
 				meta: meta,
 				metrics: metrics.list,
 				metricsByKey: metrics.byKey,
-				trends: toArray(raw.trend_series || raw.trends),
-				teams_summary: toArray(raw.teams_summary || raw.rows),
-				alerts: toArray(raw.alerts || raw.anomalies),
+				trends: trends,
+				teams_summary: teamsSummary,
+				alerts: alerts,
 			}
 		},
 
@@ -593,36 +989,7 @@ window.cskhP3Api = (function () {
 			const meta = extractEnvelopeMeta(raw)
 			const summary = normalizeMetricsCollection(raw.metrics || raw.summary_metrics || {}, meta)
 			const rows = toArray(raw.rows || raw.teams).map(function (r) {
-				const rowMetrics = r.metrics || {}
-				const hasUnattr =
-					r.is_unattributed_bucket || r.team_id === '__unattributed_historical_team__'
-				if (hasUnattr) meta.has_unknown_historical_attribution = true
-				return {
-					team: hasUnattr ? 'historical_attribution_unknown' : r.team_id || r.team || '',
-					team_label: hasUnattr ? '' : r.team_name || r.team_label || r.team_id || '',
-					is_unattributed_bucket: !!hasUnattr,
-					eligible_staff_count:
-						r.active_staff_count !== undefined ? r.active_staff_count : r.eligible_staff_count,
-					assigned_intervals:
-						r.ownership_intervals_count !== undefined
-							? r.ownership_intervals_count
-							: r.intervals_count !== undefined
-								? r.intervals_count
-								: r.assigned_intervals,
-					first_touch_on_time_rate:
-						rowMetrics.FIRST_ATTEMPT_SLA_RATE || r.first_touch_on_time_rate,
-					followup_on_time_rate: rowMetrics.FOLLOWUP_SLA_RATE || r.followup_on_time_rate,
-					connected_rate: rowMetrics.CONNECTED_RATE || r.connected_rate,
-					outcome_completeness_rate:
-						rowMetrics.VALID_OUTCOME_LOGGING_RATE || r.outcome_completeness_rate,
-					callback_completion_rate: rowMetrics.CALLBACK_COMPLETION_RATE,
-					dnc_compliance_rate: rowMetrics.DNC_COMPLIANCE_RATE,
-					process_compliance_score: rowMetrics.PROCESS_SCORE || r.process_compliance_score,
-					score_status:
-						(rowMetrics.PROCESS_SCORE && rowMetrics.PROCESS_SCORE.status) ||
-						r.score_status ||
-						'provisional',
-				}
+				return mapTeamRow(r, meta)
 			})
 			const pag = raw.pagination || {}
 			return {
@@ -646,21 +1013,33 @@ window.cskhP3Api = (function () {
 				const rawSt = String((pScore && pScore.status) || r.score_status || 'provisional').toLowerCase()
 				const mappedSt = rawSt === 'final' || rawSt === 'ok' ? 'finalized' : rawSt
 				const attBrk = r.attempt_breakdown || {}
+				const rawTeamId = r.team_id || r.team || ''
+				const rawTeamName = r.team_name || r.team_label || ''
+				if (rawTeamId && rawTeamName) registerTeamLabel(rawTeamId, rawTeamName)
 				return {
 					employee: r.employee_id || r.employee || '',
 					employee_name: r.employee_name || r.full_name || r.employee_id || '',
-					team: r.team_id || r.team || '',
-					team_label: r.team_name || r.team_label || r.team_id || '',
+					team: rawTeamId,
+					team_label: rawTeamName || resolveTeamLabel(rawTeamId) || rawTeamId,
 					rank_in_group: r.rank_in_group !== undefined ? r.rank_in_group : null,
 					score_status: mappedSt,
 					process_compliance_score: pScore,
 					first_touch_on_time_rate:
 						rowMetrics.FIRST_ATTEMPT_SLA_RATE || r.first_touch_on_time_rate,
 					followup_on_time_rate: rowMetrics.FOLLOWUP_SLA_RATE || r.followup_on_time_rate,
+					eligible_coverage:
+						rowMetrics.ELIGIBLE_COVERAGE ||
+						rowMetrics.ELIGIBLE_CONTACT_COVERAGE ||
+						r.eligible_coverage ||
+						r.eligible_contact_coverage,
 					callback_completion_rate:
-						rowMetrics.CALLBACK_COMPLETION_RATE || r.eligible_contact_coverage,
+						rowMetrics.CALLBACK_COMPLETION_RATE || r.callback_completion_rate,
 					assigned_intervals:
-						r.intervals_count !== undefined ? r.intervals_count : r.assigned_intervals,
+						r.intervals_count !== undefined
+							? r.intervals_count
+							: rowMetrics.ASSIGNED_INTERVALS !== undefined
+								? rowMetrics.ASSIGNED_INTERVALS
+								: r.assigned_intervals,
 					work_items_touched: r.work_items_touched,
 					effective_attempts:
 						attBrk.attempted !== undefined
@@ -668,8 +1047,18 @@ window.cskhP3Api = (function () {
 							: rowMetrics.CONTACT_ATTEMPT_COUNT || r.effective_attempts,
 					connected_rate: rowMetrics.CONNECTED_RATE || r.connected_rate,
 					outcome_completeness_rate:
-						rowMetrics.VALID_OUTCOME_LOGGING_RATE || r.outcome_completeness_rate,
+						rowMetrics.VALID_OUTCOME_LOGGING_RATE ||
+						rowMetrics.OUTCOME_COMPLETENESS ||
+						r.outcome_completeness_rate,
 					dnc_compliance_rate: rowMetrics.DNC_COMPLIANCE_RATE,
+					overdue_work_item_backlog:
+						rowMetrics.OVERDUE_BACKLOG !== undefined
+							? rowMetrics.OVERDUE_BACKLOG
+							: rowMetrics.OVERDUE_WORK_ITEM_BACKLOG !== undefined
+								? rowMetrics.OVERDUE_WORK_ITEM_BACKLOG
+								: r.overdue_work_item_backlog !== undefined
+									? r.overdue_work_item_backlog
+									: r.overdue_backlog,
 					verified_count: attBrk.verified !== undefined ? attBrk.verified : 0,
 				}
 			})
@@ -698,9 +1087,17 @@ window.cskhP3Api = (function () {
 					unique_assigned_work_items:
 						r.distinct_work_items !== undefined
 							? r.distinct_work_items
-							: r.unique_assigned_work_items,
+							: rowMetrics.UNIQUE_ASSIGNED_ITEMS !== undefined
+								? rowMetrics.UNIQUE_ASSIGNED_ITEMS
+								: r.unique_assigned_work_items,
 					ownership_intervals_count:
-						r.ownership_intervals_count !== undefined ? r.ownership_intervals_count : null,
+						r.ownership_intervals_count !== undefined
+							? r.ownership_intervals_count
+							: rowMetrics.ASSIGNED_INTERVALS !== undefined
+								? rowMetrics.ASSIGNED_INTERVALS
+								: null,
+					eligible_coverage:
+						rowMetrics.ELIGIBLE_COVERAGE || rowMetrics.ELIGIBLE_CONTACT_COVERAGE,
 					dnc_compliance_rate: rowMetrics.DNC_COMPLIANCE_RATE || r.invalid_or_dnc_rate,
 					work_item_first_touch_rate:
 						rowMetrics.WORK_ITEM_FIRST_ATTEMPT_SLA_RATE || r.first_touch_on_time_rate,
@@ -708,8 +1105,13 @@ window.cskhP3Api = (function () {
 						rowMetrics.FIRST_ATTEMPT_SLA_RATE || r.first_touch_on_time_rate,
 					followup_on_time_rate: rowMetrics.FOLLOWUP_SLA_RATE || r.followup_on_time_rate,
 					connected_rate: rowMetrics.CONNECTED_RATE || r.connected_rate,
+					conversion_rate:
+						rowMetrics.CONVERSION_RATE ||
+						rowMetrics.CAMPAIGN_CONVERSION_RATE ||
+						r.conversion_rate ||
+						r.campaign_conversion_rate,
 					first_connected_rate:
-						rowMetrics.FIRST_CONNECTED_TRACKING_RATE || r.campaign_conversion_rate,
+						rowMetrics.FIRST_CONNECTED_TRACKING_RATE || r.first_connected_rate,
 				}
 			})
 			const pag = raw.pagination || {}
@@ -724,18 +1126,34 @@ window.cskhP3Api = (function () {
 			const caps = window.cskh.capabilities()
 			const s = filterState || {}
 
-			// Per `report-api-contract.md` §2: `sla.list_obligations` denies BOD (`403`)
-			// to prevent customer profile exposure; BOD views 0-PII aggregate SLA + redacted drilldown.
+			// Per `report-api-contract.md` §2 & Prompt Item 4: `sla.list_obligations` denies BOD (`403`)
+			// to protect customer PII; BOD views 0-PII aggregate SLA + server-paginated redacted SLA rows.
 			if (caps.bod && !caps.admin) {
+				let targetMetric = 'FIRST_ATTEMPT_SLA_RATE'
+				if (s.obligation_type === 'FOLLOWUP') targetMetric = 'FOLLOWUP_SLA_RATE'
+				else if (s.obligation_type === 'FIRST_CONNECTED') targetMetric = 'FIRST_CONNECTED_TRACKING_RATE'
+				else if (s.obligation_type === 'MIN_ATTEMPTS') targetMetric = 'MIN_ATTEMPTS_COMPLIANCE_RATE'
+
+				let targetSegment = 'all'
+				if (s.sla_status === 'fulfilled_on_time') targetSegment = 'met'
+				else if (
+					s.sla_status === 'waived' ||
+					s.sla_status === 'canceled_validly' ||
+					s.sla_status === 'handoff_closed' ||
+					s.sla_status === 'superseded'
+				) {
+					targetSegment = 'excluded'
+				} else if (s.sla_status) {
+					targetSegment = 'unmet'
+				}
+
 				const [ovRaw, ddRaw] = await Promise.all([
 					window.cskh.get(ENDPOINTS.executiveOverview, buildPeriodParams(s)),
 					this.drilldownMetric(
 						Object.assign({}, s, {
-							metric_key:
-								s.obligation_type === 'FOLLOWUP'
-									? 'FOLLOWUP_SLA_RATE'
-									: 'FIRST_ATTEMPT_SLA_RATE',
-							segment: s.sla_status === 'fulfilled_on_time' ? 'met' : 'unmet',
+							metric_key: targetMetric,
+							segment: targetSegment,
+							sla_status: s.sla_status || '',
 							page: s.page || 1,
 							page_size: s.page_size || 20,
 						})
@@ -754,10 +1172,10 @@ window.cskhP3Api = (function () {
 				}
 			}
 
-			const obParams = {
+			const obParams = Object.assign(buildPeriodParams(s), {
 				page: Number(s.page || 1),
 				page_size: Number(s.page_size || 20),
-			}
+			})
 			if (s.sla_status) obParams.status = s.sla_status
 			if (s.obligation_type) obParams.obligation_type = s.obligation_type
 			if (s.search) obParams.work_item = s.search
@@ -797,14 +1215,54 @@ window.cskhP3Api = (function () {
 			const meta = extractEnvelopeMeta(raw)
 			meta.scope = 'self'
 			const metrics = normalizeMetricsCollection(raw.metrics || {}, meta)
+			const scoreObj =
+				metrics.byKey.PROCESS_SCORE ||
+				(raw.score ? normalizeMetric('PROCESS_SCORE', raw.score, meta) : null)
+
 			const rawComps = toArray(raw.score_components || raw.components).map(function (c) {
-				const code = c.component_code || c.metric_key || c.key || ''
-				const mappedMetricKey = SCORE_COMPONENT_METRIC_MAP[code] || code
+				const code = c.component_code || c.component || c.metric_key || c.key || ''
+				const mappedMetricKey =
+					SCORE_COMPONENT_METRIC_MAP[code] ||
+					SCORE_COMPONENT_METRIC_MAP[String(code).toUpperCase()] ||
+					c.metric_code ||
+					c.metric_key ||
+					code
 				const linked = metrics.byKey[mappedMetricKey] || null
+				const rawPoints =
+					c.raw_weighted_points !== undefined
+						? c.raw_weighted_points
+						: c.raw_points !== undefined
+							? c.raw_points
+							: c.weighted_points !== undefined
+								? c.weighted_points
+								: null
+				const normPoints =
+					c.normalized_contribution !== undefined
+						? c.normalized_contribution
+						: c.normalized_points !== undefined
+							? c.normalized_points
+							: c.reweighted_points !== undefined
+								? c.reweighted_points
+								: c.reweighted_contribution !== undefined
+									? c.reweighted_contribution
+									: c.score_contribution !== undefined
+										? c.score_contribution
+										: null
+				const rateVal = c.rate_value !== undefined ? c.rate_value : c.value
+				const isIncluded =
+					c.included !== undefined
+						? Boolean(c.included)
+						: c.status !== 'disabled' &&
+							c.status !== 'insufficient_data' &&
+							rateVal !== null &&
+							rateVal !== undefined
 				return {
 					key: code,
+					component_code: code,
+					component_label: c.component_label || c.label || '',
 					metric_key: mappedMetricKey,
-					value: c.rate_value !== undefined ? c.rate_value : c.value,
+					included: isIncluded,
+					value: rateVal,
 					unit: 'percent',
 					numerator:
 						c.numerator !== undefined
@@ -822,21 +1280,55 @@ window.cskhP3Api = (function () {
 						c.configured_weight !== undefined
 							? c.configured_weight
 							: c.weight,
-					weighted_contribution:
-						c.weighted_points !== undefined
-							? c.weighted_points
-							: c.weighted_contribution,
+					raw_weighted_points: rawPoints,
+					normalized_contribution: normPoints,
+					weighted_contribution: normPoints !== null ? normPoints : rawPoints,
 					status: c.status,
 				}
 			})
+
+			const rawScorePayload = (raw.metrics && raw.metrics.PROCESS_SCORE) || raw.score || {}
+			const rawPointsTotal =
+				raw.raw_points_total !== undefined
+					? raw.raw_points_total
+					: raw.raw_weighted_points !== undefined
+						? raw.raw_weighted_points
+						: raw.raw_weighted_sum !== undefined
+							? raw.raw_weighted_sum
+							: rawScorePayload.raw_points_total !== undefined
+								? rawScorePayload.raw_points_total
+								: rawScorePayload.raw_weighted_points !== undefined
+									? rawScorePayload.raw_weighted_points
+									: rawScorePayload.raw_weighted_sum !== undefined
+										? rawScorePayload.raw_weighted_sum
+										: rawScorePayload.numerator !== undefined &&
+											  Number(rawScorePayload.numerator) <= 100
+											? rawScorePayload.numerator
+											: null
+			const validWeightSum =
+				raw.valid_weight !== undefined
+					? raw.valid_weight
+					: raw.valid_weight_sum !== undefined
+						? raw.valid_weight_sum
+						: scoreObj && scoreObj.valid_weight_sum !== undefined
+							? scoreObj.valid_weight_sum
+							: null
+			const configuredWeightTotal =
+				raw.configured_weight_total !== undefined
+					? raw.configured_weight_total
+					: rawScorePayload.configured_weight_total !== undefined
+						? rawScorePayload.configured_weight_total
+						: 100
+
 			const activeObs = toArray(
 				raw.active_obligations || raw.actionable_obligations || raw.obligations
 			).map(normalizeObligationRow)
 			return {
 				meta: meta,
-				score:
-					metrics.byKey.PROCESS_SCORE ||
-					(raw.score ? normalizeMetric('PROCESS_SCORE', raw.score, meta) : null),
+				score: scoreObj,
+				valid_weight_sum: validWeightSum,
+				raw_points_total: rawPointsTotal,
+				configured_weight_total: configuredWeightTotal,
 				components: rawComps,
 				metrics: metrics.list,
 				metricsByKey: metrics.byKey,
@@ -853,6 +1345,10 @@ window.cskhP3Api = (function () {
 				params.scope_id = args.scope_id || scope.scope_id
 			}
 			params.filter_bucket = mapSegmentToBucket(args.segment || args.filter_bucket || 'all')
+			if (args.search) params.search = args.search
+			if (args.sort_by) params.sort_by = args.sort_by
+			if (args.sort_dir) params.sort_dir = args.sort_dir
+			if (args.sla_status) params.sla_status = args.sla_status
 			params.page = Number(args.page || 1)
 			params.page_size = Number(args.page_size || 20)
 
@@ -1076,24 +1572,25 @@ window.cskhP3Api = (function () {
 			row.pii_redacted_due_to_transfer ||
 			row.lead_ref === 'REDACTED'
 		)
+		const rawTeamId =
+			row.team_at_obligation || row.team_at_event || row.team_id || row.team || ''
+		const rawTeamName = row.team_name || row.team_label || ''
+		if (rawTeamId && rawTeamName) {
+			registerTeamLabel(rawTeamId, rawTeamName)
+		}
 		const teamVal =
 			row.attribution_status === 'historical_attribution_unknown' ||
-			row.team_at_obligation === '__unattributed_historical_team__' ||
-			row.team_id === '__unattributed_historical_team__' ||
-			row.team_at_event === 'historical_attribution_unknown'
+			rawTeamId === '__unattributed_historical_team__' ||
+			rawTeamId === 'historical_attribution_unknown'
 				? 'historical_attribution_unknown'
-				: row.team_name ||
-					row.team_at_obligation ||
-					row.team_at_event ||
-					row.team_id ||
-					row.team ||
-					''
+				: rawTeamName || resolveTeamLabel(rawTeamId) || rawTeamId
 		return {
 			obligation_id: row.obligation_id || row.record_id || row.name || row.attempt_id || '',
 			work_item: row.work_item || row.work_item_id || '',
 			obligation_type: row.obligation_type || row.record_type || '',
 			responsible_user: row.responsible_user || row.employee || row.owner_user || '',
 			team_at_event: teamVal,
+			team_name: rawTeamName || resolveTeamLabel(rawTeamId) || '',
 			pii_redacted: piiRedacted,
 			customer_ref: row.customer_name || row.lead_ref || row.lead || row.customer_ref || '',
 			original_due_at: row.original_due_at || row.started_at || '',

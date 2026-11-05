@@ -88,10 +88,22 @@
 							: null,
 					]),
 					el('td', {
-						text:
-							row.team === 'historical_attribution_unknown'
-								? t('Historical attribution unknown')
-								: row.team_label || row.team || '—',
+						text: (function () {
+							const rawTeam = row.team || row.team_id || ''
+							if (
+								rawTeam === 'historical_attribution_unknown' ||
+								rawTeam === '__unattributed_historical_team__'
+							) {
+								return t('Historical attribution unknown')
+							}
+							return (
+								row.team_label ||
+								row.team_name ||
+								api.resolveTeamLabel(rawTeam) ||
+								rawTeam ||
+								'—'
+							)
+						})(),
 					}),
 					el('td', { class: 'num' }, [
 						el('strong', { text: scoreDisp.main }),
@@ -106,6 +118,10 @@
 					el('td', {
 						class: 'num',
 						text: w.formatInlineRateCell(row.followup_on_time_rate, 'percent'),
+					}),
+					el('td', {
+						class: 'num',
+						text: w.formatInlineRateCell(row.eligible_coverage, 'percent'),
 					}),
 					el('td', {
 						class: 'num',
@@ -130,6 +146,10 @@
 					el('td', {
 						class: 'num',
 						text: w.formatInlineRateCell(row.dnc_compliance_rate, 'percent'),
+					}),
+					el('td', {
+						class: 'num',
+						text: w.formatInlineRateCell(row.overdue_work_item_backlog, 'count'),
 					}),
 					el('td', {}, [
 						el('button', {
@@ -171,12 +191,14 @@
 							el('th', { class: 'num', text: t('Process compliance score') }),
 							el('th', { class: 'num', text: t('First-touch on-time rate') }),
 							el('th', { class: 'num', text: t('Follow-up on-time rate') }),
+							el('th', { class: 'num', text: t('Eligible contact coverage') }),
 							el('th', { class: 'num', text: t('Callback completion rate') }),
 							el('th', { class: 'num', text: t('Assigned intervals') }),
 							el('th', { class: 'num', text: t('Effective attempts (activity reference)') }),
 							el('th', { class: 'num', text: t('Connected rate') }),
 							el('th', { class: 'num', text: t('Outcome completeness rate') }),
 							el('th', { class: 'num', text: t('DNC & closure compliance rate') }),
+							el('th', { class: 'num', text: t('Overdue work item backlog') }),
 							el('th', { text: t('Actions') }),
 						]),
 					]),

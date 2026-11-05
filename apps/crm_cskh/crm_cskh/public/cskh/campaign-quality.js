@@ -22,6 +22,7 @@
 
 	const filterBar = w.mountFilterBar(filterHost, {
 		showCampaign: true,
+		showLeadSource: true,
 		showTeam: true,
 		onChange: function () {
 			loadPage()
@@ -101,6 +102,10 @@
 					}),
 					el('td', {
 						class: 'num',
+						text: w.formatInlineRateCell(row.conversion_rate, 'percent'),
+					}),
+					el('td', {
+						class: 'num',
 						text: w.formatInlineRateCell(row.first_connected_rate, 'percent'),
 					}),
 					el('td', {
@@ -153,6 +158,7 @@
 								el('th', { class: 'num', text: t('First-touch on-time rate') }),
 								el('th', { class: 'num', text: t('Follow-up on-time rate') }),
 								el('th', { class: 'num', text: t('Connected rate') }),
+								el('th', { class: 'num', text: t('Campaign conversion rate') }),
 								el('th', {
 									class: 'num',
 									text: t('First-connected tracking (informational, non-penalizing)'),

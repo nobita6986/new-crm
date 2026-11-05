@@ -58,14 +58,22 @@
 		const cols = el('div', { class: 'cskh-two-col' })
 
 		// Trend chart card
-		const trendCard = el('div', { class: 'cskh-card' }, [
+		const trendCard = el('div', { class: 'cskh-card', id: 'p3-overview-trend-card' }, [
 			el('h2', { text: t('Trend over period') }),
 			w.renderBarChart(
 				(data.trends || []).map(function (pt) {
+					const rawVal =
+						pt.first_touch_on_time_rate !== undefined
+							? pt.first_touch_on_time_rate
+							: pt.first_attempt_sla_rate !== undefined
+								? pt.first_attempt_sla_rate
+								: pt.FIRST_ATTEMPT_SLA_RATE !== undefined
+									? pt.FIRST_ATTEMPT_SLA_RATE
+									: pt.value
 					return {
 						label: pt.period_label || pt.bucket || pt.date || '—',
-						value: pt.first_touch_on_time_rate !== undefined ? pt.first_touch_on_time_rate : pt.value,
-						is_na: pt.is_na,
+						value: rawVal,
+						is_na: Boolean(pt.is_na || rawVal === null || rawVal === undefined),
 						color: '#2563eb',
 					}
 				}),
@@ -75,7 +83,7 @@
 		cols.appendChild(trendCard)
 
 		// Alerts / Anomalies card
-		const alertsCard = el('div', { class: 'cskh-card' }, [
+		const alertsCard = el('div', { class: 'cskh-card', id: 'p3-overview-alerts-card' }, [
 			el('h2', { text: t('SLA & data quality alerts') }),
 		])
 		if (!data.alerts || !data.alerts.length) {
@@ -99,7 +107,7 @@
 		mainHost.appendChild(cols)
 
 		// Team summary table
-		const teamCard = el('div', { class: 'cskh-card' }, [
+		const teamCard = el('div', { class: 'cskh-card', id: 'p3-overview-teams-card' }, [
 			el('div', { class: 'cskh-pillar-head' }, [
 				el('h2', { text: t('Team comparison summary') }),
 				el('a', { class: 'cskh-btn is-small', href: '/cskh/team-quality', text: t('Team comparison') }),
@@ -128,11 +136,17 @@
 							'tbody',
 							{},
 							data.teams_summary.map(function (row) {
+								const rawTeam = row.team || row.team_id || ''
 								const teamName =
-									row.team === 'historical_attribution_unknown'
+									rawTeam === 'historical_attribution_unknown' ||
+									rawTeam === '__unattributed_historical_team__'
 										? t('Historical attribution unknown')
-										: row.team_label || row.team || '—'
-								return el('tr', {}, [
+										: row.team_label ||
+											row.team_name ||
+											api.resolveTeamLabel(rawTeam) ||
+											rawTeam ||
+											'—'
+								return el('tr', { 'data-team': rawTeam }, [
 									el('td', { text: teamName }),
 									el('td', { class: 'num', text: w.formatInlineRateCell(row.assigned_intervals, 'count') }),
 									el('td', {

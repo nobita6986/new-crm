@@ -37,7 +37,8 @@ Qua khảo sát thực tế cây mã nguồn `apps/crm_cskh/crm_cskh` trên base
 | `/cskh/sla-operations` | **5. Vận hành SLA & Kiểm định QA** (§10.5) | Chặn (`403`) | Cho phép *(scope đội)* | Cho phép | Cho phép *(0 PII thô, chỉ đọc / theo quyền)* | Tra cứu nghĩa vụ quá hạn/vi phạm/miễn trừ/cảnh báo; thao tác miễn trừ/tính lại kiểm quyền + lý do kiểm toán; QA hiển thị chế độ `qa_enabled=false` minh bạch. |
 | `/cskh/scorecard` | **6. Bảng điểm cá nhân** (§10.6) | Cho phép *(chỉ chính mình)* | Cho phép *(cá nhân)* | Cho phép | Chặn (`403`) | Scope khóa cứng từ phiên đăng nhập; không lộ PII khách đã chuyển giao cho người khác (`S04`). |
 
-- **Cờ thu hồi (`Rollback Feature Flag` — `cskh_p3_enabled`):** Mặc định `True`; khi cấu hình site đặt `cskh_p3_enabled = false`, toàn bộ mục điều hướng P3 tự ẩn và các route P3 trả thông báo tạm ngưng an toàn (`403`), bảo toàn nguyên vẹn toàn bộ luồng P1/P2.
+- **Cờ thu hồi hợp nhất (`Unified Rollback Feature Flag` — `CSKH Policy` & `site_config`):** `www/cskh_context.py` dùng chung bộ giải quyết cờ tính năng P3 của Backend (`CSKH Policy.p3_reporting_enabled` / `p3_sla_enabled` và `site_config.cskh_p3_enabled`). Khi tắt cờ P3, toàn bộ mục điều hướng P3 tự ẩn và các route/API P3 trả HTTP `403` đồng bộ với [`docs/p3/rollback.md`](./rollback.md), bảo toàn nguyên vẹn toàn bộ luồng P1/P2.
+- **Chế độ BOD trên `/cskh/sla-operations`:** Giữ nguyên quyền xem tổng hợp/nghĩa vụ đã ẩn PII (`[data-banner="bod-sla-readonly"]`), hiển thị trạng thái dữ liệu/empty/error rõ ràng và tuyệt đối `0` nút thao tác miễn trừ/cập nhật.
 
 ---
 
@@ -60,11 +61,12 @@ Qua khảo sát thực tế cây mã nguồn `apps/crm_cskh/crm_cskh` trên base
 
 ### 3.2. Tách bạch Ba Trụ cột, Chế độ `qa_enabled = false` & Bảng Xếp hạng Không Trộn
 1. **Ba trụ cột hiển thị tách rời trên mọi màn hình (`cskh-metrics-v1`):**
-   - **Nhóm A — Tuân thủ quy trình & SLA:** `PROCESS_SCORE`, `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE`, `FIRST_ATTEMPT_SLA_RATE`, `FOLLOWUP_SLA_RATE`, `MIN_ATTEMPTS_COMPLIANCE_RATE`, `CALLBACK_COMPLETION_RATE`, `RESCHEDULE_RATE`, `DNC_COMPLIANCE_RATE`.
-   - **Nhóm B — Hiệu quả kết nối & chuyển đổi:** `WORK_ITEMS_TOUCHED`, `CONTACT_ATTEMPT_COUNT` (chỉ số hoạt động tham khảo kèm phân rã `attempted / connected / self_reported / verified / disputed`), `CONNECTED_ATTEMPT_COUNT`, `CONNECTED_RATE`, `FIRST_CONNECTED_TRACKING_RATE` (theo dõi riêng, `informational_only: true`, **không phạt vi phạm SLA** khi khách không nghe máy).
-   - **Nhóm C — Độ tin cậy dữ liệu & Kiểm định QA:** `VALID_OUTCOME_LOGGING_RATE`, `CORRECTION_RATE`, `VOID_ATTEMPT_RATE`, và `QA_PASS_RATE` (tách riêng `verified`, `self_reported`, `disputed`).
-2. **Chế độ `qa_enabled = false` (`F22`, `G09`, `G10`):**
-   - Hiển thị hộp thông báo minh bạch khi backend trả `qa_enabled: false`: không sinh phiếu QA hay trạng thái `Đã xác minh` giả; `QA_PASS_RATE` hiển thị `N/A — Phân hệ QA đang tắt` (`status: "disabled"`); `PROCESS_SCORE` hiển thị rõ **`86,47 — Tạm tính; thiếu mẫu QA`** (kèm tổng trọng số hợp lệ `85/100`).
+   - **Nhóm A — Tuân thủ quy trình & SLA:** `PROCESS_SCORE`, `ASSIGNED_INTERVALS`, `UNIQUE_ASSIGNED_ITEMS`, `ELIGIBLE_COVERAGE`, `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE`, `FIRST_ATTEMPT_SLA_RATE`, `FOLLOWUP_SLA_RATE`, `MIN_ATTEMPTS_COMPLIANCE_RATE`, `CALLBACK_COMPLETION_RATE`, `RESCHEDULE_RATE`, `DNC_COMPLIANCE_RATE`, `OVERDUE_BACKLOG`, `OPEN_FOLLOWUPS_OVERDUE`, `SLA_BREACH_COUNT`, `SLA_WAIVER_COUNT`, `FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES`, `FIRST_ATTEMPT_LATENCY_WALL_MINUTES`.
+   - **Nhóm B — Hiệu quả kết nối & chuyển đổi:** `WORK_ITEMS_TOUCHED`, `CONNECTED_ITEMS`, `CONTACT_ATTEMPT_COUNT` (chỉ số hoạt động tham khảo kèm phân rã `attempted / connected / self_reported / verified / disputed`), `CONNECTED_ATTEMPT_COUNT`, `CONNECTED_RATE` (đơn vị `ownership_interval`: `connected_intervals / tried_intervals`), `CONVERSION_RATE`, `FIRST_CONNECTED_TRACKING_RATE` (theo dõi riêng, `informational_only: true`, **không phạt vi phạm SLA** khi khách không nghe máy).
+   - **Nhóm C — Độ tin cậy dữ liệu & Kiểm định QA:** `VALID_OUTCOME_LOGGING_RATE`, `VERIFICATION_RATE`, `CORRECTION_RATE`, `VOID_ATTEMPT_RATE`, và `QA_PASS_RATE` (tách riêng `verified`, `self_reported`, `disputed`).
+2. **Chế độ `qa_enabled = false` & Điểm đóng góp thành phần (`F22`, `F-P3-09`, `G09`, `G10`):**
+   - Hiển thị hộp thông báo minh bạch khi backend trả `qa_enabled: false`: không sinh phiếu QA hay trạng thái `Đã xác minh` giả; `QA_PASS_RATE` hiển thị `N/A — Chưa bật kiểm định QA` (`status: "disabled"`, tách biệt với `N/A — Chính sách đang tắt` của `MIN_ATTEMPTS`); `PROCESS_SCORE` hiển thị rõ **`86,47 — Tạm tính; thiếu mẫu QA`** (tổng điểm trọng số thô `73,50` trên tổng trọng số hợp lệ `85/100`).
+   - Trên bảng thành phần `/cskh/scorecard`, tách riêng cột **`Điểm trọng số thô`** (`0..weight`, ví dụ `90% × 25 = 22,50 / 25`) và **`Điểm đóng góp sau chuẩn hóa (0–100)`** (`26,47`).
 3. **Không xếp chung `provisional` với `finalized` (`P3.md` §0.12, §7.5, §10.3):**
    - Trên màn `/cskh/employee-quality` và `/cskh/team-quality`, các dòng được phân nhóm rõ ràng thành:
      1. **Nhóm Đã chốt (`finalized`)** — chỉ sắp xếp thứ tự trong nội bộ nhóm Đã chốt;
@@ -80,7 +82,7 @@ Qua khảo sát thực tế cây mã nguồn `apps/crm_cskh/crm_cskh` trên base
   1. `FIRST_ATTEMPT_SLA_RATE` & `WORK_ITEM_FIRST_ATTEMPT_SLA_RATE` (Cohort `FIRST_ATTEMPT` obligations đến hạn: `all_denominator` = `numerator_only` + `breached_only`; ví dụ `80/100` mở đúng `100` nghĩa vụ gồm `80` đạt và `20` không đạt, kèm phân lớp `excluded`).
   2. `FOLLOWUP_SLA_RATE` (Cohort `FOLLOWUP` callback obligations đến hạn: `all_denominator`, `numerator_only`, `breached_only`, `excluded`).
   3. `FIRST_CONNECTED_TRACKING_RATE` (Theo dõi kết nối lần đầu, `informational_only: true`).
-  4. `CONTACT_ATTEMPT_COUNT` & `CONNECTED_RATE` (`Effective Attempts`: tổng lần thử hợp lệ vs đã kết nối hai chiều vs chưa kết nối).
+  4. `CONNECTED_RATE` (`Ownership Intervals`: khoảng phụ trách có kết nối hai chiều vs đã thử nhưng chưa kết nối) & `CONTACT_ATTEMPT_COUNT` (`Effective Attempts`).
   5. `VALID_OUTCOME_LOGGING_RATE`, `CORRECTION_RATE` & `VOID_ATTEMPT_RATE` (`Raw/Effective Attempts`: đạt chuẩn cập nhật vs đã hiệu chỉnh / vô hiệu).
   6. `CALLBACK_COMPLETION_RATE` (`Due FOLLOWUP obligations` đã hoàn tất bằng lần liên hệ hợp lệ).
   7. `DNC_COMPLIANCE_RATE` (`Ownership Intervals` tuân thủ quy tắc DNC và đóng hợp lệ).

@@ -78,11 +78,17 @@
 				w.renderBarChart(
 					data.rows.map(function (r) {
 						const v = extractNumeric(r.first_touch_on_time_rate)
+						const rawTeam = r.team || r.team_id || ''
 						return {
 							label:
-								r.team === 'historical_attribution_unknown'
+								rawTeam === 'historical_attribution_unknown' ||
+								rawTeam === '__unattributed_historical_team__'
 									? t('Historical attribution unknown')
-									: r.team_label || r.team || '—',
+									: r.team_label ||
+										r.team_name ||
+										api.resolveTeamLabel(rawTeam) ||
+										rawTeam ||
+										'—',
 							value: v,
 							is_na: v === null,
 							color: '#0d9488',
@@ -98,10 +104,16 @@
 			{},
 			data.rows.map(function (row) {
 				const rawTeam = row.team || row.team_id || ''
-				const isUnknown = rawTeam === 'historical_attribution_unknown'
+				const isUnknown =
+					rawTeam === 'historical_attribution_unknown' ||
+					rawTeam === '__unattributed_historical_team__'
 				const teamName = isUnknown
 					? t('Historical attribution unknown')
-					: row.team_label || rawTeam || '—'
+					: row.team_label ||
+						row.team_name ||
+						api.resolveTeamLabel(rawTeam) ||
+						rawTeam ||
+						'—'
 				const conf = row.score_status || row.confidence_status || 'provisional'
 
 				return el('tr', { 'data-team': rawTeam }, [

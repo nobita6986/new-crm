@@ -54,6 +54,21 @@
 	function renderSlaOps(data) {
 		cskh.clear(mainHost)
 
+		const canWaive = !!cskh.capabilities().can_waive_sla
+		const canOpenPii = !!cskh.capabilities().pii
+
+		if (!canOpenPii && !canWaive) {
+			mainHost.appendChild(
+				el('div', { class: 'cskh-alert is-info', 'data-banner': 'bod-sla-readonly' }, [
+					el('span', {
+						text: t(
+							'BOD read-only mode: customer PII is redacted and SLA mutation actions are disabled by authorization policy.'
+						),
+					}),
+				])
+			)
+		}
+
 		if (data.summaryMetrics && data.summaryMetrics.length) {
 			w.renderThreePillars(mainHost, data.summaryMetrics, {
 				onDrilldown: function (metric) {
@@ -74,9 +89,6 @@
 			mainHost.appendChild(card)
 			return
 		}
-
-		const canWaive = !!cskh.capabilities().can_waive_sla
-		const canOpenPii = !!cskh.capabilities().pii
 
 		const tbody = el(
 			'tbody',
@@ -117,10 +129,22 @@
 					el('td', { text: w.obligationTypeLabel(row.obligation_type) }),
 					el('td', { text: row.responsible_user || row.owner_user || '—' }),
 					el('td', {
-						text:
-							row.team_at_event === 'historical_attribution_unknown'
-								? t('Historical attribution unknown')
-								: row.team_at_event || row.team || '—',
+						text: (function () {
+							const rawTeam = row.team_at_event || row.team || ''
+							if (
+								rawTeam === 'historical_attribution_unknown' ||
+								rawTeam === '__unattributed_historical_team__'
+							) {
+								return t('Historical attribution unknown')
+							}
+							return (
+								row.team_name ||
+								row.team_label ||
+								api.resolveTeamLabel(rawTeam) ||
+								rawTeam ||
+								'—'
+							)
+						})(),
 					}),
 					el('td', { text: row.effective_due_at ? cskh.formatDate(row.effective_due_at) : '—' }),
 					el('td', {

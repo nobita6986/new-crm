@@ -12,7 +12,7 @@
 
 - [ ] **UAT-STAFF-01 (Điều hướng gọn đúng vai trò `Sales User`):** Trên thanh điều hướng `/cskh/*`, Nhân viên thấy đúng các mục tác nghiệp cá nhân (`Khách được giao`, `Lịch hẹn chăm sóc lại`, `Tiến độ CSKH`, `Bảng điểm cá nhân`) và liên kết chuyển nhanh từ `Bảng điểm cá nhân` sang `/cskh/my-customers` & `/cskh/callbacks`.
 - [ ] **UAT-STAFF-02 (Hiển thị minh bạch Điểm cá nhân, Tử/Mẫu số & Công thức):**
-  - Màn `/cskh/scorecard` hiển thị rõ từng thành phần tạo nên `Điểm tuân thủ quy trình` (`PROCESS_SCORE`): `C1_FIRST_ATTEMPT_SLA` (`FIRST_ATTEMPT_SLA_RATE`), `C2_FOLLOWUP_SLA` (`FOLLOWUP_SLA_RATE`), `C3_DATA_HYGIENE` (`VALID_OUTCOME_LOGGING_RATE`), `C4_CALLBACK_DNC_DISCIPLINE` (`Hoàn tất lịch hẹn & tuân thủ DNC`), `C5_QA_QUALITY` (`QA_PASS_RATE`) kèm phân số `tử / mẫu` và trọng số từng phần.
+  - Màn `/cskh/scorecard` hiển thị rõ từng thành phần tạo nên `Điểm tuân thủ quy trình` (`PROCESS_SCORE`) theo [`P3.md`](../root-plan/P3.md) §7.5: `FIRST_ATTEMPT_SLA_RATE` (`25`), `ELIGIBLE_COVERAGE` (`20`), `VALID_OUTCOME_LOGGING_RATE` (`20`), `FOLLOWUP_SLA_RATE` (`20`), `QA_PASS_RATE` (`15`) kèm phân số `tử / mẫu`, tách riêng hai cột **`Điểm trọng số thô`** (`0..weight`, ví dụ `90% × 25 = 22,50 / 25`, tổng `73,50 / 85`) và **`Điểm đóng góp sau chuẩn hóa (0–100)`** (`26,47`, tổng khớp `86,47`).
   - Khi `qa_enabled = false` hoặc chưa đủ mẫu QA, hiển thị rõ nhãn **`Tạm tính; thiếu mẫu QA`** (không tính `QA = 0` làm tụt điểm oan của nhân viên — `F22`, `G09`).
   - Khi nhân viên mới nhận việc chưa có nghĩa vụ nào đến hạn (`denominator = 0`), hiển thị **`N/A — Chưa có mẫu đủ điều kiện`**, không hiển thị `0%` (`F21`).
 - [ ] **UAT-STAFF-03 (Tách biệt nghĩa vụ sắp đến hạn / quá hạn & Liên hệ thực tế):**

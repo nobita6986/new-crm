@@ -72,6 +72,22 @@
 				)
 			}
 			if (data.components && data.components.length) {
+				const validWeightText =
+					data.score && data.score.valid_weight_sum !== null && data.score.valid_weight_sum !== undefined
+						? w.formatDecimal(data.score.valid_weight_sum, 0) +
+							(data.configured_weight_total
+								? ' / ' + w.formatDecimal(data.configured_weight_total, 0)
+								: '')
+						: '—'
+				const rawSumText =
+					data.raw_points_total !== null && data.raw_points_total !== undefined
+						? w.formatDecimal(data.raw_points_total, 2) +
+							(data.score && data.score.valid_weight_sum
+								? ' / ' + w.formatDecimal(data.score.valid_weight_sum, 0)
+								: '')
+						: t('N/A')
+				const totalScoreDisp = data.score ? w.formatMetricDisplay(data.score) : { main: t('N/A') }
+
 				scoreCard.appendChild(
 					el('div', { class: 'cskh-table-scroll', style: 'margin-top: 12px;' }, [
 						el('table', { class: 'cskh-table', id: 'p3-scorecard-components' }, [
@@ -81,7 +97,8 @@
 									el('th', { class: 'num', text: t('Weight') }),
 									el('th', { class: 'num', text: t('My rate') }),
 									el('th', { class: 'num', text: t('Numerator / Denominator') }),
-									el('th', { class: 'num', text: t('Weighted contribution') }),
+									el('th', { class: 'num', text: t('Raw weighted points') }),
+									el('th', { class: 'num', text: t('Normalized contribution (0-100)') }),
 									el('th', { text: t('Data confidence') }),
 								]),
 							]),
@@ -91,28 +108,74 @@
 								data.components.map(function (comp) {
 									const norm = api.normalizeMetric(comp.metric_key || comp.key, comp, data.meta)
 									const disp = w.formatMetricDisplay(norm)
-									return el('tr', {}, [
-										el('td', { text: t(norm.label) }),
-										el('td', { class: 'num', text: w.formatDecimal(comp.weight, 0) }),
-										el('td', { class: 'num', text: disp.main }),
-										el('td', { class: 'num', text: disp.ratio || '—' }),
-										el('td', {
-											class: 'num',
-											text:
-												comp.weighted_contribution !== undefined &&
-												comp.weighted_contribution !== null
-													? w.formatDecimal(comp.weighted_contribution, 2)
+									const hasRaw =
+										!norm.is_na &&
+										comp.raw_weighted_points !== undefined &&
+										comp.raw_weighted_points !== null
+									const hasNorm =
+										!norm.is_na &&
+										comp.normalized_contribution !== undefined &&
+										comp.normalized_contribution !== null
+									return el(
+										'tr',
+										{
+											'data-component-key': comp.component_code || comp.key || '',
+											'data-metric-key': norm.key,
+											'data-weight': comp.weight !== undefined && comp.weight !== null ? String(comp.weight) : '',
+											'data-raw-points': hasRaw ? String(comp.raw_weighted_points) : '',
+											'data-normalized-points': hasNorm ? String(comp.normalized_contribution) : '',
+										},
+										[
+											el('td', { text: comp.component_label ? t(comp.component_label) : t(norm.label) }),
+											el('td', { class: 'num', text: w.formatDecimal(comp.weight, 0) }),
+											el('td', { class: 'num', text: disp.main }),
+											el('td', { class: 'num', text: disp.ratio || '—' }),
+											el('td', {
+												class: 'num',
+												text: hasRaw
+													? w.formatDecimal(comp.raw_weighted_points, 2) +
+														' / ' +
+														w.formatDecimal(comp.weight, 0)
 													: t('N/A'),
-										}),
-										el('td', {}, [
-											el('span', {
-												class: cskh.stateBadge(norm.status),
-												text: w.confidenceLabel(norm.status),
 											}),
-										]),
-									])
+											el('td', {
+												class: 'num',
+												text: hasNorm
+													? w.formatDecimal(comp.normalized_contribution, 2)
+													: t('N/A'),
+											}),
+											el('td', {}, [
+												el('span', {
+													class: cskh.stateBadge(norm.status),
+													text: w.confidenceLabel(norm.status),
+												}),
+											]),
+										]
+									)
 								})
 							),
+							el('tfoot', { id: 'p3-scorecard-totals' }, [
+								el('tr', {}, [
+									el('td', {}, [el('strong', { text: t('Valid weight sum') })]),
+									el('td', { class: 'num' }, [el('strong', { text: validWeightText })]),
+									el('td', { class: 'num', text: '—' }),
+									el('td', { class: 'num', text: '—' }),
+									el('td', { class: 'num', 'data-total-raw-points': data.raw_points_total != null ? String(data.raw_points_total) : '' }, [
+										el('strong', { text: rawSumText }),
+									]),
+									el('td', { class: 'num', 'data-total-score': data.score && data.score.value != null ? String(data.score.value) : '' }, [
+										el('strong', { text: totalScoreDisp.main }),
+									]),
+									el('td', {}, [
+										data.score
+											? el('span', {
+													class: cskh.stateBadge(data.score.status),
+													text: w.confidenceLabel(data.score.status),
+												})
+											: el('span', { text: '—' }),
+									]),
+								]),
+							]),
 						]),
 					])
 				)
