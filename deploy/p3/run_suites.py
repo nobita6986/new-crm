@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""Run every P3 backend/UI suite, P2 backend/UI suite, P1 backend/UI suite, and P0 core suite on `p3ui.localhost`.
+"""Run every P3 backend/UI suite, P2 backend/UI suite, P1 backend/UI suite, and P0 core suite on an isolated test site.
 
-Strictly guarded so it NEVER touches Owner's `p1.localhost`, P2's `p2.localhost`, or T1B's `p3-t1b-dev` stack.
+Strictly guarded so it NEVER touches Owner's `p1.localhost`, `p2.localhost`, `p3ui.localhost` (`:8320`), or T1B's stack.
 """
 
 from __future__ import annotations
@@ -17,18 +17,19 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))
 TESTS_DIR = os.path.join(ROOT, "apps", "crm_cskh", "crm_cskh", "tests")
 
-SITE = os.environ.get("P3_SITE", "p3ui.localhost")
-CONTAINER = os.environ.get("P3_CONTAINER", "crm-cskh-p3-ui-bench-1")
+SITE = os.environ.get("P3_SITE", "p3-e2e.localhost")
+CONTAINER = os.environ.get("P3_CONTAINER", "cskh-p3-t1a-e2e-bench-1")
 BENCH = "/workspace/frappe-bench"
 
 if (
-    SITE in ("p1.localhost", "p2.localhost")
+    SITE in ("p1.localhost", "p2.localhost", "p3ui.localhost", "dev.localhost")
     or "p1-bench" in CONTAINER
     or "p2-ui" in CONTAINER
+    or "crm-cskh-p3-ui" in CONTAINER
     or "p3-t1b" in CONTAINER
 ):
     raise RuntimeError(
-        f"Refusing to run test suites against non-isolated P3 UI container/site: {CONTAINER} / {SITE}"
+        f"Refusing to run destructive test suites against protected/non-isolated container/site: {CONTAINER} / {SITE}"
     )
 
 P2_MODULES = [
