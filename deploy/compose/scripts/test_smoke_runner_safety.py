@@ -158,6 +158,62 @@ class SmokeRunnerSafetyTests(unittest.TestCase):
         self.assertIn("<REDACTED_DB_ROOT_PASSWORD>", log_txt)
         self.assertIn("sid=<REDACTED_SID>", log_txt)
 
+    def test_db_root_password_file_lf_only_bytes_and_rejects_crlf(self) -> None:
+        sample_pw = "DbSecretWinLfCheck_987654321"
+        with tempfile.TemporaryDirectory() as td:
+            sec_file = pathlib.Path(td) / "db_root_password.txt"
+            info = smoke.write_lf_secret_file(sec_file, sample_pw)
+            raw = sec_file.read_bytes()
+
+            self.assertEqual(raw, sample_pw.encode("utf-8") + b"\n")
+            self.assertTrue(raw.endswith(b"\n"))
+            self.assertFalse(raw.endswith(b"\r\n"))
+            self.assertNotIn(b"\r", raw)
+            self.assertTrue(info["ends_with_lf_only"])
+            self.assertFalse(info["contains_cr"])
+
+            # Verify CRLF bytes are explicitly rejected
+            sec_file.write_bytes(sample_pw.encode("utf-8") + b"\r\n")
+            with self.assertRaises(AssertionError):
+                smoke.verify_lf_secret_file_bytes(sec_file, sample_pw)
+
+    def test_runner_preflight_verifies_lf_secret_and_log_contains_no_password(self) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            rep_path = pathlib.Path(td) / "preflight.json"
+            log_path = pathlib.Path(td) / "preflight.log"
+            res = subprocess.run(
+                [
+                    sys.executable,
+                    "-X",
+                    "utf8",
+                    str(RUNNER_PATH),
+                    "--preflight-only",
+                    "--report-out",
+                    str(rep_path),
+                    "--log-out",
+                    str(log_path),
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            self.assertEqual(res.returncode, 0)
+            rep_bytes = rep_path.read_bytes()
+            log_bytes = log_path.read_bytes()
+            self.assertNotIn(b"\r", rep_bytes)
+            self.assertNotIn(b"\r", log_bytes)
+            self.assertTrue(rep_bytes.endswith(b"\n"))
+            self.assertTrue(log_bytes.endswith(b"\n"))
+
+            payload = json.loads(rep_bytes.decode("utf-8"))
+            self.assertTrue(payload["secret_file_byte_check"]["ends_with_lf_only"])
+            self.assertFalse(payload["secret_file_byte_check"]["contains_cr"])
+
+            log_text = log_bytes.decode("utf-8")
+            self.assertNotIn("SmokeP4#", log_text)
+            self.assertNotIn("SmokeP4#", rep_bytes.decode("utf-8"))
+            self.assertIn("ends_with_lf_only=True, contains_cr=False", log_text)
+
 
 if __name__ == "__main__":
     unittest.main()
