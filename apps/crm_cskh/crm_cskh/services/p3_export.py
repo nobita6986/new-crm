@@ -108,10 +108,10 @@ def request_export(
 ) -> dict:
 	"""Stage 1: Validate permissions & parameters synchronously, persist `CSKH Export Job`, and enqueue background worker."""
 	act = report_query.resolve_report_actor(actor)
-	if not report_query.is_p3_reporting_enabled():
-		raise PolicyConflict(
-			"Chức năng báo cáo và xuất dữ liệu P3 hiện đang tạm tắt theo cờ cấu hình (p3_reporting_enabled=false)."
-		)
+	from crm_cskh.services.p3_flags import is_p3_export_enabled
+
+	if not is_p3_export_enabled():
+		raise PolicyConflict("Chức năng báo cáo và xuất dữ liệu P3 hiện đang tạm tắt theo cờ cấu hình.")
 
 	rtype = (parse_optional_str(report_type, "Tham số report_type không hợp lệ.") or "").lower()
 	if rtype not in VALID_EXPORT_REPORT_TYPES:
@@ -565,6 +565,15 @@ def _build_export_table(job_doc, payload: dict) -> tuple[list[str], list[list[ob
 
 def execute_export_job_now(export_id: str) -> dict:
 	"""Stage 2 Worker: revalidate live roles/subtree, build sanitized CSV, attach private `File` owned by `Administrator`."""
+	from crm_cskh.services.p3_flags import is_p3_reporting_enabled
+
+	if not is_p3_reporting_enabled():
+		return {
+			"ok": True,
+			"skipped": True,
+			"reason": "p3_reporting_disabled",
+			"export_id": export_id,
+		}
 	if not frappe.db.exists("CSKH Export Job", export_id):
 		return {"ok": False, "status": "not_found", "export_id": export_id}
 
@@ -710,10 +719,10 @@ def get_export_status(export_id: str, *, actor: str | None = None) -> dict:
 def download_export(export_id: str, *, actor: str | None = None) -> dict:
 	"""Stage 3 Download: revalidate live permissions + TTL (`410 EXPORT_EXPIRED` / `403 FORBIDDEN_SCOPE`) and stream CSV."""
 	act = report_query.resolve_report_actor(actor)
-	if not report_query.is_p3_reporting_enabled():
-		raise PolicyConflict(
-			"Chức năng báo cáo và xuất dữ liệu P3 hiện đang tạm tắt theo cờ cấu hình (p3_reporting_enabled=false)."
-		)
+	from crm_cskh.services.p3_flags import is_p3_export_enabled
+
+	if not is_p3_export_enabled():
+		raise PolicyConflict("Chức năng báo cáo và xuất dữ liệu P3 hiện đang tạm tắt theo cờ cấu hình.")
 
 	eid = parse_optional_str(export_id, "Tham số export_id không hợp lệ.")
 	if not eid:

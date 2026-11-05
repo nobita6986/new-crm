@@ -16,6 +16,16 @@ from crm_cskh.services.attribution import (
 )
 
 
+def _invalidate_stale_metric_version_runs() -> None:
+	"""Enqueue append-only `CSKH Dirty Scope` rows for published runs computed under an older `metric_version` (`F-P3-06`).
+
+	Never mutates historical `CSKH KPI Snapshot` or `CSKH KPI Run` rows in place.
+	"""
+	from crm_cskh.services.kpi_runs import invalidate_stale_metric_version_snapshots
+
+	invalidate_stale_metric_version_snapshots()
+
+
 def execute() -> None:
 	p2_schema_and_seeds.execute()
 	ensure_p3_indexes()
@@ -24,4 +34,6 @@ def execute() -> None:
 	backfill_pre_p3_assignment_attribution()
 	# 2. Record cutover membership intervals starting at `now_datetime()` (never backdated)
 	ensure_cutover_membership_baseline(cutover_at=now_datetime())
+	# 3. Enqueue append-only dirty-scope invalidation for any pre-v2 KPI snapshots
+	_invalidate_stale_metric_version_runs()
 	frappe.clear_cache()

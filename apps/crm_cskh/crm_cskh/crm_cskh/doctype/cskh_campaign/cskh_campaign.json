@@ -60,6 +60,12 @@
    "label": "Selection Json",
    "permlevel": 1,
    "description": "Filter that defines the eligible lead pool of this campaign."
+  },
+  {
+   "fieldname": "conversion_outcome_codes",
+   "fieldtype": "Data",
+   "label": "Conversion Outcome Codes",
+   "description": "Optional comma-separated Outcome Codes counting as conversion for this campaign (defaults to CSKH Outcome Code.is_conversion = 1)."
   }
  ],
  "field_order": [
@@ -71,6 +77,7 @@
   "started_at",
   "ended_at",
   "rule_version",
+  "conversion_outcome_codes",
   "selection_json"
  ],
  "permissions": [

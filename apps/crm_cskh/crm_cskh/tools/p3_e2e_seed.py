@@ -335,6 +335,7 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 				"min_attempts_enabled": 0,
 				"p3_sla_enabled": 1,
 				"weight_first_attempt_sla": 25,
+				"weight_eligible_coverage": 20,
 				"weight_followup_sla": 20,
 				"weight_data_hygiene": 20,
 				"weight_callback_discipline": 20,
@@ -383,14 +384,15 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 	team_b = _ensure_node(leader_b_u, 1, None, USERS["leader_b"][1])
 	node_staff_c = _ensure_node(staff_c_u, 0, team_b, USERS["staff_c"][1])
 
-	# Reset auto-captured cutover timestamps back to `month_start` so all seeded intervals are authoritative
+	# Reset auto-captured cutover timestamps back to `hist_start` (`month_start - 2d`) so all seeded intervals are authoritative
+	hist_start = month_start - timedelta(days=2)
 	frappe.db.sql("delete from `tabCSKH Team Membership History`")
 	record_membership_interval(
 		user=leader_a_u,
 		hierarchy_node=team_a,
 		team_node=team_a,
 		team_name_snapshot=USERS["leader_a"][1],
-		effective_from=month_start,
+		effective_from=hist_start,
 		source_type="hierarchy_hook",
 	)
 	record_membership_interval(
@@ -398,7 +400,7 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 		hierarchy_node=node_staff_a,
 		team_node=team_a,
 		team_name_snapshot=USERS["leader_a"][1],
-		effective_from=month_start,
+		effective_from=hist_start,
 		source_type="hierarchy_hook",
 	)
 	record_membership_interval(
@@ -406,7 +408,7 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 		hierarchy_node=node_staff_b,
 		team_node=team_a,
 		team_name_snapshot=USERS["leader_a"][1],
-		effective_from=month_start,
+		effective_from=hist_start,
 		source_type="hierarchy_hook",
 	)
 	record_membership_interval(
@@ -414,7 +416,7 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 		hierarchy_node=node_staff_d,
 		team_node=team_a,
 		team_name_snapshot=USERS["leader_a"][1],
-		effective_from=month_start,
+		effective_from=hist_start,
 		source_type="hierarchy_hook",
 	)
 	record_membership_interval(
@@ -422,7 +424,7 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 		hierarchy_node=team_b,
 		team_node=team_b,
 		team_name_snapshot=USERS["leader_b"][1],
-		effective_from=month_start,
+		effective_from=hist_start,
 		source_type="hierarchy_hook",
 	)
 	record_membership_interval(
@@ -430,7 +432,7 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 		hierarchy_node=node_staff_c,
 		team_node=team_b,
 		team_name_snapshot=USERS["leader_b"][1],
-		effective_from=month_start,
+		effective_from=hist_start,
 		source_type="hierarchy_hook",
 	)
 
@@ -461,19 +463,44 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 	seq = 1
 
 	# ------------------------------------------------------------------
-	# A. Seed `staff_b` (`golden_employee`) -> exact `86.47` (`7350 / 85` provisional):
-	#    - C1 `FIRST_ATTEMPT_SLA_RATE`: 9 / 10 = 90.0% (`w1=25 -> 2250`)
-	#    - C2 `FOLLOWUP_SLA_RATE`:      7 / 10 = 70.0% (`w2=20 -> 1400`)
-	#    - C3 `VALID_OUTCOME_LOGGING`:  19 / 20 = 95.0% (`w3=20 -> 1900`, 1 approved correction)
-	#    - C4 `CALLBACK_DNC_DISCIPLINE`: (8 + 10) / (10 + 10) = 18 / 20 = 90.0% (`w4=20 -> 1800`)
+	# A. Seed `staff_b` (`golden_employee`) -> exact `90 / 80 / 100 / 75 -> 86.47` (`7350 / 85` provisional):
+	#    - C1 `FIRST_ATTEMPT_SLA_RATE`: 9 / 10 = 90.0% (`w1=25 -> 22.5 pts`, 1 prior-month carry-over + 8 on-time + 1 breached + 1 waived)
+	#    - C2 `ELIGIBLE_COVERAGE`:      8 / 10 = 80.0% (`w2=20 -> 16.0 pts`, 8 touched of 10 assigned intervals in period)
+	#    - C3 `VALID_OUTCOME_LOGGING`:  15 / 15 = 100.0% (`w3=20 -> 20.0 pts`, all complete fields, 1 approved correction)
+	#    - C4 `FOLLOWUP_SLA_RATE`:      3 / 4 = 75.0% (`w4=20 -> 15.0 pts`, 3 on-time + 1 late)
 	# ------------------------------------------------------------------
+	from crm_cskh.services import sla_engine
+
 	b_wis: list[str] = []
 	b_first_attempt_id_for_corr = ""
+
+	# 1 carry-over interval assigned prior to `month_start` whose `FIRST_ATTEMPT` is due & fulfilled in `[t0, t0 + 20m]`
+	seq += 1
+	wi_b_prior, _lead_bp, _ob_bp = _create_lead_and_assign(
+		idx_num=seq,
+		first_name="Khách Golden B00 (Kỳ trước chuyển sang)",
+		campaign=campaign,
+		target_user=staff_b_u,
+		admin_user=admin_u,
+		assigned_dt=month_start - timedelta(hours=7),
+		due_dt=t0 + timedelta(minutes=20),
+	)
+	att_bp = contact_attempt.record_attempt(
+		work_item=wi_b_prior,
+		channel="phone_call",
+		outcome_code="connected_interested",
+		occurred_at=str(t0 + timedelta(minutes=4)),
+		note="Hoàn tất liên hệ lần đầu đúng hạn hồ sơ chuyển kỳ",
+		idempotency_key="p3-b-fa-prior",
+		actor=staff_b_u,
+	)
+	b_first_attempt_id_for_corr = att_bp["attempt_id"]
+
 	for i in range(10):
 		seq += 1
 		t_assign = t0 + timedelta(minutes=i)
 		t_due = t_assign + timedelta(minutes=25)
-		wi_b, _lead_b, _ob_b = _create_lead_and_assign(
+		wi_b, _lead_b, ob_b = _create_lead_and_assign(
 			idx_num=seq,
 			first_name=f"Khách Golden B{i + 1:02d}",
 			campaign=campaign,
@@ -484,53 +511,49 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 		)
 		b_wis.append(wi_b)
 
-		# First attempt: 9 on-time (`t_assign + 10m <= t_due`), 1 late (`t_due + 10m`)
-		occ_1 = t_assign + timedelta(minutes=10) if i < 9 else t_due + timedelta(minutes=10)
-		cb_due_future = now_dt + timedelta(hours=4)
-		att_res = contact_attempt.record_attempt(
-			work_item=wi_b,
-			channel="phone_call",
-			outcome_code="callback_requested",
-			occurred_at=str(occ_1),
-			note=f"Gọi lần 1 khách B{i + 1:02d} hẹn gọi lại",
-			followup={
-				"due_at": str(cb_due_future),
-				"title": f"Gọi lại khách B{i + 1:02d}",
-			},
-			idempotency_key=f"p3-b-fa-{i}",
-			actor=staff_b_u,
-		)
-		if i == 0:
-			b_first_attempt_id_for_corr = att_res["attempt_id"]
-
-		# Pin FOLLOWUP obligation `due_at` into the past (`t_due + 30m`) so all 10 are due!
-		cb_due_past = t_due + timedelta(minutes=30)
-		task_id = att_res.get("callback_task") or frappe.db.get_value(
-			"CRM Task", {"cskh_work_item": wi_b, "status": "Todo"}, "name"
-		)
-		if task_id:
-			frappe.db.set_value("CRM Task", task_id, "due_date", cb_due_past, update_modified=False)
-			frappe.db.set_value("CSKH Work Item", wi_b, "next_action_due", cb_due_past, update_modified=False)
-		fu_ob = frappe.db.get_value(
-			"CSKH SLA Obligation",
-			{"work_item": wi_b, "obligation_type": "FOLLOWUP"},
-			"name",
-		)
-		if fu_ob:
-			frappe.db.sql(
-				"""
-				update `tabCSKH SLA Obligation`
-				set started_at = %s,
-				    original_due_at = %s,
-				    effective_due_at = %s
-				where name = %s
-				""",
-				(occ_1, cb_due_past, cb_due_past, fu_ob),
+		if i < 4:
+			# Touch on-time + schedule callback due at `t_due + 30m` (`3` on-time, `1` late -> `3/4 = 75%`)
+			occ_1 = t_assign + timedelta(minutes=10)
+			cb_due_future = now_dt + timedelta(hours=4)
+			att_res = contact_attempt.record_attempt(
+				work_item=wi_b,
+				channel="phone_call",
+				outcome_code="callback_requested",
+				occurred_at=str(occ_1),
+				note=f"Gọi lần 1 khách B{i + 1:02d} hẹn gọi lại",
+				followup={
+					"due_at": str(cb_due_future),
+					"title": f"Gọi lại khách B{i + 1:02d}",
+				},
+				idempotency_key=f"p3-b-fa-{i}",
+				actor=staff_b_u,
 			)
-
-		# Complete 8 of 10 followups (`7` on-time `cb_due_past - 5m`, `1` late `cb_due_past + 8m`); leave `2` breached_open!
-		if i < 8:
-			occ_2 = cb_due_past - timedelta(minutes=5) if i < 7 else cb_due_past + timedelta(minutes=8)
+			cb_due_past = t_due + timedelta(minutes=30)
+			task_id = att_res.get("callback_task") or frappe.db.get_value(
+				"CRM Task", {"cskh_work_item": wi_b, "status": "Todo"}, "name"
+			)
+			if task_id:
+				frappe.db.set_value("CRM Task", task_id, "due_date", cb_due_past, update_modified=False)
+				frappe.db.set_value(
+					"CSKH Work Item", wi_b, "next_action_due", cb_due_past, update_modified=False
+				)
+			fu_ob = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				{"work_item": wi_b, "obligation_type": "FOLLOWUP"},
+				"name",
+			)
+			if fu_ob:
+				frappe.db.sql(
+					"""
+					update `tabCSKH SLA Obligation`
+					set started_at = %s,
+					    original_due_at = %s,
+					    effective_due_at = %s
+					where name = %s
+					""",
+					(occ_1, cb_due_past, cb_due_past, fu_ob),
+				)
+			occ_2 = cb_due_past - timedelta(minutes=5) if i < 3 else cb_due_past + timedelta(minutes=8)
 			contact_attempt.record_attempt(
 				work_item=wi_b,
 				channel="phone_call",
@@ -541,8 +564,36 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 				idempotency_key=f"p3-b-fu-{i}",
 				actor=staff_b_u,
 			)
+		elif i < 8:
+			# Touch on-time (`connected_interested`, no followup)
+			occ_1 = t_assign + timedelta(minutes=10)
+			contact_attempt.record_attempt(
+				work_item=wi_b,
+				channel="phone_call",
+				outcome_code="connected_interested",
+				occurred_at=str(occ_1),
+				note=f"Gọi lần 1 khách B{i + 1:02d} kết nối thành công",
+				idempotency_key=f"p3-b-fa-{i}",
+				actor=staff_b_u,
+			)
+		elif i == 8:
+			# Untouched `breached_open` (`FIRST_ATTEMPT` breached -> `0/1` in FA SLA & `0/1` in ELIGIBLE_COVERAGE)
+			with authorized_sla_write():
+				ob_doc = frappe.get_doc("CSKH SLA Obligation", ob_b)
+				ob_doc.status = "breached_open"
+				ob_doc.breached_at = t_due
+				ob_doc.evaluation_anchor_at = t_due
+				ob_doc.flags.ignore_links = True
+				ob_doc.save(ignore_permissions=True)
+		else:
+			# `i == 9`: Untouched `waived` (`excluded` from FA SLA -> `9/10`, included in ELIGIBLE_COVERAGE -> `8/10`!)
+			sla_engine.waive_obligation(
+				ob_b,
+				reason="Miễn trừ SLA hợp lệ do hệ thống tổng đài bảo trì đột xuất",
+				actor=admin_u,
+			)
 
-	# Add 2 more attempts on `b_wis[0]` and `b_wis[1]` so `staff_b` has `10 + 8 + 2 = 20` raw attempts!
+	# Add 2 more attempts on `b_wis[0]` and `b_wis[1]` -> `15/15 = 100.0%` valid outcome logging!
 	for j in range(2):
 		occ_extra = t0 + timedelta(minutes=95 + j * 5)
 		contact_attempt.record_attempt(

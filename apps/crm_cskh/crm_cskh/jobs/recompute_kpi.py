@@ -13,7 +13,7 @@ from crm_cskh.services.kpi_runs import execute_kpi_recompute, process_dirty_scop
 
 
 def _is_reporting_enabled() -> bool:
-	from crm_cskh.services.report_query import is_p3_reporting_enabled
+	from crm_cskh.services.p3_flags import is_p3_reporting_enabled
 
 	return bool(is_p3_reporting_enabled())
 

@@ -96,6 +96,12 @@ def _reject_status_change(doc, transitions, label):
 
 class Campaign(Document):
 	def validate(self):
+		if not self.is_new():
+			prev = self.get_doc_before_save()
+			self.flags._prev_campaign_status = prev.status if prev else None
+		else:
+			self.flags._prev_campaign_status = None
+
 		if self.started_at and self.ended_at and get_datetime(self.ended_at) < get_datetime(self.started_at):
 			frappe.throw(_("The end date must not precede the start date."))
 		if self.rule_version is not None and self.rule_version < 1:
@@ -114,6 +120,18 @@ class Campaign(Document):
 				_(
 					"Resolve the active work items before closing the campaign; nothing is released implicitly."
 				)
+			)
+
+	def on_update(self):
+		prev_status = getattr(self.flags, "_prev_campaign_status", None)
+		if prev_status and prev_status != self.status:
+			from crm_cskh.services import sla_engine
+
+			sla_engine.on_campaign_status_changed_in_tx(
+				campaign=self.name,
+				previous_status=prev_status,
+				new_status=self.status,
+				actor=frappe.session.user,
 			)
 
 

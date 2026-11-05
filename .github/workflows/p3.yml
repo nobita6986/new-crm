@@ -84,9 +84,12 @@ jobs:
           assert p3_ui.get("expected_total") == 7, f"P3 UI inventory mutated: {p3_ui.get('expected_total')}"
           assert golden["golden_process_score_qa_disabled"]["expected"]["value"] == 86.47
           assert golden["golden_process_score_qa_disabled"]["expected"]["status"] == "provisional"
-          assert golden["golden_process_score_qa_enabled_final"]["expected"]["value"] == 87.0
+          assert golden["golden_process_score_qa_enabled_final"]["expected"]["value"] == 85.5
+          import hashlib
+          t1c_bytes = Path("apps/crm_cskh/crm_cskh/tests/fixtures/t1c_p3_golden_dataset_expected.json").read_bytes()
+          assert hashlib.sha256(t1c_bytes).hexdigest() == "deb6be25a55a44deee4dcd21f9ee4fdada2ed38dfd2b14800c8cc1d375c49bdf"
           print(
-              f"Inventories verified: P0=99, P1=209, P2=38, P3={p3['expected_total']}, P3-UI={p3_ui['expected_total']}; golden fixture OK."
+              f"Inventories verified: P0=99, P1=209, P2=38, P3={p3['expected_total']}, P3-UI={p3_ui['expected_total']}; golden fixtures OK."
           )
           PY
           docker compose -f deploy/dev/docker-compose.yml --env-file "$P3_ENV" -p "$P3_PROJECT" exec -T bench /workspace/frappe-bench/env/bin/python -c '
@@ -123,7 +126,8 @@ jobs:
             crm_cskh.tests.test_p3_calendar \
             crm_cskh.tests.test_p3_sla_and_attribution \
             crm_cskh.tests.test_p3_kpi_and_snapshots \
-            crm_cskh.tests.test_p3_reporting_and_security
+            crm_cskh.tests.test_p3_reporting_and_security \
+            crm_cskh.tests.test_p3_t1c_remediation
           do
             slug="${module##*.}"
             container_log="/tmp/p3-evidence/${slug}.log"

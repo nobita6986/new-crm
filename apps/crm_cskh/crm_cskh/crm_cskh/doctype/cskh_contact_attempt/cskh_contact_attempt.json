@@ -126,6 +126,24 @@
    "default": "0"
   },
   {
+   "fieldname": "conversion_snapshot",
+   "fieldtype": "Check",
+   "label": "Conversion Snapshot",
+   "default": "0"
+  },
+  {
+   "fieldname": "invalid_phone_snapshot",
+   "fieldtype": "Check",
+   "label": "Invalid Phone Snapshot",
+   "default": "0"
+  },
+  {
+   "fieldname": "complete_fields",
+   "fieldtype": "Check",
+   "label": "Complete Fields",
+   "default": "1"
+  },
+  {
    "fieldname": "policy_name_snapshot",
    "fieldtype": "Link",
    "label": "Policy Name Snapshot",
@@ -208,6 +226,9 @@
   "interested_snapshot",
   "terminal_snapshot",
   "dnc_snapshot",
+  "conversion_snapshot",
+  "invalid_phone_snapshot",
+  "complete_fields",
   "policy_name_snapshot",
   "policy_version_snapshot",
   "note",

@@ -1406,6 +1406,66 @@ def run_probe() -> int:
             actor="crm.admin@dev.local",
         )
 
+        # F-P3-05: Leader A denied 403 on company-scope CSKH KPI Run (both RPC & generic REST)
+        r_leader_a_comp_run = get(
+            "p3-http-leader-a-company-run-status-403",
+            op_leader_a,
+            f"/api/method/crm_cskh.api.p3_reporting.get_run_status?run_id={urllib.parse.quote(fx['run_id'])}",
+        )
+        check(
+            "p3-http-leader-a-company-run-status-403",
+            r_leader_a_comp_run,
+            r_leader_a_comp_run["status"] == 403
+            and error_envelope(r_leader_a_comp_run).get("code") == "FORBIDDEN_SCOPE",
+            "F-P3-05: Leader A denied 403 FORBIDDEN_SCOPE on company KPI Run get_run_status",
+            actor="team1.leader@dev.local",
+        )
+
+        r_leader_a_rest_comp_run = get(
+            "p3-http-leader-a-rest-company-kpi-run-403",
+            op_leader_a,
+            f"/api/resource/CSKH%20KPI%20Run/{urllib.parse.quote(fx['run_id'])}",
+        )
+        check(
+            "p3-http-leader-a-rest-company-kpi-run-403",
+            r_leader_a_rest_comp_run,
+            r_leader_a_rest_comp_run["status"] == 403,
+            "F-P3-05: Leader A denied 403 on generic REST GET /api/resource/CSKH KPI Run/<company>",
+            actor="team1.leader@dev.local",
+        )
+
+        # F-P3-10: get_filter_options scoped & qa.create_review returns 409 QA_DISABLED (never 500)
+        r_filter_opts = get(
+            "p3-http-leader-a-filter-options-200",
+            op_leader_a,
+            "/api/method/crm_cskh.api.p3_reporting.get_filter_options",
+        )
+        check(
+            "p3-http-leader-a-filter-options-200",
+            r_filter_opts,
+            r_filter_opts["status"] == 200
+            and body_payload(r_filter_opts).get("ok") is True
+            and isinstance(body_payload(r_filter_opts).get("teams"), list),
+            "F-P3-10: Leader A reads scoped get_filter_options cleanly",
+            actor="team1.leader@dev.local",
+        )
+
+        r_qa_create_409 = post_json(
+            "p3-http-admin-qa-create-review-disabled-409",
+            op_admin,
+            tk_admin,
+            "/api/method/crm_cskh.api.qa.create_review",
+            {},
+        )
+        check(
+            "p3-http-admin-qa-create-review-disabled-409",
+            r_qa_create_409,
+            r_qa_create_409["status"] == 409
+            and error_envelope(r_qa_create_409).get("code") == "QA_DISABLED",
+            "F-P3-10: qa.create_review with empty body returns clean 409 QA_DISABLED when QA is off",
+            actor="crm.admin@dev.local",
+        )
+
         # ------------------------------------------------------------------
         # 6. Generic Frappe REST / client / reportview / calendar guards (`S13`, `S14`, `S16`, `S17`)
         # ------------------------------------------------------------------
@@ -1598,6 +1658,21 @@ def run_probe() -> int:
             actor="team1.leader@dev.local",
         )
 
+        if job_row and job_row.file_doc:
+            r_ok_file_doc = get(
+                "p3-http-leader-a-rest-file-doc-200",
+                op_leader_a,
+                f"/api/resource/File/{urllib.parse.quote(str(job_row.file_doc))}",
+            )
+            check(
+                "p3-http-leader-a-rest-file-doc-200",
+                r_ok_file_doc,
+                r_ok_file_doc["status"] == 200
+                and isinstance((r_ok_file_doc["json"] or {}).get("data"), dict),
+                "F-P3-05 positive control: Authorized Leader A reads GET /api/resource/File/<export>",
+                actor="team1.leader@dev.local",
+            )
+
         # Cross-actor denials on BOTH `download_export` and raw `/private/files/<export>.csv` (`S11`)
         r_lb_dl = get(
             "p3-http-leader-b-cross-team-download-403",
@@ -1667,6 +1742,43 @@ def run_probe() -> int:
                 "S12: Revoking Sales Manager immediately blocks raw GET /private/files/<export>.csv",
                 actor="team1.leader@dev.local",
             )
+
+            if job_row and job_row.file_doc:
+                r_rev_file_doc = get(
+                    "p3-http-leader-a-revoked-rest-file-doc-403",
+                    op_leader_a,
+                    f"/api/resource/File/{urllib.parse.quote(str(job_row.file_doc))}",
+                )
+                # `crm_cskh/errors.py` normalizes 403 PermissionError on `/api/resource/File/<name>` to canonical 404
+                check(
+                    "p3-http-leader-a-revoked-rest-file-doc-403",
+                    r_rev_file_doc,
+                    r_rev_file_doc["status"] in (403, 404)
+                    and "data" not in (r_rev_file_doc["json"] or {})
+                    and "cskh_export_" not in str(r_rev_file_doc["text"]),
+                    "F-P3-05: Revoking Sales Manager immediately blocks GET /api/resource/File/<export> (oracle-closed 404/403)",
+                    actor="team1.leader@dev.local",
+                )
+
+                file_filter_q = urllib.parse.quote(
+                    json.dumps([["File", "name", "=", str(job_row.file_doc)]])
+                )
+                r_rev_file_list = get(
+                    "p3-http-leader-a-revoked-rest-file-list-empty",
+                    op_leader_a,
+                    f"/api/resource/File?filters={file_filter_q}",
+                )
+                check(
+                    "p3-http-leader-a-revoked-rest-file-list-empty",
+                    r_rev_file_list,
+                    r_rev_file_list["status"] == 200
+                    and (
+                        isinstance(r_rev_file_list["json"], dict)
+                        and r_rev_file_list["json"].get("data") == []
+                    ),
+                    "F-P3-05: Revoking Sales Manager filters export File out of GET /api/resource/File list",
+                    actor="team1.leader@dev.local",
+                )
         finally:
             frappe.set_user("Administrator")
             la_user_doc = frappe.get_doc("User", "team1.leader@dev.local")
