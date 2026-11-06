@@ -1,4 +1,5 @@
-[2026-11-05T22:12:05+07:00] Starting isolated smoke runner: run_id=20261105221205-16a929, project=crm-cskh-p4-smoke-20261105221205-16a929, site=p4-smoke-20261105221205-16a929.localhost, port=127.0.0.1:18080, preflight_only=True
-[2026-11-05T22:12:05+07:00] Compose git provenance: branch=codex/p4-01-compose, sha=109f02046153cec103efb249caee392778979840, clean=True
-[2026-11-05T22:12:07+07:00] Rendered config --services (11): ['db', 'redis-cache', 'redis-queue', 'configurator', 'backend', 'proxy', 'queue-long', 'queue-short', 'websocket', 'frontend', 'scheduler']
-[2026-11-05T22:12:07+07:00] Preflight completed with status=BLOCKED, blockers=1
+[2026-11-06T09:09:24+07:00] Starting isolated smoke runner: run_id=20261106090923-4ac51d, project=crm-cskh-p4-smoke-20261106090923-4ac51d, site=p4-smoke-20261106090923-4ac51d.localhost, port=127.0.0.1:18080, preflight_only=True
+[2026-11-06T09:09:24+07:00] Compose git provenance: branch=codex/p4-01-compose, sha=2c1e7594471b119f2c41a85fa12d30a85b356785, clean=False
+[2026-11-06T09:09:25+07:00] Verified db_root_password.txt raw bytes: ends_with_lf_only=True, contains_cr=False
+[2026-11-06T09:09:26+07:00] Rendered config --services (11): ['db', 'redis-cache', 'redis-queue', 'configurator', 'backend', 'queue-short', 'scheduler', 'websocket', 'frontend', 'proxy', 'queue-long']
+[2026-11-06T09:09:26+07:00] Preflight completed with status=BLOCKED, blockers=1
