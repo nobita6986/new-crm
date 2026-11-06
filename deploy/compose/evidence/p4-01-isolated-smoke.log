@@ -1,20 +1,26 @@
-[2026-11-06T06:34:40+07:00] Starting isolated smoke runner: run_id=20261106063439-e9059d, project=crm-cskh-p4-smoke-20261106063439-e9059d, site=p4-smoke-20261106063439-e9059d.localhost, port=127.0.0.1:18080, preflight_only=False
-[2026-11-06T06:34:40+07:00] Compose git provenance: branch=codex/p4-01-compose, sha=85b96482b76240a5ef9326b2d7fe6685281ee47c, clean=True
-[2026-11-06T06:34:40+07:00] Verified local image: app_image=sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9, image_id=sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9, pull_policy=never
-[2026-11-06T06:34:41+07:00] Verified db_root_password.txt raw bytes: ends_with_lf_only=True, contains_cr=False
-[2026-11-06T06:34:42+07:00] Rendered config --services (11): ['db', 'redis-cache', 'redis-queue', 'configurator', 'proxy', 'queue-short', 'scheduler', 'websocket', 'backend', 'frontend', 'queue-long']
-[2026-11-06T06:34:42+07:00] Bringing up isolated Compose project 'crm-cskh-p4-smoke-20261106063439-e9059d'
-[2026-11-06T06:35:06+07:00] Day-0 infra (db, redis-cache, redis-queue, configurator) ready; bootstrapping synthetic site
-[2026-11-06T06:36:35+07:00] Synthetic site bootstrapped: {"site": "p4-smoke-20261106063439-e9059d.localhost", "installed_apps": ["frappe   15.123.1 HEAD", "crm      1.87.0   HEAD", "crm_cskh 0.0.1    UNVERSIONED"], "synthetic_data": {"lead_name": "CRM-LEAD-2026-00001", "mobile_no": "0900000123", "email": "synthetic-smoke@example.invalid", "is_synthetic": true}}
-[2026-11-06T06:36:35+07:00] All 10 long-running services reached health='healthy' and configurator exited 0
-[2026-11-06T06:36:35+07:00] Port exposure audit passed: {"proxy": [{"URL": "127.0.0.1", "TargetPort": 80, "PublishedPort": 18080, "Protocol": "tcp"}]}
-[2026-11-06T06:36:55+07:00] Migrator rehearsal #1 exited 0 in 19.11s: ['Executing `after_migrate` hooks...', 'Queued rebuilding of search index for p4-smoke-20261106063439-e9059d.localhost']
-[2026-11-06T06:37:14+07:00] Migrator rehearsal #2 exited 0 in 19.14s: ['Executing `after_migrate` hooks...', 'Queued rebuilding of search index for p4-smoke-20261106063439-e9059d.localhost']
-[2026-11-06T06:37:16+07:00] Guest access checks passed: /crm=403, /cskh/dashboard=403, /cskh/quality-overview=403, health.ping=403
-[2026-11-06T06:37:16+07:00] Authenticated login passed: user=Administrator, sid_httponly=False, sid_samesite=True
-[2026-11-06T06:37:17+07:00] Vietnamese UI & SPA checks passed: /cskh/dashboard=200, /cskh/quality-overview=200, /crm=200, matched_labels=['Đã đăng nhập với tư cách', 'Về danh sách khách hàng tiềm năng', 'Tổng quan', 'Chất lượng', 'Chiến dịch', 'Làm mới', 'Xuất báo cáo']
-[2026-11-06T06:37:17+07:00] CSRF checks passed: forged=400, missing=400, valid=200 (app_version=0.0.1)
-[2026-11-06T06:37:17+07:00] Socket.IO HTTP polling passed: unauth='44/p4-smoke-20261106063439-e9059d.localhost,{"message":"Missing cookie and authorization header. Either one needed for authentication."}', auth='40/p4-smoke-20261106063439-e9059d.localhost,{"sid":"<REDACTED_SOCKET_SID>"}'
-[2026-11-06T06:37:17+07:00] Socket.IO WebSocket RFC 6455 upgrade & frame exchange passed: status='HTTP/1.1 101 Switching Protocols', probe='2probe->3probe->5', direct_ns='40/p4-smoke-20261106063439-e9059d.localhost,{"sid":"<REDACTED_SOCKET_SID>"}', rfc6455_ping_pong='cskh-p4-ping'
-[2026-11-06T06:37:17+07:00] Tearing down owned isolated stack 'crm-cskh-p4-smoke-20261106063439-e9059d' (down --volumes --remove-orphans)
-[2026-11-06T06:37:24+07:00] Scoped teardown verified clean for 'crm-cskh-p4-smoke-20261106063439-e9059d': 0 remaining containers/volumes/networks
+[2026-11-06T09:05:05+07:00] Starting isolated smoke runner: run_id=20261106090505-fa2d24, project=crm-cskh-p4-smoke-20261106090505-fa2d24, site=p4-smoke-20261106090505-fa2d24.localhost, port=127.0.0.1:18080, preflight_only=False
+[2026-11-06T09:05:05+07:00] Compose git provenance: branch=codex/p4-01-compose, sha=2c1e7594471b119f2c41a85fa12d30a85b356785, clean=True
+[2026-11-06T09:05:06+07:00] Verified local image: app_image=sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9, image_id=sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9, pull_policy=never
+[2026-11-06T09:05:07+07:00] Verified db_root_password.txt raw bytes: ends_with_lf_only=True, contains_cr=False
+[2026-11-06T09:05:07+07:00] Rendered config --services (11): ['proxy', 'redis-cache', 'redis-queue', 'db', 'configurator', 'queue-short', 'scheduler', 'websocket', 'queue-long', 'backend', 'frontend']
+[2026-11-06T09:05:07+07:00] Captured pre-run host Docker baseline: volumes=32 (anonymous=5), containers=38, networks=12
+[2026-11-06T09:05:07+07:00] Bringing up isolated Compose project 'crm-cskh-p4-smoke-20261106090505-fa2d24'
+[2026-11-06T09:05:27+07:00] Day-0 infra (db, redis-cache, redis-queue, configurator) ready; verifying sites/apps.txt and common_site_config.json after configurator
+[2026-11-06T09:05:27+07:00] F-P4-01 checkpoint 'after_initial_configurator': apps.txt=['frappe', 'crm', 'crm_cskh'], common_site_config={"db_host": "db", "db_port": 3306, "redis_cache": "redis://redis-cache:6379", "redis_queue": "redis://redis-queue:6379", "redis_socketio": "redis://redis-queue:6379", "socketio_port": 9000, "chromium_path": "/usr/lib/chromium/chromium-headless-shell"}
+[2026-11-06T09:06:55+07:00] Synthetic site bootstrapped: {"site": "p4-smoke-20261106090505-fa2d24.localhost", "installed_apps": ["frappe   15.123.1 HEAD", "crm      1.87.0   HEAD", "crm_cskh 0.0.1    UNVERSIONED"], "synthetic_data": {"lead_name": "CRM-LEAD-2026-00001", "mobile_no": "0900000123", "email": "synthetic-smoke@example.invalid", "is_synthetic": true}}
+[2026-11-06T09:06:56+07:00] All 10 long-running services reached health='healthy' and configurator exited 0
+[2026-11-06T09:06:56+07:00] Port exposure audit passed: {"proxy": [{"URL": "127.0.0.1", "TargetPort": 80, "PublishedPort": 18080, "Protocol": "tcp"}]}
+[2026-11-06T09:07:19+07:00] Migrator rehearsal #1 exited 0 in 22.83s; sites/apps.txt=['frappe', 'crm', 'crm_cskh']; tail=['Executing `after_migrate` hooks...', 'Queued rebuilding of search index for p4-smoke-20261106090505-fa2d24.localhost']
+[2026-11-06T09:07:43+07:00] Migrator rehearsal #2 exited 0 in 23.64s; sites/apps.txt=['frappe', 'crm', 'crm_cskh']; tail=['Executing `after_migrate` hooks...', 'Queued rebuilding of search index for p4-smoke-20261106090505-fa2d24.localhost']
+[2026-11-06T09:07:44+07:00] F-P4-01 negative guard verified: migrator exited 1 before bench migrate (crm_cskh'); stopping before bench migrate.)
+[2026-11-06T09:07:54+07:00] F-P4-01 force-recreate configurator (1f3b0b957bb2 -> 0b52802f3a08) exited 0; restored sites/apps.txt=['frappe', 'crm', 'crm_cskh']
+[2026-11-06T09:08:17+07:00] F-P4-01 post-recreate migrator (#3) exited 0 in 23.23s; sites/apps.txt=['frappe', 'crm', 'crm_cskh']
+[2026-11-06T09:08:36+07:00] F-P4-03 force-recreate across all app services completed; all 10 long-running services healthy, anonymous_mounts=[]
+[2026-11-06T09:08:38+07:00] Guest access checks passed: /crm=403, /cskh/dashboard=403, /cskh/quality-overview=403, health.ping=403
+[2026-11-06T09:08:38+07:00] Authenticated login passed: user=Administrator, sid_httponly=True, sid_samesite=Lax, sid_secure=False (DEFERRED_TO_STAGING_HTTPS), set_cookie_headers=5
+[2026-11-06T09:08:39+07:00] Vietnamese UI & SPA checks passed: /cskh/dashboard=200, /cskh/quality-overview=200, /crm=200, matched_labels=['Đã đăng nhập với tư cách', 'Về danh sách khách hàng tiềm năng', 'Tổng quan', 'Chất lượng', 'Chiến dịch', 'Làm mới', 'Xuất báo cáo']
+[2026-11-06T09:08:39+07:00] CSRF checks passed: forged=400, missing=400, valid=200 (app_version=0.0.1)
+[2026-11-06T09:08:39+07:00] Socket.IO HTTP polling passed: unauth='44/p4-smoke-20261106090505-fa2d24.localhost,{"message":"Missing cookie and authorization header. Either one needed for authentication."}', auth='40/p4-smoke-20261106090505-fa2d24.localhost,{"sid":"<REDACTED_SOCKET_SID>"}'
+[2026-11-06T09:08:39+07:00] Socket.IO WebSocket RFC 6455 upgrade & frame exchange passed: status='HTTP/1.1 101 Switching Protocols', probe='2probe->3probe->5', direct_ns='40/p4-smoke-20261106090505-fa2d24.localhost,{"sid":"<REDACTED_SOCKET_SID>"}', rfc6455_ping_pong='cskh-p4-ping'
+[2026-11-06T09:08:39+07:00] Tearing down owned isolated stack 'crm-cskh-p4-smoke-20261106090505-fa2d24' (down --volumes --remove-orphans)
+[2026-11-06T09:08:47+07:00] Scoped teardown & F-P4-03 before/after resource diff verified clean for 'crm-cskh-p4-smoke-20261106090505-fa2d24': volumes_before=32, volumes_after=32, leaked_volumes=[], leaked_anonymous_volumes=[]

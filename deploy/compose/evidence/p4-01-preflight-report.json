@@ -2,13 +2,13 @@
   "status": "BLOCKED",
   "preflight_only": true,
   "exit_code_note": "When --preflight-only is used, process exit code 0 only indicates preflight evaluation finished; callers MUST inspect report['status'] ('PREFLIGHT_READY' vs 'BLOCKED').",
-  "run_id": "20261105221205-16a929",
-  "project_name": "crm-cskh-p4-smoke-20261105221205-16a929",
-  "site_name": "p4-smoke-20261105221205-16a929.localhost",
+  "run_id": "20261106090923-4ac51d",
+  "project_name": "crm-cskh-p4-smoke-20261106090923-4ac51d",
+  "site_name": "p4-smoke-20261106090923-4ac51d.localhost",
   "compose_provenance": {
-    "head_sha": "109f02046153cec103efb249caee392778979840",
+    "head_sha": "2c1e7594471b119f2c41a85fa12d30a85b356785",
     "branch": "codex/p4-01-compose",
-    "worktree_clean": true
+    "worktree_clean": false
   },
   "image_provenance": {
     "image_git_sha": null,
@@ -28,32 +28,38 @@
       "detail": "127.0.0.1:18080 free"
     }
   },
+  "secret_file_byte_check": {
+    "file_name": "db_root_password.txt",
+    "byte_length": 33,
+    "ends_with_lf_only": true,
+    "contains_cr": false
+  },
   "config_services": [
     "db",
     "redis-cache",
     "redis-queue",
     "configurator",
     "backend",
-    "proxy",
-    "queue-long",
     "queue-short",
+    "scheduler",
     "websocket",
     "frontend",
-    "scheduler"
+    "proxy",
+    "queue-long"
   ],
   "config_services_with_migrate_profile": [
-    "proxy",
+    "redis-queue",
     "db",
     "redis-cache",
-    "redis-queue",
     "configurator",
-    "queue-long",
     "queue-short",
-    "backend",
     "websocket",
-    "frontend",
+    "proxy",
     "scheduler",
-    "migrator"
+    "backend",
+    "frontend",
+    "migrator",
+    "queue-long"
   ],
   "blockers": [
     {
