@@ -5,11 +5,12 @@
 - **Hồ sơ đầu vào đối chiếu:** `P4-00` dự thảo tại `be33e6c931337c42b94184b2fe292e094bd51c97` (`docs/p4/entry-audit.md`, `docs/p4/infra-inventory.md`)
 - **Upstream `frappe_docker` đã ghim:** `v4.0.1` (`2b26e9ab8d751e5ea33bb7b930aea3550bb81ded`)
 - **Trạng thái tổng hợp:**
+  - **Cổng `G03` (Phạm vi Local — tách môi trường, mạng, volume, secret, kiểm định cấu hình & isolated smoke):** **`PASS (Local)`**
   - Kiểm định tĩnh cấu hình Compose, phân tách mạng/volume/site/secrets, khóa thứ tự `sites/apps.txt` (`F-P4-01`), gắn named volume `logs` cho cả 8 service ứng dụng (`F-P4-03`), kiểm toán cổng và 4 negative gates: **`PASS`** (`docker compose v5.6.1`)
   - Bộ 11 unit test an toàn & hồi quy của runner (`LF` secret bytes, đa dòng `Set-Cookie` / thuộc tính `sid` `F-P4-02`, cô lập project từng lượt, từ chối tài nguyên sẵn có, khử secret): **`PASS`** (`11/11` OK)
   - Danh mục PII cấp trường theo mã nguồn thực tế (DB, log, attachment, import/export, nơi lưu bản sao): **`COMPLETED`** ([`docs/p4/pii-field-catalog.md`](./pii-field-catalog.md))
   - Chạy thực tế container smoke trên dữ liệu giả (`P4-01 §4`, lượt `20261106090505-fa2d24`): **`PASS`** ([`p4-01-isolated-smoke-report.json`](../../deploy/compose/evidence/p4-01-isolated-smoke-report.json), [`p4-01-isolated-smoke.log`](../../deploy/compose/evidence/p4-01-isolated-smoke.log))
-  - Triển khai lên Staging / Production thật: **`BLOCKED`** *(thiếu các đầu vào hạ tầng ngoài kho mã: DNS/TLS, Container Registry, Kho Secret + `encryption_key`, VPS/Firewall và Đích Backup Offsite liệt kê tại Mục 3)*
+  - Cổng Registry từ xa & Triển khai lên Staging / Production thật (`G04`/`G05`/`G06`): **`BLOCKED`** *(thiếu các đầu vào hạ tầng ngoài kho mã: DNS/TLS, Container Registry, Kho Secret + `encryption_key`, VPS/Firewall và Đích Backup Offsite liệt kê tại Mục 3)*
 
 ---
 
