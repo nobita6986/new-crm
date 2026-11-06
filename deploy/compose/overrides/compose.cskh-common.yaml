@@ -23,10 +23,40 @@ x-cskh-app-common: &cskh_app_common
   security_opt:
     - no-new-privileges:true
   logging: *cskh_logging
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+    - logs:/home/frappe/frappe-bench/logs
 
 services:
   configurator:
     <<: *cskh_app_common
+    command: !override
+      - |
+        set -eu
+        if [ ! -s /home/frappe/frappe-bench/apps-order.txt ]; then
+          echo "[configurator] FATAL: missing /home/frappe/frappe-bench/apps-order.txt" >&2
+          exit 1
+        fi
+        expected_order=$$(printf 'frappe\ncrm\ncrm_cskh')
+        image_order=$$(tr -d '\r' < /home/frappe/frappe-bench/apps-order.txt | awk 'NF')
+        if [ "$$image_order" != "$$expected_order" ]; then
+          echo "[configurator] FATAL: unexpected apps-order.txt order: $$image_order" >&2
+          exit 1
+        fi
+        mkdir -p sites
+        printf '%s\n' "$$image_order" > sites/apps.txt
+        written_order=$$(tr -d '\r' < sites/apps.txt | awk 'NF')
+        if [ "$$written_order" != "$$expected_order" ]; then
+          echo "[configurator] FATAL: sites/apps.txt verification failed: $$written_order" >&2
+          exit 1
+        fi
+        bench set-config -g db_host "$$DB_HOST"
+        bench set-config -gp db_port "$$DB_PORT"
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE"
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE"
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE"
+        bench set-config -gp socketio_port "$$SOCKETIO_PORT"
+        bench set-config -g chromium_path /usr/lib/chromium/chromium-headless-shell
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     depends_on:
@@ -43,18 +73,36 @@ services:
     <<: *cskh_app_common
     profiles:
       - migrate
-    command:
-      - >
+    command: !override
+      - |
+        set -eu
         if [ "$$MIGRATE_SITES" != "true" ]; then
-          echo "[migrator] MIGRATE_SITES!=true; refusing automatic migration.";
-          exit 0;
-        fi;
+          echo "[migrator] MIGRATE_SITES!=true; refusing automatic migration."
+          exit 0
+        fi
         if [ -z "$$SITE_NAME" ] || [ ! -f "sites/$$SITE_NAME/site_config.json" ]; then
-          echo "[migrator] Target site $$SITE_NAME not initialized; aborting.";
-          exit 1;
-        fi;
-        echo "[migrator] Running controlled migration for site $$SITE_NAME";
-        bench --site "$$SITE_NAME" migrate;
+          echo "[migrator] Target site $$SITE_NAME not initialized; aborting." >&2
+          exit 1
+        fi
+        expected_order=$$(printf 'frappe\ncrm\ncrm_cskh')
+        if [ -s /home/frappe/frappe-bench/apps-order.txt ]; then
+          image_order=$$(tr -d '\r' < /home/frappe/frappe-bench/apps-order.txt | awk 'NF')
+          if [ "$$image_order" != "$$expected_order" ]; then
+            echo "[migrator] FATAL: unexpected image apps-order.txt ('$$image_order'); stopping before bench migrate." >&2
+            exit 1
+          fi
+        fi
+        if [ ! -s sites/apps.txt ]; then
+          echo "[migrator] FATAL: missing or empty sites/apps.txt; stopping before bench migrate." >&2
+          exit 1
+        fi
+        actual_order=$$(tr -d '\r' < sites/apps.txt | awk 'NF')
+        if [ "$$actual_order" != "$$expected_order" ]; then
+          echo "[migrator] FATAL: invalid sites/apps.txt order ('$$actual_order' != '$$expected_order'); stopping before bench migrate." >&2
+          exit 1
+        fi
+        echo "[migrator] Verified sites/apps.txt order (frappe -> crm -> crm_cskh); running controlled migration for site $$SITE_NAME"
+        bench --site "$$SITE_NAME" migrate
     environment:
       MIGRATE_SITES: ${MIGRATE_SITES:-false}
       SITE_NAME: ${SITE_NAME:?set SITE_NAME in env}
@@ -239,6 +287,8 @@ services:
 volumes:
   sites:
     name: ${COMPOSE_PROJECT_NAME}_sites
+  logs:
+    name: ${COMPOSE_PROJECT_NAME}_logs
   db-data:
     name: ${COMPOSE_PROJECT_NAME}_db_data
   redis-queue-data:

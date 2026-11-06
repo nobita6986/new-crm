@@ -48,6 +48,18 @@ EXPECTED_DEFAULT_SERVICES = sorted(
 EXPECTED_LONG_RUNNING_SERVICES = sorted(
     s for s in EXPECTED_DEFAULT_SERVICES if s != "configurator"
 )
+EXPECTED_APP_SERVICES = sorted(
+    [
+        "backend",
+        "configurator",
+        "frontend",
+        "migrator",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "websocket",
+    ]
+)
 
 STACK_PROFILES = {
     "production": {
@@ -325,6 +337,76 @@ def validate_stack(
     assert not srvs["proxy"].get("userns_mode"), f"{stack_name}.proxy must not force userns_mode"
     assert srvs["frontend"]["environment"]["FRAPPE_SITE_NAME_HEADER"] == env_map["SITE_NAME"]
 
+    # F-P4-03: Named project-scoped `logs` + `sites` volumes on all 8 app services
+    vols_def = rendered.get("volumes") or {}
+    expected_vol_keys = (
+        {"sites", "logs", "db-data", "redis-queue-data"}
+        if stack_name == "isolated-smoke"
+        else {"sites", "logs", "db-data", "redis-queue-data", "cert-data"}
+    )
+    assert set(vols_def.keys()) == expected_vol_keys, (
+        f"{stack_name}: unexpected named volumes {set(vols_def.keys())} != {expected_vol_keys}"
+    )
+    assert vols_def["sites"]["name"] == f"{project_name}_sites", (
+        f"{stack_name}: sites volume name mismatch: {vols_def['sites']}"
+    )
+    assert vols_def["logs"]["name"] == f"{project_name}_logs", (
+        f"{stack_name}: logs volume name mismatch: {vols_def['logs']}"
+    )
+
+    expected_app_mounts = {
+        ("volume", "sites", "/home/frappe/frappe-bench/sites"),
+        ("volume", "logs", "/home/frappe/frappe-bench/logs"),
+    }
+    for app_srv in EXPECTED_APP_SERVICES:
+        raw_mounts = srvs[app_srv].get("volumes") or []
+        mount_tuples = [
+            (m.get("type"), m.get("source"), m.get("target")) for m in raw_mounts
+        ]
+        assert len(mount_tuples) == 2 and set(mount_tuples) == expected_app_mounts, (
+            f"{stack_name}.{app_srv}: expected exact named mounts {expected_app_mounts}, got {mount_tuples}"
+        )
+
+    # F-P4-01: Deterministic `sites/apps.txt` order (frappe -> crm -> crm_cskh) in configurator & migrator
+    cfg_cmd = "\n".join(srvs["configurator"].get("command") or [])
+    assert "ls -1 apps" not in cfg_cmd, (
+        f"{stack_name}.configurator still contains upstream alphabetical 'ls -1 apps'"
+    )
+    assert "/home/frappe/frappe-bench/apps-order.txt" in cfg_cmd, (
+        f"{stack_name}.configurator must source /home/frappe/frappe-bench/apps-order.txt"
+    )
+    assert "frappe\\ncrm\\ncrm_cskh" in cfg_cmd and "sites/apps.txt" in cfg_cmd, (
+        f"{stack_name}.configurator must enforce frappe -> crm -> crm_cskh in sites/apps.txt"
+    )
+    for required_cfg_step in (
+        "bench set-config -g db_host",
+        "bench set-config -gp db_port",
+        "bench set-config -g redis_cache",
+        "bench set-config -g redis_queue",
+        "bench set-config -g redis_socketio",
+        "bench set-config -gp socketio_port",
+        "bench set-config -g chromium_path /usr/lib/chromium/chromium-headless-shell",
+    ):
+        assert required_cfg_step in cfg_cmd, (
+            f"{stack_name}.configurator missing required step '{required_cfg_step}'"
+        )
+    cfg_env = srvs["configurator"].get("environment") or {}
+    for required_cfg_var in ("DB_HOST", "DB_PORT", "REDIS_CACHE", "REDIS_QUEUE", "SOCKETIO_PORT"):
+        assert cfg_env.get(required_cfg_var), (
+            f"{stack_name}.configurator missing inherited environment variable {required_cfg_var}"
+        )
+
+    mig_cmd = "\n".join(srvs["migrator"].get("command") or [])
+    assert "frappe\\ncrm\\ncrm_cskh" in mig_cmd and "sites/apps.txt" in mig_cmd, (
+        f"{stack_name}.migrator must verify sites/apps.txt order"
+    )
+    assert "stopping before bench migrate" in mig_cmd, (
+        f"{stack_name}.migrator must fail closed before bench migrate on wrong app order"
+    )
+    assert mig_cmd.rindex("stopping before bench migrate") < mig_cmd.index("bench --site"), (
+        f"{stack_name}.migrator order guard must execute BEFORE bench --site migrate"
+    )
+
     # Port exposure check: ONLY `proxy` may publish host ports!
     assert list(published_ports.keys()) == ["proxy"], (
         f"{stack_name}: ONLY proxy may publish ports, got: {published_ports}"
@@ -338,6 +420,8 @@ def validate_stack(
         "site_name": env_map["SITE_NAME"],
         "services_default": services_default,
         "services_with_migrate_profile": services_migrate,
+        "app_services_mounting_named_logs_volume": EXPECTED_APP_SERVICES,
+        "apps_order_guard_verified": True,
         "networks": {k: v["name"] for k, v in nets.items()},
         "volumes": {k: v["name"] for k, v in rendered.get("volumes", {}).items()},
         "secrets": {k: v["name"] for k, v in rendered.get("secrets", {}).items()},
