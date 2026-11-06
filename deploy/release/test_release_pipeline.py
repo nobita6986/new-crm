@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import base64
 import json
+import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -15,7 +17,10 @@ REPO_ROOT = RELEASE_DIR.parents[1]
 if str(RELEASE_DIR) not in sys.path:
     sys.path.insert(0, str(RELEASE_DIR))
 
-from evaluate_security_scan import evaluate_trivy_report  # noqa: E402
+from evaluate_security_scan import (  # noqa: E402
+    DEFAULT_EXCEPTIONS_FILE,
+    evaluate_trivy_report,
+)
 from generate_sbom import generate_sboms  # noqa: E402
 from release_manifest import (  # noqa: E402
     DEFAULT_LOCK_PATH,
@@ -51,6 +56,39 @@ SAMPLE_DRIFT_DIGEST = (
 SAMPLE_IMAGE_ID = (
     "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9"
 )
+VERIFIED_PYJWT_DOCTEST_TOKEN = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJzb21lIjoicGF5bG9hZCJ9."
+    "4twFt5NiznN84AWoo1d7KO1T_yoc0Z6XOpOVswacPZg"
+)
+DIFFERENT_JWT_TOKEN = (
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9."
+    "eyJzdWIiOiI5OTk5OTk5OTk5Iiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzAwMDAwMDAwfQ."
+    "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+)
+PYJWT_METADATA_TARGET = "/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.13.0.dist-info/METADATA"
+
+
+def _find_posix_sh() -> str:
+    candidates = [
+        shutil.which("sh"),
+        "C:/Program Files/Git/bin/sh.exe",
+        "C:/Program Files/Git/usr/bin/sh.exe",
+    ]
+    for cand in candidates:
+        if cand and Path(cand).is_file():
+            return cand
+    raise RuntimeError("POSIX `sh` executable not found on test host")
+
+
+def _build_pyjwt_metadata_text(
+    *, line76_token: str = VERIFIED_PYJWT_DOCTEST_TOKEN, extra_line90_token: str = ""
+) -> str:
+    lines = [f"Metadata-Line-{idx}: placeholder" for idx in range(1, 95)]
+    lines[75] = f"    '{line76_token}'"
+    if extra_line90_token:
+        lines[89] = f"    '{extra_line90_token}'"
+    return "\n".join(lines) + "\n"
 
 
 class TestWorkflowAndLockIsolation(unittest.TestCase):
@@ -82,12 +120,14 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
             "permissions:\n  contents: read\n  packages: write\n"
             "jobs:\n  j:\n    environment: staging\n"
             "    env:\n      TOK: ${{ secrets.REGISTRY_PUSH_TOKEN }}\n"
+            "      PULL_TOK: ${{ secrets.REGISTRY_PULL_TOKEN }}\n"
             "    steps:\n      - uses: actions/checkout@v4\n"
         )
         errs = audit_workflow_text(Path("p4-ci.yml"), bad_pr_write)
         self.assertTrue(any("write" in e for e in errs), errs)
         self.assertTrue(any("environment" in e for e in errs), errs)
         self.assertTrue(any("REGISTRY_PUSH_TOKEN" in e for e in errs), errs)
+        self.assertTrue(any("REGISTRY_PULL_TOKEN" in e for e in errs), errs)
         self.assertTrue(any("unpinned" in e for e in errs), errs)
 
         bad_release = (
@@ -99,6 +139,7 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
         rel_errs = audit_workflow_text(Path("p4-release.yml"), bad_release)
         self.assertTrue(any("pull_request" in e for e in rel_errs), rel_errs)
         self.assertTrue(any("production" in e for e in rel_errs), rel_errs)
+        self.assertTrue(any("registry-verify" in e for e in rel_errs), rel_errs)
 
         bad_prod = "name: bad-prod\non:\n  push:\n    branches: [main]\njobs: {}\n"
         prod_errs = audit_workflow_text(Path("p4-production.yml"), bad_prod)
@@ -115,19 +156,132 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
             env={
                 "GITHUB_EVENT_NAME": "pull_request",
                 "RELEASE_SIGNING_PRIVATE_KEY": "secret-key",
+                "REGISTRY_PULL_TOKEN": "pull-secret",
                 "STAGING_SSH_PRIVATE_KEY": "ssh-key",
             }
         )
         self.assertFalse(leaked["passed"])
         self.assertEqual(
             leaked["leaked_secret_env_names"],
-            ["RELEASE_SIGNING_PRIVATE_KEY", "STAGING_SSH_PRIVATE_KEY"],
+            [
+                "REGISTRY_PULL_TOKEN",
+                "RELEASE_SIGNING_PRIVATE_KEY",
+                "STAGING_SSH_PRIVATE_KEY",
+            ],
         )
 
-    def test_locks_and_evidence_checksums_pass(self) -> None:
+    def test_locks_python_constraints_and_verify_harness_contracts(self) -> None:
         res = check_locks_and_repo_hygiene(REPO_ROOT)
         self.assertTrue(res["passed"], f"Lock hygiene errors: {res['errors']}")
         self.assertEqual(res["verified_evidence_checksums"], 10)
+        self.assertEqual(res["bench_python_constraints_count"], 154)
+        self.assertEqual(res["system_python_constraints_count"], 19)
+
+        # REL-03: Containerfile enforces constraints across pip & uv steps
+        cfile = (REPO_ROOT / "deploy" / "images" / "Containerfile").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            "PIP_CONSTRAINT=/tmp/system-python-constraints.txt",
+            "PIP_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
+            "UV_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
+            "UV_BUILD_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
+            "--no-build-isolation -c /tmp/cskh-build/python-constraints.txt -e ./apps/crm_cskh",
+        ):
+            self.assertIn(marker, cfile)
+
+        # REL-04: compose.verify.yaml uses apps-order.txt (not alphabetical `ls -1 apps`)
+        verify_compose = (
+            REPO_ROOT / "deploy" / "images" / "compose.verify.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn("/home/frappe/frappe-bench/apps-order.txt", verify_compose)
+        self.assertNotIn("ls -1 apps > sites/apps.txt", verify_compose)
+
+        # REL-04: p4-release.yml uses --no-mariadb-socket and strict security gate
+        rel_wf = (REPO_ROOT / ".github" / "workflows" / "p4-release.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("--no-mariadb-socket", rel_wf)
+        self.assertIn("environment: registry-verify", rel_wf)
+        self.assertIn("--strict", rel_wf)
+
+
+class TestPosixDigestValidator(unittest.TestCase):
+    """REL-02: Tests POSIX `validate_digest_uri.sh` and Python `validate_registry_digest`."""
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.sh_bin = _find_posix_sh()
+        cls.validator_script = (RELEASE_DIR / "validate_digest_uri.sh").as_posix()
+
+    def _run_posix_validator(self, candidate: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [self.sh_bin, self.validator_script, candidate],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+
+    def test_valid_crm_cskh_digest_uris_accepted(self) -> None:
+        valid_uris = [
+            SAMPLE_DIGEST,
+            (
+                "127.0.0.1:15000/cskh/crm-cskh@sha256:"
+                "6cc10044b55be433d120660417f75d244eb984b269923d69d12465b537759a7a"
+            ),
+            (
+                "registry.internal.example:5000/team/sub/crm-cskh:0.0.1-92e14af@sha256:"
+                "abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+            ),
+        ]
+        for uri in valid_uris:
+            proc = self._run_posix_validator(uri)
+            self.assertEqual(
+                proc.returncode,
+                0,
+                f"POSIX validator unexpectedly rejected valid URI {uri!r}: {proc.stderr}",
+            )
+            validate_registry_digest(uri)
+
+    def test_negative_whitespace_tags_and_bad_digests_rejected(self) -> None:
+        hex64 = "8f4e2b1c9d0a3e5f7b6c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a"
+        invalid_cases = [
+            # Empty / blocked / placeholder
+            "",
+            "BLOCKED",
+            f"<registry>/crm-cskh@sha256:{hex64}",
+            # Whitespace: leading, trailing, middle, tab, embedded newline
+            f" {SAMPLE_DIGEST}",
+            f"{SAMPLE_DIGEST} ",
+            f"ghcr.io/nobita6986/crm cskh@sha256:{hex64}",
+            f"ghcr.io/nobita6986/crm-cskh\t@sha256:{hex64}",
+            f"{SAMPLE_DIGEST}\ninjected-line",
+            f"injected-line\n{SAMPLE_DIGEST}",
+            # Floating tags / missing @sha256 digest / missing registry host
+            "ghcr.io/nobita6986/crm-cskh:latest",
+            "ghcr.io/nobita6986/crm-cskh:0.0.1-92e14af",
+            "ghcr.io/nobita6986/crm-cskh",
+            f"crm-cskh@sha256:{hex64}",
+            # Malformed digests: short, long, uppercase, non-hex, wrong alg, all-zero
+            f"ghcr.io/nobita6986/crm-cskh@sha256:{hex64[:63]}",
+            f"ghcr.io/nobita6986/crm-cskh@sha256:{hex64}a",
+            f"ghcr.io/nobita6986/crm-cskh@sha256:{hex64.upper()}",
+            f"ghcr.io/nobita6986/crm-cskh@sha256:{'g' * 64}",
+            f"ghcr.io/nobita6986/crm-cskh@sha512:{hex64}",
+            f"ghcr.io/nobita6986/crm-cskh@sha256:{'0' * 64}",
+        ]
+        for bad in invalid_cases:
+            proc = self._run_posix_validator(bad)
+            self.assertNotEqual(
+                proc.returncode,
+                0,
+                f"POSIX validator failed to reject invalid URI {bad!r}",
+            )
+            with self.assertRaises(
+                ValueError, msg=f"Python validator failed to reject {bad!r}"
+            ):
+                validate_registry_digest(bad)
 
 
 class TestSbomAndSecurityScanGate(unittest.TestCase):
@@ -163,113 +317,186 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
                     spdx_out=spdx,
                 )
 
-    def test_security_scan_secret_and_cve_gates(self) -> None:
+    def test_repo_cve_exceptions_has_zero_preapproved_cves(self) -> None:
+        raw = json.loads(DEFAULT_EXCEPTIONS_FILE.read_text(encoding="utf-8"))
+        self.assertEqual(raw["exceptions"], [])
+        self.assertEqual(len(raw["secret_false_positives"]), 1)
+        fp = raw["secret_false_positives"][0]
+        self.assertEqual(fp["exact_line"], 76)
+        self.assertEqual(fp["exact_sample"], VERIFIED_PYJWT_DOCTEST_TOKEN)
+
+    def test_rel01_exact_pyjwt_sample_and_different_jwt_in_same_file_fails(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            trivy_file = tmp / "trivy.json"
+            meta_file = tmp / "METADATA"
+
+            trivy_single_redacted_hit = {
+                "ArtifactName": SAMPLE_DIGEST,
+                "Results": [
+                    {
+                        "Target": PYJWT_METADATA_TARGET,
+                        "Secrets": [
+                            {
+                                "RuleID": "jwt-token",
+                                "Category": "JWT",
+                                "Severity": "MEDIUM",
+                                "Title": "JWT token",
+                                "StartLine": 76,
+                                "EndLine": 76,
+                                "Match": "    '***'",
+                            }
+                        ],
+                    }
+                ],
+            }
+            trivy_file.write_text(
+                json.dumps(trivy_single_redacted_hit), encoding="utf-8"
+            )
+
+            # 1. Exact verified doctest JWT on line 76 -> PASS
+            meta_file.write_text(_build_pyjwt_metadata_text(), encoding="utf-8")
+            ok = evaluate_trivy_report(
+                trivy_file,
+                pyjwt_metadata_path=meta_file,
+                mode="strict",
+            )
+            self.assertEqual(ok["status"], "PASS", ok)
+            self.assertEqual(ok["secret_findings_count"], 0)
+            self.assertEqual(ok["excepted_secret_false_positives_count"], 1)
+
+            # 2. REL-01A REQUIRED TEST: A DIFFERENT JWT replacing line 76 in the EXACT SAME METADATA file MUST FAIL!
+            meta_file.write_text(
+                _build_pyjwt_metadata_text(line76_token=DIFFERENT_JWT_TOKEN),
+                encoding="utf-8",
+            )
+            diff_line76 = evaluate_trivy_report(
+                trivy_file,
+                pyjwt_metadata_path=meta_file,
+                mode="advisory_upstream_critical",
+            )
+            self.assertEqual(diff_line76["status"], "FAIL", diff_line76)
+            self.assertGreaterEqual(diff_line76["secret_findings_count"], 1)
+            self.assertEqual(diff_line76["excepted_secret_false_positives_count"], 0)
+
+            # 3. REL-01A REQUIRED TEST: Keeping verified JWT on line 76 AND adding a DIFFERENT JWT on line 90
+            #    in the EXACT SAME METADATA file MUST FAIL (both when Trivy reports 2 hits and 1 hit)!
+            meta_file.write_text(
+                _build_pyjwt_metadata_text(
+                    line76_token=VERIFIED_PYJWT_DOCTEST_TOKEN,
+                    extra_line90_token=DIFFERENT_JWT_TOKEN,
+                ),
+                encoding="utf-8",
+            )
+            extra_same_file_single_trivy = evaluate_trivy_report(
+                trivy_file,
+                pyjwt_metadata_path=meta_file,
+                mode="advisory_upstream_critical",
+            )
+            self.assertEqual(extra_same_file_single_trivy["status"], "FAIL")
+            self.assertGreaterEqual(
+                extra_same_file_single_trivy["secret_findings_count"], 1
+            )
+            self.assertEqual(
+                extra_same_file_single_trivy["excepted_secret_false_positives_count"], 0
+            )
+
+            trivy_two_hits_same_file = {
+                "ArtifactName": SAMPLE_DIGEST,
+                "Results": [
+                    {
+                        "Target": PYJWT_METADATA_TARGET,
+                        "Secrets": [
+                            {
+                                "RuleID": "jwt-token",
+                                "Category": "JWT",
+                                "Severity": "MEDIUM",
+                                "Title": "JWT token",
+                                "StartLine": 76,
+                                "EndLine": 76,
+                                "Match": "    '***'",
+                            },
+                            {
+                                "RuleID": "jwt-token",
+                                "Category": "JWT",
+                                "Severity": "MEDIUM",
+                                "Title": "JWT token",
+                                "StartLine": 90,
+                                "EndLine": 90,
+                                "Match": "    '***'",
+                            },
+                        ],
+                    }
+                ],
+            }
+            trivy_file.write_text(
+                json.dumps(trivy_two_hits_same_file), encoding="utf-8"
+            )
+            extra_same_file_two_trivy = evaluate_trivy_report(
+                trivy_file,
+                pyjwt_metadata_path=meta_file,
+                mode="advisory_upstream_critical",
+            )
+            self.assertEqual(extra_same_file_two_trivy["status"], "FAIL")
+            self.assertGreaterEqual(
+                extra_same_file_two_trivy["secret_findings_count"], 2
+            )
+            self.assertEqual(
+                extra_same_file_two_trivy["excepted_secret_false_positives_count"], 0
+            )
+
+            # 4. Redacted Trivy match WITHOUT --pyjwt-metadata-file MUST FAIL closed
+            trivy_file.write_text(
+                json.dumps(trivy_single_redacted_hit), encoding="utf-8"
+            )
+            no_meta = evaluate_trivy_report(
+                trivy_file,
+                pyjwt_metadata_path=None,
+                mode="advisory_upstream_critical",
+            )
+            self.assertEqual(no_meta["status"], "FAIL")
+            self.assertEqual(no_meta["secret_findings_count"], 1)
+
+            # 5. Same verified token inside application code MUST FAIL closed
+            trivy_app_secret = {
+                "ArtifactName": SAMPLE_DIGEST,
+                "Results": [
+                    {
+                        "Target": "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/api.py",
+                        "Secrets": [
+                            {
+                                "RuleID": "jwt-token",
+                                "Category": "JWT",
+                                "Severity": "MEDIUM",
+                                "Title": "JWT token",
+                                "StartLine": 76,
+                                "EndLine": 76,
+                                "Match": VERIFIED_PYJWT_DOCTEST_TOKEN,
+                            }
+                        ],
+                    }
+                ],
+            }
+            trivy_file.write_text(json.dumps(trivy_app_secret), encoding="utf-8")
+            meta_file.write_text(_build_pyjwt_metadata_text(), encoding="utf-8")
+            self.assertEqual(
+                evaluate_trivy_report(
+                    trivy_file,
+                    pyjwt_metadata_path=meta_file,
+                    mode="advisory_upstream_critical",
+                )["status"],
+                "FAIL",
+            )
+
+    def test_strict_cve_gate_and_regressed_package_guard(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = Path(td)
             trivy_file = tmp / "trivy.json"
             exc_file = tmp / "exceptions.json"
 
-            # 1. Clean report passes
-            trivy_file.write_text(
-                json.dumps({"ArtifactName": SAMPLE_DIGEST, "Results": []}),
-                encoding="utf-8",
-            )
-            clean = evaluate_trivy_report(trivy_file)
-            self.assertEqual(clean["status"], "PASS")
-
-            # 2. Embedded secret ALWAYS fails even if allow_fixable_critical is True
-            trivy_file.write_text(
-                json.dumps(
-                    {
-                        "ArtifactName": SAMPLE_DIGEST,
-                        "Results": [
-                            {
-                                "Target": "app/config.py",
-                                "Secrets": [
-                                    {
-                                        "RuleID": "private-key",
-                                        "Category": "AsymmetricPrivateKey",
-                                        "Severity": "CRITICAL",
-                                        "Title": "Private Key",
-                                    }
-                                ],
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            sec_fail = evaluate_trivy_report(
-                trivy_file,
-                fail_on_secrets=True,
-                fail_on_unapproved_fixable_critical=False,
-            )
-            self.assertEqual(sec_fail["status"], "FAIL")
-            self.assertEqual(sec_fail["secret_findings_count"], 1)
-
-            # 2b. Upstream PyJWT METADATA example JWT is excepted ONLY on exact target suffix + rule_id
-            trivy_file.write_text(
-                json.dumps(
-                    {
-                        "ArtifactName": SAMPLE_DIGEST,
-                        "Results": [
-                            {
-                                "Target": "/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.13.0.dist-info/METADATA",
-                                "Secrets": [
-                                    {
-                                        "RuleID": "jwt-token",
-                                        "Category": "JWT",
-                                        "Severity": "MEDIUM",
-                                        "Title": "JWT token",
-                                    }
-                                ],
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            pyjwt_fp_ok = evaluate_trivy_report(
-                trivy_file,
-                fail_on_secrets=True,
-                fail_on_unapproved_fixable_critical=False,
-            )
-            self.assertEqual(pyjwt_fp_ok["status"], "PASS")
-            self.assertEqual(pyjwt_fp_ok["secret_findings_count"], 0)
-            self.assertEqual(pyjwt_fp_ok["excepted_secret_false_positives_count"], 1)
-
-            # Same rule_id in app code MUST still fail closed!
-            trivy_file.write_text(
-                json.dumps(
-                    {
-                        "ArtifactName": SAMPLE_DIGEST,
-                        "Results": [
-                            {
-                                "Target": "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/api.py",
-                                "Secrets": [
-                                    {
-                                        "RuleID": "jwt-token",
-                                        "Category": "JWT",
-                                        "Severity": "MEDIUM",
-                                        "Title": "JWT token",
-                                    }
-                                ],
-                            }
-                        ],
-                    }
-                ),
-                encoding="utf-8",
-            )
-            self.assertEqual(
-                evaluate_trivy_report(
-                    trivy_file,
-                    fail_on_secrets=True,
-                    fail_on_unapproved_fixable_critical=False,
-                )["status"],
-                "FAIL",
-            )
-
-            # 3. Fixable CRITICAL fails unless active non-expired exception exists
+            # Strict mode fails on BOTH fixable CRITICAL and unfixed OS CRITICAL without active exceptions
             trivy_file.write_text(
                 json.dumps(
                     {
@@ -279,12 +506,19 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
                                 "Target": "debian",
                                 "Vulnerabilities": [
                                     {
-                                        "VulnerabilityID": "CVE-2026-99999",
-                                        "PkgName": "libfoo",
-                                        "InstalledVersion": "1.0.0",
-                                        "FixedVersion": "1.0.1",
+                                        "VulnerabilityID": "CVE-2026-99991",
+                                        "PkgName": "PyJWT",
+                                        "InstalledVersion": "2.13.0",
+                                        "FixedVersion": "2.14.0",
                                         "Severity": "CRITICAL",
-                                    }
+                                    },
+                                    {
+                                        "VulnerabilityID": "CVE-2025-7458",
+                                        "PkgName": "libsqlite3-0",
+                                        "InstalledVersion": "3.40.1-2+deb12u2",
+                                        "FixedVersion": "",
+                                        "Severity": "CRITICAL",
+                                    },
                                 ],
                             }
                         ],
@@ -292,47 +526,82 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
-            cve_fail = evaluate_trivy_report(trivy_file, exceptions_path=exc_file)
-            self.assertEqual(cve_fail["status"], "FAIL")
+            strict_fail = evaluate_trivy_report(
+                trivy_file, exceptions_path=exc_file, mode="strict"
+            )
+            self.assertEqual(strict_fail["status"], "FAIL")
+            self.assertEqual(len(strict_fail["gate_failures"]), 2)
 
-            # Expired exception still fails
+            # Advisory mode allows pending upstream CRITICALs ONLY if not in forbid_critical_packages
+            adv_ok = evaluate_trivy_report(
+                trivy_file,
+                exceptions_path=exc_file,
+                mode="advisory_upstream_critical",
+                forbid_critical_packages={"uv", "form-data"},
+            )
+            self.assertEqual(adv_ok["status"], "PASS")
+
+            # Regressed patched package fails even in advisory mode
+            adv_regressed = evaluate_trivy_report(
+                trivy_file,
+                exceptions_path=exc_file,
+                mode="advisory_upstream_critical",
+                forbid_critical_packages={"PyJWT"},
+            )
+            self.assertEqual(adv_regressed["status"], "FAIL")
+
+            # Expired exception still fails strict mode
             exc_file.write_text(
                 json.dumps(
                     {
                         "exceptions": [
                             {
-                                "cve_id": "CVE-2026-99999",
+                                "cve_id": "CVE-2026-99991",
                                 "expires_on": "2020-01-01",
                                 "approved_by": "T0",
-                            }
+                            },
+                            {
+                                "cve_id": "CVE-2025-7458",
+                                "expires_on": "2099-12-31",
+                                "approved_by": "T0",
+                            },
                         ]
                     }
                 ),
                 encoding="utf-8",
             )
             self.assertEqual(
-                evaluate_trivy_report(trivy_file, exceptions_path=exc_file)["status"],
+                evaluate_trivy_report(
+                    trivy_file, exceptions_path=exc_file, mode="strict"
+                )["status"],
                 "FAIL",
             )
 
-            # Active future exception passes and records excepted_critical
+            # Non-expired T0-approved exceptions for BOTH CVEs pass strict mode
             exc_file.write_text(
                 json.dumps(
                     {
                         "exceptions": [
                             {
-                                "cve_id": "CVE-2026-99999",
+                                "cve_id": "CVE-2026-99991",
                                 "expires_on": "2099-12-31",
                                 "approved_by": "T0",
-                            }
+                            },
+                            {
+                                "cve_id": "CVE-2025-7458",
+                                "expires_on": "2099-12-31",
+                                "approved_by": "T0",
+                            },
                         ]
                     }
                 ),
                 encoding="utf-8",
             )
-            excepted = evaluate_trivy_report(trivy_file, exceptions_path=exc_file)
-            self.assertEqual(excepted["status"], "PASS")
-            self.assertEqual(len(excepted["excepted_critical"]), 1)
+            strict_pass = evaluate_trivy_report(
+                trivy_file, exceptions_path=exc_file, mode="strict"
+            )
+            self.assertEqual(strict_pass["status"], "PASS")
+            self.assertEqual(len(strict_pass["excepted_critical"]), 2)
 
 
 class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
@@ -348,7 +617,6 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         evidence_dir = REPO_ROOT / "deploy" / "images" / "evidence"
         self.build_manifest_path = evidence_dir / "build-manifest.json"
 
-        # Synthesize registry-verified inspect summary from real P4-01 inspect file
         inspect_obj = json.loads(
             (evidence_dir / "image-inspect-summary.json").read_text(encoding="utf-8")
         )
@@ -372,7 +640,10 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         self.scan_summary = self.tmp / "security-scan-summary.json"
         self.scan_summary.write_text(
-            json.dumps({"status": "PASS", "secret_findings_count": 0}) + "\n",
+            json.dumps(
+                {"status": "PASS", "gate_mode": "strict", "secret_findings_count": 0}
+            )
+            + "\n",
             encoding="utf-8",
         )
 
@@ -386,17 +657,34 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         self.assertEqual(read_kpi_formula_version(), "cskh-metrics-v2")
 
-    def test_digest_validator_rejects_tags_and_placeholders(self) -> None:
-        validate_registry_digest(SAMPLE_DIGEST)
-        for invalid in (
-            "",
-            "crm-cskh:0.0.1-92e14af",
-            "BLOCKED",
-            "ghcr.io/org/crm-cskh@sha256:" + ("0" * 64),
-            "<registry>/crm-cskh@sha256:" + ("a" * 64),
-        ):
-            with self.assertRaises(ValueError, msg=f"Should reject {invalid!r}"):
-                validate_registry_digest(invalid)
+    def test_production_candidate_manifest_rejects_non_strict_scan(self) -> None:
+        advisory_scan = self.tmp / "advisory-scan.json"
+        advisory_scan.write_text(
+            json.dumps(
+                {
+                    "status": "PASS",
+                    "gate_mode": "advisory_upstream_critical",
+                    "secret_findings_count": 0,
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "gate_mode='strict'"):
+            build_manifest_dict(
+                release_id="crm-cskh-20261106-001",
+                environment_scope="production_candidate",
+                lock_path=DEFAULT_LOCK_PATH,
+                build_manifest_path=self.build_manifest_path,
+                image_inspect_path=self.inspect_path,
+                sbom_cyclonedx_path=self.sbom_cdx,
+                sbom_spdx_path=self.sbom_spdx,
+                security_scan_path=advisory_scan,
+                build_url="https://example.invalid/1",
+                test_report_url="https://example.invalid/1",
+                previous_release_id=None,
+                approved_by=[],
+            )
 
     def test_manifest_sign_verify_tamper_and_scope_isolation(self) -> None:
         manifest_path = self.tmp / "release-manifest.json"
@@ -442,7 +730,6 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         self.assertEqual(rc_sign, 0)
 
-        # Valid verification for matching scope
         rc_ok = manifest_main(
             [
                 "verify",
@@ -460,7 +747,6 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         self.assertEqual(rc_ok, 0)
 
-        # Production/Staging scope MUST reject `ci_ephemeral_rehearsal` manifest!
         rc_wrong_scope = manifest_main(
             [
                 "verify",
@@ -476,7 +762,6 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         self.assertNotEqual(rc_wrong_scope, 0)
 
-        # 1-byte tamper on manifest MUST fail signature verification
         tampered = self.tmp / "tampered.json"
         tampered.write_bytes(manifest_path.read_bytes().replace(b"runs/1", b"runs/2"))
         rc_tamper = manifest_main(
@@ -539,7 +824,6 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
             (base64.b64encode(raw_sig).decode("ascii") + "\n").encode("ascii")
         )
 
-        # Support containerd manifest-sha256 ID on downstream pulled stages as well as config ID
         pulled_manifest_id = SAMPLE_DIGEST.split("@", 1)[1]
 
         clean_site_path = self.tmp / "clean-site-verify.json"
@@ -604,7 +888,6 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         self.assertEqual(proof["status"], "PASS")
         self.assertTrue(proof["zero_digest_drift"])
 
-        # Negative 1: 1-char digest drift on Staging service MUST fail closed
         drifted = json.loads(staging_inspect_path.read_text(encoding="utf-8"))
         drifted[0]["Config"]["Image"] = SAMPLE_DRIFT_DIGEST
         staging_inspect_path.write_text(json.dumps(drifted), encoding="utf-8")
@@ -621,7 +904,6 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
                 expected_scope="production_candidate",
             )
 
-        # Negative 2: Forbidden `/src` host bind-mount on Staging container MUST fail closed
         bind_mounted = json.loads(json.dumps(staging_containers))
         bind_mounted[1]["Mounts"].append({"Type": "bind", "Destination": "/src"})
         staging_inspect_path.write_text(json.dumps(bind_mounted), encoding="utf-8")
@@ -638,7 +920,6 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
                 expected_scope="production_candidate",
             )
 
-        # Negative 3: Missing required Staging service (`scheduler`) MUST fail closed
         incomplete = [
             c
             for c in staging_containers

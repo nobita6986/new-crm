@@ -46,7 +46,7 @@ jobs:
             --check-locks \
             --out "$RUNNER_TEMP/p4-static-evidence/pr-isolation-audit.json"
 
-      - name: Lint and format check Python & shell entrypoints
+      - name: Lint and format check Python & POSIX/Bash entrypoints
         shell: bash
         run: |
           set -euo pipefail
@@ -60,11 +60,13 @@ jobs:
             apps/crm_cskh \
             deploy/images/verify_clean_site.py \
             deploy/release
+          sh -n deploy/release/validate_digest_uri.sh
           bash -n \
             deploy/images/build-image.sh \
             deploy/images/resources/main-entrypoint.sh \
             deploy/images/resources/nginx-entrypoint.sh \
             deploy/images/resources/start.sh \
+            deploy/release/validate_digest_uri.sh \
             deploy/release/deploy_staging_by_digest.sh \
             deploy/dev/bootstrap.sh
           git diff --check
@@ -113,6 +115,10 @@ jobs:
             -s deploy/compose/scripts -p "test_*.py" -v
           "$RUNNER_TEMP/p4-venv/bin/python" -m unittest discover \
             -s deploy/release -p "test_*.py" -v
+          (
+            cd "$RUNNER_TEMP/p4-static-evidence"
+            sha256sum *.json > SHA256SUMS.txt
+          )
 
       - name: Upload static audit evidence
         if: always()
@@ -123,8 +129,210 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  clean-build-lock-reproducibility:
+    name: Two clean builds (--no-cache) Python constraint & hash proof (REL-03)
+    needs: [source-and-static-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/.ghcup || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Execute Clean Build #1 (--no-cache), purge BuildKit cache, execute Clean Build #2 (--no-cache)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROOF_DIR="$RUNNER_TEMP/p4-lock-reproducibility"
+          mkdir -p "$PROOF_DIR/build-1" "$PROOF_DIR/build-2"
+          ACTUAL_HEAD_SHA="$(git rev-parse HEAD)"
+
+          # Clean Build #1 from zero layer cache
+          LOCAL_IMAGE_REPO="cskh-repro-check" \
+          REGISTRY_PUSH=false \
+          bash deploy/images/build-image.sh \
+            --no-cache \
+            --out-dir "$PROOF_DIR/build-1" \
+            --tag "clean-1-${ACTUAL_HEAD_SHA::12}"
+
+          IMG_1="$(jq -r '.local_image_id' "$PROOF_DIR/build-1/image-inspect-summary.json")"
+          docker rmi -f "cskh-repro-check:clean-1-${ACTUAL_HEAD_SHA::12}" "${IMG_1}" >/dev/null 2>&1 || true
+          docker builder prune -af >/dev/null 2>&1 || true
+
+          # Clean Build #2 from zero layer cache after complete BuildKit prune
+          LOCAL_IMAGE_REPO="cskh-repro-check" \
+          REGISTRY_PUSH=false \
+          bash deploy/images/build-image.sh \
+            --no-cache \
+            --out-dir "$PROOF_DIR/build-2" \
+            --tag "clean-2-${ACTUAL_HEAD_SHA::12}"
+
+          IMG_2="$(jq -r '.local_image_id' "$PROOF_DIR/build-2/image-inspect-summary.json")"
+          docker rmi -f "cskh-repro-check:clean-2-${ACTUAL_HEAD_SHA::12}" "${IMG_2}" >/dev/null 2>&1 || true
+
+      - name: Verify constraint enforcement across every install step & identical catalog SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROOF_DIR="$RUNNER_TEMP/p4-lock-reproducibility"
+          python3 - "$PROOF_DIR" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          proof_dir = Path(sys.argv[1])
+          b1 = proof_dir / "build-1"
+          b2 = proof_dir / "build-2"
+          lock = json.loads(Path("deploy/images/release-lock.json").read_text(encoding="utf-8"))
+
+          def sha256_file(p: Path) -> str:
+              return hashlib.sha256(p.read_bytes()).hexdigest()
+
+          # 1. Verify both clean build logs prove constraints were verified & enforced at every pip/uv step
+          required_log_markers = [
+              "/tmp/system-python-constraints.txt: OK",
+              "/tmp/cskh-build/python-constraints.txt: OK",
+              "PIP_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
+              "UV_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
+              "UV_BUILD_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
+              "--no-build-isolation -c /tmp/cskh-build/python-constraints.txt -e ./apps/crm_cskh",
+          ]
+          log_checks = {}
+          for label, bdir in (("clean_build_1", b1), ("clean_build_2", b2)):
+              log_txt = (bdir / "build.log").read_text(encoding="utf-8", errors="replace")
+              missing = [m for m in required_log_markers if m not in log_txt]
+              if missing:
+                  raise SystemExit(f"FATAL: {label} build.log missing constraint markers: {missing}")
+              log_checks[label] = {
+                  "verified_markers": required_log_markers,
+                  "all_present": True,
+              }
+
+          # 2. Assert bit-for-bit identical package catalog hashes across Clean Build #1 and Clean Build #2
+          compared_catalogs = [
+              "pip-freeze.txt",
+              "pip-freeze-all.txt",
+              "system-pip-freeze.txt",
+              "python-constraints.txt",
+              "system-python-constraints.txt",
+              "yarn-locks.sha256",
+              "crm-cskh-files.sha256",
+          ]
+          catalog_hashes = {}
+          for fname in compared_catalogs:
+              h1 = sha256_file(b1 / fname)
+              h2 = sha256_file(b2 / fname)
+              if h1 != h2:
+                  raise SystemExit(f"FATAL: Catalog hash drift on {fname}: build1={h1} != build2={h2}")
+              catalog_hashes[fname] = {
+                  "clean_build_1_sha256": h1,
+                  "clean_build_2_sha256": h2,
+                  "identical": True,
+                  "line_count": len(
+                      [ln for ln in (b1 / fname).read_text(encoding="utf-8").splitlines() if ln.strip()]
+                  ),
+              }
+
+          # 3. Verify every PyPI `==` package in pip-freeze-all.txt is pinned identically in python-constraints.txt
+          def parse_pins(p: Path) -> dict[str, str]:
+              out = {}
+              for raw in p.read_text(encoding="utf-8").splitlines():
+                  ln = raw.strip()
+                  if not ln or ln.startswith("#") or " @ " in ln or ln.startswith("-e "):
+                      continue
+                  if "==" in ln:
+                      k, v = ln.split("==", 1)
+                      out[k.strip().lower().replace("_", "-")] = v.strip()
+              return out
+
+          bench_constraints = parse_pins(b1 / "python-constraints.txt")
+          bench_installed = parse_pins(b1 / "pip-freeze-all.txt")
+          unconstrained_bench = {
+              pkg: ver
+              for pkg, ver in bench_installed.items()
+              if pkg != "crm-cskh" and bench_constraints.get(pkg) != ver
+          }
+          if unconstrained_bench:
+              raise SystemExit(
+                  f"FATAL: Unconstrained or mismatched bench virtualenv packages: {unconstrained_bench}"
+              )
+
+          sys_constraints = parse_pins(b1 / "system-python-constraints.txt")
+          sys_installed = parse_pins(b1 / "system-pip-freeze.txt")
+          expected_uv = lock["security_patches"]["uv_version"]
+          unconstrained_sys = {
+              pkg: ver
+              for pkg, ver in sys_installed.items()
+              if not (pkg == "uv" and ver == expected_uv) and sys_constraints.get(pkg) != ver
+          }
+          if unconstrained_sys:
+              raise SystemExit(
+                  f"FATAL: Unconstrained or mismatched base system Python packages: {unconstrained_sys}"
+              )
+
+          assert (
+              catalog_hashes["python-constraints.txt"]["clean_build_1_sha256"]
+              == lock["python_constraints"]["bench_constraints_sha256"]
+          )
+          assert (
+              catalog_hashes["system-python-constraints.txt"]["clean_build_1_sha256"]
+              == lock["python_constraints"]["system_constraints_sha256"]
+          )
+
+          report = {
+              "schema_version": "cskh-p4-python-lock-reproducibility-v1",
+              "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+              "git_commit_sha": (b1 / "build-manifest.json")
+              and json.loads((b1 / "build-manifest.json").read_text(encoding="utf-8"))["apps"]["crm_cskh"][
+                  "source_commit_sha"
+              ],
+              "status": "PASS",
+              "clean_builds_compared": 2,
+              "buildkit_cache_purged_between_builds": True,
+              "log_constraint_enforcement": log_checks,
+              "catalog_hashes": catalog_hashes,
+              "bench_virtualenv_pypi_packages_verified": len(bench_installed),
+              "system_base_pypi_packages_verified": len(sys_installed),
+              "uv_patched_version": sys_installed.get("uv"),
+          }
+          (proof_dir / "python-lock-reproducibility.json").write_text(
+              json.dumps(report, indent=2) + "\n", encoding="utf-8"
+          )
+
+          sums = []
+          for path in sorted(proof_dir.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = sha256_file(path)
+              sums.append(f"{digest}  {path.relative_to(proof_dir).as_posix()}")
+          (proof_dir / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Upload two-clean-build lock reproducibility proof (REL-03)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-lock-reproducibility-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-lock-reproducibility/
+          if-no-files-found: warn
+          retention-days: 14
+
   isolated-build-sbom-scan-and-digest-promotion:
-    name: Build-once, SBOM, scan & same-digest promotion (loopback OCI)
+    name: Build-once, SBOM, strict/PR scan & same-digest promotion (loopback OCI)
     needs: [source-and-static-gate]
     runs-on: ubuntu-24.04
     timeout-minutes: 75
@@ -187,7 +395,7 @@ jobs:
           echo "ERROR: Loopback OCI registry did not become ready" >&2
           exit 1
 
-      - name: Build custom production image ONCE & push to loopback OCI registry
+      - name: Build custom production image ONCE (--no-cache) & push to loopback OCI registry
         id: build_once
         shell: bash
         run: |
@@ -201,6 +409,7 @@ jobs:
           REGISTRY_PUSH=true \
           CSKH_REGISTRY_IMAGE="${LOOPBACK_REGISTRY_REPO}" \
           bash deploy/images/build-image.sh \
+            --no-cache \
             --out-dir "$EVIDENCE_DIR/build" \
             --tag "${CI_TAG}"
 
@@ -209,13 +418,20 @@ jobs:
           LOCAL_IMAGE_ID="$(jq -r '.local_image_id' \
             "$EVIDENCE_DIR/build/image-inspect-summary.json")"
 
-          echo "${APP_IMAGE_DIGEST}" | grep -Eq '^127\.0\.0\.1:15000/cskh/crm-cskh@sha256:[0-9a-f]{64}$'
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          case "${APP_IMAGE_DIGEST}" in
+            127.0.0.1:15000/cskh/crm-cskh@sha256:*) ;;
+            *)
+              echo "ERROR: Unexpected loopback digest prefix: ${APP_IMAGE_DIGEST}" >&2
+              exit 1
+              ;;
+          esac
           echo "app_image_digest=${APP_IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
           echo "local_image_id=${LOCAL_IMAGE_ID}" >> "$GITHUB_OUTPUT"
           echo "ci_tag=${CI_TAG}" >> "$GITHUB_OUTPUT"
           echo "actual_head_sha=${ACTUAL_HEAD_SHA}" >> "$GITHUB_OUTPUT"
 
-      - name: Generate CycloneDX 1.5 & SPDX 2.3 SBOMs and run Trivy vulnerability + secret scan
+      - name: Generate CycloneDX 1.5 & SPDX 2.3 SBOMs and run strict + rehearsal Trivy security gates
         id: sbom_and_scan
         shell: bash
         env:
@@ -232,6 +448,7 @@ jobs:
             --spdx-out "$EVIDENCE_DIR/sbom/sbom.spdx.json" \
             > "$EVIDENCE_DIR/sbom/sbom-summary.json"
 
+          # Zero Trivy suppression rules: scan every byte of the built image
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
             -v "$EVIDENCE_DIR/security:/scan-out" \
@@ -246,10 +463,48 @@ jobs:
             --output /scan-out/trivy-image.json \
             "${APP_IMAGE_DIGEST}"
 
-          # Advisory on upstream Debian/Node CVEs during PR check, strictly fail-closed on ANY secret!
+          # Extract PyJWT METADATA directly from the immutable @sha256 image for exact-token verification (REL-01A)
+          META_CID="$(docker create "${APP_IMAGE_DIGEST}")"
+          docker cp \
+            "${META_CID}:/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.13.0.dist-info/METADATA" \
+            "$EVIDENCE_DIR/security/pyjwt-METADATA.txt"
+          docker rm -f "${META_CID}" >/dev/null
+
+          # 1. Execute STRICT release security gate and archive full strict verdict (REL-01B)
+          set +e
           "$PY" deploy/release/evaluate_security_scan.py \
+            --strict \
             --trivy-json "$EVIDENCE_DIR/security/trivy-image.json" \
-            --allow-fixable-critical \
+            --pyjwt-metadata-file "$EVIDENCE_DIR/security/pyjwt-METADATA.txt" \
+            --out "$EVIDENCE_DIR/security/security-scan-strict.json"
+          STRICT_RC=$?
+          set -e
+          echo "Strict security gate exit code (expected != 0 while T0 CVE exception requests are pending): ${STRICT_RC}"
+
+          # Verify strict report exists, has 0 real secrets, and 0 CRITICAL CVEs on patched packages
+          python3 - "$EVIDENCE_DIR/security/security-scan-strict.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          strict_doc = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert strict_doc["gate_mode"] == "strict", strict_doc["gate_mode"]
+          assert strict_doc["secret_findings_count"] == 0, strict_doc["secret_findings"]
+          assert strict_doc["excepted_secret_false_positives_count"] == 1, strict_doc
+          patched_pkgs = {"uv", "form-data", "loader-utils", "shell-quote", "stdlib"}
+          leaked_patched = [
+              f for f in strict_doc["fixable_critical_unapproved"]
+              if f["package"].lower() in patched_pkgs
+          ]
+          assert not leaked_patched, f"Patched packages still reported CRITICAL CVEs: {leaked_patched}"
+          PY
+
+          # 2. Enforce PR gate: fail-closed on ANY secret OR ANY regression in patched packages
+          "$PY" deploy/release/evaluate_security_scan.py \
+            --advisory-upstream-critical \
+            --forbid-critical-packages uv,form-data,loader-utils,shell-quote,stdlib \
+            --trivy-json "$EVIDENCE_DIR/security/trivy-image.json" \
+            --pyjwt-metadata-file "$EVIDENCE_DIR/security/pyjwt-METADATA.txt" \
             --out "$EVIDENCE_DIR/security/security-scan-summary.json"
 
       - name: Sign & verify CI rehearsal release-manifest.json (ephemeral Ed25519 keypair)
@@ -396,8 +651,6 @@ jobs:
           EVIDENCE_DIR="$RUNNER_TEMP/p4-ci-evidence"
           mkdir -p "$EVIDENCE_DIR"
 
-          # Remove raw multi-megabyte Trivy JSON if needed? Keep summary + compact SHA256SUMS,
-          # and redact any accidental cookie/token pattern across logs.
           python3 - "$EVIDENCE_DIR" <<'PY'
           import hashlib
           import json
@@ -408,6 +661,7 @@ jobs:
           from pathlib import Path
 
           root = Path(sys.argv[1])
+          skip_redact = {"pyjwt-METADATA.txt"}
           patterns = [
               (re.compile(r"(?im)(set-cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
               (re.compile(r"(?im)(cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
@@ -415,7 +669,11 @@ jobs:
               (re.compile(r"(?i)(sid=)[^;\s\"']+"), r"\1[REDACTED]"),
           ]
           for path in root.rglob("*"):
-              if not path.is_file() or path.suffix.lower() not in {".log", ".txt"}:
+              if (
+                  not path.is_file()
+                  or path.name in skip_redact
+                  or path.suffix.lower() not in {".log", ".txt"}
+              ):
                   continue
               txt = path.read_text(encoding="utf-8", errors="replace")
               for pat, rep in patterns:
@@ -429,6 +687,7 @@ jobs:
               "run_id": os.environ.get("GITHUB_RUN_ID"),
               "event_name": os.environ.get("GITHUB_EVENT_NAME"),
               "ci_loopback_rehearsal": {
+                  "evidence_scope": "ephemeral_loopback_oci_v2_registry_127.0.0.1:15000",
                   "build_once": os.environ.get("BUILD_OUTCOME"),
                   "sbom_and_scan": os.environ.get("SCAN_OUTCOME"),
                   "ed25519_manifest_signing": os.environ.get("SIGN_OUTCOME"),
@@ -442,8 +701,8 @@ jobs:
                   "blocker_id": "BLK-INFRA-03",
                   "detail": (
                       "Approved external Container Registry URL (vars.CSKH_REGISTRY_IMAGE), "
-                      "push/pull robot credentials, and protected `registry-build` / `staging` / "
-                      "`production` GitHub Environments are not yet provisioned by Owner/Infra."
+                      "push/pull robot credentials, and protected `registry-build` / `registry-verify` / "
+                      "`staging` / `production` GitHub Environments are not yet provisioned by Owner/Infra."
                   ),
               },
               "remote_staging_host_deployment": {
@@ -480,5 +739,135 @@ jobs:
         with:
           name: p4-ci-evidence-${{ github.run_id }}
           path: ${{ runner.temp }}/p4-ci-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  cross-runner-lock-and-artifact-attestation:
+    name: Attest SHA256SUMS & 3-clean-build Python lock identity across runners
+    needs:
+      - clean-build-lock-reproducibility
+      - isolated-build-sbom-scan-and-digest-promotion
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Download two-clean-build lock reproducibility bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: p4-lock-reproducibility-${{ github.run_id }}
+          path: ${{ runner.temp }}/verify-bundles/lock-repro
+
+      - name: Download build-once, SBOM, strict scan & promotion bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: p4-ci-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/verify-bundles/ci-evidence
+
+      - name: Verify SHA256SUMS & cross-VM 3-build Python catalog equality
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOCK_DIR="$RUNNER_TEMP/verify-bundles/lock-repro"
+          CI_DIR="$RUNNER_TEMP/verify-bundles/ci-evidence"
+          OUT_DIR="$RUNNER_TEMP/p4-cross-runner-attestation"
+          mkdir -p "$OUT_DIR"
+
+          (cd "$LOCK_DIR" && sha256sum -c SHA256SUMS.txt)
+          (cd "$CI_DIR" && sha256sum -c SHA256SUMS.txt)
+
+          python3 - "$LOCK_DIR" "$CI_DIR" "$OUT_DIR" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          lock_dir = Path(sys.argv[1])
+          ci_dir = Path(sys.argv[2])
+          out_dir = Path(sys.argv[3])
+
+          def h(p: Path) -> str:
+              return hashlib.sha256(p.read_bytes()).hexdigest()
+
+          repro = json.loads((lock_dir / "python-lock-reproducibility.json").read_text(encoding="utf-8"))
+          promo = json.loads(
+              (ci_dir / "promotion" / "digest-promotion-attestation.json").read_text(encoding="utf-8")
+          )
+          strict_scan = json.loads(
+              (ci_dir / "security" / "security-scan-strict.json").read_text(encoding="utf-8")
+          )
+
+          assert repro["status"] == "PASS", repro
+          assert promo["status"] == "PASS" and promo["zero_digest_drift"] is True, promo
+
+          catalogs = {}
+          for fname in (
+              "pip-freeze.txt",
+              "pip-freeze-all.txt",
+              "system-pip-freeze.txt",
+              "python-constraints.txt",
+              "system-python-constraints.txt",
+              "yarn-locks.sha256",
+              "crm-cskh-files.sha256",
+          ):
+              h_b1 = h(lock_dir / "build-1" / fname)
+              h_b2 = h(lock_dir / "build-2" / fname)
+              h_b3 = h(ci_dir / "build" / fname)
+              if not (h_b1 == h_b2 == h_b3):
+                  raise SystemExit(
+                      f"FATAL: Cross-runner hash mismatch for {fname}: b1={h_b1}, b2={h_b2}, b3={h_b3}"
+                  )
+              catalogs[fname] = {
+                  "clean_build_1_vm1_sha256": h_b1,
+                  "clean_build_2_vm1_sha256": h_b2,
+                  "clean_build_3_vm2_sha256": h_b3,
+                  "identical_across_3_clean_builds": True,
+              }
+
+          attestation = {
+              "schema_version": "cskh-p4-cross-runner-ci-attestation-v1",
+              "attested_at_utc": datetime.now(timezone.utc).isoformat(),
+              "status": "PASS",
+              "clean_builds_verified": 3,
+              "independent_runner_vms": 2,
+              "ephemeral_loopback_digest": promo["canonical_registry_digest"],
+              "zero_digest_drift": promo["zero_digest_drift"],
+              "catalog_hashes": catalogs,
+              "strict_security_scan_summary": {
+                  "gate_mode": strict_scan["gate_mode"],
+                  "status": strict_scan["status"],
+                  "secret_findings_count": strict_scan["secret_findings_count"],
+                  "excepted_secret_false_positives_count": strict_scan[
+                      "excepted_secret_false_positives_count"
+                  ],
+                  "fixable_critical_unapproved_count": len(
+                      strict_scan["fixable_critical_unapproved"]
+                  ),
+                  "unfixed_critical_upstream_os_count": len(
+                      strict_scan["unfixed_critical_upstream_os"]
+                  ),
+                  "severity_counts": strict_scan["severity_counts"],
+              },
+              "bundle_sha256sums": {
+                  "p4_lock_reproducibility_sha256sums": h(lock_dir / "SHA256SUMS.txt"),
+                  "p4_ci_evidence_sha256sums": h(ci_dir / "SHA256SUMS.txt"),
+              },
+          }
+          (out_dir / "cross-runner-attestation.json").write_text(
+              json.dumps(attestation, indent=2) + "\n", encoding="utf-8"
+          )
+          (out_dir / "SHA256SUMS.txt").write_text(
+              f"{h(out_dir / 'cross-runner-attestation.json')}  cross-runner-attestation.json\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(attestation, indent=2))
+          PY
+
+      - name: Upload cross-runner attestation summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-cross-runner-attestation-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-cross-runner-attestation/
           if-no-files-found: warn
           retention-days: 14

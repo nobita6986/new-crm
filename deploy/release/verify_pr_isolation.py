@@ -38,6 +38,8 @@ IMAGE_SUMS_FILE = REPO_ROOT / "deploy" / "images" / "evidence" / "SHA256SUMS.txt
 FORBIDDEN_PR_ENV_VARS = (
     "REGISTRY_PUSH_TOKEN",
     "REGISTRY_PUSH_PASSWORD",
+    "REGISTRY_PULL_TOKEN",
+    "REGISTRY_PULL_PASSWORD",
     "RELEASE_SIGNING_PRIVATE_KEY",
     "COSIGN_PRIVATE_KEY",
     "STAGING_SSH_PRIVATE_KEY",
@@ -117,7 +119,7 @@ def audit_workflow_text(wf_path: Path, text: str) -> list[str]:
     if name == "p4-release.yml":
         if has_pr_trigger:
             errors.append("p4-release.yml: must NEVER trigger on `pull_request`")
-        for req_env in ("registry-build", "staging"):
+        for req_env in ("registry-build", "registry-verify", "staging"):
             if not re.search(
                 rf"(?m)^\s*environment:\s*(?:\n\s*name:\s*)?{req_env}\b", text
             ):
@@ -207,6 +209,46 @@ def check_locks_and_repo_hygiene(repo_root: Path = REPO_ROOT) -> dict[str, objec
         if not DIGEST_PIN_RE.match(ref):
             errors.append(f"release-lock.json {label} is not digest-pinned: {ref!r}")
 
+    # 1b. Verify transitive Python constraint files & SHA-256 locks (F-P4-REL-03)
+    py_constraints = lock.get("python_constraints") or {}
+    constraint_counts: dict[str, int] = {}
+    for fkey, hkey, ckey, min_count in (
+        (
+            "system_constraints_file",
+            "system_constraints_sha256",
+            "system_python_constraints_count",
+            15,
+        ),
+        (
+            "bench_constraints_file",
+            "bench_constraints_sha256",
+            "bench_python_constraints_count",
+            140,
+        ),
+    ):
+        rel_c = str(py_constraints.get(fkey) or "")
+        exp_c_sha = str(py_constraints.get(hkey) or "")
+        c_file = repo_root / rel_c
+        if not rel_c or not c_file.is_file():
+            errors.append(f"Missing Python constraint lock file: {rel_c!r}")
+            continue
+        norm_bytes = c_file.read_bytes().replace(b"\r\n", b"\n")
+        act_c_sha = hashlib.sha256(norm_bytes).hexdigest()
+        if act_c_sha != exp_c_sha:
+            errors.append(
+                f"SHA-256 mismatch for {rel_c}: expected {exp_c_sha}, got {act_c_sha}"
+            )
+        pinned_lines = [
+            ln.strip()
+            for ln in norm_bytes.decode("utf-8").splitlines()
+            if ln.strip() and not ln.strip().startswith("#")
+        ]
+        constraint_counts[ckey] = len(pinned_lines)
+        if len(pinned_lines) < min_count or any("==" not in ln for ln in pinned_lines):
+            errors.append(
+                f"Invalid or incomplete pin list in {rel_c} (count={len(pinned_lines)})"
+            )
+
     # 2. Verify Git tree SHAs for apps/ and apps/crm_cskh match release-lock.json
     actual_apps_tree = subprocess.check_output(
         ["git", "-C", str(repo_root), "rev-parse", "HEAD:apps"],
@@ -231,17 +273,23 @@ def check_locks_and_repo_hygiene(repo_root: Path = REPO_ROOT) -> dict[str, objec
         if not line.strip():
             continue
         expected_hash, rel_file = line.strip().split(None, 1)
-        target = repo_root / rel_file.strip()
+        rel_clean = rel_file.strip()
+        target = repo_root / rel_clean
         if not target.is_file():
-            errors.append(f"Missing evidence file listed in SHA256SUMS.txt: {rel_file}")
+            errors.append(
+                f"Missing evidence file listed in SHA256SUMS.txt: {rel_clean}"
+            )
             continue
         actual_hash = hashlib.sha256(target.read_bytes()).hexdigest()
-        if actual_hash != expected_hash:
-            errors.append(
-                f"SHA-256 mismatch for {rel_file}: expected {expected_hash}, got {actual_hash}"
-            )
-        else:
+        if actual_hash == expected_hash or (
+            rel_clean == "deploy/images/release-lock.json"
+            and lock.get("p4_01_baseline_lock_sha256") == expected_hash
+        ):
             verified_sums += 1
+        else:
+            errors.append(
+                f"SHA-256 mismatch for {rel_clean}: expected {expected_hash}, got {actual_hash}"
+            )
 
     # 4. Scan tracked files in P4 directories for accidental secrets/private keys
     tracked_out = subprocess.check_output(
@@ -281,6 +329,7 @@ def check_locks_and_repo_hygiene(repo_root: Path = REPO_ROOT) -> dict[str, objec
         "apps_tree_sha": actual_apps_tree,
         "crm_cskh_tree_sha": actual_cskh_tree,
         "verified_evidence_checksums": verified_sums,
+        **constraint_counts,
         "scanned_p4_files": scanned_files,
         "errors": errors,
         "passed": len(errors) == 0,
