@@ -2,9 +2,10 @@
 """Trivy security scan evaluator & fail-closed vulnerability/secret gate (P4-02 / G04).
 
 Reads Trivy JSON scan output (`trivy image --format json` or `trivy fs --format json`),
-verifies zero secret findings, classifies OS/language package vulnerabilities by severity and
-fix availability, applies only non-expired approved exceptions from `cve-exceptions.json`,
-and writes a sanitized, deterministic JSON summary (`security-scan-summary.json`).
+verifies zero unapproved secret findings (honoring only exact, non-expired upstream package
+documentation false positives in `cve-exceptions.json`), classifies OS/language package
+vulnerabilities by severity and fix availability, applies only non-expired approved CVE
+exceptions, and writes a sanitized, deterministic JSON summary (`security-scan-summary.json`).
 """
 
 from __future__ import annotations
@@ -17,12 +18,16 @@ from pathlib import Path
 DEFAULT_EXCEPTIONS_FILE = Path(__file__).resolve().parent / "cve-exceptions.json"
 
 
-def load_active_exceptions(path: Path) -> dict[str, dict[str, str]]:
+def load_active_exceptions(
+    path: Path,
+) -> tuple[dict[str, dict[str, str]], list[dict[str, str]]]:
     if not path.is_file():
-        return {}
+        return {}, []
     raw = json.loads(path.read_text(encoding="utf-8"))
     today = datetime.now(timezone.utc).date()
-    active: dict[str, dict[str, str]] = {}
+    active_cves: dict[str, dict[str, str]] = {}
+    active_secret_fps: list[dict[str, str]] = []
+
     for item in raw.get("exceptions") or []:
         cve_id = str(item.get("cve_id") or "").strip()
         exp_str = str(item.get("expires_on") or "").strip()
@@ -30,8 +35,37 @@ def load_active_exceptions(path: Path) -> dict[str, dict[str, str]]:
         if not cve_id or not exp_str or not approved_by:
             continue
         if date.fromisoformat(exp_str) >= today:
-            active[cve_id] = item
-    return active
+            active_cves[cve_id] = item
+
+    for fp in raw.get("secret_false_positives") or []:
+        rule_id = str(fp.get("rule_id") or "").strip()
+        target_suffix = str(fp.get("target_suffix") or "").strip().replace("\\", "/")
+        exp_str = str(fp.get("expires_on") or "").strip()
+        approved_by = str(fp.get("approved_by") or "").strip()
+        if not rule_id or not target_suffix or not exp_str or not approved_by:
+            continue
+        if date.fromisoformat(exp_str) >= today:
+            active_secret_fps.append(
+                {
+                    "rule_id": rule_id,
+                    "target_suffix": target_suffix,
+                    "expires_on": exp_str,
+                    "approved_by": approved_by,
+                    "reason": str(fp.get("reason") or ""),
+                }
+            )
+
+    return active_cves, active_secret_fps
+
+
+def _is_approved_secret_false_positive(
+    target: str, rule_id: str, active_secret_fps: list[dict[str, str]]
+) -> dict[str, str] | None:
+    norm_target = target.replace("\\", "/")
+    for fp in active_secret_fps:
+        if fp["rule_id"] == rule_id and norm_target.endswith(fp["target_suffix"]):
+            return fp
+    return None
 
 
 def evaluate_trivy_report(
@@ -42,26 +76,41 @@ def evaluate_trivy_report(
     fail_on_unapproved_fixable_critical: bool = True,
 ) -> dict[str, object]:
     data = json.loads(trivy_json_path.read_text(encoding="utf-8"))
-    active_exceptions = load_active_exceptions(exceptions_path)
+    active_exceptions, active_secret_fps = load_active_exceptions(exceptions_path)
 
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "UNKNOWN": 0}
-    fixable_critical_unapproved: list[dict[str, str]] = []
-    unfixed_critical: list[dict[str, str]] = []
-    excepted_findings: list[dict[str, str]] = []
+    fixable_critical_unapproved: list[dict[str, str | None]] = []
+    unfixed_critical: list[dict[str, str | None]] = []
+    excepted_findings: list[dict[str, str | None]] = []
     secret_findings: list[dict[str, str]] = []
+    excepted_secret_fps: list[dict[str, str]] = []
 
     for res in data.get("Results") or []:
         target = str(res.get("Target") or "")
         for sec in res.get("Secrets") or []:
-            secret_findings.append(
-                {
-                    "target": target,
-                    "rule_id": str(sec.get("RuleID") or ""),
-                    "category": str(sec.get("Category") or ""),
-                    "severity": str(sec.get("Severity") or ""),
-                    "title": str(sec.get("Title") or ""),
-                }
+            rule_id = str(sec.get("RuleID") or "")
+            entry_sec = {
+                "target": target,
+                "rule_id": rule_id,
+                "category": str(sec.get("Category") or ""),
+                "severity": str(sec.get("Severity") or ""),
+                "title": str(sec.get("Title") or ""),
+            }
+            matched_fp = _is_approved_secret_false_positive(
+                target, rule_id, active_secret_fps
             )
+            if matched_fp is not None:
+                excepted_secret_fps.append(
+                    {
+                        **entry_sec,
+                        "approved_by": matched_fp["approved_by"],
+                        "expires_on": matched_fp["expires_on"],
+                        "reason": matched_fp["reason"],
+                    }
+                )
+            else:
+                secret_findings.append(entry_sec)
+
         for vuln in res.get("Vulnerabilities") or []:
             sev = str(vuln.get("Severity") or "UNKNOWN").upper()
             counts[sev if sev in counts else "UNKNOWN"] += 1
@@ -88,10 +137,10 @@ def evaluate_trivy_report(
     gate_failures: list[str] = []
     if fail_on_secrets and secret_findings:
         gate_failures.append(
-            f"Detected {len(secret_findings)} embedded secret finding(s) in scanned artifact"
+            f"Detected {len(secret_findings)} unapproved embedded secret finding(s) in scanned artifact"
         )
     if fail_on_unapproved_fixable_critical and fixable_critical_unapproved:
-        ids = sorted({f["cve_id"] for f in fixable_critical_unapproved})
+        ids = sorted({str(f["cve_id"]) for f in fixable_critical_unapproved})
         gate_failures.append(
             f"Detected {len(fixable_critical_unapproved)} unapproved fixable CRITICAL CVE(s): {ids}"
         )
@@ -104,6 +153,8 @@ def evaluate_trivy_report(
         "severity_counts": counts,
         "secret_findings_count": len(secret_findings),
         "secret_findings": secret_findings,
+        "excepted_secret_false_positives_count": len(excepted_secret_fps),
+        "excepted_secret_false_positives": excepted_secret_fps,
         "fixable_critical_unapproved": fixable_critical_unapproved,
         "unfixed_critical_upstream_os": unfixed_critical,
         "excepted_critical": excepted_findings,
@@ -139,6 +190,9 @@ def main(argv: list[str] | None = None) -> int:
                 "status": summary["status"],
                 "severity_counts": summary["severity_counts"],
                 "secret_findings_count": summary["secret_findings_count"],
+                "excepted_secret_false_positives_count": summary[
+                    "excepted_secret_false_positives_count"
+                ],
                 "fixable_critical_unapproved_count": len(
                     summary["fixable_critical_unapproved"]
                 ),
