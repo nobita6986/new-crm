@@ -9,14 +9,17 @@
 
 ## 1. Biến Môi Trường & Chuỗi Lệnh Compose Chuẩn Của Dự Án (`492423c`)
 
-Mọi thao tác trên máy chủ Production bắt buộc dùng đúng bộ 5 tệp Compose đã ghim (tuyệt đối không chạy `git pull && bench update`, không gọi `docker build` trên VPS và không dùng tag động):
+Mọi thao tác trên máy chủ Production bắt buộc dùng đúng bộ 8 tệp Compose đã ghim (tuyệt đối không chạy `git pull && bench update`, không gọi `docker build` trên VPS và không dùng tag động):
 
 ```bash
 export ENV_FILE="/etc/crm-cskh/production.env"
 export COMPOSE_CMD="docker compose --env-file ${ENV_FILE} \
   -f deploy/compose/upstream/frappe_docker/compose.yaml \
   -f deploy/compose/upstream/frappe_docker/overrides/compose.mariadb.yaml \
+  -f deploy/compose/upstream/frappe_docker/overrides/compose.mariadb-secrets.yaml \
   -f deploy/compose/upstream/frappe_docker/overrides/compose.redis.yaml \
+  -f deploy/compose/upstream/frappe_docker/overrides/compose.https.yaml \
+  -f deploy/compose/upstream/frappe_docker/overrides/compose.migrator.yaml \
   -f deploy/compose/overrides/compose.cskh-common.yaml \
   -f deploy/compose/overrides/compose.cskh-tls.yaml"
 ```

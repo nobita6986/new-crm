@@ -47,14 +47,20 @@ COMPOSE_MODES: dict[str, tuple[Path, ...]] = {
     "tls": (
         UPSTREAM_DIR / "compose.yaml",
         UPSTREAM_DIR / "overrides" / "compose.mariadb.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb-secrets.yaml",
         UPSTREAM_DIR / "overrides" / "compose.redis.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.https.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.migrator.yaml",
         OVERRIDES_DIR / "compose.cskh-common.yaml",
         OVERRIDES_DIR / "compose.cskh-tls.yaml",
     ),
     "isolated-smoke": (
         UPSTREAM_DIR / "compose.yaml",
         UPSTREAM_DIR / "overrides" / "compose.mariadb.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb-secrets.yaml",
         UPSTREAM_DIR / "overrides" / "compose.redis.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.proxy.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.migrator.yaml",
         OVERRIDES_DIR / "compose.cskh-common.yaml",
         OVERRIDES_DIR / "compose.cskh-isolated-smoke.yaml",
     ),
@@ -103,15 +109,128 @@ def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def redact_payload_text(text: str, extra_secrets: list[str] | None = None) -> str:
+def redact_payload_text(
+    text: str,
+    extra_secrets: list[str] | None = None,
+    csrf_tokens: list[str] | None = None,
+) -> str:
     out = text or ""
+    for tok in csrf_tokens or []:
+        if tok and tok != "None" and len(tok) >= 4:
+            out = out.replace(tok, "<REDACTED_CSRF>")
     for sec in extra_secrets or []:
         if sec and len(sec) >= 4:
             out = out.replace(sec, "<REDACTED_SECRET>")
     out = re.sub(r"(\bsid=)[^;\s\"']+", r"\1<REDACTED_FRAPPE_SID>", out)
+    out = re.sub(
+        r'(?i)(["\']x-frappe-csrf-token["\']\s*:\s*["\'])[^"\']+(["\'])',
+        r"\1<REDACTED_CSRF>\2",
+        out,
+    )
+    out = re.sub(
+        r"(?i)(\bx-frappe-csrf-token[ \t]*[:=][ \t]*)(?![\"']|<REDACTED_CSRF>)[^\s,;\"'\}|]+",
+        r"\1<REDACTED_CSRF>",
+        out,
+    )
+    out = re.sub(
+        r'(?i)(["\']?csrf_token["\']?\s*[:=]\s*["\'])[^"\']+(["\'])',
+        r"\1<REDACTED_CSRF>\2",
+        out,
+    )
     out = re.sub(r"(https?://[^\s\"'/]+/)[^\s\"']+", r"\1<REDACTED_WEBHOOK_PATH>", out)
     out = PHONE_RE.sub("<REDACTED_PHONE>", out)
     return out
+
+
+def resolve_effective_invariant_flags(flags: dict[str, Any]) -> dict[str, bool]:
+    """Use exact keys returned by `crm_cskh.services.p3_flags.resolve_p3_flags()` (F-P4-OPS-03)."""
+    return {
+        "p3_sla_enabled": bool(flags.get("p3_sla_enabled")),
+        "p3_reporting_enabled": bool(flags.get("p3_reporting_enabled")),
+    }
+
+
+def parse_docker_started_at_uptime_seconds(
+    started_at: str,
+    now_utc: datetime | None = None,
+) -> int | None:
+    raw = (started_at or "").strip()
+    if not raw or raw.startswith("0001-01-01"):
+        return None
+    normalized = re.sub(r"\.(\d{6})\d+", r".\1", raw)
+    if normalized.endswith("Z"):
+        normalized = normalized[:-1] + "+00:00"
+    try:
+        started_dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if started_dt.tzinfo is None:
+        started_dt = started_dt.replace(tzinfo=timezone.utc)
+    ref_now = now_utc or datetime.now(timezone.utc)
+    return max(0, int((ref_now - started_dt).total_seconds()))
+
+
+def evaluate_scheduler_and_queues(
+    scheduler_disabled: bool,
+    queues: dict[str, dict[str, int]],
+    cron_job_details: dict[str, dict[str, Any]],
+    error_log_last_15m: int,
+    runtime_age_seconds: int | None,
+    startup_grace_seconds: int | None = None,
+) -> dict[str, Any]:
+    """Enforce cron `Complete` after startup grace and fail if latest run `Failed` (F-P4-OPS-05)."""
+    queue_failed_total = sum(int(v.get("failed", 0)) for v in queues.values())
+    unregistered_crons: list[str] = []
+    failed_latest_crons: list[str] = []
+    never_completed_crons: list[str] = []
+    stale_crons: list[str] = []
+    in_startup_grace_crons: list[str] = []
+    cron_lags: dict[str, int | None] = {}
+
+    for job, max_lag in SCHEDULER_CADENCE_MAX_LAG_SECONDS.items():
+        info = cron_job_details.get(job, {})
+        registered = bool(info.get("registered", False))
+        lag = info.get("last_complete_lag_seconds")
+        latest_terminal = info.get("latest_terminal_status")
+        cron_lags[job] = lag
+        grace_sec = startup_grace_seconds if startup_grace_seconds is not None else max_lag
+        past_grace = True if runtime_age_seconds is None else (runtime_age_seconds >= grace_sec)
+
+        if not registered:
+            unregistered_crons.append(job)
+        if latest_terminal == "Failed":
+            failed_latest_crons.append(job)
+        if lag is None:
+            if past_grace:
+                never_completed_crons.append(job)
+            else:
+                in_startup_grace_crons.append(job)
+        elif lag > max_lag:
+            stale_crons.append(job)
+
+    ok = (
+        not scheduler_disabled
+        and queue_failed_total == 0
+        and not unregistered_crons
+        and not failed_latest_crons
+        and not never_completed_crons
+        and not stale_crons
+    )
+    return {
+        "status": "PASS" if ok else "FAIL",
+        "scheduler_disabled": scheduler_disabled,
+        "scheduler_uptime_seconds": runtime_age_seconds,
+        "startup_grace_override_seconds": startup_grace_seconds,
+        "queues": queues,
+        "unregistered_cron_jobs": unregistered_crons,
+        "failed_latest_cron_jobs": failed_latest_crons,
+        "never_completed_cron_jobs": never_completed_crons,
+        "stale_cron_jobs": stale_crons,
+        "in_startup_grace_cron_jobs": in_startup_grace_crons,
+        "cron_last_complete_lag_seconds": cron_lags,
+        "cron_job_details": cron_job_details,
+        "error_log_last_15m": error_log_last_15m,
+    }
 
 
 def evaluate_disk_thresholds(path: Path, warn_pct: float = 80.0, crit_pct: float = 90.0) -> dict[str, Any]:
@@ -301,7 +420,12 @@ def _collect_container_health(env_file: Path, mode: str) -> dict[str, Any]:
         encoding="utf-8",
         check=True,
     )
-    rows = [json.loads(line) for line in ps_proc.stdout.splitlines() if line.strip()]
+    raw_ps = (ps_proc.stdout or "").strip()
+    rows = (
+        json.loads(raw_ps)
+        if raw_ps.startswith("[")
+        else [json.loads(line) for line in raw_ps.splitlines() if line.strip()]
+    )
     expected_daemons = {
         "backend",
         "db",
@@ -316,6 +440,7 @@ def _collect_container_health(env_file: Path, mode: str) -> dict[str, Any]:
     }
     seen_services: set[str] = set()
     scheduler_running_count = 0
+    scheduler_uptime_seconds: int | None = None
     unhealthy: list[str] = []
     oom_or_restarts: list[dict[str, Any]] = []
 
@@ -331,7 +456,13 @@ def _collect_container_health(env_file: Path, mode: str) -> dict[str, Any]:
             unhealthy.append(f"{svc}:{state}/{health}")
         if name:
             insp = subprocess.run(
-                ["docker", "inspect", "--format", "{{.RestartCount}}|{{.State.OOMKilled}}", name],
+                [
+                    "docker",
+                    "inspect",
+                    "--format",
+                    "{{.RestartCount}}|{{.State.OOMKilled}}|{{.State.StartedAt}}",
+                    name,
+                ],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -340,6 +471,9 @@ def _collect_container_health(env_file: Path, mode: str) -> dict[str, Any]:
             parts = insp.stdout.strip().split("|")
             restarts = int(parts[0]) if parts and parts[0].isdigit() else 0
             oom = len(parts) > 1 and parts[1].lower() == "true"
+            started_at = parts[2] if len(parts) > 2 else ""
+            if svc == "scheduler" and state == "running":
+                scheduler_uptime_seconds = parse_docker_started_at_uptime_seconds(started_at)
             if restarts > 0 or oom:
                 oom_or_restarts.append({"service": svc, "restart_count": restarts, "oom_killed": oom})
 
@@ -350,6 +484,7 @@ def _collect_container_health(env_file: Path, mode: str) -> dict[str, Any]:
         "missing_daemon_services": missing,
         "unhealthy_services": unhealthy,
         "scheduler_running_instances": scheduler_running_count,
+        "scheduler_uptime_seconds": scheduler_uptime_seconds,
         "restarts_or_oom": oom_or_restarts,
     }
 
@@ -363,30 +498,28 @@ def _collect_backend_runtime_and_invariants(
     probe_script = r"""
 import json, os, frappe
 from datetime import datetime, timezone
-from rq import Queue
 from rq.registry import FailedJobRegistry
-from frappe.utils.background_jobs import get_redis_conn, get_queue_name
+from frappe.utils.background_jobs import get_queue
 from frappe.utils.scheduler import is_scheduler_disabled
 
 site = os.environ["CSKH_PROBE_SITE"]
 since_utc = os.environ.get("CSKH_SINCE_UTC", "").strip()
-frappe.init(site=site, sites_path="/home/frappe/frappe-bench/sites")
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
 frappe.connect()
 try:
-    def scalar(sql, params=()):
-        rows = frappe.db.sql(sql, params)
+    def scalar(sql, params=None):
+        rows = frappe.db.sql(sql) if params is None else frappe.db.sql(sql, params)
         return int(rows[0][0] or 0) if rows else 0
 
     # 1. RQ queues & failed jobs
-    conn = get_redis_conn()
     queues = {}
     for qtype in ("short", "default", "long"):
-        qname = get_queue_name(qtype)
-        q = Queue(qname, connection=conn)
+        q = get_queue(qtype, is_async=True)
         failed_reg = FailedJobRegistry(queue=q)
         queues[qtype] = {"queued": int(q.count), "failed": int(len(failed_reg))}
 
-    # 2. Scheduler status & Scheduled Job Log lag
+    # 2. Scheduler status & Scheduled Job Log lag + latest terminal status (F-P4-OPS-05)
     sched_disabled = bool(is_scheduler_disabled())
     job_methods = [
         "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations",
@@ -394,26 +527,91 @@ try:
         "crm_cskh.jobs.run_export.expire_stale_exports",
         "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods",
     ]
-    cron_freshness = {}
+    cron_job_details = {}
     for m in job_methods:
-        rows = frappe.db.sql(
-            "SELECT TIMESTAMPDIFF(SECOND, MAX(creation), NOW()) FROM `tabScheduled Job Log` WHERE scheduled_job_type LIKE %s AND status='Complete'",
-            (f"%{m.split('.')[-1]}%",),
-        )
-        lag_sec = int(rows[0][0]) if rows and rows[0][0] is not None else None
-        cron_freshness[m] = lag_sec
+        sjt_name = frappe.db.get_value("Scheduled Job Type", {"method": m}, "name")
+        if sjt_name:
+            lag_rows = frappe.db.sql(
+                "SELECT TIMESTAMPDIFF(SECOND, MAX(creation), NOW()) FROM `tabScheduled Job Log` "
+                "WHERE scheduled_job_type = %s AND status = 'Complete'",
+                (sjt_name,),
+            )
+            lag_sec = int(lag_rows[0][0]) if lag_rows and lag_rows[0][0] is not None else None
+            term_rows = frappe.db.sql(
+                "SELECT status, TIMESTAMPDIFF(SECOND, creation, NOW()) FROM `tabScheduled Job Log` "
+                "WHERE scheduled_job_type = %s AND status IN ('Complete', 'Failed') "
+                "ORDER BY creation DESC, modified DESC, name DESC LIMIT 1",
+                (sjt_name,),
+            )
+            term_status = str(term_rows[0][0]) if term_rows else None
+            term_lag = int(term_rows[0][1]) if term_rows and term_rows[0][1] is not None else None
+            any_rows = frappe.db.sql(
+                "SELECT status FROM `tabScheduled Job Log` "
+                "WHERE scheduled_job_type = %s "
+                "ORDER BY creation DESC, modified DESC, name DESC LIMIT 1",
+                (sjt_name,),
+            )
+            any_status = str(any_rows[0][0]) if any_rows else None
+        else:
+            lag_sec = None
+            term_status = None
+            term_lag = None
+            any_status = None
+        cron_job_details[m] = {
+            "registered": bool(sjt_name),
+            "scheduled_job_type": sjt_name,
+            "last_complete_lag_seconds": lag_sec,
+            "latest_terminal_status": term_status,
+            "latest_terminal_lag_seconds": term_lag,
+            "latest_any_status": any_status,
+        }
 
     error_log_15m = scalar(
         "SELECT COUNT(*) FROM `tabError Log` WHERE creation >= DATE_SUB(NOW(), INTERVAL 15 MINUTE)"
     )
 
-    # 3. Policy flags check
+    # 3. Policy flags check — exact keys from `resolve_p3_flags()` (F-P4-OPS-03)
     from crm_cskh.services.p3_flags import resolve_p3_flags
     flags = resolve_p3_flags()
-    sla_on = 1 if flags.get("sla_enabled") else 0
-    rep_on = 1 if flags.get("reporting_enabled") else 0
+    sla_on = 1 if flags.get("p3_sla_enabled") else 0
+    rep_on = 1 if flags.get("p3_reporting_enabled") else 0
 
-    # 4. Business invariants (counts only, 0 PII)
+    # 4. Structured JSON audit of `QA_PASS_RATE` on `tabCSKH KPI Snapshot` (F-P4-OPS-04)
+    snap_rows = frappe.db.sql("SELECT metrics_json FROM `tabCSKH KPI Snapshot`", as_list=True)
+    qa_zero_denom_null = 0
+    false_zero_qa = 0
+    for r in snap_rows:
+        raw = r[0] if r else None
+        if not raw or not isinstance(raw, str):
+            false_zero_qa += 1
+            continue
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            false_zero_qa += 1
+            continue
+        if not isinstance(parsed, dict):
+            false_zero_qa += 1
+            continue
+        m_map = parsed.get("metrics") if isinstance(parsed.get("metrics"), dict) else parsed
+        qa = m_map.get("QA_PASS_RATE") if isinstance(m_map, dict) else None
+        if not isinstance(qa, dict) or "denominator" not in qa or "value" not in qa:
+            false_zero_qa += 1
+            continue
+        denom = qa.get("denominator")
+        val = qa.get("value")
+        if denom is None or isinstance(denom, bool) or not isinstance(denom, (int, float)) or denom < 0:
+            false_zero_qa += 1
+            continue
+        if denom == 0:
+            if val is None:
+                qa_zero_denom_null += 1
+            else:
+                false_zero_qa += 1
+        elif val is None or isinstance(val, bool) or not isinstance(val, (int, float)):
+            false_zero_qa += 1
+
+    # 5. Business invariants (counts only, 0 PII)
     active_wi = scalar("SELECT COUNT(*) FROM `tabCSKH Work Item` WHERE status IN ('assigned','in_progress','on_hold')")
     active_claims = scalar("SELECT COUNT(*) FROM `tabCSKH Active Claim`")
     inv_raw = {
@@ -428,7 +626,12 @@ try:
             "SELECT COUNT(*) FROM (SELECT work_item, performed_by, idempotency_key FROM `tabCSKH Contact Attempt` WHERE IFNULL(idempotency_key,'') != '' GROUP BY work_item, performed_by, idempotency_key HAVING COUNT(*) > 1) t"
         ),
         "unverified_marked_verified": scalar(
-            "SELECT COUNT(*) FROM `tabCSKH Contact Attempt` ca WHERE ca.verification_status='verified' AND IFNULL(ca.call_log,'')='' AND NOT EXISTS (SELECT 1 FROM `tabCSKH QA Review` qr WHERE qr.work_item = ca.work_item)"
+            "SELECT COUNT(*) FROM `tabCSKH Contact Attempt` ca "
+            "WHERE ca.verification_status='verified' AND IFNULL(ca.call_log,'')='' "
+            "AND NOT EXISTS ("
+            "SELECT 1 FROM `tabCSKH QA Review` qr "
+            "WHERE qr.contact_attempt = ca.name AND qr.status = 'published'"
+            ")"
         ),
         "orphan_or_misassigned_open_followup_tasks": scalar(
             "SELECT COUNT(*) FROM `tabCRM Task` t LEFT JOIN `tabCSKH Work Item` wi ON wi.name = t.cskh_work_item WHERE IFNULL(t.cskh_is_followup,0)=1 AND t.status IN ('Backlog','Todo','In Progress') AND (wi.name IS NULL OR wi.status NOT IN ('assigned','in_progress','on_hold') OR (IFNULL(t.assigned_to,'') != '' AND IFNULL(t.assigned_to,'') != IFNULL(wi.assigned_to,'')))"
@@ -450,18 +653,22 @@ try:
             if rep_on
             else 0
         ),
-        "false_zero_qa_snapshots": scalar(
-            "SELECT COUNT(*) FROM `tabCSKH KPI Snapshot` WHERE metrics_json LIKE '%\"QA_PASS_RATE\": {\"value\": 0%' AND metrics_json LIKE '%\"denominator\": 0%'"
-        ),
+        "false_zero_qa_snapshots": false_zero_qa,
         "unexpired_completed_exports_past_2h_grace": scalar(
             "SELECT COUNT(*) FROM `tabCSKH Export Job` WHERE status='completed' AND expires_at < DATE_SUB(NOW(), INTERVAL 2 HOUR)"
         ),
     }
 
-    # 5. Optional pre-restore data-loss window delta counts (P4.md §15.3)
+    # 6. Optional pre-restore data-loss window delta counts (P4.md §15.3)
     delta = None
     if since_utc:
-        ts = since_utc.replace("T", " ").rstrip("Z")
+        from zoneinfo import ZoneInfo
+        from frappe.utils import get_system_timezone
+        parsed_utc = datetime.fromisoformat(since_utc.replace("Z", "+00:00"))
+        if parsed_utc.tzinfo is None:
+            parsed_utc = parsed_utc.replace(tzinfo=timezone.utc)
+        local_dt = parsed_utc.astimezone(ZoneInfo(get_system_timezone())).replace(tzinfo=None)
+        ts = local_dt.strftime("%Y-%m-%d %H:%M:%S.%f")
         delta = {
             "since_utc": since_utc,
             "new_leads": scalar("SELECT COUNT(*) FROM `tabCRM Lead` WHERE creation > %s", (ts,)),
@@ -477,9 +684,14 @@ try:
     print("PROBE_JSON=" + json.dumps({
         "queues": queues,
         "scheduler_disabled": sched_disabled,
-        "cron_last_complete_lag_seconds": cron_freshness,
+        "cron_job_details": cron_job_details,
         "error_log_last_15m": error_log_15m,
         "p3_flags": flags,
+        "qa_snapshot_audit": {
+            "total_snapshots": len(snap_rows),
+            "qa_zero_denom_null_snapshots": qa_zero_denom_null,
+            "false_zero_qa_snapshots": false_zero_qa,
+        },
         "invariants_raw": inv_raw,
         "data_loss_window_delta": delta,
     }, sort_keys=True))
@@ -498,7 +710,11 @@ finally:
         "-c",
         probe_script,
     ]
-    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=True)
+    proc = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", check=False)
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"Backend health/invariant probe failed (rc={proc.returncode}): {proc.stderr.strip()}"
+        )
     for line in proc.stdout.splitlines():
         if line.startswith("PROBE_JSON="):
             return json.loads(line.split("=", 1)[1])
@@ -506,11 +722,21 @@ finally:
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, help="Compose .env file for target stack")
     parser.add_argument("--mode", choices=("tls", "isolated-smoke"), default="tls")
     parser.add_argument("--site", help="Override site name (defaults to SITE_NAME in --env-file)")
     parser.add_argument("--environment-label", default="staging")
+    parser.add_argument(
+        "--startup-grace-seconds",
+        type=int,
+        default=None,
+        help="Override startup grace window (seconds) before requiring at least one Complete cron run",
+    )
     parser.add_argument("--since-utc", help="ISO-8601 UTC timestamp to compute P4 §15.3 restore data-loss counts")
     parser.add_argument("--preflight-alert-check", action="store_true", help="Only evaluate alert channel readiness")
     parser.add_argument("--send-test-alert", action="store_true", help="Dispatch synthetic test alert for G19")
@@ -560,10 +786,11 @@ def main(argv: list[str] | None = None) -> int:
             {"test_alert": True},
         )
         receipt = dispatch_alert_with_cooldown(env_msg, args.webhook_url, args.dedup_state_file)
+        ok_status = receipt["status"] in ("DELIVERED", "SUPPRESSED_COOLDOWN")
         report = {
             "timestamp_utc": utc_now_iso(),
             "environment": args.environment_label,
-            "status": "PASS" if receipt["status"] == "DELIVERED" else "FAIL",
+            "status": "PASS" if ok_status else "FAIL",
             "alert_envelope": env_msg,
             "receipt": receipt,
         }
@@ -572,7 +799,7 @@ def main(argv: list[str] | None = None) -> int:
             args.out.parent.mkdir(parents=True, exist_ok=True)
             args.out.write_text(out_txt, encoding="utf-8", newline="\n")
         sys.stdout.write(out_txt)
-        return 0 if report["status"] == "PASS" else 2
+        return 0 if ok_status else 2
 
     if not args.env_file or not args.env_file.is_file():
         raise SystemExit("--env-file is required for live stack health and invariant inspection")
@@ -592,24 +819,22 @@ def main(argv: list[str] | None = None) -> int:
     disk = evaluate_disk_thresholds(REPO_ROOT)
     backend_probe = _collect_backend_runtime_and_invariants(args.env_file, args.mode, site_name, args.since_utc)
     invariants = evaluate_business_invariants(backend_probe["invariants_raw"])
+    invariants["effective_p3_flags"] = resolve_effective_invariant_flags(backend_probe["p3_flags"])
+    invariants["qa_snapshot_audit"] = backend_probe["qa_snapshot_audit"]
 
-    queue_failed_total = sum(v["failed"] for v in backend_probe["queues"].values())
-    cron_lags = backend_probe["cron_last_complete_lag_seconds"]
-    stale_crons = [
-        job
-        for job, lag in cron_lags.items()
-        if lag is not None and lag > SCHEDULER_CADENCE_MAX_LAG_SECONDS[job]
-    ]
-    queue_sched_ok = (
-        not backend_probe["scheduler_disabled"]
-        and queue_failed_total == 0
-        and len(stale_crons) == 0
+    queues_and_scheduler = evaluate_scheduler_and_queues(
+        scheduler_disabled=backend_probe["scheduler_disabled"],
+        queues=backend_probe["queues"],
+        cron_job_details=backend_probe["cron_job_details"],
+        error_log_last_15m=backend_probe["error_log_last_15m"],
+        runtime_age_seconds=containers.get("scheduler_uptime_seconds"),
+        startup_grace_seconds=args.startup_grace_seconds,
     )
 
     overall_ok = (
         containers["status"] == "PASS"
         and disk["level"] != "CRITICAL"
-        and queue_sched_ok
+        and queues_and_scheduler["status"] == "PASS"
         and invariants["status"] == "PASS"
     )
     report = {
@@ -619,14 +844,7 @@ def main(argv: list[str] | None = None) -> int:
         "status": "PASS" if overall_ok else "FAIL",
         "containers": containers,
         "disk": disk,
-        "queues_and_scheduler": {
-            "status": "PASS" if queue_sched_ok else "FAIL",
-            "scheduler_disabled": backend_probe["scheduler_disabled"],
-            "queues": backend_probe["queues"],
-            "stale_cron_jobs": stale_crons,
-            "cron_last_complete_lag_seconds": cron_lags,
-            "error_log_last_15m": backend_probe["error_log_last_15m"],
-        },
+        "queues_and_scheduler": queues_and_scheduler,
         "business_invariants": invariants,
         "data_loss_window_delta": backend_probe["data_loss_window_delta"],
         "alert_preflight": alert_preflight,

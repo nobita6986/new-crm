@@ -220,6 +220,315 @@ class OpsToolkitTests(unittest.TestCase):
             finally:
                 httpd.shutdown()
 
+    def test_compose_modes_match_p4_01_validator_profiles(self) -> None:
+        import re
+        import shutil
+        import subprocess
+
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "compose" / "scripts"))
+        import validate_compose_config as vcc
+
+        expected_tls = tuple(Path(p).resolve() for p in vcc.STACK_PROFILES["staging"]["compose_files"])
+        expected_smoke = tuple(
+            Path(p).resolve() for p in vcc.STACK_PROFILES["isolated-smoke"]["compose_files"]
+        )
+        self.assertEqual(len(expected_tls), 8)
+        self.assertEqual(len(expected_smoke), 8)
+        self.assertEqual(tuple(p.resolve() for p in health_mod.COMPOSE_MODES["tls"]), expected_tls)
+        self.assertEqual(
+            tuple(p.resolve() for p in health_mod.COMPOSE_MODES["isolated-smoke"]), expected_smoke
+        )
+        self.assertEqual(tuple(p.resolve() for p in staging_mod.COMPOSE_MODES["tls"]), expected_tls)
+        self.assertEqual(
+            tuple(p.resolve() for p in staging_mod.COMPOSE_MODES["isolated-smoke"]), expected_smoke
+        )
+
+        # Verify both runbooks list all 8 Compose files in exact order (F-P4-OPS-01)
+        repo_root = staging_mod.REPO_ROOT
+        for doc_rel in (
+            "docs/p4/p4-03-staging-checklist-and-rehearsal.md",
+            "docs/p4/release-runbook.md",
+        ):
+            doc_text = (repo_root / doc_rel).read_text(encoding="utf-8")
+            doc_files = tuple(
+                (repo_root / m.group(1)).resolve()
+                for m in re.finditer(r"-f\s+(deploy/compose/[^\s\"\\]+)", doc_text)
+            )
+            self.assertEqual(doc_files, expected_tls, f"Compose list mismatch in {doc_rel}")
+
+        # Verify `docker compose config` renders cleanly across both modes & migrate profile
+        if shutil.which("docker"):
+            stg_env = staging_mod.COMPOSE_DIR / "env" / "staging.env.example"
+            smk_env = staging_mod.COMPOSE_DIR / "env" / "isolated-smoke.env.example"
+            for cmd_base, expected_svcs in (
+                (staging_mod._compose_cmd(stg_env, "tls"), 11),
+                (health_mod._compose_cmd(smk_env, "isolated-smoke"), 11),
+            ):
+                p_default = subprocess.run(
+                    cmd_base + ["config", "--services"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    check=True,
+                )
+                svcs_default = [s.strip() for s in p_default.stdout.splitlines() if s.strip()]
+                self.assertEqual(len(svcs_default), expected_svcs)
+                self.assertNotIn("migrator", svcs_default)
+
+                p_mig = subprocess.run(
+                    cmd_base + ["--profile", "migrate", "config", "--services"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    check=True,
+                )
+                svcs_mig = [s.strip() for s in p_mig.stdout.splitlines() if s.strip()]
+                self.assertEqual(len(svcs_mig), expected_svcs + 1)
+                self.assertIn("migrator", svcs_mig)
+
+    def test_f_p4_ops_02_container_image_id_and_repodigests_parity(self) -> None:
+        good_digest = "ghcr.io/company/crm-cskh@sha256:" + ("b" * 64)
+        wrong_digest = "ghcr.io/company/crm-cskh@sha256:" + ("c" * 64)
+        img_id = "sha256:" + ("d" * 64)
+        containers = [
+            {"Service": svc, "State": "running", "Name": f"proj-{svc}-1"}
+            for svc in staging_mod.APP_SERVICES
+        ]
+        seen_cmds: list[list[str]] = []
+
+        def fake_run(cmd: list[str], **_kwargs: object) -> mock.MagicMock:
+            seen_cmds.append(cmd)
+            m = mock.MagicMock()
+            if cmd[:3] == ["docker", "inspect", "--format"]:
+                m.stdout = img_id + "\n"
+            elif cmd[:4] == ["docker", "image", "inspect", "--format"]:
+                self.assertEqual(cmd[5], img_id)
+                m.stdout = json.dumps([good_digest]) + "\n"
+            else:
+                raise AssertionError(f"Unexpected docker command: {cmd}")
+            return m
+
+        with mock.patch("staging_https_smoke_and_reconcile.subprocess.run", side_effect=fake_run):
+            ok_res = staging_mod.verify_running_containers_digest(containers, good_digest)
+            self.assertTrue(ok_res["pass"], ok_res)
+            self.assertEqual(ok_res["mismatches"], [])
+
+            bad_res = staging_mod.verify_running_containers_digest(containers, wrong_digest)
+            self.assertFalse(bad_res["pass"])
+            self.assertEqual(len(bad_res["mismatches"]), len(staging_mod.APP_SERVICES))
+
+        # Empty RepoDigests must fail closed
+        def fake_empty_repodigests(cmd: list[str], **_kwargs: object) -> mock.MagicMock:
+            m = mock.MagicMock()
+            m.stdout = (img_id + "\n") if cmd[1] == "inspect" else "[]\n"
+            return m
+
+        with mock.patch(
+            "staging_https_smoke_and_reconcile.subprocess.run", side_effect=fake_empty_repodigests
+        ):
+            empty_res = staging_mod.verify_running_containers_digest(containers, good_digest)
+            self.assertFalse(empty_res["pass"])
+            self.assertEqual(len(empty_res["mismatches"]), len(staging_mod.APP_SERVICES))
+
+        # Missing app service must fail closed
+        with mock.patch("staging_https_smoke_and_reconcile.subprocess.run", side_effect=fake_run):
+            partial_res = staging_mod.verify_running_containers_digest(containers[:-1], good_digest)
+            self.assertFalse(partial_res["pass"])
+            self.assertEqual(partial_res["missing_services"], [staging_mod.APP_SERVICES[-1]])
+
+    def test_f_p4_ops_03_exact_p3_flag_keys(self) -> None:
+        eff = health_mod.resolve_effective_invariant_flags(
+            {
+                "p3_sla_enabled": True,
+                "p3_reporting_enabled": False,
+                "sla_enabled": False,
+                "reporting_enabled": True,
+            }
+        )
+        self.assertEqual(eff, {"p3_sla_enabled": True, "p3_reporting_enabled": False})
+
+        src = Path(health_mod.__file__).read_text(encoding="utf-8")
+        self.assertIn('flags.get("p3_sla_enabled")', src)
+        self.assertIn('flags.get("p3_reporting_enabled")', src)
+        self.assertNotIn('flags.get("sla_enabled")', src)
+        self.assertNotIn('flags.get("reporting_enabled")', src)
+
+    def test_f_p4_ops_04_structured_qa_pass_rate_json_and_published_contact_attempt_sql(self) -> None:
+        good_null = json.dumps(
+            {
+                "metrics": {
+                    "QA_PASS_RATE": {
+                        "metric_code": "QA_PASS_RATE",
+                        "denominator": 0,
+                        "numerator": 0,
+                        "value": None,
+                        "status": "disabled",
+                    }
+                }
+            }
+        )
+        good_positive = json.dumps(
+            {
+                "metrics": {
+                    "QA_PASS_RATE": {
+                        "metric_code": "QA_PASS_RATE",
+                        "denominator": 8,
+                        "numerator": 7,
+                        "value": 87.5,
+                        "status": "ok",
+                    }
+                }
+            }
+        )
+        audit_ok = staging_mod.audit_kpi_snapshot_qa_metrics([good_null, good_positive])
+        self.assertEqual(audit_ok["qa_zero_denom_null_snapshots"], 1)
+        self.assertEqual(audit_ok["qa_positive_denom_numeric_snapshots"], 1)
+        self.assertEqual(audit_ok["false_zero_qa_snapshots"], 0)
+
+        # Reversed keys / float 0.0 / malformed JSON must all be caught structurally
+        bad_false_zero = '{"metrics":{"QA_PASS_RATE":{"denominator":0,"status":"ok","value":0.0}}}'
+        bad_missing_qa = '{"metrics":{}}'
+        audit_bad = staging_mod.audit_kpi_snapshot_qa_metrics([good_null, bad_false_zero, bad_missing_qa, "{bad"])
+        self.assertEqual(audit_bad["qa_zero_denom_null_snapshots"], 1)
+        self.assertEqual(audit_bad["false_zero_qa_snapshots"], 3)
+
+        for mod in (staging_mod, health_mod):
+            src = Path(mod.__file__).read_text(encoding="utf-8")
+            self.assertIn("qr.contact_attempt = ca.name AND qr.status = 'published'", src)
+            self.assertNotIn("qr.work_item = ca.work_item", src)
+            self.assertNotIn("docstatus < 2", src)
+
+    def test_f_p4_ops_05_csrf_redaction_vi_heading_and_cron_complete_or_failed(self) -> None:
+        # 1. Extract real token from `window.cskhCsrfHeader` even when `frappe.csrf_token = "None"` precedes it
+        realistic_shell_html = """
+        <html lang="vi">
+        <body>
+          <script>window.frappe = {csrf_token: "None"};</script>
+          <h1 class="cskh-title">Bảng điều khiển phân phối</h1>
+          <script>
+            window.cskhCsrfHeader = {"X-Frappe-CSRF-Token": "csrfSecretToken987654321abcdef"};
+            window.frappe.csrf_token = window.cskhCsrfHeader["X-Frappe-CSRF-Token"];
+          </script>
+        </body>
+        </html>
+        """
+        tok = staging_mod.extract_csrf_token(realistic_shell_html)
+        self.assertEqual(tok, "csrfSecretToken987654321abcdef")
+
+        # 2. Redact both X-Frappe-CSRF-Token header/JSON and raw token
+        sample_leak = (
+            'Header X-Frappe-CSRF-Token: headerTok111222333 and '
+            '{"X-Frappe-CSRF-Token": "jsonTok444555666"} and raw csrfSecretToken987654321abcdef'
+        )
+        scrub1 = staging_mod.redact_sensitive(sample_leak, csrf_tokens=[tok])
+        scrub2 = health_mod.redact_payload_text(sample_leak, csrf_tokens=[tok])
+        for s in (scrub1, scrub2):
+            self.assertNotIn("headerTok111222333", s)
+            self.assertNotIn("jsonTok444555666", s)
+            self.assertNotIn("csrfSecretToken987654321abcdef", s)
+            self.assertIn("<REDACTED_CSRF>", s)
+
+        # 3. Mandatory Vietnamese `<h1>` heading check
+        en_only_html = '<html><body><h1 class="cskh-title">Distribution dashboard</h1></body></html>'
+        en_check = staging_mod.evaluate_vi_ui_and_csrf_check(
+            dash_code=200,
+            dash_html=en_only_html,
+            csrf_token=tok,
+            bad_csrf_code=400,
+            good_csrf_code=200,
+            good_csrf_bytes=b'{"message":{"app":"crm_cskh"}}',
+        )
+        self.assertFalse(en_check["contains_vi_heading"])
+        self.assertFalse(en_check["pass"])
+
+        vi_check = staging_mod.evaluate_vi_ui_and_csrf_check(
+            dash_code=200,
+            dash_html=realistic_shell_html,
+            csrf_token=tok,
+            bad_csrf_code=400,
+            good_csrf_code=200,
+            good_csrf_bytes=b'{"message":{"app":"crm_cskh"}}',
+        )
+        self.assertTrue(vi_check["contains_vi_heading"])
+        self.assertTrue(vi_check["csrf_token_extracted"])
+        self.assertTrue(vi_check["pass"])
+
+        # 4. Cron never Complete (grace vs past-grace) and latest Failed
+        clean_queues = {q: {"queued": 0, "failed": 0} for q in ("short", "default", "long")}
+        never_ran_details = {
+            job: {
+                "registered": True,
+                "last_complete_lag_seconds": None,
+                "latest_terminal_status": None,
+            }
+            for job in health_mod.SCHEDULER_CADENCE_MAX_LAG_SECONDS
+        }
+        in_grace = health_mod.evaluate_scheduler_and_queues(
+            scheduler_disabled=False,
+            queues=clean_queues,
+            cron_job_details=never_ran_details,
+            error_log_last_15m=0,
+            runtime_age_seconds=120,
+            startup_grace_seconds=600,
+        )
+        self.assertEqual(in_grace["status"], "PASS")
+        self.assertEqual(len(in_grace["in_startup_grace_cron_jobs"]), 4)
+
+        past_grace = health_mod.evaluate_scheduler_and_queues(
+            scheduler_disabled=False,
+            queues=clean_queues,
+            cron_job_details=never_ran_details,
+            error_log_last_15m=0,
+            runtime_age_seconds=601,
+            startup_grace_seconds=600,
+        )
+        self.assertEqual(past_grace["status"], "FAIL")
+        self.assertEqual(len(past_grace["never_completed_cron_jobs"]), 4)
+
+        # Latest run Failed must fail immediately even if an earlier Complete run was recent
+        latest_failed_details = {
+            job: {
+                "registered": True,
+                "last_complete_lag_seconds": 60,
+                "latest_terminal_status": "Complete",
+            }
+            for job in health_mod.SCHEDULER_CADENCE_MAX_LAG_SECONDS
+        }
+        sla_job = "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations"
+        latest_failed_details[sla_job]["latest_terminal_status"] = "Failed"
+        failed_latest = health_mod.evaluate_scheduler_and_queues(
+            scheduler_disabled=False,
+            queues=clean_queues,
+            cron_job_details=latest_failed_details,
+            error_log_last_15m=0,
+            runtime_age_seconds=45,
+            startup_grace_seconds=600,
+        )
+        self.assertEqual(failed_latest["status"], "FAIL")
+        self.assertEqual(failed_latest["failed_latest_cron_jobs"], [sla_job])
+
+    def test_staging_synthetic_seeder_refuses_production_and_mismatch(self) -> None:
+        import seed_staging_synthetic as seeder
+
+        ok_prod, errs_prod = seeder.validate_staging_seed_target(
+            {"COMPOSE_PROJECT_NAME": "crm-cskh-prod", "SITE_NAME": "crm.company.vn"},
+            "crm.company.vn",
+        )
+        self.assertFalse(ok_prod)
+        self.assertGreaterEqual(len(errs_prod), 2)
+
+        ok_mismatch, _ = seeder.validate_staging_seed_target(
+            {"COMPOSE_PROJECT_NAME": "crm-cskh-staging", "SITE_NAME": "staging-crm.company.vn"},
+            "wrong-site.company.vn",
+        )
+        self.assertFalse(ok_mismatch)
+
+        ok_stg, errs_stg = seeder.validate_staging_seed_target(
+            {"COMPOSE_PROJECT_NAME": "crm-cskh-staging", "SITE_NAME": "staging-crm.company.vn"},
+            "staging-crm.company.vn",
+        )
+        self.assertTrue(ok_stg, errs_stg)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -46,32 +46,181 @@ COMPOSE_DIR = REPO_ROOT / "deploy" / "compose"
 UPSTREAM_DIR = COMPOSE_DIR / "upstream" / "frappe_docker"
 OVERRIDES_DIR = COMPOSE_DIR / "overrides"
 
-TLS_COMPOSE_FILES = (
-    UPSTREAM_DIR / "compose.yaml",
-    UPSTREAM_DIR / "overrides" / "compose.mariadb.yaml",
-    UPSTREAM_DIR / "overrides" / "compose.redis.yaml",
-    OVERRIDES_DIR / "compose.cskh-common.yaml",
-    OVERRIDES_DIR / "compose.cskh-tls.yaml",
-)
+COMPOSE_MODES: dict[str, tuple[Path, ...]] = {
+    "tls": (
+        UPSTREAM_DIR / "compose.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb-secrets.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.redis.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.https.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.migrator.yaml",
+        OVERRIDES_DIR / "compose.cskh-common.yaml",
+        OVERRIDES_DIR / "compose.cskh-tls.yaml",
+    ),
+    "isolated-smoke": (
+        UPSTREAM_DIR / "compose.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb-secrets.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.redis.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.proxy.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.migrator.yaml",
+        OVERRIDES_DIR / "compose.cskh-common.yaml",
+        OVERRIDES_DIR / "compose.cskh-isolated-smoke.yaml",
+    ),
+}
+TLS_COMPOSE_FILES = COMPOSE_MODES["tls"]
 
 REGISTRY_DIGEST_RE = re.compile(r"^[a-z0-9._-]+(?:\.[a-z0-9._-]+|:[0-9]+)+/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
 PLACEHOLDER_TOKENS = ("example.invalid", "example.com", "changeme", "replace_me", "<", ">")
 PHONE_RE = re.compile(r"(?<!\d)(?:\+?84|0)\d{8,10}(?!\d)")
+APP_SERVICES: tuple[str, ...] = (
+    "backend",
+    "frontend",
+    "websocket",
+    "queue-short",
+    "queue-long",
+    "scheduler",
+)
 
 
 def utc_now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def redact_sensitive(text: str, extra_secrets: list[str] | None = None) -> str:
+def redact_sensitive(
+    text: str,
+    extra_secrets: list[str] | None = None,
+    csrf_tokens: list[str] | None = None,
+) -> str:
     out = text or ""
+    for tok in csrf_tokens or []:
+        if tok and tok != "None" and len(tok) >= 4:
+            out = out.replace(tok, "<REDACTED_CSRF>")
     for sec in extra_secrets or []:
         if sec and len(sec) >= 4:
             out = out.replace(sec, "<REDACTED_SECRET>")
     out = re.sub(r"(\bsid=)[^;\s\"']+", r"\1<REDACTED_FRAPPE_SID>", out)
-    out = re.sub(r'("csrf_token"\s*:\s*")[^"]+(")', r"\1<REDACTED_CSRF>\2", out)
+    out = re.sub(
+        r'(?i)(["\']x-frappe-csrf-token["\']\s*:\s*["\'])[^"\']+(["\'])',
+        r"\1<REDACTED_CSRF>\2",
+        out,
+    )
+    out = re.sub(
+        r"(?i)(\bx-frappe-csrf-token[ \t]*[:=][ \t]*)(?![\"']|<REDACTED_CSRF>)[^\s,;\"'\}|]+",
+        r"\1<REDACTED_CSRF>",
+        out,
+    )
+    out = re.sub(
+        r'(?i)(["\']?csrf_token["\']?\s*[:=]\s*["\'])[^"\']+(["\'])',
+        r"\1<REDACTED_CSRF>\2",
+        out,
+    )
     out = PHONE_RE.sub("<REDACTED_PHONE>", out)
     return out
+
+
+def extract_csrf_token(html: str) -> str:
+    """Extract live session CSRF token from CSKH `X-Frappe-CSRF-Token` header map or boot script."""
+    src = html or ""
+    invalid_literals = {"", "none", "null", "undefined", "x-frappe-csrf-token"}
+    for pattern in (
+        r'["\']X-Frappe-CSRF-Token["\']\s*:\s*["\']([^"\']+)["\']',
+        r'<meta\s+name=["\']csrf-token["\']\s+content=["\']([^"\']+)["\']',
+        r'csrf_token\s*[:=]\s*["\']([^"\']+)["\']',
+    ):
+        for match in re.finditer(pattern, src, flags=re.IGNORECASE):
+            candidate = match.group(1).strip()
+            if candidate.lower() not in invalid_literals and len(candidate) >= 8:
+                return candidate
+    return ""
+
+
+def has_vi_dashboard_heading(html: str) -> bool:
+    """Require an explicit Vietnamese `<h1>` heading on `/cskh/dashboard` (F-P4-OPS-05)."""
+    for match in re.finditer(r"<h1\b[^>]*>(.*?)</h1>", html or "", flags=re.IGNORECASE | re.DOTALL):
+        heading_text = re.sub(r"<[^>]+>", "", match.group(1)).strip()
+        if "Bảng điều khiển" in heading_text or "Tổng quan" in heading_text:
+            return True
+    return False
+
+
+def evaluate_vi_ui_and_csrf_check(
+    dash_code: int,
+    dash_html: str,
+    csrf_token: str,
+    bad_csrf_code: int,
+    good_csrf_code: int,
+    good_csrf_bytes: bytes,
+) -> dict[str, Any]:
+    contains_vi_heading = has_vi_dashboard_heading(dash_html)
+    csrf_extracted = bool(csrf_token and csrf_token.lower() != "none" and len(csrf_token) >= 8)
+    health_ping_ok = b'"crm_cskh"' in (good_csrf_bytes or b"")
+    passed = (
+        dash_code == 200
+        and contains_vi_heading
+        and csrf_extracted
+        and bad_csrf_code in (400, 403)
+        and good_csrf_code == 200
+        and health_ping_ok
+    )
+    return {
+        "dashboard_http_status": dash_code,
+        "contains_vi_heading": contains_vi_heading,
+        "csrf_token_extracted": csrf_extracted,
+        "x_frappe_csrf_token": "<REDACTED_CSRF>" if csrf_extracted else None,
+        "forged_csrf_http_status": bad_csrf_code,
+        "valid_csrf_http_status": good_csrf_code,
+        "health_ping_ok": health_ping_ok,
+        "pass": passed,
+    }
+
+
+def audit_kpi_snapshot_qa_metrics(metrics_json_rows: list[str | None]) -> dict[str, int]:
+    """Parse `metrics_json` structurally and verify `QA_PASS_RATE` is `null` when `denominator == 0`."""
+    total = len(metrics_json_rows)
+    zero_denom_null = 0
+    positive_denom_numeric = 0
+    invalid_or_false_zero = 0
+
+    for raw in metrics_json_rows:
+        if not raw or not isinstance(raw, str):
+            invalid_or_false_zero += 1
+            continue
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            invalid_or_false_zero += 1
+            continue
+        if not isinstance(parsed, dict):
+            invalid_or_false_zero += 1
+            continue
+        metrics_map = parsed.get("metrics") if isinstance(parsed.get("metrics"), dict) else parsed
+        qa = metrics_map.get("QA_PASS_RATE") if isinstance(metrics_map, dict) else None
+        if not isinstance(qa, dict) or "denominator" not in qa or "value" not in qa:
+            invalid_or_false_zero += 1
+            continue
+        denom = qa.get("denominator")
+        val = qa.get("value")
+        if denom is None or isinstance(denom, bool) or not isinstance(denom, (int, float)) or denom < 0:
+            invalid_or_false_zero += 1
+            continue
+        if denom == 0:
+            if val is None:
+                zero_denom_null += 1
+            else:
+                invalid_or_false_zero += 1
+        else:
+            if val is None or isinstance(val, bool) or not isinstance(val, (int, float)):
+                invalid_or_false_zero += 1
+            else:
+                positive_denom_numeric += 1
+
+    return {
+        "total_snapshots": total,
+        "qa_zero_denom_null_snapshots": zero_denom_null,
+        "qa_positive_denom_numeric_snapshots": positive_denom_numeric,
+        "false_zero_qa_snapshots": invalid_or_false_zero,
+    }
 
 
 def parse_env_file(path: Path) -> dict[str, str]:
@@ -398,24 +547,135 @@ def compare_migration_snapshots(
     }
 
 
-def _compose_cmd(env_file: Path) -> list[str]:
+def _compose_cmd(env_file: Path, mode: str = "tls") -> list[str]:
     cmd = ["docker", "compose", "--env-file", str(env_file)]
-    for cf in TLS_COMPOSE_FILES:
+    for cf in COMPOSE_MODES[mode]:
         cmd.extend(["-f", str(cf)])
     return cmd
 
 
-def capture_live_snapshot(env_file: Path, site_name: str) -> dict[str, Any]:
+def _parse_compose_ps_json(raw_stdout: str) -> list[dict[str, Any]]:
+    raw = (raw_stdout or "").strip()
+    if not raw:
+        return []
+    if raw.startswith("["):
+        return json.loads(raw)
+    return [json.loads(line) for line in raw.splitlines() if line.strip()]
+
+
+def verify_running_containers_digest(
+    containers: list[dict[str, Any]],
+    expected_app_image: str,
+) -> dict[str, Any]:
+    """Verify running container `.Image` ID -> `docker image inspect` `.RepoDigests` (F-P4-OPS-02)."""
+    expected_clean = expected_app_image.strip()
+    expected_sha256 = (
+        expected_clean.split("@", 1)[1]
+        if "@" in expected_clean
+        else expected_clean
+    )
+    by_svc: dict[str, dict[str, Any]] = {}
+    for row in containers:
+        svc = str(row.get("Service", ""))
+        if svc in APP_SERVICES:
+            by_svc[svc] = row
+
+    missing_services: list[str] = []
+    digest_mismatches: list[str] = []
+    inspected_services: dict[str, dict[str, Any]] = {}
+
+    for svc in APP_SERVICES:
+        row = by_svc.get(svc)
+        if not row or row.get("State") != "running" or not row.get("Name"):
+            missing_services.append(svc)
+            continue
+        cname = str(row["Name"])
+        c_insp = subprocess.run(
+            ["docker", "inspect", "--format", "{{.Image}}", cname],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        running_image_id = c_insp.stdout.strip()
+        img_insp = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{json .RepoDigests}}", running_image_id],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        repo_digests: list[str] = json.loads(img_insp.stdout.strip() or "[]") or []
+        if "@" in expected_clean:
+            matched = expected_clean in repo_digests
+        else:
+            matched = bool(repo_digests) and any(d.endswith("@" + expected_sha256) for d in repo_digests)
+
+        inspected_services[svc] = {
+            "container": cname,
+            "running_image_id": running_image_id,
+            "repo_digests": repo_digests,
+            "matched": matched,
+        }
+        if not matched:
+            digest_mismatches.append(f"{svc}:image_id={running_image_id},repo_digests={repo_digests}")
+
+    return {
+        "expected_app_image": expected_clean,
+        "expected_sha256": expected_sha256,
+        "missing_services": missing_services,
+        "inspected_services": inspected_services,
+        "mismatches": digest_mismatches,
+        "pass": len(missing_services) == 0 and len(digest_mismatches) == 0,
+    }
+
+
+def capture_live_snapshot(env_file: Path, site_name: str, mode: str = "tls") -> dict[str, Any]:
     """Run read-only zero-PII count & invariant snapshot inside `backend`."""
     probe_code = r"""
-import json, frappe
-site = __import__("os").environ["CSKH_PROBE_SITE"]
-frappe.init(site=site, sites_path="/home/frappe/frappe-bench/sites")
+import collections, json, os, frappe
+site = os.environ["CSKH_PROBE_SITE"]
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
 frappe.connect()
 try:
-    def scalar(sql, params=()):
-        rows = frappe.db.sql(sql, params)
+    def scalar(sql, params=None):
+        rows = frappe.db.sql(sql) if params is None else frappe.db.sql(sql, params)
         return int(rows[0][0] or 0) if rows else 0
+
+    snap_rows = frappe.db.sql("SELECT metrics_json FROM `tabCSKH KPI Snapshot`", as_list=True)
+    qa_zero_denom_null = 0
+    false_zero_qa = 0
+    for r in snap_rows:
+        raw = r[0] if r else None
+        if not raw or not isinstance(raw, str):
+            false_zero_qa += 1
+            continue
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            false_zero_qa += 1
+            continue
+        if not isinstance(parsed, dict):
+            false_zero_qa += 1
+            continue
+        m_map = parsed.get("metrics") if isinstance(parsed.get("metrics"), dict) else parsed
+        qa = m_map.get("QA_PASS_RATE") if isinstance(m_map, dict) else None
+        if not isinstance(qa, dict) or "denominator" not in qa or "value" not in qa:
+            false_zero_qa += 1
+            continue
+        denom = qa.get("denominator")
+        val = qa.get("value")
+        if denom is None or isinstance(denom, bool) or not isinstance(denom, (int, float)) or denom < 0:
+            false_zero_qa += 1
+            continue
+        if denom == 0:
+            if val is None:
+                qa_zero_denom_null += 1
+            else:
+                false_zero_qa += 1
+        elif val is None or isinstance(val, bool) or not isinstance(val, (int, float)):
+            false_zero_qa += 1
 
     counts = {
         "crm_lead": scalar("SELECT COUNT(*) FROM `tabCRM Lead`"),
@@ -425,10 +685,15 @@ try:
         "cskh_contact_attempt": scalar("SELECT COUNT(*) FROM `tabCSKH Contact Attempt`"),
         "contact_attempt_self_reported": scalar("SELECT COUNT(*) FROM `tabCSKH Contact Attempt` WHERE verification_status='self_reported'"),
         "contact_attempt_verified": scalar("SELECT COUNT(*) FROM `tabCSKH Contact Attempt` WHERE verification_status='verified'"),
-        "cskh_qa_review_published": scalar("SELECT COUNT(*) FROM `tabCSKH QA Review` WHERE docstatus < 2"),
+        "cskh_qa_review_published": scalar(
+            "SELECT COUNT(DISTINCT qr.contact_attempt) FROM `tabCSKH QA Review` qr "
+            "INNER JOIN `tabCSKH Contact Attempt` ca ON ca.name = qr.contact_attempt "
+            "WHERE qr.status = 'published'"
+        ),
         "cskh_sla_obligation": scalar("SELECT COUNT(*) FROM `tabCSKH SLA Obligation`"),
         "cskh_kpi_run": scalar("SELECT COUNT(*) FROM `tabCSKH KPI Run`"),
         "cskh_kpi_snapshot": scalar("SELECT COUNT(*) FROM `tabCSKH KPI Snapshot`"),
+        "qa_zero_denom_null_snapshots": qa_zero_denom_null,
         "cskh_outcome_code": scalar("SELECT COUNT(*) FROM `tabCSKH Outcome Code`"),
         "cskh_policy": scalar("SELECT COUNT(*) FROM `tabCSKH Policy`"),
         "cskh_export_job": scalar("SELECT COUNT(*) FROM `tabCSKH Export Job`"),
@@ -441,16 +706,20 @@ try:
             "SELECT COUNT(*) FROM `tabCSKH Work Item` wi JOIN `tabCRM Lead` l ON l.name = wi.lead WHERE wi.status IN ('assigned','in_progress','on_hold') AND IFNULL(wi.assigned_to,'') != IFNULL(l.lead_owner,'')"
         ),
         "unverified_marked_verified": scalar(
-            "SELECT COUNT(*) FROM `tabCSKH Contact Attempt` ca WHERE ca.verification_status='verified' AND IFNULL(ca.call_log,'')='' AND NOT EXISTS (SELECT 1 FROM `tabCSKH QA Review` qr WHERE qr.work_item = ca.work_item)"
+            "SELECT COUNT(*) FROM `tabCSKH Contact Attempt` ca "
+            "WHERE ca.verification_status='verified' AND IFNULL(ca.call_log,'')='' "
+            "AND NOT EXISTS ("
+            "SELECT 1 FROM `tabCSKH QA Review` qr "
+            "WHERE qr.contact_attempt = ca.name AND qr.status = 'published'"
+            ")"
         ),
-        "false_zero_qa_snapshots": scalar(
-            "SELECT COUNT(*) FROM `tabCSKH KPI Snapshot` WHERE metrics_json LIKE '%\"QA_PASS_RATE\": {\"value\": 0%' AND metrics_json LIKE '%\"denominator\": 0%'"
-        ),
+        "false_zero_qa_snapshots": false_zero_qa,
     }
     mod_rows = frappe.db.sql(
-        "SELECT CAST(module AS CHAR CHARACTER SET utf8mb4) AS m, COUNT(*) FROM `tabDocType` WHERE name LIKE 'CSKH %' GROUP BY BINARY module",
+        "SELECT module FROM `tabDocType` WHERE name LIKE 'CSKH %'",
         as_list=True,
     )
+    mod_dist = dict(collections.Counter(str(r[0]) for r in mod_rows))
     col_rows = frappe.db.sql(
         "SELECT COLLATION_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'tabModule Def' AND COLUMN_NAME = 'name'",
         as_list=True,
@@ -463,13 +732,13 @@ try:
         "blg_p4_mig_01": {
             "module_def_collation": col_rows[0][0] if col_rows else "",
             "export_job_table_exists": tbl_exists,
-            "cskh_doctype_module_distribution": {str(r[0]): int(r[1]) for r in mod_rows},
+            "cskh_doctype_module_distribution": mod_dist,
         },
     }, sort_keys=True))
 finally:
     frappe.destroy()
 """
-    cmd = _compose_cmd(env_file) + [
+    cmd = _compose_cmd(env_file, mode=mode) + [
         "exec",
         "-T",
         "-e",
@@ -604,7 +873,6 @@ def run_https_smoke(env_file: Path, admin_user: str, admin_password_env: str) ->
 
     env = parse_env_file(env_file)
     site_name = env["SITE_NAME"]
-    expected_digest = env["APP_IMAGE"].split("@", 1)[1]
     report: dict[str, Any] = {
         "timestamp_utc": utc_now_iso(),
         "site_name": site_name,
@@ -612,35 +880,18 @@ def run_https_smoke(env_file: Path, admin_user: str, admin_password_env: str) ->
         "checks": {},
     }
 
-    # 1. Verify running containers use exact APP_IMAGE digest
+    # 1. Verify running containers use exact APP_IMAGE digest via container .Image -> image .RepoDigests
     ps_proc = subprocess.run(
-        _compose_cmd(env_file) + ["ps", "--format", "json"],
+        _compose_cmd(env_file, mode="tls") + ["ps", "--format", "json"],
         capture_output=True,
         text=True,
         encoding="utf-8",
         check=True,
     )
-    containers = [json.loads(line) for line in ps_proc.stdout.splitlines() if line.strip()]
-    app_services = {"backend", "frontend", "websocket", "queue-short", "queue-long", "scheduler"}
-    digest_mismatches: list[str] = []
-    for c in containers:
-        svc = c.get("Service", "")
-        if svc in app_services:
-            insp = subprocess.run(
-                ["docker", "inspect", "--format", "{{json .RepoDigests}}", c["Name"]],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                check=True,
-            )
-            digests = json.loads(insp.stdout.strip() or "[]")
-            if not any(expected_digest in d for d in digests):
-                digest_mismatches.append(f"{svc}:{digests}")
-    report["checks"]["container_digest_parity"] = {
-        "expected_sha256": expected_digest,
-        "mismatches": digest_mismatches,
-        "pass": len(digest_mismatches) == 0,
-    }
+    containers = _parse_compose_ps_json(ps_proc.stdout)
+    report["checks"]["container_digest_parity"] = verify_running_containers_digest(
+        containers, env["APP_IMAGE"]
+    )
 
     # 2. HTTP -> HTTPS redirect
     conn = http.client.HTTPConnection(site_name, 80, timeout=10)
@@ -682,14 +933,13 @@ def run_https_smoke(env_file: Path, admin_user: str, admin_password_env: str) ->
         "pass": st_code == 200 and cookie_ok and bool(sid_raw_pair),
     }
 
-    # 5. Vietnamese UI & CSRF token extraction + CSRF negative/positive test
+    # 5. Mandatory Vietnamese heading & X-Frappe-CSRF-Token extraction + CSRF reject/accept test
     dash_code, _, dash_bytes = _https_request(
         f"https://{site_name}/cskh/dashboard",
         headers={"Cookie": sid_raw_pair},
     )
     dash_html = dash_bytes.decode("utf-8", errors="replace")
-    csrf_match = re.search(r'csrf_token\s*[:=]\s*["\']([^"\']+)["\']', dash_html)
-    csrf_token = csrf_match.group(1) if csrf_match else ""
+    csrf_token = extract_csrf_token(dash_html)
     bad_csrf_code, _, _ = _https_request(
         f"https://{site_name}/api/method/crm_cskh.api.health.ping",
         method="POST",
@@ -702,19 +952,14 @@ def run_https_smoke(env_file: Path, admin_user: str, admin_password_env: str) ->
         headers={"Cookie": sid_raw_pair, "X-Frappe-CSRF-Token": csrf_token},
         body=b"",
     )
-    report["checks"]["vi_ui_and_csrf"] = {
-        "dashboard_http_status": dash_code,
-        "contains_vi_heading": "Bảng điều khiển" in dash_html or "Tổng quan" in dash_html,
-        "forged_csrf_http_status": bad_csrf_code,
-        "valid_csrf_http_status": good_csrf_code,
-        "health_ping_ok": b'"crm_cskh"' in good_csrf_bytes,
-        "pass": (
-            dash_code == 200
-            and bad_csrf_code in (400, 403)
-            and good_csrf_code == 200
-            and b'"crm_cskh"' in good_csrf_bytes
-        ),
-    }
+    report["checks"]["vi_ui_and_csrf"] = evaluate_vi_ui_and_csrf_check(
+        dash_code=dash_code,
+        dash_html=dash_html,
+        csrf_token=csrf_token,
+        bad_csrf_code=bad_csrf_code,
+        good_csrf_code=good_csrf_code,
+        good_csrf_bytes=good_csrf_bytes,
+    )
 
     # 6. Secure WebSocket (wss://) upgrade & frame check
     wss_info = _check_wss_upgrade(site_name, sid_raw_pair, 443)
@@ -730,10 +975,20 @@ def run_https_smoke(env_file: Path, admin_user: str, admin_password_env: str) ->
         for section in report["checks"].values()
     )
     report["status"] = "PASS" if all_passed else "FAIL"
-    return json.loads(redact_sensitive(json.dumps(report), [admin_password, csrf_token]))
+    return json.loads(
+        redact_sensitive(
+            json.dumps(report),
+            extra_secrets=[admin_password],
+            csrf_tokens=[csrf_token],
+        )
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -741,6 +996,15 @@ def main(argv: list[str] | None = None) -> int:
     p_pre.add_argument("--env-file", type=Path, required=True)
     p_pre.add_argument("--confirm-encryption-key-escrow", action="store_true")
     p_pre.add_argument("--out", type=Path)
+
+    p_dig = sub.add_parser(
+        "verify-digest",
+        help="Inspect running container image IDs and verify RepoDigests against expected APP_IMAGE",
+    )
+    p_dig.add_argument("--env-file", type=Path, required=True)
+    p_dig.add_argument("--mode", choices=("tls", "isolated-smoke"), default="tls")
+    p_dig.add_argument("--expected-image", help="Override expected <repo>@sha256:<64hex> for verification")
+    p_dig.add_argument("--out", type=Path)
 
     p_smoke = sub.add_parser("https-smoke", help="Run live HTTPS smoke against approved Staging/Prod")
     p_smoke.add_argument("--env-file", type=Path, required=True)
@@ -751,6 +1015,7 @@ def main(argv: list[str] | None = None) -> int:
     p_snap = sub.add_parser("snapshot-counts", help="Capture zero-PII DB counts & BLG-P4-MIG-01 state")
     p_snap.add_argument("--env-file", type=Path, required=True)
     p_snap.add_argument("--site", required=True)
+    p_snap.add_argument("--mode", choices=("tls", "isolated-smoke"), default="tls")
     p_snap.add_argument("--out", type=Path, required=True)
 
     p_cmp = sub.add_parser("compare-counts", help="Compare before / migrate-1 / migrate-2 count snapshots")
@@ -774,6 +1039,30 @@ def main(argv: list[str] | None = None) -> int:
         sys.stdout.write(text)
         return 0
 
+    if args.command == "verify-digest":
+        env = parse_env_file(args.env_file)
+        expected_img = args.expected_image or env.get("APP_IMAGE", "")
+        ps_proc = subprocess.run(
+            _compose_cmd(args.env_file, mode=args.mode) + ["ps", "--format", "json"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        containers = _parse_compose_ps_json(ps_proc.stdout)
+        parity = verify_running_containers_digest(containers, expected_img)
+        res = {
+            "timestamp_utc": utc_now_iso(),
+            "status": "PASS" if parity["pass"] else "FAIL",
+            "container_digest_parity": parity,
+        }
+        text = json.dumps(res, indent=2, ensure_ascii=False) + "\n"
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(text, encoding="utf-8", newline="\n")
+        sys.stdout.write(text)
+        return 0 if parity["pass"] else 2
+
     if args.command == "https-smoke":
         res = run_https_smoke(args.env_file, args.admin_user, args.admin_password_env)
         text = json.dumps(res, indent=2, ensure_ascii=False) + "\n"
@@ -784,7 +1073,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0 if res["status"] == "PASS" else 2
 
     if args.command == "snapshot-counts":
-        res = capture_live_snapshot(args.env_file, args.site)
+        res = capture_live_snapshot(args.env_file, args.site, mode=args.mode)
         text = json.dumps(res, indent=2, ensure_ascii=False) + "\n"
         args.out.parent.mkdir(parents=True, exist_ok=True)
         args.out.write_text(text, encoding="utf-8", newline="\n")
