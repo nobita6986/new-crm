@@ -75,7 +75,7 @@ Theo nguyên tắc `P4.md §0.12` và `§19`, không giả lập kết quả Sta
 | **Nhân viên ngừng nhận số / đạt trần** | `staff.capped@example.invalid` | `Sales User` (rule `enabled=0` hoặc đạt `capacity`) | Không được giao khách mới khi chạy preview/execute phân phối (`F09`). |
 | **Tài khoản bị khóa** | `staff.locked@example.invalid` | `Sales User` (`User.enabled = 0`) | Phiên đăng nhập cũ bị từ chối ngay lập tức (`F30` / `S15`). |
 
-Tập dữ liệu seed giả lập (kế thừa có kiểm soát từ `crm_cskh.tools.p3_e2e_seed` với allowlist tên site Staging) phải bao phủ đủ 9 tình huống của `P4.md §5.6`: số trùng nội batch & trùng DB, lead phone-only (`cskh_is_placeholder_name=1`), một khách qua nhiều chiến dịch, bàn giao `A → B → A` + chuyển đội giữa kỳ, lead chưa liên hệ, nhiều lần thử đa kênh (`phone_call`/`zalo`/`sms`), lịch hẹn quá hạn, SLA xuyên giờ nghỉ/cuối tuần/ngày lễ, `QA = N/A` (`86,47` tạm tính) và kỳ cũ `is_restated = 1`.
+Tập dữ liệu seed giả lập (kế thừa có kiểm soát từ `crm_cskh.tools.p3_e2e_seed` qua trình bọc bảo vệ [`deploy/ops/seed_staging_synthetic.py`](../../deploy/ops/seed_staging_synthetic.py) từ chối mọi site Production hoặc site có dữ liệu khác `@example.invalid`/`@example.test`) phải bao phủ đủ 9 tình huống của `P4.md §5.6`: số trùng nội batch & trùng DB, lead phone-only (`cskh_is_placeholder_name=1`), một khách qua nhiều chiến dịch, bàn giao `A → B → A` + chuyển đội giữa kỳ, lead chưa liên hệ, nhiều lần thử đa kênh (`phone_call`/`zalo`/`sms`), lịch hẹn quá hạn, SLA xuyên giờ nghỉ/cuối tuần/ngày lễ, `QA = N/A` (`86,47` tạm tính) và kỳ cũ `is_restated = 1`.
 
 ### 2.5. Checklist Sẵn Sàng Rollback Trước Khi Triển Khai / Nâng Cấp (`G09`)
 
@@ -109,7 +109,10 @@ python3 deploy/ops/staging_https_smoke_and_reconcile.py preflight \
 COMPOSE_CMD="docker compose --env-file /etc/crm-cskh/staging.env \
   -f deploy/compose/upstream/frappe_docker/compose.yaml \
   -f deploy/compose/upstream/frappe_docker/overrides/compose.mariadb.yaml \
+  -f deploy/compose/upstream/frappe_docker/overrides/compose.mariadb-secrets.yaml \
   -f deploy/compose/upstream/frappe_docker/overrides/compose.redis.yaml \
+  -f deploy/compose/upstream/frappe_docker/overrides/compose.https.yaml \
+  -f deploy/compose/upstream/frappe_docker/overrides/compose.migrator.yaml \
   -f deploy/compose/overrides/compose.cskh-common.yaml \
   -f deploy/compose/overrides/compose.cskh-tls.yaml"
 

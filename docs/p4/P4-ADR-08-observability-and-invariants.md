@@ -35,7 +35,7 @@ Chọn **Phương án C**:
 2. **Tầng Thăm Dò Định Kỳ & Bất Biến Nghiệp Vụ:** Dùng kịch bản chuẩn hóa [`deploy/ops/check_health_and_invariants.py`](../../deploy/ops/check_health_and_invariants.py) kích hoạt qua `systemd` timer mỗi `5 phút` trên host VPS để kiểm tra:
    - Trạng thái `running`/`healthy`, `RestartCount` và cờ `OOMKilled` của 10 service thường trực; đảm bảo đúng `1` thực thể `scheduler` đang chạy.
    - Dung lượng đĩa cứng (`WARN >= 80%`, `CRITICAL >= 90%`).
-   - Độ sâu hàng đợi RQ (`short`, `default`, `long`), tổng số job `failed`, số bản ghi `Error Log` trong 15 phút gần nhất, và độ trễ hoàn tất thực tế của cả 4 job định kỳ trong `hooks.py` (`evaluate_sla_obligations`, `drain_dirty_kpi_scopes`, `expire_stale_exports`, `refresh_current_standard_periods` — cảnh báo khi trễ `> 2 × cadence`).
+   - Độ sâu hàng đợi RQ (`short`, `default`, `long`), tổng số job `failed`, số bản ghi `Error Log` trong 15 phút gần nhất, và trạng thái thực thi của cả 4 job định kỳ trong `hooks.py` (`evaluate_sla_obligations`, `drain_dirty_kpi_scopes`, `expire_stale_exports`, `refresh_current_standard_periods` — báo `FAIL` nếu lần chạy kết thúc gần nhất `Failed`, hoặc sau thời gian khởi động mà chưa từng `Complete`, hoặc trễ `> 2 × cadence`).
    - **6 bất biến toàn vẹn nghiệp vụ (`INV-01`..`INV-06`)** chỉ trả về số nguyên vô hướng (`0` PII).
 3. **Tầng Cảnh Báo Vệ Sinh (`Alert Hygiene`):** Mọi cảnh báo phát ra đều đính kèm `alert_code`, `severity`, `owner`, `first_action`, đường dẫn `runbook`, khóa chống gửi lặp (`cooldown = 900s` mặc định) và khử toàn bộ SĐT/cookie/token/URL bí mật.
 
