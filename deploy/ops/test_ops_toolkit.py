@@ -529,6 +529,353 @@ class OpsToolkitTests(unittest.TestCase):
         )
         self.assertTrue(ok_stg, errs_stg)
 
+    def test_rehearsal_runner_persists_scrubbed_json_and_log_after_cleanup_on_mid_run_error(self) -> None:
+        import subprocess
+        import run_local_ops_rehearsal as reh_mod
+
+        call_events: list[str] = []
+        captured_secrets: dict[str, str] = {}
+        captured_secret_file: list[Path] = []
+
+        def fake_inspect_proj(_proj: str) -> dict[str, list[str]]:
+            call_events.append("inspect_project")
+            return {"containers": [], "volumes": [], "networks": []}
+
+        def fake_snapshot_host() -> dict[str, set[str]]:
+            call_events.append("snapshot_host")
+            return {
+                "containers": {"owner-keep-c1"},
+                "volumes": {"owner-keep-v1"},
+                "networks": {"owner-keep-n1"},
+            }
+
+        def fake_inspect_img(_img: str) -> tuple[bool, dict[str, object], str]:
+            return (
+                True,
+                {
+                    "id": "sha256:" + ("a" * 64),
+                    "repo_digests": ["crm-cskh@sha256:" + ("b" * 64)],
+                },
+                "",
+            )
+
+        healthy_10 = "\n".join(
+            json.dumps({"Service": s, "State": "running", "Health": "healthy"})
+            for s in (
+                "backend",
+                "db",
+                "frontend",
+                "proxy",
+                "queue-long",
+                "queue-short",
+                "redis-cache",
+                "redis-queue",
+                "scheduler",
+                "websocket",
+            )
+        )
+
+        def fake_sub_run(cmd: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
+            if cmd[0] == "git":
+                out = ("deadbeef" * 5 + "\n") if "rev-parse" in cmd else ""
+                return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr="")
+
+            if cmd[:2] == ["docker", "compose"]:
+                if "--env-file" in cmd:
+                    ef = Path(cmd[cmd.index("--env-file") + 1])
+                    if ef.exists() and not captured_secret_file:
+                        parsed = staging_mod.parse_env_file(ef)
+                        sf = Path(parsed["DB_PASSWORD_SECRETS_FILE"])
+                        captured_secret_file.append(sf)
+                        raw_bytes = sf.read_bytes()
+                        self.assertTrue(raw_bytes.endswith(b"\n"))
+                        self.assertNotIn(b"\r", raw_bytes)
+                        captured_secrets["file_db_pw"] = raw_bytes.decode("ascii").strip()
+
+                if "ps" in cmd:
+                    return subprocess.CompletedProcess(cmd, 0, stdout=healthy_10 + "\n", stderr="")
+                if "down" in cmd and "--volumes" in cmd and "--remove-orphans" in cmd:
+                    call_events.append("teardown_down_volumes")
+                    return subprocess.CompletedProcess(cmd, 0, stdout="Removed\n", stderr="")
+                if "config" in cmd:
+                    svcs = [
+                        "backend",
+                        "configurator",
+                        "db",
+                        "frontend",
+                        "proxy",
+                        "queue-long",
+                        "queue-short",
+                        "redis-cache",
+                        "redis-queue",
+                        "scheduler",
+                        "websocket",
+                    ]
+                    if "--profile" in cmd and "migrate" in cmd:
+                        svcs.append("migrator")
+                    out = "\n".join(svcs) + "\n" if "--services" in cmd else "name: test\n"
+                    return subprocess.CompletedProcess(cmd, 0, stdout=out, stderr="")
+                if "exec" in cmd and "SEED_RESULT=" in cmd[-1]:
+                    inp = json.loads(str(kwargs.get("input", "{}")))
+                    captured_secrets.update(inp)
+                    seed_out = json.dumps(
+                        {
+                            "aba_work_item": "WI-0001",
+                            "users": {},
+                            "period_key": "2026-11",
+                            "team_a": "TA",
+                            "team_b": "TB",
+                            "golden_employee": "EMP-1",
+                        }
+                    )
+                    return subprocess.CompletedProcess(
+                        cmd, 0, stdout=f"SEED_RESULT={seed_out}\n", stderr=""
+                    )
+                if "exec" in cmd and "DELETE sjl FROM" in cmd[-1]:
+                    leak_stdout = (
+                        f"db={captured_secrets['db_pw']} adm={captured_secrets['adm_pw']} "
+                        f"seed={captured_secrets['seed_pw']} sid=liveSecretSid998877 "
+                        f"phone=0912345678"
+                    )
+                    leak_stderr = (
+                        'X-Frappe-CSRF-Token: liveSecretCsrfToken665544 | '
+                        '{"X-Frappe-CSRF-Token": "jsonCsrfToken332211"} | +84987654321'
+                    )
+                    raise subprocess.CalledProcessError(
+                        2, cmd, output=leak_stdout, stderr=leak_stderr
+                    )
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+            script_str = " ".join(str(x) for x in cmd)
+            if "staging_https_smoke_and_reconcile.py" in script_str:
+                if "snapshot-counts" in cmd:
+                    out_p = Path(cmd[cmd.index("--out") + 1])
+                    out_p.write_text("{}", encoding="utf-8", newline="\n")
+                    return subprocess.CompletedProcess(cmd, 0, stdout="{}", stderr="")
+                if "compare-counts" in cmd:
+                    return subprocess.CompletedProcess(
+                        cmd, 0, stdout=json.dumps({"status": "PASS", "violation_count": 0}), stderr=""
+                    )
+                if "verify-digest" in cmd:
+                    exp = cmd[cmd.index("--expected-image") + 1]
+                    if exp.endswith("f" * 64):
+                        return subprocess.CompletedProcess(
+                            cmd,
+                            2,
+                            stdout=json.dumps(
+                                {
+                                    "status": "FAIL",
+                                    "container_digest_parity": {"mismatches": [1, 2, 3, 4, 5, 6]},
+                                }
+                            ),
+                            stderr="",
+                        )
+                    return subprocess.CompletedProcess(
+                        cmd,
+                        0,
+                        stdout=json.dumps(
+                            {
+                                "status": "PASS",
+                                "container_digest_parity": {
+                                    "inspected_services": [1, 2, 3, 4, 5, 6]
+                                },
+                            }
+                        ),
+                        stderr="",
+                    )
+
+            raise AssertionError(f"Unexpected subprocess command in test: {cmd}")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_json = Path(tmp) / "evidence" / "rehearsal-fail.json"
+            out_log = Path(tmp) / "evidence" / "rehearsal-fail.log"
+            with (
+                mock.patch.object(reh_mod.smoke_lib, "inspect_project_resources", side_effect=fake_inspect_proj),
+                mock.patch.object(reh_mod.smoke_lib, "snapshot_host_docker_resources", side_effect=fake_snapshot_host),
+                mock.patch.object(reh_mod.smoke_lib, "inspect_image_metadata", side_effect=fake_inspect_img),
+                mock.patch.object(reh_mod.subprocess, "run", side_effect=fake_sub_run),
+            ):
+                rc = reh_mod.run_rehearsal(
+                    app_image="sha256:" + ("a" * 64),
+                    image_git_sha="4de3dc8656b0077cabd4220afc6636da543e34f6",
+                    out_json=out_json,
+                    out_log=out_log,
+                    run_id="20261106999999-errtst",
+                )
+
+            self.assertEqual(rc, 2)
+            self.assertTrue(out_json.exists())
+            self.assertTrue(out_log.exists())
+
+            # Teardown (`down --volumes --remove-orphans`) MUST happen before post-cleanup checks
+            self.assertIn("teardown_down_volumes", call_events)
+            td_idx = call_events.index("teardown_down_volumes")
+            self.assertIn("inspect_project", call_events[td_idx + 1 :])
+            self.assertIn("snapshot_host", call_events[td_idx + 1 :])
+            self.assertFalse(captured_secret_file[0].exists())
+
+            raw_json_bytes = out_json.read_bytes()
+            raw_log_bytes = out_log.read_bytes()
+            for raw_b in (raw_json_bytes, raw_log_bytes):
+                self.assertTrue(raw_b.endswith(b"\n"))
+                self.assertNotIn(b"\r", raw_b)
+
+            json_txt = raw_json_bytes.decode("utf-8")
+            log_txt = raw_log_bytes.decode("utf-8")
+            for forbidden in (
+                captured_secrets["file_db_pw"],
+                captured_secrets["db_pw"],
+                captured_secrets["adm_pw"],
+                captured_secrets["seed_pw"],
+                "liveSecretSid998877",
+                "liveSecretCsrfToken665544",
+                "jsonCsrfToken332211",
+                "0912345678",
+                "+84987654321",
+            ):
+                self.assertNotIn(forbidden, json_txt)
+                self.assertNotIn(forbidden, log_txt)
+
+            self.assertIn("<REDACTED_SECRET>", json_txt)
+            self.assertIn("<REDACTED_FRAPPE_SID>", json_txt)
+            self.assertIn("<REDACTED_CSRF>", json_txt)
+            self.assertIn("<REDACTED_PHONE>", json_txt)
+
+            parsed = json.loads(json_txt)
+            self.assertEqual(parsed["run_id"], "20261106999999-errtst")
+            self.assertEqual(parsed["status"], "FAIL")
+            self.assertEqual(parsed["failed_step"], "phase_b_and_f_p4_ops_05_cron")
+            self.assertEqual(parsed["exit_code"], 2)
+            self.assertEqual(parsed["measured_phases"], {"p4_03_migration_x2_rehearsal": "PASS"})
+            self.assertTrue(parsed["cleanup_verification"]["stack_started"])
+            self.assertTrue(parsed["cleanup_verification"]["teardown_invoked"])
+            self.assertEqual(parsed["cleanup_verification"]["teardown_exit_code"], 0)
+            self.assertTrue(parsed["cleanup_verification"]["tmpdir_removed"])
+            self.assertTrue(parsed["cleanup_verification"]["pass"])
+
+            self.assertIn("run_id=20261106999999-errtst", log_txt)
+            self.assertIn("failed_step=phase_b_and_f_p4_ops_05_cron", log_txt)
+            self.assertIn("exit_code=2", log_txt)
+            self.assertIn('measured_phases={"p4_03_migration_x2_rehearsal": "PASS"}', log_txt)
+            self.assertIn("cleanup_pass=True", log_txt)
+
+    def test_rehearsal_runner_persists_json_and_log_when_interrupted_at_bootstrap_like_c61a1b(self) -> None:
+        import signal
+        import subprocess
+        import run_local_ops_rehearsal as reh_mod
+
+        teardown_called = False
+        infra_healthy = "\n".join(
+            json.dumps({"Service": s, "State": "running", "Health": "healthy"})
+            for s in ("db", "redis-cache", "redis-queue")
+        )
+
+        def fake_sub_run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            nonlocal teardown_called
+            if cmd[0] == "git":
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+            if cmd[:2] == ["docker", "compose"]:
+                if "ps" in cmd:
+                    return subprocess.CompletedProcess(cmd, 0, stdout=infra_healthy + "\n", stderr="")
+                if "down" in cmd and "--volumes" in cmd:
+                    teardown_called = True
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                if "exec" in cmd and "SEED_RESULT=" in cmd[-1]:
+                    raise reh_mod._TerminationSignalError(int(signal.SIGTERM))
+                return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+            raise AssertionError(f"Unexpected command: {cmd}")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_json = Path(tmp) / "c61a1b-sim.json"
+            out_log = Path(tmp) / "c61a1b-sim.log"
+            with (
+                mock.patch.object(
+                    reh_mod.smoke_lib,
+                    "inspect_project_resources",
+                    return_value={"containers": [], "volumes": [], "networks": []},
+                ),
+                mock.patch.object(
+                    reh_mod.smoke_lib,
+                    "snapshot_host_docker_resources",
+                    return_value={"containers": set(), "volumes": set(), "networks": set()},
+                ),
+                mock.patch.object(
+                    reh_mod.smoke_lib,
+                    "inspect_image_metadata",
+                    return_value=(True, {"id": "sha256:" + ("a" * 64)}, ""),
+                ),
+                mock.patch.object(reh_mod.subprocess, "run", side_effect=fake_sub_run),
+            ):
+                rc = reh_mod.run_rehearsal(
+                    app_image="sha256:" + ("a" * 64),
+                    image_git_sha="4de3dc8656b0077cabd4220afc6636da543e34f6",
+                    out_json=out_json,
+                    out_log=out_log,
+                    run_id="20261106054158-c61a1b",
+                )
+
+            self.assertEqual(rc, 128 + int(signal.SIGTERM))
+            self.assertTrue(teardown_called)
+            parsed = json.loads(out_json.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["run_id"], "20261106054158-c61a1b")
+            self.assertEqual(parsed["status"], "FAIL")
+            self.assertEqual(parsed["failed_step"], "site_bootstrap_and_seed")
+            self.assertEqual(parsed["exit_code"], 128 + int(signal.SIGTERM))
+            self.assertEqual(parsed["measured_phases"], {})
+            self.assertTrue(parsed["cleanup_verification"]["pass"])
+
+    def test_rehearsal_runner_persists_json_and_log_on_preflight_error_without_stack_teardown(self) -> None:
+        import subprocess
+        import run_local_ops_rehearsal as reh_mod
+
+        compose_called = False
+
+        def fake_sub_run(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            nonlocal compose_called
+            if cmd[:2] == ["docker", "compose"]:
+                compose_called = True
+            return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+        with tempfile.TemporaryDirectory() as tmp:
+            out_json = Path(tmp) / "preflight-fail.json"
+            out_log = Path(tmp) / "preflight-fail.log"
+            with (
+                mock.patch.object(
+                    reh_mod.smoke_lib,
+                    "inspect_project_resources",
+                    return_value={"containers": [], "volumes": [], "networks": []},
+                ),
+                mock.patch.object(
+                    reh_mod.smoke_lib,
+                    "snapshot_host_docker_resources",
+                    return_value={"containers": set(), "volumes": set(), "networks": set()},
+                ),
+                mock.patch.object(
+                    reh_mod.smoke_lib,
+                    "inspect_image_metadata",
+                    return_value=(False, {}, "No such image locally"),
+                ),
+                mock.patch.object(reh_mod.subprocess, "run", side_effect=fake_sub_run),
+            ):
+                rc = reh_mod.run_rehearsal(
+                    app_image="sha256:" + ("e" * 64),
+                    image_git_sha="4de3dc8656b0077cabd4220afc6636da543e34f6",
+                    out_json=out_json,
+                    out_log=out_log,
+                    run_id="20261106999999-preflt",
+                )
+
+            self.assertEqual(rc, 1)
+            self.assertFalse(compose_called)
+            parsed = json.loads(out_json.read_text(encoding="utf-8"))
+            self.assertEqual(parsed["status"], "FAIL")
+            self.assertEqual(parsed["failed_step"], "preflight_inspect_app_image")
+            self.assertEqual(parsed["exit_code"], 1)
+            self.assertEqual(parsed["measured_phases"], {})
+            self.assertFalse(parsed["cleanup_verification"]["stack_started"])
+            self.assertFalse(parsed["cleanup_verification"]["teardown_invoked"])
+            self.assertTrue(parsed["cleanup_verification"]["pass"])
+
 
 if __name__ == "__main__":
     unittest.main()
