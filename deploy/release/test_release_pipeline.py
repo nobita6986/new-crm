@@ -207,6 +207,68 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
             self.assertEqual(sec_fail["status"], "FAIL")
             self.assertEqual(sec_fail["secret_findings_count"], 1)
 
+            # 2b. Upstream PyJWT METADATA example JWT is excepted ONLY on exact target suffix + rule_id
+            trivy_file.write_text(
+                json.dumps(
+                    {
+                        "ArtifactName": SAMPLE_DIGEST,
+                        "Results": [
+                            {
+                                "Target": "/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.13.0.dist-info/METADATA",
+                                "Secrets": [
+                                    {
+                                        "RuleID": "jwt-token",
+                                        "Category": "JWT",
+                                        "Severity": "MEDIUM",
+                                        "Title": "JWT token",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            pyjwt_fp_ok = evaluate_trivy_report(
+                trivy_file,
+                fail_on_secrets=True,
+                fail_on_unapproved_fixable_critical=False,
+            )
+            self.assertEqual(pyjwt_fp_ok["status"], "PASS")
+            self.assertEqual(pyjwt_fp_ok["secret_findings_count"], 0)
+            self.assertEqual(pyjwt_fp_ok["excepted_secret_false_positives_count"], 1)
+
+            # Same rule_id in app code MUST still fail closed!
+            trivy_file.write_text(
+                json.dumps(
+                    {
+                        "ArtifactName": SAMPLE_DIGEST,
+                        "Results": [
+                            {
+                                "Target": "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/api.py",
+                                "Secrets": [
+                                    {
+                                        "RuleID": "jwt-token",
+                                        "Category": "JWT",
+                                        "Severity": "MEDIUM",
+                                        "Title": "JWT token",
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                evaluate_trivy_report(
+                    trivy_file,
+                    fail_on_secrets=True,
+                    fail_on_unapproved_fixable_critical=False,
+                )["status"],
+                "FAIL",
+            )
+
             # 3. Fixable CRITICAL fails unless active non-expired exception exists
             trivy_file.write_text(
                 json.dumps(
