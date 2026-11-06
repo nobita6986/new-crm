@@ -1,0 +1,72 @@
+{
+  "status": "BLOCKED",
+  "preflight_only": true,
+  "exit_code_note": "When --preflight-only is used, process exit code 0 only indicates preflight evaluation finished; callers MUST inspect report['status'] ('PREFLIGHT_READY' vs 'BLOCKED').",
+  "run_id": "20261106090923-4ac51d",
+  "project_name": "crm-cskh-p4-smoke-20261106090923-4ac51d",
+  "site_name": "p4-smoke-20261106090923-4ac51d.localhost",
+  "compose_provenance": {
+    "head_sha": "2c1e7594471b119f2c41a85fa12d30a85b356785",
+    "branch": "codex/p4-01-compose",
+    "worktree_clean": false
+  },
+  "image_provenance": {
+    "image_git_sha": null,
+    "app_image": "crm-cskh@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+    "inspect": null
+  },
+  "preexisting_resources_check": {
+    "passed": true,
+    "found": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    },
+    "port_check": {
+      "port": 18080,
+      "free": true,
+      "detail": "127.0.0.1:18080 free"
+    }
+  },
+  "secret_file_byte_check": {
+    "file_name": "db_root_password.txt",
+    "byte_length": 33,
+    "ends_with_lf_only": true,
+    "contains_cr": false
+  },
+  "config_services": [
+    "db",
+    "redis-cache",
+    "redis-queue",
+    "configurator",
+    "backend",
+    "queue-short",
+    "scheduler",
+    "websocket",
+    "frontend",
+    "proxy",
+    "queue-long"
+  ],
+  "config_services_with_migrate_profile": [
+    "redis-queue",
+    "db",
+    "redis-cache",
+    "configurator",
+    "queue-short",
+    "websocket",
+    "proxy",
+    "scheduler",
+    "backend",
+    "frontend",
+    "migrator",
+    "queue-long"
+  ],
+  "blockers": [
+    {
+      "id": "BLK-RUNTIME-01",
+      "component": "Custom Production Image Digest / ID (T1B)",
+      "status": "BLOCKED",
+      "detail": "T1B has not yet handed off a built APP_IMAGE (<repo>@sha256:<64-hex> or local sha256:<64-hex>)."
+    }
+  ]
+}
