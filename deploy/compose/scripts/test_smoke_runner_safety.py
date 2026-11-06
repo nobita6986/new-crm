@@ -3,12 +3,14 @@
 
 from __future__ import annotations
 
+import http.server
 import json
 import pathlib
 import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 
 SCRIPTS_DIR = pathlib.Path(__file__).resolve().parent
@@ -213,6 +215,132 @@ class SmokeRunnerSafetyTests(unittest.TestCase):
             self.assertNotIn("SmokeP4#", log_text)
             self.assertNotIn("SmokeP4#", rep_bytes.decode("utf-8"))
             self.assertIn("ends_with_lf_only=True, contains_cr=False", log_text)
+
+    def test_parse_sid_cookie_attributes_multi_cookie_frappe_order_and_masking(self) -> None:
+        raw_sid = "a1b2c3d4e5f60718293a4b5c6d7e8f90112233445566778899aabbcc"
+        headers = [
+            f"sid={raw_sid}; Expires=Tue, 10 Nov 2026 08:00:00 GMT; HttpOnly; Path=/; SameSite=Lax",
+            "system_user=yes; Path=/; SameSite=Lax",
+            "full_name=Administrator; Path=/; SameSite=Lax",
+            "user_id=Administrator; Path=/; SameSite=Lax",
+            "user_image=; Path=/; SameSite=Lax",
+        ]
+        logger = smoke.SmokeLogger()
+        attrs = smoke.parse_sid_cookie_attributes(headers, logger=logger)
+
+        self.assertTrue(attrs["httponly"])
+        self.assertEqual(attrs["samesite"], "Lax")
+        self.assertEqual(attrs["path"], "/")
+        self.assertTrue(attrs["has_expires"])
+        self.assertFalse(attrs["secure"])
+        self.assertEqual(attrs["secure_assertion_scope"], "DEFERRED_TO_STAGING_HTTPS")
+        self.assertEqual(attrs["set_cookie_header_count"], 5)
+        self.assertEqual(
+            attrs["response_cookie_names"],
+            ["sid", "system_user", "full_name", "user_id", "user_image"],
+        )
+
+        serialized = json.dumps(attrs)
+        self.assertNotIn(raw_sid, serialized)
+        self.assertIn("<REDACTED_FRAPPE_SID>", serialized)
+
+        logger.info(f"debug leak check {raw_sid}")
+        self.assertNotIn(raw_sid, logger.render())
+
+    def test_parse_sid_cookie_attributes_does_not_leak_flags_from_other_cookies(self) -> None:
+        raw_sid = "sid_without_httponly_or_secure_token_123456"
+        headers = [
+            "csrf_aux=1; HttpOnly; Secure; Path=/; SameSite=Strict",
+            f"sid={raw_sid}; Path=/; SameSite=Lax",
+            "trailing_cookie=yes; HttpOnly; Secure; Path=/; SameSite=Strict",
+        ]
+        attrs = smoke.parse_sid_cookie_attributes(headers)
+        self.assertFalse(attrs["httponly"])
+        self.assertFalse(attrs["secure"])
+        self.assertEqual(attrs["samesite"], "Lax")
+        self.assertNotIn(raw_sid, json.dumps(attrs))
+
+    def test_http_call_with_cookies_preserves_multiple_set_cookie_headers_live(self) -> None:
+        raw_sid = "f0e1d2c3b4a5968778695a4b3c2d1e0f9988776655443322"
+
+        class MultiCookieHandler(http.server.BaseHTTPRequestHandler):
+            def do_POST(self) -> None:  # noqa: N802
+                req_len = int(self.headers.get("Content-Length", "0"))
+                if req_len:
+                    self.rfile.read(req_len)
+                payload = b'{"message":"Logged In"}'
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.send_header(
+                    "Set-Cookie",
+                    f"sid={raw_sid}; Expires=Tue, 10 Nov 2026 08:00:00 GMT; HttpOnly; Path=/; SameSite=Lax",
+                )
+                self.send_header("Set-Cookie", "system_user=yes; Path=/; SameSite=Lax")
+                self.send_header("Set-Cookie", "full_name=Administrator; Path=/; SameSite=Lax")
+                self.send_header("Set-Cookie", "user_id=Administrator; Path=/; SameSite=Lax")
+                self.send_header("Set-Cookie", "user_image=; Path=/; SameSite=Lax")
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def log_message(self, format: str, *args: object) -> None:  # noqa: A002
+                return
+
+        server = http.server.HTTPServer(("127.0.0.1", 0), MultiCookieHandler)
+        port = server.server_address[1]
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            _, opener = smoke.make_http_client()
+            code, _, set_cookies, _ = smoke.http_call_with_cookies(
+                opener,
+                f"http://127.0.0.1:{port}/api/method/login",
+                "p4-smoke-ut.localhost",
+                method="POST",
+                data=b"usr=Administrator&pwd=x",
+            )
+            self.assertEqual(code, 200)
+            self.assertEqual(len(set_cookies), 5)
+            attrs = smoke.parse_sid_cookie_attributes(set_cookies)
+            self.assertTrue(attrs["httponly"])
+            self.assertEqual(attrs["samesite"], "Lax")
+            self.assertFalse(attrs["secure"])
+        finally:
+            server.shutdown()
+            server.server_close()
+
+    def test_validate_compose_config_enforces_apps_order_and_named_logs_volume(self) -> None:
+        validator = SCRIPTS_DIR / "validate_compose_config.py"
+        res = subprocess.run(
+            [sys.executable, "-X", "utf8", str(validator)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        payload = json.loads(res.stdout)
+        self.assertEqual(payload["status"], "PASS")
+        for stack_name, expected_proj in (
+            ("production", "crm-cskh-prod"),
+            ("staging", "crm-cskh-staging"),
+            ("isolated-smoke", "crm-cskh-p4-smoke"),
+        ):
+            st = payload["stacks"][stack_name]
+            self.assertTrue(st["apps_order_guard_verified"])
+            self.assertEqual(st["volumes"]["logs"], f"{expected_proj}_logs")
+            self.assertEqual(
+                st["app_services_mounting_named_logs_volume"],
+                [
+                    "backend",
+                    "configurator",
+                    "frontend",
+                    "migrator",
+                    "queue-long",
+                    "queue-short",
+                    "scheduler",
+                    "websocket",
+                ],
+            )
 
 
 if __name__ == "__main__":

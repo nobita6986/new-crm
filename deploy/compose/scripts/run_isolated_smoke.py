@@ -87,6 +87,19 @@ LONG_RUNNING_SERVICES = sorted(
         "websocket",
     ]
 )
+DEFAULT_APP_SERVICES = sorted(
+    [
+        "backend",
+        "configurator",
+        "frontend",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "websocket",
+    ]
+)
+EXPECTED_APPS_ORDER = ["frappe", "crm", "crm_cskh"]
+ANON_VOLUME_RE = re.compile(r"^[0-9a-f]{64}$")
 
 
 class SmokeLogger:
@@ -111,7 +124,7 @@ class SmokeLogger:
             self._secrets.items(), key=lambda kv: len(kv[0]), reverse=True
         ):
             out = out.replace(raw_val, placeholder)
-        out = re.sub(r"(?i)(sid=)([0-9a-fA-F]{16,})", r"\1<REDACTED_SID>", out)
+        out = re.sub(r"(?i)(\bsid=)([^;\s\"',&]+)", r"\1<REDACTED_SID>", out)
         out = re.sub(
             r'("X-Frappe-CSRF-Token"\s*:\s*")([^"]+)(")',
             r"\1<REDACTED_CSRF_TOKEN>\3",
@@ -352,6 +365,109 @@ def inspect_project_resources(project_name: str) -> dict[str, list[str]]:
     }
 
 
+def snapshot_host_docker_resources() -> dict[str, set[str]]:
+    """Captures global host containers, volumes, and networks to prove zero leaked anonymous volumes."""
+    v_proc = subprocess.run(
+        ["docker", "volume", "ls", "--format", "{{.Name}}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    c_proc = subprocess.run(
+        ["docker", "ps", "-a", "--format", "{{.ID}}:{{.Names}}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    n_proc = subprocess.run(
+        ["docker", "network", "ls", "--format", "{{.Name}}"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    return {
+        "volumes": {ln.strip() for ln in v_proc.stdout.splitlines() if ln.strip()},
+        "containers": {ln.strip() for ln in c_proc.stdout.splitlines() if ln.strip()},
+        "networks": {ln.strip() for ln in n_proc.stdout.splitlines() if ln.strip()},
+    }
+
+
+def inspect_project_app_volume_mounts(project_name: str) -> dict[str, object]:
+    """Verifies every app container of `project_name` mounts named `sites` and `logs` volumes only."""
+    ids_proc = subprocess.run(
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            f"label=com.docker.compose.project={project_name}",
+            "--format",
+            "{{.ID}}",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    cids = [ln.strip() for ln in ids_proc.stdout.splitlines() if ln.strip()]
+    if not cids:
+        raise AssertionError(f"No containers found for project {project_name}")
+
+    insp_proc = subprocess.run(
+        ["docker", "inspect", *cids],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+    inspected = json.loads(insp_proc.stdout)
+    expected_sites_vol = f"{project_name}_sites"
+    expected_logs_vol = f"{project_name}_logs"
+
+    service_mounts: dict[str, dict[str, str]] = {}
+    anonymous_mounts: list[dict[str, str]] = []
+
+    for item in inspected:
+        labels = (item.get("Config") or {}).get("Labels") or {}
+        srv = labels.get("com.docker.compose.service", "")
+        mounts = item.get("Mounts") or []
+        dest_to_name: dict[str, str] = {}
+        for m in mounts:
+            if m.get("Type") == "volume":
+                vol_name = m.get("Name") or ""
+                dest = m.get("Destination") or ""
+                dest_to_name[dest] = vol_name
+                if ANON_VOLUME_RE.match(vol_name) or not vol_name.startswith(f"{project_name}_"):
+                    anonymous_mounts.append(
+                        {"service": srv, "destination": dest, "volume_name": vol_name}
+                    )
+        if srv in DEFAULT_APP_SERVICES or srv == "migrator":
+            assert dest_to_name.get("/home/frappe/frappe-bench/sites") == expected_sites_vol, (
+                f"{srv}: expected {expected_sites_vol} at /home/frappe/frappe-bench/sites, got {dest_to_name}"
+            )
+            assert dest_to_name.get("/home/frappe/frappe-bench/logs") == expected_logs_vol, (
+                f"{srv}: expected {expected_logs_vol} at /home/frappe/frappe-bench/logs, got {dest_to_name}"
+            )
+            service_mounts[srv] = dest_to_name
+
+    assert not anonymous_mounts, (
+        f"Anonymous or unscoped volume mounts detected in {project_name}: {anonymous_mounts}"
+    )
+    for expected_srv in DEFAULT_APP_SERVICES:
+        assert expected_srv in service_mounts, (
+            f"Missing runtime mount inspection for app service {expected_srv}"
+        )
+
+    return {
+        "verified_app_services": sorted(service_mounts.keys()),
+        "service_volume_mounts": {k: service_mounts[k] for k in sorted(service_mounts)},
+        "anonymous_volume_mounts": anonymous_mounts,
+    }
+
+
 def check_loopback_port_free(port: int) -> tuple[bool, str]:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
         probe.settimeout(0.4)
@@ -382,6 +498,30 @@ def make_http_client() -> tuple[http.cookiejar.CookieJar, urllib.request.OpenerD
     return jar, opener
 
 
+def http_call_with_cookies(
+    opener: urllib.request.OpenerDirector,
+    url: str,
+    site_host: str,
+    method: str = "GET",
+    data: bytes | None = None,
+    headers: dict[str, str] | None = None,
+) -> tuple[int, dict[str, str], list[str], str]:
+    """Performs HTTP request preserving every individual `Set-Cookie` header line."""
+    hdrs = {"Host": site_host}
+    if headers:
+        hdrs.update(headers)
+    req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
+    try:
+        with opener.open(req, timeout=25) as resp:
+            body = resp.read().decode("utf-8", errors="replace")
+            set_cookies = list(resp.headers.get_all("Set-Cookie") or [])
+            return resp.status, dict(resp.headers.items()), set_cookies, body
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
+        set_cookies = list(exc.headers.get_all("Set-Cookie") or []) if exc.headers else []
+        return exc.code, dict(exc.headers.items()) if exc.headers else {}, set_cookies, body
+
+
 def http_call(
     opener: urllib.request.OpenerDirector,
     url: str,
@@ -390,17 +530,79 @@ def http_call(
     data: bytes | None = None,
     headers: dict[str, str] | None = None,
 ) -> tuple[int, dict[str, str], str]:
-    hdrs = {"Host": site_host}
-    if headers:
-        hdrs.update(headers)
-    req = urllib.request.Request(url, data=data, headers=hdrs, method=method)
-    try:
-        with opener.open(req, timeout=25) as resp:
-            body = resp.read().decode("utf-8", errors="replace")
-            return resp.status, dict(resp.headers.items()), body
-    except urllib.error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace") if exc.fp else ""
-        return exc.code, dict(exc.headers.items()) if exc.headers else {}, body
+    status, resp_headers, _, body = http_call_with_cookies(
+        opener, url, site_host, method=method, data=data, headers=headers
+    )
+    return status, resp_headers, body
+
+
+def parse_sid_cookie_attributes(
+    set_cookie_headers: list[str],
+    logger: SmokeLogger | None = None,
+) -> dict[str, object]:
+    """Parses attributes strictly from the individual `Set-Cookie` header setting `sid` (masks value)."""
+    cookie_names: list[str] = []
+    matched_sid_attrs: dict[str, object] | None = None
+
+    for raw_line in set_cookie_headers:
+        segments = [seg.strip() for seg in raw_line.split(";") if seg.strip()]
+        if not segments or "=" not in segments[0]:
+            continue
+        raw_name, raw_val = segments[0].split("=", 1)
+        cname = raw_name.strip()
+        cval = raw_val.strip()
+        cookie_names.append(cname)
+
+        if cname != "sid" or not cval or cval == "Guest":
+            continue
+
+        if logger is not None:
+            logger.register_secret(cval, "<REDACTED_FRAPPE_SID>")
+
+        httponly = False
+        secure = False
+        samesite: str | None = None
+        path_attr: str | None = None
+        has_expires = False
+        has_max_age = False
+
+        for attr in segments[1:]:
+            lower = attr.lower()
+            if lower == "httponly":
+                httponly = True
+            elif lower == "secure":
+                secure = True
+            elif lower.startswith("samesite="):
+                samesite = attr.split("=", 1)[1].strip()
+            elif lower.startswith("path="):
+                path_attr = attr.split("=", 1)[1].strip()
+            elif lower.startswith("expires="):
+                has_expires = True
+            elif lower.startswith("max-age="):
+                has_max_age = True
+
+        matched_sid_attrs = {
+            "cookie_name": "sid",
+            "value_masked": "<REDACTED_FRAPPE_SID>",
+            "httponly": httponly,
+            "samesite": samesite,
+            "path": path_attr,
+            "has_expires": has_expires,
+            "has_max_age": has_max_age,
+            "secure": secure,
+            "secure_assertion_scope": "DEFERRED_TO_STAGING_HTTPS",
+        }
+
+    if matched_sid_attrs is None:
+        raise AssertionError(
+            f"No authenticated 'sid' Set-Cookie header found among cookies={cookie_names}"
+        )
+
+    return {
+        **matched_sid_attrs,
+        "set_cookie_header_count": len(set_cookie_headers),
+        "response_cookie_names": cookie_names,
+    }
 
 
 class MinimalRFC6455Client:
@@ -708,6 +910,127 @@ def wait_for_stack_health(
     raise TimeoutError(f"Timed out waiting for healthy stack: {json.dumps(last_states, indent=2)}")
 
 
+def get_service_container_id(project_name: str, service_name: str) -> str | None:
+    res = subprocess.run(
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            f"label=com.docker.compose.project={project_name}",
+            "--filter",
+            f"label=com.docker.compose.service={service_name}",
+            "--format",
+            "{{.ID}}",
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    ids = [ln.strip() for ln in res.stdout.splitlines() if ln.strip()]
+    return ids[0] if ids else None
+
+
+def wait_for_configurator_completion(
+    project_name: str,
+    env_file: pathlib.Path,
+    previous_container_id: str | None = None,
+    timeout_sec: int = 60,
+) -> str:
+    deadline = time.time() + timeout_sec
+    last_cid: str | None = None
+    last_states: dict[str, dict] = {}
+    while time.time() < deadline:
+        last_cid = get_service_container_id(project_name, "configurator")
+        last_states = query_compose_states(project_name, env_file)
+        cfg_state = last_states.get("configurator") or {}
+        is_new_or_any = previous_container_id is None or (
+            last_cid is not None and last_cid != previous_container_id
+        )
+        if (
+            is_new_or_any
+            and cfg_state.get("state") == "exited"
+            and int(cfg_state.get("exit_code") or 0) == 0
+        ):
+            return last_cid or ""
+        time.sleep(1)
+    raise TimeoutError(
+        f"Timed out waiting for configurator completion (prev={previous_container_id}, "
+        f"current={last_cid}): {json.dumps(last_states, indent=2)}"
+    )
+
+
+def read_sites_apps_txt_direct(
+    project_name: str,
+    env_file: pathlib.Path,
+    checkpoint: str,
+) -> dict[str, object]:
+    """Reads `/home/frappe/frappe-bench/sites/apps.txt` directly and asserts exact order."""
+    proc = subprocess.run(
+        compose_cmd(
+            project_name,
+            env_file,
+            ["exec", "-T", "backend", "cat", "/home/frappe/frappe-bench/sites/apps.txt"],
+        ),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"Failed reading sites/apps.txt at '{checkpoint}': {proc.stderr}\n{proc.stdout}"
+        )
+    lines = [ln.strip() for ln in proc.stdout.replace("\r", "").splitlines() if ln.strip()]
+    assert lines == EXPECTED_APPS_ORDER, (
+        f"sites/apps.txt order mismatch at '{checkpoint}': {lines} != {EXPECTED_APPS_ORDER}"
+    )
+    return {
+        "checkpoint": checkpoint,
+        "path": "/home/frappe/frappe-bench/sites/apps.txt",
+        "apps_order": lines,
+        "matches_expected_order": True,
+    }
+
+
+def verify_common_site_config(project_name: str, env_file: pathlib.Path) -> dict[str, object]:
+    """Verifies DB, Redis, Socket.IO, and Chromium settings written by `configurator`."""
+    proc = subprocess.run(
+        compose_cmd(
+            project_name,
+            env_file,
+            [
+                "exec",
+                "-T",
+                "backend",
+                "cat",
+                "/home/frappe/frappe-bench/sites/common_site_config.json",
+            ],
+        ),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"Failed reading common_site_config.json: {proc.stderr}\n{proc.stdout}"
+        )
+    cfg = json.loads(proc.stdout)
+    expected = {
+        "db_host": "db",
+        "db_port": 3306,
+        "redis_cache": "redis://redis-cache:6379",
+        "redis_queue": "redis://redis-queue:6379",
+        "redis_socketio": "redis://redis-queue:6379",
+        "socketio_port": 9000,
+        "chromium_path": "/usr/lib/chromium/chromium-headless-shell",
+    }
+    observed = {k: cfg.get(k) for k in expected}
+    assert observed == expected, (
+        f"common_site_config.json mismatch: observed={observed} != expected={expected}"
+    )
+    return observed
+
+
 def redact_socket_packet(pkt: str, logger: SmokeLogger) -> str:
     def _repl(match: re.Match[str]) -> str:
         sid_val = match.group(2)
@@ -750,10 +1073,10 @@ def run_http_and_socketio_smoke(
         f"/cskh/quality-overview={g_cskh_code}, health.ping={g_api_code}"
     )
 
-    # 2. Login + session cookie flags
+    # 2. Login + per-header `Set-Cookie` parsing strictly on `sid` cookie (F-P4-02)
     jar, auth_opener = make_http_client()
     login_body = urllib.parse.urlencode({"usr": "Administrator", "pwd": admin_pw}).encode("utf-8")
-    l_code, l_hdrs, l_raw = http_call(
+    l_code, _, l_set_cookies, l_raw = http_call_with_cookies(
         auth_opener,
         f"{base_url}/api/method/login",
         site_name,
@@ -767,9 +1090,14 @@ def run_http_and_socketio_smoke(
     frappe_sid = sid_cookie.value
     logger.register_secret(frappe_sid, "<REDACTED_FRAPPE_SID>")
 
-    raw_set_cookie = " ".join(v for k, v in l_hdrs.items() if k.lower() == "set-cookie")
-    sid_httponly = "httponly" in raw_set_cookie.lower()
-    sid_samesite = "samesite=lax" in raw_set_cookie.lower() or "samesite=strict" in raw_set_cookie.lower()
+    sid_cookie_attrs = parse_sid_cookie_attributes(l_set_cookies, logger=logger)
+    assert sid_cookie_attrs["httponly"] is True, (
+        f"Expected HttpOnly=True on 'sid' cookie during local HTTP smoke, got: {sid_cookie_attrs}"
+    )
+    samesite_val = str(sid_cookie_attrs.get("samesite") or "")
+    assert samesite_val.lower() in ("lax", "strict"), (
+        f"Expected SameSite=Lax/Strict on 'sid' cookie, got: {sid_cookie_attrs}"
+    )
 
     u_code, _, u_raw = http_call(
         auth_opener,
@@ -779,7 +1107,12 @@ def run_http_and_socketio_smoke(
     )
     assert u_code == 200 and "Administrator" in u_raw, f"get_logged_user failed: {u_raw}"
     logger.info(
-        f"Authenticated login passed: user=Administrator, sid_httponly={sid_httponly}, sid_samesite={sid_samesite}"
+        "Authenticated login passed: user=Administrator, "
+        f"sid_httponly={sid_cookie_attrs['httponly']}, "
+        f"sid_samesite={sid_cookie_attrs['samesite']}, "
+        f"sid_secure={sid_cookie_attrs['secure']} "
+        f"({sid_cookie_attrs['secure_assertion_scope']}), "
+        f"set_cookie_headers={sid_cookie_attrs['set_cookie_header_count']}"
     )
 
     # 3. Vietnamese UI + timezone + CSRF token extraction
@@ -1019,8 +1352,11 @@ def run_http_and_socketio_smoke(
             "status": l_code,
             "logged_user": "Administrator",
             "sid_cookie_present": True,
-            "sid_httponly": sid_httponly,
-            "sid_samesite": sid_samesite,
+            "sid_httponly": sid_cookie_attrs["httponly"],
+            "sid_samesite": sid_cookie_attrs["samesite"],
+            "sid_secure": sid_cookie_attrs["secure"],
+            "sid_secure_assertion_scope": sid_cookie_attrs["secure_assertion_scope"],
+            "sid_cookie_attributes": sid_cookie_attrs,
         },
         "vietnamese_ui": {
             "cskh_dashboard_status": dash_code,
@@ -1369,6 +1705,15 @@ def main() -> int:
         owned_stack_created = False
         teardown_completed = False
         teardown_audit: dict[str, object] = {"executed": False}
+        current_step = "snapshot_host_before_up"
+        host_snapshot_before = snapshot_host_docker_resources()
+        anon_before = {v for v in host_snapshot_before["volumes"] if ANON_VOLUME_RE.match(v)}
+        logger.info(
+            "Captured pre-run host Docker baseline: "
+            f"volumes={len(host_snapshot_before['volumes'])} (anonymous={len(anon_before)}), "
+            f"containers={len(host_snapshot_before['containers'])}, "
+            f"networks={len(host_snapshot_before['networks'])}"
+        )
         current_step = "compose_up"
 
         try:
@@ -1387,7 +1732,22 @@ def main() -> int:
 
             current_step = "wait_for_bootstrap_ready"
             wait_for_bootstrap_ready(owned_project_name, env_file)
-            logger.info("Day-0 infra (db, redis-cache, redis-queue, configurator) ready; bootstrapping synthetic site")
+            logger.info(
+                "Day-0 infra (db, redis-cache, redis-queue, configurator) ready; "
+                "verifying sites/apps.txt and common_site_config.json after configurator"
+            )
+
+            current_step = "verify_apps_order_after_configurator"
+            apps_txt_checkpoints: list[dict[str, object]] = []
+            cp_cfg = read_sites_apps_txt_direct(
+                owned_project_name, env_file, "after_initial_configurator"
+            )
+            apps_txt_checkpoints.append(cp_cfg)
+            common_cfg_initial = verify_common_site_config(owned_project_name, env_file)
+            logger.info(
+                f"F-P4-01 checkpoint 'after_initial_configurator': apps.txt={cp_cfg['apps_order']}, "
+                f"common_site_config={json.dumps(common_cfg_initial)}"
+            )
 
             current_step = "bootstrap_synthetic_site"
             site_info = bootstrap_synthetic_site(
@@ -1420,7 +1780,7 @@ def main() -> int:
             logger.info(f"Port exposure audit passed: {json.dumps(port_audit)}")
 
             current_step = "migrator_rehearsal_x2"
-            # Controlled migrator idempotency rehearsal (x2)
+            # Controlled migrator idempotency rehearsal (x2) + direct sites/apps.txt verification
             mig_env = dict(run_env)
             mig_env["MIGRATE_SITES"] = "true"
             mig_env_file = tmp / "isolated-smoke-migrate.env"
@@ -1450,17 +1810,179 @@ def main() -> int:
                 out_lines = [
                     ln.strip() for ln in (m_proc.stdout or "").splitlines() if ln.strip()
                 ]
+                cp_mig = read_sites_apps_txt_direct(
+                    owned_project_name, env_file, f"after_migrator_run_{idx}"
+                )
+                apps_txt_checkpoints.append(cp_mig)
                 migrator_runs.append(
                     {
                         "run_number": idx,
                         "exit_code": m_proc.returncode,
                         "duration_sec": elapsed,
                         "output_tail": out_lines[-3:],
+                        "sites_apps_txt_after": cp_mig["apps_order"],
                     }
                 )
                 logger.info(
-                    f"Migrator rehearsal #{idx} exited 0 in {elapsed}s: {out_lines[-2:]}"
+                    f"Migrator rehearsal #{idx} exited 0 in {elapsed}s; "
+                    f"sites/apps.txt={cp_mig['apps_order']}; tail={out_lines[-2:]}"
                 )
+
+            current_step = "migrator_wrong_order_guard_and_configurator_force_recreate"
+            # F-P4-01a: Prove migrator stops BEFORE `bench migrate` if sites/apps.txt order is wrong
+            corrupt_proc = subprocess.run(
+                compose_cmd(
+                    owned_project_name,
+                    env_file,
+                    [
+                        "exec",
+                        "-T",
+                        "backend",
+                        "bash",
+                        "-c",
+                        "printf 'crm\\ncrm_cskh\\nfrappe\\n' > /home/frappe/frappe-bench/sites/apps.txt",
+                    ],
+                ),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            if corrupt_proc.returncode != 0:
+                raise RuntimeError(f"Failed staging wrong apps.txt order test: {corrupt_proc.stderr}")
+
+            # Invoke with `--no-deps` so Compose does not auto-run `configurator` (which would
+            # self-heal `sites/apps.txt` before `migrator`'s own pre-migrate guard is exercised).
+            neg_mig = subprocess.run(
+                compose_cmd(
+                    owned_project_name,
+                    mig_env_file,
+                    ["--profile", "migrate", "run", "--rm", "--no-deps", "migrator"],
+                ),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            neg_combined = f"{neg_mig.stdout}\n{neg_mig.stderr}"
+            assert neg_mig.returncode != 0, (
+                f"Expected migrator to fail closed on wrong sites/apps.txt order, got exit 0: {neg_combined}"
+            )
+            assert "stopping before bench migrate" in neg_combined, (
+                f"Expected migrator order guard message, got: {neg_combined}"
+            )
+            assert f"Migrating {site_name}" not in neg_combined, (
+                f"Migrator invoked bench migrate despite wrong sites/apps.txt order: {neg_combined}"
+            )
+            migrator_guard_check = {
+                "injected_wrong_order": ["crm", "crm_cskh", "frappe"],
+                "exit_code": neg_mig.returncode,
+                "stopped_before_bench_migrate": True,
+                "guard_message": [
+                    ln.strip() for ln in neg_combined.splitlines() if "stopping before bench migrate" in ln
+                ][-1],
+            }
+            logger.info(
+                f"F-P4-01 negative guard verified: migrator exited {neg_mig.returncode} before bench migrate "
+                f"({migrator_guard_check['guard_message']})"
+            )
+
+            # F-P4-01b: Force-recreate configurator -> verify sites/apps.txt restored -> migrate again -> verify
+            prev_cfg_cid = get_service_container_id(owned_project_name, "configurator")
+            recreate_cfg = subprocess.run(
+                compose_cmd(
+                    owned_project_name,
+                    env_file,
+                    ["up", "-d", "--no-deps", "--force-recreate", "configurator"],
+                ),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            if recreate_cfg.returncode != 0:
+                raise RuntimeError(
+                    f"force-recreate configurator failed: {recreate_cfg.stderr}\n{recreate_cfg.stdout}"
+                )
+            new_cfg_cid = wait_for_configurator_completion(
+                owned_project_name, env_file, previous_container_id=prev_cfg_cid
+            )
+            cp_after_recreate_cfg = read_sites_apps_txt_direct(
+                owned_project_name, env_file, "after_force_recreate_configurator"
+            )
+            apps_txt_checkpoints.append(cp_after_recreate_cfg)
+            common_cfg_post_recreate = verify_common_site_config(owned_project_name, env_file)
+            logger.info(
+                f"F-P4-01 force-recreate configurator ({prev_cfg_cid} -> {new_cfg_cid}) exited 0; "
+                f"restored sites/apps.txt={cp_after_recreate_cfg['apps_order']}"
+            )
+
+            t0_post = time.monotonic()
+            post_mig = subprocess.run(
+                compose_cmd(
+                    owned_project_name,
+                    mig_env_file,
+                    ["--profile", "migrate", "run", "--rm", "migrator"],
+                ),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            elapsed_post = round(time.monotonic() - t0_post, 2)
+            if post_mig.returncode != 0:
+                raise RuntimeError(
+                    f"Post-recreate migrator failed ({post_mig.returncode}): {post_mig.stderr}\n{post_mig.stdout}"
+                )
+            cp_after_post_mig = read_sites_apps_txt_direct(
+                owned_project_name, env_file, "after_migrator_post_force_recreate"
+            )
+            apps_txt_checkpoints.append(cp_after_post_mig)
+            post_out_lines = [
+                ln.strip() for ln in (post_mig.stdout or "").splitlines() if ln.strip()
+            ]
+            migrator_runs.append(
+                {
+                    "run_number": 3,
+                    "phase": "post_force_recreate_configurator",
+                    "exit_code": post_mig.returncode,
+                    "duration_sec": elapsed_post,
+                    "output_tail": post_out_lines[-3:],
+                    "sites_apps_txt_after": cp_after_post_mig["apps_order"],
+                }
+            )
+            logger.info(
+                f"F-P4-01 post-recreate migrator (#3) exited 0 in {elapsed_post}s; "
+                f"sites/apps.txt={cp_after_post_mig['apps_order']}"
+            )
+
+            current_step = "app_volume_mounts_and_force_recreate_audit"
+            # F-P4-03: Inspect runtime named volume mounts (`sites` + `logs`) and force-recreate app services
+            mounts_before_recreate = inspect_project_app_volume_mounts(owned_project_name)
+            recreated_app_services = [
+                "backend",
+                "frontend",
+                "websocket",
+                "queue-short",
+                "queue-long",
+                "scheduler",
+            ]
+            recreate_apps_proc = subprocess.run(
+                compose_cmd(
+                    owned_project_name,
+                    env_file,
+                    ["up", "-d", "--no-deps", "--force-recreate", *recreated_app_services],
+                ),
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            if recreate_apps_proc.returncode != 0:
+                raise RuntimeError(
+                    f"force-recreate app services failed: {recreate_apps_proc.stderr}\n{recreate_apps_proc.stdout}"
+                )
+            health_states = wait_for_stack_health(owned_project_name, env_file)
+            mounts_after_recreate = inspect_project_app_volume_mounts(owned_project_name)
+            logger.info(
+                "F-P4-03 force-recreate across all app services completed; "
+                f"all 10 long-running services healthy, anonymous_mounts={mounts_after_recreate['anonymous_volume_mounts']}"
+            )
 
             current_step = "http_and_socketio_smoke"
             smoke_results = run_http_and_socketio_smoke(
@@ -1468,6 +1990,12 @@ def main() -> int:
             )
 
             current_step = "scoped_teardown"
+            volume_and_recreate_audit: dict[str, object] = {
+                "force_recreated_services": ["configurator", *recreated_app_services],
+                "migrator_ephemeral_runs": 4,
+                "runtime_mounts_before_recreate": mounts_before_recreate,
+                "runtime_mounts_after_recreate": mounts_after_recreate,
+            }
             if not args.keep_running:
                 logger.info(
                     f"Tearing down owned isolated stack '{owned_project_name}' (down --volumes --remove-orphans)"
@@ -1487,15 +2015,62 @@ def main() -> int:
                 assert not any(remaining.values()), (
                     f"Leftover resources after scoped teardown of {owned_project_name}: {remaining}"
                 )
+                host_snapshot_after = snapshot_host_docker_resources()
+                anon_after = {
+                    v for v in host_snapshot_after["volumes"] if ANON_VOLUME_RE.match(v)
+                }
+                leaked_volumes = sorted(
+                    host_snapshot_after["volumes"] - host_snapshot_before["volumes"]
+                )
+                leaked_anon_volumes = [v for v in leaked_volumes if ANON_VOLUME_RE.match(v)]
+                leaked_containers = sorted(
+                    host_snapshot_after["containers"] - host_snapshot_before["containers"]
+                )
+                leaked_networks = sorted(
+                    host_snapshot_after["networks"] - host_snapshot_before["networks"]
+                )
+                assert not leaked_volumes, (
+                    f"F-P4-03 FAILURE: smoke run leaked Docker volumes: {leaked_volumes}"
+                )
+                assert not leaked_containers, (
+                    f"Smoke run leaked Docker containers: {leaked_containers}"
+                )
+                assert not leaked_networks, (
+                    f"Smoke run leaked Docker networks: {leaked_networks}"
+                )
+                volume_and_recreate_audit.update(
+                    {
+                        "host_volume_count_before": len(host_snapshot_before["volumes"]),
+                        "host_volume_count_after": len(host_snapshot_after["volumes"]),
+                        "host_anonymous_volume_count_before": len(anon_before),
+                        "host_anonymous_volume_count_after": len(anon_after),
+                        "leaked_volumes": leaked_volumes,
+                        "leaked_anonymous_volumes": leaked_anon_volumes,
+                        "leaked_containers": leaked_containers,
+                        "leaked_networks": leaked_networks,
+                    }
+                )
                 teardown_audit = {
                     "executed": True,
                     "scoped_project": owned_project_name,
                     "exit_code": down_proc.returncode,
                     "remaining_resources": remaining,
+                    "zero_anonymous_volumes_leaked": True,
                 }
                 logger.info(
-                    f"Scoped teardown verified clean for '{owned_project_name}': 0 remaining containers/volumes/networks"
+                    f"Scoped teardown & F-P4-03 before/after resource diff verified clean for '{owned_project_name}': "
+                    f"volumes_before={len(host_snapshot_before['volumes'])}, "
+                    f"volumes_after={len(host_snapshot_after['volumes'])}, "
+                    f"leaked_volumes={leaked_volumes}, leaked_anonymous_volumes={leaked_anon_volumes}"
                 )
+
+            apps_order_audit = {
+                "expected_order": EXPECTED_APPS_ORDER,
+                "checkpoints": apps_txt_checkpoints,
+                "configurator_common_site_config_initial": common_cfg_initial,
+                "configurator_common_site_config_after_force_recreate": common_cfg_post_recreate,
+                "migrator_wrong_order_guard": migrator_guard_check,
+            }
 
             report = {
                 "status": "PASS",
@@ -1528,7 +2103,9 @@ def main() -> int:
                 },
                 "port_exposure_audit": port_audit,
                 "site_bootstrap": site_info,
+                "apps_order_audit": apps_order_audit,
                 "migrator_rehearsal_x2": migrator_runs,
+                "volume_and_recreate_audit": volume_and_recreate_audit,
                 "smoke_verification": smoke_results,
                 "teardown_audit": teardown_audit,
             }
