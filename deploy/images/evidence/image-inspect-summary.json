@@ -1,0 +1,68 @@
+{
+  "schema_version": "cskh-image-inspect-v1",
+  "local_image_tag": "crm-cskh:0.0.1-92e14af",
+  "local_image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+  "repo_tags": [
+    "crm-cskh:0.0.1-92e14af"
+  ],
+  "repo_digests": [
+    "crm-cskh@sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9"
+  ],
+  "architecture": "amd64",
+  "os": "linux",
+  "size_bytes": 5238141558,
+  "user": "frappe",
+  "working_dir": "/home/frappe/frappe-bench",
+  "entrypoint": [
+    "/usr/local/bin/entrypoint.sh"
+  ],
+  "cmd": [
+    "start.sh"
+  ],
+  "volumes": [
+    "/home/frappe/frappe-bench/logs",
+    "/home/frappe/frappe-bench/sites"
+  ],
+  "labels": {
+    "io.cskh.apps_tree_sha": "b37e2cbdd99c88c7bd5620912de4519b53b2c159",
+    "io.cskh.baseline_main_sha": "92e14af3532876ad5bc2468bf0e502474cc95a53",
+    "io.cskh.crm_cskh_tree_sha": "da6373a01ad963301877f69c413fdda9a361f718",
+    "io.cskh.crm_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+    "io.cskh.crm_tag": "v1.87.0",
+    "io.cskh.frappe_docker_sha": "2b26e9ab8d751e5ea33bb7b930aea3550bb81ded",
+    "io.cskh.frappe_sha": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+    "io.cskh.frappe_tag": "v15.123.1",
+    "org.opencontainers.image.description": "CRM-CSKH immutable production image (Frappe + Frappe CRM + crm_cskh)",
+    "org.opencontainers.image.revision": "92e14af3532876ad5bc2468bf0e502474cc95a53",
+    "org.opencontainers.image.source": "https://github.com/nobita6986/new-crm",
+    "org.opencontainers.image.title": "crm-cskh"
+  },
+  "rootfs_layers": [
+    "sha256:1d7b9dd8778ebc4d9bf2f64436dd358640718cb349f5640b33bebaea4ffd62c2",
+    "sha256:9ae7def604682355f0b9a3468566bbb06aaae177e47a961444995169178590d2",
+    "sha256:bd3e172fa0bc2e7382210f6ffe9292e1ce66a4962721cc583787fe726d705f53",
+    "sha256:3306b96cb7baf10267980832b85ae4056efdc2b3dd659fa42d77af2f850e778d",
+    "sha256:132fd59b40c9890d6e384f328033a12fa06b086c003d7de4b3b4ca7fc658b10c",
+    "sha256:526d3195edf4f45721dce5d4441d25a6eb7a26a93666c455eabff1273954f6e4",
+    "sha256:94d21a2c71020c4a06701c92a89276804535e00a4faa27e9d2bb1ef3454273ee",
+    "sha256:15cc03d266b668c5d5a30ede624214ec4df9934cd5cae9543cf070011af037e3",
+    "sha256:96e50ec9e143b69a442ecda3ed7831123a82aa08bf98e18504bde859dd8a84c9",
+    "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+    "sha256:2a73aeae988079984cf2d3ea1147041c521a84c6be097658c6a15b44de379293",
+    "sha256:bed0eeacdbc1576bf7a9dd56ed45d1fc80587f5eb2abbbcfa95223270b98c816",
+    "sha256:eac08189eafde9879647581b705cc2f2cc9aef8ba1148e7a57b23dc88096e8f4",
+    "sha256:a26589ecb46c386258b29f83c2337bcc14fe80b1034d902a77ba58027ce34ee4"
+  ],
+  "registry_verification": {
+    "status": "BLOCKED",
+    "approved_registry_repo_digest": null,
+    "blocker": "No approved container registry URL or push credentials provisioned in P4-00 infra-inventory.md."
+  },
+  "compose_handoff": {
+    "APP_IMAGE_for_remote_deploy": null,
+    "APP_IMAGE_for_local_isolated_smoke": "crm-cskh@sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+    "LOCAL_TAG_REFERENCE": "crm-cskh:0.0.1-92e14af",
+    "PULL_POLICY_local": "never",
+    "PULL_POLICY_staging_prod": "always"
+  }
+}

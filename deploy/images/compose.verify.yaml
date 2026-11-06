@@ -1,0 +1,201 @@
+# deploy/images/compose.verify.yaml
+#
+# Isolated clean-site runtime verification stack for P4-01 custom image (G02).
+# Mirrors pinned frappe/frappe_docker@v4.0.1 (2b26e9ab8d751e5ea33bb7b930aea3550bb81ded)
+# service topology and aligns with T1A's `APP_IMAGE` + `PULL_POLICY` contract in
+# `deploy/compose/overrides/compose.cskh-common.yaml`.
+#
+# - Zero ports published for MariaDB, Redis, Gunicorn, or Socket.IO.
+# - Publishes ONLY 127.0.0.1:${VERIFY_HTTP_PORT:-18780}->8080 on `frontend` (nginx).
+
+name: ${COMPOSE_PROJECT_NAME:-crm-cskh-p4-img-verify}
+
+x-app-common: &app_common
+  image: ${APP_IMAGE:?set APP_IMAGE to built image ID/digest or tag@sha256}
+  pull_policy: ${PULL_POLICY:-never}
+  restart: "no"
+  security_opt:
+    - no-new-privileges:true
+
+services:
+  db:
+    image: ${MARIADB_IMAGE:-mariadb:11.8@sha256:f16d7a344413e519dff518f27bdb221388f84b0d274c97c4fb5f2cb0dc1b34fa}
+    pull_policy: missing
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      MYSQL_ROOT_PASSWORD_FILE: /run/secrets/db_password
+      MARIADB_AUTO_UPGRADE: "1"
+      TZ: Asia/Ho_Chi_Minh
+    secrets:
+      - db_password
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 5s
+      timeout: 5s
+      retries: 15
+    networks:
+      - data_net
+
+  redis-cache:
+    image: ${REDIS_IMAGE:-redis:8.6-alpine@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba}
+    pull_policy: missing
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - data_net
+
+  redis-queue:
+    image: ${REDIS_IMAGE:-redis:8.6-alpine@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba}
+    pull_policy: missing
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-queue-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - data_net
+
+  configurator:
+    <<: *app_common
+    entrypoint: ["bash", "-c"]
+    command:
+      - >
+        ls -1 apps > sites/apps.txt;
+        bench set-config -g db_host "$$DB_HOST";
+        bench set-config -gp db_port "$$DB_PORT";
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
+        bench set-config -gp socketio_port "$$SOCKETIO_PORT";
+        bench set-config -g chromium_path /usr/lib/chromium/chromium-headless-shell;
+    environment:
+      DB_HOST: db
+      DB_PORT: "3306"
+      REDIS_CACHE: redis-cache:6379
+      REDIS_QUEUE: redis-queue:6379
+      SOCKETIO_PORT: "9000"
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+      redis-queue:
+        condition: service_healthy
+    networks:
+      - data_net
+
+  backend:
+    <<: *app_common
+    environment:
+      GUNICORN_WORKERS: "2"
+      GUNICORN_THREADS: "4"
+      GUNICORN_TIMEOUT: "120"
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    networks:
+      - app_net
+      - data_net
+
+  websocket:
+    <<: *app_common
+    command: ["node", "/home/frappe/frappe-bench/apps/frappe/socketio.js"]
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    networks:
+      - app_net
+      - data_net
+
+  queue-short:
+    <<: *app_common
+    command: ["bench", "worker", "--queue", "short,default"]
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    networks:
+      - data_net
+
+  scheduler:
+    <<: *app_common
+    command: ["bench", "schedule"]
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    networks:
+      - data_net
+
+  frontend:
+    <<: *app_common
+    command: ["nginx-entrypoint.sh"]
+    environment:
+      BACKEND: backend:8000
+      SOCKETIO: websocket:9000
+      NGINX_LISTEN_PORT: "8080"
+      FRAPPE_SITE_NAME_HEADER: ${SITE_NAME:-p4-clean-verify.localhost}
+      UPSTREAM_REAL_IP_ADDRESS: 172.16.0.0/12
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: "off"
+      PROXY_READ_TIMEOUT: "120"
+      CLIENT_MAX_BODY_SIZE: 25m
+      TZ: Asia/Ho_Chi_Minh
+    ports:
+      - "127.0.0.1:${VERIFY_HTTP_PORT:-18780}:8080"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      - backend
+      - websocket
+    networks:
+      - edge_net
+      - app_net
+
+volumes:
+  sites:
+  db-data:
+  redis-queue-data:
+
+networks:
+  edge_net:
+    driver: bridge
+  app_net:
+    driver: bridge
+    internal: true
+  data_net:
+    driver: bridge
+    internal: true
+
+secrets:
+  db_password:
+    file: ${DB_PASSWORD_SECRETS_FILE:?set DB_PASSWORD_SECRETS_FILE}
