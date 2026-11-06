@@ -1,0 +1,226 @@
+name: P4-02 Production promotion by Staging-verified @sha256 digest
+
+on:
+  workflow_dispatch:
+    inputs:
+      staging_release_run_id:
+        description: "GitHub Actions run_id of the green p4-release.yml run"
+        required: true
+        type: string
+      expected_image_digest:
+        description: "Exact @sha256 digest verified on Staging (e.g. ghcr.io/org/crm-cskh@sha256:...)"
+        required: true
+        type: string
+      release_id:
+        description: "Canonical release_id matching signed release-manifest.json"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: p4-production-promotion
+  cancel-in-progress: false
+
+jobs:
+  verify-staging-attestation:
+    name: Verify Ed25519 signature & Staging zero-drift attestation before approval
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Download signed release bundle from p4-release run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          run-id: ${{ inputs.staging_release_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: p4-release-bundle-${{ inputs.staging_release_run_id }}
+          path: ${{ runner.temp }}/p4-release-bundle
+
+      - name: Download Staging digest attestation from p4-release run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          run-id: ${{ inputs.staging_release_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: p4-staging-attestation-${{ inputs.staging_release_run_id }}
+          path: ${{ runner.temp }}/p4-staging-attestation
+
+      - name: Enforce PROD_TARGET_DIGEST == STAGING_VERIFIED_DIGEST & valid signature
+        shell: bash
+        env:
+          EXPECTED_DIGEST: ${{ inputs.expected_image_digest }}
+          EXPECTED_RELEASE_ID: ${{ inputs.release_id }}
+          RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
+        run: |
+          set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${EXPECTED_DIGEST}"
+          python3 -m venv "$RUNNER_TEMP/p4-venv"
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
+
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/release_manifest.py verify \
+            --manifest "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json" \
+            --sig "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json.sig" \
+            --public-key-env RELEASE_SIGNING_PUBLIC_KEY \
+            --expected-image "${EXPECTED_DIGEST}" \
+            --expected-scope production_candidate
+
+          python3 - \
+            "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json" \
+            "$RUNNER_TEMP/p4-staging-attestation/staging-digest-attestation.json" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+
+          manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          staging_att = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
+          exp_digest = os.environ["EXPECTED_DIGEST"]
+          exp_rel = os.environ["EXPECTED_RELEASE_ID"]
+
+          assert manifest["release_id"] == exp_rel, (manifest["release_id"], exp_rel)
+          assert staging_att.get("status") == "PASS", staging_att
+          assert staging_att.get("zero_digest_drift") is True, staging_att
+          assert staging_att.get("canonical_registry_digest") == exp_digest, staging_att
+          print(f"Verified Staging attestation for {exp_rel}: {exp_digest}")
+          PY
+
+  deploy-production:
+    name: Human-approved Production rollout of Staging-verified @sha256 digest (G23)
+    needs: [verify-staging-attestation]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Download signed release bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          run-id: ${{ inputs.staging_release_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: p4-release-bundle-${{ inputs.staging_release_run_id }}
+          path: ${{ runner.temp }}/p4-release-bundle
+
+      - name: Download verify-by-digest report
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          run-id: ${{ inputs.staging_release_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: p4-verify-by-digest-${{ inputs.staging_release_run_id }}
+          path: ${{ runner.temp }}/p4-verify-evidence
+
+      - name: Promote identical @sha256 digest to Production after mandatory pre-release backup
+        shell: bash
+        env:
+          EXPECTED_DIGEST: ${{ inputs.expected_image_digest }}
+          RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
+          CSKH_REGISTRY_PULL_USERNAME: ${{ vars.CSKH_REGISTRY_PULL_USERNAME }}
+          REGISTRY_PULL_USERNAME: ${{ secrets.REGISTRY_PULL_USERNAME }}
+          REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
+          PROD_SSH_HOST: ${{ secrets.PROD_SSH_HOST }}
+          PROD_SSH_PORT: ${{ vars.PROD_SSH_PORT }}
+          PROD_SSH_USER: ${{ secrets.PROD_SSH_USER }}
+          PROD_SSH_PRIVATE_KEY: ${{ secrets.PROD_SSH_PRIVATE_KEY }}
+          PROD_KNOWN_HOSTS: ${{ secrets.PROD_KNOWN_HOSTS }}
+          PROD_DEPLOY_PATH: ${{ vars.PROD_DEPLOY_PATH }}
+          PROD_ENV_FILE: ${{ vars.PROD_ENV_FILE }}
+          PROD_PRE_RELEASE_BACKUP_CMD: ${{ vars.PROD_PRE_RELEASE_BACKUP_CMD }}
+        run: |
+          set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${EXPECTED_DIGEST}"
+          OUT_DIR="$RUNNER_TEMP/p4-production-attestation"
+          mkdir -p "${OUT_DIR}"
+          python3 -m venv "$RUNNER_TEMP/p4-venv"
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
+
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/release_manifest.py verify \
+            --manifest "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json" \
+            --sig "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json.sig" \
+            --public-key-env RELEASE_SIGNING_PUBLIC_KEY \
+            --expected-image "${EXPECTED_DIGEST}" \
+            --expected-scope production_candidate
+
+          if [ -z "${PROD_SSH_HOST}" ] || [ -z "${PROD_SSH_USER}" ] || [ -z "${PROD_SSH_PRIVATE_KEY}" ] || [ -z "${PROD_DEPLOY_PATH}" ] || [ -z "${PROD_ENV_FILE}" ] || [ -z "${PROD_PRE_RELEASE_BACKUP_CMD}" ]; then
+            echo "BLOCKED (BLK-INFRA-02): Production VPS SSH credentials or pre-release backup command not yet provisioned." >&2
+            exit 1
+          fi
+
+          SSH_DIR="$RUNNER_TEMP/prod-ssh"
+          mkdir -p "${SSH_DIR}"
+          chmod 700 "${SSH_DIR}"
+          printf '%s\n' "${PROD_SSH_PRIVATE_KEY}" > "${SSH_DIR}/id_ed25519"
+          chmod 600 "${SSH_DIR}/id_ed25519"
+          printf '%s\n' "${PROD_KNOWN_HOSTS}" > "${SSH_DIR}/known_hosts"
+          chmod 600 "${SSH_DIR}/known_hosts"
+          printf '%s\n' "${RELEASE_SIGNING_PUBLIC_KEY}" > "${OUT_DIR}/release-signing.pub"
+
+          SSH_PORT="${PROD_SSH_PORT:-22}"
+          SSH_OPTS=(-i "${SSH_DIR}/id_ed25519" -p "${SSH_PORT}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${SSH_DIR}/known_hosts")
+          SCP_OPTS=(-i "${SSH_DIR}/id_ed25519" -P "${SSH_PORT}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${SSH_DIR}/known_hosts")
+          REMOTE_WORK="/tmp/cskh-prod-release-${GITHUB_RUN_ID}"
+
+          cleanup_prod_ssh() {
+            ssh "${SSH_OPTS[@]}" "${PROD_SSH_USER}@${PROD_SSH_HOST}" "rm -rf '${REMOTE_WORK}'" >/dev/null 2>&1 || true
+            rm -rf "${SSH_DIR}"
+          }
+          trap cleanup_prod_ssh EXIT
+
+          # 1. Execute mandatory encrypted offsite pre-release backup (G07 / G23)
+          ssh "${SSH_OPTS[@]}" "${PROD_SSH_USER}@${PROD_SSH_HOST}" "${PROD_PRE_RELEASE_BACKUP_CMD}"
+
+          # 2. Deploy identical Staging-verified @sha256 digest (zero docker build)
+          ssh "${SSH_OPTS[@]}" "${PROD_SSH_USER}@${PROD_SSH_HOST}" "umask 077 && mkdir -p '${REMOTE_WORK}/out'"
+          scp "${SCP_OPTS[@]}" \
+            "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json" \
+            "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json.sig" \
+            "$RUNNER_TEMP/p4-release-bundle/build/image-inspect-summary.json" \
+            "$RUNNER_TEMP/p4-verify-evidence/clean-site-verify.json" \
+            "${OUT_DIR}/release-signing.pub" \
+            "${PROD_SSH_USER}@${PROD_SSH_HOST}:${REMOTE_WORK}/"
+
+          PULL_USER="${REGISTRY_PULL_USERNAME:-${CSKH_REGISTRY_PULL_USERNAME:-}}"
+          PULL_AUTH_ARGS=""
+          if [ -n "${PULL_USER}" ] && [ -n "${REGISTRY_PULL_TOKEN}" ]; then
+            printf '%s\n' "${REGISTRY_PULL_TOKEN}" > "${SSH_DIR}/registry-pull.tok"
+            chmod 600 "${SSH_DIR}/registry-pull.tok"
+            scp "${SCP_OPTS[@]}" "${SSH_DIR}/registry-pull.tok" \
+              "${PROD_SSH_USER}@${PROD_SSH_HOST}:${REMOTE_WORK}/registry-pull.tok"
+            rm -f "${SSH_DIR}/registry-pull.tok"
+            PULL_AUTH_ARGS="--registry-pull-user '${PULL_USER}' --registry-pull-token-file '${REMOTE_WORK}/registry-pull.tok'"
+          fi
+
+          ssh "${SSH_OPTS[@]}" "${PROD_SSH_USER}@${PROD_SSH_HOST}" \
+            "set -euo pipefail
+             sed -i 's|^APP_IMAGE=.*|APP_IMAGE=${EXPECTED_DIGEST}|' '${PROD_ENV_FILE}'
+             sed -i 's|^PULL_POLICY=.*|PULL_POLICY=always|' '${PROD_ENV_FILE}'
+             sed -i 's|^MIGRATE_SITES=.*|MIGRATE_SITES=false|' '${PROD_ENV_FILE}'
+             bash '${PROD_DEPLOY_PATH}/deploy/release/deploy_staging_by_digest.sh' \
+               --manifest '${REMOTE_WORK}/release-manifest.json' \
+               --sig '${REMOTE_WORK}/release-manifest.json.sig' \
+               --public-key-file '${REMOTE_WORK}/release-signing.pub' \
+               --env-file '${PROD_ENV_FILE}' \
+               --build-inspect '${REMOTE_WORK}/image-inspect-summary.json' \
+               --clean-site-report '${REMOTE_WORK}/clean-site-verify.json' \
+               ${PULL_AUTH_ARGS} \
+               --out-dir '${REMOTE_WORK}/out'"
+
+          scp "${SCP_OPTS[@]}" \
+            "${PROD_SSH_USER}@${PROD_SSH_HOST}:${REMOTE_WORK}/out/staging-digest-attestation.json" \
+            "${OUT_DIR}/production-digest-attestation.json"
+
+      - name: Upload Production rollout attestation (G23)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-production-attestation-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-production-attestation/
+          if-no-files-found: warn
+          retention-days: 90
