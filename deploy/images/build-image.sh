@@ -28,6 +28,7 @@ LOCAL_IMAGE_REPO="${LOCAL_IMAGE_REPO:-crm-cskh}"
 LOCAL_IMAGE_TAG="${LOCAL_IMAGE_TAG:-}"
 REGISTRY_PUSH="${REGISTRY_PUSH:-false}"
 CSKH_REGISTRY_IMAGE="${CSKH_REGISTRY_IMAGE:-}"
+NO_CACHE="${NO_CACHE:-false}"
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -43,6 +44,10 @@ while [ "$#" -gt 0 ]; do
         LOCAL_IMAGE_TAG="$2"
       fi
       shift 2
+      ;;
+    --no-cache)
+      NO_CACHE="true"
+      shift 1
       ;;
     *)
       echo "Unknown argument: $1" >&2
@@ -67,12 +72,27 @@ fi
 
 mkdir -p "${OUT_DIR}"
 
-readarray -t LOCK_VARS < <("${PYTHON_BIN}" - "${LOCK_FILE}" <<'PY'
-import json, sys
+readarray -t LOCK_VARS < <("${PYTHON_BIN}" - "${LOCK_FILE}" "${REPO_ROOT}" <<'PY'
+import hashlib, json, sys
 from pathlib import Path
 
 sys.stdout.reconfigure(newline="\n")
 lock = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+repo_root = Path(sys.argv[2])
+
+py_constraints = lock["python_constraints"]
+for fkey, hkey in (
+    ("system_constraints_file", "system_constraints_sha256"),
+    ("bench_constraints_file", "bench_constraints_sha256"),
+):
+    cpath = repo_root / py_constraints[fkey]
+    normalized = cpath.read_bytes().replace(b"\r\n", b"\n")
+    actual_sha = hashlib.sha256(normalized).hexdigest()
+    if actual_sha != py_constraints[hkey]:
+        raise SystemExit(
+            f"ERROR: {py_constraints[fkey]} SHA-256 mismatch: actual={actual_sha} != expected={py_constraints[hkey]}"
+        )
+
 print(lock["baseline_main_sha"])
 print(lock["apps_tree_sha"])
 print(lock["crm_cskh_tree_sha"])
@@ -97,6 +117,10 @@ print(lock["apps"]["crm"]["root_yarn_lock_sha256"])
 print(lock["apps"]["crm"]["frontend_yarn_lock_sha256"])
 print(lock["builder_upstream"]["tag"])
 print(lock["builder_upstream"]["commit_sha"])
+print(lock["toolchain"]["uv_version"])
+print(py_constraints["system_constraints_sha256"])
+print(py_constraints["bench_constraints_sha256"])
+print(lock["security_patches"]["frappe_form_data_version"])
 PY
 )
 
@@ -124,6 +148,10 @@ CRM_ROOT_YARN_LOCK_SHA256="${LOCK_VARS[20]}"
 CRM_FRONTEND_YARN_LOCK_SHA256="${LOCK_VARS[21]}"
 FRAPPE_DOCKER_TAG="${LOCK_VARS[22]}"
 FRAPPE_DOCKER_SHA="${LOCK_VARS[23]}"
+UV_VERSION="${LOCK_VARS[24]}"
+SYSTEM_PYTHON_CONSTRAINTS_SHA256="${LOCK_VARS[25]}"
+BENCH_PYTHON_CONSTRAINTS_SHA256="${LOCK_VARS[26]}"
+FORM_DATA_PATCH_VERSION="${LOCK_VARS[27]}"
 
 ACTUAL_HEAD_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD | tr -d '\r')"
 ACTUAL_APPS_TREE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD:apps | tr -d '\r')"
@@ -152,11 +180,17 @@ BUILD_LOG="${OUT_DIR}/build.log"
 IID_FILE="${OUT_DIR}/.image-id.txt"
 rm -f "${IID_FILE}"
 
-echo "[build-image] Building ${LOCAL_IMAGE_FULL} from source=${ACTUAL_HEAD_SHA} (apps_tree=${ACTUAL_APPS_TREE_SHA})"
+EXTRA_BUILD_FLAGS=()
+if [ "${NO_CACHE}" = "true" ]; then
+  EXTRA_BUILD_FLAGS+=(--no-cache)
+fi
+
+echo "[build-image] Building ${LOCAL_IMAGE_FULL} from source=${ACTUAL_HEAD_SHA} (apps_tree=${ACTUAL_APPS_TREE_SHA}, no_cache=${NO_CACHE})"
 docker buildx build \
   --platform linux/amd64 \
   --load \
   --progress=plain \
+  "${EXTRA_BUILD_FLAGS[@]}" \
   --iidfile "${IID_FILE}" \
   --file "${CONTAINERFILE}" \
   --tag "${LOCAL_IMAGE_FULL}" \
@@ -166,6 +200,10 @@ docker buildx build \
   --build-arg "NODE_VERSION=${NODE_VERSION}" \
   --build-arg "YARN_VERSION=${YARN_VERSION}" \
   --build-arg "FRAPPE_BENCH_VERSION=${FRAPPE_BENCH_VERSION}" \
+  --build-arg "UV_VERSION=${UV_VERSION}" \
+  --build-arg "SYSTEM_PYTHON_CONSTRAINTS_SHA256=${SYSTEM_PYTHON_CONSTRAINTS_SHA256}" \
+  --build-arg "BENCH_PYTHON_CONSTRAINTS_SHA256=${BENCH_PYTHON_CONSTRAINTS_SHA256}" \
+  --build-arg "FORM_DATA_PATCH_VERSION=${FORM_DATA_PATCH_VERSION}" \
   --build-arg "WKHTMLTOPDF_VERSION=${WKHTMLTOPDF_VERSION}" \
   --build-arg "WKHTMLTOPDF_DISTRO=${WKHTMLTOPDF_DISTRO}" \
   --build-arg "WKHTMLTOPDF_AMD64_SHA256=${WKHTMLTOPDF_AMD64_SHA256}" \
@@ -209,7 +247,8 @@ if [ "${REGISTRY_PUSH}" = "true" ]; then
   REMOTE_TAGGED="${CSKH_REGISTRY_IMAGE}:${LOCAL_IMAGE_TAG}"
   docker tag "${LOCAL_IMAGE_ID}" "${REMOTE_TAGGED}"
   docker push "${REMOTE_TAGGED}"
-  REGISTRY_REPO_DIGEST="$(docker image inspect "${REMOTE_TAGGED}" --format '{{index .RepoDigests 0}}')"
+  REGISTRY_REPO_DIGEST="$(docker image inspect "${REMOTE_TAGGED}" --format '{{index .RepoDigests 0}}' | tr -d '\r\n')"
+  sh "${REPO_ROOT}/deploy/release/validate_digest_uri.sh" "${REGISTRY_REPO_DIGEST}"
   REGISTRY_STATUS="VERIFIED"
   REGISTRY_BLOCKER=""
 fi

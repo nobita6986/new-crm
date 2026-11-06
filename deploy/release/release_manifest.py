@@ -34,10 +34,12 @@ KPI_CALC_PATH = (
     REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "services" / "kpi_calculator.py"
 )
 
-REGISTRY_DIGEST_RE = re.compile(r"^[^@\s]+@sha256:[0-9a-f]{64}$")
-IMAGE_ID_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
-SHA64_RE = re.compile(r"^[0-9a-f]{64}$")
+REGISTRY_DIGEST_RE = re.compile(
+    r"\A[^/@\s:<>]+(?::[0-9]+)?(?:/[^/@\s:<>]+)+(?::[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}\Z"
+)
+IMAGE_ID_RE = re.compile(r"\Asha256:[0-9a-f]{64}\Z")
+SHA40_RE = re.compile(r"\A[0-9a-f]{40}\Z")
+SHA64_RE = re.compile(r"\A[0-9a-f]{64}\Z")
 ZERO_DIGEST_SUFFIX = "@sha256:" + ("0" * 64)
 ALLOWED_SCOPES = ("production_candidate", "ci_ephemeral_rehearsal")
 
@@ -349,6 +351,23 @@ def build_manifest_dict(
         raise ValueError(f"Missing or empty CycloneDX SBOM: {sbom_cyclonedx_path}")
     if not security_scan_path.is_file() or security_scan_path.stat().st_size == 0:
         raise ValueError(f"Missing or empty security scan report: {security_scan_path}")
+    scan_doc = json.loads(security_scan_path.read_text(encoding="utf-8"))
+    if (
+        scan_doc.get("status") != "PASS"
+        or int(scan_doc.get("secret_findings_count", 0)) != 0
+    ):
+        raise ValueError(
+            f"Refusing to generate release-manifest.json from non-PASS security scan "
+            f"(status={scan_doc.get('status')!r}, secrets={scan_doc.get('secret_findings_count')!r})"
+        )
+    if (
+        environment_scope == "production_candidate"
+        and scan_doc.get("gate_mode", "strict") != "strict"
+    ):
+        raise ValueError(
+            "production_candidate release-manifest.json requires security scan gate_mode='strict', "
+            f"got {scan_doc.get('gate_mode')!r}"
+        )
 
     migration_rev = read_latest_migration_revision()
     kpi_version = read_kpi_formula_version()

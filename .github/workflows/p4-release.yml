@@ -99,7 +99,7 @@ jobs:
           retention-days: 30
 
   build-once-sign-and-push:
-    name: Build-once, push @sha256, SBOM, strict CVE gate & Ed25519 sign
+    name: Build-once, push @sha256, SBOM, strict CVE/secret gate & Ed25519 sign
     needs: [preflight-and-registry-gate]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -150,7 +150,7 @@ jobs:
             --username "${REGISTRY_PUSH_USERNAME}" \
             --password-stdin
 
-      - name: Build custom production image ONCE & push to approved registry
+      - name: Build custom production image ONCE (--no-cache) & push to approved registry
         id: build
         shell: bash
         env:
@@ -166,12 +166,13 @@ jobs:
           REGISTRY_PUSH=true \
           CSKH_REGISTRY_IMAGE="${CSKH_REGISTRY_IMAGE}" \
           bash deploy/images/build-image.sh \
+            --no-cache \
             --out-dir "$BUNDLE/build" \
             --tag "${REL_TAG}"
 
           APP_IMAGE_DIGEST="$(jq -r '.registry_verification.approved_registry_repo_digest' \
             "$BUNDLE/build/image-inspect-summary.json")"
-          echo "${APP_IMAGE_DIGEST}" | grep -Eq '^[^@\s]+@sha256:[0-9a-f]{64}$'
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
 
           echo "app_image_digest=${APP_IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
           echo "actual_head_sha=${ACTUAL_HEAD_SHA}" >> "$GITHUB_OUTPUT"
@@ -207,10 +208,20 @@ jobs:
             --output /scan-out/trivy-image.json \
             "${APP_IMAGE_DIGEST}"
 
-          # Strict release gate: fails closed on ANY secret OR unapproved fixable CRITICAL CVE
+          # Extract PyJWT METADATA directly from the immutable @sha256 image for exact-token audit (REL-01A)
+          META_CID="$(docker create "${APP_IMAGE_DIGEST}")"
+          docker cp \
+            "${META_CID}:/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.13.0.dist-info/METADATA" \
+            "$BUNDLE/security/pyjwt-METADATA.txt"
+          docker rm -f "${META_CID}" >/dev/null
+
+          # Strict release gate: fails closed on ANY secret OR ANY unapproved CRITICAL CVE (fixable or unfixed OS)
           "$PY" deploy/release/evaluate_security_scan.py \
+            --strict \
             --trivy-json "$BUNDLE/security/trivy-image.json" \
+            --pyjwt-metadata-file "$BUNDLE/security/pyjwt-METADATA.txt" \
             --out "$BUNDLE/security/security-scan-summary.json"
+          cp "$BUNDLE/security/security-scan-summary.json" "$BUNDLE/security/security-scan-strict.json"
 
       - name: Generate & Ed25519-sign canonical release-manifest.json (production_candidate)
         shell: bash
@@ -252,7 +263,22 @@ jobs:
             --expected-image "${APP_IMAGE_DIGEST}" \
             --expected-scope production_candidate
 
-      - name: Logout from registry & upload signed release bundle
+          python3 - "$BUNDLE" <<'PY'
+          import hashlib
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          sums = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              sums.append(f"{digest}  {path.relative_to(root).as_posix()}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+      - name: Logout from registry
         if: always()
         shell: bash
         env:
@@ -274,6 +300,7 @@ jobs:
     needs: [build-once-sign-and-push]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    environment: registry-verify
     permissions:
       contents: read
       packages: read
@@ -293,14 +320,16 @@ jobs:
           name: p4-release-bundle-${{ github.run_id }}
           path: ${{ runner.temp }}/p4-release-bundle
 
-      - name: Verify Ed25519 signature BEFORE pulling image (zero build cache on fresh runner)
+      - name: Verify Ed25519 signature & POSIX digest URI BEFORE pulling image (zero build cache)
         shell: bash
         env:
           APP_IMAGE_DIGEST: ${{ needs.build-once-sign-and-push.outputs.app_image_digest }}
           RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
         run: |
           set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
           mkdir -p "$RUNNER_TEMP/p4-verify-evidence/junit" "$RUNNER_TEMP/p4-verify-evidence/junit-ui"
+          (cd "$RUNNER_TEMP/p4-release-bundle" && sha256sum -c SHA256SUMS.txt)
           python3 -m venv "$RUNNER_TEMP/p4-venv"
           "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
           "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/release_manifest.py verify \
@@ -310,21 +339,32 @@ jobs:
             --expected-image "${APP_IMAGE_DIGEST}" \
             --expected-scope production_candidate
 
-      - name: Pull immutable @sha256 image digest (read-only registry access)
+      - name: Authenticate pull-only robot account & pull immutable @sha256 image digest
         shell: bash
         env:
           CSKH_REGISTRY_IMAGE: ${{ vars.CSKH_REGISTRY_IMAGE }}
+          CSKH_REGISTRY_IS_PUBLIC: ${{ vars.CSKH_REGISTRY_IS_PUBLIC }}
           CSKH_REGISTRY_PULL_USERNAME: ${{ vars.CSKH_REGISTRY_PULL_USERNAME }}
+          REGISTRY_PULL_USERNAME: ${{ secrets.REGISTRY_PULL_USERNAME }}
+          REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
           GITHUB_ACTOR_FALLBACK: ${{ github.actor }}
           GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
           APP_IMAGE_DIGEST: ${{ needs.build-once-sign-and-push.outputs.app_image_digest }}
         run: |
           set -euo pipefail
           REGISTRY_HOST="${CSKH_REGISTRY_IMAGE%%/*}"
-          if [ "${REGISTRY_HOST}" = "ghcr.io" ]; then
-            printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
-              --username "${CSKH_REGISTRY_PULL_USERNAME:-${GITHUB_ACTOR_FALLBACK}}" \
+          PULL_USER="${REGISTRY_PULL_USERNAME:-${CSKH_REGISTRY_PULL_USERNAME:-}}"
+          if [ -n "${PULL_USER}" ] && [ -n "${REGISTRY_PULL_TOKEN}" ]; then
+            printf '%s\n' "${REGISTRY_PULL_TOKEN}" | docker login "${REGISTRY_HOST}" \
+              --username "${PULL_USER}" \
               --password-stdin
+          elif [ "${REGISTRY_HOST}" = "ghcr.io" ] && [ -n "${GITHUB_TOKEN_READONLY}" ]; then
+            printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+              --username "${PULL_USER:-${GITHUB_ACTOR_FALLBACK}}" \
+              --password-stdin
+          elif [ "${CSKH_REGISTRY_IS_PUBLIC}" != "true" ]; then
+            echo "BLOCKED (BLK-INFRA-03): Private registry '${REGISTRY_HOST}' requires read-only REGISTRY_PULL_USERNAME and REGISTRY_PULL_TOKEN in protected environment 'registry-verify' (or vars.CSKH_REGISTRY_IS_PUBLIC='true' for public OCI repositories)." >&2
+            exit 1
           fi
           docker pull "${APP_IMAGE_DIGEST}"
 
@@ -383,14 +423,19 @@ jobs:
             -e DB_PW="${DB_PW}" -e ADM_PW="${ADM_PW}" backend bash -lc '
               set -euo pipefail
               cd /home/frappe/frappe-bench
-              ./env/bin/pip install --no-cache-dir unittest-xml-reporting==3.2.0
+              cmp -s /home/frappe/frappe-bench/apps-order.txt /home/frappe/frappe-bench/sites/apps.txt
+              ./env/bin/pip install --no-cache-dir \
+                -c /home/frappe/frappe-bench/release-metadata/python-constraints.txt \
+                unittest-xml-reporting==3.2.0
               bench new-site \
+                --no-mariadb-socket \
                 --db-root-password "${DB_PW}" \
                 --admin-password "${ADM_PW}" \
                 --mariadb-user-host-login-scope=% \
                 --install-app crm \
                 --install-app crm_cskh \
                 p4-suites.localhost
+              cmp -s /home/frappe/frappe-bench/apps-order.txt /home/frappe/frappe-bench/sites/apps.txt
               bench --site p4-suites.localhost set-config allow_tests true
               bench --site p4-suites.localhost migrate
               bench --site p4-suites.localhost migrate
@@ -451,7 +496,7 @@ jobs:
             --xml-dir "$VERIFY_OUT/junit-ui" \
             --out "$VERIFY_OUT/p3-ui-gate.json"
 
-      - name: Attest Build -> Verify same-digest chain
+      - name: Attest Build -> Verify same-digest chain & generate SHA256SUMS
         shell: bash
         env:
           RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
@@ -466,6 +511,30 @@ jobs:
             --clean-site-report "$RUNNER_TEMP/p4-verify-evidence/clean-site-verify.json" \
             --compose-smoke-report "$RUNNER_TEMP/p4-verify-evidence/isolated-smoke-report.json" \
             --out "$RUNNER_TEMP/p4-verify-evidence/verify-stage-digest-attestation.json"
+
+          python3 - "$RUNNER_TEMP/p4-verify-evidence" <<'PY'
+          import hashlib
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          sums = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              sums.append(f"{digest}  {path.relative_to(root).as_posix()}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+      - name: Logout pull-only session from registry
+        if: always()
+        shell: bash
+        env:
+          CSKH_REGISTRY_IMAGE: ${{ vars.CSKH_REGISTRY_IMAGE }}
+        run: |
+          REGISTRY_HOST="${CSKH_REGISTRY_IMAGE%%/*}"
+          docker logout "${REGISTRY_HOST}" >/dev/null 2>&1 || true
 
       - name: Upload verify-by-digest evidence
         if: always()
@@ -506,6 +575,9 @@ jobs:
         env:
           APP_IMAGE_DIGEST: ${{ needs.build-once-sign-and-push.outputs.app_image_digest }}
           RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
+          CSKH_REGISTRY_PULL_USERNAME: ${{ vars.CSKH_REGISTRY_PULL_USERNAME }}
+          REGISTRY_PULL_USERNAME: ${{ secrets.REGISTRY_PULL_USERNAME }}
+          REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
           STAGING_SSH_HOST: ${{ secrets.STAGING_SSH_HOST }}
           STAGING_SSH_PORT: ${{ vars.STAGING_SSH_PORT }}
           STAGING_SSH_USER: ${{ secrets.STAGING_SSH_USER }}
@@ -515,6 +587,7 @@ jobs:
           STAGING_ENV_FILE: ${{ vars.STAGING_ENV_FILE }}
         run: |
           set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
           OUT_DIR="$RUNNER_TEMP/p4-staging-attestation"
           mkdir -p "${OUT_DIR}"
           python3 -m venv "$RUNNER_TEMP/p4-venv"
@@ -562,7 +635,13 @@ jobs:
           SCP_OPTS=(-i "${SSH_DIR}/id_ed25519" -P "${SSH_PORT}" -o StrictHostKeyChecking=yes -o UserKnownHostsFile="${SSH_DIR}/known_hosts")
           REMOTE_WORK="/tmp/cskh-staging-release-${GITHUB_RUN_ID}"
 
-          ssh "${SSH_OPTS[@]}" "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" "mkdir -p '${REMOTE_WORK}/out'"
+          cleanup_staging_ssh() {
+            ssh "${SSH_OPTS[@]}" "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" "rm -rf '${REMOTE_WORK}'" >/dev/null 2>&1 || true
+            rm -rf "${SSH_DIR}"
+          }
+          trap cleanup_staging_ssh EXIT
+
+          ssh "${SSH_OPTS[@]}" "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" "umask 077 && mkdir -p '${REMOTE_WORK}/out'"
           scp "${SCP_OPTS[@]}" \
             "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json" \
             "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json.sig" \
@@ -570,6 +649,17 @@ jobs:
             "$RUNNER_TEMP/p4-verify-evidence/clean-site-verify.json" \
             "${OUT_DIR}/release-signing.pub" \
             "${STAGING_SSH_USER}@${STAGING_SSH_HOST}:${REMOTE_WORK}/"
+
+          PULL_USER="${REGISTRY_PULL_USERNAME:-${CSKH_REGISTRY_PULL_USERNAME:-}}"
+          PULL_AUTH_ARGS=""
+          if [ -n "${PULL_USER}" ] && [ -n "${REGISTRY_PULL_TOKEN}" ]; then
+            printf '%s\n' "${REGISTRY_PULL_TOKEN}" > "${SSH_DIR}/registry-pull.tok"
+            chmod 600 "${SSH_DIR}/registry-pull.tok"
+            scp "${SCP_OPTS[@]}" "${SSH_DIR}/registry-pull.tok" \
+              "${STAGING_SSH_USER}@${STAGING_SSH_HOST}:${REMOTE_WORK}/registry-pull.tok"
+            rm -f "${SSH_DIR}/registry-pull.tok"
+            PULL_AUTH_ARGS="--registry-pull-user '${PULL_USER}' --registry-pull-token-file '${REMOTE_WORK}/registry-pull.tok'"
+          fi
 
           ssh "${SSH_OPTS[@]}" "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" \
             "set -euo pipefail
@@ -583,14 +673,13 @@ jobs:
                --env-file '${STAGING_ENV_FILE}' \
                --build-inspect '${REMOTE_WORK}/image-inspect-summary.json' \
                --clean-site-report '${REMOTE_WORK}/clean-site-verify.json' \
+               ${PULL_AUTH_ARGS} \
                --out-dir '${REMOTE_WORK}/out'"
 
           scp "${SCP_OPTS[@]}" \
             "${STAGING_SSH_USER}@${STAGING_SSH_HOST}:${REMOTE_WORK}/out/staging-digest-attestation.json" \
             "${STAGING_SSH_USER}@${STAGING_SSH_HOST}:${REMOTE_WORK}/out/staging-containers-inspect.json" \
             "${OUT_DIR}/"
-          ssh "${SSH_OPTS[@]}" "${STAGING_SSH_USER}@${STAGING_SSH_HOST}" "rm -rf '${REMOTE_WORK}'" || true
-          rm -rf "${SSH_DIR}"
 
       - name: Upload Staging digest attestation (G05)
         if: always()

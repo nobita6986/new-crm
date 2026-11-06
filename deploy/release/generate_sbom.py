@@ -20,7 +20,9 @@ import urllib.parse
 from datetime import datetime, timezone
 from pathlib import Path
 
-IMAGE_REF_RE = re.compile(r"^(?:[^@\s]+@)?sha256:[0-9a-f]{64}$")
+IMAGE_REF_RE = re.compile(
+    r"\A(?:[^/@\s:<>]+(?::[0-9]+)?(?:/[^/@\s:<>]+)+(?::[A-Za-z0-9._-]+)?@)?sha256:[0-9a-f]{64}\Z"
+)
 
 
 def _sha256_bytes(data: bytes) -> str:

@@ -1040,6 +1040,38 @@ def redact_socket_packet(pkt: str, logger: SmokeLogger) -> str:
     return re.sub(r'("sid"\s*:\s*")([^"]+)(")', _repl, pkt)
 
 
+def wait_for_ingress_ping(
+    base_url: str,
+    site_name: str,
+    timeout_sec: int = 30,
+) -> None:
+    """Waits for Traefik Docker provider router convergence after `--force-recreate`."""
+    _, probe_opener = make_http_client()
+    deadline = time.monotonic() + timeout_sec
+    last_status = 0
+    last_body = ""
+    while time.monotonic() < deadline:
+        try:
+            code, _, body = http_call(
+                probe_opener,
+                f"{base_url}/api/method/ping",
+                site_name,
+                headers={"Accept": "application/json"},
+            )
+            last_status = code
+            last_body = body
+            if code == 200 and "pong" in body:
+                return
+        except (urllib.error.URLError, OSError) as exc:
+            last_status = 0
+            last_body = str(exc)
+        time.sleep(0.5)
+    raise TimeoutError(
+        f"Timed out waiting for Traefik ingress /api/method/ping=200 on {site_name} "
+        f"(last_status={last_status}, last_body={last_body[:200]!r})"
+    )
+
+
 def run_http_and_socketio_smoke(
     http_port: int,
     site_name: str,
@@ -1048,6 +1080,8 @@ def run_http_and_socketio_smoke(
 ) -> dict:
     base_url = f"http://127.0.0.1:{http_port}"
     origin = f"http://{site_name}"
+
+    wait_for_ingress_ping(base_url, site_name, timeout_sec=30)
 
     # 1. Guest access enforcement
     _, guest_opener = make_http_client()

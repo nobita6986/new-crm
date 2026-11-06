@@ -1,0 +1,22 @@
+# Locked system Python transitive constraints for `frappe-bench==5.31.0` in stage `base` (P4-02 / F-P4-REL-03).
+# Verified by SHA-256 against `deploy/images/release-lock.json` prior to `pip3 install`.
+# Note: `uv` is immediately upgraded `--no-deps` to `0.13.7` after `frappe-bench` install to remediate GHSA-hq85-5cpj-mr62.
+GitPython==3.1.62
+Jinja2==3.1.6
+MarkupSafe==3.0.4
+certifi==2026.10.23
+charset-normalizer==3.5.2
+click==8.2.1
+frappe-bench==5.31.0
+gitdb==4.0.12
+honcho==2.0.0
+idna==3.20
+python-crontab==2.6.0
+python-dateutil==4.0.0
+requests==2.33.1
+semantic-version==2.10.0
+setuptools==79.0.1
+smmap==5.0.3
+tzdata==2026.6
+urllib3==2.8.0
+uv==0.11.33
