@@ -31,6 +31,7 @@ import os
 import re
 import secrets
 import shutil
+import signal
 import socket
 import ssl
 import subprocess
@@ -188,59 +189,98 @@ def run_sub(cmd: list[str], **kwargs: Any) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, env=env, **kwargs)
 
 
-def main() -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8")
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--app-image", default=os.environ.get("APP_IMAGE", ""), required=False)
-    parser.add_argument("--image-git-sha", required=True)
-    parser.add_argument(
-        "--out-json",
-        type=Path,
-        default=OPS_DIR / "evidence" / "p4-ops-local-rehearsal-report.json",
-    )
-    parser.add_argument(
-        "--out-log",
-        type=Path,
-        default=OPS_DIR / "evidence" / "p4-ops-local-rehearsal.log",
-    )
-    args = parser.parse_args()
+class _TerminationSignalError(RuntimeError):
+    """Raised when SIGINT/SIGTERM/SIGBREAK interrupts the rehearsal so teardown + persistence run."""
 
-    if not args.app_image:
-        raise SystemExit("Pass --app-image sha256:<64hex> (or set APP_IMAGE)")
+    def __init__(self, signum: int) -> None:
+        self.signum = int(signum)
+        super().__init__(f"Received termination signal {signum}")
 
-    run_id = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(3)
+
+def inspect_repo_provenance(repo_root: Path = REPO_ROOT) -> dict[str, Any]:
+    """Read HEAD commit SHA and check whether tracked/untracked files outside evidence/ are clean."""
+    head_sha = "UNKNOWN"
+    code_clean = False
+    dirty_non_evidence: list[str] = []
+    try:
+        p_sha = subprocess.run(
+            ["git", "-C", str(repo_root), "rev-parse", "HEAD"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        head_sha = p_sha.stdout.strip()
+        p_st = subprocess.run(
+            ["git", "-C", str(repo_root), "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=True,
+        )
+        for raw_line in p_st.stdout.splitlines():
+            if not raw_line.strip():
+                continue
+            rel_path = raw_line[3:].strip().strip('"').replace("\\", "/")
+            if not rel_path.startswith("deploy/ops/evidence/"):
+                dirty_non_evidence.append(rel_path)
+        code_clean = len(dirty_non_evidence) == 0
+    except Exception:
+        pass
+    return {
+        "ops_runner_git_sha": head_sha,
+        "ops_worktree_code_clean": code_clean,
+        "dirty_non_evidence_paths": dirty_non_evidence,
+    }
+
+
+def run_rehearsal(
+    app_image: str,
+    image_git_sha: str,
+    out_json: Path,
+    out_log: Path,
+    *,
+    run_id: str | None = None,
+) -> int:
+    run_id = run_id or (datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(3))
     project_name = f"crm-cskh-p4-ops-reh-{run_id}"
-    http_port = pick_free_loopback_port(18180)
-
-    preexisting = smoke_lib.inspect_project_resources(project_name)
-    if any(preexisting.values()):
-        raise RuntimeError(f"Refusing to run: preexisting resources for {project_name}: {preexisting}")
-
-    host_before = smoke_lib.snapshot_host_docker_resources()
-    ok_img, img_summary, img_err = smoke_lib.inspect_image_metadata(args.app_image)
-    if not ok_img:
-        raise RuntimeError(f"Cannot inspect local APP_IMAGE {args.app_image}: {img_err}")
+    repo_prov = inspect_repo_provenance(REPO_ROOT)
 
     scrubber = smoke_lib.SmokeLogger()
     db_root_pw = secrets.token_urlsafe(24)
     admin_pw = "Adm-" + secrets.token_urlsafe(18) + "!"
     seed_pw = "Seed-" + secrets.token_urlsafe(18) + "!"
     webhook_token = secrets.token_urlsafe(16)
-    for sec in (db_root_pw, admin_pw, seed_pw, webhook_token):
+    secret_list = [db_root_pw, admin_pw, seed_pw, webhook_token]
+    for sec in secret_list:
         scrubber.register_secret(sec, "<REDACTED_SECRET>")
+
+    def scrub_all(text: str) -> str:
+        s1 = scrubber.scrub(text or "")
+        s2 = p403_tool.redact_sensitive(s1, extra_secrets=secret_list)
+        return health_tool.redact_payload_text(s2, extra_secrets=secret_list)
 
     log_lines: list[str] = []
 
     def log(msg: str) -> None:
-        line = f"[{utc_now_iso()}] {scrubber.scrub(msg)}"
+        line = f"[{utc_now_iso()}] {scrub_all(msg)}"
         log_lines.append(line)
         print(line, flush=True)
 
     tmpdir = Path(tempfile.mkdtemp(prefix="p4-ops-reh-"))
+    env_file: Path | None = None
+    host_before: dict[str, set[str]] | None = None
     stack_started = False
+    in_teardown = False
+    teardown_invoked = False
+    teardown_exit_code: int | None = None
+    teardown_error: str | None = None
+
+    current_step = "preflight_validate_args"
+    failed_step: str | None = None
+    exit_code: int | None = None
+    failure_detail: dict[str, Any] | None = None
+
     report: dict[str, Any] = {
         "timestamp_utc": utc_now_iso(),
         "evidence_scope": "LOCAL_ISOLATED_COMPOSE_REHEARSAL",
@@ -248,15 +288,68 @@ def main() -> int:
         "run_id": run_id,
         "project_name": project_name,
         "site_name": REHEARSAL_SITE,
-        "loopback_http_port": http_port,
+        "loopback_http_port": None,
         "compose_baseline_sha": "492423c43a3ddb15e8f5fea23124c4bc70a6dbb8",
-        "image_git_sha": args.image_git_sha,
-        "app_image": args.app_image,
-        "image_summary": img_summary,
+        "ops_runner_git_sha": repo_prov["ops_runner_git_sha"],
+        "ops_worktree_code_clean": repo_prov["ops_worktree_code_clean"],
+        "dirty_non_evidence_paths": repo_prov["dirty_non_evidence_paths"],
+        "image_git_sha": image_git_sha,
+        "app_image": app_image,
+        "image_summary": {},
+        "status": "FAIL",
+        "failed_step": None,
+        "exit_code": 1,
+        "failure_detail": None,
+        "measured_phases": {},
         "phases": {},
+        "findings_verification": {},
+        "cleanup_verification": {},
     }
 
+    prev_handlers: dict[int, Any] = {}
+    if threading.current_thread() is threading.main_thread():
+        sig_candidates = [signal.SIGINT, signal.SIGTERM]
+        if hasattr(signal, "SIGBREAK"):
+            sig_candidates.append(getattr(signal, "SIGBREAK"))
+
+        def _on_signal(signum: int, _frame: Any) -> None:
+            if in_teardown:
+                return
+            raise _TerminationSignalError(signum)
+
+        for sig in sig_candidates:
+            try:
+                prev_handlers[sig] = signal.getsignal(sig)
+                signal.signal(sig, _on_signal)
+            except (OSError, ValueError):
+                pass
+
     try:
+        log(
+            f"Initializing rehearsal run_id={run_id}, ops_runner_git_sha={repo_prov['ops_runner_git_sha']}, "
+            f"ops_worktree_code_clean={repo_prov['ops_worktree_code_clean']}"
+        )
+        if not app_image:
+            raise ValueError("Pass --app-image sha256:<64hex> (or set APP_IMAGE)")
+
+        http_port = pick_free_loopback_port(18180)
+        report["loopback_http_port"] = http_port
+
+        current_step = "preflight_inspect_preexisting_project"
+        preexisting = smoke_lib.inspect_project_resources(project_name)
+        if any(preexisting.values()):
+            raise RuntimeError(f"Refusing to run: preexisting resources for {project_name}: {preexisting}")
+
+        current_step = "preflight_snapshot_host_before"
+        host_before = smoke_lib.snapshot_host_docker_resources()
+
+        current_step = "preflight_inspect_app_image"
+        ok_img, img_summary, img_err = smoke_lib.inspect_image_metadata(app_image)
+        if not ok_img:
+            raise RuntimeError(f"Cannot inspect local APP_IMAGE {app_image}: {img_err}")
+        report["image_summary"] = img_summary
+
+        current_step = "prepare_ephemeral_env_and_secrets"
         secret_file = tmpdir / "db_root_password.txt"
         secret_file.write_text(db_root_pw + "\n", encoding="ascii", newline="\n")
         raw_sec = secret_file.read_bytes()
@@ -270,7 +363,7 @@ def main() -> int:
                 "COMPOSE_PROJECT_NAME": project_name,
                 "SITE_NAME": REHEARSAL_SITE,
                 "SITES_RULE": f"Host(`{REHEARSAL_SITE}`)",
-                "APP_IMAGE": args.app_image,
+                "APP_IMAGE": app_image,
                 "PULL_POLICY": "never",
                 "INFRA_PULL_POLICY": "missing",
                 "INGRESS_BIND_IP": "127.0.0.1",
@@ -282,6 +375,7 @@ def main() -> int:
         env_lines = [f"{k}={v}" for k, v in template_env.items()]
         env_file.write_text("\n".join(env_lines) + "\n", encoding="utf-8", newline="\n")
 
+        current_step = "stack_startup_infra_and_backend"
         log(f"Starting isolated rehearsal stack {project_name} on 127.0.0.1:{http_port}...")
         stack_started = True
         subprocess.run(
@@ -306,6 +400,8 @@ def main() -> int:
             ):
                 break
             time.sleep(2)
+        else:
+            raise TimeoutError("Timed out waiting for db, redis-cache, redis-queue to reach healthy")
 
         subprocess.run(
             compose_cmd(env_file, ["run", "--rm", "configurator"]),
@@ -320,6 +416,7 @@ def main() -> int:
             text=True,
         )
 
+        current_step = "site_bootstrap_and_seed"
         log("Bootstrapping isolated site p3-test.localhost and seeding deterministic P1-P3 dataset...")
         boot_py = r"""
 import json, os, subprocess, sys
@@ -391,6 +488,7 @@ finally:
         if not seed_info:
             raise RuntimeError("Did not receive SEED_RESULT from p3_e2e_seed")
 
+        current_step = "stack_startup_daemons_and_wait_healthy"
         subprocess.run(
             compose_cmd(
                 env_file,
@@ -439,10 +537,13 @@ finally:
             ):
                 break
             time.sleep(2)
+        else:
+            raise TimeoutError("Timed out waiting for all 10 daemon services to reach running/healthy")
 
         # =====================================================================
         # PHASE A: P4-03 Migration x 2 & Count/Invariant/BLG-P4-MIG-01 Reconcile
         # =====================================================================
+        current_step = "phase_a_p4_03_migration_x2"
         log("Phase A (P4-03): Running snapshot-counts -> migrator #1 -> migrator #2 -> compare-counts...")
         snap_before = tmpdir / "mig_before.json"
         snap_r1 = tmpdir / "mig_after_r1.json"
@@ -550,6 +651,7 @@ finally:
         report["findings_verification"] = {}
 
         # --- F-P4-OPS-01: Verify all 8 Compose files in both scripts & both runbooks via `docker compose config` ---
+        current_step = "finding_f_p4_ops_01_compose_8_files"
         log("Verifying F-P4-OPS-01: 8 Compose files in 2 scripts + 2 runbooks via docker compose config...")
         stg_example_env = REPO_ROOT / "deploy" / "compose" / "env" / "staging.env.example"
         prod_example_env = REPO_ROOT / "deploy" / "compose" / "env" / "production.env.example"
@@ -612,12 +714,13 @@ finally:
         log(f"F-P4-OPS-01 result: pass={f01_pass}")
 
         # --- F-P4-OPS-02: Verify running container image ID -> `docker image inspect` RepoDigests (match & mismatch) ---
+        current_step = "finding_f_p4_ops_02_container_repodigests"
         log("Verifying F-P4-OPS-02: container .Image ID -> docker image inspect RepoDigests (match & wrong digest)...")
         repo_digests_local = img_summary.get("repo_digests") or []
         matching_repo_digest = (
             repo_digests_local[0]
             if repo_digests_local
-            else args.app_image
+            else app_image
         )
         wrong_repo_digest = "crm-cskh@sha256:" + ("f" * 64)
         dig_ok_proc = run_sub(
@@ -680,6 +783,7 @@ finally:
         log(f"F-P4-OPS-02 result: pass={f02_pass} (match=PASS/0, wrong=FAIL/2 with 6 mismatches)")
 
         # --- F-P4-OPS-05 (Scheduler part) + Phase B: Startup grace vs never Complete vs Complete vs latest Failed ---
+        current_step = "phase_b_and_f_p4_ops_05_cron"
         log("Phase B & F-P4-OPS-05 (cron): Testing startup grace, never Complete, 4 cron Complete, and latest Failed...")
         clear_cron_logs_py = r"""
 import os, frappe
@@ -873,6 +977,7 @@ finally:
             )
 
         # --- F-P4-OPS-03: Inject overdue SLA Obligation & stuck Dirty Scope to prove live probe FAIL ---
+        current_step = "finding_f_p4_ops_03_p3_flags_and_injection"
         log("Verifying F-P4-OPS-03: injecting overdue SLA Obligation + stuck Dirty Scope and verifying probe FAIL...")
         while datetime.now(timezone.utc).second >= 53:
             time.sleep(1)
@@ -997,6 +1102,7 @@ finally:
         log(f"F-P4-OPS-03 result: pass={f03_pass}")
 
         # --- F-P4-OPS-04: Structured QA_PASS_RATE JSON (`null` on 0 denom) & published QA Review by contact_attempt ---
+        current_step = "finding_f_p4_ops_04_qa_pass_rate_and_published_join"
         log("Verifying F-P4-OPS-04: structured QA_PASS_RATE JSON & published QA Review by contact_attempt...")
         inject_f04_py = r"""
 import os, sys, frappe
@@ -1206,6 +1312,7 @@ finally:
         log(f"F-P4-OPS-04 result: pass={f04_pass}")
 
         # Ephemeral loopback HTTPS webhook server for end-to-end TLS alert + cooldown test
+        current_step = "phase_b_p4_07_https_alert_drill"
         cert_path, key_path = generate_self_signed_cert_via_backend(env_file, tmpdir)
         received_alerts: list[dict[str, Any]] = []
 
@@ -1298,6 +1405,7 @@ finally:
         # =====================================================================
         # PHASE C: P4-08 Automated Pre-UAT Role Matrix, 15 Screens & Drill-Down
         # =====================================================================
+        current_step = "phase_c_and_f_p4_ops_05_ui_csrf_and_roles"
         log("Phase C (P4-08): Auditing 15 /cskh/* Vietnamese screens, 6 role scopes, and offboarding...")
         users = seed_info["users"]
         period_key = seed_info["period_key"]
@@ -1659,6 +1767,7 @@ finally:
         # =====================================================================
         # PHASE D: P4-10 Tier 1 Kill Switch & Tier 4 Backup + Delta + Restore
         # =====================================================================
+        current_step = "phase_d_p4_10_kill_switch_and_restore"
         log("Phase D (P4-10): Rehearsing Tier 1 kill switch and Tier 4 backup/delta/restore...")
         run_sub(
             compose_cmd(
@@ -1842,6 +1951,8 @@ subprocess.check_call([
             ):
                 break
             time.sleep(2)
+        else:
+            raise TimeoutError("Timed out waiting for queue-short, queue-long, scheduler after restore")
         restore_sec = round(time.monotonic() - t_rest, 2)
 
         # Re-trigger cron logs after restore (restore resets DB back to backup point)
@@ -1891,67 +2002,208 @@ subprocess.check_call([
                 "pass": tier4_ok,
             },
         }
+        current_step = "completed"
 
-    except subprocess.CalledProcessError as exc:
-        log(f"Subprocess failed (exit={exc.returncode}): stdout={exc.stdout!r} stderr={exc.stderr!r}")
-        raise
-    finally:
-        if stack_started:
-            log(f"Tearing down isolated rehearsal stack {project_name} (--volumes --remove-orphans)...")
-            subprocess.run(
-                compose_cmd(env_file, ["down", "--volumes", "--remove-orphans"], profile_migrate=True),
-                capture_output=True,
-                text=True,
+    except BaseException as exc:
+        failed_step = current_step
+        if isinstance(exc, _TerminationSignalError):
+            exit_code = 128 + exc.signum
+        elif isinstance(exc, KeyboardInterrupt):
+            exit_code = 130
+        elif isinstance(exc, subprocess.CalledProcessError):
+            exit_code = exc.returncode if isinstance(exc.returncode, int) and exc.returncode != 0 else 1
+        elif isinstance(exc, ValueError):
+            exit_code = 2
+        else:
+            exit_code = 1
+
+        detail: dict[str, Any] = {
+            "exception_type": type(exc).__name__,
+            "message": scrub_all(str(exc))[:2000],
+        }
+        if isinstance(exc, subprocess.CalledProcessError):
+            cmd_str = " ".join(str(x) for x in exc.cmd) if isinstance(exc.cmd, (list, tuple)) else str(exc.cmd)
+            out_txt = exc.stdout if isinstance(exc.stdout, str) else (exc.stdout or b"").decode("utf-8", errors="replace")
+            err_txt = exc.stderr if isinstance(exc.stderr, str) else (exc.stderr or b"").decode("utf-8", errors="replace")
+            detail.update(
+                {
+                    "returncode": exc.returncode,
+                    "cmd": scrub_all(cmd_str)[:1000],
+                    "stdout_tail": scrub_all(out_txt)[-2000:],
+                    "stderr_tail": scrub_all(err_txt)[-2000:],
+                }
             )
+            log(
+                f"ERROR at step={failed_step} (exit_code={exit_code}, type={type(exc).__name__}): "
+                f"stdout={detail['stdout_tail']!r} stderr={detail['stderr_tail']!r}"
+            )
+        else:
+            log(
+                f"ERROR at step={failed_step} (exit_code={exit_code}, type={type(exc).__name__}): "
+                f"{detail['message']}"
+            )
+        failure_detail = detail
+    finally:
+        in_teardown = True
+        if stack_started and env_file is not None and env_file.exists():
+            log(f"Tearing down isolated rehearsal stack {project_name} (--volumes --remove-orphans)...")
+            teardown_invoked = True
+            try:
+                td_proc = subprocess.run(
+                    compose_cmd(env_file, ["down", "--volumes", "--remove-orphans"], profile_migrate=True),
+                    capture_output=True,
+                    text=True,
+                )
+                teardown_exit_code = td_proc.returncode
+                log(f"Teardown finished for {project_name} (exit_code={teardown_exit_code}).")
+            except Exception as td_exc:
+                teardown_exit_code = -1
+                teardown_error = scrub_all(str(td_exc))[:1000]
+                log(f"Teardown error for {project_name}: {teardown_error}")
         shutil.rmtree(tmpdir, ignore_errors=True)
+        for sig, prev in prev_handlers.items():
+            try:
+                signal.signal(sig, prev)
+            except (OSError, ValueError):
+                pass
 
-    leftover_proj = smoke_lib.inspect_project_resources(project_name)
-    host_after = smoke_lib.snapshot_host_docker_resources()
-    leaked_volumes = sorted(host_after["volumes"] - host_before["volumes"])
-    leaked_containers = sorted(host_after["containers"] - host_before["containers"])
-    leaked_networks = sorted(host_after["networks"] - host_before["networks"])
-    cleanup_ok = (
-        not any(leftover_proj.values())
-        and not leaked_volumes
-        and not leaked_containers
-        and not leaked_networks
-    )
-    report["cleanup_verification"] = {
-        "project_leftovers": leftover_proj,
-        "host_leaked_volumes": leaked_volumes,
-        "host_leaked_containers": leaked_containers,
-        "host_leaked_networks": leaked_networks,
-        "pass": cleanup_ok,
+    # Always verify cleanup and persist scrubbed JSON + log, even after error/signal
+    cleanup_ok = False
+    try:
+        leftover_proj = smoke_lib.inspect_project_resources(project_name)
+        if host_before is not None:
+            host_after = smoke_lib.snapshot_host_docker_resources()
+            leaked_volumes = sorted(host_after["volumes"] - host_before["volumes"])
+            leaked_containers = sorted(host_after["containers"] - host_before["containers"])
+            leaked_networks = sorted(host_after["networks"] - host_before["networks"])
+            host_diff_ok = not leaked_volumes and not leaked_containers and not leaked_networks
+        else:
+            leaked_volumes = []
+            leaked_containers = []
+            leaked_networks = []
+            host_diff_ok = True
+        tmpdir_removed = not tmpdir.exists()
+        teardown_ok = (not stack_started) or (teardown_invoked and teardown_exit_code == 0)
+        cleanup_ok = (
+            not any(leftover_proj.values())
+            and host_diff_ok
+            and tmpdir_removed
+            and teardown_ok
+        )
+        report["cleanup_verification"] = {
+            "stack_started": stack_started,
+            "teardown_invoked": teardown_invoked,
+            "teardown_exit_code": teardown_exit_code,
+            "teardown_error": teardown_error,
+            "tmpdir_removed": tmpdir_removed,
+            "host_snapshot_captured": host_before is not None,
+            "project_leftovers": leftover_proj,
+            "host_leaked_volumes": leaked_volumes,
+            "host_leaked_containers": leaked_containers,
+            "host_leaked_networks": leaked_networks,
+            "pass": cleanup_ok,
+        }
+    except Exception as cleanup_exc:
+        cleanup_ok = False
+        report["cleanup_verification"] = {
+            "stack_started": stack_started,
+            "teardown_invoked": teardown_invoked,
+            "teardown_exit_code": teardown_exit_code,
+            "teardown_error": teardown_error,
+            "tmpdir_removed": not tmpdir.exists(),
+            "verification_error": scrub_all(str(cleanup_exc))[:1000],
+            "pass": False,
+        }
+
+    measured_phases = {
+        phase_name: str(phase_payload.get("status", "UNKNOWN"))
+        for phase_name, phase_payload in report["phases"].items()
     }
+    report["measured_phases"] = measured_phases
 
     findings_map = report.get("findings_verification", {})
     all_findings_ok = len(findings_map) == 5 and all(
         bool(v.get("pass")) for v in findings_map.values()
     )
     all_phases_ok = (
-        len(report["phases"]) == 4
+        failed_step is None
+        and current_step == "completed"
+        and len(report["phases"]) == 4
         and all(p.get("status") == "PASS" for p in report["phases"].values())
         and all_findings_ok
         and cleanup_ok
     )
-    report["status"] = "PASS" if all_phases_ok else "FAIL"
+
+    if all_phases_ok:
+        report["status"] = "PASS"
+        report["failed_step"] = None
+        report["exit_code"] = 0
+        report["failure_detail"] = None
+    else:
+        report["status"] = "FAIL"
+        if failed_step is None:
+            for p_name, p_val in report["phases"].items():
+                if p_val.get("status") != "PASS":
+                    failed_step = p_name
+                    break
+        if failed_step is None:
+            for f_name, f_val in findings_map.items():
+                if not f_val.get("pass"):
+                    failed_step = f"finding:{f_name}"
+                    break
+        if failed_step is None and not cleanup_ok:
+            failed_step = "cleanup_verification"
+        if failed_step is None:
+            failed_step = current_step
+        report["failed_step"] = failed_step
+        report["exit_code"] = exit_code if (exit_code is not None and exit_code != 0) else 2
+        report["failure_detail"] = failure_detail
+
     log(
-        f"Rehearsal complete: status={report['status']}, findings_pass={all_findings_ok}, cleanup_pass={cleanup_ok}"
+        f"Rehearsal finalized: run_id={run_id}, status={report['status']}, "
+        f"failed_step={report['failed_step']}, exit_code={report['exit_code']}, "
+        f"measured_phases={json.dumps(measured_phases)}, findings_pass={all_findings_ok}, cleanup_pass={cleanup_ok}"
     )
 
-    scrubbed_json_str = p403_tool.redact_sensitive(
-        scrubber.scrub(json.dumps(report, indent=2, ensure_ascii=False)) + "\n"
-    )
-    scrubbed_log_str = p403_tool.redact_sensitive(scrubber.scrub("\n".join(log_lines)) + "\n")
+    scrubbed_json_str = scrub_all(json.dumps(report, indent=2, ensure_ascii=False)) + "\n"
+    scrubbed_log_str = scrub_all("\n".join(log_lines)) + "\n"
 
-    for forbidden in (db_root_pw, admin_pw, seed_pw, webhook_token):
+    for forbidden in secret_list:
         if forbidden and (forbidden in scrubbed_json_str or forbidden in scrubbed_log_str):
             raise RuntimeError("Secret leak detected in rehearsal output; aborting write!")
 
-    args.out_json.parent.mkdir(parents=True, exist_ok=True)
-    args.out_json.write_text(scrubbed_json_str, encoding="utf-8", newline="\n")
-    args.out_log.write_text(scrubbed_log_str, encoding="utf-8", newline="\n")
-    return 0 if report["status"] == "PASS" else 2
+    out_json.parent.mkdir(parents=True, exist_ok=True)
+    out_log.parent.mkdir(parents=True, exist_ok=True)
+    out_json.write_text(scrubbed_json_str, encoding="utf-8", newline="\n")
+    out_log.write_text(scrubbed_log_str, encoding="utf-8", newline="\n")
+    return int(report["exit_code"])
+
+
+def main() -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--app-image", default=os.environ.get("APP_IMAGE", ""), required=False)
+    parser.add_argument("--image-git-sha", required=True)
+    parser.add_argument(
+        "--out-json",
+        type=Path,
+        default=OPS_DIR / "evidence" / "p4-ops-local-rehearsal-report.json",
+    )
+    parser.add_argument(
+        "--out-log",
+        type=Path,
+        default=OPS_DIR / "evidence" / "p4-ops-local-rehearsal.log",
+    )
+    args = parser.parse_args()
+    return run_rehearsal(
+        app_image=args.app_image,
+        image_git_sha=args.image_git_sha,
+        out_json=args.out_json,
+        out_log=args.out_log,
+    )
 
 
 if __name__ == "__main__":
