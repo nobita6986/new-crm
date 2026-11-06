@@ -7,7 +7,7 @@
   - `git rev-parse HEAD:apps`: `b37e2cbdd99c88c7bd5620912de4519b53b2c159` (`0` thay đổi trong `apps/*` và `.github/workflows/*`)
   - `git rev-parse HEAD:apps/crm_cskh`: `da6373a01ad963301877f69c413fdda9a361f718`
 - **Hồ sơ đầu vào `P4-00`:** `be33e6c931337c42b94184b2fe292e094bd51c97` (`docs/p4/entry-audit.md`, `docs/p4/infra-inventory.md`)
-- **Đối chiếu nhánh Compose `T1A`:** `codex/p4-01-compose` tại `e2235559aa5f31669ff11a2d264e785819a7612a` (`docs/p4/P4-ADR-01-compose-and-isolation.md`)
+- **Đối chiếu nhánh Compose `T1A`:** `codex/p4-01-compose` tại `12a44c99a12239a341c2f555d2e239bb6711f465` (provenance Compose thực chạy `2c1e7594471b119f2c41a85fa12d30a85b356785`; đối chiếu kiến trúc từ `e2235559aa5f31669ff11a2d264e785819a7612a` trong `docs/p4/P4-ADR-01-compose-and-isolation.md`)
 - **Tài liệu liên kết:**
   - [`docs/p4/P4-ADR-02-custom-image-and-lock.md`](./P4-ADR-02-custom-image-and-lock.md)
   - [`docs/p4/p4-02-pipeline-input-contract.md`](./p4-02-pipeline-input-contract.md)
@@ -28,7 +28,7 @@
 | **OCI Config Digest (bên trong manifest)** | `sha256:ea7c24011f9b8bdac989a3ba2aca1032379a7728df2f4bc96ad1a41f4c8fcd7f` | `VERIFIED` |
 | **Kiến trúc / Hệ điều hành / User mặc định** | `linux/amd64` / Debian 12 (`bookworm`) / `frappe` (`UID 1000`, `GID 0` — non-root) | `VERIFIED` |
 | **Dung lượng giải nén image** | `5,238,141,558` bytes (`~4.88 GiB` — đã loại bỏ ~600 MB `apps/crm/{,frontend/}node_modules`) | `VERIFIED` |
-| **Kiểm định site sạch + HTTP assets + nhãn tiếng Việt (`G02`)** | **`45/45` assertions `PASS`** ([`deploy/images/evidence/clean-site-verify.json`](../../deploy/images/evidence/clean-site-verify.json)) | `PASS` |
+| **Kiểm định site sạch + HTTP assets + nhãn tiếng Việt (`G02` — Phạm vi Local)** | **`45/45` assertions `PASS`** ([`deploy/images/evidence/clean-site-verify.json`](../../deploy/images/evidence/clean-site-verify.json)) | **`PASS (Local)`** |
 | **Kiểm chứng đẩy & kéo Digest từ Remote Registry** | `approved_registry_repo_digest: null` — chưa có Container Registry URL và tài khoản `push`/`pull` được phê duyệt trong `P4-00` (`infra-inventory.md` dòng 19) | **`BLOCKED`** |
 
 ---
@@ -91,7 +91,7 @@ Chạy kịch bản tự động [`deploy/images/verify_clean_site.py`](../../de
 
 ### 5.1. Hợp đồng Biến `APP_IMAGE` + `PULL_POLICY`
 
-Đã đối chiếu trực tiếp với nhánh `codex/p4-01-compose` (`e2235559aa5f31669ff11a2d264e785819a7612a`) của `T1A` tại `deploy/compose/overrides/compose.cskh-common.yaml` và `deploy/compose/scripts/validate_compose_config.py`:
+Đã đối chiếu trực tiếp với nhánh `codex/p4-01-compose` (`12a44c99a12239a341c2f555d2e239bb6711f465`, provenance Compose thực chạy `2c1e7594471b119f2c41a85fa12d30a85b356785`) của `T1A` tại `deploy/compose/overrides/compose.cskh-common.yaml` và `deploy/compose/scripts/validate_compose_config.py`:
 
 - **Biến nhận image duy nhất cho toàn bộ 8 service ứng dụng:** `APP_IMAGE`
   - **Chạy kiểm thử smoke cô lập ngay trên Docker Engine hiện tại (`v29.9.2`):**
@@ -105,7 +105,7 @@ Chạy kịch bản tự động [`deploy/images/verify_clean_site.py`](../../de
 
 ### 5.2. Ghi chú Phối hợp Tích hợp cho `T1A` / `T1C` Khi Chạy `run_isolated_smoke.py` Trên Host Windows
 
-Khi thử nghiệm nạp trực tiếp `APP_IMAGE=sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9` vào bộ Compose của `T1A` (`e223555`), toàn bộ 10 container khởi tạo hợp lệ, `configurator` thoát `0`, `db` và `redis-*` đều lên `healthy`. Tuy nhiên, trên Python chạy trực tiếp ở Windows (ngoài WSL/Linux), dòng 538 của `deploy/compose/scripts/run_isolated_smoke.py` gọi `sec_file.write_text(val + "\n", encoding="utf-8")` không truyền `newline="\n"`, khiến Python trên Windows ghi `\r\n` vào tệp `db_root_password.txt`; MariaDB nạp mật khẩu có ký tự `\r` ở cuối qua `MYSQL_ROOT_PASSWORD_FILE`, dẫn tới bước `bench new-site --db-root-password` bị lỗi `1045 Access denied` trên Windows (trên Linux/CI Ubuntu không bị ảnh hưởng; nếu chạy trực tiếp từ PowerShell trên Windows chỉ cần thêm `newline="\n"` ở hàm ghi secret tạm của `run_isolated_smoke.py`).
+Khi thử nghiệm ban đầu nạp `APP_IMAGE=sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9` vào bộ Compose của `T1A` ở mốc `e223555`, toàn bộ 10 container khởi tạo hợp lệ, `configurator` thoát `0`, `db` và `redis-*` đều lên `healthy`; riêng bước ghi `db_root_password.txt` trên Python Windows chưa truyền `newline="\n"` gây dư ký tự `\r`. **Trạng thái sau tích hợp (`12a44c9` / `2c1e759`):** `T1A` đã sửa ép `newline="\n"` kèm unit test kiểm tra byte `LF`, đóng đầy đủ `F-P4-01..03` tại `2c1e7594471b119f2c41a85fa12d30a85b356785` và chạy `PASS` trọn vẹn lượt live smoke cô lập `20261106090505-fa2d24` với đúng image `4de3dc8656b0077cabd4220afc6636da543e34f6` (bằng chứng tại [`deploy/compose/evidence/p4-01-isolated-smoke-report.json`](../../deploy/compose/evidence/p4-01-isolated-smoke-report.json)).
 
 ---
 

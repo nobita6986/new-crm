@@ -7,5 +7,7 @@
 *.sha256 text eol=lf
 *.txt text eol=lf
 *.diff text eol=lf
+evidence/build.log -text -whitespace
+evidence/upstream-patches.diff text eol=lf -whitespace
 Containerfile text eol=lf
 Containerfile.dockerignore text eol=lf
