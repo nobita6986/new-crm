@@ -1,12 +1,15 @@
 {
-  "timestamp_utc": "2026-11-06T07:29:27Z",
+  "timestamp_utc": "2026-11-06T07:52:11Z",
   "evidence_scope": "LOCAL_ISOLATED_COMPOSE_REHEARSAL",
   "remote_staging_and_production_gates_status": "BLOCKED",
-  "run_id": "20261106072926-2494ab",
-  "project_name": "crm-cskh-p4-ops-reh-20261106072926-2494ab",
+  "run_id": "20261106075211-7acede",
+  "project_name": "crm-cskh-p4-ops-reh-20261106075211-7acede",
   "site_name": "p3-test.localhost",
   "loopback_http_port": 18180,
   "compose_baseline_sha": "492423c43a3ddb15e8f5fea23124c4bc70a6dbb8",
+  "ops_runner_git_sha": "2f7d876991bd7b5eaa154e92caf6746b745b69f8",
+  "ops_worktree_code_clean": true,
+  "dirty_non_evidence_paths": [],
   "image_git_sha": "4de3dc8656b0077cabd4220afc6636da543e34f6",
   "app_image": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
   "image_summary": {
@@ -32,17 +35,27 @@
       "io.cskh.frappe_tag": "v15.123.1",
       "org.opencontainers.image.description": "CRM-CSKH immutable production image (Frappe + Frappe CRM + crm_cskh)",
       "org.opencontainers.image.revision": "92e14af3532876ad5bc2468bf0e502474cc95a53",
-      "org.opencontainers.image.source": "https://github.com/nobita6986/new-crm",
+      "org.opencontainers.image.source": "https://github.com/<REDACTED_WEBHOOK_PATH>",
       "org.opencontainers.image.title": "crm-cskh"
     }
+  },
+  "status": "PASS",
+  "failed_step": null,
+  "exit_code": 0,
+  "failure_detail": null,
+  "measured_phases": {
+    "p4_03_migration_x2_rehearsal": "PASS",
+    "p4_07_observability_and_invariants": "PASS",
+    "p4_08_pre_uat_role_and_vi_audit": "PASS",
+    "p4_10_rollback_and_restore_rehearsal": "PASS"
   },
   "phases": {
     "p4_03_migration_x2_rehearsal": {
       "status": "PASS",
-      "migrate_run1_seconds": 16.45,
-      "migrate_run2_seconds": 16.44,
+      "migrate_run1_seconds": 16.88,
+      "migrate_run2_seconds": 18.66,
       "reconciliation": {
-        "timestamp_utc": "2026-11-06T07:32:42Z",
+        "timestamp_utc": "2026-11-06T07:55:04Z",
         "status": "PASS",
         "violation_count": 0,
         "violations": [],
@@ -112,7 +125,7 @@
     "p4_07_observability_and_invariants": {
       "status": "PASS",
       "live_probe": {
-        "timestamp_utc": "2026-11-06T07:33:03Z",
+        "timestamp_utc": "2026-11-06T07:55:22Z",
         "environment": "local-isolated-rehearsal",
         "site": "p3-test.localhost",
         "status": "PASS",
@@ -121,13 +134,13 @@
           "missing_daemon_services": [],
           "unhealthy_services": [],
           "scheduler_running_instances": 1,
-          "scheduler_uptime_seconds": 62,
+          "scheduler_uptime_seconds": 64,
           "restarts_or_oom": []
         },
         "disk": {
           "total_bytes": 256059109376,
-          "used_bytes": 10089213952,
-          "free_bytes": 245969895424,
+          "used_bytes": 10089488384,
+          "free_bytes": 245969620992,
           "used_percent": 3.94,
           "warn_threshold_pct": 80.0,
           "critical_threshold_pct": 90.0,
@@ -136,7 +149,7 @@
         "queues_and_scheduler": {
           "status": "PASS",
           "scheduler_disabled": false,
-          "scheduler_uptime_seconds": 62,
+          "scheduler_uptime_seconds": 64,
           "startup_grace_override_seconds": 0,
           "queues": {
             "default": {
@@ -239,7 +252,7 @@
         },
         "data_loss_window_delta": null,
         "alert_preflight": {
-          "timestamp_utc": "2026-11-06T07:33:00Z",
+          "timestamp_utc": "2026-11-06T07:55:19Z",
           "status": "BLOCKED",
           "operator_contact_configured": false,
           "webhook_https_configured": false,
@@ -262,9 +275,9 @@
           "status": "DELIVERED",
           "http_status": 200,
           "dedup_key": "local-isolated-rehearsal:ALT-TEST-SYNTHETIC",
-          "payload_sha256": "ac587cd1e58a7298364d94cbc2b7ddb6da54cb79b4fae0d44982bac385619a4e",
+          "payload_sha256": "10f7b53ca23a2a79e0e9522ea4ef197d4c57f76e1c73d9546bfbde667123a673",
           "webhook_redacted": "https://127.0.0.1:18243/<REDACTED_WEBHOOK_PATH>",
-          "timestamp_utc": "2026-11-06T07:33:21Z"
+          "timestamp_utc": "2026-11-06T07:55:42Z"
         },
         "second_dispatch_within_cooldown": {
           "status": "SUPPRESSED_COOLDOWN",
@@ -284,7 +297,7 @@
           "runbook": "docs/p4/monitoring-alerts.md#5-kiem-thu-canh-bao-end-to-end-g19",
           "severity": "INFO",
           "summary": "Synthetic P4-07 G19 test alert verification (no PII, no secrets).",
-          "timestamp_utc": "2026-11-06T07:33:21Z"
+          "timestamp_utc": "2026-11-06T07:55:42Z"
         },
         "pass": true
       }
@@ -404,7 +417,7 @@
           "new_or_updated_work_items": 0,
           "new_published_kpi_runs": 0,
           "new_sla_breaches": 0,
-          "since_utc": "2026-11-06T07:33:40Z"
+          "since_utc": "2026-11-06T07:56:06Z"
         },
         "post_restore_delta": {
           "new_assignment_events": 0,
@@ -415,10 +428,10 @@
           "new_or_updated_work_items": 0,
           "new_published_kpi_runs": 6,
           "new_sla_breaches": 0,
-          "since_utc": "2026-11-06T07:33:40Z"
+          "since_utc": "2026-11-06T07:56:06Z"
         },
         "post_restore_invariants_status": "PASS",
-        "restore_and_migrate_seconds": 57.47,
+        "restore_and_migrate_seconds": 63.72,
         "pass": true
       }
     }
@@ -438,23 +451,23 @@
             "websocket",
             "frontend",
             "queue-long",
-            "proxy",
             "queue-short",
+            "proxy",
             "scheduler"
           ],
           "migrate_profile_services": [
             "db",
-            "redis-cache",
             "redis-queue",
+            "redis-cache",
             "configurator",
-            "websocket",
-            "backend",
-            "frontend",
+            "migrator",
             "proxy",
             "queue-long",
+            "queue-short",
             "scheduler",
-            "migrator",
-            "queue-short"
+            "backend",
+            "websocket",
+            "frontend"
           ],
           "pass": true
         },
@@ -462,17 +475,17 @@
           "compose_file_count": 8,
           "config_render_exit": 0,
           "default_services": [
-            "db",
             "redis-cache",
             "redis-queue",
+            "db",
             "configurator",
-            "websocket",
             "backend",
+            "websocket",
             "frontend",
             "proxy",
-            "queue-long",
+            "queue-short",
             "scheduler",
-            "queue-short"
+            "queue-long"
           ],
           "migrate_profile_services": [
             "db",
@@ -482,11 +495,11 @@
             "backend",
             "websocket",
             "frontend",
+            "queue-long",
+            "queue-short",
             "scheduler",
             "migrator",
-            "proxy",
-            "queue-long",
-            "queue-short"
+            "proxy"
           ],
           "pass": true
         },
@@ -499,26 +512,26 @@
             "redis-cache",
             "configurator",
             "backend",
-            "scheduler",
             "websocket",
             "frontend",
             "proxy",
-            "queue-long",
-            "queue-short"
+            "queue-short",
+            "scheduler",
+            "queue-long"
           ],
           "migrate_profile_services": [
+            "db",
             "redis-cache",
             "redis-queue",
-            "db",
             "configurator",
             "backend",
             "websocket",
             "frontend",
-            "proxy",
-            "queue-long",
+            "queue-short",
             "scheduler",
             "migrator",
-            "queue-short"
+            "proxy",
+            "queue-long"
           ],
           "pass": true
         },
@@ -526,31 +539,31 @@
           "compose_file_count": 8,
           "config_render_exit": 0,
           "default_services": [
+            "proxy",
+            "redis-queue",
             "db",
             "redis-cache",
-            "redis-queue",
             "configurator",
-            "backend",
-            "websocket",
-            "frontend",
-            "proxy",
             "queue-long",
             "queue-short",
-            "scheduler"
+            "scheduler",
+            "backend",
+            "websocket",
+            "frontend"
           ],
           "migrate_profile_services": [
-            "db",
             "redis-cache",
             "redis-queue",
+            "db",
             "configurator",
-            "backend",
-            "proxy",
-            "queue-long",
-            "scheduler",
             "websocket",
+            "backend",
             "frontend",
             "migrator",
-            "queue-short"
+            "queue-long",
+            "queue-short",
+            "scheduler",
+            "proxy"
           ],
           "pass": true
         },
@@ -576,7 +589,7 @@
         "status": "PASS",
         "inspected_services": {
           "backend": {
-            "container": "crm-cskh-p4-ops-reh-20261106072926-2494ab-backend-1",
+            "container": "crm-cskh-p4-ops-reh-20261106075211-7acede-backend-1",
             "running_image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
             "repo_digests": [
               "crm-cskh@sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9"
@@ -584,7 +597,7 @@
             "matched": true
           },
           "frontend": {
-            "container": "crm-cskh-p4-ops-reh-20261106072926-2494ab-frontend-1",
+            "container": "crm-cskh-p4-ops-reh-20261106075211-7acede-frontend-1",
             "running_image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
             "repo_digests": [
               "crm-cskh@sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9"
@@ -592,7 +605,7 @@
             "matched": true
           },
           "websocket": {
-            "container": "crm-cskh-p4-ops-reh-20261106072926-2494ab-websocket-1",
+            "container": "crm-cskh-p4-ops-reh-20261106075211-7acede-websocket-1",
             "running_image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
             "repo_digests": [
               "crm-cskh@sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9"
@@ -600,7 +613,7 @@
             "matched": true
           },
           "queue-short": {
-            "container": "crm-cskh-p4-ops-reh-20261106072926-2494ab-queue-short-1",
+            "container": "crm-cskh-p4-ops-reh-20261106075211-7acede-queue-short-1",
             "running_image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
             "repo_digests": [
               "crm-cskh@sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9"
@@ -608,7 +621,7 @@
             "matched": true
           },
           "queue-long": {
-            "container": "crm-cskh-p4-ops-reh-20261106072926-2494ab-queue-long-1",
+            "container": "crm-cskh-p4-ops-reh-20261106075211-7acede-queue-long-1",
             "running_image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
             "repo_digests": [
               "crm-cskh@sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9"
@@ -616,7 +629,7 @@
             "matched": true
           },
           "scheduler": {
-            "container": "crm-cskh-p4-ops-reh-20261106072926-2494ab-scheduler-1",
+            "container": "crm-cskh-p4-ops-reh-20261106075211-7acede-scheduler-1",
             "running_image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
             "repo_digests": [
               "crm-cskh@sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9"
@@ -744,6 +757,12 @@
     }
   },
   "cleanup_verification": {
+    "stack_started": true,
+    "teardown_invoked": true,
+    "teardown_exit_code": 0,
+    "teardown_error": null,
+    "tmpdir_removed": true,
+    "host_snapshot_captured": true,
     "project_leftovers": {
       "containers": [],
       "volumes": [],
@@ -753,6 +772,5 @@
     "host_leaked_containers": [],
     "host_leaked_networks": [],
     "pass": true
-  },
-  "status": "PASS"
+  }
 }
