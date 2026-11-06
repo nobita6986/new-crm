@@ -36,8 +36,8 @@
   },
   "python_constraints": {
     "system_constraints_file": "deploy/images/resources/system-python-constraints.txt",
-    "system_constraints_sha256": "97c5945f8400491ba7d69041448dbf6f5b94a18d5e6802e32584b4b5c7200582",
-    "system_package_count": 19,
+    "system_constraints_sha256": "aa20fca89707c32d28ee6197379c5528ff4e9afdc88735e960cbe0f0534309e4",
+    "system_package_count": 22,
     "bench_constraints_file": "deploy/images/resources/python-constraints.txt",
     "bench_constraints_sha256": "0673e11fb1d394e599dddade9c116efb2b502d0d4fb7a59a73c6d958f1d34037",
     "bench_package_count": 154

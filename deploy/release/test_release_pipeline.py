@@ -175,7 +175,7 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
         self.assertTrue(res["passed"], f"Lock hygiene errors: {res['errors']}")
         self.assertEqual(res["verified_evidence_checksums"], 10)
         self.assertEqual(res["bench_python_constraints_count"], 154)
-        self.assertEqual(res["system_python_constraints_count"], 19)
+        self.assertEqual(res["system_python_constraints_count"], 22)
 
         # REL-03: Containerfile enforces constraints across pip & uv steps
         cfile = (REPO_ROOT / "deploy" / "images" / "Containerfile").read_text(

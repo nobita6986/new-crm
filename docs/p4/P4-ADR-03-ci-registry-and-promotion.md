@@ -57,7 +57,7 @@ flowchart TB
 
 ### 2.2. Khóa Phụ thuộc Python Bắc cầu & Đồng bộ Verify Harness (`REL-03` / `REL-04`)
 
-- Hai tệp khóa [`system-python-constraints.txt`](../../deploy/images/resources/system-python-constraints.txt) (`19` gói) và [`python-constraints.txt`](../../deploy/images/resources/python-constraints.txt) (`154` gói) được ghim SHA-256 trong [`release-lock.json`](../../deploy/images/release-lock.json) và áp đặt xuyên suốt `pip3 install`, `bench init`, `bench get-app` và `./env/bin/pip install --no-build-isolation`.
+- Hai tệp khóa [`system-python-constraints.txt`](../../deploy/images/resources/system-python-constraints.txt) (`22` gói) và [`python-constraints.txt`](../../deploy/images/resources/python-constraints.txt) (`154` gói) được ghim SHA-256 trong [`release-lock.json`](../../deploy/images/release-lock.json) và áp đặt xuyên suốt `pip3 install`, `bench init`, `bench get-app` và `./env/bin/pip install --no-build-isolation`.
 - [`compose.verify.yaml`](../../deploy/images/compose.verify.yaml) sao chép `/home/frappe/frappe-bench/apps-order.txt` (`frappe -> crm -> crm_cskh`) vào `sites/apps.txt` (khớp tuyệt đối [`compose.cskh-common.yaml`](../../deploy/compose/overrides/compose.cskh-common.yaml)), và bước khởi tạo site kiểm thử P0–P3 trong `p4-release.yml` truyền `--no-mariadb-socket` đồng bộ với kết nối MariaDB qua TCP.
 
 ### 2.3. Cổng Bảo mật Strict, Bản vá Tương thích & Ký số Ed25519 (`REL-01`)
