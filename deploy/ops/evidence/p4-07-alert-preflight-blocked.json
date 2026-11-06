@@ -1,0 +1,33 @@
+{
+  "timestamp_utc": "2026-11-06T04:45:53Z",
+  "environment": "staging",
+  "mode": "preflight_alert_check",
+  "status": "BLOCKED",
+  "alert_preflight": {
+    "timestamp_utc": "2026-11-06T04:45:53Z",
+    "status": "BLOCKED",
+    "operator_contact_configured": false,
+    "webhook_https_configured": false,
+    "blockers": [
+      {
+        "id": "BLK-GOV-06",
+        "field": "CSKH_OPERATOR_CONTACT",
+        "reason": "Named Day-2 Operator / on-call recipient has not been assigned and signed off by Owner."
+      },
+      {
+        "id": "BLK-INFRA-07",
+        "field": "CSKH_ALERT_WEBHOOK_URL",
+        "reason": "Approved HTTPS alert delivery endpoint (Webhook / ChatOps / Pager) has not been provisioned."
+      }
+    ]
+  },
+  "disk": {
+    "total_bytes": 256059109376,
+    "used_bytes": 34676649984,
+    "free_bytes": 221382459392,
+    "used_percent": 13.54,
+    "warn_threshold_pct": 80.0,
+    "critical_threshold_pct": 90.0,
+    "level": "OK"
+  }
+}
