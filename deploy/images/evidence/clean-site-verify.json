@@ -1,0 +1,400 @@
+{
+  "schema_version": "cskh-p4-01-clean-site-verify-v1",
+  "work_package": "P4-01",
+  "gate_alignment": "G02",
+  "started_at_utc": "2026-11-05T15:18:31.686666+00:00",
+  "completed_at_utc": "2026-11-05T15:20:49.236092+00:00",
+  "app_image_tested": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+  "image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+  "site_name": "p4-clean-verify.localhost",
+  "http_loopback_port": 18780,
+  "list_apps": [
+    "frappe",
+    "crm",
+    "crm_cskh"
+  ],
+  "upstream_revisions": {
+    "frappe": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+    "crm": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+    "crm_tracked_modified_files": [
+      "frontend/auto-imports.d.ts"
+    ],
+    "crm_cskh_tree_sha": "da6373a01ad963301877f69c413fdda9a361f718",
+    "apps_tree_sha": "b37e2cbdd99c88c7bd5620912de4519b53b2c159"
+  },
+  "frontend_bundles_verified": {
+    "frappe_desk_js": "/assets/frappe/dist/js/desk.bundle.DWR4TLZJ.js",
+    "frappe_desk_css": "/assets/frappe/dist/css/desk.bundle.NY3NG2BJ.css",
+    "frappe_web_js": "/assets/frappe/dist/js/frappe-web.bundle.BNEBYLYP.js",
+    "crm_spa_js": "/assets/crm/frontend/assets/index-CRiPnyne.js",
+    "crm_spa_css": "/assets/crm/frontend/assets/Button-ug8Vt_Qh.css",
+    "cskh_assets": [
+      "/assets/crm_cskh/cskh/cskh.js",
+      "/assets/crm_cskh/cskh/cskh.css",
+      "/assets/crm_cskh/cskh/p2-api.js",
+      "/assets/crm_cskh/cskh/p3-api.js",
+      "/assets/crm_cskh/cskh/quality-overview.js"
+    ]
+  },
+  "schema_audit": {
+    "modules_txt": [
+      "CRM CSKH"
+    ],
+    "module_defs_for_crm_cskh": [
+      {
+        "name": "CRM CSKH",
+        "module_name": "CRM CSKH",
+        "app_name": "crm_cskh"
+      }
+    ],
+    "module_def_titlecase_crm_cskh_exists": true,
+    "cskh_export_job_json_module": "Crm Cskh",
+    "cskh_export_job_db_module": "Crm Cskh",
+    "cskh_export_job_table_exists": true,
+    "cskh_doctypes_by_module": {
+      "CRM CSKH": [
+        "CSKH Active Claim",
+        "CSKH App Settings",
+        "CSKH Assignment History",
+        "CSKH Assignment Rule",
+        "CSKH Attempt Correction",
+        "CSKH Campaign",
+        "CSKH Contact Attempt",
+        "CSKH Dirty Scope",
+        "CSKH Distribution Run",
+        "CSKH Identity Index",
+        "CSKH Import Batch",
+        "CSKH Import Batch Lead",
+        "CSKH KPI Run",
+        "CSKH KPI Snapshot",
+        "CSKH Outcome Code",
+        "CSKH Policy",
+        "CSKH QA Review",
+        "CSKH SLA Obligation",
+        "CSKH Team Membership History",
+        "CSKH Work Item",
+        "CSKH Working Calendar",
+        "CSKH Working Shift"
+      ],
+      "Crm Cskh": [
+        "CSKH Export Job"
+      ]
+    },
+    "install_app_crm_cskh_filtered_lines": [],
+    "migrate_1_filtered_lines": [],
+    "migrate_2_filtered_lines": []
+  },
+  "summary": {
+    "total_assertions": 45,
+    "passed": 45,
+    "failed": 0,
+    "verdict": "PASS"
+  },
+  "assertions": [
+    {
+      "id": "image.user_non_root",
+      "verdict": "PASS",
+      "expected": "frappe",
+      "actual": "frappe"
+    },
+    {
+      "id": "image.label.frappe_sha",
+      "verdict": "PASS",
+      "expected": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+      "actual": "d2efa79657ba5c1abf96098b3bfacc199517d57e"
+    },
+    {
+      "id": "image.label.crm_sha",
+      "verdict": "PASS",
+      "expected": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "actual": "0d3910b456ef4fb913e77b29db011b3debc4f778"
+    },
+    {
+      "id": "image.label.apps_tree_sha",
+      "verdict": "PASS",
+      "expected": "b37e2cbdd99c88c7bd5620912de4519b53b2c159",
+      "actual": "b37e2cbdd99c88c7bd5620912de4519b53b2c159"
+    },
+    {
+      "id": "image.label.crm_cskh_tree_sha",
+      "verdict": "PASS",
+      "expected": "da6373a01ad963301877f69c413fdda9a361f718",
+      "actual": "da6373a01ad963301877f69c413fdda9a361f718"
+    },
+    {
+      "id": "topology.no_host_bind_mounts",
+      "verdict": "PASS",
+      "expected": {},
+      "actual": {}
+    },
+    {
+      "id": "topology.internal_services_unexposed",
+      "verdict": "PASS",
+      "expected": {},
+      "actual": {}
+    },
+    {
+      "id": "topology.frontend_loopback_only",
+      "verdict": "PASS",
+      "expected": [
+        "127.0.0.1:18780->8080"
+      ],
+      "actual": [
+        "127.0.0.1:18780->8080"
+      ]
+    },
+    {
+      "id": "site.list_apps",
+      "verdict": "PASS",
+      "expected": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ],
+      "actual": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ]
+    },
+    {
+      "id": "site.apps_txt_order",
+      "verdict": "PASS",
+      "expected": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ],
+      "actual": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ]
+    },
+    {
+      "id": "runtime.frappe_sha",
+      "verdict": "PASS",
+      "expected": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+      "actual": "d2efa79657ba5c1abf96098b3bfacc199517d57e"
+    },
+    {
+      "id": "runtime.crm_sha",
+      "verdict": "PASS",
+      "expected": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "actual": "0d3910b456ef4fb913e77b29db011b3debc4f778"
+    },
+    {
+      "id": "runtime.crm_no_vite_dev_patch",
+      "verdict": "PASS",
+      "expected": "only auto-generated frontend/auto-imports.d.ts or empty (no Vite DEV patch)",
+      "actual": [
+        "frontend/auto-imports.d.ts"
+      ]
+    },
+    {
+      "id": "runtime.frappe_jinja_vi_patched",
+      "verdict": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "id": "runtime.cskh_tree_sha",
+      "verdict": "PASS",
+      "expected": "da6373a01ad963301877f69c413fdda9a361f718",
+      "actual": "da6373a01ad963301877f69c413fdda9a361f718"
+    },
+    {
+      "id": "site.cskh_doctypes_synced",
+      "verdict": "PASS",
+      "expected": ">=22 (23 defined in source)",
+      "actual": {
+        "synced_count": 23,
+        "export_job_in_doctype": true,
+        "export_job_module_in_db": "Crm Cskh",
+        "export_job_table_exists": true
+      }
+    },
+    {
+      "id": "site.developer_mode_disabled",
+      "verdict": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "id": "http.ping",
+      "verdict": "PASS",
+      "expected": "pong",
+      "actual": "pong"
+    },
+    {
+      "id": "http.security_header.x_frame_options",
+      "verdict": "PASS",
+      "expected": "SAMEORIGIN",
+      "actual": "SAMEORIGIN"
+    },
+    {
+      "id": "http.security_header.nosniff",
+      "verdict": "PASS",
+      "expected": "nosniff",
+      "actual": "nosniff"
+    },
+    {
+      "id": "http.asset.desk_js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >5KB",
+      "actual": "HTTP 200 (1369723 bytes)"
+    },
+    {
+      "id": "http.asset.desk_css",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >5KB",
+      "actual": "HTTP 200 (599739 bytes)"
+    },
+    {
+      "id": "http.asset.web_js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >5KB",
+      "actual": "HTTP 200 (834360 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.cskh.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (36328 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.cskh.css",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (15410 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.p2-api.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (34698 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.p3-api.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (59575 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.quality-overview.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (6077 bytes)"
+    },
+    {
+      "id": "http.guest.login_200",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & non-empty HTML",
+      "actual": "HTTP 200 (len=344955)"
+    },
+    {
+      "id": "http.guest.cskh_denied",
+      "verdict": "PASS",
+      "expected": "302/303/401/403",
+      "actual": 403
+    },
+    {
+      "id": "http.auth.login",
+      "verdict": "PASS",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "id": "http.auth.crm_page_200",
+      "verdict": "PASS",
+      "expected": "HTTP 200 with #app",
+      "actual": "HTTP 200 (len=925940)"
+    },
+    {
+      "id": "http.auth.crm_spa_entry_refs",
+      "verdict": "PASS",
+      "expected": "non-empty JS & CSS refs",
+      "actual": {
+        "js": [
+          "/assets/crm/frontend/assets/index-CRiPnyne.js"
+        ],
+        "css": [
+          "/assets/crm/frontend/assets/Button-ug8Vt_Qh.css",
+          "/assets/crm/frontend/assets/toast-DkIiB7xp.css"
+        ]
+      }
+    },
+    {
+      "id": "http.asset.crm_spa.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >1KB",
+      "actual": "HTTP 200 (612615 bytes)"
+    },
+    {
+      "id": "http.asset.crm_spa.css",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >1KB",
+      "actual": "HTTP 200 (2094 bytes)"
+    },
+    {
+      "id": "http.auth.route.cskh_dashboard",
+      "verdict": "PASS",
+      "expected": "HTTP 200 with #cskh-root & Asia/Ho_Chi_Minh",
+      "actual": "HTTP 200 (len=452786)"
+    },
+    {
+      "id": "http.vi_labels.cskh_dashboard",
+      "verdict": "PASS",
+      "expected": "Vietnamese UI labels rendered",
+      "actual": true
+    },
+    {
+      "id": "http.auth.route.cskh_quality-overview",
+      "verdict": "PASS",
+      "expected": "HTTP 200 with #cskh-root & Asia/Ho_Chi_Minh",
+      "actual": "HTTP 200 (len=452064)"
+    },
+    {
+      "id": "http.vi_labels.cskh_quality-overview",
+      "verdict": "PASS",
+      "expected": "Vietnamese UI labels rendered",
+      "actual": true
+    },
+    {
+      "id": "http.vi_labels.crm_boot_messages",
+      "verdict": "PASS",
+      "expected": "Vietnamese translated_messages in /crm boot",
+      "actual": true
+    },
+    {
+      "id": "runtime.service.backend",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    },
+    {
+      "id": "runtime.service.frontend",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    },
+    {
+      "id": "runtime.service.websocket",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    },
+    {
+      "id": "runtime.service.queue-short",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    },
+    {
+      "id": "runtime.service.scheduler",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    }
+  ]
+}
