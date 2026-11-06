@@ -264,7 +264,7 @@ RUN set -eux; \
     rm -f /tmp/cskh-form-data/node_modules/.yarn-integrity; \
     mv /tmp/cskh-form-data/node_modules apps/frappe/node_modules/form-data/node_modules; \
     rm -rf /tmp/cskh-form-data; \
-    EXPECTED_FD="${FORM_DATA_PATCH_VERSION}" node -e 'const assert = require("assert"); assert.strictEqual(require("./apps/frappe/node_modules/form-data/package.json").version, process.env.EXPECTED_FD); const FormData = require("./apps/frappe/node_modules/form-data"); const fd = new FormData(); fd.append("ping", "pong"); require("./apps/frappe/node_modules/superagent"); require("./apps/frappe/node_modules/socket.io"); require("./apps/frappe/node_modules/express"); require("./apps/frappe/node_modules/redis");'; \
+    EXPECTED_FD="${FORM_DATA_PATCH_VERSION}" node -e 'const assert = require("assert"); assert.strictEqual(require("./apps/frappe/node_modules/form-data/package.json").version, process.env.EXPECTED_FD); const FormData = require("./apps/frappe/node_modules/form-data"); const fd = new FormData(); fd.append("ping", "pong"); require("./apps/frappe/node_modules/superagent"); require("./apps/frappe/node_modules/socket.io"); require("./apps/frappe/node_modules/@redis/client"); require("./apps/frappe/node_modules/cookie");'; \
     FRAPPE_HEAD="$(git -C apps/frappe rev-parse HEAD)" \
     CRM_HEAD="$(git -C apps/crm rev-parse HEAD)" \
     FRAPPE_TAG_ARG="${FRAPPE_TAG}" \
