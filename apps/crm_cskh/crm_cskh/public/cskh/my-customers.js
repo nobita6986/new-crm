@@ -566,7 +566,7 @@
 		box.appendChild(
 			cskh.el('div', { class: 'cskh-grid' }, [
 				metric(cskh.t('Work item'), item.work_item),
-				metric(cskh.t('Customer'), (allowPii && item.display_name) || item.lead),
+				metric(cskh.t('Contact record'), (allowPii && item.display_name) || item.lead),
 				metric(
 					cskh.t('Phone number'),
 					allowPii && item.phone ? cskh.maskPhone(item.phone) : '—'

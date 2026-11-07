@@ -1,16 +1,16 @@
-Lead,Khách hàng tiềm năng
+Lead,Hồ sơ liên hệ
 Lead Owner,Nhân viên phụ trách
 Assigned To,Người phụ trách
 Note,Ghi chú
-Deal,Cơ hội
-Deals,Cơ hội
+Deal,Giao dịch CRM
+Deals,Giao dịch CRM
 Call Logs,Nhật ký cuộc gọi
 Last Modified,Cập nhật lần cuối
 Signed in as,Đã đăng nhập với tư cách
 This page uses the same Frappe site session as CRM.,Trang này dùng cùng phiên đăng nhập Frappe với CRM.
 Check session and CSRF,Kiểm tra phiên đăng nhập và CSRF
-Return to CRM Leads,Về danh sách khách hàng tiềm năng
-CSKH,CSKH
+Return to CRM Leads,Về danh sách Hồ sơ liên hệ (CRM)
+CSKH,Không gian tuyển dụng
 Email,Thư điện tử
 Emails,Thư điện tử
 Email Address,Địa chỉ thư điện tử
@@ -47,47 +47,47 @@ You are all set,Bạn đã sẵn sàng
 All steps are completed successfully,Bạn đã hoàn thành tất cả các bước
 Reset onboarding steps,Đặt lại các bước hướng dẫn
 "You need to complete ""{0}"" first.","Bạn cần hoàn thành ""{0}"" trước."
-Capture leads with a form,Thu thập khách hàng tiềm năng bằng biểu mẫu
-Won Deals,Cơ hội thành công
-Lost Deals,Cơ hội thất bại
-Avg Ongoing Deal Value,Giá trị trung bình của cơ hội đang mở
-Avg Won Deal Value,Giá trị trung bình của cơ hội thành công
-Avg Deal Value,Giá trị trung bình của cơ hội
+Capture leads with a form,Tiếp nhận hồ sơ liên hệ qua biểu mẫu
+Won Deals,Giao dịch CRM thành công
+Lost Deals,Giao dịch CRM thất bại
+Avg Ongoing Deal Value,Giá trị trung bình giao dịch CRM đang mở
+Avg Won Deal Value,Giá trị trung bình giao dịch CRM thành công
+Avg Deal Value,Giá trị trung bình giao dịch CRM
 Forecasted Revenue,Doanh thu dự báo
 Forecasted,Dự báo
 Actual,Thực tế
 Value,Giá trị
-Deals by Ongoing & Won Stage,Cơ hội theo giai đoạn đang mở và thành công
-Deals by Territory,Cơ hội theo khu vực
-Deals by Salesperson,Cơ hội theo nhân viên bán hàng
-Deals by Stage,Cơ hội theo giai đoạn
-Deals by Source,Cơ hội theo nguồn
-Total leads,Tổng số khách hàng tiềm năng
-Total number of leads,Tổng số khách hàng tiềm năng
-Ongoing deals,Cơ hội đang theo đuổi
-Total number of non won/lost deals,Tổng số cơ hội chưa thành công hoặc thất bại
-Avg. ongoing deal value,Giá trị trung bình của cơ hội đang theo đuổi
-Average deal value of non won/lost deals,Giá trị trung bình của cơ hội chưa thành công hoặc thất bại
-Won deals,Cơ hội thành công
-Total number of won deals based on its closure date,Tổng số cơ hội thành công theo ngày chốt
-Avg. won deal value,Giá trị trung bình của cơ hội thành công
-Average deal value of won deals,Giá trị trung bình của cơ hội thành công
-Avg. deal value,Giá trị trung bình mỗi cơ hội
-Average deal value of ongoing & won deals,Giá trị trung bình của cơ hội đang theo đuổi và thành công
-Avg. time to close a lead,Thời gian trung bình để chuyển đổi khách hàng tiềm năng
-Average time taken from lead creation to deal closure,Thời gian trung bình từ khi tạo khách hàng tiềm năng đến khi chốt cơ hội
-Avg. time to close a deal,Thời gian trung bình để chốt cơ hội
-Average time taken from deal creation to deal closure,Thời gian trung bình từ khi tạo cơ hội đến khi chốt
+Deals by Ongoing & Won Stage,Giao dịch CRM theo giai đoạn đang mở và thành công
+Deals by Territory,Giao dịch CRM theo khu vực
+Deals by Salesperson,Giao dịch CRM theo nhân viên phụ trách
+Deals by Stage,Giao dịch CRM theo giai đoạn
+Deals by Source,Giao dịch CRM theo nguồn
+Total leads,Tổng số hồ sơ liên hệ
+Total number of leads,Tổng số hồ sơ liên hệ
+Ongoing deals,Giao dịch CRM đang theo dõi
+Total number of non won/lost deals,Tổng số giao dịch CRM chưa đóng thành công/thất bại
+Avg. ongoing deal value,Giá trị trung bình giao dịch CRM đang theo dõi
+Average deal value of non won/lost deals,Giá trị trung bình giao dịch CRM chưa đóng thành công/thất bại
+Won deals,Giao dịch CRM thành công
+Total number of won deals based on its closure date,Tổng số giao dịch CRM thành công theo ngày đóng
+Avg. won deal value,Giá trị trung bình giao dịch CRM thành công
+Average deal value of won deals,Giá trị trung bình giao dịch CRM thành công
+Avg. deal value,Giá trị trung bình mỗi giao dịch CRM
+Average deal value of ongoing & won deals,Giá trị trung bình giao dịch CRM đang mở và thành công
+Avg. time to close a lead,Thời gian trung bình chuyển từ hồ sơ liên hệ sang giao dịch CRM
+Average time taken from lead creation to deal closure,Thời gian trung bình từ khi tạo hồ sơ liên hệ đến khi đóng giao dịch CRM
+Avg. time to close a deal,Thời gian trung bình xử lý giao dịch CRM
+Average time taken from deal creation to deal closure,Thời gian trung bình từ khi tạo giao dịch CRM đến khi đóng
 Sales trend,Xu hướng bán hàng
-"Daily performance of leads, deals, and wins","Hiệu suất hằng ngày về khách hàng tiềm năng, cơ hội và giao dịch thành công"
+"Daily performance of leads, deals, and wins",Diễn biến hằng ngày của hồ sơ liên hệ và giao dịch CRM
 Date,Ngày
 Count,Số lượng
 Forecasted revenue,Doanh thu dự báo
-Projected vs actual revenue based on deal probability,Doanh thu dự kiến so với thực tế theo xác suất thành công của cơ hội
+Projected vs actual revenue based on deal probability,Doanh thu dự kiến so với thực tế theo xác suất giao dịch CRM
 Month,Tháng
 Revenue,Doanh thu
 Funnel conversion,Chuyển đổi qua phễu bán hàng
-Lead to deal conversion pipeline,Quy trình chuyển đổi khách hàng tiềm năng thành cơ hội
+Lead to deal conversion pipeline,Quy trình chuyển từ Hồ sơ liên hệ sang Giao dịch CRM
 Stage,Giai đoạn
 stage,Giai đoạn
 days,ngày
@@ -99,34 +99,34 @@ Reference,Giới thiệu
 Referral,Giới thiệu
 Website,Trang web
 Cold Calling,Gọi điện chủ động
-Deals by ongoing & won stage,Cơ hội theo giai đoạn đang theo đuổi và thành công
-Deals by stage,Cơ hội theo giai đoạn
-Current pipeline distribution,Phân bổ cơ hội hiện tại theo giai đoạn
-Lost deal reasons,Lý do cơ hội thất bại
-Common reasons for losing deals,Các lý do phổ biến khiến cơ hội thất bại
+Deals by ongoing & won stage,Giao dịch CRM theo giai đoạn đang theo dõi và thành công
+Deals by stage,Giao dịch CRM theo giai đoạn
+Current pipeline distribution,Phân bổ giao dịch CRM hiện tại theo giai đoạn
+Lost deal reasons,Lý do giao dịch CRM thất bại
+Common reasons for losing deals,Các lý do phổ biến khiến giao dịch CRM thất bại
 Reason,Lý do
-Leads by source,Khách hàng tiềm năng theo nguồn
-Lead generation channel analysis,Phân tích kênh tạo khách hàng tiềm năng
-Deals by source,Cơ hội theo nguồn
-Deal generation channel analysis,Phân tích kênh tạo cơ hội
-Deals by territory,Cơ hội theo khu vực
-Geographic distribution of deals and revenue,Phân bổ cơ hội và doanh thu theo khu vực
+Leads by source,Hồ sơ liên hệ theo nguồn
+Lead generation channel analysis,Phân tích kênh tiếp nhận hồ sơ liên hệ
+Deals by source,Giao dịch CRM theo nguồn
+Deal generation channel analysis,Phân tích kênh tạo giao dịch CRM
+Deals by territory,Giao dịch CRM theo khu vực
+Geographic distribution of deals and revenue,Phân bổ giao dịch CRM và doanh thu theo khu vực
 Territory,Khu vực
-Number of deals,Số lượng cơ hội
-Deal value,Giá trị cơ hội
-Deals by salesperson,Cơ hội theo nhân viên bán hàng
-Number of deals and total value per salesperson,Số lượng cơ hội và tổng giá trị theo nhân viên bán hàng
+Number of deals,Số lượng giao dịch CRM
+Deal value,Giá trị giao dịch CRM
+Deals by salesperson,Giao dịch CRM theo nhân viên phụ trách
+Number of deals and total value per salesperson,Số lượng và tổng giá trị giao dịch CRM theo nhân viên
 Salesperson,Nhân viên bán hàng
-Leads,Khách hàng tiềm năng
-leads,Khách hàng tiềm năng
-deals,Cơ hội
-won_deals,Cơ hội thành công
+Leads,Hồ sơ liên hệ
+leads,Hồ sơ liên hệ
+deals,Giao dịch CRM
+won_deals,Giao dịch CRM thành công
 forecasted,Dự báo
 actual,Thực tế
 count,Số lượng
 New,Mới
 Contacted,Đã liên hệ
-Nurture,Nuôi dưỡng
+Nurture,Cần theo dõi thêm
 Qualified,Đủ điều kiện
 Unqualified,Không đủ điều kiện
 Open,Đang mở
@@ -176,14 +176,14 @@ Reset Password,Đặt lại mật khẩu
 Back to Login,Quay lại đăng nhập
 Send login link,Gửi liên kết đăng nhập
 jane@example.com,ten@vidu.vn
-CRM Lead assignments cannot change ownership; use the controlled Lead ownership path.,Không thể đổi chủ sở hữu Khách hàng tiềm năng bằng phân công thông thường; hãy dùng luồng chuyển quyền sở hữu được kiểm soát.
-Lead assignment changes are disabled until the controlled ownership service is available.,Chưa thể thay đổi phân công Khách hàng tiềm năng cho đến khi có dịch vụ chuyển quyền sở hữu được kiểm soát.
-Only a System Manager can change Lead ownership until the ownership service is available.,Hiện chỉ Quản trị hệ thống được đổi chủ sở hữu Khách hàng tiềm năng cho đến khi có dịch vụ chuyển quyền sở hữu.
-Lead assignment changes are not available for this role.,Vai trò này không được phép thay đổi phân công Khách hàng tiềm năng.
+CRM Lead assignments cannot change ownership; use the controlled Lead ownership path.,Không thể đổi người phụ trách Hồ sơ liên hệ bằng phân công thông thường; hãy dùng luồng chuyển quyền phụ trách được kiểm soát.
+Lead assignment changes are disabled until the controlled ownership service is available.,Chưa thể thay đổi phân công Hồ sơ liên hệ cho đến khi có dịch vụ chuyển quyền phụ trách được kiểm soát.
+Only a System Manager can change Lead ownership until the ownership service is available.,Hiện chỉ Quản trị hệ thống được đổi người phụ trách Hồ sơ liên hệ cho đến khi có dịch vụ chuyển quyền phụ trách.
+Lead assignment changes are not available for this role.,Vai trò này không được phép thay đổi phân công Hồ sơ liên hệ.
 Switch view,Chuyển chế độ xem
 Filter list,Lọc danh sách
 Refresh list,Làm mới danh sách
-Create Deal,Tạo cơ hội
+Create Deal,Tạo Giao dịch CRM
 Create Contact,Tạo liên hệ
 Create Organization,Tạo tổ chức
 Create Note,Tạo ghi chú
@@ -198,7 +198,7 @@ Due Date,Hạn chót
 Dashboard,Trang tổng quan
 Upload a file,Tải lên tệp
 Map columns,Ánh xạ cột
-First Name is mandatory,Tên khách hàng là trường bắt buộc
+First Name is mandatory,Vui lòng nhập tên người liên hệ
 Add Territory...,Thêm địa bàn...
 Add Industry...,Thêm ngành nghề...
 Add Salutation...,Thêm danh xưng...
@@ -211,9 +211,9 @@ Add Email...,Thêm thư điện tử...
 Add Mobile No....,Thêm số di động...
 Add Source...,Thêm nguồn...
 Select {0}...,Chọn {0}...
-Convert to Deal,Chuyển thành Cơ hội
-created this lead,đã tạo khách hàng tiềm năng này
-Lead Name,Tên khách hàng
+Convert to Deal,Chuyển thành Giao dịch CRM
+created this lead,đã tạo hồ sơ liên hệ này
+Lead Name,Tên hồ sơ liên hệ
 Search or type a command ({0}),Tìm kiếm hoặc nhập lệnh ({0})
 1. Upload a private file,1. Tải lên tệp riêng tư
 2. Preview and confirm,2. Xem trước và xác nhận
@@ -262,11 +262,11 @@ Created at,Thời điểm tạo
 Current owners,Người đang phụ trách
 Current owners are counted from work items; assignment events come from the audit trail.,Người đang phụ trách được đếm từ công việc; sự kiện phân công lấy từ nhật ký kiểm toán.
 Currently assigned,Đang được giao
-Customer,Khách hàng
-Customer pool,Kho khách hàng
-Customers assigned to me,Khách hàng được giao cho tôi
-Customers assigned to me.,Khách hàng được giao cho tôi.
-Customers currently assigned to you.,Những khách hàng hiện đang được giao cho bạn.
+Customer,Hồ sơ liên hệ
+Customer pool,Kho hồ sơ liên hệ
+Customers assigned to me,Hồ sơ được giao cho tôi
+Customers assigned to me.,"Danh sách hồ sơ liên hệ đang giao cho bạn tiếp nhận, liên hệ và hẹn lại."
+Customers currently assigned to you.,Các hồ sơ liên hệ hiện do bạn phụ trách.
 DUPLICATE,DUPLICATE
 Data as of,Dữ liệu tính đến
 Description,Mô tả
@@ -280,13 +280,13 @@ Distribution state,Trạng thái phân phối
 Duplicate rows,Số dòng trùng
 Eligibility,Đủ điều kiện
 Eligible,Đủ điều kiện
-Eligible customers,Khách hàng đủ điều kiện
+Eligible customers,Hồ sơ đủ điều kiện phân công
 Eligible in the pool,Đủ điều kiện trong kho
 Ended at,Kết thúc lúc
 Error rows,Số dòng lỗi
 Errors,Số lỗi
 Excluded,Bị loại
-Excluded customers,Khách hàng bị loại
+Excluded customers,Hồ sơ không được phân công
 Expires at,Hết hạn lúc
 FILE_TOO_LARGE,FILE_TOO_LARGE
 FORBIDDEN,FORBIDDEN
@@ -296,11 +296,11 @@ INVALID_PHONE,INVALID_PHONE
 INVALID_REQUEST,INVALID_REQUEST
 Import counters must not be negative.,Bộ đếm nhập dữ liệu không được âm.
 Import history,Lịch sử nhập
-Import list,Nhập danh sách
+Import list,Nhập danh sách liên hệ
 Import source files must be private.,Tệp nguồn nhập dữ liệu phải là riêng tư.
 Loading...,Đang tải...
 Log in to access this page.,Hãy đăng nhập để truy cập trang này.
-My customers,Khách được giao
+My customers,Hồ sơ được giao
 NOT_FOUND,NOT_FOUND
 NO_ELIGIBLE_LEADS,NO_ELIGIBLE_LEADS
 Name or phone number,Tên hoặc số điện thoại
@@ -309,15 +309,15 @@ New rows,Số dòng mới
 Next,Trang sau
 No assignment rule yet.,Chưa có quy tắc phân công nào.
 No campaign yet.,Chưa có chiến dịch nào.
-No customers match the current filters.,Không có khách hàng nào khớp với bộ lọc hiện tại.
+No customers match the current filters.,Không có hồ sơ nào khớp với bộ lọc hiện tại.
 No data,Không có dữ liệu
 No data in the current scope.,Không có dữ liệu trong phạm vi hiện tại.
 No import batch yet.,Chưa có lô nhập nào.
 Normalized share,Tỷ lệ chuẩn hóa
 Not distributed,Chưa phân phối
 Only an active work item may hold an active claim.,Chỉ công việc đang hoạt động mới được giữ quyền sở hữu đang hoạt động.
-Only the customers that are currently assigned to you.,Chỉ những khách hàng đang được giao cho bạn.
-Open in CRM,Mở trong CRM
+Only the customers that are currently assigned to you.,"Danh sách hồ sơ liên hệ hiện giao cho bạn tiếp nhận, liên hệ và đặt lịch hẹn lại."
+Open in CRM,Mở hồ sơ gốc (CRM)
 Operational distribution figures for your scope.,Số liệu phân phối trong phạm vi của bạn.
 Owner,Người phụ trách
 PARTIAL_SUCCESS,PARTIAL_SUCCESS
@@ -354,13 +354,13 @@ Started at,Bắt đầu lúc
 TOO_MANY_ROWS,TOO_MANY_ROWS
 Team,Đội
 Team scope,Phạm vi đội
-The active claim must reference the same lead and campaign as its work item.,Quyền sở hữu đang hoạt động phải trỏ tới cùng khách hàng và chiến dịch với công việc của nó.
+The active claim must reference the same lead and campaign as its work item.,Quyền sở hữu đang hoạt động phải trỏ tới cùng hồ sơ liên hệ và chiến dịch với công việc của nó.
 The actual payload must be valid JSON.,Dữ liệu kết quả phải là JSON hợp lệ.
 The allocator state must be a JSON object.,Trạng thái bộ phân bổ phải là một đối tượng JSON.
 The allocator state must be valid JSON.,Trạng thái bộ phân bổ phải là JSON hợp lệ.
-The assignee must be an enabled Sales User.,Người được giao phải là nhân viên bán hàng đang hoạt động.
+The assignee must be an enabled Sales User.,Người được giao phải là nhân viên tuyển dụng có tài khoản đang hoạt động.
 The campaign is already distributed by another executor.,Chiến dịch đã được một bộ thực thi khác phân phối.
-The canonical lead must have a mobile number.,Khách hàng chuẩn phải có số điện thoại di động.
+The canonical lead must have a mobile number.,Hồ sơ liên hệ chuẩn phải có số điện thoại di động.
 The distribution run,Đợt phân phối
 The distribution state changed after the preview. Run the preview again.,Trạng thái phân phối đã thay đổi sau khi xem trước. Hãy chạy lại xem trước.
 The end date must not precede the start date.,Ngày kết thúc không được trước ngày bắt đầu.
@@ -369,7 +369,7 @@ The file must be CSV or XLSX.,Tệp phải là CSV hoặc XLSX.
 The import batch,Lô nhập dữ liệu
 The phone column was not found. Map the column that holds the phone number.,Không tìm thấy cột số điện thoại. Hãy ánh xạ cột chứa số điện thoại.
 The phone identity must be a canonical Vietnamese mobile number.,Định danh số điện thoại phải là số di động Việt Nam chuẩn hóa.
-The phone identity must match the canonical lead mobile number.,Định danh số điện thoại phải khớp với số di động của khách hàng chuẩn.
+The phone identity must match the canonical lead mobile number.,Định danh số điện thoại phải khớp với số di động của hồ sơ liên hệ chuẩn.
 The preview has expired. Run the preview again.,Bản xem trước đã hết hạn. Hãy chạy lại xem trước.
 The preview payload must be valid JSON.,Dữ liệu xem trước phải là JSON hợp lệ.
 The rule version must be positive.,Phiên bản quy tắc phải là số dương.
@@ -381,16 +381,16 @@ Title,Tiêu đề
 Total rows,Tổng số dòng
 UNSUPPORTED_FORMAT,UNSUPPORTED_FORMAT
 Unassigned or conflicted work items,Công việc chưa giao hoặc xung đột
-Unique customers,Số khách hàng duy nhất
-Unique customers in scope,Khách hàng duy nhất trong phạm vi
+Unique customers,Số hồ sơ không trùng
+Unique customers in scope,Số hồ sơ không trùng trong phạm vi
 Valid rows,Số dòng hợp lệ
 Weight,Trọng số
 Weight and version must be positive; capacity must not be negative.,Trọng số và phiên bản phải là số dương; sức chứa không được âm.
-Work item,Công việc
+Work item,Đầu việc liên hệ
 Work item status,Trạng thái công việc
 Work items,Số công việc
 You do not have permission to access this page.,Bạn không có quyền truy cập trang này.
-You have not been assigned any customer yet.,Anh/chị chưa được giao khách hàng nào.
+You have not been assigned any customer yet.,Bạn chưa được giao hồ sơ nào.
 active_claim_in_other_campaign,Đang được giữ bởi chiến dịch khác
 assignment_failed,Phân công thất bại
 capacity_full,Đã đầy sức chứa
@@ -402,16 +402,16 @@ no_assignment_rule,Chưa có quy tắc phân công
 no_canonical_identity,Chưa có định danh chuẩn
 no_eligible_assignee,Không có người nhận đủ điều kiện
 no_positive_weight,Trọng số không dương
-owned_outside_cskh,Được quản lý ngoài phạm vi CSKH
+owned_outside_cskh,Được quản lý ngoài Không gian tuyển dụng
 user_disabled,Tài khoản đã bị vô hiệu hóa
-user_is_not_sales_user,Không phải nhân viên bán hàng
+user_is_not_sales_user,Người dùng không có vai trò nhân viên tuyển dụng
 user_out_of_team_scope,Ngoài phạm vi đội được phép
 valid,Hợp lệ
 work_item_exists_in_campaign,Đã có công việc trong chiến dịch
 {0} cannot move from {1} to {2}.,{0} không thể chuyển từ {1} sang {2}.
 The phone number is not a valid Vietnamese mobile number.,Số điện thoại không phải là số di động Việt Nam hợp lệ.
-The customer already exists in the CRM.,Khách hàng đã tồn tại trong CRM.
-The customer is already assigned in another campaign.,Khách hàng đã được giao trong chiến dịch khác.
+The customer already exists in the CRM.,Hồ sơ liên hệ này đã tồn tại trong CRM.
+The customer is already assigned in another campaign.,Hồ sơ liên hệ này đã được giao trong chiến dịch khác.
 The assignment rules changed after the preview. Run the preview again.,Quy tắc phân công đã thay đổi sau khi xem trước. Hãy xem trước lại.
 The assignment exceeds the capacity of the assignee.,Phân công vượt quá sức chứa của người được giao.
 The operation conflicts with the current state of the data.,Thao tác xung đột với trạng thái hiện tại của dữ liệu.
@@ -423,14 +423,14 @@ The file is larger than the allowed limit.,Tệp vượt quá giới hạn cho p
 The file has more rows than the allowed limit.,Tệp có nhiều dòng hơn giới hạn cho phép.
 The request is invalid.,Yêu cầu không hợp lệ.
 The requested data does not exist.,Dữ liệu yêu cầu không tồn tại.
-No customer is eligible for this campaign.,Không có khách hàng nào đủ điều kiện cho chiến dịch này.
+No customer is eligible for this campaign.,Không có hồ sơ liên hệ nào đủ điều kiện cho chiến dịch này.
 The capacity of the assignee is exhausted.,Sức chứa của người được giao đã cạn.
 A phone number is required.,Cần nhập số điện thoại.
 A phone number must be a short text value.,Số điện thoại phải là chuỗi ngắn.
 A phone number must be supplied as a text value.,Số điện thoại phải ở định dạng văn bản.
 "A queued, revoked or closed work item must not have an assignee.","Công việc đang chờ, đã thu hồi hoặc đã đóng không được có người phụ trách."
-A reason is required to revoke a customer.,Cần nhập lý do khi thu hồi khách hàng.
-A reason is required to transfer a customer.,Cần nhập lý do khi chuyển giao khách hàng.
+A reason is required to revoke a customer.,Cần nhập lý do khi thu hồi hồ sơ liên hệ.
+A reason is required to transfer a customer.,Cần nhập lý do khi chuyển giao hồ sơ liên hệ.
 A reason is required to transfer or revoke an ownership.,Cần nhập lý do để chuyển hoặc thu hồi quyền phụ trách.
 A request id is required so the action stays idempotent.,Cần có mã yêu cầu để thao tác giữ tính idempotent.
 A target user is required.,Cần chọn người nhận.
@@ -455,10 +455,10 @@ Confirmed,Đã xác nhận
 Created rows,Số dòng tạo mới
 Current owner,Người đang phụ trách
 Current ownership (live work items),Quyền phụ trách hiện tại (công việc đang hoạt động)
-"Customer pool, imports, campaigns and distribution.","Kho khách hàng, nhập danh sách, chiến dịch và phân phối."
-Customers assigned in the scope,Khách hàng được giao trong phạm vi
+"Customer pool, imports, campaigns and distribution.","Kho hồ sơ liên hệ, nhập danh sách, chiến dịch và phân công."
+Customers assigned in the scope,Hồ sơ được giao trong phạm vi
 Data error,Lỗi dữ liệu
-Distributing the customers requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép phân phối khách hàng.
+Distributing the customers requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép phân phối hồ sơ liên hệ.
 Distribution failed.,Phân phối thất bại.
 Distribution is running in the background...,Đang thực thi phân phối nền...
 Distribution queued. Waiting for background worker...,Đã xếp hàng đợi phân phối. Đang chờ tiến trình nền xử lý...
@@ -470,9 +470,9 @@ Failed runs,Đợt phân phối lỗi
 From date,Từ ngày
 From owner,Người phụ trách trước
 Identity mismatch,Định danh không khớp.
-Import batch lead outcome must be created or reused.,Kết quả liên kết khách hàng của lô nhập phải là tạo mới hoặc dùng lại.
-Import batch lead row number must not be negative.,Số thứ tự dòng khách hàng của lô nhập không được là số âm.
-Importing the customer pool requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép nhập kho khách hàng.
+Import batch lead outcome must be created or reused.,Kết quả liên kết hồ sơ liên hệ của lô nhập phải là tạo mới hoặc dùng lại.
+Import batch lead row number must not be negative.,Số thứ tự dòng hồ sơ liên hệ của lô nhập không được là số âm.
+Importing the customer pool requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép nhập kho hồ sơ liên hệ.
 Invalid boolean value for enabled.,Giá trị đúng/sai cho trạng thái kích hoạt không hợp lệ.
 Invalid boolean value for return_to_pool.,Giá trị đúng/sai cho tùy chọn trả về kho chờ không hợp lệ.
 Invalid boolean value for value.,Giá trị đúng/sai không hợp lệ.
@@ -483,14 +483,14 @@ Invalid integer value for page_size.,Giá trị số nguyên cho kích thước 
 Invalid integer value for value.,Giá trị số nguyên không hợp lệ.
 Invalid integer value for version.,Giá trị số nguyên cho phiên bản quy tắc không hợp lệ.
 Invalid or expired session/CSRF token. Reload the page and try again.,Phiên đăng nhập hoặc mã CSRF không hợp lệ hoặc đã hết hạn. Hãy tải lại trang và thử lại.
-"Leads in your scope, with the derived distribution state.","Khách hàng tiềm năng trong phạm vi của bạn, kèm trạng thái phân phối."
+"Leads in your scope, with the derived distribution state.",Danh sách Hồ sơ liên hệ (CRM Lead) trong phạm vi quản lý và trạng thái phân phối.
 Look up run,Tra cứu đợt chạy
 Managing the campaigns requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép quản lý chiến dịch.
 Name column,Cột họ tên
 New owner,Người phụ trách mới
 Newest first,Mới nhất trước
 No assignee is eligible for this campaign.,Không có nhân viên nào đủ điều kiện nhận phân phối cho chiến dịch này.
-No lead is eligible for this campaign.,Không có khách hàng nào đủ điều kiện cho chiến dịch này.
+No lead is eligible for this campaign.,Không có hồ sơ liên hệ nào đủ điều kiện cho chiến dịch này.
 Not permitted to filter on restricted field.,Bạn không có quyền lọc trên trường dữ liệu bị hạn chế.
 Oldest first,Cũ nhất trước
 Only CSV and XLSX files are supported.,Chỉ hỗ trợ tệp CSV và XLSX.
@@ -524,17 +524,17 @@ The campaign is required.,Cần chọn chiến dịch.
 The campaign must be a string.,Mã chiến dịch phải là chuỗi văn bản.
 The campaign status is not supported.,Trạng thái chiến dịch không được hỗ trợ.
 The campaign title is required.,Cần nhập tiêu đề chiến dịch.
-The canonical lead does not exist.,Khách hàng chuẩn không tồn tại.
+The canonical lead does not exist.,Hồ sơ liên hệ chuẩn không tồn tại.
 The capacity must be an integer.,Sức chứa phải là số nguyên.
 The capacity must not be negative.,Sức chứa không được là số âm.
 The current owner is not the expected owner.,"Người đang phụ trách đã thay đổi, không khớp với người phụ trách dự kiến."
-The customer already has an active claim.,Khách hàng đã có quyền sở hữu đang hoạt động.
-The customer is already assigned in another work item.,Khách hàng đang được giao trong một công việc khác.
+The customer already has an active claim.,Hồ sơ liên hệ đã có quyền sở hữu đang hoạt động.
+The customer is already assigned in another work item.,Hồ sơ liên hệ đang được giao trong một công việc khác.
 The distribution run does not exist.,Đợt phân phối không tồn tại.
 The distribution run is already executing.,Đợt phân phối đang được thực thi.
 The distribution run is already owned by another executor.,Đợt phân phối đang thuộc quyền xử lý của bộ thực thi khác.
 The distribution state changed after the preview.,Trạng thái phân phối đã thay đổi sau khi xem trước.
-The eligible lead set changed after the preview.,Tập khách hàng đủ điều kiện đã thay đổi sau khi xem trước.
+The eligible lead set changed after the preview.,Tập hồ sơ liên hệ đủ điều kiện đã thay đổi sau khi xem trước.
 The error file does not exist for this import batch.,Không có tệp lỗi cho lô nhập này.
 The expected owner must be a string.,Người phụ trách dự kiến phải là chuỗi văn bản.
 The file has more rows than the configured limit.,Tệp có nhiều dòng hơn giới hạn cấu hình.
@@ -542,13 +542,13 @@ The file is larger than the configured limit.,Tệp vượt quá dung lượng t
 The import batch does not exist.,Lô nhập dữ liệu không tồn tại.
 The import batch is required.,Cần chọn lô nhập dữ liệu.
 The import file must be private.,Tệp nhập dữ liệu bắt buộc là tệp riêng tư.
-The lead is already claimed by another campaign.,Khách hàng đang được giữ bởi chiến dịch khác.
-The lead owner does not match the intended owner.,Người phụ trách trên hồ sơ khách hàng không khớp với người dự kiến.
+The lead is already claimed by another campaign.,Hồ sơ liên hệ đang được giữ bởi chiến dịch khác.
+The lead owner does not match the intended owner.,Người phụ trách trên hồ sơ liên hệ không khớp với người dự kiến.
 The phone cell contains more than one number.,Ô số điện thoại chứa nhiều hơn một số.
 The phone cell contains unsupported characters.,Ô số điện thoại chứa ký tự không hợp lệ.
 The phone cell looks like scientific notation and cannot be trusted.,Ô số điện thoại ở dạng ký hiệu khoa học của Excel nên không thể tin cậy.
-The phone number is already bound to another canonical lead.,Số điện thoại đã gắn với một khách hàng chuẩn khác.
-The phone number is already used by another lead.,Số điện thoại đã được sử dụng bởi khách hàng khác.
+The phone number is already bound to another canonical lead.,Số điện thoại đã gắn với một hồ sơ liên hệ chuẩn khác.
+The phone number is already used by another lead.,Số điện thoại đã được sử dụng bởi hồ sơ liên hệ khác.
 The phone number is outside the supported Vietnamese mobile format.,Số điện thoại không đúng định dạng di động Việt Nam được hỗ trợ.
 "The phone number must start with 0, 84 or +84.","Số điện thoại phải bắt đầu bằng 0, 84 hoặc +84."
 The preview does not exist.,Bản xem trước không tồn tại.
@@ -565,7 +565,7 @@ The target user has no positive assignment weight in this campaign.,Người nh�
 The target user has no remaining capacity.,Người nhận đã hết sức chứa còn lại.
 The target user is disabled.,Tài khoản người nhận đang bị vô hiệu hóa.
 The target user is outside the campaign team scope.,Người nhận nằm ngoài phạm vi đội của chiến dịch.
-The target user must be a Sales User.,Người nhận phải có vai trò Nhân viên bán hàng.
+The target user must be a Sales User.,Người nhận phải có vai trò nhân viên tuyển dụng.
 The target user must be a string.,Người nhận phải là chuỗi văn bản.
 The target user's assignment rule is disabled in this campaign.,Quy tắc phân công của người nhận đang bị tắt trong chiến dịch này.
 The target user's assignment rule is outside the campaign team scope.,Quy tắc phân công của người nhận nằm ngoài phạm vi đội của chiến dịch.
@@ -585,7 +585,7 @@ This action requires the CRM Admin business role.,Thao tác này yêu cầu vai 
 This idempotency key was already used by another distribution run.,Khóa idempotency này đã được dùng cho một đợt phân phối khác.
 This idempotency key was already used with a different column mapping.,Khóa idempotency này đã được dùng với cấu hình ánh xạ cột khác.
 This idempotency key was already used with a different file.,Khóa idempotency này đã được dùng với một tệp khác.
-This import batch and lead link already exists.,Liên kết giữa lô nhập và khách hàng này đã tồn tại.
+This import batch and lead link already exists.,Liên kết giữa lô nhập và hồ sơ liên hệ này đã tồn tại.
 Timeout,Quá thời gian chờ phản hồi từ máy chủ.
 To date,Đến ngày
 To owner,Người phụ trách sau
@@ -593,17 +593,17 @@ To owner,Người phụ trách sau
 Transfer owner,Chuyển người phụ trách
 Transfer the ownership,Chuyển quyền phụ trách
 Transferred,Đã chuyển
-Transferring a customer requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép chuyển giao khách hàng.
+Transferring a customer requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép chuyển giao hồ sơ liên hệ.
 Unexpected share holders remain after the ownership change.,Vẫn còn quyền chia sẻ ngoài dự kiến sau khi đổi người phụ trách.
 Unlimited,Không giới hạn
-"Upload a private file, map the phone column, preview, then confirm.","Tải lên tệp riêng tư, ánh xạ cột số điện thoại, xem trước rồi xác nhận."
+"Upload a private file, map the phone column, preview, then confirm.","Tải lên tệp riêng tư, ánh xạ cột số điện thoại, xem trước rồi xác nhận nạp vào kho hồ sơ liên hệ."
 Whole installation,Toàn hệ thống
 You may not read a distribution run.,Bạn không có quyền xem đợt phân phối này.
-You may not read the assigned customers.,Bạn không có quyền xem danh sách khách được giao.
+You may not read the assigned customers.,Bạn không có quyền xem hồ sơ được giao.
 You may not read the campaign list.,Bạn không có quyền xem danh sách chiến dịch.
 You may not read the campaigns.,Bạn không có quyền xem thông tin chiến dịch.
-You may not read the customer list.,Bạn không có quyền xem danh sách khách hàng.
-You may not read the customer pool.,Bạn không có quyền xem kho khách hàng.
+You may not read the customer list.,Bạn không có quyền xem danh sách hồ sơ liên hệ.
+You may not read the customer pool.,Bạn không có quyền xem kho hồ sơ liên hệ.
 You may not read the distribution dashboard.,Bạn không có quyền xem bảng điều khiển phân phối.
 You may not read this assignment history.,Bạn không có quyền xem lịch sử phân công này.
 You may not read this campaign.,Bạn không có quyền xem chiến dịch này.
@@ -612,8 +612,8 @@ already_claimed,Đã được giữ bởi chiến dịch khác
 invalid_row,Dòng dữ liệu không hợp lệ
 no_phone_column,Thiếu cột số điện thoại
 do_not_contact,Khách từ chối liên hệ tiếp
-An active owned work item requires an assignee.,Công việc đang chăm sóc bắt buộc có người phụ trách.
-An active owned work item requires an assignment timestamp.,Công việc đang chăm sóc bắt buộc có thời điểm phân công.
+An active owned work item requires an assignee.,Đầu việc liên hệ đang hoạt động bắt buộc có người phụ trách.
+An active owned work item requires an assignment timestamp.,Đầu việc liên hệ đang hoạt động bắt buộc có thời điểm phân công.
 Work items cannot be deleted; revoke or close them instead.,Không được xóa công việc; hãy thu hồi hoặc đóng công việc.
 Contact Attempt,Lần liên hệ
 CSKH Contact Attempt,Nhật ký liên hệ CSKH
@@ -624,12 +624,12 @@ Outcome,Kết quả liên hệ
 Unreachable,Không liên lạc được
 Connected,Đã kết nối
 Follow-up,Hẹn liên hệ lại
-On Hold,Chờ chăm sóc lại
+On Hold,Chờ liên hệ lại
 Due,Đến hạn
 Self-reported,Nhân viên tự báo cáo
 Verified,Đã xác minh
 Do Not Contact,Không liên hệ nữa
-Close Work Item,Hoàn tất chăm sóc
+Close Work Item,Đóng đầu việc liên hệ
 OWNERSHIP_CHANGED,OWNERSHIP_CHANGED
 WORK_ITEM_NOT_ACTIVE,WORK_ITEM_NOT_ACTIVE
 STALE_WORK_ITEM,STALE_WORK_ITEM
@@ -659,8 +659,8 @@ Attempted work items,Công việc đã thử liên hệ
 "Attempted, not connected",Đã thử nhưng chưa kết nối
 "Attempted, not connected work items","Công việc đã thử, chưa kết nối"
 Attempts are append-only: direct editing or deletion is disabled. Submit a correction or void request instead.,Lần liên hệ là bất biến (append-only): không được sửa hoặc xóa trực tiếp. Hãy gửi yêu cầu hiệu chỉnh hoặc vô hiệu có lý do.
-Back to my customers,Về danh sách khách được giao
-Basic customer care activity counts in your scope (not a quality or SLA score).,Số liệu hoạt động chăm sóc cơ bản trong phạm vi của bạn (không phải điểm chất lượng hay SLA).
+Back to my customers,Về Hồ sơ được giao
+Basic customer care activity counts in your scope (not a quality or SLA score).,"Số liệu liên hệ trong phạm vi của bạn, tách riêng với điểm chất lượng và SLA."
 Block future outreach,Chặn liên hệ mới về sau
 Block outreach and auto-close work item,Chặn liên hệ mới và tự động đóng công việc
 Breakdown by assignee in scope,Chi tiết theo nhân viên trong phạm vi
@@ -670,49 +670,49 @@ Callback / Task (CRM),Lịch hẹn / Nhiệm vụ (CRM)
 Callback canceled with audit reason (not counted as connected).,Đã đóng lịch hẹn theo lý do hủy (không tính là đã kết nối).
 Callback due at,Thời điểm hẹn lại
 Callback is required for this outcome.,Kết quả này bắt buộc chọn thời điểm hẹn lại.
-Callback requested,Khách hẹn liên hệ lại
-Callback scheduled successfully.,Đã lưu lịch hẹn chăm sóc lại.
-Callback task counters,Số liệu lịch hẹn chăm sóc lại
+Callback requested,Người liên hệ hẹn gọi lại
+Callback scheduled successfully.,Đã lưu lịch hẹn liên hệ lại.
+Callback task counters,Số liệu lịch hẹn liên hệ lại
 Callback title / note,Nội dung lịch hẹn
 Callbacks / tasks,Lịch hẹn / Nhiệm vụ
 Callbacks due today,Đến hạn hôm nay
-Callbacks schedule,Lịch hẹn chăm sóc
+Callbacks schedule,Lịch hẹn liên hệ lại
 Cancel callback,Hủy lịch hẹn
 Cancel reason,Lý do hủy hẹn
 Canceled,Đã hủy
 Care coverage by work item,Độ phủ liên hệ theo công việc (Work Item)
-Care filter,Bộ lọc CSKH
-Care progress,Tiến độ chăm sóc
-Care status,Trạng thái CSKH
-Care workspace,Hồ sơ CSKH
+Care filter,Bộ lọc trạng thái liên hệ
+Care progress,Tiến độ liên hệ
+Care status,Trạng thái liên hệ
+Care workspace,Chi tiết hồ sơ
 Change channel,Đổi kênh liên hệ
 Change outcome,Đổi kết quả liên hệ
 Change timestamp,Đính chính thời điểm liên hệ
 Clarification note,Nội dung giải trình bổ sung
 Close / cancel reason,Lý do đóng / hủy
 Close callback as canceled,Xác nhận hủy lịch hẹn
-Close care work item with this outcome,Hoàn tất công việc chăm sóc với kết quả này
-Close work item,Hoàn tất chăm sóc
-Closed work items by reason,Công việc đã hoàn tất theo kết quả / lý do
+Close care work item with this outcome,Đóng đầu việc liên hệ của hồ sơ này theo kết quả đã chọn
+Close work item,Đóng đầu việc liên hệ
+Closed work items by reason,Đầu việc đã đóng theo kết quả / lý do
 Complete / cancel callback,Hoàn tất / hủy lịch hẹn
-Completed care,Hoàn tất
-Completed work items,Công việc đã hoàn tất
+Completed care,Đã đóng liên hệ
+Completed work items,Công việc đã đóng
 Completing a callback without a contact attempt requires a cancellation reason.,Đóng lịch hẹn khi chưa thực hiện liên hệ bắt buộc phải có lý do hủy.
 Completing callback task,Thực hiện cho lịch hẹn
 Completion reason,Lý do hoàn tất
-Configure contact outcome codes and versioned customer care policies.,Cấu hình danh mục mã kết quả liên hệ và chính sách chăm sóc theo phiên bản.
+Configure contact outcome codes and versioned customer care policies.,Cấu hình danh mục mã kết quả liên hệ và chính sách quy trình theo phiên bản.
 Connected contact attempts,Số lần liên hệ đã kết nối
 Connected work items,Công việc đã kết nối
-Contact attempt (CSKH),Lần liên hệ CSKH
+Contact attempt (CSKH),Lần ghi nhận liên hệ
 Contact attempt counters (effective attempts),Số liệu theo lần liên hệ hiệu lực (không tính bản đã vô hiệu)
 Contact attempts are immutable; submit a correction request instead.,Lần liên hệ là bất biến; hãy gửi yêu cầu hiệu chỉnh có kiểm toán.
-Contact attempts only,Lần liên hệ CSKH
+Contact attempts only,Lần ghi nhận liên hệ
 Contact channel,Kênh liên hệ
 Contact count,Số lần liên hệ
 Contact note,Ghi chú liên hệ
 Contact outcome,Kết quả liên hệ
 Contact result recorded successfully.,Đã ghi nhận kết quả liên hệ thành công.
-Converted / closed,Chốt thành công / Hoàn tất
+Converted / closed,Hoàn tất liên hệ đợt này (chưa phải đã tuyển/bố trí)
 Copy phone number,Sao chép số
 Corrected,Đã hiệu chỉnh
 Correction reason,Lý do hiệu chỉnh
@@ -722,18 +722,18 @@ Correction review saved.,Đã lưu kết quả xét duyệt hiệu chỉnh.
 Correction type,Loại hiệu chỉnh
 Corrections and void history,Lịch sử hiệu chỉnh & vô hiệu
 Could not copy phone number in this browser.,Trình duyệt không cho phép sao chép tự động.
-Counts as connected,Tính là đã kết nối
-"Customer care detail, unified timeline, callbacks and append-only corrections.","Chi tiết chăm sóc khách hàng, dòng thời gian hợp nhất, lịch hẹn và hiệu chỉnh bất biến."
-Customer care workspace,Hồ sơ chăm sóc khách hàng
-Customer compliance counters (distinct customers),Chỉ số tuân thủ theo khách hàng
-Customer ownership has changed to another staff member. Refresh your list.,Khách hàng này đã được chuyển giao cho nhân viên khác. Vui lòng làm mới danh sách.
-"Customer pool, imports, campaigns, distribution and customer care workflow.","Kho khách hàng, nhập danh sách, chiến dịch, phân phối và nghiệp vụ chăm sóc khách hàng."
+Counts as connected,Tính là đã kết nối (chưa phải đã tuyển/bố trí)
+"Customer care detail, unified timeline, callbacks and append-only corrections.","Tiếp nhận hồ sơ liên hệ, ghi nhận trao đổi, đặt lịch hẹn liên hệ lại và đối chiếu nhật ký hợp nhất."
+Customer care workspace,Chi tiết hồ sơ liên hệ
+Customer compliance counters (distinct customers),Chỉ số tuân thủ theo hồ sơ liên hệ
+Customer ownership has changed to another staff member. Refresh your list.,Hồ sơ liên hệ này đã được chuyển giao cho nhân viên khác. Vui lòng làm mới danh sách.
+"Customer pool, imports, campaigns, distribution and customer care workflow.","Kho hồ sơ liên hệ, nhập danh sách, chiến dịch, phân công và theo dõi liên hệ."
 Data scope,Phạm vi dữ liệu
 Default follow-up delay (hours),Khoảng cách hẹn lại mặc định (giờ)
 Direct modification or deletion of contact attempts is prohibited.,Không được phép sửa hoặc xóa trực tiếp lịch sử lần liên hệ.
 Disabled,Đã tắt
 Do not contact,Không liên hệ nữa
-Do-not-contact (DNC) customers,Số khách hàng ngừng liên hệ (DNC)
+Do-not-contact (DNC) customers,Số hồ sơ ngừng liên hệ (DNC)
 Does not count as connected,Không tính là đã kết nối
 Done,Đã hoàn tất
 Due status,Tình trạng hạn
@@ -744,13 +744,13 @@ Effective contact attempts,Tổng số lần liên hệ hiệu lực
 Effective policy,Chính sách áp dụng
 Effective value,Giá trị hiệu lực
 Enabled,Đang bật
-Enforce Do Not Contact (DNC),Chặn liên hệ khi khách từ chối (DNC)
-Enter contact summary or customer feedback...,Nhập nội dung trao đổi hoặc phản hồi của khách hàng...
+Enforce Do Not Contact (DNC),Chặn liên hệ khi người liên hệ từ chối (DNC)
+Enter contact summary or customer feedback...,Nhập nội dung trao đổi hoặc phản hồi của người liên hệ...
 Enter the reason for requesting this correction or void...,Nhập lý do cụ thể cho yêu cầu hiệu chỉnh hoặc vô hiệu...
 Facebook channel,Kênh Facebook
-"Follow-up callbacks in your scope, classified by site/user timezone.","Danh sách lịch hẹn chăm sóc lại trong phạm vi quyền, phân loại theo múi giờ chuẩn hệ thống/người dùng."
+"Follow-up callbacks in your scope, classified by site/user timezone.","Lịch hẹn liên hệ lại trong phạm vi của bạn, theo múi giờ áp dụng."
 Global,Toàn hệ thống (Global)
-In progress,Đang chăm sóc
+In progress,Đang xử lý
 Inbound,Gọi đến
 Interested,Quan tâm
 Interested (call),Quan tâm (qua cuộc gọi)
@@ -768,7 +768,7 @@ Max backdate window (minutes),Khoảng lùi giờ ghi nhận tối đa (phút)
 "Message sent, no reply","Đã gửi tin, chưa phản hồi"
 Message without reply is never counted as connected.,Gửi tin nhắn chưa có phản hồi không được tính là đã kết nối.
 Native call logs,Nhật ký cuộc gọi
-Needs follow-up,Cần chăm sóc lại
+Needs follow-up,Cần liên hệ lại
 New / edit outcome code,Thêm mới / cập nhật mã kết quả
 Newly assigned,Mới được giao
 Next callback,Hẹn tiếp theo
@@ -785,14 +785,14 @@ Not interested,Chưa có nhu cầu
 Not interested (call),Chưa có nhu cầu (qua cuộc gọi)
 Note is required for this outcome.,Kết quả này bắt buộc nhập ghi chú.
 Note — excluded from attempt count,Ghi chú nội bộ — không tính vào số lần liên hệ
-Notice: This view reports scoped operational counts only. It is not a quality KPI score or formal P3 SLA grade.,"Lưu ý: Màn hình này chỉ thống kê số lượng hoạt động cơ bản trong phạm vi quyền (tách biệt số công việc/khách với số lần liên hệ, và tự báo cáo với đã xác minh) — không phải điểm chất lượng CSKH hay xếp loại SLA."
+Notice: This view reports scoped operational counts only. It is not a quality KPI score or formal P3 SLA grade.,"Lưu ý: Màn hình này chỉ thống kê số lượng hoạt động liên hệ cơ bản trong phạm vi quyền (tách biệt số đầu việc/hồ sơ với số lần liên hệ, và tự báo cáo với đã xác minh) — không phải điểm chất lượng hay xếp loại SLA."
 Occurred at,Thời điểm liên hệ
-On hold,Chờ chăm sóc lại
-On-hold work items (awaiting callback),Đang chờ chăm sóc lại
+On hold,Chờ liên hệ lại
+On-hold work items (awaiting callback),Đang chờ liên hệ lại
 Only the active owner may record a contact attempt.,Chỉ nhân viên đang trực tiếp phụ trách mới được ghi nhận lần liên hệ.
 Open callback,Lịch hẹn đang mở
 Open callbacks,Lịch hẹn đang mở
-Open care workspace,Mở hồ sơ CSKH
+Open care workspace,Mở chi tiết hồ sơ
 Original snapshot,Bản ghi gốc
 Other,Khác
 Other channel,Kênh khác
@@ -807,7 +807,7 @@ Pending correction review,Đang chờ duyệt hiệu chỉnh
 Performed by,Người thực hiện
 Phone call,Gọi điện thoại
 Phone number copied to clipboard.,Đã sao chép số điện thoại vào bộ nhớ tạm.
-Please enter a completion reason to close this work item.,Vui lòng nhập lý do hoàn tất khi đóng công việc chăm sóc.
+Please enter a completion reason to close this work item.,Vui lòng nhập lý do hoàn tất khi đóng đầu việc liên hệ.
 Please enter a reason for the correction request.,Vui lòng nhập lý do yêu cầu hiệu chỉnh.
 Please enter a reason to cancel or reschedule the callback.,Vui lòng nhập lý do khi đổi hoặc hủy lịch hẹn.
 Please enter a reason.,Vui lòng nhập lý do.
@@ -816,7 +816,7 @@ Please enter the contact timestamp.,Vui lòng nhập thời điểm liên hệ.
 Please select a contact channel.,Vui lòng chọn kênh liên hệ.
 Please select a contact outcome.,Vui lòng chọn kết quả liên hệ.
 Policy code,Mã chính sách
-Policy configuration (versioned),Cấu hình chính sách chăm sóc (phiên bản hóa)
+Policy configuration (versioned),Cấu hình chính sách liên hệ (phiên bản hóa)
 Policy saved as a new version.,Đã lưu phiên bản chính sách mới.
 Policy scope,Phạm vi áp dụng
 Policy title,Tên chính sách
@@ -824,10 +824,10 @@ Policy version,Phiên bản chính sách
 Proposed channel,Kênh đề xuất
 Proposed outcome,Kết quả đề xuất
 Proposed timestamp,Thời điểm đề xuất
-Quick record contact result,Ghi nhận kết quả liên hệ nhanh
+Quick record contact result,Ghi nhận kết quả liên hệ
 Read-only mode: only CRM Admin may modify outcome codes or policies.,Chế độ chỉ đọc: chỉ vai trò Quản trị CRM mới được phép thay đổi mã kết quả hoặc chính sách.
-Record & complete,Ghi nhận & hoàn tất
-Record result,Ghi nhận kết quả
+Record & complete,Ghi nhận liên hệ & đóng hẹn
+Record result,Ghi nhận liên hệ
 Recorded at,Ghi nhận lúc
 Refused / Do not contact,Từ chối / Không liên hệ nữa
 Reject correction,Từ chối
@@ -870,65 +870,65 @@ Sort order,Thứ tự hiển thị
 Submit correction request,Gửi yêu cầu hiệu chỉnh
 Target campaign,Chiến dịch áp dụng
 Target team,Đội áp dụng
-Task completion without a contact attempt never counts as connected or successful care.,Hoàn tất nhiệm vụ/lịch hẹn khi chưa có lần liên hệ thực tế không được tính là đã kết nối hay chăm sóc thành công.
+Task completion without a contact attempt never counts as connected or successful care.,Đóng nhiệm vụ hoặc lịch hẹn khi chưa ghi nhận liên hệ thực tế không được tính là đã kết nối; một lần liên hệ thành công cũng chưa đồng nghĩa đã tuyển dụng hay bố trí người.
 Task — excluded from attempt count,Nhiệm vụ — không tự tính là lần liên hệ hay đã kết nối
-Terminal outcome,Kết quả đóng công việc
+Terminal outcome,Kết quả đóng đầu việc liên hệ
 The active policy or outcome configuration has changed. Reload the form and try again.,Chính sách hoặc cấu hình mã kết quả vừa thay đổi. Hãy tải lại biểu mẫu rồi thử lại.
 The contact timestamp cannot be in the future.,Thời điểm liên hệ không được nằm ở tương lai.
 The contact timestamp exceeds the permitted backdate window.,Thời điểm liên hệ vượt quá khoảng lùi giờ cho phép của chính sách.
-The contact timestamp precedes the current ownership interval.,Thời điểm liên hệ không được trước mốc nhận bàn giao khách hàng hiện tại.
+The contact timestamp precedes the current ownership interval.,Thời điểm liên hệ không được trước mốc nhận bàn giao hồ sơ hiện tại.
 The follow-up or contact timestamp is outside the permitted window.,Thời điểm liên hệ hoặc thời điểm hẹn lại nằm ngoài khoảng hợp lệ của chính sách.
-The follow-up time must be in the future.,Thời điểm hẹn chăm sóc lại phải lớn hơn thời điểm hiện tại.
+The follow-up time must be in the future.,Thời điểm hẹn liên hệ lại phải lớn hơn thời điểm hiện tại.
 The selected contact channel is invalid or not permitted by policy.,Kênh liên hệ đã chọn không hợp lệ hoặc bị giới hạn bởi chính sách.
 The selected outcome code does not exist or is disabled.,Mã kết quả liên hệ không tồn tại hoặc đã ngừng kích hoạt.
 The selected outcome is not compatible with the channel or completion policy.,Kết quả đã chọn không tương thích với kênh liên hệ hoặc chính sách đóng công việc.
 This call log or callback task is already linked to another contact attempt.,Nhật ký cuộc gọi hoặc lịch hẹn này đã được gắn với một lần liên hệ khác.
-This contact outcome requires a follow-up callback time.,Kết quả liên hệ này bắt buộc phải chọn thời điểm hẹn chăm sóc lại.
+This contact outcome requires a follow-up callback time.,Kết quả liên hệ này bắt buộc phải chọn thời điểm hẹn liên hệ lại.
 This contact outcome requires a note before saving.,Kết quả liên hệ này bắt buộc phải nhập ghi chú trước khi lưu.
-This customer is marked Do Not Contact (DNC); further outreach is blocked by policy.,Khách hàng đang ở trạng thái Không liên hệ nữa (DNC); chính sách chặn tạo liên hệ/hẹn mới.
+This customer is marked Do Not Contact (DNC); further outreach is blocked by policy.,Hồ sơ liên hệ đang ở trạng thái Không liên hệ nữa (DNC); chính sách chặn tạo liên hệ/hẹn mới.
 This outcome does not allow scheduling a follow-up callback.,Kết quả này không cho phép đặt lịch hẹn liên hệ lại.
 This request key was already used with a different payload.,Mã yêu cầu (request_id) này đã được dùng với nội dung dữ liệu khác.
-"This work item is no longer active (queued, revoked or already completed).","Công việc chăm sóc không còn ở trạng thái hoạt động (chưa giao, đã thu hồi hoặc đã hoàn tất)."
+"This work item is no longer active (queued, revoked or already completed).","Đầu việc liên hệ không còn ở trạng thái hoạt động (chưa giao, đã thu hồi hoặc đã đóng)."
 This work item was updated in another tab or session. Reload the latest state and review before saving.,Công việc vừa được cập nhật ở tab hoặc phiên làm việc khác. Hãy tải lại dữ liệu mới nhất trước khi lưu.
 Timeline filter,Lọc dòng thời gian
 Unanswered message attempts (not connected),Gửi tin chưa phản hồi (chưa kết nối)
 Unconnected contact attempts,Số lần liên hệ chưa kết nối
 Uncontacted work items,Công việc chưa thử liên hệ
-Unified care timeline,Dòng thời gian chăm sóc hợp nhất
+Unified care timeline,Nhật ký liên hệ & lịch hẹn hợp nhất
 Unlinked call log (not counted as attempt),Chưa gắn lần liên hệ (không tự tính số lần liên hệ)
 Upcoming,Sắp đến hạn
 Verified attempts,Lần liên hệ đã xác minh
 Vietnamese label,Nhãn hiển thị tiếng Việt
 Void attempt,Vô hiệu lần liên hệ (loại khỏi bộ đếm)
 Voided — excluded from counts,Đã vô hiệu — không tính vào bộ đếm
-Work item closed.,Đã hoàn tất công việc chăm sóc.
-Work item counters (distinct work items),Số liệu theo công việc chăm sóc (không trùng theo số lần gọi)
-Work item reopened.,Đã mở lại công việc chăm sóc.
+Work item closed.,Đã đóng đầu việc liên hệ.
+Work item counters (distinct work items),Số liệu theo đầu việc liên hệ (không trùng theo số lần gọi)
+Work item reopened.,Đã mở lại đầu việc liên hệ.
 Wrong number,Sai số điện thoại
 Yes,Có
-You do not have permission to modify outcome codes or policies.,Bạn không có quyền thay đổi mã kết quả hoặc chính sách chăm sóc.
+You do not have permission to modify outcome codes or policies.,Bạn không có quyền thay đổi mã kết quả hoặc chính sách quy trình.
 You do not have permission to review correction requests.,Bạn không có quyền xét duyệt yêu cầu hiệu chỉnh.
-You do not have permission to view this work item.,Bạn không có quyền xem hồ sơ công việc chăm sóc này.
+You do not have permission to view this work item.,Bạn không có quyền xem chi tiết đầu việc liên hệ này.
 Zalo channel,Kênh Zalo
 Quality overview,Tổng quan chất lượng
 Team comparison,So sánh đội nhóm
 Employee quality,Chất lượng nhân viên
-Campaign & source quality,Chiến dịch & nguồn khách
+Campaign & source quality,Chiến dịch & nguồn hồ sơ
 SLA & QA operations,Vận hành SLA & QA
 Personal scorecard,Bảng điểm cá nhân
-Executive quality overview (BOD),Tổng quan chất lượng CSKH (BOD)
+Executive quality overview (BOD),Tổng quan chất lượng liên hệ tuyển dụng (BOD)
 "Company-wide SLA compliance, connection effectiveness, data reliability and drill-down.","Toàn cảnh tuân thủ SLA, hiệu quả kết nối, độ tin cậy dữ liệu và truy vết nguồn toàn công ty."
 Team quality comparison,So sánh chất lượng giữa các đội nhóm
 "Compare teams by historical team-as-of attribution, SLA compliance, connection and data confidence.","Đối chiếu các đội theo quy gán đội nhóm tại thời điểm sự kiện (team-as-of), tuân thủ SLA, kết nối và độ tin cậy dữ liệu."
 Employee quality & compliance,Chất lượng & mức độ tuân thủ theo nhân viên
 "Evaluate staff across process compliance, connection and data reliability without mixing provisional and finalized ranks.","Đánh giá nhân viên theo 3 trụ cột tuân thủ, kết nối và độ tin cậy dữ liệu; không xếp chung điểm tạm tính với điểm đã chốt."
-Campaign & lead source performance,Hiệu quả theo chiến dịch & nguồn khách hàng
+Campaign & lead source performance,Hiệu quả theo chiến dịch & nguồn hồ sơ
 Separate lead source quality (invalid/DNC) from staff SLA execution across versioned policies.,Tách bạch chất lượng dữ liệu đầu vào (sai số/DNC) với kỷ luật thực thi SLA trên từng phiên bản chính sách.
 SLA & QA operations center,Trung tâm vận hành SLA & kiểm định QA
 "Inspect overdue, breached, waived and escalated SLA obligations, QA status and audit actions.","Theo dõi nghĩa vụ quá hạn, vi phạm, miễn trừ, cảnh báo leo thang, trạng thái QA và thao tác kiểm toán."
 My quality scorecard,Bảng điểm chất lượng cá nhân
 "Personal SLA obligations, component breakdown and progress in your own scope.","Điểm thành phần, nghĩa vụ SLA cần xử lý và tiến bộ chất lượng trong phạm vi cá nhân của bạn."
-"Customer pool, imports, campaigns, care workflow and SLA/KPI quality.","Kho khách hàng, nhập danh sách, chiến dịch, tác nghiệp chăm sóc và chất lượng SLA/KPI."
+"Customer pool, imports, campaigns, care workflow and SLA/KPI quality.","Kho hồ sơ liên hệ, nhập danh sách, chiến dịch, theo dõi liên hệ và chất lượng SLA/KPI."
 P3 quality and SLA screens are currently disabled by site configuration.,Các màn hình chất lượng và SLA giai đoạn P3 hiện đang tạm tắt theo cấu hình hệ thống.
 Period type,Loại kỳ báo cáo
 Daily,Theo ngày
@@ -953,7 +953,7 @@ Point-in-time at as-of,Ảnh chụp tồn kho tại mốc chốt (as-of)
 Snapshot revision,Phiên bản bản chụp
 Latest published snapshot,Bản chụp xuất bản mới nhất
 "Half-open interval [from, to_exclusive)","Khoảng nửa mở [từ, đến_loại_trừ)"
-Lead source,Nguồn khách hàng
+Lead source,Nguồn hồ sơ liên hệ
 Employee,Nhân viên
 Active employees only,Chỉ nhân viên đang hoạt động
 Include inactive employees,Bao gồm nhân viên ngưng hoạt động
@@ -983,7 +983,7 @@ Eligible contact coverage,Tỷ lệ phủ liên hệ khách được giao
 Effective attempts (activity reference),Số lần thử liên hệ hiệu lực (tham khảo)
 Connected rate,Tỷ lệ kết nối thành công
 First-touch on-time rate,Tỷ lệ liên hệ lần đầu đúng hạn
-Follow-up on-time rate,Tỷ lệ chăm sóc đúng lịch hẹn
+Follow-up on-time rate,Tỷ lệ liên hệ lại đúng hẹn
 "First-connected tracking (informational, non-penalizing)","Theo dõi kết nối lần đầu (tham khảo, không phạt SLA)"
 Minimum attempts compliance,Tỷ lệ đạt số lần thử tối thiểu
 Outcome completeness rate,Tỷ lệ cập nhật kết quả đầy đủ
@@ -1057,7 +1057,7 @@ Historical attribution unknown,Chưa xác định quy gán lịch sử
 PII redacted after handover or by role policy,Đã ẩn PII sau bàn giao hoặc theo chính sách vai trò
 No source records match the selected cohort segment.,Không có bản ghi nguồn nào thuộc phân lớp đã chọn.
 First-touch SLA,Liên hệ lần đầu (FIRST_ATTEMPT)
-Follow-up callback SLA,Chăm sóc đúng hẹn (FOLLOWUP)
+Follow-up callback SLA,Liên hệ lại đúng hẹn (FOLLOWUP)
 Minimum attempts SLA,Số lần thử tối thiểu (MIN_ATTEMPTS)
 First-connected tracking,Kết nối lần đầu (FIRST_CONNECTED)
 Pending (not yet due),Chưa đến hạn (Đang chờ)
@@ -1109,12 +1109,12 @@ Component,Thành phần đánh giá
 My rate,Tỷ lệ đạt
 Weighted contribution,Điểm quy đổi theo trọng số
 Actionable SLA obligations & callbacks,Nghĩa vụ SLA & lịch hẹn cần xử lý
-Go to My Customers,Mở Khách được giao
-Go to Callbacks Schedule,Mở Lịch hẹn chăm sóc lại
+Go to My Customers,Mở Hồ sơ được giao
+Go to Callbacks Schedule,Mở Lịch hẹn liên hệ lại
 Trend over period,Xu hướng biến động theo kỳ
 Team comparison summary,Tóm tắt đối chiếu đội nhóm
 Top overdue obligations,Các nghĩa vụ quá hạn cần ưu tiên xử lý
-Campaign & lead source breakdown,Phân bổ theo chiến dịch & nguồn khách
+Campaign & lead source breakdown,Phân bổ theo chiến dịch & nguồn hồ sơ
 SLA & data quality alerts,Cảnh báo SLA & chất lượng dữ liệu
 Invalid phone / DNC rate,Tỷ lệ sai số / từ chối liên hệ (DNC)
 Avg attempts per work item (reference),Số lần thử bình quân / đầu việc (tham khảo)
@@ -1218,7 +1218,7 @@ Working shift,Ca làm việc
 Team membership history,Lịch sử thành viên đội nhóm
 SLA obligation,Nghĩa vụ SLA
 First attempt SLA,SLA liên hệ lần đầu
-Follow-up SLA,SLA chăm sóc hẹn lại
+Follow-up SLA,SLA hẹn liên hệ lại
 First connected tracker (informational),Theo dõi kết nối lần đầu (tham khảo)
 Minimum attempts policy,Chính sách số lần thử tối thiểu
 Closed on handoff (within SLA),Đóng khi chuyển giao (còn hạn SLA)
@@ -1264,3 +1264,61 @@ Raw weighted points,Điểm trọng số thô
 Normalized contribution (0-100),Điểm đóng góp sau chuẩn hóa (0–100)
 Open overdue SLA obligations require attention in the selected scope.,Đang có nghĩa vụ SLA quá hạn cần xử lý trong phạm vi đã chọn.
 Disputed contact attempts or pending correction requests exist in this period.,Có lần liên hệ đang tranh chấp hoặc chờ duyệt hiệu chỉnh trong kỳ này.
+Recruitment workspace,Không gian tuyển dụng
+"Manage contact records, assignments, follow-up schedules, and recruitment team performance.","Tiếp nhận hồ sơ liên hệ được giao, ghi nhận trao đổi, theo dõi lịch hẹn gọi lại và hiệu quả đội tuyển dụng."
+Contact record,Hồ sơ liên hệ
+1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.,1. Tiếp nhận hồ sơ được giao → 2. Liên hệ & ghi nhận kết quả thực tế → 3. Đặt lịch hẹn liên hệ lại đúng hạn.
+Activity,Hoạt động
+Address,Địa chỉ
+Annual Revenue,Doanh thu năm
+Attachments,Tệp đính kèm
+CRM Deal,Giao dịch CRM
+CRM Lead,Hồ sơ liên hệ
+Choose Existing Contact,Chọn liên hệ hiện có
+Choose Existing Organization,Chọn tổ chức hiện có
+Comments,Trao đổi
+"Contact pool, import & assignment management","Quản lý kho hồ sơ, nhập danh sách & phân phối"
+Contact records here correspond directly to CRM Leads along with their campaign distribution status. Use Import list to load new contact files and Campaigns and rules to assign records to staff.,Hồ sơ liên hệ tại đây đối chiếu trực tiếp từ dữ liệu CRM Lead kèm trạng thái phân phối. Quản trị CRM dùng Nhập danh sách liên hệ để nạp nguồn mới và Chiến dịch và quy tắc để giao hồ sơ cho nhân viên.
+Convert,Chuyển đổi
+Convert Lead to Deal,Chuyển Hồ sơ liên hệ thành Giao dịch CRM
+Convert to deal,Chuyển thành Giao dịch CRM
+Create,Tạo mới
+Create Lead,Tạo Hồ sơ liên hệ
+Daily outreach tasks,Tác nghiệp liên hệ hằng ngày
+Data,Dữ liệu
+Deal Owner,Người phụ trách Giao dịch CRM
+Details,Thông tin chi tiết
+Existing Contact,Liên hệ hiện có
+Existing Organization,Tổ chức hiện có
+First Name,Tên
+Hoàn tất mục tiêu chiến dịch,Hoàn tất liên hệ đợt này (chưa phải đã tuyển/bố trí)
+Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.,"Lưu ý: Trạng thái ""Đã kết nối"" chỉ xác nhận đã trao đổi hai chiều, chưa đồng nghĩa đã tuyển dụng hay đã bố trí người. Các màn Giao dịch CRM (/crm/deals) là nghiệp vụ giao dịch gốc của CRM, tách biệt với bước liên hệ tại đây."
+Industry,Ngành nghề
+Job Title,Vị trí / Chức danh
+Khách hẹn gọi / liên hệ lại,Người liên hệ hẹn gọi lại
+Last Name,Họ và đệm
+New Deal,Giao dịch CRM mới
+New Lead,Hồ sơ liên hệ mới
+No. of Employees,Quy mô nhân sự
+Open CRM Deals,Màn Giao dịch CRM
+Open in Recruitment workspace,Mở trong Không gian tuyển dụng
+Organization,Tổ chức / Doanh nghiệp
+Person,Thông tin cá nhân
+Recruitment outreach workflow,Quy trình tiếp nhận & liên hệ tuyển dụng
+"SLA, KPI & outreach quality","Giám sát SLA, KPI & chất lượng liên hệ"
+Sai số / Không đúng người,Sai số / Không đúng người
+Salutation,Danh xưng
+Thuê bao không liên lạc được,Thuê bao không liên lạc được
+"Uploaded files stay private, normalize Vietnamese mobile numbers, and check duplicates against existing CRM Lead contact records before creating new pool entries.","Tệp danh sách tải lên được lưu riêng tư, tự động chuẩn hóa số di động Việt Nam và kiểm tra trùng với Hồ sơ liên hệ hiện có trên CRM trước khi thêm vào kho."
+Yêu cầu ngừng liên hệ (DNC),Yêu cầu ngừng liên hệ (DNC)
+created this deal,đã tạo giao dịch CRM này
+"Đã gửi tin nhắn, chưa phản hồi","Đã gửi tin nhắn, chưa phản hồi"
+Đã trao đổi — Cần chăm sóc tiếp,Đã trao đổi — Cần liên hệ lại
+Đã trao đổi — Không nhu cầu,Đã trao đổi — Chưa có nhu cầu
+Đã trao đổi — Quan tâm,Đã trao đổi — Quan tâm (chờ bước tiếp)
+Cannot convert a lost lead to deal,Không thể chuyển hồ sơ liên hệ đã đóng sang Giao dịch CRM
+Capture my first lead,Tiếp nhận hồ sơ liên hệ đầu tiên
+Change deal status,Thay đổi trạng thái Giao dịch CRM
+Convert lead to deal,Chuyển hồ sơ liên hệ thành Giao dịch CRM
+Create your first lead,Tạo hồ sơ liên hệ đầu tiên của bạn
+"Welcome {0}, lets add your first lead","Chào mừng {0}, hãy thêm hồ sơ liên hệ đầu tiên"

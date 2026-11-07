@@ -2,7 +2,8 @@
 
 {% block page_content %}
 <div class="cskh-shell" id="cskh-root" data-route="{{ cskh_route | default('') }}">
-	<nav class="cskh-nav" aria-label="{{ _('CSKH') }}">
+	<nav class="cskh-nav" aria-label="{{ _('Recruitment workspace') }}">
+		<a href="/cskh" class="{{ 'is-active' if cskh_route == '/cskh' else '' }}">{{ _("Recruitment workspace") }}</a>
 		{% for item in cskh_navigation %}
 		<a href="{{ item.route }}"
 			class="{{ 'is-active' if item.route == cskh_route else '' }}">{{ _(item.label) }}</a>
@@ -22,7 +23,10 @@
 	<p class="cskh-session">
 		{{ _("Signed in as") }} <strong>{{ cskh_user }}</strong>
 		&middot; {{ _("Site/user timezone") }}: <code>{{ (cskh_timezone or {}).get("effective", "Asia/Ho_Chi_Minh") }}</code>
+		{% if (cskh_capabilities or {}).get("can_open_crm_app") %}
 		&middot; <a href="/crm/leads/view/list">{{ _("Return to CRM Leads") }}</a>
+		&middot; <a href="/crm/deals/view/list">{{ _("Open CRM Deals") }}</a>
+		{% endif %}
 	</p>
 
 	<div id="cskh-toast-host" class="cskh-toast-host" aria-live="polite"></div>

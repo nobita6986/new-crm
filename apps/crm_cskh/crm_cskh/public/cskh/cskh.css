@@ -157,11 +157,38 @@
 	align-items: center;
 }
 
-.cskh-filter-chips {
+.cskh-filter-chips,
+.cskh-chip-bar {
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
 	margin-top: 10px;
+}
+
+.cskh-banner-notice {
+	border-radius: 8px;
+	padding: 11px 14px;
+	font-size: 13px;
+	line-height: 1.5;
+	margin-bottom: 14px;
+	border: 1px solid #bfd4ff;
+	border-left: 4px solid var(--cskh-primary);
+	background: #f5f9ff;
+	color: var(--cskh-text);
+}
+
+.cskh-workflow-guide {
+	border-left: 4px solid var(--cskh-primary);
+	background: #fcfdff;
+}
+
+.cskh-section-heading {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--cskh-muted);
+	text-transform: uppercase;
+	letter-spacing: 0.03em;
+	margin: 20px 0 10px;
 }
 
 .cskh-chip {

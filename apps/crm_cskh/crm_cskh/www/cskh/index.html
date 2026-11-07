@@ -1,10 +1,24 @@
 {% extends "templates/cskh/_shell.html" %}
 
-{% block cskh_title %}{{ _("CSKH") }}{% endblock %}
-{% block cskh_subtitle %}{{ _("Customer pool, imports, campaigns, care workflow and SLA/KPI quality.") }}{% endblock %}
+{% block cskh_title %}{{ _("Recruitment workspace") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Manage contact records, assignments, follow-up schedules, and recruitment team performance.") }}{% endblock %}
 
 {% block cskh_body %}
 {% set nav_keys = (cskh_navigation | default([])) | map(attribute='key') | list %}
+
+<div class="cskh-card cskh-workflow-guide">
+	<h2>{{ _("Recruitment outreach workflow") }}</h2>
+	<p class="cskh-muted" style="margin: 0 0 8px;">
+		{{ _("1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.") }}
+	</p>
+	<p class="cskh-muted" style="margin: 0;">
+		{{ _("Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.") }}
+	</p>
+</div>
+
+{% if 'my-customers' in nav_keys or 'callbacks' in nav_keys or 'progress' in nav_keys %}
+<h2 class="cskh-section-heading">{{ _("Daily outreach tasks") }}</h2>
+{% endif %}
 {% if 'my-customers' in nav_keys %}
 <div class="cskh-card">
 	<h2>{{ _("My customers") }}</h2>
@@ -29,6 +43,9 @@
 </div>
 {% endif %}
 
+{% if 'pool' in nav_keys or 'import' in nav_keys or 'campaigns' in nav_keys or 'dashboard' in nav_keys or 'settings' in nav_keys %}
+<h2 class="cskh-section-heading">{{ _("Contact pool, import & assignment management") }}</h2>
+{% endif %}
 {% if 'pool' in nav_keys %}
 <div class="cskh-card">
 	<h2>{{ _("Customer pool") }}</h2>
@@ -77,6 +94,9 @@
 </div>
 {% endif %}
 
+{% if 'quality-overview' in nav_keys or 'team-quality' in nav_keys or 'employee-quality' in nav_keys or 'campaign-quality' in nav_keys or 'sla-operations' in nav_keys or 'scorecard' in nav_keys %}
+<h2 class="cskh-section-heading">{{ _("SLA, KPI & outreach quality") }}</h2>
+{% endif %}
 {% if 'quality-overview' in nav_keys %}
 <div class="cskh-card">
 	<h2>{{ _("Executive quality overview (BOD)") }}</h2>

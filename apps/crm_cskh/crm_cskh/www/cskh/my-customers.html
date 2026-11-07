@@ -4,6 +4,11 @@
 {% block cskh_subtitle %}{{ _("Customers assigned to me.") }}{% endblock %}
 
 {% block cskh_body %}
+<div class="cskh-banner-notice">
+	{{ _("1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.") }}
+	<span class="cskh-muted">{{ _("Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.") }}</span>
+</div>
+
 <div class="cskh-card">
 	<div class="cskh-actions">
 		<label class="cskh-field">
@@ -73,7 +78,7 @@
 		<table id="mine-table" class="cskh-table" hidden>
 			<thead>
 				<tr>
-					<th>{{ _("Customer") }}</th>
+					<th>{{ _("Contact record") }}</th>
 					<th>{{ _("Phone number") }}</th>
 					<th>{{ _("Campaign") }}</th>
 					<th>{{ _("Care status") }}</th>
@@ -132,7 +137,7 @@
 		<table id="mine-scope-table" class="cskh-table" hidden>
 			<thead>
 				<tr>
-					<th>{{ _("Customer") }}</th>
+					<th>{{ _("Contact record") }}</th>
 					<th>{{ _("Phone number") }}</th>
 					<th>{{ _("Campaign") }}</th>
 					<th>{{ _("Current owner") }}</th>
