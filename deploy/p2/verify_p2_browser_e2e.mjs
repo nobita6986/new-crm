@@ -507,7 +507,7 @@ async function main() {
 		staffA.telemetry.apiPosts = []
 
 		const happyRow = staffA.page.locator('#mine-rows tr', { hasText: 'P2 Khách Hạnh Phúc' })
-		await happyRow.locator('a', { hasText: 'Ghi nhận kết quả' }).click()
+		await happyRow.locator('a', { hasText: 'Ghi nhận liên hệ' }).click()
 		await staffA.page.locator('#mine-quick-record-card').waitFor({ state: 'visible', timeout: 10000 })
 
 		await staffA.page.selectOption('#cskh-att-channel', 'phone_call')
@@ -589,7 +589,7 @@ async function main() {
 		)
 		assert(
 			honestyBefore.includes('Ghi chú nội bộ CRM =1+1') &&
-				honestyBefore.includes('Khách hỏi bảng giá') &&
+				honestyBefore.includes('Người liên hệ hỏi mức lương và ca làm việc') &&
 				!honestyBefore.includes('<script>'),
 			'XSS/formula FCRM Note must render safely as inert text in timeline!'
 		)
@@ -1262,7 +1262,7 @@ async function main() {
 			'F-P2-01: [H:<hex>] leaked on closed/reopened Work Item timeline!'
 		)
 		assert(
-			closedMilestoneText.includes('Đóng công việc') || closedMilestoneText.includes('Mở lại công việc'),
+			closedMilestoneText.includes('Đóng đầu việc liên hệ') || closedMilestoneText.includes('Mở lại đầu việc liên hệ'),
 			'Expected close/reopen lifecycle milestone on wi_closed_http timeline'
 		)
 

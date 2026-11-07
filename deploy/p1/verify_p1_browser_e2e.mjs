@@ -322,7 +322,7 @@ async function main() {
 					await page.selectOption('#rule-campaign', httpReport.final_ids.campaign_a)
 					await page.waitForTimeout(500)
 					const bodyText = await page.evaluate(() => document.body.innerText)
-					assert(bodyText.includes('Chiến dịch và quy tắc phân phối'), 'Missing Vietnamese title')
+					assert(bodyText.includes('Phân công — Chiến dịch và quy tắc phân phối'), 'Missing Vietnamese title Phân công — Chiến dịch và quy tắc phân phối')
 					assert(bodyText.includes('Không giới hạn'), 'capacity=0 must display "Không giới hạn"')
 					assert(bodyText.includes('60%'), 'Missing normalized 60% share')
 					assert(bodyText.includes('40%'), 'Missing normalized 40% share')
