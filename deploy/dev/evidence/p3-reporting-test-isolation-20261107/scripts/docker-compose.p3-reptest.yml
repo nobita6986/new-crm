@@ -1,0 +1,67 @@
+name: cskh-p3-reptest-clean
+
+services:
+  db:
+    image: mariadb@sha256:f16d7a344413e519dff518f27bdb221388f84b0d274c97c4fb5f2cb0dc1b34fa
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+    environment:
+      MARIADB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-P3RepTestVerifyRoot2026!}
+      MARIADB_AUTO_UPGRADE: "1"
+    tmpfs:
+      - /var/lib/mysql:rw,size=1536m
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      start_period: 10s
+      interval: 3s
+      timeout: 5s
+      retries: 15
+    networks:
+      - backend
+
+  redis-cache:
+    image: redis@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks:
+      - backend
+
+  redis-queue:
+    image: redis@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    networks:
+      - backend
+
+  web:
+    image: ${CSKH_VERIFY_IMAGE:-crm-cskh:0.0.1-92e14af}
+    working_dir: /home/frappe/frappe-bench
+    command: ["sleep", "infinity"]
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+      SITE_NAME: p3-reptest-clean.localhost
+      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-P3RepTestVerifyRoot2026!}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-P3RepTestAdmin-2026!}
+    extra_hosts:
+      - "p3-reptest-clean.localhost:127.0.0.1"
+      - "p3-reptest-cli.localhost:127.0.0.1"
+    volumes:
+      - sites-data:/home/frappe/frappe-bench/sites
+      - ../../../../../apps/crm_cskh/crm_cskh:/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh:ro
+      - ./:/verify-harness:ro
+    depends_on:
+      db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_started
+      redis-queue:
+        condition: service_started
+    networks:
+      - backend
+
+volumes:
+  sites-data:
+
+networks:
+  backend:
+    driver: bridge

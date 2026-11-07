@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity" tests="7" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py" time="13.243" timestamp="2026-11-07T05:45:12" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity" name="test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10" time="3.172" timestamp="2026-11-07T05:45:12" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py" line="243">
+			<!--`S08`, `S09`, `S10`: BOD Viewer gets company aggregates without `System Manager` and `0` customer PII.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity" name="test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting" time="3.225" timestamp="2026-11-07T05:45:15" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py" line="483">
+			<!--`P3-07/08`: Drill-down `all_denominator` & `numerator_only` totals match snapshot `100%` across 11 KPIs + `NULLS LAST`.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity" name="test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled" time="0.704" timestamp="2026-11-07T05:45:15" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py" line="913">
+			<!--`P3-09`: Disabling `p3_reporting_enabled` & `p3_sla_enabled` degrades cleanly with `0` P1/P2 impact.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity" name="test_role_capability_matrix_and_scope_isolation_s01_s02_s04" time="1.462" timestamp="2026-11-07T05:45:17" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py" line="163">
+			<!--`S01`, `S02`, `S04`, `S17`: Staff self-only bounds, Leader subtree bounds, and `reporting.*` alias parity.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity" name="test_sla_authority_and_original_due_immutability_s05_s14" time="0.592" timestamp="2026-11-07T05:45:18" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py" line="698">
+			<!--`S05`, `S14`: Staff/cross-team Leader denied on SLA waive/pause; `original_due_at` strictly immutable.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity" name="test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18" time="1.923" timestamp="2026-11-07T05:45:19" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py" line="743">
+			<!--`S11`, `S12`, `S16`, `S18`: 3-stage export auth, `File.owner='Administrator'`, live revocation, `410` TTL, CSV escaping.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity" name="test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15" time="2.164" timestamp="2026-11-07T05:45:22" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py" line="326">
+			<!--`S03`, `S15`: Historical KPI credit stays, but transferred Lead PII & post-transfer Team B activity are isolated.-->
+		</testcase>
+	</testsuite>
+</testsuites>

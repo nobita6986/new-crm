@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "description": "Standalone 7-method slice of p3_test_inventory.json for crm_cskh.tests.test_p3_reporting_and_security",
+  "expected_total": 7,
+  "modules": {
+    "crm_cskh.tests.test_p3_reporting_and_security": [
+      "TestP3ReportingAndSecurity.test_role_capability_matrix_and_scope_isolation_s01_s02_s04",
+      "TestP3ReportingAndSecurity.test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10",
+      "TestP3ReportingAndSecurity.test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15",
+      "TestP3ReportingAndSecurity.test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting",
+      "TestP3ReportingAndSecurity.test_sla_authority_and_original_due_immutability_s05_s14",
+      "TestP3ReportingAndSecurity.test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18",
+      "TestP3ReportingAndSecurity.test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled"
+    ]
+  }
+}
