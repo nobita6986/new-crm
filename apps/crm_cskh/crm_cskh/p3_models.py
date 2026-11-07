@@ -574,42 +574,56 @@ def ensure_p3_seeds() -> None:
 			frappe.flags.cskh_seed_holiday_list = prev_flag
 
 	# 3. Seed `VN-OFFICE-DEFAULT` in `CSKH Working Calendar`
-	if frappe.db.table_exists("CSKH Working Calendar") and not frappe.db.exists(
-		"CSKH Working Calendar", DEFAULT_CALENDAR_CODE
-	):
-		prev_cal_flag = getattr(frappe.flags, "cskh_seed_calendar", False)
-		frappe.flags.cskh_seed_calendar = True
-		try:
-			shifts = []
-			for day in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"):
+	default_cal_title = "Lịch Hành Chính Mặc Định (DEV / Configurable)"
+	legacy_cal_title = "Lịch Hành Chính CSKH Mặc Định (DEV / Configurable)"
+	if frappe.db.table_exists("CSKH Working Calendar"):
+		if not frappe.db.exists("CSKH Working Calendar", DEFAULT_CALENDAR_CODE):
+			prev_cal_flag = getattr(frappe.flags, "cskh_seed_calendar", False)
+			frappe.flags.cskh_seed_calendar = True
+			try:
+				shifts = []
+				for day in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday"):
+					shifts.append(
+						{"workday": day, "start_time": "08:00:00", "end_time": "12:00:00", "is_overnight": 0}
+					)
+					shifts.append(
+						{"workday": day, "start_time": "13:00:00", "end_time": "17:30:00", "is_overnight": 0}
+					)
 				shifts.append(
-					{"workday": day, "start_time": "08:00:00", "end_time": "12:00:00", "is_overnight": 0}
+					{"workday": "Saturday", "start_time": "08:00:00", "end_time": "12:00:00", "is_overnight": 0}
 				)
-				shifts.append(
-					{"workday": day, "start_time": "13:00:00", "end_time": "17:30:00", "is_overnight": 0}
+				cal_doc = frappe.get_doc(
+					{
+						"doctype": "CSKH Working Calendar",
+						"calendar_code": DEFAULT_CALENDAR_CODE,
+						"title": default_cal_title,
+						"timezone": DEFAULT_TIMEZONE,
+						"holiday_list": (
+							DEFAULT_HOLIDAY_LIST_NAME
+							if frappe.db.exists("CRM Holiday List", DEFAULT_HOLIDAY_LIST_NAME)
+							else None
+						),
+						"enabled": 1,
+						"is_default": 1,
+						"shifts": shifts,
+					}
 				)
-			shifts.append(
-				{"workday": "Saturday", "start_time": "08:00:00", "end_time": "12:00:00", "is_overnight": 0}
-			)
-			cal_doc = frappe.get_doc(
-				{
-					"doctype": "CSKH Working Calendar",
-					"calendar_code": DEFAULT_CALENDAR_CODE,
-					"title": "Lịch Hành Chính CSKH Mặc Định (DEV / Configurable)",
-					"timezone": DEFAULT_TIMEZONE,
-					"holiday_list": (
-						DEFAULT_HOLIDAY_LIST_NAME
-						if frappe.db.exists("CRM Holiday List", DEFAULT_HOLIDAY_LIST_NAME)
-						else None
-					),
-					"enabled": 1,
-					"is_default": 1,
-					"shifts": shifts,
-				}
-			)
-			cal_doc.insert(ignore_permissions=True)
-		finally:
-			frappe.flags.cskh_seed_calendar = prev_cal_flag
+				cal_doc.insert(ignore_permissions=True)
+			finally:
+				frappe.flags.cskh_seed_calendar = prev_cal_flag
+		else:
+			cur_cal_title = (
+				frappe.db.get_value("CSKH Working Calendar", DEFAULT_CALENDAR_CODE, "title") or ""
+			).strip()
+			if cur_cal_title == legacy_cal_title:
+				frappe.db.set_value(
+					"CSKH Working Calendar",
+					DEFAULT_CALENDAR_CODE,
+					"title",
+					default_cal_title,
+					update_modified=False,
+				)
+				frappe.clear_cache(doctype="CSKH Working Calendar")
 
 	# 4. Backfill P3 DEV/configurable fields on existing `CSKH Policy` rows where unset
 	if frappe.db.table_exists("CSKH Policy") and frappe.db.has_column(

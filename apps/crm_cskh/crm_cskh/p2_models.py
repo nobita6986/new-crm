@@ -72,11 +72,13 @@ P2_DOCTYPES = (
 )
 
 # 12 canonical Vietnamese Outcome Codes (`docs/outcome-catalog.md` §2).
+# Framed for Recruitment & Staffing / Manpower Supply outreach (`docs/recruitment-staffing-domain-alignment.md`):
+# none of these outreach outcomes automatically confirm a candidate has been hired, placed, or onboarded.
 DEFAULT_OUTCOME_CODES = (
 	{
 		"code": "no_answer",
 		"label_vi": "Không nghe máy",
-		"description": "Cuộc gọi đổ chuông hết hồi nhưng khách hàng không bắt máy.",
+		"description": "Cuộc gọi đổ chuông hết hồi nhưng người liên hệ không bắt máy.",
 		"result_group": "unreached",
 		"is_contact_attempt": 1,
 		"is_connected": 0,
@@ -96,7 +98,7 @@ DEFAULT_OUTCOME_CODES = (
 	{
 		"code": "busy",
 		"label_vi": "Máy bận",
-		"description": "Khách hàng đang bận đường dây hoặc từ chối cuộc gọi tức thời.",
+		"description": "Người liên hệ đang bận đường dây hoặc từ chối cuộc gọi tức thời.",
 		"result_group": "unreached",
 		"is_contact_attempt": 1,
 		"is_connected": 0,
@@ -136,7 +138,7 @@ DEFAULT_OUTCOME_CODES = (
 	{
 		"code": "message_sent_no_reply",
 		"label_vi": "Đã gửi tin nhắn, chưa phản hồi",
-		"description": "Đã gửi tin nhắn qua SMS/Zalo/MXH nhưng khách chưa phản hồi hai chiều.",
+		"description": "Đã gửi tin nhắn qua SMS/Zalo/MXH nhưng người liên hệ chưa phản hồi hai chiều (chưa tính là đã kết nối).",
 		"result_group": "unreached",
 		"is_contact_attempt": 1,
 		"is_connected": 0,
@@ -156,7 +158,7 @@ DEFAULT_OUTCOME_CODES = (
 	{
 		"code": "wrong_number",
 		"label_vi": "Sai số / Không đúng người",
-		"description": "Số điện thoại không thuộc về khách hàng mục tiêu hoặc không tồn tại.",
+		"description": "Số điện thoại không thuộc về người liên hệ mục tiêu hoặc không tồn tại.",
 		"result_group": "invalid_contact",
 		"is_contact_attempt": 1,
 		"is_connected": 0,
@@ -177,8 +179,8 @@ DEFAULT_OUTCOME_CODES = (
 	},
 	{
 		"code": "connected_needs_followup",
-		"label_vi": "Đã trao đổi — Cần chăm sóc tiếp",
-		"description": "Đã trao đổi hai chiều với khách, cần theo dõi hoặc gửi thêm thông tin.",
+		"label_vi": "Đã trao đổi — Cần liên hệ tiếp",
+		"description": "Đã kết nối hai chiều với người liên hệ, cần theo dõi hoặc gửi thêm thông tin; chưa xác nhận quan tâm hay nhận việc.",
 		"result_group": "engaged",
 		"is_contact_attempt": 1,
 		"is_connected": 1,
@@ -197,8 +199,8 @@ DEFAULT_OUTCOME_CODES = (
 	},
 	{
 		"code": "connected_interested",
-		"label_vi": "Đã trao đổi — Quan tâm",
-		"description": "Khách hàng phản hồi tích cực và thể hiện sự quan tâm rõ ràng.",
+		"label_vi": "Đã trao đổi — Có quan tâm",
+		"description": "Người liên hệ phản hồi tích cực và thể hiện sự quan tâm rõ ràng đến thông tin việc làm/nhân lực; chưa đồng nghĩa đã tuyển, bố trí hoặc nhận việc.",
 		"result_group": "positive",
 		"is_contact_attempt": 1,
 		"is_connected": 1,
@@ -217,8 +219,8 @@ DEFAULT_OUTCOME_CODES = (
 	},
 	{
 		"code": "callback_requested",
-		"label_vi": "Khách hẹn gọi / liên hệ lại",
-		"description": "Khách xác nhận bận tại thời điểm liên hệ và chủ động hẹn khung giờ gọi lại.",
+		"label_vi": "Đã hẹn gọi / liên hệ lại",
+		"description": "Người liên hệ xác nhận bận tại thời điểm liên hệ và chủ động hẹn khung giờ gọi / liên hệ lại.",
 		"result_group": "engaged",
 		"is_contact_attempt": 1,
 		"is_connected": 1,
@@ -238,7 +240,7 @@ DEFAULT_OUTCOME_CODES = (
 	{
 		"code": "connected_not_interested",
 		"label_vi": "Đã trao đổi — Không nhu cầu",
-		"description": "Khách hàng đã nghe tư vấn và xác nhận hiện chưa có nhu cầu.",
+		"description": "Người liên hệ đã trao đổi hai chiều và xác nhận hiện chưa có nhu cầu tìm việc / hợp tác.",
 		"result_group": "negative",
 		"is_contact_attempt": 1,
 		"is_connected": 1,
@@ -258,7 +260,7 @@ DEFAULT_OUTCOME_CODES = (
 	{
 		"code": "converted",
 		"label_vi": "Hoàn tất mục tiêu chiến dịch",
-		"description": "Đã đạt mục tiêu chăm sóc / chốt thành công theo tiêu chí chiến dịch.",
+		"description": "Hoàn tất tiêu chí liên hệ đầu ra của chiến dịch (ví dụ đồng ý nộp hồ sơ hoặc chốt lịch phỏng vấn); không tự xác nhận ứng viên đã được tuyển, bố trí hoặc nhận việc.",
 		"result_group": "converted",
 		"is_contact_attempt": 1,
 		"is_connected": 1,
@@ -280,7 +282,7 @@ DEFAULT_OUTCOME_CODES = (
 	{
 		"code": "do_not_contact",
 		"label_vi": "Yêu cầu ngừng liên hệ (DNC)",
-		"description": "Khách hàng yêu cầu ngừng liên hệ; gắn cờ tuân thủ DNC toàn cục trên Lead.",
+		"description": "Người liên hệ yêu cầu ngừng liên hệ; gắn cờ tuân thủ DNC toàn cục trên hồ sơ liên hệ.",
 		"result_group": "compliance",
 		"is_contact_attempt": 1,
 		"is_connected": 1,
@@ -319,9 +321,54 @@ DEFAULT_OUTCOME_CODES = (
 	},
 )
 
+_LEGACY_V1_OUTCOME_DEFAULTS: dict[str, tuple[str, str]] = {
+	"no_answer": (
+		"Không nghe máy",
+		"Cuộc gọi đổ chuông hết hồi nhưng khách hàng không bắt máy.",
+	),
+	"busy": (
+		"Máy bận",
+		"Khách hàng đang bận đường dây hoặc từ chối cuộc gọi tức thời.",
+	),
+	"message_sent_no_reply": (
+		"Đã gửi tin nhắn, chưa phản hồi",
+		"Đã gửi tin nhắn qua SMS/Zalo/MXH nhưng khách chưa phản hồi hai chiều.",
+	),
+	"wrong_number": (
+		"Sai số / Không đúng người",
+		"Số điện thoại không thuộc về khách hàng mục tiêu hoặc không tồn tại.",
+	),
+	"connected_needs_followup": (
+		"Đã trao đổi — Cần chăm sóc tiếp",
+		"Đã trao đổi hai chiều với khách, cần theo dõi hoặc gửi thêm thông tin.",
+	),
+	"connected_interested": (
+		"Đã trao đổi — Quan tâm",
+		"Khách hàng phản hồi tích cực và thể hiện sự quan tâm rõ ràng.",
+	),
+	"callback_requested": (
+		"Khách hẹn gọi / liên hệ lại",
+		"Khách xác nhận bận tại thời điểm liên hệ và chủ động hẹn khung giờ gọi lại.",
+	),
+	"connected_not_interested": (
+		"Đã trao đổi — Không nhu cầu",
+		"Khách hàng đã nghe tư vấn và xác nhận hiện chưa có nhu cầu.",
+	),
+	"converted": (
+		"Hoàn tất mục tiêu chiến dịch",
+		"Đã đạt mục tiêu chăm sóc / chốt thành công theo tiêu chí chiến dịch.",
+	),
+	"do_not_contact": (
+		"Yêu cầu ngừng liên hệ (DNC)",
+		"Khách hàng yêu cầu ngừng liên hệ; gắn cờ tuân thủ DNC toàn cục trên Lead.",
+	),
+}
+
+_LEGACY_V1_POLICY_TITLES = frozenset(("Chính sách Vận hành CSKH Mặc định",))
+
 DEFAULT_GLOBAL_POLICY = {
 	"policy_code": "GLOBAL-DEFAULT",
-	"title": "Chính sách Vận hành CSKH Mặc định",
+	"title": "Chính sách Vận hành Liên hệ & Tuyển dụng Mặc định",
 	"scope_type": "Global",
 	"team": None,
 	"campaign": None,
@@ -614,19 +661,65 @@ def ensure_p2_custom_fields() -> None:
 
 
 def ensure_p2_seeds() -> None:
-	"""Idempotently seed the 12 Vietnamese Outcome Codes and `GLOBAL-DEFAULT` Policy."""
+	"""Idempotently seed the 12 Vietnamese Outcome Codes and `GLOBAL-DEFAULT` Policy.
+
+	When migrating an existing site whose seeded `version == 1` rows still hold untouched
+	legacy CSKH wording, updates only the master catalog display `label_vi` / `description` / `title`
+	in-place without bumping `version` and without mutating historical `CSKH Contact Attempt` snapshots.
+	"""
 	prev_flag = getattr(frappe.flags, "cskh_in_settings_service", False)
 	frappe.flags.cskh_in_settings_service = True
 	try:
 		if frappe.db.table_exists("CSKH Outcome Code"):
+			outcome_cache_dirty = False
 			for row in DEFAULT_OUTCOME_CODES:
-				if not frappe.db.exists("CSKH Outcome Code", row["code"]):
+				code = row["code"]
+				if not frappe.db.exists("CSKH Outcome Code", code):
 					frappe.get_doc({"doctype": "CSKH Outcome Code", **row}).insert(ignore_permissions=True)
+					continue
+				legacy_pair = _LEGACY_V1_OUTCOME_DEFAULTS.get(code)
+				if not legacy_pair:
+					continue
+				cur = frappe.db.get_value(
+					"CSKH Outcome Code",
+					code,
+					["version", "label_vi", "description"],
+					as_dict=True,
+				)
+				if not cur or cint(cur.version) != 1:
+					continue
+				old_label, old_desc = legacy_pair
+				updates: dict[str, str] = {}
+				if (cur.label_vi or "").strip() == old_label and old_label != row["label_vi"]:
+					updates["label_vi"] = row["label_vi"]
+				if (cur.description or "").strip() == old_desc and old_desc != row["description"]:
+					updates["description"] = row["description"]
+				if updates:
+					frappe.db.set_value("CSKH Outcome Code", code, updates, update_modified=False)
+					outcome_cache_dirty = True
+			if outcome_cache_dirty:
+				frappe.clear_cache(doctype="CSKH Outcome Code")
 		if frappe.db.table_exists("CSKH Policy"):
-			if not frappe.db.exists("CSKH Policy", DEFAULT_GLOBAL_POLICY["policy_code"]):
+			pol_code = DEFAULT_GLOBAL_POLICY["policy_code"]
+			if not frappe.db.exists("CSKH Policy", pol_code):
 				frappe.get_doc({"doctype": "CSKH Policy", **DEFAULT_GLOBAL_POLICY}).insert(
 					ignore_permissions=True
 				)
+			else:
+				cur_pol = frappe.db.get_value("CSKH Policy", pol_code, ["version", "title"], as_dict=True)
+				if (
+					cur_pol
+					and cint(cur_pol.version) == 1
+					and (cur_pol.title or "").strip() in _LEGACY_V1_POLICY_TITLES
+				):
+					frappe.db.set_value(
+						"CSKH Policy",
+						pol_code,
+						"title",
+						DEFAULT_GLOBAL_POLICY["title"],
+						update_modified=False,
+					)
+					frappe.clear_cache(doctype="CSKH Policy")
 	finally:
 		frappe.flags.cskh_in_settings_service = prev_flag
 
