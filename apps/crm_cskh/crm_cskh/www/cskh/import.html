@@ -2,6 +2,10 @@
 
 {% block cskh_title %}{{ _("Import list") }}{% endblock %}
 {% block cskh_subtitle %}{{ _("Upload a private file, map the phone column, preview, then confirm.") }}{% endblock %}
+{% block cskh_actions %}
+<a class="cskh-btn is-small" href="/cskh/pool">{{ _("Customer pool") }}</a>
+<a class="cskh-btn is-small" href="/cskh/campaigns">{{ _("Campaigns and rules") }}</a>
+{% endblock %}
 
 {% block cskh_body %}
 <div class="cskh-banner-notice">

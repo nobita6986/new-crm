@@ -2,6 +2,10 @@
 
 {% block cskh_title %}{{ _("Callbacks schedule") }}{% endblock %}
 {% block cskh_subtitle %}{{ _("Follow-up callbacks in your scope, classified by site/user timezone.") }}{% endblock %}
+{% block cskh_actions %}
+<a class="cskh-btn is-small" href="/cskh/my-customers">{{ _("My customers") }}</a>
+<a class="cskh-btn is-small" href="/cskh/progress">{{ _("Care progress") }}</a>
+{% endblock %}
 
 {% block cskh_body %}
 <div class="cskh-banner-notice">

@@ -26,6 +26,7 @@
 	const PAGE_SIZE = 20
 	const caps = cskh.capabilities() || {}
 	const allowPii = !!caps.pii
+	const canOpenCrm = !!caps.can_open_crm_app
 
 	const pager = cskh.pager({
 		pageSize: PAGE_SIZE,
@@ -295,7 +296,7 @@
 				})
 			)
 		}
-		if (allowPii && wi.lead) {
+		if (allowPii && canOpenCrm && wi.lead) {
 			actions.appendChild(
 				cskh.el('a', {
 					class: 'cskh-btn',

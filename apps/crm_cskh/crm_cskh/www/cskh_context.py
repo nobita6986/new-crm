@@ -57,11 +57,11 @@ P3_NAV_KEYS = {
 
 # Navigation entries per role. Keys are English message ids translated via Frappe i18n.
 NAV_ITEMS = (
+	{"key": "import", "route": "/cskh/import", "label": "Import list"},
+	{"key": "pool", "route": "/cskh/pool", "label": "Customer pool"},
+	{"key": "campaigns", "route": "/cskh/campaigns", "label": "Campaigns and rules"},
 	{"key": "my-customers", "route": "/cskh/my-customers", "label": "My customers"},
 	{"key": "callbacks", "route": "/cskh/callbacks", "label": "Callbacks schedule"},
-	{"key": "pool", "route": "/cskh/pool", "label": "Customer pool"},
-	{"key": "import", "route": "/cskh/import", "label": "Import list"},
-	{"key": "campaigns", "route": "/cskh/campaigns", "label": "Campaigns and rules"},
 	{"key": "progress", "route": "/cskh/progress", "label": "Care progress"},
 	{"key": "dashboard", "route": "/cskh/dashboard", "label": "Distribution dashboard"},
 	{

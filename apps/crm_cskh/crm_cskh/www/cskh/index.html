@@ -9,58 +9,35 @@
 <div class="cskh-card cskh-workflow-guide">
 	<h2>{{ _("Recruitment outreach workflow") }}</h2>
 	<p class="cskh-muted" style="margin: 0 0 8px;">
+		{% if 'import' in nav_keys or 'pool' in nav_keys or 'campaigns' in nav_keys %}
+		{{ _("1. Import list -> 2. Contact pool -> 3. Assign & distribute -> 4. Assigned contact records -> 5. Record contact outcome -> 6. Follow-up callbacks.") }}
+		{% else %}
 		{{ _("1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.") }}
+		{% endif %}
 	</p>
 	<p class="cskh-muted" style="margin: 0;">
 		{{ _("Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.") }}
 	</p>
 </div>
 
-{% if 'my-customers' in nav_keys or 'callbacks' in nav_keys or 'progress' in nav_keys %}
-<h2 class="cskh-section-heading">{{ _("Daily outreach tasks") }}</h2>
-{% endif %}
-{% if 'my-customers' in nav_keys %}
-<div class="cskh-card">
-	<h2>{{ _("My customers") }}</h2>
-	<p class="cskh-muted">{{ _("Only the customers that are currently assigned to you.") }}</p>
-	<a class="cskh-btn is-primary" href="/cskh/my-customers">{{ _("My customers") }}</a>
-</div>
-{% endif %}
-
-{% if 'callbacks' in nav_keys %}
-<div class="cskh-card">
-	<h2>{{ _("Callbacks schedule") }}</h2>
-	<p class="cskh-muted">{{ _("Follow-up callbacks in your scope, classified by site/user timezone.") }}</p>
-	<a class="cskh-btn" href="/cskh/callbacks">{{ _("Callbacks schedule") }}</a>
-</div>
-{% endif %}
-
-{% if 'progress' in nav_keys %}
-<div class="cskh-card">
-	<h2>{{ _("Care progress") }}</h2>
-	<p class="cskh-muted">{{ _("Basic customer care activity counts in your scope (not a quality or SLA score).") }}</p>
-	<a class="cskh-btn" href="/cskh/progress">{{ _("Care progress") }}</a>
-</div>
-{% endif %}
-
 {% if 'pool' in nav_keys or 'import' in nav_keys or 'campaigns' in nav_keys or 'dashboard' in nav_keys or 'settings' in nav_keys %}
 <h2 class="cskh-section-heading">{{ _("Contact pool, import & assignment management") }}</h2>
 {% endif %}
-{% if 'pool' in nav_keys %}
-<div class="cskh-card">
-	<h2>{{ _("Customer pool") }}</h2>
-	<p class="cskh-muted">{{ _("Leads in your scope, with the derived distribution state.") }}</p>
-	<a class="cskh-btn" href="/cskh/pool">{{ _("Customer pool") }}</a>
-</div>
-{% endif %}
-
 {% if 'import' in nav_keys %}
 <div class="cskh-card">
 	<h2>{{ _("Import list") }}</h2>
 	<p class="cskh-muted">
 		{{ _("Upload a private file, map the phone column, preview, then confirm.") }}
 	</p>
-	<a class="cskh-btn" href="/cskh/import">{{ _("Import list") }}</a>
+	<a class="cskh-btn is-primary" href="/cskh/import">{{ _("Import list") }}</a>
+</div>
+{% endif %}
+
+{% if 'pool' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Customer pool") }}</h2>
+	<p class="cskh-muted">{{ _("Leads in your scope, with the derived distribution state.") }}</p>
+	<a class="cskh-btn" href="/cskh/pool">{{ _("Customer pool") }}</a>
 </div>
 {% endif %}
 
@@ -91,6 +68,33 @@
 		{{ _("Configure contact outcome codes and versioned customer care policies.") }}
 	</p>
 	<a class="cskh-btn" href="/cskh/settings">{{ _("Outcome and policy settings") }}</a>
+</div>
+{% endif %}
+
+{% if 'my-customers' in nav_keys or 'callbacks' in nav_keys or 'progress' in nav_keys %}
+<h2 class="cskh-section-heading">{{ _("Daily outreach tasks") }}</h2>
+{% endif %}
+{% if 'my-customers' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("My customers") }}</h2>
+	<p class="cskh-muted">{{ _("Only the customers that are currently assigned to you.") }}</p>
+	<a class="cskh-btn is-primary" href="/cskh/my-customers">{{ _("My customers") }}</a>
+</div>
+{% endif %}
+
+{% if 'callbacks' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Callbacks schedule") }}</h2>
+	<p class="cskh-muted">{{ _("Follow-up callbacks in your scope, classified by site/user timezone.") }}</p>
+	<a class="cskh-btn" href="/cskh/callbacks">{{ _("Callbacks schedule") }}</a>
+</div>
+{% endif %}
+
+{% if 'progress' in nav_keys %}
+<div class="cskh-card">
+	<h2>{{ _("Care progress") }}</h2>
+	<p class="cskh-muted">{{ _("Basic customer care activity counts in your scope (not a quality or SLA score).") }}</p>
+	<a class="cskh-btn" href="/cskh/progress">{{ _("Care progress") }}</a>
 </div>
 {% endif %}
 

@@ -70,7 +70,10 @@
 		const codeEl = document.getElementById('out-code')
 		codeEl.value = item.code
 		codeEl.readOnly = true
-		document.getElementById('out-label-vi').value = item.label_vi || item.label || ''
+		document.getElementById('out-label-vi').value = cskh.outcomeLabel(
+			item.code,
+			item.label_vi || item.label || ''
+		)
 		document.getElementById('out-group').value = item.result_group || 'unreached'
 		document.getElementById('out-channels').value = (item.allowed_channels || []).join(',')
 		document.getElementById('out-next-status').value =
