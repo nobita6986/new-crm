@@ -8,6 +8,7 @@
   - **Tên miền công khai (HTTPS Ingress):** `crm.hrpartner.vn` (`https://crm.hrpartner.vn`)
   - **Tên site Frappe nội bộ (`SITE_NAME` / `sites/<site>`):** `crm-staging.localhost`
   - **Compose wrapper vận hành trên VPS:** `/opt/crm-cskh-staging/staging-compose`
+  - **Tệp cấu hình môi trường của wrapper:** `/opt/crm-cskh-staging/.env.staging` (giữ quyền truy cập **`0600`**)
 - **Phân loại thay đổi vận hành:** **Class A+ — Zero-DDL, Fixture & Catalog Seed Update** (`0` thay đổi cấu trúc bảng/cột/index, `patches.txt` giữ nguyên; có cập nhật `CRM Form Script` và nhãn mặc định `version == 1` qua `migrate`)
 
 ---
@@ -34,7 +35,8 @@ feat(ui,i18n,p3): đồng bộ Không gian tuyển dụng 6 bước, chỉ số 
 | 8 | `a973e3a69530edb9441480c3b2862b381656b36b` + `8184c8050868da74fc0e30edff0c7dc390c19c2b` | `T1B` | Cô lập fixture `test_p3_reporting_and_security` với cuộc gọi tổng đài PBX hợp lệ `SEC2-02` + bằng chứng chạy độc lập đạt **`7/7 PASS`** trên site sạch & hồi quy **`19/19 PASS`** |
 | 9 | `391b4845be504f7f094a855d1f1aaf56f3d92867` | `T1A` | Merge tích hợp nhánh bằng chứng `8184c8050868da74fc0e30edff0c7dc390c19c2b` (`T1B`) cùng kết quả HTTP CSV `2556090767fe820c29e4f05d1808702bf31ee19d` (`T1C`) |
 | 10 | `11f7605f15a7455670d3d8b27ff2d1bd81d0101a` | `T1A` | Dọn khoảng trắng cuối dòng 2 script kiểm định `T1C` (giữ nguyên từng byte CSV HTTP `92bb90d5be2b...`), cập nhật manifest SHA-256 và hồ sơ bàn giao |
-| 11 | `HEAD` *(commit tài liệu trên `11f7605`)* | `T1A` | Hiệu chỉnh runbook cập nhật `crm.hrpartner.vn` theo đúng hạ tầng VPS hiện hành (`/opt/crm-cskh-staging/staging-compose`, site `crm-staging.localhost`) & đồng bộ manifest |
+| 11 | `6d5cb74afe2ca5556f377ab98dda66ebdcd37eb9` | `T1A` | Hiệu chỉnh runbook cập nhật `crm.hrpartner.vn` theo hạ tầng VPS hiện hành (`/opt/crm-cskh-staging/staging-compose`, site `crm-staging.localhost`, kiểm tra xả RQ worker thực tế & phân tách rollback) |
+| 12 | `HEAD` *(commit tài liệu trên `6d5cb74`)* | `T1A` | Hiệu chỉnh đường dẫn cấu hình `/opt/crm-cskh-staging/.env.staging` (giữ quyền `0600`), đối chiếu toàn bộ lệnh với wrapper `staging-compose` và đồng bộ manifest SHA-256 |
 
 ### 1.3. Đối chiếu phạm vi mã nguồn
 
@@ -76,10 +78,11 @@ feat(ui,i18n,p3): đồng bộ Không gian tuyển dụng 6 bước, chỉ số 
 
 ### 2.1. Thông số định danh hạ tầng & quy ước biến bắt buộc
 
-Trên VPS hiện hành, lưu lượng HTTPS công khai đi vào tên miền **`crm.hrpartner.vn`**, trong khi thư mục site Frappe thực tế nằm trong volume `sites` là **`crm-staging.localhost`** và toàn bộ lệnh Docker Compose được gọi qua wrapper **`/opt/crm-cskh-staging/staging-compose`**.
+Trên VPS hiện hành, lưu lượng HTTPS công khai đi vào tên miền **`crm.hrpartner.vn`**, thư mục site Frappe thực tế trong volume `sites` là **`crm-staging.localhost`**, và toàn bộ lệnh Docker Compose được gọi qua wrapper **`/opt/crm-cskh-staging/staging-compose`** gắn với tệp cấu hình **`/opt/crm-cskh-staging/.env.staging`** (quyền **`0600`**).
 
 > [!IMPORTANT]
-> - **Giữ nguyên cấu hình domain/routing hiện hành** trong `/opt/crm-cskh-staging` (`SITES_RULE` / proxy TLS cho `crm.hrpartner.vn` và `FRAPPE_SITE_NAME_HEADER` / `SITE_NAME` cho `crm-staging.localhost`). Khi nâng cấp chỉ cập nhật biến **`APP_IMAGE`**.
+> - **Giữ nguyên cấu hình domain/routing & quyền tệp `0600`:** Bảo toàn toàn bộ thông số hiện hành trong `/opt/crm-cskh-staging/.env.staging` (`SITES_RULE` / proxy TLS cho `crm.hrpartner.vn`, `SITE_NAME=crm-staging.localhost`, `MIGRATE_SITES=false`, `DB_PASSWORD_SECRETS_FILE=...`). Khi nâng cấp hoặc quay lui chỉ cập nhật duy nhất dòng **`APP_IMAGE=`**, đồng thời giữ nguyên quyền truy cập **`0600`** cho cả `/opt/crm-cskh-staging/.env.staging` lẫn bản sao lưu của nó.
+> - **Ngữ cảnh thực thi wrapper `staging-compose`:** Vì `/opt/crm-cskh-staging/.env.staging` và tệp secret MariaDB đều ở quyền `0600`, phiên bảo trì cần mở dưới quyền chủ sở hữu tệp (thông thường `sudo -i` / `root`) để `staging-compose` đọc trực tiếp `--env-file /opt/crm-cskh-staging/.env.staging` và Docker socket mà không bị `sudo` lọc biến môi trường. Khi chạy `migrator`, luôn truyền kèm `-e MIGRATE_SITES=true -e SITE_NAME="${FRAPPE_SITE}"` trực tiếp cho `run --rm` để biến vào thẳng container `migrator` kể cả khi wrapper nạp `MIGRATE_SITES=false` từ `.env.staging`.
 > - **Mọi lệnh `bench --site ...`, Python `frappe.init(...)` và đường dẫn dữ liệu/backup bên trong container** đều phải dùng tên site Frappe đã xác minh thực tế (`FRAPPE_SITE="crm-staging.localhost"`), **không** truyền `crm.hrpartner.vn` vào `--site`.
 
 Bảng tham chiếu biến dùng xuyên suốt runbook:
@@ -88,8 +91,9 @@ Bảng tham chiếu biến dùng xuyên suốt runbook:
 | :--- | :--- |
 | `PUBLIC_DOMAIN` | `crm.hrpartner.vn` (kiểm tra ngoài HTTPS: `https://crm.hrpartner.vn`) |
 | `COMPOSE_BIN` | `/opt/crm-cskh-staging/staging-compose` |
-| `FRAPPE_SITE` | `crm-staging.localhost` *(bắt buộc kiểm chứng tồn tại `sites/crm-staging.localhost/site_config.json` ở Bước 0)* |
-| `PREV_APP_IMAGE` | Giá trị `APP_IMAGE` đang cấu hình trước khi nâng cấp *(ghi lại nguyên văn từ `.env` / `docker inspect`)* |
+| `ENV_FILE` | `/opt/crm-cskh-staging/.env.staging` *(bắt buộc giữ quyền truy cập **`0600`**)* |
+| `FRAPPE_SITE` | `crm-staging.localhost` *(bắt buộc kiểm chứng khớp `SITE_NAME` trong `/opt/crm-cskh-staging/.env.staging` và tồn tại `sites/crm-staging.localhost/site_config.json` ở Bước 0)* |
+| `PREV_APP_IMAGE` | Giá trị `APP_IMAGE` đang cấu hình trước khi nâng cấp *(ghi lại nguyên văn từ `/opt/crm-cskh-staging/.env.staging` & đối chiếu `docker inspect`)* |
 | `PREV_IMAGE_ID` | Image ID thực chạy của `backend` hiện tại (`sha256:<64-hex>`, ví dụ bản `92e14af` local là `sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9` — bắt buộc lấy thực tế trên VPS ở Bước 0) |
 | `NEW_APP_IMAGE` | Định danh `APP_IMAGE` bất biến mới của bản phát hành (`<registry>/<namespace>/crm-cskh@sha256:<NEW_REPO_DIGEST>` hoặc image đã nạp cố định trên VPS) |
 | `NEW_IMAGE_ID` | Image ID thực tế của `NEW_APP_IMAGE` (`docker image inspect --format '{{.Id}}' "${NEW_APP_IMAGE}"`, dạng `sha256:<64-hex>`) |
@@ -110,14 +114,22 @@ Sau khi `T0` merge PR vào `main` (tạo `<MAIN_MERGE_SHA>`, giữ `apps/crm_csk
 
 ### 2.3. Bước 0 — Tiền kiểm chỉ đọc trên VPS (`T-1` / Trước giờ bảo trì)
 
-Chạy trên VPS (chưa tác động dịch vụ đang chạy) để khóa thông tin thực tế:
+Mở phiên quản trị (`sudo -i`) trên VPS (chưa tác động dịch vụ đang chạy) để khóa thông tin thực tế của wrapper và tệp cấu hình `/opt/crm-cskh-staging/.env.staging`:
 
 ```bash
 export COMPOSE_BIN="/opt/crm-cskh-staging/staging-compose"
+export ENV_FILE="/opt/crm-cskh-staging/.env.staging"
 export PUBLIC_DOMAIN="crm.hrpartner.vn"
 export FRAPPE_SITE="crm-staging.localhost"
 
-# 1. Kiểm tra wrapper và trạng thái các service đang chạy:
+# 1. Xác minh tệp cấu hình /opt/crm-cskh-staging/.env.staging tồn tại, giữ đúng quyền 0600,
+#    khớp SITE_NAME=crm-staging.localhost và wrapper staging-compose giải mã sạch cấu hình + profile migrate:
+sudo test -f "${ENV_FILE}"
+test "$(sudo stat -c '%a' "${ENV_FILE}")" = "600"
+sudo grep -E '^(COMPOSE_PROJECT_NAME|SITE_NAME|APP_IMAGE|PULL_POLICY|MIGRATE_SITES|SITES_RULE|DB_PASSWORD_SECRETS_FILE)=' "${ENV_FILE}"
+test "$(sudo grep '^SITE_NAME=' "${ENV_FILE}" | cut -d= -f2- | tr -d "\"'\r")" = "${FRAPPE_SITE}"
+"${COMPOSE_BIN}" config --services
+"${COMPOSE_BIN}" --profile migrate config --services | grep -qx migrator
 "${COMPOSE_BIN}" ps
 
 # 2. Xác minh thư mục site Frappe thực tế trong container backend khớp crm-staging.localhost:
@@ -128,13 +140,15 @@ export FRAPPE_SITE="crm-staging.localhost"
   echo "VERIFIED_FRAPPE_SITE='"${FRAPPE_SITE}"'"
 '
 
-# 3. Ghi lại PREV_APP_IMAGE, PREV_IMAGE_ID và RepoDigests thực chạy từ container backend:
+# 3. Ghi lại PREV_APP_IMAGE (từ .env.staging & container backend), PREV_IMAGE_ID và RepoDigests thực chạy:
+PREV_ENV_APP_IMAGE="$(sudo grep '^APP_IMAGE=' "${ENV_FILE}" | cut -d= -f2- | tr -d "\"'\r")"
 PREV_BACKEND_CID="$("${COMPOSE_BIN}" ps -q backend)"
 export PREV_APP_IMAGE="$(docker inspect --format '{{.Config.Image}}' "${PREV_BACKEND_CID}")"
 export PREV_IMAGE_ID="$(docker inspect --format '{{.Image}}' "${PREV_BACKEND_CID}")"
 PREV_REPO_DIGESTS="$(docker image inspect --format '{{json .RepoDigests}}' "${PREV_IMAGE_ID}")"
-printf 'PREV_APP_IMAGE=%s\nPREV_IMAGE_ID=%s\nPREV_REPO_DIGESTS=%s\n' \
-  "${PREV_APP_IMAGE}" "${PREV_IMAGE_ID}" "${PREV_REPO_DIGESTS}" | tee /tmp/cskh-pre-upgrade-image.txt
+install -m 0600 /dev/null /tmp/cskh-pre-upgrade-image.txt
+printf 'PREV_ENV_APP_IMAGE=%s\nPREV_APP_IMAGE=%s\nPREV_IMAGE_ID=%s\nPREV_REPO_DIGESTS=%s\n' \
+  "${PREV_ENV_APP_IMAGE}" "${PREV_APP_IMAGE}" "${PREV_IMAGE_ID}" "${PREV_REPO_DIGESTS}" | tee /tmp/cskh-pre-upgrade-image.txt
 
 # 4. Kiểm tra dung lượng đĩa trống (yêu cầu >= 5 GB trống) và xác nhận encryption_key đã lưu ký ngoài VPS:
 df -h / /var/lib/docker /opt/crm-cskh-staging
@@ -261,29 +275,43 @@ sudo bash -lc "cd '${BACKUP_HOST_DIR}' && ls -lh *-database.sql.gz && sha256sum 
 # (Đồng bộ thư mục ${BACKUP_HOST_DIR} sang kho lưu trữ ngoài VPS theo quy trình backup hiện hành trước khi qua Bước 3)
 ```
 
-#### Bước 3 — Cập nhật `APP_IMAGE`, chạy `configurator` và chạy `migrator` (`--profile migrate` + `MIGRATE_SITES=true`)
+#### Bước 3 — Sao lưu `/opt/crm-cskh-staging/.env.staging` (`0600`), cập nhật `APP_IMAGE`, chạy `configurator` và `migrator`
 
 ```bash
-# 1. Sao lưu tệp cấu hình môi trường của wrapper trước khi đổi APP_IMAGE
-#    (CHỈ cập nhật dòng APP_IMAGE=${NEW_APP_IMAGE}; giữ nguyên toàn bộ cấu hình domain crm.hrpartner.vn & SITE_NAME=crm-staging.localhost):
-sudo cp -a /opt/crm-cskh-staging/.env "/opt/crm-cskh-staging/.env.bak.$(date -u +%Y%m%dT%H%M%SZ)"
-sudo python3 - "${NEW_APP_IMAGE}" <<'PY'
-import pathlib, re, sys
-new_img = sys.argv[1]
-env_path = pathlib.Path("/opt/crm-cskh-staging/.env")
+# 1. Sao lưu /opt/crm-cskh-staging/.env.staging với quyền 0600 trước khi đổi APP_IMAGE
+#    (CHỈ cập nhật dòng APP_IMAGE=${NEW_APP_IMAGE}; giữ nguyên quyền 0600 + chủ sở hữu và toàn bộ cấu hình domain crm.hrpartner.vn & SITE_NAME=crm-staging.localhost):
+ENV_BACKUP="${ENV_FILE}.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+sudo install -m 0600 "${ENV_FILE}" "${ENV_BACKUP}"
+test "$(sudo stat -c '%a' "${ENV_BACKUP}")" = "600"
+
+sudo python3 - "${ENV_FILE}" "${NEW_APP_IMAGE}" <<'PY'
+import os, pathlib, re, stat, sys
+env_path = pathlib.Path(sys.argv[1])
+new_img = sys.argv[2]
+st = env_path.stat()
 text = env_path.read_text(encoding="utf-8")
 updated, n = re.subn(r"(?m)^APP_IMAGE=.*$", f"APP_IMAGE={new_img}", text)
 assert n == 1, f"Expected exactly 1 APP_IMAGE= line in {env_path}, found {n}"
-env_path.write_text(updated, encoding="utf-8")
-print(f"Updated APP_IMAGE -> {new_img}")
+env_path.write_text(updated, encoding="utf-8", newline="\n")
+os.chmod(env_path, 0o600)
+os.chown(env_path, st.st_uid, st.st_gid)
+assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+print(f"Updated {env_path} APP_IMAGE -> {new_img} (mode=0600 preserved)")
 PY
+test "$(sudo stat -c '%a' "${ENV_FILE}")" = "600"
 
-# 2. Chạy configurator để xác thực thứ tự sites/apps.txt (frappe -> crm -> crm_cskh):
+# 2. Chạy configurator qua wrapper staging-compose để xác thực thứ tự sites/apps.txt (frappe -> crm -> crm_cskh):
 "${COMPOSE_BIN}" run --rm configurator
 
-# 3. Chạy one-shot migrator qua profile 'migrate' với MIGRATE_SITES=true cho site crm-staging.localhost
-#    (TUYỆT ĐỐI KHÔNG dùng --skip-failing; kiểm tra log in ra đúng 'running controlled migration for site crm-staging.localhost'):
-MIGRATE_SITES=true SITE_NAME="${FRAPPE_SITE}" "${COMPOSE_BIN}" --profile migrate run --rm migrator
+# 3. Chạy one-shot migrator qua wrapper với --profile migrate và truyền tường minh -e MIGRATE_SITES=true -e SITE_NAME=${FRAPPE_SITE}
+#    (bảo đảm MIGRATE_SITES=true vào thẳng container migrator kể cả khi wrapper nạp MIGRATE_SITES=false từ .env.staging;
+#     TUYỆT ĐỐI KHÔNG dùng --skip-failing; kiểm tra fail-closed log đã chạy migration cho crm-staging.localhost):
+(
+  set -euo pipefail
+  MIGRATE_SITES=true "${COMPOSE_BIN}" --profile migrate run --rm \
+    -e MIGRATE_SITES=true -e SITE_NAME="${FRAPPE_SITE}" migrator 2>&1 | tee /tmp/cskh-migrator.log
+  grep -Fq "running controlled migration for site ${FRAPPE_SITE}" /tmp/cskh-migrator.log
+)
 ```
 
 #### Bước 4 — Cập nhật các container runtime, đối chiếu `NEW_IMAGE_ID`, xóa cache và mở lưu lượng
@@ -334,6 +362,7 @@ done
 
 ```bash
 export COMPOSE_BIN="/opt/crm-cskh-staging/staging-compose"
+export ENV_FILE="/opt/crm-cskh-staging/.env.staging"
 export FRAPPE_SITE="crm-staging.localhost"
 
 # 1. Bật chế độ bảo trì ngắn & tạm dừng scheduler, sau đó chạy lại đoạn kiểm tra RQ ở Bước 1.2
@@ -341,21 +370,32 @@ export FRAPPE_SITE="crm-staging.localhost"
 "${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" set-maintenance-mode on
 "${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" scheduler pause
 
-# 2. Đổi APP_IMAGE trong /opt/crm-cskh-staging/.env về lại PREV_APP_IMAGE đã ghi ở Bước 0:
-sudo python3 - "${PREV_APP_IMAGE}" <<'PY'
-import pathlib, re, sys
-prev_img = sys.argv[1]
-env_path = pathlib.Path("/opt/crm-cskh-staging/.env")
+# 2. Đổi APP_IMAGE trong /opt/crm-cskh-staging/.env.staging về lại PREV_APP_IMAGE đã ghi ở Bước 0 (giữ nguyên quyền 0600):
+sudo python3 - "${ENV_FILE}" "${PREV_APP_IMAGE}" <<'PY'
+import os, pathlib, re, stat, sys
+env_path = pathlib.Path(sys.argv[1])
+prev_img = sys.argv[2]
+st = env_path.stat()
 text = env_path.read_text(encoding="utf-8")
 updated, n = re.subn(r"(?m)^APP_IMAGE=.*$", f"APP_IMAGE={prev_img}", text)
-assert n == 1, f"Expected 1 APP_IMAGE= line, found {n}"
-env_path.write_text(updated, encoding="utf-8")
+assert n == 1, f"Expected 1 APP_IMAGE= line in {env_path}, found {n}"
+env_path.write_text(updated, encoding="utf-8", newline="\n")
+os.chmod(env_path, 0o600)
+os.chown(env_path, st.st_uid, st.st_gid)
+assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+print(f"Reverted {env_path} APP_IMAGE -> {prev_img} (mode=0600 preserved)")
 PY
+test "$(sudo stat -c '%a' "${ENV_FILE}")" = "600"
 
-# 3. Chạy configurator + migrator trên image cũ để khôi phục 2 CRM Form Script của CRM Lead,
-#    sau đó tắt script thứ 3 trên CRM Deal và đưa các service về PREV_IMAGE_ID:
+# 3. Chạy configurator + migrator trên image cũ qua wrapper staging-compose để khôi phục 2 CRM Form Script của CRM Lead,
+#    sau đó đưa các service về PREV_IMAGE_ID và tắt script thứ 3 trên CRM Deal:
 "${COMPOSE_BIN}" run --rm configurator
-MIGRATE_SITES=true SITE_NAME="${FRAPPE_SITE}" "${COMPOSE_BIN}" --profile migrate run --rm migrator
+(
+  set -euo pipefail
+  MIGRATE_SITES=true "${COMPOSE_BIN}" --profile migrate run --rm \
+    -e MIGRATE_SITES=true -e SITE_NAME="${FRAPPE_SITE}" migrator 2>&1 | tee /tmp/cskh-rollback-migrator.log
+  grep -Fq "running controlled migration for site ${FRAPPE_SITE}" /tmp/cskh-rollback-migrator.log
+)
 "${COMPOSE_BIN}" up -d backend frontend websocket queue-short queue-long scheduler
 
 for svc in backend frontend websocket queue-short queue-long scheduler; do
@@ -393,6 +433,7 @@ finally:
 
 ```bash
 export COMPOSE_BIN="/opt/crm-cskh-staging/staging-compose"
+export ENV_FILE="/opt/crm-cskh-staging/.env.staging"
 export FRAPPE_SITE="crm-staging.localhost"
 
 # 1. Khóa ghi ngay lập tức và dừng workers + scheduler:
@@ -435,21 +476,43 @@ cat /tmp/cskh-post-backup-delta-audit.json
 "${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" backup --with-files
 
 # 4. Sau khi T0/Owner phê duyệt cửa sổ dữ liệu ở Bước 2:
-#    - Đặt lại APP_IMAGE=${PREV_APP_IMAGE} trong /opt/crm-cskh-staging/.env
+#    - Đặt lại APP_IMAGE=${PREV_APP_IMAGE} trong /opt/crm-cskh-staging/.env.staging (giữ nguyên quyền 0600)
 #    - Kiểm tra SHA-256 của bộ tệp backup tại ${BACKUP_HOST_DIR}
-#    - Dừng frontend/websocket, nạp tệp backup vào backend và chạy --force restore với mật khẩu root DB đọc từ DB_PASSWORD_SECRETS_FILE:
-"${COMPOSE_BIN}" stop frontend websocket
-docker cp "${BACKUP_HOST_DIR}/"*.sql.gz "$("${COMPOSE_BIN}" ps -q backend):/tmp/"
-docker cp "${BACKUP_HOST_DIR}/"*-files.tar "$("${COMPOSE_BIN}" ps -q backend):/tmp/" 2>/dev/null || true
+#    - Dừng frontend/websocket, nạp tệp backup vào backend và chạy --force restore với mật khẩu root DB đọc từ DB_PASSWORD_SECRETS_FILE trong /opt/crm-cskh-staging/.env.staging:
+sudo python3 - "${ENV_FILE}" "${PREV_APP_IMAGE}" <<'PY'
+import os, pathlib, re, stat, sys
+env_path = pathlib.Path(sys.argv[1])
+prev_img = sys.argv[2]
+st = env_path.stat()
+text = env_path.read_text(encoding="utf-8")
+updated, n = re.subn(r"(?m)^APP_IMAGE=.*$", f"APP_IMAGE={prev_img}", text)
+assert n == 1, f"Expected 1 APP_IMAGE= line in {env_path}, found {n}"
+env_path.write_text(updated, encoding="utf-8", newline="\n")
+os.chmod(env_path, 0o600)
+os.chown(env_path, st.st_uid, st.st_gid)
+assert stat.S_IMODE(env_path.stat().st_mode) == 0o600
+print(f"Reverted {env_path} APP_IMAGE -> {prev_img} (mode=0600 preserved)")
+PY
+test "$(sudo stat -c '%a' "${ENV_FILE}")" = "600"
+sudo bash -lc "cd '${BACKUP_HOST_DIR}' && sha256sum -c SHA256SUMS.txt"
 
-DB_SECRET_FILE="$(grep '^DB_PASSWORD_SECRETS_FILE=' /opt/crm-cskh-staging/.env | cut -d= -f2- | tr -d "\"'\r")"
-DB_ROOT_PW="$(sudo tr -d '\r\n' < "${DB_SECRET_FILE}")"
+"${COMPOSE_BIN}" stop frontend websocket
+BACKEND_CID="$("${COMPOSE_BIN}" ps -q backend)"
+for f in "${BACKUP_HOST_DIR}"/*-crm_staging_localhost-database.sql.gz \
+         "${BACKUP_HOST_DIR}"/*-crm_staging_localhost-files.tar \
+         "${BACKUP_HOST_DIR}"/*-crm_staging_localhost-private-files.tar; do
+  [ -f "${f}" ] && docker cp "${f}" "${BACKEND_CID}:/tmp/"
+done
+
+DB_SECRET_FILE="$(sudo grep '^DB_PASSWORD_SECRETS_FILE=' "${ENV_FILE}" | cut -d= -f2- | tr -d "\"'\r")"
+test -n "${DB_SECRET_FILE}" && sudo test -f "${DB_SECRET_FILE}"
+DB_ROOT_PW="$(sudo cat "${DB_SECRET_FILE}" | tr -d '\r\n')"
 "${COMPOSE_BIN}" exec -T -e DB_ROOT_PW="${DB_ROOT_PW}" backend bash -lc '
   set -eu
   SQL_FILE="$(ls -1t /tmp/*-crm_staging_localhost-database.sql.gz | head -n1)"
   PUB_TAR="$(ls -1t /tmp/*-crm_staging_localhost-files.tar 2>/dev/null | head -n1 || true)"
   PRIV_TAR="$(ls -1t /tmp/*-crm_staging_localhost-private-files.tar 2>/dev/null | head -n1 || true)"
-  ARGS=(--force restore "${SQL_FILE}" --mariadb-root-password "${DB_ROOT_PW}")
+  ARGS=(--force restore "${SQL_FILE}" --db-root-password "${DB_ROOT_PW}")
   [ -n "${PUB_TAR}" ] && ARGS+=(--with-public-files "${PUB_TAR}")
   [ -n "${PRIV_TAR}" ] && ARGS+=(--with-private-files "${PRIV_TAR}")
   bench --site "'"${FRAPPE_SITE}"'" "${ARGS[@]}"
@@ -458,9 +521,19 @@ DB_ROOT_PW="$(sudo tr -d '\r\n' < "${DB_SECRET_FILE}")"
 unset DB_ROOT_PW
 
 # 5. Đảm bảo encryption_key trong sites/crm-staging.localhost/site_config.json khớp bản lưu ký,
-#    khởi động lại toàn bộ stack trên PREV_APP_IMAGE, xóa cache và mở chế độ bảo trì sau khi kiểm tra:
+#    chạy configurator + migrator và khởi động lại toàn bộ stack trên PREV_APP_IMAGE (PREV_IMAGE_ID), xóa cache và mở chế độ bảo trì sau khi kiểm tra:
 "${COMPOSE_BIN}" run --rm configurator
+(
+  set -euo pipefail
+  MIGRATE_SITES=true "${COMPOSE_BIN}" --profile migrate run --rm \
+    -e MIGRATE_SITES=true -e SITE_NAME="${FRAPPE_SITE}" migrator 2>&1 | tee /tmp/cskh-restore-migrator.log
+  grep -Fq "running controlled migration for site ${FRAPPE_SITE}" /tmp/cskh-restore-migrator.log
+)
 "${COMPOSE_BIN}" up -d backend frontend websocket queue-short queue-long scheduler
+for svc in backend frontend websocket queue-short queue-long scheduler; do
+  actual_iid="$(docker inspect --format '{{.Image}}' "$("${COMPOSE_BIN}" ps -q "${svc}")")"
+  test "${actual_iid}" = "${PREV_IMAGE_ID}"
+done
 "${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" clear-cache
 "${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" clear-website-cache
 "${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" scheduler resume
