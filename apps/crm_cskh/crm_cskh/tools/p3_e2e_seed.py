@@ -28,12 +28,12 @@ USERS = {
 	"bod": ("cskh-p3-bod@example.test", "Ban Giám đốc P3", ("CSKH BOD Viewer",)),
 	"leader_a": (
 		"cskh-p3-leader-a@example.test",
-		"=CMD|' /C calc'!A0 Nhóm CSKH Miền Bắc",
+		"=CMD|' /C calc'!A0 Nhóm Tuyển dụng Miền Bắc",
 		("Sales Manager", "Sales User"),
 	),
 	"leader_b": (
 		"cskh-p3-leader-b@example.test",
-		"Nhóm CSKH Miền Nam",
+		"Nhóm Tuyển dụng Miền Nam",
 		("Sales Manager", "Sales User"),
 	),
 	"staff_a": ("cskh-p3-staff-a@example.test", "Nhân viên A1", ("Sales User",)),
@@ -511,7 +511,7 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 		{
 			"doctype": "CSKH Campaign",
 			"code": "CAMP-P3-E2E",
-			"title": "Chiến dịch Chăm sóc Khách hàng P3",
+			"title": "Chiến dịch Tuyển dụng & Liên hệ P3",
 			"status": "Active",
 		}
 	).insert(ignore_permissions=True)
@@ -679,7 +679,7 @@ def _reset_and_seed_p3_inner(site: str) -> dict:
 			channel="zalo",
 			outcome_code="connected_interested",
 			occurred_at=str(occ_extra),
-			note=f"Gửi tài liệu tư vấn chi tiết qua Zalo cho khách Golden B{j + 1:02d}",
+			note=f"Gửi thông tin vị trí & ca làm việc qua Zalo cho hồ sơ Golden B{j + 1:02d}",
 			idempotency_key=f"p3-b-extra-{j}",
 			actor=staff_b_u,
 		)

@@ -1,0 +1,12 @@
+test_bod_accesses_five_management_p3_pages_with_zero_pii_and_denied_scorecard (crm_cskh.tests.test_ui_p3_pages_and_context.TestUiP3PagesAndContext.test_bod_accesses_five_management_p3_pages_with_zero_pii_and_denied_scorecard) ... ok
+test_crm_admin_accesses_all_six_p3_pages_with_recompute_and_waive_capabilities (crm_cskh.tests.test_ui_p3_pages_and_context.TestUiP3PagesAndContext.test_crm_admin_accesses_all_six_p3_pages_with_recompute_and_waive_capabilities) ... ok
+test_guest_is_denied_on_all_six_p3_pages (crm_cskh.tests.test_ui_p3_pages_and_context.TestUiP3PagesAndContext.test_guest_is_denied_on_all_six_p3_pages) ... ok
+test_leader_accesses_all_six_p3_pages_in_team_scope_with_waive_and_recompute (crm_cskh.tests.test_ui_p3_pages_and_context.TestUiP3PagesAndContext.test_leader_accesses_all_six_p3_pages_in_team_scope_with_waive_and_recompute) ... ok
+test_p3_feature_flag_rollback_hides_p3_nav_and_blocks_p3_routes_cleanly (crm_cskh.tests.test_ui_p3_pages_and_context.TestUiP3PagesAndContext.test_p3_feature_flag_rollback_hides_p3_nav_and_blocks_p3_routes_cleanly) ... ok
+test_qa_enabled_flag_defaults_false_and_publishes_p3_vietnamese_catalogue (crm_cskh.tests.test_ui_p3_pages_and_context.TestUiP3PagesAndContext.test_qa_enabled_flag_defaults_false_and_publishes_p3_vietnamese_catalogue) ... ok
+test_staff_only_accesses_personal_scorecard_among_p3_pages (crm_cskh.tests.test_ui_p3_pages_and_context.TestUiP3PagesAndContext.test_staff_only_accesses_personal_scorecard_among_p3_pages) ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 3.323s
+
+OK

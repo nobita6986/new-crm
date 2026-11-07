@@ -300,24 +300,26 @@ class P2TestCase(FrappeTestCase):
 		status: str = "Completed",
 		duration: int = 45,
 		receiver: str | None = None,
+		telephony_medium: str | None = None,
 	) -> str:
 		phone = frappe.db.get_value("CRM Lead", lead, "mobile_no") or "0900000999"
-		doc = frappe.get_doc(
-			{
-				"doctype": "CRM Call Log",
-				"id": f"P2CL-{frappe.generate_hash(length=10)}",
-				"type": call_type,
-				"status": status,
-				"from": "+842873001101" if call_type == "Outgoing" else phone,
-				"to": phone if call_type == "Outgoing" else "+842873001101",
-				"duration": duration,
-				"start_time": add_to_date(now_datetime(), minutes=-2),
-				"end_time": add_to_date(now_datetime(), minutes=-1),
-				"caller": frappe.session.user if call_type == "Outgoing" else None,
-				"receiver": receiver,
-				"reference_doctype": "CRM Lead",
-				"reference_docname": lead,
-			}
-		)
+		payload = {
+			"doctype": "CRM Call Log",
+			"id": f"P2CL-{frappe.generate_hash(length=10)}",
+			"type": call_type,
+			"status": status,
+			"from": "+842873001101" if call_type == "Outgoing" else phone,
+			"to": phone if call_type == "Outgoing" else "+842873001101",
+			"duration": duration,
+			"start_time": add_to_date(now_datetime(), minutes=-2),
+			"end_time": add_to_date(now_datetime(), minutes=-1),
+			"caller": frappe.session.user if call_type == "Outgoing" else None,
+			"receiver": receiver,
+			"reference_doctype": "CRM Lead",
+			"reference_docname": lead,
+		}
+		if telephony_medium is not None and frappe.db.has_column("CRM Call Log", "telephony_medium"):
+			payload["telephony_medium"] = telephony_medium
+		doc = frappe.get_doc(payload)
 		doc.insert(ignore_permissions=True)
 		return doc.name

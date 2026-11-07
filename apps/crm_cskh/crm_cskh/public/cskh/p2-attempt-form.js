@@ -301,6 +301,17 @@ window.cskhAttemptForm = (function () {
 					})
 				)
 			}
+			if (out.is_conversion || out.code === 'converted') {
+				semanticBar.appendChild(
+					cskh.el('span', {
+						class: 'cskh-muted',
+						style: 'font-size: 12px;',
+						text: cskh.t(
+							'Campaign goal completion closes outreach intake only — it does not confirm hiring or placement.'
+						),
+					})
+				)
+			}
 			if (
 				out.code === 'message_sent_no_reply' ||
 				(!out.is_connected &&

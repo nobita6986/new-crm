@@ -1,0 +1,15 @@
+test_channel_compatibility_and_policy_enabled_channels (crm_cskh.tests.test_p2_outcomes_policy.TestP2OutcomesAndChannelSemantics.test_channel_compatibility_and_policy_enabled_channels)
+`T2-04`: Rejects incompatible channel/outcome pairs and channels disabled by Policy. ... ok
+test_seeded_vietnamese_outcome_catalog_and_unreached_invariant (crm_cskh.tests.test_p2_outcomes_policy.TestP2OutcomesAndChannelSemantics.test_seeded_vietnamese_outcome_catalog_and_unreached_invariant)
+`T2-02`, `T2-24`: All 12 seeded codes exist in Vietnamese and unreached codes never count as connected. ... ok
+test_unreached_vs_connected_outcomes_and_mandatory_fields (crm_cskh.tests.test_p2_outcomes_policy.TestP2OutcomesAndChannelSemantics.test_unreached_vs_connected_outcomes_and_mandatory_fields)
+`T2-02`, `T2-03`, `T2-04`: `no_answer`/`busy`/`message_sent_no_reply` vs `connected_interested`, `NOTE_REQUIRED`, `FOLLOWUP_REQUIRED`. ... ok
+test_campaign_overrides_team_overrides_global_policy_and_guards_stale_policy_version (crm_cskh.tests.test_p2_outcomes_policy.TestP2PolicyInheritanceAndSnapshotVersioning.test_campaign_overrides_team_overrides_global_policy_and_guards_stale_policy_version)
+`T2-18`: Resolves `Global -> Team -> Campaign` precedence and enforces `expected_policy_version`. ... ok
+test_outcome_rename_or_disable_never_drifts_historical_attempt_snapshots (crm_cskh.tests.test_p2_outcomes_policy.TestP2PolicyInheritanceAndSnapshotVersioning.test_outcome_rename_or_disable_never_drifts_historical_attempt_snapshots)
+`T2-18`: Custom Outcome v1 snapshot stays frozen on historical attempt after rename (v2) and disable (v3). ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 5.306s
+
+OK

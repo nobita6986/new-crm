@@ -70,7 +70,17 @@ fixtures = [
 	},
 	{
 		"doctype": "CRM Form Script",
-		"filters": [["name", "in", ["CSKH - Open CSKH Page", "CSKH - Open Lead CSKH Workspace"]]],
+		"filters": [
+			[
+				"name",
+				"in",
+				[
+					"CSKH - Open CSKH Page",
+					"CSKH - Open Lead CSKH Workspace",
+					"CSKH - Open CSKH Page from Deal",
+				],
+			]
+		],
 	},
 ]
 

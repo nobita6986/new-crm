@@ -1,0 +1,9 @@
+ALL INTEGRATED RECRUITMENT UI + P3 REPORT CONSISTENCY CHECKS PASSED!
+  - PASS [Staff]: Nút "Không gian tuyển dụng" trên /crm/leads điều hướng trực tiếp sang /cskh
+  - PASS [Staff - Anti-XSS & Ngữ cảnh tuyển dụng]: Ghi chú "Người liên hệ hỏi mức lương và ca làm việc" hiển thị an toàn dạng văn bản thuần trên dòng thời gian, payload <script>/<img onerror> bị vô hiệu hoàn toàn (window.__xssTriggered === undefined)
+  - PASS [Staff]: Màn Giao dịch CRM (/crm/deals) giữ nguyên tính năng Deal gốc và hiển thị rõ "Giao dịch CRM"
+  - PASS [CRM Admin - Mã kết quả converted]: Bảng và biểu mẫu /cskh/settings đồng bộ "Hoàn tất mục tiêu liên hệ chiến dịch"
+  - PASS [Steps 1→3]: Nhập danh sách liên hệ → Kho hồ sơ liên hệ → Phân công & xác nhận phân phối hoạt động xuyên suốt
+  - PASS [Steps 4→6]: Hồ sơ được giao → Ghi nhận liên hệ ("Hoàn tất mục tiêu liên hệ chiến dịch" giữ đúng nghĩa kết quả liên hệ) → Lịch hẹn liên hệ lại hoàn tất xuyên suốt
+  - PASS [CRM Admin - Báo cáo P3 & CSV Export]: Đối chiếu 29 chỉ số trên Thẻ KPI === Bảng chi tiết (/quality-overview, /team-quality, /employee-quality, /campaign-quality) === Modal Drill-down === Cột label_vi tệp xuất CSV (29 dòng)
+  - PASS [Staff - Bảng điểm cá nhân P3 & CSV Export]: Tất cả chỉ số trên /cskh/scorecard khớp 100% với cột label_vi của tệp CSV my_scorecard (29 dòng)

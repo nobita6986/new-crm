@@ -133,7 +133,7 @@ def _ensure_notification(work_item, lead, to_user, actor):
 			"from_user": actor,
 			"to_user": to_user,
 			"type": NOTIFICATION_TYPE,
-			"message": f"You were assigned a CRM Lead {lead}.",
+			"message": f"Bạn được phân công hồ sơ liên hệ {lead}.",
 			"reference_doctype": "CRM Lead",
 			"reference_name": lead,
 		}
@@ -181,7 +181,7 @@ def deliver_followup_notification(work_item, task_id, owner, event_id, actor=Non
 					"from_user": actor,
 					"to_user": owner,
 					"type": NOTIFICATION_TYPE,
-					"message": f"Bạn có lịch hẹn chăm sóc lại #{task_ref}.",
+					"message": f"Bạn có lịch hẹn liên hệ lại #{task_ref}.",
 					"notification_type_doctype": "CRM Task",
 					"notification_type_doc": task_ref,
 					"reference_doctype": "CRM Lead" if lead else "CRM Task",

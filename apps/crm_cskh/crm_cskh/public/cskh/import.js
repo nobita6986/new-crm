@@ -303,11 +303,35 @@
 				})
 			)
 		}
+		const nextActions = []
 		if (data && data.error_artifact) {
+			nextActions.push(renderArtifact(data.batch || currentBatch, data.error_artifact))
+		}
+		if (
+			data &&
+			(data.status === 'COMPLETED' || data.status === 'COMPLETED_WITH_ERRORS')
+		) {
+			const batchId = data.batch || currentBatch || ''
+			nextActions.push(
+				cskh.el('a', {
+					class: 'cskh-btn is-primary is-small',
+					href:
+						'/cskh/pool' +
+						(batchId ? '?batch=' + encodeURIComponent(batchId) : ''),
+					text: cskh.t('Open batch in contact pool'),
+				})
+			)
+			nextActions.push(
+				cskh.el('a', {
+					class: 'cskh-btn is-small',
+					href: '/cskh/campaigns',
+					text: cskh.t('Continue to assignment'),
+				})
+			)
+		}
+		if (nextActions.length) {
 			progressBox.appendChild(
-				cskh.el('div', { class: 'cskh-actions' }, [
-					renderArtifact(data.batch || currentBatch, data.error_artifact),
-				])
+				cskh.el('div', { class: 'cskh-actions', style: 'margin-top: 10px;' }, nextActions)
 			)
 		}
 	}

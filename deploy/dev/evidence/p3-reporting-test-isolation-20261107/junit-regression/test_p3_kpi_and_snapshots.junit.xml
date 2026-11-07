@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites>
+	<testsuite name="crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots" tests="8" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_kpi_and_snapshots.py" time="9.109" timestamp="2026-11-07T05:44:57" failures="0" errors="0" skipped="0">
+		<testcase classname="crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots" name="test_effective_attempts_no_call_log_double_count_and_aba_distinct_grain" time="2.247" timestamp="2026-11-07T05:44:57" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_kpi_and_snapshots.py" line="241">
+			<!--`P3-04`: `CRM Call Log` is never double-counted; `A -> B -> A` yields `1` `DISTINCT Work Item` vs `3` intervals.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots" name="test_golden_process_score_provisional_final_and_zero_denominator" time="0.039" timestamp="2026-11-07T05:44:57" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_kpi_and_snapshots.py" line="129">
+			<!--`P3-04`: Independent golden fixture (`7350/85 = 86.47` provisional, `87.0` final, `0/0 -> null`) & period validation.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots" name="test_non_averaging_rollup_and_unattributed_historical_team_bucket" time="1.448" timestamp="2026-11-07T05:44:59" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_kpi_and_snapshots.py" line="368">
+			<!--`P3-04`: Team rollup computes `2/4 = 50.0%` (not `(100+33.33)/2`); Monthly dedupes `DISTINCT Work Item`; legacy -> `__unattributed_historical_team__`.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots" name="test_post_commit_dirty_invalidation_and_rollback_safety" time="1.237" timestamp="2026-11-07T05:45:00" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_kpi_and_snapshots.py" line="524">
+			<!--`P3-05`: Failed `record_attempt` leaves `0` dirty scopes; committed `record_attempt` writes `CSKH Dirty Scope` post-commit without sync KPI run.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots" name="test_pr3_doctype_permissions_and_filter_oracles" time="0.602" timestamp="2026-11-07T05:45:01" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_kpi_and_snapshots.py" line="826">
+			<!--`S07`, `S13`, `S16`, `S17`: Row-level scope, generic ORM write blocks, run ID probing & `permlevel=1` filter oracles.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots" name="test_prior_period_correction_restated_run_and_append_only_provenance" time="1.682" timestamp="2026-11-07T05:45:02" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_kpi_and_snapshots.py" line="568">
+			<!--`P3-05`: Prior-period approved correction triggers `restated` `CSKH KPI Run` linked via `restated_from_run` while keeping old revision intact.-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots" name="test_qa_disabled_default_and_anti_self_review_when_enabled" time="0.801" timestamp="2026-11-07T05:45:03" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_kpi_and_snapshots.py" line="747">
+			<!--`P3-06`: Default `qa_enabled=false` blocks QA writes (`409 QA_DISABLED`, `0` fake data); when enabled, enforces `reviewer != reviewed_staff` (`S06`).-->
+		</testcase>
+		<testcase classname="crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots" name="test_recompute_concurrency_lock_and_backfill_checkpoint_resume" time="1.054" timestamp="2026-11-07T05:45:04" file="/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_kpi_and_snapshots.py" line="695">
+			<!--`P3-05`: Concurrent recompute raises `409 RECOMPUTE_IN_PROGRESS`; backfill supports `dry_run`, batching & checkpoint resume.-->
+		</testcase>
+	</testsuite>
+</testsuites>
