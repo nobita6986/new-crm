@@ -1,10 +1,14 @@
-# Hồ sơ chuẩn bị Pull Request & Phương án cập nhật `crm.hrpartner.vn`
+# Hồ sơ chuẩn bị Pull Request & Runbook cập nhật `crm.hrpartner.vn` (`crm-staging.localhost`)
 
 - **Nhánh nguồn:** `codex/recruitment-workspace-ui`
-- **Nhánh đích:** `main` (`92e14afef376d9bd68beea702ab057af77d70b5b`)
-- **Merge SHA tích hợp 3 bên (`T1A` + `T1B` + `T1C`):** `391b4845be504f7f094a855d1f1aaf56f3d92867`
+- **Nhánh đích:** `main` (`92e14af3532876ad5bc2468bf0e502474cc95a53`)
+- **Commit chốt mã nguồn & bằng chứng 3 bên:** `11f7605f15a7455670d3d8b27ff2d1bd81d0101a` (trên merge `391b4845be504f7f094a855d1f1aaf56f3d92867`)
 - **Tree SHA `apps/crm_cskh` cuối cùng:** `0248d8954b9a9314e907151f911373d48546e8b6`
-- **Phân loại thay đổi vận hành:** **Class A+ — Zero-DDL, Fixture & Idempotent Catalog Sync** (`0` thay đổi schema/bảng/cột/index, `patches.txt` giữ nguyên)
+- **Ánh xạ hạ tầng VPS hiện hành:**
+  - **Tên miền công khai (HTTPS Ingress):** `crm.hrpartner.vn` (`https://crm.hrpartner.vn`)
+  - **Tên site Frappe nội bộ (`SITE_NAME` / `sites/<site>`):** `crm-staging.localhost`
+  - **Compose wrapper vận hành trên VPS:** `/opt/crm-cskh-staging/staging-compose`
+- **Phân loại thay đổi vận hành:** **Class A+ — Zero-DDL, Fixture & Catalog Seed Update** (`0` thay đổi cấu trúc bảng/cột/index, `patches.txt` giữ nguyên; có cập nhật `CRM Form Script` và nhãn mặc định `version == 1` qua `migrate`)
 
 ---
 
@@ -16,213 +20,451 @@
 feat(ui,i18n,p3): đồng bộ Không gian tuyển dụng 6 bước, chỉ số P3 và bộ kiểm thử độc lập
 ```
 
-### 1.2. Chuỗi commit tích hợp trên nhánh
+### 1.2. Chuỗi commit tích hợp trên nhánh (đã kiểm chứng bằng `git rev-parse`)
 
-| Thứ tự | Commit SHA | Vai trò | Nội dung chính |
+| Thứ tự | Commit SHA đầy đủ (`git rev-parse`) | Vai trò | Nội dung chính |
 | :-: | :--- | :---: | :--- |
-| 1 | `8549a6289811b6cd3ba639ebddfcda2d55bd1f00` | `T1A` | Việt hóa luồng cơ sở Không gian tuyển dụng, lối vào `/crm` ↔ `/cskh`, giữ nhãn **Giao dịch CRM** cho `CRM Deal`, tài liệu tách bạch `GAP-01..03` |
-| 2 | `b36b6c4a47f2db1b299b327f036515b91a8301e6` | `T1A` | Đồng bộ điều hướng 6 bước tuyển dụng, bộ từ điển `vi.csv` (`1.331` dòng, bảo toàn khối P3), cập nhật assertion E2E P1/P2 & ghi chú mẫu lương/ca làm việc (bảo toàn payload chống XSS) |
+| 1 | `8549a62180343ae48511c9b0910c8c529ee65a97` | `T1A` | Việt hóa luồng cơ sở Không gian tuyển dụng, lối vào `/crm` ↔ `/cskh`, giữ nhãn **Giao dịch CRM** cho `CRM Deal`, tài liệu tách bạch `GAP-01..03` |
+| 2 | `b36b6c402c4b83167fe83bf95e37ca47cb0fea1a` | `T1A` | Đồng bộ điều hướng 6 bước tuyển dụng, bộ từ điển `vi.csv` (`1.331` dòng, bảo toàn khối P3), cập nhật assertion E2E P1/P2 & ghi chú mẫu lương/ca làm việc (bảo toàn payload chống XSS) |
 | 3 | `32b53fb51a87b85b7e04da4fbd1c62259affe616` | `T1B` | Đồng bộ nhãn tiếng Việt danh mục kết quả liên hệ P2, `label_vi` của `29` chỉ số + `5` điểm thành phần P3 và ánh xạ tương thích snapshot cũ |
-| 4 | `6912c78c1c74483c1a0063379d94d8c9b8bdb30b` | `T1A` | Merge tích hợp giao diện `b36b6c4` + backend `32b53fb` |
+| 4 | `6912c78c1c74483c1a0063379d94d8c9b8bdb30b` | `T1A` | Merge tích hợp giao diện `b36b6c402c4b83167fe83bf95e37ca47cb0fea1a` + backend `32b53fb51a87b85b7e04da4fbd1c62259affe616` |
 | 5 | `14960ebd0031a8170e35a1847a01aabdb8b10815` | `T1A` | Đóng gói bộ kiểm thử Việt hóa tái lập (`12/12` suite, `48/48` JUnit methods, `17` ảnh Chromium E2E, `SHA256SUMS.txt`) |
 | 6 | `6a751286e7c4b699bebe3fa9d2c685879d94e326` | `T1C` | Kiểm định độc lập đa vai trò (`Admin` / `Staff` / `BOD`), đối chứng `migrate × 2` bất biến lịch sử & snapshot KPI |
 | 7 | `2556090767fe820c29e4f05d1808702bf31ee19d` | `T1C` | Kiểm định tải CSV qua HTTP xác thực của `BOD` (`EXP-BE8FDEFBDD98`, `29/29` chỉ số, `0` PII) và `4/4` cổng chặn `HTTP 403` |
 | 8 | `a973e3a69530edb9441480c3b2862b381656b36b` + `8184c8050868da74fc0e30edff0c7dc390c19c2b` | `T1B` | Cô lập fixture `test_p3_reporting_and_security` với cuộc gọi tổng đài PBX hợp lệ `SEC2-02` + bằng chứng chạy độc lập đạt **`7/7 PASS`** trên site sạch & hồi quy **`19/19 PASS`** |
-| 9 | `391b4845be504f7f094a855d1f1aaf56f3d92867` | `T1A` | Merge tích hợp nhánh bằng chứng `8184c80` của `T1B` cùng kết quả HTTP CSV `2556090` của `T1C` (không xung đột) |
-| 10 | `HEAD` *(commit chốt trên `391b484`)* | `T1A` | Dọn khoảng trắng cuối dòng 2 script kiểm định `T1C` (giữ nguyên từng byte CSV HTTP `92bb90d5be2b...`), cập nhật manifest SHA-256, hồ sơ bàn giao và phương án triển khai `crm.hrpartner.vn` |
+| 9 | `391b4845be504f7f094a855d1f1aaf56f3d92867` | `T1A` | Merge tích hợp nhánh bằng chứng `8184c8050868da74fc0e30edff0c7dc390c19c2b` (`T1B`) cùng kết quả HTTP CSV `2556090767fe820c29e4f05d1808702bf31ee19d` (`T1C`) |
+| 10 | `11f7605f15a7455670d3d8b27ff2d1bd81d0101a` | `T1A` | Dọn khoảng trắng cuối dòng 2 script kiểm định `T1C` (giữ nguyên từng byte CSV HTTP `92bb90d5be2b...`), cập nhật manifest SHA-256 và hồ sơ bàn giao |
+| 11 | `HEAD` *(commit tài liệu trên `11f7605`)* | `T1A` | Hiệu chỉnh runbook cập nhật `crm.hrpartner.vn` theo đúng hạ tầng VPS hiện hành (`/opt/crm-cskh-staging/staging-compose`, site `crm-staging.localhost`) & đồng bộ manifest |
 
-### 1.3. Đối chiếu diff sau tích hợp `8184c80` (`6912c78..391b484`)
+### 1.3. Đối chiếu phạm vi mã nguồn
 
-- **Thay đổi trên mã nguồn runtime sản phẩm:** **`0` tệp / `0` dòng** (`services/`, `api/`, `doctype/`, `www/`, `public/`, `templates/`, `translations/vi.csv`, `fixtures/`, `hooks.py`, `patches.txt` giữ nguyên 100% như tại `6912c78`).
-- **Thay đổi trên mã kiểm thử (`a973e3a`, `+47/-22` dòng trên 2 tệp test):**
-  1. `apps/crm_cskh/crm_cskh/tests/p2_base.py`: bổ sung tham số tùy chọn `telephony_medium: str | None = None` cho `make_native_call_log()` (mặc định giữ nguyên `""` cho các suite P2 cũ).
-  2. `apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py`: dọn sạch các bảng runtime CSKH trong `setUp()` và tạo tường minh 1 cuộc gọi tổng đài `telephony_medium="Twilio"` (`verification_status="verified"`) + 2 cuộc gọi `Manual` (`verification_status="self_reported"`) trong `_seed_two_team_activity()`, kiểm tra chính xác `verified == 1` và `self_reported == 2`.
-- **Tổng phạm vi thay đổi so với `main` (`92e14af`) không tính thư mục `deploy/dev/evidence/`:** **`46` tệp (`+1.181 / -555` dòng)**.
+- **So với baseline `origin/main` (`92e14af3532876ad5bc2468bf0e502474cc95a53`) không tính `deploy/dev/evidence/`:** **`46` tệp (`+1.181 / -555` dòng)**, **`0` thay đổi DDL/schema**, `apps/crm_cskh/crm_cskh/patches.txt` không đổi.
+- **So với SHA tích hợp UI+Backend `6912c78c1c74483c1a0063379d94d8c9b8bdb30b`:** **`0` tệp / `0` dòng thay đổi trên mã nguồn runtime sản phẩm**; chỉ có `+47 / -22` dòng trên 2 tệp test (`apps/crm_cskh/crm_cskh/tests/p2_base.py` và `apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py`) từ `a973e3a69530edb9441480c3b2862b381656b36b`.
 
 ### 1.4. Nội dung mô tả PR (sẵn sàng dán khi mở PR)
 
 ```markdown
 ## Mục tiêu
-Đồng bộ thuật ngữ và luồng thao tác tiếng Việt của **Không gian tuyển dụng** (`/cskh` và lối vào từ `/crm`) theo đúng thực tế vận hành tiếp nhận hồ sơ, liên hệ và hẹn gọi lại của HR Partner, đồng thời giữ nguyên chức năng gốc của **Giao dịch CRM** (`CRM Deal`) và bảo toàn toàn bộ kiến trúc DocType, dữ liệu lịch sử, phân quyền và công thức KPI P1–P3.
+Đồng bộ thuật ngữ và luồng thao tác tiếng Việt của **Không gian tuyển dụng** (`/cskh` và lối vào từ `/crm`) theo thực tế vận hành tiếp nhận hồ sơ, liên hệ và hẹn gọi lại của HR Partner, đồng thời giữ nguyên chức năng gốc của **Giao dịch CRM** (`CRM Deal`) và bảo toàn toàn bộ kiến trúc DocType, dữ liệu lịch sử, phân quyền và công thức KPI P1–P3.
 
-## Phạm vi thay đổi chính (`46` tệp code/test/tài liệu, `0` thay đổi DDL/schema)
+## Phạm vi thay đổi chính (`46` tệp code/test/tài liệu từ `92e14af3532876ad5bc2468bf0e502474cc95a53`, `0` DDL)
 1. **Lối vào `/crm` ↔ `/cskh` & luồng 6 bước Không gian tuyển dụng:**
-   - Lối vào rõ ràng trên danh sách/chi tiết `CRM Lead` (**Hồ sơ liên hệ**) và danh sách `CRM Deal` (**Giao dịch CRM**) qua `fixtures/crm_form_script.json`.
-   - Đồng bộ xuyên suốt 6 bước trên `/cskh`: **Nhập danh sách liên hệ** (`/cskh/import`) → **Kho hồ sơ liên hệ** (`/cskh/pool`) → **Phân công** (`/cskh/campaigns`) → **Hồ sơ được giao** (`/cskh/my-customers`) → **Ghi nhận liên hệ** (`/cskh/work-item`) → **Lịch hẹn liên hệ lại** (`/cskh/callbacks`).
+   - Lối vào trên danh sách/chi tiết `CRM Lead` (**Hồ sơ liên hệ**) và danh sách `CRM Deal` (**Giao dịch CRM**) qua `fixtures/crm_form_script.json`.
+   - Đồng bộ 6 bước trên `/cskh`: **Nhập danh sách liên hệ** (`/cskh/import`) → **Kho hồ sơ liên hệ** (`/cskh/pool`) → **Phân công** (`/cskh/campaigns`) → **Hồ sơ được giao** (`/cskh/my-customers`) → **Ghi nhận liên hệ** (`/cskh/work-item`) → **Lịch hẹn liên hệ lại** (`/cskh/callbacks`).
 2. **Bảo toàn ngữ nghĩa nghiệp vụ trung thực:**
    - `CRM Deal` giữ nguyên chức năng thương mại gốc dưới nhãn **Giao dịch CRM** (**Chuyển thành Giao dịch CRM**).
-   - Kết quả `converted` hiển thị nhất quán là **Hoàn tất mục tiêu liên hệ chiến dịch** kèm hộp lưu ý ngữ nghĩa ngay trên biểu mẫu ghi nhận liên hệ (không gây hiểu nhầm là đã tuyển hoặc đã bố trí nhân sự).
-   - Ghi nhận riêng các yêu cầu nghiệp vụ mở rộng (`GAP-01..03`: phân loại ứng viên/doanh nghiệp, đối chiếu yêu cầu cung ứng, trạng thái đặt người/onboard) tại `docs/recruitment-staffing-domain-alignment.md`.
+   - Kết quả `converted` hiển thị nhất quán là **Hoàn tất mục tiêu liên hệ chiến dịch** kèm hộp lưu ý trên biểu mẫu ghi nhận liên hệ (không gây hiểu nhầm là đã trúng tuyển hoặc đã bố trí nhân sự).
+   - Tách bạch 3 khoảng trống nghiệp vụ cần thiết kế riêng (`GAP-01..03`) tại `docs/recruitment-staffing-domain-alignment.md`.
 3. **Đồng bộ 3 chiều báo cáo P3 & tương thích ngược dữ liệu cũ:**
-   - Đồng bộ `29/29` chỉ số và `5/5` điểm thành phần giữa thẻ giao diện, bảng chi tiết và tệp CSV xuất ra (`/cskh/quality-overview`, `/cskh/campaign-quality`, `/cskh/my-scorecard`).
-   - Ánh xạ nhãn in-memory qua `unpack_snapshot_metrics()` đối với `CSKH KPI Snapshot` cũ mà không ghi đè `metrics_json` lịch sử; chỉ cập nhật nhãn mặc định cho `CSKH Outcome Code` còn ở `version == 1`, bảo toàn các mã do Quản trị tùy chỉnh (`version > 1`) và `outcome_label_snapshot` lịch sử.
-4. **Cô lập hoàn toàn kiểm thử bảo mật P3 (`a973e3a`):**
-   - `crm_cskh.tests.test_p3_reporting_and_security` nay tự nạp dữ liệu tổng đài PBX hợp lệ `SEC2-02` và chạy độc lập đạt **`7/7 PASS`** trên site sạch hoàn toàn.
+   - Khớp 100% `29/29` chỉ số và `5/5` điểm thành phần giữa thẻ giao diện, bảng chi tiết, modal truy vết và tệp CSV xuất ra.
+   - Chiếu nhãn mới trong bộ nhớ qua `unpack_snapshot_metrics()` cho `CSKH KPI Snapshot` cũ mà không sửa `metrics_json` lịch sử; chỉ cập nhật nhãn mặc định cho `CSKH Outcome Code` còn ở `version == 1`, bảo toàn các mã Quản trị đã tùy chỉnh (`version > 1`) và `outcome_label_snapshot` lịch sử.
+4. **Cô lập hoàn toàn kiểm thử bảo mật P3 (`a973e3a69530edb9441480c3b2862b381656b36b`):**
+   - `crm_cskh.tests.test_p3_reporting_and_security` tự nạp cuộc gọi tổng đài PBX hợp lệ `SEC2-02` và dọn sạch bảng runtime trong `setUp()`, đạt **`7/7 PASS` độc lập** trên site sạch và **`19/19 PASS`** hồi quy liên module P2+P3.
 
 ## Kết quả kiểm định 3 bên (`T1A` · `T1B` · `T1C`)
 - **Cổng tĩnh & hợp đồng (`T1A`):** `vi.csv` `1.331` dòng (`0` lỗi cú pháp, `missing=0`, `conflict=0`, `orphan=0`); đối chiếu `29/29` chỉ số P3 `mismatches=0`; hợp đồng UI & múi giờ P2/P3 PASS (`deploy/dev/evidence/recruitment-workspace-ui-20261107/`).
-- **Frappe Unit & Bảo mật độc lập (`T1A` + `T1B`):** `48/48` unit test methods PASS qua `ci_junit_gate.py`; riêng `test_p3_reporting_and_security` chạy **độc lập trên site sạch** đạt **`7/7 PASS`** (`0` fail, `0` error, `0` skip) và chạy hồi quy liên module P2+P3 đạt **`19/19 PASS`** (`deploy/dev/evidence/p3-reporting-test-isolation-20261107/`).
+- **Frappe Unit & Bảo mật độc lập (`T1A` + `T1B`):** `48/48` unit test methods PASS qua `ci_junit_gate.py`; `test_p3_reporting_and_security` chạy **độc lập trên site sạch đạt `7/7 PASS`** (`0` fail/error/skip) và hồi quy P2+P3 đạt **`19/19 PASS`** (`deploy/dev/evidence/p3-reporting-test-isolation-20261107/`).
 - **Trình duyệt đa vai trò & Tải CSV qua HTTP xác thực (`T1A` + `T1C`):**
-  - Chromium `153.0.8010.12` E2E trên các vai trò **Quản trị CRM**, **Nhân viên** và **BOD** (`17` ảnh của `T1A` + `12` ảnh của `T1C`, `0` lỗi console/pageerror/HTTP 5xx, chặn XSS an toàn).
-  - `migrate × 2` idempotent, giữ nguyên mã kết quả đã tùy chỉnh (`version > 1`), `outcome_label_snapshot` và `metrics_json` thô.
-  - Phiên HTTP xác thực của `BOD` tải `GET /api/method/crm_cskh.api.p3_reporting.download_export` đạt `HTTP 200 OK` (`EXP-BE8FDEFBDD98.csv`, `3.018` bytes, `29/29` chỉ số tiếng Việt, `0` PII) và chặn đúng **`4/4` kịch bản trái phép với `HTTP 403`** (`include_pii=1`, `my_scorecard` bởi BOD, tải chéo bởi Nhân viên, tải không xác thực bởi Guest) (`deploy/dev/evidence/t1c-recruitment-multirole-audit-20261107/`).
+  - Chromium `153.0.8010.12` E2E trên **Quản trị CRM**, **Nhân viên** và **BOD** (`17` ảnh của `T1A` + `12` ảnh của `T1C`, `0` lỗi console/pageerror/HTTP 5xx, khử XSS an toàn).
+  - `migrate × 2` lũy đẳng, bảo toàn mã tùy chỉnh (`version > 1`), `outcome_label_snapshot` và `metrics_json` thô.
+  - Phiên HTTP xác thực của `BOD` tải `GET /api/method/crm_cskh.api.p3_reporting.download_export` đạt `HTTP 200 OK` (`EXP-BE8FDEFBDD98.csv`, `3.018` bytes, SHA-256 `92bb90d5be2b924edd36851c381d130345a9cb0c1bbb59509bd7a2c7275b75c0`, `29/29` chỉ số tiếng Việt, `0` PII) và chặn đúng **`4/4` kịch bản trái phép với `HTTP 403`** (`deploy/dev/evidence/t1c-recruitment-multirole-audit-20261107/`).
 ```
 
 ---
 
-## Phần 2 — Phương án cập nhật `crm.hrpartner.vn`
+## Phần 2 — Runbook cập nhật `crm.hrpartner.vn` theo hạ tầng VPS hiện hành
 
-### 2.1. Đánh giá tác động kỹ thuật trên môi trường thật
+### 2.1. Thông số định danh hạ tầng & quy ước biến bắt buộc
 
-1. **Cơ sở dữ liệu (`MariaDB`):** **Zero-DDL (`0` thay đổi cấu trúc bảng).** Không thêm/xóa/đổi kiểu bất kỳ DocType, cột hay chỉ mục nào; `apps/crm_cskh/crm_cskh/patches.txt` không thay đổi.
-2. **Vì sao cần đồng thời (a) Build Image mới VÀ (b) Chạy `bench migrate` + `clear-cache`:**
-   - **Image mới (`crm-cskh:<TAG>`):** Đóng gói tĩnh bản dịch `translations/vi.csv` (`1.331` dòng), tài sản `/assets/crm_cskh/cskh/*`, các bản vá Việt hóa `apply-frappe-vi-patch.py` + `apply-crm-ui-vi-patch.py` và gói biên dịch Vue SPA `/crm` (`CI=true bench build --production --force`).
-   - **`bench --site crm.hrpartner.vn migrate`:** Đồng bộ `fixtures/crm_form_script.json` vào bảng `tabCRM Form Script` (cập nhật 2 nút lối vào trên `CRM Lead` và thêm nút lối vào từ danh sách `CRM Deal`), đồng thời kích hoạt hook `after_migrate` (`ensure_p2_seeds`, `ensure_p3_seeds`) để cập nhật nhãn mặc định cho các `CSKH Outcome Code` chưa bị chỉnh sửa (`version == 1`).
-   - **An toàn dữ liệu hiện hữu trên `crm.hrpartner.vn`:**
-     - Các mã kết quả do Quản trị viên đã chỉnh sửa trên môi trường thật (`version > 1`) **được giữ nguyên 100%**.
-     - Cột `outcome_label_snapshot` trên toàn bộ `CSKH Contact Attempt` cũ **bất biến**.
-     - Cột `metrics_json` trên các `CSKH KPI Snapshot` đã chốt kỳ **không bị ghi đè** (tầng đọc tự động chiếu sang nhãn mới).
+Trên VPS hiện hành, lưu lượng HTTPS công khai đi vào tên miền **`crm.hrpartner.vn`**, trong khi thư mục site Frappe thực tế nằm trong volume `sites` là **`crm-staging.localhost`** và toàn bộ lệnh Docker Compose được gọi qua wrapper **`/opt/crm-cskh-staging/staging-compose`**.
 
-### 2.2. Kiểm tra trước giờ cập nhật (`T-1` — chỉ đọc, không tác động dịch vụ)
+> [!IMPORTANT]
+> - **Giữ nguyên cấu hình domain/routing hiện hành** trong `/opt/crm-cskh-staging` (`SITES_RULE` / proxy TLS cho `crm.hrpartner.vn` và `FRAPPE_SITE_NAME_HEADER` / `SITE_NAME` cho `crm-staging.localhost`). Khi nâng cấp chỉ cập nhật biến **`APP_IMAGE`**.
+> - **Mọi lệnh `bench --site ...`, Python `frappe.init(...)` và đường dẫn dữ liệu/backup bên trong container** đều phải dùng tên site Frappe đã xác minh thực tế (`FRAPPE_SITE="crm-staging.localhost"`), **không** truyền `crm.hrpartner.vn` vào `--site`.
 
-Thực hiện trên VPS của `crm.hrpartner.vn` trước khi mở khung bảo trì:
+Bảng tham chiếu biến dùng xuyên suốt runbook:
 
-1. **Xác định chính xác project Compose, tệp cấu hình và image digest đang chạy:**
-   ```bash
-   docker compose ls
-   docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
-   # Ghi lại <PREV_IMAGE_REF> và <PREV_DIGEST> thực tế đang chạy của container web/worker:
-   docker inspect <WEB_CONTAINER> --format '{{.Config.Image}} -> {{.Image}}'
-   docker image inspect <IMAGE_ID> --format '{{json .RepoDigests}}'
-   ```
-2. **Kiểm tra dung lượng đĩa và khóa mã hóa (`encryption_key`):**
-   - Đảm bảo phân vùng chứa Docker volumes và thư mục backup còn trống tối thiểu **5 GB** (`df -h`).
-   - Xác nhận giá trị `encryption_key` trong `sites/crm.hrpartner.vn/site_config.json` đã được lưu trữ an toàn ngoài VPS (offsite escrow).
-3. **Kiểm tra trạng thái hàng đợi nền hiện tại:**
-   - Xác nhận không có lô phân phối lớn hoặc kỳ chốt KPI tháng đang treo dở trước giờ bảo trì.
+| Biến vận hành | Giá trị / Cách xác định trên VPS |
+| :--- | :--- |
+| `PUBLIC_DOMAIN` | `crm.hrpartner.vn` (kiểm tra ngoài HTTPS: `https://crm.hrpartner.vn`) |
+| `COMPOSE_BIN` | `/opt/crm-cskh-staging/staging-compose` |
+| `FRAPPE_SITE` | `crm-staging.localhost` *(bắt buộc kiểm chứng tồn tại `sites/crm-staging.localhost/site_config.json` ở Bước 0)* |
+| `PREV_APP_IMAGE` | Giá trị `APP_IMAGE` đang cấu hình trước khi nâng cấp *(ghi lại nguyên văn từ `.env` / `docker inspect`)* |
+| `PREV_IMAGE_ID` | Image ID thực chạy của `backend` hiện tại (`sha256:<64-hex>`, ví dụ bản `92e14af` local là `sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9` — bắt buộc lấy thực tế trên VPS ở Bước 0) |
+| `NEW_APP_IMAGE` | Định danh `APP_IMAGE` bất biến mới của bản phát hành (`<registry>/<namespace>/crm-cskh@sha256:<NEW_REPO_DIGEST>` hoặc image đã nạp cố định trên VPS) |
+| `NEW_IMAGE_ID` | Image ID thực tế của `NEW_APP_IMAGE` (`docker image inspect --format '{{.Id}}' "${NEW_APP_IMAGE}"`, dạng `sha256:<64-hex>`) |
 
-### 2.3. Quy trình đóng gói Image bất biến trước giờ cắt chuyển
+---
 
-Sau khi `T0` merge PR vào `main` (tạo `<MAIN_MERGE_SHA>`):
+### 2.2. Đóng gói Image bất biến mới trước giờ cắt chuyển
 
-1. Build image sản phẩm từ `<MAIN_MERGE_SHA>` theo đúng quy trình đóng gói production:
-   - Giữ nguyên thứ tự cài đặt `frappe` (`d2efa79657ba5c1abf96098b3bfacc199517d57e`) → `crm` (`0d3910b456ef4fb913e77b29db011b3debc4f778`) → `crm_cskh` (`<MAIN_MERGE_SHA>`).
-   - Thực thi hai script vá giao diện tiếng Việt trước bước build tài sản:
-     - `python deploy/dev/apply-frappe-vi-patch.py`
-     - `python deploy/dev/apply-crm-ui-vi-patch.py`
-   - **Tuyệt đối KHÔNG chạy** `deploy/dev/apply-crm-vite-dev-patch.py` trên image production.
-   - Chạy `CI=true bench build --production --force` để biên dịch mới cả bundle Vue `/crm` lẫn `/assets/crm_cskh/cskh/*`.
-2. Đẩy image lên registry nội bộ/GHCR và ghi nhận mã băm bất biến `sha256:<NEW_DIGEST>`.
+Sau khi `T0` merge PR vào `main` (tạo `<MAIN_MERGE_SHA>`, giữ `apps/crm_cskh` tree `0248d8954b9a9314e907151f911373d48546e8b6`):
 
-### 2.4. Các bước cập nhật trong khung bảo trì (`~10–15` phút)
+1. Build image `linux/amd64` theo đúng quy trình `Containerfile` / `build-image.sh`:
+   - Thứ tự ứng dụng trong `/home/frappe/frappe-bench/apps-order.txt`: `frappe` (`d2efa79657ba5c1abf96098b3bfacc199517d57e`) → `crm` (`0d3910b456ef4fb913e77b29db011b3debc4f778`) → `crm_cskh` (`<MAIN_MERGE_SHA>`).
+   - Chạy `python deploy/dev/apply-frappe-vi-patch.py` và `python deploy/dev/apply-crm-ui-vi-patch.py` trước khi build tài sản (**tuyệt đối không chạy** `apply-crm-vite-dev-patch.py`).
+   - Chạy `CI=true bench build --production --force` để biên dịch tĩnh bundle `/crm` Vue SPA, `/assets/crm_cskh/cskh/*` và nạp `translations/vi.csv` (`1.331` dòng).
+2. Phát hành image lên registry (hoặc chuyển gói tar đã kiểm SHA-256 sang VPS) và ghi nhận rõ cả **`NEW_APP_IMAGE`** lẫn **`NEW_IMAGE_ID`**.
+
+---
+
+### 2.3. Bước 0 — Tiền kiểm chỉ đọc trên VPS (`T-1` / Trước giờ bảo trì)
+
+Chạy trên VPS (chưa tác động dịch vụ đang chạy) để khóa thông tin thực tế:
+
+```bash
+export COMPOSE_BIN="/opt/crm-cskh-staging/staging-compose"
+export PUBLIC_DOMAIN="crm.hrpartner.vn"
+export FRAPPE_SITE="crm-staging.localhost"
+
+# 1. Kiểm tra wrapper và trạng thái các service đang chạy:
+"${COMPOSE_BIN}" ps
+
+# 2. Xác minh thư mục site Frappe thực tế trong container backend khớp crm-staging.localhost:
+"${COMPOSE_BIN}" exec -T backend bash -lc '
+  set -eu
+  ls -1 /home/frappe/frappe-bench/sites/*/site_config.json
+  test -f "/home/frappe/frappe-bench/sites/'"${FRAPPE_SITE}"'/site_config.json"
+  echo "VERIFIED_FRAPPE_SITE='"${FRAPPE_SITE}"'"
+'
+
+# 3. Ghi lại PREV_APP_IMAGE, PREV_IMAGE_ID và RepoDigests thực chạy từ container backend:
+PREV_BACKEND_CID="$("${COMPOSE_BIN}" ps -q backend)"
+export PREV_APP_IMAGE="$(docker inspect --format '{{.Config.Image}}' "${PREV_BACKEND_CID}")"
+export PREV_IMAGE_ID="$(docker inspect --format '{{.Image}}' "${PREV_BACKEND_CID}")"
+PREV_REPO_DIGESTS="$(docker image inspect --format '{{json .RepoDigests}}' "${PREV_IMAGE_ID}")"
+printf 'PREV_APP_IMAGE=%s\nPREV_IMAGE_ID=%s\nPREV_REPO_DIGESTS=%s\n' \
+  "${PREV_APP_IMAGE}" "${PREV_IMAGE_ID}" "${PREV_REPO_DIGESTS}" | tee /tmp/cskh-pre-upgrade-image.txt
+
+# 4. Kiểm tra dung lượng đĩa trống (yêu cầu >= 5 GB trống) và xác nhận encryption_key đã lưu ký ngoài VPS:
+df -h / /var/lib/docker /opt/crm-cskh-staging
+"${COMPOSE_BIN}" exec -T backend /home/frappe/frappe-bench/env/bin/python -c "
+import json, pathlib
+cfg = json.loads(pathlib.Path('/home/frappe/frappe-bench/sites/${FRAPPE_SITE}/site_config.json').read_text())
+assert cfg.get('encryption_key'), 'MISSING encryption_key!'
+print('encryption_key present (length =', len(cfg['encryption_key']), ') — confirm matches offsite escrow before proceeding')
+"
+
+# 5. Kéo/nạp sẵn NEW_APP_IMAGE trước khi bật bảo trì và ghi nhận NEW_IMAGE_ID:
+export NEW_APP_IMAGE="<REGISTRY_OR_REPO>/crm-cskh@sha256:<NEW_REPO_DIGEST>"
+docker pull "${NEW_APP_IMAGE}"
+export NEW_IMAGE_ID="$(docker image inspect --format '{{.Id}}' "${NEW_APP_IMAGE}")"
+printf 'NEW_APP_IMAGE=%s\nNEW_IMAGE_ID=%s\n' "${NEW_APP_IMAGE}" "${NEW_IMAGE_ID}" | tee -a /tmp/cskh-pre-upgrade-image.txt
+```
+
+---
+
+### 2.4. Quy trình cập nhật trong khung bảo trì (`~10–15` phút)
 
 > [!CAUTION]
-> **Quy tắc dừng khẩn cấp (`STOP RULE`):** Nếu bước sao lưu (`Bước 2`) không tạo ra đủ tệp dump SQL + files hoặc kiểm tra mã băm thất bại, **dừng ngay lập tức**, tắt chế độ bảo trì (`set-maintenance-mode off`), bật lại scheduler và **không** cập nhật container.
+> **QUY TẮC DỪNG KHẨN CẤP (`STOP RULE`):** Nếu kiểm tra xả worker RQ quá hạn vẫn còn job đang chạy, hoặc bước `backup --with-files` thất bại / không khớp SHA-256, hoặc `migrator` trả mã thoát `!= 0`, **DỪNG NGAY LẬP TỨC**, không chạy tiếp các bước sau và chuyển sang Mục 2.5 để mở lại an toàn hoặc quay lui có kiểm soát.
 
-#### Bước 1 — Bật chế độ bảo trì, tạm dừng scheduler và chụp số liệu đối chiếu (`~2` phút)
+#### Bước 1 — Bật chế độ bảo trì, tạm dừng scheduler và kiểm tra chắc chắn toàn bộ job RQ đang chạy đã kết thúc
 
 ```bash
-# 1. Bật chế độ bảo trì và tạm dừng lập lịch trên site crm.hrpartner.vn
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn set-maintenance-mode on
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn scheduler pause
+# 1. Khóa nhận tác vụ mới trên site thực tế crm-staging.localhost:
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" set-maintenance-mode on
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" scheduler pause
 
-# 2. Chờ 15-30 giây để RQ workers hoàn tất các job ngắn đang xử lý, sau đó ghi nhận baseline bản ghi:
-docker exec <WEB_CONTAINER> /home/frappe/frappe-bench/env/bin/python -c "
-import frappe, json
-frappe.init(site='crm.hrpartner.vn', sites_path='/home/frappe/frappe-bench/sites')
+# 2. Kiểm tra thực tế hàng đợi RQ (short, default, long) và trạng thái tất cả RQ workers
+#    cho tới khi queued == 0, started == 0 và busy_workers == 0 (timeout fail-closed 180s):
+"${COMPOSE_BIN}" exec -T backend /home/frappe/frappe-bench/env/bin/python - <<'PY'
+import json, os, sys, time
+import frappe
+from rq import Worker
+from rq.registry import StartedJobRegistry
+from frappe.utils.background_jobs import get_queue
+
+site = "crm-staging.localhost"
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
 frappe.connect()
-counts = {dt: frappe.db.count(dt) for dt in [
-    'CRM Lead', 'CRM Deal', 'CSKH Work Item', 'CSKH Contact Attempt', 'CSKH KPI Snapshot', 'CRM Form Script'
-] if frappe.db.exists('DocType', dt)}
-print(json.dumps(counts, ensure_ascii=False))
-"
+try:
+    deadline = time.monotonic() + 180
+    while True:
+        q_objs = {qname: get_queue(qname, is_async=True) for qname in ("short", "default", "long")}
+        conn = next(iter(q_objs.values())).connection
+        busy_workers = [
+            {"name": w.name, "state": w.get_state(), "job_id": w.get_current_job_id()}
+            for w in Worker.all(connection=conn)
+            if w.get_state() == "busy" or w.get_current_job_id() is not None
+        ]
+        queues = {}
+        active_total = 0
+        for qname, q in q_objs.items():
+            started_ids = StartedJobRegistry(queue=q).get_job_ids()
+            queued_cnt = int(q.count)
+            queues[qname] = {
+                "queued": queued_cnt,
+                "started": len(started_ids),
+                "started_job_ids": started_ids,
+            }
+            active_total += queued_cnt + len(started_ids)
+        print(json.dumps({"queues": queues, "busy_workers": busy_workers}, ensure_ascii=False), flush=True)
+        if active_total == 0 and not busy_workers:
+            print("RQ_DRAIN_VERIFIED: 0 queued, 0 started, 0 busy workers.")
+            break
+        if time.monotonic() >= deadline:
+            print("ERROR: RQ jobs still running/queued after 180s; aborting before backup/migrate.", file=sys.stderr)
+            sys.exit(1)
+        time.sleep(2)
+finally:
+    frappe.destroy()
+PY
+
+# 3. Chụp số lượng bản ghi đối chiếu trước khi backup & migrate:
+"${COMPOSE_BIN}" exec -T backend /home/frappe/frappe-bench/env/bin/python - <<'PY' > /tmp/cskh-pre-migrate-counts.json
+import json, os, frappe
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site="crm-staging.localhost", sites_path=".")
+frappe.connect()
+try:
+    dts = [
+        "CRM Lead", "CRM Deal", "CSKH Import Batch", "CSKH Work Item",
+        "CSKH Active Claim", "CSKH Assignment History", "CSKH Contact Attempt",
+        "CSKH SLA Obligation", "CSKH KPI Snapshot", "CRM Form Script",
+    ]
+    counts = {dt: int(frappe.db.count(dt)) for dt in dts if frappe.db.exists("DocType", dt)}
+    print(json.dumps(counts, indent=2, ensure_ascii=False))
+finally:
+    frappe.destroy()
+PY
+cat /tmp/cskh-pre-migrate-counts.json
 ```
 
-#### Bước 2 — Sao lưu toàn phần và kiểm chứng SHA-256 (`~2–3` phút)
+#### Bước 2 — Sao lưu toàn phần `crm-staging.localhost` và kiểm chứng SHA-256
 
 ```bash
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn backup --with-files
-# Sao chép các tệp backup mới nhất từ sites/crm.hrpartner.vn/private/backups/ ra thư mục lưu trữ ngoài container + tạo SHA256SUMS:
-# sha256sum <BACKUP_DIR>/*crm_hrpartner_vn* > <BACKUP_DIR>/SHA256SUMS.txt && sha256sum -c <BACKUP_DIR>/SHA256SUMS.txt
+# Ghi mốc UTC ngay trước thời điểm backup để làm chuẩn đối soát nếu cần đánh giá cửa sổ dữ liệu:
+export T_BACKUP_UTC="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+echo "T_BACKUP_UTC=${T_BACKUP_UTC}" | tee /tmp/cskh-backup-marker.txt
+
+# Chạy backup DB + public/private files trên site crm-staging.localhost:
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" backup --with-files
+
+# Sao chép bộ backup mới nhất từ sites/crm-staging.localhost/private/backups/ ra thư mục lưu trữ trên host/offsite:
+BACKUP_HOST_DIR="/var/backups/crm-cskh/pre-vi-rollout-$(date -u +%Y%m%dT%H%M%SZ)"
+sudo install -d -m 0700 "${BACKUP_HOST_DIR}"
+LATEST_PREFIX="$("${COMPOSE_BIN}" exec -T backend bash -lc '
+  ls -1t /home/frappe/frappe-bench/sites/crm-staging.localhost/private/backups/*-crm_staging_localhost-database.sql.gz | head -n1 | sed "s/-database\.sql\.gz$//"
+' | tr -d '\r')"
+echo "LATEST_BACKUP_PREFIX=${LATEST_PREFIX}" | tee -a /tmp/cskh-backup-marker.txt
+
+for suffix in database.sql.gz files.tar private-files.tar site_config_backup.json; do
+  if "${COMPOSE_BIN}" exec -T backend test -f "${LATEST_PREFIX}-${suffix}"; then
+    docker cp "$("${COMPOSE_BIN}" ps -q backend):${LATEST_PREFIX}-${suffix}" "${BACKUP_HOST_DIR}/"
+  fi
+done
+
+# Bắt buộc có đủ database.sql.gz và kiểm tra SHA-256:
+sudo bash -lc "cd '${BACKUP_HOST_DIR}' && ls -lh *-database.sql.gz && sha256sum * > SHA256SUMS.txt && sha256sum -c SHA256SUMS.txt"
+# (Đồng bộ thư mục ${BACKUP_HOST_DIR} sang kho lưu trữ ngoài VPS theo quy trình backup hiện hành trước khi qua Bước 3)
 ```
 
-#### Bước 3 — Kéo image mới, cập nhật biến image digest và chạy `migrate` (`~3–5` phút)
+#### Bước 3 — Cập nhật `APP_IMAGE`, chạy `configurator` và chạy `migrator` (`--profile migrate` + `MIGRATE_SITES=true`)
 
 ```bash
-# 1. Kéo trước image mới theo digest để tối thiểu hóa thời gian gián đoạn:
-docker pull <REGISTRY>/crm-cskh@sha256:<NEW_DIGEST>
+# 1. Sao lưu tệp cấu hình môi trường của wrapper trước khi đổi APP_IMAGE
+#    (CHỈ cập nhật dòng APP_IMAGE=${NEW_APP_IMAGE}; giữ nguyên toàn bộ cấu hình domain crm.hrpartner.vn & SITE_NAME=crm-staging.localhost):
+sudo cp -a /opt/crm-cskh-staging/.env "/opt/crm-cskh-staging/.env.bak.$(date -u +%Y%m%dT%H%M%SZ)"
+sudo python3 - "${NEW_APP_IMAGE}" <<'PY'
+import pathlib, re, sys
+new_img = sys.argv[1]
+env_path = pathlib.Path("/opt/crm-cskh-staging/.env")
+text = env_path.read_text(encoding="utf-8")
+updated, n = re.subn(r"(?m)^APP_IMAGE=.*$", f"APP_IMAGE={new_img}", text)
+assert n == 1, f"Expected exactly 1 APP_IMAGE= line in {env_path}, found {n}"
+env_path.write_text(updated, encoding="utf-8")
+print(f"Updated APP_IMAGE -> {new_img}")
+PY
 
-# 2. Cập nhật biến IMAGE/TAG trong tệp .env của stack VPS sang @sha256:<NEW_DIGEST>
-# (giữ lại dòng ghi chú <PREV_DIGEST> để sẵn sàng rollback tức thì).
+# 2. Chạy configurator để xác thực thứ tự sites/apps.txt (frappe -> crm -> crm_cskh):
+"${COMPOSE_BIN}" run --rm configurator
 
-# 3. Chạy configurator (nếu stack dùng service configurator) để đảm bảo sites/apps.txt = frappe -> crm -> crm_cskh,
-#    sau đó chạy migrate một lần (TUYỆT ĐỐI KHÔNG dùng cờ --skip-failing):
-docker compose <COMPOSE_FILES> run --rm migrator \
-  bench --site crm.hrpartner.vn migrate
+# 3. Chạy one-shot migrator qua profile 'migrate' với MIGRATE_SITES=true cho site crm-staging.localhost
+#    (TUYỆT ĐỐI KHÔNG dùng --skip-failing; kiểm tra log in ra đúng 'running controlled migration for site crm-staging.localhost'):
+MIGRATE_SITES=true SITE_NAME="${FRAPPE_SITE}" "${COMPOSE_BIN}" --profile migrate run --rm migrator
 ```
-*(Nếu stack hiện hành trên VPS chạy trực tiếp không tách service `migrator`, thực hiện `docker compose up -d` với image mới rồi chạy ngay `docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn migrate` trong khi `maintenance_mode` vẫn đang `on`).*
 
-#### Bước 4 — Khởi động lại dịch vụ runtime, xóa cache và mở lại lưu lượng (`~2` phút)
+#### Bước 4 — Cập nhật các container runtime, đối chiếu `NEW_IMAGE_ID`, xóa cache và mở lưu lượng
 
 ```bash
-# 1. Cập nhật toàn bộ dịch vụ runtime lên image mới (web, websocket, worker-short/default/long, scheduler, proxy nếu dùng chung):
-docker compose <COMPOSE_FILES> up -d
+# 1. Đưa các service ứng dụng lên image mới (giữ nguyên db, redis, proxy & cấu hình domain hiện hành):
+"${COMPOSE_BIN}" up -d backend frontend websocket queue-short queue-long scheduler
 
-# 2. Xóa toàn bộ Redis/website cache để nạp từ điển vi.csv (1.331 dòng) và CRM Form Script mới:
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn clear-cache
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn clear-website-cache
+# 2. Xác minh 100% các container ứng dụng đang chạy đúng NEW_IMAGE_ID:
+for svc in backend frontend websocket queue-short queue-long scheduler; do
+  cid="$("${COMPOSE_BIN}" ps -q "${svc}")"
+  actual_iid="$(docker inspect --format '{{.Image}}' "${cid}")"
+  printf '%-12s %s\n' "${svc}" "${actual_iid}"
+  test "${actual_iid}" = "${NEW_IMAGE_ID}"
+done
 
-# 3. Bật lại scheduler và mở chế độ bảo trì:
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn scheduler resume
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn set-maintenance-mode off
+# 3. Xóa cache Redis & website cache trên site crm-staging.localhost:
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" clear-cache
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" clear-website-cache
+
+# 4. Bật lại scheduler và tắt chế độ bảo trì trên site crm-staging.localhost:
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" scheduler resume
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" set-maintenance-mode off
 ```
 
-#### Bước 5 — Kiểm tra đối chứng sau triển khai trên `https://crm.hrpartner.vn` (`~3` phút)
+#### Bước 5 — Kiểm tra sau cập nhật trên `crm-staging.localhost` & `https://crm.hrpartner.vn`
 
-1. **Đối chiếu số lượng bản ghi DB:** Chạy lại đoạn lệnh đếm ở Bước 1 — xác nhận `CRM Lead`, `CRM Deal`, `CSKH Work Item`, `CSKH Contact Attempt`, `CSKH KPI Snapshot` **bảo toàn 100%**, và `CRM Form Script` có đủ 3 bản ghi (`CSKH - Open CSKH Page`, `CSKH - Open Lead CSKH Workspace`, `CSKH - Open CSKH Page from Deal`).
-2. **Kiểm tra `/crm` (SPA):**
-   - Mở `https://crm.hrpartner.vn/crm/leads`: tiêu đề **Hồ sơ liên hệ**, có nút **Không gian tuyển dụng**; mở 1 hồ sơ thấy nút **Chuyển thành Giao dịch CRM** và **Mở trong Không gian tuyển dụng**.
-   - Mở `https://crm.hrpartner.vn/crm/deals`: tiêu đề **Giao dịch CRM**, có nút **Không gian tuyển dụng**.
-3. **Kiểm tra luồng 6 bước `/cskh`:**
-   - Với tài khoản **Quản trị CRM**: kiểm tra thanh điều hướng 6 bước (`Nhập danh sách liên hệ` → `Kho hồ sơ liên hệ` → `Phân công` → `Hồ sơ được giao` → `Ghi nhận liên hệ` → `Lịch hẹn liên hệ lại`) và `/cskh/settings` (xác nhận các mã kết quả đã tùy chỉnh trước đó giữ nguyên nhãn).
-   - Với tài khoản **Nhân viên**: mở 1 hồ sơ được giao, kiểm tra biểu mẫu **Ghi nhận liên hệ** hiển thị hộp lưu ý cho kết quả **Hoàn tất mục tiêu liên hệ chiến dịch**.
-4. **Kiểm tra báo cáo P3 & Tải CSV qua HTTPS (vai trò `BOD` hoặc `Quản trị CRM`):**
-   - Mở `https://crm.hrpartner.vn/cskh/quality-overview`: tiêu đề `<h1>` hiển thị **Tổng quan chất lượng liên hệ & SLA (BOD)**, không có lỗi console/HTTP `5xx`.
-   - Bấm **Xuất CSV** trên trang báo cáo, xác nhận tải tệp `.csv` qua HTTPS thành công (`HTTP 200`, tiêu đề cột & nhãn chỉ số tiếng Việt đồng bộ với thẻ và bảng chi tiết, `0` cột PII).
+1. **Đối chiếu số lượng bản ghi DB nội bộ (`crm-staging.localhost`):**
+   - Chạy lại đoạn đếm bản ghi ở Bước 1.3 sang `/tmp/cskh-post-migrate-counts.json` và xác nhận:
+     - Các bảng dữ liệu nghiệp vụ (`CRM Lead`, `CRM Deal`, `CSKH Import Batch`, `CSKH Work Item`, `CSKH Active Claim`, `CSKH Assignment History`, `CSKH Contact Attempt`, `CSKH SLA Obligation`, `CSKH KPI Snapshot`) **bảo toàn 100% số dòng**.
+     - `CRM Form Script` có đủ `3` bản ghi (`CSKH - Open CSKH Page`, `CSKH - Open Lead CSKH Workspace`, `CSKH - Open CSKH Page from Deal`).
+2. **Kiểm tra giao diện HTTPS công khai trên `https://crm.hrpartner.vn`:**
+   - `https://crm.hrpartner.vn/crm/leads`: hiển thị **Hồ sơ liên hệ** và nút **Không gian tuyển dụng**; chi tiết hồ sơ có **Chuyển thành Giao dịch CRM** và **Mở trong Không gian tuyển dụng**.
+   - `https://crm.hrpartner.vn/crm/deals`: hiển thị **Giao dịch CRM** và nút **Không gian tuyển dụng**.
+   - `https://crm.hrpartner.vn/cskh`: thanh điều hướng 6 bước (`Nhập danh sách liên hệ` → `Kho hồ sơ liên hệ` → `Phân công` → `Hồ sơ được giao` → `Ghi nhận liên hệ` → `Lịch hẹn liên hệ lại`); trên biểu mẫu **Ghi nhận liên hệ**, chọn `Hoàn tất mục tiêu liên hệ chiến dịch` hiển thị đúng hộp lưu ý ngữ nghĩa; `/cskh/settings` giữ nguyên các mã kết quả `version > 1` đã tùy chỉnh.
+   - `https://crm.hrpartner.vn/cskh/quality-overview` (tài khoản `BOD` / `Quản trị CRM`): tiêu đề `<h1>` hiển thị **Tổng quan chất lượng liên hệ & SLA (BOD)**; thực hiện **Xuất CSV** và tải tệp qua HTTPS đạt `HTTP 200`, tiêu đề & `29` dòng chỉ số tiếng Việt đồng bộ giao diện, `0` cột PII, `0` lỗi console/HTTP `5xx`.
 
 ---
 
-### 2.5. Phương án Rollback 2 tầng
+### 2.5. Phương án quay lại bản trước (Rollback) — Đã hiệu chỉnh theo hành vi thực tế của DB & dữ liệu phát sinh
 
-#### Tầng 1 — Fast Image & Fixture Rollback (`< 3` phút — Khuyến nghị mặc định)
+#### Tầng 1 — Quay lại Image cũ (`APP_IMAGE` → `PREV_APP_IMAGE` / `PREV_IMAGE_ID`, không restore DB)
 
-Do bản cập nhật này **không có bất kỳ thay đổi DDL/schema nào** và không ghi đè dữ liệu lịch sử (`outcome_label_snapshot`, `metrics_json`), nếu phát hiện lỗi hiển thị giao diện sau khi mở lưu lượng, thực hiện hoàn nguyên nóng mà **không làm mất dữ liệu giao dịch mới phát sinh**:
+- **Khi nào áp dụng:** Phát hiện lỗi hiển thị giao diện/JS/tài sản tĩnh sau nâng cấp nhưng dữ liệu nghiệp vụ vẫn toàn vẹn; cần quay lui nhanh (`~3–5` phút) mà **không làm mất các giao dịch phát sinh sau thời điểm nâng cấp**.
+- **Lưu ý kỹ thuật quan trọng về nhãn danh mục lưu trong DB:**
+  1. Trên image cũ (`92e14af3532876ad5bc2468bf0e502474cc95a53`), các hàm `ensure_p2_seeds()` và `ensure_p3_seeds()` chỉ chèn bản ghi khi chưa tồn tại (`if not frappe.db.exists(...)`) chứ **không** ghi đè ngược bản ghi đã có. Vì vậy, khi quay lại `PREV_APP_IMAGE` (kể cả có chạy lại `migrator`), **các nhãn danh mục mặc định `version == 1` trong MariaDB đã được cập nhật ở Bước 3 sẽ vẫn giữ nhãn tiếng Việt mới** (`CSKH Outcome Code`: `Đã trao đổi — Cần liên hệ tiếp`, `Đã trao đổi — Có quan tâm`, `Đã hẹn gọi / liên hệ lại`, `Hoàn tất mục tiêu chiến dịch`; `CSKH Policy.title`; `CSKH Working Calendar.title`). Các mã hành vi (`code`, `is_connected`, `is_conversion`, công thức KPI) không đổi nên runtime của image cũ vẫn hoạt động bình thường với các nhãn này.
+  2. Đối với `tabCRM Form Script`: chạy lại `migrator` trên `PREV_APP_IMAGE` sẽ đồng bộ lại 2 script trên `CRM Lead` về `__('CSKH')` / `__('Care workspace')` (khớp với `vi.csv` của image cũ), nhưng Frappe `sync_fixtures` không tự xóa bản ghi thứ 3 `CSKH - Open CSKH Page from Deal` mới thêm. Để tránh nút thứ 3 trên `/crm/deals` hiển thị chuỗi tiếng Anh chưa có trong `vi.csv` cũ, cần tắt `enabled = 0` cho `CSKH - Open CSKH Page from Deal`.
 
 ```bash
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn set-maintenance-mode on
-# Đổi lại biến image trong .env về @sha256:<PREV_DIGEST>
-docker compose <COMPOSE_FILES> up -d
-# Chạy migrate trên image cũ để đồng bộ lại fixtures/crm_form_script.json cũ:
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn migrate
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn clear-cache
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn clear-website-cache
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn set-maintenance-mode off
+export COMPOSE_BIN="/opt/crm-cskh-staging/staging-compose"
+export FRAPPE_SITE="crm-staging.localhost"
+
+# 1. Bật chế độ bảo trì ngắn & tạm dừng scheduler, sau đó chạy lại đoạn kiểm tra RQ ở Bước 1.2
+#    cho tới khi in ra "RQ_DRAIN_VERIFIED: 0 queued, 0 started, 0 busy workers.":
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" set-maintenance-mode on
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" scheduler pause
+
+# 2. Đổi APP_IMAGE trong /opt/crm-cskh-staging/.env về lại PREV_APP_IMAGE đã ghi ở Bước 0:
+sudo python3 - "${PREV_APP_IMAGE}" <<'PY'
+import pathlib, re, sys
+prev_img = sys.argv[1]
+env_path = pathlib.Path("/opt/crm-cskh-staging/.env")
+text = env_path.read_text(encoding="utf-8")
+updated, n = re.subn(r"(?m)^APP_IMAGE=.*$", f"APP_IMAGE={prev_img}", text)
+assert n == 1, f"Expected 1 APP_IMAGE= line, found {n}"
+env_path.write_text(updated, encoding="utf-8")
+PY
+
+# 3. Chạy configurator + migrator trên image cũ để khôi phục 2 CRM Form Script của CRM Lead,
+#    sau đó tắt script thứ 3 trên CRM Deal và đưa các service về PREV_IMAGE_ID:
+"${COMPOSE_BIN}" run --rm configurator
+MIGRATE_SITES=true SITE_NAME="${FRAPPE_SITE}" "${COMPOSE_BIN}" --profile migrate run --rm migrator
+"${COMPOSE_BIN}" up -d backend frontend websocket queue-short queue-long scheduler
+
+for svc in backend frontend websocket queue-short queue-long scheduler; do
+  actual_iid="$(docker inspect --format '{{.Image}}' "$("${COMPOSE_BIN}" ps -q "${svc}")")"
+  test "${actual_iid}" = "${PREV_IMAGE_ID}"
+done
+
+"${COMPOSE_BIN}" exec -T backend /home/frappe/frappe-bench/env/bin/python -c "
+import os, frappe
+os.chdir('/home/frappe/frappe-bench/sites')
+frappe.init(site='${FRAPPE_SITE}', sites_path='.')
+frappe.connect()
+try:
+    if frappe.db.exists('CRM Form Script', 'CSKH - Open CSKH Page from Deal'):
+        frappe.db.set_value('CRM Form Script', 'CSKH - Open CSKH Page from Deal', 'enabled', 0, update_modified=False)
+        frappe.db.commit()
+finally:
+    frappe.destroy()
+"
+
+# 4. Xóa cache, bật lại scheduler và mở lại lưu lượng:
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" clear-cache
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" clear-website-cache
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" scheduler resume
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" set-maintenance-mode off
 ```
 
-#### Tầng 2 — Full Backup Restore (`5–10` phút — Chỉ dùng khi cần khôi phục toàn bộ DB về thời điểm Bước 2)
+#### Tầng 2 — Khôi phục toàn phần DB & Files từ bản Backup (`bench --site crm-staging.localhost --force restore`)
+
+> [!WARNING]
+> **TÁC ĐỘNG MẤT DỮ LIỆU PHÁT SINH SAU BACKUP (`DATA-LOSS IMPACT`):**
+> - Lệnh `bench --site crm-staging.localhost --force restore` **ghi đè toàn bộ cơ sở dữ liệu MariaDB và cây tệp `public/files` + `private/files` quay về đúng thời điểm `T_BACKUP_UTC` ở Bước 2**.
+> - **Mọi dữ liệu nghiệp vụ tạo mới hoặc cập nhật sau `T_BACKUP_UTC` sẽ bị xóa bỏ hoàn toàn khỏi hệ thống sau khi restore**, bao gồm: `CRM Lead` mới/chỉnh sửa, `CRM Deal` mới/chuyển giai đoạn, lô nhập CSV (`CSKH Import Batch` + tệp gốc), phân công/thu hồi/chuyển giao (`CSKH Work Item`, `CSKH Active Claim`, `CSKH Assignment History`), nhật ký liên hệ & hiệu chỉnh (`CSKH Contact Attempt`, `CSKH Attempt Correction`, `CRM Call Log`), lịch hẹn (`CRM Task`), nghĩa vụ SLA (`CSKH SLA Obligation`), kỳ chốt `CSKH KPI Run`/`Snapshot`, tệp xuất báo cáo (`CSKH Export Job`) và mọi tệp đính kèm tải lên sau `T_BACKUP_UTC`.
+> - **Chỉ thực hiện Tầng 2 khi có phê duyệt rõ ràng của `T0` / Owner sau khi đã xem bảng kiểm đếm số bản ghi phát sinh sau `T_BACKUP_UTC` và đã chụp một bản backup hiện trạng (`pre-restore safety backup`) để lưu vết đối chiếu.**
 
 ```bash
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn set-maintenance-mode on
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn scheduler pause
-# Đổi lại biến image trong .env về @sha256:<PREV_DIGEST> và docker compose up -d db redis-cache redis-queue web
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn --force restore \
-  /path/in/container/to/<SQL_BACKUP.sql.gz> \
-  --with-public-files /path/in/container/to/<PUBLIC_FILES.tar> \
-  --with-private-files /path/in/container/to/<PRIVATE_FILES.tar>
-docker compose <COMPOSE_FILES> up -d
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn clear-cache
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn scheduler resume
-docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn set-maintenance-mode off
+export COMPOSE_BIN="/opt/crm-cskh-staging/staging-compose"
+export FRAPPE_SITE="crm-staging.localhost"
+
+# 1. Khóa ghi ngay lập tức và dừng workers + scheduler:
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" set-maintenance-mode on
+"${COMPOSE_BIN}" stop queue-short queue-long scheduler
+
+# 2. Kiểm đếm chính xác các bản ghi phát sinh hoặc biến đổi sau T_BACKUP_UTC để trình duyệt tác động mất dữ liệu:
+"${COMPOSE_BIN}" exec -T backend /home/frappe/frappe-bench/env/bin/python - "${T_BACKUP_UTC}" <<'PY' > /tmp/cskh-post-backup-delta-audit.json
+import json, os, sys, frappe
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+from frappe.utils import get_system_timezone
+
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site="crm-staging.localhost", sites_path=".")
+frappe.connect()
+try:
+    parsed_utc = datetime.fromisoformat(sys.argv[1].replace("Z", "+00:00"))
+    if parsed_utc.tzinfo is None:
+        parsed_utc = parsed_utc.replace(tzinfo=timezone.utc)
+    cutoff_local = parsed_utc.astimezone(ZoneInfo(get_system_timezone())).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S.%f")
+    dts = [
+        "CRM Lead", "CRM Deal", "CSKH Import Batch", "CSKH Work Item",
+        "CSKH Assignment History", "CSKH Contact Attempt", "CSKH Attempt Correction",
+        "CRM Call Log", "CRM Task", "CSKH SLA Obligation", "CSKH KPI Run", "CSKH Export Job",
+    ]
+    report = {"t_backup_utc": sys.argv[1], "cutoff_site_local": cutoff_local, "post_backup_deltas": {}}
+    for dt in dts:
+        if frappe.db.exists("DocType", dt):
+            created = frappe.db.sql(f"SELECT COUNT(*) FROM `tab{dt}` WHERE creation > %s", (cutoff_local,))[0][0]
+            modified = frappe.db.sql(f"SELECT COUNT(*) FROM `tab{dt}` WHERE creation <= %s AND modified > %s", (cutoff_local, cutoff_local))[0][0]
+            report["post_backup_deltas"][dt] = {"created_since_backup": int(created), "updated_since_backup": int(modified)}
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+finally:
+    frappe.destroy()
+PY
+cat /tmp/cskh-post-backup-delta-audit.json
+
+# 3. Chụp thêm 1 bản safety backup của trạng thái trước khi ghi đè (phục vụ đối chiếu thủ công sau sự cố):
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" backup --with-files
+
+# 4. Sau khi T0/Owner phê duyệt cửa sổ dữ liệu ở Bước 2:
+#    - Đặt lại APP_IMAGE=${PREV_APP_IMAGE} trong /opt/crm-cskh-staging/.env
+#    - Kiểm tra SHA-256 của bộ tệp backup tại ${BACKUP_HOST_DIR}
+#    - Dừng frontend/websocket, nạp tệp backup vào backend và chạy --force restore với mật khẩu root DB đọc từ DB_PASSWORD_SECRETS_FILE:
+"${COMPOSE_BIN}" stop frontend websocket
+docker cp "${BACKUP_HOST_DIR}/"*.sql.gz "$("${COMPOSE_BIN}" ps -q backend):/tmp/"
+docker cp "${BACKUP_HOST_DIR}/"*-files.tar "$("${COMPOSE_BIN}" ps -q backend):/tmp/" 2>/dev/null || true
+
+DB_SECRET_FILE="$(grep '^DB_PASSWORD_SECRETS_FILE=' /opt/crm-cskh-staging/.env | cut -d= -f2- | tr -d "\"'\r")"
+DB_ROOT_PW="$(sudo tr -d '\r\n' < "${DB_SECRET_FILE}")"
+"${COMPOSE_BIN}" exec -T -e DB_ROOT_PW="${DB_ROOT_PW}" backend bash -lc '
+  set -eu
+  SQL_FILE="$(ls -1t /tmp/*-crm_staging_localhost-database.sql.gz | head -n1)"
+  PUB_TAR="$(ls -1t /tmp/*-crm_staging_localhost-files.tar 2>/dev/null | head -n1 || true)"
+  PRIV_TAR="$(ls -1t /tmp/*-crm_staging_localhost-private-files.tar 2>/dev/null | head -n1 || true)"
+  ARGS=(--force restore "${SQL_FILE}" --mariadb-root-password "${DB_ROOT_PW}")
+  [ -n "${PUB_TAR}" ] && ARGS+=(--with-public-files "${PUB_TAR}")
+  [ -n "${PRIV_TAR}" ] && ARGS+=(--with-private-files "${PRIV_TAR}")
+  bench --site "'"${FRAPPE_SITE}"'" "${ARGS[@]}"
+  rm -f /tmp/*-crm_staging_localhost-*
+'
+unset DB_ROOT_PW
+
+# 5. Đảm bảo encryption_key trong sites/crm-staging.localhost/site_config.json khớp bản lưu ký,
+#    khởi động lại toàn bộ stack trên PREV_APP_IMAGE, xóa cache và mở chế độ bảo trì sau khi kiểm tra:
+"${COMPOSE_BIN}" run --rm configurator
+"${COMPOSE_BIN}" up -d backend frontend websocket queue-short queue-long scheduler
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" clear-cache
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" clear-website-cache
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" scheduler resume
+"${COMPOSE_BIN}" exec -T backend bench --site "${FRAPPE_SITE}" set-maintenance-mode off
 ```
 
 ---
@@ -230,4 +472,4 @@ docker exec <WEB_CONTAINER> bench --site crm.hrpartner.vn set-maintenance-mode o
 ### 2.6. Lưu ý phối hợp liên nhánh với P4 (`codex/p4-01-compose` / `codex/p4-ops-readiness`)
 
 - Trên trang `/cskh/quality-overview`, tiêu đề `<h1>` đã chuyển từ `"Tổng quan chất lượng CSKH (BOD)"` sang **`"Tổng quan chất lượng liên hệ & SLA (BOD)"`**.
-- Khi rebase các nhánh vận hành P4 lên sau PR này, cập nhật chuỗi kiểm tra smoke HTTP tương ứng trong script smoke P4 (`run_isolated_smoke.py` / `staging_https_smoke_and_reconcile.py`) để khớp với tiêu đề mới.
+- Khi rebase các nhánh vận hành P4 lên sau PR này, cập nhật chuỗi kiểm tra smoke HTTP tương ứng trong `run_isolated_smoke.py` / `staging_https_smoke_and_reconcile.py` để khớp với tiêu đề mới.
