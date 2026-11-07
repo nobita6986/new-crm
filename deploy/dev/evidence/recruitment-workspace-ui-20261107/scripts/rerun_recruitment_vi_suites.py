@@ -242,7 +242,7 @@ def main() -> int:
 			("08-test_ui_p3_pages_and_context", "crm_cskh.tests.test_ui_p3_pages_and_context", False),
 			("09-test_p2_outcomes_policy", "crm_cskh.tests.test_p2_outcomes_policy", False),
 			("10-test_p3_kpi_and_snapshots", "crm_cskh.tests.test_p3_kpi_and_snapshots", True),
-			("11-test_p3_reporting_and_security", "crm_cskh.tests.test_p3_reporting_and_security", False),
+			("11-test_p3_reporting_and_security", "crm_cskh.tests.test_p3_reporting_and_security", True),
 		]
 
 		check_out(["docker", "exec", WEB_CONTAINER, "mkdir", "-p", "/tmp/junit"])
@@ -457,11 +457,23 @@ def main() -> int:
 				},
 				{
 					"run": 4,
-					"scope": "full_module (7/7 methods in canonical CI sequence after test_p3_kpi_and_snapshots, clean site_config.json)",
+					"scope": "full_module on 6912c78 (7/7 methods in canonical CI sequence after test_p3_kpi_and_snapshots, clean site_config.json)",
 					"result": "PASS (7 passed, 0 errors, 0 failures)",
 					"junit": "deploy/dev/evidence/recruitment-workspace-ui-20261107/junit/test_p3_reporting_and_security.junit.xml",
 					"log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/11-test_p3_reporting_and_security.log",
-					"rootCause": "Canonical CI execution order with clean site_config.json passes all 7/7 methods with zero code edits.",
+					"rootCause": "Canonical CI execution order with clean site_config.json passes all 7/7 methods on 6912c78.",
+				},
+				{
+					"run": 5,
+					"scope": "standalone clean-site full_module after fixture isolation a973e3a / 8184c80 (7/7 methods, 0 prior runtime rows)",
+					"result": "PASS (7 passed, 0 errors, 0 failures, 0 skipped)",
+					"junit": "deploy/dev/evidence/p3-reporting-test-isolation-20261107/junit-standalone/test_p3_reporting_and_security.junit.xml",
+					"log": "deploy/dev/evidence/p3-reporting-test-isolation-20261107/logs/02-standalone-clean-site-test_p3_reporting_and_security.log",
+					"rootCause": (
+						"Commit a973e3a69530edb9441480c3b2862b381656b36b adds optional telephony_medium to p2_base.make_native_call_log(), "
+						"seeds an explicit SEC2-02 PBX call (telephony_medium='Twilio' -> verified=1) alongside Manual calls (self_reported=2), "
+						"and wipes CSKH runtime tables in TestP3ReportingAndSecurity.setUp(). Suite now passes 7/7 completely standalone on a virgin site."
+					),
 				},
 			],
 		}

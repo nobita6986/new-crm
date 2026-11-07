@@ -62,7 +62,7 @@ async function login(browser, email, password = PASSWORD) {
     timezoneId: 'Asia/Ho_Chi_Minh',
   });
   const page = await context.newPage();
-  
+
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded' });
   const loginStatus = await page.evaluate(async ({ usr, pwd }) => {
     const r = await fetch('/api/method/login', {
@@ -73,7 +73,7 @@ async function login(browser, email, password = PASSWORD) {
     });
     return r.status;
   }, { usr: email, pwd: password });
-  
+
   assert(loginStatus === 200, `Login failed for ${email}: HTTP ${loginStatus}`);
   return { context, page };
 }
@@ -110,7 +110,7 @@ async function main() {
   try {
     console.log('=== TEST 1: NHÂN VIÊN (Sales User) ===');
     const staff = await login(browser, 'cskh-p3-staff-a@example.test');
-    
+
     // 1A. /crm/leads list & "Không gian tuyển dụng" entry button
     await staff.page.goto(`${BASE_URL}/crm/leads`, { waitUntil: 'networkidle' });
     await staff.page.waitForTimeout(1000);
@@ -118,7 +118,7 @@ async function main() {
     assert(leadsPageText.includes('Hồ sơ liên hệ'), '/crm/leads must show "Hồ sơ liên hệ"');
     assert(leadsPageText.includes('Giao dịch CRM'), 'Sidebar must show "Giao dịch CRM"');
     assert(!leadsPageText.includes('Khách hàng tiềm năng'), 'Must not show legacy "Khách hàng tiềm năng"');
-    
+
     const cskhEntryBtn = staff.page.getByRole('button', { name: /Không gian tuyển dụng/i }).first();
     const hasEntryBtn = await cskhEntryBtn.isVisible().catch(() => false);
     console.log('  Staff: Lối vào "Không gian tuyển dụng" trên /crm/leads visible:', hasEntryBtn);
@@ -143,10 +143,10 @@ async function main() {
     if (await quickRecordLink.isVisible()) {
       await quickRecordLink.click();
       await staff.page.locator('#cskh-att-outcome').waitFor({ state: 'visible', timeout: 10000 });
-      
+
       const outcomeOptions = await staff.page.locator('#cskh-att-outcome option').allInnerTexts();
       console.log('  Outcome options in Quick Record:', outcomeOptions.map(s => s.trim()));
-      
+
       // Test selecting 'converted' -> verify honesty disclaimer
       await staff.page.selectOption('#cskh-att-outcome', 'converted');
       await staff.page.waitForTimeout(300);
@@ -156,7 +156,7 @@ async function main() {
         'Outreach outcome "Hoàn tất mục tiêu liên hệ chiến dịch" must display non-placement disclaimer'
       );
       console.log('  Disclaimer for "Hoàn tất mục tiêu liên hệ chiến dịch" verified OK!');
-      
+
       // Now select connected_needs_followup and schedule callback
       await staff.page.selectOption('#cskh-att-outcome', 'connected_needs_followup');
       await staff.page.fill('#cskh-att-note', 'Ứng viên quan tâm vị trí tuyển dụng, hẹn gọi lại chiều nay để chốt lịch phỏng vấn.');
@@ -164,10 +164,10 @@ async function main() {
         await staff.page.check('#cskh-att-has-followup');
       }
       await staff.page.fill('#cskh-att-followup-title', 'Hẹn gọi lại xác nhận phỏng vấn');
-      
+
       const shot3 = await saveShot(staff.page, '03-staff-record-attempt-and-disclaimer.png');
       results.screenshots.push({ id: '03-staff-record-attempt-and-disclaimer.png', path: shot3 });
-      
+
       await staff.page.click('#cskh-att-submit');
       await staff.page.waitForTimeout(1000);
       results.staff.push('Ghi nhận liên hệ kèm lịch hẹn và lưu ý không hiểu nhầm sang đã tuyển/bố trí');
