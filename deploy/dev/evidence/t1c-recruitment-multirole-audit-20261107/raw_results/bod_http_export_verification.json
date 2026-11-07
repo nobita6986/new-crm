@@ -1,0 +1,112 @@
+{
+  "timestamp": "2026-11-07T06:47:38Z",
+  "base_url": "http://127.0.0.1:8320",
+  "host_header": "p3ui.localhost",
+  "http_flow": {
+    "request_export": {
+      "status_code": 200,
+      "export_id": "EXP-BE8FDEFBDD98",
+      "response": {
+        "ok": true,
+        "export_id": "EXP-BE8FDEFBDD98",
+        "status": "queued",
+        "expires_in_seconds": 3600,
+        "expires_at": "2026-11-07T14:47:38+07:00"
+      }
+    },
+    "status_polling": {
+      "poll_count": 2,
+      "final_status": "completed",
+      "row_count": 29,
+      "download_endpoint": "/api/method/crm_cskh.api.p3_reporting.download_export?export_id=EXP-BE8FDEFBDD98"
+    },
+    "download": {
+      "status_code": 200,
+      "headers": {
+        "Content-Type": "text/csv; charset=utf-8; charset=utf-8",
+        "Content-Disposition": "attachment; filename=EXP-BE8FDEFBDD98.csv",
+        "Content-Length": "3018",
+        "Server": "Werkzeug/3.1.6 Python/3.14.8"
+      },
+      "byte_length": 3018,
+      "sha256": "92bb90d5be2b924edd36851c381d130345a9cb0c1bbb59509bd7a2c7275b75c0"
+    }
+  },
+  "file_verification": {
+    "total_lines": 30,
+    "data_rows": 29,
+    "header": [
+      "metric_code",
+      "label_vi",
+      "value",
+      "numerator",
+      "denominator",
+      "unit",
+      "status",
+      "reason"
+    ],
+    "zero_pii_verified": true,
+    "phone_numbers_detected": 0,
+    "emails_detected": 0
+  },
+  "label_reconciliation": {
+    "status": "PASS",
+    "reconciled_count": 29,
+    "labels": {
+      "ASSIGNED_INTERVALS": "Lượt nhận hồ sơ (Khoảng phụ trách)",
+      "UNIQUE_ASSIGNED_ITEMS": "Hồ sơ liên hệ được giao duy nhất",
+      "ELIGIBLE_COVERAGE": "Tỷ lệ phủ liên hệ trên hồ sơ đủ điều kiện",
+      "WORK_ITEM_FIRST_ATTEMPT_SLA_RATE": "Tỷ lệ đạt SLA liên hệ lần đầu (Cấp hồ sơ liên hệ)",
+      "FIRST_ATTEMPT_SLA_RATE": "Tỷ lệ đạt SLA liên hệ lần đầu (Khoảng phụ trách)",
+      "FOLLOWUP_SLA_RATE": "Tỷ lệ đạt SLA lịch hẹn liên hệ lại (Callback)",
+      "FIRST_CONNECTED_TRACKING_RATE": "Tỷ lệ kết nối trong ngưỡng theo dõi (Tham khảo)",
+      "MIN_ATTEMPTS_COMPLIANCE_RATE": "Tỷ lệ tuân thủ số lần liên hệ tối thiểu",
+      "CONTACT_ATTEMPT_COUNT": "Tổng lượt liên hệ hợp lệ (Effective Attempts)",
+      "CONNECTED_ATTEMPT_COUNT": "Tổng lượt kết nối hai chiều thành công",
+      "CONNECTED_ITEMS": "Hồ sơ đã kết nối hai chiều duy nhất",
+      "CONNECTED_RATE": "Tỷ lệ kết nối hai chiều (Cấp khoảng phụ trách)",
+      "WORK_ITEMS_TOUCHED": "Số hồ sơ công việc đã tác nghiệp",
+      "VALID_OUTCOME_LOGGING_RATE": "Tỷ lệ cập nhật kết quả đầy đủ (Outcome Completeness)",
+      "VERIFICATION_RATE": "Tỷ lệ kết quả đã xác minh (Verified)",
+      "CONVERSION_RATE": "Tỷ lệ hoàn tất mục tiêu liên hệ chiến dịch",
+      "CORRECTION_RATE": "Tỷ lệ bản ghi phải đính chính / hủy",
+      "VOID_ATTEMPT_RATE": "Tỷ lệ bản ghi liên hệ bị hủy (Void)",
+      "CALLBACK_COMPLETION_RATE": "Tỷ lệ hoàn tất lịch hẹn hợp lệ",
+      "RESCHEDULE_RATE": "Tỷ lệ dời lịch hẹn (Reschedule)",
+      "DNC_COMPLIANCE_RATE": "Tỷ lệ tuân thủ DNC & kỷ luật đóng hồ sơ",
+      "OVERDUE_BACKLOG": "Hồ sơ công việc đang tồn quá hạn",
+      "OPEN_FOLLOWUPS_OVERDUE": "Lịch hẹn gọi lại đang quá hạn",
+      "SLA_BREACH_COUNT": "Tổng số nghĩa vụ vi phạm SLA trong kỳ",
+      "SLA_WAIVER_COUNT": "Số nghĩa vụ được miễn trừ hợp lệ",
+      "FIRST_ATTEMPT_LATENCY_P50_MINUTES": "Trung vị thời gian phản hồi lần đầu (Phút làm việc - P50)",
+      "FIRST_ATTEMPT_LATENCY_P90_MINUTES": "Phân vị P90 thời gian phản hồi lần đầu (Phút làm việc - P90)",
+      "QA_PASS_RATE": "Tỷ lệ đạt kiểm định chất lượng QA",
+      "PROCESS_SCORE": "Điểm tuân thủ quy trình tổng hợp (0-100)"
+    }
+  },
+  "negative_security_gates": {
+    "gate_1_bod_pii_rejected": {
+      "status": "PASS",
+      "status_code": 403,
+      "exc_type": "FORBIDDEN_SCOPE",
+      "message": "crm_cskh.services.errors.ForbiddenScope: BOD Viewer không được phép xuất báo cáo chứa dữ liệu định danh khách hàng (PII)."
+    },
+    "gate_2_bod_my_scorecard_rejected": {
+      "status": "PASS",
+      "status_code": 403,
+      "exc_type": "FORBIDDEN_SCOPE",
+      "message": "crm_cskh.services.errors.ForbiddenScope: BOD Viewer không có bảng điểm cá nhân để xuất."
+    },
+    "gate_3_cross_actor_staff_download_rejected": {
+      "status": "PASS",
+      "status_code": 403,
+      "exc_type": "FORBIDDEN_SCOPE",
+      "message": "crm_cskh.services.errors.ForbiddenScope: Bạn không có quyền tải tệp xuất báo cáo của người khác."
+    },
+    "gate_4_guest_download_rejected": {
+      "status": "PASS",
+      "status_code": 403,
+      "exc_type": "PermissionError"
+    }
+  }
+}

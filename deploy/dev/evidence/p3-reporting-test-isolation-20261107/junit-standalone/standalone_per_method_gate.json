@@ -1,0 +1,91 @@
+{
+  "schema_version": 2,
+  "gate": "g007-per-method-junit",
+  "gate_passed": true,
+  "expected_total": 7,
+  "observed_total": 7,
+  "passing_total": 7,
+  "counts": {
+    "PASS": 7
+  },
+  "xml_files": [
+    "test_p3_reporting_and_security.junit.xml"
+  ],
+  "xml_module_binding": {
+    "test_p3_reporting_and_security.junit.xml": "crm_cskh.tests.test_p3_reporting_and_security"
+  },
+  "missing_modules": [],
+  "empty_xml_files": [],
+  "missing_methods": [],
+  "failed_methods": [],
+  "errored_methods": [],
+  "skipped_methods": [],
+  "duplicate_methods": [],
+  "unexpected_cases": [],
+  "parse_errors": [],
+  "results": [
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_role_capability_matrix_and_scope_isolation_s01_s02_s04",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_role_capability_matrix_and_scope_isolation_s01_s02_s04",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_sla_authority_and_original_due_immutability_s05_s14",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_sla_authority_and_original_due_immutability_s05_s14",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled",
+      "match_reason": "exact"
+    }
+  ]
+}

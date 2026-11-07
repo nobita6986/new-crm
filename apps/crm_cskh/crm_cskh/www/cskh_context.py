@@ -57,8 +57,8 @@ P3_NAV_KEYS = {
 
 # Navigation entries per role. Keys are English message ids translated via Frappe i18n.
 NAV_ITEMS = (
-	{"key": "pool", "route": "/cskh/pool", "label": "Customer pool"},
 	{"key": "import", "route": "/cskh/import", "label": "Import list"},
+	{"key": "pool", "route": "/cskh/pool", "label": "Customer pool"},
 	{"key": "campaigns", "route": "/cskh/campaigns", "label": "Campaigns and rules"},
 	{"key": "my-customers", "route": "/cskh/my-customers", "label": "My customers"},
 	{"key": "callbacks", "route": "/cskh/callbacks", "label": "Callbacks schedule"},
@@ -351,6 +351,7 @@ def build_context(
 		"can_recompute_kpi": is_admin() or is_leader(),
 		"can_waive_sla": is_admin() or is_leader(),
 		"can_export_report": has_role_grant(READ_ROLES),
+		"can_open_crm_app": is_system() or has_role_grant(("Sales Manager", "Sales User")),
 	}
 	context.cskh_timezone = timezone_context(frappe.session.user)
 	context.cskh_error_codes = (

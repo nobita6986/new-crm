@@ -193,7 +193,7 @@ def seed_native_activities(lead, caller_user, phone="0912340002"):
 		{
 			"doctype": "FCRM Note",
 			"title": "Ghi chú nội bộ CRM =1+1",
-			"content": "Khách hỏi bảng giá <script>window.__xssTriggered=1</script> <img src=x onerror=window.__xssTriggered=2>",
+			"content": "Người liên hệ hỏi mức lương và ca làm việc <script>window.__xssTriggered=1</script> <img src=x onerror=window.__xssTriggered=2>",
 			"reference_doctype": "CRM Lead",
 			"reference_docname": lead,
 		}

@@ -74,6 +74,10 @@ P2_CHANNELS_AND_OUTCOMES = (
 	"Replied — callback requested",
 	"Interested",
 	"Not interested",
+	"Đã trao đổi — Cần chăm sóc tiếp",
+	"Đã trao đổi — Quan tâm",
+	"Khách hẹn gọi / liên hệ lại",
+	"Hoàn tất mục tiêu chiến dịch",
 )
 
 P2_QUICK_ATTEMPT_FORM = (
@@ -102,6 +106,7 @@ P2_QUICK_ATTEMPT_FORM = (
 	"Terminal outcome",
 	"Sets Do Not Contact (DNC)",
 	"Message without reply is never counted as connected.",
+	"Campaign goal completion closes outreach intake only — it does not confirm hiring or placement.",
 	"Contact result recorded successfully.",
 	"Copy phone number",
 	"Phone number copied to clipboard.",

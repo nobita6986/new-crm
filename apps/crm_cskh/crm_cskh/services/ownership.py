@@ -55,6 +55,7 @@ _STATIC_NEUTRAL_REASONS = frozenset(
 		"Chuyển người phụ trách",
 		"Thu hồi về hàng đợi",
 		"Thu hồi phân công",
+		"Tự động đóng Work Item do người liên hệ yêu cầu ngừng liên hệ (DNC)",
 		"Tự động đóng Work Item do khách yêu cầu ngừng liên hệ (DNC)",
 		"Đóng Work Item (dữ liệu sai/trùng)",
 		"Đóng Work Item",
@@ -109,7 +110,7 @@ def public_history_reason(
 		return "Thu hồi về hàng đợi" if return_to_pool else "Thu hồi phân công"
 	if act == "close":
 		if is_dnc:
-			return "Tự động đóng Work Item do khách yêu cầu ngừng liên hệ (DNC)"
+			return "Tự động đóng Work Item do người liên hệ yêu cầu ngừng liên hệ (DNC)"
 		if close_category == "invalid_or_duplicate":
 			return "Đóng Work Item (dữ liệu sai/trùng)"
 		return "Đóng Work Item"

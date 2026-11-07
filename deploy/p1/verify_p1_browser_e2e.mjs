@@ -245,8 +245,8 @@ async function main() {
 				'E2E-04-campaign-rules-stale-preview-and-execute',
 				async (page, text, status) => {
 					assert(status === 200, `Expected 200 on /cskh/pool, got ${status}`)
-					assert(text.includes('Kho khách hàng'), 'Missing Vietnamese title Kho khách hàng')
-					assert(text.includes('Số khách hàng duy nhất'), 'Missing Unique customers counter')
+					assert(text.includes('Kho hồ sơ liên hệ'), 'Missing Vietnamese title Kho hồ sơ liên hệ')
+					assert(text.includes('Số hồ sơ không trùng'), 'Missing Unique customers counter')
 					assert(text.includes('Số công việc'), 'Missing Work items counter')
 					assert(text.includes('Đã giao'), 'Missing Assigned state badge')
 					assert(text.includes('Xung đột'), 'Missing Conflict state badge')
@@ -322,7 +322,7 @@ async function main() {
 					await page.selectOption('#rule-campaign', httpReport.final_ids.campaign_a)
 					await page.waitForTimeout(500)
 					const bodyText = await page.evaluate(() => document.body.innerText)
-					assert(bodyText.includes('Chiến dịch và quy tắc phân phối'), 'Missing Vietnamese title')
+					assert(bodyText.includes('Phân công — Chiến dịch và quy tắc phân phối'), 'Missing Vietnamese title Phân công — Chiến dịch và quy tắc phân phối')
 					assert(bodyText.includes('Không giới hạn'), 'capacity=0 must display "Không giới hạn"')
 					assert(bodyText.includes('60%'), 'Missing normalized 60% share')
 					assert(bodyText.includes('40%'), 'Missing normalized 40% share')
@@ -526,7 +526,7 @@ async function main() {
 					assert(searchHidden === true, 'BOD must not see phone/name search box')
 					const tableText = await page.evaluate(() => document.getElementById('pool-table')?.innerText || '')
 					assert(!tableText.includes('******'), 'BOD pool must omit phone completely (not even last-4 digits)')
-					assert(!tableText.includes('Mở trong CRM'), 'BOD pool must not show Open in CRM link')
+					assert(!tableText.includes('Mở hồ sơ gốc (CRM)'), 'BOD pool must not show Open in CRM link')
 				}
 			)
 		} finally {

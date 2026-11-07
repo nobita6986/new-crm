@@ -1,0 +1,18 @@
+test_error_file_download_allows_admin_and_denies_other_roles (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_error_file_download_allows_admin_and_denies_other_roles) ... ok
+test_import_history_and_batch_detail_expose_reconciled_counters_to_admin_only (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_import_history_and_batch_detail_expose_reconciled_counters_to_admin_only) ... ok
+test_l23_pool_ui_blocks_revoked_or_closed_history_leak_to_active_other_team (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_l23_pool_ui_blocks_revoked_or_closed_history_leak_to_active_other_team) ... ok
+test_l24_run_history_shared_campaign_scopes_assigned_skipped_preview_counters_and_polling (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_l24_run_history_shared_campaign_scopes_assigned_skipped_preview_counters_and_polling) ... ok
+test_l26_invalid_pagination_returns_400_and_assignees_applies_campaign_eligibility (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_l26_invalid_pagination_returns_400_and_assignees_applies_campaign_eligibility) ... ok
+test_l27_l29_leader_and_bod_ui_flows_under_strict_doctype_and_permlevel_rules (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_l27_l29_leader_and_bod_ui_flows_under_strict_doctype_and_permlevel_rules)
+Verify Leader & BOD UI endpoints work cleanly alongside L-23/L-26/L-29 DocType & permlevel lockdown. ... ok
+test_ownership_ui_scopes_team_blocks_widening_and_restricts_assignees (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_ownership_ui_scopes_team_blocks_widening_and_restricts_assignees) ... ok
+test_pool_ui_derives_states_isolates_teams_and_omits_bod_pii (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_pool_ui_derives_states_isolates_teams_and_omits_bod_pii) ... ok
+test_run_history_and_navigation_match_role_capabilities (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_run_history_and_navigation_match_role_capabilities) ... ok
+test_ui_endpoints_do_not_accept_scope_widening_parameters (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_ui_endpoints_do_not_accept_scope_widening_parameters) ... ok
+test_upload_import_file_enforces_admin_role_private_flag_extension_and_size (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_upload_import_file_enforces_admin_role_private_flag_extension_and_size) ... ok
+test_l25_pool_ui_import_batch_source_and_name_filters_match_persisted_import_links (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1ImportBatchPoolFilter.test_l25_pool_ui_import_batch_source_and_name_filters_match_persisted_import_links) ... ok
+
+----------------------------------------------------------------------
+Ran 12 tests in 11.138s
+
+OK
