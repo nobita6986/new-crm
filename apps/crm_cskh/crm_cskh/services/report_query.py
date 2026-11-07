@@ -56,6 +56,7 @@ from crm_cskh.services.errors import (
 )
 from crm_cskh.services.kpi_calculator import (
 	COMPANY_SCOPE_ID,
+	COMPANY_SCOPE_LABEL,
 	DRILLDOWN_SUPPORTED_METRICS,
 	ELIGIBLE_SLA_STATUSES,
 	METRIC_LABELS_VI,
@@ -555,6 +556,8 @@ def _fetch_snapshots(
 		as_dict=True,
 	)
 	for r in rows:
+		if r.scope_type == "company" and r.scope_label == "Toàn công ty CSKH":
+			r["scope_label"] = COMPANY_SCOPE_LABEL
 		metrics, comps, breakdown = unpack_snapshot_metrics(r.metrics_json)
 		extra = unpack_snapshot_extra(r.metrics_json)
 		r["metrics"] = metrics

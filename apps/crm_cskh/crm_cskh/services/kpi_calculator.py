@@ -41,6 +41,7 @@ from crm_cskh.services.kpi_periods import PeriodSpec, iter_days
 
 METRIC_VERSION = "cskh-metrics-v2"
 COMPANY_SCOPE_ID = "__company__"
+COMPANY_SCOPE_LABEL = "Toàn công ty"
 UNATTRIBUTED_TEAM_ID = "__unattributed_historical_team__"
 UNATTRIBUTED_TEAM_LABEL = "Chưa xác định nhánh lịch sử (Trước P3)"
 
@@ -50,22 +51,22 @@ ELIGIBLE_SLA_STATUSES = frozenset(
 BREACH_SLA_STATUSES = frozenset(("fulfilled_late", "breached_open", "breached_handoff"))
 
 METRIC_LABELS_VI: dict[str, str] = {
-	"ASSIGNED_INTERVALS": "Lượt nhận khách (Khoảng trách nhiệm)",
-	"UNIQUE_ASSIGNED_ITEMS": "Khách được giao duy nhất",
+	"ASSIGNED_INTERVALS": "Lượt nhận hồ sơ (Khoảng phụ trách)",
+	"UNIQUE_ASSIGNED_ITEMS": "Hồ sơ liên hệ được giao duy nhất",
 	"ELIGIBLE_COVERAGE": "Tỷ lệ phủ liên hệ trên hồ sơ đủ điều kiện",
-	"WORK_ITEM_FIRST_ATTEMPT_SLA_RATE": "Tỷ lệ đạt SLA liên hệ lần đầu (Cấp Hồ sơ khách hàng)",
-	"FIRST_ATTEMPT_SLA_RATE": "Tỷ lệ đạt SLA liên hệ lần đầu (Khoảng trách nhiệm)",
-	"FOLLOWUP_SLA_RATE": "Tỷ lệ đạt SLA lịch hẹn gọi lại (Callback)",
+	"WORK_ITEM_FIRST_ATTEMPT_SLA_RATE": "Tỷ lệ đạt SLA liên hệ lần đầu (Cấp hồ sơ liên hệ)",
+	"FIRST_ATTEMPT_SLA_RATE": "Tỷ lệ đạt SLA liên hệ lần đầu (Khoảng phụ trách)",
+	"FOLLOWUP_SLA_RATE": "Tỷ lệ đạt SLA lịch hẹn liên hệ lại (Callback)",
 	"FIRST_CONNECTED_TRACKING_RATE": "Tỷ lệ kết nối trong ngưỡng theo dõi (Tham khảo)",
 	"MIN_ATTEMPTS_COMPLIANCE_RATE": "Tỷ lệ tuân thủ số lần liên hệ tối thiểu",
 	"CONTACT_ATTEMPT_COUNT": "Tổng lượt liên hệ hợp lệ (Effective Attempts)",
-	"CONNECTED_ATTEMPT_COUNT": "Tổng lượt kết nối thành công",
-	"CONNECTED_ITEMS": "Khách kết nối thành công duy nhất",
-	"CONNECTED_RATE": "Tỷ lệ kết nối thành công (Cấp Khoảng trách nhiệm)",
+	"CONNECTED_ATTEMPT_COUNT": "Tổng lượt kết nối hai chiều thành công",
+	"CONNECTED_ITEMS": "Hồ sơ đã kết nối hai chiều duy nhất",
+	"CONNECTED_RATE": "Tỷ lệ kết nối hai chiều (Cấp khoảng phụ trách)",
 	"WORK_ITEMS_TOUCHED": "Số hồ sơ công việc đã tác nghiệp",
 	"VALID_OUTCOME_LOGGING_RATE": "Tỷ lệ cập nhật kết quả đầy đủ (Outcome Completeness)",
 	"VERIFICATION_RATE": "Tỷ lệ kết quả đã xác minh (Verified)",
-	"CONVERSION_RATE": "Tỷ lệ chuyển đổi đạt mục tiêu chiến dịch",
+	"CONVERSION_RATE": "Tỷ lệ hoàn tất mục tiêu liên hệ chiến dịch",
 	"CORRECTION_RATE": "Tỷ lệ bản ghi phải đính chính / hủy",
 	"VOID_ATTEMPT_RATE": "Tỷ lệ bản ghi liên hệ bị hủy (Void)",
 	"CALLBACK_COMPLETION_RATE": "Tỷ lệ hoàn tất lịch hẹn hợp lệ",
@@ -79,6 +80,14 @@ METRIC_LABELS_VI: dict[str, str] = {
 	"FIRST_ATTEMPT_LATENCY_P90_MINUTES": "Phân vị P90 thời gian phản hồi lần đầu (Phút làm việc - P90)",
 	"QA_PASS_RATE": "Tỷ lệ đạt kiểm định chất lượng QA",
 	"PROCESS_SCORE": "Điểm tuân thủ quy trình tổng hợp (0-100)",
+}
+
+SCORE_COMPONENT_LABELS_VI: dict[str, str] = {
+	"C1_FIRST_ATTEMPT_SLA": "SLA liên hệ lần đầu đúng hạn",
+	"ELIGIBLE_COVERAGE": "Tỷ lệ phủ hồ sơ được giao đủ điều kiện",
+	"C3_DATA_HYGIENE": "Cập nhật kết quả đầy đủ",
+	"FOLLOWUP_SLA_RATE": "SLA liên hệ lại đúng lịch hẹn",
+	"C5_QA_QUALITY": "Chất lượng kiểm định QA đại diện",
 }
 
 DRILLDOWN_SUPPORTED_METRICS = frozenset(
@@ -305,7 +314,7 @@ def compute_process_score_from_components(
 		(
 			"C1_FIRST_ATTEMPT_SLA",
 			"FIRST_ATTEMPT_SLA_RATE",
-			"SLA liên hệ lần đầu đúng hạn",
+			SCORE_COMPONENT_LABELS_VI["C1_FIRST_ATTEMPT_SLA"],
 			w1,
 			first_attempt_sla,
 			first_attempt_sla.get("value") if first_attempt_sla.get("status") == "ok" else None,
@@ -314,7 +323,7 @@ def compute_process_score_from_components(
 		(
 			"ELIGIBLE_COVERAGE",
 			"ELIGIBLE_COVERAGE",
-			"Tỷ lệ phủ hồ sơ được giao đủ điều kiện",
+			SCORE_COMPONENT_LABELS_VI["ELIGIBLE_COVERAGE"],
 			w2,
 			eligible_coverage,
 			eligible_coverage.get("value") if eligible_coverage.get("status") == "ok" else None,
@@ -323,7 +332,7 @@ def compute_process_score_from_components(
 		(
 			"C3_DATA_HYGIENE",
 			"VALID_OUTCOME_LOGGING_RATE",
-			"Cập nhật kết quả đầy đủ",
+			SCORE_COMPONENT_LABELS_VI["C3_DATA_HYGIENE"],
 			w3,
 			data_hygiene,
 			data_hygiene.get("value") if data_hygiene.get("status") == "ok" else None,
@@ -332,7 +341,7 @@ def compute_process_score_from_components(
 		(
 			"FOLLOWUP_SLA_RATE",
 			"FOLLOWUP_SLA_RATE",
-			"SLA chăm sóc đúng lịch hẹn",
+			SCORE_COMPONENT_LABELS_VI["FOLLOWUP_SLA_RATE"],
 			w4,
 			followup_sla,
 			followup_sla.get("value") if followup_sla.get("status") == "ok" else None,
@@ -341,7 +350,7 @@ def compute_process_score_from_components(
 		(
 			"C5_QA_QUALITY",
 			"QA_PASS_RATE",
-			"Chất lượng kiểm định QA đại diện",
+			SCORE_COMPONENT_LABELS_VI["C5_QA_QUALITY"],
 			w5,
 			qa_pass_rate,
 			qa_pass_rate.get("value") if c5_valid else None,
@@ -1938,7 +1947,7 @@ def compute_period_snapshots(
 	comp_snap = _aggregate_bucket(
 		scope_type="company",
 		scope_id=COMPANY_SCOPE_ID,
-		scope_label="Toàn công ty CSKH",
+		scope_label=COMPANY_SCOPE_LABEL,
 		attempts=attempts,
 		obligations=obligations,
 		intervals=intervals,
