@@ -157,7 +157,7 @@ def test_migration_and_snapshot_preservation():
     # Test KPI Snapshot unpack behavior (memory projection vs stored persistence)
     db_json = frappe.db.get_value("CSKH KPI Snapshot", snap_id, "metrics_json")
     unpacked_metrics, unpacked_comps, unpacked_breakdown = unpack_snapshot_metrics(db_json)
-    
+
     results["kpi_snapshot_unpack_projection"] = {
         "assigned_intervals_projected_label": unpacked_metrics["ASSIGNED_INTERVALS"]["label_vi"],
         "assigned_intervals_value": unpacked_metrics["ASSIGNED_INTERVALS"]["value"],
@@ -193,7 +193,7 @@ def test_migration_and_snapshot_preservation():
     assert results["kpi_snapshot_unpack_projection"]["assigned_intervals_projected_label"] == "Lượt nhận hồ sơ (Khoảng phụ trách)", f"Projected label wrong! Got {results['kpi_snapshot_unpack_projection']['assigned_intervals_projected_label']}"
     assert results["kpi_snapshot_unpack_projection"]["unique_assigned_items_projected_label"] == "Hồ sơ liên hệ được giao duy nhất", f"Projected label wrong! Got {results['kpi_snapshot_unpack_projection']['unique_assigned_items_projected_label']}"
     assert results["kpi_snapshot_unpack_projection"]["followup_sla_component_projected_label"] == "SLA liên hệ lại đúng lịch hẹn", f"Projected component label wrong! Got {results['kpi_snapshot_unpack_projection']['followup_sla_component_projected_label']}"
-    
+
     # 7. Unpacked numeric values strictly preserved
     assert results["kpi_snapshot_unpack_projection"]["assigned_intervals_value"] == 15.0
     assert results["kpi_snapshot_unpack_projection"]["unique_assigned_items_value"] == 10.0
