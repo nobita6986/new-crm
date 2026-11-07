@@ -1301,7 +1301,7 @@ window.cskhP3Widgets = (function () {
 
 		const disp = formatMetricDisplay(metric)
 		mountModalShell(
-			t('Metric drill-down') + ' — ' + t(metric.label),
+			t('Metric drill-down') + ' — ' + (metric.label_vi || t(metric.label)),
 			disp.main + (disp.ratio ? ' (' + disp.ratio + ')' : '') + ' · ' + grainLabel(metric.grain),
 			[
 				alertBox,

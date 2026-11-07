@@ -2,8 +2,16 @@
 
 {% block cskh_title %}{{ _("Campaigns and distribution rules") }}{% endblock %}
 {% block cskh_subtitle %}{{ _("Set up the target set and the weights, then preview before distributing.") }}{% endblock %}
+{% block cskh_actions %}
+<a class="cskh-btn is-small" href="/cskh/pool">{{ _("Customer pool") }}</a>
+<a class="cskh-btn is-small" href="/cskh/my-customers">{{ _("My customers") }}</a>
+{% endblock %}
 
 {% block cskh_body %}
+<div class="cskh-banner-notice">
+	{{ _("Assignment step: 1. Create or select an Active campaign -> 2. Configure eligible staff and weights -> 3. Preview distribution, then Confirm distribution to hand over contact records.") }}
+</div>
+
 <div id="campaign-alert" aria-live="polite"></div>
 
 <div class="cskh-card">

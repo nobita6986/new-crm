@@ -1,0 +1,15 @@
+{
+  "started_utc": "2026-11-07T05:41:41.344256+00:00",
+  "finished_utc": "2026-11-07T05:45:23.050200+00:00",
+  "base_commit_sha": "6912c78c1c74483c1a0063379d94d8c9b8bdb30b",
+  "tested_commit_sha": "a973e3a69530edb9441480c3b2862b381656b36b",
+  "tested_apps_crm_cskh_tree_sha": "0248d8954b9a9314e907151f911373d48546e8b6",
+  "app_image_tag": "crm-cskh:0.0.1-92e14af",
+  "app_image_id": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+  "db_image": "mariadb@sha256:f16d7a344413e519dff518f27bdb221388f84b0d274c97c4fb5f2cb0dc1b34fa",
+  "redis_image": "redis@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba",
+  "standalone_clean_site": "p3-reptest-clean.localhost",
+  "standalone_bench_cli_site": "p3-reptest-cli.localhost",
+  "standalone_methods_passed": "7/7",
+  "regression_methods_passed": "19/19"
+}

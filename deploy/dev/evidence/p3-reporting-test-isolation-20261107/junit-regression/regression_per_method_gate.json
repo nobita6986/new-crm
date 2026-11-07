@@ -1,0 +1,203 @@
+{
+  "schema_version": 2,
+  "gate": "g007-per-method-junit",
+  "gate_passed": true,
+  "expected_total": 19,
+  "observed_total": 19,
+  "passing_total": 19,
+  "counts": {
+    "PASS": 19
+  },
+  "xml_files": [
+    "test_p2_calllog_followup.junit.xml",
+    "test_p3_kpi_and_snapshots.junit.xml",
+    "test_p3_reporting_and_security.junit.xml"
+  ],
+  "xml_module_binding": {
+    "test_p2_calllog_followup.junit.xml": "crm_cskh.tests.test_p2_calllog_followup",
+    "test_p3_kpi_and_snapshots.junit.xml": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+    "test_p3_reporting_and_security.junit.xml": "crm_cskh.tests.test_p3_reporting_and_security"
+  },
+  "missing_modules": [],
+  "empty_xml_files": [],
+  "missing_methods": [],
+  "failed_methods": [],
+  "errored_methods": [],
+  "skipped_methods": [],
+  "duplicate_methods": [],
+  "unexpected_cases": [],
+  "parse_errors": [],
+  "results": [
+    {
+      "module": "crm_cskh.tests.test_p2_calllog_followup",
+      "class": "TestP2CallLogReuseAndSideArtifactIsolation",
+      "method": "test_link_existing_call_log_create_manual_call_log_and_block_duplicate_linking",
+      "status": "PASS",
+      "source_xml": "test_p2_calllog_followup.junit.xml",
+      "raw_name": "test_link_existing_call_log_create_manual_call_log_and_block_duplicate_linking",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_calllog_followup",
+      "class": "TestP2CallLogReuseAndSideArtifactIsolation",
+      "method": "test_fcrm_note_general_crm_task_and_standalone_call_log_never_inflate_counters",
+      "status": "PASS",
+      "source_xml": "test_p2_calllog_followup.junit.xml",
+      "raw_name": "test_fcrm_note_general_crm_task_and_standalone_call_log_never_inflate_counters",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_calllog_followup",
+      "class": "TestP2FollowupInvariantsAndTimezoneBuckets",
+      "method": "test_single_open_callback_reschedule_and_block_empty_completion_or_direct_bypass",
+      "status": "PASS",
+      "source_xml": "test_p2_calllog_followup.junit.xml",
+      "raw_name": "test_single_open_callback_reschedule_and_block_empty_completion_or_direct_bypass",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_calllog_followup",
+      "class": "TestP2FollowupInvariantsAndTimezoneBuckets",
+      "method": "test_timezone_consistent_overdue_today_upcoming_buckets_at_day_boundaries",
+      "status": "PASS",
+      "source_xml": "test_p2_calllog_followup.junit.xml",
+      "raw_name": "test_timezone_consistent_overdue_today_upcoming_buckets_at_day_boundaries",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "class": "TestP3KPIAndSnapshots",
+      "method": "test_golden_process_score_provisional_final_and_zero_denominator",
+      "status": "PASS",
+      "source_xml": "test_p3_kpi_and_snapshots.junit.xml",
+      "raw_name": "test_golden_process_score_provisional_final_and_zero_denominator",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "class": "TestP3KPIAndSnapshots",
+      "method": "test_effective_attempts_no_call_log_double_count_and_aba_distinct_grain",
+      "status": "PASS",
+      "source_xml": "test_p3_kpi_and_snapshots.junit.xml",
+      "raw_name": "test_effective_attempts_no_call_log_double_count_and_aba_distinct_grain",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "class": "TestP3KPIAndSnapshots",
+      "method": "test_non_averaging_rollup_and_unattributed_historical_team_bucket",
+      "status": "PASS",
+      "source_xml": "test_p3_kpi_and_snapshots.junit.xml",
+      "raw_name": "test_non_averaging_rollup_and_unattributed_historical_team_bucket",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "class": "TestP3KPIAndSnapshots",
+      "method": "test_post_commit_dirty_invalidation_and_rollback_safety",
+      "status": "PASS",
+      "source_xml": "test_p3_kpi_and_snapshots.junit.xml",
+      "raw_name": "test_post_commit_dirty_invalidation_and_rollback_safety",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "class": "TestP3KPIAndSnapshots",
+      "method": "test_prior_period_correction_restated_run_and_append_only_provenance",
+      "status": "PASS",
+      "source_xml": "test_p3_kpi_and_snapshots.junit.xml",
+      "raw_name": "test_prior_period_correction_restated_run_and_append_only_provenance",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "class": "TestP3KPIAndSnapshots",
+      "method": "test_recompute_concurrency_lock_and_backfill_checkpoint_resume",
+      "status": "PASS",
+      "source_xml": "test_p3_kpi_and_snapshots.junit.xml",
+      "raw_name": "test_recompute_concurrency_lock_and_backfill_checkpoint_resume",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "class": "TestP3KPIAndSnapshots",
+      "method": "test_qa_disabled_default_and_anti_self_review_when_enabled",
+      "status": "PASS",
+      "source_xml": "test_p3_kpi_and_snapshots.junit.xml",
+      "raw_name": "test_qa_disabled_default_and_anti_self_review_when_enabled",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "class": "TestP3KPIAndSnapshots",
+      "method": "test_pr3_doctype_permissions_and_filter_oracles",
+      "status": "PASS",
+      "source_xml": "test_p3_kpi_and_snapshots.junit.xml",
+      "raw_name": "test_pr3_doctype_permissions_and_filter_oracles",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_role_capability_matrix_and_scope_isolation_s01_s02_s04",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_role_capability_matrix_and_scope_isolation_s01_s02_s04",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_sla_authority_and_original_due_immutability_s05_s14",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_sla_authority_and_original_due_immutability_s05_s14",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "class": "TestP3ReportingAndSecurity",
+      "method": "test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled",
+      "status": "PASS",
+      "source_xml": "test_p3_reporting_and_security.junit.xml",
+      "raw_name": "test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled",
+      "match_reason": "exact"
+    }
+  ]
+}

@@ -1,0 +1,300 @@
+{
+  "status": "PASS",
+  "generatedAt": "2026-11-07T04:59:37.814859+00:00",
+  "rerunEntryCommand": "python deploy/dev/evidence/recruitment-workspace-ui-20261107/scripts/rerun_recruitment_vi_suites.py",
+  "runtimeRevision": {
+    "testedCodeSha": "6912c78c1c74483c1a0063379d94d8c9b8bdb30b",
+    "checkoutHeadSha": "6912c78c1c74483c1a0063379d94d8c9b8bdb30b",
+    "crmCskhTreeSha": "8bab15364b7965250b4e2ac85c86fe99142d7cca",
+    "postIntegrationMergeSha": "391b4845be504f7f094a855d1f1aaf56f3d92867",
+    "postIntegrationFixtureSha": "a973e3a69530edb9441480c3b2862b381656b36b",
+    "postIntegrationEvidenceSha": "8184c8050868da74fc0e30edff0c7dc390c19c2b",
+    "postIntegrationT1cHttpCsvSha": "2556090767fe820c29e4f05d1808702bf31ee19d",
+    "postIntegrationCrmCskhTreeSha": "0248d8954b9a9314e907151f911373d48546e8b6",
+    "productionRuntimeCodeDiffSince6912c78": "0 files (only tests/p2_base.py and tests/test_p3_reporting_and_security.py changed: +47/-22 lines)",
+    "frappeSha": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+    "crmSha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+    "baseImage": "crm-cskh:0.0.1-92e14af",
+    "baseImageId": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+    "containerPythonVersion": "3.11.18",
+    "hostPythonVersion": "3.12.10",
+    "hostNodeVersion": "v22.23.3"
+  },
+  "browser": {
+    "engine": "chromium",
+    "version": "153.0.8010.12",
+    "playwrightVersion": "1.63.0",
+    "nodeVersion": "v22.23.3",
+    "headless": true,
+    "timezoneId": "Asia/Ho_Chi_Minh",
+    "locale": "vi-VN",
+    "viewport": {
+      "width": 1440,
+      "height": 920
+    }
+  },
+  "totals": {
+    "suitesTotal": 12,
+    "suitesPassed": 12,
+    "suitesFailed": 0,
+    "frappeUnitTestsTotal": 48,
+    "screenshotsTotal": 17
+  },
+  "suites": [
+    {
+      "id": "01-check_translations",
+      "category": "offline_gate",
+      "command": "python deploy/p1/check_translations.py apps/crm_cskh/crm_cskh/translations/vi.csv",
+      "scope": "full",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 0.093,
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/01-check_translations.log",
+      "summary": "rows 1331 malformed 0"
+    },
+    {
+      "id": "02-check_translations_audit",
+      "category": "offline_gate",
+      "command": "python deploy/p1/check_translations_audit.py",
+      "scope": "full",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 0.688,
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/02-check_translations_audit.log",
+      "summary": "orphan declaration  : 0"
+    },
+    {
+      "id": "03-verify_p3_metric_parity",
+      "category": "offline_gate",
+      "command": "python deploy/dev/evidence/recruitment-workspace-ui-20261107/scripts/verify_p3_metric_parity.py",
+      "scope": "full",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 0.172,
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/03-verify_p3_metric_parity.log",
+      "summary": "P3 Metric Parity Audit: checked 29 metrics & 5 score components | mismatches=0"
+    },
+    {
+      "id": "04-test_p2_ui_timezone_and_contracts",
+      "category": "offline_gate",
+      "command": "node deploy/p2/test_p2_ui_timezone_and_contracts.mjs",
+      "scope": "full",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 0.125,
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/04-test_p2_ui_timezone_and_contracts.log",
+      "summary": "ALL P2 UI TIMEZONE (23:59 / 00:00) & CONTRACT NORMALIZER TESTS PASSED"
+    },
+    {
+      "id": "05-test_p3_ui_timezone_and_contracts",
+      "category": "offline_gate",
+      "command": "node deploy/p3/test_p3_ui_timezone_and_contracts.mjs",
+      "scope": "full",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 0.703,
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/05-test_p3_ui_timezone_and_contracts.log",
+      "summary": "P3 UI timezone, N/A, provisional ranking & safe-DOM suite: ALL CHECKS PASSED."
+    },
+    {
+      "id": "06-test_ui_p1_endpoints",
+      "category": "frappe_unit_suite",
+      "module": "crm_cskh.tests.test_ui_p1_endpoints",
+      "command": "docker exec cskh-recruit-ui-verify-web-1 bash -lc \"/home/frappe/frappe-bench/env/bin/python /tmp/exec_junit.py recruit-ui.localhost crm_cskh.tests.test_ui_p1_endpoints /tmp/junit/test_ui_p1_endpoints.junit.xml\"",
+      "scope": "full_module (12/12 methods)",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 13.406,
+      "junit": "deploy/dev/evidence/recruitment-workspace-ui-20261107/junit/test_ui_p1_endpoints.junit.xml",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/06-test_ui_p1_endpoints.log",
+      "tests": 12,
+      "passed": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_time_sec": 7.364
+    },
+    {
+      "id": "07-test_ui_p2_pages_and_context",
+      "category": "frappe_unit_suite",
+      "module": "crm_cskh.tests.test_ui_p2_pages_and_context",
+      "command": "docker exec cskh-recruit-ui-verify-web-1 bash -lc \"/home/frappe/frappe-bench/env/bin/python /tmp/exec_junit.py recruit-ui.localhost crm_cskh.tests.test_ui_p2_pages_and_context /tmp/junit/test_ui_p2_pages_and_context.junit.xml\"",
+      "scope": "full_module (9/9 methods)",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 8.406,
+      "junit": "deploy/dev/evidence/recruitment-workspace-ui-20261107/junit/test_ui_p2_pages_and_context.junit.xml",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/07-test_ui_p2_pages_and_context.log",
+      "tests": 9,
+      "passed": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_time_sec": 2.348
+    },
+    {
+      "id": "08-test_ui_p3_pages_and_context",
+      "category": "frappe_unit_suite",
+      "module": "crm_cskh.tests.test_ui_p3_pages_and_context",
+      "command": "docker exec cskh-recruit-ui-verify-web-1 bash -lc \"/home/frappe/frappe-bench/env/bin/python /tmp/exec_junit.py recruit-ui.localhost crm_cskh.tests.test_ui_p3_pages_and_context /tmp/junit/test_ui_p3_pages_and_context.junit.xml\"",
+      "scope": "full_module (7/7 methods)",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 5.187,
+      "junit": "deploy/dev/evidence/recruitment-workspace-ui-20261107/junit/test_ui_p3_pages_and_context.junit.xml",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/08-test_ui_p3_pages_and_context.log",
+      "tests": 7,
+      "passed": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_time_sec": 1.511
+    },
+    {
+      "id": "09-test_p2_outcomes_policy",
+      "category": "frappe_unit_suite",
+      "module": "crm_cskh.tests.test_p2_outcomes_policy",
+      "command": "docker exec cskh-recruit-ui-verify-web-1 bash -lc \"/home/frappe/frappe-bench/env/bin/python /tmp/exec_junit.py recruit-ui.localhost crm_cskh.tests.test_p2_outcomes_policy /tmp/junit/test_p2_outcomes_policy.junit.xml\"",
+      "scope": "full_module (5/5 methods)",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 7.0,
+      "junit": "deploy/dev/evidence/recruitment-workspace-ui-20261107/junit/test_p2_outcomes_policy.junit.xml",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/09-test_p2_outcomes_policy.log",
+      "tests": 5,
+      "passed": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_time_sec": 2.895
+    },
+    {
+      "id": "10-test_p3_kpi_and_snapshots",
+      "category": "frappe_unit_suite",
+      "module": "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "command": "docker exec cskh-recruit-ui-verify-web-1 bash -lc \"/home/frappe/frappe-bench/env/bin/python /tmp/exec_junit.py recruit-ui.localhost crm_cskh.tests.test_p3_kpi_and_snapshots /tmp/junit/test_p3_kpi_and_snapshots.junit.xml\"",
+      "scope": "full_module (8/8 methods)",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 11.766,
+      "junit": "deploy/dev/evidence/recruitment-workspace-ui-20261107/junit/test_p3_kpi_and_snapshots.junit.xml",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/10-test_p3_kpi_and_snapshots.log",
+      "tests": 8,
+      "passed": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_time_sec": 8.423
+    },
+    {
+      "id": "11-test_p3_reporting_and_security",
+      "category": "frappe_unit_suite",
+      "module": "crm_cskh.tests.test_p3_reporting_and_security",
+      "command": "docker exec cskh-recruit-ui-verify-web-1 bash -lc \"/home/frappe/frappe-bench/env/bin/python /tmp/exec_junit.py recruit-ui.localhost crm_cskh.tests.test_p3_reporting_and_security /tmp/junit/test_p3_reporting_and_security.junit.xml\"",
+      "scope": "full_module (7/7 methods)",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 16.469,
+      "junit": "deploy/dev/evidence/recruitment-workspace-ui-20261107/junit/test_p3_reporting_and_security.junit.xml",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/11-test_p3_reporting_and_security.log",
+      "tests": 7,
+      "passed": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "junit_time_sec": 12.932
+    },
+    {
+      "id": "12-verify_recruitment_ui_browser",
+      "category": "browser_e2e",
+      "command": "node deploy/dev/evidence/recruitment-workspace-ui-20261107/scripts/verify_recruitment_ui_browser.mjs",
+      "scope": "full_e2e (8 check groups, 17 screenshots, 2 server CSV exports)",
+      "status": "PASS",
+      "exit_code": 0,
+      "duration_sec": 55.86,
+      "browser": {
+        "engine": "chromium",
+        "version": "153.0.8010.12",
+        "playwrightVersion": "1.63.0",
+        "nodeVersion": "v22.23.3",
+        "headless": true,
+        "timezoneId": "Asia/Ho_Chi_Minh",
+        "locale": "vi-VN",
+        "viewport": {
+          "width": 1440,
+          "height": 920
+        }
+      },
+      "screenshots_count": 17,
+      "report": "deploy/dev/evidence/recruitment-workspace-ui-20261107/browser_e2e_report.json",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/12-verify_recruitment_ui_browser.log"
+    }
+  ],
+  "p3ReportingAndSecurityRunComparison": [
+    {
+      "run": 1,
+      "scope": "full_module (7 methods, standalone without predecessor test_p3_kpi_and_snapshots)",
+      "result": "FAILED (5 passed, 1 error, 1 failure)",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/historical-p3-reporting-runs/run1-standalone-siteconfig-override-7methods.log",
+      "rootCause": "(a) ERROR in test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled (KeyError: 'reporting_enabled'): ad-hoc bootstrap wrote p3_reporting_enabled=1 & p3_sla_enabled=1 into site_config.json (frappe.conf), which overrides CSKH Policy in services/p3_flags.py:16-18 when the test toggled CSKH Policy.p3_reporting_enabled=0. (b) FAIL in test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10 (overview['attempt_breakdown']['verified'] == 0): _seed_two_team_activity() calls p2_base.make_native_call_log() without telephony_medium, which SEC2-02 (call_log_adapter.py:117-123) classifies as 'self_reported'; in canonical CI (.github/workflows/p3.yml:128-129 & deploy/p3/run_suites.py:75), test_p3_kpi_and_snapshots runs immediately prior on the same site and seeds a verification_status='verified' attempt in the active month_key."
+    },
+    {
+      "run": 2,
+      "scope": "full_module (7 methods, standalone after removing site_config.json p3_*_enabled overrides)",
+      "result": "FAILED (6 passed, 0 errors, 1 failure)",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/historical-p3-reporting-runs/run2-standalone-clean-siteconfig-7methods.log",
+      "rootCause": "Removing p3_*_enabled from site_config.json resolved test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled (PASS). Standalone execution without predecessor test_p3_kpi_and_snapshots still left verified == 0 in test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10."
+    },
+    {
+      "run": 3,
+      "scope": "partial_single_method (--test test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10, 1 method)",
+      "result": "FAILED (0 passed, 1 failure)",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/historical-p3-reporting-runs/run3-single-method-bod-s08-s09-s10.log",
+      "rootCause": "Diagnostic single-method rerun after re-applying ensure_p2_seeds/ensure_p3_seeds confirmed the failure was strictly the cross-module fixture dependency on test_p3_kpi_and_snapshots.py:305-311 rather than CSKH Policy seeds."
+    },
+    {
+      "run": 4,
+      "scope": "full_module on 6912c78 (7/7 methods in canonical CI sequence after test_p3_kpi_and_snapshots, clean site_config.json)",
+      "result": "PASS (7 passed, 0 errors, 0 failures)",
+      "junit": "deploy/dev/evidence/recruitment-workspace-ui-20261107/junit/test_p3_reporting_and_security.junit.xml",
+      "log": "deploy/dev/evidence/recruitment-workspace-ui-20261107/logs/11-test_p3_reporting_and_security.log",
+      "rootCause": "Canonical CI execution order with clean site_config.json passes all 7/7 methods on 6912c78."
+    },
+    {
+      "run": 5,
+      "scope": "standalone clean-site full_module after fixture isolation a973e3a / 8184c80 (7/7 methods, 0 prior runtime rows)",
+      "result": "PASS (7 passed, 0 errors, 0 failures, 0 skipped)",
+      "junit": "deploy/dev/evidence/p3-reporting-test-isolation-20261107/junit-standalone/test_p3_reporting_and_security.junit.xml",
+      "gate": "deploy/dev/evidence/p3-reporting-test-isolation-20261107/junit-standalone/standalone_per_method_gate.json",
+      "log": "deploy/dev/evidence/p3-reporting-test-isolation-20261107/logs/02-standalone-clean-site-test_p3_reporting_and_security.log",
+      "rootCause": "Commit a973e3a69530edb9441480c3b2862b381656b36b adds optional telephony_medium to p2_base.make_native_call_log(), seeds an explicit SEC2-02 PBX call (telephony_medium='Twilio' -> verified=1) alongside Manual calls (self_reported=2), and wipes CSKH runtime tables in TestP3ReportingAndSecurity.setUp(). Suite now passes 7/7 completely standalone on a virgin site as well as 19/19 in P2+P3 cross-module regression."
+    }
+  ],
+  "t1bFixtureIsolationReceipt": {
+    "fixtureCommit": "a973e3a69530edb9441480c3b2862b381656b36b",
+    "evidenceCommit": "8184c8050868da74fc0e30edff0c7dc390c19c2b",
+    "standaloneCleanSiteResult": "7/7 PASS (0 failures, 0 errors, 0 skipped)",
+    "crossModuleRegressionResult": "19/19 PASS (test_p2_calllog_followup 4/4 + test_p3_kpi_and_snapshots 8/8 + test_p3_reporting_and_security 7/7)",
+    "standaloneGateJson": "deploy/dev/evidence/p3-reporting-test-isolation-20261107/junit-standalone/standalone_per_method_gate.json",
+    "regressionGateJson": "deploy/dev/evidence/p3-reporting-test-isolation-20261107/junit-regression/regression_per_method_gate.json",
+    "manifest": "deploy/dev/evidence/p3-reporting-test-isolation-20261107/SHA256SUMS.txt"
+  },
+  "t1cIndependentVerificationReceipt": {
+    "multiroleAuditCommit": "6a751286e7c4b699bebe3fa9d2c685879d94e326",
+    "httpCsvExportCommit": "2556090767fe820c29e4f05d1808702bf31ee19d",
+    "reportJson": "deploy/dev/evidence/t1c-recruitment-multirole-audit-20261107/raw_results/bod_http_export_verification.json",
+    "downloadedCsv": "deploy/dev/evidence/t1c-recruitment-multirole-audit-20261107/raw_results/bod_http_downloaded_export.csv",
+    "downloadedCsvSha256": "92bb90d5be2b924edd36851c381d130345a9cb0c1bbb59509bd7a2c7275b75c0",
+    "downloadedCsvBytesUntouched": true,
+    "httpStatusCode": 200,
+    "byteLength": 3018,
+    "metricRowsReconciled": 29,
+    "zeroPiiVerified": true,
+    "negativeHttp403GatesPassed": 4,
+    "trailingWhitespaceCleanedScripts": {
+      "scripts/run_t1c_multirole_browser_audit.mjs": "ec184afbd62735401fa4260cf8b260f33c959764fcf7e75814e3489c2357db76",
+      "scripts/verify_migrate_x2_and_kpi.py": "c396e9bd88052a3f964189646175e34ec83133b300332c3744dd11055e59e510"
+    },
+    "manifest": "deploy/dev/evidence/t1c-recruitment-multirole-audit-20261107/SHA256SUMS.txt"
+  }
+}

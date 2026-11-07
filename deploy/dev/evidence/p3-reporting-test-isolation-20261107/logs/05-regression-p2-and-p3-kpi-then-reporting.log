@@ -1,0 +1,58 @@
+=== crm_cskh.tests.test_p2_calllog_followup ===
+test_fcrm_note_general_crm_task_and_standalone_call_log_never_inflate_counters (crm_cskh.tests.test_p2_calllog_followup.TestP2CallLogReuseAndSideArtifactIsolation.test_fcrm_note_general_crm_task_and_standalone_call_log_never_inflate_counters)
+`T2-12`, `T2-17`: Creating `FCRM Note`, general `CRM Task`, or unlinked `CRM Call Log` keeps `attempt_count=0`. ... ok
+test_link_existing_call_log_create_manual_call_log_and_block_duplicate_linking (crm_cskh.tests.test_p2_calllog_followup.TestP2CallLogReuseAndSideArtifactIsolation.test_link_existing_call_log_create_manual_call_log_and_block_duplicate_linking)
+`T2-16`: 1:1 `CRM Call Log` linking, manual `call_log_data`, foreign Lead block, and `409 ALREADY_LINKED`. ... ok
+test_single_open_callback_reschedule_and_block_empty_completion_or_direct_bypass (crm_cskh.tests.test_p2_calllog_followup.TestP2FollowupInvariantsAndTimezoneBuckets.test_single_open_callback_reschedule_and_block_empty_completion_or_direct_bypass)
+`T2-06`, `T2-07`: Rescheduling updates the same `CRM Task`; empty Done and direct ORM bypass are rejected. ... ok
+test_timezone_consistent_overdue_today_upcoming_buckets_at_day_boundaries (crm_cskh.tests.test_p2_calllog_followup.TestP2FollowupInvariantsAndTimezoneBuckets.test_timezone_consistent_overdue_today_upcoming_buckets_at_day_boundaries)
+`T2-21`: `overdue` / `today` / `upcoming` buckets classify `09:59`, `23:59`, and `tomorrow 00:01` accurately. ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 5.720s
+
+OK
+
+=== crm_cskh.tests.test_p3_kpi_and_snapshots ===
+test_effective_attempts_no_call_log_double_count_and_aba_distinct_grain (crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots.test_effective_attempts_no_call_log_double_count_and_aba_distinct_grain)
+`P3-04`: `CRM Call Log` is never double-counted; `A -> B -> A` yields `1` `DISTINCT Work Item` vs `3` intervals. ... ok
+test_golden_process_score_provisional_final_and_zero_denominator (crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots.test_golden_process_score_provisional_final_and_zero_denominator)
+`P3-04`: Independent golden fixture (`7350/85 = 86.47` provisional, `87.0` final, `0/0 -> null`) & period validation. ... ok
+test_non_averaging_rollup_and_unattributed_historical_team_bucket (crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots.test_non_averaging_rollup_and_unattributed_historical_team_bucket)
+`P3-04`: Team rollup computes `2/4 = 50.0%` (not `(100+33.33)/2`); Monthly dedupes `DISTINCT Work Item`; legacy -> `__unattributed_historical_team__`. ... ok
+test_post_commit_dirty_invalidation_and_rollback_safety (crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots.test_post_commit_dirty_invalidation_and_rollback_safety)
+`P3-05`: Failed `record_attempt` leaves `0` dirty scopes; committed `record_attempt` writes `CSKH Dirty Scope` post-commit without sync KPI run. ... ok
+test_pr3_doctype_permissions_and_filter_oracles (crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots.test_pr3_doctype_permissions_and_filter_oracles)
+`S07`, `S13`, `S16`, `S17`: Row-level scope, generic ORM write blocks, run ID probing & `permlevel=1` filter oracles. ... ok
+test_prior_period_correction_restated_run_and_append_only_provenance (crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots.test_prior_period_correction_restated_run_and_append_only_provenance)
+`P3-05`: Prior-period approved correction triggers `restated` `CSKH KPI Run` linked via `restated_from_run` while keeping old revision intact. ... ok
+test_qa_disabled_default_and_anti_self_review_when_enabled (crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots.test_qa_disabled_default_and_anti_self_review_when_enabled)
+`P3-06`: Default `qa_enabled=false` blocks QA writes (`409 QA_DISABLED`, `0` fake data); when enabled, enforces `reviewer != reviewed_staff` (`S06`). ... ok
+test_recompute_concurrency_lock_and_backfill_checkpoint_resume (crm_cskh.tests.test_p3_kpi_and_snapshots.TestP3KPIAndSnapshots.test_recompute_concurrency_lock_and_backfill_checkpoint_resume)
+`P3-05`: Concurrent recompute raises `409 RECOMPUTE_IN_PROGRESS`; backfill supports `dry_run`, batching & checkpoint resume. ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 11.275s
+
+OK
+
+=== crm_cskh.tests.test_p3_reporting_and_security ===
+test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10)
+`S08`, `S09`, `S10`: BOD Viewer gets company aggregates without `System Manager` and `0` customer PII. ... ok
+test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting)
+`P3-07/08`: Drill-down `all_denominator` & `numerator_only` totals match snapshot `100%` across 11 KPIs + `NULLS LAST`. ... ok
+test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled)
+`P3-09`: Disabling `p3_reporting_enabled` & `p3_sla_enabled` degrades cleanly with `0` P1/P2 impact. ... ok
+test_role_capability_matrix_and_scope_isolation_s01_s02_s04 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_role_capability_matrix_and_scope_isolation_s01_s02_s04)
+`S01`, `S02`, `S04`, `S17`: Staff self-only bounds, Leader subtree bounds, and `reporting.*` alias parity. ... ok
+test_sla_authority_and_original_due_immutability_s05_s14 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_sla_authority_and_original_due_immutability_s05_s14)
+`S05`, `S14`: Staff/cross-team Leader denied on SLA waive/pause; `original_due_at` strictly immutable. ... ok
+test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18)
+`S11`, `S12`, `S16`, `S18`: 3-stage export auth, `File.owner='Administrator'`, live revocation, `410` TTL, CSV escaping. ... ok
+test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15)
+`S03`, `S15`: Historical KPI credit stays, but transferred Lead PII & post-transfer Team B activity are isolated. ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 15.116s
+
+OK

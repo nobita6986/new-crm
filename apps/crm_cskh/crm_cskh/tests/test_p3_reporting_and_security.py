@@ -56,9 +56,17 @@ class TestP3ReportingAndSecurity(P3TestCase):
 			"CSKH KPI Snapshot",
 			"CSKH KPI Run",
 			"CSKH QA Review",
+			"CSKH SLA Obligation",
+			"CSKH Attempt Correction",
+			"CSKH Contact Attempt",
+			"CSKH Active Claim",
+			"CSKH Assignment History",
+			"CSKH Work Item",
 		):
 			if frappe.db.table_exists(dt):
 				frappe.db.sql(f"delete from `tab{dt}`")
+		if frappe.db.table_exists("CRM Task") and frappe.db.has_column("CRM Task", "cskh_is_followup"):
+			frappe.db.sql("delete from `tabCRM Task` where coalesce(cskh_is_followup, 0) = 1")
 		frappe.db.commit()
 
 		self.shared_campaign = self.make_campaign(title="Chiến dịch Chung P3", team_scope=None)
@@ -95,8 +103,8 @@ class TestP3ReportingAndSecurity(P3TestCase):
 		wi_b_priv, lead_b_priv = self.make_assigned_work_item(self.team_b_campaign, self.staff_c)
 
 		frappe.set_user(self.staff_a)
-		cl_a = self.make_native_call_log(lead_a, duration=60)
-		contact_attempt.record_attempt(
+		cl_a = self.make_native_call_log(lead_a, status="Completed", duration=60, telephony_medium="Twilio")
+		att_a = contact_attempt.record_attempt(
 			work_item=wi_a,
 			channel="phone_call",
 			outcome_code="connected_interested",
@@ -106,10 +114,16 @@ class TestP3ReportingAndSecurity(P3TestCase):
 			completion_reason="Hoàn tất chăm sóc",
 			idempotency_key=self.unique_key("att-a"),
 		)
+		self.assertEqual(frappe.db.get_value("CRM Call Log", cl_a, "telephony_medium"), "Twilio")
+		self.assertEqual(att_a["call_log"], cl_a)
+		self.assertEqual(
+			frappe.db.get_value("CSKH Contact Attempt", att_a["attempt_id"], "verification_status"),
+			"verified",
+		)
 
 		frappe.set_user(self.staff_c)
-		cl_c = self.make_native_call_log(lead_c, duration=45)
-		contact_attempt.record_attempt(
+		cl_c = self.make_native_call_log(lead_c, status="Completed", duration=45, telephony_medium="Manual")
+		att_c = contact_attempt.record_attempt(
 			work_item=wi_c,
 			channel="phone_call",
 			outcome_code="no_answer",
@@ -120,7 +134,7 @@ class TestP3ReportingAndSecurity(P3TestCase):
 			idempotency_key=self.unique_key("att-c"),
 		)
 		cl_c2 = self.make_native_call_log(lead_b_priv, duration=30)
-		contact_attempt.record_attempt(
+		att_c2 = contact_attempt.record_attempt(
 			work_item=wi_b_priv,
 			channel="phone_call",
 			outcome_code="connected_not_interested",
@@ -130,6 +144,13 @@ class TestP3ReportingAndSecurity(P3TestCase):
 			completion_reason="Hoàn tất chăm sóc",
 			idempotency_key=self.unique_key("att-c2"),
 		)
+		for manual_cl, manual_att in ((cl_c, att_c), (cl_c2, att_c2)):
+			self.assertEqual(frappe.db.get_value("CRM Call Log", manual_cl, "telephony_medium"), "Manual")
+			self.assertEqual(manual_att["call_log"], manual_cl)
+			self.assertEqual(
+				frappe.db.get_value("CSKH Contact Attempt", manual_att["attempt_id"], "verification_status"),
+				"self_reported",
+			)
 
 		frappe.set_user("Administrator")
 		frappe.db.commit()
@@ -247,6 +268,8 @@ class TestP3ReportingAndSecurity(P3TestCase):
 		self.assertIsNone(overview["metrics"]["QA_PASS_RATE"]["value"])
 		# Per `F-P3-03`, `qa_enabled=false` disables QA sampling (`QA_PASS_RATE`) without erasing P2 call-log `verified` status
 		self.assertGreaterEqual(overview["attempt_breakdown"]["verified"], 1)
+		self.assertEqual(overview["attempt_breakdown"]["verified"], 1)
+		self.assertEqual(overview["attempt_breakdown"]["self_reported"], 2)
 		self.assertGreaterEqual(len(teams["rows"]), 2)
 		self.assertGreaterEqual(len(emps["rows"]), 2)
 		self.assertGreaterEqual(len(camps["rows"]), 2)

@@ -117,7 +117,7 @@ def reset_and_seed():
 	invalid_lead = frappe.get_doc(
 		{
 			"doctype": "CRM Lead",
-			"first_name": "Khách thiếu định danh SĐT (mẫu lỗi)",
+			"first_name": "Hồ sơ thiếu định danh SĐT (mẫu lỗi)",
 			"mobile_no": "",
 			"status": "New",
 		}
@@ -126,7 +126,7 @@ def reset_and_seed():
 	conflict_lead = frappe.get_doc(
 		{
 			"doctype": "CRM Lead",
-			"first_name": "Khách ngoài luồng CSKH <img src=x onerror=alert(1)>",
+			"first_name": "Hồ sơ ngoài luồng phân công <img src=x onerror=alert(1)>",
 			"mobile_no": "",
 			"status": "New",
 			"lead_owner": USERS["outside"][0],
@@ -140,7 +140,7 @@ def reset_and_seed():
 			"is_private": 1,
 			"attached_to_doctype": "CRM Lead",
 			"attached_to_name": invalid_lead.name,
-			"content": b"so_dt,ho_ten\n0918880888,Khach Thu Lai Job Loi\n",
+			"content": b"so_dt,ho_ten\n0918880888,Lien He Thu Lai Job Loi\n",
 		}
 	).insert(ignore_permissions=True)
 
@@ -203,7 +203,7 @@ def seed_failed_states_for_ui(campaign):
 			"is_private": 1,
 			"attached_to_doctype": "CRM Lead",
 			"attached_to_name": lead_name,
-			"content": b"so_dt,ho_ten\n0918880777,Khach Demo Retry\n",
+			"content": b"so_dt,ho_ten\n0918880777,Lien He Demo Retry\n",
 		}
 	).insert(ignore_permissions=True)
 

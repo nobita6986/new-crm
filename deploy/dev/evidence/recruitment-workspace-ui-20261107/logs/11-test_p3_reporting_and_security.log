@@ -1,0 +1,19 @@
+test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10)
+`S08`, `S09`, `S10`: BOD Viewer gets company aggregates without `System Manager` and `0` customer PII. ... ok
+test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting)
+`P3-07/08`: Drill-down `all_denominator` & `numerator_only` totals match snapshot `100%` across 11 KPIs + `NULLS LAST`. ... ok
+test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled)
+`P3-09`: Disabling `p3_reporting_enabled` & `p3_sla_enabled` degrades cleanly with `0` P1/P2 impact. ... ok
+test_role_capability_matrix_and_scope_isolation_s01_s02_s04 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_role_capability_matrix_and_scope_isolation_s01_s02_s04)
+`S01`, `S02`, `S04`, `S17`: Staff self-only bounds, Leader subtree bounds, and `reporting.*` alias parity. ... ok
+test_sla_authority_and_original_due_immutability_s05_s14 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_sla_authority_and_original_due_immutability_s05_s14)
+`S05`, `S14`: Staff/cross-team Leader denied on SLA waive/pause; `original_due_at` strictly immutable. ... ok
+test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18)
+`S11`, `S12`, `S16`, `S18`: 3-stage export auth, `File.owner='Administrator'`, live revocation, `410` TTL, CSV escaping. ... ok
+test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15)
+`S03`, `S15`: Historical KPI credit stays, but transferred Lead PII & post-transfer Team B activity are isolated. ... ok
+
+----------------------------------------------------------------------
+Ran 7 tests in 14.561s
+
+OK

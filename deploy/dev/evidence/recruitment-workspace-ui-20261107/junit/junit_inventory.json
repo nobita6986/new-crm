@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "description": "Canonical per-method JUnit inventory for the Recruitment & Staffing Vietnamese UI/i18n & P3 parity verification bundle (6 modules, 48 methods).",
+  "expected_total": 48,
+  "modules": {
+    "crm_cskh.tests.test_ui_p1_endpoints": [
+      "TestUiP1Endpoints.test_ui_endpoints_do_not_accept_scope_widening_parameters",
+      "TestUiP1Endpoints.test_error_file_download_allows_admin_and_denies_other_roles",
+      "TestUiP1Endpoints.test_import_history_and_batch_detail_expose_reconciled_counters_to_admin_only",
+      "TestUiP1Endpoints.test_pool_ui_derives_states_isolates_teams_and_omits_bod_pii",
+      "TestUiP1Endpoints.test_ownership_ui_scopes_team_blocks_widening_and_restricts_assignees",
+      "TestUiP1Endpoints.test_run_history_and_navigation_match_role_capabilities",
+      "TestUiP1Endpoints.test_l23_pool_ui_blocks_revoked_or_closed_history_leak_to_active_other_team",
+      "TestUiP1Endpoints.test_l24_run_history_shared_campaign_scopes_assigned_skipped_preview_counters_and_polling",
+      "TestUiP1Endpoints.test_l26_invalid_pagination_returns_400_and_assignees_applies_campaign_eligibility",
+      "TestUiP1Endpoints.test_upload_import_file_enforces_admin_role_private_flag_extension_and_size",
+      "TestUiP1Endpoints.test_l27_l29_leader_and_bod_ui_flows_under_strict_doctype_and_permlevel_rules",
+      "TestUiP1ImportBatchPoolFilter.test_l25_pool_ui_import_batch_source_and_name_filters_match_persisted_import_links"
+    ],
+    "crm_cskh.tests.test_ui_p2_pages_and_context": [
+      "TestUiP2PagesAndContext.test_guest_is_denied_on_all_p2_pages",
+      "TestUiP2PagesAndContext.test_staff_page_grants_and_navigation",
+      "TestUiP2PagesAndContext.test_bod_is_denied_on_pii_p2_pages_and_allowed_on_zero_pii_pages",
+      "TestUiP2PagesAndContext.test_leader_and_admin_page_capabilities",
+      "TestUiP2PagesAndContext.test_timezone_context_respects_site_and_user_timezone_with_safe_fallback",
+      "TestUiP2PagesAndContext.test_p2_error_codes_and_vietnamese_explanations_published_to_browser",
+      "TestUiP2PagesAndContext.test_lead_form_script_fixture_declares_open_care_workspace",
+      "TestUiP2PagesAndContext.test_o02_ownership_ui_assignees_respects_per_user_latest_rule_version",
+      "TestUiP2PagesAndContext.test_remediation_ui_templates_and_static_contracts_f_p2_01_04a_05"
+    ],
+    "crm_cskh.tests.test_ui_p3_pages_and_context": [
+      "TestUiP3PagesAndContext.test_guest_is_denied_on_all_six_p3_pages",
+      "TestUiP3PagesAndContext.test_staff_only_accesses_personal_scorecard_among_p3_pages",
+      "TestUiP3PagesAndContext.test_leader_accesses_all_six_p3_pages_in_team_scope_with_waive_and_recompute",
+      "TestUiP3PagesAndContext.test_bod_accesses_five_management_p3_pages_with_zero_pii_and_denied_scorecard",
+      "TestUiP3PagesAndContext.test_crm_admin_accesses_all_six_p3_pages_with_recompute_and_waive_capabilities",
+      "TestUiP3PagesAndContext.test_p3_feature_flag_rollback_hides_p3_nav_and_blocks_p3_routes_cleanly",
+      "TestUiP3PagesAndContext.test_qa_enabled_flag_defaults_false_and_publishes_p3_vietnamese_catalogue"
+    ],
+    "crm_cskh.tests.test_p2_outcomes_policy": [
+      "TestP2OutcomesAndChannelSemantics.test_seeded_vietnamese_outcome_catalog_and_unreached_invariant",
+      "TestP2OutcomesAndChannelSemantics.test_unreached_vs_connected_outcomes_and_mandatory_fields",
+      "TestP2OutcomesAndChannelSemantics.test_channel_compatibility_and_policy_enabled_channels",
+      "TestP2PolicyInheritanceAndSnapshotVersioning.test_campaign_overrides_team_overrides_global_policy_and_guards_stale_policy_version",
+      "TestP2PolicyInheritanceAndSnapshotVersioning.test_outcome_rename_or_disable_never_drifts_historical_attempt_snapshots"
+    ],
+    "crm_cskh.tests.test_p3_kpi_and_snapshots": [
+      "TestP3KPIAndSnapshots.test_golden_process_score_provisional_final_and_zero_denominator",
+      "TestP3KPIAndSnapshots.test_effective_attempts_no_call_log_double_count_and_aba_distinct_grain",
+      "TestP3KPIAndSnapshots.test_non_averaging_rollup_and_unattributed_historical_team_bucket",
+      "TestP3KPIAndSnapshots.test_post_commit_dirty_invalidation_and_rollback_safety",
+      "TestP3KPIAndSnapshots.test_prior_period_correction_restated_run_and_append_only_provenance",
+      "TestP3KPIAndSnapshots.test_recompute_concurrency_lock_and_backfill_checkpoint_resume",
+      "TestP3KPIAndSnapshots.test_qa_disabled_default_and_anti_self_review_when_enabled",
+      "TestP3KPIAndSnapshots.test_pr3_doctype_permissions_and_filter_oracles"
+    ],
+    "crm_cskh.tests.test_p3_reporting_and_security": [
+      "TestP3ReportingAndSecurity.test_role_capability_matrix_and_scope_isolation_s01_s02_s04",
+      "TestP3ReportingAndSecurity.test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10",
+      "TestP3ReportingAndSecurity.test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15",
+      "TestP3ReportingAndSecurity.test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting",
+      "TestP3ReportingAndSecurity.test_sla_authority_and_original_due_immutability_s05_s14",
+      "TestP3ReportingAndSecurity.test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18",
+      "TestP3ReportingAndSecurity.test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled"
+    ]
+  }
+}

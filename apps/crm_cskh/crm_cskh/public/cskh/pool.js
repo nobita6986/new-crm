@@ -57,7 +57,10 @@
 		const table = document.getElementById('pool-table')
 		const empty = document.getElementById('pool-empty')
 		const rows = document.getElementById('pool-rows')
-		const allowPii = !!(cskh.capabilities() && cskh.capabilities().pii)
+		const caps = cskh.capabilities() || {}
+		const allowPii = !!caps.pii
+		const isAdmin = !!caps.admin
+		const canOpenCrm = !!caps.can_open_crm_app
 
 		cskh.clear(rows)
 		const list = items || []
@@ -69,7 +72,25 @@
 		empty.hidden = true
 		list.forEach(function (item) {
 			const actions = []
-			if (allowPii && item.lead) {
+			if (isAdmin && item.state === 'eligible') {
+				actions.push(
+					cskh.el('a', {
+						class: 'cskh-btn is-small is-primary',
+						href: '/cskh/campaigns',
+						text: cskh.t('Assign'),
+					})
+				)
+			}
+			if (allowPii && item.state === 'assigned' && item.lead) {
+				actions.push(
+					cskh.el('a', {
+						class: 'cskh-btn is-small',
+						href: '/cskh/work-item?lead=' + encodeURIComponent(item.lead),
+						text: cskh.t('Care workspace'),
+					})
+				)
+			}
+			if (allowPii && canOpenCrm && item.lead) {
 				actions.push(
 					cskh.el('a', {
 						class: 'cskh-btn is-small',
@@ -101,7 +122,7 @@
 					]),
 					cskh.el('td', { text: item.owner || cskh.t('No data') }),
 					cskh.el('td', { text: cskh.formatDate(item.created_at) }),
-					cskh.el('td', {}, actions),
+					cskh.el('td', {}, [cskh.el('div', { class: 'cskh-row-actions' }, actions)]),
 				])
 			)
 		})
@@ -240,6 +261,16 @@
 		pager.goto(pager.page() + 1)
 		load()
 	})
+
+	const initialParams = new URLSearchParams(window.location.search || '')
+	const initialBatch = (initialParams.get('batch') || '').trim()
+	if (initialBatch && document.getElementById('pool-batch')) {
+		document.getElementById('pool-batch').value = initialBatch
+	}
+	const initialState = (initialParams.get('state') || '').trim()
+	if (initialState && document.getElementById('pool-state')) {
+		document.getElementById('pool-state').value = initialState
+	}
 
 	loadCampaigns()
 	load()
