@@ -3,7 +3,7 @@
 - **Nhánh nguồn:** `codex/recruitment-workspace-ui`
 - **Nhánh đích:** `main` (`92e14af3532876ad5bc2468bf0e502474cc95a53`)
 - **Commit chốt mã nguồn & bằng chứng 3 bên:** `11f7605f15a7455670d3d8b27ff2d1bd81d0101a` (trên merge `391b4845be504f7f094a855d1f1aaf56f3d92867`)
-- **Tree SHA `apps/crm_cskh` cuối cùng:** `0248d8954b9a9314e907151f911373d48546e8b6`
+- **Tree SHA `apps/crm_cskh` cuối cùng:** `f51095ec245e103ed3a487654b5580636424ea36` *(AST tương đương 100% với `0248d8954b9a9314e907151f911373d48546e8b6` sau khi chạy `ruff==0.14.0 format`)*
 - **Ánh xạ hạ tầng VPS hiện hành:**
   - **Tên miền công khai (HTTPS Ingress):** `crm.hrpartner.vn` (`https://crm.hrpartner.vn`)
   - **Tên site Frappe nội bộ (`SITE_NAME` / `sites/<site>`):** `crm-staging.localhost`
@@ -36,7 +36,8 @@ feat(ui,i18n,p3): đồng bộ Không gian tuyển dụng 6 bước, chỉ số 
 | 9 | `391b4845be504f7f094a855d1f1aaf56f3d92867` | `T1A` | Merge tích hợp nhánh bằng chứng `8184c8050868da74fc0e30edff0c7dc390c19c2b` (`T1B`) cùng kết quả HTTP CSV `2556090767fe820c29e4f05d1808702bf31ee19d` (`T1C`) |
 | 10 | `11f7605f15a7455670d3d8b27ff2d1bd81d0101a` | `T1A` | Dọn khoảng trắng cuối dòng 2 script kiểm định `T1C` (giữ nguyên từng byte CSV HTTP `92bb90d5be2b...`), cập nhật manifest SHA-256 và hồ sơ bàn giao |
 | 11 | `6d5cb74afe2ca5556f377ab98dda66ebdcd37eb9` | `T1A` | Hiệu chỉnh runbook cập nhật `crm.hrpartner.vn` theo hạ tầng VPS hiện hành (`/opt/crm-cskh-staging/staging-compose`, site `crm-staging.localhost`, kiểm tra xả RQ worker thực tế & phân tách rollback) |
-| 12 | `HEAD` *(commit tài liệu trên `6d5cb74`)* | `T1A` | Hiệu chỉnh đường dẫn cấu hình `/opt/crm-cskh-staging/.env.staging` (giữ quyền `0600`), đối chiếu toàn bộ lệnh với wrapper `staging-compose` và đồng bộ manifest SHA-256 |
+| 12 | `c88af347a4e0d88a13cb695d8352222643f315c9` | `T1A` | Hiệu chỉnh đường dẫn cấu hình `/opt/crm-cskh-staging/.env.staging` (giữ quyền `0600`), đối chiếu toàn bộ lệnh với wrapper `staging-compose` và đồng bộ manifest SHA-256 |
+| 13 | `HEAD` *(trên `c88af34`)* | `T1A` | Chuẩn hóa định dạng `ruff==0.14.0 format` cho `p1_translations.py` & `p3_models.py` (`ast.dump` bất biến 100%) theo cổng lint CI `P0..P3` |
 
 ### 1.3. Đối chiếu phạm vi mã nguồn
 
@@ -102,7 +103,7 @@ Bảng tham chiếu biến dùng xuyên suốt runbook:
 
 ### 2.2. Đóng gói Image bất biến mới trước giờ cắt chuyển
 
-Sau khi `T0` merge PR vào `main` (tạo `<MAIN_MERGE_SHA>`, giữ `apps/crm_cskh` tree `0248d8954b9a9314e907151f911373d48546e8b6`):
+Sau khi `T0` merge PR vào `main` (tạo `<MAIN_MERGE_SHA>`, giữ `apps/crm_cskh` tree `f51095ec245e103ed3a487654b5580636424ea36`):
 
 1. Build image `linux/amd64` theo đúng quy trình `Containerfile` / `build-image.sh`:
    - Thứ tự ứng dụng trong `/home/frappe/frappe-bench/apps-order.txt`: `frappe` (`d2efa79657ba5c1abf96098b3bfacc199517d57e`) → `crm` (`0d3910b456ef4fb913e77b29db011b3debc4f778`) → `crm_cskh` (`<MAIN_MERGE_SHA>`).

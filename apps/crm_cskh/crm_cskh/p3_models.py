@@ -590,7 +590,12 @@ def ensure_p3_seeds() -> None:
 						{"workday": day, "start_time": "13:00:00", "end_time": "17:30:00", "is_overnight": 0}
 					)
 				shifts.append(
-					{"workday": "Saturday", "start_time": "08:00:00", "end_time": "12:00:00", "is_overnight": 0}
+					{
+						"workday": "Saturday",
+						"start_time": "08:00:00",
+						"end_time": "12:00:00",
+						"is_overnight": 0,
+					}
 				)
 				cal_doc = frappe.get_doc(
 					{
