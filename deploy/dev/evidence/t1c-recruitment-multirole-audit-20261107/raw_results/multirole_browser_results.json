@@ -1,0 +1,70 @@
+{
+  "staff": [
+    "Lối vào Không gian tuyển dụng và danh sách Hồ sơ liên hệ (/crm/leads) hiển thị chính xác",
+    "Danh sách hồ sơ được giao (/cskh/my-customers) tải đầy đủ",
+    "Ghi nhận liên hệ kèm lịch hẹn và lưu ý không hiểu nhầm sang đã tuyển/bố trí",
+    "Trang Lịch hẹn liên hệ lại (/cskh/callbacks) hiển thị và hoạt động",
+    "Truy cập hồ sơ ngoài phạm vi phụ trách bị chặn nghiêm ngặt (403 Forbidden Scope)",
+    "Bảng điểm chất lượng cá nhân (/cskh/scorecard) hiển thị đúng nhãn"
+  ],
+  "crm_admin": [
+    "Màn hình Giao dịch CRM (/crm/deals) hiển thị chuẩn \"Giao dịch CRM\" thay cho \"Cơ hội\"",
+    "Chi tiết Hồ sơ liên hệ (/crm/leads/<id>) có nút Mở trong Không gian tuyển dụng",
+    "Danh mục kết quả (/cskh/settings) cập nhật chuẩn \"Hoàn tất mục tiêu liên hệ chiến dịch\""
+  ],
+  "bod": [
+    "BOD Quality Overview (/cskh/quality-overview) hiển thị đầy đủ, drilldown bảo mật Zero PII",
+    "Bảng so sánh chất lượng giữa các đội nhóm (/cskh/team-quality) khớp chỉ số",
+    "Hộp thoại xuất báo cáo CSV (/cskh/quality-overview) với lý do bắt buộc và kiểm soát quyền Zero PII"
+  ],
+  "screenshots": [
+    {
+      "id": "01-staff-crm-leads-to-cskh.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\01-staff-crm-leads-to-cskh.png"
+    },
+    {
+      "id": "02-staff-assigned-candidates-list.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\02-staff-assigned-candidates-list.png"
+    },
+    {
+      "id": "03-staff-record-attempt-and-disclaimer.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\03-staff-record-attempt-and-disclaimer.png"
+    },
+    {
+      "id": "04-staff-callbacks-list.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\04-staff-callbacks-list.png"
+    },
+    {
+      "id": "05-staff-out-of-scope-forbidden.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\05-staff-out-of-scope-forbidden.png"
+    },
+    {
+      "id": "06-staff-personal-scorecard.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\06-staff-personal-scorecard.png"
+    },
+    {
+      "id": "07-admin-crm-deals-native.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\07-admin-crm-deals-native.png"
+    },
+    {
+      "id": "08-admin-crm-lead-detail.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\08-admin-crm-lead-detail.png"
+    },
+    {
+      "id": "09-admin-settings-outcomes.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\09-admin-settings-outcomes.png"
+    },
+    {
+      "id": "10-bod-quality-overview-drilldown.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\10-bod-quality-overview-drilldown.png"
+    },
+    {
+      "id": "11-bod-team-quality-table.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\11-bod-team-quality-table.png"
+    },
+    {
+      "id": "12-bod-csv-export-dialog.png",
+      "path": "C:\\Users\\Admin\\.gemini\\antigravity\\brain\\7221202e-7ced-4391-b1f1-015142938603\\screenshots\\12-bod-csv-export-dialog.png"
+    }
+  ]
+}
