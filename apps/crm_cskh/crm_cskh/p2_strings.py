@@ -74,6 +74,15 @@ P2_CHANNELS_AND_OUTCOMES = (
 	"Replied — callback requested",
 	"Interested",
 	"Not interested",
+	"Đã trao đổi — Cần chăm sóc tiếp",
+	"Đã trao đổi — Quan tâm",
+	"Khách hẹn gọi / liên hệ lại",
+	"Đã trao đổi — Không nhu cầu",
+	"Hoàn tất mục tiêu chiến dịch",
+	"Yêu cầu ngừng liên hệ (DNC)",
+	"Sai số / Không đúng người",
+	"Thuê bao không liên lạc được",
+	"Đã gửi tin nhắn, chưa phản hồi",
 )
 
 P2_QUICK_ATTEMPT_FORM = (

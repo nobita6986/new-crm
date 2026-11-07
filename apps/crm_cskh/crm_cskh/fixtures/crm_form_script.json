@@ -6,7 +6,7 @@
     "view": "List",
     "enabled": 1,
     "is_standard": 1,
-    "script": "function setupList() {\n    return {\n        actions: [{\n            label: __('CSKH'),\n            onClick: () => window.location.assign('/cskh'),\n        }],\n    }\n}"
+    "script": "function setupList() {\n    return {\n        actions: [{\n            label: __('Recruitment workspace'),\n            onClick: () => window.location.assign('/cskh'),\n        }],\n    }\n}"
   },
   {
     "doctype": "CRM Form Script",
@@ -15,6 +15,6 @@
     "view": "Form",
     "enabled": 1,
     "is_standard": 1,
-    "script": "function setupForm({ doc }) {\n    return {\n        actions: [{\n            label: __('Care workspace'),\n            onClick: () => window.location.assign('/cskh/work-item?lead=' + encodeURIComponent((doc && doc.name) || '')),\n        }],\n    }\n}"
+    "script": "class CRMLead {\n    onLoad() {\n        this.actions = [{\n            label: __('Open in Recruitment workspace'),\n            onClick: () => window.location.assign('/cskh/work-item?lead=' + encodeURIComponent((this.doc && this.doc.name) || '')),\n        }]\n    }\n}"
   }
 ]
