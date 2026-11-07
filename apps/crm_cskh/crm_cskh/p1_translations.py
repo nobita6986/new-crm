@@ -18,7 +18,7 @@ TRANSLATIONS = {
 	"Recruitment outreach workflow": "Quy trình tiếp nhận & liên hệ tuyển dụng",
 	"1. Import list -> 2. Contact pool -> 3. Assign & distribute -> 4. Assigned contact records -> 5. Record contact outcome -> 6. Follow-up callbacks.": "1. Nhập danh sách liên hệ → 2. Kho hồ sơ liên hệ → 3. Phân công & chiến dịch → 4. Hồ sơ được giao → 5. Ghi nhận liên hệ → 6. Lịch hẹn liên hệ lại.",
 	"1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.": "1. Tiếp nhận hồ sơ được giao → 2. Liên hệ & ghi nhận kết quả thực tế → 3. Đặt lịch hẹn liên hệ lại đúng hạn.",
-	"Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.": "Lưu ý: Trạng thái \"Đã kết nối\" chỉ xác nhận đã trao đổi hai chiều, chưa đồng nghĩa đã tuyển dụng hay đã bố trí người. Các màn Giao dịch CRM (/crm/deals) là nghiệp vụ giao dịch gốc của CRM, tách biệt với bước liên hệ tại đây.",
+	"Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.": 'Lưu ý: Trạng thái "Đã kết nối" chỉ xác nhận đã trao đổi hai chiều, chưa đồng nghĩa đã tuyển dụng hay đã bố trí người. Các màn Giao dịch CRM (/crm/deals) là nghiệp vụ giao dịch gốc của CRM, tách biệt với bước liên hệ tại đây.',
 	"Daily outreach tasks": "Tác nghiệp liên hệ hằng ngày",
 	"Contact pool, import & assignment management": "Quản lý kho hồ sơ, nhập danh sách & phân công",
 	"SLA, KPI & outreach quality": "Giám sát SLA, KPI & chất lượng liên hệ",
