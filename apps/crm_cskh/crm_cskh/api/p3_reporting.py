@@ -24,7 +24,7 @@ def _return_or_raise_http_disabled(res: dict) -> dict:
 		and getattr(frappe.local, "request", None) is not None
 	):
 		raise P3DisabledError(
-			"Hệ thống báo cáo chất lượng CSKH P3 hiện đang tạm tắt theo cờ cấu hình (p3_reporting_enabled=false)."
+			"Hệ thống báo cáo chất lượng liên hệ & SLA P3 hiện đang tạm tắt theo cờ cấu hình (p3_reporting_enabled=false)."
 		)
 	return res
 
@@ -306,6 +306,6 @@ def get_run_status(run_id: str = ""):
 	if getattr(frappe.local, "request", None) is not None and not report_query.is_p3_reporting_enabled():
 		report_query.resolve_report_actor()
 		raise P3DisabledError(
-			"Hệ thống báo cáo chất lượng CSKH P3 hiện đang tạm tắt theo cờ cấu hình (p3_reporting_enabled=false)."
+			"Hệ thống báo cáo chất lượng liên hệ & SLA P3 hiện đang tạm tắt theo cờ cấu hình (p3_reporting_enabled=false)."
 		)
 	return kpi_runs.get_kpi_run_status(run_id=run_id)

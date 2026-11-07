@@ -39,7 +39,12 @@ from crm_cskh.services.errors import (
 	PolicyConflict,
 	RecomputeInProgress,
 )
-from crm_cskh.services.kpi_calculator import METRIC_VERSION, compute_period_snapshots
+from crm_cskh.services.kpi_calculator import (
+	METRIC_LABELS_VI,
+	METRIC_VERSION,
+	SCORE_COMPONENT_LABELS_VI,
+	compute_period_snapshots,
+)
 from crm_cskh.services.kpi_periods import (
 	PeriodSpec,
 	_parse_iso_date,
@@ -98,18 +103,47 @@ RESTATED_TRIGGER_REASONS = frozenset(
 )
 
 
+def _project_canonical_metric_labels(raw_metrics: dict) -> dict:
+	projected: dict = {}
+	for mcode, mcell in raw_metrics.items():
+		if isinstance(mcell, dict) and mcode in METRIC_LABELS_VI:
+			projected[mcode] = {**mcell, "label_vi": METRIC_LABELS_VI[mcode]}
+		else:
+			projected[mcode] = mcell
+	return projected
+
+
+def _project_canonical_component_labels(raw_components: list) -> list[dict]:
+	projected: list = []
+	for comp in raw_components:
+		if isinstance(comp, dict):
+			ccode = comp.get("component_code")
+			if ccode in SCORE_COMPONENT_LABELS_VI:
+				projected.append({**comp, "label_vi": SCORE_COMPONENT_LABELS_VI[ccode]})
+				continue
+		projected.append(comp)
+	return projected
+
+
 def unpack_snapshot_metrics(raw_metrics_json: str | dict | None) -> tuple[dict, list[dict], dict]:
-	"""Unpack `(metrics, score_components, attempt_breakdown)` from `CSKH KPI Snapshot.metrics_json`."""
+	"""Unpack `(metrics, score_components, attempt_breakdown)` from `CSKH KPI Snapshot.metrics_json`.
+
+	Projects canonical display `label_vi` in memory without mutating persisted snapshot rows.
+	"""
 	if not raw_metrics_json:
 		return {}, [], {}
 	parsed = json.loads(raw_metrics_json) if isinstance(raw_metrics_json, str) else dict(raw_metrics_json)
 	if "metrics" in parsed and isinstance(parsed["metrics"], dict):
 		return (
-			parsed["metrics"],
-			list(parsed.get("score_components") or []),
+			_project_canonical_metric_labels(parsed["metrics"]),
+			_project_canonical_component_labels(list(parsed.get("score_components") or [])),
 			dict(parsed.get("attempt_breakdown") or {}),
 		)
-	return parsed, [], {}
+	return (
+		_project_canonical_metric_labels(parsed) if isinstance(parsed, dict) else parsed,
+		[],
+		{},
+	)
 
 
 def unpack_snapshot_extra(raw_metrics_json: str | dict | None) -> dict:
