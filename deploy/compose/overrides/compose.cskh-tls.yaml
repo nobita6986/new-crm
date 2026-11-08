@@ -1,0 +1,60 @@
+# deploy/compose/overrides/compose.cskh-tls.yaml
+#
+# P4-01 TLS Ingress Hardening Override for Production & Staging.
+# Layered on top of upstream/frappe_docker/overrides/compose.https.yaml:
+#   - Pins proxy image by @sha256 digest (PROXY_IMAGE).
+#   - Restricts published host ports exclusively to ingress HTTP (redirect/ACME)
+#     and HTTPS on INGRESS_BIND_IP (0.0.0.0 for Production; restricted IP/127.0.0.1
+#     by default for Staging per P4.md §5.7).
+#   - Forces Traefik Docker provider to route frontend over COMPOSE_PROJECT_NAME_edge_net.
+#   - Adds internal Traefik ping healthcheck and scopes cert-data volume per environment.
+
+services:
+  frontend:
+    labels:
+      - traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+
+  proxy:
+    image: ${PROXY_IMAGE:?set PROXY_IMAGE to traefik@sha256:digest}
+    pull_policy: ${INFRA_PULL_POLICY:-missing}
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: ${LOG_MAX_SIZE:-20m}
+        max-file: "${LOG_MAX_FILE:-5}"
+    command: !override
+      - --ping=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.underscoreHeadersStrategy=delete
+      - --entrypoints.web.http.redirections.entrypoint.to=websecure
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.underscoreHeadersStrategy=delete
+      - --certificatesResolvers.main-resolver.acme.httpChallenge=true
+      - --certificatesResolvers.main-resolver.acme.httpChallenge.entrypoint=web
+      - --certificatesResolvers.main-resolver.acme.email=${LETSENCRYPT_EMAIL:?No Let's Encrypt email set}
+      - --certificatesResolvers.main-resolver.acme.storage=/letsencrypt/acme.json
+    ports: !override
+      - "${INGRESS_BIND_IP:-0.0.0.0}:${HTTP_PUBLISH_PORT:-80}:80"
+      - "${INGRESS_BIND_IP:-0.0.0.0}:${HTTPS_PUBLISH_PORT:-443}:443"
+    mem_limit: ${PROXY_MEM_LIMIT:-256m}
+    cpus: ${PROXY_CPUS:-0.5}
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      start_period: 10s
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    networks:
+      edge_net:
+        aliases:
+          - ${SITE_NAME:?set SITE_NAME in env}
+
+volumes:
+  cert-data:
+    name: ${COMPOSE_PROJECT_NAME}_cert_data

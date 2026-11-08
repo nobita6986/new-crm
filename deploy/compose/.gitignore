@@ -1,0 +1,10 @@
+# Never commit runtime env files or secrets in deploy/compose/
+.env
+*.env
+!*.env.example
+.secrets/
+secrets/
+*.secret
+*.key
+*.pem
+acme.json
