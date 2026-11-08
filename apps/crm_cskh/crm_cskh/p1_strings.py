@@ -511,8 +511,26 @@ def _load_p2_strings():
 		return mod
 
 
+def _load_p3_strings():
+	try:
+		from crm_cskh import p3_strings as mod
+
+		return mod
+	except ImportError:
+		import importlib.util
+		import os
+
+		path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "p3_strings.py")
+		spec = importlib.util.spec_from_file_location("crm_cskh_p3_strings", path)
+		mod = importlib.util.module_from_spec(spec)
+		spec.loader.exec_module(mod)
+		return mod
+
+
 _p2 = _load_p2_strings()
+_p3 = _load_p3_strings()
 ERROR_EXPLANATIONS.update(_p2.P2_ERROR_EXPLANATIONS)
+ERROR_EXPLANATIONS.update(_p3.P3_ERROR_EXPLANATIONS)
 
 ALL_STRINGS = (
 	SHELL
@@ -529,6 +547,7 @@ ALL_STRINGS = (
 	+ IMPORT_CLASSES
 	+ BACKEND_MESSAGES
 	+ _p2.ALL_P2_STRINGS
+	+ _p3.ALL_P3_STRINGS
 )
 
 

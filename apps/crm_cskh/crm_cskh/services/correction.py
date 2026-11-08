@@ -463,6 +463,15 @@ def request_correction(
 				update_status_when_active=True,
 				extra_updates={"last_activity_by": actor},
 			)
+			from crm_cskh.services import sla_engine
+
+			sla_engine.on_correction_reviewed_in_tx(
+				work_item=wi_val,
+				attempt_id=att_val,
+				action=action_val,
+				reviewed_at=now_dt,
+				actor=actor,
+			)
 			final_status = recomputed["status"]
 			final_rev = recomputed["revision"]
 		else:
@@ -636,6 +645,15 @@ def review_correction(
 				bump_revision=True,
 				update_status_when_active=True,
 				extra_updates={"last_activity_by": actor},
+			)
+			from crm_cskh.services import sla_engine
+
+			sla_engine.on_correction_reviewed_in_tx(
+				work_item=wi_val,
+				attempt_id=corr_doc.attempt,
+				action=corr_doc.action,
+				reviewed_at=now_dt,
+				actor=actor,
 			)
 			final_status = recomputed["status"]
 			final_rev = recomputed["revision"]
