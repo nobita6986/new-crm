@@ -1,0 +1,21 @@
+# BuildKit Dockerfile-specific ignore rules for deploy/images/Containerfile.
+# Deny-by-default: send only crm_cskh source, pinned UI patchers, and runtime resources.
+# Never include .env, secrets, git history, or runtime evidence in image build context.
+*
+
+!apps/
+!apps/crm_cskh/
+!apps/crm_cskh/**
+apps/crm_cskh/**/__pycache__/
+apps/crm_cskh/**/*.pyc
+apps/crm_cskh/**/*.pyo
+apps/crm_cskh/.pytest_cache/
+apps/crm_cskh/.ruff_cache/
+
+!deploy/
+!deploy/dev/
+!deploy/dev/apply-crm-ui-vi-patch.py
+!deploy/dev/apply-frappe-vi-patch.py
+!deploy/images/
+!deploy/images/resources/
+!deploy/images/resources/**
