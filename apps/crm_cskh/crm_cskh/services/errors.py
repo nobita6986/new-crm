@@ -125,6 +125,13 @@ def rollback_savepoint_safely(savepoint: str) -> None:
 	import frappe
 
 	try:
+		local = getattr(frappe, "local", None)
+		if local is not None and hasattr(local, "cskh_pending_dirty_events"):
+			local.cskh_pending_dirty_events = []
+	except Exception:
+		pass
+
+	try:
 		frappe.db.rollback(save_point=savepoint)
 	except Exception:
 		pass

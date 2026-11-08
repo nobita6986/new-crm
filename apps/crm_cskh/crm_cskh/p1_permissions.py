@@ -58,6 +58,8 @@ PERMLEVEL_PROTECTED_FIELDS = {
 	"CSKH SLA Obligation": frozenset(
 		("waive_reason", "policy_snapshot_json", "calendar_snapshot_json", "audit_events_json")
 	),
+	"CSKH KPI Run": frozenset(("reconciliation_json", "checkpoint_json", "error_message")),
+	"CSKH QA Review": frozenset(("internal_note", "scores_json")),
 }
 
 
@@ -480,7 +482,9 @@ def can_read_protected_field(doctype, field, user=None) -> bool:
 	roles = _roles(user)
 	if doctype in ("CSKH Work Item", "CSKH Assignment History", "CRM Task"):
 		return bool({ROLE_ADMIN, "Sales Manager", "Sales User"} & roles)
-	if doctype in ("CSKH Distribution Run", "CSKH Campaign"):
+	if doctype == "CSKH QA Review":
+		return bool({ROLE_ADMIN, "Sales Manager"} & roles)
+	if doctype in ("CSKH Distribution Run", "CSKH Campaign", "CSKH SLA Obligation", "CSKH KPI Run"):
 		return ROLE_ADMIN in roles
 	return False
 
