@@ -395,6 +395,7 @@ def load_period_raw_dataset(
 			"obligations": [],
 			"intervals": [],
 			"qa_reviews": [],
+			"dnc_since_by_lead": {},
 			"campaign_titles": {},
 			"user_labels": {},
 		}

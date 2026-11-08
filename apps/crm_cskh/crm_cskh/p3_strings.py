@@ -72,6 +72,8 @@ P3_SLA_AND_KPI_LABELS = (
 	"Provisional score (QA disabled)",
 	"Insufficient data",
 	"DEV / configurable policy (pending BOD sign-off)",
+	"Export jobs may only be created or updated through the export service.",
+	"Export jobs are audit records and cannot be deleted.",
 )
 
 ALL_P3_STRINGS = P3_ERROR_CODES + tuple(P3_ERROR_EXPLANATIONS.values()) + P3_SLA_AND_KPI_LABELS
