@@ -23,6 +23,7 @@
 	const caps = cskh.capabilities() || {}
 	const isAdmin = !!caps.admin
 	const allowPii = !!caps.pii
+	const canOpenCrm = !!caps.can_open_crm_app
 	const canReadScope = !!(caps.admin || caps.bod || caps.leader)
 
 	const pager = cskh.pager({
@@ -213,7 +214,7 @@
 					})
 				)
 			}
-			if (allowPii && item.lead) {
+			if (allowPii && canOpenCrm && item.lead) {
 				actions.push(
 					cskh.el('a', {
 						class: 'cskh-btn is-small',
@@ -566,7 +567,7 @@
 		box.appendChild(
 			cskh.el('div', { class: 'cskh-grid' }, [
 				metric(cskh.t('Work item'), item.work_item),
-				metric(cskh.t('Customer'), (allowPii && item.display_name) || item.lead),
+				metric(cskh.t('Contact record'), (allowPii && item.display_name) || item.lead),
 				metric(
 					cskh.t('Phone number'),
 					allowPii && item.phone ? cskh.maskPhone(item.phone) : '—'
@@ -588,7 +589,7 @@
 					})
 				)
 			}
-			if (item.lead) {
+			if (canOpenCrm && item.lead) {
 				linkButtons.push(
 					cskh.el('a', {
 						class: 'cskh-btn is-small',
@@ -597,7 +598,9 @@
 					})
 				)
 			}
-			box.appendChild(cskh.el('div', { class: 'cskh-actions' }, linkButtons))
+			if (linkButtons.length) {
+				box.appendChild(cskh.el('div', { class: 'cskh-actions' }, linkButtons))
+			}
 		}
 
 		const events = (history && history.items) || []

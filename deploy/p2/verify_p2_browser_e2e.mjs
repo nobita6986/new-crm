@@ -264,7 +264,7 @@ async function main() {
 			'My Customers upgraded with Vietnamese CSKH columns, chips, masked phones, and quick actions.'
 		)
 		const mineInitialLower = mineInitialText.toLowerCase()
-		assert(mineInitialLower.includes('trạng thái cskh'), 'Missing column Trạng thái CSKH')
+		assert(mineInitialLower.includes('trạng thái liên hệ'), 'Missing column Trạng thái liên hệ')
 		assert(mineInitialLower.includes('lần liên hệ gần nhất'), 'Missing column Lần liên hệ gần nhất')
 		assert(mineInitialLower.includes('kết quả gần nhất'), 'Missing column Kết quả gần nhất')
 		assert(mineInitialLower.includes('số lần liên hệ'), 'Missing column Số lần liên hệ')
@@ -507,7 +507,7 @@ async function main() {
 		staffA.telemetry.apiPosts = []
 
 		const happyRow = staffA.page.locator('#mine-rows tr', { hasText: 'P2 Khách Hạnh Phúc' })
-		await happyRow.locator('a', { hasText: 'Ghi nhận kết quả' }).click()
+		await happyRow.locator('a', { hasText: 'Ghi nhận liên hệ' }).click()
 		await staffA.page.locator('#mine-quick-record-card').waitFor({ state: 'visible', timeout: 10000 })
 
 		await staffA.page.selectOption('#cskh-att-channel', 'phone_call')
@@ -589,7 +589,7 @@ async function main() {
 		)
 		assert(
 			honestyBefore.includes('Ghi chú nội bộ CRM =1+1') &&
-				honestyBefore.includes('Khách hỏi bảng giá') &&
+				honestyBefore.includes('Người liên hệ hỏi mức lương và ca làm việc') &&
 				!honestyBefore.includes('<script>'),
 			'XSS/formula FCRM Note must render safely as inert text in timeline!'
 		)
@@ -1025,7 +1025,7 @@ async function main() {
 			'BOD sees global operational counts separated into Work Items, Effective Attempts, and Callbacks with non-KPI disclaimer and 0 PII.'
 		)
 		assert(
-			bodProgText.includes('không phải điểm chất lượng CSKH hay xếp loại SLA'),
+			bodProgText.includes('không phải điểm chất lượng hay xếp loại SLA'),
 			'Progress page must state non-KPI/non-SLA P2 boundary'
 		)
 		assert(bodProgText.includes('Toàn hệ thống'), 'BOD scope badge must be Toàn hệ thống')
@@ -1043,7 +1043,7 @@ async function main() {
 			'F-P2-05: Progress must explicitly label Contact Attempt counters separately from Work Items'
 		)
 		assert(
-			bodProgText.includes('Số khách hàng ngừng liên hệ (DNC)') &&
+			bodProgText.includes('Số hồ sơ ngừng liên hệ (DNC)') &&
 				!bodProgText.includes('Do-not-contact (DNC) work items') &&
 				!bodProgText.includes('Công việc ngừng liên hệ'),
 			'F-P2-05: dnc_leads must be labeled as DNC customers, NEVER as Work Items'
@@ -1262,7 +1262,7 @@ async function main() {
 			'F-P2-01: [H:<hex>] leaked on closed/reopened Work Item timeline!'
 		)
 		assert(
-			closedMilestoneText.includes('Đóng công việc') || closedMilestoneText.includes('Mở lại công việc'),
+			closedMilestoneText.includes('Đóng đầu việc liên hệ') || closedMilestoneText.includes('Mở lại đầu việc liên hệ'),
 			'Expected close/reopen lifecycle milestone on wi_closed_http timeline'
 		)
 

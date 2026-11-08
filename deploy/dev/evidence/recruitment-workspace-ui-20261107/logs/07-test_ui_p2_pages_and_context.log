@@ -1,0 +1,14 @@
+test_bod_is_denied_on_pii_p2_pages_and_allowed_on_zero_pii_pages (crm_cskh.tests.test_ui_p2_pages_and_context.TestUiP2PagesAndContext.test_bod_is_denied_on_pii_p2_pages_and_allowed_on_zero_pii_pages) ... ok
+test_guest_is_denied_on_all_p2_pages (crm_cskh.tests.test_ui_p2_pages_and_context.TestUiP2PagesAndContext.test_guest_is_denied_on_all_p2_pages) ... ok
+test_lead_form_script_fixture_declares_open_care_workspace (crm_cskh.tests.test_ui_p2_pages_and_context.TestUiP2PagesAndContext.test_lead_form_script_fixture_declares_open_care_workspace) ... ok
+test_leader_and_admin_page_capabilities (crm_cskh.tests.test_ui_p2_pages_and_context.TestUiP2PagesAndContext.test_leader_and_admin_page_capabilities) ... ok
+test_o02_ownership_ui_assignees_respects_per_user_latest_rule_version (crm_cskh.tests.test_ui_p2_pages_and_context.TestUiP2PagesAndContext.test_o02_ownership_ui_assignees_respects_per_user_latest_rule_version) ... ok
+test_p2_error_codes_and_vietnamese_explanations_published_to_browser (crm_cskh.tests.test_ui_p2_pages_and_context.TestUiP2PagesAndContext.test_p2_error_codes_and_vietnamese_explanations_published_to_browser) ... ok
+test_remediation_ui_templates_and_static_contracts_f_p2_01_04a_05 (crm_cskh.tests.test_ui_p2_pages_and_context.TestUiP2PagesAndContext.test_remediation_ui_templates_and_static_contracts_f_p2_01_04a_05) ... ok
+test_staff_page_grants_and_navigation (crm_cskh.tests.test_ui_p2_pages_and_context.TestUiP2PagesAndContext.test_staff_page_grants_and_navigation) ... ok
+test_timezone_context_respects_site_and_user_timezone_with_safe_fallback (crm_cskh.tests.test_ui_p2_pages_and_context.TestUiP2PagesAndContext.test_timezone_context_respects_site_and_user_timezone_with_safe_fallback) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 6.480s
+
+OK

@@ -44,14 +44,14 @@ LEADS = [
     ("A1", "staff.a@dev.local", "New",        "Facebook",      "Mới giao, chưa liên hệ"),
     ("A2", "staff.a@dev.local", "Contacted",  "Website",       "Đã thử gọi, không nghe máy"),
     ("A3", "staff.a@dev.local", "Nurture",    "Cold Calling",  "Hẹn gọi lại"),
-    ("A4", "staff.a@dev.local", "Qualified",  "Reference",     "Có nhu cầu, cần tư vấn"),
+    ("A4", "staff.a@dev.local", "Qualified",  "Reference",     "Quan tâm thông tin việc làm, cần trao đổi thêm"),
     ("B1", "staff.b@dev.local", "New",        "Facebook",      "Mới giao"),
     ("B2", "staff.b@dev.local", "Contacted",  "Advertisement", "Busy"),
     ("B3", "staff.b@dev.local", "Nurture",    "Campaign",      "Hẹn lại tuần sau"),
     ("B4", "staff.b@dev.local", "Unqualified","Walk In",       "Không phù hợp"),
     ("C1", "staff.c@dev.local", "New",        "Website",       "Mới giao"),
     ("C2", "staff.c@dev.local", "Contacted",  "Email",         "Đã gọi, no answer"),
-    ("C3", "staff.c@dev.local", "Converted",  "Reference",     "Đạt mục tiêu"),
+    ("C3", "staff.c@dev.local", "Converted",  "Reference",     "Hoàn tất mục tiêu liên hệ chiến dịch"),
     ("C4", "staff.c@dev.local", "Nurture",    "Mass Mailing",  "Theo dõi tiếp"),
     ("U1", None,                "New",        "Web Form",      "Chưa phân phối"),
     ("U2", None,                "New",        "Facebook",      "Chưa phân phối"),
@@ -145,7 +145,7 @@ def _ensure_lead(code, owner_email, status, source, note, index, phone_only=Fals
         frappe.get_doc({"doctype": "CRM Lost Reason", "lost_reason": lost_reason}).insert(ignore_permissions=True)
 
     if phone_only:
-        first_name = f"Khách chưa rõ tên - {DEMO}{code}"
+        first_name = f"Người liên hệ chưa rõ tên - {DEMO}{code}"
     else:
         first_name = f"{DEMO} {code} (giả lập)"
 

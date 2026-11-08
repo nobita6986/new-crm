@@ -1,0 +1,27 @@
+{
+  "site": "p3-reptest-clean.localhost",
+  "installed_apps": [
+    "frappe",
+    "crm",
+    "crm_cskh"
+  ],
+  "site_config_redacted": {
+    "allow_tests": true,
+    "db_name": "_01e22abfafd29bc6",
+    "db_password": "<REDACTED>",
+    "db_type": "mariadb"
+  },
+  "has_any_p3_flag_override_in_site_config": false,
+  "pre_test_counts": {
+    "CSKH Contact Attempt": 0,
+    "CSKH KPI Snapshot": 0,
+    "CSKH Work Item": 0,
+    "CRM Call Log": 0
+  },
+  "container_file_sha256": {
+    "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py": "20f7a5a028210320ebc4c2b2d1a42f3fd5143895dac40c08e496b57e758a141f",
+    "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/p2_base.py": "1619c318b54a2dff41daae4e57665ebe46e7bc9924e560e859cfb190fd39a319",
+    "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/services/call_log_adapter.py": "c46ea19a214e076775b159ffd1ec2a7e3a79004fe66ae5ad5d3ecaf888554791",
+    "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/services/kpi_calculator.py": "97347a3e61cd1bec56bbf5fd689261d5ed90d24c5ef719878942a08add687c1d"
+  }
+}

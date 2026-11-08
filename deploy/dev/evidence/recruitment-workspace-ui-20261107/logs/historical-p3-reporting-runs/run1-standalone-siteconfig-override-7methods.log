@@ -1,0 +1,62 @@
+=== RUNNING crm_cskh.tests.test_ui_p1_endpoints ===
+.....
+test_l27_l29_leader_and_bod_ui_flows_under_strict_doctype_and_permlevel_rules (crm_cskh.tests.test_ui_p1_endpoints.TestUiP1Endpoints.test_l27_l29_leader_and_bod_ui_flows_under_strict_doctype_and_permlevel_rules)
+Verify Leader & BOD UI endpoints work cleanly alongside L-23/L-26/L-29 DocType & permlevel lockdown. (3.03s)
+.......
+----------------------------------------------------------------------
+Ran 12 tests in 12.258s
+
+OK
+=== RUNNING crm_cskh.tests.test_ui_p2_pages_and_context ===
+.........
+----------------------------------------------------------------------
+Ran 9 tests in 7.367s
+
+OK
+=== RUNNING crm_cskh.tests.test_ui_p3_pages_and_context ===
+.......
+----------------------------------------------------------------------
+Ran 7 tests in 2.909s
+
+OK
+=== RUNNING crm_cskh.tests.test_p2_outcomes_policy ===
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 5.872s
+
+OK
+=== RUNNING crm_cskh.tests.test_p3_reporting_and_security ===
+F
+test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_drilldown_reconciliation_across_eleven_kpis_and_nulls_last_sorting)
+`P3-07/08`: Drill-down `all_denominator` & `numerator_only` totals match snapshot `100%` across 11 KPIs + `NULLS LAST`. (3.12s)
+.E..
+test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_three_stage_export_file_lock_revocation_ttl_and_csv_sanitization_s11_s12_s16_s18)
+`S11`, `S12`, `S16`, `S18`: 3-stage export auth, `File.owner='Administrator'`, live revocation, `410` TTL, CSV escaping. (2.38s)
+.
+test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_transferred_lead_and_staff_transfer_privacy_redaction_s03_s15)
+`S03`, `S15`: Historical KPI credit stays, but transferred Lead PII & post-transfer Team B activity are isolated. (3.15s)
+.
+======================================================================
+ERROR: test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled)
+`P3-09`: Disabling `p3_reporting_enabled` & `p3_sla_enabled` degrades cleanly with `0` P1/P2 impact.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py", line 902, in test_feature_flag_rollback_p3_sla_and_p3_reporting_disabled
+    self.assertFalse(ov["reporting_enabled"])
+                     ~~^^^^^^^^^^^^^^^^^^^^^
+KeyError: 'reporting_enabled'
+
+======================================================================
+FAIL: test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10)
+`S08`, `S09`, `S10`: BOD Viewer gets company aggregates without `System Manager` and `0` customer PII.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/tests/test_p3_reporting_and_security.py", line 249, in test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10
+    self.assertGreaterEqual(overview["attempt_breakdown"]["verified"], 1)
+AssertionError: 0 not greater than or equal to 1
+
+----------------------------------------------------------------------
+Ran 7 tests in 16.840s
+
+FAILED (failures=1, errors=1)
+=== SEEDING RECRUITMENT + P3 SAMPLE DATA ===

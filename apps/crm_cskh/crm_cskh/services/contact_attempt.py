@@ -162,7 +162,7 @@ def _close_work_item_in_tx(
 	"""Close an active `CSKH Work Item` atomically inside an existing transaction/savepoint."""
 	work_item_val = locked["name"]
 	old_owner = locked["assigned_to"]
-	priv_reason = (clean_reason or "").strip() or "Hoàn tất mục tiêu chăm sóc"
+	priv_reason = (clean_reason or "").strip() or "Hoàn tất mục tiêu liên hệ chiến dịch"
 	pub_reason = (public_reason or "").strip() or ownership.public_history_reason("close")
 
 	prev_sys_cancel = getattr(frappe.flags, "cskh_system_cancel_followup", False)

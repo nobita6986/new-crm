@@ -184,7 +184,7 @@ window.cskhP3Api = (function () {
 			drillable: true,
 		},
 		CONNECTED_ITEMS: {
-			label: 'Connected work items',
+			label: 'Distinct two-way connected records',
 			pillar: 'connection',
 			unit: 'count',
 			grain: 'distinct_work_item',
@@ -372,10 +372,16 @@ window.cskhP3Api = (function () {
 	METRIC_CATALOG_DEFAULTS.sla_waiver_count = METRIC_CATALOG_DEFAULTS.SLA_WAIVER_COUNT
 	METRIC_CATALOG_DEFAULTS.first_attempt_latency_business_minutes =
 		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES
-	METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_P50_MINUTES =
-		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES
-	METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_P90_MINUTES =
-		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES
+	METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_P50_MINUTES = Object.assign(
+		{},
+		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES,
+		{ label: 'First-touch latency (business minutes, p50)' }
+	)
+	METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_P90_MINUTES = Object.assign(
+		{},
+		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_BUSINESS_MINUTES,
+		{ label: 'First-touch latency (business minutes, p90)' }
+	)
 	METRIC_CATALOG_DEFAULTS.first_attempt_latency_wall_minutes =
 		METRIC_CATALOG_DEFAULTS.FIRST_ATTEMPT_LATENCY_WALL_MINUTES
 

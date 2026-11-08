@@ -31,15 +31,21 @@ Các kênh chuẩn trong P2: `phone_call`, `sms`, `zalo`, `facebook`, `other`.
 | 3 | `unreachable` | Thuê bao không liên lạc được | `unreached` | 1 | **0** | 0 | 0 | 0 | 0 | 0 | 1 | 0 | `phone_call,sms,zalo,facebook,other` | `in_progress` |
 | 4 | `message_sent_no_reply` | Đã gửi tin nhắn, chưa phản hồi | `unreached` | 1 | **0** | 0 | 0 | 0 | 0 | 0 | 1 | 0 | `sms,zalo,facebook,other` | `in_progress` |
 | 5 | `wrong_number` | Sai số / Không đúng người | `invalid_contact` | 1 | **0** | 0 | 1 | 0 | 1 | 0 | 0 | 1 | `phone_call,sms,zalo,other` | `closed` |
-| 6 | `connected_needs_followup` | Đã trao đổi — Cần chăm sóc tiếp | `engaged` | 1 | **1** | 0 | 0 | 0 | 1 | 1 | 1 | 0 | `phone_call,sms,zalo,facebook,other` | `on_hold` |
-| 7 | `connected_interested` | Đã trao đổi — Quan tâm | `positive` | 1 | **1** | 1 | 0 | 0 | 1 | 0 | 1 | 0 | `phone_call,sms,zalo,facebook,other` | `in_progress` |
-| 8 | `callback_requested` | Khách hẹn gọi / liên hệ lại | `engaged` | 1 | **1** | 0 | 0 | 0 | 0 | 1 | 1 | 0 | `phone_call,sms,zalo,facebook,other` | `on_hold` |
+| 6 | `connected_needs_followup` | Đã trao đổi — Cần liên hệ tiếp | `engaged` | 1 | **1** | 0 | 0 | 0 | 1 | 1 | 1 | 0 | `phone_call,sms,zalo,facebook,other` | `on_hold` |
+| 7 | `connected_interested` | Đã trao đổi — Có quan tâm | `positive` | 1 | **1** | 1 | 0 | 0 | 1 | 0 | 1 | 0 | `phone_call,sms,zalo,facebook,other` | `in_progress` |
+| 8 | `callback_requested` | Đã hẹn gọi / liên hệ lại | `engaged` | 1 | **1** | 0 | 0 | 0 | 0 | 1 | 1 | 0 | `phone_call,sms,zalo,facebook,other` | `on_hold` |
 | 9 | `connected_not_interested` | Đã trao đổi — Không nhu cầu | `negative` | 1 | **1** | 0 | 1 | 0 | 0 | 0 | 0 | 0 | `phone_call,sms,zalo,facebook,other` | `closed` |
 | 10 | `converted` | Hoàn tất mục tiêu chiến dịch | `converted` | 1 | **1** | 1 | 1 | 0 | 1 | 0 | 0 | 0 | `phone_call,sms,zalo,facebook,other` | `closed` |
 | 11 | `do_not_contact` | Yêu cầu ngừng liên hệ (DNC) | `compliance` | 1 | **1** | 0 | 1 | **1** | 1 | 0 | 0 | 1 | `phone_call,sms,zalo,facebook,other` | `closed` |
 | 12 | `other` | Khác (ghi rõ nội dung) | `other` | 1 | **0** | 0 | 0 | 0 | 1 | 0 | 1 | 0 | `phone_call,sms,zalo,facebook,other` | `in_progress` |
 
 *(Ghi chú cột: `attempt` = `is_contact_attempt`, `connected` = `is_connected`, `interested` = `is_interested`, `terminal` = `is_terminal`, `dnc` = `is_do_not_contact`, `req_note` = `requires_note`, `req_followup` = `requires_followup`, `allow_followup` = `allows_followup`, `req_close_reason` = `requires_completion_reason`).*
+
+> **Ranh giới ngữ nghĩa trong nghiệp vụ tuyển dụng & cung ứng nhân lực (`docs/recruitment-staffing-domain-alignment.md`):**
+> - **Đã liên hệ / kết nối (`is_connected = 1`)** chỉ xác nhận đã trao đổi hai chiều với người liên hệ (khác hẳn `no_answer`, `busy`, `unreachable`, `message_sent_no_reply` có `is_connected = 0`).
+> - **Có quan tâm (`connected_interested`, `is_interested = 1`)** chỉ xác nhận người liên hệ phản hồi tích cực về thông tin việc làm / nhân lực.
+> - **Đã hẹn lại (`callback_requested` / `connected_needs_followup`, `suggested_next_status = on_hold`)** xác nhận cần liên hệ tiếp theo khung giờ đã hẹn.
+> - **Hoàn tất mục tiêu chiến dịch (`converted`, `is_conversion = 1`)** chỉ xác nhận hoàn tất tiêu chí đầu ra của chiến dịch liên hệ (ví dụ đồng ý nộp hồ sơ hoặc chốt lịch phỏng vấn). **Không một mã kết quả liên hệ nào tự động xác nhận ứng viên đã được tuyển, bố trí hoặc nhận việc.**
 
 ---
 

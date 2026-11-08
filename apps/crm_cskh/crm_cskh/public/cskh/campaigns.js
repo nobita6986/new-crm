@@ -1145,6 +1145,18 @@
 			})
 			actionButtons.push(retryBtn)
 		}
+		if (
+			normStatus === 'completed' ||
+			normStatus === 'completed_with_errors'
+		) {
+			actionButtons.push(
+				cskh.el('a', {
+					class: 'cskh-btn is-primary is-small',
+					href: '/cskh/my-customers',
+					text: cskh.t('Open assigned records'),
+				})
+			)
+		}
 		if (actionButtons.length) {
 			container.appendChild(
 				cskh.el('div', { class: 'cskh-actions', style: 'margin-top: 10px;' }, actionButtons)
