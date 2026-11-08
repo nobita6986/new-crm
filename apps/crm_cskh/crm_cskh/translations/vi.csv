@@ -117,6 +117,7 @@ Deal value,Giá trị giao dịch CRM
 Deals by salesperson,Giao dịch CRM theo nhân viên phụ trách
 Number of deals and total value per salesperson,Số lượng và tổng giá trị giao dịch CRM theo nhân viên
 Salesperson,Nhân viên phụ trách
+Sales User,Người tuyển dụng
 Leads,Hồ sơ liên hệ
 leads,Hồ sơ liên hệ
 deals,Giao dịch CRM
@@ -158,7 +159,7 @@ Timed Out,Hết thời gian
 Importing {0},Đang nhập {0}
 Tasks,Nhiệm vụ
 Contacts,Liên hệ
-Organizations,Các tổ chức
+Organizations,Các dự án
 Notes,Ghi chú
 You have unseen notifications,Bạn có thông báo chưa đọc
 My Settings,Cài đặt cá nhân
