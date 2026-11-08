@@ -1,0 +1,5 @@
+g007-per-method-gate: PASS
+  expected_total : 19
+  observed_total : 19
+  passing_total  : 19
+  PASS    : 19

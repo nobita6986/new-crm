@@ -2,8 +2,18 @@
 
 {% block cskh_title %}{{ _("Customer pool") }}{% endblock %}
 {% block cskh_subtitle %}{{ _("Leads in your scope, with the derived distribution state.") }}{% endblock %}
+{% block cskh_actions %}
+{% if (cskh_capabilities or {}).get("admin") %}
+<a class="cskh-btn is-small" href="/cskh/import">{{ _("Import list") }}</a>
+<a class="cskh-btn is-small is-primary" href="/cskh/campaigns">{{ _("Campaigns and rules") }}</a>
+{% endif %}
+{% endblock %}
 
 {% block cskh_body %}
+<div class="cskh-banner-notice">
+	{{ _("Contact records here correspond directly to CRM Leads along with their campaign distribution status. Use Import list to load new contact files and Campaigns and rules to assign records to staff.") }}
+</div>
+
 <div class="cskh-card">
 	<div class="cskh-actions">
 		<label class="cskh-field">
@@ -55,14 +65,14 @@
 	<table id="pool-table" class="cskh-table" hidden>
 		<thead>
 			<tr>
-				<th>{{ _("Customer") }}</th>
+				<th>{{ _("Contact record") }}</th>
 				<th>{{ _("Phone number") }}</th>
 				<th>{{ _("Source") }}</th>
 				<th>{{ _("Campaign") }}</th>
 				<th>{{ _("Distribution state") }}</th>
 				<th>{{ _("Owner") }}</th>
 				<th>{{ _("Created at") }}</th>
-				<th></th>
+				<th>{{ _("Actions") }}</th>
 			</tr>
 		</thead>
 		<tbody id="pool-rows"></tbody>

@@ -14,6 +14,16 @@ import frappe
 # --- Shared shell ------------------------------------------------------------
 SHELL = (
 	"CSKH",
+	"Recruitment workspace",
+	"Open in Recruitment workspace",
+	"Manage contact records, assignments, follow-up schedules, and recruitment team performance.",
+	"Recruitment outreach workflow",
+	"1. Import list -> 2. Contact pool -> 3. Assign & distribute -> 4. Assigned contact records -> 5. Record contact outcome -> 6. Follow-up callbacks.",
+	"1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.",
+	"Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.",
+	"Daily outreach tasks",
+	"Contact pool, import & assignment management",
+	"SLA, KPI & outreach quality",
 	"Customer pool",
 	"Import list",
 	"Campaigns and rules",
@@ -25,6 +35,7 @@ SHELL = (
 	"Request denied",
 	"Session verified for",
 	"Return to CRM Leads",
+	"Open CRM Deals",
 	"Loading...",
 	"Refresh",
 	"Apply filters",
@@ -225,6 +236,8 @@ POOL = (
 	"Data error",
 	"Campaign",
 	"Customer",
+	"Contact record",
+	"Contact records here correspond directly to CRM Leads along with their campaign distribution status. Use Import list to load new contact files and Campaigns and rules to assign records to staff.",
 	"Phone number",
 	"Source",
 	"Owner",
@@ -240,6 +253,7 @@ POOL = (
 
 # --- Import ------------------------------------------------------------------
 IMPORT = (
+	"Uploaded files stay private, normalize Vietnamese mobile numbers, and check duplicates against existing CRM Lead contact records before creating new pool entries.",
 	"1. Upload a private file",
 	"2. Preview and confirm",
 	"3. Follow the progress",
@@ -272,11 +286,15 @@ IMPORT = (
 	"The file must be CSV or XLSX.",
 	"The upload failed.",
 	"Preview is ready. Review the numbers before confirming.",
+	"Open batch in contact pool",
+	"Continue to assignment",
 )
 
 # --- Campaigns and rules -----------------------------------------------------
 CAMPAIGNS = (
 	"Campaigns",
+	"Assignment step: 1. Create or select an Active campaign -> 2. Configure eligible staff and weights -> 3. Preview distribution, then Confirm distribution to hand over contact records.",
+	"Open assigned records",
 	"Assignment rules",
 	"Distribution",
 	"Distribution runs",

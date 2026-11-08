@@ -1,0 +1,8 @@
+
+test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10 (crm_cskh.tests.test_p3_reporting_and_security.TestP3ReportingAndSecurity.test_bod_viewer_aggregate_access_and_zero_pii_s08_s09_s10)
+`S08`, `S09`, `S10`: BOD Viewer gets company aggregates without `System Manager` and `0` customer PII. (2.98s)
+.
+----------------------------------------------------------------------
+Ran 1 test in 4.455s
+
+OK
