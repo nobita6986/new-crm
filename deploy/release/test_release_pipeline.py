@@ -615,7 +615,23 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         self.pub_file.write_bytes(self.pub_pem)
 
         evidence_dir = REPO_ROOT / "deploy" / "images" / "evidence"
-        self.build_manifest_path = evidence_dir / "build-manifest.json"
+        lock_obj = json.loads(DEFAULT_LOCK_PATH.read_text(encoding="utf-8"))
+        build_manifest_obj = json.loads(
+            (evidence_dir / "build-manifest.json").read_text(encoding="utf-8")
+        )
+        build_manifest_obj["apps"]["crm_cskh"]["baseline_main_sha"] = lock_obj[
+            "baseline_main_sha"
+        ]
+        build_manifest_obj["apps"]["crm_cskh"]["apps_tree_sha"] = lock_obj[
+            "apps_tree_sha"
+        ]
+        build_manifest_obj["apps"]["crm_cskh"]["crm_cskh_tree_sha"] = lock_obj[
+            "crm_cskh_tree_sha"
+        ]
+        self.build_manifest_path = self.tmp / "build-manifest.json"
+        self.build_manifest_path.write_text(
+            json.dumps(build_manifest_obj, indent=2) + "\n", encoding="utf-8"
+        )
 
         inspect_obj = json.loads(
             (evidence_dir / "image-inspect-summary.json").read_text(encoding="utf-8")
