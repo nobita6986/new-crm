@@ -72,15 +72,32 @@ services:
     <<: *app_common
     entrypoint: ["bash", "-c"]
     command:
-      - >
-        ls -1 apps > sites/apps.txt;
-        bench set-config -g db_host "$$DB_HOST";
-        bench set-config -gp db_port "$$DB_PORT";
-        bench set-config -g redis_cache "redis://$$REDIS_CACHE";
-        bench set-config -g redis_queue "redis://$$REDIS_QUEUE";
-        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE";
-        bench set-config -gp socketio_port "$$SOCKETIO_PORT";
-        bench set-config -g chromium_path /usr/lib/chromium/chromium-headless-shell;
+      - |
+        set -eu
+        if [ ! -s /home/frappe/frappe-bench/apps-order.txt ]; then
+          echo "[configurator] FATAL: missing /home/frappe/frappe-bench/apps-order.txt" >&2
+          exit 1
+        fi
+        expected_order=$$(printf 'frappe\ncrm\ncrm_cskh')
+        image_order=$$(tr -d '\r' < /home/frappe/frappe-bench/apps-order.txt | awk 'NF')
+        if [ "$$image_order" != "$$expected_order" ]; then
+          echo "[configurator] FATAL: unexpected apps-order.txt order: $$image_order" >&2
+          exit 1
+        fi
+        mkdir -p sites
+        printf '%s\n' "$$image_order" > sites/apps.txt
+        written_order=$$(tr -d '\r' < sites/apps.txt | awk 'NF')
+        if [ "$$written_order" != "$$expected_order" ]; then
+          echo "[configurator] FATAL: sites/apps.txt verification failed: $$written_order" >&2
+          exit 1
+        fi
+        bench set-config -g db_host "$$DB_HOST"
+        bench set-config -gp db_port "$$DB_PORT"
+        bench set-config -g redis_cache "redis://$$REDIS_CACHE"
+        bench set-config -g redis_queue "redis://$$REDIS_QUEUE"
+        bench set-config -g redis_socketio "redis://$$REDIS_QUEUE"
+        bench set-config -gp socketio_port "$$SOCKETIO_PORT"
+        bench set-config -g chromium_path /usr/lib/chromium/chromium-headless-shell
     environment:
       DB_HOST: db
       DB_PORT: "3306"

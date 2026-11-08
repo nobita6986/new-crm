@@ -1,0 +1,873 @@
+name: P4-02 isolated CI, SBOM, scan & digest promotion
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main, 'codex/p4-*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p4-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  source-and-static-gate:
+    name: PR isolation, locks, lint & static contracts
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Create isolated tooling virtualenv
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p4-static-evidence"
+          python3 -m venv "$RUNNER_TEMP/p4-venv"
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir \
+            ruff==0.14.0 \
+            cryptography==44.0.2
+
+      - name: Audit workflow isolation, PR zero-secret boundary & release locks
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/verify_pr_isolation.py \
+            --check-workflows \
+            --check-runtime-env \
+            --check-locks \
+            --out "$RUNNER_TEMP/p4-static-evidence/pr-isolation-audit.json"
+
+      - name: Lint and format check Python & POSIX/Bash entrypoints
+        shell: bash
+        run: |
+          set -euo pipefail
+          RUFF="$RUNNER_TEMP/p4-venv/bin/ruff"
+          "$RUFF" check \
+            apps/crm_cskh \
+            deploy/images/verify_clean_site.py \
+            deploy/compose/scripts \
+            deploy/release
+          "$RUFF" format --check \
+            apps/crm_cskh \
+            deploy/images/verify_clean_site.py \
+            deploy/release
+          sh -n deploy/release/validate_digest_uri.sh
+          bash -n \
+            deploy/images/build-image.sh \
+            deploy/images/resources/main-entrypoint.sh \
+            deploy/images/resources/nginx-entrypoint.sh \
+            deploy/images/resources/start.sh \
+            deploy/release/validate_digest_uri.sh \
+            deploy/release/deploy_staging_by_digest.sh \
+            deploy/dev/bootstrap.sh
+          git diff --check
+
+      - name: Verify P0-P3 test inventories, T1C golden SHA-256 & Vietnamese translations
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 deploy/dev/seed/p1_test_inventory.py --check deploy/dev/seed/p1_test_inventory.json
+          python3 deploy/dev/seed/p2_test_inventory.py --check deploy/dev/seed/p2_test_inventory.json
+          python3 deploy/dev/seed/p3_test_inventory.py --check deploy/dev/seed/p3_test_inventory.json
+          python3 deploy/p3/ui_test_inventory.py --check deploy/p3/ui_test_inventory.json
+          node deploy/p3/test_p3_ui_timezone_and_contracts.mjs
+          python3 deploy/p1/check_translations_audit.py
+          python3 - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          g007 = json.loads(Path("deploy/dev/seed/g007_test_inventory.json").read_text(encoding="utf-8"))
+          p1 = json.loads(Path("deploy/dev/seed/p1_test_inventory.json").read_text(encoding="utf-8"))
+          p2 = json.loads(Path("deploy/dev/seed/p2_test_inventory.json").read_text(encoding="utf-8"))
+          p3 = json.loads(Path("deploy/dev/seed/p3_test_inventory.json").read_text(encoding="utf-8"))
+          p3_ui = json.loads(Path("deploy/p3/ui_test_inventory.json").read_text(encoding="utf-8"))
+          assert g007["expected_total"] == 99
+          assert p1["expected_total"] == 209
+          assert p2["expected_total"] == 38
+          assert p3["expected_total"] >= 31
+          assert p3_ui["expected_total"] == 7
+          t1c_bytes = Path(
+              "apps/crm_cskh/crm_cskh/tests/fixtures/t1c_p3_golden_dataset_expected.json"
+          ).read_bytes()
+          assert (
+              hashlib.sha256(t1c_bytes).hexdigest()
+              == "deb6be25a55a44deee4dcd21f9ee4fdada2ed38dfd2b14800c8cc1d375c49bdf"
+          )
+          PY
+
+      - name: Run Compose validator & release pipeline unit tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/compose/scripts/validate_compose_config.py \
+            > "$RUNNER_TEMP/p4-static-evidence/compose-validation.json"
+          "$RUNNER_TEMP/p4-venv/bin/python" -m unittest discover \
+            -s deploy/compose/scripts -p "test_*.py" -v
+          "$RUNNER_TEMP/p4-venv/bin/python" -m unittest discover \
+            -s deploy/release -p "test_*.py" -v
+          (
+            cd "$RUNNER_TEMP/p4-static-evidence"
+            sha256sum *.json > SHA256SUMS.txt
+          )
+
+      - name: Upload static audit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-static-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-static-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  clean-build-lock-reproducibility:
+    name: Two clean builds (--no-cache) Python constraint & hash proof (REL-03)
+    needs: [source-and-static-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/.ghcup || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Execute Clean Build #1 (--no-cache), purge BuildKit cache, execute Clean Build #2 (--no-cache)
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROOF_DIR="$RUNNER_TEMP/p4-lock-reproducibility"
+          mkdir -p "$PROOF_DIR/build-1" "$PROOF_DIR/build-2"
+          ACTUAL_HEAD_SHA="$(git rev-parse HEAD)"
+
+          # Clean Build #1 from zero layer cache
+          LOCAL_IMAGE_REPO="cskh-repro-check" \
+          REGISTRY_PUSH=false \
+          bash deploy/images/build-image.sh \
+            --no-cache \
+            --out-dir "$PROOF_DIR/build-1" \
+            --tag "clean-1-${ACTUAL_HEAD_SHA::12}"
+
+          IMG_1="$(jq -r '.local_image_id' "$PROOF_DIR/build-1/image-inspect-summary.json")"
+          docker rmi -f "cskh-repro-check:clean-1-${ACTUAL_HEAD_SHA::12}" "${IMG_1}" >/dev/null 2>&1 || true
+          docker builder prune -af >/dev/null 2>&1 || true
+
+          # Clean Build #2 from zero layer cache after complete BuildKit prune
+          LOCAL_IMAGE_REPO="cskh-repro-check" \
+          REGISTRY_PUSH=false \
+          bash deploy/images/build-image.sh \
+            --no-cache \
+            --out-dir "$PROOF_DIR/build-2" \
+            --tag "clean-2-${ACTUAL_HEAD_SHA::12}"
+
+          IMG_2="$(jq -r '.local_image_id' "$PROOF_DIR/build-2/image-inspect-summary.json")"
+          docker rmi -f "cskh-repro-check:clean-2-${ACTUAL_HEAD_SHA::12}" "${IMG_2}" >/dev/null 2>&1 || true
+
+      - name: Verify constraint enforcement across every install step & identical catalog SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROOF_DIR="$RUNNER_TEMP/p4-lock-reproducibility"
+          python3 - "$PROOF_DIR" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          proof_dir = Path(sys.argv[1])
+          b1 = proof_dir / "build-1"
+          b2 = proof_dir / "build-2"
+          lock = json.loads(Path("deploy/images/release-lock.json").read_text(encoding="utf-8"))
+
+          def sha256_file(p: Path) -> str:
+              return hashlib.sha256(p.read_bytes()).hexdigest()
+
+          # 1. Verify both clean build logs prove constraints were verified & enforced at every pip/uv step
+          required_log_markers = [
+              "/tmp/system-python-constraints.txt: OK",
+              "/tmp/cskh-build/python-constraints.txt: OK",
+              "PIP_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
+              "UV_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
+              "UV_BUILD_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
+              "--no-build-isolation -c /tmp/cskh-build/python-constraints.txt -e ./apps/crm_cskh",
+          ]
+          log_checks = {}
+          for label, bdir in (("clean_build_1", b1), ("clean_build_2", b2)):
+              log_txt = (bdir / "build.log").read_text(encoding="utf-8", errors="replace")
+              missing = [m for m in required_log_markers if m not in log_txt]
+              if missing:
+                  raise SystemExit(f"FATAL: {label} build.log missing constraint markers: {missing}")
+              log_checks[label] = {
+                  "verified_markers": required_log_markers,
+                  "all_present": True,
+              }
+
+          # 2. Assert bit-for-bit identical package catalog hashes across Clean Build #1 and Clean Build #2
+          compared_catalogs = [
+              "pip-freeze.txt",
+              "pip-freeze-all.txt",
+              "system-pip-freeze.txt",
+              "python-constraints.txt",
+              "system-python-constraints.txt",
+              "yarn-locks.sha256",
+              "crm-cskh-files.sha256",
+          ]
+          catalog_hashes = {}
+          for fname in compared_catalogs:
+              h1 = sha256_file(b1 / fname)
+              h2 = sha256_file(b2 / fname)
+              if h1 != h2:
+                  raise SystemExit(f"FATAL: Catalog hash drift on {fname}: build1={h1} != build2={h2}")
+              catalog_hashes[fname] = {
+                  "clean_build_1_sha256": h1,
+                  "clean_build_2_sha256": h2,
+                  "identical": True,
+                  "line_count": len(
+                      [ln for ln in (b1 / fname).read_text(encoding="utf-8").splitlines() if ln.strip()]
+                  ),
+              }
+
+          # 3. Verify every PyPI `==` package in pip-freeze-all.txt is pinned identically in python-constraints.txt
+          def parse_pins(p: Path) -> dict[str, str]:
+              out = {}
+              for raw in p.read_text(encoding="utf-8").splitlines():
+                  ln = raw.strip()
+                  if not ln or ln.startswith("#") or " @ " in ln or ln.startswith("-e "):
+                      continue
+                  if "==" in ln:
+                      k, v = ln.split("==", 1)
+                      out[k.strip().lower().replace("_", "-")] = v.strip()
+              return out
+
+          bench_constraints = parse_pins(b1 / "python-constraints.txt")
+          bench_installed = parse_pins(b1 / "pip-freeze-all.txt")
+          unconstrained_bench = {
+              pkg: ver
+              for pkg, ver in bench_installed.items()
+              if pkg != "crm-cskh" and bench_constraints.get(pkg) != ver
+          }
+          if unconstrained_bench:
+              raise SystemExit(
+                  f"FATAL: Unconstrained or mismatched bench virtualenv packages: {unconstrained_bench}"
+              )
+
+          sys_constraints = parse_pins(b1 / "system-python-constraints.txt")
+          sys_installed = parse_pins(b1 / "system-pip-freeze.txt")
+          expected_uv = lock["security_patches"]["uv_version"]
+          unconstrained_sys = {
+              pkg: ver
+              for pkg, ver in sys_installed.items()
+              if not (pkg == "uv" and ver == expected_uv) and sys_constraints.get(pkg) != ver
+          }
+          if unconstrained_sys:
+              raise SystemExit(
+                  f"FATAL: Unconstrained or mismatched base system Python packages: {unconstrained_sys}"
+              )
+
+          assert (
+              catalog_hashes["python-constraints.txt"]["clean_build_1_sha256"]
+              == lock["python_constraints"]["bench_constraints_sha256"]
+          )
+          assert (
+              catalog_hashes["system-python-constraints.txt"]["clean_build_1_sha256"]
+              == lock["python_constraints"]["system_constraints_sha256"]
+          )
+
+          report = {
+              "schema_version": "cskh-p4-python-lock-reproducibility-v1",
+              "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+              "git_commit_sha": (b1 / "build-manifest.json")
+              and json.loads((b1 / "build-manifest.json").read_text(encoding="utf-8"))["apps"]["crm_cskh"][
+                  "source_commit_sha"
+              ],
+              "status": "PASS",
+              "clean_builds_compared": 2,
+              "buildkit_cache_purged_between_builds": True,
+              "log_constraint_enforcement": log_checks,
+              "catalog_hashes": catalog_hashes,
+              "bench_virtualenv_pypi_packages_verified": len(bench_installed),
+              "system_base_pypi_packages_verified": len(sys_installed),
+              "uv_patched_version": sys_installed.get("uv"),
+          }
+          (proof_dir / "python-lock-reproducibility.json").write_text(
+              json.dumps(report, indent=2) + "\n", encoding="utf-8"
+          )
+
+          sums = []
+          for path in sorted(proof_dir.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = sha256_file(path)
+              sums.append(f"{digest}  {path.relative_to(proof_dir).as_posix()}")
+          (proof_dir / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          print(json.dumps(report, indent=2))
+          PY
+
+      - name: Upload two-clean-build lock reproducibility proof (REL-03)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-lock-reproducibility-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-lock-reproducibility/
+          if-no-files-found: warn
+          retention-days: 14
+
+  isolated-build-sbom-scan-and-digest-promotion:
+    name: Build-once, SBOM, strict/PR scan & same-digest promotion (loopback OCI)
+    needs: [source-and-static-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    env:
+      LOOPBACK_REGISTRY_ADDR: 127.0.0.1:15000
+      LOOPBACK_REGISTRY_REPO: 127.0.0.1:15000/cskh/crm-cskh
+      LOOPBACK_REGISTRY_IMAGE: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+      TRIVY_IMAGE: aquasec/trivy:0.58.2@sha256:665030f4d33a82c1e8d9d5e0453365842236723c1ee5cc3becca698268e66a56
+
+    steps:
+      - name: Reclaim unused runner SDK space for 5.2 GB image build & smoke stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/.ghcup || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Initialize evidence workspace & signing virtualenv
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p \
+            "$RUNNER_TEMP/p4-ci-evidence/build" \
+            "$RUNNER_TEMP/p4-ci-evidence/sbom" \
+            "$RUNNER_TEMP/p4-ci-evidence/security" \
+            "$RUNNER_TEMP/p4-ci-evidence/manifest" \
+            "$RUNNER_TEMP/p4-ci-evidence/verify" \
+            "$RUNNER_TEMP/p4-ci-evidence/staging-rehearsal" \
+            "$RUNNER_TEMP/p4-ci-evidence/promotion"
+          python3 -m venv "$RUNNER_TEMP/p4-venv"
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/verify_pr_isolation.py \
+            --check-runtime-env \
+            --out "$RUNNER_TEMP/p4-ci-evidence/security/runtime-env-audit.json"
+
+      - name: Start loopback-only ephemeral OCI v2 registry (zero external credentials)
+        shell: bash
+        run: |
+          set -euo pipefail
+          REG_CONTAINER="cskh-p4-loopback-registry-${GITHUB_RUN_ID}"
+          docker rm -f "${REG_CONTAINER}" >/dev/null 2>&1 || true
+          docker run -d \
+            --name "${REG_CONTAINER}" \
+            -p "127.0.0.1:15000:5000" \
+            "${LOOPBACK_REGISTRY_IMAGE}"
+          for _ in $(seq 1 30); do
+            if curl -fsS "http://${LOOPBACK_REGISTRY_ADDR}/v2/" >/dev/null 2>&1; then
+              echo "Loopback OCI registry ready at http://${LOOPBACK_REGISTRY_ADDR}/v2/"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: Loopback OCI registry did not become ready" >&2
+          exit 1
+
+      - name: Build custom production image ONCE (--no-cache) & push to loopback OCI registry
+        id: build_once
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/p4-ci-evidence"
+          ACTUAL_HEAD_SHA="$(git rev-parse HEAD)"
+          CI_TAG="ci-${ACTUAL_HEAD_SHA::12}"
+
+          PYTHON_BIN="$RUNNER_TEMP/p4-venv/bin/python" \
+          LOCAL_IMAGE_REPO="${LOOPBACK_REGISTRY_REPO}" \
+          REGISTRY_PUSH=true \
+          CSKH_REGISTRY_IMAGE="${LOOPBACK_REGISTRY_REPO}" \
+          bash deploy/images/build-image.sh \
+            --no-cache \
+            --out-dir "$EVIDENCE_DIR/build" \
+            --tag "${CI_TAG}"
+
+          APP_IMAGE_DIGEST="$(jq -r '.registry_verification.approved_registry_repo_digest' \
+            "$EVIDENCE_DIR/build/image-inspect-summary.json")"
+          LOCAL_IMAGE_ID="$(jq -r '.local_image_id' \
+            "$EVIDENCE_DIR/build/image-inspect-summary.json")"
+
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          case "${APP_IMAGE_DIGEST}" in
+            127.0.0.1:15000/cskh/crm-cskh@sha256:*) ;;
+            *)
+              echo "ERROR: Unexpected loopback digest prefix: ${APP_IMAGE_DIGEST}" >&2
+              exit 1
+              ;;
+          esac
+          echo "app_image_digest=${APP_IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "local_image_id=${LOCAL_IMAGE_ID}" >> "$GITHUB_OUTPUT"
+          echo "ci_tag=${CI_TAG}" >> "$GITHUB_OUTPUT"
+          echo "actual_head_sha=${ACTUAL_HEAD_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX 1.5 & SPDX 2.3 SBOMs and run strict + rehearsal Trivy security gates
+        id: sbom_and_scan
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ steps.build_once.outputs.app_image_digest }}
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/p4-ci-evidence"
+          PY="$RUNNER_TEMP/p4-venv/bin/python"
+
+          "$PY" deploy/release/generate_sbom.py \
+            --metadata-dir "$EVIDENCE_DIR/build" \
+            --image-ref "${APP_IMAGE_DIGEST}" \
+            --cyclonedx-out "$EVIDENCE_DIR/sbom/sbom.cyclonedx.json" \
+            --spdx-out "$EVIDENCE_DIR/sbom/sbom.spdx.json" \
+            > "$EVIDENCE_DIR/sbom/sbom-summary.json"
+
+          # Zero Trivy suppression rules: scan every byte of the built image
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$EVIDENCE_DIR/security:/scan-out" \
+            -v "$RUNNER_TEMP/trivy-cache:/root/.cache" \
+            "${TRIVY_IMAGE}" \
+            image \
+            --image-src docker \
+            --db-repository "public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2" \
+            --scanners vuln,secret \
+            --format json \
+            --timeout 15m \
+            --output /scan-out/trivy-image.json \
+            "${APP_IMAGE_DIGEST}"
+
+          # Extract PyJWT METADATA directly from the immutable @sha256 image for exact-token verification (REL-01A)
+          META_CID="$(docker create "${APP_IMAGE_DIGEST}")"
+          docker cp \
+            "${META_CID}:/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.13.0.dist-info/METADATA" \
+            "$EVIDENCE_DIR/security/pyjwt-METADATA.txt"
+          docker rm -f "${META_CID}" >/dev/null
+
+          # 1. Execute STRICT release security gate and archive full strict verdict (REL-01B)
+          set +e
+          "$PY" deploy/release/evaluate_security_scan.py \
+            --strict \
+            --trivy-json "$EVIDENCE_DIR/security/trivy-image.json" \
+            --pyjwt-metadata-file "$EVIDENCE_DIR/security/pyjwt-METADATA.txt" \
+            --out "$EVIDENCE_DIR/security/security-scan-strict.json"
+          STRICT_RC=$?
+          set -e
+          echo "Strict security gate exit code (expected != 0 while T0 CVE exception requests are pending): ${STRICT_RC}"
+
+          # Verify strict report exists, has 0 real secrets, and 0 CRITICAL CVEs on patched packages
+          python3 - "$EVIDENCE_DIR/security/security-scan-strict.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          strict_doc = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert strict_doc["gate_mode"] == "strict", strict_doc["gate_mode"]
+          assert strict_doc["secret_findings_count"] == 0, strict_doc["secret_findings"]
+          assert strict_doc["excepted_secret_false_positives_count"] == 1, strict_doc
+          patched_pkgs = {"uv", "form-data", "loader-utils", "shell-quote", "stdlib"}
+          leaked_patched = [
+              f for f in strict_doc["fixable_critical_unapproved"]
+              if f["package"].lower() in patched_pkgs
+          ]
+          assert not leaked_patched, f"Patched packages still reported CRITICAL CVEs: {leaked_patched}"
+          PY
+
+          # 2. Enforce PR gate: fail-closed on ANY secret OR ANY regression in patched packages
+          "$PY" deploy/release/evaluate_security_scan.py \
+            --advisory-upstream-critical \
+            --forbid-critical-packages uv,form-data,loader-utils,shell-quote,stdlib \
+            --trivy-json "$EVIDENCE_DIR/security/trivy-image.json" \
+            --pyjwt-metadata-file "$EVIDENCE_DIR/security/pyjwt-METADATA.txt" \
+            --out "$EVIDENCE_DIR/security/security-scan-summary.json"
+
+      - name: Sign & verify CI rehearsal release-manifest.json (ephemeral Ed25519 keypair)
+        id: sign_rehearsal
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ steps.build_once.outputs.app_image_digest }}
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/p4-ci-evidence"
+          KEY_DIR="$RUNNER_TEMP/ephemeral-signing-keys"
+          PY="$RUNNER_TEMP/p4-venv/bin/python"
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          "$PY" deploy/release/release_manifest.py keygen \
+            --private-key-out "$KEY_DIR/ephemeral.key" \
+            --public-key-out "$EVIDENCE_DIR/manifest/ephemeral-rehearsal.pub"
+
+          "$PY" deploy/release/release_manifest.py generate \
+            --release-id "ci-rehearsal-${GITHUB_RUN_ID}" \
+            --environment-scope ci_ephemeral_rehearsal \
+            --build-manifest "$EVIDENCE_DIR/build/build-manifest.json" \
+            --image-inspect "$EVIDENCE_DIR/build/image-inspect-summary.json" \
+            --sbom-cyclonedx "$EVIDENCE_DIR/sbom/sbom.cyclonedx.json" \
+            --sbom-spdx "$EVIDENCE_DIR/sbom/sbom.spdx.json" \
+            --security-scan "$EVIDENCE_DIR/security/security-scan-summary.json" \
+            --build-url "${RUN_URL}" \
+            --test-report-url "${RUN_URL}" \
+            --out "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json"
+
+          "$PY" deploy/release/release_manifest.py sign \
+            --manifest "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json" \
+            --private-key-file "$KEY_DIR/ephemeral.key" \
+            --sig-out "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json.sig" \
+            --envelope-out "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.envelope.json"
+
+          # Destroy ephemeral private key immediately after signing
+          rm -rf "$KEY_DIR"
+
+          # Verify signature succeeds for `ci_ephemeral_rehearsal` scope
+          "$PY" deploy/release/release_manifest.py verify \
+            --manifest "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json" \
+            --sig "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json.sig" \
+            --public-key-file "$EVIDENCE_DIR/manifest/ephemeral-rehearsal.pub" \
+            --expected-image "${APP_IMAGE_DIGEST}" \
+            --expected-scope ci_ephemeral_rehearsal
+
+          # Fail-closed guard: prove Staging/Production scope REJECTS CI rehearsal manifests!
+          if "$PY" deploy/release/release_manifest.py verify \
+            --manifest "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json" \
+            --sig "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json.sig" \
+            --public-key-file "$EVIDENCE_DIR/manifest/ephemeral-rehearsal.pub" \
+            --expected-scope production_candidate >/dev/null 2>&1; then
+            echo "FATAL: production_candidate verifier failed to reject ci_ephemeral_rehearsal manifest!" >&2
+            exit 1
+          fi
+
+      - name: Wipe local image & run G02 clean-site verification pulled by @sha256 digest
+        id: verify_clean_site
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ steps.build_once.outputs.app_image_digest }}
+          LOCAL_IMAGE_ID: ${{ steps.build_once.outputs.local_image_id }}
+          CI_TAG: ${{ steps.build_once.outputs.ci_tag }}
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/p4-ci-evidence"
+
+          docker rmi -f \
+            "${LOOPBACK_REGISTRY_REPO}:${CI_TAG}" \
+            "${APP_IMAGE_DIGEST}" \
+            "${LOCAL_IMAGE_ID}" >/dev/null 2>&1 || true
+
+          if docker image inspect "${APP_IMAGE_DIGEST}" >/dev/null 2>&1; then
+            echo "ERROR: Local image still cached prior to Stage-1 digest pull" >&2
+            exit 1
+          fi
+
+          docker pull "${APP_IMAGE_DIGEST}"
+
+          python3 deploy/images/verify_clean_site.py \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --pull-policy always \
+            --port 18780 \
+            --out "$EVIDENCE_DIR/verify/clean-site-verify.json"
+
+      - name: Wipe local image again & run 10-service Staging-topology smoke pulled by SAME @sha256 digest
+        id: staging_topology_rehearsal
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ steps.build_once.outputs.app_image_digest }}
+          LOCAL_IMAGE_ID: ${{ steps.build_once.outputs.local_image_id }}
+          ACTUAL_HEAD_SHA: ${{ steps.build_once.outputs.actual_head_sha }}
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/p4-ci-evidence"
+
+          docker rmi -f "${APP_IMAGE_DIGEST}" "${LOCAL_IMAGE_ID}" >/dev/null 2>&1 || true
+          if docker image inspect "${APP_IMAGE_DIGEST}" >/dev/null 2>&1; then
+            echo "ERROR: Local image still cached prior to Stage-2 Staging-topology pull" >&2
+            exit 1
+          fi
+
+          docker pull "${APP_IMAGE_DIGEST}"
+
+          python3 deploy/compose/scripts/run_isolated_smoke.py \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --image-git-sha "${ACTUAL_HEAD_SHA}" \
+            --http-port 18080 \
+            --report-out "$EVIDENCE_DIR/staging-rehearsal/isolated-smoke-report.json" \
+            --log-out "$EVIDENCE_DIR/staging-rehearsal/isolated-smoke.log"
+
+      - name: Verify cryptographic Build -> Verify -> Staging-topology same-digest promotion (G02/G04)
+        id: promotion_proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/p4-ci-evidence"
+          PY="$RUNNER_TEMP/p4-venv/bin/python"
+
+          "$PY" deploy/release/verify_digest_promotion.py \
+            --manifest "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json" \
+            --sig "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json.sig" \
+            --public-key-file "$EVIDENCE_DIR/manifest/ephemeral-rehearsal.pub" \
+            --expected-scope ci_ephemeral_rehearsal \
+            --build-inspect "$EVIDENCE_DIR/build/image-inspect-summary.json" \
+            --clean-site-report "$EVIDENCE_DIR/verify/clean-site-verify.json" \
+            --compose-smoke-report "$EVIDENCE_DIR/staging-rehearsal/isolated-smoke-report.json" \
+            --out "$EVIDENCE_DIR/promotion/digest-promotion-attestation.json"
+
+      - name: Record honest external Registry & Staging infrastructure blocker status & hash artifacts
+        if: always()
+        shell: bash
+        env:
+          BUILD_OUTCOME: ${{ steps.build_once.outcome }}
+          SCAN_OUTCOME: ${{ steps.sbom_and_scan.outcome }}
+          SIGN_OUTCOME: ${{ steps.sign_rehearsal.outcome }}
+          VERIFY_OUTCOME: ${{ steps.verify_clean_site.outcome }}
+          STAGING_REHEARSAL_OUTCOME: ${{ steps.staging_topology_rehearsal.outcome }}
+          PROMOTION_OUTCOME: ${{ steps.promotion_proof.outcome }}
+          LOOPBACK_DIGEST: ${{ steps.build_once.outputs.app_image_digest }}
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="$RUNNER_TEMP/p4-ci-evidence"
+          mkdir -p "$EVIDENCE_DIR"
+
+          python3 - "$EVIDENCE_DIR" <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          skip_redact = {"pyjwt-METADATA.txt"}
+          patterns = [
+              (re.compile(r"(?im)(set-cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?im)(cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(x-frappe-csrf-token[\"'=:\s]+)[^\"'&\s<,}]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(sid=)[^;\s\"']+"), r"\1[REDACTED]"),
+          ]
+          for path in root.rglob("*"):
+              if (
+                  not path.is_file()
+                  or path.name in skip_redact
+                  or path.suffix.lower() not in {".log", ".txt"}
+              ):
+                  continue
+              txt = path.read_text(encoding="utf-8", errors="replace")
+              for pat, rep in patterns:
+                  txt = pat.sub(rep, txt)
+              path.write_text(txt, encoding="utf-8")
+
+          ext_status = {
+              "schema_version": "cskh-p4-external-infra-status-v1",
+              "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+              "commit_sha": os.environ.get("GITHUB_SHA"),
+              "run_id": os.environ.get("GITHUB_RUN_ID"),
+              "event_name": os.environ.get("GITHUB_EVENT_NAME"),
+              "ci_loopback_rehearsal": {
+                  "evidence_scope": "ephemeral_loopback_oci_v2_registry_127.0.0.1:15000",
+                  "build_once": os.environ.get("BUILD_OUTCOME"),
+                  "sbom_and_scan": os.environ.get("SCAN_OUTCOME"),
+                  "ed25519_manifest_signing": os.environ.get("SIGN_OUTCOME"),
+                  "verify_clean_site_by_digest": os.environ.get("VERIFY_OUTCOME"),
+                  "staging_compose_topology_by_digest": os.environ.get("STAGING_REHEARSAL_OUTCOME"),
+                  "digest_promotion_attestation": os.environ.get("PROMOTION_OUTCOME"),
+                  "ephemeral_registry_digest": os.environ.get("LOOPBACK_DIGEST") or None,
+              },
+              "approved_remote_registry": {
+                  "status": "BLOCKED",
+                  "blocker_id": "BLK-INFRA-03",
+                  "detail": (
+                      "Approved external Container Registry URL (vars.CSKH_REGISTRY_IMAGE), "
+                      "push/pull robot credentials, and protected `registry-build` / `registry-verify` / "
+                      "`staging` / `production` GitHub Environments are not yet provisioned by Owner/Infra."
+                  ),
+              },
+              "remote_staging_host_deployment": {
+                  "status": "BLOCKED",
+                  "blocker_id": "BLK-INFRA-01",
+                  "detail": (
+                      "Dedicated Staging VPS/host, DNS, TLS certificate, and `staging` GitHub "
+                      "Environment credentials are pending provisioning per docs/p4/infra-inventory.md."
+                  ),
+              },
+          }
+          (root / "external-infra-status.json").write_text(
+              json.dumps(ext_status, indent=2) + "\n", encoding="utf-8"
+          )
+
+          sums = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              sums.append(f"{digest}  {path.relative_to(root).as_posix()}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+      - name: Tear down loopback OCI registry container
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f "cskh-p4-loopback-registry-${GITHUB_RUN_ID}" >/dev/null 2>&1 || true
+
+      - name: Upload P4-02 CI SBOM, scan, manifest & digest-promotion evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-ci-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-ci-evidence/
+          if-no-files-found: warn
+          retention-days: 14
+
+  cross-runner-lock-and-artifact-attestation:
+    name: Attest SHA256SUMS & 3-clean-build Python lock identity across runners
+    needs:
+      - clean-build-lock-reproducibility
+      - isolated-build-sbom-scan-and-digest-promotion
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Download two-clean-build lock reproducibility bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: p4-lock-reproducibility-${{ github.run_id }}
+          path: ${{ runner.temp }}/verify-bundles/lock-repro
+
+      - name: Download build-once, SBOM, strict scan & promotion bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: p4-ci-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/verify-bundles/ci-evidence
+
+      - name: Verify SHA256SUMS & cross-VM 3-build Python catalog equality
+        shell: bash
+        run: |
+          set -euo pipefail
+          LOCK_DIR="$RUNNER_TEMP/verify-bundles/lock-repro"
+          CI_DIR="$RUNNER_TEMP/verify-bundles/ci-evidence"
+          OUT_DIR="$RUNNER_TEMP/p4-cross-runner-attestation"
+          mkdir -p "$OUT_DIR"
+
+          (cd "$LOCK_DIR" && sha256sum -c SHA256SUMS.txt)
+          (cd "$CI_DIR" && sha256sum -c SHA256SUMS.txt)
+
+          python3 - "$LOCK_DIR" "$CI_DIR" "$OUT_DIR" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          lock_dir = Path(sys.argv[1])
+          ci_dir = Path(sys.argv[2])
+          out_dir = Path(sys.argv[3])
+
+          def h(p: Path) -> str:
+              return hashlib.sha256(p.read_bytes()).hexdigest()
+
+          repro = json.loads((lock_dir / "python-lock-reproducibility.json").read_text(encoding="utf-8"))
+          promo = json.loads(
+              (ci_dir / "promotion" / "digest-promotion-attestation.json").read_text(encoding="utf-8")
+          )
+          strict_scan = json.loads(
+              (ci_dir / "security" / "security-scan-strict.json").read_text(encoding="utf-8")
+          )
+
+          assert repro["status"] == "PASS", repro
+          assert promo["status"] == "PASS" and promo["zero_digest_drift"] is True, promo
+
+          catalogs = {}
+          for fname in (
+              "pip-freeze.txt",
+              "pip-freeze-all.txt",
+              "system-pip-freeze.txt",
+              "python-constraints.txt",
+              "system-python-constraints.txt",
+              "yarn-locks.sha256",
+              "crm-cskh-files.sha256",
+          ):
+              h_b1 = h(lock_dir / "build-1" / fname)
+              h_b2 = h(lock_dir / "build-2" / fname)
+              h_b3 = h(ci_dir / "build" / fname)
+              if not (h_b1 == h_b2 == h_b3):
+                  raise SystemExit(
+                      f"FATAL: Cross-runner hash mismatch for {fname}: b1={h_b1}, b2={h_b2}, b3={h_b3}"
+                  )
+              catalogs[fname] = {
+                  "clean_build_1_vm1_sha256": h_b1,
+                  "clean_build_2_vm1_sha256": h_b2,
+                  "clean_build_3_vm2_sha256": h_b3,
+                  "identical_across_3_clean_builds": True,
+              }
+
+          attestation = {
+              "schema_version": "cskh-p4-cross-runner-ci-attestation-v1",
+              "attested_at_utc": datetime.now(timezone.utc).isoformat(),
+              "status": "PASS",
+              "clean_builds_verified": 3,
+              "independent_runner_vms": 2,
+              "ephemeral_loopback_digest": promo["canonical_registry_digest"],
+              "zero_digest_drift": promo["zero_digest_drift"],
+              "catalog_hashes": catalogs,
+              "strict_security_scan_summary": {
+                  "gate_mode": strict_scan["gate_mode"],
+                  "status": strict_scan["status"],
+                  "secret_findings_count": strict_scan["secret_findings_count"],
+                  "excepted_secret_false_positives_count": strict_scan[
+                      "excepted_secret_false_positives_count"
+                  ],
+                  "fixable_critical_unapproved_count": len(
+                      strict_scan["fixable_critical_unapproved"]
+                  ),
+                  "unfixed_critical_upstream_os_count": len(
+                      strict_scan["unfixed_critical_upstream_os"]
+                  ),
+                  "severity_counts": strict_scan["severity_counts"],
+              },
+              "bundle_sha256sums": {
+                  "p4_lock_reproducibility_sha256sums": h(lock_dir / "SHA256SUMS.txt"),
+                  "p4_ci_evidence_sha256sums": h(ci_dir / "SHA256SUMS.txt"),
+              },
+          }
+          (out_dir / "cross-runner-attestation.json").write_text(
+              json.dumps(attestation, indent=2) + "\n", encoding="utf-8"
+          )
+          (out_dir / "SHA256SUMS.txt").write_text(
+              f"{h(out_dir / 'cross-runner-attestation.json')}  cross-runner-attestation.json\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(attestation, indent=2))
+          PY
+
+      - name: Upload cross-runner attestation summary
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-cross-runner-attestation-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-cross-runner-attestation/
+          if-no-files-found: warn
+          retention-days: 14
