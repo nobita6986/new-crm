@@ -7,7 +7,7 @@
   - Overlay tên miền thực tế: `/opt/crm-cskh-staging/compose.domain.yaml` (nối sau 8 tệp Compose TLS gốc)
   - Công cụ kiểm tra & vận hành: [`check_health_and_invariants.py`](../../deploy/ops/check_health_and_invariants.py), [`manage_backup_lifecycle.py`](../../deploy/ops/manage_backup_lifecycle.py), [`install_systemd_timers.py`](../../deploy/ops/install_systemd_timers.py)
   - Sổ tay đi kèm: [`backup-restore.md`](./backup-restore.md), [`release-runbook.md`](./release-runbook.md), [`rollback-runbook.md`](./rollback-runbook.md), [`monitoring-alerts.md`](./monitoring-alerts.md)
-- **Trạng thái ký bàn giao vận hành (`G24`) hiện tại:** **`BLOCKED`** *(Tài liệu SOP và các unit systemd đã sẵn sàng; bước ký bàn giao tài khoản vận hành riêng và kênh cảnh báo ngoài hệ thống đang chờ Owner chỉ định đầu mối `BLK-GOV-06` / `BLK-INFRA-07` và kho lưu trữ offsite tự động `BLK-INFRA-05`)*.
+- **Trạng thái ký bàn giao vận hành (`G24`) hiện tại:** **`BLOCKED`** *(Các timer `crm-cskh-healthcheck.timer` và `crm-cskh-backup.timer` đã được cài đặt trên VPS `103.77.208.186` ngày `09/11/2026` — trong đó `crm-cskh-healthcheck.timer` đã tự kích hoạt `PASS` lúc `20:05 ICT`, `crm-cskh-backup.service` đã chạy thủ công `PASS` lúc `20:00 ICT` và `crm-cskh-backup.timer` đang `enabled` chờ lần tự kích hoạt đầu tiên lúc `02:15 ICT`; cổng `G24` vẫn giữ `BLOCKED` chờ Owner cấp đích lưu trữ offsite tự động `BLK-INFRA-05`, chỉ định người trực / người ký `BLK-GOV-06` và kênh cảnh báo ngoài `BLK-INFRA-07`)*.
 
 ---
 
@@ -15,8 +15,8 @@
 
 | Chu kỳ | Danh mục kiểm tra cụ thể | Lệnh / Màn hình chuẩn | Vai trò chịu trách nhiệm |
 | :--- | :--- | :--- | :--- |
-| **Mỗi 5 phút (Tự động trên VPS)** | 1. 10 container thường trực `healthy`, `0` `OOMKilled`, ổ đĩa `< 80%`.<br>2. Hàng đợi RQ (`short`/`default`/`long`) `failed == 0`, 4 cron `crm_cskh` chạy đúng nhịp.<br>3. Cả 6 bất biến nghiệp vụ (`INV-01`..`INV-06`) đạt `PASS`.<br>*(Lưu cục bộ ra JSON + `journald`; **chưa tự gửi email/chat ra ngoài** khi chờ `BLK-GOV-06`)* | `crm-cskh-healthcheck.timer` gọi `check_health_and_invariants.py --env-file /opt/crm-cskh-staging/.env.staging --mode tls --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml --site crm-staging.localhost` | `systemd` + **Operator kỹ thuật** (`BLK-GOV-06`) |
-| **Hằng ngày (`02:15 ICT` & Đầu giờ sáng)** | 1. `crm-cskh-backup.timer` tạo bản sao lưu mã hóa đêm trước (sinh `backup-key` `0600` riêng cho bundle đó) và kiểm tra SHA-256 cục bộ.<br>2. Đầu giờ sáng: rà `/var/lib/crm-cskh/health/latest-health-report.json`, kéo `backup.tar.gz.enc` về kho ngoài VPS, lưu ký `backup-key` vào kho khóa độc lập + chạy `record-offsite` *(giữ trạng thái offsite automation `PARTIAL` cho tới khi có đích upload tự động `BLK-INFRA-05`)*. | `manage_backup_lifecycle.py verify-bundle` & `record-offsite` ([`backup-restore.md`](./backup-restore.md)) | **Operator kỹ thuật** (`BLK-GOV-06`) |
+| **Mỗi 5 phút (Tự động trên VPS — Đã chạy thật `PASS`)** | 1. 10 container thường trực `healthy`, `0` `OOMKilled`, ổ đĩa `< 80%` (thực đo `23.79%`).<br>2. Hàng đợi RQ (`short`/`default`/`long`) `failed == 0`, 4 cron `crm_cskh` chạy đúng nhịp.<br>3. Cả 6 bất biến nghiệp vụ (`INV-01`..`INV-06`) và độ tươi backup (`<= 26.0h`) đạt `PASS`.<br>*(Đã tự kích hoạt lúc `20:05 ICT` `09/11/2026`; lưu cục bộ ra JSON + `journald`, **chưa tự gửi cảnh báo ngoài** khi chưa có `/etc/crm-cskh/alerting.env`)* | `crm-cskh-healthcheck.timer` (`enabled` / `active`) → `/var/lib/crm-cskh/health/latest-health-report.json` | `systemd` + **Operator kỹ thuật** (`CHỜ OWNER CẤP — BLK-GOV-06`) |
+| **Hằng ngày (`02:15 ICT` & Đầu giờ sáng)** | 1. `crm-cskh-backup.timer` (`enabled` / `active`, `19:15 UTC` = `02:15 ICT` + trễ ngẫu nhiên `<= 120s`) sinh gói sao lưu mã hóa (tạo `backup-key` `0600` riêng cho bundle), kiểm tra SHA-256 và áp dụng GFS retention `14d/8w/3m`. *(Lưu ý: lượt chạy `20:00 ICT` ngày `09/11` là khởi chạy service thủ công, đầu giờ sáng `10/11` kiểm tra `LastTriggerUSec` của `crm-cskh-backup.timer` để xác nhận lần tự kích hoạt đầu tiên).*<br>2. Đầu giờ sáng: rà `latest-health-report.json` & `latest-backup-lifecycle.json`; nếu chưa mở `BLK-INFRA-05`, kéo `backup.tar.gz.enc` về kho ngoài VPS, lưu ký riêng `backup-key` vào Password Vault và chạy `record-offsite`. | `systemctl status crm-cskh-backup.timer` + `manage_backup_lifecycle.py verify-bundle` & `record-offsite` ([`backup-restore.md`](./backup-restore.md) Mục 3.2–3.4) | **Operator kỹ thuật** (`CHỜ OWNER CẤP — BLK-GOV-06`) |
 | **Hằng ngày (Nghiệp vụ)** | 1. Dòng lỗi khi nhập CSV và số lượng hồ sơ chờ phân công.<br>2. Danh sách đầu việc sắp vi phạm / đã vi phạm SLA liên hệ đầu & lịch hẹn.<br>3. Độ tươi (`as_of`) của bảng chỉ số KPI ngày hiện tại. | `/cskh/import`, `/cskh/pool`, `/cskh/sla-operations`, `/cskh/quality-overview` | **Quản trị CRM & Trưởng nhóm** |
 | **Hằng tuần** | 1. Rà soát `Error Log`, truy vấn MariaDB chậm và dung lượng phân vùng Docker.<br>2. Rà soát nhật ký thay đổi phân quyền, `CSKH Export Job` và yêu cầu tính lại KPI.<br>3. Lấy mẫu đối soát ngẫu nhiên 5 đầu việc từ Dashboard xuống lịch sử gốc. | Báo cáo tuần từ `check_health_and_invariants.py` + kiểm toán DocType quản trị | **Tech Owner + Quản trị CRM** |
 | **Hằng tháng** | 1. **Diễn tập khôi phục cô lập (`Restore Drill`)** bằng `verify_offsite_restore.py` (`P4.md §7.2`).<br>2. Đối chiếu danh sách tài khoản `User.enabled = 1` với nhân sự thực tế.<br>3. Rà soát toàn vẹn 5 bản ghi `Translation` tùy chỉnh của Owner và dung lượng lưu trữ. | [`backup-restore.md`](./backup-restore.md) Mục 4 + kiểm tra user active | **Operator + Tech Owner** |
@@ -109,14 +109,25 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
 
 ---
 
-## 3. Phân Loại Và Ứng Phó Sự Cố (`P4.md §17.2`)
+## 3. Phân Loại Sự Cố, Người Trực (`On-Call`), Kênh Cảnh Báo & Xử Lý Lỗi Sao Lưu (`P4.md §17.2`)
 
-> **Lưu ý minh bạch nguồn lực:** Công ty phê duyệt khung giờ trực và kênh nhận cảnh báo khi chốt `BLK-GOV-06` / `BLK-INFRA-07`; tài liệu này không mặc định cam kết trực `24/7` hay tự gửi email/chat khi chưa được Owner chỉ định đầu mối.
+> **Quy tắc quản trị trung thực (`BLK-GOV-06` & `BLK-INFRA-07`):** Không tự điền họ tên người trực hoặc kênh nhận giả định. Mọi trường định danh dưới đây được giữ ở trạng thái chờ Owner cấp chính thức trước khi mở khóa `/etc/crm-cskh/alerting.env` (`0600`).
+
+### 3.1. Ma trận Vai trò Trực Vận hành & Kênh Nhận Cảnh Báo (Chờ Owner Cấp)
+
+| Vị trí vận hành | Trách nhiệm chính | Định danh cá nhân / Tài khoản riêng | Kênh nhận cảnh báo & Khung giờ trực |
+| :--- | :--- | :--- | :--- |
+| **Operator kỹ thuật chính (`Primary On-Call`)** | Giám sát timer sức khỏe & backup hằng sáng, chạy bù khi `ALT-BACKUP-FAILURE`, khởi động lại dịch vụ an toàn (Mục 2). | `CHỜ OWNER CẤP (BLK-GOV-06)` | `CHỜ OWNER CẤP (BLK-INFRA-07 — /etc/crm-cskh/alerting.env)` |
+| **Operator kỹ thuật dự phòng / Tech Owner** | Tiếp nhận leo thang `SEV-1`/`SEV-2`, thực thi quay lui Cấp độ 2–4 và diễn tập DR hằng tháng. | `CHỜ OWNER CẤP (BLK-GOV-06)` | `CHỜ OWNER CẤP (BLK-INFRA-07)` |
+| **Quản trị CRM nghiệp vụ (`CSKH CRM Admin`)** | Quản lý nhập CSV, phân công chiến dịch, điều chuyển/thu hồi khi nhân sự nghỉ việc (Mục 5). | `CHỜ OWNER CẤP (BLK-GOV-06)` | Trao đổi nội bộ trong giờ hành chính `Asia/Ho_Chi_Minh` |
+| **Người phê duyệt quyết định (`Owner / BOD`)** | Phê duyệt kép trước khi khôi phục ghi đè DB Cấp độ 4, phê duyệt `recompute` kỳ đã chốt và ký Go-Live. | `CHỜ OWNER CẤP (BLK-GOV-06)` | Kênh điều hành trực tiếp của Owner |
+
+### 3.2. Bảng Phân Loại Mức Độ Và Hành Động Cô Lập Đầu Tiên
 
 | Mức độ | Dấu hiệu nhận diện | Hành động cô lập đầu tiên (trong 15 phút đầu sau khi tiếp nhận) | Lộ trình leo thang |
 | :--- | :--- | :--- | :--- |
-| **`SEV-1` (Khẩn cấp)** | - Phát hiện lộ SĐT/ghi chú/tệp đính kèm chéo quyền.<br>- Vi phạm `INV-01` (nhiều owner active / lệch chủ sở hữu) hoặc `INV-02`.<br>- Mất kết nối MariaDB, hỏng dữ liệu, mất VPS hoặc nghi ngờ lộ tài khoản quản trị. | 1. Giữ nguyên bằng chứng log.<br>2. Khóa ngay tính năng gây lộ (`cskh_p3_export_enabled=false` / `cskh_p3_enabled=false` hoặc `set-maintenance-mode on` nếu lộ ở lõi P1/P2).<br>3. Thu hồi phiên người dùng liên quan nếu nghi lộ tài khoản. | Báo ngay **Tech Owner + BOD/Owner**; kích hoạt [`rollback-runbook.md`](./rollback-runbook.md) hoặc Quy trình Sự cố Dữ liệu Mục 4. |
-| **`SEV-2` (Cao)** | - `scheduler` hoặc `queue-short`/`queue-long` ngừng chạy; vi phạm `INV-03`..`INV-06`.<br>- Dashboard KPI sai lệch diện rộng hoặc chức năng nhập/phân công lỗi.<br>- Ổ đĩa vượt `80%` hoặc sao lưu đêm thất bại. | 1. Ưu tiên bảo toàn dữ liệu gốc.<br>2. Nếu lỗi chỉ ở báo cáo/SLA P3, tạm tắt cờ P3 tương ứng để **Người tuyển dụng** vẫn tác nghiệp bình thường ở P1/P2.<br>3. Thực hiện khởi động lại an toàn theo Mục 2 / giải phóng dung lượng tạm. | Báo **Tech Owner** xử lý trong ngày làm việc; lập PR sửa lỗi có kiểm thử. |
+| **`SEV-1` (Khẩn cấp)** | - Phát hiện lộ SĐT/ghi chú/tệp đính kèm chéo quyền.<br>- Vi phạm `INV-01` (nhiều owner active / lệch chủ sở hữu) hoặc `INV-02`.<br>- Mất kết nối MariaDB, hỏng dữ liệu, mất VPS hoặc nghi ngờ lộ tài khoản quản trị.<br>- Sao lưu quá hạn `> 26 giờ` hoặc phát sinh `ALT-BACKUP-FAILURE` chưa có bản chạy bù hợp lệ. | 1. Giữ nguyên bằng chứng log (`journalctl`, `health-alerts.jsonl`, `backup-alerts.jsonl`).<br>2. Nếu lộ dữ liệu: khóa ngay tính năng (`cskh_p3_export_enabled=false` / `cskh_p3_enabled=false` hoặc `set-maintenance-mode on`).<br>3. Nếu lỗi sao lưu (`ALT-BACKUP-FAILURE`): tuyệt đối không xóa bundle hợp lệ liền trước; thực hiện ngay **Mục 3.4 của [`backup-restore.md`](./backup-restore.md)** để chẩn đoán dung lượng/kết nối, chạy bù `systemctl start crm-cskh-backup.service` và lưu ký `backup-key` mới. | Báo ngay **Tech Owner + BOD/Owner**; kích hoạt [`rollback-runbook.md`](./rollback-runbook.md) hoặc Quy trình Sự cố Dữ liệu Mục 4. |
+| **`SEV-2` (Cao)** | - `scheduler` hoặc `queue-short`/`queue-long` ngừng chạy; vi phạm `INV-03`..`INV-06`.<br>- Dashboard KPI sai lệch diện rộng hoặc chức năng nhập/phân công lỗi.<br>- Ổ đĩa vượt `80%` hoặc lỗi đồng bộ kho offsite khi gói cục bộ vẫn `PASS`. | 1. Ưu tiên bảo toàn dữ liệu gốc.<br>2. Nếu lỗi chỉ ở báo cáo/SLA P3, tạm tắt cờ P3 tương ứng để **Người tuyển dụng** vẫn tác nghiệp bình thường ở P1/P2.<br>3. Thực hiện khởi động lại an toàn theo Mục 2 / chạy `prune-retention --apply` giải phóng dung lượng / chép bù gói mã hóa ra kho ngoài VPS. | Báo **Tech Owner** xử lý trong ngày làm việc; lập PR sửa lỗi có kiểm thử. |
 | **`SEV-3` (Thông thường)** | - Lỗi hiển thị nhỏ trên giao diện phụ, nhãn dịch chưa tự nhiên không làm sai số liệu hay quyền hạn. | Ghi nhận phiếu lỗi kèm ảnh chụp màn hình đã che PII. | Đưa vào nhánh sửa lỗi và phát hành theo chu kỳ chuẩn. |
 
 ---
@@ -155,12 +166,14 @@ Khi phát hiện sai lệch dữ liệu nghiệp vụ (phân công, lần liên 
 
 ---
 
-## 6. Giới Hạn Chịu Lỗi Của Kiến Trúc Một VPS & Quy Tắc Xoay Vòng Bí Mật (`P4.md §3.3–§3.4`)
+## 6. Giới Hạn Chịu Lỗi Của Kiến Trúc Một VPS, Phạm Vi RTO & Quy Tắc Xoay Vòng Bí Mật (`P4.md §3.3–§3.4`)
 
-1. **Giới hạn Single-VPS (SPOF):** Hệ thống hiện chạy trên một máy chủ VPS duy nhất (`103.77.208.186`) — **không phải kiến trúc High Availability (HA) hay Zero-Downtime**. Nếu máy chủ gặp sự cố phần cứng/trung tâm dữ liệu, thực hiện khôi phục máy chủ mới theo **Mục 5 của [`rollback-runbook.md`](./rollback-runbook.md)** từ gói sao lưu mã hóa offsite gần nhất.
+1. **Giới hạn Single-VPS (SPOF) & Phạm vi RTO thực đo (`142.598 giây`):**
+   - Hệ thống hiện chạy trên một máy chủ VPS duy nhất (`103.77.208.186`) — **không phải kiến trúc High Availability (HA) hay Zero-Downtime**.
+   - Diễn tập khôi phục cô lập ngày `09/11/2026` ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json)) đo được Pha A RTO bằng **`142.598 giây`**, **nhưng con số này chỉ áp dụng cho khôi phục bản clone cô lập trên cùng VPS khi gói backup và Docker image đã nằm sẵn trên đĩa cục bộ** — **chưa bao gồm truyền gói sao lưu/image qua mạng WAN, cấp phát/cài đặt máy chủ VPS mới hay chuyển đổi DNS / cấp lại TLS**. Nếu mất toàn bộ máy chủ, thực hiện **Mục 5 của [`rollback-runbook.md`](./rollback-runbook.md)** và cộng thêm thời gian hạ tầng tương ứng.
 2. **Quy tắc bảo vệ tệp cấu hình & khóa giải mã:**
-   - Tệp `/opt/crm-cskh-staging/.env.staging`, tệp `db_root_password.txt` (chỉ kết thúc bằng `\n` `LF`) và tệp khóa `backup-key` riêng của từng gói sao lưu bắt buộc giữ quyền **`0600`**.
-   - Khóa `encryption_key` của `site_config.json` (ngay khi được khởi tạo) và tệp `backup-key` của mỗi bundle sao lưu phải luôn có bản lưu ký tại kho bí mật độc lập ngoài VPS (tách rời hoàn toàn khỏi đích lưu trữ `backup.tar.gz.enc`); mất khóa đồng nghĩa bản sao lưu mã hóa không thể giải mã.
+   - Tệp `/opt/crm-cskh-staging/.env.staging`, `/etc/crm-cskh/offsite-backup.env` (khi tạo), `/etc/crm-cskh/alerting.env` (khi tạo), tệp `db_root_password.txt` (chỉ kết thúc bằng `\n` `LF`) và tệp khóa `backup-key` riêng của từng gói sao lưu bắt buộc giữ quyền **`0600`**.
+   - Khóa `encryption_key` của `site_config.json` (ngay khi được khởi tạo) và tệp `backup-key` của mỗi bundle sao lưu phải luôn có bản lưu ký tại kho bí mật độc lập ngoài VPS (tách rời hoàn toàn khỏi đích lưu trữ `backup.tar.gz.enc`, và tuyệt đối không coi thư mục trên cùng VPS là offsite); mất khóa đồng nghĩa bản sao lưu mã hóa không thể giải mã.
 
 ---
 
@@ -168,7 +181,7 @@ Khi phát hiện sai lệch dữ liệu nghiệp vụ (phân công, lần liên 
 
 | Hạng mục bàn giao bắt buộc (`P4.md §19` — `G24`, `§20.3` §9) | Trạng thái | Ghi chú / Đầu vào chờ mở khóa |
 | :--- | :---: | :--- |
-| Bộ sổ tay vận hành (`backup-restore.md`, `release-runbook.md`, `rollback-runbook.md`, `monitoring-alerts.md`, `operations-sop.md`, `huong-dan-su-dung-vi.md`) | **`READY (In-Repo)`** | Đã cập nhật đồng bộ với topology `compose.domain.yaml`, bản Việt hóa `4672041` và các nhãn của Owner. |
-| Cài đặt timer kiểm tra sức khỏe & backup cục bộ có kiểm tra checksum/retention | **`READY TO INSTALL`** | Đã đóng gói tại [`install_systemd_timers.py`](../../deploy/ops/install_systemd_timers.py) & [`deploy/ops/systemd/`](../../deploy/ops/systemd/). |
-| Tự động đẩy gói sao lưu mã hóa ra kho ngoài VPS (`Offsite Upload Automation`) | **`BLOCKED`** | Chờ cấp phát kho lưu trữ ngoài VPS (`BLK-INFRA-05`); hiện đang chép offsite có kiểm tra SHA-256 theo quy trình bán tự động. |
-| Cảnh báo chủ động ra kênh ngoài hệ thống & bàn giao tài khoản `Operator` riêng | **`BLOCKED`** | Chờ Owner chỉ định đầu mối và kênh nhận cảnh báo (`BLK-GOV-06`, `BLK-INFRA-07`); hiện giữ chế độ tắt gửi ngoài theo đúng yêu cầu. |
+| Bộ sổ tay vận hành (`backup-restore.md`, `release-runbook.md`, `rollback-runbook.md`, `monitoring-alerts.md`, `operations-sop.md`, `huong-dan-su-dung-vi.md`) | **`READY (In-Repo)`** | Đã cập nhật đồng bộ với topology `compose.domain.yaml`, bản Việt hóa `4672041`, hướng dẫn lưu ký khóa, xử lý backup lỗi và đối chiếu runtime VPS `09/11/2026`. |
+| Cài đặt timer kiểm tra sức khỏe & backup cục bộ kèm kiểm tra checksum/GFS retention trên VPS `103.77.208.186` | **`INSTALLED ON VPS (PARTIAL)`** | `crm-cskh-healthcheck.timer` đã tự kích hoạt `PASS` lúc `20:05 ICT` ngày `09/11/2026`; `crm-cskh-backup.service` chạy thật thủ công `PASS` lúc `20:00 ICT`; `crm-cskh-backup.timer` đã `enabled` (`02:15 ICT`), **chờ xác nhận lượt tự kích hoạt theo lịch đầu tiên sau `02:15 ICT` ngày `10/11/2026`** ([`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json)). |
+| Tự động đẩy gói sao lưu mã hóa ra kho ngoài VPS (`Offsite Upload Automation`) | **`BLOCKED` (`BLK-INFRA-05`)** | Đã nối sẵn `EnvironmentFile=-/etc/crm-cskh/offsite-backup.env` và chặn cứng thư mục cùng VPS; chờ Owner cấp đích lưu trữ ngoài VPS + credentials. Hiện đã chép thủ công và xác thực SHA-256 hai bản (`p4-20261109-pre-scheduler` & `scheduled-20261109T130029Z-1400885`). |
+| Cảnh báo chủ động ra kênh ngoài hệ thống & bàn giao tài khoản `Operator` riêng | **`BLOCKED` (`BLK-GOV-06`, `BLK-INFRA-07`)** | Đã nối sẵn `EnvironmentFile=-/etc/crm-cskh/alerting.env`; chờ Owner chỉ định họ tên/tài khoản người trực và HTTPS webhook nhận cảnh báo (không tự điền người nhận). |

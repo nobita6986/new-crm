@@ -1,0 +1,10 @@
+{
+  "checked_at_utc": "2026-11-09T13:05:46.433794+00:00",
+  "containers_total": 11,
+  "healthy_running_daemons": 10,
+  "live_container_identity_image_start_mounts_unchanged": true,
+  "app_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+  "live_application_code_redeployed": false,
+  "live_business_records_seeded_or_restored": false,
+  "source_backup_key_mode": "0600"
+}

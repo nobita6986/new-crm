@@ -5,7 +5,7 @@
 - **Tài liệu đối chiếu:** [`glossary-vi.md`](./glossary-vi.md) · [`huong-dan-su-dung-vi.md`](./huong-dan-su-dung-vi.md)
 - **Kết quả kiểm thử tự động & trình duyệt đã nghiệm thu trên source `4672041`:**
   - Hồi quy backend P1–P3: **`19/19 PASS`**; suite bảo mật & báo cáo P3 chạy độc lập: **`7/7 PASS`**; kiểm thử đa vai trò trên trình duyệt + đối chiếu tải CSV của BOD qua HTTP: **`PASS`** (`17` ảnh bằng chứng giao diện tiếng Việt).
-- **Trạng thái ký nghiệm thu người dùng đại diện chính thức (`G13`–`G16`, `G22`):** **`BLOCKED`** *(Bộ kịch bản UAT theo 5 vai trò và hướng dẫn sử dụng tiếng Việt đã sẵn sàng; bước tổ chức phiên ký nghiệm thu của đại diện người dùng thật đang chờ Owner phân công danh tính `BLK-GOV-06` và hoàn tất diễn tập restore trên VPS)*
+- **Trạng thái ký nghiệm thu người dùng đại diện chính thức (`G13`–`G16`, `G22`):** **`BLOCKED`** *(Bộ kịch bản UAT theo 5 vai trò, hướng dẫn sử dụng tiếng Việt và các ca kỹ thuật `UAT-P4-OPS-01..02` trên VPS `103.77.208.186` đã đo đạt `PASS`; bước tổ chức phiên ký nghiệm thu của đại diện 5 vai trò thật đang chờ Owner phân công danh tính người ký `BLK-GOV-06` — tuyệt đối không điền tên người ký giả)*
 
 ---
 
@@ -96,9 +96,9 @@
 
 | Mã Ca UAT | Thao tác thực nghiệm của Người vận hành | Tiêu chí đạt (`PASS`) | Trạng thái |
 | :--- | :--- | :--- | :---: |
-| **`UAT-P4-OPS-01`** | Chạy `check_health_and_invariants.py --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml` và kiểm tra timer định kỳ. | Toàn bộ 10 container `healthy`, hàng đợi RQ + 4 cron `PASS`, 6 bất biến `INV-01..06 == 0`, không tự phát cảnh báo ngoài khi chưa mở khóa. | `READY ON VPS` |
-| **`UAT-P4-OPS-02`** | Thực thi diễn tập khôi phục cô lập `verify_offsite_restore.py` với gói `p4-20261109-pre-scheduler` (`d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11`). | Pha A (`UNINITIALIZED_NO_ENCRYPTED_DATA` + `migrate ×2` + `Translation` overrides + HTTP/CSRF + RTO 9 chặng) và Pha B (Positive/Negative Control + dọn sạch tài nguyên) đạt `PASS`, site live không bị chạm. | `READY TO RUN` |
-| **`UAT-P4-OPS-03`** | Rà quy trình khởi động lại dịch vụ ([`operations-sop.md`](./operations-sop.md)), quay lui Cấp độ 1–4 và dựng lại khi mất VPS ([`rollback-runbook.md`](./rollback-runbook.md)). | Đầy đủ lệnh chuẩn theo `/opt/crm-cskh-staging/staging-compose` và `.env.staging` (`0600`). | `READY (In-Repo)` |
+| **`UAT-P4-OPS-01`** | Chạy `check_health_and_invariants.py --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml` và kiểm tra timer định kỳ. | Toàn bộ 10 container `healthy`, hàng đợi RQ + 4 cron `PASS`, 6 bất biến `INV-01..06 == 0`, `crm-cskh-healthcheck.timer` tự kích hoạt lúc `20:05 ICT` ngày `09/11/2026` (`PASS`), không tự phát cảnh báo ngoài khi chưa mở khóa ([`live-health-after.json`](../../deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json), [`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json)). | `PASS (Measured on VPS — Chờ ký nhận BLK-GOV-06)` |
+| **`UAT-P4-OPS-02`** | Thực thi diễn tập khôi phục cô lập `verify_offsite_restore.py` với gói `p4-20261109-pre-scheduler` (`d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11`). | Pha A (`UNINITIALIZED_NO_ENCRYPTED_DATA` + `migrate ×2` + `5/5 Translation` overrides + HTTP/CSRF + RTO clone cùng VPS `142.598s`) và Pha B (Positive/Negative Control `ValidationError` + dọn sạch `0` tài nguyên dư) đạt `PASS`, site live không bị chạm ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json)). | `PASS (Measured on VPS — Chờ ký nhận BLK-GOV-06)` |
+| **`UAT-P4-OPS-03`** | Rà quy trình khởi động lại dịch vụ ([`operations-sop.md`](./operations-sop.md)), xử lý backup lỗi ([`backup-restore.md`](./backup-restore.md) Mục 3.4), quay lui Cấp độ 1–4 và dựng lại khi mất VPS ([`rollback-runbook.md`](./rollback-runbook.md)). | Đầy đủ lệnh chuẩn theo `/opt/crm-cskh-staging/staging-compose` và `.env.staging` (`0600`); đã diễn tập `restart/retry` & `rollback` trên môi trường `dr-https` cô lập ([`isolated-staging-dr-https-report.json`](../../deploy/ops/evidence/p4-g07-g08-dr-20261109/isolated-staging-dr-https-report.json)). | `READY (In-Repo — Chờ ký nhận BLK-GOV-06)` |
 
 ---
 

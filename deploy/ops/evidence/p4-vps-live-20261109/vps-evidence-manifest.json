@@ -1,0 +1,61 @@
+{
+  "ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
+  "created_at_utc": "2026-11-09T13:06:05.335939+00:00",
+  "files": [
+    {
+      "name": "restore-drill-report.json",
+      "bytes": 9775,
+      "sha256": "af2d0a899e84d68243f80d64ad4d8ed43b4c2f21e5c28355c9022001c56f689c"
+    },
+    {
+      "name": "systemd-timers-dry-run.json",
+      "bytes": 2998,
+      "sha256": "74daa55b3783137af360c7ee174f71bc120c0346e0d1bf1141757774f09bd761"
+    },
+    {
+      "name": "systemd-timers-installed.json",
+      "bytes": 3087,
+      "sha256": "e54e8ad0db86c0cb73cb226f7dbc5aaf82404dae847d6b4eb8a83cf83e62f812"
+    },
+    {
+      "name": "systemd-unit-verify.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "name": "timers-runtime.json",
+      "bytes": 1212,
+      "sha256": "aa14023a5786775be6484d1929c4ae3e337a1dc0bc7a0f0558a8e92bc18aa8eb"
+    },
+    {
+      "name": "live-health-after.json",
+      "bytes": 5391,
+      "sha256": "c33647f44c354733876509639c45374cf333f7421dbcc132fe1b8078ce5b7182"
+    },
+    {
+      "name": "backup-lifecycle.json",
+      "bytes": 1815,
+      "sha256": "9f1aa768b7ad749ba9cae958e1313898ed2db81c2774b4a2bc6dbccdb86e3b9c"
+    },
+    {
+      "name": "scheduled-backup-report.json",
+      "bytes": 1867,
+      "sha256": "9f9d0e3e7d9645d0819e09e1494d73066c9480bcded186c40a795c24a75cfe16"
+    },
+    {
+      "name": "offsite-verification.json",
+      "bytes": 512,
+      "sha256": "6cf7c9673a29fb7e2a10b8b29bd6ca8da637a62210f53d432a4919ff2dd29f7a"
+    },
+    {
+      "name": "manual-offsite-receipt.json",
+      "bytes": 897,
+      "sha256": "5b2a9497ad9e8ba8cbe0c26286f4690f0e486f8372b7e151bb87024039c78db0"
+    },
+    {
+      "name": "live-preservation-check.json",
+      "bytes": 406,
+      "sha256": "ce35cdc92c5a83e78dcc1af8057d30c438aac404b79e8aa0b4488e734a86b77a"
+    }
+  ]
+}

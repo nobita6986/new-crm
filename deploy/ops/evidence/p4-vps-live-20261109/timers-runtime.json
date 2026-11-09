@@ -1,0 +1,35 @@
+{
+  "checked_at_utc": "2026-11-09T13:06:05.335939+00:00",
+  "timers": {
+    "crm-cskh-healthcheck.timer": {
+      "NextElapseUSecRealtime": "Mon 2026-11-09 20:10:16 +07",
+      "LastTriggerUSec": "Mon 2026-11-09 20:05:45 +07",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    },
+    "crm-cskh-backup.timer": {
+      "NextElapseUSecRealtime": "Tue 2026-11-10 02:16:41 +07",
+      "LastTriggerUSec": "",
+      "ActiveState": "active",
+      "UnitFileState": "enabled"
+    }
+  },
+  "services": {
+    "crm-cskh-healthcheck.service": {
+      "Result": "success",
+      "ExecMainStartTimestamp": "Mon 2026-11-09 20:05:45 +07",
+      "ExecMainExitTimestamp": "Mon 2026-11-09 20:05:47 +07",
+      "ExecMainStatus": "0",
+      "ActiveState": "inactive"
+    },
+    "crm-cskh-backup.service": {
+      "Result": "success",
+      "ExecMainStartTimestamp": "Mon 2026-11-09 20:00:28 +07",
+      "ExecMainExitTimestamp": "Mon 2026-11-09 20:00:36 +07",
+      "ExecMainStatus": "0",
+      "ActiveState": "inactive"
+    }
+  },
+  "backup_first_execution": "manual systemctl start of installed service; daily timer enabled, next due 02:15 Asia/Ho_Chi_Minh plus randomized delay",
+  "external_alerts_sent": false
+}

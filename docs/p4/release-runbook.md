@@ -8,7 +8,7 @@
   - Wrapper thực tế: `/opt/crm-cskh-staging/staging-compose` · Cấu hình: `/opt/crm-cskh-staging/.env.staging` (`0600`)
   - Overlay tên miền thực tế: `/opt/crm-cskh-staging/compose.domain.yaml` (nối sau 8 tệp Compose gốc qua `--extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml`)
   - Image đang chạy: `sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9` (source `467204176326f046442b5e20c381f9a895b6e176`)
-- **Trạng thái thực thi Go-Live Production hiện tại:** **`BLOCKED`** *(Chờ hoàn tất trọn vẹn cổng `G07`/`G08` offsite tự động `BLK-INFRA-05`, đầu mối cảnh báo `BLK-GOV-06`/`BLK-INFRA-07`, UAT ký nhận `G13..G22` và phê duyệt cắt chuyển của Owner — chưa tự merge hoặc tự cutover live)*.
+- **Trạng thái thực thi Go-Live Production hiện tại:** **`BLOCKED`** *(Diễn tập khôi phục bản clone cô lập trên VPS đã `PASS` tại `142.598s` và timer sức khỏe 5 phút đã tự kích hoạt `PASS`; Go-Live toàn bộ P4 vẫn `BLOCKED` chờ Owner cấp đích lưu trữ offsite tự động `BLK-INFRA-05` cho `G07`, đầu mối/webhook cảnh báo `BLK-GOV-06`/`BLK-INFRA-07` cho `G19`/`G24`, ký nhận UAT 5 vai trò `G13..G22` và phê duyệt cắt chuyển — tuyệt đối chưa tự nâng P4 thành `PASS` hoặc tự cutover live)*.
 
 ---
 

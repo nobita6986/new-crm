@@ -1,0 +1,164 @@
+{
+  "timestamp_utc": "2026-11-09T13:05:47Z",
+  "environment": "staging",
+  "site": "crm-staging.localhost",
+  "extra_compose_files": [
+    "/opt/crm-cskh-staging/compose.domain.yaml"
+  ],
+  "status": "PASS",
+  "containers": {
+    "status": "PASS",
+    "missing_daemon_services": [],
+    "unhealthy_services": [],
+    "scheduler_running_instances": 1,
+    "scheduler_uptime_seconds": 158139,
+    "restarts_or_oom": []
+  },
+  "disk": {
+    "total_bytes": 82572156928,
+    "used_bytes": 19640721408,
+    "free_bytes": 59425406976,
+    "used_percent": 23.79,
+    "warn_threshold_pct": 80.0,
+    "critical_threshold_pct": 90.0,
+    "level": "OK"
+  },
+  "queues_and_scheduler": {
+    "status": "PASS",
+    "scheduler_disabled": false,
+    "scheduler_uptime_seconds": 158139,
+    "startup_grace_override_seconds": null,
+    "queues": {
+      "default": {
+        "failed": 0,
+        "queued": 0
+      },
+      "long": {
+        "failed": 0,
+        "queued": 0
+      },
+      "short": {
+        "failed": 0,
+        "queued": 0
+      }
+    },
+    "unregistered_cron_jobs": [],
+    "failed_latest_cron_jobs": [],
+    "never_completed_cron_jobs": [],
+    "stale_cron_jobs": [],
+    "in_startup_grace_cron_jobs": [],
+    "cron_last_complete_lag_seconds": {
+      "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations": 25,
+      "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes": 25,
+      "crm_cskh.jobs.run_export.expire_stale_exports": 323,
+      "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods": 39809
+    },
+    "cron_job_details": {
+      "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations": {
+        "last_complete_lag_seconds": 25,
+        "latest_any_status": "Complete",
+        "latest_terminal_lag_seconds": 25,
+        "latest_terminal_status": "Complete",
+        "registered": true,
+        "scheduled_job_type": "evaluate_sla.evaluate_sla_obligations"
+      },
+      "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes": {
+        "last_complete_lag_seconds": 25,
+        "latest_any_status": "Complete",
+        "latest_terminal_lag_seconds": 25,
+        "latest_terminal_status": "Complete",
+        "registered": true,
+        "scheduled_job_type": "recompute_kpi.drain_dirty_kpi_scopes"
+      },
+      "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods": {
+        "last_complete_lag_seconds": 39809,
+        "latest_any_status": "Complete",
+        "latest_terminal_lag_seconds": 39809,
+        "latest_terminal_status": "Complete",
+        "registered": true,
+        "scheduled_job_type": "recompute_kpi.refresh_current_standard_periods"
+      },
+      "crm_cskh.jobs.run_export.expire_stale_exports": {
+        "last_complete_lag_seconds": 323,
+        "latest_any_status": "Complete",
+        "latest_terminal_lag_seconds": 323,
+        "latest_terminal_status": "Complete",
+        "registered": true,
+        "scheduled_job_type": "run_export.expire_stale_exports"
+      }
+    },
+    "error_log_last_15m": 0
+  },
+  "business_invariants": {
+    "status": "PASS",
+    "failed_invariants": [],
+    "details": {
+      "INV-01_single_active_owner_and_sync": {
+        "duplicate_active_leads": 0,
+        "owner_mismatch_active_work_items": 0,
+        "active_claim_count_mismatch": 0
+      },
+      "INV-02_attempt_idempotency_and_verification": {
+        "duplicate_attempt_idempotency_keys": 0,
+        "unverified_marked_verified": 0
+      },
+      "INV-03_followup_callback_task_integrity": {
+        "orphan_or_misassigned_open_followup_tasks": 0
+      },
+      "INV-04_sla_engine_integrity": {
+        "duplicate_sla_idempotency_keys": 0,
+        "stale_unevaluated_overdue_sla": 0
+      },
+      "INV-05_kpi_snapshot_and_dirty_scope_integrity": {
+        "stuck_dirty_scopes_over_30m": 0,
+        "false_zero_qa_snapshots": 0
+      },
+      "INV-06_export_ttl_enforcement": {
+        "unexpired_completed_exports_past_2h_grace": 0
+      }
+    },
+    "effective_p3_flags": {
+      "p3_sla_enabled": true,
+      "p3_reporting_enabled": true
+    },
+    "qa_snapshot_audit": {
+      "false_zero_qa_snapshots": 0,
+      "qa_zero_denom_null_snapshots": 8,
+      "total_snapshots": 8
+    }
+  },
+  "backup_freshness_and_offsite": {
+    "status": "PASS",
+    "lifecycle_file": "/var/backups/crm-cskh/latest-backup-lifecycle.json",
+    "exists": true,
+    "local_backup_status": "PASS",
+    "age_hours": 0.086,
+    "max_age_hours": 26.0,
+    "archive_sha256": "33fdf18bf4e9168e98baee65446c215e005b44271a9507cd94b3e1e86f34e14c",
+    "offsite_copy_status": "MANUAL_OFFSITE_HASH_VERIFIED",
+    "periodic_offsite_upload_proven": false,
+    "one_off_manual_copy_proves_periodic_upload": false,
+    "end_to_end_backup_gate_g07_status": "PARTIAL_PERIODIC_OFFSITE_UNPROVEN",
+    "errors": []
+  },
+  "data_loss_window_delta": null,
+  "alert_preflight": {
+    "timestamp_utc": "2026-11-09T13:05:45Z",
+    "status": "BLOCKED",
+    "operator_contact_configured": false,
+    "webhook_https_configured": false,
+    "blockers": [
+      {
+        "id": "BLK-GOV-06",
+        "field": "CSKH_OPERATOR_CONTACT",
+        "reason": "Named Day-2 Operator / on-call recipient has not been assigned and signed off by Owner."
+      },
+      {
+        "id": "BLK-INFRA-07",
+        "field": "CSKH_ALERT_WEBHOOK_URL",
+        "reason": "Approved HTTPS alert delivery endpoint (Webhook / ChatOps / Pager) has not been provisioned."
+      }
+    ]
+  },
+  "triggered_alerts": []
+}

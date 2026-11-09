@@ -424,6 +424,7 @@ class BackupValidationTests(unittest.TestCase):
         )
         svc = hc["crm-cskh-healthcheck.service"]
         self.assertIn("--extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml", svc)
+        self.assertIn("EnvironmentFile=-/etc/crm-cskh/alerting.env", svc)
         self.assertNotIn("--send-test-alert", svc)
         self.assertNotIn("CSKH_ALERT_WEBHOOK_URL", svc)
 
@@ -433,8 +434,20 @@ class BackupValidationTests(unittest.TestCase):
             site="crm-staging.localhost",
         )
         self.assertIn("manage_backup_lifecycle.py run-scheduled", bk["crm-cskh-backup.service"])
+        self.assertIn(
+            "EnvironmentFile=-/etc/crm-cskh/offsite-backup.env",
+            bk["crm-cskh-backup.service"],
+        )
+        self.assertIn(
+            "EnvironmentFile=-/etc/crm-cskh/alerting.env",
+            bk["crm-cskh-backup.service"],
+        )
         self.assertIn("OnFailure=crm-cskh-backup-failure@%n.service", bk["crm-cskh-backup.service"])
         self.assertIn("crm-cskh-backup-failure@.service", bk)
+        self.assertIn(
+            "EnvironmentFile=-/etc/crm-cskh/alerting.env",
+            bk["crm-cskh-backup-failure@.service"],
+        )
         self.assertIn(
             "--backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json",
             svc,
@@ -477,11 +490,29 @@ class BackupValidationTests(unittest.TestCase):
                     offsite_target_dir=backup_root / "nested-offsite",
                 )
 
-            # 2. Disjoint automated offsite target copies archive + report ONLY (never backup-key)
+            # 1b. Sibling directory on the SAME host filesystem/VPS disk MUST fail closed by default!
+            with self.assertRaisesRegex(ValueError, "NOT valid offsite storage"):
+                sync_bundle_offsite_automated(
+                    bdir,
+                    backup_root=backup_root,
+                    offsite_target_dir=offsite_vault,
+                )
+
+            # 1c. Upload command referencing backup-key MUST fail closed!
+            with self.assertRaisesRegex(ValueError, "never reference or upload backup-key"):
+                sync_bundle_offsite_automated(
+                    bdir,
+                    backup_root=backup_root,
+                    offsite_upload_cmd="scp backup-key user@remote:/vault/",
+                    offsite_verify_cmd="sha256sum /vault/backup.tar.gz.enc",
+                )
+
+            # 2. Disjoint automated offsite target (with explicit CI drill flag) copies archive + report ONLY
             verified = sync_bundle_offsite_automated(
                 bdir,
                 backup_root=backup_root,
                 offsite_target_dir=offsite_vault,
+                allow_same_filesystem_for_drill=True,
             )
             self.assertEqual(verified["end_to_end_backup_status"], "PASS")
             self.assertTrue(verified["periodic_offsite_upload_proven"])
@@ -498,6 +529,7 @@ class BackupValidationTests(unittest.TestCase):
                     bdir,
                     backup_root=backup_root,
                     offsite_target_dir=offsite_vault,
+                    allow_same_filesystem_for_drill=True,
                 )
 
             # 4. Failure alert writes redacted ALT-BACKUP-FAILURE JSONL and keeps external channel gated
@@ -884,6 +916,84 @@ class BackupValidationTests(unittest.TestCase):
                         _parse_exec_line(normalized)
                         parsed_count += 1
         self.assertGreaterEqual(parsed_count, 12)
+
+    def test_vps_live_evidence_bundle_and_env_templates_reconciled(self) -> None:
+        """Verify T0 VPS evidence SHA-256 reconciliation, CI/VPS separation, and drop-in templates."""
+        vps_dir = OPS_DIR / "evidence" / "p4-vps-live-20261109"
+        ci_dir = OPS_DIR / "evidence" / "p4-g07-g08-dr-20261109"
+        self.assertTrue(vps_dir.is_dir())
+        self.assertTrue(ci_dir.is_dir())
+
+        vps_manifest = json.loads(
+            (vps_dir / "vps-evidence-manifest.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            vps_manifest["ops_sha"], "801be22b3be2c8199704c4da7442b0c2e0edf352"
+        )
+        self.assertEqual(len(vps_manifest["files"]), 11)
+        for item in vps_manifest["files"]:
+            fp = vps_dir / item["name"]
+            self.assertTrue(fp.is_file(), item["name"])
+            raw = fp.read_bytes()
+            self.assertEqual(len(raw), item["bytes"], item["name"])
+            self.assertEqual(hashlib.sha256(raw).hexdigest(), item["sha256"], item["name"])
+
+        restore_doc = json.loads(
+            (vps_dir / "restore-drill-report.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(restore_doc["status"], "PASS")
+        self.assertEqual(
+            restore_doc["rto"]["measured_end_to_end_isolated_dr_rto_seconds"], 142.598
+        )
+        self.assertEqual(restore_doc["cleanup_exit_code"], 0)
+        self.assertTrue(restore_doc["live_containers_unchanged"])
+
+        timers_doc = json.loads(
+            (vps_dir / "timers-runtime.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            timers_doc["timers"]["crm-cskh-healthcheck.timer"]["LastTriggerUSec"],
+            "Mon 2026-11-09 20:05:45 +07",
+        )
+        # Honest distinction: backup timer is enabled, but first measured run was manual start
+        self.assertEqual(
+            timers_doc["timers"]["crm-cskh-backup.timer"]["UnitFileState"], "enabled"
+        )
+        self.assertEqual(
+            timers_doc["timers"]["crm-cskh-backup.timer"]["LastTriggerUSec"], ""
+        )
+
+        # Verify vendor-neutral drop-in env templates exist and contain zero fake signers/secrets
+        offsite_tpl = (
+            REPO_ROOT / "deploy" / "compose" / "env" / "offsite-backup.env.example"
+        ).read_text(encoding="utf-8")
+        alert_tpl = (
+            REPO_ROOT / "deploy" / "compose" / "env" / "alerting.env.example"
+        ).read_text(encoding="utf-8")
+        self.assertIn("st_dev", offsite_tpl)
+        self.assertIn("NEVER upload or reference `backup-key`", offsite_tpl)
+        self.assertIn("BLK-GOV-06", alert_tpl)
+        self.assertIn("BLK-INFRA-07", alert_tpl)
+
+        manifest_path = OPS_DIR / "evidence" / "p4-resume-ops-manifest.json"
+        manifest_doc = json.loads(manifest_path.read_text(encoding="utf-8"))
+        self.assertEqual(manifest_doc["schema_version"], "p4-resume-ops-manifest-v4")
+        self.assertFalse(manifest_doc["p4_promoted_to_pass"])
+        self.assertEqual(
+            manifest_doc["live_vps"]["vps_isolated_restore_drill_runtime_status"], "PASS"
+        )
+        self.assertEqual(
+            manifest_doc["live_vps"]["vps_backup_timer_status"],
+            "ENABLED_AWAITING_FIRST_SCHEDULED_TRIGGER",
+        )
+        for entry in manifest_doc["deliverables"]:
+            target = REPO_ROOT / entry["path"]
+            self.assertTrue(target.is_file(), entry["path"])
+            raw_bytes = target.read_bytes()
+            self.assertEqual(len(raw_bytes), entry["bytes"], entry["path"])
+            self.assertEqual(
+                hashlib.sha256(raw_bytes).hexdigest(), entry["sha256"], entry["path"]
+            )
 
 
 if __name__ == "__main__":

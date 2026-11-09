@@ -1,15 +1,31 @@
 {
-  "schema_version": "p4-resume-ops-manifest-v3",
-  "generated_at_utc": "2026-11-09T12:30:34Z",
+  "schema_version": "p4-resume-ops-manifest-v4",
+  "generated_at_utc": "2026-11-09T13:26:40Z",
   "branch": "codex/p4-resume-ops",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
   "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
   "ancestor_review_base_sha": "31e51fcac7a640fdab10517f47f02335d7b1f749",
   "verified_code_commit_sha": "49678c49154ad21fddb1ddc38d5b905959a504e2",
-  "ci_run_id": 42615723010,
-  "ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42615723010",
-  "g07_g08_dr_manifest_path": "deploy/ops/evidence/p4-g07-g08-dr-20261109/SHA256SUMS.manifest.json",
-  "g07_g08_dr_manifest_sha256": "e1858ff8f0851cfd87007ef695b91f0a025f8056b208cf05fbe441d2c0623f2e",
+  "vps_execution_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
+  "overall_p4_status": "IN_PROGRESS_BLOCKED_ON_OWNER_INPUTS",
+  "p4_promoted_to_pass": false,
+  "evidence_separation": {
+    "ci_container_evidence": {
+      "ci_run_id": 42615723010,
+      "ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42615723010",
+      "manifest_path": "deploy/ops/evidence/p4-g07-g08-dr-20261109/SHA256SUMS.manifest.json",
+      "manifest_sha256": "e1858ff8f0851cfd87007ef695b91f0a025f8056b208cf05fbe441d2c0623f2e",
+      "preserved_untouched": true
+    },
+    "vps_live_runtime_evidence": {
+      "host": "103.77.208.186",
+      "executed_by": "T0",
+      "ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
+      "manifest_path": "deploy/ops/evidence/p4-vps-live-20261109/vps-evidence-manifest.json",
+      "manifest_sha256": "daa60a1366452c90fcaa1ea3a2f549d82a2d8aa06c6bb697312ea173b2f79493",
+      "sha256sums_path": "deploy/ops/evidence/p4-vps-live-20261109/SHA256SUMS.txt"
+    }
+  },
   "live_vps": {
     "host": "103.77.208.186",
     "public_url": "https://crm.hrpartner.vn",
@@ -20,25 +36,60 @@
     "app_image_digest": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
     "app_source_sha": "467204176326f046442b5e20c381f9a895b6e176",
     "owner_live_site_touched": false,
-    "ssh_available_in_t1a_env": false,
-    "vps_isolated_restore_drill_runtime_status": "NOT_RUN",
-    "vps_dr_marked_complete": false,
-    "vps_systemd_timers_live_run_status": "NOT_RUN"
+    "live_containers_unchanged": true,
+    "vps_isolated_restore_drill_runtime_status": "PASS",
+    "vps_isolated_restore_rto": {
+      "phase_a_end_to_end_isolated_clone_seconds": 142.598,
+      "sql_and_files_restore_only_seconds": 22.585,
+      "phase_a_migrate_x2_seconds": [
+        10.247,
+        9.767
+      ],
+      "phase_b_positive_negative_control_seconds": 66.366,
+      "phase_b_migrate_x2_seconds": [
+        10.635,
+        11.234
+      ],
+      "rto_scope": "same_vps_isolated_clone_only_excludes_wan_transfer_new_server_provisioning_and_dns_cutover",
+      "cleanup_exit_code": 0,
+      "cleanup_remaining_resources": 0
+    },
+    "vps_healthcheck_timer_status": "ACTIVE_ENABLED_AUTO_TRIGGERED_PASS",
+    "vps_healthcheck_timer_last_trigger": "Mon 2026-11-09 20:05:45 +07",
+    "vps_backup_service_manual_run_status": "PASS",
+    "vps_backup_service_manual_window": "Mon 2026-11-09 20:00:28 +07 -> 20:00:36 +07",
+    "vps_backup_timer_status": "ENABLED_AWAITING_FIRST_SCHEDULED_TRIGGER",
+    "vps_backup_timer_next_elapse": "Tue 2026-11-10 02:16:41 +07",
+    "vps_backup_timer_last_trigger": "",
+    "manual_service_run_proves_scheduled_timer_trigger": false,
+    "external_alerts_sent": false
   },
   "offsite_backup_verified": {
-    "bundle_id": "p4-20261109-pre-scheduler",
-    "archive_sha256": "d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11",
-    "archive_bytes": 312672,
-    "restore_input_key_path_on_vps": "/opt/crm-p4-restore-input-20261109/backup-key",
-    "offsite_status": "OFFSITE_COPY_HASH_VERIFIED",
+    "pre_scheduler_bundle": {
+      "bundle_id": "p4-20261109-pre-scheduler",
+      "archive_sha256": "d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11",
+      "archive_bytes": 312672,
+      "restore_input_key_path_on_vps": "/opt/crm-p4-restore-input-20261109/backup-key",
+      "offsite_status": "OFFSITE_COPY_HASH_VERIFIED",
+      "vps_isolated_restore_drill": "PASS"
+    },
+    "latest_manual_service_bundle": {
+      "bundle_id": "scheduled-20261109T130029Z-1400885",
+      "archive_sha256": "33fdf18bf4e9168e98baee65446c215e005b44271a9507cd94b3e1e86f34e14c",
+      "archive_bytes": 349920,
+      "manual_offsite_copy_hash_verified": true,
+      "key_stored_separately_from_archive": true
+    },
     "one_off_manual_copy_proves_periodic_upload": false,
+    "same_vps_directory_rejected_by_st_dev_guard": true,
+    "backup_key_upload_rejected_by_guard": true,
     "live_vps_end_to_end_automated_backup_status": "PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED",
     "automated_offsite_runner_linux_drill_status": "PASS"
   },
   "test_results": {
     "test_offsite_restore": {
-      "ran": 13,
-      "passed": 13,
+      "ran": 14,
+      "passed": 14,
       "status": "PASS"
     },
     "test_ops_toolkit_windows_appcontainer": {
@@ -51,69 +102,101 @@
       "passed": 16,
       "status": "PASS"
     },
-    "test_smoke_runner_safety": {
-      "ran": 11,
-      "passed": 10,
-      "skipped": 1,
-      "status": "PASS"
-    },
     "compose_4_stack_validation": {
       "checked_stacks": 4,
       "status": "PASS"
     },
-    "systemd_timers_dry_run_and_cli_parser_audit": {
+    "pr_isolation_audit": {
+      "status": "PASS"
+    },
+    "vps_live_archive_restore_drill": {
       "status": "PASS",
-      "vps_live_timer_execution": "NOT_RUN"
+      "evidence": "deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json",
+      "restore_scripts_unchanged_since_801be22": true,
+      "rerun_required": false
     },
     "g07_backup_lifecycle_drill_ci": {
-      "status": "PASS"
+      "status": "PASS",
+      "evidence": "deploy/ops/evidence/p4-g07-g08-dr-20261109/g07-backup-lifecycle-drill.json"
     },
     "g08_restore_positive_and_negative_control_drill_ci": {
       "status": "PASS",
       "negative_control_decrypt_exception": "ValidationError",
       "measured_dr_rto_seconds": 50.352,
       "sql_only_seconds": 2.965,
-      "cleanup_remaining_resources": 0
-    },
-    "vps_live_archive_restore_drill": {
-      "status": "NOT_RUN",
-      "reason": "No SSH key in T1A environment; handed over with verified SHA & commands for T0 execution"
+      "cleanup_remaining_resources": 0,
+      "evidence": "deploy/ops/evidence/p4-g07-g08-dr-20261109/g08-restore-drill-report.json"
     },
     "isolated_staging_dr_https_rehearsal_ci": {
-      "status": "PASS"
+      "status": "PASS",
+      "evidence": "deploy/ops/evidence/p4-g07-g08-dr-20261109/isolated-staging-dr-https-report.json"
     }
   },
-  "real_blockers": [
+  "reconciled_history": [
     {
       "id": "BLK-EXEC-VPS-SSH",
-      "scope": "SSH execution on live VPS 103.77.208.186 for archive d6f1a0a1... restore drill & live systemd timer run",
-      "status": "NOT_RUN_NO_SSH_IN_T1A_ENV",
-      "summary": "T1A environment has no SSH private key for 103.77.208.186 (Permission denied publickey,password). Live VPS restore drill on /opt/crm-p4-restore-input-20261109/backup.tar.gz.enc + backup-key and live systemd timer install/start are recorded NOT RUN (DR NOT marked complete on VPS) and handed over with parser-verified commands at exact SHA for T0 execution."
-    },
+      "previous_status": "NOT_RUN_NO_SSH_IN_T1A_ENV",
+      "current_status": "CLOSED_BY_T0_VPS_EXECUTION_AT_801BE22",
+      "summary": "T0 executed the parser-verified commands on VPS 103.77.208.186 at ops_sha 801be22b3be2c8199704c4da7442b0c2e0edf352; isolated clone restore (Phase A 142.598s + Phase B 66.366s), cleanup, healthcheck timer auto-trigger (20:05 ICT), and manual backup service run all returned PASS without touching the live stack."
+    }
+  ],
+  "real_blockers": [
     {
       "id": "BLK-INFRA-05",
-      "scope": "Live VPS periodic automated offsite upload target/credentials",
+      "scope": "Live VPS periodic automated offsite upload target/credentials & off-VPS key escrow vault",
       "status": "OPEN_INFRA_CREDENTIAL_REQUIRED",
-      "summary": "Automated offsite sync + remote SHA-256 readback is implemented & verified on Linux containers; live VPS offsite automation remains PARTIAL (PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED / PARTIAL_LOCAL_ONLY_OFFSITE_PENDING) until T0/Owner provisions an automated offsite upload destination."
+      "required_owner_inputs": [
+        "Off-VPS storage target (S3-compatible object storage, remote SFTP/SSH backup host, or separate mounted volume with distinct st_dev outside VPS 103.77.208.186)",
+        "Least-privilege write+readback credentials/SSH key provisioned on VPS at /etc/crm-cskh/offsite-backup.env (mode 0600, template deploy/compose/env/offsite-backup.env.example)",
+        "Designated independent off-VPS password manager/vault for escrowing site_config.json encryption_key and per-bundle backup-key (never uploaded with backup.tar.gz.enc)"
+      ],
+      "summary": "Two manual offsite copies are SHA-256 verified, and same-VPS st_dev + backup-key upload guards are enforced in manage_backup_lifecycle.py, but automated periodic offsite upload remains PARTIAL until Owner populates /etc/crm-cskh/offsite-backup.env."
     },
     {
       "id": "BLK-GOV-06",
-      "scope": "Named Day-2 Operator & role UAT signers",
+      "scope": "Named Day-2 primary/backup operators, alert recipients, and business UAT signers",
       "status": "GATED_PENDING_OWNER_ASSIGNMENT",
-      "summary": "External email/chat alerts remain strictly disabled until Owner designates recipient/contact."
+      "required_owner_inputs": [
+        "Primary and backup Day-2 Operator names and contact handles for operations-sop.md & monitoring-alerts.md",
+        "Named business UAT testers & sign-off authorities for CSKH Staff, CSKH Leader, CSKH Admin, BOD, and Release Owner in docs/p4/uat-report.md",
+        "Formal decision on CVE risk-acceptance requests in docs/p4/p4-02-cve-exception-requests.md (if promoting to G05)"
+      ],
+      "summary": "No signer or recipient names are fabricated; human UAT and on-call tables remain explicit PENDING_OWNER_INPUT placeholders."
     },
     {
       "id": "BLK-INFRA-07",
       "scope": "Approved external HTTPS alert webhook/channel",
       "status": "GATED_PENDING_OWNER_CHANNEL",
-      "summary": "External webhook URL remains strictly disabled until Owner designates channel."
+      "required_owner_inputs": [
+        "Approved HTTPS webhook URL (Slack/Google Chat/Teams/Pager/Telegram proxy) provisioned on VPS at /etc/crm-cskh/alerting.env (mode 0600, template deploy/compose/env/alerting.env.example)",
+        "End-to-end delivery confirmation of synthetic drill alert without PII"
+      ],
+      "summary": "External alerts remain gated off by default (external_alerts_sent: false) until Owner approves channel & recipient and populates /etc/crm-cskh/alerting.env."
+    }
+  ],
+  "pending_operational_followups": [
+    {
+      "id": "OPS-FOLLOWUP-BACKUP-TIMER-01",
+      "scope": "Verify first scheduled trigger of crm-cskh-backup.timer",
+      "next_elapse_local": "Tue 2026-11-10 02:16:41 +07",
+      "note": "crm-cskh-backup.timer is enabled/active, while the 2026-11-09 20:00:28 +07 backup run was a manual systemctl start of crm-cskh-backup.service."
     }
   ],
   "deliverables": [
     {
       "path": ".github/workflows/p4-ops-dr-rehearsal.yml",
-      "bytes": 22574,
-      "sha256": "db23062656766565cc59d93db697d95fd66100a356af8d81203b041287e9c7a6"
+      "bytes": 22676,
+      "sha256": "cb8664a2c3ef2a45760a9aa6cb592ea4afc92f745fe3f43c673ec1ec2fad5bba"
+    },
+    {
+      "path": "deploy/compose/env/alerting.env.example",
+      "bytes": 1230,
+      "sha256": "3cf63980d38ca3d4fdbb49afb693bcb3c02874726b7169b86fca1da97815eb30"
+    },
+    {
+      "path": "deploy/compose/env/offsite-backup.env.example",
+      "bytes": 4078,
+      "sha256": "67849998866160ff6c75d5de47261cd7651da45e03546aac1488d90fc0091e3c"
     },
     {
       "path": "deploy/compose/env/staging-dr-https.env.example",
@@ -139,6 +222,11 @@
       "path": "deploy/ops/create_encrypted_backup.py",
       "bytes": 12787,
       "sha256": "ff558ab1128a6881b9f5e55d005d50975872f034019b9d49bc0c97b057bf7bf8"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-g07-g08-dr-20261109/SHA256SUMS.manifest.json",
+      "bytes": 16244,
+      "sha256": "e1858ff8f0851cfd87007ef695b91f0a025f8056b208cf05fbe441d2c0623f2e"
     },
     {
       "path": "deploy/ops/evidence/p4-g07-g08-dr-20261109/compose-validation-4-stacks.json",
@@ -176,14 +264,79 @@
       "sha256": "4c143c9accc829568c58ef58f5fea3108fbc37ae0c14f53ecdfc042458264204"
     },
     {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/SHA256SUMS.txt",
+      "bytes": 1104,
+      "sha256": "13515f07081396cc147539e3861ce367098cdd5fc2e1fdbe7e79df2ce90d88c1"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/backup-lifecycle.json",
+      "bytes": 1815,
+      "sha256": "9f1aa768b7ad749ba9cae958e1313898ed2db81c2774b4a2bc6dbccdb86e3b9c"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json",
+      "bytes": 5391,
+      "sha256": "c33647f44c354733876509639c45374cf333f7421dbcc132fe1b8078ce5b7182"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/live-preservation-check.json",
+      "bytes": 406,
+      "sha256": "ce35cdc92c5a83e78dcc1af8057d30c438aac404b79e8aa0b4488e734a86b77a"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/manual-offsite-receipt.json",
+      "bytes": 897,
+      "sha256": "5b2a9497ad9e8ba8cbe0c26286f4690f0e486f8372b7e151bb87024039c78db0"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/offsite-verification.json",
+      "bytes": 512,
+      "sha256": "6cf7c9673a29fb7e2a10b8b29bd6ca8da637a62210f53d432a4919ff2dd29f7a"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json",
+      "bytes": 9775,
+      "sha256": "af2d0a899e84d68243f80d64ad4d8ed43b4c2f21e5c28355c9022001c56f689c"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/scheduled-backup-report.json",
+      "bytes": 1867,
+      "sha256": "9f9d0e3e7d9645d0819e09e1494d73066c9480bcded186c40a795c24a75cfe16"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/systemd-timers-dry-run.json",
+      "bytes": 2998,
+      "sha256": "74daa55b3783137af360c7ee174f71bc120c0346e0d1bf1141757774f09bd761"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/systemd-timers-installed.json",
+      "bytes": 3087,
+      "sha256": "e54e8ad0db86c0cb73cb226f7dbc5aaf82404dae847d6b4eb8a83cf83e62f812"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/systemd-unit-verify.log",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json",
+      "bytes": 1212,
+      "sha256": "aa14023a5786775be6484d1929c4ae3e337a1dc0bc7a0f0558a8e92bc18aa8eb"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-vps-live-20261109/vps-evidence-manifest.json",
+      "bytes": 1886,
+      "sha256": "daa60a1366452c90fcaa1ea3a2f549d82a2d8aa06c6bb697312ea173b2f79493"
+    },
+    {
       "path": "deploy/ops/install_systemd_timers.py",
-      "bytes": 10802,
-      "sha256": "27594127c98e2b7554da22b3985433a82efcfef1a9c75da3cc91b084220e6ccf"
+      "bytes": 12968,
+      "sha256": "05ac9c1eb2073016ab5ce74eeb01b0cf3e674a4268b4abd6873ee909a1c57e26"
     },
     {
       "path": "deploy/ops/manage_backup_lifecycle.py",
-      "bytes": 38397,
-      "sha256": "24ab36c2045c38ccbfc5ba1492b5fe866a3a97e5906d282c137722f361203d90"
+      "bytes": 39948,
+      "sha256": "7e26700796f480f2cb45a103a5f393d1fc88a2a9a48ae987b14871c2421b8286"
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
@@ -207,13 +360,13 @@
     },
     {
       "path": "deploy/ops/systemd/crm-cskh-backup-failure@.service",
-      "bytes": 504,
-      "sha256": "2c9e573f218be9ac63b50d3215e8855d67734b606621c8e1a06892f9000e59b0"
+      "bytes": 548,
+      "sha256": "e698a9a52fbd7002fba6d857976871cc4e77c5a94a8a6c2819cd1a2fca4d28a7"
     },
     {
       "path": "deploy/ops/systemd/crm-cskh-backup.service",
-      "bytes": 696,
-      "sha256": "80a633466fc822b1209d1013d3c3f558b6586e53729ec7648581a54d68418508"
+      "bytes": 790,
+      "sha256": "4dd407337d16d0d23ff183512decb4587643334e267e58cbb5d46d171c56c3f8"
     },
     {
       "path": "deploy/ops/systemd/crm-cskh-backup.timer",
@@ -222,8 +375,8 @@
     },
     {
       "path": "deploy/ops/systemd/crm-cskh-healthcheck.service",
-      "bytes": 970,
-      "sha256": "b308f877c10a7a8ba29d581e3bf4d37c64448a47243dff3dd7079d5e6e881b61"
+      "bytes": 1014,
+      "sha256": "5fe78e7535b7b0e48e9c0b51d1fe64497994162254825c0e0a0bbadbf9c60764"
     },
     {
       "path": "deploy/ops/systemd/crm-cskh-healthcheck.timer",
@@ -232,8 +385,8 @@
     },
     {
       "path": "deploy/ops/test_offsite_restore.py",
-      "bytes": 40254,
-      "sha256": "89e64542beab0feab25e328f0cb43153a0799e0073a9aa1964278121d448b51c"
+      "bytes": 45377,
+      "sha256": "826b89facfe32d7839ad1ec16d34bd914ad1a7812483b192ee7c541bc9d38e10"
     },
     {
       "path": "deploy/ops/test_ops_toolkit.py",
@@ -267,8 +420,8 @@
     },
     {
       "path": "docs/p4/backup-restore.md",
-      "bytes": 22004,
-      "sha256": "195ea5f46feecb1de50db326745cd622e71c27b58403c1b3290db51ddd0734bb"
+      "bytes": 37183,
+      "sha256": "242a1c650945a18782c1bdaaa6b25118424578e620cfb0e5c4ba07521fe138c0"
     },
     {
       "path": "docs/p4/entry-audit.md",
@@ -297,13 +450,13 @@
     },
     {
       "path": "docs/p4/monitoring-alerts.md",
-      "bytes": 16783,
-      "sha256": "bdb9a48ec79a5e7d0754c7807027009806ea32cfa3c6f9a8bd95bfe1f3bd4ca4"
+      "bytes": 19075,
+      "sha256": "7904177f08c7e3bd318a3c5bd9e3cf477b87f5c485a27db0737238ac09d0d3ab"
     },
     {
       "path": "docs/p4/operations-sop.md",
-      "bytes": 17938,
-      "sha256": "83e32f600b730e371c4aa5e20656f8e460dd9c2cdf3e095ff52c9bc9e94844d3"
+      "bytes": 22098,
+      "sha256": "b78c6f6f88a89198722e4940eff748dcc3cfc9bf90bcb60a7904cf313e3874d1"
     },
     {
       "path": "docs/p4/p4-01-compose-and-blockers.md",
@@ -347,18 +500,18 @@
     },
     {
       "path": "docs/p4/release-runbook.md",
-      "bytes": 12937,
-      "sha256": "6cd5305f7b73167af4f25c1f241d003a2e44ac67ec31cdd4e26aa923b84f54c1"
+      "bytes": 13175,
+      "sha256": "2e93e51c084e43f0382b611213d59870d67b6d7c051c418c509b3aa19679acbf"
     },
     {
       "path": "docs/p4/rollback-runbook.md",
-      "bytes": 22105,
-      "sha256": "45071092122857ff37796b5bee2aa3bbfd72ae5051dad90ea6bde83183ca1f96"
+      "bytes": 23090,
+      "sha256": "a54937d15110fb48c2d3036af5e5b9af78d0a6eec97e5d602bf297c50f4fdc3b"
     },
     {
       "path": "docs/p4/uat-report.md",
-      "bytes": 23194,
-      "sha256": "5906e49c5b47ab8a84cc54720d3a4d6a3a84f206605c5b8362e57051bd91989e"
+      "bytes": 24144,
+      "sha256": "bb20ef2f02792964e59768a5c1de66be75fa8c8157c427a9260b91ab425c9a68"
     }
   ]
 }

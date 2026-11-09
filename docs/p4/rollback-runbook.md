@@ -223,6 +223,9 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
 
 ## 5. Kịch Bản Mất Toàn Bộ VPS — Dựng Mới Máy Chủ & Khôi Phục Thảm Họa (`Bare-Metal / Total VPS Loss DR`)
 
+> [!IMPORTANT]
+> **Phạm vi đối chiếu thời gian khôi phục (`RTO`):** Trong diễn tập khôi phục cô lập ngày `09/11/2026` trên VPS `103.77.208.186` ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json)), Pha A khôi phục hoàn chỉnh 9 chặng (giải mã → dựng stack → `new-site` → `restore` SQL + files → `migrate ×2` → đối soát `INV-01..06` + `5/5 Translation` → HTTP/CSRF smoke) đạt **`142.598 giây`** (`sql_and_files_restore_only = 22.585 giây`). **Con số `142.598 giây` này chỉ đo bản clone trên cùng máy chủ VPS khi gói sao lưu và Docker image đã sẵn có trên ổ đĩa cục bộ; kịch bản Mất toàn bộ VPS dưới đây sẽ cộng thêm thời gian: (1) cấp phát máy chủ mới & cài đặt OS/tường lửa/Docker, (2) tải gói sao lưu mã hóa và image qua mạng WAN, và (3) chuyển đổi DNS + cấp lại chứng chỉ TLS.**
+
 Áp dụng khi máy chủ `103.77.208.186` hỏng phần cứng không thể khôi phục tại chỗ và phải dựng lại từ đầu trên một VPS Linux mới:
 
 ### Bước 1 — Cấp phát VPS mới & Khóa cứng Tường lửa trước khi mở mạng

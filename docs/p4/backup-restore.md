@@ -9,10 +9,10 @@
   - Kiểm thử đơn vị: [`deploy/ops/test_offsite_restore.py`](../../deploy/ops/test_offsite_restore.py)
 
 > [!WARNING]
-> **Báo cáo trung thực trạng thái Sao lưu End-to-End (`G07`):**
-> - **Đã hoàn tất trong mã nguồn & kiểm chứng thực tế trên container Linux:** Tạo gói sao lưu mã hóa AES-256-CBC-PBKDF2 kèm kiểm tra toàn vẹn trước đóng gói, đồng bộ offsite tự động kèm đọc ngược SHA-256 hai đầu và tách biệt khóa giải mã (`sync_bundle_offsite_automated` — tuyệt đối không bao giờ chép `backup-key` sang kho offsite), chính sách lưu giữ GFS (`14 ngày / 8 tuần / 3 tháng`), và phát cảnh báo tức thì khi sao lưu lỗi/quá hạn (`OnFailure=crm-cskh-backup-failure@%n.service` → `ALT-BACKUP-FAILURE`).
-> - **Một bản sao chép thủ công về máy Owner (`p4-20261109-pre-scheduler`, SHA-256 `d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11`) KHÔNG chứng minh upload định kỳ tự động đang chạy** (`one_off_manual_copy_proves_periodic_upload = false`).
-> - **Trên VPS live `103.77.208.186` hiện tại (`PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED` bởi `BLK-INFRA-05`):** Cho tới khi cấu hình kho đích ngoài VPS (`--offsite-target-dir` gắn kho ngoài hoặc `--offsite-upload-cmd` + `--offsite-verify-cmd` sang S3/B2/SSH kho độc lập), tiến trình hằng đêm chỉ báo `PASS` phần cục bộ và giữ nguyên trạng thái `periodic_offsite_upload_proven = false`.
+> **Báo cáo trung thực trạng thái Sao lưu (`G07`) & Diễn tập Khôi phục (`G08`) sau đối chiếu thực thi trên VPS `103.77.208.186` (`801be22`, ngày `09/11/2026`):**
+> - **Diễn tập khôi phục trên bản clone cô lập tại VPS (`G08`):** **`PASS`** ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json), SHA-256 `af2d0a899e84d68243f80d64ad4d8ed43b4c2f21e5c28355c9022001c56f689c`) — Pha A khôi phục `p4-20261109-pre-scheduler` đạt `PASS` trong **`142.598 giây`** (**phạm vi chỉ tính clone cô lập trên cùng VPS, chưa gồm truyền mạng WAN, cấp máy chủ mới hay chuyển DNS**); Pha B đối chứng Dương/Âm mã hóa Fernet (`ValidationError`), tệp public/private, `migrate ×2` và dọn sạch `0` dư lượng đạt `PASS`; container & image live `acb9505...` giữ nguyên không đổi.
+> - **Lịch & dịch vụ sao lưu hằng ngày trên VPS (`G07`):** `crm-cskh-backup.service` đã chạy thật trên VPS đạt **`PASS`** lúc `20:00:28 +07` ngày `09/11/2026` (`scheduled-20261109T130029Z-1400885`, SHA-256 `33fdf18bf4e9168e98baee65446c215e005b44271a9507cd94b3e1e86f34e14c`), đã chép thủ công ra ngoài VPS khớp checksum và lưu riêng `backup-key`. Bộ hẹn giờ `crm-cskh-backup.timer` đã `enabled`/`active` (`02:15 ICT`), **nhưng lượt chạy đã đo là khởi chạy service thủ công (`systemctl start`), chưa phải bằng chứng timer tự kích hoạt theo lịch** (`LastTriggerUSec = ""`, lịch kích hoạt tự động đầu tiên lúc `2026-11-10 02:16:41 +07`).
+> - **Đồng bộ Offsite tự động (`BLK-INFRA-05`):** Hai bản chép thủ công ra máy trạm Owner **KHÔNG chứng minh upload định kỳ tự động đang hoạt động** (`one_off_manual_copy_proves_periodic_upload = false`). Cho tới khi Owner cấp đích lưu trữ ngoài VPS và credentials vào `/etc/crm-cskh/offsite-backup.env` (`0600`), cổng `G07` trên VPS giữ nguyên trạng thái **`PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED`** (`periodic_offsite_upload_proven = false`). Tuyệt đối không coi thư mục trên cùng VPS là offsite.
 
 ---
 
@@ -49,7 +49,13 @@ Trong Frappe, khóa Fernet `encryption_key` trong `site_config.json` chỉ tự 
 | **`UNINITIALIZED_NO_ENCRYPTED_DATA`** | 1. `site_config_backup.json` nguyên vẹn (`db_name`, `db_password` hợp lệ, không bị cắt cụt).<br>2. Nguồn gốc xác nhận `encryption_key_present == False` (hoặc archive `v1` nguyên vẹn cấu hình).<br>3. Cả nguồn lẫn DB sau khôi phục có **`__Auth WHERE encrypted = 1` bằng đúng `0` dòng**.<br>4. Không để sót `encryption_key` ngẫu nhiên lạ trong `site_config.json` của bản khôi phục. | **Ném `ValueError("Missing encryption key: ...")` ngay lập tức** nếu nguồn từng có khóa (`encryption_key_present == True`), hoặc có `encryption_key_sha256`, hoặc DB có bất kỳ dòng `__Auth.encrypted = 1` nào (`> 0`), hoặc tệp cấu hình bị hỏng. |
 
 > [!IMPORTANT]
-> **Quy định Lưu ký Khóa (`Escrow`):** Ngay khi cấu hình tích hợp ngoài đầu tiên (SMTP, tổng đài, OAuth, webhook có mật khẩu mã hóa) làm phát sinh `encryption_key` trong `/opt/crm-cskh-staging` / `site_config.json`, Người vận hành **bắt buộc** sao lưu giá trị `encryption_key` vào kho lưu ký bí mật độc lập ngoài VPS (Password Vault của Owner) và chạy `create_encrypted_backup.py` ngay lập tức.
+> **Hướng Dẫn Lưu Ký Khóa Tách Biệt (`Key Escrow` — 3 Lớp Bí Mật Bắt Buộc):**
+> 1. **Khóa giải mã từng gói backup (`<bundle>/backup-key`, quyền `0600`, 256-bit hex):** Mỗi lần chạy `create_encrypted_backup.py` sinh một `backup-key` ngẫu nhiên hoàn toàn mới chỉ giải mã được đúng gói `backup.tar.gz.enc` của bundle đó. Khi lưu trữ ngoài VPS:
+>    - Lưu ký nội dung `backup-key` vào **Kho quản lý bí mật độc lập của Owner** (ví dụ Password Vault nội bộ của Owner, gắn nhãn tra cứu theo `bundle_name` + `archive_sha256` + `completed_at_utc`).
+>    - **CẤM TUYỆT ĐỐI** lưu `backup-key` trên cùng kho/bucket/thư mục đích chứa `backup.tar.gz.enc` (nếu kẻ tấn công đọc được kho backup offsite thì không có khóa giải mã; nếu mất toàn bộ VPS `103.77.208.186` thì Owner lấy `backup.tar.gz.enc` từ kho offsite và lấy `backup-key` từ Password Vault để khôi phục).
+>    - Sau khi đã lưu ký `backup-key` vào Password Vault, có thể xóa bản `backup-key` cục bộ trên VPS nếu muốn cô lập tối đa và dùng cờ `--no-key-in-dir` khi gọi `manage_backup_lifecycle.py verify-bundle`.
+> 2. **Khóa mã hóa cấp ứng dụng Frappe (`site_config.json` → `encryption_key`, Fernet 32-byte):** Hiện tại trên `crm-staging.localhost` chưa có trường mật khẩu mã hóa nào (`UNINITIALIZED_NO_ENCRYPTED_DATA`, `__Auth.encrypted = 1` có `0` dòng). Ngay khi bật tích hợp ngoài đầu tiên (SMTP, tổng đài, OAuth, webhook có mật khẩu mã hóa) làm phát sinh `encryption_key` trong `site_config.json`, Người vận hành **bắt buộc** lưu ký ngay giá trị `encryption_key` vào Password Vault độc lập của Owner và chạy ngay một lượt `create_encrypted_backup.py` mới.
+> 3. **Đồng bộ vòng đời hủy khóa theo GFS Retention:** Chỉ hủy mục lưu ký `backup-key` cũ trong Password Vault sau khi gói `backup.tar.gz.enc` tương ứng đã hết hạn lưu giữ cả ở VPS lẫn kho offsite theo chính sách `14 ngày / 8 tuần / 3 tháng`. Giữ cố định không xóa khóa của các bản mốc (`pre-scheduler`, `pre-release`, `pre-cutover`, `golden`, `.pinned`).
 
 ---
 
@@ -117,32 +123,84 @@ sudo jq '{status,containers:.containers.status,invariants:.invariants.status,bac
   /var/lib/crm-cskh/health/latest-health-report.json
 ```
 
-### 3.2. Upload Offsite Tự Động Kèm Đọc Ngược SHA-256 & Cảnh Báo Lỗi (`G07`)
-1. **Khi đã cấp phát kho đích ngoài VPS (`BLK-INFRA-05`):** Truyền `--offsite-target-dir <MOUNT_OFFSITE>` hoặc cặp `--offsite-upload-cmd` + `--offsite-verify-cmd` cho `manage_backup_lifecycle.py run-scheduled` (hoặc biến môi trường `CSKH_OFFSITE_TARGET_DIR` / `CSKH_OFFSITE_UPLOAD_CMD` + `CSKH_OFFSITE_VERIFY_CMD`). Công cụ chỉ đẩy `backup.tar.gz.enc` + `backup-report.json`, **chặn cứng nếu `backup-key` xuất hiện ở đích hoặc đích nằm lồng trong `backup_root`**, đọc ngược SHA-256 + kích thước byte từ đích và chỉ khi khớp tuyệt đối mới đặt `periodic_offsite_upload_proven = true` (`end_to_end_backup_status = "PASS"`). Khi chưa có đích upload tự động, trạng thái bắt buộc giữ `PARTIAL` (`PARTIAL_LOCAL_ONLY_OFFSITE_PENDING` hoặc `PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED`).
-2. **Cảnh báo tự động khi sao lưu lỗi hoặc quá hạn (`> 26 giờ`):**
-   - `crm-cskh-backup.service` gắn `OnFailure=crm-cskh-backup-failure@%n.service` gọi `manage_backup_lifecycle.py emit-failure-alert`, ghi biên bản `ALT-BACKUP-FAILURE` đã khử PII/secret vào `/var/backups/crm-cskh/backup-alerts.jsonl` (`0600`) và giữ khóa kênh ngoài cho tới khi Owner mở `BLK-GOV-06` + `BLK-INFRA-07`.
-   - `crm-cskh-healthcheck.service` kiểm tra mỗi 5 phút tham số `--backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json` (`--max-backup-age-hours 26.0`) để phát hiện sớm lịch backup bị kẹt hoặc lỗi.
-3. **Xác nhận bản sao Offsite thủ công (khi chưa gỡ `BLK-INFRA-05`):**
-Sau khi kéo `backup.tar.gz.enc` và `backup-report.json` về kho lưu trữ ngoài VPS qua `scp`, lưu ký riêng `backup-key` vào Password Vault độc lập và đối chiếu SHA-256 khớp hai đầu (lưu ý: biên nhận thủ công giữ `periodic_offsite_upload_proven = false`):
+### 3.2. Cấu Hình Upload Offsite Tự Động (`/etc/crm-cskh/offsite-backup.env`), Cấm Offsite Cùng VPS & Đầu Vào Cần Owner Cấp (`BLK-INFRA-05`)
+
+1. **Cơ chế cấu hình không cần sửa code/unit (`EnvironmentFile=-/etc/crm-cskh/offsite-backup.env`):**
+   - `crm-cskh-backup.service` tự động nạp tệp cấu hình tùy chọn `/etc/crm-cskh/offsite-backup.env` (quyền `0600`, `root:root`, xem mẫu trung lập nhà cung cấp tại [`deploy/compose/env/offsite-backup.env.example`](../../deploy/compose/env/offsite-backup.env.example)).
+   - Khi tệp này chưa tồn tại trên VPS, `systemd` bỏ qua an toàn (dấu `-`), giữ nguyên trạng thái `PARTIAL` (`periodic_offsite_upload_proven = false`).
+   - Ngay khi Owner cấp đích lưu trữ ngoài VPS và thông tin xác thực, chỉ cần khởi tạo `/etc/crm-cskh/offsite-backup.env` (`0600`) với cặp `CSKH_OFFSITE_UPLOAD_CMD` + `CSKH_OFFSITE_VERIFY_CMD` (hoặc mount kho mạng ngoài VPS vào `CSKH_OFFSITE_TARGET_DIR`) và `CSKH_OFFSITE_LOCATION_LABEL`, sau đó chạy thử `sudo systemctl start crm-cskh-backup.service` để chứng minh đọc ngược SHA-256 tự động (`end_to_end_backup_status = "PASS"`).
+2. **Rào chắn kỹ thuật bắt buộc (Không chọn dịch vụ trả phí hộ Owner & Không coi thư mục cùng VPS là Offsite):**
+   - **Không tự chọn dịch vụ lưu trữ trả phí** khi chưa có phê duyệt của Owner.
+   - **Cấm tuyệt đối coi một thư mục khác trên cùng máy chủ VPS `103.77.208.186` là đích offsite:** Hàm `sync_bundle_offsite_automated()` trong `manage_backup_lifecycle.py` kiểm tra mã thiết bị tệp (`st_dev`) giữa `backup_root` và `offsite_target_dir`; nếu hai đường dẫn nằm trên cùng ổ đĩa/cùng filesystem của VPS, công cụ từ chối ngay với `ValueError` và phát cảnh báo `ALT-BACKUP-FAILURE`.
+   - **Cấm đẩy khóa giải mã:** Công cụ chỉ chuyển `backup.tar.gz.enc` + `backup-report.json`, đồng thời chặn cứng nếu `CSKH_OFFSITE_UPLOAD_CMD` tham chiếu tới `backup-key` hoặc nếu `backup-key` xuất hiện tại đích.
+3. **Danh sách chính xác đầu vào cần Owner cấp để mở khóa Offsite tự động (`BLK-INFRA-05`):**
+
+| STT | Hạng mục đầu vào cần Owner cấp | Yêu cầu kỹ thuật & an toàn bắt buộc | Trạng thái hiện tại |
+| :---: | :--- | :--- | :---: |
+| 1 | **Loại đích lưu trữ ngoài VPS** | Máy chủ Linux/NAS SFTP độc lập khác vật lý với `103.77.208.186` **hoặc** kho Object Storage tương thích S3 / Rclone sẵn có của Owner (không tự đăng ký dịch vụ trả phí). | `CHỜ OWNER CẤP (BLK-INFRA-05)` |
+| 2 | **Địa chỉ đích & Đường dẫn / Bucket** | `host:port` + thư mục đích (`0700`) hoặc `endpoint URL` + tên `bucket/prefix` dành riêng cho `crm-cskh`. | `CHỜ OWNER CẤP (BLK-INFRA-05)` |
+| 3 | **Thông tin xác thực tách quyền (`Least Privilege`)** | Khóa SSH `ed25519` riêng hoặc cặp Access Key chỉ có quyền ghi gói mới + đọc kiểm tra SHA-256 (**không dùng chung khóa quản trị có quyền xóa toàn bộ kho**). | `CHỜ OWNER CẤP (BLK-INFRA-05)` |
+| 4 | **Kho lưu ký khóa tách biệt (`Key Escrow`)** | Định danh kho bí mật độc lập của Owner để lưu `backup-key` của từng gói và `encryption_key` của `site_config.json` (tách rời hoàn toàn khỏi đích lưu `backup.tar.gz.enc`). | `Đang lưu thủ công riêng bởi Owner/T0` |
+| 5 | **Chính sách dung lượng & RPO/RTO phê duyệt** | Xác nhận hạn mức dung lượng cho chu kỳ GFS `14 ngày / 8 tuần / 3 tháng` tại kho đích và ký xác nhận ngưỡng RPO (`<= 24h`) / RTO mục tiêu. | `CHỜ OWNER DUYỆT` |
+
+4. **Cảnh báo tự động khi sao lưu lỗi hoặc quá hạn (`> 26 giờ`):**
+   - `crm-cskh-backup.service` gắn `OnFailure=crm-cskh-backup-failure@%n.service` gọi `manage_backup_lifecycle.py emit-failure-alert`, ghi biên bản `ALT-BACKUP-FAILURE` đã khử PII/secret vào `/var/backups/crm-cskh/backup-alerts.jsonl` (`0600`) và giữ khóa kênh ngoài cho tới khi Owner mở `BLK-GOV-06` + `BLK-INFRA-07` trong `/etc/crm-cskh/alerting.env`.
+   - `crm-cskh-healthcheck.service` (chạy tự động mỗi 5 phút qua `crm-cskh-healthcheck.timer`) kiểm tra tham số `--backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json` (`--max-backup-age-hours 26.0`) để phát hiện sớm lịch backup bị kẹt hoặc quá hạn.
+5. **Quy trình tạm thời xác nhận bản sao Offsite thủ công (trong thời gian chờ `BLK-INFRA-05`):**
+Sau khi kéo `backup.tar.gz.enc` và `backup-report.json` về kho lưu trữ ngoài VPS qua `scp`, lưu ký riêng `backup-key` vào Password Vault độc lập và đối chiếu SHA-256 khớp hai đầu (lưu ý: biên nhận thủ công luôn giữ `periodic_offsite_upload_proven = false`):
 
 ```bash
 # 1. Kiểm tra lại toàn vẹn gói backup tại chỗ:
 sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py verify-bundle \
-  --bundle-dir /var/backups/crm-cskh/scheduled-20261109T191500Z
+  --bundle-dir /var/backups/crm-cskh/scheduled-20261109T130029Z-1400885
 
 # 2. Ghi biên nhận đã chép ra ngoài VPS và khớp SHA-256:
 sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py record-offsite \
-  --bundle-dir /var/backups/crm-cskh/scheduled-20261109T191500Z \
+  --bundle-dir /var/backups/crm-cskh/scheduled-20261109T130029Z-1400885 \
   --verified-sha256 "<SHA256_DO_TREN_KHO_OFFSITE>" \
-  --offsite-location-label "workstation-offsite-vault:crm-hrpartner"
+  --offsite-location-label "owner-windows-protected-archive-separate-key-escrow"
 ```
 
-### 3.3. Chính sách Lưu giữ GFS (`Grandfather-Father-Son`)
+### 3.3. Chính Sách Lưu Giữ GFS (`Grandfather-Father-Son` — `14d / 8w / 3m`)
 `manage_backup_lifecycle.py prune-retention` thực thi chính sách giữ lại:
 - **`14` bản ngày gần nhất (`daily`)**
 - **`8` bản tuần gần nhất (`weekly` — theo tuần ISO)**
 - **`3` bản tháng gần nhất (`monthly` — theo tháng dương lịch)**
-- **Quy tắc an toàn:** Không bao giờ xóa bản hợp lệ mới nhất (`latest_verified`), không xóa các bản gắn nhãn mốc phát hành (`pre-scheduler`, `pre-release`, `milestone`, hoặc có tệp `.pinned`), và mặc định chỉ chạy chế độ xem trước trừ khi truyền `--apply`.
+- **Quy tắc an toàn:** Không bao giờ xóa bản hợp lệ mới nhất (`newest_verified`), không xóa các bản chưa kiểm chứng để phục vụ điều tra lỗi (`skipped_unverified`), không xóa các bản gắn nhãn mốc phát hành (`pre-scheduler`, `pre-release`, `pre-cutover`, `golden`, hoặc có tệp `.pinned`), và khi gọi độc lập mặc định chỉ chạy chế độ xem trước trừ khi truyền `--apply`:
+
+```bash
+# Xem trước kế hoạch giữ/xóa (dry-run an toàn):
+sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py prune-retention \
+  --backup-root /var/backups/crm-cskh \
+  --keep-daily 14 \
+  --keep-weekly 8 \
+  --keep-monthly 3
+
+# Thực thi dọn các bản hết hạn lưu giữ (chỉ xóa bundle hợp lệ ngoài cửa sổ 14d/8w/3m và không gắn nhãn mốc):
+sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py prune-retention \
+  --backup-root /var/backups/crm-cskh \
+  --keep-daily 14 \
+  --keep-weekly 8 \
+  --keep-monthly 3 \
+  --apply
+```
+
+### 3.4. Quy Trình Ứng Phó Khi Sao Lưu Lỗi Hoặc Quá Hạn (`ALT-BACKUP-FAILURE`)
+Khi `/var/lib/crm-cskh/health/latest-health-report.json` báo `backup_freshness_and_offsite.status == "FAIL"` (tuổi gói `> 26.0 giờ` hoặc `local_backup_status == "FAIL"`) hoặc xuất hiện bản ghi mới trong `/var/backups/crm-cskh/backup-alerts.jsonl`:
+
+1. **Giữ nguyên các bản sao lưu hợp lệ trước đó:** Tuyệt đối không xóa tay các thư mục bundle cũ trong `/var/backups/crm-cskh` khi chưa tạo được bản sao lưu mới đạt `PASS`.
+2. **Chẩn đoán nguyên nhân gốc (chỉ đọc, không gây gián đoạn site live):**
+   - Xem nhật ký chi tiết của lần chạy lỗi: `sudo journalctl -u crm-cskh-backup.service -u 'crm-cskh-backup-failure@*' -n 100 --no-pager` và dòng cuối `/var/backups/crm-cskh/backup-alerts.jsonl`.
+   - Kiểm tra dung lượng & inode ổ đĩa: `df -h /var/backups/crm-cskh /var/lib/docker && df -i /var/backups/crm-cskh`.
+   - Kiểm tra trạng thái MariaDB và container `backend`: `/opt/crm-cskh-staging/staging-compose ps db backend`.
+   - Nếu `local_backup_status == "PASS"` nhưng `status == "FAIL"` do lỗi mạng/đích offsite: kiểm tra kết nối SSH/HTTPS tới kho ngoài VPS và quyền tệp `/etc/crm-cskh/offsite-backup.env` (`0600`).
+3. **Khắc phục & Chạy bù ngay lập tức:**
+   - Nếu đầy đĩa (`>= 80%`): chạy `manage_backup_lifecycle.py prune-retention --backup-root /var/backups/crm-cskh --apply` và dọn thư mục bundle lỗi rỗng/dở dang (sau khi đã ghi nhận log).
+   - Kích hoạt chạy bù: `sudo systemctl start crm-cskh-backup.service`.
+4. **Xác nhận phục hồi & Lưu ký khóa:**
+   - Kiểm tra `/var/backups/crm-cskh/latest-backup-lifecycle.json` đạt `local_backup_status == "PASS"`.
+   - Chép `backup-key` của gói mới vào Password Vault độc lập của Owner; nếu chưa mở `BLK-INFRA-05`, kéo `backup.tar.gz.enc` về kho ngoài VPS, kiểm tra `sha256sum` hai đầu và chạy `record-offsite`.
+   - Kích hoạt `sudo systemctl start crm-cskh-healthcheck.service` và xác nhận `backup_freshness_and_offsite.status == "PASS"` trong `/var/lib/crm-cskh/health/latest-health-report.json`.
 
 ---
 
@@ -166,21 +224,27 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py record-offs
   3. Xóa tệp & xóa `encryption_key` trên clone → chứng minh **Negative Control fail-closed**: `evaluate_encryption_key_state()` chặn đứng lỗi mất khóa (`Missing encryption_key`), đồng thời `run_negative_control_decrypt_probe()` gọi `get_decrypted_password(..., raise_exception=True)` theo hợp đồng nghiêm ngặt: không bao giờ bắt `AssertionError`, mọi trường hợp hàm giải mã trả về mà không ném lỗi đều làm ca kiểm chứng `FAIL`, mọi lỗi DB/SQL/import/`AuthenticationError("Password not found")` đều làm ca kiểm chứng `FAIL`, và **chỉ** chấp nhận lỗi mất khóa/giải mã Fernet dự kiến (`cryptography.fernet.InvalidToken` / `ValidationError` khóa mã hóa không hợp lệ).
   4. Khôi phục lại `site_config_backup.json` (`0600`) và tệp từ gói sao lưu mới → chứng minh **Positive Control**: `get_decrypted_password()` trả về đúng từng ký tự gốc cả trước và sau `migrate ×2` idempotent, byte & SHA-256 tệp public/private khớp 100%, và qua Nginx: **Guest đọc tệp public đạt `200`, Guest đọc tệp private bị chặn `403`, User đã đăng nhập đọc tệp private đạt `200`**.
 
-### 4.3. Quy tắc đo thời gian khôi phục (`RTO`)
-Báo cáo JSON tách bạch rõ `sql_import_only_is_full_rto: false` và ghi nhận đầy đủ 9 chặng:
-1. `archive_checksum_decrypt_and_extract`
-2. `isolated_stack_bootstrap_and_db_ready`
-3. `new_site_init`
-4. `sql_and_files_restore_only` *(chỉ riêng thời gian nạp SQL + bung tar tệp — **không gọi là RTO đầy đủ**)*
-5. `pre_migrate_reconciliation`
-6. `migrate_run_1`
-7. `migrate_run_2`
-8. `post_migrate_reconciliation_and_invariants`
-9. `web_service_start_and_authenticated_http_smoke`
+### 4.3. Quy tắc đo & Phạm vi chính xác của thời gian khôi phục (`RTO`)
+Báo cáo JSON tách bạch rõ `sql_import_only_is_full_rto: false` và ghi nhận đầy đủ 9 chặng (kèm số thực đo trên VPS `103.77.208.186` ngày `09/11/2026` tại [`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json)):
+1. `archive_checksum_decrypt_and_extract`: **`0.364 giây`**
+2. `isolated_stack_bootstrap_and_db_ready`: **`13.619 giây`**
+3. `new_site_init`: **`66.149 giây`**
+4. `sql_and_files_restore_only`: **`22.585 giây`** *(chỉ riêng thời gian nạp SQL + bung tar tệp — **không gọi là RTO đầy đủ**)*
+5. `pre_migrate_reconciliation`: **`6.048 giây`**
+6. `migrate_run_1`: **`10.247 giây`**
+7. `migrate_run_2`: **`9.767 giây`**
+8. `post_migrate_reconciliation_and_invariants`: **`4.445 giây`**
+9. `web_service_start_and_authenticated_http_smoke`: **`7.841 giây`**
 
-Tổng thời gian từ chặng 1 đến hết chặng 9 là `measured_end_to_end_isolated_dr_rto_seconds` (chưa bao gồm thời gian tải mạng WAN từ kho offsite hoặc cấp phát VPS mới nếu mất toàn bộ máy chủ). Thời gian chạy Pha B (`positive_control_drill_seconds_excluded_from_rto`) được tách riêng để không làm sai lệch số đo RTO.
+- **Tổng Pha A (`measured_end_to_end_isolated_dr_rto_seconds` trên VPS `103.77.208.186`):** **`142.598 giây`** (`~2 phút 23 giây`). Thời gian chạy Pha B đối chứng Dương/Âm (`positive_control_drill_seconds_excluded_from_rto = 66.366 giây`, tổng wall-clock = `209.052 giây`) được tách riêng để không làm lệch số đo RTO.
+- **Giới hạn phạm vi RTO bắt buộc ghi rõ (`measurement_scope = isolated_single_host_container_dr_drill_excluding_offsite_wan_transfer`):**
+  - Con số **`142.598 giây`** là **thời gian khôi phục bản clone cô lập ngay trên cùng máy chủ VPS `103.77.208.186`** khi gói sao lưu mã hóa và các Docker image (`acb9505...`, MariaDB, Redis) đã nằm sẵn trên ổ đĩa cục bộ của VPS.
+  - Con số này **CHƯA BAO GỒM**:
+    1. Thời gian truyền tải gói `backup.tar.gz.enc` và Docker image qua mạng **WAN** từ kho lưu trữ offsite / Container Registry về máy chủ đích;
+    2. Thời gian **cấp phát máy chủ VPS mới**, cài đặt hệ điều hành, khóa tường lửa (`ufw` + `DOCKER-USER`) và cài đặt Docker Engine khi mất hoàn toàn VPS cũ;
+    3. Thời gian **chuyển đổi bản ghi DNS** (`TTL` lan truyền) và cấp phát lại chứng chỉ TLS Let's Encrypt cho tên miền công khai.
 
-### 4.4. Lệnh thực thi chuẩn trên VPS `103.77.208.186` (dành cho `T0` / `Operator`)
+### 4.4. Lệnh thực thi chuẩn trên VPS `103.77.208.186` (dành cho `T0` / `Operator` khi diễn tập định kỳ hằng tháng)
 
 Sau khi đã chuẩn bị thư mục mã nguồn vận hành `/opt/crm-cskh-ops` đúng commit SHA theo **Mục 3.0**:
 
@@ -197,8 +261,26 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/verify_offsite_restore.py \
 
 ---
 
-## 5. Hồ Sơ Bản Sao Lưu Đã Đối Chiếu Hiện Hành
+## 5. Hồ Sơ Đối Chiếu Thực Thi (Tách Biệt Rõ Evidence VPS Live Và Evidence Container CI)
 
-| Định danh bản sao lưu | Nguồn & Revision ứng dụng | Kích thước (`bytes`) | SHA-256 (`backup.tar.gz.enc`) | Trạng thái Offsite & Khóa |
+### 5.1. Danh mục các bản sao lưu từ VPS `103.77.208.186` đã xác thực ngoài VPS
+
+| Định danh bản sao lưu | Nguồn & Revision ứng dụng | Kích thước (`bytes`) | SHA-256 (`backup.tar.gz.enc`) | Nguồn tạo & Trạng thái Offsite / Khóa |
 | :--- | :--- | :---: | :--- | :--- |
-| `p4-20261109-pre-scheduler` | `crm-staging.localhost` (`467204176326f046442b5e20c381f9a895b6e176`) | `312.672` | `d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11` | Đã chép về `C:\Users\Admin\.codex\backups\crm-hrpartner\p4-20261109-pre-scheduler` (`OFFSITE_COPY_HASH_VERIFIED`); site chưa sinh `encryption_key` (`__Auth encrypted=1` = `0` dòng). |
+| `p4-20261109-pre-scheduler` | `crm-staging.localhost` (`467204176326f046442b5e20c381f9a895b6e176`) | `312.672` | `d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11` | Chép thủ công về `C:\Users\Admin\.codex\backups\crm-hrpartner\p4-20261109-pre-scheduler` (`OFFSITE_COPY_HASH_VERIFIED`); đã dùng làm đầu vào diễn tập khôi phục cô lập trên VPS đạt **`PASS`** (`142.598s`). |
+| `scheduled-20261109T130029Z-1400885` | `crm-staging.localhost` (`467204176326f046442b5e20c381f9a895b6e176`) | `349.920` | `33fdf18bf4e9168e98baee65446c215e005b44271a9507cd94b3e1e86f34e14c` | Sinh bởi lần khởi chạy thủ công `systemctl start crm-cskh-backup.service` lúc `20:00:28 +07` ngày `09/11/2026` ([`scheduled-backup-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/scheduled-backup-report.json)); đã chép thủ công ra ngoài VPS khớp SHA-256 lúc `20:03:25 +07`, `backup-key` lưu riêng ([`offsite-verification.json`](../../deploy/ops/evidence/p4-vps-live-20261109/offsite-verification.json), [`manual-offsite-receipt.json`](../../deploy/ops/evidence/p4-vps-live-20261109/manual-offsite-receipt.json)). |
+
+### 5.2. Bảng tách biệt Bằng chứng Thực thi trên VPS (`p4-vps-live-20261109`) và Bằng chứng Diễn tập CI (`p4-g07-g08-dr-20261109`)
+
+> [!NOTE]
+> Toàn bộ lịch sử kiểm thử container trên GitHub Actions (`ubuntu-24.04`) được giữ nguyên bất biến tại [`deploy/ops/evidence/p4-g07-g08-dr-20261109/`](../../deploy/ops/evidence/p4-g07-g08-dr-20261109/), hoàn toàn tách biệt với bộ bằng chứng thực thi trực tiếp trên VPS `103.77.208.186` do `T0` bàn giao tại [`deploy/ops/evidence/p4-vps-live-20261109/`](../../deploy/ops/evidence/p4-vps-live-20261109/) ([`vps-evidence-manifest.json`](../../deploy/ops/evidence/p4-vps-live-20261109/vps-evidence-manifest.json), SHA-256 `daa60a1366452c90fcaa1ea3a2f549d82a2d8aa06c6bb697312ea173b2f79493`).
+
+| Hạng mục đối chiếu | Thực thi trực tiếp trên VPS `103.77.208.186` (`p4-vps-live-20261109`) | Diễn tập Container CI `ubuntu-24.04` (`p4-g07-g08-dr-20261109` — lịch sử bảo toàn) |
+| :--- | :--- | :--- |
+| **Commit mã nguồn vận hành** | `801be22b3be2c8199704c4da7442b0c2e0edf352` (`/opt/crm-cskh-ops`) | `49678c49154ad21fddb1ddc38d5b905959a504e2` (GitHub Actions Run `#42615723010`) |
+| **Diễn tập Restore cô lập (`G08`)** | **`PASS`** — Pha A RTO clone cùng VPS = **`142.598s`** (`sql_and_files_restore_only = 22.585s`), `migrate ×2` `[10.247s, 9.767s]`, `5/5 Translation` overrides `PASS` ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json)) | **`PASS`** — Pha A RTO container tổng hợp = `50.352s` (`sql_and_files_restore_only = 2.965s`), `5/5 Translation` overrides `PASS` ([`g08-restore-drill-report.json`](../../deploy/ops/evidence/p4-g07-g08-dr-20261109/g08-restore-drill-report.json)) |
+| **Positive / Negative Control mã hóa & Files (Pha B)** | **`PASS`** — Fernet round-trip + `migrate ×2` `[10.635s, 11.234s]`, Negative Control bắt đúng `ValidationError`, HTTP ACL public `200` / Guest private `403` / Auth private `200` | **`PASS`** — Fernet round-trip + `migrate ×2`, Negative Control bắt đúng `ValidationError`, HTTP ACL public `200` / Guest private `403` / Auth private `200` |
+| **Dọn dẹp & Bảo toàn Site Live** | `cleanup_exit_code = 0`, `0` container/volume/network dư; `11` container live (`10` daemon `healthy`) & image `acb9505...` không đổi ([`live-preservation-check.json`](../../deploy/ops/evidence/p4-vps-live-20261109/live-preservation-check.json)) | `cleanup_exit_code = 0`, `0` container/volume/network dư; không chạm môi trường live |
+| **Timer sức khỏe 5 phút (`crm-cskh-healthcheck.timer`)** | **`PASS` (Tự kích hoạt theo lịch)** — `enabled`/`active`, tự chạy lúc `20:05:45 +07` → `20:05:47 +07` (`ExecMainStatus=0`), báo cáo sức khỏe `PASS` ([`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json), [`live-health-after.json`](../../deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json)) | Dry-run & parser check `PASS` ([`systemd-timers-dry-run.json`](../../deploy/ops/evidence/p4-g07-g08-dr-20261109/systemd-timers-dry-run.json)); lúc bàn giao CI chưa chạy trên VPS (`NOT_RUN`) |
+| **Dịch vụ & Timer sao lưu (`crm-cskh-backup.*`)** | Service chạy thật thủ công **`PASS`** (`20:00:28 +07` → `20:00:36 +07`); `crm-cskh-backup.timer` đã `enabled`/`active` (`NextElapse = 2026-11-10 02:16:41 +07`), **chưa có lượt tự kích hoạt theo lịch** (`LastTriggerUSec = ""`) | Diễn tập vòng đời cục bộ, biên nhận thủ công (`PARTIAL`), đồng bộ tự động container và cảnh báo `ALT-BACKUP-FAILURE` đạt `PASS` ([`g07-backup-lifecycle-drill.json`](../../deploy/ops/evidence/p4-g07-g08-dr-20261109/g07-backup-lifecycle-drill.json)) |
+| **Đồng bộ Offsite tự động & Cảnh báo ngoài** | **`PARTIAL` / `BLOCKED`** — Chờ Owner cấp đích lưu trữ ngoài VPS (`BLK-INFRA-05`) và đầu mối/webhook cảnh báo (`BLK-GOV-06`, `BLK-INFRA-07`) | Đã kiểm chứng logic mã nguồn trên container Linux; giữ khóa kênh ngoài mặc định |

@@ -8,6 +8,7 @@ Type=oneshot
 User=root
 Group=root
 UMask=0077
+EnvironmentFile=-/etc/crm-cskh/alerting.env
 # External alert delivery is intentionally NOT configured here (waiting for Owner BLK-GOV-06 & BLK-INFRA-07).
 # Render and install via: install_systemd_timers.py --repo-root /opt/crm-cskh-ops --install
 ExecStart=/usr/bin/python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \

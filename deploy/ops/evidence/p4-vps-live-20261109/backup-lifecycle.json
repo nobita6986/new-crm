@@ -1,0 +1,37 @@
+{
+  "schema_version": "p4-backup-lifecycle-v2",
+  "timestamp_utc": "2026-11-09T13:00:36Z",
+  "local_backup_status": "PASS",
+  "end_to_end_backup_status": "PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED",
+  "automated_offsite_upload_configured": false,
+  "periodic_offsite_upload_proven": false,
+  "one_off_manual_copy_proves_periodic_upload": false,
+  "key_separation_enforced": true,
+  "automated_offsite_blocker": "BLK-INFRA-05",
+  "action_required": "Provision automated offsite vault (BLK-INFRA-05) for end-to-end Gate G07 PASS; until then, copy backup.tar.gz.enc offsite, store backup-key in separate secret escrow, verify SHA-256 offsite, and run manage_backup_lifecycle.py record-offsite.",
+  "latest_bundle": {
+    "bundle_dir": "/var/backups/crm-cskh/scheduled-20261109T130029Z-1400885",
+    "bundle_name": "scheduled-20261109T130029Z-1400885",
+    "completed_at_utc": "2026-11-09T13:00:36.776982+00:00",
+    "source_project": "crm-cskh-vps-staging",
+    "source_revision": "467204176326f046442b5e20c381f9a895b6e176",
+    "archive_sha256": "33fdf18bf4e9168e98baee65446c215e005b44271a9507cd94b3e1e86f34e14c",
+    "archive_bytes": 349920,
+    "local_archive_status": "PASS",
+    "offsite_copy_status": "MANUAL_OFFSITE_HASH_VERIFIED",
+    "offsite_verified": true,
+    "offsite_verified_at_utc": "2026-11-09T13:03:25Z",
+    "automated_offsite_upload_configured": false,
+    "periodic_offsite_upload_proven": false,
+    "one_off_manual_copy_proves_periodic_upload": false,
+    "automated_offsite_pipeline_status": "BLOCKED_BLK_INFRA_05",
+    "end_to_end_backup_status": "PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED",
+    "errors": []
+  },
+  "retention": {
+    "applied": true,
+    "kept_count": 1,
+    "deleted_bundles": []
+  },
+  "offsite_receipt_refreshed_by": "T0 manual SCP hash verification"
+}

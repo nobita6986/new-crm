@@ -1,0 +1,12 @@
+{
+  "verified_at_utc": "2026-11-09T13:03:25Z",
+  "archive_sha256": "33fdf18bf4e9168e98baee65446c215e005b44271a9507cd94b3e1e86f34e14c",
+  "archive_bytes": 349920,
+  "source_revision": "467204176326f046442b5e20c381f9a895b6e176",
+  "offsite_location_label": "owner-windows-protected-archive-separate-key-escrow",
+  "transfer_mode": "manual_verified_copy",
+  "automated_upload": false,
+  "periodic_upload_proven": false,
+  "key_excluded_from_offsite_archive_target": true,
+  "status": "OFFSITE_COPY_HASH_VERIFIED"
+}

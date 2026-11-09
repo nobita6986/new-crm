@@ -1,0 +1,30 @@
+{
+  "mode": "install",
+  "repo_root": "/opt/crm-cskh-ops",
+  "referenced_ops_scripts": [
+    "/opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py",
+    "/opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py",
+    "/opt/crm-cskh-ops/deploy/ops/create_encrypted_backup.py"
+  ],
+  "site": "crm-staging.localhost",
+  "extra_compose_files": [
+    "/opt/crm-cskh-staging/compose.domain.yaml"
+  ],
+  "external_alerts_enabled": false,
+  "external_alert_gate": "WAITING_OWNER_CONTACT_AND_CHANNEL_BLK_GOV_06_BLK_INFRA_07",
+  "automated_offsite_upload_enabled": false,
+  "automated_offsite_status": "PARTIAL_UNTIL_AUTOMATED_TARGET_PROVISIONED",
+  "one_off_manual_copy_proves_periodic_upload": false,
+  "automated_offsite_blocker": "BLK-INFRA-05",
+  "units": {
+    "crm-cskh-healthcheck.service": "[Unit]\nDescription=CRM-CSKH Periodic Technical Health, Backup Freshness & Business Invariants Probe (External Alerts Gated)\nAfter=docker.service\nRequires=docker.service\n\n[Service]\nType=oneshot\nUser=root\nGroup=root\nUMask=0077\nExecStart=/usr/bin/python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py --env-file /opt/crm-cskh-staging/.env.staging --mode tls --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml --site crm-staging.localhost --environment-label staging --backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json --max-backup-age-hours 26.0 --alert-log-file /var/lib/crm-cskh/health/health-alerts.jsonl --out /var/lib/crm-cskh/health/latest-health-report.json\n",
+    "crm-cskh-healthcheck.timer": "[Unit]\nDescription=Run CRM-CSKH Health & Invariants Probe Periodically\n\n[Timer]\nOnCalendar=*:0/5\nRandomizedDelaySec=20\nPersistent=true\nUnit=crm-cskh-healthcheck.service\n\n[Install]\nWantedBy=timers.target\n",
+    "crm-cskh-backup.service": "[Unit]\nDescription=CRM-CSKH Daily Encrypted Backup + Checksum + GFS Retention\nAfter=docker.service\nRequires=docker.service\nOnFailure=crm-cskh-backup-failure@%n.service\n\n[Service]\nType=oneshot\nUser=root\nGroup=root\nUMask=0077\nExecStart=/usr/bin/python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py run-scheduled --compose-wrapper /opt/crm-cskh-staging/staging-compose --site crm-staging.localhost --backup-root /var/backups/crm-cskh --environment-label staging --keep-daily 14 --keep-weekly 8 --keep-monthly 3\n",
+    "crm-cskh-backup-failure@.service": "[Unit]\nDescription=CRM-CSKH Backup Failure Alert Recorder (External Delivery Gated)\n\n[Service]\nType=oneshot\nUser=root\nGroup=root\nUMask=0077\nExecStart=/usr/bin/python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py emit-failure-alert --backup-root /var/backups/crm-cskh --environment-label staging --unit-name %i --reason 'systemd unit %i exited non-zero'\n",
+    "crm-cskh-backup.timer": "[Unit]\nDescription=Run CRM-CSKH Daily Encrypted Backup\n\n[Timer]\nOnCalendar=*-*-* 19:15:00 UTC\nRandomizedDelaySec=120\nPersistent=true\nUnit=crm-cskh-backup.service\n\n[Install]\nWantedBy=timers.target\n"
+  },
+  "timers_enabled": [
+    "crm-cskh-healthcheck.timer",
+    "crm-cskh-backup.timer"
+  ]
+}

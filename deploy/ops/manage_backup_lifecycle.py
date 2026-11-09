@@ -253,6 +253,14 @@ def record_offsite_confirmation(
     return verify_backup_bundle(bundle_dir, expect_key_file=False, enforce_posix_permissions=False)
 
 
+def _existing_device_id(path: Path) -> int:
+    """Return st_dev of path or its nearest existing ancestor."""
+    cur = path.resolve()
+    while not cur.exists() and cur.parent != cur:
+        cur = cur.parent
+    return cur.stat().st_dev
+
+
 def sync_bundle_offsite_automated(
     bundle_dir: Path,
     *,
@@ -261,12 +269,15 @@ def sync_bundle_offsite_automated(
     offsite_upload_cmd: str = "",
     offsite_verify_cmd: str = "",
     offsite_location_label: str = "automated-offsite-vault",
+    allow_same_filesystem_for_drill: bool = False,
 ) -> dict[str, Any]:
     """Execute automated offsite transfer + remote SHA-256 readback with strict key separation.
 
     Security invariants:
     - `backup-key` MUST NEVER be copied or exposed to the offsite archive destination.
-    - Offsite target directory MUST NOT reside inside `backup_root`.
+    - Offsite target directory MUST NOT reside inside `backup_root` OR on the same
+      host filesystem/device (`st_dev`) as `backup_root` unless explicitly invoked
+      with `allow_same_filesystem_for_drill=True` in isolated CI container tests.
     - Remote SHA-256 and byte length MUST match `backup-report.json` before recording receipt.
     """
     pre = verify_backup_bundle(bundle_dir, expect_key_file=False, enforce_posix_permissions=False)
@@ -284,6 +295,8 @@ def sync_bundle_offsite_automated(
         raise ValueError("Neither offsite_target_dir nor offsite_upload_cmd was provided")
     if upload_cmd_clean and not verify_cmd_clean:
         raise ValueError("offsite_upload_cmd requires offsite_verify_cmd for independent SHA-256 readback")
+    if "backup-key" in upload_cmd_clean:
+        raise ValueError("CRITICAL: offsite_upload_cmd must never reference or upload backup-key")
 
     verified_remote_sha = ""
     verified_remote_bytes = 0
@@ -291,9 +304,20 @@ def sync_bundle_offsite_automated(
     if offsite_target_dir is not None:
         root_resolved = backup_root.resolve()
         target_resolved = offsite_target_dir.resolve()
-        if target_resolved == root_resolved or root_resolved in target_resolved.parents or target_resolved in root_resolved.parents:
+        if (
+            target_resolved == root_resolved
+            or root_resolved in target_resolved.parents
+            or target_resolved in root_resolved.parents
+        ):
             raise ValueError(
                 "Offsite target directory must be physically/logically disjoint from local backup_root"
+            )
+        if not allow_same_filesystem_for_drill and (
+            _existing_device_id(target_resolved) == _existing_device_id(root_resolved)
+        ):
+            raise ValueError(
+                "Offsite target directory resides on the same filesystem/device (st_dev) as local "
+                "backup_root; a folder on the same VPS/host disk is NOT valid offsite storage"
             )
         remote_bundle_dir = target_resolved / bundle_dir.name
         remote_bundle_dir.mkdir(parents=True, exist_ok=True)
@@ -604,6 +628,7 @@ def run_scheduled_backup(
     offsite_upload_cmd: str = "",
     offsite_verify_cmd: str = "",
     offsite_location_label: str = "automated-offsite-vault",
+    allow_same_filesystem_for_drill: bool = False,
     operator_contact: str = "",
     webhook_url: str = "",
 ) -> tuple[int, dict[str, Any]]:
@@ -687,6 +712,7 @@ def run_scheduled_backup(
                 offsite_upload_cmd=offsite_upload_cmd,
                 offsite_verify_cmd=offsite_verify_cmd,
                 offsite_location_label=offsite_location_label,
+                allow_same_filesystem_for_drill=allow_same_filesystem_for_drill,
             )
             verification = verify_backup_bundle(
                 bundle_dir, expect_key_file=True, enforce_posix_permissions=True
@@ -821,7 +847,15 @@ def build_parser() -> argparse.ArgumentParser:
         default=os.environ.get("CSKH_OFFSITE_VERIFY_CMD", ""),
         help="Command outputting '<sha256> [bytes]' read back from offsite destination",
     )
-    p_run.add_argument("--offsite-location-label", default="automated-offsite-vault")
+    p_run.add_argument(
+        "--offsite-location-label",
+        default=os.environ.get("CSKH_OFFSITE_LOCATION_LABEL", "automated-offsite-vault"),
+    )
+    p_run.add_argument(
+        "--allow-same-filesystem-for-ci-drill",
+        action="store_true",
+        help="CI container rehearsal flag ONLY; forbidden on live VPS (same-VPS directory is not offsite)",
+    )
     p_run.add_argument("--operator-contact", default=os.environ.get("CSKH_OPERATOR_CONTACT", ""))
     p_run.add_argument("--webhook-url", default=os.environ.get("CSKH_ALERT_WEBHOOK_URL", ""))
 
@@ -902,6 +936,7 @@ def main(argv: list[str] | None = None) -> int:
             offsite_upload_cmd=args.offsite_upload_cmd,
             offsite_verify_cmd=args.offsite_verify_cmd,
             offsite_location_label=args.offsite_location_label,
+            allow_same_filesystem_for_drill=args.allow_same_filesystem_for_ci_drill,
             operator_contact=args.operator_contact,
             webhook_url=args.webhook_url,
         )

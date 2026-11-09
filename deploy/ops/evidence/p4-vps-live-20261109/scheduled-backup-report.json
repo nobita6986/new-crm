@@ -1,0 +1,43 @@
+{
+  "schema_version": "p4-encrypted-backup-v2",
+  "status": "LOCAL_BACKUP_VERIFIED_OFFSITE_PENDING",
+  "end_to_end_backup_status": "PARTIAL_OFFSITE_UPLOAD_MANUAL",
+  "offsite_upload_automated": false,
+  "offsite_verified": false,
+  "started_at_utc": "2026-11-09T13:00:29.411411+00:00",
+  "completed_at_utc": "2026-11-09T13:00:36.776982+00:00",
+  "source_project": "crm-cskh-vps-staging",
+  "source_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+  "source_revision": "467204176326f046442b5e20c381f9a895b6e176",
+  "archive_sha256": "33fdf18bf4e9168e98baee65446c215e005b44271a9507cd94b3e1e86f34e14c",
+  "archive_bytes": 349920,
+  "member_sha256": {
+    "20261109_200032-crm-staging_localhost-private-files.tar": "e4a1f51e7dfd83e34f03d52b4a04fd50e55b84d2f1f9221a266d82200f60184c",
+    "20261109_200032-crm-staging_localhost-files.tar": "5ff1b29facd052f6930789183a4c1ee960db87aebd3bb3021da3869b3bcaacb0",
+    "20261109_200032-crm-staging_localhost-database.sql.gz": "11f90f43ba18319e1b0f6162e0f44acf9b4167283d605bcb32aac019e33c4a59",
+    "20261109_200032-crm-staging_localhost-site_config_backup.json": "4e87e16d77d72e83ce5342ffb59f04816de7f51468253e148b11eea3748a90c9"
+  },
+  "counts": {
+    "CRM Lead": 1,
+    "CRM Deal": 0,
+    "CSKH Work Item": 0,
+    "CSKH Active Claim": 0,
+    "CSKH Assignment History": 0,
+    "CSKH Contact Attempt": 0,
+    "CSKH Attempt Correction": 0,
+    "CSKH SLA Obligation": 0,
+    "CSKH KPI Snapshot": 8,
+    "CSKH KPI Run": 8,
+    "CRM Form Script": 6,
+    "User": 2,
+    "Translation": 5,
+    "File": 2
+  },
+  "encryption_key_state": "UNINITIALIZED_NO_ENCRYPTED_DATA",
+  "encryption_key_present": false,
+  "auth_encrypted_rows": 0,
+  "translation_override_rows": 5,
+  "business_fingerprints_stable_during_backup": true,
+  "encryption_round_trip_verified": true,
+  "site_configuration_changed": false
+}

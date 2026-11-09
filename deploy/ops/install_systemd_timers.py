@@ -22,12 +22,15 @@ import json
 import os
 from pathlib import Path
 import shlex
+import stat
 import subprocess
 import sys
 from typing import Any
 
 OPS_DIR = Path(__file__).resolve().parent
 DEFAULT_REPO_ROOT = OPS_DIR.parents[1]
+DEFAULT_OFFSITE_ENV_FILE = Path("/etc/crm-cskh/offsite-backup.env")
+DEFAULT_ALERT_ENV_FILE = Path("/etc/crm-cskh/alerting.env")
 
 
 def render_healthcheck_units(
@@ -42,6 +45,7 @@ def render_healthcheck_units(
     max_backup_age_hours: float = 26.0,
     alert_log_file: Path = Path("/var/lib/crm-cskh/health/health-alerts.jsonl"),
     out_report: Path = Path("/var/lib/crm-cskh/health/latest-health-report.json"),
+    alert_env_file: Path = DEFAULT_ALERT_ENV_FILE,
     calendar_spec: str = "*:0/5",
 ) -> dict[str, str]:
     script = (repo_root / "deploy" / "ops" / "check_health_and_invariants.py").as_posix()
@@ -91,6 +95,7 @@ def render_healthcheck_units(
         "User=root\n"
         "Group=root\n"
         "UMask=0077\n"
+        f"EnvironmentFile=-{alert_env_file.as_posix()}\n"
         f"ExecStart={exec_line}\n"
     )
     timer = (
@@ -120,6 +125,8 @@ def render_backup_units(
     keep_daily: int = 14,
     keep_weekly: int = 8,
     keep_monthly: int = 3,
+    offsite_env_file: Path = DEFAULT_OFFSITE_ENV_FILE,
+    alert_env_file: Path = DEFAULT_ALERT_ENV_FILE,
     calendar_spec: str = "*-*-* 19:15:00 UTC",
 ) -> dict[str, str]:
     script = (repo_root / "deploy" / "ops" / "manage_backup_lifecycle.py").as_posix()
@@ -170,6 +177,8 @@ def render_backup_units(
         "User=root\n"
         "Group=root\n"
         "UMask=0077\n"
+        f"EnvironmentFile=-{offsite_env_file.as_posix()}\n"
+        f"EnvironmentFile=-{alert_env_file.as_posix()}\n"
         f"ExecStart={exec_line}\n"
     )
     failure_service = (
@@ -180,6 +189,7 @@ def render_backup_units(
         "User=root\n"
         "Group=root\n"
         "UMask=0077\n"
+        f"EnvironmentFile=-{alert_env_file.as_posix()}\n"
         f"ExecStart={fail_exec}\n"
     )
     timer = (
@@ -224,6 +234,18 @@ def build_parser() -> argparse.ArgumentParser:
         type=Path,
         default=Path("/var/lib/crm-cskh/health/latest-health-report.json"),
     )
+    p.add_argument(
+        "--offsite-env-file",
+        type=Path,
+        default=DEFAULT_OFFSITE_ENV_FILE,
+        help="Optional 0600 drop-in env file for automated offsite upload (loaded with systemd '-')",
+    )
+    p.add_argument(
+        "--alert-env-file",
+        type=Path,
+        default=DEFAULT_ALERT_ENV_FILE,
+        help="Optional 0600 drop-in env file for external alert contact/webhook (loaded with systemd '-')",
+    )
     p.add_argument("--systemd-dir", type=Path, default=Path("/etc/systemd/system"))
     p.add_argument("--install", action="store_true", help="Write units and enable timers as root")
     return p
@@ -251,6 +273,7 @@ def main(argv: list[str] | None = None) -> int:
             extra_compose_files=overlays,
             backup_status_file=args.backup_root / "latest-backup-lifecycle.json",
             out_report=args.health_out,
+            alert_env_file=args.alert_env_file,
         )
     )
     units.update(
@@ -260,21 +283,35 @@ def main(argv: list[str] | None = None) -> int:
             site=args.site,
             environment_label=args.environment_label,
             backup_root=args.backup_root,
+            offsite_env_file=args.offsite_env_file,
+            alert_env_file=args.alert_env_file,
         )
     )
 
+    offsite_env_present = args.offsite_env_file.is_file()
+    alert_env_present = args.alert_env_file.is_file()
     summary: dict[str, Any] = {
         "mode": "install" if args.install else "dry_run",
         "repo_root": args.repo_root.as_posix(),
         "referenced_ops_scripts": [s.as_posix() for s in required_ops_scripts],
         "site": args.site,
         "extra_compose_files": [x.as_posix() for x in overlays],
-        "external_alerts_enabled": False,
-        "external_alert_gate": "WAITING_OWNER_CONTACT_AND_CHANNEL_BLK_GOV_06_BLK_INFRA_07",
-        "automated_offsite_upload_enabled": False,
-        "automated_offsite_status": "PARTIAL_UNTIL_AUTOMATED_TARGET_PROVISIONED",
+        "optional_offsite_env_file": args.offsite_env_file.as_posix(),
+        "optional_alert_env_file": args.alert_env_file.as_posix(),
+        "external_alerts_enabled": alert_env_present,
+        "external_alert_gate": (
+            "ALERT_ENV_FILE_PRESENT_PREFLIGHT_ENFORCED_AT_RUNTIME"
+            if alert_env_present
+            else "WAITING_OWNER_CONTACT_AND_CHANNEL_BLK_GOV_06_BLK_INFRA_07"
+        ),
+        "automated_offsite_upload_enabled": offsite_env_present,
+        "automated_offsite_status": (
+            "OFFSITE_ENV_FILE_PRESENT_VERIFIED_AT_RUNTIME"
+            if offsite_env_present
+            else "PARTIAL_UNTIL_AUTOMATED_TARGET_PROVISIONED"
+        ),
         "one_off_manual_copy_proves_periodic_upload": False,
-        "automated_offsite_blocker": "BLK-INFRA-05",
+        "automated_offsite_blocker": None if offsite_env_present else "BLK-INFRA-05",
         "units": units,
     }
 
@@ -289,6 +326,15 @@ def main(argv: list[str] | None = None) -> int:
         for required_path in (args.env_file, args.compose_wrapper, *overlays):
             if not required_path.is_file():
                 raise SystemExit(f"Required path missing on host: {required_path}")
+        for opt_env in (args.offsite_env_file, args.alert_env_file):
+            if opt_env.is_file():
+                mode = stat.S_IMODE(opt_env.stat().st_mode)
+                if (mode & 0o077) != 0:
+                    raise SystemExit(
+                        f"Optional env file must have 0600 permissions (got {oct(mode)}): {opt_env}"
+                    )
+        args.offsite_env_file.parent.mkdir(parents=True, exist_ok=True)
+        args.offsite_env_file.parent.chmod(0o700)
         args.health_out.parent.mkdir(parents=True, exist_ok=True)
         args.backup_root.mkdir(parents=True, exist_ok=True)
         args.backup_root.chmod(0o700)

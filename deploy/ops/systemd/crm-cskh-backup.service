@@ -9,6 +9,8 @@ Type=oneshot
 User=root
 Group=root
 UMask=0077
+EnvironmentFile=-/etc/crm-cskh/offsite-backup.env
+EnvironmentFile=-/etc/crm-cskh/alerting.env
 # Render and install via: install_systemd_timers.py --repo-root /opt/crm-cskh-ops --install
 ExecStart=/usr/bin/python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py run-scheduled \
   --compose-wrapper /opt/crm-cskh-staging/staging-compose \

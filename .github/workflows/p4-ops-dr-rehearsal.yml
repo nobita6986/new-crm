@@ -292,6 +292,7 @@ jobs:
             --site crm-staging.localhost \
             --backup-root "$BK_ROOT" \
             --offsite-target-dir "$OFFSITE_VAULT" \
+            --allow-same-filesystem-for-ci-drill \
             --environment-label ci-g07-drill \
             > "$WORK_DIR/g07_run2_automated.json"
 
@@ -322,6 +323,7 @@ jobs:
             --site crm-staging.localhost \
             --backup-root "$BK_ROOT" \
             --offsite-target-dir "$OFFSITE_VAULT" \
+            --allow-same-filesystem-for-ci-drill \
             --environment-label ci-g07-drill \
             > "$WORK_DIR/g07_run3_final.json"
 

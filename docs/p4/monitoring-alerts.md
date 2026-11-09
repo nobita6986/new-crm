@@ -6,9 +6,10 @@
   - Trình thăm dò sức khỏe & bất biến: [`deploy/ops/check_health_and_invariants.py`](../../deploy/ops/check_health_and_invariants.py)
   - Cài đặt timer định kỳ trên VPS (có gắn `compose.domain.yaml`): [`deploy/ops/install_systemd_timers.py`](../../deploy/ops/install_systemd_timers.py) (`crm-cskh-healthcheck.service` / `crm-cskh-healthcheck.timer`)
   - Kiểm thử đơn vị: [`deploy/ops/test_ops_toolkit.py`](../../deploy/ops/test_ops_toolkit.py) & [`deploy/ops/test_offsite_restore.py`](../../deploy/ops/test_offsite_restore.py)
-- **Hiện trạng đã đo trên VPS `103.77.208.186` (`crm-staging.localhost`):**
-  - `scheduler` đã bật; `live-health-handoff.json` xác nhận toàn bộ container, hàng đợi RQ, 4 cron `crm_cskh` và cả 6 bất biến nghiệp vụ `INV-01..06` đạt **`PASS`**.
-  - **Cổng gửi cảnh báo ngoài hệ thống (`G19`) đang được giữ khóa chủ động (`BLOCKED` bởi `BLK-GOV-06` & `BLK-INFRA-07`):** Hệ thống chỉ ghi báo cáo JSON cục bộ + nhật ký `journald`, **tuyệt đối chưa tự động gửi email, tin nhắn chat hay webhook ra ngoài** cho tới khi Owner chỉ định chính thức đầu mối và kênh nhận cảnh báo.
+- **Hiện trạng đã đo trên VPS `103.77.208.186` (`crm-staging.localhost`, cập nhật `09/11/2026`):**
+  - `scheduler` đã bật; bộ hẹn giờ `crm-cskh-healthcheck.timer` đã cài đặt qua `install_systemd_timers.py --install`, vượt qua `systemd-analyze verify` (`0` cảnh báo) và **đã tự kích hoạt theo lịch lúc `20:05:45 +07` ngày `09/11/2026` (`ExecMainStatus=0`)** ([`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json)).
+  - Báo cáo thực chạy tự động [`live-health-after.json`](../../deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json) (SHA-256 `c33647f44c354733876509639c45374cf333f7421dbcc132fe1b8078ce5b7182`) xác nhận: 10 daemon container `healthy`, ổ đĩa `23.79%`, hàng đợi RQ `0` lỗi, 4 cron `crm_cskh` `Complete`, cả 6 bất biến nghiệp vụ `INV-01..06` đạt **`PASS`**, và độ tươi bản sao lưu `age_hours = 0.086` (`PASS` cục bộ; `end_to_end_backup_gate_g07_status = PARTIAL_PERIODIC_OFFSITE_UNPROVEN`).
+  - **Cổng gửi cảnh báo ngoài hệ thống (`G19`) đang được giữ khóa chủ động (`BLOCKED` bởi `BLK-GOV-06` & `BLK-INFRA-07`):** Tệp `/etc/crm-cskh/alerting.env` chưa được tạo (`external_alerts_sent = false`), hệ thống chỉ ghi báo cáo JSON cục bộ + nhật ký `journald`, **tuyệt đối chưa tự động gửi email, tin nhắn chat hay webhook ra ngoài** cho tới khi Owner chỉ định chính thức đầu mối và kênh nhận cảnh báo.
 
 ---
 
@@ -108,10 +109,15 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py \
   --install
 ```
 
-### 4.2. Chính sách Khử PII, Chống Bão Cảnh Báo & Mở Khóa Kênh Ngoài Hệ Thống (`G19`)
+### 4.2. Chính sách Khử PII, Chống Bão Cảnh Báo & Mở Khóa Kênh Ngoài Hệ Thống (`/etc/crm-cskh/alerting.env` — `G19`)
 1. **Khử PII & Secret bắt buộc:** Hàm `redact_payload_text()` tự động che mọi số điện thoại Việt Nam (`<REDACTED_PHONE>`), cookie phiên (`<REDACTED_FRAPPE_SID>`), mã CSRF (`<REDACTED_CSRF>`) và đường dẫn token webhook (`<REDACTED_WEBHOOK_PATH>`).
-2. **Chống bão cảnh báo (`Deduplication Cooldown`):** Mỗi cặp `environment:alert_code` có thời gian chặn lặp mặc định `900 giây` (`15 phút`) lưu tại `/var/lib/crm-cskh/alert-dedup.json`.
-3. **Quy trình mở khóa cảnh báo ngoài hệ thống (chỉ thực hiện sau khi Owner phê duyệt đầu mối `BLK-GOV-06` và kênh `BLK-INFRA-07`):**
+2. **Chống bão cảnh báo (`Deduplication Cooldown`):** Mỗi cặp `environment:alert_code` có thời gian chặn lặp mặc định `900 giây` (`15 phút`) lưu tại `/var/lib/crm-cskh/alert-dedup.json` (và `/var/backups/crm-cskh/backup-alert-dedup.json` cho cảnh báo backup).
+3. **Đầu vào bắt buộc cần Owner cấp trước khi bật gửi cảnh báo ngoài (`BLK-GOV-06` & `BLK-INFRA-07` — không tự điền người nhận giả):**
+   - `BLK-GOV-06` (`CSKH_OPERATOR_CONTACT`): Định danh đầu mối trực vận hành chính + dự phòng và khung giờ trực được Owner phê duyệt.
+   - `BLK-INFRA-07` (`CSKH_ALERT_WEBHOOK_URL`): Địa chỉ HTTPS Webhook chính thức của kênh nhận cảnh báo do Owner phê duyệt (ChatOps nội bộ / Telegram / Slack / Pager).
+4. **Quy trình kích hoạt qua `/etc/crm-cskh/alerting.env` (`0600`) mà không cần sửa unit systemd:**
+   - Cả 3 service (`crm-cskh-healthcheck.service`, `crm-cskh-backup.service`, `crm-cskh-backup-failure@.service`) đều nạp tùy chọn `EnvironmentFile=-/etc/crm-cskh/alerting.env` (xem mẫu tại [`deploy/compose/env/alerting.env.example`](../../deploy/compose/env/alerting.env.example)).
+   - Sau khi Owner cấp đủ 2 đầu vào trên, tạo `/etc/crm-cskh/alerting.env` quyền `0600` (`root:root`) và bắn kiểm chứng một cảnh báo thử nghiệm để đóng cổng `G19`:
    ```bash
    CSKH_OPERATOR_CONTACT="<DAU_MOI_DUOC_OWNER_CHI_DINH>" \
    CSKH_ALERT_WEBHOOK_URL="<HTTPS_WEBHOOK_DUOC_OWNER_CHI_DINH>" \
@@ -140,5 +146,5 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py \
 
 | Cổng | Điều kiện `P4.md §19` | Trạng thái hiện tại | Lý do / Bằng chứng thực tế |
 | :--- | :--- | :---: | :--- |
-| **`G17`** | Scheduler, queue, background jobs hoạt động ổn định, idempotent | **`PASS` (Trên Staging Live)** | `live-health-handoff.json` trên `103.77.208.186` xác nhận `scheduler` đã bật, container/queue/cron và `INV-01..06` đạt `PASS`; systemd timer gắn `compose.domain.yaml` đã đóng gói. |
-| **`G19`** | Monitoring/alerting hoạt động và cảnh báo ngoài hệ thống đã test | **`BLOCKED` (`BLK-GOV-06`, `BLK-INFRA-07`)** | Giám sát nội bộ đã chạy và khử PII đầy đủ; phần gửi cảnh báo ngoài hệ thống đang được giữ khóa theo đúng chỉ đạo chờ Owner chỉ định đầu mối và kênh nhận. |
+| **`G17`** | Scheduler, queue, background jobs hoạt động ổn định, idempotent | **`PASS` (Trên Staging Live & Timer VPS)** | `live-health-after.json` + `timers-runtime.json` trên `103.77.208.186` xác nhận `crm-cskh-healthcheck.timer` tự kích hoạt lúc `20:05 ICT` ngày `09/11/2026` đạt `PASS` (`scheduler=1`, `queues=0 failed`, 4 cron `Complete`, `INV-01..06 == 0`); diễn tập `restart/retry ×2` cô lập đạt `PASS` tại [`isolated-staging-dr-https-report.json`](../../deploy/ops/evidence/p4-g07-g08-dr-20261109/isolated-staging-dr-https-report.json). |
+| **`G19`** | Monitoring/alerting hoạt động và cảnh báo ngoài hệ thống đã test | **`BLOCKED` (`BLK-GOV-06`, `BLK-INFRA-07`)** | Timer giám sát 5 phút/lần đã chạy tự động trên VPS và khử PII đầy đủ (`external_alerts_sent = false`); kênh gửi cảnh báo ngoài hệ thống (`/etc/crm-cskh/alerting.env`) đang giữ khóa theo đúng chỉ đạo chờ Owner chỉ định đầu mối và webhook nhận. |
