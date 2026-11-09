@@ -6,7 +6,8 @@ Type=oneshot
 User=root
 Group=root
 UMask=0077
-ExecStart=/usr/bin/python3 /opt/crm-cskh-staging/repo/deploy/ops/manage_backup_lifecycle.py emit-failure-alert \
+# Render and install via: install_systemd_timers.py --repo-root /opt/crm-cskh-ops --install
+ExecStart=/usr/bin/python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py emit-failure-alert \
   --backup-root /var/backups/crm-cskh \
   --environment-label staging \
   --unit-name %i \

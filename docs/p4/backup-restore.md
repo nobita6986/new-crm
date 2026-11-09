@@ -18,12 +18,13 @@
 
 ## 1. Kiến Trúc Gói Sao Lưu Mã Hóa (`p4-encrypted-backup-v2`)
 
-Mỗi lần chạy `create_encrypted_backup.py` sinh một thư mục mốc sao lưu độc lập (ví dụ `/var/backups/crm-cskh/daily-20261109T191500Z/`) gồm 2 tệp ngoài vỏ và 6 thành phần bên trong gói mã hóa:
+Mỗi lần chạy `create_encrypted_backup.py` sinh một thư mục mốc sao lưu độc lập quyền `0700` (ví dụ `/var/backups/crm-cskh/scheduled-20261109T191500Z/`) gồm các tệp ngoài vỏ và 6 thành phần bên trong gói mã hóa:
 
-### 1.1. Tệp ngoài vỏ (không chứa dữ liệu khách hàng hay secret)
-1. `backup.tar.gz.enc` (`0600`): Gói nén `.tar.gz` đã mã hóa bằng OpenSSL `AES-256-CBC` với dẫn xuất khóa `PBKDF2-HMAC-SHA256` (`200.000` vòng lặp, salt ngẫu nhiên) từ tệp khóa độc lập `CSKH_BACKUP_ENCRYPTION_KEY_FILE`.
-2. `backup-report.json`: Biên bản siêu dữ liệu (`archive_sha256`, `archive_bytes`, `source_revision`, `encryption_key_state` chỉ báo có/không — không lộ khóa, và trạng thái trung thực `end_to_end_backup_status`).
-3. `offsite-verification.json` *(chỉ xuất hiện sau khi đã chép ra ngoài máy chủ và đối chiếu khớp mã băm hai đầu qua `manage_backup_lifecycle.py record-offsite`)*.
+### 1.1. Tệp trong thư mục bundle cục bộ & quy tắc tách khóa
+1. `backup.tar.gz.enc` (`0600`): Gói nén `.tar.gz` đã mã hóa bằng OpenSSL `AES-256-CBC` với dẫn xuất khóa `PBKDF2-HMAC-SHA256` (`200.000` vòng lặp, salt ngẫu nhiên) từ chính tệp `backup-key` của bundle đó (`-pass file:<out_dir>/backup-key`) và kiểm chứng giải mã vòng khép kín khớp SHA-256 ngay khi tạo.
+2. `backup-key` (`0600`): **Khóa ngẫu nhiên 256-bit riêng biệt cho từng bundle (`secrets.token_hex(32)` + `\n`)** được `create_encrypted_backup.py` sinh mới độc lập ngay trong `<out_dir>/backup-key` (công cụ **không** đọc khóa cố định dùng chung từ tệp hay biến môi trường bên ngoài). Khi lưu trữ ngoài VPS, `backup-key` **bắt buộc** lưu ký tại kho bí mật độc lập (Password Vault của Owner / kho khóa tách rời) và **tuyệt đối không được đẩy sang cùng đích lưu trữ offsite chứa `backup.tar.gz.enc`**.
+3. `backup-report.json` (`0600`): Biên bản siêu dữ liệu `0` PII / `0` secret (`archive_sha256`, `archive_bytes`, `source_revision`, `encryption_key_state` chỉ báo trạng thái có/chưa khởi tạo — không lộ khóa, và trạng thái trung thực `end_to_end_backup_status`).
+4. `offsite-verification.json` *(xuất hiện sau khi đã chép `backup.tar.gz.enc` ra kho ngoài VPS và đối chiếu khớp mã băm hai đầu qua `sync_bundle_offsite_automated` hoặc `manage_backup_lifecycle.py record-offsite`)*.
 
 ### 1.2. Sáu thành phần bắt buộc bên trong `backup.tar.gz.enc`
 Khi giải mã, `verify_offsite_restore.py` kiểm tra nghiêm ngặt chống path traversal / symlink và yêu cầu **đúng đủ 6 thành phần**:
@@ -54,50 +55,84 @@ Trong Frappe, khóa Fernet `encryption_key` trong `site_config.json` chỉ tự 
 
 ## 3. Lịch Chạy Tự Động, Kiểm Tra Checksum, Offsite & Lưu Giữ (`Retention`)
 
-### 3.1. Lịch chạy hằng ngày trên VPS (`systemd`)
-Tệp mẫu [`deploy/ops/systemd/crm-cskh-backup.timer`](../../deploy/ops/systemd/crm-cskh-backup.timer) kích hoạt lúc **`02:15` sáng mỗi ngày (`Asia/Ho_Chi_Minh`)**:
+### 3.0. Chuẩn bị & xác minh thư mục mã nguồn vận hành đúng SHA (`/opt/crm-cskh-ops`)
+> [!IMPORTANT]
+> **Không giả định `/opt/crm-cskh-app` hay `/opt/crm-cskh-staging/repo` đã tồn tại trên VPS `103.77.208.186`.** Trước khi chạy diễn tập khôi phục hoặc cài đặt `systemd` timer, chuẩn bị và xác minh thư mục mã nguồn vận hành `/opt/crm-cskh-ops` đúng commit SHA đã bàn giao (`<OPS_COMMIT_SHA>`):
 
 ```bash
-# Xem trước (dry-run) các unit systemd theo đúng topology thực tế trên VPS 103.77.208.186:
-sudo python3 deploy/ops/install_systemd_timers.py \
-  --repo-root /opt/crm-cskh-app \
-  --env-file /opt/crm-cskh-staging/.env.staging \
-  --compose-wrapper /opt/crm-cskh-staging/staging-compose \
-  --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
-  --site crm-staging.localhost \
-  --environment-label staging \
-  --backup-root /var/backups/crm-cskh \
-  --backup-key-file /etc/crm-cskh/secrets/backup-passphrase.key
+# Bước A (Trên máy trạm có repo Git): Đóng gói mã nguồn ops từ đúng commit SHA bất biến và chuyển lên VPS:
+OPS_SHA="<OPS_COMMIT_SHA>"
+git archive --format=tar.gz -o crm-cskh-ops.tar.gz "${OPS_SHA}" deploy docs/p4
+sha256sum crm-cskh-ops.tar.gz
+scp crm-cskh-ops.tar.gz root@103.77.208.186:/tmp/crm-cskh-ops.tar.gz
 
-# Cài đặt và kích hoạt timer (sau khi kiểm tra dry-run):
-sudo python3 deploy/ops/install_systemd_timers.py \
-  --repo-root /opt/crm-cskh-app \
+# Bước B (Trên VPS 103.77.208.186): Đối chiếu SHA-256 gói mã nguồn, giải nén nguyên tử vào /opt/crm-cskh-ops và kiểm tra tệp thực thi:
+echo "<TAR_SHA256>  /tmp/crm-cskh-ops.tar.gz" | sha256sum -c -
+sudo rm -rf /opt/crm-cskh-ops.new && sudo install -d -m 0755 /opt/crm-cskh-ops.new
+sudo tar -xzf /tmp/crm-cskh-ops.tar.gz -C /opt/crm-cskh-ops.new
+printf '%s\n' "<OPS_COMMIT_SHA>" | sudo tee /opt/crm-cskh-ops.new/.ops-commit-sha >/dev/null
+sudo rm -rf /opt/crm-cskh-ops && sudo mv /opt/crm-cskh-ops.new /opt/crm-cskh-ops
+rm -f /tmp/crm-cskh-ops.tar.gz
+test -f /opt/crm-cskh-ops/deploy/ops/verify_offsite_restore.py
+test -f /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py
+```
+
+*(Nếu trên VPS dùng trực tiếp bản checkout Git tại `/opt/crm-cskh-ops`, bắt buộc kiểm tra `test "$(git -C /opt/crm-cskh-ops rev-parse HEAD)" = "<OPS_COMMIT_SHA>"` trước khi chạy).*
+
+### 3.1. Lịch chạy hằng ngày trên VPS (`systemd`) — Dry-run → Kiểm tra Unit → Cài đặt (`--install`) → Đo lần chạy thật
+Tệp mẫu [`deploy/ops/systemd/crm-cskh-backup.timer`](../../deploy/ops/systemd/crm-cskh-backup.timer) kích hoạt lúc **`02:15` sáng mỗi ngày (`Asia/Ho_Chi_Minh`, tức `19:15:00 UTC`)**. Trình cài đặt `install_systemd_timers.py` mặc định chạy ở chế độ xem trước (`dry_run`), kiểm tra sự tồn tại của các script dưới `--repo-root` cùng `.env.staging`, `staging-compose`, `compose.domain.yaml`, và chỉ ghi unit + bật timer khi truyền `--install` với quyền `root`:
+
+```bash
+# 1. Xem trước (dry-run mặc định — không truyền --install) và kiểm tra đường dẫn/unit:
+python3 /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py \
+  --repo-root /opt/crm-cskh-ops \
+  --env-file /opt/crm-cskh-staging/.env.staging \
+  --compose-wrapper /opt/crm-cskh-staging/staging-compose \
+  --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
+  --site crm-staging.localhost \
+  --environment-label staging \
+  --backup-root /var/backups/crm-cskh
+
+# 2. Cài đặt và kích hoạt timer sau khi dry-run khớp 100% đường dẫn:
+sudo python3 /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py \
+  --repo-root /opt/crm-cskh-ops \
   --env-file /opt/crm-cskh-staging/.env.staging \
   --compose-wrapper /opt/crm-cskh-staging/staging-compose \
   --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
   --site crm-staging.localhost \
   --environment-label staging \
   --backup-root /var/backups/crm-cskh \
-  --backup-key-file /etc/crm-cskh/secrets/backup-passphrase.key \
-  --apply
+  --install
+
+# 3. Kiểm tra cú pháp unit đã cài và đo lần chạy thật đầu tiên (giữ offsite PARTIAL & tắt gửi cảnh báo ngoài):
+sudo systemd-analyze verify \
+  /etc/systemd/system/crm-cskh-healthcheck.service \
+  /etc/systemd/system/crm-cskh-backup.service
+sudo systemctl list-timers --all 'crm-cskh-*'
+sudo systemctl start crm-cskh-backup.service
+sudo systemctl start crm-cskh-healthcheck.service
+sudo jq '{local_backup_status,end_to_end_backup_status,periodic_offsite_upload_proven,automated_offsite_blocker}' \
+  /var/backups/crm-cskh/latest-backup-lifecycle.json
+sudo jq '{status,containers:.containers.status,invariants:.invariants.status,backup:.backup_freshness.end_to_end_backup_gate_g07_status}' \
+  /var/lib/crm-cskh/health/latest-health-report.json
 ```
 
 ### 3.2. Upload Offsite Tự Động Kèm Đọc Ngược SHA-256 & Cảnh Báo Lỗi (`G07`)
-1. **Khi đã cấp phát kho đích ngoài VPS (`BLK-INFRA-05`):** Truyền `--offsite-target-dir <MOUNT_OFFSITE>` hoặc cặp `--offsite-upload-cmd` + `--offsite-verify-cmd` cho `manage_backup_lifecycle.py run-scheduled` (hoặc biến môi trường `CSKH_OFFSITE_TARGET_DIR` / `CSKH_OFFSITE_UPLOAD_CMD` + `CSKH_OFFSITE_VERIFY_CMD`). Công cụ chỉ đẩy `backup.tar.gz.enc` + `backup-report.json`, **chặn cứng nếu `backup-key` xuất hiện ở đích hoặc đích nằm lồng trong `backup_root`**, đọc ngược SHA-256 + kích thước byte từ đích và chỉ khi khớp tuyệt đối mới đặt `periodic_offsite_upload_proven = true` (`end_to_end_backup_status = "PASS"`).
+1. **Khi đã cấp phát kho đích ngoài VPS (`BLK-INFRA-05`):** Truyền `--offsite-target-dir <MOUNT_OFFSITE>` hoặc cặp `--offsite-upload-cmd` + `--offsite-verify-cmd` cho `manage_backup_lifecycle.py run-scheduled` (hoặc biến môi trường `CSKH_OFFSITE_TARGET_DIR` / `CSKH_OFFSITE_UPLOAD_CMD` + `CSKH_OFFSITE_VERIFY_CMD`). Công cụ chỉ đẩy `backup.tar.gz.enc` + `backup-report.json`, **chặn cứng nếu `backup-key` xuất hiện ở đích hoặc đích nằm lồng trong `backup_root`**, đọc ngược SHA-256 + kích thước byte từ đích và chỉ khi khớp tuyệt đối mới đặt `periodic_offsite_upload_proven = true` (`end_to_end_backup_status = "PASS"`). Khi chưa có đích upload tự động, trạng thái bắt buộc giữ `PARTIAL` (`PARTIAL_LOCAL_ONLY_OFFSITE_PENDING` hoặc `PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED`).
 2. **Cảnh báo tự động khi sao lưu lỗi hoặc quá hạn (`> 26 giờ`):**
    - `crm-cskh-backup.service` gắn `OnFailure=crm-cskh-backup-failure@%n.service` gọi `manage_backup_lifecycle.py emit-failure-alert`, ghi biên bản `ALT-BACKUP-FAILURE` đã khử PII/secret vào `/var/backups/crm-cskh/backup-alerts.jsonl` (`0600`) và giữ khóa kênh ngoài cho tới khi Owner mở `BLK-GOV-06` + `BLK-INFRA-07`.
    - `crm-cskh-healthcheck.service` kiểm tra mỗi 5 phút tham số `--backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json` (`--max-backup-age-hours 26.0`) để phát hiện sớm lịch backup bị kẹt hoặc lỗi.
 3. **Xác nhận bản sao Offsite thủ công (khi chưa gỡ `BLK-INFRA-05`):**
-Sau khi kéo `backup.tar.gz.enc` và `backup-report.json` về máy lưu trữ ngoài VPS qua `scp` và đối chiếu SHA-256 khớp hai đầu (lưu ý: biên nhận thủ công giữ `periodic_offsite_upload_proven = false`):
+Sau khi kéo `backup.tar.gz.enc` và `backup-report.json` về kho lưu trữ ngoài VPS qua `scp`, lưu ký riêng `backup-key` vào Password Vault độc lập và đối chiếu SHA-256 khớp hai đầu (lưu ý: biên nhận thủ công giữ `periodic_offsite_upload_proven = false`):
 
 ```bash
 # 1. Kiểm tra lại toàn vẹn gói backup tại chỗ:
-python3 deploy/ops/manage_backup_lifecycle.py verify-bundle \
-  --bundle-dir /var/backups/crm-cskh/daily-20261109T191500Z
+sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py verify-bundle \
+  --bundle-dir /var/backups/crm-cskh/scheduled-20261109T191500Z
 
 # 2. Ghi biên nhận đã chép ra ngoài VPS và khớp SHA-256:
-python3 deploy/ops/manage_backup_lifecycle.py record-offsite \
-  --bundle-dir /var/backups/crm-cskh/daily-20261109T191500Z \
+sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py record-offsite \
+  --bundle-dir /var/backups/crm-cskh/scheduled-20261109T191500Z \
   --verified-sha256 "<SHA256_DO_TREN_KHO_OFFSITE>" \
   --offsite-location-label "workstation-offsite-vault:crm-hrpartner"
 ```
@@ -128,8 +163,8 @@ python3 deploy/ops/manage_backup_lifecycle.py record-offsite \
 - **Pha B — Đối chứng Dương & Âm (`Positive & Negative Control`) trên Clone cô lập:**
   1. Tạo một bí mật mã hóa Fernet thật qua `set_encrypted_password` (`__Auth.encrypted = 1`, ciphertext `gAAAAAB...`), tạo tệp `public/files` và `private/files` khác rỗng, và tạo 1 `CRM Lead` synthetic trên bản clone.
   2. Chạy trọn vòng `bench backup --with-files` → đóng gói → mã hóa OpenSSL → giải mã → trích xuất an toàn.
-  3. Xóa tệp & xóa `encryption_key` trên clone → chứng minh **Negative Control**: `evaluate_encryption_key_state()` chặn đứng lỗi mất khóa (`Missing encryption_key`) và Frappe không thể giải mã khi thiếu khóa.
-  4. Khôi phục lại `site_config_backup.json` (`0600`) và tệp từ gói sao lưu mới → chứng minh **Positive Control**: `get_decrypted_password()` trả về đúng từng ký tự gốc, byte & SHA-256 tệp public/private khớp 100%, và qua Nginx: **Guest đọc tệp public đạt `200`, Guest đọc tệp private bị chặn `403`, User đã đăng nhập đọc tệp private đạt `200`**.
+  3. Xóa tệp & xóa `encryption_key` trên clone → chứng minh **Negative Control fail-closed**: `evaluate_encryption_key_state()` chặn đứng lỗi mất khóa (`Missing encryption_key`), đồng thời `run_negative_control_decrypt_probe()` gọi `get_decrypted_password(..., raise_exception=True)` theo hợp đồng nghiêm ngặt: không bao giờ bắt `AssertionError`, mọi trường hợp hàm giải mã trả về mà không ném lỗi đều làm ca kiểm chứng `FAIL`, mọi lỗi DB/SQL/import/`AuthenticationError("Password not found")` đều làm ca kiểm chứng `FAIL`, và **chỉ** chấp nhận lỗi mất khóa/giải mã Fernet dự kiến (`cryptography.fernet.InvalidToken` / `ValidationError` khóa mã hóa không hợp lệ).
+  4. Khôi phục lại `site_config_backup.json` (`0600`) và tệp từ gói sao lưu mới → chứng minh **Positive Control**: `get_decrypted_password()` trả về đúng từng ký tự gốc cả trước và sau `migrate ×2` idempotent, byte & SHA-256 tệp public/private khớp 100%, và qua Nginx: **Guest đọc tệp public đạt `200`, Guest đọc tệp private bị chặn `403`, User đã đăng nhập đọc tệp private đạt `200`**.
 
 ### 4.3. Quy tắc đo thời gian khôi phục (`RTO`)
 Báo cáo JSON tách bạch rõ `sql_import_only_is_full_rto: false` và ghi nhận đầy đủ 9 chặng:
@@ -147,11 +182,14 @@ Tổng thời gian từ chặng 1 đến hết chặng 9 là `measured_end_to_en
 
 ### 4.4. Lệnh thực thi chuẩn trên VPS `103.77.208.186` (dành cho `T0` / `Operator`)
 
+Sau khi đã chuẩn bị thư mục mã nguồn vận hành `/opt/crm-cskh-ops` đúng commit SHA theo **Mục 3.0**:
+
 ```bash
-sudo python3 /opt/crm-cskh-app/deploy/ops/verify_offsite_restore.py \
+test -f /opt/crm-cskh-ops/deploy/ops/verify_offsite_restore.py
+sudo python3 /opt/crm-cskh-ops/deploy/ops/verify_offsite_restore.py \
   --archive /opt/crm-p4-restore-input-20261109/backup.tar.gz.enc \
   --archive-sha256 d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11 \
-  --key-file /opt/crm-p4-restore-input-20261109/backup.key \
+  --key-file /opt/crm-p4-restore-input-20261109/backup-key \
   --source-project crm-cskh-vps-staging \
   --site crm-staging.localhost \
   --out /opt/crm-p4-restore-input-20261109/restore-drill-report.json

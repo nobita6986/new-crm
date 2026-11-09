@@ -837,11 +837,7 @@ def evaluate_backup_freshness_and_offsite(
     }
 
 
-def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8")
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, help="Compose .env file for target stack")
     parser.add_argument("--mode", choices=("tls", "isolated-smoke", "dr-https"), default="tls")
@@ -899,6 +895,15 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--webhook-url", default=os.environ.get("CSKH_ALERT_WEBHOOK_URL", ""))
     parser.add_argument("--dedup-state-file", type=Path)
     parser.add_argument("--out", type=Path)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     alert_preflight = evaluate_alert_preflight(args.operator_contact, args.webhook_url)

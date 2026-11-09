@@ -16,7 +16,7 @@
 | Chu kỳ | Danh mục kiểm tra cụ thể | Lệnh / Màn hình chuẩn | Vai trò chịu trách nhiệm |
 | :--- | :--- | :--- | :--- |
 | **Mỗi 5 phút (Tự động trên VPS)** | 1. 10 container thường trực `healthy`, `0` `OOMKilled`, ổ đĩa `< 80%`.<br>2. Hàng đợi RQ (`short`/`default`/`long`) `failed == 0`, 4 cron `crm_cskh` chạy đúng nhịp.<br>3. Cả 6 bất biến nghiệp vụ (`INV-01`..`INV-06`) đạt `PASS`.<br>*(Lưu cục bộ ra JSON + `journald`; **chưa tự gửi email/chat ra ngoài** khi chờ `BLK-GOV-06`)* | `crm-cskh-healthcheck.timer` gọi `check_health_and_invariants.py --env-file /opt/crm-cskh-staging/.env.staging --mode tls --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml --site crm-staging.localhost` | `systemd` + **Operator kỹ thuật** (`BLK-GOV-06`) |
-| **Hằng ngày (`02:15 ICT` & Đầu giờ sáng)** | 1. `crm-cskh-backup.timer` tạo bản sao lưu mã hóa đêm trước và kiểm tra SHA-256 cục bộ.<br>2. Đầu giờ sáng: rà `/var/lib/crm-cskh/latest-health-report.json` và kéo bản sao lưu mã hóa về kho ngoài VPS + chạy `record-offsite` *(cho tới khi có upload tự động `BLK-INFRA-05`)*. | `manage_backup_lifecycle.py verify-bundle` & `record-offsite` ([`backup-restore.md`](./backup-restore.md)) | **Operator kỹ thuật** (`BLK-GOV-06`) |
+| **Hằng ngày (`02:15 ICT` & Đầu giờ sáng)** | 1. `crm-cskh-backup.timer` tạo bản sao lưu mã hóa đêm trước (sinh `backup-key` `0600` riêng cho bundle đó) và kiểm tra SHA-256 cục bộ.<br>2. Đầu giờ sáng: rà `/var/lib/crm-cskh/health/latest-health-report.json`, kéo `backup.tar.gz.enc` về kho ngoài VPS, lưu ký `backup-key` vào kho khóa độc lập + chạy `record-offsite` *(giữ trạng thái offsite automation `PARTIAL` cho tới khi có đích upload tự động `BLK-INFRA-05`)*. | `manage_backup_lifecycle.py verify-bundle` & `record-offsite` ([`backup-restore.md`](./backup-restore.md)) | **Operator kỹ thuật** (`BLK-GOV-06`) |
 | **Hằng ngày (Nghiệp vụ)** | 1. Dòng lỗi khi nhập CSV và số lượng hồ sơ chờ phân công.<br>2. Danh sách đầu việc sắp vi phạm / đã vi phạm SLA liên hệ đầu & lịch hẹn.<br>3. Độ tươi (`as_of`) của bảng chỉ số KPI ngày hiện tại. | `/cskh/import`, `/cskh/pool`, `/cskh/sla-operations`, `/cskh/quality-overview` | **Quản trị CRM & Trưởng nhóm** |
 | **Hằng tuần** | 1. Rà soát `Error Log`, truy vấn MariaDB chậm và dung lượng phân vùng Docker.<br>2. Rà soát nhật ký thay đổi phân quyền, `CSKH Export Job` và yêu cầu tính lại KPI.<br>3. Lấy mẫu đối soát ngẫu nhiên 5 đầu việc từ Dashboard xuống lịch sử gốc. | Báo cáo tuần từ `check_health_and_invariants.py` + kiểm toán DocType quản trị | **Tech Owner + Quản trị CRM** |
 | **Hằng tháng** | 1. **Diễn tập khôi phục cô lập (`Restore Drill`)** bằng `verify_offsite_restore.py` (`P4.md §7.2`).<br>2. Đối chiếu danh sách tài khoản `User.enabled = 1` với nhân sự thực tế.<br>3. Rà soát toàn vẹn 5 bản ghi `Translation` tùy chỉnh của Owner và dung lượng lưu trữ. | [`backup-restore.md`](./backup-restore.md) Mục 4 + kiểm tra user active | **Operator + Tech Owner** |
@@ -95,15 +95,16 @@ chmod 600 /opt/crm-cskh-staging/.env.staging
 # Dựng lại theo đúng trật tự phụ thuộc của Compose (bao gồm compose.domain.yaml):
 /opt/crm-cskh-staging/staging-compose up -d
 
-# Chạy kiểm tra tổng thể container + queue + cron + 6 bất biến nghiệp vụ:
-python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
+# Chạy kiểm tra tổng thể container + queue + cron + 6 bất biến nghiệp vụ (từ thư mục ops đã xác minh đúng SHA tại /opt/crm-cskh-ops):
+test -f /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py
+sudo python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
   --env-file /opt/crm-cskh-staging/.env.staging \
   --mode tls \
   --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
   --site crm-staging.localhost \
   --environment-label staging \
   --startup-grace-seconds 600 \
-  --out /var/lib/crm-cskh/post-restart-health.json
+  --out /var/lib/crm-cskh/health/post-restart-health.json
 ```
 
 ---
@@ -158,8 +159,8 @@ Khi phát hiện sai lệch dữ liệu nghiệp vụ (phân công, lần liên 
 
 1. **Giới hạn Single-VPS (SPOF):** Hệ thống hiện chạy trên một máy chủ VPS duy nhất (`103.77.208.186`) — **không phải kiến trúc High Availability (HA) hay Zero-Downtime**. Nếu máy chủ gặp sự cố phần cứng/trung tâm dữ liệu, thực hiện khôi phục máy chủ mới theo **Mục 5 của [`rollback-runbook.md`](./rollback-runbook.md)** từ gói sao lưu mã hóa offsite gần nhất.
 2. **Quy tắc bảo vệ tệp cấu hình & khóa giải mã:**
-   - Tệp `/opt/crm-cskh-staging/.env.staging`, tệp `db_root_password.txt` (chỉ kết thúc bằng `\n` `LF`) và tệp khóa sao lưu `backup-passphrase.key` bắt buộc giữ quyền **`0600`**.
-   - Khóa `encryption_key` của `site_config.json` (ngay khi được khởi tạo) và khóa giải mã gói backup phải luôn có bản lưu ký tại kho độc lập ngoài VPS; mất khóa đồng nghĩa các trường mã hóa trong bản sao lưu không thể giải mã.
+   - Tệp `/opt/crm-cskh-staging/.env.staging`, tệp `db_root_password.txt` (chỉ kết thúc bằng `\n` `LF`) và tệp khóa `backup-key` riêng của từng gói sao lưu bắt buộc giữ quyền **`0600`**.
+   - Khóa `encryption_key` của `site_config.json` (ngay khi được khởi tạo) và tệp `backup-key` của mỗi bundle sao lưu phải luôn có bản lưu ký tại kho bí mật độc lập ngoài VPS (tách rời hoàn toàn khỏi đích lưu trữ `backup.tar.gz.enc`); mất khóa đồng nghĩa bản sao lưu mã hóa không thể giải mã.
 
 ---
 

@@ -300,6 +300,160 @@ def evaluate_translation_integrity(
         "core_vi_catalog_verified": bool(after_tr.get("core_vi_catalog_verified", False)),
         "errors": errors,
     }
+
+
+_REJECTED_NEG_CONTROL_EXC_NAMES = {
+    "AssertionError",
+    "ImportError",
+    "ModuleNotFoundError",
+    "OperationalError",
+    "ProgrammingError",
+    "InternalError",
+    "IntegrityError",
+    "InterfaceError",
+    "DataError",
+    "DatabaseError",
+    "NotSupportedError",
+    "ConnectionError",
+    "TimeoutError",
+    "QueryTimeoutError",
+    "SQLError",
+    "AuthenticationError",
+    "DoesNotExistError",
+    "PermissionError",
+    "MandatoryError",
+    "LinkValidationError",
+}
+
+_REJECTED_NEG_CONTROL_MODULE_TOKENS = (
+    "pymysql",
+    "mysqldb",
+    "mariadb",
+    "sqlite",
+    "psycopg",
+    "sqlalchemy",
+    "redis",
+    "socket",
+    "urllib",
+    "http",
+)
+
+_EXPECTED_KEY_ERROR_PHRASES = (
+    "encryption key is invalid",
+    "encryption_key",
+    "missing encryption key",
+    "fernet key must be 32",
+    "khóa mã hóa không hợp lệ",
+    "thiếu khóa mã hóa",
+)
+
+
+def is_expected_missing_key_decrypt_error(exc: BaseException) -> bool:
+    """Return True ONLY for expected missing/mismatched encryption_key Fernet decryption errors.
+
+    Rejects AssertionError, ImportError, DB/SQL/Redis/network errors,
+    AuthenticationError ('Password not found'), and unrelated exceptions.
+    """
+    if not isinstance(exc, Exception) or isinstance(
+        exc,
+        (
+            AssertionError,
+            ImportError,
+            AttributeError,
+            TypeError,
+            NameError,
+            LookupError,
+            OSError,
+            SyntaxError,
+            RuntimeError,
+            NotImplementedError,
+        ),
+    ):
+        return False
+
+    chain: list[BaseException] = []
+    seen: set[int] = set()
+    cur: BaseException | None = exc
+    while cur is not None and id(cur) not in seen and len(chain) < 8:
+        seen.add(id(cur))
+        chain.append(cur)
+        cur = cur.__cause__ if cur.__cause__ is not None else cur.__context__
+
+    for item in chain:
+        cls_name = type(item).__name__
+        mod_name = (type(item).__module__ or "").lower()
+        msg_lower = str(item).lower()
+        if isinstance(item, (AssertionError, ImportError)):
+            return False
+        if cls_name in _REJECTED_NEG_CONTROL_EXC_NAMES:
+            return False
+        if any(tok in mod_name for tok in _REJECTED_NEG_CONTROL_MODULE_TOKENS):
+            return False
+        if "password not found" in msg_lower:
+            return False
+
+    for item in chain:
+        cls_name = type(item).__name__
+        mod_name = (type(item).__module__ or "").lower()
+        if cls_name == "InvalidToken" and "cryptography" in mod_name:
+            return True
+
+    top_cls = type(exc).__name__
+    top_msg = str(exc).lower()
+    if top_cls in ("ValidationError", "ValueError") and any(
+        phrase in top_msg for phrase in _EXPECTED_KEY_ERROR_PHRASES
+    ):
+        return True
+    return False
+
+
+def run_negative_control_decrypt_probe(
+    decrypt_fn: Any,
+    control_secret: str,
+    *,
+    doctype: str = "User",
+    name: str = "Administrator",
+    fieldname: str = "p4_restore_control",
+) -> dict[str, Any]:
+    """Verify decryption fails closed with an expected key/Fernet error when encryption_key is absent.
+
+    - Never catches AssertionError emitted by the verification or by decrypt_fn.
+    - Any non-raising return from decrypt_fn (whether matching control_secret, empty, None, or other)
+      raises AssertionError outside try/except so the drill FAILS.
+    - Re-raises DB, import, authentication, or unrelated exceptions instead of counting them as PASS.
+    """
+    if not callable(decrypt_fn):
+        raise TypeError("decrypt_fn must be callable")
+    raised_exc: BaseException | None = None
+    returned_value: Any = None
+    returned_without_error = False
+    try:
+        returned_value = decrypt_fn(
+            doctype,
+            name,
+            fieldname,
+            raise_exception=True,
+        )
+        returned_without_error = True
+    except AssertionError:
+        raise
+    except Exception as exc:
+        if not is_expected_missing_key_decrypt_error(exc):
+            raise
+        raised_exc = exc
+
+    if returned_without_error:
+        matched_secret = returned_value == control_secret
+        raise AssertionError(
+            "Negative control failed: get_decrypted_password returned without raising "
+            f"when encryption_key was missing (matched_control_secret={matched_secret})"
+        )
+    assert raised_exc is not None
+    return {
+        "rejected": True,
+        "exception_class": type(raised_exc).__name__,
+        "exception_module": type(raised_exc).__module__,
+    }
 '''
 
 exec(SHARED_WORKER_HELPERS_SOURCE, globals())
@@ -1084,24 +1238,25 @@ except ValueError:
     negative_state_rejected = True
 assert negative_state_rejected, 'Negative control did not reject missing encryption_key'
 
-negative_decrypt_failed = False
-os.chdir('/home/frappe/frappe-bench/sites')
+# BEGIN_NEGATIVE_CONTROL_DECRYPT_BLOCK
+bench_root = pathlib.Path(os.environ.get('CSKH_BENCH_ROOT', '/home/frappe/frappe-bench'))
+os.chdir(bench_root / 'sites')
 frappe.init(site=site, sites_path='.')
 frappe.connect()
 try:
     from frappe.utils.password import get_decrypted_password
-    try:
-        val = get_decrypted_password('User', 'Administrator', 'p4_restore_control', raise_exception=True)
-        if val == p['control_secret']:
-            raise AssertionError('Decryption unexpectedly succeeded without encryption_key')
-    except AssertionError:
-        raise
-    except Exception:
-        negative_decrypt_failed = True
+    neg_decrypt_eval = run_negative_control_decrypt_probe(
+        get_decrypted_password,
+        p['control_secret'],
+        doctype='User',
+        name='Administrator',
+        fieldname='p4_restore_control',
+    )
 finally:
     frappe.destroy()
-    os.chdir('/home/frappe/frappe-bench')
-assert negative_decrypt_failed, 'get_decrypted_password did not fail when encryption_key was missing'
+    os.chdir(bench_root)
+assert neg_decrypt_eval['rejected'] is True, 'get_decrypted_password did not fail with expected key error when encryption_key was missing'
+# END_NEGATIVE_CONTROL_DECRYPT_BLOCK
 
 # 2. Restore encryption_key from site_config_backup.json (`0600`) and verify positive control.
 saved_pos = json.loads(pathlib.Path(p['site_config']).read_text(encoding='utf-8'))
@@ -1224,6 +1379,7 @@ print('POS_VERIFY_JSON=' + json.dumps({
     'encryption_key_state': pos_enc_eval['state'],
     'negative_control_missing_key_rejected': True,
     'negative_control_decrypt_without_key_failed': True,
+    'negative_control_decrypt_exception': neg_decrypt_eval['exception_class'],
     'encrypted_secret_fernet_round_trip': True,
     'encrypted_secret_post_migrate_x2_verified': True,
     'migrate_x2_idempotent': True,
@@ -2019,7 +2175,7 @@ def run(args: argparse.Namespace) -> int:
     return 0 if report["status"] == "PASS" else 1
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--archive", type=Path, required=True)
     p.add_argument("--archive-sha256", required=True)
@@ -2027,6 +2183,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--source-project", required=True)
     p.add_argument("--site", required=True)
     p.add_argument("--out", type=Path, required=True)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = build_parser()
     args = p.parse_args(argv)
     if not re.fullmatch(r"[a-z0-9][a-z0-9.-]+", args.site):
         p.error("Invalid site name")

@@ -9,7 +9,8 @@ User=root
 Group=root
 UMask=0077
 # External alert delivery is intentionally NOT configured here (waiting for Owner BLK-GOV-06 & BLK-INFRA-07).
-ExecStart=/usr/bin/python3 /opt/crm-cskh-staging/repo/deploy/ops/check_health_and_invariants.py \
+# Render and install via: install_systemd_timers.py --repo-root /opt/crm-cskh-ops --install
+ExecStart=/usr/bin/python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
   --env-file /opt/crm-cskh-staging/.env.staging \
   --mode tls \
   --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \

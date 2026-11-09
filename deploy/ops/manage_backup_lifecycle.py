@@ -757,9 +757,7 @@ def run_scheduled_backup(
     return 0, summary
 
 
-def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -837,7 +835,13 @@ def main(argv: list[str] | None = None) -> int:
     p_fail.add_argument("--reason", default="systemd unit crm-cskh-backup.service failed")
     p_fail.add_argument("--operator-contact", default=os.environ.get("CSKH_OPERATOR_CONTACT", ""))
     p_fail.add_argument("--webhook-url", default=os.environ.get("CSKH_ALERT_WEBHOOK_URL", ""))
+    return parser
 
+
+def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    parser = build_parser()
     args = parser.parse_args(argv)
 
     if args.command == "verify-bundle":

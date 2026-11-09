@@ -200,9 +200,7 @@ def render_backup_units(
     }
 
 
-def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--repo-root", type=Path, default=DEFAULT_REPO_ROOT)
     p.add_argument("--env-file", type=Path, default=Path("/opt/crm-cskh-staging/.env.staging"))
@@ -228,9 +226,21 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--systemd-dir", type=Path, default=Path("/etc/systemd/system"))
     p.add_argument("--install", action="store_true", help="Write units and enable timers as root")
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    p = build_parser()
     args = p.parse_args(argv)
 
     overlays = tuple(args.extra_compose_file)
+    required_ops_scripts = (
+        args.repo_root / "deploy" / "ops" / "check_health_and_invariants.py",
+        args.repo_root / "deploy" / "ops" / "manage_backup_lifecycle.py",
+        args.repo_root / "deploy" / "ops" / "create_encrypted_backup.py",
+    )
     units: dict[str, str] = {}
     units.update(
         render_healthcheck_units(
@@ -255,11 +265,14 @@ def main(argv: list[str] | None = None) -> int:
 
     summary: dict[str, Any] = {
         "mode": "install" if args.install else "dry_run",
+        "repo_root": args.repo_root.as_posix(),
+        "referenced_ops_scripts": [s.as_posix() for s in required_ops_scripts],
         "site": args.site,
-        "extra_compose_files": [str(x) for x in overlays],
+        "extra_compose_files": [x.as_posix() for x in overlays],
         "external_alerts_enabled": False,
         "external_alert_gate": "WAITING_OWNER_CONTACT_AND_CHANNEL_BLK_GOV_06_BLK_INFRA_07",
         "automated_offsite_upload_enabled": False,
+        "automated_offsite_status": "PARTIAL_UNTIL_AUTOMATED_TARGET_PROVISIONED",
         "one_off_manual_copy_proves_periodic_upload": False,
         "automated_offsite_blocker": "BLK-INFRA-05",
         "units": units,
@@ -268,6 +281,11 @@ def main(argv: list[str] | None = None) -> int:
     if args.install:
         if os.name != "posix" or os.geteuid() != 0:
             raise SystemExit("--install requires root on Linux")
+        for script_path in required_ops_scripts:
+            if not script_path.is_file():
+                raise SystemExit(
+                    f"Required ops script missing under --repo-root: {script_path}"
+                )
         for required_path in (args.env_file, args.compose_wrapper, *overlays):
             if not required_path.is_file():
                 raise SystemExit(f"Required path missing on host: {required_path}")

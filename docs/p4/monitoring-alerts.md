@@ -59,35 +59,53 @@ Tất cả truy vấn dưới đây thực thi chỉ đọc bên trong `check_he
 ## 4. Cài Đặt Kiểm Tra Sức Khỏe Định Kỳ Trên VPS & Cơ Chế Khóa Cảnh Báo Ngoài
 
 ### 4.1. Cài đặt `crm-cskh-healthcheck.timer` theo đúng topology `compose.domain.yaml`
-Tệp [`deploy/ops/systemd/crm-cskh-healthcheck.service`](../../deploy/ops/systemd/crm-cskh-healthcheck.service) và [`crm-cskh-healthcheck.timer`](../../deploy/ops/systemd/crm-cskh-healthcheck.timer) chạy mỗi **5 phút** với đúng bộ tham số thực tế của VPS `103.77.208.186`:
+Sau khi đã chuẩn bị thư mục mã nguồn vận hành `/opt/crm-cskh-ops` tại đúng commit SHA đã bàn giao (không giả định `/opt/crm-cskh-app` hay `/opt/crm-cskh-staging/repo` tồn tại sẵn — xem [`backup-restore.md`](./backup-restore.md) Mục 3.0), tệp [`deploy/ops/systemd/crm-cskh-healthcheck.service`](../../deploy/ops/systemd/crm-cskh-healthcheck.service) và [`crm-cskh-healthcheck.timer`](../../deploy/ops/systemd/crm-cskh-healthcheck.timer) chạy mỗi **5 phút** với đúng bộ tham số thực tế của VPS `103.77.208.186`:
 - `--env-file /opt/crm-cskh-staging/.env.staging`
 - `--mode tls`
 - `--extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml`
 - `--site crm-staging.localhost`
-- `--out /var/lib/crm-cskh/latest-health-report.json`
-- **Không truyền `--alert-webhook-url` và không đặt `CSKH_ALERT_WEBHOOK_URL`**, đảm bảo 100% không tự gửi email/chat ra ngoài khi chưa có chỉ định của Owner.
+- `--backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json` (`--max-backup-age-hours 26.0`)
+- `--alert-log-file /var/lib/crm-cskh/health/health-alerts.jsonl`
+- `--out /var/lib/crm-cskh/health/latest-health-report.json`
+- **Không truyền `--webhook-url` và không đặt `CSKH_ALERT_WEBHOOK_URL`**, đảm bảo 100% không tự gửi email/chat ra ngoài khi chưa có chỉ định của Owner.
 
 ```bash
+# Kiểm tra thư mục mã nguồn ops đã chuẩn bị đúng SHA:
+test -f /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py
+test -f /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py
+
 # Chạy kiểm tra một lần tại chỗ theo đúng topology thực tế:
-python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
+sudo python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
   --env-file /opt/crm-cskh-staging/.env.staging \
   --mode tls \
   --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
   --site crm-staging.localhost \
   --environment-label staging \
-  --out /var/lib/crm-cskh/latest-health-report.json
+  --backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json \
+  --max-backup-age-hours 26.0 \
+  --alert-log-file /var/lib/crm-cskh/health/health-alerts.jsonl \
+  --out /var/lib/crm-cskh/health/latest-health-report.json
 
-# Cài đặt systemd timer chạy định kỳ 5 phút/lần + backup hằng đêm 02:15 ICT:
-sudo python3 /opt/crm-cskh-app/deploy/ops/install_systemd_timers.py \
-  --repo-root /opt/crm-cskh-app \
+# Bước 1 — Dry-run xem trước các unit systemd (mặc định không ghi hệ thống):
+python3 /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py \
+  --repo-root /opt/crm-cskh-ops \
+  --env-file /opt/crm-cskh-staging/.env.staging \
+  --compose-wrapper /opt/crm-cskh-staging/staging-compose \
+  --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
+  --site crm-staging.localhost \
+  --environment-label staging \
+  --backup-root /var/backups/crm-cskh
+
+# Bước 2 — Cài đặt và kích hoạt systemd timer 5 phút/lần + backup hằng đêm 02:15 ICT (--install):
+sudo python3 /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py \
+  --repo-root /opt/crm-cskh-ops \
   --env-file /opt/crm-cskh-staging/.env.staging \
   --compose-wrapper /opt/crm-cskh-staging/staging-compose \
   --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
   --site crm-staging.localhost \
   --environment-label staging \
   --backup-root /var/backups/crm-cskh \
-  --backup-key-file /etc/crm-cskh/secrets/backup-passphrase.key \
-  --apply
+  --install
 ```
 
 ### 4.2. Chính sách Khử PII, Chống Bão Cảnh Báo & Mở Khóa Kênh Ngoài Hệ Thống (`G19`)
@@ -97,7 +115,7 @@ sudo python3 /opt/crm-cskh-app/deploy/ops/install_systemd_timers.py \
    ```bash
    CSKH_OPERATOR_CONTACT="<DAU_MOI_DUOC_OWNER_CHI_DINH>" \
    CSKH_ALERT_WEBHOOK_URL="<HTTPS_WEBHOOK_DUOC_OWNER_CHI_DINH>" \
-   python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
+   python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
      --environment-label staging \
      --send-test-alert \
      --dedup-state-file /var/lib/crm-cskh/alert-dedup.json \

@@ -96,8 +96,9 @@ chmod 600 /opt/crm-cskh-staging/.env.staging
 /opt/crm-cskh-staging/staging-compose exec -T backend \
   bench --site crm-staging.localhost set-maintenance-mode off
 
-# 5. Hậu kiểm digest, bất biến nghiệp vụ và HTTPS smoke:
-python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
+# 5. Hậu kiểm digest, bất biến nghiệp vụ và HTTPS smoke (sử dụng thư mục ops đã xác minh đúng SHA tại /opt/crm-cskh-ops — xem backup-restore.md Mục 3.0):
+test -f /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py
+sudo python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
   --env-file /opt/crm-cskh-staging/.env.staging \
   --mode tls \
   --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
@@ -123,7 +124,8 @@ python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
 /opt/crm-cskh-staging/staging-compose stop queue-short queue-long scheduler
 
 # Đếm chính xác số lượng bản ghi nghiệp vụ sẽ bị quay lui sau mốc backup:
-python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
+test -f /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py
+sudo python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
   --env-file /opt/crm-cskh-staging/.env.staging \
   --mode tls \
   --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
@@ -132,9 +134,8 @@ python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
   --since-utc "<BACKUP_TIMESTAMP_UTC_VD_2026-11-09T04:00:00Z>" \
   --out /var/lib/crm-cskh/releases/pre-restore-data-loss-audit.json
 
-# Tạo bản sao lưu cứu hộ của trạng thái hiện tại trước khi ghi đè:
-CSKH_BACKUP_ENCRYPTION_KEY_FILE=/etc/crm-cskh/secrets/backup-passphrase.key \
-python3 /opt/crm-cskh-app/deploy/ops/create_encrypted_backup.py \
+# Tạo bản sao lưu cứu hộ của trạng thái hiện tại trước khi ghi đè (công cụ tự sinh backup-key 0600 riêng trong thư mục bundle):
+sudo python3 /opt/crm-cskh-ops/deploy/ops/create_encrypted_backup.py \
   --compose-wrapper /opt/crm-cskh-staging/staging-compose \
   --site crm-staging.localhost \
   --out-dir /var/backups/crm-cskh/pre-overwrite-safety-$(date -u +%Y%m%dT%H%M%SZ)
@@ -146,19 +147,19 @@ RESTORE_WORK="/var/lib/crm-cskh/restore-work-$(date -u +%Y%m%dT%H%M%SZ)"
 install -d -m 700 "${RESTORE_WORK}"
 
 # 1. Đối chiếu SHA-256 của backup.tar.gz.enc với biên bản backup-report.json / offsite-verification.json:
-echo "<EXPECTED_ARCHIVE_SHA256>  /duong-dan/backup.tar.gz.enc" | sha256sum -c -
+echo "<EXPECTED_ARCHIVE_SHA256>  /duong-dan-goi-sao-luu/backup.tar.gz.enc" | sha256sum -c -
 
-# 2. Giải mã bằng OpenSSL PBKDF2 200.000 iter (không in khóa ra terminal):
+# 2. Giải mã bằng OpenSSL PBKDF2 200.000 iter dùng đúng tệp backup-key (0600) riêng của bundle đó (không in khóa ra terminal):
 openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -md sha256 \
-  -pass file:/etc/crm-cskh/secrets/backup-passphrase.key \
-  -in /duong-dan/backup.tar.gz.enc \
+  -pass file:/duong-dan-khoa-rieng-cua-bundle/backup-key \
+  -in /duong-dan-goi-sao-luu/backup.tar.gz.enc \
   -out "${RESTORE_WORK}/backup.tar.gz"
 chmod 600 "${RESTORE_WORK}/backup.tar.gz"
 
 # 3. Trích xuất an toàn và đối chiếu SHA-256 của từng thành phần bằng hàm chuẩn của verify_offsite_restore.py:
 python3 -c '
 import pathlib, sys
-sys.path.insert(0, "/opt/crm-cskh-app/deploy/ops")
+sys.path.insert(0, "/opt/crm-cskh-ops/deploy/ops")
 from verify_offsite_restore import extract_backup
 members = extract_backup(pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2]))
 print("VERIFIED_MEMBERS=", sorted(members.keys()))
@@ -210,7 +211,7 @@ MIGRATE_SITES=true /opt/crm-cskh-staging/staging-compose --profile migrate run -
 rm -rf "${RESTORE_WORK}"
 
 # 4. Chạy kiểm tra bất biến nghiệp vụ và HTTPS smoke:
-python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
+sudo python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
   --env-file /opt/crm-cskh-staging/.env.staging \
   --mode tls \
   --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
@@ -229,10 +230,10 @@ python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
 2. Cấu hình UFW + chuỗi `DOCKER-USER` chỉ mở cổng `80/tcp`, `443/tcp` và cổng SSH quản trị theo danh sách IP cho phép; **xác nhận bằng `ss -tulpn` rằng các cổng `3306`, `6379`, `8000`, `9000` không bao giờ lộ ra giao diện mạng ngoài**.
 
 ### Bước 2 — Tái tạo cấu trúc thư mục, Secret LF `0600` & Wrapper Compose
-1. Clone mã nguồn vận hành đã kiểm định về `/opt/crm-cskh-app` tại đúng commit SHA đã phát hành.
+1. Chuẩn bị và xác minh mã nguồn vận hành vào `/opt/crm-cskh-ops` tại đúng commit SHA đã phát hành theo [`backup-restore.md`](./backup-restore.md) Mục 3.0 (không giả định `/opt/crm-cskh-app` tồn tại sẵn).
 2. Tạo thư mục `/opt/crm-cskh-staging` và `/etc/crm-cskh/secrets` (`chmod 700`):
    - Tạo tệp mật khẩu root MariaDB mới (`db_root_password.txt`, quyền **`0600`**, kết thúc bằng duy nhất ký tự `\n` `LF`, tuyệt đối không có `\r`).
-   - Khôi phục tệp `/etc/crm-cskh/secrets/backup-passphrase.key` (`0600`) từ kho lưu ký bí mật của Owner.
+   - Lấy đúng tệp `backup-key` (`0600`) của gói sao lưu sẽ khôi phục từ kho lưu ký bí mật độc lập của Owner vào thư mục tạm `0700` riêng để phục vụ giải mã ở Bước 4.
    - Tạo lại `/opt/crm-cskh-staging/.env.staging` (`0600`), `/opt/crm-cskh-staging/compose.domain.yaml` (cấu hình Traefik host `crm.hrpartner.vn` → header `X-Frappe-Site-Name: crm-staging.localhost`) và script wrapper `/opt/crm-cskh-staging/staging-compose` (`0750`).
 
 ### Bước 3 — Nạp Image Ứng Dụng Bất Biến (`Immutable Image`)
@@ -245,13 +246,13 @@ python3 /opt/crm-cskh-app/deploy/ops/check_health_and_invariants.py \
    /opt/crm-cskh-staging/staging-compose up -d db redis-cache redis-queue
    /opt/crm-cskh-staging/staging-compose run --rm configurator
    ```
-3. Tạo khung site rỗng `crm-staging.localhost` bằng `bench new-site crm-staging.localhost --no-mariadb-socket --db-host db ...`, sau đó thực hiện **Bước 2 → Bước 4 của Mục 4.4** để nạp lại toàn bộ `database.sql.gz`, `files.tar`, `private-files.tar`, `site_config_backup.json` (`encryption_key`), chạy `migrator` và kiểm tra 5 bản ghi `Translation` của Owner.
+3. Tạo khung site rỗng `crm-staging.localhost` bằng `bench new-site crm-staging.localhost --no-mariadb-socket --db-host db ...`, sau đó thực hiện **Bước 2 → Bước 4 của Mục 4.4** để nạp lại toàn bộ `database.sql.gz`, `files.tar`, `private-files.tar`, `site_config_backup.json` (`encryption_key`), chạy `migrator` và kiểm tra 5 bản ghi `Translation` của Owner (xóa sạch bản sao tạm của `backup-key` trên VPS ngay sau khi giải mã xong).
 
 ### Bước 5 — Cắt chuyển DNS, Cấp lại TLS & Kích hoạt Vận hành Định kỳ
 1. Cập nhật bản ghi DNS `A` của `crm.hrpartner.vn` trỏ sang địa chỉ IP của VPS mới.
 2. Khởi động toàn bộ stack (`/opt/crm-cskh-staging/staging-compose up -d`), theo dõi Traefik tự động lấy chứng chỉ Let's Encrypt hợp lệ cho `crm.hrpartner.vn`.
 3. Chạy `staging_https_smoke_and_reconcile.py https-smoke --public-domain crm.hrpartner.vn --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml` và `check_health_and_invariants.py` xác nhận toàn bộ `INV-01..06 == 0`.
-4. Cài đặt lại các bộ lập lịch định kỳ bằng `install_systemd_timers.py --apply` ([`backup-restore.md`](./backup-restore.md) Mục 3.1).
+4. Kiểm tra trước (dry-run) rồi cài đặt lại các bộ lập lịch định kỳ bằng `install_systemd_timers.py --repo-root /opt/crm-cskh-ops ... --install` ([`backup-restore.md`](./backup-restore.md) Mục 3.1).
 
 ---
 

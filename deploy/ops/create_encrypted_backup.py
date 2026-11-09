@@ -156,11 +156,16 @@ def validate_site_config_backup_member(
     }
 
 
-def main(argv: list[str] | None = None) -> int:
+def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--compose-wrapper", type=Path, required=True)
     p.add_argument("--site", required=True)
     p.add_argument("--out-dir", type=Path, required=True)
+    return p
+
+
+def main(argv: list[str] | None = None) -> int:
+    p = build_parser()
     args = p.parse_args(argv)
     if os.name != "posix" or os.geteuid() != 0:
         p.error("Run as root on the Docker host")
