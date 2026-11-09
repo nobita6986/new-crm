@@ -375,7 +375,22 @@ def execute_verification_plan(
             project_name,
         ]
         try:
-            _run_checked([*compose_base, "up", "-d", "--no-build"], env=compose_env)
+            # Start only DB, Redis, configurator, and backend for deterministic unit-test execution
+            # (matches p0-p3 CI topology so background RQ workers/scheduler never race tearDownClass deletes).
+            _run_checked(
+                [
+                    *compose_base,
+                    "up",
+                    "-d",
+                    "--no-build",
+                    "db",
+                    "redis-cache",
+                    "redis-queue",
+                    "configurator",
+                    "backend",
+                ],
+                env=compose_env,
+            )
             bootstrap_cmd = (
                 "set -euo pipefail; "
                 "cd /home/frappe/frappe-bench; "
