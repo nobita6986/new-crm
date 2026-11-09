@@ -341,6 +341,38 @@ def https_req(
     )
 
 
+def wait_https_ingress_ready(
+    *,
+    site_name: str,
+    connect_host: str,
+    https_port: int,
+    ca_crt_path: Path,
+    timeout_seconds: int = 45,
+) -> None:
+    """Wait for Traefik Docker router discovery and nginx frontend convergence over TLS."""
+    deadline = time.monotonic() + timeout_seconds
+    last_status = 0
+    while time.monotonic() < deadline:
+        try:
+            st, _, raw = https_req(
+                site_name=site_name,
+                connect_host=connect_host,
+                https_port=https_port,
+                ca_crt_path=ca_crt_path,
+                path="/api/method/ping",
+                headers={"Accept": "application/json"},
+            )
+            last_status = st
+            if st == 200 and b"pong" in raw:
+                return
+        except Exception:
+            last_status = 0
+        time.sleep(0.5)
+    raise RuntimeError(
+        f"Timed out waiting for HTTPS Traefik/frontend ingress /api/method/ping=200 on {site_name} (last_status={last_status})"
+    )
+
+
 def https_login_session(
     *,
     site_name: str,
@@ -515,6 +547,12 @@ finally:
             "websocket",
         ),
         timeout_seconds=120,
+    )
+    wait_https_ingress_ready(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
     )
 
     smoke_env = os.environ.copy()
@@ -1284,6 +1322,12 @@ subprocess.check_call([
     post_health = json.loads(post_delta_proc.stdout)
     post_delta = post_health["data_loss_window_delta"]
 
+    wait_https_ingress_ready(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+    )
     smoke_env = dict(os.environ, CSKH_DR_SMOKE_ADMIN_PW=admin_pw)
     post_smoke_proc = run_sub(
         [
