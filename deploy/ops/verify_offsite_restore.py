@@ -366,19 +366,20 @@ if apps_order != ['frappe', 'crm', 'crm_cskh']:
     apps_order = ['frappe', 'crm', 'crm_cskh']
 
 def bench(*args: str) -> None:
-    done = subprocess.run(['bench', '--site', site, *args], capture_output=True, text=True)
+    cmd = ['bench', *args] if (args and args[0] == 'new-site') else ['bench', '--site', site, *args]
+    done = subprocess.run(cmd, capture_output=True, text=True)
     if done.returncode:
         pathlib.Path('/tmp/restore-error.log').write_text(done.stdout + done.stderr, encoding='utf-8')
         raise RuntimeError('bench operation failed: ' + args[0])
 
 timings: dict[str, float] = {}
+print('WORKER_STAGE=new_site_init', flush=True)
 t0 = time.monotonic()
 bench(
     'new-site',
     site,
     '--no-mariadb-socket',
-    '--db-host',
-    'db',
+    '--mariadb-user-host-login-scope=%',
     '--db-root-password',
     p['db_password'],
     '--admin-password',
@@ -386,8 +387,10 @@ bench(
 )
 timings['new_site_init'] = round(time.monotonic() - t0, 3)
 
+print('WORKER_STAGE=sql_and_files_restore', flush=True)
 t0 = time.monotonic()
 bench(
+    '--force',
     'restore',
     p['sql'],
     '--with-public-files',
@@ -399,6 +402,7 @@ bench(
 )
 timings['sql_and_files_restore_only'] = round(time.monotonic() - t0, 3)
 
+print('WORKER_STAGE=post_restore_config_and_cache', flush=True)
 t0 = time.monotonic()
 saved = json.loads(pathlib.Path(p['site_config']).read_text(encoding='utf-8'))
 site_cfg_path = root / 'site_config.json'
@@ -429,6 +433,8 @@ config.update({
 })
 site_cfg_path.write_text(json.dumps(config, indent=2) + '\n', encoding='utf-8')
 os.chmod(site_cfg_path, 0o600)
+bench('clear-cache')
+bench('clear-website-cache')
 
 baseline = p['baseline']
 expected_counts = baseline['counts']
@@ -486,7 +492,7 @@ def capture_site_state(*, verify_encryption_state: bool = False, check_invariant
             ctx = r.get('context') or None
             if not ctx:
                 overridden_sources.add(src)
-            resolved = frappe._(src, context=ctx) if ctx else frappe._(src)
+            resolved = frappe._(src, lang='vi', context=ctx) if ctx else frappe._(src, lang='vi')
             if resolved != r.get('translated_text'):
                 mismatched_overrides += 1
 
@@ -497,7 +503,7 @@ def capture_site_state(*, verify_encryption_state: bool = False, check_invariant
             'Hoàn tất mục tiêu chiến dịch': 'Hoàn tất mục tiêu liên hệ chiến dịch',
         }
         core_ok = all(
-            (src in overridden_sources) or (frappe._(src) == expected_vi)
+            (src in overridden_sources) or (frappe._(src, lang='vi') == expected_vi)
             for src, expected_vi in core_pairs.items()
         )
 
@@ -592,6 +598,7 @@ def capture_site_state(*, verify_encryption_state: bool = False, check_invariant
         frappe.destroy()
         os.chdir('/home/frappe/frappe-bench')
 
+print('WORKER_STAGE=pre_migrate_capture_and_reconcile', flush=True)
 before = capture_site_state(verify_encryption_state=True)
 assert before['counts'] == expected_counts, 'Restored counts differ from backup baseline'
 assert before['table_sha256'] == expected_table_sha256, 'Restored business rows differ from backup fingerprints'
@@ -629,20 +636,24 @@ def verify_disk_files(kind: str) -> dict[str, Any]:
         'posix_owner_and_mode_ok': True,
     }
 
+print('WORKER_STAGE=verify_disk_files', flush=True)
 file_checks = {kind: verify_disk_files(kind) for kind in ('public', 'private')}
 site_cfg_mode = stat.S_IMODE(site_cfg_path.stat().st_mode)
 assert site_cfg_mode == 0o600, f'Expected 0600 on site_config.json, found {oct(site_cfg_mode)}'
 timings['pre_migrate_reconciliation'] = round(time.monotonic() - t0, 3)
 
+print('WORKER_STAGE=migrate_run_1', flush=True)
 t0 = time.monotonic()
 bench('migrate')
 timings['migrate_run_1'] = round(time.monotonic() - t0, 3)
 after_1 = capture_site_state()
 
+print('WORKER_STAGE=migrate_run_2', flush=True)
 t0 = time.monotonic()
 bench('migrate')
 timings['migrate_run_2'] = round(time.monotonic() - t0, 3)
 
+print('WORKER_STAGE=post_migrate_reconcile_and_invariants', flush=True)
 t0 = time.monotonic()
 bench('clear-cache')
 bench('clear-website-cache')
@@ -1012,6 +1023,7 @@ done = subprocess.run(
         'bench',
         '--site',
         site,
+        '--force',
         'restore',
         p['sql'],
         '--with-public-files',
@@ -1089,6 +1101,7 @@ cfg_restored.update({
 })
 site_cfg_path.write_text(json.dumps(cfg_restored, indent=2) + '\n', encoding='utf-8')
 os.chmod(site_cfg_path, 0o600)
+subprocess.run(['bench', '--site', site, 'clear-cache'], check=True, capture_output=True, text=True)
 
 pos_enc_eval = evaluate_encryption_key_state(
     saved_pos,
@@ -1592,6 +1605,13 @@ def run(args: argparse.Namespace) -> int:
                 check=False,
             )
             if worker.returncode:
+                stages = [
+                    row.split("=", 1)[1]
+                    for row in worker.stdout.splitlines()
+                    if row.startswith("WORKER_STAGE=")
+                ]
+                if stages:
+                    step = f"{step}:{stages[-1]}"
                 detail = command(
                     ["docker", "exec", app_id, "cat", "/tmp/restore-error.log"],
                     check=False,

@@ -944,7 +944,7 @@ try:
     methods = [
         "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations",
         "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes",
-        "crm_cskh.jobs.recompute_kpi.run_scheduled_kpi_rollups",
+        "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods",
         "crm_cskh.jobs.run_export.expire_stale_exports",
     ]
     def snap_counts():
@@ -1222,7 +1222,8 @@ finally:
     t_restore = time.monotonic()
     run_sub(compose_cmd(env_file, ["stop", "queue-short", "queue-long", "scheduler"]))
     restore_py = r"""
-import json, subprocess, sys
+import json, os, subprocess, sys
+os.chdir("/home/frappe/frappe-bench")
 payload = json.loads(sys.stdin.read())
 subprocess.check_call([
     "bench", "--site", payload["site"], "--force", "restore", payload["sql"],

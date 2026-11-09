@@ -254,6 +254,11 @@ jobs:
               frappe.db.commit()
           finally:
               frappe.destroy()
+          os.chdir("/home/frappe/frappe-bench")
+          subprocess.check_call(["bench", "--site", site, "migrate"], stdout=subprocess.DEVNULL)
+          subprocess.check_call(["bench", "--site", site, "clear-cache"], stdout=subprocess.DEVNULL)
+          cfg_after = json.loads((pathlib.Path("sites") / site / "site_config.json").read_text(encoding="utf-8"))
+          assert "encryption_key" not in cfg_after
           PY
 
           # --- OBJECTIVE 3 (G07): Scheduled backup, manual vs automated offsite, retention & failure alert ---
@@ -401,6 +406,15 @@ jobs:
             --site crm-staging.localhost \
             --out "$EVID/g08-restore-drill-report.json"
           sudo chown "$USER:$USER" "$EVID/g08-restore-drill-report.json"
+
+      - name: Normalize G07 & G08 artifact ownership for upload
+        if: always()
+        shell: bash
+        run: |
+          if [ -d "$RUNNER_TEMP/p4-g07-g08-evidence" ]; then
+            sudo chown -R "$USER:$USER" "$RUNNER_TEMP/p4-g07-g08-evidence" || true
+            chmod 644 "$RUNNER_TEMP/p4-g07-g08-evidence"/*.json 2>/dev/null || true
+          fi
 
       - name: Upload G07 & G08 measured drill artifacts
         if: always()
