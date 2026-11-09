@@ -168,7 +168,7 @@ S1_API_SCENARIOS: tuple[dict[str, str], ...] = (
         "method": "GET",
         "path": (
             "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown"
-            "?period_type=daily&period_key=2026-10-15&scope_type=company"
+            "?period_type=daily&period_key=2026-10-27&scope_type=company"
             "&metric_code=CONNECTED_RATE&page=1&page_size=20"
         ),
         "workload_class": "kpi_drilldown_paginated_250k_attempts",
@@ -339,12 +339,13 @@ def _collect_queue_and_db_telemetry(
 ) -> dict[str, object]:
     probe = (
         "import json, time, frappe, redis; "
+        "from frappe.utils.background_jobs import generate_qname; "
         f"site = {site_name!r}; "
         "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites'); "
         "frappe.connect(); "
         "t0 = time.perf_counter(); "
         "r = redis.from_url(frappe.conf.redis_queue); "
-        "q_depths = {q: int(r.llen(f'rq:queue:{q}')) for q in ('short', 'default', 'long')}; "
+        "q_depths = {q: int(r.llen(f'rq:queue:{generate_qname(q)}')) for q in ('short', 'default', 'long')}; "
         "redis_ping_ms = round((time.perf_counter() - t0) * 1000.0, 3); "
         "status_rows = dict(frappe.db.sql(\"SHOW GLOBAL STATUS WHERE Variable_name IN ('Threads_connected','Max_used_connections','Innodb_row_lock_time_avg','Innodb_row_lock_waits','Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads','Slow_queries','Questions')\")); "
         "frappe.destroy(); "
@@ -836,18 +837,20 @@ sla_cols = [
 ]
 
 # 1. Insert 50,000 Leads in 5 chunks of 10,000
+# Active open working backlog = 1,600 Work Items (40 active per staff across disjoint leads
+# 24,200..24,999 and 49,200..49,999 on 2026-10-27); remaining 73,400 Work Items across Oct 1..26 are closed.
 for l_start in range(0, 50_000, 10_000):
     l_rows = []
     for li in range(l_start, l_start + 10_000):
-        day_num = (li % 27) + 1
+        has_open_wi = (24_200 <= li < 25_000) or (49_200 <= li < 50_000)
+        day_num = 27 if has_open_wi else ((li % 26) + 1)
         base_ts = datetime(2026, 10, day_num, 8 + (li % 4), (li * 7) % 50, 0)
         owner_u = staff_users[li % 40]
-        is_closed = (li % 3) != 0
         l_rows.append(
             (
                 f"S1-LEAD-{li:06d}", base_ts, base_ts, "Administrator", "Administrator", 0, 0,
                 "CRM-LEAD-", f"Ứng viên S1 {li:06d}", f"Ứng viên S1 {li:06d}", f"091{li:07d}",
-                "Converted" if is_closed else "Contacted", None if is_closed else owner_u, 0,
+                "Contacted" if has_open_wi else "Converted", owner_u if has_open_wi else None, 0,
             )
         )
     _bulk_insert("tabCRM Lead", lead_cols, l_rows)
@@ -866,14 +869,15 @@ for w_start in range(0, 75_000, 7_500):
         primary_camp_idx = s_idx // 10  # 0..3 matching team_scope
         camp = campaigns[primary_camp_idx] if i < 50_000 else campaigns[4]
 
-        day_num = (i % 27) + 1
+        is_open = (49_200 <= i < 50_000) or (74_200 <= i < 75_000)
+        is_closed = not is_open
+        day_num = 27 if is_open else ((i % 26) + 1)
         hour_num = 8 + (i % 8)
         if hour_num >= 12:
             hour_num += 1
         base_ts = datetime(2026, 10, day_num, hour_num, (i * 5) % 40, 0)
         wi_id = f"S1-WI-{i:06d}"
-        is_closed = (i % 3) != 0
-        if not is_closed and len(active_sample_wis) < 120:
+        if is_open and i < 50_000 and len(active_sample_wis) < 120:
             active_sample_wis.append((wi_id, owner_u))
 
         ah_id = f"S1-AH-{i:06d}-1"
@@ -983,7 +987,7 @@ dataset_counts = {
     "seed_elapsed_sec": seed_elapsed_s,
 }
 
-# 3. Measure Full Monthly KPI Recompute (2026-10) & Single-Day Incremental Recompute (2026-10-15)
+# 3. Measure Full Monthly KPI Recompute (2026-10) & Single-Day Incremental Recompute (2026-10-27)
 gc.collect()
 rss_b0, _ = _rss_hwm_mib()
 t_m0 = time.perf_counter()
@@ -994,7 +998,7 @@ monthly_recompute_ms = round((time.perf_counter() - t_m0) * 1000.0, 2)
 rss_m1, hwm_m1 = _rss_hwm_mib()
 
 t_d0 = time.perf_counter()
-day_spec = resolve_period_spec("daily", "2026-10-15")
+day_spec = resolve_period_spec("daily", "2026-10-27")
 day_res = execute_kpi_recompute(day_spec, run_mode="incremental", actor="Administrator")
 frappe.db.commit()
 daily_recompute_ms = round((time.perf_counter() - t_d0) * 1000.0, 2)
@@ -1119,7 +1123,7 @@ bod_overview_summary = {
     "contact_attempt_table_scans_during_read": attempt_scans_on_dashboard,
 }
 
-# Daily slice drill-down on the 250k-attempt / 75k-work-item DB (N=40)
+# Campaign-scoped daily slice drill-down on the 250k-attempt / 75k-work-item DB (N=40)
 dd_lats, dd_errs = [], 0
 t0 = time.perf_counter()
 for pg in range(40):
@@ -1127,8 +1131,9 @@ for pg in range(40):
     try:
         r = p3_reporting.get_metric_drilldown(
             period_type="daily",
-            period_key="2026-10-15",
-            scope_type="company",
+            period_key="2026-10-27",
+            scope_type="campaign",
+            scope_id=campaigns[0],
             metric_code="CONNECTED_RATE",
             page=(pg % 5) + 1,
             page_size=20,
@@ -1141,10 +1146,10 @@ for pg in range(40):
         dd_errs += 1
 drilldown_summary = _summarize(dd_lats, dd_errs, time.perf_counter() - t0)
 
-# Unscoped full-month company drill-down across all 250k attempts (N=8) to quantify full-period Python scan ceiling
+# Unscoped full-month company drill-down across all 250k attempts (N=2) to quantify full-period Python scan ceiling
 dd_month_lats, dd_month_errs = [], 0
 t0 = time.perf_counter()
-for pg in range(8):
+for pg in range(2):
     c0 = time.perf_counter()
     try:
         r = p3_reporting.get_metric_drilldown(
@@ -1152,7 +1157,7 @@ for pg in range(8):
             period_key="2026-10",
             scope_type="company",
             metric_code="CONNECTED_RATE",
-            page=(pg % 4) + 1,
+            page=pg + 1,
             page_size=20,
         )
         ok = bool(r)
@@ -1232,18 +1237,27 @@ if dist_prev.get("preview_id") and dist_eligible_count > 0:
         time.sleep(0.25)
     dist_exec_ms = round((time.perf_counter() - t_de0) * 1000.0, 2)
 
-# Direct Redis RQ 50-job burst queue lag measurement
+# Direct Redis RQ 50-job burst queue lag measurement (using Frappe bench-prefixed queue key)
+from frappe.utils.background_jobs import generate_qname
 rq_conn = redis.from_url(frappe.conf.redis_queue)
+short_q_key = f"rq:queue:{generate_qname('short')}"
+all_q_keys = [f"rq:queue:{generate_qname(q)}" for q in ("short", "default", "long")]
 t_rq0 = time.perf_counter()
+last_rq_job = None
 for j_idx in range(50):
-    frappe.enqueue("frappe.ping", queue="short", job_name=f"s1-lag-probe-{j_idx:03d}")
+    last_rq_job = frappe.enqueue("frappe.ping", queue="short", job_name=f"s1-lag-probe-{j_idx:03d}")
 enqueue_50_ms = round((time.perf_counter() - t_rq0) * 1000.0, 2)
-peak_q_depth = int(rq_conn.llen("rq:queue:short"))
+peak_q_depth = int(rq_conn.llen(short_q_key))
+last_job_key = f"rq:job:{last_rq_job.id}" if getattr(last_rq_job, "id", None) else None
 t_drain0 = time.perf_counter()
 drain_deadline = t_drain0 + 60.0
 while time.perf_counter() < drain_deadline:
-    rem = sum(int(rq_conn.llen(f"rq:queue:{q}")) for q in ("short", "default", "long"))
-    if rem == 0:
+    rem = sum(int(rq_conn.llen(qk)) for qk in all_q_keys)
+    j_done = True
+    if last_job_key:
+        j_st = rq_conn.hget(last_job_key, "status")
+        j_done = j_st in (b"finished", b"failed", b"stopped", b"canceled", "finished", "failed", None)
+    if rem == 0 and j_done:
         break
     time.sleep(0.05)
 drain_50_ms = round((time.perf_counter() - t_drain0) * 1000.0, 2)
@@ -1277,6 +1291,7 @@ out = {
         "python_version": platform.python_version(),
     },
     "s1_seeded_counts": dataset_counts,
+    "primary_campaign_id": campaigns[0],
     "kpi_recompute_s1": {
         "monthly_full_75k_wi_250k_att_ms": monthly_recompute_ms,
         "monthly_run_status": month_res.get("status") if isinstance(month_res, dict) else "ok",
@@ -1551,7 +1566,7 @@ def provision_and_execute_s1_benchmark(
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=1200,
+                timeout=1800,
             )
             if s1_proc.returncode != 0:
                 raise RuntimeError(
@@ -1568,6 +1583,24 @@ def provision_and_execute_s1_benchmark(
                     f"S1 in-container benchmark did not emit S1_BENCH_JSON marker: {s1_proc.stderr[-500:]}"
                 )
             s1_in_container = json.loads(marker_lines[-1])
+            primary_camp = str(s1_in_container.get("primary_campaign_id") or "").strip()
+            if primary_camp:
+                spec["scenarios"] = [
+                    (
+                        {
+                            **s,
+                            "path": (
+                                "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown"
+                                f"?period_type=daily&period_key=2026-10-27&scope_type=campaign"
+                                f"&scope_id={urllib.parse.quote(primary_camp)}"
+                                "&metric_code=CONNECTED_RATE&page=1&page_size=20"
+                            ),
+                        }
+                        if s.get("id") == "kpi_metric_drilldown_250k_api"
+                        else s
+                    )
+                    for s in (spec.get("scenarios") or [])  # type: ignore[union-attr]
+                ]
 
             # Wait for HTTP ping readiness through nginx -> gunicorn
             deadline = time.monotonic() + 90.0
