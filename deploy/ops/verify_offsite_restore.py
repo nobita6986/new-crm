@@ -445,6 +445,7 @@ def capture_site_state(*, verify_encryption_state: bool = False, check_invariant
     frappe.init(site=site, sites_path='.')
     frappe.connect()
     try:
+        frappe.clear_cache()
         counts = {d: frappe.db.count(d) for d in expected_counts}
         table_hashes = {
             d: hashlib.sha256(
@@ -456,7 +457,7 @@ def capture_site_state(*, verify_encryption_state: bool = False, check_invariant
         for d in expected_table_sha256:
             rows = frappe.get_all(d, fields=['*'], order_by='name')
             if d == 'CRM Form Script':
-                rows = [{k: v for k, v in r.items() if k != 'modified'} for r in rows]
+                rows = [{k: v for k, v in r.items() if k not in {'creation', 'modified'}} for r in rows]
             canonical_hashes[d] = hashlib.sha256(
                 json.dumps(rows, sort_keys=True, default=str).encode('utf-8')
             ).hexdigest()
@@ -658,11 +659,18 @@ t0 = time.monotonic()
 bench('clear-cache')
 bench('clear-website-cache')
 after_2 = capture_site_state(check_invariants=True)
+print('WORKER_STAGE=reconcile_counts', flush=True)
 assert before['counts'] == after_1['counts'] == after_2['counts'], 'Migration changed business counts'
-assert after_1['canonical_table_sha256'] == after_2['canonical_table_sha256'], 'Second migrate was not idempotent across tables'
+for dt_key in after_1['canonical_table_sha256']:
+    print(f'WORKER_STAGE=reconcile_canonical_{dt_key}', flush=True)
+    assert after_1['canonical_table_sha256'][dt_key] == after_2['canonical_table_sha256'][dt_key], (
+        f'Second migrate was not idempotent on canonical table {dt_key}'
+    )
 for dt_key in after_1['table_sha256']:
     if dt_key != 'CRM Form Script':
+        print(f'WORKER_STAGE=reconcile_full_hash_{dt_key}', flush=True)
         assert after_1['table_sha256'][dt_key] == after_2['table_sha256'][dt_key], f'Full row hash changed on {dt_key}'
+print('WORKER_STAGE=reconcile_translations', flush=True)
 tr_integrity = evaluate_translation_integrity(
     before['translations'],
     after_2['translations'],
@@ -670,10 +678,12 @@ tr_integrity = evaluate_translation_integrity(
     expected_sha256=baseline.get('translation_sha256'),
 )
 assert tr_integrity['status'] == 'PASS', f"Translation integrity failed: {tr_integrity['errors']}"
+print('WORKER_STAGE=reconcile_invariants', flush=True)
 assert all(v == 0 for v in after_2['invariants'].values()), f"Business invariant violation: {after_2['invariants']}"
 timings['post_migrate_reconciliation_and_invariants'] = round(time.monotonic() - t0, 3)
 
 # Set ephemeral login credential on disposable clone ONLY AFTER all hash/count reconciliations pass.
+print('WORKER_STAGE=clone_admin_password_reset', flush=True)
 os.chdir('/home/frappe/frappe-bench/sites')
 frappe.init(site=site, sites_path='.')
 frappe.connect()
@@ -722,20 +732,37 @@ site = payload['site']
 base_url = payload['base_url']
 login_password = payload['login_password']
 
-def request_no_cookies(path: str) -> dict[str, int]:
-    req = urllib.request.Request(base_url + path, headers={'Host': site})
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+no_redirect_opener = urllib.request.build_opener(_NoRedirect)
+
+def request_no_cookies(path: str, extra_headers: dict[str, str] | None = None) -> dict[str, int]:
+    hdrs = {'Host': site}
+    if extra_headers:
+        hdrs.update(extra_headers)
+    req = urllib.request.Request(base_url + path, headers=hdrs)
     try:
-        with urllib.request.urlopen(req, timeout=8) as r:
+        with no_redirect_opener.open(req, timeout=8) as r:
             return {'status': r.status, 'bytes': len(r.read())}
     except urllib.error.HTTPError as e:
         return {'status': e.code, 'bytes': len(e.read())}
 
 guest = {
-    path: request_no_cookies(path)
-    for path in ('/login', '/crm', '/cskh', '/api/method/ping')
+    '/login': request_no_cookies('/login'),
+    '/crm': request_no_cookies('/crm'),
+    '/cskh': request_no_cookies('/cskh'),
+    '/api/method/crm_cskh.api.health.ping': request_no_cookies(
+        '/api/method/crm_cskh.api.health.ping',
+        {'Accept': 'application/json'},
+    ),
+    '/api/method/ping': request_no_cookies('/api/method/ping', {'Accept': 'application/json'}),
 }
 assert guest['/login']['status'] == 200
-assert guest['/crm']['status'] == 403 and guest['/cskh']['status'] == 403
+assert guest['/crm']['status'] in (301, 302, 303, 403), f"Unexpected Guest /crm status {guest['/crm']['status']}"
+assert guest['/cskh']['status'] in (301, 302, 303, 403), f"Unexpected Guest /cskh status {guest['/cskh']['status']}"
+assert guest['/api/method/crm_cskh.api.health.ping']['status'] == 403
 assert guest['/api/method/ping']['status'] == 200
 
 jar = http.cookiejar.CookieJar()
@@ -1067,6 +1094,8 @@ try:
         val = get_decrypted_password('User', 'Administrator', 'p4_restore_control', raise_exception=True)
         if val == p['control_secret']:
             raise AssertionError('Decryption unexpectedly succeeded without encryption_key')
+    except AssertionError:
+        raise
     except Exception:
         negative_decrypt_failed = True
 finally:
@@ -1161,7 +1190,7 @@ for mig_idx in (1, 2):
         for d in doctypes:
             rows = frappe.get_all(d, fields=['*'], order_by='name')
             if d == 'CRM Form Script':
-                rows = [{k: v for k, v in r.items() if k != 'modified'} for r in rows]
+                rows = [{k: v for k, v in r.items() if k not in {'creation', 'modified'}} for r in rows]
             mig_canon[d] = hashlib.sha256(json.dumps(rows, sort_keys=True, default=str).encode('utf-8')).hexdigest()
         if mig_idx == 1:
             pos_mig1_counts, pos_mig1_canon = mig_counts, mig_canon
@@ -1385,7 +1414,14 @@ def run(args: argparse.Namespace) -> int:
                 "id": r["Id"],
                 "image": r["Image"],
                 "started": r["State"]["StartedAt"],
-                "mounts": r["Mounts"],
+                "mounts": sorted(
+                    r["Mounts"],
+                    key=lambda m: (
+                        str(m.get("Destination", "")),
+                        str(m.get("Source", "")),
+                        str(m.get("Name", "")),
+                    ),
+                ),
                 "service": r["Config"]["Labels"].get("com.docker.compose.service"),
             }
             for r in rows

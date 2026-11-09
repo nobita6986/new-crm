@@ -950,7 +950,12 @@ try:
     def snap_counts():
         return {
             "sla_obligations": int(frappe.db.sql("SELECT COUNT(*) FROM `tabCSKH SLA Obligation`")[0][0] or 0),
-            "kpi_snapshots": int(frappe.db.sql("SELECT COUNT(*) FROM `tabCSKH KPI Snapshot`")[0][0] or 0),
+            "latest_published_kpi_snapshots": int(frappe.db.sql(
+                "SELECT COUNT(*) FROM `tabCSKH KPI Snapshot` WHERE IFNULL(is_latest_published,0) = 1"
+            )[0][0] or 0),
+            "total_append_only_kpi_snapshots": int(frappe.db.sql(
+                "SELECT COUNT(*) FROM `tabCSKH KPI Snapshot`"
+            )[0][0] or 0),
             "dup_sla_keys": int(frappe.db.sql(
                 "SELECT COUNT(*) FROM (SELECT idempotency_key FROM `tabCSKH SLA Obligation` "
                 "WHERE IFNULL(idempotency_key,'') != '' GROUP BY idempotency_key HAVING COUNT(*) > 1) t"
@@ -1018,7 +1023,12 @@ finally:
     r2 = cron_counts.get("after_run_2", {})
     idempotent = (
         bool(r1)
-        and r1 == r2
+        and bool(r2)
+        and r1.get("sla_obligations") == r2.get("sla_obligations")
+        and int(r1.get("latest_published_kpi_snapshots", 0)) > 0
+        and r1.get("latest_published_kpi_snapshots") == r2.get("latest_published_kpi_snapshots")
+        and int(r2.get("total_append_only_kpi_snapshots", 0))
+        >= int(r1.get("total_append_only_kpi_snapshots", 0))
         and r2.get("dup_sla_keys") == 0
         and r2.get("dup_attempt_keys") == 0
     )
