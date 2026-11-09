@@ -7,7 +7,7 @@
 # runtime image, and exports dependency locks + image provenance metadata.
 #
 # Usage (local / isolated CI):
-#   bash deploy/images/build-image.sh [--out-dir deploy/images/evidence] [--tag crm-cskh:0.0.1-92e14af]
+#   bash deploy/images/build-image.sh [--out-dir deploy/images/evidence] [--tag crm-cskh:0.0.1-4672041]
 #
 # Optional registry push (for P4-02 when an approved registry + credentials exist):
 #   REGISTRY_PUSH=true CSKH_REGISTRY_IMAGE=ghcr.io/<org>/crm-cskh bash deploy/images/build-image.sh
@@ -121,6 +121,8 @@ print(lock["toolchain"]["uv_version"])
 print(py_constraints["system_constraints_sha256"])
 print(py_constraints["bench_constraints_sha256"])
 print(lock["security_patches"]["frappe_form_data_version"])
+print(lock["security_patches"]["pyjwt_version"])
+print(lock["security_patches"]["pillow_version"])
 PY
 )
 
@@ -152,6 +154,8 @@ UV_VERSION="${LOCK_VARS[24]}"
 SYSTEM_PYTHON_CONSTRAINTS_SHA256="${LOCK_VARS[25]}"
 BENCH_PYTHON_CONSTRAINTS_SHA256="${LOCK_VARS[26]}"
 FORM_DATA_PATCH_VERSION="${LOCK_VARS[27]}"
+PYJWT_PATCH_VERSION="${LOCK_VARS[28]}"
+PILLOW_PATCH_VERSION="${LOCK_VARS[29]}"
 
 ACTUAL_HEAD_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD | tr -d '\r')"
 ACTUAL_APPS_TREE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD:apps | tr -d '\r')"
@@ -204,6 +208,8 @@ docker buildx build \
   --build-arg "SYSTEM_PYTHON_CONSTRAINTS_SHA256=${SYSTEM_PYTHON_CONSTRAINTS_SHA256}" \
   --build-arg "BENCH_PYTHON_CONSTRAINTS_SHA256=${BENCH_PYTHON_CONSTRAINTS_SHA256}" \
   --build-arg "FORM_DATA_PATCH_VERSION=${FORM_DATA_PATCH_VERSION}" \
+  --build-arg "PYJWT_PATCH_VERSION=${PYJWT_PATCH_VERSION}" \
+  --build-arg "PILLOW_PATCH_VERSION=${PILLOW_PATCH_VERSION}" \
   --build-arg "WKHTMLTOPDF_VERSION=${WKHTMLTOPDF_VERSION}" \
   --build-arg "WKHTMLTOPDF_DISTRO=${WKHTMLTOPDF_DISTRO}" \
   --build-arg "WKHTMLTOPDF_AMD64_SHA256=${WKHTMLTOPDF_AMD64_SHA256}" \

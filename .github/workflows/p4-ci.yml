@@ -71,7 +71,7 @@ jobs:
             deploy/dev/bootstrap.sh
           git diff --check
 
-      - name: Verify P0-P3 test inventories, T1C golden SHA-256 & Vietnamese translations
+      - name: Verify P0-P3 test inventories, diff-impact planner, benchmark guard & translations
         shell: bash
         run: |
           set -euo pipefail
@@ -79,6 +79,14 @@ jobs:
           python3 deploy/dev/seed/p2_test_inventory.py --check deploy/dev/seed/p2_test_inventory.json
           python3 deploy/dev/seed/p3_test_inventory.py --check deploy/dev/seed/p3_test_inventory.json
           python3 deploy/p3/ui_test_inventory.py --check deploy/p3/ui_test_inventory.json
+          python3 deploy/release/run_diff_impact_verification.py \
+            --plan-only \
+            --full-suite \
+            --out-dir "$RUNNER_TEMP/p4-static-evidence" >/dev/null
+          python3 deploy/release/benchmark_p4_isolated.py \
+            --plan-only \
+            --confirm-isolated-target \
+            --out "$RUNNER_TEMP/p4-static-evidence/benchmark-p4-spec.json" >/dev/null
           node deploy/p3/test_p3_ui_timezone_and_contracts.mjs
           python3 deploy/p1/check_translations_audit.py
           python3 - <<'PY'
@@ -228,6 +236,7 @@ jobs:
               "system-pip-freeze.txt",
               "python-constraints.txt",
               "system-python-constraints.txt",
+              "dpkg-packages.txt",
               "yarn-locks.sha256",
               "crm-cskh-files.sha256",
           ]
@@ -269,6 +278,8 @@ jobs:
               raise SystemExit(
                   f"FATAL: Unconstrained or mismatched bench virtualenv packages: {unconstrained_bench}"
               )
+          assert bench_installed.get("pyjwt") == lock["security_patches"]["pyjwt_version"]
+          assert bench_installed.get("pillow") == lock["security_patches"]["pillow_version"]
 
           sys_constraints = parse_pins(b1 / "system-python-constraints.txt")
           sys_installed = parse_pins(b1 / "system-pip-freeze.txt")
@@ -307,6 +318,8 @@ jobs:
               "bench_virtualenv_pypi_packages_verified": len(bench_installed),
               "system_base_pypi_packages_verified": len(sys_installed),
               "uv_patched_version": sys_installed.get("uv"),
+              "pyjwt_patched_version": bench_installed.get("pyjwt"),
+              "pillow_patched_version": bench_installed.get("pillow"),
           }
           (proof_dir / "python-lock-reproducibility.json").write_text(
               json.dumps(report, indent=2) + "\n", encoding="utf-8"
@@ -343,7 +356,7 @@ jobs:
       TRIVY_IMAGE: aquasec/trivy:0.58.2@sha256:665030f4d33a82c1e8d9d5e0453365842236723c1ee5cc3becca698268e66a56
 
     steps:
-      - name: Reclaim unused runner SDK space for 5.2 GB image build & smoke stack
+      - name: Reclaim unused runner SDK space for image build & smoke stack
         shell: bash
         run: |
           set -euo pipefail
@@ -463,12 +476,12 @@ jobs:
             --output /scan-out/trivy-image.json \
             "${APP_IMAGE_DIGEST}"
 
-          # Extract PyJWT METADATA directly from the immutable @sha256 image for exact-token verification (REL-01A)
-          META_CID="$(docker create "${APP_IMAGE_DIGEST}")"
-          docker cp \
-            "${META_CID}:/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.13.0.dist-info/METADATA" \
-            "$EVIDENCE_DIR/security/pyjwt-METADATA.txt"
-          docker rm -f "${META_CID}" >/dev/null
+          # Extract PyJWT 2.14.0 METADATA directly from the immutable @sha256 image for exact-token verification (REL-01A)
+          docker run --rm --network none \
+            --entrypoint /home/frappe/frappe-bench/env/bin/python \
+            "${APP_IMAGE_DIGEST}" \
+            -c "from pathlib import Path; matches = sorted(Path('/home/frappe/frappe-bench/env/lib/python3.11/site-packages').glob('[Pp]y[Jj][Ww][Tt]-2.14.0.dist-info/METADATA')); assert len(matches) == 1, matches; print(matches[0].read_text(encoding='utf-8'), end='')" \
+            > "$EVIDENCE_DIR/security/pyjwt-METADATA.txt"
 
           # 1. Execute STRICT release security gate and archive full strict verdict (REL-01B)
           set +e
@@ -479,9 +492,9 @@ jobs:
             --out "$EVIDENCE_DIR/security/security-scan-strict.json"
           STRICT_RC=$?
           set -e
-          echo "Strict security gate exit code (expected != 0 while T0 CVE exception requests are pending): ${STRICT_RC}"
+          echo "Strict security gate exit code (expected != 0 while T0 OS CVE dossier decision is pending): ${STRICT_RC}"
 
-          # Verify strict report exists, has 0 real secrets, and 0 CRITICAL CVEs on patched packages
+          # Verify strict report exists, has 0 real secrets, 0 fixable Critical CVEs, and 0 regressions on patched packages
           python3 - "$EVIDENCE_DIR/security/security-scan-strict.json" <<'PY'
           import json
           import sys
@@ -491,7 +504,7 @@ jobs:
           assert strict_doc["gate_mode"] == "strict", strict_doc["gate_mode"]
           assert strict_doc["secret_findings_count"] == 0, strict_doc["secret_findings"]
           assert strict_doc["excepted_secret_false_positives_count"] == 1, strict_doc
-          patched_pkgs = {"uv", "form-data", "loader-utils", "shell-quote", "stdlib"}
+          patched_pkgs = {"uv", "form-data", "loader-utils", "shell-quote", "stdlib", "pyjwt", "pillow"}
           leaked_patched = [
               f for f in strict_doc["fixable_critical_unapproved"]
               if f["package"].lower() in patched_pkgs
@@ -502,7 +515,7 @@ jobs:
           # 2. Enforce PR gate: fail-closed on ANY secret OR ANY regression in patched packages
           "$PY" deploy/release/evaluate_security_scan.py \
             --advisory-upstream-critical \
-            --forbid-critical-packages uv,form-data,loader-utils,shell-quote,stdlib \
+            --forbid-critical-packages uv,form-data,loader-utils,shell-quote,stdlib,pyjwt,pillow \
             --trivy-json "$EVIDENCE_DIR/security/trivy-image.json" \
             --pyjwt-metadata-file "$EVIDENCE_DIR/security/pyjwt-METADATA.txt" \
             --out "$EVIDENCE_DIR/security/security-scan-summary.json"
@@ -537,6 +550,7 @@ jobs:
 
           "$PY" deploy/release/release_manifest.py sign \
             --manifest "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json" \
+            --security-scan "$EVIDENCE_DIR/security/security-scan-summary.json" \
             --private-key-file "$KEY_DIR/ephemeral.key" \
             --sig-out "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.json.sig" \
             --envelope-out "$EVIDENCE_DIR/manifest/rehearsal-release-manifest.envelope.json"
@@ -562,7 +576,7 @@ jobs:
             exit 1
           fi
 
-      - name: Wipe local image & run G02 clean-site verification pulled by @sha256 digest
+      - name: Wipe local image & run G02 clean-site + Socket.IO verification pulled by @sha256 digest
         id: verify_clean_site
         shell: bash
         env:
@@ -688,6 +702,7 @@ jobs:
               "event_name": os.environ.get("GITHUB_EVENT_NAME"),
               "ci_loopback_rehearsal": {
                   "evidence_scope": "ephemeral_loopback_oci_v2_registry_127.0.0.1:15000",
+                  "note": "CI green reflects PR/CI rehearsal scope ONLY; production_candidate release requires strict security-scan-strict.json == PASS.",
                   "build_once": os.environ.get("BUILD_OUTCOME"),
                   "sbom_and_scan": os.environ.get("SCAN_OUTCOME"),
                   "ed25519_manifest_signing": os.environ.get("SIGN_OUTCOME"),
@@ -701,8 +716,8 @@ jobs:
                   "blocker_id": "BLK-INFRA-03",
                   "detail": (
                       "Approved external Container Registry URL (vars.CSKH_REGISTRY_IMAGE), "
-                      "push/pull robot credentials, and protected `registry-build` / `registry-verify` / "
-                      "`staging` / `production` GitHub Environments are not yet provisioned by Owner/Infra."
+                      "Ed25519 signing keys, and protected `registry-build` / `registry-verify` / "
+                      "`staging` / `production` GitHub Environments are pending Owner/Infra provisioning."
                   ),
               },
               "remote_staging_host_deployment": {
@@ -807,6 +822,7 @@ jobs:
               "system-pip-freeze.txt",
               "python-constraints.txt",
               "system-python-constraints.txt",
+              "dpkg-packages.txt",
               "yarn-locks.sha256",
               "crm-cskh-files.sha256",
           ):

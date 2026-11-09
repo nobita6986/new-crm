@@ -39,17 +39,24 @@
     "system_constraints_sha256": "aa20fca89707c32d28ee6197379c5528ff4e9afdc88735e960cbe0f0534309e4",
     "system_package_count": 22,
     "bench_constraints_file": "deploy/images/resources/python-constraints.txt",
-    "bench_constraints_sha256": "0673e11fb1d394e599dddade9c116efb2b502d0d4fb7a59a73c6d958f1d34037",
+    "bench_constraints_sha256": "8bdc05097183d80a69bf32e29b91fdd3a0b4521bd08cd6d4b19164d8cf70b8b2",
     "bench_package_count": 154
   },
   "security_patches": {
     "uv_version": "0.13.7",
     "frappe_form_data_version": "4.0.5",
+    "pyjwt_version": "2.14.0",
+    "pillow_version": "13.0.0",
     "pruned_frappe_build_only_node_modules": [
       "esbuild",
       "esbuild-linux-64",
       "loader-utils",
       "shell-quote"
+    ],
+    "removed_unused_runtime_apt_packages": [
+      "libpq-dev",
+      "postgresql-client",
+      "restic"
     ]
   },
   "apps": {

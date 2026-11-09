@@ -4,19 +4,21 @@
 Enforces F-P4-REL-01A & F-P4-REL-01B:
 1. Secret gate (`fail-closed` in ALL modes):
    - Never suppresses a whole file path (`target_suffix` alone is forbidden).
-   - An upstream documentation false positive (such as the PyJWT 2.13.0 `METADATA` doctest JWT)
+   - An upstream documentation false positive (such as the PyJWT 2.14.0 `METADATA` doctest JWT)
      is permitted ONLY when ALL four invariants hold simultaneously:
-       a) `rule_id` and normalized `target_suffix` match a non-expired rule in `cve-exceptions.json`
-       b) `StartLine == EndLine == exact_line` AND total Trivy secret findings in that file == 1
+       a) `rule_id` and normalized `target_suffix` (case-insensitive dist-info folder) match a
+          non-expired rule in `cve-exceptions.json`
+       b) `StartLine == EndLine`, `allowed_line_min <= StartLine <= allowed_line_max`, AND total
+          Trivy secret findings in that file == 1
        c) Actual unmasked token bytes are verified (via `--pyjwt-metadata-file` extracted from the
           scanned `@sha256` image, or unredacted `Match`) to equal `exact_sample` and
-          `exact_sample_sha256`
+          `exact_sample_sha256` on the exact same line reported by Trivy
        d) Full-file JWT token scan of `METADATA` confirms ZERO other JWT tokens exist anywhere in
           that same file (a second or modified JWT in `METADATA` fails closed immediately).
 2. Vulnerability gate:
    - `--strict` (default; mandatory in `p4-release.yml`): fails closed on ANY unapproved `CRITICAL`
      CVE (both fixable language/OS CVEs and unfixed upstream OS CVEs) unless covered by a
-     non-expired approved exception in `cve-exceptions.json`.
+     non-expired `T0`/Owner-approved exception in `cve-exceptions.json`.
    - `--advisory-upstream-critical` (PR CI rehearsal alongside `--strict` report output): records
      pending upstream `CRITICAL` CVEs for `T0`/Owner review while still failing closed on ANY
      secret finding and on any package listed in `--forbid-critical-packages`.
@@ -66,15 +68,18 @@ def load_active_exceptions(
         exact_sample = str(fp.get("exact_sample") or "").strip()
         exact_sha = str(fp.get("exact_sample_sha256") or "").strip().lower()
         exact_line = int(fp.get("exact_line") or 0)
+        line_min = int(fp.get("allowed_line_min") or exact_line)
+        line_max = int(fp.get("allowed_line_max") or exact_line)
         exp_str = str(fp.get("expires_on") or "").strip()
         approved_by = str(fp.get("approved_by") or "").strip()
-        # Refuse broad path-only rules that lack exact token + SHA-256 + line pin
         if (
             not rule_id
             or not target_suffix
             or not exact_sample
             or not exact_sha
             or exact_line <= 0
+            or line_min <= 0
+            or line_max < line_min
             or not exp_str
             or not approved_by
         ):
@@ -91,6 +96,8 @@ def load_active_exceptions(
                     "rule_id": rule_id,
                     "target_suffix": target_suffix,
                     "exact_line": exact_line,
+                    "allowed_line_min": line_min,
+                    "allowed_line_max": line_max,
                     "exact_sample": exact_sample,
                     "exact_sample_sha256": exact_sha,
                     "expires_on": exp_str,
@@ -103,10 +110,14 @@ def load_active_exceptions(
 
 
 def verify_pyjwt_metadata_content(
-    content: str, fp_rule: dict[str, object]
+    content: str,
+    fp_rule: dict[str, object],
+    *,
+    expected_trivy_line: int | None = None,
 ) -> tuple[bool, list[str]]:
-    """Verifies `METADATA` contains ONLY the exact verified doctest JWT on `exact_line`."""
-    expected_line = int(fp_rule["exact_line"])
+    """Verifies `METADATA` contains ONLY the exact verified doctest JWT in the locked line window."""
+    line_min = int(fp_rule.get("allowed_line_min") or fp_rule["exact_line"])
+    line_max = int(fp_rule.get("allowed_line_max") or fp_rule["exact_line"])
     expected_sample = str(fp_rule["exact_sample"])
     expected_sha = str(fp_rule["exact_sample_sha256"])
 
@@ -118,7 +129,7 @@ def verify_pyjwt_metadata_content(
     errors: list[str] = []
     if not found_tokens:
         errors.append(
-            f"Expected verified doctest JWT on line {expected_line}, but found 0 JWT tokens in METADATA"
+            f"Expected verified doctest JWT in lines {line_min}..{line_max}, but found 0 JWT tokens in METADATA"
         )
         return False, errors
 
@@ -130,11 +141,10 @@ def verify_pyjwt_metadata_content(
 
     for line_no, tok in found_tokens:
         tok_sha = _sha256_ascii(tok)
-        if (
-            line_no != expected_line
-            or tok != expected_sample
-            or tok_sha != expected_sha
-        ):
+        line_ok = line_min <= line_no <= line_max and (
+            expected_trivy_line is None or line_no == expected_trivy_line
+        )
+        if not line_ok or tok != expected_sample or tok_sha != expected_sha:
             errors.append(
                 f"Unapproved JWT token in METADATA at line {line_no} (sha256={tok_sha[:16]}... != {expected_sha[:16]}...)"
             )
@@ -151,15 +161,15 @@ def _match_locked_secret_fp(
     pyjwt_metadata_content: str | None,
 ) -> tuple[dict[str, object] | None, str | None]:
     norm_target = target.replace("\\", "/")
+    norm_target_lower = norm_target.lower()
     rule_id = str(sec.get("RuleID") or "")
     start_line = int(sec.get("StartLine") or 0)
     end_line = int(sec.get("EndLine") or 0)
     raw_match = str(sec.get("Match") or "")
 
     for fp in active_secret_fps:
-        if fp["rule_id"] != rule_id or not norm_target.endswith(
-            str(fp["target_suffix"])
-        ):
+        suffix_lower = str(fp["target_suffix"]).lower()
+        if fp["rule_id"] != rule_id or not norm_target_lower.endswith(suffix_lower):
             continue
 
         if findings_in_same_target != 1:
@@ -167,14 +177,18 @@ def _match_locked_secret_fp(
                 None,
                 f"Multiple secret findings ({findings_in_same_target}) in {norm_target}; refusing false-positive exclusion",
             )
-        if start_line != int(fp["exact_line"]) or end_line != int(fp["exact_line"]):
+        line_min = int(fp["allowed_line_min"])
+        line_max = int(fp["allowed_line_max"])
+        if start_line != end_line or not (line_min <= start_line <= line_max):
             return (
                 None,
-                f"Secret finding line {start_line}..{end_line} != locked line {fp['exact_line']} in {norm_target}",
+                f"Secret finding line {start_line}..{end_line} outside locked range {line_min}..{line_max} in {norm_target}",
             )
 
         if pyjwt_metadata_content is not None:
-            ok, errs = verify_pyjwt_metadata_content(pyjwt_metadata_content, fp)
+            ok, errs = verify_pyjwt_metadata_content(
+                pyjwt_metadata_content, fp, expected_trivy_line=start_line
+            )
             if not ok:
                 return None, "; ".join(errs)
             return fp, None
@@ -258,7 +272,7 @@ def evaluate_trivy_report(
     results = data.get("Results") or []
     secret_counts_by_target: dict[str, int] = {}
     for res in results:
-        norm_t = str(res.get("Target") or "").replace("\\", "/")
+        norm_t = str(res.get("Target") or "").replace("\\", "/").lower()
         secs = res.get("Secrets") or []
         if secs:
             secret_counts_by_target[norm_t] = secret_counts_by_target.get(
@@ -268,7 +282,7 @@ def evaluate_trivy_report(
     matched_pyjwt_fp = False
     for res in results:
         target = str(res.get("Target") or "")
-        norm_target = target.replace("\\", "/")
+        norm_target_lower = target.replace("\\", "/").lower()
         for sec in res.get("Secrets") or []:
             rule_id = str(sec.get("RuleID") or "")
             entry_sec: dict[str, object] = {
@@ -283,7 +297,9 @@ def evaluate_trivy_report(
             matched_fp, reject_reason = _match_locked_secret_fp(
                 target=target,
                 sec=sec,
-                findings_in_same_target=secret_counts_by_target.get(norm_target, 0),
+                findings_in_same_target=secret_counts_by_target.get(
+                    norm_target_lower, 0
+                ),
                 active_secret_fps=active_secret_fps,
                 pyjwt_metadata_content=pyjwt_metadata_content,
             )
@@ -339,7 +355,7 @@ def evaluate_trivy_report(
         pyjwt_rules = [
             r
             for r in active_secret_fps
-            if str(r.get("target_suffix") or "").endswith("METADATA")
+            if str(r.get("target_suffix") or "").lower().endswith("metadata")
         ]
         for r in pyjwt_rules:
             ok, errs = verify_pyjwt_metadata_content(pyjwt_metadata_content, r)
@@ -358,7 +374,7 @@ def evaluate_trivy_report(
     unique_fixable = _dedupe_critical_entries(fixable_critical_unapproved)
     unique_unfixed = _dedupe_critical_entries(unfixed_critical)
     forbidden_pkgs = {
-        p.strip() for p in (forbid_critical_packages or set()) if p.strip()
+        p.strip().lower() for p in (forbid_critical_packages or set()) if p.strip()
     }
 
     gate_failures: list[str] = []
@@ -372,7 +388,7 @@ def evaluate_trivy_report(
             {
                 f"{u['package']} ({u['cve_id']})"
                 for u in (*unique_fixable, *unique_unfixed)
-                if str(u["package"]) in forbidden_pkgs
+                if str(u["package"] or "").lower() in forbidden_pkgs
             }
         )
         if regressed:

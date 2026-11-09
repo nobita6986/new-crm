@@ -2,7 +2,7 @@
 #
 # deploy/images/Containerfile
 #
-# Immutable production image for CRM-CSKH (P4-01 / P4-ADR-02).
+# Immutable production image for CRM-CSKH (P4-01 / P4-02 / P4-ADR-02).
 # Derived from pinned frappe/frappe_docker v4.0.1
 # (commit 2b26e9ab8d751e5ea33bb7b930aea3550bb81ded: images/custom/Containerfile +
 # .github/workflows/core-build-stable.yml v15 matrix), hardened so:
@@ -14,8 +14,10 @@
 #      by Containerfile.dockerignore) with deterministic SHA-256 manifest recording.
 #   4. Pinned Vietnamese localization patches are applied prior to `bench build --production`
 #      so compiled Desk, CRM Vue SPA (/crm), and CSKH (/cskh/*) assets match P0-P3 parity.
-#   5. Shallow .git metadata in apps/{frappe,crm} + /home/frappe/frappe-bench/release-metadata
-#      remain inspectable at runtime for independent audit (G02 / G05).
+#   5. Unused runtime OS packages (`libpq-dev`, `postgresql-client`, `restic`) are excluded
+#      from `base`/`backend`, compatible CVE patches (`PyJWT==2.14.0`, `pillow==13.0.0`,
+#      `uv==0.13.7`, `form-data@4.0.5`) are enforced, and runtime `dpkg-packages.txt` is
+#      captured inside `backend` so SBOMs reflect true runtime OS components.
 
 ARG BASE_IMAGE=python:3.11.18-slim-bookworm@sha256:6cbe849bdc876ecd413a4a09a919a0d861d908589de9eba61e886c29af793a07
 
@@ -45,6 +47,7 @@ ENV PATH=${NVM_DIR}/current/bin:${PATH}
 
 RUN useradd -u 1000 -g 0 -d /home/frappe -ms /bin/bash frappe \
     && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get upgrade --no-install-recommends -y \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
         ca-certificates \
         curl \
@@ -56,12 +59,9 @@ RUN useradd -u 1000 -g 0 -d /home/frappe -ms /bin/bash frappe \
         libharfbuzz0b \
         libpangoft2-1.0-0 \
         libpangocairo-1.0-0 \
-        restic \
         gpg \
         mariadb-client \
         less \
-        libpq-dev \
-        postgresql-client \
         wait-for-it \
         jq \
         media-types \
@@ -144,8 +144,10 @@ USER frappe
 
 COPY --chown=frappe:0 deploy/images/resources/python-constraints.txt /tmp/cskh-build/python-constraints.txt
 
-ARG BENCH_PYTHON_CONSTRAINTS_SHA256=0673e11fb1d394e599dddade9c116efb2b502d0d4fb7a59a73c6d958f1d34037
+ARG BENCH_PYTHON_CONSTRAINTS_SHA256=8bdc05097183d80a69bf32e29b91fdd3a0b4521bd08cd6d4b19164d8cf70b8b2
 ARG FORM_DATA_PATCH_VERSION=4.0.5
+ARG PYJWT_PATCH_VERSION=2.14.0
+ARG PILLOW_PATCH_VERSION=13.0.0
 
 ENV PIP_CONSTRAINT=/tmp/cskh-build/python-constraints.txt \
     UV_CONSTRAINT=/tmp/cskh-build/python-constraints.txt \
@@ -162,11 +164,19 @@ ARG CRM_SHA=0d3910b456ef4fb913e77b29db011b3debc4f778
 ARG CRM_ROOT_YARN_LOCK_SHA256=49e1cb522c1350c51654c391a30dfc1bd2cf1f40f2342dfba6048a4e744ea5b3
 ARG CRM_FRONTEND_YARN_LOCK_SHA256=b0d89f3bed314eb1fb7b7cfbab8c6a95855583196e0f327326f1f9c69cd299ab
 
-# 1. Initialize bench and pin upstream Frappe + CRM by exact Git commit SHA, Python constraints & Yarn lockfile SHA-256.
+# 1. Initialize bench, pin upstream Frappe + CRM by exact Git commit SHA, relax Frappe's
+#    tilde upper bounds for `PyJWT`/`Pillow` security upgrades, and enforce locked constraints.
 RUN set -eux; \
     sed -i 's/\r$//' /tmp/cskh-build/python-constraints.txt; \
     echo "${BENCH_PYTHON_CONSTRAINTS_SHA256}  /tmp/cskh-build/python-constraints.txt" | sha256sum -c -; \
     env | LC_ALL=C sort | grep -E '^(PIP|UV|UV_BUILD)_CONSTRAINT='; \
+    sed -E \
+        -e 's/^PyJWT==.*$/PyJWT==2.13.0/' \
+        -e 's/^pillow==.*$/pillow==12.3.0/' \
+        /tmp/cskh-build/python-constraints.txt > /tmp/cskh-build/init-python-constraints.txt; \
+    PIP_CONSTRAINT=/tmp/cskh-build/init-python-constraints.txt \
+    UV_CONSTRAINT=/tmp/cskh-build/init-python-constraints.txt \
+    UV_BUILD_CONSTRAINT=/tmp/cskh-build/init-python-constraints.txt \
     bench init \
         --frappe-branch="${FRAPPE_TAG}" \
         --frappe-path="${FRAPPE_REPO}" \
@@ -176,19 +186,30 @@ RUN set -eux; \
         --skip-redis-config-generation \
         --skip-assets \
         /home/frappe/frappe-bench; \
+    rm -f /tmp/cskh-build/init-python-constraints.txt; \
     cd /home/frappe/frappe-bench; \
     git -C apps/frappe fetch --depth 1 upstream "${FRAPPE_SHA}" || git -C apps/frappe fetch --depth 1 origin "${FRAPPE_SHA}" || true; \
     git -C apps/frappe checkout --force --detach "${FRAPPE_SHA}"; \
     test "$(git -C apps/frappe rev-parse HEAD)" = "${FRAPPE_SHA}"; \
     echo "${FRAPPE_YARN_LOCK_SHA256}  apps/frappe/yarn.lock" | sha256sum -c -; \
+    ./env/bin/python -c 'from pathlib import Path; p = Path("apps/frappe/pyproject.toml"); txt = p.read_text(encoding="utf-8"); assert "\"Pillow~=12.3.0\"" in txt and "\"PyJWT~=2.13.0\"" in txt, "Unexpected upstream frappe pyproject.toml pins"; txt = txt.replace("\"Pillow~=12.3.0\"", "\"Pillow>=12.3.0,<14.0.0\"", 1).replace("\"PyJWT~=2.13.0\"", "\"PyJWT>=2.13.0,<3.0.0\"", 1); p.write_text(txt, encoding="utf-8")'; \
+    test "$(git -C apps/frappe rev-parse HEAD)" = "${FRAPPE_SHA}"; \
+    uv pip install \
+        --python /home/frappe/frappe-bench/env/bin/python \
+        -c /tmp/cskh-build/python-constraints.txt \
+        --only-binary :all: \
+        "PyJWT==${PYJWT_PATCH_VERSION}" \
+        "pillow==${PILLOW_PATCH_VERSION}" \
+        pip==26.3 setuptools==84.2.1 wheel==0.48.0 packaging==26.3 flit_core==3.12.0; \
+    uv pip install \
+        --python /home/frappe/frappe-bench/env/bin/python \
+        -c /tmp/cskh-build/python-constraints.txt \
+        --no-deps \
+        -e ./apps/frappe; \
     bench get-app --branch="${CRM_TAG}" --skip-assets "${CRM_REPO}"; \
     git -C apps/crm fetch --depth 1 upstream "${CRM_SHA}" || git -C apps/crm fetch --depth 1 origin "${CRM_SHA}" || true; \
     git -C apps/crm checkout --force --detach "${CRM_SHA}"; \
     test "$(git -C apps/crm rev-parse HEAD)" = "${CRM_SHA}"; \
-    uv pip install \
-        --python /home/frappe/frappe-bench/env/bin/python \
-        -c /tmp/cskh-build/python-constraints.txt \
-        pip==26.3 setuptools==84.2.1 wheel==0.48.0 packaging==26.3 flit_core==3.12.0; \
     echo "${CRM_ROOT_YARN_LOCK_SHA256}  apps/crm/yarn.lock" | sha256sum -c -; \
     echo "${CRM_FRONTEND_YARN_LOCK_SHA256}  apps/crm/frontend/yarn.lock" | sha256sum -c -; \
     yarn --cwd apps/frappe install --frozen-lockfile --check-files; \
@@ -212,7 +233,7 @@ ARG CRM_CSKH_TREE_SHA=f51095ec245e103ed3a487654b5580636424ea36
 
 # 3. Apply pinned Vietnamese UI patches (Frappe Jinja + CRM frappe-ui after frontend deps install),
 #    install `crm_cskh` under locked constraints, compile production assets, apply compatible runtime
-#    CVE patches, verify completeness, and export dependency locks.
+#    CVE patches, verify runtime compatibility, and export dependency locks.
 RUN set -eux; \
     cd /home/frappe/frappe-bench; \
     echo "${BENCH_PYTHON_CONSTRAINTS_SHA256}  /tmp/cskh-build/python-constraints.txt" | sha256sum -c -; \
@@ -226,6 +247,9 @@ RUN set -eux; \
     echo "{}" > /home/frappe/frappe-bench/sites/common_site_config.json; \
     PIP_CONSTRAINT=/tmp/cskh-build/python-constraints.txt \
     ./env/bin/pip install --no-cache-dir --no-build-isolation -c /tmp/cskh-build/python-constraints.txt -e ./apps/crm_cskh; \
+    ./env/bin/pip check; \
+    EXPECTED_PYJWT="${PYJWT_PATCH_VERSION}" EXPECTED_PILLOW="${PILLOW_PATCH_VERSION}" \
+    ./env/bin/python -c 'import io, os, jwt, PIL; from pathlib import Path; from PIL import Image; from frappe.utils.image import optimize_image; sp = Path("/home/frappe/frappe-bench/env/lib/python3.11/site-packages"); stale = sorted([p.name for p in sp.glob("*dist-info") if p.name.lower().startswith(("pyjwt-2.13.", "pillow-12.3."))]); assert not stale, stale; assert jwt.__version__ == os.environ["EXPECTED_PYJWT"], jwt.__version__; assert PIL.__version__ == os.environ["EXPECTED_PILLOW"], PIL.__version__; tok = jwt.encode({"sub": "smoke"}, "x" * 32, algorithm="HS256"); assert jwt.decode(tok, "x" * 32, algorithms=["HS256"])["sub"] == "smoke"; pem_probe = "  -----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA0000000000000000000000000000000000000000000=\n-----END PUBLIC KEY-----"; raised = False\ntry:\n    jwt.encode({"sub": "probe"}, pem_probe, algorithm="HS256")\nexcept jwt.exceptions.InvalidKeyError:\n    raised = True\nassert raised, "CVE-2026-102268 PEM HMAC guard did not raise InvalidKeyError"; buf_png = io.BytesIO(); Image.new("RGB", (96, 96), (20, 90, 180)).save(buf_png, format="PNG"); opt_png = optimize_image(buf_png.getvalue(), "image/png", max_width=48, max_height=48); assert len(opt_png) > 40; buf_jpg = io.BytesIO(); Image.new("RGB", (96, 96), (180, 90, 20)).save(buf_jpg, format="JPEG"); opt_jpg = optimize_image(buf_jpg.getvalue(), "image/jpeg", max_width=48, max_height=48); assert len(opt_jpg) > 40'; \
     CI=true bench build --production --force; \
     test -s sites/assets/assets.json; \
     ./env/bin/python -c 'import json; d=json.load(open("sites/assets/assets.json")); assert "desk.bundle.js" in d and "desk.bundle.css" in d, list(d.keys())[:10]'; \
@@ -243,7 +267,8 @@ RUN set -eux; \
     cp /tmp/cskh-build/python-constraints.txt /home/frappe/frappe-bench/release-metadata/python-constraints.txt; \
     cp /usr/local/share/cskh-locks/system-python-constraints.txt /home/frappe/frappe-bench/release-metadata/system-python-constraints.txt; \
     sha256sum apps/frappe/yarn.lock apps/crm/yarn.lock apps/crm/frontend/yarn.lock > /home/frappe/frappe-bench/release-metadata/yarn-locks.sha256; \
-    dpkg-query -W -f='${Package}=${Version}\n' | LC_ALL=C sort > /home/frappe/frappe-bench/release-metadata/dpkg-packages.txt; \
+    dpkg-query -W -f='${Package}=${Version}\n' | LC_ALL=C sort > /home/frappe/frappe-bench/release-metadata/builder-dpkg-packages.txt; \
+    cp /home/frappe/frappe-bench/release-metadata/builder-dpkg-packages.txt /home/frappe/frappe-bench/release-metadata/dpkg-packages.txt; \
     { \
         echo "=== apps/frappe diff vs ${FRAPPE_SHA} ==="; \
         git -C apps/frappe diff; \
@@ -277,7 +302,9 @@ RUN set -eux; \
     CRM_CSKH_TREE_SHA_ARG="${CRM_CSKH_TREE_SHA}" \
     BASE_IMAGE_ARG="${BASE_IMAGE}" \
     FORM_DATA_VER_ARG="${FORM_DATA_PATCH_VERSION}" \
-    ./env/bin/python -c 'import hashlib, json, os, subprocess; from pathlib import Path; meta = Path("/home/frappe/frappe-bench/release-metadata"); sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest(); cskh_ver = {}; exec(Path("apps/crm_cskh/crm_cskh/__init__.py").read_text(), cskh_ver); out = {"schema_version": "cskh-image-build-manifest-v1", "base_image": os.environ["BASE_IMAGE_ARG"], "frappe_docker": {"tag": os.environ["FRAPPE_DOCKER_TAG_ARG"], "commit_sha": os.environ["FRAPPE_DOCKER_SHA_ARG"]}, "apps": {"frappe": {"tag": os.environ["FRAPPE_TAG_ARG"], "commit_sha": os.environ["FRAPPE_HEAD"]}, "crm": {"tag": os.environ["CRM_TAG_ARG"], "commit_sha": os.environ["CRM_HEAD"]}, "crm_cskh": {"declared_version": cskh_ver["__version__"], "baseline_main_sha": os.environ["BASELINE_MAIN_SHA_ARG"], "source_commit_sha": os.environ["CSKH_SOURCE_SHA_ARG"], "apps_tree_sha": os.environ["APPS_TREE_SHA_ARG"], "crm_cskh_tree_sha": os.environ["CRM_CSKH_TREE_SHA_ARG"], "files_manifest_sha256": sha(meta / "crm-cskh-files.sha256")}}, "toolchain": {"python": subprocess.check_output(["/home/frappe/frappe-bench/env/bin/python", "--version"], text=True).strip(), "node": subprocess.check_output(["node", "--version"], text=True).strip(), "yarn": subprocess.check_output(["yarn", "--version"], text=True).strip(), "bench": subprocess.check_output(["bench", "--version"], text=True).strip(), "uv": subprocess.check_output(["uv", "--version"], text=True).strip()}, "locks": {"pip_freeze_sha256": sha(meta / "pip-freeze.txt"), "pip_freeze_all_sha256": sha(meta / "pip-freeze-all.txt"), "system_pip_freeze_sha256": sha(meta / "system-pip-freeze.txt"), "python_constraints_sha256": sha(meta / "python-constraints.txt"), "system_python_constraints_sha256": sha(meta / "system-python-constraints.txt"), "yarn_locks_sha256": sha(meta / "yarn-locks.sha256"), "dpkg_packages_sha256": sha(meta / "dpkg-packages.txt"), "upstream_patches_diff_sha256": sha(meta / "upstream-patches.diff"), "assets_json_sha256": sha("sites/assets/assets.json"), "crm_www_html_sha256": sha("apps/crm/crm/www/crm.html")}, "security_patches": {"frappe_form_data_version": os.environ["FORM_DATA_VER_ARG"], "pruned_frappe_build_only_node_modules": ["esbuild", "esbuild-linux-64", "loader-utils", "shell-quote"]}}; (meta / "build-manifest.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")'; \
+    PYJWT_VER_ARG="${PYJWT_PATCH_VERSION}" \
+    PILLOW_VER_ARG="${PILLOW_PATCH_VERSION}" \
+    ./env/bin/python -c 'import hashlib, json, os, subprocess; from pathlib import Path; meta = Path("/home/frappe/frappe-bench/release-metadata"); sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest(); cskh_ver = {}; exec(Path("apps/crm_cskh/crm_cskh/__init__.py").read_text(), cskh_ver); out = {"schema_version": "cskh-image-build-manifest-v1", "base_image": os.environ["BASE_IMAGE_ARG"], "frappe_docker": {"tag": os.environ["FRAPPE_DOCKER_TAG_ARG"], "commit_sha": os.environ["FRAPPE_DOCKER_SHA_ARG"]}, "apps": {"frappe": {"tag": os.environ["FRAPPE_TAG_ARG"], "commit_sha": os.environ["FRAPPE_HEAD"]}, "crm": {"tag": os.environ["CRM_TAG_ARG"], "commit_sha": os.environ["CRM_HEAD"]}, "crm_cskh": {"declared_version": cskh_ver["__version__"], "baseline_main_sha": os.environ["BASELINE_MAIN_SHA_ARG"], "source_commit_sha": os.environ["CSKH_SOURCE_SHA_ARG"], "apps_tree_sha": os.environ["APPS_TREE_SHA_ARG"], "crm_cskh_tree_sha": os.environ["CRM_CSKH_TREE_SHA_ARG"], "files_manifest_sha256": sha(meta / "crm-cskh-files.sha256")}}, "toolchain": {"python": subprocess.check_output(["/home/frappe/frappe-bench/env/bin/python", "--version"], text=True).strip(), "node": subprocess.check_output(["node", "--version"], text=True).strip(), "yarn": subprocess.check_output(["yarn", "--version"], text=True).strip(), "bench": subprocess.check_output(["bench", "--version"], text=True).strip(), "uv": subprocess.check_output(["uv", "--version"], text=True).strip()}, "locks": {"pip_freeze_sha256": sha(meta / "pip-freeze.txt"), "pip_freeze_all_sha256": sha(meta / "pip-freeze-all.txt"), "system_pip_freeze_sha256": sha(meta / "system-pip-freeze.txt"), "python_constraints_sha256": sha(meta / "python-constraints.txt"), "system_python_constraints_sha256": sha(meta / "system-python-constraints.txt"), "yarn_locks_sha256": sha(meta / "yarn-locks.sha256"), "dpkg_packages_sha256": sha(meta / "dpkg-packages.txt"), "builder_dpkg_packages_sha256": sha(meta / "builder-dpkg-packages.txt"), "upstream_patches_diff_sha256": sha(meta / "upstream-patches.diff"), "assets_json_sha256": sha("sites/assets/assets.json"), "crm_www_html_sha256": sha("apps/crm/crm/www/crm.html")}, "security_patches": {"frappe_form_data_version": os.environ["FORM_DATA_VER_ARG"], "pyjwt_version": os.environ["PYJWT_VER_ARG"], "pillow_version": os.environ["PILLOW_VER_ARG"], "pruned_frappe_build_only_node_modules": ["esbuild", "esbuild-linux-64", "loader-utils", "shell-quote"], "removed_unused_runtime_apt_packages": ["libpq-dev", "postgresql-client", "restic"]}}; (meta / "build-manifest.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")'; \
     rm -rf \
         /tmp/cskh-build \
         /home/frappe/.cache \
@@ -320,7 +347,8 @@ COPY --from=builder --chown=frappe:0 /home/frappe/frappe-bench /home/frappe/frap
 WORKDIR /home/frappe/frappe-bench
 
 # Move compiled assets outside the mutable `/home/frappe/frappe-bench/sites` volume mountpoint
-# into immutable image storage (`/home/frappe/frappe-bench/assets`), linked back by entrypoint.sh.
+# into immutable image storage (`/home/frappe/frappe-bench/assets`), linked back by entrypoint.sh,
+# and record true runtime `dpkg-packages.txt` (excluding builder-only compilers/headers).
 RUN set -eux; \
     mv /home/frappe/frappe-bench/sites/assets /home/frappe/frappe-bench/assets; \
     test ! -e /home/frappe/frappe-bench/sites/assets; \
@@ -332,6 +360,8 @@ RUN set -eux; \
     test -s /home/frappe/frappe-bench/assets/crm_cskh/cskh/p3-api.js; \
     test "$(git -C /home/frappe/frappe-bench/apps/frappe rev-parse HEAD)" = "${FRAPPE_SHA}"; \
     test "$(git -C /home/frappe/frappe-bench/apps/crm rev-parse HEAD)" = "${CRM_SHA}"; \
+    dpkg-query -W -f='${Package}=${Version}\n' | LC_ALL=C sort > /home/frappe/frappe-bench/release-metadata/dpkg-packages.txt; \
+    /home/frappe/frappe-bench/env/bin/python -c 'import hashlib, json; from pathlib import Path; meta = Path("/home/frappe/frappe-bench/release-metadata"); dpkg_txt = (meta / "dpkg-packages.txt").read_text(encoding="utf-8"); pkgs = {ln.split("=", 1)[0] for ln in dpkg_txt.splitlines() if "=" in ln}; forbidden = sorted(pkgs & {"restic", "libpq-dev", "postgresql-client", "gcc", "build-essential", "libcairo2-dev"}); assert not forbidden, f"Forbidden packages leaked into runtime image: {forbidden}"; bm = json.loads((meta / "build-manifest.json").read_text(encoding="utf-8")); bm["locks"]["dpkg_packages_sha256"] = hashlib.sha256((meta / "dpkg-packages.txt").read_bytes()).hexdigest(); (meta / "build-manifest.json").write_text(json.dumps(bm, indent=2) + "\n", encoding="utf-8")'; \
     chmod -R g=u /home/frappe/frappe-bench
 
 VOLUME [ \
