@@ -265,6 +265,30 @@ def audit_workflow_text(wf_path: Path, text: str) -> list[str]:
                 "p4-production.yml: must deploy Staging-verified @sha256 digest without building"
             )
 
+    if name == "p4-candidate-verify.yml":
+        if has_pr_trigger:
+            errors.append(
+                "p4-candidate-verify.yml: must NEVER trigger on `pull_request`"
+            )
+        cand_jobs = _split_workflow_jobs(text)
+        for ro_job_name in ("verify-and-regress-by-digest", "isolated-s1-benchmark"):
+            ro_job = cand_jobs.get(ro_job_name, "")
+            if ro_job:
+                if re.search(
+                    r"(?m)^\s*(packages|id-token|deployments|actions|contents|security-events):\s*write\b",
+                    ro_job,
+                ):
+                    errors.append(
+                        f"p4-candidate-verify.yml: {ro_job_name} (pull-only) must not grant any `: write` permission"
+                    )
+                ro_nc = _strip_yaml_comments(ro_job)
+                if "build-image.sh" in ro_nc or re.search(
+                    r"\bdocker\s+(?:buildx\s+)?build\b", ro_nc
+                ):
+                    errors.append(
+                        f"p4-candidate-verify.yml: {ro_job_name} must pull immutable @sha256 digest without building"
+                    )
+
     return errors
 
 

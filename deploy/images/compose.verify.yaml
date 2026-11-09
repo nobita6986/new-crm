@@ -149,7 +149,7 @@ services:
 
   queue-short:
     <<: *app_common
-    command: ["bench", "worker", "--queue", "short,default"]
+    command: ["bench", "worker", "--queue", "short,default,long"]
     environment:
       TZ: Asia/Ho_Chi_Minh
     volumes:
