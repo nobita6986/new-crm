@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "local_only_run": {
+    "end_to_end_backup_status": "PARTIAL_LOCAL_ONLY_OFFSITE_PENDING",
+    "periodic_offsite_upload_proven": false
+  },
+  "manual_copy_receipt": {
+    "end_to_end_backup_status": "PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED",
+    "periodic_offsite_upload_proven": false,
+    "one_off_manual_copy_proves_periodic_upload": false
+  },
+  "automated_offsite_run": {
+    "end_to_end_backup_status": "PASS",
+    "periodic_offsite_upload_proven": true,
+    "archive_sha256": "d0a9e449cff3d6ba566914cc5a429fc06910d8fb2cd54b26ef98a97ab16f498f",
+    "archive_bytes": 304368,
+    "backup_key_absent_at_offsite_target": true,
+    "retention": {
+      "applied": true,
+      "kept_count": 1,
+      "deleted_bundles": [
+        "scheduled-20261109T094539Z-12972"
+      ]
+    }
+  },
+  "freshness_and_offsite_health_gate": {
+    "status": "PASS",
+    "age_hours": 0.0,
+    "end_to_end_backup_gate_g07_status": "PASS"
+  },
+  "failure_alert_verification": {
+    "simulated_failure_status": "FAIL",
+    "alert_code": "ALT-BACKUP-FAILURE",
+    "external_dispatch_status": "GATED_PENDING_OWNER_CONTACT_AND_CHANNEL"
+  }
+}

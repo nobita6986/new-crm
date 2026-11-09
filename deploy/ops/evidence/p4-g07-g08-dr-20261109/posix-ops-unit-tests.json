@@ -1,0 +1,13 @@
+{
+  "timestamp_utc": "2026-11-09T09:39:43Z",
+  "runner_os": "posix",
+  "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+  "python_version": "3.12.3",
+  "loopback_tcpserver_forced": true,
+  "suites": {
+    "test_offsite_restore.py": "PASS",
+    "test_ops_toolkit.py": "PASS",
+    "test_smoke_runner_safety.py": "PASS"
+  },
+  "status": "PASS"
+}

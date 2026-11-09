@@ -1,0 +1,465 @@
+{
+  "timestamp_utc": "2026-11-09T09:44:20Z",
+  "evidence_scope": "ISOLATED_STAGING_DR_HTTPS_FULL_REHEARSAL",
+  "owner_live_site_touched": false,
+  "run_id": "ci-42595078827",
+  "project_name": "crm-cskh-dr-https-ci-42595078827",
+  "site_name": "staging-dr-uat.crm-internal.localhost",
+  "http_port": 18081,
+  "https_port": 18443,
+  "app_image": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+  "status": "PASS",
+  "phases": {
+    "bootstrap_and_https_smoke": {
+      "status": "PASS",
+      "duration_seconds": 53.89,
+      "tls_provisioning": {
+        "cert_volume": "crm-cskh-dr-https-ci-42595078827_cert_data",
+        "ca_key_deleted_immediately": true,
+        "server_key_mode": "0o600"
+      },
+      "https_smoke": {
+        "timestamp_utc": "2026-11-09T09:45:12Z",
+        "mode": "dr-https",
+        "site_name": "staging-dr-uat.crm-internal.localhost",
+        "connect_host": "127.0.0.1",
+        "http_port": 18081,
+        "https_port": 18443,
+        "frappe_site_name": "staging-dr-uat.crm-internal.localhost",
+        "extra_compose_files": [],
+        "app_image": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+        "checks": {
+          "container_digest_parity": {
+            "expected_app_image": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+            "expected_sha256": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+            "missing_services": [],
+            "inspected_services": {
+              "backend": {
+                "container": "crm-cskh-dr-https-ci-42595078827-backend-1",
+                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "repo_digests": [],
+                "matched": true
+              },
+              "frontend": {
+                "container": "crm-cskh-dr-https-ci-42595078827-frontend-1",
+                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "repo_digests": [],
+                "matched": true
+              },
+              "websocket": {
+                "container": "crm-cskh-dr-https-ci-42595078827-websocket-1",
+                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "repo_digests": [],
+                "matched": true
+              },
+              "queue-short": {
+                "container": "crm-cskh-dr-https-ci-42595078827-queue-short-1",
+                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "repo_digests": [],
+                "matched": true
+              },
+              "queue-long": {
+                "container": "crm-cskh-dr-https-ci-42595078827-queue-long-1",
+                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "repo_digests": [],
+                "matched": true
+              },
+              "scheduler": {
+                "container": "crm-cskh-dr-https-ci-42595078827-scheduler-1",
+                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "repo_digests": [],
+                "matched": true
+              }
+            },
+            "mismatches": [],
+            "pass": true
+          },
+          "http_to_https_redirect": {
+            "status_code": 301,
+            "location": "https://staging-dr-uat.crm-internal.localhost:18443/<REDACTED_WEBHOOK_PATH>",
+            "location_starts_with_https": true,
+            "pass": true
+          },
+          "tls_certificate": {
+            "hostname": "staging-dr-uat.crm-internal.localhost",
+            "connect_host": "127.0.0.1",
+            "port": 18443,
+            "tls_version": "TLSv1.3",
+            "cipher": "TLS_AES_128_GCM_SHA256",
+            "not_after_utc": "2026-12-09T09:44:20Z",
+            "days_remaining": 29,
+            "expiry_ok": true
+          },
+          "login_and_sid_cookie": {
+            "http_status": 200,
+            "sid_attributes": {
+              "found": true,
+              "redacted_value": "<REDACTED_FRAPPE_SID>",
+              "secure": true,
+              "httponly": true,
+              "samesite": "Lax",
+              "path": "/",
+              "cookie_names_seen": [
+                "sid",
+                "system_user",
+                "full_name",
+                "user_id",
+                "user_image"
+              ]
+            },
+            "policy_errors": [],
+            "pass": true
+          },
+          "vi_ui_and_csrf": {
+            "dashboard_http_status": 200,
+            "contains_vi_heading": true,
+            "csrf_token_extracted": true,
+            "x_frappe_csrf_token": "<REDACTED_CSRF>",
+            "forged_csrf_http_status": 400,
+            "valid_csrf_http_status": 200,
+            "health_ping_ok": true,
+            "pass": true
+          },
+          "wss_websocket": {
+            "status_line": "HTTP/1.1 101 Switching Protocols",
+            "switched_protocols_101": true,
+            "sec_websocket_accept_valid": true,
+            "initial_frame_opcode": 1,
+            "engineio_open_packet_received": true,
+            "initial_frame_redacted": "0{\"sid\":\"<REDACTED_SOCKET_SID>\",\"upgrades\":[],\"pingInterval\":25000,\"pingTimeout\":20000,\"maxPayload\":1000000}",
+            "pass": true
+          }
+        },
+        "status": "PASS"
+      }
+    },
+    "uat_and_permissions_https": {
+      "status": "PASS",
+      "transport": "HTTPS_TLS_VERIFIED",
+      "hsts_header_present": true,
+      "https_sid_cookie_policy_ok": true,
+      "routes_15_vi_audit": {
+        "/cskh/dashboard": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/import": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/campaigns": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/pool": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/my-customers": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/work-item": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/callbacks": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/progress": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/settings": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/quality-overview": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/team-quality": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/employee-quality": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/campaign-quality": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/scorecard": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        },
+        "/cskh/sla-operations": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "pass": true
+        }
+      },
+      "role_scope_checks": {
+        "guest_unauthenticated_blocked_http": 403,
+        "bod_executive_overview_http": 200,
+        "bod_employee_quality_http": 200,
+        "bod_golden_employee_found": true,
+        "bod_drilldown_http": 200,
+        "bod_drilldown_raw_phone_leaks": 0,
+        "bod_recompute_write_blocked_http": 403,
+        "leader_a_own_team_http": 200,
+        "leader_a_other_team_blocked_http": 403,
+        "staff_a_own_customers_http": 200,
+        "staff_a_own_scorecard_http": 200,
+        "staff_a_pool_blocked_http": 403,
+        "staff_a_exec_overview_blocked_http": 403,
+        "outside_desk_user_blocked_http": 403,
+        "disabled_user_active_sid_before_http": 200,
+        "disabled_user_active_sid_after_disable_http": 403
+      }
+    },
+    "worker_restart_and_cron_retry": {
+      "status": "PASS",
+      "restart_recovery_seconds": 16.71,
+      "cron_retry_x2_counts": {
+        "after_run_1": {
+          "sla_obligations": 68,
+          "latest_published_kpi_snapshots": 350,
+          "total_append_only_kpi_snapshots": 795,
+          "dup_sla_keys": 0,
+          "dup_attempt_keys": 0
+        },
+        "after_run_2": {
+          "sla_obligations": 68,
+          "latest_published_kpi_snapshots": 350,
+          "total_append_only_kpi_snapshots": 921,
+          "dup_sla_keys": 0,
+          "dup_attempt_keys": 0
+        }
+      },
+      "idempotent_across_retry": true,
+      "post_restart_health_probe": {
+        "timestamp_utc": "2026-11-09T09:45:39Z",
+        "environment": "staging",
+        "site": "staging-dr-uat.crm-internal.localhost",
+        "extra_compose_files": [],
+        "status": "PASS",
+        "containers": {
+          "status": "PASS",
+          "missing_daemon_services": [],
+          "unhealthy_services": [],
+          "scheduler_running_instances": 1,
+          "scheduler_uptime_seconds": 8,
+          "restarts_or_oom": []
+        },
+        "disk": {
+          "total_bytes": 154894188544,
+          "used_bytes": 50422247424,
+          "free_bytes": 104455163904,
+          "used_percent": 32.55,
+          "warn_threshold_pct": 80.0,
+          "critical_threshold_pct": 90.0,
+          "level": "OK"
+        },
+        "queues_and_scheduler": {
+          "status": "PASS",
+          "scheduler_disabled": false,
+          "scheduler_uptime_seconds": 8,
+          "startup_grace_override_seconds": 0,
+          "queues": {
+            "default": {
+              "failed": 0,
+              "queued": 0
+            },
+            "long": {
+              "failed": 0,
+              "queued": 0
+            },
+            "short": {
+              "failed": 0,
+              "queued": 0
+            }
+          },
+          "unregistered_cron_jobs": [],
+          "failed_latest_cron_jobs": [],
+          "never_completed_cron_jobs": [],
+          "stale_cron_jobs": [],
+          "in_startup_grace_cron_jobs": [],
+          "cron_last_complete_lag_seconds": {
+            "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations": 0,
+            "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes": 0,
+            "crm_cskh.jobs.run_export.expire_stale_exports": 0,
+            "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods": 0
+          },
+          "cron_job_details": {
+            "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations": {
+              "last_complete_lag_seconds": 0,
+              "latest_any_status": "Complete",
+              "latest_terminal_lag_seconds": 0,
+              "latest_terminal_status": "Complete",
+              "registered": true,
+              "scheduled_job_type": "evaluate_sla.evaluate_sla_obligations"
+            },
+            "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes": {
+              "last_complete_lag_seconds": 0,
+              "latest_any_status": "Complete",
+              "latest_terminal_lag_seconds": 0,
+              "latest_terminal_status": "Complete",
+              "registered": true,
+              "scheduled_job_type": "recompute_kpi.drain_dirty_kpi_scopes"
+            },
+            "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods": {
+              "last_complete_lag_seconds": 0,
+              "latest_any_status": "Complete",
+              "latest_terminal_lag_seconds": 0,
+              "latest_terminal_status": "Complete",
+              "registered": true,
+              "scheduled_job_type": "recompute_kpi.refresh_current_standard_periods"
+            },
+            "crm_cskh.jobs.run_export.expire_stale_exports": {
+              "last_complete_lag_seconds": 0,
+              "latest_any_status": "Complete",
+              "latest_terminal_lag_seconds": 0,
+              "latest_terminal_status": "Complete",
+              "registered": true,
+              "scheduled_job_type": "run_export.expire_stale_exports"
+            }
+          },
+          "error_log_last_15m": 0
+        },
+        "business_invariants": {
+          "status": "PASS",
+          "failed_invariants": [],
+          "details": {
+            "INV-01_single_active_owner_and_sync": {
+              "duplicate_active_leads": 0,
+              "owner_mismatch_active_work_items": 0,
+              "active_claim_count_mismatch": 0
+            },
+            "INV-02_attempt_idempotency_and_verification": {
+              "duplicate_attempt_idempotency_keys": 0,
+              "unverified_marked_verified": 0
+            },
+            "INV-03_followup_callback_task_integrity": {
+              "orphan_or_misassigned_open_followup_tasks": 0
+            },
+            "INV-04_sla_engine_integrity": {
+              "duplicate_sla_idempotency_keys": 0,
+              "stale_unevaluated_overdue_sla": 0
+            },
+            "INV-05_kpi_snapshot_and_dirty_scope_integrity": {
+              "stuck_dirty_scopes_over_30m": 0,
+              "false_zero_qa_snapshots": 0
+            },
+            "INV-06_export_ttl_enforcement": {
+              "unexpired_completed_exports_past_2h_grace": 0
+            }
+          },
+          "effective_p3_flags": {
+            "p3_sla_enabled": true,
+            "p3_reporting_enabled": true
+          },
+          "qa_snapshot_audit": {
+            "false_zero_qa_snapshots": 0,
+            "qa_zero_denom_null_snapshots": 921,
+            "total_snapshots": 921
+          }
+        },
+        "backup_freshness_and_offsite": null,
+        "data_loss_window_delta": null,
+        "alert_preflight": {
+          "timestamp_utc": "2026-11-09T09:45:38Z",
+          "status": "BLOCKED",
+          "operator_contact_configured": false,
+          "webhook_https_configured": false,
+          "blockers": [
+            {
+              "id": "BLK-GOV-06",
+              "field": "CSKH_OPERATOR_CONTACT",
+              "reason": "Named Day-2 Operator / on-call recipient has not been assigned and signed off by Owner."
+            },
+            {
+              "id": "BLK-INFRA-07",
+              "field": "CSKH_ALERT_WEBHOOK_URL",
+              "reason": "Approved HTTPS alert delivery endpoint (Webhook / ChatOps / Pager) has not been provisioned."
+            }
+          ]
+        },
+        "triggered_alerts": []
+      }
+    },
+    "rollback_tiers_https": {
+      "status": "PASS",
+      "tier1_p3_kill_switch_https": {
+        "p3_disabled_overview_http": 503,
+        "p3_disabled_p1_my_list_http": 200,
+        "p3_reenabled_overview_http": 200,
+        "pass": true
+      },
+      "tier2_digest_verification": {
+        "matching_digest_status": "PASS",
+        "inspected_services_count": 6,
+        "wrong_digest_rejected_exit_code": 2,
+        "pass": true
+      },
+      "tier4_db_and_files_point_in_time_restore": {
+        "pre_restore_delta_since_backup": {
+          "new_assignment_events": 0,
+          "new_contact_attempts": 0,
+          "new_import_batches": 0,
+          "new_leads": 1,
+          "new_or_updated_followup_tasks": 0,
+          "new_or_updated_work_items": 0,
+          "new_published_kpi_runs": 0,
+          "new_sla_breaches": 0,
+          "since_utc": "2026-11-09T09:45:44Z"
+        },
+        "post_restore_delta_since_backup": {
+          "new_assignment_events": 0,
+          "new_contact_attempts": 0,
+          "new_import_batches": 0,
+          "new_leads": 0,
+          "new_or_updated_followup_tasks": 0,
+          "new_or_updated_work_items": 0,
+          "new_published_kpi_runs": 14,
+          "new_sla_breaches": 0,
+          "since_utc": "2026-11-09T09:45:44Z"
+        },
+        "end_to_end_restore_and_migrate_seconds": 33.79,
+        "post_restore_health_status": "PASS",
+        "post_restore_https_smoke_status": "PASS",
+        "pass": true
+      }
+    }
+  },
+  "cleanup_verification": {
+    "stack_started": true,
+    "teardown_exit_code": 0,
+    "tmpdir_removed": true,
+    "leftover_project_resources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    },
+    "extra_host_containers": [],
+    "extra_host_volumes": [],
+    "extra_host_networks": [],
+    "pass": true
+  }
+}
