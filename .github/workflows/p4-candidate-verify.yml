@@ -265,6 +265,19 @@ jobs:
             --expected-image "${APP_IMAGE_DIGEST}" \
             --expected-scope "${SIGNED_SCOPE}"
 
+          mkdir -p "$BUNDLE/locks" "$BUNDLE/registry"
+          cp deploy/images/release-lock.json "$BUNDLE/locks/release-lock.json"
+          cp deploy/images/resources/python-constraints.txt "$BUNDLE/locks/python-constraints.txt"
+          cp deploy/images/resources/system-python-constraints.txt "$BUNDLE/locks/system-python-constraints.txt"
+          cp deploy/release/cve-exceptions.json "$BUNDLE/locks/cve-exceptions.json"
+          cp deploy/release/t0-critical-cve-dossier.md "$BUNDLE/locks/t0-critical-cve-dossier.md"
+
+          "$PY" deploy/release/audit_registry_and_signing_config.py \
+            --out "$BUNDLE/registry/registry-and-signing-audit.json" >/dev/null
+
+          docker buildx imagetools inspect --raw "${APP_IMAGE_DIGEST}" \
+            > "$BUNDLE/manifest/oci-distribution-manifest.json"
+
           python3 - "$BUNDLE" "${ACTUAL_HEAD_SHA}" "${APP_IMAGE_DIGEST}" "${LOCAL_IMAGE_ID}" "${STRICT_STATUS}" "${SIGNED_SCOPE}" "${SIGNED_MANIFEST_REL}" <<'PY'
           import hashlib
           import json
@@ -277,34 +290,78 @@ jobs:
           head_sha, reg_digest, local_id, strict_st, scope, manifest_rel = sys.argv[2:8]
           apps_tree = subprocess.check_output(["git", "rev-parse", "HEAD:apps"], text=True).strip()
           cskh_tree = subprocess.check_output(["git", "rev-parse", "HEAD:apps/crm_cskh"], text=True).strip()
+          raw_dist_manifest = json.loads(
+              (bundle / "manifest" / "oci-distribution-manifest.json").read_text(encoding="utf-8")
+          )
+          dist_media_type = str(raw_dist_manifest.get("mediaType") or "")
+          oci_config_digest = str((raw_dist_manifest.get("config") or {}).get("digest") or "")
+          if not oci_config_digest and isinstance(raw_dist_manifest.get("manifests"), list):
+              repo_prefix = reg_digest.split("@", 1)[0]
+              for sub in raw_dist_manifest["manifests"]:
+                  plat = sub.get("platform") or {}
+                  if plat.get("os") == "linux" and plat.get("architecture") == "amd64":
+                      sub_raw = json.loads(
+                          subprocess.check_output(
+                              ["docker", "buildx", "imagetools", "inspect", "--raw", f"{repo_prefix}@{sub['digest']}"],
+                              text=True,
+                          )
+                      )
+                      oci_config_digest = str((sub_raw.get("config") or {}).get("digest") or "")
+                      break
+          assert oci_config_digest.startswith("sha256:"), f"Missing oci_config_digest: {raw_dist_manifest}"
 
           provenance = {
-              "schema_version": "cskh-p4-ghcr-candidate-provenance-v1",
+              "schema_version": "cskh-p4-ghcr-candidate-provenance-v2",
               "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
               "git_commit_sha": head_sha,
               "apps_tree_sha": apps_tree,
               "crm_cskh_tree_sha": cskh_tree,
               "strict_security_gate_status": strict_st,
+              "production_candidate_promotion_status": (
+                  "READY_FOR_PRODUCTION_PROMOTION" if strict_st == "PASS" else "BLOCKED_PENDING_UPSTREAM_FIX_OR_OWNER_EXCEPTION"
+              ),
               "signed_manifest_scope": scope,
               "signed_manifest_relpath": manifest_rel,
               "signing_key_provenance": (
                   "ephemeral_ci_ed25519_keypair (private key destroyed immediately after signing; "
-                  "use p4-release.yml with protected RELEASE_SIGNING_PRIVATE_KEY for formal Go-Live cutover)"
+                  "use p4-release.yml with protected CSKH_RELEASE_SIGNING_PRIVATE_KEY for formal Go-Live cutover)"
               ),
               "identifier_taxonomy": {
                   "local_image_id": {
                       "value": local_id,
-                      "class": "oci_image_config_sha256",
-                      "description": "Docker local image ID (.Id = SHA-256 of OCI Image Config JSON; analogous in class to baseline CI db925419...)",
+                      "class": "docker_local_image_id",
+                      "description": (
+                          "Docker daemon local image ID (.Id from docker image inspect; equals config digest on "
+                          "classic graphdriver store or manifest/index digest on containerd image store; "
+                          "analogous in class to baseline CI db925419...)"
+                      ),
+                  },
+                  "oci_config_digest": {
+                      "value": oci_config_digest,
+                      "class": "oci_image_config_blob_sha256",
+                      "description": (
+                          "SHA-256 digest of the OCI Image Configuration JSON blob (manifest.config.digest in "
+                          "manifest/oci-distribution-manifest.json)"
+                      ),
                   },
                   "registry_manifest_digest": {
                       "value": reg_digest,
+                      "media_type": dist_media_type,
                       "class": "oci_distribution_manifest_sha256",
-                      "description": "Remote GHCR immutable manifest digest (RepoDigests @sha256; analogous in class to baseline CI 36613468...)",
+                      "canonical_promotion_unit": True,
+                      "description": (
+                          "Remote GHCR immutable distribution manifest digest (@sha256; analogous in class to "
+                          "baseline CI 36613468...). ONLY this digest is promoted across CI -> Staging -> Production."
+                      ),
                   },
                   "unrelated_live_image_reference": {
+                      "live_host": "crm.hrpartner.vn",
                       "baseline_live_prefix": "acb95057...",
-                      "rule": "Never cross-compare local_image_id, registry_manifest_digest, and live running image IDs to claim digest drift, and never extrapolate CI scan verdicts to acb95057...",
+                      "rule": (
+                          "Live keeping a prior version before authorized cutover is NOT deployment drift; "
+                          "never deploy candidates to crm.hrpartner.vn or mutate live just to match CI, and "
+                          "never cross-compare local_image_id, oci_config_digest, and registry_manifest_digest."
+                      ),
                   },
               },
           }

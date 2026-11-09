@@ -24,9 +24,11 @@ import argparse
 import json
 import os
 import secrets
+import shutil
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -251,6 +253,7 @@ def resolve_diff_impact_plan(
                 "inventory": meta["inventory_rel_path"],
                 "xml_bucket": bucket,
                 "expected_total": meta["expected_total"],
+                "modules": mods,
             }
         )
         target_list = junit_ui_modules if bucket == "junit-ui" else junit_modules
@@ -494,11 +497,22 @@ def execute_verification_plan(
             )
 
     gate_outputs: list[str] = []
+    gated_xml_names: set[str] = set()
     for gate in plan["selected_inventory_gates"]:  # type: ignore[union-attr]
         inv_rel = str(gate["inventory"])
         bucket = str(gate["xml_bucket"])
         suite_id = str(gate["suite_id"])
-        xml_dir = junit_ui_dir if bucket == "junit-ui" else junit_dir
+        src_xml_dir = junit_ui_dir if bucket == "junit-ui" else junit_dir
+        inv_path = repo_root / inv_rel
+        inv_mods = list(gate.get("modules") or [])  # type: ignore[arg-type]
+        suite_xml_dir = out_dir / f"junit-{suite_id}"
+        suite_xml_dir.mkdir(parents=True, exist_ok=True)
+        for mod in inv_mods:
+            xml_name = f"{str(mod).rsplit('.', 1)[-1]}.junit.xml"
+            src_xml = src_xml_dir / xml_name
+            if src_xml.is_file():
+                shutil.copy2(src_xml, suite_xml_dir / xml_name)
+                gated_xml_names.add(xml_name)
         gate_name = (
             "p3-ui-gate.json"
             if suite_id == "p3_ui"
@@ -510,14 +524,42 @@ def execute_verification_plan(
                 sys.executable,
                 str(repo_root / "deploy" / "dev" / "seed" / "ci_junit_gate.py"),
                 "--inventory",
-                str(repo_root / inv_rel),
+                str(inv_path),
                 "--xml-dir",
-                str(xml_dir),
+                str(suite_xml_dir),
                 "--out",
                 str(gate_out),
             ]
         )
         gate_outputs.append(str(gate_out))
+
+    # Also verify auxiliary JUnit XML reports outside phase inventories have >0 tests and 0 failures/errors
+    auxiliary_checks: dict[str, dict[str, int]] = {}
+    for mod in plan["junit_modules"]:  # type: ignore[union-attr]
+        xml_name = f"{str(mod).rsplit('.', 1)[-1]}.junit.xml"
+        if xml_name in gated_xml_names:
+            continue
+        aux_xml = junit_dir / xml_name
+        if not aux_xml.is_file():
+            raise FileNotFoundError(f"Missing auxiliary JUnit report: {aux_xml}")
+        root_el = ET.parse(aux_xml).getroot()
+        suites_els = (
+            [root_el]
+            if root_el.tag == "testsuite"
+            else list(root_el.findall(".//testsuite"))
+        )
+        tests_cnt = sum(int(el.attrib.get("tests", 0)) for el in suites_els)
+        fail_cnt = sum(int(el.attrib.get("failures", 0)) for el in suites_els)
+        err_cnt = sum(int(el.attrib.get("errors", 0)) for el in suites_els)
+        if tests_cnt <= 0 or fail_cnt > 0 or err_cnt > 0:
+            raise RuntimeError(
+                f"Auxiliary JUnit suite {xml_name} failed: tests={tests_cnt}, failures={fail_cnt}, errors={err_cnt}"
+            )
+        auxiliary_checks[xml_name] = {
+            "tests": tests_cnt,
+            "failures": fail_cnt,
+            "errors": err_cnt,
+        }
 
     summary = {
         "schema_version": "cskh-p4-diff-impact-execution-v1",
@@ -527,6 +569,7 @@ def execute_verification_plan(
         "clean_site_executed": not skip_clean_site,
         "plan": plan,
         "junit_gate_reports": gate_outputs,
+        "auxiliary_junit_checks": auxiliary_checks,
     }
     (out_dir / "diff-impact-verification-summary.json").write_bytes(
         (json.dumps(summary, indent=2) + "\n").encode("utf-8")
