@@ -22,6 +22,7 @@ import pathlib
 import subprocess
 import sys
 import time
+import traceback
 
 THIS_DIR = pathlib.Path(__file__).resolve().parent
 if str(THIS_DIR.parent) not in sys.path:
@@ -109,7 +110,6 @@ att_b1 = wf_api.record_attempt(
     channel="phone_call",
     outcome_code="connected_interested",
     note="=CMD|' /C calc'!A0 Quan tâm vị trí tuyển dụng",
-    followup=1,
     followup_due_at=due_str,
     followup_title="Gọi lại B1",
     idempotency_key="g11-att-b1",
@@ -791,7 +791,7 @@ def run_live_verification(
             stack.base_url, stack.site_name, scrubber, "brute"
         )
         login_fail_codes: list[int] = []
-        for _ in range(4):
+        for _ in range(5):
             st_bf, _, _ = brute_actor.post_json(
                 "/api/method/login",
                 {"usr": "staff.c@dev.local", "pwd": "WrongPassword-BruteForce!"},
@@ -981,11 +981,25 @@ def main() -> int:
         )
         return 0
 
-    report = run_live_verification(
-        app_image=args.app_image,
-        http_port=args.http_port,
-        scrubber=scrubber,
-    )
+    try:
+        report = run_live_verification(
+            app_image=args.app_image,
+            http_port=args.http_port,
+            scrubber=scrubber,
+        )
+    except Exception as exc:
+        scrubber.log(f"FATAL: {exc}\n{traceback.format_exc()}")
+        scrubber.write_json_and_log(
+            {
+                "schema_version": "cskh-p4-batch2-g11-g12-v1",
+                "status": "FAIL",
+                "error": str(exc),
+                "traceback": traceback.format_exc(),
+            },
+            args.report_out,
+            args.log_out,
+        )
+        raise
     scrubber.write_json_and_log(report, args.report_out, args.log_out)
     return 0
 

@@ -25,6 +25,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 import uuid
 
 THIS_DIR = pathlib.Path(__file__).resolve().parent
@@ -380,7 +381,6 @@ att1 = wf_api.record_attempt(
     channel="phone_call",
     outcome_code="no_answer",
     note="Cuộc gọi thử trên bản N-1",
-    followup=1,
     followup_due_at=due_str,
     followup_title="Gọi lại ứng viên N-1",
     idempotency_key="b2-n1-att-1",
@@ -450,8 +450,11 @@ def take_pre_upgrade_backup(
     backup_utc = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
     body = r"""
 import glob, subprocess
+from frappe.utils import now_datetime
 site = _SITE
+pre_attempt_ids = list(frappe.get_all("CSKH Contact Attempt", pluck="name"))
 subprocess.check_call(["bench", "--site", site, "backup", "--with-files"], cwd="/home/frappe/frappe-bench")
+site_ts = str(now_datetime())
 bdir = f"/home/frappe/frappe-bench/sites/{site}/private/backups"
 db_gz = sorted(glob.glob(f"{bdir}/*-database.sql.gz"))[-1]
 priv_tar = sorted(glob.glob(f"{bdir}/*-private-files.tar"))[-1]
@@ -463,6 +466,8 @@ print(json.dumps({
     "priv_tar": priv_tar,
     "pub_tar": pub_tar,
     "site_config": cfg_json,
+    "backup_site_ts": site_ts,
+    "pre_attempt_ids": pre_attempt_ids,
 }))
 """
     paths = stack.exec_site_python(body)
@@ -480,6 +485,8 @@ print(json.dumps({
         copied[key] = str(dest)
     return {
         "backup_recorded_at_utc": backup_utc,
+        "backup_site_ts": str(paths["backup_site_ts"]),
+        "pre_attempt_ids": list(paths["pre_attempt_ids"]),
         "files_present": {k: pathlib.Path(v).stat().st_size for k, v in copied.items()},
         "host_paths": copied,
     }
@@ -593,7 +600,8 @@ def run_live_rehearsal(
         bod = stack.make_actor("bod", "bod.viewer@dev.local")
         admin = stack.make_actor("admin", "crm.admin@dev.local")
 
-        due_iso = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(days=1)).strftime(
+        ict = dt.timezone(dt.timedelta(hours=7))
+        due_iso = (dt.datetime.now(ict) + dt.timedelta(days=2)).strftime(
             "%Y-%m-%d 14:00:00"
         )
         st_att_n, _, body_att_n = staff_a.post_json(
@@ -741,14 +749,18 @@ def run_live_rehearsal(
 
         # Compute post-backup delta before Tier 4 restore accounting check
         delta_audit = stack.exec_site_python(
-            "rows = frappe.db.sql(\n"
+            "pre = set(_IN['pre_ids'])\n"
+            "rows = [r for r in frappe.db.sql(\n"
             "  'SELECT name, channel, outcome_code FROM `tabCSKH Contact Attempt` WHERE creation >= %s ORDER BY creation',\n"
-            "  (_IN['since_utc'],), as_dict=True\n"
-            ")\n"
+            "  (_IN['since_site_ts'],), as_dict=True\n"
+            ") if r['name'] not in pre]\n"
             "print(json.dumps({'post_backup_attempts_count': len(rows), 'attempt_ids': [r['name'] for r in rows]}))",
-            {"since_utc": backup_meta["backup_recorded_at_utc"]},
+            {
+                "since_site_ts": backup_meta["backup_site_ts"],
+                "pre_ids": backup_meta["pre_attempt_ids"],
+            },
         )
-        assert delta_audit["post_backup_attempts_count"] >= 2, delta_audit
+        assert delta_audit["post_backup_attempts_count"] == 2, delta_audit
 
         # Step 6: `D10–D12` Tier 4 Full DR Restore on isolated target site (`dr_stack`)
         scrubber.log(
@@ -866,9 +878,9 @@ print(json.dumps({"restored_site": site}))
                     "p3_overview_http_status": st_ov_t1,
                     "p1_my_customers_http_status": st_my_t1,
                     "p2_record_attempt_http_status": st_att_t1,
-                    "dirty_scope_reenable_reconcile_ok": reenabled["reconcile"][
-                        "reconciliation_ok"
-                    ],
+                    "dirty_scope_reenable_reconcile_ok": bool(
+                        reenabled["reconcile"]["ok"]
+                    ),
                 },
                 "tier3_image_rollback_n_to_n_minus_1": {
                     **tier3_check,
@@ -910,13 +922,27 @@ def main() -> int:
         )
         return 0
 
-    report = run_live_rehearsal(
-        n_minus_1_image=args.n_minus_1_image,
-        candidate_image=args.candidate_image,
-        http_port=args.http_port,
-        dr_http_port=args.dr_http_port,
-        scrubber=scrubber,
-    )
+    try:
+        report = run_live_rehearsal(
+            n_minus_1_image=args.n_minus_1_image,
+            candidate_image=args.candidate_image,
+            http_port=args.http_port,
+            dr_http_port=args.dr_http_port,
+            scrubber=scrubber,
+        )
+    except Exception as exc:
+        scrubber.log(f"FATAL: {exc}\n{traceback.format_exc()}")
+        scrubber.write_json_and_log(
+            {
+                "schema_version": "cskh-p4-batch2-g06-g09-v1",
+                "status": "FAIL",
+                "error": str(exc),
+                "traceback": traceback.format_exc(),
+            },
+            args.report_out,
+            args.log_out,
+        )
+        raise
     scrubber.write_json_and_log(report, args.report_out, args.log_out)
     return 0
 

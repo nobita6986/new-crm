@@ -31,6 +31,7 @@ import json
 import pathlib
 import sys
 import time
+import traceback
 
 THIS_DIR = pathlib.Path(__file__).resolve().parent
 if str(THIS_DIR.parent) not in sys.path:
@@ -188,13 +189,6 @@ for ptype, pkey in grains:
     assert rec.get("ok") is True, (ptype, pkey, rec)
     grain_reconciliations[f"{ptype}:{pkey}"] = True
 
-# Pick one open SLA obligation on Team A for live HTTP `pause` -> `resume` -> `waive` (`F22`)
-open_obl = frappe.db.get_value(
-    "CSKH SLA Obligation",
-    {"status": ["in", ["open", "due_soon", "breached_open"]]},
-    "name",
-)
-
 print(json.dumps({
     "fixture_sha256": fixture_sha,
     "golden_16_scopes_qa_off_and_on_exact": True,
@@ -204,7 +198,6 @@ print(json.dumps({
     "published_october_runs": pub_oct_runs,
     "five_grain_reconciliations": grain_reconciliations,
     "team_a_node": seeded.get("team_a_node") if isinstance(seeded, dict) else frappe.db.get_value("CRM Sales Hierarchy", {"user": "leader.a@t1cp3.local"}, "name"),
-    "sample_open_obligation": open_obl,
 }, default=str))
 """
 
@@ -266,25 +259,6 @@ def run_g15_golden_delta(stack: IsolatedComposeStack) -> dict[str, object]:
     )
     assert unwrap_message(body_qa)["qa_enabled"] is False
 
-    # `F22` Live HTTP SLA obligation `pause` -> `resume` -> `waive`
-    obl_id = res.get("sample_open_obligation")
-    sla_lifecycle_http: list[int] = []
-    if obl_id:
-        st_p, _, _ = admin.post_json(
-            "/api/method/crm_cskh.api.sla.pause_obligation",
-            {"obligation_id": obl_id, "reason": "Tạm dừng kiểm định F22"},
-        )
-        st_r, _, _ = admin.post_json(
-            "/api/method/crm_cskh.api.sla.resume_obligation",
-            {"obligation_id": obl_id, "reason": "Tiếp tục kiểm định F22"},
-        )
-        st_w, _, _ = admin.post_json(
-            "/api/method/crm_cskh.api.sla.waive_obligation",
-            {"obligation_id": obl_id, "reason": "Miễn trừ có lý do kiểm định F22"},
-        )
-        sla_lifecycle_http = [st_p, st_r, st_w]
-        assert sla_lifecycle_http == [200, 200, 200], sla_lifecycle_http
-
     # `F27` Live async export via `queue-long` -> `get_export_status` -> `download_export`
     st_exp, _, body_exp = admin.post_json(
         "/api/method/crm_cskh.api.p3_reporting.request_export",
@@ -332,7 +306,6 @@ def run_g15_golden_delta(stack: IsolatedComposeStack) -> dict[str, object]:
             "my_scorecard": st_sc,
             "metric_drilldown": st_dd,
             "qa_config": st_qa,
-            "sla_pause_resume_waive": sla_lifecycle_http,
             "async_export_download": st_dl,
         },
     }
@@ -655,7 +628,7 @@ print(json.dumps({"cumulative_3x10": totals, "reconciled": rec_ok}, default=str)
 def run_g14_p2_delta(stack: IsolatedComposeStack) -> dict[str, object]:
     fixtures = stack.exec_site_python(
         r"""
-from frappe.utils import add_to_date, now_datetime
+from frappe.utils import add_days, add_to_date, now_datetime
 from crm_cskh.api import campaigns as camp_api, ownership as own_api
 
 frappe.set_user("crm.admin@dev.local")
@@ -663,7 +636,7 @@ camp_p2 = camp_api.save(code="CAMP-G14-P2", title="Chiến dịch kiểm định
 
 frappe.set_user("Administrator")
 wis = []
-for idx in range(1, 5):
+for idx in range(1, 6):
     ph = f"090860010{idx}"
     ld = frappe.get_doc({"doctype": "CRM Lead", "first_name": f"Ứng viên P2 {idx}", "lead_name": f"Ứng viên P2 {idx}", "mobile_no": ph, "status": "New"}).insert(ignore_permissions=True)
     if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": ph}):
@@ -717,7 +690,16 @@ if frappe.db.exists("DocType", "FCRM Note"):
         "reference_docname": wis[0]["lead"],
     }).insert(ignore_permissions=True)
 
-print(json.dumps({"camp_p2": camp_p2, "wis": wis, "cl_manual": cl_manual, "cl_pbx": cl_pbx}))
+now_local = now_datetime()
+print(json.dumps({
+    "camp_p2": camp_p2,
+    "wis": wis,
+    "cl_manual": cl_manual,
+    "cl_pbx": cl_pbx,
+    "due_1": add_days(now_local, 1).strftime("%Y-%m-%d 10:00:00"),
+    "due_2": add_days(now_local, 2).strftime("%Y-%m-%d 10:00:00"),
+    "due_3": add_days(now_local, 3).strftime("%Y-%m-%d 10:00:00"),
+}))
 """
     )
 
@@ -730,13 +712,11 @@ print(json.dumps({"camp_p2": camp_p2, "wis": wis, "cl_manual": cl_manual, "cl_pb
     wi2 = fixtures["wis"][1]["wi"]
     wi3 = fixtures["wis"][2]["wi"]
     wi4 = fixtures["wis"][3]["wi"]
+    wi5 = fixtures["wis"][4]["wi"]
     lead3 = fixtures["wis"][2]["lead"]
-    due_1 = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=4)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
-    due_2 = (dt.datetime.now(dt.timezone.utc) + dt.timedelta(hours=8)).strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+    due_1 = str(fixtures["due_1"])
+    due_2 = str(fixtures["due_2"])
+    due_3 = str(fixtures["due_3"])
 
     # `F13`: `callback_requested` without `followup_due_at` -> `422` (`FOLLOWUP_REQUIRED`)
     st_f13_missing_due, _, _ = staff_a.post_json(
@@ -883,7 +863,7 @@ from crm_cskh.jobs.evaluate_sla import evaluate_sla_obligations
 obl_before = frappe.db.get_value(
     "CSKH SLA Obligation",
     {"work_item": _IN["wi"], "obligation_type": "FOLLOWUP"},
-    ["name", "original_due_at", "effective_due_at", "reschedule_count"],
+    ["name", "original_due_at", "effective_due_at", "reschedule_seq"],
     as_dict=True,
 )
 evaluate_sla_obligations(as_of="2026-12-31 23:59:59", batch_size=200)
@@ -1035,6 +1015,55 @@ print(json.dumps({
     )
     assert st_close_no_att in (409, 422), st_close_no_att
 
+    # `F22` Live HTTP SLA obligation lifecycle (`pause_obligation` -> `resume_obligation` -> `waive_obligation`) on `wi5`
+    st_fu5, _, body_fu5 = staff_a.post_json(
+        "/api/method/crm_cskh.api.workflow.schedule_followup",
+        {
+            "work_item": wi5,
+            "due_at": due_3,
+            "title": "Hẹn gọi lại kiểm định F22 SLA",
+            "note": "Tạo nghĩa vụ FOLLOWUP tương lai để kiểm chứng pause/resume/waive",
+            "idempotency_key": "g14-f22-fu-wi5",
+        },
+    )
+    assert st_fu5 == 200, body_fu5
+    wi5_obl = stack.exec_site_python(
+        "row = frappe.db.get_value('CSKH SLA Obligation', {'work_item': _IN['wi'], 'obligation_type': 'FOLLOWUP', 'status': 'open'}, ['name', 'original_due_at'], as_dict=True)\n"
+        "print(json.dumps(row, default=str))",
+        {"wi": wi5},
+    )
+    assert wi5_obl and wi5_obl.get("name"), wi5_obl
+    obl5_id = str(wi5_obl["name"])
+    st_p_no, _, _ = admin.post_json(
+        "/api/method/crm_cskh.api.sla.pause_obligation",
+        {"obligation_id": obl5_id},
+    )
+    st_p_ok, _, body_p_ok = admin.post_json(
+        "/api/method/crm_cskh.api.sla.pause_obligation",
+        {"obligation_id": obl5_id, "reason": "Tạm dừng kiểm định F22"},
+    )
+    st_r_ok, _, body_r_ok = admin.post_json(
+        "/api/method/crm_cskh.api.sla.resume_obligation",
+        {"obligation_id": obl5_id, "reason": "Tiếp tục kiểm định F22"},
+    )
+    st_w_no, _, _ = admin.post_json(
+        "/api/method/crm_cskh.api.sla.waive_obligation",
+        {"obligation_id": obl5_id},
+    )
+    st_w_ok, _, body_w_ok = admin.post_json(
+        "/api/method/crm_cskh.api.sla.waive_obligation",
+        {"obligation_id": obl5_id, "reason": "Miễn trừ có lý do kiểm định F22"},
+    )
+    f22_sla_http = [st_p_no, st_p_ok, st_r_ok, st_w_no, st_w_ok]
+    assert f22_sla_http == [422, 200, 200, 422, 200], f22_sla_http
+    assert unwrap_message(body_p_ok)["is_paused"] is True
+    assert unwrap_message(body_r_ok)["is_paused"] is False
+    assert (
+        unwrap_message(body_r_ok)["original_due_at"]
+        == unwrap_message(body_p_ok)["original_due_at"]
+    )
+    assert unwrap_message(body_w_ok)["status"] == "waived"
+
     return {
         "f13_missing_followup_http": st_f13_missing_due,
         "f13_manual_vs_pbx_verification": {
@@ -1064,6 +1093,7 @@ print(json.dumps({
         ],
         "f18_dnc_enforcement_http": [st_dnc, st_dnc_att],
         "f19_f20_void_restore_and_snapshot_immutability": True,
+        "f22_sla_pause_resume_waive_http": f22_sla_http,
     }
 
 
@@ -1235,7 +1265,8 @@ def run_g17_worker_kill_and_recovery(stack: IsolatedComposeStack) -> dict[str, o
     # -------------------------------------------------------------------------
     # 4C. `D06`: `SIGKILL` (`docker kill -s KILL`) on `queue-short` mid-KPI recompute + Redis lock `409` + atomic swap
     # -------------------------------------------------------------------------
-    now_dt = dt.datetime.now(dt.timezone.utc)
+    ict = dt.timezone(dt.timedelta(hours=7))
+    now_dt = dt.datetime.now(ict)
     month_key = f"{now_dt.year:04d}-{now_dt.month:02d}"
     r1_info = stack.exec_site_python(
         "from crm_cskh.jobs.recompute_kpi import run_single_period_recompute\n"
@@ -1356,7 +1387,7 @@ dup_claims = frappe.db.sql(
     "SELECT COUNT(*) FROM (SELECT work_item FROM `tabCSKH Active Claim` GROUP BY work_item HAVING COUNT(*)>1) t"
 )[0][0]
 dup_sla_keys = frappe.db.sql(
-    "SELECT COUNT(*) FROM (SELECT dedup_key FROM `tabCSKH SLA Obligation` WHERE dedup_key IS NOT NULL AND dedup_key != '' GROUP BY dedup_key HAVING COUNT(*)>1) t"
+    "SELECT COUNT(*) FROM (SELECT idempotency_key FROM `tabCSKH SLA Obligation` WHERE idempotency_key IS NOT NULL AND idempotency_key != '' GROUP BY idempotency_key HAVING COUNT(*)>1) t"
 )[0][0]
 mismatch_claims = frappe.db.sql(
     '''
@@ -1371,14 +1402,14 @@ print(json.dumps({
     "sla_obligations_before_after_restart_eval": [int(obl_before), int(obl_after)],
     "duplicate_normalized_phones": int(dup_phones),
     "duplicate_active_claims": int(dup_claims),
-    "duplicate_sla_dedup_keys": int(dup_sla_keys),
+    "duplicate_sla_idempotency_keys": int(dup_sla_keys),
     "mismatched_active_claims": int(mismatch_claims),
 }))
 """
     )
     assert d12_invariants["duplicate_normalized_phones"] == 0, d12_invariants
     assert d12_invariants["duplicate_active_claims"] == 0, d12_invariants
-    assert d12_invariants["duplicate_sla_dedup_keys"] == 0, d12_invariants
+    assert d12_invariants["duplicate_sla_idempotency_keys"] == 0, d12_invariants
     assert d12_invariants["mismatched_active_claims"] == 0, d12_invariants
 
     return {
@@ -1473,11 +1504,25 @@ def main() -> int:
         )
         return 0
 
-    report = run_all_deltas(
-        app_image=args.app_image,
-        http_port=args.http_port,
-        scrubber=scrubber,
-    )
+    try:
+        report = run_all_deltas(
+            app_image=args.app_image,
+            http_port=args.http_port,
+            scrubber=scrubber,
+        )
+    except Exception as exc:
+        scrubber.log(f"FATAL: {exc}\n{traceback.format_exc()}")
+        scrubber.write_json_and_log(
+            {
+                "schema_version": "cskh-p4-batch2-g13-g14-g15-g17-v1",
+                "status": "FAIL",
+                "error": str(exc),
+                "traceback": traceback.format_exc(),
+            },
+            args.report_out,
+            args.log_out,
+        )
+        raise
     scrubber.write_json_and_log(report, args.report_out, args.log_out)
     return 0
 
