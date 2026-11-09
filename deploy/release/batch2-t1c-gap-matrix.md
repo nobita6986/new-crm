@@ -4,8 +4,8 @@
   - Nhánh Đợt 1: `codex/p4-t1b-release-hardening` — Commit SHA: `427af4834eda48a15ca86c15e88342c3c40d5f2f`
   - `apps` tree SHA: `14b5387296dad815a6b9f663411f265fa7d9f910` (`crm_cskh` tree SHA: `f51095ec245e103ed3a487654b5580636424ea36`)
   - Registry Manifest Digest đã kiểm định: `ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d`
-  - Local Image ID (daemon CI): `sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d`
-  - OCI Config Digest: `sha256:7d35bc0b2b8a3ac04b7c0932ca894db72053486f5e6e85378bf1b437645e5347`
+  - Local Image ID (daemon CI): `sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829`
+  - OCI Config Digest: `sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829`
 - **Phạm vi an toàn:**
   - Không sửa `apps/**`, `deploy/compose/**`, `deploy/ops/**`, `deploy/images/**`.
   - Không hạ ngưỡng security, không nới assertion, không tự duyệt ngoại lệ CVE Critical, không tác động `crm.hrpartner.vn` (`acb95057…`).

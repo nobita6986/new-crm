@@ -27,7 +27,7 @@ services:
       - traefik.http.middlewares.cskh-login-rl.ratelimit.period=${CSKH_LOGIN_RL_PERIOD:-1m}
       - traefik.http.middlewares.cskh-login-rl.ratelimit.burst=${CSKH_LOGIN_RL_BURST:-5}
       - traefik.http.routers.frontend-login.entrypoints=web
-      - traefik.http.routers.frontend-login.rule=${SITES_RULE} && Path(`/api/method/login`)
+      - traefik.http.routers.frontend-login.rule=(${SITES_RULE}) && Path(`/api/method/login`)
       - traefik.http.routers.frontend-login.priority=300
       - traefik.http.routers.frontend-login.middlewares=cskh-login-rl
       - traefik.http.routers.frontend-login.service=frontend
@@ -37,7 +37,7 @@ services:
       - traefik.http.middlewares.cskh-heavy-rl.ratelimit.burst=${CSKH_HEAVY_RL_BURST:-6}
       - traefik.http.middlewares.cskh-heavy-rl.ratelimit.sourcecriterion.requestheadername=Cookie
       - traefik.http.routers.frontend-heavy.entrypoints=web
-      - traefik.http.routers.frontend-heavy.rule=${SITES_RULE} && (Path(`/api/method/crm_cskh.api.import_files.upload_import_file`) || Path(`/api/method/crm_cskh.api.p3_reporting.request_export`) || Path(`/api/method/crm_cskh.api.p3_reporting.request_recompute`) || Path(`/api/method/crm_cskh.api.customers.customer_pool`) || Path(`/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown`))
+      - traefik.http.routers.frontend-heavy.rule=(${SITES_RULE}) && (Path(`/api/method/crm_cskh.api.import_files.upload_import_file`) || Path(`/api/method/crm_cskh.api.p3_reporting.request_export`) || Path(`/api/method/crm_cskh.api.p3_reporting.request_recompute`) || Path(`/api/method/crm_cskh.api.customers.customer_pool`) || Path(`/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown`))
       - traefik.http.routers.frontend-heavy.priority=200
       - traefik.http.routers.frontend-heavy.middlewares=cskh-heavy-rl
       - traefik.http.routers.frontend-heavy.service=frontend
