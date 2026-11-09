@@ -1,6 +1,6 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
-  "generated_at_utc": "2026-11-09T14:17:03Z",
+  "generated_at_utc": "2026-11-09T14:31:08Z",
   "branch": "codex/p4-resume-ops",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
   "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
@@ -418,8 +418,8 @@
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
-      "bytes": 93762,
-      "sha256": "71225b9bd965f70e09c54eb49ede0603d2c94c3262f2816bfdf5492eb2017d52"
+      "bytes": 94891,
+      "sha256": "7fedb0b866eba9c26fc40a55159401cde796d2d27c3e3ce37686610817cacdae"
     },
     {
       "path": "deploy/ops/run_local_ops_rehearsal.py",

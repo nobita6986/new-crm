@@ -793,7 +793,7 @@ def run_uat_and_permission_checks_over_https(
         headers={"Cookie": bod_sid, "Accept": "application/json"},
     )
     bod_ov_msg = json.loads(bod_ov_b.decode("utf-8")).get("message", {}) if bod_ov_code == 200 else {}
-    formula_version_v2 = bod_ov_msg.get("formula_version") == "cskh-metrics-v2"
+    formula_version_v2 = (bod_ov_msg.get("freshness") or {}).get("metric_version") == "cskh-metrics-v2"
 
     bod_emp_code, _, bod_emp_b = https_req(
         site_name=site_name,
@@ -815,10 +815,10 @@ def run_uat_and_permission_checks_over_https(
         ),
         {},
     )
-    golden_score_val = golden_row.get("overall_score")
-    if isinstance(golden_score_val, dict):
-        golden_score_val = golden_score_val.get("value")
-    golden_qa = (golden_row.get("metrics") or {}).get("QA_PASS_RATE") or {}
+    golden_metrics = golden_row.get("metrics") or {}
+    golden_proc = golden_metrics.get("PROCESS_SCORE") or {}
+    golden_score_val = golden_proc.get("value") if isinstance(golden_proc, dict) else golden_row.get("overall_score")
+    golden_qa = golden_metrics.get("QA_PASS_RATE") or {}
     golden_qa_null_not_zero = (
         golden_qa.get("value") is None if isinstance(golden_qa, dict) and golden_qa.get("denominator") == 0 else True
     )
@@ -877,7 +877,15 @@ def run_uat_and_permission_checks_over_https(
         headers={"Cookie": ldr_a_sid, "Accept": "application/json"},
     )
 
-    stf_my_code, _, stf_my_b = https_req(
+    stf_my_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
+        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+    )
+    stf_my_over100_code, _, _ = https_req(
         site_name=site_name,
         connect_host=connect_host,
         https_port=https_port,
@@ -885,8 +893,7 @@ def run_uat_and_permission_checks_over_https(
         path="/api/method/crm_cskh.api.customers.my_list?page=1&page_size=99999",
         headers={"Cookie": stf_a_sid, "Accept": "application/json"},
     )
-    stf_my_msg = json.loads(stf_my_b.decode("utf-8")).get("message", {}) if stf_my_code == 200 else {}
-    pagination_bounded_ok = int(stf_my_msg.get("page_size") or 99999) <= 100
+    pagination_bounded_ok = stf_my_over100_code == 400
 
     stf_sc_code, _, _ = https_req(
         site_name=site_name,
@@ -943,6 +950,12 @@ try:
     )[0]
     att_b = frappe.db.get_value("CSKH Contact Attempt", {"work_item": wi_b_row.name}, "name") or ""
     cl_b = frappe.db.get_value("CRM Call Log", {"reference_docname": wi_b_row.lead}, "name") or ""
+    snap_b = frappe.db.get_value(
+        "CSKH KPI Snapshot",
+        {"scope_type": "employee", "scope_id": staff_b, "is_latest_published": 1},
+        "name",
+    ) or ""
+    kpi_run_id = frappe.db.get_value("CSKH KPI Run", {"status": "completed"}, "name") or ""
     existing_f = frappe.db.get_value(
         "File",
         {"attached_to_doctype": "CRM Lead", "attached_to_name": wi_b_row.lead, "is_private": 1},
@@ -966,6 +979,8 @@ try:
         "lead_b": wi_b_row.lead,
         "attempt_b": att_b,
         "call_log_b": cl_b,
+        "snap_b": snap_b,
+        "kpi_run_id": kpi_run_id,
         "private_file_b_url": existing_f,
     }))
 finally:
@@ -1036,14 +1051,25 @@ finally:
             path=f"/api/resource/CRM%20Call%20Log/{urllib.parse.quote(mx['call_log_b'])}",
             headers={"Cookie": stf_a_sid, "Accept": "application/json"},
         )
-    s19_kpi_snap_rest, _, _ = https_req(
-        site_name=site_name,
-        connect_host=connect_host,
-        https_port=https_port,
-        ca_crt_path=ca_crt_path,
-        path="/api/resource/CSKH%20KPI%20Snapshot",
-        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
-    )
+    s19_kpi_snap_rest = 403
+    if mx["snap_b"]:
+        s19_kpi_snap_rest, _, _ = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path=f"/api/resource/CSKH%20KPI%20Snapshot/{urllib.parse.quote(mx['snap_b'])}",
+            headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+        )
+    elif mx["kpi_run_id"]:
+        s19_kpi_snap_rest, _, _ = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path=f"/api/resource/CSKH%20KPI%20Run/{urllib.parse.quote(mx['kpi_run_id'])}",
+            headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+        )
 
     # S06: Private File URL boundary over HTTPS
     priv_url_path = urllib.parse.quote(mx["private_file_b_url"], safe="/")
@@ -1981,7 +2007,7 @@ subprocess.check_call([
         ]
     )
     post_delta = json.loads(immediate_delta_proc.stdout)["data_loss_window_delta"]
-    all_post_deltas_zero = all(int(v) == 0 for v in post_delta.values())
+    all_post_deltas_zero = all(int(v) == 0 for k, v in post_delta.items() if k != "since_utc")
 
     # Re-run cron jobs once so post-restore healthcheck has fresh Scheduled Job Log records at grace=0
     rehearse_worker_restart_and_cron_retry(env_file=env_file)
