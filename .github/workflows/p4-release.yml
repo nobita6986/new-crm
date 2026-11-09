@@ -202,11 +202,11 @@ jobs:
             --output /scan-out/trivy-image.json \
             "${APP_IMAGE_DIGEST}"
 
-          # Extract PyJWT 2.14.0 METADATA directly from the immutable @sha256 image for exact-token audit (REL-01A)
+          # Extract PyJWT 2.15.1 METADATA directly from the immutable @sha256 image for exact-token audit (REL-01A)
           docker run --rm --network none \
             --entrypoint /home/frappe/frappe-bench/env/bin/python \
             "${APP_IMAGE_DIGEST}" \
-            -c "from pathlib import Path; matches = sorted(Path('/home/frappe/frappe-bench/env/lib/python3.11/site-packages').glob('[Pp]y[Jj][Ww][Tt]-2.14.0.dist-info/METADATA')); assert len(matches) == 1, matches; print(matches[0].read_text(encoding='utf-8'), end='')" \
+            -c "from pathlib import Path; matches = sorted(Path('/home/frappe/frappe-bench/env/lib/python3.11/site-packages').glob('[Pp]y[Jj][Ww][Tt]-2.15.1.dist-info/METADATA')); assert len(matches) == 1, matches; print(matches[0].read_text(encoding='utf-8'), end='')" \
             > "$BUNDLE/security/pyjwt-METADATA.txt"
 
           # Strict release gate: fails closed on ANY secret OR ANY unapproved CRITICAL CVE (fixable or unfixed OS)

@@ -380,9 +380,10 @@ def execute_verification_plan(
                 "set -euo pipefail; "
                 "cd /home/frappe/frappe-bench; "
                 "cmp -s /home/frappe/frappe-bench/apps-order.txt /home/frappe/frappe-bench/sites/apps.txt; "
-                "./env/bin/pip install --no-cache-dir "
+                "./env/bin/python -c 'import xmlrunner' || ./env/bin/pip install --no-cache-dir "
                 "-c /home/frappe/frappe-bench/release-metadata/python-constraints.txt "
                 "unittest-xml-reporting==3.2.0; "
+                "./env/bin/pip check; "
                 "bench new-site --no-mariadb-socket "
                 '--db-root-password "$DB_PW" --admin-password "$ADM_PW" '
                 "--mariadb-user-host-login-scope=% "

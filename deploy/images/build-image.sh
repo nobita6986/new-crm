@@ -289,6 +289,18 @@ summary = {
         "approved_registry_repo_digest": reg_digest or None,
         "blocker": reg_blocker or None,
     },
+    "identifier_taxonomy": {
+        "local_image_id_class": "oci_image_config_sha256",
+        "local_image_id": local_id,
+        "registry_manifest_digest_class": "oci_distribution_manifest_sha256",
+        "registry_manifest_digest": reg_digest or None,
+        "note": (
+            "local_image_id (OCI config JSON SHA-256) and registry_manifest_digest "
+            "(OCI distribution manifest JSON SHA-256) hash different OCI objects of the "
+            "same image and are never equal by specification; only compare same-class "
+            "identifiers across stages, and never compare against unrelated live images."
+        ),
+    },
     "compose_handoff": {
         "APP_IMAGE_for_remote_deploy": reg_digest if reg_digest else None,
         "APP_IMAGE_for_local_isolated_smoke": (

@@ -3,7 +3,7 @@ name: P4-02 isolated CI, SBOM, scan & digest promotion
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'codex/p4-t1b-*']
   pull_request:
     branches: [main, 'codex/p4-*']
 
@@ -54,11 +54,13 @@ jobs:
           "$RUFF" check \
             apps/crm_cskh \
             deploy/images/verify_clean_site.py \
+            deploy/images/resources/apply-frappe-vi-patch.py \
             deploy/compose/scripts \
             deploy/release
           "$RUFF" format --check \
             apps/crm_cskh \
             deploy/images/verify_clean_site.py \
+            deploy/images/resources/apply-frappe-vi-patch.py \
             deploy/release
           sh -n deploy/release/validate_digest_uri.sh
           bash -n \
@@ -476,11 +478,11 @@ jobs:
             --output /scan-out/trivy-image.json \
             "${APP_IMAGE_DIGEST}"
 
-          # Extract PyJWT 2.14.0 METADATA directly from the immutable @sha256 image for exact-token verification (REL-01A)
+          # Extract PyJWT 2.15.1 METADATA directly from the immutable @sha256 image for exact-token verification (REL-01A)
           docker run --rm --network none \
             --entrypoint /home/frappe/frappe-bench/env/bin/python \
             "${APP_IMAGE_DIGEST}" \
-            -c "from pathlib import Path; matches = sorted(Path('/home/frappe/frappe-bench/env/lib/python3.11/site-packages').glob('[Pp]y[Jj][Ww][Tt]-2.14.0.dist-info/METADATA')); assert len(matches) == 1, matches; print(matches[0].read_text(encoding='utf-8'), end='')" \
+            -c "from pathlib import Path; matches = sorted(Path('/home/frappe/frappe-bench/env/lib/python3.11/site-packages').glob('[Pp]y[Jj][Ww][Tt]-2.15.1.dist-info/METADATA')); assert len(matches) == 1, matches; print(matches[0].read_text(encoding='utf-8'), end='')" \
             > "$EVIDENCE_DIR/security/pyjwt-METADATA.txt"
 
           # 1. Execute STRICT release security gate and archive full strict verdict (REL-01B)
@@ -492,7 +494,7 @@ jobs:
             --out "$EVIDENCE_DIR/security/security-scan-strict.json"
           STRICT_RC=$?
           set -e
-          echo "Strict security gate exit code (expected != 0 while T0 OS CVE dossier decision is pending): ${STRICT_RC}"
+          echo "Strict security gate exit code: ${STRICT_RC}"
 
           # Verify strict report exists, has 0 real secrets, 0 fixable Critical CVEs, and 0 regressions on patched packages
           python3 - "$EVIDENCE_DIR/security/security-scan-strict.json" <<'PY'

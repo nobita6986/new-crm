@@ -78,7 +78,7 @@ DIFFERENT_JWT_TOKEN = (
     "eyJzdWIiOiI5OTk5OTk5OTk5Iiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzAwMDAwMDAwfQ."
     "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 )
-PYJWT_METADATA_TARGET = "/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.14.0.dist-info/METADATA"
+PYJWT_METADATA_TARGET = "/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.15.1.dist-info/METADATA"
 
 
 def _find_posix_sh() -> str:
@@ -94,10 +94,10 @@ def _find_posix_sh() -> str:
 
 
 def _build_pyjwt_metadata_text(
-    *, line76_token: str = VERIFIED_PYJWT_DOCTEST_TOKEN, extra_line90_token: str = ""
+    *, line77_token: str = VERIFIED_PYJWT_DOCTEST_TOKEN, extra_line90_token: str = ""
 ) -> str:
     lines = [f"Metadata-Line-{idx}: placeholder" for idx in range(1, 95)]
-    lines[75] = f"    '{line76_token}'"
+    lines[76] = f"    '{line77_token}'"
     if extra_line90_token:
         lines[89] = f"    '{extra_line90_token}'"
     return "\n".join(lines) + "\n"
@@ -110,6 +110,7 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
         for expected_wf in (
             "p0.yml",
             "p4-ci.yml",
+            "p4-candidate-verify.yml",
             "p4-release.yml",
             "p4-production.yml",
         ):
@@ -216,8 +217,11 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
         self.assertEqual(res["system_python_constraints_count"], 22)
 
         lock = json.loads(DEFAULT_LOCK_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(lock["security_patches"]["pyjwt_version"], "2.14.0")
+        self.assertEqual(lock["security_patches"]["pyjwt_version"], "2.15.1")
         self.assertEqual(lock["security_patches"]["pillow_version"], "13.0.0")
+        self.assertEqual(lock["base_image"]["tag"], "3.11.18-slim-trixie")
+        self.assertEqual(lock["apps"]["frappe"]["tag"], "v15.126.0")
+        self.assertEqual(lock["toolchain"]["frappe_bench_version"], "5.31.1")
 
         cfile = (REPO_ROOT / "deploy" / "images" / "Containerfile").read_text(
             encoding="utf-8"
@@ -230,6 +234,9 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
             "--no-build-isolation -c /tmp/cskh-build/python-constraints.txt -e ./apps/crm_cskh",
             "PyJWT==${PYJWT_PATCH_VERSION}",
             "pillow==${PILLOW_PATCH_VERSION}",
+            'test -z "$(git -C apps/frappe diff pyproject.toml)"',
+            "pip3 check",
+            "./env/bin/pip check",
         ):
             self.assertIn(marker, cfile)
 
@@ -415,8 +422,8 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
         self.assertEqual(raw["exceptions"], [])
         self.assertEqual(len(raw["secret_false_positives"]), 1)
         fp = raw["secret_false_positives"][0]
-        self.assertEqual(fp["exact_line"], 76)
-        self.assertIn("2.14.0", fp["target_suffix"])
+        self.assertEqual(fp["exact_line"], 77)
+        self.assertIn("2.15.1", fp["target_suffix"])
         self.assertEqual(fp["exact_sample"], VERIFIED_PYJWT_DOCTEST_TOKEN)
 
     def test_rel01_exact_pyjwt_sample_and_different_jwt_in_same_file_fails(
@@ -438,8 +445,8 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
                                 "Category": "JWT",
                                 "Severity": "MEDIUM",
                                 "Title": "JWT token",
-                                "StartLine": 76,
-                                "EndLine": 76,
+                                "StartLine": 77,
+                                "EndLine": 77,
                                 "Match": "    '***'",
                             }
                         ],
@@ -450,7 +457,7 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
                 json.dumps(trivy_single_redacted_hit), encoding="utf-8"
             )
 
-            # 1. Exact verified doctest JWT on line 76 -> PASS
+            # 1. Exact verified doctest JWT on line 77 -> PASS
             meta_file.write_text(_build_pyjwt_metadata_text(), encoding="utf-8")
             ok = evaluate_trivy_report(
                 trivy_file,
@@ -461,24 +468,24 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
             self.assertEqual(ok["secret_findings_count"], 0)
             self.assertEqual(ok["excepted_secret_false_positives_count"], 1)
 
-            # 2. A DIFFERENT JWT replacing line 76 in the EXACT SAME METADATA file MUST FAIL!
+            # 2. A DIFFERENT JWT replacing line 77 in the EXACT SAME METADATA file MUST FAIL!
             meta_file.write_text(
-                _build_pyjwt_metadata_text(line76_token=DIFFERENT_JWT_TOKEN),
+                _build_pyjwt_metadata_text(line77_token=DIFFERENT_JWT_TOKEN),
                 encoding="utf-8",
             )
-            diff_line76 = evaluate_trivy_report(
+            diff_line77 = evaluate_trivy_report(
                 trivy_file,
                 pyjwt_metadata_path=meta_file,
                 mode="advisory_upstream_critical",
             )
-            self.assertEqual(diff_line76["status"], "FAIL", diff_line76)
-            self.assertGreaterEqual(diff_line76["secret_findings_count"], 1)
-            self.assertEqual(diff_line76["excepted_secret_false_positives_count"], 0)
+            self.assertEqual(diff_line77["status"], "FAIL", diff_line77)
+            self.assertGreaterEqual(diff_line77["secret_findings_count"], 1)
+            self.assertEqual(diff_line77["excepted_secret_false_positives_count"], 0)
 
             # 3. Adding a second JWT on line 90 in the SAME METADATA file MUST FAIL!
             meta_file.write_text(
                 _build_pyjwt_metadata_text(
-                    line76_token=VERIFIED_PYJWT_DOCTEST_TOKEN,
+                    line77_token=VERIFIED_PYJWT_DOCTEST_TOKEN,
                     extra_line90_token=DIFFERENT_JWT_TOKEN,
                 ),
                 encoding="utf-8",
@@ -565,6 +572,14 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         build_manifest_obj = json.loads(
             (evidence_dir / "build-manifest.json").read_text(encoding="utf-8")
         )
+        build_manifest_obj["apps"]["frappe"]["tag"] = lock_obj["apps"]["frappe"]["tag"]
+        build_manifest_obj["apps"]["frappe"]["commit_sha"] = lock_obj["apps"]["frappe"][
+            "commit_sha"
+        ]
+        build_manifest_obj["apps"]["crm"]["tag"] = lock_obj["apps"]["crm"]["tag"]
+        build_manifest_obj["apps"]["crm"]["commit_sha"] = lock_obj["apps"]["crm"][
+            "commit_sha"
+        ]
         build_manifest_obj["apps"]["crm_cskh"]["baseline_main_sha"] = lock_obj[
             "baseline_main_sha"
         ]
@@ -941,6 +956,17 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         self.assertEqual(proof["status"], "PASS")
         self.assertTrue(proof["zero_digest_drift"])
+        self.assertEqual(proof["canonical_registry_digest"], SAMPLE_DIGEST)
+        self.assertEqual(proof["canonical_image_id"], SAMPLE_IMAGE_ID)
+        self.assertNotEqual(
+            proof["canonical_image_id"], proof["canonical_registry_digest"]
+        )
+        tax = proof["identifier_taxonomy"]
+        assert isinstance(tax, dict)
+        self.assertEqual(
+            tax["canonical_registry_digest_class"], "oci_distribution_manifest_sha256"
+        )
+        self.assertEqual(tax["canonical_image_id_class"], "oci_image_config_sha256")
 
 
 class TestDiffImpactAndIsolatedBenchmark(unittest.TestCase):
@@ -996,7 +1022,32 @@ class TestDiffImpactAndIsolatedBenchmark(unittest.TestCase):
                     confirm_isolated_target=True,
                 )
 
-        # Loopback isolated target -> accepted, SLA explicitly marked UNCOMMITTED
+        # Loopback isolated target -> accepted, S1 suggested dataset framed as non-committed
+        s1_spec = build_benchmark_specification(
+            profile_name="s1_suggested_mvp",
+            base_url="http://127.0.0.1:18080",
+            site_name="p4-bench.localhost",
+            compose_project="cskh-p4-bench-local",
+            confirm_isolated_target=True,
+        )
+        self.assertEqual(
+            s1_spec["sla_commitment_status"],
+            "UNCOMMITTED_PENDING_MEASURED_RUN_AND_OWNER_APPROVAL",
+        )
+        self.assertIn("NOT a commitment of 50,000", str(s1_spec["dataset_disclaimer"]))
+        s1_ds = s1_spec["published_dataset_and_load"]
+        assert isinstance(s1_ds, dict)
+        self.assertEqual(s1_ds["leads"], 50000)
+        self.assertEqual(s1_ds["work_items"], 75000)
+        self.assertEqual(s1_ds["contact_attempts"], 250000)
+        self.assertEqual(s1_ds["active_staff"], 40)
+        self.assertEqual(
+            s1_ds["dataset_framing"],
+            "SUGGESTED_S1_DATASET_NOT_MONTHLY_VOLUME_COMMITMENT",
+        )
+        self.assertFalse(s1_spec["isolation_guard"]["owner_vps_touched"])  # type: ignore[index]
+
+        # Legacy profile alias also supported cleanly
         spec = build_benchmark_specification(
             profile_name="isolated_p4_target_50k",
             base_url="http://127.0.0.1:18080",

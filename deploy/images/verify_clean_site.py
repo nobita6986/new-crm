@@ -4,8 +4,9 @@
 Boots an isolated frappe_docker-style stack (`deploy/images/compose.verify.yaml`)
 using `APP_IMAGE`, provisions a brand-new Frappe site on empty volumes, installs
 `crm` + `crm_cskh`, runs `migrate` twice, verifies all 3 apps via `list-apps`,
-checks upstream Git SHAs, security-patched Python packages (`PyJWT==2.14.0`,
-`pillow==13.0.0`), pruned runtime OS packages, CSRF/session authentication,
+checks upstream Git SHAs, security-patched Python packages (`PyJWT==2.15.1`,
+`pillow==13.0.0`) with `pip check` consistency and unmodified upstream `pyproject.toml`,
+pruned runtime OS packages, CSRF/session authentication,
 Socket.IO polling + RFC 6455 WebSocket upgrade, and static/dynamic HTTP routes
 through `frontend` (nginx) -> `backend` (gunicorn) & `websocket` (node).
 
@@ -443,6 +444,9 @@ def main() -> int:
                 "list_apps = json.loads(subprocess.check_output(['bench', '--site', site, 'list-apps', '--format', 'json'], text=True)); "
                 "apps_txt = [x.strip() for x in Path('/home/frappe/frappe-bench/sites/apps.txt').read_text().splitlines() if x.strip()]; "
                 "f_sha = subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/frappe', 'rev-parse', 'HEAD'], text=True).strip(); "
+                "f_pyproject_diff = subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/frappe', 'diff', '--name-only', 'pyproject.toml'], text=True).strip(); "
+                "bench_pip_check_rc = subprocess.run(['/home/frappe/frappe-bench/env/bin/pip', 'check'], capture_output=True, text=True).returncode; "
+                "sys_pip_check_rc = subprocess.run(['pip3', 'check'], capture_output=True, text=True).returncode; "
                 "c_sha = subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/crm', 'rev-parse', 'HEAD'], text=True).strip(); "
                 "crm_modified = [x.strip() for x in subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/crm', 'diff', '--name-only'], text=True).splitlines() if x.strip()]; "
                 "frappe_navbar = Path('/home/frappe/frappe-bench/apps/frappe/frappe/templates/includes/navbar/navbar.html').read_text(); "
@@ -475,7 +479,7 @@ def main() -> int:
                 "export_table_exists = bool(frappe.db.sql(\"SHOW TABLES LIKE 'tabCSKH Export Job'\")); "
                 "dev_mode = bool(frappe.conf.get('developer_mode')); "
                 "frappe.destroy(); "
-                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
+                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'frappe_pyproject_diff': f_pyproject_diff, 'bench_pip_check_rc': bench_pip_check_rc, 'sys_pip_check_rc': sys_pip_check_rc, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
             )
             probe_res = run_cmd(
                 [
@@ -511,6 +515,22 @@ def main() -> int:
                 runtime_info["frappe_sha"] == expected_frappe_sha,
                 expected_frappe_sha,
                 runtime_info["frappe_sha"],
+            )
+            record(
+                "runtime.frappe_pyproject_unmodified",
+                runtime_info["frappe_pyproject_diff"] == "",
+                "",
+                runtime_info["frappe_pyproject_diff"],
+            )
+            record(
+                "runtime.pip_check_consistent",
+                runtime_info["bench_pip_check_rc"] == 0
+                and runtime_info["sys_pip_check_rc"] == 0,
+                {"bench_pip_check_rc": 0, "sys_pip_check_rc": 0},
+                {
+                    "bench_pip_check_rc": runtime_info["bench_pip_check_rc"],
+                    "sys_pip_check_rc": runtime_info["sys_pip_check_rc"],
+                },
             )
             record(
                 "runtime.crm_sha",
@@ -938,6 +958,20 @@ def main() -> int:
                 "completed_at_utc": datetime.now(timezone.utc).isoformat(),
                 "app_image_tested": args.app_image,
                 "image_id": img_info.get("Id"),
+                "identifier_taxonomy": {
+                    "app_image_tested_class": (
+                        "oci_distribution_manifest_sha256"
+                        if "@sha256:" in args.app_image
+                        else "local_image_ref"
+                    ),
+                    "image_id_class": "docker_pulled_image_id_sha256",
+                    "note": (
+                        "app_image_tested (@sha256 manifest digest) and image_id "
+                        "(local OCI config or containerd manifest ID) represent different "
+                        "OCI descriptor layers of the same candidate; never cross-compare "
+                        "mismatched identifier classes or compare against unrelated live images."
+                    ),
+                },
                 "site_name": args.site_name,
                 "http_loopback_port": args.port,
                 "list_apps": runtime_info["list_apps"],
