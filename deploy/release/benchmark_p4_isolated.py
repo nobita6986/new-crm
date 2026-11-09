@@ -168,7 +168,7 @@ S1_API_SCENARIOS: tuple[dict[str, str], ...] = (
         "method": "GET",
         "path": (
             "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown"
-            "?period_type=monthly&period_key=2026-10&scope_type=company"
+            "?period_type=daily&period_key=2026-10-15&scope_type=company"
             "&metric_code=CONNECTED_RATE&page=1&page_size=20"
         ),
         "workload_class": "kpi_drilldown_paginated_250k_attempts",
@@ -770,12 +770,11 @@ for c_idx in range(1, 6):
             "doctype": "CSKH Campaign",
             "code": f"S1-CAMP-{c_idx:02d}",
             "title": f"Chiến dịch S1 {c_idx:02d}",
-            "channel": "Telesales",
             "status": "Active",
-            "assignment_mode": "weighted_round_robin",
-            "start_date": "2026-01-01",
-            "end_date": "2026-12-31",
+            "started_at": "2026-01-01 00:00:00",
+            "ended_at": "2026-12-31 23:59:59",
             "team_scope": t_scope,
+            "rule_version": 1,
         }
     )
     c_doc.insert(ignore_permissions=True)
@@ -785,7 +784,7 @@ for c_idx in range(1, 6):
 for s_email in staff_users:
     frappe.get_doc(
         {
-            "doctype": "CSKH Campaign Assignment Rule",
+            "doctype": "CSKH Assignment Rule",
             "campaign": campaigns[4],
             "user": s_email,
             "team": staff_team_map[s_email],
@@ -901,7 +900,7 @@ for w_start in range(0, 75_000, 7_500):
             last_att_ts = occ_ts
             if a_seq == num_atts and (i % 4 != 0):
                 ocode, olabel, ogroup, is_conn, is_int = (
-                    "connected_interested", "Kết nối - Quan tâm", "connected", 1, 1
+                    "connected_interested", "Đã trao đổi — Có quan tâm", "positive", 1, 1
                 )
                 conn_cnt += 1
             elif a_seq == 1:
@@ -918,7 +917,7 @@ for w_start in range(0, 75_000, 7_500):
                     att_id, occ_ts, occ_ts, owner_u, owner_u, 0, 0,
                     wi_id, lead_id, camp, ah_id, owner_u, owner_u, occ_ts, occ_ts,
                     "phone_call", ocode, olabel, ogroup, 1, 1, is_conn, is_int, 0, 0,
-                    f"Ghi chú S1 {i:06d}-{a_seq}", "self_reported", "DEFAULT-POLICY", 1,
+                    f"Ghi chú S1 {i:06d}-{a_seq}", "self_reported", "GLOBAL-DEFAULT", 1,
                     f"s1-idem-att-{i:06d}-{a_seq}", f"s1-hash-{i:06d}-{a_seq}", 2,
                 )
             )
@@ -942,7 +941,7 @@ for w_start in range(0, 75_000, 7_500):
                 "FIRST_ATTEMPT", wi_id, lead_id, camp, ah_id, owner_u, team_u, AUTHORITATIVE,
                 "fulfilled_on_time" if on_time_1 else "fulfilled_late", 0, 0, 0,
                 base_ts, due_1, due_1, 0, att_base_ts, first_att_id,
-                None if on_time_1 else due_1, None, att_base_ts, "DEFAULT-POLICY", 1, f"s1-sla-fa-{i:06d}",
+                None if on_time_1 else due_1, None, att_base_ts, "GLOBAL-DEFAULT", 1, f"s1-sla-fa-{i:06d}",
             )
         )
         fu_due = att_base_ts + timedelta(minutes=35)
@@ -952,7 +951,7 @@ for w_start in range(0, 75_000, 7_500):
                 f"S1-SLA-{i:06d}-FU", att_base_ts, fu_done, "Administrator", "Administrator", 0, 0,
                 "FOLLOWUP", wi_id, lead_id, camp, ah_id, owner_u, team_u, AUTHORITATIVE,
                 "fulfilled_on_time", 0, 0, 0, att_base_ts, fu_due, fu_due, 0, fu_done,
-                f"S1-ATT-{i:06d}-2", None, None, fu_done, "DEFAULT-POLICY", 1, f"s1-sla-fu-{i:06d}",
+                f"S1-ATT-{i:06d}-2", None, None, fu_done, "GLOBAL-DEFAULT", 1, f"s1-sla-fu-{i:06d}",
             )
         )
 
@@ -989,14 +988,14 @@ gc.collect()
 rss_b0, _ = _rss_hwm_mib()
 t_m0 = time.perf_counter()
 month_spec = resolve_period_spec("monthly", "2026-10")
-month_res = execute_kpi_recompute(month_spec, trigger_mode="manual", requested_by="Administrator")
+month_res = execute_kpi_recompute(month_spec, run_mode="full", actor="Administrator")
 frappe.db.commit()
 monthly_recompute_ms = round((time.perf_counter() - t_m0) * 1000.0, 2)
 rss_m1, hwm_m1 = _rss_hwm_mib()
 
 t_d0 = time.perf_counter()
 day_spec = resolve_period_spec("daily", "2026-10-15")
-day_res = execute_kpi_recompute(day_spec, trigger_mode="incremental", requested_by="Administrator")
+day_res = execute_kpi_recompute(day_spec, run_mode="incremental", actor="Administrator")
 frappe.db.commit()
 daily_recompute_ms = round((time.perf_counter() - t_d0) * 1000.0, 2)
 rss_d1, hwm_d1 = _rss_hwm_mib()
@@ -1037,6 +1036,8 @@ detail_history_summary = _summarize(det_lats, det_errs, time.perf_counter() - t0
 
 # 4c. Transactional Contact Attempt + Followup Write + Idempotent Replay (N=50)
 wr_lats, wr_errs = [], 0
+future_due_str = (frappe.utils.now_datetime() + timedelta(days=3)).strftime("%Y-%m-%d 09:30:00")
+idempotent_replay_verified = False
 t0 = time.perf_counter()
 for idx in range(50):
     wi_id, actor = active_sample_wis[idx]
@@ -1049,7 +1050,7 @@ for idx in range(50):
             outcome_code="connected_interested",
             note=f"Ghi nhận liên hệ S1 {idx:04d}",
             followup={
-                "due_at": "2026-12-20 09:30:00",
+                "due_at": future_due_str,
                 "title": f"Gọi lại ứng viên {idx:04d}",
                 "description": "Kiểm tra lịch phỏng vấn",
             },
@@ -1057,16 +1058,36 @@ for idx in range(50):
             actor=actor,
         )
         frappe.db.commit()
-        ok = bool(r_write and r_write.get("attempt"))
+        ok = bool(r_write and r_write.get("attempt_id"))
+        if ok and idx == 0:
+            r_rep = contact_attempt.record_attempt(
+                work_item=wi_id,
+                channel="phone_call",
+                outcome_code="connected_interested",
+                note=f"Ghi nhận liên hệ S1 {idx:04d}",
+                followup={
+                    "due_at": future_due_str,
+                    "title": f"Gọi lại ứng viên {idx:04d}",
+                    "description": "Kiểm tra lịch phỏng vấn",
+                },
+                idempotency_key=idem_key,
+                actor=actor,
+            )
+            idempotent_replay_verified = bool(
+                r_rep and r_rep.get("idempotent_replay") is True and r_rep.get("attempt_id") == r_write.get("attempt_id")
+            )
     except Exception:
         frappe.db.rollback()
         ok = False
     wr_lats.append((time.perf_counter() - c0) * 1000.0)
     if not ok:
         wr_errs += 1
-attempt_write_summary = _summarize(wr_lats, wr_errs, time.perf_counter() - t0)
+attempt_write_summary = {
+    **_summarize(wr_lats, wr_errs, time.perf_counter() - t0),
+    "idempotent_replay_verified": idempotent_replay_verified,
+}
 
-# 4d. BOD Executive Overview (verify 0 Contact Attempt table scans) & Drill-down on 250k Attempts (N=40)
+# 4d. BOD Executive Overview (verify 0 Contact Attempt table scans) & Drill-down on 250k Attempts
 captured_sql = []
 orig_sql = frappe.db.sql
 def _spy_sql(q, *a, **kw):
@@ -1098,14 +1119,15 @@ bod_overview_summary = {
     "contact_attempt_table_scans_during_read": attempt_scans_on_dashboard,
 }
 
+# Daily slice drill-down on the 250k-attempt / 75k-work-item DB (N=40)
 dd_lats, dd_errs = [], 0
 t0 = time.perf_counter()
 for pg in range(40):
     c0 = time.perf_counter()
     try:
         r = p3_reporting.get_metric_drilldown(
-            period_type="monthly",
-            period_key="2026-10",
+            period_type="daily",
+            period_key="2026-10-15",
             scope_type="company",
             metric_code="CONNECTED_RATE",
             page=(pg % 5) + 1,
@@ -1118,6 +1140,28 @@ for pg in range(40):
     if not ok:
         dd_errs += 1
 drilldown_summary = _summarize(dd_lats, dd_errs, time.perf_counter() - t0)
+
+# Unscoped full-month company drill-down across all 250k attempts (N=8) to quantify full-period Python scan ceiling
+dd_month_lats, dd_month_errs = [], 0
+t0 = time.perf_counter()
+for pg in range(8):
+    c0 = time.perf_counter()
+    try:
+        r = p3_reporting.get_metric_drilldown(
+            period_type="monthly",
+            period_key="2026-10",
+            scope_type="company",
+            metric_code="CONNECTED_RATE",
+            page=(pg % 4) + 1,
+            page_size=20,
+        )
+        ok = bool(r)
+    except Exception:
+        ok = False
+    dd_month_lats.append((time.perf_counter() - c0) * 1000.0)
+    if not ok:
+        dd_month_errs += 1
+drilldown_full_month_summary = _summarize(dd_month_lats, dd_month_errs, time.perf_counter() - t0)
 
 # 5. CSV Import (500 rows) + Campaign Distribution across 40 staff + Redis RQ Queue Lag Drain
 frappe.set_user("Administrator")
@@ -1139,7 +1183,7 @@ frappe.db.commit()
 
 prev = import_service.create_preview(
     file_name=file_doc.name,
-    mapping={"full_name": "full_name", "phone": "phone", "email": "email", "source": "source"},
+    mapping={"name": "full_name", "phone": "phone", "source": "source"},
     actor="Administrator",
     idempotency_key="s1-import-500",
 )
@@ -1148,25 +1192,26 @@ batch_id = prev["batch"]
 import_service.confirm(batch_id, actor="Administrator")
 frappe.db.commit()
 
-# Poll RQ worker completion for import batch
+# Poll RQ worker completion for import batch (`CSKH Import Batch.status` uses uppercase states)
 imp_deadline = time.perf_counter() + 90.0
 imp_status = {}
 while time.perf_counter() < imp_deadline:
     frappe.db.commit()
     imp_status = import_service._status_response(batch_id)
-    if imp_status.get("status") in ("completed", "completed_with_errors", "failed"):
+    if str(imp_status.get("status") or "").upper() in ("COMPLETED", "COMPLETED_WITH_ERRORS", "FAILED"):
         break
     time.sleep(0.25)
 imp_total_ms = round((time.perf_counter() - t_imp0) * 1000.0, 2)
 
-# Distribution preview + execute on shared campaign campaigns[4]
+# Distribution preview + execute on shared campaign campaigns[4] across 40 staff
 t_dist0 = time.perf_counter()
 dist_prev = distribution.preview(campaigns[4], actor="Administrator", idempotency_key="s1-dist-prev-1")
 frappe.db.commit()
 dist_preview_ms = round((time.perf_counter() - t_dist0) * 1000.0, 2)
 dist_exec_ms = 0.0
 dist_run_status = "no_unassigned_pool"
-if dist_prev.get("preview_id") and int((dist_prev.get("summary") or {}).get("assignable_count") or 0) > 0:
+dist_eligible_count = int((dist_prev.get("summary") or {}).get("eligible_count") or 0)
+if dist_prev.get("preview_id") and dist_eligible_count > 0:
     t_de0 = time.perf_counter()
     dist_enq = distribution.enqueue_run(
         dist_prev["preview_id"],
@@ -1177,12 +1222,12 @@ if dist_prev.get("preview_id") and int((dist_prev.get("summary") or {}).get("ass
     )
     frappe.db.commit()
     run_id = dist_enq["run_id"]
-    d_deadline = time.perf_counter() + 90.0
+    d_deadline = time.perf_counter() + 120.0
     while time.perf_counter() < d_deadline:
         frappe.db.commit()
         r_info = distribution.get_run(run_id, actor="Administrator")
         dist_run_status = str(r_info.get("status") or "")
-        if dist_run_status in ("completed", "completed_with_errors", "failed"):
+        if dist_run_status.lower() in ("completed", "completed_with_errors", "failed", "aborted"):
             break
         time.sleep(0.25)
     dist_exec_ms = round((time.perf_counter() - t_de0) * 1000.0, 2)
@@ -1246,14 +1291,17 @@ out = {
         "contact_attempt_and_followup_write": attempt_write_summary,
         "bod_executive_overview": bod_overview_summary,
         "kpi_metric_drilldown_250k_attempts": drilldown_summary,
+        "kpi_metric_drilldown_full_month_company_250k": drilldown_full_month_summary,
     },
     "async_import_distribution_and_queue_lag": {
         "csv_import_500_rows": {
             "total_preview_confirm_and_worker_drain_ms": imp_total_ms,
             "final_batch_status": imp_status.get("status"),
+            "created_rows": imp_status.get("created_rows"),
             "rows_throughput_per_sec": round(500.0 / (imp_total_ms / 1000.0), 2) if imp_total_ms > 0 else 0.0,
         },
         "campaign_distribution_40_staff": {
+            "eligible_count": dist_eligible_count,
             "preview_ms": dist_preview_ms,
             "execute_and_worker_drain_ms": dist_exec_ms,
             "final_run_status": dist_run_status,
@@ -1294,6 +1342,10 @@ def _derive_limits_and_proposed_slos(
     dd_api_p95 = float(
         (sc.get("kpi_metric_drilldown_250k_api") or {}).get("p95_ms") or 0.0
     )
+    dd_month_p95 = float(
+        (dom.get("kpi_metric_drilldown_full_month_company_250k") or {}).get("p95_ms")
+        or 0.0
+    )
     wr_p95 = float(
         (dom.get("contact_attempt_and_followup_write") or {}).get("p95_ms") or 0.0
     )
@@ -1316,9 +1368,15 @@ def _derive_limits_and_proposed_slos(
                 "scheduled off-peak jobs while daytime updates use dirty-scope incremental recompute."
             ),
             (
-                "Single `queue-short` worker drains short bursts serially; bulk CSV imports (>1,000 rows) "
-                "and full-month KPI recomputes must stay routed to dedicated `queue-long` in 10-service "
-                "Compose topology so interactive `short` notifications/callbacks are never head-of-line blocked."
+                f"Drill-down period scope ceiling: `get_metric_drilldown` loads raw period rows via "
+                f"`load_period_raw_dataset()` before Python slicing (`daily` slice HTTP `p95={dd_api_p95} ms` vs "
+                f"unscoped full-month `company` `250k`-attempt `p95={dd_month_p95} ms`). Interactive drill-downs "
+                "at `S1` scale should default to `daily`/`weekly` or `campaign`/`team`-scoped filters."
+            ),
+            (
+                "Single `queue-short` worker drains short bursts serially; bulk CSV imports (>1,000 rows), "
+                "campaign distribution runs, and full-month KPI recomputes must stay routed to dedicated "
+                "`queue-long` in 10-service Compose topology so interactive `short` jobs are never blocked."
             ),
         ],
         "proposed_slos_for_review": {
