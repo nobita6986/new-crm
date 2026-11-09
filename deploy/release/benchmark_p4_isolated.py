@@ -1529,7 +1529,8 @@ def provision_and_execute_s1_benchmark(
                     f"STDOUT:\n{init_proc.stdout[-1500:]}\nSTDERR:\n{init_proc.stderr[-1500:]}"
                 )
 
-            # Restart workers + nginx so Gunicorn, RQ workers, and nginx upstream DNS pick up the new site
+            # Restart backend + workers (matching verify_clean_site.py; never restart `frontend`
+            # in-place while backend is restarting or `nginx-entrypoint.sh` may exit under `restart: "no"`).
             subprocess.run(
                 [
                     *compose_base,
@@ -1538,7 +1539,6 @@ def provision_and_execute_s1_benchmark(
                     "websocket",
                     "queue-short",
                     "scheduler",
-                    "frontend",
                 ],
                 env=compose_env,
                 check=True,
@@ -1602,7 +1602,25 @@ def provision_and_execute_s1_benchmark(
                     for s in (spec.get("scenarios") or [])  # type: ignore[union-attr]
                 ]
 
+            # Ensure `frontend` (nginx) is running and refresh upstream DNS cleanly if needed
+            subprocess.run(
+                [
+                    *compose_base,
+                    "up",
+                    "-d",
+                    "--no-build",
+                    "--force-recreate",
+                    "frontend",
+                ],
+                env=compose_env,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+
             # Wait for HTTP ping readiness through nginx -> gunicorn
+            http_ready = False
             deadline = time.monotonic() + 90.0
             while time.monotonic() < deadline:
                 try:
@@ -1611,10 +1629,22 @@ def provision_and_execute_s1_benchmark(
                     )
                     with urllib.request.urlopen(req, timeout=5) as r:
                         if r.status == 200:
+                            http_ready = True
                             break
                 except Exception:
                     pass
                 time.sleep(2.0)
+            if not http_ready:
+                diag = subprocess.run(
+                    [*compose_base, "logs", "--tail=60", "frontend", "backend"],
+                    env=compose_env,
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                raise RuntimeError(
+                    f"HTTP readiness probe failed on {base_url}:\n{diag.stdout[-2000:]}\n{diag.stderr[-1000:]}"
+                )
 
             http_report = execute_isolated_benchmark(
                 spec,
