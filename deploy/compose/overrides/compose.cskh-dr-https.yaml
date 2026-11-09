@@ -1,0 +1,70 @@
+# deploy/compose/overrides/compose.cskh-dr-https.yaml
+#
+# P4 Dedicated Isolated Staging/DR HTTPS Override (Synthetic UAT, RBAC, Restart/Retry & Rollback).
+# Layered on top of upstream/frappe_docker/overrides/compose.https.yaml + compose.cskh-common.yaml:
+#   - Strictly isolated project, site, networks, named volumes, secrets, and loopback/VPN ports
+#     (default 127.0.0.1:18081 -> 80 and 127.0.0.1:18443 -> 443) so destructive drills NEVER
+#     touch the Owner's live stack (`crm-cskh-vps-staging` / `crm.hrpartner.vn`).
+#   - Uses Traefik file provider `/letsencrypt/dynamic` inside project-scoped `cert-data` named
+#     volume so TLS 1.2/1.3 works with dedicated internal CA or corporate/VPN certs without
+#     requiring public port 80 ACME exposure.
+#   - Enables Gunicorn `FORWARDED_ALLOW_IPS=*` on internal `app_net` so Frappe natively sets
+#     `Secure; HttpOnly; SameSite=Lax` on `sid` cookies behind TLS-terminating Traefik + Nginx.
+
+services:
+  backend:
+    environment:
+      FORWARDED_ALLOW_IPS: "*"
+
+  frontend:
+    labels: !override
+      - traefik.enable=true
+      - traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+      - traefik.http.services.frontend.loadbalancer.server.port=${NGINX_LISTEN_PORT:-8080}
+      - traefik.http.routers.frontend-https.entrypoints=websecure
+      - traefik.http.routers.frontend-https.tls=true
+      - traefik.http.routers.frontend-https.rule=${SITES_RULE:?SITES_RULE not set}
+
+  proxy:
+    image: ${PROXY_IMAGE:?set PROXY_IMAGE to traefik@sha256:digest}
+    pull_policy: ${INFRA_PULL_POLICY:-missing}
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: ${LOG_MAX_SIZE:-10m}
+        max-file: "${LOG_MAX_FILE:-3}"
+    command: !override
+      - --ping=true
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      - --providers.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+      - --providers.file.directory=/letsencrypt/dynamic
+      - --providers.file.watch=true
+      - --entrypoints.web.address=:80
+      - --entrypoints.web.http.underscoreHeadersStrategy=delete
+      - --entrypoints.web.http.redirections.entrypoint.to=:${HTTPS_PUBLISH_PORT:-18443}
+      - --entrypoints.web.http.redirections.entrypoint.scheme=https
+      - --entrypoints.web.http.redirections.entrypoint.permanent=true
+      - --entrypoints.websecure.address=:443
+      - --entrypoints.websecure.http.underscoreHeadersStrategy=delete
+    ports: !override
+      - "${INGRESS_BIND_IP:-127.0.0.1}:${HTTP_PUBLISH_PORT:-18081}:80"
+      - "${INGRESS_BIND_IP:-127.0.0.1}:${HTTPS_PUBLISH_PORT:-18443}:443"
+    mem_limit: ${PROXY_MEM_LIMIT:-256m}
+    cpus: ${PROXY_CPUS:-0.5}
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      edge_net:
+        aliases:
+          - ${SITE_NAME:?set SITE_NAME in env}
+
+volumes:
+  cert-data:
+    name: ${COMPOSE_PROJECT_NAME}_cert_data

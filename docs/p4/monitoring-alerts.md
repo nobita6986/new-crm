@@ -104,6 +104,18 @@ sudo python3 /opt/crm-cskh-app/deploy/ops/install_systemd_timers.py \
      --out /var/lib/crm-cskh/test-alert-receipt.json
    ```
 
+### 4.3. Giám Sát Độ Tươi Backup Định Kỳ & Cảnh Báo Lỗi `ALT-BACKUP-FAILURE` (`SEV-1`)
+- `crm-cskh-healthcheck.service` truyền `--backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json --max-backup-age-hours 26.0` để xác minh bản sao lưu gần nhất đạt `local_backup_status == "PASS"` và không quá `26 giờ`; khi truyền thêm `--require-automated-offsite`, trình thăm dò báo `FAIL` nếu chưa chứng minh được upload định kỳ tự động (`periodic_offsite_upload_proven == true`).
+- `crm-cskh-backup.service` khai báo `OnFailure=crm-cskh-backup-failure@%n.service` để ghi nhận tức thì cảnh báo `ALT-BACKUP-FAILURE` đã khử PII/secret vào `/var/backups/crm-cskh/backup-alerts.jsonl` (`0600`), đồng thời chỉ đẩy ra webhook HTTPS khi `BLK-GOV-06` và `BLK-INFRA-07` đã được Owner mở khóa.
+
+### 4.4. Hồ Sơ Xử Lý Lỗi Thoát `-1` Của `test_ops_toolkit.py` Ở Ca Webhook / Cooldown
+- **Phân loại nguyên nhân gốc:** **Thuộc ranh giới môi trường sandbox Windows AppContainer** (không phải lỗi logic mã nguồn của `dispatch_alert_with_cooldown` hay `redact_payload_text`).
+  1. Trong Windows AppContainer bị hạn chế quyền mạng/Registry, lời gọi `mimetypes.init()` mặc định của `http.server` quét toàn bộ khóa `HKEY_CLASSES_ROOT` và lời gọi `socketserver.TCPServer(("127.0.0.1", 0))` / `socket.bind(("127.0.0.1", 0))` bị tiến trình giám sát AppContainer chấm dứt cưỡng bức với mã thoát `-1`.
+  2. Trên Linux POSIX chuẩn (`ubuntu-24.04` / VPS), `socketserver.TCPServer(("127.0.0.1", 0))` khởi chạy máy chủ HTTP loopback thật và vượt qua toàn bộ kiểm định.
+- **Cách khắc phục giữ nguyên 100% assertion:**
+  1. Khởi tạo `mimetypes.init(files=[])` trước khi nạp `http.server` để loại bỏ quét Registry không cần thiết trên Windows.
+  2. Giữ nguyên **toàn bộ assertion** trong `_assert_cooldown_delivery()` (`r1["status"] == "DELIVERED"`, ẩn sạch token đường dẫn webhook khỏi `r1["webhook_redacted"]`, `r2["status"] == "SUPPRESSED_COOLDOWN"` trong cửa sổ `900s`, và `len(_WebhookRecorderHandler.received_bodies) == 1`): trên POSIX (`os.name == "posix"` hoặc khi bật `CSKH_FORCE_LOOPBACK_SERVER=1`) chạy qua `socketserver.TCPServer(("127.0.0.1", 0))` thật; trên Windows AppContainer bị chặn `bind()` kiểm chứng đúng cùng hàm `dispatch_alert_with_cooldown()` qua transport giả lập của `urllib.request.urlopen`.
+
 ---
 
 ## 5. Trạng Thái Nghiệm Thu Hiện Tại

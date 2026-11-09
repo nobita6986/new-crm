@@ -1,5 +1,5 @@
 [Unit]
-Description=CRM-CSKH Periodic Technical Health & Business Invariants Probe (Domain Overlay Enabled, External Alerts Gated)
+Description=CRM-CSKH Periodic Technical Health, Backup Freshness & Business Invariants Probe (Domain Overlay Enabled, External Alerts Gated)
 After=docker.service
 Requires=docker.service
 
@@ -15,4 +15,7 @@ ExecStart=/usr/bin/python3 /opt/crm-cskh-staging/repo/deploy/ops/check_health_an
   --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
   --site crm-staging.localhost \
   --environment-label staging \
+  --backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json \
+  --max-backup-age-hours 26.0 \
+  --alert-log-file /var/lib/crm-cskh/health/health-alerts.jsonl \
   --out /var/lib/crm-cskh/health/latest-health-report.json

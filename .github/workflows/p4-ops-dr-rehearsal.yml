@@ -1,0 +1,463 @@
+name: P4 G07-G08 & Isolated Staging-DR HTTPS Rehearsal
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ['codex/p4-*']
+  pull_request:
+    branches: [main, 'codex/p4-*']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p4-ops-dr-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-and-posix-unit-gate:
+    name: Workflow audit, Compose 4-stack validation & POSIX ops unit tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Set up tooling virtualenv
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/p4-ops-static"
+          python3 -m venv "$RUNNER_TEMP/p4-venv"
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir \
+            ruff==0.14.0 \
+            cryptography==44.0.2
+
+      - name: Verify PR isolation, locks & Ruff lint across compose/release/ops
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/verify_pr_isolation.py \
+            --check-workflows \
+            --check-runtime-env \
+            --check-locks \
+            --out "$RUNNER_TEMP/p4-ops-static/pr-isolation-audit.json"
+          "$RUNNER_TEMP/p4-venv/bin/ruff" check \
+            deploy/compose/scripts \
+            deploy/release \
+            deploy/ops
+
+      - name: Validate all 4 Compose stacks & run native Linux POSIX ops tests (real TCPServer webhook)
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVID="$RUNNER_TEMP/p4-ops-static"
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/compose/scripts/validate_compose_config.py \
+            --json-out "$EVID/compose-validation-4-stacks.json"
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/ops/test_offsite_restore.py \
+            > "$EVID/test_offsite_restore.log" 2>&1
+          CSKH_FORCE_LOOPBACK_SERVER=1 "$RUNNER_TEMP/p4-venv/bin/python" deploy/ops/test_ops_toolkit.py -v \
+            > "$EVID/test_ops_toolkit_posix.log" 2>&1
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/compose/scripts/test_smoke_runner_safety.py -v \
+            > "$EVID/test_smoke_runner_safety.log" 2>&1
+          python3 - "$EVID" <<'PY'
+          import json, os, platform, sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+          evid = Path(sys.argv[1])
+          off_log = (evid / "test_offsite_restore.log").read_text(encoding="utf-8")
+          ops_log = (evid / "test_ops_toolkit_posix.log").read_text(encoding="utf-8")
+          smk_log = (evid / "test_smoke_runner_safety.log").read_text(encoding="utf-8")
+          assert "\nOK\n" in off_log or off_log.strip().endswith("OK"), off_log
+          assert "\nOK\n" in ops_log or ops_log.strip().endswith("OK"), ops_log
+          assert "OK" in smk_log, smk_log
+          summary = {
+              "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "runner_os": os.name,
+              "platform": platform.platform(),
+              "python_version": platform.python_version(),
+              "loopback_tcpserver_forced": True,
+              "suites": {
+                  "test_offsite_restore.py": "PASS",
+                  "test_ops_toolkit.py": "PASS",
+                  "test_smoke_runner_safety.py": "PASS",
+              },
+              "status": "PASS",
+          }
+          (evid / "posix-ops-unit-tests.json").write_text(
+              json.dumps(summary, indent=2) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Upload static & POSIX unit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-ops-static-evidence
+          path: ${{ runner.temp }}/p4-ops-static/*.json
+          retention-days: 14
+
+  g07-g08-backup-and-restore-drill:
+    name: Real G07 backup/offsite/retention/alert & G08 restore drill
+    needs: [static-and-posix-unit-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Build locked crm-cskh image & execute G07 + G08 container drills
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVID="$RUNNER_TEMP/p4-g07-g08-evidence"
+          BUILD_DIR="$RUNNER_TEMP/p4-img-build"
+          WORK_DIR="$RUNNER_TEMP/p4-src-sim"
+          mkdir -p "$EVID" "$BUILD_DIR" "$WORK_DIR"
+
+          HEAD_SHA="$(git rev-parse HEAD)"
+          LOCAL_IMAGE_REPO="crm-cskh" \
+          REGISTRY_PUSH=false \
+          bash deploy/images/build-image.sh \
+            --out-dir "$BUILD_DIR" \
+            --tag "p4-g08-${HEAD_SHA::12}"
+          IMG_ID="$(jq -r '.local_image_id' "$BUILD_DIR/image-inspect-summary.json")"
+
+          # Pre-pull pinned MariaDB and Redis images so RTO measures pure container/DB recovery
+          MARIADB_IMG="$(grep '^MARIADB_IMAGE=' deploy/compose/env/isolated-smoke.env.example | cut -d= -f2-)"
+          REDIS_IMG="$(grep '^REDIS_IMAGE=' deploy/compose/env/isolated-smoke.env.example | cut -d= -f2-)"
+          PROXY_IMG="$(grep '^PROXY_IMAGE=' deploy/compose/env/isolated-smoke.env.example | cut -d= -f2-)"
+          docker pull "$MARIADB_IMG"
+          docker pull "$REDIS_IMG"
+          docker pull "$PROXY_IMG"
+
+          # Boot isolated source simulator matching live topology (uninitialized encryption_key, 5 Owner Translation rows)
+          DB_SEC="$WORK_DIR/db_root_password.txt"
+          DB_PW="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
+          ADM_PW="SimAdm-$(python3 -c 'import secrets; print(secrets.token_urlsafe(16))')!"
+          printf '%s\n' "$DB_PW" > "$DB_SEC"
+          chmod 600 "$DB_SEC"
+
+          SRC_ENV="$WORK_DIR/.env.src"
+          sed \
+            -e "s|^COMPOSE_PROJECT_NAME=.*|COMPOSE_PROJECT_NAME=crm-cskh-src-sim|" \
+            -e "s|^SITE_NAME=.*|SITE_NAME=crm-staging.localhost|" \
+            -e "s|^SITES_RULE=.*|SITES_RULE=Host(\`crm-staging.localhost\`)|" \
+            -e "s|^APP_IMAGE=.*|APP_IMAGE=${IMG_ID}|" \
+            -e "s|^PULL_POLICY=.*|PULL_POLICY=never|" \
+            -e "s|^HTTP_PUBLISH_PORT=.*|HTTP_PUBLISH_PORT=18190|" \
+            -e "s|^DB_PASSWORD_SECRETS_FILE=.*|DB_PASSWORD_SECRETS_FILE=${DB_SEC}|" \
+            deploy/compose/env/isolated-smoke.env.example > "$SRC_ENV"
+          chmod 600 "$SRC_ENV"
+
+          REPO_ABS="$(pwd)"
+          WRAPPER="$WORK_DIR/src-compose"
+          cat > "$WRAPPER" <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec docker compose --env-file "${SRC_ENV}" \
+            -f "${REPO_ABS}/deploy/compose/upstream/frappe_docker/compose.yaml" \
+            -f "${REPO_ABS}/deploy/compose/upstream/frappe_docker/overrides/compose.mariadb.yaml" \
+            -f "${REPO_ABS}/deploy/compose/upstream/frappe_docker/overrides/compose.mariadb-secrets.yaml" \
+            -f "${REPO_ABS}/deploy/compose/upstream/frappe_docker/overrides/compose.redis.yaml" \
+            -f "${REPO_ABS}/deploy/compose/upstream/frappe_docker/overrides/compose.proxy.yaml" \
+            -f "${REPO_ABS}/deploy/compose/upstream/frappe_docker/overrides/compose.migrator.yaml" \
+            -f "${REPO_ABS}/deploy/compose/overrides/compose.cskh-common.yaml" \
+            -f "${REPO_ABS}/deploy/compose/overrides/compose.cskh-isolated-smoke.yaml" \
+            "\$@"
+          EOF
+          chmod 750 "$WRAPPER"
+
+          cleanup_src() {
+            "$WRAPPER" --profile migrate down --volumes --remove-orphans >/dev/null 2>&1 || true
+          }
+          trap cleanup_src EXIT
+
+          "$WRAPPER" up -d db redis-cache redis-queue
+          for _ in $(seq 1 60); do
+            if "$WRAPPER" ps --format json | jq -s 'all(.[]; .Health == "healthy")' | grep -q true; then
+              break
+            fi
+            sleep 2
+          done
+          "$WRAPPER" run --rm configurator
+          "$WRAPPER" up -d backend frontend
+          for _ in $(seq 1 30); do
+            if "$WRAPPER" exec -T backend true >/dev/null 2>&1; then
+              break
+            fi
+            sleep 1
+          done
+
+          "$WRAPPER" exec -T backend /home/frappe/frappe-bench/env/bin/python - <<PY
+          import json, os, pathlib, subprocess, frappe
+          site = "crm-staging.localhost"
+          subprocess.check_call([
+              "bench", "new-site", site,
+              "--mariadb-user-host-login-scope=%",
+              "--db-root-password", "${DB_PW}",
+              "--admin-password", "${ADM_PW}",
+              "--install-app", "crm",
+              "--install-app", "crm_cskh",
+          ], stdout=subprocess.DEVNULL)
+          subprocess.check_call(["bench", "--site", site, "set-config", "mute_emails", "1", "--parse"], stdout=subprocess.DEVNULL)
+          os.chdir("/home/frappe/frappe-bench/sites")
+          frappe.init(site=site, sites_path=".")
+          frappe.connect()
+          try:
+              frappe.db.set_single_value("System Settings", "language", "vi")
+              frappe.db.set_single_value("System Settings", "time_zone", "Asia/Ho_Chi_Minh")
+              owner_translations = [
+                  ("Sales User", "Người tuyển dụng"),
+                  ("Projects", "Các dự án"),
+                  ("Annual Revenue", "Doanh thu hàng tháng / năm"),
+                  ("Contacted", "NLĐ đang tiếp cận"),
+                  ("Converted", "NLD đã tiếp cận"),
+              ]
+              for src_txt, vi_txt in owner_translations:
+                  frappe.get_doc({
+                      "doctype": "Translation",
+                      "language": "vi",
+                      "source_text": src_txt,
+                      "translated_text": vi_txt,
+                  }).insert(ignore_permissions=True)
+              lead = frappe.get_doc({
+                  "doctype": "CRM Lead",
+                  "first_name": "UngVien",
+                  "last_name": "MauKhoiPhuc",
+                  "mobile_no": "0900011223",
+                  "email": "restore-sim@example.invalid",
+              }).insert(ignore_permissions=True)
+              pub_f = pathlib.Path(site) / "public" / "files" / "jd-cong-khai-mau.txt"
+              priv_f = pathlib.Path(site) / "private" / "files" / "ho-so-rieng-tu-mau.txt"
+              pub_f.parent.mkdir(parents=True, exist_ok=True)
+              priv_f.parent.mkdir(parents=True, exist_ok=True)
+              pub_f.write_bytes(b"JD Tuyen dung Cong khai Mau P4\n")
+              priv_f.write_bytes(b"Ho so Ung vien Rieng tu Mau P4\n")
+              # Ensure encryption_key remains absent and __Auth encrypted=1 is 0 (matching live crm-staging.localhost)
+              cfg_p = pathlib.Path(site) / "site_config.json"
+              cfg = json.loads(cfg_p.read_text(encoding="utf-8"))
+              assert "encryption_key" not in cfg
+              enc_cnt = int(frappe.db.sql("SELECT COUNT(*) FROM \`__Auth\` WHERE encrypted=1")[0][0] or 0)
+              assert enc_cnt == 0
+              frappe.clear_cache()
+              frappe.db.commit()
+          finally:
+              frappe.destroy()
+          PY
+
+          # --- OBJECTIVE 3 (G07): Scheduled backup, manual vs automated offsite, retention & failure alert ---
+          BK_ROOT="$WORK_DIR/backups"
+          OFFSITE_VAULT="$WORK_DIR/offsite-vault"
+          sudo install -d -m 700 "$BK_ROOT" "$OFFSITE_VAULT"
+
+          # 1. Local-only scheduled run -> PARTIAL_LOCAL_ONLY_OFFSITE_PENDING
+          sudo python3 deploy/ops/manage_backup_lifecycle.py run-scheduled \
+            --compose-wrapper "$WRAPPER" \
+            --site crm-staging.localhost \
+            --backup-root "$BK_ROOT" \
+            --environment-label ci-g07-drill \
+            > "$WORK_DIR/g07_run1_local.json"
+
+          BUNDLE_1="$(sudo jq -r '.latest_bundle.bundle_dir' "$BK_ROOT/latest-backup-lifecycle.json")"
+          SHA_1="$(sudo jq -r '.latest_bundle.archive_sha256' "$BK_ROOT/latest-backup-lifecycle.json")"
+
+          # 2. Manual offsite receipt -> PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED (never PASS!)
+          sudo python3 deploy/ops/manage_backup_lifecycle.py record-offsite \
+            --bundle-dir "$BUNDLE_1" \
+            --verified-sha256 "$SHA_1" \
+            --offsite-location-label "owner-workstation-manual-copy" \
+            > "$WORK_DIR/g07_manual_receipt.json"
+
+          sleep 2
+
+          # 3. Automated offsite upload + SHA-256 readback -> PASS & key-separation verified
+          sudo python3 deploy/ops/manage_backup_lifecycle.py run-scheduled \
+            --compose-wrapper "$WRAPPER" \
+            --site crm-staging.localhost \
+            --backup-root "$BK_ROOT" \
+            --offsite-target-dir "$OFFSITE_VAULT" \
+            --environment-label ci-g07-drill \
+            > "$WORK_DIR/g07_run2_automated.json"
+
+          BUNDLE_2="$(sudo jq -r '.latest_bundle.bundle_dir' "$BK_ROOT/latest-backup-lifecycle.json")"
+          BUNDLE_2_NAME="$(basename "$BUNDLE_2")"
+          SHA_2="$(sudo jq -r '.latest_bundle.archive_sha256' "$BK_ROOT/latest-backup-lifecycle.json")"
+          sudo test ! -e "$OFFSITE_VAULT/$BUNDLE_2_NAME/backup-key"
+          sudo test -f "$OFFSITE_VAULT/$BUNDLE_2_NAME/backup.tar.gz.enc"
+          sudo test -f "$OFFSITE_VAULT/$BUNDLE_2_NAME/offsite-verification.json"
+
+          # 4. Simulated failure -> ALT-BACKUP-FAILURE alert emitted with gated external channel
+          set +e
+          sudo python3 deploy/ops/manage_backup_lifecycle.py run-scheduled \
+            --compose-wrapper "/nonexistent/wrapper" \
+            --site crm-staging.localhost \
+            --backup-root "$BK_ROOT" \
+            --environment-label ci-g07-drill \
+            > "$WORK_DIR/g07_simulated_failure.json"
+          FAIL_RC=$?
+          set -e
+          test "$FAIL_RC" -ne 0
+          sudo test -f "$BK_ROOT/backup-alerts.jsonl"
+
+          # Restore clean latest-backup-lifecycle.json after failure simulation & verify freshness monitor
+          sleep 2
+          sudo python3 deploy/ops/manage_backup_lifecycle.py run-scheduled \
+            --compose-wrapper "$WRAPPER" \
+            --site crm-staging.localhost \
+            --backup-root "$BK_ROOT" \
+            --offsite-target-dir "$OFFSITE_VAULT" \
+            --environment-label ci-g07-drill \
+            > "$WORK_DIR/g07_run3_final.json"
+
+          sudo python3 - "$WORK_DIR" "$BK_ROOT" "$OFFSITE_VAULT" "$EVID/g07-backup-lifecycle-drill.json" <<'PY'
+          import json, sys
+          from pathlib import Path
+          sys.path.insert(0, "deploy/ops")
+          import check_health_and_invariants as health_mod
+
+          wdir, bk_root, offsite_dir, out_p = (Path(x) for x in sys.argv[1:5])
+          r1 = json.loads((wdir / "g07_run1_local.json").read_text(encoding="utf-8"))
+          rm = json.loads((wdir / "g07_manual_receipt.json").read_text(encoding="utf-8"))
+          r2 = json.loads((wdir / "g07_run2_automated.json").read_text(encoding="utf-8"))
+          rf = json.loads((wdir / "g07_simulated_failure.json").read_text(encoding="utf-8"))
+          r3 = json.loads((wdir / "g07_run3_final.json").read_text(encoding="utf-8"))
+          freshness = health_mod.evaluate_backup_freshness_and_offsite(
+              bk_root / "latest-backup-lifecycle.json",
+              max_age_hours=26.0,
+              require_automated_offsite=True,
+          )
+          alerts = [
+              json.loads(ln)
+              for ln in (bk_root / "backup-alerts.jsonl").read_text(encoding="utf-8").splitlines()
+              if ln.strip()
+          ]
+          assert r1["end_to_end_backup_status"] == "PARTIAL_LOCAL_ONLY_OFFSITE_PENDING"
+          assert r1["periodic_offsite_upload_proven"] is False
+          assert rm["end_to_end_backup_status"] == "PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED"
+          assert rm["periodic_offsite_upload_proven"] is False
+          assert rm["one_off_manual_copy_proves_periodic_upload"] is False
+          assert r2["end_to_end_backup_status"] == "PASS"
+          assert r2["periodic_offsite_upload_proven"] is True
+          assert r3["end_to_end_backup_status"] == "PASS"
+          assert freshness["status"] == "PASS"
+          assert freshness["end_to_end_backup_gate_g07_status"] == "PASS"
+          assert len(alerts) >= 1 and alerts[0]["alert_envelope"]["alert_code"] == "ALT-BACKUP-FAILURE"
+
+          # Sanitize temporary runner paths before saving artifact
+          summary = {
+              "status": "PASS",
+              "local_only_run": {
+                  "end_to_end_backup_status": r1["end_to_end_backup_status"],
+                  "periodic_offsite_upload_proven": r1["periodic_offsite_upload_proven"],
+              },
+              "manual_copy_receipt": {
+                  "end_to_end_backup_status": rm["end_to_end_backup_status"],
+                  "periodic_offsite_upload_proven": rm["periodic_offsite_upload_proven"],
+                  "one_off_manual_copy_proves_periodic_upload": rm["one_off_manual_copy_proves_periodic_upload"],
+              },
+              "automated_offsite_run": {
+                  "end_to_end_backup_status": r3["end_to_end_backup_status"],
+                  "periodic_offsite_upload_proven": r3["periodic_offsite_upload_proven"],
+                  "archive_sha256": r3["latest_bundle"]["archive_sha256"],
+                  "archive_bytes": r3["latest_bundle"]["archive_bytes"],
+                  "backup_key_absent_at_offsite_target": not any(offsite_dir.rglob("backup-key")),
+                  "retention": r3["retention"],
+              },
+              "freshness_and_offsite_health_gate": {
+                  "status": freshness["status"],
+                  "age_hours": freshness["age_hours"],
+                  "end_to_end_backup_gate_g07_status": freshness["end_to_end_backup_gate_g07_status"],
+              },
+              "failure_alert_verification": {
+                  "simulated_failure_status": rf["status"],
+                  "alert_code": alerts[0]["alert_envelope"]["alert_code"],
+                  "external_dispatch_status": alerts[0]["dispatch"]["status"],
+              },
+          }
+          out_p.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+          PY
+          sudo chown "$USER:$USER" "$EVID/g07-backup-lifecycle-drill.json"
+
+          # --- OBJECTIVE 1 (G08): Full isolated offsite restore + Positive/Negative Control + 9-phase RTO ---
+          FINAL_BUNDLE="$(sudo jq -r '.latest_bundle.bundle_dir' "$BK_ROOT/latest-backup-lifecycle.json")"
+          FINAL_SHA="$(sudo jq -r '.latest_bundle.archive_sha256' "$BK_ROOT/latest-backup-lifecycle.json")"
+
+          sudo python3 deploy/ops/verify_offsite_restore.py \
+            --archive "$FINAL_BUNDLE/backup.tar.gz.enc" \
+            --archive-sha256 "$FINAL_SHA" \
+            --key-file "$FINAL_BUNDLE/backup-key" \
+            --source-project crm-cskh-src-sim \
+            --site crm-staging.localhost \
+            --out "$EVID/g08-restore-drill-report.json"
+          sudo chown "$USER:$USER" "$EVID/g08-restore-drill-report.json"
+
+      - name: Upload G07 & G08 measured drill artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-g07-g08-evidence
+          path: ${{ runner.temp }}/p4-g07-g08-evidence/*.json
+          retention-days: 14
+
+  isolated-staging-dr-https-rehearsal:
+    name: Real Isolated Staging-DR HTTPS UAT, RBAC, Restart/Retry & Rollback
+    needs: [static-and-posix-unit-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Build locked crm-cskh image & run full isolated Staging-DR HTTPS rehearsal
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVID="$RUNNER_TEMP/p4-dr-https-evidence"
+          BUILD_DIR="$RUNNER_TEMP/p4-dr-img-build"
+          mkdir -p "$EVID" "$BUILD_DIR"
+
+          HEAD_SHA="$(git rev-parse HEAD)"
+          LOCAL_IMAGE_REPO="crm-cskh" \
+          REGISTRY_PUSH=false \
+          bash deploy/images/build-image.sh \
+            --out-dir "$BUILD_DIR" \
+            --tag "p4-dr-https-${HEAD_SHA::12}"
+          IMG_ID="$(jq -r '.local_image_id' "$BUILD_DIR/image-inspect-summary.json")"
+
+          MARIADB_IMG="$(grep '^MARIADB_IMAGE=' deploy/compose/env/staging-dr-https.env.example | cut -d= -f2-)"
+          REDIS_IMG="$(grep '^REDIS_IMAGE=' deploy/compose/env/staging-dr-https.env.example | cut -d= -f2-)"
+          PROXY_IMG="$(grep '^PROXY_IMAGE=' deploy/compose/env/staging-dr-https.env.example | cut -d= -f2-)"
+          docker pull "$MARIADB_IMG"
+          docker pull "$REDIS_IMG"
+          docker pull "$PROXY_IMG"
+
+          python3 deploy/ops/manage_isolated_staging_dr.py full-rehearsal \
+            --app-image "$IMG_ID" \
+            --run-id "ci-${GITHUB_RUN_ID}" \
+            --out "$EVID/isolated-staging-dr-https-report.json"
+
+      - name: Upload isolated Staging-DR HTTPS rehearsal artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-dr-https-evidence
+          path: ${{ runner.temp }}/p4-dr-https-evidence/*.json
+          retention-days: 14

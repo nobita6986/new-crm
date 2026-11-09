@@ -10,8 +10,9 @@
 
 > [!WARNING]
 > **Báo cáo trung thực trạng thái Sao lưu End-to-End (`G07`):**
-> - **Đã hoàn tất:** Tạo gói sao lưu mã hóa AES-256-CBC-PBKDF2 kèm kiểm tra toàn vẹn trước đóng gói, kiểm tra SHA-256 tự động, chính sách lưu giữ GFS (`14 ngày / 8 tuần / 3 tháng`), và sao chép offsite thủ công đã đối chiếu khớp SHA-256 cho mốc trước bật scheduler (`p4-20261109-pre-scheduler`, SHA-256 `d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11`, `312.672` bytes).
-> - **Chưa đạt End-to-End tự động (`PARTIAL_OFFSITE_UPLOAD_MANUAL` / `BLOCKED` bởi `BLK-INFRA-05`):** Đích lưu trữ tự động ngoài VPS (S3/B2/Restic/SSH kho độc lập) **chưa được cấp phát**, nên tiến trình lập lịch hằng đêm trên VPS chỉ hoàn tất sao lưu mã hóa cục bộ và đánh dấu `offsite_upload_automated = false`, `offsite_verified = false`. **Tuyệt đối không báo cáo sao lưu tự động end-to-end đạt `PASS` cho tới khi gỡ `BLK-INFRA-05`.**
+> - **Đã hoàn tất trong mã nguồn & kiểm chứng thực tế trên container Linux:** Tạo gói sao lưu mã hóa AES-256-CBC-PBKDF2 kèm kiểm tra toàn vẹn trước đóng gói, đồng bộ offsite tự động kèm đọc ngược SHA-256 hai đầu và tách biệt khóa giải mã (`sync_bundle_offsite_automated` — tuyệt đối không bao giờ chép `backup-key` sang kho offsite), chính sách lưu giữ GFS (`14 ngày / 8 tuần / 3 tháng`), và phát cảnh báo tức thì khi sao lưu lỗi/quá hạn (`OnFailure=crm-cskh-backup-failure@%n.service` → `ALT-BACKUP-FAILURE`).
+> - **Một bản sao chép thủ công về máy Owner (`p4-20261109-pre-scheduler`, SHA-256 `d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11`) KHÔNG chứng minh upload định kỳ tự động đang chạy** (`one_off_manual_copy_proves_periodic_upload = false`).
+> - **Trên VPS live `103.77.208.186` hiện tại (`PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED` bởi `BLK-INFRA-05`):** Cho tới khi cấu hình kho đích ngoài VPS (`--offsite-target-dir` gắn kho ngoài hoặc `--offsite-upload-cmd` + `--offsite-verify-cmd` sang S3/B2/SSH kho độc lập), tiến trình hằng đêm chỉ báo `PASS` phần cục bộ và giữ nguyên trạng thái `periodic_offsite_upload_proven = false`.
 
 ---
 
@@ -81,8 +82,13 @@ sudo python3 deploy/ops/install_systemd_timers.py \
   --apply
 ```
 
-### 3.2. Xác nhận bản sao Offsite thủ công (khi chưa có `BLK-INFRA-05`)
-Sau khi kéo `backup.tar.gz.enc` và `backup-report.json` về máy lưu trữ ngoài VPS qua `scp` và đối chiếu SHA-256 khớp hai đầu:
+### 3.2. Upload Offsite Tự Động Kèm Đọc Ngược SHA-256 & Cảnh Báo Lỗi (`G07`)
+1. **Khi đã cấp phát kho đích ngoài VPS (`BLK-INFRA-05`):** Truyền `--offsite-target-dir <MOUNT_OFFSITE>` hoặc cặp `--offsite-upload-cmd` + `--offsite-verify-cmd` cho `manage_backup_lifecycle.py run-scheduled` (hoặc biến môi trường `CSKH_OFFSITE_TARGET_DIR` / `CSKH_OFFSITE_UPLOAD_CMD` + `CSKH_OFFSITE_VERIFY_CMD`). Công cụ chỉ đẩy `backup.tar.gz.enc` + `backup-report.json`, **chặn cứng nếu `backup-key` xuất hiện ở đích hoặc đích nằm lồng trong `backup_root`**, đọc ngược SHA-256 + kích thước byte từ đích và chỉ khi khớp tuyệt đối mới đặt `periodic_offsite_upload_proven = true` (`end_to_end_backup_status = "PASS"`).
+2. **Cảnh báo tự động khi sao lưu lỗi hoặc quá hạn (`> 26 giờ`):**
+   - `crm-cskh-backup.service` gắn `OnFailure=crm-cskh-backup-failure@%n.service` gọi `manage_backup_lifecycle.py emit-failure-alert`, ghi biên bản `ALT-BACKUP-FAILURE` đã khử PII/secret vào `/var/backups/crm-cskh/backup-alerts.jsonl` (`0600`) và giữ khóa kênh ngoài cho tới khi Owner mở `BLK-GOV-06` + `BLK-INFRA-07`.
+   - `crm-cskh-healthcheck.service` kiểm tra mỗi 5 phút tham số `--backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json` (`--max-backup-age-hours 26.0`) để phát hiện sớm lịch backup bị kẹt hoặc lỗi.
+3. **Xác nhận bản sao Offsite thủ công (khi chưa gỡ `BLK-INFRA-05`):**
+Sau khi kéo `backup.tar.gz.enc` và `backup-report.json` về máy lưu trữ ngoài VPS qua `scp` và đối chiếu SHA-256 khớp hai đầu (lưu ý: biên nhận thủ công giữ `periodic_offsite_upload_proven = false`):
 
 ```bash
 # 1. Kiểm tra lại toàn vẹn gói backup tại chỗ:
@@ -92,8 +98,8 @@ python3 deploy/ops/manage_backup_lifecycle.py verify-bundle \
 # 2. Ghi biên nhận đã chép ra ngoài VPS và khớp SHA-256:
 python3 deploy/ops/manage_backup_lifecycle.py record-offsite \
   --bundle-dir /var/backups/crm-cskh/daily-20261109T191500Z \
-  --confirmed-sha256 "<SHA256_DO_TREN_KHO_OFFSITE>" \
-  --offsite-location "workstation-offsite-vault:crm-hrpartner"
+  --verified-sha256 "<SHA256_DO_TREN_KHO_OFFSITE>" \
+  --offsite-location-label "workstation-offsite-vault:crm-hrpartner"
 ```
 
 ### 3.3. Chính sách Lưu giữ GFS (`Grandfather-Father-Son`)

@@ -11,7 +11,7 @@
 
 ## 1. Điều Kiện & Nguyên Tắc Thực Hiện UAT Trên Staging (`P4.md §16.1`)
 
-1. **Bảo toàn tuyệt đối môi trường đang phục vụ tại `https://crm.hrpartner.vn`:** Không chạy script seed tự động xóa dữ liệu, không khôi phục đè hay chạy thử phá hủy trên site `crm-staging.localhost` đang phục vụ của Owner. Mọi ca thử nghiệm có tạo dữ liệu mẫu trong phiên UAT chỉ dùng bản ghi gắn tiền tố nhận diện rõ ràng hoặc thực hiện trên môi trường clone cô lập theo quyết định của Owner.
+1. **Bảo toàn tuyệt đối môi trường đang phục vụ tại `https://crm.hrpartner.vn`:** Không chạy script seed tự động xóa dữ liệu, không khôi phục đè hay chạy thử phá hủy trên site `crm-staging.localhost` đang phục vụ của Owner. Toàn bộ phiên UAT có dữ liệu tổng hợp, kiểm quyền chéo, diễn tập `restart/retry` và `rollback` thực hiện trên **môi trường Staging/DR HTTPS cô lập riêng** theo hướng dẫn tại [`isolated-staging-dr-https.md`](./isolated-staging-dr-https.md) (`deploy/ops/manage_isolated_staging_dr.py`).
 2. **Giữ nguyên nhãn đã duyệt & công thức KPI:** Kiểm tra đúng bộ nhãn tiếng Việt trên luồng `Hồ sơ liên hệ → Phân công → Ghi nhận liên hệ → Lịch hẹn liên hệ lại`, `Giao dịch CRM`, `Hoàn tất mục tiêu liên hệ chiến dịch` và 5 nhãn tùy chỉnh cấp site của Owner (`Người tuyển dụng`, `Các dự án`, `Doanh thu hàng tháng / năm`, `NLĐ đang tiếp cận`, `NLD đã tiếp cận`); không thay đổi công thức KPI (`cskh-metrics-v2`).
 3. **Đại diện đủ 5 nhóm vai trò (`BLK-GOV-06`):** `Ban Giám đốc (BOD)`, `Quản trị CRM`, `Trưởng nhóm` (2 đội độc lập), `Người tuyển dụng` và `Vận hành kỹ thuật (Operator)`.
 

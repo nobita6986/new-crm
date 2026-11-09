@@ -112,6 +112,23 @@ STACK_PROFILES = {
             ("127.0.0.1", "18080", 80, "tcp"),
         ],
     },
+    "staging-dr-https": {
+        "env_template": ENV_DIR / "staging-dr-https.env.example",
+        "compose_files": [
+            UPSTREAM_DIR / "compose.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.mariadb.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.mariadb-secrets.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.redis.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.https.yaml",
+            UPSTREAM_DIR / "overrides" / "compose.migrator.yaml",
+            OVERRIDES_DIR / "compose.cskh-common.yaml",
+            OVERRIDES_DIR / "compose.cskh-dr-https.yaml",
+        ],
+        "expected_ports": [
+            ("127.0.0.1", "18081", 80, "tcp"),
+            ("127.0.0.1", "18443", 443, "tcp"),
+        ],
+    },
 }
 
 
@@ -197,7 +214,10 @@ def verify_env_template(
 
     for img_key in ("APP_IMAGE", "MARIADB_IMAGE", "REDIS_IMAGE", "PROXY_IMAGE"):
         val = env_map.get(img_key, "")
-        allow_local_id = img_key == "APP_IMAGE" and stack_name == "isolated-smoke"
+        allow_local_id = img_key == "APP_IMAGE" and stack_name in (
+            "isolated-smoke",
+            "staging-dr-https",
+        )
         pattern = LOCAL_OR_REMOTE_IMMUTABLE_RE if allow_local_id else REMOTE_DIGEST_RE
         assert pattern.match(val), (
             f"{stack_name}: {img_key}='{val}' must be pinned by immutable sha256 digest"
@@ -280,7 +300,11 @@ def validate_stack(
     published_ports: dict[str, list[tuple[str, str, int, str]]] = {}
     for sname, sdef in srvs.items():
         img = sdef.get("image", "")
-        img_re = LOCAL_OR_REMOTE_IMMUTABLE_RE if stack_name == "isolated-smoke" else REMOTE_DIGEST_RE
+        img_re = (
+            LOCAL_OR_REMOTE_IMMUTABLE_RE
+            if stack_name in ("isolated-smoke", "staging-dr-https")
+            else REMOTE_DIGEST_RE
+        )
         assert img_re.match(img), f"{stack_name}.{sname}: image '{img}' lacks immutable sha256 digest"
 
         s_nets = set(sdef.get("networks", {}).keys())
@@ -487,6 +511,13 @@ def verify_negative_fail_closed(tmp_dir: pathlib.Path) -> None:
     write_env_file(f4_smoke, smoke_env)
     verify_env_template("isolated-smoke", f4_smoke, require_real_app_digest=True)
 
+    dr_env = parse_env_file(STACK_PROFILES["staging-dr-https"]["env_template"])
+    dr_env["APP_IMAGE"] = sample_local_id
+    dr_env["PULL_POLICY"] = "never"
+    f4_dr = tmp_dir / "dr_local_id.env"
+    write_env_file(f4_dr, dr_env)
+    verify_env_template("staging-dr-https", f4_dr, require_real_app_digest=True)
+
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
@@ -512,8 +543,14 @@ def main() -> int:
             )
         verify_negative_fail_closed(tmp_dir)
 
-    # Verify pairwise disjoint isolation across all environments + Owner DEV stacks
-    reserved_owner_projects = {"crm-cskh-dev", "crm-cskh-p1", "crm-cskh-p2", "crm-cskh-p3-ui"}
+    # Verify pairwise disjoint isolation across all environments + Owner DEV/VPS stacks
+    reserved_owner_projects = {
+        "crm-cskh-dev",
+        "crm-cskh-p1",
+        "crm-cskh-p2",
+        "crm-cskh-p3-ui",
+        "crm-cskh-vps-staging",
+    }
     seen_projects: set[str] = set()
     seen_sites: set[str] = set()
     seen_networks: set[str] = set()
@@ -527,7 +564,12 @@ def main() -> int:
         seen_projects.add(proj)
 
         site = info["site_name"]
-        assert site not in {"dev.localhost", "p3ui.localhost"}, f"{sname} collides with Owner site"
+        assert site not in {
+            "dev.localhost",
+            "p3ui.localhost",
+            "crm-staging.localhost",
+            "crm.hrpartner.vn",
+        }, f"{sname} collides with Owner site"
         assert site not in seen_sites, f"Duplicate site name: {site}"
         seen_sites.add(site)
 

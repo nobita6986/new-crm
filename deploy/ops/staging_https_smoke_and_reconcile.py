@@ -33,7 +33,6 @@ import ssl
 import stat
 import subprocess
 import sys
-import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -66,6 +65,16 @@ COMPOSE_MODES: dict[str, tuple[Path, ...]] = {
         UPSTREAM_DIR / "overrides" / "compose.migrator.yaml",
         OVERRIDES_DIR / "compose.cskh-common.yaml",
         OVERRIDES_DIR / "compose.cskh-isolated-smoke.yaml",
+    ),
+    "dr-https": (
+        UPSTREAM_DIR / "compose.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb-secrets.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.redis.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.https.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.migrator.yaml",
+        OVERRIDES_DIR / "compose.cskh-common.yaml",
+        OVERRIDES_DIR / "compose.cskh-dr-https.yaml",
     ),
 }
 TLS_COMPOSE_FILES = COMPOSE_MODES["tls"]
@@ -619,7 +628,10 @@ def verify_running_containers_digest(
         if "@" in expected_clean:
             matched = expected_clean in repo_digests
         else:
-            matched = bool(repo_digests) and any(d.endswith("@" + expected_sha256) for d in repo_digests)
+            matched = (
+                bool(re.fullmatch(r"sha256:[0-9a-f]{64}", expected_clean))
+                and running_image_id == expected_clean
+            ) or (bool(repo_digests) and any(d.endswith("@" + expected_sha256) for d in repo_digests))
 
         inspected_services[svc] = {
             "container": cname,
@@ -780,26 +792,89 @@ class _NoRedirectHandler(urllib.request.HTTPRedirectHandler):
         return None
 
 
+class _SNIHTTPSConnection(http.client.HTTPSConnection):
+    """Connect to `connect_host:port` while validating TLS SNI & SAN against `sni_hostname`."""
+
+    def __init__(
+        self,
+        sni_hostname: str,
+        connect_host: str,
+        port: int,
+        context: ssl.SSLContext,
+        timeout: float = 15.0,
+    ) -> None:
+        super().__init__(sni_hostname, port=port, context=context, timeout=timeout)
+        self._sni_hostname = sni_hostname
+        self._connect_host = connect_host
+
+    def connect(self) -> None:
+        raw_sock = socket.create_connection((self._connect_host, self.port), self.timeout)
+        self.sock = self._context.wrap_socket(raw_sock, server_hostname=self._sni_hostname)
+
+
+def _build_ssl_context(tls_ca_file: Path | None = None) -> ssl.SSLContext:
+    if tls_ca_file is not None:
+        return ssl.create_default_context(cafile=str(tls_ca_file))
+    return ssl.create_default_context()
+
+
 def _https_request(
     url: str,
     method: str = "GET",
     headers: dict[str, str] | None = None,
     body: bytes | None = None,
     timeout: float = 15.0,
+    connect_host: str | None = None,
+    https_port: int = 443,
+    tls_ca_file: Path | None = None,
 ) -> tuple[int, list[tuple[str, str]], bytes]:
-    ctx = ssl.create_default_context()
-    opener = urllib.request.build_opener(urllib.request.HTTPSHandler(context=ctx), _NoRedirectHandler)
-    req = urllib.request.Request(url, data=body, headers=headers or {}, method=method)
+    ctx = _build_ssl_context(tls_ca_file)
+    if connect_host is None and https_port == 443 and tls_ca_file is None:
+        opener = urllib.request.build_opener(
+            urllib.request.HTTPSHandler(context=ctx),
+            _NoRedirectHandler,
+        )
+        req = urllib.request.Request(url, data=body, headers=headers or {}, method=method)
+        try:
+            with opener.open(req, timeout=timeout) as resp:
+                return resp.status, list(resp.headers.items()), resp.read()
+        except urllib.error.HTTPError as exc:
+            return exc.code, list(exc.headers.items()), exc.read()
+
+    parsed = urllib.parse.urlsplit(url)
+    sni_host = parsed.hostname or ""
+    target_host = connect_host or sni_host
+    target_port = parsed.port or https_port
+    path_and_query = parsed.path or "/"
+    if parsed.query:
+        path_and_query = f"{path_and_query}?{parsed.query}"
+    req_headers = dict(headers or {})
+    if not any(k.lower() == "host" for k in req_headers):
+        req_headers["Host"] = sni_host
+    conn = _SNIHTTPSConnection(
+        sni_hostname=sni_host,
+        connect_host=target_host,
+        port=target_port,
+        context=ctx,
+        timeout=timeout,
+    )
     try:
-        with opener.open(req, timeout=timeout) as resp:
-            return resp.status, list(resp.headers.items()), resp.read()
-    except urllib.error.HTTPError as exc:
-        return exc.code, list(exc.headers.items()), exc.read()
+        conn.request(method, path_and_query, body=body, headers=req_headers)
+        resp = conn.getresponse()
+        return resp.status, list(resp.getheaders()), resp.read()
+    finally:
+        conn.close()
 
 
-def _check_tls_certificate(hostname: str, port: int = 443) -> dict[str, Any]:
-    ctx = ssl.create_default_context()
-    with socket.create_connection((hostname, port), timeout=10) as sock:
+def _check_tls_certificate(
+    hostname: str,
+    port: int = 443,
+    connect_host: str | None = None,
+    tls_ca_file: Path | None = None,
+) -> dict[str, Any]:
+    ctx = _build_ssl_context(tls_ca_file)
+    target_host = connect_host or hostname
+    with socket.create_connection((target_host, port), timeout=10) as sock:
         with ctx.wrap_socket(sock, server_hostname=hostname) as ssock:
             cert = ssock.getpeercert()
             cipher = ssock.cipher()
@@ -809,6 +884,8 @@ def _check_tls_certificate(hostname: str, port: int = 443) -> dict[str, Any]:
     days_remaining = (not_after_dt - datetime.now(timezone.utc)).days
     return {
         "hostname": hostname,
+        "connect_host": target_host,
+        "port": port,
         "tls_version": tls_version,
         "cipher": cipher[0] if cipher else None,
         "not_after_utc": not_after_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -817,13 +894,20 @@ def _check_tls_certificate(hostname: str, port: int = 443) -> dict[str, Any]:
     }
 
 
-def _check_wss_upgrade(hostname: str, sid_cookie_pair: str, port: int = 443) -> dict[str, Any]:
+def _check_wss_upgrade(
+    hostname: str,
+    sid_cookie_pair: str,
+    port: int = 443,
+    connect_host: str | None = None,
+    tls_ca_file: Path | None = None,
+) -> dict[str, Any]:
     raw_key = base64.b64encode(os.urandom(16)).decode("ascii")
     expected_accept = base64.b64encode(
         hashlib.sha1((raw_key + "258EAFA5-E914-47DA-95CA-C5AB0DC85B11").encode("ascii")).digest()
     ).decode("ascii")
-    ctx = ssl.create_default_context()
-    with socket.create_connection((hostname, port), timeout=10) as tcp_sock:
+    ctx = _build_ssl_context(tls_ca_file)
+    target_host = connect_host or hostname
+    with socket.create_connection((target_host, port), timeout=10) as tcp_sock:
         with ctx.wrap_socket(tcp_sock, server_hostname=hostname) as tls_sock:
             tls_sock.settimeout(10)
             req = (
@@ -875,9 +959,35 @@ def run_https_smoke(
     admin_password_env: str,
     extra_compose_files: tuple[Path, ...] = (),
     public_domain: str | None = None,
+    mode: str = "tls",
+    connect_host: str | None = None,
+    http_port: int = 80,
+    https_port: int = 443,
+    tls_ca_file: Path | None = None,
 ) -> dict[str, Any]:
     preflight = evaluate_preflight(env_file, require_escrow_flag=False)
-    if preflight["status"] != "PREFLIGHT_READY" and not public_domain:
+    if mode == "dr-https":
+        sec_audit = preflight.get("checks", {}).get("secrets", {}).get("db_password_file_audit", {})
+        sec_ok = bool(
+            sec_audit.get("exists")
+            and sec_audit.get("ends_with_lf_only")
+            and sec_audit.get("non_empty")
+            and sec_audit.get("mode_ok")
+        )
+        env_check = parse_env_file(env_file) if env_file.is_file() else {}
+        app_img_check = env_check.get("APP_IMAGE", "").strip()
+        immutable_ok = bool(
+            REGISTRY_DIGEST_RE.match(app_img_check)
+            or re.fullmatch(r"sha256:[0-9a-f]{64}", app_img_check)
+        )
+        if not sec_ok or not immutable_ok:
+            return {
+                "timestamp_utc": utc_now_iso(),
+                "status": "BLOCKED",
+                "reason": "dr-https requires valid LF/0600 DB_PASSWORD_SECRETS_FILE and immutable sha256 APP_IMAGE",
+                "preflight": preflight,
+            }
+    elif preflight["status"] != "PREFLIGHT_READY" and not public_domain:
         return {
             "timestamp_utc": utc_now_iso(),
             "status": "BLOCKED",
@@ -894,9 +1004,14 @@ def run_https_smoke(
 
     env = parse_env_file(env_file)
     site_name = (public_domain or env["SITE_NAME"]).strip()
+    target_connect_host = (connect_host or site_name).strip()
     report: dict[str, Any] = {
         "timestamp_utc": utc_now_iso(),
+        "mode": mode,
         "site_name": site_name,
+        "connect_host": target_connect_host,
+        "http_port": http_port,
+        "https_port": https_port,
         "frappe_site_name": env.get("SITE_NAME", ""),
         "extra_compose_files": [str(p) for p in extra_compose_files],
         "app_image": env["APP_IMAGE"],
@@ -905,7 +1020,7 @@ def run_https_smoke(
 
     # 1. Verify running containers use exact APP_IMAGE digest via container .Image -> image .RepoDigests
     ps_proc = subprocess.run(
-        _compose_cmd(env_file, mode="tls", extra_compose_files=extra_compose_files)
+        _compose_cmd(env_file, mode=mode, extra_compose_files=extra_compose_files)
         + ["ps", "--format", "json"],
         capture_output=True,
         text=True,
@@ -918,19 +1033,29 @@ def run_https_smoke(
     )
 
     # 2. HTTP -> HTTPS redirect
-    conn = http.client.HTTPConnection(site_name, 80, timeout=10)
-    conn.request("GET", "/login")
+    conn = http.client.HTTPConnection(target_connect_host, http_port, timeout=10)
+    conn.request("GET", "/login", headers={"Host": site_name})
     http_resp = conn.getresponse()
     loc = http_resp.getheader("Location", "")
     conn.close()
+    expected_https_prefix = (
+        f"https://{site_name}/" if https_port == 443 else f"https://{site_name}:{https_port}/"
+    )
+    loc_ok = loc.startswith(expected_https_prefix) or loc.startswith(f"https://{site_name}/")
     report["checks"]["http_to_https_redirect"] = {
         "status_code": http_resp.status,
-        "location_starts_with_https": loc.startswith(f"https://{site_name}"),
-        "pass": http_resp.status in (301, 308) and loc.startswith(f"https://{site_name}"),
+        "location": loc,
+        "location_starts_with_https": loc_ok,
+        "pass": http_resp.status in (301, 308) and loc_ok,
     }
 
     # 3. TLS certificate verification
-    tls_info = _check_tls_certificate(site_name, 443)
+    tls_info = _check_tls_certificate(
+        site_name,
+        https_port,
+        connect_host=connect_host,
+        tls_ca_file=tls_ca_file,
+    )
     report["checks"]["tls_certificate"] = tls_info
 
     # 4. Login & Set-Cookie sid Secure + HttpOnly check
@@ -940,6 +1065,9 @@ def run_https_smoke(
         method="POST",
         headers={"Content-Type": "application/x-www-form-urlencoded", "Accept": "application/json"},
         body=login_body,
+        connect_host=connect_host,
+        https_port=https_port,
+        tls_ca_file=tls_ca_file,
     )
     set_cookies = [v for k, v in hdrs if k.lower() == "set-cookie"]
     sid_attrs = parse_sid_cookie_from_headers(set_cookies)
@@ -961,6 +1089,9 @@ def run_https_smoke(
     dash_code, _, dash_bytes = _https_request(
         f"https://{site_name}/cskh/dashboard",
         headers={"Cookie": sid_raw_pair},
+        connect_host=connect_host,
+        https_port=https_port,
+        tls_ca_file=tls_ca_file,
     )
     dash_html = dash_bytes.decode("utf-8", errors="replace")
     csrf_token = extract_csrf_token(dash_html)
@@ -969,12 +1100,18 @@ def run_https_smoke(
         method="POST",
         headers={"Cookie": sid_raw_pair, "X-Frappe-CSRF-Token": "invalid-csrf-token"},
         body=b"",
+        connect_host=connect_host,
+        https_port=https_port,
+        tls_ca_file=tls_ca_file,
     )
     good_csrf_code, _, good_csrf_bytes = _https_request(
         f"https://{site_name}/api/method/crm_cskh.api.health.ping",
         method="POST",
         headers={"Cookie": sid_raw_pair, "X-Frappe-CSRF-Token": csrf_token},
         body=b"",
+        connect_host=connect_host,
+        https_port=https_port,
+        tls_ca_file=tls_ca_file,
     )
     report["checks"]["vi_ui_and_csrf"] = evaluate_vi_ui_and_csrf_check(
         dash_code=dash_code,
@@ -986,7 +1123,13 @@ def run_https_smoke(
     )
 
     # 6. Secure WebSocket (wss://) upgrade & frame check
-    wss_info = _check_wss_upgrade(site_name, sid_raw_pair, 443)
+    wss_info = _check_wss_upgrade(
+        site_name,
+        sid_raw_pair,
+        https_port,
+        connect_host=connect_host,
+        tls_ca_file=tls_ca_file,
+    )
     wss_info["pass"] = bool(
         wss_info["switched_protocols_101"]
         and wss_info["sec_websocket_accept_valid"]
@@ -1026,7 +1169,7 @@ def main(argv: list[str] | None = None) -> int:
         help="Inspect running container image IDs and verify RepoDigests against expected APP_IMAGE",
     )
     p_dig.add_argument("--env-file", type=Path, required=True)
-    p_dig.add_argument("--mode", choices=("tls", "isolated-smoke"), default="tls")
+    p_dig.add_argument("--mode", choices=("tls", "isolated-smoke", "dr-https"), default="tls")
     p_dig.add_argument(
         "--extra-compose-file",
         type=Path,
@@ -1039,6 +1182,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p_smoke = sub.add_parser("https-smoke", help="Run live HTTPS smoke against approved Staging/Prod")
     p_smoke.add_argument("--env-file", type=Path, required=True)
+    p_smoke.add_argument("--mode", choices=("tls", "dr-https"), default="tls")
     p_smoke.add_argument(
         "--extra-compose-file",
         type=Path,
@@ -1050,6 +1194,17 @@ def main(argv: list[str] | None = None) -> int:
         "--public-domain",
         help="Override public HTTPS hostname when domain overlay fronts an internal SITE_NAME",
     )
+    p_smoke.add_argument(
+        "--connect-host",
+        help="Optional TCP connect target (e.g. 127.0.0.1 for isolated dr-https) while preserving TLS SNI/Host",
+    )
+    p_smoke.add_argument("--http-port", type=int, default=80)
+    p_smoke.add_argument("--https-port", type=int, default=443)
+    p_smoke.add_argument(
+        "--tls-ca-file",
+        type=Path,
+        help="Optional Root CA PEM file for isolated dr-https TLS certificate verification",
+    )
     p_smoke.add_argument("--admin-user", default="Administrator")
     p_smoke.add_argument("--admin-password-env", default="CSKH_SMOKE_ADMIN_PASSWORD")
     p_smoke.add_argument("--out", type=Path)
@@ -1057,7 +1212,7 @@ def main(argv: list[str] | None = None) -> int:
     p_snap = sub.add_parser("snapshot-counts", help="Capture zero-PII DB counts & BLG-P4-MIG-01 state")
     p_snap.add_argument("--env-file", type=Path, required=True)
     p_snap.add_argument("--site", required=True)
-    p_snap.add_argument("--mode", choices=("tls", "isolated-smoke"), default="tls")
+    p_snap.add_argument("--mode", choices=("tls", "isolated-smoke", "dr-https"), default="tls")
     p_snap.add_argument(
         "--extra-compose-file",
         type=Path,
@@ -1116,12 +1271,18 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "https-smoke":
         extra = tuple(p.resolve(strict=True) for p in args.extra_compose_file)
+        ca_path = args.tls_ca_file.resolve(strict=True) if args.tls_ca_file else None
         res = run_https_smoke(
             args.env_file,
             args.admin_user,
             args.admin_password_env,
             extra_compose_files=extra,
             public_domain=args.public_domain,
+            mode=args.mode,
+            connect_host=args.connect_host,
+            http_port=args.http_port,
+            https_port=args.https_port,
+            tls_ca_file=ca_path,
         )
         text = json.dumps(res, indent=2, ensure_ascii=False) + "\n"
         if args.out:

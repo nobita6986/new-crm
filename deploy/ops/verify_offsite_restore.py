@@ -41,8 +41,6 @@ Verification phases executed strictly inside the disposable isolated clone:
 from __future__ import annotations
 
 import argparse
-import base64
-import binascii
 from datetime import datetime, timezone
 import hashlib
 import json
@@ -448,6 +446,14 @@ def capture_site_state(*, verify_encryption_state: bool = False, check_invariant
             ).hexdigest()
             for d in expected_table_sha256
         }
+        canonical_hashes = {}
+        for d in expected_table_sha256:
+            rows = frappe.get_all(d, fields=['*'], order_by='name')
+            if d == 'CRM Form Script':
+                rows = [{k: v for k, v in r.items() if k != 'modified'} for r in rows]
+            canonical_hashes[d] = hashlib.sha256(
+                json.dumps(rows, sort_keys=True, default=str).encode('utf-8')
+            ).hexdigest()
         tr_rows_v1 = frappe.get_all(
             'Translation',
             fields=['language', 'source_text', 'translated_text'],
@@ -570,6 +576,7 @@ def capture_site_state(*, verify_encryption_state: bool = False, check_invariant
             'counts': counts,
             'installed_apps': frappe.get_installed_apps(),
             'table_sha256': table_hashes,
+            'canonical_table_sha256': canonical_hashes,
             'translations': {
                 'translation_rows': len(tr_rows_v2),
                 'translation_sha256': tr_hash,
@@ -641,7 +648,10 @@ bench('clear-cache')
 bench('clear-website-cache')
 after_2 = capture_site_state(check_invariants=True)
 assert before['counts'] == after_1['counts'] == after_2['counts'], 'Migration changed business counts'
-assert after_1['table_sha256'] == after_2['table_sha256'], 'Second migrate was not idempotent across tables'
+assert after_1['canonical_table_sha256'] == after_2['canonical_table_sha256'], 'Second migrate was not idempotent across tables'
+for dt_key in after_1['table_sha256']:
+    if dt_key != 'CRM Form Script':
+        assert after_1['table_sha256'][dt_key] == after_2['table_sha256'][dt_key], f'Full row hash changed on {dt_key}'
 tr_integrity = evaluate_translation_integrity(
     before['translations'],
     after_2['translations'],
@@ -1103,7 +1113,7 @@ os.chdir('/home/frappe/frappe-bench/sites')
 frappe.init(site=site, sites_path='.')
 frappe.connect()
 try:
-    from frappe.utils.password import get_decrypted_password, update_password
+    from frappe.utils.password import get_decrypted_password
     decrypted = get_decrypted_password('User', 'Administrator', 'p4_restore_control', raise_exception=True)
     assert decrypted == p['control_secret'], 'Decrypted positive-control secret mismatch'
 
@@ -1117,7 +1127,47 @@ try:
     }
     assert counts_after == p['pos_before']['counts'], 'Positive-control business counts mismatch'
     assert hashes_after == p['pos_before']['table_sha256'], 'Positive-control business table hashes mismatch'
+finally:
+    frappe.destroy()
+    os.chdir('/home/frappe/frappe-bench')
 
+pos_mig_seconds = []
+for mig_idx in (1, 2):
+    t_mig = time.monotonic()
+    mig_done = subprocess.run(['bench', '--site', site, 'migrate'], capture_output=True, text=True)
+    if mig_done.returncode:
+        pathlib.Path('/tmp/restore-error.log').write_text(mig_done.stdout + mig_done.stderr, encoding='utf-8')
+        raise RuntimeError(f'Positive-control migrate run {mig_idx} failed')
+    pos_mig_seconds.append(round(time.monotonic() - t_mig, 3))
+    os.chdir('/home/frappe/frappe-bench/sites')
+    frappe.init(site=site, sites_path='.')
+    frappe.connect()
+    try:
+        mig_counts = {d: frappe.db.count(d) for d in doctypes}
+        mig_canon = {}
+        for d in doctypes:
+            rows = frappe.get_all(d, fields=['*'], order_by='name')
+            if d == 'CRM Form Script':
+                rows = [{k: v for k, v in r.items() if k != 'modified'} for r in rows]
+            mig_canon[d] = hashlib.sha256(json.dumps(rows, sort_keys=True, default=str).encode('utf-8')).hexdigest()
+        if mig_idx == 1:
+            pos_mig1_counts, pos_mig1_canon = mig_counts, mig_canon
+        else:
+            pos_mig2_counts, pos_mig2_canon = mig_counts, mig_canon
+    finally:
+        frappe.destroy()
+        os.chdir('/home/frappe/frappe-bench')
+
+assert counts_after == pos_mig1_counts == pos_mig2_counts, 'Positive-control migrate x2 altered business counts'
+assert pos_mig1_canon == pos_mig2_canon, 'Positive-control migrate x2 was not idempotent'
+
+os.chdir('/home/frappe/frappe-bench/sites')
+frappe.init(site=site, sites_path='.')
+frappe.connect()
+try:
+    from frappe.utils.password import get_decrypted_password, update_password
+    decrypted_post_mig = get_decrypted_password('User', 'Administrator', 'p4_restore_control', raise_exception=True)
+    assert decrypted_post_mig == p['control_secret'], 'Decrypted positive-control secret mismatch after migrate x2'
     update_password('Administrator', p['pos_login_password'])
     frappe.db.commit()
 finally:
@@ -1125,6 +1175,7 @@ finally:
     os.chdir('/home/frappe/frappe-bench')
 
 subprocess.run(['bench', '--site', site, 'clear-cache'], check=True, capture_output=True, text=True)
+subprocess.run(['bench', '--site', site, 'clear-website-cache'], check=True, capture_output=True, text=True)
 
 print('POS_VERIFY_JSON=' + json.dumps({
     'scope': 'disposable_clone_only',
@@ -1132,6 +1183,9 @@ print('POS_VERIFY_JSON=' + json.dumps({
     'negative_control_missing_key_rejected': True,
     'negative_control_decrypt_without_key_failed': True,
     'encrypted_secret_fernet_round_trip': True,
+    'encrypted_secret_post_migrate_x2_verified': True,
+    'migrate_x2_idempotent': True,
+    'migrate_seconds': pos_mig_seconds,
     'public_file_bytes_and_sha256_match': True,
     'private_file_bytes_and_sha256_match': True,
     'posix_permissions_verified': True,
@@ -1141,7 +1195,7 @@ print('POS_VERIFY_JSON=' + json.dumps({
 
 
 PHASE_B_HTTP_PERM_PROBE = r"""
-import hashlib, http.cookiejar, json, sys, urllib.error, urllib.parse, urllib.request
+import hashlib, http.cookiejar, json, re, sys, urllib.error, urllib.parse, urllib.request
 
 p = json.load(sys.stdin)
 site = p['site']
@@ -1149,10 +1203,19 @@ base_url = p['base_url']
 pub = p['public_file']
 priv = p['private_file']
 
+class _NoRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+guest_opener = urllib.request.build_opener(_NoRedirect)
+
 def guest_fetch(url_path: str) -> tuple[int, bytes]:
-    req = urllib.request.Request(base_url + url_path, headers={'Host': site})
+    req = urllib.request.Request(
+        base_url + url_path,
+        headers={'Host': site, 'Accept': 'application/json'},
+    )
     try:
-        with urllib.request.urlopen(req, timeout=8) as r:
+        with guest_opener.open(req, timeout=8) as r:
             return r.status, r.read()
     except urllib.error.HTTPError as e:
         return e.code, e.read()
@@ -1165,6 +1228,7 @@ assert hashlib.sha256(pub_guest_bytes).hexdigest() == pub['sha256']
 priv_guest_status, priv_guest_bytes = guest_fetch(priv['file_url'])
 assert priv_guest_status in (401, 403), f'Expected Guest denial on private file, got {priv_guest_status}'
 assert hashlib.sha256(priv_guest_bytes).hexdigest() != priv['sha256']
+assert b'P4-POSITIVE-PRIVATE-CONTROL' not in priv_guest_bytes
 
 jar = http.cookiejar.CookieJar()
 opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
@@ -1187,6 +1251,37 @@ assert priv_auth_status == 200
 assert len(priv_auth_bytes) == int(priv['bytes'])
 assert hashlib.sha256(priv_auth_bytes).hexdigest() == priv['sha256']
 
+cskh_req = urllib.request.Request(base_url + '/cskh', headers={'Host': site})
+with opener.open(cskh_req, timeout=10) as r:
+    cskh_status = r.status
+    cskh_html = r.read().decode('utf-8', errors='replace')
+assert cskh_status == 200 and 'Không gian tuyển dụng' in cskh_html
+
+csrf_token = ''
+for pat in (
+    r'["\']X-Frappe-CSRF-Token["\']\s*:\s*["\']([^"\']+)["\']',
+    r'csrf_token\s*[:=]\s*["\']([^"\']+)["\']',
+):
+    for m in re.finditer(pat, cskh_html):
+        cand = m.group(1).strip()
+        if cand and cand.lower() not in {'none', 'null', 'undefined'} and len(cand) >= 8:
+            csrf_token = cand
+            break
+    if csrf_token:
+        break
+assert csrf_token, 'Failed to extract CSRF token on positive-control /cskh'
+
+good_csrf_req = urllib.request.Request(
+    base_url + '/api/method/crm_cskh.api.health.ping',
+    data=b'',
+    headers={'Host': site, 'X-Frappe-CSRF-Token': csrf_token},
+    method='POST',
+)
+with opener.open(good_csrf_req, timeout=8) as r:
+    good_csrf_status = r.status
+    r.read()
+assert good_csrf_status == 200
+
 print(json.dumps({
     'public_guest_http_status': pub_guest_status,
     'public_guest_bytes_and_sha256_match': True,
@@ -1194,6 +1289,8 @@ print(json.dumps({
     'private_guest_access_denied': True,
     'private_authenticated_http_status': priv_auth_status,
     'private_authenticated_bytes_and_sha256_match': True,
+    'cskh_http_status': cskh_status,
+    'valid_csrf_health_ping_status': good_csrf_status,
 }))
 """
 

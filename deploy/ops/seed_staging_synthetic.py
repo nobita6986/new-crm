@@ -32,11 +32,35 @@ sys.path.insert(0, str(OPS_DIR))
 import staging_https_smoke_and_reconcile as p403_tool  # noqa: E402
 
 
+FORBIDDEN_OWNER_PROJECTS = {
+    "crm-cskh-vps-staging",
+    "crm-cskh-prod",
+    "crm-cskh-dev",
+    "crm-cskh-p1",
+    "crm-cskh-p2",
+    "crm-cskh-p3-ui",
+}
+FORBIDDEN_OWNER_SITES = {
+    "crm-staging.localhost",
+    "crm.hrpartner.vn",
+    "dev.localhost",
+    "p3ui.localhost",
+}
+
+
 def validate_staging_seed_target(env: dict[str, str], confirmed_site: str) -> tuple[bool, list[str]]:
     errors: list[str] = []
     proj = env.get("COMPOSE_PROJECT_NAME", "").strip().lower()
     site = env.get("SITE_NAME", "").strip()
 
+    if proj in FORBIDDEN_OWNER_PROJECTS:
+        errors.append(
+            f"Refusing seed: COMPOSE_PROJECT_NAME={proj!r} is a protected Owner live/dev stack."
+        )
+    if site.lower() in FORBIDDEN_OWNER_SITES:
+        errors.append(
+            f"Refusing seed: SITE_NAME={site!r} is the protected Owner live/dev site."
+        )
     if "prod" in proj or "staging" not in proj:
         errors.append(
             f"Refusing seed: COMPOSE_PROJECT_NAME={proj!r} must contain 'staging' and never 'prod'."
@@ -60,7 +84,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, required=True)
     parser.add_argument("--confirm-staging-site", required=True)
-    parser.add_argument("--mode", choices=("tls", "isolated-smoke"), default="tls")
+    parser.add_argument("--mode", choices=("tls", "isolated-smoke", "dr-https"), default="tls")
     parser.add_argument("--seed-password-env", default="CSKH_STAGING_SEED_PASSWORD")
     parser.add_argument("--out", type=Path)
     args = parser.parse_args(argv)

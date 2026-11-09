@@ -22,8 +22,10 @@ from create_encrypted_backup import SNAPSHOT, validate_site_config_backup_member
 from install_systemd_timers import render_backup_units, render_healthcheck_units  # noqa: E402
 from manage_backup_lifecycle import (  # noqa: E402
     apply_retention_plan,
+    emit_backup_failure_alert,
     plan_gfs_retention,
     record_offsite_confirmation,
+    sync_bundle_offsite_automated,
     verify_backup_bundle,
 )
 import verify_offsite_restore as restore_mod  # noqa: E402
@@ -418,6 +420,90 @@ class BackupValidationTests(unittest.TestCase):
             site="crm-staging.localhost",
         )
         self.assertIn("manage_backup_lifecycle.py run-scheduled", bk["crm-cskh-backup.service"])
+        self.assertIn("OnFailure=crm-cskh-backup-failure@%n.service", bk["crm-cskh-backup.service"])
+        self.assertIn("crm-cskh-backup-failure@.service", bk)
+        self.assertIn(
+            "--backup-status-file /var/backups/crm-cskh/latest-backup-lifecycle.json",
+            svc,
+        )
+
+    def test_automated_offsite_sync_enforces_key_separation_and_failure_alert_redaction(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            backup_root = root / "local-backups"
+            offsite_vault = root / "offsite-vault"
+            backup_root.mkdir()
+            offsite_vault.mkdir()
+
+            payload = b"encrypted-archive-for-automated-offsite"
+            bdir = backup_root / "scheduled-20261109T200000Z"
+            bdir.mkdir()
+            (bdir / "backup.tar.gz.enc").write_bytes(payload)
+            (bdir / "backup-key").write_text("fedcba9876543210" * 4 + "\n", encoding="utf-8")
+            (bdir / "backup-report.json").write_text(
+                json.dumps(
+                    {
+                        "schema_version": "p4-encrypted-backup-v2",
+                        "completed_at_utc": "2026-11-09T20:00:00+00:00",
+                        "source_project": "crm-cskh-vps-staging",
+                        "source_revision": "467204176326f046442b5e20c381f9a895b6e176",
+                        "archive_sha256": hashlib.sha256(payload).hexdigest(),
+                        "archive_bytes": len(payload),
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            # 1. Target inside backup_root must fail closed
+            with self.assertRaisesRegex(ValueError, "disjoint"):
+                sync_bundle_offsite_automated(
+                    bdir,
+                    backup_root=backup_root,
+                    offsite_target_dir=backup_root / "nested-offsite",
+                )
+
+            # 2. Disjoint automated offsite target copies archive + report ONLY (never backup-key)
+            verified = sync_bundle_offsite_automated(
+                bdir,
+                backup_root=backup_root,
+                offsite_target_dir=offsite_vault,
+            )
+            self.assertEqual(verified["end_to_end_backup_status"], "PASS")
+            self.assertTrue(verified["periodic_offsite_upload_proven"])
+            self.assertFalse(verified["one_off_manual_copy_proves_periodic_upload"])
+            self.assertFalse((offsite_vault / bdir.name / "backup-key").exists())
+            self.assertTrue((offsite_vault / bdir.name / "backup.tar.gz.enc").is_file())
+            self.assertTrue((offsite_vault / bdir.name / "offsite-verification.json").is_file())
+
+            # 3. Pre-existing backup-key at offsite destination must trigger CRITICAL refusal
+            leaked_key = offsite_vault / bdir.name / "backup-key"
+            leaked_key.write_text("accidental-key\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "backup-key detected"):
+                sync_bundle_offsite_automated(
+                    bdir,
+                    backup_root=backup_root,
+                    offsite_target_dir=offsite_vault,
+                )
+
+            # 4. Failure alert writes redacted ALT-BACKUP-FAILURE JSONL and keeps external channel gated
+            alert_res = emit_backup_failure_alert(
+                backup_root=backup_root,
+                environment_label="vps-staging",
+                reason="Offsite upload failed for phone 0912345678 and sid=topSecretSid123",
+                metrics={"unit": "crm-cskh-backup.service"},
+            )
+            self.assertEqual(alert_res["alert_envelope"]["alert_code"], "ALT-BACKUP-FAILURE")
+            self.assertEqual(
+                alert_res["dispatch"]["status"],
+                "GATED_PENDING_OWNER_CONTACT_AND_CHANNEL",
+            )
+            log_text = (backup_root / "backup-alerts.jsonl").read_text(encoding="utf-8")
+            self.assertNotIn("0912345678", log_text)
+            self.assertNotIn("topSecretSid123", log_text)
+            self.assertIn("<REDACTED_PHONE>", log_text)
+            self.assertIn("<REDACTED_FRAPPE_SID>", log_text)
 
 
 if __name__ == "__main__":

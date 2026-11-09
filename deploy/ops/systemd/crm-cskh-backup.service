@@ -2,6 +2,7 @@
 Description=CRM-CSKH Daily Encrypted Backup + Checksum + GFS Retention (Local Staged; Offsite Upload Manual Until BLK-INFRA-05)
 After=docker.service
 Requires=docker.service
+OnFailure=crm-cskh-backup-failure@%n.service
 
 [Service]
 Type=oneshot

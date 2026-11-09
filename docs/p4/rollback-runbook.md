@@ -4,8 +4,8 @@
 - **Đầu vào hạ tầng thực tế (`https://crm.hrpartner.vn`):**
   - VPS: `103.77.208.186` · Project: `crm-cskh-vps-staging` · Site: `crm-staging.localhost`
   - Wrapper: `/opt/crm-cskh-staging/staging-compose` · Cấu hình: `/opt/crm-cskh-staging/.env.staging` (`0600`) · Overlay domain: `/opt/crm-cskh-staging/compose.domain.yaml`
-  - Công cụ đi kèm: [`check_health_and_invariants.py`](../../deploy/ops/check_health_and_invariants.py) (`--since-utc`), [`create_encrypted_backup.py`](../../deploy/ops/create_encrypted_backup.py), [`verify_offsite_restore.py`](../../deploy/ops/verify_offsite_restore.py), [`staging_https_smoke_and_reconcile.py`](../../deploy/ops/staging_https_smoke_and_reconcile.py)
-  - Tài liệu liên kết: [`backup-restore.md`](./backup-restore.md), [`release-runbook.md`](./release-runbook.md), [`operations-sop.md`](./operations-sop.md)
+  - Công cụ đi kèm: [`check_health_and_invariants.py`](../../deploy/ops/check_health_and_invariants.py) (`--since-utc`), [`create_encrypted_backup.py`](../../deploy/ops/create_encrypted_backup.py), [`verify_offsite_restore.py`](../../deploy/ops/verify_offsite_restore.py), [`staging_https_smoke_and_reconcile.py`](../../deploy/ops/staging_https_smoke_and_reconcile.py), [`manage_isolated_staging_dr.py`](../../deploy/ops/manage_isolated_staging_dr.py)
+  - Tài liệu liên kết: [`backup-restore.md`](./backup-restore.md), [`isolated-staging-dr-https.md`](./isolated-staging-dr-https.md), [`release-runbook.md`](./release-runbook.md), [`operations-sop.md`](./operations-sop.md)
 
 ---
 

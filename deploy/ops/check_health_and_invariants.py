@@ -64,6 +64,16 @@ COMPOSE_MODES: dict[str, tuple[Path, ...]] = {
         OVERRIDES_DIR / "compose.cskh-common.yaml",
         OVERRIDES_DIR / "compose.cskh-isolated-smoke.yaml",
     ),
+    "dr-https": (
+        UPSTREAM_DIR / "compose.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.mariadb-secrets.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.redis.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.https.yaml",
+        UPSTREAM_DIR / "overrides" / "compose.migrator.yaml",
+        OVERRIDES_DIR / "compose.cskh-common.yaml",
+        OVERRIDES_DIR / "compose.cskh-dr-https.yaml",
+    ),
 }
 
 SCHEDULER_CADENCE_MAX_LAG_SECONDS: dict[str, int] = {
@@ -93,6 +103,11 @@ ALERT_CATALOG: dict[str, dict[str, str]] = {
         "severity": "SEV-1",
         "first_action": "Contain write operations if ownership/PII integrity is affected; follow 6-step Data Incident SOP (never edit history via raw SQL).",
         "runbook": "docs/p4/operations-sop.md#3-quy-trinh-xu-ly-su-co-du-lieu",
+    },
+    "ALT-BACKUP-FAILURE": {
+        "severity": "SEV-1",
+        "first_action": "Inspect `/var/backups/crm-cskh/latest-backup-lifecycle.json` & `journalctl -u crm-cskh-backup.service`, verify disk space, re-run scheduled backup, and confirm offsite SHA-256 receipt.",
+        "runbook": "docs/p4/backup-restore.md#6-lich-backup-dinh-ky-xac-nhan-offsite-retention-va-canh-bao-loi-g07",
     },
     "ALT-TEST-SYNTHETIC": {
         "severity": "INFO",
@@ -732,6 +747,96 @@ finally:
     raise RuntimeError("Backend health/invariant probe did not emit PROBE_JSON")
 
 
+def evaluate_backup_freshness_and_offsite(
+    lifecycle_path: Path,
+    *,
+    max_age_hours: float = 26.0,
+    require_automated_offsite: bool = False,
+    now_utc: datetime | None = None,
+) -> dict[str, Any]:
+    """Evaluate scheduled backup freshness, checksum status, and periodic offsite proof (G07)."""
+    ref_now = now_utc or datetime.now(timezone.utc)
+    if not lifecycle_path.is_file():
+        return {
+            "status": "FAIL",
+            "lifecycle_file": str(lifecycle_path),
+            "exists": False,
+            "local_backup_status": "MISSING",
+            "periodic_offsite_upload_proven": False,
+            "one_off_manual_copy_proves_periodic_upload": False,
+            "end_to_end_backup_gate_g07_status": "FAIL",
+            "errors": ["Missing latest-backup-lifecycle.json"],
+        }
+    try:
+        doc = json.loads(lifecycle_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {
+            "status": "FAIL",
+            "lifecycle_file": str(lifecycle_path),
+            "exists": True,
+            "local_backup_status": "MALFORMED",
+            "periodic_offsite_upload_proven": False,
+            "one_off_manual_copy_proves_periodic_upload": False,
+            "end_to_end_backup_gate_g07_status": "FAIL",
+            "errors": ["Malformed latest-backup-lifecycle.json"],
+        }
+
+    errors: list[str] = []
+    local_status = str(doc.get("local_backup_status") or doc.get("status") or "FAIL")
+    if local_status != "PASS":
+        errors.append(f"Latest scheduled backup status is {local_status!r}")
+
+    bundle = doc.get("latest_bundle") if isinstance(doc.get("latest_bundle"), dict) else {}
+    ts_raw = str(bundle.get("completed_at_utc") or doc.get("timestamp_utc") or "").strip()
+    age_hours: float | None = None
+    if not ts_raw:
+        errors.append("Missing completed_at_utc / timestamp_utc in backup lifecycle status")
+    else:
+        norm = re.sub(r"\.(\d{6})\d+", r".\1", ts_raw[:-1] + "+00:00" if ts_raw.endswith("Z") else ts_raw)
+        try:
+            completed_dt = datetime.fromisoformat(norm)
+            if completed_dt.tzinfo is None:
+                completed_dt = completed_dt.replace(tzinfo=timezone.utc)
+            age_hours = round(max(0.0, (ref_now - completed_dt.astimezone(timezone.utc)).total_seconds() / 3600.0), 3)
+            if age_hours > max_age_hours:
+                errors.append(f"Scheduled backup is stale: age {age_hours}h exceeds max {max_age_hours}h")
+        except ValueError:
+            errors.append("Unparseable backup timestamp in lifecycle status")
+
+    periodic_proven = bool(doc.get("periodic_offsite_upload_proven", False)) and bool(
+        bundle.get("offsite_verified", False)
+    )
+    if require_automated_offsite and not periodic_proven:
+        errors.append(
+            "Periodic automated offsite upload + SHA-256 readback is not proven (a single manual copy does not prove scheduled upload)"
+        )
+
+    ok = len(errors) == 0
+    if not ok and local_status != "PASS":
+        g07_status = "FAIL"
+    elif not ok and age_hours is not None and age_hours > max_age_hours:
+        g07_status = "FAIL"
+    elif periodic_proven and len(errors) == 0:
+        g07_status = "PASS"
+    else:
+        g07_status = "PARTIAL_PERIODIC_OFFSITE_UNPROVEN"
+
+    return {
+        "status": "PASS" if ok else "FAIL",
+        "lifecycle_file": str(lifecycle_path),
+        "exists": True,
+        "local_backup_status": local_status,
+        "age_hours": age_hours,
+        "max_age_hours": max_age_hours,
+        "archive_sha256": bundle.get("archive_sha256"),
+        "offsite_copy_status": bundle.get("offsite_copy_status"),
+        "periodic_offsite_upload_proven": periodic_proven,
+        "one_off_manual_copy_proves_periodic_upload": False,
+        "end_to_end_backup_gate_g07_status": g07_status,
+        "errors": errors,
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
@@ -739,7 +844,7 @@ def main(argv: list[str] | None = None) -> int:
         sys.stderr.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-file", type=Path, help="Compose .env file for target stack")
-    parser.add_argument("--mode", choices=("tls", "isolated-smoke"), default="tls")
+    parser.add_argument("--mode", choices=("tls", "isolated-smoke", "dr-https"), default="tls")
     parser.add_argument(
         "--extra-compose-file",
         type=Path,
@@ -758,6 +863,27 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--since-utc",
         help="ISO-8601 UTC timestamp to compute P4 §15.3 restore data-loss counts",
+    )
+    parser.add_argument(
+        "--backup-status-file",
+        type=Path,
+        help="Optional path to latest-backup-lifecycle.json to enforce backup freshness/status",
+    )
+    parser.add_argument(
+        "--max-backup-age-hours",
+        type=float,
+        default=26.0,
+        help="Maximum allowed age in hours for latest scheduled backup (default: 26.0)",
+    )
+    parser.add_argument(
+        "--require-automated-offsite",
+        action="store_true",
+        help="Fail closed unless periodic automated offsite upload + SHA-256 readback is proven",
+    )
+    parser.add_argument(
+        "--alert-log-file",
+        type=Path,
+        help="Optional local JSONL file to append redacted failure alert envelopes",
     )
     parser.add_argument(
         "--preflight-alert-check",
@@ -863,12 +989,87 @@ def main(argv: list[str] | None = None) -> int:
         startup_grace_seconds=args.startup_grace_seconds,
     )
 
+    backup_check: dict[str, Any] | None = None
+    if args.backup_status_file is not None:
+        backup_check = evaluate_backup_freshness_and_offsite(
+            args.backup_status_file,
+            max_age_hours=args.max_backup_age_hours,
+            require_automated_offsite=args.require_automated_offsite,
+        )
+
     overall_ok = (
         containers["status"] == "PASS"
         and disk["level"] != "CRITICAL"
         and queues_and_scheduler["status"] == "PASS"
         and invariants["status"] == "PASS"
+        and (backup_check is None or backup_check["status"] == "PASS")
     )
+
+    triggered_alerts: list[dict[str, Any]] = []
+    if not overall_ok:
+        owner_label = args.operator_contact.strip() or "UNASSIGNED_PENDING_BLK_GOV_06"
+        failure_codes: list[tuple[str, str, dict[str, Any]]] = []
+        if containers["status"] != "PASS":
+            failure_codes.append(
+                (
+                    "ALT-TECH-CONTAINER",
+                    "Container health or restart/OOM check failed",
+                    {"unhealthy": containers["unhealthy_services"], "missing": containers["missing_daemon_services"]},
+                )
+            )
+        if disk["level"] == "CRITICAL":
+            failure_codes.append(
+                ("ALT-TECH-DISK", f"Critical disk usage {disk['used_percent']}%", {"used_percent": disk["used_percent"]})
+            )
+        if queues_and_scheduler["status"] != "PASS":
+            failure_codes.append(
+                (
+                    "ALT-TECH-QUEUE-SCHEDULER",
+                    "RQ queue or scheduler heartbeat check failed",
+                    {
+                        "scheduler_disabled": queues_and_scheduler["scheduler_disabled"],
+                        "stale_cron_jobs": queues_and_scheduler["stale_cron_jobs"],
+                    },
+                )
+            )
+        if invariants["status"] != "PASS":
+            failure_codes.append(
+                (
+                    "ALT-BIZ-INVARIANT",
+                    "Business invariant check failed",
+                    {"failed_invariants": invariants["failed_invariants"]},
+                )
+            )
+        if backup_check is not None and backup_check["status"] != "PASS":
+            failure_codes.append(
+                (
+                    "ALT-BACKUP-FAILURE",
+                    "Scheduled backup freshness, integrity, or offsite check failed",
+                    {
+                        "local_backup_status": backup_check["local_backup_status"],
+                        "age_hours": backup_check.get("age_hours"),
+                        "errors": backup_check["errors"],
+                    },
+                )
+            )
+        for code, msg, metrics in failure_codes:
+            envelope = build_alert_envelope(code, args.environment_label, owner_label, msg, metrics)
+            if alert_preflight["status"] == "READY":
+                dispatch = dispatch_alert_with_cooldown(envelope, args.webhook_url, args.dedup_state_file)
+            else:
+                dispatch = {
+                    "status": "GATED_PENDING_OWNER_CONTACT_AND_CHANNEL",
+                    "blockers": [b["id"] for b in alert_preflight["blockers"]],
+                }
+            record = {"envelope": envelope, "dispatch": dispatch}
+            triggered_alerts.append(record)
+            if args.alert_log_file is not None:
+                args.alert_log_file.parent.mkdir(parents=True, exist_ok=True)
+                with args.alert_log_file.open("a", encoding="utf-8", newline="\n") as af:
+                    af.write(redact_payload_text(json.dumps(record, ensure_ascii=False)) + "\n")
+                if os.name == "posix":
+                    args.alert_log_file.chmod(0o600)
+
     report = {
         "timestamp_utc": utc_now_iso(),
         "environment": args.environment_label,
@@ -879,8 +1080,10 @@ def main(argv: list[str] | None = None) -> int:
         "disk": disk,
         "queues_and_scheduler": queues_and_scheduler,
         "business_invariants": invariants,
+        "backup_freshness_and_offsite": backup_check,
         "data_loss_window_delta": backend_probe["data_loss_window_delta"],
         "alert_preflight": alert_preflight,
+        "triggered_alerts": triggered_alerts,
     }
     out_txt = redact_payload_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")
     if args.out:

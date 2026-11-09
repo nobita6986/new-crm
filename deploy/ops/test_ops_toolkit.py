@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import mimetypes
 import os
+import sys
 
 mimetypes.init(files=[])
 
@@ -16,8 +17,6 @@ import threading  # noqa: E402
 import unittest  # noqa: E402
 from pathlib import Path  # noqa: E402
 from unittest import mock  # noqa: E402
-
-import sys
 
 OPS_DIR = Path(__file__).resolve().parent
 if str(OPS_DIR) not in sys.path:
@@ -245,7 +244,8 @@ class OpsToolkitTests(unittest.TestCase):
                 self.assertEqual(r2["status"], "SUPPRESSED_COOLDOWN")
                 self.assertEqual(len(_WebhookRecorderHandler.received_bodies), 1)
 
-        if os.name == "posix" and not os.environ.get("CSKH_NO_LOOPBACK_BIND"):
+        force_loopback = bool(os.environ.get("CSKH_FORCE_LOOPBACK_SERVER"))
+        if (os.name == "posix" or force_loopback) and not os.environ.get("CSKH_NO_LOOPBACK_BIND"):
             with socketserver.TCPServer(("127.0.0.1", 0), _WebhookRecorderHandler) as httpd:
                 port = httpd.server_address[1]
                 t = threading.Thread(target=httpd.serve_forever, daemon=True)
@@ -285,17 +285,29 @@ class OpsToolkitTests(unittest.TestCase):
 
         expected_tls = tuple(Path(p).resolve() for p in vcc.STACK_PROFILES["staging"]["compose_files"])
         expected_smoke = tuple(Path(p).resolve() for p in vcc.STACK_PROFILES["isolated-smoke"]["compose_files"])
+        expected_dr_https = tuple(
+            Path(p).resolve() for p in vcc.STACK_PROFILES["staging-dr-https"]["compose_files"]
+        )
         self.assertEqual(len(expected_tls), 8)
         self.assertEqual(len(expected_smoke), 8)
+        self.assertEqual(len(expected_dr_https), 8)
         self.assertEqual(tuple(p.resolve() for p in health_mod.COMPOSE_MODES["tls"]), expected_tls)
         self.assertEqual(
             tuple(p.resolve() for p in health_mod.COMPOSE_MODES["isolated-smoke"]),
             expected_smoke,
         )
+        self.assertEqual(
+            tuple(p.resolve() for p in health_mod.COMPOSE_MODES["dr-https"]),
+            expected_dr_https,
+        )
         self.assertEqual(tuple(p.resolve() for p in staging_mod.COMPOSE_MODES["tls"]), expected_tls)
         self.assertEqual(
             tuple(p.resolve() for p in staging_mod.COMPOSE_MODES["isolated-smoke"]),
             expected_smoke,
+        )
+        self.assertEqual(
+            tuple(p.resolve() for p in staging_mod.COMPOSE_MODES["dr-https"]),
+            expected_dr_https,
         )
 
         # Verify both runbooks list all 8 Compose files in exact order (F-P4-OPS-01)
@@ -606,6 +618,98 @@ class OpsToolkitTests(unittest.TestCase):
             "staging-crm.company.vn",
         )
         self.assertTrue(ok_stg, errs_stg)
+
+        # Must also refuse Owner's live VPS project/site even though they contain 'staging'
+        ok_vps, errs_vps = seeder.validate_staging_seed_target(
+            {
+                "COMPOSE_PROJECT_NAME": "crm-cskh-vps-staging",
+                "SITE_NAME": "crm-staging.localhost",
+            },
+            "crm-staging.localhost",
+        )
+        self.assertFalse(ok_vps)
+        self.assertGreaterEqual(len(errs_vps), 2)
+
+    def test_backup_freshness_monitor_and_isolated_staging_dr_owner_guards(self) -> None:
+        from datetime import datetime, timezone
+        import manage_isolated_staging_dr as dr_mod
+
+        ref_now = datetime(2026, 11, 9, 22, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as tmp:
+            lc_path = Path(tmp) / "latest-backup-lifecycle.json"
+            # Missing file -> FAIL
+            missing_eval = health_mod.evaluate_backup_freshness_and_offsite(lc_path, now_utc=ref_now)
+            self.assertEqual(missing_eval["status"], "FAIL")
+
+            # Fresh local backup without automated offsite -> PASS local freshness, PARTIAL G07, FAIL when --require-automated-offsite
+            lc_path.write_text(
+                json.dumps(
+                    {
+                        "local_backup_status": "PASS",
+                        "periodic_offsite_upload_proven": False,
+                        "latest_bundle": {
+                            "completed_at_utc": "2026-11-09T20:00:00Z",
+                            "archive_sha256": "a" * 64,
+                            "offsite_verified": True,
+                            "offsite_copy_status": "MANUAL_OFFSITE_HASH_VERIFIED",
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            local_ok = health_mod.evaluate_backup_freshness_and_offsite(
+                lc_path, max_age_hours=26.0, require_automated_offsite=False, now_utc=ref_now
+            )
+            self.assertEqual(local_ok["status"], "PASS")
+            self.assertEqual(local_ok["end_to_end_backup_gate_g07_status"], "PARTIAL_PERIODIC_OFFSITE_UNPROVEN")
+            self.assertFalse(local_ok["one_off_manual_copy_proves_periodic_upload"])
+
+            req_auto = health_mod.evaluate_backup_freshness_and_offsite(
+                lc_path, max_age_hours=26.0, require_automated_offsite=True, now_utc=ref_now
+            )
+            self.assertEqual(req_auto["status"], "FAIL")
+
+            # Stale (>26h) -> FAIL even without --require-automated-offsite
+            lc_path.write_text(
+                json.dumps(
+                    {
+                        "local_backup_status": "PASS",
+                        "periodic_offsite_upload_proven": True,
+                        "latest_bundle": {
+                            "completed_at_utc": "2026-11-08T10:00:00Z",
+                            "archive_sha256": "a" * 64,
+                            "offsite_verified": True,
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+            stale_eval = health_mod.evaluate_backup_freshness_and_offsite(
+                lc_path, max_age_hours=26.0, require_automated_offsite=False, now_utc=ref_now
+            )
+            self.assertEqual(stale_eval["status"], "FAIL")
+
+        # Isolated Staging/DR guard must accept isolated dr-https and reject Owner live / wildcard / port 443
+        valid_dr_env = {
+            "COMPOSE_PROJECT_NAME": "crm-cskh-staging-dr-https",
+            "SITE_NAME": "staging-dr-uat.crm-internal.localhost",
+            "INGRESS_BIND_IP": "127.0.0.1",
+            "HTTP_PUBLISH_PORT": "18081",
+            "HTTPS_PUBLISH_PORT": "18443",
+            "DB_PASSWORD_SECRETS_FILE": "/tmp/dr-secret/db_root_password.txt",
+        }
+        dr_mod.assert_isolated_from_owner_stack(valid_dr_env)
+
+        for bad_override in (
+            {"COMPOSE_PROJECT_NAME": "crm-cskh-vps-staging"},
+            {"SITE_NAME": "crm-staging.localhost"},
+            {"SITE_NAME": "crm.hrpartner.vn"},
+            {"INGRESS_BIND_IP": "0.0.0.0"},
+            {"HTTPS_PUBLISH_PORT": "443"},
+            {"DB_PASSWORD_SECRETS_FILE": "/opt/crm-cskh-staging/secrets/db_root_password.txt"},
+        ):
+            with self.assertRaises(ValueError):
+                dr_mod.assert_isolated_from_owner_stack({**valid_dr_env, **bad_override})
 
     def test_rehearsal_runner_persists_scrubbed_json_and_log_after_cleanup_on_mid_run_error(
         self,

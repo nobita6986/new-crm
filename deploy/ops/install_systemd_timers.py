@@ -3,13 +3,16 @@
 
 Matches the live VPS topology (`/opt/crm-cskh-staging/.env.staging`, wrapper
 `/opt/crm-cskh-staging/staging-compose`, site `crm-staging.localhost`, and domain
-overlay `/opt/crm-cskh-staging/compose.domain.yaml`).
+overlay `/opt/crm-cskh-staging/compose.domain.yaml`), including:
+- Periodic healthcheck + backup freshness/staleness monitoring (`--backup-status-file`).
+- Daily encrypted backup + checksum + GFS `14d/8w/3m` retention (`crm-cskh-backup.timer`).
+- Dedicated failure alert recorder (`OnFailure=crm-cskh-backup-failure@%n.service`).
 
 Safety guarantees:
 - Read-only `--dry-run` by default unless `--install` is explicitly passed as root.
 - Refuses missing `--env-file`, `--compose-wrapper`, or `--extra-compose-file`.
 - External alerts (`email`/`chat`/webhook) remain strictly DISABLED in periodic
-  healthcheck units until Owner assigns `BLK-GOV-06` and `BLK-INFRA-07`.
+  units until Owner assigns `BLK-GOV-06` and `BLK-INFRA-07`.
 """
 
 from __future__ import annotations
@@ -35,6 +38,9 @@ def render_healthcheck_units(
     environment_label: str = "staging",
     mode: str = "tls",
     extra_compose_files: tuple[Path, ...] = (),
+    backup_status_file: Path | None = Path("/var/backups/crm-cskh/latest-backup-lifecycle.json"),
+    max_backup_age_hours: float = 26.0,
+    alert_log_file: Path = Path("/var/lib/crm-cskh/health/health-alerts.jsonl"),
     out_report: Path = Path("/var/lib/crm-cskh/health/latest-health-report.json"),
     calendar_spec: str = "*:0/5",
 ) -> dict[str, str]:
@@ -55,6 +61,21 @@ def render_healthcheck_units(
             site,
             "--environment-label",
             environment_label,
+        ]
+    )
+    if backup_status_file is not None:
+        cmd_parts.extend(
+            [
+                "--backup-status-file",
+                backup_status_file.as_posix(),
+                "--max-backup-age-hours",
+                str(max_backup_age_hours),
+            ]
+        )
+    cmd_parts.extend(
+        [
+            "--alert-log-file",
+            alert_log_file.as_posix(),
             "--out",
             out_report.as_posix(),
         ]
@@ -62,7 +83,7 @@ def render_healthcheck_units(
     exec_line = " ".join(shlex.quote(part) for part in cmd_parts)
     service = (
         "[Unit]\n"
-        "Description=CRM-CSKH Periodic Technical Health & Business Invariants Probe (External Alerts Gated)\n"
+        "Description=CRM-CSKH Periodic Technical Health, Backup Freshness & Business Invariants Probe (External Alerts Gated)\n"
         "After=docker.service\n"
         "Requires=docker.service\n\n"
         "[Service]\n"
@@ -94,6 +115,7 @@ def render_backup_units(
     repo_root: Path,
     compose_wrapper: Path,
     site: str,
+    environment_label: str = "staging",
     backup_root: Path = Path("/var/backups/crm-cskh"),
     keep_daily: int = 14,
     keep_weekly: int = 8,
@@ -111,6 +133,8 @@ def render_backup_units(
         site,
         "--backup-root",
         backup_root.as_posix(),
+        "--environment-label",
+        environment_label,
         "--keep-daily",
         str(keep_daily),
         "--keep-weekly",
@@ -119,17 +143,44 @@ def render_backup_units(
         str(keep_monthly),
     ]
     exec_line = " ".join(shlex.quote(part) for part in cmd_parts)
+
+    fail_parts = [
+        "/usr/bin/python3",
+        script,
+        "emit-failure-alert",
+        "--backup-root",
+        backup_root.as_posix(),
+        "--environment-label",
+        environment_label,
+        "--unit-name",
+        "%i",
+        "--reason",
+        "systemd unit %i exited non-zero",
+    ]
+    fail_exec = " ".join(shlex.quote(part) for part in fail_parts)
+
     service = (
         "[Unit]\n"
         "Description=CRM-CSKH Daily Encrypted Backup + Checksum + GFS Retention\n"
         "After=docker.service\n"
-        "Requires=docker.service\n\n"
+        "Requires=docker.service\n"
+        "OnFailure=crm-cskh-backup-failure@%n.service\n\n"
         "[Service]\n"
         "Type=oneshot\n"
         "User=root\n"
         "Group=root\n"
         "UMask=0077\n"
         f"ExecStart={exec_line}\n"
+    )
+    failure_service = (
+        "[Unit]\n"
+        "Description=CRM-CSKH Backup Failure Alert Recorder (External Delivery Gated)\n\n"
+        "[Service]\n"
+        "Type=oneshot\n"
+        "User=root\n"
+        "Group=root\n"
+        "UMask=0077\n"
+        f"ExecStart={fail_exec}\n"
     )
     timer = (
         "[Unit]\n"
@@ -144,6 +195,7 @@ def render_backup_units(
     )
     return {
         "crm-cskh-backup.service": service,
+        "crm-cskh-backup-failure@.service": failure_service,
         "crm-cskh-backup.timer": timer,
     }
 
@@ -187,6 +239,7 @@ def main(argv: list[str] | None = None) -> int:
             site=args.site,
             environment_label=args.environment_label,
             extra_compose_files=overlays,
+            backup_status_file=args.backup_root / "latest-backup-lifecycle.json",
             out_report=args.health_out,
         )
     )
@@ -195,6 +248,7 @@ def main(argv: list[str] | None = None) -> int:
             repo_root=args.repo_root,
             compose_wrapper=args.compose_wrapper,
             site=args.site,
+            environment_label=args.environment_label,
             backup_root=args.backup_root,
         )
     )
@@ -206,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
         "external_alerts_enabled": False,
         "external_alert_gate": "WAITING_OWNER_CONTACT_AND_CHANNEL_BLK_GOV_06_BLK_INFRA_07",
         "automated_offsite_upload_enabled": False,
+        "one_off_manual_copy_proves_periodic_upload": False,
         "automated_offsite_blocker": "BLK-INFRA-05",
         "units": units,
     }
