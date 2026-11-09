@@ -1,0 +1,11 @@
+[Unit]
+Description=Run CRM-CSKH Daily Encrypted Backup at 02:15 Asia/Ho_Chi_Minh (19:15 UTC)
+
+[Timer]
+OnCalendar=*-*-* 19:15:00 UTC
+RandomizedDelaySec=120
+Persistent=true
+Unit=crm-cskh-backup.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,264 @@
+{
+  "schema_version": "p4-resume-ops-manifest-v1",
+  "generated_at_utc": "2026-11-09T08:00:00Z",
+  "branch": "codex/p4-resume-ops",
+  "base_main_sha": "467830195358b2431ac772486530ab935887a518",
+  "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
+  "live_vps": {
+    "host": "103.77.208.186",
+    "public_url": "https://crm.hrpartner.vn",
+    "compose_project": "crm-cskh-vps-staging",
+    "site": "crm-staging.localhost",
+    "compose_wrapper": "/opt/crm-cskh-staging/staging-compose",
+    "domain_overlay": "/opt/crm-cskh-staging/compose.domain.yaml",
+    "app_image_digest": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+    "app_source_sha": "467204176326f046442b5e20c381f9a895b6e176"
+  },
+  "offsite_backup_verified": {
+    "bundle_id": "p4-20261109-pre-scheduler",
+    "archive_sha256": "d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11",
+    "archive_bytes": 312672,
+    "offsite_status": "OFFSITE_COPY_HASH_VERIFIED",
+    "end_to_end_automated_backup_status": "PARTIAL_OFFSITE_UPLOAD_MANUAL"
+  },
+  "test_results": {
+    "test_offsite_restore": {
+      "ran": 10,
+      "passed": 10,
+      "status": "PASS"
+    },
+    "test_ops_toolkit": {
+      "ran": 15,
+      "passed": 15,
+      "status": "PASS"
+    },
+    "compose_upstream_provenance": {
+      "verified_files": 9,
+      "status": "PASS"
+    },
+    "lf_line_endings_audit": {
+      "checked_files": 37,
+      "crlf_files": 0,
+      "status": "PASS"
+    }
+  },
+  "real_blockers": [
+    {
+      "id": "BLK-INFRA-05",
+      "scope": "backup_offsite_automation",
+      "status": "OPEN",
+      "summary": "Automated offsite upload destination (S3/B2/Restic/SSH vault) is not provisioned; end-to-end automated backup is honestly reported as PARTIAL_OFFSITE_UPLOAD_MANUAL, not PASS."
+    },
+    {
+      "id": "BLK-GOV-06",
+      "scope": "operator_and_uat_signoff",
+      "status": "OPEN",
+      "summary": "Owner-designated alert recipient and role-based UAT signers pending; external email/chat alerts remain strictly disabled."
+    },
+    {
+      "id": "BLK-INFRA-07",
+      "scope": "external_alert_channel",
+      "status": "OPEN",
+      "summary": "Approved external HTTPS alert webhook/channel not yet designated by Owner."
+    },
+    {
+      "id": "BLK-EXEC-VPS-DR",
+      "scope": "vps_root_restore_drill_execution",
+      "status": "READY_FOR_VPS_ROOT_RUN",
+      "summary": "Updated verify_offsite_restore.py (Phase A + Phase B positive control) requires root + Docker daemon on 103.77.208.186 against /opt/crm-p4-restore-input-20261109."
+    },
+    {
+      "id": "BLK-INT-T1B",
+      "scope": "t1b_candidate_integration",
+      "status": "WAITING_FOR_T1B_HANDOFF",
+      "summary": "Awaiting verified commit SHA and immutable image digest from T1B before final candidate integration."
+    }
+  ],
+  "deliverables": [
+    {
+      "path": "deploy/ops/check_health_and_invariants.py",
+      "bytes": 37520,
+      "sha256": "1b41f5e9cfc6724e148568ba0297c98295b063c0db747f8cb8fb1fd22c8a06d8"
+    },
+    {
+      "path": "deploy/ops/create_encrypted_backup.py",
+      "bytes": 12702,
+      "sha256": "729426bbce1b48616cb9a5dacedd5802d85a7d6419c896bc18c1ab0235f1d214"
+    },
+    {
+      "path": "deploy/ops/install_systemd_timers.py",
+      "bytes": 8032,
+      "sha256": "275689cd75636df2c23d2233058293c0effff674ee2898c75fde464b709b8bcd"
+    },
+    {
+      "path": "deploy/ops/manage_backup_lifecycle.py",
+      "bytes": 21628,
+      "sha256": "8b4b3a82757ca24e3c68711e2daf37ae716fa0ae6e211423fccc5571c2f9691d"
+    },
+    {
+      "path": "deploy/ops/run_local_ops_rehearsal.py",
+      "bytes": 87931,
+      "sha256": "036c37a0ec0c4f03560f4159ed3971b9eab2a9055b9edbd717ea0536ab49bae1"
+    },
+    {
+      "path": "deploy/ops/seed_staging_synthetic.py",
+      "bytes": 5102,
+      "sha256": "240ddcfa9a7aefa5b99161536f2be0c77636d3a5056ed673d262f48f97f928c0"
+    },
+    {
+      "path": "deploy/ops/staging_https_smoke_and_reconcile.py",
+      "bytes": 46448,
+      "sha256": "d56af03c05262c0b6f11ff09d202996da5e9eefc17b62fffddc418f206f0f619"
+    },
+    {
+      "path": "deploy/ops/systemd/crm-cskh-backup.service",
+      "bytes": 536,
+      "sha256": "0424134c220f1ceb4a483e11e9971328de6d3693b9726fc53184399c1062f4b1"
+    },
+    {
+      "path": "deploy/ops/systemd/crm-cskh-backup.timer",
+      "bytes": 234,
+      "sha256": "fcdabc80bf6fca66c6c0623a6a35ec419960c89d36bb40b5f20fdd6437cc389c"
+    },
+    {
+      "path": "deploy/ops/systemd/crm-cskh-healthcheck.service",
+      "bytes": 695,
+      "sha256": "82794ce38bc1ffe8fefaab5e4d45d0db0d0b62a126392ed85f5abc981859d6ce"
+    },
+    {
+      "path": "deploy/ops/systemd/crm-cskh-healthcheck.timer",
+      "bytes": 206,
+      "sha256": "dd1d22491719046da312df2a22a544dc5c456e8eb2abdcc679efc465ee837721"
+    },
+    {
+      "path": "deploy/ops/test_offsite_restore.py",
+      "bytes": 17979,
+      "sha256": "775d678b6104936cfb396d6a982e5f734e942fcc0f0296b003dec68bd5a5fae3"
+    },
+    {
+      "path": "deploy/ops/test_ops_toolkit.py",
+      "bytes": 44767,
+      "sha256": "189ee0eb4b425ae649cd1ff4f1e81dae9c80d366fd697002477dbc87af093575"
+    },
+    {
+      "path": "deploy/ops/verify_offsite_restore.py",
+      "bytes": 74061,
+      "sha256": "dc1ad9aa7ac8364e9a1c7ee8f1a8ce38b04ed89feb2c6a7ddbfdea8b3f0322b1"
+    },
+    {
+      "path": "docs/p4/P4-ADR-01-compose-and-isolation.md",
+      "bytes": 25351,
+      "sha256": "701b7a6c9d11df6aadf5cad61137fec709d14e82c25e733d990263e9d6c1c06e"
+    },
+    {
+      "path": "docs/p4/P4-ADR-02-custom-image-and-lock.md",
+      "bytes": 17486,
+      "sha256": "796b1cd7f6c2828713ecfba95be70cf75e51e7db9af63f6ff5e255f19a8eddff"
+    },
+    {
+      "path": "docs/p4/P4-ADR-03-ci-registry-and-promotion.md",
+      "bytes": 7305,
+      "sha256": "56bcaa88a5a5084b28028ec9a7217eeb1f929fac5777cc861af27396712b303c"
+    },
+    {
+      "path": "docs/p4/P4-ADR-08-observability-and-invariants.md",
+      "bytes": 6056,
+      "sha256": "bfbcac388b42ea1d07c2d4121560acc05d3c191a205a74ed0dde877d9b08883b"
+    },
+    {
+      "path": "docs/p4/backup-restore.md",
+      "bytes": 15353,
+      "sha256": "0a66207f13e80ae609419ba9a15d0e93533ef9bef315a2ee0d1572d6acf75e49"
+    },
+    {
+      "path": "docs/p4/entry-audit.md",
+      "bytes": 8066,
+      "sha256": "bd6b576d7e481798e4678f4cd85a672157364d1992c2d303cf743beece351f6a"
+    },
+    {
+      "path": "docs/p4/glossary-vi.md",
+      "bytes": 12623,
+      "sha256": "dd45a404cc148a5c782334417921f2eab7ec631644feed73a33b0e87fcac1688"
+    },
+    {
+      "path": "docs/p4/huong-dan-su-dung-vi.md",
+      "bytes": 10964,
+      "sha256": "4f2d0ea9e7c6f09f5ce9aabe40a47f996ff9130f96594a0c93bf7fb7e40f9bea"
+    },
+    {
+      "path": "docs/p4/infra-inventory.md",
+      "bytes": 2988,
+      "sha256": "5211a027acf51847e1b7a3511b6c77bd7c95bffc52d30e5d60b8fa981e1410af"
+    },
+    {
+      "path": "docs/p4/monitoring-alerts.md",
+      "bytes": 12921,
+      "sha256": "f92a62359c0682e6110f9a288dc853cd0fd2c723727f3eaf0824fa6b5ef37e90"
+    },
+    {
+      "path": "docs/p4/operations-sop.md",
+      "bytes": 17537,
+      "sha256": "45237adfbf666446c3b3aa4289159430fc4cb8455a09a98df45fa4cc2a1b8821"
+    },
+    {
+      "path": "docs/p4/p4-01-compose-and-blockers.md",
+      "bytes": 24155,
+      "sha256": "907fb21c7a88d2db91279f7ed4c167ef1b0891da061773e5ee686edf34c9ff04"
+    },
+    {
+      "path": "docs/p4/p4-01-image-build-and-lock.md",
+      "bytes": 20658,
+      "sha256": "d4fa0f4a1021f5382dc71ba47610b9597302d59bd91ebec9803880c2a348f651"
+    },
+    {
+      "path": "docs/p4/p4-01-integration-summary.md",
+      "bytes": 8047,
+      "sha256": "cabacec7564b4cd05f27b45a99bde39398b08441e54024f8945de3744fa4c827"
+    },
+    {
+      "path": "docs/p4/p4-02-ci-and-release-pipeline.md",
+      "bytes": 7519,
+      "sha256": "3fb7ecbef7d1d176e6d84418af560a6127fbf388b447f83b9f3aa603e39d420e"
+    },
+    {
+      "path": "docs/p4/p4-02-cve-exception-requests.md",
+      "bytes": 18395,
+      "sha256": "9033c401cc90ec2dc17ec0b80012b4f0d12eddc64dd55e5cc274fc8a9f9d7435"
+    },
+    {
+      "path": "docs/p4/p4-02-pipeline-input-contract.md",
+      "bytes": 17402,
+      "sha256": "aed3f78894d1f73d83aa9ef30b57b7ca5d388760848f7698d1633508da363a90"
+    },
+    {
+      "path": "docs/p4/p4-03-staging-checklist-and-rehearsal.md",
+      "bytes": 16881,
+      "sha256": "6740e8ac903029af7e6a8ef744688a127e1468c05e53215caa3582327c120c1e"
+    },
+    {
+      "path": "docs/p4/pii-field-catalog.md",
+      "bytes": 20736,
+      "sha256": "bd946490f1d13e0b6ce457fe35b55c67bbcfe59a43bb89bdbc301d7e10c388b8"
+    },
+    {
+      "path": "docs/p4/release-runbook.md",
+      "bytes": 12937,
+      "sha256": "6cd5305f7b73167af4f25c1f241d003a2e44ac67ec31cdd4e26aa923b84f54c1"
+    },
+    {
+      "path": "docs/p4/rollback-runbook.md",
+      "bytes": 21230,
+      "sha256": "f4a9f69241520324167dca190cdf7b8e7e7f9e6a03ef0d18892c296562e58e96"
+    },
+    {
+      "path": "docs/p4/staging-migration-backlog.md",
+      "bytes": 4444,
+      "sha256": "63c453a5cdf2b902179f7b14925d253b5b3f9fc4ab9cd5c7ff54adc9be83b651"
+    },
+    {
+      "path": "docs/p4/uat-report.md",
+      "bytes": 23091,
+      "sha256": "0fecb8ffda0990bcbf674ebbd8e29bb54882c2df30ca80ec06907d72f3f05d89"
+    }
+  ]
+}

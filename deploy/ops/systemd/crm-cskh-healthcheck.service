@@ -1,0 +1,18 @@
+[Unit]
+Description=CRM-CSKH Periodic Technical Health & Business Invariants Probe (Domain Overlay Enabled, External Alerts Gated)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+# External alert delivery is intentionally NOT configured here (waiting for Owner BLK-GOV-06 & BLK-INFRA-07).
+ExecStart=/usr/bin/python3 /opt/crm-cskh-staging/repo/deploy/ops/check_health_and_invariants.py \
+  --env-file /opt/crm-cskh-staging/.env.staging \
+  --mode tls \
+  --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml \
+  --site crm-staging.localhost \
+  --environment-label staging \
+  --out /var/lib/crm-cskh/health/latest-health-report.json

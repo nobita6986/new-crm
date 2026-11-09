@@ -1,0 +1,17 @@
+[Unit]
+Description=CRM-CSKH Daily Encrypted Backup + Checksum + GFS Retention (Local Staged; Offsite Upload Manual Until BLK-INFRA-05)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/bin/python3 /opt/crm-cskh-staging/repo/deploy/ops/manage_backup_lifecycle.py run-scheduled \
+  --compose-wrapper /opt/crm-cskh-staging/staging-compose \
+  --site crm-staging.localhost \
+  --backup-root /var/backups/crm-cskh \
+  --keep-daily 14 \
+  --keep-weekly 8 \
+  --keep-monthly 3

@@ -1,0 +1,55 @@
+{
+  "timestamp_utc": "2026-11-06T04:55:21Z",
+  "env_file": "deploy/compose/env/staging.env.example",
+  "project_name": "crm-cskh-staging",
+  "site_name": "staging-crm.example.invalid",
+  "status": "BLOCKED",
+  "blocker_count": 4,
+  "blockers": [
+    {
+      "id": "BLK-INFRA-02",
+      "field": "SITE_NAME / LETSENCRYPT_EMAIL",
+      "reason": "Staging/Production requires a real approved FQDN and non-placeholder ACME email."
+    },
+    {
+      "id": "BLK-INFRA-03",
+      "field": "APP_IMAGE",
+      "reason": "APP_IMAGE must be a real approved remote registry digest (<registry>/<repo>@sha256:<64hex>)."
+    },
+    {
+      "id": "BLK-INFRA-04",
+      "field": "DB_PASSWORD_SECRETS_FILE",
+      "reason": "Host secret file missing, <16 bytes, contains CR/CRLF, or lacks 0600 permissions."
+    },
+    {
+      "id": "BLK-INFRA-04",
+      "field": "encryption_key_escrow",
+      "reason": "Off-VPS encrypted escrow of site_config.json encryption_key has not been attested (--confirm-encryption-key-escrow)."
+    }
+  ],
+  "checks": {
+    "dns_tls": {
+      "site_name": "staging-crm.example.invalid",
+      "acme_email_configured": false,
+      "domain_valid_fqdn": false
+    },
+    "registry_digest": {
+      "app_image": "registry.example.invalid/crm-cskh@sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "matches_remote_repo_sha256": true,
+      "pull_policy": "always"
+    },
+    "secrets": {
+      "project_name": "crm-cskh-staging",
+      "db_password_file_configured": true,
+      "db_password_file_audit": {
+        "exists": false,
+        "ends_with_lf_only": false,
+        "contains_cr": false,
+        "non_empty": false,
+        "mode_ok": false,
+        "byte_length": 0
+      },
+      "encryption_key_escrow_confirmed": false
+    }
+  }
+}
