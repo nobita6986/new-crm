@@ -5,6 +5,10 @@ Implements P4.md §4.1 and docs/p4/p4-02-pipeline-input-contract.md §4:
 - Never accepts tag-only, placeholder, or BLOCKED image references.
 - Derives `migration_revision` from `apps/crm_cskh/crm_cskh/patches.txt` and
   `kpi_formula_version` from `apps/crm_cskh/crm_cskh/services/kpi_calculator.py`.
+- Enforces that `production_candidate` manifests can ONLY be generated AND signed when
+  a `strict` security scan (`gate_mode == "strict"`, `status == "PASS"`, zero unapproved
+  Critical CVEs, zero secrets) matches the exact `manifest.image` `@sha256` digest
+  (blocking cross-digest scan extrapolation between CI/live/release images).
 - Signs exact UTF-8 manifest bytes with Ed25519 (via `cryptography` or `openssl` CLI fallback)
   without writing secrets to logs or stdout.
 - Enforces `environment_scope` separation so a `ci_ephemeral_rehearsal` manifest is
@@ -96,6 +100,61 @@ def validate_registry_digest(image_ref: str) -> None:
         raise ValueError(
             f"Image reference {image_ref!r} must match '<registry>/<repo>@sha256:<64-hex>'"
         )
+
+
+def verify_security_scan_for_manifest(
+    scan_doc: dict[str, object],
+    *,
+    environment_scope: str,
+    expected_image: str,
+) -> None:
+    """Enforces fail-closed scan & same-digest invariants before manifest generate or sign."""
+    if (
+        scan_doc.get("status") != "PASS"
+        or int(scan_doc.get("secret_findings_count", -1)) != 0
+    ):
+        raise ValueError(
+            f"Refusing security scan with non-PASS status or secret findings "
+            f"(status={scan_doc.get('status')!r}, secrets={scan_doc.get('secret_findings_count')!r})"
+        )
+    if scan_doc.get("gate_failures"):
+        raise ValueError(
+            f"Refusing security scan with non-empty gate_failures: {scan_doc.get('gate_failures')!r}"
+        )
+
+    scanned_artifact = str(scan_doc.get("artifact_name") or "").strip()
+    if scanned_artifact != expected_image:
+        raise ValueError(
+            "Security scan digest mismatch (cross-image scan extrapolation forbidden): "
+            f"scan artifact_name={scanned_artifact!r} != manifest image={expected_image!r}"
+        )
+
+    if environment_scope == "production_candidate":
+        gate_mode = scan_doc.get("gate_mode")
+        if gate_mode != "strict":
+            raise ValueError(
+                "production_candidate release-manifest.json requires explicit security scan "
+                f"gate_mode='strict', got {gate_mode!r}"
+            )
+        crit_counts = scan_doc.get("unique_critical_counts")
+        if isinstance(crit_counts, dict):
+            fixable_unapproved = int(crit_counts.get("fixable_unapproved", 0))
+            unfixed_unapproved = int(
+                crit_counts.get("unfixed_upstream_os_unapproved", 0)
+            )
+            if fixable_unapproved != 0 or unfixed_unapproved != 0:
+                raise ValueError(
+                    "production_candidate manifest cannot be generated or signed while "
+                    f"unapproved Critical CVEs remain (fixable={fixable_unapproved}, "
+                    f"unfixed_os={unfixed_unapproved})"
+                )
+        if scan_doc.get("fixable_critical_unapproved") or scan_doc.get(
+            "unfixed_critical_upstream_os"
+        ):
+            raise ValueError(
+                "production_candidate manifest cannot be generated or signed while "
+                "unapproved Critical CVE lists are non-empty"
+            )
 
 
 def _find_openssl() -> str | None:
@@ -352,22 +411,11 @@ def build_manifest_dict(
     if not security_scan_path.is_file() or security_scan_path.stat().st_size == 0:
         raise ValueError(f"Missing or empty security scan report: {security_scan_path}")
     scan_doc = json.loads(security_scan_path.read_text(encoding="utf-8"))
-    if (
-        scan_doc.get("status") != "PASS"
-        or int(scan_doc.get("secret_findings_count", 0)) != 0
-    ):
-        raise ValueError(
-            f"Refusing to generate release-manifest.json from non-PASS security scan "
-            f"(status={scan_doc.get('status')!r}, secrets={scan_doc.get('secret_findings_count')!r})"
-        )
-    if (
-        environment_scope == "production_candidate"
-        and scan_doc.get("gate_mode", "strict") != "strict"
-    ):
-        raise ValueError(
-            "production_candidate release-manifest.json requires security scan gate_mode='strict', "
-            f"got {scan_doc.get('gate_mode')!r}"
-        )
+    verify_security_scan_for_manifest(
+        scan_doc,
+        environment_scope=environment_scope,
+        expected_image=reg_digest,
+    )
 
     migration_rev = read_latest_migration_revision()
     kpi_version = read_kpi_formula_version()
@@ -562,6 +610,33 @@ def cmd_sign(args: argparse.Namespace) -> int:
     manifest_obj = json.loads(payload.decode("utf-8"))
     validate_manifest_dict(manifest_obj, lock_path=Path(args.lock))
 
+    scope = str(manifest_obj.get("environment_scope") or "")
+    scan_arg = str(getattr(args, "security_scan", "") or "").strip()
+    if scope == "production_candidate" and not scan_arg:
+        raise ValueError(
+            "Signing a production_candidate manifest requires --security-scan "
+            "pointing to the strict PASS security scan report for that exact @sha256 digest"
+        )
+    if scan_arg:
+        scan_path = Path(scan_arg)
+        if not scan_path.is_file():
+            raise ValueError(f"Missing security scan file for signing: {scan_path}")
+        artifacts = manifest_obj.get("artifacts")
+        assert isinstance(artifacts, dict)
+        expected_scan_sha = str(artifacts.get("security_scan_sha256") or "")
+        actual_scan_sha = sha256_file(scan_path)
+        if actual_scan_sha != expected_scan_sha:
+            raise ValueError(
+                "Security scan SHA-256 mismatch during manifest signing: "
+                f"scan file={actual_scan_sha} != manifest.artifacts.security_scan_sha256={expected_scan_sha}"
+            )
+        scan_doc = json.loads(scan_path.read_text(encoding="utf-8"))
+        verify_security_scan_for_manifest(
+            scan_doc,
+            environment_scope=scope,
+            expected_image=str(manifest_obj["image"]),
+        )
+
     priv_pem = _load_key_bytes(
         file_arg=args.private_key_file,
         env_arg=args.private_key_env,
@@ -674,6 +749,11 @@ def build_parser() -> argparse.ArgumentParser:
     sg = sub.add_parser("sign", help="Sign release-manifest.json with Ed25519")
     sg.add_argument("--manifest", required=True)
     sg.add_argument("--lock", default=str(DEFAULT_LOCK_PATH))
+    sg.add_argument(
+        "--security-scan",
+        default="",
+        help="Path to security-scan JSON (mandatory when signing production_candidate manifests)",
+    )
     sg.add_argument("--private-key-file", default="")
     sg.add_argument("--private-key-env", default="RELEASE_SIGNING_PRIVATE_KEY")
     sg.add_argument("--sig-out", required=True)

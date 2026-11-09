@@ -6,7 +6,7 @@ Babel==2.13.1
 GitPython==3.1.62
 Jinja2==3.1.6
 MarkupSafe==3.0.4
-PyJWT==2.13.0
+PyJWT==2.14.0
 PyMySQL==1.1.1
 PyQRCode==1.2.1
 PyYAML==6.0.3
@@ -89,7 +89,7 @@ pdfkit==1.0.0
 pexpect==4.9.0
 phonenumbers==9.0.42
 pickleshare==0.7.5
-pillow==12.3.0
+pillow==13.0.0
 pip==26.3
 ply==3.11
 posthog==3.21.0

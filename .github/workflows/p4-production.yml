@@ -117,10 +117,21 @@ jobs:
           name: p4-verify-by-digest-${{ inputs.staging_release_run_id }}
           path: ${{ runner.temp }}/p4-verify-evidence
 
-      - name: Promote identical @sha256 digest to Production after mandatory pre-release backup
+      - name: Download Staging digest attestation for re-verification inside production job
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          run-id: ${{ inputs.staging_release_run_id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          name: p4-staging-attestation-${{ inputs.staging_release_run_id }}
+          path: ${{ runner.temp }}/p4-staging-attestation
+
+      - name: Promote identical @sha256 digest to Production after mandatory pre-release backup (zero rebuild)
         shell: bash
         env:
           EXPECTED_DIGEST: ${{ inputs.expected_image_digest }}
+          EXPECTED_RELEASE_ID: ${{ inputs.release_id }}
+          CSKH_REGISTRY_IMAGE: ${{ vars.CSKH_REGISTRY_IMAGE }}
+          CSKH_REGISTRY_IS_PUBLIC: ${{ vars.CSKH_REGISTRY_IS_PUBLIC }}
           RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
           CSKH_REGISTRY_PULL_USERNAME: ${{ vars.CSKH_REGISTRY_PULL_USERNAME }}
           REGISTRY_PULL_USERNAME: ${{ secrets.REGISTRY_PULL_USERNAME }}
@@ -148,10 +159,19 @@ jobs:
             --expected-image "${EXPECTED_DIGEST}" \
             --expected-scope production_candidate
 
-          if [ -z "${PROD_SSH_HOST}" ] || [ -z "${PROD_SSH_USER}" ] || [ -z "${PROD_SSH_PRIVATE_KEY}" ] || [ -z "${PROD_DEPLOY_PATH}" ] || [ -z "${PROD_ENV_FILE}" ] || [ -z "${PROD_PRE_RELEASE_BACKUP_CMD}" ]; then
-            echo "BLOCKED (BLK-INFRA-02): Production VPS SSH credentials or pre-release backup command not yet provisioned." >&2
-            exit 1
-          fi
+          python3 - "$RUNNER_TEMP/p4-staging-attestation/staging-digest-attestation.json" <<'PY'
+          import json, os, sys
+          from pathlib import Path
+
+          att = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert att.get("status") == "PASS" and att.get("zero_digest_drift") is True, att
+          assert att.get("canonical_registry_digest") == os.environ["EXPECTED_DIGEST"], att
+          PY
+
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/audit_registry_and_signing_config.py \
+            --role deploy-production \
+            --require-ready \
+            --out "${OUT_DIR}/production-role-audit.json"
 
           SSH_DIR="$RUNNER_TEMP/prod-ssh"
           mkdir -p "${SSH_DIR}"
@@ -176,7 +196,7 @@ jobs:
           # 1. Execute mandatory encrypted offsite pre-release backup (G07 / G23)
           ssh "${SSH_OPTS[@]}" "${PROD_SSH_USER}@${PROD_SSH_HOST}" "${PROD_PRE_RELEASE_BACKUP_CMD}"
 
-          # 2. Deploy identical Staging-verified @sha256 digest (zero docker build)
+          # 2. Deploy identical Staging-verified @sha256 digest (zero image rebuild at deploy time)
           ssh "${SSH_OPTS[@]}" "${PROD_SSH_USER}@${PROD_SSH_HOST}" "umask 077 && mkdir -p '${REMOTE_WORK}/out'"
           scp "${SCP_OPTS[@]}" \
             "$RUNNER_TEMP/p4-release-bundle/manifest/release-manifest.json" \
