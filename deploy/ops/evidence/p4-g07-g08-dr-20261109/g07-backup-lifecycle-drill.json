@@ -12,14 +12,14 @@
   "automated_offsite_run": {
     "end_to_end_backup_status": "PASS",
     "periodic_offsite_upload_proven": true,
-    "archive_sha256": "d0a9e449cff3d6ba566914cc5a429fc06910d8fb2cd54b26ef98a97ab16f498f",
-    "archive_bytes": 304368,
+    "archive_sha256": "06e07750c287c4621ca89337c4b9fd263279d213b94f4e5a0be259233e27d41a",
+    "archive_bytes": 304480,
     "backup_key_absent_at_offsite_target": true,
     "retention": {
       "applied": true,
       "kept_count": 1,
       "deleted_bundles": [
-        "scheduled-20261109T094539Z-12972"
+        "scheduled-20261109T122332Z-13115"
       ]
     }
   },

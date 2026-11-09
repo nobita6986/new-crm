@@ -1,25 +1,25 @@
 {
-  "timestamp_utc": "2026-11-09T09:44:20Z",
+  "timestamp_utc": "2026-11-09T12:23:43Z",
   "evidence_scope": "ISOLATED_STAGING_DR_HTTPS_FULL_REHEARSAL",
   "owner_live_site_touched": false,
-  "run_id": "ci-42595078827",
-  "project_name": "crm-cskh-dr-https-ci-42595078827",
+  "run_id": "ci-42615723010",
+  "project_name": "crm-cskh-dr-https-ci-42615723010",
   "site_name": "staging-dr-uat.crm-internal.localhost",
   "http_port": 18081,
   "https_port": 18443,
-  "app_image": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+  "app_image": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
   "status": "PASS",
   "phases": {
     "bootstrap_and_https_smoke": {
       "status": "PASS",
-      "duration_seconds": 53.89,
+      "duration_seconds": 64.88,
       "tls_provisioning": {
-        "cert_volume": "crm-cskh-dr-https-ci-42595078827_cert_data",
+        "cert_volume": "crm-cskh-dr-https-ci-42615723010_cert_data",
         "ca_key_deleted_immediately": true,
         "server_key_mode": "0o600"
       },
       "https_smoke": {
-        "timestamp_utc": "2026-11-09T09:45:12Z",
+        "timestamp_utc": "2026-11-09T12:24:46Z",
         "mode": "dr-https",
         "site_name": "staging-dr-uat.crm-internal.localhost",
         "connect_host": "127.0.0.1",
@@ -27,46 +27,46 @@
         "https_port": 18443,
         "frappe_site_name": "staging-dr-uat.crm-internal.localhost",
         "extra_compose_files": [],
-        "app_image": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+        "app_image": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
         "checks": {
           "container_digest_parity": {
-            "expected_app_image": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
-            "expected_sha256": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+            "expected_app_image": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
+            "expected_sha256": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
             "missing_services": [],
             "inspected_services": {
               "backend": {
-                "container": "crm-cskh-dr-https-ci-42595078827-backend-1",
-                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "container": "crm-cskh-dr-https-ci-42615723010-backend-1",
+                "running_image_id": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
                 "repo_digests": [],
                 "matched": true
               },
               "frontend": {
-                "container": "crm-cskh-dr-https-ci-42595078827-frontend-1",
-                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "container": "crm-cskh-dr-https-ci-42615723010-frontend-1",
+                "running_image_id": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
                 "repo_digests": [],
                 "matched": true
               },
               "websocket": {
-                "container": "crm-cskh-dr-https-ci-42595078827-websocket-1",
-                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "container": "crm-cskh-dr-https-ci-42615723010-websocket-1",
+                "running_image_id": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
                 "repo_digests": [],
                 "matched": true
               },
               "queue-short": {
-                "container": "crm-cskh-dr-https-ci-42595078827-queue-short-1",
-                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "container": "crm-cskh-dr-https-ci-42615723010-queue-short-1",
+                "running_image_id": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
                 "repo_digests": [],
                 "matched": true
               },
               "queue-long": {
-                "container": "crm-cskh-dr-https-ci-42595078827-queue-long-1",
-                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "container": "crm-cskh-dr-https-ci-42615723010-queue-long-1",
+                "running_image_id": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
                 "repo_digests": [],
                 "matched": true
               },
               "scheduler": {
-                "container": "crm-cskh-dr-https-ci-42595078827-scheduler-1",
-                "running_image_id": "sha256:b9cc59a3213e546b0ed295433d2d289e943d2828fb5a6a329b2f34edef9330bd",
+                "container": "crm-cskh-dr-https-ci-42615723010-scheduler-1",
+                "running_image_id": "sha256:5601de529f84783a5c7e1623af30c50765aa262419d9ac01177059f930261b56",
                 "repo_digests": [],
                 "matched": true
               }
@@ -86,7 +86,7 @@
             "port": 18443,
             "tls_version": "TLSv1.3",
             "cipher": "TLS_AES_128_GCM_SHA256",
-            "not_after_utc": "2026-12-09T09:44:20Z",
+            "not_after_utc": "2026-12-09T12:23:43Z",
             "days_remaining": 29,
             "expiry_ok": true
           },
@@ -236,7 +236,7 @@
     },
     "worker_restart_and_cron_retry": {
       "status": "PASS",
-      "restart_recovery_seconds": 16.71,
+      "restart_recovery_seconds": 16.81,
       "cron_retry_x2_counts": {
         "after_run_1": {
           "sla_obligations": 68,
@@ -255,7 +255,7 @@
       },
       "idempotent_across_retry": true,
       "post_restart_health_probe": {
-        "timestamp_utc": "2026-11-09T09:45:39Z",
+        "timestamp_utc": "2026-11-09T12:25:14Z",
         "environment": "staging",
         "site": "staging-dr-uat.crm-internal.localhost",
         "extra_compose_files": [],
@@ -270,8 +270,8 @@
         },
         "disk": {
           "total_bytes": 154894188544,
-          "used_bytes": 50422247424,
-          "free_bytes": 104455163904,
+          "used_bytes": 50423730176,
+          "free_bytes": 104453681152,
           "used_percent": 32.55,
           "warn_threshold_pct": 80.0,
           "critical_threshold_pct": 90.0,
@@ -384,7 +384,7 @@
         "backup_freshness_and_offsite": null,
         "data_loss_window_delta": null,
         "alert_preflight": {
-          "timestamp_utc": "2026-11-09T09:45:38Z",
+          "timestamp_utc": "2026-11-09T12:25:13Z",
           "status": "BLOCKED",
           "operator_contact_configured": false,
           "webhook_https_configured": false,
@@ -428,7 +428,7 @@
           "new_or_updated_work_items": 0,
           "new_published_kpi_runs": 0,
           "new_sla_breaches": 0,
-          "since_utc": "2026-11-09T09:45:44Z"
+          "since_utc": "2026-11-09T12:25:20Z"
         },
         "post_restore_delta_since_backup": {
           "new_assignment_events": 0,
@@ -439,9 +439,9 @@
           "new_or_updated_work_items": 0,
           "new_published_kpi_runs": 14,
           "new_sla_breaches": 0,
-          "since_utc": "2026-11-09T09:45:44Z"
+          "since_utc": "2026-11-09T12:25:20Z"
         },
-        "end_to_end_restore_and_migrate_seconds": 33.79,
+        "end_to_end_restore_and_migrate_seconds": 35.32,
         "post_restore_health_status": "PASS",
         "post_restore_https_smoke_status": "PASS",
         "pass": true
