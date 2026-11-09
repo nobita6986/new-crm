@@ -1,0 +1,266 @@
+{
+  "status": "PASS",
+  "upstream_provenance": {
+    "pinned_tag": "v4.0.1",
+    "pinned_commit_sha": "2b26e9ab8d751e5ea33bb7b930aea3550bb81ded",
+    "verified_files": 9
+  },
+  "stacks": {
+    "production": {
+      "project_name": "crm-cskh-prod",
+      "site_name": "crm.example.invalid",
+      "services_default": [
+        "db",
+        "redis-cache",
+        "redis-queue",
+        "configurator",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "backend",
+        "websocket",
+        "frontend",
+        "proxy"
+      ],
+      "services_with_migrate_profile": [
+        "db",
+        "redis-cache",
+        "redis-queue",
+        "configurator",
+        "websocket",
+        "proxy",
+        "migrator",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "backend",
+        "frontend"
+      ],
+      "app_services_mounting_named_logs_volume": [
+        "backend",
+        "configurator",
+        "frontend",
+        "migrator",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "websocket"
+      ],
+      "apps_order_guard_verified": true,
+      "networks": {
+        "app_net": "crm-cskh-prod_app_net",
+        "data_net": "crm-cskh-prod_data_net",
+        "edge_net": "crm-cskh-prod_edge_net"
+      },
+      "volumes": {
+        "cert-data": "crm-cskh-prod_cert_data",
+        "db-data": "crm-cskh-prod_db_data",
+        "logs": "crm-cskh-prod_logs",
+        "redis-queue-data": "crm-cskh-prod_redis_queue_data",
+        "sites": "crm-cskh-prod_sites"
+      },
+      "secrets": {
+        "db_password": "crm-cskh-prod_db_password"
+      },
+      "published_ports": {
+        "proxy": [
+          "0.0.0.0:80->80/tcp",
+          "0.0.0.0:443->443/tcp"
+        ]
+      }
+    },
+    "staging": {
+      "project_name": "crm-cskh-staging",
+      "site_name": "staging-crm.example.invalid",
+      "services_default": [
+        "db",
+        "redis-cache",
+        "redis-queue",
+        "configurator",
+        "proxy",
+        "queue-long",
+        "queue-short",
+        "websocket",
+        "backend",
+        "frontend",
+        "scheduler"
+      ],
+      "services_with_migrate_profile": [
+        "proxy",
+        "redis-cache",
+        "db",
+        "redis-queue",
+        "configurator",
+        "websocket",
+        "backend",
+        "frontend",
+        "queue-short",
+        "scheduler",
+        "migrator",
+        "queue-long"
+      ],
+      "app_services_mounting_named_logs_volume": [
+        "backend",
+        "configurator",
+        "frontend",
+        "migrator",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "websocket"
+      ],
+      "apps_order_guard_verified": true,
+      "networks": {
+        "app_net": "crm-cskh-staging_app_net",
+        "data_net": "crm-cskh-staging_data_net",
+        "edge_net": "crm-cskh-staging_edge_net"
+      },
+      "volumes": {
+        "cert-data": "crm-cskh-staging_cert_data",
+        "db-data": "crm-cskh-staging_db_data",
+        "logs": "crm-cskh-staging_logs",
+        "redis-queue-data": "crm-cskh-staging_redis_queue_data",
+        "sites": "crm-cskh-staging_sites"
+      },
+      "secrets": {
+        "db_password": "crm-cskh-staging_db_password"
+      },
+      "published_ports": {
+        "proxy": [
+          "127.0.0.1:8080->80/tcp",
+          "127.0.0.1:8443->443/tcp"
+        ]
+      }
+    },
+    "isolated-smoke": {
+      "project_name": "crm-cskh-p4-smoke",
+      "site_name": "p4-smoke.localhost",
+      "services_default": [
+        "db",
+        "redis-cache",
+        "redis-queue",
+        "configurator",
+        "backend",
+        "queue-short",
+        "scheduler",
+        "websocket",
+        "frontend",
+        "proxy",
+        "queue-long"
+      ],
+      "services_with_migrate_profile": [
+        "redis-cache",
+        "redis-queue",
+        "db",
+        "configurator",
+        "websocket",
+        "backend",
+        "frontend",
+        "proxy",
+        "queue-long",
+        "queue-short",
+        "migrator",
+        "scheduler"
+      ],
+      "app_services_mounting_named_logs_volume": [
+        "backend",
+        "configurator",
+        "frontend",
+        "migrator",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "websocket"
+      ],
+      "apps_order_guard_verified": true,
+      "networks": {
+        "app_net": "crm-cskh-p4-smoke_app_net",
+        "data_net": "crm-cskh-p4-smoke_data_net",
+        "edge_net": "crm-cskh-p4-smoke_edge_net"
+      },
+      "volumes": {
+        "db-data": "crm-cskh-p4-smoke_db_data",
+        "logs": "crm-cskh-p4-smoke_logs",
+        "redis-queue-data": "crm-cskh-p4-smoke_redis_queue_data",
+        "sites": "crm-cskh-p4-smoke_sites"
+      },
+      "secrets": {
+        "db_password": "crm-cskh-p4-smoke_db_password"
+      },
+      "published_ports": {
+        "proxy": [
+          "127.0.0.1:18080->80/tcp"
+        ]
+      }
+    },
+    "staging-dr-https": {
+      "project_name": "crm-cskh-staging-dr-https",
+      "site_name": "staging-dr-uat.crm-internal.localhost",
+      "services_default": [
+        "db",
+        "redis-cache",
+        "redis-queue",
+        "configurator",
+        "backend",
+        "websocket",
+        "frontend",
+        "queue-long",
+        "scheduler",
+        "proxy",
+        "queue-short"
+      ],
+      "services_with_migrate_profile": [
+        "db",
+        "redis-cache",
+        "redis-queue",
+        "configurator",
+        "backend",
+        "websocket",
+        "frontend",
+        "proxy",
+        "queue-short",
+        "scheduler",
+        "migrator",
+        "queue-long"
+      ],
+      "app_services_mounting_named_logs_volume": [
+        "backend",
+        "configurator",
+        "frontend",
+        "migrator",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "websocket"
+      ],
+      "apps_order_guard_verified": true,
+      "networks": {
+        "app_net": "crm-cskh-staging-dr-https_app_net",
+        "data_net": "crm-cskh-staging-dr-https_data_net",
+        "edge_net": "crm-cskh-staging-dr-https_edge_net"
+      },
+      "volumes": {
+        "cert-data": "crm-cskh-staging-dr-https_cert_data",
+        "db-data": "crm-cskh-staging-dr-https_db_data",
+        "logs": "crm-cskh-staging-dr-https_logs",
+        "redis-queue-data": "crm-cskh-staging-dr-https_redis_queue_data",
+        "sites": "crm-cskh-staging-dr-https_sites"
+      },
+      "secrets": {
+        "db_password": "crm-cskh-staging-dr-https_db_password"
+      },
+      "published_ports": {
+        "proxy": [
+          "127.0.0.1:18081->80/tcp",
+          "127.0.0.1:18443->443/tcp"
+        ]
+      }
+    }
+  },
+  "negative_checks": [
+    "missing_APP_IMAGE_rejected",
+    "missing_DB_PASSWORD_SECRETS_FILE_rejected",
+    "floating_tag_without_sha256_rejected",
+    "local_sha256_id_allowed_in_smoke_rejected_in_prod"
+  ]
+}
