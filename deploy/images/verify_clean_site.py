@@ -725,24 +725,6 @@ def main() -> int:
                 who_msg,
             )
 
-            # Authenticated POST without X-Frappe-CSRF-Token must be rejected (400/403)
-            st_csrf_missing, _, csrf_missing_raw = http_request(
-                auth_no_redirect,
-                f"{base_url}/api/method/frappe.client.get_list",
-                host_header=args.site_name,
-                method="POST",
-                form_data={"doctype": "User"},
-            )
-            record(
-                "http.auth.csrf_missing_rejected",
-                st_csrf_missing in (400, 403),
-                "HTTP 400 or 403",
-                {
-                    "status": st_csrf_missing,
-                    "snippet": csrf_missing_raw.decode("utf-8", errors="replace")[:120],
-                },
-            )
-
             st_crm, _, crm_raw = http_request(
                 auth_opener, f"{base_url}/crm", host_header=args.site_name
             )
@@ -788,7 +770,7 @@ def main() -> int:
                 page_html = page_raw.decode("utf-8", errors="replace")
                 if not csrf_token:
                     m_csrf = re.search(
-                        r'csrf_token["\']?\s*[:=]\s*["\']([0-9a-fA-F]{16,})["\']',
+                        r'(?:X-Frappe-CSRF-Token|csrf_token)["\']?\s*[:=]\s*["\']([0-9a-fA-F\-]{16,})["\']',
                         page_html,
                     )
                     if m_csrf:
@@ -818,6 +800,63 @@ def main() -> int:
                     "Vietnamese UI labels rendered",
                     has_vi_label,
                 )
+
+            # Once `/cskh/*` has initialized `session.data.csrf_token` in Redis, verify missing,
+            # forged, and valid X-Frappe-CSRF-Token behavior on authenticated POST endpoints.
+            record(
+                "http.auth.csrf_token_extracted",
+                bool(csrf_token),
+                "non-empty CSRF token from /cskh/* HTML",
+                bool(csrf_token),
+            )
+            st_csrf_missing, _, csrf_missing_raw = http_request(
+                auth_no_redirect,
+                f"{base_url}/api/method/crm_cskh.api.health.ping",
+                host_header=args.site_name,
+                method="POST",
+                form_data={"probe": "missing_csrf"},
+            )
+            record(
+                "http.auth.csrf_missing_rejected",
+                st_csrf_missing in (400, 403),
+                "HTTP 400 or 403",
+                {
+                    "status": st_csrf_missing,
+                    "snippet": csrf_missing_raw.decode("utf-8", errors="replace")[:120],
+                },
+            )
+            st_csrf_forged, _, csrf_forged_raw = http_request(
+                auth_no_redirect,
+                f"{base_url}/api/method/crm_cskh.api.health.ping",
+                host_header=args.site_name,
+                method="POST",
+                form_data={"probe": "forged_csrf"},
+                extra_headers={"X-Frappe-CSRF-Token": "forged-invalid-csrf-token-0000"},
+            )
+            record(
+                "http.auth.csrf_forged_rejected",
+                st_csrf_forged in (400, 403),
+                "HTTP 400 or 403",
+                {
+                    "status": st_csrf_forged,
+                    "snippet": csrf_forged_raw.decode("utf-8", errors="replace")[:120],
+                },
+            )
+            st_csrf_valid, _, csrf_valid_raw = http_request(
+                auth_opener,
+                f"{base_url}/api/method/crm_cskh.api.health.ping",
+                host_header=args.site_name,
+                method="POST",
+                form_data={"probe": "valid_csrf"},
+                extra_headers={"X-Frappe-CSRF-Token": csrf_token},
+            )
+            csrf_valid_txt = csrf_valid_raw.decode("utf-8", errors="replace")
+            record(
+                "http.auth.csrf_valid_accepted",
+                st_csrf_valid == 200 and "crm_cskh" in csrf_valid_txt,
+                "HTTP 200 with crm_cskh health payload",
+                {"status": st_csrf_valid, "snippet": csrf_valid_txt[:120]},
+            )
 
             # Check Vietnamese translation dictionary injected into /crm boot HTML
             crm_unescaped = re.sub(
