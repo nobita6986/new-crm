@@ -1,0 +1,660 @@
+name: P4 GHCR candidate digest, full P0-P3 regression & S1 benchmark
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'codex/p4-t1b-*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p4-candidate-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-scan-sign-and-push-ghcr:
+    name: Build-once, push GHCR @sha256, SBOM, strict scan & Ed25519 sign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      app_image_digest: ${{ steps.build.outputs.app_image_digest }}
+      local_image_id: ${{ steps.build.outputs.local_image_id }}
+      actual_head_sha: ${{ steps.build.outputs.actual_head_sha }}
+      strict_gate_status: ${{ steps.scan.outputs.strict_gate_status }}
+      signed_manifest_relpath: ${{ steps.sign.outputs.signed_manifest_relpath }}
+      signed_sig_relpath: ${{ steps.sign.outputs.signed_sig_relpath }}
+      signed_scope: ${{ steps.sign.outputs.signed_scope }}
+
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/.ghcup || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Prepare candidate bundle workspace & signing virtualenv
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p \
+            "$RUNNER_TEMP/p4-ghcr-bundle/build" \
+            "$RUNNER_TEMP/p4-ghcr-bundle/sbom" \
+            "$RUNNER_TEMP/p4-ghcr-bundle/security" \
+            "$RUNNER_TEMP/p4-ghcr-bundle/manifest"
+          python3 -m venv "$RUNNER_TEMP/p4-venv"
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/verify_pr_isolation.py \
+            --check-workflows \
+            --check-locks \
+            --out "$RUNNER_TEMP/p4-ghcr-bundle/build/lock-and-workflow-audit.json"
+
+      - name: Authenticate to GHCR with scoped packages:write job token
+        shell: bash
+        env:
+          GITHUB_ACTOR_PUSH: ${{ github.actor }}
+          GITHUB_TOKEN_PUSH: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          printf '%s\n' "${GITHUB_TOKEN_PUSH}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PUSH}" \
+            --password-stdin
+
+      - name: Build custom production image ONCE (--no-cache) & push immutable @sha256 to GHCR
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUNDLE="$RUNNER_TEMP/p4-ghcr-bundle"
+          ACTUAL_HEAD_SHA="$(git rev-parse HEAD)"
+          REPO_OWNER_LC="$(printf '%s' "${GITHUB_REPOSITORY_OWNER}" | tr '[:upper:]' '[:lower:]')"
+          GHCR_REPO="ghcr.io/${REPO_OWNER_LC}/crm-cskh"
+          CAND_TAG="0.0.1-cand-${ACTUAL_HEAD_SHA::12}"
+
+          PYTHON_BIN="$RUNNER_TEMP/p4-venv/bin/python" \
+          LOCAL_IMAGE_REPO="${GHCR_REPO}" \
+          REGISTRY_PUSH=true \
+          CSKH_REGISTRY_IMAGE="${GHCR_REPO}" \
+          bash deploy/images/build-image.sh \
+            --no-cache \
+            --out-dir "$BUNDLE/build" \
+            --tag "${CAND_TAG}"
+
+          APP_IMAGE_DIGEST="$(jq -r '.registry_verification.approved_registry_repo_digest' \
+            "$BUNDLE/build/image-inspect-summary.json")"
+          LOCAL_IMAGE_ID="$(jq -r '.local_image_id' \
+            "$BUNDLE/build/image-inspect-summary.json")"
+
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          case "${APP_IMAGE_DIGEST}" in
+            "ghcr.io/${REPO_OWNER_LC}/crm-cskh@sha256:"*) ;;
+            *)
+              echo "ERROR: Unexpected GHCR digest prefix: ${APP_IMAGE_DIGEST}" >&2
+              exit 1
+              ;;
+          esac
+
+          echo "app_image_digest=${APP_IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
+          echo "local_image_id=${LOCAL_IMAGE_ID}" >> "$GITHUB_OUTPUT"
+          echo "actual_head_sha=${ACTUAL_HEAD_SHA}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate CycloneDX 1.5 & SPDX 2.3 SBOMs and run Trivy strict + patched-package gates
+        id: scan
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ steps.build.outputs.app_image_digest }}
+          TRIVY_IMAGE: aquasec/trivy:0.58.2@sha256:665030f4d33a82c1e8d9d5e0453365842236723c1ee5cc3becca698268e66a56
+        run: |
+          set -euo pipefail
+          BUNDLE="$RUNNER_TEMP/p4-ghcr-bundle"
+          PY="$RUNNER_TEMP/p4-venv/bin/python"
+
+          "$PY" deploy/release/generate_sbom.py \
+            --metadata-dir "$BUNDLE/build" \
+            --image-ref "${APP_IMAGE_DIGEST}" \
+            --cyclonedx-out "$BUNDLE/sbom/sbom.cyclonedx.json" \
+            --spdx-out "$BUNDLE/sbom/sbom.spdx.json" \
+            > "$BUNDLE/sbom/sbom-summary.json"
+
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v "$BUNDLE/security:/scan-out" \
+            -v "$RUNNER_TEMP/trivy-cache:/root/.cache" \
+            "${TRIVY_IMAGE}" \
+            image \
+            --image-src docker \
+            --db-repository "public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2" \
+            --scanners vuln,secret \
+            --format json \
+            --timeout 15m \
+            --output /scan-out/trivy-image.json \
+            "${APP_IMAGE_DIGEST}"
+
+          docker run --rm --network none \
+            --entrypoint /home/frappe/frappe-bench/env/bin/python \
+            "${APP_IMAGE_DIGEST}" \
+            -c "from pathlib import Path; matches = sorted(Path('/home/frappe/frappe-bench/env/lib/python3.11/site-packages').glob('[Pp]y[Jj][Ww][Tt]-2.15.1.dist-info/METADATA')); assert len(matches) == 1, matches; print(matches[0].read_text(encoding='utf-8'), end='')" \
+            > "$BUNDLE/security/pyjwt-METADATA.txt"
+
+          set +e
+          "$PY" deploy/release/evaluate_security_scan.py \
+            --strict \
+            --trivy-json "$BUNDLE/security/trivy-image.json" \
+            --pyjwt-metadata-file "$BUNDLE/security/pyjwt-METADATA.txt" \
+            --out "$BUNDLE/security/security-scan-strict.json"
+          STRICT_RC=$?
+          set -e
+
+          "$PY" deploy/release/evaluate_security_scan.py \
+            --advisory-upstream-critical \
+            --forbid-critical-packages uv,form-data,loader-utils,shell-quote,stdlib,pyjwt,pillow \
+            --trivy-json "$BUNDLE/security/trivy-image.json" \
+            --pyjwt-metadata-file "$BUNDLE/security/pyjwt-METADATA.txt" \
+            --out "$BUNDLE/security/security-scan-summary.json"
+
+          if [ "${STRICT_RC}" -eq 0 ]; then
+            echo "strict_gate_status=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "strict_gate_status=FAIL" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sign & verify release manifest with Ed25519 (strict-gated production_candidate when PASS)
+        id: sign
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ steps.build.outputs.app_image_digest }}
+          LOCAL_IMAGE_ID: ${{ steps.build.outputs.local_image_id }}
+          ACTUAL_HEAD_SHA: ${{ steps.build.outputs.actual_head_sha }}
+          STRICT_STATUS: ${{ steps.scan.outputs.strict_gate_status }}
+        run: |
+          set -euo pipefail
+          BUNDLE="$RUNNER_TEMP/p4-ghcr-bundle"
+          KEY_DIR="$RUNNER_TEMP/ephemeral-candidate-keys"
+          PY="$RUNNER_TEMP/p4-venv/bin/python"
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+
+          "$PY" deploy/release/release_manifest.py keygen \
+            --private-key-out "$KEY_DIR/candidate.key" \
+            --public-key-out "$BUNDLE/manifest/candidate-signing.pub"
+
+          # Always generate & sign rehearsal manifest
+          "$PY" deploy/release/release_manifest.py generate \
+            --release-id "ghcr-rehearsal-${GITHUB_RUN_ID}" \
+            --environment-scope ci_ephemeral_rehearsal \
+            --build-manifest "$BUNDLE/build/build-manifest.json" \
+            --image-inspect "$BUNDLE/build/image-inspect-summary.json" \
+            --sbom-cyclonedx "$BUNDLE/sbom/sbom.cyclonedx.json" \
+            --sbom-spdx "$BUNDLE/sbom/sbom.spdx.json" \
+            --security-scan "$BUNDLE/security/security-scan-summary.json" \
+            --build-url "${RUN_URL}" \
+            --test-report-url "${RUN_URL}" \
+            --out "$BUNDLE/manifest/rehearsal-release-manifest.json"
+
+          "$PY" deploy/release/release_manifest.py sign \
+            --manifest "$BUNDLE/manifest/rehearsal-release-manifest.json" \
+            --security-scan "$BUNDLE/security/security-scan-summary.json" \
+            --private-key-file "$KEY_DIR/candidate.key" \
+            --sig-out "$BUNDLE/manifest/rehearsal-release-manifest.json.sig" \
+            --envelope-out "$BUNDLE/manifest/rehearsal-release-manifest.envelope.json"
+
+          SIGNED_MANIFEST_REL="manifest/rehearsal-release-manifest.json"
+          SIGNED_SIG_REL="manifest/rehearsal-release-manifest.json.sig"
+          SIGNED_SCOPE="ci_ephemeral_rehearsal"
+
+          if [ "${STRICT_STATUS}" = "PASS" ]; then
+            "$PY" deploy/release/release_manifest.py generate \
+              --release-id "crm-cskh-cand-${GITHUB_RUN_ID}" \
+              --environment-scope production_candidate \
+              --build-manifest "$BUNDLE/build/build-manifest.json" \
+              --image-inspect "$BUNDLE/build/image-inspect-summary.json" \
+              --sbom-cyclonedx "$BUNDLE/sbom/sbom.cyclonedx.json" \
+              --sbom-spdx "$BUNDLE/sbom/sbom.spdx.json" \
+              --security-scan "$BUNDLE/security/security-scan-strict.json" \
+              --build-url "${RUN_URL}" \
+              --test-report-url "${RUN_URL}" \
+              --out "$BUNDLE/manifest/release-manifest.json"
+
+            "$PY" deploy/release/release_manifest.py sign \
+              --manifest "$BUNDLE/manifest/release-manifest.json" \
+              --security-scan "$BUNDLE/security/security-scan-strict.json" \
+              --private-key-file "$KEY_DIR/candidate.key" \
+              --sig-out "$BUNDLE/manifest/release-manifest.json.sig" \
+              --envelope-out "$BUNDLE/manifest/release-manifest.envelope.json"
+
+            SIGNED_MANIFEST_REL="manifest/release-manifest.json"
+            SIGNED_SIG_REL="manifest/release-manifest.json.sig"
+            SIGNED_SCOPE="production_candidate"
+          else
+            # Fail-closed proof: ensure production_candidate generation is rejected when strict != PASS
+            if "$PY" deploy/release/release_manifest.py generate \
+              --release-id "crm-cskh-cand-blocked-${GITHUB_RUN_ID}" \
+              --environment-scope production_candidate \
+              --build-manifest "$BUNDLE/build/build-manifest.json" \
+              --image-inspect "$BUNDLE/build/image-inspect-summary.json" \
+              --sbom-cyclonedx "$BUNDLE/sbom/sbom.cyclonedx.json" \
+              --security-scan "$BUNDLE/security/security-scan-strict.json" \
+              --build-url "${RUN_URL}" \
+              --test-report-url "${RUN_URL}" \
+              --out "$BUNDLE/manifest/blocked.json" >/dev/null 2>&1; then
+              echo "FATAL: production_candidate failed to block non-PASS strict scan!" >&2
+              exit 1
+            fi
+          fi
+
+          # Destroy private key immediately after signing
+          rm -rf "$KEY_DIR"
+
+          "$PY" deploy/release/release_manifest.py verify \
+            --manifest "$BUNDLE/${SIGNED_MANIFEST_REL}" \
+            --sig "$BUNDLE/${SIGNED_SIG_REL}" \
+            --public-key-file "$BUNDLE/manifest/candidate-signing.pub" \
+            --expected-image "${APP_IMAGE_DIGEST}" \
+            --expected-scope "${SIGNED_SCOPE}"
+
+          mkdir -p "$BUNDLE/locks" "$BUNDLE/registry"
+          cp deploy/images/release-lock.json "$BUNDLE/locks/release-lock.json"
+          cp deploy/images/resources/python-constraints.txt "$BUNDLE/locks/python-constraints.txt"
+          cp deploy/images/resources/system-python-constraints.txt "$BUNDLE/locks/system-python-constraints.txt"
+          cp deploy/release/cve-exceptions.json "$BUNDLE/locks/cve-exceptions.json"
+          cp deploy/release/t0-critical-cve-dossier.md "$BUNDLE/locks/t0-critical-cve-dossier.md"
+
+          "$PY" deploy/release/audit_registry_and_signing_config.py \
+            --out "$BUNDLE/registry/registry-and-signing-audit.json" >/dev/null
+
+          docker buildx imagetools inspect --raw "${APP_IMAGE_DIGEST}" \
+            > "$BUNDLE/manifest/oci-distribution-manifest.json"
+
+          python3 - "$BUNDLE" "${ACTUAL_HEAD_SHA}" "${APP_IMAGE_DIGEST}" "${LOCAL_IMAGE_ID}" "${STRICT_STATUS}" "${SIGNED_SCOPE}" "${SIGNED_MANIFEST_REL}" <<'PY'
+          import hashlib
+          import json
+          import subprocess
+          import sys
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          bundle = Path(sys.argv[1])
+          head_sha, reg_digest, local_id, strict_st, scope, manifest_rel = sys.argv[2:8]
+          apps_tree = subprocess.check_output(["git", "rev-parse", "HEAD:apps"], text=True).strip()
+          cskh_tree = subprocess.check_output(["git", "rev-parse", "HEAD:apps/crm_cskh"], text=True).strip()
+          raw_dist_manifest = json.loads(
+              (bundle / "manifest" / "oci-distribution-manifest.json").read_text(encoding="utf-8")
+          )
+          dist_media_type = str(raw_dist_manifest.get("mediaType") or "")
+          oci_config_digest = str((raw_dist_manifest.get("config") or {}).get("digest") or "")
+          if not oci_config_digest and isinstance(raw_dist_manifest.get("manifests"), list):
+              repo_prefix = reg_digest.split("@", 1)[0]
+              for sub in raw_dist_manifest["manifests"]:
+                  plat = sub.get("platform") or {}
+                  if plat.get("os") == "linux" and plat.get("architecture") == "amd64":
+                      sub_raw = json.loads(
+                          subprocess.check_output(
+                              ["docker", "buildx", "imagetools", "inspect", "--raw", f"{repo_prefix}@{sub['digest']}"],
+                              text=True,
+                          )
+                      )
+                      oci_config_digest = str((sub_raw.get("config") or {}).get("digest") or "")
+                      break
+          assert oci_config_digest.startswith("sha256:"), f"Missing oci_config_digest: {raw_dist_manifest}"
+
+          provenance = {
+              "schema_version": "cskh-p4-ghcr-candidate-provenance-v2",
+              "recorded_at_utc": datetime.now(timezone.utc).isoformat(),
+              "git_commit_sha": head_sha,
+              "apps_tree_sha": apps_tree,
+              "crm_cskh_tree_sha": cskh_tree,
+              "strict_security_gate_status": strict_st,
+              "production_candidate_promotion_status": (
+                  "READY_FOR_PRODUCTION_PROMOTION" if strict_st == "PASS" else "BLOCKED_PENDING_UPSTREAM_FIX_OR_OWNER_EXCEPTION"
+              ),
+              "signed_manifest_scope": scope,
+              "signed_manifest_relpath": manifest_rel,
+              "signing_key_provenance": (
+                  "ephemeral_ci_ed25519_keypair (private key destroyed immediately after signing; "
+                  "use p4-release.yml with protected CSKH_RELEASE_SIGNING_PRIVATE_KEY for formal Go-Live cutover)"
+              ),
+              "identifier_taxonomy": {
+                  "local_image_id": {
+                      "value": local_id,
+                      "class": "docker_local_image_id",
+                      "description": (
+                          "Docker daemon local image ID (.Id from docker image inspect; equals config digest on "
+                          "classic graphdriver store or manifest/index digest on containerd image store; "
+                          "analogous in class to baseline CI db925419...)"
+                      ),
+                  },
+                  "oci_config_digest": {
+                      "value": oci_config_digest,
+                      "class": "oci_image_config_blob_sha256",
+                      "description": (
+                          "SHA-256 digest of the OCI Image Configuration JSON blob (manifest.config.digest in "
+                          "manifest/oci-distribution-manifest.json)"
+                      ),
+                  },
+                  "registry_manifest_digest": {
+                      "value": reg_digest,
+                      "media_type": dist_media_type,
+                      "class": "oci_distribution_manifest_sha256",
+                      "canonical_promotion_unit": True,
+                      "description": (
+                          "Remote GHCR immutable distribution manifest digest (@sha256; analogous in class to "
+                          "baseline CI 36613468...). ONLY this digest is promoted across CI -> Staging -> Production."
+                      ),
+                  },
+                  "unrelated_live_image_reference": {
+                      "live_host": "crm.hrpartner.vn",
+                      "baseline_live_prefix": "acb95057...",
+                      "rule": (
+                          "Live keeping a prior version before authorized cutover is NOT deployment drift; "
+                          "never deploy candidates to crm.hrpartner.vn or mutate live just to match CI, and "
+                          "never cross-compare local_image_id, oci_config_digest, and registry_manifest_digest."
+                      ),
+                  },
+              },
+          }
+          (bundle / "candidate-provenance.json").write_text(
+              json.dumps(provenance, indent=2) + "\n", encoding="utf-8"
+          )
+
+          sums = []
+          for path in sorted(bundle.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              sums.append(f"{digest}  {path.relative_to(bundle).as_posix()}")
+          (bundle / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+          echo "signed_manifest_relpath=${SIGNED_MANIFEST_REL}" >> "$GITHUB_OUTPUT"
+          echo "signed_sig_relpath=${SIGNED_SIG_REL}" >> "$GITHUB_OUTPUT"
+          echo "signed_scope=${SIGNED_SCOPE}" >> "$GITHUB_OUTPUT"
+
+      - name: Logout from GHCR
+        if: always()
+        shell: bash
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+      - name: Upload GHCR candidate bundle (SBOM, strict scan, Ed25519 manifest & hashes)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-ghcr-candidate-bundle-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-ghcr-bundle/
+          if-no-files-found: error
+          retention-days: 30
+
+  verify-and-regress-by-digest:
+    name: Pull GHCR @sha256, G02 clean-site, G03 10-service smoke & full P0-P3 suites
+    needs: [build-scan-sign-and-push-ghcr]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Download signed GHCR candidate bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: p4-ghcr-candidate-bundle-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-ghcr-bundle
+
+      - name: Verify SHA256SUMS & Ed25519 signature BEFORE pulling @sha256 from GHCR (pull-only)
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
+          SIGNED_MANIFEST_REL: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_manifest_relpath }}
+          SIGNED_SIG_REL: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_sig_relpath }}
+          SIGNED_SCOPE: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_scope }}
+          GITHUB_ACTOR_PULL: ${{ github.actor }}
+          GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          mkdir -p "$RUNNER_TEMP/p4-ghcr-verify-evidence/junit" "$RUNNER_TEMP/p4-ghcr-verify-evidence/junit-ui"
+          (cd "$RUNNER_TEMP/p4-ghcr-bundle" && sha256sum -c SHA256SUMS.txt)
+
+          python3 -m venv "$RUNNER_TEMP/p4-venv"
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/release_manifest.py verify \
+            --manifest "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_MANIFEST_REL}" \
+            --sig "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_SIG_REL}" \
+            --public-key-file "$RUNNER_TEMP/p4-ghcr-bundle/manifest/candidate-signing.pub" \
+            --expected-image "${APP_IMAGE_DIGEST}" \
+            --expected-scope "${SIGNED_SCOPE}"
+
+          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PULL}" \
+            --password-stdin
+          docker pull "${APP_IMAGE_DIGEST}"
+
+      - name: Run G02 clean-site + Socket.IO & G03 10-service Compose smoke on pulled GHCR @sha256
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
+          ACTUAL_HEAD_SHA: ${{ needs.build-scan-sign-and-push-ghcr.outputs.actual_head_sha }}
+        run: |
+          set -euo pipefail
+          VERIFY_OUT="$RUNNER_TEMP/p4-ghcr-verify-evidence"
+
+          python3 deploy/images/verify_clean_site.py \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --pull-policy always \
+            --port 18780 \
+            --out "$VERIFY_OUT/clean-site-verify.json"
+
+          python3 deploy/compose/scripts/run_isolated_smoke.py \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --image-git-sha "${ACTUAL_HEAD_SHA}" \
+            --http-port 18080 \
+            --report-out "$VERIFY_OUT/isolated-smoke-report.json" \
+            --log-out "$VERIFY_OUT/isolated-smoke.log"
+
+      - name: Run full canonical P0-P3 backend + UI test suites inside pulled GHCR @sha256
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
+        run: |
+          set -euo pipefail
+          VERIFY_OUT="$RUNNER_TEMP/p4-ghcr-verify-evidence"
+          python3 deploy/release/run_diff_impact_verification.py \
+            --full-suite \
+            --skip-clean-site \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --out-dir "$VERIFY_OUT"
+
+      - name: Attest Build -> Verify -> Staging-topology same-digest chain & hash evidence
+        shell: bash
+        env:
+          SIGNED_MANIFEST_REL: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_manifest_relpath }}
+          SIGNED_SIG_REL: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_sig_relpath }}
+          SIGNED_SCOPE: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_scope }}
+        run: |
+          set -euo pipefail
+          VERIFY_OUT="$RUNNER_TEMP/p4-ghcr-verify-evidence"
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/verify_digest_promotion.py \
+            --manifest "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_MANIFEST_REL}" \
+            --sig "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_SIG_REL}" \
+            --public-key-file "$RUNNER_TEMP/p4-ghcr-bundle/manifest/candidate-signing.pub" \
+            --expected-scope "${SIGNED_SCOPE}" \
+            --build-inspect "$RUNNER_TEMP/p4-ghcr-bundle/build/image-inspect-summary.json" \
+            --clean-site-report "$VERIFY_OUT/clean-site-verify.json" \
+            --compose-smoke-report "$VERIFY_OUT/isolated-smoke-report.json" \
+            --out "$VERIFY_OUT/ghcr-digest-promotion-attestation.json"
+
+          python3 - "$VERIFY_OUT" <<'PY'
+          import hashlib
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          patterns = [
+              (re.compile(r"(?im)(set-cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?im)(cookie:\s*)[^\r\n]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(x-frappe-csrf-token[\"'=:\s]+)[^\"'&\s<,}]+"), r"\1[REDACTED]"),
+              (re.compile(r"(?i)(sid=)[^;\s\"']+"), r"\1[REDACTED]"),
+          ]
+          for path in root.rglob("*"):
+              if not path.is_file() or path.suffix.lower() not in {".log", ".txt"}:
+                  continue
+              txt = path.read_text(encoding="utf-8", errors="replace")
+              for pat, rep in patterns:
+                  txt = pat.sub(rep, txt)
+              path.write_text(txt, encoding="utf-8")
+
+          sums = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              sums.append(f"{digest}  {path.relative_to(root).as_posix()}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+      - name: Logout pull-only session from GHCR
+        if: always()
+        shell: bash
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+      - name: Upload GHCR verify-by-digest & P0-P3 regression evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-ghcr-verify-and-regression-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-ghcr-verify-evidence/
+          if-no-files-found: warn
+          retention-days: 30
+
+  isolated-s1-benchmark:
+    name: Pull identical GHCR @sha256 & run isolated S1 benchmark (50k/75k/250k/40 staff)
+    needs: [build-scan-sign-and-push-ghcr]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Download signed GHCR candidate bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: p4-ghcr-candidate-bundle-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-ghcr-bundle
+
+      - name: Verify Ed25519 manifest signature & pull identical GHCR @sha256 digest
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
+          SIGNED_MANIFEST_REL: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_manifest_relpath }}
+          SIGNED_SIG_REL: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_sig_relpath }}
+          SIGNED_SCOPE: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_scope }}
+          GITHUB_ACTOR_PULL: ${{ github.actor }}
+          GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          mkdir -p "$RUNNER_TEMP/p4-s1-benchmark"
+          (cd "$RUNNER_TEMP/p4-ghcr-bundle" && sha256sum -c SHA256SUMS.txt)
+
+          python3 -m venv "$RUNNER_TEMP/p4-venv"
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/release_manifest.py verify \
+            --manifest "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_MANIFEST_REL}" \
+            --sig "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_SIG_REL}" \
+            --public-key-file "$RUNNER_TEMP/p4-ghcr-bundle/manifest/candidate-signing.pub" \
+            --expected-image "${APP_IMAGE_DIGEST}" \
+            --expected-scope "${SIGNED_SCOPE}"
+
+          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PULL}" \
+            --password-stdin
+          docker pull "${APP_IMAGE_DIGEST}"
+
+      - name: Execute isolated S1 suggested-dataset benchmark (zero Owner VPS traffic)
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
+        run: |
+          set -euo pipefail
+          BENCH_OUT="$RUNNER_TEMP/p4-s1-benchmark"
+          python3 deploy/release/benchmark_p4_isolated.py \
+            --provision-and-run-s1 \
+            --confirm-isolated-target \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --pull-policy never \
+            --port 18880 \
+            --out "$BENCH_OUT/benchmark-s1-report.json"
+
+          python3 - "$BENCH_OUT" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          rpt = json.loads((root / "benchmark-s1-report.json").read_text(encoding="utf-8"))
+          s1 = rpt["s1_domain_and_database_benchmark"]
+          counts = s1["s1_seeded_counts"]
+          assert counts["crm_leads"] >= 50000, counts
+          assert counts["cskh_work_items"] >= 75000, counts
+          assert counts["cskh_contact_attempts"] >= 250000, counts
+          assert counts["active_staff_users"] == 40, counts
+          assert rpt["isolation_guard"]["owner_vps_touched"] is False
+
+          sums = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              digest = hashlib.sha256(path.read_bytes()).hexdigest()
+              sums.append(f"{digest}  {path.relative_to(root).as_posix()}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+      - name: Logout pull-only session from GHCR
+        if: always()
+        shell: bash
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+      - name: Upload isolated S1 benchmark report & SHA256SUMS
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-s1-isolated-benchmark-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-s1-benchmark/
+          if-no-files-found: warn
+          retention-days: 30

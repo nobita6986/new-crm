@@ -1,0 +1,927 @@
+{
+  "schema_version": 2,
+  "gate": "g007-per-method-junit",
+  "gate_passed": true,
+  "expected_total": 99,
+  "observed_total": 99,
+  "passing_total": 99,
+  "counts": {
+    "PASS": 99
+  },
+  "xml_files": [
+    "test_bt1c5_matrix_gaps.junit.xml",
+    "test_docshare_lifecycle.junit.xml",
+    "test_permissions.junit.xml",
+    "test_security_remediation.junit.xml",
+    "test_security_remediation_v2.junit.xml"
+  ],
+  "xml_module_binding": {
+    "test_bt1c5_matrix_gaps.junit.xml": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+    "test_docshare_lifecycle.junit.xml": "crm_cskh.tests.test_docshare_lifecycle",
+    "test_permissions.junit.xml": "crm_cskh.tests.test_permissions",
+    "test_security_remediation.junit.xml": "crm_cskh.tests.test_security_remediation",
+    "test_security_remediation_v2.junit.xml": "crm_cskh.tests.test_security_remediation_v2"
+  },
+  "missing_modules": [],
+  "empty_xml_files": [],
+  "missing_methods": [],
+  "failed_methods": [],
+  "errored_methods": [],
+  "skipped_methods": [],
+  "duplicate_methods": [],
+  "unexpected_cases": [],
+  "parse_errors": [],
+  "results": [
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_lead_list_and_get_data_only_return_owner_scope",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_lead_list_and_get_data_only_return_owner_scope",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_get_data_does_not_return_permlevel_fields",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_get_data_does_not_return_permlevel_fields",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_child_lists_and_activity_reads_stay_with_parent_scope",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_child_lists_and_activity_reads_stay_with_parent_scope",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_private_file_download_and_stale_docshare_are_revoked",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_private_file_download_and_stale_docshare_are_revoked",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_export_and_unscoped_reporting_are_blocked_for_staff_and_managers",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_export_and_unscoped_reporting_are_blocked_for_staff_and_managers",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_child_records_and_direct_private_file_are_record_scoped",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_child_records_and_direct_private_file_are_record_scoped",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_team_leader_sees_team_but_not_other_team",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_team_leader_sees_team_but_not_other_team",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_sales_manager_without_hierarchy_is_denied",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_sales_manager_without_hierarchy_is_denied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_linked_activity_endpoints_check_parent_before_returning_data",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_linked_activity_endpoints_check_parent_before_returning_data",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_owner_change_and_assignment_bypass_are_denied",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_owner_change_and_assignment_bypass_are_denied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_bulk_delete_and_unlink_cannot_touch_cross_scope_records",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_bulk_delete_and_unlink_cannot_touch_cross_scope_records",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_stale_todo_cannot_restore_access_after_owner_changes",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_stale_todo_cannot_restore_access_after_owner_changes",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_cross_team_transfer_blocks_old_owner_and_leader",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_cross_team_transfer_blocks_old_owner_and_leader",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_direct_todo_assignment_is_denied_even_with_ignore_permissions",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_direct_todo_assignment_is_denied_even_with_ignore_permissions",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_staff_cannot_duplicate_assignment_rules",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_staff_cannot_duplicate_assignment_rules",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_bod_viewer_cannot_read_leads_or_manage_users",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_bod_viewer_cannot_read_leads_or_manage_users",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_crm_admin_role_fails_closed_until_controlled_service_exists",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_crm_admin_role_fails_closed_until_controlled_service_exists",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_permissions",
+      "class": "TestPermissionBoundaries",
+      "method": "test_seed_owner_scope_and_hierarchy_are_applied",
+      "status": "PASS",
+      "source_xml": "test_permissions.junit.xml",
+      "raw_name": "test_seed_owner_scope_and_hierarchy_are_applied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC13GuestTransport",
+      "method": "test_health_ping_endpoint_not_registered_for_guest",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_health_ping_endpoint_not_registered_for_guest",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC13GuestTransport",
+      "method": "test_guest_is_denied_for_health_ping",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_guest_is_denied_for_health_ping",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC13GuestTransport",
+      "method": "test_guest_is_denied_for_every_crm_cskh_endpoint",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_guest_is_denied_for_every_crm_cskh_endpoint",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC14CSRFAndSession",
+      "method": "test_get_request_does_not_require_csrf",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_get_request_does_not_require_csrf",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC14CSRFAndSession",
+      "method": "test_post_without_csrf_token_is_rejected",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_post_without_csrf_token_is_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC14CSRFAndSession",
+      "method": "test_post_with_invalid_csrf_token_is_rejected",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_post_with_invalid_csrf_token_is_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC14CSRFAndSession",
+      "method": "test_post_with_valid_csrf_token_succeeds",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_post_with_valid_csrf_token_succeeds",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC14CSRFAndSession",
+      "method": "test_post_with_valid_csrf_token_via_form_data_succeeds",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_post_with_valid_csrf_token_via_form_data_succeeds",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC27CallLogFallbackContact",
+      "method": "test_get_call_contact_orphan_routes_to_lookup_path",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_get_call_contact_orphan_routes_to_lookup_path",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC27CallLogFallbackContact",
+      "method": "test_overridden_get_call_log_wrapper_exists_and_is_whitelisted",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_overridden_get_call_log_wrapper_exists_and_is_whitelisted",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC27CallLogFallbackContact",
+      "method": "test_staff_get_call_log_for_orphan_raises_permission_error",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_staff_get_call_log_for_orphan_raises_permission_error",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation",
+      "class": "TestSEC27CallLogFallbackContact",
+      "method": "test_administrator_get_call_log_for_orphan_succeeds",
+      "status": "PASS",
+      "source_xml": "test_security_remediation.junit.xml",
+      "raw_name": "test_administrator_get_call_log_for_orphan_succeeds",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC13GuestTransportHTTP",
+      "method": "test_guest_via_execute_cmd_health_ping_denied",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_guest_via_execute_cmd_health_ping_denied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC13GuestTransportHTTP",
+      "method": "test_guest_via_execute_cmd_all_crm_cskh_endpoints_denied",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_guest_via_execute_cmd_all_crm_cskh_endpoints_denied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC13GuestTransportHTTP",
+      "method": "test_authenticated_user_via_execute_cmd_health_ping_succeeds",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_authenticated_user_via_execute_cmd_health_ping_succeeds",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC14CSRFAndSessionHTTP",
+      "method": "test_get_does_not_require_csrf",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_does_not_require_csrf",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC14CSRFAndSessionHTTP",
+      "method": "test_post_without_csrf_token_rejected",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_post_without_csrf_token_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC14CSRFAndSessionHTTP",
+      "method": "test_post_with_invalid_csrf_token_rejected",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_post_with_invalid_csrf_token_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC14CSRFAndSessionHTTP",
+      "method": "test_post_with_valid_csrf_header_succeeds",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_post_with_valid_csrf_header_succeeds",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC14CSRFAndSessionHTTP",
+      "method": "test_post_with_valid_csrf_form_dict_succeeds",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_post_with_valid_csrf_form_dict_succeeds",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC14CSRFAndSessionHTTP",
+      "method": "test_post_via_execute_cmd_without_csrf_rejected",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_post_via_execute_cmd_without_csrf_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC16FieldExposure",
+      "method": "test_get_attachments_does_not_leak_permlevel_field",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_attachments_does_not_leak_permlevel_field",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC16FieldExposure",
+      "method": "test_get_linked_calls_does_not_leak_permlevel_field",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_linked_calls_does_not_leak_permlevel_field",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC16FieldExposure",
+      "method": "test_get_linked_notes_does_not_leak_permlevel_field",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_linked_notes_does_not_leak_permlevel_field",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC16FieldExposure",
+      "method": "test_get_assigned_users_returns_only_user_identifier",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_assigned_users_returns_only_user_identifier",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC16FieldExposure",
+      "method": "test_get_linked_docs_of_document_returns_only_allowed",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_linked_docs_of_document_returns_only_allowed",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC16FieldExposure",
+      "method": "test_crm_api_get_data_filters_permlevel_field",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_crm_api_get_data_filters_permlevel_field",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC26FileURLLeak",
+      "method": "test_get_attachments_redacts_file_url_for_non_system_user",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_attachments_redacts_file_url_for_non_system_user",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC26FileURLLeak",
+      "method": "test_get_attachments_preserves_file_url_for_system_caller",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_attachments_preserves_file_url_for_system_caller",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC26FileURLLeak",
+      "method": "test_get_attachments_does_not_redact_non_private_file",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_attachments_does_not_redact_non_private_file",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC26FileURLLeak",
+      "method": "test_get_linked_docs_of_document_shape_probe_only",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_linked_docs_of_document_shape_probe_only",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC26FileURLLeak",
+      "method": "test_get_attachments_does_not_leak_cross_scope_file_url",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_get_attachments_does_not_leak_cross_scope_file_url",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC26FileURLLeak",
+      "method": "test_find_file_by_url_returns_none_for_old_owner_after_reassign",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_find_file_by_url_returns_none_for_old_owner_after_reassign",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC27CallLogFallbackContactInternal",
+      "method": "test_upstream_get_call_contact_orphan_routes_to_phone_lookup",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_upstream_get_call_contact_orphan_routes_to_phone_lookup",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC27CallLogFallbackContactInternal",
+      "method": "test_upstream_get_call_log_orphan_raises_for_staff_via_check_permission",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_upstream_get_call_log_orphan_raises_for_staff_via_check_permission",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC27CallLogFallbackContactInternal",
+      "method": "test_wrapper_get_call_log_still_raises_for_staff",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_wrapper_get_call_log_still_raises_for_staff",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC27CallLogFallbackContactInternal",
+      "method": "test_wrapper_get_call_log_administrator_succeeds",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_wrapper_get_call_log_administrator_succeeds",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC15BODAndRISKSEC12BulkReassign",
+      "method": "test_bod_calling_guarded_reporting_via_execute_cmd_denied",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_bod_calling_guarded_reporting_via_execute_cmd_denied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC15BODAndRISKSEC12BulkReassign",
+      "method": "test_bod_calling_crm_cskh_api_endpoints_denied",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_bod_calling_crm_cskh_api_endpoints_denied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC15BODAndRISKSEC12BulkReassign",
+      "method": "test_staff_bulk_delete_cross_scope_denied",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_staff_bulk_delete_cross_scope_denied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC15BODAndRISKSEC12BulkReassign",
+      "method": "test_bod_cross_scope_set_value_denied",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_bod_cross_scope_set_value_denied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC22And23StaleAfterReassign",
+      "method": "test_stale_todo_after_reassign_raises_for_old_owner",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_stale_todo_after_reassign_raises_for_old_owner",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC22And23StaleAfterReassign",
+      "method": "test_stale_comment_after_reassign_raises_for_old_owner",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_stale_comment_after_reassign_raises_for_old_owner",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_security_remediation_v2",
+      "class": "TestSEC22And23StaleAfterReassign",
+      "method": "test_cross_team_reassign_blocks_old_owner_and_leader",
+      "status": "PASS",
+      "source_xml": "test_security_remediation_v2.junit.xml",
+      "raw_name": "test_cross_team_reassign_blocks_old_owner_and_leader",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestLEAD07UnassignedLead",
+      "method": "test_unassigned_lead_has_no_owner_and_no_share",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_unassigned_lead_has_no_owner_and_no_share",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestLEAD07UnassignedLead",
+      "method": "test_staff_list_does_not_return_unassigned_lead",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_staff_list_does_not_return_unassigned_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestLEAD07UnassignedLead",
+      "method": "test_staff_detail_is_denied_for_unassigned_lead",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_staff_detail_is_denied_for_unassigned_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestCL0607TeamLeaderCallLog",
+      "method": "test_cl06_tl1_can_list_call_log_of_team_1",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_cl06_tl1_can_list_call_log_of_team_1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestCL0607TeamLeaderCallLog",
+      "method": "test_cl06_tl1_can_read_call_log_detail_of_team_1",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_cl06_tl1_can_read_call_log_detail_of_team_1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestCL0607TeamLeaderCallLog",
+      "method": "test_cl06_tl1_can_call_get_call_log_endpoint_for_team_1",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_cl06_tl1_can_call_get_call_log_endpoint_for_team_1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestCL0607TeamLeaderCallLog",
+      "method": "test_cl07_tl1_list_does_not_include_call_log_of_team_2",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_cl07_tl1_list_does_not_include_call_log_of_team_2",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestCL0607TeamLeaderCallLog",
+      "method": "test_cl07_tl1_detail_is_denied_for_call_log_of_team_2",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_cl07_tl1_detail_is_denied_for_call_log_of_team_2",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestCL0607TeamLeaderCallLog",
+      "method": "test_cl07_tl1_get_call_log_endpoint_is_denied_for_team_2",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_cl07_tl1_get_call_log_endpoint_is_denied_for_team_2",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestTK0506TeamLeaderTask",
+      "method": "test_tk05_tl1_can_list_task_of_team_1",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_tk05_tl1_can_list_task_of_team_1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestTK0506TeamLeaderTask",
+      "method": "test_tk05_tl1_can_read_task_detail_of_team_1",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_tk05_tl1_can_read_task_detail_of_team_1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestTK0506TeamLeaderTask",
+      "method": "test_tk05_tl1_can_call_get_linked_tasks_endpoint_for_team_1",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_tk05_tl1_can_call_get_linked_tasks_endpoint_for_team_1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestTK0506TeamLeaderTask",
+      "method": "test_tk06_tl1_list_does_not_include_task_of_team_2",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_tk06_tl1_list_does_not_include_task_of_team_2",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestTK0506TeamLeaderTask",
+      "method": "test_tk06_tl1_detail_is_denied_for_task_of_team_2",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_tk06_tl1_detail_is_denied_for_task_of_team_2",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestTK0506TeamLeaderTask",
+      "method": "test_tk06_tl1_get_linked_tasks_endpoint_is_denied_for_team_2",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_tk06_tl1_get_linked_tasks_endpoint_is_denied_for_team_2",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestNT0506TeamLeaderNote",
+      "method": "test_nt05_tl1_can_list_note_of_team_1",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_nt05_tl1_can_list_note_of_team_1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestNT0506TeamLeaderNote",
+      "method": "test_nt05_tl1_can_read_note_detail_of_team_1",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_nt05_tl1_can_read_note_detail_of_team_1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestNT0506TeamLeaderNote",
+      "method": "test_nt05_tl1_can_call_get_linked_notes_endpoint_for_team_1",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_nt05_tl1_can_call_get_linked_notes_endpoint_for_team_1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestNT0506TeamLeaderNote",
+      "method": "test_nt06_tl1_list_does_not_include_note_of_team_2",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_nt06_tl1_list_does_not_include_note_of_team_2",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestNT0506TeamLeaderNote",
+      "method": "test_nt06_tl1_detail_is_denied_for_note_of_team_2",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_nt06_tl1_detail_is_denied_for_note_of_team_2",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestNT0506TeamLeaderNote",
+      "method": "test_nt06_tl1_get_linked_notes_endpoint_is_denied_for_team_2",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_nt06_tl1_get_linked_notes_endpoint_is_denied_for_team_2",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestRA04CrmAdminReassignBlocked",
+      "method": "test_ra04_ownership_service_does_not_exist_yet",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_ra04_ownership_service_does_not_exist_yet",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestRA04CrmAdminReassignBlocked",
+      "method": "test_ra04_crm_admin_is_not_system_and_is_blocked_by_validate_lead_owner",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_ra04_crm_admin_is_not_system_and_is_blocked_by_validate_lead_owner",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestRA04CrmAdminReassignBlocked",
+      "method": "test_ra04_stays_unclosed_pending_owner_decision",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_ra04_stays_unclosed_pending_owner_decision",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestLS02GlobalSearchScope",
+      "method": "test_ls02_search_widget_returns_only_own_leads_for_staff",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_ls02_search_widget_returns_only_own_leads_for_staff",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestLS02GlobalSearchScope",
+      "method": "test_ls02_search_link_does_not_leak_cross_scope_lead",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_ls02_search_link_does_not_leak_cross_scope_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "class": "TestLS02GlobalSearchScope",
+      "method": "test_ls02_search_with_ignore_user_permissions_is_still_scope_bound",
+      "status": "PASS",
+      "source_xml": "test_bt1c5_matrix_gaps.junit.xml",
+      "raw_name": "test_ls02_search_with_ignore_user_permissions_is_still_scope_bound",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocShareBaseline",
+      "method": "test_docshare_absent_before_any_assignment",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_docshare_absent_before_any_assignment",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocShareAssignAgent",
+      "method": "test_docshare_created_by_assign_agent_when_assignee_lacks_permission",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_docshare_created_by_assign_agent_when_assignee_lacks_permission",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocShareAssignAgent",
+      "method": "test_docshare_not_created_by_assign_agent_when_assignee_already_in_scope",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_docshare_not_created_by_assign_agent_when_assignee_already_in_scope",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocShareAssignAgent",
+      "method": "test_docshare_flags_after_assign_agent",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_docshare_flags_after_assign_agent",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocShareLeadSave",
+      "method": "test_docshare_removed_by_lead_save_when_owner_changes",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_docshare_removed_by_lead_save_when_owner_changes",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocShareLeadSave",
+      "method": "test_docshare_survives_lead_save_when_owner_unchanged",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_docshare_survives_lead_save_when_owner_unchanged",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocShareRemoveAssignments",
+      "method": "test_docshare_survives_remove_assignments",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_docshare_survives_remove_assignments",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocShareEffectivePermission",
+      "method": "test_effective_permission_before_and_after_reassign",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_effective_permission_before_and_after_reassign",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocShareEffectivePermission",
+      "method": "test_effective_permission_of_shared_child_records",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_effective_permission_of_shared_child_records",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_docshare_lifecycle",
+      "class": "TestDocSharePolicyPinRegistry",
+      "method": "test_policy_pin_registry_is_consistent",
+      "status": "PASS",
+      "source_xml": "test_docshare_lifecycle.junit.xml",
+      "raw_name": "test_policy_pin_registry_is_consistent",
+      "match_reason": "exact"
+    }
+  ]
+}

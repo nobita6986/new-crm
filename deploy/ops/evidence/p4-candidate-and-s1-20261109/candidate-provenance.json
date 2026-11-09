@@ -1,0 +1,36 @@
+{
+  "schema_version": "cskh-p4-ghcr-candidate-provenance-v2",
+  "recorded_at_utc": "2026-11-09T13:33:51.144871+00:00",
+  "git_commit_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+  "apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910",
+  "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
+  "strict_security_gate_status": "FAIL",
+  "production_candidate_promotion_status": "BLOCKED_PENDING_UPSTREAM_FIX_OR_OWNER_EXCEPTION",
+  "signed_manifest_scope": "ci_ephemeral_rehearsal",
+  "signed_manifest_relpath": "manifest/rehearsal-release-manifest.json",
+  "signing_key_provenance": "ephemeral_ci_ed25519_keypair (private key destroyed immediately after signing; use p4-release.yml with protected CSKH_RELEASE_SIGNING_PRIVATE_KEY for formal Go-Live cutover)",
+  "identifier_taxonomy": {
+    "local_image_id": {
+      "value": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+      "class": "docker_local_image_id",
+      "description": "Docker daemon local image ID (.Id from docker image inspect; equals config digest on classic graphdriver store or manifest/index digest on containerd image store; analogous in class to baseline CI db925419...)"
+    },
+    "oci_config_digest": {
+      "value": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+      "class": "oci_image_config_blob_sha256",
+      "description": "SHA-256 digest of the OCI Image Configuration JSON blob (manifest.config.digest in manifest/oci-distribution-manifest.json)"
+    },
+    "registry_manifest_digest": {
+      "value": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+      "media_type": "application/vnd.docker.distribution.manifest.v2+json",
+      "class": "oci_distribution_manifest_sha256",
+      "canonical_promotion_unit": true,
+      "description": "Remote GHCR immutable distribution manifest digest (@sha256; analogous in class to baseline CI 36613468...). ONLY this digest is promoted across CI -> Staging -> Production."
+    },
+    "unrelated_live_image_reference": {
+      "live_host": "crm.hrpartner.vn",
+      "baseline_live_prefix": "acb95057...",
+      "rule": "Live keeping a prior version before authorized cutover is NOT deployment drift; never deploy candidates to crm.hrpartner.vn or mutate live just to match CI, and never cross-compare local_image_id, oci_config_digest, and registry_manifest_digest."
+    }
+  }
+}

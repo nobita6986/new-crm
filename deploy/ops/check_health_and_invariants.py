@@ -121,6 +121,9 @@ PLACEHOLDER_TOKENS = (
     "example.com",
     "changeme",
     "replace_me",
+    "pending",
+    "unassigned",
+    "tbd",
     "<",
     ">",
 )
@@ -413,6 +416,16 @@ def dispatch_alert_with_cooldown(
             http_status = resp.status
     except urllib.error.HTTPError as exc:
         http_status = exc.code
+    except urllib.error.URLError as exc:
+        return {
+            "status": "FAILED",
+            "http_status": 0,
+            "dedup_key": dedup_key,
+            "payload_sha256": payload_sha256,
+            "webhook_redacted": redact_payload_text(webhook_url),
+            "error": redact_payload_text(str(exc.reason)),
+            "timestamp_utc": utc_now_iso(),
+        }
 
     delivered = 200 <= http_status < 300
     if delivered and dedup_state_file:
@@ -427,6 +440,59 @@ def dispatch_alert_with_cooldown(
         "payload_sha256": payload_sha256,
         "webhook_redacted": redact_payload_text(webhook_url),
         "timestamp_utc": utc_now_iso(),
+    }
+
+
+def verify_alert_receipt_file(receipt_path: Path) -> dict[str, Any]:
+    """Validate a G19 synthetic alert receipt JSON (HTTP 2xx DELIVERED, redacted webhook, 0 PII, named owner)."""
+    if not receipt_path.is_file():
+        return {
+            "timestamp_utc": utc_now_iso(),
+            "gate": "G19",
+            "status": "BLOCKED",
+            "reason": f"Missing alert receipt file: {receipt_path}",
+            "required_owner_inputs": ["BLK-GOV-06 (CSKH_OPERATOR_CONTACT)", "BLK-INFRA-07 (CSKH_ALERT_WEBHOOK_URL)"],
+        }
+    raw_text = receipt_path.read_text(encoding="utf-8")
+    doc = json.loads(raw_text)
+    if doc.get("status") == "BLOCKED":
+        return {
+            "timestamp_utc": utc_now_iso(),
+            "gate": "G19",
+            "status": "BLOCKED",
+            "alert_preflight": doc.get("alert_preflight"),
+            "required_owner_inputs": ["BLK-GOV-06 (CSKH_OPERATOR_CONTACT)", "BLK-INFRA-07 (CSKH_ALERT_WEBHOOK_URL)"],
+        }
+
+    env_msg = doc.get("alert_envelope") or {}
+    receipt = doc.get("receipt") or {}
+    owner = str(env_msg.get("owner") or "").strip()
+    errors: list[str] = []
+    if not owner or any(tok in owner.lower() for tok in PLACEHOLDER_TOKENS):
+        errors.append("alert_envelope.owner is missing or contains placeholder")
+    if receipt.get("status") != "DELIVERED":
+        errors.append(f"Expected receipt.status == 'DELIVERED', got {receipt.get('status')!r}")
+    http_st = int(receipt.get("http_status") or 0)
+    if not (200 <= http_st < 300):
+        errors.append(f"Expected HTTP 2xx receipt status, got {http_st}")
+    sha = str(receipt.get("payload_sha256") or "")
+    if not re.fullmatch(r"[0-9a-f]{64}", sha):
+        errors.append("Missing or invalid 64-hex receipt.payload_sha256")
+    wh_redacted = str(receipt.get("webhook_redacted") or "")
+    if "<REDACTED_WEBHOOK_PATH>" not in wh_redacted:
+        errors.append("receipt.webhook_redacted does not scrub webhook path token")
+    if len(PHONE_RE.findall(raw_text)) > 0:
+        errors.append("Raw phone number detected in alert receipt artifact")
+
+    return {
+        "timestamp_utc": utc_now_iso(),
+        "gate": "G19",
+        "status": "PASS" if not errors else "FAIL",
+        "owner": owner,
+        "http_status": http_st,
+        "payload_sha256": sha,
+        "webhook_redacted": wh_redacted,
+        "errors": errors,
     }
 
 
@@ -891,6 +957,12 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Dispatch synthetic test alert for G19",
     )
+    parser.add_argument(
+        "--verify-alert-receipt",
+        type=Path,
+        default=None,
+        help="Verify a saved G19 synthetic alert receipt JSON (HTTP 2xx DELIVERED, redacted webhook, 0 PII)",
+    )
     parser.add_argument("--operator-contact", default=os.environ.get("CSKH_OPERATOR_CONTACT", ""))
     parser.add_argument("--webhook-url", default=os.environ.get("CSKH_ALERT_WEBHOOK_URL", ""))
     parser.add_argument("--dedup-state-file", type=Path)
@@ -907,6 +979,20 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     alert_preflight = evaluate_alert_preflight(args.operator_contact, args.webhook_url)
+
+    if args.verify_alert_receipt is not None:
+        report = verify_alert_receipt_file(args.verify_alert_receipt)
+        out_txt = json.dumps(report, indent=2, ensure_ascii=False) + "\n"
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(out_txt, encoding="utf-8", newline="\n")
+        sys.stdout.write(out_txt)
+        st = report.get("status")
+        if st == "PASS":
+            return 0
+        if st == "BLOCKED":
+            return 2
+        return 1
 
     if args.preflight_alert_check:
         report = {

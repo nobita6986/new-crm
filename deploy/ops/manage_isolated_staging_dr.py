@@ -595,6 +595,49 @@ finally:
     }
 
 
+def rehearse_migration_x2_and_reconcile(*, env_file: Path) -> dict[str, Any]:
+    """Rehearse `G06` + `BLG-P4-MIG-01`: snapshot -> migrator #1 -> snapshot -> migrator #2 -> compare."""
+    env = p403_tool.parse_env_file(env_file)
+    assert_isolated_from_owner_stack(env, env_file)
+    site_name = env["SITE_NAME"].strip()
+
+    run_sub(compose_cmd(env_file, ["stop", "queue-short", "queue-long", "scheduler"]))
+    mig_env = dict(os.environ, MIGRATE_SITES="true")
+    try:
+        before_snap = p403_tool.capture_live_snapshot(env_file, site_name, mode="dr-https")
+
+        t1 = time.monotonic()
+        run_sub(
+            compose_cmd(env_file, ["run", "--rm", "-e", "MIGRATE_SITES=true", "migrator"], profile_migrate=True),
+            env=mig_env,
+        )
+        mig1_sec = round(time.monotonic() - t1, 3)
+        after_1 = p403_tool.capture_live_snapshot(env_file, site_name, mode="dr-https")
+
+        t2 = time.monotonic()
+        run_sub(
+            compose_cmd(env_file, ["run", "--rm", "-e", "MIGRATE_SITES=true", "migrator"], profile_migrate=True),
+            env=mig_env,
+        )
+        mig2_sec = round(time.monotonic() - t2, 3)
+        after_2 = p403_tool.capture_live_snapshot(env_file, site_name, mode="dr-https")
+    finally:
+        run_sub(
+            compose_cmd(env_file, ["exec", "-T", "backend", "bench", "--site", site_name, "enable-scheduler"])
+        )
+        run_sub(compose_cmd(env_file, ["exec", "-T", "backend", "bench", "--site", site_name, "clear-cache"]))
+        run_sub(compose_cmd(env_file, ["up", "-d", "queue-short", "queue-long", "scheduler"]))
+        wait_services_healthy(env_file, ("queue-short", "queue-long", "scheduler"), timeout_seconds=90)
+
+    reconcile = p403_tool.compare_migration_snapshots(before_snap, after_1, after_2)
+    return {
+        "status": reconcile["status"],
+        "migrate_run_1_seconds": mig1_sec,
+        "migrate_run_2_seconds": mig2_sec,
+        "reconciliation": reconcile,
+    }
+
+
 def run_uat_and_permission_checks_over_https(
     *,
     env_file: Path,
@@ -603,7 +646,7 @@ def run_uat_and_permission_checks_over_https(
     seed_pw: str,
     scrubber: smoke_lib.SmokeLogger,
 ) -> dict[str, Any]:
-    """Execute 15-screen Vietnamese UAT (`G13-G16`) + RBAC & offboarding (`G10-G12`) over TLS."""
+    """Execute 15-screen Vietnamese UAT (`G13-G16`/`G20`) + RBAC, IDOR, Export & offboarding (`G10-G12`/`G21`) over TLS."""
     env = p403_tool.parse_env_file(env_file)
     assert_isolated_from_owner_stack(env, env_file)
     site_name = env["SITE_NAME"].strip()
@@ -616,7 +659,7 @@ def run_uat_and_permission_checks_over_https(
     team_b = seed_info["team_b"]
     sample_wi = seed_info["aba_work_item"]
 
-    # Unauthenticated Guest check over HTTPS
+    # Unauthenticated Guest check over HTTPS + security headers audit (G20)
     guest_api_code, guest_hdrs, _ = https_req(
         site_name=site_name,
         connect_host=connect_host,
@@ -625,10 +668,14 @@ def run_uat_and_permission_checks_over_https(
         path="/api/method/crm_cskh.api.customers.my_list",
         headers={"Accept": "application/json"},
     )
+    hdr_map = {k.lower(): v for k, v in guest_hdrs}
     hsts_values = [v for k, v in guest_hdrs if k.lower() == "strict-transport-security"]
     hsts_present = any("max-age=" in v for v in hsts_values)
+    nosniff_present = hdr_map.get("x-content-type-options", "").lower() == "nosniff"
+    xfo_present = hdr_map.get("x-frame-options", "").upper() in ("SAMEORIGIN", "DENY")
+    referrer_policy_present = bool(hdr_map.get("referrer-policy"))
 
-    _, admin_sid, _, admin_cookie_attrs = https_login_session(
+    _, admin_sid, admin_csrf, admin_cookie_attrs = https_login_session(
         site_name=site_name,
         connect_host=connect_host,
         https_port=https_port,
@@ -655,12 +702,21 @@ def run_uat_and_permission_checks_over_https(
         pwd=seed_pw,
         scrubber=scrubber,
     )
-    _, stf_a_sid, _, _ = https_login_session(
+    _, stf_a_sid, stf_a_csrf, _ = https_login_session(
         site_name=site_name,
         connect_host=connect_host,
         https_port=https_port,
         ca_crt_path=ca_crt_path,
         usr=users["staff_a"],
+        pwd=seed_pw,
+        scrubber=scrubber,
+    )
+    _, stf_b_sid, _, _ = https_login_session(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        usr=users["staff_b"],
         pwd=seed_pw,
         scrubber=scrubber,
     )
@@ -694,6 +750,7 @@ def run_uat_and_permission_checks_over_https(
         "/cskh/scorecard",
         "/cskh/sla-operations",
     ]
+    vi_diacritics_re = re.compile(r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ]", re.I)
     route_results: dict[str, dict[str, Any]] = {}
     for rt in routes_15:
         cookie = stf_a_sid if rt == "/cskh/scorecard" else admin_sid
@@ -707,14 +764,27 @@ def run_uat_and_permission_checks_over_https(
         )
         rhtml = rbytes.decode("utf-8", errors="replace")
         has_lang_vi = 'lang="vi"' in rhtml or "lang='vi'" in rhtml
+        has_vi_copy = bool(vi_diacritics_re.search(rhtml))
+        no_traceback = "Traceback (most recent call last)" not in rhtml
         route_results[rt.split("?", 1)[0]] = {
             "http_status": rc,
             "html_lang_vi": has_lang_vi,
-            "pass": rc == 200 and has_lang_vi,
+            "has_vietnamese_copy": has_vi_copy,
+            "no_server_traceback": no_traceback,
+            "pass": rc == 200 and has_lang_vi and has_vi_copy and no_traceback,
         }
 
+    crm_shell_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/crm",
+        headers={"Cookie": stf_a_sid},
+    )
+
     q_params = urllib.parse.urlencode({"period_type": "monthly", "period_key": period_key})
-    bod_ov_code, _, _ = https_req(
+    bod_ov_code, _, bod_ov_b = https_req(
         site_name=site_name,
         connect_host=connect_host,
         https_port=https_port,
@@ -722,6 +792,9 @@ def run_uat_and_permission_checks_over_https(
         path=f"/api/method/crm_cskh.api.reporting.get_executive_overview?{q_params}",
         headers={"Cookie": bod_sid, "Accept": "application/json"},
     )
+    bod_ov_msg = json.loads(bod_ov_b.decode("utf-8")).get("message", {}) if bod_ov_code == 200 else {}
+    formula_version_v2 = bod_ov_msg.get("formula_version") == "cskh-metrics-v2"
+
     bod_emp_code, _, bod_emp_b = https_req(
         site_name=site_name,
         connect_host=connect_host,
@@ -742,6 +815,15 @@ def run_uat_and_permission_checks_over_https(
         ),
         {},
     )
+    golden_score_val = golden_row.get("overall_score")
+    if isinstance(golden_score_val, dict):
+        golden_score_val = golden_score_val.get("value")
+    golden_qa = (golden_row.get("metrics") or {}).get("QA_PASS_RATE") or {}
+    golden_qa_null_not_zero = (
+        golden_qa.get("value") is None if isinstance(golden_qa, dict) and golden_qa.get("denominator") == 0 else True
+    )
+    golden_score_86_47 = golden_score_val is not None and round(float(golden_score_val), 2) == 86.47
+
     dd_params = urllib.parse.urlencode(
         {
             "metric_code": "FIRST_ATTEMPT_SLA_RATE",
@@ -795,14 +877,17 @@ def run_uat_and_permission_checks_over_https(
         headers={"Cookie": ldr_a_sid, "Accept": "application/json"},
     )
 
-    stf_my_code, _, _ = https_req(
+    stf_my_code, _, stf_my_b = https_req(
         site_name=site_name,
         connect_host=connect_host,
         https_port=https_port,
         ca_crt_path=ca_crt_path,
-        path="/api/method/crm_cskh.api.customers.my_list",
+        path="/api/method/crm_cskh.api.customers.my_list?page=1&page_size=99999",
         headers={"Cookie": stf_a_sid, "Accept": "application/json"},
     )
+    stf_my_msg = json.loads(stf_my_b.decode("utf-8")).get("message", {}) if stf_my_code == 200 else {}
+    pagination_bounded_ok = int(stf_my_msg.get("page_size") or 99999) <= 100
+
     stf_sc_code, _, _ = https_req(
         site_name=site_name,
         connect_host=connect_host,
@@ -837,6 +922,499 @@ def run_uat_and_permission_checks_over_https(
         headers={"Cookie": out_sid, "Accept": "application/json"},
     )
 
+    # --- S01-S20 & F10/F13/F20/F21/F29 HTTPS Security Negative & Workflow Matrix ---
+    prep_matrix_py = r"""
+import json, os, sys, frappe
+site, staff_a, staff_b = sys.argv[1], sys.argv[2], sys.argv[3]
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    frappe.set_user("Administrator")
+    wi_a_row = frappe.db.sql(
+        "SELECT name, lead FROM `tabCSKH Work Item` WHERE assigned_to=%s AND status IN ('assigned','in_progress') ORDER BY name DESC LIMIT 1",
+        (staff_a,),
+        as_dict=True,
+    )[0]
+    wi_b_row = frappe.db.sql(
+        "SELECT name, lead FROM `tabCSKH Work Item` WHERE assigned_to=%s AND status IN ('assigned','in_progress','closed') ORDER BY name ASC LIMIT 1",
+        (staff_b,),
+        as_dict=True,
+    )[0]
+    att_b = frappe.db.get_value("CSKH Contact Attempt", {"work_item": wi_b_row.name}, "name") or ""
+    cl_b = frappe.db.get_value("CRM Call Log", {"reference_docname": wi_b_row.lead}, "name") or ""
+    existing_f = frappe.db.get_value(
+        "File",
+        {"attached_to_doctype": "CRM Lead", "attached_to_name": wi_b_row.lead, "is_private": 1},
+        "file_url",
+    )
+    if not existing_f:
+        fdoc = frappe.get_doc({
+            "doctype": "File",
+            "file_name": "dr-s06-private-check.txt",
+            "attached_to_doctype": "CRM Lead",
+            "attached_to_name": wi_b_row.lead,
+            "is_private": 1,
+            "content": "SYNTHETIC_ISOLATED_DR_PRIVATE_FILE_CHECK",
+        }).insert(ignore_permissions=True)
+        existing_f = fdoc.file_url
+    frappe.db.commit()
+    print("DR_MATRIX_JSON=" + json.dumps({
+        "wi_a": wi_a_row.name,
+        "lead_a": wi_a_row.lead,
+        "wi_b": wi_b_row.name,
+        "lead_b": wi_b_row.lead,
+        "attempt_b": att_b,
+        "call_log_b": cl_b,
+        "private_file_b_url": existing_f,
+    }))
+finally:
+    frappe.destroy()
+"""
+    prep_proc = run_sub(
+        compose_cmd(
+            env_file,
+            [
+                "exec",
+                "-T",
+                "backend",
+                "/home/frappe/frappe-bench/env/bin/python",
+                "-c",
+                prep_matrix_py,
+                site_name,
+                users["staff_a"],
+                users["staff_b"],
+            ],
+        )
+    )
+    mx = json.loads(
+        [ln.split("=", 1)[1] for ln in prep_proc.stdout.splitlines() if ln.startswith("DR_MATRIX_JSON=")][-1]
+    )
+
+    # S01-S05, S19: Cross-staff Frappe REST /api/resource/* & RPC IDOR blocked (403)
+    s01_lead_idor, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=f"/api/resource/CRM%20Lead/{urllib.parse.quote(mx['lead_b'])}",
+        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+    )
+    s02_wi_rest_idor, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=f"/api/resource/CSKH%20Work%20Item/{urllib.parse.quote(mx['wi_b'])}",
+        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+    )
+    s03_wi_rpc_idor, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=f"/api/method/crm_cskh.api.workflow.get_work_item?work_item={urllib.parse.quote(mx['wi_b'])}",
+        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+    )
+    s04_att_rest_idor = 403
+    if mx["attempt_b"]:
+        s04_att_rest_idor, _, _ = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path=f"/api/resource/CSKH%20Contact%20Attempt/{urllib.parse.quote(mx['attempt_b'])}",
+            headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+        )
+    s05_call_rest_idor = 403
+    if mx["call_log_b"]:
+        s05_call_rest_idor, _, _ = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path=f"/api/resource/CRM%20Call%20Log/{urllib.parse.quote(mx['call_log_b'])}",
+            headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+        )
+    s19_kpi_snap_rest, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/resource/CSKH%20KPI%20Snapshot",
+        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+    )
+
+    # S06: Private File URL boundary over HTTPS
+    priv_url_path = urllib.parse.quote(mx["private_file_b_url"], safe="/")
+    s06_priv_guest_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=priv_url_path,
+    )
+    s06_priv_staff_a_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=priv_url_path,
+        headers={"Cookie": stf_a_sid},
+    )
+    s06_priv_staff_b_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=priv_url_path,
+        headers={"Cookie": stf_b_sid},
+    )
+
+    # S07, S11, S12, F29: BOD CSV export authorization + PII block + cross-role download block
+    s11_bod_pii_export_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.reporting.request_export",
+        method="POST",
+        headers={
+            "Cookie": bod_sid,
+            "X-Frappe-CSRF-Token": bod_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=json.dumps(
+            {
+                "report_type": "metric_drilldown",
+                "metric_code": "FIRST_ATTEMPT_SLA_RATE",
+                "period_type": "monthly",
+                "period_key": period_key,
+                "include_pii": 1,
+            }
+        ).encode("utf-8"),
+    )
+    bod_exp_req_code, _, bod_exp_req_b = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.reporting.request_export",
+        method="POST",
+        headers={
+            "Cookie": bod_sid,
+            "X-Frappe-CSRF-Token": bod_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=json.dumps(
+            {
+                "report_type": "employee_quality",
+                "period_type": "monthly",
+                "period_key": period_key,
+                "include_pii": 0,
+            }
+        ).encode("utf-8"),
+    )
+    export_id = ""
+    if bod_exp_req_code == 200:
+        export_id = str(json.loads(bod_exp_req_b.decode("utf-8")).get("message", {}).get("export_id") or "")
+    export_status_val = ""
+    if export_id:
+        for _ in range(30):
+            st_c, _, st_b = https_req(
+                site_name=site_name,
+                connect_host=connect_host,
+                https_port=https_port,
+                ca_crt_path=ca_crt_path,
+                path=f"/api/method/crm_cskh.api.reporting.get_export_status?export_id={urllib.parse.quote(export_id)}",
+                headers={"Cookie": bod_sid, "Accept": "application/json"},
+            )
+            if st_c == 200:
+                export_status_val = str(
+                    json.loads(st_b.decode("utf-8")).get("message", {}).get("status") or ""
+                )
+                if export_status_val in ("completed", "failed", "revoked"):
+                    break
+            time.sleep(0.5)
+
+    bod_exp_dl_code = 0
+    bod_exp_raw_phones = -1
+    s12_staff_a_exp_dl_code = 0
+    s12_guest_exp_dl_code = 0
+    if export_id and export_status_val == "completed":
+        bod_exp_dl_code, _, bod_exp_csv_b = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path=f"/api/method/crm_cskh.api.reporting.download_export?export_id={urllib.parse.quote(export_id)}",
+            headers={"Cookie": bod_sid},
+        )
+        bod_exp_raw_phones = len(PHONE_RE.findall(bod_exp_csv_b.decode("utf-8", errors="replace")))
+        s12_staff_a_exp_dl_code, _, _ = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path=f"/api/method/crm_cskh.api.reporting.download_export?export_id={urllib.parse.quote(export_id)}",
+            headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+        )
+        s12_guest_exp_dl_code, _, _ = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path=f"/api/method/crm_cskh.api.reporting.download_export?export_id={urllib.parse.quote(export_id)}",
+            headers={"Accept": "application/json"},
+        )
+
+    # S08, S09, S10, S16: Missing CSRF, Spoofed identity, Staff privilege escalation & native assign_to bypass
+    s16_missing_csrf_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.workflow.record_attempt",
+        method="POST",
+        headers={
+            "Cookie": stf_a_sid,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=json.dumps(
+            {
+                "work_item": mx["wi_a"],
+                "channel": "phone_call",
+                "outcome_code": "no_answer",
+                "idempotency_key": "dr-no-csrf-001",
+            }
+        ).encode("utf-8"),
+    )
+    s09_spoofed_performer_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.workflow.record_attempt",
+        method="POST",
+        headers={
+            "Cookie": stf_a_sid,
+            "X-Frappe-CSRF-Token": stf_a_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=json.dumps(
+            {
+                "work_item": mx["wi_a"],
+                "channel": "phone_call",
+                "outcome_code": "no_answer",
+                "performed_by": users["staff_b"],
+                "idempotency_key": "dr-spoof-001",
+            }
+        ).encode("utf-8"),
+    )
+    s10_staff_reassign_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.ownership.reassign",
+        method="POST",
+        headers={
+            "Cookie": stf_a_sid,
+            "X-Frappe-CSRF-Token": stf_a_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=json.dumps(
+            {
+                "work_item": mx["wi_b"],
+                "expected_owner": users["staff_b"],
+                "target_user": users["staff_a"],
+                "reason": "unauthorized-takeover",
+            }
+        ).encode("utf-8"),
+    )
+    s10_staff_dist_exec_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.distribution.execute",
+        method="POST",
+        headers={
+            "Cookie": stf_a_sid,
+            "X-Frappe-CSRF-Token": stf_a_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=json.dumps({"campaign": seed_info["campaign_id"]}).encode("utf-8"),
+    )
+    s08_native_assign_to_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/frappe.desk.form.assign_to.add",
+        method="POST",
+        headers={
+            "Cookie": stf_a_sid,
+            "X-Frappe-CSRF-Token": stf_a_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=json.dumps(
+            {
+                "doctype": "CRM Lead",
+                "name": mx["lead_b"],
+                "assign_to": [users["staff_a"]],
+            }
+        ).encode("utf-8"),
+    )
+
+    # S13, S14, F20, F21: Live transfer A -> B -> A over HTTPS immediately revokes old owner access
+    aba_a_before_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=f"/api/method/crm_cskh.api.workflow.get_work_item?work_item={urllib.parse.quote(mx['wi_a'])}",
+        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+    )
+    aba_a_to_b_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.ownership.reassign",
+        method="POST",
+        headers={
+            "Cookie": admin_sid,
+            "X-Frappe-CSRF-Token": admin_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=json.dumps(
+            {
+                "work_item": mx["wi_a"],
+                "expected_owner": users["staff_a"],
+                "target_user": users["staff_b"],
+                "reason": "dr-https-s13-a-to-b",
+                "request_id": f"dr-s13-a2b-{mx['wi_a']}",
+            }
+        ).encode("utf-8"),
+    )
+    aba_a_after_transfer_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=f"/api/method/crm_cskh.api.workflow.get_work_item?work_item={urllib.parse.quote(mx['wi_a'])}",
+        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+    )
+    aba_b_after_transfer_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=f"/api/method/crm_cskh.api.workflow.get_work_item?work_item={urllib.parse.quote(mx['wi_a'])}",
+        headers={"Cookie": stf_b_sid, "Accept": "application/json"},
+    )
+    aba_b_to_a_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.ownership.reassign",
+        method="POST",
+        headers={
+            "Cookie": admin_sid,
+            "X-Frappe-CSRF-Token": admin_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=json.dumps(
+            {
+                "work_item": mx["wi_a"],
+                "expected_owner": users["staff_b"],
+                "target_user": users["staff_a"],
+                "reason": "dr-https-s13-b-to-a",
+                "request_id": f"dr-s13-b2a-{mx['wi_a']}",
+            }
+        ).encode("utf-8"),
+    )
+    aba_a_restored_code, _, _ = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=f"/api/method/crm_cskh.api.workflow.get_work_item?work_item={urllib.parse.quote(mx['wi_a'])}",
+        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+    )
+
+    # F10, F13, S17: Idempotent POST retry + Stored XSS note sanitization + self_reported guard over HTTPS
+    idem_body = json.dumps(
+        {
+            "work_item": mx["wi_a"],
+            "channel": "phone_call",
+            "outcome_code": "no_answer",
+            "note": "<script>alert(1)</script> Đã liên hệ ứng viên kiểm thử DR",
+            "idempotency_key": f"dr-https-idem-{mx['wi_a']}",
+        }
+    ).encode("utf-8")
+    att1_code, _, att1_b = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.workflow.record_attempt",
+        method="POST",
+        headers={
+            "Cookie": stf_a_sid,
+            "X-Frappe-CSRF-Token": stf_a_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=idem_body,
+    )
+    att2_code, _, att2_b = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path="/api/method/crm_cskh.api.workflow.record_attempt",
+        method="POST",
+        headers={
+            "Cookie": stf_a_sid,
+            "X-Frappe-CSRF-Token": stf_a_csrf,
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        },
+        body=idem_body,
+    )
+    att1_msg = json.loads(att1_b.decode("utf-8")).get("message", {}) if att1_code == 200 else {}
+    att2_msg = json.loads(att2_b.decode("utf-8")).get("message", {}) if att2_code == 200 else {}
+    idem_same_attempt = (
+        att1_code == 200
+        and att2_code == 200
+        and bool(att1_msg.get("attempt_id"))
+        and att1_msg.get("attempt_id") == att2_msg.get("attempt_id")
+        and att2_msg.get("idempotent_replay") is True
+    )
+    tl_code, _, tl_b = https_req(
+        site_name=site_name,
+        connect_host=connect_host,
+        https_port=https_port,
+        ca_crt_path=ca_crt_path,
+        path=f"/api/method/crm_cskh.api.workflow.list_attempts?work_item={urllib.parse.quote(mx['wi_a'])}",
+        headers={"Cookie": stf_a_sid, "Accept": "application/json"},
+    )
+    tl_raw = tl_b.decode("utf-8", errors="replace") if tl_code == 200 else ""
+    xss_sanitized_ok = tl_code == 200 and "<script>" not in tl_raw.lower()
+
+    # S15: Immediate session invalidation upon user offboarding / disable
     _, stf_c_sid, _, _ = https_login_session(
         site_name=site_name,
         connect_host=connect_host,
@@ -912,34 +1490,87 @@ finally:
     )
 
     all_15_ok = all(v["pass"] for v in route_results.values())
+    security_matrix_ok = (
+        s01_lead_idor == 403
+        and s02_wi_rest_idor == 403
+        and s03_wi_rpc_idor == 403
+        and s04_att_rest_idor == 403
+        and s05_call_rest_idor == 403
+        and s19_kpi_snap_rest == 403
+        and s06_priv_guest_code in (401, 403)
+        and s06_priv_staff_a_code == 403
+        and s06_priv_staff_b_code == 200
+        and s11_bod_pii_export_code == 403
+        and bod_exp_req_code == 200
+        and export_status_val == "completed"
+        and bod_exp_dl_code == 200
+        and bod_exp_raw_phones == 0
+        and s12_staff_a_exp_dl_code == 403
+        and s12_guest_exp_dl_code in (401, 403)
+        and s16_missing_csrf_code in (400, 403)
+        and s09_spoofed_performer_code == 403
+        and s10_staff_reassign_code == 403
+        and s10_staff_dist_exec_code == 403
+        and s08_native_assign_to_code == 403
+        and aba_a_before_code == 200
+        and aba_a_to_b_code == 200
+        and aba_a_after_transfer_code == 403
+        and aba_b_after_transfer_code == 200
+        and aba_b_to_a_code == 200
+        and aba_a_restored_code == 200
+        and idem_same_attempt
+        and xss_sanitized_ok
+    )
     passed = (
         all_15_ok
+        and crm_shell_code == 200
         and hsts_present
+        and nosniff_present
+        and xfo_present
+        and referrer_policy_present
         and admin_cookie_ok
         and bod_cookie_ok
         and guest_api_code in (401, 403)
         and bod_ov_code == 200
+        and formula_version_v2
         and bod_emp_code == 200
         and bool(golden_row)
+        and golden_score_86_47
+        and golden_qa_null_not_zero
         and bod_dd_code == 200
         and raw_phones_in_dd == 0
         and bod_recompute_code == 403
         and ldr_own_code == 200
         and ldr_other_code == 403
         and stf_my_code == 200
+        and pagination_bounded_ok
         and stf_sc_code == 200
         and stf_pool_code == 403
         and stf_exec_code == 403
         and out_code == 403
         and stf_c_before == 200
         and stf_c_disabled_code in (401, 403)
+        and security_matrix_ok
     )
     return {
         "status": "PASS" if passed else "FAIL",
         "transport": "HTTPS_TLS_VERIFIED",
         "hsts_header_present": hsts_present,
+        "security_headers": {
+            "strict_transport_security": hsts_present,
+            "x_content_type_options_nosniff": nosniff_present,
+            "x_frame_options_sameorigin_or_deny": xfo_present,
+            "referrer_policy_present": referrer_policy_present,
+        },
         "https_sid_cookie_policy_ok": admin_cookie_ok and bod_cookie_ok,
+        "crm_shell_http": crm_shell_code,
         "routes_15_vi_audit": route_results,
+        "metrics_v2_and_pagination_contract": {
+            "formula_version_cskh_metrics_v2": formula_version_v2,
+            "golden_employee_overall_score_86_47": golden_score_86_47,
+            "golden_employee_qa_zero_denom_is_null": golden_qa_null_not_zero,
+            "pagination_page_size_99999_bounded_le_100": pagination_bounded_ok,
+        },
         "role_scope_checks": {
             "guest_unauthenticated_blocked_http": guest_api_code,
             "bod_executive_overview_http": bod_ov_code,
@@ -957,6 +1588,38 @@ finally:
             "outside_desk_user_blocked_http": out_code,
             "disabled_user_active_sid_before_http": stf_c_before,
             "disabled_user_active_sid_after_disable_http": stf_c_disabled_code,
+        },
+        "security_negative_and_workflow_matrix_https": {
+            "s01_cross_staff_lead_rest_blocked_http": s01_lead_idor,
+            "s02_cross_staff_work_item_rest_blocked_http": s02_wi_rest_idor,
+            "s03_cross_staff_work_item_rpc_blocked_http": s03_wi_rpc_idor,
+            "s04_cross_staff_attempt_rest_blocked_http": s04_att_rest_idor,
+            "s05_cross_staff_call_log_rest_blocked_http": s05_call_rest_idor,
+            "s19_staff_kpi_snapshot_rest_blocked_http": s19_kpi_snap_rest,
+            "s06_private_file_guest_blocked_http": s06_priv_guest_code,
+            "s06_private_file_other_staff_blocked_http": s06_priv_staff_a_code,
+            "s06_private_file_owner_allowed_http": s06_priv_staff_b_code,
+            "s11_bod_pii_export_blocked_http": s11_bod_pii_export_code,
+            "f29_bod_csv_export_request_http": bod_exp_req_code,
+            "f29_bod_csv_export_job_status": export_status_val,
+            "f29_bod_csv_export_download_http": bod_exp_dl_code,
+            "f29_bod_csv_export_raw_phone_leaks": bod_exp_raw_phones,
+            "s12_other_staff_export_download_blocked_http": s12_staff_a_exp_dl_code,
+            "s12_guest_export_download_blocked_http": s12_guest_exp_dl_code,
+            "s16_missing_csrf_post_blocked_http": s16_missing_csrf_code,
+            "s09_spoofed_performed_by_blocked_http": s09_spoofed_performer_code,
+            "s10_staff_reassign_blocked_http": s10_staff_reassign_code,
+            "s10_staff_distribution_execute_blocked_http": s10_staff_dist_exec_code,
+            "s08_native_assign_to_bypass_blocked_http": s08_native_assign_to_code,
+            "s13_f20_aba_transfer_a_before_http": aba_a_before_code,
+            "s13_f20_aba_transfer_a_to_b_http": aba_a_to_b_code,
+            "s13_f20_aba_transfer_a_immediately_revoked_http": aba_a_after_transfer_code,
+            "s13_f20_aba_transfer_b_allowed_http": aba_b_after_transfer_code,
+            "s14_f21_aba_transfer_b_to_a_http": aba_b_to_a_code,
+            "s14_f21_aba_transfer_a_restored_http": aba_a_restored_code,
+            "f10_idempotent_attempt_replay_deduplicated": idem_same_attempt,
+            "s17_xss_note_sanitized": xss_sanitized_ok,
+            "pass": security_matrix_ok,
         },
     }
 
@@ -1298,10 +1961,32 @@ subprocess.check_call([
     wait_services_healthy(env_file, ("queue-short", "queue-long", "scheduler"), timeout_seconds=90)
     tier4_restore_sec = round(time.monotonic() - t_restore, 2)
 
-    # Re-run cron jobs once so post-restore healthcheck has fresh Scheduled Job Log records
+    # Measure point-in-time delta IMMEDIATELY after restore + migrator before any new cron KPI runs
+    immediate_delta_proc = run_sub(
+        [
+            sys.executable,
+            "-X",
+            "utf8",
+            str(OPS_DIR / "check_health_and_invariants.py"),
+            "--env-file",
+            str(env_file),
+            "--mode",
+            "dr-https",
+            "--site",
+            site_name,
+            "--startup-grace-seconds",
+            "3600",
+            "--since-utc",
+            bk_info["db_now"],
+        ]
+    )
+    post_delta = json.loads(immediate_delta_proc.stdout)["data_loss_window_delta"]
+    all_post_deltas_zero = all(int(v) == 0 for v in post_delta.values())
+
+    # Re-run cron jobs once so post-restore healthcheck has fresh Scheduled Job Log records at grace=0
     rehearse_worker_restart_and_cron_retry(env_file=env_file)
 
-    post_delta_proc = run_sub(
+    post_health_proc = run_sub(
         [
             sys.executable,
             "-X",
@@ -1315,12 +2000,9 @@ subprocess.check_call([
             site_name,
             "--startup-grace-seconds",
             "0",
-            "--since-utc",
-            bk_info["db_now"],
         ]
     )
-    post_health = json.loads(post_delta_proc.stdout)
-    post_delta = post_health["data_loss_window_delta"]
+    post_health = json.loads(post_health_proc.stdout)
 
     wait_https_ingress_ready(
         site_name=site_name,
@@ -1360,7 +2042,7 @@ subprocess.check_call([
 
     tier4_ok = (
         pre_delta.get("new_leads") == 1
-        and post_delta.get("new_leads") == 0
+        and all_post_deltas_zero
         and post_health.get("status") == "PASS"
         and post_smoke_proc.returncode == 0
         and post_smoke.get("status") == "PASS"
@@ -1382,9 +2064,15 @@ subprocess.check_call([
             "wrong_digest_rejected_exit_code": dig_bad_proc.returncode,
             "pass": tier2_ok,
         },
+        "tier3_forward_fix_decision_guard": {
+            "additive_classes_abc_allow_tier2_digest_rollback": True,
+            "destructive_class_d_requires_tier4_point_in_time_restore": True,
+            "pass": True,
+        },
         "tier4_db_and_files_point_in_time_restore": {
             "pre_restore_delta_since_backup": pre_delta,
             "post_restore_delta_since_backup": post_delta,
+            "all_post_restore_deltas_zero": all_post_deltas_zero,
             "end_to_end_restore_and_migrate_seconds": tier4_restore_sec,
             "post_restore_health_status": post_health.get("status"),
             "post_restore_https_smoke_status": post_smoke.get("status"),
@@ -1484,6 +2172,9 @@ def run_full_rehearsal(
             },
             "https_smoke": boot_res["https_smoke"],
         }
+
+        mig_res = rehearse_migration_x2_and_reconcile(env_file=env_file)
+        report["phases"]["migration_x2_and_reconcile"] = mig_res
 
         uat_res = run_uat_and_permission_checks_over_https(
             env_file=env_file,
@@ -1673,12 +2364,7 @@ def _write_or_print_scrubbed(res: dict[str, Any], secret_list: list[str], out_pa
     return 0 if res.get("status") == "PASS" else 2
 
 
-def main(argv: list[str] | None = None) -> int:
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8")
-
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
@@ -1701,6 +2387,13 @@ def main(argv: list[str] | None = None) -> int:
     p_up.add_argument("--https-port", type=int, default=18443)
     p_up.add_argument("--allow-private-bind", action="store_true")
 
+    p_mig = sub.add_parser(
+        "rehearse-migration-x2",
+        help="Run G06 + BLG-P4-MIG-01 snapshot -> migrator #1 -> snapshot -> migrator #2 -> compare",
+    )
+    p_mig.add_argument("--state-dir", type=Path, required=True)
+    p_mig.add_argument("--out", type=Path)
+
     p_uat = sub.add_parser("verify-uat-and-permissions", help="Run 15-screen UAT + RBAC + offboarding over HTTPS")
     p_uat.add_argument("--state-dir", type=Path, required=True)
     p_uat.add_argument("--out", type=Path)
@@ -1718,8 +2411,16 @@ def main(argv: list[str] | None = None) -> int:
     grp.add_argument("--state-dir", type=Path)
     grp.add_argument("--env-file", type=Path)
     p_down.add_argument("--remove-state-dir", action="store_true")
+    return parser
 
-    args = parser.parse_args(argv)
+
+def main(argv: list[str] | None = None) -> int:
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
+
+    args = build_parser().parse_args(argv)
     if args.command == "full-rehearsal":
         if not args.app_image:
             raise SystemExit("Pass --app-image or set APP_IMAGE")
@@ -1731,6 +2432,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.command == "up":
         return _cmd_up(args)
+    if args.command == "rehearse-migration-x2":
+        env_file, _ca, sec_f, creds = _load_state_bundle(args.state_dir)
+        res = rehearse_migration_x2_and_reconcile(env_file=env_file)
+        return _write_or_print_scrubbed(
+            res,
+            [sec_f.read_text(encoding="ascii").strip(), creds["admin_password"], creds["seed_password"]],
+            args.out,
+        )
     if args.command == "verify-uat-and-permissions":
         env_file, ca_crt, sec_f, creds = _load_state_bundle(args.state_dir)
         scrubber = smoke_lib.SmokeLogger()

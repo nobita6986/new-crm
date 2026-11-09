@@ -5,8 +5,8 @@
   - VPS: `103.77.208.186` · Project Compose: `crm-cskh-vps-staging` · Site Frappe: `crm-staging.localhost`
   - Wrapper chuẩn: `/opt/crm-cskh-staging/staging-compose` · Tệp cấu hình: `/opt/crm-cskh-staging/.env.staging` (`0600`)
   - Overlay tên miền thực tế: `/opt/crm-cskh-staging/compose.domain.yaml` (nối sau 8 tệp Compose TLS gốc)
-  - Công cụ kiểm tra & vận hành: [`check_health_and_invariants.py`](../../deploy/ops/check_health_and_invariants.py), [`manage_backup_lifecycle.py`](../../deploy/ops/manage_backup_lifecycle.py), [`install_systemd_timers.py`](../../deploy/ops/install_systemd_timers.py)
-  - Sổ tay đi kèm: [`backup-restore.md`](./backup-restore.md), [`release-runbook.md`](./release-runbook.md), [`rollback-runbook.md`](./rollback-runbook.md), [`monitoring-alerts.md`](./monitoring-alerts.md)
+  - Công cụ kiểm tra & vận hành: [`check_health_and_invariants.py`](../../deploy/ops/check_health_and_invariants.py) (`--verify-alert-receipt`), [`manage_backup_lifecycle.py`](../../deploy/ops/manage_backup_lifecycle.py) (`record-key-escrow`, `audit-g07-gate`), [`install_systemd_timers.py`](../../deploy/ops/install_systemd_timers.py)
+  - Sổ tay & hồ sơ nghiệm thu đi kèm: [`backup-restore.md`](./backup-restore.md), [`release-runbook.md`](./release-runbook.md), [`rollback-runbook.md`](./rollback-runbook.md), [`monitoring-alerts.md`](./monitoring-alerts.md), [`api-contract.md`](./api-contract.md), [`security-review.md`](./security-review.md), [`performance-report.md`](./performance-report.md), [`P4-exit-report.md`](./P4-exit-report.md)
 - **Trạng thái ký bàn giao vận hành (`G24`) hiện tại:** **`BLOCKED`** *(Các timer `crm-cskh-healthcheck.timer` và `crm-cskh-backup.timer` đã được cài đặt trên VPS `103.77.208.186` ngày `09/11/2026` — trong đó `crm-cskh-healthcheck.timer` đã tự kích hoạt `PASS` lúc `20:05 ICT`, `crm-cskh-backup.service` đã chạy thủ công `PASS` lúc `20:00 ICT` và `crm-cskh-backup.timer` đang `enabled` chờ lần tự kích hoạt đầu tiên lúc `02:15 ICT`; cổng `G24` vẫn giữ `BLOCKED` chờ Owner cấp đích lưu trữ offsite tự động `BLK-INFRA-05`, chỉ định người trực / người ký `BLK-GOV-06` và kênh cảnh báo ngoài `BLK-INFRA-07`)*.
 
 ---

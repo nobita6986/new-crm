@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
-"""Hermetic clean-site & HTTP frontend asset verifier for the P4-01 custom image (G02).
+"""Hermetic clean-site, auth, Socket.IO & asset verifier for the P4 custom image (G02).
 
 Boots an isolated frappe_docker-style stack (`deploy/images/compose.verify.yaml`)
 using `APP_IMAGE`, provisions a brand-new Frappe site on empty volumes, installs
 `crm` + `crm_cskh`, runs `migrate` twice, verifies all 3 apps via `list-apps`,
-checks upstream Git SHAs and embedded dependency locks, and probes static & dynamic
-routes over HTTP through `frontend` (nginx) -> `backend` (gunicorn).
+checks upstream Git SHAs, security-patched Python packages (`PyJWT==2.15.1`,
+`pillow==13.0.0`) with `pip check` consistency and unmodified upstream `pyproject.toml`,
+pruned runtime OS packages, CSRF/session authentication,
+Socket.IO polling + RFC 6455 WebSocket upgrade, and static/dynamic HTTP routes
+through `frontend` (nginx) -> `backend` (gunicorn) & `websocket` (node).
 
 Ephemeral credentials exist only in a temporary directory outside the repository
 and are destroyed in `finally` together with all containers and volumes.
@@ -14,11 +17,14 @@ and are destroyed in `finally` together with all containers and volumes.
 from __future__ import annotations
 
 import argparse
+import base64
+import hashlib
 import http.cookiejar
 import json
 import os
 import re
 import secrets
+import socket
 import subprocess
 import tempfile
 import time
@@ -32,6 +38,7 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 IMAGES_DIR = Path(__file__).resolve().parent
 LOCK_FILE = IMAGES_DIR / "release-lock.json"
 COMPOSE_FILE = IMAGES_DIR / "compose.verify.yaml"
+WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11"
 
 
 def run_cmd(
@@ -79,13 +86,16 @@ def http_request(
     host_header: str,
     method: str = "GET",
     form_data: dict[str, str] | None = None,
+    extra_headers: dict[str, str] | None = None,
     timeout: int = 20,
 ) -> tuple[int, dict[str, str], bytes]:
     body_bytes = None
     headers = {"Host": host_header, "Accept-Language": "vi-VN,vi;q=0.9"}
+    if extra_headers:
+        headers.update(extra_headers)
     if form_data is not None:
         body_bytes = urllib.parse.urlencode(form_data).encode("utf-8")
-        headers["Content-Type"] = "application/x-www-form-urlencoded"
+        headers.setdefault("Content-Type", "application/x-www-form-urlencoded")
     req = urllib.request.Request(url, data=body_bytes, headers=headers, method=method)
     try:
         with opener.open(req, timeout=timeout) as resp:
@@ -98,6 +108,55 @@ def http_request(
         data = exc.read() if exc.fp else b""
         hdrs = {k.lower(): v for k, v in exc.headers.items()} if exc.headers else {}
         return exc.code, hdrs, data
+
+
+def probe_socketio_websocket_upgrade(
+    port: int, site_name: str, cookie_header: str = "", timeout: int = 15
+) -> dict[str, object]:
+    ws_key = base64.b64encode(secrets.token_bytes(16)).decode("ascii")
+    expected_accept = base64.b64encode(
+        hashlib.sha1((ws_key + WS_GUID).encode("ascii")).digest()
+    ).decode("ascii")
+    req_lines = [
+        "GET /socket.io/?EIO=4&transport=websocket HTTP/1.1",
+        f"Host: {site_name}",
+        f"Origin: http://{site_name}",
+        "Upgrade: websocket",
+        "Connection: Upgrade",
+        f"Sec-WebSocket-Key: {ws_key}",
+        "Sec-WebSocket-Version: 13",
+    ]
+    if cookie_header:
+        req_lines.append(f"Cookie: {cookie_header}")
+    raw_req = ("\r\n".join(req_lines) + "\r\n\r\n").encode("utf-8")
+
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout) as sock:
+        sock.settimeout(timeout)
+        sock.sendall(raw_req)
+        buf = b""
+        while b"\r\n\r\n" not in buf and len(buf) < 16384:
+            chunk = sock.recv(4096)
+            if not chunk:
+                break
+            buf += chunk
+
+    header_blob, _, remainder = buf.partition(b"\r\n\r\n")
+    lines = header_blob.decode("iso-8859-1", errors="replace").split("\r\n")
+    status_line = lines[0] if lines else ""
+    parts = status_line.split(" ", 2)
+    status_code = int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 0
+    resp_headers: dict[str, str] = {}
+    for line in lines[1:]:
+        if ":" in line:
+            k, v = line.split(":", 1)
+            resp_headers[k.strip().lower()] = v.strip()
+    actual_accept = resp_headers.get("sec-websocket-accept", "")
+    return {
+        "status_code": status_code,
+        "upgrade": resp_headers.get("upgrade", "").lower(),
+        "accept_valid": actual_accept == expected_accept,
+        "initial_frame_bytes": len(remainder),
+    }
 
 
 def wait_for_http_ping(
@@ -160,6 +219,8 @@ def main() -> int:
     expected_apps_tree = lock["apps_tree_sha"]
     expected_cskh_tree = lock["crm_cskh_tree_sha"]
     expected_load_order = lock["apps"]["load_order"]
+    expected_pyjwt_ver = lock["security_patches"]["pyjwt_version"]
+    expected_pillow_ver = lock["security_patches"]["pillow_version"]
 
     project_name = f"cskh-p4-verify-{secrets.token_hex(4)}"
     db_root_pw = secrets.token_hex(24)
@@ -243,8 +304,12 @@ def main() -> int:
                 labels.get("io.cskh.crm_cskh_tree_sha"),
             )
 
-            # 2. Boot isolated verification topology (zero /src bind-mounts)
-            run_cmd([*compose_base, "up", "-d"], env=compose_env, timeout=300)
+            # 2. Boot isolated verification topology (zero /src bind-mounts, --no-build)
+            run_cmd(
+                [*compose_base, "up", "-d", "--no-build"],
+                env=compose_env,
+                timeout=300,
+            )
 
             # Verify container mounts (no /src or host bind-mount) & port exposure boundaries
             ps_res = run_cmd([*compose_base, "ps", "--format", "json"], env=compose_env)
@@ -300,7 +365,7 @@ def main() -> int:
                 published_by_service.get("frontend"),
             )
 
-            # 3. Create clean site + install crm + install crm_cskh + migrate x2 (capture logs for schema/module audit)
+            # 3. Create clean site + install crm + install crm_cskh + migrate x2
             def exec_backend(
                 shell_cmd: str, extra_env: dict[str, str] | None = None
             ) -> subprocess.CompletedProcess[str]:
@@ -369,14 +434,19 @@ def main() -> int:
                 timeout=120,
             )
 
-            # 4. Inspect runtime bench state + CSKH Export Job schema/module audit inside container
+            # 4. Inspect runtime bench state + security patches + CSKH schema audit inside container
             probe_py = (
-                "import json, subprocess, frappe; "
+                "import importlib.metadata as im, io, json, subprocess, frappe, jwt; "
                 "from pathlib import Path; "
+                "from PIL import Image; "
+                "from frappe.utils.image import optimize_image; "
                 f"site = {args.site_name!r}; "
                 "list_apps = json.loads(subprocess.check_output(['bench', '--site', site, 'list-apps', '--format', 'json'], text=True)); "
                 "apps_txt = [x.strip() for x in Path('/home/frappe/frappe-bench/sites/apps.txt').read_text().splitlines() if x.strip()]; "
                 "f_sha = subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/frappe', 'rev-parse', 'HEAD'], text=True).strip(); "
+                "f_pyproject_diff = subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/frappe', 'diff', '--name-only', 'pyproject.toml'], text=True).strip(); "
+                "bench_pip_check_rc = subprocess.run(['/home/frappe/frappe-bench/env/bin/pip', 'check'], capture_output=True, text=True).returncode; "
+                "sys_pip_check_rc = subprocess.run(['pip3', 'check'], capture_output=True, text=True).returncode; "
                 "c_sha = subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/crm', 'rev-parse', 'HEAD'], text=True).strip(); "
                 "crm_modified = [x.strip() for x in subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/crm', 'diff', '--name-only'], text=True).splitlines() if x.strip()]; "
                 "frappe_navbar = Path('/home/frappe/frappe-bench/apps/frappe/frappe/templates/includes/navbar/navbar.html').read_text(); "
@@ -385,6 +455,22 @@ def main() -> int:
                 "assets_map = json.loads(Path('/home/frappe/frappe-bench/sites/assets/assets.json').read_text()); "
                 "modules_txt = [x.strip() for x in Path('/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/modules.txt').read_text().splitlines() if x.strip()]; "
                 "export_json = json.loads(Path('/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/crm_cskh/doctype/cskh_export_job/cskh_export_job.json').read_text()); "
+                "pyjwt_ver = im.version('PyJWT'); "
+                "pillow_ver = im.version('pillow'); "
+                "pem_key = '-----BEGIN PUBLIC KEY-----\\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE\\n-----END PUBLIC KEY-----'; "
+                "pem_guard = False\n"
+                "try:\n"
+                "    jwt.encode({'sub': 'probe'}, pem_key, algorithm='HS256')\n"
+                "except Exception as exc:\n"
+                "    pem_guard = exc.__class__.__name__ == 'InvalidKeyError'\n"
+                "img_buf = io.BytesIO(); "
+                "Image.new('RGB', (32, 32), (16, 64, 128)).save(img_buf, format='PNG'); "
+                "opt_bytes = optimize_image(img_buf.getvalue(), 'image/png', max_width=16, max_height=16); "
+                "pruned_present = []\n"
+                "for pkg in ('restic', 'libpq-dev', 'postgresql-client', 'gcc', 'build-essential'):\n"
+                "    p = subprocess.run(['dpkg-query', '-W', '-f=${Status}\\n', pkg], capture_output=True, text=True)\n"
+                "    if p.returncode == 0 and 'install ok installed' in p.stdout:\n"
+                "        pruned_present.append(pkg)\n"
                 "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites'); "
                 "frappe.connect(); "
                 "cskh_rows = frappe.get_all('DocType', filters=[['name', 'like', 'CSKH %']], fields=['name', 'module'], order_by='name asc'); "
@@ -393,7 +479,7 @@ def main() -> int:
                 "export_table_exists = bool(frappe.db.sql(\"SHOW TABLES LIKE 'tabCSKH Export Job'\")); "
                 "dev_mode = bool(frappe.conf.get('developer_mode')); "
                 "frappe.destroy(); "
-                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
+                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'frappe_pyproject_diff': f_pyproject_diff, 'bench_pip_check_rc': bench_pip_check_rc, 'sys_pip_check_rc': sys_pip_check_rc, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
             )
             probe_res = run_cmd(
                 [
@@ -431,6 +517,22 @@ def main() -> int:
                 runtime_info["frappe_sha"],
             )
             record(
+                "runtime.frappe_pyproject_unmodified",
+                runtime_info["frappe_pyproject_diff"] == "",
+                "",
+                runtime_info["frappe_pyproject_diff"],
+            )
+            record(
+                "runtime.pip_check_consistent",
+                runtime_info["bench_pip_check_rc"] == 0
+                and runtime_info["sys_pip_check_rc"] == 0,
+                {"bench_pip_check_rc": 0, "sys_pip_check_rc": 0},
+                {
+                    "bench_pip_check_rc": runtime_info["bench_pip_check_rc"],
+                    "sys_pip_check_rc": runtime_info["sys_pip_check_rc"],
+                },
+            )
+            record(
                 "runtime.crm_sha",
                 runtime_info["crm_sha"] == expected_crm_sha,
                 expected_crm_sha,
@@ -457,6 +559,37 @@ def main() -> int:
                 expected_cskh_tree,
                 runtime_info["manifest"]["apps"]["crm_cskh"]["crm_cskh_tree_sha"],
             )
+            record(
+                "runtime.security_patch.pyjwt_version",
+                runtime_info["pyjwt_ver"] == expected_pyjwt_ver,
+                expected_pyjwt_ver,
+                runtime_info["pyjwt_ver"],
+            )
+            record(
+                "runtime.security_patch.cve_2026_102268_pem_hmac_guard",
+                runtime_info["pem_guard"] is True,
+                True,
+                runtime_info["pem_guard"],
+            )
+            record(
+                "runtime.security_patch.pillow_version",
+                runtime_info["pillow_ver"] == expected_pillow_ver,
+                expected_pillow_ver,
+                runtime_info["pillow_ver"],
+            )
+            record(
+                "runtime.security_patch.pillow_optimize_image",
+                runtime_info["pillow_optimize_ok"] is True,
+                True,
+                runtime_info["pillow_optimize_ok"],
+            )
+            record(
+                "runtime.pruned_unused_apt_packages",
+                runtime_info["pruned_present"] == [],
+                [],
+                runtime_info["pruned_present"],
+            )
+
             cskh_by_name = {
                 r["name"]: r["module"] for r in runtime_info["cskh_doctypes_rows"]
             }
@@ -478,7 +611,7 @@ def main() -> int:
                 runtime_info["developer_mode"],
             )
 
-            # 5. Probe HTTP routes and frontend static assets via `frontend` nginx -> `backend` gunicorn
+            # 5. Probe HTTP routes, authentication, Socket.IO & frontend static assets
             ping_info = wait_for_http_ping(args.port, args.site_name, timeout_sec=90)
             record(
                 "http.ping",
@@ -538,7 +671,7 @@ def main() -> int:
                     f"HTTP {st} ({len(body)} bytes)",
                 )
 
-            # Guest login page (Vietnamese default language hook check) & Guest `/cskh/quality-overview` guard
+            # Guest login page & Guest `/cskh/quality-overview` guard
             st_login, _, login_body = http_request(
                 anon_no_redirect, f"{base_url}/login", host_header=args.site_name
             )
@@ -562,9 +695,10 @@ def main() -> int:
                 st_guest_cskh,
             )
 
-            # Authenticated session checks for `/crm` SPA + its hashed Vite chunks + `/cskh` + `/cskh/quality-overview`
+            # Authenticated session checks
             jar = http.cookiejar.CookieJar()
             auth_opener = make_opener(follow_redirects=True, cookie_jar=jar)
+            auth_no_redirect = make_opener(follow_redirects=False, cookie_jar=jar)
             st_auth, _, _auth_raw = http_request(
                 auth_opener,
                 f"{base_url}/api/method/login",
@@ -573,6 +707,23 @@ def main() -> int:
                 form_data={"usr": "Administrator", "pwd": admin_pw},
             )
             record("http.auth.login", st_auth == 200, 200, st_auth)
+
+            st_who, _, who_raw = http_request(
+                auth_opener,
+                f"{base_url}/api/method/frappe.auth.get_logged_user",
+                host_header=args.site_name,
+            )
+            who_msg = (
+                json.loads(who_raw.decode("utf-8", errors="replace")).get("message")
+                if st_who == 200
+                else None
+            )
+            record(
+                "http.auth.logged_user_administrator",
+                st_who == 200 and who_msg == "Administrator",
+                "Administrator",
+                who_msg,
+            )
 
             st_crm, _, crm_raw = http_request(
                 auth_opener, f"{base_url}/crm", host_header=args.site_name
@@ -611,11 +762,19 @@ def main() -> int:
                     f"HTTP {st_spa} ({len(spa_bytes)} bytes)",
                 )
 
+            csrf_token = ""
             for cskh_route in ("/cskh/dashboard", "/cskh/quality-overview"):
                 st_page, _, page_raw = http_request(
                     auth_opener, f"{base_url}{cskh_route}", host_header=args.site_name
                 )
                 page_html = page_raw.decode("utf-8", errors="replace")
+                if not csrf_token:
+                    m_csrf = re.search(
+                        r'(?:X-Frappe-CSRF-Token|csrf_token)["\']?\s*[:=]\s*["\']([0-9a-fA-F\-]{16,})["\']',
+                        page_html,
+                    )
+                    if m_csrf:
+                        csrf_token = m_csrf.group(1)
                 has_vi_label = any(
                     term in page_html
                     for term in (
@@ -642,7 +801,64 @@ def main() -> int:
                     has_vi_label,
                 )
 
-            # Check Vietnamese translation dictionary injected into /crm boot HTML (raw UTF-8 or \uXXXX JSON-escaped)
+            # Once `/cskh/*` has initialized `session.data.csrf_token` in Redis, verify missing,
+            # forged, and valid X-Frappe-CSRF-Token behavior on authenticated POST endpoints.
+            record(
+                "http.auth.csrf_token_extracted",
+                bool(csrf_token),
+                "non-empty CSRF token from /cskh/* HTML",
+                bool(csrf_token),
+            )
+            st_csrf_missing, _, csrf_missing_raw = http_request(
+                auth_no_redirect,
+                f"{base_url}/api/method/crm_cskh.api.health.ping",
+                host_header=args.site_name,
+                method="POST",
+                form_data={"probe": "missing_csrf"},
+            )
+            record(
+                "http.auth.csrf_missing_rejected",
+                st_csrf_missing in (400, 403),
+                "HTTP 400 or 403",
+                {
+                    "status": st_csrf_missing,
+                    "snippet": csrf_missing_raw.decode("utf-8", errors="replace")[:120],
+                },
+            )
+            st_csrf_forged, _, csrf_forged_raw = http_request(
+                auth_no_redirect,
+                f"{base_url}/api/method/crm_cskh.api.health.ping",
+                host_header=args.site_name,
+                method="POST",
+                form_data={"probe": "forged_csrf"},
+                extra_headers={"X-Frappe-CSRF-Token": "forged-invalid-csrf-token-0000"},
+            )
+            record(
+                "http.auth.csrf_forged_rejected",
+                st_csrf_forged in (400, 403),
+                "HTTP 400 or 403",
+                {
+                    "status": st_csrf_forged,
+                    "snippet": csrf_forged_raw.decode("utf-8", errors="replace")[:120],
+                },
+            )
+            st_csrf_valid, _, csrf_valid_raw = http_request(
+                auth_opener,
+                f"{base_url}/api/method/crm_cskh.api.health.ping",
+                host_header=args.site_name,
+                method="POST",
+                form_data={"probe": "valid_csrf"},
+                extra_headers={"X-Frappe-CSRF-Token": csrf_token},
+            )
+            csrf_valid_txt = csrf_valid_raw.decode("utf-8", errors="replace")
+            record(
+                "http.auth.csrf_valid_accepted",
+                st_csrf_valid == 200 and "crm_cskh" in csrf_valid_txt,
+                "HTTP 200 with crm_cskh health payload",
+                {"status": st_csrf_valid, "snippet": csrf_valid_txt[:120]},
+            )
+
+            # Check Vietnamese translation dictionary injected into /crm boot HTML
             crm_unescaped = re.sub(
                 r"\\u([0-9a-fA-F]{4})", lambda m: chr(int(m.group(1), 16)), crm_html
             )
@@ -661,6 +877,58 @@ def main() -> int:
                 crm_has_vi_boot,
                 "Vietnamese translated_messages in /crm boot",
                 crm_has_vi_boot,
+            )
+
+            # Socket.IO Engine.IO v4 HTTP polling + RFC 6455 WebSocket upgrade via frontend nginx -> websocket:9000
+            st_sio_poll, _, sio_poll_raw = http_request(
+                auth_opener,
+                f"{base_url}/socket.io/?EIO=4&transport=polling",
+                host_header=args.site_name,
+            )
+            sio_poll_txt = sio_poll_raw.decode("utf-8", errors="replace")
+            record(
+                "http.socketio.polling_handshake",
+                st_sio_poll == 200 and '"sid"' in sio_poll_txt,
+                'HTTP 200 with Engine.IO "sid"',
+                f"HTTP {st_sio_poll}: {sio_poll_txt[:100]}",
+            )
+
+            cookie_hdr = "; ".join(f"{c.name}={c.value}" for c in jar)
+            ws_probe = probe_socketio_websocket_upgrade(
+                args.port, args.site_name, cookie_hdr
+            )
+            record(
+                "http.socketio.websocket_upgrade_101",
+                ws_probe["status_code"] == 101
+                and ws_probe["upgrade"] == "websocket"
+                and ws_probe["accept_valid"] is True,
+                {
+                    "status_code": 101,
+                    "upgrade": "websocket",
+                    "accept_valid": True,
+                },
+                ws_probe,
+            )
+
+            # Verify logout revokes session access to protected `/cskh/quality-overview`
+            logout_headers = {"X-Frappe-CSRF-Token": csrf_token} if csrf_token else None
+            st_logout, _, _ = http_request(
+                auth_opener,
+                f"{base_url}/api/method/logout",
+                host_header=args.site_name,
+                method="POST" if csrf_token else "GET",
+                extra_headers=logout_headers,
+            )
+            st_after_logout, _, _ = http_request(
+                auth_no_redirect,
+                f"{base_url}/cskh/quality-overview",
+                host_header=args.site_name,
+            )
+            record(
+                "http.auth.logout_revokes_cskh_session",
+                st_logout == 200 and st_after_logout in (302, 303, 401, 403),
+                {"logout": 200, "post_logout_cskh": "302/303/401/403"},
+                {"logout": st_logout, "post_logout_cskh": st_after_logout},
             )
 
             # 6. Check background worker/scheduler/websocket container health
@@ -729,9 +997,32 @@ def main() -> int:
                 "completed_at_utc": datetime.now(timezone.utc).isoformat(),
                 "app_image_tested": args.app_image,
                 "image_id": img_info.get("Id"),
+                "identifier_taxonomy": {
+                    "app_image_tested_class": (
+                        "oci_distribution_manifest_sha256"
+                        if "@sha256:" in args.app_image
+                        else "local_image_ref"
+                    ),
+                    "image_id_class": "docker_pulled_image_id_sha256",
+                    "note": (
+                        "app_image_tested (@sha256 manifest digest) and image_id "
+                        "(local OCI config or containerd manifest ID) represent different "
+                        "OCI descriptor layers of the same candidate; never cross-compare "
+                        "mismatched identifier classes or compare against unrelated live images."
+                    ),
+                },
                 "site_name": args.site_name,
                 "http_loopback_port": args.port,
                 "list_apps": runtime_info["list_apps"],
+                "security_patches_verified": {
+                    "pyjwt_version": runtime_info["pyjwt_ver"],
+                    "cve_2026_102268_pem_hmac_guard": runtime_info["pem_guard"],
+                    "pillow_version": runtime_info["pillow_ver"],
+                    "pillow_optimize_image_ok": runtime_info["pillow_optimize_ok"],
+                    "pruned_unused_apt_packages_present": runtime_info[
+                        "pruned_present"
+                    ],
+                },
                 "upstream_revisions": {
                     "frappe": runtime_info["frappe_sha"],
                     "crm": runtime_info["crm_sha"],

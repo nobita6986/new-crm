@@ -1,0 +1,559 @@
+{
+  "status": "PASS",
+  "preflight_only": false,
+  "run_id": "20261109133816-9b6eea",
+  "project_name": "crm-cskh-p4-smoke-20261109133816-9b6eea",
+  "site_name": "p4-smoke-20261109133816-9b6eea.localhost",
+  "p4_00_approved_sha": "be33e6c931337c42b94184b2fe292e094bd51c97",
+  "compose_provenance": {
+    "head_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+    "branch": "codex/p4-t1b-release-hardening",
+    "worktree_clean": true
+  },
+  "image_provenance": {
+    "image_git_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+    "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+    "pull_policy_used": "never",
+    "image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+    "repo_digests": [
+      "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+    ],
+    "labels": {
+      "io.cskh.apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910",
+      "io.cskh.baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
+      "io.cskh.crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
+      "io.cskh.crm_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "io.cskh.crm_tag": "v1.87.0",
+      "io.cskh.frappe_docker_sha": "61d35da827ebc04d01b64c9e78385597ccebc9d8",
+      "io.cskh.frappe_sha": "53bae3ef2550ca96320f036f581446783cd11b72",
+      "io.cskh.frappe_tag": "v15.126.0",
+      "org.opencontainers.image.description": "CRM-CSKH immutable production image (Frappe + Frappe CRM + crm_cskh)",
+      "org.opencontainers.image.revision": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+      "org.opencontainers.image.source": "https://github.com/nobita6986/new-crm",
+      "org.opencontainers.image.title": "crm-cskh"
+    }
+  },
+  "preexisting_resources_check": {
+    "passed": true,
+    "found": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    },
+    "port_check": {
+      "port": 18080,
+      "free": true,
+      "detail": "127.0.0.1:18080 free"
+    }
+  },
+  "secret_file_byte_check": {
+    "file_name": "db_root_password.txt",
+    "byte_length": 33,
+    "ends_with_lf_only": true,
+    "contains_cr": false
+  },
+  "config_services": [
+    "redis-queue",
+    "db",
+    "redis-cache",
+    "configurator",
+    "websocket",
+    "backend",
+    "proxy",
+    "queue-short",
+    "scheduler",
+    "frontend",
+    "queue-long"
+  ],
+  "config_services_with_migrate_profile": [
+    "db",
+    "redis-cache",
+    "redis-queue",
+    "configurator",
+    "backend",
+    "websocket",
+    "frontend",
+    "proxy",
+    "queue-short",
+    "scheduler",
+    "migrator",
+    "queue-long"
+  ],
+  "healthchecks": {
+    "backend": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "configurator": {
+      "state": "exited",
+      "health": "",
+      "exit_code": 0
+    },
+    "db": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "frontend": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "proxy": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "queue-long": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "queue-short": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "redis-cache": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "redis-queue": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "scheduler": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    },
+    "websocket": {
+      "state": "running",
+      "health": "healthy",
+      "exit_code": 0
+    }
+  },
+  "port_exposure_audit": {
+    "proxy": [
+      {
+        "URL": "127.0.0.1",
+        "TargetPort": 80,
+        "PublishedPort": 18080,
+        "Protocol": "tcp"
+      }
+    ]
+  },
+  "site_bootstrap": {
+    "site": "p4-smoke-20261109133816-9b6eea.localhost",
+    "installed_apps": [
+      "frappe   15.126.0 HEAD",
+      "crm      1.87.0   HEAD",
+      "crm_cskh 0.0.1    UNVERSIONED"
+    ],
+    "synthetic_data": {
+      "lead_name": "CRM-LEAD-2026-00001",
+      "mobile_no": "0900000123",
+      "email": "synthetic-smoke@example.invalid",
+      "is_synthetic": true
+    }
+  },
+  "apps_order_audit": {
+    "expected_order": [
+      "frappe",
+      "crm",
+      "crm_cskh"
+    ],
+    "checkpoints": [
+      {
+        "checkpoint": "after_initial_configurator",
+        "path": "/home/frappe/frappe-bench/sites/apps.txt",
+        "apps_order": [
+          "frappe",
+          "crm",
+          "crm_cskh"
+        ],
+        "matches_expected_order": true
+      },
+      {
+        "checkpoint": "after_migrator_run_1",
+        "path": "/home/frappe/frappe-bench/sites/apps.txt",
+        "apps_order": [
+          "frappe",
+          "crm",
+          "crm_cskh"
+        ],
+        "matches_expected_order": true
+      },
+      {
+        "checkpoint": "after_migrator_run_2",
+        "path": "/home/frappe/frappe-bench/sites/apps.txt",
+        "apps_order": [
+          "frappe",
+          "crm",
+          "crm_cskh"
+        ],
+        "matches_expected_order": true
+      },
+      {
+        "checkpoint": "after_force_recreate_configurator",
+        "path": "/home/frappe/frappe-bench/sites/apps.txt",
+        "apps_order": [
+          "frappe",
+          "crm",
+          "crm_cskh"
+        ],
+        "matches_expected_order": true
+      },
+      {
+        "checkpoint": "after_migrator_post_force_recreate",
+        "path": "/home/frappe/frappe-bench/sites/apps.txt",
+        "apps_order": [
+          "frappe",
+          "crm",
+          "crm_cskh"
+        ],
+        "matches_expected_order": true
+      }
+    ],
+    "configurator_common_site_config_initial": {
+      "db_host": "db",
+      "db_port": 3306,
+      "redis_cache": "redis://redis-cache:6379",
+      "redis_queue": "redis://redis-queue:6379",
+      "redis_socketio": "redis://redis-queue:6379",
+      "socketio_port": 9000,
+      "chromium_path": "/usr/lib/chromium/chromium-headless-shell"
+    },
+    "configurator_common_site_config_after_force_recreate": {
+      "db_host": "db",
+      "db_port": 3306,
+      "redis_cache": "redis://redis-cache:6379",
+      "redis_queue": "redis://redis-queue:6379",
+      "redis_socketio": "redis://redis-queue:6379",
+      "socketio_port": 9000,
+      "chromium_path": "/usr/lib/chromium/chromium-headless-shell"
+    },
+    "migrator_wrong_order_guard": {
+      "injected_wrong_order": [
+        "crm",
+        "crm_cskh",
+        "frappe"
+      ],
+      "exit_code": 1,
+      "stopped_before_bench_migrate": true,
+      "guard_message": "crm_cskh'); stopping before bench migrate."
+    }
+  },
+  "migrator_rehearsal_x2": [
+    {
+      "run_number": 1,
+      "exit_code": 0,
+      "duration_sec": 10.28,
+      "output_tail": [
+        "Updating Dashboard for crm_cskh",
+        "Executing `after_migrate` hooks...",
+        "Queued rebuilding of search index for p4-smoke-20261109133816-9b6eea.localhost"
+      ],
+      "sites_apps_txt_after": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ]
+    },
+    {
+      "run_number": 2,
+      "exit_code": 0,
+      "duration_sec": 11.26,
+      "output_tail": [
+        "Updating Dashboard for crm_cskh",
+        "Executing `after_migrate` hooks...",
+        "Queued rebuilding of search index for p4-smoke-20261109133816-9b6eea.localhost"
+      ],
+      "sites_apps_txt_after": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ]
+    },
+    {
+      "run_number": 3,
+      "phase": "post_force_recreate_configurator",
+      "exit_code": 0,
+      "duration_sec": 11.61,
+      "output_tail": [
+        "Updating Dashboard for crm_cskh",
+        "Executing `after_migrate` hooks...",
+        "Queued rebuilding of search index for p4-smoke-20261109133816-9b6eea.localhost"
+      ],
+      "sites_apps_txt_after": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ]
+    }
+  ],
+  "volume_and_recreate_audit": {
+    "force_recreated_services": [
+      "configurator",
+      "backend",
+      "frontend",
+      "websocket",
+      "queue-short",
+      "queue-long",
+      "scheduler"
+    ],
+    "migrator_ephemeral_runs": 4,
+    "runtime_mounts_before_recreate": {
+      "verified_app_services": [
+        "backend",
+        "configurator",
+        "frontend",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "websocket"
+      ],
+      "service_volume_mounts": {
+        "backend": {
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites",
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs"
+        },
+        "configurator": {
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs",
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites"
+        },
+        "frontend": {
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites",
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs"
+        },
+        "queue-long": {
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs",
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites"
+        },
+        "queue-short": {
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites",
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs"
+        },
+        "scheduler": {
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs",
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites"
+        },
+        "websocket": {
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites",
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs"
+        }
+      },
+      "anonymous_volume_mounts": []
+    },
+    "runtime_mounts_after_recreate": {
+      "verified_app_services": [
+        "backend",
+        "configurator",
+        "frontend",
+        "queue-long",
+        "queue-short",
+        "scheduler",
+        "websocket"
+      ],
+      "service_volume_mounts": {
+        "backend": {
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites",
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs"
+        },
+        "configurator": {
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs",
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites"
+        },
+        "frontend": {
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites",
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs"
+        },
+        "queue-long": {
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs",
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites"
+        },
+        "queue-short": {
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs",
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites"
+        },
+        "scheduler": {
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites",
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs"
+        },
+        "websocket": {
+          "/home/frappe/frappe-bench/logs": "crm-cskh-p4-smoke-20261109133816-9b6eea_logs",
+          "/home/frappe/frappe-bench/sites": "crm-cskh-p4-smoke-20261109133816-9b6eea_sites"
+        }
+      },
+      "anonymous_volume_mounts": []
+    },
+    "host_volume_count_before": 0,
+    "host_volume_count_after": 0,
+    "host_anonymous_volume_count_before": 0,
+    "host_anonymous_volume_count_after": 0,
+    "leaked_volumes": [],
+    "leaked_anonymous_volumes": [],
+    "leaked_containers": [],
+    "leaked_networks": []
+  },
+  "smoke_verification": {
+    "guest_access": {
+      "crm_status": 403,
+      "cskh_dashboard_status": 403,
+      "cskh_quality_overview_status": 403,
+      "health_ping_api_status": 403
+    },
+    "login": {
+      "status": 200,
+      "logged_user": "Administrator",
+      "sid_cookie_present": true,
+      "sid_httponly": true,
+      "sid_samesite": "Lax",
+      "sid_secure": false,
+      "sid_secure_assertion_scope": "DEFERRED_TO_STAGING_HTTPS",
+      "sid_cookie_attributes": {
+        "cookie_name": "sid",
+        "value_masked": "<REDACTED_FRAPPE_SID>",
+        "httponly": true,
+        "samesite": "Lax",
+        "path": "/",
+        "has_expires": true,
+        "has_max_age": true,
+        "secure": false,
+        "secure_assertion_scope": "DEFERRED_TO_STAGING_HTTPS",
+        "set_cookie_header_count": 5,
+        "response_cookie_names": [
+          "sid",
+          "system_user",
+          "full_name",
+          "user_id",
+          "user_image"
+        ]
+      }
+    },
+    "vietnamese_ui": {
+      "cskh_dashboard_status": 200,
+      "cskh_quality_overview_status": 200,
+      "crm_spa_status": 200,
+      "timezone_present": "Asia/Ho_Chi_Minh",
+      "dashboard_h1": "Bảng điều khiển phân phối",
+      "quality_overview_h1": "Tổng quan chất lượng liên hệ & SLA (BOD)",
+      "matched_vietnamese_labels": [
+        "Đã đăng nhập với tư cách",
+        "Tổng quan",
+        "Chất lượng",
+        "Chiến dịch",
+        "Làm mới",
+        "Xuất báo cáo"
+      ]
+    },
+    "csrf": {
+      "forged_token_rejected_status": 400,
+      "missing_token_rejected_status": 400,
+      "valid_token_accepted_status": 200,
+      "health_ping_payload": {
+        "app": "crm_cskh",
+        "status": "ok",
+        "app_version": "0.0.1",
+        "user": "Administrator"
+      }
+    },
+    "socketio_polling": {
+      "status": "PASS",
+      "transport": "polling",
+      "upgrades_advertised": [
+        "websocket"
+      ],
+      "unauthenticated_namespace_status": 200,
+      "unauthenticated_packet": "44/p4-smoke-20261109133816-9b6eea.localhost,{\"message\":\"Missing cookie and authorization header. Either one needed for authentication.\"}",
+      "authenticated_namespace_status": 200,
+      "authenticated_packet": "40/p4-smoke-20261109133816-9b6eea.localhost,{\"sid\":\"<REDACTED_SOCKET_SID>\"}"
+    },
+    "socketio_websocket": {
+      "status": "PASS",
+      "transport": "websocket",
+      "polling_to_ws_upgrade": {
+        "handshake": {
+          "status_line": "HTTP/1.1 101 Switching Protocols",
+          "upgrade": "websocket",
+          "connection": "upgrade",
+          "sec_websocket_accept_verified": true
+        },
+        "frames_exchanged": [
+          {
+            "direction": "client->server",
+            "opcode": 1,
+            "masked": true,
+            "payload": "2probe"
+          },
+          {
+            "direction": "server->client",
+            "opcode": 1,
+            "masked": false,
+            "payload": "3probe"
+          },
+          {
+            "direction": "client->server",
+            "opcode": 1,
+            "masked": true,
+            "payload": "5"
+          }
+        ]
+      },
+      "direct_ws_namespace": {
+        "handshake": {
+          "status_line": "HTTP/1.1 101 Switching Protocols",
+          "upgrade": "websocket",
+          "connection": "upgrade",
+          "sec_websocket_accept_verified": true
+        },
+        "frames_exchanged": [
+          {
+            "direction": "server->client",
+            "opcode": 1,
+            "masked": false,
+            "payload": "0{\"sid\":\"<REDACTED_SOCKET_SID>\",\"upgrades\":[],\"pingInterval\":25000,\"pingTimeout\":20000,\"maxPayload\":1000000}"
+          },
+          {
+            "direction": "client->server",
+            "opcode": 1,
+            "masked": true,
+            "payload": "40/p4-smoke-20261109133816-9b6eea.localhost,"
+          },
+          {
+            "direction": "server->client",
+            "opcode": 1,
+            "masked": false,
+            "payload": "40/p4-smoke-20261109133816-9b6eea.localhost,{\"sid\":\"<REDACTED_SOCKET_SID>\"}"
+          },
+          {
+            "direction": "client->server",
+            "opcode": 9,
+            "masked": true,
+            "payload": "cskh-p4-ping"
+          },
+          {
+            "direction": "server->client",
+            "opcode": 10,
+            "masked": false,
+            "payload": "cskh-p4-ping"
+          }
+        ]
+      }
+    }
+  },
+  "teardown_audit": {
+    "executed": true,
+    "scoped_project": "crm-cskh-p4-smoke-20261109133816-9b6eea",
+    "exit_code": 0,
+    "remaining_resources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    },
+    "zero_anonymous_volumes_leaked": true
+  }
+}

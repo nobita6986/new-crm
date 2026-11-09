@@ -1,0 +1,384 @@
+{
+  "schema_version": 2,
+  "gate": "g007-per-method-junit",
+  "gate_passed": true,
+  "expected_total": 38,
+  "observed_total": 38,
+  "passing_total": 38,
+  "counts": {
+    "PASS": 38
+  },
+  "xml_files": [
+    "test_p2_calllog_followup.junit.xml",
+    "test_p2_concurrency_chaos.junit.xml",
+    "test_p2_corrections.junit.xml",
+    "test_p2_lifecycle.junit.xml",
+    "test_p2_outcomes_policy.junit.xml",
+    "test_p2_permissions_sec.junit.xml",
+    "test_p2_reconciliation_perf.junit.xml",
+    "test_p2_t1c_regressions.junit.xml"
+  ],
+  "xml_module_binding": {
+    "test_p2_calllog_followup.junit.xml": "crm_cskh.tests.test_p2_calllog_followup",
+    "test_p2_concurrency_chaos.junit.xml": "crm_cskh.tests.test_p2_concurrency_chaos",
+    "test_p2_corrections.junit.xml": "crm_cskh.tests.test_p2_corrections",
+    "test_p2_lifecycle.junit.xml": "crm_cskh.tests.test_p2_lifecycle",
+    "test_p2_outcomes_policy.junit.xml": "crm_cskh.tests.test_p2_outcomes_policy",
+    "test_p2_permissions_sec.junit.xml": "crm_cskh.tests.test_p2_permissions_sec",
+    "test_p2_reconciliation_perf.junit.xml": "crm_cskh.tests.test_p2_reconciliation_perf",
+    "test_p2_t1c_regressions.junit.xml": "crm_cskh.tests.test_p2_t1c_regressions"
+  },
+  "missing_modules": [],
+  "empty_xml_files": [],
+  "missing_methods": [],
+  "failed_methods": [],
+  "errored_methods": [],
+  "skipped_methods": [],
+  "duplicate_methods": [],
+  "unexpected_cases": [],
+  "parse_errors": [],
+  "results": [
+    {
+      "module": "crm_cskh.tests.test_p2_calllog_followup",
+      "class": "TestP2CallLogReuseAndSideArtifactIsolation",
+      "method": "test_link_existing_call_log_create_manual_call_log_and_block_duplicate_linking",
+      "status": "PASS",
+      "source_xml": "test_p2_calllog_followup.junit.xml",
+      "raw_name": "test_link_existing_call_log_create_manual_call_log_and_block_duplicate_linking",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_calllog_followup",
+      "class": "TestP2CallLogReuseAndSideArtifactIsolation",
+      "method": "test_fcrm_note_general_crm_task_and_standalone_call_log_never_inflate_counters",
+      "status": "PASS",
+      "source_xml": "test_p2_calllog_followup.junit.xml",
+      "raw_name": "test_fcrm_note_general_crm_task_and_standalone_call_log_never_inflate_counters",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_calllog_followup",
+      "class": "TestP2FollowupInvariantsAndTimezoneBuckets",
+      "method": "test_single_open_callback_reschedule_and_block_empty_completion_or_direct_bypass",
+      "status": "PASS",
+      "source_xml": "test_p2_calllog_followup.junit.xml",
+      "raw_name": "test_single_open_callback_reschedule_and_block_empty_completion_or_direct_bypass",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_calllog_followup",
+      "class": "TestP2FollowupInvariantsAndTimezoneBuckets",
+      "method": "test_timezone_consistent_overdue_today_upcoming_buckets_at_day_boundaries",
+      "status": "PASS",
+      "source_xml": "test_p2_calllog_followup.junit.xml",
+      "raw_name": "test_timezone_consistent_overdue_today_upcoming_buckets_at_day_boundaries",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_concurrency_chaos",
+      "class": "TestP2IdempotencyAndStaleRevision",
+      "method": "test_idempotent_replay_and_payload_mismatch_across_all_p2_mutations",
+      "status": "PASS",
+      "source_xml": "test_p2_concurrency_chaos.junit.xml",
+      "raw_name": "test_idempotent_replay_and_payload_mismatch_across_all_p2_mutations",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_concurrency_chaos",
+      "class": "TestP2IdempotencyAndStaleRevision",
+      "method": "test_two_tab_expected_revision_mismatch_returns_409_stale_work_item",
+      "status": "PASS",
+      "source_xml": "test_p2_concurrency_chaos.junit.xml",
+      "raw_name": "test_two_tab_expected_revision_mismatch_returns_409_stale_work_item",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_concurrency_chaos",
+      "class": "TestP2RealMariaDbRacesAndRollbackChaos",
+      "method": "test_parallel_double_submit_and_record_attempt_vs_reassign_race_preserve_invariants",
+      "status": "PASS",
+      "source_xml": "test_p2_concurrency_chaos.junit.xml",
+      "raw_name": "test_parallel_double_submit_and_record_attempt_vs_reassign_race_preserve_invariants",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_concurrency_chaos",
+      "class": "TestP2RealMariaDbRacesAndRollbackChaos",
+      "method": "test_mid_transaction_fault_rolls_back_savepoint_and_post_commit_notification_fault_preserves_state",
+      "status": "PASS",
+      "source_xml": "test_p2_concurrency_chaos.junit.xml",
+      "raw_name": "test_mid_transaction_fault_rolls_back_savepoint_and_post_commit_notification_fault_preserves_state",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_concurrency_chaos",
+      "class": "TestZeroProductionFaultInjectionP2",
+      "method": "test_no_fault_injection_symbols_in_production_modules",
+      "status": "PASS",
+      "source_xml": "test_p2_concurrency_chaos.junit.xml",
+      "raw_name": "test_no_fault_injection_symbols_in_production_modules",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_corrections",
+      "class": "TestP2AttemptImmutabilityAndCorrections",
+      "method": "test_contact_attempt_and_correction_docs_enforce_orm_immutability_and_no_delete",
+      "status": "PASS",
+      "source_xml": "test_p2_corrections.junit.xml",
+      "raw_name": "test_contact_attempt_and_correction_docs_enforce_orm_immutability_and_no_delete",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_corrections",
+      "class": "TestP2AttemptImmutabilityAndCorrections",
+      "method": "test_correction_request_reject_approve_void_and_admin_restore_recompute_read_model",
+      "status": "PASS",
+      "source_xml": "test_p2_corrections.junit.xml",
+      "raw_name": "test_correction_request_reject_approve_void_and_admin_restore_recompute_read_model",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_corrections",
+      "class": "TestP2AttemptImmutabilityAndCorrections",
+      "method": "test_policy_disabling_leader_correction_review_enforced_fail_closed",
+      "status": "PASS",
+      "source_xml": "test_p2_corrections.junit.xml",
+      "raw_name": "test_policy_disabling_leader_correction_review_enforced_fail_closed",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_lifecycle",
+      "class": "TestP2WorkItemLifecycle",
+      "method": "test_full_state_lifecycle_assigned_in_progress_on_hold_closed",
+      "status": "PASS",
+      "source_xml": "test_p2_lifecycle.junit.xml",
+      "raw_name": "test_full_state_lifecycle_assigned_in_progress_on_hold_closed",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_lifecycle",
+      "class": "TestP2WorkItemLifecycle",
+      "method": "test_work_item_status_and_crm_lead_status_remain_isolated",
+      "status": "PASS",
+      "source_xml": "test_p2_lifecycle.junit.xml",
+      "raw_name": "test_work_item_status_and_crm_lead_status_remain_isolated",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_lifecycle",
+      "class": "TestP2WorkItemLifecycle",
+      "method": "test_reassign_preserves_in_progress_and_on_hold_and_interval_attribution",
+      "status": "PASS",
+      "source_xml": "test_p2_lifecycle.junit.xml",
+      "raw_name": "test_reassign_preserves_in_progress_and_on_hold_and_interval_attribution",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_lifecycle",
+      "class": "TestP2WorkItemLifecycle",
+      "method": "test_revoke_from_on_hold_cancels_callback_and_handles_return_to_pool",
+      "status": "PASS",
+      "source_xml": "test_p2_lifecycle.junit.xml",
+      "raw_name": "test_revoke_from_on_hold_cancels_callback_and_handles_return_to_pool",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_lifecycle",
+      "class": "TestP2CloseReopenDncAndCompatibility",
+      "method": "test_close_blocks_zero_attempts_by_default_but_allows_invalid_duplicate_with_reason",
+      "status": "PASS",
+      "source_xml": "test_p2_lifecycle.junit.xml",
+      "raw_name": "test_close_blocks_zero_attempts_by_default_but_allows_invalid_duplicate_with_reason",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_lifecycle",
+      "class": "TestP2CloseReopenDncAndCompatibility",
+      "method": "test_reopen_audit_permissions_and_active_claim_collision_guard",
+      "status": "PASS",
+      "source_xml": "test_p2_lifecycle.junit.xml",
+      "raw_name": "test_reopen_audit_permissions_and_active_claim_collision_guard",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_lifecycle",
+      "class": "TestP2CloseReopenDncAndCompatibility",
+      "method": "test_dnc_persists_on_lead_blocks_future_campaigns_and_requires_admin_override",
+      "status": "PASS",
+      "source_xml": "test_p2_lifecycle.junit.xml",
+      "raw_name": "test_dnc_persists_on_lead_blocks_future_campaigns_and_requires_admin_override",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_lifecycle",
+      "class": "TestP2CloseReopenDncAndCompatibility",
+      "method": "test_p1_capacity_distribution_reporting_and_my_list_recognize_in_progress_and_on_hold",
+      "status": "PASS",
+      "source_xml": "test_p2_lifecycle.junit.xml",
+      "raw_name": "test_p1_capacity_distribution_reporting_and_my_list_recognize_in_progress_and_on_hold",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_outcomes_policy",
+      "class": "TestP2OutcomesAndChannelSemantics",
+      "method": "test_seeded_vietnamese_outcome_catalog_and_unreached_invariant",
+      "status": "PASS",
+      "source_xml": "test_p2_outcomes_policy.junit.xml",
+      "raw_name": "test_seeded_vietnamese_outcome_catalog_and_unreached_invariant",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_outcomes_policy",
+      "class": "TestP2OutcomesAndChannelSemantics",
+      "method": "test_unreached_vs_connected_outcomes_and_mandatory_fields",
+      "status": "PASS",
+      "source_xml": "test_p2_outcomes_policy.junit.xml",
+      "raw_name": "test_unreached_vs_connected_outcomes_and_mandatory_fields",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_outcomes_policy",
+      "class": "TestP2OutcomesAndChannelSemantics",
+      "method": "test_channel_compatibility_and_policy_enabled_channels",
+      "status": "PASS",
+      "source_xml": "test_p2_outcomes_policy.junit.xml",
+      "raw_name": "test_channel_compatibility_and_policy_enabled_channels",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_outcomes_policy",
+      "class": "TestP2PolicyInheritanceAndSnapshotVersioning",
+      "method": "test_campaign_overrides_team_overrides_global_policy_and_guards_stale_policy_version",
+      "status": "PASS",
+      "source_xml": "test_p2_outcomes_policy.junit.xml",
+      "raw_name": "test_campaign_overrides_team_overrides_global_policy_and_guards_stale_policy_version",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_outcomes_policy",
+      "class": "TestP2PolicyInheritanceAndSnapshotVersioning",
+      "method": "test_outcome_rename_or_disable_never_drifts_historical_attempt_snapshots",
+      "status": "PASS",
+      "source_xml": "test_p2_outcomes_policy.junit.xml",
+      "raw_name": "test_outcome_rename_or_disable_never_drifts_historical_attempt_snapshots",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_permissions_sec",
+      "class": "TestP2PermissionsAndGenericApiGuards",
+      "method": "test_actor_matrix_across_workflow_rpc_and_generic_frappe_surfaces",
+      "status": "PASS",
+      "source_xml": "test_p2_permissions_sec.junit.xml",
+      "raw_name": "test_actor_matrix_across_workflow_rpc_and_generic_frappe_surfaces",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_permissions_sec",
+      "class": "TestP2PermissionsAndGenericApiGuards",
+      "method": "test_post_reassign_and_post_close_cross_team_total_pii_revocation",
+      "status": "PASS",
+      "source_xml": "test_p2_permissions_sec.junit.xml",
+      "raw_name": "test_post_reassign_and_post_close_cross_team_total_pii_revocation",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_permissions_sec",
+      "class": "TestP2AntiSpoofingSanitizationBackdateAndSummary",
+      "method": "test_client_spoofed_identity_or_verification_fields_rejected_with_403",
+      "status": "PASS",
+      "source_xml": "test_p2_permissions_sec.junit.xml",
+      "raw_name": "test_client_spoofed_identity_or_verification_fields_rejected_with_403",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_permissions_sec",
+      "class": "TestP2AntiSpoofingSanitizationBackdateAndSummary",
+      "method": "test_xss_formula_sanitization_backdate_bounds_and_pii_error_redaction",
+      "status": "PASS",
+      "source_xml": "test_p2_permissions_sec.junit.xml",
+      "raw_name": "test_xss_formula_sanitization_backdate_bounds_and_pii_error_redaction",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_permissions_sec",
+      "class": "TestP2AntiSpoofingSanitizationBackdateAndSummary",
+      "method": "test_progress_summary_reconciles_10_leads_15_attempts_without_double_counting",
+      "status": "PASS",
+      "source_xml": "test_p2_permissions_sec.junit.xml",
+      "raw_name": "test_progress_summary_reconciles_10_leads_15_attempts_without_double_counting",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_reconciliation_perf",
+      "class": "TestP2ReconciliationTimelineAndSchema",
+      "method": "test_lead_journey_a_to_b_to_a_across_campaigns_and_105_work_items_reconcile",
+      "status": "PASS",
+      "source_xml": "test_p2_reconciliation_perf.junit.xml",
+      "raw_name": "test_lead_journey_a_to_b_to_a_across_campaigns_and_105_work_items_reconcile",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_reconciliation_perf",
+      "class": "TestP2ReconciliationTimelineAndSchema",
+      "method": "test_single_work_item_with_120_attempts_paginates_cleanly_and_detects_counter_drift",
+      "status": "PASS",
+      "source_xml": "test_p2_reconciliation_perf.junit.xml",
+      "raw_name": "test_single_work_item_with_120_attempts_paginates_cleanly_and_detects_counter_drift",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_reconciliation_perf",
+      "class": "TestP2ReconciliationTimelineAndSchema",
+      "method": "test_p2_migration_seeds_and_mariadb_indexes_are_idempotent",
+      "status": "PASS",
+      "source_xml": "test_p2_reconciliation_perf.junit.xml",
+      "raw_name": "test_p2_migration_seeds_and_mariadb_indexes_are_idempotent",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_t1c_regressions",
+      "class": "TestP2T1cRegressions",
+      "method": "test_f_p2_01_dnc_autoclose_close_reopen_privacy_five_planes_oracles_and_legacy_migration",
+      "status": "PASS",
+      "source_xml": "test_p2_t1c_regressions.junit.xml",
+      "raw_name": "test_f_p2_01_dnc_autoclose_close_reopen_privacy_five_planes_oracles_and_legacy_migration",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_t1c_regressions",
+      "class": "TestP2T1cRegressions",
+      "method": "test_f_p2_06_dnc_generic_api_bypass_blocked_across_actors_and_lead_writes_preserved",
+      "status": "PASS",
+      "source_xml": "test_p2_t1c_regressions.junit.xml",
+      "raw_name": "test_f_p2_06_dnc_generic_api_bypass_blocked_across_actors_and_lead_writes_preserved",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_t1c_regressions",
+      "class": "TestP2T1cRegressions",
+      "method": "test_f_p2_02_run_history_preserves_counts_across_p2_states_reassignment_and_shared_campaign",
+      "status": "PASS",
+      "source_xml": "test_p2_t1c_regressions.junit.xml",
+      "raw_name": "test_f_p2_02_run_history_preserves_counts_across_p2_states_reassignment_and_shared_campaign",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_t1c_regressions",
+      "class": "TestP2T1cRegressions",
+      "method": "test_f_p2_04_server_side_care_state_pagination_closed_owner_vs_actor_and_l23_denial",
+      "status": "PASS",
+      "source_xml": "test_p2_t1c_regressions.junit.xml",
+      "raw_name": "test_f_p2_04_server_side_care_state_pagination_closed_owner_vs_actor_and_l23_denial",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p2_t1c_regressions",
+      "class": "TestP2T1cRegressions",
+      "method": "test_f_p2_05_progress_summary_half_open_dates_distinct_wi_counters_overlays_and_dnc_units",
+      "status": "PASS",
+      "source_xml": "test_p2_t1c_regressions.junit.xml",
+      "raw_name": "test_f_p2_05_progress_summary_half_open_dates_distinct_wi_counters_overlays_and_dnc_units",
+      "match_reason": "exact"
+    }
+  ]
+}

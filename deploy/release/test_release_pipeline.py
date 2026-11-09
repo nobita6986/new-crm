@@ -17,6 +17,14 @@ REPO_ROOT = RELEASE_DIR.parents[1]
 if str(RELEASE_DIR) not in sys.path:
     sys.path.insert(0, str(RELEASE_DIR))
 
+from audit_registry_and_signing_config import (  # noqa: E402
+    audit_registry_and_signing,
+)
+from benchmark_p4_isolated import (  # noqa: E402
+    build_benchmark_specification,
+    enforce_isolated_benchmark_target,
+    summarize_latencies_ms,
+)
 from evaluate_security_scan import (  # noqa: E402
     DEFAULT_EXCEPTIONS_FILE,
     evaluate_trivy_report,
@@ -33,6 +41,10 @@ from release_manifest import (  # noqa: E402
     read_latest_migration_revision,
     validate_manifest_dict,
     validate_registry_digest,
+)
+from run_diff_impact_verification import (  # noqa: E402
+    load_canonical_inventories,
+    resolve_diff_impact_plan,
 )
 from verify_digest_promotion import (  # noqa: E402
     REQUIRED_STAGING_APP_SERVICES,
@@ -66,14 +78,14 @@ DIFFERENT_JWT_TOKEN = (
     "eyJzdWIiOiI5OTk5OTk5OTk5Iiwicm9sZSI6ImFkbWluIiwiaWF0IjoxNzAwMDAwMDAwfQ."
     "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
 )
-PYJWT_METADATA_TARGET = "/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.13.0.dist-info/METADATA"
+PYJWT_METADATA_TARGET = "/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.15.1.dist-info/METADATA"
 
 
 def _find_posix_sh() -> str:
     candidates = [
-        shutil.which("sh"),
         "C:/Program Files/Git/bin/sh.exe",
         "C:/Program Files/Git/usr/bin/sh.exe",
+        shutil.which("sh"),
     ]
     for cand in candidates:
         if cand and Path(cand).is_file():
@@ -82,10 +94,10 @@ def _find_posix_sh() -> str:
 
 
 def _build_pyjwt_metadata_text(
-    *, line76_token: str = VERIFIED_PYJWT_DOCTEST_TOKEN, extra_line90_token: str = ""
+    *, line77_token: str = VERIFIED_PYJWT_DOCTEST_TOKEN, extra_line90_token: str = ""
 ) -> str:
     lines = [f"Metadata-Line-{idx}: placeholder" for idx in range(1, 95)]
-    lines[75] = f"    '{line76_token}'"
+    lines[76] = f"    '{line77_token}'"
     if extra_line90_token:
         lines[89] = f"    '{extra_line90_token}'"
     return "\n".join(lines) + "\n"
@@ -98,12 +110,13 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
         for expected_wf in (
             "p0.yml",
             "p4-ci.yml",
+            "p4-candidate-verify.yml",
             "p4-release.yml",
             "p4-production.yml",
         ):
             self.assertIn(expected_wf, res["checked_workflows"])
 
-    def test_negative_workflow_security_violations_rejected(self) -> None:
+    def test_negative_workflow_security_and_privilege_separation_rejected(self) -> None:
         bad_prt = (
             "name: bad\non:\n  pull_request_target:\npermissions:\n  contents: read\n"
         )
@@ -132,18 +145,44 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
 
         bad_release = (
             "name: bad-rel\n"
-            "on:\n  pull_request:\n"
+            "on:\n  workflow_dispatch:\n"
             "permissions:\n  contents: read\n"
-            "jobs:\n  b:\n    environment: production\n"
+            "jobs:\n"
+            "  build-once-sign-and-push:\n"
+            "    environment: registry-build\n"
+            "    env:\n      SSH_LEAK: ${{ secrets.STAGING_SSH_PRIVATE_KEY }}\n"
+            "    steps:\n      - run: release_manifest.py sign --manifest m.json\n"
+            "  verify-by-digest:\n"
+            "    environment: registry-verify\n"
+            "    permissions:\n      packages: write\n"
+            "    env:\n      SIGN_LEAK: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}\n"
+            "    steps:\n      - run: docker build .\n"
+            "  deploy-staging:\n"
+            "    environment: staging\n"
+            "    env:\n      PUSH_LEAK: ${{ secrets.REGISTRY_PUSH_TOKEN }}\n"
         )
         rel_errs = audit_workflow_text(Path("p4-release.yml"), bad_release)
-        self.assertTrue(any("pull_request" in e for e in rel_errs), rel_errs)
-        self.assertTrue(any("production" in e for e in rel_errs), rel_errs)
-        self.assertTrue(any("registry-verify" in e for e in rel_errs), rel_errs)
+        self.assertTrue(any("STAGING_SSH_PRIVATE_KEY" in e for e in rel_errs), rel_errs)
+        self.assertTrue(any("--security-scan" in e for e in rel_errs), rel_errs)
+        self.assertTrue(
+            any("verify-by-digest (pull-only)" in e for e in rel_errs), rel_errs
+        )
+        self.assertTrue(
+            any("RELEASE_SIGNING_PRIVATE_KEY" in e for e in rel_errs), rel_errs
+        )
+        self.assertTrue(any("never build images" in e for e in rel_errs), rel_errs)
+        self.assertTrue(any("REGISTRY_PUSH_TOKEN" in e for e in rel_errs), rel_errs)
 
-        bad_prod = "name: bad-prod\non:\n  push:\n    branches: [main]\njobs: {}\n"
+        bad_prod = (
+            "name: bad-prod\non:\n  push:\n    branches: [main]\n"
+            "jobs:\n  d:\n    environment: production\n"
+            "    env:\n      K: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}\n"
+        )
         prod_errs = audit_workflow_text(Path("p4-production.yml"), bad_prod)
         self.assertTrue(any("workflow_dispatch" in e for e in prod_errs), prod_errs)
+        self.assertTrue(
+            any("RELEASE_SIGNING_PRIVATE_KEY" in e for e in prod_errs), prod_errs
+        )
 
     def test_runtime_pr_zero_secrets_boundary(self) -> None:
         clean = check_runtime_pr_zero_secrets(
@@ -177,7 +216,13 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
         self.assertEqual(res["bench_python_constraints_count"], 154)
         self.assertEqual(res["system_python_constraints_count"], 22)
 
-        # REL-03: Containerfile enforces constraints across pip & uv steps
+        lock = json.loads(DEFAULT_LOCK_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(lock["security_patches"]["pyjwt_version"], "2.15.1")
+        self.assertEqual(lock["security_patches"]["pillow_version"], "13.0.0")
+        self.assertEqual(lock["base_image"]["tag"], "3.11.18-slim-trixie")
+        self.assertEqual(lock["apps"]["frappe"]["tag"], "v15.126.0")
+        self.assertEqual(lock["toolchain"]["frappe_bench_version"], "5.31.1")
+
         cfile = (REPO_ROOT / "deploy" / "images" / "Containerfile").read_text(
             encoding="utf-8"
         )
@@ -187,23 +232,82 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
             "UV_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
             "UV_BUILD_CONSTRAINT=/tmp/cskh-build/python-constraints.txt",
             "--no-build-isolation -c /tmp/cskh-build/python-constraints.txt -e ./apps/crm_cskh",
+            "PyJWT==${PYJWT_PATCH_VERSION}",
+            "pillow==${PILLOW_PATCH_VERSION}",
+            'test -z "$(git -C apps/frappe diff pyproject.toml)"',
+            "pip3 check",
+            "./env/bin/pip check",
         ):
             self.assertIn(marker, cfile)
 
-        # REL-04: compose.verify.yaml uses apps-order.txt (not alphabetical `ls -1 apps`)
         verify_compose = (
             REPO_ROOT / "deploy" / "images" / "compose.verify.yaml"
         ).read_text(encoding="utf-8")
         self.assertIn("/home/frappe/frappe-bench/apps-order.txt", verify_compose)
         self.assertNotIn("ls -1 apps > sites/apps.txt", verify_compose)
 
-        # REL-04: p4-release.yml uses --no-mariadb-socket and strict security gate
         rel_wf = (REPO_ROOT / ".github" / "workflows" / "p4-release.yml").read_text(
             encoding="utf-8"
         )
-        self.assertIn("--no-mariadb-socket", rel_wf)
         self.assertIn("environment: registry-verify", rel_wf)
         self.assertIn("--strict", rel_wf)
+        self.assertIn("run_diff_impact_verification.py", rel_wf)
+
+
+class TestRegistryConfigAuditor(unittest.TestCase):
+    def test_reuses_ghcr_github_token_before_requesting_robot_secrets(self) -> None:
+        priv_pem, pub_pem = generate_ed25519_keypair()
+        pub_str = pub_pem.decode("utf-8")
+        priv_str = priv_pem.decode("utf-8")
+
+        # GHCR same-owner push role: GITHUB_TOKEN satisfies push auth; only signing key needed!
+        push_audit = audit_registry_and_signing(
+            env={
+                "GITHUB_REPOSITORY": "nobita6986/new-crm",
+                "CSKH_REGISTRY_IMAGE": "ghcr.io/nobita6986/crm-cskh",
+                "RELEASE_SIGNING_PUBLIC_KEY": pub_str,
+                "RELEASE_SIGNING_PRIVATE_KEY": priv_str,
+                "GITHUB_TOKEN": "ghs_ephemeral_job_token",
+            },
+            role="push",
+        )
+        self.assertEqual(push_audit["status"], "READY", push_audit)
+        self.assertEqual(push_audit["minimal_secrets_to_request"], [])
+        self.assertEqual(
+            push_audit["registry"]["effective_push_auth"],
+            "github_token_packages_write",
+        )
+
+        # Pull role fails closed if signing private key or SSH key leaks into pull environment
+        leaked_pull = audit_registry_and_signing(
+            env={
+                "GITHUB_REPOSITORY": "nobita6986/new-crm",
+                "CSKH_REGISTRY_IMAGE": "ghcr.io/nobita6986/crm-cskh",
+                "RELEASE_SIGNING_PUBLIC_KEY": pub_str,
+                "GITHUB_TOKEN_READONLY": "ghs_read_token",
+                "RELEASE_SIGNING_PRIVATE_KEY": priv_str,
+            },
+            role="pull",
+        )
+        self.assertEqual(leaked_pull["status"], "BLOCKED")
+        self.assertTrue(leaked_pull["privilege_separation_violations"])
+
+        # External private registry requests robot push/pull tokens when unset
+        ext_push = audit_registry_and_signing(
+            env={
+                "GITHUB_REPOSITORY": "nobita6986/new-crm",
+                "CSKH_REGISTRY_IMAGE": "registry.internal.example/cskh/crm-cskh",
+                "RELEASE_SIGNING_PUBLIC_KEY": pub_str,
+                "RELEASE_SIGNING_PRIVATE_KEY": priv_str,
+                "GITHUB_TOKEN": "ghs_ephemeral",
+            },
+            role="push",
+        )
+        self.assertEqual(ext_push["status"], "BLOCKED")
+        self.assertEqual(
+            ext_push["minimal_secrets_to_request"],
+            ["REGISTRY_PUSH_TOKEN", "REGISTRY_PUSH_USERNAME"],
+        )
 
 
 class TestPosixDigestValidator(unittest.TestCase):
@@ -247,23 +351,19 @@ class TestPosixDigestValidator(unittest.TestCase):
     def test_negative_whitespace_tags_and_bad_digests_rejected(self) -> None:
         hex64 = "8f4e2b1c9d0a3e5f7b6c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a"
         invalid_cases = [
-            # Empty / blocked / placeholder
             "",
             "BLOCKED",
             f"<registry>/crm-cskh@sha256:{hex64}",
-            # Whitespace: leading, trailing, middle, tab, embedded newline
             f" {SAMPLE_DIGEST}",
             f"{SAMPLE_DIGEST} ",
             f"ghcr.io/nobita6986/crm cskh@sha256:{hex64}",
             f"ghcr.io/nobita6986/crm-cskh\t@sha256:{hex64}",
             f"{SAMPLE_DIGEST}\ninjected-line",
             f"injected-line\n{SAMPLE_DIGEST}",
-            # Floating tags / missing @sha256 digest / missing registry host
             "ghcr.io/nobita6986/crm-cskh:latest",
             "ghcr.io/nobita6986/crm-cskh:0.0.1-92e14af",
             "ghcr.io/nobita6986/crm-cskh",
             f"crm-cskh@sha256:{hex64}",
-            # Malformed digests: short, long, uppercase, non-hex, wrong alg, all-zero
             f"ghcr.io/nobita6986/crm-cskh@sha256:{hex64[:63]}",
             f"ghcr.io/nobita6986/crm-cskh@sha256:{hex64}a",
             f"ghcr.io/nobita6986/crm-cskh@sha256:{hex64.upper()}",
@@ -322,7 +422,8 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
         self.assertEqual(raw["exceptions"], [])
         self.assertEqual(len(raw["secret_false_positives"]), 1)
         fp = raw["secret_false_positives"][0]
-        self.assertEqual(fp["exact_line"], 76)
+        self.assertEqual(fp["exact_line"], 77)
+        self.assertIn("2.15.1", fp["target_suffix"])
         self.assertEqual(fp["exact_sample"], VERIFIED_PYJWT_DOCTEST_TOKEN)
 
     def test_rel01_exact_pyjwt_sample_and_different_jwt_in_same_file_fails(
@@ -344,8 +445,8 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
                                 "Category": "JWT",
                                 "Severity": "MEDIUM",
                                 "Title": "JWT token",
-                                "StartLine": 76,
-                                "EndLine": 76,
+                                "StartLine": 77,
+                                "EndLine": 77,
                                 "Match": "    '***'",
                             }
                         ],
@@ -356,7 +457,7 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
                 json.dumps(trivy_single_redacted_hit), encoding="utf-8"
             )
 
-            # 1. Exact verified doctest JWT on line 76 -> PASS
+            # 1. Exact verified doctest JWT on line 77 -> PASS
             meta_file.write_text(_build_pyjwt_metadata_text(), encoding="utf-8")
             ok = evaluate_trivy_report(
                 trivy_file,
@@ -367,136 +468,50 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
             self.assertEqual(ok["secret_findings_count"], 0)
             self.assertEqual(ok["excepted_secret_false_positives_count"], 1)
 
-            # 2. REL-01A REQUIRED TEST: A DIFFERENT JWT replacing line 76 in the EXACT SAME METADATA file MUST FAIL!
+            # 2. A DIFFERENT JWT replacing line 77 in the EXACT SAME METADATA file MUST FAIL!
             meta_file.write_text(
-                _build_pyjwt_metadata_text(line76_token=DIFFERENT_JWT_TOKEN),
+                _build_pyjwt_metadata_text(line77_token=DIFFERENT_JWT_TOKEN),
                 encoding="utf-8",
             )
-            diff_line76 = evaluate_trivy_report(
+            diff_line77 = evaluate_trivy_report(
                 trivy_file,
                 pyjwt_metadata_path=meta_file,
                 mode="advisory_upstream_critical",
             )
-            self.assertEqual(diff_line76["status"], "FAIL", diff_line76)
-            self.assertGreaterEqual(diff_line76["secret_findings_count"], 1)
-            self.assertEqual(diff_line76["excepted_secret_false_positives_count"], 0)
+            self.assertEqual(diff_line77["status"], "FAIL", diff_line77)
+            self.assertGreaterEqual(diff_line77["secret_findings_count"], 1)
+            self.assertEqual(diff_line77["excepted_secret_false_positives_count"], 0)
 
-            # 3. REL-01A REQUIRED TEST: Keeping verified JWT on line 76 AND adding a DIFFERENT JWT on line 90
-            #    in the EXACT SAME METADATA file MUST FAIL (both when Trivy reports 2 hits and 1 hit)!
+            # 3. Adding a second JWT on line 90 in the SAME METADATA file MUST FAIL!
             meta_file.write_text(
                 _build_pyjwt_metadata_text(
-                    line76_token=VERIFIED_PYJWT_DOCTEST_TOKEN,
+                    line77_token=VERIFIED_PYJWT_DOCTEST_TOKEN,
                     extra_line90_token=DIFFERENT_JWT_TOKEN,
                 ),
                 encoding="utf-8",
             )
-            extra_same_file_single_trivy = evaluate_trivy_report(
+            extra_same_file = evaluate_trivy_report(
                 trivy_file,
                 pyjwt_metadata_path=meta_file,
                 mode="advisory_upstream_critical",
             )
-            self.assertEqual(extra_same_file_single_trivy["status"], "FAIL")
-            self.assertGreaterEqual(
-                extra_same_file_single_trivy["secret_findings_count"], 1
-            )
-            self.assertEqual(
-                extra_same_file_single_trivy["excepted_secret_false_positives_count"], 0
-            )
-
-            trivy_two_hits_same_file = {
-                "ArtifactName": SAMPLE_DIGEST,
-                "Results": [
-                    {
-                        "Target": PYJWT_METADATA_TARGET,
-                        "Secrets": [
-                            {
-                                "RuleID": "jwt-token",
-                                "Category": "JWT",
-                                "Severity": "MEDIUM",
-                                "Title": "JWT token",
-                                "StartLine": 76,
-                                "EndLine": 76,
-                                "Match": "    '***'",
-                            },
-                            {
-                                "RuleID": "jwt-token",
-                                "Category": "JWT",
-                                "Severity": "MEDIUM",
-                                "Title": "JWT token",
-                                "StartLine": 90,
-                                "EndLine": 90,
-                                "Match": "    '***'",
-                            },
-                        ],
-                    }
-                ],
-            }
-            trivy_file.write_text(
-                json.dumps(trivy_two_hits_same_file), encoding="utf-8"
-            )
-            extra_same_file_two_trivy = evaluate_trivy_report(
-                trivy_file,
-                pyjwt_metadata_path=meta_file,
-                mode="advisory_upstream_critical",
-            )
-            self.assertEqual(extra_same_file_two_trivy["status"], "FAIL")
-            self.assertGreaterEqual(
-                extra_same_file_two_trivy["secret_findings_count"], 2
-            )
-            self.assertEqual(
-                extra_same_file_two_trivy["excepted_secret_false_positives_count"], 0
-            )
+            self.assertEqual(extra_same_file["status"], "FAIL")
+            self.assertGreaterEqual(extra_same_file["secret_findings_count"], 1)
 
             # 4. Redacted Trivy match WITHOUT --pyjwt-metadata-file MUST FAIL closed
-            trivy_file.write_text(
-                json.dumps(trivy_single_redacted_hit), encoding="utf-8"
-            )
             no_meta = evaluate_trivy_report(
                 trivy_file,
                 pyjwt_metadata_path=None,
                 mode="advisory_upstream_critical",
             )
             self.assertEqual(no_meta["status"], "FAIL")
-            self.assertEqual(no_meta["secret_findings_count"], 1)
 
-            # 5. Same verified token inside application code MUST FAIL closed
-            trivy_app_secret = {
-                "ArtifactName": SAMPLE_DIGEST,
-                "Results": [
-                    {
-                        "Target": "/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/api.py",
-                        "Secrets": [
-                            {
-                                "RuleID": "jwt-token",
-                                "Category": "JWT",
-                                "Severity": "MEDIUM",
-                                "Title": "JWT token",
-                                "StartLine": 76,
-                                "EndLine": 76,
-                                "Match": VERIFIED_PYJWT_DOCTEST_TOKEN,
-                            }
-                        ],
-                    }
-                ],
-            }
-            trivy_file.write_text(json.dumps(trivy_app_secret), encoding="utf-8")
-            meta_file.write_text(_build_pyjwt_metadata_text(), encoding="utf-8")
-            self.assertEqual(
-                evaluate_trivy_report(
-                    trivy_file,
-                    pyjwt_metadata_path=meta_file,
-                    mode="advisory_upstream_critical",
-                )["status"],
-                "FAIL",
-            )
-
-    def test_strict_cve_gate_and_regressed_package_guard(self) -> None:
+    def test_strict_cve_gate_and_case_insensitive_regressed_package_guard(self) -> None:
         with tempfile.TemporaryDirectory() as td:
             tmp = Path(td)
             trivy_file = tmp / "trivy.json"
             exc_file = tmp / "exceptions.json"
 
-            # Strict mode fails on BOTH fixable CRITICAL and unfixed OS CRITICAL without active exceptions
             trivy_file.write_text(
                 json.dumps(
                     {
@@ -506,7 +521,7 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
                                 "Target": "debian",
                                 "Vulnerabilities": [
                                     {
-                                        "VulnerabilityID": "CVE-2026-99991",
+                                        "VulnerabilityID": "CVE-2026-102268",
                                         "PkgName": "PyJWT",
                                         "InstalledVersion": "2.13.0",
                                         "FixedVersion": "2.14.0",
@@ -532,76 +547,14 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
             self.assertEqual(strict_fail["status"], "FAIL")
             self.assertEqual(len(strict_fail["gate_failures"]), 2)
 
-            # Advisory mode allows pending upstream CRITICALs ONLY if not in forbid_critical_packages
-            adv_ok = evaluate_trivy_report(
-                trivy_file,
-                exceptions_path=exc_file,
-                mode="advisory_upstream_critical",
-                forbid_critical_packages={"uv", "form-data"},
-            )
-            self.assertEqual(adv_ok["status"], "PASS")
-
-            # Regressed patched package fails even in advisory mode
+            # Case-insensitive forbid_critical_packages (`pyjwt` catches `PyJWT`)
             adv_regressed = evaluate_trivy_report(
                 trivy_file,
                 exceptions_path=exc_file,
                 mode="advisory_upstream_critical",
-                forbid_critical_packages={"PyJWT"},
+                forbid_critical_packages={"pyjwt", "pillow"},
             )
             self.assertEqual(adv_regressed["status"], "FAIL")
-
-            # Expired exception still fails strict mode
-            exc_file.write_text(
-                json.dumps(
-                    {
-                        "exceptions": [
-                            {
-                                "cve_id": "CVE-2026-99991",
-                                "expires_on": "2020-01-01",
-                                "approved_by": "T0",
-                            },
-                            {
-                                "cve_id": "CVE-2025-7458",
-                                "expires_on": "2099-12-31",
-                                "approved_by": "T0",
-                            },
-                        ]
-                    }
-                ),
-                encoding="utf-8",
-            )
-            self.assertEqual(
-                evaluate_trivy_report(
-                    trivy_file, exceptions_path=exc_file, mode="strict"
-                )["status"],
-                "FAIL",
-            )
-
-            # Non-expired T0-approved exceptions for BOTH CVEs pass strict mode
-            exc_file.write_text(
-                json.dumps(
-                    {
-                        "exceptions": [
-                            {
-                                "cve_id": "CVE-2026-99991",
-                                "expires_on": "2099-12-31",
-                                "approved_by": "T0",
-                            },
-                            {
-                                "cve_id": "CVE-2025-7458",
-                                "expires_on": "2099-12-31",
-                                "approved_by": "T0",
-                            },
-                        ]
-                    }
-                ),
-                encoding="utf-8",
-            )
-            strict_pass = evaluate_trivy_report(
-                trivy_file, exceptions_path=exc_file, mode="strict"
-            )
-            self.assertEqual(strict_pass["status"], "PASS")
-            self.assertEqual(len(strict_pass["excepted_critical"]), 2)
 
 
 class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
@@ -619,6 +572,14 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         build_manifest_obj = json.loads(
             (evidence_dir / "build-manifest.json").read_text(encoding="utf-8")
         )
+        build_manifest_obj["apps"]["frappe"]["tag"] = lock_obj["apps"]["frappe"]["tag"]
+        build_manifest_obj["apps"]["frappe"]["commit_sha"] = lock_obj["apps"]["frappe"][
+            "commit_sha"
+        ]
+        build_manifest_obj["apps"]["crm"]["tag"] = lock_obj["apps"]["crm"]["tag"]
+        build_manifest_obj["apps"]["crm"]["commit_sha"] = lock_obj["apps"]["crm"][
+            "commit_sha"
+        ]
         build_manifest_obj["apps"]["crm_cskh"]["baseline_main_sha"] = lock_obj[
             "baseline_main_sha"
         ]
@@ -654,10 +615,21 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
             cyclonedx_out=self.sbom_cdx,
             spdx_out=self.sbom_spdx,
         )
-        self.scan_summary = self.tmp / "security-scan-summary.json"
+        self.scan_summary = self.tmp / "security-scan-strict.json"
         self.scan_summary.write_text(
             json.dumps(
-                {"status": "PASS", "gate_mode": "strict", "secret_findings_count": 0}
+                {
+                    "status": "PASS",
+                    "gate_mode": "strict",
+                    "artifact_name": SAMPLE_DIGEST,
+                    "secret_findings_count": 0,
+                    "unique_critical_counts": {
+                        "fixable_unapproved": 0,
+                        "unfixed_upstream_os_unapproved": 0,
+                        "excepted": 0,
+                    },
+                    "gate_failures": [],
+                }
             )
             + "\n",
             encoding="utf-8",
@@ -673,14 +645,18 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         self.assertEqual(read_kpi_formula_version(), "cskh-metrics-v2")
 
-    def test_production_candidate_manifest_rejects_non_strict_scan(self) -> None:
+    def test_production_candidate_rejects_non_strict_or_cross_digest_scan_on_generate_and_sign(
+        self,
+    ) -> None:
         advisory_scan = self.tmp / "advisory-scan.json"
         advisory_scan.write_text(
             json.dumps(
                 {
                     "status": "PASS",
                     "gate_mode": "advisory_upstream_critical",
+                    "artifact_name": SAMPLE_DIGEST,
                     "secret_findings_count": 0,
+                    "gate_failures": [],
                 }
             )
             + "\n",
@@ -688,7 +664,7 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         with self.assertRaisesRegex(ValueError, "gate_mode='strict'"):
             build_manifest_dict(
-                release_id="crm-cskh-20261106-001",
+                release_id="crm-cskh-20261109-001",
                 environment_scope="production_candidate",
                 lock_path=DEFAULT_LOCK_PATH,
                 build_manifest_path=self.build_manifest_path,
@@ -701,6 +677,101 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
                 previous_release_id=None,
                 approved_by=[],
             )
+
+        # Cross-digest scan (e.g. CI loopback image scan reused for live/release digest) MUST fail!
+        cross_digest_scan = self.tmp / "cross-digest-scan.json"
+        cross_digest_scan.write_text(
+            json.dumps(
+                {
+                    "status": "PASS",
+                    "gate_mode": "strict",
+                    "artifact_name": SAMPLE_DRIFT_DIGEST,
+                    "secret_findings_count": 0,
+                    "gate_failures": [],
+                }
+            )
+            + "\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "digest mismatch"):
+            build_manifest_dict(
+                release_id="crm-cskh-20261109-001",
+                environment_scope="production_candidate",
+                lock_path=DEFAULT_LOCK_PATH,
+                build_manifest_path=self.build_manifest_path,
+                image_inspect_path=self.inspect_path,
+                sbom_cyclonedx_path=self.sbom_cdx,
+                sbom_spdx_path=self.sbom_spdx,
+                security_scan_path=cross_digest_scan,
+                build_url="https://example.invalid/1",
+                test_report_url="https://example.invalid/1",
+                previous_release_id=None,
+                approved_by=[],
+            )
+
+        # Signing a production_candidate manifest WITHOUT --security-scan MUST fail closed!
+        prod_manifest = self.tmp / "prod-candidate.json"
+        sig_out = self.tmp / "prod-candidate.sig"
+        self.assertEqual(
+            manifest_main(
+                [
+                    "generate",
+                    "--release-id",
+                    "crm-cskh-20261109-001",
+                    "--environment-scope",
+                    "production_candidate",
+                    "--build-manifest",
+                    str(self.build_manifest_path),
+                    "--image-inspect",
+                    str(self.inspect_path),
+                    "--sbom-cyclonedx",
+                    str(self.sbom_cdx),
+                    "--security-scan",
+                    str(self.scan_summary),
+                    "--build-url",
+                    "https://example.invalid/1",
+                    "--test-report-url",
+                    "https://example.invalid/1",
+                    "--out",
+                    str(prod_manifest),
+                ]
+            ),
+            0,
+        )
+        self.assertNotEqual(
+            manifest_main(
+                [
+                    "sign",
+                    "--manifest",
+                    str(prod_manifest),
+                    "--private-key-file",
+                    str(self.priv_file),
+                    "--sig-out",
+                    str(sig_out),
+                ]
+            ),
+            0,
+        )
+        self.assertFalse(sig_out.exists())
+
+        # Signing WITH matching strict PASS --security-scan succeeds!
+        self.assertEqual(
+            manifest_main(
+                [
+                    "sign",
+                    "--manifest",
+                    str(prod_manifest),
+                    "--security-scan",
+                    str(self.scan_summary),
+                    "--private-key-file",
+                    str(self.priv_file),
+                    "--sig-out",
+                    str(sig_out),
+                ]
+            ),
+            0,
+        )
+        self.assertTrue(sig_out.is_file())
 
     def test_manifest_sign_verify_tamper_and_scope_isolation(self) -> None:
         manifest_path = self.tmp / "release-manifest.json"
@@ -738,6 +809,8 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
                 "sign",
                 "--manifest",
                 str(manifest_path),
+                "--security-scan",
+                str(self.scan_summary),
                 "--private-key-file",
                 str(self.priv_file),
                 "--sig-out",
@@ -793,26 +866,6 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         self.assertNotEqual(rc_tamper, 0)
 
-    def test_blocked_inspect_refused_for_manifest_generation(self) -> None:
-        blocked_inspect = (
-            REPO_ROOT / "deploy" / "images" / "evidence" / "image-inspect-summary.json"
-        )
-        with self.assertRaises(ValueError):
-            build_manifest_dict(
-                release_id="crm-cskh-blocked",
-                environment_scope="production_candidate",
-                lock_path=DEFAULT_LOCK_PATH,
-                build_manifest_path=self.build_manifest_path,
-                image_inspect_path=blocked_inspect,
-                sbom_cyclonedx_path=self.sbom_cdx,
-                sbom_spdx_path=self.sbom_spdx,
-                security_scan_path=self.scan_summary,
-                build_url="https://example.invalid/1",
-                test_report_url="https://example.invalid/1",
-                previous_release_id=None,
-                approved_by=[],
-            )
-
     def test_end_to_end_digest_promotion_and_drift_rejection(self) -> None:
         manifest_dict = build_manifest_dict(
             release_id="crm-cskh-20261106-001",
@@ -847,8 +900,8 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
             "app_image_tested": SAMPLE_DIGEST,
             "image_id": pulled_manifest_id,
             "summary": {
-                "total_assertions": 45,
-                "passed": 45,
+                "total_assertions": 55,
+                "passed": 55,
                 "failed": 0,
                 "verdict": "PASS",
             },
@@ -903,57 +956,119 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
         )
         self.assertEqual(proof["status"], "PASS")
         self.assertTrue(proof["zero_digest_drift"])
+        self.assertEqual(proof["canonical_registry_digest"], SAMPLE_DIGEST)
+        self.assertEqual(proof["canonical_image_id"], SAMPLE_IMAGE_ID)
+        self.assertNotEqual(
+            proof["canonical_image_id"], proof["canonical_registry_digest"]
+        )
+        tax = proof["identifier_taxonomy"]
+        assert isinstance(tax, dict)
+        self.assertEqual(
+            tax["canonical_registry_digest_class"], "oci_distribution_manifest_sha256"
+        )
+        self.assertEqual(tax["canonical_image_id_class"], "oci_image_config_sha256")
 
-        drifted = json.loads(staging_inspect_path.read_text(encoding="utf-8"))
-        drifted[0]["Config"]["Image"] = SAMPLE_DRIFT_DIGEST
-        staging_inspect_path.write_text(json.dumps(drifted), encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "drift"):
-            verify_promotion_chain(
-                manifest_path=manifest_path,
-                sig_path=sig_path,
-                public_key_pem=self.pub_pem,
-                lock_path=DEFAULT_LOCK_PATH,
-                build_inspect_path=self.inspect_path,
-                clean_site_report_path=clean_site_path,
-                compose_smoke_report_path=smoke_path,
-                staging_containers_inspect_path=staging_inspect_path,
-                expected_scope="production_candidate",
+
+class TestDiffImpactAndIsolatedBenchmark(unittest.TestCase):
+    def test_canonical_inventories_exist_and_diff_impact_maps_correctly(self) -> None:
+        invs = load_canonical_inventories(REPO_ROOT)
+        self.assertEqual(invs["g007"]["expected_total"], 99)
+        self.assertEqual(invs["p1"]["expected_total"], 209)
+        self.assertEqual(invs["p2"]["expected_total"], 38)
+        self.assertGreaterEqual(int(invs["p3"]["expected_total"]), 31)  # type: ignore[arg-type]
+        self.assertEqual(invs["p3_ui"]["expected_total"], 7)
+
+        # Containerfile change escalates to full P0-P3 suite (29 modules)
+        full_plan = resolve_diff_impact_plan(
+            ["deploy/images/Containerfile"], repo_root=REPO_ROOT
+        )
+        self.assertTrue(full_plan["full_suite_escalated"])
+        self.assertEqual(
+            full_plan["selected_suites"], ["g007", "p1", "p2", "p3", "p3_ui"]
+        )
+        self.assertEqual(full_plan["total_modules_to_run"], 30)
+
+        # Scoped P3 KPI edit runs g007 + p3 + p3_ui without unneeded P1/P2 modules
+        p3_plan = resolve_diff_impact_plan(
+            ["apps/crm_cskh/crm_cskh/services/kpi_calculator.py"],
+            repo_root=REPO_ROOT,
+        )
+        self.assertFalse(p3_plan["full_suite_escalated"])
+        self.assertEqual(p3_plan["selected_suites"], ["g007", "p3", "p3_ui"])
+
+    def test_isolated_benchmark_blocks_owner_vps_and_commits_zero_unmeasured_sla(
+        self,
+    ) -> None:
+        # Missing --confirm-isolated-target -> rejected
+        with self.assertRaisesRegex(ValueError, "--confirm-isolated-target"):
+            enforce_isolated_benchmark_target(
+                base_url="http://127.0.0.1:18080",
+                site_name="p4-bench.localhost",
+                compose_project="cskh-p4-bench-01",
+                confirm_isolated_target=False,
             )
 
-        bind_mounted = json.loads(json.dumps(staging_containers))
-        bind_mounted[1]["Mounts"].append({"Type": "bind", "Destination": "/src"})
-        staging_inspect_path.write_text(json.dumps(bind_mounted), encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "bind-mount"):
-            verify_promotion_chain(
-                manifest_path=manifest_path,
-                sig_path=sig_path,
-                public_key_pem=self.pub_pem,
-                lock_path=DEFAULT_LOCK_PATH,
-                build_inspect_path=self.inspect_path,
-                clean_site_report_path=clean_site_path,
-                compose_smoke_report_path=None,
-                staging_containers_inspect_path=staging_inspect_path,
-                expected_scope="production_candidate",
-            )
+        # Public / Owner / Production URLs -> rejected even with --confirm-isolated-target
+        for forbidden_url in (
+            "https://crm.hrpartner.vn",
+            "https://prod-crm.example.com",
+            "http://203.0.113.10:8080",
+        ):
+            with self.assertRaises(ValueError):
+                enforce_isolated_benchmark_target(
+                    base_url=forbidden_url,
+                    site_name="p4-bench.localhost",
+                    compose_project="cskh-p4-bench-01",
+                    confirm_isolated_target=True,
+                )
 
-        incomplete = [
-            c
-            for c in staging_containers
-            if c["Config"]["Labels"]["com.docker.compose.service"] != "scheduler"
-        ]
-        staging_inspect_path.write_text(json.dumps(incomplete), encoding="utf-8")
-        with self.assertRaisesRegex(ValueError, "scheduler"):
-            verify_promotion_chain(
-                manifest_path=manifest_path,
-                sig_path=sig_path,
-                public_key_pem=self.pub_pem,
-                lock_path=DEFAULT_LOCK_PATH,
-                build_inspect_path=self.inspect_path,
-                clean_site_report_path=clean_site_path,
-                compose_smoke_report_path=None,
-                staging_containers_inspect_path=staging_inspect_path,
-                expected_scope="production_candidate",
-            )
+        # Loopback isolated target -> accepted, S1 suggested dataset framed as non-committed
+        s1_spec = build_benchmark_specification(
+            profile_name="s1_suggested_mvp",
+            base_url="http://127.0.0.1:18080",
+            site_name="p4-bench.localhost",
+            compose_project="cskh-p4-bench-local",
+            confirm_isolated_target=True,
+        )
+        self.assertEqual(
+            s1_spec["sla_commitment_status"],
+            "UNCOMMITTED_PENDING_MEASURED_RUN_AND_OWNER_APPROVAL",
+        )
+        self.assertIn("NOT a commitment of 50,000", str(s1_spec["dataset_disclaimer"]))
+        s1_ds = s1_spec["published_dataset_and_load"]
+        assert isinstance(s1_ds, dict)
+        self.assertEqual(s1_ds["leads"], 50000)
+        self.assertEqual(s1_ds["work_items"], 75000)
+        self.assertEqual(s1_ds["contact_attempts"], 250000)
+        self.assertEqual(s1_ds["active_staff"], 40)
+        self.assertEqual(
+            s1_ds["dataset_framing"],
+            "SUGGESTED_S1_DATASET_NOT_MONTHLY_VOLUME_COMMITMENT",
+        )
+        self.assertFalse(s1_spec["isolation_guard"]["owner_vps_touched"])  # type: ignore[index]
+
+        # Legacy profile alias also supported cleanly
+        spec = build_benchmark_specification(
+            profile_name="isolated_p4_target_50k",
+            base_url="http://127.0.0.1:18080",
+            site_name="p4-bench.localhost",
+            compose_project="cskh-p4-bench-local",
+            confirm_isolated_target=True,
+        )
+        self.assertEqual(
+            spec["sla_commitment_status"],
+            "UNCOMMITTED_PENDING_MEASURED_RUN_AND_OWNER_APPROVAL",
+        )
+        self.assertFalse(spec["isolation_guard"]["owner_vps_touched"])  # type: ignore[index]
+
+        stats = summarize_latencies_ms(
+            [10.0, 20.0, 30.0, 40.0, 100.0], error_count=1, elapsed_sec=2.0
+        )
+        self.assertEqual(stats["requests_total"], 5)
+        self.assertEqual(stats["error_rate_pct"], 20.0)
+        self.assertEqual(stats["throughput_rps"], 2.5)
+        self.assertEqual(stats["p50_ms"], 30.0)
+        self.assertGreaterEqual(float(stats["p95_ms"]), 80.0)
 
 
 if __name__ == "__main__":

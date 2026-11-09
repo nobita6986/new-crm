@@ -106,6 +106,10 @@ COMPOSE_ARGS=(
   -f "${REPO_ROOT}/deploy/compose/overrides/compose.cskh-tls.yaml"
 )
 
+# Guardrail: refuse deployment if any rendered service declares a local `build:` stanza
+docker compose "${COMPOSE_ARGS[@]}" config --format json \
+  | jq -e '[.services[] | select(has("build"))] | length == 0' >/dev/null
+
 # 3. Optional pull-only private registry login -> pull exact immutable digest -> immediate logout
 REGISTRY_HOST="${TARGET_IMAGE%%/*}"
 LOGGED_IN_REGISTRY="false"
@@ -138,17 +142,14 @@ logout_pull_registry
 LOGGED_IN_REGISTRY="false"
 trap - EXIT
 
-docker compose "${COMPOSE_ARGS[@]}" up -d db redis-cache redis-queue
-docker compose "${COMPOSE_ARGS[@]}" up -d configurator
-MIGRATE_SITES=true docker compose "${COMPOSE_ARGS[@]}" --profile migrate run --rm migrator
+docker compose "${COMPOSE_ARGS[@]}" up -d --no-build db redis-cache redis-queue
+PULL_POLICY=never docker compose "${COMPOSE_ARGS[@]}" up -d --no-build configurator
+PULL_POLICY=never MIGRATE_SITES=true docker compose "${COMPOSE_ARGS[@]}" --profile migrate run --rm migrator
 
-# 4. Roll application & proxy services on the identical digest (PULL_POLICY=never post-verified pull
-#    if transient logout occurred, or PULL_POLICY=always when host daemon keeps read-only auth; pass
-#    PULL_POLICY=never to `up -d` ONLY after step 3 verified `docker pull "${TARGET_IMAGE}"` so private
-#    registries do not fail after pull-token logout!)
-PULL_POLICY=never docker compose "${COMPOSE_ARGS[@]}" up -d backend frontend websocket queue-short queue-long scheduler proxy
+# 4. Roll application & proxy services on the identical pre-pulled digest (--no-build, zero rebuild)
+PULL_POLICY=never docker compose "${COMPOSE_ARGS[@]}" up -d --no-build backend frontend websocket queue-short queue-long scheduler proxy
 
-# 5. Inspect all running Staging app containers & prove zero digest drift (G05)
+# 5. Inspect all running target app containers & prove zero digest drift (G05 / G23)
 mapfile -t APP_CIDS < <(
   docker compose "${COMPOSE_ARGS[@]}" ps -q backend frontend websocket queue-short queue-long scheduler
 )

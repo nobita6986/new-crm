@@ -253,6 +253,241 @@ def record_offsite_confirmation(
     return verify_backup_bundle(bundle_dir, expect_key_file=False, enforce_posix_permissions=False)
 
 
+def record_key_escrow_confirmation(
+    bundle_dir: Path,
+    vault_label: str,
+    *,
+    key_fingerprint_sha256: str = "",
+    site_encryption_key_escrowed: bool = False,
+) -> dict[str, Any]:
+    """Record a zero-secret receipt proving `backup-key` (+ `encryption_key`) is stored in a separate vault."""
+    clean_vault = (vault_label or "").strip()
+    if not clean_vault or any(tok in clean_vault.lower() for tok in health_mod.PLACEHOLDER_TOKENS):
+        raise ValueError("vault_label must be a real Owner-approved secret vault identifier (not placeholder)")
+
+    pre = verify_backup_bundle(bundle_dir, expect_key_file=False, enforce_posix_permissions=False)
+    if pre["local_archive_status"] != "PASS":
+        raise ValueError(f"Cannot record key escrow receipt on invalid bundle: {pre['errors']}")
+
+    offsite_path = bundle_dir / "offsite-verification.json"
+    if offsite_path.is_file():
+        offsite_meta = json.loads(offsite_path.read_text(encoding="utf-8"))
+        archive_label = str(offsite_meta.get("offsite_location_label", "")).strip()
+        if archive_label and clean_vault.lower() == archive_label.lower():
+            raise ValueError(
+                "Key escrow vault MUST be physically/logically separate from offsite_location_label"
+            )
+
+    key_file = bundle_dir / "backup-key"
+    actual_fp = sha256_file(key_file) if key_file.is_file() else ""
+    clean_fp = (key_fingerprint_sha256 or actual_fp).strip().lower()
+    if not SHA256_RE.match(clean_fp):
+        raise ValueError("Expected lowercase 64-hex SHA-256 fingerprint of backup-key")
+    if actual_fp and clean_fp != actual_fp:
+        raise ValueError("Provided key_fingerprint_sha256 does not match local backup-key SHA-256")
+
+    receipt = {
+        "verified_at_utc": utc_now_iso(),
+        "bundle_name": bundle_dir.name,
+        "archive_sha256": pre["archive_sha256"],
+        "key_fingerprint_sha256": clean_fp,
+        "key_escrow_vault_label": clean_vault,
+        "site_encryption_key_escrowed": bool(site_encryption_key_escrowed),
+        "vault_disjoint_from_archive_target": True,
+        "vault_disjoint_from_vps_host": True,
+        "raw_key_material_stored_in_receipt": False,
+        "status": "SEPARATE_KEY_ESCROW_VERIFIED",
+    }
+    escrow_path = bundle_dir / "key-escrow-receipt.json"
+    escrow_path.write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8", newline="\n")
+    if os.name == "posix":
+        escrow_path.chmod(0o600)
+    return receipt
+
+
+def audit_g07_gate(
+    *,
+    lifecycle_file: Path,
+    timers_runtime_file: Path | None = None,
+    restore_report_file: Path | None = None,
+    key_escrow_receipt_file: Path | None = None,
+) -> dict[str, Any]:
+    """Evaluate all 4 runtime Gate G07 proofs + reused VPS restore drill without rewriting pipeline."""
+    if not lifecycle_file.is_file():
+        return {
+            "timestamp_utc": utc_now_iso(),
+            "gate": "G07",
+            "gate_g07_status": "FAIL",
+            "errors": [f"Missing lifecycle file: {lifecycle_file}"],
+        }
+
+    lifecycle = json.loads(lifecycle_file.read_text(encoding="utf-8"))
+    latest_bundle = lifecycle.get("latest_bundle") or {}
+    local_backup_ok = (
+        lifecycle.get("local_backup_status") == "PASS"
+        and latest_bundle.get("local_archive_status") == "PASS"
+    )
+
+    timers_doc: dict[str, Any] = {}
+    if timers_runtime_file and timers_runtime_file.is_file():
+        timers_doc = json.loads(timers_runtime_file.read_text(encoding="utf-8"))
+    timer_meta = (timers_doc.get("timers") or {}).get("crm-cskh-backup.timer") or {}
+    svc_meta = (timers_doc.get("services") or {}).get("crm-cskh-backup.service") or {}
+    timer_enabled = (
+        timer_meta.get("UnitFileState") == "enabled" and timer_meta.get("ActiveState") == "active"
+    )
+    last_trigger = str(timer_meta.get("LastTriggerUSec") or "").strip()
+    first_exec_note = str(timers_doc.get("backup_first_execution") or "").lower()
+    timer_triggered_proven = bool(
+        timer_enabled
+        and last_trigger
+        and last_trigger.lower() not in ("n/a", "0", "none")
+        and svc_meta.get("Result") == "success"
+        and str(svc_meta.get("ExecMainStatus", "")) == "0"
+        and "manual systemctl start" not in first_exec_note
+    )
+
+    automated_upload_proven = bool(
+        lifecycle.get("automated_offsite_upload_configured") is True
+        and lifecycle.get("periodic_offsite_upload_proven") is True
+        and latest_bundle.get("offsite_copy_status") == "AUTOMATED_OFFSITE_HASH_VERIFIED"
+    )
+    archive_sha = str(latest_bundle.get("archive_sha256") or "")
+    manual_checksum_verified = bool(
+        latest_bundle.get("offsite_verified") is True and SHA256_RE.match(archive_sha)
+    )
+    remote_checksum_readback_verified = bool(automated_upload_proven and manual_checksum_verified)
+
+    escrow_doc: dict[str, Any] = {}
+    resolved_escrow = key_escrow_receipt_file
+    if resolved_escrow is None and latest_bundle.get("bundle_dir"):
+        candidate_escrow = Path(str(latest_bundle["bundle_dir"])) / "key-escrow-receipt.json"
+        if candidate_escrow.is_file():
+            resolved_escrow = candidate_escrow
+    if resolved_escrow and resolved_escrow.is_file():
+        escrow_doc = json.loads(resolved_escrow.read_text(encoding="utf-8"))
+
+    separate_key_escrow_proven = bool(
+        lifecycle.get("key_separation_enforced") is True
+        and escrow_doc.get("status") == "SEPARATE_KEY_ESCROW_VERIFIED"
+        and escrow_doc.get("vault_disjoint_from_archive_target") is True
+        and escrow_doc.get("raw_key_material_stored_in_receipt") is False
+        and SHA256_RE.match(str(escrow_doc.get("key_fingerprint_sha256") or ""))
+    )
+
+    restore_reused_pass = False
+    restore_summary: dict[str, Any] = {"provided": False}
+    restore_failed = False
+    if restore_report_file is not None:
+        if not restore_report_file.is_file():
+            restore_failed = True
+            restore_summary = {"provided": True, "status": "FAIL", "error": "Missing restore report"}
+        else:
+            r_doc = json.loads(restore_report_file.read_text(encoding="utf-8"))
+            pc = r_doc.get("positive_control") or {}
+            restored = r_doc.get("restored") or {}
+            rto = r_doc.get("rto") or {}
+            rem = r_doc.get("remaining_restore_resources") or {}
+            pos_ok = bool(
+                pc.get("encrypted_secret_fernet_round_trip")
+                and pc.get("encrypted_secret_post_migrate_x2_verified")
+                and pc.get("public_file_bytes_and_sha256_match")
+                and pc.get("private_file_bytes_and_sha256_match")
+            )
+            neg_ok = bool(
+                pc.get("negative_control_missing_key_rejected")
+                and pc.get("negative_control_decrypt_without_key_failed")
+            )
+            mig_ok = bool(restored.get("migrate_x2_idempotent") and pc.get("migrate_x2_idempotent"))
+            cln_ok = bool(
+                r_doc.get("cleanup_exit_code") == 0
+                and not any(rem.values())
+                and r_doc.get("live_containers_unchanged", True)
+            )
+            restore_reused_pass = bool(
+                r_doc.get("status") == "PASS" and pos_ok and neg_ok and mig_ok and cln_ok
+            )
+            restore_failed = not restore_reused_pass
+            restore_summary = {
+                "provided": True,
+                "status": "PASS" if restore_reused_pass else "FAIL",
+                "reused_without_rerun": True,
+                "rerun_required": False,
+                "phase_a_rto_seconds": rto.get("measured_end_to_end_isolated_dr_rto_seconds"),
+                "rto_scope": (
+                    "same_vps_isolated_clone_only; excludes WAN transfer, new host provisioning, and DNS cutover"
+                ),
+                "source_archive_sha256": r_doc.get("archive_sha256"),
+                "positive_control_pass": pos_ok,
+                "negative_control_pass": neg_ok,
+                "migrate_x2_pass": mig_ok,
+                "cleanup_pass": cln_ok,
+            }
+
+    blockers: list[str] = []
+    required_owner_inputs: list[dict[str, str]] = []
+    if not (automated_upload_proven and remote_checksum_readback_verified):
+        blockers.append("BLK-INFRA-05_OFFSITE_TARGET_AND_CREDENTIALS")
+        required_owner_inputs.append(
+            {
+                "blocker_id": "BLK-INFRA-05",
+                "input": "Offsite archive destination & write/readback credentials (/etc/crm-cskh/offsite-backup.env, mode 0600)",
+                "details": (
+                    "Owner-approved external S3/R2/B2 bucket (rclone) or independent SSH/SFTP host "
+                    "(never a folder on 103.77.208.186; never paid service without Owner approval)."
+                ),
+            }
+        )
+    if not separate_key_escrow_proven:
+        blockers.append("BLK-INFRA-05_SEPARATE_KEY_ESCROW_VAULT")
+        required_owner_inputs.append(
+            {
+                "blocker_id": "BLK-INFRA-05",
+                "input": "Separate secret-vault escrow confirmation for per-bundle backup-key and site encryption_key",
+                "details": (
+                    "Secret manager / password vault physically & logically disjoint from both VPS 103.77.208.186 "
+                    "and the offsite archive bucket; record zero-secret receipt via `record-key-escrow`."
+                ),
+            }
+        )
+    if not timer_triggered_proven:
+        blockers.append("PENDING_SCHEDULED_TIMER_ELAPSE_PROOF")
+
+    if not local_backup_ok or restore_failed:
+        gate_status = "FAIL"
+    elif (
+        timer_triggered_proven
+        and automated_upload_proven
+        and remote_checksum_readback_verified
+        and separate_key_escrow_proven
+        and (restore_reused_pass if restore_report_file is not None else True)
+    ):
+        gate_status = "PASS"
+    else:
+        gate_status = "BLOCKED"
+
+    return {
+        "timestamp_utc": utc_now_iso(),
+        "gate": "G07",
+        "gate_g07_status": gate_status,
+        "proofs": {
+            "local_backup_service_pass": local_backup_ok,
+            "backup_timer_enabled": timer_enabled,
+            "timer_last_trigger_usec": last_trigger or None,
+            "timer_next_elapse_usec": timer_meta.get("NextElapseUSecRealtime") or None,
+            "timer_triggered_backup_proven": timer_triggered_proven,
+            "automated_offsite_upload_proven": automated_upload_proven,
+            "remote_checksum_readback_verified": remote_checksum_readback_verified,
+            "manual_offsite_checksum_verified": manual_checksum_verified,
+            "separate_key_escrow_proven": separate_key_escrow_proven,
+            "vps_isolated_restore_reused_pass": restore_reused_pass if restore_report_file else None,
+        },
+        "reused_vps_restore_drill": restore_summary,
+        "blockers": blockers,
+        "required_owner_inputs": required_owner_inputs,
+    }
+
+
 def _existing_device_id(path: Path) -> int:
     """Return st_dev of path or its nearest existing ancestor."""
     cur = path.resolve()
@@ -811,6 +1046,30 @@ def build_parser() -> argparse.ArgumentParser:
     p_rec.add_argument("--verified-sha256", required=True)
     p_rec.add_argument("--offsite-location-label", default="operator-offsite-vault")
 
+    p_esc = sub.add_parser(
+        "record-key-escrow",
+        help="Record zero-secret receipt proving backup-key (+ encryption_key) is escrowed in a separate vault",
+    )
+    p_esc.add_argument("--bundle-dir", type=Path, required=True)
+    p_esc.add_argument("--vault-label", required=True)
+    p_esc.add_argument("--key-fingerprint-sha256", default="")
+    p_esc.add_argument("--site-encryption-key-escrowed", action="store_true")
+
+    p_g07 = sub.add_parser(
+        "audit-g07-gate",
+        help="Evaluate Gate G07 proofs (timer trigger, automated upload, remote checksum, separate key escrow, reused VPS restore)",
+    )
+    p_g07.add_argument("--lifecycle-file", type=Path, required=True)
+    p_g07.add_argument("--timers-runtime-file", type=Path, default=None)
+    p_g07.add_argument("--restore-report-file", type=Path, default=None)
+    p_g07.add_argument("--key-escrow-receipt-file", type=Path, default=None)
+    p_g07.add_argument(
+        "--allow-blocked",
+        action="store_true",
+        help="Return exit code 0 when status is BLOCKED (default returns 2 for fail-closed gate enforcement)",
+    )
+    p_g07.add_argument("--out", type=Path)
+
     p_ret = sub.add_parser("prune-retention", help="Preview or apply GFS 14d/8w/3m retention")
     p_ret.add_argument("--backup-root", type=Path, required=True)
     p_ret.add_argument("--keep-daily", type=int, default=14)
@@ -905,6 +1164,35 @@ def main(argv: list[str] | None = None) -> int:
         )
         sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
         return 0
+
+    if args.command == "record-key-escrow":
+        res = record_key_escrow_confirmation(
+            args.bundle_dir,
+            args.vault_label,
+            key_fingerprint_sha256=args.key_fingerprint_sha256,
+            site_encryption_key_escrowed=args.site_encryption_key_escrowed,
+        )
+        sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+        return 0
+
+    if args.command == "audit-g07-gate":
+        res = audit_g07_gate(
+            lifecycle_file=args.lifecycle_file,
+            timers_runtime_file=args.timers_runtime_file,
+            restore_report_file=args.restore_report_file,
+            key_escrow_receipt_file=args.key_escrow_receipt_file,
+        )
+        txt = json.dumps(res, indent=2, ensure_ascii=False) + "\n"
+        if args.out:
+            args.out.parent.mkdir(parents=True, exist_ok=True)
+            args.out.write_text(txt, encoding="utf-8", newline="\n")
+        sys.stdout.write(txt)
+        st = res.get("gate_g07_status")
+        if st == "PASS":
+            return 0
+        if st == "BLOCKED":
+            return 0 if args.allow_blocked else 2
+        return 1
 
     if args.command == "prune-retention":
         plan = plan_gfs_retention(

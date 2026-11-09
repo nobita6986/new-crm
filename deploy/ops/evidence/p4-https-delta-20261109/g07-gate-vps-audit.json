@@ -1,0 +1,47 @@
+{
+  "timestamp_utc": "2026-11-09T14:11:40Z",
+  "gate": "G07",
+  "gate_g07_status": "BLOCKED",
+  "proofs": {
+    "local_backup_service_pass": true,
+    "backup_timer_enabled": true,
+    "timer_last_trigger_usec": null,
+    "timer_next_elapse_usec": "Tue 2026-11-10 02:16:41 +07",
+    "timer_triggered_backup_proven": false,
+    "automated_offsite_upload_proven": false,
+    "remote_checksum_readback_verified": false,
+    "manual_offsite_checksum_verified": true,
+    "separate_key_escrow_proven": false,
+    "vps_isolated_restore_reused_pass": true
+  },
+  "reused_vps_restore_drill": {
+    "provided": true,
+    "status": "PASS",
+    "reused_without_rerun": true,
+    "rerun_required": false,
+    "phase_a_rto_seconds": 142.598,
+    "rto_scope": "same_vps_isolated_clone_only; excludes WAN transfer, new host provisioning, and DNS cutover",
+    "source_archive_sha256": "d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11",
+    "positive_control_pass": true,
+    "negative_control_pass": true,
+    "migrate_x2_pass": true,
+    "cleanup_pass": true
+  },
+  "blockers": [
+    "BLK-INFRA-05_OFFSITE_TARGET_AND_CREDENTIALS",
+    "BLK-INFRA-05_SEPARATE_KEY_ESCROW_VAULT",
+    "PENDING_SCHEDULED_TIMER_ELAPSE_PROOF"
+  ],
+  "required_owner_inputs": [
+    {
+      "blocker_id": "BLK-INFRA-05",
+      "input": "Offsite archive destination & write/readback credentials (/etc/crm-cskh/offsite-backup.env, mode 0600)",
+      "details": "Owner-approved external S3/R2/B2 bucket (rclone) or independent SSH/SFTP host (never a folder on 103.77.208.186; never paid service without Owner approval)."
+    },
+    {
+      "blocker_id": "BLK-INFRA-05",
+      "input": "Separate secret-vault escrow confirmation for per-bundle backup-key and site encryption_key",
+      "details": "Secret manager / password vault physically & logically disjoint from both VPS 103.77.208.186 and the offsite archive bucket; record zero-secret receipt via `record-key-escrow`."
+    }
+  ]
+}

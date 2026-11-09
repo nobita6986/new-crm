@@ -1083,6 +1083,276 @@ class OpsToolkitTests(unittest.TestCase):
             self.assertFalse(parsed["cleanup_verification"]["teardown_invoked"])
             self.assertTrue(parsed["cleanup_verification"]["pass"])
 
+    def test_record_key_escrow_and_audit_g07_gate_blocked_vs_pass(self) -> None:
+        import hashlib
+        import manage_backup_lifecycle as bkl_mod
+
+        repo_root = staging_mod.REPO_ROOT
+        vps_dir = repo_root / "deploy" / "ops" / "evidence" / "p4-vps-live-20261109"
+        vps_audit = bkl_mod.audit_g07_gate(
+            lifecycle_file=vps_dir / "backup-lifecycle.json",
+            timers_runtime_file=vps_dir / "timers-runtime.json",
+            restore_report_file=vps_dir / "restore-drill-report.json",
+        )
+        self.assertEqual(vps_audit["gate_g07_status"], "BLOCKED")
+        self.assertTrue(vps_audit["proofs"]["local_backup_service_pass"])
+        self.assertTrue(vps_audit["proofs"]["backup_timer_enabled"])
+        self.assertFalse(vps_audit["proofs"]["timer_triggered_backup_proven"])
+        self.assertFalse(vps_audit["proofs"]["automated_offsite_upload_proven"])
+        self.assertFalse(vps_audit["proofs"]["remote_checksum_readback_verified"])
+        self.assertTrue(vps_audit["proofs"]["manual_offsite_checksum_verified"])
+        self.assertFalse(vps_audit["proofs"]["separate_key_escrow_proven"])
+        self.assertTrue(vps_audit["proofs"]["vps_isolated_restore_reused_pass"])
+        self.assertEqual(vps_audit["reused_vps_restore_drill"]["phase_a_rto_seconds"], 142.598)
+        self.assertGreaterEqual(len(vps_audit["required_owner_inputs"]), 2)
+
+        with tempfile.TemporaryDirectory() as tmp:
+            bundle = Path(tmp) / "scheduled-20261110T191500Z"
+            bundle.mkdir(parents=True)
+            enc_bytes = b"encrypted-archive-payload-for-unit-test"
+            enc_sha = hashlib.sha256(enc_bytes).hexdigest()
+            raw_key_secret = "deadbeef" * 8
+            (bundle / "backup.tar.gz.enc").write_bytes(enc_bytes)
+            (bundle / "backup-key").write_text(raw_key_secret + "\n", encoding="utf-8", newline="\n")
+            (bundle / "backup-report.json").write_text(
+                json.dumps(
+                    {
+                        "schema": "p4-encrypted-backup-v2",
+                        "archive_sha256": enc_sha,
+                        "archive_bytes": len(enc_bytes),
+                        "source_revision": "467204176326f046442b5e20c381f9a895b6e176",
+                        "completed_at_utc": "2026-11-10T19:16:10Z",
+                        "end_to_end_backup_status": "PASS",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            (bundle / "offsite-verification.json").write_text(
+                json.dumps(
+                    {
+                        "verified_at_utc": "2026-11-10T19:16:15Z",
+                        "archive_sha256": enc_sha,
+                        "archive_bytes": len(enc_bytes),
+                        "offsite_location_label": "owner-s3-archive-bucket-hn",
+                        "transfer_mode": "automated_offsite_sync",
+                        "automated_upload": True,
+                        "periodic_upload_proven": True,
+                        "key_excluded_from_offsite_archive_target": True,
+                        "status": "OFFSITE_COPY_HASH_VERIFIED",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+
+            # Reject placeholder or identical vault label as archive offsite target
+            with self.assertRaisesRegex(ValueError, "placeholder"):
+                bkl_mod.record_key_escrow_confirmation(bundle, "PENDING_OWNER_VAULT")
+            with self.assertRaisesRegex(ValueError, "separate from offsite_location_label"):
+                bkl_mod.record_key_escrow_confirmation(bundle, "owner-s3-archive-bucket-hn")
+
+            escrow = bkl_mod.record_key_escrow_confirmation(
+                bundle,
+                "owner-1password-escrow-vault-separate",
+                site_encryption_key_escrowed=True,
+            )
+            escrow_raw = (bundle / "key-escrow-receipt.json").read_text(encoding="utf-8")
+            self.assertNotIn(raw_key_secret, escrow_raw)
+            self.assertEqual(escrow["status"], "SEPARATE_KEY_ESCROW_VERIFIED")
+            self.assertEqual(
+                escrow["key_fingerprint_sha256"],
+                hashlib.sha256((raw_key_secret + "\n").encode("utf-8")).hexdigest(),
+            )
+
+            lifecycle_p = Path(tmp) / "latest-backup-lifecycle.json"
+            lifecycle_p.write_text(
+                json.dumps(
+                    {
+                        "local_backup_status": "PASS",
+                        "automated_offsite_upload_configured": True,
+                        "periodic_offsite_upload_proven": True,
+                        "key_separation_enforced": True,
+                        "latest_bundle": {
+                            "bundle_dir": str(bundle),
+                            "local_archive_status": "PASS",
+                            "archive_sha256": enc_sha,
+                            "offsite_verified": True,
+                            "offsite_copy_status": "AUTOMATED_OFFSITE_HASH_VERIFIED",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            timers_p = Path(tmp) / "timers-runtime.json"
+            timers_p.write_text(
+                json.dumps(
+                    {
+                        "timers": {
+                            "crm-cskh-backup.timer": {
+                                "UnitFileState": "enabled",
+                                "ActiveState": "active",
+                                "LastTriggerUSec": "Tue 2026-11-10 02:16:41 +07",
+                                "NextElapseUSecRealtime": "Wed 2026-11-11 02:15:12 +07",
+                            }
+                        },
+                        "services": {
+                            "crm-cskh-backup.service": {
+                                "Result": "success",
+                                "ExecMainStatus": "0",
+                            }
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            pass_audit = bkl_mod.audit_g07_gate(
+                lifecycle_file=lifecycle_p,
+                timers_runtime_file=timers_p,
+                restore_report_file=vps_dir / "restore-drill-report.json",
+                key_escrow_receipt_file=bundle / "key-escrow-receipt.json",
+            )
+            self.assertEqual(pass_audit["gate_g07_status"], "PASS", pass_audit)
+            self.assertEqual(pass_audit["blockers"], [])
+
+            # CLI parser verification matching runbook commands
+            parsed_esc = bkl_mod.build_parser().parse_args(
+                ["record-key-escrow", "--bundle-dir", str(bundle), "--vault-label", "vault-a"]
+            )
+            self.assertEqual(parsed_esc.command, "record-key-escrow")
+            parsed_g07 = bkl_mod.build_parser().parse_args(
+                [
+                    "audit-g07-gate",
+                    "--lifecycle-file",
+                    str(lifecycle_p),
+                    "--timers-runtime-file",
+                    str(timers_p),
+                    "--key-escrow-receipt-file",
+                    str(bundle / "key-escrow-receipt.json"),
+                    "--restore-report-file",
+                    str(vps_dir / "restore-drill-report.json"),
+                ]
+            )
+            self.assertEqual(parsed_g07.command, "audit-g07-gate")
+
+    def test_verify_alert_receipt_file_g19_blocked_pass_and_fail_cases(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            missing_p = Path(tmp) / "missing-receipt.json"
+            self.assertEqual(health_mod.verify_alert_receipt_file(missing_p)["status"], "BLOCKED")
+
+            blocked_p = Path(tmp) / "blocked-receipt.json"
+            blocked_p.write_text(json.dumps({"status": "BLOCKED"}) + "\n", encoding="utf-8")
+            self.assertEqual(health_mod.verify_alert_receipt_file(blocked_p)["status"], "BLOCKED")
+
+            good_p = Path(tmp) / "good-receipt.json"
+            good_p.write_text(
+                json.dumps(
+                    {
+                        "status": "PASS",
+                        "alert_envelope": {
+                            "alert_code": "ALT-TEST-SYNTHETIC",
+                            "owner": "oncall-primary@hrpartner.vn",
+                            "summary": "Synthetic P4-07 G19 test alert verification",
+                        },
+                        "receipt": {
+                            "status": "DELIVERED",
+                            "http_status": 200,
+                            "payload_sha256": "b" * 64,
+                            "webhook_redacted": "https://hooks.hrpartner.vn/<REDACTED_WEBHOOK_PATH>",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            good_res = health_mod.verify_alert_receipt_file(good_p)
+            self.assertEqual(good_res["status"], "PASS", good_res)
+
+            leaked_p = Path(tmp) / "leaked-receipt.json"
+            leaked_p.write_text(
+                json.dumps(
+                    {
+                        "status": "PASS",
+                        "alert_envelope": {
+                            "alert_code": "ALT-TEST-SYNTHETIC",
+                            "owner": "PENDING_OWNER",
+                            "summary": "Leaked phone 0912345678",
+                        },
+                        "receipt": {
+                            "status": "DELIVERED",
+                            "http_status": 200,
+                            "payload_sha256": "b" * 64,
+                            "webhook_redacted": "https://hooks.hrpartner.vn/raw-secret-token",
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            bad_res = health_mod.verify_alert_receipt_file(leaked_p)
+            self.assertEqual(bad_res["status"], "FAIL")
+            self.assertGreaterEqual(len(bad_res["errors"]), 3)
+
+    def test_ast_113_whitelisted_endpoints_and_p4_gate_traceability_docs(self) -> None:
+        import ast
+        import manage_isolated_staging_dr as dr_mod
+
+        repo_root = staging_mod.REPO_ROOT
+        app_root = repo_root / "apps" / "crm_cskh" / "crm_cskh"
+        endpoints: list[str] = []
+        for py_path in sorted(app_root.rglob("*.py")):
+            if "tests" in py_path.parts:
+                continue
+            tree = ast.parse(py_path.read_text(encoding="utf-8"))
+            mod = ".".join(py_path.relative_to(repo_root / "apps" / "crm_cskh").with_suffix("").parts)
+            for node in tree.body:
+                if isinstance(node, ast.FunctionDef):
+                    for dec in node.decorator_list:
+                        dec_txt = ast.unparse(dec)
+                        if "whitelist" in dec_txt:
+                            self.assertNotIn(
+                                "allow_guest=True",
+                                dec_txt,
+                                f"Unexpected allow_guest=True on {mod}.{node.name}",
+                            )
+                            endpoints.append(f"{mod}.{node.name}")
+
+        self.assertEqual(len(endpoints), 113)
+        api_doc = (repo_root / "docs" / "p4" / "api-contract.md").read_text(encoding="utf-8")
+        sec_doc = (repo_root / "docs" / "p4" / "security-review.md").read_text(encoding="utf-8")
+        uat_doc = (repo_root / "docs" / "p4" / "uat-report.md").read_text(encoding="utf-8")
+        perf_doc = (repo_root / "docs" / "p4" / "performance-report.md").read_text(encoding="utf-8")
+        exit_doc = (repo_root / "docs" / "p4" / "P4-exit-report.md").read_text(encoding="utf-8")
+
+        missing_api = [ep for ep in endpoints if ep not in api_doc]
+        missing_sec = [ep for ep in endpoints if ep not in sec_doc]
+        self.assertEqual(missing_api, [], f"Endpoints missing in api-contract.md: {missing_api}")
+        self.assertEqual(missing_sec, [], f"Endpoints missing in security-review.md: {missing_sec}")
+
+        for i in range(1, 31):
+            code = f"F{i:02d}"
+            self.assertIn(code, uat_doc, f"Missing {code} in uat-report.md")
+        for i in range(1, 16):
+            code = f"D{i:02d}"
+            self.assertIn(code, uat_doc, f"Missing {code} in uat-report.md")
+        for i in range(1, 21):
+            code = f"S{i:02d}"
+            self.assertIn(code, sec_doc, f"Missing {code} in security-review.md")
+        for i in range(1, 25):
+            code = f"G{i:02d}"
+            self.assertIn(code, exit_doc, f"Missing {code} in P4-exit-report.md")
+
+        self.assertIn("UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL", perf_doc)
+        self.assertIn("cskh-metrics-v2", api_doc)
+        self.assertIn("cskh-metrics-v2", exit_doc)
+
+        parsed_mig = dr_mod.build_parser().parse_args(
+            ["rehearse-migration-x2", "--state-dir", "/tmp/dr-state"]
+        )
+        self.assertEqual(parsed_mig.command, "rehearse-migration-x2")
+
 
 if __name__ == "__main__":
     unittest.main()

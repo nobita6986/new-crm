@@ -1,0 +1,532 @@
+{
+  "schema_version": "cskh-p4-01-clean-site-verify-v1",
+  "work_package": "P4-01",
+  "gate_alignment": "G02",
+  "started_at_utc": "2026-11-09T13:36:41.367537+00:00",
+  "completed_at_utc": "2026-11-09T13:38:05.082416+00:00",
+  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+  "image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+  "identifier_taxonomy": {
+    "app_image_tested_class": "oci_distribution_manifest_sha256",
+    "image_id_class": "docker_pulled_image_id_sha256",
+    "note": "app_image_tested (@sha256 manifest digest) and image_id (local OCI config or containerd manifest ID) represent different OCI descriptor layers of the same candidate; never cross-compare mismatched identifier classes or compare against unrelated live images."
+  },
+  "site_name": "p4-clean-verify.localhost",
+  "http_loopback_port": 18780,
+  "list_apps": [
+    "frappe",
+    "crm",
+    "crm_cskh"
+  ],
+  "security_patches_verified": {
+    "pyjwt_version": "2.15.1",
+    "cve_2026_102268_pem_hmac_guard": true,
+    "pillow_version": "13.0.0",
+    "pillow_optimize_image_ok": true,
+    "pruned_unused_apt_packages_present": []
+  },
+  "upstream_revisions": {
+    "frappe": "53bae3ef2550ca96320f036f581446783cd11b72",
+    "crm": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+    "crm_tracked_modified_files": [
+      "frontend/auto-imports.d.ts"
+    ],
+    "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
+    "apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910"
+  },
+  "frontend_bundles_verified": {
+    "frappe_desk_js": "/assets/frappe/dist/js/desk.bundle.IGJ3OTJL.js",
+    "frappe_desk_css": "/assets/frappe/dist/css/desk.bundle.GA6YVSTK.css",
+    "frappe_web_js": "/assets/frappe/dist/js/frappe-web.bundle.5YW6GKD2.js",
+    "crm_spa_js": "/assets/crm/frontend/assets/index-Doe89KeD.js",
+    "crm_spa_css": "/assets/crm/frontend/assets/Button-ug8Vt_Qh.css",
+    "cskh_assets": [
+      "/assets/crm_cskh/cskh/cskh.js",
+      "/assets/crm_cskh/cskh/cskh.css",
+      "/assets/crm_cskh/cskh/p2-api.js",
+      "/assets/crm_cskh/cskh/p3-api.js",
+      "/assets/crm_cskh/cskh/quality-overview.js"
+    ]
+  },
+  "schema_audit": {
+    "modules_txt": [
+      "CRM CSKH"
+    ],
+    "module_defs_for_crm_cskh": [
+      {
+        "name": "CRM CSKH",
+        "module_name": "CRM CSKH",
+        "app_name": "crm_cskh"
+      }
+    ],
+    "module_def_titlecase_crm_cskh_exists": true,
+    "cskh_export_job_json_module": "Crm Cskh",
+    "cskh_export_job_db_module": "Crm Cskh",
+    "cskh_export_job_table_exists": true,
+    "cskh_doctypes_by_module": {
+      "CRM CSKH": [
+        "CSKH Active Claim",
+        "CSKH App Settings",
+        "CSKH Assignment History",
+        "CSKH Assignment Rule",
+        "CSKH Attempt Correction",
+        "CSKH Campaign",
+        "CSKH Contact Attempt",
+        "CSKH Dirty Scope",
+        "CSKH Distribution Run",
+        "CSKH Identity Index",
+        "CSKH Import Batch",
+        "CSKH Import Batch Lead",
+        "CSKH KPI Run",
+        "CSKH KPI Snapshot",
+        "CSKH Outcome Code",
+        "CSKH Policy",
+        "CSKH QA Review",
+        "CSKH SLA Obligation",
+        "CSKH Team Membership History",
+        "CSKH Work Item",
+        "CSKH Working Calendar",
+        "CSKH Working Shift"
+      ],
+      "Crm Cskh": [
+        "CSKH Export Job"
+      ]
+    },
+    "install_app_crm_cskh_filtered_lines": [],
+    "migrate_1_filtered_lines": [],
+    "migrate_2_filtered_lines": []
+  },
+  "summary": {
+    "total_assertions": 60,
+    "passed": 60,
+    "failed": 0,
+    "verdict": "PASS"
+  },
+  "assertions": [
+    {
+      "id": "image.user_non_root",
+      "verdict": "PASS",
+      "expected": "frappe",
+      "actual": "frappe"
+    },
+    {
+      "id": "image.label.frappe_sha",
+      "verdict": "PASS",
+      "expected": "53bae3ef2550ca96320f036f581446783cd11b72",
+      "actual": "53bae3ef2550ca96320f036f581446783cd11b72"
+    },
+    {
+      "id": "image.label.crm_sha",
+      "verdict": "PASS",
+      "expected": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "actual": "0d3910b456ef4fb913e77b29db011b3debc4f778"
+    },
+    {
+      "id": "image.label.apps_tree_sha",
+      "verdict": "PASS",
+      "expected": "14b5387296dad815a6b9f663411f265fa7d9f910",
+      "actual": "14b5387296dad815a6b9f663411f265fa7d9f910"
+    },
+    {
+      "id": "image.label.crm_cskh_tree_sha",
+      "verdict": "PASS",
+      "expected": "f51095ec245e103ed3a487654b5580636424ea36",
+      "actual": "f51095ec245e103ed3a487654b5580636424ea36"
+    },
+    {
+      "id": "topology.no_host_bind_mounts",
+      "verdict": "PASS",
+      "expected": {},
+      "actual": {}
+    },
+    {
+      "id": "topology.internal_services_unexposed",
+      "verdict": "PASS",
+      "expected": {},
+      "actual": {}
+    },
+    {
+      "id": "topology.frontend_loopback_only",
+      "verdict": "PASS",
+      "expected": [
+        "127.0.0.1:18780->8080"
+      ],
+      "actual": [
+        "127.0.0.1:18780->8080"
+      ]
+    },
+    {
+      "id": "site.list_apps",
+      "verdict": "PASS",
+      "expected": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ],
+      "actual": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ]
+    },
+    {
+      "id": "site.apps_txt_order",
+      "verdict": "PASS",
+      "expected": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ],
+      "actual": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ]
+    },
+    {
+      "id": "runtime.frappe_sha",
+      "verdict": "PASS",
+      "expected": "53bae3ef2550ca96320f036f581446783cd11b72",
+      "actual": "53bae3ef2550ca96320f036f581446783cd11b72"
+    },
+    {
+      "id": "runtime.frappe_pyproject_unmodified",
+      "verdict": "PASS",
+      "expected": "",
+      "actual": ""
+    },
+    {
+      "id": "runtime.pip_check_consistent",
+      "verdict": "PASS",
+      "expected": {
+        "bench_pip_check_rc": 0,
+        "sys_pip_check_rc": 0
+      },
+      "actual": {
+        "bench_pip_check_rc": 0,
+        "sys_pip_check_rc": 0
+      }
+    },
+    {
+      "id": "runtime.crm_sha",
+      "verdict": "PASS",
+      "expected": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "actual": "0d3910b456ef4fb913e77b29db011b3debc4f778"
+    },
+    {
+      "id": "runtime.crm_no_vite_dev_patch",
+      "verdict": "PASS",
+      "expected": "only auto-generated frontend/auto-imports.d.ts or empty (no Vite DEV patch)",
+      "actual": [
+        "frontend/auto-imports.d.ts"
+      ]
+    },
+    {
+      "id": "runtime.frappe_jinja_vi_patched",
+      "verdict": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "id": "runtime.cskh_tree_sha",
+      "verdict": "PASS",
+      "expected": "f51095ec245e103ed3a487654b5580636424ea36",
+      "actual": "f51095ec245e103ed3a487654b5580636424ea36"
+    },
+    {
+      "id": "runtime.security_patch.pyjwt_version",
+      "verdict": "PASS",
+      "expected": "2.15.1",
+      "actual": "2.15.1"
+    },
+    {
+      "id": "runtime.security_patch.cve_2026_102268_pem_hmac_guard",
+      "verdict": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "id": "runtime.security_patch.pillow_version",
+      "verdict": "PASS",
+      "expected": "13.0.0",
+      "actual": "13.0.0"
+    },
+    {
+      "id": "runtime.security_patch.pillow_optimize_image",
+      "verdict": "PASS",
+      "expected": true,
+      "actual": true
+    },
+    {
+      "id": "runtime.pruned_unused_apt_packages",
+      "verdict": "PASS",
+      "expected": [],
+      "actual": []
+    },
+    {
+      "id": "site.cskh_doctypes_synced",
+      "verdict": "PASS",
+      "expected": ">=22 (23 defined in source)",
+      "actual": {
+        "synced_count": 23,
+        "export_job_in_doctype": true,
+        "export_job_module_in_db": "Crm Cskh",
+        "export_job_table_exists": true
+      }
+    },
+    {
+      "id": "site.developer_mode_disabled",
+      "verdict": "PASS",
+      "expected": false,
+      "actual": false
+    },
+    {
+      "id": "http.ping",
+      "verdict": "PASS",
+      "expected": "pong",
+      "actual": "pong"
+    },
+    {
+      "id": "http.security_header.x_frame_options",
+      "verdict": "PASS",
+      "expected": "SAMEORIGIN",
+      "actual": "SAMEORIGIN"
+    },
+    {
+      "id": "http.security_header.nosniff",
+      "verdict": "PASS",
+      "expected": "nosniff",
+      "actual": "nosniff"
+    },
+    {
+      "id": "http.asset.desk_js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >5KB",
+      "actual": "HTTP 200 (1371435 bytes)"
+    },
+    {
+      "id": "http.asset.desk_css",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >5KB",
+      "actual": "HTTP 200 (599739 bytes)"
+    },
+    {
+      "id": "http.asset.web_js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >5KB",
+      "actual": "HTTP 200 (835548 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.cskh.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (36328 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.cskh.css",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (15932 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.p2-api.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (34698 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.p3-api.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (59757 bytes)"
+    },
+    {
+      "id": "http.asset.cskh.quality-overview.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >200B",
+      "actual": "HTTP 200 (6077 bytes)"
+    },
+    {
+      "id": "http.guest.login_200",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & non-empty HTML",
+      "actual": "HTTP 200 (len=344955)"
+    },
+    {
+      "id": "http.guest.cskh_denied",
+      "verdict": "PASS",
+      "expected": "302/303/401/403",
+      "actual": 403
+    },
+    {
+      "id": "http.auth.login",
+      "verdict": "PASS",
+      "expected": 200,
+      "actual": 200
+    },
+    {
+      "id": "http.auth.logged_user_administrator",
+      "verdict": "PASS",
+      "expected": "Administrator",
+      "actual": "Administrator"
+    },
+    {
+      "id": "http.auth.crm_page_200",
+      "verdict": "PASS",
+      "expected": "HTTP 200 with #app",
+      "actual": "HTTP 200 (len=984289)"
+    },
+    {
+      "id": "http.auth.crm_spa_entry_refs",
+      "verdict": "PASS",
+      "expected": "non-empty JS & CSS refs",
+      "actual": {
+        "js": [
+          "/assets/crm/frontend/assets/index-Doe89KeD.js"
+        ],
+        "css": [
+          "/assets/crm/frontend/assets/Button-ug8Vt_Qh.css",
+          "/assets/crm/frontend/assets/toast-DkIiB7xp.css"
+        ]
+      }
+    },
+    {
+      "id": "http.asset.crm_spa.js",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >1KB",
+      "actual": "HTTP 200 (612615 bytes)"
+    },
+    {
+      "id": "http.asset.crm_spa.css",
+      "verdict": "PASS",
+      "expected": "HTTP 200 & >1KB",
+      "actual": "HTTP 200 (2094 bytes)"
+    },
+    {
+      "id": "http.auth.route.cskh_dashboard",
+      "verdict": "PASS",
+      "expected": "HTTP 200 with #cskh-root & Asia/Ho_Chi_Minh",
+      "actual": "HTTP 200 (len=460888)"
+    },
+    {
+      "id": "http.vi_labels.cskh_dashboard",
+      "verdict": "PASS",
+      "expected": "Vietnamese UI labels rendered",
+      "actual": true
+    },
+    {
+      "id": "http.auth.route.cskh_quality-overview",
+      "verdict": "PASS",
+      "expected": "HTTP 200 with #cskh-root & Asia/Ho_Chi_Minh",
+      "actual": "HTTP 200 (len=460226)"
+    },
+    {
+      "id": "http.vi_labels.cskh_quality-overview",
+      "verdict": "PASS",
+      "expected": "Vietnamese UI labels rendered",
+      "actual": true
+    },
+    {
+      "id": "http.auth.csrf_token_extracted",
+      "verdict": "PASS",
+      "expected": "non-empty CSRF token from /cskh/* HTML",
+      "actual": true
+    },
+    {
+      "id": "http.auth.csrf_missing_rejected",
+      "verdict": "PASS",
+      "expected": "HTTP 400 or 403",
+      "actual": {
+        "status": 400,
+        "snippet": "{\"exc_type\":\"CSRFTokenError\",\"_server_messages\":\"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Y\\\\\\\\u00eau c\\\\\\\\u1ea7u kh\\\\\\\\u00f4ng h\\\\\\\\u1e"
+      }
+    },
+    {
+      "id": "http.auth.csrf_forged_rejected",
+      "verdict": "PASS",
+      "expected": "HTTP 400 or 403",
+      "actual": {
+        "status": 400,
+        "snippet": "{\"exc_type\":\"CSRFTokenError\",\"_server_messages\":\"[\\\"{\\\\\\\"message\\\\\\\": \\\\\\\"Y\\\\\\\\u00eau c\\\\\\\\u1ea7u kh\\\\\\\\u00f4ng h\\\\\\\\u1e"
+      }
+    },
+    {
+      "id": "http.auth.csrf_valid_accepted",
+      "verdict": "PASS",
+      "expected": "HTTP 200 with crm_cskh health payload",
+      "actual": {
+        "status": 200,
+        "snippet": "{\"message\":{\"app\":\"crm_cskh\",\"status\":\"ok\",\"app_version\":\"0.0.1\",\"user\":\"Administrator\"}}"
+      }
+    },
+    {
+      "id": "http.vi_labels.crm_boot_messages",
+      "verdict": "PASS",
+      "expected": "Vietnamese translated_messages in /crm boot",
+      "actual": true
+    },
+    {
+      "id": "http.socketio.polling_handshake",
+      "verdict": "PASS",
+      "expected": "HTTP 200 with Engine.IO \"sid\"",
+      "actual": "HTTP 200: 0{\"sid\":\"c5VvHuXIgaqEgqkwAAAA\",\"upgrades\":[\"websocket\"],\"pingInterval\":25000,\"pingTimeout\":20000,\"ma"
+    },
+    {
+      "id": "http.socketio.websocket_upgrade_101",
+      "verdict": "PASS",
+      "expected": {
+        "status_code": 101,
+        "upgrade": "websocket",
+        "accept_valid": true
+      },
+      "actual": {
+        "status_code": 101,
+        "upgrade": "websocket",
+        "accept_valid": true,
+        "initial_frame_bytes": 0
+      }
+    },
+    {
+      "id": "http.auth.logout_revokes_cskh_session",
+      "verdict": "PASS",
+      "expected": {
+        "logout": 200,
+        "post_logout_cskh": "302/303/401/403"
+      },
+      "actual": {
+        "logout": 200,
+        "post_logout_cskh": 403
+      }
+    },
+    {
+      "id": "runtime.service.backend",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    },
+    {
+      "id": "runtime.service.frontend",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    },
+    {
+      "id": "runtime.service.websocket",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    },
+    {
+      "id": "runtime.service.queue-short",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    },
+    {
+      "id": "runtime.service.scheduler",
+      "verdict": "PASS",
+      "expected": "running",
+      "actual": "running"
+    }
+  ]
+}

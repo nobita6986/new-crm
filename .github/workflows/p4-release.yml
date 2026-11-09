@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_id:
-        description: "Canonical release ID (e.g. crm-cskh-20261106-001)"
+        description: "Canonical release ID (e.g. crm-cskh-20261109-001)"
         required: true
         type: string
       previous_release_id:
@@ -48,11 +48,12 @@ jobs:
             --check-locks \
             --out "$RUNNER_TEMP/p4-release-preflight/isolation-audit.json"
 
-      - name: Fail-closed gate on approved Container Registry & public verification key
+      - name: Audit existing registry & Ed25519 signing configuration before requesting secrets
         id: meta
         shell: bash
         env:
           CSKH_REGISTRY_IMAGE: ${{ vars.CSKH_REGISTRY_IMAGE }}
+          CSKH_REGISTRY_IS_PUBLIC: ${{ vars.CSKH_REGISTRY_IS_PUBLIC }}
           RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
           INPUT_RELEASE_ID: ${{ inputs.release_id }}
           INPUT_PREV_ID: ${{ inputs.previous_release_id }}
@@ -63,31 +64,10 @@ jobs:
           echo "release_id=${REL_ID}" >> "$GITHUB_OUTPUT"
           echo "previous_release_id=${INPUT_PREV_ID}" >> "$GITHUB_OUTPUT"
 
-          if [ -z "${CSKH_REGISTRY_IMAGE}" ] || [ -z "${RELEASE_SIGNING_PUBLIC_KEY}" ]; then
-            python3 - "$OUT_DIR/blocked-registry-prereq.json" <<'PY'
-          import json, os, sys
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          report = {
-              "status": "BLOCKED",
-              "blocker_id": "BLK-INFRA-03",
-              "checked_at_utc": datetime.now(timezone.utc).isoformat(),
-              "missing_configuration": [
-                  k for k in ("CSKH_REGISTRY_IMAGE", "RELEASE_SIGNING_PUBLIC_KEY")
-                  if not os.environ.get(k, "").strip()
-              ],
-              "detail": (
-                  "Approved Container Registry repository variable (vars.CSKH_REGISTRY_IMAGE) and/or "
-                  "Ed25519 verification key (vars.RELEASE_SIGNING_PUBLIC_KEY) are not provisioned yet. "
-                  "Refusing to run release build-once without an approved registry."
-              ),
-          }
-          Path(sys.argv[1]).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-          print(json.dumps(report, indent=2), file=sys.stderr)
-          PY
-            exit 1
-          fi
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/audit_registry_and_signing_config.py \
+            --role preflight \
+            --require-ready \
+            --out "$OUT_DIR/registry-signing-preflight.json"
 
       - name: Upload preflight status
         if: always()
@@ -133,22 +113,36 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/p4-venv"
           "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
 
-      - name: Authenticate push-only robot account to approved Container Registry
+      - name: Audit push-role privilege separation & authenticate to approved Container Registry
         shell: bash
         env:
           CSKH_REGISTRY_IMAGE: ${{ vars.CSKH_REGISTRY_IMAGE }}
+          RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
+          RELEASE_SIGNING_PRIVATE_KEY: ${{ secrets.RELEASE_SIGNING_PRIVATE_KEY }}
           REGISTRY_PUSH_USERNAME: ${{ secrets.REGISTRY_PUSH_USERNAME }}
           REGISTRY_PUSH_TOKEN: ${{ secrets.REGISTRY_PUSH_TOKEN }}
+          GITHUB_ACTOR_PUSH: ${{ github.actor }}
+          GITHUB_TOKEN_PUSH: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/audit_registry_and_signing_config.py \
+            --role push \
+            --require-ready \
+            --out "$RUNNER_TEMP/p4-release-bundle/build/push-role-audit.json"
+
           REGISTRY_HOST="${CSKH_REGISTRY_IMAGE%%/*}"
-          if [ -z "${REGISTRY_PUSH_USERNAME}" ] || [ -z "${REGISTRY_PUSH_TOKEN}" ]; then
-            echo "ERROR: Missing REGISTRY_PUSH_USERNAME / REGISTRY_PUSH_TOKEN in registry-build environment" >&2
+          if [ -n "${REGISTRY_PUSH_USERNAME}" ] && [ -n "${REGISTRY_PUSH_TOKEN}" ]; then
+            printf '%s\n' "${REGISTRY_PUSH_TOKEN}" | docker login "${REGISTRY_HOST}" \
+              --username "${REGISTRY_PUSH_USERNAME}" \
+              --password-stdin
+          elif [ "${REGISTRY_HOST}" = "ghcr.io" ] && [ -n "${GITHUB_TOKEN_PUSH}" ]; then
+            printf '%s\n' "${GITHUB_TOKEN_PUSH}" | docker login ghcr.io \
+              --username "${GITHUB_ACTOR_PUSH}" \
+              --password-stdin
+          else
+            echo "ERROR: Missing push credentials for registry '${REGISTRY_HOST}' in registry-build environment" >&2
             exit 1
           fi
-          printf '%s\n' "${REGISTRY_PUSH_TOKEN}" | docker login "${REGISTRY_HOST}" \
-            --username "${REGISTRY_PUSH_USERNAME}" \
-            --password-stdin
 
       - name: Build custom production image ONCE (--no-cache) & push to approved registry
         id: build
@@ -208,22 +202,22 @@ jobs:
             --output /scan-out/trivy-image.json \
             "${APP_IMAGE_DIGEST}"
 
-          # Extract PyJWT METADATA directly from the immutable @sha256 image for exact-token audit (REL-01A)
-          META_CID="$(docker create "${APP_IMAGE_DIGEST}")"
-          docker cp \
-            "${META_CID}:/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.13.0.dist-info/METADATA" \
-            "$BUNDLE/security/pyjwt-METADATA.txt"
-          docker rm -f "${META_CID}" >/dev/null
+          # Extract PyJWT 2.15.1 METADATA directly from the immutable @sha256 image for exact-token audit (REL-01A)
+          docker run --rm --network none \
+            --entrypoint /home/frappe/frappe-bench/env/bin/python \
+            "${APP_IMAGE_DIGEST}" \
+            -c "from pathlib import Path; matches = sorted(Path('/home/frappe/frappe-bench/env/lib/python3.11/site-packages').glob('[Pp]y[Jj][Ww][Tt]-2.15.1.dist-info/METADATA')); assert len(matches) == 1, matches; print(matches[0].read_text(encoding='utf-8'), end='')" \
+            > "$BUNDLE/security/pyjwt-METADATA.txt"
 
           # Strict release gate: fails closed on ANY secret OR ANY unapproved CRITICAL CVE (fixable or unfixed OS)
           "$PY" deploy/release/evaluate_security_scan.py \
             --strict \
             --trivy-json "$BUNDLE/security/trivy-image.json" \
             --pyjwt-metadata-file "$BUNDLE/security/pyjwt-METADATA.txt" \
-            --out "$BUNDLE/security/security-scan-summary.json"
-          cp "$BUNDLE/security/security-scan-summary.json" "$BUNDLE/security/security-scan-strict.json"
+            --out "$BUNDLE/security/security-scan-strict.json"
+          cp "$BUNDLE/security/security-scan-strict.json" "$BUNDLE/security/security-scan-summary.json"
 
-      - name: Generate & Ed25519-sign canonical release-manifest.json (production_candidate)
+      - name: Generate & Ed25519-sign canonical release-manifest.json ONLY when strict gate PASSes
         shell: bash
         env:
           APP_IMAGE_DIGEST: ${{ steps.build.outputs.app_image_digest }}
@@ -245,13 +239,14 @@ jobs:
             --image-inspect "$BUNDLE/build/image-inspect-summary.json" \
             --sbom-cyclonedx "$BUNDLE/sbom/sbom.cyclonedx.json" \
             --sbom-spdx "$BUNDLE/sbom/sbom.spdx.json" \
-            --security-scan "$BUNDLE/security/security-scan-summary.json" \
+            --security-scan "$BUNDLE/security/security-scan-strict.json" \
             --build-url "${RUN_URL}" \
             --test-report-url "${RUN_URL}" \
             --out "$BUNDLE/manifest/release-manifest.json"
 
           "$PY" deploy/release/release_manifest.py sign \
             --manifest "$BUNDLE/manifest/release-manifest.json" \
+            --security-scan "$BUNDLE/security/security-scan-strict.json" \
             --private-key-env RELEASE_SIGNING_PRIVATE_KEY \
             --sig-out "$BUNDLE/manifest/release-manifest.json.sig" \
             --envelope-out "$BUNDLE/manifest/release-manifest.envelope.json"
@@ -339,12 +334,13 @@ jobs:
             --expected-image "${APP_IMAGE_DIGEST}" \
             --expected-scope production_candidate
 
-      - name: Authenticate pull-only robot account & pull immutable @sha256 image digest
+      - name: Audit pull-only privilege separation & pull immutable @sha256 image digest
         shell: bash
         env:
           CSKH_REGISTRY_IMAGE: ${{ vars.CSKH_REGISTRY_IMAGE }}
           CSKH_REGISTRY_IS_PUBLIC: ${{ vars.CSKH_REGISTRY_IS_PUBLIC }}
           CSKH_REGISTRY_PULL_USERNAME: ${{ vars.CSKH_REGISTRY_PULL_USERNAME }}
+          RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
           REGISTRY_PULL_USERNAME: ${{ secrets.REGISTRY_PULL_USERNAME }}
           REGISTRY_PULL_TOKEN: ${{ secrets.REGISTRY_PULL_TOKEN }}
           GITHUB_ACTOR_FALLBACK: ${{ github.actor }}
@@ -352,6 +348,11 @@ jobs:
           APP_IMAGE_DIGEST: ${{ needs.build-once-sign-and-push.outputs.app_image_digest }}
         run: |
           set -euo pipefail
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/audit_registry_and_signing_config.py \
+            --role pull \
+            --require-ready \
+            --out "$RUNNER_TEMP/p4-verify-evidence/pull-role-audit.json"
+
           REGISTRY_HOST="${CSKH_REGISTRY_IMAGE%%/*}"
           PULL_USER="${REGISTRY_PULL_USERNAME:-${CSKH_REGISTRY_PULL_USERNAME:-}}"
           if [ -n "${PULL_USER}" ] && [ -n "${REGISTRY_PULL_TOKEN}" ]; then
@@ -363,12 +364,12 @@ jobs:
               --username "${PULL_USER:-${GITHUB_ACTOR_FALLBACK}}" \
               --password-stdin
           elif [ "${CSKH_REGISTRY_IS_PUBLIC}" != "true" ]; then
-            echo "BLOCKED (BLK-INFRA-03): Private registry '${REGISTRY_HOST}' requires read-only REGISTRY_PULL_USERNAME and REGISTRY_PULL_TOKEN in protected environment 'registry-verify' (or vars.CSKH_REGISTRY_IS_PUBLIC='true' for public OCI repositories)." >&2
+            echo "BLOCKED (BLK-INFRA-03): Private registry '${REGISTRY_HOST}' requires read-only REGISTRY_PULL_USERNAME and REGISTRY_PULL_TOKEN in protected environment 'registry-verify'." >&2
             exit 1
           fi
           docker pull "${APP_IMAGE_DIGEST}"
 
-      - name: Run G02 clean-site & G03 10-service Compose smoke on pulled @sha256 digest
+      - name: Run G02 clean-site + Socket.IO & G03 10-service Compose smoke on pulled @sha256 digest
         shell: bash
         env:
           APP_IMAGE_DIGEST: ${{ needs.build-once-sign-and-push.outputs.app_image_digest }}
@@ -390,111 +391,18 @@ jobs:
             --report-out "$VERIFY_OUT/isolated-smoke-report.json" \
             --log-out "$VERIFY_OUT/isolated-smoke.log"
 
-      - name: Run P0-P3 Frappe test suites inside pulled @sha256 image (zero apps/ bind-mounts)
+      - name: Run canonical P0-P3 Frappe test inventories inside pulled @sha256 image (--no-mariadb-socket, zero mounts)
         shell: bash
         env:
           APP_IMAGE_DIGEST: ${{ needs.build-once-sign-and-push.outputs.app_image_digest }}
         run: |
           set -euo pipefail
           VERIFY_OUT="$RUNNER_TEMP/p4-verify-evidence"
-          SEC_DIR="$RUNNER_TEMP/p4-suite-secrets"
-          mkdir -p "${SEC_DIR}"
-          DB_PW="$(openssl rand -hex 24)"
-          ADM_PW="P4Suite#$(openssl rand -hex 12)"
-          printf '%s\n' "${DB_PW}" > "${SEC_DIR}/db_pw.txt"
-          chmod 600 "${SEC_DIR}/db_pw.txt"
-
-          export COMPOSE_PROJECT_NAME="cskh-p4-suites-${GITHUB_RUN_ID}"
-          export APP_IMAGE="${APP_IMAGE_DIGEST}"
-          export PULL_POLICY="never"
-          export SITE_NAME="p4-suites.localhost"
-          export VERIFY_HTTP_PORT="18880"
-          export DB_PASSWORD_SECRETS_FILE="${SEC_DIR}/db_pw.txt"
-
-          cleanup() {
-            docker compose -f deploy/images/compose.verify.yaml -p "${COMPOSE_PROJECT_NAME}" \
-              down -v --remove-orphans >/dev/null 2>&1 || true
-            rm -rf "${SEC_DIR}"
-          }
-          trap cleanup EXIT
-
-          docker compose -f deploy/images/compose.verify.yaml -p "${COMPOSE_PROJECT_NAME}" up -d
-          docker compose -f deploy/images/compose.verify.yaml -p "${COMPOSE_PROJECT_NAME}" exec -T \
-            -e DB_PW="${DB_PW}" -e ADM_PW="${ADM_PW}" backend bash -lc '
-              set -euo pipefail
-              cd /home/frappe/frappe-bench
-              cmp -s /home/frappe/frappe-bench/apps-order.txt /home/frappe/frappe-bench/sites/apps.txt
-              ./env/bin/pip install --no-cache-dir \
-                -c /home/frappe/frappe-bench/release-metadata/python-constraints.txt \
-                unittest-xml-reporting==3.2.0
-              bench new-site \
-                --no-mariadb-socket \
-                --db-root-password "${DB_PW}" \
-                --admin-password "${ADM_PW}" \
-                --mariadb-user-host-login-scope=% \
-                --install-app crm \
-                --install-app crm_cskh \
-                p4-suites.localhost
-              cmp -s /home/frappe/frappe-bench/apps-order.txt /home/frappe/frappe-bench/sites/apps.txt
-              bench --site p4-suites.localhost set-config allow_tests true
-              bench --site p4-suites.localhost migrate
-              bench --site p4-suites.localhost migrate
-              mkdir -p /tmp/p4-junit /tmp/p4-junit-ui
-            '
-
-          MODULES=(
-            crm_cskh.tests.test_permissions
-            crm_cskh.tests.test_security_remediation
-            crm_cskh.tests.test_security_remediation_v2
-            crm_cskh.tests.test_bt1c5_matrix_gaps
-            crm_cskh.tests.test_docshare_lifecycle
-            crm_cskh.tests.test_p1_lead_import
-            crm_cskh.tests.test_p1_dedup_merge
-            crm_cskh.tests.test_p1_distribution
-            crm_cskh.tests.test_p1_work_item_lifecycle
-            crm_cskh.tests.test_p1_contact_attempt
-            crm_cskh.tests.test_p1_telesale_api
-            crm_cskh.tests.test_p1_security_and_scope
-            crm_cskh.tests.test_p2_campaign_targets_and_policy
-            crm_cskh.tests.test_p2_dashboard_and_drilldown
-            crm_cskh.tests.test_p2_reconciliation
-            crm_cskh.tests.test_p3_calendar
-            crm_cskh.tests.test_p3_sla_and_attribution
-            crm_cskh.tests.test_p3_kpi_and_snapshots
-            crm_cskh.tests.test_p3_reporting_and_security
-            crm_cskh.tests.test_p3_t1c_remediation
-          )
-          for mod in "${MODULES[@]}"; do
-            slug="${mod##*.}"
-            docker compose -f deploy/images/compose.verify.yaml -p "${COMPOSE_PROJECT_NAME}" exec -T \
-              -e CI=true backend bash -lc \
-              "cd /home/frappe/frappe-bench && bench --site p4-suites.localhost --verbose run-tests --module '${mod}' --junit-xml-output '/tmp/p4-junit/${slug}.junit.xml'"
-          done
-
-          docker compose -f deploy/images/compose.verify.yaml -p "${COMPOSE_PROJECT_NAME}" exec -T \
-            -e CI=true backend bash -lc \
-            "cd /home/frappe/frappe-bench && bench --site p4-suites.localhost --verbose run-tests --module crm_cskh.tests.test_ui_p3_pages_and_context --junit-xml-output /tmp/p4-junit-ui/test_ui_p3_pages_and_context.junit.xml"
-
-          BACKEND_CID="$(docker compose -f deploy/images/compose.verify.yaml -p "${COMPOSE_PROJECT_NAME}" ps -q backend)"
-          docker cp "${BACKEND_CID}:/tmp/p4-junit/." "$VERIFY_OUT/junit/"
-          docker cp "${BACKEND_CID}:/tmp/p4-junit-ui/." "$VERIFY_OUT/junit-ui/"
-
-          for inv in \
-            deploy/dev/seed/g007_test_inventory.json \
-            deploy/dev/seed/p1_test_inventory.json \
-            deploy/dev/seed/p2_test_inventory.json \
-            deploy/dev/seed/p3_test_inventory.json
-          do
-            name="$(basename "${inv}" .json)"
-            python3 deploy/dev/seed/ci_junit_gate.py \
-              --inventory "${inv}" \
-              --xml-dir "$VERIFY_OUT/junit" \
-              --out "$VERIFY_OUT/${name}-gate.json"
-          done
-          python3 deploy/dev/seed/ci_junit_gate.py \
-            --inventory deploy/p3/ui_test_inventory.json \
-            --xml-dir "$VERIFY_OUT/junit-ui" \
-            --out "$VERIFY_OUT/p3-ui-gate.json"
+          python3 deploy/release/run_diff_impact_verification.py \
+            --full-suite \
+            --skip-clean-site \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --out-dir "$VERIFY_OUT"
 
       - name: Attest Build -> Verify same-digest chain & generate SHA256SUMS
         shell: bash
@@ -570,10 +478,12 @@ jobs:
           name: p4-verify-by-digest-${{ github.run_id }}
           path: ${{ runner.temp }}/p4-verify-evidence
 
-      - name: Verify Staging host configuration & deploy identical @sha256 digest
+      - name: Verify Staging host configuration & deploy identical @sha256 digest (zero rebuild)
         shell: bash
         env:
           APP_IMAGE_DIGEST: ${{ needs.build-once-sign-and-push.outputs.app_image_digest }}
+          CSKH_REGISTRY_IMAGE: ${{ vars.CSKH_REGISTRY_IMAGE }}
+          CSKH_REGISTRY_IS_PUBLIC: ${{ vars.CSKH_REGISTRY_IS_PUBLIC }}
           RELEASE_SIGNING_PUBLIC_KEY: ${{ vars.RELEASE_SIGNING_PUBLIC_KEY }}
           CSKH_REGISTRY_PULL_USERNAME: ${{ vars.CSKH_REGISTRY_PULL_USERNAME }}
           REGISTRY_PULL_USERNAME: ${{ secrets.REGISTRY_PULL_USERNAME }}
@@ -600,26 +510,10 @@ jobs:
             --expected-image "${APP_IMAGE_DIGEST}" \
             --expected-scope production_candidate
 
-          if [ -z "${STAGING_SSH_HOST}" ] || [ -z "${STAGING_SSH_USER}" ] || [ -z "${STAGING_SSH_PRIVATE_KEY}" ] || [ -z "${STAGING_DEPLOY_PATH}" ] || [ -z "${STAGING_ENV_FILE}" ]; then
-            python3 - "${OUT_DIR}/blocked-staging-host.json" <<'PY'
-          import json, sys
-          from datetime import datetime, timezone
-          from pathlib import Path
-
-          report = {
-              "status": "BLOCKED",
-              "blocker_id": "BLK-INFRA-01",
-              "checked_at_utc": datetime.now(timezone.utc).isoformat(),
-              "detail": (
-                  "Staging VPS/host SSH credentials and paths are not yet provisioned in the "
-                  "protected `staging` GitHub Environment."
-              ),
-          }
-          Path(sys.argv[1]).write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
-          print(json.dumps(report, indent=2), file=sys.stderr)
-          PY
-            exit 1
-          fi
+          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/audit_registry_and_signing_config.py \
+            --role deploy-staging \
+            --require-ready \
+            --out "${OUT_DIR}/staging-role-audit.json"
 
           SSH_DIR="$RUNNER_TEMP/staging-ssh"
           mkdir -p "${SSH_DIR}"

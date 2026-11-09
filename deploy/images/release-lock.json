@@ -3,31 +3,31 @@
   "work_package": "P4-01",
   "p4_01_baseline_lock_sha256": "dde3bdaa11180cd103f8d8b064e20411d380135ac88d4a39226b7d451a990962",
   "p4_00_entry_dossier_sha": "be33e6c931337c42b94184b2fe292e094bd51c97",
-  "baseline_main_sha": "467204176326f046442b5e20c381f9a895b6e176",
+  "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
   "apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910",
   "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
   "builder_upstream": {
     "repository": "https://github.com/frappe/frappe_docker.git",
-    "tag": "v4.0.1",
-    "commit_sha": "2b26e9ab8d751e5ea33bb7b930aea3550bb81ded",
+    "tag": "v4.2.0",
+    "commit_sha": "61d35da827ebc04d01b64c9e78385597ccebc9d8",
     "reference_containerfile": "images/custom/Containerfile",
     "v15_matrix_reference": ".github/workflows/core-build-stable.yml"
   },
   "base_image": {
     "repository": "python",
-    "tag": "3.11.18-slim-bookworm",
-    "index_digest": "sha256:6cbe849bdc876ecd413a4a09a919a0d861d908589de9eba61e886c29af793a07",
-    "linux_amd64_digest": "sha256:e8c69d86735f6df3efa06b324694fe51f0422785f83a3bd463052636c2421944",
-    "pinned_ref": "python:3.11.18-slim-bookworm@sha256:6cbe849bdc876ecd413a4a09a919a0d861d908589de9eba61e886c29af793a07"
+    "tag": "3.11.18-slim-trixie",
+    "index_digest": "sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535",
+    "linux_amd64_digest": "sha256:b701198cb708b68d9413ca67d6311bd97c9389a2c5fe4da0511fc652642366cd",
+    "pinned_ref": "python:3.11.18-slim-trixie@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535"
   },
   "toolchain": {
     "python_series": "3.11",
-    "debian_base": "bookworm",
+    "debian_base": "trixie",
     "nvm_version": "v0.40.6",
     "nvm_install_sha256": "2ef7e8d4373c1ffd70daa55f919f629e98a619543ffc0a8d892d77a5247e50e4",
     "node_version": "22.23.3",
     "yarn_version": "1.22.22",
-    "frappe_bench_version": "5.31.0",
+    "frappe_bench_version": "5.31.1",
     "uv_version": "0.13.7",
     "wkhtmltopdf_version": "0.12.6.1-3",
     "wkhtmltopdf_distro": "bookworm",
@@ -36,20 +36,27 @@
   },
   "python_constraints": {
     "system_constraints_file": "deploy/images/resources/system-python-constraints.txt",
-    "system_constraints_sha256": "aa20fca89707c32d28ee6197379c5528ff4e9afdc88735e960cbe0f0534309e4",
+    "system_constraints_sha256": "d8f6cae77c62f12d5e62be7437995d6afa4e3ac94bcb58ea47491d998b1cd7df",
     "system_package_count": 22,
     "bench_constraints_file": "deploy/images/resources/python-constraints.txt",
-    "bench_constraints_sha256": "0673e11fb1d394e599dddade9c116efb2b502d0d4fb7a59a73c6d958f1d34037",
+    "bench_constraints_sha256": "4e69d3138d445c0548b9cdf2f8177b715f1b0d96bbabf9c85fbf48a35ae92620",
     "bench_package_count": 154
   },
   "security_patches": {
     "uv_version": "0.13.7",
-    "frappe_form_data_version": "4.0.5",
+    "frappe_form_data_version": "4.0.6",
+    "pyjwt_version": "2.15.1",
+    "pillow_version": "13.0.0",
     "pruned_frappe_build_only_node_modules": [
       "esbuild",
       "esbuild-linux-64",
       "loader-utils",
       "shell-quote"
+    ],
+    "removed_unused_runtime_apt_packages": [
+      "libpq-dev",
+      "postgresql-client",
+      "restic"
     ]
   },
   "apps": {
@@ -60,10 +67,10 @@
     ],
     "frappe": {
       "repository": "https://github.com/frappe/frappe.git",
-      "tag": "v15.123.1",
-      "commit_sha": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
-      "yarn_lock_sha256": "ec8d4dfd0fd9ed82b102167768ff6d09b50184153335d12bcad4a1017a660c10",
-      "localization_patcher": "deploy/dev/apply-frappe-vi-patch.py"
+      "tag": "v15.126.0",
+      "commit_sha": "53bae3ef2550ca96320f036f581446783cd11b72",
+      "yarn_lock_sha256": "fd713bb100a3b4ae0ce801bbeec1135938f5028e21f249343daf4e434c528bad",
+      "localization_patcher": "deploy/images/resources/apply-frappe-vi-patch.py"
     },
     "crm": {
       "repository": "https://github.com/frappe/crm.git",
@@ -85,7 +92,7 @@
       "subpath": "apps/crm_cskh",
       "declared_app_version": "0.0.1",
       "identity_rule": "Identify release exclusively by source_commit_sha + crm_cskh_tree_sha + OCI image digest (never by 0.0.1 alone).",
-      "baseline_main_sha": "467204176326f046442b5e20c381f9a895b6e176",
+      "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
       "apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910",
       "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36"
     }

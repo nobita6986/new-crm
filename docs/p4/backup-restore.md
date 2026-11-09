@@ -12,7 +12,7 @@
 > **Báo cáo trung thực trạng thái Sao lưu (`G07`) & Diễn tập Khôi phục (`G08`) sau đối chiếu thực thi trên VPS `103.77.208.186` (`801be22`, ngày `09/11/2026`):**
 > - **Diễn tập khôi phục trên bản clone cô lập tại VPS (`G08`):** **`PASS`** ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json), SHA-256 `af2d0a899e84d68243f80d64ad4d8ed43b4c2f21e5c28355c9022001c56f689c`) — Pha A khôi phục `p4-20261109-pre-scheduler` đạt `PASS` trong **`142.598 giây`** (**phạm vi chỉ tính clone cô lập trên cùng VPS, chưa gồm truyền mạng WAN, cấp máy chủ mới hay chuyển DNS**); Pha B đối chứng Dương/Âm mã hóa Fernet (`ValidationError`), tệp public/private, `migrate ×2` và dọn sạch `0` dư lượng đạt `PASS`; container & image live `acb9505...` giữ nguyên không đổi.
 > - **Lịch & dịch vụ sao lưu hằng ngày trên VPS (`G07`):** `crm-cskh-backup.service` đã chạy thật trên VPS đạt **`PASS`** lúc `20:00:28 +07` ngày `09/11/2026` (`scheduled-20261109T130029Z-1400885`, SHA-256 `33fdf18bf4e9168e98baee65446c215e005b44271a9507cd94b3e1e86f34e14c`), đã chép thủ công ra ngoài VPS khớp checksum và lưu riêng `backup-key`. Bộ hẹn giờ `crm-cskh-backup.timer` đã `enabled`/`active` (`02:15 ICT`), **nhưng lượt chạy đã đo là khởi chạy service thủ công (`systemctl start`), chưa phải bằng chứng timer tự kích hoạt theo lịch** (`LastTriggerUSec = ""`, lịch kích hoạt tự động đầu tiên lúc `2026-11-10 02:16:41 +07`).
-> - **Đồng bộ Offsite tự động (`BLK-INFRA-05`):** Hai bản chép thủ công ra máy trạm Owner **KHÔNG chứng minh upload định kỳ tự động đang hoạt động** (`one_off_manual_copy_proves_periodic_upload = false`). Cho tới khi Owner cấp đích lưu trữ ngoài VPS và credentials vào `/etc/crm-cskh/offsite-backup.env` (`0600`), cổng `G07` trên VPS giữ nguyên trạng thái **`PARTIAL_MANUAL_OFFSITE_VERIFIED_AUTOMATION_BLOCKED`** (`periodic_offsite_upload_proven = false`). Tuyệt đối không coi thư mục trên cùng VPS là offsite.
+> - **Đồng bộ Offsite tự động (`BLK-INFRA-05`):** Hai bản chép thủ công ra máy trạm Owner **KHÔNG chứng minh upload định kỳ tự động đang hoạt động** (`one_off_manual_copy_proves_periodic_upload = false`). Cho tới khi Owner cấp đích lưu trữ ngoài VPS và credentials vào `/etc/crm-cskh/offsite-backup.env` (`0600`), cổng **`G07` giữ trạng thái `BLOCKED`** (`manage_backup_lifecycle.py audit-g07-gate` trả về `"gate_g07_status": "BLOCKED"`, trong khi tái sử dụng kết quả diễn tập restore cô lập đã đạt `PASS` trên VPS `142.598s` mà không chạy lại do không có thay đổi ảnh hưởng tới `create_encrypted_backup.py` hay `verify_offsite_restore.py`). Tuyệt đối không coi thư mục trên cùng VPS là offsite.
 
 ---
 
@@ -159,6 +159,19 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py record-offs
   --bundle-dir /var/backups/crm-cskh/scheduled-20261109T130029Z-1400885 \
   --verified-sha256 "<SHA256_DO_TREN_KHO_OFFSITE>" \
   --offsite-location-label "owner-windows-protected-archive-separate-key-escrow"
+
+# 3. Ghi biên nhận lưu ký khóa tách biệt (0 secret, chỉ ghi dấu vân tay SHA-256 của backup-key):
+sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py record-key-escrow \
+  --bundle-dir /var/backups/crm-cskh/scheduled-20261109T130029Z-1400885 \
+  --vault-label "<TEN_KHO_LUU_KY_KHOA_DOC_LAP_CUA_OWNER>"
+
+# 4. Kiểm toán 4 bằng chứng runtime để đóng cổng G07 (trả BLOCKED khi chưa đủ timer + offsite tự động + remote SHA-256 + kho khóa riêng):
+sudo python3 /opt/crm-cskh-ops/deploy/ops/manage_backup_lifecycle.py audit-g07-gate \
+  --lifecycle-file /var/backups/crm-cskh/latest-backup-lifecycle.json \
+  --timers-runtime-file /var/lib/crm-cskh/health/timers-runtime.json \
+  --key-escrow-receipt-file /var/backups/crm-cskh/scheduled-20261109T130029Z-1400885/key-escrow-receipt.json \
+  --restore-report-file /opt/crm-p4-restore-input-20261109/restore-drill-report.json \
+  --out /var/backups/crm-cskh/g07-gate-audit.json
 ```
 
 ### 3.3. Chính Sách Lưu Giữ GFS (`Grandfather-Father-Son` — `14d / 8w / 3m`)

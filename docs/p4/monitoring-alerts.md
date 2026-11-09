@@ -119,6 +119,7 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py \
    - Cả 3 service (`crm-cskh-healthcheck.service`, `crm-cskh-backup.service`, `crm-cskh-backup-failure@.service`) đều nạp tùy chọn `EnvironmentFile=-/etc/crm-cskh/alerting.env` (xem mẫu tại [`deploy/compose/env/alerting.env.example`](../../deploy/compose/env/alerting.env.example)).
    - Sau khi Owner cấp đủ 2 đầu vào trên, tạo `/etc/crm-cskh/alerting.env` quyền `0600` (`root:root`) và bắn kiểm chứng một cảnh báo thử nghiệm để đóng cổng `G19`:
    ```bash
+   # Bước A — Gửi thử 1 cảnh báo kiểm tra sau khi Owner đã duyệt kênh & người trực (xem bảng tổng hợp tại P4-exit-report.md §3):
    CSKH_OPERATOR_CONTACT="<DAU_MOI_DUOC_OWNER_CHI_DINH>" \
    CSKH_ALERT_WEBHOOK_URL="<HTTPS_WEBHOOK_DUOC_OWNER_CHI_DINH>" \
    python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
@@ -126,6 +127,11 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py \
      --send-test-alert \
      --dedup-state-file /var/lib/crm-cskh/alert-dedup.json \
      --out /var/lib/crm-cskh/test-alert-receipt.json
+
+   # Bước B — Kiểm chứng biên nhận cảnh báo (đòi hỏi DELIVERED HTTP 2xx, <REDACTED_WEBHOOK_PATH>, 0 PII/SĐT và owner thật; trả BLOCKED exit 2 khi chưa cấu hình):
+   python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
+     --verify-alert-receipt /var/lib/crm-cskh/test-alert-receipt.json \
+     --out /var/lib/crm-cskh/g19-alert-receipt-audit.json
    ```
 
 ### 4.3. Giám Sát Độ Tươi Backup Định Kỳ & Cảnh Báo Lỗi `ALT-BACKUP-FAILURE` (`SEV-1`)

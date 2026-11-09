@@ -52,6 +52,26 @@
 | **F29** | Xuất tệp báo cáo CSV qua HTTP & kiểm tra trung hòa công thức / TTL | `BOD`, `Trưởng nhóm` | `CSKH Export Job` | Tải CSV tiếng Việt khớp nhãn thẻ/bảng, che PII cho BOD, trung hòa `=,+,-,@` và tự hết hạn đúng `expires_at`. | `PASS` (HTTP CSV) | `PENDING UAT` |
 | **F30** | Mở nhiều tab trình duyệt & khóa tài khoản đang mở phiên | `Người tuyển dụng` | Session / WebSocket | Nhiều tab hợp lệ hoạt động ổn định; ngay khi `User.enabled=0`, phiên cũ bị từ chối tức thì. | `PASS` | `PENDING UAT` |
 
+### 2.2. Ma Trận Toàn Vẹn Dữ Liệu, Migration & Khôi Phục Thảm Họa (`D01`–`D15`, `P4.md §13.3`)
+
+| Mã | Kịch bản kiểm thử toàn vẹn & DR | Cơ chế / Công cụ thực thi | Kết quả kỳ vọng bắt buộc | Bằng chứng thực đo |
+| :--- | :--- | :--- | :--- | :---: |
+| **D01** | Chạy migration trên bản sao `N-1` | `verify_offsite_restore.py`, `manage_isolated_staging_dr.py` | Thoát `0`, đối soát số dòng & SHA-256 bảng khớp 100%, bảo toàn `5/5 Translation`. | **`PASS`** |
+| **D02** | Chạy lại migration lần 2 (`migrate ×2`) | `rehearse_migration_x2_and_reconcile` (`BLG-P4-MIG-01`) | Idempotent: không nhân đôi schema/records, `CRM CSKH=22, Crm Cskh=1`, `INV-01..06 == 0`. | **`PASS`** |
+| **D03** | Migration gặp lỗi / không tương thích | Cây quyết định Cấp 3–4 ([`rollback-runbook.md`](./rollback-runbook.md)) | Dừng ngay theo Stop Rule, không dùng `--skip-failing`, bảo vệ bởi `tier3_forward_fix_decision_guard`. | **`PASS`** |
+| **D04** | Thử lại (`retry`) tác vụ nhập CSV (`CSKH Import Batch`) | `test_p1_imports`, `test_p1_chaos` | Không đếm đôi và không tạo trùng `CRM Lead` / `CSKH Identity Index`. | **`PASS`** |
+| **D05** | Thử lại (`retry`) tác vụ phân phối chiến dịch | `test_p1_distribution`, `test_p1_concurrency` | Khóa `CSKH Active Claim` giữ duy nhất 1 owner active (`INV-01 == 0`). | **`PASS`** |
+| **D06** | Thử lại (`retry`) tác vụ tính lại KPI (`recompute`) | `test_p3_kpi_and_snapshots`, `rehearse_worker_restart_and_cron_retry` | Chỉ công bố snapshot khi `status == completed`; không phát sinh snapshot dở dang. | **`PASS`** |
+| **D07** | Đổi đội trong `CRM Sales Hierarchy` sau khi kỳ KPI đã chốt | `test_p3_sla_and_attribution` (`CSKH Team Membership History`) | Quy gán lịch sử `team-as-of` của kỳ cũ giữ nguyên bất biến. | **`PASS`** |
+| **D08** | Thiếu mẫu chấm QA (`denominator = 0` hoặc tắt QA) | `test_p3_kpi_and_snapshots`, `INV-05` | `QA_PASS_RATE.value = null`, điểm chuẩn hóa `Tạm tính = 86,47`, không bao giờ biến thành `0%` giả. | **`PASS`** |
+| **D09** | Bù dữ liệu lịch sử thiếu chủ sở hữu | `test_p3_sla_and_attribution`, `test_p3_t1c_remediation` | Đánh dấu không xác định theo hợp đồng, tuyệt đối không suy đoán bằng owner hiện tại. | **`PASS`** |
+| **D10** | Sao lưu cơ sở dữ liệu có mã hóa & kiểm tra mã băm | `create_encrypted_backup.py`, `manage_backup_lifecycle.py` | Gói `backup.tar.gz.enc` (`AES-256-CBC` PBKDF2) giải mã vòng khép kín khớp SHA-256. | **`PASS`** |
+| **D11** | Khôi phục tệp công khai (`public/files`) | `verify_offsite_restore.py` (Pha A & B trên VPS) | Byte/SHA-256 khớp 100%, quyền POSIX an toàn, Guest đọc qua HTTP đạt `200`. | **`PASS`** |
+| **D12** | Khôi phục tệp riêng tư (`private/files`) + `encryption_key` | `verify_offsite_restore.py` (Pha B Positive/Negative Control) | Giải mã Fernet thành công, Negative Control chặn mất khóa, Guest `403` / Auth `200`. | **`PASS`** |
+| **D13** | Quay lui mã nguồn (`Code Rollback`) trên schema tương thích | `rehearse_rollback_tiers_over_https` (Cấp 1–2) | Chuyển cờ tính năng & quay lui image an toàn, dữ liệu và bất biến không suy suyển. | **`PASS`** |
+| **D14** | Khôi phục toàn phần trên site DR cô lập | `restore-drill-report.json` (VPS `142,598s`) & `dr-https` (Cấp 4) | Đăng nhập, đọc/ghi bản ghi, kiểm tra KPI & `all_post_restore_deltas_zero = true` (`8/8` bộ đếm `= 0`). | **`PASS`** |
+| **D15** | Khởi động lại worker / `scheduler` giữa chu kỳ xử lý | `rehearse_worker_restart_and_cron_retry` (`×2`) | Không nhân đôi tác dụng phụ, tự động tiếp tục và giữ `INV-01..06 == 0`. | **`PASS`** |
+
 ---
 
 ## 3. Danh Sách Ca Nghiệm Thu UAT Theo Từng Vai Trò (`P4.md §16.2–§16.3`)
@@ -113,7 +133,7 @@
 - [x] **7. Báo cáo Chất lượng & SLA (`/cskh/dashboard`, `quality-overview`, `team-quality`, `employee-quality`, `campaign-quality`, `sla-operations`):** Nhãn chỉ số đồng nhất giữa thẻ, bảng chi tiết và bản xuất CSV.
 - [x] **8. Bảng điểm cá nhân (`/cskh/scorecard`):** Hiển thị rõ điểm trọng số thô, điểm chuẩn hóa `0–100`, `Tạm tính` và `N/A`.
 - [x] **9. Giao diện CRM gốc (`/crm`, `/crm/leads`, `/crm/deals`, `/crm/organizations`):** Giữ `Giao dịch CRM` cho `CRM Deal` và hiển thị đúng 5 nhãn tùy chỉnh cấp site của Owner.
-- [x] **10. Điều hướng bàn phím & Tiêu điểm (`Keyboard & Focus`):** Hỗ trợ `Tab`, `Shift+Tab`, `Enter`, `Escape` đóng hộp thoại an toàn.
+- [x] **10. Điều hướng bàn phím, Tiêu điểm & Header Bảo mật HTTPS (`Keyboard, Focus & TLS Headers`):** Hỗ trợ `Tab`, `Shift+Tab`, `Enter`, `Escape` đóng hộp thoại an toàn; toàn bộ `/crm` và 15 đường dẫn `/cskh/*` trả `HTTP 200`, `lang="vi"`, có dấu tiếng Việt chuẩn, `0` `Traceback`, kèm đầy đủ header `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy` (kiểm chứng tự động trong `manage_isolated_staging_dr.py`).
 
 ---
 
@@ -125,7 +145,7 @@ Xem bản hướng dẫn sử dụng tiếng Việt chi tiết theo từng vai t
 
 ## 6. Biểu Mẫu Ký Nghiệm Thu UAT Chính Thức (`G13`–`G16`, `G20`, `G22` — Chờ `BLK-GOV-06`)
 
-> **Quy tắc trung thực:** Không điền chữ ký giả. Chỉ cập nhật sang `PASS` sau khi đại diện từng vai trò do Owner chỉ định trực tiếp ký xác nhận.
+> **Quy tắc trung thực:** Không điền chữ ký giả. Chỉ cập nhật sang `PASS` sau khi đại diện từng vai trò do Owner chỉ định trực tiếp ký xác nhận (xem danh sách tổng hợp duy nhất các đầu vào cần Owner cấp tại [`P4-exit-report.md`](./P4-exit-report.md) Mục 3).
 
 | Vai trò nghiệm thu | Họ tên / Tài khoản (`BLK-GOV-06`) | Phạm vi ca nghiệm thu | Image Digest kiểm thử | Kết quả ký nhận | Ngày ký |
 | :--- | :--- | :--- | :--- | :---: | :--- |

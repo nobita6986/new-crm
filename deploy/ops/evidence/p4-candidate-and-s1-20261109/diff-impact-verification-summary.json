@@ -1,0 +1,154 @@
+{
+  "schema_version": "cskh-p4-diff-impact-execution-v1",
+  "completed_at_utc": "2026-11-09T13:44:50.788357+00:00",
+  "status": "PASS",
+  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+  "clean_site_executed": false,
+  "plan": {
+    "schema_version": "cskh-p4-diff-impact-plan-v1",
+    "generated_at_utc": "2026-11-09T13:40:19.914276+00:00",
+    "full_suite_escalated": true,
+    "changed_files_count": 0,
+    "changed_files": [],
+    "escalation_reasons": [
+      "--full-suite explicitly requested"
+    ],
+    "clean_site_and_socketio_required": true,
+    "selected_suites": [
+      "g007",
+      "p1",
+      "p2",
+      "p3",
+      "p3_ui"
+    ],
+    "selected_inventory_gates": [
+      {
+        "suite_id": "g007",
+        "inventory": "deploy/dev/seed/g007_test_inventory.json",
+        "xml_bucket": "junit",
+        "expected_total": 99,
+        "modules": [
+          "crm_cskh.tests.test_permissions",
+          "crm_cskh.tests.test_security_remediation",
+          "crm_cskh.tests.test_security_remediation_v2",
+          "crm_cskh.tests.test_bt1c5_matrix_gaps",
+          "crm_cskh.tests.test_docshare_lifecycle"
+        ]
+      },
+      {
+        "suite_id": "p1",
+        "inventory": "deploy/dev/seed/p1_test_inventory.json",
+        "xml_bucket": "junit",
+        "expected_total": 209,
+        "modules": [
+          "crm_cskh.tests.test_p1_api_permissions",
+          "crm_cskh.tests.test_p1_chaos",
+          "crm_cskh.tests.test_p1_concurrency",
+          "crm_cskh.tests.test_p1_distribution",
+          "crm_cskh.tests.test_p1_identity",
+          "crm_cskh.tests.test_p1_imports",
+          "crm_cskh.tests.test_p1_ownership",
+          "crm_cskh.tests.test_p1_regressions"
+        ]
+      },
+      {
+        "suite_id": "p2",
+        "inventory": "deploy/dev/seed/p2_test_inventory.json",
+        "xml_bucket": "junit",
+        "expected_total": 38,
+        "modules": [
+          "crm_cskh.tests.test_p2_calllog_followup",
+          "crm_cskh.tests.test_p2_concurrency_chaos",
+          "crm_cskh.tests.test_p2_corrections",
+          "crm_cskh.tests.test_p2_lifecycle",
+          "crm_cskh.tests.test_p2_outcomes_policy",
+          "crm_cskh.tests.test_p2_permissions_sec",
+          "crm_cskh.tests.test_p2_reconciliation_perf",
+          "crm_cskh.tests.test_p2_t1c_regressions"
+        ]
+      },
+      {
+        "suite_id": "p3",
+        "inventory": "deploy/dev/seed/p3_test_inventory.json",
+        "xml_bucket": "junit",
+        "expected_total": 39,
+        "modules": [
+          "crm_cskh.tests.test_p3_calendar",
+          "crm_cskh.tests.test_p3_kpi_and_snapshots",
+          "crm_cskh.tests.test_p3_reporting_and_security",
+          "crm_cskh.tests.test_p3_sla_and_attribution",
+          "crm_cskh.tests.test_p3_t1c_remediation"
+        ]
+      },
+      {
+        "suite_id": "p3_ui",
+        "inventory": "deploy/p3/ui_test_inventory.json",
+        "xml_bucket": "junit-ui",
+        "expected_total": 7,
+        "modules": [
+          "crm_cskh.tests.test_ui_p3_pages_and_context"
+        ]
+      }
+    ],
+    "expected_gated_methods_total": 392,
+    "junit_modules": [
+      "crm_cskh.tests.test_permissions",
+      "crm_cskh.tests.test_security_remediation",
+      "crm_cskh.tests.test_security_remediation_v2",
+      "crm_cskh.tests.test_bt1c5_matrix_gaps",
+      "crm_cskh.tests.test_docshare_lifecycle",
+      "crm_cskh.tests.test_p1_api_permissions",
+      "crm_cskh.tests.test_p1_chaos",
+      "crm_cskh.tests.test_p1_concurrency",
+      "crm_cskh.tests.test_p1_distribution",
+      "crm_cskh.tests.test_p1_identity",
+      "crm_cskh.tests.test_p1_imports",
+      "crm_cskh.tests.test_p1_ownership",
+      "crm_cskh.tests.test_p1_regressions",
+      "crm_cskh.tests.test_p2_calllog_followup",
+      "crm_cskh.tests.test_p2_concurrency_chaos",
+      "crm_cskh.tests.test_p2_corrections",
+      "crm_cskh.tests.test_p2_lifecycle",
+      "crm_cskh.tests.test_p2_outcomes_policy",
+      "crm_cskh.tests.test_p2_permissions_sec",
+      "crm_cskh.tests.test_p2_reconciliation_perf",
+      "crm_cskh.tests.test_p2_t1c_regressions",
+      "crm_cskh.tests.test_p3_calendar",
+      "crm_cskh.tests.test_p3_kpi_and_snapshots",
+      "crm_cskh.tests.test_p3_reporting_and_security",
+      "crm_cskh.tests.test_p3_sla_and_attribution",
+      "crm_cskh.tests.test_p3_t1c_remediation",
+      "crm_cskh.tests.test_error_response_normalization",
+      "crm_cskh.tests.test_ui_p1_endpoints",
+      "crm_cskh.tests.test_ui_p2_pages_and_context"
+    ],
+    "junit_ui_modules": [
+      "crm_cskh.tests.test_ui_p3_pages_and_context"
+    ],
+    "total_modules_to_run": 30
+  },
+  "junit_gate_reports": [
+    "/home/runner/work/_temp/p4-ghcr-verify-evidence/g007_test_inventory-gate.json",
+    "/home/runner/work/_temp/p4-ghcr-verify-evidence/p1_test_inventory-gate.json",
+    "/home/runner/work/_temp/p4-ghcr-verify-evidence/p2_test_inventory-gate.json",
+    "/home/runner/work/_temp/p4-ghcr-verify-evidence/p3_test_inventory-gate.json",
+    "/home/runner/work/_temp/p4-ghcr-verify-evidence/p3-ui-gate.json"
+  ],
+  "auxiliary_junit_checks": {
+    "test_error_response_normalization.junit.xml": {
+      "tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    "test_ui_p1_endpoints.junit.xml": {
+      "tests": 12,
+      "failures": 0,
+      "errors": 0
+    },
+    "test_ui_p2_pages_and_context.junit.xml": {
+      "tests": 9,
+      "failures": 0,
+      "errors": 0
+    }
+  }
+}

@@ -1,0 +1,1923 @@
+{
+  "schema_version": 2,
+  "gate": "g007-per-method-junit",
+  "gate_passed": true,
+  "expected_total": 209,
+  "observed_total": 209,
+  "passing_total": 209,
+  "counts": {
+    "PASS": 209
+  },
+  "xml_files": [
+    "test_p1_api_permissions.junit.xml",
+    "test_p1_chaos.junit.xml",
+    "test_p1_concurrency.junit.xml",
+    "test_p1_distribution.junit.xml",
+    "test_p1_identity.junit.xml",
+    "test_p1_imports.junit.xml",
+    "test_p1_ownership.junit.xml",
+    "test_p1_regressions.junit.xml"
+  ],
+  "xml_module_binding": {
+    "test_p1_api_permissions.junit.xml": "crm_cskh.tests.test_p1_api_permissions",
+    "test_p1_chaos.junit.xml": "crm_cskh.tests.test_p1_chaos",
+    "test_p1_concurrency.junit.xml": "crm_cskh.tests.test_p1_concurrency",
+    "test_p1_distribution.junit.xml": "crm_cskh.tests.test_p1_distribution",
+    "test_p1_identity.junit.xml": "crm_cskh.tests.test_p1_identity",
+    "test_p1_imports.junit.xml": "crm_cskh.tests.test_p1_imports",
+    "test_p1_ownership.junit.xml": "crm_cskh.tests.test_p1_ownership",
+    "test_p1_regressions.junit.xml": "crm_cskh.tests.test_p1_regressions"
+  },
+  "missing_modules": [],
+  "empty_xml_files": [],
+  "missing_methods": [],
+  "failed_methods": [],
+  "errored_methods": [],
+  "skipped_methods": [],
+  "duplicate_methods": [],
+  "unexpected_cases": [],
+  "parse_errors": [],
+  "results": [
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestApiContract",
+      "method": "test_every_planned_endpoint_exists",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_every_planned_endpoint_exists",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestApiContract",
+      "method": "test_the_list_endpoints_return_the_scope_total_and_timestamp",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_the_list_endpoints_return_the_scope_total_and_timestamp",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestApiContract",
+      "method": "test_the_dashboard_returns_the_p1_cards",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_the_dashboard_returns_the_p1_cards",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestApiContract",
+      "method": "test_the_preview_contract_carries_the_frozen_keys",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_the_preview_contract_carries_the_frozen_keys",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestApiContract",
+      "method": "test_the_mutations_require_an_idempotency_key",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_the_mutations_require_an_idempotency_key",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestApiContract",
+      "method": "test_the_error_codes_are_stable",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_the_error_codes_are_stable",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestApiContract",
+      "method": "test_a_forbidden_response_carries_the_forbidden_code",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_a_forbidden_response_carries_the_forbidden_code",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestApiContract",
+      "method": "test_the_business_roles_are_not_system_roles",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_the_business_roles_are_not_system_roles",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_01_a_staff_member_cannot_read_the_lead_of_another_user",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_01_a_staff_member_cannot_read_the_lead_of_another_user",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_01_a_staff_member_cannot_widen_the_lead_list",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_01_a_staff_member_cannot_widen_the_lead_list",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_02_a_staff_member_cannot_read_the_work_item_of_another_user",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_02_a_staff_member_cannot_read_the_work_item_of_another_user",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_02_a_staff_member_cannot_read_an_import_batch",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_02_a_staff_member_cannot_read_an_import_batch",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_02_a_staff_member_cannot_read_the_raw_import_file",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_02_a_staff_member_cannot_read_the_raw_import_file",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_03_a_staff_member_cannot_execute_a_distribution",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_03_a_staff_member_cannot_execute_a_distribution",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_03_a_staff_member_cannot_transfer_or_revoke_an_ownership",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_03_a_staff_member_cannot_transfer_or_revoke_an_ownership",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_04_a_leader_only_reads_the_aggregate_of_their_own_team",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_04_a_leader_only_reads_the_aggregate_of_their_own_team",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_04_a_leader_cannot_transfer_the_customer_of_another_team",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_04_a_leader_cannot_transfer_the_customer_of_another_team",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_04_a_leader_cannot_see_the_work_items_of_another_team",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_04_a_leader_cannot_see_the_work_items_of_another_team",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_05_the_bod_viewer_cannot_change_a_campaign_or_a_rule",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_05_the_bod_viewer_cannot_change_a_campaign_or_a_rule",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_05_the_bod_viewer_cannot_change_the_assignment_history",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_05_the_bod_viewer_cannot_change_the_assignment_history",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_05_the_bod_viewer_cannot_mutate_an_ownership",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_05_the_bod_viewer_cannot_mutate_an_ownership",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_06_the_revoked_owner_loses_every_access_path",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_06_the_revoked_owner_loses_every_access_path",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_07_the_endpoints_do_not_accept_a_scope_parameter",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_07_the_endpoints_do_not_accept_a_scope_parameter",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_07_a_staff_member_cannot_widen_the_scope_with_a_query_parameter",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_07_a_staff_member_cannot_widen_the_scope_with_a_query_parameter",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_07_the_pool_of_a_leader_stays_inside_the_scope",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_07_the_pool_of_a_leader_stays_inside_the_scope",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_08_a_formula_cell_is_neutralized_in_the_error_artifact",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_08_a_formula_cell_is_neutralized_in_the_error_artifact",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_09_the_raw_file_is_not_reachable_without_permission",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_09_the_raw_file_is_not_reachable_without_permission",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_09_the_import_batch_is_not_readable_by_a_foreign_role",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_09_the_import_batch_is_not_readable_by_a_foreign_role",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_10_a_stale_expected_owner_does_not_overwrite_a_new_owner",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_10_a_stale_expected_owner_does_not_overwrite_a_new_owner",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_api_permissions",
+      "class": "TestSecurityNegatives",
+      "method": "test_sec_10_a_retry_with_the_same_request_id_does_not_double_apply",
+      "status": "PASS",
+      "source_xml": "test_p1_api_permissions.junit.xml",
+      "raw_name": "test_sec_10_a_retry_with_the_same_request_id_does_not_double_apply",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestDistributionRollbackAndResume",
+      "method": "test_fault_after_work_item_before_ownership_leaves_no_orphan",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_fault_after_work_item_before_ownership_leaves_no_orphan",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestDistributionRollbackAndResume",
+      "method": "test_fault_mid_ownership_after_history_and_todo_rolls_back_all_artifacts",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_fault_mid_ownership_after_history_and_todo_rolls_back_all_artifacts",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestDistributionRollbackAndResume",
+      "method": "test_fault_mid_reassign_rolls_back_to_original_owner_and_open_interval",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_fault_mid_reassign_rolls_back_to_original_owner_and_open_interval",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestDistributionRollbackAndResume",
+      "method": "test_resumed_run_retries_only_failed_leads_sums_counts_and_keeps_fairness",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_resumed_run_retries_only_failed_leads_sums_counts_and_keeps_fairness",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestPostCommitNotificationRetry",
+      "method": "test_fault_after_commit_before_notification_and_idempotent_retry",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_fault_after_commit_before_notification_and_idempotent_retry",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestImportWorkerCrashAndRecovery",
+      "method": "test_worker_hard_kill_os_exit_mid_batch_recovers_with_zero_duplicates",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_worker_hard_kill_os_exit_mid_batch_recovers_with_zero_duplicates",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestImportWorkerCrashAndRecovery",
+      "method": "test_failed_row_in_early_chunk_blocks_progress_advance_and_recovers_on_retry",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_failed_row_in_early_chunk_blocks_progress_advance_and_recovers_on_retry",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestImportWorkerCrashAndRecovery",
+      "method": "test_mixed_batch_does_not_double_count_preview_invalid_rows",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_mixed_batch_does_not_double_count_preview_invalid_rows",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestDistributionWorkerCrashAndRecovery",
+      "method": "test_distribution_worker_hard_kill_os_exit_mid_batch_and_lease_recovery",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_distribution_worker_hard_kill_os_exit_mid_batch_and_lease_recovery",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestZeroProductionFaultInjection",
+      "method": "test_chaos_module_does_not_exist_in_production_services",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_chaos_module_does_not_exist_in_production_services",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_chaos",
+      "class": "TestZeroProductionFaultInjection",
+      "method": "test_production_modules_contain_no_fault_injection_hooks_or_hard_exit",
+      "status": "PASS",
+      "source_xml": "test_p1_chaos.junit.xml",
+      "raw_name": "test_production_modules_contain_no_fault_injection_hooks_or_hard_exit",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestConcurrentIdentity",
+      "method": "test_two_parallel_writers_leave_one_canonical_lead",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_two_parallel_writers_leave_one_canonical_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestConcurrentIdentity",
+      "method": "test_five_parallel_writers_leave_one_canonical_lead",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_five_parallel_writers_leave_one_canonical_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestConcurrentIdentity",
+      "method": "test_two_parallel_import_jobs_on_the_same_phone",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_two_parallel_import_jobs_on_the_same_phone",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestConcurrentDistribution",
+      "method": "test_two_parallel_runs_cannot_claim_the_same_lead_twice",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_two_parallel_runs_cannot_claim_the_same_lead_twice",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestConcurrentDistribution",
+      "method": "test_five_parallel_runs_cannot_claim_the_same_lead_twice",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_five_parallel_runs_cannot_claim_the_same_lead_twice",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestConcurrentDistribution",
+      "method": "test_a_lead_cannot_be_claimed_by_two_different_campaigns",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_a_lead_cannot_be_claimed_by_two_different_campaigns",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestRollbackAndRetry",
+      "method": "test_a_failure_after_the_work_item_creation_leaves_no_orphan",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_a_failure_after_the_work_item_creation_leaves_no_orphan",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestRollbackAndRetry",
+      "method": "test_a_retry_after_a_committed_assignment_does_not_double_apply",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_a_retry_after_a_committed_assignment_does_not_double_apply",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestRollbackAndRetry",
+      "method": "test_a_revoked_work_item_frees_the_lead_for_another_campaign",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_a_revoked_work_item_frees_the_lead_for_another_campaign",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_concurrency",
+      "class": "TestRollbackAndRetry",
+      "method": "test_an_expected_owner_conflict_keeps_the_current_owner",
+      "status": "PASS",
+      "source_xml": "test_p1_concurrency.junit.xml",
+      "raw_name": "test_an_expected_owner_conflict_keeps_the_current_owner",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestAllocatorFairness",
+      "method": "test_1000_leads_are_split_500_300_200",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_1000_leads_are_split_500_300_200",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestAllocatorFairness",
+      "method": "test_100_batches_of_one_keep_the_cumulative_ratio",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_100_batches_of_one_keep_the_cumulative_ratio",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestAllocatorFairness",
+      "method": "test_the_allocation_is_deterministic",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_the_allocation_is_deterministic",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestAllocatorFairness",
+      "method": "test_capacity_exhaustion_stops_the_allocation",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_capacity_exhaustion_stops_the_allocation",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestAllocatorFairness",
+      "method": "test_a_changed_user_set_starts_a_new_epoch",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_a_changed_user_set_starts_a_new_epoch",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_preview_is_a_dry_run",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_preview_is_a_dry_run",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_preview_is_idempotent_for_the_same_selection",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_preview_is_idempotent_for_the_same_selection",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_execute_assigns_every_lead_and_creates_the_claims",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_execute_assigns_every_lead_and_creates_the_claims",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_execute_is_idempotent",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_execute_is_idempotent",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_a_changed_rule_version_makes_the_preview_stale",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_a_changed_rule_version_makes_the_preview_stale",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_a_changed_fairness_state_makes_the_preview_stale",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_a_changed_fairness_state_makes_the_preview_stale",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_the_capacity_limit_cuts_the_distribution_off",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_the_capacity_limit_cuts_the_distribution_off",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_a_lead_claimed_in_another_campaign_is_excluded",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_a_lead_claimed_in_another_campaign_is_excluded",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_a_lead_cannot_be_claimed_twice_in_the_same_campaign",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_a_lead_cannot_be_claimed_twice_in_the_same_campaign",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_reconcile_reports_the_database_truth",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_reconcile_reports_the_database_truth",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestDistributionFlow",
+      "method": "test_an_exhausted_campaign_is_rejected",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_an_exhausted_campaign_is_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestPersistedFairness",
+      "method": "test_100_single_lead_batches_keep_the_cumulative_ratio",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_100_single_lead_batches_keep_the_cumulative_ratio",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestBackgroundDistributionRQ",
+      "method": "test_api_execute_enqueues_rq_and_returns_early_queued_state",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_api_execute_enqueues_rq_and_returns_early_queued_state",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestBackgroundDistributionRQ",
+      "method": "test_chunked_worker_persists_progress_and_polling_reads_cumulative_counts",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_chunked_worker_persists_progress_and_polling_reads_cumulative_counts",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestBackgroundDistributionRQ",
+      "method": "test_worker_rechecks_actor_permission_and_rule_version_at_execution_time",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_worker_rechecks_actor_permission_and_rule_version_at_execution_time",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_distribution",
+      "class": "TestBackgroundDistributionRQ",
+      "method": "test_worker_rechecks_assignee_and_lead_eligibility_and_capacity_mid_run",
+      "status": "PASS",
+      "source_xml": "test_p1_distribution.junit.xml",
+      "raw_name": "test_worker_rechecks_assignee_and_lead_eligibility_and_capacity_mid_run",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestPhoneNormalization",
+      "method": "test_equivalent_formats_normalize_to_the_same_canonical_phone",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_equivalent_formats_normalize_to_the_same_canonical_phone",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestPhoneNormalization",
+      "method": "test_invalid_forms_are_rejected",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_invalid_forms_are_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestPhoneNormalization",
+      "method": "test_scientific_notation_is_never_trusted",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_scientific_notation_is_never_trusted",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestPhoneNormalization",
+      "method": "test_two_numbers_in_one_cell_are_not_guessed",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_two_numbers_in_one_cell_are_not_guessed",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestPhoneNormalization",
+      "method": "test_non_string_input_is_rejected",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_non_string_input_is_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestPhoneNormalization",
+      "method": "test_error_code_is_stable",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_error_code_is_stable",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestCanonicalIdentity",
+      "method": "test_duplicate_normalized_phone_is_blocked_by_the_database",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_duplicate_normalized_phone_is_blocked_by_the_database",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestCanonicalIdentity",
+      "method": "test_claim_is_idempotent_for_the_same_lead",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_claim_is_idempotent_for_the_same_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestCanonicalIdentity",
+      "method": "test_claim_rejects_a_phone_owned_by_another_lead",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_claim_rejects_a_phone_owned_by_another_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestCanonicalIdentity",
+      "method": "test_lookup_by_phone_and_by_lead",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_lookup_by_phone_and_by_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestCanonicalIdentity",
+      "method": "test_adopt_policy_links_a_lead_created_outside_p1",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_adopt_policy_links_a_lead_created_outside_p1",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestCanonicalIdentity",
+      "method": "test_ensure_identity_for_lead_is_idempotent",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_ensure_identity_for_lead_is_idempotent",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_identity",
+      "class": "TestCanonicalIdentity",
+      "method": "test_release_removes_the_identity_claim",
+      "status": "PASS",
+      "source_xml": "test_p1_identity.junit.xml",
+      "raw_name": "test_release_removes_the_identity_claim",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportSanitizer",
+      "method": "test_a_formula_is_neutralized",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_a_formula_is_neutralized",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportSanitizer",
+      "method": "test_html_is_removed",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_html_is_removed",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportSanitizer",
+      "method": "test_a_plain_value_is_untouched",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_a_plain_value_is_untouched",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportPreview",
+      "method": "test_a_public_file_is_rejected",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_a_public_file_is_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportPreview",
+      "method": "test_an_unsupported_format_is_rejected",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_an_unsupported_format_is_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportPreview",
+      "method": "test_the_preview_classifies_every_row",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_the_preview_classifies_every_row",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportPreview",
+      "method": "test_the_preview_never_creates_a_lead",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_the_preview_never_creates_a_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportPreview",
+      "method": "test_the_same_file_and_key_returns_the_same_batch",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_the_same_file_and_key_returns_the_same_batch",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportPreview",
+      "method": "test_the_same_file_with_a_different_key_creates_a_second_batch",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_the_same_file_with_a_different_key_creates_a_second_batch",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportPreview",
+      "method": "test_the_row_limit_is_enforced",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_the_row_limit_is_enforced",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportPreview",
+      "method": "test_an_xlsx_file_is_parsed",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_an_xlsx_file_is_parsed",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportWorker",
+      "method": "test_the_worker_creates_the_canonical_leads",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_the_worker_creates_the_canonical_leads",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportWorker",
+      "method": "test_the_worker_is_idempotent",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_the_worker_is_idempotent",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportWorker",
+      "method": "test_an_existing_lead_is_reused_and_not_modified",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_an_existing_lead_is_reused_and_not_modified",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportWorker",
+      "method": "test_the_failed_rows_are_written_into_a_private_artifact",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_the_failed_rows_are_written_into_a_private_artifact",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportWorker",
+      "method": "test_a_confirmed_batch_can_be_retried",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_a_confirmed_batch_can_be_retried",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_imports",
+      "class": "TestImportWorker",
+      "method": "test_over_200_rows_imports_every_valid_row_and_records_every_error",
+      "status": "PASS",
+      "source_xml": "test_p1_imports.junit.xml",
+      "raw_name": "test_over_200_rows_imports_every_valid_row_and_records_every_error",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_assign_sets_owner_audit_todo_and_share",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_assign_sets_owner_audit_todo_and_share",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_assign_is_idempotent_for_the_same_request_id",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_assign_is_idempotent_for_the_same_request_id",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_assign_requires_a_request_id",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_assign_requires_a_request_id",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_assign_rejects_a_non_admin_actor",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_assign_rejects_a_non_admin_actor",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_assign_rejects_a_disabled_target",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_assign_rejects_a_disabled_target",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_assign_rejects_a_target_that_is_not_a_sales_user",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_assign_rejects_a_target_that_is_not_a_sales_user",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_assign_of_an_already_assigned_item_conflicts",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_assign_of_an_already_assigned_item_conflicts",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_reassign_moves_owner_and_revokes_the_previous_access",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_reassign_moves_owner_and_revokes_the_previous_access",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_reassign_with_a_stale_expected_owner_is_rejected",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_reassign_with_a_stale_expected_owner_is_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_reassign_requires_a_reason",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_reassign_requires_a_reason",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_reassign_respects_the_capacity_limit",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_reassign_respects_the_capacity_limit",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_revoke_returns_the_lead_to_the_pool_and_clears_every_access",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_revoke_returns_the_lead_to_the_pool_and_clears_every_access",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_revoke_releases_the_active_claim",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_revoke_releases_the_active_claim",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_revoke_with_a_stale_expected_owner_is_rejected",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_revoke_with_a_stale_expected_owner_is_rejected",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_history_cannot_be_updated",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_history_cannot_be_updated",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_history_cannot_be_deleted",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_history_cannot_be_deleted",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_ownership",
+      "class": "TestOwnershipService",
+      "method": "test_history_records_the_actor",
+      "status": "PASS",
+      "source_xml": "test_p1_ownership.junit.xml",
+      "raw_name": "test_history_records_the_actor",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL01Reconcile",
+      "method": "test_reconcile_does_not_raise_and_reports_the_five_numbers",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_reconcile_does_not_raise_and_reports_the_five_numbers",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL01Reconcile",
+      "method": "test_the_events_are_scoped_to_the_campaign",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_events_are_scoped_to_the_campaign",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL01Reconcile",
+      "method": "test_the_current_owner_is_read_from_the_work_item",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_current_owner_is_read_from_the_work_item",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL02Checksum",
+      "method": "test_the_checksum_is_identical_for_bytes_and_str",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_checksum_is_identical_for_bytes_and_str",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL02Checksum",
+      "method": "test_a_file_flushed_to_disk_is_importable",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_file_flushed_to_disk_is_importable",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL02Checksum",
+      "method": "test_a_utf8_bom_csv_is_importable",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_utf8_bom_csv_is_importable",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL02Checksum",
+      "method": "test_a_real_xlsx_is_importable",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_real_xlsx_is_importable",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL03ColumnResolution",
+      "method": "test_the_resolution_returns_a_column_name_not_a_value",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_resolution_returns_a_column_name_not_a_value",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL03ColumnResolution",
+      "method": "test_the_mapping_with_several_fields_prefers_the_phone_column",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_mapping_with_several_fields_prefers_the_phone_column",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL03ColumnResolution",
+      "method": "test_a_mapping_without_a_phone_field_falls_back_to_a_phone_header",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_mapping_without_a_phone_field_falls_back_to_a_phone_header",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL03ColumnResolution",
+      "method": "test_a_mapping_without_any_phone_column_yields_no_column",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_mapping_without_any_phone_column_yields_no_column",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL03ColumnResolution",
+      "method": "test_the_classification_reads_the_phone_of_the_resolved_column",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_classification_reads_the_phone_of_the_resolved_column",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL04PoolQuery",
+      "method": "test_pool_list_does_not_raise_for_any_actor",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_pool_list_does_not_raise_for_any_actor",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL04PoolQuery",
+      "method": "test_the_total_is_scoped_like_the_items",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_total_is_scoped_like_the_items",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL04PoolQuery",
+      "method": "test_the_total_never_exceeds_the_scoped_truth",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_total_never_exceeds_the_scoped_truth",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL04PoolQuery",
+      "method": "test_a_staff_member_reads_a_bounded_pool",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_staff_member_reads_a_bounded_pool",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_the_leader_card_counts_the_team_only",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_leader_card_counts_the_team_only",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_the_leader_per_user_has_no_foreign_user",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_leader_per_user_has_no_foreign_user",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_the_per_user_breakdown_matches_the_card",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_per_user_breakdown_matches_the_card",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_a_staff_member_sees_only_its_own_work_items",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_staff_member_sees_only_its_own_work_items",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_the_bod_sees_the_whole_installation",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_bod_sees_the_whole_installation",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_the_active_claims_counter_is_scoped",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_active_claims_counter_is_scoped",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_the_failed_counters_are_scoped",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_failed_counters_are_scoped",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_the_identity_count_is_scoped_not_global",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_identity_count_is_scoped_not_global",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_the_campaign_summary_counts_work_items_not_users",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_campaign_summary_counts_work_items_not_users",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_the_campaign_summary_hides_the_campaign_of_another_team",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_campaign_summary_hides_the_campaign_of_another_team",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL05DashboardScope",
+      "method": "test_a_campaign_filter_narrows_the_cards",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_campaign_filter_narrows_the_cards",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL06CampaignFilter",
+      "method": "test_the_campaign_filter_does_not_raise",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_campaign_filter_does_not_raise",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL06CampaignFilter",
+      "method": "test_a_campaign_without_a_run_reports_zero_events",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_campaign_without_a_run_reports_zero_events",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL06CampaignFilter",
+      "method": "test_the_date_filter_is_applied",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_date_filter_is_applied",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL06CampaignFilter",
+      "method": "test_the_date_filter_narrows_the_cards_and_not_only_the_events",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_date_filter_narrows_the_cards_and_not_only_the_events",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL06CampaignFilter",
+      "method": "test_reconcile_with_a_campaign_does_not_raise",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_reconcile_with_a_campaign_does_not_raise",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL07LeaderRead",
+      "method": "test_the_leader_reads_the_rules_of_their_campaign",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_leader_reads_the_rules_of_their_campaign",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL07LeaderRead",
+      "method": "test_the_leader_does_not_read_the_rules_of_another_team",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_leader_does_not_read_the_rules_of_another_team",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL07LeaderRead",
+      "method": "test_the_leader_reads_the_runs_of_their_campaign",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_leader_reads_the_runs_of_their_campaign",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL07LeaderRead",
+      "method": "test_a_shared_campaign_hides_the_rule_of_another_team",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_shared_campaign_hides_the_rule_of_another_team",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL07LeaderRead",
+      "method": "test_the_admin_role_still_reads_every_rule",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_admin_role_still_reads_every_rule",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL07LeaderRead",
+      "method": "test_the_api_rules_endpoint_works_for_a_leader",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_api_rules_endpoint_works_for_a_leader",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL08AuditTrail",
+      "method": "test_the_assignment_event_carries_the_run",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_assignment_event_carries_the_run",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL08AuditTrail",
+      "method": "test_a_distribution_run_writes_the_run_in_every_event",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_distribution_run_writes_the_run_in_every_event",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL08AuditTrail",
+      "method": "test_a_manual_reassign_keeps_the_source_of_the_original_assignment",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_manual_reassign_keeps_the_source_of_the_original_assignment",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL08AuditTrail",
+      "method": "test_a_manual_reassign_of_a_manual_assignment_has_no_run",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_manual_reassign_of_a_manual_assignment_has_no_run",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL08AuditTrail",
+      "method": "test_a_manual_revoke_keeps_the_source_of_the_original_assignment",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_manual_revoke_keeps_the_source_of_the_original_assignment",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL09PlaceholderField",
+      "method": "test_the_custom_field_exists",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_custom_field_exists",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL09PlaceholderField",
+      "method": "test_the_column_exists_in_the_database",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_column_exists_in_the_database",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL09PlaceholderField",
+      "method": "test_the_patch_is_idempotent",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_patch_is_idempotent",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL09PlaceholderField",
+      "method": "test_the_worker_marks_the_lead_it_creates",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_worker_marks_the_lead_it_creates",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL10Capacity",
+      "method": "test_a_zero_capacity_is_unlimited_in_the_eligibility",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_zero_capacity_is_unlimited_in_the_eligibility",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL10Capacity",
+      "method": "test_a_zero_capacity_stays_eligible_after_many_assignments",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_zero_capacity_stays_eligible_after_many_assignments",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL10Capacity",
+      "method": "test_a_positive_capacity_is_enforced",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_positive_capacity_is_enforced",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL10Capacity",
+      "method": "test_a_positive_capacity_is_never_exceeded_by_a_distribution",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_positive_capacity_is_never_exceeded_by_a_distribution",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL10Capacity",
+      "method": "test_a_positive_capacity_is_never_exceeded_by_a_manual_reassign",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_positive_capacity_is_never_exceeded_by_a_manual_reassign",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL10Capacity",
+      "method": "test_the_dashboard_reports_an_unlimited_capacity_as_null",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_dashboard_reports_an_unlimited_capacity_as_null",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL13Sanitization",
+      "method": "test_a_formula_is_neutralized",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_formula_is_neutralized",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL13Sanitization",
+      "method": "test_html_is_removed",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_html_is_removed",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL13Sanitization",
+      "method": "test_a_valid_plus84_phone_is_not_broken",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_valid_plus84_phone_is_not_broken",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL13Sanitization",
+      "method": "test_the_preview_never_stores_a_formula",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_preview_never_stores_a_formula",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL13Sanitization",
+      "method": "test_the_error_artifact_is_private_and_sanitized",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_error_artifact_is_private_and_sanitized",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL13Sanitization",
+      "method": "test_the_stored_error_of_a_failed_batch_carries_no_phone_number",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_stored_error_of_a_failed_batch_carries_no_phone_number",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL15NoPermissionBypass",
+      "method": "test_the_reporting_service_does_not_use_get_all",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_reporting_service_does_not_use_get_all",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL15NoPermissionBypass",
+      "method": "test_the_eligibility_service_does_not_use_get_all",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_eligibility_service_does_not_use_get_all",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL15NoPermissionBypass",
+      "method": "test_the_campaigns_api_does_not_use_get_all",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_campaigns_api_does_not_use_get_all",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL15NoPermissionBypass",
+      "method": "test_the_ownership_api_does_not_use_get_all",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_ownership_api_does_not_use_get_all",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL15NoPermissionBypass",
+      "method": "test_the_history_endpoint_respects_the_row_level_permission",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_history_endpoint_respects_the_row_level_permission",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL15NoPermissionBypass",
+      "method": "test_the_leader_only_sees_the_history_of_their_team",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_leader_only_sees_the_history_of_their_team",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestImportIdempotency",
+      "method": "test_the_same_file_and_key_returns_the_same_batch",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_same_file_and_key_returns_the_same_batch",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestImportIdempotency",
+      "method": "test_the_same_file_in_another_mode_creates_a_second_batch",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_same_file_in_another_mode_creates_a_second_batch",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestImportIdempotency",
+      "method": "test_a_duplicate_import_does_not_change_the_owner_or_the_status",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_duplicate_import_does_not_change_the_owner_or_the_status",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestImportIdempotency",
+      "method": "test_a_duplicate_import_does_not_distribute_the_lead",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_a_duplicate_import_does_not_distribute_the_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestImportIdempotency",
+      "method": "test_the_canonical_phone_is_shared_by_the_zero_and_84_forms",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_the_canonical_phone_is_shared_by_the_zero_and_84_forms",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestImportIdempotency",
+      "method": "test_an_empty_or_numeric_or_scientific_cell_is_an_error_not_a_lead",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_an_empty_or_numeric_or_scientific_cell_is_an_error_not_a_lead",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL16ErrorEnvelopeAndFileOracle",
+      "method": "test_every_p1_error_subclass_emits_stable_code_and_clears_context",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_every_p1_error_subclass_emits_stable_code_and_clears_context",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL16ErrorEnvelopeAndFileOracle",
+      "method": "test_chained_normalizers_keep_file_oracle_byte_identical_even_after_p1_error",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_chained_normalizers_keep_file_oracle_byte_identical_even_after_p1_error",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL17CrmAdminReportingScope",
+      "method": "test_crm_admin_has_no_system_manager_yet_reads_full_system_scope_matching_db",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_crm_admin_has_no_system_manager_yet_reads_full_system_scope_matching_db",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL18FirstConfirmToWorker",
+      "method": "test_first_confirm_reaches_queued_without_db_set_value_or_second_confirm",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_first_confirm_reaches_queued_without_db_set_value_or_second_confirm",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL19L20LargeImportAndErrorArtifact",
+      "method": "test_260_row_import_commits_all_valid_rows_and_preserves_exact_error_counts_across_resume",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_260_row_import_commits_all_valid_rows_and_preserves_exact_error_counts_across_resume",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL21RevokeBooleanParsing",
+      "method": "test_revoke_parses_all_false_and_true_variants_and_syncs_db_artifacts",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_revoke_parses_all_false_and_true_variants_and_syncs_db_artifacts",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL21RevokeBooleanParsing",
+      "method": "test_invalid_boolean_strings_fail_closed_with_invalid_request",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_invalid_boolean_strings_fail_closed_with_invalid_request",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL22LeaderUnassignedAndUniqueCustomers",
+      "method": "test_leader_counts_unassigned_revoked_closed_and_claims_without_cross_team_leak",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_leader_counts_unassigned_revoked_closed_and_claims_without_cross_team_leak",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL22LeaderUnassignedAndUniqueCustomers",
+      "method": "test_unique_customers_definition_is_unified_across_admin_bod_leader_and_staff",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_unique_customers_definition_is_unified_across_admin_bod_leader_and_staff",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL25ImportMappingAndBatchLink",
+      "method": "test_mapped_name_and_source_apply_to_new_leads_and_placeholder_only_when_missing",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_mapped_name_and_source_apply_to_new_leads_and_placeholder_only_when_missing",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL25ImportMappingAndBatchLink",
+      "method": "test_formula_and_html_sanitization_and_mapping_conflict_guard",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_formula_and_html_sanitization_and_mapping_conflict_guard",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL25ImportMappingAndBatchLink",
+      "method": "test_existing_canonical_lead_is_never_overwritten_and_links_across_multiple_batches",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_existing_canonical_lead_is_never_overwritten_and_links_across_multiple_batches",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL25ImportMappingAndBatchLink",
+      "method": "test_retry_and_concurrent_multi_batch_race_keep_non_duplicate_links_and_counters",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_retry_and_concurrent_multi_batch_race_keep_non_duplicate_links_and_counters",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL23BackendCustomerPoolCrossTeamIsolation",
+      "method": "test_revoked_or_closed_team_a_history_never_leaks_foreign_active_lead_in_reporting_or_api",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_revoked_or_closed_team_a_history_never_leaks_foreign_active_lead_in_reporting_or_api",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL23BackendCustomerPoolCrossTeamIsolation",
+      "method": "test_l23_pool_list_pre_pagination_unified_counts_all_pool_apis_and_bod_zero_pii",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_l23_pool_list_pre_pagination_unified_counts_all_pool_apis_and_bod_zero_pii",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL26BackendPaginationAndLimitValidation",
+      "method": "test_invalid_pagination_and_limit_raise_400_invalid_request_on_backend_endpoints",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_invalid_pagination_and_limit_raise_400_invalid_request_on_backend_endpoints",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL29GenericFrappeApiPermissionAndRawRunProtection",
+      "method": "test_doctype_and_document_level_has_permission_across_all_actors",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_doctype_and_document_level_has_permission_across_all_actors",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestL29GenericFrappeApiPermissionAndRawRunProtection",
+      "method": "test_frappe_client_and_desk_paths_enforce_team_scope_and_strip_raw_json",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_frappe_client_and_desk_paths_enforce_team_scope_and_strip_raw_json",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_p1_regressions",
+      "class": "TestDirectOwnershipMutationEligibility",
+      "method": "test_direct_assign_and_reassign_enforce_team_scope_rule_state_capacity_and_claims",
+      "status": "PASS",
+      "source_xml": "test_p1_regressions.junit.xml",
+      "raw_name": "test_direct_assign_and_reassign_enforce_team_scope_rule_state_capacity_and_claims",
+      "match_reason": "exact"
+    }
+  ]
+}

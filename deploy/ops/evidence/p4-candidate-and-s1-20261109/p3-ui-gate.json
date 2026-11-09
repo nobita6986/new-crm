@@ -1,0 +1,91 @@
+{
+  "schema_version": 2,
+  "gate": "g007-per-method-junit",
+  "gate_passed": true,
+  "expected_total": 7,
+  "observed_total": 7,
+  "passing_total": 7,
+  "counts": {
+    "PASS": 7
+  },
+  "xml_files": [
+    "test_ui_p3_pages_and_context.junit.xml"
+  ],
+  "xml_module_binding": {
+    "test_ui_p3_pages_and_context.junit.xml": "crm_cskh.tests.test_ui_p3_pages_and_context"
+  },
+  "missing_modules": [],
+  "empty_xml_files": [],
+  "missing_methods": [],
+  "failed_methods": [],
+  "errored_methods": [],
+  "skipped_methods": [],
+  "duplicate_methods": [],
+  "unexpected_cases": [],
+  "parse_errors": [],
+  "results": [
+    {
+      "module": "crm_cskh.tests.test_ui_p3_pages_and_context",
+      "class": "TestUiP3PagesAndContext",
+      "method": "test_guest_is_denied_on_all_six_p3_pages",
+      "status": "PASS",
+      "source_xml": "test_ui_p3_pages_and_context.junit.xml",
+      "raw_name": "test_guest_is_denied_on_all_six_p3_pages",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_ui_p3_pages_and_context",
+      "class": "TestUiP3PagesAndContext",
+      "method": "test_staff_only_accesses_personal_scorecard_among_p3_pages",
+      "status": "PASS",
+      "source_xml": "test_ui_p3_pages_and_context.junit.xml",
+      "raw_name": "test_staff_only_accesses_personal_scorecard_among_p3_pages",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_ui_p3_pages_and_context",
+      "class": "TestUiP3PagesAndContext",
+      "method": "test_leader_accesses_all_six_p3_pages_in_team_scope_with_waive_and_recompute",
+      "status": "PASS",
+      "source_xml": "test_ui_p3_pages_and_context.junit.xml",
+      "raw_name": "test_leader_accesses_all_six_p3_pages_in_team_scope_with_waive_and_recompute",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_ui_p3_pages_and_context",
+      "class": "TestUiP3PagesAndContext",
+      "method": "test_bod_accesses_five_management_p3_pages_with_zero_pii_and_denied_scorecard",
+      "status": "PASS",
+      "source_xml": "test_ui_p3_pages_and_context.junit.xml",
+      "raw_name": "test_bod_accesses_five_management_p3_pages_with_zero_pii_and_denied_scorecard",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_ui_p3_pages_and_context",
+      "class": "TestUiP3PagesAndContext",
+      "method": "test_crm_admin_accesses_all_six_p3_pages_with_recompute_and_waive_capabilities",
+      "status": "PASS",
+      "source_xml": "test_ui_p3_pages_and_context.junit.xml",
+      "raw_name": "test_crm_admin_accesses_all_six_p3_pages_with_recompute_and_waive_capabilities",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_ui_p3_pages_and_context",
+      "class": "TestUiP3PagesAndContext",
+      "method": "test_p3_feature_flag_rollback_hides_p3_nav_and_blocks_p3_routes_cleanly",
+      "status": "PASS",
+      "source_xml": "test_ui_p3_pages_and_context.junit.xml",
+      "raw_name": "test_p3_feature_flag_rollback_hides_p3_nav_and_blocks_p3_routes_cleanly",
+      "match_reason": "exact"
+    },
+    {
+      "module": "crm_cskh.tests.test_ui_p3_pages_and_context",
+      "class": "TestUiP3PagesAndContext",
+      "method": "test_qa_enabled_flag_defaults_false_and_publishes_p3_vietnamese_catalogue",
+      "status": "PASS",
+      "source_xml": "test_ui_p3_pages_and_context.junit.xml",
+      "raw_name": "test_qa_enabled_flag_defaults_false_and_publishes_p3_vietnamese_catalogue",
+      "match_reason": "exact"
+    }
+  ]
+}
