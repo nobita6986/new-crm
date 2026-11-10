@@ -41,6 +41,7 @@ from batch2_delta.common_stack import (  # noqa: E402
 
 SEED_G11_G12_PY = r"""
 from frappe.utils import add_days, now_datetime
+from crm_cskh.services.phone_identity import normalize_vn_phone
 from crm_cskh.api import (
     campaigns as camp_api,
     ownership as own_api,
@@ -80,10 +81,11 @@ for key, phone, fname, camp_id, owner_email in specs:
         "mobile_no": phone,
         "status": "New",
     }).insert(ignore_permissions=True)
-    if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": phone}):
+    norm_ph = normalize_vn_phone(phone)
+    if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": norm_ph}):
         frappe.get_doc({
             "doctype": "CSKH Identity Index",
-            "normalized_phone": phone,
+            "normalized_phone": norm_ph,
             "canonical_lead": lead.name,
         }).insert(ignore_permissions=True)
     wi = frappe.get_doc({
@@ -115,7 +117,7 @@ att_b1 = wf_api.record_attempt(
     idempotency_key="g11-att-b1",
 )
 corr_b1 = wf_api.request_correction(
-    attempt=att_b1["attempt"]["name"],
+    attempt=att_b1["attempt_id"],
     action="correct",
     corrected_fields={"note": "+Đã trao đổi chi tiết vị trí"},
     reason="Đính chính ghi chú B1",
@@ -123,7 +125,7 @@ corr_b1 = wf_api.request_correction(
 )
 frappe.set_user("team1.leader@dev.local")
 wf_api.review_correction(
-    correction_id=corr_b1["correction"]["name"],
+    correction_id=corr_b1["correction_id"],
     decision="approve",
     review_note="Duyệt đính chính",
     idempotency_key="g11-corr-rev-b1",
@@ -181,8 +183,8 @@ print(json.dumps({
     "month_key": month_key,
     "day_key": day_key,
     "items": items,
-    "att_b1_id": att_b1["attempt"]["name"],
-    "corr_b1_id": corr_b1["correction"]["name"],
+    "att_b1_id": att_b1["attempt_id"],
+    "corr_b1_id": corr_b1["correction_id"],
     "leader_export_id": leader_exp["export_id"],
     "leader_export_file_url": leader_exp_row["file_url"],
     "admin_pii_export_id": admin_pii_exp["export_id"],

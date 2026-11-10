@@ -437,10 +437,10 @@ def run_g13_p1_delta(stack: IsolatedComposeStack) -> dict[str, object]:
     assert int(b1k_done["created_rows"]) == 1000, b1k_done
 
     leads_1k = stack.exec_site_python(
-        "rows = frappe.db.sql(\"SELECT canonical_lead FROM `tabCSKH Identity Index` WHERE normalized_phone LIKE '09084%%' ORDER BY normalized_phone\", pluck=True)\n"
+        "rows = frappe.db.sql(\"SELECT canonical_lead FROM `tabCSKH Identity Index` WHERE normalized_phone LIKE %s ORDER BY normalized_phone\", ('+849084%',), pluck=True)\n"
         "print(json.dumps({'leads': list(rows)}))"
     )["leads"]
-    assert len(leads_1k) == 1000
+    assert len(leads_1k) == 1000, len(leads_1k)
 
     _, _, camp_1k_resp = admin1.post_json(
         "/api/method/crm_cskh.api.campaigns.save",
@@ -550,6 +550,7 @@ def run_g13_p1_delta(stack: IsolatedComposeStack) -> dict[str, object]:
         r"""
 from crm_cskh.api import campaigns as camp_api, distribution as dist_api
 from crm_cskh.services import distribution as dist_svc
+from crm_cskh.services.phone_identity import normalize_vn_phone
 
 frappe.set_user("crm.admin@dev.local")
 camp_f = camp_api.save(code="CAMP-F08-FAIR", title="Chiến dịch cộng dồn nhiều lô", status="Active")["campaign"]
@@ -561,9 +562,10 @@ for b_idx in range(3):
     b_leads = []
     for j in range(10):
         ph = f"09085{b_idx}{j:04d}"
+        norm_ph = normalize_vn_phone(ph)
         ld = frappe.get_doc({"doctype": "CRM Lead", "first_name": f"Fair {b_idx}-{j}", "lead_name": f"Fair {b_idx}-{j}", "mobile_no": ph, "status": "New"}).insert(ignore_permissions=True)
-        if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": ph}):
-            frappe.get_doc({"doctype": "CSKH Identity Index", "normalized_phone": ph, "canonical_lead": ld.name}).insert(ignore_permissions=True)
+        if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": norm_ph}):
+            frappe.get_doc({"doctype": "CSKH Identity Index", "normalized_phone": norm_ph, "canonical_lead": ld.name}).insert(ignore_permissions=True)
         b_leads.append(ld.name)
     frappe.set_user("crm.admin@dev.local")
     camp_api.save(campaign=camp_f, title="Chiến dịch cộng dồn nhiều lô", status="Active", selection={"leads": b_leads})
@@ -630,6 +632,7 @@ def run_g14_p2_delta(stack: IsolatedComposeStack) -> dict[str, object]:
         r"""
 from frappe.utils import add_days, add_to_date, now_datetime
 from crm_cskh.api import campaigns as camp_api, ownership as own_api
+from crm_cskh.services.phone_identity import normalize_vn_phone
 
 frappe.set_user("crm.admin@dev.local")
 camp_p2 = camp_api.save(code="CAMP-G14-P2", title="Chiến dịch kiểm định P2 G14", status="Active")["campaign"]
@@ -638,9 +641,10 @@ frappe.set_user("Administrator")
 wis = []
 for idx in range(1, 6):
     ph = f"090860010{idx}"
+    norm_ph = normalize_vn_phone(ph)
     ld = frappe.get_doc({"doctype": "CRM Lead", "first_name": f"Ứng viên P2 {idx}", "lead_name": f"Ứng viên P2 {idx}", "mobile_no": ph, "status": "New"}).insert(ignore_permissions=True)
-    if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": ph}):
-        frappe.get_doc({"doctype": "CSKH Identity Index", "normalized_phone": ph, "canonical_lead": ld.name}).insert(ignore_permissions=True)
+    if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": norm_ph}):
+        frappe.get_doc({"doctype": "CSKH Identity Index", "normalized_phone": norm_ph, "canonical_lead": ld.name}).insert(ignore_permissions=True)
     wi = frappe.get_doc({"doctype": "CSKH Work Item", "lead": ld.name, "campaign": camp_p2, "status": "queued"}).insert(ignore_permissions=True)
     frappe.set_user("crm.admin@dev.local")
     own_api.assign(work_item=wi.name, target_user="staff.a@dev.local", reason=f"G14 {idx}", request_id=f"g14-asgn-{idx}")
@@ -772,19 +776,36 @@ print(json.dumps({
             "idempotency_key": "g14-att-zalo",
         },
     )
-    assert st_man == 200 and st_pbx == 200 and st_dup_cl == 409 and st_zalo == 200
-    att_man = unwrap_message(body_man)["attempt"]
-    att_pbx = unwrap_message(body_pbx)["attempt"]
-    att_zalo = unwrap_message(body_zalo)["attempt"]
+    assert st_man == 200 and st_pbx == 200 and st_dup_cl == 409 and st_zalo == 200, (
+        st_man,
+        st_pbx,
+        st_dup_cl,
+        st_zalo,
+    )
+    att_rows = stack.exec_site_python(
+        "fields = ['name', 'connected_snapshot', 'verification_status', 'call_log', 'outcome_label_snapshot']\n"
+        "out = {k: frappe.db.get_value('CSKH Contact Attempt', v, fields, as_dict=True) for k, v in _IN['ids'].items()}\n"
+        "print(json.dumps(out, default=str))",
+        {
+            "ids": {
+                "man": unwrap_message(body_man)["attempt_id"],
+                "pbx": unwrap_message(body_pbx)["attempt_id"],
+                "zalo": unwrap_message(body_zalo)["attempt_id"],
+            }
+        },
+    )
+    att_man = att_rows["man"]
+    att_pbx = att_rows["pbx"]
+    att_zalo = att_rows["zalo"]
     assert (
-        att_man["is_connected"] in (0, False)
+        att_man["connected_snapshot"] in (0, False)
         and att_man["verification_status"] == "self_reported"
     )
     assert (
-        att_pbx["is_connected"] in (1, True)
+        att_pbx["connected_snapshot"] in (1, True)
         and att_pbx["verification_status"] == "verified"
     )
-    assert att_zalo["is_connected"] in (0, False) and not att_zalo.get("call_log")
+    assert att_zalo["connected_snapshot"] in (0, False) and not att_zalo.get("call_log")
 
     # `F16`: Idempotent replay (`200`) vs altered payload (`409 IDEMPOTENCY_CONFLICT`) + `409 STALE_WORK_ITEM`
     st_idem_ok, _, body_idem_ok = staff_a.post_json(
@@ -1161,8 +1182,8 @@ def run_g17_worker_kill_and_recovery(stack: IsolatedComposeStack) -> dict[str, o
     )
     d04_done = wait_import_terminal(stack, batch_d04, timeout_sec=180.0)
     d04_db_truth = stack.exec_site_python(
-        "cnt = frappe.db.sql(\"SELECT COUNT(*) FROM `tabCSKH Identity Index` WHERE normalized_phone LIKE '09087%%'\")[0][0]\n"
-        "dups = frappe.db.sql(\"SELECT COUNT(*) FROM (SELECT normalized_phone FROM `tabCSKH Identity Index` WHERE normalized_phone LIKE '09087%%' GROUP BY normalized_phone HAVING COUNT(*)>1) t\")[0][0]\n"
+        "cnt = frappe.db.sql(\"SELECT COUNT(*) FROM `tabCSKH Identity Index` WHERE normalized_phone LIKE %s\", ('+849087%',))[0][0]\n"
+        "dups = frappe.db.sql(\"SELECT COUNT(*) FROM (SELECT normalized_phone FROM `tabCSKH Identity Index` WHERE normalized_phone LIKE %s GROUP BY normalized_phone HAVING COUNT(*)>1) t\", ('+849087%',))[0][0]\n"
         "print(json.dumps({'identity_rows': int(cnt), 'duplicate_phones': int(dups)}))"
     )
     assert (
@@ -1174,9 +1195,10 @@ def run_g17_worker_kill_and_recovery(stack: IsolatedComposeStack) -> dict[str, o
     # 4B. `D05`: `SIGKILL` (`docker kill -s KILL`) on `queue-long` mid-`600`-Lead distribution + lease recovery
     # -------------------------------------------------------------------------
     leads_600 = stack.exec_site_python(
-        "rows = frappe.db.sql(\"SELECT canonical_lead FROM `tabCSKH Identity Index` WHERE normalized_phone LIKE '09087%%' ORDER BY normalized_phone LIMIT 600\", pluck=True)\n"
+        "rows = frappe.db.sql(\"SELECT canonical_lead FROM `tabCSKH Identity Index` WHERE normalized_phone LIKE %s ORDER BY normalized_phone LIMIT 600\", ('+849087%',), pluck=True)\n"
         "print(json.dumps({'leads': list(rows)}))"
     )["leads"]
+    assert len(leads_600) == 600, len(leads_600)
     _, _, camp_d05_resp = admin.post_json(
         "/api/method/crm_cskh.api.campaigns.save",
         {
@@ -1233,11 +1255,22 @@ def run_g17_worker_kill_and_recovery(stack: IsolatedComposeStack) -> dict[str, o
     stack.run_compose(["up", "-d", "--no-build", "queue-long"])
     stack.wait_services_healthy(["queue-long"], timeout_sec=90)
 
-    # Fast-forward expired lease (`lease_expires_at`) and recover via HTTP `distribution.execute`!
+    # Fast-forward expired lease (`lease_expires_at` + dead worker RQ `StartedJobRegistry`) and recover via HTTP `distribution.execute`!
     stack.exec_site_python(
+        "from frappe.utils.background_jobs import create_job_id, get_queue\n"
+        "from rq.job import Job\n"
+        "from rq.registry import StartedJobRegistry\n"
         "st = frappe.db.get_value('CSKH Distribution Run', _IN['r'], 'status')\n"
         "if st != 'completed':\n"
         "    frappe.db.set_value('CSKH Distribution Run', _IN['r'], 'lease_expires_at', '2020-01-01 00:00:00', update_modified=False)\n"
+        "    q = get_queue('long')\n"
+        "    jid = create_job_id(f\"cskh-dist-{_IN['r']}\")\n"
+        "    try:\n"
+        "        j = Job.fetch(jid, connection=q.connection)\n"
+        "        StartedJobRegistry(queue=q).remove(j, delete_job=True)\n"
+        "        j.delete()\n"
+        "    except Exception:\n"
+        "        pass\n"
         "print(json.dumps({'status_at_kill': st}))",
         {"r": run_d05},
     )
@@ -1394,7 +1427,11 @@ mismatch_claims = frappe.db.sql(
     SELECT COUNT(*)
     FROM `tabCSKH Active Claim` ac
     LEFT JOIN `tabCSKH Work Item` wi ON wi.name = ac.work_item
-    WHERE wi.name IS NULL OR wi.status NOT IN ('assigned', 'in_progress', 'on_hold') OR wi.assigned_to != ac.owner_user
+    WHERE wi.name IS NULL
+       OR wi.lead != ac.lead
+       OR wi.campaign != ac.campaign
+       OR wi.status NOT IN ('assigned', 'in_progress', 'on_hold')
+       OR COALESCE(wi.assigned_to, '') = ''
     '''
 )[0][0]
 

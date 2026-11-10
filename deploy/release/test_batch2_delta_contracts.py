@@ -208,6 +208,62 @@ class TestBatch2DeltaContracts(unittest.TestCase):
         ):
             compile(src, f"<{name}>", "exec")
 
+    def test_verifier_cskh_doctype_columns_and_api_keys(self) -> None:
+        import re
+
+        dt_root = REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "crm_cskh" / "doctype"
+        std_cols = {
+            "name",
+            "creation",
+            "modified",
+            "modified_by",
+            "owner",
+            "docstatus",
+            "idx",
+        }
+        schema: dict[str, set[str]] = {}
+        for jf in dt_root.glob("cskh_*/*.json"):
+            data = json.loads(jf.read_text(encoding="utf-8"))
+            if data.get("doctype") == "DocType" and data.get("name"):
+                cols = set(std_cols) | {
+                    f["fieldname"]
+                    for f in data.get("fields", [])
+                    if f.get("fieldname")
+                    and f.get("fieldtype")
+                    not in ("Section Break", "Column Break", "Tab Break", "HTML")
+                }
+                schema[data["name"]] = cols
+
+        for sname in (
+            "verify_g06_g09_migration_and_rollback.py",
+            "verify_g11_g12_security_topology.py",
+            "verify_g13_g14_g15_g17_delta.py",
+        ):
+            src = (RELEASE_DIR / "batch2_delta" / sname).read_text(encoding="utf-8")
+            self.assertNotIn('["attempt"]', src, f"Stale record_attempt key in {sname}")
+            self.assertNotIn(
+                '["correction"]', src, f"Stale request_correction key in {sname}"
+            )
+            self.assertNotIn("dedup_key", src, f"Non-existent dedup_key in {sname}")
+            self.assertNotIn(
+                "reschedule_count", src, f"Non-existent reschedule_count in {sname}"
+            )
+            for m in re.finditer(
+                r"SELECT\s+([a-zA-Z0-9_,\s]+)\s+FROM\s+`tab(CSKH [^`]+)`", src
+            ):
+                sel_part, dt_name = m.group(1), m.group(2)
+                if "COUNT(" in sel_part.upper() or dt_name not in schema:
+                    continue
+                for raw_col in sel_part.split(","):
+                    col = raw_col.strip().split()[0]
+                    if "." in col:
+                        col = col.split(".")[-1]
+                    self.assertIn(
+                        col,
+                        schema[dt_name],
+                        f"{sname}: column {col!r} missing from {dt_name}",
+                    )
+
 
 if __name__ == "__main__":
     unittest.main()
