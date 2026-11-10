@@ -272,6 +272,24 @@ class TestBatch2DeltaContracts(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertNotIn("publish_revision", bench_src)
+        self.assertNotIn("connected_callback", bench_src)
+        self.assertNotIn("S1AbortProbe", bench_src)
+
+        perm_src = (
+            REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "permissions.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn(
+            "org_hierarchy._permission_query_conditions =",
+            perm_src,
+        )
+        self.assertIn(
+            "org_hierarchy.get_lead_permission_query_conditions =",
+            perm_src,
+        )
+        self.assertIn(
+            "org_hierarchy.get_deal_permission_query_conditions =",
+            perm_src,
+        )
 
     def test_lock_diff_parsers_and_reachability_probe_compile(self) -> None:
         from collect_cve_and_lock_diff_evidence import (

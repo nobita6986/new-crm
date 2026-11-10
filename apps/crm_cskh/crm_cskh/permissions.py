@@ -90,9 +90,10 @@ def on_user_security_change(doc, method=None):
 
 
 def _install_org_hierarchy_guard():
-	"""Wrap upstream `crm.permissions.org_hierarchy._permission_query_conditions` so its unparenthesized
-	`owner OR todo` SQL never precedence-hijacks `DatabaseQuery.get_permission_query_conditions()` (`A OR B and C`)
-	and never grants `CRM Sales Hierarchy` subtree visibility after `Sales Manager` role removal (`G11`).
+	"""Wrap upstream `crm.permissions.org_hierarchy.get_lead_permission_query_conditions` and
+	`get_deal_permission_query_conditions` so unparenthesized `owner OR todo` SQL never precedence-hijacks
+	`DatabaseQuery.get_permission_query_conditions()` (`A OR B and C`) and never grants `CRM Sales Hierarchy`
+	subtree visibility after `Sales Manager` role removal (`G11`).
 	"""
 	global _ORG_HIERARCHY_GUARD_INSTALLED
 	if _ORG_HIERARCHY_GUARD_INSTALLED:
@@ -101,24 +102,23 @@ def _install_org_hierarchy_guard():
 		from crm.permissions import org_hierarchy
 	except Exception:
 		return
-	orig_fn = getattr(org_hierarchy, "_permission_query_conditions", None)
-	if not callable(orig_fn) or getattr(orig_fn, "_cskh_guarded", False):
-		_ORG_HIERARCHY_GUARD_INSTALLED = True
-		return
 
-	def _guarded_permission_query_conditions(user=None, doctype=None):
+	def _guarded_lead_permission_query_conditions(user=None, **kwargs):
 		resolved_user = user or frappe.session.user
 		if _is_system(resolved_user):
 			return ""
-		if doctype == "CRM Lead":
-			return f"({_owner_scope_condition(resolved_user, 'tabCRM Lead', 'lead_owner')})"
-		if doctype == "CRM Deal":
-			return f"({_owner_scope_condition(resolved_user, 'tabCRM Deal', 'deal_owner')})"
-		res = orig_fn(user=user, doctype=doctype)
-		return f"({res})" if res else ""
+		return f"({_owner_scope_condition(resolved_user, 'tabCRM Lead', 'lead_owner')})"
 
-	_guarded_permission_query_conditions._cskh_guarded = True
-	org_hierarchy._permission_query_conditions = _guarded_permission_query_conditions
+	def _guarded_deal_permission_query_conditions(user=None, **kwargs):
+		resolved_user = user or frappe.session.user
+		if _is_system(resolved_user):
+			return ""
+		return f"({_owner_scope_condition(resolved_user, 'tabCRM Deal', 'deal_owner')})"
+
+	_guarded_lead_permission_query_conditions._cskh_guarded = True
+	_guarded_deal_permission_query_conditions._cskh_guarded = True
+	org_hierarchy.get_lead_permission_query_conditions = _guarded_lead_permission_query_conditions
+	org_hierarchy.get_deal_permission_query_conditions = _guarded_deal_permission_query_conditions
 	_ORG_HIERARCHY_GUARD_INSTALLED = True
 
 
@@ -148,11 +148,17 @@ def _normalize_caller_permission_conditions(cskh_cond: str) -> str:
 
 def lead_query_conditions(user=None, **kwargs):
 	user = user or frappe.session.user
+	if _is_system(user):
+		_install_org_hierarchy_guard()
+		return ""
 	return _normalize_caller_permission_conditions(_owner_scope_condition(user, "tabCRM Lead", "lead_owner"))
 
 
 def deal_query_conditions(user=None, **kwargs):
 	user = user or frappe.session.user
+	if _is_system(user):
+		_install_org_hierarchy_guard()
+		return ""
 	return _normalize_caller_permission_conditions(_owner_scope_condition(user, "tabCRM Deal", "deal_owner"))
 
 

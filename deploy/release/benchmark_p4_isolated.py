@@ -804,7 +804,7 @@ def _execute_s1_http_acceptance_and_mixed_waves(
             json_body={
                 "work_item": wi_id,
                 "channel": "phone_call",
-                "outcome_code": "connected_callback",
+                "outcome_code": "connected_interested",
                 "note": f"Ghi nhận gọi lại HTTP S1 {idx:04d}",
                 "followup_due_at": future_due_str,
                 "followup_title": f"Callback HTTP S1 {idx:04d}",
@@ -846,7 +846,7 @@ def _execute_s1_http_acceptance_and_mixed_waves(
             json_body={
                 "work_item": str(item["work_item"]),
                 "channel": "phone_call",
-                "outcome_code": "connected_callback",
+                "outcome_code": "connected_interested",
                 "note": f"Ghi nhận gọi lại HTTP S1 {r_idx:04d}",
                 "followup_due_at": future_due_str,
                 "followup_title": f"Callback HTTP S1 {r_idx:04d}",
@@ -1990,10 +1990,12 @@ dist_dup_leads = int(
 )
 dist_reconcile = distribution.reconcile(dist_10k_camp, actor="Administrator")
 
-# Verify operator cancel/pause abort guard on a separate 2-lead campaign (`Paused` before worker runs -> clean `CONFLICT` abort)
+# Verify operator cancel/pause abort guard on a separate campaign (`Closed` before worker runs -> clean `CONFLICT` abort)
+from crm_cskh.services import identity as identity_service
 abort_l1 = frappe.get_doc(
-    {"doctype": "CRM Lead", "first_name": "Abort Guard 1", "mobile_no": "0969990001", "source": "S1AbortProbe"}
+    {"doctype": "CRM Lead", "first_name": "Abort Guard 1", "mobile_no": "0969990001"}
 ).insert(ignore_permissions=True)
+identity_service.register("+84969990001", abort_l1.name)
 frappe.db.commit()
 abort_camp = frappe.get_doc(
     {
@@ -2001,7 +2003,7 @@ abort_camp = frappe.get_doc(
         "code": "S1-CAMP-ABORT-GUARD",
         "title": "Chiến dịch Kiểm tra Hủy/Dừng",
         "status": "Active",
-        "selection_json": json.dumps({"source": "S1AbortProbe"}),
+        "selection_json": json.dumps({"leads": [abort_l1.name]}),
         "rule_version": 1,
     }
 ).insert(ignore_permissions=True)
