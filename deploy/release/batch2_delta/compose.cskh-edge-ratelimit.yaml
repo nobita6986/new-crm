@@ -17,10 +17,13 @@ services:
       - traefik.enable=true
       - traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
       - traefik.http.services.frontend.loadbalancer.server.port=${NGINX_LISTEN_PORT:-8080}
+      # Edge response headers (complements Nginx security_headers.conf without rebuilding APP_IMAGE)
+      - traefik.http.middlewares.cskh-sec-hdrs.headers.permissionsPolicy=camera=(), microphone=(), geolocation=()
       # Default site router
       - traefik.http.routers.frontend-http.entrypoints=web
       - traefik.http.routers.frontend-http.rule=${SITES_RULE:?SITES_RULE not set}
       - traefik.http.routers.frontend-http.priority=100
+      - traefik.http.routers.frontend-http.middlewares=cskh-sec-hdrs
       - traefik.http.routers.frontend-http.service=frontend
       # Login brute-force / burst router -> HTTP 429
       - traefik.http.middlewares.cskh-login-rl.ratelimit.average=${CSKH_LOGIN_RL_AVERAGE:-10}
@@ -29,7 +32,7 @@ services:
       - traefik.http.routers.frontend-login.entrypoints=web
       - traefik.http.routers.frontend-login.rule=(${SITES_RULE}) && Path(`/api/method/login`)
       - traefik.http.routers.frontend-login.priority=300
-      - traefik.http.routers.frontend-login.middlewares=cskh-login-rl
+      - traefik.http.routers.frontend-login.middlewares=cskh-sec-hdrs,cskh-login-rl
       - traefik.http.routers.frontend-login.service=frontend
       # Heavy API router (per-Cookie session bucket) -> HTTP 429
       - traefik.http.middlewares.cskh-heavy-rl.ratelimit.average=${CSKH_HEAVY_RL_AVERAGE:-20}
@@ -39,5 +42,5 @@ services:
       - traefik.http.routers.frontend-heavy.entrypoints=web
       - traefik.http.routers.frontend-heavy.rule=(${SITES_RULE}) && (Path(`/api/method/crm_cskh.api.import_files.upload_import_file`) || Path(`/api/method/crm_cskh.api.p3_reporting.request_export`) || Path(`/api/method/crm_cskh.api.p3_reporting.request_recompute`) || Path(`/api/method/crm_cskh.api.customers.customer_pool`) || Path(`/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown`))
       - traefik.http.routers.frontend-heavy.priority=200
-      - traefik.http.routers.frontend-heavy.middlewares=cskh-heavy-rl
+      - traefik.http.routers.frontend-heavy.middlewares=cskh-sec-hdrs,cskh-heavy-rl
       - traefik.http.routers.frontend-heavy.service=frontend
