@@ -517,21 +517,31 @@ def _login_session(
     jar = http.cookiejar.CookieJar()
     opener = urllib.request.build_opener(urllib.request.HTTPCookieProcessor(jar))
     login_body = urllib.parse.urlencode({"usr": user, "pwd": password}).encode("utf-8")
-    login_req = urllib.request.Request(
-        f"{base_url.rstrip('/')}/api/method/login",
-        data=login_body,
-        headers={
-            "Host": site_name,
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        method="POST",
-    )
-    with opener.open(login_req, timeout=25) as resp:
-        if resp.status != 200:
-            raise RuntimeError(
-                f"Benchmark login failed for {user} with HTTP {resp.status}"
-            )
-        _ = resp.read()
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        login_req = urllib.request.Request(
+            f"{base_url.rstrip('/')}/api/method/login",
+            data=login_body,
+            headers={
+                "Host": site_name,
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            method="POST",
+        )
+        try:
+            with opener.open(login_req, timeout=35) as resp:
+                if resp.status != 200:
+                    raise RuntimeError(
+                        f"Benchmark login failed for {user} with HTTP {resp.status}"
+                    )
+                _ = resp.read()
+            last_exc = None
+            break
+        except Exception as exc:
+            last_exc = exc
+            time.sleep(0.5 * (attempt + 1))
+    if last_exc is not None:
+        raise last_exc
     cookie_header = "; ".join(f"{c.name}={c.value}" for c in jar)
     csrf_token = ""
     if fetch_csrf:
@@ -542,7 +552,7 @@ def _login_session(
                 method="GET",
             )
             try:
-                with urllib.request.urlopen(req, timeout=25) as r:
+                with urllib.request.urlopen(req, timeout=35) as r:
                     html = r.read().decode("utf-8", errors="ignore")
                 for pat in (
                     r'["\']X-Frappe-CSRF-Token["\']\s*:\s*["\']([^"\']+)',
@@ -690,7 +700,7 @@ def _execute_s1_http_acceptance_and_mixed_waves(
     login_targets.append((bod_user, False))
     login_targets.append((bod_user, False))
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
         sessions_80 = list(
             pool.map(
                 lambda pair: _login_session(
@@ -1139,6 +1149,7 @@ def execute_isolated_benchmark(
             "overall_summary": wave40_overall,
             "scenario_summaries": wave40_scenarios,
         }
+        time.sleep(2.0)
 
     s1_http_acceptance: dict[str, object] | None = None
     if s1_in_container is not None and actor_password:
@@ -2102,6 +2113,23 @@ explain_plans = {
         "EXPLAIN SELECT work_item, outcome_code FROM `tabCSKH Contact Attempt` "
         "WHERE campaign = %s AND occurred_at >= '2026-10-27 00:00:00' AND occurred_at < '2026-10-28 00:00:00'",
         (campaigns[0],),
+        as_dict=True,
+    ),
+    "kpi_drilldown_interval_page": frappe.db.sql(
+        "EXPLAIN SELECT ah.name, ah.work_item, ah.to_user, ah.ownership_start, ah.ownership_end, wi.campaign, wi.lead "
+        "FROM `tabCSKH Assignment History` ah USE INDEX (idx_cskh_ah_start_name) "
+        "INNER JOIN `tabCSKH Work Item` wi ON wi.name = ah.work_item "
+        "WHERE ah.ownership_start >= '2026-10-01 00:00:00' AND ah.ownership_start < '2026-11-01 00:00:00' "
+        "AND ah.action IN ('assign', 'reassign', 'reopen') "
+        "ORDER BY ah.ownership_start ASC, ah.name ASC LIMIT 120 OFFSET 0",
+        as_dict=True,
+    ),
+    "kpi_drilldown_attempt_chunk": frappe.db.sql(
+        "EXPLAIN SELECT ca.ownership_event, MAX(ca.connected_snapshot) "
+        "FROM `tabCSKH Contact Attempt` ca USE INDEX (idx_cskh_attempt_ownevt_occ) "
+        "WHERE ca.ownership_event IN ('AH-S1-000001', 'AH-S1-000002', 'AH-S1-000003') "
+        "AND ca.recorded_at <= '2026-11-01 00:00:00' "
+        "GROUP BY ca.ownership_event",
         as_dict=True,
     ),
 }

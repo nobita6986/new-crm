@@ -711,23 +711,63 @@ def load_period_raw_dataset(
 	wi_src_clause, wi_src_params = _lead_src_subclause("wi.lead")
 	ah_emp_clause = " and ah.to_user = %s" if emp_clean else ""
 	ah_emp_params = (emp_clean,) if emp_clean else ()
-	intervals = frappe.db.sql(
-		f"""
-		select ah.name, ah.work_item, ah.action, ah.to_user, ah.event_at,
-		       ah.ownership_start, ah.ownership_end, ah.creation, ah.modified,
-		       {team_sel}, wi.campaign, wi.lead
-		from `tabCSKH Assignment History` ah
-		inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
-		where ah.action in ('assign', 'reassign', 'reopen')
-		  and coalesce(ah.ownership_start, ah.event_at) <= %s
-		  and (
-		        ah.ownership_end is null
-		     or ah.ownership_end >= %s
-		      ){wi_camp_clause}{wi_src_clause}{ah_emp_clause}
-		""",
-		(as_of_dt, start_dt, *camp_params, *wi_src_params, *ah_emp_params),
-		as_dict=True,
+	is_iv_cohort_dd = bool(
+		is_drilldown
+		and dd_mcode
+		in (
+			"CONNECTED_RATE",
+			"ELIGIBLE_COVERAGE",
+			"ASSIGNED_INTERVALS",
+			"UNIQUE_ASSIGNED_ITEMS",
+			"CONVERSION_RATE",
+		)
 	)
+	if is_iv_cohort_dd:
+		intervals = frappe.db.sql(
+			f"""
+			select ah.name, ah.work_item, ah.action, ah.to_user, ah.event_at,
+			       ah.ownership_start, ah.ownership_end, ah.creation, ah.modified,
+			       {team_sel}, wi.campaign, wi.lead
+			from `tabCSKH Assignment History` ah
+			inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
+			where ah.action in ('assign', 'reassign', 'reopen')
+			  and (ah.ownership_start is null or (ah.ownership_start >= %s and ah.ownership_start < %s))
+			  and coalesce(ah.ownership_start, ah.event_at) >= %s
+			  and coalesce(ah.ownership_start, ah.event_at) < %s
+			  and coalesce(ah.ownership_start, ah.event_at) <= %s{wi_camp_clause}{wi_src_clause}{ah_emp_clause}
+			order by coalesce(ah.ownership_start, ah.event_at) asc, ah.name asc
+			""",
+			(
+				start_dt,
+				cutoff_dt,
+				start_dt,
+				end_dt_excl,
+				as_of_dt,
+				*camp_params,
+				*wi_src_params,
+				*ah_emp_params,
+			),
+			as_dict=True,
+		)
+	else:
+		intervals = frappe.db.sql(
+			f"""
+			select ah.name, ah.work_item, ah.action, ah.to_user, ah.event_at,
+			       ah.ownership_start, ah.ownership_end, ah.creation, ah.modified,
+			       {team_sel}, wi.campaign, wi.lead
+			from `tabCSKH Assignment History` ah
+			inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
+			where ah.action in ('assign', 'reassign', 'reopen')
+			  and coalesce(ah.ownership_start, ah.event_at) <= %s
+			  and (
+			        ah.ownership_end is null
+			     or ah.ownership_end >= %s
+			      ){wi_camp_clause}{wi_src_clause}{ah_emp_clause}
+			order by coalesce(ah.ownership_start, ah.event_at) asc, ah.name asc
+			""",
+			(as_of_dt, start_dt, *camp_params, *wi_src_params, *ah_emp_params),
+			as_dict=True,
+		)
 
 	hist_team_map: dict[str, tuple[str | None, str]] = {}
 	iv_by_id: dict[str, dict] = {}
@@ -774,8 +814,23 @@ def load_period_raw_dataset(
 	#    (b) `FOLLOWUP` started in window (for `RESCHEDULE_RATE`),
 	#    (c) `FIRST_ATTEMPT` on `assigned_intervals` (for `ELIGIBLE_COVERAGE` `canceled_validly` check),
 	#    (d) open overdue obligations at `as_of_dt` (`OVERDUE_BACKLOG` / `OPEN_FOLLOWUPS_OVERDUE`).
+	dd_needs_obligations = (not is_drilldown) or (
+		dd_mcode
+		in (
+			"ELIGIBLE_COVERAGE",
+			"FIRST_ATTEMPT_SLA_RATE",
+			"WORK_ITEM_FIRST_ATTEMPT_SLA_RATE",
+			"FOLLOWUP_SLA_RATE",
+			"CALLBACK_COMPLETION_RATE",
+			"FIRST_CONNECTED_TRACKING_RATE",
+			"MIN_ATTEMPTS_COMPLIANCE_RATE",
+			"RESCHEDULE_RATE",
+			"OVERDUE_BACKLOG",
+			"OPEN_FOLLOWUPS_OVERDUE",
+		)
+	)
 	obligations_raw: list[dict] = []
-	if frappe.db.table_exists("CSKH SLA Obligation"):
+	if dd_needs_obligations and frappe.db.table_exists("CSKH SLA Obligation"):
 		ob_src_clause, ob_src_params = _lead_src_subclause("lead")
 		ob_emp_clause = " and owner_user = %s" if emp_clean else ""
 		ob_emp_params = (emp_clean,) if emp_clean else ()
@@ -785,44 +840,47 @@ def load_period_raw_dataset(
 			in ("CONNECTED_RATE", "ELIGIBLE_COVERAGE", "ASSIGNED_INTERVALS", "UNIQUE_ASSIGNED_ITEMS")
 			else ""
 		)
-		obligations_raw = frappe.db.sql(
-			f"""
-			select name, obligation_type, work_item, lead, campaign, interval_event, owner_user,
-			       team_at_obligation, attribution_status, followup_task, status, informational_only,
-			       is_recovery_obligation, reschedule_seq, started_at, original_due_at, effective_due_at,
-			       is_paused, paused_at, fulfilled_at, fulfilled_by_attempt, breached_at, closed_at,
-			       waived_by, waived_at, evaluation_anchor_at, modified
-			from `tabCSKH SLA Obligation`
-			where started_at <= %s
-			  and (
-			        (effective_due_at >= %s and effective_due_at < %s)
-			     or (started_at >= %s and started_at < %s)
-			     or (
-			           effective_due_at < %s
-			           and (
-			                 status in ('open', 'breached_open')
-			              or (
-			                    status in ('fulfilled_late', 'fulfilled_on_time', 'waived', 'canceled_validly', 'breached_handoff', 'handoff_closed')
-			                and coalesce(fulfilled_at, waived_at, closed_at) > %s
-			                 )
-			               )
-			        )
-			      ){ob_type_clause}{camp_clause}{ob_src_clause}{ob_emp_clause}
-			""",
-			(
-				as_of_dt,
-				start_dt,
-				end_dt_excl,
-				start_dt,
-				end_dt_excl,
-				as_of_dt,
-				as_of_dt,
-				*camp_params,
-				*ob_src_params,
-				*ob_emp_params,
-			),
-			as_dict=True,
-		)
+		if dd_mcode == "ELIGIBLE_COVERAGE" and len(assigned_intervals) <= 2500:
+			obligations_raw = []
+		else:
+			obligations_raw = frappe.db.sql(
+				f"""
+				select name, obligation_type, work_item, lead, campaign, interval_event, owner_user,
+				       team_at_obligation, attribution_status, followup_task, status, informational_only,
+				       is_recovery_obligation, reschedule_seq, started_at, original_due_at, effective_due_at,
+				       is_paused, paused_at, fulfilled_at, fulfilled_by_attempt, breached_at, closed_at,
+				       waived_by, waived_at, evaluation_anchor_at, modified
+				from `tabCSKH SLA Obligation`
+				where started_at <= %s
+				  and (
+				        (effective_due_at >= %s and effective_due_at < %s)
+				     or (started_at >= %s and started_at < %s)
+				     or (
+				           effective_due_at < %s
+				           and (
+				                 status in ('open', 'breached_open')
+				              or (
+				                    status in ('fulfilled_late', 'fulfilled_on_time', 'waived', 'canceled_validly', 'breached_handoff', 'handoff_closed')
+				                and coalesce(fulfilled_at, waived_at, closed_at) > %s
+				                 )
+				               )
+				        )
+				      ){ob_type_clause}{camp_clause}{ob_src_clause}{ob_emp_clause}
+				""",
+				(
+					as_of_dt,
+					start_dt,
+					end_dt_excl,
+					start_dt,
+					end_dt_excl,
+					as_of_dt,
+					as_of_dt,
+					*camp_params,
+					*ob_src_params,
+					*ob_emp_params,
+				),
+				as_dict=True,
+			)
 		seen_ob_ids = {r.name for r in obligations_raw}
 		missing_cov_ivs = sorted(
 			{iv.name for iv in assigned_intervals}
@@ -948,55 +1006,93 @@ def load_period_raw_dataset(
 	eff_attempts_by_iv_asof: dict[str, list[dict]] = defaultdict(list)
 
 	if use_sql_interval_agg:
-		has_inv_col = frappe.db.has_column("CSKH Contact Attempt", "invalid_phone_snapshot")
-		inv_codes_sorted = sorted(invalid_phone_codes_global)
-		inv_ph = ", ".join(["%s"] * len(inv_codes_sorted)) if inv_codes_sorted else "''"
-		inv_expr = (
-			f"(coalesce(ca.invalid_phone_snapshot, 0) = 1 or lower(coalesce(ca.outcome_code, '')) in ({inv_ph}))"
-			if has_inv_col
-			else f"(lower(coalesce(ca.outcome_code, '')) in ({inv_ph}))"
-		)
-		ca_camp_clause = " and ca.campaign = %s" if campaign_filter else ""
-		ca_src_clause, ca_src_params = _lead_src_subclause("ca.lead")
-		ca_emp_clause = " and ah_iv.to_user = %s" if emp_clean else ""
-		ca_emp_params = (emp_clean,) if emp_clean else ()
-		agg_rows = frappe.db.sql(
-			f"""
-			select ca.ownership_event,
-			       min(case when ca.occurred_at <= %s and (ah_iv.ownership_end is null or ca.occurred_at <= ah_iv.ownership_end) then ca.occurred_at else null end),
-			       max(case when ca.occurred_at < %s and ca.occurred_at <= %s then 1 else 0 end),
-			       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.connected_snapshot, 0) = 1 then 1 else 0 end),
-			       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and {inv_expr} then 1 else 0 end),
-			       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.dnc_snapshot, 0) = 1 then 1 else 0 end)
-			from `tabCSKH Contact Attempt` ca
-			inner join `tabCSKH Assignment History` ah_iv on ah_iv.name = ca.ownership_event
-			where ca.ownership_event is not null
-			  and coalesce(ca.contact_attempt_snapshot, 1) = 1
-			  and ca.recorded_at <= %s
-			  and coalesce(ah_iv.ownership_start, ah_iv.event_at) <= %s
-			  and (ah_iv.ownership_end is null or ah_iv.ownership_end >= %s){ca_camp_clause}{ca_src_clause}{ca_emp_clause}
-			group by ca.ownership_event
-			""",
-			(
-				as_of_dt,
-				end_dt_excl,
-				as_of_dt,
-				end_dt_excl,
-				as_of_dt,
-				end_dt_excl,
-				as_of_dt,
-				*inv_codes_sorted,
-				end_dt_excl,
-				as_of_dt,
-				as_of_dt,
-				as_of_dt,
-				start_dt,
-				*camp_params,
-				*ca_src_params,
-				*ca_emp_params,
-			),
-			as_dict=False,
-		)
+		if dd_mcode in ("ASSIGNED_INTERVALS", "UNIQUE_ASSIGNED_ITEMS") or not assigned_intervals:
+			agg_rows = []
+		else:
+			has_inv_col = frappe.db.has_column("CSKH Contact Attempt", "invalid_phone_snapshot")
+			inv_codes_sorted = sorted(invalid_phone_codes_global)
+			inv_ph = ", ".join(["%s"] * len(inv_codes_sorted)) if inv_codes_sorted else "''"
+			inv_expr = (
+				f"(coalesce(ca.invalid_phone_snapshot, 0) = 1 or lower(coalesce(ca.outcome_code, '')) in ({inv_ph}))"
+				if has_inv_col
+				else f"(lower(coalesce(ca.outcome_code, '')) in ({inv_ph}))"
+			)
+			if len(assigned_intervals) <= 2500:
+				iv_names = [iv.name for iv in assigned_intervals]
+				ph_ivs = ", ".join(["%s"] * len(iv_names))
+				agg_rows = frappe.db.sql(
+					f"""
+					select ca.ownership_event,
+					       min(case when ca.occurred_at <= %s and (ah_iv.ownership_end is null or ca.occurred_at <= ah_iv.ownership_end) then ca.occurred_at else null end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.connected_snapshot, 0) = 1 then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and {inv_expr} then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.dnc_snapshot, 0) = 1 then 1 else 0 end)
+					from `tabCSKH Contact Attempt` ca USE INDEX (idx_cskh_attempt_ownevt_occ)
+					inner join `tabCSKH Assignment History` ah_iv on ah_iv.name = ca.ownership_event
+					where ca.ownership_event in ({ph_ivs})
+					  and coalesce(ca.contact_attempt_snapshot, 1) = 1
+					  and ca.recorded_at <= %s
+					group by ca.ownership_event
+					""",
+					(
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						*inv_codes_sorted,
+						end_dt_excl,
+						as_of_dt,
+						*iv_names,
+						as_of_dt,
+					),
+					as_dict=False,
+				)
+			else:
+				ca_camp_clause = " and ca.campaign = %s" if campaign_filter else ""
+				ca_src_clause, ca_src_params = _lead_src_subclause("ca.lead")
+				ca_emp_clause = " and ah_iv.to_user = %s" if emp_clean else ""
+				ca_emp_params = (emp_clean,) if emp_clean else ()
+				agg_rows = frappe.db.sql(
+					f"""
+					select ca.ownership_event,
+					       min(case when ca.occurred_at <= %s and (ah_iv.ownership_end is null or ca.occurred_at <= ah_iv.ownership_end) then ca.occurred_at else null end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.connected_snapshot, 0) = 1 then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and {inv_expr} then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.dnc_snapshot, 0) = 1 then 1 else 0 end)
+					from `tabCSKH Contact Attempt` ca
+					inner join `tabCSKH Assignment History` ah_iv on ah_iv.name = ca.ownership_event
+					where ca.ownership_event is not null
+					  and coalesce(ca.contact_attempt_snapshot, 1) = 1
+					  and ca.recorded_at <= %s
+					  and coalesce(ah_iv.ownership_start, ah_iv.event_at) <= %s
+					  and (ah_iv.ownership_end is null or ah_iv.ownership_end >= %s){ca_camp_clause}{ca_src_clause}{ca_emp_clause}
+					group by ca.ownership_event
+					""",
+					(
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						*inv_codes_sorted,
+						end_dt_excl,
+						as_of_dt,
+						as_of_dt,
+						as_of_dt,
+						start_dt,
+						*camp_params,
+						*ca_src_params,
+						*ca_emp_params,
+					),
+					as_dict=False,
+				)
 		for oe_val, min_occ_val, has_att_v, has_conn_v, has_inv_v, has_dnc_v in agg_rows:
 			iv_agg_map[str(oe_val)] = (
 				get_datetime(min_occ_val) if min_occ_val else None,
