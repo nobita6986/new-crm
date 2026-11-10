@@ -422,6 +422,17 @@ def run_live_verification(
             ws_b.close()
 
         # 1B. `S08`: Disable `staff.a@dev.local` while holding open HTTP `sid` + open WebSocket `ws_a`
+        # Seed active rules for `staff.a` & `staff.b` BEFORE disabling `staff.a` so `campaigns.rules` classifies `staff.a` as `user_disabled`
+        st_ra_pre, _, _ = admin.post_json(
+            "/api/method/crm_cskh.api.campaigns.save_rule",
+            {"campaign": ctx["camp_t1"], "user": "staff.a@dev.local", "weight": 50},
+        )
+        st_rb_pre, _, _ = admin.post_json(
+            "/api/method/crm_cskh.api.campaigns.save_rule",
+            {"campaign": ctx["camp_t1"], "user": "staff.b@dev.local", "weight": 50},
+        )
+        assert st_ra_pre == 200 and st_rb_pre == 200, (st_ra_pre, st_rb_pre)
+
         old_sid_a = staff_a.sid
         old_csrf_a = staff_a.csrf_token
         assert old_sid_a and old_sid_a != "Guest"
@@ -520,14 +531,6 @@ def run_live_verification(
             }, disable_info
 
             # Campaign eligibility excludes disabled `staff.a@dev.local` (`REASON_USER_DISABLED`)
-            admin.post_json(
-                "/api/method/crm_cskh.api.campaigns.save_rule",
-                {"campaign": ctx["camp_t1"], "user": "staff.a@dev.local", "weight": 50},
-            )
-            _, _, rules_resp = admin.post_json(
-                "/api/method/crm_cskh.api.campaigns.save_rule",
-                {"campaign": ctx["camp_t1"], "user": "staff.b@dev.local", "weight": 50},
-            )
             st_rules, _, body_rules = admin.get_json(
                 "/api/method/crm_cskh.api.campaigns.rules", {"campaign": ctx["camp_t1"]}
             )
