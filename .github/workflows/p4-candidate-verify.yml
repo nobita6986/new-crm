@@ -598,6 +598,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
 
       - name: Download signed GHCR candidate bundle
         if: ${{ inputs.run_mode != 's1_only' }}
