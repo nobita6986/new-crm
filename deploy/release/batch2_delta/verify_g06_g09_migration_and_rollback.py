@@ -430,9 +430,16 @@ wf_api.close_work_item(
 frappe.set_user("Administrator")
 now_dt = now_datetime()
 month_key = f"{now_dt.year:04d}-{now_dt.month:02d}"
+import time as _t
 from crm_cskh.jobs.recompute_kpi import run_single_period_recompute
 from crm_cskh.jobs.run_export import execute_export_job
-run_single_period_recompute(period_type="monthly", period_key=month_key, actor="Administrator")
+from crm_cskh.services.errors import RecomputeInProgress
+for _ in range(20):
+    try:
+        run_single_period_recompute(period_type="monthly", period_key=month_key, actor="Administrator")
+        break
+    except RecomputeInProgress:
+        _t.sleep(1.5)
 
 frappe.set_user("crm.admin@dev.local")
 exp_req = p3_api.request_export(
