@@ -1,0 +1,155 @@
+{
+  "schema_version": "cskh-p4-batch2-g11-g12-v1",
+  "status": "PASS",
+  "generated_at_utc": "2026-11-10T04:14:07.504412+00:00",
+  "gates_verified": [
+    "G11",
+    "G12"
+  ],
+  "locked_batch1_commit_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+  "topology_measured": {
+    "architecture": "single_vps_10_service_compose",
+    "extra_distributed_cluster_created": false,
+    "session_store": "redis-cache + MariaDB tabSessions",
+    "realtime_bus": "redis-queue (redis_socketio) -> websocket (Node Socket.IO :9000)",
+    "open_websocket_behavior_note": "Upstream Frappe v15 validates `sid` on Socket.IO namespace connect (`40/<site>`) and per-document `doc_subscribe` (`can_subscribe_doc`), without pushing an unsolicited TCP 0x8 close frame on `clear_sessions`; verified 0 PII frames on pre-existing open TCP socket, immediate `44/<site>` rejection on reconnect, and immediate `401/403` on all HTTP/RPC/REST calls."
+  },
+  "g11_revocation_results": {
+    "s07_transfer_and_revoke": {
+      "old_owner_work_item_http": 403,
+      "old_owner_record_attempt_http": 409,
+      "old_owner_rest_lead_http": 403,
+      "old_owner_desk_getdoc_http": 403,
+      "new_owner_work_item_http": 200,
+      "docshare_and_todo_cleanup": {
+        "docshare_old_owner": 0,
+        "open_todo_old_owner": 0,
+        "docshare_new_owner": 1
+      },
+      "a_to_b_to_a_and_revoke_http": [
+        200,
+        200
+      ],
+      "zero_pii_frames_on_old_open_ws": true
+    },
+    "s08_user_disable": {
+      "inert_row_before_explicit_clear": {
+        "db_sessions": 1,
+        "redis_cached": true
+      },
+      "after_clear_sessions_force": {
+        "db_sessions": 0,
+        "redis_cached": false
+      },
+      "disabled_page_http": 417,
+      "disabled_api_http": 417,
+      "disabled_mutation_http": 417,
+      "socketio_reconnect_rejected_44": true,
+      "excluded_from_campaign_eligibility": true
+    },
+    "s09_and_s04_role_and_team_change": {
+      "s04_historical_team_as_of_leader1_http": 200,
+      "s04_historical_team_as_of_leader2_http": 403,
+      "s04_historical_team_as_of_leader2_p3_http": 403,
+      "pre_downgrade_export_http": 200,
+      "post_downgrade_team_page_http": 403,
+      "post_downgrade_team_api_http": 403,
+      "post_downgrade_export_rpc_http": 403,
+      "post_downgrade_export_raw_file_http": 403
+    }
+  },
+  "g12_security_controls": {
+    "authorization_and_headers": {
+      "guest_blocked": [
+        403,
+        403,
+        403
+      ],
+      "outside_user_http": 403,
+      "cross_staff_lead_rest_http": 403,
+      "cross_staff_403_parity": [
+        403,
+        403
+      ],
+      "file_direct_oracle_404_byte_identical": true,
+      "cross_team_leader_http": 403,
+      "bod_include_pii_blocked_http": 403,
+      "bod_aggregate_drilldown_zero_pii": true,
+      "forged_csrf_http": 400,
+      "desk_bypass_http": 403,
+      "spoofed_actor_http": 403,
+      "security_headers_verified": [
+        "x-content-type-options",
+        "x-frame-options",
+        "strict-transport-security",
+        "referrer-policy",
+        "permissions-policy"
+      ]
+    },
+    "payload_and_upload_limits_s11": {
+      "nginx_26mb_body_http": 413,
+      "app_11mb_import_http": 413,
+      "disguised_exe_upload_http": 400,
+      "corrupt_xlsx_preview_http": 400,
+      "foreign_lead_upload_file_http": 403
+    },
+    "audit_and_file_export_s12_s13_s15": {
+      "immutable_doctype_delete_blocked": {
+        "assignment_history": true,
+        "contact_attempt": true,
+        "attempt_correction": true,
+        "export_job": true
+      },
+      "export_file_is_private": 1,
+      "export_file_owner": "Administrator",
+      "csv_formula_injection_neutralized": true,
+      "nginx_protected_internal_guard_http": 404,
+      "path_traversal_guard_http": 403,
+      "expired_export_download_http": 410
+    },
+    "rate_limiting_s20": {
+      "base_compose_observation": "Base `compose.cskh-tls.yaml` relies on Frappe `System Settings` consecutive failed-login lockout in `redis-cache`; per-route `HTTP 429` burst throttling is delivered without rebuilding `APP_IMAGE` via `deploy/release/batch2_delta/compose.cskh-edge-ratelimit.yaml`.",
+      "frappe_consecutive_login_lockout_triggered": true,
+      "traefik_login_burst_http_codes": [
+        401,
+        401,
+        429,
+        429,
+        429,
+        429,
+        429,
+        429,
+        429,
+        429
+      ],
+      "traefik_heavy_api_burst_http_codes": [
+        200,
+        200,
+        200,
+        429,
+        429,
+        429,
+        429,
+        429,
+        429,
+        429,
+        429,
+        429
+      ],
+      "concurrent_other_session_http_status": 200
+    },
+    "port_isolation_s18": {
+      "service_published_ports": {
+        "db": "",
+        "redis-cache": "",
+        "redis-queue": "",
+        "backend": "",
+        "websocket": "",
+        "frontend": "",
+        "proxy": "80/tcp -> 127.0.0.1:18920"
+      },
+      "internal_services_zero_host_ports": true
+    }
+  }
+}

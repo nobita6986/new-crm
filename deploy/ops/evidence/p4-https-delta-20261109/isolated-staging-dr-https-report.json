@@ -1,25 +1,25 @@
 {
-  "timestamp_utc": "2026-11-09T14:36:57Z",
+  "timestamp_utc": "2026-11-10T04:34:18Z",
   "evidence_scope": "ISOLATED_STAGING_DR_HTTPS_FULL_REHEARSAL",
   "owner_live_site_touched": false,
-  "run_id": "ci-42635479943",
-  "project_name": "crm-cskh-dr-https-ci-42635479943",
+  "run_id": "ci-42755793371",
+  "project_name": "crm-cskh-dr-https-ci-42755793371",
   "site_name": "staging-dr-uat.crm-internal.localhost",
   "http_port": 18081,
   "https_port": 18443,
-  "app_image": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
+  "app_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
   "status": "PASS",
   "phases": {
     "bootstrap_and_https_smoke": {
       "status": "PASS",
-      "duration_seconds": 77.0,
+      "duration_seconds": 47.59,
       "tls_provisioning": {
-        "cert_volume": "crm-cskh-dr-https-ci-42635479943_cert_data",
+        "cert_volume": "crm-cskh-dr-https-ci-42755793371_cert_data",
         "ca_key_deleted_immediately": true,
         "server_key_mode": "0o600"
       },
       "https_smoke": {
-        "timestamp_utc": "2026-11-09T14:38:12Z",
+        "timestamp_utc": "2026-11-10T04:35:05Z",
         "mode": "dr-https",
         "site_name": "staging-dr-uat.crm-internal.localhost",
         "connect_host": "127.0.0.1",
@@ -27,46 +27,46 @@
         "https_port": 18443,
         "frappe_site_name": "staging-dr-uat.crm-internal.localhost",
         "extra_compose_files": [],
-        "app_image": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
+        "app_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
         "checks": {
           "container_digest_parity": {
-            "expected_app_image": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
-            "expected_sha256": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
+            "expected_app_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
+            "expected_sha256": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
             "missing_services": [],
             "inspected_services": {
               "backend": {
-                "container": "crm-cskh-dr-https-ci-42635479943-backend-1",
-                "running_image_id": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
+                "container": "crm-cskh-dr-https-ci-42755793371-backend-1",
+                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
                 "repo_digests": [],
                 "matched": true
               },
               "frontend": {
-                "container": "crm-cskh-dr-https-ci-42635479943-frontend-1",
-                "running_image_id": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
+                "container": "crm-cskh-dr-https-ci-42755793371-frontend-1",
+                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
                 "repo_digests": [],
                 "matched": true
               },
               "websocket": {
-                "container": "crm-cskh-dr-https-ci-42635479943-websocket-1",
-                "running_image_id": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
+                "container": "crm-cskh-dr-https-ci-42755793371-websocket-1",
+                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
                 "repo_digests": [],
                 "matched": true
               },
               "queue-short": {
-                "container": "crm-cskh-dr-https-ci-42635479943-queue-short-1",
-                "running_image_id": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
+                "container": "crm-cskh-dr-https-ci-42755793371-queue-short-1",
+                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
                 "repo_digests": [],
                 "matched": true
               },
               "queue-long": {
-                "container": "crm-cskh-dr-https-ci-42635479943-queue-long-1",
-                "running_image_id": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
+                "container": "crm-cskh-dr-https-ci-42755793371-queue-long-1",
+                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
                 "repo_digests": [],
                 "matched": true
               },
               "scheduler": {
-                "container": "crm-cskh-dr-https-ci-42635479943-scheduler-1",
-                "running_image_id": "sha256:f1f1ebb784e71720f9c94bc81dedb1a9acbb7f64b2eeaac174c13209b0b6638c",
+                "container": "crm-cskh-dr-https-ci-42755793371-scheduler-1",
+                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
                 "repo_digests": [],
                 "matched": true
               }
@@ -86,7 +86,7 @@
             "port": 18443,
             "tls_version": "TLSv1.3",
             "cipher": "TLS_AES_128_GCM_SHA256",
-            "not_after_utc": "2026-12-09T14:36:57Z",
+            "not_after_utc": "2026-12-10T04:34:18Z",
             "days_remaining": 29,
             "expiry_ok": true
           },
@@ -135,10 +135,10 @@
     },
     "migration_x2_and_reconcile": {
       "status": "PASS",
-      "migrate_run_1_seconds": 13.119,
-      "migrate_run_2_seconds": 13.067,
+      "migrate_run_1_seconds": 8.147,
+      "migrate_run_2_seconds": 8.0,
       "reconciliation": {
-        "timestamp_utc": "2026-11-09T14:39:06Z",
+        "timestamp_utc": "2026-11-10T04:35:44Z",
         "status": "PASS",
         "violation_count": 0,
         "violations": [],
@@ -381,28 +381,38 @@
         "pass": true
       }
     },
+    "https_browser_chromium_uat_and_security": {
+      "status": "PASS",
+      "duration_seconds": 50.51,
+      "browser_engine": "Playwright Headless Chromium",
+      "transport": "HTTPS_TLS_VERIFIED_IGNORE_HTTPS_ERRORS_FALSE",
+      "administrator_used_for_business_journeys": false,
+      "cases_total": 10,
+      "cases_passed": 10,
+      "failed_cases": []
+    },
     "worker_restart_and_cron_retry": {
       "status": "PASS",
-      "restart_recovery_seconds": 17.23,
+      "restart_recovery_seconds": 16.68,
       "cron_retry_x2_counts": {
         "after_run_1": {
           "sla_obligations": 68,
-          "latest_published_kpi_snapshots": 350,
-          "total_append_only_kpi_snapshots": 885,
+          "latest_published_kpi_snapshots": 332,
+          "total_append_only_kpi_snapshots": 1047,
           "dup_sla_keys": 0,
           "dup_attempt_keys": 0
         },
         "after_run_2": {
           "sla_obligations": 68,
-          "latest_published_kpi_snapshots": 350,
-          "total_append_only_kpi_snapshots": 1011,
+          "latest_published_kpi_snapshots": 332,
+          "total_append_only_kpi_snapshots": 1155,
           "dup_sla_keys": 0,
           "dup_attempt_keys": 0
         }
       },
       "idempotent_across_retry": true,
       "post_restart_health_probe": {
-        "timestamp_utc": "2026-11-09T14:39:48Z",
+        "timestamp_utc": "2026-11-10T04:37:07Z",
         "environment": "staging",
         "site": "staging-dr-uat.crm-internal.localhost",
         "extra_compose_files": [],
@@ -412,14 +422,14 @@
           "missing_daemon_services": [],
           "unhealthy_services": [],
           "scheduler_running_instances": 1,
-          "scheduler_uptime_seconds": 9,
+          "scheduler_uptime_seconds": 7,
           "restarts_or_oom": []
         },
         "disk": {
           "total_bytes": 154894188544,
-          "used_bytes": 50612523008,
-          "free_bytes": 104264888320,
-          "used_percent": 32.68,
+          "used_bytes": 60541952000,
+          "free_bytes": 94335459328,
+          "used_percent": 39.09,
           "warn_threshold_pct": 80.0,
           "critical_threshold_pct": 90.0,
           "level": "OK"
@@ -427,7 +437,7 @@
         "queues_and_scheduler": {
           "status": "PASS",
           "scheduler_disabled": false,
-          "scheduler_uptime_seconds": 9,
+          "scheduler_uptime_seconds": 7,
           "startup_grace_override_seconds": 0,
           "queues": {
             "default": {
@@ -449,32 +459,32 @@
           "stale_cron_jobs": [],
           "in_startup_grace_cron_jobs": [],
           "cron_last_complete_lag_seconds": {
-            "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations": 1,
-            "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes": 1,
+            "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations": 0,
+            "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes": 0,
             "crm_cskh.jobs.run_export.expire_stale_exports": 0,
-            "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods": 1
+            "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods": 0
           },
           "cron_job_details": {
             "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations": {
-              "last_complete_lag_seconds": 1,
+              "last_complete_lag_seconds": 0,
               "latest_any_status": "Complete",
-              "latest_terminal_lag_seconds": 1,
+              "latest_terminal_lag_seconds": 0,
               "latest_terminal_status": "Complete",
               "registered": true,
               "scheduled_job_type": "evaluate_sla.evaluate_sla_obligations"
             },
             "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes": {
-              "last_complete_lag_seconds": 1,
+              "last_complete_lag_seconds": 0,
               "latest_any_status": "Complete",
-              "latest_terminal_lag_seconds": 1,
+              "latest_terminal_lag_seconds": 0,
               "latest_terminal_status": "Complete",
               "registered": true,
               "scheduled_job_type": "recompute_kpi.drain_dirty_kpi_scopes"
             },
             "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods": {
-              "last_complete_lag_seconds": 1,
+              "last_complete_lag_seconds": 0,
               "latest_any_status": "Complete",
-              "latest_terminal_lag_seconds": 1,
+              "latest_terminal_lag_seconds": 0,
               "latest_terminal_status": "Complete",
               "registered": true,
               "scheduled_job_type": "recompute_kpi.refresh_current_standard_periods"
@@ -524,14 +534,14 @@
           },
           "qa_snapshot_audit": {
             "false_zero_qa_snapshots": 0,
-            "qa_zero_denom_null_snapshots": 1011,
-            "total_snapshots": 1011
+            "qa_zero_denom_null_snapshots": 1155,
+            "total_snapshots": 1155
           }
         },
         "backup_freshness_and_offsite": null,
         "data_loss_window_delta": null,
         "alert_preflight": {
-          "timestamp_utc": "2026-11-09T14:39:46Z",
+          "timestamp_utc": "2026-11-10T04:37:06Z",
           "status": "BLOCKED",
           "operator_contact_configured": false,
           "webhook_https_configured": false,
@@ -553,21 +563,91 @@
     },
     "rollback_tiers_https": {
       "status": "PASS",
+      "operator_decision_tree_log": [
+        {
+          "timestamp_utc": "2026-11-10T04:37:10Z",
+          "step_id": "DT-01-TIER1-FEATURE-DISABLE",
+          "p4_15_2_node": "Is the defect isolated to P3 reporting/SLA without PII leak or core P1/P2 corruption?",
+          "operator_decision": "YES -> Apply Tier 1 feature flag disable (cskh_p3_enabled=false) while preserving P1/P2 writes",
+          "executed_action": "bench --site <site> set-config cskh_p3_enabled false && clear-cache",
+          "outcome": {
+            "p3_http": 503,
+            "p1_my_list_http": 200,
+            "reenabled_p3_http": 200,
+            "pass": true
+          }
+        },
+        {
+          "timestamp_utc": "2026-11-10T04:37:36Z",
+          "step_id": "DT-02-SCHEMA-COMPATIBILITY-AND-TIER3-IMAGE-ROLLBACK",
+          "p4_15_2_node": "Is the defect in app/OS code while DB schema is Class A/B backward-compatible?",
+          "operator_decision": "YES -> Roll back APP_IMAGE from N (15.126.0) to N-1 (15.123.1) without touching MariaDB schema",
+          "executed_action": "Update APP_IMAGE to N-1 -> docker compose up -d --no-build --force-recreate 6 app services -> bench clear-cache -> verify-digest & INV-01..06",
+          "outcome": {
+            "executed_real_n_minus_1_rollback": true,
+            "candidate_n_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
+            "rolled_back_n_minus_1_image": "sha256:668d370259296f752a1ecfe6f4629bd99ca444272dad06bf59f24ad8fc464313",
+            "frappe_version_before_on_n": "15.126.0",
+            "frappe_version_after_on_n_minus_1": "15.123.1",
+            "db_schema_downgraded": false,
+            "post_deploy_n_record_preserved_on_n_minus_1": true,
+            "six_app_containers_digest_verified_on_n_minus_1": true,
+            "n_minus_1_staff_my_list_http": 200,
+            "n_minus_1_staff_ui_http": 200,
+            "n_minus_1_bod_overview_http": 200,
+            "n_minus_1_invariants_status": "PASS",
+            "rollback_rto_seconds": 25.32,
+            "pass": true
+          }
+        },
+        {
+          "timestamp_utc": "2026-11-10T04:39:04Z",
+          "step_id": "DT-03-CLASS-D-OR-CORRUPTION-TIER4-RESTORE",
+          "p4_15_2_node": "If schema/data is incompatible and no safe forward-fix is immediately available, how is Tier 4 restore executed?",
+          "operator_decision": "Account pre-restore data-loss window (--since-utc) -> stop workers/scheduler -> bench restore DB+public+private files -> migrator -> verify 8/8 post-restore deltas == 0 & INV-01..06 == 0",
+          "executed_action": "check_health_and_invariants.py --since-utc -> bench restore -> migrator -> https-smoke",
+          "outcome": {
+            "pre_restore_new_leads": 1,
+            "all_post_restore_deltas_zero": true,
+            "restore_and_migrate_seconds": 31.95,
+            "post_restore_health": "PASS",
+            "post_restore_https_smoke": "PASS",
+            "pass": true
+          }
+        }
+      ],
       "tier1_p3_kill_switch_https": {
         "p3_disabled_overview_http": 503,
         "p3_disabled_p1_my_list_http": 200,
         "p3_reenabled_overview_http": 200,
         "pass": true
       },
-      "tier2_digest_verification": {
+      "digest_parity_preflight_guard": {
         "matching_digest_status": "PASS",
         "inspected_services_count": 6,
         "wrong_digest_rejected_exit_code": 2,
+        "note": "Preflight digest guard only — NOT a substitute for Tier 3 application image rollback",
+        "pass": true
+      },
+      "tier3_real_n_to_n_minus_1_image_rollback": {
+        "executed_real_n_minus_1_rollback": true,
+        "candidate_n_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
+        "rolled_back_n_minus_1_image": "sha256:668d370259296f752a1ecfe6f4629bd99ca444272dad06bf59f24ad8fc464313",
+        "frappe_version_before_on_n": "15.126.0",
+        "frappe_version_after_on_n_minus_1": "15.123.1",
+        "db_schema_downgraded": false,
+        "post_deploy_n_record_preserved_on_n_minus_1": true,
+        "six_app_containers_digest_verified_on_n_minus_1": true,
+        "n_minus_1_staff_my_list_http": 200,
+        "n_minus_1_staff_ui_http": 200,
+        "n_minus_1_bod_overview_http": 200,
+        "n_minus_1_invariants_status": "PASS",
+        "rollback_rto_seconds": 25.32,
         "pass": true
       },
       "tier3_forward_fix_decision_guard": {
-        "additive_classes_abc_allow_tier2_digest_rollback": true,
-        "destructive_class_d_requires_tier4_point_in_time_restore": true,
+        "additive_classes_ab_allow_tier3_image_rollback": true,
+        "destructive_classes_cd_require_forward_fix_or_tier4_restore": true,
         "pass": true
       },
       "tier4_db_and_files_point_in_time_restore": {
@@ -580,7 +660,7 @@
           "new_or_updated_work_items": 0,
           "new_published_kpi_runs": 0,
           "new_sla_breaches": 0,
-          "since_utc": "2026-11-09T14:39:56Z"
+          "since_utc": "2026-11-10T04:38:08Z"
         },
         "post_restore_delta_since_backup": {
           "new_assignment_events": 0,
@@ -591,10 +671,10 @@
           "new_or_updated_work_items": 0,
           "new_published_kpi_runs": 0,
           "new_sla_breaches": 0,
-          "since_utc": "2026-11-09T14:39:56Z"
+          "since_utc": "2026-11-10T04:38:08Z"
         },
         "all_post_restore_deltas_zero": true,
-        "end_to_end_restore_and_migrate_seconds": 41.36,
+        "end_to_end_restore_and_migrate_seconds": 31.95,
         "post_restore_health_status": "PASS",
         "post_restore_https_smoke_status": "PASS",
         "pass": true

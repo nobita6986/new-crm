@@ -1,0 +1,167 @@
+{
+  "schema_version": "cskh-p4-batch2-g13-g14-g15-g17-v1",
+  "status": "PASS",
+  "generated_at_utc": "2026-11-10T04:21:34.106256+00:00",
+  "gates_verified": [
+    "G13",
+    "G14",
+    "G15",
+    "G17"
+  ],
+  "locked_batch1_commit_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+  "g15_golden_and_metrics_v2_delta": {
+    "fixture_sha256": "deb6be25a55a44deee4dcd21f9ee4fdada2ed38dfd2b14800c8cc1d375c49bdf",
+    "golden_16_scopes_qa_off_and_on_exact": true,
+    "calendar_vectors_verified": 9,
+    "empty_calendar_blocked": true,
+    "append_only_october_runs": 2,
+    "published_october_runs": 1,
+    "five_grain_reconciliations": {
+      "daily:2026-10-15": true,
+      "weekly:2026-W42": true,
+      "monthly:2026-10": true,
+      "quarterly:2026-Q4": true,
+      "yearly:2026": true
+    },
+    "team_a_node": "0unf0036gd",
+    "live_http_endpoints_200": {
+      "executive_overview": 200,
+      "team_comparison": 200,
+      "employee_quality": 200,
+      "campaign_quality": 200,
+      "my_scorecard": 200,
+      "metric_drilldown": 200,
+      "qa_config": 200,
+      "async_export_download": 200
+    }
+  },
+  "g13_p1_e2e_delta": {
+    "f03_csv_import_status": "COMPLETED_WITH_ERRORS",
+    "f04_xlsx_import_status": "COMPLETED",
+    "f05_idempotent_replay_verified": true,
+    "f07_rule_changed_and_expired_http": [
+      409,
+      409
+    ],
+    "f08_1000_lead_50_30_20_allocation": {
+      "staff.a@dev.local": 500,
+      "staff.b@dev.local": 300,
+      "staff.c@dev.local": 200
+    },
+    "f08_multi_batch_cumulative_3x10": {
+      "staff.a@dev.local": 15,
+      "staff.b@dev.local": 9,
+      "staff.c@dev.local": 6
+    },
+    "f09_pool_mylist_and_workflow_http": [
+      200,
+      403,
+      200,
+      200,
+      403
+    ],
+    "f11_concurrent_two_admin_execute_http": [
+      200,
+      400
+    ]
+  },
+  "g14_p2_e2e_delta": {
+    "f13_missing_followup_http": 422,
+    "f13_manual_vs_pbx_verification": {
+      "manual": "self_reported",
+      "pbx_twilio": "verified",
+      "zalo_call_log_null": true
+    },
+    "f14_duplicate_call_log_http": 409,
+    "f15_reschedule_and_sla_eval_dedup": {
+      "reschedule_without_reason_http": 422,
+      "reschedule_with_reason_http": 200,
+      "sla_obligation_counts_across_2_evals": [
+        4,
+        4
+      ]
+    },
+    "f16_idempotency_and_stale_revision_http": [
+      200,
+      409,
+      409
+    ],
+    "f17_close_and_reopen_http": [
+      200,
+      403,
+      200,
+      422
+    ],
+    "f18_dnc_enforcement_http": [
+      200,
+      409
+    ],
+    "f19_f20_void_restore_and_snapshot_immutability": true,
+    "f22_sla_pause_resume_waive_http": [
+      422,
+      200,
+      200,
+      422,
+      200
+    ]
+  },
+  "g17_worker_kill_and_recovery_delta": {
+    "d04_import_worker_sigkill": {
+      "kill_signal": {
+        "service": "queue-long",
+        "container_id_short": "34a94b57ebd5",
+        "signal": "KILL",
+        "post_kill_status": "exited",
+        "exit_code": 137
+      },
+      "mid_kill_progress_observed": 201,
+      "final_status": "COMPLETED",
+      "created_rows": 1200,
+      "db_truth": {
+        "identity_rows": 1200,
+        "duplicate_phones": 0
+      }
+    },
+    "d05_distribution_worker_sigkill_and_lease_takeover": {
+      "kill_signal": {
+        "service": "queue-long",
+        "container_id_short": "34a94b57ebd5",
+        "signal": "KILL",
+        "post_kill_status": "exited",
+        "exit_code": 137
+      },
+      "mid_kill_progress_observed": 100,
+      "http_takeover_status": 200,
+      "final_status": "completed",
+      "reconciled": true
+    },
+    "d06_kpi_recompute_sigkill_and_atomic_publish": {
+      "kill_signal": {
+        "service": "queue-short",
+        "container_id_short": "6e83f408c72c",
+        "signal": "KILL",
+        "post_kill_status": "exited",
+        "exit_code": 137
+      },
+      "http_overview_during_kill_status": 200,
+      "concurrent_lock_http_status": 409,
+      "recovered_swap": {
+        "published_runs": [
+          "5ad1k58a4f"
+        ],
+        "reconcile_ok": true
+      }
+    },
+    "d14_d15_restarts_and_d12_sql_invariants": {
+      "sla_obligations_before_after_restart_eval": [
+        3274,
+        3274
+      ],
+      "duplicate_normalized_phones": 0,
+      "duplicate_active_claims": 0,
+      "duplicate_sla_idempotency_keys": 0,
+      "mismatched_active_claims": 0
+    }
+  }
+}

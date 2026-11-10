@@ -1,0 +1,176 @@
+{
+  "schema_version": "cskh-p4-batch2-g06-g09-v1",
+  "status": "PASS",
+  "generated_at_utc": "2026-11-10T04:20:19.339114+00:00",
+  "gates_verified": [
+    "G06",
+    "G09"
+  ],
+  "matrix_items_verified": [
+    "D01",
+    "D02",
+    "D03",
+    "D10",
+    "D11",
+    "D12",
+    "D13"
+  ],
+  "n_minus_1_provenance": {
+    "git_commit_sha": "467830195358b2431ac772486530ab935887a518",
+    "image_ref": "cskh-n-minus-1:local",
+    "frappe_version": "15.123.1"
+  },
+  "candidate_n_provenance": {
+    "git_commit_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+    "image_ref": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+    "frappe_version": "15.126.0"
+  },
+  "g06_clone_migration_and_idempotency": {
+    "blg_p4_mig_01_audit": {
+      "doctype_modules": {
+        "CRM CSKH": 23
+      },
+      "table_collations": {
+        "utf8mb4_unicode_ci": 22
+      },
+      "export_job_table_exists": true
+    },
+    "migrator_run_1_duration_sec": 10.252,
+    "migrator_run_2_duration_sec": 10.21,
+    "migrator_run_1_exit_code": 0,
+    "migrator_run_2_exit_code": 0,
+    "failed_migration_guard_d03_exit_code": 1,
+    "schema_compatibility": {
+      "compatibility_class": "Class_A_Code_And_Runtime_Only",
+      "tier3_image_rollback_safe": true,
+      "added_tables": [],
+      "dropped_tables": [],
+      "added_compatible_columns": [],
+      "added_non_nullable_no_default": [],
+      "dropped_columns": [],
+      "type_changes": []
+    },
+    "counts_before": {
+      "crm_lead": 4,
+      "work_item": 4,
+      "active_claim": 3,
+      "contact_attempt": 2,
+      "assignment_history": 5,
+      "attempt_correction": 1,
+      "sla_obligation": 9,
+      "kpi_snapshot_monthly_published": 14,
+      "export_job": 1,
+      "custom_translation": 1
+    },
+    "counts_after_migrate_x2": {
+      "crm_lead": 4,
+      "work_item": 4,
+      "active_claim": 3,
+      "contact_attempt": 2,
+      "assignment_history": 5,
+      "attempt_correction": 1,
+      "sla_obligation": 9,
+      "kpi_snapshot_monthly_published": 14,
+      "export_job": 1,
+      "custom_translation": 1
+    },
+    "immutable_fingerprints_identical": true,
+    "custom_outcome_preserved": {
+      "version": 2,
+      "label_vi": "Không bắt máy (giữ qua migrate)"
+    },
+    "custom_policy_preserved": {
+      "name": "GLOBAL-DEFAULT",
+      "version": 2
+    },
+    "distribution_reconcile": {
+      "campaign": "30pjgsn9ol",
+      "current_owners": {
+        "staff.a@dev.local": 2,
+        "staff.c@dev.local": 1
+      },
+      "assignment_events": {
+        "staff.a@dev.local": 2,
+        "staff.b@dev.local": 1,
+        "staff.c@dev.local": 1
+      },
+      "distinct_leads": 4,
+      "active_work_items": 3,
+      "active_claims": 3,
+      "as_of": "2026-11-10 11:18:15.887733",
+      "reconciled": true
+    },
+    "kpi_monthly_reconcile": {
+      "ok": true,
+      "status": "reconciled",
+      "run_id": "3249tcu961",
+      "period": {
+        "period_type": "monthly",
+        "period_key": "2026-11",
+        "from_date": "2026-11-01",
+        "to_date": "2026-11-30",
+        "timezone": "Asia/Ho_Chi_Minh"
+      },
+      "snapshots_checked": 14,
+      "mismatches": []
+    }
+  },
+  "g09_rollback_rehearsals": {
+    "tier2_export_flag_rollback": {
+      "overview_http_status": 200,
+      "export_blocked_http_status": 503
+    },
+    "tier1_master_p3_flag_rollback": {
+      "p3_page_http_status": 403,
+      "p3_overview_http_status": 503,
+      "p1_my_customers_http_status": 200,
+      "p2_record_attempt_http_status": 200,
+      "dirty_scope_reenable_reconcile_ok": true
+    },
+    "tier3_image_rollback_n_to_n_minus_1": {
+      "frappe_version": "15.123.1",
+      "post_upgrade_attempt_preserved_on_n_minus_1": true,
+      "total_attempts_on_n_minus_1": 4,
+      "distribution_reconciled": true,
+      "kpi_reconciled": true,
+      "http_my_customers_status": 200,
+      "http_executive_overview_status": 200
+    },
+    "tier4_dr_full_restore_and_delta_accounting": {
+      "backup_files_bytes": {
+        "db_gz": 321888,
+        "priv_tar": 10240,
+        "pub_tar": 10240,
+        "site_config": 94
+      },
+      "restored_counts_match_pre_upgrade": true,
+      "restored_fingerprints_match_pre_upgrade": true,
+      "audited_post_backup_delta_window": {
+        "post_backup_attempts_count": 2,
+        "attempt_ids": [
+          "3j3mhvn6is",
+          "3k0j4k410m"
+        ]
+      }
+    }
+  },
+  "forward_fix_vs_restore_contract": {
+    "tier1_and_tier2_feature_flags": {
+      "when_to_use": "Regression isolated to P3 reporting, SLA engine, export, or QA toggle.",
+      "action": "Set `cskh_p3_enabled=false` or scoped `cskh_p3_export_enabled=false` + `bench clear-cache`.",
+      "rto_target_sec": 60,
+      "data_loss": "ZERO (P1/P2 writes continue and enqueue `CSKH Dirty Scope` for replay on re-enable)."
+    },
+    "tier3_image_rollback_n_to_n_minus_1": {
+      "when_to_use": "Class A (code/dependency/OS only) or Class B (additive nullable/default columns or new indexes/tables).",
+      "action": "Pin `APP_IMAGE` back to verified `N-1` `@sha256` digest, recreate `backend`, `frontend`, `websocket`, `queue-short`, `queue-long`, `scheduler`, and run `bench --site <site> clear-cache`. NEVER run `git reset`, `bench update --reset`, or manual `DROP TABLE`/`DROP COLUMN`.",
+      "tier3_safe_for_current_batch1_candidate": true,
+      "data_loss": "ZERO (all post-upgrade `CRM Lead`, `CSKH Work Item`, and `CSKH Contact Attempt` rows remain intact)."
+    },
+    "class_c_and_d_forward_fix_vs_tier4_restore": {
+      "when_tier3_is_insufficient": "Class C (destructive backfill/data rewrite) or Class D (dropped/renamed/narrowed column or incompatible state enum).",
+      "primary_path_forward_fix": "1. Enable maintenance / pause ingress mutations if data integrity is threatened; 2. Ship a tested forward-fix candidate image (`N+1`) with an idempotent corrective patch; 3. Promote `N+1` by `@sha256` digest so zero post-cutover business writes are lost.",
+      "last_resort_tier4_db_restore": "Execute ONLY with explicit Owner (`T0`) sign-off when forward-fix cannot restore integrity within RTO: 1. Query post-backup delta rows (`CSKH Contact Attempt`, `CRM Call Log`, `CRM Task`, `CSKH Assignment History` with `creation >= pre_migrate_backup_utc`) and export delta audit manifest before overwrite; 2. Restore pre-migrate `bench backup --with-files` (`SQL + private + public + site_config.json`) onto isolated/target site; 3. Boot `N-1` image, run reconciliation, and coordinate manual business replay of the audited delta window."
+    }
+  }
+}

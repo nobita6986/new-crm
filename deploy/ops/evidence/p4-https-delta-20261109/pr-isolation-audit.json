@@ -27,7 +27,7 @@
     "verified_evidence_checksums": 10,
     "system_python_constraints_count": 22,
     "bench_python_constraints_count": 154,
-    "scanned_p4_files": 108,
+    "scanned_p4_files": 109,
     "errors": [],
     "passed": true
   },
