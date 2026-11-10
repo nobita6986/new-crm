@@ -420,6 +420,24 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			False,
 		),
 		(
+			"CSKH Assignment History",
+			("ownership_start", "name", "action"),
+			"idx_cskh_ah_start_name",
+			False,
+		),
+		(
+			"CSKH Assignment History",
+			("work_item", "action", "ownership_start"),
+			"idx_cskh_ah_wi_act_start",
+			False,
+		),
+		(
+			"CSKH Work Item",
+			("campaign", "name", "lead"),
+			"idx_cskh_wi_camp_name",
+			False,
+		),
+		(
 			"CSKH SLA Obligation",
 			("idempotency_key",),
 			"uniq_cskh_sla_idem_key",
