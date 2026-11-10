@@ -274,6 +274,71 @@ class TestBatch2DeltaContracts(unittest.TestCase):
         self.assertNotIn("publish_revision", bench_src)
         self.assertNotIn("connected_callback", bench_src)
         self.assertNotIn("S1AbortProbe", bench_src)
+        self.assertNotIn("identity_service.register(", bench_src)
+        self.assertIn("identity_service.claim_canonical_identity(", bench_src)
+        self.assertIn('r_info.get("created")', bench_src)
+
+        import ast
+        from benchmark_p4_isolated import S1_IN_CONTAINER_BENCH_SCRIPT
+
+        tree = ast.parse(S1_IN_CONTAINER_BENCH_SCRIPT, filename="<s1_in_container>")
+        module_files = {
+            "identity_service": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "identity.py",
+            "distribution": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "distribution.py",
+            "import_service": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "import_service.py",
+            "contact_attempt": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "contact_attempt.py",
+            "read_model": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "read_model.py",
+            "p3_reporting": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "api"
+            / "p3_reporting.py",
+        }
+        defined_funcs: dict[str, set[str]] = {}
+        for alias, mf in module_files.items():
+            mtree = ast.parse(mf.read_text(encoding="utf-8"), filename=str(mf))
+            defined_funcs[alias] = {
+                n.name
+                for n in mtree.body
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id in defined_funcs
+            ):
+                self.assertIn(
+                    node.attr,
+                    defined_funcs[node.value.id],
+                    f"S1_IN_CONTAINER_BENCH_SCRIPT references missing {node.value.id}.{node.attr}",
+                )
 
         perm_src = (
             REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "permissions.py"
