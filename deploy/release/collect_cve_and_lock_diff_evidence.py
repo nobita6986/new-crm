@@ -79,15 +79,17 @@ def _diff_kv_map(before: dict[str, str], after: dict[str, str]) -> dict[str, obj
     }
 
 
-def _git_show_text(repo_root: Path, rev: str, rel_path: str) -> str:
+def _git_show_text(
+    repo_root: Path, rev: str, rel_path: str, *, optional: bool = False
+) -> str:
     proc = subprocess.run(
         ["git", "-C", str(repo_root), "show", f"{rev}:{rel_path}"],
         capture_output=True,
         text=True,
         encoding="utf-8",
-        check=True,
+        check=not optional,
     )
-    return proc.stdout
+    return proc.stdout if proc.returncode == 0 else ""
 
 
 def build_lock_diff_report(
@@ -121,14 +123,27 @@ def build_lock_diff_report(
         (candidate_build_dir / "pip-freeze.txt").read_text(encoding="utf-8")
     )
 
-    base_sys_pip = _parse_pip_freeze(
-        _git_show_text(
-            repo_root, baseline_sha, "deploy/images/evidence/system-pip-freeze.txt"
+    raw_base_sys = _git_show_text(
+        repo_root,
+        baseline_sha,
+        "deploy/images/evidence/system-pip-freeze.txt",
+        optional=True,
+    ) or _git_show_text(
+        repo_root,
+        baseline_sha,
+        "deploy/images/resources/system-python-constraints.txt",
+    )
+    base_sys_pip = _parse_pip_freeze(raw_base_sys)
+    cand_sys_file = candidate_build_dir / "system-pip-freeze.txt"
+    if not cand_sys_file.is_file():
+        cand_sys_file = (
+            repo_root
+            / "deploy"
+            / "images"
+            / "resources"
+            / "system-python-constraints.txt"
         )
-    )
-    cand_sys_pip = _parse_pip_freeze(
-        (candidate_build_dir / "system-pip-freeze.txt").read_text(encoding="utf-8")
-    )
+    cand_sys_pip = _parse_pip_freeze(cand_sys_file.read_text(encoding="utf-8"))
 
     base_dpkg = _parse_dpkg_list(
         _git_show_text(
