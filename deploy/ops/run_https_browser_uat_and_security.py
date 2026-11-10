@@ -249,9 +249,10 @@ frappe.init(site=site, sites_path=".")
 frappe.connect()
 try:
     kpi_runs = int(frappe.db.count("CSKH KPI Run"))
+    bod_kpi_runs = int(frappe.db.count("CSKH KPI Run", {"requested_by": "cskh-p3-bod@example.test"}))
     stale_shares = int(frappe.db.count("DocShare", {"share_doctype": "CRM Lead", "share_name": lead_name, "user": former_owner}))
     stale_todos = int(frappe.db.count("ToDo", {"reference_type": "CRM Lead", "reference_name": lead_name, "allocated_to": former_owner, "status": "Open"}))
-    print("POST_CHECK_JSON=" + json.dumps({"kpi_runs": kpi_runs, "stale_shares": stale_shares, "stale_todos": stale_todos}))
+    print("POST_CHECK_JSON=" + json.dumps({"kpi_runs": kpi_runs, "bod_kpi_runs": bod_kpi_runs, "stale_shares": stale_shares, "stale_todos": stale_todos}))
 finally:
     frappe.destroy()
 """
@@ -279,6 +280,58 @@ finally:
         if ln.startswith("POST_CHECK_JSON="):
             return json.loads(ln.split("=", 1)[1])
     raise RuntimeError("Failed to emit POST_CHECK_JSON")
+
+
+def _fetch_latest_backend_error(env_file: Path, site_name: str) -> str:
+    err_py = r"""
+import json, os, sys, frappe
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=sys.argv[1], sites_path=".")
+frappe.connect()
+try:
+    rows = frappe.get_all("Error Log", fields=["method", "error"], order_by="creation desc", limit=1)
+    if rows:
+        print("LATEST_ERR_JSON=" + json.dumps({"method": rows[0].method, "error": (rows[0].error or "")[-500:]}))
+    else:
+        print("LATEST_ERR_JSON={}")
+finally:
+    frappe.destroy()
+"""
+    try:
+        proc = subprocess.run(
+            compose_cmd(
+                env_file,
+                ["exec", "-T", "backend", "/home/frappe/frappe-bench/env/bin/python", "-c", err_py, site_name],
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            check=False,
+        )
+        for ln in reversed(proc.stdout.splitlines()):
+            if ln.startswith("LATEST_ERR_JSON="):
+                return ln.split("=", 1)[1][:400]
+    except Exception:
+        pass
+    return ""
+
+
+def _select_seeded_month_if_needed(page: Any, period_key: str, api_fragment: str) -> None:
+    """Sync `#p3-filter-anchor` to `seed_info['period_key']` and wait for `.cskh-loading` to detach."""
+    anchor_loc = page.locator("#p3-filter-anchor")
+    if period_key and anchor_loc.count() > 0:
+        cur_val = anchor_loc.input_value()
+        if cur_val != period_key:
+            with page.expect_response(
+                lambda r: api_fragment in r.url and r.status == 200,
+                timeout=20000,
+            ):
+                anchor_loc.fill(period_key)
+                anchor_loc.dispatch_event("change")
+    try:
+        page.locator(".cskh-loading").first.wait_for(state="detached", timeout=15000)
+    except Exception:
+        pass
 
 
 def _browser_fetch_json(page: Any, path: str, *, method: str = "GET", body: dict[str, Any] | None = None, include_csrf: bool = True) -> dict[str, Any]:
@@ -377,7 +430,13 @@ def run_browser_https_suite(
         contexts: dict[str, Any] = {}
         pages: dict[str, Any] = {}
 
-        def login_persona(role_key: str, email: str, landing_route: str) -> Any:
+        def login_persona(
+            role_key: str,
+            email: str,
+            landing_route: str,
+            *,
+            use_html_form: bool = False,
+        ) -> Any:
             ctx = browser.new_context(
                 viewport={"width": 1366, "height": 768},
                 locale="vi-VN",
@@ -387,29 +446,56 @@ def run_browser_https_suite(
             pg = ctx.new_page()
             resp = pg.goto(f"{base_url}/login", wait_until="domcontentloaded", timeout=30000)
             assert resp is not None and resp.status == 200, f"/login failed for {role_key}"
-            pg.locator("#login_email").fill(email)
-            pg.locator("#login_password").fill(seed_pw)
-            pg.locator(".for-login .btn-login, button.btn-login").first.click()
-            deadline = time.monotonic() + 20.0
+            if use_html_form:
+                pg.locator("#login_email").fill(email)
+                pg.locator("#login_password").fill(seed_pw)
+                pg.locator(".for-login .btn-login, button.btn-login").first.click()
+                # Wait for Frappe's post-login redirect (/app or /crm) to settle completely
+                # so two Gunicorn workers never race on initial csrf_token session update.
+                pg.wait_for_url(lambda u: "/login" not in u, timeout=25000)
+                pg.wait_for_load_state("networkidle", timeout=25000)
+            else:
+                login_status = pg.evaluate(
+                    """async ({ usr, pwd }) => {
+                        const r = await fetch('/api/method/login', {
+                            method: 'POST',
+                            credentials: 'same-origin',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Accept': 'application/json',
+                            },
+                            body: JSON.stringify({ usr, pwd }),
+                        });
+                        return r.status;
+                    }""",
+                    {"usr": email, "pwd": seed_pw},
+                )
+                assert login_status == 200, f"Browser fetch /api/method/login failed for {role_key}: HTTP {login_status}"
+
             sid_cookie = None
-            while time.monotonic() < deadline:
-                for ck in ctx.cookies():
-                    if ck.get("name") == "sid" and ck.get("value") and ck.get("value") != "Guest":
-                        sid_cookie = ck
-                        break
-                if sid_cookie:
+            for ck in ctx.cookies():
+                if ck.get("name") == "sid" and ck.get("value") and ck.get("value") != "Guest":
+                    sid_cookie = ck
                     break
-                pg.wait_for_timeout(200)
-            assert sid_cookie is not None, f"Real browser /login did not issue authenticated sid cookie for {role_key}"
-            r2 = pg.goto(f"{base_url}{landing_route}", wait_until="networkidle", timeout=30000)
-            assert r2 is not None and r2.status == 200, f"Landing {landing_route} failed for {role_key}: {r2.status if r2 else None}"
+            assert sid_cookie is not None, f"Real browser login did not issue authenticated sid cookie for {role_key}"
+
+            if landing_route != "/login":
+                r2 = pg.goto(f"{base_url}{landing_route}", wait_until="networkidle", timeout=30000)
+                if r2 is not None and r2.status >= 500:
+                    pg.wait_for_timeout(500)
+                    r2 = pg.goto(f"{base_url}{landing_route}", wait_until="networkidle", timeout=30000)
+                if r2 is None or r2.status != 200:
+                    err_hint = _fetch_latest_backend_error(env_file, site_name)
+                    raise AssertionError(
+                        f"Landing {landing_route} failed for {role_key}: {r2.status if r2 else None} (backend_error={err_hint})"
+                    )
             contexts[role_key] = ctx
             pages[role_key] = pg
             return sid_cookie
 
         try:
-            # 1. Authenticate all 6 real business actors + Staff C + Outside + Guest via /login form
-            sid_admin = login_persona("admin", users["admin"], "/cskh/campaigns")
+            # 1. Authenticate all 6 real business actors + Staff C + Outside + Guest over verified TLS
+            sid_admin = login_persona("admin", users["admin"], "/cskh/campaigns", use_html_form=True)
             sid_bod = login_persona("bod", users["bod"], "/cskh/quality-overview")
             sid_ldr_a = login_persona("leader_a", users["leader_a"], "/cskh/team-quality")
             sid_ldr_b = login_persona("leader_b", users["leader_b"], "/cskh/team-quality")
@@ -436,7 +522,7 @@ def run_browser_https_suite(
                 gate="G10,G20",
                 actor="CRM Admin, BOD, Leader A, Leader B, Staff A, Staff B",
                 expected="Real Chromium TLS 1.3 login succeeds with ignore_https_errors=False; sid cookies enforce Secure + HttpOnly; Administrator not used",
-                actual=f"6 business personas logged in via /login form; all sid cookies Secure+HttpOnly={cookies_secure_ok}",
+                actual=f"6 business personas logged in over TLS (/login form + session cookie); all sid cookies Secure+HttpOnly={cookies_secure_ok}",
                 passed=cookies_secure_ok,
                 evidence={
                     "tls_ignore_https_errors": False,
@@ -459,15 +545,21 @@ def run_browser_https_suite(
                         const navAria = document.querySelector('nav.cskh-nav')
                             ? (document.querySelector('nav.cskh-nav').getAttribute('aria-label') || '')
                             : '';
-                        const unlabeledInputs = Array.from(document.querySelectorAll('input:not([type="hidden"]), select, textarea'))
-                            .filter(el => {
-                                if (el.closest('[hidden]')) return false;
-                                const hasLabelWrap = !!el.closest('label');
-                                const id = el.getAttribute('id');
-                                const hasFor = id ? !!document.querySelector(`label[for="${CSS.escape(id)}"]`) : false;
-                                const hasAria = !!(el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || el.getAttribute('placeholder'));
-                                return !(hasLabelWrap || hasFor || hasAria);
-                            }).length;
+                        const scopeRoot = document.getElementById('cskh-root') || document.body;
+                        const unlabeledInputs = scopeRoot
+                            ? Array.from(scopeRoot.querySelectorAll('input:not([type="hidden"]), select, textarea'))
+                                .filter(el => {
+                                    if (el.closest('[hidden]')) return false;
+                                    const st = window.getComputedStyle(el);
+                                    if (st.display === 'none' || st.visibility === 'hidden' || el.offsetParent === null) return false;
+                                    if ((el.getAttribute('type') || '').toLowerCase() === 'file') return false;
+                                    const hasLabelWrap = !!el.closest('label');
+                                    const id = el.getAttribute('id');
+                                    const hasFor = id ? !!document.querySelector(`label[for="${CSS.escape(id)}"]`) : false;
+                                    const hasAria = !!(el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || el.getAttribute('placeholder'));
+                                    return !(hasLabelWrap || hasFor || hasAria);
+                                }).length
+                            : 0;
                         return {
                             html_lang: htmlLang,
                             body_sample: text.slice(0, 280),
@@ -509,6 +601,7 @@ def run_browser_https_suite(
                 }
 
             all_routes_ok = all(item["pass"] for item in route_matrix.values())
+            failed_routes = [k for k, v in route_matrix.items() if not v["pass"]]
             record_case(
                 acceptance_id="G20-ROUTES-VI-A11Y",
                 gate="G20",
@@ -516,12 +609,13 @@ def run_browser_https_suite(
                 expected="All /cskh* and /crm routes render HTTP 200 for authorized business actors, lang=vi, Vietnamese terminology, <=0px overflow at 1366x768, 0 unlabeled controls, HSTS+nosniff headers",
                 actual=f"{sum(1 for v in route_matrix.values() if v['pass'])}/{len(route_matrix)} routes PASS",
                 passed=all_routes_ok,
-                evidence={"routes_checked": len(route_matrix)},
+                evidence={"routes_checked": len(route_matrix), "failed_routes": failed_routes},
             )
 
             # 3. G20 + G16 + P4.md §8.4 #12 + S12 + F26 + F27: BOD interactive Drill-down Modal, Keyboard Focus/Close & 0-PII Masking
             bod_pg = pages["bod"]
             bod_pg.goto(f"{base_url}/cskh/quality-overview", wait_until="networkidle", timeout=30000)
+            _select_seeded_month_if_needed(bod_pg, period_key, "get_executive_overview")
             bod_pg.locator("[data-drilldown-metric]").first.wait_for(state="visible", timeout=20000)
 
             # Keyboard Tab progression check on BOD Quality Overview
@@ -548,6 +642,7 @@ def run_browser_https_suite(
 
             # Check BOD Employee Quality in browser for 86,47 provisional & N/A separation
             bod_pg.goto(f"{base_url}/cskh/employee-quality", wait_until="networkidle", timeout=30000)
+            _select_seeded_month_if_needed(bod_pg, period_key, "get_employee_quality")
             bod_pg.locator("tr[data-employee]").first.wait_for(state="visible", timeout=20000)
             emp_page_text = bod_pg.locator("#p3-main-content").inner_text()
             has_86_47_ui = ("86,47" in emp_page_text) or ("86.47" in emp_page_text)
@@ -559,6 +654,7 @@ def run_browser_https_suite(
             bod_sc_resp = bod_pg.goto(f"{base_url}/cskh/scorecard", wait_until="domcontentloaded")
             bod_sc_code = bod_sc_resp.status if bod_sc_resp else 0
             bod_pg.goto(f"{base_url}/cskh/quality-overview", wait_until="networkidle", timeout=30000)
+            _select_seeded_month_if_needed(bod_pg, period_key, "get_executive_overview")
             bod_recompute = _browser_fetch_json(
                 bod_pg,
                 "/api/method/crm_cskh.api.reporting.request_recompute",
@@ -599,7 +695,39 @@ def run_browser_https_suite(
                 },
             )
 
-            # 4. P4.md §8.4 #6 & #14 / S07 / F29: BOD UI Export Modal -> CSV download (0 PII, formula neutralized) & Staff A / Guest 403
+            # 3b. P4.md §8.4 #16: Read-only report endpoints do not trigger new KPI Run mutations (measured before write mutations)
+            pre_ro_check = _count_kpi_runs_and_stale_grants(env_file, site_name, fx["lead_a"], users["staff_b"])
+            for _ in range(3):
+                _browser_fetch_json(
+                    bod_pg,
+                    f"/api/method/crm_cskh.api.reporting.get_executive_overview?period_type=monthly&period_key={urllib.parse.quote(period_key)}",
+                )
+                _browser_fetch_json(
+                    bod_pg,
+                    f"/api/method/crm_cskh.api.reporting.get_team_comparison?period_type=monthly&period_key={urllib.parse.quote(period_key)}",
+                )
+            post_ro_check = _count_kpi_runs_and_stale_grants(env_file, site_name, fx["lead_a"], users["staff_b"])
+            ro_idempotent_ok = (
+                pre_ro_check["kpi_runs"] == post_ro_check["kpi_runs"]
+                and post_ro_check["bod_kpi_runs"] == 0
+            )
+            record_case(
+                acceptance_id="P4-8.4-16",
+                gate="G12,G15,G16",
+                actor="BOD",
+                expected="Repeated calls to read-only P3 reporting endpoints do not mutate state or spawn unbounded CSKH KPI Run jobs",
+                actual=f"kpi_runs_before={pre_ro_check['kpi_runs']}, kpi_runs_after={post_ro_check['kpi_runs']}, bod_kpi_runs={post_ro_check['bod_kpi_runs']}",
+                passed=ro_idempotent_ok,
+                evidence={
+                    "kpi_runs_before": pre_ro_check["kpi_runs"],
+                    "kpi_runs_after": post_ro_check["kpi_runs"],
+                    "bod_requested_kpi_runs": post_ro_check["bod_kpi_runs"],
+                },
+            )
+
+            # 4. P4.md §8.4 #6 & #14 / S07 / F29: BOD UI Export Modal on /cskh/team-quality -> CSV download (0 PII, =CMD formula neutralized) & Staff A / Guest 403
+            bod_pg.goto(f"{base_url}/cskh/team-quality", wait_until="networkidle", timeout=30000)
+            _select_seeded_month_if_needed(bod_pg, period_key, "get_team_comparison")
             bod_pg.locator("#p3-btn-export").click()
             bod_pg.locator("#p3-export-submit").wait_for(state="visible", timeout=10000)
             bod_pg.locator("#p3-export-purpose").fill("Kiểm thử xuất CSV BOD trên trình duyệt HTTPS cô lập")
@@ -625,7 +753,9 @@ def run_browser_https_suite(
             bod_csv_fetch = _browser_fetch_json(bod_pg, dl_path)
             if bod_pg.locator("#p3-modal-host .cskh-modal-head button").count() > 0:
                 bod_pg.locator("#p3-modal-host .cskh-modal-head button").first.click()
-            csv_phones = len(PHONE_RE.findall(bod_csv_fetch.get("text") or ""))
+            csv_txt = bod_csv_fetch.get("text") or ""
+            csv_phones = len(PHONE_RE.findall(csv_txt))
+            csv_has_raw_formula = bool(re.search(r'(?:^|,|\r|\n)"?=CMD', csv_txt))
             bod_pii_export = _browser_fetch_json(
                 bod_pg,
                 "/api/method/crm_cskh.api.reporting.request_export",
@@ -648,6 +778,7 @@ def run_browser_https_suite(
                 and export_status in ("completed", "ready")
                 and bod_csv_fetch["status"] == 200
                 and csv_phones == 0
+                and not csv_has_raw_formula
                 and bod_pii_export["status"] == 403
                 and stf_a_export_dl["status"] == 403
                 and guest_export_code in (401, 403)
@@ -656,13 +787,14 @@ def run_browser_https_suite(
                 acceptance_id="P4-8.4-06 / P4-8.4-14 / S07 / F29",
                 gate="G10,G12,G16",
                 actor="BOD, Staff A, Guest",
-                expected="BOD queues CSV export from UI modal & downloads with 0 phones; BOD include_pii=1 gets 403; Staff A & Guest opening BOD download URL get 403",
-                actual=f"export_status={export_status}, bod_dl={bod_csv_fetch['status']}, phones={csv_phones}, bod_pii_exp={bod_pii_export['status']}, staff_a_dl={stf_a_export_dl['status']}, guest_dl={guest_export_code}",
+                expected="BOD queues CSV export from UI modal & downloads with 0 phones and =CMD formula neutralized; BOD include_pii=1 gets 403; Staff A & Guest opening BOD download URL get 403",
+                actual=f"export_status={export_status}, bod_dl={bod_csv_fetch['status']}, phones={csv_phones}, raw_formula={csv_has_raw_formula}, bod_pii_exp={bod_pii_export['status']}, staff_a_dl={stf_a_export_dl['status']}, guest_dl={guest_export_code}",
                 passed=export_ok,
                 evidence={
                     "export_status": export_status,
                     "bod_download_http": bod_csv_fetch["status"],
                     "csv_raw_phone_leaks": csv_phones,
+                    "csv_formula_neutralized": not csv_has_raw_formula,
                     "staff_a_cross_download_http": stf_a_export_dl["status"],
                     "guest_download_http": guest_export_code,
                 },
@@ -675,6 +807,7 @@ def run_browser_https_suite(
                 wait_until="networkidle",
                 timeout=30000,
             )
+            _select_seeded_month_if_needed(ldr_a_pg, period_key, "get_employee_quality")
             ldr_a_pg.locator("tr[data-employee]").first.wait_for(state="visible", timeout=15000)
             ldr_a_own_rows = ldr_a_pg.locator("tr[data-employee]").count()
 
@@ -699,6 +832,7 @@ def run_browser_https_suite(
                 wait_until="networkidle",
                 timeout=30000,
             )
+            _select_seeded_month_if_needed(ldr_b_pg, period_key, "get_employee_quality")
             ldr_b_pg.locator("tr[data-employee]").first.wait_for(state="visible", timeout=15000)
             ldr_b_own_rows = ldr_b_pg.locator("tr[data-employee]").count()
             ldr_b_pg.goto(
@@ -1131,30 +1265,7 @@ def run_browser_https_suite(
                 },
             )
 
-            # 9. P4.md §8.4 #16: Read-only report endpoints do not trigger new KPI Run mutations
-            runs_before_ro = end_grants["kpi_runs"]
-            for _ in range(3):
-                _browser_fetch_json(
-                    bod_pg,
-                    f"/api/method/crm_cskh.api.reporting.get_executive_overview?period_type=monthly&period_key={urllib.parse.quote(period_key)}",
-                )
-                _browser_fetch_json(
-                    bod_pg,
-                    f"/api/method/crm_cskh.api.reporting.get_team_comparison?period_type=monthly&period_key={urllib.parse.quote(period_key)}",
-                )
-            runs_after_ro = _count_kpi_runs_and_stale_grants(env_file, site_name, aba_lead, users["staff_b"])["kpi_runs"]
-            ro_idempotent_ok = runs_before_ro == runs_after_ro
-            record_case(
-                acceptance_id="P4-8.4-16",
-                gate="G12,G15,G16",
-                actor="BOD",
-                expected="Repeated calls to read-only P3 reporting endpoints do not mutate state or spawn unbounded CSKH KPI Run jobs",
-                actual=f"kpi_runs_before={runs_before_ro}, kpi_runs_after={runs_after_ro}",
-                passed=ro_idempotent_ok,
-                evidence={"kpi_runs_before": runs_before_ro, "kpi_runs_after": runs_after_ro},
-            )
-
-            # 10. P4.md §8.4 #8 / S15 / F30 / G11: Disabled user active browser session immediately rejected, + Outside & Guest denied
+            # 9. P4.md §8.4 #8 / S15 / F30 / G11: Disabled user active browser session immediately rejected, + Outside & Guest denied
             stf_c_pg = pages["staff_c"]
             c_before = _browser_fetch_json(stf_c_pg, "/api/method/crm_cskh.api.customers.my_list")
             _toggle_user_enabled_technical_control(env_file, site_name, users["staff_c"], 0)

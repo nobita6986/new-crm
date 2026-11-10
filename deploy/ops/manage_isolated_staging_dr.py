@@ -2509,6 +2509,11 @@ def run_full_rehearsal(
                 "administrator_used_for_business_journeys": browser_res.get("administrator_used_for_business_journeys"),
                 "cases_total": browser_res.get("cases_total"),
                 "cases_passed": browser_res.get("cases_passed"),
+                "failed_cases": [
+                    {"acceptance_id": c.get("acceptance_id"), "actual": c.get("actual"), "evidence": c.get("redacted_evidence")}
+                    for c in (browser_res.get("cases") or [])
+                    if c.get("status") != "PASS"
+                ],
             }
 
         restart_res = rehearse_worker_restart_and_cron_retry(env_file=env_file)
