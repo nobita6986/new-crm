@@ -1,6 +1,6 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
-  "generated_at_utc": "2026-11-09T14:42:27Z",
+  "generated_at_utc": "2026-11-10T01:36:37Z",
   "branch": "codex/p4-resume-ops",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
   "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
@@ -511,8 +511,8 @@
     },
     {
       "path": "deploy/ops/test_ops_toolkit.py",
-      "bytes": 62825,
-      "sha256": "7df40d09d7ed9b26d5513db184f749e5560839d49a5534c746c285e6cb4f66ac"
+      "bytes": 63915,
+      "sha256": "72d55cf20ac3a92f5a943543ff896df1af930e5f3a1927f9c10b1e5f8324176e"
     },
     {
       "path": "deploy/ops/verify_offsite_restore.py",
@@ -635,6 +635,11 @@
       "sha256": "bd946490f1d13e0b6ce457fe35b55c67bbcfe59a43bb89bdbc301d7e10c388b8"
     },
     {
+      "path": "docs/p4/release-manifest.json",
+      "bytes": 3163,
+      "sha256": "8306978851518d9d58bfb313f318c7b81e61002514318e38d9afdd1631ce7e49"
+    },
+    {
       "path": "docs/p4/release-runbook.md",
       "bytes": 13175,
       "sha256": "2e93e51c084e43f0382b611213d59870d67b6d7c051c418c509b3aa19679acbf"
@@ -646,13 +651,13 @@
     },
     {
       "path": "docs/p4/security-review.md",
-      "bytes": 21516,
-      "sha256": "3fe570479a34846fbc362d5bcd7fc2a3acb8eeae97871d7f0b835f050b09af9d"
+      "bytes": 22148,
+      "sha256": "3f716f62855874320c944a1304cb8838832d0e8428b8a50a909d3fe787d6fda2"
     },
     {
       "path": "docs/p4/uat-report.md",
-      "bytes": 28585,
-      "sha256": "bca7b110f54b0f273d02416b671b298f03789db803334e33bb998d56e3e52042"
+      "bytes": 30260,
+      "sha256": "c02ebff5d727a4689be26d6d649c081cd6e5ea97093535d75f2b2c32b16b3061"
     }
   ],
   "manifest_revision": "v5-t1a-t1b-integrated-delta-20261109",

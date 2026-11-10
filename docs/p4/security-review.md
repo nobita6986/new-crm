@@ -26,7 +26,7 @@
 2. **Phiên đăng nhập, Thu hồi Tức thì & CSRF (`G11`):**
    - Toàn bộ `113` endpoint `crm_cskh` đặt `allow_guest=False`.
    - Mọi lệnh ghi yêu cầu `X-Frappe-CSRF-Token` hợp lệ (`S16`).
-   - Khi khóa tài khoản nghỉ việc (`User.enabled = 0`) hoặc thu hồi/điều chuyển hồ sơ (`ownership.reassign` / `revoke`), phiên cũ mất hiệu lực tức thì và toàn bộ `DocShare` / `ToDo` cũ trên `CRM Lead` được dọn sạch đồng bộ (`clear_stale_lead_shares`, `INV-01 == 0`, `INV-03 == 0`).
+   - Khi khóa tài khoản nghỉ việc (`User.enabled = 0`) hoặc thu hồi/điều chuyển hồ sơ (`ownership.reassign` / `revoke`), phiên HTTP cũ mất hiệu lực tức thì (`401`/`403`), `tabSessions` và khóa phiên trên `redis-cache` bị xóa, mọi kết nối/kết nối lại Socket.IO bằng `sid` cũ bị từ chối ngay ở bước bắt tay namespace (`44/<site>`), và toàn bộ `DocShare` / `ToDo` cũ trên `CRM Lead` được dọn sạch đồng bộ (`clear_stale_lead_shares`, `INV-01 == 0`, `INV-03 == 0`). *(Lưu ý kiến trúc Frappe v15 trên topology 10 dịch vụ hiện tại: một kết nối TCP WebSocket rảnh đã mở sẵn từ trước thời điểm khóa chưa tự đóng cưỡng bức từ phía tiến trình Node `websocket`, nhưng mọi yêu cầu `doc_subscribe` mới đều gọi lại `can_subscribe_doc` sang `backend` với `sid` đã thu hồi nên bị chặn `403` và `0` rò rỉ PII.)*
 3. **Bảo vệ Tệp Riêng tư, Đóng Oracle Dò Tồn tại & Kiểm soát Xuất Báo cáo 3 Lớp (`G12`):**
    - Tệp nhập kho và tệp xuất báo cáo luôn lưu với `is_private = 1` (`/private/files/...`), đi qua `crm_cskh.permissions.linked_lead_has_permission`.
    - Hook `crm_cskh.errors.normalize_error_response` chuẩn hóa phản hồi `403`/`404` trên `/api/resource/File/<name>` và `frappe.client.get(doctype="File")` về cùng mã `404` và chuỗi JSON cố định byte-identical, triệt tiêu kênh dò sự tồn tại của tệp.

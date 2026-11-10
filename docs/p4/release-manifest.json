@@ -1,0 +1,54 @@
+{
+  "schema_version": "cskh-p4-release-manifest-v1",
+  "release_id": "p4-candidate-ghcr-42625295772",
+  "environment_scope": "staging_candidate_verified_production_blocked",
+  "created_at_utc": "2026-11-10T01:35:00Z",
+  "git_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+  "integrated_ops_branch": "codex/p4-resume-ops",
+  "apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910",
+  "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
+  "frappe_framework_ref": "v15.126.0@53bae3ef2550ca96320f036f581446783cd11b72",
+  "frappe_crm_ref": "v1.87.0@0d3910b456ef4fb913e77b29db011b3debc4f778",
+  "crm_cskh_ref": "427af4834eda48a15ca86c15e88342c3c40d5f2f (tree:f51095ec245e103ed3a487654b5580636424ea36)",
+  "image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+  "image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+  "oci_config_digest": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+  "migration_revision": "crm_cskh.patches.v3_0.p3_schema_and_seeds",
+  "migration_compatibility_class": "Class B (additive schema, migrate x2 idempotent)",
+  "kpi_formula_version": "cskh-metrics-v2",
+  "live_serving_vps_baseline": {
+    "public_url": "https://crm.hrpartner.vn",
+    "host": "103.77.208.186",
+    "site": "crm-staging.localhost",
+    "running_image_tag": "crm-cskh:0.0.1-4672041",
+    "running_image_id": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+    "running_source_sha": "467204176326f046442b5e20c381f9a895b6e176",
+    "cutover_executed_in_this_turn": false
+  },
+  "verification_runs": {
+    "candidate_build_junit_and_s1_benchmark_url": "https://github.com/nobita6986/new-crm/actions/runs/42625295772",
+    "isolated_staging_dr_https_delta_url": "https://github.com/nobita6986/new-crm/actions/runs/42635479943",
+    "vps_isolated_restore_and_timers_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
+    "junit_tests_passed": 421,
+    "junit_tests_total": 421
+  },
+  "promotion_governance": {
+    "staging_candidate_status": "PASS",
+    "production_promotion_status": "BLOCKED",
+    "approved_by": [],
+    "pending_owner_inputs": [
+      "BLK-INFRA-05 (Offsite destination credentials & separate key escrow vault)",
+      "BLK-GOV-06 (Named Day-2 on-call operators & 5-role UAT signers)",
+      "BLK-INFRA-07 (Approved external HTTPS alert webhook)",
+      "UPSTREAM_DEBIAN13_CVE_OR_OWNER_CUTOVER_DECISION (3 unfixed Debian 13 source CVEs & maintenance window)"
+    ]
+  },
+  "artifacts": {
+    "rehearsal_release_manifest_sha256": "b1f13218acc7ac38371d90a82a06a2a5afa43d15cdb65862a4f2918e30406b01",
+    "build_manifest_sha256": "40916951e0536f97b4a43d7c249e6e5b70728f32b302fcba654e3d2eb0a42182",
+    "image_inspect_summary_sha256": "9fa77baad44ec7e04fd4bc45314c5bab0648610b06e54fef54ce21f960772af2",
+    "sbom_cyclonedx_sha256": "ec9ce62274bba83fd83a73c453a675171e7b1add0574d7cd2f84dc6db7f55c40",
+    "sbom_spdx_sha256": "3380b1d0fe5e59c9303ddc025b7e86782453a9be662da6ac0e59ef36db1453c9",
+    "security_scan_sha256": "fb9269988460c479a016eb8e5634c317e69c9711c40e1e17f52e6449bc1627b0"
+  }
+}

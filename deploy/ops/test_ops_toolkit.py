@@ -1348,6 +1348,30 @@ class OpsToolkitTests(unittest.TestCase):
         self.assertIn("cskh-metrics-v2", api_doc)
         self.assertIn("cskh-metrics-v2", exit_doc)
 
+        p4_20_2_mandatory_files = (
+            "entry-audit.md",
+            "infra-inventory.md",
+            "release-manifest.json",
+            "security-review.md",
+            "backup-restore.md",
+            "release-runbook.md",
+            "rollback-runbook.md",
+            "monitoring-alerts.md",
+            "performance-report.md",
+            "uat-report.md",
+            "api-contract.md",
+            "glossary-vi.md",
+            "operations-sop.md",
+            "P4-exit-report.md",
+        )
+        for fname in p4_20_2_mandatory_files:
+            fpath = repo_root / "docs" / "p4" / fname
+            self.assertTrue(fpath.is_file(), f"Missing P4.md 20.2 mandatory file: {fname}")
+        rel_manifest = json.loads((repo_root / "docs" / "p4" / "release-manifest.json").read_text(encoding="utf-8"))
+        self.assertEqual(rel_manifest["kpi_formula_version"], "cskh-metrics-v2")
+        self.assertEqual(rel_manifest["promotion_governance"]["production_promotion_status"], "BLOCKED")
+        self.assertEqual(rel_manifest["promotion_governance"]["approved_by"], [])
+
         parsed_mig = dr_mod.build_parser().parse_args(
             ["rehearse-migration-x2", "--state-dir", "/tmp/dr-state"]
         )

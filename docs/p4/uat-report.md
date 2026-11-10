@@ -118,22 +118,23 @@
 | :--- | :--- | :--- | :---: |
 | **`UAT-P4-OPS-01`** | Chạy `check_health_and_invariants.py --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml` và kiểm tra timer định kỳ. | Toàn bộ 10 container `healthy`, hàng đợi RQ + 4 cron `PASS`, 6 bất biến `INV-01..06 == 0`, `crm-cskh-healthcheck.timer` tự kích hoạt lúc `20:05 ICT` ngày `09/11/2026` (`PASS`), không tự phát cảnh báo ngoài khi chưa mở khóa ([`live-health-after.json`](../../deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json), [`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json)). | `PASS (Measured on VPS — Chờ ký nhận BLK-GOV-06)` |
 | **`UAT-P4-OPS-02`** | Thực thi diễn tập khôi phục cô lập `verify_offsite_restore.py` với gói `p4-20261109-pre-scheduler` (`d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11`). | Pha A (`UNINITIALIZED_NO_ENCRYPTED_DATA` + `migrate ×2` + `5/5 Translation` overrides + HTTP/CSRF + RTO clone cùng VPS `142.598s`) và Pha B (Positive/Negative Control `ValidationError` + dọn sạch `0` tài nguyên dư) đạt `PASS`, site live không bị chạm ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json)). | `PASS (Measured on VPS — Chờ ký nhận BLK-GOV-06)` |
-| **`UAT-P4-OPS-03`** | Rà quy trình khởi động lại dịch vụ ([`operations-sop.md`](./operations-sop.md)), xử lý backup lỗi ([`backup-restore.md`](./backup-restore.md) Mục 3.4), quay lui Cấp độ 1–4 và dựng lại khi mất VPS ([`rollback-runbook.md`](./rollback-runbook.md)). | Đầy đủ lệnh chuẩn theo `/opt/crm-cskh-staging/staging-compose` và `.env.staging` (`0600`); đã diễn tập `restart/retry` & `rollback` trên môi trường `dr-https` cô lập ([`isolated-staging-dr-https-report.json`](../../deploy/ops/evidence/p4-g07-g08-dr-20261109/isolated-staging-dr-https-report.json)). | `READY (In-Repo — Chờ ký nhận BLK-GOV-06)` |
+| **`UAT-P4-OPS-03`** | Rà quy trình khởi động lại dịch vụ ([`operations-sop.md`](./operations-sop.md)), xử lý backup lỗi ([`backup-restore.md`](./backup-restore.md) Mục 3.4), quay lui Cấp độ 1–4 và dựng lại khi mất VPS ([`rollback-runbook.md`](./rollback-runbook.md)). | Đầy đủ lệnh chuẩn theo `/opt/crm-cskh-staging/staging-compose` và `.env.staging` (`0600`); đã diễn tập `migrate ×2`, `restart/retry ×2` & `rollback` Cấp 1–4 (`all_post_restore_deltas_zero = true`) trên môi trường `dr-https` cô lập ([`isolated-staging-dr-https-report.json`](../../deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json)). | `READY (In-Repo — Chờ ký nhận BLK-GOV-06)` |
 
 ---
 
-## 4. Checklist Kiểm Tra Việt Hóa & Khả Năng Truy Cập Trên 10 Màn Hình Trọng Yếu (`G20`)
+## 4. Checklist Kiểm Tra Trình Duyệt, Việt Hóa & Khả Năng Truy Cập Trên 10 Nhóm Màn Hình Trọng Yếu (`G20` — `P4.md §12`)
 
-- [x] **1. Đăng nhập (`/login`):** Nhãn đăng nhập và thông báo lỗi/khóa tài khoản hiển thị tiếng Việt chuẩn (đã kiểm chứng trên `crm.hrpartner.vn`).
-- [x] **2. Nhập danh sách liên hệ (`/cskh/import`):** Nhãn tải tệp riêng tư, ánh xạ cột, bảng xem trước và xác nhận nhập tiếng Việt rõ nghĩa.
-- [x] **3. Kho hồ sơ & Phân công chiến dịch (`/cskh/pool`, `/cskh/campaigns`):** Quy tắc phân công, sức chứa, xem trước và xác nhận phân phối không tràn vỡ trên `1366×768`.
-- [x] **4. Hồ sơ được giao (`/cskh/my-customers`):** Hiển thị đúng `Hồ sơ liên hệ` / `Hồ sơ được giao` (triệt tiêu hoàn toàn lỗi dịch máy).
-- [x] **5. Chi tiết hồ sơ & Ghi nhận liên hệ (`/cskh/work-item`):** Đủ 5 kênh, 12 kết quả liên hệ tiếng Việt, giữ đúng nghĩa `Hoàn tất mục tiêu liên hệ chiến dịch`.
-- [x] **6. Lịch hẹn liên hệ lại (`/cskh/callbacks`):** Hạn giờ `Asia/Ho_Chi_Minh`, đổi/hủy lịch hẹn có lý do và nhãn trạng thái rõ ràng.
-- [x] **7. Báo cáo Chất lượng & SLA (`/cskh/dashboard`, `quality-overview`, `team-quality`, `employee-quality`, `campaign-quality`, `sla-operations`):** Nhãn chỉ số đồng nhất giữa thẻ, bảng chi tiết và bản xuất CSV.
-- [x] **8. Bảng điểm cá nhân (`/cskh/scorecard`):** Hiển thị rõ điểm trọng số thô, điểm chuẩn hóa `0–100`, `Tạm tính` và `N/A`.
-- [x] **9. Giao diện CRM gốc (`/crm`, `/crm/leads`, `/crm/deals`, `/crm/organizations`):** Giữ `Giao dịch CRM` cho `CRM Deal` và hiển thị đúng 5 nhãn tùy chỉnh cấp site của Owner.
-- [x] **10. Điều hướng bàn phím, Tiêu điểm & Header Bảo mật HTTPS (`Keyboard, Focus & TLS Headers`):** Hỗ trợ `Tab`, `Shift+Tab`, `Enter`, `Escape` đóng hộp thoại an toàn; toàn bộ `/crm` và 15 đường dẫn `/cskh/*` trả `HTTP 200`, `lang="vi"`, có dấu tiếng Việt chuẩn, `0` `Traceback`, kèm đầy đủ header `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy` (kiểm chứng tự động trong `manage_isolated_staging_dr.py`).
+- [x] **1. Đăng nhập & Đổi mật khẩu (`/login`):** Nhãn đăng nhập, đổi mật khẩu và thông báo lỗi/khóa tài khoản hiển thị tiếng Việt chuẩn (đã kiểm chứng trên `crm.hrpartner.vn` và `dr-https`).
+- [x] **2. Nhập danh sách liên hệ (`/cskh/import`):** Nhãn tải tệp riêng tư, thông báo lỗi CSV, lý do trùng SĐT, bảng xem trước và xác nhận nhập tiếng Việt rõ nghĩa.
+- [x] **3. Kho hồ sơ & Phân công chiến dịch (`/cskh/pool`, `/cskh/campaigns`):** Trọng số `%`, hạn mức `Sức chứa`, xem trước kết quả phân bổ, xác nhận giao hồ sơ và điều chuyển/thu hồi không tràn vỡ bố cục trên màn hình laptop `1366×768`.
+- [x] **4. Hồ sơ được giao (`/cskh/my-customers`):** Tìm kiếm, lọc, trạng thái rỗng/đang tải/lỗi hiển thị đúng `Hồ sơ liên hệ` / `Hồ sơ được giao` (triệt tiêu hoàn toàn lỗi dịch máy).
+- [x] **5. Chi tiết hồ sơ & Ghi nhận liên hệ (`/cskh/work-item`):** Đủ 5 kênh liên hệ, 12 kết quả tiếng Việt, ô ghi chú, thông báo kiểm tra hợp lệ và cảnh báo rõ `Hoàn tất mục tiêu liên hệ chiến dịch` không đồng nghĩa ứng viên đã nhận việc.
+- [x] **6. Lịch hẹn liên hệ lại (`/cskh/callbacks`):** Đặt lịch hẹn, lịch sử dời hẹn có lý do, cảnh báo quá hạn hiển thị theo múi giờ `Asia/Ho_Chi_Minh` (lưu UTC/chuẩn hệ thống).
+- [x] **7. Báo cáo Chất lượng, SLA & Bảng điểm (`/cskh/dashboard`, `quality-overview`, `team-quality`, `employee-quality`, `campaign-quality`, `sla-operations`, `scorecard`):** Hiển thị rõ tử số / mẫu số, giải thích công thức, dấu phân cách số nhất quán và phân biệt minh bạch `0%`, `Tạm tính (86,47)` và `N/A`.
+- [x] **8. Chấm mẫu QA khi bật cờ (`QA Sampling` — `p3_qa_enabled`):** Mặc định tắt (`false`) và hiển thị nhãn `Tạm tính; thiếu mẫu QA`; khi bật kiểm tra đúng quyền chấm/xem phiếu `published`, chặn tự chấm (`QA_CONFLICT`) và ghi kiểm toán (`test_ui_p3_pages_and_context`).
+- [x] **9. Tải tệp riêng tư & Xuất báo cáo CSV (`Export & Private Files`):** Hiển thị trạng thái xử lý `queued`/`completed`/`expired`, cảnh báo phạm vi, từ chối `403`/`410` khi thiếu quyền hoặc quá hạn `expires_at`, và giữ đồng bộ nhãn tiếng Việt trên `/crm` (`Giao dịch CRM` + 5 nhãn `Translation` của Owner).
+- [x] **10. Cài đặt/Vai trò, Điều hướng Bàn phím & Header Bảo mật HTTPS (`Settings/Roles, A11y & TLS`):** Nhãn vai trò `BOD` / `Trưởng nhóm` / `Người tuyển dụng` / `Quản trị CRM` rõ ràng tại `/cskh/settings`; hỗ trợ `Tab`, `Shift+Tab`, `Enter`, `Escape`, độ tương phản dễ đọc; `/crm` và toàn bộ 15 đường dẫn `/cskh/*` trả `HTTP 200`, `lang="vi"`, `0` `Traceback`, kèm `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: SAMEORIGIN`, `Referrer-Policy`.
+  - *Ghi nhận giới hạn được phép theo `P4.md §12` & `§19.2`:* Một số màn cấu hình Frappe Desk hệ thống cấp thấp (`/app/*` chỉ dành cho `System Manager`, nhân viên và `BOD` không sử dụng hằng ngày) vẫn giữ thuật ngữ kỹ thuật gốc của Frappe Framework; luồng tác nghiệp `/cskh/*` và `/crm` đã Việt hóa nhất quán 100%.
 
 ---
 
@@ -143,9 +144,9 @@ Xem bản hướng dẫn sử dụng tiếng Việt chi tiết theo từng vai t
 
 ---
 
-## 6. Biểu Mẫu Ký Nghiệm Thu UAT Chính Thức (`G13`–`G16`, `G20`, `G22` — Chờ `BLK-GOV-06`)
+## 6. Biểu Mẫu Ký Nghiệm Thu UAT Chính Thức (`G13`–`G16`, `G20`, `G22` — `P4.md §16.3`, Chờ `BLK-GOV-06`)
 
-> **Quy tắc trung thực:** Không điền chữ ký giả. Chỉ cập nhật sang `PASS` sau khi đại diện từng vai trò do Owner chỉ định trực tiếp ký xác nhận (xem danh sách tổng hợp duy nhất các đầu vào cần Owner cấp tại [`P4-exit-report.md`](./P4-exit-report.md) Mục 3).
+> **Quy tắc trung thực & Hồ sơ tối thiểu mỗi ca (`P4.md §16.3`):** Khi thực hiện ký nghiệm thu thật, mỗi ca ghi đầy đủ: người kiểm thử, vai trò/đội, bộ dữ liệu sử dụng, các bước thực hiện, kết quả kỳ vọng, kết quả thực tế, ảnh chụp/nhật ký đã che PII, mức độ lỗi (nếu có), commit sửa lỗi, ngày kiểm tra lại và chữ ký xác nhận. Tuyệt đối không điền chữ ký giả khi chưa có phân công `BLK-GOV-06` từ Owner (xem danh sách đầu vào duy nhất tại [`P4-exit-report.md`](./P4-exit-report.md) Mục 3).
 
 | Vai trò nghiệm thu | Họ tên / Tài khoản (`BLK-GOV-06`) | Phạm vi ca nghiệm thu | Image Digest kiểm thử | Kết quả ký nhận | Ngày ký |
 | :--- | :--- | :--- | :--- | :---: | :--- |
