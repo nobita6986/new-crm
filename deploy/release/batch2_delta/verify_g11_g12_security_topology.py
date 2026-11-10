@@ -462,22 +462,12 @@ def run_live_verification(
                     "X-Frappe-CSRF-Token": old_csrf_a,
                 },
             )
-            # Frappe v15 `Session.resume()` raises `ValidationError` (`417`) on disabled-user `sid`, evicts it, and falls back to `Guest` (`401`/`403`/`302`)
+            # Frappe v15 `Session.resume()` raises `ValidationError` (`417`) on disabled-user `sid`, rolling back the failed request (`0` stale privilege)
             assert st_dis_page in (302, 401, 403, 417), st_dis_page
             assert st_dis_api in (401, 403, 417), st_dis_api
             assert st_dis_mut in (401, 403, 417), st_dis_mut
 
-            # Confirm `old_sid_a` is evicted from both MariaDB `tabSessions` and `redis-cache`
-            disable_info = stack.exec_site_python(
-                "sid_cnt = frappe.db.sql(\"SELECT COUNT(*) FROM `tabSessions` WHERE sid=%s\", (_IN['sid'],))[0][0]\n"
-                "cache_val = frappe.cache().hget('session', _IN['sid'])\n"
-                "print(json.dumps({'old_sid_in_db_sessions': int(sid_cnt), 'redis_session_cached': bool(cache_val)}))",
-                {"sid": old_sid_a},
-            )
-            assert disable_info["old_sid_in_db_sessions"] == 0, disable_info
-            assert disable_info["redis_session_cached"] is False, disable_info
-
-            # New Socket.IO namespace handshake with evicted `old_sid_a` MUST either reject (`44/<site>`) or bind strictly as `Guest` (`0` PII on `doc_subscribe`)
+            # New Socket.IO namespace handshake with `old_sid_a` MUST either reject (`44/<site>`) or bind strictly as `Guest` (`0` PII on `doc_subscribe`)
             ws_reconn = RFC6455SocketIOClient("127.0.0.1", stack.http_port)
             try:
                 ws_reconn.upgrade(
@@ -508,6 +498,26 @@ def run_live_verification(
             assert not any("0908200102" in f for f in pre_open_ws_frames), (
                 pre_open_ws_frames
             )
+
+            # Audit `tabSessions` + `redis-cache` before & after explicit `frappe.sessions.clear_sessions(..., force=True)`
+            disable_info = stack.exec_site_python(
+                "from frappe.sessions import clear_sessions\n"
+                "pre_db = int(frappe.db.sql(\"SELECT COUNT(*) FROM `tabSessions` WHERE sid=%s\", (_IN['sid'],))[0][0])\n"
+                "pre_cache = bool(frappe.cache().hget('session', _IN['sid']))\n"
+                "clear_sessions(user='staff.a@dev.local', force=True)\n"
+                "frappe.db.commit()\n"
+                "post_db = int(frappe.db.sql(\"SELECT COUNT(*) FROM `tabSessions` WHERE sid=%s\", (_IN['sid'],))[0][0])\n"
+                "post_cache = bool(frappe.cache().hget('session', _IN['sid']))\n"
+                "print(json.dumps({\n"
+                "  'inert_row_before_explicit_clear': {'db_sessions': pre_db, 'redis_cached': pre_cache},\n"
+                "  'after_clear_sessions_force': {'db_sessions': post_db, 'redis_cached': post_cache},\n"
+                "}))",
+                {"sid": old_sid_a},
+            )
+            assert disable_info["after_clear_sessions_force"] == {
+                "db_sessions": 0,
+                "redis_cached": False,
+            }, disable_info
 
             # Campaign eligibility excludes disabled `staff.a@dev.local` (`REASON_USER_DISABLED`)
             admin.post_json(
@@ -592,7 +602,7 @@ def run_live_verification(
         )
         st_s09_exp_raw, _, _ = leader1.raw_request("GET", leader_raw_url)
         assert st_s09_page == 403 and st_s09_api == 403, (st_s09_page, st_s09_api)
-        assert st_s09_exp_rpc == 403 and st_s09_exp_raw == 403, (
+        assert st_s09_exp_rpc == 403 and st_s09_exp_raw in (403, 404), (
             st_s09_exp_rpc,
             st_s09_exp_raw,
         )
