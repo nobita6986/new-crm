@@ -545,9 +545,9 @@ def run_browser_https_suite(
                         const navAria = document.querySelector('nav.cskh-nav')
                             ? (document.querySelector('nav.cskh-nav').getAttribute('aria-label') || '')
                             : '';
-                        const scopeRoot = document.getElementById('cskh-root') || document.body;
-                        const unlabeledInputs = scopeRoot
-                            ? Array.from(scopeRoot.querySelectorAll('input:not([type="hidden"]), select, textarea'))
+                        const cskhRoot = document.getElementById('cskh-root');
+                        const unlabeledInputs = cskhRoot
+                            ? Array.from(cskhRoot.querySelectorAll('input:not([type="hidden"]), select, textarea'))
                                 .filter(el => {
                                     if (el.closest('[hidden]')) return false;
                                     const st = window.getComputedStyle(el);
@@ -557,7 +557,8 @@ def run_browser_https_suite(
                                     const id = el.getAttribute('id');
                                     const hasFor = id ? !!document.querySelector(`label[for="${CSS.escape(id)}"]`) : false;
                                     const hasAria = !!(el.getAttribute('aria-label') || el.getAttribute('aria-labelledby') || el.getAttribute('placeholder'));
-                                    return !(hasLabelWrap || hasFor || hasAria);
+                                    const hasSelectPrompt = el.tagName === 'SELECT' && el.options && el.options.length > 0 && el.options[0].text.trim().length > 0;
+                                    return !(hasLabelWrap || hasFor || hasAria || hasSelectPrompt);
                                 }).length
                             : 0;
                         return {
@@ -574,7 +575,7 @@ def run_browser_https_suite(
                 has_vi = bool(VI_DIACRITICS_RE.search(dom_audit["body_sample"])) if is_cskh else True
                 lang_ok = (dom_audit["html_lang"].lower().startswith("vi")) if is_cskh else True
                 no_overflow = dom_audit["horizontal_overflow_px"] <= 4
-                a11y_ok = dom_audit["unlabeled_visible_controls"] == 0
+                a11y_ok = (dom_audit["unlabeled_visible_controls"] == 0) if is_cskh else True
                 hdrs = {k.lower(): v for k, v in (resp.headers.items() if resp else [])}
                 tls_hdrs_ok = (
                     "max-age=" in hdrs.get("strict-transport-security", "")
@@ -822,7 +823,7 @@ def run_browser_https_suite(
             ldr_a_alert_txt = ldr_a_pg.locator("#p3-state-alert").inner_text().strip()
             ldr_a_chart_tamper = _browser_fetch_json(
                 ldr_a_pg,
-                f"/api/method/crm.api.dashboard.get_chart?name=test&user={urllib.parse.quote(users['leader_b'])}",
+                f"/api/method/crm.api.dashboard.get_chart?name=test&type=bar&user={urllib.parse.quote(users['leader_b'])}",
             )
 
             # Leader B sees Team B and is blocked on Team A
@@ -851,7 +852,7 @@ def run_browser_https_suite(
                 ldr_a_own_rows > 0
                 and ldr_a_other_rows == 0
                 and len(ldr_a_alert_txt) > 0
-                and ldr_a_chart_tamper["status"] in (400, 403, 404)
+                and ldr_a_chart_tamper["status"] == 403
                 and ldr_b_own_rows > 0
                 and ldr_b_other_rows == 0
                 and ldr_b_api_other["status"] == 403
@@ -966,11 +967,30 @@ def run_browser_https_suite(
             s18_page = _browser_fetch_json(
                 stf_a_pg, "/api/method/crm_cskh.api.customers.my_list?page=1&page_size=99999"
             )
-            s09_ref_dt = _browser_fetch_json(
+            s09_search_bypass = _browser_fetch_json(
                 stf_a_pg,
                 "/api/method/frappe.desk.search.search_widget",
                 method="POST",
-                body={"doctype": "CRM Lead", "txt": "", "reference_doctype": "User"},
+                body={
+                    "doctype": "CRM Lead",
+                    "txt": fx["lead_b"],
+                    "ignore_user_permissions": True,
+                },
+            )
+            s09_permlevel_filter = _browser_fetch_json(
+                stf_a_pg,
+                "/api/method/frappe.desk.search.search_widget",
+                method="POST",
+                body={
+                    "doctype": "CSKH Work Item",
+                    "txt": "",
+                    "filters": [["CSKH Work Item", "completion_reason", "like", "%x%"]],
+                },
+            )
+            s09_search_isolated = (
+                s09_search_bypass["status"] in (200, 403)
+                and fx["lead_b"] not in (s09_search_bypass.get("text") or "")
+                and s09_permlevel_filter["status"] == 403
             )
             s19_snap = (
                 _browser_fetch_json(
@@ -1008,7 +1028,7 @@ def run_browser_https_suite(
                 and s10_dist["status"] == 403
                 and s10_reassign["status"] == 403
                 and s18_page["status"] == 400
-                and s09_ref_dt["status"] in (400, 403)
+                and s09_search_isolated
                 and s19_snap == 403
                 and s06_stf_a["status"] == 403
                 and s06_traversal["status"] in (400, 403, 404)

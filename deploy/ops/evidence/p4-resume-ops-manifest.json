@@ -1,6 +1,6 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
-  "generated_at_utc": "2026-11-10T03:08:48Z",
+  "generated_at_utc": "2026-11-10T03:32:21Z",
   "branch": "codex/p4-resume-ops",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
   "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
@@ -476,8 +476,8 @@
     },
     {
       "path": "deploy/ops/run_https_browser_uat_and_security.py",
-      "bytes": 67194,
-      "sha256": "40e35e86205efd2228f8cb16b081b1e9fe145479126186d2cf06279f396d8d4c"
+      "bytes": 68108,
+      "sha256": "35dac3fd8cd323e04b17f3bd12787249851b677a36cbbb55234c064542ee19fb"
     },
     {
       "path": "deploy/ops/run_local_ops_rehearsal.py",
