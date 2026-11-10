@@ -1,0 +1,46 @@
+# deploy/release/batch2_delta/compose.cskh-edge-ratelimit.yaml
+#
+# Drop-in Traefik v3.7 edge rate-limiting override for P4 G12 / S20 verification
+# and Staging/Production integration by T1A (zero rebuild of APP_IMAGE required).
+#
+# Splits ingress routing into three priority-ordered routers on the existing
+# single-VPS topology (`proxy` Traefik -> `frontend` Nginx -> `backend` Gunicorn):
+#   1. `frontend-login` (priority 300): `/api/method/login` — IP-scoped burst guard (`HTTP 429`).
+#   2. `frontend-heavy` (priority 200): upload / export / recompute / pool / drilldown —
+#      per-session (`Cookie` header fallback to IP) rate limit (`HTTP 429`) so one
+#      noisy session cannot starve other authenticated users.
+#   3. `frontend-http`  (priority 100): default site router for normal UI/API/Socket.IO traffic.
+
+services:
+  frontend:
+    labels: !override
+      - traefik.enable=true
+      - traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+      - traefik.http.services.frontend.loadbalancer.server.port=${NGINX_LISTEN_PORT:-8080}
+      # Edge response headers (complements Nginx security_headers.conf without rebuilding APP_IMAGE)
+      - traefik.http.middlewares.cskh-sec-hdrs.headers.permissionsPolicy=camera=(), microphone=(), geolocation=()
+      # Default site router
+      - traefik.http.routers.frontend-http.entrypoints=web
+      - traefik.http.routers.frontend-http.rule=${SITES_RULE:?SITES_RULE not set}
+      - traefik.http.routers.frontend-http.priority=100
+      - traefik.http.routers.frontend-http.middlewares=cskh-sec-hdrs
+      - traefik.http.routers.frontend-http.service=frontend
+      # Login brute-force / burst router -> HTTP 429
+      - traefik.http.middlewares.cskh-login-rl.ratelimit.average=${CSKH_LOGIN_RL_AVERAGE:-10}
+      - traefik.http.middlewares.cskh-login-rl.ratelimit.period=${CSKH_LOGIN_RL_PERIOD:-1m}
+      - traefik.http.middlewares.cskh-login-rl.ratelimit.burst=${CSKH_LOGIN_RL_BURST:-5}
+      - traefik.http.routers.frontend-login.entrypoints=web
+      - traefik.http.routers.frontend-login.rule=(${SITES_RULE}) && Path(`/api/method/login`)
+      - traefik.http.routers.frontend-login.priority=300
+      - traefik.http.routers.frontend-login.middlewares=cskh-sec-hdrs,cskh-login-rl
+      - traefik.http.routers.frontend-login.service=frontend
+      # Heavy API router (per-Cookie session bucket) -> HTTP 429
+      - traefik.http.middlewares.cskh-heavy-rl.ratelimit.average=${CSKH_HEAVY_RL_AVERAGE:-20}
+      - traefik.http.middlewares.cskh-heavy-rl.ratelimit.period=${CSKH_HEAVY_RL_PERIOD:-1m}
+      - traefik.http.middlewares.cskh-heavy-rl.ratelimit.burst=${CSKH_HEAVY_RL_BURST:-6}
+      - traefik.http.middlewares.cskh-heavy-rl.ratelimit.sourcecriterion.requestheadername=Cookie
+      - traefik.http.routers.frontend-heavy.entrypoints=web
+      - traefik.http.routers.frontend-heavy.rule=(${SITES_RULE}) && (Path(`/api/method/crm_cskh.api.import_files.upload_import_file`) || Path(`/api/method/crm_cskh.api.p3_reporting.request_export`) || Path(`/api/method/crm_cskh.api.p3_reporting.request_recompute`) || Path(`/api/method/crm_cskh.api.customers.customer_pool`) || Path(`/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown`))
+      - traefik.http.routers.frontend-heavy.priority=200
+      - traefik.http.routers.frontend-heavy.middlewares=cskh-sec-hdrs,cskh-heavy-rl
+      - traefik.http.routers.frontend-heavy.service=frontend

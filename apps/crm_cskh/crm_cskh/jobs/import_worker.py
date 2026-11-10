@@ -423,12 +423,28 @@ def _reconcile_counts(targets, batch):
 	)
 	linked = {row.lead: row.outcome for row in linked_rows}
 
+	bulk_index: dict[str, str] = {}
+	if len(targets) > 50:
+		all_phones = [entry["canonical"] for entry in targets if entry.get("canonical")]
+		for idx in range(0, len(all_phones), 2000):
+			chunk = all_phones[idx : idx + 2000]
+			ph = ", ".join(["%s"] * len(chunk))
+			for r in frappe.db.sql(
+				f"select normalized_phone, canonical_lead from `tabCSKH Identity Index` where normalized_phone in ({ph}) lock in share mode",
+				tuple(chunk),
+				as_dict=True,
+			):
+				if r.normalized_phone and r.canonical_lead:
+					bulk_index[r.normalized_phone] = r.canonical_lead
+
 	created = 0
 	reused = 0
 	failed = 0
 	missing = []
 	for entry in targets:
-		lead = identity_service.find_by_phone_current(entry["canonical"])
+		lead = bulk_index.get(entry["canonical"]) or identity_service.find_by_phone_current(
+			entry["canonical"]
+		)
 		if not lead:
 			lead = identity_service.find_lead_by_phone(entry["canonical"])
 		if not lead:
@@ -540,8 +556,9 @@ def _ensure_lead(canonical_phone, row):
 	  and adopts the winner's canonical lead untouched (`is_new = False`).
 	"""
 	existing_lead = identity_service.find_by_phone(canonical_phone)
-	if not existing_lead:
-		existing_lead = identity_service.find_lead_by_phone(canonical_phone)
+	if existing_lead:
+		return existing_lead, False
+	existing_lead = identity_service.find_lead_by_phone(canonical_phone)
 	if existing_lead:
 		identity_service.ensure_identity_for_lead(existing_lead)
 		return existing_lead, False

@@ -500,6 +500,46 @@ def _source_candidates(header):
 	return candidates
 
 
+def _preload_existing_leads_by_phone(canonicals: set[str]) -> dict[str, str]:
+	"""Bulk-preload `CSKH Identity Index` and fallback `CRM Lead.mobile_no` without N+1 queries."""
+	if not canonicals:
+		return {}
+	ordered = sorted(canonicals)
+	found: dict[str, str] = {}
+	for idx in range(0, len(ordered), 2000):
+		chunk = ordered[idx : idx + 2000]
+		ph = ", ".join(["%s"] * len(chunk))
+		for row in frappe.db.sql(
+			f"select normalized_phone, canonical_lead from `tabCSKH Identity Index` where normalized_phone in ({ph})",
+			tuple(chunk),
+			as_dict=True,
+		):
+			if row.normalized_phone and row.canonical_lead:
+				found[row.normalized_phone] = row.canonical_lead
+
+	missing = [c for c in ordered if c not in found]
+	if missing:
+		raw_variants: list[str] = []
+		for norm_ph in missing:
+			digits = norm_ph[3:] if norm_ph.startswith("+84") else norm_ph
+			raw_variants.extend((f"0{digits}", f"84{digits}", f"+84{digits}"))
+		for idx in range(0, len(raw_variants), 1800):
+			chunk = raw_variants[idx : idx + 1800]
+			ph = ", ".join(["%s"] * len(chunk))
+			for row in frappe.db.sql(
+				f"select name, mobile_no from `tabCRM Lead` where mobile_no in ({ph}) order by creation asc, name asc",
+				tuple(chunk),
+				as_dict=True,
+			):
+				try:
+					norm = normalize_vn_phone(row.mobile_no)
+				except InvalidPhone:
+					continue
+				if norm not in found:
+					found[norm] = row.name
+	return found
+
+
 def _classify(rows, mapping, phone_column, name_column=None, source_column=None):
 	"""Classify every row and compute the preview statistics (P1 6.5)."""
 	seen_in_file = set()
@@ -513,6 +553,18 @@ def _classify(rows, mapping, phone_column, name_column=None, source_column=None)
 	duplicate_in_crm = 0
 	conflict_active = 0
 	preview_rows = []
+
+	preloaded_by_phone: dict[str, str] | None = None
+	if len(rows) > 50 and phone_column:
+		candidate_phones: set[str] = set()
+		for r_probe in rows:
+			raw_p = _cell_value(r_probe["cells"], phone_column)
+			if raw_p is not None:
+				try:
+					candidate_phones.add(normalize_vn_phone(str(raw_p)))
+				except InvalidPhone:
+					continue
+		preloaded_by_phone = _preload_existing_leads_by_phone(candidate_phones)
 
 	for row in rows:
 		counts["total_rows"] += 1
@@ -555,9 +607,12 @@ def _classify(rows, mapping, phone_column, name_column=None, source_column=None)
 			continue
 		seen_in_file.add(canonical)
 
-		existing_lead = identity_service.find_by_phone(canonical)
-		if not existing_lead:
-			existing_lead = identity_service.find_lead_by_phone(canonical)
+		if preloaded_by_phone is not None:
+			existing_lead = preloaded_by_phone.get(canonical)
+		else:
+			existing_lead = identity_service.find_by_phone(canonical)
+			if not existing_lead:
+				existing_lead = identity_service.find_lead_by_phone(canonical)
 		if existing_lead:
 			counts["duplicate_rows"] += 1
 			duplicate_in_crm += 1

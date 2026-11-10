@@ -166,6 +166,12 @@ jobs:
             --pyjwt-metadata-file "$BUNDLE/security/pyjwt-METADATA.txt" \
             --out "$BUNDLE/security/security-scan-summary.json"
 
+          "$PY" deploy/release/collect_cve_and_lock_diff_evidence.py cve-reachability \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --trivy-json "$BUNDLE/security/trivy-image.json" \
+            --strict-scan-json "$BUNDLE/security/security-scan-strict.json" \
+            --out "$BUNDLE/security/runtime-cve-reachability-proof.json"
+
           if [ "${STRICT_RC}" -eq 0 ]; then
             echo "strict_gate_status=PASS" >> "$GITHUB_OUTPUT"
           else
@@ -271,6 +277,10 @@ jobs:
           cp deploy/images/resources/system-python-constraints.txt "$BUNDLE/locks/system-python-constraints.txt"
           cp deploy/release/cve-exceptions.json "$BUNDLE/locks/cve-exceptions.json"
           cp deploy/release/t0-critical-cve-dossier.md "$BUNDLE/locks/t0-critical-cve-dossier.md"
+          cp deploy/release/frappe-v15-123-1-to-v15-126-0-compatibility-dossier.md "$BUNDLE/locks/frappe-v15-123-1-to-v15-126-0-compatibility-dossier.md"
+          "$PY" deploy/release/collect_cve_and_lock_diff_evidence.py lock-diff \
+            --candidate-build-dir "$BUNDLE/build" \
+            --out "$BUNDLE/locks/frappe-v15-123-1-vs-candidate-lock-diff.json"
 
           "$PY" deploy/release/audit_registry_and_signing_config.py \
             --out "$BUNDLE/registry/registry-and-signing-audit.json" >/dev/null
@@ -554,7 +564,7 @@ jobs:
     name: Pull identical GHCR @sha256 & run isolated S1 benchmark (50k/75k/250k/40 staff)
     needs: [build-scan-sign-and-push-ghcr]
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: read
@@ -634,6 +644,7 @@ jobs:
           assert counts["cskh_contact_attempts"] >= 250000, counts
           assert counts["active_staff_users"] == 40, counts
           assert rpt["isolation_guard"]["owner_vps_touched"] is False
+          assert rpt["p4_9_2_acceptance_matrix"]["all_passed"] is True, rpt["p4_9_2_acceptance_matrix"]
 
           sums = []
           for path in sorted(root.rglob("*")):

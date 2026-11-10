@@ -359,6 +359,14 @@ def _sync_lead_owner(lead, owner):
 	frappe.db.set_value("CRM Lead", lead, "lead_owner", owner, update_modified=False)
 
 
+_CHILD_LEAD_SHARE_SPECS = (
+	("CRM Call Log", "reference_doctype", "reference_docname"),
+	("CRM Task", "reference_doctype", "reference_docname"),
+	("FCRM Note", "reference_doctype", "reference_docname"),
+	("File", "attached_to_doctype", "attached_to_name"),
+)
+
+
 def _lead_docshares(lead):
 	return frappe.db.get_all(
 		"DocShare",
@@ -367,13 +375,44 @@ def _lead_docshares(lead):
 	)
 
 
+def _purge_stale_child_docshares(lead, keep_set):
+	if not lead:
+		return
+	active_share_dts = {
+		r[0]
+		for r in frappe.db.sql(
+			"SELECT DISTINCT share_doctype FROM `tabDocShare` "
+			"WHERE share_doctype IN ('CRM Call Log', 'CRM Task', 'FCRM Note', 'File')"
+		)
+	}
+	if not active_share_dts:
+		return
+	for child_dt, dt_col, name_col in _CHILD_LEAD_SHARE_SPECS:
+		if child_dt not in active_share_dts or not frappe.db.table_exists(child_dt):
+			continue
+		child_names = frappe.db.get_all(
+			child_dt,
+			filters={dt_col: "CRM Lead", name_col: lead},
+			pluck="name",
+		)
+		if not child_names:
+			continue
+		for share in frappe.db.get_all(
+			"DocShare",
+			filters={"share_doctype": child_dt, "share_name": ["in", child_names]},
+			fields=["name", "user"],
+		):
+			if share.user not in keep_set:
+				frappe.db.delete("DocShare", {"name": share.name})
+
+
 def _sync_docshares(lead, keep_users):
-	"""Grant the share to the current owner and revoke every other share.
+	"""Grant the share to the current owner and revoke every other share (`S13`, `S14`).
 
 	P0 already removes stale shares when the owner changes
 	(`permissions.py::clear_stale_lead_shares`); the ownership service repeats
-	the cleanup inside its own transaction so a revoked owner cannot keep
-	reading the lead (T1-16, SEC-06).
+	the cleanup inside its own transaction (including linked child documents)
+	so a revoked owner cannot keep reading the lead or its activities (T1-16, SEC-06).
 	"""
 	if not lead:
 		return
@@ -381,6 +420,7 @@ def _sync_docshares(lead, keep_users):
 	for share in _lead_docshares(lead):
 		if share.user not in keep:
 			frappe.db.delete("DocShare", {"name": share.name})
+	_purge_stale_child_docshares(lead, keep)
 	for user in keep:
 		if not frappe.db.exists("DocShare", {"user": user, "share_name": lead, "share_doctype": "CRM Lead"}):
 			frappe.share.add_docshare(
@@ -401,6 +441,23 @@ def _todo_for(lead, user):
 		{"reference_type": "CRM Lead", "reference_name": lead, "allocated_to": user, "status": "Open"},
 		"name",
 	)
+
+
+def _cancel_stale_lead_todos(lead, keep_user=None):
+	"""Cancel ALL `Open` `ToDo` rows on `lead` that do not belong to `keep_user` (`S14`)."""
+	if not lead:
+		return 0
+	open_rows = frappe.db.get_all(
+		"ToDo",
+		filters={"reference_type": "CRM Lead", "reference_name": lead, "status": "Open"},
+		fields=["name", "allocated_to"],
+	)
+	cancelled = 0
+	for row in open_rows:
+		if keep_user is None or row.allocated_to != keep_user:
+			frappe.db.set_value("ToDo", row.name, "status", "Cancelled", update_modified=False)
+			cancelled += 1
+	return cancelled
 
 
 def _create_todo(lead, user, description):
@@ -435,7 +492,7 @@ def _cancel_todo(todo_name):
 
 
 def _assert_final_owner(lead, expected_owner):
-	"""Assert that only the intended owner still has access to the lead."""
+	"""Assert that only the intended owner still has `DocShare` and `Open` `ToDo` access (`S14`)."""
 	shares = [share.user for share in _lead_docshares(lead)]
 	unexpected = [user for user in shares if user != expected_owner]
 	if unexpected:
@@ -444,13 +501,28 @@ def _assert_final_owner(lead, expected_owner):
 			code="CONFLICT",
 			details={"unexpected": len(unexpected)},
 		)
+	open_todo_users = [
+		row.allocated_to
+		for row in frappe.db.get_all(
+			"ToDo",
+			filters={"reference_type": "CRM Lead", "reference_name": lead, "status": "Open"},
+			fields=["allocated_to"],
+		)
+	]
+	unexpected_todos = [u for u in open_todo_users if u != expected_owner]
+	if unexpected_todos:
+		raise Conflict(
+			"Unexpected open ToDo assignments remain after the ownership change.",
+			code="CONFLICT",
+			details={"unexpected_todos": len(unexpected_todos)},
+		)
 	actual_owner = frappe.db.get_value("CRM Lead", lead, "lead_owner")
 	if actual_owner != expected_owner:
 		raise Conflict(
 			"The lead owner does not match the intended owner.",
 			code="CONFLICT",
 		)
-	return {"owner": actual_owner, "shares": shares}
+	return {"owner": actual_owner, "shares": shares, "open_todos": open_todo_users}
 
 
 def assign(work_item, target_user, actor=None, reason=None, request_id=None, distribution_run=None):
@@ -561,12 +633,14 @@ def assign(work_item, target_user, actor=None, reason=None, request_id=None, dis
 	)
 
 	_sync_lead_owner(item.lead, target_user)
+	_cancel_stale_lead_todos(item.lead, keep_user=target_user)
 	_sync_docshares(item.lead, [target_user])
 	if not _todo_for(item.lead, target_user):
 		_create_todo(item.lead, target_user, f"CSKH assignment ({work_item})")
 	# The upstream ToDo hook mirrors the allocated user into `lead_owner`; the
 	# value is re-asserted so the transaction always ends on the intended owner.
 	_sync_lead_owner(item.lead, target_user)
+	_assert_final_owner(item.lead, target_user)
 
 	return {"work_item": work_item, "status": "assigned", "owner": target_user}
 
@@ -700,10 +774,8 @@ def reassign(
 	)
 
 	_sync_lead_owner(item.lead, target_user)
-	# Revoke the previous owner: their ToDo is cancelled and their DocShare is
-	# removed, so the stale grant cannot outlive the access.
-	old_todo = _todo_for(item.lead, old_owner)
-	_cancel_todo(old_todo)
+	# Revoke all non-owner Open ToDos and DocShares so no stale grant can outlive handoff (`S13`, `S14`).
+	_cancel_stale_lead_todos(item.lead, keep_user=target_user)
 	_sync_docshares(item.lead, [target_user])
 	if not _todo_for(item.lead, target_user):
 		_create_todo(item.lead, target_user, f"CSKH assignment ({work_item})")
@@ -830,10 +902,10 @@ def revoke(
 	)
 
 	_sync_lead_owner(item.lead, None)
-	old_todo = _todo_for(item.lead, old_owner)
-	_cancel_todo(old_todo)
+	_cancel_stale_lead_todos(item.lead, keep_user=None)
 	_sync_docshares(item.lead, [])
 	_sync_lead_owner(item.lead, None)
+	_assert_final_owner(item.lead, None)
 
 	# The active claim is released together with the ownership: the lead is
 	# back in the pool and may join another campaign (ADR-P1-02 §2.2).
