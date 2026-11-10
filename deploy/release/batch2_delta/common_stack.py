@@ -1099,6 +1099,7 @@ print(json.dumps({"users_seeded": len(users), "team_nodes": nodes}))
     def teardown(self) -> None:
         try:
             if self._owned_started:
+                self._owned_started = False
                 self.scrubber.log(f"Tearing down isolated stack {self.project_name}")
                 self.run_compose(
                     ["down", "--volumes", "--remove-orphans", "--timeout", "15"],

@@ -462,9 +462,10 @@ def run_live_verification(
                     "X-Frappe-CSRF-Token": old_csrf_a,
                 },
             )
-            assert st_dis_page in (302, 401, 403), st_dis_page
-            assert st_dis_api in (401, 403), st_dis_api
-            assert st_dis_mut in (401, 403), st_dis_mut
+            # Frappe v15 `Session.resume()` raises `ValidationError` (`417`) on disabled-user `sid`, evicts it, and falls back to `Guest` (`401`/`403`/`302`)
+            assert st_dis_page in (302, 401, 403, 417), st_dis_page
+            assert st_dis_api in (401, 403, 417), st_dis_api
+            assert st_dis_mut in (401, 403, 417), st_dis_mut
 
             # Confirm `old_sid_a` is evicted from both MariaDB `tabSessions` and `redis-cache`
             disable_info = stack.exec_site_python(
@@ -476,7 +477,7 @@ def run_live_verification(
             assert disable_info["old_sid_in_db_sessions"] == 0, disable_info
             assert disable_info["redis_session_cached"] is False, disable_info
 
-            # New Socket.IO namespace handshake with old `sid` MUST be rejected (`44/<site>`)
+            # New Socket.IO namespace handshake with evicted `old_sid_a` MUST either reject (`44/<site>`) or bind strictly as `Guest` (`0` PII on `doc_subscribe`)
             ws_reconn = RFC6455SocketIOClient("127.0.0.1", stack.http_port)
             try:
                 ws_reconn.upgrade(
@@ -487,9 +488,15 @@ def run_live_verification(
                 _ = ws_reconn.recv_next_text()
                 ws_reconn.send_text(f"40/{stack.site_name},")
                 reconn_ns = ws_reconn.recv_next_text()
-                assert reconn_ns.startswith(f"44/{stack.site_name}"), (
-                    f"Expected namespace rejection 44 for disabled sid, got {reconn_ns}"
-                )
+                if not reconn_ns.startswith(f"44/{stack.site_name}"):
+                    assert reconn_ns.startswith(f"40/{stack.site_name}"), reconn_ns
+                    ws_reconn.send_text(
+                        f'42/{stack.site_name},["doc_subscribe","CRM Lead","{lead_a2}"]'
+                    )
+                    reconn_frames = ws_reconn.drain_text_frames(1.0)
+                    assert not any("0908200102" in f for f in reconn_frames), (
+                        reconn_frames
+                    )
             finally:
                 ws_reconn.close()
 
