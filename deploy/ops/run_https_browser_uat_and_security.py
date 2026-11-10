@@ -914,7 +914,13 @@ def run_browser_https_suite(
                 stf_a_pg,
                 "/api/method/frappe.desk.reportview.export_query",
                 method="POST",
-                body={"doctype": "CRM Lead", "file_format_type": "CSV"},
+                body={},
+            )
+            s01_data_exp = _browser_fetch_json(
+                stf_a_pg,
+                "/api/method/frappe.core.doctype.data_export.exporter.export_data",
+                method="POST",
+                body={"doctype": "CRM Lead", "file_type": "CSV"},
             )
             s03_att = (
                 _browser_fetch_json(
@@ -1020,6 +1026,7 @@ def run_browser_https_suite(
                 and s01_get["status"] == 403
                 and s02_put["status"] == 403
                 and s01_export_q["status"] == 403
+                and s01_data_exp["status"] == 403
                 and s03_att == 403
                 and s04_call == 403
                 and s05_task == 403
@@ -1041,22 +1048,30 @@ def run_browser_https_suite(
                 gate="G10,G12",
                 actor="Staff A, Staff B, Guest",
                 expected="Staff A blocked in both UI and API across Lead/Attempt/CallLog/Task/Pool/Campaigns/AssignTo/Distribution/KPI-Snapshot/PrivateFile; File oracle normalized to 404; Staff B reads own private file 200",
-                actual=f"wi_b_hidden={wi_b_card_hidden}, phones={wi_b_dom_phones}, pool_ssr={stf_pool_ssr}, s01={s01_get['status']}, s02={s02_put['status']}, s03={s03_att}, s04={s04_call}, s06_a={s06_stf_a['status']}, s06_b={s06_stf_b['status']}, oracle={s20_file_oracle['status']}, page99999={s18_page['status']}",
+                actual=f"wi_b_hidden={wi_b_card_hidden}, phones={wi_b_dom_phones}, pool_ssr={stf_pool_ssr}, camp_ssr={stf_camp_ssr}, s01={s01_get['status']}, s02={s02_put['status']}, exp_q={s01_export_q['status']}, s03={s03_att}, s04={s04_call}, s06_a={s06_stf_a['status']}, s06_b={s06_stf_b['status']}, oracle={s20_file_oracle['status']}, page99999={s18_page['status']}",
                 passed=staff_boundary_ok,
                 evidence={
                     "staff_a_own_rows": stf_a_own_rows,
                     "tampered_wi_b_summary_hidden": wi_b_card_hidden,
                     "tampered_wi_b_raw_phones": wi_b_dom_phones,
+                    "pool_ssr": stf_pool_ssr,
+                    "campaigns_ssr": stf_camp_ssr,
                     "s01_lead_get": s01_get["status"],
                     "s02_lead_put": s02_put["status"],
+                    "s01_reportview_export_query": s01_export_q["status"],
+                    "s01_data_export": s01_data_exp["status"],
                     "s03_attempt_get": s03_att,
                     "s04_call_log_get": s04_call,
                     "s05_task_get": s05_task,
                     "s06_private_file_staff_a": s06_stf_a["status"],
                     "s06_private_file_staff_b": s06_stf_b["status"],
                     "s06_private_file_guest": s06_guest_code,
+                    "s06_traversal_http": s06_traversal["status"],
                     "s08_assign_to": s08_todo["status"],
+                    "s08_remove_assignments": s08_rm_todo["status"],
+                    "s09_search_isolated": s09_search_isolated,
                     "s10_distribution_execute": s10_dist["status"],
+                    "s10_reassign": s10_reassign["status"],
                     "s18_page_size_99999": s18_page["status"],
                     "s19_other_kpi_snapshot": s19_snap,
                     "s20_file_oracle_normalized": s20_file_oracle["status"],
