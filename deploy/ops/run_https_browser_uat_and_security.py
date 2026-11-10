@@ -988,9 +988,9 @@ def run_browser_https_suite(
                 "/api/method/frappe.desk.search.search_widget",
                 method="POST",
                 body={
-                    "doctype": "CSKH Work Item",
+                    "doctype": "CSKH SLA Obligation",
                     "txt": "",
-                    "filters": [["CSKH Work Item", "completion_reason", "like", "%x%"]],
+                    "filters": [["CSKH SLA Obligation", "waive_reason", "like", "%x%"]],
                 },
             )
             s09_search_isolated = (
