@@ -240,6 +240,50 @@ finally:
     )
 
 
+def _toggle_leader_role_team_technical_control(
+    env_file: Path,
+    site_name: str,
+    user_email: str,
+    team_name: str,
+    revoke: bool,
+) -> None:
+    """Technical-only role/team toggle invoking `p3_e2e_seed.temporarily_revoke_leader_team`."""
+    role_py = r"""
+import os, sys, frappe
+site, user_email, team_name, revoke = sys.argv[1], sys.argv[2], sys.argv[3], bool(int(sys.argv[4]))
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    import crm_cskh.tools.p3_e2e_seed as seed_mod
+    seed_mod.ALLOWED_P3_SITES.add(site)
+    seed_mod.temporarily_revoke_leader_team(user=user_email, team=team_name, revoke=revoke)
+finally:
+    frappe.destroy()
+"""
+    subprocess.run(
+        compose_cmd(
+            env_file,
+            [
+                "exec",
+                "-T",
+                "backend",
+                "/home/frappe/frappe-bench/env/bin/python",
+                "-c",
+                role_py,
+                site_name,
+                user_email,
+                team_name,
+                "1" if revoke else "0",
+            ],
+        ),
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        check=True,
+    )
+
+
 def _count_kpi_runs_and_stale_grants(env_file: Path, site_name: str, lead_name: str, former_owner: str) -> dict[str, int]:
     check_py = r"""
 import json, os, sys, frappe
@@ -1337,6 +1381,70 @@ def run_browser_https_suite(
                     "staff_c_after_disable_page_http": c_nav_code,
                     "outside_user_http": out_api["status"],
                     "guest_page_http": guest_my_code,
+                },
+            )
+
+            # 10. Live Role-Change & Team-Ownership Revocation in Active Browser Session (Sales Manager -> Sales User -> Sales Manager)
+            ldr_a_before_nav = ldr_a_pg.goto(f"{base_url}/cskh/team-quality", wait_until="networkidle", timeout=30000)
+            ldr_a_before_ui = ldr_a_before_nav.status if ldr_a_before_nav else 0
+            ldr_a_before_api = _browser_fetch_json(
+                ldr_a_pg,
+                f"/api/method/crm_cskh.api.reporting.get_team_comparison?period_type=monthly&period_key={urllib.parse.quote(period_key)}",
+            )
+            _toggle_leader_role_team_technical_control(env_file, site_name, users["leader_a"], team_a, True)
+            try:
+                ldr_a_demoted_nav = ldr_a_pg.goto(f"{base_url}/cskh/team-quality", wait_until="domcontentloaded")
+                ldr_a_demoted_ui = ldr_a_demoted_nav.status if ldr_a_demoted_nav else 0
+                ldr_a_staff_nav = ldr_a_pg.goto(f"{base_url}/cskh/my-customers", wait_until="networkidle", timeout=30000)
+                ldr_a_staff_ui = ldr_a_staff_nav.status if ldr_a_staff_nav else 0
+                ldr_a_demoted_team_api = _browser_fetch_json(
+                    ldr_a_pg,
+                    f"/api/method/crm_cskh.api.reporting.get_team_comparison?period_type=monthly&period_key={urllib.parse.quote(period_key)}",
+                )
+                ldr_a_demoted_emp_api = _browser_fetch_json(
+                    ldr_a_pg,
+                    f"/api/method/crm_cskh.api.reporting.get_employee_quality?period_type=monthly&period_key={urllib.parse.quote(period_key)}&team={urllib.parse.quote(team_a)}",
+                )
+                ldr_a_demoted_mylist_api = _browser_fetch_json(
+                    ldr_a_pg,
+                    "/api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
+                )
+            finally:
+                _toggle_leader_role_team_technical_control(env_file, site_name, users["leader_a"], team_a, False)
+
+            ldr_a_restored_nav = ldr_a_pg.goto(f"{base_url}/cskh/team-quality", wait_until="networkidle", timeout=30000)
+            ldr_a_restored_ui = ldr_a_restored_nav.status if ldr_a_restored_nav else 0
+            ldr_a_restored_api = _browser_fetch_json(
+                ldr_a_pg,
+                f"/api/method/crm_cskh.api.reporting.get_team_comparison?period_type=monthly&period_key={urllib.parse.quote(period_key)}",
+            )
+            role_change_ok = (
+                ldr_a_before_ui == 200
+                and ldr_a_before_api["status"] == 200
+                and ldr_a_demoted_ui == 403
+                and ldr_a_staff_ui == 200
+                and ldr_a_demoted_team_api["status"] == 403
+                and ldr_a_demoted_emp_api["status"] == 403
+                and ldr_a_demoted_mylist_api["status"] == 200
+                and ldr_a_restored_ui == 200
+                and ldr_a_restored_api["status"] == 200
+            )
+            record_case(
+                acceptance_id="P4-ROLE-CHANGE / S11-REVOCATION / G11,G16",
+                gate="G10,G11,G16",
+                actor="Leader A (Sales Manager -> Sales User -> Sales Manager)",
+                expected="Demoting Leader A to Sales User & revoking team ownership immediately blocks /cskh/team-quality (403) and team/employee reporting APIs (403) in active browser session while keeping Sales User /cskh/my-customers (200); restoring role immediately recovers 200",
+                actual=f"before(ui={ldr_a_before_ui},api={ldr_a_before_api['status']}) -> demoted(team_ui={ldr_a_demoted_ui},team_api={ldr_a_demoted_team_api['status']},emp_api={ldr_a_demoted_emp_api['status']},staff_ui={ldr_a_staff_ui}) -> restored(ui={ldr_a_restored_ui},api={ldr_a_restored_api['status']})",
+                passed=role_change_ok,
+                evidence={
+                    "before_team_ui_http": ldr_a_before_ui,
+                    "before_team_api_http": ldr_a_before_api["status"],
+                    "demoted_team_ui_http": ldr_a_demoted_ui,
+                    "demoted_team_comparison_api_http": ldr_a_demoted_team_api["status"],
+                    "demoted_employee_quality_api_http": ldr_a_demoted_emp_api["status"],
+                    "demoted_sales_user_mylist_http": ldr_a_demoted_mylist_api["status"],
+                    "restored_team_ui_http": ldr_a_restored_ui,
+                    "restored_team_api_http": ldr_a_restored_api["status"],
                 },
             )
         finally:

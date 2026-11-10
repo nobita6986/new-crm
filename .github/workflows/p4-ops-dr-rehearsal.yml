@@ -14,6 +14,11 @@ concurrency:
   group: p4-ops-dr-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  LOCKED_BATCH1_COMMIT_SHA: '427af4834eda48a15ca86c15e88342c3c40d5f2f'
+  LOCKED_CANDIDATE_IMAGE_DIGEST: 'ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d'
+  BASELINE_MAIN_COMMIT_SHA: '467830195358b2431ac772486530ab935887a518'
+
 jobs:
   static-and-posix-unit-gate:
     name: Workflow audit, Compose 4-stack validation & POSIX ops unit tests
@@ -105,6 +110,9 @@ jobs:
     needs: [static-and-posix-unit-gate]
     runs-on: ubuntu-24.04
     timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Reclaim unused runner SDK space
@@ -115,23 +123,28 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
 
-      - name: Build locked crm-cskh image & execute G07 + G08 container drills
+      - name: Pull locked candidate @sha256 from GHCR & execute G07 + G08 container drills
         shell: bash
+        env:
+          GITHUB_ACTOR_PULL: ${{ github.actor }}
+          GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           EVID="$RUNNER_TEMP/p4-g07-g08-evidence"
-          BUILD_DIR="$RUNNER_TEMP/p4-img-build"
           WORK_DIR="$RUNNER_TEMP/p4-src-sim"
-          mkdir -p "$EVID" "$BUILD_DIR" "$WORK_DIR"
+          mkdir -p "$EVID" "$WORK_DIR"
 
-          HEAD_SHA="$(git rev-parse HEAD)"
-          LOCAL_IMAGE_REPO="crm-cskh" \
-          REGISTRY_PUSH=false \
-          bash deploy/images/build-image.sh \
-            --out-dir "$BUILD_DIR" \
-            --tag "p4-g08-${HEAD_SHA::12}"
-          IMG_ID="$(jq -r '.local_image_id' "$BUILD_DIR/image-inspect-summary.json")"
+          test "$(git rev-parse HEAD:apps)" = "$(git rev-parse "${LOCKED_BATCH1_COMMIT_SHA}:apps")"
+          sh deploy/release/validate_digest_uri.sh "${LOCKED_CANDIDATE_IMAGE_DIGEST}"
+          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PULL}" \
+            --password-stdin
+          docker pull "${LOCKED_CANDIDATE_IMAGE_DIGEST}"
+          docker logout ghcr.io >/dev/null 2>&1 || true
+          IMG_ID="${LOCKED_CANDIDATE_IMAGE_DIGEST}"
 
           # Pre-pull pinned MariaDB and Redis images so RTO measures pure container/DB recovery
           MARIADB_IMG="$(grep '^MARIADB_IMAGE=' deploy/compose/env/isolated-smoke.env.example | cut -d= -f2-)"
@@ -431,6 +444,9 @@ jobs:
     needs: [static-and-posix-unit-gate]
     runs-on: ubuntu-24.04
     timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
 
     steps:
       - name: Reclaim unused runner SDK space
@@ -456,24 +472,73 @@ jobs:
             cryptography==44.0.2
           "$RUNNER_TEMP/pw-venv/bin/playwright" install --with-deps chromium
 
-      - name: Build locked candidate N + baseline N-1 images & run full HTTPS + Browser + Tier 3/4 rehearsal
+      - name: Pull locked candidate @sha256 from GHCR, build baseline N-1 & run full HTTPS + Browser + Mid-Job SIGKILL + N->N-1 Rollback
         shell: bash
+        env:
+          GITHUB_ACTOR_PULL: ${{ github.actor }}
+          GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           EVID="$RUNNER_TEMP/p4-dr-https-evidence"
-          BUILD_DIR="$RUNNER_TEMP/p4-dr-img-build"
           N1_BUILD_DIR="$RUNNER_TEMP/p4-dr-n1-build"
-          mkdir -p "$EVID" "$BUILD_DIR" "$N1_BUILD_DIR"
+          mkdir -p "$EVID" "$N1_BUILD_DIR"
 
-          HEAD_SHA="$(git rev-parse HEAD)"
-          LOCAL_IMAGE_REPO="crm-cskh" \
-          REGISTRY_PUSH=false \
-          bash deploy/images/build-image.sh \
-            --out-dir "$BUILD_DIR" \
-            --tag "p4-dr-https-${HEAD_SHA::12}"
-          IMG_ID="$(jq -r '.local_image_id' "$BUILD_DIR/image-inspect-summary.json")"
+          test "$(git rev-parse HEAD:apps)" = "$(git rev-parse "${LOCKED_BATCH1_COMMIT_SHA}:apps")"
+          sh deploy/release/validate_digest_uri.sh "${LOCKED_CANDIDATE_IMAGE_DIGEST}"
 
-          N1_SHA="467830195358b2431ac772486530ab935887a518"
+          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PULL}" \
+            --password-stdin
+          PULL_LOG="$RUNNER_TEMP/ghcr-candidate-pull.log"
+          docker pull "${LOCKED_CANDIDATE_IMAGE_DIGEST}" | tee "$PULL_LOG"
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+          INSPECT_RAW="$RUNNER_TEMP/ghcr-candidate-inspect.json"
+          docker image inspect "${LOCKED_CANDIDATE_IMAGE_DIGEST}" > "$INSPECT_RAW"
+          python3 - "${LOCKED_CANDIDATE_IMAGE_DIGEST}" "${LOCKED_BATCH1_COMMIT_SHA}" "$PULL_LOG" "$INSPECT_RAW" "$EVID/candidate-registry-pull-inspect-receipt.json" <<'PY'
+          import datetime, json, re, subprocess, sys
+          from pathlib import Path
+
+          req_digest, locked_sha, pull_log_p, insp_p, out_p = sys.argv[1:6]
+          pull_txt = Path(pull_log_p).read_text(encoding="utf-8", errors="replace")
+          m_dig = re.search(r"Digest:\s*(sha256:[0-9a-f]{64})", pull_txt)
+          pulled_digest = m_dig.group(1) if m_dig else ""
+          insp = json.loads(Path(insp_p).read_text(encoding="utf-8"))[0]
+          repo_digests = insp.get("RepoDigests") or []
+          assert req_digest in repo_digests, f"Expected {req_digest} in RepoDigests={repo_digests}"
+          cfg = insp.get("Config") or {}
+          assert cfg.get("User") == "frappe", f"Expected non-root User=frappe, got {cfg.get('User')!r}"
+
+          def git_rev(spec: str) -> str:
+              return subprocess.check_output(["git", "rev-parse", spec], text=True).strip()
+
+          receipt = {
+              "schema_version": "cskh-p4-candidate-registry-receipt-v1",
+              "timestamp_utc": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+              "status": "PASS",
+              "candidate_verification_only": True,
+              "promoted_to_production": False,
+              "owner_live_site_touched": False,
+              "integrated_head_sha": git_rev("HEAD"),
+              "locked_batch1_candidate_sha": locked_sha,
+              "apps_tree_sha": git_rev("HEAD:apps"),
+              "crm_cskh_tree_sha": git_rev("HEAD:apps/crm_cskh"),
+              "compose_tree_sha": git_rev("HEAD:deploy/compose"),
+              "requested_registry_digest": req_digest,
+              "pull_log_digest": pulled_digest,
+              "inspected_image_id": insp.get("Id"),
+              "inspected_repo_digests": repo_digests,
+              "inspected_created": insp.get("Created"),
+              "inspected_architecture": insp.get("Architecture"),
+              "inspected_os": insp.get("Os"),
+              "inspected_size_bytes": insp.get("Size"),
+              "inspected_user": cfg.get("User"),
+              "inspected_labels": cfg.get("Labels") or {},
+          }
+          Path(out_p).write_text(json.dumps(receipt, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+
+          N1_SHA="${BASELINE_MAIN_COMMIT_SHA}"
           git worktree add --detach "$RUNNER_TEMP/n-minus-1-src" "$N1_SHA"
           LOCAL_IMAGE_REPO="crm-cskh-n-minus-1" \
           REGISTRY_PUSH=false \
@@ -491,9 +556,10 @@ jobs:
           docker pull "$PROXY_IMG"
 
           "$RUNNER_TEMP/pw-venv/bin/python" deploy/ops/manage_isolated_staging_dr.py full-rehearsal \
-            --app-image "$IMG_ID" \
+            --app-image "${LOCKED_CANDIDATE_IMAGE_DIGEST}" \
             --n-minus-1-image "$N1_IMG_ID" \
             --browser-report-out "$EVID/https-browser-uat-security-report.json" \
+            --runtime-audit-out "$EVID/staging-dr-runtime-isolation-audit.json" \
             --run-id "ci-${GITHUB_RUN_ID}" \
             --out "$EVID/isolated-staging-dr-https-report.json"
 

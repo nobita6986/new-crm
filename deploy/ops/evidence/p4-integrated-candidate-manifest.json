@@ -1,0 +1,216 @@
+{
+  "schema_version": "cskh-p4-integrated-candidate-manifest-v1",
+  "generated_at_utc": "2026-11-10T05:35:00Z",
+  "candidate_verification_only": true,
+  "promoted_to_production": false,
+  "owner_live_site_touched": false,
+  "integration_lineage": {
+    "integration_branch": "codex/p4-resume-ops",
+    "base_main_n_minus_1_sha": "467830195358b2431ac772486530ab935887a518",
+    "t1a_ops_baseline_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
+    "t1b_batch1_locked_candidate_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+    "t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
+    "integrated_code_sha": "PENDING_FINAL_CI_RUN",
+    "apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910",
+    "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
+    "apps_tree_parity_with_locked_candidate": true
+  },
+  "frappe_crm_app_versions": {
+    "load_order": [
+      "frappe",
+      "crm",
+      "crm_cskh"
+    ],
+    "frappe": {
+      "version_tag": "v15.126.0",
+      "commit_sha": "53bae3ef2550ca96320f036f581446783cd11b72",
+      "upgraded_from_n_minus_1": "v15.123.1 (d2efa79657ba5c1abf96098b3bfacc199517d57e)",
+      "localization_patcher": "deploy/images/resources/apply-frappe-vi-patch.py"
+    },
+    "crm": {
+      "version_tag": "v1.87.0",
+      "commit_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "pinned_frappe_ui": "1.0.0-beta.29",
+      "pinned_vite": "8.2.0",
+      "localization_patcher": "deploy/dev/apply-crm-ui-vi-patch.py"
+    },
+    "crm_cskh": {
+      "declared_version": "0.0.1",
+      "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
+      "metrics_formula_version": "cskh-metrics-v2"
+    },
+    "runtime_toolchain_and_key_python_upgrades": {
+      "base_image": "python:3.11.18-slim-trixie@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535",
+      "frappe_docker_upstream": "v4.2.0 (61d35da827ebc04d01b64c9e78385597ccebc9d8)",
+      "node_version": "22.23.3",
+      "uv_version": "0.13.7",
+      "Werkzeug": "3.1.6 -> 3.1.9",
+      "PyJWT": "2.13.0 -> 2.15.1",
+      "Babel": "2.13.1 -> 2.18.0",
+      "pillow": "12.3.0 -> 13.0.0",
+      "pypdf": "6.15.0 -> 6.21.4",
+      "weasyprint": "69.0 -> 70.0",
+      "phonenumbers": "9.0.42 -> 9.0.43",
+      "sqlglot": "30.29.0 -> 30.30.0",
+      "oauthlib": "3.3.1 -> 4.0.1",
+      "filelock": "3.20.4 -> 4.2.9"
+    }
+  },
+  "registry_digest": {
+    "candidate_image_uri": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+    "mariadb_image": "mariadb:11.8@sha256:f16d7a344413e519dff518f27bdb221388f274c97c4fb5f2cb0dc1b34fa",
+    "redis_image": "redis:8.6-alpine@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba",
+    "proxy_image": "traefik:v3.3@sha256:1fb7fe1eb8eb2ebccfb6bf9d96f0ed1f639f3ac60bc181cebd3bd6f21a1e62d8",
+    "pull_inspect_receipt_path": "deploy/ops/evidence/p4-https-delta-20261109/candidate-registry-pull-inspect-receipt.json",
+    "live_production_untouched_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9"
+  },
+  "compose_and_config_sha": {
+    "deploy_compose_git_tree_sha": "33eee03f392da7c1926a76d7b60052d8f1727da0",
+    "deploy_images_git_tree_sha": "6f050a9aad5367f89158a68e9d429c106f31c214",
+    "release_lock_sha256": "54800fc8c3aa579f8b2369c255966a5e44f799e08370dcde5a05543e211b9309",
+    "runtime_isolation_audit_path": "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json",
+    "environment_inventory_doc": "docs/p4/environment-isolation-inventory.md"
+  },
+  "test_sites": {
+    "isolated_staging_dr_https_site": {
+      "site_name": "staging-dr-uat.crm-internal.localhost",
+      "compose_mode": "dr-https",
+      "project_prefix": "crm-cskh-dr-https-*",
+      "ingress_bind": "127.0.0.1:18081 / 127.0.0.1:18443",
+      "purpose": "Isolated HTTPS + WSS candidate UAT, Playwright Chromium journeys, worker mid-job SIGKILL, and Tier 1/3/4 rollback"
+    },
+    "isolated_g07_g08_simulator_and_clone_site": {
+      "site_name": "crm-staging.localhost (isolated container namespace crm-cskh-src-sim / crm-cskh-dr-*)",
+      "purpose": "Encrypted backup lifecycle + isolated restore positive/negative control on candidate @sha256"
+    },
+    "isolated_batch2_delta_sites": {
+      "sites": [
+        "g06-mig.localhost",
+        "g09-dr.localhost",
+        "g11-sec.localhost",
+        "g15-delta.localhost"
+      ],
+      "purpose": "N-1 -> N clone migration, S01-S20 topology/edge rate-limit, cskh-metrics-v2 golden dataset & D04/D05/D06 worker SIGKILL"
+    },
+    "untouched_live_vps_production_site": {
+      "host": "103.77.208.186",
+      "public_url": "https://crm.hrpartner.vn",
+      "compose_project": "crm-cskh-vps-staging",
+      "site_name": "crm-staging.localhost",
+      "touched_by_candidate_verification": false
+    }
+  },
+  "frappe_upgrade_diff_impact_checks": [
+    {
+      "impact_area": "Migration & restore compatibility on candidate (Frappe v15.123.1 -> v15.126.0, sqlglot 30.30.0)",
+      "status": "PASS",
+      "evidence": [
+        "deploy/ops/evidence/p4-https-delta-20261109/g06-g09-migration-and-rollback-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json"
+      ]
+    },
+    {
+      "impact_area": "Login / session / Secure+HttpOnly+SameSite=Lax cookie / CSRF enforcement (Werkzeug 3.1.9, PyJWT 2.15.1, oauthlib 4.0.1)",
+      "status": "PASS",
+      "evidence": [
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json"
+      ]
+    },
+    {
+      "impact_area": "Socket.IO WSS 101 upgrade & session eviction on User.enabled=0 (Frappe v15.126.0 realtime)",
+      "status": "PASS",
+      "evidence": [
+        "deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/g11-g12-security-topology-report.json"
+      ]
+    },
+    {
+      "impact_area": "Private file attachment guard (S06) & async CSV export formula neutralization / RBAC (pillow 13.0.0, pypdf 6.21.4, weasyprint 70.0)",
+      "status": "PASS",
+      "evidence": [
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/g11-g12-security-topology-report.json"
+      ]
+    },
+    {
+      "impact_area": "UI + API by role (CRM Admin, BOD, Leader A/B, Staff A/B/C, Outside, Guest), A->B->A transfer & live role-change (Sales Manager -> Sales User)",
+      "status": "PASS",
+      "evidence": [
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json"
+      ]
+    },
+    {
+      "impact_area": "Dashboard / KPI drill-down modal, Vietnamese localization (Babel 2.18.0 + apply-frappe-vi-patch.py), and 1366x768 keyboard/label accessibility",
+      "status": "PASS",
+      "evidence": [
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/g13-g14-g15-g17-delta-report.json"
+      ]
+    },
+    {
+      "impact_area": "Joint T1A+T1B Tier 3 N -> N-1 image rollback & worker mid-job SIGKILL recovery + cleanup verification",
+      "status": "PASS",
+      "evidence": [
+        "deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/g06-g09-migration-and-rollback-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/g13-g14-g15-g17-delta-report.json"
+      ]
+    }
+  ],
+  "reused_unaffected_evidence": [
+    {
+      "gate": "G08 (Live VPS archive isolated clone restore)",
+      "reason_reusable": "deploy/ops/create_encrypted_backup.py and deploy/ops/verify_offsite_restore.py are byte-identical to 801be22b3be2c8199704c4da7442b0c2e0edf352; live VPS image sha256:acb95057... unchanged",
+      "evidence": "deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json"
+    },
+    {
+      "gate": "G02/G05/G10-G16 (421/421 JUnit suite & Trivy/SBOM/provenance on exact digest)",
+      "reason_reusable": "apps_tree_sha (14b5387296dad815a6b9f663411f265fa7d9f910) and candidate digest (sha256:b1329ef7...) are byte-identical to Batch 1 Run #42625295772",
+      "evidence": "deploy/ops/evidence/p4-candidate-and-s1-20261109/ candidate-verify-summary.md & junit-421"
+    },
+    {
+      "gate": "G18 (S1 10,000-Lead performance benchmark)",
+      "reason_reusable": "crm_cskh_tree_sha (f51095ec245e103ed3a487654b5580636424ea36) and candidate runtime dependencies unchanged since Run #42625295772",
+      "evidence": "deploy/ops/evidence/p4-candidate-and-s1-20261109/s1-benchmark-report.json"
+    }
+  ],
+  "owner_pending_inputs_consolidated": {
+    "g07_offsite_and_key_escrow": {
+      "status": "BLOCKED_ON_OWNER_INFRA_INPUT",
+      "blocker_id": "BLK-INFRA-05",
+      "required_inputs": [
+        "Off-VPS storage destination URI (S3-compatible bucket, remote SFTP/SSH host, or mounted off-host volume with distinct st_dev outside VPS 103.77.208.186)",
+        "Write + SHA-256 readback credentials provisioned at /etc/crm-cskh/offsite-backup.env (mode 0600, template deploy/compose/env/offsite-backup.env.example)",
+        "Confirmation of independent off-VPS vault/password manager for escrowing site_config.json encryption_key and per-bundle backup-key (never co-located with backup.tar.gz.enc)",
+        "Scheduled timer trigger log capture (crm-cskh-backup.timer) after configuring offsite target"
+      ]
+    },
+    "g19_alerting_channel_and_oncall": {
+      "status": "BLOCKED_ON_OWNER_CHANNEL_AND_RECIPIENT",
+      "blocker_ids": [
+        "BLK-GOV-06",
+        "BLK-INFRA-07"
+      ],
+      "required_inputs": [
+        "Named Primary & Backup Day-2 Operators (full name, role, phone/chat handle) for CSKH_OPERATOR_CONTACT",
+        "Approved external HTTPS alert webhook URL (Slack / Google Chat / Teams / Pager / Telegram proxy) for CSKH_ALERT_WEBHOOK_URL in /etc/crm-cskh/alerting.env (mode 0600)",
+        "Receipt verification via python3 deploy/ops/check_health_and_invariants.py --send-test-alert --alert-receipt-out ... followed by --verify-alert-receipt"
+      ]
+    },
+    "g22_business_uat_signers": {
+      "status": "BLOCKED_ON_HUMAN_SIGN_OFF",
+      "blocker_id": "BLK-GOV-06",
+      "required_inputs": [
+        "Named human UAT signers & dates for 5 roles in docs/p4/uat-report.md §4: CSKH Staff, CSKH Leader, CSKH CRM Admin, BOD Viewer, and Release Owner"
+      ]
+    },
+    "g24_day2_operator_handover_acceptance": {
+      "status": "BLOCKED_ON_OPERATOR_ACCEPTANCE",
+      "blocker_id": "BLK-GOV-06",
+      "required_inputs": [
+        "Named Day-2 Operator acceptance signature & walkthrough completion date in docs/p4/operator-handover-pack.md"
+      ]
+    }
+  }
+}

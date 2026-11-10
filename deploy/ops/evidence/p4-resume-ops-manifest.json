@@ -1,6 +1,6 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
-  "generated_at_utc": "2026-11-10T04:46:03Z",
+  "generated_at_utc": "2026-11-10T05:33:58Z",
   "branch": "codex/p4-resume-ops",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
   "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
@@ -224,8 +224,8 @@
     },
     {
       "path": ".github/workflows/p4-ops-dr-rehearsal.yml",
-      "bytes": 24099,
-      "sha256": "7a875884546225b4fb0c036c12939d0c6e18148f89167be4cf53bba04ccbf3a3"
+      "bytes": 27730,
+      "sha256": "4911f227a06f43ef300fc83730efd806503b10fef12f46db1f360814b9b07a35"
     },
     {
       "path": "deploy/compose/env/alerting.env.example",
@@ -423,6 +423,11 @@
       "sha256": "124c2038799eb98d2f5bc9c5ed9fa4657af154eccfe4da2f78e1c5b0a0e61a7a"
     },
     {
+      "path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
+      "bytes": 10879,
+      "sha256": "ab30d71f46278f6716df9cce439801d69058c681888fff3db68e0aba41d615ac"
+    },
+    {
       "path": "deploy/ops/evidence/p4-vps-live-20261109/SHA256SUMS.txt",
       "bytes": 1104,
       "sha256": "13515f07081396cc147539e3861ce367098cdd5fc2e1fdbe7e79df2ce90d88c1"
@@ -499,13 +504,13 @@
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
-      "bytes": 109113,
-      "sha256": "4b5ee276a697e09a20346aad7cf56f69d396e33820987237dc21899a261f1843"
+      "bytes": 124180,
+      "sha256": "a14396aaf18ce51ad57c69a9d6857f8e3432c1e8edd0fc2809e3def263bfd864"
     },
     {
       "path": "deploy/ops/run_https_browser_uat_and_security.py",
-      "bytes": 68936,
-      "sha256": "d18a1ba60dd9edff9784648d4ffe21569e0b35b76ac2bbb2d94c114d2b01963a"
+      "bytes": 74599,
+      "sha256": "581b7ff84efbf76a20e33c466b6768eff8afc461ac611731391ac8466a4e4ee6"
     },
     {
       "path": "deploy/ops/run_local_ops_rehearsal.py",
@@ -743,7 +748,8 @@
       "sha256": "c02ebff5d727a4689be26d6d649c081cd6e5ea97093535d75f2b2c32b16b3061"
     }
   ],
-  "manifest_revision": "v6-t1a-t1b-https-browser-and-batch2-delta-20261110",
+  "manifest_revision": "v7-integrated-ghcr-digest-rolechange-midjob-sigkill-20261110",
   "merged_t1b_release_hardening_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
-  "merged_t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17"
+  "merged_t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
+  "integrated_candidate_manifest_path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json"
 }

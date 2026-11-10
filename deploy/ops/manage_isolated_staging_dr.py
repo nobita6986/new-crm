@@ -23,6 +23,7 @@ Hard safety boundary:
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -593,6 +594,185 @@ finally:
         "seed_info": seed_info,
         "https_smoke": smoke_json,
     }
+
+
+def audit_isolated_stack_runtime_resources(
+    *,
+    env_file: Path,
+    secret_file: Path,
+    out_json: Path | None = None,
+) -> dict[str, Any]:
+    """Inspect live Docker networks, host ports, volumes, secrets & digest parity on isolated Staging/DR."""
+    env = p403_tool.parse_env_file(env_file)
+    assert_isolated_from_owner_stack(env, env_file)
+    project_name = env["COMPOSE_PROJECT_NAME"].strip()
+    site_name = env["SITE_NAME"].strip()
+    app_image = env["APP_IMAGE"].strip()
+    http_port = int(env.get("HTTP_PUBLISH_PORT", "18081"))
+    https_port = int(env.get("HTTPS_PUBLISH_PORT", "18443"))
+
+    git_tree_proc = subprocess.run(
+        ["git", "-C", str(REPO_ROOT), "rev-parse", "HEAD:deploy/compose"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    compose_tree_sha = git_tree_proc.stdout.strip() if git_tree_proc.returncode == 0 else ""
+
+    cfg_proc = run_sub(compose_cmd(env_file, ["config"], profile_migrate=True))
+    rendered_cfg_sha256 = hashlib.sha256(cfg_proc.stdout.encode("utf-8")).hexdigest()
+
+    ps_proc = run_sub(compose_cmd(env_file, ["ps", "--format", "json"]))
+    containers = p403_tool._parse_compose_ps_json(ps_proc.stdout)
+    digest_parity = p403_tool.verify_running_containers_digest(containers, app_image)
+
+    published_ports_by_service: dict[str, list[dict[str, Any]]] = {}
+    non_proxy_published_ports: list[dict[str, Any]] = []
+    wildcard_binds: list[dict[str, Any]] = []
+    for row in containers:
+        svc = str(row.get("Service") or "")
+        pubs = [
+            {
+                "bind_ip": str(p.get("URL") or ""),
+                "published_port": int(p.get("PublishedPort") or 0),
+                "target_port": int(p.get("TargetPort") or 0),
+                "protocol": str(p.get("Protocol") or "tcp"),
+            }
+            for p in (row.get("Publishers") or [])
+            if int(p.get("PublishedPort") or 0) > 0
+        ]
+        published_ports_by_service[svc] = pubs
+        if svc != "proxy" and pubs:
+            non_proxy_published_ports.extend([{"service": svc, **p} for p in pubs])
+        for p in pubs:
+            if p["bind_ip"] in ("0.0.0.0", "::", "*", ""):
+                wildcard_binds.append({"service": svc, **p})
+
+    proxy_ports = sorted(p["published_port"] for p in published_ports_by_service.get("proxy", []))
+    ports_ok = (
+        proxy_ports == sorted([http_port, https_port])
+        and not non_proxy_published_ports
+        and not wildcard_binds
+    )
+
+    net_ls = run_sub(
+        ["docker", "network", "ls", "--filter", f"label=com.docker.compose.project={project_name}", "--format", "{{.Name}}"]
+    )
+    net_names = sorted(ln.strip() for ln in net_ls.stdout.splitlines() if ln.strip())
+    inspected_networks: list[dict[str, Any]] = []
+    for nname in net_names:
+        ninsp = run_sub(["docker", "network", "inspect", nname])
+        ndata = json.loads(ninsp.stdout)[0]
+        attached = sorted(
+            str(cinfo.get("Name") or "") for cinfo in (ndata.get("Containers") or {}).values()
+        )
+        inspected_networks.append(
+            {
+                "name": nname,
+                "driver": ndata.get("Driver"),
+                "internal": bool(ndata.get("Internal")),
+                "attached_containers": attached,
+            }
+        )
+    net_by_suffix = {n["name"]: n for n in inspected_networks}
+    data_net_internal = any(
+        n["name"].endswith("_data_net") and n["internal"] for n in inspected_networks
+    )
+    app_net_internal = any(
+        n["name"].endswith("_app_net") and n["internal"] for n in inspected_networks
+    )
+    edge_net_present = any(
+        n["name"].endswith("_edge_net") and not n["internal"] for n in inspected_networks
+    )
+    zero_owner_net_overlap = all(
+        not n["name"].startswith(("crm-cskh-vps-staging", "crm-cskh-prod"))
+        for n in inspected_networks
+    )
+    networks_ok = data_net_internal and app_net_internal and edge_net_present and zero_owner_net_overlap
+
+    vol_ls = run_sub(
+        ["docker", "volume", "ls", "--filter", f"label=com.docker.compose.project={project_name}", "--format", "{{.Name}}"]
+    )
+    vol_names = sorted(ln.strip() for ln in vol_ls.stdout.splitlines() if ln.strip())
+    volumes_ok = len(vol_names) >= 5 and all(v.startswith(f"{project_name}_") for v in vol_names)
+
+    host_secret_meta = p403_tool.inspect_secret_file_bytes(
+        secret_file, enforce_posix_mode=(os.name == "posix")
+    )
+    db_sec_proc = run_sub(
+        compose_cmd(
+            env_file,
+            ["exec", "-T", "db", "sh", "-c", "test -s /run/secrets/db_password && echo MOUNTED_OK"],
+        ),
+        check=False,
+    )
+    db_cid = run_sub(compose_cmd(env_file, ["ps", "-q", "db"])).stdout.strip().splitlines()[0].strip()
+    db_env_proc = run_sub(
+        ["docker", "inspect", "--format", "{{json .Config.Env}}", db_cid]
+    )
+    db_env_keys = [e.split("=", 1)[0] for e in (json.loads(db_env_proc.stdout) or [])]
+    has_plaintext_root_pw_env = any(
+        k in ("MYSQL_ROOT_PASSWORD", "MARIADB_ROOT_PASSWORD") for k in db_env_keys
+    )
+    secrets_ok = (
+        bool(host_secret_meta.get("exists"))
+        and bool(host_secret_meta.get("ends_with_lf_only"))
+        and bool(host_secret_meta.get("non_empty"))
+        and bool(host_secret_meta.get("mode_ok"))
+        and "MOUNTED_OK" in db_sec_proc.stdout
+        and not has_plaintext_root_pw_env
+    )
+
+    passed = (
+        digest_parity.get("status") == "PASS"
+        and ports_ok
+        and networks_ok
+        and volumes_ok
+        and secrets_ok
+    )
+    audit_doc = {
+        "schema_version": "cskh-p4-staging-dr-runtime-audit-v1",
+        "timestamp_utc": utc_now_iso(),
+        "status": "PASS" if passed else "FAIL",
+        "candidate_verification_only": True,
+        "promoted_to_production": False,
+        "owner_live_site_touched": False,
+        "project_name": project_name,
+        "site_name": site_name,
+        "app_image": app_image,
+        "compose_git_tree_sha": compose_tree_sha,
+        "rendered_compose_config_sha256": rendered_cfg_sha256,
+        "container_digest_parity": digest_parity,
+        "networks": {
+            "pass": networks_ok,
+            "edge_net_present": edge_net_present,
+            "app_net_internal_true": app_net_internal,
+            "data_net_internal_true": data_net_internal,
+            "zero_owner_network_overlap": zero_owner_net_overlap,
+            "inspected_networks": list(net_by_suffix.values()),
+        },
+        "ports": {
+            "pass": ports_ok,
+            "proxy_loopback_ports": proxy_ports,
+            "non_proxy_published_ports": non_proxy_published_ports,
+            "wildcard_binds": wildcard_binds,
+            "by_service": published_ports_by_service,
+        },
+        "volumes": {
+            "pass": volumes_ok,
+            "project_scoped_volumes": vol_names,
+        },
+        "secrets": {
+            "pass": secrets_ok,
+            "host_secret_file_metadata": host_secret_meta,
+            "db_secret_mounted_at_run_secrets_db_password": "MOUNTED_OK" in db_sec_proc.stdout,
+            "db_has_plaintext_root_password_env": has_plaintext_root_pw_env,
+        },
+    }
+    if out_json is not None:
+        out_json.parent.mkdir(parents=True, exist_ok=True)
+        out_json.write_text(json.dumps(audit_doc, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    return audit_doc
 
 
 def rehearse_migration_x2_and_reconcile(*, env_file: Path) -> dict[str, Any]:
@@ -1650,16 +1830,183 @@ finally:
     }
 
 
-def rehearse_worker_restart_and_cron_retry(*, env_file: Path) -> dict[str, Any]:
-    """Rehearse `G17` daemon restart (`queue-short`, `queue-long`, `scheduler`) + cron ×2 retry."""
+def rehearse_worker_restart_and_cron_retry(
+    *,
+    env_file: Path,
+    include_mid_job_sigkill: bool = True,
+) -> dict[str, Any]:
+    """Rehearse `G17` worker mid-job `SIGKILL` recovery + daemon restart + cron ×2 retry."""
     env = p403_tool.parse_env_file(env_file)
     assert_isolated_from_owner_stack(env, env_file)
     site_name = env["SITE_NAME"].strip()
+    operator_actions_log: list[dict[str, Any]] = []
+
+    mid_job_sigkill_report: dict[str, Any] = {"executed": False, "pass": True}
+    if include_mid_job_sigkill:
+        enq_py = r"""
+import json, os, sys, time, frappe
+site = sys.argv[1]
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    frappe.set_user("Administrator")
+    p_key = frappe.db.sql(
+        "SELECT period_key FROM `tabCSKH KPI Snapshot` WHERE period_type='monthly' AND IFNULL(is_latest_published,0)=1 LIMIT 1"
+    )
+    period_key = str(p_key[0][0]) if p_key else frappe.utils.nowdate()[:7]
+    pub_before = frappe.db.get_value(
+        "CSKH KPI Run",
+        {"period_type": "monthly", "period_key": period_key, "is_latest_published": 1},
+        "name",
+    )
+    frappe.enqueue(
+        "crm_cskh.jobs.recompute_kpi.run_single_period_recompute",
+        queue="short",
+        now=False,
+        period_type="monthly",
+        period_key=period_key,
+        actor="Administrator",
+    )
+    frappe.db.commit()
+    picked_up = False
+    for _ in range(60):
+        rkey = frappe.cache.make_key(f"cskh:kpi:recompute_lock:monthly:{period_key}:*")
+        running = int(frappe.db.count("CSKH KPI Run", {"period_type": "monthly", "period_key": period_key, "status": "running"}))
+        if running > 0 or bool(frappe.cache.get(rkey)):
+            picked_up = True
+            break
+        time.sleep(0.03)
+    print("MIDJOB_ENQ_JSON=" + json.dumps({"period_key": period_key, "published_before": pub_before, "picked_up_before_kill": picked_up}))
+finally:
+    frappe.destroy()
+"""
+        enq_proc = run_sub(
+            compose_cmd(
+                env_file,
+                ["exec", "-T", "backend", "/home/frappe/frappe-bench/env/bin/python", "-c", enq_py, site_name],
+            )
+        )
+        enq_meta = json.loads(
+            [ln.split("=", 1)[1] for ln in enq_proc.stdout.splitlines() if ln.startswith("MIDJOB_ENQ_JSON=")][-1]
+        )
+        qs_cid = run_sub(compose_cmd(env_file, ["ps", "-q", "queue-short"])).stdout.strip().splitlines()[0].strip()
+        run_sub(["docker", "kill", "-s", "KILL", qs_cid])
+        insp_kill = run_sub(
+            ["docker", "inspect", "--format", "{{.State.Status}}:{{.State.ExitCode}}", qs_cid]
+        ).stdout.strip()
+        kill_parts = insp_kill.split(":", 1)
+        kill_exit_code = int(kill_parts[1]) if len(kill_parts) > 1 and kill_parts[1].lstrip("-").isdigit() else 0
+        operator_actions_log.append(
+            {
+                "timestamp_utc": utc_now_iso(),
+                "action": f"docker kill -s KILL {qs_cid[:12]} (service=queue-short)",
+                "post_kill_status": kill_parts[0],
+                "exit_code": kill_exit_code,
+            }
+        )
+
+        # Recreate queue-short cleanly (resets Docker RestartCount to 0) and reconcile interrupted job + queues
+        run_sub(compose_cmd(env_file, ["up", "-d", "--no-build", "--force-recreate", "queue-short"]))
+        wait_services_healthy(env_file, ("queue-short",), timeout_seconds=90)
+        operator_actions_log.append(
+            {
+                "timestamp_utc": utc_now_iso(),
+                "action": "docker compose up -d --no-build --force-recreate queue-short",
+                "outcome": "queue-short healthy with RestartCount=0",
+            }
+        )
+
+        rec_py = r"""
+import json, os, sys, time, frappe
+from rq.registry import FailedJobRegistry, StartedJobRegistry
+from frappe.utils.background_jobs import get_queue
+from crm_cskh.jobs.recompute_kpi import run_single_period_recompute
+from crm_cskh.jobs.reconcile_metrics import reconcile_published_period
+from crm_cskh.services.errors import RecomputeInProgress
+
+site, period_key = sys.argv[1], sys.argv[2]
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    frappe.set_user("Administrator")
+    rkey = frappe.cache.make_key(f"cskh:kpi:recompute_lock:monthly:{period_key}:*")
+    frappe.cache.delete(rkey)
+    frappe.db.sql("UPDATE `tabCSKH Dirty Scope` SET status='pending' WHERE status='processing'")
+    frappe.db.sql("UPDATE `tabCSKH KPI Run` SET status='failed' WHERE status='running'")
+    frappe.db.commit()
+    for qtype in ("short", "default", "long"):
+        q = get_queue(qtype, is_async=True)
+        q.empty()
+        for reg in (FailedJobRegistry(queue=q), StartedJobRegistry(queue=q)):
+            for jid in list(reg.get_job_ids()):
+                reg.remove(jid, delete_job=True)
+    for _ in range(15):
+        try:
+            run_single_period_recompute(period_type="monthly", period_key=period_key, actor="Administrator")
+            break
+        except RecomputeInProgress:
+            time.sleep(1.0)
+    pub_runs = frappe.get_all(
+        "CSKH KPI Run",
+        filters={"period_type": "monthly", "period_key": period_key, "is_latest_published": 1},
+        pluck="name",
+    )
+    rec = reconcile_published_period(period_type="monthly", period_key=period_key)
+    frappe.db.commit()
+    print("MIDJOB_REC_JSON=" + json.dumps({"published_runs": pub_runs, "reconcile_ok": bool(rec.get("ok"))}))
+finally:
+    frappe.destroy()
+"""
+        rec_proc = run_sub(
+            compose_cmd(
+                env_file,
+                [
+                    "exec",
+                    "-T",
+                    "backend",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "-c",
+                    rec_py,
+                    site_name,
+                    enq_meta["period_key"],
+                ],
+            )
+        )
+        rec_meta = json.loads(
+            [ln.split("=", 1)[1] for ln in rec_proc.stdout.splitlines() if ln.startswith("MIDJOB_REC_JSON=")][-1]
+        )
+        sigkill_ok = (
+            kill_exit_code == 137
+            and len(rec_meta.get("published_runs") or []) == 1
+            and bool(rec_meta.get("reconcile_ok"))
+        )
+        mid_job_sigkill_report = {
+            "executed": True,
+            "service_killed": "queue-short",
+            "container_id_short": qs_cid[:12],
+            "signal": "SIGKILL",
+            "kill_exit_code": kill_exit_code,
+            "period_key": enq_meta["period_key"],
+            "picked_up_before_kill": enq_meta["picked_up_before_kill"],
+            "published_before": enq_meta["published_before"],
+            "published_after_recovery": rec_meta["published_runs"],
+            "reconcile_ok": rec_meta["reconcile_ok"],
+            "pass": sigkill_ok,
+        }
 
     t_restart = time.monotonic()
     run_sub(compose_cmd(env_file, ["restart", "queue-short", "queue-long", "scheduler"]))
     wait_services_healthy(env_file, ("queue-short", "queue-long", "scheduler"), timeout_seconds=90)
     restart_recovery_sec = round(time.monotonic() - t_restart, 2)
+    operator_actions_log.append(
+        {
+            "timestamp_utc": utc_now_iso(),
+            "action": "docker compose restart queue-short queue-long scheduler",
+            "recovery_seconds": restart_recovery_sec,
+        }
+    )
 
     cron_retry_py = r"""
 import json, os, sys, frappe
@@ -1759,9 +2106,16 @@ finally:
         and r2.get("dup_sla_keys") == 0
         and r2.get("dup_attempt_keys") == 0
     )
-    passed = idempotent and health_proc.returncode == 0 and health_json.get("status") == "PASS"
+    passed = (
+        bool(mid_job_sigkill_report.get("pass"))
+        and idempotent
+        and health_proc.returncode == 0
+        and health_json.get("status") == "PASS"
+    )
     return {
         "status": "PASS" if passed else "FAIL",
+        "operator_actions_log": operator_actions_log,
+        "worker_mid_job_sigkill": mid_job_sigkill_report,
         "restart_recovery_seconds": restart_recovery_sec,
         "cron_retry_x2_counts": cron_counts,
         "idempotent_across_retry": idempotent,
@@ -1914,7 +2268,11 @@ def rehearse_rollback_tiers_over_https(
     def _switch_stack_app_image(target_img: str) -> None:
         cur_env = p403_tool.parse_env_file(env_file)
         cur_env["APP_IMAGE"] = target_img
-        cur_env["PULL_POLICY"] = "never" if target_img.startswith("sha256:") or target_img.endswith(":local") else "missing"
+        cur_env["PULL_POLICY"] = (
+            "never"
+            if (target_img.startswith("sha256:") or target_img.endswith(":local") or "@sha256:" in target_img)
+            else "missing"
+        )
         env_file.write_text("\n".join(f"{k}={v}" for k, v in cur_env.items()) + "\n", encoding="utf-8", newline="\n")
         if os.name == "posix":
             os.chmod(env_file, 0o600)
@@ -2271,7 +2629,7 @@ subprocess.check_call([
     all_post_deltas_zero = all(int(v) == 0 for k, v in post_delta.items() if k != "since_utc")
 
     # Re-run cron jobs once so post-restore healthcheck has fresh Scheduled Job Log records at grace=0
-    rehearse_worker_restart_and_cron_retry(env_file=env_file)
+    rehearse_worker_restart_and_cron_retry(env_file=env_file, include_mid_job_sigkill=False)
 
     post_health_proc = run_sub(
         [
@@ -2393,6 +2751,7 @@ def run_full_rehearsal(
     run_id: str | None = None,
     n_minus_1_image: str = "",
     browser_report_out: Path | None = None,
+    runtime_audit_out: Path | None = None,
 ) -> int:
     run_id = run_id or (datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(3))
     project_name = f"crm-cskh-dr-https-{run_id}"
@@ -2420,7 +2779,9 @@ def run_full_rehearsal(
 
     report: dict[str, Any] = {
         "timestamp_utc": utc_now_iso(),
-        "evidence_scope": "ISOLATED_STAGING_DR_HTTPS_FULL_REHEARSAL",
+        "evidence_scope": "ISOLATED_STAGING_DR_HTTPS_CANDIDATE_VERIFICATION",
+        "candidate_verification_only": True,
+        "promoted_to_production": False,
         "owner_live_site_touched": False,
         "run_id": run_id,
         "project_name": project_name,
@@ -2445,7 +2806,7 @@ def run_full_rehearsal(
                 "SITE_NAME": site_name,
                 "SITES_RULE": f"Host(`{site_name}`)",
                 "APP_IMAGE": app_image,
-                "PULL_POLICY": "never" if app_image.startswith("sha256:") else "missing",
+                "PULL_POLICY": "never" if (app_image.startswith("sha256:") or "@sha256:" in app_image) else "missing",
                 "INFRA_PULL_POLICY": "missing",
                 "INGRESS_BIND_IP": "127.0.0.1",
                 "HTTP_PUBLISH_PORT": str(http_port),
@@ -2478,6 +2839,13 @@ def run_full_rehearsal(
             },
             "https_smoke": boot_res["https_smoke"],
         }
+
+        runtime_audit = audit_isolated_stack_runtime_resources(
+            env_file=env_file,
+            secret_file=secret_file,
+            out_json=runtime_audit_out,
+        )
+        report["phases"]["runtime_isolation_and_digest_audit"] = runtime_audit
 
         mig_res = rehearse_migration_x2_and_reconcile(env_file=env_file)
         report["phases"]["migration_x2_and_reconcile"] = mig_res
@@ -2707,6 +3075,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_full.add_argument("--app-image", default=os.environ.get("APP_IMAGE", ""), required=False)
     p_full.add_argument("--n-minus-1-image", default="", required=False)
     p_full.add_argument("--browser-report-out", type=Path, default=None)
+    p_full.add_argument("--runtime-audit-out", type=Path, default=None)
     p_full.add_argument("--site-name", default=DEFAULT_DR_SITE)
     p_full.add_argument("--run-id", default=None)
     p_full.add_argument("--out", type=Path, required=True)
@@ -2766,6 +3135,7 @@ def main(argv: list[str] | None = None) -> int:
             run_id=args.run_id,
             n_minus_1_image=args.n_minus_1_image,
             browser_report_out=args.browser_report_out,
+            runtime_audit_out=args.runtime_audit_out,
         )
     if args.command == "up":
         return _cmd_up(args)
