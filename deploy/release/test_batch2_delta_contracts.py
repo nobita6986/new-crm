@@ -248,6 +248,11 @@ class TestBatch2DeltaContracts(unittest.TestCase):
             self.assertNotIn(
                 "reschedule_count", src, f"Non-existent reschedule_count in {sname}"
             )
+            self.assertNotIn(
+                "connected_callback",
+                src,
+                f"Non-existent outcome connected_callback in {sname}",
+            )
             for m in re.finditer(
                 r"SELECT\s+([a-zA-Z0-9_,\s]+)\s+FROM\s+`tab(CSKH [^`]+)`", src
             ):
@@ -263,6 +268,10 @@ class TestBatch2DeltaContracts(unittest.TestCase):
                         schema[dt_name],
                         f"{sname}: column {col!r} missing from {dt_name}",
                     )
+        bench_src = (RELEASE_DIR / "benchmark_p4_isolated.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("publish_revision", bench_src)
 
     def test_lock_diff_parsers_and_reachability_probe_compile(self) -> None:
         from collect_cve_and_lock_diff_evidence import (
