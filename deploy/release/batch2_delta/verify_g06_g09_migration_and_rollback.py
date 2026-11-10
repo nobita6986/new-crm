@@ -209,7 +209,7 @@ def _table_digest(sql_query):
     return {"count": len(rows), "sha256": hashlib.sha256(raw.encode("utf-8")).hexdigest()}
 
 att_fp = _table_digest(
-    "SELECT name, work_item, lead, channel, outcome_code, is_connected, verification_status, owner_at_attempt FROM `tabCSKH Contact Attempt` ORDER BY name"
+    "SELECT name, work_item, lead, channel, outcome_code, connected_snapshot, verification_status, owner_at_attempt FROM `tabCSKH Contact Attempt` ORDER BY name"
 )
 hist_fp = _table_digest(
     "SELECT name, work_item, action, from_user, to_user, actor, event_id FROM `tabCSKH Assignment History` ORDER BY name"
@@ -268,6 +268,7 @@ print(json.dumps({
 
 SEED_N_MINUS_1_PY = r"""
 from frappe.utils import add_days, now_datetime
+from crm_cskh.services.phone_identity import normalize_vn_phone
 from crm_cskh.api import (
     campaigns as camp_api,
     ownership as own_api,
@@ -340,10 +341,11 @@ for idx, owner_email in enumerate(
         "mobile_no": phone,
         "status": "New",
     }).insert(ignore_permissions=True)
-    if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": phone}):
+    norm_ph = normalize_vn_phone(phone)
+    if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": norm_ph}):
         frappe.get_doc({
             "doctype": "CSKH Identity Index",
-            "normalized_phone": phone,
+            "normalized_phone": norm_ph,
             "canonical_lead": lead.name,
         }).insert(ignore_permissions=True)
     wi = frappe.get_doc({
@@ -385,7 +387,7 @@ att1 = wf_api.record_attempt(
     followup_title="Gọi lại ứng viên N-1",
     idempotency_key="b2-n1-att-1",
 )
-att1_id = att1["attempt"]["name"]
+att1_id = att1["attempt_id"]
 corr_req = wf_api.request_correction(
     attempt=att1_id,
     action="correct",
@@ -395,7 +397,7 @@ corr_req = wf_api.request_correction(
 )
 frappe.set_user("team1.leader@dev.local")
 wf_api.review_correction(
-    correction_id=corr_req["correction"]["name"],
+    correction_id=corr_req["correction_id"],
     decision="approve",
     review_note="Leader duyệt đính chính N-1",
     idempotency_key="b2-n1-corr-rev-1",
@@ -619,7 +621,7 @@ def run_live_rehearsal(
         assert st_att_n == 200, (
             f"Post-upgrade record_attempt failed ({st_att_n}): {body_att_n}"
         )
-        post_upgrade_attempt_id = unwrap_message(body_att_n)["attempt"]["name"]
+        post_upgrade_attempt_id = unwrap_message(body_att_n)["attempt_id"]
 
         # Step 4: `G09` Tier 1 & Tier 2 Feature-Flag Rollback over Live HTTP
         # Tier 2: disable only P3 export (`cskh_p3_export_enabled = false`) while overview stays 200
