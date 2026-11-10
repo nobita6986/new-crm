@@ -692,15 +692,30 @@ def run_live_rehearsal(
         )
         assert st_my_t1 == 200 and st_att_t1 == 200, (st_my_t1, st_att_t1, body_att_t1)
 
-        # Re-enable P3 flags and drain dirty scopes
-        reenabled = stack.exec_site_python(
+        # Re-enable P3 flags first so subsequent `frappe.init()` loads `cskh_p3_enabled=true` in `frappe.conf`
+        stack.exec_site_python(
             "from frappe.installer import update_site_config\n"
-            "from crm_cskh.jobs.recompute_kpi import drain_dirty_kpi_scopes\n"
-            "from crm_cskh.jobs.reconcile_metrics import reconcile_published_period\n"
             "update_site_config('cskh_p3_enabled', True)\n"
             "update_site_config('cskh_p3_export_enabled', True)\n"
             "frappe.clear_cache()\n"
-            "drained = drain_dirty_kpi_scopes(max_scopes=20)\n"
+            "print(json.dumps({'reenabled_flags': True}))"
+        )
+        reenabled = stack.exec_site_python(
+            "import time\n"
+            "from crm_cskh.jobs.recompute_kpi import drain_dirty_kpi_scopes, run_single_period_recompute\n"
+            "from crm_cskh.jobs.reconcile_metrics import reconcile_published_period\n"
+            "from crm_cskh.services.errors import RecomputeInProgress\n"
+            "frappe.conf['cskh_p3_enabled'] = True\n"
+            "frappe.conf['cskh_p3_export_enabled'] = True\n"
+            "drained = {}\n"
+            "for _ in range(12):\n"
+            "    try:\n"
+            "        drained = drain_dirty_kpi_scopes(max_scopes=20)\n"
+            "        if not drained.get('runs'):\n"
+            "            run_single_period_recompute(period_type='monthly', period_key=_IN['month_key'], actor='Administrator')\n"
+            "        break\n"
+            "    except RecomputeInProgress:\n"
+            "        time.sleep(1.5)\n"
             "rec = reconcile_published_period(period_type='monthly', period_key=_IN['month_key'])\n"
             "print(json.dumps({'drained': drained, 'reconcile': rec}, default=str))",
             {"month_key": month_key},
