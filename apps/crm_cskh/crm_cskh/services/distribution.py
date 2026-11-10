@@ -692,18 +692,40 @@ def run_distribution_worker(run_id, actor=None):
 			chunk = work_entries[chunk_offset : chunk_offset + CHUNK_SIZE]
 			pending_notifications = []
 			highest_index = initial_progress
+			chunk_leads = [ld for _, ld in chunk if ld]
+			already_in_chunk: set[str] = set()
+			chunk_exclusions: dict[str, str] | None = None
+			if len(chunk_leads) > 20 and len(set(chunk_leads)) == len(chunk_leads):
+				ph = ", ".join(["%s"] * len(chunk_leads))
+				already_in_chunk = set(
+					frappe.db.sql(
+						f"select lead from `tabCSKH Work Item` where campaign = %s and allocation_run = %s and lead in ({ph})",
+						(campaign, run.name, *chunk_leads),
+						pluck=True,
+					)
+					or ()
+				)
+				chunk_exclusions = eligibility._bulk_lead_exclusion_reasons(campaign, chunk_leads)
 
 			for row_pos, (target_idx, lead) in enumerate(chunk):
 				highest_index = max(highest_index, target_idx + 1)
 				# Idempotency guard if a lead was already committed by an earlier attempt.
-				if frappe.db.exists(
-					"CSKH Work Item",
-					{"campaign": campaign, "lead": lead, "allocation_run": run.name},
+				if (
+					lead in already_in_chunk
+					if chunk_exclusions is not None
+					else frappe.db.exists(
+						"CSKH Work Item",
+						{"campaign": campaign, "lead": lead, "allocation_run": run.name},
+					)
 				):
 					continue
 
 				# Re-check lead eligibility at execution time (P1 §7.1 #5).
-				lead_exclusion = eligibility._lead_exclusion_reason(campaign, lead)
+				lead_exclusion = (
+					chunk_exclusions.get(lead)
+					if chunk_exclusions is not None
+					else eligibility._lead_exclusion_reason(campaign, lead)
+				)
 				if lead_exclusion:
 					new_skipped.append({"lead": lead, "reason": lead_exclusion})
 					continue
