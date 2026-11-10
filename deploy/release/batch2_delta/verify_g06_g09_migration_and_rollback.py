@@ -774,6 +774,8 @@ def run_live_rehearsal(
         assert delta_audit["post_backup_attempts_count"] == 2, delta_audit
 
         # Step 6: `D10–D12` Tier 4 Full DR Restore on isolated target site (`dr_stack`)
+        # Tear down `stack` first so Traefik Docker provider never sees duplicate `frontend-http` routers across two concurrent stacks
+        stack.teardown()
         scrubber.log(
             "Executing Tier 4 full pre-upgrade backup restore rehearsal on isolated DR stack"
         )
