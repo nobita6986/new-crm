@@ -226,7 +226,10 @@ counts = {
     "assignment_history": frappe.db.count("CSKH Assignment History"),
     "attempt_correction": frappe.db.count("CSKH Attempt Correction"),
     "sla_obligation": frappe.db.count("CSKH SLA Obligation"),
-    "kpi_snapshot_published": frappe.db.count("CSKH KPI Snapshot", {"is_latest_published": 1}),
+    "kpi_snapshot_monthly_published": frappe.db.count(
+        "CSKH KPI Snapshot",
+        {"period_type": "monthly", "period_key": _IN.get("month_key"), "is_latest_published": 1},
+    ),
     "export_job": frappe.db.count("CSKH Export Job"),
     "custom_translation": frappe.db.count("Translation", {"source_text": " Batch2 Migration Guard Label "}),
 }

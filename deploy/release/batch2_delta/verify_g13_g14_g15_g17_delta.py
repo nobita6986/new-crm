@@ -604,17 +604,31 @@ print(json.dumps({"cumulative_3x10": totals, "reconciled": rec_ok}, default=str)
     }, fair_res
     assert fair_res["reconciled"] is True
 
-    # `F09` Pool & `my_list` RBAC (`BOD` blocked from PII pool/my_list or 0 PII)
+    # `F09` Pool, `my_list` & workflow RBAC (`staff` blocked from pool `403`, `BOD` 0-PII pool & blocked from P2 workflow `403`)
     st_pool_adm, _, _ = admin1.get_json(
+        "/api/method/crm_cskh.api.customers.customer_pool", {"page": 1}
+    )
+    st_pool_staff, _, _ = staff_a.get_json(
         "/api/method/crm_cskh.api.customers.customer_pool", {"page": 1}
     )
     st_my_a, _, body_my_a = staff_a.get_json(
         "/api/method/crm_cskh.api.customers.my_list", {"page": 1}
     )
-    st_my_bod, _, _ = bod.get_json(
-        "/api/method/crm_cskh.api.customers.my_list", {"page": 1}
+    st_pool_bod, _, body_pool_bod = bod.get_json(
+        "/api/method/crm_cskh.api.customers.customer_pool", {"page": 1}
     )
-    assert st_pool_adm == 200 and st_my_a == 200 and st_my_bod == 403
+    st_wf_bod, _, _ = bod.get_json(
+        "/api/method/crm_cskh.api.workflow.list_work_items", {"page": 1}
+    )
+    bod_pool_dump = json.dumps(body_pool_bod)
+    assert (
+        st_pool_adm == 200
+        and st_pool_staff == 403
+        and st_my_a == 200
+        and st_pool_bod == 200
+        and st_wf_bod == 403
+    ), (st_pool_adm, st_pool_staff, st_my_a, st_pool_bod, st_wf_bod)
+    assert "09084" not in bod_pool_dump and "849084" not in bod_pool_dump
 
     return {
         "f03_csv_import_status": csv_done["status"],
@@ -623,7 +637,13 @@ print(json.dumps({"cumulative_3x10": totals, "reconciled": rec_ok}, default=str)
         "f07_rule_changed_and_expired_http": [st_rule_chg, st_prev_exp],
         "f08_1000_lead_50_30_20_allocation": actual_1k,
         "f08_multi_batch_cumulative_3x10": fair_res["cumulative_3x10"],
-        "f09_pool_and_mylist_http": [st_pool_adm, st_my_a, st_my_bod],
+        "f09_pool_mylist_and_workflow_http": [
+            st_pool_adm,
+            st_pool_staff,
+            st_my_a,
+            st_pool_bod,
+            st_wf_bod,
+        ],
         "f11_concurrent_two_admin_execute_http": race_codes,
     }
 

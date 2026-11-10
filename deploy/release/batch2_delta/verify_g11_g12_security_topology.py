@@ -423,39 +423,58 @@ def run_live_verification(
 
         # 1B. `S08`: Disable `staff.a@dev.local` while holding open HTTP `sid` + open WebSocket `ws_a`
         old_sid_a = staff_a.sid
+        old_csrf_a = staff_a.csrf_token
         assert old_sid_a and old_sid_a != "Guest"
         try:
-            disable_info = stack.exec_site_python(
+            stack.exec_site_python(
                 "u = frappe.get_doc('User', 'staff.a@dev.local')\n"
                 "u.enabled = 0\n"
                 "u.save(ignore_permissions=True)\n"
-                "sess_cnt = frappe.db.sql(\"SELECT COUNT(*) FROM `tabSessions` WHERE user='staff.a@dev.local'\")[0][0]\n"
-                "cache_val = frappe.cache().hget('session', _IN['sid'])\n"
-                "print(json.dumps({'db_sessions_remaining': int(sess_cnt), 'redis_session_cached': bool(cache_val)}))",
-                {"sid": old_sid_a},
+                "print(json.dumps({'user_disabled': True}))"
             )
-            assert disable_info["db_sessions_remaining"] == 0
-            assert disable_info["redis_session_cached"] is False
 
-            # Old HTTP `sid` immediately loses access
-            st_dis_page, _, _ = staff_a.raw_request("GET", "/cskh/my-customers")
-            st_dis_api, _, _ = staff_a.get_json(
-                "/api/method/crm_cskh.api.customers.my_list",
-                {"page": 1, "page_size": 10},
+            # Replay exact `old_sid_a` over HTTP UI, GET RPC, and POST mutation -> immediate revocation
+            replay_cookie = {"Cookie": f"sid={old_sid_a}"}
+            st_dis_page, _, _ = guest.raw_request(
+                "GET", "/cskh/my-customers", headers=replay_cookie
             )
-            st_dis_mut, _, _ = staff_a.post_json(
+            st_dis_api, _, _ = guest.raw_request(
+                "GET",
+                "/api/method/crm_cskh.api.customers.my_list?page=1&page_size=10",
+                headers={**replay_cookie, "Accept": "application/json"},
+            )
+            st_dis_mut, _, _ = guest.raw_request(
+                "POST",
                 "/api/method/crm_cskh.api.workflow.record_attempt",
-                {
-                    "work_item": wi_a2,
-                    "channel": "sms",
-                    "outcome_code": "message_sent_no_reply",
-                    "note": "Thử ghi khi user bị khóa",
-                    "idempotency_key": "g11-s08-disabled-mut",
+                data=json.dumps(
+                    {
+                        "work_item": wi_a2,
+                        "channel": "sms",
+                        "outcome_code": "message_sent_no_reply",
+                        "note": "Thử ghi khi user bị khóa",
+                        "idempotency_key": "g11-s08-disabled-mut",
+                    }
+                ).encode("utf-8"),
+                headers={
+                    **replay_cookie,
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                    "X-Frappe-CSRF-Token": old_csrf_a,
                 },
             )
             assert st_dis_page in (302, 401, 403), st_dis_page
             assert st_dis_api in (401, 403), st_dis_api
             assert st_dis_mut in (401, 403), st_dis_mut
+
+            # Confirm `old_sid_a` is evicted from both MariaDB `tabSessions` and `redis-cache`
+            disable_info = stack.exec_site_python(
+                "sid_cnt = frappe.db.sql(\"SELECT COUNT(*) FROM `tabSessions` WHERE sid=%s\", (_IN['sid'],))[0][0]\n"
+                "cache_val = frappe.cache().hget('session', _IN['sid'])\n"
+                "print(json.dumps({'old_sid_in_db_sessions': int(sid_cnt), 'redis_session_cached': bool(cache_val)}))",
+                {"sid": old_sid_a},
+            )
+            assert disable_info["old_sid_in_db_sessions"] == 0, disable_info
+            assert disable_info["redis_session_cached"] is False, disable_info
 
             # New Socket.IO namespace handshake with old `sid` MUST be rejected (`44/<site>`)
             ws_reconn = RFC6455SocketIOClient("127.0.0.1", stack.http_port)
