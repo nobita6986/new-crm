@@ -109,16 +109,27 @@ def wait_distribution_terminal(
 
 G15_SETUP_AND_ORACLE_PY = r"""
 import hashlib
+import time
 from pathlib import Path
 from crm_cskh.tests.test_p3_t1c_remediation import T1C_GOLDEN_FIXTURE_PATH, TestP3T1CRemediation
 from crm_cskh.jobs.recompute_kpi import run_single_period_recompute
 from crm_cskh.jobs.reconcile_metrics import reconcile_published_period
+from crm_cskh.services.errors import RecomputeInProgress
 from crm_cskh.services.calendar import (
     InvalidCalendarError,
     add_business_minutes,
     build_calendar_spec,
     resolve_working_calendar,
 )
+
+
+def _sync_recompute(ptype: str, pkey: str) -> dict:
+    for _ in range(25):
+        try:
+            return run_single_period_recompute(period_type=ptype, period_key=pkey, actor="Administrator")
+        except RecomputeInProgress:
+            time.sleep(1.5)
+    return run_single_period_recompute(period_type=ptype, period_key=pkey, actor="Administrator")
 
 raw_bytes = T1C_GOLDEN_FIXTURE_PATH.read_bytes()
 fixture_sha = hashlib.sha256(raw_bytes).hexdigest()
@@ -168,8 +179,8 @@ for vec in cal_vectors:
     assert actual_due.strftime("%Y-%m-%d %H:%M:%S") == exp_due[:19], (vec, actual_due)
 
 # `F24` / `F25`: Double recompute append-only (`2026-10`) + all 5 grains (`daily`, `weekly`, `monthly`, `quarterly`, `yearly`)
-r1 = run_single_period_recompute(period_type="monthly", period_key="2026-10", actor="Administrator")
-r2 = run_single_period_recompute(period_type="monthly", period_key="2026-10", actor="Administrator")
+r1 = _sync_recompute("monthly", "2026-10")
+r2 = _sync_recompute("monthly", "2026-10")
 total_oct_runs = frappe.db.count("CSKH KPI Run", {"period_type": "monthly", "period_key": "2026-10", "status": "completed"})
 pub_oct_runs = frappe.db.count("CSKH KPI Run", {"period_type": "monthly", "period_key": "2026-10", "is_latest_published": 1})
 assert total_oct_runs >= 2 and pub_oct_runs == 1, (total_oct_runs, pub_oct_runs)
@@ -184,7 +195,7 @@ grains = [
 grain_reconciliations = {}
 for ptype, pkey in grains:
     if ptype != "monthly":
-        run_single_period_recompute(period_type=ptype, period_key=pkey, actor="Administrator")
+        _sync_recompute(ptype, pkey)
     rec = reconcile_published_period(period_type=ptype, period_key=pkey)
     assert rec.get("ok") is True, (ptype, pkey, rec)
     grain_reconciliations[f"{ptype}:{pkey}"] = True
@@ -1329,8 +1340,15 @@ def run_g17_worker_kill_and_recovery(stack: IsolatedComposeStack) -> dict[str, o
     now_dt = dt.datetime.now(ict)
     month_key = f"{now_dt.year:04d}-{now_dt.month:02d}"
     r1_info = stack.exec_site_python(
+        "import time\n"
         "from crm_cskh.jobs.recompute_kpi import run_single_period_recompute\n"
-        "r1 = run_single_period_recompute(period_type='monthly', period_key=_IN['m'], actor='Administrator')\n"
+        "from crm_cskh.services.errors import RecomputeInProgress\n"
+        "for _ in range(25):\n"
+        "    try:\n"
+        "        run_single_period_recompute(period_type='monthly', period_key=_IN['m'], actor='Administrator')\n"
+        "        break\n"
+        "    except RecomputeInProgress:\n"
+        "        time.sleep(1.5)\n"
         "pub_id = frappe.db.get_value('CSKH KPI Run', {'period_type': 'monthly', 'period_key': _IN['m'], 'is_latest_published': 1}, 'name')\n"
         "print(json.dumps({'r1_published_run': pub_id}))",
         {"m": month_key},
@@ -1397,14 +1415,21 @@ def run_g17_worker_kill_and_recovery(stack: IsolatedComposeStack) -> dict[str, o
     stack.run_compose(["up", "-d", "--no-build", "queue-short"])
     stack.wait_services_healthy(["queue-short"], timeout_sec=90)
     d06_recovered = stack.exec_site_python(
+        "import time\n"
         "from crm_cskh.jobs.recompute_kpi import run_single_period_recompute\n"
         "from crm_cskh.jobs.reconcile_metrics import reconcile_published_period\n"
+        "from crm_cskh.services.errors import RecomputeInProgress\n"
         "rkey = frappe.cache.make_key(f\"cskh:kpi:recompute_lock:monthly:{_IN['m']}:*\")\n"
         "frappe.cache.delete(rkey)\n"
         "frappe.db.sql(\"UPDATE `tabCSKH Dirty Scope` SET status='pending' WHERE status='processing'\")\n"
         "frappe.db.sql(\"UPDATE `tabCSKH KPI Run` SET status='failed' WHERE status='running'\")\n"
         "frappe.db.commit()\n"
-        "run_single_period_recompute(period_type='monthly', period_key=_IN['m'], actor='Administrator')\n"
+        "for _ in range(25):\n"
+        "    try:\n"
+        "        run_single_period_recompute(period_type='monthly', period_key=_IN['m'], actor='Administrator')\n"
+        "        break\n"
+        "    except RecomputeInProgress:\n"
+        "        time.sleep(1.5)\n"
         "pub_runs = frappe.get_all('CSKH KPI Run', filters={'period_type': 'monthly', 'period_key': _IN['m'], 'is_latest_published': 1}, pluck='name')\n"
         "rec = reconcile_published_period(period_type='monthly', period_key=_IN['m'])\n"
         "print(json.dumps({'published_runs': pub_runs, 'reconcile_ok': bool(rec.get('ok'))}, default=str))",

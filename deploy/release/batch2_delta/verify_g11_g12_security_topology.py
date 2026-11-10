@@ -142,8 +142,15 @@ frappe.set_user("Administrator")
 now_dt = now_datetime()
 month_key = f"{now_dt.year:04d}-{now_dt.month:02d}"
 day_key = now_dt.strftime("%Y-%m-%d")
-run_single_period_recompute(period_type="monthly", period_key=month_key, actor="Administrator")
-run_single_period_recompute(period_type="daily", period_key=day_key, actor="Administrator")
+import time as _t
+from crm_cskh.services.errors import RecomputeInProgress
+for _pt, _pk in (("monthly", month_key), ("daily", day_key)):
+    for _ in range(20):
+        try:
+            run_single_period_recompute(period_type=_pt, period_key=_pk, actor="Administrator")
+            break
+        except RecomputeInProgress:
+            _t.sleep(1.5)
 
 t1_node = frappe.db.get_value("CRM Sales Hierarchy", {"user": "team1.leader@dev.local"}, "name")
 frappe.set_user("team1.leader@dev.local")
