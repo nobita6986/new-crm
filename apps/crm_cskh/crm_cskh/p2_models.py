@@ -588,6 +588,7 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 			"CSKH Attempt Correction",
 			"CSKH Work Item",
 			"CRM Task",
+			"CRM Lead",
 		)
 	)
 	for dt in targets:
@@ -614,6 +615,9 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 			frappe.db.add_index(dt, ["campaign", "status", "last_attempt_at"], "cskh_wi_camp_last_idx")
 			if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
 				frappe.db.add_index(dt, ["status", "owner_at_close", "closed_at"], "cskh_wi_owner_close_idx")
+		elif dt == "CRM Lead":
+			if frappe.db.has_column("CRM Lead", "mobile_no"):
+				frappe.db.add_index(dt, ["mobile_no"], "cskh_lead_mobile_no_idx")
 		elif dt == "CRM Task":
 			# Only create indexes once the Custom Fields exist as columns on `tabCRM Task`.
 			if frappe.db.has_column("CRM Task", "cskh_work_item") and frappe.db.has_column(

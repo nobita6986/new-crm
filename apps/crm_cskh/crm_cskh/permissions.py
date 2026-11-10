@@ -22,41 +22,44 @@ def _manager_without_scope(user):
 
 
 def _owner_scope_condition(user, table, owner_field):
-	roles = frappe.get_roles(user)
+	roles = set(frappe.get_roles(user))
 	if not {"Sales User", "Sales Manager"}.intersection(roles):
 		return "1=0"
 	user_sql = frappe.db.escape(user, percent=False)
-	manager = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"])
-	if manager and frappe.db.get_single_value("FCRM Settings", "enable_sales_hierarchy"):
-		return (
-			f"`{table}`.`{owner_field}` IN (SELECT `member`.`user` FROM `tabCRM Sales Hierarchy` `root` "
-			"JOIN `tabCRM Sales Hierarchy` `member` ON `member`.`lft` >= `root`.`lft` "
-			f"AND `member`.`rgt` <= `root`.`rgt` WHERE `root`.`user` = {user_sql})"
-		)
+	if "Sales Manager" in roles:
+		manager = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"])
+		if manager and frappe.db.get_single_value("FCRM Settings", "enable_sales_hierarchy"):
+			return (
+				f"`{table}`.`{owner_field}` IN (SELECT `member`.`user` FROM `tabCRM Sales Hierarchy` `root` "
+				"JOIN `tabCRM Sales Hierarchy` `member` ON `member`.`lft` >= `root`.`lft` "
+				f"AND `member`.`rgt` <= `root`.`rgt` WHERE `root`.`user` = {user_sql})"
+			)
 	return f"`{table}`.`{owner_field}` = {user_sql}"
 
 
 def _user_owns_in_scope(user, owner):
 	if not owner:
 		return False
-	roles = frappe.get_roles(user)
+	roles = set(frappe.get_roles(user))
 	if not {"Sales User", "Sales Manager"}.intersection(roles):
 		return False
-	manager = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"])
-	if manager and frappe.db.get_single_value("FCRM Settings", "enable_sales_hierarchy"):
-		return bool(
-			frappe.db.exists(
-				"CRM Sales Hierarchy",
-				{"user": owner, "lft": [">=", manager[0]], "rgt": ["<=", manager[1]]},
+	if "Sales Manager" in roles:
+		manager = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"])
+		if manager and frappe.db.get_single_value("FCRM Settings", "enable_sales_hierarchy"):
+			return bool(
+				frappe.db.exists(
+					"CRM Sales Hierarchy",
+					{"user": owner, "lft": [">=", manager[0]], "rgt": ["<=", manager[1]]},
+				)
 			)
-		)
 	return owner == user
 
 
 def user_in_scope(user, target):
 	if _is_system(user) or user == target:
 		return True
-	if _manager_without_scope(user):
+	roles = set(frappe.get_roles(user))
+	if "Sales Manager" not in roles or _manager_without_scope(user):
 		return False
 	manager = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"])
 	member = frappe.db.get_value("CRM Sales Hierarchy", {"user": target}, ["lft", "rgt"])
@@ -67,6 +70,20 @@ def user_in_scope(user, target):
 		and manager[0] <= member[0]
 		and member[1] <= manager[1]
 	)
+
+
+def on_user_security_change(doc, method=None):
+	"""Invalidate cached user roles/permissions on role change and purge sessions on user disable (`G11`)."""
+	if getattr(frappe.flags, "in_install", False) or getattr(frappe.flags, "in_migrate", False):
+		return
+	user_name = getattr(doc, "name", None)
+	if not user_name:
+		return
+	frappe.clear_cache(user=user_name)
+	if user_name not in ("Administrator", "Guest") and not int(getattr(doc, "enabled", 1) or 0):
+		from frappe.sessions import clear_sessions
+
+		clear_sessions(user=user_name, force=True)
 
 
 def lead_query_conditions(user=None, **kwargs):

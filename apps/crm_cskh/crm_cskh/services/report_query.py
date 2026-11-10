@@ -521,12 +521,8 @@ def _fetch_snapshots(
 	if team_filters is not None and len(team_filters) == 0:
 		return []
 	camp_val = campaign_filter or ""
-	if camp_val:
-		camp_sql = "and campaign_filter = %s"
-		params: list = [1, period.period_type, period.period_key, camp_val, scope_type]
-	else:
-		camp_sql = "and (campaign_filter = '' or campaign_filter is null)"
-		params = [1, period.period_type, period.period_key, scope_type]
+	camp_sql = "and campaign_filter = %s"
+	params: list = [1, period.period_type, period.period_key, camp_val, scope_type]
 	extra_sql = ""
 	if scope_ids is not None:
 		ph = ", ".join(["%s"] * len(scope_ids))
@@ -2018,11 +2014,14 @@ def get_metric_drilldown(
 	run_row = _ensure_or_load_published_run(period, campaign_filter=eff_camp_filter)
 	as_of_dt = get_datetime(run_row.as_of) if (run_row and run_row.as_of) else None
 
+	eff_emp_pushdown = sid if stype == "employee" else (emp_filter_arg or "")
 	ds = load_period_raw_dataset(
 		period,
 		as_of=as_of_dt,
 		campaign_filter=(sid if stype == "campaign" else (camp_filter or "")),
 		lead_source_filter=src_filter,
+		employee_filter=eff_emp_pushdown,
+		drilldown_metric=mcode,
 	)
 
 	attempts = ds["attempts"]

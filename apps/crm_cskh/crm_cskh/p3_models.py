@@ -414,6 +414,12 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			False,
 		),
 		(
+			"CSKH Assignment History",
+			("action", "ownership_start", "ownership_end"),
+			"idx_cskh_ah_act_interval",
+			False,
+		),
+		(
 			"CSKH SLA Obligation",
 			("idempotency_key",),
 			"uniq_cskh_sla_idem_key",
@@ -483,6 +489,12 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			"CSKH Contact Attempt",
 			("occurred_at", "recorded_at"),
 			"idx_cskh_attempt_occ_rec",
+			False,
+		),
+		(
+			"CSKH Contact Attempt",
+			("ownership_event", "occurred_at"),
+			"idx_cskh_attempt_ownevt_occ",
 			False,
 		),
 		(
@@ -711,3 +723,9 @@ def ensure_p3_seeds() -> None:
 				  and coalesce(is_invalid_phone, 0) = 0
 				"""
 			)
+
+	# 6. Normalize `CSKH KPI Snapshot.campaign_filter` NULLs to '' so `idx_cskh_kpisnap_lookup` matches by equality
+	if frappe.db.table_exists("CSKH KPI Snapshot") and frappe.db.has_column(
+		"CSKH KPI Snapshot", "campaign_filter"
+	):
+		frappe.db.sql("update `tabCSKH KPI Snapshot` set campaign_filter = '' where campaign_filter is null")
