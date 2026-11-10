@@ -37,10 +37,10 @@
     "production_promotion_status": "BLOCKED",
     "approved_by": [],
     "pending_owner_inputs": [
-      "BLK-INFRA-05 (Offsite destination credentials & separate key escrow vault)",
-      "BLK-GOV-06 (Named Day-2 on-call operators & 5-role UAT signers)",
+      "BLK-INFRA-05 (Offsite destination inventory confirming off-VPS failure domain + write/readback credentials & separate key escrow vault; st_dev alone only proves different filesystem)",
+      "BLK-GOV-06 (Named primary on-call Operator [backup operator recommended], 4-role UAT signers [BOD, CRM Admin, Leader, Staff] for G22, and separate Operator handover acceptance for G24)",
       "BLK-INFRA-07 (Approved external HTTPS alert webhook)",
-      "UPSTREAM_DEBIAN13_CVE_OR_OWNER_CUTOVER_DECISION (3 unfixed Debian 13 source CVEs & maintenance window)"
+      "RELEASE_DECISION (Owner SLO sign-off, 3 unfixed Debian 13 source CVEs option PA1/PA2, & maintenance cutover window)"
     ]
   },
   "artifacts": {

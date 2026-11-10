@@ -5,7 +5,7 @@
 - **Tài liệu đối chiếu:** [`glossary-vi.md`](./glossary-vi.md) · [`huong-dan-su-dung-vi.md`](./huong-dan-su-dung-vi.md)
 - **Kết quả kiểm thử tự động & trình duyệt đã nghiệm thu trên source `4672041`:**
   - Hồi quy backend P1–P3: **`19/19 PASS`**; suite bảo mật & báo cáo P3 chạy độc lập: **`7/7 PASS`**; kiểm thử đa vai trò trên trình duyệt + đối chiếu tải CSV của BOD qua HTTP: **`PASS`** (`17` ảnh bằng chứng giao diện tiếng Việt).
-- **Trạng thái ký nghiệm thu người dùng đại diện chính thức (`G13`–`G16`, `G22`):** **`BLOCKED`** *(Bộ kịch bản UAT theo 5 vai trò, hướng dẫn sử dụng tiếng Việt và các ca kỹ thuật `UAT-P4-OPS-01..02` trên VPS `103.77.208.186` đã đo đạt `PASS`; bước tổ chức phiên ký nghiệm thu của đại diện 5 vai trò thật đang chờ Owner phân công danh tính người ký `BLK-GOV-06` — tuyệt đối không điền tên người ký giả)*
+- **Trạng thái ký nghiệm thu UAT nghiệp vụ (`G22`):** **`BLOCKED`** *(Bộ kịch bản UAT theo **4 vai trò nghiệp vụ (`BOD`, `Quản trị CRM / CRM Admin`, `Trưởng nhóm / Leader`, `Người tuyển dụng / Staff`)** theo phân công của Owner và hướng dẫn sử dụng tiếng Việt đã hoàn tất, cùng kiểm thử tự động `Playwright Headless Chromium` `11/11` nhóm ca trên HTTPS cô lập; bước ký nghiệm thu `G22` chỉ chờ đại diện 4 vai trò nghiệp vụ theo phân công của Owner tại [`P4-exit-report.md`](./P4-exit-report.md) Mục 3 — **không biến thành yêu cầu 5 người UAT khác nhau**, còn phần nhận bàn giao vận hành của **Operator** thuộc cổng **`G24` riêng** tại [`operations-sop.md`](./operations-sop.md) Mục 7)*
 
 ---
 
@@ -13,7 +13,9 @@
 
 1. **Bảo toàn tuyệt đối môi trường đang phục vụ tại `https://crm.hrpartner.vn`:** Không chạy script seed tự động xóa dữ liệu, không khôi phục đè hay chạy thử phá hủy trên site `crm-staging.localhost` đang phục vụ của Owner. Toàn bộ phiên UAT có dữ liệu tổng hợp, kiểm quyền chéo, diễn tập `restart/retry` và `rollback` thực hiện trên **môi trường Staging/DR HTTPS cô lập riêng** theo hướng dẫn tại [`isolated-staging-dr-https.md`](./isolated-staging-dr-https.md) (`deploy/ops/manage_isolated_staging_dr.py`).
 2. **Giữ nguyên nhãn đã duyệt & công thức KPI:** Kiểm tra đúng bộ nhãn tiếng Việt trên luồng `Hồ sơ liên hệ → Phân công → Ghi nhận liên hệ → Lịch hẹn liên hệ lại`, `Giao dịch CRM`, `Hoàn tất mục tiêu liên hệ chiến dịch` và 5 nhãn tùy chỉnh cấp site của Owner (`Người tuyển dụng`, `Các dự án`, `Doanh thu hàng tháng / năm`, `NLĐ đang tiếp cận`, `NLD đã tiếp cận`); không thay đổi công thức KPI (`cskh-metrics-v2`).
-3. **Đại diện đủ 5 nhóm vai trò (`BLK-GOV-06`):** `Ban Giám đốc (BOD)`, `Quản trị CRM`, `Trưởng nhóm` (2 đội độc lập), `Người tuyển dụng` và `Vận hành kỹ thuật (Operator)`.
+3. **Phân định rõ nghiệm thu UAT (`G22`) và bàn giao vận hành (`G24`):**
+   - **`G22` (Nghiệm thu UAT nghiệp vụ):** Đủ **4 vai trò nghiệp vụ (`Ban Giám đốc / BOD`, `Quản trị CRM / CRM Admin`, `Trưởng nhóm / Leader`, `Người tuyển dụng / Staff`)** theo phân công của Owner (không biến thành yêu cầu 5 người UAT khác nhau).
+   - **`G24` (Bàn giao vận hành):** **Operator kỹ thuật** nhận bàn giao vận hành riêng theo [`operations-sop.md`](./operations-sop.md) Mục 7.
 
 ---
 
@@ -112,13 +114,13 @@
 | **`UAT-P4-STF-03`** | Ghi nhận `Hoàn tất mục tiêu liên hệ chiến dịch` và `Yêu cầu ngừng liên hệ (DNC)`, kiểm tra `/cskh/scorecard`. | Hiển thị rõ lưu ý chỉ đóng bước liên hệ đầu vào; hồ sơ DNC bị khóa liên hệ tiếp; bảng điểm cá nhân hiển thị rõ tử/mẫu số. | `PENDING UAT` |
 | **`UAT-P4-STF-04`** | Sau khi Quản trị CRM chuyển hồ sơ sang người khác, bấm lại đường dẫn cũ `/cskh/work-item?id=...`. | Bị từ chối `403` ngay lập tức (`0` lộ SĐT/ghi chú mới), trong khi điểm lịch sử khoảng mình từng phụ trách vẫn được bảo toàn. | `PENDING UAT` |
 
-### 3.5. Vai trò 5 — Vận Hành Kỹ Thuật (`Operator` · Role `System Manager` + Host Ops)
+### 3.5. Phụ lục Kiểm tra Kỹ thuật Vận hành (`Operator` · Phục vụ Bàn giao Riêng Cổng `G24` tại [`operations-sop.md`](./operations-sop.md))
 
-| Mã Ca UAT | Thao tác thực nghiệm của Người vận hành | Tiêu chí đạt (`PASS`) | Trạng thái |
+| Mã Ca Ops | Thao tác thực nghiệm kỹ thuật (nghiệm thu riêng ở cổng `G24`) | Tiêu chí đạt (`PASS`) | Trạng thái |
 | :--- | :--- | :--- | :---: |
-| **`UAT-P4-OPS-01`** | Chạy `check_health_and_invariants.py --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml` và kiểm tra timer định kỳ. | Toàn bộ 10 container `healthy`, hàng đợi RQ + 4 cron `PASS`, 6 bất biến `INV-01..06 == 0`, `crm-cskh-healthcheck.timer` tự kích hoạt lúc `20:05 ICT` ngày `09/11/2026` (`PASS`), không tự phát cảnh báo ngoài khi chưa mở khóa ([`live-health-after.json`](../../deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json), [`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json)). | `PASS (Measured on VPS — Chờ ký nhận BLK-GOV-06)` |
-| **`UAT-P4-OPS-02`** | Thực thi diễn tập khôi phục cô lập `verify_offsite_restore.py` với gói `p4-20261109-pre-scheduler` (`d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11`). | Pha A (`UNINITIALIZED_NO_ENCRYPTED_DATA` + `migrate ×2` + `5/5 Translation` overrides + HTTP/CSRF + RTO clone cùng VPS `142.598s`) và Pha B (Positive/Negative Control `ValidationError` + dọn sạch `0` tài nguyên dư) đạt `PASS`, site live không bị chạm ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json)). | `PASS (Measured on VPS — Chờ ký nhận BLK-GOV-06)` |
-| **`UAT-P4-OPS-03`** | Rà quy trình khởi động lại dịch vụ ([`operations-sop.md`](./operations-sop.md)), xử lý backup lỗi ([`backup-restore.md`](./backup-restore.md) Mục 3.4), quay lui Cấp độ 1–4 và dựng lại khi mất VPS ([`rollback-runbook.md`](./rollback-runbook.md)). | Đầy đủ lệnh chuẩn theo `/opt/crm-cskh-staging/staging-compose` và `.env.staging` (`0600`); đã diễn tập `migrate ×2`, `restart/retry ×2` & `rollback` Cấp 1–4 (`all_post_restore_deltas_zero = true`) trên môi trường `dr-https` cô lập ([`isolated-staging-dr-https-report.json`](../../deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json)). | `READY (In-Repo — Chờ ký nhận BLK-GOV-06)` |
+| **`UAT-P4-OPS-01`** | Chạy `check_health_and_invariants.py --extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml` và kiểm tra timer định kỳ. | Toàn bộ 10 container `healthy`, hàng đợi RQ + 4 cron `PASS`, 6 bất biến `INV-01..06 == 0`, `crm-cskh-healthcheck.timer` tự kích hoạt lúc `20:05 ICT` ngày `09/11/2026` (`PASS`), không tự phát cảnh báo ngoài khi chưa mở khóa ([`live-health-after.json`](../../deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json), [`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json)). | `PASS (Measured on VPS — Bàn giao riêng ở G24)` |
+| **`UAT-P4-OPS-02`** | Thực thi diễn tập khôi phục cô lập `verify_offsite_restore.py` với gói `p4-20261109-pre-scheduler` (`d6f1a0a1600f92d9b0b486665da486f74f209b676e43c15835e6c4a74d877e11`). | Pha A (`UNINITIALIZED_NO_ENCRYPTED_DATA` + `migrate ×2` + `5/5 Translation` overrides + HTTP/CSRF + RTO clone cùng VPS `142.598s`) và Pha B (Positive/Negative Control `ValidationError` + dọn sạch `0` tài nguyên dư) đạt `PASS`, site live không bị chạm ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json)). | `PASS (Measured on VPS — Bàn giao riêng ở G24)` |
+| **`UAT-P4-OPS-03`** | Rà quy trình khởi động lại dịch vụ ([`operations-sop.md`](./operations-sop.md)), xử lý backup lỗi ([`backup-restore.md`](./backup-restore.md) Mục 3.4), quay lui Cấp độ 1–4 và dựng lại khi mất VPS ([`rollback-runbook.md`](./rollback-runbook.md)). | Đầy đủ lệnh chuẩn theo `/opt/crm-cskh-staging/staging-compose` và `.env.staging` (`0600`); đã diễn tập `migrate ×2`, `restart/retry ×2` & `rollback` Cấp 1–4 (`all_post_restore_deltas_zero = true`) trên môi trường `dr-https` cô lập ([`isolated-staging-dr-https-report.json`](../../deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json)). | `READY (In-Repo — Bàn giao riêng ở G24)` |
 
 ---
 
@@ -144,14 +146,16 @@ Xem bản hướng dẫn sử dụng tiếng Việt chi tiết theo từng vai t
 
 ---
 
-## 6. Biểu Mẫu Ký Nghiệm Thu UAT Chính Thức (`G13`–`G16`, `G20`, `G22` — `P4.md §16.3`, Chờ `BLK-GOV-06`)
+## 6. Biểu Mẫu Ký Nghiệm Thu UAT 4 Vai Trò Nghiệp Vụ (`G22` — `P4.md §16.3`, Chờ `BLK-GOV-06`)
 
-> **Quy tắc trung thực & Hồ sơ tối thiểu mỗi ca (`P4.md §16.3`):** Khi thực hiện ký nghiệm thu thật, mỗi ca ghi đầy đủ: người kiểm thử, vai trò/đội, bộ dữ liệu sử dụng, các bước thực hiện, kết quả kỳ vọng, kết quả thực tế, ảnh chụp/nhật ký đã che PII, mức độ lỗi (nếu có), commit sửa lỗi, ngày kiểm tra lại và chữ ký xác nhận. Tuyệt đối không điền chữ ký giả khi chưa có phân công `BLK-GOV-06` từ Owner (xem danh sách đầu vào duy nhất tại [`P4-exit-report.md`](./P4-exit-report.md) Mục 3).
+> **Quy tắc phân định nghiệm thu (`G22` vs `G24`):**
+> - Cổng **`G22`** nghiệm thu đủ **4 vai trò nghiệp vụ (`BOD`, `CRM Admin`, `Leader`, `Staff`) theo phân công của Owner** — **không biến thành yêu cầu 5 người UAT khác nhau**.
+> - Cổng **`G24`** (Operator nhận bàn giao vận hành) được ký nhận riêng tại [`operations-sop.md`](./operations-sop.md) Mục 7.
+> - Tuyệt đối không điền chữ ký giả khi chưa có phân công từ Owner (xem phiếu đầu vào tập trung duy nhất tại [`P4-exit-report.md`](./P4-exit-report.md) Mục 3).
 
-| Vai trò nghiệm thu | Họ tên / Tài khoản (`BLK-GOV-06`) | Phạm vi ca nghiệm thu | Image Digest kiểm thử | Kết quả ký nhận | Ngày ký |
+| Vai trò nghiệm thu (`G22`) | Đại diện theo phân công Owner (`BLK-GOV-06`) | Phạm vi ca nghiệm thu | Image Digest kiểm thử | Kết quả ký nhận | Ngày ký |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **Ban Giám đốc (`BOD`)** | `PENDING (BLK-GOV-06)` | `F02`, `F25..F27`, `F29`, `UAT-P4-BOD-01..05` | `sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9` | **`BLOCKED` (Chờ người ký)** | — |
-| **Quản trị CRM (`CSKH CRM Admin`)** | `PENDING (BLK-GOV-06)` | `F03..F11`, `F20..F21`, `F24`, `UAT-P4-ADM-01..04` | `sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9` | **`BLOCKED` (Chờ người ký)** | — |
-| **Trưởng nhóm Đội A & Đội B** | `PENDING (BLK-GOV-06)` | `F27..F29`, `UAT-P4-LDR-01..03` | `sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9` | **`BLOCKED` (Chờ người ký)** | — |
-| **Người tuyển dụng đại diện** | `PENDING (BLK-GOV-06)` | `F01`, `F12..F20`, `F22`, `F30`, `UAT-P4-STF-01..04` | `sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9` | **`BLOCKED` (Chờ người ký)** | — |
-| **Vận hành kỹ thuật (`Operator`)** | `PENDING (BLK-GOV-06)` | `UAT-P4-OPS-01..03`, Đào tạo & Bàn giao | `sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9` | **`BLOCKED` (Chờ người ký)** | — |
+| **1. Ban Giám đốc (`BOD`)** | `PENDING (BLK-GOV-06)` | `F02`, `F25..F27`, `F29`, `UAT-P4-BOD-01..05` | Live `sha256:acb95057...` / Candidate `sha256:b1329ef7...` | **`BLOCKED` (Chờ phân công Owner)** | — |
+| **2. Quản trị CRM (`CRM Admin`)** | `PENDING (BLK-GOV-06)` | `F03..F11`, `F20..F21`, `F24`, `UAT-P4-ADM-01..04` | Live `sha256:acb95057...` / Candidate `sha256:b1329ef7...` | **`BLOCKED` (Chờ phân công Owner)** | — |
+| **3. Trưởng nhóm (`Leader`)** | `PENDING (BLK-GOV-06)` | `F27..F29`, `UAT-P4-LDR-01..03` | Live `sha256:acb95057...` / Candidate `sha256:b1329ef7...` | **`BLOCKED` (Chờ phân công Owner)** | — |
+| **4. Người tuyển dụng (`Staff`)** | `PENDING (BLK-GOV-06)` | `F01`, `F12..F20`, `F22`, `F30`, `UAT-P4-STF-01..04` | Live `sha256:acb95057...` / Candidate `sha256:b1329ef7...` | **`BLOCKED` (Chờ phân công Owner)** | — |

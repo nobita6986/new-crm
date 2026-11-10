@@ -379,8 +379,7 @@
         "UAT-P4-BOD-01..05",
         "UAT-P4-ADM-01..04",
         "UAT-P4-LDR-01..03",
-        "UAT-P4-STF-01..04",
-        "UAT-P4-OPS-01..03"
+        "UAT-P4-STF-01..04"
       ],
       "blocker_ids": [
         "BLK-GOV-06"
@@ -408,6 +407,7 @@
       "gate": "G24",
       "status": "BLOCKED",
       "acceptance_ids": [
+        "UAT-P4-OPS-01..03",
         "P4-11-OPERATOR-HANDOVER-10-ITEMS"
       ],
       "blocker_ids": [
@@ -426,6 +426,6 @@
   "t1b_batch2_delta_commit_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
   "t1b_batch2_delta_ci_run_id": 42754081275,
   "integrated_candidate_manifest": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
-  "verified_code_commit_sha": "012d45460857926430b4ef1d216404f7fa186a77",
-  "verified_ci_run_id": 42764755609
+  "verified_code_commit_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
+  "verified_ci_run_id": 42766731946
 }

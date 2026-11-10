@@ -1441,9 +1441,50 @@ class OpsToolkitTests(unittest.TestCase):
         )
         self.assertEqual(g07_doc["gate"], "G07")
         self.assertEqual(g07_doc["gate_g07_status"], "BLOCKED")
+        self.assertTrue(g07_doc["proofs"]["st_dev_only_proves_different_filesystem_not_off_host"])
         self.assertEqual(g19_doc["gate"], "G19")
         self.assertEqual(g19_doc["gate_g19_status"], "BLOCKED")
         self.assertFalse(g19_doc["external_alerts_sent"])
+
+        # G21 API contract version lock & migration policy checks
+        for g21_tok in (
+            "v15.126.0",
+            "v1.87.0",
+            "f51095ec245e103ed3a487654b5580636424ea36",
+            "b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+            "Class A",
+            "Class B",
+            "Class C",
+            "Class D",
+            "N -> N-1",
+        ):
+            self.assertIn(g21_tok, api_doc, f"Missing G21 token {g21_tok} in api-contract.md")
+
+        # Offsite st_dev vs destination inventory & G22 4-role vs G24 Operator separation checks
+        backup_doc = (repo_root / "docs" / "p4" / "backup-restore.md").read_text(encoding="utf-8")
+        sop_doc = (repo_root / "docs" / "p4" / "operations-sop.md").read_text(encoding="utf-8")
+        self.assertIn("Destination Inventory", backup_doc)
+        self.assertIn("không chứng minh", backup_doc.lower())
+        self.assertIn("4 vai trò nghiệp vụ", uat_doc)
+        self.assertIn("không biến thành yêu cầu 5 người UAT khác nhau", uat_doc)
+        self.assertIn("Khuyến nghị", sop_doc)
+
+        cand_manifest = json.loads(
+            (repo_root / "deploy" / "ops" / "evidence" / "p4-integrated-candidate-manifest.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        owner_ticket = cand_manifest["owner_pending_inputs_consolidated"]
+        self.assertEqual(owner_ticket["canonical_ticket_reference"], "docs/p4/P4-exit-report.md#3")
+        for key in (
+            "1_offsite_destination_inventory_and_credentials",
+            "2_separate_key_escrow_location",
+            "3_oncall_operator",
+            "4_approved_alert_channel",
+            "5_uat_4_roles_and_separate_operator_handover",
+            "6_release_decision",
+        ):
+            self.assertIn(key, owner_ticket)
 
 
 if __name__ == "__main__":

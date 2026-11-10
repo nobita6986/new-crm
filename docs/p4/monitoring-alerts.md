@@ -112,9 +112,9 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/install_systemd_timers.py \
 ### 4.2. Chính sách Khử PII, Chống Bão Cảnh Báo & Mở Khóa Kênh Ngoài Hệ Thống (`/etc/crm-cskh/alerting.env` — `G19`)
 1. **Khử PII & Secret bắt buộc:** Hàm `redact_payload_text()` tự động che mọi số điện thoại Việt Nam (`<REDACTED_PHONE>`), cookie phiên (`<REDACTED_FRAPPE_SID>`), mã CSRF (`<REDACTED_CSRF>`) và đường dẫn token webhook (`<REDACTED_WEBHOOK_PATH>`).
 2. **Chống bão cảnh báo (`Deduplication Cooldown`):** Mỗi cặp `environment:alert_code` có thời gian chặn lặp mặc định `900 giây` (`15 phút`) lưu tại `/var/lib/crm-cskh/alert-dedup.json` (và `/var/backups/crm-cskh/backup-alert-dedup.json` cho cảnh báo backup).
-3. **Đầu vào bắt buộc cần Owner cấp trước khi bật gửi cảnh báo ngoài (`BLK-GOV-06` & `BLK-INFRA-07` — không tự điền người nhận giả):**
-   - `BLK-GOV-06` (`CSKH_OPERATOR_CONTACT`): Định danh đầu mối trực vận hành chính + dự phòng và khung giờ trực được Owner phê duyệt.
-   - `BLK-INFRA-07` (`CSKH_ALERT_WEBHOOK_URL`): Địa chỉ HTTPS Webhook chính thức của kênh nhận cảnh báo do Owner phê duyệt (ChatOps nội bộ / Telegram / Slack / Pager).
+3. **Đầu vào cần Owner cấp trước khi bật gửi cảnh báo ngoài (`BLK-GOV-06` & `BLK-INFRA-07` — gom tại phiếu duy nhất ở [`P4-exit-report.md`](./P4-exit-report.md) Mục 3):**
+   - `CSKH_OPERATOR_CONTACT` (`BLK-GOV-06`): Định danh **Operator trực vận hành chính** được Owner phân công *(Operator dự phòng là khuyến nghị, không bắt buộc nếu kế hoạch chưa quy định)*.
+   - `CSKH_ALERT_WEBHOOK_URL` (`BLK-INFRA-07`): Địa chỉ HTTPS Webhook chính thức của kênh nhận cảnh báo do Owner phê duyệt (ChatOps nội bộ / Telegram / Slack / Pager).
 4. **Quy trình kích hoạt qua `/etc/crm-cskh/alerting.env` (`0600`) mà không cần sửa unit systemd:**
    - Cả 3 service (`crm-cskh-healthcheck.service`, `crm-cskh-backup.service`, `crm-cskh-backup-failure@.service`) đều nạp tùy chọn `EnvironmentFile=-/etc/crm-cskh/alerting.env` (xem mẫu tại [`deploy/compose/env/alerting.env.example`](../../deploy/compose/env/alerting.env.example)).
    - Sau khi Owner cấp đủ 2 đầu vào trên, tạo `/etc/crm-cskh/alerting.env` quyền `0600` (`root:root`) và bắn kiểm chứng một cảnh báo thử nghiệm để đóng cổng `G19`:

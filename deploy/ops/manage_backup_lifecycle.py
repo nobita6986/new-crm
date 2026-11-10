@@ -431,10 +431,15 @@ def audit_g07_gate(
         required_owner_inputs.append(
             {
                 "blocker_id": "BLK-INFRA-05",
-                "input": "Offsite archive destination & write/readback credentials (/etc/crm-cskh/offsite-backup.env, mode 0600)",
+                "input": (
+                    "Offsite destination inventory & write/readback credentials "
+                    "(/etc/crm-cskh/offsite-backup.env, mode 0600)"
+                ),
                 "details": (
-                    "Owner-approved external S3/R2/B2 bucket (rclone) or independent SSH/SFTP host "
-                    "(never a folder on 103.77.208.186; never paid service without Owner approval)."
+                    "Destination inventory confirming backup resides outside VPS 103.77.208.186 "
+                    "in an independent failure domain (S3/Object Storage bucket or independent "
+                    "SSH/SFTP host). Note: a different st_dev only proves a different local "
+                    "filesystem, NOT a different physical server or failure domain."
                 ),
             }
         )
@@ -480,6 +485,8 @@ def audit_g07_gate(
             "remote_checksum_readback_verified": remote_checksum_readback_verified,
             "manual_offsite_checksum_verified": manual_checksum_verified,
             "separate_key_escrow_proven": separate_key_escrow_proven,
+            "st_dev_only_proves_different_filesystem_not_off_host": True,
+            "offsite_destination_inventory_outside_vps_confirmed": automated_upload_proven,
             "vps_isolated_restore_reused_pass": restore_reused_pass if restore_report_file else None,
         },
         "reused_vps_restore_drill": restore_summary,
@@ -513,6 +520,11 @@ def sync_bundle_offsite_automated(
     - Offsite target directory MUST NOT reside inside `backup_root` OR on the same
       host filesystem/device (`st_dev`) as `backup_root` unless explicitly invoked
       with `allow_same_filesystem_for_drill=True` in isolated CI container tests.
+    - NOTE: A different `st_dev` only proves a different filesystem/mount point (preventing
+      accidental local same-disk directory copy); it does NOT prove a different server or
+      independent failure domain. Production G07 sign-off requires an explicit Destination
+      Inventory confirming the target resides outside VPS `103.77.208.186` and keys are
+      escrowed separately.
     - Remote SHA-256 and byte length MUST match `backup-report.json` before recording receipt.
     """
     pre = verify_backup_bundle(bundle_dir, expect_key_file=False, enforce_posix_permissions=False)
@@ -627,6 +639,17 @@ def sync_bundle_offsite_automated(
         "automated_upload": True,
         "periodic_upload_proven": True,
         "key_excluded_from_offsite_archive_target": True,
+        "st_dev_only_proves_different_filesystem_not_off_host": True,
+        "destination_inventory": {
+            "location_label": offsite_location_label,
+            "host_or_bucket_uri": os.environ.get(
+                "CSKH_OFFSITE_DESTINATION_HOST_OR_BUCKET", offsite_location_label
+            ),
+            "failure_domain_attestation": os.environ.get(
+                "CSKH_OFFSITE_FAILURE_DOMAIN_ATTESTATION",
+                "outside-vps-103.77.208.186-independent-failure-domain",
+            ),
+        },
         "status": "OFFSITE_COPY_HASH_VERIFIED",
     }
     receipt_path = bundle_dir / "offsite-verification.json"

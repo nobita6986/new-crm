@@ -123,25 +123,21 @@ sudo jq '{status,containers:.containers.status,invariants:.invariants.status,bac
   /var/lib/crm-cskh/health/latest-health-report.json
 ```
 
-### 3.2. Cấu Hình Upload Offsite Tự Động (`/etc/crm-cskh/offsite-backup.env`), Cấm Offsite Cùng VPS & Đầu Vào Cần Owner Cấp (`BLK-INFRA-05`)
+### 3.2. Cấu Hình Upload Offsite Tự Động (`/etc/crm-cskh/offsite-backup.env`), Phân Biệt `st_dev` Với Kiểm Kê Đích Ngoài VPS & Lưu Ký Khóa Riêng (`BLK-INFRA-05`)
 
 1. **Cơ chế cấu hình không cần sửa code/unit (`EnvironmentFile=-/etc/crm-cskh/offsite-backup.env`):**
    - `crm-cskh-backup.service` tự động nạp tệp cấu hình tùy chọn `/etc/crm-cskh/offsite-backup.env` (quyền `0600`, `root:root`, xem mẫu trung lập nhà cung cấp tại [`deploy/compose/env/offsite-backup.env.example`](../../deploy/compose/env/offsite-backup.env.example)).
    - Khi tệp này chưa tồn tại trên VPS, `systemd` bỏ qua an toàn (dấu `-`), giữ nguyên trạng thái `PARTIAL` (`periodic_offsite_upload_proven = false`).
-   - Ngay khi Owner cấp đích lưu trữ ngoài VPS và thông tin xác thực, chỉ cần khởi tạo `/etc/crm-cskh/offsite-backup.env` (`0600`) với cặp `CSKH_OFFSITE_UPLOAD_CMD` + `CSKH_OFFSITE_VERIFY_CMD` (hoặc mount kho mạng ngoài VPS vào `CSKH_OFFSITE_TARGET_DIR`) và `CSKH_OFFSITE_LOCATION_LABEL`, sau đó chạy thử `sudo systemctl start crm-cskh-backup.service` để chứng minh đọc ngược SHA-256 tự động (`end_to_end_backup_status = "PASS"`).
-2. **Rào chắn kỹ thuật bắt buộc (Không chọn dịch vụ trả phí hộ Owner & Không coi thư mục cùng VPS là Offsite):**
+   - Ngay khi Owner cấp đích lưu trữ ngoài VPS và thông tin xác thực, khởi tạo `/etc/crm-cskh/offsite-backup.env` (`0600`) với cặp `CSKH_OFFSITE_UPLOAD_CMD` + `CSKH_OFFSITE_VERIFY_CMD` (hoặc mount mạng từ máy chủ ngoài vào `CSKH_OFFSITE_TARGET_DIR`), `CSKH_OFFSITE_LOCATION_LABEL`, `CSKH_OFFSITE_DESTINATION_HOST_OR_BUCKET` và `CSKH_OFFSITE_FAILURE_DOMAIN_ATTESTATION`, sau đó chạy thử `sudo systemctl start crm-cskh-backup.service` để chứng minh đọc ngược SHA-256 tự động (`end_to_end_backup_status = "PASS"`).
+2. **Phân biệt rõ rào chắn `st_dev` cục bộ với Hồ sơ kiểm kê đích Offsite (`Destination Inventory`) và Lưu ký khóa riêng (`Key Escrow`):**
    - **Không tự chọn dịch vụ lưu trữ trả phí** khi chưa có phê duyệt của Owner.
-   - **Cấm tuyệt đối coi một thư mục khác trên cùng máy chủ VPS `103.77.208.186` là đích offsite:** Hàm `sync_bundle_offsite_automated()` trong `manage_backup_lifecycle.py` kiểm tra mã thiết bị tệp (`st_dev`) giữa `backup_root` và `offsite_target_dir`; nếu hai đường dẫn nằm trên cùng ổ đĩa/cùng filesystem của VPS, công cụ từ chối ngay với `ValueError` và phát cảnh báo `ALT-BACKUP-FAILURE`.
-   - **Cấm đẩy khóa giải mã:** Công cụ chỉ chuyển `backup.tar.gz.enc` + `backup-report.json`, đồng thời chặn cứng nếu `CSKH_OFFSITE_UPLOAD_CMD` tham chiếu tới `backup-key` hoặc nếu `backup-key` xuất hiện tại đích.
-3. **Danh sách chính xác đầu vào cần Owner cấp để mở khóa Offsite tự động (`BLK-INFRA-05`):**
-
-| STT | Hạng mục đầu vào cần Owner cấp | Yêu cầu kỹ thuật & an toàn bắt buộc | Trạng thái hiện tại |
-| :---: | :--- | :--- | :---: |
-| 1 | **Loại đích lưu trữ ngoài VPS** | Máy chủ Linux/NAS SFTP độc lập khác vật lý với `103.77.208.186` **hoặc** kho Object Storage tương thích S3 / Rclone sẵn có của Owner (không tự đăng ký dịch vụ trả phí). | `CHỜ OWNER CẤP (BLK-INFRA-05)` |
-| 2 | **Địa chỉ đích & Đường dẫn / Bucket** | `host:port` + thư mục đích (`0700`) hoặc `endpoint URL` + tên `bucket/prefix` dành riêng cho `crm-cskh`. | `CHỜ OWNER CẤP (BLK-INFRA-05)` |
-| 3 | **Thông tin xác thực tách quyền (`Least Privilege`)** | Khóa SSH `ed25519` riêng hoặc cặp Access Key chỉ có quyền ghi gói mới + đọc kiểm tra SHA-256 (**không dùng chung khóa quản trị có quyền xóa toàn bộ kho**). | `CHỜ OWNER CẤP (BLK-INFRA-05)` |
-| 4 | **Kho lưu ký khóa tách biệt (`Key Escrow`)** | Định danh kho bí mật độc lập của Owner để lưu `backup-key` của từng gói và `encryption_key` của `site_config.json` (tách rời hoàn toàn khỏi đích lưu `backup.tar.gz.enc`). | `Đang lưu thủ công riêng bởi Owner/T0` |
-| 5 | **Chính sách dung lượng & RPO/RTO phê duyệt** | Xác nhận hạn mức dung lượng cho chu kỳ GFS `14 ngày / 8 tuần / 3 tháng` tại kho đích và ký xác nhận ngưỡng RPO (`<= 24h`) / RTO mục tiêu. | `CHỜ OWNER DUYỆT` |
+   - **Giới hạn của kiểm tra `st_dev` (`st_dev` khác chỉ chứng minh khác filesystem, KHÔNG chứng minh khác máy chủ hay miền sự cố):** Hàm `sync_bundle_offsite_automated()` trong `manage_backup_lifecycle.py` kiểm tra mã thiết bị tệp (`st_dev`) giữa `backup_root` và `offsite_target_dir` làm **rào chắn âm cục bộ** để chặn lỗi trỏ nhầm vào cùng phân vùng đĩa gốc `/var/backups`. **Tuy nhiên, `st_dev` khác nhau chỉ chứng minh hai đường dẫn nằm trên hai filesystem / mount point khác nhau — hoàn toàn KHÔNG chứng minh đích lưu trữ nằm trên máy chủ vật lý khác hay miền sự cố (`failure domain`) độc lập** (ví dụ một ổ đĩa/volume phụ, phân vùng LVM, loop mount hoặc `tmpfs` gắn trên cùng máy chủ VPS `103.77.208.186` vẫn có `st_dev` khác nhưng sẽ mất đồng thời nếu VPS gặp sự cố).
+   - **Bắt buộc phải có Hồ sơ kiểm kê đích lưu trữ ngoài VPS (`Offsite Destination Inventory`):** Để đóng cổng `G07`, cấu hình và biên nhận offsite phải đi kèm thông tin kiểm kê đích xác nhận tường minh:
+     1. Loại đích & định danh máy chủ / bucket (`CSKH_OFFSITE_DESTINATION_HOST_OR_BUCKET`: máy chủ SFTP/NAS vật lý độc lập hoặc kho Object Storage tương thích S3/Rclone ngoài VPS),
+     2. Xác nhận đích lưu trữ **nằm hoàn toàn ngoài máy chủ VPS `103.77.208.186` và thuộc miền sự cố độc lập** (`CSKH_OFFSITE_FAILURE_DOMAIN_ATTESTATION`),
+     3. **Khóa giải mã được lưu ký riêng (`Separate Key Escrow`):** Công cụ chỉ chuyển `backup.tar.gz.enc` + `backup-report.json` và chặn cứng nếu `CSKH_OFFSITE_UPLOAD_CMD` tham chiếu tới `backup-key` hoặc nếu `backup-key` xuất hiện tại đích; đồng thời `backup-key` của từng gói và `encryption_key` của `site_config.json` phải có biên nhận lưu ký riêng (`record-key-escrow`) tại kho bí mật độc lập của Owner (tách rời khỏi cả VPS `103.77.208.186` lẫn kho chứa `backup.tar.gz.enc`).
+3. **Phiếu đầu vào cần Owner cung cấp để mở khóa `G07` (`BLK-INFRA-05`):**
+   - Để tránh hỏi lặp qua nhiều báo cáo, toàn bộ đầu vào cần Owner cấp (hồ sơ kiểm kê đích offsite & credentials, nơi lưu ký khóa tách biệt, người trực, kênh cảnh báo, đại diện UAT/Operator và quyết định phát hành) được gom tại **một bảng duy nhất ở [`P4-exit-report.md`](./P4-exit-report.md) Mục 3**.
 
 4. **Cảnh báo tự động khi sao lưu lỗi hoặc quá hạn (`> 26 giờ`):**
    - `crm-cskh-backup.service` gắn `OnFailure=crm-cskh-backup-failure@%n.service` gọi `manage_backup_lifecycle.py emit-failure-alert`, ghi biên bản `ALT-BACKUP-FAILURE` đã khử PII/secret vào `/var/backups/crm-cskh/backup-alerts.jsonl` (`0600`) và giữ khóa kênh ngoài cho tới khi Owner mở `BLK-GOV-06` + `BLK-INFRA-07` trong `/etc/crm-cskh/alerting.env`.

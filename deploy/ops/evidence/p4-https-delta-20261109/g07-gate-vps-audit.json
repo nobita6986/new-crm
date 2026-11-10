@@ -1,5 +1,5 @@
 {
-  "timestamp_utc": "2026-11-09T14:11:40Z",
+  "timestamp_utc": "2026-11-10T06:44:07Z",
   "gate": "G07",
   "gate_g07_status": "BLOCKED",
   "proofs": {
@@ -12,6 +12,8 @@
     "remote_checksum_readback_verified": false,
     "manual_offsite_checksum_verified": true,
     "separate_key_escrow_proven": false,
+    "st_dev_only_proves_different_filesystem_not_off_host": true,
+    "offsite_destination_inventory_outside_vps_confirmed": false,
     "vps_isolated_restore_reused_pass": true
   },
   "reused_vps_restore_drill": {
@@ -35,8 +37,8 @@
   "required_owner_inputs": [
     {
       "blocker_id": "BLK-INFRA-05",
-      "input": "Offsite archive destination & write/readback credentials (/etc/crm-cskh/offsite-backup.env, mode 0600)",
-      "details": "Owner-approved external S3/R2/B2 bucket (rclone) or independent SSH/SFTP host (never a folder on 103.77.208.186; never paid service without Owner approval)."
+      "input": "Offsite destination inventory & write/readback credentials (/etc/crm-cskh/offsite-backup.env, mode 0600)",
+      "details": "Destination inventory confirming backup resides outside VPS 103.77.208.186 in an independent failure domain (S3/Object Storage bucket or independent SSH/SFTP host). Note: a different st_dev only proves a different local filesystem, NOT a different physical server or failure domain."
     },
     {
       "blocker_id": "BLK-INFRA-05",

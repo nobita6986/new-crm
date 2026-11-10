@@ -111,16 +111,16 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
 
 ## 3. Phân Loại Sự Cố, Người Trực (`On-Call`), Kênh Cảnh Báo & Xử Lý Lỗi Sao Lưu (`P4.md §17.2`)
 
-> **Quy tắc quản trị trung thực (`BLK-GOV-06` & `BLK-INFRA-07`):** Không tự điền họ tên người trực hoặc kênh nhận giả định. Mọi trường định danh dưới đây được giữ ở trạng thái chờ Owner cấp chính thức trước khi mở khóa `/etc/crm-cskh/alerting.env` (`0600`).
+> **Quy tắc quản trị trung thực (`BLK-GOV-06` & `BLK-INFRA-07`):** Không tự điền họ tên người trực hoặc kênh nhận giả định. Để không hỏi lặp qua nhiều báo cáo, toàn bộ đầu vào cần Owner cấp được gom tại **phiếu đầu vào duy nhất ở [`P4-exit-report.md`](./P4-exit-report.md) Mục 3**. Lưu ý: **Operator dự phòng (`Secondary On-Call`) là khuyến nghị**, không phải điều kiện bắt buộc khóa cổng nếu kế hoạch của Owner chỉ định 1 Operator chính (hoặc Tech Owner kiêm nhiệm).
 
-### 3.1. Ma trận Vai trò Trực Vận hành & Kênh Nhận Cảnh Báo (Chờ Owner Cấp)
+### 3.1. Ma trận Vai trò Trực Vận hành & Kênh Nhận Cảnh Báo (Theo Phiếu Đầu Vào [`P4-exit-report.md`](./P4-exit-report.md) Mục 3)
 
 | Vị trí vận hành | Trách nhiệm chính | Định danh cá nhân / Tài khoản riêng | Kênh nhận cảnh báo & Khung giờ trực |
 | :--- | :--- | :--- | :--- |
-| **Operator kỹ thuật chính (`Primary On-Call`)** | Giám sát timer sức khỏe & backup hằng sáng, chạy bù khi `ALT-BACKUP-FAILURE`, khởi động lại dịch vụ an toàn (Mục 2). | `CHỜ OWNER CẤP (BLK-GOV-06)` | `CHỜ OWNER CẤP (BLK-INFRA-07 — /etc/crm-cskh/alerting.env)` |
-| **Operator kỹ thuật dự phòng / Tech Owner** | Tiếp nhận leo thang `SEV-1`/`SEV-2`, thực thi quay lui Cấp độ 2–4 và diễn tập DR hằng tháng. | `CHỜ OWNER CẤP (BLK-GOV-06)` | `CHỜ OWNER CẤP (BLK-INFRA-07)` |
-| **Quản trị CRM nghiệp vụ (`CSKH CRM Admin`)** | Quản lý nhập CSV, phân công chiến dịch, điều chuyển/thu hồi khi nhân sự nghỉ việc (Mục 5). | `CHỜ OWNER CẤP (BLK-GOV-06)` | Trao đổi nội bộ trong giờ hành chính `Asia/Ho_Chi_Minh` |
-| **Người phê duyệt quyết định (`Owner / BOD`)** | Phê duyệt kép trước khi khôi phục ghi đè DB Cấp độ 4, phê duyệt `recompute` kỳ đã chốt và ký Go-Live. | `CHỜ OWNER CẤP (BLK-GOV-06)` | Kênh điều hành trực tiếp của Owner |
+| **Operator kỹ thuật chính (`Primary On-Call` — Bắt buộc cho `G19`/`G24`)** | Giám sát timer sức khỏe & backup hằng sáng, chạy bù khi `ALT-BACKUP-FAILURE`, khởi động lại dịch vụ an toàn (Mục 2). | `CHỜ OWNER CẤP (BLK-GOV-06)` | `CHỜ OWNER CẤP (BLK-INFRA-07 — /etc/crm-cskh/alerting.env)` |
+| **Operator kỹ thuật dự phòng / Tech Owner (`Khuyến nghị`)** | *(Khuyến nghị nếu kế hoạch chưa quy định bắt buộc)* Tiếp nhận leo thang `SEV-1`/`SEV-2`, hỗ trợ quay lui Cấp độ 2–4 và diễn tập DR hằng tháng. | `KHUYẾN NGHỊ / TÙY CHỌN THEO PHÂN CÔNG OWNER` | `Theo cấu hình kênh cảnh báo của Owner` |
+| **Quản trị CRM nghiệp vụ (`CSKH CRM Admin`)** | Quản lý nhập CSV, phân công chiến dịch, điều chuyển/thu hồi khi nhân sự nghỉ việc (Mục 5). | `Theo phân công vai trò Quản trị CRM của Owner` | Trao đổi nội bộ trong giờ hành chính `Asia/Ho_Chi_Minh` |
+| **Người phê duyệt quyết định (`Owner / BOD`)** | Phê duyệt kép trước khi khôi phục ghi đè DB Cấp độ 4, phê duyệt `recompute` kỳ đã chốt và ký Go-Live. | `Owner / Đại diện BOD` | Kênh điều hành trực tiếp của Owner |
 
 ### 3.2. Bảng Phân Loại Mức Độ Và Hành Động Cô Lập Đầu Tiên
 
@@ -190,15 +190,17 @@ Khi phát hiện sai lệch dữ liệu nghiệp vụ (phân công, lần liên 
 | 5 | Giám sát 10 container, hàng đợi RQ, 4 cron, bất biến `INV-01..06` & biên nhận cảnh báo | [`monitoring-alerts.md`](./monitoring-alerts.md), `check_health_and_invariants.py` | `READY` (`G17 PASS`, `G19 BLOCKED` chờ `BLK-GOV-06`/`07`) | `PENDING_SIGNER` |
 | 6 | Quy trình vận hành ngày/tuần/tháng, xử lý sự cố dữ liệu 6 bước & thu hồi tài khoản nghỉ việc | [`operations-sop.md`](./operations-sop.md) Mục 1–6 | `READY` | `PENDING_SIGNER` |
 | 7 | Hợp đồng `113` API, rà soát bảo mật `S01`–`S20` & báo cáo hiệu năng `S1` | [`api-contract.md`](./api-contract.md), [`security-review.md`](./security-review.md), [`performance-report.md`](./performance-report.md) | `READY` | `PENDING_SIGNER` |
-| 8 | Hướng dẫn sử dụng tiếng Việt theo 5 vai trò & Báo cáo Tổng kết `P4` | [`huong-dan-su-dung-vi.md`](./huong-dan-su-dung-vi.md), [`P4-exit-report.md`](./P4-exit-report.md) | `READY` | `PENDING_SIGNER` |
+| 8 | Hướng dẫn sử dụng tiếng Việt theo 4 vai trò nghiệp vụ & Báo cáo Tổng kết `P4` | [`huong-dan-su-dung-vi.md`](./huong-dan-su-dung-vi.md), [`P4-exit-report.md`](./P4-exit-report.md) | `READY` | `PENDING_SIGNER` |
 | 9 | Bộ lập lịch systemd trên VPS `103.77.208.186` (`healthcheck.timer` 5m + `backup.timer` `02:15 ICT`) | `install_systemd_timers.py`, [`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json) | `INSTALLED ON VPS` | `PENDING_SIGNER` |
-| 10 | Bàn giao người trực chính/dự phòng, tài khoản định danh riêng & diễn tập nhận cảnh báo thật | `/etc/crm-cskh/offsite-backup.env`, `/etc/crm-cskh/alerting.env` (`0600`) | **`BLOCKED`** (`BLK-INFRA-05`, `BLK-GOV-06`, `BLK-INFRA-07`) | **`BLOCKED` (Không tự ký thay)** |
+| 10 | Bàn giao Operator nhận vận hành riêng (`G24`), cấu hình offsite inventory & diễn tập nhận cảnh báo thật | `/etc/crm-cskh/offsite-backup.env`, `/etc/crm-cskh/alerting.env` (`0600`) | **`BLOCKED`** (`BLK-INFRA-05`, `BLK-GOV-06`, `BLK-INFRA-07`) | **`BLOCKED` (Không tự ký thay)** |
 
-### 7.2. Khung ký nhận bàn giao vận hành (Chỉ điền khi Owner phân công `BLK-GOV-06`)
+### 7.2. Khung ký nhận bàn giao vận hành riêng cho Operator (`G24` — Tách biệt với UAT 4 vai trò `G22`)
 
-| Vai trò bàn giao | Họ tên & Tài khoản định danh | Ngày nhận bàn giao | Chữ ký xác nhận |
+> **Phân định nghiệm thu:** Cổng **`G24`** là biên bản **Operator nhận bàn giao vận hành riêng** (tách biệt với `G22` nghiệm thu UAT của 4 vai trò nghiệp vụ `BOD`, `CRM Admin`, `Leader`, `Staff` tại [`uat-report.md`](./uat-report.md)). **Operator dự phòng là khuyến nghị** nếu kế hoạch chưa quy định bắt buộc. Xem phiếu đầu vào Owner tập trung duy nhất tại [`P4-exit-report.md`](./P4-exit-report.md) Mục 3.
+
+| Vai trò bàn giao (`G24`) | Họ tên & Tài khoản định danh | Ngày nhận bàn giao | Chữ ký xác nhận |
 | :--- | :--- | :---: | :---: |
 | **Người bàn giao kỹ thuật (`Release / Engineering`)** | `T1A` / `T1B` (Hồ sơ kỹ thuật trong Git) | `10/11/2026` | Đã bàn giao mã nguồn & evidence |
-| **Operator kỹ thuật chính (`Primary On-Call`)** | `PENDING (BLK-GOV-06)` | — | **`BLOCKED` (Chờ Owner chỉ định)** |
-| **Operator dự phòng / Tech Owner (`Secondary On-Call`)** | `PENDING (BLK-GOV-06)` | — | **`BLOCKED` (Chờ Owner chỉ định)** |
+| **Operator nhận bàn giao vận hành (`Primary Operator` — Bắt buộc cho `G24`)** | `PENDING (BLK-GOV-06)` | — | **`BLOCKED` (Chờ Owner chỉ định)** |
+| **Operator dự phòng (`Secondary Operator` — Khuyến nghị, không bắt buộc)** | `OPTIONAL / RECOMMENDED` | — | *Khuyến nghị (không chặn cổng nếu chỉ định 1 Operator)* |
 | **Đại diện Phê duyệt Vận hành (`Owner / T0`)** | `PENDING (BLK-GOV-06)` | — | **`BLOCKED` (Chờ Owner phê duyệt)** |
