@@ -827,6 +827,9 @@ def load_period_raw_dataset(
 			"RESCHEDULE_RATE",
 			"OVERDUE_BACKLOG",
 			"OPEN_FOLLOWUPS_OVERDUE",
+			"SLA_BREACH_COUNT",
+			"BREACH_COUNT",
+			"SLA_WAIVER_COUNT",
 		)
 	)
 	obligations_raw: list[dict] = []

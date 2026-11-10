@@ -868,13 +868,14 @@ def _execute_s1_http_acceptance_and_mixed_waves(
 
     # Reconcile in MariaDB: exact 80 attempts + exact 80 open callback CRM Tasks + 0 duplicate idempotency keys
     reconcile_probe = (
-        "import json, frappe; "
+        "import json, os, frappe; "
+        "os.chdir('/home/frappe/frappe-bench/sites'); "
         f"frappe.init(site={site_name!r}, sites_path='/home/frappe/frappe-bench/sites'); "
         "frappe.connect(); "
         f"wis = {[str(x['work_item']) for x in write_wis]!r}; "
         "ph = ','.join(['%s'] * len(wis)); "
-        "att_cnt = int(frappe.db.sql(\"SELECT COUNT(*) FROM `tabCSKH Contact Attempt` WHERE idempotency_key LIKE 's1-http-att-cb-%%'\")[0][0]); "
-        "dup_cnt = int(frappe.db.sql(\"SELECT COUNT(*) FROM (SELECT idempotency_key FROM `tabCSKH Contact Attempt` WHERE idempotency_key LIKE 's1-http-att-cb-%%' GROUP BY idempotency_key HAVING COUNT(*) > 1) t\")[0][0]); "
+        "att_cnt = int(frappe.db.sql(\"SELECT COUNT(*) FROM `tabCSKH Contact Attempt` WHERE idempotency_key LIKE %s\", ('s1-http-att-cb-%',))[0][0]); "
+        "dup_cnt = int(frappe.db.sql(\"SELECT COUNT(*) FROM (SELECT idempotency_key FROM `tabCSKH Contact Attempt` WHERE idempotency_key LIKE %s GROUP BY idempotency_key HAVING COUNT(*) > 1) t\", ('s1-http-att-cb-%',))[0][0]); "
         "cb_cnt = int(frappe.db.sql(f\"SELECT COUNT(*) FROM `tabCSKH Work Item` WHERE name IN ({ph}) AND open_callback_task IS NOT NULL AND open_callback_task != ''\", tuple(wis))[0][0]); "
         "frappe.destroy(); "
         "print(json.dumps({'attempts_created': att_cnt, 'duplicate_idempotency_keys': dup_cnt, 'work_items_with_open_callback_task': cb_cnt}))"
@@ -888,6 +889,8 @@ def _execute_s1_http_acceptance_and_mixed_waves(
             compose_project,
             "exec",
             "-T",
+            "-e",
+            "FRAPPE_STREAM_LOGGING=1",
             "backend",
             "/home/frappe/frappe-bench/env/bin/python",
             "-c",
@@ -896,9 +899,14 @@ def _execute_s1_http_acceptance_and_mixed_waves(
         capture_output=True,
         text=True,
         env=compose_env,
-        check=True,
+        check=False,
         timeout=60,
     )
+    if rec_res.returncode != 0:
+        raise RuntimeError(
+            f"HTTP write DB reconciliation probe failed (rc={rec_res.returncode}):\n"
+            f"STDOUT:\n{rec_res.stdout[-1500:]}\nSTDERR:\n{rec_res.stderr[-1500:]}"
+        )
     http_write_reconciliation = json.loads(rec_res.stdout.strip().splitlines()[-1])
     record_attempt_and_callback_http = {
         **summarize_latencies_ms(
