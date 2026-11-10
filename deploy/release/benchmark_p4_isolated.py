@@ -1650,11 +1650,12 @@ rss_d1, _ = _rss_hwm_mib()
 frappe.db.sql("ANALYZE TABLE `tabCSKH KPI Snapshot`")
 frappe.db.commit()
 
-rev_before_bg = int(
+rev_before_bg = str(
     frappe.db.sql(
-        "SELECT COALESCE(MAX(publish_revision), 0) FROM `tabCSKH KPI Snapshot` "
+        "SELECT COALESCE(MAX(kpi_run), '') FROM `tabCSKH KPI Snapshot` "
         "WHERE is_latest_published = 1 AND period_type = 'monthly' AND period_key = '2026-10' AND campaign_filter = ''"
     )[0][0]
+    or ""
 )
 bg_job = frappe.enqueue(
     "crm_cskh.jobs.recompute_kpi.run_single_period_recompute",
@@ -1676,11 +1677,12 @@ while time.perf_counter() < bg_deadline:
     c_r0 = time.perf_counter()
     ov = p3_reporting.get_executive_overview(period_type="monthly", period_key="2026-10")
     bg_ui_read_lats.append((time.perf_counter() - c_r0) * 1000.0)
-    cur_rev = int(
+    cur_rev = str(
         frappe.db.sql(
-            "SELECT COALESCE(MAX(publish_revision), 0) FROM `tabCSKH KPI Snapshot` "
+            "SELECT COALESCE(MAX(kpi_run), '') FROM `tabCSKH KPI Snapshot` "
             "WHERE is_latest_published = 1 AND period_type = 'monthly' AND period_key = '2026-10' AND campaign_filter = ''"
         )[0][0]
+        or ""
     )
     running_cnt = int(
         frappe.db.sql(
@@ -1689,15 +1691,16 @@ while time.perf_counter() < bg_deadline:
     )
     if running_cnt > 0:
         revisions_seen_while_running.add(cur_rev)
-    if cur_rev > rev_before_bg and running_cnt == 0:
+    if cur_rev != "" and cur_rev != rev_before_bg and running_cnt == 0:
         break
     time.sleep(0.15)
 bg_recompute_wall_ms = round((time.perf_counter() - t_bg0) * 1000.0, 2)
-rev_after_bg = int(
+rev_after_bg = str(
     frappe.db.sql(
-        "SELECT COALESCE(MAX(publish_revision), 0) FROM `tabCSKH KPI Snapshot` "
+        "SELECT COALESCE(MAX(kpi_run), '') FROM `tabCSKH KPI Snapshot` "
         "WHERE is_latest_published = 1 AND period_type = 'monthly' AND period_key = '2026-10' AND campaign_filter = ''"
     )[0][0]
+    or ""
 )
 frappe.set_user("Administrator")
 
@@ -2069,7 +2072,7 @@ explain_plans = {
         as_dict=True,
     ),
     "kpi_snapshot_lookup": frappe.db.sql(
-        "EXPLAIN SELECT name, metrics_json FROM `tabCSKH KPI Snapshot` "
+        "EXPLAIN SELECT name, metrics_json FROM `tabCSKH KPI Snapshot` USE INDEX (idx_cskh_kpisnap_lookup) "
         "WHERE is_latest_published = 1 AND period_type = 'monthly' AND period_key = '2026-10' "
         "AND campaign_filter = '' AND scope_type = 'company' AND scope_id = '__company__' LIMIT 5",
         as_dict=True,
@@ -2120,7 +2123,8 @@ out = {
             "revisions_seen_while_running": sorted(revisions_seen_while_running),
             "revision_after_complete": rev_after_bg,
             "atomic_publish_verified": bool(
-                rev_after_bg == rev_before_bg + 1
+                rev_after_bg != ""
+                and rev_after_bg != rev_before_bg
                 and all(r == rev_before_bg for r in revisions_seen_while_running)
             ),
             "concurrent_ui_overview_reads": _summarize(

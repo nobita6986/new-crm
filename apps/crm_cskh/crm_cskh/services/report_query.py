@@ -533,6 +533,11 @@ def _fetch_snapshots(
 		extra_sql += f" and team_filter in ({ph_t})"
 		params.extend(team_filters)
 
+	index_hint = (
+		"USE INDEX (idx_cskh_kpisnap_lookup)"
+		if team_filters is None
+		else "USE INDEX (idx_cskh_kpisnap_emp_team)"
+	)
 	rows = frappe.db.sql(
 		f"""
 		select name, kpi_run, scope_type, scope_id, scope_label, team_filter,
@@ -541,7 +546,7 @@ def _fetch_snapshots(
 		       distinct_work_items, ownership_intervals_count, work_items_touched,
 		       contact_attempt_count, connected_attempt_count,
 		       metrics_json, exclusion_counts_json, trend_series_json
-		from `tabCSKH KPI Snapshot`
+		from `tabCSKH KPI Snapshot` {index_hint}
 		where is_latest_published = %s
 		  and period_type = %s
 		  and period_key = %s

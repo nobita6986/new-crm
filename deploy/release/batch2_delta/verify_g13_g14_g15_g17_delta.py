@@ -697,16 +697,19 @@ for idx in range(5):
     frappe.get_doc({"doctype": "CSKH Identity Index", "normalized_phone": f"+849083990{idx:02d}", "canonical_lead": ld.name}).insert(ignore_permissions=True)
     cap_leads.append(ld.name)
 
+frappe.set_user("crm.admin@dev.local")
+c_cap = camp_api.save(code="CAMP-P4-F09-CAP", title="Chiến dịch kiểm tra cap & user khóa", status="Active", selection={"leads": cap_leads})["campaign"]
+camp_api.save_rule(campaign=c_cap, user="staff.a@dev.local", weight=50, capacity_limit=0)
+camp_api.save_rule(campaign=c_cap, user="staff.b@dev.local", weight=50, capacity_limit=2)
+camp_api.save_rule(campaign=c_cap, user="staff.c@dev.local", weight=50, capacity_limit=0)
+
+frappe.set_user("Administrator")
 uc = frappe.get_doc("User", "staff.c@dev.local")
 uc.enabled = 0
 uc.save(ignore_permissions=True)
 frappe.db.commit()
 try:
     frappe.set_user("crm.admin@dev.local")
-    c_cap = camp_api.save(code="CAMP-P4-F09-CAP", title="Chiến dịch kiểm tra cap & user khóa", status="Active", selection={"leads": cap_leads})["campaign"]
-    camp_api.save_rule(campaign=c_cap, user="staff.a@dev.local", weight=50, capacity_limit=0)
-    camp_api.save_rule(campaign=c_cap, user="staff.b@dev.local", weight=50, capacity_limit=2)
-    camp_api.save_rule(campaign=c_cap, user="staff.c@dev.local", weight=50, capacity_limit=0)
     pr_cap = dist_api.preview(campaign=c_cap, idempotency_key="p4-f09-prev")
     ex1 = dist_svc.execute(pr_cap["preview_id"], expected_rule_version=pr_cap["rule_version"], idempotency_key="p4-f09-exec", actor="crm.admin@dev.local")
     # P4-F10: Retry execute with same preview_id / idempotency_key -> 0 duplicate Work Items

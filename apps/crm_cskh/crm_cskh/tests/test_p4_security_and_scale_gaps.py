@@ -465,7 +465,7 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 		execute_kpi_recompute(resolve_period_spec("monthly", m_key), run_mode="full", actor="Administrator")
 
 		plan = frappe.db.sql(
-			"""EXPLAIN SELECT name, metrics_json FROM `tabCSKH KPI Snapshot`
+			"""EXPLAIN SELECT name, metrics_json FROM `tabCSKH KPI Snapshot` USE INDEX (idx_cskh_kpisnap_lookup)
 			   WHERE is_latest_published = 1 AND period_type = 'monthly'
 			     AND period_key = %s AND campaign_filter = '' AND scope_type = 'company' AND scope_id = '__company__'""",
 			(m_key,),

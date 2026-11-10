@@ -366,7 +366,7 @@ def run_live_verification(
             "frappe.set_user('staff.a@dev.local')\n"
             "due_str = add_days(now_datetime(), 1).strftime('%Y-%m-%d 11:00:00')\n"
             "att = wf_api.record_attempt(\n"
-            "    work_item=_IN['wi'], channel='phone_call', outcome_code='connected_callback',\n"
+            "    work_item=_IN['wi'], channel='phone_call', outcome_code='connected_interested',\n"
             "    note='Ghi chú trước bàn giao S13', followup_due_at=due_str, followup_title='Callback S13', idempotency_key='g11-s13-pre'\n"
             ")\n"
             "frappe.set_user('Administrator')\n"
