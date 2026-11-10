@@ -1,25 +1,27 @@
 {
-  "timestamp_utc": "2026-11-10T04:34:18Z",
-  "evidence_scope": "ISOLATED_STAGING_DR_HTTPS_FULL_REHEARSAL",
+  "timestamp_utc": "2026-11-10T05:59:28Z",
+  "evidence_scope": "ISOLATED_STAGING_DR_HTTPS_CANDIDATE_VERIFICATION",
+  "candidate_verification_only": true,
+  "promoted_to_production": false,
   "owner_live_site_touched": false,
-  "run_id": "ci-42755793371",
-  "project_name": "crm-cskh-dr-https-ci-42755793371",
+  "run_id": "ci-42764755609",
+  "project_name": "crm-cskh-dr-https-ci-42764755609",
   "site_name": "staging-dr-uat.crm-internal.localhost",
   "http_port": 18081,
   "https_port": 18443,
-  "app_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
+  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
   "status": "PASS",
   "phases": {
     "bootstrap_and_https_smoke": {
       "status": "PASS",
-      "duration_seconds": 47.59,
+      "duration_seconds": 87.05,
       "tls_provisioning": {
-        "cert_volume": "crm-cskh-dr-https-ci-42755793371_cert_data",
+        "cert_volume": "crm-cskh-dr-https-ci-42764755609_cert_data",
         "ca_key_deleted_immediately": true,
         "server_key_mode": "0o600"
       },
       "https_smoke": {
-        "timestamp_utc": "2026-11-10T04:35:05Z",
+        "timestamp_utc": "2026-11-10T06:00:53Z",
         "mode": "dr-https",
         "site_name": "staging-dr-uat.crm-internal.localhost",
         "connect_host": "127.0.0.1",
@@ -27,47 +29,59 @@
         "https_port": 18443,
         "frappe_site_name": "staging-dr-uat.crm-internal.localhost",
         "extra_compose_files": [],
-        "app_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
+        "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
         "checks": {
           "container_digest_parity": {
-            "expected_app_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
-            "expected_sha256": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
+            "expected_app_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+            "expected_sha256": "sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
             "missing_services": [],
             "inspected_services": {
               "backend": {
-                "container": "crm-cskh-dr-https-ci-42755793371-backend-1",
-                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
-                "repo_digests": [],
+                "container": "crm-cskh-dr-https-ci-42764755609-backend-1",
+                "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+                ],
                 "matched": true
               },
               "frontend": {
-                "container": "crm-cskh-dr-https-ci-42755793371-frontend-1",
-                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
-                "repo_digests": [],
+                "container": "crm-cskh-dr-https-ci-42764755609-frontend-1",
+                "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+                ],
                 "matched": true
               },
               "websocket": {
-                "container": "crm-cskh-dr-https-ci-42755793371-websocket-1",
-                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
-                "repo_digests": [],
+                "container": "crm-cskh-dr-https-ci-42764755609-websocket-1",
+                "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+                ],
                 "matched": true
               },
               "queue-short": {
-                "container": "crm-cskh-dr-https-ci-42755793371-queue-short-1",
-                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
-                "repo_digests": [],
+                "container": "crm-cskh-dr-https-ci-42764755609-queue-short-1",
+                "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+                ],
                 "matched": true
               },
               "queue-long": {
-                "container": "crm-cskh-dr-https-ci-42755793371-queue-long-1",
-                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
-                "repo_digests": [],
+                "container": "crm-cskh-dr-https-ci-42764755609-queue-long-1",
+                "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+                ],
                 "matched": true
               },
               "scheduler": {
-                "container": "crm-cskh-dr-https-ci-42755793371-scheduler-1",
-                "running_image_id": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
-                "repo_digests": [],
+                "container": "crm-cskh-dr-https-ci-42764755609-scheduler-1",
+                "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+                ],
                 "matched": true
               }
             },
@@ -86,7 +100,7 @@
             "port": 18443,
             "tls_version": "TLSv1.3",
             "cipher": "TLS_AES_128_GCM_SHA256",
-            "not_after_utc": "2026-12-10T04:34:18Z",
+            "not_after_utc": "2026-12-10T05:59:28Z",
             "days_remaining": 29,
             "expiry_ok": true
           },
@@ -133,12 +147,184 @@
         "status": "PASS"
       }
     },
+    "runtime_isolation_and_digest_audit": {
+      "schema_version": "cskh-p4-staging-dr-runtime-audit-v1",
+      "timestamp_utc": "2026-11-10T06:00:56Z",
+      "status": "PASS",
+      "candidate_verification_only": true,
+      "promoted_to_production": false,
+      "owner_live_site_touched": false,
+      "project_name": "crm-cskh-dr-https-ci-42764755609",
+      "site_name": "staging-dr-uat.crm-internal.localhost",
+      "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+      "compose_git_tree_sha": "33eee03f392da7c1926a76d7b60052d8f1727da0",
+      "rendered_compose_config_sha256": "ddb80a87b246a4fc0360eabf982482b643485ea0ea0e9f4a9800fe938b2b22ec",
+      "container_digest_parity": {
+        "expected_app_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+        "expected_sha256": "sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+        "missing_services": [],
+        "inspected_services": {
+          "backend": {
+            "container": "crm-cskh-dr-https-ci-42764755609-backend-1",
+            "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+            ],
+            "matched": true
+          },
+          "frontend": {
+            "container": "crm-cskh-dr-https-ci-42764755609-frontend-1",
+            "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+            ],
+            "matched": true
+          },
+          "websocket": {
+            "container": "crm-cskh-dr-https-ci-42764755609-websocket-1",
+            "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+            ],
+            "matched": true
+          },
+          "queue-short": {
+            "container": "crm-cskh-dr-https-ci-42764755609-queue-short-1",
+            "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+            ],
+            "matched": true
+          },
+          "queue-long": {
+            "container": "crm-cskh-dr-https-ci-42764755609-queue-long-1",
+            "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+            ],
+            "matched": true
+          },
+          "scheduler": {
+            "container": "crm-cskh-dr-https-ci-42764755609-scheduler-1",
+            "running_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+            ],
+            "matched": true
+          }
+        },
+        "mismatches": [],
+        "pass": true
+      },
+      "networks": {
+        "pass": true,
+        "edge_net_present": true,
+        "app_net_internal_true": true,
+        "data_net_internal_true": true,
+        "zero_owner_network_overlap": true,
+        "inspected_networks": [
+          {
+            "name": "crm-cskh-dr-https-ci-42764755609_app_net",
+            "driver": "bridge",
+            "internal": true,
+            "attached_containers": [
+              "crm-cskh-dr-https-ci-42764755609-backend-1",
+              "crm-cskh-dr-https-ci-42764755609-frontend-1",
+              "crm-cskh-dr-https-ci-42764755609-websocket-1"
+            ]
+          },
+          {
+            "name": "crm-cskh-dr-https-ci-42764755609_data_net",
+            "driver": "bridge",
+            "internal": true,
+            "attached_containers": [
+              "crm-cskh-dr-https-ci-42764755609-backend-1",
+              "crm-cskh-dr-https-ci-42764755609-db-1",
+              "crm-cskh-dr-https-ci-42764755609-queue-long-1",
+              "crm-cskh-dr-https-ci-42764755609-queue-short-1",
+              "crm-cskh-dr-https-ci-42764755609-redis-cache-1",
+              "crm-cskh-dr-https-ci-42764755609-redis-queue-1",
+              "crm-cskh-dr-https-ci-42764755609-scheduler-1",
+              "crm-cskh-dr-https-ci-42764755609-websocket-1"
+            ]
+          },
+          {
+            "name": "crm-cskh-dr-https-ci-42764755609_edge_net",
+            "driver": "bridge",
+            "internal": false,
+            "attached_containers": [
+              "crm-cskh-dr-https-ci-42764755609-frontend-1",
+              "crm-cskh-dr-https-ci-42764755609-proxy-1",
+              "crm-cskh-dr-https-ci-42764755609-websocket-1"
+            ]
+          }
+        ]
+      },
+      "ports": {
+        "pass": true,
+        "proxy_loopback_ports": [
+          18081,
+          18443
+        ],
+        "non_proxy_published_ports": [],
+        "wildcard_binds": [],
+        "by_service": {
+          "backend": [],
+          "db": [],
+          "frontend": [],
+          "proxy": [
+            {
+              "bind_ip": "127.0.0.1",
+              "published_port": 18081,
+              "target_port": 80,
+              "protocol": "tcp"
+            },
+            {
+              "bind_ip": "127.0.0.1",
+              "published_port": 18443,
+              "target_port": 443,
+              "protocol": "tcp"
+            }
+          ],
+          "queue-long": [],
+          "queue-short": [],
+          "redis-cache": [],
+          "redis-queue": [],
+          "scheduler": [],
+          "websocket": []
+        }
+      },
+      "volumes": {
+        "pass": true,
+        "project_scoped_volumes": [
+          "crm-cskh-dr-https-ci-42764755609_cert_data",
+          "crm-cskh-dr-https-ci-42764755609_db_data",
+          "crm-cskh-dr-https-ci-42764755609_logs",
+          "crm-cskh-dr-https-ci-42764755609_redis_queue_data",
+          "crm-cskh-dr-https-ci-42764755609_sites"
+        ]
+      },
+      "secrets": {
+        "pass": true,
+        "host_secret_file_metadata": {
+          "exists": true,
+          "ends_with_lf_only": true,
+          "contains_cr": false,
+          "non_empty": true,
+          "mode_octal": "0o600",
+          "mode_ok": true,
+          "byte_length": 33
+        },
+        "db_secret_mounted_at_run_secrets_db_password": true,
+        "db_has_plaintext_root_password_env": false
+      }
+    },
     "migration_x2_and_reconcile": {
       "status": "PASS",
-      "migrate_run_1_seconds": 8.147,
-      "migrate_run_2_seconds": 8.0,
+      "migrate_run_1_seconds": 13.964,
+      "migrate_run_2_seconds": 14.815,
       "reconciliation": {
-        "timestamp_utc": "2026-11-10T04:35:44Z",
+        "timestamp_utc": "2026-11-10T06:01:52Z",
         "status": "PASS",
         "violation_count": 0,
         "violations": [],
@@ -383,36 +569,69 @@
     },
     "https_browser_chromium_uat_and_security": {
       "status": "PASS",
-      "duration_seconds": 50.51,
+      "duration_seconds": 77.22,
       "browser_engine": "Playwright Headless Chromium",
       "transport": "HTTPS_TLS_VERIFIED_IGNORE_HTTPS_ERRORS_FALSE",
       "administrator_used_for_business_journeys": false,
-      "cases_total": 10,
-      "cases_passed": 10,
+      "cases_total": 11,
+      "cases_passed": 11,
       "failed_cases": []
     },
     "worker_restart_and_cron_retry": {
       "status": "PASS",
-      "restart_recovery_seconds": 16.68,
+      "operator_actions_log": [
+        {
+          "timestamp_utc": "2026-11-10T06:03:34Z",
+          "action": "docker kill -s KILL 8a846fc32867 (service=queue-short)",
+          "post_kill_status": "exited",
+          "exit_code": 137
+        },
+        {
+          "timestamp_utc": "2026-11-10T06:03:47Z",
+          "action": "docker compose up -d --no-build --force-recreate queue-short",
+          "outcome": "queue-short healthy with RestartCount=0"
+        },
+        {
+          "timestamp_utc": "2026-11-10T06:04:05Z",
+          "action": "docker compose restart queue-short queue-long scheduler",
+          "recovery_seconds": 17.19
+        }
+      ],
+      "worker_mid_job_sigkill": {
+        "executed": true,
+        "service_killed": "queue-short",
+        "container_id_short": "8a846fc32867",
+        "signal": "SIGKILL",
+        "kill_exit_code": 137,
+        "period_key": "2026-10",
+        "picked_up_before_kill": true,
+        "published_before": "vhmtls9339",
+        "published_after_recovery": [
+          "1d63suijof"
+        ],
+        "reconcile_ok": true,
+        "pass": true
+      },
+      "restart_recovery_seconds": 17.19,
       "cron_retry_x2_counts": {
         "after_run_1": {
           "sla_obligations": 68,
           "latest_published_kpi_snapshots": 332,
-          "total_append_only_kpi_snapshots": 1047,
+          "total_append_only_kpi_snapshots": 1083,
           "dup_sla_keys": 0,
           "dup_attempt_keys": 0
         },
         "after_run_2": {
           "sla_obligations": 68,
           "latest_published_kpi_snapshots": 332,
-          "total_append_only_kpi_snapshots": 1155,
+          "total_append_only_kpi_snapshots": 1191,
           "dup_sla_keys": 0,
           "dup_attempt_keys": 0
         }
       },
       "idempotent_across_retry": true,
       "post_restart_health_probe": {
-        "timestamp_utc": "2026-11-10T04:37:07Z",
+        "timestamp_utc": "2026-11-10T06:04:09Z",
         "environment": "staging",
         "site": "staging-dr-uat.crm-internal.localhost",
         "extra_compose_files": [],
@@ -422,14 +641,14 @@
           "missing_daemon_services": [],
           "unhealthy_services": [],
           "scheduler_running_instances": 1,
-          "scheduler_uptime_seconds": 7,
+          "scheduler_uptime_seconds": 9,
           "restarts_or_oom": []
         },
         "disk": {
           "total_bytes": 154894188544,
-          "used_bytes": 60541952000,
-          "free_bytes": 94335459328,
-          "used_percent": 39.09,
+          "used_bytes": 55857917952,
+          "free_bytes": 99019493376,
+          "used_percent": 36.06,
           "warn_threshold_pct": 80.0,
           "critical_threshold_pct": 90.0,
           "level": "OK"
@@ -437,7 +656,7 @@
         "queues_and_scheduler": {
           "status": "PASS",
           "scheduler_disabled": false,
-          "scheduler_uptime_seconds": 7,
+          "scheduler_uptime_seconds": 9,
           "startup_grace_override_seconds": 0,
           "queues": {
             "default": {
@@ -534,14 +753,14 @@
           },
           "qa_snapshot_audit": {
             "false_zero_qa_snapshots": 0,
-            "qa_zero_denom_null_snapshots": 1155,
-            "total_snapshots": 1155
+            "qa_zero_denom_null_snapshots": 1191,
+            "total_snapshots": 1191
           }
         },
         "backup_freshness_and_offsite": null,
         "data_loss_window_delta": null,
         "alert_preflight": {
-          "timestamp_utc": "2026-11-10T04:37:06Z",
+          "timestamp_utc": "2026-11-10T06:04:07Z",
           "status": "BLOCKED",
           "operator_contact_configured": false,
           "webhook_https_configured": false,
@@ -565,7 +784,7 @@
       "status": "PASS",
       "operator_decision_tree_log": [
         {
-          "timestamp_utc": "2026-11-10T04:37:10Z",
+          "timestamp_utc": "2026-11-10T06:04:14Z",
           "step_id": "DT-01-TIER1-FEATURE-DISABLE",
           "p4_15_2_node": "Is the defect isolated to P3 reporting/SLA without PII leak or core P1/P2 corruption?",
           "operator_decision": "YES -> Apply Tier 1 feature flag disable (cskh_p3_enabled=false) while preserving P1/P2 writes",
@@ -578,15 +797,15 @@
           }
         },
         {
-          "timestamp_utc": "2026-11-10T04:37:36Z",
+          "timestamp_utc": "2026-11-10T06:04:48Z",
           "step_id": "DT-02-SCHEMA-COMPATIBILITY-AND-TIER3-IMAGE-ROLLBACK",
           "p4_15_2_node": "Is the defect in app/OS code while DB schema is Class A/B backward-compatible?",
           "operator_decision": "YES -> Roll back APP_IMAGE from N (15.126.0) to N-1 (15.123.1) without touching MariaDB schema",
           "executed_action": "Update APP_IMAGE to N-1 -> docker compose up -d --no-build --force-recreate 6 app services -> bench clear-cache -> verify-digest & INV-01..06",
           "outcome": {
             "executed_real_n_minus_1_rollback": true,
-            "candidate_n_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
-            "rolled_back_n_minus_1_image": "sha256:668d370259296f752a1ecfe6f4629bd99ca444272dad06bf59f24ad8fc464313",
+            "candidate_n_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+            "rolled_back_n_minus_1_image": "sha256:3039376f8926ab55dac49f89978d52ecf7e0ac5d67c462e608ed09d6807e5a10",
             "frappe_version_before_on_n": "15.126.0",
             "frappe_version_after_on_n_minus_1": "15.123.1",
             "db_schema_downgraded": false,
@@ -596,12 +815,12 @@
             "n_minus_1_staff_ui_http": 200,
             "n_minus_1_bod_overview_http": 200,
             "n_minus_1_invariants_status": "PASS",
-            "rollback_rto_seconds": 25.32,
+            "rollback_rto_seconds": 32.6,
             "pass": true
           }
         },
         {
-          "timestamp_utc": "2026-11-10T04:39:04Z",
+          "timestamp_utc": "2026-11-10T06:06:48Z",
           "step_id": "DT-03-CLASS-D-OR-CORRUPTION-TIER4-RESTORE",
           "p4_15_2_node": "If schema/data is incompatible and no safe forward-fix is immediately available, how is Tier 4 restore executed?",
           "operator_decision": "Account pre-restore data-loss window (--since-utc) -> stop workers/scheduler -> bench restore DB+public+private files -> migrator -> verify 8/8 post-restore deltas == 0 & INV-01..06 == 0",
@@ -609,7 +828,7 @@
           "outcome": {
             "pre_restore_new_leads": 1,
             "all_post_restore_deltas_zero": true,
-            "restore_and_migrate_seconds": 31.95,
+            "restore_and_migrate_seconds": 45.38,
             "post_restore_health": "PASS",
             "post_restore_https_smoke": "PASS",
             "pass": true
@@ -631,8 +850,8 @@
       },
       "tier3_real_n_to_n_minus_1_image_rollback": {
         "executed_real_n_minus_1_rollback": true,
-        "candidate_n_image": "sha256:4e03f757f9827441561a901452ac6d5422bdb26164bccac88dd81c178c214ddf",
-        "rolled_back_n_minus_1_image": "sha256:668d370259296f752a1ecfe6f4629bd99ca444272dad06bf59f24ad8fc464313",
+        "candidate_n_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+        "rolled_back_n_minus_1_image": "sha256:3039376f8926ab55dac49f89978d52ecf7e0ac5d67c462e608ed09d6807e5a10",
         "frappe_version_before_on_n": "15.126.0",
         "frappe_version_after_on_n_minus_1": "15.123.1",
         "db_schema_downgraded": false,
@@ -642,7 +861,7 @@
         "n_minus_1_staff_ui_http": 200,
         "n_minus_1_bod_overview_http": 200,
         "n_minus_1_invariants_status": "PASS",
-        "rollback_rto_seconds": 25.32,
+        "rollback_rto_seconds": 32.6,
         "pass": true
       },
       "tier3_forward_fix_decision_guard": {
@@ -660,7 +879,7 @@
           "new_or_updated_work_items": 0,
           "new_published_kpi_runs": 0,
           "new_sla_breaches": 0,
-          "since_utc": "2026-11-10T04:38:08Z"
+          "since_utc": "2026-11-10T06:05:33Z"
         },
         "post_restore_delta_since_backup": {
           "new_assignment_events": 0,
@@ -671,10 +890,10 @@
           "new_or_updated_work_items": 0,
           "new_published_kpi_runs": 0,
           "new_sla_breaches": 0,
-          "since_utc": "2026-11-10T04:38:08Z"
+          "since_utc": "2026-11-10T06:05:33Z"
         },
         "all_post_restore_deltas_zero": true,
-        "end_to_end_restore_and_migrate_seconds": 31.95,
+        "end_to_end_restore_and_migrate_seconds": 45.38,
         "post_restore_health_status": "PASS",
         "post_restore_https_smoke_status": "PASS",
         "pass": true

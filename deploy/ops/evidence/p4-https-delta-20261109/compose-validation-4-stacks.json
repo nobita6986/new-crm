@@ -10,31 +10,31 @@
       "project_name": "crm-cskh-prod",
       "site_name": "crm.example.invalid",
       "services_default": [
-        "proxy",
         "db",
         "redis-cache",
         "redis-queue",
         "configurator",
-        "queue-long",
         "backend",
         "websocket",
         "frontend",
-        "scheduler",
-        "queue-short"
+        "proxy",
+        "queue-long",
+        "queue-short",
+        "scheduler"
       ],
       "services_with_migrate_profile": [
         "db",
         "redis-cache",
         "redis-queue",
         "configurator",
+        "migrator",
+        "queue-short",
         "backend",
         "websocket",
         "frontend",
-        "migrator",
         "proxy",
-        "queue-short",
-        "scheduler",
-        "queue-long"
+        "queue-long",
+        "scheduler"
       ],
       "app_services_mounting_named_logs_volume": [
         "backend",
@@ -77,27 +77,27 @@
         "redis-queue",
         "db",
         "configurator",
+        "scheduler",
         "websocket",
         "backend",
         "frontend",
-        "proxy",
-        "queue-short",
         "queue-long",
-        "scheduler"
+        "queue-short",
+        "proxy"
       ],
       "services_with_migrate_profile": [
         "redis-queue",
         "db",
         "redis-cache",
         "configurator",
-        "scheduler",
-        "backend",
         "websocket",
+        "backend",
         "frontend",
+        "queue-short",
         "migrator",
         "proxy",
-        "queue-short",
-        "queue-long"
+        "queue-long",
+        "scheduler"
       ],
       "app_services_mounting_named_logs_volume": [
         "backend",
@@ -136,31 +136,31 @@
       "project_name": "crm-cskh-p4-smoke",
       "site_name": "p4-smoke.localhost",
       "services_default": [
+        "proxy",
+        "db",
         "redis-cache",
         "redis-queue",
-        "db",
         "configurator",
         "queue-long",
-        "websocket",
         "queue-short",
-        "scheduler",
         "backend",
+        "websocket",
         "frontend",
-        "proxy"
+        "scheduler"
       ],
       "services_with_migrate_profile": [
+        "db",
         "redis-cache",
         "redis-queue",
-        "db",
         "configurator",
-        "websocket",
         "backend",
+        "websocket",
         "frontend",
-        "migrator",
         "proxy",
-        "queue-long",
         "queue-short",
-        "scheduler"
+        "scheduler",
+        "migrator",
+        "queue-long"
       ],
       "app_services_mounting_named_logs_volume": [
         "backend",
@@ -197,31 +197,31 @@
       "project_name": "crm-cskh-staging-dr-https",
       "site_name": "staging-dr-uat.crm-internal.localhost",
       "services_default": [
-        "redis-queue",
         "db",
         "redis-cache",
+        "redis-queue",
         "configurator",
         "scheduler",
         "websocket",
         "backend",
         "frontend",
-        "queue-short",
         "proxy",
-        "queue-long"
+        "queue-long",
+        "queue-short"
       ],
       "services_with_migrate_profile": [
         "db",
         "redis-cache",
         "redis-queue",
         "configurator",
-        "queue-long",
-        "queue-short",
-        "scheduler",
-        "websocket",
         "backend",
+        "websocket",
         "frontend",
         "migrator",
-        "proxy"
+        "proxy",
+        "queue-long",
+        "queue-short",
+        "scheduler"
       ],
       "app_services_mounting_named_logs_volume": [
         "backend",

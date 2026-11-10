@@ -6,6 +6,7 @@
       "p1.yml",
       "p2.yml",
       "p3.yml",
+      "p4-batch2-delta.yml",
       "p4-candidate-verify.yml",
       "p4-ci.yml",
       "p4-ops-dr-rehearsal.yml",
@@ -27,7 +28,7 @@
     "verified_evidence_checksums": 10,
     "system_python_constraints_count": 22,
     "bench_python_constraints_count": 154,
-    "scanned_p4_files": 109,
+    "scanned_p4_files": 118,
     "errors": [],
     "passed": true
   },

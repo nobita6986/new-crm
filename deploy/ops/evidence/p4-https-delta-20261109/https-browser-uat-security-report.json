@@ -1,8 +1,8 @@
 {
   "schema_version": "cskh-p4-https-browser-uat-security-v1",
-  "timestamp_utc": "2026-11-10T04:36:48Z",
+  "timestamp_utc": "2026-11-10T06:03:32Z",
   "status": "PASS",
-  "duration_seconds": 50.51,
+  "duration_seconds": 77.22,
   "browser_engine": "Playwright Headless Chromium",
   "transport": "HTTPS_TLS_VERIFIED_IGNORE_HTTPS_ERRORS_FALSE",
   "viewport": "1366x768",
@@ -12,7 +12,7 @@
     "platform": "posix",
     "certutil_available": true,
     "nss_db": "/home/runner/.pki/nssdb",
-    "nickname": "cskh-dr-ca-1794285357",
+    "nickname": "cskh-dr-ca-1794290534",
     "nss_imported": true
   },
   "administrator_used_for_business_journeys": false,
@@ -239,8 +239,8 @@
       "pass": true
     }
   },
-  "cases_total": 10,
-  "cases_passed": 10,
+  "cases_total": 11,
+  "cases_passed": 11,
   "cases": [
     {
       "acceptance_id": "G10-TLS-COOKIE / F01 / F02",
@@ -420,6 +420,24 @@
         "staff_c_after_disable_page_http": 403,
         "outside_user_http": 403,
         "guest_page_http": 403
+      }
+    },
+    {
+      "acceptance_id": "P4-ROLE-CHANGE / S11-REVOCATION / G11,G16",
+      "gate": "G10,G11,G16",
+      "actor": "Leader A (Sales Manager -> Sales User -> Sales Manager)",
+      "expected": "Demoting Leader A to Sales User & revoking team ownership immediately blocks /cskh/team-quality (403) and team/employee reporting APIs (403) in active browser session while keeping Sales User /cskh/my-customers (200); restoring role immediately recovers 200",
+      "actual": "before(ui=200,api=200) -> demoted(team_ui=403,team_api=403,emp_api=403,staff_ui=200) -> restored(ui=200,api=200)",
+      "status": "PASS",
+      "redacted_evidence": {
+        "before_team_ui_http": 200,
+        "before_team_api_http": 200,
+        "demoted_team_ui_http": 403,
+        "demoted_team_comparison_api_http": 403,
+        "demoted_employee_quality_api_http": 403,
+        "demoted_sales_user_mylist_http": 200,
+        "restored_team_ui_http": 200,
+        "restored_team_api_http": 200
       }
     }
   ]

@@ -1,6 +1,6 @@
 {
   "schema_version": "cskh-p4-gate-acceptance-evidence-map-v1",
-  "generated_at_utc": "2026-11-10T04:46:03Z",
+  "generated_at_utc": "2026-11-10T06:10:01Z",
   "baseline_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
   "g08_vps_restore_preserved_untouched": true,
   "live_vps_cutover_executed": false,
@@ -29,7 +29,8 @@
       "evidence_paths": [
         "deploy/images/release-lock.json",
         "deploy/ops/evidence/p4-candidate-and-s1-20261109/candidate-provenance.json",
-        "deploy/ops/evidence/p4-candidate-and-s1-20261109/clean-site-verify.json"
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/clean-site-verify.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/candidate-registry-pull-inspect-receipt.json"
       ]
     },
     {
@@ -42,7 +43,8 @@
         "docs/p4/infra-inventory.md",
         "deploy/ops/evidence/p4-https-delta-20261109/compose-validation-4-stacks.json",
         "deploy/ops/evidence/p4-https-delta-20261109/pr-isolation-audit.json",
-        "deploy/ops/evidence/p4-vps-live-20261109/live-preservation-check.json"
+        "deploy/ops/evidence/p4-vps-live-20261109/live-preservation-check.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json"
       ]
     },
     {
@@ -71,7 +73,9 @@
       ],
       "evidence_paths": [
         "deploy/ops/evidence/p4-candidate-and-s1-20261109/ghcr-digest-promotion-attestation.json",
-        "deploy/ops/evidence/p4-candidate-and-s1-20261109/isolated-smoke-report.json"
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/isolated-smoke-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/candidate-registry-pull-inspect-receipt.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json"
       ]
     },
     {
@@ -117,7 +121,8 @@
       ],
       "evidence_paths": [
         "deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json",
-        "deploy/ops/evidence/p4-g07-g08-dr-20261109/g08-restore-drill-report.json"
+        "deploy/ops/evidence/p4-g07-g08-dr-20261109/g08-restore-drill-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/g08-candidate-digest-restore-report.json"
       ]
     },
     {
@@ -181,7 +186,8 @@
         "S15",
         "F20",
         "F21",
-        "F30"
+        "F30",
+        "P4-ROLE-CHANGE"
       ],
       "evidence_paths": [
         "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
@@ -418,5 +424,8 @@
   "t1a_https_browser_dr_commit_sha": "6c430c9334527c2dd80d354726ae4da45a3aa96f",
   "t1a_https_browser_dr_ci_run_id": 42755793371,
   "t1b_batch2_delta_commit_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
-  "t1b_batch2_delta_ci_run_id": 42754081275
+  "t1b_batch2_delta_ci_run_id": 42754081275,
+  "integrated_candidate_manifest": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
+  "verified_code_commit_sha": "012d45460857926430b4ef1d216404f7fa186a77",
+  "verified_ci_run_id": 42764755609
 }

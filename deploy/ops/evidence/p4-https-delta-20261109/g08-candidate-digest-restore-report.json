@@ -1,0 +1,257 @@
+{
+  "schema_version": "p4-offsite-restore-v2",
+  "status": "PASS",
+  "started_at_utc": "2026-11-10T05:55:35.875160+00:00",
+  "archive_sha256": "139aa7334b262c72e1dcc66e57f1d92ea00f082d62ea83b35bbf35073a5afe10",
+  "project": "crm-cskh-p4-restore-20261110055535-9bbc12",
+  "source_project": "crm-cskh-src-sim",
+  "images": {
+    "backend": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+    "db": "sha256:c1d04d5c27cfe84c85c8b11684d121b93df541ee2ccfdf62f72f2ac4ff37f762",
+    "redis-cache": "sha256:166f6f1437e3ae4bb78589379bc6e7937ea6e9fdd93fbb6cdf3a7fd509ca7c9e",
+    "frontend": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829"
+  },
+  "restored": {
+    "before_migrate": {
+      "counts": {
+        "CRM Lead": 1,
+        "CRM Deal": 0,
+        "CSKH Work Item": 0,
+        "CSKH Active Claim": 0,
+        "CSKH Assignment History": 0,
+        "CSKH Contact Attempt": 0,
+        "CSKH Attempt Correction": 0,
+        "CSKH SLA Obligation": 0,
+        "CSKH KPI Snapshot": 0,
+        "CSKH KPI Run": 0,
+        "CRM Form Script": 6,
+        "User": 2,
+        "Translation": 5,
+        "File": 2
+      },
+      "installed_apps": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ],
+      "table_sha256": {
+        "CRM Lead": "b885d7b61f86a48647275d227682f4a12f175da1eb5e90dd6d73531a97651b02",
+        "CRM Deal": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Work Item": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Active Claim": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Assignment History": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Contact Attempt": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Attempt Correction": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH SLA Obligation": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH KPI Snapshot": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH KPI Run": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CRM Form Script": "ae61c6c697013df5f76868d2a5e72591759edf50e9110876890ab4bcca8ae67b",
+        "User": "29c25cf8f052cf6e9ea067961e6562007203d962f8191d132150aa3f55877105",
+        "Translation": "e60f9cdc5e72fb7a7afbca46a78f804d917709d59087b88f8350cb7e26816130",
+        "File": "2a080d7b933116919ff3128932347267bcf99e83196039bffb9b314d1aec7d07"
+      },
+      "translation_rows": 5,
+      "translation_sha256": "a537a04f3726a50259916b1367d06d73f2bef06f0e4761f65148df8c87bc4a79",
+      "encrypted_credentials_decrypted": 0
+    },
+    "after_migrate": {
+      "counts": {
+        "CRM Lead": 1,
+        "CRM Deal": 0,
+        "CSKH Work Item": 0,
+        "CSKH Active Claim": 0,
+        "CSKH Assignment History": 0,
+        "CSKH Contact Attempt": 0,
+        "CSKH Attempt Correction": 0,
+        "CSKH SLA Obligation": 0,
+        "CSKH KPI Snapshot": 0,
+        "CSKH KPI Run": 0,
+        "CRM Form Script": 6,
+        "User": 2,
+        "Translation": 5,
+        "File": 2
+      },
+      "installed_apps": [
+        "frappe",
+        "crm",
+        "crm_cskh"
+      ],
+      "table_sha256": {
+        "CRM Lead": "b885d7b61f86a48647275d227682f4a12f175da1eb5e90dd6d73531a97651b02",
+        "CRM Deal": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Work Item": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Active Claim": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Assignment History": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Contact Attempt": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH Attempt Correction": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH SLA Obligation": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH KPI Snapshot": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CSKH KPI Run": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+        "CRM Form Script": "c992b42812cfcf9c7fac0016efe799ac5ef409701404345737d47a08b40f4d30",
+        "User": "29c25cf8f052cf6e9ea067961e6562007203d962f8191d132150aa3f55877105",
+        "Translation": "e60f9cdc5e72fb7a7afbca46a78f804d917709d59087b88f8350cb7e26816130",
+        "File": "2a080d7b933116919ff3128932347267bcf99e83196039bffb9b314d1aec7d07"
+      },
+      "translation_rows": 5,
+      "translation_sha256": "a537a04f3726a50259916b1367d06d73f2bef06f0e4761f65148df8c87bc4a79",
+      "invariants": {
+        "duplicate_active_leads": 0,
+        "owner_mismatch_active_work_items": 0,
+        "active_claim_count_mismatch": 0,
+        "duplicate_attempt_idempotency_keys": 0,
+        "unverified_marked_verified": 0,
+        "orphan_or_misassigned_open_followup_tasks": 0,
+        "duplicate_sla_idempotency_keys": 0,
+        "false_zero_qa_snapshots": 0
+      }
+    },
+    "migrate_x2_idempotent": true,
+    "migrate_seconds": [
+      4.663,
+      4.361
+    ],
+    "worker_phase_seconds": {
+      "new_site_init": 22.598,
+      "sql_and_files_restore_only": 3.166,
+      "pre_migrate_reconciliation": 2.75,
+      "migrate_run_1": 4.663,
+      "migrate_run_2": 4.361,
+      "post_migrate_reconciliation_and_invariants": 2.176
+    },
+    "translation_integrity": {
+      "status": "PASS",
+      "translation_override_rows": 5,
+      "translation_sha256": "a537a04f3726a50259916b1367d06d73f2bef06f0e4761f65148df8c87bc4a79",
+      "effective_overrides_verified": 5,
+      "core_vi_catalog_verified": true,
+      "errors": []
+    },
+    "encryption_key_evaluation": {
+      "state": "UNINITIALIZED_NO_ENCRYPTED_DATA",
+      "encryption_key_present_in_backup": false,
+      "restored_matches_backup": true,
+      "source_key_provenance": "explicitly_absent_at_source",
+      "auth_encrypted_rows": 0,
+      "key_loss_detected": false
+    },
+    "files": {
+      "public": {
+        "count": 1,
+        "total_bytes": 31,
+        "all_bytes_and_hashes_match": true,
+        "posix_owner_and_mode_ok": true
+      },
+      "private": {
+        "count": 1,
+        "total_bytes": 31,
+        "all_bytes_and_hashes_match": true,
+        "posix_owner_and_mode_ok": true
+      }
+    },
+    "site_config_mode_octal": "0o600",
+    "apps_order": [
+      "frappe",
+      "crm",
+      "crm_cskh"
+    ]
+  },
+  "restored_http_smoke": {
+    "via_nginx_frontend": true,
+    "guest_guards": {
+      "/login": {
+        "status": 200,
+        "bytes": 344095
+      },
+      "/crm": {
+        "status": 403,
+        "bytes": 329231
+      },
+      "/cskh": {
+        "status": 403,
+        "bytes": 329333
+      },
+      "/api/method/crm_cskh.api.health.ping": {
+        "status": 403,
+        "bytes": 2028
+      },
+      "/api/method/ping": {
+        "status": 200,
+        "bytes": 18
+      }
+    },
+    "authenticated": {
+      "login_status": 200,
+      "sid_httponly": true,
+      "crm_status": 200,
+      "cskh_status": 200,
+      "cskh_vi_heading_verified": true,
+      "forged_csrf_status": 400,
+      "valid_csrf_health_ping_status": 200
+    }
+  },
+  "positive_control": {
+    "scope": "disposable_clone_only",
+    "encryption_key_state": "PRESENT_VERIFIED",
+    "negative_control_missing_key_rejected": true,
+    "negative_control_decrypt_without_key_failed": true,
+    "negative_control_decrypt_exception": "ValidationError",
+    "encrypted_secret_fernet_round_trip": true,
+    "encrypted_secret_post_migrate_x2_verified": true,
+    "migrate_x2_idempotent": true,
+    "migrate_seconds": [
+      4.435,
+      4.427
+    ],
+    "public_file_bytes_and_sha256_match": true,
+    "private_file_bytes_and_sha256_match": true,
+    "posix_permissions_verified": true,
+    "business_data_counts_and_hashes_reconciled": true,
+    "http_file_access_boundary": {
+      "public_guest_http_status": 200,
+      "public_guest_bytes_and_sha256_match": true,
+      "private_guest_http_status": 403,
+      "private_guest_access_denied": true,
+      "private_authenticated_http_status": 200,
+      "private_authenticated_bytes_and_sha256_match": true,
+      "cskh_http_status": 200,
+      "valid_csrf_health_ping_status": 200
+    },
+    "openssl_aes256_round_trip_verified": true
+  },
+  "isolation": {
+    "containers_inspected": 4,
+    "host_ports": 0,
+    "shared_live_mounts": 0,
+    "network_internal": true,
+    "workers_started": 0,
+    "scheduler_started": false
+  },
+  "rto": {
+    "measurement_scope": "isolated_single_host_container_dr_drill_excluding_offsite_wan_transfer",
+    "sql_import_only_is_full_rto": false,
+    "phases_seconds": {
+      "archive_checksum_decrypt_and_extract": 0.128,
+      "isolated_stack_bootstrap_and_db_ready": 5.157,
+      "new_site_init": 22.598,
+      "sql_and_files_restore_only": 3.166,
+      "pre_migrate_reconciliation": 2.75,
+      "migrate_run_1": 4.663,
+      "migrate_run_2": 4.361,
+      "post_migrate_reconciliation_and_invariants": 2.176,
+      "web_service_start_and_authenticated_http_smoke": 4.475
+    },
+    "sql_and_files_restore_only_seconds": 3.166,
+    "measured_end_to_end_isolated_dr_rto_seconds": 50.1,
+    "positive_control_drill_seconds_excluded_from_rto": 23.165,
+    "total_drill_wall_seconds_with_positive_control": 73.298
+  },
+  "restore_and_verify_seconds": 73.298,
+  "cleanup_exit_code": 0,
+  "remaining_restore_resources": {
+    "container": [],
+    "volume": [],
+    "network": []
+  },
+  "live_containers_unchanged": true,
+  "finished_at_utc": "2026-11-10T05:56:59.815609+00:00"
+}
