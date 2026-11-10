@@ -1941,7 +1941,6 @@ def _try_fast_connected_rate_drilldown_page(
 	eff_as_of = get_datetime(as_of_dt or now_datetime())
 	start_dt = period.start_dt
 	end_dt_excl = period.end_dt_exclusive
-	cutoff_dt = min(end_dt_excl, eff_as_of)
 
 	if frappe.db.table_exists("CSKH Attempt Correction"):
 		corr_cnt = int(
@@ -2045,9 +2044,7 @@ def _try_fast_connected_rate_drilldown_page(
 			),
 			as_dict=False,
 		)
-		att_map = {
-			str(oe): (bool(h_att), bool(h_conn), bool(h_inv)) for oe, h_att, h_conn, h_inv in agg_rows
-		}
+		att_map = {str(oe): (bool(h_att), bool(h_conn), bool(h_inv)) for oe, h_att, h_conn, h_inv in agg_rows}
 		for iv in chunk:
 			h_att, h_conn, h_inv = att_map.get(iv.name, (False, False, False))
 			is_tried = h_att and not h_inv
