@@ -1267,6 +1267,10 @@ ensure_p2_indexes()
 ensure_p2_seeds()
 ensure_p3_indexes()
 ensure_p3_seeds()
+from crm_cskh.services import identity as _preflight_identity
+assert callable(getattr(_preflight_identity, "claim_canonical_identity", None)), "missing claim_canonical_identity"
+assert callable(getattr(distribution, "run_distribution_worker", None)), "missing run_distribution_worker"
+assert callable(getattr(p3_reporting, "get_metric_drilldown", None)), "missing get_metric_drilldown"
 frappe.db.set_single_value("System Settings", "time_zone", "Asia/Ho_Chi_Minh")
 if frappe.db.exists("DocType", "FCRM Settings"):
     frappe.db.set_single_value("FCRM Settings", "enable_sales_hierarchy", 1)
@@ -1995,7 +1999,7 @@ from crm_cskh.services import identity as identity_service
 abort_l1 = frappe.get_doc(
     {"doctype": "CRM Lead", "first_name": "Abort Guard 1", "mobile_no": "0969990001"}
 ).insert(ignore_permissions=True)
-identity_service.register("+84969990001", abort_l1.name)
+identity_service.claim_canonical_identity("+84969990001", abort_l1.name)
 frappe.db.commit()
 abort_camp = frappe.get_doc(
     {
@@ -2031,7 +2035,14 @@ ab_enq = distribution.enqueue_run(
 frappe.db.set_value("CSKH Campaign", abort_camp.name, "status", "Closed")
 frappe.db.commit()
 ab_res = distribution.run_distribution_worker(ab_enq["run_id"], actor="Administrator")
-abort_guard_verified = bool(ab_res and ab_res.get("status") == "failed" and int((ab_res.get("actual") or {}).get("created") or 0) == 0)
+ab_created = (
+    ab_res.get("created")
+    if isinstance(ab_res, dict) and ab_res.get("created") is not None
+    else ((ab_res.get("actual") or {}).get("created") if isinstance(ab_res, dict) else 0)
+)
+abort_guard_verified = bool(
+    ab_res and ab_res.get("status") == "failed" and int(ab_created or 0) == 0
+)
 
 # 7. Direct Redis RQ 50-job burst queue lag measurement on dedicated `queue-short`
 from frappe.utils.background_jobs import generate_qname
@@ -2170,7 +2181,11 @@ out = {
             "preview_within_60s_reference": dist_preview_ms <= 60_000.0,
             "execute_and_worker_drain_ms": dist_exec_ms,
             "final_run_status": dist_run_status,
-            "created_work_items": (r_info.get("actual") or {}).get("created"),
+            "created_work_items": (
+                r_info.get("created")
+                if r_info.get("created") is not None
+                else (r_info.get("actual") or {}).get("created")
+            ),
             "duplicate_work_items": dist_dup_leads,
             "double_submit_idempotent": double_submit_idempotent,
             "abort_cancel_guard_verified": abort_guard_verified,

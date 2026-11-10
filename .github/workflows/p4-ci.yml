@@ -4,6 +4,15 @@ on:
   workflow_dispatch:
   push:
     branches: [main, 'codex/p4-t1b-*']
+    paths:
+      - 'apps/**'
+      - 'deploy/images/**'
+      - 'deploy/release/python-constraints.txt'
+      - 'deploy/release/system-python-constraints.txt'
+      - 'deploy/release/cve-exceptions.json'
+      - 'deploy/release/evaluate_security_scan.py'
+      - 'deploy/release/generate_sbom.py'
+      - 'deploy/release/release_manifest.py'
   pull_request:
     branches: [main, 'codex/p4-*']
 
