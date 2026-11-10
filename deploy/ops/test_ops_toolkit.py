@@ -1372,10 +1372,78 @@ class OpsToolkitTests(unittest.TestCase):
         self.assertEqual(rel_manifest["promotion_governance"]["production_promotion_status"], "BLOCKED")
         self.assertEqual(rel_manifest["promotion_governance"]["approved_by"], [])
 
+        for i in range(1, 17):
+            code = f"P4-8.4-{i:02d}"
+            self.assertIn(code, sec_doc, f"Missing {code} in security-review.md")
+
+        infra_doc = (repo_root / "docs" / "p4" / "infra-inventory.md").read_text(encoding="utf-8")
+        for req_tok in (
+            "COMPOSE_PROJECT_NAME",
+            "SITE_NAME",
+            "networks",
+            "ports",
+            "volumes",
+            "secrets",
+            "crm-cskh-p4-smoke",
+            "crm-cskh-staging-dr-https",
+            "crm-cskh-vps-staging",
+            "crm-cskh-prod",
+        ):
+            self.assertIn(req_tok, infra_doc, f"Missing G03 token {req_tok} in infra-inventory.md")
+
         parsed_mig = dr_mod.build_parser().parse_args(
             ["rehearse-migration-x2", "--state-dir", "/tmp/dr-state"]
         )
         self.assertEqual(parsed_mig.command, "rehearse-migration-x2")
+        parsed_full = dr_mod.build_parser().parse_args(
+            [
+                "full-rehearsal",
+                "--app-image",
+                "sha256:" + ("a" * 64),
+                "--n-minus-1-image",
+                "sha256:" + ("b" * 64),
+                "--browser-report-out",
+                "/tmp/browser.json",
+                "--out",
+                "/tmp/full.json",
+            ]
+        )
+        self.assertEqual(parsed_full.n_minus_1_image, "sha256:" + ("b" * 64))
+
+        import run_https_browser_uat_and_security as brw_mod
+
+        for _route, actor_key in brw_mod.AUTHORIZED_ROUTE_ACTORS:
+            self.assertNotIn("administrator", actor_key.lower())
+        parsed_brw = brw_mod.build_parser().parse_args(
+            [
+                "--env-file",
+                "/tmp/dr.env",
+                "--ca-crt",
+                "/tmp/ca.crt",
+                "--seed-info-json",
+                "/tmp/seed.json",
+                "--out",
+                "/tmp/brw-out.json",
+            ]
+        )
+        self.assertEqual(parsed_brw.connect_host, "127.0.0.1")
+
+        # Separate G07 and G19 gate audit artifacts must both exist and report BLOCKED honestly
+        g07_doc = json.loads(
+            (repo_root / "deploy" / "ops" / "evidence" / "p4-https-delta-20261109" / "g07-gate-vps-audit.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        g19_doc = json.loads(
+            (repo_root / "deploy" / "ops" / "evidence" / "p4-https-delta-20261109" / "g19-gate-vps-audit.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(g07_doc["gate"], "G07")
+        self.assertEqual(g07_doc["gate_g07_status"], "BLOCKED")
+        self.assertEqual(g19_doc["gate"], "G19")
+        self.assertEqual(g19_doc["gate_g19_status"], "BLOCKED")
+        self.assertFalse(g19_doc["external_alerts_sent"])
 
 
 if __name__ == "__main__":

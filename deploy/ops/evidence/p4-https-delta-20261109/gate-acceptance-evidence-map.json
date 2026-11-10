@@ -1,0 +1,250 @@
+{
+  "schema_version": "cskh-p4-gate-acceptance-evidence-map-v1",
+  "generated_at_utc": "2026-11-10T02:13:00Z",
+  "baseline_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
+  "g08_vps_restore_preserved_untouched": true,
+  "live_vps_cutover_executed": false,
+  "gates": [
+    {
+      "gate": "G01",
+      "status": "PASS",
+      "acceptance_ids": ["P0-EXIT", "P1-EXIT", "P2-EXIT", "P3-EXIT"],
+      "evidence_paths": [
+        "docs/p4/entry-audit.md",
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/diff-impact-verification-summary.json"
+      ]
+    },
+    {
+      "gate": "G02",
+      "status": "PASS",
+      "acceptance_ids": ["P4-01-IMAGE-LOCK", "CLEAN-SITE-60"],
+      "evidence_paths": [
+        "deploy/images/release-lock.json",
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/candidate-provenance.json",
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/clean-site-verify.json"
+      ]
+    },
+    {
+      "gate": "G03",
+      "status": "PASS",
+      "acceptance_ids": ["P4-01-ISOLATION-6DIM"],
+      "evidence_paths": [
+        "docs/p4/infra-inventory.md",
+        "deploy/ops/evidence/p4-https-delta-20261109/compose-validation-4-stacks.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/pr-isolation-audit.json",
+        "deploy/ops/evidence/p4-vps-live-20261109/live-preservation-check.json"
+      ]
+    },
+    {
+      "gate": "G04",
+      "status": "BLOCKED",
+      "acceptance_ids": ["P4-02-SBOM-SCAN"],
+      "blocker_ids": ["UPSTREAM-DEBIAN13-3-UNFIXED-CVES"],
+      "evidence_paths": [
+        "docs/p4/release-manifest.json",
+        "deploy/release/t0-critical-cve-dossier.md",
+        "deploy/release/cve-exceptions.json"
+      ]
+    },
+    {
+      "gate": "G05",
+      "status": "BLOCKED",
+      "acceptance_ids": ["P4-02-DIGEST-PROMOTION"],
+      "blocker_ids": ["G04-UPSTREAM-CVE-AND-OWNER-CUTOVER-APPROVAL"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/ghcr-digest-promotion-attestation.json",
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/isolated-smoke-report.json"
+      ]
+    },
+    {
+      "gate": "G06",
+      "status": "PASS",
+      "acceptance_ids": ["D01", "D02", "BLG-P4-MIG-01"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json",
+        "docs/p4/api-contract.md"
+      ]
+    },
+    {
+      "gate": "G07",
+      "status": "BLOCKED",
+      "acceptance_ids": ["D10", "G07-SEPARATE-KEY-ESCROW"],
+      "blocker_ids": ["BLK-INFRA-05"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-https-delta-20261109/g07-gate-vps-audit.json",
+        "deploy/ops/evidence/p4-vps-live-20261109/backup-lifecycle.json",
+        "deploy/ops/evidence/p4-vps-live-20261109/manual-offsite-receipt.json",
+        "deploy/ops/evidence/p4-g07-g08-dr-20261109/g07-backup-lifecycle-drill.json",
+        "docs/p4/backup-restore.md"
+      ]
+    },
+    {
+      "gate": "G08",
+      "status": "PASS",
+      "acceptance_ids": ["D11", "D12", "D14"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json",
+        "deploy/ops/evidence/p4-g07-g08-dr-20261109/g08-restore-drill-report.json"
+      ]
+    },
+    {
+      "gate": "G09",
+      "status": "PASS",
+      "acceptance_ids": ["D03", "D13", "D14", "DT-01", "DT-02-REAL-N-TO-N1", "DT-03"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json",
+        "docs/p4/rollback-runbook.md"
+      ]
+    },
+    {
+      "gate": "G10",
+      "status": "PASS",
+      "acceptance_ids": [
+        "P4-8.4-01", "P4-8.4-02", "P4-8.4-03", "P4-8.4-04", "P4-8.4-05", "P4-8.4-06", "P4-8.4-07", "P4-8.4-10",
+        "S01", "S02", "S03", "S04", "S05", "S06", "S07", "S08", "S09", "S10", "S11", "S12", "S19", "S20"
+      ],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/g007_test_inventory-gate.json",
+        "docs/p4/security-review.md"
+      ]
+    },
+    {
+      "gate": "G11",
+      "status": "PASS",
+      "acceptance_ids": ["P4-8.4-08", "P4-8.4-11", "S13", "S14", "S15", "F20", "F21", "F30"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json",
+        "docs/p4/security-review.md"
+      ]
+    },
+    {
+      "gate": "G12",
+      "status": "PASS",
+      "acceptance_ids": ["P4-8.4-09", "P4-8.4-14", "P4-8.4-15", "P4-8.4-16", "S06", "S07", "S16", "S17", "S18", "S20"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
+        "docs/p4/security-review.md",
+        "docs/p4/api-contract.md"
+      ]
+    },
+    {
+      "gate": "G13",
+      "status": "PASS",
+      "acceptance_ids": ["F03", "F04", "F05", "F06", "F07", "F08", "F09", "F10", "F11"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/p1_test_inventory-gate.json",
+        "deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json"
+      ]
+    },
+    {
+      "gate": "G14",
+      "status": "PASS",
+      "acceptance_ids": ["F12", "F13", "F14", "F15", "F16", "F17", "F18", "F19", "F20", "F22"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/p2_test_inventory-gate.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json"
+      ]
+    },
+    {
+      "gate": "G15",
+      "status": "PASS",
+      "acceptance_ids": ["F21", "F23", "F24", "F25", "F26", "F27", "D07", "D08", "D09", "P4-8.4-13"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/p3_test_inventory-gate.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json"
+      ]
+    },
+    {
+      "gate": "G16",
+      "status": "PASS",
+      "acceptance_ids": ["F01", "F02", "F27", "F28", "F29", "P4-8.4-06", "P4-8.4-07", "P4-8.4-12"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/p3-ui-gate.json"
+      ]
+    },
+    {
+      "gate": "G17",
+      "status": "PASS",
+      "acceptance_ids": ["D04", "D05", "D06", "D15"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json",
+        "deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json",
+        "deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json"
+      ]
+    },
+    {
+      "gate": "G18",
+      "status": "PASS_MEASURED_PENDING_OWNER_SLO_SIGN_OFF",
+      "acceptance_ids": ["S1-BENCHMARK-50K-75K-250K-40STAFF"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json",
+        "docs/p4/performance-report.md"
+      ]
+    },
+    {
+      "gate": "G19",
+      "status": "BLOCKED",
+      "acceptance_ids": ["ALT-TECH-CONTAINER", "ALT-TECH-DISK", "ALT-TECH-QUEUE-SCHEDULER", "ALT-BIZ-INVARIANT", "ALT-BACKUP-FAILURE", "ALT-TEST-SYNTHETIC"],
+      "blocker_ids": ["BLK-GOV-06", "BLK-INFRA-07"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-https-delta-20261109/g19-gate-vps-audit.json",
+        "deploy/ops/evidence/p4-vps-live-20261109/live-health-after.json",
+        "docs/p4/monitoring-alerts.md"
+      ]
+    },
+    {
+      "gate": "G20",
+      "status": "PASS",
+      "acceptance_ids": ["G20-ROUTES-VI-A11Y", "G20-MODAL"],
+      "evidence_paths": [
+        "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
+        "docs/p4/uat-report.md",
+        "docs/p4/glossary-vi.md",
+        "docs/p4/huong-dan-su-dung-vi.md"
+      ]
+    },
+    {
+      "gate": "G21",
+      "status": "PASS",
+      "acceptance_ids": ["API-113-ENDPOINTS", "MIGRATION-POLICY-CLASS-ABCD"],
+      "evidence_paths": [
+        "docs/p4/api-contract.md",
+        "deploy/ops/test_ops_toolkit.py"
+      ]
+    },
+    {
+      "gate": "G22",
+      "status": "BLOCKED",
+      "acceptance_ids": ["UAT-P4-BOD-01..05", "UAT-P4-ADM-01..04", "UAT-P4-LDR-01..03", "UAT-P4-STF-01..04", "UAT-P4-OPS-01..03"],
+      "blocker_ids": ["BLK-GOV-06"],
+      "evidence_paths": [
+        "docs/p4/uat-report.md",
+        "docs/p4/huong-dan-su-dung-vi.md"
+      ]
+    },
+    {
+      "gate": "G23",
+      "status": "BLOCKED",
+      "acceptance_ids": ["P4-10-PRODUCTION-CUTOVER"],
+      "blocker_ids": ["OWNER-CUTOVER-WINDOW-NOT-AUTHORIZED"],
+      "evidence_paths": [
+        "docs/p4/release-runbook.md",
+        "docs/p4/release-manifest.json"
+      ]
+    },
+    {
+      "gate": "G24",
+      "status": "BLOCKED",
+      "acceptance_ids": ["P4-11-OPERATOR-HANDOVER-10-ITEMS"],
+      "blocker_ids": ["BLK-INFRA-05", "BLK-GOV-06", "BLK-INFRA-07"],
+      "evidence_paths": [
+        "docs/p4/operations-sop.md",
+        "docs/p4/P4-exit-report.md"
+      ]
+    }
+  ]
+}

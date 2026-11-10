@@ -177,11 +177,28 @@ Khi phát hiện sai lệch dữ liệu nghiệp vụ (phân công, lần liên 
 
 ---
 
-## 7. Biên Bản Bàn Giao Vận Hành Cho Cổng `G24` (`Trạng Thái Hiện Tại: BLOCKED`)
+## 7. Checklist Bàn Giao Operator & Biên Bản Cổng `G24` (`Trạng Thái Hiện Tại: BLOCKED`)
 
-| Hạng mục bàn giao bắt buộc (`P4.md §19` — `G24`, `§20.3` §9) | Trạng thái | Ghi chú / Đầu vào chờ mở khóa |
-| :--- | :---: | :--- |
-| Bộ sổ tay vận hành (`backup-restore.md`, `release-runbook.md`, `rollback-runbook.md`, `monitoring-alerts.md`, `operations-sop.md`, `huong-dan-su-dung-vi.md`) | **`READY (In-Repo)`** | Đã cập nhật đồng bộ với topology `compose.domain.yaml`, bản Việt hóa `4672041`, hướng dẫn lưu ký khóa, xử lý backup lỗi và đối chiếu runtime VPS `09/11/2026`. |
-| Cài đặt timer kiểm tra sức khỏe & backup cục bộ kèm kiểm tra checksum/GFS retention trên VPS `103.77.208.186` | **`INSTALLED ON VPS (PARTIAL)`** | `crm-cskh-healthcheck.timer` đã tự kích hoạt `PASS` lúc `20:05 ICT` ngày `09/11/2026`; `crm-cskh-backup.service` chạy thật thủ công `PASS` lúc `20:00 ICT`; `crm-cskh-backup.timer` đã `enabled` (`02:15 ICT`), **chờ xác nhận lượt tự kích hoạt theo lịch đầu tiên sau `02:15 ICT` ngày `10/11/2026`** ([`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json)). |
-| Tự động đẩy gói sao lưu mã hóa ra kho ngoài VPS (`Offsite Upload Automation`) | **`BLOCKED` (`BLK-INFRA-05`)** | Đã nối sẵn `EnvironmentFile=-/etc/crm-cskh/offsite-backup.env` và chặn cứng thư mục cùng VPS; chờ Owner cấp đích lưu trữ ngoài VPS + credentials. Hiện đã chép thủ công và xác thực SHA-256 hai bản (`p4-20261109-pre-scheduler` & `scheduled-20261109T130029Z-1400885`). |
-| Cảnh báo chủ động ra kênh ngoài hệ thống & bàn giao tài khoản `Operator` riêng | **`BLOCKED` (`BLK-GOV-06`, `BLK-INFRA-07`)** | Đã nối sẵn `EnvironmentFile=-/etc/crm-cskh/alerting.env`; chờ Owner chỉ định họ tên/tài khoản người trực và HTTPS webhook nhận cảnh báo (không tự điền người nhận). |
+### 7.1. Danh mục bàn giao kỹ thuật cho Operator (`Operator Handover Checklist`)
+
+| STT | Hạng mục bàn giao (`P4.md §17`, `§19 G24`, `§20.2`) | Đường dẫn / Lệnh chuẩn trên Repo & VPS | Trạng thái kỹ thuật | Trạng thái ký nhận (`BLK-GOV-06`) |
+| :---: | :--- | :--- | :---: | :---: |
+| 1 | Kiểm kê hạ tầng & tách biệt 5 môi trường `DEV/CI/STAGING-DR/STAGING-LIVE/PROD` | [`infra-inventory.md`](./infra-inventory.md) | `READY` | `PENDING_SIGNER` |
+| 2 | Sổ tay sao lưu mã hóa, lưu ký khóa riêng, GFS `14d/8w/3m` & khôi phục clone | [`backup-restore.md`](./backup-restore.md), `manage_backup_lifecycle.py` | `READY` (`G08 PASS`, `G07 BLOCKED` chờ `BLK-INFRA-05`) | `PENDING_SIGNER` |
+| 3 | Sổ tay phát hành theo `@sha256` digest & Stop Rules | [`release-runbook.md`](./release-runbook.md), [`release-manifest.json`](./release-manifest.json) | `READY` | `PENDING_SIGNER` |
+| 4 | Sổ tay cây quyết định Rollback Cấp 1–4 (`N -> N-1` & Bare-Metal DR) | [`rollback-runbook.md`](./rollback-runbook.md), `manage_isolated_staging_dr.py` | `READY` (`G09 PASS`) | `PENDING_SIGNER` |
+| 5 | Giám sát 10 container, hàng đợi RQ, 4 cron, bất biến `INV-01..06` & biên nhận cảnh báo | [`monitoring-alerts.md`](./monitoring-alerts.md), `check_health_and_invariants.py` | `READY` (`G17 PASS`, `G19 BLOCKED` chờ `BLK-GOV-06`/`07`) | `PENDING_SIGNER` |
+| 6 | Quy trình vận hành ngày/tuần/tháng, xử lý sự cố dữ liệu 6 bước & thu hồi tài khoản nghỉ việc | [`operations-sop.md`](./operations-sop.md) Mục 1–6 | `READY` | `PENDING_SIGNER` |
+| 7 | Hợp đồng `113` API, rà soát bảo mật `S01`–`S20` & báo cáo hiệu năng `S1` | [`api-contract.md`](./api-contract.md), [`security-review.md`](./security-review.md), [`performance-report.md`](./performance-report.md) | `READY` | `PENDING_SIGNER` |
+| 8 | Hướng dẫn sử dụng tiếng Việt theo 5 vai trò & Báo cáo Tổng kết `P4` | [`huong-dan-su-dung-vi.md`](./huong-dan-su-dung-vi.md), [`P4-exit-report.md`](./P4-exit-report.md) | `READY` | `PENDING_SIGNER` |
+| 9 | Bộ lập lịch systemd trên VPS `103.77.208.186` (`healthcheck.timer` 5m + `backup.timer` `02:15 ICT`) | `install_systemd_timers.py`, [`timers-runtime.json`](../../deploy/ops/evidence/p4-vps-live-20261109/timers-runtime.json) | `INSTALLED ON VPS` | `PENDING_SIGNER` |
+| 10 | Bàn giao người trực chính/dự phòng, tài khoản định danh riêng & diễn tập nhận cảnh báo thật | `/etc/crm-cskh/offsite-backup.env`, `/etc/crm-cskh/alerting.env` (`0600`) | **`BLOCKED`** (`BLK-INFRA-05`, `BLK-GOV-06`, `BLK-INFRA-07`) | **`BLOCKED` (Không tự ký thay)** |
+
+### 7.2. Khung ký nhận bàn giao vận hành (Chỉ điền khi Owner phân công `BLK-GOV-06`)
+
+| Vai trò bàn giao | Họ tên & Tài khoản định danh | Ngày nhận bàn giao | Chữ ký xác nhận |
+| :--- | :--- | :---: | :---: |
+| **Người bàn giao kỹ thuật (`Release / Engineering`)** | `T1A` / `T1B` (Hồ sơ kỹ thuật trong Git) | `10/11/2026` | Đã bàn giao mã nguồn & evidence |
+| **Operator kỹ thuật chính (`Primary On-Call`)** | `PENDING (BLK-GOV-06)` | — | **`BLOCKED` (Chờ Owner chỉ định)** |
+| **Operator dự phòng / Tech Owner (`Secondary On-Call`)** | `PENDING (BLK-GOV-06)` | — | **`BLOCKED` (Chờ Owner chỉ định)** |
+| **Đại diện Phê duyệt Vận hành (`Owner / T0`)** | `PENDING (BLK-GOV-06)` | — | **`BLOCKED` (Chờ Owner phê duyệt)** |

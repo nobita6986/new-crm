@@ -1,0 +1,36 @@
+{
+  "schema": "p4-g19-gate-audit-v1",
+  "audited_at_utc": "2026-11-10T02:15:18Z",
+  "gate": "G19",
+  "separated_from_g07_gate": true,
+  "gate_g19_status": "BLOCKED",
+  "external_alerts_sent": false,
+  "vps_monitoring_runtime": {
+    "healthcheck_timer_unit_state": "enabled",
+    "healthcheck_timer_active_state": "active",
+    "healthcheck_timer_last_trigger": "Mon 2026-11-09 20:05:45 +07",
+    "live_containers_status": "PASS",
+    "live_queues_and_scheduler_status": "PASS",
+    "live_business_invariants_status": "PASS"
+  },
+  "alert_channel_and_receipt_verification": {
+    "preflight_status": "BLOCKED",
+    "receipt_verification_status": "BLOCKED",
+    "blockers": [
+      {
+        "id": "BLK-GOV-06",
+        "field": "CSKH_OPERATOR_CONTACT",
+        "reason": "Named Day-2 Operator / on-call recipient has not been assigned and signed off by Owner."
+      },
+      {
+        "id": "BLK-INFRA-07",
+        "field": "CSKH_ALERT_WEBHOOK_URL",
+        "reason": "Approved HTTPS alert delivery endpoint (Webhook / ChatOps / Pager) has not been provisioned."
+      }
+    ],
+    "required_owner_inputs": [
+      "BLK-GOV-06 (CSKH_OPERATOR_CONTACT)",
+      "BLK-INFRA-07 (CSKH_ALERT_WEBHOOK_URL)"
+    ]
+  }
+}

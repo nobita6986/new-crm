@@ -427,28 +427,43 @@ jobs:
           retention-days: 14
 
   isolated-staging-dr-https-rehearsal:
-    name: Real Isolated Staging-DR HTTPS UAT, RBAC, Restart/Retry & Rollback
+    name: Real Isolated Staging-DR HTTPS UAT, Playwright Browser, Restart/Retry & N->N-1 Rollback
     needs: [static-and-posix-unit-gate]
     runs-on: ubuntu-24.04
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Reclaim unused runner SDK space
         shell: bash
         run: |
           set -euo pipefail
-          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost || true
 
-      - name: Checkout repository
+      - name: Checkout repository with full history for N-1 baseline build
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
 
-      - name: Build locked crm-cskh image & run full isolated Staging-DR HTTPS rehearsal
+      - name: Install Playwright Headless Chromium & NSS CA tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo apt-get install -y --no-install-recommends libnss3-tools
+          python3 -m venv "$RUNNER_TEMP/pw-venv"
+          "$RUNNER_TEMP/pw-venv/bin/pip" install --no-cache-dir \
+            playwright==1.51.0 \
+            cryptography==44.0.2
+          "$RUNNER_TEMP/pw-venv/bin/playwright" install --with-deps chromium
+
+      - name: Build locked candidate N + baseline N-1 images & run full HTTPS + Browser + Tier 3/4 rehearsal
         shell: bash
         run: |
           set -euo pipefail
           EVID="$RUNNER_TEMP/p4-dr-https-evidence"
           BUILD_DIR="$RUNNER_TEMP/p4-dr-img-build"
-          mkdir -p "$EVID" "$BUILD_DIR"
+          N1_BUILD_DIR="$RUNNER_TEMP/p4-dr-n1-build"
+          mkdir -p "$EVID" "$BUILD_DIR" "$N1_BUILD_DIR"
 
           HEAD_SHA="$(git rev-parse HEAD)"
           LOCAL_IMAGE_REPO="crm-cskh" \
@@ -458,6 +473,16 @@ jobs:
             --tag "p4-dr-https-${HEAD_SHA::12}"
           IMG_ID="$(jq -r '.local_image_id' "$BUILD_DIR/image-inspect-summary.json")"
 
+          N1_SHA="467830195358b2431ac772486530ab935887a518"
+          git worktree add --detach "$RUNNER_TEMP/n-minus-1-src" "$N1_SHA"
+          LOCAL_IMAGE_REPO="crm-cskh-n-minus-1" \
+          REGISTRY_PUSH=false \
+          bash "$RUNNER_TEMP/n-minus-1-src/deploy/images/build-image.sh" \
+            --out-dir "$N1_BUILD_DIR" \
+            --tag "p4-dr-n-minus-1-${N1_SHA::12}"
+          git worktree remove --force "$RUNNER_TEMP/n-minus-1-src"
+          N1_IMG_ID="$(jq -r '.local_image_id' "$N1_BUILD_DIR/image-inspect-summary.json")"
+
           MARIADB_IMG="$(grep '^MARIADB_IMAGE=' deploy/compose/env/staging-dr-https.env.example | cut -d= -f2-)"
           REDIS_IMG="$(grep '^REDIS_IMAGE=' deploy/compose/env/staging-dr-https.env.example | cut -d= -f2-)"
           PROXY_IMG="$(grep '^PROXY_IMAGE=' deploy/compose/env/staging-dr-https.env.example | cut -d= -f2-)"
@@ -465,12 +490,14 @@ jobs:
           docker pull "$REDIS_IMG"
           docker pull "$PROXY_IMG"
 
-          python3 deploy/ops/manage_isolated_staging_dr.py full-rehearsal \
+          "$RUNNER_TEMP/pw-venv/bin/python" deploy/ops/manage_isolated_staging_dr.py full-rehearsal \
             --app-image "$IMG_ID" \
+            --n-minus-1-image "$N1_IMG_ID" \
+            --browser-report-out "$EVID/https-browser-uat-security-report.json" \
             --run-id "ci-${GITHUB_RUN_ID}" \
             --out "$EVID/isolated-staging-dr-https-report.json"
 
-      - name: Upload isolated Staging-DR HTTPS rehearsal artifact
+      - name: Upload isolated Staging-DR HTTPS & Playwright Browser rehearsal artifacts
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

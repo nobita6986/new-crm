@@ -259,7 +259,21 @@ sudo python3 /opt/crm-cskh-ops/deploy/ops/check_health_and_invariants.py \
 
 ---
 
-## 6. Các Thao Tác Bị Cấm Tuyệt Đối Khi Xử Lý Sự Cố (`P4.md §15.4`)
+## 6. Bằng Chứng Thực Thi Cây Quyết Định & Quay Lui Image Thật `N -> N-1` Trên Clone HTTPS Cô Lập (`G09`)
+
+> [!IMPORTANT]
+> **Nguyên tắc bắt buộc (`G09`):** Phép kiểm `verify-digest` từ chối một digest sai chỉ là rào chắn preflight, **không bao giờ thay thế cho diễn tập quay lui ứng dụng thật**. Diễn tập `G09` trong [`manage_isolated_staging_dr.py`](../../deploy/ops/manage_isolated_staging_dr.py) (`rehearse_rollback_tiers_over_https`) thực thi đầy đủ trên clone HTTPS cô lập và ghi nhận nhật ký quyết định từng bước của Operator (`operator_decision_tree_log` trong [`isolated-staging-dr-https-report.json`](../../deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json)):
+
+1. **`DT-01-TIER1-FEATURE-DISABLE` (Cấp 1 — Cờ tính năng P3):** Tắt `cskh_p3_enabled=false` + `clear-cache` → API P3 trả `503` an toàn trong khi luồng tác nghiệp cốt lõi `P1/P2` (`customers.my_list`) tiếp tục trả `200`, sau đó bật lại khôi phục `200`.
+2. **`DT-02-SCHEMA-COMPATIBILITY-AND-TIER3-IMAGE-ROLLBACK` (Quay lui Ứng Dụng Thật `N -> N-1` Không Hạ DB):**
+   - Khi thay đổi thuộc `Class A/B` tương thích ngược (như giữa baseline `main` `46783019` `v15.123.1` và ứng viên `N` `v15.126.0`), ghi bản ghi đánh dấu trên `N` → đổi `APP_IMAGE` về đúng image `N-1` thật → chạy `docker compose up -d --no-build --force-recreate backend frontend websocket queue-short queue-long scheduler` → `bench clear-cache` + `clear-website-cache`.
+   - Kiểm chứng cả 6 container chạy đúng digest `N-1` (`verify-digest == PASS`), phiên bản Frappe thực chạy lùi về `N-1`, bản ghi tạo trên `N` được **bảo toàn 100% (`0` mất dữ liệu, không hạ cấp schema MariaDB)**, `Staff A` và `BOD` đăng nhập/đọc qua HTTPS đạt `200`, và `INV-01..06 == 0`.
+3. **`DT-03-CLASS-D-OR-CORRUPTION-TIER4-RESTORE` (Cấp 4 — Khôi Phục Điểm Thời Gian Có Kiểm Kê Mất Dữ Liệu):**
+   - Khi rơi vào nhánh `Class C/D` hoặc hỏng dữ liệu không thể `forward-fix` ngay: chạy `check_health_and_invariants.py --since-utc <backup_utc>` thống kê chính xác số bản ghi phát sinh sau mốc sao lưu → dừng `queue-short`, `queue-long`, `scheduler` → `bench --force restore` DB + public/private files → chạy `migrator` → đo lại ngay cửa sổ `--since-utc` xác nhận **`all_post_restore_deltas_zero = true` (`8/8` bộ đếm `= 0`)** và `INV-01..06 == 0`.
+
+---
+
+## 7. Các Thao Tác Bị Cấm Tuyệt Đối Khi Xử Lý Sự Cố (`P4.md §15.4`)
 
 - **CẤM** chạy `bench reinstall`, `bench drop-site`, `docker compose down --volumes` hoặc câu lệnh SQL `DELETE` / `TRUNCATE` trên môi trường đang phục vụ của Owner.
 - **CẤM** chạy `bench migrate --skip-failing` để bỏ qua patch lỗi và báo cáo phát hành thành công.

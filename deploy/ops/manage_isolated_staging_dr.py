@@ -1778,14 +1778,29 @@ def rehearse_rollback_tiers_over_https(
     seed_info: dict[str, Any],
     seed_pw: str,
     scrubber: smoke_lib.SmokeLogger,
+    n_minus_1_image: str = "",
 ) -> dict[str, Any]:
-    """Rehearse `G09` Tier 1 kill switch, Tier 2 digest parity/re-apply, and Tier 4 DB/file restore."""
+    """Rehearse `G09` Tier 1 kill switch, real Tier 3 N->N-1 image rollback, operator decision tree & Tier 4 restore."""
     env = p403_tool.parse_env_file(env_file)
     assert_isolated_from_owner_stack(env, env_file)
     site_name = env["SITE_NAME"].strip()
+    candidate_n_image = env["APP_IMAGE"].strip()
     connect_host = env.get("INGRESS_BIND_IP", "127.0.0.1").strip()
     http_port = int(env.get("HTTP_PUBLISH_PORT", "18081"))
     https_port = int(env.get("HTTPS_PUBLISH_PORT", "18443"))
+    decision_tree_log: list[dict[str, Any]] = []
+
+    def log_decision(step_id: str, node_question: str, decision: str, action: str, outcome: dict[str, Any]) -> None:
+        decision_tree_log.append(
+            {
+                "timestamp_utc": utc_now_iso(),
+                "step_id": step_id,
+                "p4_15_2_node": node_question,
+                "operator_decision": decision,
+                "executed_action": action,
+                "outcome": outcome,
+            }
+        )
 
     users = seed_info["users"]
     period_key = seed_info["period_key"]
@@ -1850,8 +1865,15 @@ def rehearse_rollback_tiers_over_https(
         headers={"Cookie": bod_sid, "Accept": "application/json"},
     )
     tier1_ok = kill_p3_code == 503 and kill_p1_code == 200 and recover_p3_code == 200
+    log_decision(
+        "DT-01-TIER1-FEATURE-DISABLE",
+        "Is the defect isolated to P3 reporting/SLA without PII leak or core P1/P2 corruption?",
+        "YES -> Apply Tier 1 feature flag disable (cskh_p3_enabled=false) while preserving P1/P2 writes",
+        "bench --site <site> set-config cskh_p3_enabled false && clear-cache",
+        {"p3_http": kill_p3_code, "p1_my_list_http": kill_p1_code, "reenabled_p3_http": recover_p3_code, "pass": tier1_ok},
+    )
 
-    # --- Tier 2: Immutable digest verification (match + fail-closed mismatch + migrator x2) ---
+    # --- Pre-check: Immutable digest parity guard (never treated as application rollback itself) ---
     dig_ok_proc = run_sub(
         [
             sys.executable,
@@ -1882,11 +1904,250 @@ def rehearse_rollback_tiers_over_https(
         ],
         check=False,
     )
-    tier2_ok = (
+    digest_guard_ok = (
         dig_ok_proc.returncode == 0
         and dig_ok_json.get("status") == "PASS"
         and dig_bad_proc.returncode == 2
     )
+
+    # --- Tier 3 (Real Application Image Rollback N -> N-1 on Compatible Class A/B Schema) ---
+    def _switch_stack_app_image(target_img: str) -> None:
+        cur_env = p403_tool.parse_env_file(env_file)
+        cur_env["APP_IMAGE"] = target_img
+        cur_env["PULL_POLICY"] = "never" if target_img.startswith("sha256:") or target_img.endswith(":local") else "missing"
+        env_file.write_text("\n".join(f"{k}={v}" for k, v in cur_env.items()) + "\n", encoding="utf-8", newline="\n")
+        if os.name == "posix":
+            os.chmod(env_file, 0o600)
+        run_sub(
+            compose_cmd(
+                env_file,
+                [
+                    "up",
+                    "-d",
+                    "--no-build",
+                    "--force-recreate",
+                    "backend",
+                    "frontend",
+                    "websocket",
+                    "queue-short",
+                    "queue-long",
+                    "scheduler",
+                ],
+            )
+        )
+        wait_services_healthy(
+            env_file,
+            ("backend", "frontend", "websocket", "queue-short", "queue-long", "scheduler"),
+            timeout_seconds=120,
+        )
+        run_sub(compose_cmd(env_file, ["exec", "-T", "backend", "bench", "--site", site_name, "clear-cache"]))
+        run_sub(compose_cmd(env_file, ["exec", "-T", "backend", "bench", "--site", site_name, "clear-website-cache"]))
+        wait_https_ingress_ready(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+        )
+
+    tier3_real_rollback_report: dict[str, Any] = {
+        "executed_real_n_minus_1_rollback": False,
+        "pass": True,
+    }
+    tier3_ok = True
+    if n_minus_1_image.strip():
+        n1_img = n_minus_1_image.strip()
+        if n1_img == candidate_n_image:
+            raise ValueError("Refusing Tier 3 rehearsal: --n-minus-1-image must be distinct from candidate N image")
+
+        t_t3 = time.monotonic()
+        marker_py = r"""
+import json, os, sys, frappe
+site, action = sys.argv[1], sys.argv[2]
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    if action == "insert":
+        existing = frappe.db.get_value("CRM Lead", {"email": "tier3-n-marker@example.invalid"}, "name")
+        if not existing:
+            doc = frappe.get_doc({
+                "doctype": "CRM Lead",
+                "first_name": "Tier3Marker",
+                "last_name": "WrittenOnCandidateN",
+                "mobile_no": "0900077777",
+                "email": "tier3-n-marker@example.invalid",
+            }).insert(ignore_permissions=True)
+            existing = doc.name
+        frappe.db.commit()
+        print("TIER3_MARKER_JSON=" + json.dumps({"frappe_version": frappe.__version__, "marker_lead": existing}))
+    elif action == "verify":
+        found = bool(frappe.db.get_value("CRM Lead", {"email": "tier3-n-marker@example.invalid"}, "name"))
+        print("TIER3_MARKER_JSON=" + json.dumps({"frappe_version": frappe.__version__, "marker_preserved": found}))
+    elif action == "cleanup":
+        for nm in frappe.get_all("CRM Lead", filters={"email": "tier3-n-marker@example.invalid"}, pluck="name"):
+            frappe.delete_doc("CRM Lead", nm, force=True, ignore_permissions=True)
+        frappe.db.commit()
+        print("TIER3_MARKER_JSON=" + json.dumps({"cleaned": True}))
+finally:
+    frappe.destroy()
+"""
+        ins_proc = run_sub(
+            compose_cmd(
+                env_file,
+                ["exec", "-T", "backend", "/home/frappe/frappe-bench/env/bin/python", "-c", marker_py, site_name, "insert"],
+            )
+        )
+        n_meta = json.loads(
+            [ln.split("=", 1)[1] for ln in ins_proc.stdout.splitlines() if ln.startswith("TIER3_MARKER_JSON=")][-1]
+        )
+
+        # Roll back running application containers N -> N-1 WITHOUT downgrading MariaDB schema
+        _switch_stack_app_image(n1_img)
+        n1_dig_proc = run_sub(
+            [
+                sys.executable,
+                "-X",
+                "utf8",
+                str(OPS_DIR / "staging_https_smoke_and_reconcile.py"),
+                "verify-digest",
+                "--env-file",
+                str(env_file),
+                "--mode",
+                "dr-https",
+                "--expected-image",
+                n1_img,
+            ]
+        )
+        n1_dig_json = json.loads(n1_dig_proc.stdout)
+        ver_proc = run_sub(
+            compose_cmd(
+                env_file,
+                ["exec", "-T", "backend", "/home/frappe/frappe-bench/env/bin/python", "-c", marker_py, site_name, "verify"],
+            )
+        )
+        n1_meta = json.loads(
+            [ln.split("=", 1)[1] for ln in ver_proc.stdout.splitlines() if ln.startswith("TIER3_MARKER_JSON=")][-1]
+        )
+
+        # Re-authenticate business actors Staff A & BOD on rolled-back N-1 stack over HTTPS
+        _, n1_stf_sid, _, _ = https_login_session(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            usr=users["staff_a"],
+            pwd=seed_pw,
+            scrubber=scrubber,
+        )
+        _, n1_bod_sid, _, _ = https_login_session(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            usr=users["bod"],
+            pwd=seed_pw,
+            scrubber=scrubber,
+        )
+        n1_stf_api, _, _ = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path="/api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
+            headers={"Cookie": n1_stf_sid, "Accept": "application/json"},
+        )
+        n1_stf_ui, _, _ = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path="/cskh/my-customers",
+            headers={"Cookie": n1_stf_sid},
+        )
+        n1_bod_api, _, _ = https_req(
+            site_name=site_name,
+            connect_host=connect_host,
+            https_port=https_port,
+            ca_crt_path=ca_crt_path,
+            path=f"/api/method/crm_cskh.api.reporting.get_executive_overview?{q_params}",
+            headers={"Cookie": n1_bod_sid, "Accept": "application/json"},
+        )
+        n1_health_proc = run_sub(
+            [
+                sys.executable,
+                "-X",
+                "utf8",
+                str(OPS_DIR / "check_health_and_invariants.py"),
+                "--env-file",
+                str(env_file),
+                "--mode",
+                "dr-https",
+                "--site",
+                site_name,
+                "--startup-grace-seconds",
+                "3600",
+            ]
+        )
+        n1_health = json.loads(n1_health_proc.stdout)
+        t3_elapsed = round(time.monotonic() - t_t3, 2)
+
+        tier3_ok = (
+            n1_dig_proc.returncode == 0
+            and n1_dig_json.get("status") == "PASS"
+            and bool(n1_meta.get("marker_preserved"))
+            and n_meta.get("frappe_version") != n1_meta.get("frappe_version")
+            and n1_stf_api == 200
+            and n1_stf_ui == 200
+            and n1_bod_api == 200
+            and n1_health.get("containers", {}).get("status") == "PASS"
+            and n1_health.get("business_invariants", {}).get("status") == "PASS"
+        )
+        tier3_real_rollback_report = {
+            "executed_real_n_minus_1_rollback": True,
+            "candidate_n_image": candidate_n_image,
+            "rolled_back_n_minus_1_image": n1_img,
+            "frappe_version_before_on_n": n_meta.get("frappe_version"),
+            "frappe_version_after_on_n_minus_1": n1_meta.get("frappe_version"),
+            "db_schema_downgraded": False,
+            "post_deploy_n_record_preserved_on_n_minus_1": bool(n1_meta.get("marker_preserved")),
+            "six_app_containers_digest_verified_on_n_minus_1": n1_dig_json.get("status") == "PASS",
+            "n_minus_1_staff_my_list_http": n1_stf_api,
+            "n_minus_1_staff_ui_http": n1_stf_ui,
+            "n_minus_1_bod_overview_http": n1_bod_api,
+            "n_minus_1_invariants_status": n1_health.get("business_invariants", {}).get("status"),
+            "rollback_rto_seconds": t3_elapsed,
+            "pass": tier3_ok,
+        }
+        log_decision(
+            "DT-02-SCHEMA-COMPATIBILITY-AND-TIER3-IMAGE-ROLLBACK",
+            "Is the defect in app/OS code while DB schema is Class A/B backward-compatible?",
+            f"YES -> Roll back APP_IMAGE from N ({n_meta.get('frappe_version')}) to N-1 ({n1_meta.get('frappe_version')}) without touching MariaDB schema",
+            "Update APP_IMAGE to N-1 -> docker compose up -d --no-build --force-recreate 6 app services -> bench clear-cache -> verify-digest & INV-01..06",
+            tier3_real_rollback_report,
+        )
+
+        # Clean up Tier 3 marker and promote stack back to Candidate N before Tier 4 DB/files restore test
+        run_sub(
+            compose_cmd(
+                env_file,
+                ["exec", "-T", "backend", "/home/frappe/frappe-bench/env/bin/python", "-c", marker_py, site_name, "cleanup"],
+            )
+        )
+        _switch_stack_app_image(candidate_n_image)
+        mig_env_restore_n = dict(os.environ, MIGRATE_SITES="true")
+        run_sub(
+            compose_cmd(env_file, ["run", "--rm", "-e", "MIGRATE_SITES=true", "migrator"], profile_migrate=True),
+            env=mig_env_restore_n,
+        )
+        run_sub(compose_cmd(env_file, ["exec", "-T", "backend", "bench", "--site", site_name, "clear-cache"]))
+    else:
+        log_decision(
+            "DT-02-SCHEMA-COMPATIBILITY-ASSESSMENT",
+            "Is --n-minus-1-image provided for live container rollback in this invocation?",
+            "SKIPPED_NO_N_MINUS_1_IMAGE_ARG -> Pass --n-minus-1-image to execute real N->N-1 rollback",
+            "Verified digest guard only",
+            {"digest_guard_ok": digest_guard_ok},
+        )
 
     # --- Tier 4: Backup -> post-backup mutation -> --since-utc delta -> restore + migrator -> HTTPS smoke ---
     backup_py = r"""
@@ -2073,26 +2334,43 @@ subprocess.check_call([
         and post_smoke_proc.returncode == 0
         and post_smoke.get("status") == "PASS"
     )
-    passed = tier1_ok and tier2_ok and tier4_ok
+    log_decision(
+        "DT-03-CLASS-D-OR-CORRUPTION-TIER4-RESTORE",
+        "If schema/data is incompatible and no safe forward-fix is immediately available, how is Tier 4 restore executed?",
+        "Account pre-restore data-loss window (--since-utc) -> stop workers/scheduler -> bench restore DB+public+private files -> migrator -> verify 8/8 post-restore deltas == 0 & INV-01..06 == 0",
+        "check_health_and_invariants.py --since-utc -> bench restore -> migrator -> https-smoke",
+        {
+            "pre_restore_new_leads": pre_delta.get("new_leads"),
+            "all_post_restore_deltas_zero": all_post_deltas_zero,
+            "restore_and_migrate_seconds": tier4_restore_sec,
+            "post_restore_health": post_health.get("status"),
+            "post_restore_https_smoke": post_smoke.get("status"),
+            "pass": tier4_ok,
+        },
+    )
+    passed = tier1_ok and digest_guard_ok and tier3_ok and tier4_ok
     return {
         "status": "PASS" if passed else "FAIL",
+        "operator_decision_tree_log": decision_tree_log,
         "tier1_p3_kill_switch_https": {
             "p3_disabled_overview_http": kill_p3_code,
             "p3_disabled_p1_my_list_http": kill_p1_code,
             "p3_reenabled_overview_http": recover_p3_code,
             "pass": tier1_ok,
         },
-        "tier2_digest_verification": {
+        "digest_parity_preflight_guard": {
             "matching_digest_status": dig_ok_json.get("status"),
             "inspected_services_count": len(
                 dig_ok_json.get("container_digest_parity", {}).get("inspected_services", {})
             ),
             "wrong_digest_rejected_exit_code": dig_bad_proc.returncode,
-            "pass": tier2_ok,
+            "note": "Preflight digest guard only — NOT a substitute for Tier 3 application image rollback",
+            "pass": digest_guard_ok,
         },
+        "tier3_real_n_to_n_minus_1_image_rollback": tier3_real_rollback_report,
         "tier3_forward_fix_decision_guard": {
-            "additive_classes_abc_allow_tier2_digest_rollback": True,
-            "destructive_class_d_requires_tier4_point_in_time_restore": True,
+            "additive_classes_ab_allow_tier3_image_rollback": True,
+            "destructive_classes_cd_require_forward_fix_or_tier4_restore": True,
             "pass": True,
         },
         "tier4_db_and_files_point_in_time_restore": {
@@ -2113,6 +2391,8 @@ def run_full_rehearsal(
     out_json: Path,
     site_name: str = DEFAULT_DR_SITE,
     run_id: str | None = None,
+    n_minus_1_image: str = "",
+    browser_report_out: Path | None = None,
 ) -> int:
     run_id = run_id or (datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S") + "-" + secrets.token_hex(3))
     project_name = f"crm-cskh-dr-https-{run_id}"
@@ -2211,6 +2491,26 @@ def run_full_rehearsal(
         )
         report["phases"]["uat_and_permissions_https"] = uat_res
 
+        if browser_report_out is not None:
+            import run_https_browser_uat_and_security as browser_tool
+
+            browser_res = browser_tool.run_browser_https_suite(
+                env_file=env_file,
+                ca_crt_path=ca_crt_path,
+                seed_info=boot_res["seed_info"],
+                seed_pw=seed_pw,
+                out_json=browser_report_out,
+            )
+            report["phases"]["https_browser_chromium_uat_and_security"] = {
+                "status": browser_res.get("status"),
+                "duration_seconds": browser_res.get("duration_seconds"),
+                "browser_engine": browser_res.get("browser_engine"),
+                "transport": browser_res.get("transport"),
+                "administrator_used_for_business_journeys": browser_res.get("administrator_used_for_business_journeys"),
+                "cases_total": browser_res.get("cases_total"),
+                "cases_passed": browser_res.get("cases_passed"),
+            }
+
         restart_res = rehearse_worker_restart_and_cron_retry(env_file=env_file)
         report["phases"]["worker_restart_and_cron_retry"] = restart_res
 
@@ -2222,6 +2522,7 @@ def run_full_rehearsal(
             seed_info=boot_res["seed_info"],
             seed_pw=seed_pw,
             scrubber=scrubber,
+            n_minus_1_image=n_minus_1_image,
         )
         report["phases"]["rollback_tiers_https"] = rollback_res
 
@@ -2396,9 +2697,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_full = sub.add_parser(
         "full-rehearsal",
-        help="Boot isolated Staging/DR HTTPS stack, run HTTPS smoke + UAT/RBAC + restart/retry + rollback, and tear down cleanly",
+        help="Boot isolated Staging/DR HTTPS stack, run HTTPS smoke + UAT/RBAC + Playwright browser + restart/retry + N->N-1 rollback, and tear down cleanly",
     )
     p_full.add_argument("--app-image", default=os.environ.get("APP_IMAGE", ""), required=False)
+    p_full.add_argument("--n-minus-1-image", default="", required=False)
+    p_full.add_argument("--browser-report-out", type=Path, default=None)
     p_full.add_argument("--site-name", default=DEFAULT_DR_SITE)
     p_full.add_argument("--run-id", default=None)
     p_full.add_argument("--out", type=Path, required=True)
@@ -2428,8 +2731,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_rst.add_argument("--state-dir", type=Path, required=True)
     p_rst.add_argument("--out", type=Path)
 
-    p_rbk = sub.add_parser("rehearse-rollback", help="Run Tier 1/2/4 rollback & restore drills over HTTPS")
+    p_rbk = sub.add_parser("rehearse-rollback", help="Run Tier 1/3/4 rollback & restore drills over HTTPS")
     p_rbk.add_argument("--state-dir", type=Path, required=True)
+    p_rbk.add_argument("--n-minus-1-image", default="", required=False)
     p_rbk.add_argument("--out", type=Path)
 
     p_down = sub.add_parser("down", help="Tear down isolated Staging/DR HTTPS stack and volumes")
@@ -2455,6 +2759,8 @@ def main(argv: list[str] | None = None) -> int:
             out_json=args.out,
             site_name=args.site_name,
             run_id=args.run_id,
+            n_minus_1_image=args.n_minus_1_image,
+            browser_report_out=args.browser_report_out,
         )
     if args.command == "up":
         return _cmd_up(args)
@@ -2501,6 +2807,7 @@ def main(argv: list[str] | None = None) -> int:
             seed_info=creds["seed_info"],
             seed_pw=creds["seed_password"],
             scrubber=scrubber,
+            n_minus_1_image=args.n_minus_1_image,
         )
         return _write_or_print_scrubbed(res, [db_pw, creds["admin_password"], creds["seed_password"]], args.out)
     if args.command == "down":

@@ -58,8 +58,31 @@
 | **S16** | Gọi lệnh ghi `POST /api/method/crm_cskh.*` thiếu hoặc sai `X-Frappe-CSRF-Token` | Từ chối `400`/`403` | `test_security_remediation`, `verify_offsite_restore.py`, `manage_isolated_staging_dr.py` | **`PASS`** |
 | **S17** | Chèn mã `<script>alert(1)</script>` / HTML độc hại / công thức CSV `=CMD|...` vào tên/ghi chú | Đã làm sạch thẻ độc hại & tiền tố `'` trong CSV | `test_p2_permissions_sec`, `test_p3_reporting_and_security`, `manage_isolated_staging_dr.py` | **`PASS`** |
 | **S18** | Gửi `page_size=99999` hoặc tạo hàng loạt job xuất báo cáo vượt hạn mức | Bị kẹp `<= 100` bản ghi/trang; chặn vượt quota xuất | `test_p1_api_permissions`, `test_p3_reporting_and_security`, `manage_isolated_staging_dr.py` | **`PASS`** |
-| **S19** | Truy cập trực tiếp `/api/resource/CSKH KPI Snapshot` hoặc `reportview_get` của cá nhân khác | Từ chối `403` / lọc rỗng | `test_p3_reporting_and_security`, `manage_isolated_staging_dr.py` | **`PASS`** |
-| **S20** | Kiểm tra phản hồi lỗi `403`/`404`, tệp log sức khỏe/backup, gói báo cáo & URL tải tệp | Khử sạch SĐT/sid/token (`<REDACTED_*>`), đóng File oracle | `test_error_response_normalization`, `test_ops_toolkit.py`, `test_offsite_restore.py` | **`PASS`** |
+| **S19** | Truy cập trực tiếp `/api/resource/CSKH KPI Snapshot` hoặc `reportview_get` của cá nhân khác | Từ chối `403` / lọc rỗng | `test_p3_reporting_and_security`, `manage_isolated_staging_dr.py`, `run_https_browser_uat_and_security.py` | **`PASS`** |
+| **S20** | Kiểm tra phản hồi lỗi `403`/`404`, tệp log sức khỏe/backup, gói báo cáo & URL tải tệp | Khử sạch SĐT/sid/token (`<REDACTED_*>`), đóng File oracle | `test_error_response_normalization`, `test_ops_toolkit.py`, `test_offsite_restore.py`, `run_https_browser_uat_and_security.py` | **`PASS`** |
+
+### 2.2. Ánh Xạ Đầy Đủ 16 Mục `P4.md §8.4` (`P4-8.4-01`–`P4-8.4-16`) Trên Trình Duyệt Chromium HTTPS Thật
+
+Toàn bộ 16 bài kiểm thử phá ranh giới quyền bắt buộc của `P4.md §8.4` được thực thi trên trình duyệt **Playwright Headless Chromium** qua TLS 1.3 thật (`ignore_https_errors=False`) bằng đúng 6 tài khoản nghiệp vụ (`CRM Admin`, `Leader A`, `Leader B`, `Staff A`, `Staff B`, `BOD` — **`administrator_used_for_business_journeys = false`**) tại [`run_https_browser_uat_and_security.py`](../../deploy/ops/run_https_browser_uat_and_security.py) (bằng chứng đã khử dữ liệu nhạy cảm tại [`https-browser-uat-security-report.json`](../../deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json)):
+
+| Mã `P4.md §8.4` | Actor thực hiện trên Chromium HTTPS | Kịch bản kiểm chứng UI + API | Expected / Actual |
+| :--- | :--- | :--- | :---: |
+| **`P4-8.4-01`** | `Staff A` | Đổi URL sang `/cskh/work-item?id=<wi_b>` (`#wi-summary-card` bị xóa trắng) + `get` / `PUT` / `export_query` `CRM Lead` của `Staff B` | Deny (`403`, `0` SĐT trên DOM) — **`PASS`** |
+| **`P4-8.4-02`** | `Staff A` | Đọc `CRM Call Log` của `Staff B` qua ID trực tiếp | Deny (`403`, `0` PII) — **`PASS`** |
+| **`P4-8.4-03`** | `Staff A` | Đọc/sửa `CRM Task`, `FCRM Note`, `CSKH Contact Attempt` của `Staff B` | Deny (`403`) — **`PASS`** |
+| **`P4-8.4-04`** | `Staff A` | Mở `/cskh/pool`, `/cskh/campaigns` (`403` SSR) & gọi `distribution.execute`, `ownership.reassign`, `assign_to.add`, `remove_assignments` | Deny (`403`) — **`PASS`** |
+| **`P4-8.4-05`** | `Staff A` | Chèn `performed_by` giả của `Staff B` vào payload `record_attempt` | Deny (`403`) — **`PASS`** |
+| **`P4-8.4-06`** | `BOD`, `Staff A`, `Guest` | `BOD` mở hộp thoại Xuất CSV trên UI & tải thành công (`0` SĐT); `Staff A` và `Guest` mở URL tải đó | `BOD 200`, `Staff A 403`, `Guest 403` — **`PASS`** |
+| **`P4-8.4-07`** | `Leader A`, `Leader B` | `Leader A` xem Đội A (`>0` dòng) rồi sửa URL `?team=TeamB` (`0` dòng + cảnh báo lỗi tiếng Việt); đối xứng cho `Leader B` (`403`) | Deny chéo đội 2 chiều — **`PASS`** |
+| **`P4-8.4-08`** | `Staff C` (`enabled=0`) | Khóa tài khoản khi đang mở phiên trình duyệt, tải lại trang & gọi API | Phiên cũ bị từ chối tức thì (`401`/`403`/`/login`) — **`PASS`** |
+| **`P4-8.4-09`** | `Staff A` | Truyền `page_size=99999` (`400`) & giả mạo `reference_doctype=User` trên `search_widget` (`403`) & đọc `CSKH KPI Snapshot` của `B` (`403`) | Deny (`400`/`403`) — **`PASS`** |
+| **`P4-8.4-10`** | `Staff A`, `Staff B`, `Guest` | Mở `/private/files/...` của `B`, thử `..%2f` traversal, và kiểm `/api/resource/File/<id>` chuẩn hóa `404` | `A 403`, `Guest 403`, `B 200`, Oracle `404` — **`PASS`** |
+| **`P4-8.4-11`** | `CRM Admin`, `Staff A`, `Staff B` | `CRM Admin` chuyển `A → B → A`: kiểm tra UI + API trước và ngay sau từng lần chuyển + `0` `DocShare`/`ToDo` mồ côi | `A` mất quyền ngay (`403`), `B` nhận (`200`), rồi hoàn trả chuẩn — **`PASS`** |
+| **`P4-8.4-12`** | `BOD` | Mở hộp thoại Drill-down KPI (`0` SĐT thô), kiểm `0` role `System Manager`, bị chặn `403` trên `/cskh/work-item`, `/cskh/scorecard`, `request_recompute` | Đúng phạm vi `BOD` — **`PASS`** |
+| **`P4-8.4-13`** | `CRM Admin` | Gọi `qa.create_sample` khi `p3_qa_enabled=false` + kiểm tra chặn tự chấm `QA_CONFLICT` trong JUnit | Chặn đúng quy chế — **`PASS`** |
+| **`P4-8.4-14`** | `BOD` | Yêu cầu xuất báo cáo kèm `include_pii=1` bị chặn `403`; xuất hợp lệ chạy nền qua hàng đợi | Deny `403` khi `include_pii=1` — **`PASS`** |
+| **`P4-8.4-15`** | `Staff A` | Bỏ `X-Frappe-CSRF-Token` (`400`/`403`) & gửi `<script>`/`onerror` trong ghi chú liên hệ rồi tải lại DOM Chromium | `window.__cskh_p4_xss == false`, `<script>` bị khử — **`PASS`** |
+| **`P4-8.4-16`** | `BOD` | Gọi lặp lại các endpoint báo cáo chỉ đọc (`get_executive_overview`, `get_team_comparison`) | Số dòng `CSKH KPI Run` không đổi — **`PASS`** |
 
 ---
 
