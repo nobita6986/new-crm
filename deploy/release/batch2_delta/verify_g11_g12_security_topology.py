@@ -19,6 +19,7 @@ import argparse
 import datetime as dt
 import json
 import pathlib
+import socket
 import subprocess
 import sys
 import time
@@ -192,12 +193,61 @@ print(json.dumps({
     "att_b1_id": att_b1["attempt_id"],
     "corr_b1_id": corr_b1["correction_id"],
     "leader_export_id": leader_exp["export_id"],
+    "leader_export_file_doc": leader_exp_row["file_doc"],
     "leader_export_file_url": leader_exp_row["file_url"],
     "admin_pii_export_id": admin_pii_exp["export_id"],
     "admin_ttl_export_id": admin_ttl_exp["export_id"],
     "export_file_meta": file_meta,
 }))
 """
+
+
+def _probe_oversized_body_status(
+    *,
+    port: int,
+    site_host: str,
+    path: str,
+    size_bytes: int,
+    cookie_hdr: str,
+    csrf_token: str,
+) -> int:
+    """Streams an oversized HTTP body while reading early `HTTP/1.1 413` safely even on early server close."""
+    req_head = (
+        f"POST {path} HTTP/1.1\r\n"
+        f"Host: {site_host}\r\n"
+        f"Cookie: {cookie_hdr}\r\n"
+        f"X-Frappe-CSRF-Token: {csrf_token}\r\n"
+        "Content-Type: application/octet-stream\r\n"
+        f"Content-Length: {size_bytes}\r\n"
+        "Connection: close\r\n\r\n"
+    ).encode("utf-8")
+    chunk = b"x" * 65536
+    sent = 0
+    with socket.create_connection(("127.0.0.1", port), timeout=30.0) as sock:
+        sock.sendall(req_head)
+        while sent < size_bytes:
+            to_send = min(len(chunk), size_bytes - sent)
+            try:
+                sock.sendall(chunk[:to_send])
+                sent += to_send
+            except (BrokenPipeError, ConnectionResetError):
+                break
+        resp = b""
+        while len(resp) < 4096:
+            try:
+                part = sock.recv(1024)
+            except ConnectionResetError:
+                break
+            if not part:
+                break
+            resp += part
+            if b"\r\n" in resp:
+                break
+    first_line = (
+        resp.splitlines()[0].decode("latin-1", errors="replace") if resp else ""
+    )
+    parts = first_line.split()
+    return int(parts[1]) if len(parts) >= 2 and parts[1].isdigit() else 0
 
 
 def build_plan_only_report(app_image: str) -> dict[str, object]:
@@ -566,7 +616,19 @@ def run_live_verification(
         )
         assert st_l1_exp_ok == 200 and len(raw_l1_csv) > 20
 
-        # Transfer `staff.b@dev.local` from Team 1 -> Team 2 (`S04` historical `team-as-of` check)
+        # Close `wi_b1` while `staff.b@dev.local` belongs to Team 1 (`team_at_assignment` + `owner_at_close`),
+        # then transfer `staff.b@dev.local` from Team 1 -> Team 2 (`S04` historical `team-as-of` isolation check).
+        st_close_b1, _, body_close_b1 = staff_b.post_json(
+            "/api/method/crm_cskh.api.workflow.close_work_item",
+            {
+                "work_item": wi_b1,
+                "completion_reason": "Hoàn tất liên hệ tại Team 1 trước khi điều chuyển nhân sự",
+                "close_category": "normal",
+                "idempotency_key": "g11-s04-close-b1-team1",
+            },
+        )
+        assert st_close_b1 == 200, (st_close_b1, body_close_b1)
+
         stack.exec_site_python(
             "node_b = frappe.db.get_value('CRM Sales Hierarchy', {'user': 'staff.b@dev.local'}, 'name')\n"
             "doc_b = frappe.get_doc('CRM Sales Hierarchy', node_b)\n"
@@ -576,12 +638,27 @@ def run_live_verification(
             "print(json.dumps({'transferred_to': doc_b.reports_to}))",
             {"team2_node": ctx["team2_node"]},
         )
-        # `leader2` (`Team 2`) MUST still get `403` on `wi_b1` belonging to `Team 1` private campaign (`S04`)
+        # `leader1` (`Team 1`) retains historical read (`200`), while `leader2` (`Team 2`) MUST get `403` on
+        # historical Team 1 closed item `wi_b1` AND `403` on Team 1 KPI comparison (`S04` `team-as-of`)!
+        st_s04_l1_wi, _, _ = leader1.get_json(
+            "/api/method/crm_cskh.api.workflow.get_work_item", {"work_item": wi_b1}
+        )
         st_s04_wi, _, _ = leader2.get_json(
             "/api/method/crm_cskh.api.workflow.get_work_item", {"work_item": wi_b1}
         )
-        assert st_s04_wi == 403, (
-            f"Expected S04 403 for Leader 2 on Team 1 item, got {st_s04_wi}"
+        st_s04_p3, _, _ = leader2.get_json(
+            "/api/method/crm_cskh.api.p3_reporting.get_team_comparison",
+            {
+                "period_type": "monthly",
+                "period_key": month_key,
+                "team": ctx["team1_node"],
+            },
+        )
+        assert st_s04_l1_wi == 200, (
+            f"Expected Leader 1 historical 200, got {st_s04_l1_wi}"
+        )
+        assert st_s04_wi == 403 and st_s04_p3 == 403, (
+            f"Expected S04 403 for Leader 2 on Team 1 item/KPI, got ({st_s04_wi}, {st_s04_p3})"
         )
 
         # Downgrade `team1.leader@dev.local` (`Sales Manager` removed -> `Sales User` only, leaf node)
@@ -639,19 +716,30 @@ def run_live_verification(
             and st_g_priv in (401, 403)
         )
 
-        # Security headers (`S17`)
+        # Security headers (`S17`: base Nginx `security_headers.conf`; `Permissions-Policy` verified with edge override in 2D)
         _, hdr_auth, _ = staff_a.raw_request("GET", "/cskh/my-customers")
         assert hdr_auth.get("x-content-type-options", "").lower() == "nosniff", hdr_auth
         assert hdr_auth.get("x-frame-options", "").upper() == "SAMEORIGIN", hdr_auth
-        assert "referrer-policy" in hdr_auth and "permissions-policy" in hdr_auth, (
-            hdr_auth
-        )
+        assert (
+            "referrer-policy" in hdr_auth and "strict-transport-security" in hdr_auth
+        ), hdr_auth
 
-        # Outside user (`S06`), Cross-staff (`S02`), Cross-team (`S03`), BOD 0-PII (`S05`)
+        # Outside user (`S06`), Cross-staff IDOR + anti-enumeration (`S02`), File oracle (`404 == 404`), Cross-team (`S03`), BOD 0-PII (`S05`)
         st_out, _, _ = outside.get_json("/api/method/crm_cskh.api.customers.my_list")
-        st_s02_existing, _, _ = staff_a.get_json(f"/api/resource/CRM%20Lead/{lead_c1}")
+        st_s02_lead_rest, _, _ = staff_a.get_json(f"/api/resource/CRM%20Lead/{lead_c1}")
+        st_s02_existing, _, _ = staff_a.get_json(
+            "/api/method/crm_cskh.api.workflow.get_work_item",
+            {"work_item": ctx["items"]["wi_c1"]["work_item"]},
+        )
         st_s02_missing, _, _ = staff_a.get_json(
-            "/api/resource/CRM%20Lead/CRM-LEAD-NONEXISTENT-9999"
+            "/api/method/crm_cskh.api.workflow.get_work_item",
+            {"work_item": "CSKH-WI-NONEXISTENT-9999"},
+        )
+        st_file_foreign, _, raw_file_foreign = staff_a.raw_request(
+            "GET", f"/api/resource/File/{ctx['leader_export_file_doc']}"
+        )
+        st_file_missing, _, raw_file_missing = staff_a.raw_request(
+            "GET", "/api/resource/File/NONEXISTENT-FILE-9999"
         )
         st_s03_leader, _, _ = leader1.get_json(
             "/api/method/crm_cskh.api.workflow.get_work_item",
@@ -678,7 +766,17 @@ def run_live_verification(
             },
         )
         bod_dump = json.dumps(body_bod_ok)
-        assert st_out == 403 and st_s02_existing == 403 and st_s02_missing == 403
+        assert (
+            st_out == 403
+            and st_s02_lead_rest == 403
+            and st_s02_existing == 403
+            and st_s02_missing == 403
+        ), (st_out, st_s02_lead_rest, st_s02_existing, st_s02_missing)
+        assert (
+            st_file_foreign == 404
+            and st_file_missing == 404
+            and raw_file_foreign == raw_file_missing
+        ), (st_file_foreign, st_file_missing)
         assert st_s03_leader == 403 and st_bod_pii == 403 and st_bod_ok == 200
         assert "090820010" not in bod_dump
 
@@ -717,16 +815,13 @@ def run_live_verification(
 
         # 2B. Payload Limits & Upload Hardening (`S11`, `OBS-P2-03`)
         # >25 MiB body blocked at Nginx (`CLIENT_MAX_BODY_SIZE=25m` -> `HTTP 413`)
-        oversized_26m = b"x" * (26 * 1024 * 1024)
-        st_26m, _, _ = admin.raw_request(
-            "POST",
-            "/api/method/crm_cskh.api.import_files.upload_import_file",
-            data=oversized_26m,
-            headers={
-                "Content-Type": "application/octet-stream",
-                "X-Frappe-CSRF-Token": admin.csrf_token,
-            },
-            timeout=45.0,
+        st_26m = _probe_oversized_body_status(
+            port=stack.http_port,
+            site_host=stack.site_name,
+            path="/api/method/crm_cskh.api.import_files.upload_import_file",
+            size_bytes=26 * 1024 * 1024,
+            cookie_hdr=admin.cookie_header(),
+            csrf_token=admin.csrf_token,
         )
         # >10 MiB multipart CSV blocked at app endpoint (`MAX_FILE_BYTES=10m` -> `HTTP 413 FILE_TOO_LARGE`)
         st_11m, _, body_11m = admin.upload_multipart(
@@ -907,7 +1002,7 @@ def run_live_verification(
             )[0]
             for _ in range(12)
         ]
-        st_leader1_unstarved, _, _ = leader1.get_json(
+        st_leader1_unstarved, hdr_edge, _ = leader1.get_json(
             "/api/method/crm_cskh.api.customers.customer_pool", {"page": 1}
         )
         assert 429 in rl_login_codes, (
@@ -919,6 +1014,7 @@ def run_live_verification(
         assert st_leader1_unstarved == 200, (
             f"Concurrent user starved during rate-limit burst: {st_leader1_unstarved}"
         )
+        assert "permissions-policy" in hdr_edge, hdr_edge
 
         port_isolation = verify_internal_ports_unexposed(stack)
 
@@ -961,7 +1057,9 @@ def run_live_verification(
                     "excluded_from_campaign_eligibility": True,
                 },
                 "s09_and_s04_role_and_team_change": {
+                    "s04_historical_team_as_of_leader1_http": st_s04_l1_wi,
                     "s04_historical_team_as_of_leader2_http": st_s04_wi,
+                    "s04_historical_team_as_of_leader2_p3_http": st_s04_p3,
                     "pre_downgrade_export_http": st_l1_exp_ok,
                     "post_downgrade_team_page_http": st_s09_page,
                     "post_downgrade_team_api_http": st_s09_api,
@@ -973,7 +1071,9 @@ def run_live_verification(
                 "authorization_and_headers": {
                     "guest_blocked": [st_g_page, st_g_api, st_g_priv],
                     "outside_user_http": st_out,
+                    "cross_staff_lead_rest_http": st_s02_lead_rest,
                     "cross_staff_403_parity": [st_s02_existing, st_s02_missing],
+                    "file_direct_oracle_404_byte_identical": True,
                     "cross_team_leader_http": st_s03_leader,
                     "bod_include_pii_blocked_http": st_bod_pii,
                     "bod_aggregate_drilldown_zero_pii": True,
@@ -983,6 +1083,7 @@ def run_live_verification(
                     "security_headers_verified": [
                         "x-content-type-options",
                         "x-frame-options",
+                        "strict-transport-security",
                         "referrer-policy",
                         "permissions-policy",
                     ],
