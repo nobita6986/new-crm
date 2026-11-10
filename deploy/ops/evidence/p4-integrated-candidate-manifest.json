@@ -58,6 +58,7 @@
   },
   "registry_digest": {
     "candidate_image_uri": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+    "oci_config_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
     "mariadb_image": "mariadb:11.8@sha256:f16d7a344413e519dff518f27bdb221388f274c97c4fb5f2cb0dc1b34fa",
     "redis_image": "redis:8.6-alpine@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba",
     "proxy_image": "traefik:v3.3@sha256:1fb7fe1eb8eb2ebccfb6bf9d96f0ed1f639f3ac60bc181cebd3bd6f21a1e62d8",
@@ -67,9 +68,10 @@
   "compose_and_config_sha": {
     "deploy_compose_git_tree_sha": "33eee03f392da7c1926a76d7b60052d8f1727da0",
     "deploy_images_git_tree_sha": "6f050a9aad5367f89158a68e9d429c106f31c214",
+    "rendered_dr_https_compose_config_sha256": "01a6b06741e3bfe212234353e9941e15d5ceabba35f78e256dc8ed4f6d8ac24f",
     "release_lock_sha256": "54800fc8c3aa579f8b2369c255966a5e44f799e08370dcde5a05543e211b9309",
     "runtime_isolation_audit_path": "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json",
-    "environment_inventory_doc": "docs/p4/environment-isolation-inventory.md"
+    "environment_inventory_doc": "docs/p4/infra-inventory.md"
   },
   "test_sites": {
     "isolated_staging_dr_https_site": {
@@ -209,7 +211,7 @@
       "status": "BLOCKED_ON_OPERATOR_ACCEPTANCE",
       "blocker_id": "BLK-GOV-06",
       "required_inputs": [
-        "Named Day-2 Operator acceptance signature & walkthrough completion date in docs/p4/operator-handover-pack.md"
+        "Named Day-2 Operator acceptance signature & walkthrough completion date in docs/p4/operations-sop.md"
       ]
     }
   }

@@ -1,6 +1,6 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
-  "generated_at_utc": "2026-11-10T05:33:58Z",
+  "generated_at_utc": "2026-11-10T05:51:42Z",
   "branch": "codex/p4-resume-ops",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
   "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
@@ -424,8 +424,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
-      "bytes": 10879,
-      "sha256": "ab30d71f46278f6716df9cce439801d69058c681888fff3db68e0aba41d615ac"
+      "bytes": 11072,
+      "sha256": "d5bcd1de48e9e53ffeeff91ebb7ecbf0e80837651151bfedaba3cf405d3ad489"
     },
     {
       "path": "deploy/ops/evidence/p4-vps-live-20261109/SHA256SUMS.txt",
@@ -504,8 +504,8 @@
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
-      "bytes": 124180,
-      "sha256": "a14396aaf18ce51ad57c69a9d6857f8e3432c1e8edd0fc2809e3def263bfd864"
+      "bytes": 124259,
+      "sha256": "272c6b5fb1259d172dd4bf03ced74284690042dd0f3569f864991e19fcf877a1"
     },
     {
       "path": "deploy/ops/run_https_browser_uat_and_security.py",

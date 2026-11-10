@@ -691,10 +691,15 @@ def audit_isolated_stack_runtime_resources(
     networks_ok = data_net_internal and app_net_internal and edge_net_present and zero_owner_net_overlap
 
     vol_ls = run_sub(
-        ["docker", "volume", "ls", "--filter", f"label=com.docker.compose.project={project_name}", "--format", "{{.Name}}"]
+        ["docker", "volume", "ls", "--format", "{{.Name}}"]
     )
-    vol_names = sorted(ln.strip() for ln in vol_ls.stdout.splitlines() if ln.strip())
-    volumes_ok = len(vol_names) >= 5 and all(v.startswith(f"{project_name}_") for v in vol_names)
+    vol_names = sorted(
+        ln.strip()
+        for ln in vol_ls.stdout.splitlines()
+        if ln.strip().startswith(f"{project_name}_")
+    )
+    expected_vol_suffixes = ("_cert_data", "_db_data", "_logs", "_redis_queue_data", "_sites")
+    volumes_ok = all(f"{project_name}{sfx}" in vol_names for sfx in expected_vol_suffixes)
 
     host_secret_meta = p403_tool.inspect_secret_file_bytes(
         secret_file, enforce_posix_mode=(os.name == "posix")
@@ -724,7 +729,7 @@ def audit_isolated_stack_runtime_resources(
     )
 
     passed = (
-        digest_parity.get("status") == "PASS"
+        bool(digest_parity.get("pass"))
         and ports_ok
         and networks_ok
         and volumes_ok
