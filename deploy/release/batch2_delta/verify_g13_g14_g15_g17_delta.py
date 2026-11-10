@@ -469,7 +469,7 @@ def run_g13_p1_delta(stack: IsolatedComposeStack) -> dict[str, object]:
     )
     stale_prev = unwrap_message(stale_prev_resp)
 
-    # Update `staff.a` weight to `50`, `staff.b` `30`, `staff.c` `20` -> bumps `rule_version`
+    # Publish `version=2` rules (`50/30/20`) -> advances `_db_rule_version(camp_1k)` to `2`
     for u_email, w in (
         ("staff.a@dev.local", 50),
         ("staff.b@dev.local", 30),
@@ -477,7 +477,13 @@ def run_g13_p1_delta(stack: IsolatedComposeStack) -> dict[str, object]:
     ):
         admin1.post_json(
             "/api/method/crm_cskh.api.campaigns.save_rule",
-            {"campaign": camp_1k, "user": u_email, "weight": w, "capacity_limit": 0},
+            {
+                "campaign": camp_1k,
+                "user": u_email,
+                "weight": w,
+                "capacity_limit": 0,
+                "version": 2,
+            },
         )
     st_rule_chg, _, _ = admin1.post_json(
         "/api/method/crm_cskh.api.distribution.execute",
@@ -646,6 +652,7 @@ for idx in range(1, 6):
     if not frappe.db.exists("CSKH Identity Index", {"normalized_phone": norm_ph}):
         frappe.get_doc({"doctype": "CSKH Identity Index", "normalized_phone": norm_ph, "canonical_lead": ld.name}).insert(ignore_permissions=True)
     wi = frappe.get_doc({"doctype": "CSKH Work Item", "lead": ld.name, "campaign": camp_p2, "status": "queued"}).insert(ignore_permissions=True)
+    frappe.get_doc({"doctype": "CSKH Active Claim", "lead": ld.name, "campaign": camp_p2, "work_item": wi.name}).insert(ignore_permissions=True)
     frappe.set_user("crm.admin@dev.local")
     own_api.assign(work_item=wi.name, target_user="staff.a@dev.local", reason=f"G14 {idx}", request_id=f"g14-asgn-{idx}")
     frappe.set_user("Administrator")

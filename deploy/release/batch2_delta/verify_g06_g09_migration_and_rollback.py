@@ -354,6 +354,12 @@ for idx, owner_email in enumerate(
         "campaign": camp_id,
         "status": "queued",
     }).insert(ignore_permissions=True)
+    frappe.get_doc({
+        "doctype": "CSKH Active Claim",
+        "lead": lead.name,
+        "campaign": camp_id,
+        "work_item": wi.name,
+    }).insert(ignore_permissions=True)
     frappe.set_user("crm.admin@dev.local")
     own_api.assign(
         work_item=wi.name,

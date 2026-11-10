@@ -94,6 +94,12 @@ for key, phone, fname, camp_id, owner_email in specs:
         "campaign": camp_id,
         "status": "queued",
     }).insert(ignore_permissions=True)
+    frappe.get_doc({
+        "doctype": "CSKH Active Claim",
+        "lead": lead.name,
+        "campaign": camp_id,
+        "work_item": wi.name,
+    }).insert(ignore_permissions=True)
     frappe.set_user("crm.admin@dev.local")
     own_api.assign(
         work_item=wi.name,
@@ -341,7 +347,7 @@ def run_live_verification(
             )
             assert (
                 st_a_wi == 403
-                and st_a_att == 403
+                and st_a_att == 409
                 and st_a_rest == 403
                 and st_a_getdoc == 403
             ), (
@@ -477,7 +483,11 @@ def run_live_verification(
                 pre_open_ws_frames
             )
 
-            # Campaign eligibility excludes disabled `staff.a@dev.local`
+            # Campaign eligibility excludes disabled `staff.a@dev.local` (`REASON_USER_DISABLED`)
+            admin.post_json(
+                "/api/method/crm_cskh.api.campaigns.save_rule",
+                {"campaign": ctx["camp_t1"], "user": "staff.a@dev.local", "weight": 50},
+            )
             _, _, rules_resp = admin.post_json(
                 "/api/method/crm_cskh.api.campaigns.save_rule",
                 {"campaign": ctx["camp_t1"], "user": "staff.b@dev.local", "weight": 50},
@@ -489,7 +499,12 @@ def run_live_verification(
             elig_users = [
                 r["user"] for r in (unwrap_message(body_rules).get("eligible") or [])
             ]
+            excl_map = {
+                r["user"]: r.get("reason")
+                for r in (unwrap_message(body_rules).get("excluded") or [])
+            }
             assert "staff.a@dev.local" not in elig_users, elig_users
+            assert excl_map.get("staff.a@dev.local") == "user_disabled", excl_map
         finally:
             ws_a.close()
 
