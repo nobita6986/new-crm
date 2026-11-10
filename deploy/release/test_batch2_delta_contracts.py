@@ -266,10 +266,12 @@ class TestBatch2DeltaContracts(unittest.TestCase):
 
     def test_lock_diff_parsers_and_reachability_probe_compile(self) -> None:
         from collect_cve_and_lock_diff_evidence import (
+            DEFAULT_BASELINE_SHA,
             IN_CONTAINER_REACHABILITY_PROBE,
             _diff_kv_map,
             _parse_dpkg_list,
             _parse_pip_freeze,
+            build_lock_diff_report,
         )
 
         compile(IN_CONTAINER_REACHABILITY_PROBE, "<reachability_probe>", "exec")
@@ -283,6 +285,20 @@ class TestBatch2DeltaContracts(unittest.TestCase):
         )
         self.assertIn("libmariadb3:amd64", dpkg)
         self.assertIn("libxml2", dpkg)
+
+        live_diff = build_lock_diff_report(
+            repo_root=REPO_ROOT,
+            baseline_sha=DEFAULT_BASELINE_SHA,
+            candidate_build_dir=REPO_ROOT / "deploy" / "images" / "evidence",
+        )
+        self.assertEqual(
+            live_diff["component_version_transitions"]["frappe"]["before"]["tag"],  # type: ignore[index]
+            "v15.123.1",
+        )
+        self.assertEqual(
+            live_diff["component_version_transitions"]["frappe"]["after"]["tag"],  # type: ignore[index]
+            "v15.126.0",
+        )
 
 
 if __name__ == "__main__":
