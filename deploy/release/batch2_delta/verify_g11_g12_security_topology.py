@@ -790,13 +790,21 @@ def run_live_verification(
             },
             csrf_override="forged-csrf-token-000",
         )
-        st_desk_bypass, _, _ = staff_a.get_json(
+        st_gv, _, body_gv = staff_a.get_json(
             "/api/method/frappe.client.get_value",
             {
                 "doctype": "CRM Lead",
                 "filters": json.dumps({"name": lead_c1}),
                 "fieldname": "mobile_no",
             },
+        )
+        st_desk_bypass, _, _ = staff_a.get_json(
+            "/api/method/frappe.core.doctype.data_export.exporter.export_data",
+            {"doctype": "CRM Lead"},
+        )
+        st_phone_bypass, _, _ = staff_a.get_json(
+            "/api/method/crm.integrations.api.get_contact_by_phone_number",
+            {"phone_number": "0908200104"},
         )
         st_spoof, _, _ = staff_a.post_json(
             "/api/method/crm_cskh.api.workflow.record_attempt",
@@ -810,7 +818,15 @@ def run_live_verification(
             },
         )
         assert st_csrf_bad in (400, 403), st_csrf_bad
-        assert st_desk_bypass == 403, st_desk_bypass
+        assert (
+            st_gv == 200
+            and not unwrap_message(body_gv)
+            and "0908200104" not in json.dumps(body_gv)
+        ), (st_gv, body_gv)
+        assert st_desk_bypass == 403 and st_phone_bypass == 403, (
+            st_desk_bypass,
+            st_phone_bypass,
+        )
         assert st_spoof in (400, 403, 422), st_spoof
 
         # 2B. Payload Limits & Upload Hardening (`S11`, `OBS-P2-03`)
