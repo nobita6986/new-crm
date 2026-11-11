@@ -25,7 +25,9 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import math
 import os
+import platform
 import re
 import secrets
 import shutil
@@ -3084,13 +3086,17 @@ def _write_or_print_scrubbed(res: dict[str, Any], secret_list: list[str], out_pa
 LOCKED_CANDIDATE_DIGEST_V1_4 = (
     "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
 )
+DEFAULT_G18_THRESHOLDS_V1_4_PATH = OPS_DIR / "g18_slo_thresholds_v1_4.json"
+LOCKED_G18_THRESHOLDS_V1_4_SHA256 = (
+    "2a3ff3642af97b98d4102ec3bcb138655a58ce21860132d056c7ff0f33c2dc19"
+)
 
 OWNER_TICKET_V1_4_PROPOSED_SLOS: dict[str, dict[str, Any]] = {
     "my_customers_worklist_api_p95_ms": {
         "threshold": 500.0,
         "unit": "ms",
         "operator": "<=",
-        "description": "My Customers worklist JSON API p95 latency",
+        "description": "My Customers worklist JSON API p95 latency (40 distinct staff sessions)",
     },
     "open_lead_and_history_api_p95_ms": {
         "threshold": 600.0,
@@ -3114,13 +3120,13 @@ OWNER_TICKET_V1_4_PROPOSED_SLOS: dict[str, dict[str, Any]] = {
         "threshold": 1200.0,
         "unit": "ms",
         "operator": "<=",
-        "description": "Paginated KPI drill-down API p95 latency (worst-case across daily & 250k monthly)",
+        "description": "Paginated KPI drill-down API p95 latency (worst-case across daily campaign & 250k monthly company)",
     },
     "http_5xx_error_rate_pct": {
         "threshold": 0.5,
         "unit": "%",
         "operator": "<=",
-        "description": "HTTP 5xx error rate across S1 workloads and session waves",
+        "description": "HTTP error rate across S1 c=12 suite and 20/40/80 mixed session waves",
     },
     "daily_incremental_kpi_refresh_lag_sec": {
         "threshold": 300.0,
@@ -3269,6 +3275,11 @@ def readonly_vps_preflight(
         "timestamp_utc": utc_now_iso(),
         "mode": "READ_ONLY_ZERO_MUTATION",
         "status": "PASS" if all(checks.values()) else "FAIL",
+        "host_identity": {
+            "hostname": socket.gethostname(),
+            "platform": platform.platform(),
+            "kernel_release": platform.release(),
+        },
         "host_resources": {
             "cpu_cores": cpu_cores,
             "mem_total_mib": mem["mem_total_mib"],
@@ -3469,6 +3480,7 @@ def collect_vps_g03_g05_receipts(
         "timestamp_utc": utc_now_iso(),
         "status": "PASS" if all_ok else "FAIL",
         "app_image": app_image,
+        "host_identity": preflight["host_identity"],
         "isolated_project_name": project_name,
         "isolated_site_name": site_name,
         "kept_up_for_g18": keep_up,
@@ -3491,88 +3503,1488 @@ def collect_vps_g03_g05_receipts(
     return summary
 
 
+def serialize_g18_thresholds_spec(spec: dict[str, Any]) -> bytes:
+    """Deterministic UTF-8 sorted-key JSON serialization for `g18_slo_thresholds_v1_4.json`."""
+    return (json.dumps(spec, indent=2, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def compute_g18_thresholds_sha256(spec: dict[str, Any]) -> str:
+    """Compute SHA-256 hex digest of a canonical v1.4 G18 SLO threshold specification."""
+    return hashlib.sha256(serialize_g18_thresholds_spec(spec)).hexdigest()
+
+
+def _diff_threshold_nodes(expected: Any, candidate: Any, prefix: str, errors: list[str]) -> None:
+    if isinstance(expected, dict):
+        if not isinstance(candidate, dict):
+            errors.append(f"threshold_type_mismatch:{prefix}:expected_dict_got_{type(candidate).__name__}")
+            return
+        for k in sorted(expected):
+            if k not in candidate:
+                errors.append(f"missing_threshold_spec_key:{prefix}.{k}")
+            else:
+                _diff_threshold_nodes(expected[k], candidate[k], f"{prefix}.{k}", errors)
+        for k in sorted(candidate):
+            if k not in expected:
+                errors.append(f"unexpected_threshold_spec_key:{prefix}.{k}")
+        return
+    if isinstance(expected, bool):
+        if not isinstance(candidate, bool) or candidate != expected:
+            errors.append(f"threshold_mismatch:{prefix}:expected={expected!r}:got={candidate!r}")
+        return
+    if isinstance(expected, (int, float)):
+        if isinstance(candidate, bool) or not isinstance(candidate, (int, float)):
+            errors.append(f"threshold_type_mismatch:{prefix}:expected_number_got_{type(candidate).__name__}")
+            return
+        if not math.isfinite(float(candidate)) or abs(float(candidate) - float(expected)) > 1e-6:
+            errors.append(f"threshold_mismatch:{prefix}:expected={expected}:got={candidate}")
+        return
+    if candidate != expected:
+        errors.append(f"threshold_mismatch:{prefix}:expected={expected!r}:got={candidate!r}")
+
+
+def load_and_validate_g18_thresholds_v1_4(
+    *,
+    thresholds_spec: dict[str, Any] | None = None,
+    thresholds_path: Path | None = None,
+) -> tuple[dict[str, Any], str, list[str]]:
+    """Load and cryptographically validate the locked v1.4 G18 threshold specification."""
+    errors: list[str] = []
+    canonical_bytes = DEFAULT_G18_THRESHOLDS_V1_4_PATH.read_bytes()
+    canonical_file_sha = hashlib.sha256(canonical_bytes).hexdigest()
+    canonical_spec = json.loads(canonical_bytes.decode("utf-8"))
+    canonical_sha = compute_g18_thresholds_sha256(canonical_spec)
+    if canonical_file_sha != LOCKED_G18_THRESHOLDS_V1_4_SHA256 or canonical_sha != LOCKED_G18_THRESHOLDS_V1_4_SHA256:
+        raise RuntimeError(
+            f"Canonical {DEFAULT_G18_THRESHOLDS_V1_4_PATH} SHA-256 drift: "
+            f"file={canonical_file_sha} canon={canonical_sha} expected={LOCKED_G18_THRESHOLDS_V1_4_SHA256}"
+        )
+
+    if thresholds_spec is not None and thresholds_path is not None:
+        errors.append("cannot_specify_both_thresholds_spec_and_thresholds_path")
+
+    if thresholds_spec is None and thresholds_path is None:
+        return canonical_spec, canonical_sha, errors
+
+    candidate_spec: dict[str, Any] | None = None
+    raw_file_sha: str | None = None
+    if thresholds_path is not None:
+        if not thresholds_path.is_file():
+            errors.append(f"thresholds_file_not_found:{thresholds_path}")
+            return canonical_spec, "", errors
+        try:
+            raw_bytes = thresholds_path.read_bytes()
+            raw_file_sha = hashlib.sha256(raw_bytes).hexdigest()
+            loaded = json.loads(raw_bytes.decode("utf-8"))
+        except Exception as exc:
+            errors.append(f"thresholds_file_invalid_json:{exc}")
+            return canonical_spec, raw_file_sha or "", errors
+        if not isinstance(loaded, dict):
+            errors.append("thresholds_file_root_not_dict")
+            return canonical_spec, raw_file_sha, errors
+        candidate_spec = loaded
+    else:
+        if not isinstance(thresholds_spec, dict):
+            errors.append(f"thresholds_spec_not_dict:{type(thresholds_spec).__name__}")
+            return canonical_spec, "", errors
+        candidate_spec = thresholds_spec
+
+    candidate_sha = compute_g18_thresholds_sha256(candidate_spec)
+    if raw_file_sha is not None and raw_file_sha != candidate_sha:
+        errors.append(
+            f"non_canonical_thresholds_file_bytes_sha256_mismatch:file={raw_file_sha}:canonical={candidate_sha}"
+        )
+    _diff_threshold_nodes(canonical_spec, candidate_spec, "root", errors)
+    if candidate_sha != LOCKED_G18_THRESHOLDS_V1_4_SHA256:
+        errors.append(
+            f"thresholds_sha256_mismatch_vs_locked_v1_4:expected={LOCKED_G18_THRESHOLDS_V1_4_SHA256}:got={candidate_sha}"
+        )
+    return (canonical_spec if errors else candidate_spec), candidate_sha, errors
+
+
+def _nav_dict(root: Any, dotted_path: str, missing: list[str]) -> dict[str, Any] | None:
+    cur = root
+    built: list[str] = []
+    for part in dotted_path.split("."):
+        built.append(part)
+        if not isinstance(cur, dict) or part not in cur:
+            missing.append(".".join(built))
+            return None
+        cur = cur[part]
+    if not isinstance(cur, dict):
+        missing.append(dotted_path)
+        return None
+    return cur
+
+
+def _req_float(
+    obj: dict[str, Any] | None,
+    key: str,
+    full_path: str,
+    missing: list[str],
+    *,
+    require_positive: bool = False,
+) -> float | None:
+    if not isinstance(obj, dict) or key not in obj:
+        missing.append(full_path)
+        return None
+    val = obj[key]
+    if val is None or isinstance(val, bool) or not isinstance(val, (int, float)):
+        missing.append(full_path)
+        return None
+    fval = float(val)
+    if not math.isfinite(fval) or fval < 0.0 or (require_positive and fval <= 0.0):
+        missing.append(full_path)
+        return None
+    return fval
+
+
+def _req_int(
+    obj: dict[str, Any] | None,
+    key: str,
+    full_path: str,
+    missing: list[str],
+    *,
+    require_positive: bool = False,
+    allow_digit_str: bool = False,
+) -> int | None:
+    if not isinstance(obj, dict) or key not in obj:
+        missing.append(full_path)
+        return None
+    val = obj[key]
+    if val is None or isinstance(val, bool):
+        missing.append(full_path)
+        return None
+    if allow_digit_str and isinstance(val, str) and val.isdigit():
+        ival = int(val)
+    elif isinstance(val, int):
+        ival = val
+    else:
+        missing.append(full_path)
+        return None
+    if ival < 0 or (require_positive and ival <= 0):
+        missing.append(full_path)
+        return None
+    return ival
+
+
+def _req_bool(obj: dict[str, Any] | None, key: str, full_path: str, missing: list[str]) -> bool | None:
+    if not isinstance(obj, dict) or key not in obj or not isinstance(obj[key], bool):
+        missing.append(full_path)
+        return None
+    return obj[key]
+
+
+def _req_str(obj: dict[str, Any] | None, key: str, full_path: str, missing: list[str]) -> str | None:
+    if not isinstance(obj, dict) or key not in obj or not isinstance(obj[key], str) or not obj[key].strip():
+        missing.append(full_path)
+        return None
+    return obj[key].strip()
+
+
+def evaluate_precheck_7_metrics(
+    benchmark_report: dict[str, Any],
+    precheck_spec: dict[str, Any],
+    *,
+    owner_signed: bool,
+    missing: list[str],
+    breaches: list[str],
+) -> dict[str, Any]:
+    """Evaluate the 7-metric table strictly for the G18 pre-check step (zero silent 0.0 defaults)."""
+    http_root = _nav_dict(benchmark_report, "s1_http_acceptance_and_mixed_waves", missing)
+    bod_root = (
+        _nav_dict(http_root, "bod_overview_and_drilldown_http", missing)
+        if http_root is not None
+        else None
+    )
+    waves_root = (
+        _nav_dict(http_root, "concurrent_mixed_session_waves_20_40_80", missing)
+        if http_root is not None
+        else None
+    )
+    dom_root = _nav_dict(benchmark_report, "s1_domain_and_database_benchmark", missing)
+    kpi_recompute = _nav_dict(dom_root, "kpi_recompute_s1", missing) if dom_root is not None else None
+    overall_sum = _nav_dict(benchmark_report, "overall_summary", missing)
+    p4_9_2_items = _nav_dict(benchmark_report, "p4_9_2_acceptance_matrix.items", missing)
+
+    def _p95_from_http_node(parent: dict[str, Any] | None, key: str, prefix: str) -> float | None:
+        if parent is None:
+            return None
+        node = _nav_dict(parent, key, missing)
+        if node is None:
+            return None
+        _req_int(node, "requests_total", f"{prefix}.requests_total", missing, require_positive=True)
+        return _req_float(node, "p95_ms", f"{prefix}.p95_ms", missing, require_positive=True)
+
+    mc_primary = _p95_from_http_node(
+        http_root,
+        "staff_my_customers_http",
+        "s1_http_acceptance_and_mixed_waves.staff_my_customers_http",
+    )
+    mc_matrix = _req_float(
+        _nav_dict(p4_9_2_items, "staff_my_customers_p95_le_1500ms", missing) if p4_9_2_items is not None else None,
+        "measured_http_p95_ms",
+        "p4_9_2_acceptance_matrix.items.staff_my_customers_p95_le_1500ms.measured_http_p95_ms",
+        missing,
+        require_positive=True,
+    )
+
+    lead_primary = _p95_from_http_node(
+        http_root,
+        "lead_detail_and_history_http",
+        "s1_http_acceptance_and_mixed_waves.lead_detail_and_history_http",
+    )
+    lead_matrix = _req_float(
+        _nav_dict(p4_9_2_items, "open_lead_and_history_p95_le_2000ms", missing) if p4_9_2_items is not None else None,
+        "measured_http_p95_ms",
+        "p4_9_2_acceptance_matrix.items.open_lead_and_history_p95_le_2000ms.measured_http_p95_ms",
+        missing,
+        require_positive=True,
+    )
+
+    att_primary = _p95_from_http_node(
+        http_root,
+        "record_attempt_and_callback_http",
+        "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http",
+    )
+    att_matrix = _req_float(
+        (
+            _nav_dict(p4_9_2_items, "record_attempt_and_callback_p95_le_2000ms_zero_dup", missing)
+            if p4_9_2_items is not None
+            else None
+        ),
+        "measured_http_p95_ms",
+        "p4_9_2_acceptance_matrix.items.record_attempt_and_callback_p95_le_2000ms_zero_dup.measured_http_p95_ms",
+        missing,
+        require_positive=True,
+    )
+
+    bod_primary = _p95_from_http_node(
+        bod_root,
+        "bod_executive_overview_role_api",
+        "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.bod_executive_overview_role_api",
+    )
+    bod_matrix = _req_float(
+        _nav_dict(p4_9_2_items, "bod_overview_snapshot_p95_le_3000ms", missing) if p4_9_2_items is not None else None,
+        "measured_http_p95_ms",
+        "p4_9_2_acceptance_matrix.items.bod_overview_snapshot_p95_le_3000ms.measured_http_p95_ms",
+        missing,
+        require_positive=True,
+    )
+
+    drill_daily_primary = _p95_from_http_node(
+        bod_root,
+        "kpi_drilldown_daily_campaign_role_api",
+        "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_daily_campaign_role_api",
+    )
+    drill_monthly_primary = _p95_from_http_node(
+        bod_root,
+        "kpi_drilldown_monthly_company_role_api",
+        "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_monthly_company_role_api",
+    )
+    drill_matrix_node = (
+        _nav_dict(p4_9_2_items, "kpi_drilldown_paginated_p95_le_3000ms", missing)
+        if p4_9_2_items is not None
+        else None
+    )
+    drill_daily_matrix = _req_float(
+        drill_matrix_node,
+        "measured_daily_campaign_http_p95_ms",
+        "p4_9_2_acceptance_matrix.items.kpi_drilldown_paginated_p95_le_3000ms.measured_daily_campaign_http_p95_ms",
+        missing,
+        require_positive=True,
+    )
+    drill_monthly_matrix = _req_float(
+        drill_matrix_node,
+        "measured_monthly_company_250k_http_p95_ms",
+        "p4_9_2_acceptance_matrix.items.kpi_drilldown_paginated_p95_le_3000ms.measured_monthly_company_250k_http_p95_ms",
+        missing,
+        require_positive=True,
+    )
+
+    overall_err: float | None = None
+    if overall_sum is not None:
+        _req_int(overall_sum, "requests_total", "overall_summary.requests_total", missing, require_positive=True)
+        overall_err = _req_float(overall_sum, "error_rate_pct", "overall_summary.error_rate_pct", missing)
+
+    wave_errs: list[float | None] = []
+    for wname in ("sessions_20", "sessions_40", "sessions_80"):
+        wsum = (
+            _nav_dict(waves_root, f"{wname}.overall_summary", missing)
+            if waves_root is not None
+            else None
+        )
+        p_base = f"s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.{wname}.overall_summary"
+        if wsum is not None:
+            _req_int(wsum, "requests_total", f"{p_base}.requests_total", missing, require_positive=True)
+            wave_errs.append(_req_float(wsum, "error_rate_pct", f"{p_base}.error_rate_pct", missing))
+        else:
+            wave_errs.append(None)
+
+    daily_inc_ms = (
+        _req_float(
+            kpi_recompute,
+            "daily_incremental_ms",
+            "s1_domain_and_database_benchmark.kpi_recompute_s1.daily_incremental_ms",
+            missing,
+            require_positive=True,
+        )
+        if kpi_recompute is not None
+        else None
+    )
+
+    def _reconcile_pair(primary: float | None, matrix_val: float | None, label: str) -> float | None:
+        if primary is None or matrix_val is None:
+            return None
+        if abs(primary - matrix_val) > 1e-2:
+            breaches.append(
+                f"precheck_matrix_inconsistency:{label}:primary={primary}:p4_9_2_matrix={matrix_val}"
+            )
+            return max(primary, matrix_val)
+        return primary
+
+    drill_daily = _reconcile_pair(drill_daily_primary, drill_daily_matrix, "kpi_drilldown_daily")
+    drill_monthly = _reconcile_pair(drill_monthly_primary, drill_monthly_matrix, "kpi_drilldown_monthly_250k")
+
+    err_candidates = [overall_err, *wave_errs]
+    worst_err = (
+        max(v for v in err_candidates if v is not None)
+        if all(v is not None for v in err_candidates)
+        else None
+    )
+
+    measured_values: dict[str, float | None] = {
+        "my_customers_worklist_api_p95_ms": _reconcile_pair(
+            mc_primary, mc_matrix, "my_customers_worklist_api_p95_ms"
+        ),
+        "open_lead_and_history_api_p95_ms": _reconcile_pair(
+            lead_primary, lead_matrix, "open_lead_and_history_api_p95_ms"
+        ),
+        "contact_attempt_write_p95_ms": _reconcile_pair(
+            att_primary, att_matrix, "contact_attempt_write_p95_ms"
+        ),
+        "bod_executive_overview_api_p95_ms": _reconcile_pair(
+            bod_primary, bod_matrix, "bod_executive_overview_api_p95_ms"
+        ),
+        "kpi_drilldown_paginated_api_p95_ms": (
+            max(drill_daily, drill_monthly)
+            if (drill_daily is not None and drill_monthly is not None)
+            else None
+        ),
+        "http_5xx_error_rate_pct": worst_err,
+        "daily_incremental_kpi_refresh_lag_sec": (
+            round(daily_inc_ms / 1000.0, 3) if daily_inc_ms is not None else None
+        ),
+    }
+
+    metric_comparisons: dict[str, dict[str, Any]] = {}
+    all_7_within = True
+    any_7_missing = False
+    for key, spec in precheck_spec.items():
+        threshold = float(spec["threshold"])
+        measured = measured_values.get(key)
+        if measured is None:
+            any_7_missing = True
+            all_7_within = False
+            entry: dict[str, Any] = {
+                "metric": key,
+                "description": spec["description"],
+                "operator": spec["operator"],
+                "v1_4_threshold": threshold,
+                "measured_value": None,
+                "unit": spec["unit"],
+                "headroom": None,
+                "within_v1_4_threshold": False,
+                "evaluation_status": "MISSING_MEASUREMENT",
+            }
+        else:
+            passed_metric = measured <= threshold
+            if not passed_metric:
+                all_7_within = False
+                breaches.append(
+                    f"precheck_7_metrics.{key}:measured={measured}{spec['unit']}>threshold={threshold}{spec['unit']}"
+                )
+            entry = {
+                "metric": key,
+                "description": spec["description"],
+                "operator": spec["operator"],
+                "v1_4_threshold": threshold,
+                "measured_value": measured,
+                "unit": spec["unit"],
+                "headroom": round(threshold - measured, 3),
+                "within_v1_4_threshold": passed_metric,
+                "evaluation_status": (
+                    ("PASS" if passed_metric else "FAIL")
+                    if owner_signed
+                    else "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+                    if passed_metric
+                    else "PRE_CHECK_BREACHES_PROPOSED_V1_4"
+                ),
+            }
+        if key == "kpi_drilldown_paginated_api_p95_ms":
+            entry["measured_daily_campaign_http_p95_ms"] = drill_daily
+            entry["measured_monthly_company_250k_http_p95_ms"] = drill_monthly
+        metric_comparisons[key] = entry
+
+    precheck_status = (
+        "FAIL_MISSING_MEASUREMENTS"
+        if any_7_missing
+        else ("PRECHECK_PASS" if all_7_within else "PRECHECK_FAIL_THRESHOLD_BREACH")
+    )
+    return {
+        "role": "PRECHECK_TABLE_7_METRICS",
+        "status": precheck_status,
+        "all_7_metrics_present": not any_7_missing,
+        "all_7_metrics_within_v1_4_thresholds": all_7_within,
+        "metric_comparisons": metric_comparisons,
+    }
+
+
+def evaluate_section_3_2_a_b_c(
+    benchmark_report: dict[str, Any],
+    thresholds_spec: dict[str, Any],
+    *,
+    missing: list[str],
+    breaches: list[str],
+) -> dict[str, Any]:
+    """Full §3.2A–C reconciliation by individual case and session model aligned with T1B benchmark v2."""
+    # --- §3.2A: Interactive HTTP API & SSR by case and session model ---
+    spec_3_2a = thresholds_spec["section_3_2A_cases_and_session_models"]
+    cases_3_2a: dict[str, dict[str, Any]] = {}
+    by_session_model: dict[str, dict[str, Any]] = {}
+    sec_3_2a_passed = True
+
+    for case_name, cspec in sorted(spec_3_2a.items()):
+        cpath = str(cspec["path"])
+        session_model = str(cspec["session_model"])
+        node = _nav_dict(benchmark_report, cpath, missing)
+        case_missing_before = len(missing)
+        case_breaches: list[str] = []
+
+        req_total = _req_int(node, "requests_total", f"{cpath}.requests_total", missing, require_positive=True)
+        ok_cnt = _req_int(node, "ok_count", f"{cpath}.ok_count", missing)
+        err_cnt = _req_int(node, "error_count", f"{cpath}.error_count", missing)
+        err_pct = _req_float(node, "error_rate_pct", f"{cpath}.error_rate_pct", missing)
+        p95_ms = _req_float(node, "p95_ms", f"{cpath}.p95_ms", missing, require_positive=True)
+
+        conc_val: int | None = None
+        if "concurrency" in cspec:
+            conc_val = _req_int(node, "concurrency", f"{cpath}.concurrency", missing, require_positive=True)
+            if conc_val is not None and conc_val != int(cspec["concurrency"]):
+                case_breaches.append(
+                    f"{case_name}.concurrency:expected={cspec['concurrency']}:got={conc_val}"
+                )
+
+        dist_sess_val: int | None = None
+        if "distinct_sessions_used" in cspec:
+            dist_sess_val = _req_int(
+                node, "distinct_sessions_used", f"{cpath}.distinct_sessions_used", missing, require_positive=True
+            )
+            if dist_sess_val is not None and dist_sess_val != int(cspec["distinct_sessions_used"]):
+                case_breaches.append(
+                    f"{case_name}.distinct_sessions_used:expected={cspec['distinct_sessions_used']}:got={dist_sess_val}"
+                )
+
+        timeout_cnt: int | None = None
+        if "max_timeout_count" in cspec:
+            timeout_cnt = _req_int(node, "timeout_count", f"{cpath}.timeout_count", missing)
+            if timeout_cnt is not None and timeout_cnt > int(cspec["max_timeout_count"]):
+                case_breaches.append(
+                    f"{case_name}.timeout_count:{timeout_cnt}>{cspec['max_timeout_count']}"
+                )
+
+        if "max_error_count" in cspec and err_cnt is not None and err_cnt > int(cspec["max_error_count"]):
+            case_breaches.append(f"{case_name}.error_count:{err_cnt}>{cspec['max_error_count']}")
+
+        if req_total is not None and req_total < int(cspec["min_requests"]):
+            case_breaches.append(f"{case_name}.requests_total:{req_total}<{cspec['min_requests']}")
+        if req_total is not None and ok_cnt is not None and err_cnt is not None and (ok_cnt + err_cnt) != req_total:
+            case_breaches.append(
+                f"{case_name}.count_accounting_mismatch:ok={ok_cnt}+err={err_cnt}!=total={req_total}"
+            )
+        if err_pct is not None and err_pct > float(cspec["max_error_rate_pct"]) + 1e-6:
+            case_breaches.append(
+                f"{case_name}.error_rate_pct:{err_pct}>{cspec['max_error_rate_pct']}"
+            )
+        if p95_ms is not None and p95_ms > float(cspec["max_p95_ms"]):
+            case_breaches.append(f"{case_name}.p95_ms:{p95_ms}>{cspec['max_p95_ms']}")
+
+        if "max_get_work_item_p95_ms" in cspec:
+            gw_p95 = _req_float(
+                node, "get_work_item_p95_ms", f"{cpath}.get_work_item_p95_ms", missing, require_positive=True
+            )
+            if gw_p95 is not None and gw_p95 > float(cspec["max_get_work_item_p95_ms"]):
+                case_breaches.append(
+                    f"{case_name}.get_work_item_p95_ms:{gw_p95}>{cspec['max_get_work_item_p95_ms']}"
+                )
+        if "max_list_attempts_p95_ms" in cspec:
+            la_p95 = _req_float(
+                node, "list_attempts_p95_ms", f"{cpath}.list_attempts_p95_ms", missing, require_positive=True
+            )
+            if la_p95 is not None and la_p95 > float(cspec["max_list_attempts_p95_ms"]):
+                case_breaches.append(
+                    f"{case_name}.list_attempts_p95_ms:{la_p95}>{cspec['max_list_attempts_p95_ms']}"
+                )
+
+        if "min_idempotent_replays_verified" in cspec:
+            replays = _req_int(
+                node,
+                "http_idempotent_replays_verified",
+                f"{cpath}.http_idempotent_replays_verified",
+                missing,
+                require_positive=True,
+            )
+            if replays is not None and replays < int(cspec["min_idempotent_replays_verified"]):
+                case_breaches.append(
+                    f"{case_name}.http_idempotent_replays_verified:{replays}<{cspec['min_idempotent_replays_verified']}"
+                )
+            dbrec = _nav_dict(node, "db_reconciliation", missing) if node is not None else None
+            att_created = _req_int(
+                dbrec, "attempts_created", f"{cpath}.db_reconciliation.attempts_created", missing
+            )
+            dup_idem = _req_int(
+                dbrec,
+                "duplicate_idempotency_keys",
+                f"{cpath}.db_reconciliation.duplicate_idempotency_keys",
+                missing,
+            )
+            cb_open = _req_int(
+                dbrec,
+                "work_items_with_open_callback_task",
+                f"{cpath}.db_reconciliation.work_items_with_open_callback_task",
+                missing,
+            )
+            if att_created is not None and att_created != int(cspec["expected_attempts_created"]):
+                case_breaches.append(
+                    f"{case_name}.attempts_created:{att_created}!={cspec['expected_attempts_created']}"
+                )
+            if dup_idem is not None and dup_idem != int(cspec["expected_duplicate_idempotency_keys"]):
+                case_breaches.append(
+                    f"{case_name}.duplicate_idempotency_keys:{dup_idem}!={cspec['expected_duplicate_idempotency_keys']}"
+                )
+            if cb_open is not None and cb_open != int(cspec["expected_open_callback_tasks"]):
+                case_breaches.append(
+                    f"{case_name}.work_items_with_open_callback_task:{cb_open}!={cspec['expected_open_callback_tasks']}"
+                )
+
+        if "expected_contact_attempt_table_scans" in cspec:
+            bod_dom = _nav_dict(
+                benchmark_report,
+                "s1_domain_and_database_benchmark.domain_workloads_s1.bod_executive_overview",
+                missing,
+            )
+            scans = _req_int(
+                bod_dom,
+                "contact_attempt_table_scans_during_read",
+                "s1_domain_and_database_benchmark.domain_workloads_s1.bod_executive_overview.contact_attempt_table_scans_during_read",
+                missing,
+            )
+            if scans is not None and scans != int(cspec["expected_contact_attempt_table_scans"]):
+                case_breaches.append(
+                    f"{case_name}.contact_attempt_table_scans_during_read:{scans}!={cspec['expected_contact_attempt_table_scans']}"
+                )
+            exp_plans = _nav_dict(
+                benchmark_report, "s1_domain_and_database_benchmark.mariadb_explain_plans", missing
+            )
+            if exp_plans is not None:
+                snap_plan = exp_plans.get("kpi_snapshot_lookup")
+                if not isinstance(snap_plan, list) or not snap_plan or not isinstance(snap_plan[0], dict):
+                    missing.append(
+                        "s1_domain_and_database_benchmark.mariadb_explain_plans.kpi_snapshot_lookup[0].key"
+                    )
+                else:
+                    snap_key = _req_str(
+                        snap_plan[0],
+                        "key",
+                        "s1_domain_and_database_benchmark.mariadb_explain_plans.kpi_snapshot_lookup[0].key",
+                        missing,
+                    )
+                    if snap_key is not None and snap_key != str(cspec["expected_explain_index_key"]):
+                        case_breaches.append(
+                            f"{case_name}.explain_key:{snap_key}!={cspec['expected_explain_index_key']}"
+                        )
+
+        if "expected_unauthorized_staff_http_status" in cspec:
+            bod_http = _nav_dict(
+                benchmark_report,
+                "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http",
+                missing,
+            )
+            unauth_code = _req_int(
+                bod_http,
+                "staff_unauthorized_company_drilldown_http_status",
+                "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.staff_unauthorized_company_drilldown_http_status",
+                missing,
+                require_positive=True,
+            )
+            if unauth_code is not None and unauth_code != int(cspec["expected_unauthorized_staff_http_status"]):
+                case_breaches.append(
+                    f"{case_name}.staff_unauthorized_company_drilldown_http_status:{unauth_code}!={cspec['expected_unauthorized_staff_http_status']}"
+                )
+
+        if case_name in ("worklist_ssr_case_2c_40_staff_sessions_c12", "worklist_ssr_case_2c_40_staff_sessions_c40"):
+            mirror_suffix = "c12" if case_name.endswith("_c12") else "c40"
+            mirror_path = f"s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_{mirror_suffix}"
+            mirror_node = _nav_dict(benchmark_report, mirror_path, missing)
+            mirror_p95 = _req_float(mirror_node, "p95_ms", f"{mirror_path}.p95_ms", missing, require_positive=True)
+            mirror_sess = _req_int(
+                mirror_node,
+                "distinct_sessions_used",
+                f"{mirror_path}.distinct_sessions_used",
+                missing,
+                require_positive=True,
+            )
+            if p95_ms is not None and mirror_p95 is not None and abs(p95_ms - mirror_p95) > 1e-2:
+                case_breaches.append(
+                    f"{case_name}.ssr_mirror_p95_mismatch:{p95_ms}!={mirror_p95}"
+                )
+            if dist_sess_val is not None and mirror_sess is not None and dist_sess_val != mirror_sess:
+                case_breaches.append(
+                    f"{case_name}.ssr_mirror_sessions_mismatch:{dist_sess_val}!={mirror_sess}"
+                )
+
+        case_missing = len(missing) > case_missing_before
+        case_ok = (not case_missing) and (not case_breaches)
+        if not case_ok:
+            sec_3_2a_passed = False
+        breaches.extend(f"section_3_2A.{b}" for b in case_breaches)
+
+        cases_3_2a[case_name] = {
+            "session_model": session_model,
+            "path": cpath,
+            "concurrency": conc_val,
+            "distinct_sessions_used": dist_sess_val,
+            "requests_total": req_total,
+            "p95_ms": p95_ms,
+            "max_p95_ms": float(cspec["max_p95_ms"]),
+            "error_rate_pct": err_pct,
+            "max_error_rate_pct": float(cspec["max_error_rate_pct"]),
+            "timeout_count": timeout_cnt,
+            "passed": case_ok,
+            "status": (
+                "MISSING_MEASUREMENT"
+                if case_missing
+                else ("PASS" if case_ok else "FAIL_THRESHOLD_BREACH")
+            ),
+            "breaches": case_breaches,
+        }
+        sm_bucket = by_session_model.setdefault(
+            session_model, {"cases_total": 0, "cases_passed": 0, "case_names": []}
+        )
+        sm_bucket["cases_total"] += 1
+        if case_ok:
+            sm_bucket["cases_passed"] += 1
+        sm_bucket["case_names"].append(case_name)
+
+    # Verify SSR separation telemetry exists so SSR p95 is never conflated with aggregate API p95
+    sep_root = _nav_dict(benchmark_report, "worklist_ssr_acceptance_and_separation", missing)
+    exec_mode = (
+        _req_str(
+            sep_root,
+            "execution_mode",
+            "worklist_ssr_acceptance_and_separation.execution_mode",
+            missing,
+        )
+        if sep_root is not None
+        else None
+    )
+    if exec_mode is not None and exec_mode != "BUILT_INTO_OFFICIAL_COMMIT_AND_IMAGE_DIGEST_NO_IN_CONTAINER_PATCHING":
+        sec_3_2a_passed = False
+        breaches.append(
+            f"section_3_2A.worklist_ssr_execution_mode_invalid:{exec_mode}"
+        )
+
+    # --- §3.2B: Concurrent mixed authenticated session waves (20 / 40 / 80 from pool of 80) ---
+    spec_3_2b = thresholds_spec["section_3_2B_mixed_session_waves"]
+    http_root = _nav_dict(benchmark_report, "s1_http_acceptance_and_mixed_waves", missing)
+    pool_sessions = _req_int(
+        http_root,
+        "distinct_authenticated_sessions_created",
+        "s1_http_acceptance_and_mixed_waves.distinct_authenticated_sessions_created",
+        missing,
+        require_positive=True,
+    )
+    sec_3_2b_passed = True
+    if pool_sessions is None:
+        sec_3_2b_passed = False
+    elif pool_sessions != int(spec_3_2b["required_distinct_authenticated_sessions"]):
+        sec_3_2b_passed = False
+        breaches.append(
+            f"section_3_2B.distinct_authenticated_sessions_created:{pool_sessions}!={spec_3_2b['required_distinct_authenticated_sessions']}"
+        )
+
+    waves_root = (
+        _nav_dict(http_root, "concurrent_mixed_session_waves_20_40_80", missing)
+        if http_root is not None
+        else None
+    )
+    waves_eval: dict[str, dict[str, Any]] = {}
+    for wname, wspec in sorted(spec_3_2b["waves"].items()):
+        wpath = f"s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.{wname}"
+        wnode = _nav_dict(waves_root, wname, missing) if waves_root is not None else None
+        w_missing_before = len(missing)
+        w_breaches: list[str] = []
+
+        conc_users = _req_int(
+            wnode, "concurrent_user_sessions", f"{wpath}.concurrent_user_sessions", missing, require_positive=True
+        )
+        if conc_users is not None and conc_users != int(wspec["concurrent_user_sessions"]):
+            w_breaches.append(
+                f"{wname}.concurrent_user_sessions:{conc_users}!={wspec['concurrent_user_sessions']}"
+            )
+
+        w_sum = _nav_dict(wnode, "overall_summary", missing) if wnode is not None else None
+        w_req = _req_int(
+            w_sum, "requests_total", f"{wpath}.overall_summary.requests_total", missing, require_positive=True
+        )
+        w_ok = _req_int(w_sum, "ok_count", f"{wpath}.overall_summary.ok_count", missing)
+        w_err = _req_int(w_sum, "error_count", f"{wpath}.overall_summary.error_count", missing)
+        w_err_pct = _req_float(w_sum, "error_rate_pct", f"{wpath}.overall_summary.error_rate_pct", missing)
+        w_p95 = _req_float(
+            w_sum, "p95_ms", f"{wpath}.overall_summary.p95_ms", missing, require_positive=True
+        )
+
+        if w_req is not None and w_req < int(wspec["min_requests"]):
+            w_breaches.append(f"{wname}.overall_summary.requests_total:{w_req}<{wspec['min_requests']}")
+        if w_req is not None and w_ok is not None and w_err is not None and (w_ok + w_err) != w_req:
+            w_breaches.append(
+                f"{wname}.overall_summary.count_mismatch:ok={w_ok}+err={w_err}!=total={w_req}"
+            )
+        if w_err_pct is not None and w_err_pct > float(wspec["max_error_rate_pct"]) + 1e-6:
+            w_breaches.append(
+                f"{wname}.overall_summary.error_rate_pct:{w_err_pct}>{wspec['max_error_rate_pct']}"
+            )
+        if w_p95 is not None and w_p95 > float(wspec["max_overall_p95_ms"]):
+            w_breaches.append(
+                f"{wname}.overall_summary.p95_ms:{w_p95}>{wspec['max_overall_p95_ms']}"
+            )
+
+        by_wl_node = _nav_dict(wnode, "by_workload", missing) if wnode is not None else None
+        wl_eval: dict[str, dict[str, Any]] = {}
+        for wlname, wl_max_p95 in sorted(wspec["by_workload_max_p95_ms"].items()):
+            wl_path = f"{wpath}.by_workload.{wlname}"
+            wln = _nav_dict(by_wl_node, wlname, missing) if by_wl_node is not None else None
+            wl_req = _req_int(wln, "requests_total", f"{wl_path}.requests_total", missing, require_positive=True)
+            wl_ok = _req_int(wln, "ok_count", f"{wl_path}.ok_count", missing)
+            wl_err = _req_int(wln, "error_count", f"{wl_path}.error_count", missing)
+            wl_err_pct = _req_float(wln, "error_rate_pct", f"{wl_path}.error_rate_pct", missing)
+            wl_p95 = _req_float(wln, "p95_ms", f"{wl_path}.p95_ms", missing, require_positive=True)
+            wl_ok_flag = (
+                wl_req is not None
+                and wl_ok is not None
+                and wl_err is not None
+                and wl_err_pct is not None
+                and wl_p95 is not None
+            )
+            if wl_req is not None and wl_ok is not None and wl_err is not None and (wl_ok + wl_err) != wl_req:
+                w_breaches.append(f"{wname}.{wlname}.count_mismatch")
+                wl_ok_flag = False
+            if wl_err_pct is not None and wl_err_pct > float(wspec["max_error_rate_pct"]) + 1e-6:
+                w_breaches.append(
+                    f"{wname}.by_workload.{wlname}.error_rate_pct:{wl_err_pct}>{wspec['max_error_rate_pct']}"
+                )
+                wl_ok_flag = False
+            if wl_p95 is not None and wl_p95 > float(wl_max_p95):
+                w_breaches.append(
+                    f"{wname}.by_workload.{wlname}.p95_ms:{wl_p95}>{wl_max_p95}"
+                )
+                wl_ok_flag = False
+            wl_eval[wlname] = {
+                "requests_total": wl_req,
+                "p95_ms": wl_p95,
+                "max_p95_ms": float(wl_max_p95),
+                "error_rate_pct": wl_err_pct,
+                "passed": wl_ok_flag,
+            }
+
+        qdb = _nav_dict(wnode, "queue_and_db_after_wave", missing) if wnode is not None else None
+        q_backlog = _req_int(
+            qdb, "queue_backlog_total", f"{wpath}.queue_and_db_after_wave.queue_backlog_total", missing
+        )
+        mdb = _nav_dict(qdb, "mariadb_global_status", missing) if qdb is not None else None
+        slow_q = _req_int(
+            mdb,
+            "Slow_queries",
+            f"{wpath}.queue_and_db_after_wave.mariadb_global_status.Slow_queries",
+            missing,
+            allow_digit_str=True,
+        )
+        if q_backlog is not None and q_backlog > int(wspec["max_queue_backlog_after"]):
+            w_breaches.append(
+                f"{wname}.queue_backlog_total:{q_backlog}>{wspec['max_queue_backlog_after']}"
+            )
+        if slow_q is not None and slow_q > int(wspec["max_slow_queries_after"]):
+            w_breaches.append(
+                f"{wname}.Slow_queries:{slow_q}>{wspec['max_slow_queries_after']}"
+            )
+
+        w_missing = len(missing) > w_missing_before
+        w_ok_flag = (not w_missing) and (not w_breaches)
+        if not w_ok_flag:
+            sec_3_2b_passed = False
+        breaches.extend(f"section_3_2B.{b}" for b in w_breaches)
+        waves_eval[wname] = {
+            "session_model": str(wspec["session_model"]),
+            "concurrent_user_sessions": conc_users,
+            "requests_total": w_req,
+            "overall_p95_ms": w_p95,
+            "max_overall_p95_ms": float(wspec["max_overall_p95_ms"]),
+            "error_rate_pct": w_err_pct,
+            "max_error_rate_pct": float(wspec["max_error_rate_pct"]),
+            "queue_backlog_after": q_backlog,
+            "slow_queries_after": slow_q,
+            "by_workload": wl_eval,
+            "passed": w_ok_flag,
+            "status": (
+                "MISSING_MEASUREMENT"
+                if w_missing
+                else ("PASS" if w_ok_flag else "FAIL_THRESHOLD_BREACH")
+            ),
+            "breaches": w_breaches,
+        }
+
+    # --- §3.2C: Dataset S1, EXPLAIN plans, CSV import, weighted distribution, KPI recompute, RQ burst ---
+    spec_3_2c = thresholds_spec["section_3_2C_dataset_batch_and_background"]
+    dom_root = _nav_dict(benchmark_report, "s1_domain_and_database_benchmark", missing)
+    sec_3_2c_breaches: list[str] = []
+    sec_3_2c_missing_before = len(missing)
+
+    # 3.2C.1 S1 dataset counts, PII policy & MariaDB EXPLAIN index keys
+    seed_spec = spec_3_2c["s1_dataset_and_explain_plans"]
+    seeded = _nav_dict(dom_root, "s1_seeded_counts", missing) if dom_root is not None else None
+    for ckey, exp_cnt in sorted(seed_spec["expected_counts"].items()):
+        got_cnt = _req_int(
+            seeded,
+            ckey,
+            f"s1_domain_and_database_benchmark.s1_seeded_counts.{ckey}",
+            missing,
+            require_positive=True,
+        )
+        if got_cnt is not None and got_cnt != int(exp_cnt):
+            sec_3_2c_breaches.append(f"s1_seeded_counts.{ckey}:{got_cnt}!={exp_cnt}")
+
+    pub_ds = _nav_dict(benchmark_report, "published_dataset_and_load", missing)
+    pii_pol = _req_str(pub_ds, "pii_policy", "published_dataset_and_load.pii_policy", missing)
+    if pii_pol is not None and pii_pol != "ZERO_REAL_PII_SYNTHETIC_ONLY":
+        sec_3_2c_breaches.append(f"published_dataset_and_load.pii_policy:{pii_pol}")
+
+    exp_plans = _nav_dict(dom_root, "mariadb_explain_plans", missing) if dom_root is not None else None
+    for pkey, exp_idx in sorted(seed_spec["expected_explain_keys"].items()):
+        p_full = f"s1_domain_and_database_benchmark.mariadb_explain_plans.{pkey}[0].key"
+        if exp_plans is None or pkey not in exp_plans:
+            missing.append(p_full)
+        else:
+            rows = exp_plans[pkey]
+            if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+                missing.append(p_full)
+            else:
+                got_idx = _req_str(rows[0], "key", p_full, missing)
+                if got_idx is not None and got_idx != str(exp_idx):
+                    sec_3_2c_breaches.append(f"mariadb_explain_plans.{pkey}:{got_idx}!={exp_idx}")
+
+    # 3.2C.1b Direct domain service workloads on S1 dataset (domain_workloads_s1)
+    dom_wl_root = _nav_dict(dom_root, "domain_workloads_s1", missing) if dom_root is not None else None
+    for dw_key, dw_spec in sorted(spec_3_2c["domain_workloads_s1"].items()):
+        dw_path = f"s1_domain_and_database_benchmark.domain_workloads_s1.{dw_key}"
+        dw_node = _nav_dict(dom_wl_root, dw_key, missing) if dom_wl_root is not None else None
+        dw_cnt = _req_int(dw_node, "count", f"{dw_path}.count", missing, require_positive=True)
+        dw_err = _req_int(dw_node, "error_count", f"{dw_path}.error_count", missing)
+        dw_p95 = _req_float(dw_node, "p95_ms", f"{dw_path}.p95_ms", missing, require_positive=True)
+        if dw_cnt is not None and dw_cnt < int(dw_spec["min_count"]):
+            sec_3_2c_breaches.append(f"domain_workloads_s1.{dw_key}.count:{dw_cnt}<{dw_spec['min_count']}")
+        if dw_err is not None and dw_err > int(dw_spec["max_error_count"]):
+            sec_3_2c_breaches.append(
+                f"domain_workloads_s1.{dw_key}.error_count:{dw_err}>{dw_spec['max_error_count']}"
+            )
+        if dw_p95 is not None and dw_p95 > float(dw_spec["max_p95_ms"]):
+            sec_3_2c_breaches.append(
+                f"domain_workloads_s1.{dw_key}.p95_ms:{dw_p95}>{dw_spec['max_p95_ms']}"
+            )
+        if "expected_idempotent_replay_verified" in dw_spec:
+            dw_idem = _req_bool(
+                dw_node, "idempotent_replay_verified", f"{dw_path}.idempotent_replay_verified", missing
+            )
+            if dw_idem is not None and dw_idem is not bool(dw_spec["expected_idempotent_replay_verified"]):
+                sec_3_2c_breaches.append(f"domain_workloads_s1.{dw_key}.idempotent_replay_verified:{dw_idem}")
+        if "expected_contact_attempt_table_scans" in dw_spec:
+            dw_scans = _req_int(
+                dw_node,
+                "contact_attempt_table_scans_during_read",
+                f"{dw_path}.contact_attempt_table_scans_during_read",
+                missing,
+            )
+            if dw_scans is not None and dw_scans != int(dw_spec["expected_contact_attempt_table_scans"]):
+                sec_3_2c_breaches.append(
+                    f"domain_workloads_s1.{dw_key}.contact_attempt_table_scans:{dw_scans}!={dw_spec['expected_contact_attempt_table_scans']}"
+                )
+
+    # 3.2C.2 50,000-row CSV import
+    async_root = (
+        _nav_dict(dom_root, "async_import_distribution_and_queue_lag", missing)
+        if dom_root is not None
+        else None
+    )
+    csv_spec = spec_3_2c["csv_import_50000_rows"]
+    csv_path = "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows"
+    csv_node = _nav_dict(async_root, "csv_import_50000_rows", missing) if async_root is not None else None
+    csv_total = _req_int(csv_node, "total_rows", f"{csv_path}.total_rows", missing, require_positive=True)
+    csv_created = _req_int(csv_node, "created_rows", f"{csv_path}.created_rows", missing, require_positive=True)
+    csv_reused = _req_int(csv_node, "reused_rows", f"{csv_path}.reused_rows", missing, require_positive=True)
+    csv_err_rows = _req_int(csv_node, "error_rows", f"{csv_path}.error_rows", missing)
+    csv_err_art = _req_bool(csv_node, "error_artifact_present", f"{csv_path}.error_artifact_present", missing)
+    csv_status = _req_str(csv_node, "final_batch_status", f"{csv_path}.final_batch_status", missing)
+    csv_prev_ms = _req_float(csv_node, "preview_ms", f"{csv_path}.preview_ms", missing, require_positive=True)
+    csv_tot_ms = _req_float(
+        csv_node,
+        "total_preview_confirm_and_worker_drain_ms",
+        f"{csv_path}.total_preview_confirm_and_worker_drain_ms",
+        missing,
+        require_positive=True,
+    )
+    csv_hwm = _req_float(csv_node, "preview_hwm_mib", f"{csv_path}.preview_hwm_mib", missing, require_positive=True)
+    csv_wl_p95 = _req_float(
+        csv_node,
+        "concurrent_worklist_read_p95_ms",
+        f"{csv_path}.concurrent_worklist_read_p95_ms",
+        missing,
+        require_positive=True,
+    )
+    if csv_total is not None and csv_total != int(csv_spec["expected_total_rows"]):
+        sec_3_2c_breaches.append(f"csv_import_50000_rows.total_rows:{csv_total}!={csv_spec['expected_total_rows']}")
+    if csv_created is not None and csv_created != int(csv_spec["expected_created_rows"]):
+        sec_3_2c_breaches.append(
+            f"csv_import_50000_rows.created_rows:{csv_created}!={csv_spec['expected_created_rows']}"
+        )
+    if csv_reused is not None and csv_reused != int(csv_spec["expected_reused_rows"]):
+        sec_3_2c_breaches.append(f"csv_import_50000_rows.reused_rows:{csv_reused}!={csv_spec['expected_reused_rows']}")
+    if csv_err_rows is not None and csv_err_rows != int(csv_spec["expected_error_rows"]):
+        sec_3_2c_breaches.append(f"csv_import_50000_rows.error_rows:{csv_err_rows}!={csv_spec['expected_error_rows']}")
+    if csv_err_art is not None and csv_err_art is not bool(csv_spec["expected_error_artifact_present"]):
+        sec_3_2c_breaches.append(f"csv_import_50000_rows.error_artifact_present:{csv_err_art}")
+    if csv_status is not None and csv_status != str(csv_spec["expected_final_batch_status"]):
+        sec_3_2c_breaches.append(
+            f"csv_import_50000_rows.final_batch_status:{csv_status}!={csv_spec['expected_final_batch_status']}"
+        )
+    if csv_prev_ms is not None and csv_prev_ms > float(csv_spec["max_preview_ms"]):
+        sec_3_2c_breaches.append(f"csv_import_50000_rows.preview_ms:{csv_prev_ms}>{csv_spec['max_preview_ms']}")
+    if csv_tot_ms is not None and csv_tot_ms > float(csv_spec["max_total_preview_confirm_and_worker_drain_ms"]):
+        sec_3_2c_breaches.append(
+            f"csv_import_50000_rows.total_ms:{csv_tot_ms}>{csv_spec['max_total_preview_confirm_and_worker_drain_ms']}"
+        )
+    if csv_hwm is not None and csv_hwm > float(csv_spec["max_preview_hwm_mib"]):
+        sec_3_2c_breaches.append(
+            f"csv_import_50000_rows.preview_hwm_mib:{csv_hwm}>{csv_spec['max_preview_hwm_mib']}"
+        )
+    if csv_wl_p95 is not None and csv_wl_p95 > float(csv_spec["max_concurrent_worklist_read_p95_ms"]):
+        sec_3_2c_breaches.append(
+            f"csv_import_50000_rows.concurrent_worklist_read_p95_ms:{csv_wl_p95}>{csv_spec['max_concurrent_worklist_read_p95_ms']}"
+        )
+
+    # 3.2C.3 10,000-item weighted campaign distribution across 40 staff
+    dist_spec = spec_3_2c["campaign_distribution_10000_work_items_40_staff"]
+    dist_path = (
+        "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag."
+        "campaign_distribution_10000_work_items_40_staff"
+    )
+    dist_node = (
+        _nav_dict(async_root, "campaign_distribution_10000_work_items_40_staff", missing)
+        if async_root is not None
+        else None
+    )
+    dist_elig = _req_int(dist_node, "eligible_count", f"{dist_path}.eligible_count", missing, require_positive=True)
+    dist_prev_ms = _req_float(dist_node, "preview_ms", f"{dist_path}.preview_ms", missing, require_positive=True)
+    dist_exec_ms = _req_float(
+        dist_node, "execute_and_worker_drain_ms", f"{dist_path}.execute_and_worker_drain_ms", missing, require_positive=True
+    )
+    dist_status = _req_str(dist_node, "final_run_status", f"{dist_path}.final_run_status", missing)
+    dist_created = _req_int(
+        dist_node, "created_work_items", f"{dist_path}.created_work_items", missing, require_positive=True
+    )
+    dist_dup = _req_int(dist_node, "duplicate_work_items", f"{dist_path}.duplicate_work_items", missing)
+    dist_dbl = _req_bool(dist_node, "double_submit_idempotent", f"{dist_path}.double_submit_idempotent", missing)
+    dist_abort = _req_bool(
+        dist_node, "abort_cancel_guard_verified", f"{dist_path}.abort_cancel_guard_verified", missing
+    )
+    dist_wl_p95 = _req_float(
+        dist_node,
+        "concurrent_worklist_read_p95_ms",
+        f"{dist_path}.concurrent_worklist_read_p95_ms",
+        missing,
+        require_positive=True,
+    )
+    dist_rec = _nav_dict(dist_node, "reconciliation", missing) if dist_node is not None else None
+    dist_stale_ds = _req_int(dist_rec, "stale_docshares", f"{dist_path}.reconciliation.stale_docshares", missing)
+    dist_stale_td = _req_int(dist_rec, "stale_open_todos", f"{dist_path}.reconciliation.stale_open_todos", missing)
+    dist_own_rec = _req_bool(
+        dist_rec, "ownership_reconciled", f"{dist_path}.reconciliation.ownership_reconciled", missing
+    )
+    if dist_elig is not None and dist_elig != int(dist_spec["expected_eligible_count"]):
+        sec_3_2c_breaches.append(f"distribution.eligible_count:{dist_elig}!={dist_spec['expected_eligible_count']}")
+    if dist_prev_ms is not None and dist_prev_ms > float(dist_spec["max_preview_ms"]):
+        sec_3_2c_breaches.append(f"distribution.preview_ms:{dist_prev_ms}>{dist_spec['max_preview_ms']}")
+    if dist_exec_ms is not None and dist_exec_ms > float(dist_spec["max_execute_and_worker_drain_ms"]):
+        sec_3_2c_breaches.append(
+            f"distribution.execute_and_worker_drain_ms:{dist_exec_ms}>{dist_spec['max_execute_and_worker_drain_ms']}"
+        )
+    if dist_status is not None and dist_status != str(dist_spec["expected_final_run_status"]):
+        sec_3_2c_breaches.append(
+            f"distribution.final_run_status:{dist_status}!={dist_spec['expected_final_run_status']}"
+        )
+    if dist_created is not None and dist_created != int(dist_spec["expected_created_work_items"]):
+        sec_3_2c_breaches.append(
+            f"distribution.created_work_items:{dist_created}!={dist_spec['expected_created_work_items']}"
+        )
+    if dist_dup is not None and dist_dup != int(dist_spec["expected_duplicate_work_items"]):
+        sec_3_2c_breaches.append(
+            f"distribution.duplicate_work_items:{dist_dup}!={dist_spec['expected_duplicate_work_items']}"
+        )
+    if dist_dbl is not None and dist_dbl is not bool(dist_spec["expected_double_submit_idempotent"]):
+        sec_3_2c_breaches.append(f"distribution.double_submit_idempotent:{dist_dbl}")
+    if dist_abort is not None and dist_abort is not bool(dist_spec["expected_abort_cancel_guard_verified"]):
+        sec_3_2c_breaches.append(f"distribution.abort_cancel_guard_verified:{dist_abort}")
+    if dist_wl_p95 is not None and dist_wl_p95 > float(dist_spec["max_concurrent_worklist_read_p95_ms"]):
+        sec_3_2c_breaches.append(
+            f"distribution.concurrent_worklist_read_p95_ms:{dist_wl_p95}>{dist_spec['max_concurrent_worklist_read_p95_ms']}"
+        )
+    if dist_stale_ds is not None and dist_stale_ds != int(dist_spec["expected_stale_docshares"]):
+        sec_3_2c_breaches.append(f"distribution.stale_docshares:{dist_stale_ds}!={dist_spec['expected_stale_docshares']}")
+    if dist_stale_td is not None and dist_stale_td != int(dist_spec["expected_stale_open_todos"]):
+        sec_3_2c_breaches.append(
+            f"distribution.stale_open_todos:{dist_stale_td}!={dist_spec['expected_stale_open_todos']}"
+        )
+    if dist_own_rec is not None and dist_own_rec is not bool(dist_spec["expected_ownership_reconciled"]):
+        sec_3_2c_breaches.append(f"distribution.ownership_reconciled:{dist_own_rec}")
+
+    # 3.2C.4 KPI full monthly + daily incremental + atomic publish under concurrent UI reads
+    kpi_spec = spec_3_2c["kpi_recompute_s1"]
+    kpi_path = "s1_domain_and_database_benchmark.kpi_recompute_s1"
+    kpi_node = _nav_dict(dom_root, "kpi_recompute_s1", missing) if dom_root is not None else None
+    kpi_mon_ms = _req_float(
+        kpi_node, "monthly_full_75k_wi_250k_att_ms", f"{kpi_path}.monthly_full_75k_wi_250k_att_ms", missing, require_positive=True
+    )
+    kpi_mon_st = _req_str(kpi_node, "monthly_run_status", f"{kpi_path}.monthly_run_status", missing)
+    kpi_day_ms = _req_float(
+        kpi_node, "daily_incremental_ms", f"{kpi_path}.daily_incremental_ms", missing, require_positive=True
+    )
+    kpi_bg = _nav_dict(kpi_node, "background_queue_long_recompute", missing) if kpi_node is not None else None
+    kpi_atomic = _req_bool(
+        kpi_bg, "atomic_publish_verified", f"{kpi_path}.background_queue_long_recompute.atomic_publish_verified", missing
+    )
+    rev_before = _req_str(
+        kpi_bg, "revision_before", f"{kpi_path}.background_queue_long_recompute.revision_before", missing
+    )
+    rev_after = _req_str(
+        kpi_bg,
+        "revision_after_complete",
+        f"{kpi_path}.background_queue_long_recompute.revision_after_complete",
+        missing,
+    )
+    kpi_ui = (
+        _nav_dict(kpi_bg, "concurrent_ui_overview_reads", missing)
+        if kpi_bg is not None
+        else None
+    )
+    kpi_ui_cnt = _req_int(
+        kpi_ui,
+        "count",
+        f"{kpi_path}.background_queue_long_recompute.concurrent_ui_overview_reads.count",
+        missing,
+        require_positive=True,
+    )
+    kpi_ui_err = _req_int(
+        kpi_ui,
+        "error_count",
+        f"{kpi_path}.background_queue_long_recompute.concurrent_ui_overview_reads.error_count",
+        missing,
+    )
+    kpi_ui_p95 = _req_float(
+        kpi_ui,
+        "p95_ms",
+        f"{kpi_path}.background_queue_long_recompute.concurrent_ui_overview_reads.p95_ms",
+        missing,
+        require_positive=True,
+    )
+    if kpi_mon_ms is not None and kpi_mon_ms > float(kpi_spec["max_monthly_full_ms"]):
+        sec_3_2c_breaches.append(f"kpi_recompute_s1.monthly_full_ms:{kpi_mon_ms}>{kpi_spec['max_monthly_full_ms']}")
+    if kpi_mon_st is not None and kpi_mon_st != str(kpi_spec["expected_monthly_run_status"]):
+        sec_3_2c_breaches.append(
+            f"kpi_recompute_s1.monthly_run_status:{kpi_mon_st}!={kpi_spec['expected_monthly_run_status']}"
+        )
+    if kpi_day_ms is not None and kpi_day_ms > float(kpi_spec["max_daily_incremental_ms"]):
+        sec_3_2c_breaches.append(
+            f"kpi_recompute_s1.daily_incremental_ms:{kpi_day_ms}>{kpi_spec['max_daily_incremental_ms']}"
+        )
+    if kpi_atomic is not None and kpi_atomic is not bool(kpi_spec["expected_atomic_publish_verified"]):
+        sec_3_2c_breaches.append(f"kpi_recompute_s1.atomic_publish_verified:{kpi_atomic}")
+    if rev_before is not None and rev_after is not None and rev_before == rev_after:
+        sec_3_2c_breaches.append(f"kpi_recompute_s1.revision_did_not_advance:{rev_before}")
+    if kpi_ui_cnt is not None and kpi_ui_cnt < int(kpi_spec["min_concurrent_ui_reads_count"]):
+        sec_3_2c_breaches.append(
+            f"kpi_recompute_s1.concurrent_ui_reads_count:{kpi_ui_cnt}<{kpi_spec['min_concurrent_ui_reads_count']}"
+        )
+    if kpi_ui_err is not None and kpi_ui_err != int(kpi_spec["expected_concurrent_ui_error_count"]):
+        sec_3_2c_breaches.append(
+            f"kpi_recompute_s1.concurrent_ui_error_count:{kpi_ui_err}!={kpi_spec['expected_concurrent_ui_error_count']}"
+        )
+    if kpi_ui_p95 is not None and kpi_ui_p95 > float(kpi_spec["max_concurrent_ui_overview_p95_ms"]):
+        sec_3_2c_breaches.append(
+            f"kpi_recompute_s1.concurrent_ui_overview_p95_ms:{kpi_ui_p95}>{kpi_spec['max_concurrent_ui_overview_p95_ms']}"
+        )
+
+    # 3.2C.5 RQ short 50-job burst & post-run queue/MariaDB health
+    rq_spec = spec_3_2c["rq_short_50_job_burst_and_post_run_db_health"]
+    rq_path = "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.rq_short_50_job_burst"
+    rq_node = _nav_dict(async_root, "rq_short_50_job_burst", missing) if async_root is not None else None
+    rq_enq_ms = _req_float(
+        rq_node, "enqueue_50_jobs_ms", f"{rq_path}.enqueue_50_jobs_ms", missing, require_positive=True
+    )
+    rq_drain_ms = _req_float(
+        rq_node, "drain_to_zero_lag_ms", f"{rq_path}.drain_to_zero_lag_ms", missing, require_positive=True
+    )
+    qdb_after = _nav_dict(benchmark_report, "queue_and_db_after", missing)
+    post_backlog = _req_int(qdb_after, "queue_backlog_total", "queue_and_db_after.queue_backlog_total", missing)
+    mdb_after = _nav_dict(qdb_after, "mariadb_global_status", missing) if qdb_after is not None else None
+    post_slow_q = _req_int(
+        mdb_after,
+        "Slow_queries",
+        "queue_and_db_after.mariadb_global_status.Slow_queries",
+        missing,
+        allow_digit_str=True,
+    )
+    if rq_enq_ms is not None and rq_enq_ms > float(rq_spec["max_enqueue_50_jobs_ms"]):
+        sec_3_2c_breaches.append(f"rq_short_50_job_burst.enqueue_50_jobs_ms:{rq_enq_ms}>{rq_spec['max_enqueue_50_jobs_ms']}")
+    if rq_drain_ms is not None and rq_drain_ms > float(rq_spec["max_drain_to_zero_lag_ms"]):
+        sec_3_2c_breaches.append(
+            f"rq_short_50_job_burst.drain_to_zero_lag_ms:{rq_drain_ms}>{rq_spec['max_drain_to_zero_lag_ms']}"
+        )
+    if post_backlog is not None and post_backlog > int(rq_spec["max_post_run_queue_backlog_total"]):
+        sec_3_2c_breaches.append(
+            f"queue_and_db_after.queue_backlog_total:{post_backlog}>{rq_spec['max_post_run_queue_backlog_total']}"
+        )
+    if post_slow_q is not None and post_slow_q > int(rq_spec["max_post_run_slow_queries"]):
+        sec_3_2c_breaches.append(
+            f"queue_and_db_after.Slow_queries:{post_slow_q}>{rq_spec['max_post_run_slow_queries']}"
+        )
+
+    sec_3_2c_missing = len(missing) > sec_3_2c_missing_before
+    sec_3_2c_passed = (not sec_3_2c_missing) and (not sec_3_2c_breaches)
+    breaches.extend(f"section_3_2C.{b}" for b in sec_3_2c_breaches)
+
+    return {
+        "all_passed": sec_3_2a_passed and sec_3_2b_passed and sec_3_2c_passed,
+        "section_3_2A": {
+            "passed": sec_3_2a_passed,
+            "cases_total": len(cases_3_2a),
+            "cases_passed": sum(1 for c in cases_3_2a.values() if c["passed"]),
+            "by_session_model_summary": by_session_model,
+            "cases": cases_3_2a,
+        },
+        "section_3_2B": {
+            "passed": sec_3_2b_passed,
+            "distinct_authenticated_sessions_created": pool_sessions,
+            "required_distinct_authenticated_sessions": int(
+                spec_3_2b["required_distinct_authenticated_sessions"]
+            ),
+            "waves": waves_eval,
+        },
+        "section_3_2C": {
+            "passed": sec_3_2c_passed,
+            "status": (
+                "MISSING_MEASUREMENT"
+                if sec_3_2c_missing
+                else ("PASS" if sec_3_2c_passed else "FAIL_THRESHOLD_BREACH")
+            ),
+            "csv_import_total_ms": csv_tot_ms,
+            "distribution_preview_ms": dist_prev_ms,
+            "distribution_execute_ms": dist_exec_ms,
+            "kpi_monthly_full_ms": kpi_mon_ms,
+            "kpi_daily_incremental_ms": kpi_day_ms,
+            "rq_short_drain_lag_ms": rq_drain_ms,
+            "post_run_queue_backlog_total": post_backlog,
+            "post_run_slow_queries": post_slow_q,
+            "breaches": sec_3_2c_breaches,
+        },
+    }
+
+
+CI_PLATFORM_TOKENS = ("azure", "github", "actions-runner", "codespaces")
+
+
+def detect_ci_benchmark_report(benchmark_report: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Detect whether a benchmark report originated from an ephemeral CI runner rather than Staging VPS."""
+    reasons: list[str] = []
+    dom = benchmark_report.get("s1_domain_and_database_benchmark")
+    hw = dom.get("runner_hardware") if isinstance(dom, dict) else None
+    plat = str((hw or {}).get("platform") or "").strip()
+    plat_lower = plat.lower()
+    for tok in CI_PLATFORM_TOKENS:
+        if tok in plat_lower:
+            reasons.append(f"runner_hardware.platform_contains_{tok}:{plat}")
+    for ci_key in ("ci_run_id", "github_run_id"):
+        if benchmark_report.get(ci_key) not in (None, ""):
+            reasons.append(f"benchmark_has_{ci_key}:{benchmark_report.get(ci_key)}")
+    exec_env = str(benchmark_report.get("execution_environment") or "").strip().lower()
+    if exec_env in ("ci", "github_actions", "github-actions"):
+        reasons.append(f"execution_environment={exec_env}")
+    iso = benchmark_report.get("isolation_guard")
+    comp_proj = str((iso or {}).get("compose_project") or "").lower() if isinstance(iso, dict) else ""
+    if "-ci-" in comp_proj or comp_proj.endswith("-ci"):
+        reasons.append(f"compose_project_indicates_ci:{comp_proj}")
+    return bool(reasons), reasons
+
+
+def verify_staging_vps_receipts_for_g18(
+    benchmark_report: dict[str, Any],
+    vps_receipts: dict[str, Any] | Path | None,
+    *,
+    expected_digest: str,
+    is_ci_benchmark_report: bool,
+) -> tuple[bool, list[str]]:
+    """Verify G03/G05, read-only preflight, digest pull, and live zero-mutation receipts from Staging VPS."""
+    if vps_receipts is None:
+        return False, ["missing_staging_vps_receipts_bundle"]
+
+    errors: list[str] = []
+    bundle: dict[str, Any] = {}
+    file_map = {
+        "summary": "vps-g03-g05-summary.json",
+        "readonly_vps_preflight": "readonly-vps-preflight.json",
+        "candidate_pull_inspect_receipt": "candidate-registry-pull-inspect-receipt.json",
+        "runtime_isolation_audit_g03": "staging-dr-runtime-isolation-audit.json",
+        "https_wss_smoke_g05": "https-wss-smoke-receipt.json",
+        "live_preservation_before_after": "live-preservation-before-after.json",
+    }
+    if isinstance(vps_receipts, Path):
+        if not vps_receipts.is_dir():
+            return False, [f"vps_receipt_dir_not_found:{vps_receipts}"]
+        for key, fname in file_map.items():
+            fpath = vps_receipts / fname
+            if not fpath.is_file():
+                errors.append(f"missing_vps_receipt_file:{fname}")
+            else:
+                try:
+                    bundle[key] = json.loads(fpath.read_text(encoding="utf-8"))
+                except Exception as exc:
+                    errors.append(f"invalid_vps_receipt_json:{fname}:{exc}")
+    elif isinstance(vps_receipts, dict):
+        for key in file_map:
+            if not isinstance(vps_receipts.get(key), dict):
+                errors.append(f"missing_vps_receipt_section:{key}")
+            else:
+                bundle[key] = vps_receipts[key]
+    else:
+        return False, [f"unsupported_vps_receipts_type:{type(vps_receipts).__name__}"]
+
+    if errors:
+        return False, errors
+
+    if is_ci_benchmark_report:
+        errors.append("benchmark_report_is_ci_runner_cannot_pair_with_staging_vps_receipts")
+
+    summary = bundle["summary"]
+    preflight = bundle["readonly_vps_preflight"]
+    pull_rec = bundle["candidate_pull_inspect_receipt"]
+    runtime_g03 = bundle["runtime_isolation_audit_g03"]
+    smoke_g05 = bundle["https_wss_smoke_g05"]
+    live_pres = bundle["live_preservation_before_after"]
+
+    # 1. Summary receipt
+    if summary.get("schema_version") != "cskh-p4-vps-g03-g05-bundle-v1":
+        errors.append(f"summary.invalid_schema_version:{summary.get('schema_version')!r}")
+    if summary.get("status") != "PASS":
+        errors.append(f"summary.status_not_pass:{summary.get('status')!r}")
+    if summary.get("app_image") != expected_digest:
+        errors.append(f"summary.app_image_mismatch:{summary.get('app_image')!r}")
+    if summary.get("zero_live_mutation") is not True:
+        errors.append("summary.zero_live_mutation_not_true")
+    iso_proj = str(summary.get("isolated_project_name") or "")
+    if not iso_proj or "-ci-" in iso_proj.lower() or iso_proj in FORBIDDEN_OWNER_PROJECTS:
+        errors.append(f"summary.invalid_or_ci_isolated_project_name:{iso_proj!r}")
+    if set(summary.get("inspected_app_services") or []) != set(p403_tool.APP_SERVICES):
+        errors.append("summary.inspected_app_services_mismatch_expected_6_services")
+
+    # 2. Read-only VPS preflight & host binding against benchmark runner_hardware
+    if preflight.get("schema_version") != "cskh-p4-readonly-vps-preflight-v1":
+        errors.append(f"preflight.invalid_schema_version:{preflight.get('schema_version')!r}")
+    if preflight.get("status") != "PASS" or preflight.get("mode") != "READ_ONLY_ZERO_MUTATION":
+        errors.append("preflight.status_or_mode_invalid")
+    p_checks = preflight.get("checks") or {}
+    if not isinstance(p_checks, dict) or not p_checks or not all(v is True for v in p_checks.values()):
+        errors.append("preflight.checks_not_all_true")
+    host_id = preflight.get("host_identity") or {}
+    vps_hostname = str(host_id.get("hostname") or "").strip()
+    vps_platform = str(host_id.get("platform") or "").strip()
+    if not vps_hostname or not vps_platform:
+        errors.append("preflight.missing_host_identity_hostname_or_platform")
+    else:
+        for tok in (*CI_PLATFORM_TOKENS, "fv-az"):
+            if tok in vps_platform.lower() or tok in vps_hostname.lower():
+                errors.append(f"preflight.host_identity_indicates_ci:{vps_hostname}:{vps_platform}")
+                break
+        bench_plat = str(
+            (((benchmark_report.get("s1_domain_and_database_benchmark") or {}).get("runner_hardware") or {}).get("platform"))
+            or ""
+        ).strip()
+        if bench_plat != vps_platform:
+            errors.append(
+                f"benchmark_runner_platform_mismatch_vs_vps_preflight:bench={bench_plat!r}:vps={vps_platform!r}"
+            )
+
+    # 3. Candidate @sha256 registry pull & inspect receipt
+    if pull_rec.get("schema_version") != "cskh-p4-candidate-registry-receipt-v1" or pull_rec.get("status") != "PASS":
+        errors.append("pull_receipt.schema_or_status_invalid")
+    if pull_rec.get("requested_registry_digest") != expected_digest:
+        errors.append(f"pull_receipt.digest_mismatch:{pull_rec.get('requested_registry_digest')!r}")
+    if expected_digest not in (pull_rec.get("inspected_repo_digests") or []):
+        errors.append("pull_receipt.expected_digest_not_in_inspected_repo_digests")
+    if pull_rec.get("inspected_user") != "frappe":
+        errors.append(f"pull_receipt.non_root_user_mismatch:{pull_rec.get('inspected_user')!r}")
+    if pull_rec.get("owner_live_site_touched") is not False or pull_rec.get("promoted_to_production") is not False:
+        errors.append("pull_receipt.isolation_flags_invalid")
+
+    # 4. G03 runtime isolation & 6-service container digest parity receipt
+    if runtime_g03.get("schema_version") != "cskh-p4-staging-dr-runtime-audit-v1" or runtime_g03.get("status") != "PASS":
+        errors.append("runtime_g03.schema_or_status_invalid")
+    if runtime_g03.get("app_image") != expected_digest:
+        errors.append(f"runtime_g03.app_image_mismatch:{runtime_g03.get('app_image')!r}")
+    g03_proj = str(runtime_g03.get("project_name") or "")
+    if g03_proj != iso_proj or "-ci-" in g03_proj.lower():
+        errors.append(f"runtime_g03.project_name_invalid_or_ci:{g03_proj!r}")
+    if runtime_g03.get("owner_live_site_touched") is not False:
+        errors.append("runtime_g03.owner_live_site_touched_not_false")
+    parity = runtime_g03.get("container_digest_parity") or {}
+    if (
+        parity.get("pass") is not True
+        or parity.get("expected_app_image") != expected_digest
+        or parity.get("missing_services") != []
+        or parity.get("mismatches") != []
+    ):
+        errors.append("runtime_g03.container_digest_parity_failed")
+    insp_svcs = parity.get("inspected_services") or {}
+    if not isinstance(insp_svcs, dict) or set(insp_svcs.keys()) != set(p403_tool.APP_SERVICES):
+        errors.append("runtime_g03.inspected_services_not_exact_6_app_services")
+    else:
+        for svc_name, svc_row in sorted(insp_svcs.items()):
+            if (
+                not isinstance(svc_row, dict)
+                or svc_row.get("matched") is not True
+                or expected_digest not in (svc_row.get("repo_digests") or [])
+                or "-ci-" in str(svc_row.get("container") or "").lower()
+            ):
+                errors.append(f"runtime_g03.service_digest_or_ci_container_invalid:{svc_name}")
+
+    # 5. G05 HTTPS + WSS smoke receipt
+    if smoke_g05.get("status") != "PASS" or smoke_g05.get("mode") != "dr-https":
+        errors.append("smoke_g05.status_or_mode_invalid")
+    if smoke_g05.get("app_image") != expected_digest:
+        errors.append(f"smoke_g05.app_image_mismatch:{smoke_g05.get('app_image')!r}")
+    s_checks = smoke_g05.get("checks") or {}
+    if (
+        (s_checks.get("container_digest_parity") or {}).get("pass") is not True
+        or (s_checks.get("http_to_https_redirect") or {}).get("pass") is not True
+        or (s_checks.get("tls_certificate") or {}).get("expiry_ok") is not True
+        or (s_checks.get("login_and_sid_cookie") or {}).get("pass") is not True
+        or (s_checks.get("vi_ui_and_csrf") or {}).get("pass") is not True
+        or (s_checks.get("wss_websocket") or {}).get("pass") is not True
+        or (s_checks.get("wss_websocket") or {}).get("switched_protocols_101") is not True
+    ):
+        errors.append("smoke_g05.subchecks_failed")
+
+    # 6. Live serving stack before/after zero-mutation receipt
+    if (
+        live_pres.get("schema_version") != "cskh-p4-live-preservation-before-after-v1"
+        or live_pres.get("status") != "PASS"
+        or live_pres.get("zero_live_mutation") is not True
+        or live_pres.get("deltas") != []
+        or int(live_pres.get("container_count_before") or 0) <= 0
+        or live_pres.get("container_count_before") != live_pres.get("container_count_after")
+    ):
+        errors.append("live_preservation.zero_delta_check_failed")
+
+    return (not errors), errors
+
+
 def reconcile_g18_benchmark_with_v1_4_slos(
     benchmark_report: dict[str, Any],
     *,
     owner_slo_approval: dict[str, Any] | None = None,
+    vps_receipts: dict[str, Any] | Path | None = None,
+    thresholds_spec: dict[str, Any] | None = None,
+    thresholds_path: Path | None = None,
     expected_digest: str = LOCKED_CANDIDATE_DIGEST_V1_4,
     out_json: Path | None = None,
 ) -> dict[str, Any]:
-    """Reconcile every metric of a G18 S1 benchmark report against the 7 SLOs attached to Owner Ticket v1.4."""
-    p4_9_2 = benchmark_report.get("p4_9_2_acceptance_matrix") or {}
-    items = p4_9_2.get("items") or {}
-    targets_raw = (benchmark_report.get("proposed_slos_for_review") or {}).get("targets") or {}
-    kpi_recompute = (
-        (benchmark_report.get("s1_domain_and_database_benchmark") or {}).get("kpi_recompute_s1") or {}
-    )
-    overall_err = float((benchmark_report.get("overall_summary") or {}).get("error_rate_pct", 0.0))
-    waves = items.get("concurrent_20_40_80_mixed_user_sessions") or {}
-    worst_5xx_pct = max(
-        overall_err,
-        float(waves.get("sessions_20_error_rate_pct", 0.0)),
-        float(waves.get("sessions_40_error_rate_pct", 0.0)),
-        float(waves.get("sessions_80_error_rate_pct", 0.0)),
+    """Reconcile G18 per Owner Ticket v1.4: 7-metric precheck + full §3.2A–C + Staging VPS receipts + SHA-256 SLO signature."""
+    validated_spec, candidate_thresholds_sha256, threshold_spec_errors = load_and_validate_g18_thresholds_v1_4(
+        thresholds_spec=thresholds_spec,
+        thresholds_path=thresholds_path,
     )
 
-    drill_item = items.get("kpi_drilldown_paginated_p95_le_3000ms") or {}
-    drill_daily = float(
-        drill_item.get(
-            "measured_daily_campaign_http_p95_ms",
-            (targets_raw.get("kpi_drilldown_paginated_api_p95_ms") or {}).get("measured_daily_http_p95_ms", 0.0),
-        )
-    )
-    drill_monthly = float(
-        drill_item.get(
-            "measured_monthly_company_250k_http_p95_ms",
-            (targets_raw.get("kpi_drilldown_paginated_api_p95_ms") or {}).get(
-                "measured_monthly_250k_http_p95_ms", 0.0
-            ),
-        )
-    )
-    daily_inc_ms = float(
-        kpi_recompute.get(
-            "daily_incremental_ms",
-            (targets_raw.get("daily_incremental_kpi_refresh_lag_sec") or {}).get(
-                "measured_daily_recompute_ms", 0.0
-            ),
-        )
-    )
+    missing_measurements: list[str] = []
+    breached_checks: list[str] = []
 
-    measured_values: dict[str, float] = {
-        "my_customers_worklist_api_p95_ms": float(
-            (items.get("staff_my_customers_p95_le_1500ms") or {}).get(
-                "measured_http_p95_ms",
-                (targets_raw.get("my_customers_worklist_api_p95_ms") or {}).get("measured_http_p95_ms", 0.0),
-            )
-        ),
-        "open_lead_and_history_api_p95_ms": float(
-            (items.get("open_lead_and_history_p95_le_2000ms") or {}).get(
-                "measured_http_p95_ms",
-                (targets_raw.get("open_lead_and_history_api_p95_ms") or {}).get("measured_http_p95_ms", 0.0),
-            )
-        ),
-        "contact_attempt_write_p95_ms": float(
-            (items.get("record_attempt_and_callback_p95_le_2000ms_zero_dup") or {}).get(
-                "measured_http_p95_ms",
-                (targets_raw.get("contact_attempt_write_p95_ms") or {}).get("measured_http_p95_ms", 0.0),
-            )
-        ),
-        "bod_executive_overview_api_p95_ms": float(
-            (items.get("bod_overview_snapshot_p95_le_3000ms") or {}).get(
-                "measured_http_p95_ms",
-                (targets_raw.get("bod_executive_overview_api_p95_ms") or {}).get("measured_http_p95_ms", 0.0),
-            )
-        ),
-        "kpi_drilldown_paginated_api_p95_ms": max(drill_daily, drill_monthly),
-        "http_5xx_error_rate_pct": worst_5xx_pct,
-        "daily_incremental_kpi_refresh_lag_sec": round(daily_inc_ms / 1000.0, 3),
-    }
+    # Validate top-level benchmark contract & required provenance/summary fields
+    bench_schema = _req_str(benchmark_report, "schema_version", "schema_version", missing_measurements)
+    if bench_schema is not None and bench_schema != str(validated_spec["coordinated_benchmark_schema_version"]):
+        breached_checks.append(
+            f"schema_version:{bench_schema}!={validated_spec['coordinated_benchmark_schema_version']}"
+        )
+    app_image_tested_opt = _req_str(benchmark_report, "app_image_tested", "app_image_tested", missing_measurements)
+    app_image_tested = app_image_tested_opt or ""
+    iso_guard = _nav_dict(benchmark_report, "isolation_guard", missing_measurements)
+    iso_verified = _req_bool(iso_guard, "verified_isolated", "isolation_guard.verified_isolated", missing_measurements)
+    owner_vps_touched = _req_bool(
+        iso_guard, "owner_vps_touched", "isolation_guard.owner_vps_touched", missing_measurements
+    )
+    runner_hw = _nav_dict(
+        benchmark_report, "s1_domain_and_database_benchmark.runner_hardware", missing_measurements
+    )
+    _req_str(
+        runner_hw,
+        "platform",
+        "s1_domain_and_database_benchmark.runner_hardware.platform",
+        missing_measurements,
+    )
+    p4_9_2 = _nav_dict(benchmark_report, "p4_9_2_acceptance_matrix", missing_measurements)
+    p4_9_2_all_passed_opt = _req_bool(
+        p4_9_2, "all_passed", "p4_9_2_acceptance_matrix.all_passed", missing_measurements
+    )
+    p4_9_2_items = _nav_dict(p4_9_2, "items", missing_measurements) if p4_9_2 is not None else None
+    required_11_items = (
+        "staff_my_customers_p95_le_1500ms",
+        "open_lead_and_history_p95_le_2000ms",
+        "record_attempt_and_callback_p95_le_2000ms_zero_dup",
+        "bod_overview_snapshot_p95_le_3000ms",
+        "kpi_drilldown_paginated_p95_le_3000ms",
+        "preview_weighted_distribution_10000_items",
+        "execute_weighted_distribution_10000_items",
+        "import_50000_csv_rows",
+        "recompute_kpi_non_blocking_atomic_publish",
+        "concurrent_20_40_80_mixed_user_sessions",
+        "telesale_worklist_ssr_zero_errors_c12_and_c40",
+    )
+    all_11_item_flags_true = True
+    for item_key in required_11_items:
+        inode = _nav_dict(p4_9_2_items, item_key, missing_measurements) if p4_9_2_items is not None else None
+        ipassed = _req_bool(
+            inode, "passed", f"p4_9_2_acceptance_matrix.items.{item_key}.passed", missing_measurements
+        )
+        if ipassed is not True:
+            all_11_item_flags_true = False
+            if ipassed is False:
+                breached_checks.append(f"p4_9_2_acceptance_matrix.items.{item_key}.passed_is_false")
+    p4_9_2_all_passed = (p4_9_2_all_passed_opt is True) and all_11_item_flags_true
+    if p4_9_2_all_passed_opt is False:
+        breached_checks.append("p4_9_2_acceptance_matrix.all_passed_is_false")
 
+    # Validate Owner approval document + cryptographic SHA-256 binding to the threshold specification
+    owner_approval_present = owner_slo_approval is not None
     approval_errors: list[str] = []
-    signed_thresholds: dict[str, float] = {}
     owner_signed = False
-    if not owner_slo_approval:
+    signed_thresholds_sha256 = ""
+    if owner_slo_approval is None:
         approval_errors.append("missing_owner_slo_approval_document")
+    elif not isinstance(owner_slo_approval, dict):
+        approval_errors.append(f"owner_slo_approval_not_dict:{type(owner_slo_approval).__name__}")
     else:
         if owner_slo_approval.get("approved") is not True:
             approval_errors.append("approved_flag_not_true")
@@ -3584,76 +4996,153 @@ def reconcile_g18_benchmark_with_v1_4_slos(
             approval_errors.append("missing_signed_by")
         if not str(owner_slo_approval.get("signed_at") or "").strip():
             approval_errors.append("missing_signed_at")
-        raw_signed = owner_slo_approval.get("approved_thresholds") or {}
-        for key, spec in OWNER_TICKET_V1_4_PROPOSED_SLOS.items():
-            if key not in raw_signed:
-                approval_errors.append(f"missing_threshold_key:{key}")
-            else:
-                val = float(raw_signed[key])
-                if abs(val - float(spec["threshold"])) > 1e-6:
-                    approval_errors.append(
-                        f"threshold_mismatch_vs_ticket_v1.4:{key}:expected={spec['threshold']}:got={val}"
-                    )
-                signed_thresholds[key] = val
-        owner_signed = not approval_errors
+        signed_thresholds_sha256 = str(owner_slo_approval.get("thresholds_sha256") or "").strip()
+        if not signed_thresholds_sha256:
+            approval_errors.append("missing_thresholds_sha256_in_owner_approval")
+        else:
+            if signed_thresholds_sha256 != LOCKED_G18_THRESHOLDS_V1_4_SHA256:
+                approval_errors.append(
+                    f"owner_approval_thresholds_sha256_mismatch_vs_locked_v1_4:"
+                    f"expected={LOCKED_G18_THRESHOLDS_V1_4_SHA256}:got={signed_thresholds_sha256}"
+                )
+            if candidate_thresholds_sha256 and signed_thresholds_sha256 != candidate_thresholds_sha256:
+                approval_errors.append(
+                    f"owner_approval_thresholds_sha256_mismatch_vs_evaluated_spec:"
+                    f"expected={candidate_thresholds_sha256}:got={signed_thresholds_sha256}"
+                )
+        raw_signed = owner_slo_approval.get("approved_thresholds")
+        if not isinstance(raw_signed, dict):
+            approval_errors.append("missing_or_invalid_approved_thresholds_dict")
+        else:
+            pre_spec = validated_spec["precheck_7_metrics"]
+            for key, spec in pre_spec.items():
+                if key not in raw_signed:
+                    approval_errors.append(f"missing_threshold_key:{key}")
+                elif isinstance(raw_signed[key], bool) or not isinstance(raw_signed[key], (int, float)):
+                    approval_errors.append(f"invalid_threshold_type:{key}")
+                else:
+                    val = float(raw_signed[key])
+                    if not math.isfinite(val) or abs(val - float(spec["threshold"])) > 1e-6:
+                        approval_errors.append(
+                            f"threshold_mismatch_vs_ticket_v1.4:{key}:expected={spec['threshold']}:got={val}"
+                        )
+            for extra_k in sorted(set(raw_signed) - set(pre_spec)):
+                approval_errors.append(f"unexpected_approved_threshold_key:{extra_k}")
+        owner_signed = (not approval_errors) and (not threshold_spec_errors)
 
-    metric_comparisons: dict[str, dict[str, Any]] = {}
-    all_metrics_within_threshold = True
-    for key, spec in OWNER_TICKET_V1_4_PROPOSED_SLOS.items():
-        threshold = signed_thresholds.get(key, float(spec["threshold"]))
-        measured = measured_values[key]
-        passed_metric = measured <= threshold
-        if not passed_metric:
-            all_metrics_within_threshold = False
-        entry: dict[str, Any] = {
-            "metric": key,
-            "description": spec["description"],
-            "operator": spec["operator"],
-            "v1_4_threshold": threshold,
-            "measured_value": measured,
-            "unit": spec["unit"],
-            "headroom": round(threshold - measured, 3),
-            "within_v1_4_threshold": passed_metric,
-            "evaluation_status": (
-                ("PASS" if passed_metric else "FAIL")
-                if owner_signed
-                else "PRE_CHECK_WITHIN_PROPOSED_V1_4"
-                if passed_metric
-                else "PRE_CHECK_BREACHES_PROPOSED_V1_4"
-            ),
-        }
-        if key == "kpi_drilldown_paginated_api_p95_ms":
-            entry["measured_daily_campaign_http_p95_ms"] = drill_daily
-            entry["measured_monthly_company_250k_http_p95_ms"] = drill_monthly
-        metric_comparisons[key] = entry
+    # Step 1: 7-metric table pre-check
+    precheck_eval = evaluate_precheck_7_metrics(
+        benchmark_report,
+        validated_spec["precheck_7_metrics"],
+        owner_signed=owner_signed,
+        missing=missing_measurements,
+        breaches=breached_checks,
+    )
 
-    app_image_tested = str(benchmark_report.get("app_image_tested") or "")
-    digest_matches = app_image_tested == expected_digest
-    p4_9_2_all_passed = bool(p4_9_2.get("all_passed"))
-    owner_vps_untouched = (benchmark_report.get("isolation_guard") or {}).get("owner_vps_touched") is False
+    # Step 2: Full §3.2A–C reconciliation by case and session model
+    sec_3_2_eval = evaluate_section_3_2_a_b_c(
+        benchmark_report,
+        validated_spec,
+        missing=missing_measurements,
+        breaches=breached_checks,
+    )
 
-    if not owner_signed:
+    unique_missing = sorted(dict.fromkeys(missing_measurements))
+    unique_breaches = sorted(dict.fromkeys(breached_checks))
+    measurements_complete = not unique_missing
+
+    digest_matches = (
+        bool(app_image_tested)
+        and "@sha256:" in expected_digest
+        and app_image_tested == expected_digest
+        and expected_digest == str(validated_spec["locked_candidate_digest"])
+    )
+    owner_vps_untouched = (iso_verified is True) and (owner_vps_touched is False)
+
+    is_ci_report, ci_report_reasons = detect_ci_benchmark_report(benchmark_report)
+    vps_receipts_present = vps_receipts is not None
+    vps_receipts_verified, vps_receipt_errors = verify_staging_vps_receipts_for_g18(
+        benchmark_report,
+        vps_receipts,
+        expected_digest=expected_digest,
+        is_ci_benchmark_report=is_ci_report,
+    )
+
+    all_technical_thresholds_passed = (
+        measurements_complete
+        and precheck_eval["all_7_metrics_within_v1_4_thresholds"]
+        and sec_3_2_eval["all_passed"]
+        and p4_9_2_all_passed
+        and not unique_breaches
+    )
+
+    # Deterministic fail-closed status precedence for G18 v1.4
+    if threshold_spec_errors:
+        overall_status = "FAIL_INVALID_THRESHOLDS"
+    elif not measurements_complete:
+        overall_status = "FAIL_MISSING_MEASUREMENTS"
+    elif not digest_matches:
+        overall_status = "FAIL_DIGEST_MISMATCH"
+    elif not owner_vps_untouched:
+        overall_status = "FAIL_ISOLATION_GUARD"
+    elif not all_technical_thresholds_passed:
+        overall_status = "FAIL_THRESHOLD_BREACH"
+    elif owner_approval_present and not owner_signed:
+        overall_status = "FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256"
+    elif vps_receipts_present and not vps_receipts_verified:
+        overall_status = "FAIL_INVALID_STAGING_VPS_RECEIPTS"
+    elif is_ci_report:
+        overall_status = (
+            "BLOCKED_CI_REPORT_REQUIRES_STAGING_VPS_BENCHMARK_AND_RECEIPTS"
+            if owner_signed
+            else "BLOCKED_CI_PRECHECK_ONLY_PENDING_VPS_RECEIPTS_AND_OWNER_APPROVAL"
+        )
+    elif not vps_receipts_verified:
+        overall_status = (
+            "BLOCKED_MISSING_STAGING_VPS_RECEIPTS"
+            if owner_signed
+            else "BLOCKED_PENDING_STAGING_VPS_RECEIPTS_AND_OWNER_APPROVAL"
+        )
+    elif not owner_signed:
         overall_status = "BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE"
-    elif digest_matches and p4_9_2_all_passed and owner_vps_untouched and all_metrics_within_threshold:
-        overall_status = "PASS"
     else:
-        overall_status = "FAIL"
+        overall_status = "PASS"
 
     reconciliation = {
-        "schema_version": "cskh-p4-g18-slo-v1-4-reconciliation-v1",
+        "schema_version": "cskh-p4-g18-slo-v1-4-reconciliation-v2",
         "timestamp_utc": utc_now_iso(),
         "gate": "G18",
         "ticket_version_required": "v1.4",
         "status": overall_status,
+        "thresholds_spec_path": str(thresholds_path or DEFAULT_G18_THRESHOLDS_V1_4_PATH),
+        "locked_thresholds_sha256": LOCKED_G18_THRESHOLDS_V1_4_SHA256,
+        "evaluated_thresholds_sha256": candidate_thresholds_sha256,
+        "threshold_validation_errors": threshold_spec_errors,
         "owner_slo_v1_4_signed": owner_signed,
+        "owner_approval_thresholds_sha256": signed_thresholds_sha256,
         "owner_approval_validation_errors": approval_errors,
         "expected_candidate_digest": expected_digest,
         "app_image_tested": app_image_tested,
         "digest_matches_candidate": digest_matches,
+        "is_ci_benchmark_report": is_ci_report,
+        "ci_benchmark_indicators": ci_report_reasons,
+        "staging_vps_receipts_verified": vps_receipts_verified,
+        "staging_vps_receipt_validation_errors": vps_receipt_errors,
+        "measurements_complete": measurements_complete,
+        "missing_measurements": unique_missing,
+        "breached_checks": unique_breaches,
         "p4_9_2_all_11_items_passed": p4_9_2_all_passed,
         "owner_live_service_untouched": owner_vps_untouched,
-        "all_7_metrics_within_v1_4_thresholds": all_metrics_within_threshold,
-        "metric_comparisons": metric_comparisons,
+        "all_7_metrics_within_v1_4_thresholds": precheck_eval["all_7_metrics_within_v1_4_thresholds"],
+        "precheck_7_metrics": precheck_eval,
+        "metric_comparisons": precheck_eval["metric_comparisons"],
+        "section_3_2_reconciliation": sec_3_2_eval,
+        "g18_pass_requirements": {
+            "measurements_complete_and_within_v1_4_thresholds": all_technical_thresholds_passed,
+            "candidate_digest_matches_locked_v1_4": digest_matches,
+            "staging_vps_benchmark_and_receipts_verified": (not is_ci_report) and vps_receipts_verified,
+            "owner_v1_4_approval_bound_to_thresholds_sha256": owner_signed,
+        },
     }
     if out_json is not None:
         out_json.parent.mkdir(parents=True, exist_ok=True)
@@ -3745,9 +5234,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_slo = sub.add_parser(
         "reconcile-g18-slo",
-        help="Reconcile every G18 S1 metric against the 7 SLO thresholds attached to Owner Ticket v1.4",
+        help="Reconcile G18 S1 benchmark (7-metric precheck + §3.2A–C) against v1.4 thresholds, Staging VPS receipts & SHA-256 Owner signature",
     )
     p_slo.add_argument("--benchmark-json", type=Path, required=True)
+    p_slo.add_argument("--vps-receipt-dir", type=Path, default=None)
+    p_slo.add_argument("--thresholds-json", type=Path, default=None)
     p_slo.add_argument("--owner-approval-json", type=Path, default=None)
     p_slo.add_argument("--expected-digest", default=LOCKED_CANDIDATE_DIGEST_V1_4)
     p_slo.add_argument("--out", type=Path, default=None)
@@ -3859,6 +5350,8 @@ def main(argv: list[str] | None = None) -> int:
         res = reconcile_g18_benchmark_with_v1_4_slos(
             bench_doc,
             owner_slo_approval=owner_doc,
+            vps_receipts=args.vps_receipt_dir,
+            thresholds_path=args.thresholds_json,
             expected_digest=args.expected_digest,
             out_json=args.out,
         )

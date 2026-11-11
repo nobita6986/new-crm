@@ -114,8 +114,8 @@
       "status": "PASS"
     },
     "test_ops_toolkit_windows_appcontainer": {
-      "ran": 19,
-      "passed": 19,
+      "ran": 20,
+      "passed": 20,
       "status": "PASS"
     },
     "test_ops_toolkit_linux_posix_tcpserver": {
@@ -451,8 +451,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
-      "bytes": 19980,
-      "sha256": "65e0e85fb19b55ab2dd8200666f7151ac014178c558a797ad5724ee5a45f47f8"
+      "bytes": 20779,
+      "sha256": "f676eef8be7279148790ba317a430718bfca6d45f17cf315b0648164fe173f81"
     },
     {
       "path": "deploy/ops/evidence/p4-vps-live-20261109/SHA256SUMS.txt",
@@ -520,6 +520,11 @@
       "sha256": "daa60a1366452c90fcaa1ea3a2f549d82a2d8aa06c6bb697312ea173b2f79493"
     },
     {
+      "path": "deploy/ops/g18_slo_thresholds_v1_4.json",
+      "bytes": 15210,
+      "sha256": "2a3ff3642af97b98d4102ec3bcb138655a58ce21860132d056c7ff0f33c2dc19"
+    },
+    {
       "path": "deploy/ops/install_systemd_timers.py",
       "bytes": 12968,
       "sha256": "05ac9c1eb2073016ab5ce74eeb01b0cf3e674a4268b4abd6873ee909a1c57e26"
@@ -531,8 +536,8 @@
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
-      "bytes": 152948,
-      "sha256": "f26db0bd182458a89378ea66c09d840340ac6eac71fd77fc895b8a87493ac675"
+      "bytes": 227496,
+      "sha256": "ea9dc0a6ae2347698689a0846d1afc1bf1afdaccfdb2b689c86449530682f315"
     },
     {
       "path": "deploy/ops/run_https_browser_uat_and_security.py",
@@ -586,8 +591,8 @@
     },
     {
       "path": "deploy/ops/test_ops_toolkit.py",
-      "bytes": 73706,
-      "sha256": "ce0388eb975c3659105629c945ed03ba7795b1b42a40dd21e629bde15d25b21f"
+      "bytes": 92000,
+      "sha256": "af1468b763fbb3db9575db5d51f5cdcafbf92112e3361ee8fb3549f04568f811"
     },
     {
       "path": "deploy/ops/verify_offsite_restore.py",
@@ -656,8 +661,8 @@
     },
     {
       "path": "docs/p4/P4-exit-report.md",
-      "bytes": 35929,
-      "sha256": "9db6ff10b57a63e1aa529ab92623a46e02e11de2f61f43dbc19d160fc155501b"
+      "bytes": 37179,
+      "sha256": "cc4436e2ad5e941b1e790a9c55444b31b341122644666bedb21efc281fc6eee8"
     },
     {
       "path": "docs/p4/api-contract.md",

@@ -1489,12 +1489,144 @@ class OpsToolkitTests(unittest.TestCase):
             self.assertIn(key, owner_ticket)
         v14_slo = owner_ticket["6_release_decision"]["attached_slo_set_v1_4"]
         self.assertEqual(set(v14_slo["thresholds"]), set(dr_mod.OWNER_TICKET_V1_4_PROPOSED_SLOS))
+        self.assertEqual(v14_slo["thresholds_sha256"], dr_mod.LOCKED_G18_THRESHOLDS_V1_4_SHA256)
+
+    def _build_mock_staging_vps_bundle(
+        self,
+        repo_root: Path,
+        out_dir: Path,
+        *,
+        expected_digest: str,
+        vps_platform: str = "Linux-6.8.0-51-generic-x86_64-with-glibc2.39",
+        vps_hostname: str = "vps-hrpartner-103-77-208-186",
+        isolated_project: str = "crm-cskh-dr-https-vps",
+    ) -> Path:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        ci_delta_dir = repo_root / "deploy" / "ops" / "evidence" / "p4-https-delta-20261109"
+        pull_rec = json.loads((ci_delta_dir / "candidate-registry-pull-inspect-receipt.json").read_text(encoding="utf-8"))
+        pull_rec["requested_registry_digest"] = expected_digest
+        pull_rec["inspected_repo_digests"] = [expected_digest]
+
+        g03_rec = json.loads((ci_delta_dir / "staging-dr-runtime-isolation-audit.json").read_text(encoding="utf-8"))
+        g03_rec["project_name"] = isolated_project
+        g03_rec["app_image"] = expected_digest
+        g03_rec["container_digest_parity"]["expected_app_image"] = expected_digest
+        for svc_name, svc_row in g03_rec["container_digest_parity"]["inspected_services"].items():
+            svc_row["container"] = f"{isolated_project}-{svc_name}-1"
+            svc_row["repo_digests"] = [expected_digest]
+            svc_row["matched"] = True
+
+        dr_rep = json.loads((ci_delta_dir / "isolated-staging-dr-https-report.json").read_text(encoding="utf-8"))
+        g05_smoke = json.loads(json.dumps(dr_rep["phases"]["bootstrap_and_https_smoke"]["https_smoke"]))
+        g05_smoke["app_image"] = expected_digest
+        g05_smoke["checks"]["container_digest_parity"] = json.loads(
+            json.dumps(g03_rec["container_digest_parity"])
+        )
+
+        snap_live = {
+            "timestamp_utc": "2026-11-11T13:00:00Z",
+            "live_project_name": "crm-cskh-vps-staging",
+            "container_count": 1,
+            "all_running": True,
+            "containers": [
+                {
+                    "id": "cid-live-1",
+                    "name": "crm-cskh-vps-staging-backend-1",
+                    "service": "backend",
+                    "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+                    "config_image": "crm-cskh:0.0.1-4672041",
+                    "status": "running",
+                    "health": "healthy",
+                    "started_at": "2026-11-09T12:00:00Z",
+                    "restart_count": 0,
+                }
+            ],
+        }
+        preflight = {
+            "schema_version": "cskh-p4-readonly-vps-preflight-v1",
+            "timestamp_utc": "2026-11-11T13:00:00Z",
+            "mode": "READ_ONLY_ZERO_MUTATION",
+            "status": "PASS",
+            "host_identity": {
+                "hostname": vps_hostname,
+                "platform": vps_platform,
+                "kernel_release": "6.8.0-51-generic",
+            },
+            "host_resources": {
+                "cpu_cores": 4,
+                "mem_total_mib": 15984.0,
+                "mem_available_mib": 9200.0,
+                "required_avail_ram_mib": 1536.0,
+                "disk_check_path": "/",
+                "disk_total_gib": 120.0,
+                "disk_free_gib": 68.5,
+                "required_free_disk_gib": 12.0,
+            },
+            "planned_isolated_loopback_ports": {
+                "bind_ip": "127.0.0.1",
+                "http_port": 18081,
+                "http_port_free": True,
+                "https_port": 18443,
+                "https_port_free": True,
+            },
+            "checks": {
+                "cpu_cores_ge_2": True,
+                "available_ram_sufficient": True,
+                "free_disk_sufficient": True,
+                "planned_loopback_ports_free": True,
+                "live_stack_running_untouched": True,
+            },
+            "live_before_snapshot": snap_live,
+        }
+        import manage_isolated_staging_dr as dr_mod
+
+        live_pres = dr_mod.compare_live_stack_preservation(snap_live, json.loads(json.dumps(snap_live)))
+        summary = {
+            "schema_version": "cskh-p4-vps-g03-g05-bundle-v1",
+            "timestamp_utc": "2026-11-11T13:10:00Z",
+            "status": "PASS",
+            "app_image": expected_digest,
+            "host_identity": preflight["host_identity"],
+            "isolated_project_name": isolated_project,
+            "isolated_site_name": "staging-dr-uat.crm-internal.localhost",
+            "kept_up_for_g18": True,
+            "live_project_untouched": "crm-cskh-vps-staging",
+            "zero_live_mutation": True,
+            "inspected_app_services": [
+                "backend",
+                "frontend",
+                "websocket",
+                "queue-short",
+                "queue-long",
+                "scheduler",
+            ],
+            "artifacts": {
+                "readonly_vps_preflight": str(out_dir / "readonly-vps-preflight.json"),
+                "candidate_pull_inspect_receipt": str(out_dir / "candidate-registry-pull-inspect-receipt.json"),
+                "runtime_isolation_audit_g03": str(out_dir / "staging-dr-runtime-isolation-audit.json"),
+                "https_wss_smoke_g05": str(out_dir / "https-wss-smoke-receipt.json"),
+                "live_preservation_before_after": str(out_dir / "live-preservation-before-after.json"),
+            },
+        }
+        files_to_write = {
+            "readonly-vps-preflight.json": preflight,
+            "candidate-registry-pull-inspect-receipt.json": pull_rec,
+            "staging-dr-runtime-isolation-audit.json": g03_rec,
+            "https-wss-smoke-receipt.json": g05_smoke,
+            "live-preservation-before-after.json": live_pres,
+            "vps-g03-g05-summary.json": summary,
+        }
+        for fname, payload in files_to_write.items():
+            (out_dir / fname).write_text(
+                json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n"
+            )
+        return out_dir
 
     def test_vps_live_preservation_and_g18_v1_4_slo_reconciliation(self) -> None:
         import manage_isolated_staging_dr as dr_mod
 
         repo_root = staging_mod.REPO_ROOT
-        bench_doc = json.loads(
+        ci_bench_doc = json.loads(
             (
                 repo_root
                 / "deploy"
@@ -1505,61 +1637,289 @@ class OpsToolkitTests(unittest.TestCase):
             ).read_text(encoding="utf-8")
         )
 
-        # 1. Unsigned -> must remain BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE while pre-checking all 7 metrics
-        unsigned_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(bench_doc)
-        self.assertEqual(unsigned_res["status"], "BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE")
-        self.assertFalse(unsigned_res["owner_slo_v1_4_signed"])
-        self.assertTrue(unsigned_res["digest_matches_candidate"])
-        self.assertTrue(unsigned_res["p4_9_2_all_11_items_passed"])
-        self.assertTrue(unsigned_res["all_7_metrics_within_v1_4_thresholds"])
-        self.assertEqual(len(unsigned_res["metric_comparisons"]), 7)
+        # Verify canonical threshold file & SHA-256 cryptographic lock
+        canon_spec, canon_sha, canon_errs = dr_mod.load_and_validate_g18_thresholds_v1_4()
+        self.assertEqual(canon_errs, [])
+        self.assertEqual(canon_sha, dr_mod.LOCKED_G18_THRESHOLDS_V1_4_SHA256)
+        self.assertEqual(len(canon_spec["precheck_7_metrics"]), 7)
+        self.assertEqual(len(canon_spec["section_3_2A_cases_and_session_models"]), 22)
 
         valid_approval = {
             "approved": True,
             "ticket_version": "v1.4",
             "signed_by": "owner-representative@hrpartner.vn",
             "signed_at": "2026-11-11T20:00:00+07:00",
+            "thresholds_sha256": dr_mod.LOCKED_G18_THRESHOLDS_V1_4_SHA256,
             "approved_thresholds": {
                 k: spec["threshold"] for k, spec in dr_mod.OWNER_TICKET_V1_4_PROPOSED_SLOS.items()
             },
         }
 
-        # 2. Wrong ticket version or tampered threshold -> fail closed as unsigned
-        wrong_ver = dict(valid_approval, ticket_version="v1.3")
+        # 1. CI benchmark report (unsigned): 7-metric precheck + §3.2A-C pass, but status stays CI-blocked
+        unsigned_ci = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(ci_bench_doc)
         self.assertEqual(
-            dr_mod.reconcile_g18_benchmark_with_v1_4_slos(bench_doc, owner_slo_approval=wrong_ver)["status"],
-            "BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE",
+            unsigned_ci["status"],
+            "BLOCKED_CI_PRECHECK_ONLY_PENDING_VPS_RECEIPTS_AND_OWNER_APPROVAL",
         )
-        tampered_thresh = dict(
-            valid_approval,
-            approved_thresholds=dict(valid_approval["approved_thresholds"], my_customers_worklist_api_p95_ms=550.0),
+        self.assertTrue(unsigned_ci["is_ci_benchmark_report"])
+        self.assertTrue(unsigned_ci["measurements_complete"])
+        self.assertEqual(unsigned_ci["missing_measurements"], [])
+        self.assertEqual(unsigned_ci["precheck_7_metrics"]["status"], "PRECHECK_PASS")
+        self.assertTrue(unsigned_ci["all_7_metrics_within_v1_4_thresholds"])
+        self.assertTrue(unsigned_ci["section_3_2_reconciliation"]["all_passed"])
+        self.assertEqual(unsigned_ci["section_3_2_reconciliation"]["section_3_2A"]["cases_passed"], 22)
+        self.assertEqual(
+            set(unsigned_ci["section_3_2_reconciliation"]["section_3_2A"]["by_session_model_summary"]),
+            {
+                "shared_session",
+                "shared_new_session",
+                "single_initialized_session",
+                "40_distinct_staff_sessions",
+                "40_distinct_staff_sessions_idempotent_post",
+                "single_initialized_session_peak_c40",
+                "bod_role_session",
+            },
+        )
+
+        # 2. CI benchmark report EVEN WITH valid Owner signature + thresholds_sha256 MUST NOT PASS G18
+        signed_ci = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+            ci_bench_doc, owner_slo_approval=valid_approval
         )
         self.assertEqual(
-            dr_mod.reconcile_g18_benchmark_with_v1_4_slos(bench_doc, owner_slo_approval=tampered_thresh)["status"],
-            "BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE",
+            signed_ci["status"],
+            "BLOCKED_CI_REPORT_REQUIRES_STAGING_VPS_BENCHMARK_AND_RECEIPTS",
         )
+        self.assertNotEqual(signed_ci["status"], "PASS")
+        self.assertTrue(signed_ci["owner_slo_v1_4_signed"])
+        self.assertFalse(signed_ci["g18_pass_requirements"]["staging_vps_benchmark_and_receipts_verified"])
 
-        # 3. Signed exact v1.4 SLO set + all 7 metrics within threshold -> PASS
-        signed_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
-            bench_doc, owner_slo_approval=valid_approval
-        )
-        self.assertEqual(signed_res["status"], "PASS", signed_res)
-        self.assertTrue(signed_res["owner_slo_v1_4_signed"])
+        with tempfile.TemporaryDirectory(prefix="g18-v14-test-") as td:
+            td_path = Path(td)
+            vps_receipt_dir = self._build_mock_staging_vps_bundle(
+                repo_root,
+                td_path / "vps-receipts",
+                expected_digest=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+            )
 
-        # 4. Signed v1.4 SLO set + metric breach -> FAIL
-        breached_bench = json.loads(json.dumps(bench_doc))
-        breached_bench["p4_9_2_acceptance_matrix"]["items"][
-            "record_attempt_and_callback_p95_le_2000ms_zero_dup"
-        ]["measured_http_p95_ms"] = 1250.5
-        breached_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
-            breached_bench, owner_slo_approval=valid_approval
-        )
-        self.assertEqual(breached_res["status"], "FAIL")
-        self.assertFalse(
-            breached_res["metric_comparisons"]["contact_attempt_write_p95_ms"]["within_v1_4_threshold"]
-        )
+            # Pairing CI Azure benchmark report with Staging VPS receipts must fail closed
+            ci_plus_vps = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                ci_bench_doc,
+                owner_slo_approval=valid_approval,
+                vps_receipts=vps_receipt_dir,
+            )
+            self.assertEqual(ci_plus_vps["status"], "FAIL_INVALID_STAGING_VPS_RECEIPTS")
+            self.assertIn(
+                "benchmark_report_is_ci_runner_cannot_pair_with_staging_vps_receipts",
+                ci_plus_vps["staging_vps_receipt_validation_errors"],
+            )
 
-        # 5. Live preservation zero-delta check
+            # Build non-CI Staging VPS benchmark report on same host platform & locked @sha256 digest
+            vps_bench_doc = json.loads(json.dumps(ci_bench_doc))
+            vps_bench_doc["s1_domain_and_database_benchmark"]["runner_hardware"]["platform"] = (
+                "Linux-6.8.0-51-generic-x86_64-with-glibc2.39"
+            )
+            vps_bench_doc["isolation_guard"]["compose_project"] = "crm-cskh-s1-bench-vps"
+
+            # 3. Non-CI VPS benchmark without Staging VPS receipts -> BLOCKED_MISSING_STAGING_VPS_RECEIPTS
+            no_receipts_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                vps_bench_doc,
+                owner_slo_approval=valid_approval,
+            )
+            self.assertEqual(no_receipts_res["status"], "BLOCKED_MISSING_STAGING_VPS_RECEIPTS")
+
+            # 4. Positive control: complete measurements + locked digest + Staging VPS receipts + SHA-256 approval -> PASS
+            pass_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                vps_bench_doc,
+                owner_slo_approval=valid_approval,
+                vps_receipts=vps_receipt_dir,
+            )
+            self.assertEqual(pass_res["status"], "PASS", pass_res)
+            self.assertTrue(all(pass_res["g18_pass_requirements"].values()))
+
+            # CLI reconcile-g18-slo returns 0 on full Staging VPS PASS and 2 on CI report
+            vps_bench_file = td_path / "vps-bench.json"
+            ci_bench_file = td_path / "ci-bench.json"
+            approval_file = td_path / "owner-approval.json"
+            out_pass_file = td_path / "reconcile-pass.json"
+            vps_bench_file.write_text(json.dumps(vps_bench_doc), encoding="utf-8")
+            ci_bench_file.write_text(json.dumps(ci_bench_doc), encoding="utf-8")
+            approval_file.write_text(json.dumps(valid_approval), encoding="utf-8")
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(vps_bench_file),
+                        "--vps-receipt-dir",
+                        str(vps_receipt_dir),
+                        "--owner-approval-json",
+                        str(approval_file),
+                        "--out",
+                        str(out_pass_file),
+                    ]
+                ),
+                0,
+            )
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(ci_bench_file),
+                        "--owner-approval-json",
+                        str(approval_file),
+                    ]
+                ),
+                2,
+            )
+
+            # 5. Missing measurements (số đo thiếu) MUST report FAIL_MISSING_MEASUREMENTS (never default to 0.0)
+            # 5a. Missing one leg of paginated drill-down in 7-metric precheck / §3.2A
+            miss_drill = json.loads(json.dumps(vps_bench_doc))
+            del miss_drill["s1_http_acceptance_and_mixed_waves"]["bod_overview_and_drilldown_http"][
+                "kpi_drilldown_monthly_company_role_api"
+            ]["p95_ms"]
+            res_miss_drill = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                miss_drill, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+            )
+            self.assertEqual(res_miss_drill["status"], "FAIL_MISSING_MEASUREMENTS")
+            self.assertIn(
+                "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_monthly_company_role_api.p95_ms",
+                res_miss_drill["missing_measurements"],
+            )
+            self.assertEqual(
+                res_miss_drill["metric_comparisons"]["kpi_drilldown_paginated_api_p95_ms"]["evaluation_status"],
+                "MISSING_MEASUREMENT",
+            )
+
+            # 5b. Missing §3.2A 40-session SSR case metric even on unsigned precheck
+            miss_ssr = json.loads(json.dumps(ci_bench_doc))
+            miss_ssr["worklist_ssr_acceptance_and_separation"]["case_2c_40_staff_sessions_c40"]["p95_ms"] = None
+            res_miss_ssr = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(miss_ssr)
+            self.assertEqual(res_miss_ssr["status"], "FAIL_MISSING_MEASUREMENTS")
+            self.assertIn(
+                "worklist_ssr_acceptance_and_separation.case_2c_40_staff_sessions_c40.p95_ms",
+                res_miss_ssr["missing_measurements"],
+            )
+
+            # 5c. Missing §3.2B sub-workload p95 or boolean spoofing numeric metric
+            miss_32b = json.loads(json.dumps(vps_bench_doc))
+            miss_32b["s1_http_acceptance_and_mixed_waves"]["concurrent_mixed_session_waves_20_40_80"][
+                "sessions_40"
+            ]["by_workload"]["record_attempt_write_api"]["p95_ms"] = True
+            res_miss_32b = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                miss_32b, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+            )
+            self.assertEqual(res_miss_32b["status"], "FAIL_MISSING_MEASUREMENTS")
+            self.assertIn(
+                "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.record_attempt_write_api.p95_ms",
+                res_miss_32b["missing_measurements"],
+            )
+
+            # 5d. Missing §3.2C CSV batch / domain workload measurement
+            miss_32c = json.loads(json.dumps(vps_bench_doc))
+            del miss_32c["s1_domain_and_database_benchmark"]["async_import_distribution_and_queue_lag"][
+                "csv_import_50000_rows"
+            ]["preview_ms"]
+            del miss_32c["s1_domain_and_database_benchmark"]["domain_workloads_s1"][
+                "my_customers_list_work_items"
+            ]["p95_ms"]
+            res_miss_32c = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                miss_32c, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+            )
+            self.assertEqual(res_miss_32c["status"], "FAIL_MISSING_MEASUREMENTS")
+            self.assertIn(
+                "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.preview_ms",
+                res_miss_32c["missing_measurements"],
+            )
+            self.assertIn(
+                "s1_domain_and_database_benchmark.domain_workloads_s1.my_customers_list_work_items.p95_ms",
+                res_miss_32c["missing_measurements"],
+            )
+
+            # 6. Wrong thresholds / SHA-256 mismatch (ngưỡng sai)
+            # 6a. Tampered threshold specification dict or file
+            bad_spec = json.loads(json.dumps(canon_spec))
+            bad_spec["section_3_2A_cases_and_session_models"]["worklist_ssr_case_2c_40_staff_sessions_c40"][
+                "max_p95_ms"
+            ] = 9500.0
+            bad_spec_file = td_path / "tampered-thresholds.json"
+            bad_spec_file.write_bytes(dr_mod.serialize_g18_thresholds_spec(bad_spec))
+            res_bad_spec = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                vps_bench_doc,
+                owner_slo_approval=valid_approval,
+                vps_receipts=vps_receipt_dir,
+                thresholds_path=bad_spec_file,
+            )
+            self.assertEqual(res_bad_spec["status"], "FAIL_INVALID_THRESHOLDS")
+            self.assertTrue(
+                any("worklist_ssr_case_2c_40_staff_sessions_c40.max_p95_ms" in e for e in res_bad_spec["threshold_validation_errors"])
+            )
+
+            # 6b. Missing or wrong thresholds_sha256 in Owner approval
+            no_sha_approval = {k: v for k, v in valid_approval.items() if k != "thresholds_sha256"}
+            res_no_sha = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                vps_bench_doc, owner_slo_approval=no_sha_approval, vps_receipts=vps_receipt_dir
+            )
+            self.assertEqual(res_no_sha["status"], "FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256")
+            self.assertIn(
+                "missing_thresholds_sha256_in_owner_approval",
+                res_no_sha["owner_approval_validation_errors"],
+            )
+
+            wrong_sha_approval = dict(valid_approval, thresholds_sha256="0" * 64)
+            res_wrong_sha = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                vps_bench_doc, owner_slo_approval=wrong_sha_approval, vps_receipts=vps_receipt_dir
+            )
+            self.assertEqual(res_wrong_sha["status"], "FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256")
+
+            # 6c. Wrong ticket version or tampered approved_thresholds value in Owner approval
+            wrong_ver = dict(valid_approval, ticket_version="v1.3")
+            self.assertEqual(
+                dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                    vps_bench_doc, owner_slo_approval=wrong_ver, vps_receipts=vps_receipt_dir
+                )["status"],
+                "FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256",
+            )
+            tampered_thresh = dict(
+                valid_approval,
+                approved_thresholds=dict(
+                    valid_approval["approved_thresholds"], my_customers_worklist_api_p95_ms=550.0
+                ),
+            )
+            self.assertEqual(
+                dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                    vps_bench_doc, owner_slo_approval=tampered_thresh, vps_receipts=vps_receipt_dir
+                )["status"],
+                "FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256",
+            )
+
+            # 7. Digest mismatch & threshold breach checks
+            wrong_dig_bench = json.loads(json.dumps(vps_bench_doc))
+            wrong_dig_bench["app_image_tested"] = "ghcr.io/nobita6986/crm-cskh@sha256:" + ("a" * 64)
+            self.assertEqual(
+                dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                    wrong_dig_bench, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+                )["status"],
+                "FAIL_DIGEST_MISMATCH",
+            )
+
+            breached_bench = json.loads(json.dumps(vps_bench_doc))
+            breached_bench["s1_http_acceptance_and_mixed_waves"]["record_attempt_and_callback_http"][
+                "p95_ms"
+            ] = 1250.5
+            breached_bench["p4_9_2_acceptance_matrix"]["items"][
+                "record_attempt_and_callback_p95_le_2000ms_zero_dup"
+            ]["measured_http_p95_ms"] = 1250.5
+            breached_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                breached_bench, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+            )
+            self.assertEqual(breached_res["status"], "FAIL_THRESHOLD_BREACH")
+            self.assertFalse(
+                breached_res["metric_comparisons"]["contact_attempt_write_p95_ms"]["within_v1_4_threshold"]
+            )
+
+        # 8. Live preservation zero-delta check & CLI options remain independent for SSH preflight + G03/G05
         snap_before = {
             "live_project_name": "crm-cskh-vps-staging",
             "containers": [
@@ -1585,13 +1945,20 @@ class OpsToolkitTests(unittest.TestCase):
         self.assertEqual(mutated_check["status"], "FAIL")
         self.assertFalse(mutated_check["zero_live_mutation"])
 
-        # 6. CLI subcommands parse cleanly
         p_pre = dr_mod.build_parser().parse_args(["readonly-vps-preflight", "--out", "/tmp/pre.json"])
         self.assertEqual(p_pre.live_project, "crm-cskh-vps-staging")
         p_col = dr_mod.build_parser().parse_args(["collect-vps-g03-g05", "--out-dir", "/tmp/receipts"])
         self.assertEqual(p_col.app_image, dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4)
         p_slo = dr_mod.build_parser().parse_args(
-            ["reconcile-g18-slo", "--benchmark-json", "/tmp/bench.json"]
+            [
+                "reconcile-g18-slo",
+                "--benchmark-json",
+                "/tmp/bench.json",
+                "--vps-receipt-dir",
+                "/tmp/receipts",
+                "--thresholds-json",
+                str(dr_mod.DEFAULT_G18_THRESHOLDS_V1_4_PATH),
+            ]
         )
         self.assertEqual(p_slo.expected_digest, dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4)
 
