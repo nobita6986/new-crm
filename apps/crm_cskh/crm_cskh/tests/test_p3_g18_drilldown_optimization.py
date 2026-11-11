@@ -16,7 +16,11 @@ from crm_cskh.services.attribution import AUTHORITATIVE, UNKNOWN_HISTORICAL
 from crm_cskh.services.errors import ForbiddenScope
 from crm_cskh.services.kpi_calculator import COMPANY_SCOPE_ID, UNATTRIBUTED_TEAM_ID
 from crm_cskh.services.kpi_periods import resolve_period_spec
-from crm_cskh.services.kpi_runs import execute_kpi_recompute
+from crm_cskh.services.kpi_runs import (
+	_flush_pending_dirty_events,
+	execute_kpi_recompute,
+	schedule_post_commit_dirty_invalidation,
+)
 from crm_cskh.tests.p3_base import P3TestCase
 
 
@@ -42,6 +46,8 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		):
 			if frappe.db.table_exists(dt):
 				frappe.db.sql(f"delete from `tab{dt}`")
+		if frappe.db.table_exists("CRM Lead"):
+			frappe.db.sql("delete from `tabCRM Lead` where name like 'LEAD-G18-DEEP-%'")
 		if frappe.db.table_exists("CRM Task") and frappe.db.has_column("CRM Task", "cskh_is_followup"):
 			frappe.db.sql("delete from `tabCRM Task` where coalesce(cskh_is_followup, 0) = 1")
 		frappe.db.commit()
@@ -108,7 +114,7 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				update_modified=False,
 			)
 
-		# 2. Not-connected attempt (`no_answer`) on `wi_noans`
+		# 2. Not-connected attempt (`no_answer`) + overdue follow-up on `wi_noans` (not transferred)
 		contact_attempt.record_attempt(
 			work_item=wi_noans,
 			channel="phone_call",
@@ -116,6 +122,28 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 			note="Không nghe máy lần 1",
 			idempotency_key=self.unique_key("g18-noans"),
 		)
+		followup.schedule_followup(
+			work_item=wi_noans,
+			due_at=(now_datetime() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S"),
+			note="Hẹn gọi lại khách chưa nghe máy G18",
+			idempotency_key=self.unique_key("g18-fu-noans"),
+		)
+		fu_noans_ob = frappe.db.get_value(
+			"CSKH SLA Obligation",
+			{"work_item": wi_noans, "obligation_type": "FOLLOWUP"},
+			"name",
+		)
+		if fu_noans_ob:
+			frappe.db.set_value(
+				"CSKH SLA Obligation",
+				fu_noans_ob,
+				{
+					"effective_due_at": fu_due,
+					"original_due_at": fu_due,
+					"started_at": max(fu_due - timedelta(seconds=30), day_floor),
+				},
+				update_modified=False,
+			)
 
 		# 3. Invalid phone (`wrong_number`) on `wi_inv` (`staff_b`)
 		frappe.set_user(self.staff_b)
@@ -156,6 +184,7 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		frappe.set_user(self.admin_user)
 		ownership.reassign(
 			wi_conn,
+			self.staff_a,
 			self.staff_c,
 			reason="Bàn giao sang Team B kiểm tra che PII",
 			actor=self.admin_user,
@@ -332,277 +361,450 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		frappe.set_user("Administrator")
 		base_dt = datetime(2026, 9, 10, 9, 0, 0)
 		m_key = "2026-09"
-		lead_base = self.make_canonical_lead(first_name="Khách Deep")
-
-		# Bulk-insert 565 deterministic Work Items + Assignment History + SLA Obligations + Contact Attempts (`29` pages of 20)
-		now_s = now_datetime()
-		wi_rows = []
-		ah_rows = []
-		ob_rows = []
-		ca_rows = []
-		for i in range(565):
-			wi_id = f"WI-G18-DEEP-{i:04d}"
-			ah_id = f"AH-G18-DEEP-{i:04d}"
-			ob_id = f"OB-G18-DEEP-{i:04d}"
-			ca_id = f"CA-G18-DEEP-{i:04d}"
-			iv_start = base_dt + timedelta(minutes=i)
-			att_dt = iv_start + timedelta(minutes=5)
-			due_dt = iv_start + timedelta(minutes=(15 if i % 3 != 0 else 2))
-			is_conn = 1 if (i % 2 == 0) else 0
-			wi_rows.append(
-				(
-					wi_id,
-					now_s,
-					now_s,
-					"Administrator",
-					"Administrator",
-					lead_base,
-					self.shared_campaign,
-					"closed",
-					None,
-					self.staff_a,
-					self.staff_a,
-					self.staff_a,
-				)
-			)
-			ah_rows.append(
-				(
-					ah_id,
-					now_s,
-					now_s,
-					"Administrator",
-					"Administrator",
-					f"ev-g18-{i:04d}",
-					wi_id,
-					"assign",
-					self.staff_a,
-					iv_start,
-					iv_start,
-					att_dt + timedelta(minutes=1),
-					self.team_a,
-					AUTHORITATIVE,
-				)
-			)
-			ob_rows.append(
-				(
-					ob_id,
-					now_s,
-					now_s,
-					"Administrator",
-					"Administrator",
-					f"idem-ob-g18-{i:04d}",
-					"FIRST_ATTEMPT",
-					wi_id,
-					lead_base,
-					self.shared_campaign,
-					ah_id,
-					self.staff_a,
-					self.team_a,
-					AUTHORITATIVE,
-					"fulfilled_on_time" if att_dt <= due_dt else "fulfilled_late",
-					0,
-					iv_start,
-					due_dt,
-					due_dt,
-					att_dt,
-					ca_id,
-					iv_start,
-				)
-			)
-			ca_rows.append(
-				(
-					ca_id,
-					now_s,
-					now_s,
-					"Administrator",
-					"Administrator",
-					f"idem-ca-g18-{i:04d}",
-					wi_id,
-					lead_base,
-					self.shared_campaign,
-					ah_id,
-					self.staff_a,
-					self.staff_a,
-					att_dt,
-					att_dt,
-					"phone_call",
-					"connected_interested" if is_conn else "no_answer",
-					1,
-					is_conn,
-					"self_reported",
-					f"Note G18 {i:04d}",
-				)
-			)
-
-		has_owner_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
-		if has_owner_close:
-			frappe.db.sql(
-				"""
-				insert into `tabCSKH Work Item`
-				(name, creation, modified, owner, modified_by, lead, campaign, status, assigned_to, closed_by, last_activity_by, owner_at_close)
-				values """
-				+ ", ".join(["(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"] * len(wi_rows)),
-				tuple(v for r in wi_rows for v in r),
-			)
-		else:
-			frappe.db.sql(
-				"""
-				insert into `tabCSKH Work Item`
-				(name, creation, modified, owner, modified_by, lead, campaign, status, assigned_to, closed_by, last_activity_by)
-				values """
-				+ ", ".join(["(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"] * len(wi_rows)),
-				tuple(v for r in wi_rows for v in r[:-1]),
-			)
-		frappe.db.sql(
-			"""
-			insert into `tabCSKH Assignment History`
-			(name, creation, modified, owner, modified_by, event_id, work_item, action, to_user, event_at,
-			 ownership_start, ownership_end, team_at_assignment, attribution_status)
-			values """
-			+ ", ".join(["(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"] * len(ah_rows)),
-			tuple(v for r in ah_rows for v in r),
+		orig_tmh = frappe.db.sql(
+			"select name, effective_from from `tabCSKH Team Membership History`",
+			as_dict=True,
 		)
-		frappe.db.sql(
-			"""
-			insert into `tabCSKH SLA Obligation`
-			(name, creation, modified, owner, modified_by, idempotency_key, obligation_type, work_item, lead,
-			 campaign, interval_event, owner_user, team_at_obligation, attribution_status, status, informational_only,
-			 started_at, original_due_at, effective_due_at, fulfilled_at, fulfilled_by_attempt, evaluation_anchor_at)
-			values """
-			+ ", ".join(
-				["(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"] * len(ob_rows)
-			),
-			tuple(v for r in ob_rows for v in r),
-		)
-		frappe.db.sql(
-			"""
-			insert into `tabCSKH Contact Attempt`
-			(name, creation, modified, owner, modified_by, idempotency_key, work_item, lead, campaign,
-			 ownership_event, owner_at_attempt, performed_by, occurred_at, recorded_at, channel, outcome_code,
-			 contact_attempt_snapshot, connected_snapshot, verification_status, note)
-			values """
-			+ ", ".join(["(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)"] * len(ca_rows)),
-			tuple(v for r in ca_rows for v in r),
-		)
+		frappe.db.sql("update `tabCSKH Team Membership History` set effective_from = '2026-01-01 00:00:00'")
 		frappe.db.commit()
 
-		execute_kpi_recompute(resolve_period_spec("monthly", m_key), run_mode="full", actor="Administrator")
+		try:
+			# Bulk-insert 565 distinct Leads + Work Items + Assignment History + SLA Obligations + Contact Attempts (`29` pages of 20)
+			now_s = now_datetime()
+			lead_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"naming_series",
+				"first_name",
+				"lead_name",
+				"mobile_no",
+				"status",
+				"lead_owner",
+				"cskh_do_not_contact",
+			]
+			wi_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"lead",
+				"campaign",
+				"status",
+				"assigned_to",
+				"assigned_at",
+				"owner_at_close",
+				"closed_by",
+				"closed_at",
+				"attempt_count",
+				"connected_attempt_count",
+				"first_attempt_at",
+				"last_attempt_at",
+				"last_outcome_code",
+				"last_outcome_label",
+				"revision",
+			]
+			ah_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"work_item",
+				"action",
+				"from_user",
+				"to_user",
+				"actor",
+				"event_at",
+				"ownership_start",
+				"ownership_end",
+				"event_id",
+				"team_at_assignment",
+				"attribution_status",
+				"reason",
+			]
+			sla_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"obligation_type",
+				"work_item",
+				"lead",
+				"campaign",
+				"interval_event",
+				"owner_user",
+				"team_at_obligation",
+				"attribution_status",
+				"status",
+				"informational_only",
+				"is_recovery_obligation",
+				"reschedule_seq",
+				"started_at",
+				"original_due_at",
+				"effective_due_at",
+				"is_paused",
+				"fulfilled_at",
+				"fulfilled_by_attempt",
+				"breached_at",
+				"closed_at",
+				"evaluation_anchor_at",
+				"policy_name_snapshot",
+				"policy_version_snapshot",
+				"idempotency_key",
+			]
+			att_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"work_item",
+				"lead",
+				"campaign",
+				"ownership_event",
+				"owner_at_attempt",
+				"performed_by",
+				"occurred_at",
+				"recorded_at",
+				"channel",
+				"outcome_code",
+				"outcome_label_snapshot",
+				"outcome_group_snapshot",
+				"outcome_version_snapshot",
+				"contact_attempt_snapshot",
+				"connected_snapshot",
+				"interested_snapshot",
+				"terminal_snapshot",
+				"dnc_snapshot",
+				"note",
+				"verification_status",
+				"policy_name_snapshot",
+				"policy_version_snapshot",
+				"idempotency_key",
+				"payload_hash",
+				"work_item_revision",
+			]
 
-		# 1. Deep pagination past `offset=500` (`page=25`, `page=26`, `page=29`) across all 3 families
-		frappe.set_user(self.bod_user)
-		for mcode in (
-			"CONNECTED_RATE",
-			"FIRST_ATTEMPT_SLA_RATE",
-			"CONTACT_ATTEMPT_COUNT",
-			"ELIGIBLE_COVERAGE",
-		):
-			seen_ids: set[str] = set()
-			for pg in (1, 25, 26, 29):
-				res = self._assert_fast_matches_reference(
+			lead_rows = []
+			wi_rows = []
+			ah_rows = []
+			ob_rows = []
+			ca_rows = []
+			for i in range(565):
+				lead_id = f"LEAD-G18-DEEP-{i:04d}"
+				wi_id = f"WI-G18-DEEP-{i:04d}"
+				ah_id = f"AH-G18-DEEP-{i:04d}"
+				ob_id = f"OB-G18-DEEP-{i:04d}"
+				ca_id = f"CA-G18-DEEP-{i:04d}"
+				iv_start = base_dt + timedelta(minutes=i)
+				att_dt = iv_start + timedelta(minutes=5)
+				close_dt = att_dt + timedelta(minutes=1)
+				due_dt = iv_start + timedelta(minutes=(15 if i % 3 != 0 else 2))
+				is_conn = 1 if (i % 2 == 0) else 0
+				ocode = "connected_interested" if is_conn else "no_answer"
+				olabel = "Đã trao đổi — Có quan tâm" if is_conn else "Không nghe máy"
+				ogroup = "positive" if is_conn else "unreached"
+				on_time = att_dt <= due_dt
+
+				lead_rows.append(
+					(
+						lead_id,
+						now_s,
+						now_s,
+						"Administrator",
+						"Administrator",
+						0,
+						0,
+						"CRM-LEAD-",
+						f"Khách Deep {i:04d}",
+						f"Khách Deep {i:04d}",
+						f"0978{i:06d}",
+						"Converted",
+						None,
+						0,
+					)
+				)
+				wi_rows.append(
+					(
+						wi_id,
+						now_s,
+						now_s,
+						"Administrator",
+						"Administrator",
+						0,
+						0,
+						lead_id,
+						self.shared_campaign,
+						"closed",
+						None,
+						iv_start,
+						self.staff_a,
+						self.staff_a,
+						close_dt,
+						1,
+						is_conn,
+						att_dt,
+						att_dt,
+						ocode,
+						olabel,
+						2,
+					)
+				)
+				ah_rows.append(
+					(
+						ah_id,
+						now_s,
+						now_s,
+						"Administrator",
+						"Administrator",
+						0,
+						0,
+						wi_id,
+						"assign",
+						None,
+						self.staff_a,
+						"Administrator",
+						iv_start,
+						iv_start,
+						close_dt,
+						f"ev-g18-{i:04d}",
+						self.team_a,
+						AUTHORITATIVE,
+						"Phân bổ G18 Deep",
+					)
+				)
+				ob_rows.append(
+					(
+						ob_id,
+						now_s,
+						now_s,
+						"Administrator",
+						"Administrator",
+						0,
+						0,
+						"FIRST_ATTEMPT",
+						wi_id,
+						lead_id,
+						self.shared_campaign,
+						ah_id,
+						self.staff_a,
+						self.team_a,
+						AUTHORITATIVE,
+						"fulfilled_on_time" if on_time else "fulfilled_late",
+						0,
+						0,
+						0,
+						iv_start,
+						due_dt,
+						due_dt,
+						0,
+						att_dt,
+						ca_id,
+						None if on_time else due_dt,
+						close_dt,
+						iv_start,
+						"GLOBAL-DEFAULT",
+						1,
+						f"idem-ob-g18-{i:04d}",
+					)
+				)
+				ca_rows.append(
+					(
+						ca_id,
+						now_s,
+						now_s,
+						self.staff_a,
+						self.staff_a,
+						0,
+						0,
+						wi_id,
+						lead_id,
+						self.shared_campaign,
+						ah_id,
+						self.staff_a,
+						self.staff_a,
+						att_dt,
+						att_dt,
+						"phone_call",
+						ocode,
+						olabel,
+						ogroup,
+						1,
+						1,
+						is_conn,
+						is_conn,
+						0,
+						0,
+						f"Note G18 {i:04d}",
+						"self_reported",
+						"GLOBAL-DEFAULT",
+						1,
+						f"idem-ca-g18-{i:04d}",
+						f"hash-ca-g18-{i:04d}",
+						2,
+					)
+				)
+
+			frappe.db.bulk_insert("CRM Lead", fields=lead_cols, values=lead_rows)
+			frappe.db.bulk_insert("CSKH Work Item", fields=wi_cols, values=wi_rows)
+			frappe.db.bulk_insert("CSKH Assignment History", fields=ah_cols, values=ah_rows)
+			frappe.db.bulk_insert("CSKH SLA Obligation", fields=sla_cols, values=ob_rows)
+			frappe.db.bulk_insert("CSKH Contact Attempt", fields=att_cols, values=ca_rows)
+			frappe.db.commit()
+
+			execute_kpi_recompute(
+				resolve_period_spec("monthly", m_key), run_mode="full", actor="Administrator"
+			)
+
+			# 1. Deep pagination past `offset=500` (`page=25`, `page=26`, `page=29`) across all 3 families
+			frappe.set_user(self.bod_user)
+			for mcode in (
+				"CONNECTED_RATE",
+				"FIRST_ATTEMPT_SLA_RATE",
+				"CONTACT_ATTEMPT_COUNT",
+				"ELIGIBLE_COVERAGE",
+			):
+				seen_ids: set[str] = set()
+				for pg in (1, 25, 26, 29):
+					res = self._assert_fast_matches_reference(
+						metric_code=mcode,
+						period_type="monthly",
+						period_key=m_key,
+						scope_type="company",
+						page=pg,
+						page_size=20,
+					)
+					self.assertEqual(res["pagination"]["total"], 565)
+					page_ids = {r["record_id"] for r in res["rows"]}
+					self.assertFalse(seen_ids & page_ids)
+					seen_ids |= page_ids
+				self.assertEqual(len(seen_ids), 20 * 3 + 5)
+
+			# 2. `Team Leader` SQL query ceiling check (`<= 55` queries for a 20-row page instead of `377`!)
+			frappe.set_user(self.leader_a)
+			sql_counter = [0]
+			orig_sql = frappe.db.sql
+
+			def _counting_sql(query, *a, **kw):
+				sql_counter[0] += 1
+				return orig_sql(query, *a, **kw)
+
+			with patch.object(frappe.db, "sql", side_effect=_counting_sql):
+				tl_res = p3_reporting.get_metric_drilldown(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="team",
+					scope_id=self.team_a,
+					page=27,
+					page_size=20,
+				)
+			self.assertEqual(tl_res["pagination"]["total"], 565)
+			self.assertEqual(len(tl_res["rows"]), 20)
+			self.assertLessEqual(
+				sql_counter[0], 55, f"Expected <=55 SQL queries for Team Leader page, got {sql_counter[0]}"
+			)
+			with patch.object(report_query, "_try_fast_sql_drilldown_page", return_value=None):
+				tl_ref = p3_reporting.get_metric_drilldown(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="team",
+					scope_id=self.team_a,
+					page=27,
+					page_size=20,
+				)
+			self.assertEqual(tl_res["rows"], tl_ref["rows"])
+
+			# 3. `dirty_pending = True` parity (no fallback cliff!)
+			frappe.set_user("Administrator")
+			prev_suppress = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+			frappe.flags.cskh_suppress_dirty_enqueue = True
+			try:
+				schedule_post_commit_dirty_invalidation(
+					work_item="WI-G18-DEEP-0000",
+					campaign=self.shared_campaign,
+					owner_user=self.staff_a,
+					event_dt=base_dt,
+					reason="g18_dirty_test",
+					trigger_reference="WI-G18-DEEP-0000",
+				)
+				_flush_pending_dirty_events()
+				frappe.db.commit()
+			finally:
+				frappe.flags.cskh_suppress_dirty_enqueue = prev_suppress
+
+			frappe.set_user(self.bod_user)
+			for mcode in ("CONNECTED_RATE", "FIRST_ATTEMPT_SLA_RATE", "CONTACT_ATTEMPT_COUNT"):
+				dirty_res = self._assert_fast_matches_reference(
 					metric_code=mcode,
 					period_type="monthly",
 					period_key=m_key,
 					scope_type="company",
-					page=pg,
+					page=26,
 					page_size=20,
 				)
-				self.assertEqual(res["pagination"]["total"], 565)
-				page_ids = {r["record_id"] for r in res["rows"]}
-				self.assertFalse(seen_ids & page_ids)
-				seen_ids |= page_ids
-			self.assertEqual(len(seen_ids), 20 * 3 + 5)
+				self.assertTrue(dirty_res["freshness"]["dirty_pending"])
+				self.assertEqual(dirty_res["pagination"]["total"], 565)
 
-		# 2. `Team Leader` SQL query ceiling check (`<= 25` queries for a 20-row page instead of `377`!)
-		frappe.set_user(self.leader_a)
-		sql_counter = [0]
-		orig_sql = frappe.db.sql
-
-		def _counting_sql(query, *a, **kw):
-			sql_counter[0] += 1
-			return orig_sql(query, *a, **kw)
-
-		with patch.object(frappe.db, "sql", side_effect=_counting_sql):
-			tl_res = p3_reporting.get_metric_drilldown(
-				metric_code="CONNECTED_RATE",
-				period_type="monthly",
-				period_key=m_key,
-				scope_type="team",
-				scope_id=self.team_a,
-				page=27,
-				page_size=20,
+			# 4. Approved `CSKH Attempt Correction` (`void`) falls back cleanly and preserves exact parity
+			frappe.set_user(self.admin_user)
+			corr_req = correction.request_correction(
+				attempt="CA-G18-DEEP-0001",
+				action="void",
+				reason="Ghi nhận nhầm cuộc gọi kiểm thử G18",
+				auto_approve=False,
+				idempotency_key=self.unique_key("g18-void-req"),
+				actor=self.admin_user,
 			)
-		self.assertEqual(tl_res["pagination"]["total"], 565)
-		self.assertEqual(len(tl_res["rows"]), 20)
-		self.assertLessEqual(
-			sql_counter[0], 55, f"Expected <=55 SQL queries for Team Leader page, got {sql_counter[0]}"
-		)
-		with patch.object(report_query, "_try_fast_sql_drilldown_page", return_value=None):
-			tl_ref = p3_reporting.get_metric_drilldown(
-				metric_code="CONNECTED_RATE",
-				period_type="monthly",
-				period_key=m_key,
-				scope_type="team",
-				scope_id=self.team_a,
-				page=27,
-				page_size=20,
+			correction.review_correction(
+				correction_id=corr_req["correction_id"],
+				decision="approve",
+				review_note="Duyệt hủy bản ghi kiểm thử G18",
+				idempotency_key=self.unique_key("g18-void-rev"),
+				actor=self.admin_user,
 			)
-		self.assertEqual(tl_res["rows"], tl_ref["rows"])
-
-		# 3. `dirty_pending = True` parity (no fallback cliff!)
-		frappe.set_user("Administrator")
-		from crm_cskh.services.dirty_scope import mark_dirty_scope
-
-		mark_dirty_scope(
-			dirty_date=base_dt.date(),
-			campaign=self.shared_campaign,
-			reason="g18_dirty_test",
-			trigger_reference="WI-G18-DEEP-0000",
-		)
-		frappe.db.commit()
-		frappe.set_user(self.bod_user)
-		for mcode in ("CONNECTED_RATE", "FIRST_ATTEMPT_SLA_RATE", "CONTACT_ATTEMPT_COUNT"):
-			dirty_res = self._assert_fast_matches_reference(
-				metric_code=mcode,
+			frappe.set_user("Administrator")
+			execute_kpi_recompute(
+				resolve_period_spec("monthly", m_key), run_mode="restated", actor="Administrator"
+			)
+			frappe.set_user(self.bod_user)
+			void_res = self._assert_fast_matches_reference(
+				metric_code="CONTACT_ATTEMPT_COUNT",
 				period_type="monthly",
 				period_key=m_key,
 				scope_type="company",
-				page=26,
+				page=1,
 				page_size=20,
 			)
-			self.assertTrue(dirty_res["freshness"]["dirty_pending"])
-			self.assertEqual(dirty_res["pagination"]["total"], 565)
-
-		# 4. Approved `CSKH Attempt Correction` (`void`) falls back cleanly and preserves exact parity
-		frappe.set_user(self.admin_user)
-		corr_req = correction.request_correction(
-			attempt="CA-G18-DEEP-0001",
-			action="void",
-			reason="Ghi nhận nhầm cuộc gọi kiểm thử G18",
-			auto_approve=False,
-			idempotency_key=self.unique_key("g18-void-req"),
-			actor=self.admin_user,
-		)
-		correction.review_correction(
-			correction_id=corr_req["correction_id"],
-			decision="approve",
-			review_note="Duyệt hủy bản ghi kiểm thử G18",
-			idempotency_key=self.unique_key("g18-void-rev"),
-			actor=self.admin_user,
-		)
-		frappe.set_user("Administrator")
-		execute_kpi_recompute(
-			resolve_period_spec("monthly", m_key), run_mode="restated", actor="Administrator"
-		)
-		frappe.set_user(self.bod_user)
-		void_res = self._assert_fast_matches_reference(
-			metric_code="CONTACT_ATTEMPT_COUNT",
-			period_type="monthly",
-			period_key=m_key,
-			scope_type="company",
-			page=1,
-			page_size=20,
-		)
-		self.assertEqual(void_res["pagination"]["total"], 564)
+			self.assertEqual(void_res["pagination"]["total"], 564)
+		finally:
+			frappe.set_user("Administrator")
+			for row in orig_tmh:
+				frappe.db.set_value(
+					"CSKH Team Membership History",
+					row["name"],
+					"effective_from",
+					row["effective_from"],
+					update_modified=False,
+				)
+			frappe.db.sql("delete from `tabCRM Lead` where name like 'LEAD-G18-DEEP-%'")
+			frappe.db.commit()
 
 	def test_additive_g18_indexes_explain_idempotent_migrate_and_n_minus_1_rollback(self):
 		"""Verify G18 additive indexes exist, eliminate `type=ALL` / `Using filesort`, survive `migrate x2`, and allow clean `N -> N-1` rollback."""
