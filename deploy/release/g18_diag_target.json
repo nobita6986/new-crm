@@ -1,0 +1,6 @@
+{
+  "schema_version": "cskh-p4-g18-diag-target-v1",
+  "mode": "pre_optimization_baseline",
+  "app_image_digest": "",
+  "run_g04_remediation_probe": true
+}
