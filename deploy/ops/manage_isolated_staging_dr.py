@@ -350,9 +350,10 @@ def wait_https_ingress_ready(
     ca_crt_path: Path,
     timeout_seconds: int = 45,
 ) -> None:
-    """Wait for Traefik Docker router discovery and nginx frontend convergence over TLS."""
+    """Wait for Traefik Docker router discovery, nginx frontend, and Frappe website SSR warm-up over TLS."""
     deadline = time.monotonic() + timeout_seconds
     last_status = 0
+    last_login_status = 0
     while time.monotonic() < deadline:
         try:
             st, _, raw = https_req(
@@ -365,12 +366,23 @@ def wait_https_ingress_ready(
             )
             last_status = st
             if st == 200 and b"pong" in raw:
-                return
+                login_st, _, _ = https_req(
+                    site_name=site_name,
+                    connect_host=connect_host,
+                    https_port=https_port,
+                    ca_crt_path=ca_crt_path,
+                    path="/login",
+                    headers={"Accept": "text/html"},
+                )
+                last_login_status = login_st
+                if login_st == 200:
+                    return
         except Exception:
             last_status = 0
         time.sleep(0.5)
     raise RuntimeError(
-        f"Timed out waiting for HTTPS Traefik/frontend ingress /api/method/ping=200 on {site_name} (last_status={last_status})"
+        f"Timed out waiting for HTTPS Traefik/frontend ingress /api/method/ping=200 and /login=200 on {site_name} "
+        f"(last_ping_status={last_status}, last_login_status={last_login_status})"
     )
 
 
@@ -3069,6 +3081,590 @@ def _write_or_print_scrubbed(res: dict[str, Any], secret_list: list[str], out_pa
     return 0 if res.get("status") == "PASS" else 2
 
 
+LOCKED_CANDIDATE_DIGEST_V1_4 = (
+    "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
+)
+
+OWNER_TICKET_V1_4_PROPOSED_SLOS: dict[str, dict[str, Any]] = {
+    "my_customers_worklist_api_p95_ms": {
+        "threshold": 500.0,
+        "unit": "ms",
+        "operator": "<=",
+        "description": "My Customers worklist JSON API p95 latency",
+    },
+    "open_lead_and_history_api_p95_ms": {
+        "threshold": 600.0,
+        "unit": "ms",
+        "operator": "<=",
+        "description": "Open Lead detail + Contact Attempt history API p95 latency",
+    },
+    "contact_attempt_write_p95_ms": {
+        "threshold": 1200.0,
+        "unit": "ms",
+        "operator": "<=",
+        "description": "Record Contact Attempt + Callback write API p95 latency",
+    },
+    "bod_executive_overview_api_p95_ms": {
+        "threshold": 800.0,
+        "unit": "ms",
+        "operator": "<=",
+        "description": "BOD Executive Overview KPI snapshot API p95 latency",
+    },
+    "kpi_drilldown_paginated_api_p95_ms": {
+        "threshold": 1200.0,
+        "unit": "ms",
+        "operator": "<=",
+        "description": "Paginated KPI drill-down API p95 latency (worst-case across daily & 250k monthly)",
+    },
+    "http_5xx_error_rate_pct": {
+        "threshold": 0.5,
+        "unit": "%",
+        "operator": "<=",
+        "description": "HTTP 5xx error rate across S1 workloads and session waves",
+    },
+    "daily_incremental_kpi_refresh_lag_sec": {
+        "threshold": 300.0,
+        "unit": "s",
+        "operator": "<=",
+        "description": "Daily incremental KPI refresh execution lag",
+    },
+}
+
+
+def capture_readonly_live_stack_snapshot(live_project_name: str = "crm-cskh-vps-staging") -> dict[str, Any]:
+    """Read-only `docker ps` + `docker inspect` snapshot of the live serving stack (zero mutation)."""
+    ps_proc = run_sub(
+        [
+            "docker",
+            "ps",
+            "-a",
+            "--filter",
+            f"label=com.docker.compose.project={live_project_name}",
+            "--format",
+            "{{.ID}}",
+        ],
+        check=False,
+    )
+    cids = sorted(ln.strip() for ln in ps_proc.stdout.splitlines() if ln.strip())
+    containers: list[dict[str, Any]] = []
+    if cids:
+        insp_proc = run_sub(["docker", "inspect", *cids], check=True)
+        for item in json.loads(insp_proc.stdout):
+            state = item.get("State") or {}
+            health = (state.get("Health") or {}).get("Status")
+            labels = (item.get("Config") or {}).get("Labels") or {}
+            containers.append(
+                {
+                    "id": item.get("Id"),
+                    "name": str(item.get("Name") or "").lstrip("/"),
+                    "service": labels.get("com.docker.compose.service", ""),
+                    "image": item.get("Image"),
+                    "config_image": (item.get("Config") or {}).get("Image"),
+                    "status": state.get("Status"),
+                    "health": health,
+                    "started_at": state.get("StartedAt"),
+                    "restart_count": int(item.get("RestartCount") or 0),
+                }
+            )
+    containers.sort(key=lambda r: (str(r.get("service") or ""), str(r.get("name") or "")))
+    return {
+        "timestamp_utc": utc_now_iso(),
+        "live_project_name": live_project_name,
+        "container_count": len(containers),
+        "all_running": bool(containers) and all(c.get("status") == "running" for c in containers),
+        "containers": containers,
+    }
+
+
+def compare_live_stack_preservation(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    """Verify zero mutation on the live serving stack between pre-drill and post-drill snapshots."""
+    before_map = {str(c.get("name")): c for c in (before.get("containers") or [])}
+    after_map = {str(c.get("name")): c for c in (after.get("containers") or [])}
+    deltas: list[str] = []
+    if sorted(before_map) != sorted(after_map):
+        deltas.append(f"container_set_changed: before={sorted(before_map)} after={sorted(after_map)}")
+    for cname, b_row in sorted(before_map.items()):
+        a_row = after_map.get(cname)
+        if not a_row:
+            continue
+        for field in ("id", "image", "config_image", "status", "started_at", "restart_count"):
+            if b_row.get(field) != a_row.get(field):
+                deltas.append(
+                    f"{cname}.{field}: before={b_row.get(field)!r} after={a_row.get(field)!r}"
+                )
+        if a_row.get("status") != "running":
+            deltas.append(f"{cname}.status_not_running={a_row.get('status')!r}")
+    zero_mutation = bool(before_map) and not deltas
+    return {
+        "schema_version": "cskh-p4-live-preservation-before-after-v1",
+        "timestamp_utc": utc_now_iso(),
+        "status": "PASS" if zero_mutation else "FAIL",
+        "zero_live_mutation": zero_mutation,
+        "live_project_name": before.get("live_project_name"),
+        "container_count_before": len(before_map),
+        "container_count_after": len(after_map),
+        "deltas": deltas,
+        "before_snapshot": before,
+        "after_snapshot": after,
+    }
+
+
+def _read_linux_meminfo_mib() -> dict[str, float]:
+    meminfo_path = Path("/proc/meminfo")
+    if not meminfo_path.is_file():
+        return {"mem_total_mib": 0.0, "mem_available_mib": 0.0}
+    vals_kib: dict[str, int] = {}
+    for ln in meminfo_path.read_text(encoding="utf-8", errors="replace").splitlines():
+        if ":" not in ln:
+            continue
+        k, rest = ln.split(":", 1)
+        parts = rest.strip().split()
+        if parts and parts[0].isdigit():
+            vals_kib[k.strip()] = int(parts[0])
+    total_mib = round(vals_kib.get("MemTotal", 0) / 1024.0, 2)
+    avail_mib = round(vals_kib.get("MemAvailable", vals_kib.get("MemFree", 0)) / 1024.0, 2)
+    return {"mem_total_mib": total_mib, "mem_available_mib": avail_mib}
+
+
+def _check_loopback_port_free(port: int, bind_ip: str = "127.0.0.1") -> bool:
+    if port in FORBIDDEN_HOST_PORTS:
+        return False
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind((bind_ip, port))
+            return True
+        except OSError:
+            return False
+
+
+def readonly_vps_preflight(
+    *,
+    live_project_name: str = "crm-cskh-vps-staging",
+    disk_check_path: Path = Path("/"),
+    required_free_disk_gib: float = 12.0,
+    required_avail_ram_mib: float = 1536.0,
+    planned_http_port: int = 18081,
+    planned_https_port: int = 18443,
+    out_json: Path | None = None,
+) -> dict[str, Any]:
+    """Read-only VPS resource, port, and live-stack preflight before isolated Staging/DR boot."""
+    cpu_cores = int(os.cpu_count() or 0)
+    mem = _read_linux_meminfo_mib()
+    du = shutil.disk_usage(disk_check_path)
+    free_disk_gib = round(du.free / (1024.0**3), 2)
+    total_disk_gib = round(du.total / (1024.0**3), 2)
+    http_port_free = _check_loopback_port_free(planned_http_port)
+    https_port_free = _check_loopback_port_free(planned_https_port)
+    live_snap = capture_readonly_live_stack_snapshot(live_project_name)
+
+    checks = {
+        "cpu_cores_ge_2": cpu_cores >= 2,
+        "available_ram_sufficient": mem["mem_available_mib"] >= required_avail_ram_mib,
+        "free_disk_sufficient": free_disk_gib >= required_free_disk_gib,
+        "planned_loopback_ports_free": http_port_free and https_port_free,
+        "live_stack_running_untouched": bool(live_snap["all_running"]),
+    }
+    report = {
+        "schema_version": "cskh-p4-readonly-vps-preflight-v1",
+        "timestamp_utc": utc_now_iso(),
+        "mode": "READ_ONLY_ZERO_MUTATION",
+        "status": "PASS" if all(checks.values()) else "FAIL",
+        "host_resources": {
+            "cpu_cores": cpu_cores,
+            "mem_total_mib": mem["mem_total_mib"],
+            "mem_available_mib": mem["mem_available_mib"],
+            "required_avail_ram_mib": required_avail_ram_mib,
+            "disk_check_path": str(disk_check_path),
+            "disk_total_gib": total_disk_gib,
+            "disk_free_gib": free_disk_gib,
+            "required_free_disk_gib": required_free_disk_gib,
+        },
+        "planned_isolated_loopback_ports": {
+            "bind_ip": "127.0.0.1",
+            "http_port": planned_http_port,
+            "http_port_free": http_port_free,
+            "https_port": planned_https_port,
+            "https_port_free": https_port_free,
+        },
+        "checks": checks,
+        "live_before_snapshot": live_snap,
+    }
+    if out_json is not None:
+        out_json.parent.mkdir(parents=True, exist_ok=True)
+        out_json.write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    return report
+
+
+def pull_and_inspect_candidate_digest(
+    app_image: str,
+    *,
+    locked_batch1_sha: str = "bcdc419f9f95ad75449315572928e3d8c43817cc",
+    out_json: Path | None = None,
+) -> dict[str, Any]:
+    """Pull exact `@sha256` candidate image and emit `candidate-registry-pull-inspect-receipt.json`."""
+    if "@sha256:" not in app_image:
+        raise ValueError(f"Expected immutable @sha256 digest URI, got: {app_image!r}")
+    pull_proc = run_sub(["docker", "pull", app_image])
+    m_dig = re.search(r"Digest:\s*(sha256:[0-9a-f]{64})", pull_proc.stdout)
+    pulled_digest = m_dig.group(1) if m_dig else ""
+    insp_proc = run_sub(["docker", "image", "inspect", app_image])
+    insp = json.loads(insp_proc.stdout)[0]
+    repo_digests = insp.get("RepoDigests") or []
+    cfg = insp.get("Config") or {}
+    digest_ok = app_image in repo_digests
+    non_root_ok = cfg.get("User") == "frappe"
+
+    def _git_rev(spec: str) -> str:
+        p = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-parse", spec],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return p.stdout.strip() if p.returncode == 0 else ""
+
+    receipt = {
+        "schema_version": "cskh-p4-candidate-registry-receipt-v1",
+        "timestamp_utc": utc_now_iso(),
+        "status": "PASS" if (digest_ok and non_root_ok) else "FAIL",
+        "candidate_verification_only": True,
+        "promoted_to_production": False,
+        "owner_live_site_touched": False,
+        "integrated_head_sha": _git_rev("HEAD"),
+        "locked_batch1_candidate_sha": locked_batch1_sha,
+        "apps_tree_sha": _git_rev("HEAD:apps"),
+        "crm_cskh_tree_sha": _git_rev("HEAD:apps/crm_cskh"),
+        "compose_tree_sha": _git_rev("HEAD:deploy/compose"),
+        "requested_registry_digest": app_image,
+        "pull_log_digest": pulled_digest,
+        "inspected_image_id": insp.get("Id"),
+        "inspected_repo_digests": repo_digests,
+        "inspected_created": insp.get("Created"),
+        "inspected_architecture": insp.get("Architecture"),
+        "inspected_os": insp.get("Os"),
+        "inspected_size_bytes": insp.get("Size"),
+        "inspected_user": cfg.get("User"),
+        "inspected_labels": cfg.get("Labels") or {},
+    }
+    if out_json is not None:
+        out_json.parent.mkdir(parents=True, exist_ok=True)
+        out_json.write_text(json.dumps(receipt, indent=2, ensure_ascii=False) + "\n", encoding="utf-8", newline="\n")
+    if receipt["status"] != "PASS":
+        raise RuntimeError(f"Candidate digest pull/inspect failed: {receipt}")
+    return receipt
+
+
+def collect_vps_g03_g05_receipts(
+    *,
+    app_image: str,
+    out_dir: Path,
+    project_name: str = "crm-cskh-dr-https-vps",
+    site_name: str = DEFAULT_DR_SITE,
+    live_project_name: str = "crm-cskh-vps-staging",
+    http_port: int = 18081,
+    https_port: int = 18443,
+    keep_up: bool = False,
+    state_dir: Path | None = None,
+) -> dict[str, Any]:
+    """Execute read-only preflight -> pull `@sha256` -> isolated Staging/DR G03/G05 receipts -> live zero-delta check."""
+    out_dir = out_dir.resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    preflight = readonly_vps_preflight(
+        live_project_name=live_project_name,
+        planned_http_port=http_port,
+        planned_https_port=https_port,
+        out_json=out_dir / "readonly-vps-preflight.json",
+    )
+    if preflight["status"] != "PASS":
+        raise RuntimeError(f"Read-only VPS preflight failed; aborting before touching Docker: {preflight}")
+
+    pull_receipt = pull_and_inspect_candidate_digest(
+        app_image,
+        out_json=out_dir / "candidate-registry-pull-inspect-receipt.json",
+    )
+
+    managed_tmp = state_dir is None and not keep_up
+    work_state = (
+        Path(tempfile.mkdtemp(prefix="cskh-vps-g03-g05-"))
+        if managed_tmp
+        else (state_dir or (out_dir / "isolated-dr-state")).resolve()
+    )
+    work_state.mkdir(parents=True, exist_ok=True)
+    env_file = work_state / "staging-dr-https.env"
+    secret_file = work_state / "db_root_password.txt"
+    ca_crt_path = work_state / "ca.crt"
+    db_root_pw = secrets.token_urlsafe(24)
+    admin_pw = "DrAdm-" + secrets.token_urlsafe(18) + "!"
+    seed_pw = "DrSeed-" + secrets.token_urlsafe(18) + "!"
+
+    secret_file.write_text(db_root_pw + "\n", encoding="ascii", newline="\n")
+    if os.name == "posix":
+        os.chmod(secret_file, 0o600)
+
+    tpl = p403_tool.parse_env_file(DR_TEMPLATE_ENV)
+    tpl.update(
+        {
+            "COMPOSE_PROJECT_NAME": project_name,
+            "SITE_NAME": site_name,
+            "SITES_RULE": f"Host(`{site_name}`)",
+            "APP_IMAGE": app_image,
+            "PULL_POLICY": "never",
+            "INFRA_PULL_POLICY": "missing",
+            "INGRESS_BIND_IP": "127.0.0.1",
+            "HTTP_PUBLISH_PORT": str(http_port),
+            "HTTPS_PUBLISH_PORT": str(https_port),
+            "DB_PASSWORD_SECRETS_FILE": str(secret_file),
+        }
+    )
+    assert_isolated_from_owner_stack(tpl, env_file)
+    env_file.write_text("\n".join(f"{k}={v}" for k, v in tpl.items()) + "\n", encoding="utf-8", newline="\n")
+    if os.name == "posix":
+        os.chmod(env_file, 0o600)
+
+    try:
+        boot_res = bootstrap_isolated_dr_stack(
+            env_file=env_file,
+            ca_crt_path=ca_crt_path,
+            db_root_pw=db_root_pw,
+            admin_pw=admin_pw,
+            seed_pw=seed_pw,
+        )
+        smoke_doc = boot_res["https_smoke"]
+        (out_dir / "https-wss-smoke-receipt.json").write_text(
+            json.dumps(smoke_doc, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+        runtime_audit = audit_isolated_stack_runtime_resources(
+            env_file=env_file,
+            secret_file=secret_file,
+            out_json=out_dir / "staging-dr-runtime-isolation-audit.json",
+        )
+    finally:
+        if not keep_up:
+            run_sub(
+                compose_cmd(env_file, ["down", "--volumes", "--remove-orphans"], profile_migrate=True),
+                check=False,
+            )
+            if managed_tmp:
+                shutil.rmtree(work_state, ignore_errors=True)
+
+    live_after = capture_readonly_live_stack_snapshot(live_project_name)
+    live_preservation = compare_live_stack_preservation(preflight["live_before_snapshot"], live_after)
+    (out_dir / "live-preservation-before-after.json").write_text(
+        json.dumps(live_preservation, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+    all_ok = (
+        pull_receipt["status"] == "PASS"
+        and smoke_doc.get("status") == "PASS"
+        and runtime_audit.get("status") == "PASS"
+        and live_preservation["status"] == "PASS"
+    )
+    summary = {
+        "schema_version": "cskh-p4-vps-g03-g05-bundle-v1",
+        "timestamp_utc": utc_now_iso(),
+        "status": "PASS" if all_ok else "FAIL",
+        "app_image": app_image,
+        "isolated_project_name": project_name,
+        "isolated_site_name": site_name,
+        "kept_up_for_g18": keep_up,
+        "live_project_untouched": live_project_name,
+        "zero_live_mutation": live_preservation["zero_live_mutation"],
+        "inspected_app_services": list(p403_tool.APP_SERVICES),
+        "artifacts": {
+            "readonly_vps_preflight": str(out_dir / "readonly-vps-preflight.json"),
+            "candidate_pull_inspect_receipt": str(out_dir / "candidate-registry-pull-inspect-receipt.json"),
+            "runtime_isolation_audit_g03": str(out_dir / "staging-dr-runtime-isolation-audit.json"),
+            "https_wss_smoke_g05": str(out_dir / "https-wss-smoke-receipt.json"),
+            "live_preservation_before_after": str(out_dir / "live-preservation-before-after.json"),
+        },
+    }
+    (out_dir / "vps-g03-g05-summary.json").write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return summary
+
+
+def reconcile_g18_benchmark_with_v1_4_slos(
+    benchmark_report: dict[str, Any],
+    *,
+    owner_slo_approval: dict[str, Any] | None = None,
+    expected_digest: str = LOCKED_CANDIDATE_DIGEST_V1_4,
+    out_json: Path | None = None,
+) -> dict[str, Any]:
+    """Reconcile every metric of a G18 S1 benchmark report against the 7 SLOs attached to Owner Ticket v1.4."""
+    p4_9_2 = benchmark_report.get("p4_9_2_acceptance_matrix") or {}
+    items = p4_9_2.get("items") or {}
+    targets_raw = (benchmark_report.get("proposed_slos_for_review") or {}).get("targets") or {}
+    kpi_recompute = (
+        (benchmark_report.get("s1_domain_and_database_benchmark") or {}).get("kpi_recompute_s1") or {}
+    )
+    overall_err = float((benchmark_report.get("overall_summary") or {}).get("error_rate_pct", 0.0))
+    waves = items.get("concurrent_20_40_80_mixed_user_sessions") or {}
+    worst_5xx_pct = max(
+        overall_err,
+        float(waves.get("sessions_20_error_rate_pct", 0.0)),
+        float(waves.get("sessions_40_error_rate_pct", 0.0)),
+        float(waves.get("sessions_80_error_rate_pct", 0.0)),
+    )
+
+    drill_item = items.get("kpi_drilldown_paginated_p95_le_3000ms") or {}
+    drill_daily = float(
+        drill_item.get(
+            "measured_daily_campaign_http_p95_ms",
+            (targets_raw.get("kpi_drilldown_paginated_api_p95_ms") or {}).get("measured_daily_http_p95_ms", 0.0),
+        )
+    )
+    drill_monthly = float(
+        drill_item.get(
+            "measured_monthly_company_250k_http_p95_ms",
+            (targets_raw.get("kpi_drilldown_paginated_api_p95_ms") or {}).get(
+                "measured_monthly_250k_http_p95_ms", 0.0
+            ),
+        )
+    )
+    daily_inc_ms = float(
+        kpi_recompute.get(
+            "daily_incremental_ms",
+            (targets_raw.get("daily_incremental_kpi_refresh_lag_sec") or {}).get(
+                "measured_daily_recompute_ms", 0.0
+            ),
+        )
+    )
+
+    measured_values: dict[str, float] = {
+        "my_customers_worklist_api_p95_ms": float(
+            (items.get("staff_my_customers_p95_le_1500ms") or {}).get(
+                "measured_http_p95_ms",
+                (targets_raw.get("my_customers_worklist_api_p95_ms") or {}).get("measured_http_p95_ms", 0.0),
+            )
+        ),
+        "open_lead_and_history_api_p95_ms": float(
+            (items.get("open_lead_and_history_p95_le_2000ms") or {}).get(
+                "measured_http_p95_ms",
+                (targets_raw.get("open_lead_and_history_api_p95_ms") or {}).get("measured_http_p95_ms", 0.0),
+            )
+        ),
+        "contact_attempt_write_p95_ms": float(
+            (items.get("record_attempt_and_callback_p95_le_2000ms_zero_dup") or {}).get(
+                "measured_http_p95_ms",
+                (targets_raw.get("contact_attempt_write_p95_ms") or {}).get("measured_http_p95_ms", 0.0),
+            )
+        ),
+        "bod_executive_overview_api_p95_ms": float(
+            (items.get("bod_overview_snapshot_p95_le_3000ms") or {}).get(
+                "measured_http_p95_ms",
+                (targets_raw.get("bod_executive_overview_api_p95_ms") or {}).get("measured_http_p95_ms", 0.0),
+            )
+        ),
+        "kpi_drilldown_paginated_api_p95_ms": max(drill_daily, drill_monthly),
+        "http_5xx_error_rate_pct": worst_5xx_pct,
+        "daily_incremental_kpi_refresh_lag_sec": round(daily_inc_ms / 1000.0, 3),
+    }
+
+    approval_errors: list[str] = []
+    signed_thresholds: dict[str, float] = {}
+    owner_signed = False
+    if not owner_slo_approval:
+        approval_errors.append("missing_owner_slo_approval_document")
+    else:
+        if owner_slo_approval.get("approved") is not True:
+            approval_errors.append("approved_flag_not_true")
+        if str(owner_slo_approval.get("ticket_version") or "") != "v1.4":
+            approval_errors.append(
+                f"expected_ticket_version_v1.4_got_{owner_slo_approval.get('ticket_version')!r}"
+            )
+        if not str(owner_slo_approval.get("signed_by") or "").strip():
+            approval_errors.append("missing_signed_by")
+        if not str(owner_slo_approval.get("signed_at") or "").strip():
+            approval_errors.append("missing_signed_at")
+        raw_signed = owner_slo_approval.get("approved_thresholds") or {}
+        for key, spec in OWNER_TICKET_V1_4_PROPOSED_SLOS.items():
+            if key not in raw_signed:
+                approval_errors.append(f"missing_threshold_key:{key}")
+            else:
+                val = float(raw_signed[key])
+                if abs(val - float(spec["threshold"])) > 1e-6:
+                    approval_errors.append(
+                        f"threshold_mismatch_vs_ticket_v1.4:{key}:expected={spec['threshold']}:got={val}"
+                    )
+                signed_thresholds[key] = val
+        owner_signed = not approval_errors
+
+    metric_comparisons: dict[str, dict[str, Any]] = {}
+    all_metrics_within_threshold = True
+    for key, spec in OWNER_TICKET_V1_4_PROPOSED_SLOS.items():
+        threshold = signed_thresholds.get(key, float(spec["threshold"]))
+        measured = measured_values[key]
+        passed_metric = measured <= threshold
+        if not passed_metric:
+            all_metrics_within_threshold = False
+        entry: dict[str, Any] = {
+            "metric": key,
+            "description": spec["description"],
+            "operator": spec["operator"],
+            "v1_4_threshold": threshold,
+            "measured_value": measured,
+            "unit": spec["unit"],
+            "headroom": round(threshold - measured, 3),
+            "within_v1_4_threshold": passed_metric,
+            "evaluation_status": (
+                ("PASS" if passed_metric else "FAIL")
+                if owner_signed
+                else "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+                if passed_metric
+                else "PRE_CHECK_BREACHES_PROPOSED_V1_4"
+            ),
+        }
+        if key == "kpi_drilldown_paginated_api_p95_ms":
+            entry["measured_daily_campaign_http_p95_ms"] = drill_daily
+            entry["measured_monthly_company_250k_http_p95_ms"] = drill_monthly
+        metric_comparisons[key] = entry
+
+    app_image_tested = str(benchmark_report.get("app_image_tested") or "")
+    digest_matches = app_image_tested == expected_digest
+    p4_9_2_all_passed = bool(p4_9_2.get("all_passed"))
+    owner_vps_untouched = (benchmark_report.get("isolation_guard") or {}).get("owner_vps_touched") is False
+
+    if not owner_signed:
+        overall_status = "BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE"
+    elif digest_matches and p4_9_2_all_passed and owner_vps_untouched and all_metrics_within_threshold:
+        overall_status = "PASS"
+    else:
+        overall_status = "FAIL"
+
+    reconciliation = {
+        "schema_version": "cskh-p4-g18-slo-v1-4-reconciliation-v1",
+        "timestamp_utc": utc_now_iso(),
+        "gate": "G18",
+        "ticket_version_required": "v1.4",
+        "status": overall_status,
+        "owner_slo_v1_4_signed": owner_signed,
+        "owner_approval_validation_errors": approval_errors,
+        "expected_candidate_digest": expected_digest,
+        "app_image_tested": app_image_tested,
+        "digest_matches_candidate": digest_matches,
+        "p4_9_2_all_11_items_passed": p4_9_2_all_passed,
+        "owner_live_service_untouched": owner_vps_untouched,
+        "all_7_metrics_within_v1_4_thresholds": all_metrics_within_threshold,
+        "metric_comparisons": metric_comparisons,
+    }
+    if out_json is not None:
+        out_json.parent.mkdir(parents=True, exist_ok=True)
+        out_json.write_text(
+            json.dumps(reconciliation, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+    return reconciliation
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -3120,6 +3716,41 @@ def build_parser() -> argparse.ArgumentParser:
     grp.add_argument("--state-dir", type=Path)
     grp.add_argument("--env-file", type=Path)
     p_down.add_argument("--remove-state-dir", action="store_true")
+
+    p_vpre = sub.add_parser(
+        "readonly-vps-preflight",
+        help="Read-only check of VPS CPU/RAM/disk/ports and live-before snapshot (zero mutation)",
+    )
+    p_vpre.add_argument("--live-project", default="crm-cskh-vps-staging")
+    p_vpre.add_argument("--disk-path", type=Path, default=Path("/"))
+    p_vpre.add_argument("--required-free-disk-gib", type=float, default=12.0)
+    p_vpre.add_argument("--required-avail-ram-mib", type=float, default=1536.0)
+    p_vpre.add_argument("--http-port", type=int, default=18081)
+    p_vpre.add_argument("--https-port", type=int, default=18443)
+    p_vpre.add_argument("--out", type=Path, default=None)
+
+    p_vg = sub.add_parser(
+        "collect-vps-g03-g05",
+        help="Collect G03/G05 pull, isolation & HTTPS/WSS smoke receipts on isolated Staging/DR with live zero-delta proof",
+    )
+    p_vg.add_argument("--app-image", default=LOCKED_CANDIDATE_DIGEST_V1_4)
+    p_vg.add_argument("--out-dir", type=Path, required=True)
+    p_vg.add_argument("--project-name", default="crm-cskh-dr-https-vps")
+    p_vg.add_argument("--site-name", default=DEFAULT_DR_SITE)
+    p_vg.add_argument("--live-project", default="crm-cskh-vps-staging")
+    p_vg.add_argument("--http-port", type=int, default=18081)
+    p_vg.add_argument("--https-port", type=int, default=18443)
+    p_vg.add_argument("--keep-up", action="store_true")
+    p_vg.add_argument("--state-dir", type=Path, default=None)
+
+    p_slo = sub.add_parser(
+        "reconcile-g18-slo",
+        help="Reconcile every G18 S1 metric against the 7 SLO thresholds attached to Owner Ticket v1.4",
+    )
+    p_slo.add_argument("--benchmark-json", type=Path, required=True)
+    p_slo.add_argument("--owner-approval-json", type=Path, default=None)
+    p_slo.add_argument("--expected-digest", default=LOCKED_CANDIDATE_DIGEST_V1_4)
+    p_slo.add_argument("--out", type=Path, default=None)
     return parser
 
 
@@ -3192,6 +3823,47 @@ def main(argv: list[str] | None = None) -> int:
         return _write_or_print_scrubbed(res, [db_pw, creds["admin_password"], creds["seed_password"]], args.out)
     if args.command == "down":
         return _cmd_down(args)
+    if args.command == "readonly-vps-preflight":
+        res = readonly_vps_preflight(
+            live_project_name=args.live_project,
+            disk_check_path=args.disk_path,
+            required_free_disk_gib=args.required_free_disk_gib,
+            required_avail_ram_mib=args.required_avail_ram_mib,
+            planned_http_port=args.http_port,
+            planned_https_port=args.https_port,
+            out_json=args.out,
+        )
+        sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+        return 0 if res["status"] == "PASS" else 2
+    if args.command == "collect-vps-g03-g05":
+        res = collect_vps_g03_g05_receipts(
+            app_image=args.app_image,
+            out_dir=args.out_dir,
+            project_name=args.project_name,
+            site_name=args.site_name,
+            live_project_name=args.live_project,
+            http_port=args.http_port,
+            https_port=args.https_port,
+            keep_up=args.keep_up,
+            state_dir=args.state_dir,
+        )
+        sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+        return 0 if res["status"] == "PASS" else 2
+    if args.command == "reconcile-g18-slo":
+        bench_doc = json.loads(args.benchmark_json.read_text(encoding="utf-8"))
+        owner_doc = (
+            json.loads(args.owner_approval_json.read_text(encoding="utf-8"))
+            if args.owner_approval_json
+            else None
+        )
+        res = reconcile_g18_benchmark_with_v1_4_slos(
+            bench_doc,
+            owner_slo_approval=owner_doc,
+            expected_digest=args.expected_digest,
+            out_json=args.out,
+        )
+        sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+        return 0 if res["status"] == "PASS" else 2
     return 1
 
 

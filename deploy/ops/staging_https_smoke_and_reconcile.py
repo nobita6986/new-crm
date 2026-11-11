@@ -33,6 +33,7 @@ import ssl
 import stat
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -1086,13 +1087,22 @@ def run_https_smoke(
     }
 
     # 5. Mandatory Vietnamese heading & X-Frappe-CSRF-Token extraction + CSRF reject/accept test
-    dash_code, _, dash_bytes = _https_request(
-        f"https://{site_name}/cskh/dashboard",
-        headers={"Cookie": sid_raw_pair},
-        connect_host=connect_host,
-        https_port=https_port,
-        tls_ca_file=tls_ca_file,
-    )
+    # Retry up to 3 times on transient 5xx cold-cache initialization right after clear_cache()/boot.
+    dash_code = 0
+    dash_bytes = b""
+    dash_attempts = 0
+    for attempt_idx in range(3):
+        dash_attempts = attempt_idx + 1
+        dash_code, _, dash_bytes = _https_request(
+            f"https://{site_name}/cskh/dashboard",
+            headers={"Cookie": sid_raw_pair},
+            connect_host=connect_host,
+            https_port=https_port,
+            tls_ca_file=tls_ca_file,
+        )
+        if dash_code < 500 or attempt_idx == 2:
+            break
+        time.sleep(0.75)
     dash_html = dash_bytes.decode("utf-8", errors="replace")
     csrf_token = extract_csrf_token(dash_html)
     bad_csrf_code, _, _ = _https_request(
@@ -1113,7 +1123,7 @@ def run_https_smoke(
         https_port=https_port,
         tls_ca_file=tls_ca_file,
     )
-    report["checks"]["vi_ui_and_csrf"] = evaluate_vi_ui_and_csrf_check(
+    vi_check = evaluate_vi_ui_and_csrf_check(
         dash_code=dash_code,
         dash_html=dash_html,
         csrf_token=csrf_token,
@@ -1121,6 +1131,8 @@ def run_https_smoke(
         good_csrf_code=good_csrf_code,
         good_csrf_bytes=good_csrf_bytes,
     )
+    vi_check["dashboard_attempts"] = dash_attempts
+    report["checks"]["vi_ui_and_csrf"] = vi_check
 
     # 6. Secure WebSocket (wss://) upgrade & frame check
     wss_info = _check_wss_upgrade(

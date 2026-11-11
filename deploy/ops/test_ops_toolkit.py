@@ -1476,7 +1476,9 @@ class OpsToolkitTests(unittest.TestCase):
         )
         owner_ticket = cand_manifest["owner_pending_inputs_consolidated"]
         self.assertEqual(owner_ticket["canonical_ticket_reference"], "docs/p4/P4-exit-report.md#3")
+        self.assertEqual(owner_ticket["ticket_version"], "v1.4")
         for key in (
+            "0_ssh_access_for_t1a_isolated_staging_and_g18",
             "1_offsite_destination_inventory_and_credentials",
             "2_separate_key_escrow_location",
             "3_oncall_operator",
@@ -1485,6 +1487,113 @@ class OpsToolkitTests(unittest.TestCase):
             "6_release_decision",
         ):
             self.assertIn(key, owner_ticket)
+        v14_slo = owner_ticket["6_release_decision"]["attached_slo_set_v1_4"]
+        self.assertEqual(set(v14_slo["thresholds"]), set(dr_mod.OWNER_TICKET_V1_4_PROPOSED_SLOS))
+
+    def test_vps_live_preservation_and_g18_v1_4_slo_reconciliation(self) -> None:
+        import manage_isolated_staging_dr as dr_mod
+
+        repo_root = staging_mod.REPO_ROOT
+        bench_doc = json.loads(
+            (
+                repo_root
+                / "deploy"
+                / "ops"
+                / "evidence"
+                / "p4-candidate-and-s1-20261109"
+                / "benchmark-s1-report.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        # 1. Unsigned -> must remain BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE while pre-checking all 7 metrics
+        unsigned_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(bench_doc)
+        self.assertEqual(unsigned_res["status"], "BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE")
+        self.assertFalse(unsigned_res["owner_slo_v1_4_signed"])
+        self.assertTrue(unsigned_res["digest_matches_candidate"])
+        self.assertTrue(unsigned_res["p4_9_2_all_11_items_passed"])
+        self.assertTrue(unsigned_res["all_7_metrics_within_v1_4_thresholds"])
+        self.assertEqual(len(unsigned_res["metric_comparisons"]), 7)
+
+        valid_approval = {
+            "approved": True,
+            "ticket_version": "v1.4",
+            "signed_by": "owner-representative@hrpartner.vn",
+            "signed_at": "2026-11-11T20:00:00+07:00",
+            "approved_thresholds": {
+                k: spec["threshold"] for k, spec in dr_mod.OWNER_TICKET_V1_4_PROPOSED_SLOS.items()
+            },
+        }
+
+        # 2. Wrong ticket version or tampered threshold -> fail closed as unsigned
+        wrong_ver = dict(valid_approval, ticket_version="v1.3")
+        self.assertEqual(
+            dr_mod.reconcile_g18_benchmark_with_v1_4_slos(bench_doc, owner_slo_approval=wrong_ver)["status"],
+            "BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE",
+        )
+        tampered_thresh = dict(
+            valid_approval,
+            approved_thresholds=dict(valid_approval["approved_thresholds"], my_customers_worklist_api_p95_ms=550.0),
+        )
+        self.assertEqual(
+            dr_mod.reconcile_g18_benchmark_with_v1_4_slos(bench_doc, owner_slo_approval=tampered_thresh)["status"],
+            "BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE",
+        )
+
+        # 3. Signed exact v1.4 SLO set + all 7 metrics within threshold -> PASS
+        signed_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+            bench_doc, owner_slo_approval=valid_approval
+        )
+        self.assertEqual(signed_res["status"], "PASS", signed_res)
+        self.assertTrue(signed_res["owner_slo_v1_4_signed"])
+
+        # 4. Signed v1.4 SLO set + metric breach -> FAIL
+        breached_bench = json.loads(json.dumps(bench_doc))
+        breached_bench["p4_9_2_acceptance_matrix"]["items"][
+            "record_attempt_and_callback_p95_le_2000ms_zero_dup"
+        ]["measured_http_p95_ms"] = 1250.5
+        breached_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+            breached_bench, owner_slo_approval=valid_approval
+        )
+        self.assertEqual(breached_res["status"], "FAIL")
+        self.assertFalse(
+            breached_res["metric_comparisons"]["contact_attempt_write_p95_ms"]["within_v1_4_threshold"]
+        )
+
+        # 5. Live preservation zero-delta check
+        snap_before = {
+            "live_project_name": "crm-cskh-vps-staging",
+            "containers": [
+                {
+                    "id": "cid-1",
+                    "name": "crm-cskh-vps-staging-backend-1",
+                    "service": "backend",
+                    "image": "sha256:acb95057",
+                    "config_image": "crm-cskh:0.0.1-4672041",
+                    "status": "running",
+                    "started_at": "2026-11-09T12:00:00Z",
+                    "restart_count": 0,
+                }
+            ],
+        }
+        same_check = dr_mod.compare_live_stack_preservation(snap_before, json.loads(json.dumps(snap_before)))
+        self.assertEqual(same_check["status"], "PASS")
+        self.assertTrue(same_check["zero_live_mutation"])
+
+        mutated_after = json.loads(json.dumps(snap_before))
+        mutated_after["containers"][0]["restart_count"] = 1
+        mutated_check = dr_mod.compare_live_stack_preservation(snap_before, mutated_after)
+        self.assertEqual(mutated_check["status"], "FAIL")
+        self.assertFalse(mutated_check["zero_live_mutation"])
+
+        # 6. CLI subcommands parse cleanly
+        p_pre = dr_mod.build_parser().parse_args(["readonly-vps-preflight", "--out", "/tmp/pre.json"])
+        self.assertEqual(p_pre.live_project, "crm-cskh-vps-staging")
+        p_col = dr_mod.build_parser().parse_args(["collect-vps-g03-g05", "--out-dir", "/tmp/receipts"])
+        self.assertEqual(p_col.app_image, dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4)
+        p_slo = dr_mod.build_parser().parse_args(
+            ["reconcile-g18-slo", "--benchmark-json", "/tmp/bench.json"]
+        )
+        self.assertEqual(p_slo.expected_digest, dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4)
 
 
 if __name__ == "__main__":
