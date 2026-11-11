@@ -2133,7 +2133,7 @@ def _sort_drilldown_rows(rows: list[dict], sort_by: str | None, sort_dir: str | 
 	return [x[2] for x in with_val] + nulls
 
 
-_FAST_INTERVAL_METRICS = frozenset(("CONNECTED_RATE", "ASSIGNED_INTERVALS", "ELIGIBLE_COVERAGE"))
+_FAST_INTERVAL_METRICS = frozenset(("CONNECTED_RATE", "ELIGIBLE_COVERAGE"))
 _FAST_SLA_METRICS = frozenset(
 	(
 		"FIRST_ATTEMPT_SLA_RATE",
@@ -2226,7 +2226,6 @@ def _resolve_fast_total(
 				return den
 			return num
 		elif mcode in (
-			"ASSIGNED_INTERVALS",
 			"CONTACT_ATTEMPT_COUNT",
 			"CONNECTED_ATTEMPT_COUNT",
 			"SLA_WAIVER_COUNT",
@@ -2253,9 +2252,7 @@ def _fast_interval_cohort_drilldown_page(
 	snap_metrics_all: dict | None,
 	dirty_pending: bool,
 ) -> tuple[list[dict], int] | None:
-	"""Exact SQL-paginated interval-cohort query (`CONNECTED_RATE`, `ASSIGNED_INTERVALS`, `ELIGIBLE_COVERAGE`)."""
-	if mcode == "ASSIGNED_INTERVALS" and bucket in ("breached_only", "excluded"):
-		return [], 0
+	"""Exact SQL-paginated interval-cohort query (`CONNECTED_RATE`, `ELIGIBLE_COVERAGE`)."""
 	if not frappe.db.has_column("CSKH Assignment History", "team_at_assignment"):
 		return None
 
@@ -2351,9 +2348,7 @@ def _fast_interval_cohort_drilldown_page(
 	extra_sel_sql = ""
 	extra_sel_params: list = []
 
-	if mcode == "ASSIGNED_INTERVALS":
-		pass
-	elif mcode == "CONNECTED_RATE":
+	if mcode == "CONNECTED_RATE":
 		invalid_phone_codes: set[str] = {"wrong_number"}
 		if frappe.db.table_exists("CSKH Outcome Code") and frappe.db.has_column(
 			"CSKH Outcome Code", "is_invalid_phone"
@@ -2547,9 +2542,7 @@ def _fast_interval_cohort_drilldown_page(
 	out_events: list[dict] = []
 	for iv in page_rows:
 		iv["resolved_team"] = iv.team_at_assignment
-		if mcode == "ASSIGNED_INTERVALS":
-			out_events.append(_iv_event_dict(iv, in_numerator=True, status_label="assigned"))
-		elif mcode == "CONNECTED_RATE":
+		if mcode == "CONNECTED_RATE":
 			if bucket == "excluded":
 				has_inv = bool(cint(iv.get("has_inv_flag")))
 				out_events.append(
