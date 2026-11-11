@@ -1162,7 +1162,7 @@ def _sample_worker_and_db_saturation(
             "backend",
             "bash",
             "-lc",
-            "ps -C python,gunicorn -L -o pid=,tid=,state=,pcpu=,rss=,comm= 2>/dev/null || ps -eL -o pid=,tid=,state=,pcpu=,rss=,comm=",
+            "ps -eL -o pid=,tid=,state=,pcpu=,rss=,args=",
         ],
         env=compose_env,
         capture_output=True,
@@ -1176,11 +1176,14 @@ def _sample_worker_and_db_saturation(
     worker_rss_kib_by_pid: dict[str, int] = {}
     cpu_pct_sum = 0.0
     for ln in ps_res.stdout.splitlines():
-        parts = ln.split()
+        parts = ln.split(None, 5)
         if len(parts) < 6:
             continue
-        pid_s, _, state_s, pcpu_s, rss_s, comm_s = parts[:6]
-        if "python" not in comm_s and "gunicorn" not in comm_s:
+        pid_s, _, state_s, pcpu_s, rss_s, args_s = parts
+        args_lc = args_s.lower()
+        if "ps -el" in args_lc:
+            continue
+        if "gunicorn" not in args_lc and "frappe.app:application" not in args_lc:
             continue
         total_threads += 1
         if state_s.startswith("R"):
@@ -1617,6 +1620,22 @@ def run_diagnostic(
                 "&metric_code=CONTACT_ATTEMPT_COUNT&page=1&page_size=20"
             )
 
+            # Live HTTP cross-access negative checks (must return HTTP 403 on clean socket pool)
+            _, st_staff_comp, _ = _http_call(
+                base_url=base_url,
+                site_name=site_name,
+                cookie_header=staff_sess["cookie"],
+                path=path_month_comp_p1,
+                method="GET",
+            )
+            _, st_leader_comp, _ = _http_call(
+                base_url=base_url,
+                site_name=site_name,
+                cookie_header=leader_sess["cookie"],
+                path=path_month_comp_p1,
+                method="GET",
+            )
+
             http_waves: dict[str, object] = {}
 
             # Mandatory exact S1 baseline comparison waves: c=12 (240 reqs) & c=40 (160 reqs, 30s timeout)
@@ -1747,22 +1766,6 @@ def run_diagnostic(
                         compose_files=compose_files,
                         db_root_pw=db_root_pw,
                     )
-
-            # Live HTTP cross-access negative checks (must return HTTP 403)
-            _, st_staff_comp, _ = _http_call(
-                base_url=base_url,
-                site_name=site_name,
-                cookie_header=staff_sess["cookie"],
-                path=path_month_comp_p1,
-                method="GET",
-            )
-            _, st_leader_comp, _ = _http_call(
-                base_url=base_url,
-                site_name=site_name,
-                cookie_header=leader_sess["cookie"],
-                path=path_month_comp_p1,
-                method="GET",
-            )
 
             db_after = _collect_queue_and_db_telemetry(
                 compose_project, site_name, compose_file=compose_files, env=compose_env

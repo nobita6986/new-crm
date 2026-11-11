@@ -869,6 +869,7 @@ def load_period_raw_dataset(
 				               )
 				        )
 				      ){ob_type_clause}{camp_clause}{ob_src_clause}{ob_emp_clause}
+				order by effective_due_at asc, name asc
 				""",
 				(
 					as_of_dt,
@@ -909,6 +910,7 @@ def load_period_raw_dataset(
 					if extra_ob.name not in seen_ob_ids:
 						obligations_raw.append(extra_ob)
 						seen_ob_ids.add(extra_ob.name)
+			obligations_raw.sort(key=lambda r: (get_datetime(r.effective_due_at), str(r.name)))
 
 	# Ensure `iv_by_id` has interval metadata for any obligation whose interval closed before `start_dt`
 	missing_ob_ivs = sorted(
@@ -1116,6 +1118,7 @@ def load_period_raw_dataset(
 			       policy_name_snapshot, policy_version_snapshot, creation, modified
 			from `tabCSKH Contact Attempt`
 			where occurred_at >= %s and occurred_at < %s and occurred_at <= %s and recorded_at <= %s{camp_clause}{att_src_clause}{att_emp_clause}
+			order by occurred_at asc, name asc
 			""",
 			(start_dt, end_dt_excl, as_of_dt, as_of_dt, *camp_params, *att_src_params, *att_emp_params),
 			as_dict=True,
@@ -1326,6 +1329,8 @@ def load_period_raw_dataset(
 
 			if in_eff_window or in_raw_window or (oe in needed_iv_set and eff_occ <= as_of_dt):
 				attempts_enriched.append(p)
+
+		attempts_enriched.sort(key=lambda x: (x["eff_occ_dt"], str(x["attempt_id"])))
 
 		for oe_key in eff_attempts_by_iv_asof:
 			eff_attempts_by_iv_asof[oe_key].sort(key=lambda x: (x["eff_occ_dt"], x["attempt_id"]))
