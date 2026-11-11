@@ -96,6 +96,23 @@
     "rendered_dr_https_compose_config_sha256": "496cb03ffb2447b9ac0ea12b9711a279dfc87d053ce053621f9c7baf1f58665a",
     "release_lock_sha256": "8ccad179ae5832e58196c6f1591bb15138d3b4605ef504126797dd71c3208f8b",
     "runtime_isolation_audit_path": "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json",
+    "inspected_app_services_count": 6,
+    "inspected_app_services": [
+      "backend",
+      "frontend",
+      "websocket",
+      "queue-short",
+      "queue-long",
+      "scheduler"
+    ],
+    "inspected_infra_services_count": 4,
+    "inspected_infra_services": [
+      "proxy",
+      "db",
+      "redis-cache",
+      "redis-queue"
+    ],
+    "service_scope_note": "6 app services verified against ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6 (queue-short handles RQ short,default queues; no separate queue-default container) plus 4 infrastructure services (proxy, db, redis-cache, redis-queue) in isolated Staging/DR stack",
     "environment_inventory_doc": "docs/p4/infra-inventory.md"
   },
   "test_sites": {
@@ -213,6 +230,102 @@
       "rq_queue_long_workers": 1,
       "scheduler_workers": 1,
       "websocket_workers": 1
+    },
+    "s1_seeded_dataset_counts": {
+      "crm_leads": 50000,
+      "cskh_identity_index": 50000,
+      "cskh_work_items": 75000,
+      "cskh_contact_attempts": 250000,
+      "cskh_sla_obligations": 150000,
+      "cskh_assignment_history": 75000,
+      "active_staff_users": 40,
+      "teams": 4,
+      "campaigns": 6,
+      "import_batch_rows": 50000,
+      "distribution_batch_items": 10000,
+      "seed_elapsed_sec": 76.28
+    },
+    "ssr_and_http_summary": {
+      "c12_overall": {
+        "requests_total": 1920,
+        "ok_count": 1920,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 49.785,
+        "p50_ms": 114.235,
+        "p95_ms": 765.308,
+        "p99_ms": 1090.273,
+        "max_ms": 1353.79
+      },
+      "telesale_worklist_ssr_c12_shared_session": {
+        "path": "/cskh/my-customers",
+        "concurrency": 12,
+        "requests_total": 240,
+        "ok_count": 240,
+        "error_count": 0,
+        "p50_ms": 521.224,
+        "p95_ms": 981.42,
+        "p99_ms": 1236.002,
+        "max_ms": 1353.79
+      },
+      "telesale_worklist_ssr_c12_40_staff_sessions": {
+        "path": "/cskh/my-customers",
+        "concurrency": 12,
+        "distinct_sessions_used": 40,
+        "requests_total": 240,
+        "ok_count": 240,
+        "error_count": 0,
+        "p50_ms": 809.81,
+        "p95_ms": 1432.297,
+        "p99_ms": 1846.03,
+        "max_ms": 1901.895
+      },
+      "telesale_worklist_ssr_c40_single_initialized_session": {
+        "path": "/cskh/my-customers",
+        "concurrency": 40,
+        "distinct_sessions_used": 1,
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "p50_ms": 1773.552,
+        "p95_ms": 2659.025,
+        "p99_ms": 2998.821,
+        "max_ms": 3070.955
+      },
+      "telesale_worklist_ssr_c40_40_staff_sessions": {
+        "path": "/cskh/my-customers",
+        "concurrency": 40,
+        "distinct_sessions_used": 40,
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "p50_ms": 2193.414,
+        "p95_ms": 6009.04,
+        "p99_ms": 6122.054,
+        "max_ms": 6248.615
+      },
+      "quality_overview_ssr_c12": {
+        "path": "/cskh/quality-overview",
+        "concurrency": 12,
+        "requests_total": 240,
+        "ok_count": 240,
+        "error_count": 0,
+        "p50_ms": 497.387,
+        "p95_ms": 850.421,
+        "p99_ms": 1000.331,
+        "max_ms": 1241.273
+      },
+      "campaigns_distribution_ssr_c12": {
+        "path": "/cskh/campaigns",
+        "concurrency": 12,
+        "requests_total": 240,
+        "ok_count": 240,
+        "error_count": 0,
+        "p50_ms": 474.222,
+        "p95_ms": 1088.614,
+        "p99_ms": 1260.671,
+        "max_ms": 1339.749
+      }
     },
     "evidence_path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json",
     "evidence_sha256": "7e7c2e000fea33fe41ddc0c43c43a486855157c9fc2cd359fd5d6461f1f82e3f",

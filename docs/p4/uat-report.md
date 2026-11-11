@@ -155,7 +155,7 @@ Xem bản hướng dẫn sử dụng tiếng Việt chi tiết theo từng vai t
 
 | Vai trò nghiệm thu (`G22`) | Đại diện theo phân công Owner (`BLK-GOV-06`) | Phạm vi ca nghiệm thu | Image Digest kiểm thử | Kết quả ký nhận | Ngày ký |
 | :--- | :--- | :--- | :--- | :---: | :--- |
-| **1. Ban Giám đốc (`BOD`)** | `PENDING (BLK-GOV-06)` | `F02`, `F25..F27`, `F29`, `UAT-P4-BOD-01..05` | Live `sha256:acb95057...` / Candidate `sha256:5ea736da...` | **`BLOCKED` (Chờ phân công Owner)** | — |
-| **2. Quản trị CRM (`CRM Admin`)** | `PENDING (BLK-GOV-06)` | `F03..F11`, `F20..F21`, `F24`, `UAT-P4-ADM-01..04` | Live `sha256:acb95057...` / Candidate `sha256:5ea736da...` | **`BLOCKED` (Chờ phân công Owner)** | — |
-| **3. Trưởng nhóm (`Leader`)** | `PENDING (BLK-GOV-06)` | `F27..F29`, `UAT-P4-LDR-01..03` | Live `sha256:acb95057...` / Candidate `sha256:5ea736da...` | **`BLOCKED` (Chờ phân công Owner)** | — |
-| **4. Người tuyển dụng (`Staff`)** | `PENDING (BLK-GOV-06)` | `F01`, `F12..F20`, `F22`, `F30`, `UAT-P4-STF-01..04` | Live `sha256:acb95057...` / Candidate `sha256:5ea736da...` | **`BLOCKED` (Chờ phân công Owner)** | — |
+| **1. Ban Giám đốc (`BOD`)** | `PENDING (BLK-GOV-06)` | `F02`, `F25..F27`, `F29`, `UAT-P4-BOD-01..05` | Live `sha256:acb95057...` / Candidate `sha256:693a3cdcc758...` | **`BLOCKED` (Chờ phân công Owner)** | — |
+| **2. Quản trị CRM (`CRM Admin`)** | `PENDING (BLK-GOV-06)` | `F03..F11`, `F20..F21`, `F24`, `UAT-P4-ADM-01..04` | Live `sha256:acb95057...` / Candidate `sha256:693a3cdcc758...` | **`BLOCKED` (Chờ phân công Owner)** | — |
+| **3. Trưởng nhóm (`Leader`)** | `PENDING (BLK-GOV-06)` | `F27..F29`, `UAT-P4-LDR-01..03` | Live `sha256:acb95057...` / Candidate `sha256:693a3cdcc758...` | **`BLOCKED` (Chờ phân công Owner)** | — |
+| **4. Người tuyển dụng (`Staff`)** | `PENDING (BLK-GOV-06)` | `F01`, `F12..F20`, `F22`, `F30`, `UAT-P4-STF-01..04` | Live `sha256:acb95057...` / Candidate `sha256:693a3cdcc758...` | **`BLOCKED` (Chờ phân công Owner)** | — |
