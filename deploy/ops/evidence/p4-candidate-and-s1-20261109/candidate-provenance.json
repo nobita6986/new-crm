@@ -1,9 +1,9 @@
 {
   "schema_version": "cskh-p4-ghcr-candidate-provenance-v2",
-  "recorded_at_utc": "2026-11-10T13:29:28.514856+00:00",
-  "git_commit_sha": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
-  "apps_tree_sha": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578",
-  "crm_cskh_tree_sha": "fbfafa93c7334684edfba633754964f9c3cc9868",
+  "recorded_at_utc": "2026-11-11T08:19:12.391704+00:00",
+  "git_commit_sha": "bcdc419f9f95ad75449315572928e3d8c43817cc",
+  "apps_tree_sha": "4d361e68912f52243751ae5986cabbd13033f050",
+  "crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
   "strict_security_gate_status": "FAIL",
   "production_candidate_promotion_status": "BLOCKED_PENDING_UPSTREAM_FIX_OR_OWNER_EXCEPTION",
   "signed_manifest_scope": "ci_ephemeral_rehearsal",
@@ -11,17 +11,17 @@
   "signing_key_provenance": "ephemeral_ci_ed25519_keypair (private key destroyed immediately after signing; use p4-release.yml with protected CSKH_RELEASE_SIGNING_PRIVATE_KEY for formal Go-Live cutover)",
   "identifier_taxonomy": {
     "local_image_id": {
-      "value": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+      "value": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
       "class": "docker_local_image_id",
       "description": "Docker daemon local image ID (.Id from docker image inspect; equals config digest on classic graphdriver store or manifest/index digest on containerd image store; analogous in class to baseline CI db925419...)"
     },
     "oci_config_digest": {
-      "value": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+      "value": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
       "class": "oci_image_config_blob_sha256",
       "description": "SHA-256 digest of the OCI Image Configuration JSON blob (manifest.config.digest in manifest/oci-distribution-manifest.json)"
     },
     "registry_manifest_digest": {
-      "value": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
+      "value": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
       "media_type": "application/vnd.docker.distribution.manifest.v2+json",
       "class": "oci_distribution_manifest_sha256",
       "canonical_promotion_unit": true,

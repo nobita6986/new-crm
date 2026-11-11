@@ -2,7 +2,7 @@
   "schema_version": "cskh-p4-isolated-benchmark-v2",
   "work_package": "P4-06",
   "gate_alignment": "G18",
-  "generated_at_utc": "2026-11-10T13:32:23.409552+00:00",
+  "generated_at_utc": "2026-11-11T08:21:38.540974+00:00",
   "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
   "dataset_disclaimer": "S1 (50,000 h\u1ed3 s\u01a1 / 75,000 Work Items / 250,000 Attempts / 40 staff) is a suggested synthetic dataset for isolated performance/capacity measurement; it is NOT a commitment of 50,000 h\u1ed3 s\u01a1/th\u00e1ng and NOT a committed production SLA.",
   "isolation_guard": {
@@ -12,7 +12,7 @@
     "is_loopback": true,
     "is_isolated_private_ip": false,
     "site_name": "p4-s1-bench.localhost",
-    "compose_project": "cskh-p4-bench-21a1be83"
+    "compose_project": "cskh-p4-bench-907e9189"
   },
   "profile_name": "s1_suggested_mvp",
   "published_dataset_and_load": {
@@ -79,7 +79,7 @@
     {
       "id": "kpi_metric_drilldown_250k_api",
       "method": "GET",
-      "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=8povrbi2tl&metric_code=CONNECTED_RATE&page=1&page_size=20",
+      "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=uir9u2sp56&metric_code=CONNECTED_RATE&page=1&page_size=20",
       "workload_class": "kpi_drilldown_paginated_250k_attempts"
     },
     {
@@ -100,158 +100,194 @@
     "mariadb_connections_and_row_locks"
   ],
   "status": "MEASURED",
-  "completed_at_utc": "2026-11-10T13:48:46.486250+00:00",
+  "completed_at_utc": "2026-11-11T08:43:12.665194+00:00",
   "overall_summary": {
     "requests_total": 1920,
-    "ok_count": 1909,
-    "error_count": 11,
-    "error_rate_pct": 0.5729,
-    "throughput_rps": 59.158,
-    "min_ms": 6.308,
-    "p50_ms": 90.844,
-    "p95_ms": 642.825,
-    "p99_ms": 906.226,
-    "max_ms": 1374.062
+    "ok_count": 1920,
+    "error_count": 0,
+    "error_rate_pct": 0.0,
+    "throughput_rps": 49.785,
+    "min_ms": 6.684,
+    "p50_ms": 114.235,
+    "p95_ms": 765.308,
+    "p99_ms": 1090.273,
+    "max_ms": 1353.79,
+    "timeout_count": 0,
+    "status_counts": {
+      "200": 1920
+    }
   },
   "scenario_summaries": {
     "health_ping": {
       "workload_class": "baseline_edge_to_gunicorn",
       "path": "/api/method/ping",
       "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
       "requests_total": 240,
       "ok_count": 240,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 452.921,
-      "min_ms": 7.795,
-      "p50_ms": 22.125,
-      "p95_ms": 58.205,
-      "p99_ms": 114.363,
-      "max_ms": 130.844
+      "throughput_rps": 500.184,
+      "min_ms": 6.684,
+      "p50_ms": 18.947,
+      "p95_ms": 57.748,
+      "p99_ms": 110.607,
+      "max_ms": 117.946
     },
     "telesale_worklist_page": {
       "workload_class": "authenticated_worklist_ssr",
       "path": "/cskh/my-customers",
       "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
       "requests_total": 240,
-      "ok_count": 229,
-      "error_count": 11,
-      "error_rate_pct": 4.5833,
-      "throughput_rps": 23.377,
-      "min_ms": 139.757,
-      "p50_ms": 488.391,
-      "p95_ms": 951.234,
-      "p99_ms": 1190.849,
-      "max_ms": 1374.062
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 22.07,
+      "min_ms": 170.731,
+      "p50_ms": 521.224,
+      "p95_ms": 981.42,
+      "p99_ms": 1236.002,
+      "max_ms": 1353.79
     },
     "quality_overview_drilldown": {
       "workload_class": "kpi_reporting_drilldown",
       "path": "/cskh/quality-overview",
       "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
       "requests_total": 240,
       "ok_count": 240,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 27.271,
-      "min_ms": 131.12,
-      "p50_ms": 417.122,
-      "p95_ms": 707.279,
-      "p99_ms": 860.881,
-      "max_ms": 957.029
+      "throughput_rps": 23.397,
+      "min_ms": 141.738,
+      "p50_ms": 497.387,
+      "p95_ms": 850.421,
+      "p99_ms": 1000.331,
+      "max_ms": 1241.273
     },
     "campaigns_distribution_view": {
       "workload_class": "campaign_distribution_summary",
       "path": "/cskh/campaigns",
       "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
       "requests_total": 240,
       "ok_count": 240,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 30.073,
-      "min_ms": 125.028,
-      "p50_ms": 390.667,
-      "p95_ms": 678.139,
-      "p99_ms": 866.147,
-      "max_ms": 1038.928
+      "throughput_rps": 22.761,
+      "min_ms": 150.602,
+      "p50_ms": 474.222,
+      "p95_ms": 1088.614,
+      "p99_ms": 1260.671,
+      "max_ms": 1339.749
     },
     "my_customers_worklist_api": {
       "workload_class": "authenticated_worklist_json_api",
       "path": "/api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
       "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
       "requests_total": 240,
       "ok_count": 240,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 706.228,
-      "min_ms": 6.308,
-      "p50_ms": 16.176,
-      "p95_ms": 29.952,
-      "p99_ms": 32.882,
-      "max_ms": 33.376
+      "throughput_rps": 566.281,
+      "min_ms": 7.17,
+      "p50_ms": 20.401,
+      "p95_ms": 30.611,
+      "p99_ms": 37.838,
+      "max_ms": 39.774
     },
     "bod_executive_overview_api": {
       "workload_class": "bod_kpi_snapshot_read_json_api",
       "path": "/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
       "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
       "requests_total": 240,
       "ok_count": 240,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 306.942,
-      "min_ms": 13.545,
-      "p50_ms": 37.694,
-      "p95_ms": 57.554,
-      "p99_ms": 65.445,
-      "max_ms": 66.958
+      "throughput_rps": 246.006,
+      "min_ms": 18.235,
+      "p50_ms": 45.196,
+      "p95_ms": 87.475,
+      "p99_ms": 99.733,
+      "max_ms": 109.325
     },
     "kpi_metric_drilldown_250k_api": {
       "workload_class": "kpi_drilldown_paginated_250k_attempts",
-      "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=8povrbi2tl&metric_code=CONNECTED_RATE&page=1&page_size=20",
+      "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=uir9u2sp56&metric_code=CONNECTED_RATE&page=1&page_size=20",
       "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
       "requests_total": 240,
       "ok_count": 240,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 97.2,
-      "min_ms": 47.863,
-      "p50_ms": 118.381,
-      "p95_ms": 179.909,
-      "p99_ms": 241.398,
-      "max_ms": 254.417
+      "throughput_rps": 70.995,
+      "min_ms": 59.917,
+      "p50_ms": 159.907,
+      "p95_ms": 269.474,
+      "p99_ms": 317.779,
+      "max_ms": 352.717
     },
     "kpi_metric_drilldown_monthly_company_api": {
       "workload_class": "kpi_drilldown_paginated_full_month_250k_attempts",
       "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=monthly&period_key=2026-10&scope_type=company&metric_code=CONNECTED_RATE&page=1&page_size=20",
       "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
       "requests_total": 240,
       "ok_count": 240,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 186.518,
-      "min_ms": 20.553,
-      "p50_ms": 58.395,
-      "p95_ms": 118.378,
-      "p99_ms": 136.146,
-      "max_ms": 165.587
+      "throughput_rps": 147.325,
+      "min_ms": 35.512,
+      "p50_ms": 75.503,
+      "p95_ms": 130.056,
+      "p99_ms": 141.053,
+      "max_ms": 153.928
     }
   },
   "queue_and_db_before": {
     "queue_depths": {
-      "short": 50,
+      "short": 0,
       "default": 0,
       "long": 0
     },
-    "queue_backlog_total": 50,
-    "redis_queue_rtt_ms": 1.198,
+    "queue_backlog_total": 0,
+    "redis_queue_rtt_ms": 0.957,
     "mariadb_global_status": {
-      "Innodb_buffer_pool_read_requests": "54507445",
-      "Innodb_buffer_pool_reads": "974595",
+      "Innodb_buffer_pool_read_requests": "55039419",
+      "Innodb_buffer_pool_reads": "972157",
       "Innodb_row_lock_time_avg": "0",
       "Innodb_row_lock_waits": "0",
       "Max_used_connections": "4",
-      "Questions": "1248548",
+      "Questions": "1251424",
       "Slow_queries": "0",
-      "Threads_connected": "2"
+      "Threads_connected": "1"
     }
   },
   "queue_and_db_after": {
@@ -261,163 +297,163 @@
       "long": 0
     },
     "queue_backlog_total": 0,
-    "redis_queue_rtt_ms": 1.11,
+    "redis_queue_rtt_ms": 1.123,
     "mariadb_global_status": {
-      "Innodb_buffer_pool_read_requests": "76238451",
-      "Innodb_buffer_pool_reads": "1036683",
-      "Innodb_row_lock_time_avg": "65",
-      "Innodb_row_lock_waits": "61",
-      "Max_used_connections": "17",
-      "Questions": "1348350",
+      "Innodb_buffer_pool_read_requests": "76379033",
+      "Innodb_buffer_pool_reads": "1047266",
+      "Innodb_row_lock_time_avg": "86",
+      "Innodb_row_lock_waits": "58",
+      "Max_used_connections": "18",
+      "Questions": "1371772",
       "Slow_queries": "0",
       "Threads_connected": "2"
     }
   },
   "container_resources_before": [
     {
-      "container": "cskh-p4-bench-21a1be83-backend-1",
+      "container": "cskh-p4-bench-907e9189-backend-1",
       "cpu_pct": "0.01%",
-      "mem_usage": "165.8MiB / 15.61GiB",
-      "mem_pct": "1.04%",
-      "net_io": "489MB / 277MB",
+      "mem_usage": "153.4MiB / 15.61GiB",
+      "mem_pct": "0.96%",
+      "net_io": "591MB / 277MB",
       "block_io": "0B / 4.32MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-db-1",
-      "cpu_pct": "0.02%",
-      "mem_usage": "334.8MiB / 15.61GiB",
-      "mem_pct": "2.09%",
-      "net_io": "915MB / 5.15GB",
-      "block_io": "15.3GB / 6.75GB"
+      "container": "cskh-p4-bench-907e9189-db-1",
+      "cpu_pct": "0.01%",
+      "mem_usage": "353.4MiB / 15.61GiB",
+      "mem_pct": "2.21%",
+      "net_io": "917MB / 5.24GB",
+      "block_io": "15.2GB / 6.75GB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-frontend-1",
+      "container": "cskh-p4-bench-907e9189-frontend-1",
       "cpu_pct": "0.00%",
-      "mem_usage": "4.387MiB / 15.61GiB",
+      "mem_usage": "4.359MiB / 15.61GiB",
       "mem_pct": "0.03%",
       "net_io": "4.24kB / 4.08kB",
       "block_io": "0B / 0B"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-queue-long-1",
-      "cpu_pct": "0.05%",
-      "mem_usage": "35.27MiB / 15.61GiB",
+      "container": "cskh-p4-bench-907e9189-queue-long-1",
+      "cpu_pct": "0.04%",
+      "mem_usage": "35.26MiB / 15.61GiB",
       "mem_pct": "0.22%",
-      "net_io": "1.27GB / 666MB",
-      "block_io": "0B / 1.95MB"
+      "net_io": "1.27GB / 667MB",
+      "block_io": "0B / 3.98MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-queue-short-1",
-      "cpu_pct": "100.97%",
-      "mem_usage": "1.676GiB / 15.61GiB",
-      "mem_pct": "10.74%",
-      "net_io": "3.41GB / 130MB",
-      "block_io": "0B / 19.4MB"
+      "container": "cskh-p4-bench-907e9189-queue-short-1",
+      "cpu_pct": "0.04%",
+      "mem_usage": "40.23MiB / 15.61GiB",
+      "mem_pct": "0.25%",
+      "net_io": "3.4GB / 131MB",
+      "block_io": "0B / 19.5MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-redis-cache-1",
-      "cpu_pct": "0.16%",
-      "mem_usage": "10.41MiB / 15.61GiB",
-      "mem_pct": "0.07%",
-      "net_io": "89.1MB / 77.6MB",
-      "block_io": "0B / 0B"
+      "container": "cskh-p4-bench-907e9189-redis-cache-1",
+      "cpu_pct": "0.14%",
+      "mem_usage": "10.25MiB / 15.61GiB",
+      "mem_pct": "0.06%",
+      "net_io": "89.2MB / 79.7MB",
+      "block_io": "8.19kB / 0B"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-redis-queue-1",
-      "cpu_pct": "0.17%",
-      "mem_usage": "6.32MiB / 15.61GiB",
+      "container": "cskh-p4-bench-907e9189-redis-queue-1",
+      "cpu_pct": "0.14%",
+      "mem_usage": "6.332MiB / 15.61GiB",
       "mem_pct": "0.04%",
-      "net_io": "126MB / 126MB",
-      "block_io": "1.12MB / 2.88MB"
+      "net_io": "127MB / 126MB",
+      "block_io": "1.2MB / 3.35MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-scheduler-1",
+      "container": "cskh-p4-bench-907e9189-scheduler-1",
       "cpu_pct": "0.00%",
-      "mem_usage": "61.2MiB / 15.61GiB",
+      "mem_usage": "61.21MiB / 15.61GiB",
       "mem_pct": "0.38%",
-      "net_io": "810kB / 26.5kB",
+      "net_io": "1.04MB / 32.9kB",
       "block_io": "0B / 5.64MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-websocket-1",
+      "container": "cskh-p4-bench-907e9189-websocket-1",
       "cpu_pct": "0.00%",
-      "mem_usage": "23.43MiB / 15.61GiB",
+      "mem_usage": "24.15MiB / 15.61GiB",
       "mem_pct": "0.15%",
-      "net_io": "104MB / 18.8MB",
+      "net_io": "104MB / 19MB",
       "block_io": "0B / 0B"
     }
   ],
   "container_resources_after": [
     {
-      "container": "cskh-p4-bench-21a1be83-backend-1",
+      "container": "cskh-p4-bench-907e9189-backend-1",
       "cpu_pct": "0.01%",
-      "mem_usage": "468MiB / 15.61GiB",
-      "mem_pct": "2.93%",
-      "net_io": "1.93GB / 842MB",
+      "mem_usage": "531.9MiB / 15.61GiB",
+      "mem_pct": "3.33%",
+      "net_io": "2.67GB / 1.15GB",
       "block_io": "0B / 4.65MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-db-1",
-      "cpu_pct": "17.65%",
-      "mem_usage": "409.5MiB / 15.61GiB",
-      "mem_pct": "2.56%",
-      "net_io": "955MB / 5.45GB",
-      "block_io": "16.2GB / 6.81GB"
+      "container": "cskh-p4-bench-907e9189-db-1",
+      "cpu_pct": "0.53%",
+      "mem_usage": "426.9MiB / 15.61GiB",
+      "mem_pct": "2.67%",
+      "net_io": "962MB / 5.67GB",
+      "block_io": "16.4GB / 6.81GB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-frontend-1",
+      "container": "cskh-p4-bench-907e9189-frontend-1",
       "cpu_pct": "0.00%",
-      "mem_usage": "8.82MiB / 15.61GiB",
+      "mem_usage": "9.234MiB / 15.61GiB",
       "mem_pct": "0.06%",
-      "net_io": "507MB / 509MB",
+      "net_io": "809MB / 812MB",
       "block_io": "0B / 8.19kB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-queue-long-1",
-      "cpu_pct": "0.04%",
-      "mem_usage": "35.27MiB / 15.61GiB",
+      "container": "cskh-p4-bench-907e9189-queue-long-1",
+      "cpu_pct": "0.03%",
+      "mem_usage": "35.26MiB / 15.61GiB",
       "mem_pct": "0.22%",
-      "net_io": "1.27GB / 666MB",
-      "block_io": "0B / 1.95MB"
+      "net_io": "1.27GB / 667MB",
+      "block_io": "0B / 3.98MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-queue-short-1",
-      "cpu_pct": "97.46%",
-      "mem_usage": "370MiB / 15.61GiB",
-      "mem_pct": "2.31%",
-      "net_io": "3.49GB / 136MB",
-      "block_io": "0B / 19.4MB"
+      "container": "cskh-p4-bench-907e9189-queue-short-1",
+      "cpu_pct": "87.00%",
+      "mem_usage": "1.627GiB / 15.61GiB",
+      "mem_pct": "10.42%",
+      "net_io": "3.58GB / 137MB",
+      "block_io": "0B / 19.5MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-redis-cache-1",
-      "cpu_pct": "1.81%",
-      "mem_usage": "11.05MiB / 15.61GiB",
-      "mem_pct": "0.07%",
-      "net_io": "117MB / 1.28GB",
-      "block_io": "0B / 0B"
+      "container": "cskh-p4-bench-907e9189-redis-cache-1",
+      "cpu_pct": "0.18%",
+      "mem_usage": "12.28MiB / 15.61GiB",
+      "mem_pct": "0.08%",
+      "net_io": "124MB / 1.9GB",
+      "block_io": "8.19kB / 0B"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-redis-queue-1",
-      "cpu_pct": "3.12%",
-      "mem_usage": "6.605MiB / 15.61GiB",
+      "container": "cskh-p4-bench-907e9189-redis-queue-1",
+      "cpu_pct": "0.14%",
+      "mem_usage": "6.445MiB / 15.61GiB",
       "mem_pct": "0.04%",
-      "net_io": "127MB / 127MB",
-      "block_io": "1.16MB / 3.18MB"
+      "net_io": "127MB / 126MB",
+      "block_io": "1.22MB / 3.49MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-scheduler-1",
+      "container": "cskh-p4-bench-907e9189-scheduler-1",
       "cpu_pct": "0.00%",
-      "mem_usage": "61.2MiB / 15.61GiB",
+      "mem_usage": "61.21MiB / 15.61GiB",
       "mem_pct": "0.38%",
-      "net_io": "868kB / 28.2kB",
+      "net_io": "1.16MB / 36.2kB",
       "block_io": "0B / 5.64MB"
     },
     {
-      "container": "cskh-p4-bench-21a1be83-websocket-1",
+      "container": "cskh-p4-bench-907e9189-websocket-1",
       "cpu_pct": "0.00%",
-      "mem_usage": "23.43MiB / 15.61GiB",
+      "mem_usage": "24.15MiB / 15.61GiB",
       "mem_pct": "0.15%",
-      "net_io": "104MB / 18.9MB",
+      "net_io": "104MB / 19.1MB",
       "block_io": "0B / 0B"
     }
   ],
@@ -428,88 +464,112 @@
       "ok_count": 800,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 87.593,
-      "min_ms": 15.293,
-      "p50_ms": 172.332,
-      "p95_ms": 1986.036,
-      "p99_ms": 2636.179,
-      "max_ms": 3023.992
+      "throughput_rps": 66.036,
+      "min_ms": 12.58,
+      "p50_ms": 252.765,
+      "p95_ms": 2002.565,
+      "p99_ms": 2657.003,
+      "max_ms": 3070.955,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 800
+      }
     },
     "scenario_summaries": {
       "telesale_worklist_page": {
         "workload_class": "authenticated_worklist_ssr",
         "path": "/cskh/my-customers",
         "concurrency": 40,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 160
+        },
         "requests_total": 160,
         "ok_count": 160,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_rps": 27.755,
-        "min_ms": 130.976,
-        "p50_ms": 1023.438,
-        "p95_ms": 2636.437,
-        "p99_ms": 2777.985,
-        "max_ms": 3023.992
+        "throughput_rps": 21.058,
+        "min_ms": 175.205,
+        "p50_ms": 1773.552,
+        "p95_ms": 2659.025,
+        "p99_ms": 2998.821,
+        "max_ms": 3070.955
       },
       "my_customers_worklist_api": {
         "workload_class": "authenticated_worklist_json_api",
         "path": "/api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
         "concurrency": 40,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 160
+        },
         "requests_total": 160,
         "ok_count": 160,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_rps": 647.903,
-        "min_ms": 15.293,
-        "p50_ms": 46.866,
-        "p95_ms": 81.235,
-        "p99_ms": 85.596,
-        "max_ms": 88.336
+        "throughput_rps": 513.91,
+        "min_ms": 12.58,
+        "p50_ms": 56.57,
+        "p95_ms": 105.955,
+        "p99_ms": 114.908,
+        "max_ms": 117.244
       },
       "bod_executive_overview_api": {
         "workload_class": "bod_kpi_snapshot_read_json_api",
         "path": "/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
         "concurrency": 40,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 160
+        },
         "requests_total": 160,
         "ok_count": 160,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_rps": 289.44,
-        "min_ms": 25.9,
-        "p50_ms": 119.256,
-        "p95_ms": 207.281,
-        "p99_ms": 225.45,
-        "max_ms": 231.229
+        "throughput_rps": 213.839,
+        "min_ms": 41.151,
+        "p50_ms": 135.51,
+        "p95_ms": 296.195,
+        "p99_ms": 312.361,
+        "max_ms": 327.39
       },
       "kpi_metric_drilldown_250k_api": {
         "workload_class": "kpi_drilldown_paginated_250k_attempts",
-        "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=8povrbi2tl&metric_code=CONNECTED_RATE&page=1&page_size=20",
+        "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=uir9u2sp56&metric_code=CONNECTED_RATE&page=1&page_size=20",
         "concurrency": 40,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 160
+        },
         "requests_total": 160,
         "ok_count": 160,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_rps": 90.854,
-        "min_ms": 106.219,
-        "p50_ms": 364.009,
-        "p95_ms": 581.342,
-        "p99_ms": 645.906,
-        "max_ms": 658.843
+        "throughput_rps": 68.002,
+        "min_ms": 172.231,
+        "p50_ms": 493.574,
+        "p95_ms": 843.427,
+        "p99_ms": 868.558,
+        "max_ms": 883.847
       },
       "kpi_metric_drilldown_monthly_company_api": {
         "workload_class": "kpi_drilldown_paginated_full_month_250k_attempts",
         "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=monthly&period_key=2026-10&scope_type=company&metric_code=CONNECTED_RATE&page=1&page_size=20",
         "concurrency": 40,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 160
+        },
         "requests_total": 160,
         "ok_count": 160,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_rps": 198.169,
-        "min_ms": 50.994,
-        "p50_ms": 170.401,
-        "p95_ms": 285.144,
-        "p99_ms": 306.59,
-        "max_ms": 335.171
+        "throughput_rps": 144.934,
+        "min_ms": 72.688,
+        "p50_ms": 226.854,
+        "p95_ms": 393.959,
+        "p99_ms": 409.493,
+        "max_ms": 412.091
       }
     }
   },
@@ -520,42 +580,82 @@
       "ok_count": 240,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 371.708,
-      "min_ms": 10.638,
-      "p50_ms": 28.246,
-      "p95_ms": 53.603,
-      "p99_ms": 79.017,
-      "max_ms": 91.925
+      "throughput_rps": 290.097,
+      "min_ms": 12.464,
+      "p50_ms": 36.339,
+      "p95_ms": 73.585,
+      "p99_ms": 101.155,
+      "max_ms": 119.529
+    },
+    "telesale_worklist_ssr_40_staff_sessions_c12": {
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 14.103,
+      "min_ms": 193.261,
+      "p50_ms": 809.81,
+      "p95_ms": 1432.297,
+      "p99_ms": 1846.03,
+      "max_ms": 1901.895
+    },
+    "telesale_worklist_ssr_40_staff_sessions_c40": {
+      "path": "/cskh/my-customers",
+      "concurrency": 40,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 160
+      },
+      "requests_total": 160,
+      "ok_count": 160,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 14.015,
+      "min_ms": 540.691,
+      "p50_ms": 2193.414,
+      "p95_ms": 6009.04,
+      "p99_ms": 6122.054,
+      "max_ms": 6248.615
     },
     "lead_detail_and_history_http": {
       "requests_total": 160,
       "ok_count": 160,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 122.944,
-      "min_ms": 38.672,
-      "p50_ms": 96.451,
-      "p95_ms": 130.815,
-      "p99_ms": 144.886,
-      "max_ms": 157.01,
-      "get_work_item_p95_ms": 78.458,
-      "list_attempts_p95_ms": 61.617,
+      "throughput_rps": 92.537,
+      "min_ms": 51.966,
+      "p50_ms": 124.223,
+      "p95_ms": 184.981,
+      "p99_ms": 212.164,
+      "max_ms": 214.551,
+      "get_work_item_p95_ms": 109.379,
+      "list_attempts_p95_ms": 95.245,
       "raw_samples_first_15_ms": [
-        81.168,
-        99.845,
-        106.475,
-        104.344,
-        109.087,
-        106.971,
-        111.374,
-        112.12,
-        112.808,
-        116.059,
-        119.615,
-        121.456,
-        62.123,
-        48.342,
-        71.125
+        134.416,
+        134.74,
+        136.455,
+        140.723,
+        146.994,
+        151.725,
+        157.729,
+        170.076,
+        174.901,
+        181.535,
+        211.914,
+        214.551,
+        109.712,
+        134.515,
+        139.252
       ]
     },
     "record_attempt_and_callback_http": {
@@ -563,12 +663,12 @@
       "ok_count": 80,
       "error_count": 0,
       "error_rate_pct": 0.0,
-      "throughput_rps": 34.348,
-      "min_ms": 88.9,
-      "p50_ms": 224.16,
-      "p95_ms": 363.193,
-      "p99_ms": 384.416,
-      "max_ms": 393.693,
+      "throughput_rps": 26.137,
+      "min_ms": 140.881,
+      "p50_ms": 289.996,
+      "p95_ms": 477.873,
+      "p99_ms": 545.721,
+      "max_ms": 636.484,
       "http_idempotent_replays_verified": 10,
       "db_reconciliation": {
         "attempts_created": 80,
@@ -581,46 +681,58 @@
         "workload_class": "bod_kpi_snapshot_read_json_api",
         "path": "/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
         "concurrency": 12,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 120
+        },
         "requests_total": 120,
         "ok_count": 120,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_rps": 245.182,
-        "min_ms": 18.72,
-        "p50_ms": 45.892,
-        "p95_ms": 68.903,
-        "p99_ms": 76.161,
-        "max_ms": 83.928
+        "throughput_rps": 202.058,
+        "min_ms": 21.549,
+        "p50_ms": 53.166,
+        "p95_ms": 96.042,
+        "p99_ms": 113.996,
+        "max_ms": 117.498
       },
       "kpi_drilldown_daily_campaign_role_api": {
         "workload_class": "kpi_drilldown_daily_campaign_api",
-        "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=8povrbi2tl&metric_code=CONNECTED_RATE&page=1&page_size=20",
+        "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=uir9u2sp56&metric_code=CONNECTED_RATE&page=1&page_size=20",
         "concurrency": 12,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 120
+        },
         "requests_total": 120,
         "ok_count": 120,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_rps": 87.898,
-        "min_ms": 54.136,
-        "p50_ms": 131.225,
-        "p95_ms": 202.298,
-        "p99_ms": 235.12,
-        "max_ms": 236.612
+        "throughput_rps": 61.031,
+        "min_ms": 74.927,
+        "p50_ms": 176.687,
+        "p95_ms": 290.296,
+        "p99_ms": 327.813,
+        "max_ms": 355.648
       },
       "kpi_drilldown_monthly_company_role_api": {
         "workload_class": "kpi_drilldown_monthly_company_250k_api",
         "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=monthly&period_key=2026-10&scope_type=company&metric_code=CONNECTED_RATE&page=1&page_size=20",
         "concurrency": 12,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 120
+        },
         "requests_total": 120,
         "ok_count": 120,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_rps": 167.69,
-        "min_ms": 30.33,
-        "p50_ms": 64.97,
-        "p95_ms": 113.294,
-        "p99_ms": 127.165,
-        "max_ms": 151.613
+        "throughput_rps": 113.036,
+        "min_ms": 43.989,
+        "p50_ms": 91.514,
+        "p95_ms": 203.35,
+        "p99_ms": 208.12,
+        "max_ms": 212.962
       },
       "staff_unauthorized_company_drilldown_http_status": 403
     },
@@ -632,12 +744,12 @@
           "ok_count": 200,
           "error_count": 0,
           "error_rate_pct": 0.0,
-          "throughput_rps": 70.603,
-          "min_ms": 12.244,
-          "p50_ms": 104.669,
-          "p95_ms": 337.392,
-          "p99_ms": 544.826,
-          "max_ms": 670.339
+          "throughput_rps": 69.259,
+          "min_ms": 17.245,
+          "p50_ms": 139.889,
+          "p95_ms": 414.335,
+          "p99_ms": 682.547,
+          "max_ms": 869.079
         },
         "by_workload": {
           "bod_overview_api": {
@@ -645,133 +757,133 @@
             "ok_count": 30,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 10.591,
-            "min_ms": 31.333,
-            "p50_ms": 67.506,
-            "p95_ms": 244.234,
-            "p99_ms": 247.104,
-            "max_ms": 247.677
+            "throughput_rps": 10.389,
+            "min_ms": 24.291,
+            "p50_ms": 108.35,
+            "p95_ms": 232.638,
+            "p99_ms": 245.604,
+            "max_ms": 250.585
           },
           "kpi_drilldown_api": {
             "requests_total": 20,
             "ok_count": 20,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 7.06,
-            "min_ms": 82.175,
-            "p50_ms": 145.935,
-            "p95_ms": 312.38,
-            "p99_ms": 329.358,
-            "max_ms": 333.603
+            "throughput_rps": 6.926,
+            "min_ms": 123.534,
+            "p50_ms": 261.805,
+            "p95_ms": 367.472,
+            "p99_ms": 376.049,
+            "max_ms": 378.193
           },
           "lead_detail_history_api": {
             "requests_total": 50,
             "ok_count": 50,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 17.651,
-            "min_ms": 71.774,
-            "p50_ms": 190.139,
-            "p95_ms": 353.262,
-            "p99_ms": 421.287,
-            "max_ms": 426.905
+            "throughput_rps": 17.315,
+            "min_ms": 65.846,
+            "p50_ms": 256.592,
+            "p95_ms": 445.486,
+            "p99_ms": 495.492,
+            "max_ms": 507.808
           },
           "my_customers_api": {
             "requests_total": 90,
             "ok_count": 90,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 31.772,
-            "min_ms": 12.244,
-            "p50_ms": 53.266,
-            "p95_ms": 219.014,
-            "p99_ms": 267.125,
-            "max_ms": 280.775
+            "throughput_rps": 31.167,
+            "min_ms": 17.245,
+            "p50_ms": 74.41,
+            "p95_ms": 221.384,
+            "p99_ms": 248.809,
+            "max_ms": 282.222
           },
           "record_attempt_write_api": {
             "requests_total": 10,
             "ok_count": 10,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 3.53,
-            "min_ms": 174.392,
-            "p50_ms": 455.314,
-            "p95_ms": 652.087,
-            "p99_ms": 666.689,
-            "max_ms": 670.339
+            "throughput_rps": 3.463,
+            "min_ms": 251.688,
+            "p50_ms": 575.853,
+            "p95_ms": 840.033,
+            "p99_ms": 863.27,
+            "max_ms": 869.079
           }
         },
         "container_resources_during_wave": [
           {
-            "container": "cskh-p4-bench-21a1be83-backend-1",
-            "cpu_pct": "204.40%",
-            "mem_usage": "465.8MiB / 15.61GiB",
-            "mem_pct": "2.91%",
-            "net_io": "1.81GB / 816MB",
-            "block_io": "0B / 4.65MB"
+            "container": "cskh-p4-bench-907e9189-backend-1",
+            "cpu_pct": "117.20%",
+            "mem_usage": "474MiB / 15.61GiB",
+            "mem_pct": "2.97%",
+            "net_io": "2.14GB / 934MB",
+            "block_io": "0B / 4.6MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-db-1",
-            "cpu_pct": "89.20%",
-            "mem_usage": "405.9MiB / 15.61GiB",
-            "mem_pct": "2.54%",
-            "net_io": "947MB / 5.35GB",
-            "block_io": "15.7GB / 6.78GB"
+            "container": "cskh-p4-bench-907e9189-db-1",
+            "cpu_pct": "103.76%",
+            "mem_usage": "419.2MiB / 15.61GiB",
+            "mem_pct": "2.62%",
+            "net_io": "949MB / 5.45GB",
+            "block_io": "15.6GB / 6.78GB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-frontend-1",
-            "cpu_pct": "0.68%",
-            "mem_usage": "8.707MiB / 15.61GiB",
-            "mem_pct": "0.05%",
-            "net_io": "490MB / 492MB",
+            "container": "cskh-p4-bench-907e9189-frontend-1",
+            "cpu_pct": "1.91%",
+            "mem_usage": "9.094MiB / 15.61GiB",
+            "mem_pct": "0.06%",
+            "net_io": "604MB / 606MB",
             "block_io": "0B / 8.19kB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-queue-long-1",
+            "container": "cskh-p4-bench-907e9189-queue-long-1",
             "cpu_pct": "0.03%",
-            "mem_usage": "35.27MiB / 15.61GiB",
+            "mem_usage": "35.26MiB / 15.61GiB",
             "mem_pct": "0.22%",
-            "net_io": "1.27GB / 666MB",
-            "block_io": "0B / 1.95MB"
+            "net_io": "1.27GB / 667MB",
+            "block_io": "0B / 3.98MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-queue-short-1",
-            "cpu_pct": "14.62%",
-            "mem_usage": "147.4MiB / 15.61GiB",
-            "mem_pct": "0.92%",
-            "net_io": "3.42GB / 134MB",
-            "block_io": "0B / 19.4MB"
+            "container": "cskh-p4-bench-907e9189-queue-short-1",
+            "cpu_pct": "22.91%",
+            "mem_usage": "148.7MiB / 15.61GiB",
+            "mem_pct": "0.93%",
+            "net_io": "3.41GB / 133MB",
+            "block_io": "0B / 19.5MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-redis-cache-1",
-            "cpu_pct": "3.72%",
-            "mem_usage": "11.24MiB / 15.61GiB",
+            "container": "cskh-p4-bench-907e9189-redis-cache-1",
+            "cpu_pct": "4.94%",
+            "mem_usage": "11.3MiB / 15.61GiB",
             "mem_pct": "0.07%",
-            "net_io": "113MB / 1.21GB",
-            "block_io": "0B / 0B"
+            "net_io": "116MB / 1.43GB",
+            "block_io": "8.19kB / 0B"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-redis-queue-1",
-            "cpu_pct": "2.06%",
-            "mem_usage": "6.832MiB / 15.61GiB",
+            "container": "cskh-p4-bench-907e9189-redis-queue-1",
+            "cpu_pct": "0.41%",
+            "mem_usage": "6.438MiB / 15.61GiB",
             "mem_pct": "0.04%",
             "net_io": "127MB / 126MB",
-            "block_io": "1.16MB / 3.18MB"
+            "block_io": "1.22MB / 3.48MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-scheduler-1",
+            "container": "cskh-p4-bench-907e9189-scheduler-1",
             "cpu_pct": "0.00%",
-            "mem_usage": "61.2MiB / 15.61GiB",
+            "mem_usage": "61.21MiB / 15.61GiB",
             "mem_pct": "0.38%",
-            "net_io": "868kB / 28.2kB",
+            "net_io": "1.1MB / 34.6kB",
             "block_io": "0B / 5.64MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-websocket-1",
-            "cpu_pct": "0.14%",
-            "mem_usage": "23.43MiB / 15.61GiB",
+            "container": "cskh-p4-bench-907e9189-websocket-1",
+            "cpu_pct": "0.40%",
+            "mem_usage": "24.15MiB / 15.61GiB",
             "mem_pct": "0.15%",
-            "net_io": "104MB / 18.9MB",
+            "net_io": "104MB / 19.1MB",
             "block_io": "0B / 0B"
           }
         ],
@@ -782,14 +894,14 @@
             "long": 0
           },
           "queue_backlog_total": 0,
-          "redis_queue_rtt_ms": 0.791,
+          "redis_queue_rtt_ms": 1.03,
           "mariadb_global_status": {
-            "Innodb_buffer_pool_read_requests": "71904473",
-            "Innodb_buffer_pool_reads": "1005500",
-            "Innodb_row_lock_time_avg": "65",
-            "Innodb_row_lock_waits": "54",
+            "Innodb_buffer_pool_read_requests": "71712757",
+            "Innodb_buffer_pool_reads": "1000547",
+            "Innodb_row_lock_time_avg": "74",
+            "Innodb_row_lock_waits": "50",
             "Max_used_connections": "16",
-            "Questions": "1333081",
+            "Questions": "1339843",
             "Slow_queries": "0",
             "Threads_connected": "2"
           }
@@ -802,12 +914,12 @@
           "ok_count": 320,
           "error_count": 0,
           "error_rate_pct": 0.0,
-          "throughput_rps": 114.143,
-          "min_ms": 10.261,
-          "p50_ms": 169.73,
-          "p95_ms": 625.039,
-          "p99_ms": 766.858,
-          "max_ms": 932.573
+          "throughput_rps": 111.811,
+          "min_ms": 19.15,
+          "p50_ms": 219.749,
+          "p95_ms": 906.052,
+          "p99_ms": 1094.409,
+          "max_ms": 1455.085
         },
         "by_workload": {
           "bod_overview_api": {
@@ -815,133 +927,133 @@
             "ok_count": 48,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 17.121,
-            "min_ms": 28.767,
-            "p50_ms": 122.724,
-            "p95_ms": 565.975,
-            "p99_ms": 611.192,
-            "max_ms": 629.637
+            "throughput_rps": 16.772,
+            "min_ms": 35.922,
+            "p50_ms": 125.512,
+            "p95_ms": 737.636,
+            "p99_ms": 910.793,
+            "max_ms": 915.236
           },
           "kpi_drilldown_api": {
             "requests_total": 32,
             "ok_count": 32,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 11.414,
-            "min_ms": 74.13,
-            "p50_ms": 258.088,
-            "p95_ms": 645.077,
-            "p99_ms": 676.827,
-            "max_ms": 688.963
+            "throughput_rps": 11.181,
+            "min_ms": 149.76,
+            "p50_ms": 257.993,
+            "p95_ms": 793.025,
+            "p99_ms": 803.063,
+            "max_ms": 807.542
           },
           "lead_detail_history_api": {
             "requests_total": 80,
             "ok_count": 80,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 28.536,
-            "min_ms": 70.413,
-            "p50_ms": 295.749,
-            "p95_ms": 688.036,
-            "p99_ms": 916.769,
-            "max_ms": 932.573
+            "throughput_rps": 27.953,
+            "min_ms": 124.069,
+            "p50_ms": 441.277,
+            "p95_ms": 1061.042,
+            "p99_ms": 1393.063,
+            "max_ms": 1455.085
           },
           "my_customers_api": {
             "requests_total": 144,
             "ok_count": 144,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 51.364,
-            "min_ms": 10.261,
-            "p50_ms": 98.501,
-            "p95_ms": 582.821,
-            "p99_ms": 602.888,
-            "max_ms": 608.153
+            "throughput_rps": 50.315,
+            "min_ms": 19.15,
+            "p50_ms": 110.557,
+            "p95_ms": 704.115,
+            "p99_ms": 840.59,
+            "max_ms": 866.304
           },
           "record_attempt_write_api": {
             "requests_total": 16,
             "ok_count": 16,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 5.707,
-            "min_ms": 247.558,
-            "p50_ms": 464.038,
-            "p95_ms": 774.592,
-            "p99_ms": 784.894,
-            "max_ms": 787.469
+            "throughput_rps": 5.591,
+            "min_ms": 365.392,
+            "p50_ms": 543.154,
+            "p95_ms": 944.29,
+            "p99_ms": 1070.598,
+            "max_ms": 1102.175
           }
         },
         "container_resources_during_wave": [
           {
-            "container": "cskh-p4-bench-21a1be83-backend-1",
-            "cpu_pct": "175.11%",
-            "mem_usage": "465.5MiB / 15.61GiB",
-            "mem_pct": "2.91%",
-            "net_io": "1.86GB / 827MB",
-            "block_io": "0B / 4.65MB"
+            "container": "cskh-p4-bench-907e9189-backend-1",
+            "cpu_pct": "221.08%",
+            "mem_usage": "480.3MiB / 15.61GiB",
+            "mem_pct": "3.00%",
+            "net_io": "2.16GB / 939MB",
+            "block_io": "0B / 4.6MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-db-1",
-            "cpu_pct": "86.46%",
-            "mem_usage": "406.4MiB / 15.61GiB",
-            "mem_pct": "2.54%",
-            "net_io": "950MB / 5.37GB",
-            "block_io": "15.9GB / 6.79GB"
+            "container": "cskh-p4-bench-907e9189-db-1",
+            "cpu_pct": "121.93%",
+            "mem_usage": "421.6MiB / 15.61GiB",
+            "mem_pct": "2.64%",
+            "net_io": "951MB / 5.46GB",
+            "block_io": "15.7GB / 6.78GB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-frontend-1",
-            "cpu_pct": "3.43%",
-            "mem_usage": "8.777MiB / 15.61GiB",
-            "mem_pct": "0.05%",
-            "net_io": "497MB / 499MB",
+            "container": "cskh-p4-bench-907e9189-frontend-1",
+            "cpu_pct": "4.53%",
+            "mem_usage": "10.06MiB / 15.61GiB",
+            "mem_pct": "0.06%",
+            "net_io": "611MB / 613MB",
             "block_io": "0B / 8.19kB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-queue-long-1",
+            "container": "cskh-p4-bench-907e9189-queue-long-1",
             "cpu_pct": "0.03%",
-            "mem_usage": "35.27MiB / 15.61GiB",
+            "mem_usage": "35.26MiB / 15.61GiB",
             "mem_pct": "0.22%",
-            "net_io": "1.27GB / 666MB",
-            "block_io": "0B / 1.95MB"
+            "net_io": "1.27GB / 667MB",
+            "block_io": "0B / 3.98MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-queue-short-1",
-            "cpu_pct": "41.36%",
-            "mem_usage": "165MiB / 15.61GiB",
-            "mem_pct": "1.03%",
-            "net_io": "3.43GB / 134MB",
-            "block_io": "0B / 19.4MB"
+            "container": "cskh-p4-bench-907e9189-queue-short-1",
+            "cpu_pct": "0.07%",
+            "mem_usage": "148.5MiB / 15.61GiB",
+            "mem_pct": "0.93%",
+            "net_io": "3.41GB / 133MB",
+            "block_io": "0B / 19.5MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-redis-cache-1",
-            "cpu_pct": "7.63%",
-            "mem_usage": "11.39MiB / 15.61GiB",
+            "container": "cskh-p4-bench-907e9189-redis-cache-1",
+            "cpu_pct": "9.78%",
+            "mem_usage": "11.18MiB / 15.61GiB",
             "mem_pct": "0.07%",
-            "net_io": "115MB / 1.24GB",
-            "block_io": "0B / 0B"
+            "net_io": "117MB / 1.46GB",
+            "block_io": "8.19kB / 0B"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-redis-queue-1",
-            "cpu_pct": "0.54%",
-            "mem_usage": "6.332MiB / 15.61GiB",
+            "container": "cskh-p4-bench-907e9189-redis-queue-1",
+            "cpu_pct": "0.44%",
+            "mem_usage": "6.195MiB / 15.61GiB",
             "mem_pct": "0.04%",
             "net_io": "127MB / 126MB",
-            "block_io": "1.16MB / 3.18MB"
+            "block_io": "1.22MB / 3.48MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-scheduler-1",
+            "container": "cskh-p4-bench-907e9189-scheduler-1",
             "cpu_pct": "0.00%",
-            "mem_usage": "61.2MiB / 15.61GiB",
+            "mem_usage": "61.21MiB / 15.61GiB",
             "mem_pct": "0.38%",
-            "net_io": "868kB / 28.2kB",
+            "net_io": "1.1MB / 34.6kB",
             "block_io": "0B / 5.64MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-websocket-1",
-            "cpu_pct": "0.58%",
-            "mem_usage": "23.93MiB / 15.61GiB",
+            "container": "cskh-p4-bench-907e9189-websocket-1",
+            "cpu_pct": "0.43%",
+            "mem_usage": "24.38MiB / 15.61GiB",
             "mem_pct": "0.15%",
-            "net_io": "104MB / 18.9MB",
+            "net_io": "104MB / 19.1MB",
             "block_io": "0B / 0B"
           }
         ],
@@ -952,14 +1064,14 @@
             "long": 0
           },
           "queue_backlog_total": 0,
-          "redis_queue_rtt_ms": 0.845,
+          "redis_queue_rtt_ms": 0.977,
           "mariadb_global_status": {
-            "Innodb_buffer_pool_read_requests": "73731795",
-            "Innodb_buffer_pool_reads": "1018925",
-            "Innodb_row_lock_time_avg": "66",
-            "Innodb_row_lock_waits": "57",
+            "Innodb_buffer_pool_read_requests": "73377741",
+            "Innodb_buffer_pool_reads": "1009275",
+            "Innodb_row_lock_time_avg": "76",
+            "Innodb_row_lock_waits": "53",
             "Max_used_connections": "17",
-            "Questions": "1339216",
+            "Questions": "1345928",
             "Slow_queries": "0",
             "Threads_connected": "2"
           }
@@ -972,12 +1084,12 @@
           "ok_count": 480,
           "error_count": 0,
           "error_rate_pct": 0.0,
-          "throughput_rps": 138.508,
-          "min_ms": 21.821,
-          "p50_ms": 472.661,
-          "p95_ms": 1046.346,
-          "p99_ms": 1337.191,
-          "max_ms": 1606.963
+          "throughput_rps": 110.067,
+          "min_ms": 31.031,
+          "p50_ms": 508.735,
+          "p95_ms": 1413.987,
+          "p99_ms": 2072.679,
+          "max_ms": 2386.631
         },
         "by_workload": {
           "bod_overview_api": {
@@ -985,133 +1097,133 @@
             "ok_count": 72,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 20.776,
-            "min_ms": 107.293,
-            "p50_ms": 399.685,
-            "p95_ms": 769.923,
-            "p99_ms": 820.107,
-            "max_ms": 820.39
+            "throughput_rps": 16.51,
+            "min_ms": 87.615,
+            "p50_ms": 416.721,
+            "p95_ms": 1314.88,
+            "p99_ms": 1361.491,
+            "max_ms": 1413.938
           },
           "kpi_drilldown_api": {
             "requests_total": 48,
             "ok_count": 48,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 13.851,
-            "min_ms": 172.009,
-            "p50_ms": 440.358,
-            "p95_ms": 906.858,
-            "p99_ms": 959.572,
-            "max_ms": 976.033
+            "throughput_rps": 11.007,
+            "min_ms": 236.842,
+            "p50_ms": 526.117,
+            "p95_ms": 1413.902,
+            "p99_ms": 1476.037,
+            "max_ms": 1477.74
           },
           "lead_detail_history_api": {
             "requests_total": 120,
             "ok_count": 120,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 34.627,
-            "min_ms": 292.595,
-            "p50_ms": 815.309,
-            "p95_ms": 1310.4,
-            "p99_ms": 1581.119,
-            "max_ms": 1606.963
+            "throughput_rps": 27.517,
+            "min_ms": 355.932,
+            "p50_ms": 847.52,
+            "p95_ms": 1819.958,
+            "p99_ms": 2328.008,
+            "max_ms": 2386.631
           },
           "my_customers_api": {
             "requests_total": 216,
             "ok_count": 216,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 62.328,
-            "min_ms": 21.821,
-            "p50_ms": 392.868,
-            "p95_ms": 706.152,
-            "p99_ms": 772.731,
-            "max_ms": 785.942
+            "throughput_rps": 49.53,
+            "min_ms": 31.031,
+            "p50_ms": 405.278,
+            "p95_ms": 1200.766,
+            "p99_ms": 1319.096,
+            "max_ms": 1345.623
           },
           "record_attempt_write_api": {
             "requests_total": 24,
             "ok_count": 24,
             "error_count": 0,
             "error_rate_pct": 0.0,
-            "throughput_rps": 6.925,
-            "min_ms": 446.987,
-            "p50_ms": 811.609,
-            "p95_ms": 1099.932,
-            "p99_ms": 1157.377,
-            "max_ms": 1172.774
+            "throughput_rps": 5.503,
+            "min_ms": 616.895,
+            "p50_ms": 924.613,
+            "p95_ms": 1346.669,
+            "p99_ms": 1496.473,
+            "max_ms": 1539.049
           }
         },
         "container_resources_during_wave": [
           {
-            "container": "cskh-p4-bench-21a1be83-backend-1",
-            "cpu_pct": "198.09%",
-            "mem_usage": "469.1MiB / 15.61GiB",
-            "mem_pct": "2.93%",
-            "net_io": "1.9GB / 837MB",
-            "block_io": "0B / 4.65MB"
+            "container": "cskh-p4-bench-907e9189-backend-1",
+            "cpu_pct": "213.24%",
+            "mem_usage": "483.6MiB / 15.61GiB",
+            "mem_pct": "3.03%",
+            "net_io": "2.23GB / 954MB",
+            "block_io": "0B / 4.6MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-db-1",
-            "cpu_pct": "93.55%",
-            "mem_usage": "406.9MiB / 15.61GiB",
-            "mem_pct": "2.55%",
-            "net_io": "954MB / 5.41GB",
-            "block_io": "16GB / 6.8GB"
+            "container": "cskh-p4-bench-907e9189-db-1",
+            "cpu_pct": "83.98%",
+            "mem_usage": "422.3MiB / 15.61GiB",
+            "mem_pct": "2.64%",
+            "net_io": "954MB / 5.48GB",
+            "block_io": "15.9GB / 6.79GB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-frontend-1",
-            "cpu_pct": "4.07%",
-            "mem_usage": "10.01MiB / 15.61GiB",
+            "container": "cskh-p4-bench-907e9189-frontend-1",
+            "cpu_pct": "3.95%",
+            "mem_usage": "9.809MiB / 15.61GiB",
             "mem_pct": "0.06%",
-            "net_io": "501MB / 503MB",
+            "net_io": "618MB / 620MB",
             "block_io": "0B / 8.19kB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-queue-long-1",
+            "container": "cskh-p4-bench-907e9189-queue-long-1",
             "cpu_pct": "0.03%",
-            "mem_usage": "35.27MiB / 15.61GiB",
+            "mem_usage": "35.26MiB / 15.61GiB",
             "mem_pct": "0.22%",
-            "net_io": "1.27GB / 666MB",
-            "block_io": "0B / 1.95MB"
+            "net_io": "1.27GB / 667MB",
+            "block_io": "0B / 3.98MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-queue-short-1",
-            "cpu_pct": "69.05%",
-            "mem_usage": "241.3MiB / 15.61GiB",
-            "mem_pct": "1.51%",
-            "net_io": "3.45GB / 136MB",
-            "block_io": "0B / 19.4MB"
+            "container": "cskh-p4-bench-907e9189-queue-short-1",
+            "cpu_pct": "57.84%",
+            "mem_usage": "163MiB / 15.61GiB",
+            "mem_pct": "1.02%",
+            "net_io": "3.41GB / 133MB",
+            "block_io": "0B / 19.5MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-redis-cache-1",
-            "cpu_pct": "8.43%",
-            "mem_usage": "11.35MiB / 15.61GiB",
-            "mem_pct": "0.07%",
-            "net_io": "116MB / 1.27GB",
-            "block_io": "0B / 0B"
+            "container": "cskh-p4-bench-907e9189-redis-cache-1",
+            "cpu_pct": "11.28%",
+            "mem_usage": "12.06MiB / 15.61GiB",
+            "mem_pct": "0.08%",
+            "net_io": "118MB / 1.49GB",
+            "block_io": "8.19kB / 0B"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-redis-queue-1",
-            "cpu_pct": "0.42%",
-            "mem_usage": "6.781MiB / 15.61GiB",
-            "mem_pct": "0.04%",
-            "net_io": "127MB / 127MB",
-            "block_io": "1.16MB / 3.18MB"
+            "container": "cskh-p4-bench-907e9189-redis-queue-1",
+            "cpu_pct": "1.67%",
+            "mem_usage": "9.527MiB / 15.61GiB",
+            "mem_pct": "0.06%",
+            "net_io": "127MB / 126MB",
+            "block_io": "1.22MB / 3.48MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-scheduler-1",
+            "container": "cskh-p4-bench-907e9189-scheduler-1",
             "cpu_pct": "0.00%",
-            "mem_usage": "61.2MiB / 15.61GiB",
+            "mem_usage": "61.21MiB / 15.61GiB",
             "mem_pct": "0.38%",
-            "net_io": "868kB / 28.2kB",
+            "net_io": "1.1MB / 34.6kB",
             "block_io": "0B / 5.64MB"
           },
           {
-            "container": "cskh-p4-bench-21a1be83-websocket-1",
-            "cpu_pct": "0.40%",
-            "mem_usage": "23.43MiB / 15.61GiB",
+            "container": "cskh-p4-bench-907e9189-websocket-1",
+            "cpu_pct": "0.45%",
+            "mem_usage": "24.15MiB / 15.61GiB",
             "mem_pct": "0.15%",
-            "net_io": "104MB / 18.9MB",
+            "net_io": "104MB / 19.1MB",
             "block_io": "0B / 0B"
           }
         ],
@@ -1122,14 +1234,14 @@
             "long": 0
           },
           "queue_backlog_total": 0,
-          "redis_queue_rtt_ms": 0.81,
+          "redis_queue_rtt_ms": 0.98,
           "mariadb_global_status": {
-            "Innodb_buffer_pool_read_requests": "76238451",
-            "Innodb_buffer_pool_reads": "1021645",
-            "Innodb_row_lock_time_avg": "65",
-            "Innodb_row_lock_waits": "61",
+            "Innodb_buffer_pool_read_requests": "76041934",
+            "Innodb_buffer_pool_reads": "1019518",
+            "Innodb_row_lock_time_avg": "86",
+            "Innodb_row_lock_waits": "58",
             "Max_used_connections": "17",
-            "Questions": "1348345",
+            "Questions": "1355103",
             "Slow_queries": "0",
             "Threads_connected": "2"
           }
@@ -1137,8 +1249,252 @@
       }
     }
   },
-  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
-  "image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+  "worklist_ssr_acceptance_and_separation": {
+    "execution_mode": "BUILT_INTO_OFFICIAL_COMMIT_AND_IMAGE_DIGEST_NO_IN_CONTAINER_PATCHING",
+    "priority_acceptance_case_1_shared_new_session_c12": {
+      "workload_class": "authenticated_worklist_ssr",
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 22.07,
+      "min_ms": 170.731,
+      "p50_ms": 521.224,
+      "p95_ms": 981.42,
+      "p99_ms": 1236.002,
+      "max_ms": 1353.79
+    },
+    "priority_acceptance_case_2_40_staff_sessions_c40": {
+      "path": "/cskh/my-customers",
+      "concurrency": 40,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 160
+      },
+      "requests_total": 160,
+      "ok_count": 160,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 14.015,
+      "min_ms": 540.691,
+      "p50_ms": 2193.414,
+      "p95_ms": 6009.04,
+      "p99_ms": 6122.054,
+      "max_ms": 6248.615
+    },
+    "case_2a_shared_new_session_c12": {
+      "workload_class": "authenticated_worklist_ssr",
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 22.07,
+      "min_ms": 170.731,
+      "p50_ms": 521.224,
+      "p95_ms": 981.42,
+      "p99_ms": 1236.002,
+      "max_ms": 1353.79
+    },
+    "case_2b_single_initialized_session_c12": {
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "distinct_sessions_used": 1,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 22.275,
+      "min_ms": 153.968,
+      "p50_ms": 524.078,
+      "p95_ms": 962.07,
+      "p99_ms": 1097.519,
+      "max_ms": 1216.857
+    },
+    "case_2b_single_initialized_session_c40": {
+      "workload_class": "authenticated_worklist_ssr",
+      "path": "/cskh/my-customers",
+      "concurrency": 40,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 160
+      },
+      "requests_total": 160,
+      "ok_count": 160,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 21.058,
+      "min_ms": 175.205,
+      "p50_ms": 1773.552,
+      "p95_ms": 2659.025,
+      "p99_ms": 2998.821,
+      "max_ms": 3070.955
+    },
+    "case_2c_40_staff_sessions_c12": {
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 14.103,
+      "min_ms": 193.261,
+      "p50_ms": 809.81,
+      "p95_ms": 1432.297,
+      "p99_ms": 1846.03,
+      "max_ms": 1901.895
+    },
+    "case_2c_40_staff_sessions_c40": {
+      "path": "/cskh/my-customers",
+      "concurrency": 40,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "status_counts": {
+        "200": 160
+      },
+      "requests_total": 160,
+      "ok_count": 160,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 14.015,
+      "min_ms": 540.691,
+      "p50_ms": 2193.414,
+      "p95_ms": 6009.04,
+      "p99_ms": 6122.054,
+      "max_ms": 6248.615
+    },
+    "ssr_vs_aggregate_separation": {
+      "c12_ssr_telesale_worklist_page_only": {
+        "workload_class": "authenticated_worklist_ssr",
+        "path": "/cskh/my-customers",
+        "concurrency": 12,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 240
+        },
+        "requests_total": 240,
+        "ok_count": 240,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 22.07,
+        "min_ms": 170.731,
+        "p50_ms": 521.224,
+        "p95_ms": 981.42,
+        "p99_ms": 1236.002,
+        "max_ms": 1353.79
+      },
+      "c12_overall_summary_all_8_scenarios": {
+        "requests_total": 1920,
+        "ok_count": 1920,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 49.785,
+        "min_ms": 6.684,
+        "p50_ms": 114.235,
+        "p95_ms": 765.308,
+        "p99_ms": 1090.273,
+        "max_ms": 1353.79,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 1920
+        }
+      },
+      "c40_ssr_telesale_worklist_page_40_staff_sessions_only": {
+        "path": "/cskh/my-customers",
+        "concurrency": 40,
+        "distinct_sessions_used": 40,
+        "client_timeout_threshold_sec": 30.0,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 160
+        },
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 14.015,
+        "min_ms": 540.691,
+        "p50_ms": 2193.414,
+        "p95_ms": 6009.04,
+        "p99_ms": 6122.054,
+        "max_ms": 6248.615
+      },
+      "c40_ssr_telesale_worklist_page_single_session_only": {
+        "workload_class": "authenticated_worklist_ssr",
+        "path": "/cskh/my-customers",
+        "concurrency": 40,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 160
+        },
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 21.058,
+        "min_ms": 175.205,
+        "p50_ms": 1773.552,
+        "p95_ms": 2659.025,
+        "p99_ms": 2998.821,
+        "max_ms": 3070.955
+      },
+      "c40_overall_summary_peak_wave_5_scenarios": {
+        "requests_total": 800,
+        "ok_count": 800,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 66.036,
+        "min_ms": 12.58,
+        "p50_ms": 252.765,
+        "p95_ms": 2002.565,
+        "p99_ms": 2657.003,
+        "max_ms": 3070.955,
+        "timeout_count": 0,
+        "status_counts": {
+          "200": 800
+        }
+      },
+      "c40_overall_summary_mixed_api_sessions_40": {
+        "requests_total": 320,
+        "ok_count": 320,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 111.811,
+        "min_ms": 19.15,
+        "p50_ms": 219.749,
+        "p95_ms": 906.052,
+        "p99_ms": 1094.409,
+        "max_ms": 1455.085
+      }
+    }
+  },
+  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
+  "image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
   "s1_domain_and_database_benchmark": {
     "runner_hardware": {
       "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.41",
@@ -1155,37 +1511,37 @@
       "active_staff_users": 40,
       "teams": 4,
       "campaigns": 6,
-      "seed_elapsed_sec": 64.1
+      "seed_elapsed_sec": 76.28
     },
-    "primary_campaign_id": "8povrbi2tl",
-    "dist_10k_campaign_id": "8pofn90j2i",
+    "primary_campaign_id": "uir9u2sp56",
+    "dist_10k_campaign_id": "uirros0mc4",
     "bod_user": "bod.bench@dev.local",
     "admin_user": "admin.bench@dev.local",
     "kpi_recompute_s1": {
-      "monthly_full_75k_wi_250k_att_ms": 27168.71,
+      "monthly_full_75k_wi_250k_att_ms": 33571.48,
       "monthly_run_status": "completed",
-      "monthly_rss_after_mib": 783.99,
-      "monthly_hwm_mib": 1729.26,
-      "daily_incremental_ms": 2316.8,
-      "daily_rss_after_mib": 783.03,
+      "monthly_rss_after_mib": 783.07,
+      "monthly_hwm_mib": 1729.14,
+      "daily_incremental_ms": 2953.42,
+      "daily_rss_after_mib": 782.1,
       "background_queue_long_recompute": {
-        "wall_ms": 27094.45,
-        "revision_before": "9d4qg8ou0b",
+        "wall_ms": 32616.23,
+        "revision_before": "v9ik5mrdpu",
         "revisions_seen_while_running": [
-          "9d4qg8ou0b"
+          "v9ik5mrdpu"
         ],
-        "revision_after_complete": "9me6r79leh",
+        "revision_after_complete": "vl3kd78ihp",
         "atomic_publish_verified": true,
         "concurrent_ui_overview_reads": {
-          "count": 175,
+          "count": 209,
           "error_count": 0,
           "error_rate_pct": 0.0,
-          "throughput_ops_sec": 6.459,
-          "min_ms": 3.863,
-          "p50_ms": 4.434,
-          "p95_ms": 5.853,
-          "p99_ms": 9.094,
-          "max_ms": 11.855
+          "throughput_ops_sec": 6.408,
+          "min_ms": 4.77,
+          "p50_ms": 5.382,
+          "p95_ms": 6.671,
+          "p99_ms": 8.026,
+          "max_ms": 15.511
         }
       }
     },
@@ -1194,69 +1550,69 @@
         "count": 60,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_ops_sec": 562.542,
-        "min_ms": 1.5,
-        "p50_ms": 1.613,
-        "p95_ms": 1.692,
-        "p99_ms": 6.171,
-        "max_ms": 12.33
+        "throughput_ops_sec": 412.472,
+        "min_ms": 2.119,
+        "p50_ms": 2.24,
+        "p95_ms": 2.465,
+        "p99_ms": 6.362,
+        "max_ms": 11.793
       },
       "work_item_detail_and_attempt_timeline": {
         "count": 60,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_ops_sec": 94.95,
-        "min_ms": 8.818,
-        "p50_ms": 9.928,
-        "p95_ms": 11.549,
-        "p99_ms": 25.799,
-        "max_ms": 45.844
+        "throughput_ops_sec": 71.459,
+        "min_ms": 12.564,
+        "p50_ms": 12.897,
+        "p95_ms": 14.216,
+        "p99_ms": 33.38,
+        "max_ms": 59.868
       },
       "contact_attempt_and_followup_write": {
         "count": 50,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_ops_sec": 29.81,
-        "min_ms": 25.718,
-        "p50_ms": 30.464,
-        "p95_ms": 36.595,
-        "p99_ms": 102.429,
-        "max_ms": 155.493,
+        "throughput_ops_sec": 18.731,
+        "min_ms": 36.233,
+        "p50_ms": 40.909,
+        "p95_ms": 133.493,
+        "p99_ms": 239.195,
+        "max_ms": 283.218,
         "idempotent_replay_verified": true
       },
       "bod_executive_overview": {
         "count": 40,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_ops_sec": 293.096,
-        "min_ms": 2.671,
-        "p50_ms": 2.925,
-        "p95_ms": 5.963,
-        "p99_ms": 6.218,
-        "max_ms": 6.264,
+        "throughput_ops_sec": 229.751,
+        "min_ms": 4.13,
+        "p50_ms": 4.207,
+        "p95_ms": 5.545,
+        "p99_ms": 5.614,
+        "max_ms": 5.626,
         "contact_attempt_table_scans_during_read": 0
       },
       "kpi_metric_drilldown_250k_attempts": {
         "count": 40,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_ops_sec": 47.624,
-        "min_ms": 17.638,
-        "p50_ms": 20.13,
-        "p95_ms": 24.326,
-        "p99_ms": 39.29,
-        "max_ms": 39.866
+        "throughput_ops_sec": 37.727,
+        "min_ms": 23.799,
+        "p50_ms": 26.161,
+        "p95_ms": 30.902,
+        "p99_ms": 37.063,
+        "max_ms": 40.935
       },
       "kpi_metric_drilldown_full_month_company_250k": {
         "count": 10,
         "error_count": 0,
         "error_rate_pct": 0.0,
-        "throughput_ops_sec": 38.597,
-        "min_ms": 8.308,
-        "p50_ms": 26.07,
-        "p95_ms": 51.04,
-        "p99_ms": 58.724,
-        "max_ms": 60.645
+        "throughput_ops_sec": 35.611,
+        "min_ms": 10.77,
+        "p50_ms": 17.568,
+        "p95_ms": 71.437,
+        "p99_ms": 95.485,
+        "max_ms": 101.497
       }
     },
     "async_import_distribution_and_queue_lag": {
@@ -1270,22 +1626,22 @@
         "reused_rows": 5000,
         "skipped_rows": 500,
         "error_artifact_present": true,
-        "preview_ms": 509.77,
-        "worker_commit_and_drain_ms": 100459.13,
-        "total_preview_confirm_and_worker_drain_ms": 100968.9,
+        "preview_ms": 650.63,
+        "worker_commit_and_drain_ms": 143688.74,
+        "total_preview_confirm_and_worker_drain_ms": 144339.37,
         "final_batch_status": "COMPLETED_WITH_ERRORS",
-        "preview_rss_before_mib": 779.07,
-        "preview_rss_after_mib": 785.08,
-        "preview_hwm_mib": 1729.26,
-        "progress_checkpoints_count": 74,
-        "concurrent_worklist_read_p95_ms": 5.965,
-        "rows_throughput_per_sec": 495.2
+        "preview_rss_before_mib": 780.16,
+        "preview_rss_after_mib": 788.01,
+        "preview_hwm_mib": 1729.14,
+        "progress_checkpoints_count": 76,
+        "concurrent_worklist_read_p95_ms": 5.988,
+        "rows_throughput_per_sec": 346.41
       },
       "campaign_distribution_10000_work_items_40_staff": {
         "eligible_count": 10000,
-        "preview_ms": 546.25,
+        "preview_ms": 787.08,
         "preview_within_60s_reference": true,
-        "execute_and_worker_drain_ms": 566328.03,
+        "execute_and_worker_drain_ms": 764511.65,
         "final_run_status": "completed",
         "created_work_items": 10000,
         "duplicate_work_items": 0,
@@ -1306,7 +1662,7 @@
           9900,
           10000
         ],
-        "concurrent_worklist_read_p95_ms": 3.136,
+        "concurrent_worklist_read_p95_ms": 3.696,
         "reconciliation": {
           "active_work_items": 10000,
           "stale_docshares": 0,
@@ -1315,10 +1671,10 @@
         }
       },
       "rq_short_50_job_burst": {
-        "enqueue_50_jobs_ms": 9.09,
-        "peak_queue_short_depth": 50,
-        "drain_to_zero_lag_ms": 60036.06,
-        "effective_worker_drain_jobs_per_sec": 0.83
+        "enqueue_50_jobs_ms": 15.88,
+        "peak_queue_short_depth": 51,
+        "drain_to_zero_lag_ms": 39242.43,
+        "effective_worker_drain_jobs_per_sec": 1.27
       }
     },
     "mariadb_explain_plans": {
@@ -1416,7 +1772,7 @@
           "key": "idx_cskh_ah_start_name",
           "key_len": "9",
           "ref": null,
-          "rows": "83484",
+          "rows": "84128",
           "Extra": "Using index condition; Using where"
         },
         {
@@ -1453,19 +1809,19 @@
     "items": {
       "staff_my_customers_p95_le_1500ms": {
         "target_p95_ms": 1500.0,
-        "measured_http_p95_ms": 53.603,
+        "measured_http_p95_ms": 73.585,
         "error_rate_pct": 0.0,
         "passed": true
       },
       "open_lead_and_history_p95_le_2000ms": {
         "target_p95_ms": 2000.0,
-        "measured_http_p95_ms": 130.815,
+        "measured_http_p95_ms": 184.981,
         "error_rate_pct": 0.0,
         "passed": true
       },
       "record_attempt_and_callback_p95_le_2000ms_zero_dup": {
         "target_p95_ms": 2000.0,
-        "measured_http_p95_ms": 363.193,
+        "measured_http_p95_ms": 477.873,
         "duplicate_idempotency_keys": 0,
         "attempts_created": 80,
         "work_items_with_open_callback_task": 80,
@@ -1474,27 +1830,27 @@
       },
       "bod_overview_snapshot_p95_le_3000ms": {
         "target_p95_ms": 3000.0,
-        "measured_http_p95_ms": 68.903,
+        "measured_http_p95_ms": 96.042,
         "explain_index_key": "idx_cskh_kpisnap_lookup",
         "passed": true
       },
       "kpi_drilldown_paginated_p95_le_3000ms": {
         "target_p95_ms": 3000.0,
-        "measured_daily_campaign_http_p95_ms": 202.298,
-        "measured_monthly_company_250k_http_p95_ms": 113.294,
+        "measured_daily_campaign_http_p95_ms": 290.296,
+        "measured_monthly_company_250k_http_p95_ms": 203.35,
         "staff_unauthorized_company_http_status": 403,
         "passed": true
       },
       "preview_weighted_distribution_10000_items": {
         "reference_target_ms": 60000.0,
         "eligible_count": 10000,
-        "measured_preview_ms": 546.25,
+        "measured_preview_ms": 787.08,
         "passed": true
       },
       "execute_weighted_distribution_10000_items": {
         "created_work_items": 10000,
         "duplicate_work_items": 0,
-        "execute_ms": 566328.03,
+        "execute_ms": 764511.65,
         "ownership_reconciled": true,
         "abort_cancel_guard_verified": true,
         "passed": true
@@ -1505,62 +1861,69 @@
         "reused_rows": 5000,
         "error_rows": 500,
         "error_artifact_present": true,
-        "total_ms": 100968.9,
-        "preview_hwm_mib": 1729.26,
+        "total_ms": 144339.37,
+        "preview_hwm_mib": 1729.14,
         "passed": true
       },
       "recompute_kpi_non_blocking_atomic_publish": {
         "atomic_publish_verified": true,
-        "concurrent_ui_p95_ms": 5.853,
+        "concurrent_ui_p95_ms": 6.671,
         "passed": true
       },
       "concurrent_20_40_80_mixed_user_sessions": {
-        "sessions_20_p95_ms": 337.392,
+        "sessions_20_p95_ms": 414.335,
         "sessions_20_error_rate_pct": 0.0,
-        "sessions_40_p95_ms": 625.039,
+        "sessions_40_p95_ms": 906.052,
         "sessions_40_error_rate_pct": 0.0,
-        "sessions_80_p95_ms": 1046.346,
+        "sessions_80_p95_ms": 1413.987,
         "sessions_80_error_rate_pct": 0.0,
+        "passed": true
+      },
+      "telesale_worklist_ssr_zero_errors_c12_and_c40": {
+        "shared_new_session_c12_error_count": 0,
+        "shared_new_session_c12_timeout_count": 0,
+        "staff_40_sessions_c40_error_count": 0,
+        "staff_40_sessions_c40_timeout_count": 0,
         "passed": true
       }
     }
   },
   "observed_environment_limits": [
     "Gunicorn & multi-session ceiling: isolated benchmark runs `GUNICORN_WORKERS=4, GUNICORN_THREADS=4` (16 concurrent Python threads) with dedicated `queue-short` + `queue-long`. Across 20, 40, and 80 simultaneous zero-think-time user sessions, 20 and 40 sessions stay comfortably sub-second; at 80 simultaneous active requests queueing behind 16 Gunicorn threads increases tail `p95`/`p99` cleanly with 0% 5xx.",
-    "Full monthly KPI recompute (`75,000` Work Items / `250,000` Attempts / `150,000` SLA Obligations) completes in `27168.71 ms` (daily incremental: `2316.8 ms`) on `queue-long` without blocking UI snapshot reads and publishes the new revision atomically only upon completion.",
-    "Paginated KPI drill-down after SQL interval aggregation & lazy business-minute optimizations achieves `p95=202.298 ms` on daily campaign scope and `p95=113.294 ms` on full-month company `250k`-attempt scope (`<= 3,000 ms`).",
-    "Bulk batch operations on dedicated `queue-long`: `50,000`-row CSV import completes in `100968.9 ms`; `10,000`-Work-Item weighted distribution preview completes in `546.25 ms` (`<= 60,000 ms`) and chunked background execution completes in `566328.03 ms` with `0` duplicates and unblocked interactive `My Customers` reads."
+    "Full monthly KPI recompute (`75,000` Work Items / `250,000` Attempts / `150,000` SLA Obligations) completes in `33571.48 ms` (daily incremental: `2953.42 ms`) on `queue-long` without blocking UI snapshot reads and publishes the new revision atomically only upon completion.",
+    "Paginated KPI drill-down after SQL interval aggregation & lazy business-minute optimizations achieves `p95=290.296 ms` on daily campaign scope and `p95=203.35 ms` on full-month company `250k`-attempt scope (`<= 3,000 ms`).",
+    "Bulk batch operations on dedicated `queue-long`: `50,000`-row CSV import completes in `144339.37 ms`; `10,000`-Work-Item weighted distribution preview completes in `787.08 ms` (`<= 60,000 ms`) and chunked background execution completes in `764511.65 ms` with `0` duplicates and unblocked interactive `My Customers` reads."
   ],
   "proposed_slos_for_review": {
     "status": "PROPOSED_ONLY_NOT_COMMITTED_SLA",
     "target_sizing_assumption": "4 vCPU / 8-16 GB RAM isolated host, Gunicorn 4 workers x 4 threads, dedicated queue-short + queue-long",
     "targets": {
       "my_customers_worklist_api_p95_ms": {
-        "measured_http_p95_ms": 53.603,
+        "measured_http_p95_ms": 73.585,
         "proposed_slo_p95_ms": 500
       },
       "open_lead_and_history_api_p95_ms": {
-        "measured_http_p95_ms": 130.815,
+        "measured_http_p95_ms": 184.981,
         "proposed_slo_p95_ms": 600
       },
       "contact_attempt_write_p95_ms": {
-        "measured_http_p95_ms": 363.193,
-        "proposed_slo_p95_ms": 950
+        "measured_http_p95_ms": 477.873,
+        "proposed_slo_p95_ms": 1200
       },
       "bod_executive_overview_api_p95_ms": {
-        "measured_http_p95_ms": 68.903,
+        "measured_http_p95_ms": 96.042,
         "proposed_slo_p95_ms": 800
       },
       "kpi_drilldown_paginated_api_p95_ms": {
-        "measured_daily_http_p95_ms": 202.298,
-        "measured_monthly_250k_http_p95_ms": 113.294,
+        "measured_daily_http_p95_ms": 290.296,
+        "measured_monthly_250k_http_p95_ms": 203.35,
         "proposed_slo_p95_ms": 1200
       },
       "http_5xx_error_rate_pct": {
         "proposed_slo_max_pct": 0.5
       },
       "daily_incremental_kpi_refresh_lag_sec": {
-        "measured_daily_recompute_ms": 2316.8,
+        "measured_daily_recompute_ms": 2953.42,
         "proposed_slo_max_sec": 300
       }
     }

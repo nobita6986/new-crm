@@ -1,37 +1,37 @@
 {
   "schema_version": "cskh-p4-digest-promotion-proof-v1",
   "status": "PASS",
-  "verified_at_utc": "2026-11-10T13:41:50.958663+00:00",
-  "release_id": "ghcr-rehearsal-42823368860",
+  "verified_at_utc": "2026-11-11T08:27:36.605559+00:00",
+  "release_id": "ghcr-rehearsal-42984867723",
   "environment_scope": "ci_ephemeral_rehearsal",
-  "git_sha": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
-  "canonical_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
-  "canonical_image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+  "git_sha": "bcdc419f9f95ad75449315572928e3d8c43817cc",
+  "canonical_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
+  "canonical_image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
   "identifier_taxonomy": {
     "canonical_registry_digest_class": "oci_distribution_manifest_sha256",
     "canonical_image_id_class": "oci_image_config_sha256",
     "drift_evaluation_rule": "Digest drift is evaluated exclusively within identical identifier classes (registry_manifest_digest == registry_manifest_digest and image_id in allowed_pulled_image_ids across Build -> Verify -> Staging). Cross-comparing a local image ID (e.g. db925419...) against a registry manifest digest (e.g. 36613468...) or against an unrelated live running image (e.g. acb95057...) is invalid."
   },
-  "manifest_sha256": "5ce5dcc213d3601c77f5bfa9dc9217c9c04b9a65c7a9b555b4de674be20f21db",
+  "manifest_sha256": "be8f7b5df2ea7c49fa4566dc675a2dc63a2fc3420e2bd189388dd32255b5ac8a",
   "signature_verified": true,
-  "public_key_fingerprint_sha256": "fce7b4fbe4205c31a2c322779aee967387cf3503000d0377ccd06546a1fb15eb",
+  "public_key_fingerprint_sha256": "b3e6137bbe048229ec0da37b434bff40b8f30cd96657b28349e443c766573b76",
   "stages_verified": {
     "build_once": {
-      "approved_registry_repo_digest": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
-      "local_image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee"
+      "approved_registry_repo_digest": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
+      "local_image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df"
     },
     "verify_by_digest_clean_site": {
-      "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
-      "image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+      "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
+      "image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
       "assertions_passed": 60,
       "assertions_total": 60
     },
     "compose_smoke_stack": {
-      "project_name": "crm-cskh-p4-smoke-20261110133347-351d78",
-      "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
-      "image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+      "project_name": "crm-cskh-p4-smoke-20261111082237-afa425",
+      "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
+      "image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
       "repo_digests": [
-        "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9"
+        "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
       ],
       "status": "PASS"
     }

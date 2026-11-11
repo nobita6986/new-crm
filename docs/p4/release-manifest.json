@@ -1,18 +1,18 @@
 {
   "schema_version": "cskh-p4-release-manifest-v1",
-  "release_id": "p4-candidate-ghcr-42823368860",
+  "release_id": "p4-candidate-ghcr-42984867723",
   "environment_scope": "staging_candidate_verified_production_blocked",
-  "created_at_utc": "2026-11-10T13:29:27Z",
-  "git_sha": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
+  "created_at_utc": "2026-11-11T08:19:12Z",
+  "git_sha": "bcdc419f9f95ad75449315572928e3d8c43817cc",
   "integrated_ops_branch": "codex/p4-resume-ops",
-  "apps_tree_sha": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578",
-  "crm_cskh_tree_sha": "fbfafa93c7334684edfba633754964f9c3cc9868",
+  "apps_tree_sha": "4d361e68912f52243751ae5986cabbd13033f050",
+  "crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
   "frappe_framework_ref": "v15.126.0@53bae3ef2550ca96320f036f581446783cd11b72",
   "frappe_crm_ref": "v1.87.0@0d3910b456ef4fb913e77b29db011b3debc4f778",
-  "crm_cskh_ref": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5 (tree:fbfafa93c7334684edfba633754964f9c3cc9868)",
-  "image": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
-  "image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
-  "oci_config_digest": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+  "crm_cskh_ref": "bcdc419f9f95ad75449315572928e3d8c43817cc (tree:a8737dbcce74f9095a6e76c5e93491e92843f3d0)",
+  "image": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
+  "image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
+  "oci_config_digest": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
   "migration_revision": "crm_cskh.patches.v3_0.p3_schema_and_seeds",
   "migration_compatibility_class": "Class B (additive schema, migrate x2 idempotent; N-1 -> N delta is Class A code/runtime only)",
   "kpi_formula_version": "cskh-metrics-v2",
@@ -26,18 +26,19 @@
     "cutover_executed_in_this_turn": false
   },
   "verification_runs": {
-    "candidate_build_junit_and_s1_benchmark_url": "https://github.com/nobita6986/new-crm/actions/runs/42823368860",
+    "candidate_build_junit_and_s1_benchmark_url": "https://github.com/nobita6986/new-crm/actions/runs/42984867723",
     "batch2_delta_url": "https://github.com/nobita6986/new-crm/actions/runs/42825411058",
     "isolated_staging_dr_https_delta_url": "https://github.com/nobita6986/new-crm/actions/runs/42959552770",
     "vps_isolated_restore_and_timers_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
-    "junit_tests_passed": 421,
-    "junit_tests_total": 421
+    "junit_tests_passed": 426,
+    "junit_tests_total": 426
   },
   "promotion_governance": {
     "staging_candidate_status": "PASS",
     "production_promotion_status": "BLOCKED",
     "approved_by": [],
     "pending_owner_inputs": [
+      "BLK-SSH-T1A (SSH credential / agent access to VPS 103.77.208.186 for T1A session to execute read-only preflight, isolated Staging G03/G05 receipts, and G18 benchmark)",
       "BLK-INFRA-05 (Offsite destination inventory confirming off-VPS failure domain + write/readback credentials & separate key escrow vault; st_dev alone only proves different filesystem)",
       "BLK-GOV-06 (Named primary on-call Operator [backup operator recommended], 4-role UAT signers [BOD, CRM Admin, Leader, Staff] for G22, and separate Operator handover acceptance for G24)",
       "BLK-INFRA-07 (Approved external HTTPS alert webhook)",
@@ -45,11 +46,11 @@
     ]
   },
   "artifacts": {
-    "rehearsal_release_manifest_sha256": "5ce5dcc213d3601c77f5bfa9dc9217c9c04b9a65c7a9b555b4de674be20f21db",
-    "build_manifest_sha256": "734b59e9908c6be291cdcafdd358f27e7c1a55e146fddc6aebe55f04e13711a9",
-    "image_inspect_summary_sha256": "8101ebd68a6dde285490065e956c363cbd12c03dd15495151bbd7dba083258ce",
-    "sbom_cyclonedx_sha256": "84b19f7e1ac2ea89593bf4c37fa7e46504964b288258c13e38a3e13cbec1bb20",
-    "sbom_spdx_sha256": "98e13316598da8d1cfbbeba7ff8604ce3d6c5e36b25121ee2e0f54b9a26ba6d1",
-    "security_scan_sha256": "207960d481f42060c8a8e503684fff0c72a1824cce3afb2beadd370b85caa18c"
+    "rehearsal_release_manifest_sha256": "be8f7b5df2ea7c49fa4566dc675a2dc63a2fc3420e2bd189388dd32255b5ac8a",
+    "build_manifest_sha256": "3106cc839b4801b319229788b981448d2b9e179c964ced76c1c7e7ad6f7a2b57",
+    "image_inspect_summary_sha256": "853901268bff2ac0bf3fff1555619847852934d7ef525f390562316998af33b9",
+    "sbom_cyclonedx_sha256": "42c5312ae97e80972c672c4622c9d0dab1b9720f67e748d79d2884ad1f46889b",
+    "sbom_spdx_sha256": "81813dd5ddf656507941d632fefbd0d83242753259f01acff7a4f08013f2b917",
+    "security_scan_sha256": "ae6968a7f1fc7f91d698cd37dc556a2081964d252ddde63a6769b341f60c2446"
   }
 }

@@ -1,13 +1,13 @@
 # Báo Cáo Đo Kiểm Hiệu Năng, Chịu Tải & Khuyến Nghị Dung Lượng Môi Trường Cô Lập (`P4-06` — Cổng `G18`)
 
 - **Mã tài liệu:** `P4-PERFORMANCE-REPORT` (`docs/p4/performance-report.md` — `P4.md §3.3`, `§9`, `§20.2`)
-- **Bằng chứng JSON gốc đã kiểm chứng mã băm:** [`deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json`](../../deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json) (GitHub Actions Run `42823368860` trên repo `nobita6986/new-crm`, hoàn tất `2026-11-10T13:48:46Z`)
+- **Bằng chứng JSON gốc đã kiểm chứng mã băm:** [`deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json`](../../deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json) (SHA-256 `7e7c2e000fea33fe41ddc0c43c43a486855157c9fc2cd359fd5d6461f1f82e3f`, GitHub Actions Run `42984867723` trên repo `nobita6986/new-crm`, hoàn tất `2026-11-11T08:43:23Z`)
 - **Bộ sinh dữ liệu & Trình đo tải:** [`deploy/release/benchmark_p4_isolated.py`](../../deploy/release/benchmark_p4_isolated.py) (`schema_version = cskh-p4-isolated-benchmark-v2`)
 - **Image bất biến, cấu hình worker & hạn mức tài nguyên thực cấp trong kết quả đo:**
-  - **Registry Manifest Digest (`app_image_tested`):** `ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9`
-  - **OCI Config / Local Image ID (`image_id`):** `sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee`
-  - **Commit mã nguồn & Cây ứng dụng:** `ce6f45549d562327bb6992fc5b29e4a5b1efcbd5` (`apps_tree_sha = e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578`, `crm_cskh_tree_sha = fbfafa93c7334684edfba633754964f9c3cc9868`)
-  - **Tài nguyên thực cấp (`Confirmed Resource Allocation`):** Host Linux `7.0.0-1017-azure-x86_64` (`glibc 2.41`), **`4 vCPU` (`cpu_count = 4`)**, **`15.61 GiB RAM`**, Python `3.11.18`, stack cô lập `cskh-p4-bench-21a1be83` (`127.0.0.1`, site `p4-s1-bench.localhost`).
+  - **Registry Manifest Digest (`app_image_tested`):** `ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6`
+  - **OCI Config / Local Image ID (`image_id`):** `sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df`
+  - **Commit mã nguồn & Cây ứng dụng:** `bcdc419f9f95ad75449315572928e3d8c43817cc` (`apps_tree_sha = 4d361e68912f52243751ae5986cabbd13033f050`, `crm_cskh_tree_sha = a8737dbcce74f9095a6e76c5e93491e92843f3d0`)
+  - **Tài nguyên thực cấp (`Confirmed Resource Allocation`):** Host Linux `7.0.0-1017-azure-x86_64` (`glibc 2.41`), **`4 vCPU` (`cpu_count = 4`)**, **`15.61 GiB RAM`**, Python `3.11.18`, stack cô lập `127.0.0.1` (`site = p4-s1-bench.localhost`).
   - **Cấu hình Worker (`Worker & Queue Configuration`):**
     - `backend` (Gunicorn): **`GUNICORN_WORKERS=4`, `GUNICORN_THREADS=4` (`16` luồng xử lý HTTP Python đồng thời)**
     - `queue-short`: **`1` tiến trình worker RQ `short,default`** (xử lý tác vụ tương tác nhanh)
@@ -56,18 +56,18 @@
 | **10. Sóng tải hỗn hợp `20 / 40 / 80` phiên người dùng đồng thời (`concurrent_20_40_80_mixed_user_sessions`)** | Đo rõ điểm nghẽn & trần phần cứng | **`20` phiên:** `p95 = 337,392 ms` (`0%` lỗi)<br>**`40` phiên:** `p95 = 625,039 ms` (`0%` lỗi)<br>**`80` phiên:** `p95 = 1.046,346 ms` (`0%` lỗi) | Tổng `1.000 / 1.000` requests hỗn hợp (Read + Drill-down + Write Attempt) hoàn tất với **`0,0%` lỗi HTTP** | **`PASS`** |
 
 ### 2.2. Đợt tải hỗn hợp chuẩn 8 kịch bản (`concurrency = 12`, `240` requests/kịch bản, tổng `1.920` requests)
-- **Tổng hợp toàn đợt (`overall_summary`):** `1.909 / 1.920` thành công, tỷ lệ lỗi tổng **`0,5729%`** (`0,00%` lỗi trên toàn bộ 7 kịch bản JSON API & trang báo cáo), thông lượng tổng hợp **`59,158 RPS`**, `p50 = 90,844 ms`, `p95 = 642,825 ms`, `p99 = 906,226 ms`.
+- **Tổng hợp toàn đợt (`overall_summary` trên `@sha256:693a3cdcc758...`):** **`1.920 / 1.920` thành công, tỷ lệ lỗi tổng `0,0000%` (`0` lỗi và `0` timeout trên cả 8 kịch bản, bao gồm `telesale_worklist_page` SSR ở cả `c=12` và `c=40` với 40 phiên nhân sự phân biệt)**, thông lượng tổng hợp **`49,785 RPS`**, `p50 = 114,235 ms`, `p95 = 765,308 ms`, `p99 = 1.090,273 ms`, `max = 1.353,790 ms`.
 
 | Kịch bản (`scenario_id`) | Đường dẫn thực đo | Đồng thời | Tổng / OK | Lỗi (`%`) | RPS | `p50` (`ms`) | `p95` (`ms`) | `p99` (`ms`) | `max` (`ms`) |
 | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `health_ping` | `GET /api/method/ping` | `12` | `240 / 240` | `0,00%` | `452,92` | `22,13` | **`58,21`** | `114,36` | `130,84` |
-| `my_customers_worklist_api` | `GET /api/method/crm_cskh.api.customers.my_list?page=1&page_size=20` | `12` | `240 / 240` | `0,00%` | `462,25` | `22,61` | **`43,39`** | `51,26` | `59,64` |
-| `bod_executive_overview_api` | `GET /api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10` | `12` | `240 / 240` | `0,00%` | `204,77` | `56,12` | **`91,82`** | `102,43` | `111,01` |
-| `kpi_metric_drilldown_250k_api` | `GET .../get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=8povrbi2tl&metric_code=CONNECTED_RATE&page=1&page_size=20` | `12` | `240 / 240` | `0,00%` | `83,42` | `138,45` | **`214,62`** | `248,19` | `265,40` |
-| `kpi_metric_drilldown_monthly_company_api` | `GET .../get_metric_drilldown?period_type=monthly&period_key=2026-10&scope_type=company&metric_code=CONNECTED_RATE&page=1&page_size=20` | `12` | `240 / 240` | `0,00%` | `158,34` | `71,08` | **`121,45`** | `139,80` | `154,12` |
-| `campaigns_distribution_view` | `GET /cskh/campaigns` (SSR HTML) | `12` | `240 / 240` | `0,00%` | `30,07` | `390,67` | **`678,14`** | `866,15` | `1038,93` |
-| `quality_overview_drilldown` | `GET /cskh/quality-overview` (SSR HTML) | `12` | `240 / 240` | `0,00%` | `27,27` | `417,12` | **`707,28`** | `860,88` | `957,03` |
-| `telesale_worklist_page` | `GET /cskh/my-customers` (SSR HTML) | `12` | `229 / 240` | `4,58%` | `23,38` | `488,39` | **`951,23`** | `1190,85` | `1374,06` |
+| `health_ping` | `GET /api/method/ping` | `12` | `240 / 240` | `0,00%` | `500,18` | `18,95` | **`57,75`** | `110,61` | `117,95` |
+| `my_customers_worklist_api` | `GET /api/method/crm_cskh.api.customers.my_list?page=1&page_size=20` | `12` | `240 / 240` | `0,00%` | `566,28` | `20,40` | **`30,61`** | `37,84` | `39,77` |
+| `bod_executive_overview_api` | `GET /api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10` | `12` | `240 / 240` | `0,00%` | `246,01` | `45,20` | **`87,48`** | `99,73` | `109,33` |
+| `kpi_metric_drilldown_250k_api` | `GET .../get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=uir9u2sp56&metric_code=CONNECTED_RATE&page=1&page_size=20` | `12` | `240 / 240` | `0,00%` | `71,00` | `159,91` | **`269,47`** | `317,78` | `352,72` |
+| `kpi_metric_drilldown_monthly_company_api` | `GET .../get_metric_drilldown?period_type=monthly&period_key=2026-10&scope_type=company&metric_code=CONNECTED_RATE&page=1&page_size=20` | `12` | `240 / 240` | `0,00%` | `147,33` | `75,50` | **`130,06`** | `141,05` | `153,93` |
+| `campaigns_distribution_view` | `GET /cskh/campaigns` (SSR HTML) | `12` | `240 / 240` | `0,00%` | `22,76` | `474,22` | **`1088,61`** | `1260,67` | `1339,75` |
+| `quality_overview_drilldown` | `GET /cskh/quality-overview` (SSR HTML) | `12` | `240 / 240` | `0,00%` | `23,40` | `497,39` | **`850,42`** | `1000,33` | `1241,27` |
+| `telesale_worklist_page` | `GET /cskh/my-customers` (SSR HTML) | `12` | `240 / 240` | **`0,00%`** | `22,07` | `521,22` | **`981,42`** | `1236,00` | `1353,79` |
 
 ### 2.3. Đợt bùng nổ đỉnh đồng thời 40 nhân sự (`peak_40_staff_concurrent_wave`, `800 / 800` OK, `0,00%` lỗi) & Sóng hỗn hợp `20 / 40 / 80` phiên
 
