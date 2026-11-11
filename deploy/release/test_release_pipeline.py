@@ -1442,7 +1442,7 @@ class TestDiffImpactAndIsolatedBenchmark(unittest.TestCase):
         self.assertGreaterEqual(int(invs["p3"]["expected_total"]), 31)  # type: ignore[arg-type]
         self.assertEqual(invs["p3_ui"]["expected_total"], 7)
 
-        # Containerfile change escalates to full P0-P3 suite (29 modules)
+        # Containerfile change escalates to full P0-P3 suite (32 modules)
         full_plan = resolve_diff_impact_plan(
             ["deploy/images/Containerfile"], repo_root=REPO_ROOT
         )
@@ -1450,7 +1450,7 @@ class TestDiffImpactAndIsolatedBenchmark(unittest.TestCase):
         self.assertEqual(
             full_plan["selected_suites"], ["g007", "p1", "p2", "p3", "p3_ui"]
         )
-        self.assertEqual(full_plan["total_modules_to_run"], 31)
+        self.assertEqual(full_plan["total_modules_to_run"], 32)
 
         # Scoped P3 KPI edit runs g007 + p3 + p3_ui without unneeded P1/P2 modules
         p3_plan = resolve_diff_impact_plan(

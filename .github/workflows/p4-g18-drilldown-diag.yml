@@ -33,6 +33,8 @@ jobs:
     name: Resolve diagnostic & verification matrix
     runs-on: ubuntu-24.04
     outputs:
+      has_targets: ${{ steps.plan.outputs.has_targets }}
+      target_digest: ${{ steps.plan.outputs.target_digest }}
       matrix_json: ${{ steps.plan.outputs.matrix_json }}
       run_g04_probe: ${{ steps.plan.outputs.run_g04_probe }}
     steps:
@@ -73,6 +75,8 @@ jobs:
                       "resource_profile": "staging_vps_capped",
                   },
               ]
+          elif bool(cfg.get("skip_default_push", False)):
+              items = []
           else:
               items = [
                   {
@@ -86,6 +90,8 @@ jobs:
                       "resource_profile": "s1_canonical_4x4",
                   },
               ]
+          print("has_targets=" + ("true" if items else "false"))
+          print("target_digest=" + digest)
           print("matrix_json=" + json.dumps({"include": items}))
           print("run_g04_probe=" + ("true" if run_probe else "false"))
           PY
@@ -93,6 +99,7 @@ jobs:
   g18-drilldown-diagnostic:
     name: G18 diagnostic (${{ matrix.label }})
     needs: [resolve-matrix]
+    if: ${{ needs.resolve-matrix.outputs.has_targets == 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     permissions:
@@ -279,5 +286,90 @@ jobs:
         with:
           name: g04-remediation-probe-${{ github.run_id }}
           path: ${{ runner.temp }}/g04-probe/
+          if-no-files-found: warn
+          retention-days: 30
+
+  s1-benchmark-staging-vps-capped:
+    name: Full S1 workload benchmark (staging_vps_capped + live resource guard)
+    needs: [resolve-matrix]
+    if: ${{ needs.resolve-matrix.outputs.target_digest != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Pull immutable GHCR @sha256 image
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.resolve-matrix.outputs.target_digest }}
+          GITHUB_ACTOR_PULL: ${{ github.actor }}
+          GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          mkdir -p "$RUNNER_TEMP/p4-s1-staging-capped"
+          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PULL}" \
+            --password-stdin
+          docker pull "${APP_IMAGE_DIGEST}"
+
+      - name: Execute full S1 workload benchmark under Staging VPS cgroup caps & live headroom protection
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.resolve-matrix.outputs.target_digest }}
+        run: |
+          set -euo pipefail
+          OUT_DIR="$RUNNER_TEMP/p4-s1-staging-capped"
+          python3 deploy/release/benchmark_p4_isolated.py \
+            --provision-and-run-s1 \
+            --confirm-isolated-target \
+            --resource-profile staging_vps_capped \
+            --require-live-headroom \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --pull-policy never \
+            --port 18885 \
+            --out "$OUT_DIR/benchmark-s1-staging-vps-capped.json"
+
+          python3 - "$OUT_DIR" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          rpt = json.loads((root / "benchmark-s1-staging-vps-capped.json").read_text(encoding="utf-8"))
+          assert rpt["isolation_guard"]["owner_vps_touched"] is False
+          assert rpt["p4_9_2_acceptance_matrix"]["all_passed"] is True, rpt["p4_9_2_acceptance_matrix"]
+          sums = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              sums.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root).as_posix()}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+      - name: Logout from GHCR
+        if: always()
+        shell: bash
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+      - name: Upload Staging-capped S1 full workload benchmark
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-s1-staging-vps-capped-benchmark-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-s1-staging-capped/
           if-no-files-found: warn
           retention-days: 30
