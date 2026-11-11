@@ -82,7 +82,7 @@ jobs:
                   },
                   {
                       "label": "pre_opt_current_cand_693a3cdc",
-                      "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc75888f0db7bb88001b5cd9bd6d1486b0f8f00be1e0c4f84b68db358",
+                      "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
                       "resource_profile": "s1_canonical_4x4",
                   },
               ]
@@ -188,7 +188,7 @@ jobs:
       - name: Pull baseline candidate & inspect Debian Trixie / MariaDB 11.8 / libxml2 remediation options
         shell: bash
         env:
-          BASE_CAND_IMAGE: ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc75888f0db7bb88001b5cd9bd6d1486b0f8f00be1e0c4f84b68db358
+          BASE_CAND_IMAGE: ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6
           TRIVY_IMAGE: aquasec/trivy:0.58.2@sha256:665030f4d33a82c1e8d9d5e0453365842236723c1ee5cc3becca698268e66a56
           GITHUB_ACTOR_PULL: ${{ github.actor }}
           GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
