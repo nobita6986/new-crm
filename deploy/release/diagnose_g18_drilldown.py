@@ -828,7 +828,8 @@ def _profile_drilldown_call(label, actor_email, kwargs):
         )
 
     pag = (resp or {}).get("pagination") or {}
-    rec = (resp or {}).get("snapshot_reconciliation") or {}
+    ctx = (resp or {}).get("drilldown_context") or {}
+    snap_m = ctx.get("snapshot_metric") or {}
     fresh = (resp or {}).get("freshness") or {}
     rows_out = (resp or {}).get("rows") or []
     return {
@@ -845,14 +846,13 @@ def _profile_drilldown_call(label, actor_email, kwargs):
         "mariadb_handler_and_sort_delta": status_delta,
         "pagination": pag,
         "snapshot_reconciliation": {
-            "published_numerator": rec.get("published_numerator"),
-            "published_denominator": rec.get("published_denominator"),
-            "drilldown_matching_denominator_rows": rec.get("drilldown_matching_denominator_rows"),
-            "drilldown_matching_numerator_rows": rec.get("drilldown_matching_numerator_rows"),
+            "published_numerator": snap_m.get("numerator"),
+            "published_denominator": snap_m.get("denominator"),
+            "drilldown_pagination_total": pag.get("total"),
         },
         "freshness_dirty_pending": fresh.get("dirty_pending"),
         "returned_page_row_count": len(rows_out),
-        "first_row_event_id": rows_out[0].get("event_id") if rows_out else None,
+        "first_row_record_id": rows_out[0].get("record_id") if rows_out else None,
         "top_sql_shapes": top_queries,
     }
 
@@ -1039,12 +1039,12 @@ p30 = p3_reporting.get_metric_drilldown(
     period_type="monthly", period_key="2026-10", scope_type="company",
     metric_code="CONNECTED_RATE", page=30, page_size=20,
 )
-ids_p1 = [r["event_id"] for r in p1["rows"]]
-ids_p2 = [r["event_id"] for r in p2["rows"]]
-ids_p30 = [r["event_id"] for r in p30["rows"]]
+ids_p1 = [r["record_id"] for r in p1["rows"]]
+ids_p2 = [r["record_id"] for r in p2["rows"]]
+ids_p30 = [r["record_id"] for r in p30["rows"]]
 bod_raw_phones = [
-    r.get("lead_phone") for r in p1["rows"]
-    if r.get("lead_phone") and "*" not in str(r.get("lead_phone"))
+    r.get("phone") for r in p1["rows"]
+    if r.get("phone") and "*" not in str(r.get("phone"))
 ]
 
 cross_access_checks = {}
@@ -1079,12 +1079,12 @@ for role_label, actor_u, kw in (
     try:
         res_x = p3_reporting.get_metric_drilldown(**kw)
         raw_leak = [
-            r.get("lead_phone") for r in (res_x.get("rows") or [])
-            if r.get("lead_phone") and "*" not in str(r.get("lead_phone"))
+            r.get("phone") for r in (res_x.get("rows") or [])
+            if r.get("phone") and "*" not in str(r.get("phone"))
         ]
         cross_access_checks[role_label] = {
             "allowed": True,
-            "pii_redacted": (res_x.get("scope") or {}).get("pii_redacted"),
+            "all_rows_pii_redacted": all(bool(r.get("pii_redacted")) for r in (res_x.get("rows") or [])),
             "unmasked_phone_leaks": len(raw_leak),
         }
     except Exception as exc:
@@ -1094,13 +1094,14 @@ for role_label, actor_u, kw in (
             "http_status_code": getattr(exc, "http_status_code", None),
         }
 
+snap_p1 = (p1.get("drilldown_context") or {}).get("snapshot_metric") or {}
 correctness_summary = {
     "monthly_connected_rate_reconciled": (
-        p1["snapshot_reconciliation"]["published_denominator"] == p1["pagination"]["total"]
-        and p1["snapshot_reconciliation"]["published_Denominator" if False else "published_denominator"] == 75000
+        snap_p1.get("denominator") == p1["pagination"]["total"]
+        and snap_p1.get("denominator") == 75000
     ),
-    "published_numerator": p1["snapshot_reconciliation"]["published_numerator"],
-    "published_denominator": p1["snapshot_reconciliation"]["published_denominator"],
+    "published_numerator": snap_p1.get("numerator"),
+    "published_denominator": snap_p1.get("denominator"),
     "p1_total": p1["pagination"]["total"],
     "p2_total": p2["pagination"]["total"],
     "p30_total": p30["pagination"]["total"],
