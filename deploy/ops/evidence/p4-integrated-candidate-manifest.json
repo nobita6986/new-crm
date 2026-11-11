@@ -474,9 +474,9 @@
       "attached_slo_set_v1_4": {
         "status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_SIGNATURE",
         "thresholds_spec_path": "deploy/ops/g18_slo_thresholds_v1_4.json",
-        "thresholds_sha256": "2a3ff3642af97b98d4102ec3bcb138655a58ce21860132d056c7ff0f33c2dc19",
+        "thresholds_sha256": "e9fde1a0e796a4f30651689c02384fb07051ab6adcaf368e5c336122f4ec54e7",
         "precheck_role": "7_headline_metrics_table_used_for_precheck_step",
-        "full_reconciliation_scope": "section_3_2A_22_cases_by_session_model_plus_3_2B_20_40_80_waves_plus_3_2C_dataset_explain_domain_batch_kpi_rq",
+        "full_reconciliation_scope": "section_3_2A_22_cases_p95_p99_by_session_model_plus_3_2B_20_40_80_waves_p95_p99_plus_3_2C_agg01_02_bg01_03_dataset_explain_domain_rq",
         "g18_pass_requires": [
           "complete_measurements_zero_missing_across_precheck_7_and_section_3_2A_to_3_2C",
           "exact_candidate_digest_ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",

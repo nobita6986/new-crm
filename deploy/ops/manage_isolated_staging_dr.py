@@ -3163,7 +3163,7 @@ LOCKED_CANDIDATE_DIGEST_V1_4 = (
 )
 DEFAULT_G18_THRESHOLDS_V1_4_PATH = OPS_DIR / "g18_slo_thresholds_v1_4.json"
 LOCKED_G18_THRESHOLDS_V1_4_SHA256 = (
-    "2a3ff3642af97b98d4102ec3bcb138655a58ce21860132d056c7ff0f33c2dc19"
+    "e9fde1a0e796a4f30651689c02384fb07051ab6adcaf368e5c336122f4ec54e7"
 )
 
 OWNER_TICKET_V1_4_PROPOSED_SLOS: dict[str, dict[str, Any]] = {
@@ -4369,8 +4369,8 @@ def evaluate_section_3_2_a_b_c(
     missing: list[str],
     breaches: list[str],
 ) -> dict[str, Any]:
-    """Full §3.2A–C reconciliation by individual case and session model aligned with T1B benchmark v2."""
-    # --- §3.2A: Interactive HTTP API & SSR by case and session model ---
+    """Full §3.2A–C reconciliation by individual case, session model, and p95+p99 aligned with Ticket v1.4."""
+    # --- §3.2A: Interactive HTTP API & SSR by case and session model (p95 + p99 + mirror parity) ---
     spec_3_2a = thresholds_spec["section_3_2A_cases_and_session_models"]
     cases_3_2a: dict[str, dict[str, Any]] = {}
     by_session_model: dict[str, dict[str, Any]] = {}
@@ -4388,6 +4388,7 @@ def evaluate_section_3_2_a_b_c(
         err_cnt = _req_int(node, "error_count", f"{cpath}.error_count", missing)
         err_pct = _req_float(node, "error_rate_pct", f"{cpath}.error_rate_pct", missing)
         p95_ms = _req_float(node, "p95_ms", f"{cpath}.p95_ms", missing, require_positive=True)
+        p99_ms = _req_float(node, "p99_ms", f"{cpath}.p99_ms", missing, require_positive=True)
 
         conc_val: int | None = None
         if "concurrency" in cspec:
@@ -4430,6 +4431,19 @@ def evaluate_section_3_2_a_b_c(
             )
         if p95_ms is not None and p95_ms > float(cspec["max_p95_ms"]):
             case_breaches.append(f"{case_name}.p95_ms:{p95_ms}>{cspec['max_p95_ms']}")
+        if p99_ms is not None and p99_ms > float(cspec["max_p99_ms"]):
+            case_breaches.append(f"{case_name}.p99_ms:{p99_ms}>{cspec['max_p99_ms']}")
+        if p95_ms is not None and p99_ms is not None and p99_ms + 1e-6 < p95_ms:
+            case_breaches.append(f"{case_name}.p99_lt_p95:{p99_ms}<{p95_ms}")
+
+        if "fallback_max_p95_ms" in cspec and isinstance(node, dict) and "fallback_p95_ms" in node:
+            fb_p95 = _req_float(
+                node, "fallback_p95_ms", f"{cpath}.fallback_p95_ms", missing, require_positive=True
+            )
+            if fb_p95 is not None and fb_p95 > float(cspec["fallback_max_p95_ms"]):
+                case_breaches.append(
+                    f"{case_name}.fallback_p95_ms:{fb_p95}>{cspec['fallback_max_p95_ms']}"
+                )
 
         if "max_get_work_item_p95_ms" in cspec:
             gw_p95 = _req_float(
@@ -4544,26 +4558,63 @@ def evaluate_section_3_2_a_b_c(
                     f"{case_name}.staff_unauthorized_company_drilldown_http_status:{unauth_code}!={cspec['expected_unauthorized_staff_http_status']}"
                 )
 
-        if case_name in ("worklist_ssr_case_2c_40_staff_sessions_c12", "worklist_ssr_case_2c_40_staff_sessions_c40"):
-            mirror_suffix = "c12" if case_name.endswith("_c12") else "c40"
-            mirror_path = f"s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_{mirror_suffix}"
+        for mirror_path in cspec.get("mirror_paths", []):
             mirror_node = _nav_dict(benchmark_report, mirror_path, missing)
-            mirror_p95 = _req_float(mirror_node, "p95_ms", f"{mirror_path}.p95_ms", missing, require_positive=True)
-            mirror_sess = _req_int(
-                mirror_node,
-                "distinct_sessions_used",
-                f"{mirror_path}.distinct_sessions_used",
-                missing,
-                require_positive=True,
+            mirror_req = _req_int(
+                mirror_node, "requests_total", f"{mirror_path}.requests_total", missing, require_positive=True
             )
+            mirror_err = _req_int(mirror_node, "error_count", f"{mirror_path}.error_count", missing)
+            mirror_to = _req_int(mirror_node, "timeout_count", f"{mirror_path}.timeout_count", missing)
+            mirror_p95 = _req_float(
+                mirror_node, "p95_ms", f"{mirror_path}.p95_ms", missing, require_positive=True
+            )
+            mirror_p99 = _req_float(
+                mirror_node, "p99_ms", f"{mirror_path}.p99_ms", missing, require_positive=True
+            )
+            if mirror_p95 is not None and mirror_p95 > float(cspec["max_p95_ms"]):
+                case_breaches.append(
+                    f"{case_name}.mirror({mirror_path}).p95_ms:{mirror_p95}>{cspec['max_p95_ms']}"
+                )
+            if mirror_p99 is not None and mirror_p99 > float(cspec["max_p99_ms"]):
+                case_breaches.append(
+                    f"{case_name}.mirror({mirror_path}).p99_ms:{mirror_p99}>{cspec['max_p99_ms']}"
+                )
             if p95_ms is not None and mirror_p95 is not None and abs(p95_ms - mirror_p95) > 1e-2:
                 case_breaches.append(
-                    f"{case_name}.ssr_mirror_p95_mismatch:{p95_ms}!={mirror_p95}"
+                    f"{case_name}.ssr_mirror_p95_mismatch:{mirror_path}:{p95_ms}!={mirror_p95}"
                 )
-            if dist_sess_val is not None and mirror_sess is not None and dist_sess_val != mirror_sess:
+            if p99_ms is not None and mirror_p99 is not None and abs(p99_ms - mirror_p99) > 1e-2:
                 case_breaches.append(
-                    f"{case_name}.ssr_mirror_sessions_mismatch:{dist_sess_val}!={mirror_sess}"
+                    f"{case_name}.ssr_mirror_p99_mismatch:{mirror_path}:{p99_ms}!={mirror_p99}"
                 )
+            if req_total is not None and mirror_req is not None and req_total != mirror_req:
+                case_breaches.append(
+                    f"{case_name}.ssr_mirror_requests_mismatch:{mirror_path}:{req_total}!={mirror_req}"
+                )
+            if "max_error_count" in cspec and mirror_err is not None and mirror_err > int(cspec["max_error_count"]):
+                case_breaches.append(
+                    f"{case_name}.mirror({mirror_path}).error_count:{mirror_err}>{cspec['max_error_count']}"
+                )
+            if "max_timeout_count" in cspec and mirror_to is not None and mirror_to > int(cspec["max_timeout_count"]):
+                case_breaches.append(
+                    f"{case_name}.mirror({mirror_path}).timeout_count:{mirror_to}>{cspec['max_timeout_count']}"
+                )
+            if (
+                "distinct_sessions_used" in cspec
+                and isinstance(mirror_node, dict)
+                and "distinct_sessions_used" in mirror_node
+            ):
+                mirror_sess = _req_int(
+                    mirror_node,
+                    "distinct_sessions_used",
+                    f"{mirror_path}.distinct_sessions_used",
+                    missing,
+                    require_positive=True,
+                )
+                if dist_sess_val is not None and mirror_sess is not None and dist_sess_val != mirror_sess:
+                    case_breaches.append(
+                        f"{case_name}.ssr_mirror_sessions_mismatch:{mirror_path}:{dist_sess_val}!={mirror_sess}"
+                    )
 
         case_missing = len(missing) > case_missing_before
         case_ok = (not case_missing) and (not case_breaches)
@@ -4572,6 +4623,7 @@ def evaluate_section_3_2_a_b_c(
         breaches.extend(f"section_3_2A.{b}" for b in case_breaches)
 
         cases_3_2a[case_name] = {
+            "ticket_item_id": str(cspec.get("ticket_item_id", "")),
             "session_model": session_model,
             "path": cpath,
             "concurrency": conc_val,
@@ -4579,6 +4631,8 @@ def evaluate_section_3_2_a_b_c(
             "requests_total": req_total,
             "p95_ms": p95_ms,
             "max_p95_ms": float(cspec["max_p95_ms"]),
+            "p99_ms": p99_ms,
+            "max_p99_ms": float(cspec["max_p99_ms"]),
             "error_rate_pct": err_pct,
             "max_error_rate_pct": float(cspec["max_error_rate_pct"]),
             "timeout_count": timeout_cnt,
@@ -4598,7 +4652,7 @@ def evaluate_section_3_2_a_b_c(
             sm_bucket["cases_passed"] += 1
         sm_bucket["case_names"].append(case_name)
 
-    # Verify SSR separation telemetry exists so SSR p95 is never conflated with aggregate API p95
+    # Verify SSR separation telemetry exists so SSR p95/p99 is never conflated with aggregate API p95/p99
     sep_root = _nav_dict(benchmark_report, "worklist_ssr_acceptance_and_separation", missing)
     exec_mode = (
         _req_str(
@@ -4616,7 +4670,7 @@ def evaluate_section_3_2_a_b_c(
             f"section_3_2A.worklist_ssr_execution_mode_invalid:{exec_mode}"
         )
 
-    # --- §3.2B: Concurrent mixed authenticated session waves (20 / 40 / 80 from pool of 80) ---
+    # --- §3.2B: Concurrent mixed authenticated session waves (20 / 40 / 80 from pool of 80, p95 + p99) ---
     spec_3_2b = thresholds_spec["section_3_2B_mixed_session_waves"]
     http_root = _nav_dict(benchmark_report, "s1_http_acceptance_and_mixed_waves", missing)
     pool_sessions = _req_int(
@@ -4665,6 +4719,9 @@ def evaluate_section_3_2_a_b_c(
         w_p95 = _req_float(
             w_sum, "p95_ms", f"{wpath}.overall_summary.p95_ms", missing, require_positive=True
         )
+        w_p99 = _req_float(
+            w_sum, "p99_ms", f"{wpath}.overall_summary.p99_ms", missing, require_positive=True
+        )
 
         if w_req is not None and w_req < int(wspec["min_requests"]):
             w_breaches.append(f"{wname}.overall_summary.requests_total:{w_req}<{wspec['min_requests']}")
@@ -4672,6 +4729,16 @@ def evaluate_section_3_2_a_b_c(
             w_breaches.append(
                 f"{wname}.overall_summary.count_mismatch:ok={w_ok}+err={w_err}!=total={w_req}"
             )
+        if "max_error_count" in wspec and w_err is not None and w_err > int(wspec["max_error_count"]):
+            w_breaches.append(
+                f"{wname}.overall_summary.error_count:{w_err}>{wspec['max_error_count']}"
+            )
+        if "max_timeout_count" in wspec and isinstance(w_sum, dict) and "timeout_count" in w_sum:
+            w_to = _req_int(w_sum, "timeout_count", f"{wpath}.overall_summary.timeout_count", missing)
+            if w_to is not None and w_to > int(wspec["max_timeout_count"]):
+                w_breaches.append(
+                    f"{wname}.overall_summary.timeout_count:{w_to}>{wspec['max_timeout_count']}"
+                )
         if w_err_pct is not None and w_err_pct > float(wspec["max_error_rate_pct"]) + 1e-6:
             w_breaches.append(
                 f"{wname}.overall_summary.error_rate_pct:{w_err_pct}>{wspec['max_error_rate_pct']}"
@@ -4680,10 +4747,57 @@ def evaluate_section_3_2_a_b_c(
             w_breaches.append(
                 f"{wname}.overall_summary.p95_ms:{w_p95}>{wspec['max_overall_p95_ms']}"
             )
+        if w_p99 is not None and w_p99 > float(wspec["max_overall_p99_ms"]):
+            w_breaches.append(
+                f"{wname}.overall_summary.p99_ms:{w_p99}>{wspec['max_overall_p99_ms']}"
+            )
+        if w_p95 is not None and w_p99 is not None and w_p99 + 1e-6 < w_p95:
+            w_breaches.append(
+                f"{wname}.overall_summary.p99_lt_p95:{w_p99}<{w_p95}"
+            )
+
+        for wm_path in wspec.get("mirror_paths", []):
+            wm_node = _nav_dict(benchmark_report, wm_path, missing)
+            wm_req = _req_int(
+                wm_node, "requests_total", f"{wm_path}.requests_total", missing, require_positive=True
+            )
+            wm_err = _req_int(wm_node, "error_count", f"{wm_path}.error_count", missing)
+            wm_p95 = _req_float(
+                wm_node, "p95_ms", f"{wm_path}.p95_ms", missing, require_positive=True
+            )
+            wm_p99 = _req_float(
+                wm_node, "p99_ms", f"{wm_path}.p99_ms", missing, require_positive=True
+            )
+            if wm_p95 is not None and wm_p95 > float(wspec["max_overall_p95_ms"]):
+                w_breaches.append(
+                    f"{wname}.mirror({wm_path}).p95_ms:{wm_p95}>{wspec['max_overall_p95_ms']}"
+                )
+            if wm_p99 is not None and wm_p99 > float(wspec["max_overall_p99_ms"]):
+                w_breaches.append(
+                    f"{wname}.mirror({wm_path}).p99_ms:{wm_p99}>{wspec['max_overall_p99_ms']}"
+                )
+            if w_p95 is not None and wm_p95 is not None and abs(w_p95 - wm_p95) > 1e-2:
+                w_breaches.append(
+                    f"{wname}.wave_mirror_p95_mismatch:{wm_path}:{w_p95}!={wm_p95}"
+                )
+            if w_p99 is not None and wm_p99 is not None and abs(w_p99 - wm_p99) > 1e-2:
+                w_breaches.append(
+                    f"{wname}.wave_mirror_p99_mismatch:{wm_path}:{w_p99}!={wm_p99}"
+                )
+            if w_req is not None and wm_req is not None and w_req != wm_req:
+                w_breaches.append(
+                    f"{wname}.wave_mirror_requests_mismatch:{wm_path}:{w_req}!={wm_req}"
+                )
+            if w_err is not None and wm_err is not None and w_err != wm_err:
+                w_breaches.append(
+                    f"{wname}.wave_mirror_error_count_mismatch:{wm_path}:{w_err}!={wm_err}"
+                )
 
         by_wl_node = _nav_dict(wnode, "by_workload", missing) if wnode is not None else None
+        wl_p99_map = wspec["by_workload_max_p99_ms"]
         wl_eval: dict[str, dict[str, Any]] = {}
         for wlname, wl_max_p95 in sorted(wspec["by_workload_max_p95_ms"].items()):
+            wl_max_p99 = float(wl_p99_map[wlname])
             wl_path = f"{wpath}.by_workload.{wlname}"
             wln = _nav_dict(by_wl_node, wlname, missing) if by_wl_node is not None else None
             wl_req = _req_int(wln, "requests_total", f"{wl_path}.requests_total", missing, require_positive=True)
@@ -4691,12 +4805,14 @@ def evaluate_section_3_2_a_b_c(
             wl_err = _req_int(wln, "error_count", f"{wl_path}.error_count", missing)
             wl_err_pct = _req_float(wln, "error_rate_pct", f"{wl_path}.error_rate_pct", missing)
             wl_p95 = _req_float(wln, "p95_ms", f"{wl_path}.p95_ms", missing, require_positive=True)
+            wl_p99 = _req_float(wln, "p99_ms", f"{wl_path}.p99_ms", missing, require_positive=True)
             wl_ok_flag = (
                 wl_req is not None
                 and wl_ok is not None
                 and wl_err is not None
                 and wl_err_pct is not None
                 and wl_p95 is not None
+                and wl_p99 is not None
             )
             if wl_req is not None and wl_ok is not None and wl_err is not None and (wl_ok + wl_err) != wl_req:
                 w_breaches.append(f"{wname}.{wlname}.count_mismatch")
@@ -4711,10 +4827,22 @@ def evaluate_section_3_2_a_b_c(
                     f"{wname}.by_workload.{wlname}.p95_ms:{wl_p95}>{wl_max_p95}"
                 )
                 wl_ok_flag = False
+            if wl_p99 is not None and wl_p99 > wl_max_p99:
+                w_breaches.append(
+                    f"{wname}.by_workload.{wlname}.p99_ms:{wl_p99}>{wl_max_p99}"
+                )
+                wl_ok_flag = False
+            if wl_p95 is not None and wl_p99 is not None and wl_p99 + 1e-6 < wl_p95:
+                w_breaches.append(
+                    f"{wname}.by_workload.{wlname}.p99_lt_p95:{wl_p99}<{wl_p95}"
+                )
+                wl_ok_flag = False
             wl_eval[wlname] = {
                 "requests_total": wl_req,
                 "p95_ms": wl_p95,
                 "max_p95_ms": float(wl_max_p95),
+                "p99_ms": wl_p99,
+                "max_p99_ms": wl_max_p99,
                 "error_rate_pct": wl_err_pct,
                 "passed": wl_ok_flag,
             }
@@ -4746,11 +4874,14 @@ def evaluate_section_3_2_a_b_c(
             sec_3_2b_passed = False
         breaches.extend(f"section_3_2B.{b}" for b in w_breaches)
         waves_eval[wname] = {
+            "ticket_item_id": str(wspec.get("ticket_item_id", "")),
             "session_model": str(wspec["session_model"]),
             "concurrent_user_sessions": conc_users,
             "requests_total": w_req,
             "overall_p95_ms": w_p95,
             "max_overall_p95_ms": float(wspec["max_overall_p95_ms"]),
+            "overall_p99_ms": w_p99,
+            "max_overall_p99_ms": float(wspec["max_overall_p99_ms"]),
             "error_rate_pct": w_err_pct,
             "max_error_rate_pct": float(wspec["max_error_rate_pct"]),
             "queue_backlog_after": q_backlog,
@@ -4765,11 +4896,137 @@ def evaluate_section_3_2_a_b_c(
             "breaches": w_breaches,
         }
 
-    # --- §3.2C: Dataset S1, EXPLAIN plans, CSV import, weighted distribution, KPI recompute, RQ burst ---
+    # --- §3.2C: Aggregate load (AGG-01/AGG-02), S1 dataset/EXPLAIN, CSV import, distribution, KPI recompute, RQ burst ---
     spec_3_2c = thresholds_spec["section_3_2C_dataset_batch_and_background"]
     dom_root = _nav_dict(benchmark_report, "s1_domain_and_database_benchmark", missing)
     sec_3_2c_breaches: list[str] = []
     sec_3_2c_missing_before = len(missing)
+
+    # 3.2C.0 Aggregate load summaries (AGG-01 c=12 1920 reqs & AGG-02 c=40 peak 800 reqs; never compensates §3.2A/B)
+    agg_eval: dict[str, dict[str, Any]] = {}
+    for agg_name, aspec in sorted(spec_3_2c["aggregate_load_summaries"].items()):
+        apath = str(aspec["path"])
+        agg_missing_before = len(missing)
+        agg_item_breaches: list[str] = []
+        anode = _nav_dict(benchmark_report, apath, missing)
+        a_req = _req_int(anode, "requests_total", f"{apath}.requests_total", missing, require_positive=True)
+        a_ok = _req_int(anode, "ok_count", f"{apath}.ok_count", missing)
+        a_err = _req_int(anode, "error_count", f"{apath}.error_count", missing)
+        a_err_pct = _req_float(anode, "error_rate_pct", f"{apath}.error_rate_pct", missing)
+        a_to = _req_int(anode, "timeout_count", f"{apath}.timeout_count", missing)
+        a_p95 = _req_float(anode, "p95_ms", f"{apath}.p95_ms", missing, require_positive=True)
+        a_p99 = _req_float(anode, "p99_ms", f"{apath}.p99_ms", missing, require_positive=True)
+
+        if "expected_wave_concurrency" in aspec:
+            peak_parent = _nav_dict(benchmark_report, "peak_40_staff_concurrent_wave", missing)
+            peak_conc = _req_int(
+                peak_parent,
+                "concurrency",
+                "peak_40_staff_concurrent_wave.concurrency",
+                missing,
+                require_positive=True,
+            )
+            if peak_conc is not None and peak_conc != int(aspec["expected_wave_concurrency"]):
+                agg_item_breaches.append(
+                    f"aggregate_load_summaries.{agg_name}.concurrency:{peak_conc}!={aspec['expected_wave_concurrency']}"
+                )
+
+        if a_req is not None and a_req < int(aspec["min_requests"]):
+            agg_item_breaches.append(
+                f"aggregate_load_summaries.{agg_name}.requests_total:{a_req}<{aspec['min_requests']}"
+            )
+        if a_req is not None and a_ok is not None and a_err is not None and (a_ok + a_err) != a_req:
+            agg_item_breaches.append(
+                f"aggregate_load_summaries.{agg_name}.count_mismatch:ok={a_ok}+err={a_err}!=total={a_req}"
+            )
+        if a_err is not None and a_err > int(aspec["max_error_count"]):
+            agg_item_breaches.append(
+                f"aggregate_load_summaries.{agg_name}.error_count:{a_err}>{aspec['max_error_count']}"
+            )
+        if a_err_pct is not None and a_err_pct > float(aspec["max_error_rate_pct"]) + 1e-6:
+            agg_item_breaches.append(
+                f"aggregate_load_summaries.{agg_name}.error_rate_pct:{a_err_pct}>{aspec['max_error_rate_pct']}"
+            )
+        if a_to is not None and a_to > int(aspec["max_timeout_count"]):
+            agg_item_breaches.append(
+                f"aggregate_load_summaries.{agg_name}.timeout_count:{a_to}>{aspec['max_timeout_count']}"
+            )
+        if a_p95 is not None and a_p95 > float(aspec["max_p95_ms"]):
+            agg_item_breaches.append(
+                f"aggregate_load_summaries.{agg_name}.p95_ms:{a_p95}>{aspec['max_p95_ms']}"
+            )
+        if a_p99 is not None and a_p99 > float(aspec["max_p99_ms"]):
+            agg_item_breaches.append(
+                f"aggregate_load_summaries.{agg_name}.p99_ms:{a_p99}>{aspec['max_p99_ms']}"
+            )
+        if a_p95 is not None and a_p99 is not None and a_p99 + 1e-6 < a_p95:
+            agg_item_breaches.append(
+                f"aggregate_load_summaries.{agg_name}.p99_lt_p95:{a_p99}<{a_p95}"
+            )
+
+        for am_path in aspec.get("mirror_paths", []):
+            am_node = _nav_dict(benchmark_report, am_path, missing)
+            am_req = _req_int(
+                am_node, "requests_total", f"{am_path}.requests_total", missing, require_positive=True
+            )
+            am_err = _req_int(am_node, "error_count", f"{am_path}.error_count", missing)
+            am_to = _req_int(am_node, "timeout_count", f"{am_path}.timeout_count", missing)
+            am_p95 = _req_float(
+                am_node, "p95_ms", f"{am_path}.p95_ms", missing, require_positive=True
+            )
+            am_p99 = _req_float(
+                am_node, "p99_ms", f"{am_path}.p99_ms", missing, require_positive=True
+            )
+            if am_p95 is not None and am_p95 > float(aspec["max_p95_ms"]):
+                agg_item_breaches.append(
+                    f"aggregate_load_summaries.{agg_name}.mirror({am_path}).p95_ms:{am_p95}>{aspec['max_p95_ms']}"
+                )
+            if am_p99 is not None and am_p99 > float(aspec["max_p99_ms"]):
+                agg_item_breaches.append(
+                    f"aggregate_load_summaries.{agg_name}.mirror({am_path}).p99_ms:{am_p99}>{aspec['max_p99_ms']}"
+                )
+            if a_p95 is not None and am_p95 is not None and abs(a_p95 - am_p95) > 1e-2:
+                agg_item_breaches.append(
+                    f"aggregate_load_summaries.{agg_name}.mirror_p95_mismatch:{am_path}:{a_p95}!={am_p95}"
+                )
+            if a_p99 is not None and am_p99 is not None and abs(a_p99 - am_p99) > 1e-2:
+                agg_item_breaches.append(
+                    f"aggregate_load_summaries.{agg_name}.mirror_p99_mismatch:{am_path}:{a_p99}!={am_p99}"
+                )
+            if a_req is not None and am_req is not None and a_req != am_req:
+                agg_item_breaches.append(
+                    f"aggregate_load_summaries.{agg_name}.mirror_requests_mismatch:{am_path}:{a_req}!={am_req}"
+                )
+            if am_err is not None and am_err > int(aspec["max_error_count"]):
+                agg_item_breaches.append(
+                    f"aggregate_load_summaries.{agg_name}.mirror({am_path}).error_count:{am_err}>{aspec['max_error_count']}"
+                )
+            if am_to is not None and am_to > int(aspec["max_timeout_count"]):
+                agg_item_breaches.append(
+                    f"aggregate_load_summaries.{agg_name}.mirror({am_path}).timeout_count:{am_to}>{aspec['max_timeout_count']}"
+                )
+
+        agg_item_missing = len(missing) > agg_missing_before
+        agg_item_ok = (not agg_item_missing) and (not agg_item_breaches)
+        sec_3_2c_breaches.extend(agg_item_breaches)
+        agg_eval[agg_name] = {
+            "ticket_item_id": str(aspec.get("ticket_item_id", "")),
+            "path": apath,
+            "requests_total": a_req,
+            "p95_ms": a_p95,
+            "max_p95_ms": float(aspec["max_p95_ms"]),
+            "p99_ms": a_p99,
+            "max_p99_ms": float(aspec["max_p99_ms"]),
+            "error_rate_pct": a_err_pct,
+            "timeout_count": a_to,
+            "passed": agg_item_ok,
+            "status": (
+                "MISSING_MEASUREMENT"
+                if agg_item_missing
+                else ("PASS" if agg_item_ok else "FAIL_THRESHOLD_BREACH")
+            ),
+            "breaches": agg_item_breaches,
+        }
 
     # 3.2C.1 S1 dataset counts, PII policy & MariaDB EXPLAIN index keys
     seed_spec = spec_3_2c["s1_dataset_and_explain_plans"]
@@ -4804,7 +5061,7 @@ def evaluate_section_3_2_a_b_c(
                 if got_idx is not None and got_idx != str(exp_idx):
                     sec_3_2c_breaches.append(f"mariadb_explain_plans.{pkey}:{got_idx}!={exp_idx}")
 
-    # 3.2C.1b Direct domain service workloads on S1 dataset (domain_workloads_s1)
+    # 3.2C.1b Direct domain service workloads on S1 dataset (domain_workloads_s1, p95 + p99)
     dom_wl_root = _nav_dict(dom_root, "domain_workloads_s1", missing) if dom_root is not None else None
     for dw_key, dw_spec in sorted(spec_3_2c["domain_workloads_s1"].items()):
         dw_path = f"s1_domain_and_database_benchmark.domain_workloads_s1.{dw_key}"
@@ -4812,6 +5069,7 @@ def evaluate_section_3_2_a_b_c(
         dw_cnt = _req_int(dw_node, "count", f"{dw_path}.count", missing, require_positive=True)
         dw_err = _req_int(dw_node, "error_count", f"{dw_path}.error_count", missing)
         dw_p95 = _req_float(dw_node, "p95_ms", f"{dw_path}.p95_ms", missing, require_positive=True)
+        dw_p99 = _req_float(dw_node, "p99_ms", f"{dw_path}.p99_ms", missing, require_positive=True)
         if dw_cnt is not None and dw_cnt < int(dw_spec["min_count"]):
             sec_3_2c_breaches.append(f"domain_workloads_s1.{dw_key}.count:{dw_cnt}<{dw_spec['min_count']}")
         if dw_err is not None and dw_err > int(dw_spec["max_error_count"]):
@@ -4821,6 +5079,14 @@ def evaluate_section_3_2_a_b_c(
         if dw_p95 is not None and dw_p95 > float(dw_spec["max_p95_ms"]):
             sec_3_2c_breaches.append(
                 f"domain_workloads_s1.{dw_key}.p95_ms:{dw_p95}>{dw_spec['max_p95_ms']}"
+            )
+        if dw_p99 is not None and dw_p99 > float(dw_spec["max_p99_ms"]):
+            sec_3_2c_breaches.append(
+                f"domain_workloads_s1.{dw_key}.p99_ms:{dw_p99}>{dw_spec['max_p99_ms']}"
+            )
+        if dw_p95 is not None and dw_p99 is not None and dw_p99 + 1e-6 < dw_p95:
+            sec_3_2c_breaches.append(
+                f"domain_workloads_s1.{dw_key}.p99_lt_p95:{dw_p99}<{dw_p95}"
             )
         if "expected_idempotent_replay_verified" in dw_spec:
             dw_idem = _req_bool(
@@ -4840,7 +5106,7 @@ def evaluate_section_3_2_a_b_c(
                     f"domain_workloads_s1.{dw_key}.contact_attempt_table_scans:{dw_scans}!={dw_spec['expected_contact_attempt_table_scans']}"
                 )
 
-    # 3.2C.2 50,000-row CSV import
+    # 3.2C.2 50,000-row CSV import (BG-02)
     async_root = (
         _nav_dict(dom_root, "async_import_distribution_and_queue_lag", missing)
         if dom_root is not None
@@ -4856,6 +5122,13 @@ def evaluate_section_3_2_a_b_c(
     csv_err_art = _req_bool(csv_node, "error_artifact_present", f"{csv_path}.error_artifact_present", missing)
     csv_status = _req_str(csv_node, "final_batch_status", f"{csv_path}.final_batch_status", missing)
     csv_prev_ms = _req_float(csv_node, "preview_ms", f"{csv_path}.preview_ms", missing, require_positive=True)
+    csv_worker_ms = _req_float(
+        csv_node,
+        "worker_commit_and_drain_ms",
+        f"{csv_path}.worker_commit_and_drain_ms",
+        missing,
+        require_positive=True,
+    )
     csv_tot_ms = _req_float(
         csv_node,
         "total_preview_confirm_and_worker_drain_ms",
@@ -4889,6 +5162,10 @@ def evaluate_section_3_2_a_b_c(
         )
     if csv_prev_ms is not None and csv_prev_ms > float(csv_spec["max_preview_ms"]):
         sec_3_2c_breaches.append(f"csv_import_50000_rows.preview_ms:{csv_prev_ms}>{csv_spec['max_preview_ms']}")
+    if csv_worker_ms is not None and csv_worker_ms > float(csv_spec["max_worker_commit_and_drain_ms"]):
+        sec_3_2c_breaches.append(
+            f"csv_import_50000_rows.worker_commit_and_drain_ms:{csv_worker_ms}>{csv_spec['max_worker_commit_and_drain_ms']}"
+        )
     if csv_tot_ms is not None and csv_tot_ms > float(csv_spec["max_total_preview_confirm_and_worker_drain_ms"]):
         sec_3_2c_breaches.append(
             f"csv_import_50000_rows.total_ms:{csv_tot_ms}>{csv_spec['max_total_preview_confirm_and_worker_drain_ms']}"
@@ -4902,7 +5179,7 @@ def evaluate_section_3_2_a_b_c(
             f"csv_import_50000_rows.concurrent_worklist_read_p95_ms:{csv_wl_p95}>{csv_spec['max_concurrent_worklist_read_p95_ms']}"
         )
 
-    # 3.2C.3 10,000-item weighted campaign distribution across 40 staff
+    # 3.2C.3 10,000-item weighted campaign distribution across 40 staff (BG-01)
     dist_spec = spec_3_2c["campaign_distribution_10000_work_items_40_staff"]
     dist_path = (
         "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag."
@@ -4918,6 +5195,15 @@ def evaluate_section_3_2_a_b_c(
     dist_exec_ms = _req_float(
         dist_node, "execute_and_worker_drain_ms", f"{dist_path}.execute_and_worker_drain_ms", missing, require_positive=True
     )
+    for enq_field in ("enqueue_api_ms", "enqueue_http_ms"):
+        if isinstance(dist_node, dict) and enq_field in dist_node:
+            dist_enq_ms = _req_float(
+                dist_node, enq_field, f"{dist_path}.{enq_field}", missing, require_positive=True
+            )
+            if dist_enq_ms is not None and dist_enq_ms > float(dist_spec["max_enqueue_http_ms"]):
+                sec_3_2c_breaches.append(
+                    f"distribution.{enq_field}:{dist_enq_ms}>{dist_spec['max_enqueue_http_ms']}"
+                )
     dist_status = _req_str(dist_node, "final_run_status", f"{dist_path}.final_run_status", missing)
     dist_created = _req_int(
         dist_node, "created_work_items", f"{dist_path}.created_work_items", missing, require_positive=True
@@ -4977,7 +5263,7 @@ def evaluate_section_3_2_a_b_c(
     if dist_own_rec is not None and dist_own_rec is not bool(dist_spec["expected_ownership_reconciled"]):
         sec_3_2c_breaches.append(f"distribution.ownership_reconciled:{dist_own_rec}")
 
-    # 3.2C.4 KPI full monthly + daily incremental + atomic publish under concurrent UI reads
+    # 3.2C.4 KPI full monthly + daily incremental + atomic publish under concurrent UI reads (BG-03)
     kpi_spec = spec_3_2c["kpi_recompute_s1"]
     kpi_path = "s1_domain_and_database_benchmark.kpi_recompute_s1"
     kpi_node = _nav_dict(dom_root, "kpi_recompute_s1", missing) if dom_root is not None else None
@@ -4989,6 +5275,9 @@ def evaluate_section_3_2_a_b_c(
         kpi_node, "daily_incremental_ms", f"{kpi_path}.daily_incremental_ms", missing, require_positive=True
     )
     kpi_bg = _nav_dict(kpi_node, "background_queue_long_recompute", missing) if kpi_node is not None else None
+    kpi_bg_wall_ms = _req_float(
+        kpi_bg, "wall_ms", f"{kpi_path}.background_queue_long_recompute.wall_ms", missing, require_positive=True
+    )
     kpi_atomic = _req_bool(
         kpi_bg, "atomic_publish_verified", f"{kpi_path}.background_queue_long_recompute.atomic_publish_verified", missing
     )
@@ -5026,8 +5315,19 @@ def evaluate_section_3_2_a_b_c(
         missing,
         require_positive=True,
     )
+    kpi_ui_p99 = _req_float(
+        kpi_ui,
+        "p99_ms",
+        f"{kpi_path}.background_queue_long_recompute.concurrent_ui_overview_reads.p99_ms",
+        missing,
+        require_positive=True,
+    )
     if kpi_mon_ms is not None and kpi_mon_ms > float(kpi_spec["max_monthly_full_ms"]):
         sec_3_2c_breaches.append(f"kpi_recompute_s1.monthly_full_ms:{kpi_mon_ms}>{kpi_spec['max_monthly_full_ms']}")
+    if kpi_bg_wall_ms is not None and kpi_bg_wall_ms > float(kpi_spec["max_background_queue_long_wall_ms"]):
+        sec_3_2c_breaches.append(
+            f"kpi_recompute_s1.background_queue_long_wall_ms:{kpi_bg_wall_ms}>{kpi_spec['max_background_queue_long_wall_ms']}"
+        )
     if kpi_mon_st is not None and kpi_mon_st != str(kpi_spec["expected_monthly_run_status"]):
         sec_3_2c_breaches.append(
             f"kpi_recompute_s1.monthly_run_status:{kpi_mon_st}!={kpi_spec['expected_monthly_run_status']}"
@@ -5051,6 +5351,14 @@ def evaluate_section_3_2_a_b_c(
     if kpi_ui_p95 is not None and kpi_ui_p95 > float(kpi_spec["max_concurrent_ui_overview_p95_ms"]):
         sec_3_2c_breaches.append(
             f"kpi_recompute_s1.concurrent_ui_overview_p95_ms:{kpi_ui_p95}>{kpi_spec['max_concurrent_ui_overview_p95_ms']}"
+        )
+    if kpi_ui_p99 is not None and kpi_ui_p99 > float(kpi_spec["max_concurrent_ui_overview_p99_ms"]):
+        sec_3_2c_breaches.append(
+            f"kpi_recompute_s1.concurrent_ui_overview_p99_ms:{kpi_ui_p99}>{kpi_spec['max_concurrent_ui_overview_p99_ms']}"
+        )
+    if kpi_ui_p95 is not None and kpi_ui_p99 is not None and kpi_ui_p99 + 1e-6 < kpi_ui_p95:
+        sec_3_2c_breaches.append(
+            f"kpi_recompute_s1.concurrent_ui_overview_p99_lt_p95:{kpi_ui_p99}<{kpi_ui_p95}"
         )
 
     # 3.2C.5 RQ short 50-job burst & post-run queue/MariaDB health
@@ -5116,10 +5424,14 @@ def evaluate_section_3_2_a_b_c(
                 if sec_3_2c_missing
                 else ("PASS" if sec_3_2c_passed else "FAIL_THRESHOLD_BREACH")
             ),
+            "aggregate_load_summaries": agg_eval,
+            "csv_import_preview_ms": csv_prev_ms,
+            "csv_import_worker_commit_and_drain_ms": csv_worker_ms,
             "csv_import_total_ms": csv_tot_ms,
             "distribution_preview_ms": dist_prev_ms,
             "distribution_execute_ms": dist_exec_ms,
             "kpi_monthly_full_ms": kpi_mon_ms,
+            "kpi_background_queue_long_wall_ms": kpi_bg_wall_ms,
             "kpi_daily_incremental_ms": kpi_day_ms,
             "rq_short_drain_lag_ms": rq_drain_ms,
             "post_run_queue_backlog_total": post_backlog,

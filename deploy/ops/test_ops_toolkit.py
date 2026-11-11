@@ -2376,6 +2376,548 @@ class OpsToolkitTests(unittest.TestCase):
                     self.assertIn(new_t1b_digest, raw_r)
                     self.assertNotIn(dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4, raw_r)
 
+    def test_g18_v1_4_ticket_3_2_abc_divergent_thresholds_and_p99_checks(self) -> None:
+        import manage_isolated_staging_dr as dr_mod
+
+        repo_root = staging_mod.REPO_ROOT
+        ci_bench_doc = json.loads(
+            (
+                repo_root
+                / "deploy"
+                / "ops"
+                / "evidence"
+                / "p4-candidate-and-s1-20261109"
+                / "benchmark-s1-report.json"
+            ).read_text(encoding="utf-8")
+        )
+
+        # 1. Verify new SHA-256 lock and reject Owner approvals bound to old 141f52e SHA-256
+        expected_new_sha = "e9fde1a0e796a4f30651689c02384fb07051ab6adcaf368e5c336122f4ec54e7"
+        old_141f52e_sha = "2a3ff3642af97b98d4102ec3bcb138655a58ce21860132d056c7ff0f33c2dc19"
+        self.assertEqual(dr_mod.LOCKED_G18_THRESHOLDS_V1_4_SHA256, expected_new_sha)
+
+        valid_approval = {
+            "approved": True,
+            "ticket_version": "v1.4",
+            "signed_by": "owner-representative@hrpartner.vn",
+            "signed_at": "2026-11-11T21:40:00+07:00",
+            "thresholds_sha256": expected_new_sha,
+            "approved_thresholds": {
+                k: spec["threshold"] for k, spec in dr_mod.OWNER_TICKET_V1_4_PROPOSED_SLOS.items()
+            },
+        }
+        stale_approval = dict(valid_approval, thresholds_sha256=old_141f52e_sha)
+
+        def set_path(doc: dict, dotted: str, val: object) -> None:
+            parts = dotted.split(".")
+            cur: dict = doc
+            for part in parts[:-1]:
+                cur = cur[part]
+            cur[parts[-1]] = val
+
+        def del_path(doc: dict, dotted: str) -> None:
+            parts = dotted.split(".")
+            cur: dict = doc
+            for part in parts[:-1]:
+                cur = cur[part]
+            del cur[parts[-1]]
+
+        with tempfile.TemporaryDirectory(prefix="g18-gap-p99-test-") as td:
+            td_path = Path(td)
+            vps_receipt_dir = self._build_mock_staging_vps_bundle(
+                repo_root,
+                td_path / "vps-receipts",
+                expected_digest=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+            )
+            vps_base = json.loads(json.dumps(ci_bench_doc))
+            vps_base["s1_domain_and_database_benchmark"]["runner_hardware"]["platform"] = (
+                "Linux-6.8.0-51-generic-x86_64-with-glibc2.39"
+            )
+            vps_base["isolation_guard"]["compose_project"] = "crm-cskh-s1-bench-vps"
+
+            # Stale SHA-256 from 141f52e must be rejected
+            stale_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                vps_base, owner_slo_approval=stale_approval, vps_receipts=vps_receipt_dir
+            )
+            self.assertEqual(stale_res["status"], "FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256")
+            self.assertTrue(
+                any("owner_approval_thresholds_sha256_mismatch" in e for e in stale_res["owner_approval_validation_errors"])
+            )
+
+            # Baseline passes cleanly
+            base_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                vps_base, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+            )
+            self.assertEqual(base_res["status"], "PASS")
+
+            # 2. Measurements that EXCEED Ticket §3.2A-C SLOs while STILL FALLING INSIDE old 141f52e JSON thresholds
+            gap_breach_cases: list[tuple[str, list[tuple[str, object]], str]] = [
+                # §3.2A SSR-01A: Ticket <= 6500ms vs old JSON <= 8000ms (p95=7000, p99=7200 <= 7500)
+                (
+                    "SSR-01A_c40_40_sessions",
+                    [
+                        ("worklist_ssr_acceptance_and_separation.case_2c_40_staff_sessions_c40.p95_ms", 7000.0),
+                        ("worklist_ssr_acceptance_and_separation.case_2c_40_staff_sessions_c40.p99_ms", 7200.0),
+                        ("s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c40.p95_ms", 7000.0),
+                        ("s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c40.p99_ms", 7200.0),
+                        ("worklist_ssr_acceptance_and_separation.priority_acceptance_case_2_40_staff_sessions_c40.p95_ms", 7000.0),
+                        ("worklist_ssr_acceptance_and_separation.priority_acceptance_case_2_40_staff_sessions_c40.p99_ms", 7200.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c40_ssr_telesale_worklist_page_40_staff_sessions_only.p95_ms", 7000.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c40_ssr_telesale_worklist_page_40_staff_sessions_only.p99_ms", 7200.0),
+                    ],
+                    "section_3_2A.worklist_ssr_case_2c_40_staff_sessions_c40.p95_ms:7000.0>6500.0",
+                ),
+                # §3.2A SSR-01B: Ticket <= 1800ms vs old JSON <= 3000ms (p95=2000, p99=2100 <= 2200)
+                (
+                    "SSR-01B_c12_40_sessions",
+                    [
+                        ("worklist_ssr_acceptance_and_separation.case_2c_40_staff_sessions_c12.p95_ms", 2000.0),
+                        ("worklist_ssr_acceptance_and_separation.case_2c_40_staff_sessions_c12.p99_ms", 2100.0),
+                        ("s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c12.p95_ms", 2000.0),
+                        ("s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c12.p99_ms", 2100.0),
+                    ],
+                    "section_3_2A.worklist_ssr_case_2c_40_staff_sessions_c12.p95_ms:2000.0>1800.0",
+                ),
+                # §3.2A SSR-01C 2a c=12: Ticket <= 1500ms vs old JSON <= 3000ms (p95=1750, p99=1900 <= 2000)
+                (
+                    "SSR-01C_2a_c12_shared_new",
+                    [
+                        ("worklist_ssr_acceptance_and_separation.case_2a_shared_new_session_c12.p95_ms", 1750.0),
+                        ("worklist_ssr_acceptance_and_separation.case_2a_shared_new_session_c12.p99_ms", 1900.0),
+                        ("scenario_summaries.telesale_worklist_page.p95_ms", 1750.0),
+                        ("scenario_summaries.telesale_worklist_page.p99_ms", 1900.0),
+                        ("worklist_ssr_acceptance_and_separation.priority_acceptance_case_1_shared_new_session_c12.p95_ms", 1750.0),
+                        ("worklist_ssr_acceptance_and_separation.priority_acceptance_case_1_shared_new_session_c12.p99_ms", 1900.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c12_ssr_telesale_worklist_page_only.p95_ms", 1750.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c12_ssr_telesale_worklist_page_only.p99_ms", 1900.0),
+                    ],
+                    "section_3_2A.worklist_ssr_case_2a_shared_new_session_c12.p95_ms:1750.0>1500.0",
+                ),
+                # §3.2A SSR-01C 2b c=12: Ticket <= 1500ms vs old JSON <= 3000ms
+                (
+                    "SSR-01C_2b_c12_single_init",
+                    [
+                        ("worklist_ssr_acceptance_and_separation.case_2b_single_initialized_session_c12.p95_ms", 1750.0),
+                        ("worklist_ssr_acceptance_and_separation.case_2b_single_initialized_session_c12.p99_ms", 1900.0),
+                    ],
+                    "section_3_2A.worklist_ssr_case_2b_single_initialized_session_c12.p95_ms:1750.0>1500.0",
+                ),
+                # §3.2A SSR-01C 2b c=40: Ticket <= 3000ms vs old JSON <= 4500ms (p95=3250, p99=3400 <= 3500)
+                (
+                    "SSR-01C_2b_c40_single_init",
+                    [
+                        ("worklist_ssr_acceptance_and_separation.case_2b_single_initialized_session_c40.p95_ms", 3250.0),
+                        ("worklist_ssr_acceptance_and_separation.case_2b_single_initialized_session_c40.p99_ms", 3400.0),
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.telesale_worklist_page.p95_ms", 3250.0),
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.telesale_worklist_page.p99_ms", 3400.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c40_ssr_telesale_worklist_page_single_session_only.p95_ms", 3250.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c40_ssr_telesale_worklist_page_single_session_only.p99_ms", 3400.0),
+                    ],
+                    "section_3_2A.worklist_ssr_case_2b_single_initialized_session_c40.p95_ms:3250.0>3000.0",
+                ),
+                # §3.2A SSR-02 campaigns & quality SSR: Ticket <= 1500ms vs old JSON <= 3000ms
+                (
+                    "SSR-02_campaigns_ssr_c12",
+                    [
+                        ("scenario_summaries.campaigns_distribution_view.p95_ms", 1750.0),
+                        ("scenario_summaries.campaigns_distribution_view.p99_ms", 1900.0),
+                    ],
+                    "section_3_2A.campaigns_distribution_ssr_c12_shared.p95_ms:1750.0>1500.0",
+                ),
+                (
+                    "SSR-02_quality_ssr_c12",
+                    [
+                        ("scenario_summaries.quality_overview_drilldown.p95_ms", 1750.0),
+                        ("scenario_summaries.quality_overview_drilldown.p99_ms", 1900.0),
+                    ],
+                    "section_3_2A.quality_overview_ssr_c12_shared.p95_ms:1750.0>1500.0",
+                ),
+                # §3.2A API-01 c=40: Ticket <= 1000ms vs old JSON <= 1500ms
+                (
+                    "API-01_c40_peak",
+                    [
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.my_customers_worklist_api.p95_ms", 1150.0),
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.my_customers_worklist_api.p99_ms", 1250.0),
+                    ],
+                    "section_3_2A.my_customers_worklist_api_c40_peak.p95_ms:1150.0>1000.0",
+                ),
+                # §3.2A API-02 c=12 per-leg: Ticket <= 400ms each leg while combined p95=550 <= 600ms
+                (
+                    "API-02_c12_each_leg_le_400ms",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.lead_detail_and_history_http.get_work_item_p95_ms", 500.0),
+                        ("s1_http_acceptance_and_mixed_waves.lead_detail_and_history_http.list_attempts_p95_ms", 480.0),
+                        ("s1_http_acceptance_and_mixed_waves.lead_detail_and_history_http.p95_ms", 550.0),
+                        ("s1_http_acceptance_and_mixed_waves.lead_detail_and_history_http.p99_ms", 700.0),
+                        ("p4_9_2_acceptance_matrix.items.open_lead_and_history_p95_le_2000ms.measured_http_p95_ms", 550.0),
+                    ],
+                    "section_3_2A.open_lead_and_history_role_40_sessions.get_work_item_p95_ms:500.0>400.0",
+                ),
+                # §3.2A API-03 c=12: Ticket <= 950ms vs old JSON / 7-metric precheck <= 1200ms
+                (
+                    "API-03_c12_write_le_950ms",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.p95_ms", 1050.0),
+                        ("s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.p99_ms", 1150.0),
+                        ("p4_9_2_acceptance_matrix.items.record_attempt_and_callback_p95_le_2000ms_zero_dup.measured_http_p95_ms", 1050.0),
+                    ],
+                    "section_3_2A.record_attempt_and_callback_role_40_sessions.p95_ms:1050.0>950.0",
+                ),
+                # §3.2A API-04 c=40: Ticket <= 1500ms vs old JSON <= 3000ms
+                (
+                    "API-04_c40_peak",
+                    [
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.bod_executive_overview_api.p95_ms", 1750.0),
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.bod_executive_overview_api.p99_ms", 1900.0),
+                    ],
+                    "section_3_2A.bod_executive_overview_api_c40_peak.p95_ms:1750.0>1500.0",
+                ),
+                # §3.2A API-05 c=40 daily & monthly: Ticket <= 2500ms vs old JSON <= 3000ms
+                (
+                    "API-05_c40_daily_drilldown",
+                    [
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_250k_api.p95_ms", 2750.0),
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_250k_api.p99_ms", 2900.0),
+                    ],
+                    "section_3_2A.kpi_drilldown_daily_campaign_api_c40_peak.p95_ms:2750.0>2500.0",
+                ),
+                (
+                    "API-05_c40_monthly_drilldown",
+                    [
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_monthly_company_api.p95_ms", 2750.0),
+                        ("peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_monthly_company_api.p99_ms", 2900.0),
+                    ],
+                    "section_3_2A.kpi_drilldown_monthly_company_250k_api_c40_peak.p95_ms:2750.0>2500.0",
+                ),
+                # §3.2A API-06 health_ping: Ticket <= 150ms vs old JSON <= 500ms
+                (
+                    "API-06_health_ping_c12",
+                    [
+                        ("scenario_summaries.health_ping.p95_ms", 200.0),
+                        ("scenario_summaries.health_ping.p99_ms", 230.0),
+                    ],
+                    "section_3_2A.health_ping_c12_shared.p95_ms:200.0>150.0",
+                ),
+                # §3.2B AGG-03 sessions_20 overall & sub-workloads: Ticket <= 800ms (950ms write) vs old JSON <= 1000ms (1200ms write)
+                (
+                    "AGG-03_sessions_20_overall",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.overall_summary.p95_ms", 900.0),
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.overall_summary.p99_ms", 1100.0),
+                    ],
+                    "section_3_2B.sessions_20.overall_summary.p95_ms:900.0>800.0",
+                ),
+                (
+                    "AGG-03_sessions_20_record_attempt_write",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.by_workload.record_attempt_write_api.p95_ms", 1050.0),
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.by_workload.record_attempt_write_api.p99_ms", 1150.0),
+                    ],
+                    "section_3_2B.sessions_20.by_workload.record_attempt_write_api.p95_ms:1050.0>950.0",
+                ),
+                # §3.2B AGG-03 sessions_40 sub-workloads: my_customers<=1000, lead_detail<=1300, write<=1500, bod<=1500 vs old 1500/2000/2000/2000
+                (
+                    "AGG-03_sessions_40_my_customers",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.my_customers_api.p95_ms", 1150.0),
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.my_customers_api.p99_ms", 1250.0),
+                    ],
+                    "section_3_2B.sessions_40.by_workload.my_customers_api.p95_ms:1150.0>1000.0",
+                ),
+                (
+                    "AGG-03_sessions_40_lead_detail",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.lead_detail_history_api.p95_ms", 1450.0),
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.lead_detail_history_api.p99_ms", 1550.0),
+                    ],
+                    "section_3_2B.sessions_40.by_workload.lead_detail_history_api.p95_ms:1450.0>1300.0",
+                ),
+                (
+                    "AGG-03_sessions_40_record_attempt_write",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.record_attempt_write_api.p95_ms", 1750.0),
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.record_attempt_write_api.p99_ms", 1900.0),
+                    ],
+                    "section_3_2B.sessions_40.by_workload.record_attempt_write_api.p95_ms:1750.0>1500.0",
+                ),
+                (
+                    "AGG-03_sessions_40_bod_overview",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.bod_overview_api.p95_ms", 1750.0),
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.bod_overview_api.p99_ms", 1900.0),
+                    ],
+                    "section_3_2B.sessions_40.by_workload.bod_overview_api.p95_ms:1750.0>1500.0",
+                ),
+                # §3.2B AGG-03 sessions_80 overall & sub-workload: Ticket <= 2500ms vs old JSON <= 3000ms
+                (
+                    "AGG-03_sessions_80_overall",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_80.overall_summary.p95_ms", 2750.0),
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_80.overall_summary.p99_ms", 3000.0),
+                    ],
+                    "section_3_2B.sessions_80.overall_summary.p95_ms:2750.0>2500.0",
+                ),
+                # §3.2C AGG-01 & AGG-02 aggregate load summaries (previously unchecked in old JSON)
+                (
+                    "AGG-01_c12_overall_summary",
+                    [
+                        ("overall_summary.p95_ms", 1500.0),
+                        ("overall_summary.p99_ms", 1700.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c12_overall_summary_all_8_scenarios.p95_ms", 1500.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c12_overall_summary_all_8_scenarios.p99_ms", 1700.0),
+                    ],
+                    "section_3_2C.aggregate_load_summaries.agg_01_c12_overall_summary.p95_ms:1500.0>1200.0",
+                ),
+                (
+                    "AGG-02_c40_peak_overall_summary",
+                    [
+                        ("peak_40_staff_concurrent_wave.overall_summary.p95_ms", 2800.0),
+                        ("peak_40_staff_concurrent_wave.overall_summary.p99_ms", 3000.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c40_overall_summary_peak_wave_5_scenarios.p95_ms", 2800.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c40_overall_summary_peak_wave_5_scenarios.p99_ms", 3000.0),
+                    ],
+                    "section_3_2C.aggregate_load_summaries.agg_02_c40_peak_overall_summary.p95_ms:2800.0>2500.0",
+                ),
+                # §3.2C domain_workloads_s1 contact_attempt_and_followup_write: Ticket <= 950ms vs old JSON <= 1200ms
+                (
+                    "domain_contact_attempt_write_le_950ms",
+                    [
+                        ("s1_domain_and_database_benchmark.domain_workloads_s1.contact_attempt_and_followup_write.p95_ms", 1050.0),
+                        ("s1_domain_and_database_benchmark.domain_workloads_s1.contact_attempt_and_followup_write.p99_ms", 1150.0),
+                    ],
+                    "section_3_2C.domain_workloads_s1.contact_attempt_and_followup_write.p95_ms:1050.0>950.0",
+                ),
+                # §3.2C BG-01 distribution: preview <= 10000ms (old 60000ms), drain <= 900000ms (old 1200000ms), enqueue <= 500ms
+                (
+                    "BG-01_distribution_preview_le_10s",
+                    [
+                        ("s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.preview_ms", 25000.0),
+                    ],
+                    "section_3_2C.distribution.preview_ms:25000.0>10000.0",
+                ),
+                (
+                    "BG-01_distribution_drain_le_15m",
+                    [
+                        ("s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.execute_and_worker_drain_ms", 1000000.0),
+                    ],
+                    "section_3_2C.distribution.execute_and_worker_drain_ms:1000000.0>900000.0",
+                ),
+                (
+                    "BG-01_distribution_enqueue_le_500ms",
+                    [
+                        ("s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.enqueue_api_ms", 650.0),
+                    ],
+                    "section_3_2C.distribution.enqueue_api_ms:650.0>500.0",
+                ),
+                # §3.2C BG-02 CSV import: preview <= 5000ms (old 15000ms), worker_commit_and_drain <= 300000ms (old 600000ms)
+                (
+                    "BG-02_csv_preview_le_5s",
+                    [
+                        ("s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.preview_ms", 9000.0),
+                    ],
+                    "section_3_2C.csv_import_50000_rows.preview_ms:9000.0>5000.0",
+                ),
+                (
+                    "BG-02_csv_worker_drain_le_5m",
+                    [
+                        ("s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.worker_commit_and_drain_ms", 400000.0),
+                        ("s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.total_preview_confirm_and_worker_drain_ms", 400650.63),
+                    ],
+                    "section_3_2C.csv_import_50000_rows.worker_commit_and_drain_ms:400000.0>300000.0",
+                ),
+                # §3.2C BG-03 KPI recompute: daily <= 30000ms (old 300000ms), monthly <= 120000ms (old 180000ms), wall <= 120000ms, UI p95 <= 500ms (old 800ms)
+                (
+                    "BG-03_kpi_daily_le_30s",
+                    [
+                        ("s1_domain_and_database_benchmark.kpi_recompute_s1.daily_incremental_ms", 60000.0),
+                    ],
+                    "section_3_2C.kpi_recompute_s1.daily_incremental_ms:60000.0>30000.0",
+                ),
+                (
+                    "BG-03_kpi_monthly_le_120s",
+                    [
+                        ("s1_domain_and_database_benchmark.kpi_recompute_s1.monthly_full_75k_wi_250k_att_ms", 150000.0),
+                    ],
+                    "section_3_2C.kpi_recompute_s1.monthly_full_ms:150000.0>120000.0",
+                ),
+                (
+                    "BG-03_kpi_queue_long_wall_le_120s",
+                    [
+                        ("s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.wall_ms", 150000.0),
+                    ],
+                    "section_3_2C.kpi_recompute_s1.background_queue_long_wall_ms:150000.0>120000.0",
+                ),
+                (
+                    "BG-03_kpi_concurrent_ui_p95_le_500ms",
+                    [
+                        ("s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.concurrent_ui_overview_reads.p95_ms", 650.0),
+                        ("s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.concurrent_ui_overview_reads.p99_ms", 800.0),
+                        ("p4_9_2_acceptance_matrix.items.recompute_kpi_non_blocking_atomic_publish.concurrent_ui_p95_ms", 650.0),
+                    ],
+                    "section_3_2C.kpi_recompute_s1.concurrent_ui_overview_p95_ms:650.0>500.0",
+                ),
+            ]
+
+            for label, mutations, expected_breach in gap_breach_cases:
+                with self.subTest(gap_case=label):
+                    cand = json.loads(json.dumps(vps_base))
+                    for path_str, val in mutations:
+                        set_path(cand, path_str, val)
+                    res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                        cand, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+                    )
+                    self.assertEqual(res["status"], "FAIL_THRESHOLD_BREACH", f"{label}: {res['status']}")
+                    self.assertIn(expected_breach, res["breached_checks"], f"{label}: {res['breached_checks']}")
+                    if label in ("API-02_c12_each_leg_le_400ms", "API-03_c12_write_le_950ms", "BG-03_kpi_daily_le_30s"):
+                        # 7-metric headline precheck still passes, proving full §3.2A-C catch is required
+                        self.assertTrue(res["all_7_metrics_within_v1_4_thresholds"], label)
+
+            # Verify sessions_40.by_workload.kpi_drilldown_api corrected from overly strict old 2000ms to Ticket 2500ms/3000ms
+            s40_drill_ok = json.loads(json.dumps(vps_base))
+            set_path(
+                s40_drill_ok,
+                "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.kpi_drilldown_api.p95_ms",
+                2250.0,
+            )
+            set_path(
+                s40_drill_ok,
+                "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.kpi_drilldown_api.p99_ms",
+                2400.0,
+            )
+            self.assertEqual(
+                dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                    s40_drill_ok, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+                )["status"],
+                "PASS",
+            )
+            s40_drill_fail = json.loads(json.dumps(vps_base))
+            set_path(
+                s40_drill_fail,
+                "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.kpi_drilldown_api.p95_ms",
+                2750.0,
+            )
+            set_path(
+                s40_drill_fail,
+                "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.kpi_drilldown_api.p99_ms",
+                2900.0,
+            )
+            s40_drill_fail_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                s40_drill_fail, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+            )
+            self.assertEqual(s40_drill_fail_res["status"], "FAIL_THRESHOLD_BREACH")
+            self.assertIn(
+                "section_3_2B.sessions_40.by_workload.kpi_drilldown_api.p95_ms:2750.0>2500.0",
+                s40_drill_fail_res["breached_checks"],
+            )
+
+            # 3. Dedicated p99 breach checks across §3.2A, §3.2B, and §3.2C (when p95 is strictly within max_p95_ms)
+            p99_breach_cases: list[tuple[str, list[tuple[str, object]], str]] = [
+                (
+                    "p99_3_2A_SSR_01A",
+                    [
+                        ("worklist_ssr_acceptance_and_separation.case_2c_40_staff_sessions_c40.p99_ms", 7800.0),
+                        ("s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c40.p99_ms", 7800.0),
+                        ("worklist_ssr_acceptance_and_separation.priority_acceptance_case_2_40_staff_sessions_c40.p99_ms", 7800.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c40_ssr_telesale_worklist_page_40_staff_sessions_only.p99_ms", 7800.0),
+                    ],
+                    "section_3_2A.worklist_ssr_case_2c_40_staff_sessions_c40.p99_ms:7800.0>7500.0",
+                ),
+                (
+                    "p99_3_2A_API_06",
+                    [("scenario_summaries.health_ping.p99_ms", 300.0)],
+                    "section_3_2A.health_ping_c12_shared.p99_ms:300.0>250.0",
+                ),
+                (
+                    "p99_3_2A_non_monotonic_p99_lt_p95",
+                    [
+                        ("scenario_summaries.my_customers_worklist_api.p95_ms", 400.0),
+                        ("scenario_summaries.my_customers_worklist_api.p99_ms", 350.0),
+                    ],
+                    "section_3_2A.my_customers_worklist_api_c12_shared.p99_lt_p95:350.0<400.0",
+                ),
+                (
+                    "p99_3_2B_sessions_20_overall",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.overall_summary.p99_ms", 1350.0),
+                    ],
+                    "section_3_2B.sessions_20.overall_summary.p99_ms:1350.0>1200.0",
+                ),
+                (
+                    "p99_3_2B_sessions_40_lead_detail",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.lead_detail_history_api.p99_ms", 1750.0),
+                    ],
+                    "section_3_2B.sessions_40.by_workload.lead_detail_history_api.p99_ms:1750.0>1600.0",
+                ),
+                (
+                    "p99_3_2B_sessions_80_overall",
+                    [
+                        ("s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_80.overall_summary.p99_ms", 3500.0),
+                    ],
+                    "section_3_2B.sessions_80.overall_summary.p99_ms:3500.0>3200.0",
+                ),
+                (
+                    "p99_3_2C_AGG_01",
+                    [
+                        ("overall_summary.p99_ms", 1950.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c12_overall_summary_all_8_scenarios.p99_ms", 1950.0),
+                    ],
+                    "section_3_2C.aggregate_load_summaries.agg_01_c12_overall_summary.p99_ms:1950.0>1800.0",
+                ),
+                (
+                    "p99_3_2C_AGG_02",
+                    [
+                        ("peak_40_staff_concurrent_wave.overall_summary.p99_ms", 3400.0),
+                        ("worklist_ssr_acceptance_and_separation.ssr_vs_aggregate_separation.c40_overall_summary_peak_wave_5_scenarios.p99_ms", 3400.0),
+                    ],
+                    "section_3_2C.aggregate_load_summaries.agg_02_c40_peak_overall_summary.p99_ms:3400.0>3200.0",
+                ),
+                (
+                    "p99_3_2C_domain_contact_attempt_write",
+                    [
+                        ("s1_domain_and_database_benchmark.domain_workloads_s1.contact_attempt_and_followup_write.p99_ms", 1350.0),
+                    ],
+                    "section_3_2C.domain_workloads_s1.contact_attempt_and_followup_write.p99_ms:1350.0>1200.0",
+                ),
+                (
+                    "p99_3_2C_BG_03_concurrent_ui_p99",
+                    [
+                        ("s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.concurrent_ui_overview_reads.p99_ms", 1150.0),
+                    ],
+                    "section_3_2C.kpi_recompute_s1.concurrent_ui_overview_p99_ms:1150.0>1000.0",
+                ),
+            ]
+            for label, mutations, expected_breach in p99_breach_cases:
+                with self.subTest(p99_breach=label):
+                    cand = json.loads(json.dumps(vps_base))
+                    for path_str, val in mutations:
+                        set_path(cand, path_str, val)
+                    res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                        cand, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+                    )
+                    self.assertEqual(res["status"], "FAIL_THRESHOLD_BREACH", label)
+                    self.assertIn(expected_breach, res["breached_checks"], f"{label}: {res['breached_checks']}")
+
+            # 4. Missing p99 measurements across §3.2A, §3.2B, and §3.2C MUST report FAIL_MISSING_MEASUREMENTS
+            missing_p99_paths = [
+                "worklist_ssr_acceptance_and_separation.case_2c_40_staff_sessions_c12.p99_ms",
+                "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.overall_summary.p99_ms",
+                "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.my_customers_api.p99_ms",
+                "overall_summary.p99_ms",
+                "peak_40_staff_concurrent_wave.overall_summary.p99_ms",
+                "s1_domain_and_database_benchmark.domain_workloads_s1.bod_executive_overview.p99_ms",
+                "s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.concurrent_ui_overview_reads.p99_ms",
+            ]
+            for miss_p99 in missing_p99_paths:
+                with self.subTest(missing_p99=miss_p99):
+                    cand = json.loads(json.dumps(vps_base))
+                    del_path(cand, miss_p99)
+                    res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                        cand, owner_slo_approval=valid_approval, vps_receipts=vps_receipt_dir
+                    )
+                    self.assertEqual(res["status"], "FAIL_MISSING_MEASUREMENTS", miss_p99)
+                    self.assertIn(miss_p99, res["missing_measurements"])
+
 
 if __name__ == "__main__":
     unittest.main()

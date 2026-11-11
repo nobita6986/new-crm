@@ -1,1 +1,2 @@
 deploy/dev/**/*.sh text eol=lf
+deploy/ops/g18_slo_thresholds_v1_4.json text eol=lf
