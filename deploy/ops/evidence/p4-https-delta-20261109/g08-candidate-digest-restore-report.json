@@ -1,15 +1,15 @@
 {
   "schema_version": "p4-offsite-restore-v2",
   "status": "PASS",
-  "started_at_utc": "2026-11-10T05:55:35.875160+00:00",
-  "archive_sha256": "139aa7334b262c72e1dcc66e57f1d92ea00f082d62ea83b35bbf35073a5afe10",
-  "project": "crm-cskh-p4-restore-20261110055535-9bbc12",
+  "started_at_utc": "2026-11-11T04:33:39.463872+00:00",
+  "archive_sha256": "c82581df0a2a1fdf53137074a90d8f937ad915d3b88b8c9a530aec7e60b3e42a",
+  "project": "crm-cskh-p4-restore-20261111043339-4afeff",
   "source_project": "crm-cskh-src-sim",
   "images": {
-    "backend": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+    "backend": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
     "db": "sha256:c1d04d5c27cfe84c85c8b11684d121b93df541ee2ccfdf62f72f2ac4ff37f762",
     "redis-cache": "sha256:166f6f1437e3ae4bb78589379bc6e7937ea6e9fdd93fbb6cdf3a7fd509ca7c9e",
-    "frontend": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829"
+    "frontend": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee"
   },
   "restored": {
     "before_migrate": {
@@ -35,7 +35,7 @@
         "crm_cskh"
       ],
       "table_sha256": {
-        "CRM Lead": "b885d7b61f86a48647275d227682f4a12f175da1eb5e90dd6d73531a97651b02",
+        "CRM Lead": "be125431c255edf179f381e22f2bac1bcec5942a30fc72b8eb38268516d24a35",
         "CRM Deal": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
         "CSKH Work Item": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
         "CSKH Active Claim": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
@@ -45,13 +45,13 @@
         "CSKH SLA Obligation": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
         "CSKH KPI Snapshot": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
         "CSKH KPI Run": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-        "CRM Form Script": "ae61c6c697013df5f76868d2a5e72591759edf50e9110876890ab4bcca8ae67b",
-        "User": "29c25cf8f052cf6e9ea067961e6562007203d962f8191d132150aa3f55877105",
-        "Translation": "e60f9cdc5e72fb7a7afbca46a78f804d917709d59087b88f8350cb7e26816130",
-        "File": "2a080d7b933116919ff3128932347267bcf99e83196039bffb9b314d1aec7d07"
+        "CRM Form Script": "c775b4912c0a4d15107726cc58068a24835ea1246221a82bef936951ace09b5c",
+        "User": "a9e79de5ac37e35d4497d3e9c0e83f88b168461d59b61b2317c10ca33564714b",
+        "Translation": "417329ba94aa4c51a24d2403511ee30b685870c83388123757a51e401cdce7d1",
+        "File": "aef43ce69dbcb234d3a29d6ff50b5c838c884c9aa4554ecc7fae3cbe40ffa97d"
       },
       "translation_rows": 5,
-      "translation_sha256": "a537a04f3726a50259916b1367d06d73f2bef06f0e4761f65148df8c87bc4a79",
+      "translation_sha256": "fa6462b000e61baa9e2b2612f7bf71e21e04bf259333563b95825ffb53923b61",
       "encrypted_credentials_decrypted": 0
     },
     "after_migrate": {
@@ -77,7 +77,7 @@
         "crm_cskh"
       ],
       "table_sha256": {
-        "CRM Lead": "b885d7b61f86a48647275d227682f4a12f175da1eb5e90dd6d73531a97651b02",
+        "CRM Lead": "be125431c255edf179f381e22f2bac1bcec5942a30fc72b8eb38268516d24a35",
         "CRM Deal": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
         "CSKH Work Item": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
         "CSKH Active Claim": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
@@ -87,13 +87,13 @@
         "CSKH SLA Obligation": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
         "CSKH KPI Snapshot": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
         "CSKH KPI Run": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
-        "CRM Form Script": "c992b42812cfcf9c7fac0016efe799ac5ef409701404345737d47a08b40f4d30",
-        "User": "29c25cf8f052cf6e9ea067961e6562007203d962f8191d132150aa3f55877105",
-        "Translation": "e60f9cdc5e72fb7a7afbca46a78f804d917709d59087b88f8350cb7e26816130",
-        "File": "2a080d7b933116919ff3128932347267bcf99e83196039bffb9b314d1aec7d07"
+        "CRM Form Script": "ebc0ec68c242b8437aa799576b52ea30f4f4d6817f0fe314531771eb269b6c24",
+        "User": "a9e79de5ac37e35d4497d3e9c0e83f88b168461d59b61b2317c10ca33564714b",
+        "Translation": "417329ba94aa4c51a24d2403511ee30b685870c83388123757a51e401cdce7d1",
+        "File": "aef43ce69dbcb234d3a29d6ff50b5c838c884c9aa4554ecc7fae3cbe40ffa97d"
       },
       "translation_rows": 5,
-      "translation_sha256": "a537a04f3726a50259916b1367d06d73f2bef06f0e4761f65148df8c87bc4a79",
+      "translation_sha256": "fa6462b000e61baa9e2b2612f7bf71e21e04bf259333563b95825ffb53923b61",
       "invariants": {
         "duplicate_active_leads": 0,
         "owner_mismatch_active_work_items": 0,
@@ -107,21 +107,21 @@
     },
     "migrate_x2_idempotent": true,
     "migrate_seconds": [
-      4.663,
-      4.361
+      4.094,
+      3.899
     ],
     "worker_phase_seconds": {
-      "new_site_init": 22.598,
-      "sql_and_files_restore_only": 3.166,
-      "pre_migrate_reconciliation": 2.75,
-      "migrate_run_1": 4.663,
-      "migrate_run_2": 4.361,
-      "post_migrate_reconciliation_and_invariants": 2.176
+      "new_site_init": 28.065,
+      "sql_and_files_restore_only": 4.254,
+      "pre_migrate_reconciliation": 2.372,
+      "migrate_run_1": 4.094,
+      "migrate_run_2": 3.899,
+      "post_migrate_reconciliation_and_invariants": 1.864
     },
     "translation_integrity": {
       "status": "PASS",
       "translation_override_rows": 5,
-      "translation_sha256": "a537a04f3726a50259916b1367d06d73f2bef06f0e4761f65148df8c87bc4a79",
+      "translation_sha256": "fa6462b000e61baa9e2b2612f7bf71e21e04bf259333563b95825ffb53923b61",
       "effective_overrides_verified": 5,
       "core_vi_catalog_verified": true,
       "errors": []
@@ -199,8 +199,8 @@
     "encrypted_secret_post_migrate_x2_verified": true,
     "migrate_x2_idempotent": true,
     "migrate_seconds": [
-      4.435,
-      4.427
+      3.518,
+      3.613
     ],
     "public_file_bytes_and_sha256_match": true,
     "private_file_bytes_and_sha256_match": true,
@@ -230,22 +230,22 @@
     "measurement_scope": "isolated_single_host_container_dr_drill_excluding_offsite_wan_transfer",
     "sql_import_only_is_full_rto": false,
     "phases_seconds": {
-      "archive_checksum_decrypt_and_extract": 0.128,
-      "isolated_stack_bootstrap_and_db_ready": 5.157,
-      "new_site_init": 22.598,
-      "sql_and_files_restore_only": 3.166,
-      "pre_migrate_reconciliation": 2.75,
-      "migrate_run_1": 4.663,
-      "migrate_run_2": 4.361,
-      "post_migrate_reconciliation_and_invariants": 2.176,
-      "web_service_start_and_authenticated_http_smoke": 4.475
+      "archive_checksum_decrypt_and_extract": 0.097,
+      "isolated_stack_bootstrap_and_db_ready": 7.551,
+      "new_site_init": 28.065,
+      "sql_and_files_restore_only": 4.254,
+      "pre_migrate_reconciliation": 2.372,
+      "migrate_run_1": 4.094,
+      "migrate_run_2": 3.899,
+      "post_migrate_reconciliation_and_invariants": 1.864,
+      "web_service_start_and_authenticated_http_smoke": 4.114
     },
-    "sql_and_files_restore_only_seconds": 3.166,
-    "measured_end_to_end_isolated_dr_rto_seconds": 50.1,
-    "positive_control_drill_seconds_excluded_from_rto": 23.165,
-    "total_drill_wall_seconds_with_positive_control": 73.298
+    "sql_and_files_restore_only_seconds": 4.254,
+    "measured_end_to_end_isolated_dr_rto_seconds": 56.881,
+    "positive_control_drill_seconds_excluded_from_rto": 21.616,
+    "total_drill_wall_seconds_with_positive_control": 78.526
   },
-  "restore_and_verify_seconds": 73.298,
+  "restore_and_verify_seconds": 78.526,
   "cleanup_exit_code": 0,
   "remaining_restore_resources": {
     "container": [],
@@ -253,5 +253,5 @@
     "network": []
   },
   "live_containers_unchanged": true,
-  "finished_at_utc": "2026-11-10T05:56:59.815609+00:00"
+  "finished_at_utc": "2026-11-11T04:35:08.905344+00:00"
 }

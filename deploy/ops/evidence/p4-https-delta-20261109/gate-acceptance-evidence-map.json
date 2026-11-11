@@ -421,10 +421,12 @@
       ]
     }
   ],
-  "t1a_https_browser_dr_commit_sha": "0762ef66f6b5f88a4105127e41e71955d000495d",
-  "t1a_https_browser_dr_ci_run_id": 42770672473,
+  "t1a_https_browser_dr_commit_sha": "7cf697bd12798d87a5209358c7e80f4f55a4663d",
+  "t1a_https_browser_dr_ci_run_id": 42959552770,
   "t1b_batch2_delta_commit_sha": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
   "t1b_batch2_delta_ci_run_id": 42825411058,
   "t1b_candidate_verify_and_s1_ci_run_id": 42823368860,
-  "integrated_candidate_manifest": "deploy/ops/evidence/p4-integrated-candidate-manifest.json"
+  "integrated_candidate_manifest": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
+  "verified_code_commit_sha": "7cf697bd12798d87a5209358c7e80f4f55a4663d",
+  "verified_ci_run_id": 42959552770
 }

@@ -17,7 +17,7 @@
     "passed": true
   },
   "runtime_env_audit": {
-    "event_name": "local",
+    "event_name": "push",
     "enforced": false,
     "leaked_secret_env_names": [],
     "passed": true

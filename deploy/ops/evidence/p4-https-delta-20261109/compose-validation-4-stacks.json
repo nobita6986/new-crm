@@ -10,16 +10,16 @@
       "project_name": "crm-cskh-prod",
       "site_name": "crm.example.invalid",
       "services_default": [
-        "db",
         "redis-cache",
         "redis-queue",
+        "db",
         "configurator",
+        "queue-long",
+        "queue-short",
         "backend",
         "websocket",
         "frontend",
         "proxy",
-        "queue-long",
-        "queue-short",
         "scheduler"
       ],
       "services_with_migrate_profile": [
@@ -27,14 +27,14 @@
         "redis-cache",
         "redis-queue",
         "configurator",
-        "migrator",
-        "queue-short",
         "backend",
         "websocket",
         "frontend",
         "proxy",
         "queue-long",
-        "scheduler"
+        "queue-short",
+        "scheduler",
+        "migrator"
       ],
       "app_services_mounting_named_logs_volume": [
         "backend",
@@ -77,27 +77,27 @@
         "redis-queue",
         "db",
         "configurator",
+        "queue-long",
         "scheduler",
+        "queue-short",
         "websocket",
         "backend",
         "frontend",
-        "queue-long",
-        "queue-short",
         "proxy"
       ],
       "services_with_migrate_profile": [
-        "redis-queue",
         "db",
         "redis-cache",
+        "redis-queue",
         "configurator",
         "websocket",
         "backend",
         "frontend",
         "queue-short",
-        "migrator",
+        "scheduler",
         "proxy",
         "queue-long",
-        "scheduler"
+        "migrator"
       ],
       "app_services_mounting_named_logs_volume": [
         "backend",
@@ -136,31 +136,31 @@
       "project_name": "crm-cskh-p4-smoke",
       "site_name": "p4-smoke.localhost",
       "services_default": [
-        "proxy",
+        "redis-queue",
         "db",
         "redis-cache",
-        "redis-queue",
         "configurator",
-        "queue-long",
-        "queue-short",
+        "scheduler",
         "backend",
+        "proxy",
         "websocket",
         "frontend",
-        "scheduler"
+        "queue-long",
+        "queue-short"
       ],
       "services_with_migrate_profile": [
-        "db",
         "redis-cache",
         "redis-queue",
+        "db",
         "configurator",
         "backend",
         "websocket",
         "frontend",
-        "proxy",
         "queue-short",
-        "scheduler",
         "migrator",
-        "queue-long"
+        "proxy",
+        "queue-long",
+        "scheduler"
       ],
       "app_services_mounting_named_logs_volume": [
         "backend",
@@ -202,8 +202,8 @@
         "redis-queue",
         "configurator",
         "scheduler",
-        "websocket",
         "backend",
+        "websocket",
         "frontend",
         "proxy",
         "queue-long",
@@ -217,11 +217,11 @@
         "backend",
         "websocket",
         "frontend",
+        "queue-short",
+        "scheduler",
         "migrator",
         "proxy",
-        "queue-long",
-        "queue-short",
-        "scheduler"
+        "queue-long"
       ],
       "app_services_mounting_named_logs_volume": [
         "backend",

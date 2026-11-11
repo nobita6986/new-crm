@@ -1,8 +1,8 @@
 {
   "schema_version": "cskh-p4-https-browser-uat-security-v1",
-  "timestamp_utc": "2026-11-10T06:03:32Z",
+  "timestamp_utc": "2026-11-11T04:38:35Z",
   "status": "PASS",
-  "duration_seconds": 77.22,
+  "duration_seconds": 56.17,
   "browser_engine": "Playwright Headless Chromium",
   "transport": "HTTPS_TLS_VERIFIED_IGNORE_HTTPS_ERRORS_FALSE",
   "viewport": "1366x768",
@@ -12,7 +12,7 @@
     "platform": "posix",
     "certutil_available": true,
     "nss_db": "/home/runner/.pki/nssdb",
-    "nickname": "cskh-dr-ca-1794290534",
+    "nickname": "cskh-dr-ca-1794371858",
     "nss_imported": true
   },
   "administrator_used_for_business_journeys": false,

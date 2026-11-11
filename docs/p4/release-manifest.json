@@ -28,7 +28,7 @@
   "verification_runs": {
     "candidate_build_junit_and_s1_benchmark_url": "https://github.com/nobita6986/new-crm/actions/runs/42823368860",
     "batch2_delta_url": "https://github.com/nobita6986/new-crm/actions/runs/42825411058",
-    "isolated_staging_dr_https_delta_url": "https://github.com/nobita6986/new-crm/actions/runs/42770672473",
+    "isolated_staging_dr_https_delta_url": "https://github.com/nobita6986/new-crm/actions/runs/42959552770",
     "vps_isolated_restore_and_timers_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
     "junit_tests_passed": 421,
     "junit_tests_total": 421

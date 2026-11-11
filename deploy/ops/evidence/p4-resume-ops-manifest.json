@@ -1,11 +1,11 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
-  "generated_at_utc": "2026-11-11T04:28:00Z",
+  "generated_at_utc": "2026-11-11T04:44:00Z",
   "branch": "codex/p4-resume-ops",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
   "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
   "ancestor_review_base_sha": "31e51fcac7a640fdab10517f47f02335d7b1f749",
-  "verified_code_commit_sha": "0762ef66f6b5f88a4105127e41e71955d000495d",
+  "verified_code_commit_sha": "7cf697bd12798d87a5209358c7e80f4f55a4663d",
   "vps_execution_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
   "overall_p4_status": "IN_PROGRESS_BLOCKED_ON_OWNER_INPUTS",
   "p4_promoted_to_pass": false,
@@ -34,9 +34,9 @@
       "junit_failures": 0
     },
     "ci_https_delta_evidence": {
-      "ci_run_id": 42770672473,
-      "ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42770672473",
-      "verified_code_commit_sha": "0762ef66f6b5f88a4105127e41e71955d000495d",
+      "ci_run_id": 42959552770,
+      "ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42959552770",
+      "verified_code_commit_sha": "7cf697bd12798d87a5209358c7e80f4f55a4663d",
       "t1b_batch2_ci_run_id": 42825411058,
       "t1b_batch2_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42825411058",
       "t1b_batch2_verified_sha": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
@@ -372,17 +372,17 @@
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/SHA256SUMS.txt",
       "bytes": 1505,
-      "sha256": "b1e7f1ed4355d8bbf9d8b042219bc7e663a3c9a9fbaf1ea307836013f55cc2d0"
+      "sha256": "221704b89a9c7d494d9ebf4f8c4fdf548e091cd9de2c04d3e8e68414bb753fbe"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/candidate-registry-pull-inspect-receipt.json",
-      "bytes": 2110,
-      "sha256": "311d4dfd89be880f3afd6710e7026112025eb2e7ebb7e8f77a0eb1c2c99d3b24"
+      "bytes": 2146,
+      "sha256": "fc089c3b5d8d41adb7af1203ded2101989230bfd386e2671d44123f43c2aeccd"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/compose-validation-4-stacks.json",
       "bytes": 6834,
-      "sha256": "4644a5f054bc69c5b5b340f5855a130773d3b3d12dfb5d6ff2d8cb69c396de13"
+      "sha256": "319d4b291cd757a362ba1163b79ec3008d320b9e4b247fca9f9424da904c5ba5"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g06-g09-migration-and-rollback-report.json",
@@ -392,7 +392,7 @@
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g07-candidate-digest-drill.json",
       "bytes": 1148,
-      "sha256": "fab91a475aca26082307e650abaf0fd4026974f2831e8f0045adf4082382f809"
+      "sha256": "3e23ad415a68a46ecd3109912773813b1827fec5ef2cb5e24fffa47663b131f0"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g07-gate-vps-audit.json",
@@ -401,8 +401,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g08-candidate-digest-restore-report.json",
-      "bytes": 9722,
-      "sha256": "333d29b33b0e7c4ef4e15c590f3d66160fb2e8346b37cdd768a5289e78e23356"
+      "bytes": 9726,
+      "sha256": "0862443f0dd8afa35736e311de4670563c766790b4b72519cb1e9d4d3244fd38"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g11-g12-security-topology-report.json",
@@ -421,38 +421,38 @@
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/gate-acceptance-evidence-map.json",
-      "bytes": 12082,
-      "sha256": "88832c599efe06dd45522a790223e1e7860194559130fb58c6b04c68509b3c61"
+      "bytes": 12193,
+      "sha256": "91581122b834d1721a6ab57ad0ba4a2488fa6d892c52f2094c8837a41c74b060"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
       "bytes": 15289,
-      "sha256": "2d3476d7a7231b2406cc54a2c4134d62bc7cfd7bd7451df7c70dec4c72685776"
+      "sha256": "5887c51128618ebf306c05b56450e86ed0054535eca966ecf1ef43736c389c31"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/isolated-staging-dr-https-report.json",
-      "bytes": 36095,
-      "sha256": "f2a7ca54e3dca0663a7a0366540be8f5887204e9b66f0b57e0b8a2a9cb0ea679"
+      "bytes": 36179,
+      "sha256": "2ae4c3300371993cbddda941a9fc389b096fe720f72cd3f5c19d7dffba6b357f"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/posix-ops-unit-tests.json",
       "bytes": 354,
-      "sha256": "d3814eca6f7fa9584acdf9fcee00f7bb1d454132540b229829a14738fd1109ad"
+      "sha256": "4842c08fa6af328c18197150f2a47efe5923c1eedd4a0cc3b5a849073730bac5"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/pr-isolation-audit.json",
-      "bytes": 898,
-      "sha256": "6c77d81fd7fef1780791b45d95664045026a9a6cb3500e8f2d71dd525e56b4ed"
+      "bytes": 897,
+      "sha256": "25b68d0fe9e991d386c3258061e801994dea8e20f751eca83ab4a7435560b4a1"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json",
       "bytes": 6199,
-      "sha256": "e992fa3d9a7fdb6f024483552c4ac1a6c73ef5d91530501c3838fc4daf2b46ba"
+      "sha256": "12d2140e7eaac75f110d4598245bf1b1a03bf9bcf1dab67af56ae4a060939571"
     },
     {
       "path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
-      "bytes": 14766,
-      "sha256": "48378b0af2ceb2d63698a838c6a97f7802e73caedd09ffaef8c9ecf6c8dfe801"
+      "bytes": 14999,
+      "sha256": "d63f068341251c3e9c1d6fdeed00a837113e4c026eaea0cbdd72e3baf869174c"
     },
     {
       "path": "deploy/ops/evidence/p4-vps-live-20261109/SHA256SUMS.txt",
@@ -656,8 +656,8 @@
     },
     {
       "path": "docs/p4/P4-exit-report.md",
-      "bytes": 32279,
-      "sha256": "5c99c4a891ac8807b7cd6b8a44ae61b99b307a61a0da215d07e63f2cc67a97f0"
+      "bytes": 32328,
+      "sha256": "e4fa302da37884a20bc263250450b8b5374c8412ec4fb93b8eaf81486086ea52"
     },
     {
       "path": "docs/p4/api-contract.md",
@@ -752,7 +752,7 @@
     {
       "path": "docs/p4/release-manifest.json",
       "bytes": 3540,
-      "sha256": "f8c94fb88d80f0601a8258918bbb82e381a61903f7d260dfb6fc55954ec148f4"
+      "sha256": "bcd5b730c4324dfcceb55b7f71d3fb9d992e70ec6cce5615ed0136c4804edb7e"
     },
     {
       "path": "docs/p4/release-runbook.md",

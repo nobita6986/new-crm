@@ -16,6 +16,9 @@
       "p4_candidate_verify_and_s1_benchmark_run_id": 42823368860,
       "p4_batch2_delta_run_id": 42825411058
     },
+    "t1a_integrated_https_dr_ci_run_id": 42959552770,
+    "t1a_integrated_https_dr_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42959552770",
+    "integrated_code_sha": "7cf697bd12798d87a5209358c7e80f4f55a4663d",
     "apps_tree_sha": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578",
     "crm_cskh_tree_sha": "fbfafa93c7334684edfba633754964f9c3cc9868",
     "apps_tree_parity_with_locked_candidate": true
@@ -90,7 +93,7 @@
   "compose_and_config_sha": {
     "deploy_compose_git_tree_sha": "89c564918abacb52d8511e3075d94c62e74a5be6",
     "deploy_images_git_tree_sha": "44acc06d2de97e3161171408ca0859a8f36f24a8",
-    "rendered_dr_https_compose_config_sha256": "ddb80a87b246a4fc0360eabf982482b643485ea0ea0e9f4a9800fe938b2b22ec",
+    "rendered_dr_https_compose_config_sha256": "496cb03ffb2447b9ac0ea12b9711a279dfc87d053ce053621f9c7baf1f58665a",
     "release_lock_sha256": "8ccad179ae5832e58196c6f1591bb15138d3b4605ef504126797dd71c3208f8b",
     "runtime_isolation_audit_path": "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json",
     "environment_inventory_doc": "docs/p4/infra-inventory.md"
