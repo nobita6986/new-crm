@@ -8,7 +8,7 @@
   - Wrapper thực tế: `/opt/crm-cskh-staging/staging-compose` · Cấu hình: `/opt/crm-cskh-staging/.env.staging` (`0600`)
   - Overlay tên miền thực tế: `/opt/crm-cskh-staging/compose.domain.yaml` (nối sau 8 tệp Compose gốc qua `--extra-compose-file /opt/crm-cskh-staging/compose.domain.yaml`)
   - Image đang chạy: `sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9` (source `467204176326f046442b5e20c381f9a895b6e176`)
-- **Trạng thái thực thi Go-Live Production hiện tại:** **`BLOCKED`** *(Diễn tập khôi phục bản clone cô lập trên VPS đã `PASS` tại `142.598s` và timer sức khỏe 5 phút đã tự kích hoạt `PASS`; Go-Live toàn bộ P4 vẫn `BLOCKED` chờ Owner cấp đích lưu trữ offsite tự động `BLK-INFRA-05` cho `G07`, đầu mối/webhook cảnh báo `BLK-GOV-06`/`BLK-INFRA-07` cho `G19`/`G24`, ký nhận UAT 5 vai trò `G13..G22` và phê duyệt cắt chuyển — tuyệt đối chưa tự nâng P4 thành `PASS` hoặc tự cutover live)*.
+- **Trạng thái thực thi Go-Live Production hiện tại:** **`BLOCKED`** *(15 cổng `T1C` đã ký được bảo toàn nguyên vẹn, gồm diễn tập khôi phục bản clone cô lập trên VPS `PASS` tại `142.598s` và timer sức khỏe 5 phút tự kích hoạt `PASS`; Go-Live Production vẫn `BLOCKED` chờ Owner cấp SSH `BLK-SSH-T1A` cho `G03`/`G05`/`G18` trên VPS đích, xử lý `G04` để mở khóa `production_candidate`, cấp đích lưu trữ offsite tự động + lưu ký khóa riêng `BLK-INFRA-05` cho `G07`, đầu mối/webhook cảnh báo `BLK-GOV-06`/`BLK-INFRA-07` cho `G19`/`G24`, ký nhận UAT 4 vai trò nghiệp vụ `G22`, bàn giao Operator riêng `G24` và phê duyệt cắt chuyển `G23` — tuyệt đối không dùng khóa `ci_ephemeral_rehearsal` để phê duyệt Production và chưa cutover live)*.
 
 ---
 

@@ -1,11 +1,64 @@
 {
   "schema_version": "cskh-p4-integrated-candidate-manifest-v1",
-  "generated_at_utc": "2026-11-11T09:37:00Z",
+  "generated_at_utc": "2026-11-11T14:00:00Z",
   "candidate_verification_only": true,
   "promoted_to_production": false,
   "owner_live_site_touched": false,
+  "gate_accounting": {
+    "preserved_t1c_signed_gates_count": 15,
+    "preserved_t1c_signed_gates": [
+      "G01",
+      "G02",
+      "G06",
+      "G08",
+      "G09",
+      "G10",
+      "G11",
+      "G12",
+      "G13",
+      "G14",
+      "G15",
+      "G16",
+      "G17",
+      "G20",
+      "G21"
+    ],
+    "blocked_gates_count": 9,
+    "blocked_gates": [
+      "G03",
+      "G04",
+      "G05",
+      "G07",
+      "G18",
+      "G19",
+      "G22",
+      "G23",
+      "G24"
+    ],
+    "full_rerun_executed": false
+  },
+  "staging_verification_and_resource_governance": {
+    "verification_scope": "staging_candidate_isolated_verification",
+    "production_candidate_status": "BLOCKED",
+    "g04_status": "BLOCKED",
+    "rehearsal_signing_key_allowed_for_production": false,
+    "banned_rehearsal_public_key_fingerprints": [
+      "b3e6137bbe048229ec0da37b434bff40b8f30cd966573b76"
+    ],
+    "isolated_staging_daemon_services_capped": 10,
+    "total_capped_ram_mib": 5696.0,
+    "total_capped_cpus": 6.0,
+    "headroom_audit_phases": [
+      "before_isolated_staging",
+      "during_isolated_staging",
+      "after_isolated_staging"
+    ],
+    "inventory_and_config_receipt": "staging-inventory-and-config-audit.json",
+    "t1b_digest_refresh_subcommand": "python3 deploy/ops/manage_isolated_staging_dr.py refresh-candidate-digest"
+  },
   "integration_lineage": {
     "integration_branch": "codex/p4-resume-ops",
+    "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
     "base_main_n_minus_1_sha": "467830195358b2431ac772486530ab935887a518",
     "t1a_ops_baseline_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
     "t1a_locked_ops_handoff_sha": "0762ef66f6b5f88a4105127e41e71955d000495d",
@@ -18,7 +71,9 @@
     },
     "t1a_integrated_https_dr_ci_run_id": 42994618293,
     "t1a_integrated_https_dr_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42994618293",
-    "integrated_code_sha": "0b4fcfb28bbde667742fe4c219a1bd216e7b62b3",
+    "t1a_latest_ops_dr_rehearsal_ci_run_id": 43031124613,
+    "t1a_latest_ops_dr_rehearsal_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/43031124613",
+    "integrated_code_sha": "dd3d18ebc811784764b48faeaa57ac145859570e",
     "apps_tree_sha": "4d361e68912f52243751ae5986cabbd13033f050",
     "crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
     "apps_tree_parity_with_locked_candidate": true
@@ -67,9 +122,9 @@
   "registry_digest": {
     "candidate_image_uri": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
     "oci_config_image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
-    "mariadb_image": "mariadb:11.8@sha256:f16d7a344413e519dff518f27bdb221388f274c97c4fb5f2cb0dc1b34fa",
+    "mariadb_image": "mariadb:11.8@sha256:f16d7a344413e519dff518f27bdb221388f84b0d274c97c4fb5f2cb0dc1b34fa",
     "redis_image": "redis:8.6-alpine@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba",
-    "proxy_image": "traefik:v3.3@sha256:1fb7fe1eb8eb2ebccfb6bf9d96f0ed1f639f3ac60bc181cebd3bd6f21a1e62d8",
+    "proxy_image": "traefik:v3.7@sha256:68ae5fe5b64ca166704b746a9e8afcd385e36b3f569a5691401bf652d57b3748",
     "pull_inspect_receipt_path": "deploy/ops/evidence/p4-https-delta-20261109/candidate-registry-pull-inspect-receipt.json",
     "live_production_untouched_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
     "staging_target_pullability_check": {
@@ -92,9 +147,9 @@
   },
   "compose_and_config_sha": {
     "deploy_compose_git_tree_sha": "89c564918abacb52d8511e3075d94c62e74a5be6",
-    "deploy_images_git_tree_sha": "44acc06d2de97e3161171408ca0859a8f36f24a8",
+    "deploy_images_git_tree_sha": "2497dfbb9368aba61bdee7c602cbe4e48790f53a",
     "rendered_dr_https_compose_config_sha256": "496cb03ffb2447b9ac0ea12b9711a279dfc87d053ce053621f9c7baf1f58665a",
-    "release_lock_sha256": "8ccad179ae5832e58196c6f1591bb15138d3b4605ef504126797dd71c3208f8b",
+    "release_lock_sha256": "afb030b78ec674881cda9437fed504b62c3a7be60af654065c292049f92d4c5f",
     "runtime_isolation_audit_path": "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json",
     "inspected_app_services_count": 6,
     "inspected_app_services": [

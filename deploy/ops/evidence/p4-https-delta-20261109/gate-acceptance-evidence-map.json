@@ -1,7 +1,10 @@
 {
   "schema_version": "cskh-p4-gate-acceptance-evidence-map-v1",
-  "generated_at_utc": "2026-11-10T06:10:01Z",
+  "generated_at_utc": "2026-11-11T14:00:00Z",
+  "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
   "baseline_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
+  "preserved_t1c_signed_gates_count": 15,
+  "blocked_gates_count": 9,
   "g08_vps_restore_preserved_untouched": true,
   "live_vps_cutover_executed": false,
   "gates": [
@@ -35,9 +38,13 @@
     },
     {
       "gate": "G03",
-      "status": "PASS",
+      "status": "BLOCKED",
+      "ci_rehearsal_status": "PASS",
       "acceptance_ids": [
         "P4-01-ISOLATION-6DIM"
+      ],
+      "blocker_ids": [
+        "BLK-SSH-T1A"
       ],
       "evidence_paths": [
         "docs/p4/infra-inventory.md",
@@ -65,10 +72,13 @@
     {
       "gate": "G05",
       "status": "BLOCKED",
+      "ci_rehearsal_status": "PASS",
+      "production_candidate_status": "BLOCKED",
       "acceptance_ids": [
         "P4-02-DIGEST-PROMOTION"
       ],
       "blocker_ids": [
+        "BLK-SSH-T1A",
         "G04-UPSTREAM-CVE-AND-OWNER-CUTOVER-APPROVAL"
       ],
       "evidence_paths": [
@@ -316,12 +326,18 @@
     },
     {
       "gate": "G18",
-      "status": "PASS_MEASURED_PENDING_OWNER_SLO_SIGN_OFF",
+      "status": "BLOCKED",
+      "ci_precheck_status": "PRECHECK_PASS_7_METRICS_AND_3_2A_C",
       "acceptance_ids": [
         "S1-BENCHMARK-50K-75K-250K-40STAFF"
       ],
+      "blocker_ids": [
+        "BLK-SSH-T1A",
+        "OWNER-SLO-V1-4-SHA256-SIGNATURE"
+      ],
       "evidence_paths": [
         "deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json",
+        "deploy/ops/g18_slo_thresholds_v1_4.json",
         "docs/p4/performance-report.md"
       ]
     },
@@ -423,10 +439,12 @@
   ],
   "t1a_https_browser_dr_commit_sha": "0b4fcfb28bbde667742fe4c219a1bd216e7b62b3",
   "t1a_https_browser_dr_ci_run_id": 42994618293,
+  "t1a_latest_ops_dr_rehearsal_commit_sha": "dd3d18ebc811784764b48faeaa57ac145859570e",
+  "t1a_latest_ops_dr_rehearsal_ci_run_id": 43031124613,
   "t1b_batch2_delta_commit_sha": "bcdc419f9f95ad75449315572928e3d8c43817cc",
   "t1b_batch2_delta_ci_run_id": 42825411058,
   "t1b_candidate_verify_and_s1_ci_run_id": 42984867723,
   "integrated_candidate_manifest": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
-  "verified_code_commit_sha": "0b4fcfb28bbde667742fe4c219a1bd216e7b62b3",
-  "verified_ci_run_id": 42994618293
+  "verified_code_commit_sha": "dd3d18ebc811784764b48faeaa57ac145859570e",
+  "verified_ci_run_id": 43031124613
 }

@@ -23,6 +23,7 @@ Hard safety boundary:
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
 import json
 import math
@@ -74,6 +75,32 @@ FORBIDDEN_OWNER_SITES = {
     "p3ui.localhost",
 }
 FORBIDDEN_HOST_PORTS = {80, 443, 3306, 6379, 8000, 8080, 8443, 9000}
+ALL_DAEMON_SERVICES: tuple[str, ...] = (
+    "backend",
+    "db",
+    "frontend",
+    "proxy",
+    "queue-long",
+    "queue-short",
+    "redis-cache",
+    "redis-queue",
+    "scheduler",
+    "websocket",
+)
+STAGING_CANDIDATE_SCOPE = "staging_candidate_isolated_verification"
+PRODUCTION_CANDIDATE_SCOPE = "production_candidate"
+CI_REHEARSAL_SCOPE = "ci_ephemeral_rehearsal"
+KNOWN_REHEARSAL_PUBLIC_KEY_FINGERPRINTS: frozenset[str] = frozenset(
+    {
+        "b3e6137bbe048229ec0da37b434bff40b8f30cd96657b28349e443c766573b76",
+    }
+)
+DEFAULT_RELEASE_MANIFEST_PATH = REPO_ROOT / "docs" / "p4" / "release-manifest.json"
+DEFAULT_CVE_EXCEPTIONS_PATH = REPO_ROOT / "deploy" / "release" / "cve-exceptions.json"
+IMMUTABLE_REGISTRY_DIGEST_RE = re.compile(
+    r"\A[^/@\s:<>]+(?::[0-9]+)?(?:/[^/@\s:<>]+)+(?::[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}\Z"
+)
+LOCAL_IMAGE_ID_RE = re.compile(r"\Asha256:[0-9a-f]{64}\Z")
 
 
 def utc_now_iso() -> str:
@@ -640,6 +667,43 @@ def audit_isolated_stack_runtime_resources(
     containers = p403_tool._parse_compose_ps_json(ps_proc.stdout)
     digest_parity = p403_tool.verify_running_containers_digest(containers, app_image)
 
+    daemon_q_proc = run_sub(compose_cmd(env_file, ["ps", "-q", *ALL_DAEMON_SERVICES]), check=False)
+    daemon_cids = [ln.strip() for ln in daemon_q_proc.stdout.splitlines() if ln.strip()]
+    resource_limits_by_service: dict[str, dict[str, Any]] = {}
+    if daemon_cids:
+        dinsp_proc = run_sub(["docker", "inspect", *daemon_cids])
+        for item in json.loads(dinsp_proc.stdout):
+            labels = (item.get("Config") or {}).get("Labels") or {}
+            svc_name = str(labels.get("com.docker.compose.service") or "")
+            if not svc_name:
+                continue
+            hcfg = item.get("HostConfig") or {}
+            mem_bytes = int(hcfg.get("Memory") or 0)
+            nano_cpus = int(hcfg.get("NanoCpus") or 0)
+            resource_limits_by_service[svc_name] = {
+                "container": str(item.get("Name") or "").lstrip("/"),
+                "mem_limit_bytes": mem_bytes,
+                "mem_limit_mib": round(mem_bytes / (1024.0 * 1024.0), 2),
+                "nano_cpus": nano_cpus,
+                "cpus": round(nano_cpus / 1_000_000_000.0, 3),
+                "bounded": (mem_bytes > 0) and (nano_cpus > 0),
+            }
+    missing_daemon_services = sorted(set(ALL_DAEMON_SERVICES) - set(resource_limits_by_service))
+    unbounded_services = sorted(
+        svc for svc, rmeta in resource_limits_by_service.items() if not rmeta["bounded"]
+    )
+    total_capped_ram_mib = round(
+        sum(rmeta["mem_limit_mib"] for rmeta in resource_limits_by_service.values()), 2
+    )
+    total_capped_cpus = round(
+        sum(rmeta["cpus"] for rmeta in resource_limits_by_service.values()), 3
+    )
+    resource_limits_ok = (not missing_daemon_services) and (not unbounded_services)
+    governance_scope = verify_staging_candidate_scope_and_key_guard(
+        app_image=app_image,
+        allow_local_image_id_for_drill=True,
+    )
+
     published_ports_by_service: dict[str, list[dict[str, Any]]] = {}
     non_proxy_published_ports: list[dict[str, Any]] = []
     wildcard_binds: list[dict[str, Any]] = []
@@ -744,6 +808,7 @@ def audit_isolated_stack_runtime_resources(
 
     passed = (
         bool(digest_parity.get("pass"))
+        and resource_limits_ok
         and ports_ok
         and networks_ok
         and volumes_ok
@@ -756,12 +821,22 @@ def audit_isolated_stack_runtime_resources(
         "candidate_verification_only": True,
         "promoted_to_production": False,
         "owner_live_site_touched": False,
+        "governance_scope": governance_scope,
         "project_name": project_name,
         "site_name": site_name,
         "app_image": app_image,
         "compose_git_tree_sha": compose_tree_sha,
         "rendered_compose_config_sha256": rendered_cfg_sha256,
         "container_digest_parity": digest_parity,
+        "resource_limits": {
+            "pass": resource_limits_ok,
+            "expected_daemon_services": list(ALL_DAEMON_SERVICES),
+            "missing_daemon_services": missing_daemon_services,
+            "unbounded_services": unbounded_services,
+            "total_capped_ram_mib": total_capped_ram_mib,
+            "total_capped_cpus": total_capped_cpus,
+            "by_service": dict(sorted(resource_limits_by_service.items())),
+        },
         "networks": {
             "pass": networks_ok,
             "edge_net_present": edge_net_present,
@@ -3215,10 +3290,136 @@ def compare_live_stack_preservation(before: dict[str, Any], after: dict[str, Any
     }
 
 
+def _normalize_ed25519_public_key_fingerprint(public_key_pem: bytes) -> str:
+    clean_lines = [
+        ln.strip()
+        for ln in public_key_pem.decode("utf-8", errors="strict").splitlines()
+        if ln.strip() and not ln.strip().startswith("-----")
+    ]
+    der_bytes = base64.b64decode("".join(clean_lines), validate=True)
+    return hashlib.sha256(der_bytes).hexdigest()
+
+
+def verify_staging_candidate_scope_and_key_guard(
+    *,
+    app_image: str,
+    requested_scope: str = STAGING_CANDIDATE_SCOPE,
+    release_manifest_path: Path | None = None,
+    cve_exceptions_path: Path | None = None,
+    promotion_manifest: dict[str, Any] | None = None,
+    promotion_public_key_pem: bytes | None = None,
+    promotion_public_key_path: Path | None = None,
+    g04_override_passed: bool | None = None,
+    allow_local_image_id_for_drill: bool = False,
+) -> dict[str, Any]:
+    """Enforce Staging candidate verification scope; keep `production_candidate = BLOCKED` on G04 and ban rehearsal keys."""
+    clean_img = str(app_image or "").strip()
+    if not clean_img or "BLOCKED" in clean_img.upper() or clean_img.endswith("@sha256:" + ("0" * 64)):
+        raise ValueError(f"Refusing empty, placeholder, or BLOCKED candidate image reference: {app_image!r}")
+    if allow_local_image_id_for_drill and LOCAL_IMAGE_ID_RE.match(clean_img):
+        pass
+    elif not IMMUTABLE_REGISTRY_DIGEST_RE.match(clean_img):
+        raise ValueError(
+            f"Candidate image {app_image!r} must be an immutable '<registry>/<repo>@sha256:<64-hex>' digest URI"
+        )
+
+    if requested_scope == CI_REHEARSAL_SCOPE:
+        raise ValueError(
+            "Refusing ci_ephemeral_rehearsal scope for VPS Staging/Production operations; "
+            f"use {STAGING_CANDIDATE_SCOPE!r} for Staging verification"
+        )
+    if requested_scope not in (STAGING_CANDIDATE_SCOPE, PRODUCTION_CANDIDATE_SCOPE):
+        raise ValueError(f"Unsupported verification scope: {requested_scope!r}")
+
+    if promotion_manifest is not None:
+        m_scope = str(promotion_manifest.get("environment_scope") or "").strip()
+        m_rel = str(promotion_manifest.get("release_id") or "").strip().lower()
+        m_fp = str(promotion_manifest.get("public_key_fingerprint_sha256") or "").strip().lower()
+        if m_scope == CI_REHEARSAL_SCOPE or m_rel.startswith(("ghcr-rehearsal-", "ci-rehearsal-")):
+            raise ValueError(
+                "Refusing CI rehearsal manifest (environment_scope='ci_ephemeral_rehearsal') "
+                "to approve or promote production_candidate"
+            )
+        if m_fp in KNOWN_REHEARSAL_PUBLIC_KEY_FINGERPRINTS:
+            raise ValueError(
+                f"Refusing promotion manifest signed by ephemeral rehearsal key (fingerprint={m_fp})"
+            )
+
+    checked_key_fp = ""
+    if promotion_public_key_path is not None:
+        key_name_low = str(promotion_public_key_path).lower()
+        if "rehearsal" in key_name_low or "ephemeral" in key_name_low:
+            raise ValueError(
+                f"Refusing rehearsal/ephemeral signing key file {str(promotion_public_key_path)!r} "
+                "for production approval"
+            )
+        if promotion_public_key_pem is None and promotion_public_key_path.is_file():
+            promotion_public_key_pem = promotion_public_key_path.read_bytes()
+
+    if promotion_public_key_pem is not None:
+        checked_key_fp = _normalize_ed25519_public_key_fingerprint(promotion_public_key_pem)
+        if checked_key_fp in KNOWN_REHEARSAL_PUBLIC_KEY_FINGERPRINTS:
+            raise ValueError(
+                f"Refusing ephemeral CI rehearsal public key (fingerprint={checked_key_fp}) "
+                "to approve production_candidate"
+            )
+
+    rel_path = release_manifest_path or DEFAULT_RELEASE_MANIFEST_PATH
+    exc_path = cve_exceptions_path or DEFAULT_CVE_EXCEPTIONS_PATH
+    rel_doc: dict[str, Any] = {}
+    if rel_path.is_file():
+        rel_doc = json.loads(rel_path.read_text(encoding="utf-8"))
+    active_exceptions_count = 0
+    if exc_path.is_file():
+        exc_doc = json.loads(exc_path.read_text(encoding="utf-8"))
+        active_exceptions_count = len(exc_doc.get("exceptions") or [])
+
+    promo_gov = rel_doc.get("promotion_governance") or {}
+    prod_promo_status = str(promo_gov.get("production_promotion_status") or "BLOCKED")
+    rel_env_scope = str(rel_doc.get("environment_scope") or "staging_candidate_verified_production_blocked")
+
+    if g04_override_passed is not None:
+        g04_passed = bool(g04_override_passed)
+    else:
+        g04_passed = (
+            prod_promo_status == "PASS"
+            and rel_env_scope == PRODUCTION_CANDIDATE_SCOPE
+        )
+
+    g04_status = "PASS" if g04_passed else "BLOCKED"
+    production_candidate_status = "READY" if g04_passed else "BLOCKED"
+
+    if requested_scope == PRODUCTION_CANDIDATE_SCOPE and not g04_passed:
+        raise ValueError(
+            "Refusing production_candidate approval/promotion: production_candidate remains BLOCKED "
+            "while Gate G04 has unresolved Critical CVEs"
+        )
+
+    return {
+        "verification_scope": requested_scope,
+        "candidate_verification_only": requested_scope == STAGING_CANDIDATE_SCOPE,
+        "promoted_to_production": False,
+        "g04_status": g04_status,
+        "production_candidate_status": production_candidate_status,
+        "release_manifest_environment_scope": rel_env_scope,
+        "active_cve_exceptions_count": active_exceptions_count,
+        "rehearsal_key_allowed_for_production": False,
+        "rehearsal_key_used_for_production_approval": False,
+        "checked_promotion_public_key_fingerprint": checked_key_fp or None,
+        "app_image_digest": clean_img,
+        "digest_update_policy": "update_isolated_staging_and_regenerate_all_receipts_on_t1b_digest_change",
+    }
+
+
 def _read_linux_meminfo_mib() -> dict[str, float]:
     meminfo_path = Path("/proc/meminfo")
     if not meminfo_path.is_file():
-        return {"mem_total_mib": 0.0, "mem_available_mib": 0.0}
+        return {
+            "mem_total_mib": 0.0,
+            "mem_available_mib": 0.0,
+            "swap_total_mib": 0.0,
+            "swap_free_mib": 0.0,
+        }
     vals_kib: dict[str, int] = {}
     for ln in meminfo_path.read_text(encoding="utf-8", errors="replace").splitlines():
         if ":" not in ln:
@@ -3229,7 +3430,31 @@ def _read_linux_meminfo_mib() -> dict[str, float]:
             vals_kib[k.strip()] = int(parts[0])
     total_mib = round(vals_kib.get("MemTotal", 0) / 1024.0, 2)
     avail_mib = round(vals_kib.get("MemAvailable", vals_kib.get("MemFree", 0)) / 1024.0, 2)
-    return {"mem_total_mib": total_mib, "mem_available_mib": avail_mib}
+    swap_total_mib = round(vals_kib.get("SwapTotal", 0) / 1024.0, 2)
+    swap_free_mib = round(vals_kib.get("SwapFree", 0) / 1024.0, 2)
+    return {
+        "mem_total_mib": total_mib,
+        "mem_available_mib": avail_mib,
+        "swap_total_mib": swap_total_mib,
+        "swap_free_mib": swap_free_mib,
+    }
+
+
+def _read_linux_loadavg() -> dict[str, float]:
+    load_path = Path("/proc/loadavg")
+    if not load_path.is_file():
+        return {"loadavg_1m": 0.0, "loadavg_5m": 0.0, "loadavg_15m": 0.0}
+    parts = load_path.read_text(encoding="utf-8", errors="replace").strip().split()
+    if len(parts) < 3:
+        return {"loadavg_1m": 0.0, "loadavg_5m": 0.0, "loadavg_15m": 0.0}
+    try:
+        return {
+            "loadavg_1m": round(float(parts[0]), 2),
+            "loadavg_5m": round(float(parts[1]), 2),
+            "loadavg_15m": round(float(parts[2]), 2),
+        }
+    except ValueError:
+        return {"loadavg_1m": 0.0, "loadavg_5m": 0.0, "loadavg_15m": 0.0}
 
 
 def _check_loopback_port_free(port: int, bind_ip: str = "127.0.0.1") -> bool:
@@ -3253,9 +3478,10 @@ def readonly_vps_preflight(
     planned_https_port: int = 18443,
     out_json: Path | None = None,
 ) -> dict[str, Any]:
-    """Read-only VPS resource, port, and live-stack preflight before isolated Staging/DR boot."""
+    """Read-only VPS resource, port, headroom, and live-stack preflight before isolated Staging/DR boot."""
     cpu_cores = int(os.cpu_count() or 0)
     mem = _read_linux_meminfo_mib()
+    loadavg = _read_linux_loadavg()
     du = shutil.disk_usage(disk_check_path)
     free_disk_gib = round(du.free / (1024.0**3), 2)
     total_disk_gib = round(du.total / (1024.0**3), 2)
@@ -3285,10 +3511,17 @@ def readonly_vps_preflight(
             "mem_total_mib": mem["mem_total_mib"],
             "mem_available_mib": mem["mem_available_mib"],
             "required_avail_ram_mib": required_avail_ram_mib,
+            "ram_headroom_surplus_mib": round(mem["mem_available_mib"] - required_avail_ram_mib, 2),
+            "swap_total_mib": mem.get("swap_total_mib", 0.0),
+            "swap_free_mib": mem.get("swap_free_mib", 0.0),
+            "loadavg_1m": loadavg["loadavg_1m"],
+            "loadavg_5m": loadavg["loadavg_5m"],
+            "loadavg_15m": loadavg["loadavg_15m"],
             "disk_check_path": str(disk_check_path),
             "disk_total_gib": total_disk_gib,
             "disk_free_gib": free_disk_gib,
             "required_free_disk_gib": required_free_disk_gib,
+            "disk_headroom_surplus_gib": round(free_disk_gib - required_free_disk_gib, 2),
         },
         "planned_isolated_loopback_ports": {
             "bind_ip": "127.0.0.1",
@@ -3313,8 +3546,10 @@ def pull_and_inspect_candidate_digest(
     out_json: Path | None = None,
 ) -> dict[str, Any]:
     """Pull exact `@sha256` candidate image and emit `candidate-registry-pull-inspect-receipt.json`."""
-    if "@sha256:" not in app_image:
-        raise ValueError(f"Expected immutable @sha256 digest URI, got: {app_image!r}")
+    governance_scope = verify_staging_candidate_scope_and_key_guard(
+        app_image=app_image,
+        requested_scope=STAGING_CANDIDATE_SCOPE,
+    )
     pull_proc = run_sub(["docker", "pull", app_image])
     m_dig = re.search(r"Digest:\s*(sha256:[0-9a-f]{64})", pull_proc.stdout)
     pulled_digest = m_dig.group(1) if m_dig else ""
@@ -3341,6 +3576,7 @@ def pull_and_inspect_candidate_digest(
         "candidate_verification_only": True,
         "promoted_to_production": False,
         "owner_live_site_touched": False,
+        "governance_scope": governance_scope,
         "integrated_head_sha": _git_rev("HEAD"),
         "locked_batch1_candidate_sha": locked_batch1_sha,
         "apps_tree_sha": _git_rev("HEAD:apps"),
@@ -3376,13 +3612,19 @@ def collect_vps_g03_g05_receipts(
     https_port: int = 18443,
     keep_up: bool = False,
     state_dir: Path | None = None,
+    disk_check_path: Path = Path("/"),
 ) -> dict[str, Any]:
-    """Execute read-only preflight -> pull `@sha256` -> isolated Staging/DR G03/G05 receipts -> live zero-delta check."""
+    """Execute read-only preflight -> pull `@sha256` -> isolated Staging/DR G03/G05 receipts -> inventory/config audit -> live zero-delta check."""
+    governance_scope = verify_staging_candidate_scope_and_key_guard(
+        app_image=app_image,
+        requested_scope=STAGING_CANDIDATE_SCOPE,
+    )
     out_dir = out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
     preflight = readonly_vps_preflight(
         live_project_name=live_project_name,
+        disk_check_path=disk_check_path,
         planned_http_port=http_port,
         planned_https_port=https_port,
         out_json=out_dir / "readonly-vps-preflight.json",
@@ -3433,6 +3675,8 @@ def collect_vps_g03_g05_receipts(
     if os.name == "posix":
         os.chmod(env_file, 0o600)
 
+    headroom_during: dict[str, Any] = {}
+    live_during_check: dict[str, Any] = {}
     try:
         boot_res = bootstrap_isolated_dr_stack(
             env_file=env_file,
@@ -3452,6 +3696,23 @@ def collect_vps_g03_g05_receipts(
             secret_file=secret_file,
             out_json=out_dir / "staging-dr-runtime-isolation-audit.json",
         )
+        mem_during = _read_linux_meminfo_mib()
+        du_during = shutil.disk_usage(disk_check_path)
+        load_during = _read_linux_loadavg()
+        live_during_snap = capture_readonly_live_stack_snapshot(live_project_name)
+        live_during_check = compare_live_stack_preservation(
+            preflight["live_before_snapshot"], live_during_snap
+        )
+        headroom_during = {
+            "timestamp_utc": utc_now_iso(),
+            "mem_available_mib": mem_during["mem_available_mib"],
+            "swap_free_mib": mem_during.get("swap_free_mib", 0.0),
+            "disk_free_gib": round(du_during.free / (1024.0**3), 2),
+            "loadavg_1m": load_during["loadavg_1m"],
+            "loadavg_5m": load_during["loadavg_5m"],
+            "loadavg_15m": load_during["loadavg_15m"],
+            "live_zero_mutation_while_isolated_staging_running": live_during_check["zero_live_mutation"],
+        }
     finally:
         if not keep_up:
             run_sub(
@@ -3461,6 +3722,9 @@ def collect_vps_g03_g05_receipts(
             if managed_tmp:
                 shutil.rmtree(work_state, ignore_errors=True)
 
+    mem_after = _read_linux_meminfo_mib()
+    du_after = shutil.disk_usage(disk_check_path)
+    load_after = _read_linux_loadavg()
     live_after = capture_readonly_live_stack_snapshot(live_project_name)
     live_preservation = compare_live_stack_preservation(preflight["live_before_snapshot"], live_after)
     (out_dir / "live-preservation-before-after.json").write_text(
@@ -3469,10 +3733,74 @@ def collect_vps_g03_g05_receipts(
         newline="\n",
     )
 
+    inventory_config_audit = {
+        "schema_version": "cskh-p4-staging-inventory-config-audit-v1",
+        "timestamp_utc": utc_now_iso(),
+        "status": (
+            "PASS"
+            if (
+                runtime_audit.get("status") == "PASS"
+                and live_during_check.get("zero_live_mutation") is True
+                and live_preservation.get("zero_live_mutation") is True
+            )
+            else "FAIL"
+        ),
+        "governance_scope": governance_scope,
+        "host_identity": preflight["host_identity"],
+        "digest_provenance": {
+            "app_image": app_image,
+            "inspected_image_id": pull_receipt.get("inspected_image_id"),
+            "apps_tree_sha": pull_receipt.get("apps_tree_sha"),
+            "crm_cskh_tree_sha": pull_receipt.get("crm_cskh_tree_sha"),
+            "compose_git_tree_sha": runtime_audit.get("compose_git_tree_sha"),
+            "rendered_compose_config_sha256": runtime_audit.get("rendered_compose_config_sha256"),
+        },
+        "six_dimension_isolation_vs_live": {
+            "live_untouched": {
+                "project_name": live_project_name,
+                "site_name": "crm-staging.localhost",
+                "public_domain": "crm.hrpartner.vn",
+                "ports": [80, 443],
+            },
+            "isolated_staging": {
+                "project_name": project_name,
+                "site_name": site_name,
+                "ingress_bind": f"127.0.0.1:{http_port} / 127.0.0.1:{https_port}",
+                "networks": [n["name"] for n in (runtime_audit.get("networks") or {}).get("inspected_networks", [])],
+                "volumes": (runtime_audit.get("volumes") or {}).get("project_scoped_volumes", []),
+                "secret_mounted_no_plaintext_env": (runtime_audit.get("secrets") or {}).get("pass") is True,
+            },
+            "disjoint_verified": runtime_audit.get("status") == "PASS",
+        },
+        "resource_limits": runtime_audit.get("resource_limits"),
+        "headroom_timeline": {
+            "before_isolated_staging": preflight["host_resources"],
+            "during_isolated_staging": headroom_during,
+            "after_isolated_staging": {
+                "mem_available_mib": mem_after["mem_available_mib"],
+                "swap_free_mib": mem_after.get("swap_free_mib", 0.0),
+                "disk_free_gib": round(du_after.free / (1024.0**3), 2),
+                "loadavg_1m": load_after["loadavg_1m"],
+                "loadavg_5m": load_after["loadavg_5m"],
+                "loadavg_15m": load_after["loadavg_15m"],
+            },
+        },
+        "zero_live_mutation_during_and_after": (
+            live_during_check.get("zero_live_mutation") is True
+            and live_preservation.get("zero_live_mutation") is True
+        ),
+    }
+    (out_dir / "staging-inventory-and-config-audit.json").write_text(
+        json.dumps(inventory_config_audit, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
     all_ok = (
         pull_receipt["status"] == "PASS"
         and smoke_doc.get("status") == "PASS"
         and runtime_audit.get("status") == "PASS"
+        and inventory_config_audit["status"] == "PASS"
         and live_preservation["status"] == "PASS"
     )
     summary = {
@@ -3480,6 +3808,7 @@ def collect_vps_g03_g05_receipts(
         "timestamp_utc": utc_now_iso(),
         "status": "PASS" if all_ok else "FAIL",
         "app_image": app_image,
+        "governance_scope": governance_scope,
         "host_identity": preflight["host_identity"],
         "isolated_project_name": project_name,
         "isolated_site_name": site_name,
@@ -3491,10 +3820,104 @@ def collect_vps_g03_g05_receipts(
             "readonly_vps_preflight": str(out_dir / "readonly-vps-preflight.json"),
             "candidate_pull_inspect_receipt": str(out_dir / "candidate-registry-pull-inspect-receipt.json"),
             "runtime_isolation_audit_g03": str(out_dir / "staging-dr-runtime-isolation-audit.json"),
+            "inventory_and_config_audit": str(out_dir / "staging-inventory-and-config-audit.json"),
             "https_wss_smoke_g05": str(out_dir / "https-wss-smoke-receipt.json"),
             "live_preservation_before_after": str(out_dir / "live-preservation-before-after.json"),
         },
     }
+    (out_dir / "vps-g03-g05-summary.json").write_text(
+        json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    return summary
+
+
+def refresh_staging_for_new_candidate_digest(
+    *,
+    new_app_image: str,
+    out_dir: Path,
+    project_name: str = "crm-cskh-dr-https-vps",
+    site_name: str = DEFAULT_DR_SITE,
+    live_project_name: str = "crm-cskh-vps-staging",
+    http_port: int = 18081,
+    https_port: int = 18443,
+    keep_up: bool = False,
+    state_dir: Path | None = None,
+    disk_check_path: Path = Path("/"),
+) -> dict[str, Any]:
+    """Update isolated Staging & regenerate all G03/G05/inventory receipts when T1B delivers a new digest for G18."""
+    verify_staging_candidate_scope_and_key_guard(
+        app_image=new_app_image,
+        requested_scope=STAGING_CANDIDATE_SCOPE,
+    )
+    out_dir = out_dir.resolve()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    previous_digest: str | None = None
+    prev_summary_path = out_dir / "vps-g03-g05-summary.json"
+    if prev_summary_path.is_file():
+        prev_doc = json.loads(prev_summary_path.read_text(encoding="utf-8"))
+        previous_digest = str(prev_doc.get("app_image") or "") or None
+
+    resolved_state = (state_dir or (out_dir / "isolated-dr-state")).resolve()
+    existing_env = resolved_state / "staging-dr-https.env"
+    if existing_env.is_file():
+        parsed_existing = p403_tool.parse_env_file(existing_env)
+        assert_isolated_from_owner_stack(parsed_existing, existing_env, allow_private_bind=True)
+        run_sub(
+            compose_cmd(existing_env, ["down", "--volumes", "--remove-orphans"], profile_migrate=True),
+            check=False,
+        )
+
+    for fname in (
+        "readonly-vps-preflight.json",
+        "candidate-registry-pull-inspect-receipt.json",
+        "staging-dr-runtime-isolation-audit.json",
+        "staging-inventory-and-config-audit.json",
+        "https-wss-smoke-receipt.json",
+        "live-preservation-before-after.json",
+        "vps-g03-g05-summary.json",
+    ):
+        stale_f = out_dir / fname
+        if stale_f.is_file():
+            stale_f.unlink()
+
+    summary = collect_vps_g03_g05_receipts(
+        app_image=new_app_image,
+        out_dir=out_dir,
+        project_name=project_name,
+        site_name=site_name,
+        live_project_name=live_project_name,
+        http_port=http_port,
+        https_port=https_port,
+        keep_up=keep_up,
+        state_dir=state_dir,
+        disk_check_path=disk_check_path,
+    )
+
+    stale_refs: list[str] = []
+    digest_checked_files = (
+        ("vps-g03-g05-summary.json", "app_image"),
+        ("candidate-registry-pull-inspect-receipt.json", "requested_registry_digest"),
+        ("staging-dr-runtime-isolation-audit.json", "app_image"),
+        ("https-wss-smoke-receipt.json", "app_image"),
+    )
+    for fname, field in digest_checked_files:
+        doc = json.loads((out_dir / fname).read_text(encoding="utf-8"))
+        if doc.get(field) != new_app_image:
+            stale_refs.append(f"{fname}:{field}={doc.get(field)!r}")
+        if previous_digest and previous_digest != new_app_image:
+            raw_txt = (out_dir / fname).read_text(encoding="utf-8")
+            if previous_digest in raw_txt:
+                stale_refs.append(f"{fname}:contains_previous_digest")
+    inv_doc = json.loads((out_dir / "staging-inventory-and-config-audit.json").read_text(encoding="utf-8"))
+    if ((inv_doc.get("digest_provenance") or {}).get("app_image")) != new_app_image:
+        stale_refs.append("staging-inventory-and-config-audit.json:digest_provenance.app_image_mismatch")
+    if stale_refs:
+        raise RuntimeError(f"Digest refresh left mismatched/stale receipt fields: {stale_refs}")
+
+    summary["refreshed_from_previous_digest"] = previous_digest
+    summary["stale_digest_references"] = []
     (out_dir / "vps-g03-g05-summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -5220,7 +5643,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_vg = sub.add_parser(
         "collect-vps-g03-g05",
-        help="Collect G03/G05 pull, isolation & HTTPS/WSS smoke receipts on isolated Staging/DR with live zero-delta proof",
+        help="Collect G03/G05 pull, isolation, inventory/config & HTTPS/WSS smoke receipts on isolated Staging/DR with live zero-delta proof",
     )
     p_vg.add_argument("--app-image", default=LOCKED_CANDIDATE_DIGEST_V1_4)
     p_vg.add_argument("--out-dir", type=Path, required=True)
@@ -5231,6 +5654,20 @@ def build_parser() -> argparse.ArgumentParser:
     p_vg.add_argument("--https-port", type=int, default=18443)
     p_vg.add_argument("--keep-up", action="store_true")
     p_vg.add_argument("--state-dir", type=Path, default=None)
+
+    p_vref = sub.add_parser(
+        "refresh-candidate-digest",
+        help="Update isolated Staging & regenerate all G03/G05/inventory receipts when T1B changes candidate digest for G18",
+    )
+    p_vref.add_argument("--app-image", required=True)
+    p_vref.add_argument("--out-dir", type=Path, required=True)
+    p_vref.add_argument("--project-name", default="crm-cskh-dr-https-vps")
+    p_vref.add_argument("--site-name", default=DEFAULT_DR_SITE)
+    p_vref.add_argument("--live-project", default="crm-cskh-vps-staging")
+    p_vref.add_argument("--http-port", type=int, default=18081)
+    p_vref.add_argument("--https-port", type=int, default=18443)
+    p_vref.add_argument("--keep-up", action="store_true")
+    p_vref.add_argument("--state-dir", type=Path, default=None)
 
     p_slo = sub.add_parser(
         "reconcile-g18-slo",
@@ -5329,6 +5766,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "collect-vps-g03-g05":
         res = collect_vps_g03_g05_receipts(
             app_image=args.app_image,
+            out_dir=args.out_dir,
+            project_name=args.project_name,
+            site_name=args.site_name,
+            live_project_name=args.live_project,
+            http_port=args.http_port,
+            https_port=args.https_port,
+            keep_up=args.keep_up,
+            state_dir=args.state_dir,
+        )
+        sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+        return 0 if res["status"] == "PASS" else 2
+    if args.command == "refresh-candidate-digest":
+        res = refresh_staging_for_new_candidate_digest(
+            new_app_image=args.app_image,
             out_dir=args.out_dir,
             project_name=args.project_name,
             site_name=args.site_name,

@@ -1,11 +1,12 @@
 # Kiểm Kê Hạ Tầng, Topology Compose & Ma Trận Tách Biệt `DEV / CI / STAGING-DR / STAGING-LIVE / PROD` (`P4-00` / `P4-01` — Cổng `G03`)
 
 - **Mã tài liệu:** `P4-INFRA-INVENTORY` (`docs/p4/infra-inventory.md` — `P4.md §3`, `§5`, `§19 G03`, `§20.2`)
-- **Ngày cập nhật:** `10/11/2026` (`Asia/Ho_Chi_Minh`)
-- **Nguyên tắc vận hành (`G03`):**
-  1. **Tận dụng môi trường cô lập sẵn có, không tự thuê thêm hạ tầng trả phí.**
+- **Ngày cập nhật:** `11/11/2026` (`Asia/Ho_Chi_Minh`)
+- **Nguyên tắc vận hành (`G03` / `G05`):**
+  1. **Tận dụng môi trường cô lập sẵn có trên VPS đích khi có quyền SSH, không tự thuê thêm hạ tầng trả phí và giữ nguyên 100% dịch vụ live (`zero_live_mutation = true`).**
   2. **Tách biệt tuyệt đối 6 chiều** giữa `DEV`, `CI`, `STAGING-DR-HTTPS` (cô lập thử nghiệm phá hủy/UAT), `STAGING-LIVE` (`https://crm.hrpartner.vn` đang phục vụ) và `PRODUCTION`: `COMPOSE_PROJECT_NAME`, `networks`, `ports`, `volumes`, `secrets` và `SITE_NAME`.
-  3. **Tuyệt đối không sửa code trực tiếp trên VPS (`git pull` / sửa tay trong container bị cấm):** mọi dịch vụ ứng dụng chỉ chạy từ artifact image bất biến khóa `@sha256`.
+  3. **Giới hạn tài nguyên container & kiểm headroom (`before` / `during` / `after`):** Toàn bộ `10/10` dịch vụ daemon của stack Staging cô lập bắt buộc áp trần `mem_limit` và `cpus` (tổng trần tối đa `5.696 MiB` RAM / `6,0` vCPU), đối chiếu ngưỡng trống trước/trong/sau khi bật tại `staging-inventory-and-config-audit.json`.
+  4. **Đúng phạm vi kiểm định Staging & cấm khóa diễn tập cho Production:** Stack Staging cô lập chỉ chạy với `verification_scope = staging_candidate_isolated_verification`; `production_candidate` giữ cứng **`BLOCKED`** chừng nào `G04` còn 3 mã CVE gói nguồn Debian 13 chưa đóng, và cấm tuyệt đối dùng manifest/khóa ký `ci_ephemeral_rehearsal` (`b3e6137bbe...`) để phê duyệt Production. Tuyệt đối không sửa code trực tiếp trên VPS.
 
 ---
 
@@ -38,6 +39,10 @@ Toàn bộ các stack `CI`, `STAGING-DR-HTTPS`, `STAGING-LIVE VPS` và `PRODUCTI
 3. **Thứ tự ghép overlay trên VPS `103.77.208.186` (`crm-cskh-vps-staging`):**
    - Wrapper `/opt/crm-cskh-staging/staging-compose` nạp `/opt/crm-cskh-staging/.env.staging` (`0600`) và ghép `compose.domain.yaml` ở **cuối cùng** để giữ nguyên cấu hình HTTPS/domain `crm.hrpartner.vn` mà không phải sửa tệp Compose trong Git ([`live-preservation-check.json`](../../deploy/ops/evidence/p4-vps-live-20261109/live-preservation-check.json)).
 
+4. **Giới hạn tài nguyên 10 dịch vụ Daemon & Kiểm tra Headroom trên Staging Cô Lập (`G03` / `G05`):**
+   - Áp trần cứng trong [`compose.cskh-common.yaml`](../../deploy/compose/overrides/compose.cskh-common.yaml) và [`staging-dr-https.env.example`](../../deploy/compose/env/staging-dr-https.env.example): `proxy` (`256 MiB / 0.5 CPU`), `frontend` (`256 MiB / 0.5 CPU`), `backend` (`1024 MiB / 1.0 CPU`), `websocket` (`384 MiB / 0.5 CPU`), `queue-short` (`768 MiB / 0.75 CPU`), `queue-long` (`1024 MiB / 1.0 CPU`), `scheduler` (`384 MiB / 0.25 CPU`), `db` (`1024 MiB / 1.0 CPU`), `redis-cache` (`256 MiB / 0.25 CPU`), `redis-queue` (`320 MiB / 0.25 CPU`) — **tổng trần `5.696 MiB` RAM và `6,0` vCPU**, không tranh chấp tài nguyên của `crm-cskh-vps-staging`.
+   - `manage_isolated_staging_dr.py collect-vps-g03-g05` kiểm tra `HostConfig.Memory > 0` và `HostConfig.NanoCpus > 0` trên đủ `10/10` container, đo `headroom_timeline` (`before_isolated_staging` / `during_isolated_staging` / `after_isolated_staging`), đối soát `zero_live_mutation_during_and_after == true` và xuất biên nhận `staging-inventory-and-config-audit.json`. Nếu `T1B` cập nhật image digest để sửa `G18`, lệnh `refresh-candidate-digest` gỡ sạch stack cũ và tái tạo đồng bộ toàn bộ biên nhận theo digest mới (`stale_digest_references == []`).
+
 ---
 
 ## 3. Các Rào Chắn Kỹ Thuật Ngăn Đụng Độ Giữa Môi Trường Cô Lập Và Site Của Owner (`G03`)
@@ -61,6 +66,7 @@ Toàn bộ các stack `CI`, `STAGING-DR-HTTPS`, `STAGING-LIVE VPS` và `PRODUCTI
 - **Đã xác nhận thực tế trên VPS `103.77.208.186` (`ops_sha = 801be22b3be2c8199704c4da7442b0c2e0edf352`):**
   - Đang phục vụ `https://crm.hrpartner.vn` trên project `crm-cskh-vps-staging`, site `crm-staging.localhost`, image `crm-cskh:0.0.1-4672041` (`sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9`), `10/10` container daemon `healthy`, `scheduler` đã bật, `crm-cskh-healthcheck.timer` tự chạy mỗi 5 phút (`PASS`), `crm-cskh-backup.timer` đã `enabled`.
   - Clone khôi phục cô lập của `verify_offsite_restore.py` sử dụng project ngẫu nhiên riêng `crm-p4-dr-<ts>`, cổng loopback riêng và đã dọn sạch `0` container/volume/network dư sau khi đo RTO Pha A `142,598s` ([`restore-drill-report.json`](../../deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json)).
-- **Đầu vào hạ tầng ngoài VPS còn chờ Owner cấp (xem bảng tổng hợp duy nhất tại [`P4-exit-report.md`](./P4-exit-report.md) Mục 3):**
-  - `BLK-INFRA-05`: Đích lưu trữ offsite tự động ngoài VPS `103.77.208.186` + kho lưu ký khóa tách biệt (`Key Escrow`).
-  - `BLK-INFRA-07` & `BLK-GOV-06`: Kênh HTTPS Webhook cảnh báo đã duyệt + danh sách người trực vận hành / người ký UAT.
+- **Đầu vào hạ tầng & phiên thực thi còn chờ Owner cấp (xem bảng tổng hợp duy nhất tại [`P4-exit-report.md`](./P4-exit-report.md) Mục 3):**
+  - `BLK-SSH-T1A`: Quyền xác thực SSH an toàn tới `103.77.208.186` cho phiên `T1A` để tiền kiểm chỉ đọc, dựng Staging cô lập `crm-cskh-dr-https-vps` (`127.0.0.1:18081/18443`) và thu biên nhận `G03`/`G05`/`G18`.
+  - `BLK-INFRA-05`: Đích lưu trữ offsite tự động ngoài VPS `103.77.208.186` (khác miền sự cố, không chỉ khác `st_dev`) + kho lưu ký khóa tách biệt (`Key Escrow`).
+  - `BLK-INFRA-07` & `BLK-GOV-06`: Kênh HTTPS Webhook cảnh báo đã duyệt + danh sách người trực vận hành / đại diện UAT 4 vai trò nghiệp vụ (`G22`) & bàn giao Operator riêng (`G24`).

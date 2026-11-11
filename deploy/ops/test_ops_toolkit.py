@@ -1962,6 +1962,415 @@ class OpsToolkitTests(unittest.TestCase):
         )
         self.assertEqual(p_slo.expected_digest, dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4)
 
+    def test_staging_scope_key_guard_resource_caps_inventory_and_digest_refresh(self) -> None:
+        import base64
+        import hashlib
+        import subprocess
+        from types import SimpleNamespace
+        import manage_isolated_staging_dr as dr_mod
+
+        repo_root = staging_mod.REPO_ROOT
+
+        # 1. Exact 15 T1C-signed PASS gates preserved + 9 BLOCKED gates = 24 gates
+        gate_map = json.loads(
+            (repo_root / "deploy" / "ops" / "evidence" / "p4-https-delta-20261109" / "gate-acceptance-evidence-map.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        expected_15_signed_pass = {
+            "G01",
+            "G02",
+            "G06",
+            "G08",
+            "G09",
+            "G10",
+            "G11",
+            "G12",
+            "G13",
+            "G14",
+            "G15",
+            "G16",
+            "G17",
+            "G20",
+            "G21",
+        }
+        expected_9_blocked = {"G03", "G04", "G05", "G07", "G18", "G19", "G22", "G23", "G24"}
+        actual_pass = {g["gate"] for g in gate_map["gates"] if g["status"] == "PASS"}
+        actual_blocked = {g["gate"] for g in gate_map["gates"] if g["status"] == "BLOCKED"}
+        self.assertEqual(actual_pass, expected_15_signed_pass)
+        self.assertEqual(actual_blocked, expected_9_blocked)
+        self.assertEqual(len(gate_map["gates"]), 24)
+
+        # 2. Staging candidate scope vs production_candidate BLOCKED on G04 + rehearsal key ban
+        stg_scope = dr_mod.verify_staging_candidate_scope_and_key_guard(
+            app_image=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+            requested_scope=dr_mod.STAGING_CANDIDATE_SCOPE,
+        )
+        self.assertEqual(stg_scope["verification_scope"], "staging_candidate_isolated_verification")
+        self.assertTrue(stg_scope["candidate_verification_only"])
+        self.assertFalse(stg_scope["promoted_to_production"])
+        self.assertEqual(stg_scope["g04_status"], "BLOCKED")
+        self.assertEqual(stg_scope["production_candidate_status"], "BLOCKED")
+        self.assertFalse(stg_scope["rehearsal_key_allowed_for_production"])
+
+        with self.assertRaisesRegex(ValueError, "production_candidate remains BLOCKED"):
+            dr_mod.verify_staging_candidate_scope_and_key_guard(
+                app_image=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+                requested_scope=dr_mod.PRODUCTION_CANDIDATE_SCOPE,
+            )
+
+        with self.assertRaisesRegex(ValueError, "ci_ephemeral_rehearsal"):
+            dr_mod.verify_staging_candidate_scope_and_key_guard(
+                app_image=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+                requested_scope=dr_mod.CI_REHEARSAL_SCOPE,
+            )
+
+        ci_attestation = json.loads(
+            (repo_root / "deploy" / "ops" / "evidence" / "p4-candidate-and-s1-20261109" / "ghcr-digest-promotion-attestation.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        with self.assertRaisesRegex(ValueError, "ci_ephemeral_rehearsal"):
+            dr_mod.verify_staging_candidate_scope_and_key_guard(
+                app_image=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+                requested_scope=dr_mod.PRODUCTION_CANDIDATE_SCOPE,
+                promotion_manifest=ci_attestation,
+                g04_override_passed=True,
+            )
+
+        spoofed_attestation = dict(
+            ci_attestation,
+            environment_scope="production_candidate",
+            release_id="prod-release-001",
+        )
+        with self.assertRaisesRegex(ValueError, "ephemeral rehearsal key"):
+            dr_mod.verify_staging_candidate_scope_and_key_guard(
+                app_image=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+                requested_scope=dr_mod.PRODUCTION_CANDIDATE_SCOPE,
+                promotion_manifest=spoofed_attestation,
+                g04_override_passed=True,
+            )
+
+        with self.assertRaisesRegex(ValueError, "rehearsal/ephemeral signing key"):
+            dr_mod.verify_staging_candidate_scope_and_key_guard(
+                app_image=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+                requested_scope=dr_mod.PRODUCTION_CANDIDATE_SCOPE,
+                promotion_public_key_path=Path("/tmp/ci-ephemeral-rehearsal.pub"),
+                g04_override_passed=True,
+            )
+
+        fake_der = b"\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00" + (b"\x42" * 32)
+        fake_fp = hashlib.sha256(fake_der).hexdigest()
+        fake_pem = (
+            b"-----BEGIN PUBLIC KEY-----\n"
+            + base64.b64encode(fake_der)
+            + b"\n-----END PUBLIC KEY-----\n"
+        )
+        with mock.patch.object(
+            dr_mod,
+            "KNOWN_REHEARSAL_PUBLIC_KEY_FINGERPRINTS",
+            frozenset({*dr_mod.KNOWN_REHEARSAL_PUBLIC_KEY_FINGERPRINTS, fake_fp}),
+        ):
+            with self.assertRaisesRegex(ValueError, "ephemeral CI rehearsal public key"):
+                dr_mod.verify_staging_candidate_scope_and_key_guard(
+                    app_image=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+                    requested_scope=dr_mod.PRODUCTION_CANDIDATE_SCOPE,
+                    promotion_public_key_pem=fake_pem,
+                    g04_override_passed=True,
+                )
+
+        # 3. 10-daemon resource limits, headroom timeline, inventory/config audit, and digest refresh
+        svc_caps = {
+            "proxy": (256, 0.5),
+            "frontend": (256, 0.5),
+            "backend": (1024, 1.0),
+            "websocket": (384, 0.5),
+            "queue-short": (768, 0.75),
+            "queue-long": (1024, 1.0),
+            "scheduler": (384, 0.25),
+            "db": (1024, 1.0),
+            "redis-cache": (256, 0.25),
+            "redis-queue": (320, 0.25),
+        }
+        unbounded_service_override: list[str] = []
+        teardown_calls: list[list[str]] = []
+        active_digest_box = [dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4]
+
+        live_snap = {
+            "timestamp_utc": "2026-11-11T14:00:00Z",
+            "live_project_name": "crm-cskh-vps-staging",
+            "container_count": 1,
+            "all_running": True,
+            "containers": [
+                {
+                    "id": "cid-live-1",
+                    "name": "crm-cskh-vps-staging-backend-1",
+                    "service": "backend",
+                    "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+                    "config_image": "crm-cskh:0.0.1-4672041",
+                    "status": "running",
+                    "health": "healthy",
+                    "started_at": "2026-11-09T12:00:00Z",
+                    "restart_count": 0,
+                }
+            ],
+        }
+
+        def fake_run_sub(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            proj = "crm-cskh-dr-https-vps"
+            if "--env-file" in cmd:
+                ef = Path(cmd[cmd.index("--env-file") + 1])
+                if ef.is_file():
+                    env_d = staging_mod.parse_env_file(ef)
+                    proj = env_d.get("COMPOSE_PROJECT_NAME", proj)
+                    active_digest_box[0] = env_d.get("APP_IMAGE", active_digest_box[0])
+            cur_img = active_digest_box[0]
+
+            if cmd[:2] == ["docker", "pull"]:
+                active_digest_box[0] = cmd[2]
+                cur_img = cmd[2]
+                dig = cur_img.split("@", 1)[1]
+                return subprocess.CompletedProcess(cmd, 0, stdout=f"Digest: {dig}\nStatus: Downloaded\n", stderr="")
+            if cmd[:3] == ["docker", "image", "inspect"]:
+                target_img = cmd[3]
+                return subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
+                                "RepoDigests": [target_img],
+                                "Created": "2026-11-11T08:00:00Z",
+                                "Architecture": "amd64",
+                                "Os": "linux",
+                                "Size": 1190528512,
+                                "Config": {
+                                    "User": "frappe",
+                                    "Labels": {
+                                        "io.cskh.apps_tree_sha": "4d361e68912f52243751ae5986cabbd13033f050",
+                                        "io.cskh.crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
+                                    },
+                                },
+                            }
+                        ]
+                    ),
+                    stderr="",
+                )
+            if cmd[:2] == ["docker", "compose"]:
+                if "down" in cmd and "--volumes" in cmd:
+                    teardown_calls.append(list(cmd))
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                if "config" in cmd:
+                    return subprocess.CompletedProcess(cmd, 0, stdout=f"name: {proj}\n", stderr="")
+                if "ps" in cmd and "--format" in cmd:
+                    rows = []
+                    for svc in dr_mod.ALL_DAEMON_SERVICES:
+                        pubs = (
+                            [
+                                {"URL": "127.0.0.1", "PublishedPort": 18081, "TargetPort": 80, "Protocol": "tcp"},
+                                {"URL": "127.0.0.1", "PublishedPort": 18443, "TargetPort": 443, "Protocol": "tcp"},
+                            ]
+                            if svc == "proxy"
+                            else []
+                        )
+                        rows.append(
+                            {
+                                "ID": f"cid-{svc}",
+                                "Name": f"{proj}-{svc}-1",
+                                "Service": svc,
+                                "State": "running",
+                                "Publishers": pubs,
+                            }
+                        )
+                    return subprocess.CompletedProcess(
+                        cmd, 0, stdout="\n".join(json.dumps(r) for r in rows) + "\n", stderr=""
+                    )
+                if "ps" in cmd and "-q" in cmd:
+                    q_idx = cmd.index("-q")
+                    svcs = cmd[q_idx + 1 :]
+                    return subprocess.CompletedProcess(
+                        cmd, 0, stdout="\n".join(f"cid-{s}" for s in svcs) + "\n", stderr=""
+                    )
+                if "exec" in cmd and "MOUNTED_OK" in cmd[-1]:
+                    return subprocess.CompletedProcess(cmd, 0, stdout="MOUNTED_OK\n", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                nets = f"{proj}_app_net\n{proj}_data_net\n{proj}_edge_net\n"
+                return subprocess.CompletedProcess(cmd, 0, stdout=nets, stderr="")
+            if cmd[:3] == ["docker", "network", "inspect"]:
+                nname = cmd[3]
+                return subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Driver": "bridge",
+                                "Internal": nname.endswith(("_app_net", "_data_net")),
+                                "Containers": {"c1": {"Name": f"{proj}-backend-1"}},
+                            }
+                        ]
+                    ),
+                    stderr="",
+                )
+            if cmd[:3] == ["docker", "volume", "ls"]:
+                vols = "\n".join(
+                    f"{proj}{sfx}" for sfx in ("_cert_data", "_db_data", "_logs", "_redis_queue_data", "_sites")
+                )
+                return subprocess.CompletedProcess(cmd, 0, stdout=vols + "\n", stderr="")
+            if cmd[:2] == ["docker", "inspect"] and "--format" in cmd:
+                return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(["MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db_password"]), stderr="")
+            if cmd[:2] == ["docker", "inspect"]:
+                cids = cmd[2:]
+                items = []
+                for cid in cids:
+                    svc = cid.removeprefix("cid-")
+                    mib, cpus = svc_caps[svc]
+                    mem_b = 0 if svc in unbounded_service_override else int(mib * 1024 * 1024)
+                    nano_c = int(cpus * 1_000_000_000)
+                    items.append(
+                        {
+                            "Name": f"/{proj}-{svc}-1",
+                            "Config": {"Labels": {"com.docker.compose.service": svc}},
+                            "HostConfig": {"Memory": mem_b, "NanoCpus": nano_c},
+                        }
+                    )
+                return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(items), stderr="")
+            raise AssertionError(f"Unexpected mocked command: {cmd}")
+
+        def fake_verify_digest(_containers: object, expected_image: str) -> dict[str, object]:
+            return {
+                "pass": True,
+                "expected_app_image": expected_image,
+                "missing_services": [],
+                "mismatches": [],
+                "inspected_services": {
+                    svc: {
+                        "container": f"crm-cskh-dr-https-vps-{svc}-1",
+                        "image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
+                        "repo_digests": [expected_image],
+                        "matched": True,
+                    }
+                    for svc in staging_mod.APP_SERVICES
+                },
+            }
+
+        def fake_bootstrap(*, env_file: Path, **_kwargs: object) -> dict[str, object]:
+            ed = staging_mod.parse_env_file(env_file)
+            img = ed["APP_IMAGE"]
+            return {
+                "https_smoke": {
+                    "status": "PASS",
+                    "mode": "dr-https",
+                    "app_image": img,
+                    "checks": {
+                        "container_digest_parity": fake_verify_digest([], img),
+                        "http_to_https_redirect": {"pass": True},
+                        "tls_certificate": {"expiry_ok": True},
+                        "login_and_sid_cookie": {"pass": True},
+                        "vi_ui_and_csrf": {"pass": True},
+                        "wss_websocket": {"pass": True, "switched_protocols_101": True},
+                    },
+                }
+            }
+
+        with tempfile.TemporaryDirectory(prefix="t1a-vps-receipt-test-") as td:
+            out_dir = Path(td) / "vps-receipts"
+            state_dir = Path(td) / "vps-state"
+            with (
+                mock.patch.object(dr_mod, "run_sub", side_effect=fake_run_sub),
+                mock.patch.object(dr_mod.p403_tool, "verify_running_containers_digest", side_effect=fake_verify_digest),
+                mock.patch.object(dr_mod, "bootstrap_isolated_dr_stack", side_effect=fake_bootstrap),
+                mock.patch.object(dr_mod, "capture_readonly_live_stack_snapshot", return_value=json.loads(json.dumps(live_snap))),
+                mock.patch.object(dr_mod, "_check_loopback_port_free", return_value=True),
+                mock.patch.object(dr_mod.os, "cpu_count", return_value=4),
+                mock.patch.object(
+                    dr_mod,
+                    "_read_linux_meminfo_mib",
+                    return_value={
+                        "mem_total_mib": 15984.0,
+                        "mem_available_mib": 9400.0,
+                        "swap_total_mib": 2048.0,
+                        "swap_free_mib": 2048.0,
+                    },
+                ),
+                mock.patch.object(
+                    dr_mod,
+                    "_read_linux_loadavg",
+                    return_value={"loadavg_1m": 0.42, "loadavg_5m": 0.38, "loadavg_15m": 0.31},
+                ),
+                mock.patch.object(
+                    dr_mod.shutil,
+                    "disk_usage",
+                    return_value=SimpleNamespace(
+                        total=int(120 * (1024**3)),
+                        used=int(50 * (1024**3)),
+                        free=int(70 * (1024**3)),
+                    ),
+                ),
+                mock.patch.object(dr_mod.socket, "gethostname", return_value="vps-hrpartner-103-77-208-186"),
+                mock.patch.object(dr_mod.platform, "platform", return_value="Linux-6.8.0-51-generic-x86_64-with-glibc2.39"),
+                mock.patch.object(dr_mod.platform, "release", return_value="6.8.0-51-generic"),
+            ):
+                bundle_sum = dr_mod.collect_vps_g03_g05_receipts(
+                    app_image=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+                    out_dir=out_dir,
+                    keep_up=True,
+                    state_dir=state_dir,
+                )
+                self.assertEqual(bundle_sum["status"], "PASS")
+                self.assertTrue((out_dir / "staging-inventory-and-config-audit.json").is_file())
+                inv_audit = json.loads((out_dir / "staging-inventory-and-config-audit.json").read_text(encoding="utf-8"))
+                self.assertEqual(inv_audit["status"], "PASS")
+                self.assertEqual(inv_audit["governance_scope"]["production_candidate_status"], "BLOCKED")
+                self.assertTrue(inv_audit["resource_limits"]["pass"])
+                self.assertEqual(inv_audit["resource_limits"]["total_capped_ram_mib"], 5696.0)
+                self.assertEqual(inv_audit["resource_limits"]["total_capped_cpus"], 6.0)
+                self.assertTrue(inv_audit["zero_live_mutation_during_and_after"])
+                self.assertIn("before_isolated_staging", inv_audit["headroom_timeline"])
+                self.assertIn("during_isolated_staging", inv_audit["headroom_timeline"])
+                self.assertIn("after_isolated_staging", inv_audit["headroom_timeline"])
+
+                # Unbounded daemon container must fail runtime resource audit
+                unbounded_service_override.append("backend")
+                fail_audit = dr_mod.audit_isolated_stack_runtime_resources(
+                    env_file=state_dir / "staging-dr-https.env",
+                    secret_file=state_dir / "db_root_password.txt",
+                )
+                self.assertEqual(fail_audit["status"], "FAIL")
+                self.assertEqual(fail_audit["resource_limits"]["unbounded_services"], ["backend"])
+                unbounded_service_override.clear()
+
+                # When T1B changes candidate image digest to fix G18, refresh-candidate-digest updates Staging & all receipts
+                new_t1b_digest = "ghcr.io/nobita6986/crm-cskh@sha256:" + ("c" * 64)
+                rc = dr_mod.main(
+                    [
+                        "refresh-candidate-digest",
+                        "--app-image",
+                        new_t1b_digest,
+                        "--out-dir",
+                        str(out_dir),
+                        "--state-dir",
+                        str(state_dir),
+                        "--keep-up",
+                    ]
+                )
+                self.assertEqual(rc, 0)
+                self.assertGreaterEqual(len(teardown_calls), 1)
+                refreshed_sum = json.loads((out_dir / "vps-g03-g05-summary.json").read_text(encoding="utf-8"))
+                self.assertEqual(refreshed_sum["app_image"], new_t1b_digest)
+                self.assertEqual(refreshed_sum["refreshed_from_previous_digest"], dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4)
+                self.assertEqual(refreshed_sum["stale_digest_references"], [])
+                for rfile in (
+                    "candidate-registry-pull-inspect-receipt.json",
+                    "staging-dr-runtime-isolation-audit.json",
+                    "staging-inventory-and-config-audit.json",
+                    "https-wss-smoke-receipt.json",
+                ):
+                    raw_r = (out_dir / rfile).read_text(encoding="utf-8")
+                    self.assertIn(new_t1b_digest, raw_r)
+                    self.assertNotIn(dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4, raw_r)
+
 
 if __name__ == "__main__":
     unittest.main()
