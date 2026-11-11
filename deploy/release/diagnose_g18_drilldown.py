@@ -61,7 +61,10 @@ from benchmark_p4_isolated import (
 
 S1_CANONICAL_OVERRIDE_YAML = """\
 services:
+  db:
+    mem_limit: 3g
   backend:
+    mem_limit: 8g
     environment:
       GUNICORN_WORKERS: "4"
       GUNICORN_THREADS: "4"
@@ -1658,75 +1661,46 @@ def run_diagnostic(
                     "W2_monthly_company_connected_rate_p1",
                     path_month_comp_p1,
                     [bod_sess["cookie"]],
-                    float(
-                        (
-                            profiles_by_name.get("D2_monthly_company_connected_rate_p1")
-                            or {}
-                        ).get("wall_ms")
-                        or 0.0
-                    ),
+                    profiles_by_name.get("D2_monthly_company_connected_rate_p1") or {},
                 ),
                 (
                     "W3_monthly_company_connected_rate_deep_p30",
                     path_month_comp_p30,
                     [bod_sess["cookie"]],
-                    float(
-                        (
-                            profiles_by_name.get(
-                                "D3c_monthly_company_connected_rate_p26_post_cliff"
-                            )
-                            or {}
-                        ).get("wall_ms")
-                        or 0.0
-                    ),
+                    profiles_by_name.get(
+                        "D3c_monthly_company_connected_rate_p26_post_cliff"
+                    )
+                    or {},
                 ),
                 (
                     "W4_monthly_team_leader_connected_rate_p1",
                     path_month_team_p1,
                     [leader_sess["cookie"]],
-                    float(
-                        (
-                            profiles_by_name.get(
-                                "D5_monthly_team_leader_connected_rate_p1"
-                            )
-                            or {}
-                        ).get("wall_ms")
-                        or 0.0
-                    ),
+                    profiles_by_name.get("D5_monthly_team_leader_connected_rate_p1")
+                    or {},
                 ),
                 (
                     "W5_monthly_company_first_attempt_sla_p1",
                     path_month_sla_p1,
                     [bod_sess["cookie"]],
-                    float(
-                        (
-                            profiles_by_name.get(
-                                "D6_monthly_company_first_attempt_sla_rate_p1"
-                            )
-                            or {}
-                        ).get("wall_ms")
-                        or 0.0
-                    ),
+                    profiles_by_name.get("D6_monthly_company_first_attempt_sla_rate_p1")
+                    or {},
                 ),
                 (
                     "W6_monthly_company_contact_attempt_count_p1",
                     path_month_att_p1,
                     [bod_sess["cookie"]],
-                    float(
-                        (
-                            profiles_by_name.get(
-                                "D7_monthly_company_contact_attempt_count_p1"
-                            )
-                            or {}
-                        ).get("wall_ms")
-                        or 0.0
-                    ),
+                    profiles_by_name.get("D7_monthly_company_contact_attempt_count_p1")
+                    or {},
                 ),
             ]
 
-            for w_prefix, w_path, w_cookies, single_ms in extended_specs:
-                if single_ms > 8000.0:
-                    # Unoptimized path (>8s single call): run compact c=12 (24 reqs) saturation wave so CI finishes cleanly
+            for w_prefix, w_path, w_cookies, prof_obj in extended_specs:
+                single_ms = float(prof_obj.get("wall_ms") or 0.0)
+                rows_fetched = int(prof_obj.get("sql_rows_fetched_into_python") or 0)
+                if rows_fetched > 5000 or single_ms > 600.0:
+                    # Unoptimized full-dataset hydration (>5k rows per request): run bounded c=12 (24 reqs)
+                    # saturation probe so CI collects real saturation metrics without 16x250k host OOM.
                     http_waves[f"{w_prefix}_c12"] = _run_monitored_http_wave(
                         wave_id=f"{w_prefix}_c12_compact_unoptimized",
                         path=w_path,
