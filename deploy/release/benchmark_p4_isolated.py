@@ -55,6 +55,7 @@ import math
 import os
 import re
 import secrets
+import socket
 import subprocess
 import tempfile
 import time
@@ -605,10 +606,72 @@ def _http_call(
     except urllib.error.HTTPError as exc:
         body = exc.read() if exc.fp else b""
         status = int(exc.code)
-    except Exception:
+    except (TimeoutError, socket.timeout):
         body = b""
         status = 0
+    except urllib.error.URLError as exc:
+        body = b""
+        status = (
+            0
+            if isinstance(getattr(exc, "reason", None), (TimeoutError, socket.timeout))
+            else -1
+        )
+    except Exception:
+        body = b""
+        status = -1
     return (time.perf_counter() - t0) * 1000.0, status, body
+
+
+def _run_multi_cookie_wave(
+    cookies: list[str],
+    *,
+    base_url: str,
+    site_name: str,
+    path: str,
+    method: str = "GET",
+    concurrency: int,
+    requests_total: int,
+    timeout: float = 30.0,
+) -> dict[str, object]:
+    lats: list[float] = []
+    errs = 0
+    timeouts = 0
+    status_counts: dict[str, int] = {}
+
+    def _one(idx: int) -> tuple[float, int]:
+        ck = cookies[idx % len(cookies)]
+        lat_ms, st, _ = _http_call(
+            base_url=base_url,
+            site_name=site_name,
+            cookie_header=ck,
+            path=path,
+            method=method,
+            timeout=timeout,
+        )
+        return lat_ms, st
+
+    t_sc = time.perf_counter()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
+        futs = [pool.submit(_one, i) for i in range(requests_total)]
+        for fut in concurrent.futures.as_completed(futs):
+            lat_ms, st = fut.result()
+            lats.append(lat_ms)
+            st_key = "timeout" if st == 0 else ("conn_error" if st < 0 else str(st))
+            status_counts[st_key] = status_counts.get(st_key, 0) + 1
+            if st == 0:
+                timeouts += 1
+            if not (200 <= st < 400):
+                errs += 1
+    elapsed = time.perf_counter() - t_sc
+    return {
+        "path": path,
+        "concurrency": concurrency,
+        "distinct_sessions_used": len(cookies),
+        "client_timeout_threshold_sec": timeout,
+        "timeout_count": timeouts,
+        "status_counts": status_counts,
+        **summarize_latencies_ms(lats, error_count=errs, elapsed_sec=elapsed),
+    }
 
 
 def _run_http_wave(
@@ -619,13 +682,15 @@ def _run_http_wave(
     cookie_header: str,
     concurrency: int,
     requests_per_scenario: int,
-) -> tuple[dict[str, dict[str, object]], dict[str, float | int]]:
+) -> tuple[dict[str, dict[str, object]], dict[str, object]]:
     scenario_results: dict[str, dict[str, object]] = {}
     all_latencies: list[float] = []
     all_errors = 0
+    all_timeouts = 0
+    all_status_counts: dict[str, int] = {}
     overall_t0 = time.perf_counter()
 
-    def _one_call(path: str, method: str) -> tuple[float, bool]:
+    def _one_call(path: str, method: str) -> tuple[float, int]:
         lat_ms, status, _ = _http_call(
             base_url=base_url,
             site_name=site_name,
@@ -633,7 +698,7 @@ def _run_http_wave(
             path=path,
             method=method,
         )
-        return lat_ms, 200 <= status < 400
+        return lat_ms, status
 
     for sc in scenarios:
         sc_id = sc["id"]
@@ -642,30 +707,48 @@ def _run_http_wave(
         t_sc = time.perf_counter()
         lats: list[float] = []
         errs = 0
+        timeouts = 0
+        status_counts: dict[str, int] = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
             futs = [
                 pool.submit(_one_call, sc_path, sc_method)
                 for _ in range(requests_per_scenario)
             ]
             for fut in concurrent.futures.as_completed(futs):
-                lat_ms, ok = fut.result()
+                lat_ms, status = fut.result()
                 lats.append(lat_ms)
-                if not ok:
+                st_key = (
+                    "timeout"
+                    if status == 0
+                    else ("conn_error" if status < 0 else str(status))
+                )
+                status_counts[st_key] = status_counts.get(st_key, 0) + 1
+                all_status_counts[st_key] = all_status_counts.get(st_key, 0) + 1
+                if status == 0:
+                    timeouts += 1
+                    all_timeouts += 1
+                if not (200 <= status < 400):
                     errs += 1
         elapsed = time.perf_counter() - t_sc
         scenario_results[sc_id] = {
             "workload_class": sc["workload_class"],
             "path": sc_path,
             "concurrency": concurrency,
+            "timeout_count": timeouts,
+            "status_counts": status_counts,
             **summarize_latencies_ms(lats, error_count=errs, elapsed_sec=elapsed),
         }
         all_latencies.extend(lats)
         all_errors += errs
 
     overall_elapsed = time.perf_counter() - overall_t0
-    return scenario_results, summarize_latencies_ms(
-        all_latencies, error_count=all_errors, elapsed_sec=overall_elapsed
-    )
+    return scenario_results, {
+        **summarize_latencies_ms(
+            all_latencies, error_count=all_errors, elapsed_sec=overall_elapsed
+        ),
+        "timeout_count": all_timeouts,
+        "status_counts": all_status_counts,
+    }
 
 
 def _execute_s1_http_acceptance_and_mixed_waves(
@@ -1076,9 +1159,29 @@ def _execute_s1_http_acceptance_and_mixed_waves(
             "queue_and_db_after_wave": w_db_q,
         }
 
+    staff_cookies_40 = [s["cookie"] for s in sessions_80[:40]]
+    telesale_worklist_ssr_40_staff_c12 = _run_multi_cookie_wave(
+        staff_cookies_40,
+        base_url=base_url,
+        site_name=site_name,
+        path="/cskh/my-customers",
+        concurrency=12,
+        requests_total=240,
+    )
+    telesale_worklist_ssr_40_staff_c40 = _run_multi_cookie_wave(
+        staff_cookies_40,
+        base_url=base_url,
+        site_name=site_name,
+        path="/cskh/my-customers",
+        concurrency=40,
+        requests_total=160,
+    )
+
     return {
         "distinct_authenticated_sessions_created": len(sessions_80),
         "staff_my_customers_http": staff_my_customers_http,
+        "telesale_worklist_ssr_40_staff_sessions_c12": telesale_worklist_ssr_40_staff_c12,
+        "telesale_worklist_ssr_40_staff_sessions_c40": telesale_worklist_ssr_40_staff_c40,
         "lead_detail_and_history_http": lead_detail_and_history_http,
         "record_attempt_and_callback_http": record_attempt_and_callback_http,
         "bod_overview_and_drilldown_http": bod_role_results,
@@ -1128,6 +1231,14 @@ def execute_isolated_benchmark(
         cookie_header=cookie_header,
         concurrency=concurrency,
         requests_per_scenario=requests_per_scenario,
+    )
+    worklist_ssr_single_initialized_c12 = _run_multi_cookie_wave(
+        [cookie_header],
+        base_url=base_url,
+        site_name=site_name,
+        path="/cskh/my-customers",
+        concurrency=concurrency,
+        requests_total=requests_per_scenario,
     )
 
     peak_staff_wave: dict[str, object] | None = None
@@ -1193,6 +1304,66 @@ def execute_isolated_benchmark(
         out["peak_40_staff_concurrent_wave"] = peak_staff_wave
     if s1_http_acceptance is not None:
         out["s1_http_acceptance_and_mixed_waves"] = s1_http_acceptance
+    out["worklist_ssr_acceptance_and_separation"] = {
+        "execution_mode": "BUILT_INTO_OFFICIAL_COMMIT_AND_IMAGE_DIGEST_NO_IN_CONTAINER_PATCHING",
+        "priority_acceptance_case_1_shared_new_session_c12": scenario_results.get(
+            "telesale_worklist_page"
+        ),
+        "priority_acceptance_case_2_40_staff_sessions_c40": (
+            (s1_http_acceptance or {}).get(
+                "telesale_worklist_ssr_40_staff_sessions_c40"
+            )
+        ),
+        "case_2a_shared_new_session_c12": scenario_results.get(
+            "telesale_worklist_page"
+        ),
+        "case_2b_single_initialized_session_c12": worklist_ssr_single_initialized_c12,
+        "case_2b_single_initialized_session_c40": (
+            ((peak_staff_wave or {}).get("scenario_summaries") or {}).get(
+                "telesale_worklist_page"
+            )
+        ),
+        "case_2c_40_staff_sessions_c12": (
+            (s1_http_acceptance or {}).get(
+                "telesale_worklist_ssr_40_staff_sessions_c12"
+            )
+        ),
+        "case_2c_40_staff_sessions_c40": (
+            (s1_http_acceptance or {}).get(
+                "telesale_worklist_ssr_40_staff_sessions_c40"
+            )
+        ),
+        "ssr_vs_aggregate_separation": {
+            "c12_ssr_telesale_worklist_page_only": scenario_results.get(
+                "telesale_worklist_page"
+            ),
+            "c12_overall_summary_all_8_scenarios": overall_summary,
+            "c40_ssr_telesale_worklist_page_40_staff_sessions_only": (
+                (s1_http_acceptance or {}).get(
+                    "telesale_worklist_ssr_40_staff_sessions_c40"
+                )
+            ),
+            "c40_ssr_telesale_worklist_page_single_session_only": (
+                ((peak_staff_wave or {}).get("scenario_summaries") or {}).get(
+                    "telesale_worklist_page"
+                )
+            ),
+            "c40_overall_summary_peak_wave_5_scenarios": (
+                (peak_staff_wave or {}).get("overall_summary")
+            ),
+            "c40_overall_summary_mixed_api_sessions_40": (
+                (
+                    (
+                        (s1_http_acceptance or {}).get(
+                            "concurrent_mixed_session_waves_20_40_80"
+                        )
+                        or {}
+                    ).get("sessions_40")
+                    or {}
+                ).get("overall_summary")
+            ),
+        },
+    }
     return out
 
 
@@ -2407,6 +2578,64 @@ def _build_p4_9_2_acceptance_matrix(
                 float(w20.get("error_rate_pct") or 0.0) == 0.0
                 and float(w40.get("error_rate_pct") or 0.0) == 0.0
                 and float(w80.get("error_rate_pct") or 0.0) <= 0.5
+            ),
+        },
+        "telesale_worklist_ssr_zero_errors_c12_and_c40": {
+            "shared_new_session_c12_error_count": (
+                (http_report.get("scenario_summaries") or {}).get(
+                    "telesale_worklist_page"
+                )
+                or {}
+            ).get("error_count"),
+            "shared_new_session_c12_timeout_count": (
+                (http_report.get("scenario_summaries") or {}).get(
+                    "telesale_worklist_page"
+                )
+                or {}
+            ).get("timeout_count"),
+            "staff_40_sessions_c40_error_count": (
+                http_acc.get("telesale_worklist_ssr_40_staff_sessions_c40") or {}
+            ).get("error_count"),
+            "staff_40_sessions_c40_timeout_count": (
+                http_acc.get("telesale_worklist_ssr_40_staff_sessions_c40") or {}
+            ).get("timeout_count"),
+            "passed": (
+                int(
+                    (
+                        (http_report.get("scenario_summaries") or {}).get(
+                            "telesale_worklist_page"
+                        )
+                        or {}
+                    ).get("error_count")
+                    or 0
+                )
+                == 0
+                and int(
+                    (
+                        (http_report.get("scenario_summaries") or {}).get(
+                            "telesale_worklist_page"
+                        )
+                        or {}
+                    ).get("timeout_count")
+                    or 0
+                )
+                == 0
+                and int(
+                    (
+                        http_acc.get("telesale_worklist_ssr_40_staff_sessions_c40")
+                        or {}
+                    ).get("error_count")
+                    or 0
+                )
+                == 0
+                and int(
+                    (
+                        http_acc.get("telesale_worklist_ssr_40_staff_sessions_c40")
+                        or {}
+                    ).get("timeout_count")
+                    or 0
+                )
+                == 0
             ),
         },
     }
