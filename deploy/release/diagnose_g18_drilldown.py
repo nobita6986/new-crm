@@ -340,9 +340,12 @@ from crm_cskh.api import p3_reporting
 from crm_cskh.p2_models import ensure_p2_indexes, ensure_p2_seeds
 from crm_cskh.p3_models import ensure_p3_indexes, ensure_p3_seeds
 from crm_cskh.services.attribution import AUTHORITATIVE
-from crm_cskh.services.dirty_scope import schedule_post_commit_dirty_invalidation
 from crm_cskh.services.kpi_periods import resolve_period_spec
-from crm_cskh.services.kpi_runs import _flush_pending_dirty_events, execute_kpi_recompute
+from crm_cskh.services.kpi_runs import (
+    _flush_pending_dirty_events,
+    execute_kpi_recompute,
+    schedule_post_commit_dirty_invalidation,
+)
 
 
 def _bulk_insert(table, columns, rows, chunk_size=2500):
