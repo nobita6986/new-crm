@@ -23,10 +23,9 @@
       "G20",
       "G21"
     ],
-    "blocked_gates_count": 9,
+    "blocked_gates_count": 8,
     "blocked_gates": [
       "G03",
-      "G04",
       "G05",
       "G07",
       "G18",
@@ -35,7 +34,11 @@
       "G23",
       "G24"
     ],
-    "full_rerun_executed": false
+    "full_rerun_executed": false,
+    "failed_gates_count": 1,
+    "failed_gates": [
+      "G04"
+    ]
   },
   "staging_verification_and_resource_governance": {
     "verification_scope": "staging_candidate_isolated_verification",
@@ -437,7 +440,7 @@
       ],
       "required_inputs": [
         "Named Primary Day-2 Operator (full name, account, on-call hours) for CSKH_OPERATOR_CONTACT in /etc/crm-cskh/alerting.env (mode 0600)",
-        "Backup / Secondary Day-2 Operator is RECOMMENDED (khuyến nghị), not a mandatory gate blocker if the plan assigns a single primary Operator"
+        "Backup / Secondary Day-2 Operator is RECOMMENDED (khuy\u1ebfn ngh\u1ecb), not a mandatory gate blocker if the plan assigns a single primary Operator"
       ]
     },
     "4_approved_alert_channel": {
@@ -456,8 +459,8 @@
         "G24"
       ],
       "required_inputs": [
-        "G22 (Business UAT): Owner-assigned representatives covering the 4 business roles (BOD, CRM Admin, Leader, Staff) in docs/p4/uat-report.md §6 (does NOT require 5 distinct UAT people)",
-        "G24 (Operational Handover): Separate Operator operational handover acceptance signature in docs/p4/operations-sop.md §7.2"
+        "G22 (Business UAT): Owner-assigned representatives covering the 4 business roles (BOD, CRM Admin, Leader, Staff) in docs/p4/uat-report.md \u00a76 (does NOT require 5 distinct UAT people)",
+        "G24 (Operational Handover): Separate Operator operational handover acceptance signature in docs/p4/operations-sop.md \u00a77.2"
       ]
     },
     "6_release_decision": {
@@ -492,8 +495,8 @@
         }
       },
       "required_inputs": [
-        "Owner signature on the exact 7-metric proposed S1 performance SLO set attached to Ticket v1.4 (docs/p4/performance-report.md §4.3) prior to running G18 on Staging VPS",
-        "Owner selection of handling option (PA1 wait for upstream Debian deb13u* fix vs PA2 time-boxed 30-day exception per deploy/release/t0-critical-cve-dossier.md §4) for the 3 unfixed Debian 13 source CVEs and authorization of production cutover window"
+        "Owner signature on the exact 7-metric proposed S1 performance SLO set attached to Ticket v1.4 (docs/p4/performance-report.md \u00a74.3) prior to running G18 on Staging VPS",
+        "Owner selection of handling option (PA1 wait for upstream Debian deb13u* fix vs PA2 time-boxed 30-day exception per deploy/release/t0-critical-cve-dossier.md \u00a74) for the 3 unfixed Debian 13 source CVEs and authorization of production cutover window"
       ]
     }
   }

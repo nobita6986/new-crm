@@ -1994,12 +1994,17 @@ class OpsToolkitTests(unittest.TestCase):
             "G20",
             "G21",
         }
-        expected_9_blocked = {"G03", "G04", "G05", "G07", "G18", "G19", "G22", "G23", "G24"}
+        expected_1_fail = {"G04"}
+        expected_8_blocked = {"G03", "G05", "G07", "G18", "G19", "G22", "G23", "G24"}
         actual_pass = {g["gate"] for g in gate_map["gates"] if g["status"] == "PASS"}
+        actual_fail = {g["gate"] for g in gate_map["gates"] if g["status"] == "FAIL"}
         actual_blocked = {g["gate"] for g in gate_map["gates"] if g["status"] == "BLOCKED"}
         self.assertEqual(actual_pass, expected_15_signed_pass)
-        self.assertEqual(actual_blocked, expected_9_blocked)
+        self.assertEqual(actual_fail, expected_1_fail)
+        self.assertEqual(actual_blocked, expected_8_blocked)
         self.assertEqual(len(gate_map["gates"]), 24)
+        self.assertEqual(gate_map.get("failed_gates_count"), 1)
+        self.assertEqual(gate_map.get("blocked_gates_count"), 8)
 
         # 2. Staging candidate scope vs production_candidate BLOCKED on G04 + rehearsal key ban
         stg_scope = dr_mod.verify_staging_candidate_scope_and_key_guard(
@@ -2009,7 +2014,7 @@ class OpsToolkitTests(unittest.TestCase):
         self.assertEqual(stg_scope["verification_scope"], "staging_candidate_isolated_verification")
         self.assertTrue(stg_scope["candidate_verification_only"])
         self.assertFalse(stg_scope["promoted_to_production"])
-        self.assertEqual(stg_scope["g04_status"], "BLOCKED")
+        self.assertEqual(stg_scope["g04_status"], "FAIL")
         self.assertEqual(stg_scope["production_candidate_status"], "BLOCKED")
         self.assertFalse(stg_scope["rehearsal_key_allowed_for_production"])
 

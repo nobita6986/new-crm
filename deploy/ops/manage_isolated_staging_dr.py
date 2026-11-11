@@ -3386,7 +3386,7 @@ def verify_staging_candidate_scope_and_key_guard(
             and rel_env_scope == PRODUCTION_CANDIDATE_SCOPE
         )
 
-    g04_status = "PASS" if g04_passed else "BLOCKED"
+    g04_status = "PASS" if g04_passed else "FAIL"
     production_candidate_status = "READY" if g04_passed else "BLOCKED"
 
     if requested_scope == PRODUCTION_CANDIDATE_SCOPE and not g04_passed:

@@ -4,7 +4,7 @@
   "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
   "baseline_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
   "preserved_t1c_signed_gates_count": 15,
-  "blocked_gates_count": 9,
+  "blocked_gates_count": 8,
   "g08_vps_restore_preserved_untouched": true,
   "live_vps_cutover_executed": false,
   "gates": [
@@ -56,7 +56,7 @@
     },
     {
       "gate": "G04",
-      "status": "BLOCKED",
+      "status": "FAIL",
       "acceptance_ids": [
         "P4-02-SBOM-SCAN"
       ],
@@ -446,5 +446,19 @@
   "t1b_candidate_verify_and_s1_ci_run_id": 42984867723,
   "integrated_candidate_manifest": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
   "verified_code_commit_sha": "dd3d18ebc811784764b48faeaa57ac145859570e",
-  "verified_ci_run_id": 43031124613
+  "verified_ci_run_id": 43031124613,
+  "failed_gates_count": 1,
+  "failed_gates": [
+    "G04"
+  ],
+  "blocked_gates": [
+    "G03",
+    "G05",
+    "G07",
+    "G18",
+    "G19",
+    "G22",
+    "G23",
+    "G24"
+  ]
 }
