@@ -227,7 +227,7 @@ jobs:
               apt-get update; \
               apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
               install -d -m 0755 /etc/apt/keyrings; \
-              curl -fsSL https://supplychain.mariadb.com/mariadb-release-signing-key.asc \
+              curl -fsSL https://mariadb.org/mariadb_release_signing_key.pgp \
                 | gpg --dearmor -o /etc/apt/keyrings/mariadb-keyring.gpg; \
               echo "deb [signed-by=/etc/apt/keyrings/mariadb-keyring.gpg] https://deb.mariadb.org/11.8/debian trixie main" \
                 > /etc/apt/sources.list.d/mariadb.list; \
