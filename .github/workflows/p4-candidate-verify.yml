@@ -2,9 +2,26 @@ name: P4 GHCR candidate digest, full P0-P3 regression & S1 benchmark
 
 on:
   workflow_dispatch:
+    inputs:
+      existing_app_image_digest:
+        description: 'Optional existing GHCR @sha256 digest (for run_mode=s1_only without rebuilding)'
+        required: false
+        type: string
+        default: ''
+      run_mode:
+        description: 'Execution mode: full (build + regression + S1) or s1_only (benchmark existing digest)'
+        required: false
+        type: string
+        default: 'full'
   push:
     branches:
       - 'codex/p4-t1b-*'
+    paths:
+      - 'apps/**'
+      - 'deploy/images/**'
+      - 'deploy/release/python-constraints.txt'
+      - 'deploy/release/system-python-constraints.txt'
+      - 'deploy/release/cve-exceptions.json'
 
 permissions:
   contents: read
@@ -16,6 +33,7 @@ concurrency:
 jobs:
   build-scan-sign-and-push-ghcr:
     name: Build-once, push GHCR @sha256, SBOM, strict scan & Ed25519 sign
+    if: ${{ inputs.run_mode != 's1_only' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     permissions:
@@ -166,6 +184,12 @@ jobs:
             --pyjwt-metadata-file "$BUNDLE/security/pyjwt-METADATA.txt" \
             --out "$BUNDLE/security/security-scan-summary.json"
 
+          "$PY" deploy/release/collect_cve_and_lock_diff_evidence.py cve-reachability \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --trivy-json "$BUNDLE/security/trivy-image.json" \
+            --strict-scan-json "$BUNDLE/security/security-scan-strict.json" \
+            --out "$BUNDLE/security/runtime-cve-reachability-proof.json"
+
           if [ "${STRICT_RC}" -eq 0 ]; then
             echo "strict_gate_status=PASS" >> "$GITHUB_OUTPUT"
           else
@@ -271,6 +295,10 @@ jobs:
           cp deploy/images/resources/system-python-constraints.txt "$BUNDLE/locks/system-python-constraints.txt"
           cp deploy/release/cve-exceptions.json "$BUNDLE/locks/cve-exceptions.json"
           cp deploy/release/t0-critical-cve-dossier.md "$BUNDLE/locks/t0-critical-cve-dossier.md"
+          cp deploy/release/frappe-v15-123-1-to-v15-126-0-compatibility-dossier.md "$BUNDLE/locks/frappe-v15-123-1-to-v15-126-0-compatibility-dossier.md"
+          "$PY" deploy/release/collect_cve_and_lock_diff_evidence.py lock-diff \
+            --candidate-build-dir "$BUNDLE/build" \
+            --out "$BUNDLE/locks/frappe-v15-123-1-vs-candidate-lock-diff.json"
 
           "$PY" deploy/release/audit_registry_and_signing_config.py \
             --out "$BUNDLE/registry/registry-and-signing-audit.json" >/dev/null
@@ -399,6 +427,7 @@ jobs:
 
   verify-and-regress-by-digest:
     name: Pull GHCR @sha256, G02 clean-site, G03 10-service smoke & full P0-P3 suites
+    if: ${{ inputs.run_mode != 's1_only' }}
     needs: [build-scan-sign-and-push-ghcr]
     runs-on: ubuntu-24.04
     timeout-minutes: 90
@@ -552,9 +581,10 @@ jobs:
 
   isolated-s1-benchmark:
     name: Pull identical GHCR @sha256 & run isolated S1 benchmark (50k/75k/250k/40 staff)
+    if: ${{ always() && (inputs.run_mode == 's1_only' || needs.build-scan-sign-and-push-ghcr.result == 'success') }}
     needs: [build-scan-sign-and-push-ghcr]
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    timeout-minutes: 90
     permissions:
       contents: read
       packages: read
@@ -568,8 +598,11 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
 
       - name: Download signed GHCR candidate bundle
+        if: ${{ inputs.run_mode != 's1_only' }}
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: p4-ghcr-candidate-bundle-${{ github.run_id }}
@@ -578,7 +611,8 @@ jobs:
       - name: Verify Ed25519 manifest signature & pull identical GHCR @sha256 digest
         shell: bash
         env:
-          APP_IMAGE_DIGEST: ${{ needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
+          APP_IMAGE_DIGEST: ${{ inputs.existing_app_image_digest || needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
+          RUN_MODE: ${{ inputs.run_mode || 'full' }}
           SIGNED_MANIFEST_REL: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_manifest_relpath }}
           SIGNED_SIG_REL: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_sig_relpath }}
           SIGNED_SCOPE: ${{ needs.build-scan-sign-and-push-ghcr.outputs.signed_scope }}
@@ -588,16 +622,19 @@ jobs:
           set -euo pipefail
           sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
           mkdir -p "$RUNNER_TEMP/p4-s1-benchmark"
-          (cd "$RUNNER_TEMP/p4-ghcr-bundle" && sha256sum -c SHA256SUMS.txt)
-
           python3 -m venv "$RUNNER_TEMP/p4-venv"
           "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
-          "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/release_manifest.py verify \
-            --manifest "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_MANIFEST_REL}" \
-            --sig "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_SIG_REL}" \
-            --public-key-file "$RUNNER_TEMP/p4-ghcr-bundle/manifest/candidate-signing.pub" \
-            --expected-image "${APP_IMAGE_DIGEST}" \
-            --expected-scope "${SIGNED_SCOPE}"
+          "$RUNNER_TEMP/p4-venv/bin/python" -m unittest discover -s deploy/release -p 'test_*.py' -v
+
+          if [ "${RUN_MODE}" != "s1_only" ]; then
+            (cd "$RUNNER_TEMP/p4-ghcr-bundle" && sha256sum -c SHA256SUMS.txt)
+            "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/release_manifest.py verify \
+              --manifest "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_MANIFEST_REL}" \
+              --sig "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_SIG_REL}" \
+              --public-key-file "$RUNNER_TEMP/p4-ghcr-bundle/manifest/candidate-signing.pub" \
+              --expected-image "${APP_IMAGE_DIGEST}" \
+              --expected-scope "${SIGNED_SCOPE}"
+          fi
 
           printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
             --username "${GITHUB_ACTOR_PULL}" \
@@ -607,7 +644,7 @@ jobs:
       - name: Execute isolated S1 suggested-dataset benchmark (zero Owner VPS traffic)
         shell: bash
         env:
-          APP_IMAGE_DIGEST: ${{ needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
+          APP_IMAGE_DIGEST: ${{ inputs.existing_app_image_digest || needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
         run: |
           set -euo pipefail
           BENCH_OUT="$RUNNER_TEMP/p4-s1-benchmark"
@@ -634,6 +671,7 @@ jobs:
           assert counts["cskh_contact_attempts"] >= 250000, counts
           assert counts["active_staff_users"] == 40, counts
           assert rpt["isolation_guard"]["owner_vps_touched"] is False
+          assert rpt["p4_9_2_acceptance_matrix"]["all_passed"] is True, rpt["p4_9_2_acceptance_matrix"]
 
           sums = []
           for path in sorted(root.rglob("*")):

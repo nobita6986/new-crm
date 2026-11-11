@@ -1,10 +1,12 @@
-name: P4 Batch 2 T1C gap delta verification on locked GHCR digest
+name: P4 Batch 2 T1C gap delta verification on unified candidate GHCR digest
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - 'codex/p4-batch2-t1b-delta'
+    inputs:
+      app_image_digest:
+        description: 'Immutable GHCR candidate digest (ghcr.io/nobita6986/crm-cskh@sha256:...)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,8 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LOCKED_BATCH1_COMMIT_SHA: '427af4834eda48a15ca86c15e88342c3c40d5f2f'
-  LOCKED_BATCH1_IMAGE_DIGEST: 'ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d'
+  TARGET_IMAGE_DIGEST: ${{ inputs.app_image_digest }}
   BASELINE_MAIN_COMMIT_SHA: '467830195358b2431ac772486530ab935887a518'
 
 jobs:
@@ -29,13 +30,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Verify apps tree parity with locked Batch 1 SHA, ruff & unit contracts
+      - name: Verify digest URI, PR isolation, locks, ruff & unit contracts
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD:apps)" = "$(git rev-parse "${LOCKED_BATCH1_COMMIT_SHA}:apps")"
-          test "$(git rev-parse HEAD:deploy/compose)" = "$(git rev-parse "${LOCKED_BATCH1_COMMIT_SHA}:deploy/compose")"
-          test "$(git rev-parse HEAD:deploy/images)" = "$(git rev-parse "${LOCKED_BATCH1_COMMIT_SHA}:deploy/images")"
+          sh deploy/release/validate_digest_uri.sh "${TARGET_IMAGE_DIGEST}"
 
           python3 deploy/release/verify_pr_isolation.py \
             --check-workflows \
@@ -69,7 +68,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Build N-1 image from baseline main & pull locked Batch 1 candidate @sha256 from GHCR
+      - name: Build N-1 image from baseline main & pull unified candidate @sha256 from GHCR
         shell: bash
         env:
           GITHUB_ACTOR_PULL: ${{ github.actor }}
@@ -77,13 +76,17 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/p4-batch2-g06-g09/n-minus-1-build"
-          sh deploy/release/validate_digest_uri.sh "${LOCKED_BATCH1_IMAGE_DIGEST}"
+          sh deploy/release/validate_digest_uri.sh "${TARGET_IMAGE_DIGEST}"
 
           printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
             --username "${GITHUB_ACTOR_PULL}" \
             --password-stdin
-          docker pull "${LOCKED_BATCH1_IMAGE_DIGEST}"
+          docker pull "${TARGET_IMAGE_DIGEST}"
           docker logout ghcr.io >/dev/null 2>&1 || true
+
+          IMG_REV="$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${TARGET_IMAGE_DIGEST}")"
+          HEAD_REV="$(git rev-parse HEAD)"
+          test "${IMG_REV}" = "${HEAD_REV}"
 
           git worktree add --detach "$RUNNER_TEMP/n-minus-1-src" "${BASELINE_MAIN_COMMIT_SHA}"
           REGISTRY_PUSH=false \
@@ -99,7 +102,7 @@ jobs:
           OUT_DIR="$RUNNER_TEMP/p4-batch2-g06-g09"
           python3 deploy/release/batch2_delta/verify_g06_g09_migration_and_rollback.py \
             --n-minus-1-image "cskh-n-minus-1:local" \
-            --candidate-image "${LOCKED_BATCH1_IMAGE_DIGEST}" \
+            --candidate-image "${TARGET_IMAGE_DIGEST}" \
             --http-port 18910 \
             --dr-http-port 18911 \
             --report-out "$OUT_DIR/g06-g09-migration-and-rollback-report.json" \
@@ -138,19 +141,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Pull locked Batch 1 candidate @sha256 from GHCR (pull-only)
+      - name: Pull unified candidate @sha256 from GHCR & assert revision parity (pull-only)
         shell: bash
         env:
           GITHUB_ACTOR_PULL: ${{ github.actor }}
           GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          sh deploy/release/validate_digest_uri.sh "${LOCKED_BATCH1_IMAGE_DIGEST}"
+          sh deploy/release/validate_digest_uri.sh "${TARGET_IMAGE_DIGEST}"
           printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
             --username "${GITHUB_ACTOR_PULL}" \
             --password-stdin
-          docker pull "${LOCKED_BATCH1_IMAGE_DIGEST}"
+          docker pull "${TARGET_IMAGE_DIGEST}"
           docker logout ghcr.io >/dev/null 2>&1 || true
+
+          IMG_REV="$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${TARGET_IMAGE_DIGEST}")"
+          HEAD_REV="$(git rev-parse HEAD)"
+          test "${IMG_REV}" = "${HEAD_REV}"
 
       - name: Run G11 & G12 live topology revocation, rate-limit, payload-limit, audit & export verification
         shell: bash
@@ -159,7 +166,7 @@ jobs:
           OUT_DIR="$RUNNER_TEMP/p4-batch2-g11-g12"
           mkdir -p "$OUT_DIR"
           python3 deploy/release/batch2_delta/verify_g11_g12_security_topology.py \
-            --app-image "${LOCKED_BATCH1_IMAGE_DIGEST}" \
+            --app-image "${TARGET_IMAGE_DIGEST}" \
             --http-port 18920 \
             --report-out "$OUT_DIR/g11-g12-security-topology-report.json" \
             --log-out "$OUT_DIR/g11-g12-execution.log"
@@ -197,19 +204,23 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
 
-      - name: Pull locked Batch 1 candidate @sha256 from GHCR (pull-only)
+      - name: Pull unified candidate @sha256 from GHCR & assert revision parity (pull-only)
         shell: bash
         env:
           GITHUB_ACTOR_PULL: ${{ github.actor }}
           GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          sh deploy/release/validate_digest_uri.sh "${LOCKED_BATCH1_IMAGE_DIGEST}"
+          sh deploy/release/validate_digest_uri.sh "${TARGET_IMAGE_DIGEST}"
           printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
             --username "${GITHUB_ACTOR_PULL}" \
             --password-stdin
-          docker pull "${LOCKED_BATCH1_IMAGE_DIGEST}"
+          docker pull "${TARGET_IMAGE_DIGEST}"
           docker logout ghcr.io >/dev/null 2>&1 || true
+
+          IMG_REV="$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${TARGET_IMAGE_DIGEST}")"
+          HEAD_REV="$(git rev-parse HEAD)"
+          test "${IMG_REV}" = "${HEAD_REV}"
 
       - name: Run G15 Golden Dataset, G13/G14 HTTP E2E delta & G17 worker SIGKILL chaos suite
         shell: bash
@@ -218,7 +229,7 @@ jobs:
           OUT_DIR="$RUNNER_TEMP/p4-batch2-g13-g17"
           mkdir -p "$OUT_DIR"
           python3 deploy/release/batch2_delta/verify_g13_g14_g15_g17_delta.py \
-            --app-image "${LOCKED_BATCH1_IMAGE_DIGEST}" \
+            --app-image "${TARGET_IMAGE_DIGEST}" \
             --http-port 18930 \
             --report-out "$OUT_DIR/g13-g14-g15-g17-delta-report.json" \
             --log-out "$OUT_DIR/g13-g14-g15-g17-execution.log"

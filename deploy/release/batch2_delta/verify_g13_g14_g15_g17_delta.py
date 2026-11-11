@@ -56,10 +56,7 @@ def build_plan_only_report(app_image: str) -> dict[str, object]:
         "mode": "plan_only",
         "status": "PLANNED",
         "gates": ["G13", "G14", "G15", "G17"],
-        "functional_matrix_delta": [
-            *[f"F{i:02d}" for i in range(3, 12)],
-            *[f"F{i:02d}" for i in range(13, 28)],
-        ],
+        "functional_matrix_delta": [f"F{i:02d}" for i in range(3, 28)],
         "chaos_matrix_delta": ["D04", "D05", "D06", "D08", "D12", "D14", "D15"],
         "golden_dataset_expected_sha256": GOLDEN_DATASET_EXPECTED_SHA256,
         "locked_batch1_commit_sha": LOCKED_BATCH1_COMMIT_SHA,
@@ -269,6 +266,14 @@ def run_g15_golden_delta(stack: IsolatedComposeStack) -> dict[str, object]:
         st_qa,
     )
     assert unwrap_message(body_qa)["qa_enabled"] is False
+    # `F27` Drill-down pagination total reconciles against published snapshot denominator
+    dd_msg = unwrap_message(body_dd)
+    dd_total = int(
+        dd_msg.get("total")
+        or (dd_msg.get("pagination") or {}).get("total")
+        or len(dd_msg.get("items") or [])
+    )
+    assert dd_total > 0, dd_msg
 
     # `F27` Live async export via `queue-long` -> `get_export_status` -> `download_export`
     st_exp, _, body_exp = admin.post_json(
@@ -641,13 +646,118 @@ print(json.dumps({"cumulative_3x10": totals, "reconciled": rec_ok}, default=str)
     ), (st_pool_adm, st_pool_staff, st_my_a, st_pool_bod, st_wf_bod)
     assert "09084" not in bod_pool_dump and "849084" not in bod_pool_dump
 
+    # `P4-F03`, `P4-F04`, `P4-F09`, `P4-F10`, `P4-F12` explicit gap assertions:
+    # - `P4-F03`: Phone-only CSV (`Chưa rõ tên` placeholder, `cskh_is_placeholder_name=1`)
+    # - `P4-F04`: `0`/`+84`/whitespace canonicalization (`1` canonical `CSKH Identity Index`)
+    # - `P4-F09`: Disabled staff (`0` allocated) + `capacity_limit=2` cap on 5 leads (`2` to B, `3` to A)
+    # - `P4-F10`: Client retry on `distribution.execute` (`0` duplicate allocation)
+    # - `P4-F12`: Staff A opens assigned Work Item detail & attempt history (`200`)
+    p4_f03_f12_gap_res = stack.exec_site_python(
+        r"""
+from crm_cskh.api import campaigns as camp_api, distribution as dist_api
+from crm_cskh.services import distribution as dist_svc, import_service as imp_svc
+from crm_cskh.jobs import import_worker
+
+frappe.set_user("Administrator")
+# P4-F03: Phone-only CSV
+f_po = frappe.get_doc({
+    "doctype": "File", "file_name": "p4_f03_phone_only.csv", "is_private": 1,
+    "content": b"phone\n0908319901\n+84 908 319 902\n",
+}).insert(ignore_permissions=True)
+frappe.db.commit()
+pr_po = imp_svc.create_preview(file_name=f_po.name, mapping={"phone": "phone"}, actor="crm.admin@dev.local", idempotency_key="p4-f03-po")
+frappe.db.commit()
+frappe.db.set_value("CSKH Import Batch", pr_po["batch"], "status", "QUEUED")
+frappe.db.commit()
+import_worker.run_batch(pr_po["batch"])
+ld_po = frappe.db.get_value("CSKH Identity Index", {"normalized_phone": "+84908319901"}, "canonical_lead")
+po_info = frappe.db.get_value("CRM Lead", ld_po, ["first_name", "cskh_is_placeholder_name"], as_dict=True)
+assert po_info["first_name"] == "Chưa rõ tên" and int(po_info["cskh_is_placeholder_name"] or 0) == 1, po_info
+
+# P4-F04: 0 / +84 / whitespace formatting variants resolve to the exact single canonical lead
+f_canon = frappe.get_doc({
+    "doctype": "File", "file_name": "p4_f04_variants.csv", "is_private": 1,
+    "content": b"phone,name\n0908 319 901,Var 1\n+84-908-319-901,Var 2\n84.908.319.901,Var 3\n",
+}).insert(ignore_permissions=True)
+frappe.db.commit()
+pr_cn = imp_svc.create_preview(file_name=f_canon.name, mapping={"phone": "phone", "name": "name"}, actor="crm.admin@dev.local", idempotency_key="p4-f04-var")
+frappe.db.commit()
+frappe.db.set_value("CSKH Import Batch", pr_cn["batch"], "status", "QUEUED")
+frappe.db.commit()
+import_worker.run_batch(pr_cn["batch"])
+cn_stat = imp_svc._status_response(pr_cn["batch"])
+ii_cnt = frappe.db.count("CSKH Identity Index", {"normalized_phone": "+84908319901"})
+assert int(cn_stat["created_rows"]) == 0 and int(cn_stat["reused_rows"]) == 1 and ii_cnt == 1, (cn_stat, ii_cnt)
+
+# P4-F09 + P4-F10: 5 new leads; disable `staff.c`, cap `staff.b` at `capacity_limit=2` -> B gets 2, A gets 3, C gets 0 + retry idempotent
+cap_leads = []
+for idx in range(5):
+    ph = f"09083990{idx:02d}"
+    ld = frappe.get_doc({"doctype": "CRM Lead", "first_name": f"Cap {idx}", "mobile_no": ph, "status": "New"}).insert(ignore_permissions=True)
+    frappe.get_doc({"doctype": "CSKH Identity Index", "normalized_phone": f"+849083990{idx:02d}", "canonical_lead": ld.name}).insert(ignore_permissions=True)
+    cap_leads.append(ld.name)
+
+frappe.set_user("crm.admin@dev.local")
+c_cap = camp_api.save(code="CAMP-P4-F09-CAP", title="Chiến dịch kiểm tra cap & user khóa", status="Active", selection={"leads": cap_leads})["campaign"]
+camp_api.save_rule(campaign=c_cap, user="staff.a@dev.local", weight=50, capacity_limit=0)
+camp_api.save_rule(campaign=c_cap, user="staff.b@dev.local", weight=50, capacity_limit=2)
+camp_api.save_rule(campaign=c_cap, user="staff.c@dev.local", weight=50, capacity_limit=0)
+
+frappe.set_user("Administrator")
+uc = frappe.get_doc("User", "staff.c@dev.local")
+uc.enabled = 0
+uc.save(ignore_permissions=True)
+frappe.db.commit()
+try:
+    frappe.set_user("crm.admin@dev.local")
+    pr_cap = dist_api.preview(campaign=c_cap, idempotency_key="p4-f09-prev")
+    ex1 = dist_svc.execute(pr_cap["preview_id"], expected_rule_version=pr_cap["rule_version"], idempotency_key="p4-f09-exec", actor="crm.admin@dev.local")
+    # P4-F10: Retry execute with same preview_id / idempotency_key -> 0 duplicate Work Items
+    ex2 = dist_svc.execute(pr_cap["preview_id"], expected_rule_version=pr_cap["rule_version"], idempotency_key="p4-f09-exec", actor="crm.admin@dev.local")
+finally:
+    frappe.set_user("Administrator")
+    uc = frappe.get_doc("User", "staff.c@dev.local")
+    uc.enabled = 1
+    uc.save(ignore_permissions=True)
+    frappe.db.commit()
+
+cap_counts = {
+    r["assigned_to"]: int(r["cnt"])
+    for r in frappe.db.sql("SELECT assigned_to, COUNT(*) AS cnt FROM `tabCSKH Work Item` WHERE campaign=%s GROUP BY assigned_to", (c_cap,), as_dict=True)
+}
+assert cap_counts == {"staff.a@dev.local": 3, "staff.b@dev.local": 2}, cap_counts
+assert ex1["run_id"] == ex2["run_id"]
+sample_wi_a = frappe.db.get_value("CSKH Work Item", {"campaign": c_cap, "assigned_to": "staff.a@dev.local"}, "name")
+print(json.dumps({"placeholder_verified": True, "canonical_single_identity": True, "f09_cap_and_disabled_counts": cap_counts, "f10_retry_same_run_id": True, "sample_wi_a": sample_wi_a}))
+"""
+    )
+    # `P4-F12`: Staff A opens assigned Work Item & interaction history over live HTTP (`200` + `200`)
+    st_f12_wi, _, _ = staff_a.get_json(
+        "/api/method/crm_cskh.api.workflow.get_work_item",
+        {"work_item": p4_f03_f12_gap_res["sample_wi_a"]},
+    )
+    st_f12_hist, _, _ = staff_a.get_json(
+        "/api/method/crm_cskh.api.workflow.list_attempts",
+        {"work_item": p4_f03_f12_gap_res["sample_wi_a"], "page": 1, "page_size": 20},
+    )
+    assert st_f12_wi == 200 and st_f12_hist == 200, (st_f12_wi, st_f12_hist)
+
     return {
         "f03_csv_import_status": csv_done["status"],
+        "f03_phone_only_placeholder_verified": p4_f03_f12_gap_res[
+            "placeholder_verified"
+        ],
         "f04_xlsx_import_status": xlsx_done["status"],
+        "f04_canonical_single_identity_verified": p4_f03_f12_gap_res[
+            "canonical_single_identity"
+        ],
         "f05_idempotent_replay_verified": True,
         "f07_rule_changed_and_expired_http": [st_rule_chg, st_prev_exp],
         "f08_1000_lead_50_30_20_allocation": actual_1k,
         "f08_multi_batch_cumulative_3x10": fair_res["cumulative_3x10"],
+        "f09_disabled_and_capacity_cap_counts": p4_f03_f12_gap_res[
+            "f09_cap_and_disabled_counts"
+        ],
         "f09_pool_mylist_and_workflow_http": [
             st_pool_adm,
             st_pool_staff,
@@ -655,7 +765,11 @@ print(json.dumps({"cumulative_3x10": totals, "reconciled": rec_ok}, default=str)
             st_pool_bod,
             st_wf_bod,
         ],
+        "f10_retry_zero_duplicate_verified": p4_f03_f12_gap_res[
+            "f10_retry_same_run_id"
+        ],
         "f11_concurrent_two_admin_execute_http": race_codes,
+        "f12_staff_a_detail_and_history_http": [st_f12_wi, st_f12_hist],
     }
 
 
@@ -1566,6 +1680,9 @@ def run_all_deltas(
             "status": "PASS",
             "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
             "gates_verified": ["G13", "G14", "G15", "G17"],
+            "candidate_commit_sha_tested": __import__("subprocess")
+            .check_output(["git", "rev-parse", "HEAD"], text=True)
+            .strip(),
             "locked_batch1_commit_sha": LOCKED_BATCH1_COMMIT_SHA,
             "app_image_tested": app_image,
             "g15_golden_and_metrics_v2_delta": g15_res,

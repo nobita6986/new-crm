@@ -358,7 +358,44 @@ def run_live_verification(
         # PART 1 — `G11`: Transfer (`S07`), User Disable (`S08`), Role/Team Change (`S09`)
         # =====================================================================
 
-        # 1A. `S07`: Ownership transfer `A -> B` -> `A -> B -> A` -> `revoke` with live WS + HTTP sid
+        # 1A. `S07` + `P4-S13` + `P4-S14`: Ownership transfer `A -> B` -> `A -> B -> A` -> `revoke`
+        # Seed linked child records + extra Open ToDo + child DocShare on `wi_a1`/`lead_a1` BEFORE handoff (`P4-S13`, `P4-S14`)
+        a1_children = stack.exec_site_python(
+            "from frappe.utils import add_days, add_to_date, now_datetime\n"
+            "from crm_cskh.api import workflow as wf_api\n"
+            "frappe.set_user('staff.a@dev.local')\n"
+            "due_str = add_days(now_datetime(), 1).strftime('%Y-%m-%d 11:00:00')\n"
+            "att = wf_api.record_attempt(\n"
+            "    work_item=_IN['wi'], channel='phone_call', outcome_code='connected_interested',\n"
+            "    note='Ghi chú trước bàn giao S13', followup_due_at=due_str, followup_title='Callback S13', idempotency_key='g11-s13-pre'\n"
+            ")\n"
+            "frappe.set_user('Administrator')\n"
+            "task_id = frappe.db.get_value('CSKH Work Item', _IN['wi'], 'open_callback_task')\n"
+            "cl_id = frappe.get_doc({\n"
+            "    'doctype': 'CRM Call Log', 'id': f'CL-S13-{frappe.generate_hash(length=6)}', 'type': 'Outgoing', 'status': 'Completed',\n"
+            "    'from': '+842873009999', 'to': '0908200101', 'duration': 25, 'start_time': add_to_date(now_datetime(), minutes=-2),\n"
+            "    'end_time': add_to_date(now_datetime(), minutes=-1), 'caller': 'staff.a@dev.local', 'telephony_medium': 'Manual',\n"
+            "    'reference_doctype': 'CRM Lead', 'reference_docname': _IN['lead'],\n"
+            "}).insert(ignore_permissions=True).name\n"
+            "note_id = frappe.get_doc({\n"
+            "    'doctype': 'FCRM Note', 'title': 'Note S13', 'content': 'Nội dung S13',\n"
+            "    'reference_doctype': 'CRM Lead', 'reference_docname': _IN['lead'],\n"
+            "}).insert(ignore_permissions=True).name\n"
+            "file_id = frappe.get_doc({\n"
+            "    'doctype': 'File', 'file_name': 's13_lead_attachment.txt', 'is_private': 1,\n"
+            "    'attached_to_doctype': 'CRM Lead', 'attached_to_name': _IN['lead'], 'content': b'S13 private attachment',\n"
+            "}).insert(ignore_permissions=True).name\n"
+            "extra_todo = frappe.get_doc({\n"
+            "    'doctype': 'ToDo', 'allocated_to': 'staff.a@dev.local', 'reference_type': 'CRM Lead', 'reference_name': _IN['lead'],\n"
+            "    'description': 'Extra stale ToDo S14', 'priority': 'Medium', 'status': 'Open', 'assigned_by': 'Administrator',\n"
+            "}).insert(ignore_permissions=True).name\n"
+            "frappe.share.add_docshare('CRM Task', task_id, 'staff.a@dev.local', read=1, write=1, flags={'ignore_share_permission': True})\n"
+            "frappe.share.add_docshare('CRM Call Log', cl_id, 'staff.a@dev.local', read=1, write=0, flags={'ignore_share_permission': True})\n"
+            "frappe.db.commit()\n"
+            "print(json.dumps({'attempt_id': att['attempt_id'], 'task': task_id, 'call_log': cl_id, 'note': note_id, 'file': file_id, 'extra_todo': extra_todo}))",
+            {"wi": wi_a1, "lead": lead_a1},
+        )
+
         ws_a, _ = open_authenticated_ws(stack, staff_a)
         ws_b, _ = open_authenticated_ws(stack, staff_b)
         try:
@@ -374,15 +411,18 @@ def run_live_verification(
                     "work_item": wi_a1,
                     "expected_owner": "staff.a@dev.local",
                     "target_user": "staff.b@dev.local",
-                    "reason": "Chuyển giao kiểm định G11 S07",
+                    "reason": "Chuyển giao kiểm định G11 S07/S13/S14",
                     "request_id": "g11-s07-a-to-b",
                 },
             )
             assert st_re == 200, (st_re, body_re)
 
-            # Immediate HTTP + REST + Desk getdoc revocation for `staff_a`
+            # `P4-S13`: Immediate HTTP + REST + Desk getdoc revocation for `staff_a` across ALL old record IDs!
             st_a_wi, _, _ = staff_a.get_json(
                 "/api/method/crm_cskh.api.workflow.get_work_item", {"work_item": wi_a1}
+            )
+            st_a_atts, _, _ = staff_a.get_json(
+                "/api/method/crm_cskh.api.workflow.list_attempts", {"work_item": wi_a1}
             )
             st_a_att, _, _ = staff_a.post_json(
                 "/api/method/crm_cskh.api.workflow.record_attempt",
@@ -399,16 +439,40 @@ def run_live_verification(
                 "/api/method/frappe.desk.form.load.getdoc",
                 {"doctype": "CRM Lead", "name": lead_a1},
             )
+            s13_old_id_codes: dict[str, int] = {}
+            for dt_label, dt_url, rec_id in (
+                ("cskh_work_item", "CSKH%20Work%20Item", wi_a1),
+                (
+                    "cskh_contact_attempt",
+                    "CSKH%20Contact%20Attempt",
+                    a1_children["attempt_id"],
+                ),
+                ("crm_call_log", "CRM%20Call%20Log", a1_children["call_log"]),
+                ("crm_task", "CRM%20Task", a1_children["task"]),
+                ("fcrm_note", "FCRM%20Note", a1_children["note"]),
+                ("file", "File", a1_children["file"]),
+                ("todo", "ToDo", a1_children["extra_todo"]),
+            ):
+                code_old, _, _ = staff_a.raw_request(
+                    "GET", f"/api/resource/{dt_url}/{rec_id}"
+                )
+                s13_old_id_codes[dt_label] = code_old
+                assert code_old in (403, 404), (
+                    f"P4-S13 failed on {dt_label}={rec_id}: got {code_old}"
+                )
+
             st_b_wi, _, _ = staff_b.get_json(
                 "/api/method/crm_cskh.api.workflow.get_work_item", {"work_item": wi_a1}
             )
             assert (
                 st_a_wi == 403
+                and st_a_atts == 403
                 and st_a_att == 409
                 and st_a_rest == 403
                 and st_a_getdoc == 403
             ), (
                 st_a_wi,
+                st_a_atts,
                 st_a_att,
                 st_a_rest,
                 st_a_getdoc,
@@ -442,19 +506,22 @@ def run_live_verification(
                 for f in frames_a_after_transfer
             ), frames_a_after_transfer
 
-            # Verify DB `DocShare` / `ToDo` revocation + `A -> B -> A` + `revoke`
+            # Verify DB `DocShare` (including child DocShares) / multi-`ToDo` revocation after `A -> B` (`P4-S14`)
             s07_db = stack.exec_site_python(
                 "share_a = frappe.db.count('DocShare', {'share_doctype': 'CRM Lead', 'share_name': _IN['lead'], 'user': 'staff.a@dev.local'})\n"
+                "child_share_a = frappe.db.count('DocShare', {'share_doctype': ['in', ['CRM Task', 'CRM Call Log', 'FCRM Note', 'File']], 'user': 'staff.a@dev.local'})\n"
                 "todo_a = frappe.db.count('ToDo', {'reference_type': 'CRM Lead', 'reference_name': _IN['lead'], 'allocated_to': 'staff.a@dev.local', 'status': 'Open'})\n"
                 "share_b = frappe.db.count('DocShare', {'share_doctype': 'CRM Lead', 'share_name': _IN['lead'], 'user': 'staff.b@dev.local'})\n"
-                "print(json.dumps({'docshare_old_owner': share_a, 'open_todo_old_owner': todo_a, 'docshare_new_owner': share_b}))",
+                "print(json.dumps({'docshare_old_owner': share_a, 'child_docshare_old_owner': child_share_a, 'open_todo_old_owner': todo_a, 'docshare_new_owner': share_b}))",
                 {"lead": lead_a1},
             )
             assert (
-                s07_db["docshare_old_owner"] == 0 and s07_db["open_todo_old_owner"] == 0
-            )
+                s07_db["docshare_old_owner"] == 0
+                and s07_db["child_docshare_old_owner"] == 0
+                and s07_db["open_todo_old_owner"] == 0
+            ), s07_db
 
-            # Complete `A -> B -> A` cycle and `revoke` on `wi_a1`
+            # Complete `A -> B -> A` cycle, run `distribution.reconcile` (`P4-S14`), and `revoke` on `wi_a1`
             st_ba, _, _ = admin.post_json(
                 "/api/method/crm_cskh.api.ownership.reassign",
                 {
@@ -465,6 +532,22 @@ def run_live_verification(
                     "request_id": "g11-s07-b-to-a",
                 },
             )
+            st_s14_rec, _, body_s14_rec = admin.get_json(
+                "/api/method/crm_cskh.api.distribution.reconcile",
+                {"campaign": ctx["camp_t1"]},
+            )
+            s14_rec_msg = unwrap_message(body_s14_rec)
+            assert (
+                st_s14_rec == 200 and s14_rec_msg.get("ownership_reconciled") is True
+            ), (
+                st_s14_rec,
+                s14_rec_msg,
+            )
+            assert (
+                int(s14_rec_msg.get("stale_docshares") or 0) == 0
+                and int(s14_rec_msg.get("stale_open_todos") or 0) == 0
+            ), s14_rec_msg
+
             st_rev, _, _ = admin.post_json(
                 "/api/method/crm_cskh.api.ownership.revoke",
                 {
@@ -567,27 +650,21 @@ def run_live_verification(
                 pre_open_ws_frames
             )
 
-            # Audit `tabSessions` + `redis-cache` before & after explicit `frappe.sessions.clear_sessions(..., force=True)`
+            # Verify `on_user_security_change` AUTOMATICALLY purged `tabSessions` + `redis-cache` on `User.save(enabled=0)` without manual `clear_sessions`!
             disable_info = stack.exec_site_python(
-                "from frappe.sessions import clear_sessions\n"
-                "pre_db = int(frappe.db.sql(\"SELECT COUNT(*) FROM `tabSessions` WHERE sid=%s\", (_IN['sid'],))[0][0])\n"
-                "pre_cache = bool(frappe.cache().hget('session', _IN['sid']))\n"
-                "clear_sessions(user='staff.a@dev.local', force=True)\n"
-                "frappe.db.commit()\n"
-                "post_db = int(frappe.db.sql(\"SELECT COUNT(*) FROM `tabSessions` WHERE sid=%s\", (_IN['sid'],))[0][0])\n"
-                "post_cache = bool(frappe.cache().hget('session', _IN['sid']))\n"
+                "auto_db = int(frappe.db.sql(\"SELECT COUNT(*) FROM `tabSessions` WHERE sid=%s\", (_IN['sid'],))[0][0])\n"
+                "auto_cache = bool(frappe.cache().hget('session', _IN['sid']))\n"
                 "print(json.dumps({\n"
-                "  'inert_row_before_explicit_clear': {'db_sessions': pre_db, 'redis_cached': pre_cache},\n"
-                "  'after_clear_sessions_force': {'db_sessions': post_db, 'redis_cached': post_cache},\n"
+                "  'automatic_purge_on_user_disable': {'db_sessions': auto_db, 'redis_cached': auto_cache},\n"
                 "}))",
                 {"sid": old_sid_a},
             )
-            assert disable_info["after_clear_sessions_force"] == {
+            assert disable_info["automatic_purge_on_user_disable"] == {
                 "db_sessions": 0,
                 "redis_cached": False,
             }, disable_info
 
-            # Campaign eligibility excludes disabled `staff.a@dev.local` (`REASON_USER_DISABLED`)
+            # Campaign eligibility + direct assign + post-preview execute ALL exclude disabled users!
             st_rules, _, body_rules = admin.get_json(
                 "/api/method/crm_cskh.api.campaigns.rules", {"campaign": ctx["camp_t1"]}
             )
@@ -601,6 +678,54 @@ def run_live_verification(
             }
             assert "staff.a@dev.local" not in elig_users, elig_users
             assert excl_map.get("staff.a@dev.local") == "user_disabled", excl_map
+
+            # Direct `ownership.assign` to disabled `staff.a@dev.local` -> rejected (`400`)
+            st_dis_assign, _, _ = admin.post_json(
+                "/api/method/crm_cskh.api.ownership.assign",
+                {
+                    "work_item": wi_a1,
+                    "target_user": "staff.a@dev.local",
+                    "reason": "Thử giao cho user đã bị vô hiệu hóa",
+                    "request_id": "g11-s08-direct-assign-disabled",
+                },
+            )
+            assert st_dis_assign == 400, st_dis_assign
+
+            # Post-preview pre-execute disable: preview with `staff.b` eligible, then disable `staff.b` too -> `execute` MUST fail closed with `409 CAPACITY_FULL`!
+            post_prev_disable_res = stack.exec_site_python(
+                "from crm_cskh.api import campaigns as camp_api, distribution as dist_api\n"
+                "from crm_cskh.services.phone_identity import normalize_vn_phone\n"
+                "frappe.set_user('Administrator')\n"
+                "ld = frappe.get_doc({'doctype': 'CRM Lead', 'first_name': 'PostPrev Dis', 'mobile_no': '0908299901', 'status': 'New'}).insert(ignore_permissions=True)\n"
+                "frappe.get_doc({'doctype': 'CSKH Identity Index', 'normalized_phone': normalize_vn_phone('0908299901'), 'canonical_lead': ld.name}).insert(ignore_permissions=True)\n"
+                "frappe.set_user('crm.admin@dev.local')\n"
+                "c_dis = camp_api.save(code='CAMP-S08-POSTPREV', title='Kiểm tra khóa sau preview', status='Active', selection={'leads': [ld.name]})['campaign']\n"
+                "camp_api.save_rule(campaign=c_dis, user='staff.b@dev.local', weight=100)\n"
+                "pr = dist_api.preview(campaign=c_dis, idempotency_key='s08-postprev-1')\n"
+                "frappe.set_user('Administrator')\n"
+                "ub = frappe.get_doc('User', 'staff.b@dev.local')\n"
+                "ub.enabled = 0\n"
+                "ub.save(ignore_permissions=True)\n"
+                "frappe.db.commit()\n"
+                "print(json.dumps({'preview_id': pr['preview_id'], 'rule_version': pr['rule_version'], 'campaign': c_dis}))"
+            )
+            st_postprev_exec, _, body_postprev_exec = admin.post_json(
+                "/api/method/crm_cskh.api.distribution.execute",
+                {
+                    "preview_id": post_prev_disable_res["preview_id"],
+                    "expected_rule_version": post_prev_disable_res["rule_version"],
+                    "idempotency_key": "s08-postprev-exec-blocked",
+                },
+            )
+            stack.exec_site_python(
+                "ub = frappe.get_doc('User', 'staff.b@dev.local')\n"
+                "ub.enabled = 1\n"
+                "ub.save(ignore_permissions=True)\n"
+                "frappe.db.commit()\n"
+                "print(json.dumps({'reenabled_b': True}))"
+            )
+            staff_b = stack.make_actor("staff_b", "staff.b@dev.local")
+            assert st_postprev_exec == 409, (st_postprev_exec, body_postprev_exec)
         finally:
             ws_a.close()
 
@@ -614,14 +739,19 @@ def run_live_verification(
         staff_a = stack.make_actor("staff_a", "staff.a@dev.local")
 
         # 1C. `S09` & `S04`: Team transfer (`team-as-of`) + Role downgrade (`Sales Manager` -> `Sales User`)
-        # Pre-downgrade: `leader1` CAN download their Team 1 export (`200`)
+        # Pre-downgrade: `leader1` CAN download their Team 1 export (`200`) and read subordinate `lead_a2`/`wi_a2` (`200`)
         leader_exp_id = str(ctx["leader_export_id"])
         leader_raw_url = str(ctx["leader_export_file_url"])
         st_l1_exp_ok, _, raw_l1_csv = leader1.raw_request(
             "GET",
             f"/api/method/crm_cskh.api.p3_reporting.download_export?export_id={leader_exp_id}",
         )
-        assert st_l1_exp_ok == 200 and len(raw_l1_csv) > 20
+        st_l1_pre_sub_lead, _, _ = leader1.get_json(
+            f"/api/resource/CRM%20Lead/{lead_a2}"
+        )
+        assert (
+            st_l1_exp_ok == 200 and len(raw_l1_csv) > 20 and st_l1_pre_sub_lead == 200
+        )
 
         # Close `wi_b1` while `staff.b@dev.local` belongs to Team 1 (`team_at_assignment` + `owner_at_close`),
         # then transfer `staff.b@dev.local` from Team 1 -> Team 2 (`S04` historical `team-as-of` isolation check).
@@ -668,16 +798,33 @@ def run_live_verification(
             f"Expected S04 403 for Leader 2 on Team 1 item/KPI, got ({st_s04_wi}, {st_s04_p3})"
         )
 
-        # Downgrade `team1.leader@dev.local` (`Sales Manager` removed -> `Sales User` only, leaf node)
+        # Downgrade `team1.leader@dev.local` (`Sales Manager` removed -> `Sales User` only, STILL on group node,
+        # WITHOUT calling `frappe.clear_cache` manually — verifying `on_user_security_change` + `permissions.py`!)
         stack.exec_site_python(
             "u = frappe.get_doc('User', 'team1.leader@dev.local')\n"
             "u.roles = []\n"
             "u.append('roles', {'role': 'Sales User'})\n"
             "u.save(ignore_permissions=True)\n"
-            "frappe.clear_cache(user='team1.leader@dev.local')\n"
-            "print(json.dumps({'downgraded': True}))"
+            "frappe.db.commit()\n"
+            "print(json.dumps({'downgraded_without_manual_clear_cache': True}))"
         )
-        # Using the SAME pre-existing `leader1` session cookie (`0` stale privilege):
+        # Using the SAME pre-existing `leader1` session cookie (`0` stale privilege on subordinate Lead, WI, list, KPI & Export):
+        st_s09_sub_lead, _, _ = leader1.get_json(f"/api/resource/CRM%20Lead/{lead_a2}")
+        st_s09_sub_getdoc, _, _ = leader1.get_json(
+            "/api/method/frappe.desk.form.load.getdoc",
+            {"doctype": "CRM Lead", "name": lead_a2},
+        )
+        st_s09_sub_wi, _, _ = leader1.get_json(
+            "/api/method/crm_cskh.api.workflow.get_work_item", {"work_item": wi_a2}
+        )
+        st_s09_sub_list, _, body_s09_list = leader1.get_json(
+            "/api/method/frappe.client.get_list", {"doctype": "CRM Lead"}
+        )
+        s09_visible_leads = [
+            r.get("name")
+            for r in (unwrap_message(body_s09_list) or [])
+            if isinstance(r, dict)
+        ]
         st_s09_page, _, _ = leader1.raw_request("GET", "/cskh/team-quality")
         st_s09_api, _, _ = leader1.get_json(
             "/api/method/crm_cskh.api.p3_reporting.get_team_comparison",
@@ -688,6 +835,12 @@ def run_live_verification(
             f"/api/method/crm_cskh.api.p3_reporting.download_export?export_id={leader_exp_id}",
         )
         st_s09_exp_raw, _, _ = leader1.raw_request("GET", leader_raw_url)
+        assert (
+            st_s09_sub_lead == 403
+            and st_s09_sub_getdoc == 403
+            and st_s09_sub_wi == 403
+            and lead_a2 not in s09_visible_leads
+        ), (st_s09_sub_lead, st_s09_sub_getdoc, st_s09_sub_wi, s09_visible_leads)
         assert st_s09_page == 403 and st_s09_api == 403, (st_s09_page, st_s09_api)
         assert st_s09_exp_rpc == 403 and st_s09_exp_raw in (403, 404), (
             st_s09_exp_rpc,
@@ -1046,6 +1199,9 @@ def run_live_verification(
             "status": "PASS",
             "generated_at_utc": dt.datetime.now(dt.timezone.utc).isoformat(),
             "gates_verified": ["G11", "G12"],
+            "candidate_commit_sha_tested": subprocess.check_output(
+                ["git", "rev-parse", "HEAD"], text=True
+            ).strip(),
             "locked_batch1_commit_sha": LOCKED_BATCH1_COMMIT_SHA,
             "app_image_tested": app_image,
             "topology_measured": {
@@ -1061,13 +1217,16 @@ def run_live_verification(
                 ),
             },
             "g11_revocation_results": {
-                "s07_transfer_and_revoke": {
+                "s07_p4_s13_s14_transfer_and_revoke": {
                     "old_owner_work_item_http": st_a_wi,
+                    "old_owner_attempts_timeline_http": st_a_atts,
                     "old_owner_record_attempt_http": st_a_att,
                     "old_owner_rest_lead_http": st_a_rest,
                     "old_owner_desk_getdoc_http": st_a_getdoc,
+                    "p4_s13_old_record_id_http_codes": s13_old_id_codes,
                     "new_owner_work_item_http": st_b_wi,
                     "docshare_and_todo_cleanup": s07_db,
+                    "p4_s14_a_b_a_reconcile": s14_rec_msg,
                     "a_to_b_to_a_and_revoke_http": [st_ba, st_rev],
                     "zero_pii_frames_on_old_open_ws": True,
                 },
@@ -1078,12 +1237,21 @@ def run_live_verification(
                     "disabled_mutation_http": st_dis_mut,
                     "socketio_reconnect_rejected_44": True,
                     "excluded_from_campaign_eligibility": True,
+                    "disabled_direct_assign_http": st_dis_assign,
+                    "disabled_post_preview_execute_http": st_postprev_exec,
                 },
                 "s09_and_s04_role_and_team_change": {
                     "s04_historical_team_as_of_leader1_http": st_s04_l1_wi,
                     "s04_historical_team_as_of_leader2_http": st_s04_wi,
                     "s04_historical_team_as_of_leader2_p3_http": st_s04_p3,
                     "pre_downgrade_export_http": st_l1_exp_ok,
+                    "pre_downgrade_subordinate_lead_http": st_l1_pre_sub_lead,
+                    "post_downgrade_without_manual_clear_cache": True,
+                    "post_downgrade_subordinate_lead_http": st_s09_sub_lead,
+                    "post_downgrade_subordinate_getdoc_http": st_s09_sub_getdoc,
+                    "post_downgrade_subordinate_work_item_http": st_s09_sub_wi,
+                    "post_downgrade_subordinate_list_excluded": lead_a2
+                    not in s09_visible_leads,
                     "post_downgrade_team_page_http": st_s09_page,
                     "post_downgrade_team_api_http": st_s09_api,
                     "post_downgrade_export_rpc_http": st_s09_exp_rpc,

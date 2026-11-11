@@ -510,6 +510,8 @@ def load_period_raw_dataset(
 	*,
 	campaign_filter: str = "",
 	lead_source_filter: str = "",
+	employee_filter: str = "",
+	drilldown_metric: str = "",
 ) -> dict:
 	"""Execute bounded indexed bulk SQL queries for `period` capped at `as_of` (`0` N+1 queries)."""
 	from crm_cskh.services.p3_flags import is_qa_enabled as resolve_is_qa_enabled
@@ -635,6 +637,9 @@ def load_period_raw_dataset(
 
 	camp_clause = " and campaign = %s" if campaign_filter else ""
 	camp_params = (campaign_filter,) if campaign_filter else ()
+	emp_clean = (employee_filter or "").strip()
+	dd_mcode = (drilldown_metric or "").strip().upper()
+	is_drilldown = bool(dd_mcode)
 
 	# Preload Outcome Code metadata & Campaign conversion overrides
 	valid_outcome_codes: set[str] = set()
@@ -704,23 +709,65 @@ def load_period_raw_dataset(
 	)
 	wi_camp_clause = " and wi.campaign = %s" if campaign_filter else ""
 	wi_src_clause, wi_src_params = _lead_src_subclause("wi.lead")
-	intervals = frappe.db.sql(
-		f"""
-		select ah.name, ah.work_item, ah.action, ah.to_user, ah.event_at,
-		       ah.ownership_start, ah.ownership_end, ah.creation, ah.modified,
-		       {team_sel}, wi.campaign, wi.lead
-		from `tabCSKH Assignment History` ah
-		inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
-		where ah.action in ('assign', 'reassign', 'reopen')
-		  and coalesce(ah.ownership_start, ah.event_at) <= %s
-		  and (
-		        ah.ownership_end is null
-		     or ah.ownership_end >= %s
-		      ){wi_camp_clause}{wi_src_clause}
-		""",
-		(as_of_dt, start_dt, *camp_params, *wi_src_params),
-		as_dict=True,
+	ah_emp_clause = " and ah.to_user = %s" if emp_clean else ""
+	ah_emp_params = (emp_clean,) if emp_clean else ()
+	is_iv_cohort_dd = bool(
+		is_drilldown
+		and dd_mcode
+		in (
+			"CONNECTED_RATE",
+			"ELIGIBLE_COVERAGE",
+			"ASSIGNED_INTERVALS",
+			"UNIQUE_ASSIGNED_ITEMS",
+			"CONVERSION_RATE",
+		)
 	)
+	if is_iv_cohort_dd:
+		intervals = frappe.db.sql(
+			f"""
+			select ah.name, ah.work_item, ah.action, ah.to_user, ah.event_at,
+			       ah.ownership_start, ah.ownership_end, ah.creation, ah.modified,
+			       {team_sel}, wi.campaign, wi.lead
+			from `tabCSKH Assignment History` ah
+			inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
+			where ah.action in ('assign', 'reassign', 'reopen')
+			  and (ah.ownership_start is null or (ah.ownership_start >= %s and ah.ownership_start < %s))
+			  and coalesce(ah.ownership_start, ah.event_at) >= %s
+			  and coalesce(ah.ownership_start, ah.event_at) < %s
+			  and coalesce(ah.ownership_start, ah.event_at) <= %s{wi_camp_clause}{wi_src_clause}{ah_emp_clause}
+			order by coalesce(ah.ownership_start, ah.event_at) asc, ah.name asc
+			""",
+			(
+				start_dt,
+				cutoff_dt,
+				start_dt,
+				end_dt_excl,
+				as_of_dt,
+				*camp_params,
+				*wi_src_params,
+				*ah_emp_params,
+			),
+			as_dict=True,
+		)
+	else:
+		intervals = frappe.db.sql(
+			f"""
+			select ah.name, ah.work_item, ah.action, ah.to_user, ah.event_at,
+			       ah.ownership_start, ah.ownership_end, ah.creation, ah.modified,
+			       {team_sel}, wi.campaign, wi.lead
+			from `tabCSKH Assignment History` ah
+			inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
+			where ah.action in ('assign', 'reassign', 'reopen')
+			  and coalesce(ah.ownership_start, ah.event_at) <= %s
+			  and (
+			        ah.ownership_end is null
+			     or ah.ownership_end >= %s
+			      ){wi_camp_clause}{wi_src_clause}{ah_emp_clause}
+			order by coalesce(ah.ownership_start, ah.event_at) asc, ah.name asc
+			""",
+			(as_of_dt, start_dt, *camp_params, *wi_src_params, *ah_emp_params),
+			as_dict=True,
+		)
 
 	hist_team_map: dict[str, tuple[str | None, str]] = {}
 	iv_by_id: dict[str, dict] = {}
@@ -745,7 +792,7 @@ def load_period_raw_dataset(
 
 	# Also detect Work Items that have an active/closed owner or status != 'queued' WITHOUT any valid opening Assignment History interval (`G16`)
 	unattributed_wis: list[dict] = []
-	if frappe.db.table_exists("CSKH Work Item"):
+	if not is_drilldown and frappe.db.table_exists("CSKH Work Item"):
 		unattributed_wis = frappe.db.sql(
 			f"""
 			select wi.name, wi.campaign, wi.lead, wi.status, wi.creation
@@ -767,36 +814,76 @@ def load_period_raw_dataset(
 	#    (b) `FOLLOWUP` started in window (for `RESCHEDULE_RATE`),
 	#    (c) `FIRST_ATTEMPT` on `assigned_intervals` (for `ELIGIBLE_COVERAGE` `canceled_validly` check),
 	#    (d) open overdue obligations at `as_of_dt` (`OVERDUE_BACKLOG` / `OPEN_FOLLOWUPS_OVERDUE`).
-	obligations_raw: list[dict] = []
-	if frappe.db.table_exists("CSKH SLA Obligation"):
-		ob_src_clause, ob_src_params = _lead_src_subclause("lead")
-		obligations_raw = frappe.db.sql(
-			f"""
-			select name, obligation_type, work_item, lead, campaign, interval_event, owner_user,
-			       team_at_obligation, attribution_status, followup_task, status, informational_only,
-			       is_recovery_obligation, reschedule_seq, started_at, original_due_at, effective_due_at,
-			       is_paused, paused_at, fulfilled_at, fulfilled_by_attempt, breached_at, closed_at,
-			       waived_by, waived_at, evaluation_anchor_at, modified
-			from `tabCSKH SLA Obligation`
-			where started_at <= %s
-			  and (
-			        (effective_due_at >= %s and effective_due_at < %s)
-			     or (started_at >= %s and started_at < %s)
-			     or (effective_due_at < %s and status in ('open', 'breached_open', 'fulfilled_late'))
-			      ){camp_clause}{ob_src_clause}
-			""",
-			(
-				as_of_dt,
-				start_dt,
-				end_dt_excl,
-				start_dt,
-				end_dt_excl,
-				as_of_dt,
-				*camp_params,
-				*ob_src_params,
-			),
-			as_dict=True,
+	dd_needs_obligations = (not is_drilldown) or (
+		dd_mcode
+		in (
+			"ELIGIBLE_COVERAGE",
+			"FIRST_ATTEMPT_SLA_RATE",
+			"WORK_ITEM_FIRST_ATTEMPT_SLA_RATE",
+			"FOLLOWUP_SLA_RATE",
+			"CALLBACK_COMPLETION_RATE",
+			"FIRST_CONNECTED_TRACKING_RATE",
+			"MIN_ATTEMPTS_COMPLIANCE_RATE",
+			"RESCHEDULE_RATE",
+			"OVERDUE_BACKLOG",
+			"OPEN_FOLLOWUPS_OVERDUE",
+			"SLA_BREACH_COUNT",
+			"BREACH_COUNT",
+			"SLA_WAIVER_COUNT",
 		)
+	)
+	obligations_raw: list[dict] = []
+	if dd_needs_obligations and frappe.db.table_exists("CSKH SLA Obligation"):
+		ob_src_clause, ob_src_params = _lead_src_subclause("lead")
+		ob_emp_clause = " and owner_user = %s" if emp_clean else ""
+		ob_emp_params = (emp_clean,) if emp_clean else ()
+		ob_type_clause = (
+			" and obligation_type = 'FIRST_ATTEMPT'"
+			if dd_mcode
+			in ("CONNECTED_RATE", "ELIGIBLE_COVERAGE", "ASSIGNED_INTERVALS", "UNIQUE_ASSIGNED_ITEMS")
+			else ""
+		)
+		if dd_mcode == "ELIGIBLE_COVERAGE" and len(assigned_intervals) <= 2500:
+			obligations_raw = []
+		else:
+			obligations_raw = frappe.db.sql(
+				f"""
+				select name, obligation_type, work_item, lead, campaign, interval_event, owner_user,
+				       team_at_obligation, attribution_status, followup_task, status, informational_only,
+				       is_recovery_obligation, reschedule_seq, started_at, original_due_at, effective_due_at,
+				       is_paused, paused_at, fulfilled_at, fulfilled_by_attempt, breached_at, closed_at,
+				       waived_by, waived_at, evaluation_anchor_at, modified
+				from `tabCSKH SLA Obligation`
+				where started_at <= %s
+				  and (
+				        (effective_due_at >= %s and effective_due_at < %s)
+				     or (started_at >= %s and started_at < %s)
+				     or (
+				           effective_due_at < %s
+				           and (
+				                 status in ('open', 'breached_open')
+				              or (
+				                    status in ('fulfilled_late', 'fulfilled_on_time', 'waived', 'canceled_validly', 'breached_handoff', 'handoff_closed')
+				                and coalesce(fulfilled_at, waived_at, closed_at) > %s
+				                 )
+				               )
+				        )
+				      ){ob_type_clause}{camp_clause}{ob_src_clause}{ob_emp_clause}
+				""",
+				(
+					as_of_dt,
+					start_dt,
+					end_dt_excl,
+					start_dt,
+					end_dt_excl,
+					as_of_dt,
+					as_of_dt,
+					*camp_params,
+					*ob_src_params,
+					*ob_emp_params,
+				),
+				as_dict=True,
+			)
 		seen_ob_ids = {r.name for r in obligations_raw}
 		missing_cov_ivs = sorted(
 			{iv.name for iv in assigned_intervals}
@@ -814,9 +901,9 @@ def load_period_raw_dataset(
 					       is_paused, paused_at, fulfilled_at, fulfilled_by_attempt, breached_at, closed_at,
 					       waived_by, waived_at, evaluation_anchor_at, modified
 					from `tabCSKH SLA Obligation`
-					where interval_event in ({ph}) and started_at <= %s{camp_clause}{ob_src_clause}
+					where interval_event in ({ph}) and started_at <= %s{ob_type_clause}{camp_clause}{ob_src_clause}{ob_emp_clause}
 					""",
-					(*chunk, as_of_dt, *camp_params, *ob_src_params),
+					(*chunk, as_of_dt, *camp_params, *ob_src_params, *ob_emp_params),
 					as_dict=True,
 				):
 					if extra_ob.name not in seen_ob_ids:
@@ -865,8 +952,19 @@ def load_period_raw_dataset(
 	# 3. Bulk query `CSKH Contact Attempt` + `CSKH Attempt Correction`:
 	#    Include attempts in `[start_dt, cutoff_dt]`, attempts moved into window via correction,
 	#    AND attempts on `assigned_intervals` / `obligations` up to `as_of_dt` so interval/deadline cohorts evaluate cleanly!
+	total_corrs = (
+		int(
+			frappe.db.sql(
+				"select count(*) from `tabCSKH Attempt Correction` where requested_at <= %s",
+				(as_of_dt,),
+			)[0][0]
+			or 0
+		)
+		if frappe.db.table_exists("CSKH Attempt Correction")
+		else 0
+	)
 	moved_attempt_ids: set[str] = set()
-	if frappe.db.table_exists("CSKH Attempt Correction"):
+	if total_corrs > 0:
 		corr_move_rows = frappe.db.sql(
 			"""
 			select attempt, corrected_fields_json
@@ -894,145 +992,354 @@ def load_period_raw_dataset(
 		att_opt_cols.append(col if frappe.db.has_column("CSKH Contact Attempt", col) else f"null as {col}")
 	att_opt_sel = ", ".join(att_opt_cols)
 	att_src_clause, att_src_params = _lead_src_subclause("lead")
+	att_emp_clause = " and (performed_by = %s or owner_at_attempt = %s)" if emp_clean else ""
+	att_emp_params = (emp_clean, emp_clean) if emp_clean else ()
 
-	raw_attempts = frappe.db.sql(
-		f"""
-		select name, work_item, lead, campaign, ownership_event, owner_at_attempt, performed_by,
-		       occurred_at, recorded_at, channel, outcome_code, outcome_label_snapshot,
-		       outcome_group_snapshot, outcome_version_snapshot, contact_attempt_snapshot,
-		       connected_snapshot, interested_snapshot, terminal_snapshot, dnc_snapshot,
-		       {att_opt_sel},
-		       note, call_log, callback_task, resolved_callback_task, verification_status,
-		       policy_name_snapshot, policy_version_snapshot, creation, modified
-		from `tabCSKH Contact Attempt`
-		where occurred_at >= %s and occurred_at < %s and occurred_at <= %s and recorded_at <= %s{camp_clause}{att_src_clause}
-		""",
-		(start_dt, end_dt_excl, as_of_dt, as_of_dt, *camp_params, *att_src_params),
-		as_dict=True,
+	use_sql_interval_agg = bool(
+		dd_mcode in ("CONNECTED_RATE", "ELIGIBLE_COVERAGE", "ASSIGNED_INTERVALS", "UNIQUE_ASSIGNED_ITEMS")
+		and total_corrs == 0
 	)
-	seen_att_ids = {r.name for r in raw_attempts}
+	iv_agg_map: dict[str, tuple[datetime | None, bool, bool, bool, bool]] = {}
 
-	# Load attempts on `assigned_intervals` or `obligations` that occurred outside `[start_dt, end_dt_excl)` (e.g. `F-P3-02` Part B early July call for Aug deadline!)
-	needed_iv_ids = sorted(
-		{iv.name for iv in assigned_intervals}
-		| {ob.interval_event for ob in obligations_raw if ob.interval_event}
-	)
-	if needed_iv_ids:
-		for idx in range(0, len(needed_iv_ids), 2000):
-			chunk = needed_iv_ids[idx : idx + 2000]
-			ph = ", ".join(["%s"] * len(chunk))
-			for extra_a in frappe.db.sql(
-				f"""
-				select name, work_item, lead, campaign, ownership_event, owner_at_attempt, performed_by,
-				       occurred_at, recorded_at, channel, outcome_code, outcome_label_snapshot,
-				       outcome_group_snapshot, outcome_version_snapshot, contact_attempt_snapshot,
-				       connected_snapshot, interested_snapshot, terminal_snapshot, dnc_snapshot,
-				       {att_opt_sel},
-				       note, call_log, callback_task, resolved_callback_task, verification_status,
-				       policy_name_snapshot, policy_version_snapshot, creation, modified
-				from `tabCSKH Contact Attempt`
-				where ownership_event in ({ph}) and recorded_at <= %s{camp_clause}{att_src_clause}
-				""",
-				(*chunk, as_of_dt, *camp_params, *att_src_params),
-				as_dict=True,
-			):
-				if extra_a.name not in seen_att_ids:
-					raw_attempts.append(extra_a)
-					seen_att_ids.add(extra_a.name)
+	raw_attempts: list[dict] = []
+	corr_rows: list[dict] = []
+	attempts_enriched: list[dict] = []
+	projected_by_id: dict[str, dict] = {}
+	eff_attempts_by_iv_cutoff: dict[str, list[dict]] = defaultdict(list)
+	eff_attempts_by_iv_asof: dict[str, list[dict]] = defaultdict(list)
 
-	missing_moved = sorted(
-		(moved_attempt_ids | {ob.fulfilled_by_attempt for ob in obligations_raw if ob.fulfilled_by_attempt})
-		- seen_att_ids
-	)
-	if missing_moved:
-		for idx in range(0, len(missing_moved), 2000):
-			chunk = missing_moved[idx : idx + 2000]
-			ph = ", ".join(["%s"] * len(chunk))
-			for extra_a in frappe.db.sql(
-				f"""
-				select name, work_item, lead, campaign, ownership_event, owner_at_attempt, performed_by,
-				       occurred_at, recorded_at, channel, outcome_code, outcome_label_snapshot,
-				       outcome_group_snapshot, outcome_version_snapshot, contact_attempt_snapshot,
-				       connected_snapshot, interested_snapshot, terminal_snapshot, dnc_snapshot,
-				       {att_opt_sel},
-				       note, call_log, callback_task, resolved_callback_task, verification_status,
-				       policy_name_snapshot, policy_version_snapshot, creation, modified
-				from `tabCSKH Contact Attempt`
-				where name in ({ph}) and recorded_at <= %s{camp_clause}{att_src_clause}
-				""",
-				(*chunk, as_of_dt, *camp_params, *att_src_params),
-				as_dict=True,
-			):
-				if extra_a.name not in seen_att_ids:
-					raw_attempts.append(extra_a)
-					seen_att_ids.add(extra_a.name)
-
-	corr_rows = []
-	if seen_att_ids and frappe.db.table_exists("CSKH Attempt Correction"):
-		att_list = sorted(seen_att_ids)
-		for idx in range(0, len(att_list), 2000):
-			chunk = att_list[idx : idx + 2000]
-			ph = ", ".join(["%s"] * len(chunk))
-			corr_rows.extend(
-				frappe.db.sql(
+	if use_sql_interval_agg:
+		if dd_mcode in ("ASSIGNED_INTERVALS", "UNIQUE_ASSIGNED_ITEMS") or not assigned_intervals:
+			agg_rows = []
+		else:
+			has_inv_col = frappe.db.has_column("CSKH Contact Attempt", "invalid_phone_snapshot")
+			inv_codes_sorted = sorted(invalid_phone_codes_global)
+			inv_ph = ", ".join(["%s"] * len(inv_codes_sorted)) if inv_codes_sorted else "''"
+			inv_expr = (
+				f"(coalesce(ca.invalid_phone_snapshot, 0) = 1 or lower(coalesce(ca.outcome_code, '')) in ({inv_ph}))"
+				if has_inv_col
+				else f"(lower(coalesce(ca.outcome_code, '')) in ({inv_ph}))"
+			)
+			if len(assigned_intervals) <= 2500:
+				iv_names = [iv.name for iv in assigned_intervals]
+				ph_ivs = ", ".join(["%s"] * len(iv_names))
+				agg_rows = frappe.db.sql(
 					f"""
+					select ca.ownership_event,
+					       min(case when ca.occurred_at <= %s and (ah_iv.ownership_end is null or ca.occurred_at <= ah_iv.ownership_end) then ca.occurred_at else null end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.connected_snapshot, 0) = 1 then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and {inv_expr} then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.dnc_snapshot, 0) = 1 then 1 else 0 end)
+					from `tabCSKH Contact Attempt` ca USE INDEX (idx_cskh_attempt_ownevt_occ)
+					inner join `tabCSKH Assignment History` ah_iv on ah_iv.name = ca.ownership_event
+					where ca.ownership_event in ({ph_ivs})
+					  and coalesce(ca.contact_attempt_snapshot, 1) = 1
+					  and ca.recorded_at <= %s
+					group by ca.ownership_event
+					""",
+					(
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						*inv_codes_sorted,
+						end_dt_excl,
+						as_of_dt,
+						*iv_names,
+						as_of_dt,
+					),
+					as_dict=False,
+				)
+			else:
+				ca_camp_clause = " and ca.campaign = %s" if campaign_filter else ""
+				ca_src_clause, ca_src_params = _lead_src_subclause("ca.lead")
+				ca_emp_clause = " and ah_iv.to_user = %s" if emp_clean else ""
+				ca_emp_params = (emp_clean,) if emp_clean else ()
+				agg_rows = frappe.db.sql(
+					f"""
+					select ca.ownership_event,
+					       min(case when ca.occurred_at <= %s and (ah_iv.ownership_end is null or ca.occurred_at <= ah_iv.ownership_end) then ca.occurred_at else null end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.connected_snapshot, 0) = 1 then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and {inv_expr} then 1 else 0 end),
+					       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.dnc_snapshot, 0) = 1 then 1 else 0 end)
+					from `tabCSKH Contact Attempt` ca
+					inner join `tabCSKH Assignment History` ah_iv on ah_iv.name = ca.ownership_event
+					where ca.ownership_event is not null
+					  and coalesce(ca.contact_attempt_snapshot, 1) = 1
+					  and ca.recorded_at <= %s
+					  and coalesce(ah_iv.ownership_start, ah_iv.event_at) <= %s
+					  and (ah_iv.ownership_end is null or ah_iv.ownership_end >= %s){ca_camp_clause}{ca_src_clause}{ca_emp_clause}
+					group by ca.ownership_event
+					""",
+					(
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						end_dt_excl,
+						as_of_dt,
+						*inv_codes_sorted,
+						end_dt_excl,
+						as_of_dt,
+						as_of_dt,
+						as_of_dt,
+						start_dt,
+						*camp_params,
+						*ca_src_params,
+						*ca_emp_params,
+					),
+					as_dict=False,
+				)
+		for oe_val, min_occ_val, has_att_v, has_conn_v, has_inv_v, has_dnc_v in agg_rows:
+			iv_agg_map[str(oe_val)] = (
+				get_datetime(min_occ_val) if min_occ_val else None,
+				bool(has_att_v),
+				bool(has_conn_v),
+				bool(has_inv_v),
+				bool(has_dnc_v),
+			)
+	else:
+		raw_attempts = frappe.db.sql(
+			f"""
+			select name, work_item, lead, campaign, ownership_event, owner_at_attempt, performed_by,
+			       occurred_at, recorded_at, channel, outcome_code, outcome_label_snapshot,
+			       outcome_group_snapshot, outcome_version_snapshot, contact_attempt_snapshot,
+			       connected_snapshot, interested_snapshot, terminal_snapshot, dnc_snapshot,
+			       {att_opt_sel},
+			       note, call_log, callback_task, resolved_callback_task, verification_status,
+			       policy_name_snapshot, policy_version_snapshot, creation, modified
+			from `tabCSKH Contact Attempt`
+			where occurred_at >= %s and occurred_at < %s and occurred_at <= %s and recorded_at <= %s{camp_clause}{att_src_clause}{att_emp_clause}
+			""",
+			(start_dt, end_dt_excl, as_of_dt, as_of_dt, *camp_params, *att_src_params, *att_emp_params),
+			as_dict=True,
+		)
+		seen_att_ids = {r.name for r in raw_attempts}
+
+		# Load attempts on `assigned_intervals` or `obligations` that occurred OUTSIDE `[start_dt, min(end_dt_excl, as_of_dt)]`
+		needed_iv_ids = sorted(
+			{iv.name for iv in assigned_intervals}
+			| {ob.interval_event for ob in obligations_raw if ob.interval_event}
+		)
+		needed_iv_set = set(needed_iv_ids)
+		if needed_iv_ids:
+			for idx in range(0, len(needed_iv_ids), 2000):
+				chunk = needed_iv_ids[idx : idx + 2000]
+				ph = ", ".join(["%s"] * len(chunk))
+				for extra_a in frappe.db.sql(
+					f"""
+					select name, work_item, lead, campaign, ownership_event, owner_at_attempt, performed_by,
+					       occurred_at, recorded_at, channel, outcome_code, outcome_label_snapshot,
+					       outcome_group_snapshot, outcome_version_snapshot, contact_attempt_snapshot,
+					       connected_snapshot, interested_snapshot, terminal_snapshot, dnc_snapshot,
+					       {att_opt_sel},
+					       note, call_log, callback_task, resolved_callback_task, verification_status,
+					       policy_name_snapshot, policy_version_snapshot, creation, modified
+					from `tabCSKH Contact Attempt`
+					where ownership_event in ({ph})
+					  and recorded_at <= %s
+					  and (occurred_at < %s or occurred_at >= %s or occurred_at > %s){camp_clause}{att_src_clause}
+					""",
+					(*chunk, as_of_dt, start_dt, end_dt_excl, as_of_dt, *camp_params, *att_src_params),
+					as_dict=True,
+				):
+					if extra_a.name not in seen_att_ids:
+						raw_attempts.append(extra_a)
+						seen_att_ids.add(extra_a.name)
+
+		missing_moved = sorted(
+			(
+				moved_attempt_ids
+				| {ob.fulfilled_by_attempt for ob in obligations_raw if ob.fulfilled_by_attempt}
+			)
+			- seen_att_ids
+		)
+		if missing_moved:
+			for idx in range(0, len(missing_moved), 2000):
+				chunk = missing_moved[idx : idx + 2000]
+				ph = ", ".join(["%s"] * len(chunk))
+				for extra_a in frappe.db.sql(
+					f"""
+					select name, work_item, lead, campaign, ownership_event, owner_at_attempt, performed_by,
+					       occurred_at, recorded_at, channel, outcome_code, outcome_label_snapshot,
+					       outcome_group_snapshot, outcome_version_snapshot, contact_attempt_snapshot,
+					       connected_snapshot, interested_snapshot, terminal_snapshot, dnc_snapshot,
+					       {att_opt_sel},
+					       note, call_log, callback_task, resolved_callback_task, verification_status,
+					       policy_name_snapshot, policy_version_snapshot, creation, modified
+					from `tabCSKH Contact Attempt`
+					where name in ({ph}) and recorded_at <= %s{camp_clause}{att_src_clause}
+					""",
+					(*chunk, as_of_dt, *camp_params, *att_src_params),
+					as_dict=True,
+				):
+					if extra_a.name not in seen_att_ids:
+						raw_attempts.append(extra_a)
+						seen_att_ids.add(extra_a.name)
+
+		if seen_att_ids and total_corrs > 0:
+			if total_corrs <= 5000:
+				all_corrs = frappe.db.sql(
+					"""
 					select name, work_item, attempt, action, status, requested_by, requested_at,
 					       reason, original_snapshot_json, corrected_fields_json,
 					       reviewed_by, reviewed_at, review_note, creation, modified
 					from `tabCSKH Attempt Correction`
-					where attempt in ({ph}) and requested_at <= %s
+					where requested_at <= %s
 					""",
-					(*chunk, as_of_dt),
+					(as_of_dt,),
 					as_dict=True,
 				)
-			)
-
-	as_of_corrs = []
-	for c in corr_rows:
-		c_copy = frappe._dict(c)
-		if c_copy.status == "approved" and c_copy.reviewed_at and get_datetime(c_copy.reviewed_at) > as_of_dt:
-			c_copy.status = "pending"
-		elif (
-			c_copy.status == "rejected" and c_copy.reviewed_at and get_datetime(c_copy.reviewed_at) > as_of_dt
-		):
-			c_copy.status = "pending"
-		as_of_corrs.append(c_copy)
-
-	from crm_cskh.services.read_model import _project_attempts_rows
-
-	projected_all = _project_attempts_rows(raw_attempts, as_of_corrs)
-
-	missing_hist_ids = sorted(
-		{
-			p["ownership_event"]
-			for p in projected_all
-			if p.get("ownership_event") and p["ownership_event"] not in hist_team_map
-		}
-	)
-	if missing_hist_ids and has_team_col:
-		for idx in range(0, len(missing_hist_ids), 2000):
-			chunk = missing_hist_ids[idx : idx + 2000]
-			ph = ", ".join(["%s"] * len(chunk))
-			for eh in frappe.db.sql(
-				f"""
-				select name, to_user, ownership_start, event_at, team_at_assignment, attribution_status
-				from `tabCSKH Assignment History`
-				where name in ({ph})
-				""",
-				tuple(chunk),
-				as_dict=True,
-			):
-				if eh.attribution_status:
-					hist_team_map[eh.name] = (eh.team_at_assignment, str(eh.attribution_status))
-				else:
-					hist_team_map[eh.name] = _fast_team_as_of(
-						eh.to_user, get_datetime(eh.ownership_start or eh.event_at)
+				corr_rows = [c for c in all_corrs if c.attempt in seen_att_ids]
+			else:
+				att_list = sorted(seen_att_ids)
+				for idx in range(0, len(att_list), 2000):
+					chunk = att_list[idx : idx + 2000]
+					ph = ", ".join(["%s"] * len(chunk))
+					corr_rows.extend(
+						frappe.db.sql(
+							f"""
+							select name, work_item, attempt, action, status, requested_by, requested_at,
+							       reason, original_snapshot_json, corrected_fields_json,
+							       reviewed_by, reviewed_at, review_note, creation, modified
+							from `tabCSKH Attempt Correction`
+							where attempt in ({ph}) and requested_at <= %s
+							""",
+							(*chunk, as_of_dt),
+							as_dict=True,
+						)
 					)
 
-	# 4. Bulk query `CSKH QA Review` when `qa_enabled`
+		as_of_corrs = []
+		for c in corr_rows:
+			c_copy = frappe._dict(c)
+			if (
+				c_copy.status == "approved"
+				and c_copy.reviewed_at
+				and get_datetime(c_copy.reviewed_at) > as_of_dt
+			):
+				c_copy.status = "pending"
+			elif (
+				c_copy.status == "rejected"
+				and c_copy.reviewed_at
+				and get_datetime(c_copy.reviewed_at) > as_of_dt
+			):
+				c_copy.status = "pending"
+			as_of_corrs.append(c_copy)
+
+		from crm_cskh.services.read_model import _project_attempts_rows
+
+		projected_all = _project_attempts_rows(raw_attempts, as_of_corrs)
+
+		missing_hist_ids = sorted(
+			{
+				p["ownership_event"]
+				for p in projected_all
+				if p.get("ownership_event") and p["ownership_event"] not in hist_team_map
+			}
+		)
+		if missing_hist_ids and has_team_col:
+			for idx in range(0, len(missing_hist_ids), 2000):
+				chunk = missing_hist_ids[idx : idx + 2000]
+				ph = ", ".join(["%s"] * len(chunk))
+				for eh in frappe.db.sql(
+					f"""
+					select name, to_user, ownership_start, event_at, team_at_assignment, attribution_status
+					from `tabCSKH Assignment History`
+					where name in ({ph})
+					""",
+					tuple(chunk),
+					as_dict=True,
+				):
+					if eh.attribution_status:
+						hist_team_map[eh.name] = (eh.team_at_assignment, str(eh.attribution_status))
+					else:
+						hist_team_map[eh.name] = _fast_team_as_of(
+							eh.to_user, get_datetime(eh.ownership_start or eh.event_at)
+						)
+
+		for p in projected_all:
+			eff_occ = get_datetime(p["effective"]["occurred_at"])
+			raw_occ = get_datetime(p["original"]["occurred_at"])
+			in_eff_window = _in_half_open_window(eff_occ, start_dt, end_dt_excl, as_of_dt)
+			in_raw_window = _in_half_open_window(raw_occ, start_dt, end_dt_excl, as_of_dt)
+
+			actor_user = p.get("performed_by") or p.get("owner_at_attempt")
+			oe = p.get("ownership_event")
+			if oe and oe in hist_team_map:
+				t_node, a_stat = hist_team_map[oe]
+			else:
+				t_node, a_stat = _fast_team_as_of(actor_user, eff_occ)
+
+			eff_code = str(p["effective"].get("outcome_code") or "")
+			eff_code_lower = eff_code.lower()
+			camp_id = p.get("campaign") or ""
+			camp_conv_set = campaign_conversion_map.get(camp_id, conversion_outcome_codes_global)
+
+			is_conv = bool(p["effective"].get("is_conversion")) or (eff_code_lower in camp_conv_set)
+			is_inv = bool(p["effective"].get("is_invalid_phone")) or (
+				eff_code_lower in invalid_phone_codes_global
+			)
+			p["effective"]["is_conversion"] = is_conv
+			p["effective"]["is_invalid_phone"] = is_inv
+
+			req_note = eff_code in requires_note_codes
+			has_note_ok = (not req_note) or bool(str(p["effective"].get("note") or "").strip())
+			code_valid = (not valid_outcome_codes) or (eff_code in valid_outcome_codes)
+			channel_valid = bool(str(p["effective"].get("channel") or "").strip())
+			complete_ok = (
+				bool(p["effective"].get("complete_fields", True))
+				and code_valid
+				and channel_valid
+				and has_note_ok
+			)
+
+			# F-P3-03: Preserve authoritative P2 `CSKH Contact Attempt.verification_status` (`verified`, `self_reported`, `disputed`)!
+			raw_ver = str(p.get("verification_status") or "self_reported").lower()
+			is_disputed = raw_ver == "disputed"
+			is_verified = raw_ver == "verified"
+
+			p["eff_occ_dt"] = eff_occ
+			p["in_effective_window"] = in_eff_window
+			p["in_raw_window"] = in_raw_window
+			p["in_cutoff_window"] = eff_occ < end_dt_excl and eff_occ <= as_of_dt
+			p["actor_user"] = actor_user
+			p["resolved_team"] = t_node
+			p["resolved_attribution"] = a_stat
+			p["note_Policy_ok"] = has_note_ok
+			p["complete_fields_ok"] = complete_ok
+			p["is_verified_state"] = is_verified
+			p["is_disputed_state"] = is_disputed
+			projected_by_id[p["attempt_id"]] = p
+
+			if not p["is_voided"] and bool(p["effective"].get("is_contact_attempt", True)):
+				if oe and eff_occ <= as_of_dt:
+					eff_attempts_by_iv_asof[oe].append(p)
+					if eff_occ < end_dt_excl:
+						eff_attempts_by_iv_cutoff[oe].append(p)
+
+			if in_eff_window or in_raw_window or (oe in needed_iv_set and eff_occ <= as_of_dt):
+				attempts_enriched.append(p)
+
+		for oe_key in eff_attempts_by_iv_asof:
+			eff_attempts_by_iv_asof[oe_key].sort(key=lambda x: (x["eff_occ_dt"], x["attempt_id"]))
+		for oe_key in eff_attempts_by_iv_cutoff:
+			eff_attempts_by_iv_cutoff[oe_key].sort(key=lambda x: (x["eff_occ_dt"], x["attempt_id"]))
+
+	# 4. Bulk query `CSKH QA Review` when `qa_enabled` (or `QA_PASS_RATE` drilldown)
 	qa_by_attempt: dict[str, dict] = {}
 	qa_reviews: list[dict] = []
-	if qa_enabled and frappe.db.table_exists("CSKH QA Review"):
+	if (
+		(qa_enabled or dd_mcode == "QA_PASS_RATE")
+		and (not is_drilldown or dd_mcode == "QA_PASS_RATE")
+		and frappe.db.table_exists("CSKH QA Review")
+	):
 		has_cohort_col = frappe.db.has_column("CSKH QA Review", "cohort_type")
 		cohort_sel = "cohort_type" if has_cohort_col else "'random_sample' as cohort_type"
 		qa_src_clause, qa_src_params = (
@@ -1046,19 +1353,21 @@ def load_period_raw_dataset(
 			if src_filter_clean
 			else ("", ())
 		)
+		qa_emp_clause = " and reviewed_staff = %s" if emp_clean else ""
+		qa_emp_params = (emp_clean,) if emp_clean else ()
 		qa_reviews = frappe.db.sql(
 			f"""
 			select name, contact_attempt, work_item, campaign, reviewed_staff, team_at_review,
 			       reviewer, status, {cohort_sel}, points_achieved, max_points, passed, reviewed_at, modified
 			from `tabCSKH QA Review`
 			where reviewed_at >= %s and reviewed_at < %s and reviewed_at <= %s
-			  and status in ('published', 'approved', 'disputed'){camp_clause}{qa_src_clause}
+			  and status in ('published', 'approved', 'disputed'){camp_clause}{qa_src_clause}{qa_emp_clause}
 			""",
-			(start_dt, end_dt_excl, as_of_dt, *camp_params, *qa_src_params),
+			(start_dt, end_dt_excl, as_of_dt, *camp_params, *qa_src_params, *qa_emp_params),
 			as_dict=True,
 		)
-		if seen_att_ids:
-			att_list = sorted(seen_att_ids)
+		if not is_drilldown and projected_by_id:
+			att_list = sorted(projected_by_id.keys())
 			for idx in range(0, len(att_list), 2000):
 				chunk = att_list[idx : idx + 2000]
 				ph = ", ".join(["%s"] * len(chunk))
@@ -1072,78 +1381,6 @@ def load_period_raw_dataset(
 					as_dict=True,
 				):
 					qa_by_attempt[qr.contact_attempt] = qr
-
-	attempts_enriched: list[dict] = []
-	projected_by_id: dict[str, dict] = {}
-	eff_attempts_by_iv_cutoff: dict[str, list[dict]] = defaultdict(list)
-	eff_attempts_by_iv_asof: dict[str, list[dict]] = defaultdict(list)
-
-	for p in projected_all:
-		eff_occ = get_datetime(p["effective"]["occurred_at"])
-		raw_occ = get_datetime(p["original"]["occurred_at"])
-		in_eff_window = _in_half_open_window(eff_occ, start_dt, end_dt_excl, as_of_dt)
-		in_raw_window = _in_half_open_window(raw_occ, start_dt, end_dt_excl, as_of_dt)
-
-		actor_user = p.get("performed_by") or p.get("owner_at_attempt")
-		oe = p.get("ownership_event")
-		if oe and oe in hist_team_map:
-			t_node, a_stat = hist_team_map[oe]
-		else:
-			t_node, a_stat = _fast_team_as_of(actor_user, eff_occ)
-
-		eff_code = str(p["effective"].get("outcome_code") or "")
-		eff_code_lower = eff_code.lower()
-		camp_id = p.get("campaign") or ""
-		camp_conv_set = campaign_conversion_map.get(camp_id, conversion_outcome_codes_global)
-
-		is_conv = bool(p["effective"].get("is_conversion")) or (eff_code_lower in camp_conv_set)
-		is_inv = bool(p["effective"].get("is_invalid_phone")) or (
-			eff_code_lower in invalid_phone_codes_global
-		)
-		p["effective"]["is_conversion"] = is_conv
-		p["effective"]["is_invalid_phone"] = is_inv
-
-		req_note = eff_code in requires_note_codes
-		has_note_ok = (not req_note) or bool(str(p["effective"].get("note") or "").strip())
-		code_valid = (not valid_outcome_codes) or (eff_code in valid_outcome_codes)
-		channel_valid = bool(str(p["effective"].get("channel") or "").strip())
-		complete_ok = (
-			bool(p["effective"].get("complete_fields", True)) and code_valid and channel_valid and has_note_ok
-		)
-
-		# F-P3-03: Preserve authoritative P2 `CSKH Contact Attempt.verification_status` (`verified`, `self_reported`, `disputed`)!
-		# Pending corrections (`status='pending'`) must NOT alter effective fields or `verification_status` before review,
-		# and `CSKH QA Review` rubric rows do NOT fabricate `verified` on `self_reported` attempts unless `verification_status` itself was updated.
-		raw_ver = str(p.get("verification_status") or "self_reported").lower()
-		is_disputed = raw_ver == "disputed"
-		is_verified = raw_ver == "verified"
-
-		p["eff_occ_dt"] = eff_occ
-		p["in_effective_window"] = in_eff_window
-		p["in_raw_window"] = in_raw_window
-		p["in_cutoff_window"] = eff_occ < end_dt_excl and eff_occ <= as_of_dt
-		p["actor_user"] = actor_user
-		p["resolved_team"] = t_node
-		p["resolved_attribution"] = a_stat
-		p["note_Policy_ok"] = has_note_ok
-		p["complete_fields_ok"] = complete_ok
-		p["is_verified_state"] = is_verified
-		p["is_disputed_state"] = is_disputed
-		projected_by_id[p["attempt_id"]] = p
-
-		if not p["is_voided"] and bool(p["effective"].get("is_contact_attempt", True)):
-			if oe and eff_occ <= as_of_dt:
-				eff_attempts_by_iv_asof[oe].append(p)
-				if eff_occ < end_dt_excl:
-					eff_attempts_by_iv_cutoff[oe].append(p)
-
-		if in_eff_window or in_raw_window or (oe in needed_iv_ids and eff_occ <= as_of_dt):
-			attempts_enriched.append(p)
-
-	for oe_key in eff_attempts_by_iv_asof:
-		eff_attempts_by_iv_asof[oe_key].sort(key=lambda x: (x["eff_occ_dt"], x["attempt_id"]))
-	for oe_key in eff_attempts_by_iv_cutoff:
-		eff_attempts_by_iv_cutoff[oe_key].sort(key=lambda x: (x["eff_occ_dt"], x["attempt_id"]))
 
 	# Evaluate `obligations` strictly on `deadline_cohort` (`effective_due_at in [start_dt, end_dt_excl)`) and as-of `as_of_dt`!
 	obligations: list[dict] = []
@@ -1166,18 +1403,23 @@ def load_period_raw_dataset(
 		else:
 			f_dt: datetime | None = None
 			if ob.obligation_type == "FIRST_ATTEMPT" and ob.interval_event:
-				cand_atts = [
-					a
-					for a in eff_attempts_by_iv_asof.get(ob.interval_event, ())
-					if (iv_end is None or a["eff_occ_dt"] <= iv_end)
-				]
-				if cand_atts:
-					f_dt = cand_atts[0]["eff_occ_dt"]
+				if use_sql_interval_agg:
+					agg_tup = iv_agg_map.get(ob.interval_event)
+					if agg_tup and agg_tup[0] is not None:
+						f_dt = agg_tup[0]
+				else:
+					cand_atts = [
+						a
+						for a in eff_attempts_by_iv_asof.get(ob.interval_event, ())
+						if (iv_end is None or a["eff_occ_dt"] <= iv_end)
+					]
+					if cand_atts:
+						f_dt = cand_atts[0]["eff_occ_dt"]
 			if f_dt is None and ob.fulfilled_by_attempt and ob.fulfilled_by_attempt in projected_by_id:
 				fa_proj = projected_by_id[ob.fulfilled_by_attempt]
 				if not fa_proj["is_voided"] and fa_proj["eff_occ_dt"] <= as_of_dt:
 					f_dt = fa_proj["eff_occ_dt"]
-			elif f_dt is None and not ob.fulfilled_by_attempt and ob.fulfilled_at:
+			elif f_dt is None and (not ob.fulfilled_by_attempt or use_sql_interval_agg) and ob.fulfilled_at:
 				cand_f = get_datetime(ob.fulfilled_at)
 				if cand_f <= as_of_dt:
 					f_dt = cand_f
@@ -1242,32 +1484,44 @@ def load_period_raw_dataset(
 
 	# Enrich `assigned_intervals` with `ELIGIBLE_COVERAGE`, `CONNECTED_RATE`, and first-attempt latency metrics!
 	for iv in assigned_intervals:
-		iv_al = eff_attempts_by_iv_cutoff.get(iv.name, [])
 		fa_ob = fa_ob_by_iv.get(iv.name)
 		fa_canceled = bool(fa_ob and fa_ob["as_of_status"] == "canceled_validly")
 		fa_matured_by_sla = bool(
 			fa_ob and fa_ob["as_of_status"] in ("breached_open", "breached_handoff", "waived")
 		)
-		cal_spec, min_exp_mins = _campaign_cal_and_min_exp(iv.campaign)
-		exp_end = min(iv["iv_end_dt"] or cutoff_dt, cutoff_dt)
-		if cal_spec is not None and exp_end > iv["iv_start_dt"]:
-			exp_biz_mins = float(business_minutes_between(iv["iv_start_dt"], exp_end, cal_spec))
+		if use_sql_interval_agg:
+			agg_tup = iv_agg_map.get(iv.name)
+			if agg_tup:
+				_, has_att, has_conn, has_inv, has_dnc = agg_tup
+			else:
+				has_att = has_conn = has_inv = has_dnc = False
+			iv_al = []
 		else:
-			exp_biz_mins = max((exp_end - iv["iv_start_dt"]).total_seconds() / 60.0, 0.0)
+			iv_al = eff_attempts_by_iv_cutoff.get(iv.name, [])
+			has_att = len(iv_al) > 0
+			has_conn = any(bool(a["effective"].get("is_connected")) for a in iv_al)
+			has_inv = any(bool(a["effective"].get("is_invalid_phone")) for a in iv_al)
+			has_dnc = any(bool(a["effective"].get("is_do_not_contact")) for a in iv_al)
 
-		has_att = len(iv_al) > 0
-		has_conn = any(bool(a["effective"].get("is_connected")) for a in iv_al)
-		has_inv = any(bool(a["effective"].get("is_invalid_phone")) for a in iv_al)
-		has_dnc = any(bool(a["effective"].get("is_do_not_contact")) for a in iv_al)
+		if (not fa_canceled) and (not has_att) and (not fa_matured_by_sla):
+			cal_spec, min_exp_mins = _campaign_cal_and_min_exp(iv.campaign)
+			exp_end = min(iv["iv_end_dt"] or cutoff_dt, cutoff_dt)
+			if cal_spec is not None and exp_end > iv["iv_start_dt"]:
+				exp_biz_mins = float(business_minutes_between(iv["iv_start_dt"], exp_end, cal_spec))
+			else:
+				exp_biz_mins = max((exp_end - iv["iv_start_dt"]).total_seconds() / 60.0, 0.0)
+			cov_eligible = exp_biz_mins >= min_exp_mins
+		else:
+			cov_eligible = not fa_canceled
 
-		cov_eligible = (not fa_canceled) and (has_att or fa_matured_by_sla or exp_biz_mins >= min_exp_mins)
 		iv["has_attempt_cutoff"] = has_att
 		iv["has_connected_cutoff"] = has_conn
 		iv["has_invalid_phone_cutoff"] = has_inv
 		iv["has_dnc_cutoff"] = has_dnc
 		iv["coverage_eligible"] = cov_eligible
 		iv["tried_for_connected_rate"] = has_att and (not has_inv)
-		if has_att:
+		if has_att and not is_drilldown:
+			cal_spec, _ = _campaign_cal_and_min_exp(iv.campaign)
 			first_att_dt = max(iv_al[0]["eff_occ_dt"], iv["iv_start_dt"])
 			iv["first_attempt_wall_minutes"] = max(
 				(first_att_dt - iv["iv_start_dt"]).total_seconds() / 60.0, 0.0
@@ -1282,89 +1536,96 @@ def load_period_raw_dataset(
 			iv["first_attempt_biz_minutes"] = None
 
 	# 5. Check Lead DNC timestamps & Lead Source labels
-	lead_ids = sorted(
-		{iv.lead for iv in intervals if iv.lead}
-		| {a["lead"] for a in attempts_enriched if a.get("lead")}
-		| {ob.lead for ob in obligations if ob.lead}
-	)
 	dnc_since_by_lead: dict[str, datetime] = {}
 	lead_source_by_lead: dict[str, str] = {}
-	if lead_ids and frappe.db.table_exists("CRM Lead"):
-		has_dnc = frappe.db.has_column("CRM Lead", "cskh_do_not_contact")
-		dnc_col = "cskh_dnc_at" if frappe.db.has_column("CRM Lead", "cskh_dnc_at") else "modified"
-		for idx in range(0, len(lead_ids), 2000):
-			chunk = lead_ids[idx : idx + 2000]
-			ph = ", ".join(["%s"] * len(chunk))
-			sel_parts = ["name"]
-			if has_dnc:
-				sel_parts.append("coalesce(cskh_do_not_contact, 0) as is_dnc")
-				sel_parts.append(f"{dnc_col} as dnc_at")
-			if lead_src_col:
-				sel_parts.append(f"`{lead_src_col}` as lead_src")
-			for lr in frappe.db.sql(
-				f"select {', '.join(sel_parts)} from `tabCRM Lead` where name in ({ph})",
-				tuple(chunk),
-				as_dict=True,
-			):
-				if has_dnc and cint(lr.is_dnc) and lr.dnc_at:
-					dnc_since_by_lead[lr.name] = get_datetime(lr.dnc_at)
-				if lead_src_col and lr.get("lead_src"):
-					lead_source_by_lead[lr.name] = str(lr.lead_src)
+	need_lead_meta = (not is_drilldown) or (dd_mcode == "DNC_COMPLIANCE_RATE")
+	if need_lead_meta:
+		lead_ids = sorted(
+			{iv.lead for iv in intervals if iv.lead}
+			| {a["lead"] for a in attempts_enriched if a.get("lead")}
+			| {ob.lead for ob in obligations if ob.lead}
+		)
+		if lead_ids and frappe.db.table_exists("CRM Lead"):
+			has_dnc = frappe.db.has_column("CRM Lead", "cskh_do_not_contact")
+			dnc_col = "cskh_dnc_at" if frappe.db.has_column("CRM Lead", "cskh_dnc_at") else "modified"
+			for idx in range(0, len(lead_ids), 2000):
+				chunk = lead_ids[idx : idx + 2000]
+				ph = ", ".join(["%s"] * len(chunk))
+				sel_parts = ["name"]
+				if has_dnc:
+					sel_parts.append("coalesce(cskh_do_not_contact, 0) as is_dnc")
+					sel_parts.append(f"{dnc_col} as dnc_at")
+				if lead_src_col and not is_drilldown:
+					sel_parts.append(f"`{lead_src_col}` as lead_src")
+				for lr in frappe.db.sql(
+					f"select {', '.join(sel_parts)} from `tabCRM Lead` where name in ({ph})",
+					tuple(chunk),
+					as_dict=True,
+				):
+					if has_dnc and cint(lr.is_dnc) and lr.dnc_at:
+						dnc_since_by_lead[lr.name] = get_datetime(lr.dnc_at)
+					if lead_src_col and not is_drilldown and lr.get("lead_src"):
+						lead_source_by_lead[lr.name] = str(lr.lead_src)
 
 	campaign_lead_sources: dict[str, str] = {}
-	sources_by_camp: dict[str, set[str]] = defaultdict(set)
-	for iv in assigned_intervals:
-		if iv.campaign and iv.lead and iv.lead in lead_source_by_lead:
-			sources_by_camp[iv.campaign].add(lead_source_by_lead[iv.lead])
-	for cid, s_set in sources_by_camp.items():
-		campaign_lead_sources[cid] = ", ".join(sorted(s_set))
-
-	# Compute `source_watermark` capped by `as_of_dt`
-	wm_candidates: list[datetime] = []
-	for a in raw_attempts:
-		if a.get("recorded_at"):
-			wm_candidates.append(get_datetime(a.recorded_at))
-	for c in corr_rows:
-		if c.get("reviewed_at"):
-			wm_candidates.append(get_datetime(c.reviewed_at))
-		elif c.get("requested_at"):
-			wm_candidates.append(get_datetime(c.requested_at))
-	for ob in obligations:
-		if ob.get("as_of_fulfilled_dt"):
-			wm_candidates.append(get_datetime(ob["as_of_fulfilled_dt"]))
-		elif ob.get("eff_due_dt") and ob["eff_due_dt"] <= as_of_dt:
-			wm_candidates.append(ob["eff_due_dt"])
-		elif ob.get("started_at"):
-			wm_candidates.append(get_datetime(ob.started_at))
-	for iv in intervals:
-		if iv.get("event_at"):
-			wm_candidates.append(get_datetime(iv.event_at))
-	bounded_wms = [w for w in wm_candidates if w <= as_of_dt]
-	watermark = max(bounded_wms) if bounded_wms else as_of_dt
-
-	camp_ids = sorted(
-		{iv.campaign for iv in intervals if iv.campaign}
-		| {ob.campaign for ob in obligations if ob.campaign}
-		| {a["campaign"] for a in attempts_enriched if a.get("campaign")}
-	)
 	campaign_titles: dict[str, str] = {}
-	if camp_ids and frappe.db.table_exists("CSKH Campaign"):
-		for cr in frappe.db.get_all(
-			"CSKH Campaign", filters={"name": ["in", camp_ids]}, fields=["name", "title", "code"]
-		):
-			campaign_titles[cr.name] = str(cr.title or cr.code or cr.name)
-
-	user_ids = sorted(
-		{iv.to_user for iv in intervals if iv.to_user}
-		| {ob.owner_user for ob in obligations if ob.owner_user}
-		| {a["actor_user"] for a in attempts_enriched if a.get("actor_user")}
-		| {qr.reviewed_staff for qr in qa_reviews if qr.get("reviewed_staff")}
-		| set(user_primary_team.keys())
-	)
 	user_labels: dict[str, str] = {}
-	if user_ids:
-		for ur in frappe.db.get_all("User", filters={"name": ["in", user_ids]}, fields=["name", "full_name"]):
-			user_labels[ur.name] = str(ur.full_name or ur.name)
+	watermark = as_of_dt
+
+	if not is_drilldown:
+		sources_by_camp: dict[str, set[str]] = defaultdict(set)
+		for iv in assigned_intervals:
+			if iv.campaign and iv.lead and iv.lead in lead_source_by_lead:
+				sources_by_camp[iv.campaign].add(lead_source_by_lead[iv.lead])
+		for cid, s_set in sources_by_camp.items():
+			campaign_lead_sources[cid] = ", ".join(sorted(s_set))
+
+		# Compute `source_watermark` capped by `as_of_dt`
+		wm_candidates: list[datetime] = []
+		for a in raw_attempts:
+			if a.get("recorded_at"):
+				wm_candidates.append(get_datetime(a.recorded_at))
+		for c in corr_rows:
+			if c.get("reviewed_at"):
+				wm_candidates.append(get_datetime(c.reviewed_at))
+			elif c.get("requested_at"):
+				wm_candidates.append(get_datetime(c.requested_at))
+		for ob in obligations:
+			if ob.get("as_of_fulfilled_dt"):
+				wm_candidates.append(get_datetime(ob["as_of_fulfilled_dt"]))
+			elif ob.get("eff_due_dt") and ob["eff_due_dt"] <= as_of_dt:
+				wm_candidates.append(ob["eff_due_dt"])
+			elif ob.get("started_at"):
+				wm_candidates.append(get_datetime(ob.started_at))
+		for iv in intervals:
+			if iv.get("event_at"):
+				wm_candidates.append(get_datetime(iv.event_at))
+		bounded_wms = [w for w in wm_candidates if w <= as_of_dt]
+		watermark = max(bounded_wms) if bounded_wms else as_of_dt
+
+		camp_ids = sorted(
+			{iv.campaign for iv in intervals if iv.campaign}
+			| {ob.campaign for ob in obligations if ob.campaign}
+			| {a["campaign"] for a in attempts_enriched if a.get("campaign")}
+		)
+		if camp_ids and frappe.db.table_exists("CSKH Campaign"):
+			for cr in frappe.db.get_all(
+				"CSKH Campaign", filters={"name": ["in", camp_ids]}, fields=["name", "title", "code"]
+			):
+				campaign_titles[cr.name] = str(cr.title or cr.code or cr.name)
+
+		user_ids = sorted(
+			{iv.to_user for iv in intervals if iv.to_user}
+			| {ob.owner_user for ob in obligations if ob.owner_user}
+			| {a["actor_user"] for a in attempts_enriched if a.get("actor_user")}
+			| {qr.reviewed_staff for qr in qa_reviews if qr.get("reviewed_staff")}
+			| set(user_primary_team.keys())
+		)
+		if user_ids:
+			for ur in frappe.db.get_all(
+				"User", filters={"name": ["in", user_ids]}, fields=["name", "full_name"]
+			):
+				user_labels[ur.name] = str(ur.full_name or ur.name)
 
 	return {
 		"period": period,

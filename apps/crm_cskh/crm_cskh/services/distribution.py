@@ -435,7 +435,7 @@ def enqueue_run(preview_id, expected_rule_version=None, idempotency_key=None, ac
 	if run.expires_at and get_datetime(run.expires_at) < get_datetime(now):
 		raise Conflict("The preview has expired; run the preview again.", code="PREVIEW_EXPIRED")
 
-	_validate_rule_version_and_campaign(run, expected_rule_version=expected_rule_version)
+	campaign_doc, _ = _validate_rule_version_and_campaign(run, expected_rule_version=expected_rule_version)
 
 	# Verify fairness cursor has not moved since the preview was computed.
 	base_state = _run_state(run)
@@ -456,6 +456,16 @@ def enqueue_run(preview_id, expected_rule_version=None, idempotency_key=None, ac
 		frappe.db.commit()
 		raise RuleChanged("The eligible lead set changed after the preview.")
 
+	curr_eligible_assignees, curr_excluded_assignees = _eligible_assignees_for_worker(
+		run.campaign, campaign_doc.team_scope, run.rule_version, actor
+	)
+	if not curr_eligible_assignees:
+		raise Conflict(
+			"No assignee is eligible for this campaign.",
+			code="CAPACITY_FULL",
+			details={"excluded": curr_excluded_assignees},
+		)
+
 	if idempotency_key and idempotency_key != run.idempotency_key:
 		run.idempotency_key = idempotency_key
 
@@ -472,7 +482,7 @@ def enqueue_run(preview_id, expected_rule_version=None, idempotency_key=None, ac
 			"created": 0,
 			"errors": 0,
 			"skipped": [],
-			"excluded_assignees": preview_payload.get("excluded_assignees", []),
+			"excluded_assignees": curr_excluded_assignees,
 		},
 		ensure_ascii=False,
 	)
@@ -682,18 +692,40 @@ def run_distribution_worker(run_id, actor=None):
 			chunk = work_entries[chunk_offset : chunk_offset + CHUNK_SIZE]
 			pending_notifications = []
 			highest_index = initial_progress
+			chunk_leads = [ld for _, ld in chunk if ld]
+			already_in_chunk: set[str] = set()
+			chunk_exclusions: dict[str, str] | None = None
+			if len(chunk_leads) > 20 and len(set(chunk_leads)) == len(chunk_leads):
+				ph = ", ".join(["%s"] * len(chunk_leads))
+				already_in_chunk = set(
+					frappe.db.sql(
+						f"select lead from `tabCSKH Work Item` where campaign = %s and allocation_run = %s and lead in ({ph})",
+						(campaign, run.name, *chunk_leads),
+						pluck=True,
+					)
+					or ()
+				)
+				chunk_exclusions = eligibility._bulk_lead_exclusion_reasons(campaign, chunk_leads)
 
 			for row_pos, (target_idx, lead) in enumerate(chunk):
 				highest_index = max(highest_index, target_idx + 1)
 				# Idempotency guard if a lead was already committed by an earlier attempt.
-				if frappe.db.exists(
-					"CSKH Work Item",
-					{"campaign": campaign, "lead": lead, "allocation_run": run.name},
+				if (
+					lead in already_in_chunk
+					if chunk_exclusions is not None
+					else frappe.db.exists(
+						"CSKH Work Item",
+						{"campaign": campaign, "lead": lead, "allocation_run": run.name},
+					)
 				):
 					continue
 
 				# Re-check lead eligibility at execution time (P1 §7.1 #5).
-				lead_exclusion = eligibility._lead_exclusion_reason(campaign, lead)
+				lead_exclusion = (
+					chunk_exclusions.get(lead)
+					if chunk_exclusions is not None
+					else eligibility._lead_exclusion_reason(campaign, lead)
+				)
 				if lead_exclusion:
 					new_skipped.append({"lead": lead, "reason": lead_exclusion})
 					continue
@@ -990,15 +1022,52 @@ def reconcile(campaign, actor=None):
 		(campaign,),
 	)[0][0]
 
+	active_work_items = frappe.db.count(
+		"CSKH Work Item",
+		{"campaign": campaign, "status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)]},
+	)
+	active_claims = frappe.db.count("CSKH Active Claim", {"campaign": campaign})
+
+	stale_docshares = int(
+		frappe.db.sql(
+			"""select count(distinct ds.name)
+			   from `tabDocShare` ds
+			   inner join `tabCRM Lead` l on l.name = ds.share_name and ds.share_doctype = 'CRM Lead'
+			   where l.name in (select distinct wi.lead from `tabCSKH Work Item` wi where wi.campaign = %s)
+			     and coalesce(ds.user, '') != coalesce(l.lead_owner, '')""",
+			(campaign,),
+		)[0][0]
+		or 0
+	)
+	stale_open_todos = int(
+		frappe.db.sql(
+			"""select count(distinct td.name)
+			   from `tabToDo` td
+			   inner join `tabCRM Lead` l on l.name = td.reference_name and td.reference_type = 'CRM Lead'
+			   where td.status = 'Open'
+			     and l.name in (select distinct wi.lead from `tabCSKH Work Item` wi where wi.campaign = %s)
+			     and coalesce(td.allocated_to, '') != coalesce(l.lead_owner, '')""",
+			(campaign,),
+		)[0][0]
+		or 0
+	)
+	owners_sum = sum(int(v) for v in loads.values())
+	ownership_reconciled = bool(
+		active_work_items == active_claims
+		and active_work_items == owners_sum
+		and stale_docshares == 0
+		and stale_open_todos == 0
+	)
+
 	return {
 		"campaign": campaign,
 		"current_owners": loads,
 		"assignment_events": {row.user: int(row.total) for row in counts if row.user},
 		"distinct_leads": int(distinct_leads),
-		"active_work_items": frappe.db.count(
-			"CSKH Work Item",
-			{"campaign": campaign, "status": ["in", list(OWNED_ACTIVE_WORK_ITEM_STATES)]},
-		),
-		"active_claims": frappe.db.count("CSKH Active Claim", {"campaign": campaign}),
+		"active_work_items": active_work_items,
+		"active_claims": active_claims,
+		"stale_docshares": stale_docshares,
+		"stale_open_todos": stale_open_todos,
+		"ownership_reconciled": ownership_reconciled,
 		"as_of": now_datetime(),
 	}

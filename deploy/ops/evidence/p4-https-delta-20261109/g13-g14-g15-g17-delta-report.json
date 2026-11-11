@@ -1,15 +1,16 @@
 {
   "schema_version": "cskh-p4-batch2-g13-g14-g15-g17-v1",
   "status": "PASS",
-  "generated_at_utc": "2026-11-10T04:21:34.106256+00:00",
+  "generated_at_utc": "2026-11-10T13:42:07.141505+00:00",
   "gates_verified": [
     "G13",
     "G14",
     "G15",
     "G17"
   ],
+  "candidate_commit_sha_tested": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
   "locked_batch1_commit_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
-  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
   "g15_golden_and_metrics_v2_delta": {
     "fixture_sha256": "deb6be25a55a44deee4dcd21f9ee4fdada2ed38dfd2b14800c8cc1d375c49bdf",
     "golden_16_scopes_qa_off_and_on_exact": true,
@@ -24,7 +25,7 @@
       "quarterly:2026-Q4": true,
       "yearly:2026": true
     },
-    "team_a_node": "0unf0036gd",
+    "team_a_node": "aomev255uh",
     "live_http_endpoints_200": {
       "executive_overview": 200,
       "team_comparison": 200,
@@ -38,7 +39,9 @@
   },
   "g13_p1_e2e_delta": {
     "f03_csv_import_status": "COMPLETED_WITH_ERRORS",
+    "f03_phone_only_placeholder_verified": true,
     "f04_xlsx_import_status": "COMPLETED",
+    "f04_canonical_single_identity_verified": true,
     "f05_idempotent_replay_verified": true,
     "f07_rule_changed_and_expired_http": [
       409,
@@ -54,6 +57,10 @@
       "staff.b@dev.local": 9,
       "staff.c@dev.local": 6
     },
+    "f09_disabled_and_capacity_cap_counts": {
+      "staff.a@dev.local": 3,
+      "staff.b@dev.local": 2
+    },
     "f09_pool_mylist_and_workflow_http": [
       200,
       403,
@@ -61,9 +68,14 @@
       200,
       403
     ],
+    "f10_retry_zero_duplicate_verified": true,
     "f11_concurrent_two_admin_execute_http": [
       200,
       400
+    ],
+    "f12_staff_a_detail_and_history_http": [
+      200,
+      200
     ]
   },
   "g14_p2_e2e_delta": {
@@ -110,7 +122,7 @@
     "d04_import_worker_sigkill": {
       "kill_signal": {
         "service": "queue-long",
-        "container_id_short": "34a94b57ebd5",
+        "container_id_short": "bbec1ce8dfa9",
         "signal": "KILL",
         "post_kill_status": "exited",
         "exit_code": 137
@@ -126,7 +138,7 @@
     "d05_distribution_worker_sigkill_and_lease_takeover": {
       "kill_signal": {
         "service": "queue-long",
-        "container_id_short": "34a94b57ebd5",
+        "container_id_short": "bbec1ce8dfa9",
         "signal": "KILL",
         "post_kill_status": "exited",
         "exit_code": 137
@@ -139,7 +151,7 @@
     "d06_kpi_recompute_sigkill_and_atomic_publish": {
       "kill_signal": {
         "service": "queue-short",
-        "container_id_short": "6e83f408c72c",
+        "container_id_short": "2b770ab96c8a",
         "signal": "KILL",
         "post_kill_status": "exited",
         "exit_code": 137
@@ -148,15 +160,15 @@
       "concurrent_lock_http_status": 409,
       "recovered_swap": {
         "published_runs": [
-          "5ad1k58a4f"
+          "dovski463o"
         ],
         "reconcile_ok": true
       }
     },
     "d14_d15_restarts_and_d12_sql_invariants": {
       "sla_obligations_before_after_restart_eval": [
-        3274,
-        3274
+        3284,
+        3284
       ],
       "duplicate_normalized_phones": 0,
       "duplicate_active_claims": 0,

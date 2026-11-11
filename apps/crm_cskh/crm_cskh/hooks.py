@@ -269,6 +269,9 @@ doc_events = {
 		"before_save": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
 		"on_trash": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
 	},
+	"User": {
+		"on_update": "crm_cskh.permissions.on_user_security_change",
+	},
 }
 
 override_whitelisted_methods = {

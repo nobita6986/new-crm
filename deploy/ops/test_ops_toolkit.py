@@ -1450,8 +1450,8 @@ class OpsToolkitTests(unittest.TestCase):
         for g21_tok in (
             "v15.126.0",
             "v1.87.0",
-            "f51095ec245e103ed3a487654b5580636424ea36",
-            "b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+            "fbfafa93c7334684edfba633754964f9c3cc9868",
+            "5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
             "Class A",
             "Class B",
             "Class C",

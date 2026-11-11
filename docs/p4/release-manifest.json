@@ -1,20 +1,20 @@
 {
   "schema_version": "cskh-p4-release-manifest-v1",
-  "release_id": "p4-candidate-ghcr-42625295772",
+  "release_id": "p4-candidate-ghcr-42823368860",
   "environment_scope": "staging_candidate_verified_production_blocked",
-  "created_at_utc": "2026-11-10T01:35:00Z",
-  "git_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
+  "created_at_utc": "2026-11-10T13:29:27Z",
+  "git_sha": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
   "integrated_ops_branch": "codex/p4-resume-ops",
-  "apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910",
-  "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
+  "apps_tree_sha": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578",
+  "crm_cskh_tree_sha": "fbfafa93c7334684edfba633754964f9c3cc9868",
   "frappe_framework_ref": "v15.126.0@53bae3ef2550ca96320f036f581446783cd11b72",
   "frappe_crm_ref": "v1.87.0@0d3910b456ef4fb913e77b29db011b3debc4f778",
-  "crm_cskh_ref": "427af4834eda48a15ca86c15e88342c3c40d5f2f (tree:f51095ec245e103ed3a487654b5580636424ea36)",
-  "image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
-  "image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
-  "oci_config_digest": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+  "crm_cskh_ref": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5 (tree:fbfafa93c7334684edfba633754964f9c3cc9868)",
+  "image": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
+  "image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+  "oci_config_digest": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
   "migration_revision": "crm_cskh.patches.v3_0.p3_schema_and_seeds",
-  "migration_compatibility_class": "Class B (additive schema, migrate x2 idempotent)",
+  "migration_compatibility_class": "Class B (additive schema, migrate x2 idempotent; N-1 -> N delta is Class A code/runtime only)",
   "kpi_formula_version": "cskh-metrics-v2",
   "live_serving_vps_baseline": {
     "public_url": "https://crm.hrpartner.vn",
@@ -26,8 +26,9 @@
     "cutover_executed_in_this_turn": false
   },
   "verification_runs": {
-    "candidate_build_junit_and_s1_benchmark_url": "https://github.com/nobita6986/new-crm/actions/runs/42625295772",
-    "isolated_staging_dr_https_delta_url": "https://github.com/nobita6986/new-crm/actions/runs/42635479943",
+    "candidate_build_junit_and_s1_benchmark_url": "https://github.com/nobita6986/new-crm/actions/runs/42823368860",
+    "batch2_delta_url": "https://github.com/nobita6986/new-crm/actions/runs/42825411058",
+    "isolated_staging_dr_https_delta_url": "https://github.com/nobita6986/new-crm/actions/runs/42770672473",
     "vps_isolated_restore_and_timers_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
     "junit_tests_passed": 421,
     "junit_tests_total": 421
@@ -44,11 +45,11 @@
     ]
   },
   "artifacts": {
-    "rehearsal_release_manifest_sha256": "b1f13218acc7ac38371d90a82a06a2a5afa43d15cdb65862a4f2918e30406b01",
-    "build_manifest_sha256": "40916951e0536f97b4a43d7c249e6e5b70728f32b302fcba654e3d2eb0a42182",
-    "image_inspect_summary_sha256": "9fa77baad44ec7e04fd4bc45314c5bab0648610b06e54fef54ce21f960772af2",
-    "sbom_cyclonedx_sha256": "ec9ce62274bba83fd83a73c453a675171e7b1add0574d7cd2f84dc6db7f55c40",
-    "sbom_spdx_sha256": "3380b1d0fe5e59c9303ddc025b7e86782453a9be662da6ac0e59ef36db1453c9",
-    "security_scan_sha256": "fb9269988460c479a016eb8e5634c317e69c9711c40e1e17f52e6449bc1627b0"
+    "rehearsal_release_manifest_sha256": "5ce5dcc213d3601c77f5bfa9dc9217c9c04b9a65c7a9b555b4de674be20f21db",
+    "build_manifest_sha256": "734b59e9908c6be291cdcafdd358f27e7c1a55e146fddc6aebe55f04e13711a9",
+    "image_inspect_summary_sha256": "8101ebd68a6dde285490065e956c363cbd12c03dd15495151bbd7dba083258ce",
+    "sbom_cyclonedx_sha256": "84b19f7e1ac2ea89593bf4c37fa7e46504964b288258c13e38a3e13cbec1bb20",
+    "sbom_spdx_sha256": "98e13316598da8d1cfbbeba7ff8604ce3d6c5e36b25121ee2e0f54b9a26ba6d1",
+    "security_scan_sha256": "207960d481f42060c8a8e503684fff0c72a1824cce3afb2beadd370b85caa18c"
   }
 }

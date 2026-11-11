@@ -211,10 +211,10 @@ def _close_work_item_in_tx(
 	)
 
 	ownership._sync_lead_owner(locked["lead"], None)
-	old_todo = ownership._todo_for(locked["lead"], old_owner)
-	ownership._cancel_todo(old_todo)
+	ownership._cancel_stale_lead_todos(locked["lead"], keep_user=None)
 	ownership._sync_docshares(locked["lead"], [])
 	ownership._sync_lead_owner(locked["lead"], None)
+	ownership._assert_final_owner(locked["lead"], None)
 	frappe.db.delete("CSKH Active Claim", {"lead": locked["lead"]})
 
 	wi_updates = {
@@ -1219,6 +1219,7 @@ def reopen_work_item(
 		)
 
 		ownership._sync_lead_owner(locked.lead, target_val)
+		ownership._cancel_stale_lead_todos(locked.lead, keep_user=target_val)
 		ownership._sync_docshares(locked.lead, [target_val])
 		if not ownership._todo_for(locked.lead, target_val):
 			ownership._create_todo(locked.lead, target_val, f"CSKH assignment ({wi_val})")

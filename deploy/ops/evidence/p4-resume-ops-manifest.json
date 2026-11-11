@@ -1,11 +1,11 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
-  "generated_at_utc": "2026-11-10T06:10:01Z",
+  "generated_at_utc": "2026-11-11T04:28:00Z",
   "branch": "codex/p4-resume-ops",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
   "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
   "ancestor_review_base_sha": "31e51fcac7a640fdab10517f47f02335d7b1f749",
-  "verified_code_commit_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
+  "verified_code_commit_sha": "0762ef66f6b5f88a4105127e41e71955d000495d",
   "vps_execution_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
   "overall_p4_status": "IN_PROGRESS_BLOCKED_ON_OWNER_INPUTS",
   "p4_promoted_to_pass": false,
@@ -26,23 +26,23 @@
       "sha256sums_path": "deploy/ops/evidence/p4-vps-live-20261109/SHA256SUMS.txt"
     },
     "t1b_candidate_and_s1_ci_evidence": {
-      "ci_run_id": 42625295772,
-      "ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42625295772",
-      "candidate_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+      "ci_run_id": 42823368860,
+      "ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42823368860",
+      "candidate_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
       "evidence_dir": "deploy/ops/evidence/p4-candidate-and-s1-20261109",
       "junit_tests_total": 421,
       "junit_failures": 0
     },
     "ci_https_delta_evidence": {
-      "ci_run_id": 42766731946,
-      "ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42766731946",
-      "verified_code_commit_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
-      "t1b_batch2_ci_run_id": 42754081275,
-      "t1b_batch2_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42754081275",
-      "t1b_batch2_verified_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
+      "ci_run_id": 42770672473,
+      "ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42770672473",
+      "verified_code_commit_sha": "0762ef66f6b5f88a4105127e41e71955d000495d",
+      "t1b_batch2_ci_run_id": 42825411058,
+      "t1b_batch2_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42825411058",
+      "t1b_batch2_verified_sha": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
       "evidence_dir": "deploy/ops/evidence/p4-https-delta-20261109",
       "sha256sums_path": "deploy/ops/evidence/p4-https-delta-20261109/SHA256SUMS.txt",
-      "candidate_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d"
+      "candidate_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9"
     }
   },
   "live_vps": {
@@ -199,10 +199,10 @@
       "status": "GATED_PENDING_OWNER_ASSIGNMENT",
       "required_owner_inputs": [
         "Primary Day-2 Operator name and contact handle for operations-sop.md & monitoring-alerts.md (backup/secondary operator is recommended, not mandatory)",
-        "Owner-assigned business UAT sign-off representatives for the 4 roles (BOD, CRM Admin, Leader, Staff) in docs/p4/uat-report.md \u00a76 for G22 (does NOT require 5 distinct UAT people) + separate Operator handover acceptance in docs/p4/operations-sop.md \u00a77.2 for G24",
-        "Release decision (S1 SLO sign-off, 3 unfixed Debian 13 source CVEs option PA1/PA2, and maintenance cutover window) in docs/p4/P4-exit-report.md \u00a73"
+        "Owner-assigned business UAT sign-off representatives for the 4 roles (BOD, CRM Admin, Leader, Staff) in docs/p4/uat-report.md §6 for G22 (does NOT require 5 distinct UAT people) + separate Operator handover acceptance in docs/p4/operations-sop.md §7.2 for G24",
+        "Release decision (S1 SLO sign-off, 3 unfixed Debian 13 source CVEs option PA1/PA2, and maintenance cutover window) in docs/p4/P4-exit-report.md §3"
       ],
-      "summary": "No signer or recipient names are fabricated; all pending Owner inputs are consolidated in docs/p4/P4-exit-report.md \u00a73."
+      "summary": "No signer or recipient names are fabricated; all pending Owner inputs are consolidated in docs/p4/P4-exit-report.md §3."
     },
     {
       "id": "BLK-INFRA-07",
@@ -226,13 +226,13 @@
   "deliverables": [
     {
       "path": ".github/workflows/p4-batch2-delta.yml",
-      "bytes": 9644,
-      "sha256": "22e9b6bffeadb7ea39963a6ff663473bfbc49450a096dcf55934fac6631b8bb2"
+      "bytes": 9994,
+      "sha256": "45b46ffb5c65a2f8608ed7392646c2208534042cfc2b3e14f7900171017c372f"
     },
     {
       "path": ".github/workflows/p4-ops-dr-rehearsal.yml",
-      "bytes": 27730,
-      "sha256": "4911f227a06f43ef300fc83730efd806503b10fef12f46db1f360814b9b07a35"
+      "bytes": 28056,
+      "sha256": "9348640131a58ad3a8198aea5979691adaf29eef239b86cc89afb9a400f0aa7f"
     },
     {
       "path": "deploy/compose/env/alerting.env.example",
@@ -272,27 +272,27 @@
     {
       "path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/SHA256SUMS.txt",
       "bytes": 1034,
-      "sha256": "d66ee3028295b85410b1cd9bae26335bbe72c0f8edc8d356a70b4ebd85ddf87e"
+      "sha256": "ad74125f9e260e7dd3b1f6fef44b318eb1750d4b1dc4d570b390d98832d0a1f9"
     },
     {
       "path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json",
-      "bytes": 21526,
-      "sha256": "04409d7a641235bbdde397cd480b52251e5bdbc9866bc924d5a9bbd4c4a28aa2"
+      "bytes": 50634,
+      "sha256": "6113d38e44be31f24d9ad884a3b40cf23221a14b4fc7a5f183880c0ed9cd9fef"
     },
     {
       "path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/candidate-provenance.json",
       "bytes": 2439,
-      "sha256": "42fc064d2c0a85d58a6b29af8fb3145f456d15dedf572c908d7b2908418442a3"
+      "sha256": "c85d317fbc5556589d56bedd4668a7dcd871e38088454e5827d0c59bfb83cbda"
     },
     {
       "path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/clean-site-verify.json",
       "bytes": 14681,
-      "sha256": "f283277ab97b93eaa3df601d4644f2b5608438ba9f62bf89c3a9c85eeaad15bf"
+      "sha256": "5d9521a00497d13b704e6a38f1e00b84b17ea9c27756565b858d406638f9a5d8"
     },
     {
       "path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/diff-impact-verification-summary.json",
-      "bytes": 5476,
-      "sha256": "4ac7653b6f22ba90a2fe494c12c7f2b60fa1d2dc4f23bfc667b45cdfc95d97e4"
+      "bytes": 5647,
+      "sha256": "513a2b4f2208ba4519b8d64ab6e1741376b73bcef3c80a2b21acdeccbd8a85d5"
     },
     {
       "path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/g007_test_inventory-gate.json",
@@ -302,12 +302,12 @@
     {
       "path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/ghcr-digest-promotion-attestation.json",
       "bytes": 2457,
-      "sha256": "f9831740a3a754ddc94d96061ecc345d376be179e7c0cec727a747bff134b115"
+      "sha256": "cacbee6f1f661116a8d1e848354dd88d482a5cf12e9c29c1feac62f8648e5025"
     },
     {
       "path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/isolated-smoke-report.json",
-      "bytes": 17040,
-      "sha256": "e450b1774b62ff063c6401c5da186c934fa27442016e25e2416ddefab06374f5"
+      "bytes": 17039,
+      "sha256": "cdecf29963eeac7bd8f05d84abe135983635c5a4c3c140e988992a0933f89b58"
     },
     {
       "path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/p1_test_inventory-gate.json",
@@ -372,7 +372,7 @@
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/SHA256SUMS.txt",
       "bytes": 1505,
-      "sha256": "d8855517d29f6ae88150a3a41979998f59b4f301491e14d77c16fe71a82729d1"
+      "sha256": "b1e7f1ed4355d8bbf9d8b042219bc7e663a3c9a9fbaf1ea307836013f55cc2d0"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/candidate-registry-pull-inspect-receipt.json",
@@ -386,8 +386,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g06-g09-migration-and-rollback-report.json",
-      "bytes": 6600,
-      "sha256": "b70f848ca654c1b2f52713390c1694e6d2cdc7de7a0bb1aea3b25f9fa6fd6bd1"
+      "bytes": 6694,
+      "sha256": "cc5f3366e644f8ccd4fe8198eaf2f581ee4da6af02f8cfbf4f80746e259ab585"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g07-candidate-digest-drill.json",
@@ -406,13 +406,13 @@
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g11-g12-security-topology-report.json",
-      "bytes": 5112,
-      "sha256": "1e0658a67ef2661b647ad69fe1ea02bdee713520f7822acfbfe1f1f5ce3e6fb4"
+      "bytes": 6365,
+      "sha256": "3e55327e65e60bdd03745910d2472d4f59ae22800b0cc1e5b4fb5fa33fa3fc65"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g13-g14-g15-g17-delta-report.json",
-      "bytes": 4465,
-      "sha256": "b728a7cdc3e2bd0bda68f78a6fdda4541ef5fc55efb014343045fed2e1f47c00"
+      "bytes": 4875,
+      "sha256": "185a25dd018b1a178640fed114c4cfe7f844b4f10808db138c3a7fafd642ea20"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/g19-gate-vps-audit.json",
@@ -421,8 +421,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/gate-acceptance-evidence-map.json",
-      "bytes": 12137,
-      "sha256": "0fb15175936db886326fd814e20fb4a9727aee52d6126a4f9c39d3934e654d7c"
+      "bytes": 12082,
+      "sha256": "88832c599efe06dd45522a790223e1e7860194559130fb58c6b04c68509b3c61"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
@@ -441,8 +441,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/pr-isolation-audit.json",
-      "bytes": 897,
-      "sha256": "d62f38317e6c41dd002b5ce37da9b6d28ed8c79d08a0d5cb4330a28476e0d0b2"
+      "bytes": 898,
+      "sha256": "6c77d81fd7fef1780791b45d95664045026a9a6cb3500e8f2d71dd525e56b4ed"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json",
@@ -451,8 +451,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
-      "bytes": 12599,
-      "sha256": "b4b2c2b78059a726eaa1eda2dbd249cd50c84e8ef103552d3e3a14b8fe2bff81"
+      "bytes": 14766,
+      "sha256": "48378b0af2ceb2d63698a838c6a97f7802e73caedd09ffaef8c9ecf6c8dfe801"
     },
     {
       "path": "deploy/ops/evidence/p4-vps-live-20261109/SHA256SUMS.txt",
@@ -587,7 +587,7 @@
     {
       "path": "deploy/ops/test_ops_toolkit.py",
       "bytes": 68432,
-      "sha256": "ea5620db114520dc2194b1b2ed87fb704fc8efd29adb664e9384245d141b7c75"
+      "sha256": "2d5027c1ecc59285f873c429e43ea2066484bab6b439691d29994cefc2362237"
     },
     {
       "path": "deploy/ops/verify_offsite_restore.py",
@@ -616,23 +616,23 @@
     },
     {
       "path": "deploy/release/batch2_delta/verify_g06_g09_migration_and_rollback.py",
-      "bytes": 41314,
-      "sha256": "5b9787e10f0c14b132e3de8e6f165941760fd30c143fb9ab09f259208033ff29"
+      "bytes": 41400,
+      "sha256": "413401e6bd6f3f32d93fbbc1e58b7a39ad6a816932ed96555bd485563f259b34"
     },
     {
       "path": "deploy/release/batch2_delta/verify_g11_g12_security_topology.py",
-      "bytes": 52379,
-      "sha256": "20fb7e75a074b850a241fbaa5e0bced32bbb42103522ef589a45f4df66a49f0b"
+      "bytes": 62596,
+      "sha256": "8854ba35507d0d57ecff8699590f34eda2b8b3489d6b086d044a4ab27a7d9ac8"
     },
     {
       "path": "deploy/release/batch2_delta/verify_g13_g14_g15_g17_delta.py",
-      "bytes": 67137,
-      "sha256": "83d330941fc63d92be1b7134bb158bce7b06b1dd423710abfd6aaf4ee2a78790"
+      "bytes": 73710,
+      "sha256": "84ae4f93001ba7839fc4666dc4968bed391909272da34c8fadabac58aa362965"
     },
     {
       "path": "deploy/release/test_batch2_delta_contracts.py",
-      "bytes": 10564,
-      "sha256": "4e2ea6f025e48f7331d3e2d21f5e582153288e7a741235d510f0ebfd3556a403"
+      "bytes": 15273,
+      "sha256": "21c4a80dde60ee5593442c03dfdac101c85e9657b83d6e2dd2c0de704ff24f99"
     },
     {
       "path": "docs/p4/P4-ADR-01-compose-and-isolation.md",
@@ -656,13 +656,13 @@
     },
     {
       "path": "docs/p4/P4-exit-report.md",
-      "bytes": 30983,
-      "sha256": "fdd8dcfa4ac5c703f1f35723c0d86f92c06a79bb1114715390223dde76f7cf2e"
+      "bytes": 32279,
+      "sha256": "5c99c4a891ac8807b7cd6b8a44ae61b99b307a61a0da215d07e63f2cc67a97f0"
     },
     {
       "path": "docs/p4/api-contract.md",
-      "bytes": 42289,
-      "sha256": "51175a74e079c4918d9a2db6b0f8228a8aa8da4121dd2763e74690513ca3134d"
+      "bytes": 42347,
+      "sha256": "37466c57b77d871dc6467b4601c2421c4a7d16f296f3ecb731efc90bf8788d2e"
     },
     {
       "path": "docs/p4/backup-restore.md",
@@ -741,8 +741,8 @@
     },
     {
       "path": "docs/p4/performance-report.md",
-      "bytes": 14669,
-      "sha256": "0fe80c1d11055295f130040e60f2291e8c819a3b1a8e294fec750d90d49058e3"
+      "bytes": 23894,
+      "sha256": "3abfda1775e2139067a9bb1e6f9b22f1ec4c6e93e89cec78f2541d5a059b1cc5"
     },
     {
       "path": "docs/p4/pii-field-catalog.md",
@@ -751,8 +751,8 @@
     },
     {
       "path": "docs/p4/release-manifest.json",
-      "bytes": 3405,
-      "sha256": "dc9463417bb44611869e19f98819f36afc7205527b9b2d3987994aa6f8b5ddda"
+      "bytes": 3540,
+      "sha256": "f8c94fb88d80f0601a8258918bbb82e381a61903f7d260dfb6fc55954ec148f4"
     },
     {
       "path": "docs/p4/release-runbook.md",
@@ -767,12 +767,12 @@
     {
       "path": "docs/p4/security-review.md",
       "bytes": 26503,
-      "sha256": "82cd8ec4290b50157ef696057201f3bbd38ae866c53d8de30daac7aa1da11db7"
+      "sha256": "28f38750ff9c4123121bdb6b7437d822d222d73ab622b7888335406dae9d851a"
     },
     {
       "path": "docs/p4/uat-report.md",
       "bytes": 30679,
-      "sha256": "2571deaf019a22ef1f10c06c8311fa6d91c71742f061ee4ac58bf2d06b3f164e"
+      "sha256": "1f38b1b6bad9f3364beae0fa2d362c9daa2d028f7c9329ca2b84b20f391dd6c4"
     }
   ],
   "manifest_revision": "v7-integrated-ghcr-digest-rolechange-midjob-sigkill-20261110",

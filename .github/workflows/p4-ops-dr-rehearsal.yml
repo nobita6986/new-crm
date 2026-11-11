@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LOCKED_BATCH1_COMMIT_SHA: '427af4834eda48a15ca86c15e88342c3c40d5f2f'
-  LOCKED_CANDIDATE_IMAGE_DIGEST: 'ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d'
+  LOCKED_BATCH1_COMMIT_SHA: 'ce6f45549d562327bb6992fc5b29e4a5b1efcbd5'
+  LOCKED_CANDIDATE_IMAGE_DIGEST: 'ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9'
   BASELINE_MAIN_COMMIT_SHA: '467830195358b2431ac772486530ab935887a518'
 
 jobs:
@@ -486,20 +486,26 @@ jobs:
           test "$(git rev-parse HEAD:apps)" = "$(git rev-parse "${LOCKED_BATCH1_COMMIT_SHA}:apps")"
           sh deploy/release/validate_digest_uri.sh "${LOCKED_CANDIDATE_IMAGE_DIGEST}"
 
-          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
-            --username "${GITHUB_ACTOR_PULL}" \
-            --password-stdin
-          PULL_LOG="$RUNNER_TEMP/ghcr-candidate-pull.log"
-          docker pull "${LOCKED_CANDIDATE_IMAGE_DIGEST}" | tee "$PULL_LOG"
           docker logout ghcr.io >/dev/null 2>&1 || true
+          PULL_LOG="$RUNNER_TEMP/ghcr-candidate-pull.log"
+          ANON_PULL_OK="false"
+          if docker pull "${LOCKED_CANDIDATE_IMAGE_DIGEST}" | tee "$PULL_LOG"; then
+            ANON_PULL_OK="true"
+          else
+            printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+              --username "${GITHUB_ACTOR_PULL}" \
+              --password-stdin
+            docker pull "${LOCKED_CANDIDATE_IMAGE_DIGEST}" | tee "$PULL_LOG"
+            docker logout ghcr.io >/dev/null 2>&1 || true
+          fi
 
           INSPECT_RAW="$RUNNER_TEMP/ghcr-candidate-inspect.json"
           docker image inspect "${LOCKED_CANDIDATE_IMAGE_DIGEST}" > "$INSPECT_RAW"
-          python3 - "${LOCKED_CANDIDATE_IMAGE_DIGEST}" "${LOCKED_BATCH1_COMMIT_SHA}" "$PULL_LOG" "$INSPECT_RAW" "$EVID/candidate-registry-pull-inspect-receipt.json" <<'PY'
+          python3 - "${LOCKED_CANDIDATE_IMAGE_DIGEST}" "${LOCKED_BATCH1_COMMIT_SHA}" "$PULL_LOG" "$INSPECT_RAW" "$EVID/candidate-registry-pull-inspect-receipt.json" "$ANON_PULL_OK" <<'PY'
           import datetime, json, re, subprocess, sys
           from pathlib import Path
 
-          req_digest, locked_sha, pull_log_p, insp_p, out_p = sys.argv[1:6]
+          req_digest, locked_sha, pull_log_p, insp_p, out_p, anon_ok = sys.argv[1:7]
           pull_txt = Path(pull_log_p).read_text(encoding="utf-8", errors="replace")
           m_dig = re.search(r"Digest:\s*(sha256:[0-9a-f]{64})", pull_txt)
           pulled_digest = m_dig.group(1) if m_dig else ""
@@ -519,6 +525,7 @@ jobs:
               "candidate_verification_only": True,
               "promoted_to_production": False,
               "owner_live_site_touched": False,
+              "anonymous_pull_verified": anon_ok == "true",
               "integrated_head_sha": git_rev("HEAD"),
               "locked_batch1_candidate_sha": locked_sha,
               "apps_tree_sha": git_rev("HEAD:apps"),

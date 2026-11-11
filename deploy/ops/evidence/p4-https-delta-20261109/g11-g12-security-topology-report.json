@@ -1,13 +1,14 @@
 {
   "schema_version": "cskh-p4-batch2-g11-g12-v1",
   "status": "PASS",
-  "generated_at_utc": "2026-11-10T04:14:07.504412+00:00",
+  "generated_at_utc": "2026-11-10T13:37:08.277408+00:00",
   "gates_verified": [
     "G11",
     "G12"
   ],
+  "candidate_commit_sha_tested": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
   "locked_batch1_commit_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
-  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
   "topology_measured": {
     "architecture": "single_vps_10_service_compose",
     "extra_distributed_cluster_created": false,
@@ -16,16 +17,45 @@
     "open_websocket_behavior_note": "Upstream Frappe v15 validates `sid` on Socket.IO namespace connect (`40/<site>`) and per-document `doc_subscribe` (`can_subscribe_doc`), without pushing an unsolicited TCP 0x8 close frame on `clear_sessions`; verified 0 PII frames on pre-existing open TCP socket, immediate `44/<site>` rejection on reconnect, and immediate `401/403` on all HTTP/RPC/REST calls."
   },
   "g11_revocation_results": {
-    "s07_transfer_and_revoke": {
+    "s07_p4_s13_s14_transfer_and_revoke": {
       "old_owner_work_item_http": 403,
+      "old_owner_attempts_timeline_http": 403,
       "old_owner_record_attempt_http": 409,
       "old_owner_rest_lead_http": 403,
       "old_owner_desk_getdoc_http": 403,
+      "p4_s13_old_record_id_http_codes": {
+        "cskh_work_item": 403,
+        "cskh_contact_attempt": 403,
+        "crm_call_log": 403,
+        "crm_task": 403,
+        "fcrm_note": 403,
+        "file": 404,
+        "todo": 403
+      },
       "new_owner_work_item_http": 200,
       "docshare_and_todo_cleanup": {
         "docshare_old_owner": 0,
+        "child_docshare_old_owner": 0,
         "open_todo_old_owner": 0,
         "docshare_new_owner": 1
+      },
+      "p4_s14_a_b_a_reconcile": {
+        "campaign": "akrfk8jhs4",
+        "current_owners": {
+          "staff.a@dev.local": 2,
+          "staff.b@dev.local": 1
+        },
+        "assignment_events": {
+          "staff.a@dev.local": 2,
+          "staff.b@dev.local": 1
+        },
+        "distinct_leads": 3,
+        "active_work_items": 3,
+        "active_claims": 3,
+        "stale_docshares": 0,
+        "stale_open_todos": 0,
+        "ownership_reconciled": true,
+        "as_of": "2026-11-10 20:36:38.783631"
       },
       "a_to_b_to_a_and_revoke_http": [
         200,
@@ -34,25 +64,29 @@
       "zero_pii_frames_on_old_open_ws": true
     },
     "s08_user_disable": {
-      "inert_row_before_explicit_clear": {
-        "db_sessions": 1,
-        "redis_cached": true
-      },
-      "after_clear_sessions_force": {
+      "automatic_purge_on_user_disable": {
         "db_sessions": 0,
         "redis_cached": false
       },
-      "disabled_page_http": 417,
-      "disabled_api_http": 417,
-      "disabled_mutation_http": 417,
+      "disabled_page_http": 403,
+      "disabled_api_http": 403,
+      "disabled_mutation_http": 403,
       "socketio_reconnect_rejected_44": true,
-      "excluded_from_campaign_eligibility": true
+      "excluded_from_campaign_eligibility": true,
+      "disabled_direct_assign_http": 400,
+      "disabled_post_preview_execute_http": 409
     },
     "s09_and_s04_role_and_team_change": {
       "s04_historical_team_as_of_leader1_http": 200,
       "s04_historical_team_as_of_leader2_http": 403,
       "s04_historical_team_as_of_leader2_p3_http": 403,
       "pre_downgrade_export_http": 200,
+      "pre_downgrade_subordinate_lead_http": 200,
+      "post_downgrade_without_manual_clear_cache": true,
+      "post_downgrade_subordinate_lead_http": 403,
+      "post_downgrade_subordinate_getdoc_http": 403,
+      "post_downgrade_subordinate_work_item_http": 403,
+      "post_downgrade_subordinate_list_excluded": true,
       "post_downgrade_team_page_http": 403,
       "post_downgrade_team_api_http": 403,
       "post_downgrade_export_rpc_http": 403,

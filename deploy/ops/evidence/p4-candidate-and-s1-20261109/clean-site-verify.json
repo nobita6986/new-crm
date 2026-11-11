@@ -2,10 +2,10 @@
   "schema_version": "cskh-p4-01-clean-site-verify-v1",
   "work_package": "P4-01",
   "gate_alignment": "G02",
-  "started_at_utc": "2026-11-09T13:36:41.367537+00:00",
-  "completed_at_utc": "2026-11-09T13:38:05.082416+00:00",
-  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
-  "image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+  "started_at_utc": "2026-11-10T13:32:11.163330+00:00",
+  "completed_at_utc": "2026-11-10T13:33:36.897087+00:00",
+  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
+  "image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
   "identifier_taxonomy": {
     "app_image_tested_class": "oci_distribution_manifest_sha256",
     "image_id_class": "docker_pulled_image_id_sha256",
@@ -31,12 +31,12 @@
     "crm_tracked_modified_files": [
       "frontend/auto-imports.d.ts"
     ],
-    "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
-    "apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910"
+    "crm_cskh_tree_sha": "fbfafa93c7334684edfba633754964f9c3cc9868",
+    "apps_tree_sha": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578"
   },
   "frontend_bundles_verified": {
     "frappe_desk_js": "/assets/frappe/dist/js/desk.bundle.IGJ3OTJL.js",
-    "frappe_desk_css": "/assets/frappe/dist/css/desk.bundle.GA6YVSTK.css",
+    "frappe_desk_css": "/assets/frappe/dist/css/desk.bundle.LXD6GSUO.css",
     "frappe_web_js": "/assets/frappe/dist/js/frappe-web.bundle.5YW6GKD2.js",
     "crm_spa_js": "/assets/crm/frontend/assets/index-Doe89KeD.js",
     "crm_spa_css": "/assets/crm/frontend/assets/Button-ug8Vt_Qh.css",
@@ -124,14 +124,14 @@
     {
       "id": "image.label.apps_tree_sha",
       "verdict": "PASS",
-      "expected": "14b5387296dad815a6b9f663411f265fa7d9f910",
-      "actual": "14b5387296dad815a6b9f663411f265fa7d9f910"
+      "expected": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578",
+      "actual": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578"
     },
     {
       "id": "image.label.crm_cskh_tree_sha",
       "verdict": "PASS",
-      "expected": "f51095ec245e103ed3a487654b5580636424ea36",
-      "actual": "f51095ec245e103ed3a487654b5580636424ea36"
+      "expected": "fbfafa93c7334684edfba633754964f9c3cc9868",
+      "actual": "fbfafa93c7334684edfba633754964f9c3cc9868"
     },
     {
       "id": "topology.no_host_bind_mounts",
@@ -230,8 +230,8 @@
     {
       "id": "runtime.cskh_tree_sha",
       "verdict": "PASS",
-      "expected": "f51095ec245e103ed3a487654b5580636424ea36",
-      "actual": "f51095ec245e103ed3a487654b5580636424ea36"
+      "expected": "fbfafa93c7334684edfba633754964f9c3cc9868",
+      "actual": "fbfafa93c7334684edfba633754964f9c3cc9868"
     },
     {
       "id": "runtime.security_patch.pyjwt_version",
@@ -469,7 +469,7 @@
       "id": "http.socketio.polling_handshake",
       "verdict": "PASS",
       "expected": "HTTP 200 with Engine.IO \"sid\"",
-      "actual": "HTTP 200: 0{\"sid\":\"c5VvHuXIgaqEgqkwAAAA\",\"upgrades\":[\"websocket\"],\"pingInterval\":25000,\"pingTimeout\":20000,\"ma"
+      "actual": "HTTP 200: 0{\"sid\":\"ymqrx7LddzJoA4FDAAAA\",\"upgrades\":[\"websocket\"],\"pingInterval\":25000,\"pingTimeout\":20000,\"ma"
     },
     {
       "id": "http.socketio.websocket_upgrade_101",

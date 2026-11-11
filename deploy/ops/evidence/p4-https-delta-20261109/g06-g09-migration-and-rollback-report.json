@@ -1,7 +1,7 @@
 {
   "schema_version": "cskh-p4-batch2-g06-g09-v1",
   "status": "PASS",
-  "generated_at_utc": "2026-11-10T04:20:19.339114+00:00",
+  "generated_at_utc": "2026-11-10T13:43:15.419190+00:00",
   "gates_verified": [
     "G06",
     "G09"
@@ -21,8 +21,8 @@
     "frappe_version": "15.123.1"
   },
   "candidate_n_provenance": {
-    "git_commit_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
-    "image_ref": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+    "git_commit_sha": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
+    "image_ref": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
     "frappe_version": "15.126.0"
   },
   "g06_clone_migration_and_idempotency": {
@@ -35,8 +35,8 @@
       },
       "export_job_table_exists": true
     },
-    "migrator_run_1_duration_sec": 10.252,
-    "migrator_run_2_duration_sec": 10.21,
+    "migrator_run_1_duration_sec": 12.437,
+    "migrator_run_2_duration_sec": 12.313,
     "migrator_run_1_exit_code": 0,
     "migrator_run_2_exit_code": 0,
     "failed_migration_guard_d03_exit_code": 1,
@@ -84,7 +84,7 @@
       "version": 2
     },
     "distribution_reconcile": {
-      "campaign": "30pjgsn9ol",
+      "campaign": "co4jas5e9r",
       "current_owners": {
         "staff.a@dev.local": 2,
         "staff.c@dev.local": 1
@@ -97,13 +97,16 @@
       "distinct_leads": 4,
       "active_work_items": 3,
       "active_claims": 3,
-      "as_of": "2026-11-10 11:18:15.887733",
+      "stale_docshares": 0,
+      "stale_open_todos": 0,
+      "ownership_reconciled": true,
+      "as_of": "2026-11-10 20:41:06.338527",
       "reconciled": true
     },
     "kpi_monthly_reconcile": {
       "ok": true,
       "status": "reconciled",
-      "run_id": "3249tcu961",
+      "run_id": "cq3uic0qdv",
       "period": {
         "period_type": "monthly",
         "period_key": "2026-11",
@@ -138,7 +141,7 @@
     },
     "tier4_dr_full_restore_and_delta_accounting": {
       "backup_files_bytes": {
-        "db_gz": 321888,
+        "db_gz": 320808,
         "priv_tar": 10240,
         "pub_tar": 10240,
         "site_config": 94
@@ -148,8 +151,8 @@
       "audited_post_backup_delta_window": {
         "post_backup_attempts_count": 2,
         "attempt_ids": [
-          "3j3mhvn6is",
-          "3k0j4k410m"
+          "dckqb1kt7s",
+          "ddp6lp6ovd"
         ]
       }
     }

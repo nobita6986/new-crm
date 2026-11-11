@@ -248,6 +248,11 @@ class TestBatch2DeltaContracts(unittest.TestCase):
             self.assertNotIn(
                 "reschedule_count", src, f"Non-existent reschedule_count in {sname}"
             )
+            self.assertNotIn(
+                "connected_callback",
+                src,
+                f"Non-existent outcome connected_callback in {sname}",
+            )
             for m in re.finditer(
                 r"SELECT\s+([a-zA-Z0-9_,\s]+)\s+FROM\s+`tab(CSKH [^`]+)`", src
             ):
@@ -263,6 +268,129 @@ class TestBatch2DeltaContracts(unittest.TestCase):
                         schema[dt_name],
                         f"{sname}: column {col!r} missing from {dt_name}",
                     )
+        bench_src = (RELEASE_DIR / "benchmark_p4_isolated.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("publish_revision", bench_src)
+        self.assertNotIn("connected_callback", bench_src)
+        self.assertNotIn("S1AbortProbe", bench_src)
+        self.assertNotIn("identity_service.register(", bench_src)
+        self.assertIn("identity_service.claim_canonical_identity(", bench_src)
+        self.assertIn('r_info.get("created")', bench_src)
+
+        import ast
+        from benchmark_p4_isolated import S1_IN_CONTAINER_BENCH_SCRIPT
+
+        tree = ast.parse(S1_IN_CONTAINER_BENCH_SCRIPT, filename="<s1_in_container>")
+        module_files = {
+            "identity_service": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "identity.py",
+            "distribution": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "distribution.py",
+            "import_service": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "import_service.py",
+            "contact_attempt": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "contact_attempt.py",
+            "read_model": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "services"
+            / "read_model.py",
+            "p3_reporting": REPO_ROOT
+            / "apps"
+            / "crm_cskh"
+            / "crm_cskh"
+            / "api"
+            / "p3_reporting.py",
+        }
+        defined_funcs: dict[str, set[str]] = {}
+        for alias, mf in module_files.items():
+            mtree = ast.parse(mf.read_text(encoding="utf-8"), filename=str(mf))
+            defined_funcs[alias] = {
+                n.name
+                for n in mtree.body
+                if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))
+            }
+        for node in ast.walk(tree):
+            if (
+                isinstance(node, ast.Attribute)
+                and isinstance(node.value, ast.Name)
+                and node.value.id in defined_funcs
+            ):
+                self.assertIn(
+                    node.attr,
+                    defined_funcs[node.value.id],
+                    f"S1_IN_CONTAINER_BENCH_SCRIPT references missing {node.value.id}.{node.attr}",
+                )
+
+        perm_src = (
+            REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "permissions.py"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn(
+            "org_hierarchy._permission_query_conditions =",
+            perm_src,
+        )
+        self.assertIn(
+            "org_hierarchy.get_lead_permission_query_conditions =",
+            perm_src,
+        )
+        self.assertIn(
+            "org_hierarchy.get_deal_permission_query_conditions =",
+            perm_src,
+        )
+
+    def test_lock_diff_parsers_and_reachability_probe_compile(self) -> None:
+        from collect_cve_and_lock_diff_evidence import (
+            DEFAULT_BASELINE_SHA,
+            IN_CONTAINER_REACHABILITY_PROBE,
+            _diff_kv_map,
+            _parse_dpkg_list,
+            _parse_pip_freeze,
+            build_lock_diff_report,
+        )
+
+        compile(IN_CONTAINER_REACHABILITY_PROBE, "<reachability_probe>", "exec")
+        p_before = _parse_pip_freeze("PyJWT==2.13.0\npillow==12.3.0\nPyMySQL==1.1.1\n")
+        p_after = _parse_pip_freeze("PyJWT==2.15.1\npillow==13.0.0\nPyMySQL==1.1.1\n")
+        diff = _diff_kv_map(p_before, p_after)
+        self.assertEqual(diff["changed_count"], 2)
+        self.assertEqual(diff["added_count"], 0)
+        dpkg = _parse_dpkg_list(
+            "ii  libmariadb3:amd64  1:11.8.6-0+deb13u1  amd64\nlibxml2\t2.12.7+dfsg\n"
+        )
+        self.assertIn("libmariadb3:amd64", dpkg)
+        self.assertIn("libxml2", dpkg)
+
+        live_diff = build_lock_diff_report(
+            repo_root=REPO_ROOT,
+            baseline_sha=DEFAULT_BASELINE_SHA,
+            candidate_build_dir=REPO_ROOT / "deploy" / "images" / "evidence",
+        )
+        self.assertEqual(
+            live_diff["component_version_transitions"]["frappe"]["before"]["tag"],  # type: ignore[index]
+            "v15.123.1",
+        )
+        self.assertEqual(
+            live_diff["component_version_transitions"]["frappe"]["after"]["tag"],  # type: ignore[index]
+            "v15.126.0",
+        )
 
 
 if __name__ == "__main__":

@@ -883,7 +883,9 @@ print(json.dumps({"restored_site": site}))
                 "frappe_version": snap_before["frappe_version"],
             },
             "candidate_n_provenance": {
-                "git_commit_sha": LOCKED_BATCH1_COMMIT_SHA,
+                "git_commit_sha": subprocess.check_output(
+                    ["git", "rev-parse", "HEAD"], text=True
+                ).strip(),
                 "image_ref": candidate_image,
                 "frappe_version": snap_after_mig2["frappe_version"],
             },

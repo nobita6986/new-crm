@@ -986,7 +986,7 @@ class TestDiffImpactAndIsolatedBenchmark(unittest.TestCase):
         self.assertEqual(
             full_plan["selected_suites"], ["g007", "p1", "p2", "p3", "p3_ui"]
         )
-        self.assertEqual(full_plan["total_modules_to_run"], 30)
+        self.assertEqual(full_plan["total_modules_to_run"], 31)
 
         # Scoped P3 KPI edit runs g007 + p3 + p3_ui without unneeded P1/P2 modules
         p3_plan = resolve_diff_impact_plan(

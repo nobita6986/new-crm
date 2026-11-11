@@ -2,9 +2,9 @@
 
 - **Mã tài liệu:** `P4-API-CONTRACT` (`docs/p4/api-contract.md` — `P4.md §6`, `§11`, `§20.2`)
 - **Phiên bản bàn giao khóa cứng (`Release & Integration Lock`):**
-  - **Cây mã nguồn ứng dụng (`apps_tree_sha`):** `14b5387296dad815a6b9f663411f265fa7d9f910` · `apps/crm_cskh` tree SHA `f51095ec245e103ed3a487654b5580636424ea36` (`crm_cskh 0.0.1`)
+  - **Cây mã nguồn ứng dụng (`apps_tree_sha`):** `e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578` · `apps/crm_cskh` tree SHA `fbfafa93c7334684edfba633754964f9c3cc9868` (`crm_cskh 0.0.1`, candidate SHA `ce6f45549d562327bb6992fc5b29e4a5b1efcbd5`)
   - **Nền tảng khóa cứng ([`release-lock.json`](../../deploy/images/release-lock.json)):** `Frappe Framework v15.126.0` (`53bae3ef2550ca96320f036f581446783cd11b72`, nâng từ `N-1 v15.123.1` @ `d2efa79657ba5c1abf96098b3bfacc199517d57e`), `Frappe CRM v1.87.0` (`0d3910b456ef4fb913e77b29db011b3debc4f778`, `frappe-ui 1.0.0-beta.29`, `vite 8.2.0`)
-  - **Registry Digest bất biến:** `ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d` (OCI Image ID `sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829`)
+  - **Registry Digest bất biến:** `ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9` (OCI Image ID `sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee`)
   - **Hợp đồng công thức & Schema đỉnh:** `cskh-metrics-v2` · `crm_cskh.patches.v3_0.p3_schema_and_seeds` (`Class B` additive schema, idempotent qua `migrate ×2`)
 - **Phạm vi:** Toàn bộ **`113` endpoint `@frappe.whitelist`** trong `apps/crm_cskh`, các bề mặt gốc Frappe được gắn rào chắn (`REST /api/resource/*`, `/private/files/*`, `override_whitelisted_methods`), chuẩn phản hồi lỗi khử PII, hợp đồng báo cáo `cskh-metrics-v2` và chính sách tương thích migration `Class A/B/C/D` + `BLG-P4-MIG-01`.
 - **Nguyên tắc nền tảng (`P4.md §0.2`, `§11`):**

@@ -28,7 +28,7 @@ from dataclasses import dataclass
 from datetime import timedelta
 
 import frappe
-from frappe.utils import cint, get_datetime
+from frappe.utils import cint, get_datetime, now_datetime
 
 from crm_cskh.api._params import parse_bool, parse_optional_str, parse_pagination
 from crm_cskh.p1_models import OWNED_ACTIVE_WORK_ITEM_STATES
@@ -385,7 +385,7 @@ def _snapshot_has_activity(snap: dict) -> bool:
 def _load_latest_published_run_row(period: PeriodSpec, campaign_filter: str = "") -> dict | None:
 	rows = frappe.db.sql(
 		"""
-		select name, run_mode, as_of, source_watermark, is_restated, restated_from_run, metric_version
+		select name, run_mode, as_of, source_watermark, is_restated, restated_from_run, metric_version, creation
 		from `tabCSKH KPI Run`
 		where period_type = %s
 		  and period_key = %s
@@ -521,12 +521,8 @@ def _fetch_snapshots(
 	if team_filters is not None and len(team_filters) == 0:
 		return []
 	camp_val = campaign_filter or ""
-	if camp_val:
-		camp_sql = "and campaign_filter = %s"
-		params: list = [1, period.period_type, period.period_key, camp_val, scope_type]
-	else:
-		camp_sql = "and (campaign_filter = '' or campaign_filter is null)"
-		params = [1, period.period_type, period.period_key, scope_type]
+	camp_sql = "and campaign_filter = %s"
+	params: list = [1, period.period_type, period.period_key, camp_val, scope_type]
 	extra_sql = ""
 	if scope_ids is not None:
 		ph = ", ".join(["%s"] * len(scope_ids))
@@ -537,6 +533,11 @@ def _fetch_snapshots(
 		extra_sql += f" and team_filter in ({ph_t})"
 		params.extend(team_filters)
 
+	index_hint = (
+		"USE INDEX (idx_cskh_kpisnap_lookup)"
+		if team_filters is None
+		else "USE INDEX (idx_cskh_kpisnap_emp_team)"
+	)
 	rows = frappe.db.sql(
 		f"""
 		select name, kpi_run, scope_type, scope_id, scope_label, team_filter,
@@ -545,7 +546,7 @@ def _fetch_snapshots(
 		       distinct_work_items, ownership_intervals_count, work_items_touched,
 		       contact_attempt_count, connected_attempt_count,
 		       metrics_json, exclusion_counts_json, trend_series_json
-		from `tabCSKH KPI Snapshot`
+		from `tabCSKH KPI Snapshot` {index_hint}
 		where is_latest_published = %s
 		  and period_type = %s
 		  and period_key = %s
@@ -1822,6 +1823,9 @@ def _project_drilldown_pii(
 ) -> dict:
 	"""Apply strict `S03` / `S08` / `S09` / `S15` / `F-P3-04` privacy redaction onto a drill-down event row."""
 	out = dict(raw_row)
+	for dt_key in ("started_at", "original_due_at", "effective_due_at", "fulfilled_at", "occurred_at"):
+		if dt_key in out:
+			out[dt_key] = format_calendar_iso(out[dt_key]) if out[dt_key] else None
 	lead_id = out.pop("_lead_id", None)
 	raw_note = out.pop("_note_excerpt", None)
 	tid = out.get("team_id")
@@ -1910,6 +1914,166 @@ def _sort_drilldown_rows(rows: list[dict], sort_by: str | None, sort_dir: str | 
 	else:
 		with_val.sort(key=lambda x: x[0])
 	return [x[2] for x in with_val] + nulls
+
+
+def _try_fast_connected_rate_drilldown_page(
+	*,
+	period: PeriodSpec,
+	as_of_dt,
+	stype: str,
+	sid: str,
+	camp_filter: str,
+	bucket: str,
+	offset: int,
+	limit: int,
+	snap_cell: dict,
+) -> tuple[list[dict], int] | None:
+	"""Paginated index-ordered fast path for large `CONNECTED_RATE` cohorts (`G18` — `0` full-period load)."""
+	if bucket not in ("all_denominator", "numerator_only", "breached_only"):
+		return None
+	if offset + limit > 500:
+		return None
+	den = int(snap_cell.get("denominator") or 0)
+	num = int(snap_cell.get("numerator") or 0)
+	if den < 500:
+		return None
+
+	eff_as_of = get_datetime(as_of_dt or now_datetime())
+	start_dt = period.start_dt
+	end_dt_excl = period.end_dt_exclusive
+
+	if frappe.db.table_exists("CSKH Attempt Correction"):
+		corr_cnt = int(
+			frappe.db.sql(
+				"select count(*) from `tabCSKH Attempt Correction` where requested_at <= %s",
+				(eff_as_of,),
+			)[0][0]
+			or 0
+		)
+		if corr_cnt > 0:
+			return None
+
+	if bucket == "all_denominator":
+		total = den
+	elif bucket == "numerator_only":
+		total = num
+	else:
+		total = max(0, den - num)
+
+	if total == 0 or offset >= total:
+		return [], total
+
+	eff_camp = sid if stype == "campaign" else (camp_filter or "")
+	wi_camp_clause = " and wi.campaign = %s" if eff_camp else ""
+	camp_params = (eff_camp,) if eff_camp else ()
+
+	has_team_col = frappe.db.has_column("CSKH Assignment History", "team_at_assignment")
+	if not has_team_col:
+		return None
+
+	invalid_phone_codes: set[str] = {"wrong_number"}
+	if frappe.db.table_exists("CSKH Outcome Code") and frappe.db.has_column(
+		"CSKH Outcome Code", "is_invalid_phone"
+	):
+		for oc in frappe.db.get_all(
+			"CSKH Outcome Code", filters={"is_invalid_phone": 1}, fields=["name", "code"]
+		):
+			invalid_phone_codes.add(str(oc.code or oc.name).lower())
+	inv_codes_sorted = sorted(invalid_phone_codes)
+	inv_ph = ", ".join(["%s"] * len(inv_codes_sorted)) if inv_codes_sorted else "''"
+	has_inv_col = frappe.db.has_column("CSKH Contact Attempt", "invalid_phone_snapshot")
+	inv_expr = (
+		f"(coalesce(ca.invalid_phone_snapshot, 0) = 1 or lower(coalesce(ca.outcome_code, '')) in ({inv_ph}))"
+		if has_inv_col
+		else f"(lower(coalesce(ca.outcome_code, '')) in ({inv_ph}))"
+	)
+
+	target_needed = min(offset + limit, total)
+	chunk_size = max(120, (offset + limit) * 3)
+	ah_offset = 0
+	matched: list[dict] = []
+
+	for _ in range(8):
+		chunk = frappe.db.sql(
+			f"""
+			select ah.name, ah.work_item, ah.to_user, ah.event_at,
+			       ah.ownership_start, ah.ownership_end,
+			       ah.team_at_assignment, ah.attribution_status,
+			       wi.campaign, wi.lead
+			from `tabCSKH Assignment History` ah USE INDEX (idx_cskh_ah_start_name)
+			inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
+			where ah.ownership_start >= %s
+			  and ah.ownership_start < %s
+			  and ah.ownership_start <= %s
+			  and ah.action in ('assign', 'reassign', 'reopen'){wi_camp_clause}
+			order by ah.ownership_start asc, ah.name asc
+			limit %s offset %s
+			""",
+			(start_dt, end_dt_excl, eff_as_of, *camp_params, chunk_size, ah_offset),
+			as_dict=True,
+		)
+		if not chunk:
+			break
+		if any(not r.get("attribution_status") for r in chunk):
+			return None
+
+		iv_names = [r.name for r in chunk]
+		ph_ivs = ", ".join(["%s"] * len(iv_names))
+		agg_rows = frappe.db.sql(
+			f"""
+			select ca.ownership_event,
+			       max(case when ca.occurred_at < %s and ca.occurred_at <= %s then 1 else 0 end),
+			       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and coalesce(ca.connected_snapshot, 0) = 1 then 1 else 0 end),
+			       max(case when ca.occurred_at < %s and ca.occurred_at <= %s and {inv_expr} then 1 else 0 end)
+			from `tabCSKH Contact Attempt` ca USE INDEX (idx_cskh_attempt_ownevt_occ)
+			where ca.ownership_event in ({ph_ivs})
+			  and coalesce(ca.contact_attempt_snapshot, 1) = 1
+			  and ca.recorded_at <= %s
+			group by ca.ownership_event
+			""",
+			(
+				end_dt_excl,
+				eff_as_of,
+				end_dt_excl,
+				eff_as_of,
+				end_dt_excl,
+				eff_as_of,
+				*inv_codes_sorted,
+				*iv_names,
+				eff_as_of,
+			),
+			as_dict=False,
+		)
+		att_map = {str(oe): (bool(h_att), bool(h_conn), bool(h_inv)) for oe, h_att, h_conn, h_inv in agg_rows}
+		for iv in chunk:
+			h_att, h_conn, h_inv = att_map.get(iv.name, (False, False, False))
+			is_tried = h_att and not h_inv
+			if not is_tried:
+				continue
+			is_conn = is_tried and h_conn
+			if bucket == "numerator_only" and not is_conn:
+				continue
+			if bucket == "breached_only" and is_conn:
+				continue
+			iv["resolved_team"] = iv.team_at_assignment
+			matched.append(
+				_iv_event_dict(
+					iv,
+					in_numerator=is_conn,
+					status_label="connected" if is_conn else "not_connected",
+				)
+			)
+			if len(matched) >= target_needed:
+				break
+
+		if len(matched) >= target_needed or len(chunk) < chunk_size:
+			break
+		ah_offset += chunk_size
+	else:
+		if len(matched) < target_needed:
+			return None
+
+	return matched[offset : offset + limit], total
 
 
 def get_metric_drilldown(
@@ -2017,211 +2181,10 @@ def get_metric_drilldown(
 	eff_camp_filter = "" if stype == "campaign" else camp_filter
 	run_row = _ensure_or_load_published_run(period, campaign_filter=eff_camp_filter)
 	as_of_dt = get_datetime(run_row.as_of) if (run_row and run_row.as_of) else None
-
-	ds = load_period_raw_dataset(
-		period,
-		as_of=as_of_dt,
-		campaign_filter=(sid if stype == "campaign" else (camp_filter or "")),
-		lead_source_filter=src_filter,
-	)
-
-	attempts = ds["attempts"]
-	obligations = ds["obligations"]
-	intervals = ds["intervals"]
-	qa_reviews = ds["qa_reviews"]
-
-	# Apply `(stype, sid)` AND `team_leader` historical `team-as-of` bounds (`F-P3-04`!)
+	freshness = _build_freshness(period, run_row, campaign_filter=eff_camp_filter)
 	leader_allowed_nodes = set(act.allowed_nodes or ()) if act.role_profile == "team_leader" else None
 
-	if stype == "team":
-		if sid == UNATTRIBUTED_TEAM_ID:
-			attempts = [
-				a for a in attempts if not (a["resolved_team"] and a["resolved_attribution"] == AUTHORITATIVE)
-			]
-			obligations = [
-				ob
-				for ob in obligations
-				if not (ob["resolved_team"] and ob["resolved_attribution"] == AUTHORITATIVE)
-			]
-			intervals = [
-				iv
-				for iv in intervals
-				if not (iv["resolved_team"] and iv["resolved_attribution"] == AUTHORITATIVE)
-			]
-			qa_reviews = [qr for qr in qa_reviews if not qr.get("team_at_review")]
-		else:
-			sub_t = set(_subtree_nodes(sid) or {sid})
-			if leader_allowed_nodes is not None:
-				sub_t &= leader_allowed_nodes
-			attempts = [
-				a
-				for a in attempts
-				if a["resolved_team"] in sub_t and a["resolved_attribution"] == AUTHORITATIVE
-			]
-			obligations = [
-				ob
-				for ob in obligations
-				if ob["resolved_team"] in sub_t and ob["resolved_attribution"] == AUTHORITATIVE
-			]
-			intervals = [
-				iv
-				for iv in intervals
-				if iv["resolved_team"] in sub_t and iv["resolved_attribution"] == AUTHORITATIVE
-			]
-			qa_reviews = [qr for qr in qa_reviews if (qr.get("team_at_review") or "") in sub_t]
-	elif stype == "employee":
-		attempts = [a for a in attempts if a.get("actor_user") == sid]
-		obligations = [ob for ob in obligations if ob.get("owner_user") == sid]
-		intervals = [iv for iv in intervals if iv.get("to_user") == sid]
-		qa_reviews = [qr for qr in qa_reviews if qr.get("reviewed_staff") == sid]
-		if leader_allowed_nodes is not None:
-			attempts = [
-				a
-				for a in attempts
-				if a.get("resolved_attribution") == AUTHORITATIVE
-				and a.get("resolved_team") in leader_allowed_nodes
-			]
-			obligations = [
-				ob
-				for ob in obligations
-				if ob.get("resolved_attribution") == AUTHORITATIVE
-				and ob.get("resolved_team") in leader_allowed_nodes
-			]
-			intervals = [
-				iv
-				for iv in intervals
-				if iv.get("resolved_attribution") == AUTHORITATIVE
-				and iv.get("resolved_team") in leader_allowed_nodes
-			]
-			qa_reviews = [qr for qr in qa_reviews if (qr.get("team_at_review") or "") in leader_allowed_nodes]
-			in_live_subtree = bool(act.allowed_users and sid in act.allowed_users)
-			if not (in_live_subtree or attempts or obligations or intervals or qa_reviews):
-				raise ForbiddenScope("Nhân viên drill-down nằm ngoài phạm vi quản lý và lịch sử của bạn.")
-	elif stype == "campaign":
-		attempts = [a for a in attempts if a.get("campaign") == sid]
-		obligations = [ob for ob in obligations if ob.get("campaign") == sid]
-		intervals = [iv for iv in intervals if iv.get("campaign") == sid]
-		qa_reviews = [qr for qr in qa_reviews if qr.get("campaign") == sid]
-		if leader_allowed_nodes is not None:
-			attempts = [
-				a
-				for a in attempts
-				if a.get("resolved_attribution") == AUTHORITATIVE
-				and a.get("resolved_team") in leader_allowed_nodes
-			]
-			obligations = [
-				ob
-				for ob in obligations
-				if ob.get("resolved_attribution") == AUTHORITATIVE
-				and ob.get("resolved_team") in leader_allowed_nodes
-			]
-			intervals = [
-				iv
-				for iv in intervals
-				if iv.get("resolved_attribution") == AUTHORITATIVE
-				and iv.get("resolved_team") in leader_allowed_nodes
-			]
-			qa_reviews = [qr for qr in qa_reviews if (qr.get("team_at_review") or "") in leader_allowed_nodes]
-
-	# Optional additional `team` / `employee` filters (`F-P3-10`)
-	if team_filter_arg and stype != "team":
-		tf_nodes = set(_subtree_nodes(team_filter_arg) or {team_filter_arg})
-		if leader_allowed_nodes is not None:
-			tf_nodes &= leader_allowed_nodes
-		attempts = [
-			a
-			for a in attempts
-			if a.get("resolved_attribution") == AUTHORITATIVE and a.get("resolved_team") in tf_nodes
-		]
-		obligations = [
-			ob
-			for ob in obligations
-			if ob.get("resolved_attribution") == AUTHORITATIVE and ob.get("resolved_team") in tf_nodes
-		]
-		intervals = [
-			iv
-			for iv in intervals
-			if iv.get("resolved_attribution") == AUTHORITATIVE and iv.get("resolved_team") in tf_nodes
-		]
-		qa_reviews = [qr for qr in qa_reviews if (qr.get("team_at_review") or "") in tf_nodes]
-
-	if emp_filter_arg and stype != "employee":
-		if leader_allowed_nodes is not None:
-			in_live = bool(act.allowed_users and emp_filter_arg in act.allowed_users)
-			has_emp_hist = (
-				any(a.get("actor_user") == emp_filter_arg for a in attempts)
-				or any(ob.get("owner_user") == emp_filter_arg for ob in obligations)
-				or any(iv.get("to_user") == emp_filter_arg for iv in intervals)
-			)
-			if not (in_live or has_emp_hist):
-				raise ForbiddenScope("Nhân viên lọc trên drill-down nằm ngoài phạm vi quản lý của bạn.")
-		attempts = [a for a in attempts if a.get("actor_user") == emp_filter_arg]
-		obligations = [ob for ob in obligations if ob.get("owner_user") == emp_filter_arg]
-		intervals = [iv for iv in intervals if iv.get("to_user") == emp_filter_arg]
-		qa_reviews = [qr for qr in qa_reviews if qr.get("reviewed_staff") == emp_filter_arg]
-
-	events = _extract_drilldown_events(
-		mcode=mcode,
-		bucket=bucket,
-		attempts=attempts,
-		obligations=obligations,
-		intervals=intervals,
-		qa_reviews=qa_reviews,
-		dnc_since_by_lead=ds["dnc_since_by_lead"],
-		cutoff_dt=ds["cutoff_dt"],
-		policy_cfg=ds["policy_cfg"],
-	)
-
-	emit_pii = (
-		act.role_profile != "bod" and act.pii_allowed and (wants_pii if include_pii is not None else True)
-	)
-	team_map = _resolve_team_label_map()
-	camp_map = _resolve_campaign_title_map()
-
-	if search_q or sort_key_clean:
-		# Project PII BEFORE search/sort so redacted rows NEVER leak via search filter-oracles!
-		all_lead_ids = [r.get("_lead_id") for r in events if r.get("_lead_id")] if emit_pii else []
-		lead_display_map = _load_lead_display_map(all_lead_ids, act) if emit_pii else {}
-		wi_readable_cache: dict[str, bool] = {}
-		projected_all = [
-			_project_drilldown_pii(
-				r,
-				act,
-				lead_display_map,
-				wi_readable_cache,
-				emit_pii=emit_pii,
-				team_map=team_map,
-				camp_map=camp_map,
-			)
-			for r in events
-		]
-		if search_q:
-			ql = search_q.lower()
-			projected_all = [r for r in projected_all if _drilldown_row_matches_search(r, ql)]
-		if sort_key_clean:
-			projected_all = _sort_drilldown_rows(projected_all, sort_key_clean, sort_dir_clean)
-		total = len(projected_all)
-		projected_rows = projected_all[offset : offset + limit]
-	else:
-		total = len(events)
-		sliced = events[offset : offset + limit]
-		page_lead_ids = [r.get("_lead_id") for r in sliced if r.get("_lead_id")] if emit_pii else []
-		lead_display_map = _load_lead_display_map(page_lead_ids, act) if emit_pii else {}
-		wi_readable_cache = {}
-		projected_rows = [
-			_project_drilldown_pii(
-				r,
-				act,
-				lead_display_map,
-				wi_readable_cache,
-				emit_pii=emit_pii,
-				team_map=team_map,
-				camp_map=camp_map,
-			)
-			for r in sliced
-		]
-
-	# Fetch matching snapshot cell for reconciliation metadata
+	# Fetch matching snapshot cell for reconciliation metadata (and paginated fast path)
 	snap_cell = None
 	if run_row and not src_filter and not team_filter_arg and not emp_filter_arg and not search_q:
 		if (
@@ -2244,6 +2207,259 @@ def get_metric_drilldown(
 			if snaps:
 				snap_cell = snaps[0]["metrics"].get(mcode)
 
+	fast_page_result = None
+	if (
+		mcode == "CONNECTED_RATE"
+		and not search_q
+		and not sort_key_clean
+		and not src_filter
+		and not team_filter_arg
+		and not emp_filter_arg
+		and stype in ("company", "campaign")
+		and act.role_profile in ("crm_admin", "bod")
+		and snap_cell is not None
+		and not freshness.get("dirty_pending")
+	):
+		fast_page_result = _try_fast_connected_rate_drilldown_page(
+			period=period,
+			as_of_dt=as_of_dt,
+			stype=stype,
+			sid=sid,
+			camp_filter=camp_filter,
+			bucket=bucket,
+			offset=offset,
+			limit=limit,
+			snap_cell=snap_cell,
+		)
+
+	emit_pii = (
+		act.role_profile != "bod" and act.pii_allowed and (wants_pii if include_pii is not None else True)
+	)
+	team_map = _resolve_team_label_map()
+	camp_map = _resolve_campaign_title_map()
+
+	if fast_page_result is not None:
+		sliced, total = fast_page_result
+		page_lead_ids = [r.get("_lead_id") for r in sliced if r.get("_lead_id")] if emit_pii else []
+		lead_display_map = _load_lead_display_map(page_lead_ids, act) if emit_pii else {}
+		wi_readable_cache: dict[str, bool] = {}
+		projected_rows = [
+			_project_drilldown_pii(
+				r,
+				act,
+				lead_display_map,
+				wi_readable_cache,
+				emit_pii=emit_pii,
+				team_map=team_map,
+				camp_map=camp_map,
+			)
+			for r in sliced
+		]
+	else:
+		eff_emp_pushdown = sid if stype == "employee" else (emp_filter_arg or "")
+		ds = load_period_raw_dataset(
+			period,
+			as_of=as_of_dt,
+			campaign_filter=(sid if stype == "campaign" else (camp_filter or "")),
+			lead_source_filter=src_filter,
+			employee_filter=eff_emp_pushdown,
+			drilldown_metric=mcode,
+		)
+
+		attempts = ds["attempts"]
+		obligations = ds["obligations"]
+		intervals = ds["intervals"]
+		qa_reviews = ds["qa_reviews"]
+
+		# Apply `(stype, sid)` AND `team_leader` historical `team-as-of` bounds (`F-P3-04`!)
+		if stype == "team":
+			if sid == UNATTRIBUTED_TEAM_ID:
+				attempts = [
+					a
+					for a in attempts
+					if not (a["resolved_team"] and a["resolved_attribution"] == AUTHORITATIVE)
+				]
+				obligations = [
+					ob
+					for ob in obligations
+					if not (ob["resolved_team"] and ob["resolved_attribution"] == AUTHORITATIVE)
+				]
+				intervals = [
+					iv
+					for iv in intervals
+					if not (iv["resolved_team"] and iv["resolved_attribution"] == AUTHORITATIVE)
+				]
+				qa_reviews = [qr for qr in qa_reviews if not qr.get("team_at_review")]
+			else:
+				sub_t = set(_subtree_nodes(sid) or {sid})
+				if leader_allowed_nodes is not None:
+					sub_t &= leader_allowed_nodes
+				attempts = [
+					a
+					for a in attempts
+					if a["resolved_team"] in sub_t and a["resolved_attribution"] == AUTHORITATIVE
+				]
+				obligations = [
+					ob
+					for ob in obligations
+					if ob["resolved_team"] in sub_t and ob["resolved_attribution"] == AUTHORITATIVE
+				]
+				intervals = [
+					iv
+					for iv in intervals
+					if iv["resolved_team"] in sub_t and iv["resolved_attribution"] == AUTHORITATIVE
+				]
+				qa_reviews = [qr for qr in qa_reviews if (qr.get("team_at_review") or "") in sub_t]
+		elif stype == "employee":
+			attempts = [a for a in attempts if a.get("actor_user") == sid]
+			obligations = [ob for ob in obligations if ob.get("owner_user") == sid]
+			intervals = [iv for iv in intervals if iv.get("to_user") == sid]
+			qa_reviews = [qr for qr in qa_reviews if qr.get("reviewed_staff") == sid]
+			if leader_allowed_nodes is not None:
+				attempts = [
+					a
+					for a in attempts
+					if a.get("resolved_attribution") == AUTHORITATIVE
+					and a.get("resolved_team") in leader_allowed_nodes
+				]
+				obligations = [
+					ob
+					for ob in obligations
+					if ob.get("resolved_attribution") == AUTHORITATIVE
+					and ob.get("resolved_team") in leader_allowed_nodes
+				]
+				intervals = [
+					iv
+					for iv in intervals
+					if iv.get("resolved_attribution") == AUTHORITATIVE
+					and iv.get("resolved_team") in leader_allowed_nodes
+				]
+				qa_reviews = [
+					qr for qr in qa_reviews if (qr.get("team_at_review") or "") in leader_allowed_nodes
+				]
+				in_live_subtree = bool(act.allowed_users and sid in act.allowed_users)
+				if not (in_live_subtree or attempts or obligations or intervals or qa_reviews):
+					raise ForbiddenScope("Nhân viên drill-down nằm ngoài phạm vi quản lý và lịch sử của bạn.")
+		elif stype == "campaign":
+			attempts = [a for a in attempts if a.get("campaign") == sid]
+			obligations = [ob for ob in obligations if ob.get("campaign") == sid]
+			intervals = [iv for iv in intervals if iv.get("campaign") == sid]
+			qa_reviews = [qr for qr in qa_reviews if qr.get("campaign") == sid]
+			if leader_allowed_nodes is not None:
+				attempts = [
+					a
+					for a in attempts
+					if a.get("resolved_attribution") == AUTHORITATIVE
+					and a.get("resolved_team") in leader_allowed_nodes
+				]
+				obligations = [
+					ob
+					for ob in obligations
+					if ob.get("resolved_attribution") == AUTHORITATIVE
+					and ob.get("resolved_team") in leader_allowed_nodes
+				]
+				intervals = [
+					iv
+					for iv in intervals
+					if iv.get("resolved_attribution") == AUTHORITATIVE
+					and iv.get("resolved_team") in leader_allowed_nodes
+				]
+				qa_reviews = [
+					qr for qr in qa_reviews if (qr.get("team_at_review") or "") in leader_allowed_nodes
+				]
+
+		# Optional additional `team` / `employee` filters (`F-P3-10`)
+		if team_filter_arg and stype != "team":
+			tf_nodes = set(_subtree_nodes(team_filter_arg) or {team_filter_arg})
+			if leader_allowed_nodes is not None:
+				tf_nodes &= leader_allowed_nodes
+			attempts = [
+				a
+				for a in attempts
+				if a.get("resolved_attribution") == AUTHORITATIVE and a.get("resolved_team") in tf_nodes
+			]
+			obligations = [
+				ob
+				for ob in obligations
+				if ob.get("resolved_attribution") == AUTHORITATIVE and ob.get("resolved_team") in tf_nodes
+			]
+			intervals = [
+				iv
+				for iv in intervals
+				if iv.get("resolved_attribution") == AUTHORITATIVE and iv.get("resolved_team") in tf_nodes
+			]
+			qa_reviews = [qr for qr in qa_reviews if (qr.get("team_at_review") or "") in tf_nodes]
+
+		if emp_filter_arg and stype != "employee":
+			if leader_allowed_nodes is not None:
+				in_live = bool(act.allowed_users and emp_filter_arg in act.allowed_users)
+				has_emp_hist = (
+					any(a.get("actor_user") == emp_filter_arg for a in attempts)
+					or any(ob.get("owner_user") == emp_filter_arg for ob in obligations)
+					or any(iv.get("to_user") == emp_filter_arg for iv in intervals)
+				)
+				if not (in_live or has_emp_hist):
+					raise ForbiddenScope("Nhân viên lọc trên drill-down nằm ngoài phạm vi quản lý của bạn.")
+			attempts = [a for a in attempts if a.get("actor_user") == emp_filter_arg]
+			obligations = [ob for ob in obligations if ob.get("owner_user") == emp_filter_arg]
+			intervals = [iv for iv in intervals if iv.get("to_user") == emp_filter_arg]
+			qa_reviews = [qr for qr in qa_reviews if qr.get("reviewed_staff") == emp_filter_arg]
+
+		events = _extract_drilldown_events(
+			mcode=mcode,
+			bucket=bucket,
+			attempts=attempts,
+			obligations=obligations,
+			intervals=intervals,
+			qa_reviews=qa_reviews,
+			dnc_since_by_lead=ds["dnc_since_by_lead"],
+			cutoff_dt=ds["cutoff_dt"],
+			policy_cfg=ds["policy_cfg"],
+		)
+
+		if search_q or sort_key_clean:
+			# Project PII BEFORE search/sort so redacted rows NEVER leak via search filter-oracles!
+			all_lead_ids = [r.get("_lead_id") for r in events if r.get("_lead_id")] if emit_pii else []
+			lead_display_map = _load_lead_display_map(all_lead_ids, act) if emit_pii else {}
+			wi_readable_cache = {}
+			projected_all = [
+				_project_drilldown_pii(
+					r,
+					act,
+					lead_display_map,
+					wi_readable_cache,
+					emit_pii=emit_pii,
+					team_map=team_map,
+					camp_map=camp_map,
+				)
+				for r in events
+			]
+			if search_q:
+				ql = search_q.lower()
+				projected_all = [r for r in projected_all if _drilldown_row_matches_search(r, ql)]
+			if sort_key_clean:
+				projected_all = _sort_drilldown_rows(projected_all, sort_key_clean, sort_dir_clean)
+			total = len(projected_all)
+			projected_rows = projected_all[offset : offset + limit]
+		else:
+			total = len(events)
+			sliced = events[offset : offset + limit]
+			page_lead_ids = [r.get("_lead_id") for r in sliced if r.get("_lead_id")] if emit_pii else []
+			lead_display_map = _load_lead_display_map(page_lead_ids, act) if emit_pii else {}
+			wi_readable_cache = {}
+			projected_rows = [
+				_project_drilldown_pii(
+					r,
+					act,
+					lead_display_map,
+					wi_readable_cache,
+					emit_pii=emit_pii,
+					team_map=team_map,
+					camp_map=camp_map,
+				)
+				for r in sliced
+			]
+
 	return {
 		"ok": True,
 		"actor_scope": _actor_scope_dict(act, flags),
@@ -2256,7 +2472,7 @@ def get_metric_drilldown(
 			"filter_bucket": bucket,
 			"snapshot_metric": snap_cell,
 		},
-		"freshness": _build_freshness(period, run_row, campaign_filter=eff_camp_filter),
+		"freshness": freshness,
 		"policy_notice": dict(POLICY_NOTICE_PAYLOAD),
 		"exclusion_counts": {
 			"historical_attribution_unknown": 0,
@@ -2287,10 +2503,10 @@ def _ob_event_dict(ob: dict, *, in_numerator: bool) -> dict:
 		"team_id": ob.get("resolved_team"),
 		"status": ob["as_of_status"],
 		"in_numerator": in_numerator,
-		"started_at": format_calendar_iso(ob.started_at) if ob.started_at else None,
-		"original_due_at": format_calendar_iso(ob.original_due_at) if ob.original_due_at else None,
-		"effective_due_at": format_calendar_iso(ob.effective_due_at) if ob.effective_due_at else None,
-		"fulfilled_at": format_calendar_iso(ob.fulfilled_at) if ob.fulfilled_at else None,
+		"started_at": ob.started_at or None,
+		"original_due_at": ob.original_due_at or None,
+		"effective_due_at": ob.effective_due_at or None,
+		"fulfilled_at": ob.fulfilled_at or None,
 		"_lead_id": ob.lead,
 		"_note_excerpt": None,
 	}
@@ -2308,8 +2524,8 @@ def _iv_event_dict(iv: dict, *, in_numerator: bool, status_label: str) -> dict:
 		"team_id": iv.get("resolved_team"),
 		"status": status_label,
 		"in_numerator": in_numerator,
-		"started_at": format_calendar_iso(iv_s) if iv_s else None,
-		"effective_due_at": format_calendar_iso(iv.get("ownership_end")) if iv.get("ownership_end") else None,
+		"started_at": iv_s or None,
+		"effective_due_at": iv.get("ownership_end") or None,
 		"_lead_id": iv.lead,
 		"_note_excerpt": None,
 	}
@@ -2333,7 +2549,7 @@ def _att_event_dict(a: dict, *, in_numerator: bool) -> dict:
 		"has_approved_correction": bool(a["has_approved_correction"]),
 		"status": "voided" if a["is_voided"] else ("connected" if eff.get("is_connected") else "attempted"),
 		"in_numerator": in_numerator,
-		"occurred_at": format_calendar_iso(eff.get("occurred_at")) if eff.get("occurred_at") else None,
+		"occurred_at": eff.get("occurred_at") or None,
 		"_lead_id": a.get("lead"),
 		"_note_excerpt": eff.get("note"),
 	}

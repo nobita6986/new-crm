@@ -8,13 +8,16 @@
     "integration_branch": "codex/p4-resume-ops",
     "base_main_n_minus_1_sha": "467830195358b2431ac772486530ab935887a518",
     "t1a_ops_baseline_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
+    "t1a_locked_ops_handoff_sha": "0762ef66f6b5f88a4105127e41e71955d000495d",
     "t1b_batch1_locked_candidate_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
-    "t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
-    "integrated_code_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
-    "verified_ci_run_id": 42766731946,
-    "verified_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42766731946",
-    "apps_tree_sha": "14b5387296dad815a6b9f663411f265fa7d9f910",
-    "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
+    "t1b_batch2_delta_sha": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5",
+    "t1b_verified_ci_runs": {
+      "p4_ci_sbom_and_reproducibility_run_id": 42823368835,
+      "p4_candidate_verify_and_s1_benchmark_run_id": 42823368860,
+      "p4_batch2_delta_run_id": 42825411058
+    },
+    "apps_tree_sha": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578",
+    "crm_cskh_tree_sha": "fbfafa93c7334684edfba633754964f9c3cc9868",
     "apps_tree_parity_with_locked_candidate": true
   },
   "frappe_crm_app_versions": {
@@ -38,7 +41,7 @@
     },
     "crm_cskh": {
       "declared_version": "0.0.1",
-      "crm_cskh_tree_sha": "f51095ec245e103ed3a487654b5580636424ea36",
+      "crm_cskh_tree_sha": "fbfafa93c7334684edfba633754964f9c3cc9868",
       "metrics_formula_version": "cskh-metrics-v2"
     },
     "runtime_toolchain_and_key_python_upgrades": {
@@ -59,19 +62,36 @@
     }
   },
   "registry_digest": {
-    "candidate_image_uri": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
-    "oci_config_image_id": "sha256:9f295546fc78c061d950322b9c8f60d40312016b802f325b15f834524f500829",
+    "candidate_image_uri": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
+    "oci_config_image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
     "mariadb_image": "mariadb:11.8@sha256:f16d7a344413e519dff518f27bdb221388f274c97c4fb5f2cb0dc1b34fa",
     "redis_image": "redis:8.6-alpine@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba",
     "proxy_image": "traefik:v3.3@sha256:1fb7fe1eb8eb2ebccfb6bf9d96f0ed1f639f3ac60bc181cebd3bd6f21a1e62d8",
     "pull_inspect_receipt_path": "deploy/ops/evidence/p4-https-delta-20261109/candidate-registry-pull-inspect-receipt.json",
-    "live_production_untouched_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9"
+    "live_production_untouched_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+    "staging_target_pullability_check": {
+      "status": "PUBLIC_PULLABLE_WITHOUT_TOKEN",
+      "ghcr_token_required_for_staging_pull": false,
+      "anonymous_token_acquired": true,
+      "manifest_http_status": 200,
+      "verified_manifest_sha256": "sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
+      "config_http_status": 200,
+      "verified_config_sha256": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+      "layers_count": 15,
+      "layers_head_200_count": 15,
+      "compressed_layers_total_bytes": 1190528681,
+      "verified_labels": {
+        "io.cskh.apps_tree_sha": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578",
+        "io.cskh.crm_cskh_tree_sha": "fbfafa93c7334684edfba633754964f9c3cc9868",
+        "org.opencontainers.image.revision": "ce6f45549d562327bb6992fc5b29e4a5b1efcbd5"
+      }
+    }
   },
   "compose_and_config_sha": {
-    "deploy_compose_git_tree_sha": "33eee03f392da7c1926a76d7b60052d8f1727da0",
-    "deploy_images_git_tree_sha": "6f050a9aad5367f89158a68e9d429c106f31c214",
+    "deploy_compose_git_tree_sha": "89c564918abacb52d8511e3075d94c62e74a5be6",
+    "deploy_images_git_tree_sha": "44acc06d2de97e3161171408ca0859a8f36f24a8",
     "rendered_dr_https_compose_config_sha256": "ddb80a87b246a4fc0360eabf982482b643485ea0ea0e9f4a9800fe938b2b22ec",
-    "release_lock_sha256": "54800fc8c3aa579f8b2369c255966a5e44f799e08370dcde5a05543e211b9309",
+    "release_lock_sha256": "8ccad179ae5832e58196c6f1591bb15138d3b4605ef504126797dd71c3208f8b",
     "runtime_isolation_audit_path": "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json",
     "environment_inventory_doc": "docs/p4/infra-inventory.md"
   },
@@ -167,18 +187,42 @@
       "gate": "G08 (Live VPS archive isolated clone restore)",
       "reason_reusable": "deploy/ops/create_encrypted_backup.py and deploy/ops/verify_offsite_restore.py are byte-identical to 801be22b3be2c8199704c4da7442b0c2e0edf352; live VPS image sha256:acb95057... unchanged",
       "evidence": "deploy/ops/evidence/p4-vps-live-20261109/restore-drill-report.json"
-    },
-    {
-      "gate": "G02/G05/G10-G16 (421/421 JUnit suite & Trivy/SBOM/provenance on exact digest)",
-      "reason_reusable": "apps_tree_sha (14b5387296dad815a6b9f663411f265fa7d9f910) and candidate digest (sha256:b1329ef7...) are byte-identical to Batch 1 Run #42625295772",
-      "evidence": "deploy/ops/evidence/p4-candidate-and-s1-20261109/ candidate-verify-summary.md & junit-421"
-    },
-    {
-      "gate": "G18 (S1 10,000-Lead performance benchmark)",
-      "reason_reusable": "crm_cskh_tree_sha (f51095ec245e103ed3a487654b5580636424ea36) and candidate runtime dependencies unchanged since Run #42625295772",
-      "evidence": "deploy/ops/evidence/p4-candidate-and-s1-20261109/s1-benchmark-report.json"
     }
   ],
+  "s1_benchmark_on_confirmed_resource_envelope": {
+    "status": "MEASURED_ALL_10_P4_9_2_ITEMS_PASSED",
+    "ci_run_id": 42823368860,
+    "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
+    "image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+    "confirmed_resource_allocation": {
+      "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.41",
+      "vcpu_count": 4,
+      "ram_gib": 15.61,
+      "compose_project": "cskh-p4-bench-21a1be83",
+      "site_name": "p4-s1-bench.localhost",
+      "owner_vps_touched": false
+    },
+    "worker_configuration": {
+      "gunicorn_workers": 4,
+      "gunicorn_threads_per_worker": 4,
+      "total_concurrent_http_threads": 16,
+      "rq_queue_short_workers": 1,
+      "rq_queue_long_workers": 1,
+      "scheduler_workers": 1,
+      "websocket_workers": 1
+    },
+    "evidence_path": "deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json",
+    "report_doc": "docs/p4/performance-report.md"
+  },
+  "vps_isolated_staging_ssh_execution_status": {
+    "target_vps_host": "103.77.208.186",
+    "live_serving_project_untouched": "crm-cskh-vps-staging (crm-staging.localhost, sha256:acb95057...)",
+    "planned_isolated_staging_project": "crm-cskh-dr-https-vps (staging-dr-uat.crm-internal.localhost, 127.0.0.1:18081/18443)",
+    "ssh_blocker_status": "BLOCKED_PENDING_SSH_CREDENTIAL_IN_T1A_SESSION",
+    "ssh_blocker_detail": "BatchMode=yes only tests non-interactive key/agent auth; current T1A Windows session has no SSH private key in ~/.ssh (only known_hosts/known_hosts.old), ssh-agent service is Stopped/Disabled, and no SSH credential was injected via secure session mechanism.",
+    "ghcr_pull_blocker_status": "NOT_BLOCKED_PUBLIC_PULLABLE_HTTP_200",
+    "signing_key_blocker_status": "NOT_REQUIRED_FOR_STAGING_CANDIDATE_ONLY_FOR_PRODUCTION_PROMOTION"
+  },
   "owner_pending_inputs_consolidated": {
     "canonical_ticket_reference": "docs/p4/P4-exit-report.md#3",
     "1_offsite_destination_inventory_and_credentials": {

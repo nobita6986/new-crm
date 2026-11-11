@@ -1,12 +1,12 @@
 {
   "schema_version": "cskh-p4-diff-impact-execution-v1",
-  "completed_at_utc": "2026-11-09T13:44:50.788357+00:00",
+  "completed_at_utc": "2026-11-10T13:41:50.843344+00:00",
   "status": "PASS",
-  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
   "clean_site_executed": false,
   "plan": {
     "schema_version": "cskh-p4-diff-impact-plan-v1",
-    "generated_at_utc": "2026-11-09T13:40:19.914276+00:00",
+    "generated_at_utc": "2026-11-10T13:36:03.928773+00:00",
     "full_suite_escalated": true,
     "changed_files_count": 0,
     "changed_files": [],
@@ -119,13 +119,14 @@
       "crm_cskh.tests.test_p3_sla_and_attribution",
       "crm_cskh.tests.test_p3_t1c_remediation",
       "crm_cskh.tests.test_error_response_normalization",
+      "crm_cskh.tests.test_p4_security_and_scale_gaps",
       "crm_cskh.tests.test_ui_p1_endpoints",
       "crm_cskh.tests.test_ui_p2_pages_and_context"
     ],
     "junit_ui_modules": [
       "crm_cskh.tests.test_ui_p3_pages_and_context"
     ],
-    "total_modules_to_run": 30
+    "total_modules_to_run": 31
   },
   "junit_gate_reports": [
     "/home/runner/work/_temp/p4-ghcr-verify-evidence/g007_test_inventory-gate.json",
@@ -137,6 +138,11 @@
   "auxiliary_junit_checks": {
     "test_error_response_normalization.junit.xml": {
       "tests": 8,
+      "failures": 0,
+      "errors": 0
+    },
+    "test_p4_security_and_scale_gaps.junit.xml": {
+      "tests": 4,
       "failures": 0,
       "errors": 0
     },
