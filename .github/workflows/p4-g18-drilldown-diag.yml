@@ -1,0 +1,283 @@
+name: P4 G18 drill-down diagnostic, Staging-capped verification & G04 probe
+
+on:
+  workflow_dispatch:
+    inputs:
+      app_image_digest:
+        description: 'Optional GHCR @sha256 digest (empty = read deploy/release/g18_diag_target.json)'
+        required: false
+        type: string
+        default: ''
+      run_g04_remediation_probe:
+        description: 'Run empirical Debian Trixie / MariaDB 11.8 / libxml2 + Trivy 0.58.2 remediation probe (true/false)'
+        required: false
+        type: string
+        default: ''
+  push:
+    branches:
+      - 'codex/p4-t1b-g18-drilldown-opt'
+    paths:
+      - 'deploy/release/diagnose_g18_drilldown.py'
+      - 'deploy/release/g18_diag_target.json'
+      - '.github/workflows/p4-g18-drilldown-diag.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p4-g18-diag-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resolve-matrix:
+    name: Resolve diagnostic & verification matrix
+    runs-on: ubuntu-24.04
+    outputs:
+      matrix_json: ${{ steps.plan.outputs.matrix_json }}
+      run_g04_probe: ${{ steps.plan.outputs.run_g04_probe }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Build target matrix
+        id: plan
+        env:
+          INPUT_DIGEST: ${{ inputs.app_image_digest }}
+          INPUT_PROBE: ${{ inputs.run_g04_remediation_probe }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          from pathlib import Path
+
+          cfg = json.loads(Path("deploy/release/g18_diag_target.json").read_text(encoding="utf-8"))
+          digest = os.environ.get("INPUT_DIGEST", "").strip() or str(cfg.get("app_image_digest") or "").strip()
+          probe_in = os.environ.get("INPUT_PROBE", "").strip().lower()
+          if probe_in in ("true", "false"):
+              run_probe = probe_in == "true"
+          else:
+              run_probe = bool(cfg.get("run_g04_remediation_probe", False))
+
+          if digest:
+              items = [
+                  {
+                      "label": "post_opt_s1_canonical_4x4",
+                      "app_image": digest,
+                      "resource_profile": "s1_canonical_4x4",
+                  },
+                  {
+                      "label": "post_opt_staging_vps_capped",
+                      "app_image": digest,
+                      "resource_profile": "staging_vps_capped",
+                  },
+              ]
+          else:
+              items = [
+                  {
+                      "label": "pre_opt_s1_baseline_4522d04",
+                      "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:b1329ef7c26a9861a07d25d425eb4438150d065d2548c464e7d3395e568a201d",
+                      "resource_profile": "s1_canonical_4x4",
+                  },
+                  {
+                      "label": "pre_opt_current_cand_693a3cdc",
+                      "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc75888f0db7bb88001b5cd9bd6d1486b0f8f00be1e0c4f84b68db358",
+                      "resource_profile": "s1_canonical_4x4",
+                  },
+              ]
+          print("matrix_json=" + json.dumps({"include": items}))
+          print("run_g04_probe=" + ("true" if run_probe else "false"))
+          PY
+
+  g18-drilldown-diagnostic:
+    name: G18 diagnostic (${{ matrix.label }})
+    needs: [resolve-matrix]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.resolve-matrix.outputs.matrix_json) }}
+
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Pull immutable GHCR @sha256 image
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ matrix.app_image }}
+          GITHUB_ACTOR_PULL: ${{ github.actor }}
+          GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          mkdir -p "$RUNNER_TEMP/g18-diag-${{ matrix.label }}"
+          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PULL}" \
+            --password-stdin
+          docker pull "${APP_IMAGE_DIGEST}"
+
+      - name: Run G18 EXPLAIN, query timings, pagination & worker saturation harness
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ matrix.app_image }}
+          RESOURCE_PROFILE: ${{ matrix.resource_profile }}
+          DIAG_LABEL: ${{ matrix.label }}
+        run: |
+          set -euo pipefail
+          OUT_DIR="$RUNNER_TEMP/g18-diag-${DIAG_LABEL}"
+          python3 deploy/release/diagnose_g18_drilldown.py \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --resource-profile "${RESOURCE_PROFILE}" \
+            --pull-policy never \
+            --forbid-cohosted-live-containers \
+            --out "$OUT_DIR/g18-diagnostic-${DIAG_LABEL}.json"
+
+          python3 - "$OUT_DIR" <<'PY'
+          import hashlib
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          sums = []
+          for p in sorted(root.rglob("*")):
+              if p.is_file() and p.name != "SHA256SUMS.txt":
+                  sums.append(f"{hashlib.sha256(p.read_bytes()).hexdigest()}  {p.relative_to(root).as_posix()}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+      - name: Logout from GHCR
+        if: always()
+        shell: bash
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+      - name: Upload G18 diagnostic bundle
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: g18-diagnostic-${{ matrix.label }}-${{ github.run_id }}
+          path: ${{ runner.temp }}/g18-diag-${{ matrix.label }}/
+          if-no-files-found: warn
+          retention-days: 30
+
+  probe-g04-remediation:
+    name: Probe G04 OS CVE technical remediation options (Trivy 0.58.2)
+    needs: [resolve-matrix]
+    if: ${{ needs.resolve-matrix.outputs.run_g04_probe == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Pull baseline candidate & inspect Debian Trixie / MariaDB 11.8 / libxml2 remediation options
+        shell: bash
+        env:
+          BASE_CAND_IMAGE: ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc75888f0db7bb88001b5cd9bd6d1486b0f8f00be1e0c4f84b68db358
+          TRIVY_IMAGE: aquasec/trivy:0.58.2@sha256:665030f4d33a82c1e8d9d5e0453365842236723c1ee5cc3becca698268e66a56
+          GITHUB_ACTOR_PULL: ${{ github.actor }}
+          GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          OUT="$RUNNER_TEMP/g04-probe"
+          mkdir -p "$OUT"
+          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PULL}" \
+            --password-stdin
+          docker pull "${BASE_CAND_IMAGE}"
+
+          docker run --rm --user root --entrypoint bash "${BASE_CAND_IMAGE}" -lc '
+            set -euo pipefail
+            apt-get update -qq
+            echo "=== APT POLICY ==="
+            apt-cache policy libmariadb3 mariadb-client mariadb-client-core mariadb-common libxml2
+            echo "=== RDEPENDS INSTALLED ==="
+            apt-cache rdepends --installed libmariadb3 mariadb-client mariadb-client-core mariadb-common libxml2
+            echo "=== DRY RUN REMOVE MARIADB-CLIENT ==="
+            apt-get remove -s mariadb-client mariadb-client-core libmariadb3 mariadb-common || true
+            echo "=== DRY RUN REMOVE LIBXML2 ==="
+            apt-get remove -s libxml2 || true
+            echo "=== LXML LINKAGE ==="
+            /home/frappe/frappe-bench/env/bin/python -c "import lxml.etree as e; print(\"LIBXML_VERSION=\", e.LIBXML_VERSION, \"COMPILED=\", e.LIBXML_COMPILED_VERSION, \"FILE=\", e.__file__)"
+            ldd /home/frappe/frappe-bench/env/lib/python3.11/site-packages/lxml/*.so | head -n 40 || true
+            echo "=== FRAPPE MARIADB CLI CALLS ==="
+            grep -rn "mariadb\|mysqldump\|mysql" /home/frappe/frappe-bench/apps/frappe/frappe/database/mariadb/ | head -n 50 || true
+          ' > "$OUT/debian-trixie-and-linkage-probe.txt" 2>&1
+
+          set +e
+          cat > "$OUT/Dockerfile.mariadb118" <<EOF
+          FROM ${BASE_CAND_IMAGE}
+          USER root
+          RUN set -eux; \
+              apt-get update; \
+              apt-get install -y --no-install-recommends ca-certificates curl gnupg; \
+              install -d -m 0755 /etc/apt/keyrings; \
+              curl -fsSL https://supplychain.mariadb.com/mariadb-release-signing-key.asc \
+                | gpg --dearmor -o /etc/apt/keyrings/mariadb-keyring.gpg; \
+              echo "deb [signed-by=/etc/apt/keyrings/mariadb-keyring.gpg] https://deb.mariadb.org/11.8/debian trixie main" \
+                > /etc/apt/sources.list.d/mariadb.list; \
+              apt-get update; \
+              apt-cache policy mariadb-client libmariadb3 mariadb-common; \
+              apt-get install -y --no-install-recommends mariadb-client libmariadb3 mariadb-common; \
+              rm -f /etc/apt/sources.list.d/mariadb.list /etc/apt/keyrings/mariadb-keyring.gpg; \
+              rm -rf /var/lib/apt/lists/*; \
+              mariadb --version; \
+              mariadb-dump --version
+          USER frappe
+          EOF
+          docker build -f "$OUT/Dockerfile.mariadb118" -t local/g04-probe-mariadb118:test "$OUT" \
+            > "$OUT/mariadb118-build.log" 2>&1
+          MARIADB_BUILD_RC=$?
+          set -e
+
+          if [ "${MARIADB_BUILD_RC}" -eq 0 ]; then
+            docker run --rm --network none --entrypoint dpkg-query local/g04-probe-mariadb118:test \
+              -W -f='${Package}\t${Version}\t${Source}\n' \
+              | grep -E 'mariadb|libxml2' > "$OUT/mariadb118-dpkg.txt" || true
+
+            docker run --rm \
+              -v /var/run/docker.sock:/var/run/docker.sock \
+              -v "$OUT:/scan-out" \
+              -v "$RUNNER_TEMP/trivy-cache:/root/.cache" \
+              "${TRIVY_IMAGE}" \
+              image \
+              --image-src docker \
+              --db-repository "public.ecr.aws/aquasecurity/trivy-db:2,ghcr.io/aquasecurity/trivy-db:2" \
+              --scanners vuln,secret \
+              --format json \
+              --timeout 15m \
+              --output /scan-out/trivy-mariadb118-probe.json \
+              local/g04-probe-mariadb118:test
+
+            python3 deploy/release/evaluate_security_scan.py \
+              --strict \
+              --exceptions deploy/release/cve-exceptions.json \
+              --trivy-json "$OUT/trivy-mariadb118-probe.json" \
+              --out "$OUT/strict-eval-mariadb118-probe.json" || true
+          fi
+
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+      - name: Upload G04 remediation probe evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: g04-remediation-probe-${{ github.run_id }}
+          path: ${{ runner.temp }}/g04-probe/
+          if-no-files-found: warn
+          retention-days: 30
