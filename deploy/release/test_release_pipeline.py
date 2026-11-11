@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import date
 from pathlib import Path
 
 RELEASE_DIR = Path(__file__).resolve().parent
@@ -28,6 +29,7 @@ from benchmark_p4_isolated import (  # noqa: E402
 from evaluate_security_scan import (  # noqa: E402
     DEFAULT_EXCEPTIONS_FILE,
     evaluate_trivy_report,
+    main as scan_main,
 )
 from generate_sbom import generate_sboms  # noqa: E402
 from release_manifest import (  # noqa: E402
@@ -163,7 +165,14 @@ class TestWorkflowAndLockIsolation(unittest.TestCase):
         )
         rel_errs = audit_workflow_text(Path("p4-release.yml"), bad_release)
         self.assertTrue(any("STAGING_SSH_PRIVATE_KEY" in e for e in rel_errs), rel_errs)
+        self.assertTrue(any("--expected-image" in e for e in rel_errs), rel_errs)
+        self.assertTrue(
+            any("generate" in e and "--exceptions" in e for e in rel_errs), rel_errs
+        )
         self.assertTrue(any("--security-scan" in e for e in rel_errs), rel_errs)
+        self.assertTrue(
+            any("sign" in e and "--exceptions" in e for e in rel_errs), rel_errs
+        )
         self.assertTrue(
             any("verify-by-digest (pull-only)" in e for e in rel_errs), rel_errs
         )
@@ -556,6 +565,190 @@ class TestSbomAndSecurityScanGate(unittest.TestCase):
             )
             self.assertEqual(adv_regressed["status"], "FAIL")
 
+    def test_g04_scoped_cve_exceptions_reject_wrong_digest_cve_package_version_and_expiry(
+        self,
+    ) -> None:
+        ref_day = date(2026, 11, 11)
+        base_exc_doc = json.loads(DEFAULT_EXCEPTIONS_FILE.read_text(encoding="utf-8"))
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td)
+            trivy_file = tmp / "trivy-g04.json"
+            clean_trivy_file = tmp / "trivy-clean.json"
+            exc_file = tmp / "cve-exceptions-sim.json"
+
+            trivy_file.write_text(
+                json.dumps(
+                    {
+                        "ArtifactName": SAMPLE_DIGEST,
+                        "ArtifactType": "container_image",
+                        "Results": [
+                            {
+                                "Target": "debian 13.7",
+                                "Vulnerabilities": [
+                                    {
+                                        "VulnerabilityID": "CVE-2026-44172",
+                                        "PkgName": "libmariadb3",
+                                        "InstalledVersion": "1:11.8.6-0+deb13u1",
+                                        "FixedVersion": "",
+                                        "Severity": "CRITICAL",
+                                    },
+                                    {
+                                        "VulnerabilityID": "CVE-2026-44172",
+                                        "PkgName": "mariadb-client",
+                                        "InstalledVersion": "1:11.8.6-0+deb13u1",
+                                        "FixedVersion": "",
+                                        "Severity": "CRITICAL",
+                                    },
+                                    {
+                                        "VulnerabilityID": "CVE-2026-6653",
+                                        "PkgName": "libxml2",
+                                        "InstalledVersion": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+                                        "FixedVersion": "",
+                                        "Severity": "CRITICAL",
+                                    },
+                                ],
+                            }
+                        ],
+                    }
+                ),
+                encoding="utf-8",
+            )
+            clean_trivy_file.write_text(
+                json.dumps({"ArtifactName": SAMPLE_DIGEST, "Results": []}),
+                encoding="utf-8",
+            )
+
+            def _valid_exceptions() -> list[dict[str, object]]:
+                return [
+                    {
+                        "id": "EXC-SIM-001",
+                        "cve_id": "CVE-2026-44172",
+                        "image_digest": SAMPLE_DIGEST,
+                        "packages": ["libmariadb3", "mariadb-client"],
+                        "installed_version": "1:11.8.6-0+deb13u1",
+                        "expires_on": "2026-12-11",
+                        "approved_by": "Owner-T0-Signed-Ref-001",
+                        "reason": "Simulated Owner-signed scoped exception",
+                    },
+                    {
+                        "id": "EXC-SIM-002",
+                        "cve_id": "CVE-2026-6653",
+                        "image_digest": SAMPLE_DIGEST,
+                        "package": "libxml2",
+                        "installed_version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+                        "expires_on": "2026-11-11",
+                        "approved_by": "Owner-T0-Signed-Ref-001",
+                        "reason": "Valid inclusive on exact expiry date",
+                    },
+                ]
+
+            def _eval(
+                exceptions: list[dict[str, object]],
+                *,
+                scan_path: Path = trivy_file,
+                mode: str = "strict",
+                expected_img: str | None = SAMPLE_DIGEST,
+            ) -> dict[str, object]:
+                doc = {**base_exc_doc, "exceptions": exceptions}
+                exc_file.write_text(json.dumps(doc), encoding="utf-8")
+                return evaluate_trivy_report(
+                    scan_path,
+                    exceptions_path=exc_file,
+                    mode=mode,
+                    expected_image_digest=expected_img,
+                    reference_date=ref_day,
+                )
+
+            # 1. Exact 5-tuple match -> PASS
+            ok = _eval(_valid_exceptions())
+            self.assertEqual(ok["status"], "PASS", ok)
+            self.assertEqual(ok["rejected_exceptions_count"], 0)
+            self.assertEqual(
+                ok["unique_critical_counts"],
+                {
+                    "fixable_unapproved": 0,
+                    "unfixed_upstream_os_unapproved": 0,
+                    "excepted": 3,
+                },
+            )
+
+            # 2. Wrong / missing / tag-only image_digest -> FAIL
+            for bad_digest in (
+                SAMPLE_DRIFT_DIGEST,
+                "",
+                "ghcr.io/nobita6986/crm-cskh:latest",
+                "*",
+            ):
+                mut = _valid_exceptions()
+                mut[0]["image_digest"] = bad_digest
+                res = _eval(mut)
+                self.assertEqual(res["status"], "FAIL", (bad_digest, res))
+                self.assertGreaterEqual(int(res["rejected_exceptions_count"]), 1)
+
+            # Also fails if --expected-image differs from scanned ArtifactName
+            mismatch_target = _eval(
+                _valid_exceptions(), expected_img=SAMPLE_DRIFT_DIGEST
+            )
+            self.assertEqual(mismatch_target["status"], "FAIL", mismatch_target)
+
+            # 3. Wrong CVE ID or wildcard CVE -> FAIL (even on a 0-CVE scan!)
+            for bad_cve in ("CVE-2026-99999", "CVE-*", "cve-2026-44172", ""):
+                mut = _valid_exceptions()
+                mut[1]["cve_id"] = bad_cve
+                res = _eval(mut)
+                self.assertEqual(res["status"], "FAIL", (bad_cve, res))
+
+            unmatched_on_clean = _eval(_valid_exceptions(), scan_path=clean_trivy_file)
+            self.assertEqual(unmatched_on_clean["status"], "FAIL", unmatched_on_clean)
+
+            # 4. Wrong, partial, over-broad, case-mismatched, or wildcard package(s) -> FAIL
+            partial_pkg = _valid_exceptions()
+            partial_pkg[0]["packages"] = ["libmariadb3"]  # omits mariadb-client
+            self.assertEqual(_eval(partial_pkg)["status"], "FAIL")
+
+            overbroad_pkg = _valid_exceptions()
+            overbroad_pkg[0]["packages"] = [
+                "libmariadb3",
+                "mariadb-client",
+                "openssl",
+            ]
+            self.assertEqual(_eval(overbroad_pkg)["status"], "FAIL")
+
+            for bad_pkg in ("openssl", "LibXML2", "*", ""):
+                mut = _valid_exceptions()
+                mut[1]["package"] = bad_pkg
+                self.assertEqual(_eval(mut)["status"], "FAIL", bad_pkg)
+
+            # 5. Wrong, range, or wildcard installed_version -> FAIL
+            for bad_ver in (
+                "1:11.8.5-0+deb13u1",
+                ">=1:11.8.6-0+deb13u1",
+                "*",
+                "",
+            ):
+                mut = _valid_exceptions()
+                mut[0]["installed_version"] = bad_ver
+                self.assertEqual(_eval(mut)["status"], "FAIL", bad_ver)
+
+            # 6. Expired expires_on, invalid date, placeholder approver, or T1B self-approval -> FAIL in ALL modes
+            for field_name, bad_val in (
+                ("expires_on", "2026-11-10"),
+                ("expires_on", "2026/12/11"),
+                ("expires_on", ""),
+                ("approved_by", ""),
+                ("approved_by", "<T0_APPROVER_HANDLE>"),
+                ("approved_by", "TBD"),
+                ("approved_by", "T1B"),
+                ("approved_by", "T1B-P4-02"),
+            ):
+                mut = _valid_exceptions()
+                mut[0][field_name] = bad_val
+                for eval_mode in ("strict", "advisory_upstream_critical"):
+                    res = _eval(mut, mode=eval_mode)
+                    self.assertEqual(
+                        res["status"], "FAIL", (field_name, bad_val, eval_mode, res)
+                    )
+
 
 class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
     def setUp(self) -> None:
@@ -772,6 +965,277 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
             0,
         )
         self.assertTrue(sig_out.is_file())
+
+    def test_g04_manifest_generate_and_sign_enforce_5tuple_exception_scope_and_expiry(
+        self,
+    ) -> None:
+        base_exc_doc = json.loads(DEFAULT_EXCEPTIONS_FILE.read_text(encoding="utf-8"))
+        trivy_path = self.tmp / "trivy-candidate.json"
+        strict_scan_path = self.tmp / "security-scan-strict-excepted.json"
+        valid_exc_path = self.tmp / "cve-exceptions-owner.json"
+
+        trivy_path.write_text(
+            json.dumps(
+                {
+                    "ArtifactName": SAMPLE_DIGEST,
+                    "ArtifactType": "container_image",
+                    "Results": [
+                        {
+                            "Target": "debian 13.7",
+                            "Vulnerabilities": [
+                                {
+                                    "VulnerabilityID": "CVE-2026-44172",
+                                    "PkgName": "libmariadb3",
+                                    "InstalledVersion": "1:11.8.6-0+deb13u1",
+                                    "FixedVersion": "",
+                                    "Severity": "CRITICAL",
+                                },
+                                {
+                                    "VulnerabilityID": "CVE-2026-44172",
+                                    "PkgName": "mariadb-client",
+                                    "InstalledVersion": "1:11.8.6-0+deb13u1",
+                                    "FixedVersion": "",
+                                    "Severity": "CRITICAL",
+                                },
+                                {
+                                    "VulnerabilityID": "CVE-2026-6653",
+                                    "PkgName": "libxml2",
+                                    "InstalledVersion": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+                                    "FixedVersion": "",
+                                    "Severity": "CRITICAL",
+                                },
+                            ],
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        def _make_valid_exc() -> dict[str, object]:
+            return {
+                **base_exc_doc,
+                "exceptions": [
+                    {
+                        "id": "EXC-REL-001",
+                        "cve_id": "CVE-2026-44172",
+                        "image_digest": SAMPLE_DIGEST,
+                        "packages": ["libmariadb3", "mariadb-client"],
+                        "installed_version": "1:11.8.6-0+deb13u1",
+                        "expires_on": "2026-11-20",
+                        "approved_by": "Owner-T0-Decision-20261111",
+                        "reason": "Scoped exception on SAMPLE_DIGEST",
+                    },
+                    {
+                        "id": "EXC-REL-002",
+                        "cve_id": "CVE-2026-6653",
+                        "image_digest": SAMPLE_DIGEST,
+                        "package": "libxml2",
+                        "installed_version": "2.12.7+dfsg+really2.9.14-2.1+deb13u3",
+                        "expires_on": "2026-11-20",
+                        "approved_by": "Owner-T0-Decision-20261111",
+                        "reason": "Scoped exception on SAMPLE_DIGEST",
+                    },
+                ],
+            }
+
+        valid_exc_path.write_text(
+            json.dumps(_make_valid_exc(), indent=2) + "\n", encoding="utf-8"
+        )
+
+        # 1. Strict scan CLI succeeds with exact 5-tuple scope -> generate -> sign -> verify succeed
+        self.assertEqual(
+            scan_main(
+                [
+                    "--strict",
+                    "--expected-image",
+                    SAMPLE_DIGEST,
+                    "--exceptions",
+                    str(valid_exc_path),
+                    "--reference-date",
+                    "2026-11-11",
+                    "--trivy-json",
+                    str(trivy_path),
+                    "--out",
+                    str(strict_scan_path),
+                ]
+            ),
+            0,
+        )
+
+        valid_manifest = self.tmp / "prod-scoped-manifest.json"
+        valid_sig = self.tmp / "prod-scoped-manifest.json.sig"
+
+        def _run_generate(
+            exc_path: Path, out_path: Path, *, ref_date: str = "2026-11-11"
+        ) -> int:
+            return manifest_main(
+                [
+                    "generate",
+                    "--release-id",
+                    "crm-cskh-20261111-g04",
+                    "--environment-scope",
+                    "production_candidate",
+                    "--build-manifest",
+                    str(self.build_manifest_path),
+                    "--image-inspect",
+                    str(self.inspect_path),
+                    "--sbom-cyclonedx",
+                    str(self.sbom_cdx),
+                    "--sbom-spdx",
+                    str(self.sbom_spdx),
+                    "--security-scan",
+                    str(strict_scan_path),
+                    "--exceptions",
+                    str(exc_path),
+                    "--reference-date",
+                    ref_date,
+                    "--build-url",
+                    "https://example.invalid/run/1",
+                    "--test-report-url",
+                    "https://example.invalid/run/1",
+                    "--out",
+                    str(out_path),
+                ]
+            )
+
+        def _run_sign(
+            manifest_file: Path,
+            exc_path: Path,
+            sig_file: Path,
+            *,
+            ref_date: str = "2026-11-11",
+        ) -> int:
+            return manifest_main(
+                [
+                    "sign",
+                    "--manifest",
+                    str(manifest_file),
+                    "--security-scan",
+                    str(strict_scan_path),
+                    "--exceptions",
+                    str(exc_path),
+                    "--reference-date",
+                    ref_date,
+                    "--private-key-file",
+                    str(self.priv_file),
+                    "--sig-out",
+                    str(sig_file),
+                ]
+            )
+
+        self.assertEqual(_run_generate(valid_exc_path, valid_manifest), 0)
+        manifest_json = json.loads(valid_manifest.read_text(encoding="utf-8"))
+        self.assertIn("cve_exceptions_sha256", manifest_json["artifacts"])
+
+        self.assertEqual(_run_sign(valid_manifest, valid_exc_path, valid_sig), 0)
+        self.assertEqual(
+            manifest_main(
+                [
+                    "verify",
+                    "--manifest",
+                    str(valid_manifest),
+                    "--sig",
+                    str(valid_sig),
+                    "--public-key-file",
+                    str(self.pub_file),
+                    "--expected-image",
+                    SAMPLE_DIGEST,
+                    "--expected-scope",
+                    "production_candidate",
+                ]
+            ),
+            0,
+        )
+
+        # 2. Empty repo `cve-exceptions.json` (`exceptions: []`) MUST reject BOTH generate & sign
+        blocked_empty = self.tmp / "blocked-empty.json"
+        blocked_empty_sig = self.tmp / "blocked-empty.sig"
+        self.assertNotEqual(_run_generate(DEFAULT_EXCEPTIONS_FILE, blocked_empty), 0)
+        self.assertFalse(blocked_empty.exists())
+        self.assertNotEqual(
+            _run_sign(valid_manifest, DEFAULT_EXCEPTIONS_FILE, blocked_empty_sig), 0
+        )
+        self.assertFalse(blocked_empty_sig.exists())
+
+        # 3. Expired after scan time (2026-11-21 > expires_on 2026-11-20) MUST reject BOTH generate & sign!
+        blocked_exp = self.tmp / "blocked-expired.json"
+        blocked_exp_sig = self.tmp / "blocked-expired.sig"
+        self.assertNotEqual(
+            _run_generate(valid_exc_path, blocked_exp, ref_date="2026-11-21"), 0
+        )
+        self.assertFalse(blocked_exp.exists())
+        self.assertNotEqual(
+            _run_sign(
+                valid_manifest, valid_exc_path, blocked_exp_sig, ref_date="2026-11-21"
+            ),
+            0,
+        )
+        self.assertFalse(blocked_exp_sig.exists())
+
+        # 4. Out-of-scope mutations (wrong digest, wrong CVE, partial/extra package, wrong version, T1B self-approval)
+        mutations: list[tuple[str, object]] = []
+
+        m_digest = _make_valid_exc()
+        m_digest["exceptions"][0]["image_digest"] = SAMPLE_DRIFT_DIGEST  # type: ignore[index]
+        mutations.append(("wrong_digest", m_digest))
+
+        m_cve = _make_valid_exc()
+        m_cve["exceptions"][1]["cve_id"] = "CVE-2026-99999"  # type: ignore[index]
+        mutations.append(("wrong_cve", m_cve))
+
+        m_partial_pkg = _make_valid_exc()
+        m_partial_pkg["exceptions"][0]["packages"] = ["libmariadb3"]  # type: ignore[index]
+        mutations.append(("partial_package", m_partial_pkg))
+
+        m_extra_pkg = _make_valid_exc()
+        m_extra_pkg["exceptions"][1]["packages"] = ["libxml2", "openssl"]  # type: ignore[index]
+        del m_extra_pkg["exceptions"][1]["package"]  # type: ignore[index]
+        mutations.append(("extra_unmatched_package", m_extra_pkg))
+
+        m_ver = _make_valid_exc()
+        m_ver["exceptions"][1]["installed_version"] = (
+            "2.12.7+dfsg+really2.9.14-2.1+deb13u2"  # type: ignore[index]
+        )
+        mutations.append(("wrong_version", m_ver))
+
+        m_self = _make_valid_exc()
+        m_self["exceptions"][0]["approved_by"] = "T1B"  # type: ignore[index]
+        mutations.append(("t1b_self_approved", m_self))
+
+        for label, bad_doc in mutations:
+            bad_exc_file = self.tmp / f"bad-{label}.json"
+            bad_manifest_out = self.tmp / f"blocked-{label}.manifest.json"
+            bad_sig_out = self.tmp / f"blocked-{label}.sig"
+            bad_exc_file.write_text(json.dumps(bad_doc), encoding="utf-8")
+
+            self.assertNotEqual(
+                _run_generate(bad_exc_file, bad_manifest_out),
+                0,
+                f"generate failed to reject {label}",
+            )
+            self.assertFalse(bad_manifest_out.exists(), label)
+
+            # Even if manifest without cve_exceptions_sha256 is forged, sign MUST still reject on scope check!
+            forged_manifest = self.tmp / f"forged-{label}.manifest.json"
+            forged_obj = json.loads(valid_manifest.read_text(encoding="utf-8"))
+            del forged_obj["artifacts"]["cve_exceptions_sha256"]
+            forged_manifest.write_text(json.dumps(forged_obj), encoding="utf-8")
+            self.assertNotEqual(
+                _run_sign(forged_manifest, bad_exc_file, bad_sig_out),
+                0,
+                f"sign failed to reject {label}",
+            )
+            self.assertFalse(bad_sig_out.exists(), label)
+
+        # 5. Tampering with cve-exceptions.json between generate and sign (even benign text) fails SHA-256 lock
+        tampered_exc = self.tmp / "tampered-after-generate.json"
+        tampered_doc = _make_valid_exc()
+        tampered_doc["exceptions"][0]["reason"] = "Modified after generate"  # type: ignore[index]
+        tampered_exc.write_text(json.dumps(tampered_doc), encoding="utf-8")
+        tampered_sig = self.tmp / "tampered.sig"
+        self.assertNotEqual(_run_sign(valid_manifest, tampered_exc, tampered_sig), 0)
+        self.assertFalse(tampered_sig.exists())
 
     def test_manifest_sign_verify_tamper_and_scope_isolation(self) -> None:
         manifest_path = self.tmp / "release-manifest.json"
