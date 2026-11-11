@@ -2286,11 +2286,11 @@ def _fast_interval_cohort_drilldown_page(
 		return None
 
 	if eff_emp:
-		ah_idx = "USE INDEX (idx_cskh_ah_user_interval)"
+		ah_idx = "FORCE INDEX (idx_cskh_ah_user_interval)"
 	elif team_mode == "authoritative_in" and len(team_nodes) == 1:
-		ah_idx = "USE INDEX (idx_cskh_ah_team_start)"
+		ah_idx = "FORCE INDEX (idx_cskh_ah_team_start)"
 	else:
-		ah_idx = "USE INDEX (idx_cskh_ah_start_name)"
+		ah_idx = "FORCE INDEX (idx_cskh_ah_start_name)"
 
 	where_parts = [
 		"ah.ownership_start >= %s",
@@ -2319,28 +2319,32 @@ def _fast_interval_cohort_drilldown_page(
 			where_parts.append(f"ah.team_at_assignment in ({ph_t}) and ah.attribution_status = %s")
 			base_params.extend([*team_nodes, AUTHORITATIVE])
 
-	ca_att_sql = """
-		exists (
-			select 1 from `tabCSKH Contact Attempt` ca USE INDEX (idx_cskh_attempt_ownevt_occ)
+	# Scalar `coalesce((select 1 ... FORCE INDEX ... limit 1), 0)` prevents MariaDB 11.x from flattening
+	# correlated `idx_cskh_attempt_ownevt_occ` probes (3 rows/interval) into a 250k-row semi-join `<subquery>` scan.
+	ca_att_flag_sql = """
+		coalesce((
+			select 1 from `tabCSKH Contact Attempt` ca FORCE INDEX (idx_cskh_attempt_ownevt_occ)
 			where ca.ownership_event = ah.name
 			  and coalesce(ca.contact_attempt_snapshot, 0) = 1
 			  and ca.recorded_at <= %s
 			  and ca.occurred_at < %s
 			  and ca.occurred_at <= %s
-		)
+			limit 1
+		), 0)
 	"""
 	ca_att_params = (eff_as_of, end_dt_excl, eff_as_of)
 
-	ca_conn_sql = """
-		exists (
-			select 1 from `tabCSKH Contact Attempt` ca_c USE INDEX (idx_cskh_attempt_ownevt_occ)
+	ca_conn_flag_sql = """
+		coalesce((
+			select 1 from `tabCSKH Contact Attempt` ca_c FORCE INDEX (idx_cskh_attempt_ownevt_occ)
 			where ca_c.ownership_event = ah.name
 			  and coalesce(ca_c.contact_attempt_snapshot, 0) = 1
 			  and ca_c.recorded_at <= %s
 			  and ca_c.occurred_at < %s
 			  and ca_c.occurred_at <= %s
 			  and coalesce(ca_c.connected_snapshot, 0) = 1
-		)
+			limit 1
+		), 0)
 	"""
 	ca_conn_params = (eff_as_of, end_dt_excl, eff_as_of)
 
@@ -2366,47 +2370,51 @@ def _fast_interval_cohort_drilldown_page(
 			if has_inv_col
 			else f"(lower(coalesce(ca_i.outcome_code, '')) in ({inv_ph}))"
 		)
-		ca_inv_sql = f"""
-			exists (
-				select 1 from `tabCSKH Contact Attempt` ca_i USE INDEX (idx_cskh_attempt_ownevt_occ)
+		ca_inv_flag_sql = f"""
+			coalesce((
+				select 1 from `tabCSKH Contact Attempt` ca_i FORCE INDEX (idx_cskh_attempt_ownevt_occ)
 				where ca_i.ownership_event = ah.name
 				  and coalesce(ca_i.contact_attempt_snapshot, 0) = 1
 				  and ca_i.recorded_at <= %s
 				  and ca_i.occurred_at < %s
 				  and ca_i.occurred_at <= %s
 				  and {inv_expr}
-			)
+				limit 1
+			), 0)
 		"""
 		ca_inv_params = (eff_as_of, end_dt_excl, eff_as_of, *inv_codes_sorted)
 
 		if bucket == "all_denominator":
-			where_parts.append(f"({ca_att_sql}) and not ({ca_inv_sql})")
+			where_parts.append(f"({ca_att_flag_sql} = 1) and ({ca_inv_flag_sql} = 0)")
 			base_params.extend([*ca_att_params, *ca_inv_params])
-			extra_sel_sql = f", ({ca_conn_sql}) as is_conn_flag"
+			extra_sel_sql = f", ({ca_conn_flag_sql}) as is_conn_flag"
 			extra_sel_params.extend(ca_conn_params)
 		elif bucket == "numerator_only":
-			where_parts.append(f"({ca_conn_sql}) and not ({ca_inv_sql})")
+			where_parts.append(f"({ca_conn_flag_sql} = 1) and ({ca_inv_flag_sql} = 0)")
 			base_params.extend([*ca_conn_params, *ca_inv_params])
 		elif bucket == "breached_only":
-			where_parts.append(f"({ca_att_sql}) and not ({ca_inv_sql}) and not ({ca_conn_sql})")
+			where_parts.append(
+				f"({ca_att_flag_sql} = 1) and ({ca_inv_flag_sql} = 0) and ({ca_conn_flag_sql} = 0)"
+			)
 			base_params.extend([*ca_att_params, *ca_inv_params, *ca_conn_params])
 		else:  # excluded
-			where_parts.append(f"(not ({ca_att_sql}) or ({ca_inv_sql}))")
+			where_parts.append(f"(({ca_att_flag_sql} = 0) or ({ca_inv_flag_sql} = 1))")
 			base_params.extend([*ca_att_params, *ca_inv_params])
-			extra_sel_sql = f", ({ca_inv_sql}) as has_inv_flag"
+			extra_sel_sql = f", ({ca_inv_flag_sql}) as has_inv_flag"
 			extra_sel_params.extend(ca_inv_params)
 	else:  # ELIGIBLE_COVERAGE
 		if not frappe.db.table_exists("CSKH SLA Obligation"):
 			return None
-		fa_canc_sql = """
-			exists (
-				select 1 from `tabCSKH SLA Obligation` fa USE INDEX (idx_cskh_sla_ivevt_type)
+		fa_canc_flag_sql = """
+			coalesce((
+				select 1 from `tabCSKH SLA Obligation` fa FORCE INDEX (idx_cskh_sla_ivevt_type)
 				where fa.interval_event = ah.name
 				  and fa.obligation_type = 'FIRST_ATTEMPT'
 				  and fa.started_at <= %s
 				  and fa.status = 'canceled_validly'
 				  and (fa.closed_at is null or fa.closed_at <= %s)
-			)
+				limit 1
+			), 0)
 		"""
 		fa_canc_params = (eff_as_of, eff_as_of)
 
@@ -2420,9 +2428,9 @@ def _fast_interval_cohort_drilldown_page(
 
 		if not all_assigned_eligible:
 			# Verify zero intervals require calendar-based `min_exposure_business_minutes` (`not has_att and not fa_canceled and not fa_matured`)
-			fa_matured_strict_sql = """
-				exists (
-					select 1 from `tabCSKH SLA Obligation` fa_m USE INDEX (idx_cskh_sla_ivevt_type)
+			fa_matured_strict_flag_sql = """
+				coalesce((
+					select 1 from `tabCSKH SLA Obligation` fa_m FORCE INDEX (idx_cskh_sla_ivevt_type)
 					where fa_m.interval_event = ah.name
 					  and fa_m.obligation_type = 'FIRST_ATTEMPT'
 					  and fa_m.started_at <= %s
@@ -2433,25 +2441,27 @@ def _fast_interval_cohort_drilldown_page(
 					          fa_m.effective_due_at <= %s
 					          and not (coalesce(fa_m.is_paused, 0) = 1 and fa_m.status = 'open' and (fa_m.paused_at is null or fa_m.paused_at <= %s))
 					          and (fa_m.fulfilled_at is null or fa_m.fulfilled_at > %s)
-					          and not exists (
-					              select 1 from `tabCSKH Contact Attempt` ca_fa USE INDEX (idx_cskh_attempt_ownevt_occ)
+					          and coalesce((
+					              select 1 from `tabCSKH Contact Attempt` ca_fa FORCE INDEX (idx_cskh_attempt_ownevt_occ)
 					              where ca_fa.ownership_event = ah.name
 					                and coalesce(ca_fa.contact_attempt_snapshot, 0) = 1
 					                and ca_fa.recorded_at <= %s
 					                and ca_fa.occurred_at <= %s
 					                and (ah.ownership_end is null or ca_fa.occurred_at <= ah.ownership_end)
-					          )
+					              limit 1
+					          ), 0) = 0
 					        )
 					      )
-				)
+					limit 1
+				), 0)
 			"""
 			fa_mat_params = (eff_as_of,) * 7
 			ambig_where = " and ".join(
 				[
 					*where_parts,
-					f"not ({ca_att_sql})",
-					f"not ({fa_canc_sql})",
-					f"not ({fa_matured_strict_sql})",
+					f"({ca_att_flag_sql} = 0)",
+					f"({fa_canc_flag_sql} = 0)",
+					f"({fa_matured_strict_flag_sql} = 0)",
 				]
 			)
 			if frappe.db.sql(
@@ -2468,26 +2478,26 @@ def _fast_interval_cohort_drilldown_page(
 
 		if bucket == "all_denominator":
 			if not all_assigned_eligible:
-				where_parts.append(f"not ({fa_canc_sql})")
+				where_parts.append(f"({fa_canc_flag_sql} = 0)")
 				base_params.extend(fa_canc_params)
-			extra_sel_sql = f", ({ca_att_sql}) as is_touched_flag"
+			extra_sel_sql = f", ({ca_att_flag_sql}) as is_touched_flag"
 			extra_sel_params.extend(ca_att_params)
 		elif bucket == "numerator_only":
 			if not all_assigned_eligible:
-				where_parts.append(f"not ({fa_canc_sql})")
+				where_parts.append(f"({fa_canc_flag_sql} = 0)")
 				base_params.extend(fa_canc_params)
-			where_parts.append(f"({ca_att_sql})")
+			where_parts.append(f"({ca_att_flag_sql} = 1)")
 			base_params.extend(ca_att_params)
 		elif bucket == "breached_only":
 			if not all_assigned_eligible:
-				where_parts.append(f"not ({fa_canc_sql})")
+				where_parts.append(f"({fa_canc_flag_sql} = 0)")
 				base_params.extend(fa_canc_params)
-			where_parts.append(f"not ({ca_att_sql})")
+			where_parts.append(f"({ca_att_flag_sql} = 0)")
 			base_params.extend(ca_att_params)
 		else:  # excluded
 			if all_assigned_eligible:
 				return [], 0
-			where_parts.append(f"({fa_canc_sql})")
+			where_parts.append(f"({fa_canc_flag_sql} = 1)")
 			base_params.extend(fa_canc_params)
 
 	where_clause = " and ".join(where_parts)

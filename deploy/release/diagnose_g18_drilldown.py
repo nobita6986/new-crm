@@ -1154,15 +1154,37 @@ def _sample_worker_and_db_saturation(
     db_root_pw: str,
 ) -> dict[str, object]:
     """Capture Gunicorn worker/thread CPU+state, container cgroup stats, and MariaDB Threads_running."""
+    proc_script = (
+        "import json, os\n"
+        "from pathlib import Path\n"
+        "pg = os.sysconf('SC_PAGE_SIZE')\n"
+        "tot = run = slp = 0\n"
+        "rss = {}\n"
+        "for p in Path('/proc').iterdir():\n"
+        "    if not p.name.isdigit(): continue\n"
+        "    try:\n"
+        "        cmd = (p / 'cmdline').read_bytes().replace(b'\\x00', b' ').decode('utf-8', 'ignore').lower()\n"
+        "        if 'gunicorn' not in cmd and 'frappe.app:application' not in cmd: continue\n"
+        "        sm = (p / 'statm').read_text().split()\n"
+        "        rss[p.name] = int(sm[1]) * pg // 1024\n"
+        "        for t in (p / 'task').iterdir():\n"
+        "            if not t.name.isdigit(): continue\n"
+        "            st = (t / 'stat').read_text().rsplit(')', 1)[1].split()[0]\n"
+        "            tot += 1\n"
+        "            if st == 'R': run += 1\n"
+        "            else: slp += 1\n"
+        "    except Exception: pass\n"
+        "print(json.dumps({'tot': tot, 'run': run, 'slp': slp, 'rss': rss}))\n"
+    )
     ps_res = subprocess.run(
         [
             *compose_base,
             "exec",
             "-T",
             "backend",
-            "bash",
-            "-lc",
-            "ps -eL -o pid=,tid=,state=,pcpu=,rss=,args=",
+            "/home/frappe/frappe-bench/env/bin/python",
+            "-c",
+            proc_script,
         ],
         env=compose_env,
         capture_output=True,
@@ -1175,29 +1197,16 @@ def _sample_worker_and_db_saturation(
     total_threads = 0
     worker_rss_kib_by_pid: dict[str, int] = {}
     cpu_pct_sum = 0.0
-    for ln in ps_res.stdout.splitlines():
-        parts = ln.split(None, 5)
-        if len(parts) < 6:
-            continue
-        pid_s, _, state_s, pcpu_s, rss_s, args_s = parts
-        args_lc = args_s.lower()
-        if "ps -el" in args_lc:
-            continue
-        if "gunicorn" not in args_lc and "frappe.app:application" not in args_lc:
-            continue
-        total_threads += 1
-        if state_s.startswith("R"):
-            running_threads += 1
-        else:
-            sleeping_threads += 1
-        try:
-            cpu_pct_sum += float(pcpu_s)
-        except ValueError:
-            pass
-        try:
-            worker_rss_kib_by_pid[pid_s] = int(rss_s)
-        except ValueError:
-            pass
+    try:
+        proc_obj = json.loads((ps_res.stdout or "").strip().splitlines()[-1])
+        total_threads = int(proc_obj.get("tot") or 0)
+        running_threads = int(proc_obj.get("run") or 0)
+        sleeping_threads = int(proc_obj.get("slp") or 0)
+        worker_rss_kib_by_pid = {
+            str(k): int(v) for k, v in (proc_obj.get("rss") or {}).items()
+        }
+    except Exception:
+        pass
 
     db_res = subprocess.run(
         [
