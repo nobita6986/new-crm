@@ -239,7 +239,7 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		execute_kpi_recompute(resolve_period_spec("monthly", m_key), run_mode="full", actor="Administrator")
 		execute_kpi_recompute(resolve_period_spec("daily", d_key), run_mode="full", actor="Administrator")
 
-		# Verify parity across all 17 SQL-fast-path metrics & all 4 buckets as `CRM Admin`
+		# Verify parity across all 16 SQL-fast-path metrics & all 4 buckets as `CRM Admin`
 		frappe.set_user(self.admin_user)
 		for mcode in sorted(report_query._FAST_SQL_DRILLDOWN_METRICS):
 			for bucket in ("all_denominator", "numerator_only", "breached_only", "excluded"):
@@ -272,13 +272,18 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 
 		# Verify `UNATTRIBUTED_TEAM_ID` scope as `CRM Admin`
 		frappe.set_user(self.admin_user)
-		for mcode in ("ASSIGNED_INTERVALS", "FIRST_ATTEMPT_SLA_RATE"):
+		for mcode, bucket in (
+			("ELIGIBLE_COVERAGE", "all_denominator"),
+			("FIRST_ATTEMPT_SLA_RATE", "all_denominator"),
+			("CONNECTED_RATE", "excluded"),
+		):
 			unattr_res = self._assert_fast_matches_reference(
 				metric_code=mcode,
 				period_type="monthly",
 				period_key=m_key,
 				scope_type="team",
 				scope_id=UNATTRIBUTED_TEAM_ID,
+				filter_bucket=bucket,
 				page=1,
 				page_size=20,
 			)
