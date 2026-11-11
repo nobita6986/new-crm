@@ -23,8 +23,8 @@
     "passed": true
   },
   "locks_and_hygiene_audit": {
-    "apps_tree_sha": "e394b6a8bfb26cbad5ca24bd0171f67eb8f0b578",
-    "crm_cskh_tree_sha": "fbfafa93c7334684edfba633754964f9c3cc9868",
+    "apps_tree_sha": "4d361e68912f52243751ae5986cabbd13033f050",
+    "crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
     "verified_evidence_checksums": 10,
     "system_python_constraints_count": 22,
     "bench_python_constraints_count": 154,

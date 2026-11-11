@@ -1,6 +1,6 @@
 {
   "schema_version": "cskh-p4-integrated-candidate-manifest-v1",
-  "generated_at_utc": "2026-11-10T05:35:00Z",
+  "generated_at_utc": "2026-11-11T09:37:00Z",
   "candidate_verification_only": true,
   "promoted_to_production": false,
   "owner_live_site_touched": false,
@@ -16,9 +16,9 @@
       "p4_candidate_verify_and_s1_benchmark_run_id": 42984867723,
       "p4_batch2_delta_run_id": 42825411058
     },
-    "t1a_integrated_https_dr_ci_run_id": 42959552770,
-    "t1a_integrated_https_dr_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42959552770",
-    "integrated_code_sha": "636ae7a6063799bca6793f384f315440a1fd5d8e",
+    "t1a_integrated_https_dr_ci_run_id": 42994618293,
+    "t1a_integrated_https_dr_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42994618293",
+    "integrated_code_sha": "0b4fcfb28bbde667742fe4c219a1bd216e7b62b3",
     "apps_tree_sha": "4d361e68912f52243751ae5986cabbd13033f050",
     "crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
     "apps_tree_parity_with_locked_candidate": true

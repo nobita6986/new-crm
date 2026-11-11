@@ -1,65 +1,65 @@
 {
   "schema_version": "cskh-p4-staging-dr-runtime-audit-v1",
-  "timestamp_utc": "2026-11-11T04:36:44Z",
+  "timestamp_utc": "2026-11-11T09:30:48Z",
   "status": "PASS",
   "candidate_verification_only": true,
   "promoted_to_production": false,
   "owner_live_site_touched": false,
-  "project_name": "crm-cskh-dr-https-ci-42959552770",
+  "project_name": "crm-cskh-dr-https-ci-42994618293",
   "site_name": "staging-dr-uat.crm-internal.localhost",
-  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
+  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
   "compose_git_tree_sha": "89c564918abacb52d8511e3075d94c62e74a5be6",
-  "rendered_compose_config_sha256": "496cb03ffb2447b9ac0ea12b9711a279dfc87d053ce053621f9c7baf1f58665a",
+  "rendered_compose_config_sha256": "44550b34f7c663e9b60a5a12f40a3a0eb868d7463be538126fc4b96a2983cd84",
   "container_digest_parity": {
-    "expected_app_image": "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
-    "expected_sha256": "sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9",
+    "expected_app_image": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
+    "expected_sha256": "sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
     "missing_services": [],
     "inspected_services": {
       "backend": {
-        "container": "crm-cskh-dr-https-ci-42959552770-backend-1",
-        "running_image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+        "container": "crm-cskh-dr-https-ci-42994618293-backend-1",
+        "running_image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
         "repo_digests": [
-          "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9"
+          "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
         ],
         "matched": true
       },
       "frontend": {
-        "container": "crm-cskh-dr-https-ci-42959552770-frontend-1",
-        "running_image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+        "container": "crm-cskh-dr-https-ci-42994618293-frontend-1",
+        "running_image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
         "repo_digests": [
-          "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9"
+          "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
         ],
         "matched": true
       },
       "websocket": {
-        "container": "crm-cskh-dr-https-ci-42959552770-websocket-1",
-        "running_image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+        "container": "crm-cskh-dr-https-ci-42994618293-websocket-1",
+        "running_image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
         "repo_digests": [
-          "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9"
+          "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
         ],
         "matched": true
       },
       "queue-short": {
-        "container": "crm-cskh-dr-https-ci-42959552770-queue-short-1",
-        "running_image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+        "container": "crm-cskh-dr-https-ci-42994618293-queue-short-1",
+        "running_image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
         "repo_digests": [
-          "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9"
+          "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
         ],
         "matched": true
       },
       "queue-long": {
-        "container": "crm-cskh-dr-https-ci-42959552770-queue-long-1",
-        "running_image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+        "container": "crm-cskh-dr-https-ci-42994618293-queue-long-1",
+        "running_image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
         "repo_digests": [
-          "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9"
+          "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
         ],
         "matched": true
       },
       "scheduler": {
-        "container": "crm-cskh-dr-https-ci-42959552770-scheduler-1",
-        "running_image_id": "sha256:b062793096ee0e0af35bfbc7b0872c25b2b84dc7a50615ca8590c361e48d67ee",
+        "container": "crm-cskh-dr-https-ci-42994618293-scheduler-1",
+        "running_image_id": "sha256:4d43b76850b8caa34f96a4139b31e8bd17815706bf93edcb8a0dd18cec25e8df",
         "repo_digests": [
-          "ghcr.io/nobita6986/crm-cskh@sha256:5ea736da8ff704e2c4b2e201ca71482b4d8b67235e3054dae63eb77bb06c72a9"
+          "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
         ],
         "matched": true
       }
@@ -75,38 +75,38 @@
     "zero_owner_network_overlap": true,
     "inspected_networks": [
       {
-        "name": "crm-cskh-dr-https-ci-42959552770_app_net",
+        "name": "crm-cskh-dr-https-ci-42994618293_app_net",
         "driver": "bridge",
         "internal": true,
         "attached_containers": [
-          "crm-cskh-dr-https-ci-42959552770-backend-1",
-          "crm-cskh-dr-https-ci-42959552770-frontend-1",
-          "crm-cskh-dr-https-ci-42959552770-websocket-1"
+          "crm-cskh-dr-https-ci-42994618293-backend-1",
+          "crm-cskh-dr-https-ci-42994618293-frontend-1",
+          "crm-cskh-dr-https-ci-42994618293-websocket-1"
         ]
       },
       {
-        "name": "crm-cskh-dr-https-ci-42959552770_data_net",
+        "name": "crm-cskh-dr-https-ci-42994618293_data_net",
         "driver": "bridge",
         "internal": true,
         "attached_containers": [
-          "crm-cskh-dr-https-ci-42959552770-backend-1",
-          "crm-cskh-dr-https-ci-42959552770-db-1",
-          "crm-cskh-dr-https-ci-42959552770-queue-long-1",
-          "crm-cskh-dr-https-ci-42959552770-queue-short-1",
-          "crm-cskh-dr-https-ci-42959552770-redis-cache-1",
-          "crm-cskh-dr-https-ci-42959552770-redis-queue-1",
-          "crm-cskh-dr-https-ci-42959552770-scheduler-1",
-          "crm-cskh-dr-https-ci-42959552770-websocket-1"
+          "crm-cskh-dr-https-ci-42994618293-backend-1",
+          "crm-cskh-dr-https-ci-42994618293-db-1",
+          "crm-cskh-dr-https-ci-42994618293-queue-long-1",
+          "crm-cskh-dr-https-ci-42994618293-queue-short-1",
+          "crm-cskh-dr-https-ci-42994618293-redis-cache-1",
+          "crm-cskh-dr-https-ci-42994618293-redis-queue-1",
+          "crm-cskh-dr-https-ci-42994618293-scheduler-1",
+          "crm-cskh-dr-https-ci-42994618293-websocket-1"
         ]
       },
       {
-        "name": "crm-cskh-dr-https-ci-42959552770_edge_net",
+        "name": "crm-cskh-dr-https-ci-42994618293_edge_net",
         "driver": "bridge",
         "internal": false,
         "attached_containers": [
-          "crm-cskh-dr-https-ci-42959552770-frontend-1",
-          "crm-cskh-dr-https-ci-42959552770-proxy-1",
-          "crm-cskh-dr-https-ci-42959552770-websocket-1"
+          "crm-cskh-dr-https-ci-42994618293-frontend-1",
+          "crm-cskh-dr-https-ci-42994618293-proxy-1",
+          "crm-cskh-dr-https-ci-42994618293-websocket-1"
         ]
       }
     ]
@@ -148,11 +148,11 @@
   "volumes": {
     "pass": true,
     "project_scoped_volumes": [
-      "crm-cskh-dr-https-ci-42959552770_cert_data",
-      "crm-cskh-dr-https-ci-42959552770_db_data",
-      "crm-cskh-dr-https-ci-42959552770_logs",
-      "crm-cskh-dr-https-ci-42959552770_redis_queue_data",
-      "crm-cskh-dr-https-ci-42959552770_sites"
+      "crm-cskh-dr-https-ci-42994618293_cert_data",
+      "crm-cskh-dr-https-ci-42994618293_db_data",
+      "crm-cskh-dr-https-ci-42994618293_logs",
+      "crm-cskh-dr-https-ci-42994618293_redis_queue_data",
+      "crm-cskh-dr-https-ci-42994618293_sites"
     ]
   },
   "secrets": {
