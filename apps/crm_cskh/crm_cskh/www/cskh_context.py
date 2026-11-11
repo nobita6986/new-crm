@@ -14,6 +14,8 @@ contradict the contract, and never *looser*: a deep link to a page the actor
 may not use answers with the permission-denied page instead of a crash.
 """
 
+import json
+import time
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
@@ -278,6 +280,52 @@ def timezone_context(user=None):
 	}
 
 
+def _get_or_init_csrf_token() -> str:
+	"""Return the session CSRF token, defending against first-touch concurrent tab updates on tabSessions."""
+	sess_data = getattr(getattr(frappe.local, "session", None), "data", None)
+	csrf_tok = getattr(sess_data, "csrf_token", None) if sess_data is not None else None
+	if csrf_tok:
+		return str(csrf_tok)
+
+	sid = getattr(getattr(frappe, "session", None), "sid", None)
+	for attempt in range(4):
+		try:
+			csrf_tok = frappe.sessions.get_csrf_token()
+			if csrf_tok:
+				return str(csrf_tok)
+		except Exception:
+			frappe.db.rollback()
+			if sid:
+				try:
+					cached = frappe.cache.hget("session", sid)
+					if isinstance(cached, dict):
+						cdata = cached.get("data")
+						if isinstance(cdata, dict) and cdata.get("csrf_token"):
+							csrf_tok = str(cdata["csrf_token"])
+							if sess_data is not None:
+								sess_data.csrf_token = csrf_tok
+							return csrf_tok
+				except Exception:
+					pass
+				try:
+					row = frappe.db.sql(
+						"SELECT sessiondata FROM `tabSessions` WHERE sid = %s LIMIT 1",
+						(sid,),
+					)
+					if row and row[0] and row[0][0]:
+						parsed = json.loads(row[0][0])
+						if isinstance(parsed, dict) and parsed.get("csrf_token"):
+							csrf_tok = str(parsed["csrf_token"])
+							if sess_data is not None:
+								sess_data.csrf_token = csrf_tok
+							return csrf_tok
+				except Exception:
+					frappe.db.rollback()
+			time.sleep(0.02 * (attempt + 1))
+
+	return str(frappe.sessions.get_csrf_token())
+
+
 def build_context(
 	context,
 	route="",
@@ -329,7 +377,7 @@ def build_context(
 
 	context.no_cache = 1
 	context.title = _(title) if title else _("CSKH")
-	context.csrf_token = frappe.sessions.get_csrf_token()
+	context.csrf_token = _get_or_init_csrf_token()
 	context.cskh_csrf_header = {"X-Frappe-CSRF-Token": context.csrf_token}
 	context.cskh_user = frappe.session.user
 	context.cskh_route = route

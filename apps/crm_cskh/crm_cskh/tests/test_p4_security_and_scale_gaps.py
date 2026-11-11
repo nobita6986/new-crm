@@ -486,3 +486,65 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 		self.assertIsNotNone(snap_m)
 		self.assertEqual(dd["pagination"]["total"], snap_m["denominator"])
 		frappe.db.rollback()
+
+	def test_cskh_context_csrf_token_concurrent_session_init_recovery(self):
+		"""Verify cskh_context._get_or_init_csrf_token recovers from MariaDB Error 1020 on tabSessions while keeping RBAC/CSRF."""
+		from unittest.mock import patch
+
+		from crm_cskh.www import cskh_context
+
+		frappe.set_user("Guest")
+		with self.assertRaises(frappe.PermissionError):
+			cskh_context.build_context(
+				frappe._dict(), route="/cskh/my-customers", allowed_roles=cskh_context.READ_ROLES
+			)
+
+		frappe.set_user(self.staff_a)
+		with self.assertRaises(frappe.PermissionError):
+			cskh_context.build_context(
+				frappe._dict(),
+				route="/cskh/import",
+				allowed_roles=cskh_context.IMPORT_ROLES,
+				require_admin=True,
+			)
+
+		sess_data = getattr(getattr(frappe.local, "session", None), "data", None)
+		orig_tok = getattr(sess_data, "csrf_token", None) if sess_data is not None else None
+		orig_hget = frappe.cache.hget
+		try:
+			if sess_data is not None:
+				sess_data.csrf_token = None
+			expected_tok = "csrf-recovered-from-concurrent-session-update-1020"
+
+			def _fake_hget(name, key, *args, **kwargs):
+				if name == "session":
+					return {"data": {"csrf_token": expected_tok}}
+				return orig_hget(name, key, *args, **kwargs)
+
+			with (
+				patch.object(
+					frappe.sessions,
+					"get_csrf_token",
+					side_effect=frappe.QueryDeadlockError(
+						"(1020, \"Record has changed since last read in table 'tabSessions'; try restarting transaction\")"
+					),
+				),
+				patch.object(
+					frappe.cache,
+					"hget",
+					side_effect=_fake_hget,
+				),
+			):
+				ctx = cskh_context.build_context(
+					frappe._dict(),
+					route="/cskh/my-customers",
+					allowed_roles=cskh_context.READ_ROLES,
+				)
+				self.assertEqual(ctx.csrf_token, expected_tok)
+				self.assertEqual(ctx.cskh_csrf_header, {"X-Frappe-CSRF-Token": expected_tok})
+				if sess_data is not None:
+					self.assertEqual(sess_data.csrf_token, expected_tok)
+		finally:
+			if sess_data is not None:
+				sess_data.csrf_token = orig_tok
+			frappe.set_user("Administrator")
