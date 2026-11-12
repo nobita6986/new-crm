@@ -379,12 +379,14 @@ def wait_https_ingress_ready(
     connect_host: str,
     https_port: int,
     ca_crt_path: Path,
-    timeout_seconds: int = 45,
+    timeout_seconds: int = 120,
 ) -> None:
     """Wait for Traefik Docker router discovery, nginx frontend, and Frappe website SSR warm-up over TLS."""
     deadline = time.monotonic() + timeout_seconds
     last_status = 0
     last_login_status = 0
+    last_err: Exception | None = None
+    start_time = time.monotonic()
     while time.monotonic() < deadline:
         try:
             st, _, raw = https_req(
@@ -397,23 +399,49 @@ def wait_https_ingress_ready(
             )
             last_status = st
             if st == 200 and b"pong" in raw:
-                login_st, _, _ = https_req(
-                    site_name=site_name,
-                    connect_host=connect_host,
-                    https_port=https_port,
-                    ca_crt_path=ca_crt_path,
-                    path="/login",
-                    headers={"Accept": "text/html"},
+                try:
+                    login_st, _, _ = https_req(
+                        site_name=site_name,
+                        connect_host=connect_host,
+                        https_port=https_port,
+                        ca_crt_path=ca_crt_path,
+                        path="/login",
+                        headers={"Accept": "text/html"},
+                    )
+                    last_login_status = login_st
+                    if login_st == 200:
+                        sys.stderr.write(
+                            f"[wait_https_ingress_ready] Ingress ready in {time.monotonic() - start_time:.1f}s\n"
+                        )
+                        sys.stderr.flush()
+                        return
+                    sys.stderr.write(
+                        f"[wait_https_ingress_ready] ping=200 but login={login_st} (elapsed={time.monotonic() - start_time:.1f}s)\n"
+                    )
+                    sys.stderr.flush()
+                except Exception as lex:
+                    last_login_status = 0
+                    last_err = lex
+                    sys.stderr.write(
+                        f"[wait_https_ingress_ready] ping=200 but login error: {type(lex).__name__}: {lex}\n"
+                    )
+                    sys.stderr.flush()
+            else:
+                sys.stderr.write(
+                    f"[wait_https_ingress_ready] ping status={st}, raw={raw[:100]!r} (elapsed={time.monotonic() - start_time:.1f}s)\n"
                 )
-                last_login_status = login_st
-                if login_st == 200:
-                    return
-        except Exception:
+                sys.stderr.flush()
+        except Exception as pex:
             last_status = 0
-        time.sleep(0.5)
+            last_err = pex
+            sys.stderr.write(
+                f"[wait_https_ingress_ready] ping exception: {type(pex).__name__}: {pex} (elapsed={time.monotonic() - start_time:.1f}s)\n"
+            )
+            sys.stderr.flush()
+        time.sleep(1.0)
     raise RuntimeError(
         f"Timed out waiting for HTTPS Traefik/frontend ingress /api/method/ping=200 and /login=200 on {site_name} "
-        f"(last_ping_status={last_status}, last_login_status={last_login_status})"
+        f"(last_ping_status={last_status}, last_login_status={last_login_status}, last_err={type(last_err).__name__}: {last_err})"
     )
 
 
