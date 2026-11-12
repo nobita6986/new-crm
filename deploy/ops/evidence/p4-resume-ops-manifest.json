@@ -813,8 +813,8 @@
     },
     {
       "path": "docs/p4/P4-exit-report.md",
-      "bytes": 44302,
-      "sha256": "2c05687ae24df8c2a8e03ec2f925c4e5a102191266beaf86acbbc3774ae5a6e9"
+      "bytes": 44651,
+      "sha256": "a5b197655881286eea0a69f4559f6431ae295dcbd8ca170883f8e4ea1477c9ff"
     },
     {
       "path": "docs/p4/api-contract.md",
