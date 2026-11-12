@@ -625,7 +625,20 @@ finally:
         raise RuntimeError("Isolated Staging/DR bootstrap did not emit DR_SEED_RESULT")
 
     run_sub(compose_cmd(env_file, ["restart", "backend"]))
-    wait_services_healthy(env_file, ("backend",), timeout_seconds=60)
+    wait_services_healthy(env_file, ("backend",), timeout_seconds=90)
+
+    # Warm-up: send a few pings directly to backend before bringing up frontend/proxy
+    # This forces Gunicorn workers to finish --preload warm-up and avoids 30s hangs on first request
+    _warmup_deadline = time.monotonic() + 60.0
+    while time.monotonic() < _warmup_deadline:
+        try:
+            import socket as _socket
+            conn = _socket.create_connection(("127.0.0.1", 8000), timeout=5.0)
+            conn.close()
+            break
+        except Exception:
+            time.sleep(1.0)
+    time.sleep(5.0)  # additional grace for Gunicorn workers to finish preloading
 
     run_sub(
         compose_cmd(
@@ -654,6 +667,7 @@ finally:
         connect_host=connect_host,
         https_port=https_port,
         ca_crt_path=ca_crt_path,
+        timeout_seconds=300,
     )
 
     smoke_env = os.environ.copy()

@@ -653,8 +653,8 @@
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
-      "bytes": 377849,
-      "sha256": "a4bfc949346c08fe484b971978277045a30d93f4874dc2a655df0520d8d8218d"
+      "bytes": 378468,
+      "sha256": "77997d04e1370aa83a29aef60a88e7a87a2d9ed0caee25f83e01054b03549962"
     },
     {
       "path": "deploy/ops/run_https_browser_uat_and_security.py",
