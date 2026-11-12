@@ -1,0 +1,259 @@
+{
+  "schema_version": "cskh-p4-readonly-vps-preflight-v1",
+  "timestamp_utc": "2026-11-12T14:00:07Z",
+  "mode": "READ_ONLY_ZERO_MUTATION",
+  "status": "PASS",
+  "host_identity": {
+    "hostname": "vps-3928",
+    "platform": "Linux-6.8.0-31-generic-x86_64-with-glibc2.39",
+    "kernel_release": "6.8.0-31-generic"
+  },
+  "host_resources": {
+    "cpu_cores": 6,
+    "mem_total_mib": 11960.71,
+    "mem_available_mib": 10210.81,
+    "required_avail_ram_mib": 1536.0,
+    "ram_headroom_surplus_mib": 8674.81,
+    "swap_total_mib": 1923.0,
+    "swap_free_mib": 1921.45,
+    "loadavg_1m": 0.63,
+    "loadavg_5m": 1.09,
+    "loadavg_15m": 2.61,
+    "disk_check_path": "/",
+    "disk_total_gib": 76.9,
+    "disk_free_gib": 49.78,
+    "required_free_disk_gib": 12.0,
+    "disk_headroom_surplus_gib": 37.78
+  },
+  "planned_isolated_loopback_ports": {
+    "bind_ip": "127.0.0.1",
+    "http_port": 18081,
+    "http_port_free": true,
+    "https_port": 18443,
+    "https_port_free": true
+  },
+  "checks": {
+    "cpu_cores_ge_2": true,
+    "available_ram_sufficient": true,
+    "free_disk_sufficient": true,
+    "planned_loopback_ports_free": true,
+    "live_stack_running_untouched": true
+  },
+  "safe_staging_allocation": {
+    "status": "SAFE_FOR_G03_G05_AND_G18",
+    "load_per_cpu_1m": 0.105,
+    "g03_g05_smoke_safe": true,
+    "g18_acceptance_safe": true,
+    "recommended_g03_g05_profile": "s1_canonical_4x4",
+    "recommended_g18_profile": "s1_canonical_4x4",
+    "recommended_config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+    "recommended_compose_env_overrides": {
+      "PROXY_CPUS": "0.5",
+      "PROXY_MEM_LIMIT": "256m",
+      "FRONTEND_CPUS": "1.0",
+      "FRONTEND_MEM_LIMIT": "512m",
+      "BACKEND_CPUS": "2.0",
+      "BACKEND_MEM_LIMIT": "2048m",
+      "GUNICORN_WORKERS": "4",
+      "GUNICORN_THREADS": "4",
+      "GUNICORN_TIMEOUT": "120",
+      "WEBSOCKET_CPUS": "0.5",
+      "WEBSOCKET_MEM_LIMIT": "512m",
+      "QUEUE_SHORT_CPUS": "1.0",
+      "QUEUE_SHORT_MEM_LIMIT": "1024m",
+      "QUEUE_LONG_CPUS": "1.5",
+      "QUEUE_LONG_MEM_LIMIT": "2048m",
+      "SCHEDULER_CPUS": "0.5",
+      "SCHEDULER_MEM_LIMIT": "512m",
+      "DB_CPUS": "2.0",
+      "DB_MEM_LIMIT": "4096m",
+      "REDIS_CACHE_CPUS": "0.5",
+      "REDIS_CACHE_MEM_LIMIT": "512m",
+      "REDIS_CACHE_MAXMEMORY": "256mb",
+      "REDIS_QUEUE_CPUS": "0.5",
+      "REDIS_QUEUE_MEM_LIMIT": "512m"
+    },
+    "safe_profiles_allowed": [
+      "s1_canonical_4x4",
+      "staging_vps_capped",
+      "staging_dr_smoke_only"
+    ],
+    "profile_evaluations": {
+      "s1_canonical_4x4": {
+        "safe_to_allocate": true,
+        "g03_g05_smoke_capable": true,
+        "g18_s1_benchmark_capable": true,
+        "config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+        "backend_cpus": 2.0,
+        "backend_mem_mib": 2048.0,
+        "gunicorn_workers": 4,
+        "gunicorn_threads": 4,
+        "db_cpus": 2.0,
+        "db_mem_mib": 4096.0,
+        "total_capped_cpus": 10.0,
+        "total_capped_ram_mib": 12032.0,
+        "disqualification_reasons": []
+      },
+      "staging_vps_capped": {
+        "safe_to_allocate": true,
+        "g03_g05_smoke_capable": true,
+        "g18_s1_benchmark_capable": true,
+        "config_spec_sha256": "40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254",
+        "backend_cpus": 1.5,
+        "backend_mem_mib": 1536.0,
+        "gunicorn_workers": 2,
+        "gunicorn_threads": 4,
+        "db_cpus": 1.5,
+        "db_mem_mib": 2048.0,
+        "total_capped_cpus": 7.0,
+        "total_capped_ram_mib": 7936.0,
+        "disqualification_reasons": []
+      },
+      "staging_dr_smoke_only": {
+        "safe_to_allocate": true,
+        "g03_g05_smoke_capable": true,
+        "g18_s1_benchmark_capable": false,
+        "config_spec_sha256": "0069e828c64a8e025e0c88b4fd67c308a485d03d140e153e133f7213c02e6b58",
+        "backend_cpus": 1.0,
+        "backend_mem_mib": 1280.0,
+        "gunicorn_workers": 2,
+        "gunicorn_threads": 2,
+        "db_cpus": 1.0,
+        "db_mem_mib": 1536.0,
+        "total_capped_cpus": 6.0,
+        "total_capped_ram_mib": 5696.0,
+        "disqualification_reasons": []
+      }
+    }
+  },
+  "live_before_snapshot": {
+    "timestamp_utc": "2026-11-12T14:00:07Z",
+    "live_project_name": "crm-cskh-vps-staging",
+    "container_count": 11,
+    "daemon_container_count": 10,
+    "all_running": true,
+    "containers": [
+      {
+        "id": "1ef1f0f4a379155556f953506d1c8eb19704f0344881cdb719d45509f1bc1a38",
+        "name": "crm-cskh-vps-staging-backend-1",
+        "service": "backend",
+        "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "config_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-07T17:10:07.145423245Z",
+        "restart_count": 0
+      },
+      {
+        "id": "af70f1a6420249619690b3f6857f4dffc320dfa131756fef65458b8797467d79",
+        "name": "crm-cskh-vps-staging-configurator-1",
+        "service": "configurator",
+        "image": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+        "config_image": "sha256:c56c19f9d87546ba5d52161cad92d937c1369d9fb0cd53f77c7193b166380df9",
+        "status": "exited",
+        "health": null,
+        "started_at": "2026-11-06T06:59:23.786802176Z",
+        "restart_count": 0
+      },
+      {
+        "id": "bd5f2f2e8fc5f02f68ff84dd5dbeb729dfeffa44509456561c3bd4f0b0a8f1b1",
+        "name": "crm-cskh-vps-staging-db-1",
+        "service": "db",
+        "image": "sha256:f16d7a344413e519dff518f27bdb221388f84b0d274c97c4fb5f2cb0dc1b34fa",
+        "config_image": "mariadb:11.8@sha256:f16d7a344413e519dff518f27bdb221388f84b0d274c97c4fb5f2cb0dc1b34fa",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-06T06:55:29.232441936Z",
+        "restart_count": 0
+      },
+      {
+        "id": "8f961de2492b13a82cd9e8c6799c9098ab6fc13f2b47a875b50be155d8e3a758",
+        "name": "crm-cskh-vps-staging-frontend-1",
+        "service": "frontend",
+        "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "config_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-07T17:10:07.512046479Z",
+        "restart_count": 0
+      },
+      {
+        "id": "eac868d76d015829d2f5e1d0c2d87c5cbbccdcdca6eaeb4e5a0f81a9c1a7daaa",
+        "name": "crm-cskh-vps-staging-proxy-1",
+        "service": "proxy",
+        "image": "sha256:68ae5fe5b64ca166704b746a9e8afcd385e36b3f569a5691401bf652d57b3748",
+        "config_image": "traefik:v3.7@sha256:68ae5fe5b64ca166704b746a9e8afcd385e36b3f569a5691401bf652d57b3748",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-06T09:09:45.197706211Z",
+        "restart_count": 0
+      },
+      {
+        "id": "a3447e79305802e2a878cd927812729ecb3de09bc0d2d422f1695f68cee75aba",
+        "name": "crm-cskh-vps-staging-queue-long-1",
+        "service": "queue-long",
+        "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "config_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-07T17:10:06.084053977Z",
+        "restart_count": 0
+      },
+      {
+        "id": "7b6017343b553bfdcdd9424c74b4639e33a6f9b758ef10f50c5d9bb21dd7ae69",
+        "name": "crm-cskh-vps-staging-queue-short-1",
+        "service": "queue-short",
+        "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "config_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-07T17:10:05.822731104Z",
+        "restart_count": 0
+      },
+      {
+        "id": "77d230525c3297bc9fcf193e6baf701b371cf73e6ba6bd97f726093f5ef92416",
+        "name": "crm-cskh-vps-staging-redis-cache-1",
+        "service": "redis-cache",
+        "image": "sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba",
+        "config_image": "redis:8.6-alpine@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-06T06:55:30.572864744Z",
+        "restart_count": 0
+      },
+      {
+        "id": "2d086aaddd8f71b6b679d280ab05807bc91b4b8535537823325978ca6f818674",
+        "name": "crm-cskh-vps-staging-redis-queue-1",
+        "service": "redis-queue",
+        "image": "sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba",
+        "config_image": "redis:8.6-alpine@sha256:ac2da09bc822f325a9f68f533120b86fa39c1b8db46b3aa7c1bbea7fdfd4fcba",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-06T06:55:29.671663294Z",
+        "restart_count": 0
+      },
+      {
+        "id": "34b4e9c6f7ef9289df786188c98f3cee1ce222d5efc574972876934e763feb61",
+        "name": "crm-cskh-vps-staging-scheduler-1",
+        "service": "scheduler",
+        "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "config_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-07T17:10:06.433611751Z",
+        "restart_count": 0
+      },
+      {
+        "id": "cfc7477fd1c160d8a20f4e563d8698aa8db54e779d0e0c31ca2d88a846644cc6",
+        "name": "crm-cskh-vps-staging-websocket-1",
+        "service": "websocket",
+        "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "config_image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+        "status": "running",
+        "health": "healthy",
+        "started_at": "2026-11-07T17:10:06.720643844Z",
+        "restart_count": 0
+      }
+    ]
+  }
+}

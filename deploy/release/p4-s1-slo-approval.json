@@ -7,12 +7,18 @@
   "slo_spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
   "approved_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
   "approved_profiles": [
-    "staging_vps_capped"
+    "staging_vps_capped",
+    "s1_canonical_4x4"
   ],
   "approval_status": "OWNER_APPROVED",
   "owner_signoff": {
     "approved_by": "Owner-T0",
     "approved_at_utc": "2026-11-12T09:43:00Z",
     "decision_reference": "T1A-handover-g03-g05-g18: staging_vps_capped confirmed, config_spec_sha256=40254538, image=ba68cd22"
+  },
+  "owner_signoff_s1_canonical_4x4": {
+    "approved_by": "Owner-T0",
+    "approved_at_utc": "2026-11-12T14:00:00Z",
+    "decision_reference": "G18 rerun approved for s1_canonical_4x4 after staging_vps_capped FAIL (2/11); readonly-vps-preflight-recheck PASS, config_spec_sha256=683bc830, same image=ba68cd22. All 11 SLO thresholds unchanged per slo_spec_sha256=ccd8f83c."
   }
 }

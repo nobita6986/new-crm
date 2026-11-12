@@ -1,0 +1,39 @@
+{
+  schema: g18-resource-snapshot-v1,
+  note: Captured at approx 2026-11-12T13:42:38Z while benchmark was running (phase: HTTP load test, backend at 104% CPU),
+  captured_at_utc: 2026-11-12T13:42:38Z,
+  bench_elapsed_min: 52,
+  bench_project: cskh-p4-bench-1d8ae0f0,
+  profile: staging_vps_capped,
+  docker_stats: {
+    cskh-p4-bench-1d8ae0f0-frontend-1: {cpu_pct: 0.13, mem_usage_mib: 10.21, mem_limit_mib: 256},
+    cskh-p4-bench-1d8ae0f0-backend-1:  {cpu_pct: 104.90, mem_usage_mib: 292.8, mem_limit_mib: 1536, note: Gunicorn 2wx4t at full load},
+    cskh-p4-bench-1d8ae0f0-scheduler-1:{cpu_pct: 0.00, mem_usage_mib: 55.95, mem_limit_mib: 384},
+    cskh-p4-bench-1d8ae0f0-queue-long-1:{cpu_pct: 68.99, mem_usage_mib: 128.6, mem_limit_mib: 1536, note: execute_weighted_distribution job running here},
+    cskh-p4-bench-1d8ae0f0-queue-short-1:{cpu_pct: 25.93, mem_usage_mib: 767.9, mem_limit_mib: 768, note: AT MEMORY LIMIT — likely GC pressure contributing to record_attempt latency},
+    cskh-p4-bench-1d8ae0f0-websocket-1: {cpu_pct: 0.05, mem_usage_mib: 24.12, mem_limit_mib: 384},
+    cskh-p4-bench-1d8ae0f0-redis-cache-1:{cpu_pct: 8.98, mem_usage_mib: 9.73, mem_limit_mib: 384},
+    cskh-p4-bench-1d8ae0f0-redis-queue-1:{cpu_pct: 0.64, mem_usage_mib: 5.69, mem_limit_mib: 384},
+    cskh-p4-bench-1d8ae0f0-db-1:         {cpu_pct: 15.73, mem_usage_mib: 344.1, mem_limit_mib: 2048}
+  },
+  host_procs_during_bench: {
+    pid_2953158_benchmark_orchestrator: {cpu_pct: 0.2, rss_mib: 47.2, stat: Sl, elapsed: 51:53},
+    pid_3025146_frappe_worker_long:     {cpu_pct: 70.5, rss_mib: 109.8, stat: RNs, elapsed: 0:30:30},
+    pid_3058779_frappe_worker_short:    {cpu_pct: 24.8, rss_mib: 699.8, stat: DNs, note: D=uninterruptible I/O wait; at RAM limit},
+    pid_2963396_actor_python:           {cpu_pct: 9.6, rss_mib: 742.4, stat: Ss, elapsed: 0:31:00}
+  },
+  distribution_job_final_state: {
+    check: execute_weighted_distribution_10000_items,
+    eligible_count: 10000,
+    created_work_items: 4100,
+    duplicate_work_items: 0,
+    execute_ms: 1201130.43,
+    throughput_items_per_min: 204.9,
+    ownership_reconciled: true,
+    abort_cancel_guard_verified: true,
+    worker_queue: queue-long,
+    worker_cpu_pct_at_capture: 68.99,
+    worker_mem_limit_mib: 1536,
+    analysis: Job processed 4100/10000 eligible items (41%) in 20 minutes. Remaining 5900 may be pre-assigned or filtered by eligibility rules — cannot distinguish without actor source. CPU was not fully saturated (69%), suggesting I/O-bound or lock-contention bottleneck in DB write path at 1.5 vCPU shared.
+  }
+}
