@@ -1,27 +1,53 @@
-"""Fail-closed SLO scorer for P4 S1 & G18 isolated benchmark reports (`T1A` / `T1C` / `Owner`)."""
+"""Fail-closed SLO scorer for P4 S1 & G18 isolated benchmark reports (`T1A` / `T1C` / `Owner`).
+
+Governance model:
+- `deploy/release/p4-s1-slo-spec.json` is the immutable versioned threshold specification
+  submitted for review; its bytes and SHA-256 digest are NEVER modified when Owner signs off.
+- `deploy/release/p4-s1-slo-approval.json` is the separate Owner approval record bound
+  cryptographically to `slo_spec_sha256`, `approved_image_digest`, and `approved_profiles`.
+"""
 
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 EXPECTED_SCHEMA_VERSION = "cskh-p4-s1-slo-spec-v1"
+EXPECTED_APPROVAL_SCHEMA_VERSION = "cskh-p4-s1-slo-approval-v1"
+VALID_APPROVAL_STATUSES = ("PENDING_OWNER_APPROVAL", "OWNER_APPROVED")
 REQUIRED_CATEGORIES = ("SSR", "JSON_API", "AGGREGATE_AND_BACKGROUND")
 REQUIRED_DRILLDOWN_VARIANTS = (
     "kpi_metric_drilldown_250k_api",
     "kpi_metric_drilldown_monthly_company_api",
 )
 SUPPORTED_PROFILES = ("s1_canonical_4x4", "staging_vps_capped")
+SHA256_HEX_RE = re.compile(r"^[0-9a-f]{64}$")
+DIGEST_URI_RE = re.compile(r"^ghcr\.io/[a-z0-9._-]+/[a-z0-9._/-]+@sha256:[0-9a-f]{64}$")
 
 
 def compute_normalized_sha256(path: Path) -> str:
     """Compute SHA-256 over LF-normalized UTF-8 bytes so Linux and Windows match bit-for-bit."""
     raw = path.read_bytes().replace(b"\r\n", b"\n")
     return hashlib.sha256(raw).hexdigest()
+
+
+def _parse_utc_iso8601(raw: str) -> datetime | None:
+    val = raw.strip()
+    if not val:
+        return None
+    normalized = val[:-1] + "+00:00" if val.endswith("Z") else val
+    try:
+        dt = datetime.fromisoformat(normalized)
+    except ValueError:
+        return None
+    if dt.tzinfo is None or dt.utcoffset() != timezone.utc.utcoffset(dt):
+        return None
+    return dt
 
 
 def resolve_dotted_path(doc: dict[str, Any], dotted_path: str) -> Any:
@@ -68,7 +94,6 @@ def validate_slo_spec_governance(
     spec: dict[str, Any],
     *,
     profile: str,
-    require_owner_approved: bool = False,
 ) -> list[str]:
     errors: list[str] = []
     if spec.get("schema_version") != EXPECTED_SCHEMA_VERSION:
@@ -144,23 +169,164 @@ def validate_slo_spec_governance(
                 f"SLO spec missing mandatory G18 drill-down variant {req_var!r}"
             )
 
-    if require_owner_approved:
-        if spec.get("approval_status") != "OWNER_APPROVED":
+    return errors
+
+
+def validate_slo_approval_document(
+    approval_doc: dict[str, Any],
+    *,
+    spec: dict[str, Any],
+    actual_slo_sha256: str,
+    target_image_digest: str,
+    profile: str,
+    require_owner_approved: bool = False,
+) -> tuple[list[str], dict[str, Any]]:
+    """Validate separate Owner SLO approval document against SLO SHA-256, digest & profile."""
+    errors: list[str] = []
+    if not isinstance(approval_doc, dict):
+        return ["Approval document root must be a JSON object"], {}
+
+    if approval_doc.get("schema_version") != EXPECTED_APPROVAL_SCHEMA_VERSION:
+        errors.append(
+            f"Approval document invalid schema_version: {approval_doc.get('schema_version')!r} "
+            f"!= {EXPECTED_APPROVAL_SCHEMA_VERSION!r}"
+        )
+
+    if approval_doc.get("slo_bundle_id") != spec.get("slo_bundle_id"):
+        errors.append(
+            f"Approval document slo_bundle_id ({approval_doc.get('slo_bundle_id')!r}) "
+            f"!= SLO spec slo_bundle_id ({spec.get('slo_bundle_id')!r})"
+        )
+
+    if str(approval_doc.get("slo_version") or "") != str(spec.get("slo_version") or ""):
+        errors.append(
+            f"Approval document slo_version ({approval_doc.get('slo_version')!r}) "
+            f"!= SLO spec slo_version ({spec.get('slo_version')!r})"
+        )
+
+    doc_slo_sha = str(approval_doc.get("slo_spec_sha256") or "").strip().lower()
+    if not SHA256_HEX_RE.match(doc_slo_sha):
+        errors.append(
+            f"Approval document slo_spec_sha256 is not a valid 64-hex SHA-256: {doc_slo_sha!r}"
+        )
+    elif doc_slo_sha != actual_slo_sha256.lower():
+        errors.append(
+            f"Approval document slo_spec_sha256 ({doc_slo_sha}) != "
+            f"actual SLO spec SHA-256 ({actual_slo_sha256.lower()})"
+        )
+
+    approved_digest = str(approval_doc.get("approved_image_digest") or "").strip()
+    if not DIGEST_URI_RE.match(approved_digest):
+        errors.append(
+            "Approval document approved_image_digest must be an immutable "
+            f"`ghcr.io/<owner>/<repo>@sha256:<64-hex>` URI, got {approved_digest!r}"
+        )
+    elif target_image_digest and approved_digest != target_image_digest:
+        errors.append(
+            f"Approval document approved_image_digest ({approved_digest!r}) != "
+            f"expected image digest ({target_image_digest!r})"
+        )
+
+    approved_profiles = approval_doc.get("approved_profiles")
+    valid_profile_list = True
+    if not isinstance(approved_profiles, list):
+        errors.append("Approval document `approved_profiles` must be a JSON array")
+        valid_profile_list = False
+        approved_profiles = []
+    else:
+        seen_profs: set[str] = set()
+        for item in approved_profiles:
+            if not isinstance(item, str) or item not in SUPPORTED_PROFILES:
+                errors.append(
+                    f"Approval document `approved_profiles` contains unsupported profile {item!r}"
+                )
+                valid_profile_list = False
+            elif item in seen_profs:
+                errors.append(
+                    f"Approval document `approved_profiles` contains duplicate profile {item!r}"
+                )
+                valid_profile_list = False
+            else:
+                seen_profs.add(item)
+
+    status = str(approval_doc.get("approval_status") or "").strip()
+    if status not in VALID_APPROVAL_STATUSES:
+        errors.append(
+            f"Approval document invalid approval_status {status!r}; "
+            f"expected one of {VALID_APPROVAL_STATUSES}"
+        )
+
+    signoff = approval_doc.get("owner_signoff")
+    if not isinstance(signoff, dict):
+        errors.append("Approval document `owner_signoff` must be a JSON object")
+        signoff = {}
+
+    approved_by = str(signoff.get("approved_by") or "").strip()
+    approved_at_utc = str(signoff.get("approved_at_utc") or "").strip()
+    decision_ref = str(signoff.get("decision_reference") or "").strip()
+
+    if status == "PENDING_OWNER_APPROVAL":
+        if valid_profile_list and len(approved_profiles) > 0:
             errors.append(
-                f"Owner approval required (`approval_status` is {spec.get('approval_status')!r}, "
-                "expected 'OWNER_APPROVED')"
+                "Approval document cannot populate `approved_profiles` while "
+                "`approval_status` is 'PENDING_OWNER_APPROVAL'"
             )
-        signoff = spec.get("owner_signoff") or {}
-        if (
-            not str(signoff.get("approved_by") or "").strip()
-            or not str(signoff.get("approved_at_utc") or "").strip()
-        ):
+        if approved_by or approved_at_utc or decision_ref:
             errors.append(
-                "Owner approval required (`owner_signoff.approved_by` and "
-                "`owner_signoff.approved_at_utc` must be populated)"
+                "Approval document cannot populate `owner_signoff` fields while "
+                "`approval_status` is 'PENDING_OWNER_APPROVAL'"
+            )
+        if require_owner_approved:
+            errors.append(
+                "Owner approval required: separate approval document has "
+                "approval_status='PENDING_OWNER_APPROVAL' (expected 'OWNER_APPROVED')"
+            )
+    elif status == "OWNER_APPROVED":
+        if valid_profile_list and len(approved_profiles) == 0:
+            errors.append(
+                "Approval document with approval_status='OWNER_APPROVED' must list "
+                "at least one approved configuration in `approved_profiles`"
+            )
+        if not approved_by:
+            errors.append(
+                "Approval document with approval_status='OWNER_APPROVED' requires "
+                "non-empty `owner_signoff.approved_by`"
+            )
+        if not decision_ref:
+            errors.append(
+                "Approval document with approval_status='OWNER_APPROVED' requires "
+                "non-empty `owner_signoff.decision_reference`"
+            )
+        if not approved_at_utc or _parse_utc_iso8601(approved_at_utc) is None:
+            errors.append(
+                "Approval document with approval_status='OWNER_APPROVED' requires "
+                "valid UTC ISO-8601 `owner_signoff.approved_at_utc`"
+            )
+        if require_owner_approved and profile not in approved_profiles:
+            errors.append(
+                f"Owner approval required: profile {profile!r} is not in "
+                f"approved_profiles {approved_profiles!r}"
             )
 
-    return errors
+    owner_approved_for_profile = (
+        status == "OWNER_APPROVED"
+        and valid_profile_list
+        and profile in approved_profiles
+        and len(errors) == 0
+    )
+    meta = {
+        "approval_status": status or None,
+        "slo_spec_sha256_bound": doc_slo_sha or None,
+        "approved_image_digest": approved_digest or None,
+        "approved_profiles": approved_profiles,
+        "owner_approved_for_profile": owner_approved_for_profile,
+        "owner_signoff": {
+            "approved_by": approved_by or None,
+            "approved_at_utc": approved_at_utc or None,
+            "decision_reference": decision_ref or None,
+        },
+    }
+    return errors, meta
 
 
 def _evaluate_http_rule(
@@ -278,6 +444,7 @@ def evaluate_slo_bundle(
     expected_slo_sha256: str,
     benchmark_report_path: Path,
     profile: str,
+    approval_doc_path: Path | None = None,
     expected_image_digest: str = "",
     g18_diag_report_path: Path | None = None,
     require_owner_approved: bool = False,
@@ -294,13 +461,7 @@ def evaluate_slo_bundle(
             f"got {actual_slo_sha}"
         )
 
-    gate_errors.extend(
-        validate_slo_spec_governance(
-            spec,
-            profile=profile,
-            require_owner_approved=require_owner_approved,
-        )
-    )
+    gate_errors.extend(validate_slo_spec_governance(spec, profile=profile))
 
     tested_image = str(bench.get("app_image_tested") or "")
     target_digest = expected_image_digest.strip() or str(
@@ -310,6 +471,47 @@ def evaluate_slo_bundle(
         gate_errors.append(
             f"Benchmark report app_image_tested ({tested_image!r}) != "
             f"expected_image_digest ({target_digest!r})"
+        )
+
+    approval_doc_sha: str | None = None
+    approval_verification: dict[str, Any] = {
+        "approval_doc_path": str(approval_doc_path) if approval_doc_path else None,
+        "approval_doc_sha256": None,
+        "approval_status": None,
+        "approved_image_digest": None,
+        "approved_profiles": [],
+        "owner_approved_for_profile": False,
+        "owner_signoff": None,
+    }
+    if approval_doc_path is not None:
+        if not approval_doc_path.is_file():
+            gate_errors.append(f"Approval document not found: {approval_doc_path}")
+        else:
+            approval_doc_sha = compute_normalized_sha256(approval_doc_path)
+            approval_doc = json.loads(approval_doc_path.read_text(encoding="utf-8"))
+            app_errs, app_meta = validate_slo_approval_document(
+                approval_doc,
+                spec=spec,
+                actual_slo_sha256=actual_slo_sha,
+                target_image_digest=target_digest,
+                profile=profile,
+                require_owner_approved=require_owner_approved,
+            )
+            gate_errors.extend(app_errs)
+            approved_digest = str(app_meta.get("approved_image_digest") or "")
+            if approved_digest and tested_image and tested_image != approved_digest:
+                gate_errors.append(
+                    f"Benchmark report app_image_tested ({tested_image!r}) != "
+                    f"approval document approved_image_digest ({approved_digest!r})"
+                )
+            approval_verification = {
+                "approval_doc_path": str(approval_doc_path),
+                "approval_doc_sha256": approval_doc_sha,
+                **app_meta,
+            }
+    elif require_owner_approved:
+        gate_errors.append(
+            "Owner approval required: separate approval document (`--approval-doc`) must be provided"
         )
 
     report_prof = str(bench.get("resource_profile") or "s1_canonical_4x4")
@@ -363,6 +565,17 @@ def evaluate_slo_bundle(
                 f"G18 diagnostic app_image_tested ({diag_doc.get('app_image_tested')!r}) "
                 f"!= expected_image_digest ({target_digest!r})"
             )
+        approved_digest_for_diag = str(
+            approval_verification.get("approved_image_digest") or ""
+        )
+        if (
+            approved_digest_for_diag
+            and str(diag_doc.get("app_image_tested") or "") != approved_digest_for_diag
+        ):
+            gate_errors.append(
+                f"G18 diagnostic app_image_tested ({diag_doc.get('app_image_tested')!r}) "
+                f"!= approval document approved_image_digest ({approved_digest_for_diag!r})"
+            )
         diag_rp = diag_doc.get("resource_profile")
         diag_prof_name = (
             str(diag_rp.get("name") or "")
@@ -390,13 +603,18 @@ def evaluate_slo_bundle(
         and len(gate_errors) == 0
     )
 
+    effective_approval_status = approval_verification.get(
+        "approval_status"
+    ) or spec.get("approval_status")
+
     return {
         "schema_version": "cskh-p4-s1-slo-evaluation-v1",
         "evaluated_at_utc": datetime.now(timezone.utc).isoformat(),
         "slo_bundle_id": spec.get("slo_bundle_id"),
         "slo_version": spec.get("slo_version"),
-        "slo_approval_status": spec.get("approval_status"),
+        "slo_approval_status": effective_approval_status,
         "slo_spec_sha256": actual_slo_sha,
+        "approval_verification": approval_verification,
         "profile_evaluated": profile,
         "expected_image_digest": target_digest,
         "benchmark_report_sha256": bench_sha,
@@ -415,12 +633,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--slo-spec",
         default="deploy/release/p4-s1-slo-spec.json",
-        help="Path to versioned SLO JSON specification",
+        help="Path to immutable versioned SLO JSON specification",
     )
     parser.add_argument(
         "--expected-slo-sha256",
         required=True,
-        help="Mandatory expected SHA-256 hex digest of the SLO specification file",
+        help="Mandatory expected SHA-256 hex digest of the immutable SLO specification file",
+    )
+    parser.add_argument(
+        "--approval-doc",
+        "--slo-approval",
+        dest="approval_doc",
+        default="deploy/release/p4-s1-slo-approval.json",
+        help=(
+            "Path to separate Owner SLO approval JSON document bound to slo_spec_sha256, "
+            "approved_image_digest, and approved_profiles"
+        ),
     )
     parser.add_argument(
         "--benchmark-report",
@@ -446,16 +674,21 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--require-owner-approved",
         action="store_true",
-        help="Fail closed unless `approval_status == OWNER_APPROVED`",
+        help=(
+            "Fail closed unless separate `--approval-doc` has `approval_status == OWNER_APPROVED`, "
+            "complete `owner_signoff`, and includes `--profile` in `approved_profiles`"
+        ),
     )
     parser.add_argument("--out", default="", help="Optional JSON output summary path")
     args = parser.parse_args(argv)
 
+    approval_arg = args.approval_doc.strip()
     summary = evaluate_slo_bundle(
         slo_spec_path=Path(args.slo_spec),
         expected_slo_sha256=args.expected_slo_sha256,
         benchmark_report_path=Path(args.benchmark_report),
         profile=args.profile,
+        approval_doc_path=Path(approval_arg) if approval_arg else None,
         expected_image_digest=args.expected_image_digest,
         g18_diag_report_path=(
             Path(args.g18_diag_report) if args.g18_diag_report.strip() else None
@@ -473,6 +706,10 @@ def main(argv: list[str] | None = None) -> int:
                 "status": summary["status"],
                 "slo_version": summary["slo_version"],
                 "slo_spec_sha256": summary["slo_spec_sha256"],
+                "slo_approval_status": summary["slo_approval_status"],
+                "owner_approved_for_profile": summary["approval_verification"][
+                    "owner_approved_for_profile"
+                ],
                 "profile_evaluated": summary["profile_evaluated"],
                 "category_verdicts": summary["category_verdicts"],
                 "gate_errors": summary["gate_errors"],
