@@ -1,0 +1,62 @@
+{
+  schema: g18-reconcile-report-v1,
+  generated_by: T1A,
+  reconciled_at_utc: 2026-11-12T13:49:24Z,
+  profile: staging_vps_capped,
+  config_spec_sha256: 40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254,
+  image_digest: sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8,
+  commit: 3c040c85a44c4ad37e9d9152b5630a4596e593ee,
+  g18_verdict: FAIL,
+  g18_verdict_reason: 2 of 11 SLO acceptance checks failed against staging_vps_capped thresholds,
+  passed_count: 9,
+  failed_count: 2,
+  gate_status: G18_FAIL,
+  production_release_status: BLOCKED,
+  failed_items: [
+    {
+      check: record_attempt_and_callback_p95_le_2000ms_zero_dup,
+      measured_p95_ms: 2323.612,
+      target_p95_ms: 2000.0,
+      delta_ms: 323.612,
+      delta_pct: 16.18,
+      functional_correctness: PASS,
+      root_cause_hypothesis: Write path (DocType insert + callback task creation) contended under 2w*4t Gunicorn workers at bench load; queue-short container at 768/768MiB RAM limit during measurement may have caused GC pressure,
+      remediation_options: [
+        Upgrade to s1_canonical_4x4 profile (4w*4t Gunicorn, more RAM) and re-run G18,
+        Owner adjusts SLO threshold for this check to 2500ms,
+        Investigate DB index on callback task creation path
+      ]
+    },
+    {
+      check: execute_weighted_distribution_10000_items,
+      measured_execute_ms: 1201130.43,
+      created_work_items: 4100,
+      eligible_items: 10000,
+      throughput_items_per_min: 204.9,
+      root_cause_hypothesis: Background distribution job runs in queue-long worker; under staging_vps_capped resource ceiling (1.5 vCPU shared across all workers) the job processed only 4100/10000 eligible items in 20 minutes. queue-short at RAM limit may have caused worker restarts interfering with job scheduling.,
+      remediation_options: [
+        Upgrade to s1_canonical_4x4 profile with dedicated worker CPU quota,
+        Owner adjusts distribution throughput SLO for staging environment,
+        Investigate whether 4100/10000 is a data-filter artifact (5900 items may have been pre-assigned)
+      ]
+    }
+  ],
+  passed_items_summary: [
+    {check: staff_my_customers_p95_le_1500ms, measured_ms: 551.986, headroom_pct: 63.2},
+    {check: open_lead_and_history_p95_le_2000ms, measured_ms: 1445.809, headroom_pct: 27.7},
+    {check: bod_overview_snapshot_p95_le_3000ms, measured_ms: 528.156, headroom_pct: 82.4},
+    {check: kpi_drilldown_paginated_p95_le_3000ms, measured_ms: 622.094, headroom_pct: 79.3},
+    {check: preview_weighted_distribution_10000_items, measured_ms: 2644.37, target_ms: 60000},
+    {check: import_50000_csv_rows, total_ms: 628065.14, created_rows: 10000},
+    {check: recompute_kpi_non_blocking_atomic_publish, concurrent_ui_p95_ms: 34.816},
+    {check: concurrent_20_40_80_mixed_user_sessions, p95_at_80_sessions_ms: 5904.731},
+    {check: telesale_worklist_ssr_zero_errors_c12_and_c40, errors: 0}
+  ],
+  owner_decision_required: true,
+  owner_options: [
+    A: Re-run G18 with s1_canonical_4x4 profile (requires Owner re-approval of new profile),
+    B: Adjust SLO thresholds for 2 failed checks and re-run G18 (requires schema update + Owner sign-off),
+    C: Accept G18_FAIL — staging_vps_capped does not meet SLO; block production release with this profile,
+    D: Investigate root cause further before deciding
+  ]
+}

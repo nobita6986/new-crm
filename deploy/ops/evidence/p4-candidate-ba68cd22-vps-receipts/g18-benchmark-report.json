@@ -1,0 +1,100 @@
+{
+  schema: g18-benchmark-report-v1,
+  generated_by: T1A-reconstructed-from-RuntimeError,
+  note: benchmark_p4_isolated.py raised RuntimeError before writing output file; all measurement data reconstructed faithfully from exception payload. Script exit code: 1.,
+  profile: staging_vps_capped,
+  config_spec_sha256: 40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254,
+  image_digest: sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8,
+  commit: 3c040c85a44c4ad37e9d9152b5630a4596e593ee,
+  ops_release: af00a20,
+  benchmark_script: benchmark_p4_isolated.py,
+  measured_at_utc: 2026-11-12T13:49:24Z,
+  bench_project: cskh-p4-bench-1d8ae0f0,
+  bench_port: 18880,
+  all_passed: false,
+  passed_count: 9,
+  failed_count: 2,
+  items: {
+    staff_my_customers_p95_le_1500ms: {
+      target_p95_ms: 1500.0,
+      measured_http_p95_ms: 551.986,
+      error_rate_pct: 0.0,
+      passed: true
+    },
+    open_lead_and_history_p95_le_2000ms: {
+      target_p95_ms: 2000.0,
+      measured_http_p95_ms: 1445.809,
+      error_rate_pct: 0.0,
+      passed: true
+    },
+    record_attempt_and_callback_p95_le_2000ms_zero_dup: {
+      target_p95_ms: 2000.0,
+      measured_http_p95_ms: 2323.612,
+      duplicate_idempotency_keys: 0,
+      attempts_created: 80,
+      work_items_with_open_callback_task: 80,
+      http_idempotent_replays_verified: 10,
+      passed: false,
+      fail_reason: p95 2323.612ms exceeds target 2000ms by +16.2%
+    },
+    bod_overview_snapshot_p95_le_3000ms: {
+      target_p95_ms: 3000.0,
+      measured_http_p95_ms: 528.156,
+      explain_index_key: idx_cskh_kpisnap_lookup,
+      passed: true
+    },
+    kpi_drilldown_paginated_p95_le_3000ms: {
+      target_p95_ms: 3000.0,
+      measured_daily_campaign_http_p95_ms: 617.793,
+      measured_monthly_company_250k_http_p95_ms: 622.094,
+      staff_unauthorized_company_http_status: 403,
+      passed: true
+    },
+    preview_weighted_distribution_10000_items: {
+      reference_target_ms: 60000.0,
+      eligible_count: 10000,
+      measured_preview_ms: 2644.37,
+      passed: true
+    },
+    execute_weighted_distribution_10000_items: {
+      created_work_items: 4100,
+      duplicate_work_items: 0,
+      execute_ms: 1201130.43,
+      ownership_reconciled: true,
+      abort_cancel_guard_verified: true,
+      passed: false,
+      fail_reason: execute_ms 1201130ms (~20min) for 4100/10000 eligible items; throughput severely degraded under staging_vps_capped queue-long worker resource ceiling (observed 69% CPU, queue-short at 768/768MiB RAM limit during run)
+    },
+    import_50000_csv_rows: {
+      total_rows: 50000,
+      created_rows: 10000,
+      reused_rows: 5000,
+      error_rows: 500,
+      error_artifact_present: true,
+      total_ms: 628065.14,
+      preview_hwm_mib: 1555.04,
+      passed: true
+    },
+    recompute_kpi_non_blocking_atomic_publish: {
+      atomic_publish_verified: true,
+      concurrent_ui_p95_ms: 34.816,
+      passed: true
+    },
+    concurrent_20_40_80_mixed_user_sessions: {
+      sessions_20_p95_ms: 2087.674,
+      sessions_20_error_rate_pct: 0.0,
+      sessions_40_p95_ms: 3774.284,
+      sessions_40_error_rate_pct: 0.0,
+      sessions_80_p95_ms: 5904.731,
+      sessions_80_error_rate_pct: 0.0,
+      passed: true
+    },
+    telesale_worklist_ssr_zero_errors_c12_and_c40: {
+      shared_new_session_c12_error_count: 0,
+      shared_new_session_c12_timeout_count: 0,
+      staff_40_sessions_c40_error_count: 0,
+      staff_40_sessions_c40_timeout_count: 0,
+      passed: true
+    }
+  }
+}

@@ -1,6 +1,8 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
   "generated_at_utc": "2026-11-12T09:31:11Z",
+  "manifest_revision": "v12-g18-benchmark-result-20261112",
+  "manifest_updated_at_utc": "2026-11-12T13:52:00Z",
   "branch": "codex/p4-resume-ops",
   "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
@@ -8,7 +10,7 @@
   "ancestor_review_base_sha": "31e51fcac7a640fdab10517f47f02335d7b1f749",
   "verified_code_commit_sha": "33ed7a218a24cf01ab6102078d874a40ebb18deb",
   "vps_execution_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
-  "overall_p4_status": "IN_PROGRESS_BLOCKED_ON_OWNER_INPUTS",
+  "overall_p4_status": "G18_FAIL_AWAITING_OWNER_DECISION",
   "p4_promoted_to_pass": false,
   "gate_accounting": {
     "preserved_t1c_signed_gates_count": 17,
@@ -105,7 +107,22 @@
       "config_spec_sha256": "40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254",
       "g03_status": "PASS",
       "g05_status": "PASS",
-      "g18_status": "BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO",
+      "g18_status": "FAIL",
+      "g18_verdict": "2_OF_11_SLO_CHECKS_FAILED",
+      "g18_failed_checks": [
+        "record_attempt_and_callback_p95_le_2000ms_zero_dup",
+        "execute_weighted_distribution_10000_items"
+      ],
+      "g18_passed_checks": 9,
+      "g18_measured_at_utc": "2026-11-12T13:49:24Z",
+      "g18_bench_project": "cskh-p4-bench-1d8ae0f0",
+      "g18_owner_decision_required": true,
+      "g18_owner_options": [
+        "A: Re-run G18 with s1_canonical_4x4 profile",
+        "B: Adjust SLO thresholds for 2 failed checks",
+        "C: Accept G18_FAIL — staging_vps_capped does not meet SLO",
+        "D: Investigate root cause further"
+      ],
       "zero_live_mutation": true,
       "evidence_dir": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts",
       "evidence_files": {
@@ -113,9 +130,18 @@
           "sha256": "e417cba9f26fc22d8a25ea104f74815f2ebaaf0431ac8c7575f81e927dafc165",
           "bytes": 2880
         },
+        "g18-benchmark-report.json": {
+          "sha256": "70a52a63c19b6fe77673432e14bd8e374c23c71cd5d89f83c52328df16dfbdd5",
+          "bytes": 3527,
+          "note": "Reconstructed from RuntimeError payload; script exit code 1 before native write"
+        },
         "g18-pre-measurement-gate.json": {
           "sha256": "0eef0b058afa69fb1ad57db597b0412b3c1d1db4d56f227580c75ccb3d00282e",
           "bytes": 1840
+        },
+        "g18-reconcile-report.json": {
+          "sha256": "cb77dab687452a6809033c63992b0b04a38be8602ac1024090bd561701407410",
+          "bytes": 3361
         },
         "https-wss-smoke-receipt.json": {
           "sha256": "376be69550acf963c8f00af670af9838a31a7ac1f29abedc0d70a3da1a637b35",
@@ -146,7 +172,7 @@
           "bytes": 3642
         }
       },
-      "completed_at_utc": "2026-11-12T09:28:08Z"
+      "completed_at_utc": "2026-11-12T13:50:00Z"
     }
   },
   "live_vps": {
