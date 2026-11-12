@@ -40,6 +40,7 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+      - --providers.docker.constraints=Label(`com.docker.compose.project`,`${COMPOSE_PROJECT_NAME}`)
       - --providers.file.directory=/letsencrypt/dynamic
       - --providers.file.watch=true
       - --serversTransport.forwardingTimeouts.responseHeaderTimeout=120s
