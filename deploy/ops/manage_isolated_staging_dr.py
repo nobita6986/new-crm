@@ -3262,11 +3262,13 @@ def capture_readonly_live_stack_snapshot(live_project_name: str = "crm-cskh-vps-
                 }
             )
     containers.sort(key=lambda r: (str(r.get("service") or ""), str(r.get("name") or "")))
+    daemon_containers = [c for c in containers if c.get("service") not in {"configurator", "migrator"}]
     return {
         "timestamp_utc": utc_now_iso(),
         "live_project_name": live_project_name,
         "container_count": len(containers),
-        "all_running": bool(containers) and all(c.get("status") == "running" for c in containers),
+        "daemon_container_count": len(daemon_containers),
+        "all_running": bool(daemon_containers) and all(c.get("status") == "running" for c in daemon_containers),
         "containers": containers,
     }
 
@@ -3287,7 +3289,7 @@ def compare_live_stack_preservation(before: dict[str, Any], after: dict[str, Any
                 deltas.append(
                     f"{cname}.{field}: before={b_row.get(field)!r} after={a_row.get(field)!r}"
                 )
-        if a_row.get("status") != "running":
+        if b_row.get("service") not in {"configurator", "migrator"} and a_row.get("status") != "running":
             deltas.append(f"{cname}.status_not_running={a_row.get('status')!r}")
     zero_mutation = bool(before_map) and not deltas
     return {
