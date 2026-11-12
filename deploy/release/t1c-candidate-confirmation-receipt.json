@@ -1,0 +1,11 @@
+{
+  "schema_version": "cskh-p4-t1c-candidate-confirmation-receipt-v1",
+  "confirmed": true,
+  "confirmed_by": "T1C-Independent-Acceptance-Lead",
+  "confirmed_at": "2026-11-12T12:15:48+07:00",
+  "candidate_commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+  "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "verification_scope": "staging_candidate_isolated_verification",
+  "g04_status": "FAIL",
+  "production_candidate_status": "BLOCKED"
+}
