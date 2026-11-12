@@ -898,8 +898,8 @@
     },
     {
       "path": "docs/p4/performance-report.md",
-      "bytes": 28662,
-      "sha256": "9ad0070e1b14b64f7cf83fe5b69bf6e3bbc58b799c9f798cf47eb6cf52f4bb28"
+      "bytes": 28775,
+      "sha256": "823b4c578cd93f5f51b1b2ed6e3972283c99510579a87ec3511140f1a8bd642d"
     },
     {
       "path": "docs/p4/pii-field-catalog.md",
