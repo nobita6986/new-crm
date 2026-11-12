@@ -815,8 +815,13 @@ class _SNIHTTPSConnection(http.client.HTTPSConnection):
 
 def _build_ssl_context(tls_ca_file: Path | None = None) -> ssl.SSLContext:
     if tls_ca_file is not None:
-        return ssl.create_default_context(cafile=str(tls_ca_file))
-    return ssl.create_default_context()
+        ctx = ssl.create_default_context(cafile=str(tls_ca_file))
+    else:
+        ctx = ssl.create_default_context()
+    # Force HTTP/1.1 via ALPN so that http.client (which speaks HTTP/1.1 only)
+    # does not receive an HTTP/2 connection preface from Traefik and hang.
+    ctx.set_alpn_protocols(["http/1.1"])
+    return ctx
 
 
 def _https_request(
