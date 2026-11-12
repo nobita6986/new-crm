@@ -1,0 +1,70 @@
+{
+  "schema_version": "cskh-p4-vps-g03-g05-bundle-v1",
+  "timestamp_utc": "2026-11-12T09:28:08Z",
+  "status": "PASS",
+  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "governance_scope": {
+    "verification_scope": "staging_candidate_isolated_verification",
+    "candidate_verification_only": true,
+    "promoted_to_production": false,
+    "g04_status": "FAIL",
+    "production_candidate_status": "BLOCKED",
+    "release_manifest_environment_scope": "staging_candidate_verified_production_blocked",
+    "active_cve_exceptions_count": 0,
+    "rehearsal_key_allowed_for_production": false,
+    "rehearsal_key_used_for_production_approval": false,
+    "checked_promotion_public_key_fingerprint": null,
+    "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "digest_update_policy": "update_isolated_staging_and_regenerate_all_receipts_on_t1b_digest_change"
+  },
+  "host_identity": {
+    "hostname": "vps-3928",
+    "platform": "Linux-6.8.0-31-generic-x86_64-with-glibc2.39",
+    "kernel_release": "6.8.0-31-generic"
+  },
+  "isolated_project_name": "crm-cskh-dr-https-vps",
+  "isolated_site_name": "staging-dr-uat.crm-internal.localhost",
+  "kept_up_for_g18": true,
+  "live_project_untouched": "crm-cskh-vps-staging",
+  "zero_live_mutation": true,
+  "inspected_app_services": [
+    "backend",
+    "frontend",
+    "websocket",
+    "queue-short",
+    "queue-long",
+    "scheduler"
+  ],
+  "artifacts": {
+    "readonly_vps_preflight": "/opt/crm-cskh-ops-releases/af00a20/deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts/readonly-vps-preflight.json",
+    "candidate_pull_inspect_receipt": "/opt/crm-cskh-ops-releases/af00a20/deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts/candidate-registry-pull-inspect-receipt.json",
+    "runtime_isolation_audit_g03": "/opt/crm-cskh-ops-releases/af00a20/deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts/staging-dr-runtime-isolation-audit.json",
+    "inventory_and_config_audit": "/opt/crm-cskh-ops-releases/af00a20/deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts/staging-inventory-and-config-audit.json",
+    "https_wss_smoke_g05": "/opt/crm-cskh-ops-releases/af00a20/deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts/https-wss-smoke-receipt.json",
+    "live_preservation_before_after": "/opt/crm-cskh-ops-releases/af00a20/deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts/live-preservation-before-after.json",
+    "t1c_candidate_confirmation_receipt": "/opt/crm-cskh-ops-releases/af00a20/deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts/t1c-candidate-confirmation-receipt.json"
+  },
+  "staging_resource_configuration": {
+    "profile_id": "staging_vps_capped",
+    "config_spec_sha256": "40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254",
+    "g18_s1_benchmark_capable": true,
+    "backend_cpus": 1.5,
+    "backend_mem_mib": 1536.0,
+    "gunicorn_workers": 2,
+    "gunicorn_threads": 4,
+    "db_cpus": 1.5,
+    "db_mem_mib": 2048.0,
+    "total_capped_cpus": 7.0,
+    "total_capped_ram_mib": 7936.0
+  },
+  "t1c_candidate_confirmation": {
+    "confirmed": true,
+    "confirmed_by": "T1C-Independent-Acceptance-Lead",
+    "confirmed_at": "2026-11-12T12:15:48+07:00",
+    "candidate_commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+    "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "verification_scope": "staging_candidate_isolated_verification",
+    "g04_status": "FAIL",
+    "production_candidate_status": "BLOCKED"
+  }
+}

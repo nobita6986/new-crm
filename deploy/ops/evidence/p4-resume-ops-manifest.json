@@ -1,6 +1,6 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
-  "generated_at_utc": "2026-11-12T03:26:00Z",
+  "generated_at_utc": "2026-11-12T09:31:11Z",
   "branch": "codex/p4-resume-ops",
   "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
@@ -11,10 +11,12 @@
   "overall_p4_status": "IN_PROGRESS_BLOCKED_ON_OWNER_INPUTS",
   "p4_promoted_to_pass": false,
   "gate_accounting": {
-    "preserved_t1c_signed_gates_count": 15,
+    "preserved_t1c_signed_gates_count": 17,
     "preserved_t1c_signed_gates": [
       "G01",
       "G02",
+      "G03",
+      "G05",
       "G06",
       "G08",
       "G09",
@@ -29,10 +31,8 @@
       "G20",
       "G21"
     ],
-    "blocked_gates_count": 8,
+    "blocked_gates_count": 6,
     "blocked_gates": [
-      "G03",
-      "G05",
       "G07",
       "G18",
       "G19",
@@ -92,6 +92,61 @@
       "sha256sums_path": "deploy/ops/evidence/p4-candidate-ba68cd22-s1-20261112/SHA256SUMS.txt",
       "junit_tests_total": 447,
       "junit_failures": 0
+    },
+    "vps_candidate_staging": {
+      "host": "103.77.208.186",
+      "executed_by": "T1A",
+      "ops_release": "af00a20",
+      "isolated_project": "crm-cskh-dr-https-vps",
+      "isolated_site": "staging-dr-uat.crm-internal.localhost",
+      "candidate_commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+      "candidate_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "profile_id": "staging_vps_capped",
+      "config_spec_sha256": "40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254",
+      "g03_status": "PASS",
+      "g05_status": "PASS",
+      "g18_status": "BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO",
+      "zero_live_mutation": true,
+      "evidence_dir": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts",
+      "evidence_files": {
+        "candidate-registry-pull-inspect-receipt.json": {
+          "sha256": "e417cba9f26fc22d8a25ea104f74815f2ebaaf0431ac8c7575f81e927dafc165",
+          "bytes": 2880
+        },
+        "g18-pre-measurement-gate.json": {
+          "sha256": "0eef0b058afa69fb1ad57db597b0412b3c1d1db4d56f227580c75ccb3d00282e",
+          "bytes": 1840
+        },
+        "https-wss-smoke-receipt.json": {
+          "sha256": "376be69550acf963c8f00af670af9838a31a7ac1f29abedc0d70a3da1a637b35",
+          "bytes": 4862
+        },
+        "live-preservation-before-after.json": {
+          "sha256": "1ac16e8f016d0c49a3653bb6fa55f2ec333a13a38113a3d412a8a271a210bb44",
+          "bytes": 12174
+        },
+        "readonly-vps-preflight.json": {
+          "sha256": "cc6d115ca00e50b12bfd7d59b3c5d6e6764c60647d2f433b791951863ac8c156",
+          "bytes": 10164
+        },
+        "staging-dr-runtime-isolation-audit.json": {
+          "sha256": "3b8858d7f5b4024e7d99587fb09ff9508c7943eccd2262e162eda7958fb61b3d",
+          "bytes": 9423
+        },
+        "staging-inventory-and-config-audit.json": {
+          "sha256": "002e84ae31c0c3d56a9ec62ce40145949a3b96292eb187c7eb9aff9bf5c61c95",
+          "bytes": 10437
+        },
+        "t1c-candidate-confirmation-receipt.json": {
+          "sha256": "d8dc0aeb3e82773ab023a13fc7c0dbe5872da839fe41c0ee65f5b4be974ed7df",
+          "bytes": 454
+        },
+        "vps-g03-g05-summary.json": {
+          "sha256": "0dd345a22bff65989ac5ffd644710599b6624b1f7562a3a538ce094b421574e6",
+          "bytes": 3642
+        }
+      },
+      "completed_at_utc": "2026-11-12T09:28:08Z"
     }
   },
   "live_vps": {
@@ -932,7 +987,7 @@
       "sha256": "4cf7156eaeb76f45778b4aea8f2b69771337657cbedcaf4e87947336ce1d8b78"
     }
   ],
-  "manifest_revision": "v10-staging-vps-safe-sizing-t1c-confirm-and-config-bound-g18-gate-20261112",
+  "manifest_revision": "v11-g03-g05-vps-pass-g18-blocked-owner-slo-20261112",
   "merged_t1b_release_hardening_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
   "merged_t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
   "integrated_candidate_manifest_path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json"
