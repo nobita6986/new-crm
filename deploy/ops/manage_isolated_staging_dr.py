@@ -4315,12 +4315,49 @@ def collect_vps_g03_g05_receipts(
             _reuse_site = env_vals.get("SITE_NAME", site_name)
             _reuse_https_port = int(env_vals.get("HTTPS_PUBLISH_PORT", str(https_port)))
             _connect_host = "127.0.0.1"
+
+            # Pre-warm Frappe backend by sending a direct HTTP request to the backend
+            # container's bench-net IP (bypasses Traefik, avoids 504 on first real request).
+            # The backend may take up to 35 seconds to serve the first request after idle.
+            sys.stderr.write("[reuse-mode] Pre-warming Frappe backend via direct HTTP (bypass Traefik)...\n")
+            sys.stderr.flush()
+            try:
+                _backend_name = f"{project_name}-backend-1"
+                _inspect = subprocess.run(
+                    ["docker", "inspect", _backend_name, "--format",
+                     "{{range .NetworkSettings.Networks}}{{.IPAddress}} {{end}}"],
+                    capture_output=True, text=True, timeout=10,
+                )
+                _backend_ips = _inspect.stdout.strip().split()
+                _warmed = False
+                for _bip in _backend_ips:
+                    if not _bip:
+                        continue
+                    _warmup_res = subprocess.run(
+                        ["curl", "-s", "-o", "/dev/null", "-w", "%{http_code}",
+                         "--max-time", "35", "-H", f"Host: {_reuse_site}",
+                         f"http://{_bip}:8000/login"],
+                        capture_output=True, text=True, timeout=38,
+                    )
+                    _warmup_code = (_warmup_res.stdout or "0").strip()
+                    sys.stderr.write(f"[reuse-mode] Backend warmup {_bip}:8000/login → {_warmup_code}\n")
+                    sys.stderr.flush()
+                    if _warmup_code in ("200", "302", "303"):
+                        _warmed = True
+                        break
+                if not _warmed:
+                    sys.stderr.write("[reuse-mode] Warning: backend warmup did not succeed on any IP; continuing anyway.\n")
+                    sys.stderr.flush()
+            except Exception as _we:
+                sys.stderr.write(f"[reuse-mode] Warning: backend warmup failed ({_we}); continuing anyway.\n")
+                sys.stderr.flush()
+
             wait_https_ingress_ready(
                 site_name=_reuse_site,
                 connect_host=_connect_host,
                 https_port=_reuse_https_port,
                 ca_crt_path=ca_crt_path,
-                timeout_seconds=60,
+                timeout_seconds=120,
             )
             ping_st, _, ping_raw = https_req(
                 site_name=_reuse_site, connect_host=_connect_host,
