@@ -323,8 +323,8 @@
     },
     {
       "path": "deploy/compose/overrides/compose.cskh-dr-https.yaml",
-      "bytes": 3169,
-      "sha256": "2e3b6a8d04501d5e586031cd6eb47dd24038568b50350c51d24467bfc40e1724"
+      "bytes": 3270,
+      "sha256": "c3f9095b586eb492764f569bcbce217694b38247ee26c92dee8a50e5d8860560"
     },
     {
       "path": "deploy/compose/scripts/validate_compose_config.py",
