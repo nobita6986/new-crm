@@ -492,6 +492,24 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			False,
 		),
 		(
+			"CSKH SLA Obligation",
+			("obligation_type", "effective_due_at", "name", "status"),
+			"idx_cskh_sla_type_due_name",
+			False,
+		),
+		(
+			"CSKH SLA Obligation",
+			("effective_due_at", "name", "obligation_type", "status"),
+			"idx_cskh_sla_due_name",
+			False,
+		),
+		(
+			"CSKH SLA Obligation",
+			("interval_event", "obligation_type", "status"),
+			"idx_cskh_sla_ivevt_type",
+			False,
+		),
+		(
 			"CSKH KPI Snapshot",
 			(
 				"is_latest_published",
@@ -507,6 +525,18 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			"CSKH Contact Attempt",
 			("occurred_at", "recorded_at"),
 			"idx_cskh_attempt_occ_rec",
+			False,
+		),
+		(
+			"CSKH Contact Attempt",
+			(
+				"occurred_at",
+				"name",
+				"recorded_at",
+				"contact_attempt_snapshot",
+				"connected_snapshot",
+			),
+			"idx_cskh_attempt_occ_name",
 			False,
 		),
 		(

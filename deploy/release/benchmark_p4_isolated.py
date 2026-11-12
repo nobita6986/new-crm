@@ -204,6 +204,7 @@ def enforce_live_resource_headroom(
         "headroom_ok": True,
     }
 
+
 PUBLISHED_PROFILES: dict[str, dict[str, object]] = {
     "s1_suggested_mvp": {
         "description": (
