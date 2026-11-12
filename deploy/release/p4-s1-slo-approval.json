@@ -7,20 +7,12 @@
   "slo_spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
   "approved_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
   "approved_profiles": [
-    {
-      "profile_id": "staging_vps_capped",
-      "config_spec_sha256": "40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254",
-      "backend_cpus": 1.5,
-      "backend_mem_mib": 1536,
-      "gunicorn_workers": 2,
-      "gunicorn_threads": 4,
-      "approved": true
-    }
+    "staging_vps_capped"
   ],
   "approval_status": "OWNER_APPROVED",
   "owner_signoff": {
     "approved_by": "Owner-T0",
     "approved_at_utc": "2026-11-12T09:43:00Z",
-    "decision_reference": "T1A-handover-g03-g05-g18 — staging_vps_capped profile confirmed, config_spec_sha256=40254538...  image=ba68cd22..."
+    "decision_reference": "T1A-handover-g03-g05-g18: staging_vps_capped confirmed, config_spec_sha256=40254538, image=ba68cd22"
   }
 }
