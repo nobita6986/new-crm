@@ -546,6 +546,14 @@ subprocess.check_call(
     ["bench", "--site", site, "set-config", "mute_emails", "1", "--parse"],
     stdout=subprocess.DEVNULL,
 )
+subprocess.check_call(
+    ["bench", "--site", site, "set-config", "disable_telemetry", "1", "--parse"],
+    stdout=subprocess.DEVNULL,
+)
+subprocess.check_call(
+    ["bench", "--site", site, "set-config", "disable_change_log_notification", "1", "--parse"],
+    stdout=subprocess.DEVNULL,
+)
 os.environ["P3_SEED_PASSWORD"] = payload["seed_pw"]
 os.chdir("/home/frappe/frappe-bench/sites")
 import frappe
@@ -557,6 +565,12 @@ frappe.connect()
 try:
     frappe.db.set_single_value("System Settings", "language", "vi")
     frappe.db.set_single_value("System Settings", "time_zone", "Asia/Ho_Chi_Minh")
+    try:
+        frappe.db.set_single_value("System Settings", "disable_system_update_notification", 1)
+        frappe.db.set_single_value("System Settings", "disable_change_log_notification", 1)
+        frappe.db.set_single_value("System Settings", "enable_telemetry", 0)
+    except Exception:
+        pass
     enable_scheduler()
     import crm_cskh.tools.p3_e2e_seed as seed_mod
     seed_mod.ALLOWED_P3_SITES.add(site)
@@ -574,6 +588,15 @@ try:
         for jid in list(freg.get_job_ids()):
             freg.remove(jid, delete_job=True)
     frappe.clear_cache()
+    try:
+        frappe.cache.set_value(
+            "changelog_feed::frappe.desk.doctype.changelog_feed.changelog_feed.get_feed",
+            [],
+            expires_in_sec=365 * 24 * 60 * 60,
+            shared=True,
+        )
+    except Exception:
+        pass
     frappe.db.commit()
     print("DR_SEED_RESULT=" + json.dumps(seed_info))
 finally:
@@ -600,6 +623,9 @@ finally:
             break
     if not seed_info:
         raise RuntimeError("Isolated Staging/DR bootstrap did not emit DR_SEED_RESULT")
+
+    run_sub(compose_cmd(env_file, ["restart", "backend"]))
+    wait_services_healthy(env_file, ("backend",), timeout_seconds=60)
 
     run_sub(
         compose_cmd(

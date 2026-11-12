@@ -323,8 +323,8 @@
     },
     {
       "path": "deploy/compose/overrides/compose.cskh-dr-https.yaml",
-      "bytes": 3018,
-      "sha256": "7f012b1bb77afea2fd5dfba8e2e3e68ad927ad7eae523499751135045eedac30"
+      "bytes": 3169,
+      "sha256": "2e3b6a8d04501d5e586031cd6eb47dd24038568b50350c51d24467bfc40e1724"
     },
     {
       "path": "deploy/compose/scripts/validate_compose_config.py",
@@ -653,8 +653,8 @@
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
-      "bytes": 376857,
-      "sha256": "22197a1bc53fdcc96202df02bdc218e7bd0d9f96a521376a8a4aeff92b684860"
+      "bytes": 377849,
+      "sha256": "a4bfc949346c08fe484b971978277045a30d93f4874dc2a655df0520d8d8218d"
     },
     {
       "path": "deploy/ops/run_https_browser_uat_and_security.py",
