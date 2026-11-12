@@ -1,0 +1,3020 @@
+{
+  "schema_version": "cskh-p4-s1-slo-spec-v1",
+  "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+  "slo_version": "1.0.0",
+  "generated_at_utc": "2026-11-12T01:40:00Z",
+  "approval_status": "PROPOSED_PENDING_OWNER_APPROVAL",
+  "owner_signoff": {
+    "approved_by": null,
+    "approved_at_utc": null,
+    "decision_reference": null
+  },
+  "candidate_binding": {
+    "image_source_commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+    "apps_tree_sha": "e3972e2fa0ef6275c6d272602819a39e29870077",
+    "crm_cskh_tree_sha": "b9ce3e2e12f5012df989d0a75ae83cccb77e9774",
+    "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "oci_config_digest": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+    "source_evidence_artifacts": {
+      "s1_canonical_4x4_benchmark": {
+        "workflow_run_id": 43075109950,
+        "artifact_file": "benchmark-s1-report.json",
+        "sha256": "3b1cd3f0a83178375a6e209c944ca242143258dca9a31d4c7ea38b9ff975327f"
+      },
+      "staging_vps_capped_benchmark": {
+        "workflow_run_id": 43079350070,
+        "artifact_file": "benchmark-s1-staging-vps-capped.json",
+        "sha256": "46106ebd1f2677c35b378de62af726a3b8916a10923f7f881b3add3e7377eb7f"
+      },
+      "g18_deep_diagnostic_s1_canonical_4x4": {
+        "workflow_run_id": 43079350070,
+        "artifact_file": "g18-diagnostic-post_opt_s1_canonical_4x4.json",
+        "sha256": "9a0c0d95546ca2a08072c8ac9aeda21ae8d2899ed5406dd9a322afebe212bdfe"
+      },
+      "g18_deep_diagnostic_staging_vps_capped": {
+        "workflow_run_id": 43079350070,
+        "artifact_file": "g18-diagnostic-post_opt_staging_vps_capped.json",
+        "sha256": "ca78e4aaae96120e25b27262aee7fe356db12f2ef1d88f12fcbf7ed09f54dec5"
+      }
+    }
+  },
+  "governance_invariants": {
+    "no_endpoint_exclusion": true,
+    "no_aggregate_compensation_for_endpoints": true,
+    "no_threshold_inflation_above_p4_9_2_ceiling": true,
+    "required_drilldown_variants": [
+      "kpi_metric_drilldown_250k_api",
+      "kpi_metric_drilldown_monthly_company_api"
+    ]
+  },
+  "resource_profiles": {
+    "s1_canonical_4x4": {
+      "description": "Production target sizing (4 vCPU / 8-16 GB RAM isolated host, Gunicorn 4 workers x 4 threads = 16 web threads, dedicated queue-short + queue-long)",
+      "gunicorn_workers": 4,
+      "gunicorn_threads": 4,
+      "total_web_threads": 16,
+      "require_live_headroom_precheck": false
+    },
+    "staging_vps_capped": {
+      "description": "Isolated Staging VPS cgroup-capped profile with live resource protection guard (backend 1.50 vCPU / 1536 MiB, Gunicorn 2 workers x 4 threads = 8 web threads, MariaDB 1.50 vCPU / 2 GiB)",
+      "gunicorn_workers": 2,
+      "gunicorn_threads": 4,
+      "total_web_threads": 8,
+      "require_live_headroom_precheck": true
+    }
+  },
+  "rules": [
+    {
+      "slo_id": "SSR-01A",
+      "category": "SSR",
+      "rule_type": "http_summary",
+      "scenario_key": "telesale_worklist_ssr_40_staff_sessions_c40",
+      "endpoint": "GET /cskh/my-customers",
+      "concurrency": 40,
+      "sessions_mode": "40_independent_staff_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c40",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 9.837,
+          "p50_ms": 3711.34,
+          "p95_ms": 5190.632,
+          "p99_ms": 5850.545
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.579,
+          "p50_ms": 6509.857,
+          "p95_ms": 9342.282,
+          "p99_ms": 10021.799
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 6500.0,
+          "max_p99_ms": 7500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 10500.0,
+          "max_p99_ms": 11500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "SSR-01B",
+      "category": "SSR",
+      "rule_type": "http_summary",
+      "scenario_key": "telesale_worklist_ssr_40_staff_sessions_c12",
+      "endpoint": "GET /cskh/my-customers",
+      "concurrency": 12,
+      "sessions_mode": "40_independent_staff_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c12",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 10.182,
+          "p50_ms": 1124.878,
+          "p95_ms": 1823.039,
+          "p99_ms": 2554.526
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.664,
+          "p50_ms": 2161.864,
+          "p95_ms": 3423.847,
+          "p99_ms": 3837.471
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 2300.0,
+          "max_p99_ms": 3000.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 4200.0,
+          "max_p99_ms": 4800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "SSR-01C",
+      "category": "SSR",
+      "rule_type": "http_summary",
+      "scenario_key": "telesale_worklist_page_shared_new_session_c12",
+      "endpoint": "GET /cskh/my-customers",
+      "concurrency": 12,
+      "sessions_mode": "1_shared_new_session_no_csrf_prefetch",
+      "report_json_path": "scenario_summaries.telesale_worklist_page",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 11.013,
+          "p50_ms": 1007.365,
+          "p95_ms": 1821.911,
+          "p99_ms": 2020.164
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.163,
+          "p50_ms": 1648.29,
+          "p95_ms": 2835.816,
+          "p99_ms": 3110.285
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 2300.0,
+          "max_p99_ms": 2600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 3600.0,
+          "max_p99_ms": 4200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "SSR-01D",
+      "category": "SSR",
+      "rule_type": "http_summary",
+      "scenario_key": "telesale_worklist_page_warm_session_c12",
+      "endpoint": "GET /cskh/my-customers",
+      "concurrency": 12,
+      "sessions_mode": "1_initialized_warm_session",
+      "report_json_path": "worklist_ssr_acceptance_and_separation.case_2b_single_initialized_session_c12",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 12.124,
+          "p50_ms": 1013.993,
+          "p95_ms": 1708.626,
+          "p99_ms": 1923.296
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.115,
+          "p50_ms": 1642.802,
+          "p95_ms": 2400.988,
+          "p99_ms": 2874.098
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 2200.0,
+          "max_p99_ms": 2600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 3200.0,
+          "max_p99_ms": 3800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "SSR-01E",
+      "category": "SSR",
+      "rule_type": "http_summary",
+      "scenario_key": "telesale_worklist_page_warm_session_c40",
+      "endpoint": "GET /cskh/my-customers",
+      "concurrency": 40,
+      "sessions_mode": "1_initialized_warm_session",
+      "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.telesale_worklist_page",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 11.291,
+          "p50_ms": 2975.556,
+          "p95_ms": 5469.478,
+          "p99_ms": 6086.63
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.013,
+          "p50_ms": 4545.038,
+          "p95_ms": 7286.31,
+          "p99_ms": 7723.497
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 6500.0,
+          "max_p99_ms": 7200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 8800.0,
+          "max_p99_ms": 9500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "SSR-02",
+      "category": "SSR",
+      "rule_type": "http_summary",
+      "scenario_key": "quality_overview_drilldown",
+      "endpoint": "GET /cskh/quality-overview",
+      "concurrency": 12,
+      "sessions_mode": "1_shared_session",
+      "report_json_path": "scenario_summaries.quality_overview_drilldown",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 12.184,
+          "p50_ms": 971.718,
+          "p95_ms": 1610.166,
+          "p99_ms": 1849.92
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.428,
+          "p50_ms": 1668.153,
+          "p95_ms": 2625.202,
+          "p99_ms": 2921.104
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 2200.0,
+          "max_p99_ms": 2600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 3400.0,
+          "max_p99_ms": 3900.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "SSR-03",
+      "category": "SSR",
+      "rule_type": "http_summary",
+      "scenario_key": "campaigns_distribution_view",
+      "endpoint": "GET /cskh/campaigns",
+      "concurrency": 12,
+      "sessions_mode": "1_shared_session",
+      "report_json_path": "scenario_summaries.campaigns_distribution_view",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 12.153,
+          "p50_ms": 945.264,
+          "p95_ms": 1616.705,
+          "p99_ms": 1872.879
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.35,
+          "p50_ms": 1697.871,
+          "p95_ms": 2779.497,
+          "p99_ms": 3055.941
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 2200.0,
+          "max_p99_ms": 2600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 3500.0,
+          "max_p99_ms": 4000.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-00",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "health_ping",
+      "endpoint": "GET /api/method/ping",
+      "concurrency": 12,
+      "sessions_mode": "unauthenticated_liveness",
+      "report_json_path": "scenario_summaries.health_ping",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 270.713,
+          "p50_ms": 35.009,
+          "p95_ms": 94.252,
+          "p99_ms": 202.263
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 194.06,
+          "p50_ms": 60.096,
+          "p95_ms": 100.681,
+          "p99_ms": 128.637
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 150.0,
+          "max_p99_ms": 250.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 200.0,
+          "max_p99_ms": 300.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-01A",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "my_customers_worklist_api_c12",
+      "endpoint": "GET /api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
+      "concurrency": 12,
+      "sessions_mode": "1_shared_session",
+      "report_json_path": "scenario_summaries.my_customers_worklist_api",
+      "p4_9_2_ceiling_p95_ms": 1500.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 309.484,
+          "p50_ms": 37.282,
+          "p95_ms": 55.85,
+          "p99_ms": 69.238
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 191.854,
+          "p50_ms": 62.225,
+          "p95_ms": 98.462,
+          "p99_ms": 102.194
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 300.0,
+          "max_p99_ms": 450.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 450.0,
+          "max_p99_ms": 600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-01B",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "staff_my_customers_http_40_sessions_c12",
+      "endpoint": "GET /api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
+      "concurrency": 12,
+      "sessions_mode": "40_independent_staff_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.staff_my_customers_http",
+      "p4_9_2_ceiling_p95_ms": 1500.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 152.532,
+          "p50_ms": 67.026,
+          "p95_ms": 178.59,
+          "p99_ms": 203.854
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 127.182,
+          "p50_ms": 88.154,
+          "p95_ms": 177.798,
+          "p99_ms": 225.068
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 500.0,
+          "max_p99_ms": 750.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 600.0,
+          "max_p99_ms": 850.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-01C",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "my_customers_worklist_api_c40",
+      "endpoint": "GET /api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
+      "concurrency": 40,
+      "sessions_mode": "1_shared_session_peak",
+      "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.my_customers_worklist_api",
+      "p4_9_2_ceiling_p95_ms": 1500.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 287.017,
+          "p50_ms": 99.709,
+          "p95_ms": 230.259,
+          "p99_ms": 245.135
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 201.398,
+          "p50_ms": 188.506,
+          "p95_ms": 254.915,
+          "p99_ms": 263.628
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 600.0,
+          "max_p99_ms": 850.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-02A",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "lead_detail_and_history_http_c12",
+      "endpoint": "GET crm_cskh.api.workflow.get_work_item + GET list_attempts",
+      "concurrency": 12,
+      "sessions_mode": "40_independent_staff_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.lead_detail_and_history_http",
+      "p4_9_2_ceiling_p95_ms": 2000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 50.957,
+          "p50_ms": 222.695,
+          "p95_ms": 346.151,
+          "p99_ms": 429.101
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 28.071,
+          "p50_ms": 419.206,
+          "p95_ms": 584.924,
+          "p99_ms": 626.743
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 900.0,
+          "max_p99_ms": 1200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-02B",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "lead_detail_and_history_mixed_40_sessions",
+      "endpoint": "GET crm_cskh.api.workflow.get_work_item + GET list_attempts",
+      "concurrency": 40,
+      "sessions_mode": "40_mixed_user_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.lead_detail_history_api",
+      "p4_9_2_ceiling_p95_ms": 2000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 80,
+          "ok_count": 80,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 20.777,
+          "p50_ms": 701.446,
+          "p95_ms": 909.558,
+          "p99_ms": 1037.359
+        },
+        "staging_vps_capped": {
+          "requests_total": 80,
+          "ok_count": 80,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 14.636,
+          "p50_ms": 975.133,
+          "p95_ms": 1636.732,
+          "p99_ms": 1660.533
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1950.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-03A",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "record_attempt_and_callback_http_c12",
+      "endpoint": "POST /api/method/crm_cskh.api.workflow.record_attempt",
+      "concurrency": 12,
+      "sessions_mode": "40_independent_staff_sessions_plus_10_replays",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http",
+      "p4_9_2_ceiling_p95_ms": 2000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 80,
+          "ok_count": 80,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 17.707,
+          "p50_ms": 434.46,
+          "p95_ms": 659.289,
+          "p99_ms": 724.519
+        },
+        "staging_vps_capped": {
+          "requests_total": 80,
+          "ok_count": 80,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 12.896,
+          "p50_ms": 575.683,
+          "p95_ms": 923.278,
+          "p99_ms": 995.217
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0,
+          "invariants": [
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.db_reconciliation.duplicate_idempotency_keys",
+              "op": "eq",
+              "expected": 0
+            },
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.db_reconciliation.attempts_created",
+              "op": "eq",
+              "expected": 80
+            }
+          ]
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0,
+          "invariants": [
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.db_reconciliation.duplicate_idempotency_keys",
+              "op": "eq",
+              "expected": 0
+            },
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.db_reconciliation.attempts_created",
+              "op": "eq",
+              "expected": 80
+            }
+          ]
+        }
+      }
+    },
+    {
+      "slo_id": "API-03B",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "record_attempt_write_mixed_40_sessions",
+      "endpoint": "POST /api/method/crm_cskh.api.workflow.record_attempt",
+      "concurrency": 40,
+      "sessions_mode": "40_mixed_user_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.record_attempt_write_api",
+      "p4_9_2_ceiling_p95_ms": 2000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 16,
+          "ok_count": 16,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 4.155,
+          "p50_ms": 981.326,
+          "p95_ms": 1437.007,
+          "p99_ms": 1517.788
+        },
+        "staging_vps_capped": {
+          "requests_total": 16,
+          "ok_count": 16,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 2.927,
+          "p50_ms": 867.724,
+          "p95_ms": 1242.613,
+          "p99_ms": 1308.476
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1900.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-04A",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "bod_executive_overview_api_c12_admin",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
+      "concurrency": 12,
+      "sessions_mode": "admin_session",
+      "report_json_path": "scenario_summaries.bod_executive_overview_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 145.873,
+          "p50_ms": 78.275,
+          "p95_ms": 125.019,
+          "p99_ms": 137.482
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 76.827,
+          "p50_ms": 160.049,
+          "p95_ms": 248.561,
+          "p99_ms": 268.795
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 600.0,
+          "max_p99_ms": 850.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-04B",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "bod_executive_overview_role_api_c12",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
+      "concurrency": 12,
+      "sessions_mode": "bod_viewer_role_session",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.bod_executive_overview_role_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 120,
+          "ok_count": 120,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 127.836,
+          "p50_ms": 84.6,
+          "p95_ms": 140.47,
+          "p99_ms": 162.779
+        },
+        "staging_vps_capped": {
+          "requests_total": 120,
+          "ok_count": 120,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 77.355,
+          "p50_ms": 164.151,
+          "p95_ms": 250.682,
+          "p99_ms": 264.204
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 600.0,
+          "max_p99_ms": 850.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-04C",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "bod_executive_overview_api_c40",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
+      "concurrency": 40,
+      "sessions_mode": "admin_session_peak",
+      "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.bod_executive_overview_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 140.984,
+          "p50_ms": 255.39,
+          "p95_ms": 348.636,
+          "p99_ms": 375.941
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 76.951,
+          "p50_ms": 471.837,
+          "p95_ms": 761.922,
+          "p99_ms": 775.641
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1000.0,
+          "max_p99_ms": 1300.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-05A-C12",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "kpi_metric_drilldown_250k_api_c12_admin",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_metric_drilldown (period_type=daily, scope_type=campaign, metric_code=CONNECTED_RATE, S1 250k dataset)",
+      "concurrency": 12,
+      "sessions_mode": "admin_session",
+      "report_json_path": "scenario_summaries.kpi_metric_drilldown_250k_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "drilldown_variant": "kpi_metric_drilldown_250k_api",
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 115.721,
+          "p50_ms": 99.925,
+          "p95_ms": 137.872,
+          "p99_ms": 152.765
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 68.667,
+          "p50_ms": 179.2,
+          "p95_ms": 283.901,
+          "p99_ms": 307.678
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-05A-BOD",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "kpi_metric_drilldown_250k_api_c12_bod_role",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_metric_drilldown (period_type=daily, scope_type=campaign, BOD role + 403 RBAC check)",
+      "concurrency": 12,
+      "sessions_mode": "bod_viewer_role_session",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_daily_campaign_role_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "drilldown_variant": "kpi_metric_drilldown_250k_api",
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 120,
+          "ok_count": 120,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 105.335,
+          "p50_ms": 106.86,
+          "p95_ms": 164.616,
+          "p99_ms": 192.552
+        },
+        "staging_vps_capped": {
+          "requests_total": 120,
+          "ok_count": 120,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 73.81,
+          "p50_ms": 155.116,
+          "p95_ms": 224.639,
+          "p99_ms": 259.777
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0,
+          "invariants": [
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.staff_unauthorized_company_drilldown_http_status",
+              "op": "eq",
+              "expected": 403
+            }
+          ]
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0,
+          "invariants": [
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.staff_unauthorized_company_drilldown_http_status",
+              "op": "eq",
+              "expected": 403
+            }
+          ]
+        }
+      }
+    },
+    {
+      "slo_id": "API-05A-C40",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "kpi_metric_drilldown_250k_api_c40_peak",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_metric_drilldown (period_type=daily, scope_type=campaign, c=40 peak)",
+      "concurrency": 40,
+      "sessions_mode": "admin_session_peak",
+      "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_250k_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "drilldown_variant": "kpi_metric_drilldown_250k_api",
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 110.246,
+          "p50_ms": 311.032,
+          "p95_ms": 440.705,
+          "p99_ms": 470.26
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 69.688,
+          "p50_ms": 497.197,
+          "p95_ms": 846.603,
+          "p99_ms": 875.936
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-05B-C12",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "kpi_metric_drilldown_monthly_company_api_c12_admin",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_metric_drilldown (period_type=monthly, scope_type=company, 75k WI / 250k Attempts)",
+      "concurrency": 12,
+      "sessions_mode": "admin_session",
+      "report_json_path": "scenario_summaries.kpi_metric_drilldown_monthly_company_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 118.265,
+          "p50_ms": 95.064,
+          "p95_ms": 154.477,
+          "p99_ms": 184.768
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 65.789,
+          "p50_ms": 184.335,
+          "p95_ms": 271.65,
+          "p99_ms": 298.003
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-05B-BOD",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "kpi_metric_drilldown_monthly_company_api_c12_bod_role",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_metric_drilldown (period_type=monthly, scope_type=company, BOD role, 250k Attempts)",
+      "concurrency": 12,
+      "sessions_mode": "bod_viewer_role_session",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_monthly_company_role_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 120,
+          "ok_count": 120,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 109.559,
+          "p50_ms": 101.072,
+          "p95_ms": 144.277,
+          "p99_ms": 215.142
+        },
+        "staging_vps_capped": {
+          "requests_total": 120,
+          "ok_count": 120,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 76.899,
+          "p50_ms": 147.657,
+          "p95_ms": 241.697,
+          "p99_ms": 282.982
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-05B-C40",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "kpi_metric_drilldown_monthly_company_api_c40_peak",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_metric_drilldown (period_type=monthly, scope_type=company, c=40 peak, 250k Attempts)",
+      "concurrency": 40,
+      "sessions_mode": "admin_session_peak",
+      "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_monthly_company_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 107.343,
+          "p50_ms": 292.369,
+          "p95_ms": 593.668,
+          "p99_ms": 637.26
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 67.397,
+          "p50_ms": 451.689,
+          "p95_ms": 866.051,
+          "p99_ms": 913.112
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-05C-MIX20",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "kpi_drilldown_api_mixed_20_sessions",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_metric_drilldown (mixed wave 20 sessions)",
+      "concurrency": 20,
+      "sessions_mode": "20_mixed_user_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.by_workload.kpi_drilldown_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "drilldown_variant": "mixed_wave_drilldown",
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 20,
+          "ok_count": 20,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 6.882,
+          "p50_ms": 208.797,
+          "p95_ms": 332.124,
+          "p99_ms": 358.398
+        },
+        "staging_vps_capped": {
+          "requests_total": 20,
+          "ok_count": 20,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.711,
+          "p50_ms": 320.908,
+          "p95_ms": 517.2,
+          "p99_ms": 538.779
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-05C-MIX40",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "kpi_drilldown_api_mixed_40_sessions",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_metric_drilldown (mixed wave 40 sessions)",
+      "concurrency": 40,
+      "sessions_mode": "40_mixed_user_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.kpi_drilldown_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "drilldown_variant": "mixed_wave_drilldown",
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 32,
+          "ok_count": 32,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 8.311,
+          "p50_ms": 417.675,
+          "p95_ms": 540.885,
+          "p99_ms": 559.9
+        },
+        "staging_vps_capped": {
+          "requests_total": 32,
+          "ok_count": 32,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.854,
+          "p50_ms": 597.947,
+          "p95_ms": 911.477,
+          "p99_ms": 969.851
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "API-05C-MIX80",
+      "category": "JSON_API",
+      "rule_type": "http_summary",
+      "scenario_key": "kpi_drilldown_api_mixed_80_sessions",
+      "endpoint": "GET /api/method/crm_cskh.api.p3_reporting.get_metric_drilldown (mixed wave 80 sessions overload)",
+      "concurrency": 80,
+      "sessions_mode": "80_mixed_user_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_80.by_workload.kpi_drilldown_api",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "drilldown_variant": "mixed_wave_drilldown",
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 48,
+          "ok_count": 48,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 8.087,
+          "p50_ms": 544.452,
+          "p95_ms": 1464.481,
+          "p99_ms": 1765.499
+        },
+        "staging_vps_capped": {
+          "requests_total": 48,
+          "ok_count": 48,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.922,
+          "p50_ms": 959.676,
+          "p95_ms": 1467.206,
+          "p99_ms": 1496.952
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 2400.0,
+          "max_p99_ms": 2900.0,
+          "max_error_rate_pct": 0.5,
+          "max_timeout_count": 0,
+          "max_client_error_count": 2,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 2
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 2600.0,
+          "max_p99_ms": 3000.0,
+          "max_error_rate_pct": 0.5,
+          "max_timeout_count": 0,
+          "max_client_error_count": 2,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 2
+        }
+      }
+    },
+    {
+      "slo_id": "AGG-01",
+      "category": "AGGREGATE_AND_BACKGROUND",
+      "rule_type": "http_summary",
+      "scenario_key": "overall_summary_c12_all_8_scenarios",
+      "endpoint": "Aggregate (8 SSR + API scenarios, 1920 requests)",
+      "concurrency": 12,
+      "sessions_mode": "mixed_suite_c12",
+      "report_json_path": "overall_summary",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 1920,
+          "ok_count": 1920,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 27.968,
+          "p50_ms": 104.638,
+          "p95_ms": 1412.711,
+          "p99_ms": 1834.879
+        },
+        "staging_vps_capped": {
+          "requests_total": 1920,
+          "ok_count": 1920,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 17.263,
+          "p50_ms": 198.315,
+          "p95_ms": 2467.542,
+          "p99_ms": 2922.66
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2400.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 3200.0,
+          "max_p99_ms": 3800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "AGG-02",
+      "category": "AGGREGATE_AND_BACKGROUND",
+      "rule_type": "http_summary",
+      "scenario_key": "peak_40_staff_overall_summary_c40",
+      "endpoint": "Aggregate (5 SSR + API peak scenarios, 800 requests)",
+      "concurrency": 40,
+      "sessions_mode": "mixed_suite_c40",
+      "report_json_path": "peak_40_staff_concurrent_wave.overall_summary",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 800,
+          "ok_count": 800,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 42.541,
+          "p50_ms": 274.749,
+          "p95_ms": 4089.564,
+          "p99_ms": 5465.686
+        },
+        "staging_vps_capped": {
+          "requests_total": 800,
+          "ok_count": 800,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 26.351,
+          "p50_ms": 459.818,
+          "p95_ms": 6748.008,
+          "p99_ms": 7284.183
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 5000.0,
+          "max_p99_ms": 6200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 8200.0,
+          "max_p99_ms": 9000.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "AGG-03A",
+      "category": "AGGREGATE_AND_BACKGROUND",
+      "rule_type": "http_summary",
+      "scenario_key": "mixed_user_sessions_20_overall",
+      "endpoint": "Aggregate (5 JSON API workloads, 20 sessions, 200 requests)",
+      "concurrency": 20,
+      "sessions_mode": "20_mixed_user_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.overall_summary",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 200,
+          "ok_count": 200,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 68.82,
+          "p50_ms": 192.651,
+          "p95_ms": 529.713,
+          "p99_ms": 777.984
+        },
+        "staging_vps_capped": {
+          "requests_total": 200,
+          "ok_count": 200,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 57.106,
+          "p50_ms": 296.729,
+          "p95_ms": 793.539,
+          "p99_ms": 854.941
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "AGG-03B",
+      "category": "AGGREGATE_AND_BACKGROUND",
+      "rule_type": "http_summary",
+      "scenario_key": "mixed_user_sessions_40_overall",
+      "endpoint": "Aggregate (5 JSON API workloads, 40 sessions, 320 requests)",
+      "concurrency": 40,
+      "sessions_mode": "40_mixed_user_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.overall_summary",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 320,
+          "ok_count": 320,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 83.107,
+          "p50_ms": 379.218,
+          "p95_ms": 909.558,
+          "p99_ms": 1234.545
+        },
+        "staging_vps_capped": {
+          "requests_total": 320,
+          "ok_count": 320,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 58.545,
+          "p50_ms": 633.023,
+          "p95_ms": 1281.859,
+          "p99_ms": 1648.08
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 2000.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1850.0,
+          "max_p99_ms": 2300.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "AGG-03C",
+      "category": "AGGREGATE_AND_BACKGROUND",
+      "rule_type": "http_summary",
+      "scenario_key": "mixed_user_sessions_80_overall",
+      "endpoint": "Aggregate (5 JSON API workloads, 80 sessions, 480 requests)",
+      "concurrency": 80,
+      "sessions_mode": "80_mixed_user_sessions",
+      "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_80.overall_summary",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 480,
+          "ok_count": 480,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 80.871,
+          "p50_ms": 769.593,
+          "p95_ms": 1858.784,
+          "p99_ms": 2337.494
+        },
+        "staging_vps_capped": {
+          "requests_total": 480,
+          "ok_count": 480,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 59.221,
+          "p50_ms": 1171.794,
+          "p95_ms": 2346.513,
+          "p99_ms": 2801.979
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 2500.0,
+          "max_p99_ms": 3200.0,
+          "max_error_rate_pct": 0.5,
+          "max_timeout_count": 0,
+          "max_client_error_count": 2,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 2
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 3000.0,
+          "max_p99_ms": 3600.0,
+          "max_error_rate_pct": 0.5,
+          "max_timeout_count": 0,
+          "max_client_error_count": 2,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 2
+        }
+      }
+    },
+    {
+      "slo_id": "BG-01",
+      "category": "AGGREGATE_AND_BACKGROUND",
+      "rule_type": "invariants_only",
+      "scenario_key": "campaign_distribution_10000_work_items_40_staff",
+      "endpoint": "Background queue-long: weighted distribution 10,000 Work Items across 40 staff",
+      "concurrency": 1,
+      "sessions_mode": "queue_long_plus_concurrent_ui_reads",
+      "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "preview_ms": 1031.0,
+          "execute_and_worker_drain_ms": 1137210.98,
+          "created_work_items": 10000,
+          "duplicate_work_items": 0,
+          "concurrent_worklist_read_p95_ms": 5.186,
+          "ownership_reconciled": true
+        },
+        "staging_vps_capped": {
+          "preview_ms": 1146.5,
+          "execute_and_worker_drain_ms": 1089463.76,
+          "created_work_items": 10000,
+          "duplicate_work_items": 0,
+          "concurrent_worklist_read_p95_ms": 4.979,
+          "ownership_reconciled": true
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.preview_ms",
+              "op": "le",
+              "expected": 10000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.execute_and_worker_drain_ms",
+              "op": "le",
+              "expected": 1200000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.created_work_items",
+              "op": "eq",
+              "expected": 10000
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.duplicate_work_items",
+              "op": "eq",
+              "expected": 0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.reconciliation.ownership_reconciled",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.concurrent_worklist_read_p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        },
+        "staging_vps_capped": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.preview_ms",
+              "op": "le",
+              "expected": 10000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.execute_and_worker_drain_ms",
+              "op": "le",
+              "expected": 1200000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.created_work_items",
+              "op": "eq",
+              "expected": 10000
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.duplicate_work_items",
+              "op": "eq",
+              "expected": 0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.reconciliation.ownership_reconciled",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.concurrent_worklist_read_p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "slo_id": "BG-02",
+      "category": "AGGREGATE_AND_BACKGROUND",
+      "rule_type": "invariants_only",
+      "scenario_key": "csv_import_50000_rows",
+      "endpoint": "Background queue-long: 50,000-row CSV import + private error artifact",
+      "concurrency": 1,
+      "sessions_mode": "queue_long_plus_concurrent_ui_reads",
+      "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "preview_ms": 807.22,
+          "total_preview_confirm_and_worker_drain_ms": 217624.59,
+          "created_rows": 10000,
+          "reused_rows": 5000,
+          "error_rows": 500,
+          "error_artifact_present": true,
+          "concurrent_worklist_read_p95_ms": 8.72
+        },
+        "staging_vps_capped": {
+          "preview_ms": 774.44,
+          "total_preview_confirm_and_worker_drain_ms": 222067.39,
+          "created_rows": 10000,
+          "reused_rows": 5000,
+          "error_rows": 500,
+          "error_artifact_present": true,
+          "concurrent_worklist_read_p95_ms": 7.449
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.preview_ms",
+              "op": "le",
+              "expected": 5000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.total_preview_confirm_and_worker_drain_ms",
+              "op": "le",
+              "expected": 300000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.error_artifact_present",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.concurrent_worklist_read_p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        },
+        "staging_vps_capped": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.preview_ms",
+              "op": "le",
+              "expected": 5000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.total_preview_confirm_and_worker_drain_ms",
+              "op": "le",
+              "expected": 300000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.error_artifact_present",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.concurrent_worklist_read_p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "slo_id": "BG-03",
+      "category": "AGGREGATE_AND_BACKGROUND",
+      "rule_type": "invariants_only",
+      "scenario_key": "kpi_recompute_s1_daily_and_monthly",
+      "endpoint": "Background queue-long: incremental daily & full monthly KPI recompute (75k WI / 250k Att / 150k SLA)",
+      "concurrency": 1,
+      "sessions_mode": "queue_long_atomic_publish_plus_concurrent_ui_reads",
+      "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1",
+      "p4_9_2_ceiling_p95_ms": null,
+      "measured": {
+        "s1_canonical_4x4": {
+          "daily_incremental_ms": 3841.33,
+          "monthly_full_75k_wi_250k_att_ms": 41120.03,
+          "atomic_publish_verified": true,
+          "concurrent_ui_overview_read_p95_ms": 9.829
+        },
+        "staging_vps_capped": {
+          "daily_incremental_ms": 3859.96,
+          "monthly_full_75k_wi_250k_att_ms": 46155.49,
+          "atomic_publish_verified": true,
+          "concurrent_ui_overview_read_p95_ms": 9.488
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.daily_incremental_ms",
+              "op": "le",
+              "expected": 30000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.monthly_full_75k_wi_250k_att_ms",
+              "op": "le",
+              "expected": 120000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.atomic_publish_verified",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.concurrent_ui_overview_reads.p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        },
+        "staging_vps_capped": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.daily_incremental_ms",
+              "op": "le",
+              "expected": 30000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.monthly_full_75k_wi_250k_att_ms",
+              "op": "le",
+              "expected": 120000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.atomic_publish_verified",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.concurrent_ui_overview_reads.p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "g18_deep_diagnostic_rules": [
+    {
+      "slo_id": "G18-W1-C12",
+      "wave_key": "W1_daily_campaign_connected_rate_p1_c12",
+      "drilldown_variant": "kpi_metric_drilldown_250k_api",
+      "concurrency": 12,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W1_daily_campaign_connected_rate_p1_c12",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 68.044,
+          "p50_ms": 91.091,
+          "p95_ms": 159.178,
+          "p99_ms": 221.535
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 73.168,
+          "p50_ms": 165.019,
+          "p95_ms": 263.825,
+          "p99_ms": 313.989
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W1-C40",
+      "wave_key": "W1_daily_campaign_connected_rate_p1_c40",
+      "drilldown_variant": "kpi_metric_drilldown_250k_api",
+      "concurrency": 40,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W1_daily_campaign_connected_rate_p1_c40",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 44.735,
+          "p50_ms": 286.524,
+          "p95_ms": 623.067,
+          "p99_ms": 667.042
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 48.077,
+          "p50_ms": 483.236,
+          "p95_ms": 722.456,
+          "p99_ms": 756.642
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W2-C12",
+      "wave_key": "W2_monthly_company_connected_rate_p1_c12",
+      "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+      "concurrency": 12,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W2_monthly_company_connected_rate_p1_c12",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 68.69,
+          "p50_ms": 87.942,
+          "p95_ms": 131.491,
+          "p99_ms": 147.29
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 72.376,
+          "p50_ms": 161.893,
+          "p95_ms": 260.117,
+          "p99_ms": 296.03
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W2-C40",
+      "wave_key": "W2_monthly_company_connected_rate_p1_c40",
+      "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+      "concurrency": 40,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W2_monthly_company_connected_rate_p1_c40",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 45.121,
+          "p50_ms": 223.338,
+          "p95_ms": 610.725,
+          "p99_ms": 645.05
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 47.992,
+          "p50_ms": 533.015,
+          "p95_ms": 687.393,
+          "p99_ms": 729.078
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W3-P30-C12",
+      "wave_key": "W3_monthly_company_connected_rate_deep_p30_c12",
+      "drilldown_variant": "kpi_metric_drilldown_monthly_company_api_deep_p30",
+      "concurrency": 12,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W3_monthly_company_connected_rate_deep_p30_c12",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 66.758,
+          "p50_ms": 165.175,
+          "p95_ms": 291.055,
+          "p99_ms": 341.115
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 29.887,
+          "p50_ms": 263.761,
+          "p95_ms": 422.11,
+          "p99_ms": 499.48
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1000.0,
+          "max_p99_ms": 1300.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W3-P30-C40",
+      "wave_key": "W3_monthly_company_connected_rate_deep_p30_c40",
+      "drilldown_variant": "kpi_metric_drilldown_monthly_company_api_deep_p30",
+      "concurrency": 40,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W3_monthly_company_connected_rate_deep_p30_c40",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 42.681,
+          "p50_ms": 529.796,
+          "p95_ms": 930.244,
+          "p99_ms": 1061.196
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 42.377,
+          "p50_ms": 802.423,
+          "p95_ms": 1202.537,
+          "p99_ms": 1284.672
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 2400.0,
+          "max_p99_ms": 2800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W4-TL-C12",
+      "wave_key": "W4_monthly_team_leader_connected_rate_p1_c12",
+      "drilldown_variant": "kpi_metric_drilldown_team_leader",
+      "concurrency": 12,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W4_monthly_team_leader_connected_rate_p1_c12",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 69.729,
+          "p50_ms": 141.122,
+          "p95_ms": 216.546,
+          "p99_ms": 267.302
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 30.752,
+          "p50_ms": 252.761,
+          "p95_ms": 383.55,
+          "p99_ms": 411.548
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1000.0,
+          "max_p99_ms": 1300.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1400.0,
+          "max_p99_ms": 1700.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W4-TL-C40",
+      "wave_key": "W4_monthly_team_leader_connected_rate_p1_c40",
+      "drilldown_variant": "kpi_metric_drilldown_team_leader",
+      "concurrency": 40,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W4_monthly_team_leader_connected_rate_p1_c40",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 43.327,
+          "p50_ms": 422.125,
+          "p95_ms": 742.965,
+          "p99_ms": 794.878
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 44.582,
+          "p50_ms": 669.277,
+          "p95_ms": 1262.621,
+          "p99_ms": 1303.699
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1600.0,
+          "max_p99_ms": 2000.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 2200.0,
+          "max_p99_ms": 2600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W5-SLA-C12",
+      "wave_key": "W5_monthly_company_first_attempt_sla_p1_c12",
+      "drilldown_variant": "kpi_metric_drilldown_first_attempt_sla_150k",
+      "concurrency": 12,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W5_monthly_company_first_attempt_sla_p1_c12",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 69.201,
+          "p50_ms": 83.63,
+          "p95_ms": 123.316,
+          "p99_ms": 149.875
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 73.953,
+          "p50_ms": 154.859,
+          "p95_ms": 252.707,
+          "p99_ms": 276.562
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W5-SLA-C40",
+      "wave_key": "W5_monthly_company_first_attempt_sla_p1_c40",
+      "drilldown_variant": "kpi_metric_drilldown_first_attempt_sla_150k",
+      "concurrency": 40,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W5_monthly_company_first_attempt_sla_p1_c40",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 59.664,
+          "p50_ms": 291.255,
+          "p95_ms": 444.94,
+          "p99_ms": 507.966
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 47.66,
+          "p50_ms": 422.428,
+          "p95_ms": 781.479,
+          "p99_ms": 791.341
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W6-ATT-C12",
+      "wave_key": "W6_monthly_company_contact_attempt_count_p1_c12",
+      "drilldown_variant": "kpi_metric_drilldown_contact_attempt_count_250k",
+      "concurrency": 12,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W6_monthly_company_contact_attempt_count_p1_c12",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 71.116,
+          "p50_ms": 77.544,
+          "p95_ms": 121.85,
+          "p99_ms": 155.456
+        },
+        "staging_vps_capped": {
+          "requests_total": 240,
+          "ok_count": 240,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 74.199,
+          "p50_ms": 159.172,
+          "p95_ms": 242.997,
+          "p99_ms": 269.832
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    },
+    {
+      "slo_id": "G18-W6-ATT-C40",
+      "wave_key": "W6_monthly_company_contact_attempt_count_p1_c40",
+      "drilldown_variant": "kpi_metric_drilldown_contact_attempt_count_250k",
+      "concurrency": 40,
+      "diag_report_json_path": "http_concurrency_and_saturation_waves.W6_monthly_company_contact_attempt_count_p1_c40",
+      "p4_9_2_ceiling_p95_ms": 3000.0,
+      "measured": {
+        "s1_canonical_4x4": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 45.618,
+          "p50_ms": 259.748,
+          "p95_ms": 446.896,
+          "p99_ms": 487.947
+        },
+        "staging_vps_capped": {
+          "requests_total": 160,
+          "ok_count": 160,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 48.491,
+          "p50_ms": 451.631,
+          "p95_ms": 694.874,
+          "p99_ms": 718.069
+        }
+      },
+      "proposed_thresholds": {
+        "s1_canonical_4x4": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "staging_vps_capped": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        }
+      }
+    }
+  ]
+}
