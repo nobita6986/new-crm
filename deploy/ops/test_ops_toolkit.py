@@ -4017,6 +4017,473 @@ class OpsToolkitTests(unittest.TestCase):
                 spec_sha_before,
             )
 
+    def test_ba68cd22_v1_0_0_rejects_old_digest_jsons_and_missing_owner_approval(self) -> None:
+        import manage_isolated_staging_dr as dr_mod
+
+        repo_root = staging_mod.REPO_ROOT
+        cand_dir = repo_root / "deploy" / "ops" / "evidence" / "p4-candidate-ba68cd22-s1-20261112"
+        old_evidence_dir = repo_root / "deploy" / "ops" / "evidence" / "p4-candidate-and-s1-20261109"
+
+        # 1. Parity & Governance: v1.0.0 SLO spec & decoupled approval invariants
+        self.assertEqual(
+            dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256,
+            "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+        )
+        self.assertEqual(
+            dr_mod.compute_p4_s1_slo_spec_sha256(dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH),
+            dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256,
+        )
+        spec_doc = json.loads(dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(spec_doc["schema_version"], "cskh-p4-s1-slo-spec-v1")
+        self.assertEqual(spec_doc["slo_version"], "1.0.0")
+        self.assertEqual(spec_doc["slo_bundle_id"], "cskh-p4-g18-s1-endpoint-slo")
+        self.assertEqual(spec_doc["approval_status"], "PROPOSED_PENDING_OWNER_APPROVAL")
+        self.assertEqual(
+            spec_doc["candidate_binding"]["app_image_digest"],
+            dr_mod.CURRENT_CANDIDATE_DIGEST,
+        )
+        self.assertEqual(
+            spec_doc["candidate_binding"]["image_source_commit_sha"],
+            dr_mod.CURRENT_CANDIDATE_SOURCE_SHA,
+        )
+
+        app_doc = json.loads(dr_mod.DEFAULT_P4_S1_SLO_APPROVAL_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(app_doc["schema_version"], "cskh-p4-s1-slo-approval-v1")
+        self.assertEqual(app_doc["slo_version"], "1.0.0")
+        self.assertEqual(app_doc["slo_bundle_id"], "cskh-p4-g18-s1-endpoint-slo")
+        self.assertEqual(app_doc["slo_spec_sha256"], dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256)
+        self.assertEqual(app_doc["approved_image_digest"], dr_mod.CURRENT_CANDIDATE_DIGEST)
+        self.assertEqual(app_doc["approval_status"], "PENDING_OWNER_APPROVAL")
+        self.assertEqual(app_doc["approved_profiles"], [])
+
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+
+            # Build valid Staging VPS bundle for candidate ba68cd22 (staging_vps_capped)
+            receipt_dir_ba68 = self._build_mock_staging_vps_bundle(
+                repo_root,
+                td_path / "vps-receipts-ba68cd22",
+                expected_digest=dr_mod.CURRENT_CANDIDATE_DIGEST,
+            )
+            valid_t1c_data = {
+                "confirmed": True,
+                "confirmed_by": "T1C-Independent-Acceptance-Lead",
+                "confirmed_at": "2026-11-12T10:00:00+07:00",
+                "candidate_commit_sha": dr_mod.CURRENT_CANDIDATE_SOURCE_SHA,
+                "app_image_digest": dr_mod.CURRENT_CANDIDATE_DIGEST,
+                "verification_scope": dr_mod.STAGING_CANDIDATE_SCOPE,
+                "g04_status": "FAIL",
+                "production_candidate_status": "BLOCKED",
+            }
+            verified_t1c_doc = dr_mod.verify_t1c_candidate_confirmation(
+                valid_t1c_data, expected_app_image=dr_mod.CURRENT_CANDIDATE_DIGEST
+            )[1]
+            t1c_ba68_file = td_path / "t1c-ba68cd22.json"
+            t1c_ba68_file.write_text(json.dumps(verified_t1c_doc, indent=2), encoding="utf-8")
+            (receipt_dir_ba68 / "t1c-candidate-confirmation-receipt.json").write_text(
+                json.dumps(verified_t1c_doc, indent=2), encoding="utf-8"
+            )
+
+            preflight_doc = json.loads((receipt_dir_ba68 / "readonly-vps-preflight.json").read_text(encoding="utf-8"))
+            preflight_doc["safe_staging_allocation"] = dr_mod.determine_safe_staging_vps_configuration(
+                cpu_cores=4,
+                mem_available_mib=4200.0,
+                loadavg_1m=0.6,
+                free_disk_gib=18.0,
+                loopback_ports_free=True,
+                live_stack_running=True,
+            )
+            (receipt_dir_ba68 / "readonly-vps-preflight.json").write_text(
+                json.dumps(preflight_doc, indent=2), encoding="utf-8"
+            )
+            sum_doc = json.loads((receipt_dir_ba68 / "vps-g03-g05-summary.json").read_text(encoding="utf-8"))
+            sum_doc["staging_resource_configuration"] = dr_mod.get_staging_resource_profile_spec("staging_vps_capped")
+            sum_doc["t1c_candidate_confirmation"] = verified_t1c_doc
+            (receipt_dir_ba68 / "vps-g03-g05-summary.json").write_text(
+                json.dumps(sum_doc, indent=2), encoding="utf-8"
+            )
+
+            owner_ba68_file = td_path / "owner-approved-ba68.json"
+            owner_ba68_file.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "cskh-p4-s1-slo-approval-v1",
+                        "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+                        "slo_version": "1.0.0",
+                        "slo_spec_sha256": dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256,
+                        "approved_image_digest": dr_mod.CURRENT_CANDIDATE_DIGEST,
+                        "approved_profiles": ["staging_vps_capped"],
+                        "approval_status": "OWNER_APPROVED",
+                        "owner_signoff": {
+                            "approved_by": "CRM Product & Ops Owner",
+                            "approved_at_utc": "2026-11-12T03:30:00Z",
+                            "decision_reference": "OWNER-SLO-2026-11-12-BA68CD22",
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            bench_ba68_file = cand_dir / "benchmark-s1-staging-vps-capped.json"
+            diag_ba68_file = cand_dir / "g18-diagnostic-post_opt_staging_vps_capped.json"
+
+            # 2. Rejection when using old-digest JSONs (@sha256:693a3cdcc758...) across every input slot
+            # Slot A: Old-digest thresholds JSON (g18_slo_thresholds_v1_4.json)
+            # prepare-staging-g18 rejects old thresholds spec for candidate ba68cd22
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir_ba68),
+                        "--thresholds-json",
+                        str(dr_mod.DEFAULT_G18_THRESHOLDS_V1_4_PATH),
+                        "--owner-approval-json",
+                        str(owner_ba68_file),
+                    ]
+                ),
+                2,
+            )
+            # reconcile-g18-slo rejects old thresholds spec against ba68cd22 benchmark
+            rec_old_thr_out = td_path / "rec-old-thr.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(bench_ba68_file),
+                        "--thresholds-json",
+                        str(dr_mod.DEFAULT_G18_THRESHOLDS_V1_4_PATH),
+                        "--owner-approval-json",
+                        str(owner_ba68_file),
+                        "--out",
+                        str(rec_old_thr_out),
+                    ]
+                ),
+                2,
+            )
+            rec_old_thr = json.loads(rec_old_thr_out.read_text(encoding="utf-8"))
+            self.assertEqual(rec_old_thr["status"], "FAIL_INVALID_THRESHOLDS")
+            self.assertTrue(
+                any("thresholds_locked_candidate_digest_mismatch" in e for e in rec_old_thr["threshold_validation_errors"]),
+                rec_old_thr["threshold_validation_errors"],
+            )
+
+            # Slot B: Old-digest benchmark JSON (693a3cdc...)
+            old_bench_file = old_evidence_dir / "benchmark-s1-report.json"
+            rec_old_bench_out = td_path / "rec-old-bench.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(old_bench_file),
+                        "--thresholds-json",
+                        str(dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH),
+                        "--owner-approval-json",
+                        str(owner_ba68_file),
+                        "--out",
+                        str(rec_old_bench_out),
+                    ]
+                ),
+                2,
+            )
+            rec_old_bench = json.loads(rec_old_bench_out.read_text(encoding="utf-8"))
+            self.assertEqual(rec_old_bench["status"], "FAIL_DIGEST_MISMATCH")
+            self.assertFalse(rec_old_bench["digest_matches_candidate"])
+
+            # Slot C: Old-digest G18 deep diagnostic report (693a3cdc...)
+            old_diag_data = json.loads(diag_ba68_file.read_text(encoding="utf-8"))
+            old_diag_data["app_image_tested"] = dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4
+            old_diag_file = td_path / "diag-old-digest.json"
+            old_diag_file.write_text(json.dumps(old_diag_data, indent=2), encoding="utf-8")
+
+            prep_old_diag_out = td_path / "prep-old-diag.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir_ba68),
+                        "--owner-approval-json",
+                        str(owner_ba68_file),
+                        "--g18-diag-json",
+                        str(old_diag_file),
+                        "--out",
+                        str(prep_old_diag_out),
+                    ]
+                ),
+                2,
+            )
+            prep_old_diag = json.loads(prep_old_diag_out.read_text(encoding="utf-8"))
+            self.assertEqual(prep_old_diag["status"], "FAIL_INVALID_G18_DIAGNOSTIC_REPORT")
+            self.assertFalse(prep_old_diag["measurement_allowed"])
+
+            rec_old_diag_out = td_path / "rec-old-diag.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(bench_ba68_file),
+                        "--thresholds-json",
+                        str(dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH),
+                        "--owner-approval-json",
+                        str(owner_ba68_file),
+                        "--g18-diag-json",
+                        str(old_diag_file),
+                        "--out",
+                        str(rec_old_diag_out),
+                    ]
+                ),
+                2,
+            )
+            rec_old_diag = json.loads(rec_old_diag_out.read_text(encoding="utf-8"))
+            self.assertEqual(rec_old_diag["status"], "FAIL_DIGEST_MISMATCH")
+
+            # Slot D: Old-digest Staging VPS receipts bundle (693a3cdc...)
+            old_receipt_dir = self._build_mock_staging_vps_bundle(
+                repo_root,
+                td_path / "vps-receipts-old-digest",
+                expected_digest=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+            )
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(old_receipt_dir),
+                        "--owner-approval-json",
+                        str(owner_ba68_file),
+                    ]
+                ),
+                2,
+            )
+            rec_old_receipt_out = td_path / "rec-old-receipt.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(bench_ba68_file),
+                        "--vps-receipt-dir",
+                        str(old_receipt_dir),
+                        "--owner-approval-json",
+                        str(owner_ba68_file),
+                        "--out",
+                        str(rec_old_receipt_out),
+                    ]
+                ),
+                2,
+            )
+            rec_old_receipt = json.loads(rec_old_receipt_out.read_text(encoding="utf-8"))
+            self.assertEqual(rec_old_receipt["status"], "FAIL_INVALID_STAGING_VPS_RECEIPTS")
+
+            # Slot E: Old-digest T1C confirmation JSON (693a3cdc...)
+            old_t1c_data = dict(valid_t1c_data, app_image_digest=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4)
+            old_t1c_file = td_path / "t1c-old-digest.json"
+            old_t1c_file.write_text(json.dumps(old_t1c_data, indent=2), encoding="utf-8")
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir_ba68),
+                        "--t1c-confirmation-json",
+                        str(old_t1c_file),
+                        "--owner-approval-json",
+                        str(owner_ba68_file),
+                    ]
+                ),
+                2,
+            )
+            rec_old_t1c_out = td_path / "rec-old-t1c.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(bench_ba68_file),
+                        "--t1c-confirmation-json",
+                        str(old_t1c_file),
+                        "--require-t1c-confirmation",
+                        "--owner-approval-json",
+                        str(owner_ba68_file),
+                        "--out",
+                        str(rec_old_t1c_out),
+                    ]
+                ),
+                2,
+            )
+            rec_old_t1c = json.loads(rec_old_t1c_out.read_text(encoding="utf-8"))
+            self.assertEqual(rec_old_t1c["status"], "FAIL_INVALID_T1C_CANDIDATE_CONFIRMATION")
+
+            # Slot F: Old-digest Owner approval JSON (approved_image_digest = 693a3cdc...)
+            old_owner_approval_file = td_path / "owner-approval-old-digest.json"
+            old_owner_approval_file.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "cskh-p4-s1-slo-approval-v1",
+                        "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+                        "slo_version": "1.0.0",
+                        "slo_spec_sha256": dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256,
+                        "approved_image_digest": dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+                        "approved_profiles": ["staging_vps_capped"],
+                        "approval_status": "OWNER_APPROVED",
+                        "owner_signoff": {
+                            "approved_by": "CRM Product & Ops Owner",
+                            "approved_at_utc": "2026-11-12T03:30:00Z",
+                            "decision_reference": "OLD-DIGEST-APPROVAL",
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir_ba68),
+                        "--owner-approval-json",
+                        str(old_owner_approval_file),
+                    ]
+                ),
+                2,
+            )
+            rec_old_app_out = td_path / "rec-old-app.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(bench_ba68_file),
+                        "--owner-approval-json",
+                        str(old_owner_approval_file),
+                        "--out",
+                        str(rec_old_app_out),
+                    ]
+                ),
+                2,
+            )
+            rec_old_app = json.loads(rec_old_app_out.read_text(encoding="utf-8"))
+            self.assertEqual(rec_old_app["status"], "FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256")
+
+            # 3. Rejection when missing Owner approval across pre-measurement & G18 scoring
+            # 3a. owner_slo_approval=None (omitted)
+            gate_none_app = dr_mod.verify_g18_acceptance_measurement_gate(
+                vps_receipts=receipt_dir_ba68,
+                owner_slo_approval=None,
+            )
+            self.assertEqual(gate_none_app["status"], "BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO")
+            self.assertFalse(gate_none_app["measurement_allowed"])
+
+            run_none_app = dr_mod.run_staging_vps_g18_acceptance(
+                vps_receipts=receipt_dir_ba68,
+                owner_slo_approval=None,
+                benchmark_out_json=td_path / "never.json",
+            )
+            self.assertEqual(run_none_app["status"], "BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO")
+            self.assertFalse(run_none_app["benchmark_executed"])
+
+            # Staging VPS benchmark + receipts ready, but Owner approval omitted -> BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE
+            vps_bench_data = json.loads(bench_ba68_file.read_text(encoding="utf-8"))
+            vps_bench_data["isolation_guard"]["compose_project"] = "crm-cskh-s1-bench-vps"
+            vps_bench_data["s1_domain_and_database_benchmark"]["runner_hardware"]["platform"] = (
+                "Linux-6.8.0-51-generic-x86_64-with-glibc2.39"
+            )
+            vps_bench_ready_file = td_path / "vps-bench-ready.json"
+            vps_bench_ready_file.write_text(json.dumps(vps_bench_data, indent=2), encoding="utf-8")
+
+            rec_no_app_out = td_path / "rec-no-app.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(vps_bench_ready_file),
+                        "--vps-receipt-dir",
+                        str(receipt_dir_ba68),
+                        "--out",
+                        str(rec_no_app_out),
+                    ]
+                ),
+                2,
+            )
+            rec_no_app = json.loads(rec_no_app_out.read_text(encoding="utf-8"))
+            self.assertEqual(rec_no_app["status"], "BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE")
+            self.assertFalse(rec_no_app["owner_slo_v1_4_signed"])
+            self.assertFalse(rec_no_app["g18_pass_requirements"]["owner_v1_4_approval_bound_to_thresholds_sha256"])
+
+            # 3b. Non-existent --owner-approval-json path
+            non_exist_app = td_path / "non-existent-owner-approval.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir_ba68),
+                        "--owner-approval-json",
+                        str(non_exist_app),
+                    ]
+                ),
+                2,
+            )
+            rec_non_exist_out = td_path / "rec-non-exist.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(vps_bench_ready_file),
+                        "--owner-approval-json",
+                        str(non_exist_app),
+                        "--out",
+                        str(rec_non_exist_out),
+                    ]
+                ),
+                2,
+            )
+            rec_non_exist = json.loads(rec_non_exist_out.read_text(encoding="utf-8"))
+            self.assertEqual(rec_non_exist["status"], "FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256")
+            self.assertTrue(
+                any("owner_approval_file_not_found" in e for e in rec_non_exist["owner_approval_validation_errors"]),
+                rec_non_exist["owner_approval_validation_errors"],
+            )
+
+            # 3c. Forbidden self-approval by T1C or T1A
+            self_t1c_app_file = td_path / "self-t1c-app.json"
+            self_t1c_app_file.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "cskh-p4-s1-slo-approval-v1",
+                        "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+                        "slo_version": "1.0.0",
+                        "slo_spec_sha256": dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256,
+                        "approved_image_digest": dr_mod.CURRENT_CANDIDATE_DIGEST,
+                        "approved_profiles": ["staging_vps_capped"],
+                        "approval_status": "OWNER_APPROVED",
+                        "owner_signoff": {
+                            "approved_by": "T1C-Independent-Acceptance-Lead",
+                            "approved_at_utc": "2026-11-12T03:30:00Z",
+                            "decision_reference": "T1C-CANNOT-SELF-APPROVE",
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+            gate_self_t1c = dr_mod.verify_g18_acceptance_measurement_gate(
+                vps_receipts=receipt_dir_ba68,
+                owner_slo_approval=self_t1c_app_file,
+            )
+            self.assertEqual(gate_self_t1c["status"], "FAIL_SCORER_DOES_NOT_MATCH_OWNER_SIGNED_CONFIG_SLO")
+            self.assertTrue(
+                any("forbidden_or_self_approved_by" in e for e in gate_self_t1c["owner_approval_validation_errors"])
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

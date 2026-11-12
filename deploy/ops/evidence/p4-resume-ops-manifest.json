@@ -163,8 +163,8 @@
       "status": "PASS"
     },
     "test_ops_toolkit_windows_appcontainer": {
-      "ran": 24,
-      "passed": 24,
+      "ran": 25,
+      "passed": 25,
       "status": "PASS"
     },
     "test_ops_toolkit_linux_posix_tcpserver": {
@@ -484,12 +484,12 @@
     {
       "path": "deploy/ops/evidence/p4-g07-g08-dr-20261109/systemd-timers-dry-run.json",
       "bytes": 6050,
-      "sha256": "3ce27e0531767a7105feac0ffb77154cb202b21f84bfe8bcf211586e48d3fe2a"
+      "sha256": "4c143c9accc829568c58ef58f5fea3108fbc37ae0c14f53ecdfc042458264204"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/SHA256SUMS.txt",
-      "bytes": 1505,
-      "sha256": "5cf16db9aa0935eab9ac3c2a083e6b31d261ef9220d70e3455357b990341ea68"
+      "bytes": 1520,
+      "sha256": "b75f841a5bed536c28dbb7e13b002ad13daccf73119e74f50507d341dee0bfcf"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/candidate-registry-pull-inspect-receipt.json",
@@ -538,8 +538,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/gate-acceptance-evidence-map.json",
-      "bytes": 13039,
-      "sha256": "059439f69c66e609cac9dfe4eccffdf78e64494f8f928d99a9f610a326ccae5d"
+      "bytes": 13503,
+      "sha256": "e313108b58d174dc37b73f25a27a8ede18bba81f0084d809a56a9943d5ded710"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
@@ -653,8 +653,8 @@
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
-      "bytes": 373615,
-      "sha256": "f743475617d7f0d737e556d4c811d96a9e354800530d012e687064083301ff64"
+      "bytes": 375017,
+      "sha256": "7af811a517d3f8cfe2f722c0f989e1da73e759947998716ac7730ef5e0626f17"
     },
     {
       "path": "deploy/ops/run_https_browser_uat_and_security.py",
@@ -708,8 +708,8 @@
     },
     {
       "path": "deploy/ops/test_ops_toolkit.py",
-      "bytes": 203590,
-      "sha256": "9c100a0011ddbb0ba16ca3f5276516900fceca1f570b050b8f8be437748a975e"
+      "bytes": 225375,
+      "sha256": "0465859eadcfdf737b6fb388e846761b54a426a86fdee1562a89a38cb84fc012"
     },
     {
       "path": "deploy/ops/verify_offsite_restore.py",
@@ -898,8 +898,8 @@
     },
     {
       "path": "docs/p4/performance-report.md",
-      "bytes": 25467,
-      "sha256": "d6faecf65922718f92f9c5ddb09ec82548dc5a61b0a60b77638fce8d7eea11fa"
+      "bytes": 28662,
+      "sha256": "9ad0070e1b14b64f7cf83fe5b69bf6e3bbc58b799c9f798cf47eb6cf52f4bb28"
     },
     {
       "path": "docs/p4/pii-field-catalog.md",

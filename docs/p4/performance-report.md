@@ -156,3 +156,22 @@
 | `kpi_drilldown_paginated_api` (`p95`) | **`290,296 ms`** (ngày/chiến dịch) · **`203,350 ms`** (tháng/công ty `250k`) | `<= 1.200 ms` (tham chiếu `P4.md`: `3.000 ms`) | `CHỜ OWNER PHÊ DUYỆT` |
 | Tỷ lệ lỗi `HTTP 5xx` trên API nghiệp vụ | **`0,00%`** | `<= 0,50%` | `CHỜ OWNER PHÊ DUYỆT` |
 | Độ trễ làm mới KPI tăng trưởng trong ngày | **`2,953 giây`** (`2.953,42 ms` + chu kỳ cron `5 phút`) | `<= 300 giây` (`5 phút`) | `CHỜ OWNER PHÊ DUYỆT` |
+
+---
+
+### 4.4. Bộ Đặc Tả SLO `v1.0.0` & Cơ Chế Phê Duyệt Tách Rời Cho Ứng Viên `@sha256:ba68cd22...` (`UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL`)
+
+Nhằm khắc phục điểm nghẽn độ trễ drill-down tháng toàn công ty trên quy mô `250.000` attempts và chuẩn hóa quản trị kiểm định Cổng `G18` cho ứng viên mới `@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8` (commit `3c040c85a44c4ad37e9d9152b5630a4596e593ee`), toàn bộ luồng tiền đo (`prepare-staging-g18`) và đối soát nghiệm thu (`reconcile-g18-slo`) đã được nâng cấp đồng bộ theo cơ chế tách rời phê duyệt (`decoupled approval`) từ `cd03af5`:
+
+1. **Bộ đặc tả ngưỡng bất biến (`deploy/release/p4-s1-slo-spec.json`):**
+   - Định danh gói: `slo_bundle_id = "cskh-p4-g18-s1-endpoint-slo"`, phiên bản `slo_version = "1.0.0"`, lược đồ `schema_version = "cskh-p4-s1-slo-spec-v1"`.
+   - Mã băm SHA-256 bất biến chuẩn hóa LF: **`ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d`**. Tệp này tuyệt đối không bị chỉnh sửa byte khi Owner ký duyệt.
+   - Hỗ trợ đầy đủ hai cấu hình tài nguyên: cấu hình chuẩn đo kiểm `s1_canonical_4x4` (`4 vCPU / 16 GiB RAM`) và cấu hình an toàn trên VPS đích `staging_vps_capped` (`2 vCPU / 2 GiB RAM`, `GUNICORN_WORKERS=2, GUNICORN_THREADS=2`, có kiểm soát headroom trước khi chạy).
+2. **Phiếu phê duyệt riêng của Owner (`deploy/release/p4-s1-slo-approval.json`):**
+   - Lược đồ: `schema_version = "cskh-p4-s1-slo-approval-v1"`.
+   - Trạng thái khởi tạo: `approval_status = "PENDING_OWNER_APPROVAL"`, `approved_profiles = []`.
+   - Ràng buộc mật mã học: Khóa chặt vào `slo_spec_sha256 = "ccd8f83c..."`, digest ứng viên `approved_image_digest = "...@sha256:ba68cd22..."`, và danh sách cấu hình được phê duyệt.
+3. **Cơ chế từ chối nghiêm ngặt (`Fail-Closed Enforcement`):**
+   - **Từ chối JSON digest cũ:** Bất kỳ tệp JSON nào thuộc digest cũ (`@sha256:693a3cdcc758...`) bao gồm ngưỡng v1.4, báo cáo đo kiểm, chẩn đoán G18, biên nhận Staging VPS, xác nhận T1C, hoặc phiếu duyệt Owner khi đưa vào luồng tiền đo hay chấm G18 của ứng viên `ba68cd22...` đều bị từ chối ngay lập tức (`FAIL_INVALID_THRESHOLDS`, `FAIL_DIGEST_MISMATCH`, `FAIL_INVALID_G18_DIAGNOSTIC_REPORT`, `FAIL_UNSAFE_OR_INVALID_STAGING_VPS_CONFIGURATION`, `FAIL_INVALID_T1C_CANDIDATE_CONFIRMATION`, hoặc `FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256`).
+   - **Từ chối khi thiếu phê duyệt Owner:** Khi thiếu tệp phê duyệt (`owner_slo_approval=None`), tệp còn ở trạng thái `PENDING_OWNER_APPROVAL`, đường dẫn không tồn tại, danh sách profile rỗng, hoặc tự ý phê duyệt bởi `T1A`/`T1B`/`T1C`, cổng đo nghiệm thu và bộ chấm đều chặn đứng (`BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO` / `BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE`), đảm bảo tuyệt đối không nghiệm thu Cổng G18 khi chưa có chữ ký hợp lệ từ Owner.
+

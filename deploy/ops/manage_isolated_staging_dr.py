@@ -4983,6 +4983,16 @@ def validate_p4_s1_slo_spec_for_configuration(
         errors.append(
             f"slo_bundle_id_mismatch:expected={canonical_spec.get('slo_bundle_id')!r}:got={candidate_spec.get('slo_bundle_id')!r}"
         )
+    if str(candidate_spec.get("slo_version") or "").strip() != str(canonical_spec.get("slo_version") or ""):
+        errors.append(
+            f"slo_version_mismatch:expected={canonical_spec.get('slo_version')!r}:got={candidate_spec.get('slo_version')!r}"
+        )
+    cand_signoff = candidate_spec.get("owner_signoff")
+    if candidate_spec.get("approval_status") != "PROPOSED_PENDING_OWNER_APPROVAL" or (
+        not isinstance(cand_signoff, dict)
+        or any(v is not None for v in cand_signoff.values())
+    ):
+        errors.append("s1_slo_spec_embedded_signoff_mutation_forbidden_use_separate_approval_json")
 
     cand_binding = candidate_spec.get("candidate_binding")
     if not isinstance(cand_binding, dict):
@@ -6938,6 +6948,31 @@ def _is_clean_pending_s1_slo_approval(
     return len(errs) == 0
 
 
+def _load_optional_owner_slo_approval(
+    owner_slo_approval: dict[str, Any] | Path | None,
+) -> tuple[dict[str, Any] | None, str | None, str | None]:
+    """Load optional Owner SLO approval dict/file and compute LF-normalized SHA-256."""
+    if owner_slo_approval is None:
+        return None, None, None
+    if isinstance(owner_slo_approval, Path):
+        if not owner_slo_approval.is_file():
+            return None, None, f"owner_approval_file_not_found:{owner_slo_approval}"
+        try:
+            doc_sha = s1_slo_tool.compute_normalized_sha256(owner_slo_approval)
+            loaded = json.loads(owner_slo_approval.read_text(encoding="utf-8"))
+        except Exception as exc:
+            return None, None, f"owner_approval_invalid_json:{exc}"
+        if not isinstance(loaded, dict):
+            return None, doc_sha, "owner_approval_root_not_dict"
+        return loaded, doc_sha, None
+    if isinstance(owner_slo_approval, dict):
+        doc_sha = hashlib.sha256(
+            (json.dumps(owner_slo_approval, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+        ).hexdigest()
+        return owner_slo_approval, doc_sha, None
+    return None, None, f"owner_slo_approval_not_dict:{type(owner_slo_approval).__name__}"
+
+
 def _validate_owner_slo_approval_document(
     owner_slo_approval: dict[str, Any] | None,
     *,
@@ -6960,130 +6995,60 @@ def _validate_owner_slo_approval_document(
         expected_cfg_sha = (
             get_staging_resource_profile_spec(resolved_profile)["config_spec_sha256"]
             if (resolved_profile and resolved_profile in STAGING_VPS_RESOURCE_PROFILES)
-            else ""
+             else ""
         )
-        if owner_slo_approval.get("schema_version") == s1_slo_tool.EXPECTED_APPROVAL_SCHEMA_VERSION:
-            app_errs, app_meta = s1_slo_tool.validate_slo_approval_document(
-                owner_slo_approval,
-                spec=validated_spec,
-                actual_slo_sha256=candidate_thresholds_sha256,
-                target_image_digest=expected_digest,
-                profile=resolved_profile or "__missing__",
-                require_owner_approved=True,
-            )
-            approval_errors.extend(app_errs)
-            signoff = owner_slo_approval.get("owner_signoff")
-            approved_by = (
-                str(signoff.get("approved_by") or "").strip() if isinstance(signoff, dict) else ""
-            )
-            if approved_by and (
-                approved_by.lower() in FORBIDDEN_T1C_SELF_APPROVERS
-                or approved_by.lower() == "t1c"
-                or approved_by.lower().startswith(("t1a", "t1b", "t1c", "<"))
-                or "placeholder" in approved_by.lower()
-            ):
-                approval_errors.append(f"forbidden_or_self_approved_by:{approved_by!r}")
-            if "approved_config_spec_sha256" in owner_slo_approval:
-                got_cfg_sha = str(owner_slo_approval.get("approved_config_spec_sha256") or "").strip()
-                if expected_cfg_sha and got_cfg_sha != expected_cfg_sha:
-                    approval_errors.append(
-                        f"owner_approval_config_spec_sha256_mismatch:expected={expected_cfg_sha}:got={got_cfg_sha}"
-                    )
-            if isinstance(owner_slo_approval.get("approved_profile_config_spec_sha256"), dict) and resolved_profile:
-                prof_sha_map = owner_slo_approval["approved_profile_config_spec_sha256"]
-                if resolved_profile in prof_sha_map and expected_cfg_sha:
-                    if str(prof_sha_map[resolved_profile] or "").strip() != expected_cfg_sha:
-                        approval_errors.append(
-                            f"owner_approval_config_spec_sha256_mismatch:expected={expected_cfg_sha}:got={prof_sha_map[resolved_profile]}"
-                        )
-            signed_thresholds_sha256 = str(app_meta.get("slo_spec_sha256_bound") or "")
-            owner_signed = (
-                (not approval_errors)
-                and (not threshold_spec_errors)
-                and bool(app_meta.get("owner_approved_for_profile"))
-            )
-            return owner_signed, signed_thresholds_sha256, approval_errors
-
-        if owner_slo_approval.get("approved") is not True:
-            approval_errors.append("approved_flag_not_true")
-        signed_by = str(owner_slo_approval.get("signed_by") or "").strip()
-        if not signed_by:
-            approval_errors.append("missing_signed_by")
-        elif (
-            signed_by.lower() in FORBIDDEN_T1C_SELF_APPROVERS
-            or signed_by.lower() == "t1c"
-            or signed_by.lower().startswith(("t1a", "t1b", "t1c", "<"))
-            or "placeholder" in signed_by.lower()
-        ):
-            approval_errors.append(f"forbidden_or_self_signed_by:{signed_by!r}")
-        if not str(owner_slo_approval.get("signed_at") or "").strip():
-            approval_errors.append("missing_signed_at")
-
-        signed_thresholds_sha256 = str(
-            owner_slo_approval.get("thresholds_sha256") or owner_slo_approval.get("slo_spec_sha256") or ""
-        ).strip()
-        if not signed_thresholds_sha256:
-            approval_errors.append("missing_thresholds_sha256_in_owner_approval")
-        elif candidate_thresholds_sha256 and signed_thresholds_sha256 != candidate_thresholds_sha256:
+        app_errs, app_meta = s1_slo_tool.validate_slo_approval_document(
+            owner_slo_approval,
+            spec=validated_spec,
+            actual_slo_sha256=candidate_thresholds_sha256,
+            target_image_digest=expected_digest,
+            profile=resolved_profile or "__missing__",
+            require_owner_approved=True,
+        )
+        approval_errors.extend(app_errs)
+        if owner_slo_approval.get("schema_version") != s1_slo_tool.EXPECTED_APPROVAL_SCHEMA_VERSION:
+            approval_errors.append("decoupled_s1_slo_approval_v1_schema_required")
+        legacy_sha = str(owner_slo_approval.get("thresholds_sha256") or "").strip()
+        if legacy_sha and candidate_thresholds_sha256 and legacy_sha != candidate_thresholds_sha256:
             approval_errors.append(
                 f"owner_approval_thresholds_sha256_mismatch_vs_evaluated_spec:"
-                f"expected={candidate_thresholds_sha256}:got={signed_thresholds_sha256}"
+                f"expected={candidate_thresholds_sha256}:got={legacy_sha}"
             )
-
-        if "slo_bundle_id" in owner_slo_approval and owner_slo_approval.get("slo_bundle_id") != validated_spec.get("slo_bundle_id"):
+        legacy_dig = str(owner_slo_approval.get("approved_candidate_digest") or "").strip()
+        if legacy_dig and legacy_dig != expected_digest:
             approval_errors.append(
-                f"owner_approval_slo_bundle_id_mismatch:expected={validated_spec.get('slo_bundle_id')!r}:got={owner_slo_approval.get('slo_bundle_id')!r}"
+                f"owner_approval_candidate_digest_mismatch:expected={expected_digest!r}:got={legacy_dig!r}"
             )
-        if "slo_version" in owner_slo_approval and str(owner_slo_approval.get("slo_version") or "") != str(validated_spec.get("slo_version") or ""):
-            approval_errors.append(
-                f"owner_approval_slo_version_mismatch:expected={validated_spec.get('slo_version')!r}:got={owner_slo_approval.get('slo_version')!r}"
-            )
-
-        approved_prof = str(owner_slo_approval.get("approved_configuration_profile") or "").strip()
-        if not approved_prof:
-            approval_errors.append("missing_approved_configuration_profile_in_owner_approval")
-        elif resolved_profile and approved_prof != resolved_profile:
-            approval_errors.append(
-                f"owner_approval_configuration_profile_mismatch:expected={resolved_profile!r}:got={approved_prof!r}"
-            )
-        approved_cfg_sha = str(owner_slo_approval.get("approved_config_spec_sha256") or "").strip()
-        if not approved_cfg_sha:
-            approval_errors.append("missing_approved_config_spec_sha256_in_owner_approval")
-        elif expected_cfg_sha and approved_cfg_sha != expected_cfg_sha:
-            approval_errors.append(
-                f"owner_approval_config_spec_sha256_mismatch:expected={expected_cfg_sha}:got={approved_cfg_sha}"
-            )
-        approved_dig = str(owner_slo_approval.get("approved_candidate_digest") or "").strip()
-        if not approved_dig:
-            approval_errors.append("missing_approved_candidate_digest_in_owner_approval")
-        elif approved_dig != expected_digest:
-            approval_errors.append(
-                f"owner_approval_candidate_digest_mismatch:expected={expected_digest!r}:got={approved_dig!r}"
-            )
-        if "approved_thresholds" in owner_slo_approval:
-            raw_signed = owner_slo_approval.get("approved_thresholds")
-            if not isinstance(raw_signed, dict):
-                approval_errors.append("missing_or_invalid_approved_thresholds_dict")
-            else:
-                pre_spec = derive_precheck_7_metrics_from_p4_s1_slo_spec(
-                    validated_spec,
-                    resolved_profile or "s1_canonical_4x4",
+        signoff = owner_slo_approval.get("owner_signoff")
+        approved_by = (
+            str(signoff.get("approved_by") or "").strip() if isinstance(signoff, dict) else ""
+        )
+        if approved_by and (
+            approved_by.lower() in FORBIDDEN_T1C_SELF_APPROVERS
+            or approved_by.lower() == "t1c"
+            or approved_by.lower().startswith(("t1a", "t1b", "t1c", "<"))
+            or "placeholder" in approved_by.lower()
+        ):
+            approval_errors.append(f"forbidden_or_self_approved_by:{approved_by!r}")
+        if "approved_config_spec_sha256" in owner_slo_approval:
+            got_cfg_sha = str(owner_slo_approval.get("approved_config_spec_sha256") or "").strip()
+            if expected_cfg_sha and got_cfg_sha != expected_cfg_sha:
+                approval_errors.append(
+                    f"owner_approval_config_spec_sha256_mismatch:expected={expected_cfg_sha}:got={got_cfg_sha}"
                 )
-                for key, spec in pre_spec.items():
-                    if key not in raw_signed:
-                        approval_errors.append(f"missing_threshold_key:{key}")
-                    elif isinstance(raw_signed[key], bool) or not isinstance(raw_signed[key], (int, float)):
-                        approval_errors.append(f"invalid_threshold_type:{key}")
-                    else:
-                        val = float(raw_signed[key])
-                        if not math.isfinite(val) or abs(val - float(spec["threshold"])) > 1e-6:
-                            approval_errors.append(
-                                f"threshold_mismatch_vs_s1_slo:{key}:expected={spec['threshold']}:got={val}"
-                            )
-                for extra_k in sorted(set(raw_signed) - set(pre_spec)):
-                    approval_errors.append(f"unexpected_approved_threshold_key:{extra_k}")
-
-        owner_signed = (not approval_errors) and (not threshold_spec_errors)
+        if isinstance(owner_slo_approval.get("approved_profile_config_spec_sha256"), dict) and resolved_profile:
+            prof_sha_map = owner_slo_approval["approved_profile_config_spec_sha256"]
+            if resolved_profile in prof_sha_map and expected_cfg_sha:
+                if str(prof_sha_map[resolved_profile] or "").strip() != expected_cfg_sha:
+                    approval_errors.append(
+                        f"owner_approval_config_spec_sha256_mismatch:expected={expected_cfg_sha}:got={prof_sha_map[resolved_profile]}"
+                    )
+        signed_thresholds_sha256 = str(app_meta.get("slo_spec_sha256_bound") or legacy_sha or "")
+        owner_signed = (
+            (not approval_errors)
+            and (not threshold_spec_errors)
+            and bool(app_meta.get("owner_approved_for_profile"))
+        )
         return owner_signed, signed_thresholds_sha256, approval_errors
 
     if owner_slo_approval.get("approved") is not True:
@@ -7332,6 +7297,8 @@ def evaluate_p4_s1_slo_reconciliation(
     diag_results: list[dict[str, Any]] = []
     diag_sha: str | None = None
     diag_passed = True
+    diag_digest_matches = True
+    diag_profile_matches = True
     if g18_diag_report is not None:
         diag_doc: dict[str, Any] | None = None
         if isinstance(g18_diag_report, Path):
@@ -7350,6 +7317,7 @@ def evaluate_p4_s1_slo_reconciliation(
         if isinstance(diag_doc, dict):
             diag_img = _req_str(diag_doc, "app_image_tested", "g18_diag.app_image_tested", missing)
             if diag_img is not None and diag_img != expected_digest:
+                diag_digest_matches = False
                 diag_passed = False
                 breaches.append(f"g18_diag.app_image_tested_mismatch:{diag_img}!={expected_digest}")
             diag_rp = diag_doc.get("resource_profile")
@@ -7362,6 +7330,7 @@ def evaluate_p4_s1_slo_reconciliation(
                 missing.append("g18_diag.resource_profile")
                 diag_passed = False
             elif diag_prof_name != eff_prof:
+                diag_profile_matches = False
                 diag_passed = False
                 breaches.append(f"g18_diag.resource_profile_mismatch:{diag_prof_name}!={eff_prof}")
 
@@ -7412,6 +7381,8 @@ def evaluate_p4_s1_slo_reconciliation(
         "category_verdicts": category_verdicts,
         "s1_rule_results": rule_results,
         "g18_diag_report_sha256": diag_sha,
+        "g18_diag_digest_matches": diag_digest_matches,
+        "g18_diag_profile_matches": diag_profile_matches,
         "g18_deep_diagnostic_results": diag_results,
     }
 
@@ -7447,7 +7418,7 @@ def _peek_approval_single_profile(owner_slo_approval: dict[str, Any] | None) -> 
 def reconcile_g18_benchmark_with_v1_4_slos(
     benchmark_report: dict[str, Any],
     *,
-    owner_slo_approval: dict[str, Any] | None = None,
+    owner_slo_approval: dict[str, Any] | Path | None = None,
     vps_receipts: dict[str, Any] | Path | None = None,
     thresholds_spec: dict[str, Any] | None = None,
     thresholds_path: Path | None = None,
@@ -7459,12 +7430,27 @@ def reconcile_g18_benchmark_with_v1_4_slos(
     out_json: Path | None = None,
 ) -> dict[str, Any]:
     """Reconcile G18 per Owner Ticket v1.4 or `cskh-p4-s1-slo-spec-v1` config-bound Staging VPS SLO."""
+    owner_doc, owner_doc_sha, owner_load_err = _load_optional_owner_slo_approval(owner_slo_approval)
+
+    if thresholds_spec is None and thresholds_path is None:
+        if expected_digest == CURRENT_CANDIDATE_DIGEST or (
+            expected_digest is None
+            and (
+                str(benchmark_report.get("app_image_tested") or "").strip() == CURRENT_CANDIDATE_DIGEST
+                or (
+                    isinstance(owner_doc, dict)
+                    and owner_doc.get("schema_version") == s1_slo_tool.EXPECTED_APPROVAL_SCHEMA_VERSION
+                )
+            )
+        ):
+            thresholds_path = DEFAULT_P4_S1_SLO_SPEC_PATH
+
     s1_slo_v1_mode = is_p4_s1_slo_spec_v1(thresholds_spec, thresholds_path)
     if expected_digest is None:
         expected_digest = CURRENT_CANDIDATE_DIGEST if s1_slo_v1_mode else LOCKED_CANDIDATE_DIGEST_V1_4
 
     peek_thresh_prof = _peek_thresholds_target_profile(thresholds_spec, thresholds_path)
-    approval_prof = _peek_approval_single_profile(owner_slo_approval) or ""
+    approval_prof = _peek_approval_single_profile(owner_doc) or ""
     vps_prof = _infer_staging_profile_from_vps_receipts(vps_receipts) or ""
     bench_resource_profile = str(benchmark_report.get("resource_profile") or "").strip()
     req_target_prof = (
@@ -7489,11 +7475,12 @@ def reconcile_g18_benchmark_with_v1_4_slos(
     )
 
     if config_bound_mode:
+        spec_check_profile = resolved_profile or ("s1_canonical_4x4" if s1_slo_v1_mode else "__missing__")
         validated_spec, candidate_thresholds_sha256, threshold_spec_errors = (
             validate_g18_thresholds_for_configuration(
                 thresholds_spec=thresholds_spec,
                 thresholds_path=thresholds_path,
-                target_configuration_profile=resolved_profile or "__missing__",
+                target_configuration_profile=spec_check_profile,
                 expected_digest=expected_digest,
             )
         )
@@ -7564,22 +7551,28 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         breached_checks.append("p4_9_2_acceptance_matrix.all_passed_is_false")
 
     owner_approval_present = owner_slo_approval is not None
-    owner_signed, signed_thresholds_sha256, approval_errors = _validate_owner_slo_approval_document(
-        owner_slo_approval,
-        validated_spec=validated_spec,
-        candidate_thresholds_sha256=candidate_thresholds_sha256,
-        threshold_spec_errors=threshold_spec_errors,
-        config_bound_mode=config_bound_mode,
-        resolved_profile=resolved_profile,
-        expected_digest=expected_digest,
-    )
-    clean_pending_approval = _is_clean_pending_s1_slo_approval(
-        owner_slo_approval,
-        validated_spec=validated_spec,
-        actual_slo_sha256=candidate_thresholds_sha256,
-        expected_digest=expected_digest,
-        profile=resolved_profile,
-    )
+    if owner_load_err is not None:
+        owner_signed = False
+        signed_thresholds_sha256 = ""
+        approval_errors = [owner_load_err]
+        clean_pending_approval = False
+    else:
+        owner_signed, signed_thresholds_sha256, approval_errors = _validate_owner_slo_approval_document(
+            owner_doc,
+            validated_spec=validated_spec,
+            candidate_thresholds_sha256=candidate_thresholds_sha256,
+            threshold_spec_errors=threshold_spec_errors,
+            config_bound_mode=config_bound_mode,
+            resolved_profile=resolved_profile,
+            expected_digest=expected_digest,
+        )
+        clean_pending_approval = _is_clean_pending_s1_slo_approval(
+            owner_doc,
+            validated_spec=validated_spec,
+            actual_slo_sha256=candidate_thresholds_sha256,
+            expected_digest=expected_digest,
+            profile=resolved_profile,
+        )
 
     t1c_check_enforced = bool(require_t1c_confirmation or t1c_confirmation is not None)
     t1c_ok = True
@@ -7641,6 +7634,10 @@ def reconcile_g18_benchmark_with_v1_4_slos(
             breaches=breached_checks,
         )
 
+    if s1_slo_bundle_eval is not None and s1_slo_bundle_eval.get("g18_diag_profile_matches") is False:
+        configuration_matches = False
+        configuration_errors.append("g18_diag_resource_profile_mismatch")
+
     unique_missing = sorted(dict.fromkeys(missing_measurements))
     unique_breaches = sorted(dict.fromkeys(breached_checks))
     measurements_complete = not unique_missing
@@ -7650,11 +7647,17 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         if s1_slo_v1_mode
         else str(validated_spec["locked_candidate_digest"])
     )
+    diag_digest_ok = (
+        True
+        if s1_slo_bundle_eval is None
+        else bool(s1_slo_bundle_eval.get("g18_diag_digest_matches", True))
+    )
     digest_matches = (
         bool(app_image_tested)
         and "@sha256:" in expected_digest
         and app_image_tested == expected_digest
         and expected_digest == spec_locked_digest
+        and diag_digest_ok
     )
     owner_vps_untouched = (iso_verified is True) and (owner_vps_touched is False)
 
@@ -7679,6 +7682,8 @@ def reconcile_g18_benchmark_with_v1_4_slos(
     # Deterministic fail-closed status precedence for G18
     if threshold_spec_errors:
         overall_status = "FAIL_INVALID_THRESHOLDS"
+    elif app_image_tested and not digest_matches:
+        overall_status = "FAIL_DIGEST_MISMATCH"
     elif not measurements_complete:
         overall_status = "FAIL_MISSING_MEASUREMENTS"
     elif not digest_matches:
@@ -7758,6 +7763,7 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         "evaluated_thresholds_sha256": candidate_thresholds_sha256,
         "threshold_validation_errors": threshold_spec_errors,
         "owner_slo_v1_4_signed": owner_signed,
+        "owner_approval_doc_sha256": owner_doc_sha,
         "owner_approval_thresholds_sha256": signed_thresholds_sha256,
         "owner_approval_validation_errors": approval_errors,
         "expected_candidate_digest": expected_digest,
@@ -7825,6 +7831,51 @@ def _infer_staging_profile_from_vps_receipts(vps_receipts: dict[str, Any] | Path
     return None
 
 
+def _validate_premeasurement_g18_diag_report(
+    g18_diag_report: dict[str, Any] | Path | None,
+    *,
+    expected_digest: str,
+    resolved_profile: str | None,
+) -> tuple[bool, list[str]]:
+    """Validate optional G18 deep diagnostic report digest & Staging profile before measurement."""
+    if g18_diag_report is None:
+        return True, []
+    diag_doc: dict[str, Any] | None = None
+    if isinstance(g18_diag_report, Path):
+        if not g18_diag_report.is_file():
+            return False, [f"g18_diag_report_file_not_found:{g18_diag_report}"]
+        try:
+            loaded = json.loads(g18_diag_report.read_text(encoding="utf-8"))
+        except Exception as exc:
+            return False, [f"g18_diag_report_invalid_json:{exc}"]
+        if not isinstance(loaded, dict):
+            return False, ["g18_diag_report_root_not_dict"]
+        diag_doc = loaded
+    elif isinstance(g18_diag_report, dict):
+        diag_doc = g18_diag_report
+    else:
+        return False, [f"g18_diag_report_not_dict:{type(g18_diag_report).__name__}"]
+
+    errs: list[str] = []
+    diag_img = str(diag_doc.get("app_image_tested") or "").strip()
+    if not diag_img:
+        errs.append("missing_app_image_tested_in_g18_diag_report")
+    elif diag_img != expected_digest:
+        errs.append(f"g18_diag_digest_mismatch:expected={expected_digest!r}:got={diag_img!r}")
+
+    diag_rp = diag_doc.get("resource_profile")
+    diag_prof = (
+        str(diag_rp.get("name") or "").strip()
+        if isinstance(diag_rp, dict)
+        else str(diag_rp or "").strip()
+    )
+    if not diag_prof:
+        errs.append("missing_resource_profile_in_g18_diag_report")
+    elif resolved_profile and diag_prof != resolved_profile:
+        errs.append(f"g18_diag_resource_profile_mismatch:expected={resolved_profile!r}:got={diag_prof!r}")
+    return (not errs), errs
+
+
 def verify_g18_acceptance_measurement_gate(
     *,
     vps_receipts: dict[str, Any] | Path | None,
@@ -7834,6 +7885,7 @@ def verify_g18_acceptance_measurement_gate(
     thresholds_path: Path | None = None,
     owner_slo_approval: dict[str, Any] | Path | None = None,
     t1c_confirmation: dict[str, Any] | Path | None = None,
+    g18_diag_report: dict[str, Any] | Path | None = None,
     bench_port: int = 18880,
     benchmark_out_json: Path | None = None,
     out_json: Path | None = None,
@@ -7842,22 +7894,7 @@ def verify_g18_acceptance_measurement_gate(
     if thresholds_spec is None and thresholds_path is None and expected_digest == CURRENT_CANDIDATE_DIGEST:
         thresholds_path = DEFAULT_P4_S1_SLO_SPEC_PATH
 
-    owner_doc: dict[str, Any] | None = None
-    owner_load_err: str | None = None
-    if isinstance(owner_slo_approval, Path):
-        if not owner_slo_approval.is_file():
-            owner_load_err = f"owner_approval_file_not_found:{owner_slo_approval}"
-        else:
-            try:
-                loaded_owner = json.loads(owner_slo_approval.read_text(encoding="utf-8"))
-                if isinstance(loaded_owner, dict):
-                    owner_doc = loaded_owner
-                else:
-                    owner_load_err = "owner_approval_root_not_dict"
-            except Exception as exc:
-                owner_load_err = f"owner_approval_invalid_json:{exc}"
-    elif isinstance(owner_slo_approval, dict):
-        owner_doc = owner_slo_approval
+    owner_doc, owner_doc_sha, owner_load_err = _load_optional_owner_slo_approval(owner_slo_approval)
 
     t1c_source = t1c_confirmation
     if t1c_source is None:
@@ -7901,6 +7938,11 @@ def verify_g18_acceptance_measurement_gate(
         target_configuration_profile=resolved_profile or "__missing__",
         expected_digest=expected_digest,
     )
+    g18_diag_ok, g18_diag_errors = _validate_premeasurement_g18_diag_report(
+        g18_diag_report,
+        expected_digest=expected_digest,
+        resolved_profile=resolved_profile,
+    )
     if owner_load_err is not None:
         owner_signed = False
         signed_thresholds_sha256 = ""
@@ -7929,6 +7971,7 @@ def verify_g18_acceptance_measurement_gate(
         and t1c_ok
         and vps_ok
         and (not threshold_errors)
+        and g18_diag_ok
         and owner_signed
     )
 
@@ -7946,6 +7989,8 @@ def verify_g18_acceptance_measurement_gate(
         )
     elif threshold_errors:
         gate_status = "BLOCKED_SCORER_THRESHOLDS_NOT_BOUND_TO_CONFIGURATION"
+    elif not g18_diag_ok:
+        gate_status = "FAIL_INVALID_G18_DIAGNOSTIC_REPORT"
     elif not owner_signed:
         gate_status = (
             "BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO"
@@ -7999,7 +8044,10 @@ def verify_g18_acceptance_measurement_gate(
         "staging_vps_receipt_errors": vps_errors,
         "scorer_thresholds_sha256": candidate_thresholds_sha256,
         "scorer_threshold_validation_errors": threshold_errors,
+        "g18_diag_report_verified": g18_diag_ok,
+        "g18_diag_validation_errors": g18_diag_errors,
         "owner_config_slo_signed_and_matched": owner_signed,
+        "owner_approval_doc_sha256": owner_doc_sha,
         "owner_approval_thresholds_sha256": signed_thresholds_sha256,
         "owner_approval_validation_errors": approval_errors,
         "planned_benchmark_command": planned_cmd,
@@ -8041,6 +8089,7 @@ def run_staging_vps_g18_acceptance(
         thresholds_path=thresholds_path,
         owner_slo_approval=owner_slo_approval,
         t1c_confirmation=t1c_confirmation,
+        g18_diag_report=g18_diag_report,
         bench_port=bench_port,
         benchmark_out_json=benchmark_out_json,
     )
@@ -8098,11 +8147,6 @@ def run_staging_vps_g18_acceptance(
         return fail_live
 
     bench_doc = json.loads(benchmark_out_json.read_text(encoding="utf-8"))
-    owner_doc = (
-        json.loads(owner_slo_approval.read_text(encoding="utf-8"))
-        if isinstance(owner_slo_approval, Path)
-        else owner_slo_approval
-    )
     t1c_src = (
         t1c_confirmation
         if t1c_confirmation is not None
@@ -8118,7 +8162,7 @@ def run_staging_vps_g18_acceptance(
     )
     rec = reconcile_g18_benchmark_with_v1_4_slos(
         bench_doc,
-        owner_slo_approval=owner_doc,
+        owner_slo_approval=owner_slo_approval,
         vps_receipts=vps_receipts,
         thresholds_spec=thresholds_spec,
         thresholds_path=thresholds_path,
@@ -8256,6 +8300,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_g18_prep.add_argument("--thresholds-json", type=Path, default=DEFAULT_P4_S1_SLO_SPEC_PATH)
     p_g18_prep.add_argument("--owner-approval-json", type=Path, default=DEFAULT_P4_S1_SLO_APPROVAL_PATH)
     p_g18_prep.add_argument("--t1c-confirmation-json", type=Path, default=None)
+    p_g18_prep.add_argument("--g18-diag-json", type=Path, default=None)
     p_g18_prep.add_argument("--bench-port", type=int, default=18880)
     p_g18_prep.add_argument("--benchmark-out", type=Path, default=None)
     p_g18_prep.add_argument("--out", type=Path, default=None)
@@ -8416,6 +8461,7 @@ def main(argv: list[str] | None = None) -> int:
             thresholds_path=args.thresholds_json,
             owner_slo_approval=args.owner_approval_json,
             t1c_confirmation=args.t1c_confirmation_json,
+            g18_diag_report=args.g18_diag_json,
             bench_port=args.bench_port,
             benchmark_out_json=args.benchmark_out,
             out_json=args.out,
@@ -8444,20 +8490,24 @@ def main(argv: list[str] | None = None) -> int:
             a == "--expected-digest" or a.startswith("--expected-digest=")
             for a in raw_argv
         )
+        bench_doc = json.loads(args.benchmark_json.read_text(encoding="utf-8"))
+        owner_peek, _, _ = _load_optional_owner_slo_approval(args.owner_approval_json)
+        auto_ba68_mode = bool(
+            is_p4_s1_slo_spec_v1(None, args.thresholds_json)
+            or str(bench_doc.get("app_image_tested") or "").strip() == CURRENT_CANDIDATE_DIGEST
+            or (
+                isinstance(owner_peek, dict)
+                and owner_peek.get("schema_version") == s1_slo_tool.EXPECTED_APPROVAL_SCHEMA_VERSION
+            )
+        )
         eff_digest = (
             args.expected_digest
             if explicit_digest
-            else (None if is_p4_s1_slo_spec_v1(None, args.thresholds_json) else args.expected_digest)
-        )
-        bench_doc = json.loads(args.benchmark_json.read_text(encoding="utf-8"))
-        owner_doc = (
-            json.loads(args.owner_approval_json.read_text(encoding="utf-8"))
-            if args.owner_approval_json
-            else None
+            else (CURRENT_CANDIDATE_DIGEST if auto_ba68_mode else args.expected_digest)
         )
         res = reconcile_g18_benchmark_with_v1_4_slos(
             bench_doc,
-            owner_slo_approval=owner_doc,
+            owner_slo_approval=args.owner_approval_json,
             vps_receipts=args.vps_receipt_dir,
             thresholds_path=args.thresholds_json,
             expected_digest=eff_digest,
