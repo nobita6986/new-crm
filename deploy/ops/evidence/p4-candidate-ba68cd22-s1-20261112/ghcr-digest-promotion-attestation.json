@@ -1,0 +1,40 @@
+{
+  "schema_version": "cskh-p4-digest-promotion-proof-v1",
+  "status": "PASS",
+  "verified_at_utc": "2026-11-11T18:30:37.725288+00:00",
+  "release_id": "ghcr-rehearsal-43075109950",
+  "environment_scope": "ci_ephemeral_rehearsal",
+  "git_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+  "canonical_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "canonical_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+  "identifier_taxonomy": {
+    "canonical_registry_digest_class": "oci_distribution_manifest_sha256",
+    "canonical_image_id_class": "oci_image_config_sha256",
+    "drift_evaluation_rule": "Digest drift is evaluated exclusively within identical identifier classes (registry_manifest_digest == registry_manifest_digest and image_id in allowed_pulled_image_ids across Build -> Verify -> Staging). Cross-comparing a local image ID (e.g. db925419...) against a registry manifest digest (e.g. 36613468...) or against an unrelated live running image (e.g. acb95057...) is invalid."
+  },
+  "manifest_sha256": "5a3841330022e856340ca6cf102828ae8c417998494a8fb6aa89642283138d13",
+  "signature_verified": true,
+  "public_key_fingerprint_sha256": "ecfd6ec6c6ee4b6003d64c697c1a2cae9c523b6461db5d078e50ff442bc872ae",
+  "stages_verified": {
+    "build_once": {
+      "approved_registry_repo_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "local_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d"
+    },
+    "verify_by_digest_clean_site": {
+      "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+      "assertions_passed": 60,
+      "assertions_total": 60
+    },
+    "compose_smoke_stack": {
+      "project_name": "crm-cskh-p4-smoke-20261111182300-55e918",
+      "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+      "repo_digests": [
+        "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+      ],
+      "status": "PASS"
+    }
+  },
+  "zero_digest_drift": true
+}

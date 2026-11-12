@@ -1,0 +1,3223 @@
+{
+  "schema_version": "cskh-p4-g18-slo-v1-4-reconciliation-v2",
+  "timestamp_utc": "2026-11-12T03:11:18Z",
+  "gate": "G18",
+  "ticket_version_required": "1.0.0",
+  "slo_spec_schema_version": "cskh-p4-s1-slo-spec-v1",
+  "config_bound_mode": true,
+  "target_configuration_profile": "staging_vps_capped",
+  "benchmark_resource_profile": "staging_vps_capped",
+  "configuration_matches": true,
+  "configuration_validation_errors": [],
+  "t1c_candidate_confirmed": null,
+  "t1c_candidate_confirmation": null,
+  "t1c_confirmation_errors": [],
+  "status": "BLOCKED_CI_PRECHECK_ONLY_PENDING_VPS_RECEIPTS_AND_OWNER_APPROVAL",
+  "thresholds_spec_path": "D:\\HRP-app\\p4-resume-ops\\deploy\\release\\p4-s1-slo-spec.json",
+  "locked_thresholds_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+  "evaluated_thresholds_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+  "threshold_validation_errors": [],
+  "owner_slo_v1_4_signed": false,
+  "owner_approval_thresholds_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+  "owner_approval_validation_errors": [
+    "Owner approval required: separate approval document has approval_status='PENDING_OWNER_APPROVAL' (expected 'OWNER_APPROVED')"
+  ],
+  "expected_candidate_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "digest_matches_candidate": true,
+  "is_ci_benchmark_report": true,
+  "ci_benchmark_indicators": [
+    "runner_hardware.platform_contains_azure:Linux-7.0.0-1017-azure-x86_64-with-glibc2.41"
+  ],
+  "staging_vps_receipts_verified": false,
+  "staging_vps_receipt_validation_errors": [
+    "missing_staging_vps_receipts_bundle"
+  ],
+  "measurements_complete": true,
+  "missing_measurements": [],
+  "breached_checks": [],
+  "p4_9_2_all_11_items_passed": true,
+  "owner_live_service_untouched": true,
+  "all_7_metrics_within_v1_4_thresholds": true,
+  "precheck_7_metrics": {
+    "role": "PRECHECK_TABLE_7_METRICS",
+    "status": "PRECHECK_PASS",
+    "all_7_metrics_present": true,
+    "all_7_metrics_within_v1_4_thresholds": true,
+    "metric_comparisons": {
+      "my_customers_worklist_api_p95_ms": {
+        "metric": "my_customers_worklist_api_p95_ms",
+        "description": "My Customers worklist JSON API p95 latency (40 distinct staff sessions)",
+        "operator": "<=",
+        "v1_4_threshold": 600.0,
+        "measured_value": 177.798,
+        "unit": "ms",
+        "headroom": 422.202,
+        "within_v1_4_threshold": true,
+        "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+      },
+      "open_lead_and_history_api_p95_ms": {
+        "metric": "open_lead_and_history_api_p95_ms",
+        "description": "Open Lead detail + Contact Attempt history API p95 latency",
+        "operator": "<=",
+        "v1_4_threshold": 1200.0,
+        "measured_value": 584.924,
+        "unit": "ms",
+        "headroom": 615.076,
+        "within_v1_4_threshold": true,
+        "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+      },
+      "contact_attempt_write_p95_ms": {
+        "metric": "contact_attempt_write_p95_ms",
+        "description": "Record Contact Attempt + Callback write API p95 latency",
+        "operator": "<=",
+        "v1_4_threshold": 1500.0,
+        "measured_value": 923.278,
+        "unit": "ms",
+        "headroom": 576.722,
+        "within_v1_4_threshold": true,
+        "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+      },
+      "bod_executive_overview_api_p95_ms": {
+        "metric": "bod_executive_overview_api_p95_ms",
+        "description": "BOD Executive Overview KPI snapshot API p95 latency",
+        "operator": "<=",
+        "v1_4_threshold": 800.0,
+        "measured_value": 250.682,
+        "unit": "ms",
+        "headroom": 549.318,
+        "within_v1_4_threshold": true,
+        "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+      },
+      "kpi_drilldown_paginated_api_p95_ms": {
+        "metric": "kpi_drilldown_paginated_api_p95_ms",
+        "description": "Paginated KPI drill-down API p95 latency (worst-case across daily campaign & 250k monthly company)",
+        "operator": "<=",
+        "v1_4_threshold": 1200.0,
+        "measured_value": 241.697,
+        "unit": "ms",
+        "headroom": 958.303,
+        "within_v1_4_threshold": true,
+        "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4",
+        "measured_daily_campaign_http_p95_ms": 224.639,
+        "measured_monthly_company_250k_http_p95_ms": 241.697
+      },
+      "http_5xx_error_rate_pct": {
+        "metric": "http_5xx_error_rate_pct",
+        "description": "HTTP error rate across S1 c=12 suite and 20/40/80 mixed session waves",
+        "operator": "<=",
+        "v1_4_threshold": 0.5,
+        "measured_value": 0.0,
+        "unit": "%",
+        "headroom": 0.5,
+        "within_v1_4_threshold": true,
+        "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+      },
+      "daily_incremental_kpi_refresh_lag_sec": {
+        "metric": "daily_incremental_kpi_refresh_lag_sec",
+        "description": "Daily incremental KPI refresh execution lag",
+        "operator": "<=",
+        "v1_4_threshold": 30.0,
+        "measured_value": 3.86,
+        "unit": "s",
+        "headroom": 26.14,
+        "within_v1_4_threshold": true,
+        "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+      }
+    }
+  },
+  "metric_comparisons": {
+    "my_customers_worklist_api_p95_ms": {
+      "metric": "my_customers_worklist_api_p95_ms",
+      "description": "My Customers worklist JSON API p95 latency (40 distinct staff sessions)",
+      "operator": "<=",
+      "v1_4_threshold": 600.0,
+      "measured_value": 177.798,
+      "unit": "ms",
+      "headroom": 422.202,
+      "within_v1_4_threshold": true,
+      "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+    },
+    "open_lead_and_history_api_p95_ms": {
+      "metric": "open_lead_and_history_api_p95_ms",
+      "description": "Open Lead detail + Contact Attempt history API p95 latency",
+      "operator": "<=",
+      "v1_4_threshold": 1200.0,
+      "measured_value": 584.924,
+      "unit": "ms",
+      "headroom": 615.076,
+      "within_v1_4_threshold": true,
+      "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+    },
+    "contact_attempt_write_p95_ms": {
+      "metric": "contact_attempt_write_p95_ms",
+      "description": "Record Contact Attempt + Callback write API p95 latency",
+      "operator": "<=",
+      "v1_4_threshold": 1500.0,
+      "measured_value": 923.278,
+      "unit": "ms",
+      "headroom": 576.722,
+      "within_v1_4_threshold": true,
+      "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+    },
+    "bod_executive_overview_api_p95_ms": {
+      "metric": "bod_executive_overview_api_p95_ms",
+      "description": "BOD Executive Overview KPI snapshot API p95 latency",
+      "operator": "<=",
+      "v1_4_threshold": 800.0,
+      "measured_value": 250.682,
+      "unit": "ms",
+      "headroom": 549.318,
+      "within_v1_4_threshold": true,
+      "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+    },
+    "kpi_drilldown_paginated_api_p95_ms": {
+      "metric": "kpi_drilldown_paginated_api_p95_ms",
+      "description": "Paginated KPI drill-down API p95 latency (worst-case across daily campaign & 250k monthly company)",
+      "operator": "<=",
+      "v1_4_threshold": 1200.0,
+      "measured_value": 241.697,
+      "unit": "ms",
+      "headroom": 958.303,
+      "within_v1_4_threshold": true,
+      "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4",
+      "measured_daily_campaign_http_p95_ms": 224.639,
+      "measured_monthly_company_250k_http_p95_ms": 241.697
+    },
+    "http_5xx_error_rate_pct": {
+      "metric": "http_5xx_error_rate_pct",
+      "description": "HTTP error rate across S1 c=12 suite and 20/40/80 mixed session waves",
+      "operator": "<=",
+      "v1_4_threshold": 0.5,
+      "measured_value": 0.0,
+      "unit": "%",
+      "headroom": 0.5,
+      "within_v1_4_threshold": true,
+      "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+    },
+    "daily_incremental_kpi_refresh_lag_sec": {
+      "metric": "daily_incremental_kpi_refresh_lag_sec",
+      "description": "Daily incremental KPI refresh execution lag",
+      "operator": "<=",
+      "v1_4_threshold": 30.0,
+      "measured_value": 3.86,
+      "unit": "s",
+      "headroom": 26.14,
+      "within_v1_4_threshold": true,
+      "evaluation_status": "PRE_CHECK_WITHIN_PROPOSED_V1_4"
+    }
+  },
+  "section_3_2_reconciliation": {
+    "schema_version": "cskh-p4-s1-slo-evaluation-v1",
+    "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+    "slo_version": "1.0.0",
+    "profile_evaluated": "staging_vps_capped",
+    "all_passed": true,
+    "s1_dataset_and_explain_verified": true,
+    "category_verdicts": {
+      "SSR": {
+        "total": 7,
+        "passed_count": 7,
+        "failed_count": 0,
+        "passed": true
+      },
+      "JSON_API": {
+        "total": 20,
+        "passed_count": 20,
+        "failed_count": 0,
+        "passed": true
+      },
+      "AGGREGATE_AND_BACKGROUND": {
+        "total": 8,
+        "passed_count": 8,
+        "failed_count": 0,
+        "passed": true
+      }
+    },
+    "s1_rule_results": [
+      {
+        "slo_id": "SSR-01A",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_ssr_40_staff_sessions_c40",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 10500.0,
+          "max_p99_ms": 11500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 9342.282,
+          "p99_ms": 10021.799,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.579
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-01B",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_ssr_40_staff_sessions_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 4200.0,
+          "max_p99_ms": 4800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 3423.847,
+          "p99_ms": 3837.471,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.664
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-01C",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_page_shared_new_session_c12",
+        "report_json_path": "scenario_summaries.telesale_worklist_page",
+        "thresholds_applied": {
+          "max_p95_ms": 3600.0,
+          "max_p99_ms": 4200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 2835.816,
+          "p99_ms": 3110.285,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.163
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-01D",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_page_warm_session_c12",
+        "report_json_path": "worklist_ssr_acceptance_and_separation.case_2b_single_initialized_session_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 3200.0,
+          "max_p99_ms": 3800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 2400.988,
+          "p99_ms": 2874.098,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.115
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-01E",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_page_warm_session_c40",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.telesale_worklist_page",
+        "thresholds_applied": {
+          "max_p95_ms": 8800.0,
+          "max_p99_ms": 9500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 7286.31,
+          "p99_ms": 7723.497,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.013
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-02",
+        "category": "SSR",
+        "scenario_key": "quality_overview_drilldown",
+        "report_json_path": "scenario_summaries.quality_overview_drilldown",
+        "thresholds_applied": {
+          "max_p95_ms": 3400.0,
+          "max_p99_ms": 3900.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 2625.202,
+          "p99_ms": 2921.104,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.428
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-03",
+        "category": "SSR",
+        "scenario_key": "campaigns_distribution_view",
+        "report_json_path": "scenario_summaries.campaigns_distribution_view",
+        "thresholds_applied": {
+          "max_p95_ms": 3500.0,
+          "max_p99_ms": 4000.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 2779.497,
+          "p99_ms": 3055.941,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.35
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-00",
+        "category": "JSON_API",
+        "scenario_key": "health_ping",
+        "report_json_path": "scenario_summaries.health_ping",
+        "thresholds_applied": {
+          "max_p95_ms": 200.0,
+          "max_p99_ms": 300.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 100.681,
+          "p99_ms": 128.637,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 194.06
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-01A",
+        "category": "JSON_API",
+        "scenario_key": "my_customers_worklist_api_c12",
+        "report_json_path": "scenario_summaries.my_customers_worklist_api",
+        "thresholds_applied": {
+          "max_p95_ms": 450.0,
+          "max_p99_ms": 600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 98.462,
+          "p99_ms": 102.194,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 191.854
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-01B",
+        "category": "JSON_API",
+        "scenario_key": "staff_my_customers_http_40_sessions_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.staff_my_customers_http",
+        "thresholds_applied": {
+          "max_p95_ms": 600.0,
+          "max_p99_ms": 850.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 177.798,
+          "p99_ms": 225.068,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 127.182
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-01C",
+        "category": "JSON_API",
+        "scenario_key": "my_customers_worklist_api_c40",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.my_customers_worklist_api",
+        "thresholds_applied": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 254.915,
+          "p99_ms": 263.628,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 201.398
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-02A",
+        "category": "JSON_API",
+        "scenario_key": "lead_detail_and_history_http_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.lead_detail_and_history_http",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 584.924,
+          "p99_ms": 626.743,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 28.071
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-02B",
+        "category": "JSON_API",
+        "scenario_key": "lead_detail_and_history_mixed_40_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.lead_detail_history_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1950.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 80,
+          "p95_ms": 1636.732,
+          "p99_ms": 1660.533,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 14.636
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-03A",
+        "category": "JSON_API",
+        "scenario_key": "record_attempt_and_callback_http_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http",
+        "thresholds_applied": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0,
+          "invariants": [
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.db_reconciliation.duplicate_idempotency_keys",
+              "op": "eq",
+              "expected": 0
+            },
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.db_reconciliation.attempts_created",
+              "op": "eq",
+              "expected": 80
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 80,
+          "p95_ms": 923.278,
+          "p99_ms": 995.217,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 12.896
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-03B",
+        "category": "JSON_API",
+        "scenario_key": "record_attempt_write_mixed_40_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.record_attempt_write_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1900.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 16,
+          "p95_ms": 1242.613,
+          "p99_ms": 1308.476,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 2.927
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-04A",
+        "category": "JSON_API",
+        "scenario_key": "bod_executive_overview_api_c12_admin",
+        "report_json_path": "scenario_summaries.bod_executive_overview_api",
+        "thresholds_applied": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 248.561,
+          "p99_ms": 268.795,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 76.827
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-04B",
+        "category": "JSON_API",
+        "scenario_key": "bod_executive_overview_role_api_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.bod_executive_overview_role_api",
+        "thresholds_applied": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 120,
+          "p95_ms": 250.682,
+          "p99_ms": 264.204,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 77.355
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-04C",
+        "category": "JSON_API",
+        "scenario_key": "bod_executive_overview_api_c40",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.bod_executive_overview_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 761.922,
+          "p99_ms": 775.641,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 76.951
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05A-C12",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_250k_api_c12_admin",
+        "report_json_path": "scenario_summaries.kpi_metric_drilldown_250k_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 283.901,
+          "p99_ms": 307.678,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 68.667
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05A-BOD",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_250k_api_c12_bod_role",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_daily_campaign_role_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0,
+          "invariants": [
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.staff_unauthorized_company_drilldown_http_status",
+              "op": "eq",
+              "expected": 403
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 120,
+          "p95_ms": 224.639,
+          "p99_ms": 259.777,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 73.81
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05A-C40",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_250k_api_c40_peak",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_250k_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 846.603,
+          "p99_ms": 875.936,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 69.688
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05B-C12",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_monthly_company_api_c12_admin",
+        "report_json_path": "scenario_summaries.kpi_metric_drilldown_monthly_company_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 271.65,
+          "p99_ms": 298.003,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 65.789
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05B-BOD",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_monthly_company_api_c12_bod_role",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_monthly_company_role_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 120,
+          "p95_ms": 241.697,
+          "p99_ms": 282.982,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 76.899
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05B-C40",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_monthly_company_api_c40_peak",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_monthly_company_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 866.051,
+          "p99_ms": 913.112,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 67.397
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05C-MIX20",
+        "category": "JSON_API",
+        "scenario_key": "kpi_drilldown_api_mixed_20_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.by_workload.kpi_drilldown_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "mixed_wave_drilldown",
+        "measured": {
+          "requests_total": 20,
+          "p95_ms": 517.2,
+          "p99_ms": 538.779,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.711
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05C-MIX40",
+        "category": "JSON_API",
+        "scenario_key": "kpi_drilldown_api_mixed_40_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.kpi_drilldown_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "mixed_wave_drilldown",
+        "measured": {
+          "requests_total": 32,
+          "p95_ms": 911.477,
+          "p99_ms": 969.851,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.854
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05C-MIX80",
+        "category": "JSON_API",
+        "scenario_key": "kpi_drilldown_api_mixed_80_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_80.by_workload.kpi_drilldown_api",
+        "thresholds_applied": {
+          "max_p95_ms": 2600.0,
+          "max_p99_ms": 3000.0,
+          "max_error_rate_pct": 0.5,
+          "max_timeout_count": 0,
+          "max_client_error_count": 2,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 2
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "mixed_wave_drilldown",
+        "measured": {
+          "requests_total": 48,
+          "p95_ms": 1467.206,
+          "p99_ms": 1496.952,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.922
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-01",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "overall_summary_c12_all_8_scenarios",
+        "report_json_path": "overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 3200.0,
+          "max_p99_ms": 3800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 1920,
+          "p95_ms": 2467.542,
+          "p99_ms": 2922.66,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 17.263
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-02",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "peak_40_staff_overall_summary_c40",
+        "report_json_path": "peak_40_staff_concurrent_wave.overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 8200.0,
+          "max_p99_ms": 9000.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 800,
+          "p95_ms": 6748.008,
+          "p99_ms": 7284.183,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 26.351
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-03A",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "mixed_user_sessions_20_overall",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 200,
+          "p95_ms": 793.539,
+          "p99_ms": 854.941,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 57.106
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-03B",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "mixed_user_sessions_40_overall",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 1850.0,
+          "max_p99_ms": 2300.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 320,
+          "p95_ms": 1281.859,
+          "p99_ms": 1648.08,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 58.545
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-03C",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "mixed_user_sessions_80_overall",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_80.overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 3000.0,
+          "max_p99_ms": 3600.0,
+          "max_error_rate_pct": 0.5,
+          "max_timeout_count": 0,
+          "max_client_error_count": 2,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 2
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 480,
+          "p95_ms": 2346.513,
+          "p99_ms": 2801.979,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 59.221
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "BG-01",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "campaign_distribution_10000_work_items_40_staff",
+        "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff",
+        "thresholds_applied": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.preview_ms",
+              "op": "le",
+              "expected": 10000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.execute_and_worker_drain_ms",
+              "op": "le",
+              "expected": 1200000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.created_work_items",
+              "op": "eq",
+              "expected": 10000
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.duplicate_work_items",
+              "op": "eq",
+              "expected": 0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.reconciliation.ownership_reconciled",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.concurrent_worklist_read_p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "status": "PASS"
+      },
+      {
+        "slo_id": "BG-02",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "csv_import_50000_rows",
+        "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows",
+        "thresholds_applied": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.preview_ms",
+              "op": "le",
+              "expected": 5000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.total_preview_confirm_and_worker_drain_ms",
+              "op": "le",
+              "expected": 300000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.error_artifact_present",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.concurrent_worklist_read_p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "status": "PASS"
+      },
+      {
+        "slo_id": "BG-03",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "kpi_recompute_s1_daily_and_monthly",
+        "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1",
+        "thresholds_applied": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.daily_incremental_ms",
+              "op": "le",
+              "expected": 30000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.monthly_full_75k_wi_250k_att_ms",
+              "op": "le",
+              "expected": 120000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.atomic_publish_verified",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.concurrent_ui_overview_reads.p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "status": "PASS"
+      }
+    ],
+    "g18_diag_report_sha256": "ca78e4aaae96120e25b27262aee7fe356db12f2ef1d88f12fcbf7ed09f54dec5",
+    "g18_deep_diagnostic_results": [
+      {
+        "slo_id": "G18-W1-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W1_daily_campaign_connected_rate_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W1_daily_campaign_connected_rate_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 263.825,
+          "p99_ms": 313.989,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 73.168
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W1-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W1_daily_campaign_connected_rate_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W1_daily_campaign_connected_rate_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 722.456,
+          "p99_ms": 756.642,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 48.077
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W2-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W2_monthly_company_connected_rate_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W2_monthly_company_connected_rate_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 260.117,
+          "p99_ms": 296.03,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 72.376
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W2-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W2_monthly_company_connected_rate_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W2_monthly_company_connected_rate_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 687.393,
+          "p99_ms": 729.078,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 47.992
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W3-P30-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W3_monthly_company_connected_rate_deep_p30_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W3_monthly_company_connected_rate_deep_p30_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api_deep_p30",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 422.11,
+          "p99_ms": 499.48,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 29.887
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W3-P30-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W3_monthly_company_connected_rate_deep_p30_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W3_monthly_company_connected_rate_deep_p30_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 2400.0,
+          "max_p99_ms": 2800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api_deep_p30",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 1202.537,
+          "p99_ms": 1284.672,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 42.377
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W4-TL-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W4_monthly_team_leader_connected_rate_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W4_monthly_team_leader_connected_rate_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1400.0,
+          "max_p99_ms": 1700.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_team_leader",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 383.55,
+          "p99_ms": 411.548,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 30.752
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W4-TL-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W4_monthly_team_leader_connected_rate_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W4_monthly_team_leader_connected_rate_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 2200.0,
+          "max_p99_ms": 2600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_team_leader",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 1262.621,
+          "p99_ms": 1303.699,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 44.582
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W5-SLA-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W5_monthly_company_first_attempt_sla_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W5_monthly_company_first_attempt_sla_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_first_attempt_sla_150k",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 252.707,
+          "p99_ms": 276.562,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 73.953
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W5-SLA-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W5_monthly_company_first_attempt_sla_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W5_monthly_company_first_attempt_sla_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_first_attempt_sla_150k",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 781.479,
+          "p99_ms": 791.341,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 47.66
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W6-ATT-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W6_monthly_company_contact_attempt_count_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W6_monthly_company_contact_attempt_count_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_contact_attempt_count_250k",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 242.997,
+          "p99_ms": 269.832,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 74.199
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W6-ATT-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W6_monthly_company_contact_attempt_count_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W6_monthly_company_contact_attempt_count_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_contact_attempt_count_250k",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 694.874,
+          "p99_ms": 718.069,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 48.491
+        },
+        "status": "PASS"
+      }
+    ]
+  },
+  "g18_pass_requirements": {
+    "measurements_complete_and_within_v1_4_thresholds": true,
+    "candidate_digest_matches_locked_v1_4": true,
+    "staging_vps_benchmark_and_receipts_verified": false,
+    "owner_v1_4_approval_bound_to_thresholds_sha256": false,
+    "benchmark_and_slo_bound_to_safe_staging_configuration": false
+  },
+  "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+  "slo_version": "1.0.0",
+  "s1_slo_bundle_evaluation": {
+    "schema_version": "cskh-p4-s1-slo-evaluation-v1",
+    "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+    "slo_version": "1.0.0",
+    "profile_evaluated": "staging_vps_capped",
+    "all_passed": true,
+    "s1_dataset_and_explain_verified": true,
+    "category_verdicts": {
+      "SSR": {
+        "total": 7,
+        "passed_count": 7,
+        "failed_count": 0,
+        "passed": true
+      },
+      "JSON_API": {
+        "total": 20,
+        "passed_count": 20,
+        "failed_count": 0,
+        "passed": true
+      },
+      "AGGREGATE_AND_BACKGROUND": {
+        "total": 8,
+        "passed_count": 8,
+        "failed_count": 0,
+        "passed": true
+      }
+    },
+    "s1_rule_results": [
+      {
+        "slo_id": "SSR-01A",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_ssr_40_staff_sessions_c40",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 10500.0,
+          "max_p99_ms": 11500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 9342.282,
+          "p99_ms": 10021.799,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.579
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-01B",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_ssr_40_staff_sessions_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.telesale_worklist_ssr_40_staff_sessions_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 4200.0,
+          "max_p99_ms": 4800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 3423.847,
+          "p99_ms": 3837.471,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.664
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-01C",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_page_shared_new_session_c12",
+        "report_json_path": "scenario_summaries.telesale_worklist_page",
+        "thresholds_applied": {
+          "max_p95_ms": 3600.0,
+          "max_p99_ms": 4200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 2835.816,
+          "p99_ms": 3110.285,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.163
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-01D",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_page_warm_session_c12",
+        "report_json_path": "worklist_ssr_acceptance_and_separation.case_2b_single_initialized_session_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 3200.0,
+          "max_p99_ms": 3800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 2400.988,
+          "p99_ms": 2874.098,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.115
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-01E",
+        "category": "SSR",
+        "scenario_key": "telesale_worklist_page_warm_session_c40",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.telesale_worklist_page",
+        "thresholds_applied": {
+          "max_p95_ms": 8800.0,
+          "max_p99_ms": 9500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 7286.31,
+          "p99_ms": 7723.497,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.013
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-02",
+        "category": "SSR",
+        "scenario_key": "quality_overview_drilldown",
+        "report_json_path": "scenario_summaries.quality_overview_drilldown",
+        "thresholds_applied": {
+          "max_p95_ms": 3400.0,
+          "max_p99_ms": 3900.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 2625.202,
+          "p99_ms": 2921.104,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.428
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "SSR-03",
+        "category": "SSR",
+        "scenario_key": "campaigns_distribution_view",
+        "report_json_path": "scenario_summaries.campaigns_distribution_view",
+        "thresholds_applied": {
+          "max_p95_ms": 3500.0,
+          "max_p99_ms": 4000.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 2779.497,
+          "p99_ms": 3055.941,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 7.35
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-00",
+        "category": "JSON_API",
+        "scenario_key": "health_ping",
+        "report_json_path": "scenario_summaries.health_ping",
+        "thresholds_applied": {
+          "max_p95_ms": 200.0,
+          "max_p99_ms": 300.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 100.681,
+          "p99_ms": 128.637,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 194.06
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-01A",
+        "category": "JSON_API",
+        "scenario_key": "my_customers_worklist_api_c12",
+        "report_json_path": "scenario_summaries.my_customers_worklist_api",
+        "thresholds_applied": {
+          "max_p95_ms": 450.0,
+          "max_p99_ms": 600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 98.462,
+          "p99_ms": 102.194,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 191.854
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-01B",
+        "category": "JSON_API",
+        "scenario_key": "staff_my_customers_http_40_sessions_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.staff_my_customers_http",
+        "thresholds_applied": {
+          "max_p95_ms": 600.0,
+          "max_p99_ms": 850.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 177.798,
+          "p99_ms": 225.068,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 127.182
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-01C",
+        "category": "JSON_API",
+        "scenario_key": "my_customers_worklist_api_c40",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.my_customers_worklist_api",
+        "thresholds_applied": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 254.915,
+          "p99_ms": 263.628,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 201.398
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-02A",
+        "category": "JSON_API",
+        "scenario_key": "lead_detail_and_history_http_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.lead_detail_and_history_http",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 584.924,
+          "p99_ms": 626.743,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 28.071
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-02B",
+        "category": "JSON_API",
+        "scenario_key": "lead_detail_and_history_mixed_40_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.lead_detail_history_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1950.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 80,
+          "p95_ms": 1636.732,
+          "p99_ms": 1660.533,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 14.636
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-03A",
+        "category": "JSON_API",
+        "scenario_key": "record_attempt_and_callback_http_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http",
+        "thresholds_applied": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0,
+          "invariants": [
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.db_reconciliation.duplicate_idempotency_keys",
+              "op": "eq",
+              "expected": 0
+            },
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.record_attempt_and_callback_http.db_reconciliation.attempts_created",
+              "op": "eq",
+              "expected": 80
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 80,
+          "p95_ms": 923.278,
+          "p99_ms": 995.217,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 12.896
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-03B",
+        "category": "JSON_API",
+        "scenario_key": "record_attempt_write_mixed_40_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.record_attempt_write_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1900.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 16,
+          "p95_ms": 1242.613,
+          "p99_ms": 1308.476,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 2.927
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-04A",
+        "category": "JSON_API",
+        "scenario_key": "bod_executive_overview_api_c12_admin",
+        "report_json_path": "scenario_summaries.bod_executive_overview_api",
+        "thresholds_applied": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 248.561,
+          "p99_ms": 268.795,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 76.827
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-04B",
+        "category": "JSON_API",
+        "scenario_key": "bod_executive_overview_role_api_c12",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.bod_executive_overview_role_api",
+        "thresholds_applied": {
+          "max_p95_ms": 800.0,
+          "max_p99_ms": 1100.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 120,
+          "p95_ms": 250.682,
+          "p99_ms": 264.204,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 77.355
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-04C",
+        "category": "JSON_API",
+        "scenario_key": "bod_executive_overview_api_c40",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.bod_executive_overview_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 761.922,
+          "p99_ms": 775.641,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 76.951
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05A-C12",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_250k_api_c12_admin",
+        "report_json_path": "scenario_summaries.kpi_metric_drilldown_250k_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 283.901,
+          "p99_ms": 307.678,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 68.667
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05A-BOD",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_250k_api_c12_bod_role",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_daily_campaign_role_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0,
+          "invariants": [
+            {
+              "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.staff_unauthorized_company_drilldown_http_status",
+              "op": "eq",
+              "expected": 403
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 120,
+          "p95_ms": 224.639,
+          "p99_ms": 259.777,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 73.81
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05A-C40",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_250k_api_c40_peak",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_250k_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 846.603,
+          "p99_ms": 875.936,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 69.688
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05B-C12",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_monthly_company_api_c12_admin",
+        "report_json_path": "scenario_summaries.kpi_metric_drilldown_monthly_company_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 271.65,
+          "p99_ms": 298.003,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 65.789
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05B-BOD",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_monthly_company_api_c12_bod_role",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_monthly_company_role_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 120,
+          "p95_ms": 241.697,
+          "p99_ms": 282.982,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 76.899
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05B-C40",
+        "category": "JSON_API",
+        "scenario_key": "kpi_metric_drilldown_monthly_company_api_c40_peak",
+        "report_json_path": "peak_40_staff_concurrent_wave.scenario_summaries.kpi_metric_drilldown_monthly_company_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 866.051,
+          "p99_ms": 913.112,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 67.397
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05C-MIX20",
+        "category": "JSON_API",
+        "scenario_key": "kpi_drilldown_api_mixed_20_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.by_workload.kpi_drilldown_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "mixed_wave_drilldown",
+        "measured": {
+          "requests_total": 20,
+          "p95_ms": 517.2,
+          "p99_ms": 538.779,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.711
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05C-MIX40",
+        "category": "JSON_API",
+        "scenario_key": "kpi_drilldown_api_mixed_40_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.by_workload.kpi_drilldown_api",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "mixed_wave_drilldown",
+        "measured": {
+          "requests_total": 32,
+          "p95_ms": 911.477,
+          "p99_ms": 969.851,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.854
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "API-05C-MIX80",
+        "category": "JSON_API",
+        "scenario_key": "kpi_drilldown_api_mixed_80_sessions",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_80.by_workload.kpi_drilldown_api",
+        "thresholds_applied": {
+          "max_p95_ms": 2600.0,
+          "max_p99_ms": 3000.0,
+          "max_error_rate_pct": 0.5,
+          "max_timeout_count": 0,
+          "max_client_error_count": 2,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 2
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "mixed_wave_drilldown",
+        "measured": {
+          "requests_total": 48,
+          "p95_ms": 1467.206,
+          "p99_ms": 1496.952,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 5.922
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-01",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "overall_summary_c12_all_8_scenarios",
+        "report_json_path": "overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 3200.0,
+          "max_p99_ms": 3800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 1920,
+          "p95_ms": 2467.542,
+          "p99_ms": 2922.66,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 17.263
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-02",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "peak_40_staff_overall_summary_c40",
+        "report_json_path": "peak_40_staff_concurrent_wave.overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 8200.0,
+          "max_p99_ms": 9000.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 800,
+          "p95_ms": 6748.008,
+          "p99_ms": 7284.183,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 26.351
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-03A",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "mixed_user_sessions_20_overall",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_20.overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 200,
+          "p95_ms": 793.539,
+          "p99_ms": 854.941,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 57.106
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-03B",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "mixed_user_sessions_40_overall",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_40.overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 1850.0,
+          "max_p99_ms": 2300.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 320,
+          "p95_ms": 1281.859,
+          "p99_ms": 1648.08,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 58.545
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "AGG-03C",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "mixed_user_sessions_80_overall",
+        "report_json_path": "s1_http_acceptance_and_mixed_waves.concurrent_mixed_session_waves_20_40_80.sessions_80.overall_summary",
+        "thresholds_applied": {
+          "max_p95_ms": 3000.0,
+          "max_p99_ms": 3600.0,
+          "max_error_rate_pct": 0.5,
+          "max_timeout_count": 0,
+          "max_client_error_count": 2,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 2
+        },
+        "passed": true,
+        "failures": [],
+        "measured": {
+          "requests_total": 480,
+          "p95_ms": 2346.513,
+          "p99_ms": 2801.979,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 59.221
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "BG-01",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "campaign_distribution_10000_work_items_40_staff",
+        "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff",
+        "thresholds_applied": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.preview_ms",
+              "op": "le",
+              "expected": 10000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.execute_and_worker_drain_ms",
+              "op": "le",
+              "expected": 1200000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.created_work_items",
+              "op": "eq",
+              "expected": 10000
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.duplicate_work_items",
+              "op": "eq",
+              "expected": 0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.reconciliation.ownership_reconciled",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.campaign_distribution_10000_work_items_40_staff.concurrent_worklist_read_p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "status": "PASS"
+      },
+      {
+        "slo_id": "BG-02",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "csv_import_50000_rows",
+        "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows",
+        "thresholds_applied": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.preview_ms",
+              "op": "le",
+              "expected": 5000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.total_preview_confirm_and_worker_drain_ms",
+              "op": "le",
+              "expected": 300000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.error_artifact_present",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.async_import_distribution_and_queue_lag.csv_import_50000_rows.concurrent_worklist_read_p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "status": "PASS"
+      },
+      {
+        "slo_id": "BG-03",
+        "category": "AGGREGATE_AND_BACKGROUND",
+        "scenario_key": "kpi_recompute_s1_daily_and_monthly",
+        "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1",
+        "thresholds_applied": {
+          "invariants": [
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.daily_incremental_ms",
+              "op": "le",
+              "expected": 30000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.monthly_full_75k_wi_250k_att_ms",
+              "op": "le",
+              "expected": 120000.0
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.atomic_publish_verified",
+              "op": "eq",
+              "expected": true
+            },
+            {
+              "report_json_path": "s1_domain_and_database_benchmark.kpi_recompute_s1.background_queue_long_recompute.concurrent_ui_overview_reads.p95_ms",
+              "op": "le",
+              "expected": 500.0
+            }
+          ]
+        },
+        "passed": true,
+        "failures": [],
+        "status": "PASS"
+      }
+    ],
+    "g18_diag_report_sha256": "ca78e4aaae96120e25b27262aee7fe356db12f2ef1d88f12fcbf7ed09f54dec5",
+    "g18_deep_diagnostic_results": [
+      {
+        "slo_id": "G18-W1-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W1_daily_campaign_connected_rate_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W1_daily_campaign_connected_rate_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 263.825,
+          "p99_ms": 313.989,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 73.168
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W1-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W1_daily_campaign_connected_rate_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W1_daily_campaign_connected_rate_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_250k_api",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 722.456,
+          "p99_ms": 756.642,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 48.077
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W2-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W2_monthly_company_connected_rate_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W2_monthly_company_connected_rate_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 260.117,
+          "p99_ms": 296.03,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 72.376
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W2-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W2_monthly_company_connected_rate_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W2_monthly_company_connected_rate_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 687.393,
+          "p99_ms": 729.078,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 47.992
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W3-P30-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W3_monthly_company_connected_rate_deep_p30_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W3_monthly_company_connected_rate_deep_p30_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1500.0,
+          "max_p99_ms": 1800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api_deep_p30",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 422.11,
+          "p99_ms": 499.48,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 29.887
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W3-P30-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W3_monthly_company_connected_rate_deep_p30_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W3_monthly_company_connected_rate_deep_p30_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 2400.0,
+          "max_p99_ms": 2800.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_monthly_company_api_deep_p30",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 1202.537,
+          "p99_ms": 1284.672,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 42.377
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W4-TL-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W4_monthly_team_leader_connected_rate_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W4_monthly_team_leader_connected_rate_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1400.0,
+          "max_p99_ms": 1700.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_team_leader",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 383.55,
+          "p99_ms": 411.548,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 30.752
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W4-TL-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W4_monthly_team_leader_connected_rate_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W4_monthly_team_leader_connected_rate_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 2200.0,
+          "max_p99_ms": 2600.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_team_leader",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 1262.621,
+          "p99_ms": 1303.699,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 44.582
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W5-SLA-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W5_monthly_company_first_attempt_sla_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W5_monthly_company_first_attempt_sla_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_first_attempt_sla_150k",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 252.707,
+          "p99_ms": 276.562,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 73.953
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W5-SLA-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W5_monthly_company_first_attempt_sla_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W5_monthly_company_first_attempt_sla_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_first_attempt_sla_150k",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 781.479,
+          "p99_ms": 791.341,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 47.66
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W6-ATT-C12",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W6_monthly_company_contact_attempt_count_p1_c12",
+        "report_json_path": "http_concurrency_and_saturation_waves.W6_monthly_company_contact_attempt_count_p1_c12",
+        "thresholds_applied": {
+          "max_p95_ms": 1200.0,
+          "max_p99_ms": 1500.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_contact_attempt_count_250k",
+        "measured": {
+          "requests_total": 240,
+          "p95_ms": 242.997,
+          "p99_ms": 269.832,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 74.199
+        },
+        "status": "PASS"
+      },
+      {
+        "slo_id": "G18-W6-ATT-C40",
+        "category": "G18_DEEP_DIAGNOSTIC",
+        "scenario_key": "W6_monthly_company_contact_attempt_count_p1_c40",
+        "report_json_path": "http_concurrency_and_saturation_waves.W6_monthly_company_contact_attempt_count_p1_c40",
+        "thresholds_applied": {
+          "max_p95_ms": 1800.0,
+          "max_p99_ms": 2200.0,
+          "max_error_rate_pct": 0.0,
+          "max_timeout_count": 0,
+          "max_client_error_count": 0,
+          "max_http_4xx_count": 0,
+          "max_http_5xx_count": 0
+        },
+        "passed": true,
+        "failures": [],
+        "drilldown_variant": "kpi_metric_drilldown_contact_attempt_count_250k",
+        "measured": {
+          "requests_total": 160,
+          "p95_ms": 694.874,
+          "p99_ms": 718.069,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "timeout_count": 0,
+          "client_error_count": 0,
+          "http_4xx_count": 0,
+          "http_5xx_count": 0,
+          "throughput_rps": 48.491
+        },
+        "status": "PASS"
+      }
+    ]
+  }
+}

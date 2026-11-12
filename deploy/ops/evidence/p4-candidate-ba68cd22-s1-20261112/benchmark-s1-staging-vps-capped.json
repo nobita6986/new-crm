@@ -1,0 +1,2068 @@
+{
+  "schema_version": "cskh-p4-isolated-benchmark-v2",
+  "work_package": "P4-06",
+  "gate_alignment": "G18",
+  "generated_at_utc": "2026-11-11T18:39:12.724721+00:00",
+  "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
+  "dataset_disclaimer": "S1 (50,000 h\u1ed3 s\u01a1 / 75,000 Work Items / 250,000 Attempts / 40 staff) is a suggested synthetic dataset for isolated performance/capacity measurement; it is NOT a commitment of 50,000 h\u1ed3 s\u01a1/th\u00e1ng and NOT a committed production SLA.",
+  "isolation_guard": {
+    "verified_isolated": true,
+    "owner_vps_touched": false,
+    "target_host": "127.0.0.1",
+    "is_loopback": true,
+    "is_isolated_private_ip": false,
+    "site_name": "p4-s1-bench.localhost",
+    "compose_project": "cskh-p4-bench-737dd90c"
+  },
+  "profile_name": "s1_suggested_mvp",
+  "published_dataset_and_load": {
+    "description": "Suggested S1 benchmark dataset (P4.md \u00a79.1-\u00a79.2): 50,000 Leads, 75,000 Work Items, 250,000 Contact Attempts, 40 active staff, 50,000-row CSV import, 10,000-item weighted distribution, and 20/40/80 concurrent user sessions on isolated environment (NOT a 50,000 Leads/month commitment)",
+    "dataset_framing": "SUGGESTED_S1_DATASET_NOT_MONTHLY_VOLUME_COMMITMENT",
+    "leads": 50000,
+    "work_items": 75000,
+    "monthly_work_items": 75000,
+    "contact_attempts": 250000,
+    "sla_obligations": 150000,
+    "teams": 4,
+    "campaigns": 6,
+    "telesale_agents": 40,
+    "active_staff": 40,
+    "import_batch_rows": 50000,
+    "distribution_batch_items": 10000,
+    "concurrency": 12,
+    "peak_staff_concurrency": 40,
+    "concurrent_session_waves": [
+      20,
+      40,
+      80
+    ],
+    "requests_per_scenario": 240,
+    "pii_policy": "ZERO_REAL_PII_SYNTHETIC_ONLY"
+  },
+  "scenarios": [
+    {
+      "id": "health_ping",
+      "method": "GET",
+      "path": "/api/method/ping",
+      "workload_class": "baseline_edge_to_gunicorn"
+    },
+    {
+      "id": "telesale_worklist_page",
+      "method": "GET",
+      "path": "/cskh/my-customers",
+      "workload_class": "authenticated_worklist_ssr"
+    },
+    {
+      "id": "quality_overview_drilldown",
+      "method": "GET",
+      "path": "/cskh/quality-overview",
+      "workload_class": "kpi_reporting_drilldown"
+    },
+    {
+      "id": "campaigns_distribution_view",
+      "method": "GET",
+      "path": "/cskh/campaigns",
+      "workload_class": "campaign_distribution_summary"
+    },
+    {
+      "id": "my_customers_worklist_api",
+      "method": "GET",
+      "path": "/api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
+      "workload_class": "authenticated_worklist_json_api"
+    },
+    {
+      "id": "bod_executive_overview_api",
+      "method": "GET",
+      "path": "/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
+      "workload_class": "bod_kpi_snapshot_read_json_api"
+    },
+    {
+      "id": "kpi_metric_drilldown_250k_api",
+      "method": "GET",
+      "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=8i6f1ojcr6&metric_code=CONNECTED_RATE&page=1&page_size=20",
+      "workload_class": "kpi_drilldown_paginated_250k_attempts"
+    },
+    {
+      "id": "kpi_metric_drilldown_monthly_company_api",
+      "method": "GET",
+      "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=monthly&period_key=2026-10&scope_type=company&metric_code=CONNECTED_RATE&page=1&page_size=20",
+      "workload_class": "kpi_drilldown_paginated_full_month_250k_attempts"
+    }
+  ],
+  "measured_metrics_contract": [
+    "p50_ms",
+    "p95_ms",
+    "p99_ms",
+    "throughput_rps",
+    "error_rate_pct",
+    "queue_depths_and_lag",
+    "container_cpu_ram",
+    "mariadb_connections_and_row_locks"
+  ],
+  "status": "MEASURED",
+  "completed_at_utc": "2026-11-11T19:11:47.473472+00:00",
+  "overall_summary": {
+    "requests_total": 1920,
+    "ok_count": 1920,
+    "error_count": 0,
+    "error_rate_pct": 0.0,
+    "throughput_rps": 17.263,
+    "min_ms": 10.344,
+    "p50_ms": 198.315,
+    "p95_ms": 2467.542,
+    "p99_ms": 2922.66,
+    "max_ms": 3195.519,
+    "timeout_count": 0,
+    "client_error_count": 0,
+    "http_4xx_count": 0,
+    "http_5xx_count": 0,
+    "http_error_count": 0,
+    "status_counts": {
+      "200": 1920
+    }
+  },
+  "scenario_summaries": {
+    "health_ping": {
+      "workload_class": "baseline_edge_to_gunicorn",
+      "path": "/api/method/ping",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 194.06,
+      "min_ms": 11.619,
+      "p50_ms": 60.096,
+      "p95_ms": 100.681,
+      "p99_ms": 128.637,
+      "max_ms": 149.05
+    },
+    "telesale_worklist_page": {
+      "workload_class": "authenticated_worklist_ssr",
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 7.163,
+      "min_ms": 228.184,
+      "p50_ms": 1648.29,
+      "p95_ms": 2835.816,
+      "p99_ms": 3110.285,
+      "max_ms": 3134.87
+    },
+    "quality_overview_drilldown": {
+      "workload_class": "kpi_reporting_drilldown",
+      "path": "/cskh/quality-overview",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 7.428,
+      "min_ms": 226.216,
+      "p50_ms": 1668.153,
+      "p95_ms": 2625.202,
+      "p99_ms": 2921.104,
+      "max_ms": 3195.519
+    },
+    "campaigns_distribution_view": {
+      "workload_class": "campaign_distribution_summary",
+      "path": "/cskh/campaigns",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 7.35,
+      "min_ms": 221.025,
+      "p50_ms": 1697.871,
+      "p95_ms": 2779.497,
+      "p99_ms": 3055.941,
+      "max_ms": 3082.439
+    },
+    "my_customers_worklist_api": {
+      "workload_class": "authenticated_worklist_json_api",
+      "path": "/api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 191.854,
+      "min_ms": 10.344,
+      "p50_ms": 62.225,
+      "p95_ms": 98.462,
+      "p99_ms": 102.194,
+      "max_ms": 107.482
+    },
+    "bod_executive_overview_api": {
+      "workload_class": "bod_kpi_snapshot_read_json_api",
+      "path": "/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 76.827,
+      "min_ms": 27.589,
+      "p50_ms": 160.049,
+      "p95_ms": 248.561,
+      "p99_ms": 268.795,
+      "max_ms": 280.546
+    },
+    "kpi_metric_drilldown_250k_api": {
+      "workload_class": "kpi_drilldown_paginated_250k_attempts",
+      "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=8i6f1ojcr6&metric_code=CONNECTED_RATE&page=1&page_size=20",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 68.667,
+      "min_ms": 34.491,
+      "p50_ms": 179.2,
+      "p95_ms": 283.901,
+      "p99_ms": 307.678,
+      "max_ms": 332.278
+    },
+    "kpi_metric_drilldown_monthly_company_api": {
+      "workload_class": "kpi_drilldown_paginated_full_month_250k_attempts",
+      "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=monthly&period_key=2026-10&scope_type=company&metric_code=CONNECTED_RATE&page=1&page_size=20",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 65.789,
+      "min_ms": 43.948,
+      "p50_ms": 184.335,
+      "p95_ms": 271.65,
+      "p99_ms": 298.003,
+      "max_ms": 312.922
+    }
+  },
+  "queue_and_db_before": {
+    "queue_depths": {
+      "short": 0,
+      "default": 0,
+      "long": 0
+    },
+    "queue_backlog_total": 0,
+    "redis_queue_rtt_ms": 1.576,
+    "mariadb_global_status": {
+      "Innodb_buffer_pool_read_requests": "62887122",
+      "Innodb_buffer_pool_reads": "1758867",
+      "Innodb_row_lock_time_avg": "0",
+      "Innodb_row_lock_waits": "0",
+      "Max_used_connections": "4",
+      "Questions": "1255054",
+      "Slow_queries": "0",
+      "Threads_connected": "1"
+    }
+  },
+  "queue_and_db_after": {
+    "queue_depths": {
+      "short": 0,
+      "default": 0,
+      "long": 0
+    },
+    "queue_backlog_total": 0,
+    "redis_queue_rtt_ms": 1.542,
+    "mariadb_global_status": {
+      "Innodb_buffer_pool_read_requests": "75178675",
+      "Innodb_buffer_pool_reads": "1904300",
+      "Innodb_row_lock_time_avg": "121",
+      "Innodb_row_lock_waits": "56",
+      "Max_used_connections": "10",
+      "Questions": "1369825",
+      "Slow_queries": "1",
+      "Threads_connected": "2"
+    }
+  },
+  "container_resources_before": [
+    {
+      "container": "cskh-p4-bench-737dd90c-backend-1",
+      "cpu_pct": "0.01%",
+      "mem_usage": "97.79MiB / 1.5GiB",
+      "mem_pct": "6.37%",
+      "net_io": "759MB / 277MB",
+      "block_io": "349MB / 432MB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-db-1",
+      "cpu_pct": "4.36%",
+      "mem_usage": "347.7MiB / 2GiB",
+      "mem_pct": "16.98%",
+      "net_io": "942MB / 3.24GB",
+      "block_io": "27.8GB / 15.6GB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-frontend-1",
+      "cpu_pct": "0.00%",
+      "mem_usage": "4.355MiB / 256MiB",
+      "mem_pct": "1.70%",
+      "net_io": "4.17kB / 4.14kB",
+      "block_io": "0B / 0B"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-queue-long-1",
+      "cpu_pct": "0.05%",
+      "mem_usage": "46.34MiB / 1.5GiB",
+      "mem_pct": "3.02%",
+      "net_io": "1.27GB / 666MB",
+      "block_io": "203MB / 267MB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-queue-short-1",
+      "cpu_pct": "0.05%",
+      "mem_usage": "29MiB / 768MiB",
+      "mem_pct": "3.78%",
+      "net_io": "1.24GB / 157MB",
+      "block_io": "6.91GB / 9.13GB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-redis-cache-1",
+      "cpu_pct": "0.20%",
+      "mem_usage": "10.45MiB / 384MiB",
+      "mem_pct": "2.72%",
+      "net_io": "89.4MB / 72.3MB",
+      "block_io": "139kB / 0B"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-redis-queue-1",
+      "cpu_pct": "0.17%",
+      "mem_usage": "6.191MiB / 384MiB",
+      "mem_pct": "1.61%",
+      "net_io": "127MB / 126MB",
+      "block_io": "1.95MB / 4.3MB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-scheduler-1",
+      "cpu_pct": "0.00%",
+      "mem_usage": "61.24MiB / 384MiB",
+      "mem_pct": "15.95%",
+      "net_io": "1.5MB / 46.6kB",
+      "block_io": "0B / 5.64MB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-websocket-1",
+      "cpu_pct": "0.00%",
+      "mem_usage": "23.89MiB / 384MiB",
+      "mem_pct": "6.22%",
+      "net_io": "104MB / 19.1MB",
+      "block_io": "0B / 0B"
+    }
+  ],
+  "container_resources_after": [
+    {
+      "container": "cskh-p4-bench-737dd90c-backend-1",
+      "cpu_pct": "0.01%",
+      "mem_usage": "301.1MiB / 1.5GiB",
+      "mem_pct": "19.60%",
+      "net_io": "2.76GB / 1.15GB",
+      "block_io": "359MB / 432MB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-db-1",
+      "cpu_pct": "7.53%",
+      "mem_usage": "395.8MiB / 2GiB",
+      "mem_pct": "19.32%",
+      "net_io": "983MB / 3.63GB",
+      "block_io": "30.1GB / 15.8GB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-frontend-1",
+      "cpu_pct": "0.00%",
+      "mem_usage": "8.262MiB / 256MiB",
+      "mem_pct": "3.23%",
+      "net_io": "809MB / 811MB",
+      "block_io": "0B / 8.19kB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-queue-long-1",
+      "cpu_pct": "0.04%",
+      "mem_usage": "47.03MiB / 1.5GiB",
+      "mem_pct": "3.06%",
+      "net_io": "1.27GB / 666MB",
+      "block_io": "203MB / 267MB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-queue-short-1",
+      "cpu_pct": "74.33%",
+      "mem_usage": "152MiB / 768MiB",
+      "mem_pct": "19.79%",
+      "net_io": "1.43GB / 163MB",
+      "block_io": "8.24GB / 10.9GB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-redis-cache-1",
+      "cpu_pct": "0.20%",
+      "mem_usage": "11.54MiB / 384MiB",
+      "mem_pct": "3.00%",
+      "net_io": "123MB / 1.87GB",
+      "block_io": "139kB / 0B"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-redis-queue-1",
+      "cpu_pct": "0.17%",
+      "mem_usage": "6.715MiB / 384MiB",
+      "mem_pct": "1.75%",
+      "net_io": "128MB / 127MB",
+      "block_io": "2MB / 4.51MB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-scheduler-1",
+      "cpu_pct": "0.00%",
+      "mem_usage": "61.23MiB / 384MiB",
+      "mem_pct": "15.95%",
+      "net_io": "1.79MB / 55.3kB",
+      "block_io": "0B / 5.64MB"
+    },
+    {
+      "container": "cskh-p4-bench-737dd90c-websocket-1",
+      "cpu_pct": "0.00%",
+      "mem_usage": "23.89MiB / 384MiB",
+      "mem_pct": "6.22%",
+      "net_io": "104MB / 19.2MB",
+      "block_io": "0B / 0B"
+    }
+  ],
+  "peak_40_staff_concurrent_wave": {
+    "concurrency": 40,
+    "overall_summary": {
+      "requests_total": 800,
+      "ok_count": 800,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 26.351,
+      "min_ms": 29.805,
+      "p50_ms": 459.818,
+      "p95_ms": 6748.008,
+      "p99_ms": 7284.183,
+      "max_ms": 7789.756,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 800
+      }
+    },
+    "scenario_summaries": {
+      "telesale_worklist_page": {
+        "workload_class": "authenticated_worklist_ssr",
+        "path": "/cskh/my-customers",
+        "concurrency": 40,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 160
+        },
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 7.013,
+        "min_ms": 926.204,
+        "p50_ms": 4545.038,
+        "p95_ms": 7286.31,
+        "p99_ms": 7723.497,
+        "max_ms": 7789.756
+      },
+      "my_customers_worklist_api": {
+        "workload_class": "authenticated_worklist_json_api",
+        "path": "/api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
+        "concurrency": 40,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 160
+        },
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 201.398,
+        "min_ms": 29.805,
+        "p50_ms": 188.506,
+        "p95_ms": 254.915,
+        "p99_ms": 263.628,
+        "max_ms": 267.147
+      },
+      "bod_executive_overview_api": {
+        "workload_class": "bod_kpi_snapshot_read_json_api",
+        "path": "/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
+        "concurrency": 40,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 160
+        },
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 76.951,
+        "min_ms": 67.058,
+        "p50_ms": 471.837,
+        "p95_ms": 761.922,
+        "p99_ms": 775.641,
+        "max_ms": 782.084
+      },
+      "kpi_metric_drilldown_250k_api": {
+        "workload_class": "kpi_drilldown_paginated_250k_attempts",
+        "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=8i6f1ojcr6&metric_code=CONNECTED_RATE&page=1&page_size=20",
+        "concurrency": 40,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 160
+        },
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 69.688,
+        "min_ms": 46.66,
+        "p50_ms": 497.197,
+        "p95_ms": 846.603,
+        "p99_ms": 875.936,
+        "max_ms": 879.235
+      },
+      "kpi_metric_drilldown_monthly_company_api": {
+        "workload_class": "kpi_drilldown_paginated_full_month_250k_attempts",
+        "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=monthly&period_key=2026-10&scope_type=company&metric_code=CONNECTED_RATE&page=1&page_size=20",
+        "concurrency": 40,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 160
+        },
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 67.397,
+        "min_ms": 68.617,
+        "p50_ms": 451.689,
+        "p95_ms": 866.051,
+        "p99_ms": 913.112,
+        "max_ms": 928.891
+      }
+    }
+  },
+  "s1_http_acceptance_and_mixed_waves": {
+    "distinct_authenticated_sessions_created": 80,
+    "staff_my_customers_http": {
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 127.182,
+      "min_ms": 23.499,
+      "p50_ms": 88.154,
+      "p95_ms": 177.798,
+      "p99_ms": 225.068,
+      "max_ms": 261.399
+    },
+    "telesale_worklist_ssr_40_staff_sessions_c12": {
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 5.664,
+      "min_ms": 320.157,
+      "p50_ms": 2161.864,
+      "p95_ms": 3423.847,
+      "p99_ms": 3837.471,
+      "max_ms": 4022.465
+    },
+    "telesale_worklist_ssr_40_staff_sessions_c40": {
+      "path": "/cskh/my-customers",
+      "concurrency": 40,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 160
+      },
+      "requests_total": 160,
+      "ok_count": 160,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 5.579,
+      "min_ms": 1114.497,
+      "p50_ms": 6509.857,
+      "p95_ms": 9342.282,
+      "p99_ms": 10021.799,
+      "max_ms": 10163.481
+    },
+    "lead_detail_and_history_http": {
+      "requests_total": 160,
+      "ok_count": 160,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 28.071,
+      "min_ms": 124.862,
+      "p50_ms": 419.206,
+      "p95_ms": 584.924,
+      "p99_ms": 626.743,
+      "max_ms": 668.143,
+      "get_work_item_p95_ms": 363.908,
+      "list_attempts_p95_ms": 296.624,
+      "raw_samples_first_15_ms": [
+        271.333,
+        303.602,
+        320.372,
+        364.641,
+        371.093,
+        401.597,
+        422.133,
+        429.703,
+        489.889,
+        521.277,
+        575.409,
+        578.476,
+        418.929,
+        336.602,
+        393.114
+      ]
+    },
+    "record_attempt_and_callback_http": {
+      "requests_total": 80,
+      "ok_count": 80,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 12.896,
+      "min_ms": 250.948,
+      "p50_ms": 575.683,
+      "p95_ms": 923.278,
+      "p99_ms": 995.217,
+      "max_ms": 1034.56,
+      "http_idempotent_replays_verified": 10,
+      "db_reconciliation": {
+        "attempts_created": 80,
+        "duplicate_idempotency_keys": 0,
+        "work_items_with_open_callback_task": 80
+      }
+    },
+    "bod_overview_and_drilldown_http": {
+      "bod_executive_overview_role_api": {
+        "workload_class": "bod_kpi_snapshot_read_json_api",
+        "path": "/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
+        "concurrency": 12,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 120
+        },
+        "requests_total": 120,
+        "ok_count": 120,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 77.355,
+        "min_ms": 20.848,
+        "p50_ms": 164.151,
+        "p95_ms": 250.682,
+        "p99_ms": 264.204,
+        "max_ms": 271.113
+      },
+      "kpi_drilldown_daily_campaign_role_api": {
+        "workload_class": "kpi_drilldown_daily_campaign_api",
+        "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=daily&period_key=2026-10-27&scope_type=campaign&scope_id=8i6f1ojcr6&metric_code=CONNECTED_RATE&page=1&page_size=20",
+        "concurrency": 12,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 120
+        },
+        "requests_total": 120,
+        "ok_count": 120,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 73.81,
+        "min_ms": 82.212,
+        "p50_ms": 155.116,
+        "p95_ms": 224.639,
+        "p99_ms": 259.777,
+        "max_ms": 272.695
+      },
+      "kpi_drilldown_monthly_company_role_api": {
+        "workload_class": "kpi_drilldown_monthly_company_250k_api",
+        "path": "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown?period_type=monthly&period_key=2026-10&scope_type=company&metric_code=CONNECTED_RATE&page=1&page_size=20",
+        "concurrency": 12,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 120
+        },
+        "requests_total": 120,
+        "ok_count": 120,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 76.899,
+        "min_ms": 63.808,
+        "p50_ms": 147.657,
+        "p95_ms": 241.697,
+        "p99_ms": 282.982,
+        "max_ms": 285.304
+      },
+      "staff_unauthorized_company_drilldown_http_status": 403
+    },
+    "concurrent_mixed_session_waves_20_40_80": {
+      "sessions_20": {
+        "concurrent_user_sessions": 20,
+        "overall_summary": {
+          "requests_total": 200,
+          "ok_count": 200,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "throughput_rps": 57.106,
+          "min_ms": 25.597,
+          "p50_ms": 296.729,
+          "p95_ms": 793.539,
+          "p99_ms": 854.941,
+          "max_ms": 933.018
+        },
+        "by_workload": {
+          "bod_overview_api": {
+            "requests_total": 30,
+            "ok_count": 30,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 8.566,
+            "min_ms": 50.953,
+            "p50_ms": 264.051,
+            "p95_ms": 440.186,
+            "p99_ms": 502.637,
+            "max_ms": 526.846
+          },
+          "kpi_drilldown_api": {
+            "requests_total": 20,
+            "ok_count": 20,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 5.711,
+            "min_ms": 44.898,
+            "p50_ms": 320.908,
+            "p95_ms": 517.2,
+            "p99_ms": 538.779,
+            "max_ms": 544.174
+          },
+          "lead_detail_history_api": {
+            "requests_total": 50,
+            "ok_count": 50,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 14.276,
+            "min_ms": 164.805,
+            "p50_ms": 515.942,
+            "p95_ms": 828.844,
+            "p99_ms": 864.416,
+            "max_ms": 878.931
+          },
+          "my_customers_api": {
+            "requests_total": 90,
+            "ok_count": 90,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 25.698,
+            "min_ms": 25.597,
+            "p50_ms": 210.178,
+            "p95_ms": 438.129,
+            "p99_ms": 469.437,
+            "max_ms": 489.646
+          },
+          "record_attempt_write_api": {
+            "requests_total": 10,
+            "ok_count": 10,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 2.855,
+            "min_ms": 184.675,
+            "p50_ms": 805.961,
+            "p95_ms": 897.774,
+            "p99_ms": 925.97,
+            "max_ms": 933.018
+          }
+        },
+        "container_resources_during_wave": [
+          {
+            "container": "cskh-p4-bench-737dd90c-backend-1",
+            "cpu_pct": "153.74%",
+            "mem_usage": "285.6MiB / 1.5GiB",
+            "mem_pct": "18.59%",
+            "net_io": "2.23GB / 928MB",
+            "block_io": "359MB / 432MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-db-1",
+            "cpu_pct": "90.96%",
+            "mem_usage": "389.3MiB / 2GiB",
+            "mem_pct": "19.01%",
+            "net_io": "969MB / 3.39GB",
+            "block_io": "28.4GB / 15.7GB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-frontend-1",
+            "cpu_pct": "3.12%",
+            "mem_usage": "8.926MiB / 256MiB",
+            "mem_pct": "3.49%",
+            "net_io": "603MB / 605MB",
+            "block_io": "0B / 8.19kB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-queue-long-1",
+            "cpu_pct": "0.03%",
+            "mem_usage": "46.33MiB / 1.5GiB",
+            "mem_pct": "3.02%",
+            "net_io": "1.27GB / 666MB",
+            "block_io": "203MB / 267MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-queue-short-1",
+            "cpu_pct": "32.17%",
+            "mem_usage": "136.3MiB / 768MiB",
+            "mem_pct": "17.75%",
+            "net_io": "1.25GB / 159MB",
+            "block_io": "6.91GB / 9.13GB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-redis-cache-1",
+            "cpu_pct": "6.85%",
+            "mem_usage": "11.5MiB / 384MiB",
+            "mem_pct": "2.99%",
+            "net_io": "115MB / 1.4GB",
+            "block_io": "139kB / 0B"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-redis-queue-1",
+            "cpu_pct": "0.38%",
+            "mem_usage": "6.457MiB / 384MiB",
+            "mem_pct": "1.68%",
+            "net_io": "128MB / 127MB",
+            "block_io": "1.96MB / 4.46MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-scheduler-1",
+            "cpu_pct": "0.00%",
+            "mem_usage": "61.23MiB / 384MiB",
+            "mem_pct": "15.95%",
+            "net_io": "1.67MB / 51.8kB",
+            "block_io": "0B / 5.64MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-websocket-1",
+            "cpu_pct": "0.33%",
+            "mem_usage": "23.9MiB / 384MiB",
+            "mem_pct": "6.22%",
+            "net_io": "104MB / 19.2MB",
+            "block_io": "0B / 0B"
+          }
+        ],
+        "queue_and_db_after_wave": {
+          "queue_depths": {
+            "short": 0,
+            "default": 0,
+            "long": 0
+          },
+          "queue_backlog_total": 0,
+          "redis_queue_rtt_ms": 1.562,
+          "mariadb_global_status": {
+            "Innodb_buffer_pool_read_requests": "69906473",
+            "Innodb_buffer_pool_reads": "1796090",
+            "Innodb_row_lock_time_avg": "122",
+            "Innodb_row_lock_waits": "55",
+            "Max_used_connections": "10",
+            "Questions": "1338524",
+            "Slow_queries": "0",
+            "Threads_connected": "2"
+          }
+        }
+      },
+      "sessions_40": {
+        "concurrent_user_sessions": 40,
+        "overall_summary": {
+          "requests_total": 320,
+          "ok_count": 320,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "throughput_rps": 58.545,
+          "min_ms": 43.111,
+          "p50_ms": 633.023,
+          "p95_ms": 1281.859,
+          "p99_ms": 1648.08,
+          "max_ms": 1667.837
+        },
+        "by_workload": {
+          "bod_overview_api": {
+            "requests_total": 48,
+            "ok_count": 48,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 8.782,
+            "min_ms": 103.259,
+            "p50_ms": 428.627,
+            "p95_ms": 886.311,
+            "p99_ms": 951.213,
+            "max_ms": 986.553
+          },
+          "kpi_drilldown_api": {
+            "requests_total": 32,
+            "ok_count": 32,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 5.854,
+            "min_ms": 215.819,
+            "p50_ms": 597.947,
+            "p95_ms": 911.477,
+            "p99_ms": 969.851,
+            "max_ms": 992.054
+          },
+          "lead_detail_history_api": {
+            "requests_total": 80,
+            "ok_count": 80,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 14.636,
+            "min_ms": 324.979,
+            "p50_ms": 975.133,
+            "p95_ms": 1636.732,
+            "p99_ms": 1660.533,
+            "max_ms": 1667.837
+          },
+          "my_customers_api": {
+            "requests_total": 144,
+            "ok_count": 144,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 26.345,
+            "min_ms": 43.111,
+            "p50_ms": 424.385,
+            "p95_ms": 862.188,
+            "p99_ms": 918.228,
+            "max_ms": 960.872
+          },
+          "record_attempt_write_api": {
+            "requests_total": 16,
+            "ok_count": 16,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 2.927,
+            "min_ms": 645.907,
+            "p50_ms": 867.724,
+            "p95_ms": 1242.613,
+            "p99_ms": 1308.476,
+            "max_ms": 1324.942
+          }
+        },
+        "container_resources_during_wave": [
+          {
+            "container": "cskh-p4-bench-737dd90c-backend-1",
+            "cpu_pct": "153.39%",
+            "mem_usage": "285.8MiB / 1.5GiB",
+            "mem_pct": "18.61%",
+            "net_io": "2.25GB / 935MB",
+            "block_io": "359MB / 432MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-db-1",
+            "cpu_pct": "100.30%",
+            "mem_usage": "389.4MiB / 2GiB",
+            "mem_pct": "19.01%",
+            "net_io": "971MB / 3.4GB",
+            "block_io": "28.5GB / 15.7GB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-frontend-1",
+            "cpu_pct": "3.09%",
+            "mem_usage": "9.641MiB / 256MiB",
+            "mem_pct": "3.77%",
+            "net_io": "607MB / 610MB",
+            "block_io": "0B / 8.19kB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-queue-long-1",
+            "cpu_pct": "0.03%",
+            "mem_usage": "46.33MiB / 1.5GiB",
+            "mem_pct": "3.02%",
+            "net_io": "1.27GB / 666MB",
+            "block_io": "203MB / 267MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-queue-short-1",
+            "cpu_pct": "0.07%",
+            "mem_usage": "136.3MiB / 768MiB",
+            "mem_pct": "17.75%",
+            "net_io": "1.25GB / 159MB",
+            "block_io": "6.91GB / 9.13GB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-redis-cache-1",
+            "cpu_pct": "7.31%",
+            "mem_usage": "11.27MiB / 384MiB",
+            "mem_pct": "2.93%",
+            "net_io": "116MB / 1.41GB",
+            "block_io": "139kB / 0B"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-redis-queue-1",
+            "cpu_pct": "4.43%",
+            "mem_usage": "6.207MiB / 384MiB",
+            "mem_pct": "1.62%",
+            "net_io": "128MB / 127MB",
+            "block_io": "1.96MB / 4.46MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-scheduler-1",
+            "cpu_pct": "0.00%",
+            "mem_usage": "61.23MiB / 384MiB",
+            "mem_pct": "15.95%",
+            "net_io": "1.67MB / 51.8kB",
+            "block_io": "0B / 5.64MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-websocket-1",
+            "cpu_pct": "0.33%",
+            "mem_usage": "23.89MiB / 384MiB",
+            "mem_pct": "6.22%",
+            "net_io": "104MB / 19.2MB",
+            "block_io": "0B / 0B"
+          }
+        ],
+        "queue_and_db_after_wave": {
+          "queue_depths": {
+            "short": 1,
+            "default": 0,
+            "long": 0
+          },
+          "queue_backlog_total": 1,
+          "redis_queue_rtt_ms": 1.58,
+          "mariadb_global_status": {
+            "Innodb_buffer_pool_read_requests": "71053907",
+            "Innodb_buffer_pool_reads": "1818251",
+            "Innodb_row_lock_time_avg": "121",
+            "Innodb_row_lock_waits": "56",
+            "Max_used_connections": "10",
+            "Questions": "1344333",
+            "Slow_queries": "0",
+            "Threads_connected": "2"
+          }
+        }
+      },
+      "sessions_80": {
+        "concurrent_user_sessions": 80,
+        "overall_summary": {
+          "requests_total": 480,
+          "ok_count": 480,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "throughput_rps": 59.221,
+          "min_ms": 50.464,
+          "p50_ms": 1171.794,
+          "p95_ms": 2346.513,
+          "p99_ms": 2801.979,
+          "max_ms": 2921.873
+        },
+        "by_workload": {
+          "bod_overview_api": {
+            "requests_total": 72,
+            "ok_count": 72,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 8.883,
+            "min_ms": 123.734,
+            "p50_ms": 927.202,
+            "p95_ms": 1460.864,
+            "p99_ms": 1506.324,
+            "max_ms": 1551.423
+          },
+          "kpi_drilldown_api": {
+            "requests_total": 48,
+            "ok_count": 48,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 5.922,
+            "min_ms": 291.557,
+            "p50_ms": 959.676,
+            "p95_ms": 1467.206,
+            "p99_ms": 1496.952,
+            "max_ms": 1511.698
+          },
+          "lead_detail_history_api": {
+            "requests_total": 120,
+            "ok_count": 120,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 14.805,
+            "min_ms": 949.225,
+            "p50_ms": 1981.652,
+            "p95_ms": 2794.74,
+            "p99_ms": 2893.332,
+            "max_ms": 2921.873
+          },
+          "my_customers_api": {
+            "requests_total": 216,
+            "ok_count": 216,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 26.649,
+            "min_ms": 50.464,
+            "p50_ms": 915.0,
+            "p95_ms": 1438.484,
+            "p99_ms": 1487.24,
+            "max_ms": 1497.757
+          },
+          "record_attempt_write_api": {
+            "requests_total": 24,
+            "ok_count": 24,
+            "error_count": 0,
+            "error_rate_pct": 0.0,
+            "throughput_rps": 2.961,
+            "min_ms": 697.846,
+            "p50_ms": 1503.602,
+            "p95_ms": 1927.666,
+            "p99_ms": 1946.084,
+            "max_ms": 1949.106
+          }
+        },
+        "container_resources_during_wave": [
+          {
+            "container": "cskh-p4-bench-737dd90c-backend-1",
+            "cpu_pct": "151.83%",
+            "mem_usage": "286.8MiB / 1.5GiB",
+            "mem_pct": "18.67%",
+            "net_io": "2.29GB / 945MB",
+            "block_io": "359MB / 432MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-db-1",
+            "cpu_pct": "55.24%",
+            "mem_usage": "389.5MiB / 2GiB",
+            "mem_pct": "19.02%",
+            "net_io": "973MB / 3.42GB",
+            "block_io": "28.8GB / 15.7GB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-frontend-1",
+            "cpu_pct": "3.36%",
+            "mem_usage": "9.645MiB / 256MiB",
+            "mem_pct": "3.77%",
+            "net_io": "614MB / 617MB",
+            "block_io": "0B / 8.19kB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-queue-long-1",
+            "cpu_pct": "0.03%",
+            "mem_usage": "46.33MiB / 1.5GiB",
+            "mem_pct": "3.02%",
+            "net_io": "1.27GB / 666MB",
+            "block_io": "203MB / 267MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-queue-short-1",
+            "cpu_pct": "77.84%",
+            "mem_usage": "154.9MiB / 768MiB",
+            "mem_pct": "20.17%",
+            "net_io": "1.26GB / 159MB",
+            "block_io": "6.91GB / 9.13GB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-redis-cache-1",
+            "cpu_pct": "7.33%",
+            "mem_usage": "11.49MiB / 384MiB",
+            "mem_pct": "2.99%",
+            "net_io": "118MB / 1.44GB",
+            "block_io": "139kB / 0B"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-redis-queue-1",
+            "cpu_pct": "0.42%",
+            "mem_usage": "6.703MiB / 384MiB",
+            "mem_pct": "1.75%",
+            "net_io": "128MB / 127MB",
+            "block_io": "1.97MB / 4.47MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-scheduler-1",
+            "cpu_pct": "0.00%",
+            "mem_usage": "61.23MiB / 384MiB",
+            "mem_pct": "15.95%",
+            "net_io": "1.67MB / 51.8kB",
+            "block_io": "0B / 5.64MB"
+          },
+          {
+            "container": "cskh-p4-bench-737dd90c-websocket-1",
+            "cpu_pct": "0.29%",
+            "mem_usage": "24.12MiB / 384MiB",
+            "mem_pct": "6.28%",
+            "net_io": "104MB / 19.2MB",
+            "block_io": "0B / 0B"
+          }
+        ],
+        "queue_and_db_after_wave": {
+          "queue_depths": {
+            "short": 1,
+            "default": 0,
+            "long": 0
+          },
+          "queue_backlog_total": 1,
+          "redis_queue_rtt_ms": 1.491,
+          "mariadb_global_status": {
+            "Innodb_buffer_pool_read_requests": "73014436",
+            "Innodb_buffer_pool_reads": "1823879",
+            "Innodb_row_lock_time_avg": "121",
+            "Innodb_row_lock_waits": "56",
+            "Max_used_connections": "10",
+            "Questions": "1353077",
+            "Slow_queries": "0",
+            "Threads_connected": "2"
+          }
+        }
+      }
+    }
+  },
+  "worklist_ssr_acceptance_and_separation": {
+    "execution_mode": "BUILT_INTO_OFFICIAL_COMMIT_AND_IMAGE_DIGEST_NO_IN_CONTAINER_PATCHING",
+    "priority_acceptance_case_1_shared_new_session_c12": {
+      "workload_class": "authenticated_worklist_ssr",
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 7.163,
+      "min_ms": 228.184,
+      "p50_ms": 1648.29,
+      "p95_ms": 2835.816,
+      "p99_ms": 3110.285,
+      "max_ms": 3134.87
+    },
+    "priority_acceptance_case_2_40_staff_sessions_c40": {
+      "path": "/cskh/my-customers",
+      "concurrency": 40,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 160
+      },
+      "requests_total": 160,
+      "ok_count": 160,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 5.579,
+      "min_ms": 1114.497,
+      "p50_ms": 6509.857,
+      "p95_ms": 9342.282,
+      "p99_ms": 10021.799,
+      "max_ms": 10163.481
+    },
+    "case_2a_shared_new_session_c12": {
+      "workload_class": "authenticated_worklist_ssr",
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 7.163,
+      "min_ms": 228.184,
+      "p50_ms": 1648.29,
+      "p95_ms": 2835.816,
+      "p99_ms": 3110.285,
+      "max_ms": 3134.87
+    },
+    "case_2b_single_initialized_session_c12": {
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "distinct_sessions_used": 1,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 7.115,
+      "min_ms": 299.901,
+      "p50_ms": 1642.802,
+      "p95_ms": 2400.988,
+      "p99_ms": 2874.098,
+      "max_ms": 3171.444
+    },
+    "case_2b_single_initialized_session_c40": {
+      "workload_class": "authenticated_worklist_ssr",
+      "path": "/cskh/my-customers",
+      "concurrency": 40,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 160
+      },
+      "requests_total": 160,
+      "ok_count": 160,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 7.013,
+      "min_ms": 926.204,
+      "p50_ms": 4545.038,
+      "p95_ms": 7286.31,
+      "p99_ms": 7723.497,
+      "max_ms": 7789.756
+    },
+    "case_2c_40_staff_sessions_c12": {
+      "path": "/cskh/my-customers",
+      "concurrency": 12,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 240
+      },
+      "requests_total": 240,
+      "ok_count": 240,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 5.664,
+      "min_ms": 320.157,
+      "p50_ms": 2161.864,
+      "p95_ms": 3423.847,
+      "p99_ms": 3837.471,
+      "max_ms": 4022.465
+    },
+    "case_2c_40_staff_sessions_c40": {
+      "path": "/cskh/my-customers",
+      "concurrency": 40,
+      "distinct_sessions_used": 40,
+      "client_timeout_threshold_sec": 30.0,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 160
+      },
+      "requests_total": 160,
+      "ok_count": 160,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 5.579,
+      "min_ms": 1114.497,
+      "p50_ms": 6509.857,
+      "p95_ms": 9342.282,
+      "p99_ms": 10021.799,
+      "max_ms": 10163.481
+    },
+    "ssr_vs_aggregate_separation": {
+      "c12_ssr_telesale_worklist_page_only": {
+        "workload_class": "authenticated_worklist_ssr",
+        "path": "/cskh/my-customers",
+        "concurrency": 12,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 240
+        },
+        "requests_total": 240,
+        "ok_count": 240,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 7.163,
+        "min_ms": 228.184,
+        "p50_ms": 1648.29,
+        "p95_ms": 2835.816,
+        "p99_ms": 3110.285,
+        "max_ms": 3134.87
+      },
+      "c12_overall_summary_all_8_scenarios": {
+        "requests_total": 1920,
+        "ok_count": 1920,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 17.263,
+        "min_ms": 10.344,
+        "p50_ms": 198.315,
+        "p95_ms": 2467.542,
+        "p99_ms": 2922.66,
+        "max_ms": 3195.519,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 1920
+        }
+      },
+      "c40_ssr_telesale_worklist_page_40_staff_sessions_only": {
+        "path": "/cskh/my-customers",
+        "concurrency": 40,
+        "distinct_sessions_used": 40,
+        "client_timeout_threshold_sec": 30.0,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 160
+        },
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 5.579,
+        "min_ms": 1114.497,
+        "p50_ms": 6509.857,
+        "p95_ms": 9342.282,
+        "p99_ms": 10021.799,
+        "max_ms": 10163.481
+      },
+      "c40_ssr_telesale_worklist_page_single_session_only": {
+        "workload_class": "authenticated_worklist_ssr",
+        "path": "/cskh/my-customers",
+        "concurrency": 40,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 160
+        },
+        "requests_total": 160,
+        "ok_count": 160,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 7.013,
+        "min_ms": 926.204,
+        "p50_ms": 4545.038,
+        "p95_ms": 7286.31,
+        "p99_ms": 7723.497,
+        "max_ms": 7789.756
+      },
+      "c40_overall_summary_peak_wave_5_scenarios": {
+        "requests_total": 800,
+        "ok_count": 800,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 26.351,
+        "min_ms": 29.805,
+        "p50_ms": 459.818,
+        "p95_ms": 6748.008,
+        "p99_ms": 7284.183,
+        "max_ms": 7789.756,
+        "timeout_count": 0,
+        "client_error_count": 0,
+        "http_4xx_count": 0,
+        "http_5xx_count": 0,
+        "http_error_count": 0,
+        "status_counts": {
+          "200": 800
+        }
+      },
+      "c40_overall_summary_mixed_api_sessions_40": {
+        "requests_total": 320,
+        "ok_count": 320,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_rps": 58.545,
+        "min_ms": 43.111,
+        "p50_ms": 633.023,
+        "p95_ms": 1281.859,
+        "p99_ms": 1648.08,
+        "max_ms": 1667.837
+      }
+    }
+  },
+  "app_image_tested": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+  "resource_profile": "staging_vps_capped",
+  "live_resource_headroom_precheck": {
+    "cpu_count": 4,
+    "mem_total_mib": 15983.91,
+    "mem_available_mib": 14811.4,
+    "load_1m": 2.134,
+    "load_per_cpu": 0.533,
+    "headroom_ok": true
+  },
+  "s1_domain_and_database_benchmark": {
+    "runner_hardware": {
+      "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.41",
+      "cpu_count": 4,
+      "python_version": "3.11.18"
+    },
+    "s1_seeded_counts": {
+      "crm_leads": 50000,
+      "cskh_identity_index": 50000,
+      "cskh_work_items": 75000,
+      "cskh_contact_attempts": 250000,
+      "cskh_sla_obligations": 150000,
+      "cskh_assignment_history": 75000,
+      "active_staff_users": 40,
+      "teams": 4,
+      "campaigns": 6,
+      "seed_elapsed_sec": 94.6
+    },
+    "primary_campaign_id": "8i6f1ojcr6",
+    "dist_10k_campaign_id": "8i6d0c2v7g",
+    "bod_user": "bod.bench@dev.local",
+    "admin_user": "admin.bench@dev.local",
+    "kpi_recompute_s1": {
+      "monthly_full_75k_wi_250k_att_ms": 46155.49,
+      "monthly_run_status": "completed",
+      "monthly_rss_after_mib": 636.32,
+      "monthly_hwm_mib": 1553.48,
+      "daily_incremental_ms": 3859.96,
+      "daily_rss_after_mib": 638.45,
+      "background_queue_long_recompute": {
+        "wall_ms": 46859.33,
+        "revision_before": "9e7cg31kt0",
+        "revisions_seen_while_running": [
+          "9e7cg31kt0"
+        ],
+        "revision_after_complete": "9u1rg5i6ob",
+        "atomic_publish_verified": true,
+        "concurrent_ui_overview_reads": {
+          "count": 294,
+          "error_count": 0,
+          "error_rate_pct": 0.0,
+          "throughput_ops_sec": 6.274,
+          "min_ms": 6.569,
+          "p50_ms": 7.444,
+          "p95_ms": 9.488,
+          "p99_ms": 10.816,
+          "max_ms": 67.715
+        }
+      }
+    },
+    "domain_workloads_s1": {
+      "my_customers_list_work_items": {
+        "count": 60,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_ops_sec": 264.585,
+        "min_ms": 2.837,
+        "p50_ms": 3.282,
+        "p95_ms": 4.162,
+        "p99_ms": 15.17,
+        "max_ms": 26.273
+      },
+      "work_item_detail_and_attempt_timeline": {
+        "count": 60,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_ops_sec": 49.483,
+        "min_ms": 17.053,
+        "p50_ms": 18.457,
+        "p95_ms": 24.619,
+        "p99_ms": 57.262,
+        "max_ms": 101.223
+      },
+      "contact_attempt_and_followup_write": {
+        "count": 50,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_ops_sec": 15.262,
+        "min_ms": 51.142,
+        "p50_ms": 57.399,
+        "p95_ms": 70.908,
+        "p99_ms": 245.836,
+        "max_ms": 394.295,
+        "idempotent_replay_verified": true
+      },
+      "bod_executive_overview": {
+        "count": 40,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_ops_sec": 151.955,
+        "min_ms": 5.968,
+        "p50_ms": 6.365,
+        "p95_ms": 7.913,
+        "p99_ms": 8.085,
+        "max_ms": 8.141,
+        "contact_attempt_table_scans_during_read": 0
+      },
+      "kpi_metric_drilldown_250k_attempts": {
+        "count": 40,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_ops_sec": 55.041,
+        "min_ms": 9.952,
+        "p50_ms": 17.954,
+        "p95_ms": 26.33,
+        "p99_ms": 32.805,
+        "max_ms": 35.693
+      },
+      "kpi_metric_drilldown_full_month_company_250k": {
+        "count": 10,
+        "error_count": 0,
+        "error_rate_pct": 0.0,
+        "throughput_ops_sec": 54.795,
+        "min_ms": 9.838,
+        "p50_ms": 18.012,
+        "p95_ms": 26.681,
+        "p99_ms": 27.758,
+        "max_ms": 28.028
+      }
+    },
+    "async_import_distribution_and_queue_lag": {
+      "csv_import_50000_rows": {
+        "total_rows": 50000,
+        "valid_rows": 10000,
+        "new_rows": 10000,
+        "duplicate_rows": 39500,
+        "error_rows": 500,
+        "created_rows": 10000,
+        "reused_rows": 5000,
+        "skipped_rows": 500,
+        "error_artifact_present": true,
+        "preview_ms": 774.44,
+        "worker_commit_and_drain_ms": 221292.95,
+        "total_preview_confirm_and_worker_drain_ms": 222067.39,
+        "final_batch_status": "COMPLETED_WITH_ERRORS",
+        "preview_rss_before_mib": 728.22,
+        "preview_rss_after_mib": 734.23,
+        "preview_hwm_mib": 1553.48,
+        "progress_checkpoints_count": 76,
+        "concurrent_worklist_read_p95_ms": 7.449,
+        "rows_throughput_per_sec": 225.16
+      },
+      "campaign_distribution_10000_work_items_40_staff": {
+        "eligible_count": 10000,
+        "preview_ms": 1146.5,
+        "preview_within_60s_reference": true,
+        "execute_and_worker_drain_ms": 1089463.76,
+        "final_run_status": "completed",
+        "created_work_items": 10000,
+        "duplicate_work_items": 0,
+        "double_submit_idempotent": true,
+        "abort_cancel_guard_verified": true,
+        "progress_checkpoints_recorded": [
+          0,
+          100,
+          200,
+          300,
+          400,
+          500,
+          600,
+          700,
+          800,
+          900,
+          9800,
+          9900,
+          10000
+        ],
+        "concurrent_worklist_read_p95_ms": 4.979,
+        "reconciliation": {
+          "active_work_items": 10000,
+          "stale_docshares": 0,
+          "stale_open_todos": 0,
+          "ownership_reconciled": true
+        }
+      },
+      "rq_short_50_job_burst": {
+        "enqueue_50_jobs_ms": 25.73,
+        "peak_queue_short_depth": 51,
+        "drain_to_zero_lag_ms": 48146.93,
+        "effective_worker_drain_jobs_per_sec": 1.04
+      }
+    },
+    "mariadb_explain_plans": {
+      "worklist_by_owner": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "tabCSKH Work Item",
+          "type": "ref",
+          "possible_keys": "cskh_lookup_0,cskh_wi_queue_due_idx,cskh_wi_owner_close_idx",
+          "key": "cskh_lookup_0",
+          "key_len": "1126",
+          "ref": "const,const",
+          "rows": "38",
+          "Extra": "Using index condition; Using where; Using filesort"
+        }
+      ],
+      "attempt_timeline_by_work_item": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "tabCSKH Contact Attempt",
+          "type": "ref",
+          "possible_keys": "cskh_attempt_idem_uq,cskh_attempt_wi_occ_idx",
+          "key": "cskh_attempt_wi_occ_idx",
+          "key_len": "563",
+          "ref": "const",
+          "rows": "4",
+          "Extra": "Using where"
+        }
+      ],
+      "kpi_snapshot_lookup": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "tabCSKH KPI Snapshot",
+          "type": "ref",
+          "possible_keys": "idx_cskh_kpisnap_lookup",
+          "key": "idx_cskh_kpisnap_lookup",
+          "key_len": "2819",
+          "ref": "const,const,const,const,const,const",
+          "rows": "1",
+          "Extra": "Using index condition"
+        }
+      ],
+      "canonical_phone_identity_lookup": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "tabCSKH Identity Index",
+          "type": "const",
+          "possible_keys": "normalized_phone",
+          "key": "normalized_phone",
+          "key_len": "259",
+          "ref": "const",
+          "rows": "1",
+          "Extra": ""
+        }
+      ],
+      "crm_lead_mobile_no_lookup": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "tabCRM Lead",
+          "type": "ref",
+          "possible_keys": "cskh_lead_mobile_no_idx",
+          "key": "cskh_lead_mobile_no_idx",
+          "key_len": "563",
+          "ref": "const",
+          "rows": "1",
+          "Extra": "Using where; Using index"
+        }
+      ],
+      "kpi_drilldown_attempt_window": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "tabCSKH Contact Attempt",
+          "type": "range",
+          "possible_keys": "cskh_attempt_camp_occ_idx,idx_cskh_attempt_occ_rec,idx_cskh_attempt_occ_name",
+          "key": "cskh_attempt_camp_occ_idx",
+          "key_len": "572",
+          "ref": null,
+          "rows": "600",
+          "Extra": "Using index condition"
+        }
+      ],
+      "kpi_drilldown_interval_page": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "ah",
+          "type": "range",
+          "possible_keys": "idx_cskh_ah_start_name",
+          "key": "idx_cskh_ah_start_name",
+          "key_len": "9",
+          "ref": null,
+          "rows": "81916",
+          "Extra": "Using index condition; Using where"
+        },
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "wi",
+          "type": "eq_ref",
+          "possible_keys": "PRIMARY",
+          "key": "PRIMARY",
+          "key_len": "562",
+          "ref": "_b23dd78fd7e42e7a.ah.work_item",
+          "rows": "1",
+          "Extra": ""
+        }
+      ],
+      "kpi_drilldown_attempt_chunk": [
+        {
+          "id": 1,
+          "select_type": "SIMPLE",
+          "table": "ca",
+          "type": "range",
+          "possible_keys": "idx_cskh_attempt_ownevt_occ",
+          "key": "idx_cskh_attempt_ownevt_occ",
+          "key_len": "563",
+          "ref": null,
+          "rows": "3",
+          "Extra": "Using index condition; Using where"
+        }
+      ]
+    }
+  },
+  "p4_9_2_acceptance_matrix": {
+    "all_passed": true,
+    "items": {
+      "staff_my_customers_p95_le_1500ms": {
+        "target_p95_ms": 1500.0,
+        "measured_http_p95_ms": 177.798,
+        "error_rate_pct": 0.0,
+        "passed": true
+      },
+      "open_lead_and_history_p95_le_2000ms": {
+        "target_p95_ms": 2000.0,
+        "measured_http_p95_ms": 584.924,
+        "error_rate_pct": 0.0,
+        "passed": true
+      },
+      "record_attempt_and_callback_p95_le_2000ms_zero_dup": {
+        "target_p95_ms": 2000.0,
+        "measured_http_p95_ms": 923.278,
+        "duplicate_idempotency_keys": 0,
+        "attempts_created": 80,
+        "work_items_with_open_callback_task": 80,
+        "http_idempotent_replays_verified": 10,
+        "passed": true
+      },
+      "bod_overview_snapshot_p95_le_3000ms": {
+        "target_p95_ms": 3000.0,
+        "measured_http_p95_ms": 250.682,
+        "explain_index_key": "idx_cskh_kpisnap_lookup",
+        "passed": true
+      },
+      "kpi_drilldown_paginated_p95_le_3000ms": {
+        "target_p95_ms": 3000.0,
+        "measured_daily_campaign_http_p95_ms": 224.639,
+        "measured_monthly_company_250k_http_p95_ms": 241.697,
+        "staff_unauthorized_company_http_status": 403,
+        "passed": true
+      },
+      "preview_weighted_distribution_10000_items": {
+        "reference_target_ms": 60000.0,
+        "eligible_count": 10000,
+        "measured_preview_ms": 1146.5,
+        "passed": true
+      },
+      "execute_weighted_distribution_10000_items": {
+        "created_work_items": 10000,
+        "duplicate_work_items": 0,
+        "execute_ms": 1089463.76,
+        "ownership_reconciled": true,
+        "abort_cancel_guard_verified": true,
+        "passed": true
+      },
+      "import_50000_csv_rows": {
+        "total_rows": 50000,
+        "created_rows": 10000,
+        "reused_rows": 5000,
+        "error_rows": 500,
+        "error_artifact_present": true,
+        "total_ms": 222067.39,
+        "preview_hwm_mib": 1553.48,
+        "passed": true
+      },
+      "recompute_kpi_non_blocking_atomic_publish": {
+        "atomic_publish_verified": true,
+        "concurrent_ui_p95_ms": 9.488,
+        "passed": true
+      },
+      "concurrent_20_40_80_mixed_user_sessions": {
+        "sessions_20_p95_ms": 793.539,
+        "sessions_20_error_rate_pct": 0.0,
+        "sessions_40_p95_ms": 1281.859,
+        "sessions_40_error_rate_pct": 0.0,
+        "sessions_80_p95_ms": 2346.513,
+        "sessions_80_error_rate_pct": 0.0,
+        "passed": true
+      },
+      "telesale_worklist_ssr_zero_errors_c12_and_c40": {
+        "shared_new_session_c12_error_count": 0,
+        "shared_new_session_c12_timeout_count": 0,
+        "staff_40_sessions_c40_error_count": 0,
+        "staff_40_sessions_c40_timeout_count": 0,
+        "passed": true
+      }
+    }
+  },
+  "observed_environment_limits": [
+    "Gunicorn & multi-session ceiling: isolated benchmark runs `GUNICORN_WORKERS=4, GUNICORN_THREADS=4` (16 concurrent Python threads) with dedicated `queue-short` + `queue-long`. Across 20, 40, and 80 simultaneous zero-think-time user sessions, 20 and 40 sessions stay comfortably sub-second; at 80 simultaneous active requests queueing behind 16 Gunicorn threads increases tail `p95`/`p99` cleanly with 0% 5xx.",
+    "Full monthly KPI recompute (`75,000` Work Items / `250,000` Attempts / `150,000` SLA Obligations) completes in `46155.49 ms` (daily incremental: `3859.96 ms`) on `queue-long` without blocking UI snapshot reads and publishes the new revision atomically only upon completion.",
+    "Paginated KPI drill-down after SQL interval aggregation & lazy business-minute optimizations achieves `p95=224.639 ms` on daily campaign scope and `p95=241.697 ms` on full-month company `250k`-attempt scope (`<= 3,000 ms`).",
+    "Bulk batch operations on dedicated `queue-long`: `50,000`-row CSV import completes in `222067.39 ms`; `10,000`-Work-Item weighted distribution preview completes in `1146.5 ms` (`<= 60,000 ms`) and chunked background execution completes in `1089463.76 ms` with `0` duplicates and unblocked interactive `My Customers` reads."
+  ],
+  "proposed_slos_for_review": {
+    "status": "PROPOSED_ONLY_NOT_COMMITTED_SLA",
+    "target_sizing_assumption": "4 vCPU / 8-16 GB RAM isolated host, Gunicorn 4 workers x 4 threads, dedicated queue-short + queue-long",
+    "targets": {
+      "my_customers_worklist_api_p95_ms": {
+        "measured_http_p95_ms": 177.798,
+        "proposed_slo_p95_ms": 500
+      },
+      "open_lead_and_history_api_p95_ms": {
+        "measured_http_p95_ms": 584.924,
+        "proposed_slo_p95_ms": 1500
+      },
+      "contact_attempt_write_p95_ms": {
+        "measured_http_p95_ms": 923.278,
+        "proposed_slo_p95_ms": 2000
+      },
+      "bod_executive_overview_api_p95_ms": {
+        "measured_http_p95_ms": 250.682,
+        "proposed_slo_p95_ms": 800
+      },
+      "kpi_drilldown_paginated_api_p95_ms": {
+        "measured_daily_http_p95_ms": 224.639,
+        "measured_monthly_250k_http_p95_ms": 241.697,
+        "proposed_slo_p95_ms": 1200
+      },
+      "http_5xx_error_rate_pct": {
+        "proposed_slo_max_pct": 0.5
+      },
+      "daily_incremental_kpi_refresh_lag_sec": {
+        "measured_daily_recompute_ms": 3859.96,
+        "proposed_slo_max_sec": 300
+      }
+    }
+  }
+}

@@ -1,6 +1,6 @@
 {
   "schema_version": "cskh-p4-integrated-candidate-manifest-v1",
-  "generated_at_utc": "2026-11-12T02:20:00Z",
+  "generated_at_utc": "2026-11-12T03:25:00Z",
   "candidate_verification_only": true,
   "promoted_to_production": false,
   "owner_live_site_touched": false,
@@ -91,8 +91,15 @@
     },
     "pending_t1b_g18_candidate_awaiting_t1c_confirmation": {
       "commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+      "t1b_slo_bundle_commit_sha": "cd03af5c99bd5b56ce62f4fa285b2f284b5d1f06",
       "candidate_image_uri": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
-      "t1c_confirmation_status": "AWAITING_T1C_CONFIRMATION_NOT_MERGED_INTO_T1A",
+      "oci_config_digest": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+      "slo_spec_path": "deploy/release/p4-s1-slo-spec.json",
+      "slo_spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+      "slo_approval_path": "deploy/release/p4-s1-slo-approval.json",
+      "slo_approval_sha256": "71bdf60ff8982f5532d00c714d3224ce796fe771c752e8a41ecabb93a2b1a483",
+      "slo_approval_status": "PENDING_OWNER_APPROVAL",
+      "t1c_confirmation_status": "SYNCED_IN_T1A_SCORER_AWAITING_T1C_CONFIRMATION_FOR_VPS_G03_G05_AND_G18",
       "last_t1c_verified_baseline_digest": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
     }
   },
@@ -104,18 +111,22 @@
     "t1a_locked_ops_handoff_sha": "0762ef66f6b5f88a4105127e41e71955d000495d",
     "t1b_batch1_locked_candidate_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
     "t1b_batch2_delta_sha": "bcdc419f9f95ad75449315572928e3d8c43817cc",
+    "t1b_g18_drilldown_opt_candidate_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+    "t1b_decoupled_slo_bundle_sha": "cd03af5c99bd5b56ce62f4fa285b2f284b5d1f06",
     "t1b_verified_ci_runs": {
       "p4_ci_sbom_and_reproducibility_run_id": 42984867793,
       "p4_candidate_verify_and_s1_benchmark_run_id": 42984867723,
-      "p4_batch2_delta_run_id": 42825411058
+      "p4_batch2_delta_run_id": 42825411058,
+      "p4_ba68cd22_candidate_verify_and_s1_4x4_run_id": 43075109950,
+      "p4_ba68cd22_capped_s1_and_g18_deep_diag_run_id": 43079350070
     },
     "t1a_integrated_https_dr_ci_run_id": 42994618293,
     "t1a_integrated_https_dr_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42994618293",
     "t1a_latest_ops_dr_rehearsal_ci_run_id": 43031124613,
     "t1a_latest_ops_dr_rehearsal_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/43031124613",
-    "integrated_code_sha": "c403fc4cdb4e63d7cd27ac0374d1549dccd7c598",
-    "apps_tree_sha": "4d361e68912f52243751ae5986cabbd13033f050",
-    "crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
+    "integrated_code_sha": "33ed7a2d150c3d950e6efdb6bd77ee572d44566c",
+    "apps_tree_sha": "e3972e2fa0ef6275c6d272602819a39e29870077",
+    "crm_cskh_tree_sha": "b9ce3e2e12f5012df989d0a75ae83cccb77e9774",
     "apps_tree_parity_with_locked_candidate": true
   },
   "frappe_crm_app_versions": {
@@ -139,7 +150,8 @@
     },
     "crm_cskh": {
       "declared_version": "0.0.1",
-      "crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
+      "crm_cskh_tree_sha": "b9ce3e2e12f5012df989d0a75ae83cccb77e9774",
+      "baseline_t1c_signed_crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
       "metrics_formula_version": "cskh-metrics-v2"
     },
     "runtime_toolchain_and_key_python_upgrades": {
@@ -187,9 +199,9 @@
   },
   "compose_and_config_sha": {
     "deploy_compose_git_tree_sha": "89c564918abacb52d8511e3075d94c62e74a5be6",
-    "deploy_images_git_tree_sha": "2497dfbb9368aba61bdee7c602cbe4e48790f53a",
+    "deploy_images_git_tree_sha": "d0937425797e900c546d21df85162775705308aa",
     "rendered_dr_https_compose_config_sha256": "496cb03ffb2447b9ac0ea12b9711a279dfc87d053ce053621f9c7baf1f58665a",
-    "release_lock_sha256": "afb030b78ec674881cda9437fed504b62c3a7be60af654065c292049f92d4c5f",
+    "release_lock_sha256": "f795ac87521d92665b3000364b788a42749912922aae16f35c40e930fdf76791",
     "runtime_isolation_audit_path": "deploy/ops/evidence/p4-https-delta-20261109/staging-dr-runtime-isolation-audit.json",
     "inspected_app_services_count": 6,
     "inspected_app_services": [
@@ -533,6 +545,22 @@
           "kpi_drilldown_paginated_api_p95_ms": 1200.0,
           "http_5xx_error_rate_pct": 0.5,
           "daily_incremental_kpi_refresh_lag_sec": 300.0
+        }
+      },
+      "synced_s1_endpoint_slo_bundle_v1": {
+        "schema_version": "cskh-p4-s1-slo-spec-v1",
+        "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+        "slo_version": "1.0.0",
+        "candidate_source_commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+        "candidate_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "immutable_slo_spec_path": "deploy/release/p4-s1-slo-spec.json",
+        "immutable_slo_spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+        "decoupled_owner_approval_path": "deploy/release/p4-s1-slo-approval.json",
+        "decoupled_owner_approval_sha256": "71bdf60ff8982f5532d00c714d3224ce796fe771c752e8a41ecabb93a2b1a483",
+        "approval_status": "PENDING_OWNER_APPROVAL",
+        "ci_precheck_reconciliations": {
+          "s1_canonical_4x4": "deploy/ops/evidence/p4-candidate-ba68cd22-s1-20261112/g18-precheck-reconciliation-s1-canonical-4x4.json",
+          "staging_vps_capped": "deploy/ops/evidence/p4-candidate-ba68cd22-s1-20261112/g18-precheck-reconciliation-staging-vps-capped.json"
         }
       },
       "required_inputs": [

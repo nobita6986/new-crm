@@ -4,20 +4,23 @@ from __future__ import annotations
 
 import copy
 import json
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from typing import Any
 
-from evaluate_s1_slo import (
+RELEASE_DIR = Path(__file__).resolve().parent
+if str(RELEASE_DIR) not in sys.path:
+    sys.path.insert(0, str(RELEASE_DIR))
+
+from evaluate_s1_slo import (  # noqa: E402
     compute_normalized_sha256,
     evaluate_slo_bundle,
     main,
     validate_slo_approval_document,
     validate_slo_spec_governance,
 )
-
-RELEASE_DIR = Path(__file__).resolve().parent
 CANONICAL_SLO_PATH = RELEASE_DIR / "p4-s1-slo-spec.json"
 CANONICAL_APPROVAL_PATH = RELEASE_DIR / "p4-s1-slo-approval.json"
 LOCKED_SUBMITTED_SLO_SHA256 = (

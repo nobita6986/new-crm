@@ -3666,6 +3666,357 @@ class OpsToolkitTests(unittest.TestCase):
                 cross_res["configuration_validation_errors"],
             )
 
+    def test_synced_p4_s1_slo_bundle_ba68cd22_precheck_and_g18_gate(self) -> None:
+        import subprocess
+        import manage_isolated_staging_dr as dr_mod
+
+        repo_root = staging_mod.REPO_ROOT
+        cand_dir = repo_root / "deploy" / "ops" / "evidence" / "p4-candidate-ba68cd22-s1-20261112"
+        bench_4x4_path = cand_dir / "benchmark-s1-report.json"
+        bench_capped_path = cand_dir / "benchmark-s1-staging-vps-capped.json"
+        diag_4x4_path = cand_dir / "g18-diagnostic-post_opt_s1_canonical_4x4.json"
+        diag_capped_path = cand_dir / "g18-diagnostic-post_opt_staging_vps_capped.json"
+
+        # 1. Immutable SLO spec SHA-256 & governance checks across profiles
+        spec_sha_before = dr_mod.compute_p4_s1_slo_spec_sha256(dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH)
+        self.assertEqual(spec_sha_before, dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256)
+        self.assertEqual(
+            dr_mod.CURRENT_CANDIDATE_SOURCE_SHA,
+            "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+        )
+
+        for prof in ("s1_canonical_4x4", "staging_vps_capped"):
+            val_spec, val_sha, val_errs = dr_mod.validate_g18_thresholds_for_configuration(
+                thresholds_path=dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH,
+                target_configuration_profile=prof,
+                expected_digest=dr_mod.CURRENT_CANDIDATE_DIGEST,
+            )
+            self.assertEqual(val_errs, [], f"{prof}: {val_errs}")
+            self.assertEqual(val_sha, dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256)
+            self.assertEqual(val_spec["slo_bundle_id"], "cskh-p4-g18-s1-endpoint-slo")
+
+        _, _, smoke_prof_errs = dr_mod.validate_g18_thresholds_for_configuration(
+            thresholds_path=dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH,
+            target_configuration_profile="staging_dr_smoke_only",
+            expected_digest=dr_mod.CURRENT_CANDIDATE_DIGEST,
+        )
+        self.assertTrue(
+            any("target_configuration_profile_not_g18_s1_capable" in e for e in smoke_prof_errs),
+            smoke_prof_errs,
+        )
+
+        _, _, stale_dig_errs = dr_mod.validate_g18_thresholds_for_configuration(
+            thresholds_path=dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH,
+            target_configuration_profile="staging_vps_capped",
+            expected_digest=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4,
+        )
+        self.assertTrue(
+            any("thresholds_locked_candidate_digest_mismatch" in e for e in stale_dig_errs),
+            stale_dig_errs,
+        )
+
+        canon_s1_spec = json.loads(dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH.read_text(encoding="utf-8"))
+        inflated_spec = json.loads(json.dumps(canon_s1_spec))
+        for r in inflated_spec["rules"]:
+            if r["slo_id"] == "API-05B-BOD":
+                r["proposed_thresholds"]["staging_vps_capped"]["max_p95_ms"] = 3500.0
+                r["proposed_thresholds"]["staging_vps_capped"]["max_p99_ms"] = 4000.0
+                r["proposed_thresholds"]["staging_vps_capped"]["max_timeout_count"] = 1
+        _, _, inf_errs = dr_mod.validate_g18_thresholds_for_configuration(
+            thresholds_spec=inflated_spec,
+            target_configuration_profile="staging_vps_capped",
+            expected_digest=dr_mod.CURRENT_CANDIDATE_DIGEST,
+        )
+        self.assertTrue(any("exceeds P4.md §9.2 ceiling" in e for e in inf_errs), inf_errs)
+        self.assertTrue(any("zero_error_budget_loosened" in e for e in inf_errs), inf_errs)
+
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+
+            # 2. CLI reconcile-g18-slo against real ba68cd22 CI benchmark & G18 deep diagnostic reports
+            for prof, bpath, dpath in (
+                ("s1_canonical_4x4", bench_4x4_path, diag_4x4_path),
+                ("staging_vps_capped", bench_capped_path, diag_capped_path),
+            ):
+                out_rec = td_path / f"rec-{prof}.json"
+                rc = dr_mod.main(
+                    [
+                        "reconcile-g18-slo",
+                        "--benchmark-json",
+                        str(bpath),
+                        "--thresholds-json",
+                        str(dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH),
+                        "--owner-approval-json",
+                        str(dr_mod.DEFAULT_P4_S1_SLO_APPROVAL_PATH),
+                        "--g18-diag-json",
+                        str(dpath),
+                        "--out",
+                        str(out_rec),
+                    ]
+                )
+                self.assertEqual(rc, 2)
+                rec = json.loads(out_rec.read_text(encoding="utf-8"))
+                self.assertEqual(
+                    rec["status"],
+                    "BLOCKED_CI_PRECHECK_ONLY_PENDING_VPS_RECEIPTS_AND_OWNER_APPROVAL",
+                    rec,
+                )
+                self.assertEqual(rec["expected_candidate_digest"], dr_mod.CURRENT_CANDIDATE_DIGEST)
+                self.assertTrue(rec["digest_matches_candidate"])
+                self.assertEqual(rec["evaluated_thresholds_sha256"], dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256)
+                self.assertEqual(rec["target_configuration_profile"], prof)
+                self.assertTrue(rec["measurements_complete"], rec["missing_measurements"])
+                self.assertEqual(rec["breached_checks"], [])
+                self.assertTrue(rec["all_7_metrics_within_v1_4_thresholds"])
+                bundle_eval = rec["s1_slo_bundle_evaluation"]
+                self.assertTrue(bundle_eval["all_passed"])
+                self.assertEqual(bundle_eval["category_verdicts"]["SSR"]["passed_count"], 7)
+                self.assertEqual(bundle_eval["category_verdicts"]["JSON_API"]["passed_count"], 20)
+                self.assertEqual(bundle_eval["category_verdicts"]["AGGREGATE_AND_BACKGROUND"]["passed_count"], 8)
+                self.assertEqual(len(bundle_eval["g18_deep_diagnostic_results"]), 12)
+                self.assertTrue(all(r["passed"] for r in bundle_eval["g18_deep_diagnostic_results"]))
+
+            # 3. Missing measurements & threshold breaches on cskh-p4-s1-slo-spec-v1 fail closed
+            capped_doc = json.loads(bench_capped_path.read_text(encoding="utf-8"))
+            pending_approval_doc = json.loads(dr_mod.DEFAULT_P4_S1_SLO_APPROVAL_PATH.read_text(encoding="utf-8"))
+
+            missing_p99_doc = json.loads(json.dumps(capped_doc))
+            del missing_p99_doc["s1_http_acceptance_and_mixed_waves"]["bod_overview_and_drilldown_http"][
+                "kpi_drilldown_monthly_company_role_api"
+            ]["p99_ms"]
+            miss_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                missing_p99_doc,
+                owner_slo_approval=pending_approval_doc,
+                thresholds_path=dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH,
+            )
+            self.assertEqual(miss_res["status"], "FAIL_MISSING_MEASUREMENTS")
+            self.assertIn(
+                "s1_http_acceptance_and_mixed_waves.bod_overview_and_drilldown_http.kpi_drilldown_monthly_company_role_api.p99_ms",
+                miss_res["missing_measurements"],
+            )
+
+            missing_headroom_doc = json.loads(json.dumps(capped_doc))
+            del missing_headroom_doc["live_resource_headroom_precheck"]
+            miss_hr_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                missing_headroom_doc,
+                owner_slo_approval=pending_approval_doc,
+                thresholds_path=dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH,
+            )
+            self.assertEqual(miss_hr_res["status"], "FAIL_MISSING_MEASUREMENTS")
+            self.assertIn("live_resource_headroom_precheck", miss_hr_res["missing_measurements"])
+
+            bad_p99_doc = json.loads(json.dumps(capped_doc))
+            bad_p99_doc["s1_http_acceptance_and_mixed_waves"]["bod_overview_and_drilldown_http"][
+                "kpi_drilldown_monthly_company_role_api"
+            ]["p99_ms"] = 1850.0
+            breach_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                bad_p99_doc,
+                owner_slo_approval=pending_approval_doc,
+                thresholds_path=dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH,
+            )
+            self.assertEqual(breach_res["status"], "FAIL_THRESHOLD_BREACH")
+            self.assertTrue(any("s1_slo.API-05B-BOD" in b for b in breach_res["breached_checks"]), breach_res["breached_checks"])
+
+            bad_explain_doc = json.loads(json.dumps(capped_doc))
+            bad_explain_doc["s1_domain_and_database_benchmark"]["mariadb_explain_plans"][
+                "kpi_drilldown_interval_page"
+            ][0]["key"] = "PRIMARY"
+            exp_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                bad_explain_doc,
+                owner_slo_approval=pending_approval_doc,
+                thresholds_path=dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH,
+            )
+            self.assertEqual(exp_res["status"], "FAIL_THRESHOLD_BREACH")
+            self.assertTrue(
+                any("mariadb_explain_plans.kpi_drilldown_interval_page" in b for b in exp_res["breached_checks"]),
+                exp_res["breached_checks"],
+            )
+
+            # 4. Pre-measurement gate & acceptance runner with decoupled p4-s1-slo-approval.json
+            receipt_dir = self._build_mock_staging_vps_bundle(
+                repo_root,
+                td_path / "vps-receipts-ba68cd22",
+                expected_digest=dr_mod.CURRENT_CANDIDATE_DIGEST,
+            )
+            valid_t1c = {
+                "confirmed": True,
+                "confirmed_by": "T1C-Independent-Acceptance-Lead",
+                "confirmed_at": "2026-11-12T10:00:00+07:00",
+                "candidate_commit_sha": dr_mod.CURRENT_CANDIDATE_SOURCE_SHA,
+                "app_image_digest": dr_mod.CURRENT_CANDIDATE_DIGEST,
+                "verification_scope": dr_mod.STAGING_CANDIDATE_SCOPE,
+                "g04_status": "FAIL",
+                "production_candidate_status": "BLOCKED",
+            }
+            verified_t1c_doc = dr_mod.verify_t1c_candidate_confirmation(
+                valid_t1c, expected_app_image=dr_mod.CURRENT_CANDIDATE_DIGEST
+            )[1]
+            (receipt_dir / "t1c-candidate-confirmation-receipt.json").write_text(
+                json.dumps(verified_t1c_doc, indent=2), encoding="utf-8"
+            )
+            preflight_path = receipt_dir / "readonly-vps-preflight.json"
+            preflight_doc = json.loads(preflight_path.read_text(encoding="utf-8"))
+            preflight_doc["safe_staging_allocation"] = dr_mod.determine_safe_staging_vps_configuration(
+                cpu_cores=4,
+                mem_available_mib=4200.0,
+                loadavg_1m=0.6,
+                free_disk_gib=18.0,
+                loopback_ports_free=True,
+                live_stack_running=True,
+            )
+            preflight_path.write_text(json.dumps(preflight_doc, indent=2), encoding="utf-8")
+            sum_path = receipt_dir / "vps-g03-g05-summary.json"
+            sum_doc = json.loads(sum_path.read_text(encoding="utf-8"))
+            sum_doc["staging_resource_configuration"] = dr_mod.get_staging_resource_profile_spec("staging_vps_capped")
+            sum_doc["t1c_candidate_confirmation"] = verified_t1c_doc
+            sum_path.write_text(json.dumps(sum_doc, indent=2), encoding="utf-8")
+
+            # 4a. Default CLI prepare-staging-g18 with pending p4-s1-slo-approval.json -> BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO
+            prep_pending_out = td_path / "prep-pending.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--out",
+                        str(prep_pending_out),
+                    ]
+                ),
+                2,
+            )
+            prep_pending = json.loads(prep_pending_out.read_text(encoding="utf-8"))
+            self.assertEqual(prep_pending["status"], "BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO")
+            self.assertFalse(prep_pending["measurement_allowed"])
+            self.assertEqual(prep_pending["resolved_configuration_profile"], "staging_vps_capped")
+
+            # 4b. Profile mismatch in decoupled approval (signed only for s1_canonical_4x4) -> FAIL
+            wrong_prof_app_file = td_path / "approval-4x4-only.json"
+            wrong_prof_app = {
+                "schema_version": "cskh-p4-s1-slo-approval-v1",
+                "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+                "slo_version": "1.0.0",
+                "slo_spec_sha256": dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256,
+                "approved_image_digest": dr_mod.CURRENT_CANDIDATE_DIGEST,
+                "approved_profiles": ["s1_canonical_4x4"],
+                "approval_status": "OWNER_APPROVED",
+                "owner_signoff": {
+                    "approved_by": "CRM Product & Ops Owner",
+                    "approved_at_utc": "2026-11-12T03:00:00Z",
+                    "decision_reference": "OWNER-SLO-4X4-ONLY",
+                },
+            }
+            wrong_prof_app_file.write_text(json.dumps(wrong_prof_app, indent=2), encoding="utf-8")
+            gate_wrong_prof = dr_mod.verify_g18_acceptance_measurement_gate(
+                vps_receipts=receipt_dir,
+                owner_slo_approval=wrong_prof_app_file,
+            )
+            self.assertEqual(gate_wrong_prof["status"], "FAIL_SCORER_DOES_NOT_MATCH_OWNER_SIGNED_CONFIG_SLO")
+            self.assertFalse(gate_wrong_prof["measurement_allowed"])
+
+            # 4c. Self-signed approval by T1B -> FAIL
+            self_signed_app_file = td_path / "approval-self-signed.json"
+            self_signed_app = dict(
+                wrong_prof_app,
+                approved_profiles=["staging_vps_capped"],
+                owner_signoff={
+                    "approved_by": "T1B-Release-Engineer",
+                    "approved_at_utc": "2026-11-12T03:00:00Z",
+                    "decision_reference": "SELF-SIGN-ATTEMPT",
+                },
+            )
+            self_signed_app_file.write_text(json.dumps(self_signed_app, indent=2), encoding="utf-8")
+            gate_self_sign = dr_mod.verify_g18_acceptance_measurement_gate(
+                vps_receipts=receipt_dir,
+                owner_slo_approval=self_signed_app_file,
+            )
+            self.assertEqual(gate_self_sign["status"], "FAIL_SCORER_DOES_NOT_MATCH_OWNER_SIGNED_CONFIG_SLO")
+            self.assertFalse(gate_self_sign["measurement_allowed"])
+
+            # 4d. Valid Owner-approved decoupled p4-s1-slo-approval-v1 -> READY -> run-staging-vps-g18 PASS
+            valid_app_file = td_path / "approval-capped-owner.json"
+            valid_app = dict(
+                wrong_prof_app,
+                approved_profiles=["staging_vps_capped"],
+                owner_signoff={
+                    "approved_by": "CRM Product & Ops Owner",
+                    "approved_at_utc": "2026-11-12T03:15:00Z",
+                    "decision_reference": "OWNER-SLO-2026-11-12-BA68CD22",
+                },
+            )
+            valid_app_file.write_text(json.dumps(valid_app, indent=2), encoding="utf-8")
+
+            vps_bench_doc = json.loads(json.dumps(capped_doc))
+            vps_bench_doc["isolation_guard"]["compose_project"] = "crm-cskh-s1-bench-vps"
+            vps_bench_doc["s1_domain_and_database_benchmark"]["runner_hardware"]["platform"] = (
+                "Linux-6.8.0-51-generic-x86_64-with-glibc2.39"
+            )
+            live_snap = {
+                "timestamp_utc": "2026-11-12T03:20:00Z",
+                "live_project_name": "crm-cskh-vps-staging",
+                "container_count": 1,
+                "all_running": True,
+                "containers": [
+                    {
+                        "id": "cid-live-1",
+                        "name": "crm-cskh-vps-staging-backend-1",
+                        "service": "backend",
+                        "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+                        "config_image": "crm-cskh:0.0.1-4672041",
+                        "status": "running",
+                        "health": "healthy",
+                        "started_at": "2026-11-09T12:00:00Z",
+                        "restart_count": 0,
+                    }
+                ],
+            }
+
+            def fake_run_s1_vps(cmd: list[str], **_kw: object) -> subprocess.CompletedProcess[str]:
+                out_idx = cmd.index("--out") + 1
+                Path(cmd[out_idx]).write_text(json.dumps(vps_bench_doc), encoding="utf-8")
+                return subprocess.CompletedProcess(cmd, 0, stdout="OK\n", stderr="")
+
+            bench_vps_out = td_path / "vps-bench-ba68cd22.json"
+            rec_vps_out = td_path / "vps-rec-ba68cd22.json"
+            with (
+                mock.patch.object(dr_mod, "run_sub", side_effect=fake_run_s1_vps),
+                mock.patch.object(
+                    dr_mod,
+                    "capture_readonly_live_stack_snapshot",
+                    side_effect=[json.loads(json.dumps(live_snap)), json.loads(json.dumps(live_snap))],
+                ),
+            ):
+                rc_vps = dr_mod.main(
+                    [
+                        "run-staging-vps-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--owner-approval-json",
+                        str(valid_app_file),
+                        "--g18-diag-json",
+                        str(diag_capped_path),
+                        "--benchmark-out",
+                        str(bench_vps_out),
+                        "--reconcile-out",
+                        str(rec_vps_out),
+                    ]
+                )
+                self.assertEqual(rc_vps, 0)
+
+            rec_vps = json.loads(rec_vps_out.read_text(encoding="utf-8"))
+            self.assertEqual(rec_vps["status"], "PASS", rec_vps)
+            self.assertTrue(rec_vps["owner_slo_v1_4_signed"])
+            self.assertEqual(rec_vps["evaluated_thresholds_sha256"], dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256)
+            self.assertEqual(rec_vps["owner_approval_thresholds_sha256"], dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256)
+            self.assertTrue(rec_vps["s1_slo_bundle_evaluation"]["all_passed"])
+            self.assertEqual(len(rec_vps["s1_slo_bundle_evaluation"]["g18_deep_diagnostic_results"]), 12)
+            self.assertTrue(all(rec_vps["g18_pass_requirements"].values()), rec_vps["g18_pass_requirements"])
+            # Submitted SLO spec bytes remained 100% untouched
+            self.assertEqual(
+                dr_mod.compute_p4_s1_slo_spec_sha256(dr_mod.DEFAULT_P4_S1_SLO_SPEC_PATH),
+                spec_sha_before,
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

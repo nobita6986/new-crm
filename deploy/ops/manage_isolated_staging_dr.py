@@ -46,11 +46,13 @@ from typing import Any
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMPOSE_SCRIPTS_DIR = REPO_ROOT / "deploy" / "compose" / "scripts"
 OPS_DIR = REPO_ROOT / "deploy" / "ops"
-for _p in (str(COMPOSE_SCRIPTS_DIR), str(OPS_DIR)):
+RELEASE_DIR = REPO_ROOT / "deploy" / "release"
+for _p in (str(COMPOSE_SCRIPTS_DIR), str(OPS_DIR), str(RELEASE_DIR)):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 
 import check_health_and_invariants as health_tool  # noqa: E402
+import evaluate_s1_slo as s1_slo_tool  # noqa: E402
 import run_isolated_smoke as smoke_lib  # noqa: E402
 import staging_https_smoke_and_reconcile as p403_tool  # noqa: E402
 
@@ -3165,6 +3167,18 @@ DEFAULT_G18_THRESHOLDS_V1_4_PATH = OPS_DIR / "g18_slo_thresholds_v1_4.json"
 LOCKED_G18_THRESHOLDS_V1_4_SHA256 = (
     "e9fde1a0e796a4f30651689c02384fb07051ab6adcaf368e5c336122f4ec54e7"
 )
+CURRENT_CANDIDATE_SOURCE_SHA = "3c040c85a44c4ad37e9d9152b5630a4596e593ee"
+CURRENT_CANDIDATE_DIGEST = (
+    "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+)
+CURRENT_CANDIDATE_OCI_CONFIG_DIGEST = (
+    "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d"
+)
+DEFAULT_P4_S1_SLO_SPEC_PATH = RELEASE_DIR / "p4-s1-slo-spec.json"
+DEFAULT_P4_S1_SLO_APPROVAL_PATH = RELEASE_DIR / "p4-s1-slo-approval.json"
+LOCKED_P4_S1_SLO_SPEC_SHA256 = (
+    "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d"
+)
 
 OWNER_TICKET_V1_4_PROPOSED_SLOS: dict[str, dict[str, Any]] = {
     "my_customers_worklist_api_p95_ms": {
@@ -4776,6 +4790,352 @@ def _validate_config_bound_subtree(
         return
 
 
+def serialize_p4_s1_slo_spec(spec: dict[str, Any]) -> bytes:
+    """Canonical LF UTF-8 JSON serialization matching `deploy/release/p4-s1-slo-spec.json`."""
+    return (json.dumps(spec, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+
+
+def compute_p4_s1_slo_spec_sha256(spec_or_path: dict[str, Any] | Path) -> str:
+    """Compute LF-normalized SHA-256 hex digest for a `cskh-p4-s1-slo-spec-v1` document or file."""
+    if isinstance(spec_or_path, Path):
+        return s1_slo_tool.compute_normalized_sha256(spec_or_path)
+    return hashlib.sha256(serialize_p4_s1_slo_spec(spec_or_path)).hexdigest()
+
+
+def is_p4_s1_slo_spec_v1(
+    thresholds_spec: dict[str, Any] | None = None,
+    thresholds_path: Path | None = None,
+) -> bool:
+    """Return True when the threshold specification uses T1B's `cskh-p4-s1-slo-spec-v1` bundle schema."""
+    if isinstance(thresholds_spec, dict):
+        return thresholds_spec.get("schema_version") == s1_slo_tool.EXPECTED_SCHEMA_VERSION
+    if thresholds_path is not None and thresholds_path.is_file():
+        try:
+            loaded = json.loads(thresholds_path.read_text(encoding="utf-8"))
+            return isinstance(loaded, dict) and loaded.get("schema_version") == s1_slo_tool.EXPECTED_SCHEMA_VERSION
+        except Exception:
+            return False
+    return False
+
+
+def derive_precheck_7_metrics_from_p4_s1_slo_spec(
+    spec: dict[str, Any],
+    profile: str,
+) -> dict[str, dict[str, Any]]:
+    """Derive the 7-metric pre-check table thresholds for `profile` directly from `p4-s1-slo-spec.json`."""
+    eff_prof = profile if profile in s1_slo_tool.SUPPORTED_PROFILES else "s1_canonical_4x4"
+    by_id: dict[str, dict[str, Any]] = {}
+    for rule in spec.get("rules") or []:
+        if isinstance(rule, dict) and rule.get("slo_id"):
+            by_id[str(rule["slo_id"])] = rule
+
+    def _rule_p95(slo_id: str, fallback: float) -> float:
+        r = by_id.get(slo_id) or {}
+        pt = ((r.get("proposed_thresholds") or {}).get(eff_prof)) or {}
+        return float(pt.get("max_p95_ms", fallback))
+
+    def _rule_err(slo_id: str, fallback: float) -> float:
+        r = by_id.get(slo_id) or {}
+        pt = ((r.get("proposed_thresholds") or {}).get(eff_prof)) or {}
+        return float(pt.get("max_error_rate_pct", fallback))
+
+    daily_lag_sec = 300.0
+    bg03 = by_id.get("BG-03") or {}
+    bg03_pt = ((bg03.get("proposed_thresholds") or {}).get(eff_prof)) or {}
+    for inv in bg03_pt.get("invariants") or []:
+        if (
+            isinstance(inv, dict)
+            and inv.get("report_json_path") == "s1_domain_and_database_benchmark.kpi_recompute_s1.daily_incremental_ms"
+            and inv.get("op") == "le"
+            and isinstance(inv.get("expected"), (int, float))
+        ):
+            daily_lag_sec = round(float(inv["expected"]) / 1000.0, 3)
+            break
+
+    drill_thr = max(_rule_p95("API-05A-BOD", 1200.0), _rule_p95("API-05B-BOD", 1200.0))
+    err_thr = max(
+        _rule_err("AGG-01", 0.0),
+        _rule_err("AGG-03A", 0.0),
+        _rule_err("AGG-03B", 0.0),
+        _rule_err("AGG-03C", 0.5),
+    )
+
+    return {
+        "my_customers_worklist_api_p95_ms": {
+            "threshold": _rule_p95("API-01B", 500.0),
+            "unit": "ms",
+            "operator": "<=",
+            "description": "My Customers worklist JSON API p95 latency (40 distinct staff sessions)",
+        },
+        "open_lead_and_history_api_p95_ms": {
+            "threshold": _rule_p95("API-02A", 900.0),
+            "unit": "ms",
+            "operator": "<=",
+            "description": "Open Lead detail + Contact Attempt history API p95 latency",
+        },
+        "contact_attempt_write_p95_ms": {
+            "threshold": _rule_p95("API-03A", 1200.0),
+            "unit": "ms",
+            "operator": "<=",
+            "description": "Record Contact Attempt + Callback write API p95 latency",
+        },
+        "bod_executive_overview_api_p95_ms": {
+            "threshold": _rule_p95("API-04B", 600.0),
+            "unit": "ms",
+            "operator": "<=",
+            "description": "BOD Executive Overview KPI snapshot API p95 latency",
+        },
+        "kpi_drilldown_paginated_api_p95_ms": {
+            "threshold": drill_thr,
+            "unit": "ms",
+            "operator": "<=",
+            "description": "Paginated KPI drill-down API p95 latency (worst-case across daily campaign & 250k monthly company)",
+        },
+        "http_5xx_error_rate_pct": {
+            "threshold": err_thr,
+            "unit": "%",
+            "operator": "<=",
+            "description": "HTTP error rate across S1 c=12 suite and 20/40/80 mixed session waves",
+        },
+        "daily_incremental_kpi_refresh_lag_sec": {
+            "threshold": daily_lag_sec,
+            "unit": "s",
+            "operator": "<=",
+            "description": "Daily incremental KPI refresh execution lag",
+        },
+    }
+
+
+def validate_p4_s1_slo_spec_for_configuration(
+    *,
+    thresholds_spec: dict[str, Any] | None = None,
+    thresholds_path: Path | None = None,
+    target_configuration_profile: str,
+    expected_digest: str,
+) -> tuple[dict[str, Any], str, list[str]]:
+    """Fail-closed governance & configuration validator for `cskh-p4-s1-slo-spec-v1` (`p4-s1-slo-spec.json`)."""
+    canonical_sha = s1_slo_tool.compute_normalized_sha256(DEFAULT_P4_S1_SLO_SPEC_PATH)
+    canonical_spec = json.loads(DEFAULT_P4_S1_SLO_SPEC_PATH.read_text(encoding="utf-8"))
+    if canonical_sha != LOCKED_P4_S1_SLO_SPEC_SHA256:
+        raise RuntimeError(
+            f"Canonical {DEFAULT_P4_S1_SLO_SPEC_PATH} SHA-256 drift: "
+            f"got={canonical_sha} expected={LOCKED_P4_S1_SLO_SPEC_SHA256}"
+        )
+
+    errors: list[str] = []
+    if thresholds_spec is not None and thresholds_path is not None:
+        errors.append("cannot_specify_both_thresholds_spec_and_thresholds_path")
+
+    expected_cfg: dict[str, Any] | None = None
+    try:
+        expected_cfg = build_target_staging_configuration_block(target_configuration_profile)
+        if expected_cfg.get("g18_s1_benchmark_capable") is not True:
+            errors.append(f"target_configuration_profile_not_g18_s1_capable:{target_configuration_profile!r}")
+    except ValueError as exc:
+        errors.append(f"invalid_target_configuration_profile:{target_configuration_profile!r}:{exc}")
+
+    clean_expected_digest = str(expected_digest or "").strip()
+    if not IMMUTABLE_REGISTRY_DIGEST_RE.match(clean_expected_digest):
+        errors.append(f"invalid_expected_candidate_digest:{expected_digest!r}")
+
+    candidate_spec: dict[str, Any]
+    candidate_sha: str
+    if thresholds_path is not None:
+        if not thresholds_path.is_file():
+            errors.append(f"thresholds_file_not_found:{thresholds_path}")
+            return canonical_spec, "", errors
+        try:
+            raw_bytes = thresholds_path.read_bytes()
+            norm_sha = s1_slo_tool.compute_normalized_sha256(thresholds_path)
+            loaded = json.loads(raw_bytes.decode("utf-8"))
+        except Exception as exc:
+            errors.append(f"thresholds_file_invalid_json:{exc}")
+            return canonical_spec, "", errors
+        if not isinstance(loaded, dict):
+            errors.append("thresholds_file_root_not_dict")
+            return canonical_spec, norm_sha, errors
+        candidate_spec = loaded
+        candidate_sha = norm_sha
+        canon_serialized_sha = compute_p4_s1_slo_spec_sha256(candidate_spec)
+        if raw_bytes != raw_bytes.replace(b"\r\n", b"\n"):
+            errors.append("thresholds_file_contains_crlf_line_endings")
+        if candidate_sha != canon_serialized_sha:
+            errors.append(
+                f"non_canonical_thresholds_file_bytes_sha256_mismatch:file={candidate_sha}:canonical={canon_serialized_sha}"
+            )
+    elif thresholds_spec is not None:
+        if not isinstance(thresholds_spec, dict):
+            errors.append(f"thresholds_spec_not_dict:{type(thresholds_spec).__name__}")
+            return canonical_spec, "", errors
+        candidate_spec = thresholds_spec
+        candidate_sha = compute_p4_s1_slo_spec_sha256(candidate_spec)
+    else:
+        candidate_spec = canonical_spec
+        candidate_sha = canonical_sha
+
+    gov_errs = s1_slo_tool.validate_slo_spec_governance(
+        candidate_spec,
+        profile=target_configuration_profile,
+    )
+    errors.extend(gov_errs)
+
+    if str(candidate_spec.get("slo_bundle_id") or "").strip() != str(canonical_spec.get("slo_bundle_id") or ""):
+        errors.append(
+            f"slo_bundle_id_mismatch:expected={canonical_spec.get('slo_bundle_id')!r}:got={candidate_spec.get('slo_bundle_id')!r}"
+        )
+
+    cand_binding = candidate_spec.get("candidate_binding")
+    if not isinstance(cand_binding, dict):
+        errors.append("missing_or_invalid_candidate_binding")
+    else:
+        bound_digest = str(cand_binding.get("app_image_digest") or "").strip()
+        if bound_digest != clean_expected_digest:
+            errors.append(
+                f"thresholds_locked_candidate_digest_mismatch:expected={clean_expected_digest!r}:got={bound_digest!r}"
+            )
+        for sha_field in ("image_source_commit_sha", "apps_tree_sha", "crm_cskh_tree_sha"):
+            if not re.fullmatch(r"[0-9a-f]{40}", str(cand_binding.get(sha_field) or "").strip()):
+                errors.append(f"invalid_candidate_binding_{sha_field}:{cand_binding.get(sha_field)!r}")
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", str(cand_binding.get("oci_config_digest") or "").strip()):
+            errors.append(f"invalid_candidate_binding_oci_config_digest:{cand_binding.get('oci_config_digest')!r}")
+
+    res_profs = candidate_spec.get("resource_profiles")
+    if not isinstance(res_profs, dict) or target_configuration_profile not in res_profs:
+        errors.append(f"missing_resource_profile_in_s1_slo_spec:{target_configuration_profile!r}")
+    elif expected_cfg is not None:
+        rp_entry = res_profs[target_configuration_profile]
+        if not isinstance(rp_entry, dict):
+            errors.append(f"invalid_resource_profile_entry:{target_configuration_profile!r}")
+        else:
+            if rp_entry.get("gunicorn_workers") != expected_cfg["gunicorn_workers"]:
+                errors.append(
+                    f"s1_slo_gunicorn_workers_mismatch:{target_configuration_profile}:"
+                    f"expected={expected_cfg['gunicorn_workers']}:got={rp_entry.get('gunicorn_workers')!r}"
+                )
+            if rp_entry.get("gunicorn_threads") != expected_cfg["gunicorn_threads"]:
+                errors.append(
+                    f"s1_slo_gunicorn_threads_mismatch:{target_configuration_profile}:"
+                    f"expected={expected_cfg['gunicorn_threads']}:got={rp_entry.get('gunicorn_threads')!r}"
+                )
+            if (
+                target_configuration_profile == "staging_vps_capped"
+                and rp_entry.get("require_live_headroom_precheck") is not True
+            ):
+                errors.append("s1_slo_staging_vps_capped_must_require_live_headroom_precheck")
+
+    def _validate_rule_list(
+        canon_rules: list[dict[str, Any]],
+        cand_rules: Any,
+        section_label: str,
+        path_field: str,
+    ) -> None:
+        if not isinstance(cand_rules, list):
+            errors.append(f"invalid_rule_list:{section_label}")
+            return
+        canon_by_id = {str(r["slo_id"]): r for r in canon_rules}
+        cand_by_id: dict[str, dict[str, Any]] = {}
+        for item in cand_rules:
+            if isinstance(item, dict) and item.get("slo_id"):
+                cand_by_id[str(item["slo_id"])] = item
+        for missing_id in sorted(set(canon_by_id) - set(cand_by_id)):
+            errors.append(f"missing_slo_rule:{section_label}.{missing_id}")
+        for extra_id in sorted(set(cand_by_id) - set(canon_by_id)):
+            errors.append(f"unexpected_slo_rule:{section_label}.{extra_id}")
+
+        if target_configuration_profile not in s1_slo_tool.SUPPORTED_PROFILES:
+            return
+
+        for slo_id in sorted(set(canon_by_id) & set(cand_by_id)):
+            c_rule = canon_by_id[slo_id]
+            x_rule = cand_by_id[slo_id]
+            for exact_k in ("category", "rule_type", path_field, "p4_9_2_ceiling_p95_ms"):
+                if c_rule.get(exact_k) != x_rule.get(exact_k):
+                    errors.append(
+                        f"slo_rule_metadata_mismatch:{section_label}.{slo_id}.{exact_k}:"
+                        f"expected={c_rule.get(exact_k)!r}:got={x_rule.get(exact_k)!r}"
+                    )
+            c_pt = ((c_rule.get("proposed_thresholds") or {}).get(target_configuration_profile)) or {}
+            x_pt = ((x_rule.get("proposed_thresholds") or {}).get(target_configuration_profile)) or {}
+            if not isinstance(x_pt, dict) or not x_pt:
+                errors.append(f"missing_profile_thresholds:{section_label}.{slo_id}.{target_configuration_profile}")
+                continue
+            rtype = str(c_rule.get("rule_type") or "http_summary")
+            if rtype == "http_summary":
+                for num_k in ("max_p95_ms", "max_p99_ms", "max_error_rate_pct"):
+                    val = x_pt.get(num_k)
+                    if isinstance(val, bool) or not isinstance(val, (int, float)) or not math.isfinite(float(val)):
+                        errors.append(f"invalid_numeric_threshold:{section_label}.{slo_id}.{num_k}:{val!r}")
+                p95_v = x_pt.get("max_p95_ms")
+                p99_v = x_pt.get("max_p99_ms")
+                if (
+                    isinstance(p95_v, (int, float))
+                    and not isinstance(p95_v, bool)
+                    and isinstance(p99_v, (int, float))
+                    and not isinstance(p99_v, bool)
+                ):
+                    if float(p95_v) <= 0.0:
+                        errors.append(f"non_positive_threshold:{section_label}.{slo_id}.max_p95_ms:{p95_v}")
+                    if float(p99_v) + 1e-6 < float(p95_v):
+                        errors.append(
+                            f"p99_threshold_lt_p95_threshold:{section_label}.{slo_id}:max_p99_ms={p99_v}<max_p95_ms={p95_v}"
+                        )
+                err_v = x_pt.get("max_error_rate_pct")
+                if isinstance(err_v, (int, float)) and not isinstance(err_v, bool):
+                    if float(err_v) < 0.0 or float(err_v) > 5.0:
+                        errors.append(f"error_rate_threshold_out_of_bounds:{section_label}.{slo_id}:{err_v}")
+                    elif abs(float(c_pt.get("max_error_rate_pct", 0.0))) <= 1e-9 and float(err_v) > 1e-9:
+                        errors.append(
+                            f"zero_error_rate_budget_loosened:{section_label}.{slo_id}:expected=0.0:got={err_v}"
+                        )
+                for cnt_k in (
+                    "max_timeout_count",
+                    "max_client_error_count",
+                    "max_http_4xx_count",
+                    "max_http_5xx_count",
+                ):
+                    cv = x_pt.get(cnt_k)
+                    if isinstance(cv, bool) or not isinstance(cv, int) or cv < 0:
+                        errors.append(f"invalid_int_error_threshold:{section_label}.{slo_id}.{cnt_k}:{cv!r}")
+                    elif int(c_pt.get(cnt_k, 0)) == 0 and cv != 0:
+                        errors.append(
+                            f"zero_error_budget_loosened:{section_label}.{slo_id}.{cnt_k}:expected=0:got={cv}"
+                        )
+
+            c_invs = c_pt.get("invariants") or []
+            x_invs = x_pt.get("invariants") or []
+            if len(x_invs) != len(c_invs):
+                errors.append(
+                    f"invariant_count_mismatch:{section_label}.{slo_id}:expected={len(c_invs)}:got={len(x_invs)}"
+                )
+            else:
+                for idx_inv, (c_inv, x_inv) in enumerate(zip(c_invs, x_invs)):
+                    if not isinstance(x_inv, dict):
+                        errors.append(f"invalid_invariant_entry:{section_label}.{slo_id}[{idx_inv}]")
+                        continue
+                    if x_inv.get("report_json_path") != c_inv.get("report_json_path") or x_inv.get("op") != c_inv.get("op"):
+                        errors.append(f"invariant_target_modified:{section_label}.{slo_id}[{idx_inv}]")
+                    elif c_inv.get("op") == "eq" and x_inv.get("expected") != c_inv.get("expected"):
+                        errors.append(
+                            f"invariant_threshold_modified:{section_label}.{slo_id}[{idx_inv}]:"
+                            f"expected={c_inv.get('expected')!r}:got={x_inv.get('expected')!r}"
+                        )
+
+    _validate_rule_list(
+        canonical_spec.get("rules") or [],
+        candidate_spec.get("rules"),
+        "rules",
+        "report_json_path",
+    )
+    _validate_rule_list(
+        canonical_spec.get("g18_deep_diagnostic_rules") or [],
+        candidate_spec.get("g18_deep_diagnostic_rules"),
+        "g18_deep_diagnostic_rules",
+        "diag_report_json_path",
+    )
+
+    return (canonical_spec if errors else candidate_spec), candidate_sha, errors
+
+
 def validate_g18_thresholds_for_configuration(
     *,
     thresholds_spec: dict[str, Any] | None = None,
@@ -4783,7 +5143,14 @@ def validate_g18_thresholds_for_configuration(
     target_configuration_profile: str,
     expected_digest: str,
 ) -> tuple[dict[str, Any], str, list[str]]:
-    """Validate a configuration-bound G18 threshold specification against §3.2A–C structure, digest, and Staging resource profile."""
+    """Validate a configuration-bound G18 threshold specification against §3.2A–C or `cskh-p4-s1-slo-spec-v1` structure, digest, and Staging resource profile."""
+    if is_p4_s1_slo_spec_v1(thresholds_spec, thresholds_path):
+        return validate_p4_s1_slo_spec_for_configuration(
+            thresholds_spec=thresholds_spec,
+            thresholds_path=thresholds_path,
+            target_configuration_profile=target_configuration_profile,
+            expected_digest=expected_digest,
+        )
     errors: list[str] = []
     canonical_spec = json.loads(DEFAULT_G18_THRESHOLDS_V1_4_PATH.read_text(encoding="utf-8"))
 
@@ -6542,6 +6909,35 @@ def verify_staging_vps_receipts_for_g18(
     return (not errors), errors
 
 
+def _is_clean_pending_s1_slo_approval(
+    owner_slo_approval: dict[str, Any] | None,
+    *,
+    validated_spec: dict[str, Any],
+    actual_slo_sha256: str,
+    expected_digest: str,
+    profile: str | None,
+) -> bool:
+    """Return True when `owner_slo_approval` is an untampered `p4-s1-slo-approval.json` still in `PENDING_OWNER_APPROVAL`."""
+    if validated_spec.get("schema_version") != s1_slo_tool.EXPECTED_SCHEMA_VERSION:
+        return False
+    if not isinstance(owner_slo_approval, dict):
+        return False
+    if owner_slo_approval.get("schema_version") != s1_slo_tool.EXPECTED_APPROVAL_SCHEMA_VERSION:
+        return False
+    if str(owner_slo_approval.get("approval_status") or "").strip() != "PENDING_OWNER_APPROVAL":
+        return False
+    check_prof = profile if profile in s1_slo_tool.SUPPORTED_PROFILES else "s1_canonical_4x4"
+    errs, _ = s1_slo_tool.validate_slo_approval_document(
+        owner_slo_approval,
+        spec=validated_spec,
+        actual_slo_sha256=actual_slo_sha256,
+        target_image_digest=expected_digest,
+        profile=check_prof,
+        require_owner_approved=False,
+    )
+    return len(errs) == 0
+
+
 def _validate_owner_slo_approval_document(
     owner_slo_approval: dict[str, Any] | None,
     *,
@@ -6559,6 +6955,136 @@ def _validate_owner_slo_approval_document(
         return False, "", ["missing_owner_slo_approval_document"]
     if not isinstance(owner_slo_approval, dict):
         return False, "", [f"owner_slo_approval_not_dict:{type(owner_slo_approval).__name__}"]
+
+    if validated_spec.get("schema_version") == s1_slo_tool.EXPECTED_SCHEMA_VERSION:
+        expected_cfg_sha = (
+            get_staging_resource_profile_spec(resolved_profile)["config_spec_sha256"]
+            if (resolved_profile and resolved_profile in STAGING_VPS_RESOURCE_PROFILES)
+            else ""
+        )
+        if owner_slo_approval.get("schema_version") == s1_slo_tool.EXPECTED_APPROVAL_SCHEMA_VERSION:
+            app_errs, app_meta = s1_slo_tool.validate_slo_approval_document(
+                owner_slo_approval,
+                spec=validated_spec,
+                actual_slo_sha256=candidate_thresholds_sha256,
+                target_image_digest=expected_digest,
+                profile=resolved_profile or "__missing__",
+                require_owner_approved=True,
+            )
+            approval_errors.extend(app_errs)
+            signoff = owner_slo_approval.get("owner_signoff")
+            approved_by = (
+                str(signoff.get("approved_by") or "").strip() if isinstance(signoff, dict) else ""
+            )
+            if approved_by and (
+                approved_by.lower() in FORBIDDEN_T1C_SELF_APPROVERS
+                or approved_by.lower() == "t1c"
+                or approved_by.lower().startswith(("t1a", "t1b", "t1c", "<"))
+                or "placeholder" in approved_by.lower()
+            ):
+                approval_errors.append(f"forbidden_or_self_approved_by:{approved_by!r}")
+            if "approved_config_spec_sha256" in owner_slo_approval:
+                got_cfg_sha = str(owner_slo_approval.get("approved_config_spec_sha256") or "").strip()
+                if expected_cfg_sha and got_cfg_sha != expected_cfg_sha:
+                    approval_errors.append(
+                        f"owner_approval_config_spec_sha256_mismatch:expected={expected_cfg_sha}:got={got_cfg_sha}"
+                    )
+            if isinstance(owner_slo_approval.get("approved_profile_config_spec_sha256"), dict) and resolved_profile:
+                prof_sha_map = owner_slo_approval["approved_profile_config_spec_sha256"]
+                if resolved_profile in prof_sha_map and expected_cfg_sha:
+                    if str(prof_sha_map[resolved_profile] or "").strip() != expected_cfg_sha:
+                        approval_errors.append(
+                            f"owner_approval_config_spec_sha256_mismatch:expected={expected_cfg_sha}:got={prof_sha_map[resolved_profile]}"
+                        )
+            signed_thresholds_sha256 = str(app_meta.get("slo_spec_sha256_bound") or "")
+            owner_signed = (
+                (not approval_errors)
+                and (not threshold_spec_errors)
+                and bool(app_meta.get("owner_approved_for_profile"))
+            )
+            return owner_signed, signed_thresholds_sha256, approval_errors
+
+        if owner_slo_approval.get("approved") is not True:
+            approval_errors.append("approved_flag_not_true")
+        signed_by = str(owner_slo_approval.get("signed_by") or "").strip()
+        if not signed_by:
+            approval_errors.append("missing_signed_by")
+        elif (
+            signed_by.lower() in FORBIDDEN_T1C_SELF_APPROVERS
+            or signed_by.lower() == "t1c"
+            or signed_by.lower().startswith(("t1a", "t1b", "t1c", "<"))
+            or "placeholder" in signed_by.lower()
+        ):
+            approval_errors.append(f"forbidden_or_self_signed_by:{signed_by!r}")
+        if not str(owner_slo_approval.get("signed_at") or "").strip():
+            approval_errors.append("missing_signed_at")
+
+        signed_thresholds_sha256 = str(
+            owner_slo_approval.get("thresholds_sha256") or owner_slo_approval.get("slo_spec_sha256") or ""
+        ).strip()
+        if not signed_thresholds_sha256:
+            approval_errors.append("missing_thresholds_sha256_in_owner_approval")
+        elif candidate_thresholds_sha256 and signed_thresholds_sha256 != candidate_thresholds_sha256:
+            approval_errors.append(
+                f"owner_approval_thresholds_sha256_mismatch_vs_evaluated_spec:"
+                f"expected={candidate_thresholds_sha256}:got={signed_thresholds_sha256}"
+            )
+
+        if "slo_bundle_id" in owner_slo_approval and owner_slo_approval.get("slo_bundle_id") != validated_spec.get("slo_bundle_id"):
+            approval_errors.append(
+                f"owner_approval_slo_bundle_id_mismatch:expected={validated_spec.get('slo_bundle_id')!r}:got={owner_slo_approval.get('slo_bundle_id')!r}"
+            )
+        if "slo_version" in owner_slo_approval and str(owner_slo_approval.get("slo_version") or "") != str(validated_spec.get("slo_version") or ""):
+            approval_errors.append(
+                f"owner_approval_slo_version_mismatch:expected={validated_spec.get('slo_version')!r}:got={owner_slo_approval.get('slo_version')!r}"
+            )
+
+        approved_prof = str(owner_slo_approval.get("approved_configuration_profile") or "").strip()
+        if not approved_prof:
+            approval_errors.append("missing_approved_configuration_profile_in_owner_approval")
+        elif resolved_profile and approved_prof != resolved_profile:
+            approval_errors.append(
+                f"owner_approval_configuration_profile_mismatch:expected={resolved_profile!r}:got={approved_prof!r}"
+            )
+        approved_cfg_sha = str(owner_slo_approval.get("approved_config_spec_sha256") or "").strip()
+        if not approved_cfg_sha:
+            approval_errors.append("missing_approved_config_spec_sha256_in_owner_approval")
+        elif expected_cfg_sha and approved_cfg_sha != expected_cfg_sha:
+            approval_errors.append(
+                f"owner_approval_config_spec_sha256_mismatch:expected={expected_cfg_sha}:got={approved_cfg_sha}"
+            )
+        approved_dig = str(owner_slo_approval.get("approved_candidate_digest") or "").strip()
+        if not approved_dig:
+            approval_errors.append("missing_approved_candidate_digest_in_owner_approval")
+        elif approved_dig != expected_digest:
+            approval_errors.append(
+                f"owner_approval_candidate_digest_mismatch:expected={expected_digest!r}:got={approved_dig!r}"
+            )
+        if "approved_thresholds" in owner_slo_approval:
+            raw_signed = owner_slo_approval.get("approved_thresholds")
+            if not isinstance(raw_signed, dict):
+                approval_errors.append("missing_or_invalid_approved_thresholds_dict")
+            else:
+                pre_spec = derive_precheck_7_metrics_from_p4_s1_slo_spec(
+                    validated_spec,
+                    resolved_profile or "s1_canonical_4x4",
+                )
+                for key, spec in pre_spec.items():
+                    if key not in raw_signed:
+                        approval_errors.append(f"missing_threshold_key:{key}")
+                    elif isinstance(raw_signed[key], bool) or not isinstance(raw_signed[key], (int, float)):
+                        approval_errors.append(f"invalid_threshold_type:{key}")
+                    else:
+                        val = float(raw_signed[key])
+                        if not math.isfinite(val) or abs(val - float(spec["threshold"])) > 1e-6:
+                            approval_errors.append(
+                                f"threshold_mismatch_vs_s1_slo:{key}:expected={spec['threshold']}:got={val}"
+                            )
+                for extra_k in sorted(set(raw_signed) - set(pre_spec)):
+                    approval_errors.append(f"unexpected_approved_threshold_key:{extra_k}")
+
+        owner_signed = (not approval_errors) and (not threshold_spec_errors)
+        return owner_signed, signed_thresholds_sha256, approval_errors
 
     if owner_slo_approval.get("approved") is not True:
         approval_errors.append("approved_flag_not_true")
@@ -6645,6 +7171,251 @@ def _validate_owner_slo_approval_document(
     return owner_signed, signed_thresholds_sha256, approval_errors
 
 
+S1_EXPECTED_SEEDED_COUNTS: dict[str, int] = {
+    "crm_leads": 50000,
+    "cskh_identity_index": 50000,
+    "cskh_work_items": 75000,
+    "cskh_contact_attempts": 250000,
+    "cskh_sla_obligations": 150000,
+    "cskh_assignment_history": 75000,
+    "active_staff_users": 40,
+    "teams": 4,
+    "campaigns": 6,
+}
+
+S1_EXPECTED_EXPLAIN_KEYS_V2: dict[str, str] = {
+    "worklist_by_owner": "cskh_lookup_0",
+    "attempt_timeline_by_work_item": "cskh_attempt_wi_occ_idx",
+    "kpi_snapshot_lookup": "idx_cskh_kpisnap_lookup",
+    "canonical_phone_identity_lookup": "normalized_phone",
+    "crm_lead_mobile_no_lookup": "cskh_lead_mobile_no_idx",
+    "kpi_drilldown_attempt_window": "cskh_attempt_camp_occ_idx",
+    "kpi_drilldown_interval_page": "idx_cskh_ah_start_name",
+    "kpi_drilldown_attempt_chunk": "idx_cskh_attempt_ownevt_occ",
+}
+
+
+def evaluate_p4_s1_slo_reconciliation(
+    benchmark_report: dict[str, Any],
+    validated_spec: dict[str, Any],
+    *,
+    profile: str,
+    expected_digest: str,
+    g18_diag_report: dict[str, Any] | Path | None = None,
+    missing: list[str],
+    breaches: list[str],
+) -> dict[str, Any]:
+    """Score `benchmark_report` (+ optional `g18_diag_report`) via `evaluate_s1_slo` with strict missing-measurement checks."""
+    eff_prof = profile if profile in s1_slo_tool.SUPPORTED_PROFILES else "s1_canonical_4x4"
+    dataset_missing_before = len(missing)
+    dataset_breaches: list[str] = []
+
+    # 1. S1 dataset counts, 0-PII policy, SSR separation & 8 MariaDB EXPLAIN index plans
+    dom_root = _nav_dict(benchmark_report, "s1_domain_and_database_benchmark", missing)
+    seeded = _nav_dict(dom_root, "s1_seeded_counts", missing) if dom_root is not None else None
+    for ckey, exp_cnt in sorted(S1_EXPECTED_SEEDED_COUNTS.items()):
+        got_cnt = _req_int(
+            seeded,
+            ckey,
+            f"s1_domain_and_database_benchmark.s1_seeded_counts.{ckey}",
+            missing,
+            require_positive=True,
+        )
+        if got_cnt is not None and got_cnt != exp_cnt:
+            dataset_breaches.append(f"s1_seeded_counts.{ckey}:{got_cnt}!={exp_cnt}")
+
+    pub_ds = _nav_dict(benchmark_report, "published_dataset_and_load", missing)
+    pii_pol = _req_str(pub_ds, "pii_policy", "published_dataset_and_load.pii_policy", missing)
+    if pii_pol is not None and pii_pol != "ZERO_REAL_PII_SYNTHETIC_ONLY":
+        dataset_breaches.append(f"published_dataset_and_load.pii_policy:{pii_pol}")
+
+    sep_root = _nav_dict(benchmark_report, "worklist_ssr_acceptance_and_separation", missing)
+    exec_mode = (
+        _req_str(sep_root, "execution_mode", "worklist_ssr_acceptance_and_separation.execution_mode", missing)
+        if sep_root is not None
+        else None
+    )
+    if exec_mode is not None and exec_mode != "BUILT_INTO_OFFICIAL_COMMIT_AND_IMAGE_DIGEST_NO_IN_CONTAINER_PATCHING":
+        dataset_breaches.append(f"worklist_ssr_execution_mode_invalid:{exec_mode}")
+
+    http_root = _nav_dict(benchmark_report, "s1_http_acceptance_and_mixed_waves", missing)
+    pool_sessions = _req_int(
+        http_root,
+        "distinct_authenticated_sessions_created",
+        "s1_http_acceptance_and_mixed_waves.distinct_authenticated_sessions_created",
+        missing,
+        require_positive=True,
+    )
+    if pool_sessions is not None and pool_sessions != 80:
+        dataset_breaches.append(f"distinct_authenticated_sessions_created:{pool_sessions}!=80")
+
+    exp_plans = _nav_dict(dom_root, "mariadb_explain_plans", missing) if dom_root is not None else None
+    for pkey, exp_idx in sorted(S1_EXPECTED_EXPLAIN_KEYS_V2.items()):
+        p_full = f"s1_domain_and_database_benchmark.mariadb_explain_plans.{pkey}[0].key"
+        if exp_plans is None or pkey not in exp_plans:
+            missing.append(p_full)
+        else:
+            rows = exp_plans[pkey]
+            if not isinstance(rows, list) or not rows or not isinstance(rows[0], dict):
+                missing.append(p_full)
+            else:
+                got_idx = _req_str(rows[0], "key", p_full, missing)
+                if got_idx is not None and got_idx != exp_idx:
+                    dataset_breaches.append(f"mariadb_explain_plans.{pkey}:{got_idx}!={exp_idx}")
+
+    prof_cfg = ((validated_spec.get("resource_profiles") or {}).get(eff_prof)) or {}
+    if prof_cfg.get("require_live_headroom_precheck") is True:
+        hr_node = _nav_dict(benchmark_report, "live_resource_headroom_precheck", missing)
+        if hr_node is not None:
+            hr_ok = _req_bool(hr_node, "headroom_ok", "live_resource_headroom_precheck.headroom_ok", missing)
+            if hr_ok is False:
+                dataset_breaches.append("live_resource_headroom_precheck.headroom_ok_is_false")
+
+    breaches.extend(f"s1_slo_dataset.{b}" for b in dataset_breaches)
+
+    # 2. Evaluate all 35 S1 rules (`SSR`, `JSON_API`, `AGGREGATE_AND_BACKGROUND`) via `evaluate_s1_slo`
+    category_verdicts: dict[str, dict[str, Any]] = {
+        cat: {"total": 0, "passed_count": 0, "failed_count": 0, "passed": True}
+        for cat in s1_slo_tool.REQUIRED_CATEGORIES
+    }
+    rule_results: list[dict[str, Any]] = []
+    for rule in validated_spec.get("rules") or []:
+        if not isinstance(rule, dict):
+            continue
+        slo_id = str(rule.get("slo_id") or "")
+        jpath = str(rule.get("report_json_path") or "")
+        rtype = str(rule.get("rule_type") or "http_summary")
+        prof_thr = ((rule.get("proposed_thresholds") or {}).get(eff_prof)) or {}
+        rule_missing_before = len(missing)
+
+        if rtype == "http_summary":
+            rnode = _nav_dict(benchmark_report, jpath, missing)
+            _req_int(rnode, "requests_total", f"{jpath}.requests_total", missing, require_positive=True)
+            _req_int(rnode, "error_count", f"{jpath}.error_count", missing)
+            _req_float(rnode, "error_rate_pct", f"{jpath}.error_rate_pct", missing)
+            p95_v = _req_float(rnode, "p95_ms", f"{jpath}.p95_ms", missing, require_positive=True)
+            p99_v = _req_float(rnode, "p99_ms", f"{jpath}.p99_ms", missing, require_positive=True)
+            if p95_v is not None and p99_v is not None and p99_v + 1e-6 < p95_v:
+                breaches.append(f"s1_slo.{slo_id}.p99_lt_p95:{p99_v}<{p95_v}")
+
+        for inv in prof_thr.get("invariants") or []:
+            inv_path = str(inv.get("report_json_path") or "")
+            try:
+                inv_val = s1_slo_tool.resolve_dotted_path(benchmark_report, inv_path)
+                if inv_val is None:
+                    missing.append(inv_path)
+            except KeyError:
+                missing.append(inv_path)
+
+        rule_was_missing = len(missing) > rule_missing_before
+        res = s1_slo_tool._evaluate_http_rule(benchmark_report, rule, prof_thr)
+        if rule_was_missing:
+            res["passed"] = False
+            res["status"] = "MISSING_MEASUREMENT"
+        else:
+            res["status"] = "PASS" if res["passed"] else "FAIL_THRESHOLD_BREACH"
+            if not res["passed"]:
+                for fail_msg in res["failures"]:
+                    breaches.append(f"s1_slo.{slo_id}:{fail_msg}")
+
+        rule_results.append(res)
+        cat = str(res["category"])
+        if cat in category_verdicts:
+            category_verdicts[cat]["total"] += 1
+            if res["passed"]:
+                category_verdicts[cat]["passed_count"] += 1
+            else:
+                category_verdicts[cat]["failed_count"] += 1
+                category_verdicts[cat]["passed"] = False
+
+    # 3. Optional deep G18 diagnostic wave scoring (12 rules)
+    diag_results: list[dict[str, Any]] = []
+    diag_sha: str | None = None
+    diag_passed = True
+    if g18_diag_report is not None:
+        diag_doc: dict[str, Any] | None = None
+        if isinstance(g18_diag_report, Path):
+            if not g18_diag_report.is_file():
+                missing.append(f"g18_diag_report_file_not_found:{g18_diag_report}")
+                diag_passed = False
+            else:
+                diag_sha = s1_slo_tool.compute_normalized_sha256(g18_diag_report)
+                diag_doc = json.loads(g18_diag_report.read_text(encoding="utf-8"))
+        elif isinstance(g18_diag_report, dict):
+            diag_doc = g18_diag_report
+            diag_sha = hashlib.sha256(
+                (json.dumps(diag_doc, sort_keys=True, ensure_ascii=False) + "\n").encode("utf-8")
+            ).hexdigest()
+
+        if isinstance(diag_doc, dict):
+            diag_img = _req_str(diag_doc, "app_image_tested", "g18_diag.app_image_tested", missing)
+            if diag_img is not None and diag_img != expected_digest:
+                diag_passed = False
+                breaches.append(f"g18_diag.app_image_tested_mismatch:{diag_img}!={expected_digest}")
+            diag_rp = diag_doc.get("resource_profile")
+            diag_prof_name = (
+                str(diag_rp.get("name") or "").strip()
+                if isinstance(diag_rp, dict)
+                else str(diag_rp or "").strip()
+            )
+            if not diag_prof_name:
+                missing.append("g18_diag.resource_profile")
+                diag_passed = False
+            elif diag_prof_name != eff_prof:
+                diag_passed = False
+                breaches.append(f"g18_diag.resource_profile_mismatch:{diag_prof_name}!={eff_prof}")
+
+            for drule in validated_spec.get("g18_deep_diagnostic_rules") or []:
+                d_id = str(drule.get("slo_id") or "")
+                d_path = str(drule.get("diag_report_json_path") or "")
+                d_thr = ((drule.get("proposed_thresholds") or {}).get(eff_prof)) or {}
+                d_miss_before = len(missing)
+                dnode = _nav_dict(diag_doc, d_path, missing)
+                _req_int(dnode, "requests_total", f"g18_diag.{d_path}.requests_total", missing, require_positive=True)
+                _req_int(dnode, "error_count", f"g18_diag.{d_path}.error_count", missing)
+                _req_float(dnode, "error_rate_pct", f"g18_diag.{d_path}.error_rate_pct", missing)
+                dp95 = _req_float(dnode, "p95_ms", f"g18_diag.{d_path}.p95_ms", missing, require_positive=True)
+                dp99 = _req_float(dnode, "p99_ms", f"g18_diag.{d_path}.p99_ms", missing, require_positive=True)
+                if dp95 is not None and dp99 is not None and dp99 + 1e-6 < dp95:
+                    breaches.append(f"g18_diag.{d_id}.p99_lt_p95:{dp99}<{dp95}")
+
+                d_was_missing = len(missing) > d_miss_before
+                dres = s1_slo_tool._evaluate_http_rule(
+                    diag_doc,
+                    {**drule, "category": "G18_DEEP_DIAGNOSTIC"},
+                    d_thr,
+                    path_key="diag_report_json_path",
+                )
+                if d_was_missing:
+                    dres["passed"] = False
+                    dres["status"] = "MISSING_MEASUREMENT"
+                    diag_passed = False
+                else:
+                    dres["status"] = "PASS" if dres["passed"] else "FAIL_THRESHOLD_BREACH"
+                    if not dres["passed"]:
+                        diag_passed = False
+                        for fail_msg in dres["failures"]:
+                            breaches.append(f"g18_diag.{d_id}:{fail_msg}")
+                diag_results.append(dres)
+
+    dataset_ok = (len(missing) == dataset_missing_before or all(not m.startswith("s1_domain_and_database_benchmark.") for m in missing[dataset_missing_before:])) and (not dataset_breaches)
+    all_categories_ok = all(v["passed"] and v["total"] > 0 for v in category_verdicts.values())
+    all_passed = bool(dataset_ok and all_categories_ok and diag_passed and len(missing) == dataset_missing_before)
+
+    return {
+        "schema_version": "cskh-p4-s1-slo-evaluation-v1",
+        "slo_bundle_id": validated_spec.get("slo_bundle_id"),
+        "slo_version": validated_spec.get("slo_version"),
+        "profile_evaluated": eff_prof,
+        "all_passed": all_passed,
+        "s1_dataset_and_explain_verified": (not dataset_breaches),
+        "category_verdicts": category_verdicts,
+        "s1_rule_results": rule_results,
+        "g18_diag_report_sha256": diag_sha,
+        "g18_deep_diagnostic_results": diag_results,
+    }
+
+
 def _peek_thresholds_target_profile(
     thresholds_spec: dict[str, Any] | None,
     thresholds_path: Path | None,
@@ -6661,6 +7432,18 @@ def _peek_thresholds_target_profile(
     return None
 
 
+def _peek_approval_single_profile(owner_slo_approval: dict[str, Any] | None) -> str | None:
+    if not isinstance(owner_slo_approval, dict):
+        return None
+    direct = str(owner_slo_approval.get("approved_configuration_profile") or "").strip()
+    if direct:
+        return direct
+    profs = owner_slo_approval.get("approved_profiles")
+    if isinstance(profs, list) and len(profs) == 1 and isinstance(profs[0], str) and profs[0].strip():
+        return profs[0].strip()
+    return None
+
+
 def reconcile_g18_benchmark_with_v1_4_slos(
     benchmark_report: dict[str, Any],
     *,
@@ -6668,30 +7451,41 @@ def reconcile_g18_benchmark_with_v1_4_slos(
     vps_receipts: dict[str, Any] | Path | None = None,
     thresholds_spec: dict[str, Any] | None = None,
     thresholds_path: Path | None = None,
-    expected_digest: str = LOCKED_CANDIDATE_DIGEST_V1_4,
+    expected_digest: str | None = None,
     target_configuration_profile: str | None = None,
     t1c_confirmation: dict[str, Any] | Path | None = None,
     require_t1c_confirmation: bool = False,
+    g18_diag_report: dict[str, Any] | Path | None = None,
     out_json: Path | None = None,
 ) -> dict[str, Any]:
-    """Reconcile G18 per Owner Ticket v1.4 or config-bound Staging VPS SLO: 7-metric precheck + full §3.2A–C + Staging VPS receipts + SHA-256 SLO signature."""
+    """Reconcile G18 per Owner Ticket v1.4 or `cskh-p4-s1-slo-spec-v1` config-bound Staging VPS SLO."""
+    s1_slo_v1_mode = is_p4_s1_slo_spec_v1(thresholds_spec, thresholds_path)
+    if expected_digest is None:
+        expected_digest = CURRENT_CANDIDATE_DIGEST if s1_slo_v1_mode else LOCKED_CANDIDATE_DIGEST_V1_4
+
     peek_thresh_prof = _peek_thresholds_target_profile(thresholds_spec, thresholds_path)
-    approval_prof = (
-        str(owner_slo_approval.get("approved_configuration_profile") or "").strip()
-        if isinstance(owner_slo_approval, dict)
+    approval_prof = _peek_approval_single_profile(owner_slo_approval) or ""
+    vps_prof = _infer_staging_profile_from_vps_receipts(vps_receipts) or ""
+    bench_resource_profile = str(benchmark_report.get("resource_profile") or "").strip()
+    req_target_prof = (
+        str(target_configuration_profile).strip()
+        if (target_configuration_profile is not None and str(target_configuration_profile).strip() not in ("", "auto"))
         else ""
     )
-    bench_resource_profile = str(benchmark_report.get("resource_profile") or "").strip()
     config_bound_mode = bool(
-        target_configuration_profile is not None
+        s1_slo_v1_mode
+        or req_target_prof
         or peek_thresh_prof is not None
         or approval_prof
         or bench_resource_profile
     )
     resolved_profile = (
-        str(target_configuration_profile).strip()
-        if target_configuration_profile is not None
-        else (peek_thresh_prof or approval_prof or bench_resource_profile or None)
+        req_target_prof
+        or peek_thresh_prof
+        or (vps_prof if s1_slo_v1_mode else "")
+        or approval_prof
+        or bench_resource_profile
+        or None
     )
 
     if config_bound_mode:
@@ -6713,11 +7507,14 @@ def reconcile_g18_benchmark_with_v1_4_slos(
     breached_checks: list[str] = []
 
     # Validate top-level benchmark contract & required provenance/summary fields
+    expected_bench_schema = (
+        "cskh-p4-isolated-benchmark-v2"
+        if s1_slo_v1_mode
+        else str(validated_spec["coordinated_benchmark_schema_version"])
+    )
     bench_schema = _req_str(benchmark_report, "schema_version", "schema_version", missing_measurements)
-    if bench_schema is not None and bench_schema != str(validated_spec["coordinated_benchmark_schema_version"]):
-        breached_checks.append(
-            f"schema_version:{bench_schema}!={validated_spec['coordinated_benchmark_schema_version']}"
-        )
+    if bench_schema is not None and bench_schema != expected_bench_schema:
+        breached_checks.append(f"schema_version:{bench_schema}!={expected_bench_schema}")
     app_image_tested_opt = _req_str(benchmark_report, "app_image_tested", "app_image_tested", missing_measurements)
     app_image_tested = app_image_tested_opt or ""
     iso_guard = _nav_dict(benchmark_report, "isolation_guard", missing_measurements)
@@ -6776,6 +7573,13 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         resolved_profile=resolved_profile,
         expected_digest=expected_digest,
     )
+    clean_pending_approval = _is_clean_pending_s1_slo_approval(
+        owner_slo_approval,
+        validated_spec=validated_spec,
+        actual_slo_sha256=candidate_thresholds_sha256,
+        expected_digest=expected_digest,
+        profile=resolved_profile,
+    )
 
     t1c_check_enforced = bool(require_t1c_confirmation or t1c_confirmation is not None)
     t1c_ok = True
@@ -6800,31 +7604,57 @@ def reconcile_g18_benchmark_with_v1_4_slos(
             )
 
     # Step 1: 7-metric table pre-check
+    precheck_spec = (
+        derive_precheck_7_metrics_from_p4_s1_slo_spec(
+            validated_spec,
+            resolved_profile or bench_resource_profile or "s1_canonical_4x4",
+        )
+        if s1_slo_v1_mode
+        else validated_spec["precheck_7_metrics"]
+    )
     precheck_eval = evaluate_precheck_7_metrics(
         benchmark_report,
-        validated_spec["precheck_7_metrics"],
+        precheck_spec,
         owner_signed=owner_signed,
         missing=missing_measurements,
         breaches=breached_checks,
     )
 
-    # Step 2: Full §3.2A–C reconciliation by case and session model
-    sec_3_2_eval = evaluate_section_3_2_a_b_c(
-        benchmark_report,
-        validated_spec,
-        missing=missing_measurements,
-        breaches=breached_checks,
-    )
+    # Step 2: Full endpoint/wave/background reconciliation (`evaluate_s1_slo` on v1 bundle, or §3.2A–C on v1.4)
+    s1_slo_bundle_eval: dict[str, Any] | None = None
+    if s1_slo_v1_mode:
+        s1_slo_bundle_eval = evaluate_p4_s1_slo_reconciliation(
+            benchmark_report,
+            validated_spec,
+            profile=resolved_profile or bench_resource_profile or "s1_canonical_4x4",
+            expected_digest=expected_digest,
+            g18_diag_report=g18_diag_report,
+            missing=missing_measurements,
+            breaches=breached_checks,
+        )
+        sec_3_2_eval = s1_slo_bundle_eval
+    else:
+        sec_3_2_eval = evaluate_section_3_2_a_b_c(
+            benchmark_report,
+            validated_spec,
+            missing=missing_measurements,
+            breaches=breached_checks,
+        )
 
     unique_missing = sorted(dict.fromkeys(missing_measurements))
     unique_breaches = sorted(dict.fromkeys(breached_checks))
     measurements_complete = not unique_missing
 
+    spec_locked_digest = (
+        str(((validated_spec.get("candidate_binding") or {}).get("app_image_digest")) or "")
+        if s1_slo_v1_mode
+        else str(validated_spec["locked_candidate_digest"])
+    )
     digest_matches = (
         bool(app_image_tested)
         and "@sha256:" in expected_digest
         and app_image_tested == expected_digest
-        and expected_digest == str(validated_spec["locked_candidate_digest"])
+        and expected_digest == spec_locked_digest
     )
     owner_vps_untouched = (iso_verified is True) and (owner_vps_touched is False)
 
@@ -6865,7 +7695,7 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         )
     elif not all_technical_thresholds_passed:
         overall_status = "FAIL_THRESHOLD_BREACH"
-    elif owner_approval_present and not owner_signed:
+    elif owner_approval_present and (not owner_signed) and (not clean_pending_approval):
         overall_status = "FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256"
     elif vps_receipts_present and not vps_receipts_verified:
         overall_status = "FAIL_INVALID_STAGING_VPS_RECEIPTS"
@@ -6899,11 +7729,16 @@ def reconcile_g18_benchmark_with_v1_4_slos(
     if t1c_check_enforced:
         pass_reqs["t1c_candidate_confirmation_verified"] = t1c_ok
 
-    reconciliation = {
+    reconciliation: dict[str, Any] = {
         "schema_version": "cskh-p4-g18-slo-v1-4-reconciliation-v2",
         "timestamp_utc": utc_now_iso(),
         "gate": "G18",
-        "ticket_version_required": str(validated_spec.get("ticket_version") or "v1.4"),
+        "ticket_version_required": str(
+            validated_spec.get("slo_version")
+            if s1_slo_v1_mode
+            else (validated_spec.get("ticket_version") or "v1.4")
+        ),
+        "slo_spec_schema_version": str(validated_spec.get("schema_version") or ""),
         "config_bound_mode": config_bound_mode,
         "target_configuration_profile": resolved_profile,
         "benchmark_resource_profile": bench_resource_profile or None,
@@ -6913,8 +7748,13 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         "t1c_candidate_confirmation": t1c_doc,
         "t1c_confirmation_errors": t1c_errors,
         "status": overall_status,
-        "thresholds_spec_path": str(thresholds_path or DEFAULT_G18_THRESHOLDS_V1_4_PATH),
-        "locked_thresholds_sha256": LOCKED_G18_THRESHOLDS_V1_4_SHA256,
+        "thresholds_spec_path": str(
+            thresholds_path
+            or (DEFAULT_P4_S1_SLO_SPEC_PATH if s1_slo_v1_mode else DEFAULT_G18_THRESHOLDS_V1_4_PATH)
+        ),
+        "locked_thresholds_sha256": (
+            LOCKED_P4_S1_SLO_SPEC_SHA256 if s1_slo_v1_mode else LOCKED_G18_THRESHOLDS_V1_4_SHA256
+        ),
         "evaluated_thresholds_sha256": candidate_thresholds_sha256,
         "threshold_validation_errors": threshold_spec_errors,
         "owner_slo_v1_4_signed": owner_signed,
@@ -6938,6 +7778,10 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         "section_3_2_reconciliation": sec_3_2_eval,
         "g18_pass_requirements": pass_reqs,
     }
+    if s1_slo_bundle_eval is not None:
+        reconciliation["slo_bundle_id"] = validated_spec.get("slo_bundle_id")
+        reconciliation["slo_version"] = validated_spec.get("slo_version")
+        reconciliation["s1_slo_bundle_evaluation"] = s1_slo_bundle_eval
     if out_json is not None:
         out_json.parent.mkdir(parents=True, exist_ok=True)
         out_json.write_text(
@@ -6984,7 +7828,7 @@ def _infer_staging_profile_from_vps_receipts(vps_receipts: dict[str, Any] | Path
 def verify_g18_acceptance_measurement_gate(
     *,
     vps_receipts: dict[str, Any] | Path | None,
-    expected_digest: str,
+    expected_digest: str = CURRENT_CANDIDATE_DIGEST,
     target_configuration_profile: str | None = None,
     thresholds_spec: dict[str, Any] | None = None,
     thresholds_path: Path | None = None,
@@ -6995,6 +7839,9 @@ def verify_g18_acceptance_measurement_gate(
     out_json: Path | None = None,
 ) -> dict[str, Any]:
     """Fail-closed pre-measurement gate: allow running G18 on Staging VPS ONLY when T1C confirmed candidate, G03/G05 receipts match safe VPS sizing, and scorer thresholds match Owner-signed SLO for that configuration."""
+    if thresholds_spec is None and thresholds_path is None and expected_digest == CURRENT_CANDIDATE_DIGEST:
+        thresholds_path = DEFAULT_P4_S1_SLO_SPEC_PATH
+
     owner_doc: dict[str, Any] | None = None
     owner_load_err: str | None = None
     if isinstance(owner_slo_approval, Path):
@@ -7031,7 +7878,7 @@ def verify_g18_acceptance_measurement_gate(
         resolved_profile = (
             _infer_staging_profile_from_vps_receipts(vps_receipts)
             or _peek_thresholds_target_profile(thresholds_spec, thresholds_path)
-            or (str(owner_doc.get("approved_configuration_profile") or "").strip() if owner_doc else "")
+            or _peek_approval_single_profile(owner_doc)
             or None
         )
     else:
@@ -7058,6 +7905,7 @@ def verify_g18_acceptance_measurement_gate(
         owner_signed = False
         signed_thresholds_sha256 = ""
         approval_errors = [owner_load_err]
+        clean_pending_approval = False
     else:
         owner_signed, signed_thresholds_sha256, approval_errors = _validate_owner_slo_approval_document(
             owner_doc,
@@ -7067,6 +7915,13 @@ def verify_g18_acceptance_measurement_gate(
             config_bound_mode=True,
             resolved_profile=resolved_profile,
             expected_digest=expected_digest,
+        )
+        clean_pending_approval = _is_clean_pending_s1_slo_approval(
+            owner_doc,
+            validated_spec=validated_spec,
+            actual_slo_sha256=candidate_thresholds_sha256,
+            expected_digest=expected_digest,
+            profile=resolved_profile,
         )
 
     measurement_allowed = bool(
@@ -7094,7 +7949,7 @@ def verify_g18_acceptance_measurement_gate(
     elif not owner_signed:
         gate_status = (
             "BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO"
-            if (owner_slo_approval is None)
+            if (owner_slo_approval is None or clean_pending_approval)
             else "FAIL_SCORER_DOES_NOT_MATCH_OWNER_SIGNED_CONFIG_SLO"
         )
     else:
@@ -7162,7 +8017,7 @@ def verify_g18_acceptance_measurement_gate(
 def run_staging_vps_g18_acceptance(
     *,
     vps_receipts: dict[str, Any] | Path,
-    expected_digest: str,
+    expected_digest: str = CURRENT_CANDIDATE_DIGEST,
     benchmark_out_json: Path,
     reconcile_out_json: Path | None = None,
     target_configuration_profile: str | None = None,
@@ -7170,10 +8025,14 @@ def run_staging_vps_g18_acceptance(
     thresholds_path: Path | None = None,
     owner_slo_approval: dict[str, Any] | Path | None = None,
     t1c_confirmation: dict[str, Any] | Path | None = None,
+    g18_diag_report: dict[str, Any] | Path | None = None,
     live_project_name: str = "crm-cskh-vps-staging",
     bench_port: int = 18880,
 ) -> dict[str, Any]:
     """Execute G18 S1 acceptance on Staging VPS ONLY if pre-measurement config-bound SLO gate passes, preserving live stack before/after."""
+    if thresholds_spec is None and thresholds_path is None and expected_digest == CURRENT_CANDIDATE_DIGEST:
+        thresholds_path = DEFAULT_P4_S1_SLO_SPEC_PATH
+
     gate = verify_g18_acceptance_measurement_gate(
         vps_receipts=vps_receipts,
         expected_digest=expected_digest,
@@ -7267,6 +8126,7 @@ def run_staging_vps_g18_acceptance(
         target_configuration_profile=gate["resolved_configuration_profile"],
         t1c_confirmation=t1c_src,
         require_t1c_confirmation=True,
+        g18_diag_report=g18_diag_report,
         out_json=reconcile_out_json,
     )
     rec["benchmark_executed"] = True
@@ -7391,10 +8251,10 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fail-closed pre-measurement check verifying T1C confirmation, G03/G05 safe sizing receipts, and scorer ↔ Owner-signed config SLO match before running G18",
     )
     p_g18_prep.add_argument("--vps-receipt-dir", type=Path, required=True)
-    p_g18_prep.add_argument("--expected-digest", required=True)
+    p_g18_prep.add_argument("--expected-digest", default=CURRENT_CANDIDATE_DIGEST)
     p_g18_prep.add_argument("--target-config-profile", default="auto")
-    p_g18_prep.add_argument("--thresholds-json", type=Path, required=True)
-    p_g18_prep.add_argument("--owner-approval-json", type=Path, required=True)
+    p_g18_prep.add_argument("--thresholds-json", type=Path, default=DEFAULT_P4_S1_SLO_SPEC_PATH)
+    p_g18_prep.add_argument("--owner-approval-json", type=Path, default=DEFAULT_P4_S1_SLO_APPROVAL_PATH)
     p_g18_prep.add_argument("--t1c-confirmation-json", type=Path, default=None)
     p_g18_prep.add_argument("--bench-port", type=int, default=18880)
     p_g18_prep.add_argument("--benchmark-out", type=Path, default=None)
@@ -7405,11 +8265,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="Execute isolated S1 G18 acceptance on Staging VPS ONLY if scorer matches Owner-signed config SLO and live stack remains untouched",
     )
     p_g18_run.add_argument("--vps-receipt-dir", type=Path, required=True)
-    p_g18_run.add_argument("--expected-digest", required=True)
+    p_g18_run.add_argument("--expected-digest", default=CURRENT_CANDIDATE_DIGEST)
     p_g18_run.add_argument("--target-config-profile", default="auto")
-    p_g18_run.add_argument("--thresholds-json", type=Path, required=True)
-    p_g18_run.add_argument("--owner-approval-json", type=Path, required=True)
+    p_g18_run.add_argument("--thresholds-json", type=Path, default=DEFAULT_P4_S1_SLO_SPEC_PATH)
+    p_g18_run.add_argument("--owner-approval-json", type=Path, default=DEFAULT_P4_S1_SLO_APPROVAL_PATH)
     p_g18_run.add_argument("--t1c-confirmation-json", type=Path, default=None)
+    p_g18_run.add_argument("--g18-diag-json", type=Path, default=None)
     p_g18_run.add_argument("--live-project", default="crm-cskh-vps-staging")
     p_g18_run.add_argument("--bench-port", type=int, default=18880)
     p_g18_run.add_argument("--benchmark-out", type=Path, required=True)
@@ -7427,6 +8288,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_slo.add_argument("--target-config-profile", default=None)
     p_slo.add_argument("--t1c-confirmation-json", type=Path, default=None)
     p_slo.add_argument("--require-t1c-confirmation", action="store_true")
+    p_slo.add_argument("--g18-diag-json", type=Path, default=None)
     p_slo.add_argument("--out", type=Path, default=None)
     return parser
 
@@ -7570,12 +8432,23 @@ def main(argv: list[str] | None = None) -> int:
             thresholds_path=args.thresholds_json,
             owner_slo_approval=args.owner_approval_json,
             t1c_confirmation=args.t1c_confirmation_json,
+            g18_diag_report=args.g18_diag_json,
             live_project_name=args.live_project,
             bench_port=args.bench_port,
         )
         sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
         return 0 if res["status"] == "PASS" else 2
     if args.command == "reconcile-g18-slo":
+        raw_argv = list(argv) if argv is not None else sys.argv[1:]
+        explicit_digest = any(
+            a == "--expected-digest" or a.startswith("--expected-digest=")
+            for a in raw_argv
+        )
+        eff_digest = (
+            args.expected_digest
+            if explicit_digest
+            else (None if is_p4_s1_slo_spec_v1(None, args.thresholds_json) else args.expected_digest)
+        )
         bench_doc = json.loads(args.benchmark_json.read_text(encoding="utf-8"))
         owner_doc = (
             json.loads(args.owner_approval_json.read_text(encoding="utf-8"))
@@ -7587,10 +8460,11 @@ def main(argv: list[str] | None = None) -> int:
             owner_slo_approval=owner_doc,
             vps_receipts=args.vps_receipt_dir,
             thresholds_path=args.thresholds_json,
-            expected_digest=args.expected_digest,
+            expected_digest=eff_digest,
             target_configuration_profile=args.target_config_profile,
             t1c_confirmation=args.t1c_confirmation_json,
             require_t1c_confirmation=args.require_t1c_confirmation,
+            g18_diag_report=args.g18_diag_json,
             out_json=args.out,
         )
         sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
