@@ -166,7 +166,7 @@ Nhằm khắc phục điểm nghẽn độ trễ drill-down tháng toàn công t
 1. **Bộ đặc tả ngưỡng bất biến (`deploy/release/p4-s1-slo-spec.json`):**
    - Định danh gói: `slo_bundle_id = "cskh-p4-g18-s1-endpoint-slo"`, phiên bản `slo_version = "1.0.0"`, lược đồ `schema_version = "cskh-p4-s1-slo-spec-v1"`.
    - Mã băm SHA-256 bất biến chuẩn hóa LF: **`ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d`**. Tệp này tuyệt đối không bị chỉnh sửa byte khi Owner ký duyệt.
-   - Hỗ trợ đầy đủ hai cấu hình tài nguyên: cấu hình chuẩn đo kiểm `s1_canonical_4x4` (`4 vCPU / 16 GiB RAM`, Gunicorn 4×4) và cấu hình an toàn trên VPS đích `staging_vps_capped` (backend sử dụng `1,5 vCPU`, `1.536 MiB RAM` và `Gunicorn 2×4` [2 workers × 4 threads = 8 threads]; tổng stack giới hạn `7,0 vCPU` / `7.936 MiB RAM`, có kiểm soát headroom trước khi chạy).
+   - Hỗ trợ đầy đủ hai cấu hình tài nguyên: cấu hình chuẩn đo kiểm `s1_canonical_4x4` (`4 vCPU / 16 GiB RAM`, Gunicorn 4×4, `config_spec_sha256 = 683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe`) và cấu hình an toàn trên VPS đích `staging_vps_capped` (backend sử dụng `1,5 vCPU`, `1.536 MiB RAM` và `Gunicorn 2×4` [2 workers × 4 threads = 8 threads]; tổng stack giới hạn `7,0 vCPU` / `7.936 MiB RAM`, `config_spec_sha256 = 40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254`, có kiểm soát headroom trước khi chạy).
 2. **Phiếu phê duyệt riêng của Owner (`deploy/release/p4-s1-slo-approval.json`):**
    - Lược đồ: `schema_version = "cskh-p4-s1-slo-approval-v1"`.
    - Trạng thái khởi tạo: `approval_status = "PENDING_OWNER_APPROVAL"`, `approved_profiles = []`.
