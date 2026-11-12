@@ -1,6 +1,6 @@
 {
   "schema_version": "cskh-p4-integrated-candidate-manifest-v1",
-  "generated_at_utc": "2026-11-11T14:00:00Z",
+  "generated_at_utc": "2026-11-12T02:20:00Z",
   "candidate_verification_only": true,
   "promoted_to_production": false,
   "owner_live_site_touched": false,
@@ -57,7 +57,44 @@
       "after_isolated_staging"
     ],
     "inventory_and_config_receipt": "staging-inventory-and-config-audit.json",
-    "t1b_digest_refresh_subcommand": "python3 deploy/ops/manage_isolated_staging_dr.py refresh-candidate-digest"
+    "readonly_preflight_subcommand": "python3 deploy/ops/manage_isolated_staging_dr.py readonly-vps-preflight",
+    "g03_g05_post_t1c_confirm_subcommand": "python3 deploy/ops/manage_isolated_staging_dr.py collect-vps-g03-g05 --require-t1c-confirmation --resource-profile auto",
+    "t1b_digest_refresh_subcommand": "python3 deploy/ops/manage_isolated_staging_dr.py refresh-candidate-digest --require-t1c-confirmation --resource-profile auto",
+    "g18_pre_measurement_gate_subcommand": "python3 deploy/ops/manage_isolated_staging_dr.py prepare-staging-g18",
+    "g18_config_bound_runner_subcommand": "python3 deploy/ops/manage_isolated_staging_dr.py run-staging-vps-g18",
+    "g18_slo_reconcile_subcommand": "python3 deploy/ops/manage_isolated_staging_dr.py reconcile-g18-slo",
+    "safe_staging_vps_resource_profiles": {
+      "s1_canonical_4x4": {
+        "config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+        "total_capped_cpus": 10.0,
+        "total_capped_ram_mib": 12032.0,
+        "gunicorn_workers_x_threads": "4x4",
+        "g03_g05_smoke_capable": true,
+        "g18_s1_benchmark_capable": true
+      },
+      "staging_vps_capped": {
+        "config_spec_sha256": "40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254",
+        "total_capped_cpus": 7.0,
+        "total_capped_ram_mib": 7936.0,
+        "gunicorn_workers_x_threads": "2x4",
+        "g03_g05_smoke_capable": true,
+        "g18_s1_benchmark_capable": true
+      },
+      "staging_dr_smoke_only": {
+        "config_spec_sha256": "0069e828c64a8e025e0c88b4fd67c308a485d03d140e153e133f7213c02e6b58",
+        "total_capped_cpus": 6.0,
+        "total_capped_ram_mib": 5696.0,
+        "gunicorn_workers_x_threads": "2x4",
+        "g03_g05_smoke_capable": true,
+        "g18_s1_benchmark_capable": false
+      }
+    },
+    "pending_t1b_g18_candidate_awaiting_t1c_confirmation": {
+      "commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+      "candidate_image_uri": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "t1c_confirmation_status": "AWAITING_T1C_CONFIRMATION_NOT_MERGED_INTO_T1A",
+      "last_t1c_verified_baseline_digest": "ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6"
+    }
   },
   "integration_lineage": {
     "integration_branch": "codex/p4-resume-ops",
@@ -76,7 +113,7 @@
     "t1a_integrated_https_dr_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/42994618293",
     "t1a_latest_ops_dr_rehearsal_ci_run_id": 43031124613,
     "t1a_latest_ops_dr_rehearsal_ci_run_url": "https://github.com/nobita6986/new-crm/actions/runs/43031124613",
-    "integrated_code_sha": "dd3d18ebc811784764b48faeaa57ac145859570e",
+    "integrated_code_sha": "c403fc4cdb4e63d7cd27ac0374d1549dccd7c598",
     "apps_tree_sha": "4d361e68912f52243751ae5986cabbd13033f050",
     "crm_cskh_tree_sha": "a8737dbcce74f9095a6e76c5e93491e92843f3d0",
     "apps_tree_parity_with_locked_candidate": true
@@ -410,7 +447,7 @@
         "G18"
       ],
       "required_inputs": [
-        "Secure SSH credential / ssh-agent key provisioning to 103.77.208.186 for session T1A (and confirmation that access is provisioned) to execute read-only VPS resource pre-check, stand up isolated Staging crm-cskh-dr-https-vps with ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6 for G03/G05 receipts, and coordinate G18 after Owner signs the v1.4 SLO set"
+        "Secure SSH credential / ssh-agent key provisioning to 103.77.208.186 for session T1A (and confirmation that access is provisioned) to: (1) execute read-only VPS resource sizing pre-check (readonly-vps-preflight -> safe_staging_allocation), (2) after T1C confirms the candidate digest, stand up isolated Staging crm-cskh-dr-https-vps under the safe resource profile to collect G03/G05 receipts on the new digest, and (3) run G18 acceptance measurement (prepare-staging-g18 -> run-staging-vps-g18) ONLY when scorer thresholds match the Owner-signed SLO for that exact safe Staging configuration"
       ]
     },
     "1_offsite_destination_inventory_and_credentials": {
@@ -479,11 +516,15 @@
         "full_reconciliation_scope": "section_3_2A_22_cases_p95_p99_by_session_model_plus_3_2B_20_40_80_waves_p95_p99_plus_3_2C_agg01_02_bg01_03_dataset_explain_domain_rq",
         "g18_pass_requires": [
           "complete_measurements_zero_missing_across_precheck_7_and_section_3_2A_to_3_2C",
-          "exact_candidate_digest_ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6",
-          "non_ci_staging_vps_benchmark_and_verified_6_receipt_bundle",
-          "owner_v1_4_signature_bound_to_thresholds_sha256"
+          "t1c_confirmed_candidate_digest_matching_receipts_scorer_and_owner_approval",
+          "non_ci_staging_vps_benchmark_and_verified_6_receipt_bundle_with_zero_live_mutation",
+          "scorer_thresholds_and_owner_v1_4_signature_bound_to_exact_safe_staging_configuration_and_thresholds_sha256"
         ],
-        "target_sizing_assumption": "4 vCPU / 8-16 GB RAM isolated host, Gunicorn 4 workers x 4 threads, dedicated queue-short + queue-long",
+        "canonical_profile_id": "s1_canonical_4x4",
+        "canonical_config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+        "capped_vps_profile_id": "staging_vps_capped",
+        "capped_vps_config_spec_sha256": "40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254",
+        "target_sizing_assumption": "4 vCPU / 8-16 GB RAM isolated host, Gunicorn 4 workers x 4 threads, dedicated queue-short + queue-long (or config-bound staging_vps_capped 7.0 CPUs / 7,936 MiB RAM, Gunicorn 2x4 if readonly-vps-preflight selects capped profile and Owner signs its config-bound SLO spec)",
         "thresholds": {
           "my_customers_worklist_api_p95_ms": 500.0,
           "open_lead_and_history_api_p95_ms": 600.0,

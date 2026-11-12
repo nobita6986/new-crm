@@ -3468,6 +3468,441 @@ def _check_loopback_port_free(port: int, bind_ip: str = "127.0.0.1") -> bool:
             return False
 
 
+STAGING_VPS_RESOURCE_PROFILES: dict[str, dict[str, Any]] = {
+    "s1_canonical_4x4": {
+        "profile_id": "s1_canonical_4x4",
+        "description": "Full 4-vCPU / Gunicorn 4w x 4t (16 threads) isolated S1 benchmark configuration",
+        "g03_g05_smoke_capable": True,
+        "g18_s1_benchmark_capable": True,
+        "backend_cpus": 2.0,
+        "backend_mem_mib": 2048.0,
+        "gunicorn_workers": 4,
+        "gunicorn_threads": 4,
+        "db_cpus": 2.0,
+        "db_mem_mib": 4096.0,
+        "queue_long_cpus": 1.5,
+        "queue_long_mem_mib": 2048.0,
+        "queue_short_cpus": 1.0,
+        "queue_short_mem_mib": 1024.0,
+        "frontend_cpus": 1.0,
+        "frontend_mem_mib": 512.0,
+        "websocket_cpus": 0.5,
+        "websocket_mem_mib": 512.0,
+        "scheduler_cpus": 0.5,
+        "scheduler_mem_mib": 512.0,
+        "proxy_cpus": 0.5,
+        "proxy_mem_mib": 256.0,
+        "redis_cache_cpus": 0.5,
+        "redis_cache_mem_mib": 512.0,
+        "redis_queue_cpus": 0.5,
+        "redis_queue_mem_mib": 512.0,
+        "total_capped_cpus": 10.0,
+        "total_capped_ram_mib": 12032.0,
+        "host_safety_requirements": {
+            "min_host_cpu_cores": 6,
+            "min_mem_available_mib": 8192.0,
+            "min_live_ram_reserve_mib": 2048.0,
+            "max_load_per_cpu": 0.65,
+            "min_free_disk_gib": 20.0,
+        },
+        "compose_env_overrides": {
+            "PROXY_CPUS": "0.5",
+            "PROXY_MEM_LIMIT": "256m",
+            "FRONTEND_CPUS": "1.0",
+            "FRONTEND_MEM_LIMIT": "512m",
+            "BACKEND_CPUS": "2.0",
+            "BACKEND_MEM_LIMIT": "2048m",
+            "GUNICORN_WORKERS": "4",
+            "GUNICORN_THREADS": "4",
+            "GUNICORN_TIMEOUT": "120",
+            "WEBSOCKET_CPUS": "0.5",
+            "WEBSOCKET_MEM_LIMIT": "512m",
+            "QUEUE_SHORT_CPUS": "1.0",
+            "QUEUE_SHORT_MEM_LIMIT": "1024m",
+            "QUEUE_LONG_CPUS": "1.5",
+            "QUEUE_LONG_MEM_LIMIT": "2048m",
+            "SCHEDULER_CPUS": "0.5",
+            "SCHEDULER_MEM_LIMIT": "512m",
+            "DB_CPUS": "2.0",
+            "DB_MEM_LIMIT": "4096m",
+            "REDIS_CACHE_CPUS": "0.5",
+            "REDIS_CACHE_MEM_LIMIT": "512m",
+            "REDIS_CACHE_MAXMEMORY": "256mb",
+            "REDIS_QUEUE_CPUS": "0.5",
+            "REDIS_QUEUE_MEM_LIMIT": "512m",
+        },
+    },
+    "staging_vps_capped": {
+        "profile_id": "staging_vps_capped",
+        "description": "Capped shared-VPS S1 configuration (1.5 vCPU backend / Gunicorn 2w x 4t = 8 threads, 1.5 vCPU DB)",
+        "g03_g05_smoke_capable": True,
+        "g18_s1_benchmark_capable": True,
+        "backend_cpus": 1.5,
+        "backend_mem_mib": 1536.0,
+        "gunicorn_workers": 2,
+        "gunicorn_threads": 4,
+        "db_cpus": 1.5,
+        "db_mem_mib": 2048.0,
+        "queue_long_cpus": 1.0,
+        "queue_long_mem_mib": 1536.0,
+        "queue_short_cpus": 0.75,
+        "queue_short_mem_mib": 768.0,
+        "frontend_cpus": 0.5,
+        "frontend_mem_mib": 256.0,
+        "websocket_cpus": 0.5,
+        "websocket_mem_mib": 384.0,
+        "scheduler_cpus": 0.25,
+        "scheduler_mem_mib": 384.0,
+        "proxy_cpus": 0.5,
+        "proxy_mem_mib": 256.0,
+        "redis_cache_cpus": 0.25,
+        "redis_cache_mem_mib": 384.0,
+        "redis_queue_cpus": 0.25,
+        "redis_queue_mem_mib": 384.0,
+        "total_capped_cpus": 7.0,
+        "total_capped_ram_mib": 7936.0,
+        "host_safety_requirements": {
+            "min_host_cpu_cores": 4,
+            "min_mem_available_mib": 3072.0,
+            "min_live_ram_reserve_mib": 1536.0,
+            "max_load_per_cpu": 0.85,
+            "min_free_disk_gib": 12.0,
+        },
+        "compose_env_overrides": {
+            "PROXY_CPUS": "0.50",
+            "PROXY_MEM_LIMIT": "256m",
+            "FRONTEND_CPUS": "0.50",
+            "FRONTEND_MEM_LIMIT": "256m",
+            "BACKEND_CPUS": "1.50",
+            "BACKEND_MEM_LIMIT": "1536m",
+            "GUNICORN_WORKERS": "2",
+            "GUNICORN_THREADS": "4",
+            "GUNICORN_TIMEOUT": "120",
+            "WEBSOCKET_CPUS": "0.50",
+            "WEBSOCKET_MEM_LIMIT": "384m",
+            "QUEUE_SHORT_CPUS": "0.75",
+            "QUEUE_SHORT_MEM_LIMIT": "768m",
+            "QUEUE_LONG_CPUS": "1.00",
+            "QUEUE_LONG_MEM_LIMIT": "1536m",
+            "SCHEDULER_CPUS": "0.25",
+            "SCHEDULER_MEM_LIMIT": "384m",
+            "DB_CPUS": "1.50",
+            "DB_MEM_LIMIT": "2048m",
+            "REDIS_CACHE_CPUS": "0.25",
+            "REDIS_CACHE_MEM_LIMIT": "384m",
+            "REDIS_CACHE_MAXMEMORY": "128mb",
+            "REDIS_QUEUE_CPUS": "0.25",
+            "REDIS_QUEUE_MEM_LIMIT": "384m",
+        },
+    },
+    "staging_dr_smoke_only": {
+        "profile_id": "staging_dr_smoke_only",
+        "description": "Minimal isolated Staging/DR smoke-only profile (safe for G03/G05 smoke; NOT safe for G18 S1 load)",
+        "g03_g05_smoke_capable": True,
+        "g18_s1_benchmark_capable": False,
+        "backend_cpus": 1.0,
+        "backend_mem_mib": 1280.0,
+        "gunicorn_workers": 2,
+        "gunicorn_threads": 2,
+        "db_cpus": 1.0,
+        "db_mem_mib": 1536.0,
+        "queue_long_cpus": 0.5,
+        "queue_long_mem_mib": 768.0,
+        "queue_short_cpus": 0.5,
+        "queue_short_mem_mib": 512.0,
+        "frontend_cpus": 0.5,
+        "frontend_mem_mib": 256.0,
+        "websocket_cpus": 0.5,
+        "websocket_mem_mib": 256.0,
+        "scheduler_cpus": 0.5,
+        "scheduler_mem_mib": 256.0,
+        "proxy_cpus": 0.5,
+        "proxy_mem_mib": 192.0,
+        "redis_cache_cpus": 0.5,
+        "redis_cache_mem_mib": 256.0,
+        "redis_queue_cpus": 0.5,
+        "redis_queue_mem_mib": 384.0,
+        "total_capped_cpus": 6.0,
+        "total_capped_ram_mib": 5696.0,
+        "host_safety_requirements": {
+            "min_host_cpu_cores": 2,
+            "min_mem_available_mib": 1536.0,
+            "min_live_ram_reserve_mib": 768.0,
+            "max_load_per_cpu": 0.85,
+            "min_free_disk_gib": 12.0,
+        },
+        "compose_env_overrides": {
+            "PROXY_CPUS": "0.5",
+            "PROXY_MEM_LIMIT": "192m",
+            "FRONTEND_CPUS": "0.5",
+            "FRONTEND_MEM_LIMIT": "256m",
+            "BACKEND_CPUS": "1.0",
+            "BACKEND_MEM_LIMIT": "1280m",
+            "GUNICORN_WORKERS": "2",
+            "GUNICORN_THREADS": "2",
+            "GUNICORN_TIMEOUT": "120",
+            "WEBSOCKET_CPUS": "0.5",
+            "WEBSOCKET_MEM_LIMIT": "256m",
+            "QUEUE_SHORT_CPUS": "0.5",
+            "QUEUE_SHORT_MEM_LIMIT": "512m",
+            "QUEUE_LONG_CPUS": "0.5",
+            "QUEUE_LONG_MEM_LIMIT": "768m",
+            "SCHEDULER_CPUS": "0.5",
+            "SCHEDULER_MEM_LIMIT": "256m",
+            "DB_CPUS": "1.0",
+            "DB_MEM_LIMIT": "1536m",
+            "REDIS_CACHE_CPUS": "0.5",
+            "REDIS_CACHE_MEM_LIMIT": "256m",
+            "REDIS_CACHE_MAXMEMORY": "128mb",
+            "REDIS_QUEUE_CPUS": "0.5",
+            "REDIS_QUEUE_MEM_LIMIT": "384m",
+        },
+    },
+}
+
+STAGING_CONFIG_ENVELOPE_KEYS = (
+    "profile_id",
+    "g18_s1_benchmark_capable",
+    "backend_cpus",
+    "backend_mem_mib",
+    "gunicorn_workers",
+    "gunicorn_threads",
+    "db_cpus",
+    "db_mem_mib",
+    "queue_long_cpus",
+    "queue_long_mem_mib",
+    "queue_short_cpus",
+    "queue_short_mem_mib",
+    "frontend_cpus",
+    "frontend_mem_mib",
+    "websocket_cpus",
+    "websocket_mem_mib",
+    "scheduler_cpus",
+    "scheduler_mem_mib",
+    "proxy_cpus",
+    "proxy_mem_mib",
+    "redis_cache_cpus",
+    "redis_cache_mem_mib",
+    "redis_queue_cpus",
+    "redis_queue_mem_mib",
+    "total_capped_cpus",
+    "total_capped_ram_mib",
+)
+
+
+def get_staging_resource_profile_spec(profile_id: str) -> dict[str, Any]:
+    """Return canonical Staging VPS resource configuration envelope including `config_spec_sha256`."""
+    clean_id = str(profile_id or "").strip()
+    if clean_id not in STAGING_VPS_RESOURCE_PROFILES:
+        raise ValueError(
+            f"Unknown Staging VPS resource profile {profile_id!r}; "
+            f"supported={sorted(STAGING_VPS_RESOURCE_PROFILES)}"
+        )
+    raw = STAGING_VPS_RESOURCE_PROFILES[clean_id]
+    envelope = {k: raw[k] for k in STAGING_CONFIG_ENVELOPE_KEYS}
+    canon_bytes = (json.dumps(envelope, sort_keys=True, separators=(",", ":")) + "\n").encode("utf-8")
+    spec_sha256 = hashlib.sha256(canon_bytes).hexdigest()
+    return {
+        **envelope,
+        "description": raw["description"],
+        "g03_g05_smoke_capable": raw["g03_g05_smoke_capable"],
+        "config_spec_sha256": spec_sha256,
+        "host_safety_requirements": dict(raw["host_safety_requirements"]),
+        "compose_env_overrides": dict(raw["compose_env_overrides"]),
+    }
+
+
+def determine_safe_staging_vps_configuration(
+    *,
+    cpu_cores: int,
+    mem_available_mib: float,
+    loadavg_1m: float,
+    free_disk_gib: float,
+    loopback_ports_free: bool,
+    live_stack_running: bool,
+) -> dict[str, Any]:
+    """Determine which Staging VPS resource configuration(s) can be safely allocated without risking live."""
+    load_per_cpu = round(loadavg_1m / cpu_cores, 3) if cpu_cores > 0 else 999.0
+    ordered_profiles = ("s1_canonical_4x4", "staging_vps_capped", "staging_dr_smoke_only")
+    safe_profiles_allowed: list[str] = []
+    profile_evaluations: dict[str, dict[str, Any]] = {}
+
+    for pid in ordered_profiles:
+        pspec = get_staging_resource_profile_spec(pid)
+        reqs = pspec["host_safety_requirements"]
+        reasons: list[str] = []
+        if not live_stack_running:
+            reasons.append("live_stack_not_running_healthy")
+        if not loopback_ports_free:
+            reasons.append("planned_loopback_ports_occupied")
+        if cpu_cores < int(reqs["min_host_cpu_cores"]):
+            reasons.append(f"cpu_cores={cpu_cores}<{reqs['min_host_cpu_cores']}")
+        if mem_available_mib < float(reqs["min_mem_available_mib"]):
+            reasons.append(f"mem_available_mib={mem_available_mib}<{reqs['min_mem_available_mib']}")
+        if load_per_cpu > float(reqs["max_load_per_cpu"]):
+            reasons.append(f"load_per_cpu={load_per_cpu}>{reqs['max_load_per_cpu']}")
+        if free_disk_gib < float(reqs["min_free_disk_gib"]):
+            reasons.append(f"free_disk_gib={free_disk_gib}<{reqs['min_free_disk_gib']}")
+        is_safe = not reasons
+        if is_safe:
+            safe_profiles_allowed.append(pid)
+        profile_evaluations[pid] = {
+            "safe_to_allocate": is_safe,
+            "g03_g05_smoke_capable": pspec["g03_g05_smoke_capable"],
+            "g18_s1_benchmark_capable": pspec["g18_s1_benchmark_capable"],
+            "config_spec_sha256": pspec["config_spec_sha256"],
+            "backend_cpus": pspec["backend_cpus"],
+            "backend_mem_mib": pspec["backend_mem_mib"],
+            "gunicorn_workers": pspec["gunicorn_workers"],
+            "gunicorn_threads": pspec["gunicorn_threads"],
+            "db_cpus": pspec["db_cpus"],
+            "db_mem_mib": pspec["db_mem_mib"],
+            "total_capped_cpus": pspec["total_capped_cpus"],
+            "total_capped_ram_mib": pspec["total_capped_ram_mib"],
+            "disqualification_reasons": reasons,
+        }
+
+    recommended_g18_profile = next(
+        (
+            pid
+            for pid in ("s1_canonical_4x4", "staging_vps_capped")
+            if pid in safe_profiles_allowed
+        ),
+        None,
+    )
+    recommended_g03_g05_profile = (
+        recommended_g18_profile
+        if recommended_g18_profile is not None
+        else ("staging_dr_smoke_only" if "staging_dr_smoke_only" in safe_profiles_allowed else None)
+    )
+    g03_g05_smoke_safe = recommended_g03_g05_profile is not None
+    g18_acceptance_safe = recommended_g18_profile is not None
+    recommended_spec = (
+        get_staging_resource_profile_spec(recommended_g18_profile)
+        if recommended_g18_profile is not None
+        else (
+            get_staging_resource_profile_spec(recommended_g03_g05_profile)
+            if recommended_g03_g05_profile is not None
+            else None
+        )
+    )
+    if g18_acceptance_safe:
+        alloc_status = "SAFE_FOR_G03_G05_AND_G18"
+    elif g03_g05_smoke_safe:
+        alloc_status = "SAFE_FOR_G03_G05_SMOKE_ONLY_G18_BLOCKED"
+    else:
+        alloc_status = "UNSAFE_INSUFFICIENT_LIVE_HEADROOM"
+
+    return {
+        "status": alloc_status,
+        "load_per_cpu_1m": load_per_cpu,
+        "g03_g05_smoke_safe": g03_g05_smoke_safe,
+        "g18_acceptance_safe": g18_acceptance_safe,
+        "recommended_g03_g05_profile": recommended_g03_g05_profile,
+        "recommended_g18_profile": recommended_g18_profile,
+        "recommended_config_spec_sha256": recommended_spec["config_spec_sha256"] if recommended_spec else None,
+        "recommended_compose_env_overrides": (
+            recommended_spec["compose_env_overrides"] if recommended_spec else None
+        ),
+        "safe_profiles_allowed": safe_profiles_allowed,
+        "profile_evaluations": profile_evaluations,
+    }
+
+
+FORBIDDEN_T1C_SELF_APPROVERS = {
+    "t1a",
+    "t1b",
+    "t1b-p4-02",
+    "tbd",
+    "todo",
+    "pending",
+    "none",
+    "null",
+    "unconfirmed",
+}
+
+
+def verify_t1c_candidate_confirmation(
+    t1c_confirmation: dict[str, Any] | Path | None,
+    *,
+    expected_app_image: str,
+) -> tuple[bool, dict[str, Any] | None, list[str]]:
+    """Verify independent T1C candidate confirmation bound to the exact immutable `@sha256` image digest."""
+    errors: list[str] = []
+    clean_expected = str(expected_app_image or "").strip()
+    if not IMMUTABLE_REGISTRY_DIGEST_RE.match(clean_expected):
+        errors.append(f"invalid_expected_app_image_digest:{expected_app_image!r}")
+
+    if t1c_confirmation is None:
+        return False, None, [*errors, "missing_t1c_candidate_confirmation"]
+
+    doc: Any = None
+    if isinstance(t1c_confirmation, Path):
+        if not t1c_confirmation.is_file():
+            return False, None, [*errors, f"t1c_confirmation_file_not_found:{t1c_confirmation}"]
+        try:
+            doc = json.loads(t1c_confirmation.read_text(encoding="utf-8"))
+        except Exception as exc:
+            return False, None, [*errors, f"t1c_confirmation_invalid_json:{exc}"]
+    elif isinstance(t1c_confirmation, dict):
+        doc = dict(t1c_confirmation)
+    else:
+        return False, None, [*errors, f"unsupported_t1c_confirmation_type:{type(t1c_confirmation).__name__}"]
+
+    if not isinstance(doc, dict):
+        return False, None, [*errors, "t1c_confirmation_root_not_dict"]
+
+    if doc.get("confirmed") is not True:
+        errors.append("t1c_confirmation.confirmed_not_true")
+
+    confirmed_by = str(doc.get("confirmed_by") or "").strip()
+    if not confirmed_by:
+        errors.append("t1c_confirmation.missing_confirmed_by")
+    elif (
+        confirmed_by.lower() in FORBIDDEN_T1C_SELF_APPROVERS
+        or confirmed_by.lower().startswith(("t1a", "t1b", "<"))
+        or "placeholder" in confirmed_by.lower()
+    ):
+        errors.append(f"t1c_confirmation.forbidden_or_self_confirmed_by:{confirmed_by!r}")
+
+    confirmed_at = str(doc.get("confirmed_at") or "").strip()
+    if not confirmed_at:
+        errors.append("t1c_confirmation.missing_confirmed_at")
+
+    commit_sha = str(doc.get("candidate_commit_sha") or "").strip()
+    if not re.fullmatch(r"[0-9a-f]{40}", commit_sha):
+        errors.append(f"t1c_confirmation.invalid_candidate_commit_sha:{commit_sha!r}")
+
+    confirmed_digest = str(doc.get("app_image_digest") or "").strip()
+    if not IMMUTABLE_REGISTRY_DIGEST_RE.match(confirmed_digest):
+        errors.append(f"t1c_confirmation.invalid_app_image_digest:{confirmed_digest!r}")
+    elif clean_expected and confirmed_digest != clean_expected:
+        errors.append(
+            f"t1c_confirmation.digest_mismatch:confirmed={confirmed_digest!r}:expected={clean_expected!r}"
+        )
+
+    v_scope = str(doc.get("verification_scope") or STAGING_CANDIDATE_SCOPE).strip()
+    if v_scope == CI_REHEARSAL_SCOPE or v_scope not in (STAGING_CANDIDATE_SCOPE, PRODUCTION_CANDIDATE_SCOPE):
+        errors.append(f"t1c_confirmation.invalid_verification_scope:{v_scope!r}")
+
+    g04_stat = str(doc.get("g04_status") or "FAIL").strip().upper()
+    prod_stat = str(doc.get("production_candidate_status") or "BLOCKED").strip().upper()
+    if g04_stat != "PASS" and prod_stat != "BLOCKED":
+        errors.append("t1c_confirmation.production_candidate_must_remain_blocked_when_g04_not_pass")
+
+    normalized = {
+        "confirmed": doc.get("confirmed") is True,
+        "confirmed_by": confirmed_by,
+        "confirmed_at": confirmed_at,
+        "candidate_commit_sha": commit_sha,
+        "app_image_digest": confirmed_digest,
+        "verification_scope": v_scope,
+        "g04_status": g04_stat,
+        "production_candidate_status": prod_stat,
+    }
+    return (not errors), (normalized if not errors else None), errors
+
+
 def readonly_vps_preflight(
     *,
     live_project_name: str = "crm-cskh-vps-staging",
@@ -3478,7 +3913,7 @@ def readonly_vps_preflight(
     planned_https_port: int = 18443,
     out_json: Path | None = None,
 ) -> dict[str, Any]:
-    """Read-only VPS resource, port, headroom, and live-stack preflight before isolated Staging/DR boot."""
+    """Read-only VPS resource, port, headroom, safe Staging sizing, and live-stack preflight."""
     cpu_cores = int(os.cpu_count() or 0)
     mem = _read_linux_meminfo_mib()
     loadavg = _read_linux_loadavg()
@@ -3496,6 +3931,14 @@ def readonly_vps_preflight(
         "planned_loopback_ports_free": http_port_free and https_port_free,
         "live_stack_running_untouched": bool(live_snap["all_running"]),
     }
+    safe_staging_allocation = determine_safe_staging_vps_configuration(
+        cpu_cores=cpu_cores,
+        mem_available_mib=mem["mem_available_mib"],
+        loadavg_1m=loadavg["loadavg_1m"],
+        free_disk_gib=free_disk_gib,
+        loopback_ports_free=(http_port_free and https_port_free),
+        live_stack_running=bool(live_snap["all_running"]),
+    )
     report = {
         "schema_version": "cskh-p4-readonly-vps-preflight-v1",
         "timestamp_utc": utc_now_iso(),
@@ -3531,6 +3974,7 @@ def readonly_vps_preflight(
             "https_port_free": https_port_free,
         },
         "checks": checks,
+        "safe_staging_allocation": safe_staging_allocation,
         "live_before_snapshot": live_snap,
     }
     if out_json is not None:
@@ -3613,12 +4057,26 @@ def collect_vps_g03_g05_receipts(
     keep_up: bool = False,
     state_dir: Path | None = None,
     disk_check_path: Path = Path("/"),
+    t1c_confirmation: dict[str, Any] | Path | None = None,
+    require_t1c_confirmation: bool = False,
+    resource_profile: str | None = None,
 ) -> dict[str, Any]:
-    """Execute read-only preflight -> pull `@sha256` -> isolated Staging/DR G03/G05 receipts -> inventory/config audit -> live zero-delta check."""
+    """Execute read-only preflight -> optional T1C confirmation & safe profile guard -> pull `@sha256` -> isolated Staging/DR G03/G05 receipts -> live zero-delta check."""
     governance_scope = verify_staging_candidate_scope_and_key_guard(
         app_image=app_image,
         requested_scope=STAGING_CANDIDATE_SCOPE,
     )
+    verified_t1c_doc: dict[str, Any] | None = None
+    if require_t1c_confirmation or t1c_confirmation is not None:
+        t1c_ok, verified_t1c_doc, t1c_errs = verify_t1c_candidate_confirmation(
+            t1c_confirmation,
+            expected_app_image=app_image,
+        )
+        if not t1c_ok or verified_t1c_doc is None:
+            raise ValueError(
+                f"Refusing G03/G05 receipt collection before T1C confirms candidate digest {app_image!r}: {t1c_errs}"
+            )
+
     out_dir = out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -3632,8 +4090,41 @@ def collect_vps_g03_g05_receipts(
     if preflight["status"] != "PASS":
         raise RuntimeError(f"Read-only VPS preflight failed; aborting before touching Docker: {preflight}")
 
+    applied_profile_spec: dict[str, Any] | None = None
+    if resource_profile is not None:
+        safe_alloc = preflight.get("safe_staging_allocation") or {}
+        allowed_profiles = list(safe_alloc.get("safe_profiles_allowed") or [])
+        req_prof = str(resource_profile).strip()
+        if req_prof == "auto":
+            resolved_prof = safe_alloc.get("recommended_g18_profile") or safe_alloc.get("recommended_g03_g05_profile")
+            if not resolved_prof:
+                raise RuntimeError(
+                    f"Read-only VPS preflight found no safe Staging profile to allocate: {safe_alloc}"
+                )
+        else:
+            resolved_prof = req_prof
+        applied_profile_spec = get_staging_resource_profile_spec(str(resolved_prof))
+        if applied_profile_spec["profile_id"] not in allowed_profiles:
+            raise RuntimeError(
+                f"Requested Staging resource profile {applied_profile_spec['profile_id']!r} is NOT safe on this VPS "
+                f"(allowed={allowed_profiles}): {safe_alloc.get('profile_evaluations', {}).get(applied_profile_spec['profile_id'])}"
+            )
+
+    if verified_t1c_doc is not None:
+        (out_dir / "t1c-candidate-confirmation-receipt.json").write_text(
+            json.dumps(verified_t1c_doc, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+    candidate_sha = (
+        verified_t1c_doc["candidate_commit_sha"]
+        if verified_t1c_doc is not None
+        else "bcdc419f9f95ad75449315572928e3d8c43817cc"
+    )
     pull_receipt = pull_and_inspect_candidate_digest(
         app_image,
+        locked_batch1_sha=candidate_sha,
         out_json=out_dir / "candidate-registry-pull-inspect-receipt.json",
     )
 
@@ -3656,6 +4147,8 @@ def collect_vps_g03_g05_receipts(
         os.chmod(secret_file, 0o600)
 
     tpl = p403_tool.parse_env_file(DR_TEMPLATE_ENV)
+    if applied_profile_spec is not None:
+        tpl.update(applied_profile_spec["compose_env_overrides"])
     tpl.update(
         {
             "COMPOSE_PROJECT_NAME": project_name,
@@ -3733,7 +4226,25 @@ def collect_vps_g03_g05_receipts(
         newline="\n",
     )
 
-    inventory_config_audit = {
+    staging_resource_cfg = (
+        {
+            "profile_id": applied_profile_spec["profile_id"],
+            "config_spec_sha256": applied_profile_spec["config_spec_sha256"],
+            "g18_s1_benchmark_capable": applied_profile_spec["g18_s1_benchmark_capable"],
+            "backend_cpus": applied_profile_spec["backend_cpus"],
+            "backend_mem_mib": applied_profile_spec["backend_mem_mib"],
+            "gunicorn_workers": applied_profile_spec["gunicorn_workers"],
+            "gunicorn_threads": applied_profile_spec["gunicorn_threads"],
+            "db_cpus": applied_profile_spec["db_cpus"],
+            "db_mem_mib": applied_profile_spec["db_mem_mib"],
+            "total_capped_cpus": applied_profile_spec["total_capped_cpus"],
+            "total_capped_ram_mib": applied_profile_spec["total_capped_ram_mib"],
+        }
+        if applied_profile_spec is not None
+        else None
+    )
+
+    inventory_config_audit: dict[str, Any] = {
         "schema_version": "cskh-p4-staging-inventory-config-audit-v1",
         "timestamp_utc": utc_now_iso(),
         "status": (
@@ -3773,6 +4284,7 @@ def collect_vps_g03_g05_receipts(
             "disjoint_verified": runtime_audit.get("status") == "PASS",
         },
         "resource_limits": runtime_audit.get("resource_limits"),
+        "safe_staging_allocation": preflight.get("safe_staging_allocation"),
         "headroom_timeline": {
             "before_isolated_staging": preflight["host_resources"],
             "during_isolated_staging": headroom_during,
@@ -3790,6 +4302,11 @@ def collect_vps_g03_g05_receipts(
             and live_preservation.get("zero_live_mutation") is True
         ),
     }
+    if staging_resource_cfg is not None:
+        inventory_config_audit["staging_resource_configuration"] = staging_resource_cfg
+    if verified_t1c_doc is not None:
+        inventory_config_audit["t1c_candidate_confirmation"] = verified_t1c_doc
+
     (out_dir / "staging-inventory-and-config-audit.json").write_text(
         json.dumps(inventory_config_audit, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -3803,7 +4320,19 @@ def collect_vps_g03_g05_receipts(
         and inventory_config_audit["status"] == "PASS"
         and live_preservation["status"] == "PASS"
     )
-    summary = {
+    artifacts_map = {
+        "readonly_vps_preflight": str(out_dir / "readonly-vps-preflight.json"),
+        "candidate_pull_inspect_receipt": str(out_dir / "candidate-registry-pull-inspect-receipt.json"),
+        "runtime_isolation_audit_g03": str(out_dir / "staging-dr-runtime-isolation-audit.json"),
+        "inventory_and_config_audit": str(out_dir / "staging-inventory-and-config-audit.json"),
+        "https_wss_smoke_g05": str(out_dir / "https-wss-smoke-receipt.json"),
+        "live_preservation_before_after": str(out_dir / "live-preservation-before-after.json"),
+    }
+    if verified_t1c_doc is not None:
+        artifacts_map["t1c_candidate_confirmation_receipt"] = str(
+            out_dir / "t1c-candidate-confirmation-receipt.json"
+        )
+    summary: dict[str, Any] = {
         "schema_version": "cskh-p4-vps-g03-g05-bundle-v1",
         "timestamp_utc": utc_now_iso(),
         "status": "PASS" if all_ok else "FAIL",
@@ -3816,15 +4345,12 @@ def collect_vps_g03_g05_receipts(
         "live_project_untouched": live_project_name,
         "zero_live_mutation": live_preservation["zero_live_mutation"],
         "inspected_app_services": list(p403_tool.APP_SERVICES),
-        "artifacts": {
-            "readonly_vps_preflight": str(out_dir / "readonly-vps-preflight.json"),
-            "candidate_pull_inspect_receipt": str(out_dir / "candidate-registry-pull-inspect-receipt.json"),
-            "runtime_isolation_audit_g03": str(out_dir / "staging-dr-runtime-isolation-audit.json"),
-            "inventory_and_config_audit": str(out_dir / "staging-inventory-and-config-audit.json"),
-            "https_wss_smoke_g05": str(out_dir / "https-wss-smoke-receipt.json"),
-            "live_preservation_before_after": str(out_dir / "live-preservation-before-after.json"),
-        },
+        "artifacts": artifacts_map,
     }
+    if staging_resource_cfg is not None:
+        summary["staging_resource_configuration"] = staging_resource_cfg
+    if verified_t1c_doc is not None:
+        summary["t1c_candidate_confirmation"] = verified_t1c_doc
     (out_dir / "vps-g03-g05-summary.json").write_text(
         json.dumps(summary, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -3845,12 +4371,24 @@ def refresh_staging_for_new_candidate_digest(
     keep_up: bool = False,
     state_dir: Path | None = None,
     disk_check_path: Path = Path("/"),
+    t1c_confirmation: dict[str, Any] | Path | None = None,
+    require_t1c_confirmation: bool = False,
+    resource_profile: str | None = None,
 ) -> dict[str, Any]:
     """Update isolated Staging & regenerate all G03/G05/inventory receipts when T1B delivers a new digest for G18."""
     verify_staging_candidate_scope_and_key_guard(
         app_image=new_app_image,
         requested_scope=STAGING_CANDIDATE_SCOPE,
     )
+    if require_t1c_confirmation or t1c_confirmation is not None:
+        t1c_ok, _t1c_doc, t1c_errs = verify_t1c_candidate_confirmation(
+            t1c_confirmation,
+            expected_app_image=new_app_image,
+        )
+        if not t1c_ok:
+            raise ValueError(
+                f"Refusing Staging digest refresh before T1C confirms candidate digest {new_app_image!r}: {t1c_errs}"
+            )
     out_dir = out_dir.resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     previous_digest: str | None = None
@@ -3871,6 +4409,7 @@ def refresh_staging_for_new_candidate_digest(
 
     for fname in (
         "readonly-vps-preflight.json",
+        "t1c-candidate-confirmation-receipt.json",
         "candidate-registry-pull-inspect-receipt.json",
         "staging-dr-runtime-isolation-audit.json",
         "staging-inventory-and-config-audit.json",
@@ -3893,6 +4432,9 @@ def refresh_staging_for_new_candidate_digest(
         keep_up=keep_up,
         state_dir=state_dir,
         disk_check_path=disk_check_path,
+        t1c_confirmation=t1c_confirmation,
+        require_t1c_confirmation=require_t1c_confirmation,
+        resource_profile=resource_profile,
     )
 
     stale_refs: list[str] = []
@@ -4021,6 +4563,333 @@ def load_and_validate_g18_thresholds_v1_4(
         errors.append(
             f"thresholds_sha256_mismatch_vs_locked_v1_4:expected={LOCKED_G18_THRESHOLDS_V1_4_SHA256}:got={candidate_sha}"
         )
+    return (canonical_spec if errors else candidate_spec), candidate_sha, errors
+
+
+STAGING_CONFIG_SLO_TARGET_KEYS = (
+    "profile_id",
+    "config_spec_sha256",
+    "g18_s1_benchmark_capable",
+    "backend_cpus",
+    "backend_mem_mib",
+    "gunicorn_workers",
+    "gunicorn_threads",
+    "db_cpus",
+    "db_mem_mib",
+    "total_capped_cpus",
+    "total_capped_ram_mib",
+)
+
+
+def build_target_staging_configuration_block(profile_id: str) -> dict[str, Any]:
+    """Return canonical `target_staging_configuration` block for a Staging VPS profile."""
+    pspec = get_staging_resource_profile_spec(profile_id)
+    return {k: pspec[k] for k in STAGING_CONFIG_SLO_TARGET_KEYS}
+
+
+def build_config_bound_g18_thresholds_spec(
+    base_spec: dict[str, Any] | None = None,
+    *,
+    target_configuration_profile: str,
+    candidate_digest: str,
+    candidate_image_id: str | None = None,
+    ticket_version: str | None = None,
+    threshold_overrides: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Build a canonical G18 threshold specification bound to a specific Staging VPS configuration and `@sha256` digest."""
+    target_cfg = build_target_staging_configuration_block(target_configuration_profile)
+    if target_cfg.get("g18_s1_benchmark_capable") is not True:
+        raise ValueError(
+            f"Staging resource profile {target_configuration_profile!r} is smoke-only and NOT eligible for G18 S1 acceptance"
+        )
+    clean_digest = str(candidate_digest or "").strip()
+    if not IMMUTABLE_REGISTRY_DIGEST_RE.match(clean_digest):
+        raise ValueError(f"Invalid immutable candidate_digest {candidate_digest!r}")
+
+    src = (
+        json.loads(json.dumps(base_spec))
+        if base_spec is not None
+        else json.loads(DEFAULT_G18_THRESHOLDS_V1_4_PATH.read_text(encoding="utf-8"))
+    )
+    src["locked_candidate_digest"] = clean_digest
+    if candidate_image_id is not None:
+        clean_img_id = str(candidate_image_id).strip()
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", clean_img_id):
+            raise ValueError(f"Invalid candidate_image_id {candidate_image_id!r}")
+        src["locked_candidate_image_id"] = clean_img_id
+    if ticket_version is not None:
+        clean_tv = str(ticket_version).strip()
+        if not clean_tv:
+            raise ValueError("ticket_version must not be empty")
+        src["ticket_version"] = clean_tv
+    pspec_full = get_staging_resource_profile_spec(target_configuration_profile)
+    src["target_sizing_assumption"] = pspec_full["description"]
+    src["target_staging_configuration"] = target_cfg
+
+    if threshold_overrides:
+        for dotted_key, new_val in threshold_overrides.items():
+            parts = dotted_key.split(".")
+            cur: Any = src
+            for p in parts[:-1]:
+                if not isinstance(cur, dict) or p not in cur:
+                    raise KeyError(f"Unknown threshold override path {dotted_key!r} (missing {p!r})")
+                cur = cur[p]
+            leaf = parts[-1]
+            if not isinstance(cur, dict) or leaf not in cur:
+                raise KeyError(f"Unknown threshold override leaf {dotted_key!r} (missing {leaf!r})")
+            cur[leaf] = new_val
+    return src
+
+
+_INVARIANT_NUMERIC_LEAF_KEYS = frozenset(
+    {
+        "concurrency",
+        "distinct_sessions_used",
+        "required_distinct_authenticated_sessions",
+        "concurrent_user_sessions",
+    }
+)
+
+_NONNEG_INT_THRESHOLD_KEYS = frozenset(
+    {
+        "max_queue_backlog_total",
+        "max_queue_backlog_after",
+        "max_slow_queries_after",
+        "max_post_run_queue_backlog_total",
+        "max_post_run_slow_queries",
+    }
+)
+
+
+def _validate_config_bound_subtree(
+    canonical_node: Any,
+    candidate_node: Any,
+    prefix: str,
+    errors: list[str],
+) -> None:
+    if isinstance(canonical_node, dict):
+        if not isinstance(candidate_node, dict):
+            errors.append(f"threshold_type_mismatch:{prefix}:expected_dict_got_{type(candidate_node).__name__}")
+            return
+        for k in sorted(canonical_node):
+            if k not in candidate_node:
+                errors.append(f"missing_threshold_spec_key:{prefix}.{k}")
+            else:
+                _validate_config_bound_subtree(canonical_node[k], candidate_node[k], f"{prefix}.{k}", errors)
+        for k in sorted(candidate_node):
+            if k not in canonical_node:
+                errors.append(f"unexpected_threshold_spec_key:{prefix}.{k}")
+        if (
+            "max_p95_ms" in candidate_node
+            and "max_p99_ms" in candidate_node
+            and not isinstance(candidate_node["max_p95_ms"], bool)
+            and not isinstance(candidate_node["max_p99_ms"], bool)
+            and isinstance(candidate_node["max_p95_ms"], (int, float))
+            and isinstance(candidate_node["max_p99_ms"], (int, float))
+        ):
+            if float(candidate_node["max_p99_ms"]) + 1e-6 < float(candidate_node["max_p95_ms"]):
+                errors.append(
+                    f"p99_threshold_lt_p95_threshold:{prefix}:max_p99_ms={candidate_node['max_p99_ms']}<max_p95_ms={candidate_node['max_p95_ms']}"
+                )
+        if (
+            "max_overall_p95_ms" in candidate_node
+            and "max_overall_p99_ms" in candidate_node
+            and not isinstance(candidate_node["max_overall_p95_ms"], bool)
+            and not isinstance(candidate_node["max_overall_p99_ms"], bool)
+            and isinstance(candidate_node["max_overall_p95_ms"], (int, float))
+            and isinstance(candidate_node["max_overall_p99_ms"], (int, float))
+        ):
+            if float(candidate_node["max_overall_p99_ms"]) + 1e-6 < float(candidate_node["max_overall_p95_ms"]):
+                errors.append(
+                    f"overall_p99_threshold_lt_p95_threshold:{prefix}:max_overall_p99_ms={candidate_node['max_overall_p99_ms']}<max_overall_p95_ms={candidate_node['max_overall_p95_ms']}"
+                )
+        if isinstance(candidate_node.get("by_workload_max_p95_ms"), dict) and isinstance(
+            candidate_node.get("by_workload_max_p99_ms"), dict
+        ):
+            p95_map = candidate_node["by_workload_max_p95_ms"]
+            p99_map = candidate_node["by_workload_max_p99_ms"]
+            for wk in sorted(set(p95_map) & set(p99_map)):
+                v95, v99 = p95_map[wk], p99_map[wk]
+                if (
+                    not isinstance(v95, bool)
+                    and not isinstance(v99, bool)
+                    and isinstance(v95, (int, float))
+                    and isinstance(v99, (int, float))
+                    and float(v99) + 1e-6 < float(v95)
+                ):
+                    errors.append(f"workload_p99_threshold_lt_p95_threshold:{prefix}.{wk}:p99={v99}<p95={v95}")
+        return
+
+    if isinstance(canonical_node, list):
+        if not isinstance(candidate_node, list) or candidate_node != canonical_node:
+            errors.append(f"threshold_list_mismatch:{prefix}:expected={canonical_node!r}:got={candidate_node!r}")
+        return
+
+    if isinstance(canonical_node, bool):
+        if not isinstance(candidate_node, bool) or candidate_node != canonical_node:
+            errors.append(f"threshold_mismatch:{prefix}:expected={canonical_node!r}:got={candidate_node!r}")
+        return
+
+    leaf_key = prefix.rsplit(".", 1)[-1]
+    if isinstance(canonical_node, str):
+        if not isinstance(candidate_node, str) or not candidate_node.strip():
+            errors.append(f"threshold_invalid_string:{prefix}:{candidate_node!r}")
+            return
+        if leaf_key != "description" and candidate_node != canonical_node:
+            errors.append(f"threshold_mismatch:{prefix}:expected={canonical_node!r}:got={candidate_node!r}")
+        return
+
+    if isinstance(canonical_node, (int, float)):
+        if isinstance(candidate_node, bool) or not isinstance(candidate_node, (int, float)):
+            errors.append(f"threshold_type_mismatch:{prefix}:expected_number_got_{type(candidate_node).__name__}")
+            return
+        fval = float(candidate_node)
+        if not math.isfinite(fval):
+            errors.append(f"threshold_non_finite:{prefix}:{candidate_node!r}")
+            return
+        if (
+            ".expected_counts." in prefix
+            or leaf_key.startswith(("expected_", "min_"))
+            or leaf_key in _INVARIANT_NUMERIC_LEAF_KEYS
+        ):
+            if abs(fval - float(canonical_node)) > 1e-6:
+                errors.append(f"invariant_threshold_modified:{prefix}:expected={canonical_node}:got={candidate_node}")
+            return
+        if leaf_key in ("max_error_count", "max_timeout_count"):
+            if not isinstance(candidate_node, int) or candidate_node < 0:
+                errors.append(f"invalid_int_error_threshold:{prefix}:{candidate_node!r}")
+            elif int(canonical_node) == 0 and candidate_node != 0:
+                errors.append(f"zero_error_budget_loosened:{prefix}:expected=0:got={candidate_node}")
+            return
+        if leaf_key in _NONNEG_INT_THRESHOLD_KEYS:
+            if not isinstance(candidate_node, int) or candidate_node < 0:
+                errors.append(f"invalid_nonneg_int_threshold:{prefix}:{candidate_node!r}")
+            return
+        if leaf_key == "max_error_rate_pct" or prefix.endswith(".http_5xx_error_rate_pct.threshold"):
+            if fval < 0.0 or fval > 5.0:
+                errors.append(f"error_rate_threshold_out_of_bounds:{prefix}:{candidate_node}")
+            elif abs(float(canonical_node)) <= 1e-9 and fval > 1e-9:
+                errors.append(f"zero_error_rate_budget_loosened:{prefix}:expected=0.0:got={candidate_node}")
+            return
+        if fval <= 0.0:
+            errors.append(f"non_positive_threshold:{prefix}:{candidate_node}")
+        return
+
+
+def validate_g18_thresholds_for_configuration(
+    *,
+    thresholds_spec: dict[str, Any] | None = None,
+    thresholds_path: Path | None = None,
+    target_configuration_profile: str,
+    expected_digest: str,
+) -> tuple[dict[str, Any], str, list[str]]:
+    """Validate a configuration-bound G18 threshold specification against §3.2A–C structure, digest, and Staging resource profile."""
+    errors: list[str] = []
+    canonical_spec = json.loads(DEFAULT_G18_THRESHOLDS_V1_4_PATH.read_text(encoding="utf-8"))
+
+    if thresholds_spec is not None and thresholds_path is not None:
+        errors.append("cannot_specify_both_thresholds_spec_and_thresholds_path")
+
+    expected_cfg: dict[str, Any] | None = None
+    try:
+        expected_cfg = build_target_staging_configuration_block(target_configuration_profile)
+        if expected_cfg.get("g18_s1_benchmark_capable") is not True:
+            errors.append(f"target_configuration_profile_not_g18_s1_capable:{target_configuration_profile!r}")
+    except ValueError as exc:
+        errors.append(f"invalid_target_configuration_profile:{target_configuration_profile!r}:{exc}")
+
+    if not IMMUTABLE_REGISTRY_DIGEST_RE.match(str(expected_digest or "").strip()):
+        errors.append(f"invalid_expected_candidate_digest:{expected_digest!r}")
+
+    candidate_spec: dict[str, Any] | None = None
+    raw_file_sha: str | None = None
+    if thresholds_path is not None:
+        if not thresholds_path.is_file():
+            errors.append(f"thresholds_file_not_found:{thresholds_path}")
+            return canonical_spec, "", errors
+        try:
+            raw_bytes = thresholds_path.read_bytes()
+            raw_file_sha = hashlib.sha256(raw_bytes).hexdigest()
+            loaded = json.loads(raw_bytes.decode("utf-8"))
+        except Exception as exc:
+            errors.append(f"thresholds_file_invalid_json:{exc}")
+            return canonical_spec, raw_file_sha or "", errors
+        if not isinstance(loaded, dict):
+            errors.append("thresholds_file_root_not_dict")
+            return canonical_spec, raw_file_sha, errors
+        candidate_spec = loaded
+    elif thresholds_spec is not None:
+        if not isinstance(thresholds_spec, dict):
+            errors.append(f"thresholds_spec_not_dict:{type(thresholds_spec).__name__}")
+            return canonical_spec, "", errors
+        candidate_spec = thresholds_spec
+    else:
+        # Default file on disk lacks target_staging_configuration for a new config-bound run -> fail closed
+        raw_bytes = DEFAULT_G18_THRESHOLDS_V1_4_PATH.read_bytes()
+        raw_file_sha = hashlib.sha256(raw_bytes).hexdigest()
+        candidate_spec = canonical_spec
+
+    candidate_sha = compute_g18_thresholds_sha256(candidate_spec)
+    if raw_file_sha is not None and raw_file_sha != candidate_sha:
+        errors.append(
+            f"non_canonical_thresholds_file_bytes_sha256_mismatch:file={raw_file_sha}:canonical={candidate_sha}"
+        )
+
+    expected_root_keys = set(canonical_spec.keys()) | {"target_staging_configuration"}
+    for rk in sorted(expected_root_keys):
+        if rk not in candidate_spec:
+            if rk == "target_staging_configuration":
+                errors.append("missing_target_staging_configuration_in_thresholds_spec")
+            else:
+                errors.append(f"missing_threshold_spec_key:root.{rk}")
+    for extra_rk in sorted(set(candidate_spec.keys()) - expected_root_keys):
+        errors.append(f"unexpected_threshold_spec_key:root.{extra_rk}")
+
+    for exact_str_key in ("gate", "coordinated_benchmark_harness", "coordinated_benchmark_schema_version"):
+        if candidate_spec.get(exact_str_key) != canonical_spec[exact_str_key]:
+            errors.append(
+                f"threshold_mismatch:root.{exact_str_key}:expected={canonical_spec[exact_str_key]!r}:got={candidate_spec.get(exact_str_key)!r}"
+            )
+    for req_str_key in (
+        "canonical_source_handoff_sha256",
+        "schema_version",
+        "target_sizing_assumption",
+        "ticket_version",
+    ):
+        if not isinstance(candidate_spec.get(req_str_key), str) or not str(candidate_spec.get(req_str_key)).strip():
+            errors.append(f"invalid_or_empty_root_field:{req_str_key}")
+
+    cand_dig = str(candidate_spec.get("locked_candidate_digest") or "").strip()
+    if cand_dig != str(expected_digest or "").strip():
+        errors.append(
+            f"thresholds_locked_candidate_digest_mismatch:expected={expected_digest!r}:got={cand_dig!r}"
+        )
+    cand_img_id = str(candidate_spec.get("locked_candidate_image_id") or "").strip()
+    if not re.fullmatch(r"sha256:[0-9a-f]{64}", cand_img_id):
+        errors.append(f"invalid_locked_candidate_image_id:{cand_img_id!r}")
+
+    cand_target_cfg = candidate_spec.get("target_staging_configuration")
+    if expected_cfg is not None and isinstance(cand_target_cfg, dict):
+        _diff_threshold_nodes(expected_cfg, cand_target_cfg, "root.target_staging_configuration", errors)
+    elif cand_target_cfg is not None and not isinstance(cand_target_cfg, dict):
+        errors.append(
+            f"threshold_type_mismatch:root.target_staging_configuration:expected_dict_got_{type(cand_target_cfg).__name__}"
+        )
+
+    for section_key in (
+        "precheck_7_metrics",
+        "section_3_2A_cases_and_session_models",
+        "section_3_2B_mixed_session_waves",
+        "section_3_2C_dataset_batch_and_background",
+    ):
+        if section_key in candidate_spec:
+            _validate_config_bound_subtree(
+                canonical_spec[section_key],
+                candidate_spec[section_key],
+                f"root.{section_key}",
+                errors,
+            )
+
     return (canonical_spec if errors else candidate_spec), candidate_sha, errors
 
 
@@ -5468,13 +6337,14 @@ def detect_ci_benchmark_report(benchmark_report: dict[str, Any]) -> tuple[bool, 
 
 
 def verify_staging_vps_receipts_for_g18(
-    benchmark_report: dict[str, Any],
+    benchmark_report: dict[str, Any] | None,
     vps_receipts: dict[str, Any] | Path | None,
     *,
     expected_digest: str,
     is_ci_benchmark_report: bool,
+    target_configuration_profile: str | None = None,
 ) -> tuple[bool, list[str]]:
-    """Verify G03/G05, read-only preflight, digest pull, and live zero-mutation receipts from Staging VPS."""
+    """Verify G03/G05, read-only preflight, safe sizing, digest pull, and live zero-mutation receipts from Staging VPS."""
     if vps_receipts is None:
         return False, ["missing_staging_vps_receipts_bundle"]
 
@@ -5555,14 +6425,48 @@ def verify_staging_vps_receipts_for_g18(
             if tok in vps_platform.lower() or tok in vps_hostname.lower():
                 errors.append(f"preflight.host_identity_indicates_ci:{vps_hostname}:{vps_platform}")
                 break
-        bench_plat = str(
-            (((benchmark_report.get("s1_domain_and_database_benchmark") or {}).get("runner_hardware") or {}).get("platform"))
-            or ""
-        ).strip()
-        if bench_plat != vps_platform:
-            errors.append(
-                f"benchmark_runner_platform_mismatch_vs_vps_preflight:bench={bench_plat!r}:vps={vps_platform!r}"
-            )
+        if benchmark_report is not None:
+            bench_plat = str(
+                (((benchmark_report.get("s1_domain_and_database_benchmark") or {}).get("runner_hardware") or {}).get("platform"))
+                or ""
+            ).strip()
+            if bench_plat != vps_platform:
+                errors.append(
+                    f"benchmark_runner_platform_mismatch_vs_vps_preflight:bench={bench_plat!r}:vps={vps_platform!r}"
+                )
+
+    if target_configuration_profile is not None:
+        try:
+            expected_cfg = build_target_staging_configuration_block(target_configuration_profile)
+        except ValueError as exc:
+            expected_cfg = None
+            errors.append(f"invalid_target_configuration_profile:{target_configuration_profile!r}:{exc}")
+        if expected_cfg is not None:
+            if expected_cfg.get("g18_s1_benchmark_capable") is not True:
+                errors.append(f"target_configuration_profile_not_g18_s1_capable:{target_configuration_profile!r}")
+            safe_alloc = preflight.get("safe_staging_allocation")
+            if not isinstance(safe_alloc, dict):
+                errors.append("preflight.missing_safe_staging_allocation")
+            else:
+                if safe_alloc.get("g18_acceptance_safe") is not True:
+                    errors.append(f"preflight.g18_acceptance_not_safe_on_vps:{safe_alloc.get('status')!r}")
+                allowed_profs = safe_alloc.get("safe_profiles_allowed") or []
+                if target_configuration_profile not in allowed_profs:
+                    errors.append(
+                        f"preflight.target_profile_not_safe_on_vps:{target_configuration_profile!r}:allowed={allowed_profs!r}"
+                    )
+            summary_cfg = summary.get("staging_resource_configuration")
+            if not isinstance(summary_cfg, dict):
+                errors.append("summary.missing_staging_resource_configuration")
+            else:
+                if summary_cfg.get("profile_id") != expected_cfg["profile_id"]:
+                    errors.append(
+                        f"summary.staging_resource_profile_mismatch:expected={expected_cfg['profile_id']!r}:got={summary_cfg.get('profile_id')!r}"
+                    )
+                if summary_cfg.get("config_spec_sha256") != expected_cfg["config_spec_sha256"]:
+                    errors.append(
+                        f"summary.staging_config_spec_sha256_mismatch:expected={expected_cfg['config_spec_sha256']}:got={summary_cfg.get('config_spec_sha256')!r}"
+                    )
 
     # 3. Candidate @sha256 registry pull & inspect receipt
     if pull_rec.get("schema_version") != "cskh-p4-candidate-registry-receipt-v1" or pull_rec.get("status") != "PASS":
@@ -5638,6 +6542,125 @@ def verify_staging_vps_receipts_for_g18(
     return (not errors), errors
 
 
+def _validate_owner_slo_approval_document(
+    owner_slo_approval: dict[str, Any] | None,
+    *,
+    validated_spec: dict[str, Any],
+    candidate_thresholds_sha256: str,
+    threshold_spec_errors: list[str],
+    config_bound_mode: bool,
+    resolved_profile: str | None,
+    expected_digest: str,
+) -> tuple[bool, str, list[str]]:
+    """Validate Owner SLO approval and cryptographic SHA-256 + configuration binding."""
+    approval_errors: list[str] = []
+    signed_thresholds_sha256 = ""
+    if owner_slo_approval is None:
+        return False, "", ["missing_owner_slo_approval_document"]
+    if not isinstance(owner_slo_approval, dict):
+        return False, "", [f"owner_slo_approval_not_dict:{type(owner_slo_approval).__name__}"]
+
+    if owner_slo_approval.get("approved") is not True:
+        approval_errors.append("approved_flag_not_true")
+    expected_tv = str(validated_spec.get("ticket_version") or "v1.4")
+    if str(owner_slo_approval.get("ticket_version") or "") != expected_tv:
+        approval_errors.append(
+            f"expected_ticket_version_{expected_tv}_got_{owner_slo_approval.get('ticket_version')!r}"
+        )
+    signed_by = str(owner_slo_approval.get("signed_by") or "").strip()
+    if not signed_by:
+        approval_errors.append("missing_signed_by")
+    elif (
+        signed_by.lower() in FORBIDDEN_T1C_SELF_APPROVERS
+        or signed_by.lower().startswith(("t1a", "t1b", "<"))
+        or "placeholder" in signed_by.lower()
+    ):
+        approval_errors.append(f"forbidden_or_self_signed_by:{signed_by!r}")
+    if not str(owner_slo_approval.get("signed_at") or "").strip():
+        approval_errors.append("missing_signed_at")
+
+    signed_thresholds_sha256 = str(owner_slo_approval.get("thresholds_sha256") or "").strip()
+    if not signed_thresholds_sha256:
+        approval_errors.append("missing_thresholds_sha256_in_owner_approval")
+    else:
+        if not config_bound_mode and signed_thresholds_sha256 != LOCKED_G18_THRESHOLDS_V1_4_SHA256:
+            approval_errors.append(
+                f"owner_approval_thresholds_sha256_mismatch_vs_locked_v1_4:"
+                f"expected={LOCKED_G18_THRESHOLDS_V1_4_SHA256}:got={signed_thresholds_sha256}"
+            )
+        if candidate_thresholds_sha256 and signed_thresholds_sha256 != candidate_thresholds_sha256:
+            approval_errors.append(
+                f"owner_approval_thresholds_sha256_mismatch_vs_evaluated_spec:"
+                f"expected={candidate_thresholds_sha256}:got={signed_thresholds_sha256}"
+            )
+
+    if config_bound_mode:
+        approved_prof = str(owner_slo_approval.get("approved_configuration_profile") or "").strip()
+        if not approved_prof:
+            approval_errors.append("missing_approved_configuration_profile_in_owner_approval")
+        elif resolved_profile and approved_prof != resolved_profile:
+            approval_errors.append(
+                f"owner_approval_configuration_profile_mismatch:expected={resolved_profile!r}:got={approved_prof!r}"
+            )
+        expected_cfg_sha = (
+            get_staging_resource_profile_spec(resolved_profile)["config_spec_sha256"]
+            if (resolved_profile and resolved_profile in STAGING_VPS_RESOURCE_PROFILES)
+            else ""
+        )
+        approved_cfg_sha = str(owner_slo_approval.get("approved_config_spec_sha256") or "").strip()
+        if not approved_cfg_sha:
+            approval_errors.append("missing_approved_config_spec_sha256_in_owner_approval")
+        elif expected_cfg_sha and approved_cfg_sha != expected_cfg_sha:
+            approval_errors.append(
+                f"owner_approval_config_spec_sha256_mismatch:expected={expected_cfg_sha}:got={approved_cfg_sha}"
+            )
+        approved_dig = str(owner_slo_approval.get("approved_candidate_digest") or "").strip()
+        if not approved_dig:
+            approval_errors.append("missing_approved_candidate_digest_in_owner_approval")
+        elif approved_dig != expected_digest:
+            approval_errors.append(
+                f"owner_approval_candidate_digest_mismatch:expected={expected_digest!r}:got={approved_dig!r}"
+            )
+
+    raw_signed = owner_slo_approval.get("approved_thresholds")
+    if not isinstance(raw_signed, dict):
+        approval_errors.append("missing_or_invalid_approved_thresholds_dict")
+    else:
+        pre_spec = validated_spec["precheck_7_metrics"]
+        for key, spec in pre_spec.items():
+            if key not in raw_signed:
+                approval_errors.append(f"missing_threshold_key:{key}")
+            elif isinstance(raw_signed[key], bool) or not isinstance(raw_signed[key], (int, float)):
+                approval_errors.append(f"invalid_threshold_type:{key}")
+            else:
+                val = float(raw_signed[key])
+                if not math.isfinite(val) or abs(val - float(spec["threshold"])) > 1e-6:
+                    approval_errors.append(
+                        f"threshold_mismatch_vs_ticket_v1.4:{key}:expected={spec['threshold']}:got={val}"
+                    )
+        for extra_k in sorted(set(raw_signed) - set(pre_spec)):
+            approval_errors.append(f"unexpected_approved_threshold_key:{extra_k}")
+
+    owner_signed = (not approval_errors) and (not threshold_spec_errors)
+    return owner_signed, signed_thresholds_sha256, approval_errors
+
+
+def _peek_thresholds_target_profile(
+    thresholds_spec: dict[str, Any] | None,
+    thresholds_path: Path | None,
+) -> str | None:
+    if isinstance(thresholds_spec, dict) and isinstance(thresholds_spec.get("target_staging_configuration"), dict):
+        return str(thresholds_spec["target_staging_configuration"].get("profile_id") or "").strip() or None
+    if thresholds_path is not None and thresholds_path.is_file():
+        try:
+            loaded = json.loads(thresholds_path.read_text(encoding="utf-8"))
+            if isinstance(loaded, dict) and isinstance(loaded.get("target_staging_configuration"), dict):
+                return str(loaded["target_staging_configuration"].get("profile_id") or "").strip() or None
+        except Exception:
+            return None
+    return None
+
+
 def reconcile_g18_benchmark_with_v1_4_slos(
     benchmark_report: dict[str, Any],
     *,
@@ -5646,13 +6669,45 @@ def reconcile_g18_benchmark_with_v1_4_slos(
     thresholds_spec: dict[str, Any] | None = None,
     thresholds_path: Path | None = None,
     expected_digest: str = LOCKED_CANDIDATE_DIGEST_V1_4,
+    target_configuration_profile: str | None = None,
+    t1c_confirmation: dict[str, Any] | Path | None = None,
+    require_t1c_confirmation: bool = False,
     out_json: Path | None = None,
 ) -> dict[str, Any]:
-    """Reconcile G18 per Owner Ticket v1.4: 7-metric precheck + full §3.2A–C + Staging VPS receipts + SHA-256 SLO signature."""
-    validated_spec, candidate_thresholds_sha256, threshold_spec_errors = load_and_validate_g18_thresholds_v1_4(
-        thresholds_spec=thresholds_spec,
-        thresholds_path=thresholds_path,
+    """Reconcile G18 per Owner Ticket v1.4 or config-bound Staging VPS SLO: 7-metric precheck + full §3.2A–C + Staging VPS receipts + SHA-256 SLO signature."""
+    peek_thresh_prof = _peek_thresholds_target_profile(thresholds_spec, thresholds_path)
+    approval_prof = (
+        str(owner_slo_approval.get("approved_configuration_profile") or "").strip()
+        if isinstance(owner_slo_approval, dict)
+        else ""
     )
+    bench_resource_profile = str(benchmark_report.get("resource_profile") or "").strip()
+    config_bound_mode = bool(
+        target_configuration_profile is not None
+        or peek_thresh_prof is not None
+        or approval_prof
+        or bench_resource_profile
+    )
+    resolved_profile = (
+        str(target_configuration_profile).strip()
+        if target_configuration_profile is not None
+        else (peek_thresh_prof or approval_prof or bench_resource_profile or None)
+    )
+
+    if config_bound_mode:
+        validated_spec, candidate_thresholds_sha256, threshold_spec_errors = (
+            validate_g18_thresholds_for_configuration(
+                thresholds_spec=thresholds_spec,
+                thresholds_path=thresholds_path,
+                target_configuration_profile=resolved_profile or "__missing__",
+                expected_digest=expected_digest,
+            )
+        )
+    else:
+        validated_spec, candidate_thresholds_sha256, threshold_spec_errors = load_and_validate_g18_thresholds_v1_4(
+            thresholds_spec=thresholds_spec,
+            thresholds_path=thresholds_path,
+        )
 
     missing_measurements: list[str] = []
     breached_checks: list[str] = []
@@ -5711,59 +6766,38 @@ def reconcile_g18_benchmark_with_v1_4_slos(
     if p4_9_2_all_passed_opt is False:
         breached_checks.append("p4_9_2_acceptance_matrix.all_passed_is_false")
 
-    # Validate Owner approval document + cryptographic SHA-256 binding to the threshold specification
     owner_approval_present = owner_slo_approval is not None
-    approval_errors: list[str] = []
-    owner_signed = False
-    signed_thresholds_sha256 = ""
-    if owner_slo_approval is None:
-        approval_errors.append("missing_owner_slo_approval_document")
-    elif not isinstance(owner_slo_approval, dict):
-        approval_errors.append(f"owner_slo_approval_not_dict:{type(owner_slo_approval).__name__}")
-    else:
-        if owner_slo_approval.get("approved") is not True:
-            approval_errors.append("approved_flag_not_true")
-        if str(owner_slo_approval.get("ticket_version") or "") != "v1.4":
-            approval_errors.append(
-                f"expected_ticket_version_v1.4_got_{owner_slo_approval.get('ticket_version')!r}"
+    owner_signed, signed_thresholds_sha256, approval_errors = _validate_owner_slo_approval_document(
+        owner_slo_approval,
+        validated_spec=validated_spec,
+        candidate_thresholds_sha256=candidate_thresholds_sha256,
+        threshold_spec_errors=threshold_spec_errors,
+        config_bound_mode=config_bound_mode,
+        resolved_profile=resolved_profile,
+        expected_digest=expected_digest,
+    )
+
+    t1c_check_enforced = bool(require_t1c_confirmation or t1c_confirmation is not None)
+    t1c_ok = True
+    t1c_doc: dict[str, Any] | None = None
+    t1c_errors: list[str] = []
+    if t1c_check_enforced:
+        t1c_ok, t1c_doc, t1c_errors = verify_t1c_candidate_confirmation(
+            t1c_confirmation,
+            expected_app_image=expected_digest,
+        )
+
+    configuration_errors: list[str] = []
+    configuration_matches = True
+    if config_bound_mode:
+        if not bench_resource_profile:
+            configuration_matches = False
+            configuration_errors.append("missing_resource_profile_in_benchmark_report")
+        elif resolved_profile and bench_resource_profile != resolved_profile:
+            configuration_matches = False
+            configuration_errors.append(
+                f"benchmark_resource_profile_mismatch:expected={resolved_profile!r}:got={bench_resource_profile!r}"
             )
-        if not str(owner_slo_approval.get("signed_by") or "").strip():
-            approval_errors.append("missing_signed_by")
-        if not str(owner_slo_approval.get("signed_at") or "").strip():
-            approval_errors.append("missing_signed_at")
-        signed_thresholds_sha256 = str(owner_slo_approval.get("thresholds_sha256") or "").strip()
-        if not signed_thresholds_sha256:
-            approval_errors.append("missing_thresholds_sha256_in_owner_approval")
-        else:
-            if signed_thresholds_sha256 != LOCKED_G18_THRESHOLDS_V1_4_SHA256:
-                approval_errors.append(
-                    f"owner_approval_thresholds_sha256_mismatch_vs_locked_v1_4:"
-                    f"expected={LOCKED_G18_THRESHOLDS_V1_4_SHA256}:got={signed_thresholds_sha256}"
-                )
-            if candidate_thresholds_sha256 and signed_thresholds_sha256 != candidate_thresholds_sha256:
-                approval_errors.append(
-                    f"owner_approval_thresholds_sha256_mismatch_vs_evaluated_spec:"
-                    f"expected={candidate_thresholds_sha256}:got={signed_thresholds_sha256}"
-                )
-        raw_signed = owner_slo_approval.get("approved_thresholds")
-        if not isinstance(raw_signed, dict):
-            approval_errors.append("missing_or_invalid_approved_thresholds_dict")
-        else:
-            pre_spec = validated_spec["precheck_7_metrics"]
-            for key, spec in pre_spec.items():
-                if key not in raw_signed:
-                    approval_errors.append(f"missing_threshold_key:{key}")
-                elif isinstance(raw_signed[key], bool) or not isinstance(raw_signed[key], (int, float)):
-                    approval_errors.append(f"invalid_threshold_type:{key}")
-                else:
-                    val = float(raw_signed[key])
-                    if not math.isfinite(val) or abs(val - float(spec["threshold"])) > 1e-6:
-                        approval_errors.append(
-                            f"threshold_mismatch_vs_ticket_v1.4:{key}:expected={spec['threshold']}:got={val}"
-                        )
-            for extra_k in sorted(set(raw_signed) - set(pre_spec)):
-                approval_errors.append(f"unexpected_approved_threshold_key:{extra_k}")
-        owner_signed = (not approval_errors) and (not threshold_spec_errors)
 
     # Step 1: 7-metric table pre-check
     precheck_eval = evaluate_precheck_7_metrics(
@@ -5801,6 +6835,7 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         vps_receipts,
         expected_digest=expected_digest,
         is_ci_benchmark_report=is_ci_report,
+        target_configuration_profile=resolved_profile if config_bound_mode else None,
     )
 
     all_technical_thresholds_passed = (
@@ -5811,15 +6846,23 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         and not unique_breaches
     )
 
-    # Deterministic fail-closed status precedence for G18 v1.4
+    # Deterministic fail-closed status precedence for G18
     if threshold_spec_errors:
         overall_status = "FAIL_INVALID_THRESHOLDS"
     elif not measurements_complete:
         overall_status = "FAIL_MISSING_MEASUREMENTS"
     elif not digest_matches:
         overall_status = "FAIL_DIGEST_MISMATCH"
+    elif not configuration_matches:
+        overall_status = "FAIL_CONFIGURATION_MISMATCH"
     elif not owner_vps_untouched:
         overall_status = "FAIL_ISOLATION_GUARD"
+    elif t1c_check_enforced and not t1c_ok:
+        overall_status = (
+            "BLOCKED_PENDING_T1C_CANDIDATE_CONFIRMATION"
+            if t1c_confirmation is None
+            else "FAIL_INVALID_T1C_CANDIDATE_CONFIRMATION"
+        )
     elif not all_technical_thresholds_passed:
         overall_status = "FAIL_THRESHOLD_BREACH"
     elif owner_approval_present and not owner_signed:
@@ -5843,11 +6886,32 @@ def reconcile_g18_benchmark_with_v1_4_slos(
     else:
         overall_status = "PASS"
 
+    pass_reqs: dict[str, bool] = {
+        "measurements_complete_and_within_v1_4_thresholds": all_technical_thresholds_passed,
+        "candidate_digest_matches_locked_v1_4": digest_matches,
+        "staging_vps_benchmark_and_receipts_verified": (not is_ci_report) and vps_receipts_verified,
+        "owner_v1_4_approval_bound_to_thresholds_sha256": owner_signed,
+    }
+    if config_bound_mode:
+        pass_reqs["benchmark_and_slo_bound_to_safe_staging_configuration"] = (
+            configuration_matches and vps_receipts_verified and owner_signed
+        )
+    if t1c_check_enforced:
+        pass_reqs["t1c_candidate_confirmation_verified"] = t1c_ok
+
     reconciliation = {
         "schema_version": "cskh-p4-g18-slo-v1-4-reconciliation-v2",
         "timestamp_utc": utc_now_iso(),
         "gate": "G18",
-        "ticket_version_required": "v1.4",
+        "ticket_version_required": str(validated_spec.get("ticket_version") or "v1.4"),
+        "config_bound_mode": config_bound_mode,
+        "target_configuration_profile": resolved_profile,
+        "benchmark_resource_profile": bench_resource_profile or None,
+        "configuration_matches": configuration_matches,
+        "configuration_validation_errors": configuration_errors,
+        "t1c_candidate_confirmed": t1c_ok if t1c_check_enforced else None,
+        "t1c_candidate_confirmation": t1c_doc,
+        "t1c_confirmation_errors": t1c_errors,
         "status": overall_status,
         "thresholds_spec_path": str(thresholds_path or DEFAULT_G18_THRESHOLDS_V1_4_PATH),
         "locked_thresholds_sha256": LOCKED_G18_THRESHOLDS_V1_4_SHA256,
@@ -5872,12 +6936,7 @@ def reconcile_g18_benchmark_with_v1_4_slos(
         "precheck_7_metrics": precheck_eval,
         "metric_comparisons": precheck_eval["metric_comparisons"],
         "section_3_2_reconciliation": sec_3_2_eval,
-        "g18_pass_requirements": {
-            "measurements_complete_and_within_v1_4_thresholds": all_technical_thresholds_passed,
-            "candidate_digest_matches_locked_v1_4": digest_matches,
-            "staging_vps_benchmark_and_receipts_verified": (not is_ci_report) and vps_receipts_verified,
-            "owner_v1_4_approval_bound_to_thresholds_sha256": owner_signed,
-        },
+        "g18_pass_requirements": pass_reqs,
     }
     if out_json is not None:
         out_json.parent.mkdir(parents=True, exist_ok=True)
@@ -5887,6 +6946,338 @@ def reconcile_g18_benchmark_with_v1_4_slos(
             newline="\n",
         )
     return reconciliation
+
+
+def _infer_staging_profile_from_vps_receipts(vps_receipts: dict[str, Any] | Path | None) -> str | None:
+    summary_doc: dict[str, Any] | None = None
+    preflight_doc: dict[str, Any] | None = None
+    if isinstance(vps_receipts, Path) and vps_receipts.is_dir():
+        s_path = vps_receipts / "vps-g03-g05-summary.json"
+        p_path = vps_receipts / "readonly-vps-preflight.json"
+        if s_path.is_file():
+            try:
+                summary_doc = json.loads(s_path.read_text(encoding="utf-8"))
+            except Exception:
+                summary_doc = None
+        if p_path.is_file():
+            try:
+                preflight_doc = json.loads(p_path.read_text(encoding="utf-8"))
+            except Exception:
+                preflight_doc = None
+    elif isinstance(vps_receipts, dict):
+        if isinstance(vps_receipts.get("summary"), dict):
+            summary_doc = vps_receipts["summary"]
+        if isinstance(vps_receipts.get("readonly_vps_preflight"), dict):
+            preflight_doc = vps_receipts["readonly_vps_preflight"]
+
+    if isinstance(summary_doc, dict) and isinstance(summary_doc.get("staging_resource_configuration"), dict):
+        prof = str(summary_doc["staging_resource_configuration"].get("profile_id") or "").strip()
+        if prof:
+            return prof
+    if isinstance(preflight_doc, dict) and isinstance(preflight_doc.get("safe_staging_allocation"), dict):
+        rec = str(preflight_doc["safe_staging_allocation"].get("recommended_g18_profile") or "").strip()
+        if rec:
+            return rec
+    return None
+
+
+def verify_g18_acceptance_measurement_gate(
+    *,
+    vps_receipts: dict[str, Any] | Path | None,
+    expected_digest: str,
+    target_configuration_profile: str | None = None,
+    thresholds_spec: dict[str, Any] | None = None,
+    thresholds_path: Path | None = None,
+    owner_slo_approval: dict[str, Any] | Path | None = None,
+    t1c_confirmation: dict[str, Any] | Path | None = None,
+    bench_port: int = 18880,
+    benchmark_out_json: Path | None = None,
+    out_json: Path | None = None,
+) -> dict[str, Any]:
+    """Fail-closed pre-measurement gate: allow running G18 on Staging VPS ONLY when T1C confirmed candidate, G03/G05 receipts match safe VPS sizing, and scorer thresholds match Owner-signed SLO for that configuration."""
+    owner_doc: dict[str, Any] | None = None
+    owner_load_err: str | None = None
+    if isinstance(owner_slo_approval, Path):
+        if not owner_slo_approval.is_file():
+            owner_load_err = f"owner_approval_file_not_found:{owner_slo_approval}"
+        else:
+            try:
+                loaded_owner = json.loads(owner_slo_approval.read_text(encoding="utf-8"))
+                if isinstance(loaded_owner, dict):
+                    owner_doc = loaded_owner
+                else:
+                    owner_load_err = "owner_approval_root_not_dict"
+            except Exception as exc:
+                owner_load_err = f"owner_approval_invalid_json:{exc}"
+    elif isinstance(owner_slo_approval, dict):
+        owner_doc = owner_slo_approval
+
+    t1c_source = t1c_confirmation
+    if t1c_source is None:
+        if (
+            isinstance(vps_receipts, Path)
+            and (vps_receipts / "t1c-candidate-confirmation-receipt.json").is_file()
+        ):
+            t1c_source = vps_receipts / "t1c-candidate-confirmation-receipt.json"
+        elif (
+            isinstance(vps_receipts, dict)
+            and isinstance(vps_receipts.get("summary"), dict)
+            and isinstance(vps_receipts["summary"].get("t1c_candidate_confirmation"), dict)
+        ):
+            t1c_source = vps_receipts["summary"]["t1c_candidate_confirmation"]
+
+    req_prof = str(target_configuration_profile or "").strip()
+    if not req_prof or req_prof == "auto":
+        resolved_profile = (
+            _infer_staging_profile_from_vps_receipts(vps_receipts)
+            or _peek_thresholds_target_profile(thresholds_spec, thresholds_path)
+            or (str(owner_doc.get("approved_configuration_profile") or "").strip() if owner_doc else "")
+            or None
+        )
+    else:
+        resolved_profile = req_prof
+
+    t1c_ok, t1c_doc, t1c_errors = verify_t1c_candidate_confirmation(
+        t1c_source,
+        expected_app_image=expected_digest,
+    )
+    vps_ok, vps_errors = verify_staging_vps_receipts_for_g18(
+        None,
+        vps_receipts,
+        expected_digest=expected_digest,
+        is_ci_benchmark_report=False,
+        target_configuration_profile=resolved_profile or "__missing__",
+    )
+    validated_spec, candidate_thresholds_sha256, threshold_errors = validate_g18_thresholds_for_configuration(
+        thresholds_spec=thresholds_spec,
+        thresholds_path=thresholds_path,
+        target_configuration_profile=resolved_profile or "__missing__",
+        expected_digest=expected_digest,
+    )
+    if owner_load_err is not None:
+        owner_signed = False
+        signed_thresholds_sha256 = ""
+        approval_errors = [owner_load_err]
+    else:
+        owner_signed, signed_thresholds_sha256, approval_errors = _validate_owner_slo_approval_document(
+            owner_doc,
+            validated_spec=validated_spec,
+            candidate_thresholds_sha256=candidate_thresholds_sha256,
+            threshold_spec_errors=threshold_errors,
+            config_bound_mode=True,
+            resolved_profile=resolved_profile,
+            expected_digest=expected_digest,
+        )
+
+    measurement_allowed = bool(
+        resolved_profile
+        and t1c_ok
+        and vps_ok
+        and (not threshold_errors)
+        and owner_signed
+    )
+
+    if not t1c_ok:
+        gate_status = (
+            "BLOCKED_PENDING_T1C_CANDIDATE_CONFIRMATION"
+            if t1c_source is None
+            else "FAIL_INVALID_T1C_CANDIDATE_CONFIRMATION"
+        )
+    elif not vps_ok:
+        gate_status = (
+            "BLOCKED_MISSING_STAGING_VPS_G03_G05_RECEIPTS"
+            if vps_receipts is None
+            else "FAIL_UNSAFE_OR_INVALID_STAGING_VPS_CONFIGURATION"
+        )
+    elif threshold_errors:
+        gate_status = "BLOCKED_SCORER_THRESHOLDS_NOT_BOUND_TO_CONFIGURATION"
+    elif not owner_signed:
+        gate_status = (
+            "BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO"
+            if (owner_slo_approval is None)
+            else "FAIL_SCORER_DOES_NOT_MATCH_OWNER_SIGNED_CONFIG_SLO"
+        )
+    else:
+        gate_status = "READY_FOR_G18_ACCEPTANCE_MEASUREMENT"
+
+    resolved_cfg_sha = (
+        get_staging_resource_profile_spec(resolved_profile)["config_spec_sha256"]
+        if (resolved_profile and resolved_profile in STAGING_VPS_RESOURCE_PROFILES)
+        else None
+    )
+    planned_out = benchmark_out_json or Path("/tmp/staging-vps-s1-benchmark.json")
+    planned_cmd = (
+        [
+            sys.executable,
+            str(REPO_ROOT / "deploy" / "release" / "benchmark_p4_isolated.py"),
+            "--provision-and-run-s1",
+            "--confirm-isolated-target",
+            "--resource-profile",
+            str(resolved_profile),
+            "--require-live-headroom",
+            "--pull-policy",
+            "never",
+            "--port",
+            str(bench_port),
+            "--app-image",
+            expected_digest,
+            "--out",
+            str(planned_out),
+        ]
+        if measurement_allowed
+        else None
+    )
+
+    gate_report = {
+        "schema_version": "cskh-p4-g18-pre-measurement-gate-v1",
+        "timestamp_utc": utc_now_iso(),
+        "gate": "G18",
+        "status": gate_status,
+        "measurement_allowed": measurement_allowed,
+        "expected_candidate_digest": expected_digest,
+        "resolved_configuration_profile": resolved_profile,
+        "resolved_config_spec_sha256": resolved_cfg_sha,
+        "t1c_candidate_confirmed": t1c_ok,
+        "t1c_candidate_confirmation": t1c_doc,
+        "t1c_confirmation_errors": t1c_errors,
+        "staging_vps_g03_g05_receipts_verified": vps_ok,
+        "staging_vps_receipt_errors": vps_errors,
+        "scorer_thresholds_sha256": candidate_thresholds_sha256,
+        "scorer_threshold_validation_errors": threshold_errors,
+        "owner_config_slo_signed_and_matched": owner_signed,
+        "owner_approval_thresholds_sha256": signed_thresholds_sha256,
+        "owner_approval_validation_errors": approval_errors,
+        "planned_benchmark_command": planned_cmd,
+    }
+    if out_json is not None:
+        out_json.parent.mkdir(parents=True, exist_ok=True)
+        out_json.write_text(
+            json.dumps(gate_report, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+    return gate_report
+
+
+def run_staging_vps_g18_acceptance(
+    *,
+    vps_receipts: dict[str, Any] | Path,
+    expected_digest: str,
+    benchmark_out_json: Path,
+    reconcile_out_json: Path | None = None,
+    target_configuration_profile: str | None = None,
+    thresholds_spec: dict[str, Any] | None = None,
+    thresholds_path: Path | None = None,
+    owner_slo_approval: dict[str, Any] | Path | None = None,
+    t1c_confirmation: dict[str, Any] | Path | None = None,
+    live_project_name: str = "crm-cskh-vps-staging",
+    bench_port: int = 18880,
+) -> dict[str, Any]:
+    """Execute G18 S1 acceptance on Staging VPS ONLY if pre-measurement config-bound SLO gate passes, preserving live stack before/after."""
+    gate = verify_g18_acceptance_measurement_gate(
+        vps_receipts=vps_receipts,
+        expected_digest=expected_digest,
+        target_configuration_profile=target_configuration_profile,
+        thresholds_spec=thresholds_spec,
+        thresholds_path=thresholds_path,
+        owner_slo_approval=owner_slo_approval,
+        t1c_confirmation=t1c_confirmation,
+        bench_port=bench_port,
+        benchmark_out_json=benchmark_out_json,
+    )
+    if not gate["measurement_allowed"] or not gate["planned_benchmark_command"]:
+        blocked_res = {
+            **gate,
+            "benchmark_executed": False,
+            "live_zero_mutation": True,
+        }
+        if reconcile_out_json is not None:
+            reconcile_out_json.parent.mkdir(parents=True, exist_ok=True)
+            reconcile_out_json.write_text(
+                json.dumps(blocked_res, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+        return blocked_res
+
+    live_before = capture_readonly_live_stack_snapshot(live_project_name)
+    if not live_before.get("all_running") or int(live_before.get("container_count") or 0) <= 0:
+        raise RuntimeError(
+            f"Refusing G18 benchmark execution because live stack {live_project_name!r} is not healthy/running: {live_before}"
+        )
+
+    benchmark_out_json = benchmark_out_json.resolve()
+    benchmark_out_json.parent.mkdir(parents=True, exist_ok=True)
+    live_pres_path = benchmark_out_json.parent / "g18-live-preservation-before-after.json"
+
+    try:
+        run_sub(gate["planned_benchmark_command"])
+    finally:
+        live_after = capture_readonly_live_stack_snapshot(live_project_name)
+        live_preservation = compare_live_stack_preservation(live_before, live_after)
+        live_pres_path.write_text(
+            json.dumps(live_preservation, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+    if live_preservation.get("zero_live_mutation") is not True:
+        fail_live = {
+            **gate,
+            "status": "FAIL_LIVE_SERVICE_MUTATED_DURING_G18",
+            "benchmark_executed": True,
+            "live_zero_mutation": False,
+            "live_preservation": live_preservation,
+        }
+        if reconcile_out_json is not None:
+            reconcile_out_json.parent.mkdir(parents=True, exist_ok=True)
+            reconcile_out_json.write_text(
+                json.dumps(fail_live, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+        return fail_live
+
+    bench_doc = json.loads(benchmark_out_json.read_text(encoding="utf-8"))
+    owner_doc = (
+        json.loads(owner_slo_approval.read_text(encoding="utf-8"))
+        if isinstance(owner_slo_approval, Path)
+        else owner_slo_approval
+    )
+    t1c_src = (
+        t1c_confirmation
+        if t1c_confirmation is not None
+        else (
+            vps_receipts / "t1c-candidate-confirmation-receipt.json"
+            if isinstance(vps_receipts, Path)
+            else (
+                vps_receipts["summary"].get("t1c_candidate_confirmation")
+                if (isinstance(vps_receipts, dict) and isinstance(vps_receipts.get("summary"), dict))
+                else None
+            )
+        )
+    )
+    rec = reconcile_g18_benchmark_with_v1_4_slos(
+        bench_doc,
+        owner_slo_approval=owner_doc,
+        vps_receipts=vps_receipts,
+        thresholds_spec=thresholds_spec,
+        thresholds_path=thresholds_path,
+        expected_digest=expected_digest,
+        target_configuration_profile=gate["resolved_configuration_profile"],
+        t1c_confirmation=t1c_src,
+        require_t1c_confirmation=True,
+        out_json=reconcile_out_json,
+    )
+    rec["benchmark_executed"] = True
+    rec["g18_live_preservation_before_after"] = live_preservation
+    if reconcile_out_json is not None:
+        reconcile_out_json.write_text(
+            json.dumps(rec, indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+    return rec
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -5943,7 +7334,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_vpre = sub.add_parser(
         "readonly-vps-preflight",
-        help="Read-only check of VPS CPU/RAM/disk/ports and live-before snapshot (zero mutation)",
+        help="Read-only check of VPS CPU/RAM/disk/ports, safe Staging configuration sizing, and live-before snapshot (zero mutation)",
     )
     p_vpre.add_argument("--live-project", default="crm-cskh-vps-staging")
     p_vpre.add_argument("--disk-path", type=Path, default=Path("/"))
@@ -5966,6 +7357,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_vg.add_argument("--https-port", type=int, default=18443)
     p_vg.add_argument("--keep-up", action="store_true")
     p_vg.add_argument("--state-dir", type=Path, default=None)
+    p_vg.add_argument("--t1c-confirmation-json", type=Path, default=None)
+    p_vg.add_argument("--require-t1c-confirmation", action="store_true")
+    p_vg.add_argument(
+        "--resource-profile",
+        default=None,
+        choices=("auto", *sorted(STAGING_VPS_RESOURCE_PROFILES)),
+    )
 
     p_vref = sub.add_parser(
         "refresh-candidate-digest",
@@ -5980,16 +7378,55 @@ def build_parser() -> argparse.ArgumentParser:
     p_vref.add_argument("--https-port", type=int, default=18443)
     p_vref.add_argument("--keep-up", action="store_true")
     p_vref.add_argument("--state-dir", type=Path, default=None)
+    p_vref.add_argument("--t1c-confirmation-json", type=Path, default=None)
+    p_vref.add_argument("--require-t1c-confirmation", action="store_true")
+    p_vref.add_argument(
+        "--resource-profile",
+        default=None,
+        choices=("auto", *sorted(STAGING_VPS_RESOURCE_PROFILES)),
+    )
+
+    p_g18_prep = sub.add_parser(
+        "prepare-staging-g18",
+        help="Fail-closed pre-measurement check verifying T1C confirmation, G03/G05 safe sizing receipts, and scorer ↔ Owner-signed config SLO match before running G18",
+    )
+    p_g18_prep.add_argument("--vps-receipt-dir", type=Path, required=True)
+    p_g18_prep.add_argument("--expected-digest", required=True)
+    p_g18_prep.add_argument("--target-config-profile", default="auto")
+    p_g18_prep.add_argument("--thresholds-json", type=Path, required=True)
+    p_g18_prep.add_argument("--owner-approval-json", type=Path, required=True)
+    p_g18_prep.add_argument("--t1c-confirmation-json", type=Path, default=None)
+    p_g18_prep.add_argument("--bench-port", type=int, default=18880)
+    p_g18_prep.add_argument("--benchmark-out", type=Path, default=None)
+    p_g18_prep.add_argument("--out", type=Path, default=None)
+
+    p_g18_run = sub.add_parser(
+        "run-staging-vps-g18",
+        help="Execute isolated S1 G18 acceptance on Staging VPS ONLY if scorer matches Owner-signed config SLO and live stack remains untouched",
+    )
+    p_g18_run.add_argument("--vps-receipt-dir", type=Path, required=True)
+    p_g18_run.add_argument("--expected-digest", required=True)
+    p_g18_run.add_argument("--target-config-profile", default="auto")
+    p_g18_run.add_argument("--thresholds-json", type=Path, required=True)
+    p_g18_run.add_argument("--owner-approval-json", type=Path, required=True)
+    p_g18_run.add_argument("--t1c-confirmation-json", type=Path, default=None)
+    p_g18_run.add_argument("--live-project", default="crm-cskh-vps-staging")
+    p_g18_run.add_argument("--bench-port", type=int, default=18880)
+    p_g18_run.add_argument("--benchmark-out", type=Path, required=True)
+    p_g18_run.add_argument("--reconcile-out", type=Path, default=None)
 
     p_slo = sub.add_parser(
         "reconcile-g18-slo",
-        help="Reconcile G18 S1 benchmark (7-metric precheck + §3.2A–C) against v1.4 thresholds, Staging VPS receipts & SHA-256 Owner signature",
+        help="Reconcile G18 S1 benchmark (7-metric precheck + §3.2A–C) against v1.4 or config-bound thresholds, Staging VPS receipts & SHA-256 Owner signature",
     )
     p_slo.add_argument("--benchmark-json", type=Path, required=True)
     p_slo.add_argument("--vps-receipt-dir", type=Path, default=None)
     p_slo.add_argument("--thresholds-json", type=Path, default=None)
     p_slo.add_argument("--owner-approval-json", type=Path, default=None)
     p_slo.add_argument("--expected-digest", default=LOCKED_CANDIDATE_DIGEST_V1_4)
+    p_slo.add_argument("--target-config-profile", default=None)
+    p_slo.add_argument("--t1c-confirmation-json", type=Path, default=None)
+    p_slo.add_argument("--require-t1c-confirmation", action="store_true")
     p_slo.add_argument("--out", type=Path, default=None)
     return parser
 
@@ -6086,6 +7523,9 @@ def main(argv: list[str] | None = None) -> int:
             https_port=args.https_port,
             keep_up=args.keep_up,
             state_dir=args.state_dir,
+            t1c_confirmation=args.t1c_confirmation_json,
+            require_t1c_confirmation=args.require_t1c_confirmation,
+            resource_profile=args.resource_profile,
         )
         sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
         return 0 if res["status"] == "PASS" else 2
@@ -6100,6 +7540,38 @@ def main(argv: list[str] | None = None) -> int:
             https_port=args.https_port,
             keep_up=args.keep_up,
             state_dir=args.state_dir,
+            t1c_confirmation=args.t1c_confirmation_json,
+            require_t1c_confirmation=args.require_t1c_confirmation,
+            resource_profile=args.resource_profile,
+        )
+        sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+        return 0 if res["status"] == "PASS" else 2
+    if args.command == "prepare-staging-g18":
+        res = verify_g18_acceptance_measurement_gate(
+            vps_receipts=args.vps_receipt_dir,
+            expected_digest=args.expected_digest,
+            target_configuration_profile=args.target_config_profile,
+            thresholds_path=args.thresholds_json,
+            owner_slo_approval=args.owner_approval_json,
+            t1c_confirmation=args.t1c_confirmation_json,
+            bench_port=args.bench_port,
+            benchmark_out_json=args.benchmark_out,
+            out_json=args.out,
+        )
+        sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
+        return 0 if res["measurement_allowed"] else 2
+    if args.command == "run-staging-vps-g18":
+        res = run_staging_vps_g18_acceptance(
+            vps_receipts=args.vps_receipt_dir,
+            expected_digest=args.expected_digest,
+            benchmark_out_json=args.benchmark_out,
+            reconcile_out_json=args.reconcile_out,
+            target_configuration_profile=args.target_config_profile,
+            thresholds_path=args.thresholds_json,
+            owner_slo_approval=args.owner_approval_json,
+            t1c_confirmation=args.t1c_confirmation_json,
+            live_project_name=args.live_project,
+            bench_port=args.bench_port,
         )
         sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")
         return 0 if res["status"] == "PASS" else 2
@@ -6116,6 +7588,9 @@ def main(argv: list[str] | None = None) -> int:
             vps_receipts=args.vps_receipt_dir,
             thresholds_path=args.thresholds_json,
             expected_digest=args.expected_digest,
+            target_configuration_profile=args.target_config_profile,
+            t1c_confirmation=args.t1c_confirmation_json,
+            require_t1c_confirmation=args.require_t1c_confirmation,
             out_json=args.out,
         )
         sys.stdout.write(json.dumps(res, indent=2, ensure_ascii=False) + "\n")

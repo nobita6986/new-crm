@@ -1,12 +1,12 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
-  "generated_at_utc": "2026-11-11T14:52:00Z",
+  "generated_at_utc": "2026-11-12T02:22:00Z",
   "branch": "codex/p4-resume-ops",
   "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
   "merged_ops_readiness_sha": "b4e923a5f2959ea1f0da53048a97ebac27510219",
   "ancestor_review_base_sha": "31e51fcac7a640fdab10517f47f02335d7b1f749",
-  "verified_code_commit_sha": "dd3d18ebc811784764b48faeaa57ac145859570e",
+  "verified_code_commit_sha": "c403fc4cdb4e63d7cd27ac0374d1549dccd7c598",
   "vps_execution_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
   "overall_p4_status": "IN_PROGRESS_BLOCKED_ON_OWNER_INPUTS",
   "p4_promoted_to_pass": false,
@@ -150,8 +150,8 @@
       "status": "PASS"
     },
     "test_ops_toolkit_windows_appcontainer": {
-      "ran": 22,
-      "passed": 22,
+      "ran": 23,
+      "passed": 23,
       "status": "PASS"
     },
     "test_ops_toolkit_linux_posix_tcpserver": {
@@ -223,16 +223,16 @@
       "scope": "SSH credential / agent access to target VPS 103.77.208.186 for T1A session (G03, G05, G18)",
       "status": "OPEN_SSH_CREDENTIAL_REQUIRED",
       "required_owner_inputs": [
-        "Secure SSH credential / ssh-agent key provisioning to 103.77.208.186 for session T1A (and confirmation of access) to execute read-only VPS headroom pre-check, stand up isolated Staging crm-cskh-dr-https-vps (capped 5,696 MiB RAM / 6.0 CPUs, loopback 127.0.0.1:18081/18443) with ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6, save staging-inventory-and-config-audit.json + G03/G05 receipts, and coordinate G18 after Owner signs the v1.4 SLO set"
+        "Secure SSH credential / ssh-agent key provisioning to 103.77.208.186 for session T1A (and confirmation of access) to execute: (1) read-only VPS sizing pre-check (readonly-vps-preflight -> s1_canonical_4x4 / staging_vps_capped / staging_dr_smoke_only / UNSAFE_INSUFFICIENT_LIVE_HEADROOM), (2) isolated Staging G03/G05 receipt collection on the new digest after T1C candidate confirmation (--require-t1c-confirmation), and (3) config-bound G18 acceptance measurement (prepare-staging-g18 -> run-staging-vps-g18) ONLY when scorer thresholds match the Owner-signed SLO for that exact safe Staging configuration"
       ],
-      "summary": "BatchMode SSH check to root@103.77.208.186 exits 255 (Permission denied); ~/.ssh has no private keys and ssh-agent is Stopped/Disabled. Candidate image is public-pullable on GHCR (HTTP 200), and all G03/G05/inventory/digest-refresh tooling is verified in CI and ready to run immediately upon SSH access."
+      "summary": "BatchMode SSH check to root@103.77.208.186 exits 255 (Permission denied); ~/.ssh has no private keys and ssh-agent is Stopped/Disabled. Read-only VPS safe sizing, T1C candidate confirmation guard, and config-bound G18 pre-measurement + scoring gates are unit-tested and ready to run immediately upon SSH access without touching live https://crm.hrpartner.vn."
     },
     {
       "id": "UPSTREAM-DEBIAN13-3-UNFIXED-CVES",
       "scope": "Gate G04 / production_candidate promotion block due to 3 unfixed Debian 13 OS package CVEs (fixed_version: null)",
       "status": "OPEN_UPSTREAM_OR_OWNER_DECISION_REQUIRED",
       "required_owner_inputs": [
-        "Owner selection between PA1 (wait for upstream Debian deb13u* fix prior to live upgrade) and PA2 (time-boxed 30-day per-CVE exception per deploy/release/t0-critical-cve-dossier.md §4)"
+        "Owner selection between PA1 (wait for upstream Debian deb13u* fix prior to live upgrade) and PA2 (time-boxed 30-day per-CVE exception per deploy/release/t0-critical-cve-dossier.md \u00a74)"
       ],
       "summary": "Staging verification runs strictly under staging_candidate_isolated_verification scope; production_candidate remains BLOCKED while G04 is unclosed, and CI rehearsal signing keys (b3e6137bbe...) are rejected for production approval."
     },
@@ -253,10 +253,10 @@
       "status": "GATED_PENDING_OWNER_ASSIGNMENT",
       "required_owner_inputs": [
         "Primary Day-2 Operator name and contact handle for operations-sop.md & monitoring-alerts.md (backup/secondary operator is recommended, not mandatory)",
-        "Owner-assigned business UAT sign-off representatives for the 4 roles (BOD, CRM Admin, Leader, Staff) in docs/p4/uat-report.md §6 for G22 (does NOT require 5 distinct UAT people) + separate Operator handover acceptance in docs/p4/operations-sop.md §7.2 for G24",
-        "Release decision (S1 SLO sign-off, 3 unfixed Debian 13 source CVEs option PA1/PA2, and maintenance cutover window) in docs/p4/P4-exit-report.md §3"
+        "Owner-assigned business UAT sign-off representatives for the 4 roles (BOD, CRM Admin, Leader, Staff) in docs/p4/uat-report.md \u00a76 for G22 (does NOT require 5 distinct UAT people) + separate Operator handover acceptance in docs/p4/operations-sop.md \u00a77.2 for G24",
+        "Release decision (S1 SLO sign-off, 3 unfixed Debian 13 source CVEs option PA1/PA2, and maintenance cutover window) in docs/p4/P4-exit-report.md \u00a73"
       ],
-      "summary": "No signer or recipient names are fabricated; all pending Owner inputs are consolidated in docs/p4/P4-exit-report.md §3."
+      "summary": "No signer or recipient names are fabricated; all pending Owner inputs are consolidated in docs/p4/P4-exit-report.md \u00a73."
     },
     {
       "id": "BLK-INFRA-07",
@@ -505,8 +505,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
-      "bytes": 22974,
-      "sha256": "2f789766f0b184cc9aa7c964163ccf1166f28a1b1752bf5444058986c17c67d6"
+      "bytes": 25402,
+      "sha256": "a97165d57f10fbfc3da6db92f7913cab90331dfa9d528a85bb28f48610f3446a"
     },
     {
       "path": "deploy/ops/evidence/p4-vps-live-20261109/SHA256SUMS.txt",
@@ -590,8 +590,8 @@
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
-      "bytes": 271403,
-      "sha256": "361f244ca9989e46b8db4da45dd0673fabd4592dc9e96111d6be4936df72b974"
+      "bytes": 330019,
+      "sha256": "39d42f8c7f5a214b4a987be830d9338676119ad47b2f58feab25d1ef069e4f42"
     },
     {
       "path": "deploy/ops/run_https_browser_uat_and_security.py",
@@ -645,8 +645,8 @@
     },
     {
       "path": "deploy/ops/test_ops_toolkit.py",
-      "bytes": 149299,
-      "sha256": "2ec36a63f67a932e37a72c7ded612a63d3757eed18fc95288f1b7ebf54237029"
+      "bytes": 184892,
+      "sha256": "cc65365dbf69cb0768e172755e981bbff66b6bff51a4bc33a718d5ca46ab1ad0"
     },
     {
       "path": "deploy/ops/verify_offsite_restore.py",
@@ -689,6 +689,11 @@
       "sha256": "84ae4f93001ba7839fc4666dc4968bed391909272da34c8fadabac58aa362965"
     },
     {
+      "path": "deploy/release/benchmark_p4_isolated.py",
+      "bytes": 131386,
+      "sha256": "6d5f9f0b48553742c0684f78bc0a9bdd023dbe2fa6e75ae8c121f36fb65834c0"
+    },
+    {
       "path": "deploy/release/test_batch2_delta_contracts.py",
       "bytes": 15273,
       "sha256": "21c4a80dde60ee5593442c03dfdac101c85e9657b83d6e2dd2c0de704ff24f99"
@@ -715,8 +720,8 @@
     },
     {
       "path": "docs/p4/P4-exit-report.md",
-      "bytes": 38302,
-      "sha256": "d33a6e3c201a27bb74e78b9c32d2c5bc8f5e94512feb809d8070677190200f0a"
+      "bytes": 40881,
+      "sha256": "b7e6885134e3521d3d730d284cb6df408d21cf0c151856cfb4218a3ff17b6d47"
     },
     {
       "path": "docs/p4/api-contract.md",
@@ -834,7 +839,7 @@
       "sha256": "4cf7156eaeb76f45778b4aea8f2b69771337657cbedcaf4e87947336ce1d8b78"
     }
   ],
-  "manifest_revision": "v9-g18-full-3-2abc-p95-p99-reconciliation-20261111",
+  "manifest_revision": "v10-staging-vps-safe-sizing-t1c-confirm-and-config-bound-g18-gate-20261112",
   "merged_t1b_release_hardening_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
   "merged_t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
   "integrated_candidate_manifest_path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json"

@@ -2918,6 +2918,754 @@ class OpsToolkitTests(unittest.TestCase):
                     self.assertEqual(res["status"], "FAIL_MISSING_MEASUREMENTS", miss_p99)
                     self.assertIn(miss_p99, res["missing_measurements"])
 
+    def test_staging_vps_safe_sizing_t1c_confirmation_and_config_bound_g18_gate(self) -> None:
+        import shutil
+        import subprocess
+        from types import SimpleNamespace
+        import manage_isolated_staging_dr as dr_mod
+
+        sys.path.insert(0, str(staging_mod.REPO_ROOT / "deploy" / "release"))
+        import benchmark_p4_isolated as bench_mod
+
+        repo_root = staging_mod.REPO_ROOT
+        new_digest = (
+            "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+        )
+        new_commit = "3c040c85a44c4ad37e9d9152b5630a4596e593ee"
+        new_image_id = "sha256:29b6285a0808875b91de8115f0b61a44ec3fb47bc45da87a07d50f2995f44cf8"
+
+        # 1. Read-only VPS preflight -> safe Staging configuration sizing across 4 capacity tiers
+        high_cap = dr_mod.determine_safe_staging_vps_configuration(
+            cpu_cores=8,
+            mem_available_mib=12288.0,
+            loadavg_1m=0.8,
+            free_disk_gib=28.0,
+            loopback_ports_free=True,
+            live_stack_running=True,
+        )
+        self.assertEqual(high_cap["status"], "SAFE_FOR_G03_G05_AND_G18")
+        self.assertTrue(high_cap["g03_g05_smoke_safe"])
+        self.assertTrue(high_cap["g18_acceptance_safe"])
+        self.assertEqual(high_cap["recommended_g03_g05_profile"], "s1_canonical_4x4")
+        self.assertEqual(high_cap["recommended_g18_profile"], "s1_canonical_4x4")
+
+        shared_4c = dr_mod.determine_safe_staging_vps_configuration(
+            cpu_cores=4,
+            mem_available_mib=4200.0,
+            loadavg_1m=0.6,
+            free_disk_gib=18.0,
+            loopback_ports_free=True,
+            live_stack_running=True,
+        )
+        self.assertEqual(shared_4c["status"], "SAFE_FOR_G03_G05_AND_G18")
+        self.assertTrue(shared_4c["g03_g05_smoke_safe"])
+        self.assertTrue(shared_4c["g18_acceptance_safe"])
+        self.assertEqual(shared_4c["recommended_g03_g05_profile"], "staging_vps_capped")
+        self.assertEqual(shared_4c["recommended_g18_profile"], "staging_vps_capped")
+        self.assertEqual(shared_4c["safe_profiles_allowed"], ["staging_vps_capped", "staging_dr_smoke_only"])
+        self.assertFalse(shared_4c["profile_evaluations"]["s1_canonical_4x4"]["safe_to_allocate"])
+
+        smoke_only_2c = dr_mod.determine_safe_staging_vps_configuration(
+            cpu_cores=2,
+            mem_available_mib=2048.0,
+            loadavg_1m=0.3,
+            free_disk_gib=15.0,
+            loopback_ports_free=True,
+            live_stack_running=True,
+        )
+        self.assertEqual(smoke_only_2c["status"], "SAFE_FOR_G03_G05_SMOKE_ONLY_G18_BLOCKED")
+        self.assertTrue(smoke_only_2c["g03_g05_smoke_safe"])
+        self.assertFalse(smoke_only_2c["g18_acceptance_safe"])
+        self.assertEqual(smoke_only_2c["recommended_g03_g05_profile"], "staging_dr_smoke_only")
+        self.assertIsNone(smoke_only_2c["recommended_g18_profile"])
+
+        unsafe_ram = dr_mod.determine_safe_staging_vps_configuration(
+            cpu_cores=4,
+            mem_available_mib=1024.0,
+            loadavg_1m=0.4,
+            free_disk_gib=20.0,
+            loopback_ports_free=True,
+            live_stack_running=True,
+        )
+        self.assertEqual(unsafe_ram["status"], "UNSAFE_INSUFFICIENT_LIVE_HEADROOM")
+        self.assertFalse(unsafe_ram["g03_g05_smoke_safe"])
+        self.assertFalse(unsafe_ram["g18_acceptance_safe"])
+        self.assertEqual(unsafe_ram["safe_profiles_allowed"], [])
+
+        # 2. T1C candidate confirmation validation & post-T1C G03/G05 receipt collection on new digest
+        valid_t1c_confirm = {
+            "confirmed": True,
+            "confirmed_by": "T1C-Independent-Acceptance-Lead",
+            "confirmed_at": "2026-11-12T09:10:00+07:00",
+            "candidate_commit_sha": new_commit,
+            "app_image_digest": new_digest,
+            "verification_scope": dr_mod.STAGING_CANDIDATE_SCOPE,
+            "g04_status": "FAIL",
+            "production_candidate_status": "BLOCKED",
+        }
+        stale_t1c_confirm = dict(valid_t1c_confirm, app_image_digest=dr_mod.LOCKED_CANDIDATE_DIGEST_V1_4)
+        self_t1c_confirm = dict(valid_t1c_confirm, confirmed_by="T1B-P4-02")
+        bad_prod_t1c_confirm = dict(valid_t1c_confirm, production_candidate_status="READY")
+
+        self.assertFalse(dr_mod.verify_t1c_candidate_confirmation(None, expected_app_image=new_digest)[0])
+        self.assertFalse(
+            dr_mod.verify_t1c_candidate_confirmation(stale_t1c_confirm, expected_app_image=new_digest)[0]
+        )
+        self.assertFalse(
+            dr_mod.verify_t1c_candidate_confirmation(self_t1c_confirm, expected_app_image=new_digest)[0]
+        )
+        self.assertFalse(
+            dr_mod.verify_t1c_candidate_confirmation(bad_prod_t1c_confirm, expected_app_image=new_digest)[0]
+        )
+        ok_t1c, norm_t1c, errs_t1c = dr_mod.verify_t1c_candidate_confirmation(
+            valid_t1c_confirm, expected_app_image=new_digest
+        )
+        self.assertTrue(ok_t1c, errs_t1c)
+        assert norm_t1c is not None
+        self.assertEqual(norm_t1c["app_image_digest"], new_digest)
+
+        docker_calls: list[list[str]] = []
+        active_env_caps: dict[str, tuple[float, float]] = {
+            "proxy": (256.0, 0.5),
+            "frontend": (256.0, 0.5),
+            "backend": (1536.0, 1.5),
+            "websocket": (384.0, 0.5),
+            "queue-short": (768.0, 0.75),
+            "queue-long": (1536.0, 1.0),
+            "scheduler": (384.0, 0.25),
+            "db": (2048.0, 1.5),
+            "redis-cache": (384.0, 0.25),
+            "redis-queue": (384.0, 0.25),
+        }
+        live_snap_base = {
+            "timestamp_utc": "2026-11-12T02:00:00Z",
+            "live_project_name": "crm-cskh-vps-staging",
+            "container_count": 1,
+            "all_running": True,
+            "containers": [
+                {
+                    "id": "cid-live-1",
+                    "name": "crm-cskh-vps-staging-backend-1",
+                    "service": "backend",
+                    "image": "sha256:acb950578479189ab2f11d8843d1182b83e78789bda99b4743ed24d8b0ede0d9",
+                    "config_image": "crm-cskh:0.0.1-4672041",
+                    "status": "running",
+                    "health": "healthy",
+                    "started_at": "2026-11-09T12:00:00Z",
+                    "restart_count": 0,
+                }
+            ],
+        }
+
+        def fake_docker_sub(cmd: list[str], **_kwargs: object) -> subprocess.CompletedProcess[str]:
+            docker_calls.append(list(cmd))
+            proj = "crm-cskh-dr-https-vps"
+            if "--env-file" in cmd:
+                ef = Path(cmd[cmd.index("--env-file") + 1])
+                if ef.is_file():
+                    ed = staging_mod.parse_env_file(ef)
+                    proj = ed.get("COMPOSE_PROJECT_NAME", proj)
+            if cmd[:2] == ["docker", "pull"]:
+                dig = cmd[2].split("@", 1)[1]
+                return subprocess.CompletedProcess(cmd, 0, stdout=f"Digest: {dig}\n", stderr="")
+            if cmd[:3] == ["docker", "image", "inspect"]:
+                return subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Id": new_image_id,
+                                "RepoDigests": [cmd[3]],
+                                "Created": "2026-11-12T01:00:00Z",
+                                "Architecture": "amd64",
+                                "Os": "linux",
+                                "Size": 1190528512,
+                                "Config": {"User": "frappe", "Labels": {}},
+                            }
+                        ]
+                    ),
+                    stderr="",
+                )
+            if cmd[:2] == ["docker", "compose"]:
+                if "down" in cmd:
+                    return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+                if "config" in cmd:
+                    return subprocess.CompletedProcess(cmd, 0, stdout=f"name: {proj}\n", stderr="")
+                if "ps" in cmd and "--format" in cmd:
+                    rows = []
+                    for svc in dr_mod.ALL_DAEMON_SERVICES:
+                        pubs = (
+                            [
+                                {"URL": "127.0.0.1", "PublishedPort": 18081, "TargetPort": 80, "Protocol": "tcp"},
+                                {"URL": "127.0.0.1", "PublishedPort": 18443, "TargetPort": 443, "Protocol": "tcp"},
+                            ]
+                            if svc == "proxy"
+                            else []
+                        )
+                        rows.append(
+                            {
+                                "ID": f"cid-{svc}",
+                                "Name": f"{proj}-{svc}-1",
+                                "Service": svc,
+                                "State": "running",
+                                "Publishers": pubs,
+                            }
+                        )
+                    return subprocess.CompletedProcess(
+                        cmd, 0, stdout="\n".join(json.dumps(r) for r in rows) + "\n", stderr=""
+                    )
+                if "ps" in cmd and "-q" in cmd:
+                    svcs = cmd[cmd.index("-q") + 1 :]
+                    return subprocess.CompletedProcess(
+                        cmd, 0, stdout="\n".join(f"cid-{s}" for s in svcs) + "\n", stderr=""
+                    )
+                if "exec" in cmd and "MOUNTED_OK" in cmd[-1]:
+                    return subprocess.CompletedProcess(cmd, 0, stdout="MOUNTED_OK\n", stderr="")
+            if cmd[:3] == ["docker", "network", "ls"]:
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=f"{proj}_app_net\n{proj}_data_net\n{proj}_edge_net\n", stderr=""
+                )
+            if cmd[:3] == ["docker", "network", "inspect"]:
+                nname = cmd[3]
+                return subprocess.CompletedProcess(
+                    cmd,
+                    0,
+                    stdout=json.dumps(
+                        [
+                            {
+                                "Driver": "bridge",
+                                "Internal": nname.endswith(("_app_net", "_data_net")),
+                                "Containers": {"c1": {"Name": f"{proj}-backend-1"}},
+                            }
+                        ]
+                    ),
+                    stderr="",
+                )
+            if cmd[:3] == ["docker", "volume", "ls"]:
+                vols = "\n".join(
+                    f"{proj}{sfx}" for sfx in ("_cert_data", "_db_data", "_logs", "_redis_queue_data", "_sites")
+                )
+                return subprocess.CompletedProcess(cmd, 0, stdout=vols + "\n", stderr="")
+            if cmd[:2] == ["docker", "inspect"] and "--format" in cmd:
+                return subprocess.CompletedProcess(
+                    cmd, 0, stdout=json.dumps(["MARIADB_ROOT_PASSWORD_FILE=/run/secrets/db_password"]), stderr=""
+                )
+            if cmd[:2] == ["docker", "inspect"]:
+                items = []
+                for cid in cmd[2:]:
+                    svc = cid.removeprefix("cid-")
+                    mib, cpus = active_env_caps[svc]
+                    items.append(
+                        {
+                            "Name": f"/{proj}-{svc}-1",
+                            "Config": {"Labels": {"com.docker.compose.service": svc}},
+                            "HostConfig": {
+                                "Memory": int(mib * 1024 * 1024),
+                                "NanoCpus": int(cpus * 1_000_000_000),
+                            },
+                        }
+                    )
+                return subprocess.CompletedProcess(cmd, 0, stdout=json.dumps(items), stderr="")
+            raise AssertionError(f"Unexpected mocked command: {cmd}")
+
+        def fake_verify_digest(_containers: object, expected_image: str) -> dict[str, object]:
+            return {
+                "pass": True,
+                "expected_app_image": expected_image,
+                "missing_services": [],
+                "mismatches": [],
+                "inspected_services": {
+                    svc: {
+                        "container": f"crm-cskh-dr-https-vps-{svc}-1",
+                        "image_id": new_image_id,
+                        "repo_digests": [expected_image],
+                        "matched": True,
+                    }
+                    for svc in staging_mod.APP_SERVICES
+                },
+            }
+
+        def fake_bootstrap(*, env_file: Path, **_kwargs: object) -> dict[str, object]:
+            ed = staging_mod.parse_env_file(env_file)
+            img = ed["APP_IMAGE"]
+            # Confirm staging_vps_capped overrides were written to staging-dr-https.env
+            self.assertEqual(ed.get("GUNICORN_WORKERS"), "2")
+            self.assertEqual(ed.get("BACKEND_CPUS"), "1.50")
+            self.assertEqual(ed.get("DB_MEM_LIMIT"), "2048m")
+            return {
+                "https_smoke": {
+                    "status": "PASS",
+                    "mode": "dr-https",
+                    "app_image": img,
+                    "checks": {
+                        "container_digest_parity": fake_verify_digest([], img),
+                        "http_to_https_redirect": {"pass": True},
+                        "tls_certificate": {"expiry_ok": True},
+                        "login_and_sid_cookie": {"pass": True},
+                        "vi_ui_and_csrf": {"pass": True},
+                        "wss_websocket": {"pass": True, "switched_protocols_101": True},
+                    },
+                }
+            }
+
+        with tempfile.TemporaryDirectory(prefix="t1a-cfg-slo-g18-") as td:
+            td_path = Path(td)
+            receipt_dir = td_path / "vps-receipts-new"
+            state_dir = td_path / "vps-state-new"
+            t1c_file = td_path / "t1c-confirm.json"
+            t1c_file.write_text(json.dumps(valid_t1c_confirm), encoding="utf-8")
+
+            with (
+                mock.patch.object(dr_mod, "run_sub", side_effect=fake_docker_sub),
+                mock.patch.object(dr_mod.p403_tool, "verify_running_containers_digest", side_effect=fake_verify_digest),
+                mock.patch.object(dr_mod, "bootstrap_isolated_dr_stack", side_effect=fake_bootstrap),
+                mock.patch.object(
+                    dr_mod,
+                    "capture_readonly_live_stack_snapshot",
+                    return_value=json.loads(json.dumps(live_snap_base)),
+                ),
+                mock.patch.object(dr_mod, "_check_loopback_port_free", return_value=True),
+                mock.patch.object(dr_mod.os, "cpu_count", return_value=4),
+                mock.patch.object(
+                    dr_mod,
+                    "_read_linux_meminfo_mib",
+                    return_value={
+                        "mem_total_mib": 7984.0,
+                        "mem_available_mib": 4200.0,
+                        "swap_total_mib": 2048.0,
+                        "swap_free_mib": 2048.0,
+                    },
+                ),
+                mock.patch.object(
+                    dr_mod,
+                    "_read_linux_loadavg",
+                    return_value={"loadavg_1m": 0.55, "loadavg_5m": 0.48, "loadavg_15m": 0.40},
+                ),
+                mock.patch.object(
+                    dr_mod.shutil,
+                    "disk_usage",
+                    return_value=SimpleNamespace(
+                        total=int(80 * (1024**3)),
+                        used=int(62 * (1024**3)),
+                        free=int(18 * (1024**3)),
+                    ),
+                ),
+                mock.patch.object(dr_mod.socket, "gethostname", return_value="vps-hrpartner-103-77-208-186"),
+                mock.patch.object(
+                    dr_mod.platform, "platform", return_value="Linux-6.8.0-51-generic-x86_64-with-glibc2.39"
+                ),
+                mock.patch.object(dr_mod.platform, "release", return_value="6.8.0-51-generic"),
+            ):
+                # 2a. Unconfirmed candidate MUST fail closed BEFORE touching Docker
+                with self.assertRaisesRegex(ValueError, "before T1C confirms candidate digest"):
+                    dr_mod.collect_vps_g03_g05_receipts(
+                        app_image=new_digest,
+                        out_dir=receipt_dir,
+                        require_t1c_confirmation=True,
+                        t1c_confirmation=None,
+                    )
+                self.assertEqual(docker_calls, [])
+
+                with self.assertRaisesRegex(ValueError, "digest_mismatch"):
+                    dr_mod.collect_vps_g03_g05_receipts(
+                        app_image=new_digest,
+                        out_dir=receipt_dir,
+                        require_t1c_confirmation=True,
+                        t1c_confirmation=stale_t1c_confirm,
+                    )
+                self.assertEqual(docker_calls, [])
+
+                # 2b. Requesting s1_canonical_4x4 on 4-vCPU / 4200 MiB shared VPS MUST abort BEFORE Docker pull/up
+                with self.assertRaisesRegex(RuntimeError, "NOT safe on this VPS"):
+                    dr_mod.collect_vps_g03_g05_receipts(
+                        app_image=new_digest,
+                        out_dir=receipt_dir,
+                        require_t1c_confirmation=True,
+                        t1c_confirmation=t1c_file,
+                        resource_profile="s1_canonical_4x4",
+                    )
+                self.assertEqual(docker_calls, [])
+
+                # 2c. With T1C confirmation + resource_profile="auto", resolves to staging_vps_capped & collects G03/G05
+                with self.assertRaisesRegex(ValueError, "before T1C confirms candidate digest"):
+                    dr_mod.refresh_staging_for_new_candidate_digest(
+                        new_app_image=new_digest,
+                        out_dir=receipt_dir,
+                        require_t1c_confirmation=True,
+                        t1c_confirmation=None,
+                    )
+                self.assertEqual(docker_calls, [])
+
+                g03_g05_sum = dr_mod.collect_vps_g03_g05_receipts(
+                    app_image=new_digest,
+                    out_dir=receipt_dir,
+                    state_dir=state_dir,
+                    keep_up=True,
+                    require_t1c_confirmation=True,
+                    t1c_confirmation=t1c_file,
+                    resource_profile="auto",
+                )
+                self.assertEqual(g03_g05_sum["status"], "PASS")
+                self.assertTrue(g03_g05_sum["zero_live_mutation"])
+                self.assertEqual(
+                    g03_g05_sum["staging_resource_configuration"]["profile_id"], "staging_vps_capped"
+                )
+                self.assertEqual(g03_g05_sum["t1c_candidate_confirmation"]["app_image_digest"], new_digest)
+                self.assertTrue((receipt_dir / "t1c-candidate-confirmation-receipt.json").is_file())
+
+            # 3. Config-bound G18 threshold builder & validator
+            with self.assertRaisesRegex(ValueError, "smoke-only"):
+                dr_mod.build_config_bound_g18_thresholds_spec(
+                    target_configuration_profile="staging_dr_smoke_only",
+                    candidate_digest=new_digest,
+                )
+
+            capped_spec = dr_mod.build_config_bound_g18_thresholds_spec(
+                target_configuration_profile="staging_vps_capped",
+                candidate_digest=new_digest,
+                candidate_image_id=new_image_id,
+                ticket_version="v1.7-staging-vps-capped",
+                threshold_overrides={
+                    "precheck_7_metrics.bod_executive_overview_api_p95_ms.threshold": 1500.0,
+                    "section_3_2A_cases_and_session_models.bod_executive_overview_role_session.max_p95_ms": 1500.0,
+                    "section_3_2A_cases_and_session_models.bod_executive_overview_role_session.max_p99_ms": 1800.0,
+                    "section_3_2C_dataset_batch_and_background.rq_short_50_job_burst_and_post_run_db_health.max_post_run_slow_queries": 2,
+                },
+            )
+            capped_sha = dr_mod.compute_g18_thresholds_sha256(capped_spec)
+            _, val_sha, val_errs = dr_mod.validate_g18_thresholds_for_configuration(
+                thresholds_spec=capped_spec,
+                target_configuration_profile="staging_vps_capped",
+                expected_digest=new_digest,
+            )
+            self.assertEqual(val_errs, [])
+            self.assertEqual(val_sha, capped_sha)
+
+            # Zero-error budget loosening, p99 < p95, or S1 dataset tampering MUST be rejected
+            bad_err_spec = json.loads(json.dumps(capped_spec))
+            bad_err_spec["section_3_2A_cases_and_session_models"]["my_customers_worklist_api_c12_shared"][
+                "max_error_count"
+            ] = 1
+            bad_err_spec["section_3_2A_cases_and_session_models"]["my_customers_worklist_api_c12_shared"][
+                "max_p99_ms"
+            ] = 200.0
+            bad_err_spec["section_3_2C_dataset_batch_and_background"]["s1_dataset_and_explain_plans"][
+                "expected_counts"
+            ]["crm_leads"] = 1000
+            _, _, bad_cfg_errs = dr_mod.validate_g18_thresholds_for_configuration(
+                thresholds_spec=bad_err_spec,
+                target_configuration_profile="staging_vps_capped",
+                expected_digest=new_digest,
+            )
+            self.assertTrue(any("zero_error_budget_loosened" in e for e in bad_cfg_errs), bad_cfg_errs)
+            self.assertTrue(any("p99_threshold_lt_p95_threshold" in e for e in bad_cfg_errs), bad_cfg_errs)
+            self.assertTrue(any("invariant_threshold_modified" in e for e in bad_cfg_errs), bad_cfg_errs)
+
+            capped_cfg_sha = dr_mod.get_staging_resource_profile_spec("staging_vps_capped")["config_spec_sha256"]
+            canon_4x4_spec = dr_mod.build_config_bound_g18_thresholds_spec(
+                target_configuration_profile="s1_canonical_4x4",
+                candidate_digest=new_digest,
+                candidate_image_id=new_image_id,
+                ticket_version="v1.7-s1-4x4",
+            )
+            canon_4x4_sha = dr_mod.compute_g18_thresholds_sha256(canon_4x4_spec)
+            canon_4x4_cfg_sha = dr_mod.get_staging_resource_profile_spec("s1_canonical_4x4")["config_spec_sha256"]
+
+            capped_spec_file = td_path / "g18-thresholds-staging-vps-capped.json"
+            capped_spec_file.write_bytes(dr_mod.serialize_g18_thresholds_spec(capped_spec))
+
+            owner_capped_approval = {
+                "approved": True,
+                "ticket_version": "v1.7-staging-vps-capped",
+                "signed_by": "owner-representative@hrpartner.vn",
+                "signed_at": "2026-11-12T09:30:00+07:00",
+                "thresholds_sha256": capped_sha,
+                "approved_configuration_profile": "staging_vps_capped",
+                "approved_config_spec_sha256": capped_cfg_sha,
+                "approved_candidate_digest": new_digest,
+                "approved_thresholds": {
+                    k: spec["threshold"] for k, spec in capped_spec["precheck_7_metrics"].items()
+                },
+            }
+            owner_capped_file = td_path / "owner-capped-approval.json"
+            owner_capped_file.write_text(json.dumps(owner_capped_approval), encoding="utf-8")
+
+            owner_4x4_approval = {
+                "approved": True,
+                "ticket_version": "v1.7-s1-4x4",
+                "signed_by": "owner-representative@hrpartner.vn",
+                "signed_at": "2026-11-12T09:30:00+07:00",
+                "thresholds_sha256": canon_4x4_sha,
+                "approved_configuration_profile": "s1_canonical_4x4",
+                "approved_config_spec_sha256": canon_4x4_cfg_sha,
+                "approved_candidate_digest": new_digest,
+                "approved_thresholds": {
+                    k: spec["threshold"] for k, spec in canon_4x4_spec["precheck_7_metrics"].items()
+                },
+            }
+
+            # 4. Pre-measurement gate (prepare-staging-g18) & protected runner (run-staging-vps-g18)
+            bench_sub_calls: list[list[str]] = []
+
+            def never_run_bench(cmd: list[str], **_kw: object) -> subprocess.CompletedProcess[str]:
+                bench_sub_calls.append(list(cmd))
+                raise AssertionError(f"G18 benchmark MUST NOT execute when pre-measurement gate is blocked: {cmd}")
+
+            with mock.patch.object(dr_mod, "run_sub", side_effect=never_run_bench):
+                # 4a. Missing/stale T1C confirmation -> blocked, zero benchmark calls
+                no_t1c_dir = td_path / "vps-receipts-no-t1c"
+                shutil.copytree(receipt_dir, no_t1c_dir)
+                (no_t1c_dir / "t1c-candidate-confirmation-receipt.json").unlink()
+                sum_no_t1c = json.loads((no_t1c_dir / "vps-g03-g05-summary.json").read_text(encoding="utf-8"))
+                sum_no_t1c.pop("t1c_candidate_confirmation", None)
+                (no_t1c_dir / "vps-g03-g05-summary.json").write_text(
+                    json.dumps(sum_no_t1c), encoding="utf-8"
+                )
+                r_no_t1c = dr_mod.run_staging_vps_g18_acceptance(
+                    vps_receipts=no_t1c_dir,
+                    expected_digest=new_digest,
+                    benchmark_out_json=td_path / "never1.json",
+                    thresholds_path=capped_spec_file,
+                    owner_slo_approval=owner_capped_file,
+                )
+                self.assertEqual(r_no_t1c["status"], "BLOCKED_PENDING_T1C_CANDIDATE_CONFIRMATION")
+                self.assertFalse(r_no_t1c["benchmark_executed"])
+                self.assertEqual(bench_sub_calls, [])
+
+                # 4b. Tight VPS (staging_dr_smoke_only, g18_acceptance_safe=False) -> blocked
+                smoke_only_dir = td_path / "vps-receipts-smoke-only"
+                shutil.copytree(receipt_dir, smoke_only_dir)
+                pre_smk = json.loads((smoke_only_dir / "readonly-vps-preflight.json").read_text(encoding="utf-8"))
+                pre_smk["safe_staging_allocation"] = smoke_only_2c
+                (smoke_only_dir / "readonly-vps-preflight.json").write_text(
+                    json.dumps(pre_smk), encoding="utf-8"
+                )
+                r_smk = dr_mod.run_staging_vps_g18_acceptance(
+                    vps_receipts=smoke_only_dir,
+                    expected_digest=new_digest,
+                    benchmark_out_json=td_path / "never2.json",
+                    thresholds_path=capped_spec_file,
+                    owner_slo_approval=owner_capped_file,
+                )
+                self.assertEqual(r_smk["status"], "FAIL_UNSAFE_OR_INVALID_STAGING_VPS_CONFIGURATION")
+                self.assertFalse(r_smk["benchmark_executed"])
+
+                # 4c. Scorer still pointing to default g18_slo_thresholds_v1_4.json (un-bound) -> blocked
+                r_unbound = dr_mod.run_staging_vps_g18_acceptance(
+                    vps_receipts=receipt_dir,
+                    expected_digest=new_digest,
+                    benchmark_out_json=td_path / "never3.json",
+                    thresholds_path=dr_mod.DEFAULT_G18_THRESHOLDS_V1_4_PATH,
+                    owner_slo_approval=owner_capped_file,
+                )
+                self.assertEqual(r_unbound["status"], "BLOCKED_SCORER_THRESHOLDS_NOT_BOUND_TO_CONFIGURATION")
+                self.assertFalse(r_unbound["benchmark_executed"])
+
+                # 4d. Owner signed SLO for s1_canonical_4x4 while Staging VPS is staging_vps_capped -> blocked
+                r_wrong_prof = dr_mod.run_staging_vps_g18_acceptance(
+                    vps_receipts=receipt_dir,
+                    expected_digest=new_digest,
+                    benchmark_out_json=td_path / "never4.json",
+                    thresholds_path=capped_spec_file,
+                    owner_slo_approval=owner_4x4_approval,
+                )
+                self.assertEqual(r_wrong_prof["status"], "FAIL_SCORER_DOES_NOT_MATCH_OWNER_SIGNED_CONFIG_SLO")
+                self.assertFalse(r_wrong_prof["benchmark_executed"])
+
+                # 4e. Scorer threshold JSON differs by 1.0 ms from Owner's signed thresholds_sha256 -> blocked
+                drift_spec = json.loads(json.dumps(capped_spec))
+                drift_spec["precheck_7_metrics"]["bod_executive_overview_api_p95_ms"]["threshold"] = 1501.0
+                r_drift = dr_mod.run_staging_vps_g18_acceptance(
+                    vps_receipts=receipt_dir,
+                    expected_digest=new_digest,
+                    benchmark_out_json=td_path / "never5.json",
+                    thresholds_spec=drift_spec,
+                    owner_slo_approval=owner_capped_approval,
+                )
+                self.assertEqual(r_drift["status"], "FAIL_SCORER_DOES_NOT_MATCH_OWNER_SIGNED_CONFIG_SLO")
+                self.assertFalse(r_drift["benchmark_executed"])
+                self.assertEqual(bench_sub_calls, [])
+
+            # 4f. Positive prepare-staging-g18 check & CLI compatibility with benchmark_p4_isolated.py
+            prep_out = td_path / "prep-gate.json"
+            bench_out_file = td_path / "staging-vps-s1-benchmark.json"
+            reconcile_out_file = td_path / "staging-vps-g18-reconcile.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--expected-digest",
+                        new_digest,
+                        "--target-config-profile",
+                        "auto",
+                        "--thresholds-json",
+                        str(capped_spec_file),
+                        "--owner-approval-json",
+                        str(owner_capped_file),
+                        "--bench-port",
+                        "18882",
+                        "--benchmark-out",
+                        str(bench_out_file),
+                        "--out",
+                        str(prep_out),
+                    ]
+                ),
+                0,
+            )
+            prep_doc = json.loads(prep_out.read_text(encoding="utf-8"))
+            self.assertEqual(prep_doc["status"], "READY_FOR_G18_ACCEPTANCE_MEASUREMENT")
+            self.assertTrue(prep_doc["measurement_allowed"])
+            self.assertEqual(prep_doc["resolved_configuration_profile"], "staging_vps_capped")
+            # Verify benchmark_p4_isolated.py main() accepts the exact planned command flags & forwards profile/headroom
+            forwarded_bench_kwargs: dict[str, object] = {}
+
+            def fake_provision_s1(**kwargs: object) -> dict[str, object]:
+                forwarded_bench_kwargs.update(kwargs)
+                return {
+                    "status": "PASS",
+                    "profile_name": "s1_production_load_50k_leads_40_staff",
+                    "sla_commitment_status": "PENDING_OWNER_REVIEW",
+                }
+
+            with mock.patch.object(bench_mod, "provision_and_execute_s1_benchmark", side_effect=fake_provision_s1):
+                self.assertEqual(bench_mod.main(prep_doc["planned_benchmark_command"][2:]), 0)
+            self.assertEqual(forwarded_bench_kwargs["resource_profile"], "staging_vps_capped")
+            self.assertTrue(forwarded_bench_kwargs["require_live_headroom"])
+            self.assertEqual(forwarded_bench_kwargs["pull_policy"], "never")
+            self.assertEqual(forwarded_bench_kwargs["port"], 18882)
+            self.assertEqual(forwarded_bench_kwargs["app_image"], new_digest)
+
+            # Verify benchmark_p4_isolated.enforce_live_resource_headroom blocks low RAM headroom
+            fake_meminfo = td_path / "fake-proc-meminfo"
+            fake_meminfo.write_text("MemTotal: 8192000 kB\nMemAvailable: 1500000 kB\n", encoding="utf-8")
+            with mock.patch.object(
+                bench_mod,
+                "Path",
+                side_effect=lambda p: fake_meminfo if str(p) == "/proc/meminfo" else Path(p),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "Live resource guard refused execution"):
+                    bench_mod.enforce_live_resource_headroom(min_mem_available_mib=2048.0)
+
+            # 4g. Positive run-staging-vps-g18 execution + live service preservation guard
+            ci_template_bench = json.loads(
+                (
+                    repo_root
+                    / "deploy"
+                    / "ops"
+                    / "evidence"
+                    / "p4-candidate-and-s1-20261109"
+                    / "benchmark-s1-report.json"
+                ).read_text(encoding="utf-8")
+            )
+            vps_capped_bench = json.loads(json.dumps(ci_template_bench))
+            vps_capped_bench["app_image_tested"] = new_digest
+            vps_capped_bench["resource_profile"] = "staging_vps_capped"
+            vps_capped_bench["isolation_guard"]["compose_project"] = "crm-cskh-s1-bench-vps"
+            vps_capped_bench["s1_domain_and_database_benchmark"]["runner_hardware"]["platform"] = (
+                "Linux-6.8.0-51-generic-x86_64-with-glibc2.39"
+            )
+            vps_capped_bench["s1_http_acceptance_and_mixed_waves"]["bod_overview_and_drilldown_http"][
+                "bod_executive_overview_role_api"
+            ]["p95_ms"] = 1280.0
+            vps_capped_bench["s1_http_acceptance_and_mixed_waves"]["bod_overview_and_drilldown_http"][
+                "bod_executive_overview_role_api"
+            ]["p99_ms"] = 1420.0
+            vps_capped_bench["p4_9_2_acceptance_matrix"]["items"]["bod_overview_snapshot_p95_le_3000ms"][
+                "measured_http_p95_ms"
+            ] = 1280.0
+            vps_capped_bench["queue_and_db_after"]["mariadb_global_status"]["Slow_queries"] = "1"
+
+            def fake_exec_bench(cmd: list[str], **_kw: object) -> subprocess.CompletedProcess[str]:
+                bench_sub_calls.append(list(cmd))
+                out_idx = cmd.index("--out") + 1
+                Path(cmd[out_idx]).write_text(json.dumps(vps_capped_bench), encoding="utf-8")
+                return subprocess.CompletedProcess(cmd, 0, stdout="OK\n", stderr="")
+
+            with (
+                mock.patch.object(dr_mod, "run_sub", side_effect=fake_exec_bench),
+                mock.patch.object(
+                    dr_mod,
+                    "capture_readonly_live_stack_snapshot",
+                    side_effect=[
+                        json.loads(json.dumps(live_snap_base)),
+                        json.loads(json.dumps(live_snap_base)),
+                    ],
+                ),
+            ):
+                rc_run = dr_mod.main(
+                    [
+                        "run-staging-vps-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--expected-digest",
+                        new_digest,
+                        "--target-config-profile",
+                        "auto",
+                        "--thresholds-json",
+                        str(capped_spec_file),
+                        "--owner-approval-json",
+                        str(owner_capped_file),
+                        "--bench-port",
+                        "18882",
+                        "--benchmark-out",
+                        str(bench_out_file),
+                        "--reconcile-out",
+                        str(reconcile_out_file),
+                    ]
+                )
+                self.assertEqual(rc_run, 0)
+            self.assertEqual(len(bench_sub_calls), 1)
+            rec_doc = json.loads(reconcile_out_file.read_text(encoding="utf-8"))
+            self.assertEqual(rec_doc["status"], "PASS", rec_doc)
+            self.assertTrue(rec_doc["benchmark_executed"])
+            self.assertTrue(rec_doc["config_bound_mode"])
+            self.assertEqual(rec_doc["target_configuration_profile"], "staging_vps_capped")
+            self.assertTrue(rec_doc["g18_pass_requirements"]["benchmark_and_slo_bound_to_safe_staging_configuration"])
+            self.assertTrue(rec_doc["g18_pass_requirements"]["t1c_candidate_confirmation_verified"])
+            self.assertTrue((td_path / "g18-live-preservation-before-after.json").is_file())
+
+            # Live container restart during G18 MUST fail closed with FAIL_LIVE_SERVICE_MUTATED_DURING_G18
+            mutated_after = json.loads(json.dumps(live_snap_base))
+            mutated_after["containers"][0]["restart_count"] = 1
+            with (
+                mock.patch.object(dr_mod, "run_sub", side_effect=fake_exec_bench),
+                mock.patch.object(
+                    dr_mod,
+                    "capture_readonly_live_stack_snapshot",
+                    side_effect=[json.loads(json.dumps(live_snap_base)), mutated_after],
+                ),
+            ):
+                live_mut_res = dr_mod.run_staging_vps_g18_acceptance(
+                    vps_receipts=receipt_dir,
+                    expected_digest=new_digest,
+                    benchmark_out_json=bench_out_file,
+                    thresholds_path=capped_spec_file,
+                    owner_slo_approval=owner_capped_file,
+                )
+                self.assertEqual(live_mut_res["status"], "FAIL_LIVE_SERVICE_MUTATED_DURING_G18")
+                self.assertFalse(live_mut_res["live_zero_mutation"])
+
+            # 5. Post-measurement cross-profile scoring guard: s1_canonical_4x4 report vs staging_vps_capped SLO -> FAIL_CONFIGURATION_MISMATCH
+            wrong_prof_bench = json.loads(json.dumps(vps_capped_bench))
+            wrong_prof_bench["resource_profile"] = "s1_canonical_4x4"
+            cross_res = dr_mod.reconcile_g18_benchmark_with_v1_4_slos(
+                wrong_prof_bench,
+                owner_slo_approval=owner_capped_approval,
+                vps_receipts=receipt_dir,
+                thresholds_spec=capped_spec,
+                expected_digest=new_digest,
+                t1c_confirmation=valid_t1c_confirm,
+                require_t1c_confirmation=True,
+            )
+            self.assertEqual(cross_res["status"], "FAIL_CONFIGURATION_MISMATCH")
+            self.assertIn(
+                "benchmark_resource_profile_mismatch:expected='staging_vps_capped':got='s1_canonical_4x4'",
+                cross_res["configuration_validation_errors"],
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

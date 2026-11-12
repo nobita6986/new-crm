@@ -111,6 +111,99 @@ services:
       - data_net
 """
 
+STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML = """\
+services:
+  frontend:
+    cpus: 0.50
+    mem_limit: 256m
+  backend:
+    cpus: 1.50
+    mem_limit: 1536m
+    environment:
+      GUNICORN_WORKERS: "2"
+      GUNICORN_THREADS: "4"
+      GUNICORN_TIMEOUT: "120"
+      TZ: Asia/Ho_Chi_Minh
+  websocket:
+    cpus: 0.50
+    mem_limit: 384m
+  queue-short:
+    cpus: 0.75
+    mem_limit: 768m
+    command: ["bench", "worker", "--queue", "short,default"]
+  queue-long:
+    image: ${APP_IMAGE:?set APP_IMAGE}
+    pull_policy: ${PULL_POLICY:-never}
+    restart: "no"
+    cpus: 1.00
+    mem_limit: 1536m
+    security_opt:
+      - no-new-privileges:true
+    command: ["bench", "worker", "--queue", "long"]
+    environment:
+      TZ: Asia/Ho_Chi_Minh
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+    networks:
+      - data_net
+  scheduler:
+    cpus: 0.25
+    mem_limit: 384m
+  db:
+    cpus: 1.50
+    mem_limit: 2g
+  redis-cache:
+    cpus: 0.25
+    mem_limit: 384m
+  redis-queue:
+    cpus: 0.25
+    mem_limit: 384m
+"""
+
+
+def enforce_live_resource_headroom(
+    *,
+    min_mem_available_mib: float = 2048.0,
+    max_load_per_cpu: float = 0.85,
+) -> dict[str, object]:
+    """Fail-closed live-host resource protection guard for shared Staging/host execution."""
+    cpu_count = os.cpu_count() or 1
+    mem_avail_mib: float | None = None
+    mem_total_mib: float | None = None
+    meminfo = Path("/proc/meminfo")
+    if meminfo.is_file():
+        for raw in meminfo.read_text(encoding="utf-8", errors="ignore").splitlines():
+            if raw.startswith("MemAvailable:"):
+                mem_avail_mib = round(int(raw.split()[1]) / 1024.0, 2)
+            elif raw.startswith("MemTotal:"):
+                mem_total_mib = round(int(raw.split()[1]) / 1024.0, 2)
+    load_1m: float | None = None
+    if hasattr(os, "getloadavg"):
+        try:
+            load_1m = round(os.getloadavg()[0], 3)
+        except OSError:
+            load_1m = None
+    load_per_cpu = round(load_1m / cpu_count, 3) if load_1m is not None else None
+    if mem_avail_mib is not None and mem_avail_mib < min_mem_available_mib:
+        raise RuntimeError(
+            f"Live resource guard refused execution: MemAvailable={mem_avail_mib} MiB < {min_mem_available_mib} MiB"
+        )
+    if load_per_cpu is not None and load_per_cpu > max_load_per_cpu:
+        raise RuntimeError(
+            f"Live resource guard refused execution: load_per_cpu={load_per_cpu} > {max_load_per_cpu}"
+        )
+    return {
+        "cpu_count": cpu_count,
+        "mem_total_mib": mem_total_mib,
+        "mem_available_mib": mem_avail_mib,
+        "load_1m": load_1m,
+        "load_per_cpu": load_per_cpu,
+        "headroom_ok": True,
+    }
+
 PUBLISHED_PROFILES: dict[str, dict[str, object]] = {
     "s1_suggested_mvp": {
         "description": (
@@ -636,6 +729,9 @@ def _run_multi_cookie_wave(
     lats: list[float] = []
     errs = 0
     timeouts = 0
+    client_errors = 0
+    http_4xx = 0
+    http_5xx = 0
     status_counts: dict[str, int] = {}
 
     def _one(idx: int) -> tuple[float, int]:
@@ -660,6 +756,12 @@ def _run_multi_cookie_wave(
             status_counts[st_key] = status_counts.get(st_key, 0) + 1
             if st == 0:
                 timeouts += 1
+            elif st < 0:
+                client_errors += 1
+            elif 400 <= st < 500:
+                http_4xx += 1
+            elif st >= 500:
+                http_5xx += 1
             if not (200 <= st < 400):
                 errs += 1
     elapsed = time.perf_counter() - t_sc
@@ -669,6 +771,10 @@ def _run_multi_cookie_wave(
         "distinct_sessions_used": len(cookies),
         "client_timeout_threshold_sec": timeout,
         "timeout_count": timeouts,
+        "client_error_count": client_errors,
+        "http_4xx_count": http_4xx,
+        "http_5xx_count": http_5xx,
+        "http_error_count": http_4xx + http_5xx,
         "status_counts": status_counts,
         **summarize_latencies_ms(lats, error_count=errs, elapsed_sec=elapsed),
     }
@@ -687,6 +793,9 @@ def _run_http_wave(
     all_latencies: list[float] = []
     all_errors = 0
     all_timeouts = 0
+    all_client_errors = 0
+    all_http_4xx = 0
+    all_http_5xx = 0
     all_status_counts: dict[str, int] = {}
     overall_t0 = time.perf_counter()
 
@@ -708,6 +817,9 @@ def _run_http_wave(
         lats: list[float] = []
         errs = 0
         timeouts = 0
+        client_errors = 0
+        http_4xx = 0
+        http_5xx = 0
         status_counts: dict[str, int] = {}
         with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
             futs = [
@@ -727,6 +839,15 @@ def _run_http_wave(
                 if status == 0:
                     timeouts += 1
                     all_timeouts += 1
+                elif status < 0:
+                    client_errors += 1
+                    all_client_errors += 1
+                elif 400 <= status < 500:
+                    http_4xx += 1
+                    all_http_4xx += 1
+                elif status >= 500:
+                    http_5xx += 1
+                    all_http_5xx += 1
                 if not (200 <= status < 400):
                     errs += 1
         elapsed = time.perf_counter() - t_sc
@@ -735,6 +856,10 @@ def _run_http_wave(
             "path": sc_path,
             "concurrency": concurrency,
             "timeout_count": timeouts,
+            "client_error_count": client_errors,
+            "http_4xx_count": http_4xx,
+            "http_5xx_count": http_5xx,
+            "http_error_count": http_4xx + http_5xx,
             "status_counts": status_counts,
             **summarize_latencies_ms(lats, error_count=errs, elapsed_sec=elapsed),
         }
@@ -747,6 +872,10 @@ def _run_http_wave(
             all_latencies, error_count=all_errors, elapsed_sec=overall_elapsed
         ),
         "timeout_count": all_timeouts,
+        "client_error_count": all_client_errors,
+        "http_4xx_count": all_http_4xx,
+        "http_5xx_count": all_http_5xx,
+        "http_error_count": all_http_4xx + all_http_5xx,
         "status_counts": all_status_counts,
     }
 
@@ -2823,8 +2952,19 @@ def provision_and_execute_s1_benchmark(
     pull_policy: str = "missing",
     port: int = 18880,
     site_name: str = "p4-s1-bench.localhost",
+    resource_profile: str = "s1_canonical_4x4",
+    require_live_headroom: bool = False,
 ) -> dict[str, object]:
     """Self-contained isolated S1 provisioning, seeding, measurement, and teardown."""
+    if resource_profile not in ("s1_canonical_4x4", "staging_vps_capped"):
+        raise ValueError(
+            f"Unsupported --resource-profile {resource_profile!r}; expected s1_canonical_4x4 or staging_vps_capped"
+        )
+    live_headroom = (
+        enforce_live_resource_headroom()
+        if (require_live_headroom or resource_profile == "staging_vps_capped")
+        else None
+    )
     compose_project = f"cskh-p4-bench-{secrets.token_hex(4)}"
     base_url = f"http://127.0.0.1:{port}"
     spec = build_benchmark_specification(
@@ -2844,7 +2984,12 @@ def provision_and_execute_s1_benchmark(
         db_secret = tmp_dir / "db_root_password.txt"
         db_secret.write_text(db_root_pw, encoding="utf-8")
         bench_override = tmp_dir / "compose.bench-override.yaml"
-        bench_override.write_text(EPHEMERAL_BENCH_OVERRIDE_YAML, encoding="utf-8")
+        override_yaml = (
+            STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML
+            if resource_profile == "staging_vps_capped"
+            else EPHEMERAL_BENCH_OVERRIDE_YAML
+        )
+        bench_override.write_text(override_yaml, encoding="utf-8")
         compose_files = [VERIFY_COMPOSE_FILE, bench_override]
 
         compose_env = {
@@ -3068,6 +3213,8 @@ def provision_and_execute_s1_benchmark(
                 "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
                 "app_image_tested": app_image,
                 "image_id": img_insp.get("Id"),
+                "resource_profile": resource_profile,
+                "live_resource_headroom_precheck": live_headroom,
                 "s1_domain_and_database_benchmark": s1_clean,
                 "p4_9_2_acceptance_matrix": acceptance_matrix,
                 **limits_and_slos,
@@ -3124,6 +3271,17 @@ def main(argv: list[str] | None = None) -> int:
         choices=("never", "missing", "always"),
     )
     p.add_argument("--port", type=int, default=18880)
+    p.add_argument(
+        "--resource-profile",
+        default="s1_canonical_4x4",
+        choices=("s1_canonical_4x4", "staging_vps_capped"),
+        help="Container CPU/RAM & Gunicorn topology (s1_canonical_4x4 or staging_vps_capped)",
+    )
+    p.add_argument(
+        "--require-live-headroom",
+        action="store_true",
+        help="Enforce fail-closed host CPU/RAM headroom precheck before provisioning",
+    )
     p.add_argument("--admin-user", default="Administrator")
     p.add_argument("--admin-password-env", default="BENCHMARK_ADMIN_PASSWORD")
     p.add_argument("--out", required=True, help="Output JSON benchmark spec/report")
@@ -3145,6 +3303,8 @@ def main(argv: list[str] | None = None) -> int:
                 if args.site_name != "p4-bench.localhost"
                 else "p4-s1-bench.localhost"
             ),
+            resource_profile=args.resource_profile,
+            require_live_headroom=args.require_live_headroom,
         )
     else:
         spec = build_benchmark_specification(
