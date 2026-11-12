@@ -57,6 +57,7 @@ import re
 import secrets
 import socket
 import subprocess
+import sys
 import tempfile
 import time
 import urllib.error
@@ -82,6 +83,97 @@ FORBIDDEN_LIVE_TOKENS = (
     ".org",
 )
 ALLOWED_BENCH_PROJECT_PREFIXES = ("cskh-p4-bench-", "crm-cskh-p4-bench-")
+
+
+class BenchmarkExecutionError(RuntimeError):
+    """Benchmark runtime error carrying a structured JSON-serializable report for `--out`."""
+
+    def __init__(self, message: str, *, report: dict[str, object]) -> None:
+        super().__init__(message)
+        self.report = report
+
+
+def _scrub_diagnostic_text(
+    text: str,
+    secrets_to_redact: tuple[str, ...] = (),
+) -> str:
+    """Redact session cookies, CSRF tokens, and ephemeral passwords from diagnostic logs/errors."""
+    if not text:
+        return ""
+    scrubbed = text
+    for sec in secrets_to_redact:
+        if sec and len(sec) >= 6:
+            scrubbed = scrubbed.replace(sec, "[REDACTED_SECRET]")
+    scrubbed = re.sub(r"\bsid=[A-Za-z0-9._%-]+", "sid=[REDACTED_SID]", scrubbed)
+    scrubbed = re.sub(
+        r'(["\']X-Frappe-CSRF-Token["\']\s*:\s*["\'])[^"\']+(["\'])',
+        r"\1[REDACTED_CSRF]\2",
+        scrubbed,
+    )
+    scrubbed = re.sub(
+        r"(csrf_token\s*[:=]\s*['\"]?)[A-Za-z0-9._%-]{8,}",
+        r"\1[REDACTED_CSRF]",
+        scrubbed,
+    )
+    scrubbed = re.sub(
+        r"((?:BENCH_DB_ROOT_PW|BENCH_ADMIN_PW|BENCH_ACTOR_PW|--db-root-password|--admin-password|pwd)(?:=|\s+))([^\s&'\"]+)",
+        r"\1[REDACTED_PW]",
+        scrubbed,
+    )
+    return scrubbed
+
+
+def _write_json_report_atomic(out_path: Path, report: dict[str, object]) -> None:
+    """Serialize, round-trip validate, and atomically write UTF-8 JSON report to `out_path`."""
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    serialized = json.dumps(report, indent=2) + "\n"
+    _ = json.loads(serialized)
+    payload = serialized.encode("utf-8")
+    tmp_file: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="wb",
+            dir=str(out_path.parent),
+            prefix=f".{out_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as fh:
+            tmp_file = Path(fh.name)
+            fh.write(payload)
+            fh.flush()
+        tmp_file.replace(out_path)
+    finally:
+        if tmp_file is not None and tmp_file.exists():
+            tmp_file.unlink(missing_ok=True)
+
+
+def _classify_http_statuses(statuses: list[int]) -> dict[str, object]:
+    """Summarize per-request HTTP status codes into timeout, client-error, 4xx, and 5xx counts."""
+    timeouts = 0
+    client_errors = 0
+    http_4xx = 0
+    http_5xx = 0
+    status_counts: dict[str, int] = {}
+    for st in statuses:
+        st_key = "timeout" if st == 0 else ("conn_error" if st < 0 else str(st))
+        status_counts[st_key] = status_counts.get(st_key, 0) + 1
+        if st == 0:
+            timeouts += 1
+        elif st < 0:
+            client_errors += 1
+        elif 400 <= st < 500:
+            http_4xx += 1
+        elif st >= 500:
+            http_5xx += 1
+    return {
+        "timeout_count": timeouts,
+        "client_error_count": client_errors,
+        "http_4xx_count": http_4xx,
+        "http_5xx_count": http_5xx,
+        "http_error_count": http_4xx + http_5xx,
+        "status_counts": status_counts,
+    }
+
 
 EPHEMERAL_BENCH_OVERRIDE_YAML = """\
 services:
@@ -508,18 +600,37 @@ def _collect_queue_and_db_telemetry(
     env: dict[str, str] | None = None,
 ) -> dict[str, object]:
     probe = (
-        "import json, time, frappe, redis; "
-        "from frappe.utils.background_jobs import generate_qname; "
-        f"site = {site_name!r}; "
-        "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites'); "
-        "frappe.connect(); "
-        "t0 = time.perf_counter(); "
-        "r = redis.from_url(frappe.conf.redis_queue); "
-        "q_depths = {q: int(r.llen(f'rq:queue:{generate_qname(q)}')) for q in ('short', 'default', 'long')}; "
-        "redis_ping_ms = round((time.perf_counter() - t0) * 1000.0, 3); "
-        "status_rows = dict(frappe.db.sql(\"SHOW GLOBAL STATUS WHERE Variable_name IN ('Threads_connected','Max_used_connections','Innodb_row_lock_time_avg','Innodb_row_lock_waits','Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads','Slow_queries','Questions')\")); "
-        "frappe.destroy(); "
-        "print(json.dumps({'queue_depths': q_depths, 'queue_backlog_total': sum(q_depths.values()), 'redis_queue_rtt_ms': redis_ping_ms, 'mariadb_global_status': status_rows}))"
+        "import json, time, frappe, redis\n"
+        "from frappe.utils.background_jobs import generate_qname\n"
+        f"site = {site_name!r}\n"
+        "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites')\n"
+        "frappe.connect()\n"
+        "t0 = time.perf_counter()\n"
+        "r = redis.from_url(frappe.conf.redis_queue)\n"
+        "q_depths = {q: int(r.llen(f'rq:queue:{generate_qname(q)}')) for q in ('short', 'default', 'long')}\n"
+        "redis_ping_ms = round((time.perf_counter() - t0) * 1000.0, 3)\n"
+        "active_workers = []\n"
+        "try:\n"
+        "    from rq import Worker\n"
+        "    for w in Worker.all(connection=r):\n"
+        "        active_workers.append({\n"
+        "            'name': str(getattr(w, 'name', '')),\n"
+        "            'state': str(w.get_state() if hasattr(w, 'get_state') else ''),\n"
+        "            'queues': [str(q) for q in w.queue_names()] if hasattr(w, 'queue_names') else [],\n"
+        "            'current_job_id': str(w.get_current_job_id() or '') if hasattr(w, 'get_current_job_id') else '',\n"
+        "        })\n"
+        "except Exception:\n"
+        "    pass\n"
+        "status_rows = dict(frappe.db.sql(\"SHOW GLOBAL STATUS WHERE Variable_name IN ('Threads_connected','Max_used_connections','Innodb_row_lock_time_avg','Innodb_row_lock_waits','Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads','Slow_queries','Questions')\"))\n"
+        "frappe.destroy()\n"
+        "print(json.dumps({\n"
+        "    'queue_depths': q_depths,\n"
+        "    'queue_backlog_total': sum(q_depths.values()),\n"
+        "    'redis_queue_rtt_ms': redis_ping_ms,\n"
+        "    'active_rq_workers': active_workers,\n"
+        "    'busy_worker_count': sum(1 for w in active_workers if w.get('state') == 'busy'),\n"
+        "    'mariadb_global_status': status_rows,\n"
+        "}))"
     )
     cmd = [
         "docker",
@@ -778,6 +889,7 @@ def _run_multi_cookie_wave(
         "http_error_count": http_4xx + http_5xx,
         "status_counts": status_counts,
         **summarize_latencies_ms(lats, error_count=errs, elapsed_sec=elapsed),
+        "raw_latencies_ms": [round(x, 3) for x in lats],
     }
 
 
@@ -863,6 +975,7 @@ def _run_http_wave(
             "http_error_count": http_4xx + http_5xx,
             "status_counts": status_counts,
             **summarize_latencies_ms(lats, error_count=errs, elapsed_sec=elapsed),
+            "raw_latencies_ms": [round(x, 3) for x in lats],
         }
         all_latencies.extend(lats)
         all_errors += errs
@@ -934,6 +1047,7 @@ def _execute_s1_http_acceptance_and_mixed_waves(
     # 1. Staff `My Customers` (`GET customers.my_list`, target p95 <= 1500 ms) across 40 staff sessions
     t0 = time.perf_counter()
     mc_lats: list[float] = []
+    mc_statuses: list[int] = []
     mc_errs = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         futs = [
@@ -950,18 +1064,34 @@ def _execute_s1_http_acceptance_and_mixed_waves(
         for fut in concurrent.futures.as_completed(futs):
             lat_ms, st, _ = fut.result()
             mc_lats.append(lat_ms)
+            mc_statuses.append(st)
             if st != 200:
                 mc_errs += 1
-    staff_my_customers_http = summarize_latencies_ms(
-        mc_lats, error_count=mc_errs, elapsed_sec=time.perf_counter() - t0
-    )
+    staff_my_customers_http: dict[str, object] = {
+        **_classify_http_statuses(mc_statuses),
+        **summarize_latencies_ms(
+            mc_lats, error_count=mc_errs, elapsed_sec=time.perf_counter() - t0
+        ),
+        "raw_latencies_ms": [round(x, 3) for x in mc_lats],
+    }
 
     # 2. `Mở Lead + lịch sử tương tác` (`GET get_work_item` + `GET list_attempts` paginated, target p95 <= 2000 ms)
     detail_wis = http_wis[:160]
 
+    def _pair_effective_status(st1: int, st2: int) -> int:
+        if st1 == 200 and st2 == 200:
+            return 200
+        if st1 == 0 or st2 == 0:
+            return 0
+        if st1 < 0 or st2 < 0:
+            return -1
+        if st1 >= 500 or st2 >= 500:
+            return max(st1, st2)
+        return st1 if st1 != 200 else st2
+
     def _open_lead_and_history(
         item: dict[str, str],
-    ) -> tuple[float, float, float, bool]:
+    ) -> tuple[float, float, float, int, int, bool]:
         wi_id = urllib.parse.quote(str(item["work_item"]))
         sess = staff_session_by_user[str(item["owner"])]
         l1, st1, _ = _http_call(
@@ -978,12 +1108,15 @@ def _execute_s1_http_acceptance_and_mixed_waves(
             path=f"/api/method/crm_cskh.api.workflow.list_attempts?work_item={wi_id}&page=1&page_size=20",
             method="GET",
         )
-        return l1 + l2, l1, l2, (st1 == 200 and st2 == 200)
+        return l1 + l2, l1, l2, st1, st2, (st1 == 200 and st2 == 200)
 
     t0 = time.perf_counter()
     comb_lats: list[float] = []
     wi_get_lats: list[float] = []
     att_list_lats: list[float] = []
+    comb_statuses: list[int] = []
+    wi_get_statuses: list[int] = []
+    att_list_statuses: list[int] = []
     det_errs = 0
     with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
         futs = [
@@ -991,20 +1124,29 @@ def _execute_s1_http_acceptance_and_mixed_waves(
             for i in range(160)
         ]
         for fut in concurrent.futures.as_completed(futs):
-            c_ms, g_ms, a_ms, ok = fut.result()
+            c_ms, g_ms, a_ms, st1, st2, ok = fut.result()
             comb_lats.append(c_ms)
             wi_get_lats.append(g_ms)
             att_list_lats.append(a_ms)
+            wi_get_statuses.append(st1)
+            att_list_statuses.append(st2)
+            comb_statuses.append(_pair_effective_status(st1, st2))
             if not ok:
                 det_errs += 1
     det_elapsed = time.perf_counter() - t0
     lead_detail_and_history_http = {
+        **_classify_http_statuses(comb_statuses),
         **summarize_latencies_ms(
             comb_lats, error_count=det_errs, elapsed_sec=det_elapsed
         ),
         "get_work_item_p95_ms": percentile(sorted(wi_get_lats), 95.0),
         "list_attempts_p95_ms": percentile(sorted(att_list_lats), 95.0),
         "raw_samples_first_15_ms": [round(x, 3) for x in comb_lats[:15]],
+        "raw_latencies_ms": [round(x, 3) for x in comb_lats],
+        "get_work_item_raw_latencies_ms": [round(x, 3) for x in wi_get_lats],
+        "list_attempts_raw_latencies_ms": [round(x, 3) for x in att_list_lats],
+        "get_work_item_status_breakdown": _classify_http_statuses(wi_get_statuses),
+        "list_attempts_status_breakdown": _classify_http_statuses(att_list_statuses),
     }
 
     # 3. `Ghi Contact Attempt + Task callback` over HTTP (`POST workflow.record_attempt`, target p95 <= 2000 ms, 0 duplicates)
@@ -1012,7 +1154,7 @@ def _execute_s1_http_acceptance_and_mixed_waves(
 
     def _post_attempt_with_callback(
         idx_and_item: tuple[int, dict[str, str]],
-    ) -> tuple[float, bool, str]:
+    ) -> tuple[float, int, bool, str]:
         idx, item = idx_and_item
         wi_id = str(item["work_item"])
         sess = staff_session_by_user[str(item["owner"])]
@@ -1035,10 +1177,11 @@ def _execute_s1_http_acceptance_and_mixed_waves(
             },
         )
         ok = st == 200 and b"attempt_id" in raw
-        return lat_ms, ok, idem_key
+        return lat_ms, st, ok, idem_key
 
     t0 = time.perf_counter()
     wr_http_lats: list[float] = []
+    wr_http_statuses: list[int] = []
     wr_http_errs = 0
     written_idem_keys: list[str] = []
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as pool:
@@ -1047,8 +1190,9 @@ def _execute_s1_http_acceptance_and_mixed_waves(
             for i in range(len(write_wis))
         ]
         for fut in concurrent.futures.as_completed(futs):
-            lat_ms, ok, ikey = fut.result()
+            lat_ms, st, ok, ikey = fut.result()
             wr_http_lats.append(lat_ms)
+            wr_http_statuses.append(st)
             written_idem_keys.append(ikey)
             if not ok:
                 wr_http_errs += 1
@@ -1056,10 +1200,12 @@ def _execute_s1_http_acceptance_and_mixed_waves(
 
     # Replay first 10 HTTP POSTs with identical idempotency_key to prove 0 duplicate creation over HTTP
     replay_ok_count = 0
+    replay_lats: list[float] = []
+    replay_statuses: list[int] = []
     for r_idx in range(min(10, len(write_wis))):
         item = write_wis[r_idx]
         sess = staff_session_by_user[str(item["owner"])]
-        _, st_rep, raw_rep = _http_call(
+        rep_lat_ms, st_rep, raw_rep = _http_call(
             base_url=base_url,
             site_name=site_name,
             cookie_header=sess["cookie"],
@@ -1076,6 +1222,8 @@ def _execute_s1_http_acceptance_and_mixed_waves(
                 "idempotency_key": f"s1-http-att-cb-{r_idx:04d}",
             },
         )
+        replay_lats.append(rep_lat_ms)
+        replay_statuses.append(st_rep)
         if st_rep == 200 and b'"idempotent_replay":true' in raw_rep.replace(b" ", b""):
             replay_ok_count += 1
 
@@ -1122,9 +1270,15 @@ def _execute_s1_http_acceptance_and_mixed_waves(
         )
     http_write_reconciliation = json.loads(rec_res.stdout.strip().splitlines()[-1])
     record_attempt_and_callback_http = {
+        **_classify_http_statuses(wr_http_statuses),
         **summarize_latencies_ms(
             wr_http_lats, error_count=wr_http_errs, elapsed_sec=wr_http_elapsed
         ),
+        "raw_latencies_ms": [round(x, 3) for x in wr_http_lats],
+        "idempotent_replay_raw_latencies_ms": [round(x, 3) for x in replay_lats],
+        "idempotent_replay_status_counts": _classify_http_statuses(replay_statuses)[
+            "status_counts"
+        ],
         "http_idempotent_replays_verified": replay_ok_count,
         "db_reconciliation": http_write_reconciliation,
     }
@@ -1184,7 +1338,7 @@ def _execute_s1_http_acceptance_and_mixed_waves(
     for wave_sessions_count, total_ops in ((20, 200), (40, 320), (80, 480)):
         active_pool = sessions_80[:wave_sessions_count]
 
-        def _run_mixed_op(op_idx: int) -> tuple[str, float, bool]:
+        def _run_mixed_op(op_idx: int) -> tuple[str, float, int, bool]:
             bucket = op_idx % 20
             if bucket < 9:
                 # 45%: Staff My Customers API
@@ -1196,12 +1350,17 @@ def _execute_s1_http_acceptance_and_mixed_waves(
                     path="/api/method/crm_cskh.api.customers.my_list?page=1&page_size=20",
                     method="GET",
                 )
-                return "my_customers_api", lat, st == 200
+                return "my_customers_api", lat, st, st == 200
             if bucket < 14:
                 # 25%: Open Lead + History API
                 item = detail_wis[op_idx % len(detail_wis)]
-                c_ms, _, _, ok = _open_lead_and_history(item)
-                return "lead_detail_history_api", c_ms, ok
+                c_ms, _, _, st1, st2, ok = _open_lead_and_history(item)
+                return (
+                    "lead_detail_history_api",
+                    c_ms,
+                    _pair_effective_status(st1, st2),
+                    ok,
+                )
             if bucket < 17:
                 # 15%: BOD Executive Overview snapshot read
                 lat, st, _ = _http_call(
@@ -1211,7 +1370,7 @@ def _execute_s1_http_acceptance_and_mixed_waves(
                     path="/api/method/crm_cskh.api.p3_reporting.get_executive_overview?period_type=monthly&period_key=2026-10",
                     method="GET",
                 )
-                return "bod_overview_api", lat, st == 200
+                return "bod_overview_api", lat, st, st == 200
             if bucket < 19:
                 # 10%: Paginated KPI Drill-down
                 lat, st, _ = _http_call(
@@ -1225,7 +1384,7 @@ def _execute_s1_http_acceptance_and_mixed_waves(
                     ),
                     method="GET",
                 )
-                return "kpi_drilldown_api", lat, st == 200
+                return "kpi_drilldown_api", lat, st, st == 200
             # 5%: Idempotent Contact Attempt + Callback write on fresh open Work Item
             w_slot = next(write_cursor)
             item = mixed_write_pool[w_slot % len(mixed_write_pool)]
@@ -1247,12 +1406,19 @@ def _execute_s1_http_acceptance_and_mixed_waves(
                     "idempotency_key": f"s1-mix-c{wave_sessions_count}-{w_slot:05d}",
                 },
             )
-            return "record_attempt_write_api", lat, (st == 200 and b"attempt_id" in raw)
+            return (
+                "record_attempt_write_api",
+                lat,
+                st,
+                (st == 200 and b"attempt_id" in raw),
+            )
 
         t_w0 = time.perf_counter()
         w_all_lats: list[float] = []
+        w_all_statuses: list[int] = []
         w_all_errs = 0
         per_kind_lats: dict[str, list[float]] = {}
+        per_kind_statuses: dict[str, list[int]] = {}
         per_kind_errs: dict[str, int] = {}
 
         with concurrent.futures.ThreadPoolExecutor(
@@ -1263,9 +1429,11 @@ def _execute_s1_http_acceptance_and_mixed_waves(
                 compose_project, compose_file=compose_file, env=compose_env
             )
             for fut in concurrent.futures.as_completed(futs):
-                kind, lat_ms, ok = fut.result()
+                kind, lat_ms, st, ok = fut.result()
                 w_all_lats.append(lat_ms)
+                w_all_statuses.append(st)
                 per_kind_lats.setdefault(kind, []).append(lat_ms)
+                per_kind_statuses.setdefault(kind, []).append(st)
                 if not ok:
                     w_all_errs += 1
                     per_kind_errs[kind] = per_kind_errs.get(kind, 0) + 1
@@ -1276,13 +1444,21 @@ def _execute_s1_http_acceptance_and_mixed_waves(
         )
         mixed_waves[f"sessions_{wave_sessions_count}"] = {
             "concurrent_user_sessions": wave_sessions_count,
-            "overall_summary": summarize_latencies_ms(
-                w_all_lats, error_count=w_all_errs, elapsed_sec=w_elapsed
-            ),
+            "overall_summary": {
+                **_classify_http_statuses(w_all_statuses),
+                **summarize_latencies_ms(
+                    w_all_lats, error_count=w_all_errs, elapsed_sec=w_elapsed
+                ),
+                "raw_latencies_ms": [round(x, 3) for x in w_all_lats],
+            },
             "by_workload": {
-                k: summarize_latencies_ms(
-                    v, error_count=per_kind_errs.get(k, 0), elapsed_sec=w_elapsed
-                )
+                k: {
+                    **_classify_http_statuses(per_kind_statuses.get(k, [])),
+                    **summarize_latencies_ms(
+                        v, error_count=per_kind_errs.get(k, 0), elapsed_sec=w_elapsed
+                    ),
+                    "raw_latencies_ms": [round(x, 3) for x in v],
+                }
                 for k, v in sorted(per_kind_lats.items())
             },
             "container_resources_during_wave": mid_stats,
@@ -1548,6 +1724,7 @@ def _summarize(lats, errs, elapsed_s):
         "p95_ms": _pct(s, 95.0),
         "p99_ms": _pct(s, 99.0),
         "max_ms": round(s[-1], 3) if s else 0.0,
+        "raw_latencies_ms": [round(x, 3) for x in lats],
     }
 
 
@@ -2314,6 +2491,111 @@ dist_dup_leads = int(
 )
 dist_reconcile = distribution.reconcile(dist_10k_camp, actor="Administrator")
 
+from frappe.utils.background_jobs import generate_qname as _dist_gen_qname
+_dist_rq = redis.from_url(frappe.conf.redis_queue)
+_dist_poll_timed_out = dist_run_status.lower() not in (
+    "completed",
+    "completed_with_errors",
+    "failed",
+    "aborted",
+)
+_dist_run_rows = frappe.db.sql(
+    "SELECT name, campaign, rule_version, status, progress, started_at, finished_at, "
+    "lease_expires_at, error, actual_json FROM `tabCSKH Distribution Run` WHERE name = %s",
+    (run_id,),
+    as_dict=True,
+)
+_dist_wi_by_status = {
+    str(_st_name): int(_cnt)
+    for _st_name, _cnt in frappe.db.sql(
+        "SELECT status, COUNT(*) FROM `tabCSKH Work Item` WHERE campaign = %s GROUP BY status",
+        (dist_10k_camp,),
+    )
+}
+_dist_claim_cnt = int(
+    frappe.db.sql(
+        "SELECT COUNT(*) FROM `tabCSKH Active Claim` WHERE campaign = %s",
+        (dist_10k_camp,),
+    )[0][0]
+)
+_dirty_scope_by_status = {
+    str(_st_name): int(_cnt)
+    for _st_name, _cnt in frappe.db.sql(
+        "SELECT status, COUNT(*) FROM `tabCSKH Dirty Scope` GROUP BY status"
+    )
+}
+_rq_job_candidates = [
+    f"rq:job:{site}::cskh-dist-{run_id}",
+    f"rq:job:cskh-dist-{run_id}",
+]
+_rq_job_key_found = ""
+_rq_job_state = {}
+for _cand_key in _rq_job_candidates:
+    if _dist_rq.exists(_cand_key):
+        _rq_job_key_found = _cand_key
+        break
+if not _rq_job_key_found:
+    for _scan_key in _dist_rq.scan_iter(match=f"*{run_id}*", count=100):
+        _ks = (
+            _scan_key.decode("utf-8", errors="ignore")
+            if isinstance(_scan_key, bytes)
+            else str(_scan_key)
+        )
+        if _ks.startswith("rq:job:"):
+            _rq_job_key_found = _ks
+            break
+if _rq_job_key_found:
+    for _hk in (
+        "status",
+        "enqueued_at",
+        "started_at",
+        "ended_at",
+        "worker_name",
+        "origin",
+        "timeout",
+        "exc_info",
+    ):
+        _hv = _dist_rq.hget(_rq_job_key_found, _hk)
+        if _hv is not None:
+            _rq_job_state[_hk] = (
+                _hv.decode("utf-8", errors="replace")[:1000]
+                if isinstance(_hv, bytes)
+                else str(_hv)[:1000]
+            )
+_rq_workers_snap = []
+try:
+    from rq import Worker as _RQWorker
+    for _w in _RQWorker.all(connection=_dist_rq):
+        _rq_workers_snap.append(
+            {
+                "name": str(getattr(_w, "name", "")),
+                "state": str(_w.get_state() if hasattr(_w, "get_state") else ""),
+                "queues": [str(_q) for _q in _w.queue_names()] if hasattr(_w, "queue_names") else [],
+                "current_job_id": str(_w.get_current_job_id() or "") if hasattr(_w, "get_current_job_id") else "",
+            }
+        )
+except Exception:
+    pass
+dist_worker_and_job_diagnostics = {
+    "run_id": run_id,
+    "campaign_id": dist_10k_camp,
+    "poll_deadline_sec": 1200.0,
+    "poll_timed_out_while_running": _dist_poll_timed_out,
+    "distribution_run_row": _dist_run_rows[0] if _dist_run_rows else {},
+    "work_item_counts_by_status": _dist_wi_by_status,
+    "work_item_total_in_db": sum(_dist_wi_by_status.values()),
+    "active_claim_count_in_db": _dist_claim_cnt,
+    "dirty_scope_counts_by_status": _dirty_scope_by_status,
+    "rq_job_redis_key": _rq_job_key_found or None,
+    "rq_job_state": _rq_job_state,
+    "rq_queue_depths_at_step_end": {
+        _qn: int(_dist_rq.llen(f"rq:queue:{_dist_gen_qname(_qn)}"))
+        for _qn in ("short", "default", "long")
+    },
+    "rq_active_workers_at_step_end": _rq_workers_snap,
+    "all_progress_checkpoints": dist_progress_samples,
+}
+
 # Verify operator cancel/pause abort guard on a separate campaign (`Closed` before worker runs -> clean `CONFLICT` abort)
 from crm_cskh.services import identity as identity_service
 abort_l1 = frappe.get_doc(
@@ -2509,7 +2791,9 @@ out = {
             "preview_rss_after_mib": rss_imp_after_prev,
             "preview_hwm_mib": hwm_imp_prev,
             "progress_checkpoints_count": len(imp_progress_samples),
+            "all_progress_checkpoints": imp_progress_samples,
             "concurrent_worklist_read_p95_ms": _pct(imp_nonblocking_lats, 95.0),
+            "concurrent_worklist_read_raw_latencies_ms": imp_nonblocking_lats,
             "rows_throughput_per_sec": round(50_000.0 / (imp_total_ms / 1000.0), 2) if imp_total_ms > 0 else 0.0,
         },
         "campaign_distribution_10000_work_items_40_staff": {
@@ -2527,13 +2811,16 @@ out = {
             "double_submit_idempotent": double_submit_idempotent,
             "abort_cancel_guard_verified": abort_guard_verified,
             "progress_checkpoints_recorded": dist_progress_samples[:10] + dist_progress_samples[-3:],
+            "all_progress_checkpoints": dist_progress_samples,
             "concurrent_worklist_read_p95_ms": _pct(dist_nonblocking_lats, 95.0),
+            "concurrent_worklist_read_raw_latencies_ms": dist_nonblocking_lats,
             "reconciliation": {
                 "active_work_items": dist_reconcile.get("active_work_items"),
                 "stale_docshares": dist_reconcile.get("stale_docshares"),
                 "stale_open_todos": dist_reconcile.get("stale_open_todos"),
                 "ownership_reconciled": dist_reconcile.get("ownership_reconciled"),
             },
+            "worker_and_job_diagnostics": dist_worker_and_job_diagnostics,
         },
         "rq_short_50_job_burst": {
             "enqueue_50_jobs_ms": enqueue_50_ms,
@@ -2769,8 +3056,14 @@ def _build_p4_9_2_acceptance_matrix(
             ),
         },
     }
+    failed_checks = [k for k, v in items.items() if not bool(v["passed"])]
+    passed_count = sum(1 for v in items.values() if bool(v["passed"]))
     return {
-        "all_passed": all(bool(v["passed"]) for v in items.values()),
+        "all_passed": len(failed_checks) == 0,
+        "total_checks": len(items),
+        "passed_count": passed_count,
+        "failed_count": len(failed_checks),
+        "failed_checks": failed_checks,
         "items": items,
     }
 
@@ -2947,6 +3240,136 @@ def _derive_limits_and_proposed_slos(
     }
 
 
+def _collect_pre_teardown_diagnostics(
+    *,
+    compose_project: str,
+    site_name: str,
+    compose_files: list[Path],
+    compose_env: dict[str, str],
+    secrets_to_redact: tuple[str, ...],
+) -> dict[str, object]:
+    """Capture best-effort container, worker, RQ job, DB, and scrubbed log state before teardown."""
+    compose_base = [
+        "docker",
+        "compose",
+        *_compose_files_arg(compose_files),
+        "-p",
+        compose_project,
+    ]
+    diag: dict[str, object] = {
+        "captured_at_utc": datetime.now(timezone.utc).isoformat(),
+    }
+    try:
+        diag["container_stats"] = _collect_docker_stats(
+            compose_project, compose_file=compose_files, env=compose_env
+        )
+    except Exception as exc:
+        diag["container_stats_error"] = _scrub_diagnostic_text(
+            str(exc), secrets_to_redact
+        )
+
+    try:
+        diag["queue_and_db_state"] = _collect_queue_and_db_telemetry(
+            compose_project,
+            site_name,
+            compose_file=compose_files,
+            env=compose_env,
+        )
+    except Exception as exc:
+        diag["queue_and_db_state_error"] = _scrub_diagnostic_text(
+            str(exc), secrets_to_redact
+        )
+
+    final_state_probe = (
+        "import json, frappe, redis\n"
+        f"site = {site_name!r}\n"
+        "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites')\n"
+        "frappe.connect()\n"
+        "camp_rows = frappe.db.sql(\"SELECT name FROM `tabCSKH Campaign` WHERE code = 'S1-CAMP-DIST-10K' LIMIT 1\")\n"
+        "camp_id = str(camp_rows[0][0]) if camp_rows else ''\n"
+        "run_rows = frappe.db.sql(\n"
+        '    "SELECT name, campaign, rule_version, status, progress, started_at, finished_at, lease_expires_at, error, actual_json "\n'
+        "    \"FROM `tabCSKH Distribution Run` WHERE idempotency_key = 's1-dist-exec-10k' ORDER BY creation DESC LIMIT 1\",\n"
+        "    as_dict=True,\n"
+        ")\n"
+        "wi_by_status = {}\n"
+        "if camp_id:\n"
+        '    wi_by_status = {str(s): int(c) for s, c in frappe.db.sql("SELECT status, COUNT(*) FROM `tabCSKH Work Item` WHERE campaign = %s GROUP BY status", (camp_id,))}\n'
+        'dirty_by_status = {str(s): int(c) for s, c in frappe.db.sql("SELECT status, COUNT(*) FROM `tabCSKH Dirty Scope` GROUP BY status")}\n'
+        "rq_state = {}\n"
+        "if run_rows:\n"
+        "    rid = str(run_rows[0]['name'])\n"
+        "    r = redis.from_url(frappe.conf.redis_queue)\n"
+        "    for cand in (f'rq:job:{site}::cskh-dist-{rid}', f'rq:job:cskh-dist-{rid}'):\n"
+        "        if r.exists(cand):\n"
+        "            for hk in ('status', 'enqueued_at', 'started_at', 'ended_at', 'worker_name', 'exc_info'):\n"
+        "                hv = r.hget(cand, hk)\n"
+        "                if hv is not None:\n"
+        "                    rq_state[hk] = (hv.decode('utf-8', errors='replace') if isinstance(hv, bytes) else str(hv))[:1000]\n"
+        "            break\n"
+        "frappe.destroy()\n"
+        "print(json.dumps({\n"
+        "    'dist_10k_campaign_id': camp_id or None,\n"
+        "    'distribution_run_row': run_rows[0] if run_rows else None,\n"
+        "    'work_item_counts_by_status': wi_by_status,\n"
+        "    'work_item_total_in_db': sum(wi_by_status.values()),\n"
+        "    'dirty_scope_counts_by_status': dirty_by_status,\n"
+        "    'rq_job_state': rq_state,\n"
+        "}, default=str))"
+    )
+    try:
+        st_proc = subprocess.run(
+            [
+                *compose_base,
+                "exec",
+                "-T",
+                "-e",
+                "FRAPPE_STREAM_LOGGING=1",
+                "backend",
+                "/home/frappe/frappe-bench/env/bin/python",
+                "-c",
+                final_state_probe,
+            ],
+            env=compose_env,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=30,
+        )
+        if st_proc.returncode == 0 and st_proc.stdout.strip():
+            diag["distribution_and_work_item_final_state"] = json.loads(
+                st_proc.stdout.strip().splitlines()[-1]
+            )
+    except Exception as exc:
+        diag["distribution_and_work_item_final_state_error"] = _scrub_diagnostic_text(
+            str(exc), secrets_to_redact
+        )
+
+    service_logs: dict[str, str] = {}
+    for svc in ("queue-long", "queue-short", "backend", "db"):
+        try:
+            lg_proc = subprocess.run(
+                [*compose_base, "logs", "--no-color", "--tail=60", svc],
+                env=compose_env,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=20,
+            )
+            combined_log = (lg_proc.stdout or "") + (
+                f"\n{lg_proc.stderr}" if lg_proc.stderr else ""
+            )
+            service_logs[svc] = _scrub_diagnostic_text(
+                combined_log[-4000:], secrets_to_redact
+            )
+        except Exception as exc:
+            service_logs[svc] = _scrub_diagnostic_text(
+                f"log capture error: {exc}", secrets_to_redact
+            )
+    diag["service_logs_tail"] = service_logs
+    return diag
+
+
 def provision_and_execute_s1_benchmark(
     *,
     app_image: str,
@@ -2979,6 +3402,7 @@ def provision_and_execute_s1_benchmark(
     db_root_pw = secrets.token_hex(24)
     admin_pw = secrets.token_hex(24)
     actor_pw = secrets.token_hex(20)
+    secrets_to_redact = (db_root_pw, admin_pw, actor_pw)
 
     with tempfile.TemporaryDirectory(prefix="cskh-p4-s1-bench-") as tmp_dir_str:
         tmp_dir = Path(tmp_dir_str)
@@ -3012,6 +3436,10 @@ def provision_and_execute_s1_benchmark(
             compose_project,
         ]
 
+        current_stage = "compose_up"
+        s1_in_container: dict[str, object] | None = None
+        http_report: dict[str, object] | None = None
+
         try:
             subprocess.run(
                 [*compose_base, "up", "-d", "--no-build"],
@@ -3022,6 +3450,7 @@ def provision_and_execute_s1_benchmark(
                 timeout=300,
             )
 
+            current_stage = "site_bootstrap"
             init_cmd = (
                 "set -euo pipefail; cd /home/frappe/frappe-bench; "
                 "bench new-site --no-mariadb-socket --mariadb-user-host-login-scope=% "
@@ -3062,6 +3491,7 @@ def provision_and_execute_s1_benchmark(
                     f"STDOUT:\n{init_proc.stdout[-1500:]}\nSTDERR:\n{init_proc.stderr[-1500:]}"
                 )
 
+            current_stage = "service_restart"
             subprocess.run(
                 [
                     *compose_base,
@@ -3079,6 +3509,7 @@ def provision_and_execute_s1_benchmark(
                 timeout=120,
             )
 
+            current_stage = "s1_in_container_benchmark"
             s1_proc = subprocess.run(
                 [
                     *compose_base,
@@ -3135,6 +3566,7 @@ def provision_and_execute_s1_benchmark(
                     for s in (spec.get("scenarios") or [])  # type: ignore[union-attr]
                 ]
 
+            current_stage = "frontend_recreate_and_readiness"
             subprocess.run(
                 [
                     *compose_base,
@@ -3177,6 +3609,7 @@ def provision_and_execute_s1_benchmark(
                     f"HTTP readiness probe failed on {base_url}:\n{diag.stdout[-2000:]}\n{diag.stderr[-1000:]}"
                 )
 
+            current_stage = "http_benchmark_execution"
             http_report = execute_isolated_benchmark(
                 spec,
                 base_url=base_url,
@@ -3190,6 +3623,7 @@ def provision_and_execute_s1_benchmark(
                 s1_in_container=s1_in_container,
             )
 
+            current_stage = "post_measurement_packaging"
             # Strip helper list of 350 sample open WIs before persisting report JSON to keep artifact compact
             s1_clean = {
                 k: v
@@ -3197,29 +3631,79 @@ def provision_and_execute_s1_benchmark(
                 if k not in ("http_open_work_items", "staff_users", "leader_users")
             }
             acceptance_matrix = _build_p4_9_2_acceptance_matrix(s1_clean, http_report)
-            if not acceptance_matrix["all_passed"]:
-                raise RuntimeError(
-                    f"P4.md §9.2 benchmark acceptance check failed: {json.dumps(acceptance_matrix, indent=2)}"
-                )
+            pre_teardown_diag = _collect_pre_teardown_diagnostics(
+                compose_project=compose_project,
+                site_name=site_name,
+                compose_files=compose_files,
+                compose_env=compose_env,
+                secrets_to_redact=secrets_to_redact,
+            )
 
-            img_insp = json.loads(
-                subprocess.check_output(
-                    ["docker", "image", "inspect", app_image], text=True
-                )
-            )[0]
+            image_id: str | None = None
+            try:
+                img_insp = json.loads(
+                    subprocess.check_output(
+                        ["docker", "image", "inspect", app_image], text=True
+                    )
+                )[0]
+                image_id = img_insp.get("Id")
+            except Exception:
+                image_id = None
+
             limits_and_slos = _derive_limits_and_proposed_slos(s1_clean, http_report)
+            all_passed = bool(acceptance_matrix["all_passed"])
 
             return {
                 **http_report,
+                "acceptance_verdict": "PASS" if all_passed else "FAIL",
+                "all_acceptance_passed": all_passed,
                 "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
                 "app_image_tested": app_image,
-                "image_id": img_insp.get("Id"),
+                "image_id": image_id,
                 "resource_profile": resource_profile,
                 "live_resource_headroom_precheck": live_headroom,
                 "s1_domain_and_database_benchmark": s1_clean,
+                "worker_and_job_diagnostics": pre_teardown_diag,
                 "p4_9_2_acceptance_matrix": acceptance_matrix,
                 **limits_and_slos,
             }
+        except BenchmarkExecutionError:
+            raise
+        except Exception as exc:
+            pre_teardown_diag = _collect_pre_teardown_diagnostics(
+                compose_project=compose_project,
+                site_name=site_name,
+                compose_files=compose_files,
+                compose_env=compose_env,
+                secrets_to_redact=secrets_to_redact,
+            )
+            scrubbed_err = _scrub_diagnostic_text(str(exc), secrets_to_redact)
+            s1_partial = (
+                {
+                    k: v
+                    for k, v in s1_in_container.items()
+                    if k not in ("http_open_work_items", "staff_users", "leader_users")
+                }
+                if isinstance(s1_in_container, dict)
+                else None
+            )
+            failure_report: dict[str, object] = {
+                **(http_report if isinstance(http_report, dict) else spec),
+                "status": "EXECUTION_ERROR",
+                "acceptance_verdict": "ERROR",
+                "all_acceptance_passed": False,
+                "failed_stage": current_stage,
+                "error_type": type(exc).__name__,
+                "error_message": scrubbed_err,
+                "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+                "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
+                "app_image_tested": app_image,
+                "resource_profile": resource_profile,
+                "live_resource_headroom_precheck": live_headroom,
+                "s1_domain_and_database_benchmark": s1_partial,
+                "worker_and_job_diagnostics": pre_teardown_diag,
+            }
+            raise BenchmarkExecutionError(scrubbed_err, report=failure_report) from exc
         finally:
             subprocess.run(
                 [*compose_base, "down", "-v", "--remove-orphans"],
@@ -3288,6 +3772,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--out", required=True, help="Output JSON benchmark spec/report")
     args = p.parse_args(argv)
 
+    out_path = Path(args.out)
+    exit_code = 0
+    failure_stderr_msg = ""
+
     if args.provision_and_run_s1:
         if not args.confirm_isolated_target:
             raise SystemExit(
@@ -3295,18 +3783,27 @@ def main(argv: list[str] | None = None) -> int:
             )
         if not args.app_image.strip():
             raise SystemExit("ERROR: --provision-and-run-s1 requires --app-image")
-        report = provision_and_execute_s1_benchmark(
-            app_image=args.app_image.strip(),
-            pull_policy=args.pull_policy,
-            port=args.port,
-            site_name=(
-                args.site_name
-                if args.site_name != "p4-bench.localhost"
-                else "p4-s1-bench.localhost"
-            ),
-            resource_profile=args.resource_profile,
-            require_live_headroom=args.require_live_headroom,
-        )
+        try:
+            report = provision_and_execute_s1_benchmark(
+                app_image=args.app_image.strip(),
+                pull_policy=args.pull_policy,
+                port=args.port,
+                site_name=(
+                    args.site_name
+                    if args.site_name != "p4-bench.localhost"
+                    else "p4-s1-bench.localhost"
+                ),
+                resource_profile=args.resource_profile,
+                require_live_headroom=args.require_live_headroom,
+            )
+        except BenchmarkExecutionError as exc:
+            report = exc.report
+            exit_code = 1
+            failure_stderr_msg = (
+                f"ERROR: Benchmark execution failed at stage "
+                f"{report.get('failed_stage')!r}: {exc}; "
+                f"diagnostic JSON report saved to {out_path}"
+            )
     else:
         spec = build_benchmark_specification(
             profile_name=args.profile,
@@ -3324,29 +3821,60 @@ def main(argv: list[str] | None = None) -> int:
                 raise SystemExit(
                     f"ERROR: Environment variable {args.admin_password_env} must be set for live benchmark execution"
                 )
-            report = execute_isolated_benchmark(
-                spec,
-                base_url=args.base_url,
-                site_name=args.site_name,
-                compose_project=args.compose_project,
-                admin_user=args.admin_user,
-                admin_password=adm_pw,
+            try:
+                report = execute_isolated_benchmark(
+                    spec,
+                    base_url=args.base_url,
+                    site_name=args.site_name,
+                    compose_project=args.compose_project,
+                    admin_user=args.admin_user,
+                    admin_password=adm_pw,
+                )
+            except Exception as exc:
+                scrubbed_err = _scrub_diagnostic_text(str(exc), (adm_pw,))
+                report = {
+                    **spec,
+                    "status": "EXECUTION_ERROR",
+                    "acceptance_verdict": "ERROR",
+                    "all_acceptance_passed": False,
+                    "failed_stage": "http_benchmark_execution",
+                    "error_type": type(exc).__name__,
+                    "error_message": scrubbed_err,
+                    "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+                }
+                exit_code = 1
+                failure_stderr_msg = (
+                    f"ERROR: Live HTTP benchmark failed: {scrubbed_err}; "
+                    f"diagnostic JSON report saved to {out_path}"
+                )
+
+    acceptance = report.get("p4_9_2_acceptance_matrix")
+    if isinstance(acceptance, dict) and not bool(acceptance.get("all_passed", True)):
+        exit_code = 1
+        if not failure_stderr_msg:
+            failure_stderr_msg = (
+                f"ERROR: P4.md §9.2 benchmark acceptance check failed "
+                f"({acceptance.get('failed_checks')}); "
+                f"complete JSON report and raw measurements saved to {out_path}"
             )
 
-    out_path = Path(args.out)
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    out_path.write_bytes((json.dumps(report, indent=2) + "\n").encode("utf-8"))
-    print(
-        json.dumps(
-            {
-                "status": report["status"],
-                "profile": report.get("profile_name", args.profile),
-                "sla_commitment_status": report["sla_commitment_status"],
-                "out": str(out_path),
-            }
-        )
-    )
-    return 0
+    _write_json_report_atomic(out_path, report)
+    summary_payload: dict[str, object] = {
+        "status": report["status"],
+        "profile": report.get("profile_name", args.profile),
+        "sla_commitment_status": report["sla_commitment_status"],
+        "out": str(out_path),
+        "exit_code": exit_code,
+    }
+    if "acceptance_verdict" in report:
+        summary_payload["acceptance_verdict"] = report["acceptance_verdict"]
+        summary_payload["all_acceptance_passed"] = report.get("all_acceptance_passed")
+    if isinstance(acceptance, dict):
+        summary_payload["failed_checks"] = acceptance.get("failed_checks", [])
+    print(json.dumps(summary_payload))
+    if failure_stderr_msg:
+        print(failure_stderr_msg, file=sys.stderr)
+    return exit_code
 
 
 if __name__ == "__main__":
