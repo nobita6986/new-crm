@@ -359,6 +359,7 @@ def https_req(
     method: str = "GET",
     headers: dict[str, str] | None = None,
     body: bytes | None = None,
+    timeout: float = 60.0,
 ) -> tuple[int, list[tuple[str, str]], bytes]:
     url = f"https://{site_name}{path}"
     return p403_tool._https_request(
@@ -366,7 +367,7 @@ def https_req(
         method=method,
         headers=headers,
         body=body,
-        timeout=20.0,
+        timeout=timeout,
         connect_host=connect_host,
         https_port=https_port,
         tls_ca_file=ca_crt_path,
@@ -379,7 +380,7 @@ def wait_https_ingress_ready(
     connect_host: str,
     https_port: int,
     ca_crt_path: Path,
-    timeout_seconds: int = 120,
+    timeout_seconds: int = 180,
 ) -> None:
     """Wait for Traefik Docker router discovery, nginx frontend, and Frappe website SSR warm-up over TLS."""
     deadline = time.monotonic() + timeout_seconds
@@ -396,6 +397,7 @@ def wait_https_ingress_ready(
                 ca_crt_path=ca_crt_path,
                 path="/api/method/ping",
                 headers={"Accept": "application/json"},
+                timeout=30.0,
             )
             last_status = st
             if st == 200 and b"pong" in raw:
@@ -407,6 +409,7 @@ def wait_https_ingress_ready(
                         ca_crt_path=ca_crt_path,
                         path="/login",
                         headers={"Accept": "text/html"},
+                        timeout=90.0,
                     )
                     last_login_status = login_st
                     if login_st == 200:
@@ -423,7 +426,7 @@ def wait_https_ingress_ready(
                     last_login_status = 0
                     last_err = lex
                     sys.stderr.write(
-                        f"[wait_https_ingress_ready] ping=200 but login error: {type(lex).__name__}: {lex}\n"
+                        f"[wait_https_ingress_ready] ping=200 but login error: {type(lex).__name__}: {lex} (elapsed={time.monotonic() - start_time:.1f}s)\n"
                     )
                     sys.stderr.flush()
             else:
