@@ -1,7 +1,7 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
   "generated_at_utc": "2026-11-12T09:31:11Z",
-  "manifest_revision": "v14-sec-credential-remediation-run4-b998a96-20261113",
+  "manifest_revision": "v15-t1b-ops-g18-runner-b998a96-integration-20261113",
   "manifest_updated_at_utc": "2026-11-13T03:09:00Z",
   "branch": "codex/p4-resume-ops",
   "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
@@ -272,7 +272,9 @@
       "g05_status": "PASS",
       "g18_status": "FAIL",
       "g18_verdict": "1_OF_11_SLO_CHECKS_FAILED",
-      "g18_failed_checks": ["execute_weighted_distribution_10000_items"],
+      "g18_failed_checks": [
+        "execute_weighted_distribution_10000_items"
+      ],
       "g18_passed_checks": 10,
       "g18_measured_at_utc": "2026-11-13T01:00:00Z",
       "g18_bench_project": "cskh-p4-bench-run2-s1canonical4x4",
@@ -298,7 +300,9 @@
       "g05_status": "PASS",
       "g18_status": "FAIL",
       "g18_verdict": "1_OF_11_SLO_CHECKS_FAILED",
-      "g18_failed_checks": ["execute_weighted_distribution_10000_items"],
+      "g18_failed_checks": [
+        "execute_weighted_distribution_10000_items"
+      ],
       "g18_passed_checks": 10,
       "g18_total_checks": 11,
       "g18_fail_root_cause": "execute_ms=1201419ms exceeds hardcoded deadline 1200000ms at benchmark_p4_isolated.py line 2292; throughput ~192 items/min on VPS 6vCPU; 3600 items created at timeout vs 10000 required",
@@ -309,19 +313,58 @@
       "zero_live_mutation": true,
       "evidence_dir": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run3",
       "evidence_files": {
-        "candidate-registry-pull-inspect-receipt.json": {"sha256": "b5a2fd63e50e1ef097f024ce8f026549392c19875d0184ddcee2cfc20a2d36b0", "bytes": 2880},
-        "g18-benchmark-report.json": {"sha256": "ad50df085d7b3817b6b22f8d22e602fff87be3441f83519802a5faf123ca2815", "bytes": 4050},
-        "g18-live-preservation-before-after.json": {"sha256": "dc3d0c612422ad179d8fe6a28741a2f60e168a5cf00063ca043bfe32b5a4d2ad", "bytes": 12174},
-        "g18-pre-measurement-gate.json": {"sha256": "547f7cb83f8738436d8de4bbd6eaf6e97d840e97ae06441b93a0e93083eb7ea6", "bytes": 2191},
-        "g18-reconcile-report.json": {"sha256": "748982c28df61a928748c20f661d4190decc48113d9ad3e98c8e313883e022c8", "bytes": 3720},
-        "g18-run3-run-staging-vps-g18-log.txt": {"sha256": "c4145913eb09946e396281286afcef225d4e31c3a5c2cb2224c8b918dcca175a", "bytes": 2633},
-        "https-wss-smoke-receipt.json": {"sha256": "6a6a1786360b5ea1f025b2156db730ef7a3f16de9475a6285f4ae55d0724e4b2", "bytes": 4870},
-        "live-preservation-before-after.json": {"sha256": "f95dae7b2cc1f94afcd48dd87a51856b8b334bdc4f3078da9f6ff6d03e4424e0", "bytes": 12174},
-        "readonly-vps-preflight.json": {"sha256": "111d7eef18fec3e41e4883d6e161d59b205f7cb6395b252fb318a5afd82ce8ee", "bytes": 10164},
-        "staging-dr-runtime-isolation-audit.json": {"sha256": "75b06e178d6d3e3a09eb62c2ef8c30d89ba4ac09e8cedca686927460a94e9d1c", "bytes": 9427},
-        "staging-inventory-and-config-audit.json": {"sha256": "e3a6e466c75c9984c181c0738dfa02aa55daa06e3956e2d3fe69863ba172bdcd", "bytes": 10442},
-        "t1c-candidate-confirmation-receipt.json": {"sha256": "d8dc0aeb3e82773ab023a13fc7c0dbe5872da839fe41c0ee65f5b4be974ed7df", "bytes": 454},
-        "vps-g03-g05-summary.json": {"sha256": "0948ba866081c435a1fba6a283fcadd5770b2b6f0dd7d1f1dd9787a96e70ee43", "bytes": 3707}
+        "candidate-registry-pull-inspect-receipt.json": {
+          "sha256": "b5a2fd63e50e1ef097f024ce8f026549392c19875d0184ddcee2cfc20a2d36b0",
+          "bytes": 2880
+        },
+        "g18-benchmark-report.json": {
+          "sha256": "ad50df085d7b3817b6b22f8d22e602fff87be3441f83519802a5faf123ca2815",
+          "bytes": 4050
+        },
+        "g18-live-preservation-before-after.json": {
+          "sha256": "dc3d0c612422ad179d8fe6a28741a2f60e168a5cf00063ca043bfe32b5a4d2ad",
+          "bytes": 12174
+        },
+        "g18-pre-measurement-gate.json": {
+          "sha256": "547f7cb83f8738436d8de4bbd6eaf6e97d840e97ae06441b93a0e93083eb7ea6",
+          "bytes": 2191
+        },
+        "g18-reconcile-report.json": {
+          "sha256": "748982c28df61a928748c20f661d4190decc48113d9ad3e98c8e313883e022c8",
+          "bytes": 3720
+        },
+        "g18-run3-run-staging-vps-g18-log.txt": {
+          "sha256": "c4145913eb09946e396281286afcef225d4e31c3a5c2cb2224c8b918dcca175a",
+          "bytes": 2633
+        },
+        "https-wss-smoke-receipt.json": {
+          "sha256": "6a6a1786360b5ea1f025b2156db730ef7a3f16de9475a6285f4ae55d0724e4b2",
+          "bytes": 4870
+        },
+        "live-preservation-before-after.json": {
+          "sha256": "f95dae7b2cc1f94afcd48dd87a51856b8b334bdc4f3078da9f6ff6d03e4424e0",
+          "bytes": 12174
+        },
+        "readonly-vps-preflight.json": {
+          "sha256": "111d7eef18fec3e41e4883d6e161d59b205f7cb6395b252fb318a5afd82ce8ee",
+          "bytes": 10164
+        },
+        "staging-dr-runtime-isolation-audit.json": {
+          "sha256": "75b06e178d6d3e3a09eb62c2ef8c30d89ba4ac09e8cedca686927460a94e9d1c",
+          "bytes": 9427
+        },
+        "staging-inventory-and-config-audit.json": {
+          "sha256": "e3a6e466c75c9984c181c0738dfa02aa55daa06e3956e2d3fe69863ba172bdcd",
+          "bytes": 10442
+        },
+        "t1c-candidate-confirmation-receipt.json": {
+          "sha256": "d8dc0aeb3e82773ab023a13fc7c0dbe5872da839fe41c0ee65f5b4be974ed7df",
+          "bytes": 454
+        },
+        "vps-g03-g05-summary.json": {
+          "sha256": "0948ba866081c435a1fba6a283fcadd5770b2b6f0dd7d1f1dd9787a96e70ee43",
+          "bytes": 3707
+        }
       },
       "completed_at_utc": "2026-11-13T02:15:00Z"
     }
@@ -489,6 +532,8 @@
       ],
       "summary": "execute_weighted_distribution_10000_items FAIL confirmed reproducible across 3 runs. 10/11 all other SLO checks PASS. G04=FAIL and production=BLOCKED remain unchanged. Owner decision required to unblock G18."
     },
+    {
+      "id": "UPSTREAM-DEBIAN13-3-UNFIXED-CVES",
       "scope": "Gate G04 / production_candidate promotion block due to 3 unfixed Debian 13 OS package CVEs (fixed_version: null)",
       "status": "OPEN_UPSTREAM_OR_OWNER_DECISION_REQUIRED",
       "required_owner_inputs": [
@@ -730,8 +775,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/SHA256SUMS.txt",
-      "bytes": 1520,
-      "sha256": "b75f841a5bed536c28dbb7e13b002ad13daccf73119e74f50507d341dee0bfcf"
+      "bytes": 1505,
+      "sha256": "5cf16db9aa0935eab9ac3c2a083e6b31d261ef9220d70e3455357b990341ea68"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/candidate-registry-pull-inspect-receipt.json",
@@ -780,8 +825,8 @@
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/gate-acceptance-evidence-map.json",
-      "bytes": 13503,
-      "sha256": "e313108b58d174dc37b73f25a27a8ede18bba81f0084d809a56a9943d5ded710"
+      "bytes": 13039,
+      "sha256": "059439f69c66e609cac9dfe4eccffdf78e64494f8f928d99a9f610a326ccae5d"
     },
     {
       "path": "deploy/ops/evidence/p4-https-delta-20261109/https-browser-uat-security-report.json",
@@ -895,8 +940,8 @@
     },
     {
       "path": "deploy/ops/manage_isolated_staging_dr.py",
-      "bytes": 386161,
-      "sha256": "248d9d7b22cce92dd2d8cd680cbdc4bd2a21cdc98e7835f282e96ba22098fad8"
+      "bytes": 389513,
+      "sha256": "e328cc0c85c65147ed9e9831ce7fe18c837c2e3bd28dbd248198a4fa4ba904c5"
     },
     {
       "path": "deploy/ops/run_https_browser_uat_and_security.py",
@@ -950,8 +995,8 @@
     },
     {
       "path": "deploy/ops/test_ops_toolkit.py",
-      "bytes": 225375,
-      "sha256": "0465859eadcfdf737b6fb388e846761b54a426a86fdee1562a89a38cb84fc012"
+      "bytes": 242362,
+      "sha256": "8e41e930c262f32905f7b1f234f581cb7e36f01f339eb550d2579cdcc2475839"
     },
     {
       "path": "deploy/ops/verify_offsite_restore.py",
@@ -995,8 +1040,8 @@
     },
     {
       "path": "deploy/release/benchmark_p4_isolated.py",
-      "bytes": 131387,
-      "sha256": "def7e9cddb49c8637ea8ed8d0a629ce53686e3e32b9094ec44e2bdedef61e9fa"
+      "bytes": 152474,
+      "sha256": "55ddcedba85bda3818578ef5c54d294b4aa021871f800ad898807edf1188da24"
     },
     {
       "path": "deploy/release/diagnose_g18_drilldown.py",
@@ -1010,8 +1055,8 @@
     },
     {
       "path": "deploy/release/p4-s1-slo-approval.json",
-      "bytes": 898,
-      "sha256": "71bdf60ff8982f5532d00c714d3224ce796fe771c752e8a41ecabb93a2b1a483"
+      "bytes": 1438,
+      "sha256": "e7c9654752edeca7dd18c5ec1169591831077e567f6030823557ce228a7a6e07"
     },
     {
       "path": "deploy/release/p4-s1-slo-spec.json",
@@ -1024,14 +1069,19 @@
       "sha256": "21c4a80dde60ee5593442c03dfdac101c85e9657b83d6e2dd2c0de704ff24f99"
     },
     {
+      "path": "deploy/release/test_benchmark_p4_isolated.py",
+      "bytes": 33990,
+      "sha256": "17901e17db778bfcc80afce6b10d94046dfef541ee05c2bf46ff5d4c7b81c4f3"
+    },
+    {
       "path": "deploy/release/test_diagnose_g18_drilldown.py",
       "bytes": 3999,
       "sha256": "dd3d8b102dde72dfd9440b74f36f345b6ef098056055b3d9500ed798871e2ce7"
     },
     {
       "path": "deploy/release/test_evaluate_s1_slo.py",
-      "bytes": 15918,
-      "sha256": "96c783eaa119ac54623334d1f862a056e7bff96d410af29d886ad24e55cb9519"
+      "bytes": 17867,
+      "sha256": "26781eb6ede092fb71b02887046ca792815ba51960b44ca650831c9dee0bf3c2"
     },
     {
       "path": "docs/p4/P4-ADR-01-compose-and-isolation.md",
@@ -1174,7 +1224,6 @@
       "sha256": "4cf7156eaeb76f45778b4aea8f2b69771337657cbedcaf4e87947336ce1d8b78"
     }
   ],
-  "manifest_revision": "v14-sec-credential-remediation-run4-b998a96-20261113",
   "merged_t1b_release_hardening_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
   "merged_t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
   "integrated_candidate_manifest_path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json"

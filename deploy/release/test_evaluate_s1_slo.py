@@ -74,12 +74,19 @@ class EvaluateS1SloTests(unittest.TestCase):
         self.assertEqual(
             self.approval_doc["approved_image_digest"], LOCKED_CANDIDATE_DIGEST
         )
-        self.assertEqual(self.approval_doc["approval_status"], "PENDING_OWNER_APPROVAL")
-        self.assertEqual(self.approval_doc["approved_profiles"], [])
+        self.assertIn(
+            self.approval_doc["approval_status"],
+            ("PENDING_OWNER_APPROVAL", "OWNER_APPROVED"),
+        )
+        if self.approval_doc["approval_status"] == "OWNER_APPROVED":
+            self.assertGreater(len(self.approval_doc["approved_profiles"]), 0)
+        else:
+            self.assertEqual(self.approval_doc["approved_profiles"], [])
 
     def test_canonical_slo_spec_and_pending_approval_doc_pass_technical_check(
         self,
     ) -> None:
+        expected_status = self.approval_doc["approval_status"]
         for profile in ("s1_canonical_4x4", "staging_vps_capped"):
             errs = validate_slo_spec_governance(self.spec, profile=profile)
             self.assertEqual(
@@ -100,9 +107,34 @@ class EvaluateS1SloTests(unittest.TestCase):
                 )
                 self.assertEqual(res["status"], "PASS", res)
                 self.assertEqual(res["gate_errors"], [])
-                self.assertEqual(res["slo_approval_status"], "PENDING_OWNER_APPROVAL")
+                self.assertEqual(res["slo_approval_status"], expected_status)
+                expected_approved_for_prof = (
+                    expected_status == "OWNER_APPROVED"
+                    and profile in self.approval_doc["approved_profiles"]
+                )
+                self.assertEqual(
+                    res["approval_verification"]["owner_approved_for_profile"],
+                    expected_approved_for_prof,
+                )
+
+                pending_doc = copy.deepcopy(self.approval_doc)
+                pending_doc["approval_status"] = "PENDING_OWNER_APPROVAL"
+                pending_doc["approved_profiles"] = []
+                pending_doc["owner_signoff"] = {}
+                pending_path = Path(tmp) / "pending-approval.json"
+                pending_path.write_text(json.dumps(pending_doc), encoding="utf-8")
+
+                res_pend = evaluate_slo_bundle(
+                    slo_spec_path=CANONICAL_SLO_PATH,
+                    expected_slo_sha256=self.spec_sha,
+                    approval_doc_path=pending_path,
+                    benchmark_report_path=bench_path,
+                    profile=profile,
+                )
+                self.assertEqual(res_pend["status"], "PASS", res_pend)
+                self.assertEqual(res_pend["slo_approval_status"], "PENDING_OWNER_APPROVAL")
                 self.assertFalse(
-                    res["approval_verification"]["owner_approved_for_profile"]
+                    res_pend["approval_verification"]["owner_approved_for_profile"]
                 )
 
     def test_separate_owner_approval_passes_without_mutating_slo_spec(self) -> None:
@@ -244,6 +276,7 @@ class EvaluateS1SloTests(unittest.TestCase):
 
         # 4. Populated approved_profiles while status is PENDING_OWNER_APPROVAL
         bad_pending = copy.deepcopy(self.approval_doc)
+        bad_pending["approval_status"] = "PENDING_OWNER_APPROVAL"
         bad_pending["approved_profiles"] = ["staging_vps_capped"]
         errs_pend, _ = validate_slo_approval_document(
             bad_pending,
@@ -335,10 +368,17 @@ class EvaluateS1SloTests(unittest.TestCase):
             bench_path.write_text(json.dumps(bench_doc), encoding="utf-8")
 
             # Pending Owner approval in separate doc must fail when `--require-owner-approved` is active
+            pending_doc = copy.deepcopy(self.approval_doc)
+            pending_doc["approval_status"] = "PENDING_OWNER_APPROVAL"
+            pending_doc["approved_profiles"] = []
+            pending_doc["owner_signoff"] = {}
+            pending_path = Path(tmp) / "pending-approval.json"
+            pending_path.write_text(json.dumps(pending_doc), encoding="utf-8")
+
             res_unapproved = evaluate_slo_bundle(
                 slo_spec_path=CANONICAL_SLO_PATH,
                 expected_slo_sha256=self.spec_sha,
-                approval_doc_path=CANONICAL_APPROVAL_PATH,
+                approval_doc_path=pending_path,
                 benchmark_report_path=bench_path,
                 profile="staging_vps_capped",
                 require_owner_approved=True,

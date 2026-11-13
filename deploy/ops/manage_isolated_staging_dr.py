@@ -8079,6 +8079,22 @@ def _validate_premeasurement_g18_diag_report(
     return (not errs), errs
 
 
+LOCKED_P4_BENCHMARK_RUNNER_SHA256 = (
+    "55ddcedba85bda3818578ef5c54d294b4aa021871f800ad898807edf1188da24"
+)
+
+
+def _compute_benchmark_runner_lf_sha256(
+    runner_path: Path | None = None,
+) -> str | None:
+    """Compute SHA-256 of benchmark_p4_isolated.py normalized to LF line endings."""
+    target = runner_path or (REPO_ROOT / "deploy" / "release" / "benchmark_p4_isolated.py")
+    if not target.exists():
+        return None
+    raw = target.read_bytes().replace(b"\r\n", b"\n")
+    return hashlib.sha256(raw).hexdigest()
+
+
 def verify_g18_acceptance_measurement_gate(
     *,
     vps_receipts: dict[str, Any] | Path | None,
@@ -8253,6 +8269,12 @@ def verify_g18_acceptance_measurement_gate(
         "owner_approval_doc_sha256": owner_doc_sha,
         "owner_approval_thresholds_sha256": signed_thresholds_sha256,
         "owner_approval_validation_errors": approval_errors,
+        "benchmark_runner_path": str(REPO_ROOT / "deploy" / "release" / "benchmark_p4_isolated.py"),
+        "expected_benchmark_runner_sha256": LOCKED_P4_BENCHMARK_RUNNER_SHA256,
+        "benchmark_runner_sha256": _compute_benchmark_runner_lf_sha256(),
+        "benchmark_runner_sha256_verified": (
+            _compute_benchmark_runner_lf_sha256() == LOCKED_P4_BENCHMARK_RUNNER_SHA256
+        ),
         "planned_benchmark_command": planned_cmd,
     }
     if out_json is not None:
@@ -8319,10 +8341,16 @@ def run_staging_vps_g18_acceptance(
 
     benchmark_out_json = benchmark_out_json.resolve()
     benchmark_out_json.parent.mkdir(parents=True, exist_ok=True)
+    benchmark_out_json.unlink(missing_ok=True)
     live_pres_path = benchmark_out_json.parent / "g18-live-preservation-before-after.json"
+    _runner_sha256 = gate.get("benchmark_runner_sha256") or _compute_benchmark_runner_lf_sha256()
+    _bench_exit_code = 0
+    _bench_stderr_tail = ""
 
     try:
-        run_sub(gate["planned_benchmark_command"])
+        bench_proc = run_sub(gate["planned_benchmark_command"], check=False)
+        _bench_exit_code = int(getattr(bench_proc, "returncode", 0))
+        _bench_stderr_tail = (getattr(bench_proc, "stderr", "") or "")[-2000:]
     finally:
         live_after = capture_readonly_live_stack_snapshot(live_project_name)
         live_preservation = compare_live_stack_preservation(live_before, live_after)
@@ -8337,6 +8365,8 @@ def run_staging_vps_g18_acceptance(
             **gate,
             "status": "FAIL_LIVE_SERVICE_MUTATED_DURING_G18",
             "benchmark_executed": True,
+            "benchmark_exit_code": _bench_exit_code,
+            "benchmark_runner_sha256": _runner_sha256,
             "live_zero_mutation": False,
             "live_preservation": live_preservation,
         }
@@ -8349,7 +8379,30 @@ def run_staging_vps_g18_acceptance(
             )
         return fail_live
 
-    bench_doc = json.loads(benchmark_out_json.read_text(encoding="utf-8"))
+    try:
+        bench_doc = json.loads(benchmark_out_json.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        fail_no_out = {
+            **gate,
+            "status": "FAIL_BENCHMARK_NO_OUTPUT",
+            "benchmark_executed": True,
+            "benchmark_exit_code": _bench_exit_code,
+            "benchmark_runner_sha256": _runner_sha256,
+            "benchmark_runner_sha256_verified": bool(gate.get("benchmark_runner_sha256_verified")),
+            "live_zero_mutation": True,
+            "g18_live_preservation_before_after": live_preservation,
+            "benchmark_output_error": f"{type(exc).__name__}: {exc}",
+            "benchmark_stderr_tail": _bench_stderr_tail,
+        }
+        if reconcile_out_json is not None:
+            reconcile_out_json.parent.mkdir(parents=True, exist_ok=True)
+            reconcile_out_json.write_text(
+                json.dumps(fail_no_out, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+                newline="\n",
+            )
+        return fail_no_out
+
     t1c_src = (
         t1c_confirmation
         if t1c_confirmation is not None
@@ -8377,8 +8430,23 @@ def run_staging_vps_g18_acceptance(
         out_json=reconcile_out_json,
     )
     rec["benchmark_executed"] = True
+    rec["benchmark_exit_code"] = _bench_exit_code
+    rec["benchmark_runner_sha256"] = _runner_sha256
+    rec["benchmark_runner_sha256_verified"] = bool(gate.get("benchmark_runner_sha256_verified"))
+    rec["benchmark_report_status"] = bench_doc.get("status") if isinstance(bench_doc, dict) else None
+    rec["benchmark_acceptance_verdict"] = (
+        bench_doc.get("p4_9_2_acceptance_matrix", {}).get("all_passed")
+        if (isinstance(bench_doc, dict) and isinstance(bench_doc.get("p4_9_2_acceptance_matrix"), dict))
+        else None
+    )
     rec["g18_live_preservation_before_after"] = live_preservation
+    if _bench_exit_code != 0 and rec.get("status") == "PASS":
+        rec["status"] = "FAIL_BENCHMARK_NONZERO_EXIT"
+        rec["measurements_complete_and_within_v1_4_thresholds"] = False
+        if isinstance(rec.get("errors"), list):
+            rec["errors"].append(f"benchmark_nonzero_exit_code:{_bench_exit_code}")
     if reconcile_out_json is not None:
+        reconcile_out_json.parent.mkdir(parents=True, exist_ok=True)
         reconcile_out_json.write_text(
             json.dumps(rec, indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",

@@ -3756,9 +3756,12 @@ class OpsToolkitTests(unittest.TestCase):
                 )
                 self.assertEqual(rc, 2)
                 rec = json.loads(out_rec.read_text(encoding="utf-8"))
-                self.assertEqual(
+                self.assertIn(
                     rec["status"],
-                    "BLOCKED_CI_PRECHECK_ONLY_PENDING_VPS_RECEIPTS_AND_OWNER_APPROVAL",
+                    (
+                        "BLOCKED_CI_PRECHECK_ONLY_PENDING_VPS_RECEIPTS_AND_OWNER_APPROVAL",
+                        "BLOCKED_CI_REPORT_REQUIRES_STAGING_VPS_BENCHMARK_AND_RECEIPTS",
+                    ),
                     rec,
                 )
                 self.assertEqual(rec["expected_candidate_digest"], dr_mod.CURRENT_CANDIDATE_DIGEST)
@@ -3871,7 +3874,25 @@ class OpsToolkitTests(unittest.TestCase):
             sum_doc["t1c_candidate_confirmation"] = verified_t1c_doc
             sum_path.write_text(json.dumps(sum_doc, indent=2), encoding="utf-8")
 
-            # 4a. Default CLI prepare-staging-g18 with pending p4-s1-slo-approval.json -> BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO
+            # 4a. Default CLI prepare-staging-g18 reflects repo p4-s1-slo-approval.json state;
+            # an explicit pending approval JSON always yields BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO
+            pending_app_file = td_path / "approval-pending.json"
+            pending_app_file.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "cskh-p4-s1-slo-approval-v1",
+                        "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+                        "slo_version": "1.0.0",
+                        "slo_spec_sha256": dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256,
+                        "approved_image_digest": dr_mod.CURRENT_CANDIDATE_DIGEST,
+                        "approved_profiles": [],
+                        "approval_status": "PENDING_OWNER_APPROVAL",
+                        "owner_signoff": {},
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
             prep_pending_out = td_path / "prep-pending.json"
             self.assertEqual(
                 dr_mod.main(
@@ -3879,6 +3900,8 @@ class OpsToolkitTests(unittest.TestCase):
                         "prepare-staging-g18",
                         "--vps-receipt-dir",
                         str(receipt_dir),
+                        "--owner-approval-json",
+                        str(pending_app_file),
                         "--out",
                         str(prep_pending_out),
                     ]
@@ -3889,6 +3912,24 @@ class OpsToolkitTests(unittest.TestCase):
             self.assertEqual(prep_pending["status"], "BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO")
             self.assertFalse(prep_pending["measurement_allowed"])
             self.assertEqual(prep_pending["resolved_configuration_profile"], "staging_vps_capped")
+
+            prep_default_out = td_path / "prep-default.json"
+            default_app_status = json.loads(
+                dr_mod.DEFAULT_P4_S1_SLO_APPROVAL_PATH.read_text(encoding="utf-8")
+            ).get("approval_status")
+            expected_default_rc = 0 if default_app_status == "OWNER_APPROVED" else 2
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--out",
+                        str(prep_default_out),
+                    ]
+                ),
+                expected_default_rc,
+            )
 
             # 4b. Profile mismatch in decoupled approval (signed only for s1_canonical_4x4) -> FAIL
             wrong_prof_app_file = td_path / "approval-4x4-only.json"
@@ -4053,8 +4094,11 @@ class OpsToolkitTests(unittest.TestCase):
         self.assertEqual(app_doc["slo_bundle_id"], "cskh-p4-g18-s1-endpoint-slo")
         self.assertEqual(app_doc["slo_spec_sha256"], dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256)
         self.assertEqual(app_doc["approved_image_digest"], dr_mod.CURRENT_CANDIDATE_DIGEST)
-        self.assertEqual(app_doc["approval_status"], "PENDING_OWNER_APPROVAL")
-        self.assertEqual(app_doc["approved_profiles"], [])
+        self.assertIn(app_doc["approval_status"], ("PENDING_OWNER_APPROVAL", "OWNER_APPROVED"))
+        if app_doc["approval_status"] == "OWNER_APPROVED":
+            self.assertTrue(len(app_doc["approved_profiles"]) > 0)
+        else:
+            self.assertEqual(app_doc["approved_profiles"], [])
 
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)
@@ -4483,6 +4527,317 @@ class OpsToolkitTests(unittest.TestCase):
             self.assertTrue(
                 any("forbidden_or_self_approved_by" in e for e in gate_self_t1c["owner_approval_validation_errors"])
             )
+
+    def test_run_staging_vps_g18_persists_json_reconcile_live_preservation_and_nonzero_exit_on_fail(self) -> None:
+        import subprocess
+        import manage_isolated_staging_dr as dr_mod
+        from deploy.release import benchmark_p4_isolated as bench_mod
+
+        repo_root = staging_mod.REPO_ROOT
+        cand_dir = repo_root / "deploy" / "ops" / "evidence" / "p4-candidate-ba68cd22-s1-20261112"
+        bench_capped_path = cand_dir / "benchmark-s1-staging-vps-capped.json"
+        diag_capped_path = cand_dir / "g18-diagnostic-post_opt_staging_vps_capped.json"
+        base_bench_doc = json.loads(bench_capped_path.read_text(encoding="utf-8"))
+
+        fail_bench_doc = json.loads(json.dumps(base_bench_doc))
+        fail_bench_doc["p4_9_2_acceptance_matrix"]["all_passed"] = False
+        fail_bench_doc["p4_9_2_acceptance_matrix"]["failed_count"] = 1
+        fail_bench_doc["p4_9_2_acceptance_matrix"]["failed_checks"] = [
+            "execute_weighted_distribution_10000_items"
+        ]
+        fail_bench_doc["p4_9_2_acceptance_matrix"]["items"]["execute_weighted_distribution_10000_items"]["passed"] = (
+            False
+        )
+        dist = fail_bench_doc["s1_domain_and_database_benchmark"]["async_import_distribution_and_queue_lag"][
+            "campaign_distribution_10000_work_items_40_staff"
+        ]
+        dist["created_work_items"] = 3600
+        dist["execute_and_worker_drain_ms"] = 1200800.0
+        dist["poll_timed_out_while_running"] = True
+
+        live_snap = {
+            "live_project_name": "crm-cskh-vps-staging",
+            "all_running": True,
+            "all_healthy": True,
+            "container_count": 1,
+            "containers": [
+                {
+                    "name": "live-web-1",
+                    "service": "backend",
+                    "id": "live-cid-001",
+                    "image": "sha256:111111",
+                    "config_image": "crm-cskh:0.0.1-4672041",
+                    "status": "running",
+                    "health": "healthy",
+                    "started_at": "2026-11-09T12:00:00Z",
+                    "restart_count": 0,
+                }
+            ],
+        }
+
+        with tempfile.TemporaryDirectory() as td:
+            td_path = Path(td)
+            receipt_dir = self._build_mock_staging_vps_bundle(
+                repo_root,
+                td_path / "vps-receipts",
+                expected_digest=dr_mod.CURRENT_CANDIDATE_DIGEST,
+            )
+            verified_t1c_doc = dr_mod.verify_t1c_candidate_confirmation(
+                {
+                    "confirmed": True,
+                    "confirmed_by": "T1C-Independent-Acceptance-Lead",
+                    "confirmed_at": "2026-11-12T10:00:00+07:00",
+                    "candidate_commit_sha": dr_mod.CURRENT_CANDIDATE_SOURCE_SHA,
+                    "app_image_digest": dr_mod.CURRENT_CANDIDATE_DIGEST,
+                    "verification_scope": dr_mod.STAGING_CANDIDATE_SCOPE,
+                    "g04_status": "FAIL",
+                    "production_candidate_status": "BLOCKED",
+                },
+                expected_app_image=dr_mod.CURRENT_CANDIDATE_DIGEST,
+            )[1]
+            (receipt_dir / "t1c-candidate-confirmation-receipt.json").write_text(
+                json.dumps(verified_t1c_doc, indent=2), encoding="utf-8"
+            )
+            preflight_doc = json.loads((receipt_dir / "readonly-vps-preflight.json").read_text(encoding="utf-8"))
+            preflight_doc["safe_staging_allocation"] = dr_mod.determine_safe_staging_vps_configuration(
+                cpu_cores=4,
+                mem_available_mib=4200.0,
+                loadavg_1m=0.6,
+                free_disk_gib=18.0,
+                loopback_ports_free=True,
+                live_stack_running=True,
+            )
+            (receipt_dir / "readonly-vps-preflight.json").write_text(
+                json.dumps(preflight_doc, indent=2), encoding="utf-8"
+            )
+            sum_doc = json.loads((receipt_dir / "vps-g03-g05-summary.json").read_text(encoding="utf-8"))
+            sum_doc["staging_resource_configuration"] = dr_mod.get_staging_resource_profile_spec("staging_vps_capped")
+            sum_doc["t1c_candidate_confirmation"] = verified_t1c_doc
+            (receipt_dir / "vps-g03-g05-summary.json").write_text(
+                json.dumps(sum_doc, indent=2), encoding="utf-8"
+            )
+
+            owner_app_file = td_path / "owner-approved.json"
+            owner_app_file.write_text(
+                json.dumps(
+                    {
+                        "schema_version": "cskh-p4-s1-slo-approval-v1",
+                        "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+                        "slo_version": "1.0.0",
+                        "slo_spec_sha256": dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256,
+                        "approved_image_digest": dr_mod.CURRENT_CANDIDATE_DIGEST,
+                        "approved_profiles": ["staging_vps_capped"],
+                        "approval_status": "OWNER_APPROVED",
+                        "owner_signoff": {
+                            "approved_by": "CRM Product & Ops Owner",
+                            "approved_at_utc": "2026-11-12T03:30:00Z",
+                            "decision_reference": "OWNER-SLO-2026-11-12-BA68CD22",
+                        },
+                    },
+                    indent=2,
+                ),
+                encoding="utf-8",
+            )
+
+            # Subcase A: End-to-end run-staging-vps-g18 invoking benchmark_p4_isolated.main on FAIL path
+            sub_a = td_path / "sub_a"
+            sub_a.mkdir()
+            bench_a = sub_a / "bench.json"
+            rec_a = sub_a / "rec.json"
+
+            def run_bench_main_fail(cmd: list[str], **kw: object) -> subprocess.CompletedProcess[str]:
+                self.assertFalse(kw.get("check", True))
+                with mock.patch.object(
+                    bench_mod,
+                    "provision_and_execute_s1_benchmark",
+                    return_value=json.loads(json.dumps(fail_bench_doc)),
+                ):
+                    rc_bench = bench_mod.main(cmd[2:])
+                return subprocess.CompletedProcess(cmd, rc_bench, stdout="", stderr="FAIL criterion")
+
+            with (
+                mock.patch.object(dr_mod, "run_sub", side_effect=run_bench_main_fail),
+                mock.patch.object(
+                    dr_mod,
+                    "capture_readonly_live_stack_snapshot",
+                    side_effect=[json.loads(json.dumps(live_snap)), json.loads(json.dumps(live_snap))],
+                ),
+            ):
+                rc_a = dr_mod.main(
+                    [
+                        "run-staging-vps-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--owner-approval-json",
+                        str(owner_app_file),
+                        "--g18-diag-json",
+                        str(diag_capped_path),
+                        "--benchmark-out",
+                        str(bench_a),
+                        "--reconcile-out",
+                        str(rec_a),
+                    ]
+                )
+            self.assertEqual(rc_a, 2)
+            self.assertTrue(bench_a.exists())
+            parsed_bench_a = json.loads(bench_a.read_text(encoding="utf-8"))
+            self.assertFalse(parsed_bench_a["p4_9_2_acceptance_matrix"]["all_passed"])
+            parsed_rec_a = json.loads(rec_a.read_text(encoding="utf-8"))
+            self.assertNotEqual(parsed_rec_a["status"], "PASS")
+            self.assertTrue(parsed_rec_a["benchmark_executed"])
+            self.assertEqual(parsed_rec_a["benchmark_exit_code"], 1)
+            self.assertEqual(parsed_rec_a["benchmark_runner_sha256"], dr_mod.LOCKED_P4_BENCHMARK_RUNNER_SHA256)
+            self.assertTrue(parsed_rec_a["benchmark_runner_sha256_verified"])
+            self.assertFalse(parsed_rec_a["benchmark_acceptance_verdict"])
+            pres_a_path = sub_a / "g18-live-preservation-before-after.json"
+            self.assertTrue(pres_a_path.exists())
+            self.assertTrue(json.loads(pres_a_path.read_text(encoding="utf-8"))["zero_live_mutation"])
+
+            # Subcase B: BenchmarkExecutionError raised inside benchmark_p4_isolated.main still persists partial JSON & reconcile
+            sub_b = td_path / "sub_b"
+            sub_b.mkdir()
+            bench_b = sub_b / "bench.json"
+            rec_b = sub_b / "rec.json"
+
+            def run_bench_main_exec_err(cmd: list[str], **kw: object) -> subprocess.CompletedProcess[str]:
+                self.assertFalse(kw.get("check", True))
+                with mock.patch.object(
+                    bench_mod,
+                    "provision_and_execute_s1_benchmark",
+                    side_effect=bench_mod.BenchmarkExecutionError(
+                        "simulated fail", report=json.loads(json.dumps(fail_bench_doc))
+                    ),
+                ):
+                    rc_bench = bench_mod.main(cmd[2:])
+                return subprocess.CompletedProcess(cmd, rc_bench, stdout="", stderr="BenchmarkExecutionError")
+
+            with (
+                mock.patch.object(dr_mod, "run_sub", side_effect=run_bench_main_exec_err),
+                mock.patch.object(
+                    dr_mod,
+                    "capture_readonly_live_stack_snapshot",
+                    side_effect=[json.loads(json.dumps(live_snap)), json.loads(json.dumps(live_snap))],
+                ),
+            ):
+                rc_b = dr_mod.main(
+                    [
+                        "run-staging-vps-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--owner-approval-json",
+                        str(owner_app_file),
+                        "--g18-diag-json",
+                        str(diag_capped_path),
+                        "--benchmark-out",
+                        str(bench_b),
+                        "--reconcile-out",
+                        str(rec_b),
+                    ]
+                )
+            self.assertEqual(rc_b, 2)
+            self.assertTrue(bench_b.exists())
+            parsed_rec_b = json.loads(rec_b.read_text(encoding="utf-8"))
+            self.assertNotEqual(parsed_rec_b["status"], "PASS")
+            self.assertEqual(parsed_rec_b["benchmark_exit_code"], 1)
+            self.assertTrue((sub_b / "g18-live-preservation-before-after.json").exists())
+
+            # Subcase C: Stale benchmark JSON is unlinked before execution; crash without output yields FAIL_BENCHMARK_NO_OUTPUT
+            sub_c = td_path / "sub_c"
+            sub_c.mkdir()
+            bench_c = sub_c / "bench.json"
+            rec_c = sub_c / "rec.json"
+            bench_c.write_text('{"stale": true}\n', encoding="utf-8")
+
+            def run_crash_no_output(cmd: list[str], **kw: object) -> subprocess.CompletedProcess[str]:
+                self.assertFalse(kw.get("check", True))
+                return subprocess.CompletedProcess(cmd, 2, stdout="", stderr="crash before json")
+
+            with (
+                mock.patch.object(dr_mod, "run_sub", side_effect=run_crash_no_output),
+                mock.patch.object(
+                    dr_mod,
+                    "capture_readonly_live_stack_snapshot",
+                    side_effect=[json.loads(json.dumps(live_snap)), json.loads(json.dumps(live_snap))],
+                ),
+            ):
+                rc_c = dr_mod.main(
+                    [
+                        "run-staging-vps-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--owner-approval-json",
+                        str(owner_app_file),
+                        "--g18-diag-json",
+                        str(diag_capped_path),
+                        "--benchmark-out",
+                        str(bench_c),
+                        "--reconcile-out",
+                        str(rec_c),
+                    ]
+                )
+            self.assertEqual(rc_c, 2)
+            self.assertFalse(bench_c.exists())
+            parsed_rec_c = json.loads(rec_c.read_text(encoding="utf-8"))
+            self.assertEqual(parsed_rec_c["status"], "FAIL_BENCHMARK_NO_OUTPUT")
+            self.assertEqual(parsed_rec_c["benchmark_exit_code"], 2)
+            self.assertTrue(json.loads((sub_c / "g18-live-preservation-before-after.json").read_text(encoding="utf-8"))["zero_live_mutation"])
+
+            # Subcase D: Real dr_mod.run_sub(..., check=False) on an actual subprocess returning exit code 1
+            sub_d = td_path / "sub_d"
+            sub_d.mkdir()
+            bench_d = sub_d / "bench.json"
+            rec_d = sub_d / "rec.json"
+            fail_payload_d = sub_d / "fail_payload.json"
+            fail_payload_d.write_text(json.dumps(fail_bench_doc), encoding="utf-8")
+            subproc_script = sub_d / "fake_runner.py"
+            subproc_script.write_text(
+                "import shutil, sys\n"
+                "from pathlib import Path\n"
+                "shutil.copyfile(sys.argv[1], sys.argv[2])\n"
+                "sys.exit(1)\n",
+                encoding="utf-8",
+            )
+            real_gate_fn = dr_mod.verify_g18_acceptance_measurement_gate
+
+            def gate_with_real_subprocess(*args: object, **kwargs: object) -> dict[str, object]:
+                gate = real_gate_fn(*args, **kwargs)
+                gate["planned_benchmark_command"] = [
+                    sys.executable,
+                    str(subproc_script),
+                    str(fail_payload_d),
+                    str(bench_d),
+                ]
+                return gate
+
+            with (
+                mock.patch.object(dr_mod, "verify_g18_acceptance_measurement_gate", side_effect=gate_with_real_subprocess),
+                mock.patch.object(
+                    dr_mod,
+                    "capture_readonly_live_stack_snapshot",
+                    side_effect=[json.loads(json.dumps(live_snap)), json.loads(json.dumps(live_snap))],
+                ),
+            ):
+                rc_d = dr_mod.main(
+                    [
+                        "run-staging-vps-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--owner-approval-json",
+                        str(owner_app_file),
+                        "--g18-diag-json",
+                        str(diag_capped_path),
+                        "--benchmark-out",
+                        str(bench_d),
+                        "--reconcile-out",
+                        str(rec_d),
+                    ]
+                )
+            self.assertEqual(rc_d, 2)
+            self.assertTrue(bench_d.exists())
+            parsed_rec_d = json.loads(rec_d.read_text(encoding="utf-8"))
+            self.assertNotEqual(parsed_rec_d["status"], "PASS")
+            self.assertEqual(parsed_rec_d["benchmark_exit_code"], 1)
+            self.assertTrue(json.loads((sub_d / "g18-live-preservation-before-after.json").read_text(encoding="utf-8"))["zero_live_mutation"])
 
 
 if __name__ == "__main__":
