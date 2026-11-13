@@ -996,6 +996,10 @@ class BackupValidationTests(unittest.TestCase):
             target = REPO_ROOT / entry["path"]
             self.assertTrue(target.is_file(), entry["path"])
             raw_bytes = target.read_bytes()
+            # Git may normalize text/eol=lf files differently in Windows and Linux checkouts.
+            # Reconcile text deliverables in their canonical LF form; keep binary bytes exact.
+            if b"\x00" not in raw_bytes:
+                raw_bytes = raw_bytes.replace(b"\r\n", b"\n")
             self.assertEqual(len(raw_bytes), entry["bytes"], entry["path"])
             self.assertEqual(
                 hashlib.sha256(raw_bytes).hexdigest(), entry["sha256"], entry["path"]
