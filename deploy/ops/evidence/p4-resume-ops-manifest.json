@@ -1,8 +1,8 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
   "generated_at_utc": "2026-11-12T09:31:11Z",
-  "manifest_revision": "v13-g18-run3-official-s1canonical4x4-20261113",
-  "manifest_updated_at_utc": "2026-11-13T02:15:00Z",
+  "manifest_revision": "v14-sec-credential-remediation-run4-b998a96-20261113",
+  "manifest_updated_at_utc": "2026-11-13T03:09:00Z",
   "branch": "codex/p4-resume-ops",
   "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
@@ -10,7 +10,48 @@
   "ancestor_review_base_sha": "31e51fcac7a640fdab10517f47f02335d7b1f749",
   "verified_code_commit_sha": "33ed7a218a24cf01ab6102078d874a40ebb18deb",
   "vps_execution_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
-  "overall_p4_status": "G18_FAIL_EXECUTE_DISTRIBUTION_TIMEOUT_3RUNS_CONFIRMED",
+  "overall_p4_status": "G18_FAIL_EXECUTE_DISTRIBUTION_TIMEOUT_3RUNS_CONFIRMED_RUN4_IN_PROGRESS",
+  "security_incident": {
+    "incident_id": "SEC-20261113-001",
+    "type": "credential_exposed_in_git_history",
+    "severity": "HIGH",
+    "detected_at_utc": "2026-11-13T03:05:00Z",
+    "remediated_at_utc": "2026-11-13T03:09:00Z",
+    "commit_leaked": "5238da657f808dcdec17a3d6fbb34eec83fd7ae8",
+    "files_leaked": [
+      "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run3/isolated-dr-state/db_root_password.txt",
+      "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run3/isolated-dr-state/staging-dr-https.env",
+      "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run3/isolated-dr-state/ca.crt"
+    ],
+    "scope": {
+      "credential_type": "MariaDB root password (isolated DR stack only)",
+      "credential_length_chars": 32,
+      "affected_stack": "crm-cskh-dr-4x4r3-vps (TORN DOWN before leak detected)",
+      "live_staging_affected": false,
+      "live_staging_uses_separate_file": "/opt/crm-cskh-staging/.secrets/db_root_password.txt",
+      "bench_run4_affected": false,
+      "bench_run4_uses_separate_tempdir": "/tmp/cskh-p4-s1-bench-605ghb81/db_root_password.txt",
+      "containers_using_leaked_cred": 0,
+      "reuse_in_production": "NOT_CONFIRMED"
+    },
+    "remediation_steps": [
+      "1. shred -u db_root_password.txt on VPS (DONE 2026-11-13T03:07:30Z)",
+      "2. shred -u staging-dr-https.env on VPS (DONE 2026-11-13T03:07:30Z)",
+      "3. git filter-repo --path isolated-dr-state/ --invert-paths --force (DONE)",
+      "4. git push --force origin codex/p4-resume-ops: 5238da6 -> fb48b0c (DONE)",
+      "5. Verify 0 commits in history contain isolated-dr-state/ (DONE)",
+      "6. Remove local working tree copy (DONE - already removed by filter-repo)"
+    ],
+    "clean_commit_replacing_leaked": "fb48b0c504d76d11822b6119bdaca11830c5b857",
+    "git_history_clean": true,
+    "owner_action_required": [
+      "URGENT: If GitHub branch protection allows, enable branch protection on codex/p4-resume-ops to prevent --force push in future",
+      "RECOMMENDED: Rotate live staging DB password as precaution (file: /opt/crm-cskh-staging/.secrets/db_root_password.txt)",
+      "RECOMMENDED: Enable GitHub secret scanning alerts for this repo",
+      "INFO: GitHub may still cache the leaked commit in its CDN for up to 24h — contact GitHub support if needed"
+    ],
+    "note_for_t0_t1c": "Credential was for the ISOLATED DR stack (crm-cskh-dr-4x4r3-vps) which was torn down at commit 5238da6. Live staging (crm-cskh-vps-staging) was NOT affected. Credential value is NOT reproduced in this manifest."
+  },
   "p4_promoted_to_pass": false,
   "gate_accounting": {
     "preserved_t1c_signed_gates_count": 17,
