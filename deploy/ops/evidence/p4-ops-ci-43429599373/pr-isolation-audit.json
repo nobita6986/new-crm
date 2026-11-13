@@ -1,0 +1,37 @@
+{
+  "schema_version": "cskh-p4-pr-isolation-audit-v1",
+  "workflows_audit": {
+    "checked_workflows": [
+      "p0.yml",
+      "p1.yml",
+      "p2.yml",
+      "p3.yml",
+      "p4-batch2-delta.yml",
+      "p4-candidate-verify.yml",
+      "p4-ci.yml",
+      "p4-g18-drilldown-diag.yml",
+      "p4-ops-dr-rehearsal.yml",
+      "p4-production.yml",
+      "p4-release.yml"
+    ],
+    "errors": [],
+    "passed": true
+  },
+  "runtime_env_audit": {
+    "event_name": "push",
+    "enforced": false,
+    "leaked_secret_env_names": [],
+    "passed": true
+  },
+  "locks_and_hygiene_audit": {
+    "apps_tree_sha": "e3972e2fa0ef6275c6d272602819a39e29870077",
+    "crm_cskh_tree_sha": "b9ce3e2e12f5012df989d0a75ae83cccb77e9774",
+    "verified_evidence_checksums": 10,
+    "system_python_constraints_count": 22,
+    "bench_python_constraints_count": 154,
+    "scanned_p4_files": 129,
+    "errors": [],
+    "passed": true
+  },
+  "status": "PASS"
+}

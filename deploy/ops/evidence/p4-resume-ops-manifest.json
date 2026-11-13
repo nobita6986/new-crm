@@ -561,30 +561,6 @@
       "status": "FAIL",
       "evidence": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run4/g18-slo-evaluation-run4.json"
     },
-    "p4_ops_workflow_latest_on_handoff_branch": {
-      "ci_run_id": 43426268346,
-      "head_sha": "f1014c94501a2d48a2f47b3593f40b0d6b4ec9ba",
-      "status": "FAIL",
-      "failed_step": "Validate all 4 Compose stacks & run native Linux POSIX ops tests (real TCPServer webhook)",
-      "compose_validation": "PASS",
-      "pr_isolation_audit": "PASS",
-      "test_offsite_restore": {
-        "ran": 14,
-        "status": "FAIL",
-        "cause": "manifest deliverable checksum was recorded as Windows CRLF bytes while Linux checkout uses canonical LF; fixed locally by canonical text EOL normalization and LF hash/size"
-      },
-      "test_ops_toolkit_posix": {
-        "ran": 25,
-        "status": "PASS"
-      },
-      "test_smoke_runner_safety": {
-        "ran": 11,
-        "status": "PASS"
-      },
-      "current_fixes_ci_verified": false,
-      "staging_dr_jobs": "SKIPPED_AFTER_STATIC_GATE_FAILURE",
-      "followup": "Rerun isolated workflow to verify canonical LF reconciliation on Linux; do not treat Ops CI as green until fresh CI passes."
-    },
     "p4_ops_local_targeted_g18_gate_test": {
       "ran": 1,
       "passed": 1,
@@ -617,6 +593,31 @@
         "passed": 1,
         "status": "PASS"
       }
+    },
+    "p4_ops_workflow_run_43426268346_history": {
+      "ci_run_id": 43426268346,
+      "head_sha": "f1014c94501a2d48a2f47b3593f40b0d6b4ec9ba",
+      "status": "FAIL",
+      "failed_step": "Validate all 4 Compose stacks & run native Linux POSIX ops tests (real TCPServer webhook)",
+      "compose_validation": "PASS",
+      "pr_isolation_audit": "PASS",
+      "test_offsite_restore": {
+        "ran": 14,
+        "status": "FAIL",
+        "cause": "manifest deliverable checksum was recorded as Windows CRLF bytes while Linux checkout uses canonical LF; fixed locally by canonical text EOL normalization and LF hash/size"
+      },
+      "test_ops_toolkit_posix": {
+        "ran": 25,
+        "status": "PASS"
+      },
+      "test_smoke_runner_safety": {
+        "ran": 11,
+        "status": "PASS"
+      },
+      "current_fixes_ci_verified": false,
+      "staging_dr_jobs": "SKIPPED_AFTER_STATIC_GATE_FAILURE",
+      "followup": "Superseded by run 43429599373 (#64), where canonical deliverable hashes and source/image locks passed and both isolated runtime jobs completed successfully.",
+      "superseded_by_run_id": 43429599373
     }
   },
   "reconciled_history": [
@@ -1228,8 +1229,8 @@
     },
     {
       "path": "docs/p4/P4-exit-report.md",
-      "bytes": 40047,
-      "sha256": "3b83219bc0dbc46cbb2d0acbd7b078202d3002cd31e5ad9a305bc07e1d29345d"
+      "bytes": 41615,
+      "sha256": "227ceb88ca05d6f3014dd6a9a8b5748a0748d653cca839709e717a7a5b68e08b"
     },
     {
       "path": "docs/p4/api-contract.md",
@@ -1355,33 +1356,124 @@
       "path": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run4/g18-benchmark-report-run4.json",
       "bytes": 283613,
       "sha256": "ac7ec58c3391be3899cc3decb31e8d594c840615aa63ecab350ccb729a595ffc"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-ops-ci-43429599373/candidate-registry-pull-inspect-receipt.json",
+      "bytes": 2146,
+      "sha256": "71f9581316d80ba80117c4666036e2538410be32800e230c30ad6a4c78d80c1f"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-ops-ci-43429599373/g07-backup-lifecycle-drill.json",
+      "bytes": 1148,
+      "sha256": "34fd9a5e9fce2b9c7c9c175d8a203c2fafc120f33d344a1898a317ea134fe7a0"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-ops-ci-43429599373/g08-restore-drill-report.json",
+      "bytes": 9723,
+      "sha256": "fb8d796d4b347e09553bd95125e7ca9b68d97977166f49f62c1c4346e31db289"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-ops-ci-43429599373/https-browser-uat-security-report.json",
+      "bytes": 15289,
+      "sha256": "74b03f44fb4e4745dca466fad2b53792e46b512e036703946488104a2ee9d9e3"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-ops-ci-43429599373/isolated-staging-dr-https-report.json",
+      "bytes": 40241,
+      "sha256": "ada10efb178ac525b6d9cd9e3af01d508846b08f4b682e23f6396caef7849c50"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-ops-ci-43429599373/posix-ops-unit-tests.json",
+      "bytes": 854,
+      "sha256": "205398afefcd256540a96081c03066b0f091c3d78e16b528e296d297efdc7fff"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-ops-ci-43429599373/pr-isolation-audit.json",
+      "bytes": 932,
+      "sha256": "5d4ca5e6108c27ab9d907add2f0703c8600da2f59dddea5e9ef4b8270ce70dc7"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-ops-ci-43429599373/staging-dr-runtime-isolation-audit.json",
+      "bytes": 9845,
+      "sha256": "c7acaf92b855e0dd30aff9766d1ecd93ea49891bc2e40a04877132a3cbcf677a"
+    },
+    {
+      "path": "deploy/ops/evidence/p4-ops-ci-43429599373/ci-run-receipt.json",
+      "bytes": 4024,
+      "sha256": "8ffd3a6cf7485f351272f6839fa6aac369215180d3e7b59d9aac96930dfaeb6e"
     }
   ],
   "merged_t1b_release_hardening_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
   "merged_t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
   "integrated_candidate_manifest_path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
   "p4_ops_workflow_latest_on_handoff_branch": {
-    "ci_run_id": 43428982449,
-    "head_sha": "b4df15b621372f785d878cb31d39c63ae3dccaa2",
-    "status": "FAIL",
-    "failed_step": "Validate all 4 Compose stacks & run native Linux POSIX ops tests (real TCPServer webhook)",
-    "compose_validation": "PASS",
-    "pr_isolation_audit": "PASS",
+    "ci_run_id": 43429599373,
+    "run_number": 64,
+    "head_sha": "2ba46ea9315d8d53177bf32279f95da5edb83d44",
+    "status": "PASS",
+    "workflow_audit": "PASS",
+    "compose_validation": "4/4 PASS",
     "test_offsite_restore": {
       "ran": 14,
-      "status": "FAIL",
-      "cause": "CI run 43428982449 found the workflow deliverable still pinned to its previous size (29150 bytes); this entry is refreshed to the current workflow bytes/hash for the rerun."
+      "passed": 14,
+      "status": "PASS"
     },
     "test_ops_toolkit_posix": {
       "ran": 25,
+      "passed": 25,
       "status": "PASS"
     },
     "test_smoke_runner_safety": {
       "ran": 11,
+      "passed": 11,
       "status": "PASS"
     },
-    "current_fixes_ci_verified": false,
-    "staging_dr_jobs": "SKIPPED_AFTER_STATIC_GATE_FAILURE",
-    "followup": "Rerun the isolated workflow after committing the refreshed workflow deliverable bytes/SHA-256; do not treat Ops CI as green until the static gate and both staging jobs pass."
+    "staging_dr_https_job": "PASS",
+    "g07_g08_job": "PASS",
+    "candidate_source_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+    "candidate_apps_tree_sha": "e3972e2fa0ef6275c6d272602819a39e29870077",
+    "candidate_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "candidate_verification_only": true,
+    "promoted_to_production": false,
+    "owner_live_site_touched": false,
+    "staging_https_browser_11_of_11": "PASS",
+    "migration_x2": "PASS",
+    "worker_restart_retry": "PASS",
+    "rollback_n_to_n_minus_1": "PASS",
+    "g07_ci_offsite_fixture": "PASS_BUT_NOT_LIVE_VPS_PROOF",
+    "g07_vps_offsite_destination_and_key_escrow": "BLOCKED",
+    "g07_g19_external_alert_dispatch": "BLOCKED_PENDING_OWNER_CHANNEL",
+    "g04": "FAIL",
+    "g18": {
+      "rules_total": 35,
+      "passed": 9,
+      "failed": 26,
+      "status": "FAIL",
+      "measurement": "VPS run4 under approved SLO; unchanged by this CI run"
+    },
+    "gate_tally_unchanged": "17 PASS, 2 FAIL, 5 BLOCKED",
+    "artifact_archives": [
+      {
+        "id": 14037969931,
+        "name": "p4-ops-static-evidence",
+        "bytes": 100087,
+        "sha256": "75874d9764c227f430dbee8f80869380d2e4e3562e9388caed275f85e2fdbbeb"
+      },
+      {
+        "id": 14040106452,
+        "name": "p4-g07-g08-evidence",
+        "bytes": 3439,
+        "sha256": "f000485d5a5519108dee48c480cdb42192a52d2b089a2c8c53a9bd8a75e31c02"
+      },
+      {
+        "id": 14039453594,
+        "name": "p4-dr-https-evidence",
+        "bytes": 14644,
+        "sha256": "bf2b21ecc7130bc1157b9d707d2cbfee2b3c783e2903c811787e1b97bcea48c0"
+      }
+    ],
+    "evidence_dir": "deploy/ops/evidence/p4-ops-ci-43429599373",
+    "current_fixes_ci_verified": true,
+    "production_cutover": "NOT_PERFORMED"
   }
 }

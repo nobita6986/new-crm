@@ -1,0 +1,105 @@
+{
+  "schema_version": "cskh-p4-ci-run-receipt-v1",
+  "run_id": 43429599373,
+  "run_number": 64,
+  "run_url": "https://github.com/nobita6986/new-crm/actions/runs/43429599373",
+  "status": "completed_success",
+  "head_sha": "2ba46ea9315d8d53177bf32279f95da5edb83d44",
+  "candidate_source_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+  "apps_tree_sha": "e3972e2fa0ef6275c6d272602819a39e29870077",
+  "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "candidate_verification_only": true,
+  "promoted_to_production": false,
+  "owner_live_site_touched": false,
+  "artifact_archives": [
+    {
+      "id": 14037969931,
+      "name": "p4-ops-static-evidence",
+      "bytes": 100087,
+      "sha256": "75874d9764c227f430dbee8f80869380d2e4e3562e9388caed275f85e2fdbbeb"
+    },
+    {
+      "id": 14040106452,
+      "name": "p4-g07-g08-evidence",
+      "bytes": 3439,
+      "sha256": "f000485d5a5519108dee48c480cdb42192a52d2b089a2c8c53a9bd8a75e31c02"
+    },
+    {
+      "id": 14039453594,
+      "name": "p4-dr-https-evidence",
+      "bytes": 14644,
+      "sha256": "bf2b21ecc7130bc1157b9d707d2cbfee2b3c783e2903c811787e1b97bcea48c0"
+    }
+  ],
+  "checks": {
+    "workflow_audit": "PASS",
+    "compose_validation": "4/4 PASS",
+    "test_offsite_restore": "14/14 PASS",
+    "test_ops_toolkit_posix": "25/25 PASS",
+    "test_smoke_runner_safety": "11/11 PASS",
+    "g07_g08_container_job": "PASS",
+    "g07_automated_offsite_container_fixture": "PASS_BUT_NOT_LIVE_VPS_PROOF",
+    "g08_restore_ci_drill": "PASS",
+    "g08_ci_measured_rto_seconds": 50.426,
+    "isolated_staging_https": "PASS",
+    "https_browser_cases_total": 11,
+    "https_browser_cases_passed": 11,
+    "migration_x2": "PASS",
+    "worker_restart_retry": "PASS",
+    "rollback_n_to_n_minus_1": "PASS",
+    "runtime_isolation_audit": "PASS",
+    "alert_preflight": "BLOCKED",
+    "g04_status": "FAIL",
+    "production_candidate_status": "BLOCKED"
+  },
+  "gate_decisions": {
+    "unchanged_tally": "17 PASS, 2 FAIL (G04,G18), 5 BLOCKED (G07,G19,G22,G23,G24)",
+    "g07": "BLOCKED: CI container fixture does not provision Owner-approved offsite VPS destination, independent key escrow, or external dispatch recipient",
+    "g04": "FAIL: Debian OS CVEs remain; exceptions list remains empty",
+    "g18": "FAIL: VPS run4 remains 9/35 under the approved immutable SLO; this CI run does not replace the approved VPS benchmark",
+    "g19_g22_g24": "BLOCKED pending Owner-designated on-call, alert channel, role signers, and operator handoff",
+    "g23": "BLOCKED until G04 and G18 close and Owner approves promotion/cutover"
+  },
+  "evidence_files": [
+    {
+      "path": "candidate-registry-pull-inspect-receipt.json",
+      "bytes": 2146,
+      "sha256": "71f9581316d80ba80117c4666036e2538410be32800e230c30ad6a4c78d80c1f"
+    },
+    {
+      "path": "g07-backup-lifecycle-drill.json",
+      "bytes": 1148,
+      "sha256": "34fd9a5e9fce2b9c7c9c175d8a203c2fafc120f33d344a1898a317ea134fe7a0"
+    },
+    {
+      "path": "g08-restore-drill-report.json",
+      "bytes": 9723,
+      "sha256": "fb8d796d4b347e09553bd95125e7ca9b68d97977166f49f62c1c4346e31db289"
+    },
+    {
+      "path": "https-browser-uat-security-report.json",
+      "bytes": 15289,
+      "sha256": "74b03f44fb4e4745dca466fad2b53792e46b512e036703946488104a2ee9d9e3"
+    },
+    {
+      "path": "isolated-staging-dr-https-report.json",
+      "bytes": 40241,
+      "sha256": "ada10efb178ac525b6d9cd9e3af01d508846b08f4b682e23f6396caef7849c50"
+    },
+    {
+      "path": "posix-ops-unit-tests.json",
+      "bytes": 854,
+      "sha256": "205398afefcd256540a96081c03066b0f091c3d78e16b528e296d297efdc7fff"
+    },
+    {
+      "path": "pr-isolation-audit.json",
+      "bytes": 932,
+      "sha256": "5d4ca5e6108c27ab9d907add2f0703c8600da2f59dddea5e9ef4b8270ce70dc7"
+    },
+    {
+      "path": "staging-dr-runtime-isolation-audit.json",
+      "bytes": 9845,
+      "sha256": "c7acaf92b855e0dd30aff9766d1ecd93ea49891bc2e40a04877132a3cbcf677a"
+    }
+  ]
+}

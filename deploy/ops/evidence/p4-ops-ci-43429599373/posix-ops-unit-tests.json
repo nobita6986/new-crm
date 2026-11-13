@@ -1,0 +1,35 @@
+{
+  "timestamp_utc": "2026-11-13T12:58:26Z",
+  "runner_os": "posix",
+  "platform": "Linux-7.0.0-1017-azure-x86_64-with-glibc2.39",
+  "python_version": "3.12.3",
+  "loopback_tcpserver_forced": true,
+  "suites": {
+    "compose-validation": {
+      "exit_code": 0,
+      "status": "PASS",
+      "tests_run": null,
+      "log": "compose-validation.log"
+    },
+    "test-offsite-restore": {
+      "exit_code": 0,
+      "status": "PASS",
+      "tests_run": 14,
+      "log": "test-offsite-restore.log"
+    },
+    "test-ops-toolkit-posix": {
+      "exit_code": 0,
+      "status": "PASS",
+      "tests_run": 25,
+      "log": "test-ops-toolkit-posix.log"
+    },
+    "test-smoke-runner-safety": {
+      "exit_code": 0,
+      "status": "PASS",
+      "tests_run": 11,
+      "log": "test-smoke-runner-safety.log"
+    }
+  },
+  "failed_suites": [],
+  "status": "PASS"
+}

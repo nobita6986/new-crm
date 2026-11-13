@@ -1,0 +1,1033 @@
+{
+  "timestamp_utc": "2026-11-13T13:04:10Z",
+  "evidence_scope": "ISOLATED_STAGING_DR_HTTPS_CANDIDATE_VERIFICATION",
+  "candidate_verification_only": true,
+  "promoted_to_production": false,
+  "owner_live_site_touched": false,
+  "run_id": "ci-43429599373",
+  "project_name": "crm-cskh-dr-https-ci-43429599373",
+  "site_name": "staging-dr-uat.crm-internal.localhost",
+  "http_port": 18081,
+  "https_port": 18443,
+  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "status": "PASS",
+  "phases": {
+    "bootstrap_and_https_smoke": {
+      "status": "PASS",
+      "duration_seconds": 145.35,
+      "tls_provisioning": {
+        "cert_volume": "crm-cskh-dr-https-ci-43429599373_cert_data",
+        "ca_key_deleted_immediately": true,
+        "server_key_mode": "0o600"
+      },
+      "https_smoke": {
+        "timestamp_utc": "2026-11-13T13:06:34Z",
+        "mode": "dr-https",
+        "site_name": "staging-dr-uat.crm-internal.localhost",
+        "connect_host": "127.0.0.1",
+        "http_port": 18081,
+        "https_port": 18443,
+        "frappe_site_name": "staging-dr-uat.crm-internal.localhost",
+        "extra_compose_files": [],
+        "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "checks": {
+          "container_digest_parity": {
+            "expected_app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+            "expected_sha256": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+            "missing_services": [],
+            "inspected_services": {
+              "backend": {
+                "container": "crm-cskh-dr-https-ci-43429599373-backend-1",
+                "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+                ],
+                "matched": true
+              },
+              "frontend": {
+                "container": "crm-cskh-dr-https-ci-43429599373-frontend-1",
+                "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+                ],
+                "matched": true
+              },
+              "websocket": {
+                "container": "crm-cskh-dr-https-ci-43429599373-websocket-1",
+                "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+                ],
+                "matched": true
+              },
+              "queue-short": {
+                "container": "crm-cskh-dr-https-ci-43429599373-queue-short-1",
+                "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+                ],
+                "matched": true
+              },
+              "queue-long": {
+                "container": "crm-cskh-dr-https-ci-43429599373-queue-long-1",
+                "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+                ],
+                "matched": true
+              },
+              "scheduler": {
+                "container": "crm-cskh-dr-https-ci-43429599373-scheduler-1",
+                "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+                "repo_digests": [
+                  "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+                ],
+                "matched": true
+              }
+            },
+            "mismatches": [],
+            "pass": true
+          },
+          "http_to_https_redirect": {
+            "status_code": 301,
+            "location": "https://staging-dr-uat.crm-internal.localhost:18443/<REDACTED_WEBHOOK_PATH>",
+            "location_starts_with_https": true,
+            "pass": true
+          },
+          "tls_certificate": {
+            "hostname": "staging-dr-uat.crm-internal.localhost",
+            "connect_host": "127.0.0.1",
+            "port": 18443,
+            "tls_version": "TLSv1.3",
+            "cipher": "TLS_AES_128_GCM_SHA256",
+            "not_after_utc": "2026-12-13T13:04:11Z",
+            "days_remaining": 29,
+            "expiry_ok": true
+          },
+          "login_and_sid_cookie": {
+            "http_status": 200,
+            "sid_attributes": {
+              "found": true,
+              "redacted_value": "<REDACTED_FRAPPE_SID>",
+              "secure": true,
+              "httponly": true,
+              "samesite": "Lax",
+              "path": "/",
+              "cookie_names_seen": [
+                "sid",
+                "system_user",
+                "full_name",
+                "user_id",
+                "user_image"
+              ]
+            },
+            "policy_errors": [],
+            "pass": true
+          },
+          "vi_ui_and_csrf": {
+            "dashboard_http_status": 200,
+            "contains_vi_heading": true,
+            "csrf_token_extracted": true,
+            "x_frappe_csrf_token": "<REDACTED_CSRF>",
+            "forged_csrf_http_status": 400,
+            "valid_csrf_http_status": 200,
+            "health_ping_ok": true,
+            "pass": true,
+            "dashboard_attempts": 1
+          },
+          "wss_websocket": {
+            "status_line": "HTTP/1.1 101 Switching Protocols",
+            "switched_protocols_101": true,
+            "sec_websocket_accept_valid": true,
+            "initial_frame_opcode": 1,
+            "engineio_open_packet_received": true,
+            "initial_frame_redacted": "0{\"sid\":\"<REDACTED_SOCKET_SID>\",\"upgrades\":[],\"pingInterval\":25000,\"pingTimeout\":20000,\"maxPayload\":1000000}",
+            "pass": true
+          }
+        },
+        "status": "PASS"
+      }
+    },
+    "runtime_isolation_and_digest_audit": {
+      "schema_version": "cskh-p4-staging-dr-runtime-audit-v1",
+      "timestamp_utc": "2026-11-13T13:06:37Z",
+      "status": "PASS",
+      "candidate_verification_only": true,
+      "promoted_to_production": false,
+      "owner_live_site_touched": false,
+      "governance_scope": {
+        "verification_scope": "staging_candidate_isolated_verification",
+        "candidate_verification_only": true,
+        "promoted_to_production": false,
+        "g04_status": "FAIL",
+        "production_candidate_status": "BLOCKED",
+        "release_manifest_environment_scope": "staging_candidate_verified_production_blocked",
+        "active_cve_exceptions_count": 0,
+        "rehearsal_key_allowed_for_production": false,
+        "rehearsal_key_used_for_production_approval": false,
+        "checked_promotion_public_key_fingerprint": null,
+        "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "digest_update_policy": "update_isolated_staging_and_regenerate_all_receipts_on_t1b_digest_change"
+      },
+      "project_name": "crm-cskh-dr-https-ci-43429599373",
+      "site_name": "staging-dr-uat.crm-internal.localhost",
+      "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "compose_git_tree_sha": "f662c3330d18cf8b4aafc409e426f20afd69173c",
+      "rendered_compose_config_sha256": "a0c7b786955d8d9e84624a3d7e191ac50aaf112d45ade954e52a9753faa4c06f",
+      "container_digest_parity": {
+        "expected_app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "expected_sha256": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "missing_services": [],
+        "inspected_services": {
+          "backend": {
+            "container": "crm-cskh-dr-https-ci-43429599373-backend-1",
+            "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+            ],
+            "matched": true
+          },
+          "frontend": {
+            "container": "crm-cskh-dr-https-ci-43429599373-frontend-1",
+            "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+            ],
+            "matched": true
+          },
+          "websocket": {
+            "container": "crm-cskh-dr-https-ci-43429599373-websocket-1",
+            "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+            ],
+            "matched": true
+          },
+          "queue-short": {
+            "container": "crm-cskh-dr-https-ci-43429599373-queue-short-1",
+            "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+            ],
+            "matched": true
+          },
+          "queue-long": {
+            "container": "crm-cskh-dr-https-ci-43429599373-queue-long-1",
+            "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+            ],
+            "matched": true
+          },
+          "scheduler": {
+            "container": "crm-cskh-dr-https-ci-43429599373-scheduler-1",
+            "running_image_id": "sha256:672a97898574e404b66c7083107bbaac3c626ee658e63ab184fd6248b0aa335d",
+            "repo_digests": [
+              "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+            ],
+            "matched": true
+          }
+        },
+        "mismatches": [],
+        "pass": true
+      },
+      "resource_limits": {
+        "pass": true,
+        "expected_daemon_services": [
+          "backend",
+          "db",
+          "frontend",
+          "proxy",
+          "queue-long",
+          "queue-short",
+          "redis-cache",
+          "redis-queue",
+          "scheduler",
+          "websocket"
+        ],
+        "missing_daemon_services": [],
+        "unbounded_services": [],
+        "total_capped_ram_mib": 5696.0,
+        "total_capped_cpus": 6.0,
+        "by_service": {
+          "backend": {
+            "container": "crm-cskh-dr-https-ci-43429599373-backend-1",
+            "mem_limit_bytes": 1342177280,
+            "mem_limit_mib": 1280.0,
+            "nano_cpus": 1000000000,
+            "cpus": 1.0,
+            "bounded": true
+          },
+          "db": {
+            "container": "crm-cskh-dr-https-ci-43429599373-db-1",
+            "mem_limit_bytes": 1610612736,
+            "mem_limit_mib": 1536.0,
+            "nano_cpus": 1000000000,
+            "cpus": 1.0,
+            "bounded": true
+          },
+          "frontend": {
+            "container": "crm-cskh-dr-https-ci-43429599373-frontend-1",
+            "mem_limit_bytes": 268435456,
+            "mem_limit_mib": 256.0,
+            "nano_cpus": 500000000,
+            "cpus": 0.5,
+            "bounded": true
+          },
+          "proxy": {
+            "container": "crm-cskh-dr-https-ci-43429599373-proxy-1",
+            "mem_limit_bytes": 201326592,
+            "mem_limit_mib": 192.0,
+            "nano_cpus": 500000000,
+            "cpus": 0.5,
+            "bounded": true
+          },
+          "queue-long": {
+            "container": "crm-cskh-dr-https-ci-43429599373-queue-long-1",
+            "mem_limit_bytes": 805306368,
+            "mem_limit_mib": 768.0,
+            "nano_cpus": 500000000,
+            "cpus": 0.5,
+            "bounded": true
+          },
+          "queue-short": {
+            "container": "crm-cskh-dr-https-ci-43429599373-queue-short-1",
+            "mem_limit_bytes": 536870912,
+            "mem_limit_mib": 512.0,
+            "nano_cpus": 500000000,
+            "cpus": 0.5,
+            "bounded": true
+          },
+          "redis-cache": {
+            "container": "crm-cskh-dr-https-ci-43429599373-redis-cache-1",
+            "mem_limit_bytes": 268435456,
+            "mem_limit_mib": 256.0,
+            "nano_cpus": 500000000,
+            "cpus": 0.5,
+            "bounded": true
+          },
+          "redis-queue": {
+            "container": "crm-cskh-dr-https-ci-43429599373-redis-queue-1",
+            "mem_limit_bytes": 402653184,
+            "mem_limit_mib": 384.0,
+            "nano_cpus": 500000000,
+            "cpus": 0.5,
+            "bounded": true
+          },
+          "scheduler": {
+            "container": "crm-cskh-dr-https-ci-43429599373-scheduler-1",
+            "mem_limit_bytes": 268435456,
+            "mem_limit_mib": 256.0,
+            "nano_cpus": 500000000,
+            "cpus": 0.5,
+            "bounded": true
+          },
+          "websocket": {
+            "container": "crm-cskh-dr-https-ci-43429599373-websocket-1",
+            "mem_limit_bytes": 268435456,
+            "mem_limit_mib": 256.0,
+            "nano_cpus": 500000000,
+            "cpus": 0.5,
+            "bounded": true
+          }
+        }
+      },
+      "networks": {
+        "pass": true,
+        "edge_net_present": true,
+        "app_net_internal_true": true,
+        "data_net_internal_true": true,
+        "zero_owner_network_overlap": true,
+        "inspected_networks": [
+          {
+            "name": "crm-cskh-dr-https-ci-43429599373_app_net",
+            "driver": "bridge",
+            "internal": true,
+            "attached_containers": [
+              "crm-cskh-dr-https-ci-43429599373-backend-1",
+              "crm-cskh-dr-https-ci-43429599373-frontend-1",
+              "crm-cskh-dr-https-ci-43429599373-websocket-1"
+            ]
+          },
+          {
+            "name": "crm-cskh-dr-https-ci-43429599373_data_net",
+            "driver": "bridge",
+            "internal": true,
+            "attached_containers": [
+              "crm-cskh-dr-https-ci-43429599373-backend-1",
+              "crm-cskh-dr-https-ci-43429599373-db-1",
+              "crm-cskh-dr-https-ci-43429599373-queue-long-1",
+              "crm-cskh-dr-https-ci-43429599373-queue-short-1",
+              "crm-cskh-dr-https-ci-43429599373-redis-cache-1",
+              "crm-cskh-dr-https-ci-43429599373-redis-queue-1",
+              "crm-cskh-dr-https-ci-43429599373-scheduler-1",
+              "crm-cskh-dr-https-ci-43429599373-websocket-1"
+            ]
+          },
+          {
+            "name": "crm-cskh-dr-https-ci-43429599373_edge_net",
+            "driver": "bridge",
+            "internal": false,
+            "attached_containers": [
+              "crm-cskh-dr-https-ci-43429599373-frontend-1",
+              "crm-cskh-dr-https-ci-43429599373-proxy-1",
+              "crm-cskh-dr-https-ci-43429599373-websocket-1"
+            ]
+          }
+        ]
+      },
+      "ports": {
+        "pass": true,
+        "proxy_loopback_ports": [
+          18081,
+          18443
+        ],
+        "non_proxy_published_ports": [],
+        "wildcard_binds": [],
+        "by_service": {
+          "backend": [],
+          "db": [],
+          "frontend": [],
+          "proxy": [
+            {
+              "bind_ip": "127.0.0.1",
+              "published_port": 18081,
+              "target_port": 80,
+              "protocol": "tcp"
+            },
+            {
+              "bind_ip": "127.0.0.1",
+              "published_port": 18443,
+              "target_port": 443,
+              "protocol": "tcp"
+            }
+          ],
+          "queue-long": [],
+          "queue-short": [],
+          "redis-cache": [],
+          "redis-queue": [],
+          "scheduler": [],
+          "websocket": []
+        }
+      },
+      "volumes": {
+        "pass": true,
+        "project_scoped_volumes": [
+          "crm-cskh-dr-https-ci-43429599373_cert_data",
+          "crm-cskh-dr-https-ci-43429599373_db_data",
+          "crm-cskh-dr-https-ci-43429599373_logs",
+          "crm-cskh-dr-https-ci-43429599373_redis_queue_data",
+          "crm-cskh-dr-https-ci-43429599373_sites"
+        ]
+      },
+      "secrets": {
+        "pass": true,
+        "host_secret_file_metadata": {
+          "exists": true,
+          "ends_with_lf_only": true,
+          "contains_cr": false,
+          "non_empty": true,
+          "mode_octal": "0o600",
+          "mode_ok": true,
+          "byte_length": 33
+        },
+        "db_secret_mounted_at_run_secrets_db_password": true,
+        "db_has_plaintext_root_password_env": false
+      }
+    },
+    "migration_x2_and_reconcile": {
+      "status": "PASS",
+      "migrate_run_1_seconds": 11.137,
+      "migrate_run_2_seconds": 11.186,
+      "reconciliation": {
+        "timestamp_utc": "2026-11-13T13:07:23Z",
+        "status": "PASS",
+        "violation_count": 0,
+        "violations": [],
+        "summary": {
+          "before_counts": {
+            "contact_attempt_self_reported": 30,
+            "contact_attempt_verified": 4,
+            "crm_lead": 31,
+            "cskh_active_claim": 30,
+            "cskh_assignment_history": 34,
+            "cskh_contact_attempt": 35,
+            "cskh_export_job": 0,
+            "cskh_kpi_run": 38,
+            "cskh_kpi_snapshot": 669,
+            "cskh_outcome_code": 12,
+            "cskh_policy": 1,
+            "cskh_qa_review_published": 0,
+            "cskh_sla_obligation": 68,
+            "cskh_work_item": 31,
+            "qa_zero_denom_null_snapshots": 669
+          },
+          "after_run1_counts": {
+            "contact_attempt_self_reported": 30,
+            "contact_attempt_verified": 4,
+            "crm_lead": 31,
+            "cskh_active_claim": 30,
+            "cskh_assignment_history": 34,
+            "cskh_contact_attempt": 35,
+            "cskh_export_job": 0,
+            "cskh_kpi_run": 38,
+            "cskh_kpi_snapshot": 669,
+            "cskh_outcome_code": 12,
+            "cskh_policy": 1,
+            "cskh_qa_review_published": 0,
+            "cskh_sla_obligation": 68,
+            "cskh_work_item": 31,
+            "qa_zero_denom_null_snapshots": 669
+          },
+          "after_run2_counts": {
+            "contact_attempt_self_reported": 30,
+            "contact_attempt_verified": 4,
+            "crm_lead": 31,
+            "cskh_active_claim": 30,
+            "cskh_assignment_history": 34,
+            "cskh_contact_attempt": 35,
+            "cskh_export_job": 0,
+            "cskh_kpi_run": 38,
+            "cskh_kpi_snapshot": 669,
+            "cskh_outcome_code": 12,
+            "cskh_policy": 1,
+            "cskh_qa_review_published": 0,
+            "cskh_sla_obligation": 68,
+            "cskh_work_item": 31,
+            "qa_zero_denom_null_snapshots": 669
+          },
+          "after_run2_blg_p4_mig_01": {
+            "cskh_doctype_module_distribution": {
+              "CRM CSKH": 22,
+              "Crm Cskh": 1
+            },
+            "export_job_table_exists": true,
+            "module_def_collation": "utf8mb4_unicode_ci"
+          }
+        }
+      }
+    },
+    "uat_and_permissions_https": {
+      "status": "PASS",
+      "transport": "HTTPS_TLS_VERIFIED",
+      "hsts_header_present": true,
+      "security_headers": {
+        "strict_transport_security": true,
+        "x_content_type_options_nosniff": true,
+        "x_frame_options_sameorigin_or_deny": true,
+        "referrer_policy_present": true
+      },
+      "https_sid_cookie_policy_ok": true,
+      "crm_shell_http": 200,
+      "routes_15_vi_audit": {
+        "/cskh/dashboard": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/import": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/campaigns": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/pool": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/my-customers": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/work-item": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/callbacks": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/progress": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/settings": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/quality-overview": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/team-quality": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/employee-quality": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/campaign-quality": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/scorecard": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        },
+        "/cskh/sla-operations": {
+          "http_status": 200,
+          "html_lang_vi": true,
+          "has_vietnamese_copy": true,
+          "no_server_traceback": true,
+          "pass": true
+        }
+      },
+      "metrics_v2_and_pagination_contract": {
+        "formula_version_cskh_metrics_v2": true,
+        "golden_employee_overall_score_86_47": true,
+        "golden_employee_qa_zero_denom_is_null": true,
+        "pagination_page_size_99999_bounded_le_100": true
+      },
+      "role_scope_checks": {
+        "guest_unauthenticated_blocked_http": 403,
+        "bod_executive_overview_http": 200,
+        "bod_employee_quality_http": 200,
+        "bod_golden_employee_found": true,
+        "bod_drilldown_http": 200,
+        "bod_drilldown_raw_phone_leaks": 0,
+        "bod_recompute_write_blocked_http": 403,
+        "leader_a_own_team_http": 200,
+        "leader_a_other_team_blocked_http": 403,
+        "staff_a_own_customers_http": 200,
+        "staff_a_own_scorecard_http": 200,
+        "staff_a_pool_blocked_http": 403,
+        "staff_a_exec_overview_blocked_http": 403,
+        "outside_desk_user_blocked_http": 403,
+        "disabled_user_active_sid_before_http": 200,
+        "disabled_user_active_sid_after_disable_http": 403
+      },
+      "security_negative_and_workflow_matrix_https": {
+        "s01_cross_staff_lead_rest_blocked_http": 403,
+        "s02_cross_staff_work_item_rest_blocked_http": 403,
+        "s03_cross_staff_work_item_rpc_blocked_http": 403,
+        "s04_cross_staff_attempt_rest_blocked_http": 403,
+        "s05_cross_staff_call_log_rest_blocked_http": 403,
+        "s19_staff_kpi_snapshot_rest_blocked_http": 403,
+        "s06_private_file_guest_blocked_http": 403,
+        "s06_private_file_other_staff_blocked_http": 403,
+        "s06_private_file_owner_allowed_http": 200,
+        "s11_bod_pii_export_blocked_http": 403,
+        "f29_bod_csv_export_request_http": 200,
+        "f29_bod_csv_export_job_status": "completed",
+        "f29_bod_csv_export_download_http": 200,
+        "f29_bod_csv_export_raw_phone_leaks": 0,
+        "s12_other_staff_export_download_blocked_http": 403,
+        "s12_guest_export_download_blocked_http": 403,
+        "s16_missing_csrf_post_blocked_http": 400,
+        "s09_spoofed_performed_by_blocked_http": 403,
+        "s10_staff_reassign_blocked_http": 403,
+        "s10_staff_distribution_execute_blocked_http": 403,
+        "s08_native_assign_to_bypass_blocked_http": 403,
+        "s13_f20_aba_transfer_a_before_http": 200,
+        "s13_f20_aba_transfer_a_to_b_http": 200,
+        "s13_f20_aba_transfer_a_immediately_revoked_http": 403,
+        "s13_f20_aba_transfer_b_allowed_http": 200,
+        "s14_f21_aba_transfer_b_to_a_http": 200,
+        "s14_f21_aba_transfer_a_restored_http": 200,
+        "f10_idempotent_attempt_replay_deduplicated": true,
+        "s17_xss_note_sanitized": true,
+        "pass": true
+      }
+    },
+    "https_browser_chromium_uat_and_security": {
+      "status": "PASS",
+      "duration_seconds": 68.27,
+      "browser_engine": "Playwright Headless Chromium",
+      "transport": "HTTPS_TLS_VERIFIED_IGNORE_HTTPS_ERRORS_FALSE",
+      "administrator_used_for_business_journeys": false,
+      "cases_total": 11,
+      "cases_passed": 11,
+      "failed_cases": []
+    },
+    "worker_restart_and_cron_retry": {
+      "status": "PASS",
+      "operator_actions_log": [
+        {
+          "timestamp_utc": "2026-11-13T13:08:52Z",
+          "action": "docker kill -s KILL 631291c9198b (service=queue-short)",
+          "post_kill_status": "exited",
+          "exit_code": 137
+        },
+        {
+          "timestamp_utc": "2026-11-13T13:09:03Z",
+          "action": "docker compose up -d --no-build --force-recreate queue-short",
+          "outcome": "queue-short healthy with RestartCount=0"
+        },
+        {
+          "timestamp_utc": "2026-11-13T13:09:20Z",
+          "action": "docker compose restart queue-short queue-long scheduler",
+          "recovery_seconds": 16.94
+        }
+      ],
+      "worker_mid_job_sigkill": {
+        "executed": true,
+        "service_killed": "queue-short",
+        "container_id_short": "631291c9198b",
+        "signal": "SIGKILL",
+        "kill_exit_code": 137,
+        "period_key": "2026-10",
+        "picked_up_before_kill": true,
+        "published_before": "rh0e22a13p",
+        "published_after_recovery": [
+          "tqtk2hpn6s"
+        ],
+        "reconcile_ok": true,
+        "pass": true
+      },
+      "restart_recovery_seconds": 16.94,
+      "cron_retry_x2_counts": {
+        "after_run_1": {
+          "sla_obligations": 68,
+          "latest_published_kpi_snapshots": 332,
+          "total_append_only_kpi_snapshots": 1083,
+          "dup_sla_keys": 0,
+          "dup_attempt_keys": 0
+        },
+        "after_run_2": {
+          "sla_obligations": 68,
+          "latest_published_kpi_snapshots": 332,
+          "total_append_only_kpi_snapshots": 1191,
+          "dup_sla_keys": 0,
+          "dup_attempt_keys": 0
+        }
+      },
+      "idempotent_across_retry": true,
+      "post_restart_health_probe": {
+        "timestamp_utc": "2026-11-13T13:09:23Z",
+        "environment": "staging",
+        "site": "staging-dr-uat.crm-internal.localhost",
+        "extra_compose_files": [],
+        "status": "PASS",
+        "containers": {
+          "status": "PASS",
+          "missing_daemon_services": [],
+          "unhealthy_services": [],
+          "scheduler_running_instances": 1,
+          "scheduler_uptime_seconds": 8,
+          "restarts_or_oom": []
+        },
+        "disk": {
+          "total_bytes": 154894188544,
+          "used_bytes": 55889195008,
+          "free_bytes": 98988216320,
+          "used_percent": 36.08,
+          "warn_threshold_pct": 80.0,
+          "critical_threshold_pct": 90.0,
+          "level": "OK"
+        },
+        "queues_and_scheduler": {
+          "status": "PASS",
+          "scheduler_disabled": false,
+          "scheduler_uptime_seconds": 8,
+          "startup_grace_override_seconds": 0,
+          "queues": {
+            "default": {
+              "failed": 0,
+              "queued": 0
+            },
+            "long": {
+              "failed": 0,
+              "queued": 0
+            },
+            "short": {
+              "failed": 0,
+              "queued": 0
+            }
+          },
+          "unregistered_cron_jobs": [],
+          "failed_latest_cron_jobs": [],
+          "never_completed_cron_jobs": [],
+          "stale_cron_jobs": [],
+          "in_startup_grace_cron_jobs": [],
+          "cron_last_complete_lag_seconds": {
+            "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations": 0,
+            "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes": 0,
+            "crm_cskh.jobs.run_export.expire_stale_exports": 0,
+            "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods": 0
+          },
+          "cron_job_details": {
+            "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations": {
+              "last_complete_lag_seconds": 0,
+              "latest_any_status": "Complete",
+              "latest_terminal_lag_seconds": 0,
+              "latest_terminal_status": "Complete",
+              "registered": true,
+              "scheduled_job_type": "evaluate_sla.evaluate_sla_obligations"
+            },
+            "crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes": {
+              "last_complete_lag_seconds": 0,
+              "latest_any_status": "Complete",
+              "latest_terminal_lag_seconds": 0,
+              "latest_terminal_status": "Complete",
+              "registered": true,
+              "scheduled_job_type": "recompute_kpi.drain_dirty_kpi_scopes"
+            },
+            "crm_cskh.jobs.recompute_kpi.refresh_current_standard_periods": {
+              "last_complete_lag_seconds": 0,
+              "latest_any_status": "Complete",
+              "latest_terminal_lag_seconds": 0,
+              "latest_terminal_status": "Complete",
+              "registered": true,
+              "scheduled_job_type": "recompute_kpi.refresh_current_standard_periods"
+            },
+            "crm_cskh.jobs.run_export.expire_stale_exports": {
+              "last_complete_lag_seconds": 0,
+              "latest_any_status": "Complete",
+              "latest_terminal_lag_seconds": 0,
+              "latest_terminal_status": "Complete",
+              "registered": true,
+              "scheduled_job_type": "run_export.expire_stale_exports"
+            }
+          },
+          "error_log_last_15m": 0
+        },
+        "business_invariants": {
+          "status": "PASS",
+          "failed_invariants": [],
+          "details": {
+            "INV-01_single_active_owner_and_sync": {
+              "duplicate_active_leads": 0,
+              "owner_mismatch_active_work_items": 0,
+              "active_claim_count_mismatch": 0
+            },
+            "INV-02_attempt_idempotency_and_verification": {
+              "duplicate_attempt_idempotency_keys": 0,
+              "unverified_marked_verified": 0
+            },
+            "INV-03_followup_callback_task_integrity": {
+              "orphan_or_misassigned_open_followup_tasks": 0
+            },
+            "INV-04_sla_engine_integrity": {
+              "duplicate_sla_idempotency_keys": 0,
+              "stale_unevaluated_overdue_sla": 0
+            },
+            "INV-05_kpi_snapshot_and_dirty_scope_integrity": {
+              "stuck_dirty_scopes_over_30m": 0,
+              "false_zero_qa_snapshots": 0
+            },
+            "INV-06_export_ttl_enforcement": {
+              "unexpired_completed_exports_past_2h_grace": 0
+            }
+          },
+          "effective_p3_flags": {
+            "p3_sla_enabled": true,
+            "p3_reporting_enabled": true
+          },
+          "qa_snapshot_audit": {
+            "false_zero_qa_snapshots": 0,
+            "qa_zero_denom_null_snapshots": 1191,
+            "total_snapshots": 1191
+          }
+        },
+        "backup_freshness_and_offsite": null,
+        "data_loss_window_delta": null,
+        "alert_preflight": {
+          "timestamp_utc": "2026-11-13T13:09:22Z",
+          "status": "BLOCKED",
+          "operator_contact_configured": false,
+          "webhook_https_configured": false,
+          "blockers": [
+            {
+              "id": "BLK-GOV-06",
+              "field": "CSKH_OPERATOR_CONTACT",
+              "reason": "Named Day-2 Operator / on-call recipient has not been assigned and signed off by Owner."
+            },
+            {
+              "id": "BLK-INFRA-07",
+              "field": "CSKH_ALERT_WEBHOOK_URL",
+              "reason": "Approved HTTPS alert delivery endpoint (Webhook / ChatOps / Pager) has not been provisioned."
+            }
+          ]
+        },
+        "triggered_alerts": []
+      }
+    },
+    "rollback_tiers_https": {
+      "status": "PASS",
+      "operator_decision_tree_log": [
+        {
+          "timestamp_utc": "2026-11-13T13:09:28Z",
+          "step_id": "DT-01-TIER1-FEATURE-DISABLE",
+          "p4_15_2_node": "Is the defect isolated to P3 reporting/SLA without PII leak or core P1/P2 corruption?",
+          "operator_decision": "YES -> Apply Tier 1 feature flag disable (cskh_p3_enabled=false) while preserving P1/P2 writes",
+          "executed_action": "bench --site <site> set-config cskh_p3_enabled false && clear-cache",
+          "outcome": {
+            "p3_http": 503,
+            "p1_my_list_http": 200,
+            "reenabled_p3_http": 200,
+            "pass": true
+          }
+        },
+        {
+          "timestamp_utc": "2026-11-13T13:09:58Z",
+          "step_id": "DT-02-SCHEMA-COMPATIBILITY-AND-TIER3-IMAGE-ROLLBACK",
+          "p4_15_2_node": "Is the defect in app/OS code while DB schema is Class A/B backward-compatible?",
+          "operator_decision": "YES -> Roll back APP_IMAGE from N (15.126.0) to N-1 (15.123.1) without touching MariaDB schema",
+          "executed_action": "Update APP_IMAGE to N-1 -> docker compose up -d --no-build --force-recreate 6 app services -> bench clear-cache -> verify-digest & INV-01..06",
+          "outcome": {
+            "executed_real_n_minus_1_rollback": true,
+            "candidate_n_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+            "rolled_back_n_minus_1_image": "sha256:86ad620ecbb8da6439c1d84890a41ce830e874c7fda4397ea082ae0c78d2e6cb",
+            "frappe_version_before_on_n": "15.126.0",
+            "frappe_version_after_on_n_minus_1": "15.123.1",
+            "db_schema_downgraded": false,
+            "post_deploy_n_record_preserved_on_n_minus_1": true,
+            "six_app_containers_digest_verified_on_n_minus_1": true,
+            "n_minus_1_staff_my_list_http": 200,
+            "n_minus_1_staff_ui_http": 200,
+            "n_minus_1_bod_overview_http": 200,
+            "n_minus_1_invariants_status": "PASS",
+            "rollback_rto_seconds": 29.82,
+            "pass": true
+          }
+        },
+        {
+          "timestamp_utc": "2026-11-13T13:11:44Z",
+          "step_id": "DT-03-CLASS-D-OR-CORRUPTION-TIER4-RESTORE",
+          "p4_15_2_node": "If schema/data is incompatible and no safe forward-fix is immediately available, how is Tier 4 restore executed?",
+          "operator_decision": "Account pre-restore data-loss window (--since-utc) -> stop workers/scheduler -> bench restore DB+public+private files -> migrator -> verify 8/8 post-restore deltas == 0 & INV-01..06 == 0",
+          "executed_action": "check_health_and_invariants.py --since-utc -> bench restore -> migrator -> https-smoke",
+          "outcome": {
+            "pre_restore_new_leads": 1,
+            "all_post_restore_deltas_zero": true,
+            "restore_and_migrate_seconds": 37.73,
+            "post_restore_health": "PASS",
+            "post_restore_https_smoke": "PASS",
+            "pass": true
+          }
+        }
+      ],
+      "tier1_p3_kill_switch_https": {
+        "p3_disabled_overview_http": 503,
+        "p3_disabled_p1_my_list_http": 200,
+        "p3_reenabled_overview_http": 200,
+        "pass": true
+      },
+      "digest_parity_preflight_guard": {
+        "matching_digest_status": "PASS",
+        "inspected_services_count": 6,
+        "wrong_digest_rejected_exit_code": 2,
+        "note": "Preflight digest guard only — NOT a substitute for Tier 3 application image rollback",
+        "pass": true
+      },
+      "tier3_real_n_to_n_minus_1_image_rollback": {
+        "executed_real_n_minus_1_rollback": true,
+        "candidate_n_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "rolled_back_n_minus_1_image": "sha256:86ad620ecbb8da6439c1d84890a41ce830e874c7fda4397ea082ae0c78d2e6cb",
+        "frappe_version_before_on_n": "15.126.0",
+        "frappe_version_after_on_n_minus_1": "15.123.1",
+        "db_schema_downgraded": false,
+        "post_deploy_n_record_preserved_on_n_minus_1": true,
+        "six_app_containers_digest_verified_on_n_minus_1": true,
+        "n_minus_1_staff_my_list_http": 200,
+        "n_minus_1_staff_ui_http": 200,
+        "n_minus_1_bod_overview_http": 200,
+        "n_minus_1_invariants_status": "PASS",
+        "rollback_rto_seconds": 29.82,
+        "pass": true
+      },
+      "tier3_forward_fix_decision_guard": {
+        "additive_classes_ab_allow_tier3_image_rollback": true,
+        "destructive_classes_cd_require_forward_fix_or_tier4_restore": true,
+        "pass": true
+      },
+      "tier4_db_and_files_point_in_time_restore": {
+        "pre_restore_delta_since_backup": {
+          "new_assignment_events": 0,
+          "new_contact_attempts": 0,
+          "new_import_batches": 0,
+          "new_leads": 1,
+          "new_or_updated_followup_tasks": 0,
+          "new_or_updated_work_items": 0,
+          "new_published_kpi_runs": 0,
+          "new_sla_breaches": 0,
+          "since_utc": "2026-11-13T13:10:38Z"
+        },
+        "post_restore_delta_since_backup": {
+          "new_assignment_events": 0,
+          "new_contact_attempts": 0,
+          "new_import_batches": 0,
+          "new_leads": 0,
+          "new_or_updated_followup_tasks": 0,
+          "new_or_updated_work_items": 0,
+          "new_published_kpi_runs": 0,
+          "new_sla_breaches": 0,
+          "since_utc": "2026-11-13T13:10:38Z"
+        },
+        "all_post_restore_deltas_zero": true,
+        "end_to_end_restore_and_migrate_seconds": 37.73,
+        "post_restore_health_status": "PASS",
+        "post_restore_https_smoke_status": "PASS",
+        "pass": true
+      }
+    }
+  },
+  "cleanup_verification": {
+    "stack_started": true,
+    "teardown_exit_code": 0,
+    "tmpdir_removed": true,
+    "leftover_project_resources": {
+      "containers": [],
+      "volumes": [],
+      "networks": []
+    },
+    "extra_host_containers": [],
+    "extra_host_volumes": [],
+    "extra_host_networks": [],
+    "pass": true
+  }
+}

@@ -1,0 +1,444 @@
+{
+  "schema_version": "cskh-p4-https-browser-uat-security-v1",
+  "timestamp_utc": "2026-11-13T13:08:50Z",
+  "status": "PASS",
+  "duration_seconds": 68.27,
+  "browser_engine": "Playwright Headless Chromium",
+  "transport": "HTTPS_TLS_VERIFIED_IGNORE_HTTPS_ERRORS_FALSE",
+  "viewport": "1366x768",
+  "locale": "vi-VN",
+  "timezone": "Asia/Ho_Chi_Minh",
+  "nss_ca_trust": {
+    "platform": "posix",
+    "certutil_available": true,
+    "nss_db": "/home/runner/.pki/nssdb",
+    "nickname": "cskh-dr-ca-1794575262",
+    "nss_imported": true
+  },
+  "administrator_used_for_business_journeys": false,
+  "business_actors_verified": {
+    "crm_admin": "cskh-p3-admin@example.test",
+    "bod": "cskh-p3-bod@example.test",
+    "leader_a": "cskh-p3-leader-a@example.test",
+    "leader_b": "cskh-p3-leader-b@example.test",
+    "staff_a": "cskh-p3-staff-a@example.test",
+    "staff_b": "cskh-p3-staff-b@example.test",
+    "staff_c_offboarding": "cskh-p3-staff-c@example.test",
+    "outside_desk_user": "cskh-p3-outside@example.test",
+    "guest": "Guest"
+  },
+  "p4_8_4_coverage": [
+    "P4-8.4-01",
+    "P4-8.4-02",
+    "P4-8.4-03",
+    "P4-8.4-04",
+    "P4-8.4-05",
+    "P4-8.4-06",
+    "P4-8.4-07",
+    "P4-8.4-08",
+    "P4-8.4-09",
+    "P4-8.4-10",
+    "P4-8.4-11",
+    "P4-8.4-12",
+    "P4-8.4-13",
+    "P4-8.4-14",
+    "P4-8.4-15",
+    "P4-8.4-16"
+  ],
+  "s01_s20_coverage": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07",
+    "S08",
+    "S09",
+    "S10",
+    "S11",
+    "S12",
+    "S13",
+    "S14",
+    "S15",
+    "S16",
+    "S17",
+    "S18",
+    "S19",
+    "S20"
+  ],
+  "routes_vi_and_a11y_matrix": {
+    "/cskh": {
+      "actor": "staff_a",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/dashboard": {
+      "actor": "bod",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/import": {
+      "actor": "admin",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/campaigns": {
+      "actor": "admin",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/pool": {
+      "actor": "admin",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/my-customers": {
+      "actor": "staff_a",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/work-item": {
+      "actor": "staff_a",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/callbacks": {
+      "actor": "staff_a",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/progress": {
+      "actor": "leader_a",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/settings": {
+      "actor": "admin",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/quality-overview": {
+      "actor": "bod",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/team-quality": {
+      "actor": "leader_a",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/employee-quality": {
+      "actor": "bod",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/campaign-quality": {
+      "actor": "bod",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/scorecard": {
+      "actor": "staff_b",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/cskh/sla-operations": {
+      "actor": "leader_a",
+      "http_status": 200,
+      "html_lang": "vi",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    },
+    "/crm": {
+      "actor": "staff_a",
+      "http_status": 200,
+      "html_lang": "en",
+      "has_vietnamese_copy": true,
+      "horizontal_overflow_px": 0,
+      "unlabeled_visible_controls": 0,
+      "tls_security_headers_ok": true,
+      "pass": true
+    }
+  },
+  "cases_total": 11,
+  "cases_passed": 11,
+  "cases": [
+    {
+      "acceptance_id": "G10-TLS-COOKIE / F01 / F02",
+      "gate": "G10,G20",
+      "actor": "CRM Admin, BOD, Leader A, Leader B, Staff A, Staff B",
+      "expected": "Real Chromium TLS 1.3 login succeeds with ignore_https_errors=False; sid cookies enforce Secure + HttpOnly; Administrator not used",
+      "actual": "6 business personas logged in over TLS (/login form + session cookie); all sid cookies Secure+HttpOnly=True",
+      "status": "PASS",
+      "redacted_evidence": {
+        "tls_ignore_https_errors": false,
+        "administrator_used_for_business_journeys": false,
+        "personas_logged_in": [
+          "admin",
+          "bod",
+          "leader_a",
+          "leader_b",
+          "staff_a",
+          "staff_b"
+        ]
+      }
+    },
+    {
+      "acceptance_id": "G20-ROUTES-VI-A11Y",
+      "gate": "G20",
+      "actor": "CRM Admin, BOD, Leader A, Staff A, Staff B",
+      "expected": "All /cskh* and /crm routes render HTTP 200 for authorized business actors, lang=vi, Vietnamese terminology, <=0px overflow at 1366x768, 0 unlabeled controls, HSTS+nosniff headers",
+      "actual": "17/17 routes PASS",
+      "status": "PASS",
+      "redacted_evidence": {
+        "routes_checked": 17,
+        "failed_routes": []
+      }
+    },
+    {
+      "acceptance_id": "P4-8.4-12 / S12 / F26 / F27 / G16 / G20-MODAL",
+      "gate": "G10,G15,G16,G20",
+      "actor": "BOD (cskh-p3-bod@example.test)",
+      "expected": "BOD opens KPI drill-down dialog in browser with 0 raw phones, closes via keyboard Enter, sees 86,47 provisional & N/A, has 0 System Manager role, and gets 403 on /cskh/work-item, /cskh/scorecard, request_recompute & include_pii=1",
+      "actual": "kb_tab=True, dd_phones=0, modal_closed=True, ui_86_47=True, ui_na=True, wi_http=403, recompute_http=403, pii_dd_http=403",
+      "status": "PASS",
+      "redacted_evidence": {
+        "drilldown_raw_phone_leaks": 0,
+        "bod_has_system_manager": false,
+        "work_item_http": 403,
+        "scorecard_http": 403,
+        "recompute_http": 403,
+        "include_pii_drilldown_http": 403
+      }
+    },
+    {
+      "acceptance_id": "P4-8.4-16",
+      "gate": "G12,G15,G16",
+      "actor": "BOD",
+      "expected": "Repeated calls to read-only P3 reporting endpoints do not mutate state or spawn unbounded CSKH KPI Run jobs",
+      "actual": "kpi_runs_before=43, kpi_runs_after=43, bod_kpi_runs=0",
+      "status": "PASS",
+      "redacted_evidence": {
+        "kpi_runs_before": 43,
+        "kpi_runs_after": 43,
+        "bod_requested_kpi_runs": 0
+      }
+    },
+    {
+      "acceptance_id": "P4-8.4-06 / P4-8.4-14 / S07 / F29",
+      "gate": "G10,G12,G16",
+      "actor": "BOD, Staff A, Guest",
+      "expected": "BOD queues CSV export from UI modal & downloads with 0 phones and =CMD formula neutralized; BOD include_pii=1 gets 403; Staff A & Guest opening BOD download URL get 403",
+      "actual": "export_status=completed, bod_dl=200, phones=0, raw_formula=False, bod_pii_exp=403, staff_a_dl=403, guest_dl=403",
+      "status": "PASS",
+      "redacted_evidence": {
+        "export_status": "completed",
+        "bod_download_http": 200,
+        "csv_raw_phone_leaks": 0,
+        "csv_formula_neutralized": true,
+        "staff_a_cross_download_http": 403,
+        "guest_download_http": 403
+      }
+    },
+    {
+      "acceptance_id": "P4-8.4-07 / S11 / F28",
+      "gate": "G10,G16",
+      "actor": "Leader A & Leader B",
+      "expected": "Leader A sees Team A rows in browser & gets 0 rows + Vietnamese error alert on ?team=TeamB; Leader B sees Team B & gets 403 / 0 rows on ?team=TeamA",
+      "actual": "ldr_a_own=4, ldr_a_teamB_rows=0, ldr_b_own=3, ldr_b_teamA_rows=0, ldr_b_api=403",
+      "status": "PASS",
+      "redacted_evidence": {
+        "leader_a_own_rows": 4,
+        "leader_a_tampered_team_b_rows": 0,
+        "leader_a_error_rendered": true,
+        "leader_b_own_rows": 3,
+        "leader_b_tampered_team_a_rows": 0,
+        "leader_b_tampered_api_http": 403
+      }
+    },
+    {
+      "acceptance_id": "P4-8.4-01..04,09,10 / S01..S06,S08,S10,S18..S20",
+      "gate": "G10,G12",
+      "actor": "Staff A, Staff B, Guest",
+      "expected": "Staff A blocked in both UI and API across Lead/Attempt/CallLog/Task/Pool/Campaigns/AssignTo/Distribution/KPI-Snapshot/PrivateFile; File oracle normalized to 404; Staff B reads own private file 200",
+      "actual": "wi_b_hidden=True, phones=0, pool_ssr=403, camp_ssr=403, s01=403, s02=403, exp_q=403, s03=403, s04=403, s06_a=403, s06_b=200, oracle=404, page99999=400",
+      "status": "PASS",
+      "redacted_evidence": {
+        "staff_a_own_rows": 14,
+        "tampered_wi_b_summary_hidden": true,
+        "tampered_wi_b_raw_phones": 0,
+        "pool_ssr": 403,
+        "campaigns_ssr": 403,
+        "s01_lead_get": 403,
+        "s02_lead_put": 403,
+        "s01_reportview_export_query": 403,
+        "s01_data_export": 403,
+        "s03_attempt_get": 403,
+        "s04_call_log_get": 403,
+        "s05_task_get": 403,
+        "s06_private_file_staff_a": 403,
+        "s06_private_file_staff_b": 200,
+        "s06_private_file_guest": 403,
+        "s06_traversal_http": 403,
+        "s08_assign_to": 403,
+        "s08_remove_assignments": 403,
+        "s09_search_isolated": true,
+        "s10_distribution_execute": 403,
+        "s10_reassign": 403,
+        "s18_page_size_99999": 400,
+        "s19_other_kpi_snapshot": 403,
+        "s20_file_oracle_normalized": 404
+      }
+    },
+    {
+      "acceptance_id": "P4-8.4-05,13,15 / S09,S16,S17 / F10,F14,F18",
+      "gate": "G10,G12,G14,G20",
+      "actor": "Staff A & CRM Admin",
+      "expected": "Spoofed actor 403; missing CSRF 400/403; invalid close & DNC return structured 4xx business error; idempotent replay returns same attempt_id; XSS payload never executes in Chromium DOM; QA sample blocked when p3_qa_enabled=false",
+      "actual": "spoof=403, nocsrf=400, biz_close=400, dnc=409, same_attempt=True, xss_exec=False, qa=409",
+      "status": "PASS",
+      "redacted_evidence": {
+        "s09_spoof_http": 403,
+        "s16_missing_csrf_http": 400,
+        "invalid_close_http": 400,
+        "dnc_attempt_http": 409,
+        "idempotent_replay_deduplicated": true,
+        "xss_executed_in_chromium": false,
+        "raw_script_tag_in_timeline": false,
+        "qa_disabled_guard_http": 409
+      }
+    },
+    {
+      "acceptance_id": "P4-8.4-11 / S13,S14 / F20,F21",
+      "gate": "G10,G11,G14",
+      "actor": "CRM Admin, Staff A, Staff B",
+      "expected": "CRM Admin transfers A->B->A; Staff A UI summary immediately wiped + API 403 + 0 stale DocShare/ToDo on A->B, and Staff B immediately wiped on B->A while Staff A restored",
+      "actual": "before(A_vis=True,B_hid=True) -> A2B(A_hid=True,A_api=403,B_vis=True,stale=0/0) -> B2A(B_hid=True,A_vis=True)",
+      "status": "PASS",
+      "redacted_evidence": {
+        "executed_by_business_actor": "cskh-p3-admin@example.test (CSKH CRM Admin)",
+        "a_visible_before": true,
+        "a_hidden_after_transfer": true,
+        "a_api_http_after_transfer": 403,
+        "b_visible_after_transfer": true,
+        "mid_stale_docshares": 0,
+        "mid_stale_todos": 0,
+        "b_hidden_after_return": true,
+        "a_restored_after_return": true,
+        "end_stale_docshares": 0
+      }
+    },
+    {
+      "acceptance_id": "P4-8.4-08 / S15 / F30",
+      "gate": "G10,G11",
+      "actor": "Staff C (disabled), Outside Desk User, Guest",
+      "expected": "Disabling User.enabled=0 immediately revokes active browser session on both API (401/403) and page reload; Outside & Guest denied",
+      "actual": "staff_c_before=200, staff_c_after_api=403, nav_code=403, outside=403, guest=403",
+      "status": "PASS",
+      "redacted_evidence": {
+        "staff_c_before_disable_http": 200,
+        "staff_c_after_disable_api_http": 403,
+        "staff_c_after_disable_page_http": 403,
+        "outside_user_http": 403,
+        "guest_page_http": 403
+      }
+    },
+    {
+      "acceptance_id": "P4-ROLE-CHANGE / S11-REVOCATION / G11,G16",
+      "gate": "G10,G11,G16",
+      "actor": "Leader A (Sales Manager -> Sales User -> Sales Manager)",
+      "expected": "Demoting Leader A to Sales User & revoking team ownership immediately blocks /cskh/team-quality (403) and team/employee reporting APIs (403) in active browser session while keeping Sales User /cskh/my-customers (200); restoring role immediately recovers 200",
+      "actual": "before(ui=200,api=200) -> demoted(team_ui=403,team_api=403,emp_api=403,staff_ui=200) -> restored(ui=200,api=200)",
+      "status": "PASS",
+      "redacted_evidence": {
+        "before_team_ui_http": 200,
+        "before_team_api_http": 200,
+        "demoted_team_ui_http": 403,
+        "demoted_team_comparison_api_http": 403,
+        "demoted_employee_quality_api_http": 403,
+        "demoted_sales_user_mylist_http": 200,
+        "restored_team_ui_http": 200,
+        "restored_team_api_http": 200
+      }
+    }
+  ]
+}
