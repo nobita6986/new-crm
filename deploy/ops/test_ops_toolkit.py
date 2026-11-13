@@ -1344,7 +1344,8 @@ class OpsToolkitTests(unittest.TestCase):
             code = f"G{i:02d}"
             self.assertIn(code, exit_doc, f"Missing {code} in P4-exit-report.md")
 
-        self.assertIn("UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL", perf_doc)
+        self.assertIn("OWNER_APPROVED; ACCEPTANCE_RUN4_FAIL", perf_doc)
+        self.assertNotIn("UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL", perf_doc)
         self.assertIn("cskh-metrics-v2", api_doc)
         self.assertIn("cskh-metrics-v2", exit_doc)
 
@@ -3758,9 +3759,11 @@ class OpsToolkitTests(unittest.TestCase):
                 rec = json.loads(out_rec.read_text(encoding="utf-8"))
                 self.assertEqual(
                     rec["status"],
-                    "BLOCKED_CI_PRECHECK_ONLY_PENDING_VPS_RECEIPTS_AND_OWNER_APPROVAL",
+                    "BLOCKED_CI_REPORT_REQUIRES_STAGING_VPS_BENCHMARK_AND_RECEIPTS",
                     rec,
                 )
+                self.assertTrue(rec["owner_slo_v1_4_signed"])
+                self.assertFalse(rec["g18_pass_requirements"]["staging_vps_benchmark_and_receipts_verified"])
                 self.assertEqual(rec["expected_candidate_digest"], dr_mod.CURRENT_CANDIDATE_DIGEST)
                 self.assertTrue(rec["digest_matches_candidate"])
                 self.assertEqual(rec["evaluated_thresholds_sha256"], dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256)
@@ -3871,7 +3874,34 @@ class OpsToolkitTests(unittest.TestCase):
             sum_doc["t1c_candidate_confirmation"] = verified_t1c_doc
             sum_path.write_text(json.dumps(sum_doc, indent=2), encoding="utf-8")
 
-            # 4a. Default CLI prepare-staging-g18 with pending p4-s1-slo-approval.json -> BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO
+            # 4a. The checked-in Owner approval is valid for this candidate/profile and allows preparation.
+            prep_approved_out = td_path / "prep-owner-approved.json"
+            self.assertEqual(
+                dr_mod.main(
+                    [
+                        "prepare-staging-g18",
+                        "--vps-receipt-dir",
+                        str(receipt_dir),
+                        "--out",
+                        str(prep_approved_out),
+                    ]
+                ),
+                0,
+            )
+            prep_approved = json.loads(prep_approved_out.read_text(encoding="utf-8"))
+            self.assertEqual(prep_approved["status"], "READY_FOR_G18_ACCEPTANCE_MEASUREMENT", prep_approved)
+            self.assertTrue(prep_approved["measurement_allowed"])
+            self.assertTrue(prep_approved["owner_config_slo_signed_and_matched"])
+            self.assertEqual(prep_approved["resolved_configuration_profile"], "staging_vps_capped")
+
+            # 4a.1. An explicit unsigned fixture remains blocked (do not infer Owner approval from a proposal).
+            pending_approval = json.loads(dr_mod.DEFAULT_P4_S1_SLO_APPROVAL_PATH.read_text(encoding="utf-8"))
+            pending_approval["approval_status"] = "PENDING_OWNER_APPROVAL"
+            pending_approval["approved_profiles"] = []
+            pending_approval["owner_signoff"] = {}
+            pending_approval.pop("owner_signoff_s1_canonical_4x4", None)
+            pending_approval_path = td_path / "pending-owner-approval.json"
+            pending_approval_path.write_text(json.dumps(pending_approval, indent=2), encoding="utf-8")
             prep_pending_out = td_path / "prep-pending.json"
             self.assertEqual(
                 dr_mod.main(
@@ -3879,6 +3909,8 @@ class OpsToolkitTests(unittest.TestCase):
                         "prepare-staging-g18",
                         "--vps-receipt-dir",
                         str(receipt_dir),
+                        "--owner-approval-json",
+                        str(pending_approval_path),
                         "--out",
                         str(prep_pending_out),
                     ]
@@ -4053,8 +4085,10 @@ class OpsToolkitTests(unittest.TestCase):
         self.assertEqual(app_doc["slo_bundle_id"], "cskh-p4-g18-s1-endpoint-slo")
         self.assertEqual(app_doc["slo_spec_sha256"], dr_mod.LOCKED_P4_S1_SLO_SPEC_SHA256)
         self.assertEqual(app_doc["approved_image_digest"], dr_mod.CURRENT_CANDIDATE_DIGEST)
-        self.assertEqual(app_doc["approval_status"], "PENDING_OWNER_APPROVAL")
-        self.assertEqual(app_doc["approved_profiles"], [])
+        self.assertEqual(app_doc["approval_status"], "OWNER_APPROVED")
+        self.assertEqual(set(app_doc["approved_profiles"]), {"staging_vps_capped", "s1_canonical_4x4"})
+        self.assertEqual(app_doc["owner_signoff"]["approved_by"], "Owner-T0")
+        self.assertEqual(app_doc["owner_signoff_s1_canonical_4x4"]["approved_by"], "Owner-T0")
 
         with tempfile.TemporaryDirectory() as td:
             td_path = Path(td)

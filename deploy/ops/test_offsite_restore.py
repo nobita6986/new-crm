@@ -984,8 +984,14 @@ class BackupValidationTests(unittest.TestCase):
         )
         self.assertEqual(
             manifest_doc["live_vps"]["vps_backup_timer_status"],
-            "ENABLED_AWAITING_FIRST_SCHEDULED_TRIGGER",
+            "ACTIVE_ENABLED_AUTO_TRIGGERED_SERVICE_EXIT_0_OFFSITE_BLOCKED",
         )
+        self.assertEqual(
+            manifest_doc["live_vps"]["vps_backup_timer_last_trigger"],
+            "Fri 2026-11-13 02:15:40 +07",
+        )
+        self.assertEqual(manifest_doc["live_vps"]["vps_backup_service_last_exit_status"], 0)
+        self.assertFalse(manifest_doc["live_vps"]["offsite_backup_env_present"])
         for entry in manifest_doc["deliverables"]:
             target = REPO_ROOT / entry["path"]
             self.assertTrue(target.is_file(), entry["path"])

@@ -2,6 +2,7 @@
 
 - **Mã tài liệu:** `P4-PERFORMANCE-REPORT` (`docs/p4/performance-report.md` — `P4.md §3.3`, `§9`, `§20.2`)
 - **Bằng chứng JSON gốc đã kiểm chứng mã băm:** [`deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json`](../../deploy/ops/evidence/p4-candidate-and-s1-20261109/benchmark-s1-report.json) (SHA-256 `7e7c2e000fea33fe41ddc0c43c43a486855157c9fc2cd359fd5d6461f1f82e3f`, GitHub Actions Run `42984867723` trên repo `nobita6986/new-crm`, hoàn tất `2026-11-11T08:43:23Z`)
+- **Kết quả nghiệm thu VPS mới nhất:** run4 `2026-11-13`, candidate `@sha256:ba68cd229ea3...`, profile `s1_canonical_4x4`; ma trận `P4.md §9.2` đạt `10/11`, bộ SLO đã được Owner duyệt đạt `9/35`. Chi tiết và hash được ghi tại §4.5.
 - **Bộ sinh dữ liệu & Trình đo tải:** [`deploy/release/benchmark_p4_isolated.py`](../../deploy/release/benchmark_p4_isolated.py) (`schema_version = cskh-p4-isolated-benchmark-v2`)
 - **Image bất biến, cấu hình worker & hạn mức tài nguyên thực cấp trong kết quả đo:**
   - **Registry Manifest Digest (`app_image_tested`):** `ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6`
@@ -17,7 +18,7 @@
 > [!IMPORTANT]
 > **Định khung quản trị bắt buộc (`P4.md §9.1`, `§9.2` & Chỉ đạo `T0`):**
 > 1. **Tập dữ liệu `S1` (`50.000` Hồ sơ liên hệ / `75.000` Đầu việc / `250.000` Lần liên hệ / `150.000` Nghĩa vụ SLA / `40` nhân sự active) là tập dữ liệu tổng hợp gợi ý để đo hiệu năng/dung lượng trên môi trường cô lập (`SUGGESTED_S1_DATASET_NOT_MONTHLY_VOLUME_COMMITMENT`) — KHÔNG phải cam kết sản lượng `50.000 hồ sơ/tháng` và KHÔNG chứa bất kỳ dữ liệu cá nhân (PII) thật nào.**
-> 2. **Các ngưỡng độ trễ mục tiêu là đề xuất SLO nội bộ (`UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL`), KHÔNG phải SLA sản xuất đã ký cam kết.**
+> 2. **Bảng đề xuất cũ tại §4.3 chỉ là số liệu nền; bộ SLO nghiệm thu chính thức là `p4-s1-slo-spec.json` SHA `ccd8f83c...`, đã được Owner duyệt riêng cho candidate `ba68cd22...` và profile `s1_canonical_4x4`. SLO này không phải cam kết SLA sản xuất. Run4 chấm theo đúng ngưỡng đã duyệt và chưa đạt (`9/35`).**
 > 3. **Tuyệt đối không bắn tải vào VPS đang phục vụ của Owner (`https://crm.hrpartner.vn` / `103.77.208.186`):** `isolation_guard` xác nhận `verified_isolated = true`, `owner_vps_touched = false`.
 
 ---
@@ -145,21 +146,21 @@
   - **Lưu ý bảo toàn môi trường khi dựng Staging cô lập trên cùng VPS `103.77.208.186`:** Do VPS `103.77.208.186` đang phục vụ trực tiếp `https://crm.hrpartner.vn`, khi phiên `T1A` được cấp SSH chỉ dựng Staging cô lập để kiểm tra isolation, pull/inspect và HTTPS/WSS smoke chức năng; bước đo `G18` chỉ thực hiện sau khi Owner duyệt SLO và trong hạn mức tài nguyên an toàn đã xác nhận từ bước tiền kiểm chỉ đọc để bảo toàn `Zero Live Impact` (`P4.md §9.1`).
 - **Lộ trình nâng cấp nếu vượt ngưỡng `S1` tiến tới `S2` (`250k` khách / `1,25M` Attempts / `100` staff):** Nâng lên `8 vCPU / 16–32 GB RAM`, tăng số worker `queue-long` lên `2–4` tiến trình và tách máy chủ MariaDB riêng khi cần HA.
 
-### 4.3. Bảng Đề Xuất SLO Nội Bộ Để Owner / BOD Xem Xét Phê Duyệt (`PROPOSED_ONLY_NOT_COMMITTED_SLA`)
+### 4.3. Bảng SLO Đề Xuất Lịch Sử — Đã Được Thay Thế Bởi Đặc Tả v1.0.0
 
 | Chỉ số đề xuất (`proposed_slos_for_review`) | Kết quả thực đo trên `S1` (`@sha256:693a3cdcc758...`) | Ngưỡng SLO đề xuất trình duyệt | Trạng thái cam kết |
 | :--- | :---: | :---: | :---: |
-| `my_customers_worklist_api` (`p95`) | **`73,585 ms`** (`105,955 ms` ở `c=40`) | `<= 500 ms` (tham chiếu `P4.md`: `1.500 ms`) | `CHỜ OWNER PHÊ DUYỆT` |
-| Mở chi tiết Lead + lịch sử Attempt (`p95`) | **`184,981 ms`** | `<= 600 ms` (tham chiếu `P4.md`: `2.000 ms`) | `CHỜ OWNER PHÊ DUYỆT` |
-| Ghi `Contact Attempt` + `Follow-up` (`p95`) | **`477,873 ms`** (HTTP end-to-end) / `133,493 ms` (domain) | `<= 1.200 ms` (tham chiếu `P4.md`: `2.000 ms`) | `CHỜ OWNER PHÊ DUYỆT` |
-| `bod_executive_overview_api` (`p95`) | **`96,042 ms`** (`296,195 ms` ở `c=40`) | `<= 800 ms` (tham chiếu `P4.md`: `3.000 ms`) | `CHỜ OWNER PHÊ DUYỆT` |
-| `kpi_drilldown_paginated_api` (`p95`) | **`290,296 ms`** (ngày/chiến dịch) · **`203,350 ms`** (tháng/công ty `250k`) | `<= 1.200 ms` (tham chiếu `P4.md`: `3.000 ms`) | `CHỜ OWNER PHÊ DUYỆT` |
-| Tỷ lệ lỗi `HTTP 5xx` trên API nghiệp vụ | **`0,00%`** | `<= 0,50%` | `CHỜ OWNER PHÊ DUYỆT` |
-| Độ trễ làm mới KPI tăng trưởng trong ngày | **`2,953 giây`** (`2.953,42 ms` + chu kỳ cron `5 phút`) | `<= 300 giây` (`5 phút`) | `CHỜ OWNER PHÊ DUYỆT` |
+| `my_customers_worklist_api` (`p95`) | **`73,585 ms`** (`105,955 ms` ở `c=40`) | `<= 500 ms` (tham chiếu `P4.md`: `1.500 ms`) | `Số liệu nền; ngưỡng thay bằng spec v1.0.0` |
+| Mở chi tiết Lead + lịch sử Attempt (`p95`) | **`184,981 ms`** | `<= 600 ms` (tham chiếu `P4.md`: `2.000 ms`) | `Số liệu nền; ngưỡng thay bằng spec v1.0.0` |
+| Ghi `Contact Attempt` + `Follow-up` (`p95`) | **`477,873 ms`** (HTTP end-to-end) / `133,493 ms` (domain) | `<= 1.200 ms` (tham chiếu `P4.md`: `2.000 ms`) | `Số liệu nền; ngưỡng thay bằng spec v1.0.0` |
+| `bod_executive_overview_api` (`p95`) | **`96,042 ms`** (`296,195 ms` ở `c=40`) | `<= 800 ms` (tham chiếu `P4.md`: `3.000 ms`) | `Số liệu nền; ngưỡng thay bằng spec v1.0.0` |
+| `kpi_drilldown_paginated_api` (`p95`) | **`290,296 ms`** (ngày/chiến dịch) · **`203,350 ms`** (tháng/công ty `250k`) | `<= 1.200 ms` (tham chiếu `P4.md`: `3.000 ms`) | `Số liệu nền; ngưỡng thay bằng spec v1.0.0` |
+| Tỷ lệ lỗi `HTTP 5xx` trên API nghiệp vụ | **`0,00%`** | `<= 0,50%` | `Số liệu nền; ngưỡng thay bằng spec v1.0.0` |
+| Độ trễ làm mới KPI tăng trưởng trong ngày | **`2,953 giây`** (`2.953,42 ms` + chu kỳ cron `5 phút`) | `<= 300 giây` (`5 phút`) | `Số liệu nền; ngưỡng thay bằng spec v1.0.0` |
 
 ---
 
-### 4.4. Bộ Đặc Tả SLO `v1.0.0` & Cơ Chế Phê Duyệt Tách Rời Cho Ứng Viên `@sha256:ba68cd22...` (`UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL`)
+### 4.4. Bộ Đặc Tả SLO `v1.0.0` & Phê Duyệt Owner Cho Ứng Viên `@sha256:ba68cd22...` (`OWNER_APPROVED; ACCEPTANCE_RUN4_FAIL`)
 
 Nhằm khắc phục điểm nghẽn độ trễ drill-down tháng toàn công ty trên quy mô `250.000` attempts và chuẩn hóa quản trị kiểm định Cổng `G18` cho ứng viên mới `@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8` (commit `3c040c85a44c4ad37e9d9152b5630a4596e593ee`), toàn bộ luồng tiền đo (`prepare-staging-g18`) và đối soát nghiệm thu (`reconcile-g18-slo`) đã được nâng cấp đồng bộ theo cơ chế tách rời phê duyệt (`decoupled approval`) từ `cd03af5`:
 
@@ -169,9 +170,17 @@ Nhằm khắc phục điểm nghẽn độ trễ drill-down tháng toàn công t
    - Hỗ trợ đầy đủ hai cấu hình tài nguyên: cấu hình chuẩn đo kiểm `s1_canonical_4x4` (`4 vCPU / 16 GiB RAM`, Gunicorn 4×4, `config_spec_sha256 = 683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe`) và cấu hình an toàn trên VPS đích `staging_vps_capped` (backend sử dụng `1,5 vCPU`, `1.536 MiB RAM` và `Gunicorn 2×4` [2 workers × 4 threads = 8 threads]; tổng stack giới hạn `7,0 vCPU` / `7.936 MiB RAM`, `config_spec_sha256 = 40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254`, có kiểm soát headroom trước khi chạy).
 2. **Phiếu phê duyệt riêng của Owner (`deploy/release/p4-s1-slo-approval.json`):**
    - Lược đồ: `schema_version = "cskh-p4-s1-slo-approval-v1"`.
-   - Trạng thái khởi tạo: `approval_status = "PENDING_OWNER_APPROVAL"`, `approved_profiles = []`.
+   - Phiếu hiện hành: `approval_status = "OWNER_APPROVED"`; Owner ký profile `s1_canonical_4x4` lúc `2026-11-12T14:00:00Z` và profile `staging_vps_capped` lúc `2026-11-12T09:43:00Z`; candidate binding là digest `ba68cd22...`.
    - Ràng buộc mật mã học: Khóa chặt vào `slo_spec_sha256 = "ccd8f83c..."`, digest ứng viên `approved_image_digest = "...@sha256:ba68cd22..."`, và danh sách cấu hình được phê duyệt.
 3. **Cơ chế từ chối nghiêm ngặt (`Fail-Closed Enforcement`):**
    - **Từ chối JSON digest cũ:** Bất kỳ tệp JSON nào thuộc digest cũ (`@sha256:693a3cdcc758...`) bao gồm ngưỡng v1.4, báo cáo đo kiểm, chẩn đoán G18, biên nhận Staging VPS, xác nhận T1C, hoặc phiếu duyệt Owner khi đưa vào luồng tiền đo hay chấm G18 của ứng viên `ba68cd22...` đều bị từ chối ngay lập tức (`FAIL_INVALID_THRESHOLDS`, `FAIL_DIGEST_MISMATCH`, `FAIL_INVALID_G18_DIAGNOSTIC_REPORT`, `FAIL_UNSAFE_OR_INVALID_STAGING_VPS_CONFIGURATION`, `FAIL_INVALID_T1C_CANDIDATE_CONFIRMATION`, hoặc `FAIL_INVALID_OWNER_APPROVAL_OR_THRESHOLDS_SHA256`).
    - **Từ chối khi thiếu phê duyệt Owner:** Khi thiếu tệp phê duyệt (`owner_slo_approval=None`), tệp còn ở trạng thái `PENDING_OWNER_APPROVAL`, đường dẫn không tồn tại, danh sách profile rỗng, hoặc tự ý phê duyệt bởi `T1A`/`T1B`/`T1C`, cổng đo nghiệm thu và bộ chấm đều chặn đứng (`BLOCKED_PENDING_OWNER_SIGNED_CONFIG_SLO` / `BLOCKED_PENDING_OWNER_SLO_V1_4_SIGNATURE`), đảm bảo tuyệt đối không nghiệm thu Cổng G18 khi chưa có chữ ký hợp lệ từ Owner.
+
+### 4.5. Nghiệm Thu VPS Run4 Theo Ngưỡng Đã Duyệt — `G18 = FAIL`
+
+- **Provenance:** candidate `3c040c85a44c4ad37e9d9152b5630a4596e593ee` / `ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8`; profile `s1_canonical_4x4`; benchmark runner `b998a96acc08828bab838c29f1718bfe7a9f13bb`. Owner approval và spec SHA khớp, evaluator báo `gate_errors=[]`.
+- **Hai bộ chấm khác phạm vi:** ma trận legacy `P4.md §9.2` đạt `10/11` (chỉ `execute_weighted_distribution_10000_items` fail). Bộ SLO v1.0.0 có `35` quy tắc và đạt `9/35`, còn `26` fail: `SSR 0/7`, `JSON_API 9/20`, `AGGREGATE_AND_BACKGROUND 0/8`. Không gộp `10/11` với `9/35`.
+- **Các phép đo tiêu biểu:** tổng hợp `1.920` request không có lỗi/timeout nhưng p95 `2.697,158 ms` và p99 `3.642,733 ms`; nhập CSV `50.000` dòng mất `529.762,12 ms` so với ngưỡng `300.000 ms`; KPI tháng mất `122.241,78 ms` so với ngưỡng `120.000 ms`; phân phối đạt `4.500/10.000` work item trước khi vượt `1.200.000 ms` tại `1.200.806,19 ms`.
+- **Artifact:** [`g18-benchmark-report-run4.json`](../../deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run4/g18-benchmark-report-run4.json) (SHA-256 `ac7ec58c3391be3899cc3decb31e8d594c840615aa63ecab350ccb729a595ffc`); [`g18-slo-evaluation-run4.json`](../../deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run4/g18-slo-evaluation-run4.json) (SHA-256 `e6f07bc7a2dfc2537829f418f256e60b2d0dac6e55f138adfe4900faa4621df5`); live-preservation evidence confirms `zero_live_mutation=true`.
+- **Kết luận:** `G18 = FAIL`; giữ nguyên ngưỡng. Cần tối ưu hiệu năng trên candidate mới, chạy lại toàn bộ kiểm thử ảnh hưởng và benchmark trên Staging cô lập, rồi xin Owner ký phiếu mới gắn với digest/profile mới trước khi chấm lại.
 
