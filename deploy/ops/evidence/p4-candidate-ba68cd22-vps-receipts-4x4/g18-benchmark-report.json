@@ -1,0 +1,108 @@
+{
+  schema: g18-benchmark-report-v1,
+  generated_by: T1A-reconstructed-from-RuntimeError,
+  note: benchmark_p4_isolated.py raised RuntimeError before writing output; data reconstructed faithfully from exception payload. Script exit code: 1.,
+  profile: s1_canonical_4x4,
+  config_spec_sha256: 683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe,
+  image_digest: sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8,
+  commit: 3c040c85a44c4ad37e9d9152b5630a4596e593ee,
+  ops_release: af00a20,
+  benchmark_script: benchmark_p4_isolated.py,
+  measured_at_utc: 2026-11-12T15:04:32Z,
+  bench_project: cskh-p4-bench-3e1fb594,
+  bench_port: 18880,
+  all_passed: false,
+  passed_count: 10,
+  failed_count: 1,
+  items: {
+    staff_my_customers_p95_le_1500ms: {
+      target_p95_ms: 1500.0,
+      measured_http_p95_ms: 329.089,
+      error_rate_pct: 0.0,
+      passed: true
+    },
+    open_lead_and_history_p95_le_2000ms: {
+      target_p95_ms: 2000.0,
+      measured_http_p95_ms: 724.914,
+      error_rate_pct: 0.0,
+      passed: true
+    },
+    record_attempt_and_callback_p95_le_2000ms_zero_dup: {
+      target_p95_ms: 2000.0,
+      measured_http_p95_ms: 1611.817,
+      duplicate_idempotency_keys: 0,
+      attempts_created: 80,
+      work_items_with_open_callback_task: 80,
+      http_idempotent_replays_verified: 10,
+      passed: true,
+      delta_vs_run1_ms: -711.795,
+      note: FIXED vs staging_vps_capped run1 (2323ms). 4w*4t Gunicorn + 2048MiB backend resolved contention.
+    },
+    bod_overview_snapshot_p95_le_3000ms: {
+      target_p95_ms: 3000.0,
+      measured_http_p95_ms: 359.093,
+      explain_index_key: idx_cskh_kpisnap_lookup,
+      passed: true
+    },
+    kpi_drilldown_paginated_p95_le_3000ms: {
+      target_p95_ms: 3000.0,
+      measured_daily_campaign_http_p95_ms: 562.487,
+      measured_monthly_company_250k_http_p95_ms: 530.736,
+      staff_unauthorized_company_http_status: 403,
+      passed: true
+    },
+    preview_weighted_distribution_10000_items: {
+      reference_target_ms: 60000.0,
+      eligible_count: 10000,
+      measured_preview_ms: 3156.48,
+      passed: true
+    },
+    execute_weighted_distribution_10000_items: {
+      created_work_items: 3600,
+      duplicate_work_items: 0,
+      execute_ms: 1201419.27,
+      ownership_reconciled: true,
+      abort_cancel_guard_verified: true,
+      passed: false,
+      fail_analysis: {
+        execute_ms_run1_staging_vps_capped: 1201130.43,
+        execute_ms_run2_s1_canonical_4x4: 1201419.27,
+        delta_ms: 288.84,
+        conclusion: execute_ms is virtually identical across both profiles (~1201s = exactly 20 minutes). This is consistent with a hardcoded 1200s timeout in the script rather than actual completion time. The job processed 3600 items (run2) vs 4100 items (run1) within the 20-minute window. queue-long container has QUEUE_LONG_CPUS=1.5 in BOTH profiles — the distribution job throughput is unaffected by Gunicorn/backend scaling. Root cause: queue-long at 1.5 vCPU processes ~180-205 items/min; completing 10000 items requires ~50 minutes, well beyond 20-minute timeout.
+      }
+    },
+    import_50000_csv_rows: {
+      total_rows: 50000,
+      created_rows: 10000,
+      reused_rows: 5000,
+      error_rows: 500,
+      error_artifact_present: true,
+      total_ms: 866254.94,
+      preview_hwm_mib: 1728.16,
+      passed: true
+    },
+    recompute_kpi_non_blocking_atomic_publish: {
+      atomic_publish_verified: true,
+      concurrent_ui_p95_ms: 41.236,
+      passed: true
+    },
+    concurrent_20_40_80_mixed_user_sessions: {
+      sessions_20_p95_ms: 1220.703,
+      sessions_20_error_rate_pct: 0.0,
+      sessions_40_p95_ms: 1844.523,
+      sessions_40_error_rate_pct: 0.0,
+      sessions_80_p95_ms: 4133.499,
+      sessions_80_error_rate_pct: 0.0,
+      passed: true,
+      delta_vs_run1_p95_80sessions_ms: -1771.232,
+      note: Significant improvement: 5905ms -> 4133ms at 80 sessions with s1_canonical_4x4
+    },
+    telesale_worklist_ssr_zero_errors_c12_and_c40: {
+      shared_new_session_c12_error_count: 0,
+      shared_new_session_c12_timeout_count: 0,
+      staff_40_sessions_c40_error_count: 0,
+      staff_40_sessions_c40_timeout_count: 0,
+      passed: true
+    }
+  }
+}

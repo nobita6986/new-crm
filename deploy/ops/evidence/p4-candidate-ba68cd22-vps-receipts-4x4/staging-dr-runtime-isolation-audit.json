@@ -1,0 +1,287 @@
+{
+  "schema_version": "cskh-p4-staging-dr-runtime-audit-v1",
+  "timestamp_utc": "2026-11-12T14:08:00Z",
+  "status": "PASS",
+  "candidate_verification_only": true,
+  "promoted_to_production": false,
+  "owner_live_site_touched": false,
+  "governance_scope": {
+    "verification_scope": "staging_candidate_isolated_verification",
+    "candidate_verification_only": true,
+    "promoted_to_production": false,
+    "g04_status": "FAIL",
+    "production_candidate_status": "BLOCKED",
+    "release_manifest_environment_scope": "staging_candidate_verified_production_blocked",
+    "active_cve_exceptions_count": 0,
+    "rehearsal_key_allowed_for_production": false,
+    "rehearsal_key_used_for_production_approval": false,
+    "checked_promotion_public_key_fingerprint": null,
+    "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "digest_update_policy": "update_isolated_staging_and_regenerate_all_receipts_on_t1b_digest_change"
+  },
+  "project_name": "crm-cskh-dr-4x4-vps",
+  "site_name": "staging-dr-4x4.crm-internal.localhost",
+  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "compose_git_tree_sha": "3c2c1633b1a39c71e99364551afef586ad460b6e",
+  "rendered_compose_config_sha256": "af0b1aa4d84e71d1c11c5100214d5ca8e1dd9ea344c4dd8b8eacde407273ff59",
+  "container_digest_parity": {
+    "expected_app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "expected_sha256": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "missing_services": [],
+    "inspected_services": {
+      "backend": {
+        "container": "crm-cskh-dr-4x4-vps-backend-1",
+        "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "repo_digests": [
+          "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+        ],
+        "matched": true
+      },
+      "frontend": {
+        "container": "crm-cskh-dr-4x4-vps-frontend-1",
+        "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "repo_digests": [
+          "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+        ],
+        "matched": true
+      },
+      "websocket": {
+        "container": "crm-cskh-dr-4x4-vps-websocket-1",
+        "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "repo_digests": [
+          "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+        ],
+        "matched": true
+      },
+      "queue-short": {
+        "container": "crm-cskh-dr-4x4-vps-queue-short-1",
+        "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "repo_digests": [
+          "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+        ],
+        "matched": true
+      },
+      "queue-long": {
+        "container": "crm-cskh-dr-4x4-vps-queue-long-1",
+        "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "repo_digests": [
+          "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+        ],
+        "matched": true
+      },
+      "scheduler": {
+        "container": "crm-cskh-dr-4x4-vps-scheduler-1",
+        "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+        "repo_digests": [
+          "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+        ],
+        "matched": true
+      }
+    },
+    "mismatches": [],
+    "pass": true
+  },
+  "resource_limits": {
+    "pass": true,
+    "expected_daemon_services": [
+      "backend",
+      "db",
+      "frontend",
+      "proxy",
+      "queue-long",
+      "queue-short",
+      "redis-cache",
+      "redis-queue",
+      "scheduler",
+      "websocket"
+    ],
+    "missing_daemon_services": [],
+    "unbounded_services": [],
+    "total_capped_ram_mib": 12032.0,
+    "total_capped_cpus": 10.0,
+    "by_service": {
+      "backend": {
+        "container": "crm-cskh-dr-4x4-vps-backend-1",
+        "mem_limit_bytes": 2147483648,
+        "mem_limit_mib": 2048.0,
+        "nano_cpus": 2000000000,
+        "cpus": 2.0,
+        "bounded": true
+      },
+      "db": {
+        "container": "crm-cskh-dr-4x4-vps-db-1",
+        "mem_limit_bytes": 4294967296,
+        "mem_limit_mib": 4096.0,
+        "nano_cpus": 2000000000,
+        "cpus": 2.0,
+        "bounded": true
+      },
+      "frontend": {
+        "container": "crm-cskh-dr-4x4-vps-frontend-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 1000000000,
+        "cpus": 1.0,
+        "bounded": true
+      },
+      "proxy": {
+        "container": "crm-cskh-dr-4x4-vps-proxy-1",
+        "mem_limit_bytes": 268435456,
+        "mem_limit_mib": 256.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      },
+      "queue-long": {
+        "container": "crm-cskh-dr-4x4-vps-queue-long-1",
+        "mem_limit_bytes": 2147483648,
+        "mem_limit_mib": 2048.0,
+        "nano_cpus": 1500000000,
+        "cpus": 1.5,
+        "bounded": true
+      },
+      "queue-short": {
+        "container": "crm-cskh-dr-4x4-vps-queue-short-1",
+        "mem_limit_bytes": 1073741824,
+        "mem_limit_mib": 1024.0,
+        "nano_cpus": 1000000000,
+        "cpus": 1.0,
+        "bounded": true
+      },
+      "redis-cache": {
+        "container": "crm-cskh-dr-4x4-vps-redis-cache-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      },
+      "redis-queue": {
+        "container": "crm-cskh-dr-4x4-vps-redis-queue-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      },
+      "scheduler": {
+        "container": "crm-cskh-dr-4x4-vps-scheduler-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      },
+      "websocket": {
+        "container": "crm-cskh-dr-4x4-vps-websocket-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      }
+    }
+  },
+  "networks": {
+    "pass": true,
+    "edge_net_present": true,
+    "app_net_internal_true": true,
+    "data_net_internal_true": true,
+    "zero_owner_network_overlap": true,
+    "inspected_networks": [
+      {
+        "name": "crm-cskh-dr-4x4-vps_app_net",
+        "driver": "bridge",
+        "internal": true,
+        "attached_containers": [
+          "crm-cskh-dr-4x4-vps-backend-1",
+          "crm-cskh-dr-4x4-vps-frontend-1",
+          "crm-cskh-dr-4x4-vps-websocket-1"
+        ]
+      },
+      {
+        "name": "crm-cskh-dr-4x4-vps_data_net",
+        "driver": "bridge",
+        "internal": true,
+        "attached_containers": [
+          "crm-cskh-dr-4x4-vps-backend-1",
+          "crm-cskh-dr-4x4-vps-db-1",
+          "crm-cskh-dr-4x4-vps-queue-long-1",
+          "crm-cskh-dr-4x4-vps-queue-short-1",
+          "crm-cskh-dr-4x4-vps-redis-cache-1",
+          "crm-cskh-dr-4x4-vps-redis-queue-1",
+          "crm-cskh-dr-4x4-vps-scheduler-1",
+          "crm-cskh-dr-4x4-vps-websocket-1"
+        ]
+      },
+      {
+        "name": "crm-cskh-dr-4x4-vps_edge_net",
+        "driver": "bridge",
+        "internal": false,
+        "attached_containers": [
+          "crm-cskh-dr-4x4-vps-frontend-1",
+          "crm-cskh-dr-4x4-vps-proxy-1",
+          "crm-cskh-dr-4x4-vps-websocket-1"
+        ]
+      }
+    ]
+  },
+  "ports": {
+    "pass": true,
+    "proxy_loopback_ports": [
+      18081,
+      18443
+    ],
+    "non_proxy_published_ports": [],
+    "wildcard_binds": [],
+    "by_service": {
+      "backend": [],
+      "db": [],
+      "frontend": [],
+      "proxy": [
+        {
+          "bind_ip": "127.0.0.1",
+          "published_port": 18081,
+          "target_port": 80,
+          "protocol": "tcp"
+        },
+        {
+          "bind_ip": "127.0.0.1",
+          "published_port": 18443,
+          "target_port": 443,
+          "protocol": "tcp"
+        }
+      ],
+      "queue-long": [],
+      "queue-short": [],
+      "redis-cache": [],
+      "redis-queue": [],
+      "scheduler": [],
+      "websocket": []
+    }
+  },
+  "volumes": {
+    "pass": true,
+    "project_scoped_volumes": [
+      "crm-cskh-dr-4x4-vps_cert_data",
+      "crm-cskh-dr-4x4-vps_db_data",
+      "crm-cskh-dr-4x4-vps_logs",
+      "crm-cskh-dr-4x4-vps_redis_queue_data",
+      "crm-cskh-dr-4x4-vps_sites"
+    ]
+  },
+  "secrets": {
+    "pass": true,
+    "host_secret_file_metadata": {
+      "exists": true,
+      "ends_with_lf_only": true,
+      "contains_cr": false,
+      "non_empty": true,
+      "mode_octal": "0o600",
+      "mode_ok": true,
+      "byte_length": 33
+    },
+    "db_secret_mounted_at_run_secrets_db_password": true,
+    "db_has_plaintext_root_password_env": false
+  }
+}

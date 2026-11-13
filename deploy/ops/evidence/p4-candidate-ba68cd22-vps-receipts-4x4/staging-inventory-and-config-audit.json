@@ -1,0 +1,311 @@
+{
+  "schema_version": "cskh-p4-staging-inventory-config-audit-v1",
+  "timestamp_utc": "2026-11-12T14:08:00Z",
+  "status": "PASS",
+  "governance_scope": {
+    "verification_scope": "staging_candidate_isolated_verification",
+    "candidate_verification_only": true,
+    "promoted_to_production": false,
+    "g04_status": "FAIL",
+    "production_candidate_status": "BLOCKED",
+    "release_manifest_environment_scope": "staging_candidate_verified_production_blocked",
+    "active_cve_exceptions_count": 0,
+    "rehearsal_key_allowed_for_production": false,
+    "rehearsal_key_used_for_production_approval": false,
+    "checked_promotion_public_key_fingerprint": null,
+    "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "digest_update_policy": "update_isolated_staging_and_regenerate_all_receipts_on_t1b_digest_change"
+  },
+  "host_identity": {
+    "hostname": "vps-3928",
+    "platform": "Linux-6.8.0-31-generic-x86_64-with-glibc2.39",
+    "kernel_release": "6.8.0-31-generic"
+  },
+  "digest_provenance": {
+    "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "inspected_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "apps_tree_sha": "e3972e2fa0ef6275c6d272602819a39e29870077",
+    "crm_cskh_tree_sha": "b9ce3e2e12f5012df989d0a75ae83cccb77e9774",
+    "compose_git_tree_sha": "3c2c1633b1a39c71e99364551afef586ad460b6e",
+    "rendered_compose_config_sha256": "af0b1aa4d84e71d1c11c5100214d5ca8e1dd9ea344c4dd8b8eacde407273ff59"
+  },
+  "six_dimension_isolation_vs_live": {
+    "live_untouched": {
+      "project_name": "crm-cskh-vps-staging",
+      "site_name": "crm-staging.localhost",
+      "public_domain": "crm.hrpartner.vn",
+      "ports": [
+        80,
+        443
+      ]
+    },
+    "isolated_staging": {
+      "project_name": "crm-cskh-dr-4x4-vps",
+      "site_name": "staging-dr-4x4.crm-internal.localhost",
+      "ingress_bind": "127.0.0.1:18081 / 127.0.0.1:18443",
+      "networks": [
+        "crm-cskh-dr-4x4-vps_app_net",
+        "crm-cskh-dr-4x4-vps_data_net",
+        "crm-cskh-dr-4x4-vps_edge_net"
+      ],
+      "volumes": [
+        "crm-cskh-dr-4x4-vps_cert_data",
+        "crm-cskh-dr-4x4-vps_db_data",
+        "crm-cskh-dr-4x4-vps_logs",
+        "crm-cskh-dr-4x4-vps_redis_queue_data",
+        "crm-cskh-dr-4x4-vps_sites"
+      ],
+      "secret_mounted_no_plaintext_env": true
+    },
+    "disjoint_verified": true
+  },
+  "resource_limits": {
+    "pass": true,
+    "expected_daemon_services": [
+      "backend",
+      "db",
+      "frontend",
+      "proxy",
+      "queue-long",
+      "queue-short",
+      "redis-cache",
+      "redis-queue",
+      "scheduler",
+      "websocket"
+    ],
+    "missing_daemon_services": [],
+    "unbounded_services": [],
+    "total_capped_ram_mib": 12032.0,
+    "total_capped_cpus": 10.0,
+    "by_service": {
+      "backend": {
+        "container": "crm-cskh-dr-4x4-vps-backend-1",
+        "mem_limit_bytes": 2147483648,
+        "mem_limit_mib": 2048.0,
+        "nano_cpus": 2000000000,
+        "cpus": 2.0,
+        "bounded": true
+      },
+      "db": {
+        "container": "crm-cskh-dr-4x4-vps-db-1",
+        "mem_limit_bytes": 4294967296,
+        "mem_limit_mib": 4096.0,
+        "nano_cpus": 2000000000,
+        "cpus": 2.0,
+        "bounded": true
+      },
+      "frontend": {
+        "container": "crm-cskh-dr-4x4-vps-frontend-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 1000000000,
+        "cpus": 1.0,
+        "bounded": true
+      },
+      "proxy": {
+        "container": "crm-cskh-dr-4x4-vps-proxy-1",
+        "mem_limit_bytes": 268435456,
+        "mem_limit_mib": 256.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      },
+      "queue-long": {
+        "container": "crm-cskh-dr-4x4-vps-queue-long-1",
+        "mem_limit_bytes": 2147483648,
+        "mem_limit_mib": 2048.0,
+        "nano_cpus": 1500000000,
+        "cpus": 1.5,
+        "bounded": true
+      },
+      "queue-short": {
+        "container": "crm-cskh-dr-4x4-vps-queue-short-1",
+        "mem_limit_bytes": 1073741824,
+        "mem_limit_mib": 1024.0,
+        "nano_cpus": 1000000000,
+        "cpus": 1.0,
+        "bounded": true
+      },
+      "redis-cache": {
+        "container": "crm-cskh-dr-4x4-vps-redis-cache-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      },
+      "redis-queue": {
+        "container": "crm-cskh-dr-4x4-vps-redis-queue-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      },
+      "scheduler": {
+        "container": "crm-cskh-dr-4x4-vps-scheduler-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      },
+      "websocket": {
+        "container": "crm-cskh-dr-4x4-vps-websocket-1",
+        "mem_limit_bytes": 536870912,
+        "mem_limit_mib": 512.0,
+        "nano_cpus": 500000000,
+        "cpus": 0.5,
+        "bounded": true
+      }
+    }
+  },
+  "safe_staging_allocation": {
+    "status": "SAFE_FOR_G03_G05_AND_G18",
+    "load_per_cpu_1m": 0.113,
+    "g03_g05_smoke_safe": true,
+    "g18_acceptance_safe": true,
+    "recommended_g03_g05_profile": "s1_canonical_4x4",
+    "recommended_g18_profile": "s1_canonical_4x4",
+    "recommended_config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+    "recommended_compose_env_overrides": {
+      "PROXY_CPUS": "0.5",
+      "PROXY_MEM_LIMIT": "256m",
+      "FRONTEND_CPUS": "1.0",
+      "FRONTEND_MEM_LIMIT": "512m",
+      "BACKEND_CPUS": "2.0",
+      "BACKEND_MEM_LIMIT": "2048m",
+      "GUNICORN_WORKERS": "4",
+      "GUNICORN_THREADS": "4",
+      "GUNICORN_TIMEOUT": "120",
+      "WEBSOCKET_CPUS": "0.5",
+      "WEBSOCKET_MEM_LIMIT": "512m",
+      "QUEUE_SHORT_CPUS": "1.0",
+      "QUEUE_SHORT_MEM_LIMIT": "1024m",
+      "QUEUE_LONG_CPUS": "1.5",
+      "QUEUE_LONG_MEM_LIMIT": "2048m",
+      "SCHEDULER_CPUS": "0.5",
+      "SCHEDULER_MEM_LIMIT": "512m",
+      "DB_CPUS": "2.0",
+      "DB_MEM_LIMIT": "4096m",
+      "REDIS_CACHE_CPUS": "0.5",
+      "REDIS_CACHE_MEM_LIMIT": "512m",
+      "REDIS_CACHE_MAXMEMORY": "256mb",
+      "REDIS_QUEUE_CPUS": "0.5",
+      "REDIS_QUEUE_MEM_LIMIT": "512m"
+    },
+    "safe_profiles_allowed": [
+      "s1_canonical_4x4",
+      "staging_vps_capped",
+      "staging_dr_smoke_only"
+    ],
+    "profile_evaluations": {
+      "s1_canonical_4x4": {
+        "safe_to_allocate": true,
+        "g03_g05_smoke_capable": true,
+        "g18_s1_benchmark_capable": true,
+        "config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+        "backend_cpus": 2.0,
+        "backend_mem_mib": 2048.0,
+        "gunicorn_workers": 4,
+        "gunicorn_threads": 4,
+        "db_cpus": 2.0,
+        "db_mem_mib": 4096.0,
+        "total_capped_cpus": 10.0,
+        "total_capped_ram_mib": 12032.0,
+        "disqualification_reasons": []
+      },
+      "staging_vps_capped": {
+        "safe_to_allocate": true,
+        "g03_g05_smoke_capable": true,
+        "g18_s1_benchmark_capable": true,
+        "config_spec_sha256": "40254538242109f0304bf7f752e10cb68dbd0add5ba649e88505af10ab202254",
+        "backend_cpus": 1.5,
+        "backend_mem_mib": 1536.0,
+        "gunicorn_workers": 2,
+        "gunicorn_threads": 4,
+        "db_cpus": 1.5,
+        "db_mem_mib": 2048.0,
+        "total_capped_cpus": 7.0,
+        "total_capped_ram_mib": 7936.0,
+        "disqualification_reasons": []
+      },
+      "staging_dr_smoke_only": {
+        "safe_to_allocate": true,
+        "g03_g05_smoke_capable": true,
+        "g18_s1_benchmark_capable": false,
+        "config_spec_sha256": "0069e828c64a8e025e0c88b4fd67c308a485d03d140e153e133f7213c02e6b58",
+        "backend_cpus": 1.0,
+        "backend_mem_mib": 1280.0,
+        "gunicorn_workers": 2,
+        "gunicorn_threads": 2,
+        "db_cpus": 1.0,
+        "db_mem_mib": 1536.0,
+        "total_capped_cpus": 6.0,
+        "total_capped_ram_mib": 5696.0,
+        "disqualification_reasons": []
+      }
+    }
+  },
+  "headroom_timeline": {
+    "before_isolated_staging": {
+      "cpu_cores": 6,
+      "mem_total_mib": 11960.71,
+      "mem_available_mib": 10243.78,
+      "required_avail_ram_mib": 1536.0,
+      "ram_headroom_surplus_mib": 8707.78,
+      "swap_total_mib": 1923.0,
+      "swap_free_mib": 1921.45,
+      "loadavg_1m": 0.68,
+      "loadavg_5m": 1.01,
+      "loadavg_15m": 2.44,
+      "disk_check_path": "/",
+      "disk_total_gib": 76.9,
+      "disk_free_gib": 49.78,
+      "required_free_disk_gib": 12.0,
+      "disk_headroom_surplus_gib": 37.78
+    },
+    "during_isolated_staging": {
+      "timestamp_utc": "2026-11-12T14:08:00Z",
+      "mem_available_mib": 9586.38,
+      "swap_free_mib": 1921.45,
+      "disk_free_gib": 49.51,
+      "loadavg_1m": 2.0,
+      "loadavg_5m": 1.69,
+      "loadavg_15m": 2.28,
+      "live_zero_mutation_while_isolated_staging_running": true
+    },
+    "after_isolated_staging": {
+      "mem_available_mib": 9585.43,
+      "swap_free_mib": 1921.45,
+      "disk_free_gib": 49.51,
+      "loadavg_1m": 2.0,
+      "loadavg_5m": 1.69,
+      "loadavg_15m": 2.28
+    }
+  },
+  "zero_live_mutation_during_and_after": true,
+  "staging_resource_configuration": {
+    "profile_id": "s1_canonical_4x4",
+    "config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+    "g18_s1_benchmark_capable": true,
+    "backend_cpus": 2.0,
+    "backend_mem_mib": 2048.0,
+    "gunicorn_workers": 4,
+    "gunicorn_threads": 4,
+    "db_cpus": 2.0,
+    "db_mem_mib": 4096.0,
+    "total_capped_cpus": 10.0,
+    "total_capped_ram_mib": 12032.0
+  },
+  "t1c_candidate_confirmation": {
+    "confirmed": true,
+    "confirmed_by": "T1C-Independent-Acceptance-Lead",
+    "confirmed_at": "2026-11-12T12:15:48+07:00",
+    "candidate_commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+    "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "verification_scope": "staging_candidate_isolated_verification",
+    "g04_status": "FAIL",
+    "production_candidate_status": "BLOCKED"
+  }
+}

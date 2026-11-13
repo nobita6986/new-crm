@@ -1,0 +1,127 @@
+{
+  "timestamp_utc": "2026-11-12T14:07:52Z",
+  "mode": "dr-https",
+  "site_name": "staging-dr-4x4.crm-internal.localhost",
+  "connect_host": "127.0.0.1",
+  "http_port": 18081,
+  "https_port": 18443,
+  "frappe_site_name": "staging-dr-4x4.crm-internal.localhost",
+  "extra_compose_files": [],
+  "app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "checks": {
+    "container_digest_parity": {
+      "expected_app_image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "expected_sha256": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "missing_services": [],
+      "inspected_services": {
+        "backend": {
+          "container": "crm-cskh-dr-4x4-vps-backend-1",
+          "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+          "repo_digests": [
+            "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+          ],
+          "matched": true
+        },
+        "frontend": {
+          "container": "crm-cskh-dr-4x4-vps-frontend-1",
+          "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+          "repo_digests": [
+            "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+          ],
+          "matched": true
+        },
+        "websocket": {
+          "container": "crm-cskh-dr-4x4-vps-websocket-1",
+          "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+          "repo_digests": [
+            "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+          ],
+          "matched": true
+        },
+        "queue-short": {
+          "container": "crm-cskh-dr-4x4-vps-queue-short-1",
+          "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+          "repo_digests": [
+            "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+          ],
+          "matched": true
+        },
+        "queue-long": {
+          "container": "crm-cskh-dr-4x4-vps-queue-long-1",
+          "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+          "repo_digests": [
+            "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+          ],
+          "matched": true
+        },
+        "scheduler": {
+          "container": "crm-cskh-dr-4x4-vps-scheduler-1",
+          "running_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+          "repo_digests": [
+            "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+          ],
+          "matched": true
+        }
+      },
+      "mismatches": [],
+      "pass": true
+    },
+    "http_to_https_redirect": {
+      "status_code": 301,
+      "location": "https://staging-dr-4x4.crm-internal.localhost:18443/login",
+      "location_starts_with_https": true,
+      "pass": true
+    },
+    "tls_certificate": {
+      "hostname": "staging-dr-4x4.crm-internal.localhost",
+      "connect_host": "127.0.0.1",
+      "port": 18443,
+      "tls_version": "TLSv1.3",
+      "cipher": "TLS_AES_128_GCM_SHA256",
+      "not_after_utc": "2026-12-12T14:01:41Z",
+      "days_remaining": 29,
+      "expiry_ok": true
+    },
+    "login_and_sid_cookie": {
+      "http_status": 200,
+      "sid_attributes": {
+        "found": true,
+        "redacted_value": "<REDACTED_FRAPPE_SID>",
+        "secure": true,
+        "httponly": true,
+        "samesite": "Lax",
+        "path": "/",
+        "cookie_names_seen": [
+          "sid",
+          "system_user",
+          "full_name",
+          "user_id",
+          "user_image"
+        ]
+      },
+      "policy_errors": [],
+      "pass": true
+    },
+    "vi_ui_and_csrf": {
+      "dashboard_http_status": 200,
+      "contains_vi_heading": true,
+      "csrf_token_extracted": true,
+      "x_frappe_csrf_token": "<REDACTED_CSRF>",
+      "forged_csrf_http_status": 400,
+      "valid_csrf_http_status": 200,
+      "health_ping_ok": true,
+      "pass": true,
+      "dashboard_attempts": 1
+    },
+    "wss_websocket": {
+      "status_line": "HTTP/1.1 101 Switching Protocols",
+      "switched_protocols_101": true,
+      "sec_websocket_accept_valid": true,
+      "initial_frame_opcode": 1,
+      "engineio_open_packet_received": true,
+      "initial_frame_redacted": "0{\"sid\":\"<REDACTED_SOCKET_SID>\",\"upgrades\":[],\"pingInterval\":25000,\"pingTimeout\":20000,\"maxPayload\":1000000}",
+      "pass": true
+    }
+  },
+  "status": "PASS"
+}
