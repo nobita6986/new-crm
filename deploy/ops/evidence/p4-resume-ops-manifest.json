@@ -718,8 +718,8 @@
     },
     {
       "path": ".github/workflows/p4-ops-dr-rehearsal.yml",
-      "bytes": 29150,
-      "sha256": "0b7dedf858d28833542940f2aaa7e1a854dc9d4a31ade1ef707ed44361eac456"
+      "bytes": 29768,
+      "sha256": "6f6841484d9be09ca815a792208c962bac84ce910d2ad58f9a6e89955d2d0641"
     },
     {
       "path": "deploy/compose/env/alerting.env.example",
@@ -1359,5 +1359,29 @@
   ],
   "merged_t1b_release_hardening_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
   "merged_t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
-  "integrated_candidate_manifest_path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json"
+  "integrated_candidate_manifest_path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json",
+  "p4_ops_workflow_latest_on_handoff_branch": {
+    "ci_run_id": 43428982449,
+    "head_sha": "b4df15b621372f785d878cb31d39c63ae3dccaa2",
+    "status": "FAIL",
+    "failed_step": "Validate all 4 Compose stacks & run native Linux POSIX ops tests (real TCPServer webhook)",
+    "compose_validation": "PASS",
+    "pr_isolation_audit": "PASS",
+    "test_offsite_restore": {
+      "ran": 14,
+      "status": "FAIL",
+      "cause": "CI run 43428982449 found the workflow deliverable still pinned to its previous size (29150 bytes); this entry is refreshed to the current workflow bytes/hash for the rerun."
+    },
+    "test_ops_toolkit_posix": {
+      "ran": 25,
+      "status": "PASS"
+    },
+    "test_smoke_runner_safety": {
+      "ran": 11,
+      "status": "PASS"
+    },
+    "current_fixes_ci_verified": false,
+    "staging_dr_jobs": "SKIPPED_AFTER_STATIC_GATE_FAILURE",
+    "followup": "Rerun the isolated workflow after committing the refreshed workflow deliverable bytes/SHA-256; do not treat Ops CI as green until the static gate and both staging jobs pass."
+  }
 }
