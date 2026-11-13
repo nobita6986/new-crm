@@ -1,0 +1,12 @@
+{
+  "schema_version": "cskh-p4-g18-run4-preflight-v1",
+  "timestamp_utc": "2026-11-13T02:26:36Z",
+  "loadavg": "1.27 2.05 2.72 1/657 824150",
+  "free_mem_mb": 4200,
+  "bench_runner_sha256": "55ddcedba85bda3818578ef5c54d294b4aa021871f800ad898807edf1188da24",
+  "bench_runner_commit": "b998a96acc08828bab838c29f1718bfe7a9f13bb",
+  "bench_runner_fix": "persist valid S1 benchmark JSON and raw telemetry on FAIL while keeping exit code 1",
+  "live_stack_containers": "10 healthy (crm-cskh-vps-staging-*)",
+  "other_bench_stacks": "NONE",
+  "verdict": "READY_FOR_RUN4"
+}

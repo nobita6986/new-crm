@@ -1,0 +1,61 @@
+{
+  "schema_version": "p4-g18-live-preservation-v1",
+  "timestamp_utc": "2026-11-13T03:24:43.317293+00:00",
+  "audit_target": "crm-cskh-vps-staging",
+  "zero_live_mutation_verified": true,
+  "total_containers_expected": 10,
+  "total_containers_active": 10,
+  "all_healthy": true,
+  "containers": [
+    {
+      "name": "crm-cskh-vps-staging-frontend-1",
+      "status": "Up 5 days (healthy)",
+      "ports": ""
+    },
+    {
+      "name": "crm-cskh-vps-staging-queue-long-1",
+      "status": "Up 5 days (healthy)",
+      "ports": ""
+    },
+    {
+      "name": "crm-cskh-vps-staging-scheduler-1",
+      "status": "Up 5 days (healthy)",
+      "ports": ""
+    },
+    {
+      "name": "crm-cskh-vps-staging-websocket-1",
+      "status": "Up 5 days (healthy)",
+      "ports": ""
+    },
+    {
+      "name": "crm-cskh-vps-staging-queue-short-1",
+      "status": "Up 5 days (healthy)",
+      "ports": ""
+    },
+    {
+      "name": "crm-cskh-vps-staging-backend-1",
+      "status": "Up 5 days (healthy)",
+      "ports": ""
+    },
+    {
+      "name": "crm-cskh-vps-staging-proxy-1",
+      "status": "Up 6 days (healthy)",
+      "ports": "0.0.0.0:443->443/tcp, 127.0.0.1:18080->80/tcp, 0.0.0.0:80->8081/tcp"
+    },
+    {
+      "name": "crm-cskh-vps-staging-redis-queue-1",
+      "status": "Up 6 days (healthy)",
+      "ports": "6379/tcp"
+    },
+    {
+      "name": "crm-cskh-vps-staging-redis-cache-1",
+      "status": "Up 6 days (healthy)",
+      "ports": "6379/tcp"
+    },
+    {
+      "name": "crm-cskh-vps-staging-db-1",
+      "status": "Up 6 days (healthy)",
+      "ports": "3306/tcp"
+    }
+  ]
+}

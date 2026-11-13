@@ -10,7 +10,51 @@
   "ancestor_review_base_sha": "31e51fcac7a640fdab10517f47f02335d7b1f749",
   "verified_code_commit_sha": "33ed7a218a24cf01ab6102078d874a40ebb18deb",
   "vps_execution_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
-  "overall_p4_status": "G18_FAIL_EXECUTE_DISTRIBUTION_TIMEOUT_3RUNS_CONFIRMED_RUN4_IN_PROGRESS",
+  "overall_p4_status": "G18_FAIL_EXECUTE_DISTRIBUTION_TIMEOUT_4RUNS_CONFIRMED_VALID_JSON",
+  "vps_candidate_staging_run4": {
+    "run_id": "run4-b998a96-s1_canonical_4x4",
+    "executed_at_utc": "2026-11-13T02:31:00Z",
+    "completed_at_utc": "2026-11-13T03:19:00Z",
+    "runner_commit": "b998a96acc08828bab838c29f1718bfe7a9f13bb",
+    "runner_sha256": "55ddcedba85bda3818578ef5c54d294b4aa021871f800ad898807edf1188da24",
+    "integrated_canonical_sha256": "55ddcedba85bda3818578ef5c54d294b4aa021871f800ad898807edf1188da24",
+    "profile": "s1_canonical_4x4",
+    "image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "verdict": "FAIL",
+    "passed_checks_count": 10,
+    "failed_checks_count": 1,
+    "failed_checks": [
+      "execute_weighted_distribution_10000_items"
+    ],
+    "benchmark_report_validity": "VALID_JSON_EMITTED_DIRECTLY_BY_b998a96_RUNNER",
+    "evidence_files": [
+      {
+        "path": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run4/g18-benchmark-report-run4.json",
+        "bytes": 283613,
+        "sha256": "ac7ec58c3391be3899cc3decb31e8d594c840615aa63ecab350ccb729a595ffc"
+      },
+      {
+        "path": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run4/g18-reconcile-report-run4.json",
+        "bytes": 5557,
+        "sha256": "f3e8bfd3fea3da1820208ab6304b0afc1182d15b6ea5197c04c7717d09011e09"
+      },
+      {
+        "path": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run4/g18-live-preservation-before-after-run4.json",
+        "bytes": 1586,
+        "sha256": "b75c4748f6a9a7394e365f3a2aa1591d78d3120a3e9b8c16a76300b3b3f77051"
+      },
+      {
+        "path": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run4/g18-run4-benchmark.log",
+        "bytes": 691,
+        "sha256": "a93a00a75042667be4544699d370657cff3a86ca06316be07fdd861b73365dc3"
+      },
+      {
+        "path": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run4/readonly-vps-preflight-run4.json",
+        "bytes": 565,
+        "sha256": "2d5a185ae335d6ffaf5de32f30482234c097d5c9e5852b3fe4d98c121883181f"
+      }
+    ]
+  },
   "security_incident": {
     "incident_id": "SEC-20261113-001",
     "type": "credential_exposed_in_git_history",
@@ -1130,7 +1174,7 @@
       "sha256": "4cf7156eaeb76f45778b4aea8f2b69771337657cbedcaf4e87947336ce1d8b78"
     }
   ],
-  "manifest_revision": "v13-g18-run3-official-s1canonical4x4-20261113",
+  "manifest_revision": "v14-sec-credential-remediation-run4-b998a96-20261113",
   "merged_t1b_release_hardening_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
   "merged_t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
   "integrated_candidate_manifest_path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json"

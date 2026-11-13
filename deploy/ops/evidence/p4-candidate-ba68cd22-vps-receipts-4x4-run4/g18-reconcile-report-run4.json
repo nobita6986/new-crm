@@ -1,0 +1,144 @@
+{
+  "schema_version": "p4-g18-reconcile-report-v1",
+  "run_id": "run4-b998a96-s1_canonical_4x4",
+  "generated_at_utc": "2026-11-13T03:24:34.544308+00:00",
+  "runner_execution": {
+    "runner_commit": "b998a96acc08828bab838c29f1718bfe7a9f13bb",
+    "runner_sha256": "55ddcedba85bda3818578ef5c54d294b4aa021871f800ad898807edf1188da24",
+    "runner_path": "/opt/crm-cskh-ops-releases/af00a20/deploy/release/benchmark_p4_b998a96.py",
+    "canonical_path": "/opt/crm-cskh-ops-releases/af00a20/deploy/release/benchmark_p4_s1_canonical.py",
+    "exit_code": 1,
+    "json_persisted_on_fail": true,
+    "fail_path_verified_end_to_end": true
+  },
+  "candidate": {
+    "image": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "profile": "s1_canonical_4x4",
+    "config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+    "owner_approval_commit": "44a2e53"
+  },
+  "acceptance_verdict": {
+    "all_passed": false,
+    "total_checks": 11,
+    "passed_count": 10,
+    "failed_count": 1,
+    "failed_checks": [
+      "execute_weighted_distribution_10000_items"
+    ],
+    "items": {
+      "staff_my_customers_p95_le_1500ms": {
+        "target_p95_ms": 1500.0,
+        "measured_http_p95_ms": 350.924,
+        "error_rate_pct": 0.0,
+        "passed": true
+      },
+      "open_lead_and_history_p95_le_2000ms": {
+        "target_p95_ms": 2000.0,
+        "measured_http_p95_ms": 961.102,
+        "error_rate_pct": 0.0,
+        "passed": true
+      },
+      "record_attempt_and_callback_p95_le_2000ms_zero_dup": {
+        "target_p95_ms": 2000.0,
+        "measured_http_p95_ms": 1484.721,
+        "duplicate_idempotency_keys": 0,
+        "attempts_created": 80,
+        "work_items_with_open_callback_task": 80,
+        "http_idempotent_replays_verified": 10,
+        "passed": true
+      },
+      "bod_overview_snapshot_p95_le_3000ms": {
+        "target_p95_ms": 3000.0,
+        "measured_http_p95_ms": 465.467,
+        "explain_index_key": "idx_cskh_kpisnap_lookup",
+        "passed": true
+      },
+      "kpi_drilldown_paginated_p95_le_3000ms": {
+        "target_p95_ms": 3000.0,
+        "measured_daily_campaign_http_p95_ms": 392.21,
+        "measured_monthly_company_250k_http_p95_ms": 422.422,
+        "staff_unauthorized_company_http_status": 403,
+        "passed": true
+      },
+      "preview_weighted_distribution_10000_items": {
+        "reference_target_ms": 60000.0,
+        "eligible_count": 10000,
+        "measured_preview_ms": 2297.54,
+        "passed": true
+      },
+      "execute_weighted_distribution_10000_items": {
+        "created_work_items": 4500,
+        "duplicate_work_items": 0,
+        "execute_ms": 1200806.19,
+        "ownership_reconciled": true,
+        "abort_cancel_guard_verified": true,
+        "passed": false
+      },
+      "import_50000_csv_rows": {
+        "total_rows": 50000,
+        "created_rows": 10000,
+        "reused_rows": 5000,
+        "error_rows": 500,
+        "error_artifact_present": true,
+        "total_ms": 529762.12,
+        "preview_hwm_mib": 1727.93,
+        "passed": true
+      },
+      "recompute_kpi_non_blocking_atomic_publish": {
+        "atomic_publish_verified": true,
+        "concurrent_ui_p95_ms": 26.055,
+        "passed": true
+      },
+      "concurrent_20_40_80_mixed_user_sessions": {
+        "sessions_20_p95_ms": 1528.021,
+        "sessions_20_error_rate_pct": 0.0,
+        "sessions_40_p95_ms": 2189.177,
+        "sessions_40_error_rate_pct": 0.0,
+        "sessions_80_p95_ms": 4565.074,
+        "sessions_80_error_rate_pct": 0.0,
+        "passed": true
+      },
+      "telesale_worklist_ssr_zero_errors_c12_and_c40": {
+        "shared_new_session_c12_error_count": 0,
+        "shared_new_session_c12_timeout_count": 0,
+        "staff_40_sessions_c40_error_count": 0,
+        "staff_40_sessions_c40_timeout_count": 0,
+        "passed": true
+      }
+    }
+  },
+  "analysis": {
+    "execute_distribution_details": {
+      "created_work_items": 4500,
+      "target_items": 10000,
+      "elapsed_ms": 1200806.19,
+      "effective_throughput_items_per_min": 224.85,
+      "root_cause": "Hardcoded 1200s timeout in benchmark script vs single/capped queue worker capacity on 6 vCPU VPS host"
+    },
+    "run2_vs_run4_cross_check": {
+      "run2_b0aa57e_benchmark_report_validity": "NON_JSON_SYNTACTICALLY_INVALID_LEGACY_OPS",
+      "run4_benchmark_report_validity": "VALID_JSON_EMITTED_DIRECTLY_BY_b998a96_RUNNER",
+      "metrics_consistency": "10/11 passed in both runs, failing item identical"
+    }
+  },
+  "live_preservation": {
+    "zero_live_mutation": true,
+    "live_staging_healthy_containers_count": 10,
+    "containers": [
+      "crm-cskh-vps-staging-frontend-1 Up 5 days (healthy)",
+      "crm-cskh-vps-staging-queue-long-1 Up 5 days (healthy)",
+      "crm-cskh-vps-staging-scheduler-1 Up 5 days (healthy)",
+      "crm-cskh-vps-staging-websocket-1 Up 5 days (healthy)",
+      "crm-cskh-vps-staging-queue-short-1 Up 5 days (healthy)",
+      "crm-cskh-vps-staging-backend-1 Up 5 days (healthy)",
+      "crm-cskh-vps-staging-proxy-1 Up 6 days (healthy)",
+      "crm-cskh-vps-staging-redis-queue-1 Up 6 days (healthy)",
+      "crm-cskh-vps-staging-redis-cache-1 Up 6 days (healthy)",
+      "crm-cskh-vps-staging-db-1 Up 6 days (healthy)"
+    ]
+  },
+  "evidence_files": {
+    "g18_benchmark_report_run4_json_sha256": "ac7ec58c3391be3899cc3decb31e8d594c840615aa63ecab350ccb729a595ffc",
+    "readonly_vps_preflight_run4_json_sha256": "2d5a185ae335d6ffaf5de32f30482234c097d5c9e5852b3fe4d98c121883181f"
+  }
+}
