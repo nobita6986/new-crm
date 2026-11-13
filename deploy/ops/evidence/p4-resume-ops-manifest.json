@@ -1,8 +1,8 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
   "generated_at_utc": "2026-11-12T09:31:11Z",
-  "manifest_revision": "v17-ci-linux-eol-reconciliation-20261113",
-  "manifest_updated_at_utc": "2026-11-13T12:38:42Z",
+  "manifest_revision": "v18-g18-deadline-clarification-20261113",
+  "manifest_updated_at_utc": "2026-11-13T13:46:32Z",
   "branch": "codex/p4-resume-ops",
   "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
@@ -1229,8 +1229,8 @@
     },
     {
       "path": "docs/p4/P4-exit-report.md",
-      "bytes": 41615,
-      "sha256": "227ceb88ca05d6f3014dd6a9a8b5748a0748d653cca839709e717a7a5b68e08b"
+      "bytes": 42119,
+      "sha256": "0e115ad3197aa039cbaa5e40fa4b4ffab2902d06916f808d38919e0e17487bb1"
     },
     {
       "path": "docs/p4/api-contract.md",
