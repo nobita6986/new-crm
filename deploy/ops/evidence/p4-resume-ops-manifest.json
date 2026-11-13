@@ -1,8 +1,8 @@
 {
   "schema_version": "p4-resume-ops-manifest-v4",
   "generated_at_utc": "2026-11-12T09:31:11Z",
-  "manifest_revision": "v12-g18-benchmark-result-20261112",
-  "manifest_updated_at_utc": "2026-11-12T13:52:00Z",
+  "manifest_revision": "v13-g18-run3-official-s1canonical4x4-20261113",
+  "manifest_updated_at_utc": "2026-11-13T02:15:00Z",
   "branch": "codex/p4-resume-ops",
   "integrated_handoff_base_sha": "f9ecd1015df4bbf0a5c5bca42b172df58139f1ce",
   "base_main_sha": "467830195358b2431ac772486530ab935887a518",
@@ -10,7 +10,7 @@
   "ancestor_review_base_sha": "31e51fcac7a640fdab10517f47f02335d7b1f749",
   "verified_code_commit_sha": "33ed7a218a24cf01ab6102078d874a40ebb18deb",
   "vps_execution_ops_sha": "801be22b3be2c8199704c4da7442b0c2e0edf352",
-  "overall_p4_status": "G18_FAIL_AWAITING_OWNER_DECISION",
+  "overall_p4_status": "G18_FAIL_EXECUTE_DISTRIBUTION_TIMEOUT_3RUNS_CONFIRMED",
   "p4_promoted_to_pass": false,
   "gate_accounting": {
     "preserved_t1c_signed_gates_count": 17,
@@ -173,6 +173,72 @@
         }
       },
       "completed_at_utc": "2026-11-12T13:50:00Z"
+    },
+    "vps_candidate_staging_run2": {
+      "host": "103.77.208.186",
+      "executed_by": "T1A",
+      "ops_release": "af00a20",
+      "isolated_project": "crm-cskh-dr-4x4r2-vps",
+      "candidate_commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+      "candidate_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "profile_id": "s1_canonical_4x4",
+      "config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+      "g03_status": "PASS",
+      "g05_status": "PASS",
+      "g18_status": "FAIL",
+      "g18_verdict": "1_OF_11_SLO_CHECKS_FAILED",
+      "g18_failed_checks": ["execute_weighted_distribution_10000_items"],
+      "g18_passed_checks": 10,
+      "g18_measured_at_utc": "2026-11-13T01:00:00Z",
+      "g18_bench_project": "cskh-p4-bench-run2-s1canonical4x4",
+      "owner_approval_commit": "44a2e53",
+      "zero_live_mutation": true,
+      "evidence_dir": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4",
+      "completed_at_utc": "2026-11-13T01:17:00Z"
+    },
+    "vps_candidate_staging_run3": {
+      "host": "103.77.208.186",
+      "executed_by": "T1A",
+      "ops_release": "af00a20",
+      "isolated_project": "crm-cskh-dr-4x4r3-vps",
+      "isolated_project_teardown": "COMPLETE",
+      "candidate_commit_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+      "candidate_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+      "profile_id": "s1_canonical_4x4",
+      "config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+      "slo_spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+      "owner_approval_commit": "44a2e53",
+      "owner_approval_sha256": "e7c9654752edeca7dd18c5ec1169591831077e567f6030823557ce228a7a6e07",
+      "g03_status": "PASS",
+      "g05_status": "PASS",
+      "g18_status": "FAIL",
+      "g18_verdict": "1_OF_11_SLO_CHECKS_FAILED",
+      "g18_failed_checks": ["execute_weighted_distribution_10000_items"],
+      "g18_passed_checks": 10,
+      "g18_total_checks": 11,
+      "g18_fail_root_cause": "execute_ms=1201419ms exceeds hardcoded deadline 1200000ms at benchmark_p4_isolated.py line 2292; throughput ~192 items/min on VPS 6vCPU; 3600 items created at timeout vs 10000 required",
+      "g18_reproducibility": "CONFIRMED_3_RUNS: run1=4100items(profile:capped), run2=3600items(4x4), run3=3600items(4x4-official)",
+      "g18_invocation": "run-staging-vps-g18 official (manage_isolated_staging_dr.py --run-staging-vps-g18)",
+      "g18_invocation_exit": "CalledProcessError exit=1 (benchmark all_passed=false)",
+      "g18_live_preservation": "PASS",
+      "zero_live_mutation": true,
+      "evidence_dir": "deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run3",
+      "evidence_files": {
+        "candidate-registry-pull-inspect-receipt.json": {"sha256": "b5a2fd63e50e1ef097f024ce8f026549392c19875d0184ddcee2cfc20a2d36b0", "bytes": 2880},
+        "g18-benchmark-report.json": {"sha256": "ad50df085d7b3817b6b22f8d22e602fff87be3441f83519802a5faf123ca2815", "bytes": 4050},
+        "g18-live-preservation-before-after.json": {"sha256": "dc3d0c612422ad179d8fe6a28741a2f60e168a5cf00063ca043bfe32b5a4d2ad", "bytes": 12174},
+        "g18-pre-measurement-gate.json": {"sha256": "547f7cb83f8738436d8de4bbd6eaf6e97d840e97ae06441b93a0e93083eb7ea6", "bytes": 2191},
+        "g18-reconcile-report.json": {"sha256": "748982c28df61a928748c20f661d4190decc48113d9ad3e98c8e313883e022c8", "bytes": 3720},
+        "g18-run3-run-staging-vps-g18-log.txt": {"sha256": "c4145913eb09946e396281286afcef225d4e31c3a5c2cb2224c8b918dcca175a", "bytes": 2633},
+        "https-wss-smoke-receipt.json": {"sha256": "6a6a1786360b5ea1f025b2156db730ef7a3f16de9475a6285f4ae55d0724e4b2", "bytes": 4870},
+        "live-preservation-before-after.json": {"sha256": "f95dae7b2cc1f94afcd48dd87a51856b8b334bdc4f3078da9f6ff6d03e4424e0", "bytes": 12174},
+        "readonly-vps-preflight.json": {"sha256": "111d7eef18fec3e41e4883d6e161d59b205f7cb6395b252fb318a5afd82ce8ee", "bytes": 10164},
+        "staging-dr-runtime-isolation-audit.json": {"sha256": "75b06e178d6d3e3a09eb62c2ef8c30d89ba4ac09e8cedca686927460a94e9d1c", "bytes": 9427},
+        "staging-inventory-and-config-audit.json": {"sha256": "e3a6e466c75c9984c181c0738dfa02aa55daa06e3956e2d3fe69863ba172bdcd", "bytes": 10442},
+        "t1c-candidate-confirmation-receipt.json": {"sha256": "d8dc0aeb3e82773ab023a13fc7c0dbe5872da839fe41c0ee65f5b4be974ed7df", "bytes": 454},
+        "vps-g03-g05-summary.json": {"sha256": "0948ba866081c435a1fba6a283fcadd5770b2b6f0dd7d1f1dd9787a96e70ee43", "bytes": 3707}
+      },
+      "completed_at_utc": "2026-11-13T02:15:00Z"
     }
   },
   "live_vps": {
@@ -320,14 +386,24 @@
     {
       "id": "BLK-SSH-T1A",
       "scope": "SSH credential / agent access to target VPS 103.77.208.186 for T1A session (G03, G05, G18)",
-      "status": "OPEN_SSH_CREDENTIAL_REQUIRED",
-      "required_owner_inputs": [
-        "Secure SSH credential / ssh-agent key provisioning to 103.77.208.186 for session T1A (and confirmation of access) to execute: (1) read-only VPS sizing pre-check (readonly-vps-preflight -> s1_canonical_4x4 / staging_vps_capped / staging_dr_smoke_only / UNSAFE_INSUFFICIENT_LIVE_HEADROOM), (2) isolated Staging G03/G05 receipt collection on the new digest after T1C candidate confirmation (--require-t1c-confirmation), and (3) config-bound G18 acceptance measurement (prepare-staging-g18 -> run-staging-vps-g18) ONLY when scorer thresholds match the Owner-signed SLO for that exact safe Staging configuration"
-      ],
-      "summary": "BatchMode SSH check to root@103.77.208.186 exits 255 (Permission denied); ~/.ssh has no private keys and ssh-agent is Stopped/Disabled. Read-only VPS safe sizing, T1C candidate confirmation guard, and config-bound G18 pre-measurement + scoring gates are unit-tested and ready to run immediately upon SSH access without touching live https://crm.hrpartner.vn."
+      "status": "RESOLVED_SSH_GRANTED_G03_G05_G18_RUN3_COMPLETE",
+      "resolution": "Owner granted SSH access with Ed25519 key. T1A ran 3 G18 benchmark rounds on VPS. G03=PASS, G05=PASS, G18=FAIL (execute_distribution timeout, confirmed reproducible across 3 runs).",
+      "summary": "SSH access granted. G03/G05 collected. G18 official run3 (run-staging-vps-g18, s1_canonical_4x4) completed with CalledProcessError exit=1. Root cause: execute_weighted_distribution_10000_items hardcoded 1200s timeout at benchmark_p4_isolated.py line 2292."
     },
     {
-      "id": "UPSTREAM-DEBIAN13-3-UNFIXED-CVES",
+      "id": "BLK-G18-EXECUTE-DISTRIBUTION-TIMEOUT",
+      "scope": "G18 SLO check execute_weighted_distribution_10000_items FAIL — hardcoded 1200s timeout",
+      "status": "OPEN_OWNER_DECISION_REQUIRED",
+      "confirmed_runs": 3,
+      "confirmed_profile": "s1_canonical_4x4 (run2+run3), staging_vps_capped (run1)",
+      "root_cause": "benchmark_p4_isolated.py line 2292: d_deadline = time.perf_counter() + 1200.0 hardcoded; VPS throughput ~192 items/min; 10000 items requires ~52 min >> 20 min deadline",
+      "required_owner_inputs": [
+        "X1: Amend SLO spec (new commit to deploy/release/p4-s1-slo-spec.json) to extend execute_weighted_distribution timeout or reduce item count threshold, then rerun G18",
+        "X2: Accept 10/11 conditional pass with documented exception for this environment size",
+        "X3: Increase VPS QUEUE_LONG_CPUS beyond 1.5 and rerun (requires new config_spec + approval cycle)"
+      ],
+      "summary": "execute_weighted_distribution_10000_items FAIL confirmed reproducible across 3 runs. 10/11 all other SLO checks PASS. G04=FAIL and production=BLOCKED remain unchanged. Owner decision required to unblock G18."
+    },
       "scope": "Gate G04 / production_candidate promotion block due to 3 unfixed Debian 13 OS package CVEs (fixed_version: null)",
       "status": "OPEN_UPSTREAM_OR_OWNER_DECISION_REQUIRED",
       "required_owner_inputs": [
@@ -1013,7 +1089,7 @@
       "sha256": "4cf7156eaeb76f45778b4aea8f2b69771337657cbedcaf4e87947336ce1d8b78"
     }
   ],
-  "manifest_revision": "v11-g03-g05-vps-pass-g18-blocked-owner-slo-20261112",
+  "manifest_revision": "v13-g18-run3-official-s1canonical4x4-20261113",
   "merged_t1b_release_hardening_sha": "427af4834eda48a15ca86c15e88342c3c40d5f2f",
   "merged_t1b_batch2_delta_sha": "4ee1e0e95e24601eabfecc2e24578f2ab8548b17",
   "integrated_candidate_manifest_path": "deploy/ops/evidence/p4-integrated-candidate-manifest.json"

@@ -1,0 +1,37 @@
+=== run-staging-vps-g18 Official Log — Run 3 (s1_canonical_4x4) ===
+Timestamp: 2026-11-13T02:09:00Z (approx)
+Command: python3 /opt/crm-cskh-ops-releases/af00a20/deploy/ops/manage_isolated_staging_dr.py --run-staging-vps-g18 ...
+Log file on VPS: /tmp/bench-run3.log
+
+--- CalledProcessError Traceback (from /tmp/bench-run3.log) ---
+Traceback (most recent call last):
+  File /opt/crm-cskh-ops-releases/af00a20/deploy/ops/manage_isolated_staging_dr.py, line 8739, in <module>
+    raise SystemExit(main())
+                     ^^^^^^
+  File /opt/crm-cskh-ops-releases/af00a20/deploy/ops/manage_isolated_staging_dr.py, line 8685, in main
+    res = run_staging_vps_g18_acceptance(
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File /opt/crm-cskh-ops-releases/af00a20/deploy/ops/manage_isolated_staging_dr.py, line 8325, in run_staging_vps_g18_acceptance
+    run_sub(gate[planned_benchmark_command])
+  File /opt/crm-cskh-ops-releases/af00a20/deploy/ops/manage_isolated_staging_dr.py, line 201, in run_sub
+    return subprocess.run(cmd, env=env, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File /usr/lib/python3.12/subprocess.py, line 571, in run
+    raise CalledProcessError(retcode, process.args,
+subprocess.CalledProcessError: Command '['/usr/bin/python3', '/opt/crm-cskh-ops-releases/af00a20/deploy/release/benchmark_p4_isolated.py', '--provision-and-run-s1', '--confirm-isolated-target', '--resource-profile', 's1_canonical_4x4', '--require-live-headroom', '--pull-policy', 'never', '--port', '18880', '--app-image', 'ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8', '--out', '/opt/crm-cskh-ops-releases/af00a20/deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run3/g18-benchmark-report.json']' returned non-zero exit status 1.
+
+--- Analysis ---
+Root cause: run_sub() at line 201 calls subprocess.run with check=True (implicit).
+When benchmark_p4_isolated.py exits with code 1 (all_passed=false),
+CalledProcessError is raised BEFORE run-staging-vps-g18 can write report files.
+Benchmark stdout/stderr were captured in memory and lost on exception.
+
+Evidence recovery: RuntimeError payload retrieved from /tmp/bench-4x4.log (run2, same profile s1_canonical_4x4)
+confirming 10/11 PASS, execute_weighted_distribution FAIL at 3600/10000 items in 1201419ms.
+
+--- Benchmark Exit 1 Reason ---
+RuntimeError: P4.md §9.2 benchmark acceptance check failed: all_passed=false
+Failing check: execute_weighted_distribution_10000_items
+  created_work_items: 3600 (need 10000)
+  execute_ms: 1201419.27 (deadline 1200000ms hardcoded at benchmark_p4_isolated.py line 2292)
+

@@ -1,0 +1,52 @@
+{
+  "schema_version": "cskh-p4-candidate-registry-receipt-v1",
+  "timestamp_utc": "2026-11-13T01:19:19Z",
+  "status": "PASS",
+  "candidate_verification_only": true,
+  "promoted_to_production": false,
+  "owner_live_site_touched": false,
+  "governance_scope": {
+    "verification_scope": "staging_candidate_isolated_verification",
+    "candidate_verification_only": true,
+    "promoted_to_production": false,
+    "g04_status": "FAIL",
+    "production_candidate_status": "BLOCKED",
+    "release_manifest_environment_scope": "staging_candidate_verified_production_blocked",
+    "active_cve_exceptions_count": 0,
+    "rehearsal_key_allowed_for_production": false,
+    "rehearsal_key_used_for_production_approval": false,
+    "checked_promotion_public_key_fingerprint": null,
+    "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+    "digest_update_policy": "update_isolated_staging_and_regenerate_all_receipts_on_t1b_digest_change"
+  },
+  "integrated_head_sha": "4cb63416dd9cde1a5f0e2b2c166cffb1b4e4c0b4",
+  "locked_batch1_candidate_sha": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+  "apps_tree_sha": "e3972e2fa0ef6275c6d272602819a39e29870077",
+  "crm_cskh_tree_sha": "b9ce3e2e12f5012df989d0a75ae83cccb77e9774",
+  "compose_tree_sha": "3c2c1633b1a39c71e99364551afef586ad460b6e",
+  "requested_registry_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "pull_log_digest": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "inspected_image_id": "sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8",
+  "inspected_repo_digests": [
+    "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+  ],
+  "inspected_created": "2026-11-11T18:15:02.371627027Z",
+  "inspected_architecture": "amd64",
+  "inspected_os": "linux",
+  "inspected_size_bytes": 5235647739,
+  "inspected_user": "frappe",
+  "inspected_labels": {
+    "io.cskh.apps_tree_sha": "e3972e2fa0ef6275c6d272602819a39e29870077",
+    "io.cskh.baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
+    "io.cskh.crm_cskh_tree_sha": "b9ce3e2e12f5012df989d0a75ae83cccb77e9774",
+    "io.cskh.crm_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+    "io.cskh.crm_tag": "v1.87.0",
+    "io.cskh.frappe_docker_sha": "61d35da827ebc04d01b64c9e78385597ccebc9d8",
+    "io.cskh.frappe_sha": "53bae3ef2550ca96320f036f581446783cd11b72",
+    "io.cskh.frappe_tag": "v15.126.0",
+    "org.opencontainers.image.description": "CRM-CSKH immutable production image (Frappe + Frappe CRM + crm_cskh)",
+    "org.opencontainers.image.revision": "3c040c85a44c4ad37e9d9152b5630a4596e593ee",
+    "org.opencontainers.image.source": "https://github.com/nobita6986/new-crm",
+    "org.opencontainers.image.title": "crm-cskh"
+  }
+}

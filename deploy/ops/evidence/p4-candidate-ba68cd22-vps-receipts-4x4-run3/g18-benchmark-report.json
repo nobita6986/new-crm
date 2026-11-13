@@ -1,0 +1,103 @@
+{
+  schema_version: cskh-p4-g18-benchmark-report-v1,
+  timestamp_utc: 2026-11-13T02:09:31Z,
+  run_id: g18-run3-s1canonical4x4-official,
+  run_index: 3,
+  profile: s1_canonical_4x4,
+  config_spec_sha256: 683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe,
+  app_image_digest: ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8,
+  benchmark_invocation: {
+    command: /usr/bin/python3 /opt/crm-cskh-ops-releases/af00a20/deploy/release/benchmark_p4_isolated.py --provision-and-run-s1 --confirm-isolated-target --resource-profile s1_canonical_4x4 --require-live-headroom --pull-policy never --port 18880 --app-image ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8 --out /opt/crm-cskh-ops-releases/af00a20/deploy/ops/evidence/p4-candidate-ba68cd22-vps-receipts-4x4-run3/g18-benchmark-report.json,
+    invoked_via: run-staging-vps-g18 (manage_isolated_staging_dr.py line 8325 run_sub),
+    exit_status: 1,
+    exit_reason: RuntimeError: P4.md §9.2 benchmark acceptance check failed — all_passed=false,
+    log_artifact: /tmp/bench-run3.log,
+    log_note: run_sub() with check=True absorbed stdout/stderr; CalledProcessError propagated to manage_isolated_staging_dr.py
+  },
+  all_passed: false,
+  pass_count: 10,
+  fail_count: 1,
+  total_checks: 11,
+  items: {
+    staff_my_customers_p95_le_1500ms: {
+      target_p95_ms: 1500.0,
+      measured_http_p95_ms: 329.089,
+      error_rate_pct: 0.0,
+      passed: true
+    },
+    open_lead_and_history_p95_le_2000ms: {
+      target_p95_ms: 2000.0,
+      measured_http_p95_ms: 724.914,
+      error_rate_pct: 0.0,
+      passed: true
+    },
+    record_attempt_and_callback_p95_le_2000ms_zero_dup: {
+      target_p95_ms: 2000.0,
+      measured_http_p95_ms: 1611.817,
+      duplicate_idempotency_keys: 0,
+      attempts_created: 80,
+      work_items_with_open_callback_task: 80,
+      http_idempotent_replays_verified: 10,
+      passed: true
+    },
+    bod_overview_snapshot_p95_le_3000ms: {
+      target_p95_ms: 3000.0,
+      measured_http_p95_ms: 359.093,
+      explain_index_key: idx_cskh_kpisnap_lookup,
+      passed: true
+    },
+    kpi_drilldown_paginated_p95_le_3000ms: {
+      target_p95_ms: 3000.0,
+      measured_daily_campaign_http_p95_ms: 562.487,
+      measured_monthly_company_250k_http_p95_ms: 530.736,
+      staff_unauthorized_company_http_status: 403,
+      passed: true
+    },
+    preview_weighted_distribution_10000_items: {
+      reference_target_ms: 60000.0,
+      eligible_count: 10000,
+      measured_preview_ms: 3156.48,
+      passed: true
+    },
+    execute_weighted_distribution_10000_items: {
+      created_work_items: 3600,
+      duplicate_work_items: 0,
+      execute_ms: 1201419.27,
+      ownership_reconciled: true,
+      abort_cancel_guard_verified: true,
+      passed: false,
+      fail_reason: execute_ms (1201419ms=1201s) exceeds hardcoded deadline 1200s in benchmark_p4_isolated.py line 2292; throughput ~192 items/min on VPS 6vCPU; need ~52 min for 10000 items; 3600 items completed at timeout
+    },
+    import_50000_csv_rows: {
+      total_rows: 50000,
+      created_rows: 10000,
+      reused_rows: 5000,
+      error_rows: 500,
+      error_artifact_present: true,
+      total_ms: 866254.94,
+      preview_hwm_mib: 1728.16,
+      passed: true
+    },
+    recompute_kpi_non_blocking_atomic_publish: {
+      atomic_publish_verified: true,
+      concurrent_ui_p95_ms: 41.236,
+      passed: true
+    },
+    concurrent_20_40_80_mixed_user_sessions: {
+      sessions_20_p95_ms: 1220.703,
+      sessions_20_error_rate_pct: 0.0,
+      sessions_40_p95_ms: 1844.523,
+      sessions_40_error_rate_pct: 0.0,
+      sessions_80_p95_ms: 4133.499,
+      sessions_80_error_rate_pct: 0.0,
+      passed: true
+    },
+    telesale_worklist_ssr_zero_errors_c12_and_c40: {
+      shared_new_session_c12_error_count: 0,
+      shared_new_session_c12_timeout_count: 0,
+      staff_40_sessions_c40_error_count: 0,
+      staff_40_sessions_c40_timeout_count: 0,
+      passed: true
+    }
+  }
+}
