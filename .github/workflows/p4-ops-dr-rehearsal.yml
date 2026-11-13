@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  LOCKED_BATCH1_COMMIT_SHA: 'bcdc419f9f95ad75449315572928e3d8c43817cc'
-  LOCKED_CANDIDATE_IMAGE_DIGEST: 'ghcr.io/nobita6986/crm-cskh@sha256:693a3cdcc758dab64b3ac61d8e6f066581d94b362c9649d709684b72d7d0a2e6'
+  LOCKED_CANDIDATE_SOURCE_SHA: '3c040c85a44c4ad37e9d9152b5630a4596e593ee'
+  LOCKED_CANDIDATE_IMAGE_DIGEST: 'ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8'
   BASELINE_MAIN_COMMIT_SHA: '467830195358b2431ac772486530ab935887a518'
 
 jobs:
@@ -172,7 +172,11 @@ jobs:
           WORK_DIR="$RUNNER_TEMP/p4-src-sim"
           mkdir -p "$EVID" "$WORK_DIR"
 
-          test "$(git rev-parse HEAD:apps)" = "$(git rev-parse "${LOCKED_BATCH1_COMMIT_SHA}:apps")"
+          # The locked candidate source may live on a separate T1B branch, so
+          # fetch that exact commit before comparing its application tree.
+          git fetch --no-tags origin "${LOCKED_CANDIDATE_SOURCE_SHA}"
+          test "$(git rev-parse FETCH_HEAD)" = "${LOCKED_CANDIDATE_SOURCE_SHA}"
+          test "$(git rev-parse HEAD:apps)" = "$(git rev-parse "${LOCKED_CANDIDATE_SOURCE_SHA}:apps")"
           sh deploy/release/validate_digest_uri.sh "${LOCKED_CANDIDATE_IMAGE_DIGEST}"
           printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
             --username "${GITHUB_ACTOR_PULL}" \
@@ -518,7 +522,11 @@ jobs:
           N1_BUILD_DIR="$RUNNER_TEMP/p4-dr-n1-build"
           mkdir -p "$EVID" "$N1_BUILD_DIR"
 
-          test "$(git rev-parse HEAD:apps)" = "$(git rev-parse "${LOCKED_BATCH1_COMMIT_SHA}:apps")"
+          # The locked candidate source may live on a separate T1B branch, so
+          # fetch that exact commit before comparing its application tree.
+          git fetch --no-tags origin "${LOCKED_CANDIDATE_SOURCE_SHA}"
+          test "$(git rev-parse FETCH_HEAD)" = "${LOCKED_CANDIDATE_SOURCE_SHA}"
+          test "$(git rev-parse HEAD:apps)" = "$(git rev-parse "${LOCKED_CANDIDATE_SOURCE_SHA}:apps")"
           sh deploy/release/validate_digest_uri.sh "${LOCKED_CANDIDATE_IMAGE_DIGEST}"
 
           docker logout ghcr.io >/dev/null 2>&1 || true
@@ -536,7 +544,7 @@ jobs:
 
           INSPECT_RAW="$RUNNER_TEMP/ghcr-candidate-inspect.json"
           docker image inspect "${LOCKED_CANDIDATE_IMAGE_DIGEST}" > "$INSPECT_RAW"
-          python3 - "${LOCKED_CANDIDATE_IMAGE_DIGEST}" "${LOCKED_BATCH1_COMMIT_SHA}" "$PULL_LOG" "$INSPECT_RAW" "$EVID/candidate-registry-pull-inspect-receipt.json" "$ANON_PULL_OK" <<'PY'
+          python3 - "${LOCKED_CANDIDATE_IMAGE_DIGEST}" "${LOCKED_CANDIDATE_SOURCE_SHA}" "$PULL_LOG" "$INSPECT_RAW" "$EVID/candidate-registry-pull-inspect-receipt.json" "$ANON_PULL_OK" <<'PY'
           import datetime, json, re, subprocess, sys
           from pathlib import Path
 
