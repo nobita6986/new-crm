@@ -58,43 +58,76 @@ jobs:
       - name: Validate all 4 Compose stacks & run native Linux POSIX ops tests (real TCPServer webhook)
         shell: bash
         run: |
-          set -euo pipefail
+          set -uo pipefail
           EVID="$RUNNER_TEMP/p4-ops-static"
-          "$RUNNER_TEMP/p4-venv/bin/python" deploy/compose/scripts/validate_compose_config.py \
+          STATUS_FILE="$EVID/suite-exit-codes.tsv"
+          : > "$STATUS_FILE"
+
+          run_suite() {
+            local suite="$1"
+            shift
+            local rc=0
+            if "$@" > "$EVID/$suite.log" 2>&1; then
+              rc=0
+            else
+              rc=$?
+            fi
+            printf '%s\t%s\n' "$suite" "$rc" >> "$STATUS_FILE"
+            echo "suite=$suite exit_code=$rc"
+            if [[ "$rc" -ne 0 ]]; then
+              echo "::group::Failure output: $suite"
+              tail -n 100 "$EVID/$suite.log"
+              echo "::endgroup::"
+            fi
+          }
+
+          run_suite compose-validation \
+            "$RUNNER_TEMP/p4-venv/bin/python" deploy/compose/scripts/validate_compose_config.py \
             --json-out "$EVID/compose-validation-4-stacks.json"
-          "$RUNNER_TEMP/p4-venv/bin/python" deploy/ops/test_offsite_restore.py \
-            > "$EVID/test_offsite_restore.log" 2>&1
-          CSKH_FORCE_LOOPBACK_SERVER=1 "$RUNNER_TEMP/p4-venv/bin/python" deploy/ops/test_ops_toolkit.py -v \
-            > "$EVID/test_ops_toolkit_posix.log" 2>&1
-          "$RUNNER_TEMP/p4-venv/bin/python" deploy/compose/scripts/test_smoke_runner_safety.py -v \
-            > "$EVID/test_smoke_runner_safety.log" 2>&1
-          python3 - "$EVID" <<'PY'
-          import json, os, platform, sys
+          run_suite test-offsite-restore \
+            "$RUNNER_TEMP/p4-venv/bin/python" deploy/ops/test_offsite_restore.py
+          run_suite test-ops-toolkit-posix \
+            env CSKH_FORCE_LOOPBACK_SERVER=1 "$RUNNER_TEMP/p4-venv/bin/python" \
+            deploy/ops/test_ops_toolkit.py -v
+          run_suite test-smoke-runner-safety \
+            "$RUNNER_TEMP/p4-venv/bin/python" deploy/compose/scripts/test_smoke_runner_safety.py -v
+
+          python3 - "$EVID" "$STATUS_FILE" <<'PY'
+          import json, os, platform, re, sys
           from datetime import datetime, timezone
           from pathlib import Path
           evid = Path(sys.argv[1])
-          off_log = (evid / "test_offsite_restore.log").read_text(encoding="utf-8")
-          ops_log = (evid / "test_ops_toolkit_posix.log").read_text(encoding="utf-8")
-          smk_log = (evid / "test_smoke_runner_safety.log").read_text(encoding="utf-8")
-          assert "\nOK\n" in off_log or off_log.strip().endswith("OK"), off_log
-          assert "\nOK\n" in ops_log or ops_log.strip().endswith("OK"), ops_log
-          assert "OK" in smk_log, smk_log
+          statuses = {}
+          for line in Path(sys.argv[2]).read_text(encoding="utf-8").splitlines():
+              suite, exit_code = line.split("\t", 1)
+              statuses[suite] = int(exit_code)
+          suites = {}
+          for suite, exit_code in statuses.items():
+              log_path = evid / f"{suite}.log"
+              log = log_path.read_text(encoding="utf-8", errors="replace") if log_path.exists() else ""
+              match = re.search(r"Ran (\d+) tests?", log)
+              suites[suite] = {
+                  "exit_code": exit_code,
+                  "status": "PASS" if exit_code == 0 else "FAIL",
+                  "tests_run": int(match.group(1)) if match else None,
+                  "log": log_path.name,
+              }
+          failed = [name for name, result in suites.items() if result["exit_code"] != 0]
           summary = {
               "timestamp_utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
               "runner_os": os.name,
               "platform": platform.platform(),
               "python_version": platform.python_version(),
               "loopback_tcpserver_forced": True,
-              "suites": {
-                  "test_offsite_restore.py": "PASS",
-                  "test_ops_toolkit.py": "PASS",
-                  "test_smoke_runner_safety.py": "PASS",
-              },
-              "status": "PASS",
+              "suites": suites,
+              "failed_suites": failed,
+              "status": "FAIL" if failed else "PASS",
           }
           (evid / "posix-ops-unit-tests.json").write_text(
               json.dumps(summary, indent=2) + "\n", encoding="utf-8"
           )
+          print(json.dumps(summary, indent=2))
+          raise SystemExit(1 if failed else 0)
           PY
 
       - name: Upload static & POSIX unit evidence
@@ -102,7 +135,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: p4-ops-static-evidence
-          path: ${{ runner.temp }}/p4-ops-static/*.json
+          path: |
+            ${{ runner.temp }}/p4-ops-static/*.json
+            ${{ runner.temp }}/p4-ops-static/*.log
           retention-days: 14
 
   g07-g08-backup-and-restore-drill:
