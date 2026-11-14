@@ -767,6 +767,44 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				self.assertTrue(dirty_res["freshness"]["dirty_pending"])
 				self.assertEqual(dirty_res["pagination"]["total"], 565)
 
+			# A real source mutation must bypass the stale published total while preserving exact fast/reference parity.
+			frappe.set_user("Administrator")
+			frappe.db.sql(
+				"update `tabCSKH Contact Attempt` set contact_attempt_snapshot = 0 where name = %s",
+				("CA-G18-DEEP-0000",),
+			)
+			frappe.db.commit()
+			prev_suppress = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+			frappe.flags.cskh_suppress_dirty_enqueue = True
+			try:
+				schedule_post_commit_dirty_invalidation(
+					work_item="WI-G18-DEEP-0000",
+					campaign=self.shared_campaign,
+					owner_user=self.staff_a,
+					event_dt=base_dt,
+					reason="g18_attempt_fixture_mutation",
+					trigger_reference="WI-G18-DEEP-0000",
+				)
+				_flush_pending_dirty_events()
+				frappe.db.commit()
+			finally:
+				frappe.flags.cskh_suppress_dirty_enqueue = prev_suppress
+			frappe.set_user(self.bod_user)
+			dirty_after_mutation = self._assert_fast_matches_reference(
+				metric_code="CONNECTED_RATE",
+				period_type="monthly",
+				period_key=m_key,
+				scope_type="company",
+				page=1,
+				page_size=20,
+			)
+			self.assertTrue(dirty_after_mutation["freshness"]["dirty_pending"])
+			self.assertEqual(dirty_after_mutation["pagination"]["total"], 564)
+			self.assertNotIn(
+				"AH-G18-DEEP-0000",
+				{row["record_id"] for row in dirty_after_mutation["rows"]},
+			)
+
 			# 4. Approved `CSKH Attempt Correction` (`void`) falls back cleanly and preserves exact parity
 			frappe.set_user(self.admin_user)
 			corr_req = correction.request_correction(
@@ -830,6 +868,19 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		):
 			self.assertIn(expected_sla_idx, sla_idx)
 		self.assertIn("idx_cskh_attempt_occ_name", att_idx)
+		self.assertIn("idx_cskh_attempt_ownevt_cover", att_idx)
+		cover_index_rows = frappe.db.sql(
+			"show index from `tabCSKH Contact Attempt` where Key_name = %s",
+			("idx_cskh_attempt_ownevt_cover",),
+			as_dict=True,
+		)
+		cover_index_columns = [
+			r.Column_name for r in sorted(cover_index_rows, key=lambda r: int(r.Seq_in_index))
+		]
+		self.assertEqual(
+			cover_index_columns,
+			["ownership_event", "occurred_at", "recorded_at", "contact_attempt_snapshot"],
+		)
 
 		# EXPLAIN checks: verify `key` selection and `0` `Using filesort` on pagination queries
 		exp_sla = frappe.db.sql(
@@ -864,6 +915,21 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		self.assertEqual(exp_att[0]["key"], "idx_cskh_attempt_occ_name")
 		self.assertNotIn("Using filesort", str(exp_att[0].get("Extra") or ""))
 
+		exp_att_cover = frappe.db.sql(
+			"""
+			explain select 1
+			from `tabCSKH Contact Attempt` ca FORCE INDEX (idx_cskh_attempt_ownevt_cover)
+			where ca.ownership_event = 'AH-G18-DEEP-0000'
+			  and coalesce(ca.contact_attempt_snapshot, 0) = 1
+			  and ca.recorded_at <= '2026-11-01 00:00:00'
+			  and ca.occurred_at < '2026-11-01 00:00:00'
+			limit 1
+			""",
+			as_dict=True,
+		)
+		self.assertEqual(exp_att_cover[0]["key"], "idx_cskh_attempt_ownevt_cover")
+		self.assertIn("Using index", str(exp_att_cover[0].get("Extra") or ""))
+
 		exp_iv = frappe.db.sql(
 			"""
 			explain select ah.name
@@ -873,7 +939,7 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 			  and ah.ownership_start < '2026-11-01 00:00:00'
 			  and ah.action in ('assign', 'reassign', 'reopen')
 			  and coalesce((
-			      select 1 from `tabCSKH Contact Attempt` ca FORCE INDEX (idx_cskh_attempt_ownevt_occ)
+			      select 1 from `tabCSKH Contact Attempt` ca FORCE INDEX (idx_cskh_attempt_ownevt_cover)
 			      where ca.ownership_event = ah.name
 			        and coalesce(ca.contact_attempt_snapshot, 0) = 1
 			      limit 1
@@ -892,6 +958,7 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		frappe.db.sql_ddl("alter table `tabCSKH SLA Obligation` drop index `idx_cskh_sla_due_name`")
 		frappe.db.sql_ddl("alter table `tabCSKH SLA Obligation` drop index `idx_cskh_sla_ivevt_type`")
 		frappe.db.sql_ddl("alter table `tabCSKH Contact Attempt` drop index `idx_cskh_attempt_occ_name`")
+		frappe.db.sql_ddl("alter table `tabCSKH Contact Attempt` drop index `idx_cskh_attempt_ownevt_cover`")
 
 		# N-1 style query (without index hints) runs cleanly after rollback DDL
 		cnt = int(

@@ -546,6 +546,12 @@ def ensure_p3_indexes(only_doctype: str | None = None) -> None:
 			False,
 		),
 		(
+			"CSKH Contact Attempt",
+			("ownership_event", "occurred_at", "recorded_at", "contact_attempt_snapshot"),
+			"idx_cskh_attempt_ownevt_cover",
+			False,
+		),
+		(
 			"CSKH Dirty Scope",
 			("status", "dirty_date"),
 			"idx_cskh_dirty_status_date",

@@ -2317,10 +2317,11 @@ def _fast_interval_cohort_drilldown_page(
 			base_params.extend([*team_nodes, AUTHORITATIVE])
 
 	# Scalar `coalesce((select 1 ... FORCE INDEX ... limit 1), 0)` prevents MariaDB 11.x from flattening
-	# correlated `idx_cskh_attempt_ownevt_occ` probes (3 rows/interval) into a 250k-row semi-join `<subquery>` scan.
+	# correlated probes into a 250k-row semi-join scan. The attempt-exists probe uses a covering index so
+	# dirty-scope exact counts avoid fetching base-table rows for each assignment interval.
 	ca_att_flag_sql = """
 		coalesce((
-			select 1 from `tabCSKH Contact Attempt` ca FORCE INDEX (idx_cskh_attempt_ownevt_occ)
+		select 1 from `tabCSKH Contact Attempt` ca FORCE INDEX (idx_cskh_attempt_ownevt_cover)
 			where ca.ownership_event = ah.name
 			  and coalesce(ca.contact_attempt_snapshot, 0) = 1
 			  and ca.recorded_at <= %s
