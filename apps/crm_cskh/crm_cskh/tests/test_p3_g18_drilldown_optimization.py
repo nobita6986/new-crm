@@ -835,7 +835,8 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				page=1,
 				page_size=20,
 			)
-			self.assertEqual(void_res["pagination"]["total"], 564)
+			# The dirty-source mutation removed one attempt, and this approved void removes a second.
+			self.assertEqual(void_res["pagination"]["total"], 563)
 		finally:
 			frappe.set_user("Administrator")
 			for row in orig_tmh:
@@ -974,4 +975,8 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		sla_idx_after = {
 			r.Key_name for r in frappe.db.sql("show index from `tabCSKH SLA Obligation`", as_dict=True)
 		}
+		att_idx_after = {
+			r.Key_name for r in frappe.db.sql("show index from `tabCSKH Contact Attempt`", as_dict=True)
+		}
 		self.assertIn("idx_cskh_sla_type_due_name", sla_idx_after)
+		self.assertIn("idx_cskh_attempt_ownevt_cover", att_idx_after)
