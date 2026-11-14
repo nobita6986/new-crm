@@ -66,6 +66,8 @@ import urllib.request
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from g18_distribution_diagnostic import instrument_s1_benchmark_script
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 IMAGES_DIR = REPO_ROOT / "deploy" / "images"
 LOCK_FILE = IMAGES_DIR / "release-lock.json"
@@ -3378,12 +3380,27 @@ def provision_and_execute_s1_benchmark(
     site_name: str = "p4-s1-bench.localhost",
     resource_profile: str = "s1_canonical_4x4",
     require_live_headroom: bool = False,
+    distribution_diagnostic_only: bool = False,
+    diagnostic_poll_seconds: int = 7200,
 ) -> dict[str, object]:
     """Self-contained isolated S1 provisioning, seeding, measurement, and teardown."""
     if resource_profile not in ("s1_canonical_4x4", "staging_vps_capped"):
         raise ValueError(
             f"Unsupported --resource-profile {resource_profile!r}; expected s1_canonical_4x4 or staging_vps_capped"
         )
+    if distribution_diagnostic_only:
+        if not require_live_headroom:
+            raise ValueError(
+                "Distribution diagnostic mode requires --require-live-headroom on the isolated host"
+            )
+        if not 1200 <= diagnostic_poll_seconds <= 7200:
+            raise ValueError(
+                "Diagnostic poll limit must be between 1200 and 7200 seconds"
+            )
+        if not re.fullmatch(r".+@sha256:[0-9a-f]{64}", app_image.strip()):
+            raise ValueError(
+                "Distribution diagnostic mode requires an immutable image digest"
+            )
     live_headroom = (
         enforce_live_resource_headroom()
         if (require_live_headroom or resource_profile == "staging_vps_capped")
@@ -3428,6 +3445,9 @@ def provision_and_execute_s1_benchmark(
             "MARIADB_IMAGE": lock["infra_images"]["mariadb"],
             "REDIS_IMAGE": lock["infra_images"]["redis"],
         }
+        if distribution_diagnostic_only:
+            compose_env["P4_G18_DISTRIBUTION_DIAGNOSTIC_ONLY"] = "1"
+            compose_env["P4_G18_DIAGNOSTIC_POLL_SECONDS"] = str(diagnostic_poll_seconds)
         compose_base = [
             "docker",
             "compose",
@@ -3510,6 +3530,14 @@ def provision_and_execute_s1_benchmark(
             )
 
             current_stage = "s1_in_container_benchmark"
+            s1_script = (
+                instrument_s1_benchmark_script(
+                    S1_IN_CONTAINER_BENCH_SCRIPT,
+                    poll_seconds=diagnostic_poll_seconds,
+                )
+                if distribution_diagnostic_only
+                else S1_IN_CONTAINER_BENCH_SCRIPT
+            )
             s1_proc = subprocess.run(
                 [
                     *compose_base,
@@ -3525,12 +3553,16 @@ def provision_and_execute_s1_benchmark(
                     "/home/frappe/frappe-bench/env/bin/python",
                     "-",
                 ],
-                input=S1_IN_CONTAINER_BENCH_SCRIPT,
+                input=s1_script,
                 env=compose_env,
                 check=False,
                 capture_output=True,
                 text=True,
-                timeout=3600,
+                timeout=(
+                    diagnostic_poll_seconds + 5400
+                    if distribution_diagnostic_only
+                    else 3600
+                ),
             )
             if s1_proc.returncode != 0:
                 raise RuntimeError(
@@ -3547,6 +3579,43 @@ def provision_and_execute_s1_benchmark(
                     f"S1 in-container benchmark did not emit S1_BENCH_JSON marker: {s1_proc.stderr[-500:]}"
                 )
             s1_in_container = json.loads(marker_lines[-1])
+            if distribution_diagnostic_only:
+                distribution = (
+                    s1_in_container.get("async_import_distribution_and_queue_lag") or {}
+                ).get("campaign_distribution_10000_work_items_40_staff") or {}
+                diagnostic = s1_in_container.get("_g18_distribution_diagnostic")
+                if not isinstance(diagnostic, dict):
+                    raise RuntimeError("G18 diagnostic telemetry was not emitted")
+                img_insp = json.loads(
+                    subprocess.check_output(
+                        ["docker", "image", "inspect", app_image], text=True
+                    )
+                )[0]
+                return {
+                    "schema_version": "cskh-p4-g18-distribution-diagnostic-report-v1",
+                    "status": "DIAGNOSTIC_ONLY_NOT_ACCEPTANCE",
+                    "g18_acceptance_status": "NOT_EVALUATED",
+                    "slo_evaluation_performed": False,
+                    "sla_commitment_status": "NOT_EVALUATED_DIAGNOSTIC_ONLY",
+                    "app_image_tested": app_image,
+                    "image_id": img_insp.get("Id"),
+                    "resource_profile": resource_profile,
+                    "live_resource_headroom_precheck": live_headroom,
+                    "distribution": {
+                        "eligible_count": distribution.get("eligible_count"),
+                        "preview_ms": distribution.get("preview_ms"),
+                        "execute_and_worker_drain_ms": distribution.get(
+                            "execute_and_worker_drain_ms"
+                        ),
+                        "final_run_status": distribution.get("final_run_status"),
+                        "created_work_items": distribution.get("created_work_items"),
+                        "duplicate_work_items": distribution.get(
+                            "duplicate_work_items"
+                        ),
+                        "reconciliation": distribution.get("reconciliation"),
+                    },
+                    "sql_diagnostic": diagnostic,
+                }
             primary_camp = str(s1_in_container.get("primary_campaign_id") or "").strip()
             if primary_camp:
                 spec["scenarios"] = [
@@ -3767,6 +3836,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Enforce fail-closed host CPU/RAM headroom precheck before provisioning",
     )
+    p.add_argument(
+        "--distribution-diagnostic-only",
+        action="store_true",
+        help="Collect normalized MariaDB query digests for the S1 10k distribution worker; never evaluates G18",
+    )
+    p.add_argument(
+        "--diagnostic-poll-seconds",
+        type=int,
+        default=7200,
+        help="Diagnostic-only worker observation limit (1200–7200 seconds); does not change the G18 SLO",
+    )
     p.add_argument("--admin-user", default="Administrator")
     p.add_argument("--admin-password-env", default="BENCHMARK_ADMIN_PASSWORD")
     p.add_argument("--out", required=True, help="Output JSON benchmark spec/report")
@@ -3775,7 +3855,10 @@ def main(argv: list[str] | None = None) -> int:
     out_path = Path(args.out)
     exit_code = 0
     failure_stderr_msg = ""
-
+    if args.distribution_diagnostic_only and not args.provision_and_run_s1:
+        raise SystemExit(
+            "ERROR: --distribution-diagnostic-only requires --provision-and-run-s1"
+        )
     if args.provision_and_run_s1:
         if not args.confirm_isolated_target:
             raise SystemExit(
@@ -3783,6 +3866,10 @@ def main(argv: list[str] | None = None) -> int:
             )
         if not args.app_image.strip():
             raise SystemExit("ERROR: --provision-and-run-s1 requires --app-image")
+        if args.distribution_diagnostic_only and not args.require_live_headroom:
+            raise SystemExit(
+                "ERROR: --distribution-diagnostic-only requires --require-live-headroom"
+            )
         try:
             report = provision_and_execute_s1_benchmark(
                 app_image=args.app_image.strip(),
@@ -3795,6 +3882,8 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 resource_profile=args.resource_profile,
                 require_live_headroom=args.require_live_headroom,
+                distribution_diagnostic_only=args.distribution_diagnostic_only,
+                diagnostic_poll_seconds=args.diagnostic_poll_seconds,
             )
         except BenchmarkExecutionError as exc:
             report = exc.report
@@ -3862,7 +3951,7 @@ def main(argv: list[str] | None = None) -> int:
     summary_payload: dict[str, object] = {
         "status": report["status"],
         "profile": report.get("profile_name", args.profile),
-        "sla_commitment_status": report["sla_commitment_status"],
+        "sla_commitment_status": report.get("sla_commitment_status", "NOT_EVALUATED"),
         "out": str(out_path),
         "exit_code": exit_code,
     }
