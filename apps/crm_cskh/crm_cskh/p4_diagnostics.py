@@ -3,41 +3,85 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import re
+import secrets
 import time
 from contextlib import contextmanager
 
-_STRING_LITERAL = re.compile(r"'(?:''|\\.|[^'\\])*'|\"(?:\"\"|\\.|[^\"\\])*\"", re.DOTALL)
-_BLOCK_COMMENT = re.compile(r"/\*.*?\*/", re.DOTALL)
-_LINE_COMMENT = re.compile(r"--(?:[ \t]|$)[^\r\n]*|#[^\r\n]*")
 _HEX_LITERAL = re.compile(r"(?<![A-Za-z0-9_])0x[0-9A-Fa-f]+(?![A-Za-z0-9_])", re.IGNORECASE)
 _NUMBER_LITERAL = re.compile(r"(?<![A-Za-z0-9_])[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?(?![A-Za-z0-9_])")
 
 
 def normalize_sql_shape(query: object) -> str:
-	"""Return a value-free SQL shape; never return bind values or source literals."""
-	text = str(query)
-	# Mask quoted literals first so comment markers inside a string are not
-	# mistaken for SQL comments.
-	text = _STRING_LITERAL.sub("?", text)
-	text = _BLOCK_COMMENT.sub(" ", text)
-	text = _LINE_COMMENT.sub(" ", text)
-	text = _HEX_LITERAL.sub("?", text)
-	text = _NUMBER_LITERAL.sub("?", text)
-	text = " ".join(text.split()).casefold()
+	"""Lex SQL comments/literals before masking, including malformed comments safely."""
+	source = str(query)
+	parts: list[str] = []
+	i = 0
+	length = len(source)
+	while i < length:
+		char = source[i]
+		next_char = source[i + 1] if i + 1 < length else ""
+
+		# Comments are recognized only outside quoted literals. Quotes inside
+		# comments are never allowed to change the lexer state.
+		if char == "/" and next_char == "*":
+			end = source.find("*/", i + 2)
+			i = length if end < 0 else end + 2
+			parts.append(" ")
+			continue
+		if char == "#" or (
+			char == "-"
+			and next_char == "-"
+			and (i + 2 == length or source[i + 2].isspace() or ord(source[i + 2]) < 32)
+		):
+			newline = source.find("\n", i + (1 if char == "#" else 2))
+			i = length if newline < 0 else newline + 1
+			parts.append(" ")
+			continue
+
+		if char in ("'", '"'):
+			quote = char
+			i += 1
+			while i < length:
+				if source[i] == "\\":
+					# Backslash escapes the following byte in MariaDB string syntax.
+					i += 2
+					continue
+				if source[i] == quote:
+					if i + 1 < length and source[i + 1] == quote:
+						i += 2
+						continue
+					i += 1
+					break
+				i += 1
+			parts.append("?")
+			continue
+
+		if char.isdigit() or (char in "+-" and next_char.isdigit()):
+			match = _HEX_LITERAL.match(source, i) or _NUMBER_LITERAL.match(source, i)
+			if match:
+				parts.append("?")
+				i = match.end()
+				continue
+
+		parts.append(char)
+		i += 1
+
+	text = " ".join("".join(parts).split()).casefold()
 	return re.sub(r"\s*([=<>!]+)\s*", r"\1", text)
 
 
-def sql_fingerprint(query: str) -> str:
-	"""Hash a normalized shape without caching raw query text in process memory."""
-	return hashlib.sha256(normalize_sql_shape(query).encode("utf-8")).hexdigest()
-
-
 class SQLCallRecorder:
-	"""Bounded aggregate SQL counters; stores fingerprints and durations only."""
+	"""Bounded aggregate SQL counters; stores keyed fingerprints and durations only."""
 
 	def __init__(self, run_id: str, *, max_fingerprints: int = 256):
-		self._run_id_sha256 = hashlib.sha256(str(run_id).encode("utf-8")).hexdigest()
+		self._fingerprint_key = secrets.token_bytes(32)
+		self._run_id_hmac_sha256 = hmac.new(
+			self._fingerprint_key,
+			str(run_id).encode("utf-8"),
+			hashlib.sha256,
+		).hexdigest()
 		self._max_fingerprints = max(1, int(max_fingerprints))
 		self._started_ns = time.perf_counter_ns()
 		self._query_count = 0
@@ -47,7 +91,8 @@ class SQLCallRecorder:
 
 	def record(self, query: object, elapsed_ns: int) -> None:
 		elapsed_ns = max(0, int(elapsed_ns))
-		fingerprint = sql_fingerprint(str(query))
+		shape = normalize_sql_shape(query).encode("utf-8")
+		fingerprint = hmac.new(self._fingerprint_key, shape, hashlib.sha256).hexdigest()
 		self._query_count += 1
 		self._sql_ns += elapsed_ns
 		entry = self._fingerprints.get(fingerprint)
@@ -65,7 +110,7 @@ class SQLCallRecorder:
 		"""Build a JSON-safe record containing aggregate counters and hashes only."""
 		fingerprints = [
 			{
-				"sha256": fingerprint,
+				"hmac_sha256": fingerprint,
 				"count": stats["count"],
 				"total_ms": round(stats["total_ns"] / 1_000_000, 3),
 				"max_ms": round(stats["max_ns"] / 1_000_000, 3),
@@ -76,12 +121,12 @@ class SQLCallRecorder:
 			key=lambda item: (
 				-float(item["total_ms"]),
 				-int(item["count"]),
-				str(item["sha256"]),
+				str(item["hmac_sha256"]),
 			)
 		)
 		return {
-			"schema_version": "cskh-p4-g18-distribution-sql-diagnostic-v1",
-			"run_id_sha256": self._run_id_sha256,
+			"schema_version": "cskh-p4-g18-distribution-sql-diagnostic-v2",
+			"run_id_hmac_sha256": self._run_id_hmac_sha256,
 			"progress": None if progress is None else max(0, int(progress)),
 			"elapsed_ms": round((time.perf_counter_ns() - self._started_ns) / 1_000_000, 3),
 			"sql_query_count": self._query_count,

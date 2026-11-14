@@ -2,7 +2,7 @@
 
 ## Mục đích và giới hạn
 
-Tài liệu này mô tả phép đo chẩn đoán một job phân phối giả lập 10.000 Lead. Recorder đếm truy vấn và thời gian, rồi ghi dấu vân tay SHA-256 của câu SQL đã chuẩn hóa. Recorder không lưu SQL thô, tham số, tên Lead, số điện thoại hay run ID nguyên văn.
+Tài liệu này mô tả phép đo chẩn đoán một job phân phối giả lập 10.000 Lead. Recorder đếm truy vấn và thời gian, rồi ghi dấu vân tay HMAC-SHA-256 theo khóa ngẫu nhiên chỉ tồn tại trong bộ nhớ của run, từ câu SQL đã chuẩn hóa. Recorder không lưu SQL thô, tham số, tên Lead, số điện thoại, khóa HMAC hay run ID nguyên văn.
 
 Phép đo có thêm overhead trong worker. **Không dùng thời gian chẩn đoán để chấm G18 hoặc so với SLO.** Sau khi xác định nút thắt và có thay đổi được kiểm thử, phải chạy lại benchmark nghiệm thu nguyên trạng trên đúng candidate digest và cùng SLO đã duyệt.
 
@@ -48,7 +48,7 @@ Worker từ chối chạy nếu cờ, site, run ID, actor, campaign, trạng th�
 ## Thu thập và rà artifact
 
 - Thu các dòng log có tiền tố `CSKH_P4_G18_DIST_SQL_DIAG` từ worker benchmark.
-- Chỉ giữ `run_id_sha256`, tiến độ, thời gian đã trôi qua, tổng số/thời gian SQL, số lần/thời gian lớn nhất theo fingerprint và bộ đếm overflow.
+- Chỉ giữ `run_id_hmac_sha256`, tiến độ, thời gian đã trôi qua, tổng số/thời gian SQL, số lần/thời gian lớn nhất theo fingerprint và bộ đếm overflow.
 - Kiểm tra artifact không chứa SQL, giá trị bind, tên Lead, số điện thoại, cookie, SID, CSRF token hoặc run ID nguyên văn.
 - So chênh lệch giữa các checkpoint để tìm lô chậm; dùng fingerprint để nhóm truy vấn lặp. Không khôi phục câu SQL bằng cách dò dữ liệu nhạy cảm.
 - Tắt và xóa các biến chẩn đoán khỏi worker tạm sau run; hủy site/volume benchmark theo quy trình dọn dẹp cô lập.

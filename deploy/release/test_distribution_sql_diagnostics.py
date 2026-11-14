@@ -14,7 +14,6 @@ sys.path.insert(0, str(APP_ROOT))
 from crm_cskh.p4_diagnostics import (  # noqa: E402
     normalize_sql_shape,
     profile_database_sql,
-    sql_fingerprint,
 )
 
 
@@ -46,11 +45,29 @@ class TestDistributionSQLDiagnostics(unittest.TestCase):
         self.assertNotIn("private", normalize_sql_shape(left))
         comment_marker_in_literal = "SELECT '--not a comment 84912345678' AS value"
         self.assertNotIn("84912345678", normalize_sql_shape(comment_marker_in_literal))
+        quote_in_comment = "select 1 /* ' */ where email='secret@example.invalid'"
+        self.assertNotIn(
+            "secret@example.invalid", normalize_sql_shape(quote_in_comment)
+        )
+        db = FakeDatabase()
+        with profile_database_sql(db, "run") as recorder:
+            db.sql(quote_in_comment)
+            report = recorder.snapshot(0)
+        self.assertNotIn("secret@example.invalid", json.dumps(report, sort_keys=True))
 
     def test_fingerprint_equivalence_for_different_bound_values_and_literals(self):
         one = "SELECT name FROM `tabLead` WHERE name = 'CRM-LEAD-00001' AND idx=1"
         two = "select name from `tabLead` where name = 'CRM-LEAD-00099' and idx=99"
-        self.assertEqual(sql_fingerprint(one), sql_fingerprint(two))
+        self.assertEqual(normalize_sql_shape(one), normalize_sql_shape(two))
+
+        db = FakeDatabase()
+        with profile_database_sql(db, "synthetic-run") as recorder:
+            db.sql(one)
+            db.sql(two)
+            report = recorder.snapshot(2)
+        self.assertEqual(report["sql_query_count"], 2)
+        self.assertEqual(len(report["fingerprints"]), 1)
+        self.assertEqual(report["fingerprints"][0]["count"], 2)
 
     def test_success_and_exception_queries_are_counted_without_payloads(self):
         db = FakeDatabase()
@@ -76,7 +93,24 @@ class TestDistributionSQLDiagnostics(unittest.TestCase):
         ):
             self.assertNotIn(sensitive, serialized)
         for item in report["fingerprints"]:
-            self.assertRegex(item["sha256"], r"^[0-9a-f]{64}$")
+            self.assertRegex(item["hmac_sha256"], r"^[0-9a-f]{64}$")
+
+    def test_artifact_fingerprints_use_unexported_per_run_key(self):
+        artifacts = []
+        for run_id in ("run-a", "run-b"):
+            db = FakeDatabase()
+            with profile_database_sql(db, run_id) as recorder:
+                db.sql("SELECT * FROM `tabX` WHERE email='secret@example.invalid'")
+                artifacts.append(recorder.snapshot(1))
+
+        left = artifacts[0]["fingerprints"][0]["hmac_sha256"]
+        right = artifacts[1]["fingerprints"][0]["hmac_sha256"]
+        self.assertNotEqual(left, right)
+        for artifact in artifacts:
+            serialized = json.dumps(artifact, sort_keys=True)
+            self.assertNotIn("secret@example.invalid", serialized)
+            self.assertNotIn("run-a", serialized)
+            self.assertNotIn("run-b", serialized)
 
     def test_database_methods_are_restored_after_success_and_exception(self):
         for fail in (False, True):
