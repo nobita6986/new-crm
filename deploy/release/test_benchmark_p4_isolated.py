@@ -830,6 +830,227 @@ class TestBenchmarkP4IsolatedRunnerFix(unittest.TestCase):
             # In-container S1 domain measurements completed before the HTTP error are preserved
             self.assertIsInstance(saved["s1_domain_and_database_benchmark"], dict)
 
+    def test_staging_vps_capped_compose_override_pins_mariadb_innodb_and_worker_queues(
+        self,
+    ) -> None:
+        self.assertIn(
+            "--innodb-buffer-pool-size=2560M",
+            bench.STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML,
+        )
+        self.assertIn(
+            "--innodb-log-file-size=512M",
+            bench.STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML,
+        )
+        self.assertIn(
+            'command: ["bench", "worker", "--queue", "long"]',
+            bench.STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML,
+        )
+        self.assertIn(
+            'command: ["bench", "worker", "--queue", "short,default"]',
+            bench.STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML,
+        )
+        common_override = (
+            bench.REPO_ROOT
+            / "deploy"
+            / "compose"
+            / "overrides"
+            / "compose.cskh-common.yaml"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'command: !override ["bench", "worker", "--queue", "long"]',
+            common_override,
+        )
+        self.assertIn(
+            'command: !override ["bench", "worker", "--queue", "short,default"]',
+            common_override,
+        )
+
+    def test_probe_s1_short_cli_persists_valid_json_on_pass_and_fail(self) -> None:
+        spec = bench.build_benchmark_specification(
+            profile_name="s1_suggested_mvp",
+            base_url="http://127.0.0.1:18880",
+            site_name="p4-s1-probe.localhost",
+            compose_project="cskh-p4-bench-probe-unit",
+            confirm_isolated_target=True,
+        )
+        passing_probe = {
+            **spec,
+            "mode": "s1_short_throughput_probe",
+            "status": "COMPLETED",
+            "acceptance_verdict": "PASS",
+            "all_acceptance_passed": True,
+            "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
+            "app_image_tested": CANDIDATE_DIGEST,
+            "resource_profile": "staging_vps_capped",
+            "probe_items": 500,
+            "queue_long_scaling_evaluation": {
+                "bg01_job_architecture": "single_sequential_rq_job",
+                "single_job_parallelizable_by_extra_workers": False,
+                "configured_queue_long_workers": 1,
+                "peak_long_queue_waiting_jobs_during_bg01": 0,
+                "measured_ms_per_item": 42.5,
+                "extrapolated_10000_items_sec": 425.0,
+                "recommend_scaling_queue_long_above_1": False,
+                "decision": "KEEP_QUEUE_LONG_REPLICAS_1",
+            },
+            "probe_gate_verdict": {
+                "all_passed": True,
+                "total_checks": 6,
+                "passed_count": 6,
+                "failed_count": 0,
+                "failed_checks": [],
+                "ready_for_official_g18_full_run": True,
+                "items": {},
+            },
+        }
+        failing_probe = {
+            **passing_probe,
+            "acceptance_verdict": "FAIL",
+            "all_acceptance_passed": False,
+            "probe_gate_verdict": {
+                "all_passed": False,
+                "total_checks": 6,
+                "passed_count": 5,
+                "failed_count": 1,
+                "failed_checks": ["bg01_per_item_le_95ms_extrapolated_10k_le_950s"],
+                "ready_for_official_g18_full_run": False,
+                "items": {},
+            },
+        }
+
+        with tempfile.TemporaryDirectory() as td:
+            pass_out = Path(td) / "probe-pass.json"
+            with (
+                mock.patch.object(
+                    bench,
+                    "provision_and_execute_s1_short_probe",
+                    return_value=passing_probe,
+                ),
+                redirect_stdout(io.StringIO()),
+                redirect_stderr(io.StringIO()),
+            ):
+                rc_pass = bench.main(
+                    [
+                        "--probe-s1-short",
+                        "--confirm-isolated-target",
+                        "--resource-profile",
+                        "staging_vps_capped",
+                        "--probe-items",
+                        "500",
+                        "--app-image",
+                        CANDIDATE_DIGEST,
+                        "--out",
+                        str(pass_out),
+                    ]
+                )
+            self.assertEqual(rc_pass, 0)
+            saved_pass = json.loads(pass_out.read_text(encoding="utf-8"))
+            self.assertTrue(saved_pass["probe_gate_verdict"]["all_passed"])
+            self.assertFalse(
+                saved_pass["queue_long_scaling_evaluation"][
+                    "recommend_scaling_queue_long_above_1"
+                ]
+            )
+
+            fail_out = Path(td) / "probe-fail.json"
+            with (
+                mock.patch.object(
+                    bench,
+                    "provision_and_execute_s1_short_probe",
+                    return_value=failing_probe,
+                ),
+                redirect_stdout(io.StringIO()),
+                redirect_stderr(io.StringIO()),
+            ):
+                rc_fail = bench.main(
+                    [
+                        "--probe-s1-short",
+                        "--confirm-isolated-target",
+                        "--resource-profile",
+                        "staging_vps_capped",
+                        "--probe-items",
+                        "500",
+                        "--app-image",
+                        CANDIDATE_DIGEST,
+                        "--out",
+                        str(fail_out),
+                    ]
+                )
+            self.assertEqual(rc_fail, 1)
+            saved_fail = json.loads(fail_out.read_text(encoding="utf-8"))
+            self.assertEqual(saved_fail["acceptance_verdict"], "FAIL")
+            self.assertEqual(
+                saved_fail["probe_gate_verdict"]["failed_checks"],
+                ["bg01_per_item_le_95ms_extrapolated_10k_le_950s"],
+            )
+
+    def test_provision_and_execute_s1_short_probe_compose_project_prefix_passes_isolation_guard(
+        self,
+    ) -> None:
+        seen_projects: list[str] = []
+
+        def _fake_subproc_run(cmd, *args, **kwargs):
+            if isinstance(cmd, list) and "-p" in cmd:
+                seen_projects.append(str(cmd[cmd.index("-p") + 1]))
+            if isinstance(cmd, list) and "up" in cmd:
+                raise RuntimeError("stop_after_isolation_guard")
+            return mock.Mock(returncode=0, stdout="", stderr="")
+
+        with (
+            mock.patch.object(
+                bench,
+                "enforce_live_resource_headroom",
+                return_value={"headroom_ok": True},
+            ),
+            mock.patch.object(bench.subprocess, "run", side_effect=_fake_subproc_run),
+        ):
+            with self.assertRaises(bench.BenchmarkExecutionError) as ctx:
+                bench.provision_and_execute_s1_short_probe(
+                    app_image=CANDIDATE_DIGEST,
+                    pull_policy="never",
+                    port=18882,
+                    resource_profile="staging_vps_capped",
+                    require_live_headroom=True,
+                    probe_items=500,
+                )
+            self.assertEqual(ctx.exception.report["failed_stage"], "compose_up")
+            self.assertTrue(
+                str(
+                    ctx.exception.report["isolation_guard"]["compose_project"]
+                ).startswith("cskh-p4-bench-probe-"),
+                ctx.exception.report["isolation_guard"],
+            )
+            self.assertTrue(
+                any(p.startswith("cskh-p4-bench-probe-") for p in seen_projects)
+            )
+            compile(bench.S1_IN_CONTAINER_BENCH_SCRIPT, "<s1_in_container>", "exec")
+            self.assertNotIn('_status_after_bg01["', bench.S1_IN_CONTAINER_BENCH_SCRIPT)
+            self.assertNotIn(
+                '_status_before_bg01["', bench.S1_IN_CONTAINER_BENCH_SCRIPT
+            )
+            self.assertNotIn(
+                'dist_status_after_exec["', bench.S1_IN_CONTAINER_BENCH_SCRIPT
+            )
+            self.assertNotIn(
+                'dist_status_before_preview["', bench.S1_IN_CONTAINER_BENCH_SCRIPT
+            )
+            self.assertNotIn(
+                'dist_status_before_exec["', bench.S1_IN_CONTAINER_BENCH_SCRIPT
+            )
+            for expected_key in (
+                '"sql_queries_delta":',
+                '"sql_queries_per_item":',
+                '"execute_sql_queries_delta":',
+                '"execute_sql_queries_per_item":',
+                '"peak_long_queue_waiting_jobs_during_bg01":',
+                '"peak_short_queue_waiting_jobs_during_bg01":',
+            ):
+                self.assertGreaterEqual(
+                    bench.S1_IN_CONTAINER_BENCH_SCRIPT.count(expected_key),
+                    2,
+                    f"Expected {expected_key} in both short probe and full 10k BG-01 payloads",
+                )
+
 
 if __name__ == "__main__":
     unittest.main()

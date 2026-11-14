@@ -172,10 +172,12 @@ services:
 
   queue-short:
     <<: *cskh_app_common
+    command: !override ["bench", "worker", "--queue", "short,default"]
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     mem_limit: ${QUEUE_SHORT_MEM_LIMIT:-1g}
     cpus: ${QUEUE_SHORT_CPUS:-1.0}
+    cpu_shares: ${QUEUE_SHORT_CPU_SHARES:-512}
     healthcheck:
       test:
         - CMD-SHELL
@@ -189,10 +191,12 @@ services:
 
   queue-long:
     <<: *cskh_app_common
+    command: !override ["bench", "worker", "--queue", "long"]
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     mem_limit: ${QUEUE_LONG_MEM_LIMIT:-2g}
     cpus: ${QUEUE_LONG_CPUS:-1.5}
+    cpu_shares: ${QUEUE_LONG_CPU_SHARES:-1024}
     healthcheck:
       test:
         - CMD-SHELL
@@ -227,6 +231,18 @@ services:
     security_opt:
       - no-new-privileges:true
     logging: *cskh_logging
+    command: !override
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --innodb-buffer-pool-size=${DB_INNODB_BUFFER_POOL_SIZE:-768M}
+      - --innodb-log-file-size=${DB_INNODB_LOG_FILE_SIZE:-256M}
+      - --innodb-log-buffer-size=${DB_INNODB_LOG_BUFFER_SIZE:-64M}
+      - --innodb-flush-log-at-trx-commit=${DB_INNODB_FLUSH_LOG_AT_TRX_COMMIT:-1}
+      - --innodb-flush-method=${DB_INNODB_FLUSH_METHOD:-O_DIRECT}
+      - --innodb-io-capacity=${DB_INNODB_IO_CAPACITY:-1000}
+      - --innodb-io-capacity-max=${DB_INNODB_IO_CAPACITY_MAX:-2000}
+      - --max-connections=${DB_MAX_CONNECTIONS:-200}
     environment:
       TZ: ${TZ:-Asia/Ho_Chi_Minh}
     mem_limit: ${DB_MEM_LIMIT:-4g}

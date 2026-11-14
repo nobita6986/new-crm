@@ -373,3 +373,90 @@ jobs:
           path: ${{ runner.temp }}/p4-s1-staging-capped/
           if-no-files-found: warn
           retention-days: 30
+
+  s1-short-probe-staging-vps-capped:
+    name: S1 500-item BG-01 short probe (staging_vps_capped Before/After parity)
+    needs: [resolve-matrix]
+    if: ${{ needs.resolve-matrix.outputs.target_digest != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Pull immutable GHCR @sha256 image
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.resolve-matrix.outputs.target_digest }}
+          GITHUB_ACTOR_PULL: ${{ github.actor }}
+          GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          mkdir -p "$RUNNER_TEMP/p4-s1-short-probe-capped"
+          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PULL}" \
+            --password-stdin
+          docker pull "${APP_IMAGE_DIGEST}"
+
+      - name: Execute S1 500-item short throughput & SQL/item probe under Staging VPS cgroup caps
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.resolve-matrix.outputs.target_digest }}
+        run: |
+          set -euo pipefail
+          OUT_DIR="$RUNNER_TEMP/p4-s1-short-probe-capped"
+          python3 deploy/release/benchmark_p4_isolated.py \
+            --probe-s1-short \
+            --confirm-isolated-target \
+            --resource-profile staging_vps_capped \
+            --require-live-headroom \
+            --probe-items 500 \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --pull-policy never \
+            --port 18886 \
+            --out "$OUT_DIR/s1-short-probe-staging-vps-capped.json"
+
+          python3 - "$OUT_DIR" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          rpt = json.loads((root / "s1-short-probe-staging-vps-capped.json").read_text(encoding="utf-8"))
+          assert rpt["isolation_guard"]["owner_vps_touched"] is False
+          assert rpt["probe_gate_verdict"]["all_passed"] is True, rpt["probe_gate_verdict"]
+          assert rpt["queue_long_scaling_evaluation"]["recommend_scaling_queue_long_above_1"] is False
+          sums = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              sums.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root).as_posix()}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+      - name: Logout from GHCR
+        if: always()
+        shell: bash
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+      - name: Upload Staging-capped S1 short probe report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-s1-short-probe-staging-vps-capped-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-s1-short-probe-capped/
+          if-no-files-found: warn
+          retention-days: 30

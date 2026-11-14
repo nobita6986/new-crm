@@ -59,6 +59,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import threading
 import time
 import urllib.error
 import urllib.parse
@@ -178,17 +179,20 @@ def _classify_http_statuses(statuses: list[int]) -> dict[str, object]:
 EPHEMERAL_BENCH_OVERRIDE_YAML = """\
 services:
   backend:
+    cpu_shares: 1024
     environment:
       GUNICORN_WORKERS: "4"
       GUNICORN_THREADS: "4"
       GUNICORN_TIMEOUT: "120"
       TZ: Asia/Ho_Chi_Minh
   queue-short:
+    cpu_shares: 512
     command: ["bench", "worker", "--queue", "short,default"]
   queue-long:
     image: ${APP_IMAGE:?set APP_IMAGE}
     pull_policy: ${PULL_POLICY:-never}
     restart: "no"
+    cpu_shares: 1024
     security_opt:
       - no-new-privileges:true
     command: ["bench", "worker", "--queue", "long"]
@@ -201,34 +205,50 @@ services:
         condition: service_completed_successfully
     networks:
       - data_net
+  db:
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --innodb-buffer-pool-size=2560M
+      - --innodb-log-file-size=512M
+      - --innodb-log-buffer-size=64M
+      - --innodb-flush-log-at-trx-commit=1
+      - --innodb-flush-method=O_DIRECT
+      - --innodb-io-capacity=1000
+      - --innodb-io-capacity-max=2000
+      - --max-connections=200
 """
 
 STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML = """\
 services:
   frontend:
-    cpus: 0.50
+    cpus: 0.35
     mem_limit: 256m
   backend:
     cpus: 1.50
     mem_limit: 1536m
+    cpu_shares: 1024
     environment:
       GUNICORN_WORKERS: "2"
       GUNICORN_THREADS: "4"
       GUNICORN_TIMEOUT: "120"
       TZ: Asia/Ho_Chi_Minh
   websocket:
-    cpus: 0.50
-    mem_limit: 384m
+    cpus: 0.25
+    mem_limit: 256m
   queue-short:
-    cpus: 0.75
-    mem_limit: 768m
+    cpus: 0.50
+    mem_limit: 2048m
+    cpu_shares: 512
     command: ["bench", "worker", "--queue", "short,default"]
   queue-long:
     image: ${APP_IMAGE:?set APP_IMAGE}
     pull_policy: ${PULL_POLICY:-never}
     restart: "no"
-    cpus: 1.00
+    cpus: 1.25
     mem_limit: 1536m
+    cpu_shares: 1024
     security_opt:
       - no-new-privileges:true
     command: ["bench", "worker", "--queue", "long"]
@@ -242,17 +262,39 @@ services:
     networks:
       - data_net
   scheduler:
-    cpus: 0.25
-    mem_limit: 384m
+    cpus: 0.15
+    mem_limit: 256m
   db:
-    cpus: 1.50
-    mem_limit: 2g
+    cpus: 2.00
+    mem_limit: 3584m
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --skip-character-set-client-handshake
+      - --innodb-buffer-pool-size=2560M
+      - --innodb-log-file-size=512M
+      - --innodb-log-buffer-size=64M
+      - --innodb-flush-log-at-trx-commit=1
+      - --innodb-flush-method=O_DIRECT
+      - --innodb-io-capacity=1000
+      - --innodb-io-capacity-max=2000
+      - --max-connections=200
   redis-cache:
-    cpus: 0.25
-    mem_limit: 384m
+    cpus: 0.15
+    mem_limit: 256m
+    command:
+      - redis-server
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --maxmemory
+      - 128mb
+      - --maxmemory-policy
+      - allkeys-lru
   redis-queue:
-    cpus: 0.25
-    mem_limit: 384m
+    cpus: 0.15
+    mem_limit: 256m
 """
 
 
@@ -2151,6 +2193,396 @@ rss_d1, _ = _rss_hwm_mib()
 frappe.db.sql("ANALYZE TABLE `tabCSKH KPI Snapshot`")
 frappe.db.commit()
 
+if os.environ.get("S1_PROBE_ONLY") == "1":
+    from frappe.utils.background_jobs import generate_qname as _probe_gen_qname
+    from rq import Worker as _ProbeRQWorker
+
+    _probe_items = max(100, min(int(os.environ.get("S1_PROBE_ITEMS") or "500"), 2000))
+    _var_names = (
+        "innodb_buffer_pool_size",
+        "innodb_log_file_size",
+        "innodb_log_buffer_size",
+        "innodb_flush_log_at_trx_commit",
+        "innodb_flush_method",
+        "innodb_io_capacity",
+        "innodb_io_capacity_max",
+        "character_set_server",
+        "collation_server",
+        "max_connections",
+    )
+    _mariadb_vars = {
+        str(k): v
+        for k, v in frappe.db.sql(
+            "SHOW GLOBAL VARIABLES WHERE Variable_name IN ("
+            + ",".join(["%s"] * len(_var_names))
+            + ")",
+            _var_names,
+        )
+    }
+    _cov_idx_rows = frappe.db.sql(
+        "SHOW INDEX FROM `tabCSKH Contact Attempt` WHERE Key_name = 'idx_cskh_attempt_ownevt_cover'",
+        as_dict=True,
+    )
+    _cov_hint = (
+        "FORCE INDEX (idx_cskh_attempt_ownevt_cover)"
+        if _cov_idx_rows
+        else "USE INDEX (idx_cskh_attempt_ownevt_occ)"
+    )
+    _cov_explain = frappe.db.sql(
+        f"EXPLAIN SELECT 1 "
+        f"FROM `tabCSKH Contact Attempt` ca {_cov_hint} "
+        "WHERE ca.ownership_event = 'AH-S1-000001' "
+        "AND COALESCE(ca.contact_attempt_snapshot, 0) = 1 "
+        "AND ca.recorded_at <= '2026-11-01 00:00:00' "
+        "AND ca.occurred_at < '2026-11-01 00:00:00' "
+        "LIMIT 1",
+        as_dict=True,
+    )
+
+    frappe.set_user(bod_user)
+    _probe_dd_lats, _probe_dd_errs = [], 0
+    _t_dd0 = time.perf_counter()
+    for _pg in range(1, 6):
+        _c0 = time.perf_counter()
+        try:
+            _dd_res = p3_reporting.get_metric_drilldown(
+                period_type="monthly",
+                period_key="2026-10",
+                scope_type="company",
+                metric_code="CONNECTED_RATE",
+                page=_pg,
+                page_size=20,
+            )
+            _dd_ok = bool(_dd_res)
+        except Exception:
+            _dd_ok = False
+        _probe_dd_lats.append((time.perf_counter() - _c0) * 1000.0)
+        if not _dd_ok:
+            _probe_dd_errs += 1
+    _probe_dd_summary = _summarize(_probe_dd_lats, _probe_dd_errs, time.perf_counter() - _t_dd0)
+    frappe.set_user("Administrator")
+
+    _probe_rq = redis.from_url(frappe.conf.redis_queue)
+    _probe_workers = []
+    for _pw in _ProbeRQWorker.all(connection=_probe_rq):
+        _raw_qs = [str(_q) for _q in _pw.queue_names()] if hasattr(_pw, "queue_names") else []
+        _norm_qs = [str(_q).rsplit(":", 1)[-1] for _q in _raw_qs]
+        _probe_workers.append(
+            {
+                "name": str(getattr(_pw, "name", "")),
+                "state": str(_pw.get_state() if hasattr(_pw, "get_state") else ""),
+                "raw_queues": _raw_qs,
+                "normalized_queues": _norm_qs,
+            }
+        )
+
+    _probe_csv_lines = ["full_name,phone,email,source"]
+    for _ri in range(_probe_items):
+        _probe_csv_lines.append(
+            f"Ứng viên Probe Mới {_ri:05d},0971{_ri:06d},s1probe{_ri:05d}@dev.local,S1BatchImport"
+        )
+    _probe_csv_bytes = ("\n".join(_probe_csv_lines) + "\n").encode("utf-8")
+    _t_pimp0 = time.perf_counter()
+    _pfile_doc = frappe.get_doc(
+        {
+            "doctype": "File",
+            "file_name": f"s1_short_probe_{_probe_items}.csv",
+            "is_private": 1,
+            "content": _probe_csv_bytes,
+        }
+    ).insert(ignore_permissions=True)
+    frappe.db.commit()
+    _pprev = import_service.create_preview(
+        file_name=_pfile_doc.name,
+        mapping={"name": "full_name", "phone": "phone", "source": "source"},
+        actor="Administrator",
+        idempotency_key=f"s1-probe-import-{_probe_items}",
+    )
+    frappe.db.commit()
+    _pbatch_id = _pprev["batch"]
+    import_service.confirm(_pbatch_id, actor="Administrator")
+    frappe.db.commit()
+    _pimp_deadline = time.perf_counter() + 180.0
+    _pimp_status = {}
+    while time.perf_counter() < _pimp_deadline:
+        frappe.db.commit()
+        _pimp_status = import_service._status_response(_pbatch_id)
+        if str(_pimp_status.get("status") or "").upper() in (
+            "COMPLETED",
+            "COMPLETED_WITH_ERRORS",
+            "FAILED",
+        ):
+            break
+        time.sleep(0.25)
+    _pimp_total_ms = round((time.perf_counter() - _t_pimp0) * 1000.0, 2)
+
+    frappe.db.sql("ANALYZE TABLE `tabCRM Lead`, `tabCSKH Identity Index`")
+    frappe.db.commit()
+
+    _status_keys = (
+        "Innodb_buffer_pool_reads",
+        "Innodb_buffer_pool_read_requests",
+        "Innodb_os_log_fsyncs",
+        "Innodb_data_reads",
+        "Innodb_data_writes",
+        "Innodb_row_lock_waits",
+        "Innodb_row_lock_time",
+        "Slow_queries",
+        "Questions",
+    )
+
+    def _read_status_counters():
+        return {
+            str(k): int(float(v or 0))
+            for k, v in frappe.db.sql(
+                "SHOW GLOBAL STATUS WHERE Variable_name IN ("
+                + ",".join(["%s"] * len(_status_keys))
+                + ")",
+                _status_keys,
+            )
+        }
+
+    _status_before_bg01 = _read_status_counters()
+    _t_pdist_prev0 = time.perf_counter()
+    _pdist_prev = distribution.preview(
+        dist_10k_camp, actor="Administrator", idempotency_key="s1-probe-dist-prev"
+    )
+    frappe.db.commit()
+    _pdist_preview_ms = round((time.perf_counter() - _t_pdist_prev0) * 1000.0, 2)
+    _pdist_eligible = int((_pdist_prev.get("summary") or {}).get("eligible_count") or 0)
+
+    _long_q_key = f"rq:queue:{_probe_gen_qname('long')}"
+    _short_q_key = f"rq:queue:{_probe_gen_qname('short')}"
+    _default_q_key = f"rq:queue:{_probe_gen_qname('default')}"
+
+    _status_before_bg01_exec = _read_status_counters()
+    _t_pdist_exec0 = time.perf_counter()
+    _pdist_enq = distribution.enqueue_run(
+        _pdist_prev["preview_id"],
+        expected_rule_version=_pdist_prev.get("rule_version"),
+        idempotency_key="s1-probe-dist-exec",
+        actor="Administrator",
+        enqueue_job=True,
+    )
+    frappe.db.commit()
+    _prun_id = _pdist_enq["run_id"]
+
+    _pdist_progress = []
+    _pdist_nb_lats = []
+    _pdist_status = ""
+    _pr_info = {}
+    _peak_long_waiting_while_running = 0
+    _peak_short_waiting_during_bg01 = 0
+    _pdist_deadline = time.perf_counter() + 240.0
+    while time.perf_counter() < _pdist_deadline:
+        frappe.db.commit()
+        _pr_info = distribution.get_run(_prun_id, actor="Administrator")
+        _pdist_status = str(_pr_info.get("status") or "")
+        _p_cur = int(_pr_info.get("progress") or 0)
+        if not _pdist_progress or _pdist_progress[-1] != _p_cur:
+            _pdist_progress.append(_p_cur)
+        _cur_short_wait = int(_probe_rq.llen(_short_q_key)) + int(_probe_rq.llen(_default_q_key))
+        if _cur_short_wait > _peak_short_waiting_during_bg01:
+            _peak_short_waiting_during_bg01 = _cur_short_wait
+        if _pdist_status.lower() == "running":
+            _cur_long_wait = int(_probe_rq.llen(_long_q_key))
+            if _cur_long_wait > _peak_long_waiting_while_running:
+                _peak_long_waiting_while_running = _cur_long_wait
+        if len(_pdist_nb_lats) < 12:
+            _c_nb = time.perf_counter()
+            _ = read_model.list_work_items(page=1, page_size=20, actor=staff_users[1])
+            _pdist_nb_lats.append(round((time.perf_counter() - _c_nb) * 1000.0, 3))
+        if _pdist_status.lower() in ("completed", "completed_with_errors", "failed", "aborted"):
+            break
+        time.sleep(0.25)
+    _pdist_exec_ms = round((time.perf_counter() - _t_pdist_exec0) * 1000.0, 2)
+    _status_after_bg01 = _read_status_counters()
+
+    _pdist_dup = int(
+        frappe.db.sql(
+            "SELECT COUNT(*) - COUNT(DISTINCT lead) FROM `tabCSKH Work Item` WHERE campaign = %s",
+            (dist_10k_camp,),
+        )[0][0]
+    )
+    _pdist_reconcile = distribution.reconcile(dist_10k_camp, actor="Administrator")
+    _pdirty_by_status = {
+        str(_st): int(_cnt)
+        for _st, _cnt in frappe.db.sql(
+            "SELECT status, COUNT(*) FROM `tabCSKH Dirty Scope` GROUP BY status"
+        )
+    }
+
+    _all_q_keys = [
+        f"rq:queue:{_probe_gen_qname(q)}" for q in ("short", "default", "long")
+    ]
+    _t_rq0 = time.perf_counter()
+    _last_rq_job = None
+    for _j_idx in range(50):
+        _last_rq_job = frappe.enqueue(
+            "frappe.ping", queue="short", job_name=f"s1-short-probe-lag-{_j_idx:03d}"
+        )
+    _enq_50_ms = round((time.perf_counter() - _t_rq0) * 1000.0, 2)
+    _peak_q_short = int(_probe_rq.llen(_short_q_key))
+    _last_j_key = f"rq:job:{_last_rq_job.id}" if getattr(_last_rq_job, "id", None) else None
+    _t_drain0 = time.perf_counter()
+    _drain_dl = _t_drain0 + 60.0
+    while time.perf_counter() < _drain_dl:
+        _rem = sum(int(_probe_rq.llen(_qk)) for _qk in _all_q_keys)
+        _j_done = True
+        if _last_j_key:
+            _j_st = _probe_rq.hget(_last_j_key, "status")
+            _j_done = _j_st in (
+                b"finished",
+                b"failed",
+                b"stopped",
+                b"canceled",
+                "finished",
+                "failed",
+                None,
+            )
+        if _rem == 0 and _j_done:
+            break
+        time.sleep(0.05)
+    _drain_50_ms = round((time.perf_counter() - _t_drain0) * 1000.0, 2)
+
+    _created_cnt = int(
+        _pr_info.get("created")
+        if _pr_info.get("created") is not None
+        else ((_pr_info.get("actual") or {}).get("created") or 0)
+    )
+    _reads_delta = max(
+        0,
+        _status_after_bg01.get("Innodb_buffer_pool_reads", 0)
+        - _status_before_bg01.get("Innodb_buffer_pool_reads", 0),
+    )
+    _read_reqs_delta = max(
+        0,
+        _status_after_bg01.get("Innodb_buffer_pool_read_requests", 0)
+        - _status_before_bg01.get("Innodb_buffer_pool_read_requests", 0),
+    )
+    _hit_ratio_pct = (
+        round(100.0 * (1.0 - (_reads_delta / _read_reqs_delta)), 4)
+        if _read_reqs_delta > 0
+        else 100.0
+    )
+    _ms_per_item = round(_pdist_exec_ms / max(_created_cnt, 1), 2)
+    _items_per_sec = round(
+        _created_cnt / max(_pdist_exec_ms / 1000.0, 0.001), 2
+    )
+    _extrapolated_10k_sec = round((_ms_per_item * 10000.0) / 1000.0, 2)
+    _questions_delta = max(
+        0,
+        _status_after_bg01.get("Questions", 0)
+        - _status_before_bg01.get("Questions", 0),
+    )
+    _exec_questions_delta = max(
+        0,
+        _status_after_bg01.get("Questions", 0)
+        - _status_before_bg01_exec.get("Questions", 0),
+    )
+    _sql_per_item = round(_questions_delta / max(_created_cnt, 1), 3)
+    _exec_sql_per_item = round(_exec_questions_delta / max(_created_cnt, 1), 3)
+
+    _probe_out = {
+        "runner_hardware": {
+            "platform": platform.platform(),
+            "cpu_count": os.cpu_count(),
+            "python_version": platform.python_version(),
+        },
+        "s1_seeded_counts": dataset_counts,
+        "kpi_warmup_recompute_s1": {
+            "monthly_full_75k_wi_250k_att_ms": monthly_recompute_ms,
+            "daily_incremental_ms": daily_recompute_ms,
+        },
+        "effective_mariadb_and_worker_config": {
+            "mariadb_variables": _mariadb_vars,
+            "covering_index_idx_cskh_attempt_ownevt_cover_present": bool(_cov_idx_rows),
+            "covering_index_columns": [str(r.get("Column_name") or "") for r in _cov_idx_rows],
+            "covering_index_explain": _cov_explain,
+            "rq_workers": _probe_workers,
+            "agg03c_drilldown_5_pages_probe": _probe_dd_summary,
+        },
+        "probe_import_seed": {
+            "probe_items_target": _probe_items,
+            "created_rows": _pimp_status.get("created_rows"),
+            "final_batch_status": _pimp_status.get("status"),
+            "total_import_ms": _pimp_total_ms,
+        },
+        "bg01_per_item_probe": {
+            "run_id": _prun_id,
+            "job_id": f"cskh-dist-{_prun_id}",
+            "eligible_count": _pdist_eligible,
+            "preview_ms": _pdist_preview_ms,
+            "execute_and_worker_drain_ms": _pdist_exec_ms,
+            "final_run_status": _pdist_status,
+            "created_work_items": _created_cnt,
+            "duplicate_work_items": _pdist_dup,
+            "ms_per_item": _ms_per_item,
+            "items_per_sec": _items_per_sec,
+            "sql_queries_delta": _questions_delta,
+            "sql_queries_per_item": _sql_per_item,
+            "execute_sql_queries_delta": _exec_questions_delta,
+            "execute_sql_queries_per_item": _exec_sql_per_item,
+            "extrapolated_10000_items_sec": _extrapolated_10k_sec,
+            "slo_10000_items_budget_sec": 1200.0,
+            "progress_checkpoints": _pdist_progress,
+            "concurrent_worklist_read_p95_ms": _pct(_pdist_nb_lats, 95.0),
+            "ownership_reconciled": bool(_pdist_reconcile.get("ownership_reconciled")),
+            "dirty_scope_counts_by_status": _pdirty_by_status,
+            "peak_long_queue_waiting_jobs_during_bg01": _peak_long_waiting_while_running,
+            "peak_short_queue_waiting_jobs_during_bg01": _peak_short_waiting_during_bg01,
+        },
+        "mariadb_disk_read_telemetry": {
+            "before_bg01": _status_before_bg01,
+            "before_bg01_exec": _status_before_bg01_exec,
+            "after_bg01": _status_after_bg01,
+            "questions_delta": _questions_delta,
+            "sql_queries_per_item": _sql_per_item,
+            "execute_questions_delta": _exec_questions_delta,
+            "execute_sql_queries_per_item": _exec_sql_per_item,
+            "innodb_buffer_pool_reads_delta": _reads_delta,
+            "innodb_buffer_pool_read_requests_delta": _read_reqs_delta,
+            "buffer_pool_hit_ratio_pct": _hit_ratio_pct,
+            "physical_reads_per_item": round(_reads_delta / max(_created_cnt, 1), 4),
+            "innodb_os_log_fsyncs_delta": max(
+                0,
+                _status_after_bg01.get("Innodb_os_log_fsyncs", 0)
+                - _status_before_bg01.get("Innodb_os_log_fsyncs", 0),
+            ),
+            "innodb_data_writes_delta": max(
+                0,
+                _status_after_bg01.get("Innodb_data_writes", 0)
+                - _status_before_bg01.get("Innodb_data_writes", 0),
+            ),
+            "innodb_row_lock_waits_delta": max(
+                0,
+                _status_after_bg01.get("Innodb_row_lock_waits", 0)
+                - _status_before_bg01.get("Innodb_row_lock_waits", 0),
+            ),
+            "innodb_row_lock_time_ms_delta": max(
+                0,
+                _status_after_bg01.get("Innodb_row_lock_time", 0)
+                - _status_before_bg01.get("Innodb_row_lock_time", 0),
+            ),
+            "slow_queries_delta": max(
+                0,
+                _status_after_bg01.get("Slow_queries", 0)
+                - _status_before_bg01.get("Slow_queries", 0),
+            ),
+        },
+        "rq_short_50_job_burst": {
+            "enqueue_50_jobs_ms": _enq_50_ms,
+            "peak_queue_short_depth": _peak_q_short,
+            "drain_to_zero_lag_ms": _drain_50_ms,
+            "effective_worker_drain_jobs_per_sec": (
+                round(50.0 / (_drain_50_ms / 1000.0), 2) if _drain_50_ms > 0 else 0.0
+            ),
+        },
+    }
+    frappe.destroy()
+    print("S1_PROBE_JSON:" + json.dumps(_probe_out, default=str))
+    raise SystemExit(0)
+
 rev_before_bg = str(
     frappe.db.sql(
         "SELECT COALESCE(MAX(kpi_run), '') FROM `tabCSKH KPI Snapshot` "
@@ -2434,12 +2866,41 @@ imp_total_ms = round(imp_preview_ms + imp_worker_ms, 2)
 frappe.db.sql("ANALYZE TABLE `tabCRM Lead`, `tabCSKH Identity Index`")
 frappe.db.commit()
 
+from frappe.utils.background_jobs import generate_qname as _dist_gen_qname
+_dist_rq = redis.from_url(frappe.conf.redis_queue)
+_dist_long_q_key = f"rq:queue:{_dist_gen_qname('long')}"
+_dist_short_q_key = f"rq:queue:{_dist_gen_qname('short')}"
+_dist_default_q_key = f"rq:queue:{_dist_gen_qname('default')}"
+
+_dist_status_keys = (
+    "Questions",
+    "Innodb_buffer_pool_reads",
+    "Innodb_buffer_pool_read_requests",
+    "Innodb_os_log_fsyncs",
+    "Innodb_data_writes",
+    "Innodb_row_lock_waits",
+    "Slow_queries",
+)
+
+def _read_dist_status_counters():
+    return {
+        str(k): int(float(v or 0))
+        for k, v in frappe.db.sql(
+            "SHOW GLOBAL STATUS WHERE Variable_name IN ("
+            + ",".join(["%s"] * len(_dist_status_keys))
+            + ")",
+            _dist_status_keys,
+        )
+    }
+
+dist_status_before_preview = _read_dist_status_counters()
 t_dist0 = time.perf_counter()
 dist_prev = distribution.preview(dist_10k_camp, actor="Administrator", idempotency_key="s1-dist-prev-10k")
 frappe.db.commit()
 dist_preview_ms = round((time.perf_counter() - t_dist0) * 1000.0, 2)
 dist_eligible_count = int((dist_prev.get("summary") or {}).get("eligible_count") or 0)
 
+dist_status_before_exec = _read_dist_status_counters()
 t_de0 = time.perf_counter()
 dist_enq = distribution.enqueue_run(
     dist_prev["preview_id"],
@@ -2466,6 +2927,8 @@ dist_progress_samples = []
 dist_nonblocking_lats = []
 dist_run_status = ""
 r_info = {}
+dist_peak_long_waiting = 0
+dist_peak_short_waiting = 0
 d_deadline = time.perf_counter() + 1200.0
 while time.perf_counter() < d_deadline:
     frappe.db.commit()
@@ -2474,6 +2937,13 @@ while time.perf_counter() < d_deadline:
     p_cur = int(r_info.get("progress") or 0)
     if not dist_progress_samples or dist_progress_samples[-1] != p_cur:
         dist_progress_samples.append(p_cur)
+    _cur_short_w = int(_dist_rq.llen(_dist_short_q_key)) + int(_dist_rq.llen(_dist_default_q_key))
+    if _cur_short_w > dist_peak_short_waiting:
+        dist_peak_short_waiting = _cur_short_w
+    if dist_run_status.lower() == "running":
+        _cur_long_w = int(_dist_rq.llen(_dist_long_q_key))
+        if _cur_long_w > dist_peak_long_waiting:
+            dist_peak_long_waiting = _cur_long_w
     if len(dist_nonblocking_lats) < 20:
         c_nb = time.perf_counter()
         _ = read_model.list_work_items(page=1, page_size=20, actor=staff_users[1])
@@ -2482,6 +2952,7 @@ while time.perf_counter() < d_deadline:
         break
     time.sleep(0.5)
 dist_exec_ms = round((time.perf_counter() - t_de0) * 1000.0, 2)
+dist_status_after_exec = _read_dist_status_counters()
 
 dist_dup_leads = int(
     frappe.db.sql(
@@ -2491,8 +2962,39 @@ dist_dup_leads = int(
 )
 dist_reconcile = distribution.reconcile(dist_10k_camp, actor="Administrator")
 
-from frappe.utils.background_jobs import generate_qname as _dist_gen_qname
-_dist_rq = redis.from_url(frappe.conf.redis_queue)
+_dist_created_cnt = int(
+    r_info.get("created")
+    if r_info.get("created") is not None
+    else ((r_info.get("actual") or {}).get("created") or 0)
+)
+dist_ms_per_item = round(dist_exec_ms / max(_dist_created_cnt, 1), 2)
+dist_items_per_sec = round(_dist_created_cnt / max(dist_exec_ms / 1000.0, 0.001), 2)
+dist_questions_delta = max(
+    0,
+    dist_status_after_exec.get("Questions", 0) - dist_status_before_preview.get("Questions", 0),
+)
+dist_exec_questions_delta = max(
+    0,
+    dist_status_after_exec.get("Questions", 0) - dist_status_before_exec.get("Questions", 0),
+)
+dist_sql_per_item = round(dist_questions_delta / max(_dist_created_cnt, 1), 3)
+dist_exec_sql_per_item = round(dist_exec_questions_delta / max(_dist_created_cnt, 1), 3)
+dist_reads_delta = max(
+    0,
+    dist_status_after_exec.get("Innodb_buffer_pool_reads", 0)
+    - dist_status_before_preview.get("Innodb_buffer_pool_reads", 0),
+)
+dist_read_reqs_delta = max(
+    0,
+    dist_status_after_exec.get("Innodb_buffer_pool_read_requests", 0)
+    - dist_status_before_preview.get("Innodb_buffer_pool_read_requests", 0),
+)
+dist_hit_ratio_pct = (
+    round(100.0 * (1.0 - (dist_reads_delta / dist_read_reqs_delta)), 4)
+    if dist_read_reqs_delta > 0
+    else 100.0
+)
+
 _dist_poll_timed_out = dist_run_status.lower() not in (
     "completed",
     "completed_with_errors",
@@ -2723,6 +3225,20 @@ explain_plans = {
         "GROUP BY ca.ownership_event",
         as_dict=True,
     ),
+    "kpi_drilldown_attempt_covering_chunk": (
+        frappe.db.sql(
+            "EXPLAIN SELECT ca.ownership_event, MAX(ca.connected_snapshot) "
+            "FROM `tabCSKH Contact Attempt` ca FORCE INDEX (idx_cskh_attempt_ownevt_cover) "
+            "WHERE ca.ownership_event IN ('AH-S1-000001', 'AH-S1-000002', 'AH-S1-000003') "
+            "AND ca.recorded_at <= '2026-11-01 00:00:00' "
+            "GROUP BY ca.ownership_event",
+            as_dict=True,
+        )
+        if frappe.db.sql(
+            "SHOW INDEX FROM `tabCSKH Contact Attempt` WHERE Key_name = 'idx_cskh_attempt_ownevt_cover'"
+        )
+        else []
+    ),
 }
 
 out = {
@@ -2801,6 +3317,16 @@ out = {
             "preview_ms": dist_preview_ms,
             "preview_within_60s_reference": dist_preview_ms <= 60_000.0,
             "execute_and_worker_drain_ms": dist_exec_ms,
+            "ms_per_item": dist_ms_per_item,
+            "items_per_sec": dist_items_per_sec,
+            "sql_queries_delta": dist_questions_delta,
+            "sql_queries_per_item": dist_sql_per_item,
+            "execute_sql_queries_delta": dist_exec_questions_delta,
+            "execute_sql_queries_per_item": dist_exec_sql_per_item,
+            "innodb_buffer_pool_reads_delta": dist_reads_delta,
+            "buffer_pool_hit_ratio_pct": dist_hit_ratio_pct,
+            "peak_long_queue_waiting_jobs_during_bg01": dist_peak_long_waiting,
+            "peak_short_queue_waiting_jobs_during_bg01": dist_peak_short_waiting,
             "final_run_status": dist_run_status,
             "created_work_items": (
                 r_info.get("created")
@@ -3715,6 +4241,723 @@ def provision_and_execute_s1_benchmark(
             )
 
 
+def _parse_pct_value(raw: str) -> float:
+    cleaned = str(raw or "").strip().rstrip("%").strip()
+    try:
+        return round(float(cleaned), 2)
+    except ValueError:
+        return 0.0
+
+
+def _parse_size_token_to_mib(token: str) -> float:
+    s = str(token or "").strip()
+    m = re.match(r"^([0-9]+(?:\.[0-9]+)?)\s*([A-Za-z]+)$", s)
+    if not m:
+        return 0.0
+    val = float(m.group(1))
+    unit = m.group(2).lower()
+    factors = {
+        "b": 1.0 / (1024.0 * 1024.0),
+        "kb": 1000.0 / (1024.0 * 1024.0),
+        "kib": 1.0 / 1024.0,
+        "mb": (1000.0 * 1000.0) / (1024.0 * 1024.0),
+        "mib": 1.0,
+        "gb": (1000.0**3) / (1024.0 * 1024.0),
+        "gib": 1024.0,
+        "tb": (1000.0**4) / (1024.0 * 1024.0),
+        "tib": 1024.0 * 1024.0,
+    }
+    return round(val * factors.get(unit, 0.0), 2)
+
+
+def _parse_mem_usage_pair_mib(mem_usage: str) -> tuple[float, float]:
+    parts = [p.strip() for p in str(mem_usage or "").split("/", 1)]
+    if len(parts) != 2:
+        return (0.0, 0.0)
+    return (_parse_size_token_to_mib(parts[0]), _parse_size_token_to_mib(parts[1]))
+
+
+def _inspect_compose_service_cgroups(
+    compose_base: list[str],
+    compose_env: dict[str, str],
+    services: tuple[str, ...] = ("db", "backend", "queue-long", "queue-short"),
+) -> dict[str, dict[str, object]]:
+    inspected: dict[str, dict[str, object]] = {}
+    for svc in services:
+        try:
+            ps_proc = subprocess.run(
+                [*compose_base, "ps", "-q", svc],
+                env=compose_env,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+            cid = (
+                ps_proc.stdout.strip().splitlines()[0].strip()
+                if ps_proc.stdout.strip()
+                else ""
+            )
+            if not cid:
+                continue
+            insp_proc = subprocess.run(
+                ["docker", "inspect", cid],
+                env=compose_env,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=15,
+            )
+            if insp_proc.returncode != 0 or not insp_proc.stdout.strip():
+                continue
+            obj = json.loads(insp_proc.stdout)[0]
+            hc = obj.get("HostConfig") or {}
+            st = obj.get("State") or {}
+            cfg = obj.get("Config") or {}
+            nano_cpus = int(hc.get("NanoCpus") or 0)
+            mem_bytes = int(hc.get("Memory") or 0)
+            inspected[svc] = {
+                "container_name": str(obj.get("Name") or "").lstrip("/"),
+                "cpus_limit": round(nano_cpus / 1_000_000_000.0, 3)
+                if nano_cpus
+                else 0.0,
+                "memory_limit_mib": round(mem_bytes / (1024.0 * 1024.0), 1)
+                if mem_bytes
+                else 0.0,
+                "cpu_shares": int(hc.get("CpuShares") or 0),
+                "oom_killed": bool(st.get("OOMKilled")),
+                "restart_count": int(obj.get("RestartCount") or 0),
+                "cmd": cfg.get("Cmd") or [],
+            }
+        except Exception:
+            continue
+    return inspected
+
+
+RUN4_STAGING_VPS_CAPPED_REFERENCE: dict[str, object] = {
+    "reference_run_date": "2026-11-13",
+    "reference_candidate_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd2268bf9e4e49c4f20b34f5a75f0598c4a6b5434c0be5b4218a913ca90a",
+    "mariadb_innodb_buffer_pool_mib": 128.0,
+    "mariadb_innodb_log_file_mib": 96.0,
+    "innodb_buffer_pool_reads": 5_156_775,
+    "buffer_pool_hit_ratio_pct": 88.09,
+    "db_block_io": "86.2GB / 16.5GB",
+    "bg01_completed_items": 4_500,
+    "bg01_target_items": 10_000,
+    "bg01_elapsed_sec": 1200.47,
+    "bg01_ms_per_item": 266.77,
+    "bg01_items_per_sec": 3.75,
+    "bg01_extrapolated_10000_items_sec": 2667.7,
+    "queue_short_peak_cpu_pct": 146.99,
+    "queue_short_peak_mem_mib": 1601.54,
+    "queue_short_block_io": "1.98GB / 625MB",
+    "queue_short_job_timeout_exceptions": 1,
+    "agg03c_drilldown_monthly_company_p95_ms": 11525.91,
+}
+
+
+def provision_and_execute_s1_short_probe(
+    *,
+    app_image: str,
+    pull_policy: str = "missing",
+    port: int = 18880,
+    site_name: str = "p4-s1-probe.localhost",
+    resource_profile: str = "staging_vps_capped",
+    require_live_headroom: bool = True,
+    probe_items: int = 500,
+) -> dict[str, object]:
+    """Run an isolated S1 short throughput & telemetry probe before full 10k G18 measurement."""
+    if resource_profile not in ("s1_canonical_4x4", "staging_vps_capped"):
+        raise ValueError(
+            f"Unsupported --resource-profile {resource_profile!r}; expected s1_canonical_4x4 or staging_vps_capped"
+        )
+    bounded_probe_items = max(100, min(int(probe_items), 2000))
+    live_headroom = (
+        enforce_live_resource_headroom()
+        if (require_live_headroom or resource_profile == "staging_vps_capped")
+        else None
+    )
+    compose_project = f"cskh-p4-bench-probe-{secrets.token_hex(4)}"
+    base_url = f"http://127.0.0.1:{port}"
+    spec = build_benchmark_specification(
+        profile_name="s1_suggested_mvp",
+        base_url=base_url,
+        site_name=site_name,
+        compose_project=compose_project,
+        confirm_isolated_target=True,
+    )
+    lock = json.loads(LOCK_FILE.read_text(encoding="utf-8"))
+    db_root_pw = secrets.token_hex(24)
+    admin_pw = secrets.token_hex(24)
+    actor_pw = secrets.token_hex(20)
+    secrets_to_redact = (db_root_pw, admin_pw, actor_pw)
+    started_at_utc = datetime.now(timezone.utc).isoformat()
+
+    with tempfile.TemporaryDirectory(prefix="cskh-p4-s1-probe-") as tmp_dir_str:
+        tmp_dir = Path(tmp_dir_str)
+        db_secret = tmp_dir / "db_root_password.txt"
+        db_secret.write_text(db_root_pw, encoding="utf-8")
+        bench_override = tmp_dir / "compose.bench-override.yaml"
+        override_yaml = (
+            STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML
+            if resource_profile == "staging_vps_capped"
+            else EPHEMERAL_BENCH_OVERRIDE_YAML
+        )
+        bench_override.write_text(override_yaml, encoding="utf-8")
+        compose_files = [VERIFY_COMPOSE_FILE, bench_override]
+        compose_env = {
+            **os.environ,
+            "COMPOSE_PROJECT_NAME": compose_project,
+            "APP_IMAGE": app_image,
+            "PULL_POLICY": pull_policy,
+            "SITE_NAME": site_name,
+            "VERIFY_HTTP_PORT": str(port),
+            "DB_PASSWORD_SECRETS_FILE": str(db_secret),
+            "MARIADB_IMAGE": lock["infra_images"]["mariadb"],
+            "REDIS_IMAGE": lock["infra_images"]["redis"],
+        }
+        compose_base = [
+            "docker",
+            "compose",
+            *_compose_files_arg(compose_files),
+            "-p",
+            compose_project,
+        ]
+
+        current_stage = "compose_up"
+        probe_in_container: dict[str, object] | None = None
+        stats_samples: list[dict[str, object]] = []
+        stop_stats_event = threading.Event()
+
+        def _stats_sampler_loop() -> None:
+            while not stop_stats_event.is_set():
+                try:
+                    snap = _collect_docker_stats(
+                        compose_project, compose_file=compose_files, env=compose_env
+                    )
+                    if snap:
+                        stats_samples.append(
+                            {
+                                "ts_utc": datetime.now(timezone.utc).isoformat(),
+                                "containers": snap,
+                            }
+                        )
+                except Exception:
+                    pass
+                stop_stats_event.wait(2.0)
+
+        sampler_thread: threading.Thread | None = None
+        try:
+            subprocess.run(
+                [*compose_base, "up", "-d", "--no-build"],
+                env=compose_env,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=300,
+            )
+
+            current_stage = "site_bootstrap"
+            init_cmd = (
+                "set -euo pipefail; cd /home/frappe/frappe-bench; "
+                "bench new-site --no-mariadb-socket --mariadb-user-host-login-scope=% "
+                '--db-root-password "$BENCH_DB_ROOT_PW" --admin-password "$BENCH_ADMIN_PW" "$BENCH_SITE"; '
+                'bench use "$BENCH_SITE"; '
+                'bench --site "$BENCH_SITE" set-config time_zone Asia/Ho_Chi_Minh; '
+                'bench --site "$BENCH_SITE" set-config default_language vi; '
+                'bench --site "$BENCH_SITE" install-app crm; '
+                'bench --site "$BENCH_SITE" install-app crm_cskh; '
+                'bench --site "$BENCH_SITE" migrate; '
+                'bench --site "$BENCH_SITE" clear-cache'
+            )
+            init_proc = subprocess.run(
+                [
+                    *compose_base,
+                    "exec",
+                    "-T",
+                    "-e",
+                    f"BENCH_DB_ROOT_PW={db_root_pw}",
+                    "-e",
+                    f"BENCH_ADMIN_PW={admin_pw}",
+                    "-e",
+                    f"BENCH_SITE={site_name}",
+                    "backend",
+                    "bash",
+                    "-lc",
+                    init_cmd,
+                ],
+                env=compose_env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=600,
+            )
+            if init_proc.returncode != 0:
+                raise RuntimeError(
+                    f"S1 short probe bootstrap failed (rc={init_proc.returncode}):\n"
+                    f"STDOUT:\n{init_proc.stdout[-1500:]}\nSTDERR:\n{init_proc.stderr[-1500:]}"
+                )
+
+            current_stage = "service_restart"
+            subprocess.run(
+                [
+                    *compose_base,
+                    "restart",
+                    "backend",
+                    "websocket",
+                    "queue-short",
+                    "queue-long",
+                    "scheduler",
+                ],
+                env=compose_env,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
+
+            current_stage = "s1_short_probe_execution"
+            sampler_thread = threading.Thread(
+                target=_stats_sampler_loop, name="s1-probe-docker-stats", daemon=True
+            )
+            sampler_thread.start()
+            try:
+                probe_proc = subprocess.run(
+                    [
+                        *compose_base,
+                        "exec",
+                        "-T",
+                        "-e",
+                        "FRAPPE_STREAM_LOGGING=1",
+                        "-e",
+                        f"BENCH_SITE={site_name}",
+                        "-e",
+                        f"BENCH_ACTOR_PW={actor_pw}",
+                        "-e",
+                        "S1_PROBE_ONLY=1",
+                        "-e",
+                        f"S1_PROBE_ITEMS={bounded_probe_items}",
+                        "backend",
+                        "/home/frappe/frappe-bench/env/bin/python",
+                        "-",
+                    ],
+                    input=S1_IN_CONTAINER_BENCH_SCRIPT,
+                    env=compose_env,
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=1200,
+                )
+            finally:
+                stop_stats_event.set()
+                if sampler_thread is not None:
+                    sampler_thread.join(timeout=5.0)
+
+            if probe_proc.returncode != 0:
+                raise RuntimeError(
+                    f"S1 short probe failed (rc={probe_proc.returncode}):\n"
+                    f"STDOUT:\n{probe_proc.stdout[-2500:]}\nSTDERR:\n{probe_proc.stderr[-2500:]}"
+                )
+            marker_lines = [
+                ln[len("S1_PROBE_JSON:") :]
+                for ln in probe_proc.stdout.splitlines()
+                if ln.startswith("S1_PROBE_JSON:")
+            ]
+            if not marker_lines:
+                raise RuntimeError(
+                    f"S1 short probe did not emit S1_PROBE_JSON marker: {probe_proc.stderr[-500:]}"
+                )
+            probe_in_container = json.loads(marker_lines[-1])
+
+            current_stage = "post_probe_inspection"
+            cgroup_inspection = _inspect_compose_service_cgroups(
+                compose_base, compose_env
+            )
+            final_stats = _collect_docker_stats(
+                compose_project, compose_file=compose_files, env=compose_env
+            )
+            qs_logs_proc = subprocess.run(
+                [*compose_base, "logs", "--no-color", "queue-short"],
+                env=compose_env,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=30,
+            )
+            qs_combined_logs = (
+                (qs_logs_proc.stdout or "") + "\n" + (qs_logs_proc.stderr or "")
+            )
+            qs_timeout_count = qs_combined_logs.count(
+                "JobTimeoutException"
+            ) + qs_combined_logs.count("Task exceeded maximum timeout")
+
+            qs_cpu_vals: list[float] = []
+            qs_mem_vals: list[float] = []
+            qs_mem_limit_mib = 0.0
+            qs_last_block_io = ""
+            db_last_block_io = ""
+            ql_cpu_vals: list[float] = []
+            ql_mem_vals: list[float] = []
+            for snap in stats_samples + (
+                [{"containers": final_stats}] if final_stats else []
+            ):
+                for row in snap.get("containers") or []:  # type: ignore[union-attr]
+                    if not isinstance(row, dict):
+                        continue
+                    cname = str(row.get("container") or "")
+                    if "queue-short" in cname:
+                        qs_cpu_vals.append(
+                            _parse_pct_value(str(row.get("cpu_pct") or ""))
+                        )
+                        used_m, lim_m = _parse_mem_usage_pair_mib(
+                            str(row.get("mem_usage") or "")
+                        )
+                        qs_mem_vals.append(used_m)
+                        if lim_m > 0:
+                            qs_mem_limit_mib = lim_m
+                        qs_last_block_io = str(row.get("block_io") or qs_last_block_io)
+                    elif "queue-long" in cname:
+                        ql_cpu_vals.append(
+                            _parse_pct_value(str(row.get("cpu_pct") or ""))
+                        )
+                        used_m, _ = _parse_mem_usage_pair_mib(
+                            str(row.get("mem_usage") or "")
+                        )
+                        ql_mem_vals.append(used_m)
+                    elif cname.endswith("-db-1") or "-db-" in cname:
+                        db_last_block_io = str(row.get("block_io") or db_last_block_io)
+
+            eff_cfg = (
+                probe_in_container.get("effective_mariadb_and_worker_config") or {}
+            )
+            assert isinstance(eff_cfg, dict)
+            mariadb_vars = eff_cfg.get("mariadb_variables") or {}
+            assert isinstance(mariadb_vars, dict)
+            rq_workers = eff_cfg.get("rq_workers") or []
+            assert isinstance(rq_workers, list)
+            cov_explain = eff_cfg.get("covering_index_explain") or []
+            assert isinstance(cov_explain, list)
+            agg03c_probe = eff_cfg.get("agg03c_drilldown_5_pages_probe") or {}
+            assert isinstance(agg03c_probe, dict)
+
+            long_workers = [
+                w
+                for w in rq_workers
+                if isinstance(w, dict) and w.get("normalized_queues") == ["long"]
+            ]
+            short_workers = [
+                w
+                for w in rq_workers
+                if isinstance(w, dict)
+                and w.get("normalized_queues") == ["short", "default"]
+            ]
+
+            bg01_probe = probe_in_container.get("bg01_per_item_probe") or {}
+            assert isinstance(bg01_probe, dict)
+            disk_tel = probe_in_container.get("mariadb_disk_read_telemetry") or {}
+            assert isinstance(disk_tel, dict)
+            rq_burst = probe_in_container.get("rq_short_50_job_burst") or {}
+            assert isinstance(rq_burst, dict)
+
+            qs_oom_killed = bool(
+                (cgroup_inspection.get("queue-short") or {}).get("oom_killed")
+            )
+            ql_oom_killed = bool(
+                (cgroup_inspection.get("queue-long") or {}).get("oom_killed")
+            )
+            db_oom_killed = bool((cgroup_inspection.get("db") or {}).get("oom_killed"))
+
+            queue_short_load_telemetry = {
+                "docker_stats_samples_count": len(qs_cpu_vals),
+                "avg_cpu_pct": (
+                    round(sum(qs_cpu_vals) / len(qs_cpu_vals), 2)
+                    if qs_cpu_vals
+                    else 0.0
+                ),
+                "max_cpu_pct": max(qs_cpu_vals) if qs_cpu_vals else 0.0,
+                "peak_mem_mib": max(qs_mem_vals) if qs_mem_vals else 0.0,
+                "configured_mem_limit_mib": (
+                    qs_mem_limit_mib
+                    or float(
+                        (cgroup_inspection.get("queue-short") or {}).get(
+                            "memory_limit_mib"
+                        )
+                        or 0.0
+                    )
+                ),
+                "block_io_final": qs_last_block_io,
+                "oom_killed": qs_oom_killed,
+                "job_timeout_exception_count": qs_timeout_count,
+                "peak_short_queue_waiting_jobs_during_bg01": int(
+                    bg01_probe.get("peak_short_queue_waiting_jobs_during_bg01") or 0
+                ),
+                "rq_short_50_job_burst": rq_burst,
+            }
+
+            cov_row0 = (
+                cov_explain[0]
+                if cov_explain and isinstance(cov_explain[0], dict)
+                else {}
+            )
+            effective_config_checks = {
+                "mariadb_innodb_buffer_pool_2560m": (
+                    int(mariadb_vars.get("innodb_buffer_pool_size") or 0)
+                    == 2_684_354_560
+                ),
+                "mariadb_innodb_log_file_512m": (
+                    int(mariadb_vars.get("innodb_log_file_size") or 0) == 536_870_912
+                ),
+                "mariadb_flush_trx_commit_1": (
+                    str(mariadb_vars.get("innodb_flush_log_at_trx_commit") or "") == "1"
+                ),
+                "covering_index_present_and_using_index": (
+                    bool(
+                        eff_cfg.get(
+                            "covering_index_idx_cskh_attempt_ownevt_cover_present"
+                        )
+                    )
+                    and str(cov_row0.get("key") or "")
+                    == "idx_cskh_attempt_ownevt_cover"
+                    and "using index" in str(cov_row0.get("Extra") or "").lower()
+                ),
+                "queue_long_single_dedicated_worker": len(long_workers) == 1,
+                "queue_short_single_dedicated_worker": len(short_workers) == 1,
+            }
+
+            ms_per_item = float(bg01_probe.get("ms_per_item") or 999999.0)
+            extrapolated_10k_sec = float(
+                bg01_probe.get("extrapolated_10000_items_sec") or 999999.0
+            )
+            hit_ratio_pct = float(disk_tel.get("buffer_pool_hit_ratio_pct") or 0.0)
+            peak_long_waiting = int(
+                bg01_probe.get("peak_long_queue_waiting_jobs_during_bg01") or 0
+            )
+
+            probe_gate_items = {
+                "effective_mariadb_and_worker_config_locked": {
+                    "checks": effective_config_checks,
+                    "passed": all(effective_config_checks.values()),
+                },
+                "bg01_probe_completed_all_items_zero_dup": {
+                    "target_items": bounded_probe_items,
+                    "created_work_items": bg01_probe.get("created_work_items"),
+                    "duplicate_work_items": bg01_probe.get("duplicate_work_items"),
+                    "final_run_status": bg01_probe.get("final_run_status"),
+                    "ownership_reconciled": bg01_probe.get("ownership_reconciled"),
+                    "passed": (
+                        str(bg01_probe.get("final_run_status") or "").lower()
+                        == "completed"
+                        and int(bg01_probe.get("created_work_items") or 0)
+                        == bounded_probe_items
+                        and int(bg01_probe.get("duplicate_work_items") or 0) == 0
+                        and bool(bg01_probe.get("ownership_reconciled")) is True
+                    ),
+                },
+                "bg01_per_item_le_95ms_extrapolated_10k_le_950s": {
+                    "target_max_ms_per_item": 95.0,
+                    "measured_ms_per_item": ms_per_item,
+                    "target_max_extrapolated_10000_items_sec": 950.0,
+                    "slo_10000_items_budget_sec": 1200.0,
+                    "extrapolated_10000_items_sec": extrapolated_10k_sec,
+                    "passed": ms_per_item <= 95.0 and extrapolated_10k_sec <= 950.0,
+                },
+                "mariadb_buffer_pool_hit_ratio_ge_99pct": {
+                    "target_min_hit_ratio_pct": 99.0,
+                    "measured_hit_ratio_pct": hit_ratio_pct,
+                    "innodb_buffer_pool_reads_delta": disk_tel.get(
+                        "innodb_buffer_pool_reads_delta"
+                    ),
+                    "innodb_buffer_pool_read_requests_delta": disk_tel.get(
+                        "innodb_buffer_pool_read_requests_delta"
+                    ),
+                    "passed": hit_ratio_pct >= 99.0,
+                },
+                "queue_short_zero_timeouts_zero_oom": {
+                    "job_timeout_exception_count": qs_timeout_count,
+                    "queue_short_oom_killed": qs_oom_killed,
+                    "queue_long_oom_killed": ql_oom_killed,
+                    "db_oom_killed": db_oom_killed,
+                    "passed": (
+                        qs_timeout_count == 0
+                        and not qs_oom_killed
+                        and not ql_oom_killed
+                        and not db_oom_killed
+                    ),
+                },
+                "agg03c_drilldown_covering_index_probe_le_3000ms": {
+                    "target_p95_ms": 3000.0,
+                    "measured_p95_ms": agg03c_probe.get("p95_ms"),
+                    "error_count": agg03c_probe.get("error_count"),
+                    "passed": (
+                        float(agg03c_probe.get("p95_ms") or 999999.0) <= 3000.0
+                        and int(agg03c_probe.get("error_count") or 0) == 0
+                    ),
+                },
+            }
+            failed_probe_checks = [
+                k for k, v in probe_gate_items.items() if not bool(v.get("passed"))
+            ]
+            probe_gate_verdict = {
+                "all_passed": len(failed_probe_checks) == 0,
+                "total_checks": len(probe_gate_items),
+                "passed_count": len(probe_gate_items) - len(failed_probe_checks),
+                "failed_count": len(failed_probe_checks),
+                "failed_checks": failed_probe_checks,
+                "ready_for_official_g18_full_run": len(failed_probe_checks) == 0,
+                "items": probe_gate_items,
+            }
+
+            recommend_scale_ql = bool(peak_long_waiting > 0)
+            queue_long_scaling_evaluation = {
+                "bg01_job_architecture": "single_sequential_rq_job",
+                "bg01_job_id": bg01_probe.get("job_id"),
+                "single_job_parallelizable_by_extra_workers": False,
+                "configured_queue_long_workers": len(long_workers),
+                "peak_long_queue_waiting_jobs_during_bg01": peak_long_waiting,
+                "queue_long_avg_cpu_pct": (
+                    round(sum(ql_cpu_vals) / len(ql_cpu_vals), 2)
+                    if ql_cpu_vals
+                    else 0.0
+                ),
+                "queue_long_peak_mem_mib": max(ql_mem_vals) if ql_mem_vals else 0.0,
+                "measured_ms_per_item": ms_per_item,
+                "extrapolated_10000_items_sec": extrapolated_10k_sec,
+                "recommend_scaling_queue_long_above_1": recommend_scale_ql,
+                "decision": (
+                    "KEEP_QUEUE_LONG_REPLICAS_1"
+                    if not recommend_scale_ql
+                    else "INVESTIGATE_CONCURRENT_LONG_QUEUE_BACKLOG"
+                ),
+                "rationale": (
+                    "BG-01 executes inside a single sequential RQ job (`cskh-dist-<run_id>`) "
+                    "processing 100-item DB batches; a 2nd `queue-long` worker cannot split a "
+                    f"single job, `peak_long_queue_waiting_jobs_during_bg01={peak_long_waiting}`, "
+                    f"and measured `ms_per_item={ms_per_item} ms` extrapolates 10,000 items to "
+                    f"`{extrapolated_10k_sec} s` (budget `<= 1,200 s`). Keeping 1 replica saves "
+                    "~250-400 MiB RAM on the shared 15.62 GiB Staging VPS."
+                    if not recommend_scale_ql
+                    else (
+                        f"Observed `{peak_long_waiting}` waiting job(s) in `long` queue while "
+                        "`BG-01` was running; inspect concurrent `long` job scheduling before "
+                        "considering scaling `queue-long` above 1 replica."
+                    )
+                ),
+            }
+
+            run4_vs_probe_comparison = {
+                "baseline_run4_staging_vps_capped": RUN4_STAGING_VPS_CAPPED_REFERENCE,
+                "current_probe_measured": {
+                    "mariadb_innodb_buffer_pool_mib": round(
+                        int(mariadb_vars.get("innodb_buffer_pool_size") or 0)
+                        / (1024.0 * 1024.0),
+                        1,
+                    ),
+                    "mariadb_innodb_log_file_mib": round(
+                        int(mariadb_vars.get("innodb_log_file_size") or 0)
+                        / (1024.0 * 1024.0),
+                        1,
+                    ),
+                    "innodb_buffer_pool_reads_delta": disk_tel.get(
+                        "innodb_buffer_pool_reads_delta"
+                    ),
+                    "buffer_pool_hit_ratio_pct": hit_ratio_pct,
+                    "db_block_io_final": db_last_block_io,
+                    "bg01_probe_items": bounded_probe_items,
+                    "bg01_ms_per_item": ms_per_item,
+                    "bg01_items_per_sec": bg01_probe.get("items_per_sec"),
+                    "bg01_sql_queries_delta": bg01_probe.get("sql_queries_delta"),
+                    "bg01_sql_queries_per_item": bg01_probe.get("sql_queries_per_item"),
+                    "bg01_execute_sql_queries_delta": bg01_probe.get(
+                        "execute_sql_queries_delta"
+                    ),
+                    "bg01_execute_sql_queries_per_item": bg01_probe.get(
+                        "execute_sql_queries_per_item"
+                    ),
+                    "bg01_extrapolated_10000_items_sec": extrapolated_10k_sec,
+                    "peak_long_queue_waiting_jobs_during_bg01": peak_long_waiting,
+                    "peak_short_queue_waiting_jobs_during_bg01": queue_short_load_telemetry[
+                        "peak_short_queue_waiting_jobs_during_bg01"
+                    ],
+                    "queue_short_max_cpu_pct": queue_short_load_telemetry[
+                        "max_cpu_pct"
+                    ],
+                    "queue_short_peak_mem_mib": queue_short_load_telemetry[
+                        "peak_mem_mib"
+                    ],
+                    "queue_short_block_io_final": qs_last_block_io,
+                    "queue_short_job_timeout_exceptions": qs_timeout_count,
+                    "agg03c_drilldown_5_pages_p95_ms": agg03c_probe.get("p95_ms"),
+                },
+            }
+
+            return {
+                **spec,
+                "mode": "s1_short_throughput_probe",
+                "status": "COMPLETED",
+                "started_at_utc": started_at_utc,
+                "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+                "acceptance_verdict": "PASS"
+                if probe_gate_verdict["all_passed"]
+                else "FAIL",
+                "all_acceptance_passed": bool(probe_gate_verdict["all_passed"]),
+                "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
+                "app_image_tested": app_image,
+                "resource_profile": resource_profile,
+                "probe_items": bounded_probe_items,
+                "live_resource_headroom_precheck": live_headroom,
+                "cgroup_container_inspection": cgroup_inspection,
+                "s1_short_probe_telemetry": probe_in_container,
+                "queue_short_load_telemetry": queue_short_load_telemetry,
+                "queue_long_scaling_evaluation": queue_long_scaling_evaluation,
+                "run4_vs_probe_comparison": run4_vs_probe_comparison,
+                "probe_gate_verdict": probe_gate_verdict,
+                "final_container_stats": final_stats,
+            }
+        except BenchmarkExecutionError:
+            raise
+        except Exception as exc:
+            stop_stats_event.set()
+            if sampler_thread is not None:
+                sampler_thread.join(timeout=3.0)
+            pre_teardown_diag = _collect_pre_teardown_diagnostics(
+                compose_project=compose_project,
+                site_name=site_name,
+                compose_files=compose_files,
+                compose_env=compose_env,
+                secrets_to_redact=secrets_to_redact,
+            )
+            scrubbed_err = _scrub_diagnostic_text(str(exc), secrets_to_redact)
+            failure_report: dict[str, object] = {
+                **spec,
+                "mode": "s1_short_throughput_probe",
+                "status": "EXECUTION_ERROR",
+                "started_at_utc": started_at_utc,
+                "completed_at_utc": datetime.now(timezone.utc).isoformat(),
+                "acceptance_verdict": "ERROR",
+                "all_acceptance_passed": False,
+                "failed_stage": current_stage,
+                "error_type": type(exc).__name__,
+                "error_message": scrubbed_err,
+                "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
+                "app_image_tested": app_image,
+                "resource_profile": resource_profile,
+                "probe_items": bounded_probe_items,
+                "live_resource_headroom_precheck": live_headroom,
+                "s1_short_probe_telemetry": probe_in_container,
+                "worker_and_job_diagnostics": pre_teardown_diag,
+            }
+            raise BenchmarkExecutionError(scrubbed_err, report=failure_report) from exc
+        finally:
+            subprocess.run(
+                [*compose_base, "down", "-v", "--remove-orphans"],
+                env=compose_env,
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=180,
+            )
+
+
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument(
@@ -3746,9 +4989,20 @@ def main(argv: list[str] | None = None) -> int:
         help="Self-provision ephemeral isolated compose stack, seed exact S1 dataset, measure, and tear down",
     )
     p.add_argument(
+        "--probe-s1-short",
+        action="store_true",
+        help="Self-provision ephemeral isolated compose stack and run short S1 disk-read/per-item/queue-short probe",
+    )
+    p.add_argument(
+        "--probe-items",
+        type=int,
+        default=500,
+        help="Number of BG-01 distribution Work Items to execute in --probe-s1-short (100..2000, default: 500)",
+    )
+    p.add_argument(
         "--app-image",
         default="",
-        help="Immutable APP_IMAGE (@sha256 digest or local image ref) for --provision-and-run-s1",
+        help="Immutable APP_IMAGE (@sha256 digest or local image ref) for --provision-and-run-s1 / --probe-s1-short",
     )
     p.add_argument(
         "--pull-policy",
@@ -3776,7 +5030,41 @@ def main(argv: list[str] | None = None) -> int:
     exit_code = 0
     failure_stderr_msg = ""
 
-    if args.provision_and_run_s1:
+    if args.provision_and_run_s1 and args.probe_s1_short:
+        raise SystemExit(
+            "ERROR: --provision-and-run-s1 and --probe-s1-short are mutually exclusive"
+        )
+
+    if args.probe_s1_short:
+        if not args.confirm_isolated_target:
+            raise SystemExit(
+                "ERROR: --probe-s1-short requires explicit --confirm-isolated-target"
+            )
+        if not args.app_image.strip():
+            raise SystemExit("ERROR: --probe-s1-short requires --app-image")
+        try:
+            report = provision_and_execute_s1_short_probe(
+                app_image=args.app_image.strip(),
+                pull_policy=args.pull_policy,
+                port=args.port,
+                site_name=(
+                    args.site_name
+                    if args.site_name != "p4-bench.localhost"
+                    else "p4-s1-probe.localhost"
+                ),
+                resource_profile=args.resource_profile,
+                require_live_headroom=args.require_live_headroom,
+                probe_items=args.probe_items,
+            )
+        except BenchmarkExecutionError as exc:
+            report = exc.report
+            exit_code = 1
+            failure_stderr_msg = (
+                f"ERROR: Short S1 probe failed at stage "
+                f"{report.get('failed_stage')!r}: {exc}; "
+                f"diagnostic JSON report saved to {out_path}"
+            )
+    elif args.provision_and_run_s1:
         if not args.confirm_isolated_target:
             raise SystemExit(
                 "ERROR: --provision-and-run-s1 requires explicit --confirm-isolated-target"
@@ -3858,6 +5146,18 @@ def main(argv: list[str] | None = None) -> int:
                 f"complete JSON report and raw measurements saved to {out_path}"
             )
 
+    probe_verdict = report.get("probe_gate_verdict")
+    if isinstance(probe_verdict, dict) and not bool(
+        probe_verdict.get("all_passed", True)
+    ):
+        exit_code = 1
+        if not failure_stderr_msg:
+            failure_stderr_msg = (
+                f"ERROR: S1 short throughput probe failed checks "
+                f"({probe_verdict.get('failed_checks')}); "
+                f"complete JSON probe report saved to {out_path}"
+            )
+
     _write_json_report_atomic(out_path, report)
     summary_payload: dict[str, object] = {
         "status": report["status"],
@@ -3866,11 +5166,18 @@ def main(argv: list[str] | None = None) -> int:
         "out": str(out_path),
         "exit_code": exit_code,
     }
+    if "mode" in report:
+        summary_payload["mode"] = report["mode"]
     if "acceptance_verdict" in report:
         summary_payload["acceptance_verdict"] = report["acceptance_verdict"]
         summary_payload["all_acceptance_passed"] = report.get("all_acceptance_passed")
     if isinstance(acceptance, dict):
         summary_payload["failed_checks"] = acceptance.get("failed_checks", [])
+    elif isinstance(probe_verdict, dict):
+        summary_payload["failed_checks"] = probe_verdict.get("failed_checks", [])
+        summary_payload["ready_for_official_g18_full_run"] = probe_verdict.get(
+            "ready_for_official_g18_full_run"
+        )
     print(json.dumps(summary_payload))
     if failure_stderr_msg:
         print(failure_stderr_msg, file=sys.stderr)

@@ -1004,6 +1004,7 @@ def load_period_raw_dataset(
 	iv_agg_map: dict[str, tuple[datetime | None, bool, bool, bool, bool]] = {}
 
 	raw_attempts: list[dict] = []
+	max_att_recorded_bounded: datetime | None = None
 	corr_rows: list[dict] = []
 	attempts_enriched: list[dict] = []
 	projected_by_id: dict[str, dict] = {}
@@ -1236,9 +1237,19 @@ def load_period_raw_dataset(
 				c_copy.status = "pending"
 			as_of_corrs.append(c_copy)
 
+		if not is_drilldown:
+			for a in raw_attempts:
+				if a.get("recorded_at"):
+					rec_dt = get_datetime(a.recorded_at)
+					if rec_dt <= as_of_dt and (
+						max_att_recorded_bounded is None or rec_dt > max_att_recorded_bounded
+					):
+						max_att_recorded_bounded = rec_dt
+
 		from crm_cskh.services.read_model import _project_attempts_rows
 
 		projected_all = _project_attempts_rows(raw_attempts, as_of_corrs)
+		raw_attempts = []
 
 		missing_hist_ids = sorted(
 			{
@@ -1587,9 +1598,8 @@ def load_period_raw_dataset(
 
 		# Compute `source_watermark` capped by `as_of_dt`
 		wm_candidates: list[datetime] = []
-		for a in raw_attempts:
-			if a.get("recorded_at"):
-				wm_candidates.append(get_datetime(a.recorded_at))
+		if max_att_recorded_bounded is not None:
+			wm_candidates.append(max_att_recorded_bounded)
 		for c in corr_rows:
 			if c.get("reviewed_at"):
 				wm_candidates.append(get_datetime(c.reviewed_at))

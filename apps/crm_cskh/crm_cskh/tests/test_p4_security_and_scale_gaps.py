@@ -548,3 +548,388 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 			if sess_data is not None:
 				sess_data.csrf_token = orig_tok
 			frappe.set_user("Administrator")
+
+	def test_bg01_batch_vs_per_item_distribution_exact_domain_parity(self):
+		"""Verify batched `_batch_assign_chunk` + `deliver_assignments_batch` matches legacy per-item distribution 1-to-1."""
+		import json
+
+		from crm_cskh.services import notifications
+
+		frappe.set_user("Administrator")
+		leads_batch = [self.make_canonical_lead() for _ in range(12)]
+		leads_legacy = [self.make_canonical_lead() for _ in range(12)]
+
+		# Seed stale pre-existing lead/child DocShares and Open ToDos on index 0 of both sets.
+		for ld0 in (leads_batch[0], leads_legacy[0]):
+			children = self._make_child_records(ld0)
+			frappe.share.add("CRM Lead", ld0, self.staff_outside, read=1, write=1)
+			frappe.share.add("CRM Call Log", children["call_log"], self.staff_outside, read=1, write=0)
+			frappe.get_doc(
+				{
+					"doctype": "ToDo",
+					"allocated_to": self.staff_outside,
+					"reference_type": "CRM Lead",
+					"reference_name": ld0,
+					"description": "Stale ToDo before campaign distribution",
+					"status": "Open",
+				}
+			).insert(ignore_permissions=True)
+
+		camp_batch = self.make_campaign(team_scope=self.team_a, selection={"leads": leads_batch})
+		camp_legacy = self.make_campaign(team_scope=self.team_a, selection={"leads": leads_legacy})
+		for camp in (camp_batch, camp_legacy):
+			self.make_rule(camp, self.staff_a, weight=2, capacity=8, team=self.team_a)
+			self.make_rule(camp, self.staff_b, weight=1, capacity=8, team=self.team_a)
+		frappe.db.sql("delete from `tabCSKH Dirty Scope`")
+		frappe.db.commit()
+
+		orig_batch_fn = distribution._batch_assign_chunk
+		batch_calls: list[int] = []
+
+		def _spy_batch_fn(**kwargs):
+			batch_calls.append(len(kwargs["chunk"]))
+			return orig_batch_fn(**kwargs)
+
+		with mock.patch.object(distribution, "_batch_assign_chunk", side_effect=_spy_batch_fn):
+			prev_b = distribution.preview(
+				camp_batch, actor=self.admin_user, idempotency_key=self.unique_key("p4-bpar-prev")
+			)
+			res_b = distribution.execute(
+				prev_b["preview_id"],
+				expected_rule_version=prev_b["rule_version"],
+				actor=self.admin_user,
+				idempotency_key=self.unique_key("p4-bpar-exec"),
+			)
+		self.assertEqual(batch_calls, [12])
+		self.assertEqual(res_b["status"], "completed")
+		self.assertEqual(res_b["created"], 12)
+
+		orig_assign = ownership.assign
+		orig_deliver = notifications.deliver_assignment
+		with (
+			mock.patch.object(ownership, "assign", side_effect=orig_assign),
+			mock.patch.object(notifications, "deliver_assignment", side_effect=orig_deliver),
+		):
+			prev_l = distribution.preview(
+				camp_legacy, actor=self.admin_user, idempotency_key=self.unique_key("p4-lpar-prev")
+			)
+			res_l = distribution.execute(
+				prev_l["preview_id"],
+				expected_rule_version=prev_l["rule_version"],
+				actor=self.admin_user,
+				idempotency_key=self.unique_key("p4-lpar-exec"),
+			)
+		self.assertEqual(res_l["status"], "completed")
+		self.assertEqual(res_l["created"], 12)
+
+		rec_b = distribution.reconcile(camp_batch, actor=self.admin_user)
+		rec_l = distribution.reconcile(camp_legacy, actor=self.admin_user)
+		self.assertTrue(rec_b["ownership_reconciled"])
+		self.assertEqual(rec_b, rec_l)
+
+		for idx in range(12):
+			lb = leads_batch[idx]
+			ll = leads_legacy[idx]
+			wi_b = frappe.db.get_value(
+				"CSKH Work Item",
+				{"campaign": camp_batch, "lead": lb},
+				["name", "status", "assigned_to", "attempt_count"],
+				as_dict=True,
+			)
+			wi_l = frappe.db.get_value(
+				"CSKH Work Item",
+				{"campaign": camp_legacy, "lead": ll},
+				["name", "status", "assigned_to", "attempt_count"],
+				as_dict=True,
+			)
+			self.assertEqual(wi_b.status, "assigned")
+			self.assertEqual(wi_b.assigned_to, wi_l.assigned_to)
+			self.assertEqual(int(wi_b.attempt_count or 0), int(wi_l.attempt_count or 0))
+			owner = wi_b.assigned_to
+
+			self.assertEqual(
+				frappe.db.get_value("CSKH Active Claim", {"lead": lb}, "work_item"),
+				wi_b.name,
+			)
+			hist_b = frappe.db.get_value(
+				"CSKH Assignment History",
+				{"work_item": wi_b.name, "is_current": 1},
+				[
+					"event_id",
+					"event_type",
+					"to_user",
+					"team_at_assignment",
+					"attribution_status",
+					"reason",
+					"distribution_run",
+				],
+				as_dict=True,
+			)
+			hist_l = frappe.db.get_value(
+				"CSKH Assignment History",
+				{"work_item": wi_l.name, "is_current": 1},
+				[
+					"event_type",
+					"to_user",
+					"team_at_assignment",
+					"attribution_status",
+				],
+				as_dict=True,
+			)
+			self.assertEqual(hist_b.event_id, f"run:{res_b['run_id']}:{lb}")
+			self.assertEqual(hist_b.distribution_run, res_b["run_id"])
+			self.assertEqual(hist_b.reason, f"Distribution run {res_b['run_id']}")
+			self.assertEqual(hist_b.event_type, hist_l.event_type)
+			self.assertEqual(hist_b.to_user, hist_l.to_user)
+			self.assertEqual(hist_b.team_at_assignment, hist_l.team_at_assignment)
+			self.assertEqual(hist_b.attribution_status, hist_l.attribution_status)
+
+			obs_b = frappe.get_all(
+				"CSKH SLA Obligation",
+				filters={"work_item": wi_b.name},
+				fields=[
+					"obligation_type",
+					"owner_user",
+					"team_at_obligation",
+					"attribution_status",
+					"status",
+					"policy_name_snapshot",
+				],
+				order_by="obligation_type asc",
+			)
+			obs_l = frappe.get_all(
+				"CSKH SLA Obligation",
+				filters={"work_item": wi_l.name},
+				fields=[
+					"obligation_type",
+					"owner_user",
+					"team_at_obligation",
+					"attribution_status",
+					"status",
+					"policy_name_snapshot",
+				],
+				order_by="obligation_type asc",
+			)
+			self.assertEqual([o.obligation_type for o in obs_b], ["FIRST_ATTEMPT", "FIRST_CONNECTED"])
+			self.assertEqual(obs_b, obs_l)
+
+			lead_row_b = frappe.db.get_value("CRM Lead", lb, ["lead_owner", "_assign"], as_dict=True)
+			self.assertEqual(lead_row_b.lead_owner, owner)
+			self.assertEqual(json.loads(lead_row_b._assign or "[]"), [owner])
+
+			shares_b = frappe.get_all(
+				"DocShare",
+				filters={"share_doctype": "CRM Lead", "share_name": lb},
+				fields=["user", "read", "write"],
+			)
+			self.assertEqual(len(shares_b), 1)
+			self.assertEqual(shares_b[0].user, owner)
+			self.assertEqual(int(shares_b[0].read), 1)
+			self.assertEqual(int(shares_b[0].write), 1)
+
+			open_todos_b = frappe.get_all(
+				"ToDo",
+				filters={"reference_type": "CRM Lead", "reference_name": lb, "status": "Open"},
+				fields=["allocated_to"],
+			)
+			self.assertEqual([t.allocated_to for t in open_todos_b], [owner])
+
+			notifs_b = frappe.get_all(
+				"CRM Notification",
+				filters={
+					"reference_doctype": "CRM Lead",
+					"reference_name": lb,
+					"to_user": owner,
+					"type": "Assignment",
+				},
+				fields=["message", "read"],
+			)
+			self.assertGreaterEqual(len(notifs_b), 1)
+			self.assertEqual(int(notifs_b[0].read), 0)
+			self.assertIn("Bạn được phân công hồ sơ liên hệ", notifs_b[0].message)
+
+		dirty_b = {
+			(d.team_node, d.owner_user, d.reason, d.status)
+			for d in frappe.get_all(
+				"CSKH Dirty Scope",
+				filters={"campaign": camp_batch},
+				fields=["team_node", "owner_user", "reason", "status"],
+			)
+		}
+		dirty_l = {
+			(d.team_node, d.owner_user, d.reason, d.status)
+			for d in frappe.get_all(
+				"CSKH Dirty Scope",
+				filters={"campaign": camp_legacy},
+				fields=["team_node", "owner_user", "reason", "status"],
+			)
+		}
+		self.assertEqual(dirty_b, dirty_l)
+		self.assertGreaterEqual(len(dirty_b), 2)
+
+	def test_bg01_mid_batch_conflict_fallback_retry_and_complete_dirty_scope_drain(self):
+		"""Verify mid-batch error rolls back cleanly to per-item fallback, retry assigns each item once, and Dirty Scope drains completely."""
+		from crm_cskh.services import kpi_runs
+
+		frappe.set_user("Administrator")
+		leads = [self.make_canonical_lead() for _ in range(10)]
+		camp = self.make_campaign(team_scope=self.team_a, selection={"leads": leads})
+		self.make_rule(camp, self.staff_a, weight=1, capacity=10, team=self.team_a)
+		self.make_rule(camp, self.staff_b, weight=1, capacity=10, team=self.team_a)
+
+		other_camp = self.make_campaign(team_scope=self.team_b)
+		frappe.db.sql("delete from `tabCSKH Dirty Scope`")
+		frappe.db.commit()
+
+		prev = distribution.preview(
+			camp, actor=self.admin_user, idempotency_key=self.unique_key("p4-retry-prev")
+		)
+		self.assertEqual(prev["summary"]["eligible_count"], 10)
+
+		# Claim `leads[3]` in `other_camp` AFTER preview to trigger a mid-batch concurrent-claim conflict.
+		other_wi = self.make_work_item(other_camp, leads[3], status="assigned", assigned_to=self.staff_c)
+		other_claim = frappe.get_doc(
+			{
+				"doctype": "CSKH Active Claim",
+				"lead": leads[3],
+				"campaign": other_camp,
+				"work_item": other_wi,
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.commit()
+
+		# Force `_batch_assign_chunk` to fail partway through after writing rows (testing full savepoint
+		# rollback + pending dirty-event truncation), AND inject one transient failure on `leads[6]`
+		# inside `ownership._sync_todo` during the per-item fallback loop.
+		orig_batch = distribution._batch_assign_chunk
+		orig_sync_todo = ownership._sync_todo
+		failed_once = {"batch": False, "row6": False}
+
+		def _flaky_batch(**kwargs):
+			res = orig_batch(**kwargs)
+			if not failed_once["batch"]:
+				failed_once["batch"] = True
+				raise RuntimeError("simulated mid-batch DB error after bulk_insert")
+			return res
+
+		def _flaky_sync_todo(lead, to_user):
+			if lead == leads[6] and not failed_once["row6"]:
+				failed_once["row6"] = True
+				raise RuntimeError("simulated transient ToDo sync error")
+			return orig_sync_todo(lead, to_user)
+
+		with (
+			mock.patch.object(distribution, "_batch_assign_chunk", side_effect=_flaky_batch),
+			mock.patch.object(ownership, "_sync_todo", side_effect=_flaky_sync_todo),
+		):
+			first_res = distribution.execute(
+				prev["preview_id"],
+				expected_rule_version=prev["rule_version"],
+				actor=self.admin_user,
+				idempotency_key=self.unique_key("p4-retry-exec-1"),
+			)
+
+		self.assertTrue(failed_once["batch"])
+		self.assertTrue(failed_once["row6"])
+		self.assertEqual(first_res["status"], "completed_with_errors")
+		self.assertEqual(first_res["created"], 8)
+		self.assertEqual(first_res["errors"], 2)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp}), 8)
+
+		# Release `other_camp`'s claim on `leads[3]`, then retry the same run: the 2 remaining leads
+		# (`leads[3]` and `leads[6]`) must be assigned cleanly via the batched path with 0 duplicates.
+		frappe.delete_doc("CSKH Active Claim", other_claim.name, force=True, ignore_permissions=True)
+		frappe.db.set_value("CSKH Work Item", other_wi, "status", "closed_other")
+		frappe.db.commit()
+
+		retry_res = distribution.execute(
+			prev["preview_id"],
+			expected_rule_version=prev["rule_version"],
+			actor=self.admin_user,
+			idempotency_key=self.unique_key("p4-retry-exec-2"),
+		)
+		self.assertEqual(retry_res["run_id"], first_res["run_id"])
+		self.assertEqual(retry_res["status"], "completed")
+		self.assertEqual(retry_res["created"], 10)
+		self.assertEqual(retry_res["errors"], 0)
+		dup_cnt = int(
+			frappe.db.sql(
+				"select count(*) - count(distinct lead) from `tabCSKH Work Item` where campaign = %s",
+				(camp,),
+			)[0][0]
+		)
+		self.assertEqual(dup_cnt, 0)
+		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp}), 10)
+		self.assertEqual(frappe.db.count("CSKH Active Claim", {"campaign": camp}), 10)
+		self.assertEqual(
+			frappe.db.count("CSKH Assignment History", {"distribution_run": retry_res["run_id"]}),
+			10,
+		)
+		self.assertTrue(distribution.reconcile(camp, actor=self.admin_user)["ownership_reconciled"])
+
+		# Drain all pending Dirty Scopes and confirm 100% completion (`0` pending left).
+		self.assertGreaterEqual(
+			frappe.db.count("CSKH Dirty Scope", {"campaign": camp, "status": "pending"}), 2
+		)
+		drain_out = kpi_runs.process_dirty_scopes()
+		self.assertGreaterEqual(drain_out["processed_scopes"], 2)
+		self.assertEqual(frappe.db.count("CSKH Dirty Scope", {"status": "pending"}), 0)
+		self.assertGreaterEqual(
+			frappe.db.count("CSKH Dirty Scope", {"campaign": camp, "status": "processed"}), 2
+		)
+
+	def test_bg01_sql_per_item_reduction_and_dirty_worker_enqueue_coalescing(self):
+		"""Verify 60-item chunk executes in < 2.0 SQL/item (vs 90.28 baseline) and coalesces Dirty Scope worker enqueue to 1 post-run flush."""
+		from crm_cskh.services import kpi_runs
+
+		frappe.set_user("Administrator")
+		leads = [self.make_canonical_lead() for _ in range(60)]
+		camp = self.make_campaign(team_scope=self.team_a, selection={"leads": leads})
+		self.make_rule(camp, self.staff_a, weight=1, capacity=60, team=self.team_a)
+		self.make_rule(camp, self.staff_b, weight=1, capacity=60, team=self.team_a)
+		frappe.db.commit()
+
+		prev = distribution.preview(
+			camp, actor=self.admin_user, idempotency_key=self.unique_key("p4-sql-prev")
+		)
+		enq = distribution.enqueue_run(
+			prev["preview_id"],
+			expected_rule_version=prev["rule_version"],
+			idempotency_key=self.unique_key("p4-sql-enq"),
+			actor=self.admin_user,
+			enqueue_job=False,
+		)
+		frappe.db.commit()
+
+		sql_count = 0
+		orig_sql = frappe.db.sql
+
+		def _counting_sql(query, *args, **kwargs):
+			nonlocal sql_count
+			sql_count += 1
+			return orig_sql(query, *args, **kwargs)
+
+		enqueue_events: list[tuple[str, str]] = []
+
+		def _spy_enqueue_worker():
+			run_status = str(frappe.db.get_value("CSKH Distribution Run", enq["run_id"], "status") or "")
+			enqueue_events.append((run_status, bool(frappe.flags.cskh_suppress_dirty_enqueue)))
+			return True
+
+		with (
+			mock.patch.object(frappe.db, "sql", side_effect=_counting_sql),
+			mock.patch.object(kpi_runs, "_enqueue_dirty_scopes_worker", side_effect=_spy_enqueue_worker),
+		):
+			worker_res = distribution.run_distribution_worker(enq["run_id"], actor=self.admin_user)
+
+		self.assertEqual(worker_res["status"], "completed")
+		self.assertEqual(worker_res["created"], 60)
+		sql_per_item = sql_count / 60.0
+		self.assertLess(
+			sql_per_item,
+			2.0,
+			f"Expected < 2.0 SQL/item for batched 60-item chunk, measured {sql_per_item:.3f} ({sql_count} SQL)",
+		)
+		# Coalesced dirty worker enqueue must fire ONCE, AFTER `run.status == 'completed'` is committed!
+		self.assertEqual(enqueue_events, [("completed", False)])
+		self.assertTrue(distribution.reconcile(camp, actor=self.admin_user)["ownership_reconciled"])
