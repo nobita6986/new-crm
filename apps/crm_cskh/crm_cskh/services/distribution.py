@@ -545,7 +545,7 @@ def _eligible_assignees_for_worker(campaign, team_scope, version, effective_acto
 			frappe.set_user(previous_user)
 
 
-def run_distribution_worker(run_id, actor=None):
+def run_distribution_worker(run_id, actor=None, *, diagnostics_callback=None):
 	"""Chunked RQ worker execution with DB row lock, lease renewal, and recovery."""
 	if not run_id:
 		return None
@@ -792,6 +792,12 @@ def run_distribution_worker(run_id, actor=None):
 			)
 			run.save(ignore_permissions=True)
 			frappe.db.commit()
+			if diagnostics_callback:
+				try:
+					diagnostics_callback(int(run.progress or 0))
+				except Exception:
+					# Optional instrumentation must not affect the committed job chunk.
+					pass
 
 			if pending_notifications:
 				_deliver_notifications(run, pending_notifications, effective_actor)
