@@ -911,7 +911,7 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 		self.assertEqual(race_res["created"], 3)
 		self.assertEqual(race_res["errors"], 1)
 		self.assertEqual([s["lead"] for s in race_res["skipped"]], [race_leads[1]])
-		self.assertEqual([s["reason"] for s in race_res["skipped"]], ["already_claimed"])
+		self.assertEqual([s["reason"] for s in race_res["skipped"]], ["active_claim_in_other_campaign"])
 		self.assertTrue(distribution.reconcile(race_camp, actor=self.admin_user)["ownership_reconciled"])
 
 		# 4. Drain all pending Dirty Scopes and confirm 100% completion (`0` pending left).
