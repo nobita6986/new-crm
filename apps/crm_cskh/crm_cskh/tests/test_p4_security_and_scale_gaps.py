@@ -625,7 +625,10 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 		rec_b = distribution.reconcile(camp_batch, actor=self.admin_user)
 		rec_l = distribution.reconcile(camp_legacy, actor=self.admin_user)
 		self.assertTrue(rec_b["ownership_reconciled"])
-		self.assertEqual(rec_b, rec_l)
+		self.assertEqual(
+			{k: v for k, v in rec_b.items() if k not in ("campaign", "as_of")},
+			{k: v for k, v in rec_l.items() if k not in ("campaign", "as_of")},
+		)
 
 		for idx in range(12):
 			lb = leads_batch[idx]
@@ -653,10 +656,10 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 			)
 			hist_b = frappe.db.get_value(
 				"CSKH Assignment History",
-				{"work_item": wi_b.name, "is_current": 1},
+				{"work_item": wi_b.name, "ownership_end": ["is", "not set"]},
 				[
 					"event_id",
-					"event_type",
+					"action",
 					"to_user",
 					"team_at_assignment",
 					"attribution_status",
@@ -667,19 +670,22 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 			)
 			hist_l = frappe.db.get_value(
 				"CSKH Assignment History",
-				{"work_item": wi_l.name, "is_current": 1},
+				{"work_item": wi_l.name, "ownership_end": ["is", "not set"]},
 				[
-					"event_type",
+					"action",
 					"to_user",
 					"team_at_assignment",
 					"attribution_status",
 				],
 				as_dict=True,
 			)
-			self.assertEqual(hist_b.event_id, f"run:{res_b['run_id']}:{lb}")
+			self.assertEqual(
+				hist_b.event_id,
+				ownership._event_id(f"run:{res_b['run_id']}:{lb}", wi_b.name, ownership.ASSIGN),
+			)
 			self.assertEqual(hist_b.distribution_run, res_b["run_id"])
 			self.assertEqual(hist_b.reason, f"Distribution run {res_b['run_id']}")
-			self.assertEqual(hist_b.event_type, hist_l.event_type)
+			self.assertEqual(hist_b.action, hist_l.action)
 			self.assertEqual(hist_b.to_user, hist_l.to_user)
 			self.assertEqual(hist_b.team_at_assignment, hist_l.team_at_assignment)
 			self.assertEqual(hist_b.attribution_status, hist_l.attribution_status)
@@ -777,7 +783,6 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 		self.make_rule(camp, self.staff_a, weight=1, capacity=10, team=self.team_a)
 		self.make_rule(camp, self.staff_b, weight=1, capacity=10, team=self.team_a)
 
-		other_camp = self.make_campaign(team_scope=self.team_b)
 		frappe.db.sql("delete from `tabCSKH Dirty Scope`")
 		frappe.db.commit()
 
@@ -786,41 +791,33 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 		)
 		self.assertEqual(prev["summary"]["eligible_count"], 10)
 
-		# Claim `leads[3]` in `other_camp` AFTER preview to trigger a mid-batch concurrent-claim conflict.
-		other_wi = self.make_work_item(other_camp, leads[3], status="assigned", assigned_to=self.staff_c)
-		other_claim = frappe.get_doc(
-			{
-				"doctype": "CSKH Active Claim",
-				"lead": leads[3],
-				"campaign": other_camp,
-				"work_item": other_wi,
-			}
-		).insert(ignore_permissions=True)
-		frappe.db.commit()
-
-		# Force `_batch_assign_chunk` to fail partway through after writing rows (testing full savepoint
-		# rollback + pending dirty-event truncation), AND inject one transient failure on `leads[6]`
-		# inside `ownership._sync_todo` during the per-item fallback loop.
+		# 1. Force `_batch_assign_chunk` to fail AFTER inserting all 10 rows inside `batch_savepoint`
+		#    (proving full savepoint rollback + pending dirty-event truncation), AND inject transient
+		#    `ToDo` failures on `leads[3]` and `leads[6]` inside `ownership._create_todo` during fallback.
 		orig_batch = distribution._batch_assign_chunk
-		orig_sync_todo = ownership._sync_todo
-		failed_once = {"batch": False, "row6": False}
+		orig_create_todo = ownership._create_todo
+		failed_once = {"batch": False, "row3": False, "row6": False}
 
 		def _flaky_batch(**kwargs):
 			res = orig_batch(**kwargs)
 			if not failed_once["batch"]:
 				failed_once["batch"] = True
+				self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp}), 10)
 				raise RuntimeError("simulated mid-batch DB error after bulk_insert")
 			return res
 
-		def _flaky_sync_todo(lead, to_user):
+		def _flaky_create_todo(lead, user, description):
+			if lead == leads[3] and not failed_once["row3"]:
+				failed_once["row3"] = True
+				raise RuntimeError("simulated transient ToDo sync error on lead 3")
 			if lead == leads[6] and not failed_once["row6"]:
 				failed_once["row6"] = True
-				raise RuntimeError("simulated transient ToDo sync error")
-			return orig_sync_todo(lead, to_user)
+				raise RuntimeError("simulated transient ToDo sync error on lead 6")
+			return orig_create_todo(lead, user, description)
 
 		with (
 			mock.patch.object(distribution, "_batch_assign_chunk", side_effect=_flaky_batch),
-			mock.patch.object(ownership, "_sync_todo", side_effect=_flaky_sync_todo),
+			mock.patch.object(ownership, "_create_todo", side_effect=_flaky_create_todo),
 		):
 			first_res = distribution.execute(
 				prev["preview_id"],
@@ -830,18 +827,15 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 			)
 
 		self.assertTrue(failed_once["batch"])
+		self.assertTrue(failed_once["row3"])
 		self.assertTrue(failed_once["row6"])
 		self.assertEqual(first_res["status"], "completed_with_errors")
 		self.assertEqual(first_res["created"], 8)
 		self.assertEqual(first_res["errors"], 2)
 		self.assertEqual(frappe.db.count("CSKH Work Item", {"campaign": camp}), 8)
 
-		# Release `other_camp`'s claim on `leads[3]`, then retry the same run: the 2 remaining leads
-		# (`leads[3]` and `leads[6]`) must be assigned cleanly via the batched path with 0 duplicates.
-		frappe.delete_doc("CSKH Active Claim", other_claim.name, force=True, ignore_permissions=True)
-		frappe.db.set_value("CSKH Work Item", other_wi, "status", "closed_other")
-		frappe.db.commit()
-
+		# 2. Retry the same run: the 2 failed leads (`leads[3]` and `leads[6]`) must be assigned
+		#    cleanly via the batched path (`len == 2 > 1`) with 0 duplicates.
 		retry_res = distribution.execute(
 			prev["preview_id"],
 			expected_rule_version=prev["rule_version"],
@@ -867,7 +861,60 @@ class TestP4SecurityAndScaleGaps(P1TestCase):
 		)
 		self.assertTrue(distribution.reconcile(camp, actor=self.admin_user)["ownership_reconciled"])
 
-		# Drain all pending Dirty Scopes and confirm 100% completion (`0` pending left).
+		# 3. Also verify mid-chunk concurrent `CSKH Active Claim` race triggers savepoint fallback
+		#    and skips ONLY the raced lead (`reason == 'already_claimed'`) with 0 duplicates.
+		race_leads = [self.make_canonical_lead() for _ in range(4)]
+		race_camp = self.make_campaign(team_scope=self.team_a, selection={"leads": race_leads})
+		self.make_rule(race_camp, self.staff_a, weight=1, capacity=10, team=self.team_a)
+		other_camp = self.make_campaign(team_scope=self.team_b)
+		frappe.db.commit()
+
+		prev_race = distribution.preview(
+			race_camp, actor=self.admin_user, idempotency_key=self.unique_key("p4-race-prev")
+		)
+		enq_race = distribution.enqueue_run(
+			prev_race["preview_id"],
+			expected_rule_version=prev_race["rule_version"],
+			idempotency_key=self.unique_key("p4-race-enq"),
+			actor=self.admin_user,
+			enqueue_job=False,
+		)
+		frappe.db.commit()
+
+		orig_meta_sig = distribution._read_distribution_meta_sig
+		race_injected = {"done": False}
+
+		def _inject_concurrent_claim(team_scope):
+			sig = orig_meta_sig(team_scope)
+			if not race_injected["done"]:
+				race_injected["done"] = True
+				other_wi = self.make_work_item(
+					other_camp, race_leads[1], status="assigned", assigned_to=self.staff_c
+				)
+				frappe.get_doc(
+					{
+						"doctype": "CSKH Active Claim",
+						"lead": race_leads[1],
+						"campaign": other_camp,
+						"work_item": other_wi,
+					}
+				).insert(ignore_permissions=True)
+			return sig
+
+		with mock.patch.object(
+			distribution, "_read_distribution_meta_sig", side_effect=_inject_concurrent_claim
+		):
+			race_res = distribution.run_distribution_worker(enq_race["run_id"], actor=self.admin_user)
+
+		self.assertTrue(race_injected["done"])
+		self.assertEqual(race_res["status"], "completed_with_errors")
+		self.assertEqual(race_res["created"], 3)
+		self.assertEqual(race_res["errors"], 1)
+		self.assertEqual([s["lead"] for s in race_res["skipped"]], [race_leads[1]])
+		self.assertEqual([s["reason"] for s in race_res["skipped"]], ["already_claimed"])
+		self.assertTrue(distribution.reconcile(race_camp, actor=self.admin_user)["ownership_reconciled"])
+
+		# 4. Drain all pending Dirty Scopes and confirm 100% completion (`0` pending left).
 		self.assertGreaterEqual(
 			frappe.db.count("CSKH Dirty Scope", {"campaign": camp, "status": "pending"}), 2
 		)
