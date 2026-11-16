@@ -93,6 +93,38 @@ class TestBg02AndSloGovernance(unittest.TestCase):
         self.assertIn("_EPOCH_GEN_FIELD", rc_src)
         self.assertNotIn("cache.hgetall(rkey)", rc_src)
 
+    def test_sql_budget_30_and_g14_closed_wi_breached_handoff_contracts(self) -> None:
+        suite_src = (
+            APP_ROOT / "tests" / "test_p4_bg02_and_slo_remediation.py"
+        ).read_text(encoding="utf-8")
+        sla_src = (APP_ROOT / "services" / "sla_engine.py").read_text(encoding="utf-8")
+        g14_src = (
+            REPO_ROOT
+            / "deploy"
+            / "release"
+            / "batch2_delta"
+            / "verify_g13_g14_g15_g17_delta.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'self.assertLessEqual(sql_counter["n"], 30,',
+            suite_src,
+            "Warm record_attempt SQL budget assertion must strictly enforce <= 30 SQL statements",
+        )
+        self.assertIn(
+            "def test_g14_closed_work_item_void_breached_handoff_and_restore_sla_relink(",
+            suite_src,
+        )
+        self.assertIn(
+            "'breached_handoff'",
+            sla_src.split("def on_correction_reviewed_in_tx", 1)[1].split(
+                "def on_campaign_status_changed_in_tx", 1
+            )[0],
+        )
+        self.assertIn(
+            "f19_closed_wi_void_breached_handoff_and_restore_relinked",
+            g14_src,
+        )
+
     def test_diff_impact_includes_bg02_slo_remediation_suite(self) -> None:
         from deploy.release import run_diff_impact_verification as rdiv
 

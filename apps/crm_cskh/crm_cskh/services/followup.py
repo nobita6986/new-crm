@@ -296,6 +296,7 @@ def create_followup_in_tx(
 			open_hist=open_hist,
 			policy=policy,
 			calendar=calendar,
+			is_new_task=True,
 		)
 		return task_id
 	finally:

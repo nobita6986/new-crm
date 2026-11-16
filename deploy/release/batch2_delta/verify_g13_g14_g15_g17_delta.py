@@ -790,7 +790,7 @@ camp_p2 = camp_api.save(code="CAMP-G14-P2", title="Chiến dịch kiểm định
 
 frappe.set_user("Administrator")
 wis = []
-for idx in range(1, 6):
+for idx in range(1, 7):
     ph = f"090860010{idx}"
     norm_ph = normalize_vn_phone(ph)
     ld = frappe.get_doc({"doctype": "CRM Lead", "first_name": f"Ứng viên P2 {idx}", "lead_name": f"Ứng viên P2 {idx}", "mobile_no": ph, "status": "New"}).insert(ignore_permissions=True)
@@ -869,6 +869,7 @@ print(json.dumps({
     wi3 = fixtures["wis"][2]["wi"]
     wi4 = fixtures["wis"][3]["wi"]
     wi5 = fixtures["wis"][4]["wi"]
+    wi6 = fixtures["wis"][5]["wi"]
     lead3 = fixtures["wis"][2]["lead"]
     due_1 = str(fixtures["due_1"])
     due_2 = str(fixtures["due_2"])
@@ -1176,6 +1177,122 @@ print(json.dumps({
     assert snap_label_after["label"] == old_label, (old_label, snap_label_after)
     assert snap_label_after["dirty_scopes"] >= 1
 
+    # `F19` on an already-`closed` Work Item (`wi6`):
+    # `void` -> `FIRST_ATTEMPT` transitions to `breached_handoff` (`fulfilled_by_attempt = None`);
+    # `restore` -> `FIRST_ATTEMPT` & `FIRST_CONNECTED` return to `fulfilled_on_time` and re-link `fulfilled_by_attempt`!
+    st_att6, _, body_att6 = staff_a.post_json(
+        "/api/method/crm_cskh.api.workflow.record_attempt",
+        {
+            "work_item": wi6,
+            "channel": "phone_call",
+            "outcome_code": "connected_interested",
+            "note": "Liên hệ thành công trước khi đóng hồ sơ wi6",
+            "idempotency_key": "g14-closed-wi6-att",
+        },
+    )
+    assert st_att6 == 200, body_att6
+    att6_id = str(unwrap_message(body_att6)["attempt_id"])
+    st_close6, _, body_close6 = staff_a.post_json(
+        "/api/method/crm_cskh.api.workflow.close_work_item",
+        {
+            "work_item": wi6,
+            "completion_reason": "Đóng hồ sơ wi6 để kiểm định void -> restore trên Work Item đã closed",
+            "close_category": "normal",
+            "idempotency_key": "g14-closed-wi6-close",
+        },
+    )
+    assert (
+        st_close6 == 200 and unwrap_message(body_close6)["work_item_status"] == "closed"
+    ), (
+        st_close6,
+        body_close6,
+    )
+    st_void6, _, body_void6 = admin.post_json(
+        "/api/method/crm_cskh.api.workflow.request_correction",
+        {
+            "attempt": att6_id,
+            "action": "void",
+            "reason": "Hủy lần gọi trên Work Item đã closed kiểm tra breached_handoff",
+            "auto_approve": 1,
+            "idempotency_key": "g14-closed-wi6-void",
+        },
+    )
+    assert (
+        st_void6 == 200 and unwrap_message(body_void6)["work_item_status"] == "closed"
+    ), (
+        st_void6,
+        body_void6,
+    )
+    wi6_after_void = stack.exec_site_python(
+        "first_ob = frappe.db.get_value('CSKH SLA Obligation', {'work_item': _IN['wi'], 'obligation_type': 'FIRST_ATTEMPT'}, ['name', 'status', 'fulfilled_by_attempt', 'fulfilled_at'], as_dict=True)\n"
+        "conn_ob = frappe.db.get_value('CSKH SLA Obligation', {'work_item': _IN['wi'], 'obligation_type': 'FIRST_CONNECTED'}, ['name', 'status', 'fulfilled_by_attempt'], as_dict=True)\n"
+        "print(json.dumps({'first': first_ob, 'conn': conn_ob}, default=str))",
+        {"wi": wi6},
+    )
+    assert (
+        wi6_after_void["first"]["status"] == "breached_handoff"
+        and wi6_after_void["first"]["fulfilled_by_attempt"] is None
+        and wi6_after_void["first"]["fulfilled_at"] is None
+    ), wi6_after_void
+    assert (
+        wi6_after_void["conn"]["status"] == "canceled_validly"
+        and wi6_after_void["conn"]["fulfilled_by_attempt"] is None
+    ), wi6_after_void
+    st_det6_void, _, body_det6_void = admin.get_json(
+        "/api/method/crm_cskh.api.workflow.get_work_item", {"work_item": wi6}
+    )
+    assert (
+        st_det6_void == 200
+        and unwrap_message(body_det6_void)["work_item"]["attempt_count"] == 0
+    ), (
+        st_det6_void,
+        body_det6_void,
+    )
+
+    st_rest6, _, body_rest6 = admin.post_json(
+        "/api/method/crm_cskh.api.workflow.request_correction",
+        {
+            "attempt": att6_id,
+            "action": "restore",
+            "reason": "Khôi phục lần gọi trên Work Item đã closed kiểm tra SLA re-link",
+            "auto_approve": 1,
+            "idempotency_key": "g14-closed-wi6-restore",
+        },
+    )
+    assert (
+        st_rest6 == 200 and unwrap_message(body_rest6)["work_item_status"] == "closed"
+    ), (
+        st_rest6,
+        body_rest6,
+    )
+    wi6_after_restore = stack.exec_site_python(
+        "first_ob = frappe.db.get_value('CSKH SLA Obligation', {'work_item': _IN['wi'], 'obligation_type': 'FIRST_ATTEMPT'}, ['name', 'status', 'fulfilled_by_attempt', 'fulfilled_at', 'breached_at'], as_dict=True)\n"
+        "conn_ob = frappe.db.get_value('CSKH SLA Obligation', {'work_item': _IN['wi'], 'obligation_type': 'FIRST_CONNECTED'}, ['name', 'status', 'fulfilled_by_attempt', 'fulfilled_at'], as_dict=True)\n"
+        "print(json.dumps({'first': first_ob, 'conn': conn_ob}, default=str))",
+        {"wi": wi6},
+    )
+    assert (
+        wi6_after_restore["first"]["status"] == "fulfilled_on_time"
+        and wi6_after_restore["first"]["fulfilled_by_attempt"] == att6_id
+        and wi6_after_restore["first"]["fulfilled_at"] is not None
+        and wi6_after_restore["first"]["breached_at"] is None
+    ), wi6_after_restore
+    assert (
+        wi6_after_restore["conn"]["status"] == "fulfilled_on_time"
+        and wi6_after_restore["conn"]["fulfilled_by_attempt"] == att6_id
+        and wi6_after_restore["conn"]["fulfilled_at"] is not None
+    ), wi6_after_restore
+    st_det6_rest, _, body_det6_rest = admin.get_json(
+        "/api/method/crm_cskh.api.workflow.get_work_item", {"work_item": wi6}
+    )
+    assert (
+        st_det6_rest == 200
+        and unwrap_message(body_det6_rest)["work_item"]["attempt_count"] == 1
+    ), (
+        st_det6_rest,
+        body_det6_rest,
+    )
+
     # Also close `wi4` without attempt when `require_attempt_before_close=1` -> rejected `409`/`422` (`F22` close policy)
     st_close_no_att, _, _ = staff_a.post_json(
         "/api/method/crm_cskh.api.workflow.close_work_item",
@@ -1266,6 +1383,22 @@ print(json.dumps({
         ],
         "f18_dnc_enforcement_http": [st_dnc, st_dnc_att],
         "f19_f20_void_restore_and_snapshot_immutability": True,
+        "f19_closed_wi_void_breached_handoff_and_restore_relinked": {
+            "work_item": wi6,
+            "attempt_id": att6_id,
+            "after_void_first_attempt_status": wi6_after_void["first"]["status"],
+            "after_void_fulfilled_by_attempt": wi6_after_void["first"][
+                "fulfilled_by_attempt"
+            ],
+            "after_restore_first_attempt_status": wi6_after_restore["first"]["status"],
+            "after_restore_fulfilled_by_attempt": wi6_after_restore["first"][
+                "fulfilled_by_attempt"
+            ],
+            "after_restore_first_connected_status": wi6_after_restore["conn"]["status"],
+            "after_restore_first_connected_attempt": wi6_after_restore["conn"][
+                "fulfilled_by_attempt"
+            ],
+        },
         "f22_sla_pause_resume_waive_http": f22_sla_http,
     }
 

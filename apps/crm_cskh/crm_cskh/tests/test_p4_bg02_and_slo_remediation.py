@@ -10,13 +10,13 @@ from datetime import timedelta
 from unittest import mock
 
 import frappe
-from frappe.utils import now_datetime, set_request
+from frappe.utils import add_to_date, get_datetime, now_datetime, set_request
 
 from crm_cskh.api import campaigns as campaigns_api
 from crm_cskh.api import settings as settings_api
 from crm_cskh.jobs import import_worker
 from crm_cskh.p2_models import ensure_p2_indexes, ensure_p2_seeds
-from crm_cskh.p3_models import ensure_p3_indexes, ensure_p3_seeds
+from crm_cskh.p3_models import authorized_sla_write, ensure_p3_indexes, ensure_p3_seeds
 from crm_cskh.services import (
 	contact_attempt,
 	correction,
@@ -304,8 +304,8 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 
 			self.assertEqual(res["status"], "recorded")
 			self.assertTrue(res["callback_task"])
-			# Steady-state warm write executes ~32 SQL statements (<= 36 budget vs ~63 cold without runtime_cache)
-			self.assertLessEqual(sql_counter["n"], 36, f"Unexpected SQL count: {sql_counter['n']}")
+			# Steady-state warm write executes <= 30 SQL statements (~27 vs ~63 cold without runtime_cache)
+			self.assertLessEqual(sql_counter["n"], 30, f"Unexpected SQL count: {sql_counter['n']}")
 
 			# Idempotency replay returns identical attempt + followup task with 0 duplicates
 			replay = contact_attempt.record_attempt(
@@ -673,3 +673,278 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 					u_restore.append("roles", {"role": r_name})
 				u_restore.save(ignore_permissions=True)
 				frappe.db.commit()
+
+	def test_g14_closed_work_item_void_breached_handoff_and_restore_sla_relink(self):
+		"""Verify `G14` `void -> restore` on an already-`closed` `CSKH Work Item`:
+		1. `void` transitions `FIRST_ATTEMPT` and `FOLLOWUP` to `breached_handoff` (`fulfilled_by_attempt=None`)
+		   and `FIRST_CONNECTED` to `canceled_validly` while keeping the Work Item `closed`.
+		2. `restore` transitions SLA obligations back to their true status (`fulfilled_on_time` / `fulfilled_late`)
+		   and re-links `fulfilled_by_attempt` to the restored `CSKH Contact Attempt`.
+		"""
+		frappe.set_user("Administrator")
+		camp = self.make_campaign(title="Chiến dịch Kiểm định G14 Closed WI", team_scope=self.team_a)
+		wi_on_time = self._assign_new_work_item(camp, self.staff_a)
+		due_dt = (now_datetime() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
+		frappe.db.commit()
+
+		with runtime_cache.enable_runtime_cache_for_test():
+			# 1. Record attempt 1 (`callback_requested`) -> fulfills `FIRST_ATTEMPT` (`fulfilled_on_time`) & spawns `FOLLOWUP`
+			att1 = contact_attempt.record_attempt(
+				work_item=wi_on_time,
+				channel="phone_call",
+				outcome_code="callback_requested",
+				note="Khách hẹn gọi lại xác nhận lịch phỏng vấn",
+				followup={"due_at": due_dt, "title": "Gọi lại chốt lịch G14"},
+				idempotency_key=self.unique_key("g14-closed-att1"),
+				actor=self.staff_a,
+			)
+			task_id = att1["callback_task"]
+			self.assertTrue(task_id)
+
+			# 2. Record attempt 2 (`connected_interested`, `complete_open_followup=True`)
+			#    -> fulfills `FOLLOWUP` (`fulfilled_on_time`) & `FIRST_CONNECTED` (`fulfilled_on_time`)
+			att2 = contact_attempt.record_attempt(
+				work_item=wi_on_time,
+				channel="phone_call",
+				outcome_code="connected_interested",
+				note="Khách đồng ý tham gia phỏng vấn",
+				complete_open_followup=True,
+				idempotency_key=self.unique_key("g14-closed-att2"),
+				actor=self.staff_a,
+			)
+
+			# 3. Close `wi_on_time` -> Work Item is now `closed` (`assigned_to = None`)
+			cl_res = contact_attempt.close_work_item(
+				work_item=wi_on_time,
+				completion_reason="Hoàn tất quy trình tư vấn chiến dịch",
+				close_category="normal",
+				idempotency_key=self.unique_key("g14-closed-close"),
+				actor=self.staff_a,
+			)
+			self.assertEqual(cl_res["work_item_status"], "closed")
+
+			ob_first = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				{"work_item": wi_on_time, "obligation_type": "FIRST_ATTEMPT"},
+				["name", "status", "fulfilled_by_attempt", "effective_due_at"],
+				as_dict=True,
+			)
+			ob_fu = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				{"work_item": wi_on_time, "obligation_type": "FOLLOWUP", "followup_task": task_id},
+				["name", "status", "fulfilled_by_attempt", "effective_due_at"],
+				as_dict=True,
+			)
+			ob_conn = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				{"work_item": wi_on_time, "obligation_type": "FIRST_CONNECTED"},
+				["name", "status", "fulfilled_by_attempt"],
+				as_dict=True,
+			)
+			self.assertEqual(ob_first.status, "fulfilled_on_time")
+			self.assertEqual(ob_first.fulfilled_by_attempt, att1["attempt_id"])
+			self.assertEqual(ob_fu.status, "fulfilled_on_time")
+			self.assertEqual(ob_fu.fulfilled_by_attempt, att2["attempt_id"])
+			self.assertEqual(ob_conn.status, "fulfilled_on_time")
+			self.assertEqual(ob_conn.fulfilled_by_attempt, att2["attempt_id"])
+
+			# 4. Void `att2` then `att1` on the `closed` Work Item -> `FIRST_ATTEMPT` & `FOLLOWUP` become `breached_handoff`
+			void2 = correction.request_correction(
+				attempt=att2["attempt_id"],
+				action="void",
+				reason="Hủy tạm thời lần gọi thứ 2 để kiểm tra SLA trên Work Item đã đóng",
+				auto_approve=True,
+				idempotency_key=self.unique_key("g14-closed-void2"),
+				actor=self.admin_user,
+			)
+			self.assertEqual(void2["status"], "approved")
+			self.assertEqual(void2["work_item_status"], "closed")
+
+			fu_voided = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				ob_fu.name,
+				["status", "fulfilled_by_attempt", "fulfilled_at", "breached_at"],
+				as_dict=True,
+			)
+			conn_voided = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				ob_conn.name,
+				["status", "fulfilled_by_attempt", "fulfilled_at"],
+				as_dict=True,
+			)
+			self.assertEqual(fu_voided.status, "breached_handoff")
+			self.assertIsNone(fu_voided.fulfilled_by_attempt)
+			self.assertIsNone(fu_voided.fulfilled_at)
+			self.assertEqual(get_datetime(fu_voided.breached_at), get_datetime(ob_fu.effective_due_at))
+			self.assertEqual(conn_voided.status, "canceled_validly")
+			self.assertIsNone(conn_voided.fulfilled_by_attempt)
+
+			void1 = correction.request_correction(
+				attempt=att1["attempt_id"],
+				action="void",
+				reason="Hủy tạm thời lần gọi thứ 1 để kiểm tra trạng thái breached_handoff",
+				auto_approve=True,
+				idempotency_key=self.unique_key("g14-closed-void1"),
+				actor=self.leader_a,
+			)
+			self.assertEqual(void1["status"], "approved")
+			self.assertEqual(void1["work_item_status"], "closed")
+
+			first_voided = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				ob_first.name,
+				["status", "fulfilled_by_attempt", "fulfilled_at", "breached_at"],
+				as_dict=True,
+			)
+			self.assertEqual(first_voided.status, "breached_handoff")
+			self.assertIsNone(first_voided.fulfilled_by_attempt)
+			self.assertIsNone(first_voided.fulfilled_at)
+			self.assertEqual(get_datetime(first_voided.breached_at), get_datetime(ob_first.effective_due_at))
+
+			# Simulate cross-worker Redis epoch sync before `restore`
+			with runtime_cache._EPOCH_LOCK:
+				runtime_cache._SITE_EPOCHS.clear()
+			runtime_cache.on_before_request()
+			det_void = read_model.get_work_item_detail(wi_on_time, actor=self.admin_user)
+			self.assertEqual(det_void["work_item"]["status"], "closed")
+			self.assertEqual(det_void["work_item"]["attempt_count"], 0)
+
+			# 5. Restore `att1` via two-step `request_correction(auto_approve=False)` + `review_correction('approve')`
+			rest1_req = correction.request_correction(
+				attempt=att1["attempt_id"],
+				action="restore",
+				reason="Yêu cầu khôi phục lần gọi thứ 1 hợp lệ",
+				auto_approve=False,
+				idempotency_key=self.unique_key("g14-closed-rest1-req"),
+				actor=self.admin_user,
+			)
+			self.assertEqual(rest1_req["status"], "pending")
+			rest1_rev = correction.review_correction(
+				correction_id=rest1_req["correction_id"],
+				decision="approve",
+				review_note="Xác nhận khôi phục lần gọi thứ 1 trên Work Item đã đóng",
+				idempotency_key=self.unique_key("g14-closed-rest1-rev"),
+				actor=self.admin_user,
+			)
+			self.assertEqual(rest1_rev["status"], "approved")
+			self.assertEqual(rest1_rev["work_item_status"], "closed")
+
+			first_restored = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				ob_first.name,
+				["status", "fulfilled_by_attempt", "fulfilled_at", "breached_at", "closed_at"],
+				as_dict=True,
+			)
+			self.assertEqual(first_restored.status, "fulfilled_on_time")
+			self.assertEqual(first_restored.fulfilled_by_attempt, att1["attempt_id"])
+			self.assertIsNotNone(first_restored.fulfilled_at)
+			self.assertIsNone(first_restored.breached_at)
+			self.assertIsNone(first_restored.closed_at)
+
+			# 6. Restore `att2` via `auto_approve=True` -> re-links both `FOLLOWUP` and `FIRST_CONNECTED` to `att2`
+			rest2 = correction.request_correction(
+				attempt=att2["attempt_id"],
+				action="restore",
+				reason="Khôi phục lần gọi thứ 2 hợp lệ trên Work Item đã đóng",
+				auto_approve=True,
+				idempotency_key=self.unique_key("g14-closed-rest2"),
+				actor=self.admin_user,
+			)
+			self.assertEqual(rest2["status"], "approved")
+			self.assertEqual(rest2["work_item_status"], "closed")
+
+			fu_restored = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				ob_fu.name,
+				["status", "fulfilled_by_attempt", "fulfilled_at", "breached_at", "closed_at"],
+				as_dict=True,
+			)
+			conn_restored = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				ob_conn.name,
+				["status", "fulfilled_by_attempt", "fulfilled_at", "breached_at", "closed_at"],
+				as_dict=True,
+			)
+			self.assertEqual(fu_restored.status, "fulfilled_on_time")
+			self.assertEqual(fu_restored.fulfilled_by_attempt, att2["attempt_id"])
+			self.assertIsNotNone(fu_restored.fulfilled_at)
+			self.assertIsNone(fu_restored.breached_at)
+			self.assertIsNone(fu_restored.closed_at)
+			self.assertEqual(conn_restored.status, "fulfilled_on_time")
+			self.assertEqual(conn_restored.fulfilled_by_attempt, att2["attempt_id"])
+			self.assertIsNotNone(conn_restored.fulfilled_at)
+			self.assertIsNone(conn_restored.closed_at)
+
+			det_rest = read_model.get_work_item_detail(wi_on_time, actor=self.admin_user)
+			self.assertEqual(det_rest["work_item"]["attempt_count"], 2)
+			self.assertEqual(det_rest["work_item"]["connected_attempt_count"], 1)
+
+			# 7. Late attempt case (`fulfilled_late` -> `void` -> `breached_handoff` -> `restore` -> `fulfilled_late` + attempt re-link)
+			wi_late = self._assign_new_work_item(camp, self.staff_a)
+			ob_late_name = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				{"work_item": wi_late, "obligation_type": "FIRST_ATTEMPT"},
+				"name",
+			)
+			past_eff_due = add_to_date(now_datetime(), minutes=-15)
+			with authorized_sla_write():
+				d_late = frappe.get_doc("CSKH SLA Obligation", ob_late_name)
+				d_late.effective_due_at = past_eff_due
+				d_late.save(ignore_permissions=True)
+
+			att_late = contact_attempt.record_attempt(
+				work_item=wi_late,
+				channel="phone_call",
+				outcome_code="no_answer",
+				note="Liên hệ sau hạn SLA",
+				idempotency_key=self.unique_key("g14-late-att"),
+				actor=self.staff_a,
+			)
+			contact_attempt.close_work_item(
+				work_item=wi_late,
+				completion_reason="Đóng sau liên hệ trễ hạn",
+				close_category="normal",
+				idempotency_key=self.unique_key("g14-late-close"),
+				actor=self.staff_a,
+			)
+			self.assertEqual(
+				frappe.db.get_value("CSKH SLA Obligation", ob_late_name, "status"),
+				"fulfilled_late",
+			)
+
+			correction.request_correction(
+				attempt=att_late["attempt_id"],
+				action="void",
+				reason="Hủy tạm lần liên hệ trễ hạn trên Work Item đã đóng",
+				auto_approve=True,
+				idempotency_key=self.unique_key("g14-late-void"),
+				actor=self.admin_user,
+			)
+			late_voided = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				ob_late_name,
+				["status", "fulfilled_by_attempt", "fulfilled_at"],
+				as_dict=True,
+			)
+			self.assertEqual(late_voided.status, "breached_handoff")
+			self.assertIsNone(late_voided.fulfilled_by_attempt)
+			self.assertIsNone(late_voided.fulfilled_at)
+
+			correction.request_correction(
+				attempt=att_late["attempt_id"],
+				action="restore",
+				reason="Khôi phục lần liên hệ trễ hạn về đúng fulfilled_late",
+				auto_approve=True,
+				idempotency_key=self.unique_key("g14-late-restore"),
+				actor=self.admin_user,
+			)
+			late_restored = frappe.db.get_value(
+				"CSKH SLA Obligation",
+				ob_late_name,
+				["status", "fulfilled_by_attempt", "fulfilled_at", "breached_at"],
+				as_dict=True,
+			)
+			self.assertEqual(late_restored.status, "fulfilled_late")
+			self.assertEqual(late_restored.fulfilled_by_attempt, att_late["attempt_id"])
+			self.assertIsNotNone(late_restored.fulfilled_at)
+			self.assertEqual(get_datetime(late_restored.breached_at), get_datetime(past_eff_due))

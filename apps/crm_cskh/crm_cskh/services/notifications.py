@@ -366,7 +366,16 @@ def deliver_assignments_batch(items, run_name, actor=None):
 		return {"delivered": delivered, "failed": failed}
 
 
-def deliver_followup_notification(work_item, task_id, owner, event_id, actor=None, *, lead=None):
+def deliver_followup_notification(
+	work_item,
+	task_id,
+	owner,
+	event_id,
+	actor=None,
+	*,
+	lead=None,
+	is_new_task: bool = False,
+):
 	"""Post-commit, idempotent `CRM Notification` delivery for CSKH follow-up `CRM Task`s (`P2.md` §15.3).
 
 	Never raises and never rolls back the already-committed attempt/follow-up transaction.
@@ -379,25 +388,24 @@ def deliver_followup_notification(work_item, task_id, owner, event_id, actor=Non
 	task_ref = str(task_id)
 	try:
 		eff_lead = lead or frappe.db.get_value("CSKH Work Item", work_item, "lead")
-		existing = frappe.db.get_value(
-			"CRM Notification",
-			{
-				"notification_type_doctype": "CRM Task",
-				"notification_type_doc": task_ref,
-				"to_user": owner,
-				"type": NOTIFICATION_TYPE,
-			},
-			"name",
-		) or frappe.db.get_value(
-			"CRM Notification",
-			{
-				"reference_doctype": "CRM Task",
-				"reference_name": task_ref,
-				"to_user": owner,
-				"type": NOTIFICATION_TYPE,
-			},
-			"name",
-		)
+		if is_new_task:
+			existing = None
+		else:
+			existing_rows = frappe.db.sql(
+				"""
+				select `name`
+				from `tabCRM Notification`
+				where `to_user` = %s
+				  and `type` = %s
+				  and (
+				        (`notification_type_doctype` = 'CRM Task' and `notification_type_doc` = %s)
+				        or (`reference_doctype` = 'CRM Task' and `reference_name` = %s)
+				  )
+				limit 1
+				""",
+				(owner, NOTIFICATION_TYPE, task_ref, task_ref),
+			)
+			existing = existing_rows[0][0] if existing_rows else None
 		if not existing:
 			now_ts = now_datetime()
 			session_user = getattr(getattr(frappe, "session", None), "user", None) or actor

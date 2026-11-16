@@ -682,6 +682,9 @@ def record_attempt(
 			occurred_at=occurred_dt,
 			outcome=outcome,
 			actor=actor,
+			campaign=locked.campaign,
+			owner_user=locked.assigned_to,
+			team_node=open_event.get("team_at_assignment"),
 		)
 
 		new_due_dt = None
@@ -803,6 +806,7 @@ def record_attempt(
 			event_id=f"att-fu:{wi_val}:{idem_val}",
 			actor=actor,
 			lead=locked.lead,
+			is_new_task=True,
 		)
 
 	return {

@@ -127,6 +127,16 @@ def _append_audit(raw: str | None, event: dict) -> str:
 	return json.dumps(events, ensure_ascii=False)
 
 
+def _load_policy_snapshot(raw: str | None) -> dict:
+	if not raw:
+		return {}
+	try:
+		parsed = json.loads(raw)
+		return parsed if isinstance(parsed, dict) else {}
+	except (TypeError, ValueError):
+		return {}
+
+
 def _calendar_from_obligation(ob_row: dict) -> WorkingCalendarSpec:
 	snap = ob_row.get("calendar_snapshot_json")
 	if snap:
@@ -137,11 +147,12 @@ def _calendar_from_obligation(ob_row: dict) -> WorkingCalendarSpec:
 	return resolve_working_calendar(None)
 
 
-def _insert_obligation(fields: dict) -> str:
+def _insert_obligation(fields: dict, *, skip_idem_check: bool = False) -> str:
 	idem = fields["idempotency_key"]
-	existing = frappe.db.get_value("CSKH SLA Obligation", {"idempotency_key": idem}, "name")
-	if existing:
-		return str(existing)
+	if not skip_idem_check:
+		existing = frappe.db.get_value("CSKH SLA Obligation", {"idempotency_key": idem}, "name")
+		if existing:
+			return str(existing)
 	ob_type = fields.get("obligation_type")
 	ob_status = fields.get("status")
 	if ob_type not in OBLIGATION_TYPES:
@@ -666,6 +677,7 @@ def on_followup_created_in_tx(
 	open_hist: dict | None = None,
 	policy: dict | None = None,
 	calendar: WorkingCalendarSpec | None = None,
+	is_new_task: bool = False,
 ) -> str | None:
 	"""Spawn a `FOLLOWUP` obligation tied to native `CRM Task` (`task_id`)."""
 	if not _p3_sla_ready() or not is_p3_sla_enabled(campaign=campaign, owner_user=owner_user):
@@ -736,7 +748,8 @@ def on_followup_created_in_tx(
 				ensure_ascii=False,
 			),
 			"idempotency_key": f"FOLLOWUP:{task_id}:seq:0",
-		}
+		},
+		skip_idem_check=is_new_task,
 	)
 	_notify_dirty_post_commit(
 		work_item=work_item,
@@ -1068,6 +1081,9 @@ def on_attempt_recorded_in_tx(
 	occurred_at: datetime | str,
 	outcome: dict,
 	actor: str,
+	campaign: str | None = None,
+	owner_user: str | None = None,
+	team_node: str | None = None,
 ) -> list[str]:
 	"""Fulfill `FIRST_ATTEMPT` / `FIRST_CONNECTED` and handle DNC termination upon `record_attempt`."""
 	if not _p3_sla_ready() or not is_p3_sla_enabled():
@@ -1215,13 +1231,23 @@ def on_attempt_recorded_in_tx(
 				)
 			updated.append(ob.name)
 
-	wi_info = (
-		frappe.db.get_value("CSKH Work Item", work_item, ["campaign", "assigned_to"], as_dict=True) or {}
-	)
+	if campaign is None and owner_user is None:
+		wi_info = (
+			frappe.db.get_value("CSKH Work Item", work_item, ["campaign", "assigned_to"], as_dict=True) or {}
+		)
+		eff_campaign = wi_info.get("campaign")
+		eff_owner = wi_info.get("assigned_to") or actor
+	else:
+		eff_campaign = campaign
+		eff_owner = owner_user or actor
+	eff_team = team_node
+	if eff_team is None and active_obs:
+		eff_team = active_obs[0].get("team_at_obligation")
 	_notify_dirty_post_commit(
 		work_item=work_item,
-		campaign=wi_info.get("campaign"),
-		owner_user=wi_info.get("assigned_to") or actor,
+		campaign=eff_campaign,
+		owner_user=eff_owner,
+		team_node=eff_team,
 		event_dt=att_dt,
 		reason="attempt_recorded",
 	)
@@ -1464,34 +1490,103 @@ def on_correction_reviewed_in_tx(
 	obs = frappe.db.sql(
 		"""
 		select name, obligation_type, status, owner_user, interval_event, followup_task,
-		       effective_due_at, fulfilled_at, fulfilled_by_attempt, breached_at,
+		       reschedule_seq, original_due_at, effective_due_at,
+		       fulfilled_at, fulfilled_by_attempt, breached_at, closed_at,
+		       policy_snapshot_json, audit_events_json,
 		       campaign, team_at_obligation
 		from `tabCSKH SLA Obligation`
 		where work_item = %s
-		  and (fulfilled_by_attempt = %s or status in ('open', 'breached_open', 'fulfilled_on_time', 'fulfilled_late'))
+		  and (
+		        fulfilled_by_attempt = %s
+		        or status in (
+		            'open',
+		            'breached_open',
+		            'fulfilled_on_time',
+		            'fulfilled_late',
+		            'breached_handoff',
+		            'canceled_validly'
+		        )
+		  )
 		for update
 		""",
 		(work_item, attempt_id),
 		as_dict=True,
 	)
-	wi_status = frappe.db.get_value("CSKH Work Item", work_item, "status")
+	wi_row = (
+		frappe.db.get_value(
+			"CSKH Work Item",
+			work_item,
+			["status", "campaign", "assigned_to", "closed_at"],
+			as_dict=True,
+		)
+		or {}
+	)
+	wi_status = wi_row.get("status")
+	wi_is_active = wi_status in ("assigned", "in_progress", "on_hold")
+	wi_closed_at = get_datetime(wi_row["closed_at"]) if wi_row.get("closed_at") else None
+	open_interval_ids: set[str] = set()
+	if wi_is_active:
+		open_interval_ids = {
+			str(r.name)
+			for r in frappe.db.sql(
+				"select name from `tabCSKH Assignment History` where work_item = %s and ownership_end is null",
+				(work_item,),
+				as_dict=True,
+			)
+		}
+
+	max_seq_by_task: dict[str, int] = {}
+	fu_tasks: set[str] = set()
+	for ob in obs:
+		if ob.obligation_type == "FOLLOWUP" and ob.followup_task:
+			ft = str(ob.followup_task)
+			fu_tasks.add(ft)
+			seq = cint(ob.reschedule_seq or 0)
+			if ft not in max_seq_by_task or seq > max_seq_by_task[ft]:
+				max_seq_by_task[ft] = seq
+
+	task_completed_attempt: dict[str, str] = {}
+	if fu_tasks and runtime_cache.has_column("CRM Task", "cskh_completed_attempt"):
+		ph_fu = ", ".join(["%s"] * len(fu_tasks))
+		for r in frappe.db.sql(
+			f"select name, cskh_completed_attempt from `tabCRM Task` where name in ({ph_fu})",
+			tuple(sorted(fu_tasks)),
+			as_dict=True,
+		):
+			if r.cskh_completed_attempt:
+				task_completed_attempt[str(r.name)] = str(r.cskh_completed_attempt)
+
 	touched: list[str] = []
 
 	for ob in obs:
 		eff_due = get_datetime(ob.effective_due_at)
+		interval_is_active = wi_is_active and (
+			not ob.interval_event or str(ob.interval_event) in open_interval_ids
+		)
 		if ob.obligation_type == "FIRST_ATTEMPT":
 			candidates = [
 				a
 				for a in valid_attempts
 				if not ob.interval_event or a.get("ownership_event") == ob.interval_event
 			]
-			if ob.fulfilled_by_attempt == attempt_id or (
-				candidates and ob.status in ("open", "breached_open")
-			):
-				if candidates:
-					first_a = candidates[0]
-					occ = get_datetime(first_a["effective"]["occurred_at"])
-					new_status = "fulfilled_on_time" if occ <= eff_due else "fulfilled_late"
+			if candidates:
+				first_a = candidates[0]
+				occ = get_datetime(first_a["effective"]["occurred_at"])
+				new_status = "fulfilled_on_time" if occ <= eff_due else "fulfilled_late"
+				needs_reconcile = (
+					ob.fulfilled_by_attempt == attempt_id
+					or ob.status in ("open", "breached_open", "breached_handoff", "canceled_validly")
+					or (
+						ob.status in ("fulfilled_on_time", "fulfilled_late")
+						and (
+							ob.fulfilled_by_attempt != first_a["attempt_id"]
+							or ob.status != new_status
+							or not ob.fulfilled_at
+							or get_datetime(ob.fulfilled_at) != occ
+						)
+					)
+				)
+				if needs_reconcile:
 					_update_obligation(
 						ob.name,
 						{
@@ -1499,6 +1594,7 @@ def on_correction_reviewed_in_tx(
 							"fulfilled_at": occ,
 							"fulfilled_by_attempt": first_a["attempt_id"],
 							"breached_at": None if new_status == "fulfilled_on_time" else eff_due,
+							"closed_at": None,
 						},
 						{
 							"event": f"reconciled_after_{action}",
@@ -1506,72 +1602,22 @@ def on_correction_reviewed_in_tx(
 							"at": str(rev_dt),
 							"new_attempt": first_a["attempt_id"],
 						},
+						existing_row=ob,
 					)
-				else:
-					if rev_dt <= eff_due and wi_status in ("assigned", "in_progress", "on_hold"):
-						new_status = "open"
-						breach_ts = None
-					else:
-						new_status = (
-							"breached_open"
-							if wi_status in ("assigned", "in_progress", "on_hold")
-							else "breached_handoff"
-						)
-						breach_ts = eff_due
-					_update_obligation(
-						ob.name,
-						{
-							"status": new_status,
-							"fulfilled_at": None,
-							"fulfilled_by_attempt": None,
-							"breached_at": breach_ts,
-						},
-						{
-							"event": f"unfulfilled_after_{action}",
-							"actor": actor,
-							"at": str(rev_dt),
-							"voided_attempt": attempt_id,
-						},
-					)
-				touched.append(ob.name)
-
-		elif ob.obligation_type == "FOLLOWUP" and (
-			ob.fulfilled_by_attempt == attempt_id
-			or (
-				attempt_id in by_id
-				and by_id[attempt_id].get("resolved_callback_task") == ob.followup_task
-				and ob.status in ("open", "breached_open")
-			)
-		):
-			target_att = by_id.get(ob.fulfilled_by_attempt or attempt_id)
-			if (
-				target_att
-				and not target_att.get("is_voided")
-				and bool(target_att["effective"].get("is_contact_attempt", True))
-			):
-				occ = get_datetime(target_att["effective"]["occurred_at"])
-				new_status = "fulfilled_on_time" if occ <= eff_due else "fulfilled_late"
-				_update_obligation(
-					ob.name,
-					{
-						"status": new_status,
-						"fulfilled_at": occ,
-						"fulfilled_by_attempt": target_att["attempt_id"],
-						"breached_at": None if new_status == "fulfilled_on_time" else eff_due,
-					},
-					{"event": f"followup_reconciled_{action}", "actor": actor, "at": str(rev_dt)},
-				)
-			else:
-				if rev_dt <= eff_due and wi_status in ("assigned", "in_progress", "on_hold"):
+					touched.append(ob.name)
+			elif ob.fulfilled_by_attempt == attempt_id:
+				if rev_dt <= eff_due and interval_is_active:
 					new_status = "open"
 					breach_ts = None
-				else:
-					new_status = (
-						"breached_open"
-						if wi_status in ("assigned", "in_progress", "on_hold")
-						else "breached_handoff"
-					)
+					closed_ts = None
+				elif interval_is_active:
+					new_status = "breached_open"
 					breach_ts = eff_due
+					closed_ts = None
+				else:
+					new_status = "breached_handoff"
+					breach_ts = eff_due
+					closed_ts = ob.closed_at or wi_closed_at or rev_dt
 				_update_obligation(
 					ob.name,
 					{
@@ -1579,59 +1625,208 @@ def on_correction_reviewed_in_tx(
 						"fulfilled_at": None,
 						"fulfilled_by_attempt": None,
 						"breached_at": breach_ts,
+						"closed_at": closed_ts,
 					},
-					{"event": f"followup_unfulfilled_{action}", "actor": actor, "at": str(rev_dt)},
+					{
+						"event": f"unfulfilled_after_{action}",
+						"actor": actor,
+						"at": str(rev_dt),
+						"voided_attempt": attempt_id,
+					},
+					existing_row=ob,
 				)
-			touched.append(ob.name)
+				touched.append(ob.name)
 
-		elif ob.obligation_type == "FIRST_CONNECTED" and (
-			ob.fulfilled_by_attempt == attempt_id
-			or (connected_attempts and ob.status in ("open", "breached_open"))
-		):
+		elif ob.obligation_type == "FOLLOWUP" and ob.followup_task:
+			ft_id = str(ob.followup_task)
+			is_terminal_seq = cint(ob.reschedule_seq or 0) == max_seq_by_task.get(ft_id, 0)
+			att_matches_task = (
+				attempt_id in by_id and by_id[attempt_id].get("resolved_callback_task") == ob.followup_task
+			) or task_completed_attempt.get(ft_id) == attempt_id
+			if ob.fulfilled_by_attempt == attempt_id or (
+				is_terminal_seq
+				and att_matches_task
+				and ob.status in ("open", "breached_open", "breached_handoff", "canceled_validly")
+			):
+				target_att = by_id.get(ob.fulfilled_by_attempt or attempt_id)
+				if (
+					target_att
+					and not target_att.get("is_voided")
+					and bool(target_att["effective"].get("is_contact_attempt", True))
+				):
+					occ = get_datetime(target_att["effective"]["occurred_at"])
+					new_status = "fulfilled_on_time" if occ <= eff_due else "fulfilled_late"
+					_update_obligation(
+						ob.name,
+						{
+							"status": new_status,
+							"fulfilled_at": occ,
+							"fulfilled_by_attempt": target_att["attempt_id"],
+							"breached_at": None if new_status == "fulfilled_on_time" else eff_due,
+							"closed_at": None,
+						},
+						{
+							"event": f"followup_reconciled_{action}",
+							"actor": actor,
+							"at": str(rev_dt),
+							"new_attempt": target_att["attempt_id"],
+						},
+						existing_row=ob,
+					)
+				else:
+					if rev_dt <= eff_due and interval_is_active:
+						new_status = "open"
+						breach_ts = None
+						closed_ts = None
+					elif interval_is_active:
+						new_status = "breached_open"
+						breach_ts = eff_due
+						closed_ts = None
+					else:
+						new_status = "breached_handoff"
+						breach_ts = eff_due
+						closed_ts = ob.closed_at or wi_closed_at or rev_dt
+					_update_obligation(
+						ob.name,
+						{
+							"status": new_status,
+							"fulfilled_at": None,
+							"fulfilled_by_attempt": None,
+							"breached_at": breach_ts,
+							"closed_at": closed_ts,
+						},
+						{
+							"event": f"followup_unfulfilled_{action}",
+							"actor": actor,
+							"at": str(rev_dt),
+							"voided_attempt": attempt_id,
+						},
+						existing_row=ob,
+					)
+				touched.append(ob.name)
+
+		elif ob.obligation_type == "FIRST_CONNECTED":
 			if connected_attempts:
 				first_c = connected_attempts[0]
 				occ = get_datetime(first_c["effective"]["occurred_at"])
 				new_status = "fulfilled_on_time" if occ <= eff_due else "fulfilled_late"
-				_update_obligation(
-					ob.name,
-					{
-						"status": new_status,
-						"fulfilled_at": occ,
-						"fulfilled_by_attempt": first_c["attempt_id"],
-						"breached_at": None if new_status == "fulfilled_on_time" else eff_due,
-					},
-					{"event": f"connected_reconciled_{action}", "actor": actor, "at": str(rev_dt)},
+				needs_conn_reconcile = (
+					ob.fulfilled_by_attempt == attempt_id
+					or ob.status in ("open", "breached_open", "canceled_validly", "breached_handoff")
+					or (
+						ob.status in ("fulfilled_on_time", "fulfilled_late")
+						and (
+							ob.fulfilled_by_attempt != first_c["attempt_id"]
+							or ob.status != new_status
+							or not ob.fulfilled_at
+							or get_datetime(ob.fulfilled_at) != occ
+						)
+					)
 				)
-			else:
-				new_status = "open" if rev_dt <= eff_due else "breached_open"
+				if needs_conn_reconcile:
+					_update_obligation(
+						ob.name,
+						{
+							"status": new_status,
+							"fulfilled_at": occ,
+							"fulfilled_by_attempt": first_c["attempt_id"],
+							"breached_at": None if new_status == "fulfilled_on_time" else eff_due,
+							"closed_at": None,
+						},
+						{
+							"event": f"connected_reconciled_{action}",
+							"actor": actor,
+							"at": str(rev_dt),
+							"new_attempt": first_c["attempt_id"],
+						},
+						existing_row=ob,
+					)
+					touched.append(ob.name)
+			elif ob.fulfilled_by_attempt == attempt_id:
+				if wi_is_active:
+					new_status = "open" if rev_dt <= eff_due else "breached_open"
+					breach_ts = None if new_status == "open" else eff_due
+					closed_ts = None
+				else:
+					new_status = "canceled_validly"
+					breach_ts = None
+					closed_ts = ob.closed_at or wi_closed_at or rev_dt
 				_update_obligation(
 					ob.name,
 					{
 						"status": new_status,
 						"fulfilled_at": None,
 						"fulfilled_by_attempt": None,
-						"breached_at": None if new_status == "open" else eff_due,
+						"breached_at": breach_ts,
+						"closed_at": closed_ts,
 					},
-					{"event": f"connected_cleared_{action}", "actor": actor, "at": str(rev_dt)},
+					{
+						"event": f"connected_cleared_{action}",
+						"actor": actor,
+						"at": str(rev_dt),
+						"voided_attempt": attempt_id,
+					},
+					existing_row=ob,
 				)
-			touched.append(ob.name)
+				touched.append(ob.name)
 
-	att_occ = frappe.db.get_value("CSKH Contact Attempt", attempt_id, "occurred_at")
-	wi_info = (
-		frappe.db.get_value("CSKH Work Item", work_item, ["campaign", "assigned_to"], as_dict=True) or {}
+		elif ob.obligation_type == "MIN_ATTEMPTS" and wi_status == "closed":
+			pol_snap = _load_policy_snapshot(ob.policy_snapshot_json)
+			req_count = cint(pol_snap.get("min_attempts_before_close", 3))
+			min_gap = max(cint(pol_snap.get("min_attempt_gap_minutes", 0)), 0)
+			cl_anchor = get_datetime(ob.closed_at or wi_closed_at or ob.effective_due_at or rev_dt)
+			if connected_attempts:
+				target_min_status = "canceled_validly"
+				min_ful = None
+				min_breach = None
+			else:
+				spaced_count = 0
+				last_counted_dt: datetime | None = None
+				for a in valid_attempts:
+					cur_t = get_datetime(a["effective"]["occurred_at"])
+					if last_counted_dt is None or (cur_t - last_counted_dt).total_seconds() >= min_gap * 60:
+						spaced_count += 1
+						last_counted_dt = cur_t
+				met = spaced_count >= req_count
+				target_min_status = "fulfilled_on_time" if met else "breached_open"
+				min_ful = cl_anchor if met else None
+				min_breach = None if met else cl_anchor
+			if ob.status != target_min_status:
+				_update_obligation(
+					ob.name,
+					{
+						"status": target_min_status,
+						"fulfilled_at": min_ful,
+						"breached_at": min_breach,
+						"closed_at": cl_anchor,
+					},
+					{"event": f"min_attempts_reconciled_{action}", "actor": actor, "at": str(rev_dt)},
+					existing_row=ob,
+				)
+				touched.append(ob.name)
+
+	att_meta = (
+		frappe.db.get_value(
+			"CSKH Contact Attempt",
+			attempt_id,
+			["occurred_at", "owner_at_attempt", "performed_by"],
+			as_dict=True,
+		)
+		or {}
 	)
-	if att_occ:
+	eff_owner = wi_row.get("assigned_to") or att_meta.get("owner_at_attempt") or att_meta.get("performed_by")
+	if att_meta.get("occurred_at"):
 		_notify_dirty_post_commit(
 			work_item=work_item,
-			campaign=wi_info.get("campaign"),
-			owner_user=wi_info.get("assigned_to"),
-			event_dt=att_occ,
+			campaign=wi_row.get("campaign"),
+			owner_user=eff_owner,
+			event_dt=att_meta.get("occurred_at"),
 			reason="prior_period_correction",
 		)
 	_notify_dirty_post_commit(
 		work_item=work_item,
-		campaign=wi_info.get("campaign"),
-		owner_user=wi_info.get("assigned_to"),
+		campaign=wi_row.get("campaign"),
+		owner_user=eff_owner,
 		event_dt=rev_dt,
 		reason="correction_reviewed",
 	)

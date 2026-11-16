@@ -411,7 +411,10 @@ def request_correction(
 				details={"expected_revision": exp_rev, "current_revision": current_rev},
 			)
 
-		policy = resolve_effective_policy(campaign=locked.campaign, owner_user=locked.assigned_to)
+		policy = resolve_effective_policy(
+			campaign=locked.campaign,
+			owner_user=locked.assigned_to or att_row.owner_at_attempt or att_row.performed_by,
+		)
 		if auto_approve_b and is_leader and not is_admin and not policy["allow_leader_review_correction"]:
 			raise Forbidden("Chính sách hiện tại không cho phép Team Leader tự duyệt hiệu chỉnh.")
 
@@ -632,7 +635,16 @@ def review_correction(
 				}
 			raise Conflict("Yêu cầu hiệu chỉnh này đã được xử lý trước đó.", code="CONFLICT")
 
-		policy = resolve_effective_policy(campaign=locked.campaign, owner_user=locked.assigned_to)
+		orig_att_meta = frappe.db.get_value(
+			"CSKH Contact Attempt",
+			corr_doc.attempt,
+			["occurred_at", "performed_by", "owner_at_attempt"],
+			as_dict=True,
+		)
+		eff_policy_owner = locked.assigned_to or (
+			(orig_att_meta.owner_at_attempt or orig_att_meta.performed_by) if orig_att_meta else None
+		)
+		policy = resolve_effective_policy(campaign=locked.campaign, owner_user=eff_policy_owner)
 		if not is_admin and not policy["allow_leader_review_correction"]:
 			raise Forbidden("Chính sách hiện tại không cho phép Team Leader duyệt hiệu chỉnh.")
 
@@ -712,12 +724,6 @@ def review_correction(
 
 		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
 
-		orig_att_meta = frappe.db.get_value(
-			"CSKH Contact Attempt",
-			corr_doc.attempt,
-			["occurred_at", "performed_by", "owner_at_attempt"],
-			as_dict=True,
-		)
 		dirty_reason = "prior_period_correction" if target_status == "approved" else "correction_rejected"
 		if orig_att_meta and orig_att_meta.occurred_at:
 			schedule_post_commit_dirty_invalidation(
