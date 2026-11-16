@@ -10,7 +10,7 @@ from datetime import timedelta
 from unittest import mock
 
 import frappe
-from frappe.utils import now_datetime
+from frappe.utils import now_datetime, set_request
 
 from crm_cskh.api import campaigns as campaigns_api
 from crm_cskh.api import settings as settings_api
@@ -47,6 +47,7 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		frappe.db.set_single_value("FCRM Settings", "enable_sales_hierarchy", 1)
 
 	def tearDown(self):
+		frappe.local.request = None
 		frappe.set_user("Administrator")
 		runtime_cache.clear_all_local_caches()
 		frappe.db.rollback()
@@ -246,7 +247,7 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		with runtime_cache.enable_runtime_cache_for_test():
 			# Warm metadata caches (`User`, `Policy`, `Outcome`, `Calendar`, `Campaign`, invariants)
 			detail0 = read_model.get_work_item_detail(wi_name, actor=self.staff_a)
-			self.assertEqual(detail0["work_item"], wi_name)
+			self.assertEqual(detail0["work_item"]["name"], wi_name)
 
 			sql_counter = {"n": 0}
 			orig_sql = frappe.db.sql
@@ -262,14 +263,14 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 					channel="phone_call",
 					outcome_code="callback_requested",
 					note="Khách hẹn gọi lại chiều nay",
-					expected_revision=detail0["revision"],
+					expected_revision=detail0["work_item"]["revision"],
 					followup={"due_at": due_dt, "title": "Gọi lại xác nhận hồ sơ"},
 					idempotency_key=idem_key,
 					actor=self.staff_a,
 				)
 
 			self.assertEqual(res["status"], "recorded")
-			self.assertTrue(res["followup_task"])
+			self.assertTrue(res["callback_task"])
 			# Down from ~52+ SQL queries per write to <= 26 SQL queries (including post-commit Dirty Scope upsert)
 			self.assertLessEqual(sql_counter["n"], 26, f"Unexpected SQL count: {sql_counter['n']}")
 
@@ -279,28 +280,28 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 				channel="phone_call",
 				outcome_code="callback_requested",
 				note="Khách hẹn gọi lại chiều nay",
-				expected_revision=detail0["revision"],
+				expected_revision=detail0["work_item"]["revision"],
 				followup={"due_at": due_dt, "title": "Gọi lại xác nhận hồ sơ"},
 				idempotency_key=idem_key,
 				actor=self.staff_a,
 			)
 			self.assertTrue(replay["idempotent_replay"])
-			self.assertEqual(replay["attempt"], res["attempt"])
-			self.assertEqual(replay["followup_task"], res["followup_task"])
+			self.assertEqual(replay["attempt_id"], res["attempt_id"])
+			self.assertEqual(replay["callback_task"], res["callback_task"])
 			self.assertEqual(
 				frappe.db.count(
 					"CRM Notification",
-					{"to_user": self.staff_a, "notification_type_doc": res["followup_task"]},
+					{"to_user": self.staff_a, "notification_type_doc": res["callback_task"]},
 				),
 				1,
 			)
 
 			detail1 = read_model.get_work_item_detail(wi_name, actor=self.staff_a)
-			self.assertEqual(detail1["attempt_count"], 1)
-			self.assertEqual(detail1["open_followup"]["task"], res["followup_task"])
+			self.assertEqual(detail1["work_item"]["attempt_count"], 1)
+			self.assertEqual(detail1["open_followup"]["task_id"], res["callback_task"])
 			tl = read_model.list_attempts_timeline(wi_name, actor=self.staff_a)
 			self.assertEqual(tl["total"], 1)
-			self.assertEqual(tl["items"][0]["attempt_id"], res["attempt"])
+			self.assertEqual(tl["items"][0]["attempt_id"], res["attempt_id"])
 
 	def test_runtime_cache_rbac_scope_isolation_and_ssr_csrf_isolation(self):
 		"""Verify zero cross-user / cross-team / BOD PII / CSRF leakage when `runtime_cache` is active."""
@@ -395,35 +396,40 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 				)
 
 			# 4. SSR HTML renderer CSRF token isolation across distinct sessions of the SAME user
-			frappe.set_user(self.staff_a)
-			sess_data = getattr(frappe.local.session, "data", None)
-			if isinstance(sess_data, dict):
-				sess_data["csrf_token"] = "csrf-tok-session-alpha-111"
-			r1 = CskhPageRenderer(path="cskh/my-customers")
-			self.assertTrue(r1.can_render())
-			html_1 = r1.get_html()
-			self.assertIn("csrf-tok-session-alpha-111", html_1)
-			self.assertIn(self.staff_a, html_1)
+			set_request(method="GET", path="/cskh/my-customers")
+			try:
+				frappe.set_user(self.staff_a)
+				sess_data = getattr(frappe.local.session, "data", None)
+				if isinstance(sess_data, dict):
+					sess_data["csrf_token"] = "csrf-tok-session-alpha-111"
+				r1 = CskhPageRenderer(path="cskh/my-customers")
+				self.assertTrue(r1.can_render())
+				html_1 = r1.get_html()
+				self.assertIn("csrf-tok-session-alpha-111", html_1)
+				self.assertIn(self.staff_a, html_1)
 
-			if isinstance(sess_data, dict):
-				sess_data["csrf_token"] = "csrf-tok-session-beta-222"
-			r2 = CskhPageRenderer(path="cskh/my-customers")
-			self.assertTrue(r2.can_render())
-			html_2 = r2.get_html()
-			self.assertIn("csrf-tok-session-beta-222", html_2)
-			self.assertNotIn("csrf-tok-session-alpha-111", html_2)
+				if isinstance(sess_data, dict):
+					sess_data["csrf_token"] = "csrf-tok-session-beta-222"
+				r2 = CskhPageRenderer(path="cskh/my-customers")
+				self.assertTrue(r2.can_render())
+				html_2 = r2.get_html()
+				self.assertIn("csrf-tok-session-beta-222", html_2)
+				self.assertNotIn("csrf-tok-session-alpha-111", html_2)
 
-			# Staff B must never see Staff A's identity in SSR HTML
-			frappe.set_user(self.staff_b)
-			if isinstance(sess_data, dict):
-				sess_data["csrf_token"] = "csrf-tok-staff-b-333"
-			r3 = CskhPageRenderer(path="cskh/my-customers")
-			self.assertTrue(r3.can_render())
-			html_3 = r3.get_html()
-			self.assertIn(self.staff_b, html_3)
-			self.assertNotIn(self.staff_a, html_3)
-			self.assertNotIn("csrf-tok-session-beta-222", html_3)
-			frappe.set_user("Administrator")
+				# Staff B must never see Staff A's identity in SSR HTML
+				frappe.set_user(self.staff_b)
+				sess_data_b = getattr(frappe.local.session, "data", None)
+				if isinstance(sess_data_b, dict):
+					sess_data_b["csrf_token"] = "csrf-tok-staff-b-333"
+				r3 = CskhPageRenderer(path="cskh/my-customers")
+				self.assertTrue(r3.can_render())
+				html_3 = r3.get_html()
+				self.assertIn(self.staff_b, html_3)
+				self.assertNotIn(self.staff_a, html_3)
+				self.assertNotIn("csrf-tok-session-beta-222", html_3)
+			finally:
+				frappe.local.request = None
+				frappe.set_user("Administrator")
 
 	def test_runtime_cache_post_write_freshness_across_all_domains(self):
 		"""Verify immediate post-write cache invalidation across Policy, Outcome, Campaign, Correction, and KPI Dirty Scope."""
@@ -482,7 +488,9 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 			ov_on = report_query.get_executive_overview(
 				period_type="monthly", period_key=cur_period.period_key, actor=self.bod_user
 			)
-			self.assertTrue(ov_on["reporting_enabled"])
+			self.assertTrue(ov_on["ok"])
+			self.assertTrue(ov_on["actor_scope"]["p3_reporting_enabled"])
+			self.assertNotEqual(ov_on.get("status"), "disabled_by_policy")
 
 			# 2. Campaign update immediately updates cached campaign title map
 			campaigns_api.save(
@@ -504,10 +512,11 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 				work_item=wi_name,
 				channel="phone_call",
 				outcome_code="no_answer",
-				expected_revision=det["revision"],
+				expected_revision=det["work_item"]["revision"],
 				idempotency_key=self.unique_key("fresh-att"),
 				actor=self.staff_a,
 			)
+			frappe.db.commit()
 			ov_dirty = report_query.get_executive_overview(
 				period_type="monthly", period_key=cur_period.period_key, actor=self.bod_user
 			)
@@ -556,11 +565,11 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 			# 4. Auto-approved correction immediately bumps `DOMAIN_CORRECTION` (`compute_effective_attempts` reflects void)
 			det2 = read_model.get_work_item_detail(wi_name, actor=self.staff_a)
 			corr_res = correction.request_correction(
-				attempt=att_res["attempt"],
+				attempt=att_res["attempt_id"],
 				action="void",
 				reason="Ghi nhầm cuộc gọi thử nghiệm",
 				auto_approve=True,
-				expected_revision=det2["revision"],
+				expected_revision=det2["work_item"]["revision"],
 				idempotency_key=self.unique_key("fresh-void"),
 				actor=self.admin_user,
 			)

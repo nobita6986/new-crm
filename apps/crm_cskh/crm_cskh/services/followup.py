@@ -272,6 +272,7 @@ def create_followup_in_tx(
 				"modified_by": session_user,
 			}
 		)
+		task.set("__islocal", 1)
 		task.flags.in_insert = True
 		validate_cskh_followup_task(task)
 		task.set_new_name()

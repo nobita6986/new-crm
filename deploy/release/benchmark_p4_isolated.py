@@ -1565,6 +1565,18 @@ def execute_isolated_benchmark(
     )
     cookie_header = admin_sess["cookie"]
 
+    # Warm all Gunicorn worker threads (lazy imports + per-thread DB/Redis sockets)
+    # after S1 seeding / BG-01 / BG-02 before capturing steady-state HTTP latencies.
+    _ = _run_multi_cookie_wave(
+        [cookie_header],
+        base_url=base_url,
+        site_name=site_name,
+        path="/api/method/ping",
+        concurrency=min(concurrency, 8),
+        requests_total=24,
+    )
+    time.sleep(0.5)
+
     pre_db_queue = _collect_queue_and_db_telemetry(
         compose_project, site_name, compose_file=compose_file, env=compose_env
     )

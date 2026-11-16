@@ -602,7 +602,6 @@ def record_attempt(
 				if outcome["code"].lower() in camp_conv_codes:
 					is_conv_flag = True
 
-		session_user = getattr(getattr(frappe, "session", None), "user", None) or actor
 		att_payload = {
 			"doctype": "CSKH Contact Attempt",
 			"work_item": wi_val,
@@ -631,8 +630,6 @@ def record_attempt(
 			"idempotency_key": idem_val,
 			"payload_hash": req_hash,
 			"work_item_revision": current_rev + 1,
-			"owner": session_user,
-			"modified_by": session_user,
 		}
 		if runtime_cache.has_column("CSKH Contact Attempt", "conversion_snapshot"):
 			att_payload["conversion_snapshot"] = 1 if is_conv_flag else 0
@@ -641,9 +638,13 @@ def record_attempt(
 		if runtime_cache.has_column("CSKH Contact Attempt", "complete_fields"):
 			att_payload["complete_fields"] = 1
 
-		attempt_doc = frappe.get_doc(att_payload)
-		attempt_doc.flags.in_insert = True
-		attempt_doc.set_new_name()
+		prev_att_flag = getattr(frappe.flags, "cskh_in_attempt_service", False)
+		frappe.flags.cskh_in_attempt_service = True
+		try:
+			attempt_doc = frappe.get_doc(att_payload)
+			attempt_doc.insert(ignore_permissions=True, ignore_links=True)
+		finally:
+			frappe.flags.cskh_in_attempt_service = prev_att_flag
 		attempt_id = str(attempt_doc.name)
 
 		# 10. Resolve existing open callback `CRM Task` (if any), fulfill SLA obligations, & create new follow-up `CRM Task`
@@ -703,19 +704,16 @@ def record_attempt(
 			)
 			notify_owner = locked.assigned_to
 
-		attempt_doc.resolved_callback_task = resolved_task_id
-		attempt_doc.callback_task = new_task_id
-		prev_att_flag = getattr(frappe.flags, "cskh_in_attempt_service", False)
-		frappe.flags.cskh_in_attempt_service = True
-		try:
-			attempt_doc.flags.in_insert = True
-			attempt_doc.before_insert()
-			attempt_doc.before_save()
-			attempt_doc.creation = now_dt
-			attempt_doc.modified = now_dt
-			attempt_doc.db_insert()
-		finally:
-			frappe.flags.cskh_in_attempt_service = prev_att_flag
+		if resolved_task_id or new_task_id:
+			frappe.db.sql(
+				"""
+				update `tabCSKH Contact Attempt`
+				set `resolved_callback_task` = coalesce(%s, `resolved_callback_task`),
+				    `callback_task` = coalesce(%s, `callback_task`)
+				where `name` = %s
+				""",
+				(resolved_task_id, new_task_id, attempt_id),
+			)
 
 		# 11. Persist global DNC flag on `CRM Lead` when outcome is `is_do_not_contact`
 		dnc_active = False

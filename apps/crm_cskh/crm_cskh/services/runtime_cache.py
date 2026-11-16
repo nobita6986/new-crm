@@ -57,7 +57,7 @@ ALL_DOMAINS = (
 )
 
 _EPOCH_REDIS_HASH = "cskh:runtime_epochs"
-_EPOCH_SYNC_TTL_SEC = 0.25
+_EPOCH_SYNC_TTL_SEC = 0.50
 
 
 class _BoundedLRU:
@@ -108,6 +108,8 @@ _SSR_HTML_LRU = _BoundedLRU(maxsize=1024)
 
 _ASSET_VERSION_CACHE: str | None = None
 _MUTATION_HOOKS_INSTALLED: bool = False
+_DB_INSTANCE_HOOKED_TYPES: set[type] = set()
+_TRANSLATION_CACHE_INSTALLED: bool = False
 
 _SET_VALUE_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 	"CSKH Policy": (DOMAIN_POLICY,),
@@ -127,28 +129,41 @@ _SET_VALUE_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 }
 
 
+def _wrap_db_class_set_value(db_cls: type) -> None:
+	if db_cls in _DB_INSTANCE_HOOKED_TYPES:
+		return
+	orig_set_value = db_cls.__dict__.get("set_value")
+	if callable(orig_set_value) and not getattr(orig_set_value, "_cskh_cache_wrapped", False):
+
+		def _wrapped_set_value(self, dt, dn, field, val=None, *args, **kwargs):
+			res = orig_set_value(self, dt, dn, field, val, *args, **kwargs)
+			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(dt) if dt else "")
+			if doms:
+				bump_cache_domain(*doms)
+			return res
+
+		_wrapped_set_value._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+		db_cls.set_value = _wrapped_set_value  # type: ignore[attr-defined]
+	_DB_INSTANCE_HOOKED_TYPES.add(db_cls)
+
+
 def _ensure_mutation_hooks_installed() -> None:
-	"""Idempotently hook `Database.set_value` and `frappe.clear_cache` so direct low-level
-	mutations (`frappe.db.set_value(..., update_modified=False)`, `bench clear-cache`)
+	"""Idempotently hook `Database.set_value` (plus active `type(frappe.db)`) and `frappe.clear_cache`
+	so direct low-level mutations (`frappe.db.set_value(..., update_modified=False)`, `bench clear-cache`)
 	invalidate `runtime_cache` domains immediately even when `doc_events` are bypassed."""
 	global _MUTATION_HOOKS_INSTALLED
+	db_obj = getattr(frappe, "db", None)
+	if db_obj is not None and type(db_obj) not in _DB_INSTANCE_HOOKED_TYPES:
+		try:
+			_wrap_db_class_set_value(type(db_obj))
+		except Exception:
+			pass
 	if _MUTATION_HOOKS_INSTALLED:
 		return
 	try:
 		from frappe.database.database import Database
 
-		orig_set_value = getattr(Database, "set_value", None)
-		if callable(orig_set_value) and not getattr(orig_set_value, "_cskh_cache_wrapped", False):
-
-			def _wrapped_set_value(self, dt, dn, field, val=None, *args, **kwargs):
-				res = orig_set_value(self, dt, dn, field, val, *args, **kwargs)
-				doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(dt) if dt else "")
-				if doms:
-					bump_cache_domain(*doms)
-				return res
-
-			_wrapped_set_value._cskh_cache_wrapped = True  # type: ignore[attr-defined]
-			Database.set_value = _wrapped_set_value  # type: ignore[method-assign]
+		_wrap_db_class_set_value(Database)
 
 		orig_clear_cache = getattr(frappe, "clear_cache", None)
 		if callable(orig_clear_cache) and not getattr(orig_clear_cache, "_cskh_cache_wrapped", False):
@@ -223,6 +238,9 @@ def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
 		cached = _SITE_EPOCHS.get(site)
 		if not force and cached is not None and (now_mono - cached[0]) < _EPOCH_SYNC_TTL_SEC:
 			return cached[1]
+		if cached is not None and not force:
+			# Stamp refresh-in-progress so concurrent Gunicorn threads don't stampede Redis
+			_SITE_EPOCHS[site] = (now_mono, cached[1])
 
 	epochs: dict[str, int] = dict(cached[1]) if cached is not None else {}
 	try:
@@ -323,13 +341,19 @@ def bump_cache_domain(*domains: str) -> None:
 
 def install_inprocess_translation_cache() -> None:
 	"""Idempotently wrap `frappe.translate.get_all_translations` with worker-RAM cache."""
+	global _TRANSLATION_CACHE_INSTALLED
+	if _TRANSLATION_CACHE_INSTALLED:
+		return
 	try:
 		import frappe.translate as tr_mod
 	except Exception:
 		return
 
 	orig = getattr(tr_mod, "get_all_translations", None)
-	if orig is None or getattr(orig, "_cskh_inproc_wrapped", False):
+	if orig is None:
+		return
+	if getattr(orig, "_cskh_inproc_wrapped", False):
+		_TRANSLATION_CACHE_INSTALLED = True
 		return
 
 	def _cached_get_all_translations(lang: str) -> dict[str, str]:
@@ -352,6 +376,7 @@ def install_inprocess_translation_cache() -> None:
 	_cached_get_all_translations._cskh_orig = orig  # type: ignore[attr-defined]
 	tr_mod.get_all_translations = _cached_get_all_translations
 	tr_mod.get_full_dict = _cached_get_all_translations
+	_TRANSLATION_CACHE_INSTALLED = True
 
 
 def on_before_request(*_args, **_kwargs) -> None:

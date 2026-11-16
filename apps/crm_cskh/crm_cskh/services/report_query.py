@@ -2323,7 +2323,7 @@ def _fast_interval_cohort_drilldown_page(
 
 	if mcode == "CONNECTED_RATE":
 		invalid_phone_codes: set[str] = {"wrong_number"}
-		for oc_info in runtime_cache.get_outcome_catalog(serialize_outcome)["by_code"].values():
+		for oc_info in runtime_cache.get_outcome_catalog(serialize_outcome).values():
 			if oc_info.get("is_invalid_phone"):
 				invalid_phone_codes.add(str(oc_info.get("code") or "").lower())
 		inv_codes_sorted = sorted(c for c in invalid_phone_codes if c)
@@ -2995,7 +2995,7 @@ def _fast_attempt_grain_drilldown_page(
 	requires_note_codes: set[str] = set()
 	has_comp_col = runtime_cache.has_column("CSKH Contact Attempt", "complete_fields")
 	if mcode == "VALID_OUTCOME_LOGGING_RATE":
-		for oc_info in runtime_cache.get_outcome_catalog(serialize_outcome)["by_code"].values():
+		for oc_info in runtime_cache.get_outcome_catalog(serialize_outcome).values():
 			c_key = str(oc_info.get("code") or "")
 			if c_key:
 				valid_outcome_codes.add(c_key)
