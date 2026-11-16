@@ -2813,10 +2813,30 @@ for r_i in range(500):
     csv_lines.append(f"Ứng viên Lỗi SĐT {r_i:04d},12345,s1err{r_i:04d}@dev.local,S1BatchImport")
 assert len(csv_lines) - 1 == 50_000
 csv_bytes = ("\n".join(csv_lines) + "\n").encode("utf-8")
+del csv_lines
 
-gc.collect()
-rss_imp_before, _ = _rss_hwm_mib()
-t_imp_prev0 = time.perf_counter()
+_dist_status_keys = (
+    "Questions",
+    "Innodb_buffer_pool_reads",
+    "Innodb_buffer_pool_read_requests",
+    "Innodb_os_log_fsyncs",
+    "Innodb_data_writes",
+    "Innodb_row_lock_waits",
+    "Slow_queries",
+)
+
+def _read_dist_status_counters():
+    return {
+        str(k): int(float(v or 0))
+        for k, v in frappe.db.sql(
+            "SHOW GLOBAL STATUS WHERE Variable_name IN ("
+            + ",".join(["%s"] * len(_dist_status_keys))
+            + ")",
+            _dist_status_keys,
+        )
+    }
+
+t_imp_file0 = time.perf_counter()
 file_doc = frappe.get_doc(
     {
         "doctype": "File",
@@ -2826,7 +2846,23 @@ file_doc = frappe.get_doc(
     }
 ).insert(ignore_permissions=True)
 frappe.db.commit()
+imp_file_upload_ms = round((time.perf_counter() - t_imp_file0) * 1000.0, 2)
+del csv_bytes
+gc.collect()
 
+rss_imp_before, hwm_before_imp_prev = _rss_hwm_mib()
+imp_hwm_reset_applied = False
+try:
+    with open("/proc/self/clear_refs", "w", encoding="utf-8") as _crf:
+        _crf.write("5")
+    imp_hwm_reset_applied = True
+except OSError:
+    imp_hwm_reset_applied = False
+
+import tracemalloc as _tracemalloc
+_tracemalloc.start()
+imp_status_before_preview = _read_dist_status_counters()
+t_imp_prev_only0 = time.perf_counter()
 prev_50k = import_service.create_preview(
     file_name=file_doc.name,
     mapping={"name": "full_name", "phone": "phone", "source": "source"},
@@ -2834,10 +2870,21 @@ prev_50k = import_service.create_preview(
     idempotency_key="s1-import-50000",
 )
 frappe.db.commit()
-imp_preview_ms = round((time.perf_counter() - t_imp_prev0) * 1000.0, 2)
+imp_preview_only_ms = round((time.perf_counter() - t_imp_prev_only0) * 1000.0, 2)
+imp_preview_ms = round(imp_file_upload_ms + imp_preview_only_ms, 2)
+_, _imp_tm_peak_bytes = _tracemalloc.get_traced_memory()
+_tracemalloc.stop()
+imp_preview_tracemalloc_peak_mib = round(_imp_tm_peak_bytes / (1024.0 * 1024.0), 3)
 rss_imp_after_prev, hwm_imp_prev = _rss_hwm_mib()
+imp_preview_rss_delta_mib = round(max(0.0, rss_imp_after_prev - rss_imp_before), 2)
+imp_status_after_preview = _read_dist_status_counters()
+imp_preview_db_questions_delta = max(
+    0,
+    imp_status_after_preview.get("Questions", 0) - imp_status_before_preview.get("Questions", 0),
+)
 
 batch_id = prev_50k["batch"]
+imp_status_before_exec = _read_dist_status_counters()
 t_imp_exec0 = time.perf_counter()
 import_service.confirm(batch_id, actor="Administrator")
 frappe.db.commit()
@@ -2861,6 +2908,16 @@ while time.perf_counter() < imp_deadline:
     time.sleep(0.5)
 imp_worker_ms = round((time.perf_counter() - t_imp_exec0) * 1000.0, 2)
 imp_total_ms = round(imp_preview_ms + imp_worker_ms, 2)
+imp_status_after_exec = _read_dist_status_counters()
+imp_exec_db_questions_delta = max(
+    0,
+    imp_status_after_exec.get("Questions", 0) - imp_status_before_exec.get("Questions", 0),
+)
+imp_exec_buffer_pool_reads_delta = max(
+    0,
+    imp_status_after_exec.get("Innodb_buffer_pool_reads", 0)
+    - imp_status_before_exec.get("Innodb_buffer_pool_reads", 0),
+)
 
 # 6. Weighted Distribution Preview (10,000 Work Items, target <= 60s) & Execute (10,000 Work Items, 0 duplicates)
 frappe.db.sql("ANALYZE TABLE `tabCRM Lead`, `tabCSKH Identity Index`")
@@ -2871,27 +2928,6 @@ _dist_rq = redis.from_url(frappe.conf.redis_queue)
 _dist_long_q_key = f"rq:queue:{_dist_gen_qname('long')}"
 _dist_short_q_key = f"rq:queue:{_dist_gen_qname('short')}"
 _dist_default_q_key = f"rq:queue:{_dist_gen_qname('default')}"
-
-_dist_status_keys = (
-    "Questions",
-    "Innodb_buffer_pool_reads",
-    "Innodb_buffer_pool_read_requests",
-    "Innodb_os_log_fsyncs",
-    "Innodb_data_writes",
-    "Innodb_row_lock_waits",
-    "Slow_queries",
-)
-
-def _read_dist_status_counters():
-    return {
-        str(k): int(float(v or 0))
-        for k, v in frappe.db.sql(
-            "SHOW GLOBAL STATUS WHERE Variable_name IN ("
-            + ",".join(["%s"] * len(_dist_status_keys))
-            + ")",
-            _dist_status_keys,
-        )
-    }
 
 dist_status_before_preview = _read_dist_status_counters()
 t_dist0 = time.perf_counter()
@@ -3299,12 +3335,23 @@ out = {
             "reused_rows": imp_status.get("reused_rows"),
             "skipped_rows": imp_status.get("skipped_rows"),
             "error_artifact_present": bool(imp_status.get("error_artifact")),
+            "file_upload_ms": imp_file_upload_ms,
+            "preview_only_ms": imp_preview_only_ms,
             "preview_ms": imp_preview_ms,
             "worker_commit_and_drain_ms": imp_worker_ms,
             "total_preview_confirm_and_worker_drain_ms": imp_total_ms,
+            "preview_telemetry": imp_status.get("preview_telemetry") or {},
+            "worker_telemetry": imp_status.get("worker_telemetry") or {},
+            "preview_db_questions_delta": imp_preview_db_questions_delta,
+            "worker_db_questions_delta": imp_exec_db_questions_delta,
+            "worker_innodb_buffer_pool_reads_delta": imp_exec_buffer_pool_reads_delta,
             "final_batch_status": imp_status.get("status"),
+            "process_prior_hwm_mib": hwm_before_imp_prev,
+            "preview_hwm_reset_applied": imp_hwm_reset_applied,
             "preview_rss_before_mib": rss_imp_before,
             "preview_rss_after_mib": rss_imp_after_prev,
+            "preview_rss_delta_mib": imp_preview_rss_delta_mib,
+            "preview_tracemalloc_peak_mib": imp_preview_tracemalloc_peak_mib,
             "preview_hwm_mib": hwm_imp_prev,
             "progress_checkpoints_count": len(imp_progress_samples),
             "all_progress_checkpoints": imp_progress_samples,

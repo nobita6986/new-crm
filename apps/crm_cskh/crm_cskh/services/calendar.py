@@ -429,7 +429,7 @@ def load_holidays_from_crm_holiday_list(holiday_list_name: str | None) -> frozen
 	return frozenset(_parse_holiday_date(r.date) for r in rows if r.get("date"))
 
 
-def resolve_working_calendar(calendar_code: str | None = None) -> WorkingCalendarSpec:
+def _resolve_working_calendar_uncached(calendar_code: str | None = None) -> WorkingCalendarSpec:
 	"""Load active `CSKH Working Calendar` (or fallback default) with upstream `CRM Holiday List` dates."""
 	import frappe
 
@@ -470,3 +470,10 @@ def resolve_working_calendar(calendar_code: str | None = None) -> WorkingCalenda
 
 	holidays = load_holidays_from_crm_holiday_list(DEFAULT_HOLIDAY_LIST_NAME)
 	return default_vn_office_calendar(holidays=tuple(holidays))
+
+
+def resolve_working_calendar(calendar_code: str | None = None) -> WorkingCalendarSpec:
+	"""Load active `CSKH Working Calendar` with runtime epoch cache (`calendar` domain)."""
+	from crm_cskh.services import runtime_cache
+
+	return runtime_cache.get_cached_working_calendar(calendar_code, _resolve_working_calendar_uncached)

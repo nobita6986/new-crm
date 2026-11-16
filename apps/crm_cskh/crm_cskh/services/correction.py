@@ -477,6 +477,9 @@ def request_correction(
 			corr_doc.insert(ignore_permissions=True)
 		finally:
 			frappe.flags.cskh_in_correction_service = prev_flag
+		from crm_cskh.services import runtime_cache
+
+		runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_CORRECTION)
 
 		if corr_status == "approved":
 			recomputed = recompute_work_item_read_model(
@@ -681,6 +684,9 @@ def review_correction(
 			corr_doc.save(ignore_permissions=True)
 		finally:
 			frappe.flags.cskh_in_correction_service = prev_flag
+		from crm_cskh.services import runtime_cache
+
+		runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_CORRECTION)
 
 		if target_status == "approved":
 			recomputed = recompute_work_item_read_model(

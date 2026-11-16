@@ -342,8 +342,11 @@ def _close_open_interval(work_item, ended_at):
 
 
 def _insert_history(doc):
+	from crm_cskh.services import runtime_cache
+
 	history = frappe.get_doc(doc)
 	history.insert(ignore_permissions=True)
+	runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_ASSIGNMENT_HISTORY)
 	return history
 
 

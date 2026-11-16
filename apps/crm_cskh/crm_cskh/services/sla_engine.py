@@ -31,8 +31,14 @@ from frappe.utils import cint, flt, get_datetime, now_datetime
 from crm_cskh.api._params import parse_int, parse_optional_str, parse_pagination
 from crm_cskh.p1_permissions import ROLE_ADMIN, _is_system, _roles
 from crm_cskh.p2_permissions import _in_team, _is_leader, _is_staff
-from crm_cskh.p3_models import DEFAULT_P3_POLICY_FIELDS, authorized_sla_write
+from crm_cskh.p3_models import (
+	DEFAULT_P3_POLICY_FIELDS,
+	OBLIGATION_STATUSES,
+	OBLIGATION_TYPES,
+	authorized_sla_write,
+)
 from crm_cskh.p3_permissions import sla_obligation_has_permission
+from crm_cskh.services import runtime_cache
 from crm_cskh.services.attribution import AUTHORITATIVE, UNKNOWN_HISTORICAL, resolve_team_for_user_at
 from crm_cskh.services.calendar import (
 	WorkingCalendarSpec,
@@ -53,7 +59,7 @@ from crm_cskh.services.sanitizer import sanitize_note_text
 
 
 def _p3_sla_ready() -> bool:
-	return bool(frappe.db.table_exists("CSKH SLA Obligation"))
+	return runtime_cache.table_exists("CSKH SLA Obligation")
 
 
 def is_p3_sla_enabled(campaign: str | None = None, owner_user: str | None = None) -> bool:
@@ -136,14 +142,64 @@ def _insert_obligation(fields: dict) -> str:
 	existing = frappe.db.get_value("CSKH SLA Obligation", {"idempotency_key": idem}, "name")
 	if existing:
 		return str(existing)
+	ob_type = fields.get("obligation_type")
+	ob_status = fields.get("status")
+	if ob_type not in OBLIGATION_TYPES:
+		raise PolicyConflict(f"Loại nghĩa vụ SLA không hợp lệ: {ob_type}")
+	if ob_status not in OBLIGATION_STATUSES:
+		raise PolicyConflict(f"Trạng thái nghĩa vụ SLA không hợp lệ: {ob_status}")
+	now_ts = now_datetime()
+	session_user = getattr(getattr(frappe, "session", None), "user", None) or "Administrator"
+	eval_anchor = fields.get("fulfilled_at") or fields.get("breached_at") or fields.get("closed_at")
 	with authorized_sla_write():
-		doc = frappe.get_doc({"doctype": "CSKH SLA Obligation", **fields})
-		doc.flags.ignore_links = True
-		doc.insert(ignore_permissions=True)
+		doc = frappe.get_doc(
+			{
+				"doctype": "CSKH SLA Obligation",
+				"creation": now_ts,
+				"modified": now_ts,
+				"owner": session_user,
+				"modified_by": session_user,
+				**fields,
+				"evaluation_anchor_at": eval_anchor,
+			}
+		)
+		doc.set_new_name()
+		doc.db_insert()
 		return str(doc.name)
 
 
-def _update_obligation(name: str, updates: dict, audit_entry: dict | None = None) -> None:
+def _update_obligation(
+	name: str,
+	updates: dict,
+	audit_entry: dict | None = None,
+	*,
+	existing_row: dict | None = None,
+) -> None:
+	if existing_row is not None and "original_due_at" not in updates:
+		new_status = updates.get("status", existing_row.get("status"))
+		if new_status not in OBLIGATION_STATUSES:
+			raise PolicyConflict(f"Trạng thái nghĩa vụ SLA không hợp lệ: {new_status}")
+		eff_updates = dict(updates)
+		if audit_entry is not None:
+			eff_updates["audit_events_json"] = _append_audit(
+				existing_row.get("audit_events_json"), audit_entry
+			)
+		fulfilled = eff_updates.get("fulfilled_at", existing_row.get("fulfilled_at"))
+		breached = eff_updates.get("breached_at", existing_row.get("breached_at"))
+		closed = eff_updates.get("closed_at", existing_row.get("closed_at"))
+		eff_updates["evaluation_anchor_at"] = fulfilled or breached or closed
+		eff_updates["modified"] = now_datetime()
+		eff_updates["modified_by"] = (
+			getattr(getattr(frappe, "session", None), "user", None) or "Administrator"
+		)
+		set_parts = [f"`{col}` = %s" for col in eff_updates]
+		params = [*eff_updates.values(), name]
+		frappe.db.sql(
+			f"update `tabCSKH SLA Obligation` set {', '.join(set_parts)} where `name` = %s",
+			tuple(params),
+		)
+		return
+
 	with authorized_sla_write():
 		doc = frappe.get_doc("CSKH SLA Obligation", name)
 		for k, v in updates.items():
@@ -606,30 +662,42 @@ def on_followup_created_in_tx(
 	due_dt: datetime | str,
 	actor: str,
 	now_dt: datetime | str,
+	open_hist: dict | None = None,
+	policy: dict | None = None,
+	calendar: WorkingCalendarSpec | None = None,
 ) -> str | None:
 	"""Spawn a `FOLLOWUP` obligation tied to native `CRM Task` (`task_id`)."""
 	if not _p3_sla_ready() or not is_p3_sla_enabled(campaign=campaign, owner_user=owner_user):
 		return None
 	created_at = get_datetime(now_dt)
 	task_due = get_datetime(due_dt)
-	policy, calendar = _resolve_policy_and_calendar(campaign=campaign, owner_user=owner_user)
-	if not cint(policy.get("p3_sla_enabled", 1)):
+	if policy is not None:
+		eff_pol = _policy_with_p3_defaults(policy)
+		eff_cal = calendar or resolve_working_calendar(eff_pol.get("working_calendar"))
+	else:
+		eff_pol, eff_cal = _resolve_policy_and_calendar(campaign=campaign, owner_user=owner_user)
+	if not cint(eff_pol.get("p3_sla_enabled", 1)):
 		return None
 
-	open_hist = frappe.db.get_value(
-		"CSKH Assignment History",
-		{"work_item": work_item, "ownership_end": ["is", "not set"]},
-		["name", "team_at_assignment", "attribution_status"],
-		order_by="event_at desc, creation desc",
-		as_dict=True,
-	)
-	interval_id = open_hist.name if open_hist else None
-	team_node, attr_status = _resolve_interval_attribution(interval_id, owner_user, created_at)
+	if open_hist is None:
+		open_hist = frappe.db.get_value(
+			"CSKH Assignment History",
+			{"work_item": work_item, "ownership_end": ["is", "not set"]},
+			["name", "team_at_assignment", "attribution_status"],
+			order_by="event_at desc, creation desc",
+			as_dict=True,
+		)
+	interval_id = open_hist.get("name") if open_hist else None
+	if open_hist and open_hist.get("attribution_status"):
+		team_node = open_hist.get("team_at_assignment")
+		attr_status = str(open_hist.get("attribution_status"))
+	else:
+		team_node, attr_status = _resolve_interval_attribution(interval_id, owner_user, created_at)
 
-	grace_min = max(cint(policy.get("followup_grace_minutes", 15)), 0)
-	sla_due = add_business_minutes(task_due, grace_min, calendar)
-	pol_json = json.dumps(policy, ensure_ascii=False, sort_keys=True, default=str)
-	cal_json = calendar.to_snapshot_json()
+	grace_min = max(cint(eff_pol.get("followup_grace_minutes", 15)), 0)
+	sla_due = add_business_minutes(task_due, grace_min, eff_cal)
+	pol_json = json.dumps(eff_pol, ensure_ascii=False, sort_keys=True, default=str)
+	cal_json = eff_cal.to_snapshot_json()
 
 	ob_id = _insert_obligation(
 		{
@@ -649,8 +717,8 @@ def on_followup_created_in_tx(
 			"original_due_at": sla_due,
 			"effective_due_at": sla_due,
 			"work_item_original_due_at": sla_due,
-			"policy_name_snapshot": policy.get("name"),
-			"policy_version_snapshot": cint(policy.get("version", 1)),
+			"policy_name_snapshot": eff_pol.get("name"),
+			"policy_version_snapshot": cint(eff_pol.get("version", 1)),
 			"policy_snapshot_json": pol_json,
 			"calendar_snapshot_json": cal_json,
 			"audit_events_json": json.dumps(
@@ -857,7 +925,8 @@ def on_followup_resolved_in_tx(
 	att_dt = get_datetime(occurred_at)
 	active_fu = frappe.db.sql(
 		"""
-		select name, status, effective_due_at, breached_at, is_paused, paused_at, calendar_snapshot_json,
+		select name, status, original_due_at, effective_due_at, fulfilled_at, breached_at, closed_at,
+		       is_paused, paused_at, calendar_snapshot_json, audit_events_json,
 		       owner_user, campaign, team_at_obligation
 		from `tabCSKH SLA Obligation`
 		where work_item = %s and followup_task = %s and obligation_type = 'FOLLOWUP'
@@ -887,6 +956,7 @@ def on_followup_resolved_in_tx(
 					"attempt_id": attempt_id,
 					"occurred_at": str(att_dt),
 				},
+				existing_row=ob,
 			)
 		else:
 			breach_ts = get_datetime(ob.breached_at) if ob.breached_at else eff_due
@@ -907,6 +977,7 @@ def on_followup_resolved_in_tx(
 					"occurred_at": str(att_dt),
 					"breached_at": str(breach_ts),
 				},
+				existing_row=ob,
 			)
 		resolved_ids.append(ob.name)
 		_notify_dirty_post_commit(
@@ -1003,8 +1074,10 @@ def on_attempt_recorded_in_tx(
 	att_dt = get_datetime(occurred_at)
 	active_obs = frappe.db.sql(
 		"""
-		select name, obligation_type, status, effective_due_at, breached_at,
-		       is_paused, paused_at, calendar_snapshot_json, owner_user, campaign, team_at_obligation
+		select name, obligation_type, status, original_due_at, effective_due_at,
+		       fulfilled_at, breached_at, closed_at,
+		       is_paused, paused_at, calendar_snapshot_json, audit_events_json,
+		       owner_user, campaign, team_at_obligation
 		from `tabCSKH SLA Obligation`
 		where work_item = %s and status in ('open', 'breached_open')
 		for update
@@ -1037,6 +1110,7 @@ def on_attempt_recorded_in_tx(
 						"attempt_id": attempt_id,
 						"occurred_at": str(att_dt),
 					},
+					existing_row=ob,
 				)
 			else:
 				breach_ts = get_datetime(ob.breached_at) if ob.breached_at else eff_due
@@ -1057,6 +1131,7 @@ def on_attempt_recorded_in_tx(
 						"occurred_at": str(att_dt),
 						"breached_at": str(breach_ts),
 					},
+					existing_row=ob,
 				)
 			updated.append(ob.name)
 		elif ob.obligation_type == "FIRST_CONNECTED" and is_connected:
@@ -1077,6 +1152,7 @@ def on_attempt_recorded_in_tx(
 						"attempt_id": attempt_id,
 						"occurred_at": str(att_dt),
 					},
+					existing_row=ob,
 				)
 			else:
 				breach_ts = get_datetime(ob.breached_at) if ob.breached_at else eff_due
@@ -1096,6 +1172,7 @@ def on_attempt_recorded_in_tx(
 						"attempt_id": attempt_id,
 						"occurred_at": str(att_dt),
 					},
+					existing_row=ob,
 				)
 			updated.append(ob.name)
 		elif is_dnc:
@@ -1116,6 +1193,7 @@ def on_attempt_recorded_in_tx(
 						"attempt_id": attempt_id,
 						"at": str(att_dt),
 					},
+					existing_row=ob,
 				)
 			else:
 				_update_obligation(
@@ -1132,6 +1210,7 @@ def on_attempt_recorded_in_tx(
 						"attempt_id": attempt_id,
 						"at": str(att_dt),
 					},
+					existing_row=ob,
 				)
 			updated.append(ob.name)
 

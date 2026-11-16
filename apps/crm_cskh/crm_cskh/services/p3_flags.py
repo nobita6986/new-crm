@@ -26,6 +26,8 @@ from __future__ import annotations
 import frappe
 from frappe.utils import cint
 
+from crm_cskh.services import runtime_cache
+
 
 def parse_flag_bool(value, default: bool) -> bool:
 	"""Coerce `site_config` / `CSKH Policy` flag values into a deterministic `bool`."""
@@ -66,9 +68,9 @@ def _resolve_policy_flag(
 ) -> bool:
 	"""Read `field` from effective `CSKH Policy`, falling back safely to `default` before migration."""
 	try:
-		if not getattr(frappe, "db", None) or not frappe.db.table_exists("CSKH Policy"):
+		if not getattr(frappe, "db", None) or not runtime_cache.table_exists("CSKH Policy"):
 			return bool(default)
-		if not frappe.db.has_column("CSKH Policy", field):
+		if not runtime_cache.has_column("CSKH Policy", field):
 			return bool(default)
 	except Exception:
 		return bool(default)
@@ -79,30 +81,33 @@ def _resolve_policy_flag(
 		try:
 			from crm_cskh.services.policies import resolve_effective_policy
 
-			pol = resolve_effective_policy(campaign=camp_val, assignee=user_val)
+			pol = resolve_effective_policy(campaign=camp_val, owner_user=user_val)
 			if isinstance(pol, dict) and field in pol and pol.get(field) is not None:
 				return bool(cint(pol.get(field)))
 		except Exception:
 			pass
 
-	try:
-		global_val = frappe.db.get_value(
-			"CSKH Policy",
-			{"scope_type": "Global", "enabled": 1},
-			field,
-			order_by="version desc, modified desc",
-		)
-		if global_val is not None:
-			return bool(cint(global_val))
+	def _query_global_flag() -> bool:
+		try:
+			global_val = frappe.db.get_value(
+				"CSKH Policy",
+				{"scope_type": "Global", "enabled": 1},
+				field,
+				order_by="version desc, modified desc",
+			)
+			if global_val is not None:
+				return bool(cint(global_val))
 
-		any_rows = frappe.db.sql(
-			f"select max(`{field}`) from `tabCSKH Policy` where enabled = 1",
-		)
-		if any_rows and any_rows[0] and any_rows[0][0] is not None:
-			return bool(cint(any_rows[0][0]))
-	except Exception:
+			any_rows = frappe.db.sql(
+				f"select max(`{field}`) from `tabCSKH Policy` where enabled = 1",
+			)
+			if any_rows and any_rows[0] and any_rows[0][0] is not None:
+				return bool(cint(any_rows[0][0]))
+		except Exception:
+			return bool(default)
 		return bool(default)
-	return bool(default)
+
+	return runtime_cache.get_cached_global_policy_flag(field, default, _query_global_flag)
 
 
 def is_p3_sla_enabled(

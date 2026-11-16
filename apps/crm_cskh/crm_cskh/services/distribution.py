@@ -1491,6 +1491,9 @@ def _batch_assign_chunk(
 	frappe.db.bulk_insert("CSKH Work Item", fields=WORK_ITEM_BULK_FIELDS, values=wi_rows)
 	frappe.db.bulk_insert("CSKH Active Claim", fields=ACTIVE_CLAIM_BULK_FIELDS, values=claim_rows)
 	frappe.db.bulk_insert("CSKH Assignment History", fields=hist_fields, values=hist_rows)
+	from crm_cskh.services import runtime_cache
+
+	runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_ASSIGNMENT_HISTORY)
 
 	if ob_specs:
 		ob_names = _unique_hashes(len(ob_specs), 10)

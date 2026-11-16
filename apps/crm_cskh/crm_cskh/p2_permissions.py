@@ -31,22 +31,19 @@ from crm_cskh.p1_permissions import (
 	_team_bounds,
 	_team_user_condition,
 )
-from crm_cskh.services import reporting
+from crm_cskh.services import reporting, runtime_cache
 from crm_cskh.services.errors import Forbidden, NotFound
 
 
 def _user_ancestor_nodes(user: str) -> list[str]:
-	row = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"], as_dict=True)
+	snap = runtime_cache.get_hierarchy_snapshot()
+	if not snap:
+		return []
+	row = snap["by_user"].get(str(user))
 	if not row:
 		return []
-	return list(
-		frappe.db.sql(
-			"select name from `tabCRM Sales Hierarchy` where lft <= %s and rgt >= %s",
-			(row.lft, row.rgt),
-			pluck=True,
-		)
-		or []
-	)
+	lft, rgt = row["lft"], row["rgt"]
+	return [n["name"] for n in snap["ordered"] if n["lft"] <= lft and n["rgt"] >= rgt]
 
 
 def leader_authorized_work_item_sql(user: str, wi_alias: str = "wi") -> str:
@@ -73,7 +70,7 @@ def leader_authorized_work_item_sql(user: str, wi_alias: str = "wi") -> str:
 	)
 	owner_close_pred = (
 		f"`{wi_alias}`.`owner_at_close` in {team_users_subq} or "
-		if frappe.db.has_column("CSKH Work Item", "owner_at_close")
+		if runtime_cache.has_column("CSKH Work Item", "owner_at_close")
 		else ""
 	)
 	legacy_closed_affil = (
@@ -82,7 +79,7 @@ def leader_authorized_work_item_sql(user: str, wi_alias: str = "wi") -> str:
 		f"or `{wi_alias}`.`campaign` in (select `c_cl`.`name` from `tabCSKH Campaign` `c_cl` "
 		f"where `c_cl`.`team_scope` in {team_nodes_subq}))"
 	)
-	if frappe.db.has_column("CSKH Assignment History", "team_at_assignment"):
+	if runtime_cache.has_column("CSKH Assignment History", "team_at_assignment"):
 		lat_stat_subq = (
 			f"(select `ah_lat`.`attribution_status` from `tabCSKH Assignment History` `ah_lat` "
 			f"where `ah_lat`.`work_item` = `{wi_alias}`.`name` "
@@ -144,7 +141,7 @@ def staff_authorized_work_item_sql(user: str, wi_alias: str = "wi") -> str:
 	     (`SEC2-07`, `F-P2-04`, `docs/api-contract-p2.md` §3).
 	"""
 	u_sql = _escape(user)
-	if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
+	if runtime_cache.has_column("CSKH Work Item", "owner_at_close"):
 		closed_owner_pred = (
 			f"(coalesce(nullif(`{wi_alias}`.`owner_at_close`, ''), `{wi_alias}`.`closed_by`) = {u_sql} "
 			f"or `{wi_alias}`.`closed_by` = {u_sql})"
@@ -180,7 +177,7 @@ def is_work_item_readable_for_workflow(work_item_doc_or_name, user: str | None =
 	if ROLE_BOD in _roles(user) and not (_is_leader(user) or _is_staff(user)):
 		return False
 
-	has_owner_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
+	has_owner_close = runtime_cache.has_column("CSKH Work Item", "owner_at_close")
 	if isinstance(work_item_doc_or_name, str):
 		wi_fields = [
 			"name",
@@ -208,22 +205,20 @@ def is_work_item_readable_for_workflow(work_item_doc_or_name, user: str | None =
 	assigned_to = wi.get("assigned_to")
 	owner_at_close = wi.get("owner_at_close")
 	if status == "closed" and owner_at_close is None and has_owner_close and wi.get("name"):
-		owner_at_close = frappe.db.get_value("CSKH Work Item", wi.get("name"), "owner_at_close")
+		if not (isinstance(wi, dict) and "owner_at_close" in wi):
+			owner_at_close = frappe.db.get_value("CSKH Work Item", wi.get("name"), "owner_at_close")
 
 	if _is_leader(user):
 		if status in OWNED_ACTIVE_WORK_ITEM_STATES and assigned_to:
 			return assigned_to == user or _in_team(user, assigned_to)
 		if status == "closed" and not assigned_to:
-			camp_team = (
-				frappe.db.get_value("CSKH Campaign", wi.get("campaign"), "team_scope")
-				if wi.get("campaign")
-				else None
-			)
+			camp_row = runtime_cache.get_campaign_row(wi.get("campaign")) if wi.get("campaign") else None
+			camp_team = camp_row.get("team_scope") if camp_row else None
 			if camp_team and not _node_in_subtree(user, camp_team):
 				return False
 
 			latest_ah = None
-			if wi.get("name") and frappe.db.has_column("CSKH Assignment History", "team_at_assignment"):
+			if wi.get("name") and runtime_cache.has_column("CSKH Assignment History", "team_at_assignment"):
 				ah_rows = frappe.db.sql(
 					"""
 					select team_at_assignment, attribution_status
@@ -311,7 +306,7 @@ def assert_workflow_actor(user: str | None = None, allow_bod: bool = False) -> s
 
 
 def assert_work_item_workflow_access(
-	work_item: str,
+	work_item: str | dict,
 	user: str | None = None,
 	require_active_mutation: bool = False,
 ) -> dict:
@@ -321,29 +316,32 @@ def assert_work_item_workflow_access(
 	or `Forbidden` when `user` has no scope over `work_item` (avoiding cross-team existence leaks).
 	"""
 	user = assert_workflow_actor(user, allow_bod=False)
-	wi_fields = [
-		"name",
-		"lead",
-		"campaign",
-		"status",
-		"revision",
-		"assigned_to",
-		"assigned_at",
-		"open_callback_task",
-		"next_action_due",
-		"attempt_count",
-		"connected_attempt_count",
-		"closed_by",
-		"last_activity_by",
-	]
-	if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
-		wi_fields.append("owner_at_close")
-	wi = frappe.db.get_value(
-		"CSKH Work Item",
-		work_item,
-		wi_fields,
-		as_dict=True,
-	)
+	if isinstance(work_item, dict):
+		wi = work_item if work_item.get("name") else None
+	else:
+		wi_fields = [
+			"name",
+			"lead",
+			"campaign",
+			"status",
+			"revision",
+			"assigned_to",
+			"assigned_at",
+			"open_callback_task",
+			"next_action_due",
+			"attempt_count",
+			"connected_attempt_count",
+			"closed_by",
+			"last_activity_by",
+		]
+		if runtime_cache.has_column("CSKH Work Item", "owner_at_close"):
+			wi_fields.append("owner_at_close")
+		wi = frappe.db.get_value(
+			"CSKH Work Item",
+			work_item,
+			wi_fields,
+			as_dict=True,
+		)
 	if not wi:
 		if _is_system(user) or ROLE_ADMIN in _roles(user):
 			raise NotFound("Không tìm thấy Work Item.")

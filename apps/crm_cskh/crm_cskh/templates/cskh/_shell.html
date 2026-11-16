@@ -37,13 +37,13 @@
 <script>
 	window.cskhUser = {{ cskh_user | tojson }}
 	window.cskhCapabilities = {{ cskh_capabilities | tojson }}
-	window.cskhTimezone = {{ cskh_timezone | default({}) | tojson }}
-	window.cskhI18n = {{ cskh_i18n | tojson }}
-	window.cskhErrorCodes = {{ cskh_error_codes | tojson }}
-	window.cskhErrorTexts = {{ cskh_error_texts | tojson }}
+	window.cskhTimezone = {{ cskh_timezone_json | safe if cskh_timezone_json is defined else (cskh_timezone | default({}) | tojson) }}
+	window.cskhI18n = {{ cskh_i18n_json | safe if cskh_i18n_json is defined else (cskh_i18n | tojson) }}
+	window.cskhErrorCodes = {{ cskh_error_codes_json | safe if cskh_error_codes_json is defined else (cskh_error_codes | tojson) }}
+	window.cskhErrorTexts = {{ cskh_error_texts_json | safe if cskh_error_texts_json is defined else (cskh_error_texts | tojson) }}
 	// The CSRF token of the *current* Frappe session: every mutation of the
 	// P1/P2 pages sends it in the `X-Frappe-CSRF-Token` header.
-	window.cskhCsrfHeader = {{ cskh_csrf_header | tojson }}
+	window.cskhCsrfHeader = {{ cskh_csrf_header_json | safe if cskh_csrf_header_json is defined else (cskh_csrf_header | tojson) }}
 	window.frappe = window.frappe || {}
 	window.frappe.csrf_token = window.cskhCsrfHeader["X-Frappe-CSRF-Token"]
 </script>

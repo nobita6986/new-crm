@@ -46,6 +46,7 @@ AUXILIARY_MODULES: dict[str, tuple[str, ...]] = {
     "core": (
         "crm_cskh.tests.test_error_response_normalization",
         "crm_cskh.tests.test_p4_security_and_scale_gaps",
+        "crm_cskh.tests.test_p4_bg02_and_slo_remediation",
     ),
     "p1_ui": ("crm_cskh.tests.test_ui_p1_endpoints",),
     "p2_ui": ("crm_cskh.tests.test_ui_p2_pages_and_context",),

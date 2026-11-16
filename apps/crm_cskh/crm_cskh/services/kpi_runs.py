@@ -32,6 +32,7 @@ from frappe.utils import cint, get_datetime, now_datetime
 from crm_cskh.p1_permissions import ROLE_ADMIN, ROLE_BOD, _is_system, _node_in_subtree, _roles
 from crm_cskh.p2_permissions import _in_team, _is_leader, _is_staff
 from crm_cskh.p3_models import authorized_kpi_write
+from crm_cskh.services import runtime_cache
 from crm_cskh.services.calendar import format_calendar_iso
 from crm_cskh.services.errors import (
 	ForbiddenScope,
@@ -355,7 +356,7 @@ def _flush_pending_dirty_events() -> None:
 	local.cskh_pending_dirty_events = []
 	local.cskh_dirty_after_commit_registered = False
 
-	if not events or not frappe.db.table_exists("CSKH Dirty Scope"):
+	if not events or not runtime_cache.table_exists("CSKH Dirty Scope"):
 		return
 
 	now_dt = now_datetime()
@@ -380,71 +381,97 @@ def _flush_pending_dirty_events() -> None:
 
 	wrote_any = False
 	with authorized_kpi_write():
-		skeys = list(by_key.keys())
-		if len(skeys) == 1:
-			wrote_any = _upsert_dirty_scopes_per_key(by_key, now_dt)
-		else:
-			try:
-				frappe.db.savepoint("cskh_dirty_flush_batch")
-				ph = ", ".join(["%s"] * len(skeys))
-				existing_rows = frappe.db.sql(
-					f"""
-					select name, scope_key, is_prior_period, trigger_reference
-					from `tabCSKH Dirty Scope`
-					where scope_key in ({ph})
-					""",
-					tuple(skeys),
-					as_dict=True,
-				)
-				existing_by_key = {str(r.scope_key): r for r in existing_rows}
-				session_user = getattr(getattr(frappe, "session", None), "user", None) or "Administrator"
+		skeys = sorted(by_key.keys())
+		try:
+			frappe.db.savepoint("cskh_dirty_flush_batch")
+			ph = ", ".join(["%s"] * len(skeys))
+			existing_rows = frappe.db.sql(
+				f"""
+				select name, scope_key, is_prior_period, trigger_reference
+				from `tabCSKH Dirty Scope`
+				where scope_key in ({ph})
+				""",
+				tuple(skeys),
+				as_dict=True,
+			)
+			existing_by_key = {str(r.scope_key): r for r in existing_rows}
+			session_user = getattr(getattr(frappe, "session", None), "user", None) or "Administrator"
 
-				insert_rows: list[tuple] = []
-				update_items: list[tuple[dict, dict]] = []
-				seen_names: set[str] = set()
-				for skey, item in by_key.items():
-					ex_row = existing_by_key.get(skey)
-					if ex_row is not None:
-						update_items.append((ex_row, item))
-					else:
-						d = item["dirty_date"]
-						month_str = f"{d.year:04d}-{d.month:02d}"
+			insert_rows: list[tuple] = []
+			update_items: list[tuple[dict, dict]] = []
+			seen_names: set[str] = set()
+			for skey in skeys:
+				item = by_key[skey]
+				ex_row = existing_by_key.get(skey)
+				if ex_row is not None:
+					update_items.append((ex_row, item))
+				else:
+					d = item["dirty_date"]
+					month_str = f"{d.year:04d}-{d.month:02d}"
+					row_name = frappe.generate_hash(length=10)
+					while row_name in seen_names:
 						row_name = frappe.generate_hash(length=10)
-						while row_name in seen_names:
-							row_name = frappe.generate_hash(length=10)
-						seen_names.add(row_name)
-						insert_rows.append(
-							(
-								row_name,
-								now_dt,
-								now_dt,
-								session_user,
-								session_user,
-								0,
-								0,
-								skey,
-								d.isoformat(),
-								month_str,
-								item["campaign"] or None,
-								item["team_node"] or None,
-								item["owner_user"] or None,
-								item["reason"],
-								int(item["is_prior_period"]),
-								item["trigger_reference"] or item["work_item"] or None,
-								"pending",
-								now_dt,
-								now_dt,
-							)
+					seen_names.add(row_name)
+					insert_rows.append(
+						(
+							row_name,
+							now_dt,
+							now_dt,
+							session_user,
+							session_user,
+							0,
+							0,
+							skey,
+							d.isoformat(),
+							month_str,
+							item["campaign"] or None,
+							item["team_node"] or None,
+							item["owner_user"] or None,
+							item["reason"],
+							int(item["is_prior_period"]),
+							item["trigger_reference"] or item["work_item"] or None,
+							"pending",
+							now_dt,
+							now_dt,
 						)
-
-				if insert_rows:
-					frappe.db.bulk_insert(
-						"CSKH Dirty Scope",
-						fields=DIRTY_SCOPE_BULK_FIELDS,
-						values=insert_rows,
 					)
 
-				if update_items:
+			if insert_rows:
+				frappe.db.bulk_insert(
+					"CSKH Dirty Scope",
+					fields=DIRTY_SCOPE_BULK_FIELDS,
+					values=insert_rows,
+				)
+
+			if update_items:
+				update_items.sort(key=lambda pair: str(pair[0].name))
+				if len(update_items) == 1:
+					ex_row, item = update_items[0]
+					eff_prior = 1 if (item["is_prior_period"] or cint(ex_row.is_prior_period)) else 0
+					eff_trig = item["trigger_reference"] or ex_row.trigger_reference
+					frappe.db.sql(
+						"""
+						update `tabCSKH Dirty Scope`
+						set status = 'pending',
+						    last_dirtied_at = %s,
+						    modified = %s,
+						    modified_by = %s,
+						    reason = %s,
+						    is_prior_period = %s,
+						    trigger_reference = %s
+						where name = %s
+						""",
+						(
+							now_dt,
+							now_dt,
+							session_user,
+							item["reason"],
+							eff_prior,
+							eff_trig,
+							str(ex_row.name),
+						),
+					)
+				else:
 					reason_cases: list[str] = []
 					reason_params: list = []
 					prior_cases: list[str] = []
@@ -487,12 +514,13 @@ def _flush_pending_dirty_events() -> None:
 							*upd_names,
 						),
 					)
-				wrote_any = bool(insert_rows or update_items)
-			except Exception:
-				frappe.db.rollback(save_point="cskh_dirty_flush_batch")
-				wrote_any = _upsert_dirty_scopes_per_key(by_key, now_dt)
+			wrote_any = bool(insert_rows or update_items)
+		except Exception:
+			frappe.db.rollback(save_point="cskh_dirty_flush_batch")
+			wrote_any = _upsert_dirty_scopes_per_key(by_key, now_dt)
 
 	if wrote_any:
+		runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
 		frappe.db.commit()
 
 	# Enqueue deduplicated background worker outside unit tests unless explicitly suppressed
@@ -794,6 +822,10 @@ def execute_kpi_recompute(
 					run_id,
 				),
 			)
+			runtime_cache.bump_cache_domain(
+				runtime_cache.DOMAIN_KPI_SNAPSHOT,
+				runtime_cache.DOMAIN_DIRTY_SCOPE,
+			)
 			frappe.db.commit()
 
 			return {
@@ -853,7 +885,13 @@ def _should_defer_unmaterialized_large_rollup(p_spec: PeriodSpec) -> bool:
 		return False
 	att_cnt = int(
 		frappe.db.sql(
-			"select count(*) from `tabCSKH Contact Attempt` where occurred_at >= %s and occurred_at < %s",
+			"""
+			select count(*) from (
+				select 1 from `tabCSKH Contact Attempt`
+				where occurred_at >= %s and occurred_at < %s
+				limit 2001
+			) _p
+			""",
 			(p_spec.start_dt, p_spec.end_dt_exclusive),
 		)[0][0]
 		or 0
@@ -863,12 +901,18 @@ def _should_defer_unmaterialized_large_rollup(p_spec: PeriodSpec) -> bool:
 	ob_cnt = (
 		int(
 			frappe.db.sql(
-				"select count(*) from `tabCSKH SLA Obligation` where effective_due_at >= %s and effective_due_at < %s",
+				"""
+				select count(*) from (
+					select 1 from `tabCSKH SLA Obligation`
+					where effective_due_at >= %s and effective_due_at < %s
+					limit 2001
+				) _p
+				""",
 				(p_spec.start_dt, p_spec.end_dt_exclusive),
 			)[0][0]
 			or 0
 		)
-		if frappe.db.table_exists("CSKH SLA Obligation")
+		if runtime_cache.table_exists("CSKH SLA Obligation")
 		else 0
 	)
 	return (att_cnt + ob_cnt) > 2000
@@ -881,7 +925,7 @@ def process_dirty_scopes(
 	defer_unmaterialized_large_rollups: bool = False,
 ) -> dict:
 	"""Drain `pending` `CSKH Dirty Scope` rows into deduplicated period recomputations."""
-	if not frappe.db.table_exists("CSKH Dirty Scope"):
+	if not runtime_cache.table_exists("CSKH Dirty Scope"):
 		return {"processed_scopes": 0, "runs": []}
 	if not is_p3_reporting_enabled():
 		return {"processed_scopes": 0, "skipped": True, "reason": "p3_reporting_disabled", "runs": []}
@@ -900,12 +944,13 @@ def process_dirty_scopes(
 	if not pending_rows:
 		return {"processed_scopes": 0, "runs": []}
 
-	scope_ids = [r.name for r in pending_rows]
+	scope_ids = sorted(str(r.name) for r in pending_rows)
 	ph = ", ".join(["%s"] * len(scope_ids))
 	frappe.db.sql(
-		f"update `tabCSKH Dirty Scope` set status = 'processing' where name in ({ph})",
+		f"update `tabCSKH Dirty Scope` set status = 'processing' where name in ({ph}) and status = 'pending'",
 		tuple(scope_ids),
 	)
+	runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
 	frappe.db.commit()
 
 	# Expand unique affected standard periods `(daily, weekly, monthly, quarterly, yearly)`
@@ -954,14 +999,14 @@ def process_dirty_scopes(
 			f"update `tabCSKH Dirty Scope` set status = 'pending' where name in ({ph})",
 			tuple(scope_ids),
 		)
+		runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
 		frappe.db.commit()
-		raise
-	finally:
 		try:
 			cache = frappe.cache
 			cache.delete(cache.make_key("cskh:kpi:dirty_worker_enqueued"))
 		except Exception:
 			pass
+		raise
 
 	done_dt = now_datetime()
 	frappe.db.sql(
@@ -971,8 +1016,13 @@ def process_dirty_scopes(
 		    processed_by_run = %s,
 		    processed_at = %s
 		where name in ({ph})
+		  and status = 'processing'
 		""",
 		(last_run_id or None, done_dt, *scope_ids),
+	)
+	runtime_cache.bump_cache_domain(
+		runtime_cache.DOMAIN_DIRTY_SCOPE,
+		runtime_cache.DOMAIN_KPI_SNAPSHOT,
 	)
 	frappe.db.commit()
 	return {
@@ -985,30 +1035,37 @@ def process_dirty_scopes(
 
 def has_pending_dirty_scope_for_period(period: PeriodSpec, campaign_filter: str = "") -> bool:
 	"""Return True if any `pending` or `processing` `CSKH Dirty Scope` overlaps `[from_date, to_date]`."""
-	if not frappe.db.table_exists("CSKH Dirty Scope"):
+	if not runtime_cache.table_exists("CSKH Dirty Scope"):
 		return False
-	if campaign_filter:
-		rows = frappe.db.sql(
-			"""
-			select name from `tabCSKH Dirty Scope`
-			where status in ('pending', 'processing')
-			  and dirty_date >= %s and dirty_date <= %s
-			  and (campaign = %s or campaign is null or campaign = '')
-			limit 1
-			""",
-			(period.from_date.isoformat(), period.to_date.isoformat(), campaign_filter),
-		)
-	else:
-		rows = frappe.db.sql(
-			"""
-			select name from `tabCSKH Dirty Scope`
-			where status in ('pending', 'processing')
-			  and dirty_date >= %s and dirty_date <= %s
-			limit 1
-			""",
-			(period.from_date.isoformat(), period.to_date.isoformat()),
-		)
-	return bool(rows)
+	from_iso = period.from_date.isoformat()
+	to_iso = period.to_date.isoformat()
+	camp_val = campaign_filter or ""
+
+	def _check_db() -> bool:
+		if camp_val:
+			rows = frappe.db.sql(
+				"""
+				select name from `tabCSKH Dirty Scope`
+				where status in ('pending', 'processing')
+				  and dirty_date >= %s and dirty_date <= %s
+				  and (campaign = %s or campaign is null or campaign = '')
+				limit 1
+				""",
+				(from_iso, to_iso, camp_val),
+			)
+		else:
+			rows = frappe.db.sql(
+				"""
+				select name from `tabCSKH Dirty Scope`
+				where status in ('pending', 'processing')
+				  and dirty_date >= %s and dirty_date <= %s
+				limit 1
+				""",
+				(from_iso, to_iso),
+			)
+		return bool(rows)
+
+	return runtime_cache.get_cached_dirty_pending(from_iso, to_iso, camp_val, _check_db)
 
 
 def run_kpi_backfill(

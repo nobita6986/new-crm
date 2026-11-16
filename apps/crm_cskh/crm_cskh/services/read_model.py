@@ -29,7 +29,7 @@ from crm_cskh.p2_permissions import (
 	leader_authorized_work_item_sql,
 	staff_authorized_work_item_sql,
 )
-from crm_cskh.services import reporting
+from crm_cskh.services import reporting, runtime_cache
 from crm_cskh.services.errors import InvalidRequest
 from crm_cskh.services.followup import get_open_followup_task, serialize_followup_task
 from crm_cskh.services.policies import resolve_effective_policy
@@ -96,7 +96,7 @@ _CORRECTION_PROJECTION_FIELDS = [
 def _attempt_projection_fields() -> list[str]:
 	fields = list(_ATTEMPT_PROJECTION_FIELDS)
 	for col in ("conversion_snapshot", "invalid_phone_snapshot", "complete_fields"):
-		if frappe.db.has_column("CSKH Contact Attempt", col):
+		if runtime_cache.has_column("CSKH Contact Attempt", col):
 			fields.append(col)
 	return fields
 
@@ -255,20 +255,43 @@ def _project_attempts_rows(attempts: list, corrections: list) -> list[dict]:
 
 def compute_effective_attempts(work_item: str) -> list[dict]:
 	"""Load raw `CSKH Contact Attempt`s of `work_item` and overlay `approved` corrections."""
-	attempts = frappe.db.get_all(
-		"CSKH Contact Attempt",
-		filters={"work_item": work_item},
-		fields=_attempt_projection_fields(),
-		order_by="occurred_at asc, creation asc, name asc",
+	att_cols = ", ".join(f"`{c}`" for c in _attempt_projection_fields())
+	attempts = frappe.db.sql(
+		f"""
+		select {att_cols}
+		from `tabCSKH Contact Attempt`
+		where `work_item` = %s
+		order by `occurred_at` asc, `creation` asc, `name` asc
+		""",
+		(work_item,),
+		as_dict=True,
 	)
 	if not attempts:
 		return []
-	corrections = frappe.db.get_all(
-		"CSKH Attempt Correction",
-		filters={"work_item": work_item},
-		fields=_CORRECTION_PROJECTION_FIELDS,
-		order_by="creation asc, name asc",
+
+	has_any_corr = runtime_cache.get_cached_invariant_bool(
+		"has_any_attempt_correction",
+		(runtime_cache.DOMAIN_CORRECTION,),
+		(),
+		lambda: bool(
+			runtime_cache.table_exists("CSKH Attempt Correction")
+			and frappe.db.sql("select 1 from `tabCSKH Attempt Correction` limit 1")
+		),
 	)
+	if has_any_corr:
+		corr_cols = ", ".join(f"`{c}`" for c in _CORRECTION_PROJECTION_FIELDS)
+		corrections = frappe.db.sql(
+			f"""
+			select {corr_cols}
+			from `tabCSKH Attempt Correction`
+			where `work_item` = %s
+			order by `creation` asc, `name` asc
+			""",
+			(work_item,),
+			as_dict=True,
+		)
+	else:
+		corrections = []
 	return _project_attempts_rows(attempts, corrections)
 
 
@@ -297,29 +320,42 @@ def recompute_work_item_read_model(
 	bump_revision: bool = False,
 	update_status_when_active: bool = False,
 	extra_updates: dict | None = None,
+	wi_row: dict | None = None,
+	known_open_task: tuple[str | None, object] | None = None,
 ) -> dict:
 	"""Recompute and persist the materialized read-model columns on `CSKH Work Item` in-tx."""
-	wi_row = frappe.db.get_value(
-		"CSKH Work Item",
-		work_item,
-		["name", "status", "revision", "assigned_to"],
-		as_dict=True,
-	)
+	if wi_row is None:
+		wi_row = frappe.db.get_value(
+			"CSKH Work Item",
+			work_item,
+			["name", "status", "revision", "assigned_to"],
+			as_dict=True,
+		)
 	if not wi_row:
 		return {}
 
 	projected = compute_effective_attempts(work_item)
 	summary = summarize_effective_attempts(projected)
-	open_task = get_open_followup_task(work_item)
+	if known_open_task is not None:
+		open_task_name, open_task_due = known_open_task
+		has_open_task = bool(open_task_name)
+	else:
+		open_task = get_open_followup_task(work_item)
+		open_task_name = str(open_task["name"]) if open_task else None
+		open_task_due = open_task["due_date"] if open_task else None
+		has_open_task = bool(open_task)
 
 	updates: dict = {
 		**summary,
-		"open_callback_task": str(open_task["name"]) if open_task else None,
-		"next_action_due": open_task["due_date"] if open_task else None,
+		"open_callback_task": str(open_task_name) if open_task_name else None,
+		"next_action_due": open_task_due if has_open_task else None,
 	}
 
-	if update_status_when_active and wi_row.status in OWNED_ACTIVE_WORK_ITEM_STATES and wi_row.assigned_to:
-		if open_task:
+	cur_status = wi_row.get("status")
+	cur_assigned_to = wi_row.get("assigned_to")
+	cur_revision = cint(wi_row.get("revision") or 1)
+	if update_status_when_active and cur_status in OWNED_ACTIVE_WORK_ITEM_STATES and cur_assigned_to:
+		if has_open_task:
 			updates["status"] = "on_hold"
 		elif summary["attempt_count"] > 0:
 			updates["status"] = "in_progress"
@@ -330,13 +366,20 @@ def recompute_work_item_read_model(
 		updates.update(extra_updates)
 
 	if bump_revision and "revision" not in updates:
-		updates["revision"] = cint(wi_row.revision or 1) + 1
+		updates["revision"] = cur_revision + 1
 
-	frappe.db.set_value("CSKH Work Item", work_item, updates, update_modified=True)
+	now_ts = now_datetime()
+	session_user = getattr(getattr(frappe, "session", None), "user", None) or "Administrator"
+	sql_updates = {**updates, "modified": now_ts, "modified_by": session_user}
+	set_sql = ", ".join(f"`{col}` = %s" for col in sql_updates)
+	frappe.db.sql(
+		f"update `tabCSKH Work Item` set {set_sql} where `name` = %s",
+		(*sql_updates.values(), work_item),
+	)
 	return {
 		"work_item": work_item,
-		"status": updates.get("status", wi_row.status),
-		"revision": cint(updates.get("revision", wi_row.revision or 1)),
+		"status": updates.get("status", cur_status),
+		"revision": cint(updates.get("revision", cur_revision)),
 		**summary,
 		"open_callback_task": updates["open_callback_task"],
 		"next_action_due": updates["next_action_due"],
@@ -386,64 +429,85 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 	if not wi_val:
 		raise InvalidRequest("Mã Work Item là bắt buộc.")
 	actor = assert_workflow_actor(actor, allow_bod=False)
-	assert_work_item_workflow_access(wi_val, user=actor, require_active_mutation=False)
 
-	has_owner_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
-	wi_detail_fields = [
-		"name",
-		"campaign",
-		"lead",
-		"status",
-		"revision",
-		"assigned_to",
-		"assigned_at",
-		"first_attempt_at",
-		"last_attempt_at",
-		"last_outcome_code",
-		"last_outcome_label",
-		"last_connected_at",
-		"attempt_count",
-		"connected_attempt_count",
-		"open_callback_task",
-		"next_action_due",
-		"last_activity_by",
-		"closed_at",
-		"closed_by",
-		"completion_reason",
-		"reopened_at",
-		"reopened_by",
-		"reopen_reason",
-		"policy_version",
-	]
-	if has_owner_close:
-		wi_detail_fields.append("owner_at_close")
-	wi = frappe.db.get_value(
-		"CSKH Work Item",
-		wi_val,
-		wi_detail_fields,
-		as_dict=True,
-	)
-	camp = (
-		frappe.db.get_value("CSKH Campaign", wi.campaign, ["code", "title", "status"], as_dict=True)
-		or frappe._dict()
-	)
-
-	lead_fields = ["name", "lead_name", "first_name", "mobile_no", "email", "source"]
+	has_owner_close = runtime_cache.has_column("CSKH Work Item", "owner_at_close")
+	owner_close_sel = "wi.owner_at_close" if has_owner_close else "null as owner_at_close"
+	lead_opt_sels: list[str] = []
 	for opt_f in ("cskh_is_placeholder_name", "cskh_do_not_contact", "cskh_dnc_reason", "cskh_dnc_at"):
-		if frappe.db.has_column("CRM Lead", opt_f):
-			lead_fields.append(opt_f)
-	lead = frappe.db.get_value("CRM Lead", wi.lead, lead_fields, as_dict=True) or frappe._dict()
+		if runtime_cache.has_column("CRM Lead", opt_f):
+			lead_opt_sels.append(f"l.`{opt_f}` as `lead_{opt_f}`")
+		else:
+			lead_opt_sels.append(f"null as `lead_{opt_f}`")
 
-	open_event = frappe.db.get_value(
-		"CSKH Assignment History",
-		{"work_item": wi.name, "ownership_end": ["is", "not set"]},
-		["name", "to_user", "ownership_start"],
-		order_by="event_at desc, creation desc",
+	joined_rows = frappe.db.sql(
+		f"""
+		select wi.name, wi.campaign, wi.lead, wi.status, wi.revision,
+		       wi.assigned_to, wi.assigned_at, wi.first_attempt_at, wi.last_attempt_at,
+		       wi.last_outcome_code, wi.last_outcome_label, wi.last_connected_at,
+		       wi.attempt_count, wi.connected_attempt_count, wi.open_callback_task,
+		       wi.next_action_due, wi.last_activity_by, wi.closed_at, wi.closed_by,
+		       wi.completion_reason, wi.reopened_at, wi.reopened_by, wi.reopen_reason,
+		       wi.policy_version, {owner_close_sel},
+		       l.name as lead_pk, l.lead_name as lead_lead_name, l.first_name as lead_first_name,
+		       l.mobile_no as lead_mobile_no, l.email as lead_email, l.source as lead_source,
+		       {", ".join(lead_opt_sels)}
+		from `tabCSKH Work Item` wi
+		left join `tabCRM Lead` l on l.name = wi.lead
+		where wi.name = %s
+		limit 1
+		""",
+		(wi_val,),
 		as_dict=True,
 	)
+	wi = joined_rows[0] if joined_rows else None
+	assert_work_item_workflow_access(
+		wi if wi is not None else wi_val,
+		user=actor,
+		require_active_mutation=False,
+	)
+
+	if runtime_cache.is_runtime_db_cache_active():
+		camp = runtime_cache.get_campaign_row(wi.campaign) or {}
+	else:
+		camp = (
+			frappe.db.get_value("CSKH Campaign", wi.campaign, ["code", "title", "status"], as_dict=True)
+			or frappe._dict()
+		)
+
+	lead = {
+		"name": wi.lead_pk,
+		"lead_name": wi.lead_lead_name,
+		"first_name": wi.lead_first_name,
+		"mobile_no": wi.lead_mobile_no,
+		"email": wi.lead_email,
+		"source": wi.lead_source,
+		"cskh_is_placeholder_name": wi.lead_cskh_is_placeholder_name,
+		"cskh_do_not_contact": wi.lead_cskh_do_not_contact,
+		"cskh_dnc_reason": wi.lead_cskh_dnc_reason,
+		"cskh_dnc_at": wi.lead_cskh_dnc_at,
+	}
+
+	if wi.status in OWNED_ACTIVE_WORK_ITEM_STATES:
+		ev_rows = frappe.db.sql(
+			"""
+			select name, to_user, ownership_start
+			from `tabCSKH Assignment History`
+			where work_item = %s and ownership_end is null
+			order by event_at desc, creation desc
+			limit 1
+			""",
+			(wi.name,),
+			as_dict=True,
+		)
+		open_event = ev_rows[0] if ev_rows else None
+	else:
+		open_event = None
 
 	now_dt = now_datetime()
-	open_task_row = get_open_followup_task(wi.name)
+	if wi.open_callback_task or wi.status == "on_hold" or not runtime_cache.is_runtime_db_cache_active():
+		open_task_row = get_open_followup_task(wi.name)
+	else:
+		open_task_row = None
 	open_followup = (
 		serialize_followup_task(open_task_row, now=now_dt, include_history=True) if open_task_row else None
 	)
@@ -884,13 +948,18 @@ def list_attempts_timeline(
 			"ownership_end",
 			"reason",
 		]
-		if frappe.db.has_column("CSKH Assignment History", "private_reason"):
+		if runtime_cache.has_column("CSKH Assignment History", "private_reason"):
 			milestone_fields.append("private_reason")
-		hist_rows = frappe.db.get_all(
-			"CSKH Assignment History",
-			filters={"work_item": wi_val},
-			fields=milestone_fields,
-			order_by="event_at asc, creation asc",
+		m_cols = ", ".join(f"`{c}`" for c in milestone_fields)
+		hist_rows = frappe.db.sql(
+			f"""
+			select {m_cols}
+			from `tabCSKH Assignment History`
+			where `work_item` = %s
+			order by `event_at` asc, `creation` asc
+			""",
+			(wi_val,),
+			as_dict=True,
 		)
 		for h_row in hist_rows:
 			entry = dict(h_row)

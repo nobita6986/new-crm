@@ -41,7 +41,7 @@ from crm_cskh.p1_permissions import (
 	_subtree_nodes,
 )
 from crm_cskh.p2_permissions import _is_leader, _is_staff, is_work_item_readable_for_workflow
-from crm_cskh.services import p3_flags, reporting
+from crm_cskh.services import p3_flags, reporting, runtime_cache
 from crm_cskh.services.attribution import AUTHORITATIVE, UNKNOWN_HISTORICAL
 from crm_cskh.services.calendar import (
 	DEFAULT_TIMEZONE,
@@ -121,11 +121,11 @@ def resolve_report_actor(user: str | None = None) -> ReportActor:
 	actor = user or frappe.session.user
 	if not actor or actor == "Guest":
 		raise ForbiddenScope("Yêu cầu đăng nhập để truy cập báo cáo chất lượng CSKH.")
-	enabled = frappe.db.get_value("User", actor, "enabled")
-	if enabled is not None and not cint(enabled):
+	prof = runtime_cache.get_user_auth_profile(actor)
+	if not cint(prof["enabled"]):
 		raise ForbiddenScope("Tài khoản người dùng đã bị vô hiệu hóa.")
 
-	roles = _roles(actor)
+	roles = prof["roles"]
 	if _is_system(actor) or ROLE_ADMIN in roles:
 		return ReportActor(
 			user=actor,
@@ -137,42 +137,15 @@ def resolve_report_actor(user: str | None = None) -> ReportActor:
 		)
 
 	if _is_leader(actor):
-		node_row = frappe.db.get_value(
-			"CRM Sales Hierarchy",
-			{"user": actor},
-			["name", "lft", "rgt"],
-			as_dict=True,
-		)
+		node_row = runtime_cache.get_user_hierarchy_node(actor)
 		if node_row:
-			nodes = tuple(
-				frappe.db.sql(
-					"select name from `tabCRM Sales Hierarchy` where lft >= %s and rgt <= %s order by lft asc",
-					(node_row.lft, node_row.rgt),
-					pluck=True,
-				)
-				or ()
-			)
-			users = tuple(
-				sorted(
-					set(
-						frappe.db.sql(
-							"""
-							select distinct user from `tabCRM Sales Hierarchy`
-							where lft >= %s and rgt <= %s and user is not null and user != ''
-							""",
-							(node_row.lft, node_row.rgt),
-							pluck=True,
-						)
-						or []
-					)
-					| {actor}
-				)
-			)
+			nodes = runtime_cache.get_subtree_nodes_from_cache(node_row["name"])
+			users = tuple(sorted(set(runtime_cache.get_subtree_users_from_cache(actor)) | {actor}))
 			return ReportActor(
 				user=actor,
 				role_profile="team_leader",
 				pii_allowed=True,
-				root_node=node_row.name,
+				root_node=node_row["name"],
 				allowed_nodes=nodes,
 				allowed_users=users,
 			)
@@ -284,14 +257,14 @@ def _validate_campaign_filter(actor: ReportActor, campaign: str | None) -> str:
 	camp = parse_optional_str(campaign, "Tham số campaign không hợp lệ.")
 	if not camp:
 		return ""
-	camp_doc = frappe.db.get_value("CSKH Campaign", camp, ["name", "team_scope"], as_dict=True)
+	camp_doc = runtime_cache.get_campaign_map().get(camp)
 	if not camp_doc:
 		if actor.role_profile == "crm_admin":
 			raise InvalidRequest("Chiến dịch được lọc không tồn tại.")
 		raise ForbiddenScope("Chiến dịch nằm ngoài phạm vi quyền của bạn.")
 	if actor.role_profile == "team_leader" and not _campaign_in_leader_scope(actor.user, camp_doc):
 		raise ForbiddenScope("Chiến dịch thuộc đội nhóm khác, nằm ngoài phạm vi quản lý của bạn.")
-	return camp_doc.name
+	return str(camp_doc["name"])
 
 
 def _validate_team_filter(actor: ReportActor, team: str | None) -> str | None:
@@ -312,95 +285,42 @@ def _validate_lead_source_filter(lead_source: str | None) -> str:
 
 def _resolve_team_label_map(only_team_ids: set[str] | None = None) -> dict[str, str]:
 	team_map: dict[str, str] = {UNATTRIBUTED_TEAM_ID: "Chưa xác định đội nhóm (lịch sử trước P3)"}
-	target_ids: list[str] | None = None
+	snap = runtime_cache.get_hierarchy_snapshot()
+	all_labels = (snap or {}).get("team_labels") or {}
 	if only_team_ids is not None:
-		target_ids = sorted({str(t) for t in only_team_ids if t and str(t) != UNATTRIBUTED_TEAM_ID})
-		if not target_ids:
-			return team_map
-	if frappe.db.table_exists("CRM Sales Hierarchy"):
-		h_cols = ["h.name", "h.user", "h.is_group", "h.reports_to"]
-		if frappe.db.has_column("CRM Sales Hierarchy", "full_name"):
-			h_cols.append("h.full_name")
-		where_sql = ""
-		h_params: tuple = ()
-		if target_ids is not None:
-			ph = ", ".join(["%s"] * len(target_ids))
-			where_sql = f" where h.name in ({ph})"
-			h_params = tuple(target_ids)
-		for r in frappe.db.sql(
-			f"""
-			select {", ".join(h_cols)}, u.full_name as user_full_name
-			from `tabCRM Sales Hierarchy` h
-			left join `tabUser` u on u.name = h.user{where_sql}
-			""",
-			h_params,
-			as_dict=True,
-		):
-			team_map[str(r.name)] = str(
-				r.get("full_name") or r.get("user_full_name") or r.get("user") or r.name
-			)
-	need_hist_ids: list[str] | None = None
-	if target_ids is not None:
-		need_hist_ids = [
-			tid
-			for tid in target_ids
-			if (not team_map.get(tid)) or team_map.get(tid) == tid or "@" in str(team_map.get(tid))
-		]
-	if frappe.db.table_exists("CSKH Team Membership History") and (
-		need_hist_ids is None or len(need_hist_ids) > 0
-	):
-		m_where = "where team_node is not null and team_node != ''"
-		m_params: tuple = ()
-		if need_hist_ids is not None:
-			ph_m = ", ".join(["%s"] * len(need_hist_ids))
-			m_where = f"where team_node in ({ph_m})"
-			m_params = tuple(need_hist_ids)
-		for mr in frappe.db.sql(
-			f"""
-			select team_node, max(team_name_snapshot) as team_name_snapshot
-			from `tabCSKH Team Membership History`
-			{m_where}
-			group by team_node
-			""",
-			m_params,
-			as_dict=True,
-		):
-			snap_lbl = mr.get("team_name_snapshot")
-			if snap_lbl:
-				cur = team_map.get(str(mr.team_node), "")
-				if not cur or cur == mr.team_node or "@" in cur:
-					team_map[str(mr.team_node)] = str(snap_lbl)
+		for t in only_team_ids:
+			tid = str(t) if t else ""
+			if tid and tid != UNATTRIBUTED_TEAM_ID and tid in all_labels:
+				team_map[tid] = all_labels[tid]
+		return team_map
+	team_map.update(all_labels)
 	return team_map
 
 
 def _resolve_campaign_title_map(only_campaign_ids: set[str] | None = None) -> dict[str, str]:
-	if not frappe.db.table_exists("CSKH Campaign"):
+	camp_map = runtime_cache.get_campaign_map()
+	if not camp_map:
 		return {}
-	filters = None
 	if only_campaign_ids is not None:
-		cids = sorted({str(c) for c in only_campaign_ids if c})
-		if not cids:
-			return {}
-		filters = {"name": ["in", cids]}
-	rows = frappe.db.get_all("CSKH Campaign", filters=filters, fields=["name", "title", "code"])
-	return {str(r.name): str(r.title or r.code or r.name) for r in rows}
+		return {
+			str(c): str(camp_map[str(c)].get("title") or camp_map[str(c)].get("code") or str(c))
+			for c in only_campaign_ids
+			if c and str(c) in camp_map
+		}
+	return {cid: str(info.get("title") or info.get("code") or cid) for cid, info in camp_map.items()}
 
 
 def _active_users_in_team_nodes(team_nodes: set[str]) -> set[str]:
-	if not team_nodes or not frappe.db.table_exists("CRM Sales Hierarchy"):
+	if not team_nodes:
 		return set()
-	ph = ", ".join(["%s"] * len(team_nodes))
-	rows = frappe.db.sql(
-		f"""
-		select distinct user
-		from `tabCRM Sales Hierarchy`
-		where (name in ({ph}) or reports_to in ({ph}))
-		  and user is not null and user != ''
-		""",
-		tuple([*team_nodes, *team_nodes]),
-		pluck=True,
-	)
-	return set(rows or ())
+	snap = runtime_cache.get_hierarchy_snapshot()
+	if not snap:
+		return set()
+	return {
+		n["user"]
+		for n in snap["ordered"]
+		if n["user"] and (n["name"] in team_nodes or (n["reports_to"] and n["reports_to"] in team_nodes))
+	}
 
 
 def _snapshot_has_activity(snap: dict) -> bool:
@@ -417,21 +337,28 @@ def _snapshot_has_activity(snap: dict) -> bool:
 
 
 def _load_latest_published_run_row(period: PeriodSpec, campaign_filter: str = "") -> dict | None:
-	rows = frappe.db.sql(
-		"""
-		select name, run_mode, as_of, source_watermark, is_restated, restated_from_run, metric_version, creation
-		from `tabCSKH KPI Run`
-		where period_type = %s
-		  and period_key = %s
-		  and coalesce(campaign_filter, '') = %s
-		  and is_latest_published = 1
-		order by creation desc
-		limit 1
-		""",
-		(period.period_type, period.period_key, campaign_filter or ""),
-		as_dict=True,
+	camp_val = campaign_filter or ""
+
+	def _load_db():
+		rows = frappe.db.sql(
+			"""
+			select name, run_mode, as_of, source_watermark, is_restated, restated_from_run, metric_version, creation
+			from `tabCSKH KPI Run`
+			where period_type = %s
+			  and period_key = %s
+			  and coalesce(campaign_filter, '') = %s
+			  and is_latest_published = 1
+			order by creation desc
+			limit 1
+			""",
+			(period.period_type, period.period_key, camp_val),
+			as_dict=True,
+		)
+		return rows[0] if rows else None
+
+	return runtime_cache.get_cached_published_kpi_run(
+		period.period_type, period.period_key, camp_val, _load_db
 	)
-	return rows[0] if rows else None
 
 
 def _ensure_or_load_published_run(period: PeriodSpec, campaign_filter: str = "") -> dict | None:
@@ -461,9 +388,16 @@ def _ensure_or_load_published_run(period: PeriodSpec, campaign_filter: str = "")
 		finally:
 			frappe.flags.cskh_suppress_dirty_enqueue = prev_suppress
 
+	cap_plus_one = int(AUTO_COMPUTE_MAX_RAW_ROWS) + 1
 	att_cnt = int(
 		frappe.db.sql(
-			"select count(*) from `tabCSKH Contact Attempt` where occurred_at >= %s and occurred_at < %s",
+			f"""
+			select count(*) from (
+				select 1 from `tabCSKH Contact Attempt`
+				where occurred_at >= %s and occurred_at < %s
+				limit {cap_plus_one}
+			) _p
+			""",
 			(period.start_dt, period.end_dt_exclusive),
 		)[0][0]
 		or 0
@@ -471,12 +405,18 @@ def _ensure_or_load_published_run(period: PeriodSpec, campaign_filter: str = "")
 	ob_cnt = (
 		int(
 			frappe.db.sql(
-				"select count(*) from `tabCSKH SLA Obligation` where effective_due_at >= %s and effective_due_at < %s",
+				f"""
+				select count(*) from (
+					select 1 from `tabCSKH SLA Obligation`
+					where effective_due_at >= %s and effective_due_at < %s
+					limit {cap_plus_one}
+				) _p
+				""",
 				(period.start_dt, period.end_dt_exclusive),
 			)[0][0]
 			or 0
 		)
-		if frappe.db.table_exists("CSKH SLA Obligation")
+		if att_cnt <= AUTO_COMPUTE_MAX_RAW_ROWS and runtime_cache.table_exists("CSKH SLA Obligation")
 		else 0
 	)
 	if (att_cnt + ob_cnt) <= AUTO_COMPUTE_MAX_RAW_ROWS:
@@ -548,6 +488,7 @@ def _fetch_snapshots(
 	campaign_filter: str = "",
 	scope_ids: list[str] | tuple[str, ...] | None = None,
 	team_filters: list[str] | tuple[str, ...] | None = None,
+	run_id: str = "",
 ) -> list[dict]:
 	"""Indexed read on `tabCSKH KPI Snapshot` via `idx_cskh_kpisnap_lookup`."""
 	if scope_ids is not None and len(scope_ids) == 0:
@@ -555,53 +496,68 @@ def _fetch_snapshots(
 	if team_filters is not None and len(team_filters) == 0:
 		return []
 	camp_val = campaign_filter or ""
-	camp_sql = "and campaign_filter = %s"
-	params: list = [1, period.period_type, period.period_key, camp_val, scope_type]
-	extra_sql = ""
-	if scope_ids is not None:
-		ph = ", ".join(["%s"] * len(scope_ids))
-		extra_sql += f" and scope_id in ({ph})"
-		params.extend(scope_ids)
-	if team_filters is not None:
-		ph_t = ", ".join(["%s"] * len(team_filters))
-		extra_sql += f" and team_filter in ({ph_t})"
-		params.extend(team_filters)
+	s_ids_tuple = tuple(sorted(str(s) for s in scope_ids)) if scope_ids is not None else None
+	t_flt_tuple = tuple(sorted(str(t) for t in team_filters)) if team_filters is not None else None
 
-	index_hint = (
-		"USE INDEX (idx_cskh_kpisnap_lookup)"
-		if team_filters is None
-		else "USE INDEX (idx_cskh_kpisnap_emp_team)"
+	def _load_db() -> list[dict]:
+		camp_sql = "and campaign_filter = %s"
+		params: list = [1, period.period_type, period.period_key, camp_val, scope_type]
+		extra_sql = ""
+		if s_ids_tuple is not None:
+			ph = ", ".join(["%s"] * len(s_ids_tuple))
+			extra_sql += f" and scope_id in ({ph})"
+			params.extend(s_ids_tuple)
+		if t_flt_tuple is not None:
+			ph_t = ", ".join(["%s"] * len(t_flt_tuple))
+			extra_sql += f" and team_filter in ({ph_t})"
+			params.extend(t_flt_tuple)
+
+		index_hint = (
+			"USE INDEX (idx_cskh_kpisnap_lookup)"
+			if t_flt_tuple is None
+			else "USE INDEX (idx_cskh_kpisnap_emp_team)"
+		)
+		rows = frappe.db.sql(
+			f"""
+			select name, kpi_run, scope_type, scope_id, scope_label, team_filter,
+			       parent_team_id, parent_team_label,
+			       active_staff_count, process_score_status, process_score_sort,
+			       distinct_work_items, ownership_intervals_count, work_items_touched,
+			       contact_attempt_count, connected_attempt_count,
+			       metrics_json, exclusion_counts_json, trend_series_json
+			from `tabCSKH KPI Snapshot` {index_hint}
+			where is_latest_published = %s
+			  and period_type = %s
+			  and period_key = %s
+			  {camp_sql}
+			  and scope_type = %s{extra_sql}
+			""",
+			tuple(params),
+			as_dict=True,
+		)
+		for r in rows:
+			if r.scope_type == "company" and r.scope_label == "Toàn công ty CSKH":
+				r["scope_label"] = COMPANY_SCOPE_LABEL
+			metrics, comps, breakdown = unpack_snapshot_metrics(r.metrics_json)
+			extra = unpack_snapshot_extra(r.metrics_json)
+			r["metrics"] = metrics
+			r["score_components"] = comps
+			r["attempt_breakdown"] = breakdown
+			r["lead_source"] = extra.get("lead_source")
+			r["exclusion_counts"] = json.loads(r.exclusion_counts_json or "{}")
+			r["trend_series"] = json.loads(r.trend_series_json or "[]")
+		return rows
+
+	return runtime_cache.get_cached_kpi_snapshots(
+		run_id=run_id or "__LATEST__",
+		period_type=period.period_type,
+		period_key=period.period_key,
+		scope_type=scope_type,
+		campaign_filter=camp_val,
+		scope_ids=s_ids_tuple,
+		team_filters=t_flt_tuple,
+		load_fn=_load_db,
 	)
-	rows = frappe.db.sql(
-		f"""
-		select name, kpi_run, scope_type, scope_id, scope_label, team_filter,
-		       parent_team_id, parent_team_label,
-		       active_staff_count, process_score_status, process_score_sort,
-		       distinct_work_items, ownership_intervals_count, work_items_touched,
-		       contact_attempt_count, connected_attempt_count,
-		       metrics_json, exclusion_counts_json, trend_series_json
-		from `tabCSKH KPI Snapshot` {index_hint}
-		where is_latest_published = %s
-		  and period_type = %s
-		  and period_key = %s
-		  {camp_sql}
-		  and scope_type = %s{extra_sql}
-		""",
-		tuple(params),
-		as_dict=True,
-	)
-	for r in rows:
-		if r.scope_type == "company" and r.scope_label == "Toàn công ty CSKH":
-			r["scope_label"] = COMPANY_SCOPE_LABEL
-		metrics, comps, breakdown = unpack_snapshot_metrics(r.metrics_json)
-		extra = unpack_snapshot_extra(r.metrics_json)
-		r["metrics"] = metrics
-		r["score_components"] = comps
-		r["attempt_breakdown"] = breakdown
-		r["lead_source"] = extra.get("lead_source")
-		r["exclusion_counts"] = json.loads(r.exclusion_counts_json or "{}")
-		r["trend_series"] = json.loads(r.trend_series_json or "[]")
-	return rows
 
 
 def _fetch_or_compute_snapshots(
@@ -623,6 +579,7 @@ def _fetch_or_compute_snapshots(
 			campaign_filter=campaign_filter,
 			scope_ids=scope_ids,
 			team_filters=team_filters,
+			run_id=str(run_row.name or ""),
 		)
 	as_of_dt = get_datetime(run_row.as_of) if (run_row and run_row.as_of) else None
 	computed = compute_period_snapshots(
@@ -1831,7 +1788,7 @@ def _prime_wi_readable_cache(
 	if not missing:
 		return
 
-	has_owner_close = frappe.db.has_column("CSKH Work Item", "owner_at_close")
+	has_owner_close = runtime_cache.has_column("CSKH Work Item", "owner_at_close")
 	wi_cols = ["name", "lead", "campaign", "status", "assigned_to", "closed_by", "last_activity_by"]
 	if has_owner_close:
 		wi_cols.append("owner_at_close")
@@ -1870,14 +1827,15 @@ def _prime_wi_readable_cache(
 
 		camp_ids = sorted({str(w.campaign) for w in closed_wis if w.get("campaign")})
 		camp_team_map: dict[str, str | None] = {}
-		if camp_ids and frappe.db.table_exists("CSKH Campaign"):
-			for cr in frappe.db.get_all(
-				"CSKH Campaign", filters={"name": ["in", camp_ids]}, fields=["name", "team_scope"]
-			):
-				camp_team_map[str(cr.name)] = cr.team_scope
+		if camp_ids:
+			all_camps = runtime_cache.get_campaign_map()
+			for cid in camp_ids:
+				c_info = all_camps.get(cid)
+				if c_info:
+					camp_team_map[cid] = c_info.get("team_scope")
 
 		latest_ah_by_wi: dict[str, dict] = {}
-		if frappe.db.has_column("CSKH Assignment History", "team_at_assignment"):
+		if runtime_cache.has_column("CSKH Assignment History", "team_at_assignment"):
 			c_names = [str(w.name) for w in closed_wis]
 			ph_c = ", ".join(["%s"] * len(c_names))
 			ah_rows = frappe.db.sql(
@@ -2253,32 +2211,46 @@ def _fast_interval_cohort_drilldown_page(
 	dirty_pending: bool,
 ) -> tuple[list[dict], int] | None:
 	"""Exact SQL-paginated interval-cohort query (`CONNECTED_RATE`, `ELIGIBLE_COVERAGE`)."""
-	if not frappe.db.has_column("CSKH Assignment History", "team_at_assignment"):
+	if not runtime_cache.has_column("CSKH Assignment History", "team_at_assignment"):
 		return None
 
 	start_dt = period.start_dt
 	end_dt_excl = period.end_dt_exclusive
 
-	# Index-prefix guard (`<0.05ms` via `idx_cskh_ah_act_interval` & `idx_cskh_ah_team_start`):
+	# Index-prefix guard (`<0.05ms` via `idx_cskh_ah_act_interval` & `idx_cskh_ah_team_start`, cached per epoch):
 	# fall back cleanly if legacy rows have `ownership_start IS NULL` or unbackfilled `attribution_status`.
-	if frappe.db.sql(
-		"""
-		select 1 from `tabCSKH Assignment History` USE INDEX (idx_cskh_ah_act_interval)
-		where action in ('assign', 'reassign', 'reopen') and ownership_start is null
-		limit 1
-		"""
+	if runtime_cache.get_cached_invariant_bool(
+		"ah_null_ownership_start",
+		(runtime_cache.DOMAIN_ASSIGNMENT_HISTORY,),
+		(),
+		lambda: bool(
+			frappe.db.sql(
+				"""
+				select 1 from `tabCSKH Assignment History` USE INDEX (idx_cskh_ah_act_interval)
+				where action in ('assign', 'reassign', 'reopen') and ownership_start is null
+				limit 1
+				"""
+			)
+		),
 	):
 		return None
-	if frappe.db.sql(
-		"""
-		select 1 from `tabCSKH Assignment History` USE INDEX (idx_cskh_ah_team_start)
-		where (team_at_assignment is null or team_at_assignment = '')
-		  and ownership_start >= %s and ownership_start < %s
-		  and action in ('assign', 'reassign', 'reopen')
-		  and (attribution_status is null or attribution_status = '')
-		limit 1
-		""",
-		(start_dt, end_dt_excl),
+	if runtime_cache.get_cached_invariant_bool(
+		"ah_missing_attr_in_period",
+		(runtime_cache.DOMAIN_ASSIGNMENT_HISTORY,),
+		(str(start_dt), str(end_dt_excl)),
+		lambda: bool(
+			frappe.db.sql(
+				"""
+				select 1 from `tabCSKH Assignment History` USE INDEX (idx_cskh_ah_team_start)
+				where (team_at_assignment is null or team_at_assignment = '')
+				  and ownership_start >= %s and ownership_start < %s
+				  and action in ('assign', 'reassign', 'reopen')
+				  and (attribution_status is null or attribution_status = '')
+				limit 1
+				""",
+				(start_dt, end_dt_excl),
+			)
+		),
 	):
 		return None
 
@@ -2351,16 +2323,12 @@ def _fast_interval_cohort_drilldown_page(
 
 	if mcode == "CONNECTED_RATE":
 		invalid_phone_codes: set[str] = {"wrong_number"}
-		if frappe.db.table_exists("CSKH Outcome Code") and frappe.db.has_column(
-			"CSKH Outcome Code", "is_invalid_phone"
-		):
-			for oc in frappe.db.get_all(
-				"CSKH Outcome Code", filters={"is_invalid_phone": 1}, fields=["name", "code"]
-			):
-				invalid_phone_codes.add(str(oc.code or oc.name).lower())
-		inv_codes_sorted = sorted(invalid_phone_codes)
+		for oc_info in runtime_cache.get_outcome_catalog()["by_code"].values():
+			if oc_info.get("is_invalid_phone"):
+				invalid_phone_codes.add(str(oc_info.get("code") or "").lower())
+		inv_codes_sorted = sorted(c for c in invalid_phone_codes if c)
 		inv_ph = ", ".join(["%s"] * len(inv_codes_sorted)) if inv_codes_sorted else "''"
-		has_inv_col = frappe.db.has_column("CSKH Contact Attempt", "invalid_phone_snapshot")
+		has_inv_col = runtime_cache.has_column("CSKH Contact Attempt", "invalid_phone_snapshot")
 		inv_expr = (
 			f"(coalesce(ca_i.invalid_phone_snapshot, 0) = 1 or lower(coalesce(ca_i.outcome_code, '')) in ({inv_ph}))"
 			if has_inv_col
@@ -2399,7 +2367,7 @@ def _fast_interval_cohort_drilldown_page(
 			extra_sel_sql = f", ({ca_inv_flag_sql}) as has_inv_flag"
 			extra_sel_params.extend(ca_inv_params)
 	else:  # ELIGIBLE_COVERAGE
-		if not frappe.db.table_exists("CSKH SLA Obligation"):
+		if not runtime_cache.table_exists("CSKH SLA Obligation"):
 			return None
 		fa_canc_flag_sql = """
 			coalesce((
@@ -2606,7 +2574,7 @@ def _fast_sla_obligation_drilldown_page(
 		"excluded",
 	):
 		return [], 0
-	if not frappe.db.table_exists("CSKH SLA Obligation"):
+	if not runtime_cache.table_exists("CSKH SLA Obligation"):
 		return [], 0
 
 	start_dt = period.start_dt
@@ -2970,7 +2938,7 @@ def _fast_attempt_grain_drilldown_page(
 		"excluded",
 	):
 		return [], 0
-	if not frappe.db.has_column("CSKH Assignment History", "team_at_assignment"):
+	if not runtime_cache.has_column("CSKH Assignment History", "team_at_assignment"):
 		return None
 
 	start_dt = period.start_dt
@@ -3025,13 +2993,13 @@ def _fast_attempt_grain_drilldown_page(
 
 	valid_outcome_codes: set[str] = set()
 	requires_note_codes: set[str] = set()
-	has_comp_col = frappe.db.has_column("CSKH Contact Attempt", "complete_fields")
+	has_comp_col = runtime_cache.has_column("CSKH Contact Attempt", "complete_fields")
 	if mcode == "VALID_OUTCOME_LOGGING_RATE":
-		if frappe.db.table_exists("CSKH Outcome Code"):
-			for oc in frappe.db.get_all("CSKH Outcome Code", fields=["name", "code", "requires_note"]):
-				c_key = str(oc.code or oc.name)
+		for oc_info in runtime_cache.get_outcome_catalog()["by_code"].values():
+			c_key = str(oc_info.get("code") or "")
+			if c_key:
 				valid_outcome_codes.add(c_key)
-				if cint(oc.requires_note):
+				if oc_info.get("requires_note"):
 					requires_note_codes.add(c_key)
 		comp_parts = ["trim(coalesce(ca.channel, '')) != ''"]
 		comp_params: list = []
@@ -3211,11 +3179,17 @@ def _try_fast_sql_drilldown_page(
 		return [], 0
 
 	# Fall back cleanly whenever any `CSKH Attempt Correction` exists up to `eff_as_of`
-	if frappe.db.table_exists("CSKH Attempt Correction") and frappe.db.sql(
-		"select 1 from `tabCSKH Attempt Correction` where requested_at <= %s limit 1",
-		(eff_as_of,),
+	if runtime_cache.table_exists("CSKH Attempt Correction") and runtime_cache.get_cached_invariant_bool(
+		"any_attempt_correction",
+		(runtime_cache.DOMAIN_CORRECTION,),
+		(),
+		lambda: bool(frappe.db.sql("select 1 from `tabCSKH Attempt Correction` limit 1")),
 	):
-		return None
+		if frappe.db.sql(
+			"select 1 from `tabCSKH Attempt Correction` where requested_at <= %s limit 1",
+			(eff_as_of,),
+		):
+			return None
 
 	team_mode, team_nodes = _resolve_drilldown_team_scope_mode(
 		stype=stype,
@@ -3400,12 +3374,19 @@ def get_metric_drilldown(
 				"employee_team",
 				campaign_filter=eff_camp_filter,
 				scope_ids=[f"{sid}::{only_node}"],
+				run_id=str(run_row.name or ""),
 			)
 			if et_snaps:
 				snap_metrics_all = et_snaps[0]["metrics"]
 				snap_cell = snap_metrics_all.get(mcode)
 		elif not (stype == "campaign" and act.role_profile == "team_leader"):
-			snaps = _fetch_snapshots(period, stype, campaign_filter=eff_camp_filter, scope_ids=[sid])
+			snaps = _fetch_snapshots(
+				period,
+				stype,
+				campaign_filter=eff_camp_filter,
+				scope_ids=[sid],
+				run_id=str(run_row.name or ""),
+			)
 			if snaps:
 				snap_metrics_all = snaps[0]["metrics"]
 				snap_cell = snap_metrics_all.get(mcode)

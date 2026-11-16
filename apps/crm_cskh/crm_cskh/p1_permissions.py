@@ -34,6 +34,8 @@ from urllib.parse import unquote
 
 import frappe
 
+from crm_cskh.services import runtime_cache
+
 ROLE_ADMIN = "CSKH CRM Admin"
 ROLE_BOD = "CSKH BOD Viewer"
 
@@ -65,12 +67,12 @@ PERMLEVEL_PROTECTED_FIELDS = {
 
 
 def _roles(user):
-	return set(frappe.get_roles(user))
+	return set(runtime_cache.get_roles_set(user))
 
 
 def _is_system(user=None):
 	user = user or frappe.session.user
-	return user == "Administrator" or "System Manager" in _roles(user)
+	return user == "Administrator" or "System Manager" in runtime_cache.get_roles_set(user)
 
 
 def _escape(value):
@@ -79,6 +81,9 @@ def _escape(value):
 
 def _team_bounds(user):
 	"""Return the `(lft, rgt)` bounds of the user's sales-hierarchy node."""
+	if runtime_cache.is_runtime_db_cache_active():
+		node = runtime_cache.get_user_hierarchy_node(user)
+		return (node["lft"], node["rgt"]) if node else None
 	row = frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, ["lft", "rgt"], as_dict=True)
 	if not row:
 		return None
@@ -89,6 +94,9 @@ def _leader_node(user):
 	"""Return the `CRM Sales Hierarchy` node name owned by `user`, or `None`."""
 	if not user:
 		return None
+	if runtime_cache.is_runtime_db_cache_active():
+		node = runtime_cache.get_user_hierarchy_node(user)
+		return node["name"] if node else None
 	return frappe.db.get_value("CRM Sales Hierarchy", {"user": user}, "name")
 
 
@@ -96,6 +104,8 @@ def _subtree_nodes(node_name) -> set[str]:
 	"""Return the set of `CRM Sales Hierarchy` node names inside `node_name`'s nested-set subtree."""
 	if not node_name:
 		return set()
+	if runtime_cache.is_runtime_db_cache_active():
+		return set(runtime_cache.get_subtree_nodes_from_cache(str(node_name)))
 	row = frappe.db.get_value("CRM Sales Hierarchy", node_name, ["lft", "rgt"], as_dict=True)
 	if not row:
 		return set()
@@ -111,6 +121,15 @@ def _node_in_subtree(user, node_name):
 	"""True when `CRM Sales Hierarchy` node `node_name` lies in `user`'s subtree."""
 	if not node_name:
 		return False
+	if runtime_cache.is_runtime_db_cache_active():
+		snap = runtime_cache.get_hierarchy_snapshot()
+		if not snap:
+			return False
+		mgr = snap["by_user"].get(str(user))
+		target = snap["by_name"].get(str(node_name))
+		if not mgr or not target:
+			return False
+		return bool(mgr["lft"] <= target["lft"] and target["rgt"] <= mgr["rgt"])
 	bounds = _team_bounds(user)
 	if not bounds:
 		return False
@@ -474,6 +493,17 @@ def _in_team(manager, member):
 	"""True when `member` belongs to the team subtree of `manager`."""
 	if not member:
 		return False
+	if runtime_cache.is_runtime_db_cache_active():
+		snap = runtime_cache.get_hierarchy_snapshot()
+		if not snap:
+			return member == manager
+		mgr = snap["by_user"].get(str(manager))
+		if not mgr:
+			return member == manager
+		mem = snap["by_user"].get(str(member))
+		if not mem:
+			return False
+		return bool(mgr["lft"] <= mem["lft"] and mem["rgt"] <= mgr["rgt"])
 	bounds = _team_bounds(manager)
 	if not bounds:
 		return member == manager
@@ -697,11 +727,36 @@ def _check_active_db_query_oracles(doctype: str, user: str) -> None:
 		del frame
 
 
+_ORACLE_GUARD_ARG_KEYS = (
+	"filters",
+	"or_filters",
+	"searchfield",
+	"filter_fields",
+	"order_by",
+	"group_by",
+	"fields",
+	"fieldname",
+)
+
+
 def enforce_p1_filter_field_permissions():
 	"""`auth_hooks` callback blocking `permlevel = 1` filter/search/sort oracles across HTTP endpoints."""
 	user = getattr(getattr(frappe.local, "session", None), "user", None) or "Guest"
-	if _is_system(user):
+	if user == "Administrator":
 		return
+	request = getattr(frappe.local, "request", None)
+	form_dict = getattr(frappe.local, "form_dict", None) or {}
+	has_json_body = bool(
+		request is not None
+		and (
+			getattr(request, "content_length", 0)
+			or "json" in ((getattr(request, "mimetype", "") or "").lower())
+		)
+	)
+	if not has_json_body and isinstance(form_dict, dict):
+		if not any(form_dict.get(k) is not None for k in _ORACLE_GUARD_ARG_KEYS):
+			return
+
 	args = _merged_request_args()
 	filters = args.get("filters")
 	or_filters = args.get("or_filters")
@@ -709,7 +764,6 @@ def enforce_p1_filter_field_permissions():
 	filter_fields = args.get("filter_fields")
 	order_by = args.get("order_by")
 	group_by = args.get("group_by")
-	request = getattr(frappe.local, "request", None)
 	path = getattr(request, "path", "") or ""
 	raw_explicit = args.get("fieldname") if "get_value" in path else args.get("fields")
 	if isinstance(raw_explicit, str) and raw_explicit.strip().startswith("["):
@@ -728,6 +782,8 @@ def enforce_p1_filter_field_permissions():
 		v is None
 		for v in (filters, or_filters, searchfield, filter_fields, order_by, group_by, explicit_fields)
 	):
+		return
+	if _is_system(user):
 		return
 	target_doctype = _request_target_doctype(args)
 	validate_p1_filter_fields(

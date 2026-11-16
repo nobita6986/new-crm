@@ -16,6 +16,8 @@ import hashlib
 import io
 import json
 import re
+import time
+from contextlib import contextmanager
 
 import frappe
 from frappe.utils import now_datetime
@@ -190,6 +192,116 @@ def _read_rows(content, extension, max_rows):
 		return header, rows
 	finally:
 		workbook.close()
+
+
+@contextmanager
+def stream_import_rows(content: bytes, extension: str, max_rows: int):
+	"""Stream `(row_number, raw_row)` tuples without materializing 50k cell dicts (`BG-02`).
+
+	Yields `(header, first_row_cells, is_xlsx, row_iterator)` and enforces `max_rows`
+	with the exact same empty-row and overflow semantics as `_read_rows`.
+	"""
+	if extension == "csv":
+		text_stream = io.TextIOWrapper(
+			io.BytesIO(content), encoding="utf-8-sig", errors="replace", newline=""
+		)
+		try:
+			reader = csv.reader(text_stream)
+			header_raw = next(reader, None)
+			if header_raw is None:
+				yield [], {}, False, iter(())
+				return
+			header = [column.strip() for column in header_raw]
+			buffered_first: tuple[int, list[str]] | None = None
+			for index, raw in enumerate(reader, start=2):
+				if max_rows <= 0:
+					raise TooManyRows("The file has more rows than the configured limit.")
+				if not any((cell or "").strip() for cell in raw):
+					continue
+				buffered_first = (index, raw)
+				break
+
+			first_cells = (
+				dict(zip(header, buffered_first[1], strict=False)) if buffered_first is not None else {}
+			)
+
+			def _csv_iter():
+				emitted = 0
+				if buffered_first is not None:
+					emitted = 1
+					yield buffered_first
+				for idx, raw_row in enumerate(reader, start=(buffered_first[0] + 1 if buffered_first else 2)):
+					if emitted >= max_rows:
+						raise TooManyRows("The file has more rows than the configured limit.")
+					if not any((cell or "").strip() for cell in raw_row):
+						continue
+					emitted += 1
+					yield idx, raw_row
+
+			yield header, first_cells, False, _csv_iter()
+		finally:
+			try:
+				text_stream.close()
+			except Exception:
+				pass
+		return
+
+	from openpyxl import load_workbook
+
+	workbook = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+	try:
+		sheet = workbook[workbook.sheetnames[0]]
+		iterator = sheet.iter_rows(values_only=True)
+		header_cells = next(iterator, None)
+		if not header_cells:
+			yield [], {}, True, iter(())
+			return
+		header = [str(cell).strip() if cell is not None else "" for cell in header_cells]
+		buffered_xlsx: tuple[int, tuple] | None = None
+		for index, raw in enumerate(iterator, start=2):
+			if max_rows <= 0:
+				raise TooManyRows("The file has more rows than the configured limit.")
+			if raw is None or all(cell is None or str(cell).strip() == "" for cell in raw):
+				continue
+			buffered_xlsx = (index, raw)
+			break
+
+		first_cells_xlsx: dict[str, str] = {}
+		if buffered_xlsx is not None:
+			for column, cell in zip(header, buffered_xlsx[1], strict=False):
+				if cell is not None:
+					first_cells_xlsx[column] = str(cell)
+
+		def _xlsx_iter():
+			emitted = 0
+			if buffered_xlsx is not None:
+				emitted = 1
+				yield buffered_xlsx
+			for idx, raw_row in enumerate(iterator, start=(buffered_xlsx[0] + 1 if buffered_xlsx else 2)):
+				if emitted >= max_rows:
+					raise TooManyRows("The file has more rows than the configured limit.")
+				if raw_row is None or all(cell is None or str(cell).strip() == "" for cell in raw_row):
+					continue
+				emitted += 1
+				yield idx, raw_row
+
+		yield header, first_cells_xlsx, True, _xlsx_iter()
+	finally:
+		workbook.close()
+
+
+def _column_index_map(header: list[str]) -> dict[str, int]:
+	"""Map column name -> rightmost column index (matching `dict(zip(header, raw))`)."""
+	return {col: idx for idx, col in enumerate(header) if col}
+
+
+def _raw_cell_at(raw_row, col_idx: int | None, *, is_xlsx: bool) -> str | None:
+	if col_idx is None or col_idx < 0 or col_idx >= len(raw_row):
+		return None
+	val = raw_row[col_idx]
+	if val is None:
+		return None
+	return str(val) if is_xlsx else val
 
 
 # The canonical fields of the import mapping (L-03, L-25).
@@ -397,18 +509,16 @@ def create_preview(file_name, mapping=None, actor=None, idempotency_key=None, im
 			)
 		return _status_response(existing.name)
 
-	header, rows = _read_rows(content, extension, limits["max_import_rows"])
-	resolved = resolve_import_columns(header, rows[0]["cells"] if rows else {}, normalized_mapping)
-	phone_column = resolved["phone"]
-
-	classification = _classify(
-		rows,
-		normalized_mapping,
-		phone_column,
-		name_column=resolved["name"],
-		source_column=resolved["source"],
+	t_prev_start = time.perf_counter()
+	q_before = _session_questions_count()
+	resolved, classification, phase_ms = _classify_streaming_preview(
+		content=content,
+		extension=extension,
+		max_rows=limits["max_import_rows"],
+		normalized_mapping=normalized_mapping,
 	)
 
+	t_persist0 = time.perf_counter()
 	batch = frappe.get_doc(
 		{
 			"doctype": "CSKH Import Batch",
@@ -426,12 +536,36 @@ def create_preview(file_name, mapping=None, actor=None, idempotency_key=None, im
 				{
 					**classification["preview"],
 					"resolved_mapping": resolved,
+					"telemetry": {
+						"preview_csv_parse_ms": round(phase_ms["csv_parse_ms"], 2),
+						"preview_db_lookup_ms": round(phase_ms["db_lookup_ms"], 2),
+						"preview_persist_ms": 0.0,
+						"preview_total_ms": 0.0,
+						"preview_sql_queries_delta": max(0, _session_questions_count() - q_before),
+					},
 				},
 				ensure_ascii=False,
 			),
 		}
 	)
 	batch.insert(ignore_permissions=True)
+	persist_ms = (time.perf_counter() - t_persist0) * 1000.0
+	total_prev_ms = (time.perf_counter() - t_prev_start) * 1000.0
+	try:
+		p_obj = json.loads(batch.preview_json or "{}")
+		if isinstance(p_obj.get("telemetry"), dict):
+			p_obj["telemetry"]["preview_persist_ms"] = round(persist_ms, 2)
+			p_obj["telemetry"]["preview_total_ms"] = round(total_prev_ms, 2)
+			p_obj["telemetry"]["preview_sql_queries_delta"] = max(0, _session_questions_count() - q_before)
+			frappe.db.set_value(
+				"CSKH Import Batch",
+				batch.name,
+				"preview_json",
+				json.dumps(p_obj, ensure_ascii=False),
+				update_modified=False,
+			)
+	except Exception:
+		pass
 	return _status_response(batch.name)
 
 
@@ -538,6 +672,172 @@ def _preload_existing_leads_by_phone(canonicals: set[str]) -> dict[str, str]:
 				if norm not in found:
 					found[norm] = row.name
 	return found
+
+
+def _session_questions_count() -> int:
+	try:
+		rows = frappe.db.sql("SHOW SESSION STATUS LIKE 'Questions'")
+		if rows and rows[0] and len(rows[0]) >= 2:
+			return int(rows[0][1] or 0)
+	except Exception:
+		pass
+	return 0
+
+
+PREVIEW_STREAM_CHUNK_SIZE = 2500
+
+
+def _classify_streaming_preview(
+	*,
+	content: bytes,
+	extension: str,
+	max_rows: int,
+	normalized_mapping: dict,
+) -> tuple[dict, dict, dict[str, float]]:
+	"""Stream CSV/XLSX in bounded 2,500-row micro-batches (`< 3 MiB` RAM for 50k rows)."""
+	seen_in_file: set[str] = set()
+	counts = {
+		"total_rows": 0,
+		"valid_rows": 0,
+		"new_rows": 0,
+		"duplicate_rows": 0,
+		"error_rows": 0,
+	}
+	duplicate_in_crm = 0
+	conflict_active = 0
+	preview_rows: list[dict] = []
+	csv_parse_ms = 0.0
+	db_lookup_ms = 0.0
+
+	t0 = time.perf_counter()
+	with stream_import_rows(content, extension, max_rows) as (header, first_cells, is_xlsx, row_iter):
+		resolved = resolve_import_columns(header, first_cells, normalized_mapping)
+		col_map = _column_index_map(header)
+		phone_idx = col_map.get(resolved["phone"]) if resolved["phone"] else None
+		name_idx = col_map.get(resolved["name"]) if resolved["name"] else None
+		source_idx = col_map.get(resolved["source"]) if resolved["source"] else None
+		csv_parse_ms += (time.perf_counter() - t0) * 1000.0
+
+		pending_batch: list[tuple] = []
+
+		def _flush_microbatch(items: list[tuple]) -> None:
+			nonlocal duplicate_in_crm, db_lookup_ms
+			unseen_phones = {it[2] for it in items if it[1] == "phone_ok" and it[2] is not None}
+			t_db0 = time.perf_counter()
+			existing_map = _preload_existing_leads_by_phone(unseen_phones) if unseen_phones else {}
+			db_lookup_ms += (time.perf_counter() - t_db0) * 1000.0
+
+			for row_num, kind, canonical_or_reason, extra in items:
+				if kind == "invalid":
+					counts["error_rows"] += 1
+					if len(preview_rows) < 200:
+						preview_rows.append(
+							{
+								"row_number": row_num,
+								"class": CLASS_INVALID,
+								"reason": canonical_or_reason,
+							}
+						)
+				elif kind == "dup_file":
+					counts["duplicate_rows"] += 1
+					if len(preview_rows) < 200:
+						preview_rows.append(
+							{
+								"row_number": row_num,
+								"class": CLASS_DUPLICATE_IN_FILE,
+								"canonical": canonical_or_reason,
+								**(extra or {}),
+							}
+						)
+				else:
+					existing_lead = existing_map.get(canonical_or_reason)
+					if existing_lead:
+						counts["duplicate_rows"] += 1
+						duplicate_in_crm += 1
+						if len(preview_rows) < 200:
+							preview_rows.append(
+								{
+									"row_number": row_num,
+									"class": CLASS_DUPLICATE_IN_CRM,
+									"canonical": canonical_or_reason,
+									"lead": existing_lead,
+									**(extra or {}),
+								}
+							)
+					else:
+						counts["valid_rows"] += 1
+						counts["new_rows"] += 1
+						if len(preview_rows) < 200:
+							preview_rows.append(
+								{
+									"row_number": row_num,
+									"class": CLASS_VALID,
+									"canonical": canonical_or_reason,
+									**(extra or {}),
+								}
+							)
+
+		t_parse = time.perf_counter()
+		for row_number, raw_row in row_iter:
+			counts["total_rows"] += 1
+			need_preview_extra = counts["total_rows"] <= 200
+			raw_phone = _raw_cell_at(raw_row, phone_idx, is_xlsx=is_xlsx) if resolved["phone"] else None
+			if raw_phone is None:
+				pending_batch.append((row_number, "invalid", "no_phone_column", None))
+			else:
+				try:
+					canonical = normalize_vn_phone(str(raw_phone))
+				except InvalidPhone as exc:
+					pending_batch.append((row_number, "invalid", str(exc)[:160], None))
+				else:
+					extra: dict | None = None
+					if need_preview_extra:
+						extra = {}
+						if name_idx is not None:
+							safe_name = sanitize_cell(_raw_cell_at(raw_row, name_idx, is_xlsx=is_xlsx))[
+								:140
+							].strip()
+							if safe_name:
+								extra["name"] = safe_name
+						if source_idx is not None:
+							safe_source = sanitize_cell(_raw_cell_at(raw_row, source_idx, is_xlsx=is_xlsx))[
+								:140
+							].strip()
+							if safe_source:
+								extra["source"] = safe_source
+					if canonical in seen_in_file:
+						pending_batch.append((row_number, "dup_file", canonical, extra))
+					else:
+						seen_in_file.add(canonical)
+						pending_batch.append((row_number, "phone_ok", canonical, extra))
+
+			if len(pending_batch) >= PREVIEW_STREAM_CHUNK_SIZE:
+				csv_parse_ms += (time.perf_counter() - t_parse) * 1000.0
+				_flush_microbatch(pending_batch)
+				pending_batch = []
+				t_parse = time.perf_counter()
+
+		csv_parse_ms += (time.perf_counter() - t_parse) * 1000.0
+		if pending_batch:
+			_flush_microbatch(pending_batch)
+
+	return (
+		resolved,
+		{
+			"total_rows": counts["total_rows"],
+			"valid_rows": counts["valid_rows"],
+			"new_rows": counts["new_rows"],
+			"duplicate_rows": counts["duplicate_rows"],
+			"error_rows": counts["error_rows"],
+			"preview": {
+				"rows": preview_rows,
+				"truncated": counts["total_rows"] > 200,
+				"duplicate_in_crm": duplicate_in_crm,
+				"conflict_active": conflict_active,
+			},
+		},
+		{"csv_parse_ms": csv_parse_ms, "db_lookup_ms": db_lookup_ms},
+	)
 
 
 def _classify(rows, mapping, phone_column, name_column=None, source_column=None):
@@ -760,6 +1060,8 @@ def _status_response(batch_name):
 		"attempts": int(batch.attempts or 0),
 		"preview": preview_payload.get("rows", []),
 		"preview_truncated": preview_payload.get("truncated", False),
+		"preview_telemetry": preview_payload.get("telemetry") or {},
+		"worker_telemetry": preview_payload.get("worker_telemetry") or {},
 		"committed_at": batch.committed_at,
 		"error_artifact": batch.error_artifact,
 		"error": getattr(batch, "error", None),

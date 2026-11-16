@@ -589,6 +589,7 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 			"CSKH Work Item",
 			"CRM Task",
 			"CRM Lead",
+			"CRM Notification",
 		)
 	)
 	for dt in targets:
@@ -637,6 +638,21 @@ def ensure_p2_indexes(doctype: str | None = None) -> None:
 					dt,
 					["cskh_is_followup", "status", "due_date"],
 					"cskh_task_followup_due_idx",
+				)
+		elif dt == "CRM Notification":
+			if frappe.db.has_column(dt, "notification_type_doctype") and frappe.db.has_column(
+				dt, "notification_type_doc"
+			):
+				frappe.db.add_index(
+					dt,
+					["notification_type_doctype", "notification_type_doc", "to_user", "type"],
+					"cskh_notif_type_doc_idx",
+				)
+			if frappe.db.has_column(dt, "reference_doctype") and frappe.db.has_column(dt, "reference_name"):
+				frappe.db.add_index(
+					dt,
+					["reference_doctype", "reference_name", "to_user", "type"],
+					"cskh_notif_ref_doc_idx",
 				)
 
 

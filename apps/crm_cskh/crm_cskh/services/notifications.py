@@ -366,7 +366,7 @@ def deliver_assignments_batch(items, run_name, actor=None):
 		return {"delivered": delivered, "failed": failed}
 
 
-def deliver_followup_notification(work_item, task_id, owner, event_id, actor=None):
+def deliver_followup_notification(work_item, task_id, owner, event_id, actor=None, *, lead=None):
 	"""Post-commit, idempotent `CRM Notification` delivery for CSKH follow-up `CRM Task`s (`P2.md` §15.3).
 
 	Never raises and never rolls back the already-committed attempt/follow-up transaction.
@@ -378,7 +378,7 @@ def deliver_followup_notification(work_item, task_id, owner, event_id, actor=Non
 		return {"work_item": work_item, "delivered": False, "reason": "missing_target"}
 	task_ref = str(task_id)
 	try:
-		lead = frappe.db.get_value("CSKH Work Item", work_item, "lead")
+		eff_lead = lead or frappe.db.get_value("CSKH Work Item", work_item, "lead")
 		existing = frappe.db.get_value(
 			"CRM Notification",
 			{
@@ -399,22 +399,34 @@ def deliver_followup_notification(work_item, task_id, owner, event_id, actor=Non
 			"name",
 		)
 		if not existing:
+			now_ts = now_datetime()
+			session_user = getattr(getattr(frappe, "session", None), "user", None) or actor
 			doc = frappe.get_doc(
 				{
 					"doctype": "CRM Notification",
 					"from_user": actor,
 					"to_user": owner,
 					"type": NOTIFICATION_TYPE,
+					"read": 0,
 					"message": f"Bạn có lịch hẹn liên hệ lại #{task_ref}.",
 					"notification_type_doctype": "CRM Task",
 					"notification_type_doc": task_ref,
-					"reference_doctype": "CRM Lead" if lead else "CRM Task",
-					"reference_name": lead or task_ref,
+					"reference_doctype": "CRM Lead" if eff_lead else "CRM Task",
+					"reference_name": eff_lead or task_ref,
+					"creation": now_ts,
+					"modified": now_ts,
+					"owner": session_user,
+					"modified_by": session_user,
 				}
 			)
-			doc.insert(ignore_permissions=True)
+			doc.set_new_name()
+			doc.db_insert()
 			existing = doc.name
 			frappe.db.commit()
+			try:
+				frappe.publish_realtime("crm_notification", user=owner)
+			except Exception:
+				pass
 		return {
 			"work_item": work_item,
 			"task_id": task_ref,
