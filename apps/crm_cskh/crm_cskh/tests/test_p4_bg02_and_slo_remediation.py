@@ -27,7 +27,7 @@ from crm_cskh.services import (
 	report_query,
 	runtime_cache,
 )
-from crm_cskh.services.errors import ForbiddenScope
+from crm_cskh.services.errors import Forbidden, ForbiddenScope
 from crm_cskh.services.kpi_periods import resolve_period_spec, today_hcm
 from crm_cskh.services.phone_identity import normalize_vn_phone
 from crm_cskh.tests.p1_base import P1TestCase
@@ -619,27 +619,51 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 			self.assertFalse(eff_restored[0]["is_voided"])
 
 			# 5. `User` role downgrade (`Sales Manager` -> `Sales User` only, WITHOUT manual `frappe.clear_cache()`)
-			#    propagates via Redis `cskh:runtime_epochs` (`G11` / `S09`) and revokes subordinate Work Item read
+			#    propagates via Redis `cskh:runtime_epochs` EVEN AFTER an earlier CLI `frappe.clear_cache()` (`FLUSHALL`)
+			#    reset Redis counters below Gunicorn Worker B's pre-flush local epoch (`G11` / `S09` exact topology)
+			for _ in range(10):
+				runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_USER_HIERARCHY)
+			with runtime_cache._EPOCH_LOCK:
+				pre_flush_worker_epochs = {
+					k: (v[0], dict(v[1])) for k, v in runtime_cache._SITE_EPOCHS.items()
+				}
+				pre_flush_worker_gens = dict(runtime_cache._SITE_GENS)
+			# External CLI runs `frappe.clear_cache()` (`FLUSHALL` resets Redis counters to 1 under a new `__gen__`)
+			frappe.clear_cache()
+			# Restore Worker B's pre-flush RAM state (`counter >= 10` under old `__gen__`), then serve pre-downgrade HTTP read
+			with runtime_cache._EPOCH_LOCK:
+				runtime_cache._SITE_EPOCHS.clear()
+				runtime_cache._SITE_EPOCHS.update(pre_flush_worker_epochs)
+				runtime_cache._SITE_GENS.clear()
+				runtime_cache._SITE_GENS.update(pre_flush_worker_gens)
+			runtime_cache.on_before_request()
 			ldr_pre = read_model.get_work_item_detail(wi_name, actor=self.leader_a)
 			self.assertEqual(ldr_pre["work_item"]["name"], wi_name)
 			frappe.set_user("Administrator")
 			u_ldr = frappe.get_doc("User", self.leader_a)
 			orig_roles = [r.role for r in u_ldr.roles]
 			try:
-				# Snapshot Worker B's warm `_USER_PROFILE_LRU` before CLI mutation
+				# Snapshot Worker B's warm `_USER_PROFILE_LRU`, `_SITE_EPOCHS`, and `_SITE_GENS` before CLI mutation
 				saved_profile_lru = dict(runtime_cache._USER_PROFILE_LRU._data)
+				with runtime_cache._EPOCH_LOCK:
+					saved_worker_epochs = {
+						k: (v[0], dict(v[1])) for k, v in runtime_cache._SITE_EPOCHS.items()
+					}
+					saved_worker_gens = dict(runtime_cache._SITE_GENS)
 				u_ldr.roles = []
 				u_ldr.append("roles", {"role": "Sales User"})
 				u_ldr.save(ignore_permissions=True)
 				frappe.db.commit()
-				# Simulate Worker B still holding pre-downgrade `_USER_PROFILE_LRU` entries in RAM,
-				# syncing epochs from Redis on the next HTTP request (`on_before_request()`)
+				# Simulate Worker B still holding pre-downgrade RAM state, syncing epochs from Redis on `on_before_request()`
 				runtime_cache._USER_PROFILE_LRU._data.update(saved_profile_lru)
 				with runtime_cache._EPOCH_LOCK:
 					runtime_cache._SITE_EPOCHS.clear()
+					runtime_cache._SITE_EPOCHS.update(saved_worker_epochs)
+					runtime_cache._SITE_GENS.clear()
+					runtime_cache._SITE_GENS.update(saved_worker_gens)
 				runtime_cache.on_before_request()
 				self.assertNotIn("Sales Manager", runtime_cache.get_roles_set(self.leader_a))
-				with self.assertRaises((ForbiddenScope, frappe.PermissionError)):
+				with self.assertRaises((Forbidden, ForbiddenScope, frappe.PermissionError)):
 					read_model.get_work_item_detail(wi_name, actor=self.leader_a)
 			finally:
 				frappe.set_user("Administrator")

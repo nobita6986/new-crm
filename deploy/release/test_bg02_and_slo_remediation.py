@@ -89,6 +89,8 @@ class TestBg02AndSloGovernance(unittest.TestCase):
         self.assertIn("on_user_or_hierarchy_doc_change", perm_src)
         self.assertIn("_redis_mod.Redis.hgetall", rc_src)
         self.assertIn("_redis_mod.Redis.hincrby", rc_src)
+        self.assertIn("_redis_mod.Redis.hsetnx", rc_src)
+        self.assertIn("_EPOCH_GEN_FIELD", rc_src)
         self.assertNotIn("cache.hgetall(rkey)", rc_src)
 
     def test_diff_impact_includes_bg02_slo_remediation_suite(self) -> None:

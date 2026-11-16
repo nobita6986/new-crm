@@ -62,6 +62,7 @@ ALL_DOMAINS = (
 )
 
 _EPOCH_REDIS_HASH = "cskh:runtime_epochs"
+_EPOCH_GEN_FIELD = "__gen__"
 _EPOCH_SYNC_TTL_SEC = 0.50
 
 
@@ -95,6 +96,7 @@ class _BoundedLRU:
 
 _EPOCH_LOCK = threading.RLock()
 _SITE_EPOCHS: dict[str, tuple[float, dict[str, int]]] = {}
+_SITE_GENS: dict[str, int] = {}
 
 _SCHEMA_LRU = _BoundedLRU(maxsize=2048)
 _TRANSLATIONS_LRU = _BoundedLRU(maxsize=16)
@@ -302,7 +304,7 @@ def enable_runtime_cache_for_test():
 		clear_all_local_caches()
 
 
-def clear_all_local_caches() -> None:
+def _clear_all_lru_stores() -> None:
 	for lru in (
 		_SCHEMA_LRU,
 		_TRANSLATIONS_LRU,
@@ -320,11 +322,33 @@ def clear_all_local_caches() -> None:
 		_SSR_HTML_LRU,
 	):
 		lru.clear()
+
+
+def clear_all_local_caches() -> None:
+	_clear_all_lru_stores()
 	with _EPOCH_LOCK:
 		_SITE_EPOCHS.clear()
+		_SITE_GENS.clear()
 	local = getattr(frappe, "local", None)
 	if local is not None:
 		local._cskh_req_epochs = None
+
+
+def _new_gen_nonce() -> int:
+	return (int.from_bytes(os.urandom(8), "big") & ((1 << 62) - 1)) or 1
+
+
+def _ensure_redis_gen(cache_obj, rkey) -> int:
+	"""Return the Redis epoch generation nonce, atomically initializing one after `FLUSHALL`."""
+	g_raw = _redis_mod.Redis.hget(cache_obj, rkey, _EPOCH_GEN_FIELD)
+	if g_raw is not None:
+		return int(g_raw.decode("utf-8") if isinstance(g_raw, bytes) else g_raw)
+	seed_str = str(_new_gen_nonce())
+	_redis_mod.Redis.hsetnx(cache_obj, rkey, _EPOCH_GEN_FIELD, seed_str)
+	g_raw2 = _redis_mod.Redis.hget(cache_obj, rkey, _EPOCH_GEN_FIELD)
+	if g_raw2 is not None:
+		return int(g_raw2.decode("utf-8") if isinstance(g_raw2, bytes) else g_raw2)
+	return int(seed_str)
 
 
 def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
@@ -337,56 +361,107 @@ def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
 			# Stamp refresh-in-progress so concurrent Gunicorn threads don't stampede Redis
 			_SITE_EPOCHS[site] = (now_mono, cached[1])
 
-	epochs: dict[str, int] = dict(cached[1]) if cached is not None else {}
+	redis_ok = False
+	redis_gen = 0
+	redis_epochs: dict[str, int] = {}
 	try:
 		cache_obj = _resolve_redis_wrapper()
 		if cache_obj is not None:
 			rkey = cache_obj.make_key(_EPOCH_REDIS_HASH)
 			if _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
 				raw = _redis_mod.Redis.hgetall(cache_obj, rkey) or {}
+				for k, v in raw.items():
+					k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
+					v_int = int(v.decode("utf-8") if isinstance(v, bytes) else v)
+					if k_str == _EPOCH_GEN_FIELD:
+						redis_gen = v_int
+					else:
+						redis_epochs[k_str] = v_int
+				if not redis_gen:
+					redis_gen = _ensure_redis_gen(cache_obj, rkey)
+				redis_ok = True
 			else:
 				raw = cache_obj.get_value(_EPOCH_REDIS_HASH) or {}
-			for k, v in raw.items():
-				k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
-				v_int = int(v.decode("utf-8") if isinstance(v, bytes) else v)
-				if v_int > epochs.get(k_str, 0):
-					epochs[k_str] = v_int
+				for k, v in raw.items():
+					k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
+					v_int = int(v.decode("utf-8") if isinstance(v, bytes) else v)
+					if k_str == _EPOCH_GEN_FIELD:
+						redis_gen = v_int
+					else:
+						redis_epochs[k_str] = v_int
+				if not redis_gen:
+					redis_gen = _new_gen_nonce()
+					raw_copy = dict(redis_epochs)
+					raw_copy[_EPOCH_GEN_FIELD] = redis_gen
+					cache_obj.set_value(_EPOCH_REDIS_HASH, raw_copy)
+				redis_ok = True
 	except Exception:
-		pass
+		redis_ok = False
+
+	if redis_ok:
+		gen_changed = False
+		with _EPOCH_LOCK:
+			prev_gen = _SITE_GENS.get(site, 0)
+			if redis_gen != prev_gen:
+				# Redis `FLUSHALL` (`frappe.clear_cache()`) or first worker sync: adopt Redis epochs
+				# authoritatively and purge any pre-flush in-process LRU entries!
+				_SITE_GENS[site] = redis_gen
+				epochs = dict(redis_epochs)
+				_SITE_EPOCHS[site] = (now_mono, epochs)
+				gen_changed = prev_gen != 0
+			else:
+				epochs = dict(redis_epochs)
+				cur = _SITE_EPOCHS.get(site)
+				if cur is not None:
+					for k_str, v_int in cur[1].items():
+						if v_int > epochs.get(k_str, 0):
+							epochs[k_str] = v_int
+				_SITE_EPOCHS[site] = (now_mono, epochs)
+		if gen_changed:
+			_clear_all_lru_stores()
+		return epochs
 
 	with _EPOCH_LOCK:
+		_SITE_GENS.setdefault(site, 1)
+		fallback_epochs = dict(cached[1]) if cached is not None else {}
 		cur = _SITE_EPOCHS.get(site)
 		if cur is not None:
 			for k_str, v_int in cur[1].items():
-				if v_int > epochs.get(k_str, 0):
-					epochs[k_str] = v_int
-		_SITE_EPOCHS[site] = (now_mono, epochs)
-		return epochs
+				if v_int > fallback_epochs.get(k_str, 0):
+					fallback_epochs[k_str] = v_int
+		_SITE_EPOCHS[site] = (now_mono, fallback_epochs)
+		return fallback_epochs
 
 
-def _get_current_epochs(site: str) -> dict[str, int]:
+def _get_current_epochs(site: str) -> tuple[int, dict[str, int]]:
 	"""Sync once per HTTP request (`0 ms` cross-worker staleness) and reuse across the request."""
 	local = getattr(frappe, "local", None)
 	if local is not None:
 		req_ep = getattr(local, "_cskh_req_epochs", None)
-		if isinstance(req_ep, tuple) and len(req_ep) == 2 and req_ep[0] == site:
-			return req_ep[1]
+		if isinstance(req_ep, tuple) and len(req_ep) == 3 and req_ep[0] == site:
+			return req_ep[1], req_ep[2]
 		epochs = _sync_site_epochs(site, force=True)
-		local._cskh_req_epochs = (site, epochs)
-		return epochs
-	return _sync_site_epochs(site, force=False)
+		with _EPOCH_LOCK:
+			gen_val = _SITE_GENS.get(site, 1)
+		local._cskh_req_epochs = (site, gen_val, epochs)
+		return gen_val, epochs
+	epochs = _sync_site_epochs(site, force=False)
+	with _EPOCH_LOCK:
+		gen_val = _SITE_GENS.get(site, 1)
+	return gen_val, epochs
 
 
 def get_domain_epoch(domain: str) -> int:
 	site = _current_site()
-	epochs = _get_current_epochs(site)
-	return int(epochs.get(domain, 0))
+	gen_val, epochs = _get_current_epochs(site)
+	return (int(gen_val) << 32) + int(epochs.get(domain, 0))
 
 
 def get_domains_epoch_tuple(*domains: str) -> tuple[int, ...]:
 	site = _current_site()
-	epochs = _get_current_epochs(site)
-	return tuple(int(epochs.get(d, 0)) for d in domains)
+	gen_val, epochs = _get_current_epochs(site)
+	prefix = int(gen_val) << 32
+	return tuple(prefix + int(epochs.get(d, 0)) for d in domains)
 
 
 def _bump_domains_once(domains: tuple[str, ...]) -> None:
@@ -394,37 +469,66 @@ def _bump_domains_once(domains: tuple[str, ...]) -> None:
 		return
 	site = _current_site()
 	now_mono = time.monotonic()
-	with _EPOCH_LOCK:
-		cur = _SITE_EPOCHS.get(site)
-		local_map = dict(cur[1]) if cur is not None else {}
-		for dom in domains:
-			local_map[dom] = int(local_map.get(dom, 0)) + 1
-		_SITE_EPOCHS[site] = (now_mono, local_map)
 
+	redis_bumped = False
 	try:
 		cache_obj = _resolve_redis_wrapper()
 		if cache_obj is not None:
 			rkey = cache_obj.make_key(_EPOCH_REDIS_HASH)
 			if _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+				redis_gen = _ensure_redis_gen(cache_obj, rkey)
+				gen_changed = False
+				with _EPOCH_LOCK:
+					prev_gen = _SITE_GENS.get(site, 0)
+					if redis_gen != prev_gen:
+						_SITE_GENS[site] = redis_gen
+						_SITE_EPOCHS[site] = (now_mono, {})
+						gen_changed = prev_gen != 0
+				if gen_changed:
+					_clear_all_lru_stores()
 				for dom in domains:
 					new_val = int(_redis_mod.Redis.hincrby(cache_obj, rkey, dom, 1) or 0)
 					with _EPOCH_LOCK:
 						cur_s = _SITE_EPOCHS.get(site)
-						if cur_s is not None and new_val > cur_s[1].get(dom, 0):
-							cur_s[1][dom] = new_val
+						local_map = dict(cur_s[1]) if cur_s is not None else {}
+						if new_val > local_map.get(dom, 0):
+							local_map[dom] = new_val
+						else:
+							local_map[dom] = local_map.get(dom, 0) + 1
+						_SITE_EPOCHS[site] = (now_mono, local_map)
+				redis_bumped = True
 			else:
 				cur_dict = dict(cache_obj.get_value(_EPOCH_REDIS_HASH) or {})
+				redis_gen = int(cur_dict.get(_EPOCH_GEN_FIELD) or _new_gen_nonce())
+				cur_dict[_EPOCH_GEN_FIELD] = redis_gen
 				for dom in domains:
 					cur_dict[dom] = int(cur_dict.get(dom, 0)) + 1
 				cache_obj.set_value(_EPOCH_REDIS_HASH, cur_dict)
+				with _EPOCH_LOCK:
+					_SITE_GENS[site] = redis_gen
+					_SITE_EPOCHS[site] = (
+						now_mono,
+						{k: int(v) for k, v in cur_dict.items() if k != _EPOCH_GEN_FIELD},
+					)
+				redis_bumped = True
 	except Exception:
-		pass
+		redis_bumped = False
+
+	if not redis_bumped:
+		with _EPOCH_LOCK:
+			_SITE_GENS.setdefault(site, 1)
+			cur = _SITE_EPOCHS.get(site)
+			local_map = dict(cur[1]) if cur is not None else {}
+			for dom in domains:
+				local_map[dom] = int(local_map.get(dom, 0)) + 1
+			_SITE_EPOCHS[site] = (now_mono, local_map)
 
 	local = getattr(frappe, "local", None)
 	if local is not None:
 		with _EPOCH_LOCK:
 			cur_final = _SITE_EPOCHS.get(site)
-			local._cskh_req_epochs = (site, dict(cur_final[1])) if cur_final is not None else None
+			gen_final = _SITE_GENS.get(site, 1)
+			local._cskh_req_epochs = (site, gen_final, dict(cur_final[1])) if cur_final is not None else None
 
 
 def bump_cache_domain(*domains: str) -> None:

@@ -4,8 +4,8 @@
   "p4_01_baseline_lock_sha256": "dde3bdaa11180cd103f8d8b064e20411d380135ac88d4a39226b7d451a990962",
   "p4_00_entry_dossier_sha": "be33e6c931337c42b94184b2fe292e094bd51c97",
   "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
-  "apps_tree_sha": "dddc009e98e85f06d72e3536867f85c292191d0e",
-  "crm_cskh_tree_sha": "3bcf96437780d9cf472ad44daa9d96710b36ad55",
+  "apps_tree_sha": "7c8b2862b4d087fc7df3199a9e26b51aa7a0aa96",
+  "crm_cskh_tree_sha": "6258d577e045926229b08096cafb92fd33e7e263",
   "builder_upstream": {
     "repository": "https://github.com/frappe/frappe_docker.git",
     "tag": "v4.2.0",
