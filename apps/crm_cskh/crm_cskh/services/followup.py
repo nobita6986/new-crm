@@ -268,14 +268,15 @@ def create_followup_in_tx(
 				"cskh_source_attempt": source_attempt,
 				"cskh_reschedule_count": 0,
 				"cskh_task_history_json": json.dumps(history, ensure_ascii=False),
-				"creation": now_dt,
-				"modified": now_dt,
 				"owner": session_user,
 				"modified_by": session_user,
 			}
 		)
+		task.flags.in_insert = True
 		validate_cskh_followup_task(task)
 		task.set_new_name()
+		task.creation = now_dt
+		task.modified = now_dt
 		task.db_insert()
 		task_id = str(task.name)
 		_ensure_task_todo(task_id, owner, clean_title, is_new_task=True)

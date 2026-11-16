@@ -413,13 +413,14 @@ def deliver_followup_notification(work_item, task_id, owner, event_id, actor=Non
 					"notification_type_doc": task_ref,
 					"reference_doctype": "CRM Lead" if eff_lead else "CRM Task",
 					"reference_name": eff_lead or task_ref,
-					"creation": now_ts,
-					"modified": now_ts,
 					"owner": session_user,
 					"modified_by": session_user,
 				}
 			)
+			doc.flags.in_insert = True
 			doc.set_new_name()
+			doc.creation = now_ts
+			doc.modified = now_ts
 			doc.db_insert()
 			existing = doc.name
 			frappe.db.commit()

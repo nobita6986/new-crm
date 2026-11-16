@@ -107,6 +107,63 @@ _INVARIANT_LRU = _BoundedLRU(maxsize=128)
 _SSR_HTML_LRU = _BoundedLRU(maxsize=1024)
 
 _ASSET_VERSION_CACHE: str | None = None
+_MUTATION_HOOKS_INSTALLED: bool = False
+
+_SET_VALUE_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
+	"CSKH Policy": (DOMAIN_POLICY,),
+	"CSKH Outcome Code": (DOMAIN_OUTCOME,),
+	"CSKH Working Calendar": (DOMAIN_CALENDAR,),
+	"CRM Holiday List": (DOMAIN_CALENDAR,),
+	"CSKH Campaign": (DOMAIN_CAMPAIGN, DOMAIN_POLICY),
+	"User": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
+	"CRM Sales Hierarchy": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
+	"CSKH Team Membership History": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
+	"CSKH Attempt Correction": (DOMAIN_CORRECTION,),
+	"CSKH Assignment History": (DOMAIN_ASSIGNMENT_HISTORY,),
+	"CSKH Dirty Scope": (DOMAIN_DIRTY_SCOPE,),
+	"CSKH KPI Run": (DOMAIN_KPI_SNAPSHOT, DOMAIN_DIRTY_SCOPE),
+	"CSKH KPI Snapshot": (DOMAIN_KPI_SNAPSHOT, DOMAIN_DIRTY_SCOPE),
+	"Translation": (DOMAIN_TRANSLATIONS,),
+}
+
+
+def _ensure_mutation_hooks_installed() -> None:
+	"""Idempotently hook `Database.set_value` and `frappe.clear_cache` so direct low-level
+	mutations (`frappe.db.set_value(..., update_modified=False)`, `bench clear-cache`)
+	invalidate `runtime_cache` domains immediately even when `doc_events` are bypassed."""
+	global _MUTATION_HOOKS_INSTALLED
+	if _MUTATION_HOOKS_INSTALLED:
+		return
+	try:
+		from frappe.database.database import Database
+
+		orig_set_value = getattr(Database, "set_value", None)
+		if callable(orig_set_value) and not getattr(orig_set_value, "_cskh_cache_wrapped", False):
+
+			def _wrapped_set_value(self, dt, dn, field, val=None, *args, **kwargs):
+				res = orig_set_value(self, dt, dn, field, val, *args, **kwargs)
+				doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(dt) if dt else "")
+				if doms:
+					bump_cache_domain(*doms)
+				return res
+
+			_wrapped_set_value._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+			Database.set_value = _wrapped_set_value  # type: ignore[method-assign]
+
+		orig_clear_cache = getattr(frappe, "clear_cache", None)
+		if callable(orig_clear_cache) and not getattr(orig_clear_cache, "_cskh_cache_wrapped", False):
+
+			def _wrapped_clear_cache(*args, **kwargs):
+				res = orig_clear_cache(*args, **kwargs)
+				clear_all_local_caches()
+				bump_cache_domain(*ALL_DOMAINS)
+				return res
+
+			_wrapped_clear_cache._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+			frappe.clear_cache = _wrapped_clear_cache
+		_MUTATION_HOOKS_INSTALLED = True
+	except Exception:
+		pass
 
 
 def _current_site() -> str:
@@ -121,6 +178,7 @@ def is_runtime_db_cache_active() -> bool:
 			return False
 		if getattr(flags, "in_test", False) and not getattr(flags, "cskh_force_runtime_cache", False):
 			return False
+	_ensure_mutation_hooks_installed()
 	return True
 
 

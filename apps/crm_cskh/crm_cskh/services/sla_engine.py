@@ -155,15 +155,16 @@ def _insert_obligation(fields: dict) -> str:
 		doc = frappe.get_doc(
 			{
 				"doctype": "CSKH SLA Obligation",
-				"creation": now_ts,
-				"modified": now_ts,
 				"owner": session_user,
 				"modified_by": session_user,
 				**fields,
 				"evaluation_anchor_at": eval_anchor,
 			}
 		)
+		doc.flags.in_insert = True
 		doc.set_new_name()
+		doc.creation = now_ts
+		doc.modified = now_ts
 		doc.db_insert()
 		return str(doc.name)
 

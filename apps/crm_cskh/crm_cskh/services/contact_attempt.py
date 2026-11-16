@@ -631,8 +631,6 @@ def record_attempt(
 			"idempotency_key": idem_val,
 			"payload_hash": req_hash,
 			"work_item_revision": current_rev + 1,
-			"creation": now_dt,
-			"modified": now_dt,
 			"owner": session_user,
 			"modified_by": session_user,
 		}
@@ -644,6 +642,7 @@ def record_attempt(
 			att_payload["complete_fields"] = 1
 
 		attempt_doc = frappe.get_doc(att_payload)
+		attempt_doc.flags.in_insert = True
 		attempt_doc.set_new_name()
 		attempt_id = str(attempt_doc.name)
 
@@ -709,8 +708,11 @@ def record_attempt(
 		prev_att_flag = getattr(frappe.flags, "cskh_in_attempt_service", False)
 		frappe.flags.cskh_in_attempt_service = True
 		try:
+			attempt_doc.flags.in_insert = True
 			attempt_doc.before_insert()
 			attempt_doc.before_save()
+			attempt_doc.creation = now_dt
+			attempt_doc.modified = now_dt
 			attempt_doc.db_insert()
 		finally:
 			frappe.flags.cskh_in_attempt_service = prev_att_flag

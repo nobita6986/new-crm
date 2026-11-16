@@ -522,6 +522,37 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 			self.assertFalse(ov_fresh["freshness"]["dirty_pending"])
 			self.assertNotEqual(ov_fresh["freshness"]["run_id"], run1["run_id"])
 
+			# Verify fast SQL drill-downs (`CONNECTED_RATE` & `VALID_OUTCOME_LOGGING_RATE`) with `runtime_cache`
+			dd_conn = report_query.get_metric_drilldown(
+				metric_code="CONNECTED_RATE",
+				period_type="monthly",
+				period_key=cur_period.period_key,
+				scope_type="campaign",
+				scope_id=camp,
+				include_pii=0,
+				actor=self.bod_user,
+			)
+			self.assertTrue(dd_conn["ok"])
+			dd_log = report_query.get_metric_drilldown(
+				metric_code="VALID_OUTCOME_LOGGING_RATE",
+				period_type="monthly",
+				period_key=cur_period.period_key,
+				scope_type="campaign",
+				scope_id=camp,
+				include_pii=0,
+				actor=self.bod_user,
+			)
+			self.assertTrue(dd_log["ok"])
+
+			# Direct `frappe.db.set_value(..., update_modified=False)` immediately invalidates `DOMAIN_POLICY`
+			from crm_cskh.services import p3_flags
+
+			self.assertFalse(p3_flags.is_qa_enabled())
+			frappe.db.set_value("CSKH Policy", "GLOBAL-DEFAULT", "qa_enabled", 1, update_modified=False)
+			self.assertTrue(p3_flags.is_qa_enabled())
+			frappe.db.set_value("CSKH Policy", "GLOBAL-DEFAULT", "qa_enabled", 0, update_modified=False)
+			self.assertFalse(p3_flags.is_qa_enabled())
+
 			# 4. Auto-approved correction immediately bumps `DOMAIN_CORRECTION` (`compute_effective_attempts` reflects void)
 			det2 = read_model.get_work_item_detail(wi_name, actor=self.staff_a)
 			corr_res = correction.request_correction(
