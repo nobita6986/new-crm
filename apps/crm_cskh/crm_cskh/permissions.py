@@ -83,6 +83,9 @@ def on_user_security_change(doc, method=None):
 	if not user_name:
 		return
 	frappe.clear_cache(user=user_name)
+	from crm_cskh.services import runtime_cache
+
+	runtime_cache.on_user_or_hierarchy_doc_change(doc, method)
 	if user_name not in ("Administrator", "Guest") and not int(getattr(doc, "enabled", 1) or 0):
 		from frappe.sessions import clear_sessions
 

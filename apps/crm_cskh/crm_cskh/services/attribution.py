@@ -156,6 +156,9 @@ def close_open_membership_for_user(user: str, ended_at: datetime | str | None = 
 
 def on_sales_hierarchy_change(doc, method=None) -> None:
 	"""`doc_events` hook on `CRM Sales Hierarchy` (`after_insert`, `on_update`)."""
+	from crm_cskh.services import runtime_cache
+
+	runtime_cache.on_user_or_hierarchy_doc_change(doc, method)
 	if not frappe.db.table_exists("CSKH Team Membership History"):
 		return
 	now_dt = now_datetime()
@@ -209,6 +212,9 @@ def on_sales_hierarchy_change(doc, method=None) -> None:
 
 def on_sales_hierarchy_trash(doc, method=None) -> None:
 	"""`doc_events` hook on `CRM Sales Hierarchy` (`on_trash`)."""
+	from crm_cskh.services import runtime_cache
+
+	runtime_cache.on_user_or_hierarchy_doc_change(doc, method)
 	if getattr(doc, "user", None):
 		close_open_membership_for_user(doc.user, ended_at=now_datetime())
 

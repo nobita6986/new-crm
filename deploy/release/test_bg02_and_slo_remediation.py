@@ -79,6 +79,18 @@ class TestBg02AndSloGovernance(unittest.TestCase):
             "hooks.py must not serialize page_renderer into Redis app_hooks (breaks G09 Tier 3 N->N-1 rollback)",
         )
 
+    def test_cli_and_cross_worker_cache_invalidation_contracts(self) -> None:
+        init_src = (APP_ROOT / "__init__.py").read_text(encoding="utf-8")
+        perm_src = (APP_ROOT / "permissions.py").read_text(encoding="utf-8")
+        rc_src = (APP_ROOT / "services" / "runtime_cache.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("_ensure_mutation_hooks_installed()", init_src)
+        self.assertIn("on_user_or_hierarchy_doc_change", perm_src)
+        self.assertIn("_redis_mod.Redis.hgetall", rc_src)
+        self.assertIn("_redis_mod.Redis.hincrby", rc_src)
+        self.assertNotIn("cache.hgetall(rkey)", rc_src)
+
     def test_diff_impact_includes_bg02_slo_remediation_suite(self) -> None:
         from deploy.release import run_diff_impact_verification as rdiv
 

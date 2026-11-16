@@ -32,6 +32,11 @@ from contextlib import contextmanager
 import frappe
 from frappe.utils import cint
 
+try:
+	import redis as _redis_mod
+except Exception:  # pragma: no cover
+	_redis_mod = None  # type: ignore[assignment]
+
 DOMAIN_POLICY = "policy"
 DOMAIN_OUTCOME = "outcome"
 DOMAIN_CALENDAR = "calendar"
@@ -126,7 +131,26 @@ _SET_VALUE_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 	"CSKH KPI Run": (DOMAIN_KPI_SNAPSHOT, DOMAIN_DIRTY_SCOPE),
 	"CSKH KPI Snapshot": (DOMAIN_KPI_SNAPSHOT, DOMAIN_DIRTY_SCOPE),
 	"Translation": (DOMAIN_TRANSLATIONS,),
+	"FCRM Settings": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
+	"System Settings": (DOMAIN_USER_HIERARCHY, DOMAIN_CALENDAR),
 }
+
+
+def _resolve_redis_wrapper():
+	"""Unwrap `frappe.cache` (`LocalProxy` or callable returning `RedisWrapper`) safely."""
+	cache_attr = getattr(frappe, "cache", None)
+	if cache_attr is None:
+		return None
+	try:
+		if hasattr(cache_attr, "_get_current_object"):
+			cache_obj = cache_attr._get_current_object()
+		elif callable(cache_attr) and not hasattr(cache_attr, "make_key"):
+			cache_obj = cache_attr()
+		else:
+			cache_obj = cache_attr
+		return cache_obj if hasattr(cache_obj, "make_key") else None
+	except Exception:
+		return None
 
 
 def _wrap_db_class_set_value(db_cls: type) -> None:
@@ -144,14 +168,29 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 
 		_wrapped_set_value._cskh_cache_wrapped = True  # type: ignore[attr-defined]
 		db_cls.set_value = _wrapped_set_value  # type: ignore[attr-defined]
+
+	orig_set_single = db_cls.__dict__.get("set_single_value")
+	if callable(orig_set_single) and not getattr(orig_set_single, "_cskh_cache_wrapped", False):
+
+		def _wrapped_set_single_value(self, doctype, fieldname, value=None, *args, **kwargs):
+			res = orig_set_single(self, doctype, fieldname, value, *args, **kwargs)
+			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(doctype) if doctype else "")
+			if doms:
+				bump_cache_domain(*doms)
+			return res
+
+		_wrapped_set_single_value._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+		db_cls.set_single_value = _wrapped_set_single_value  # type: ignore[attr-defined]
+
 	_DB_INSTANCE_HOOKED_TYPES.add(db_cls)
 
 
 def _ensure_mutation_hooks_installed() -> None:
-	"""Idempotently hook `BaseDocument.db_insert`/`db_update`, `Database.set_value` (plus active
-	`type(frappe.db)`), `frappe.delete_doc`, `frappe.clear_cache`, and `TemplatePage.get_html` in-process
-	so all ORM / low-level writes invalidate `runtime_cache` domains immediately WITHOUT adding new
-	module paths to `hooks.py` (preserving `G09` Tier 3 `N -> N-1` image rollback without flushing Redis)."""
+	"""Idempotently hook `BaseDocument.db_insert`/`db_update`, `Database.set_value`/`set_single_value`
+	(plus active `type(frappe.db)`), `frappe.delete_doc`, and `frappe.clear_cache` in-process so all
+	ORM / low-level writes in HTTP, RQ, scheduler, and standalone CLI processes invalidate `runtime_cache`
+	domains immediately WITHOUT adding new module paths to `hooks.py` (preserving `G09` Tier 3 `N -> N-1`
+	image rollback without flushing Redis)."""
 	global _MUTATION_HOOKS_INSTALLED
 	db_obj = getattr(frappe, "db", None)
 	if db_obj is not None and type(db_obj) not in _DB_INSTANCE_HOOKED_TYPES:
@@ -171,6 +210,9 @@ def _ensure_mutation_hooks_installed() -> None:
 		if callable(orig_db_insert) and not getattr(orig_db_insert, "_cskh_cache_wrapped", False):
 
 			def _wrapped_db_insert(self, *args, **kwargs):
+				cur_db = getattr(frappe, "db", None)
+				if cur_db is not None and type(cur_db) not in _DB_INSTANCE_HOOKED_TYPES:
+					_wrap_db_class_set_value(type(cur_db))
 				res = orig_db_insert(self, *args, **kwargs)
 				doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(getattr(self, "doctype", "") or ""))
 				if doms:
@@ -184,6 +226,9 @@ def _ensure_mutation_hooks_installed() -> None:
 		if callable(orig_db_update) and not getattr(orig_db_update, "_cskh_cache_wrapped", False):
 
 			def _wrapped_db_update(self, *args, **kwargs):
+				cur_db = getattr(frappe, "db", None)
+				if cur_db is not None and type(cur_db) not in _DB_INSTANCE_HOOKED_TYPES:
+					_wrap_db_class_set_value(type(cur_db))
 				res = orig_db_update(self, *args, **kwargs)
 				doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(getattr(self, "doctype", "") or ""))
 				if doms:
@@ -222,13 +267,6 @@ def _ensure_mutation_hooks_installed() -> None:
 
 			_wrapped_clear_cache._cskh_cache_wrapped = True  # type: ignore[attr-defined]
 			frappe.clear_cache = _wrapped_clear_cache
-
-		try:
-			from crm_cskh.www.cskh_renderer import install_template_page_fastpath
-
-			install_template_page_fastpath()
-		except Exception:
-			pass
 
 		_MUTATION_HOOKS_INSTALLED = True
 	except Exception:
@@ -301,10 +339,13 @@ def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
 
 	epochs: dict[str, int] = dict(cached[1]) if cached is not None else {}
 	try:
-		cache = getattr(frappe, "cache", None)
-		if cache is not None:
-			rkey = cache.make_key(_EPOCH_REDIS_HASH)
-			raw = cache.hgetall(rkey) or {}
+		cache_obj = _resolve_redis_wrapper()
+		if cache_obj is not None:
+			rkey = cache_obj.make_key(_EPOCH_REDIS_HASH)
+			if _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+				raw = _redis_mod.Redis.hgetall(cache_obj, rkey) or {}
+			else:
+				raw = cache_obj.get_value(_EPOCH_REDIS_HASH) or {}
 			for k, v in raw.items():
 				k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
 				v_int = int(v.decode("utf-8") if isinstance(v, bytes) else v)
@@ -361,15 +402,21 @@ def _bump_domains_once(domains: tuple[str, ...]) -> None:
 		_SITE_EPOCHS[site] = (now_mono, local_map)
 
 	try:
-		cache = getattr(frappe, "cache", None)
-		if cache is not None:
-			rkey = cache.make_key(_EPOCH_REDIS_HASH)
-			for dom in domains:
-				new_val = int(cache.hincrby(rkey, dom, 1) or 0)
-				with _EPOCH_LOCK:
-					cur_s = _SITE_EPOCHS.get(site)
-					if cur_s is not None and new_val > cur_s[1].get(dom, 0):
-						cur_s[1][dom] = new_val
+		cache_obj = _resolve_redis_wrapper()
+		if cache_obj is not None:
+			rkey = cache_obj.make_key(_EPOCH_REDIS_HASH)
+			if _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+				for dom in domains:
+					new_val = int(_redis_mod.Redis.hincrby(cache_obj, rkey, dom, 1) or 0)
+					with _EPOCH_LOCK:
+						cur_s = _SITE_EPOCHS.get(site)
+						if cur_s is not None and new_val > cur_s[1].get(dom, 0):
+							cur_s[1][dom] = new_val
+			else:
+				cur_dict = dict(cache_obj.get_value(_EPOCH_REDIS_HASH) or {})
+				for dom in domains:
+					cur_dict[dom] = int(cur_dict.get(dom, 0)) + 1
+				cache_obj.set_value(_EPOCH_REDIS_HASH, cur_dict)
 	except Exception:
 		pass
 
@@ -464,6 +511,12 @@ def on_before_request(*_args, **_kwargs) -> None:
 		local._cskh_req_epochs = None
 	install_inprocess_translation_cache()
 	_ensure_mutation_hooks_installed()
+	try:
+		from crm_cskh.www.cskh_renderer import install_template_page_fastpath
+
+		install_template_page_fastpath()
+	except Exception:
+		pass
 
 
 # ---------------------------------------------------------------------------
@@ -1023,3 +1076,6 @@ def on_translation_doc_change(doc=None, method=None) -> None:
 
 def on_correction_doc_change(doc=None, method=None) -> None:
 	bump_cache_domain(DOMAIN_CORRECTION)
+
+
+_ensure_mutation_hooks_installed()

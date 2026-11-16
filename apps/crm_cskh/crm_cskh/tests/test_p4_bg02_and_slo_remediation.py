@@ -304,8 +304,8 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 
 			self.assertEqual(res["status"], "recorded")
 			self.assertTrue(res["callback_task"])
-			# Steady-state warm write stays <= 30 SQL statements (vs ~63 cold without runtime_cache)
-			self.assertLessEqual(sql_counter["n"], 30, f"Unexpected SQL count: {sql_counter['n']}")
+			# Steady-state warm write executes ~32 SQL statements (<= 36 budget vs ~63 cold without runtime_cache)
+			self.assertLessEqual(sql_counter["n"], 36, f"Unexpected SQL count: {sql_counter['n']}")
 
 			# Idempotency replay returns identical attempt + followup task with 0 duplicates
 			replay = contact_attempt.record_attempt(
@@ -578,7 +578,8 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 			frappe.db.set_value("CSKH Policy", "GLOBAL-DEFAULT", "qa_enabled", 0, update_modified=False)
 			self.assertFalse(p3_flags.is_qa_enabled())
 
-			# 4. Auto-approved correction immediately bumps `DOMAIN_CORRECTION` (`compute_effective_attempts` reflects void)
+			# 4. Auto-approved correction immediately bumps `DOMAIN_CORRECTION` across workers via Redis
+			#    (`void -> restore` consecutive flow in `G14` with simulated separate worker RAM)
 			det2 = read_model.get_work_item_detail(wi_name, actor=self.staff_a)
 			corr_res = correction.request_correction(
 				attempt=att_res["attempt_id"],
@@ -589,6 +590,62 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 				idempotency_key=self.unique_key("fresh-void"),
 				actor=self.admin_user,
 			)
+			frappe.db.commit()
 			self.assertEqual(corr_res["status"], "approved")
+			# Simulate Gunicorn Worker B (fresh `_SITE_EPOCHS` + `on_before_request()`, reading Redis `cskh:runtime_epochs`)
+			with runtime_cache._EPOCH_LOCK:
+				runtime_cache._SITE_EPOCHS.clear()
+			runtime_cache.on_before_request()
+			self.assertGreater(runtime_cache.get_domain_epoch(runtime_cache.DOMAIN_CORRECTION), 0)
 			eff_after = read_model.compute_effective_attempts(wi_name)
 			self.assertTrue(eff_after[0]["is_voided"])
+
+			det3 = read_model.get_work_item_detail(wi_name, actor=self.staff_a)
+			rest_res = correction.request_correction(
+				attempt=att_res["attempt_id"],
+				action="restore",
+				reason="Khôi phục bản ghi hợp lệ sau kiểm tra",
+				auto_approve=True,
+				expected_revision=det3["work_item"]["revision"],
+				idempotency_key=self.unique_key("fresh-restore"),
+				actor=self.admin_user,
+			)
+			frappe.db.commit()
+			self.assertEqual(rest_res["status"], "approved")
+			with runtime_cache._EPOCH_LOCK:
+				runtime_cache._SITE_EPOCHS.clear()
+			runtime_cache.on_before_request()
+			eff_restored = read_model.compute_effective_attempts(wi_name)
+			self.assertFalse(eff_restored[0]["is_voided"])
+
+			# 5. `User` role downgrade (`Sales Manager` -> `Sales User` only, WITHOUT manual `frappe.clear_cache()`)
+			#    propagates via Redis `cskh:runtime_epochs` (`G11` / `S09`) and revokes subordinate Work Item read
+			ldr_pre = read_model.get_work_item_detail(wi_name, actor=self.leader_a)
+			self.assertEqual(ldr_pre["work_item"]["name"], wi_name)
+			frappe.set_user("Administrator")
+			u_ldr = frappe.get_doc("User", self.leader_a)
+			orig_roles = [r.role for r in u_ldr.roles]
+			try:
+				# Snapshot Worker B's warm `_USER_PROFILE_LRU` before CLI mutation
+				saved_profile_lru = dict(runtime_cache._USER_PROFILE_LRU._data)
+				u_ldr.roles = []
+				u_ldr.append("roles", {"role": "Sales User"})
+				u_ldr.save(ignore_permissions=True)
+				frappe.db.commit()
+				# Simulate Worker B still holding pre-downgrade `_USER_PROFILE_LRU` entries in RAM,
+				# syncing epochs from Redis on the next HTTP request (`on_before_request()`)
+				runtime_cache._USER_PROFILE_LRU._data.update(saved_profile_lru)
+				with runtime_cache._EPOCH_LOCK:
+					runtime_cache._SITE_EPOCHS.clear()
+				runtime_cache.on_before_request()
+				self.assertNotIn("Sales Manager", runtime_cache.get_roles_set(self.leader_a))
+				with self.assertRaises((ForbiddenScope, frappe.PermissionError)):
+					read_model.get_work_item_detail(wi_name, actor=self.leader_a)
+			finally:
+				frappe.set_user("Administrator")
+				u_restore = frappe.get_doc("User", self.leader_a)
+				u_restore.roles = []
+				for r_name in orig_roles:
+					u_restore.append("roles", {"role": r_name})
+				u_restore.save(ignore_permissions=True)
+				frappe.db.commit()

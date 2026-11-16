@@ -179,6 +179,9 @@ def guard_crm_holiday_list_mutation(doc, method=None) -> None:
 			_("Chỉ CSKH CRM Admin hoặc System Manager được phép thay đổi danh sách ngày nghỉ lễ."),
 			frappe.PermissionError,
 		)
+	from crm_cskh.services import runtime_cache
+
+	runtime_cache.on_calendar_doc_change(doc, method)
 
 
 class TeamMembershipHistory(Document):
