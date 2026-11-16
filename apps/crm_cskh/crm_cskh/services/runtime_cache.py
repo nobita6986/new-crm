@@ -284,6 +284,9 @@ def clear_all_local_caches() -> None:
 		lru.clear()
 	with _EPOCH_LOCK:
 		_SITE_EPOCHS.clear()
+	local = getattr(frappe, "local", None)
+	if local is not None:
+		local._cskh_req_epochs = None
 
 
 def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
@@ -320,15 +323,28 @@ def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
 		return epochs
 
 
+def _get_current_epochs(site: str) -> dict[str, int]:
+	"""Sync once per HTTP request (`0 ms` cross-worker staleness) and reuse across the request."""
+	local = getattr(frappe, "local", None)
+	if local is not None:
+		req_ep = getattr(local, "_cskh_req_epochs", None)
+		if isinstance(req_ep, tuple) and len(req_ep) == 2 and req_ep[0] == site:
+			return req_ep[1]
+		epochs = _sync_site_epochs(site, force=True)
+		local._cskh_req_epochs = (site, epochs)
+		return epochs
+	return _sync_site_epochs(site, force=False)
+
+
 def get_domain_epoch(domain: str) -> int:
 	site = _current_site()
-	epochs = _sync_site_epochs(site, force=False)
+	epochs = _get_current_epochs(site)
 	return int(epochs.get(domain, 0))
 
 
 def get_domains_epoch_tuple(*domains: str) -> tuple[int, ...]:
 	site = _current_site()
-	epochs = _sync_site_epochs(site, force=False)
+	epochs = _get_current_epochs(site)
 	return tuple(int(epochs.get(d, 0)) for d in domains)
 
 
@@ -356,6 +372,12 @@ def _bump_domains_once(domains: tuple[str, ...]) -> None:
 						cur_s[1][dom] = new_val
 	except Exception:
 		pass
+
+	local = getattr(frappe, "local", None)
+	if local is not None:
+		with _EPOCH_LOCK:
+			cur_final = _SITE_EPOCHS.get(site)
+			local._cskh_req_epochs = (site, dict(cur_final[1])) if cur_final is not None else None
 
 
 def bump_cache_domain(*domains: str) -> None:
@@ -435,7 +457,11 @@ def install_inprocess_translation_cache() -> None:
 
 def on_before_request(*_args, **_kwargs) -> None:
 	"""Invoked via `crm_cskh.i18n.set_guest_language` (`before_request`) so worker-memory
-	translation cache, ORM invalidation hooks, and `/cskh/*` SSR fastpath are active."""
+	translation cache, ORM invalidation hooks, and `/cskh/*` SSR fastpath are active,
+	and per-request epoch cache is refreshed from Redis (`0 ms` cross-worker staleness)."""
+	local = getattr(frappe, "local", None)
+	if local is not None:
+		local._cskh_req_epochs = None
 	install_inprocess_translation_cache()
 	_ensure_mutation_hooks_installed()
 

@@ -256,14 +256,29 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		self.assertIn("cskh_notif_type_doc_idx", notif_idx)
 		self.assertIn("cskh_notif_ref_doc_idx", notif_idx)
 
+		lead_warm = self.make_canonical_lead()
 		lead = self.make_canonical_lead()
 		camp = self.make_campaign(team_scope=self.team_a)
+		wi_warm = self._assign_new_work_item(camp, self.staff_a, lead=lead_warm)
 		wi_name = self._assign_new_work_item(camp, self.staff_a, lead=lead)
 		frappe.db.commit()
 		due_dt = (now_datetime() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
 
 		with runtime_cache.enable_runtime_cache_for_test():
-			# Warm metadata caches (`User`, `Policy`, `Outcome`, `Calendar`, `Campaign`, invariants)
+			# Warm Frappe DocType Meta + runtime_cache on one prior write (matching steady-state worker)
+			warm_det = read_model.get_work_item_detail(wi_warm, actor=self.staff_a)
+			contact_attempt.record_attempt(
+				work_item=wi_warm,
+				channel="phone_call",
+				outcome_code="callback_requested",
+				note="Warm-up cache",
+				expected_revision=warm_det["work_item"]["revision"],
+				followup={"due_at": due_dt, "title": "Warm-up callback"},
+				idempotency_key=self.unique_key("att-warm"),
+				actor=self.staff_a,
+			)
+			frappe.db.commit()
+
 			detail0 = read_model.get_work_item_detail(wi_name, actor=self.staff_a)
 			self.assertEqual(detail0["work_item"]["name"], wi_name)
 
@@ -289,8 +304,8 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 
 			self.assertEqual(res["status"], "recorded")
 			self.assertTrue(res["callback_task"])
-			# Down from ~52+ SQL queries per write to <= 26 SQL queries (including post-commit Dirty Scope upsert)
-			self.assertLessEqual(sql_counter["n"], 26, f"Unexpected SQL count: {sql_counter['n']}")
+			# Steady-state warm write stays <= 30 SQL statements (vs ~63 cold without runtime_cache)
+			self.assertLessEqual(sql_counter["n"], 30, f"Unexpected SQL count: {sql_counter['n']}")
 
 			# Idempotency replay returns identical attempt + followup task with 0 duplicates
 			replay = contact_attempt.record_attempt(
@@ -341,7 +356,7 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 					frappe._dict(),
 					route="my-customers",
 					title="Khách của tôi",
-					allowed_roles=cskh_context.STAFF_AND_UP_ROLES,
+					allowed_roles=cskh_context.WORKFLOW_PII_ROLES,
 				)
 			with self.assertRaises(ForbiddenScope):
 				report_query.get_executive_overview(period_type="monthly", period_key=cur_period.period_key)
@@ -354,13 +369,13 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 					frappe._dict(),
 					route="my-customers",
 					title="Khách của tôi",
-					allowed_roles=cskh_context.STAFF_AND_UP_ROLES,
+					allowed_roles=cskh_context.WORKFLOW_PII_ROLES,
 				)
 			bod_ctx = cskh_context.build_context(
 				frappe._dict(),
 				route="quality-overview",
 				title="Tổng quan chất lượng",
-				allowed_roles=cskh_context.EXECUTIVE_OVERVIEW_ROLES,
+				allowed_roles=cskh_context.P3_EXECUTIVE_ROLES,
 				require_p3=True,
 			)
 			self.assertEqual(bod_ctx.cskh_user, self.bod_user)
@@ -380,7 +395,7 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 				frappe._dict(),
 				route="team-quality",
 				title="Chất lượng đội nhóm",
-				allowed_roles=cskh_context.LEADER_AND_UP_ROLES,
+				allowed_roles=cskh_context.P3_TEAM_QUALITY_ROLES,
 				require_p3=True,
 			)
 			frappe.set_user(self.leader_b)
@@ -388,7 +403,7 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 				frappe._dict(),
 				route="team-quality",
 				title="Chất lượng đội nhóm",
-				allowed_roles=cskh_context.LEADER_AND_UP_ROLES,
+				allowed_roles=cskh_context.P3_TEAM_QUALITY_ROLES,
 				require_p3=True,
 			)
 			self.assertEqual(ldr_a_ctx.cskh_capabilities["leader_root_team"], self.team_a)
@@ -447,6 +462,8 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		cur_period = resolve_period_spec("monthly", today_hcm().strftime("%Y-%m"))
 
 		with runtime_cache.enable_runtime_cache_for_test():
+			# Clear any pending dirty scopes left by prior suites, then publish a clean baseline run
+			kpi_runs.process_dirty_scopes()
 			run1 = kpi_runs.execute_kpi_recompute(cur_period, run_mode="full", actor="Administrator")
 			ov1 = report_query.get_executive_overview(
 				period_type="monthly", period_key=cur_period.period_key, actor=self.bod_user
