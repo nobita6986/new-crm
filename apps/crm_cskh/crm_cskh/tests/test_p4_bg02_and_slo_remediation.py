@@ -688,12 +688,13 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		frappe.db.commit()
 
 		with runtime_cache.enable_runtime_cache_for_test():
-			# 1. Record attempt 1 (`callback_requested`) -> fulfills `FIRST_ATTEMPT` (`fulfilled_on_time`) & spawns `FOLLOWUP`
+			# 1. Record attempt 1 (`no_answer`, `is_connected=0`, with follow-up)
+			#    -> fulfills `FIRST_ATTEMPT` (`fulfilled_on_time`) & spawns `FOLLOWUP`, while `FIRST_CONNECTED` stays `open`
 			att1 = contact_attempt.record_attempt(
 				work_item=wi_on_time,
 				channel="phone_call",
-				outcome_code="callback_requested",
-				note="Khách hẹn gọi lại xác nhận lịch phỏng vấn",
+				outcome_code="no_answer",
+				note="Chưa bắt máy, đặt lịch gọi lại xác nhận phỏng vấn",
 				followup={"due_at": due_dt, "title": "Gọi lại chốt lịch G14"},
 				idempotency_key=self.unique_key("g14-closed-att1"),
 				actor=self.staff_a,
