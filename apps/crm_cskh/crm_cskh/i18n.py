@@ -2,6 +2,8 @@
 
 import frappe
 
+from crm_cskh.services import runtime_cache
+
 
 def set_guest_language():
 	"""Use the site's configured default for guests unless they chose a language.
@@ -12,6 +14,7 @@ def set_guest_language():
 	explicit ``_lang`` parameter or ``preferred_language`` cookie still wins.
 	Authenticated users continue to use their own language preference.
 	"""
+	runtime_cache.on_before_request()
 	if frappe.session.user != "Guest":
 		return
 

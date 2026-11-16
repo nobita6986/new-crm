@@ -78,6 +78,29 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		frappe.db.commit()
 		return doc.name
 
+	def _assign_new_work_item(self, campaign: str, target_user: str, lead: str | None = None) -> str:
+		lead_name = lead or self.make_canonical_lead()
+		if not frappe.db.exists("CSKH Assignment Rule", {"campaign": campaign, "user": target_user}):
+			self.make_rule(campaign, target_user, 50)
+		wi_name = self.make_work_item(campaign, lead_name, status="queued")
+		if not frappe.db.exists("CSKH Active Claim", {"lead": lead_name}):
+			frappe.get_doc(
+				{
+					"doctype": "CSKH Active Claim",
+					"lead": lead_name,
+					"campaign": campaign,
+					"work_item": wi_name,
+				}
+			).insert(ignore_permissions=True)
+		ownership.assign(
+			wi_name,
+			target_user,
+			actor=self.admin_user,
+			reason="Giao khách kiểm thử P4 G18",
+			request_id=self.unique_key("assign"),
+		)
+		return wi_name
+
 	def test_bg02_streaming_preview_batched_worker_and_phase_telemetry(self):
 		"""Verify streaming CSV preview + batched worker writes across >1 chunk of 500, preserving
 		existing CRM Lead fields, formula sanitization, per-row errors > row 200, and telemetry."""
@@ -168,7 +191,9 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		# Error artifact must be private and contain all 15 errors beyond row 530
 		err_file = frappe.get_doc("File", status_out["error_artifact"])
 		self.assertEqual(int(err_file.is_private or 0), 1)
-		err_rows = list(csv.DictReader(io.StringIO(err_file.get_content().decode("utf-8"))))
+		raw_err = err_file.get_content()
+		err_txt = raw_err.decode("utf-8") if isinstance(raw_err, bytes) else str(raw_err)
+		err_rows = list(csv.DictReader(io.StringIO(err_txt)))
 		self.assertEqual(len(err_rows), 15)
 		self.assertGreater(int(err_rows[0]["row_number"]), 530)
 
@@ -233,15 +258,8 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 
 		lead = self.make_canonical_lead()
 		camp = self.make_campaign(team_scope=self.team_a)
-		ownership.assign(
-			lead=lead,
-			campaign=camp,
-			to_user=self.staff_a,
-			actor=self.admin_user,
-			idempotency_key=self.unique_key("att-asg"),
-		)
+		wi_name = self._assign_new_work_item(camp, self.staff_a, lead=lead)
 		frappe.db.commit()
-		wi_name = frappe.db.get_value("CSKH Work Item", {"lead": lead, "campaign": camp}, "name")
 		due_dt = (now_datetime() + timedelta(hours=3)).strftime("%Y-%m-%d %H:%M:%S")
 
 		with runtime_cache.enable_runtime_cache_for_test():
@@ -310,20 +328,8 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		lead_b = self.make_canonical_lead()
 		camp_a = self.make_campaign(team_scope=self.team_a)
 		camp_b = self.make_campaign(team_scope=self.team_b)
-		ownership.assign(
-			lead=lead_a,
-			campaign=camp_a,
-			to_user=self.staff_a,
-			actor=self.admin_user,
-			idempotency_key=self.unique_key("rbac-a"),
-		)
-		ownership.assign(
-			lead=lead_b,
-			campaign=camp_b,
-			to_user=self.staff_c,
-			actor=self.admin_user,
-			idempotency_key=self.unique_key("rbac-b"),
-		)
+		self._assign_new_work_item(camp_a, self.staff_a, lead=lead_a)
+		self._assign_new_work_item(camp_b, self.staff_c, lead=lead_b)
 		cur_period = resolve_period_spec("monthly", today_hcm().strftime("%Y-%m"))
 		kpi_runs.execute_kpi_recompute(cur_period, run_mode="full", actor="Administrator")
 
@@ -436,15 +442,8 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		frappe.set_user("Administrator")
 		lead = self.make_canonical_lead()
 		camp = self.make_campaign(title="Chiến dịch Trước Cập Nhật", team_scope=self.team_a)
-		ownership.assign(
-			lead=lead,
-			campaign=camp,
-			to_user=self.staff_a,
-			actor=self.admin_user,
-			idempotency_key=self.unique_key("fresh-asg"),
-		)
+		wi_name = self._assign_new_work_item(camp, self.staff_a, lead=lead)
 		frappe.db.commit()
-		wi_name = frappe.db.get_value("CSKH Work Item", {"lead": lead, "campaign": camp}, "name")
 		cur_period = resolve_period_spec("monthly", today_hcm().strftime("%Y-%m"))
 
 		with runtime_cache.enable_runtime_cache_for_test():

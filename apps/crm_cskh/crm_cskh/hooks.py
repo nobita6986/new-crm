@@ -260,70 +260,17 @@ doc_events = {
 		"on_trash": "crm_cskh.p2_models.prevent_cskh_followup_task_trash",
 	},
 	"CRM Sales Hierarchy": {
-		"after_insert": [
-			"crm_cskh.services.attribution.on_sales_hierarchy_change",
-			"crm_cskh.services.runtime_cache.on_user_or_hierarchy_doc_change",
-		],
-		"on_update": [
-			"crm_cskh.services.attribution.on_sales_hierarchy_change",
-			"crm_cskh.services.runtime_cache.on_user_or_hierarchy_doc_change",
-		],
-		"on_trash": [
-			"crm_cskh.services.attribution.on_sales_hierarchy_trash",
-			"crm_cskh.services.runtime_cache.on_user_or_hierarchy_doc_change",
-		],
+		"after_insert": "crm_cskh.services.attribution.on_sales_hierarchy_change",
+		"on_update": "crm_cskh.services.attribution.on_sales_hierarchy_change",
+		"on_trash": "crm_cskh.services.attribution.on_sales_hierarchy_trash",
 	},
 	"CRM Holiday List": {
 		"validate": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
 		"before_save": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
-		"on_update": "crm_cskh.services.runtime_cache.on_calendar_doc_change",
-		"on_trash": [
-			"crm_cskh.p3_models.guard_crm_holiday_list_mutation",
-			"crm_cskh.services.runtime_cache.on_calendar_doc_change",
-		],
+		"on_trash": "crm_cskh.p3_models.guard_crm_holiday_list_mutation",
 	},
 	"User": {
-		"after_insert": "crm_cskh.services.runtime_cache.on_user_or_hierarchy_doc_change",
-		"on_update": [
-			"crm_cskh.permissions.on_user_security_change",
-			"crm_cskh.services.runtime_cache.on_user_or_hierarchy_doc_change",
-		],
-		"on_trash": "crm_cskh.services.runtime_cache.on_user_or_hierarchy_doc_change",
-	},
-	"CSKH Policy": {
-		"after_insert": "crm_cskh.services.runtime_cache.on_policy_doc_change",
-		"on_update": "crm_cskh.services.runtime_cache.on_policy_doc_change",
-		"on_trash": "crm_cskh.services.runtime_cache.on_policy_doc_change",
-	},
-	"CSKH Outcome Code": {
-		"after_insert": "crm_cskh.services.runtime_cache.on_outcome_doc_change",
-		"on_update": "crm_cskh.services.runtime_cache.on_outcome_doc_change",
-		"on_trash": "crm_cskh.services.runtime_cache.on_outcome_doc_change",
-	},
-	"CSKH Working Calendar": {
-		"after_insert": "crm_cskh.services.runtime_cache.on_calendar_doc_change",
-		"on_update": "crm_cskh.services.runtime_cache.on_calendar_doc_change",
-		"on_trash": "crm_cskh.services.runtime_cache.on_calendar_doc_change",
-	},
-	"CSKH Campaign": {
-		"after_insert": "crm_cskh.services.runtime_cache.on_campaign_doc_change",
-		"on_update": "crm_cskh.services.runtime_cache.on_campaign_doc_change",
-		"on_trash": "crm_cskh.services.runtime_cache.on_campaign_doc_change",
-	},
-	"CSKH Attempt Correction": {
-		"after_insert": "crm_cskh.services.runtime_cache.on_correction_doc_change",
-		"on_update": "crm_cskh.services.runtime_cache.on_correction_doc_change",
-		"on_trash": "crm_cskh.services.runtime_cache.on_correction_doc_change",
-	},
-	"CSKH Team Membership History": {
-		"after_insert": "crm_cskh.services.runtime_cache.on_user_or_hierarchy_doc_change",
-		"on_update": "crm_cskh.services.runtime_cache.on_user_or_hierarchy_doc_change",
-		"on_trash": "crm_cskh.services.runtime_cache.on_user_or_hierarchy_doc_change",
-	},
-	"Translation": {
-		"after_insert": "crm_cskh.services.runtime_cache.on_translation_doc_change",
-		"on_update": "crm_cskh.services.runtime_cache.on_translation_doc_change",
-		"on_trash": "crm_cskh.services.runtime_cache.on_translation_doc_change",
+		"on_update": "crm_cskh.permissions.on_user_security_change",
 	},
 }
 
@@ -428,14 +375,9 @@ override_whitelisted_methods = {
 
 # ignore_links_on_delete = ["Communication", "ToDo"]
 
-# Request Events & Custom Renderers
-# ---------------------------------
-page_renderer = ["crm_cskh.www.cskh_renderer.CskhPageRenderer"]
-before_request = [
-	"crm_cskh.services.runtime_cache.on_before_request",
-	"crm_cskh.i18n.set_guest_language",
-	"crm_cskh.p1_errors.clear_p1_error_context",
-]
+# Request Events
+# ----------------
+before_request = ["crm_cskh.i18n.set_guest_language", "crm_cskh.p1_errors.clear_p1_error_context"]
 update_website_context = ["crm_cskh.i18n.update_website_context"]
 after_request = ["crm_cskh.errors.normalize_error_response", "crm_cskh.p1_errors.normalize_p1_error_response"]
 

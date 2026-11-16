@@ -148,9 +148,10 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 
 
 def _ensure_mutation_hooks_installed() -> None:
-	"""Idempotently hook `Database.set_value` (plus active `type(frappe.db)`) and `frappe.clear_cache`
-	so direct low-level mutations (`frappe.db.set_value(..., update_modified=False)`, `bench clear-cache`)
-	invalidate `runtime_cache` domains immediately even when `doc_events` are bypassed."""
+	"""Idempotently hook `BaseDocument.db_insert`/`db_update`, `Database.set_value` (plus active
+	`type(frappe.db)`), `frappe.delete_doc`, `frappe.clear_cache`, and `TemplatePage.get_html` in-process
+	so all ORM / low-level writes invalidate `runtime_cache` domains immediately WITHOUT adding new
+	module paths to `hooks.py` (preserving `G09` Tier 3 `N -> N-1` image rollback without flushing Redis)."""
 	global _MUTATION_HOOKS_INSTALLED
 	db_obj = getattr(frappe, "db", None)
 	if db_obj is not None and type(db_obj) not in _DB_INSTANCE_HOOKED_TYPES:
@@ -162,8 +163,53 @@ def _ensure_mutation_hooks_installed() -> None:
 		return
 	try:
 		from frappe.database.database import Database
+		from frappe.model.base_document import BaseDocument
 
 		_wrap_db_class_set_value(Database)
+
+		orig_db_insert = getattr(BaseDocument, "db_insert", None)
+		if callable(orig_db_insert) and not getattr(orig_db_insert, "_cskh_cache_wrapped", False):
+
+			def _wrapped_db_insert(self, *args, **kwargs):
+				res = orig_db_insert(self, *args, **kwargs)
+				doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(getattr(self, "doctype", "") or ""))
+				if doms:
+					bump_cache_domain(*doms)
+				return res
+
+			_wrapped_db_insert._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+			BaseDocument.db_insert = _wrapped_db_insert  # type: ignore[method-assign]
+
+		orig_db_update = getattr(BaseDocument, "db_update", None)
+		if callable(orig_db_update) and not getattr(orig_db_update, "_cskh_cache_wrapped", False):
+
+			def _wrapped_db_update(self, *args, **kwargs):
+				res = orig_db_update(self, *args, **kwargs)
+				doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(getattr(self, "doctype", "") or ""))
+				if doms:
+					bump_cache_domain(*doms)
+				return res
+
+			_wrapped_db_update._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+			BaseDocument.db_update = _wrapped_db_update  # type: ignore[method-assign]
+
+		orig_delete_doc = getattr(frappe, "delete_doc", None)
+		if callable(orig_delete_doc) and not getattr(orig_delete_doc, "_cskh_cache_wrapped", False):
+
+			def _wrapped_delete_doc(doctype=None, *args, **kwargs):
+				res = orig_delete_doc(doctype, *args, **kwargs)
+				dts = doctype if isinstance(doctype, list | tuple | set) else (doctype,)
+				b_doms: list[str] = []
+				for dt in dts:
+					found = _SET_VALUE_DOCTYPE_DOMAINS.get(str(dt) if dt else "")
+					if found:
+						b_doms.extend(found)
+				if b_doms:
+					bump_cache_domain(*b_doms)
+				return res
+
+			_wrapped_delete_doc._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+			frappe.delete_doc = _wrapped_delete_doc
 
 		orig_clear_cache = getattr(frappe, "clear_cache", None)
 		if callable(orig_clear_cache) and not getattr(orig_clear_cache, "_cskh_cache_wrapped", False):
@@ -176,6 +222,14 @@ def _ensure_mutation_hooks_installed() -> None:
 
 			_wrapped_clear_cache._cskh_cache_wrapped = True  # type: ignore[attr-defined]
 			frappe.clear_cache = _wrapped_clear_cache
+
+		try:
+			from crm_cskh.www.cskh_renderer import install_template_page_fastpath
+
+			install_template_page_fastpath()
+		except Exception:
+			pass
+
 		_MUTATION_HOOKS_INSTALLED = True
 	except Exception:
 		pass
@@ -380,8 +434,10 @@ def install_inprocess_translation_cache() -> None:
 
 
 def on_before_request(*_args, **_kwargs) -> None:
-	"""`before_request` hook ensuring worker-memory translation cache is active."""
+	"""Invoked via `crm_cskh.i18n.set_guest_language` (`before_request`) so worker-memory
+	translation cache, ORM invalidation hooks, and `/cskh/*` SSR fastpath are active."""
 	install_inprocess_translation_cache()
+	_ensure_mutation_hooks_installed()
 
 
 # ---------------------------------------------------------------------------

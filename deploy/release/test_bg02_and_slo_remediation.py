@@ -66,6 +66,19 @@ class TestBg02AndSloGovernance(unittest.TestCase):
                                 f"Forbidden fault-injection identifier {name!r} in {py_file}",
                             )
 
+    def test_hooks_py_preserves_tier3_n_minus_1_rollback_compatibility(self) -> None:
+        hooks_src = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
+        self.assertNotIn(
+            "crm_cskh.services.runtime_cache",
+            hooks_src,
+            "hooks.py must not serialize new module paths into Redis app_hooks (breaks G09 Tier 3 N->N-1 rollback)",
+        )
+        self.assertNotIn(
+            "crm_cskh.www.cskh_renderer",
+            hooks_src,
+            "hooks.py must not serialize page_renderer into Redis app_hooks (breaks G09 Tier 3 N->N-1 rollback)",
+        )
+
     def test_diff_impact_includes_bg02_slo_remediation_suite(self) -> None:
         from deploy.release import run_diff_impact_verification as rdiv
 
