@@ -176,6 +176,70 @@ class TestBg02AndSloGovernance(unittest.TestCase):
             t.join()
         self.assertEqual(errors, [])
 
+    def test_phone_identity_fastpath_parity_and_error_contracts(self) -> None:
+        import sys
+
+        app_pkg_dir = str(REPO_ROOT / "apps" / "crm_cskh")
+        if app_pkg_dir not in sys.path:
+            sys.path.insert(0, app_pkg_dir)
+        from crm_cskh.services.phone_identity import (
+            InvalidPhone,
+            looks_like_scientific_notation,
+            normalize_vn_phone,
+        )
+
+        valid_cases = [
+            ("0912345678", "+84912345678"),
+            (" 0387654321\t", "+84387654321"),
+            ("84567890123", "+84567890123"),
+            ("+84789012345", "+84789012345"),
+            ("0812-345-678", "+84812345678"),
+            ("+84 (912) 345.678", "+84912345678"),
+            (
+                "\uff10\uff19\uff11\uff12\uff13\uff14\uff15\uff16\uff17\uff18",
+                "+84912345678",
+            ),
+        ]
+        for raw_in, expected in valid_cases:
+            self.assertEqual(normalize_vn_phone(raw_in), expected)
+
+        invalid_cases = [
+            (None, "supplied as a text value"),
+            (912345678, "supplied as a text value"),
+            ("0" * 65, "short text value"),
+            ("8.4912345678E+10", "scientific notation"),
+            ("9.12345e8", "scientific notation"),
+            ("   ", "is required"),
+            ("---", "is required"),
+            ("0912345678 / 0987654321", "more than one number"),
+            ("09123abc78", "unsupported characters"),
+            ("+14155552671", "Only Vietnamese numbers"),
+            ("912345678", "start with 0, 84 or +84"),
+            ("0241234567", "outside the supported Vietnamese mobile format"),
+            ("091234567", "outside the supported Vietnamese mobile format"),
+            ("09123456789", "outside the supported Vietnamese mobile format"),
+        ]
+        for raw_bad, msg_substr in invalid_cases:
+            with self.assertRaises(InvalidPhone) as ctx:
+                normalize_vn_phone(raw_bad)
+            self.assertIn(msg_substr, str(ctx.exception))
+
+        self.assertFalse(looks_like_scientific_notation("0912345678"))
+        self.assertTrue(looks_like_scientific_notation("8.49123E+10"))
+
+    def test_ssr_role_skeleton_zero_leakage_contracts(self) -> None:
+        shell_src = (APP_ROOT / "templates" / "cskh" / "_shell.html").read_text(
+            encoding="utf-8"
+        )
+        ctx_src = (APP_ROOT / "www" / "cskh_context.py").read_text(encoding="utf-8")
+        rend_src = (APP_ROOT / "www" / "cskh_renderer.py").read_text(encoding="utf-8")
+        self.assertIn("cskh_user_html", shell_src)
+        self.assertIn("cskh_user_json", shell_src)
+        self.assertIn("cskh_user_html", ctx_src)
+        self.assertIn("cskh_user_json", ctx_src)
+        self.assertIn("_is_role_shareable_skeleton", rend_src)
+        self.assertIn("_RENDER_LOCK_STRIPES", rend_src)
+
 
 if __name__ == "__main__":
     unittest.main()

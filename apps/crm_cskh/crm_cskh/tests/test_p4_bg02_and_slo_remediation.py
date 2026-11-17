@@ -416,38 +416,74 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 					actor=self.leader_a,
 				)
 
-			# 4. SSR HTML renderer CSRF token isolation across distinct sessions of the SAME user
+			# 4. SSR HTML renderer role-shared skeleton + CSRF/identity isolation across distinct users & leaders
+			frappe.db.set_value(
+				"User", self.staff_a, "full_name", "Nhân viên Kiểm thử Alpha", update_modified=False
+			)
+			frappe.db.set_value(
+				"User", self.staff_b, "full_name", "Nhân viên Kiểm thử Beta", update_modified=False
+			)
+			runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_USER_HIERARCHY)
 			set_request(method="GET", path="/cskh/my-customers")
 			try:
+				from frappe.website.page_renderers.template_page import TemplatePage
+
+				raw_orig = getattr(TemplatePage.get_html, "_cskh_orig_get_html", TemplatePage.get_html)
+				compile_calls = {"n": 0}
+
+				def _counting_orig(page_obj):
+					compile_calls["n"] += 1
+					return raw_orig(page_obj)
+
 				frappe.set_user(self.staff_a)
 				sess_data = getattr(frappe.local.session, "data", None)
 				if isinstance(sess_data, dict):
 					sess_data["csrf_token"] = "csrf-tok-session-alpha-111"
 				r1 = CskhPageRenderer(path="cskh/my-customers")
 				self.assertTrue(r1.can_render())
-				html_1 = r1.get_html()
+				from crm_cskh.www import cskh_renderer as rend_mod
+
+				html_1 = rend_mod._render_cskh_page_html(r1, _counting_orig)
 				self.assertIn("csrf-tok-session-alpha-111", html_1)
 				self.assertIn(self.staff_a, html_1)
+				self.assertNotIn("Nhân viên Kiểm thử Alpha", html_1)
 
 				if isinstance(sess_data, dict):
 					sess_data["csrf_token"] = "csrf-tok-session-beta-222"
 				r2 = CskhPageRenderer(path="cskh/my-customers")
 				self.assertTrue(r2.can_render())
-				html_2 = r2.get_html()
+				html_2 = rend_mod._render_cskh_page_html(r2, _counting_orig)
 				self.assertIn("csrf-tok-session-beta-222", html_2)
 				self.assertNotIn("csrf-tok-session-alpha-111", html_2)
 
-				# Staff B must never see Staff A's identity in SSR HTML
+				# Staff B reuses the role-shared skeleton (`compile_calls["n"] == 1`) with ZERO Staff A leakage
 				frappe.set_user(self.staff_b)
 				sess_data_b = getattr(frappe.local.session, "data", None)
 				if isinstance(sess_data_b, dict):
 					sess_data_b["csrf_token"] = "csrf-tok-staff-b-333"
 				r3 = CskhPageRenderer(path="cskh/my-customers")
 				self.assertTrue(r3.can_render())
-				html_3 = r3.get_html()
+				html_3 = rend_mod._render_cskh_page_html(r3, _counting_orig)
+				self.assertEqual(compile_calls["n"], 1)
 				self.assertIn(self.staff_b, html_3)
 				self.assertNotIn(self.staff_a, html_3)
 				self.assertNotIn("csrf-tok-session-beta-222", html_3)
+				self.assertNotIn("Nhân viên Kiểm thử Alpha", html_3)
+
+				# Leader A vs Leader B render distinct `leader_root_team` capabilities without cross-team leakage
+				set_request(method="GET", path="/cskh/team-quality")
+				frappe.set_user(self.leader_a)
+				r_la = CskhPageRenderer(path="cskh/team-quality")
+				self.assertTrue(r_la.can_render())
+				html_la = rend_mod._render_cskh_page_html(r_la, _counting_orig)
+				frappe.set_user(self.leader_b)
+				r_lb = CskhPageRenderer(path="cskh/team-quality")
+				self.assertTrue(r_lb.can_render())
+				html_lb = rend_mod._render_cskh_page_html(r_lb, _counting_orig)
+				self.assertIn(self.team_a, html_la)
+				self.assertNotIn(self.team_b, html_la)
+				self.assertIn(self.team_b, html_lb)
+				self.assertNotIn(self.team_a, html_lb)
 			finally:
 				frappe.local.request = None
 				frappe.set_user("Administrator")
@@ -949,3 +985,142 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 			self.assertEqual(late_restored.fulfilled_by_attempt, att_late["attempt_id"])
 			self.assertIsNotNone(late_restored.fulfilled_at)
 			self.assertEqual(get_datetime(late_restored.breached_at), get_datetime(past_eff_due))
+
+	def test_bg02_preview_indexed_fastpath_and_unindexed_crm_lead_fallback(self):
+		"""Verify `BG-02` preview skips `CRM Lead` variant queries when all leads are in `CSKH Identity Index`,
+		and automatically falls back to `CRM Lead` matching when an unindexed `CRM Lead` exists."""
+		frappe.set_user("Administrator")
+		indexed_lead = self.make_canonical_lead()
+		indexed_phone = frappe.db.get_value("CRM Lead", indexed_lead, "mobile_no")
+		new_phones = [self.unique_phone() for _ in range(510)]
+		lines = ["full_name,phone,source"]
+		for idx, ph in enumerate(new_phones):
+			lines.append(f"Fast Preview {idx:04d},{ph},Nguồn S1")
+		lines.append(f"Indexed Dup,+84{indexed_phone[1:]},Nguồn S1")
+
+		file_indexed = self._upload_private_csv("bg02_indexed_fast.csv", lines)
+		prev_fast = import_service.create_preview(
+			file_name=file_indexed,
+			mapping={"name": "full_name", "phone": "phone", "source": "source"},
+			actor=self.admin_user,
+			idempotency_key=self.unique_key("bg02-idx-fast"),
+		)
+		self.assertEqual(prev_fast["totals"]["total_rows"], 511)
+		self.assertEqual(prev_fast["totals"]["new_rows"], 510)
+		self.assertEqual(prev_fast["totals"]["duplicate_rows"], 1)
+		if not import_service._has_unindexed_crm_leads():
+			self.assertLessEqual(
+				int((prev_fast.get("preview_telemetry") or {}).get("preview_sql_queries_delta") or 0),
+				25,
+			)
+
+		# Insert an unindexed `CRM Lead` (no `CSKH Identity Index` row) and verify fallback catches it
+		orphan_phone = self.unique_phone()
+		orphan_lead = frappe.get_doc(
+			{
+				"doctype": "CRM Lead",
+				"first_name": "Khách Chưa Có Identity Index",
+				"mobile_no": orphan_phone,
+				"status": "New",
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.commit()
+		try:
+			self.assertTrue(import_service._has_unindexed_crm_leads())
+			orphan_lines = [
+				"full_name,phone,source",
+				f"Trùng Khách Chưa Index,+84 {orphan_phone[1:]},Nguồn S1",
+				f"Khách Mới Tinh,{self.unique_phone()},Nguồn S1",
+			]
+			file_orphan = self._upload_private_csv("bg02_orphan_fallback.csv", orphan_lines)
+			prev_orphan = import_service.create_preview(
+				file_name=file_orphan,
+				mapping={"name": "full_name", "phone": "phone", "source": "source"},
+				actor=self.admin_user,
+				idempotency_key=self.unique_key("bg02-orphan-fb"),
+			)
+			self.assertEqual(prev_orphan["totals"]["total_rows"], 2)
+			self.assertEqual(prev_orphan["totals"]["duplicate_rows"], 1)
+			self.assertEqual(prev_orphan["totals"]["new_rows"], 1)
+			self.assertEqual(prev_orphan["preview"][0]["class"], import_service.CLASS_DUPLICATE_IN_CRM)
+			self.assertEqual(prev_orphan["preview"][0]["lead"], orphan_lead.name)
+		finally:
+			frappe.db.sql("delete from `tabCRM Lead` where name = %s", (orphan_lead.name,))
+			frappe.db.commit()
+
+	def test_api02b_my_list_deferred_join_and_list_attempts_pagination_parity(self):
+		"""Verify `reporting.my_list` deferred join and `read_model.list_attempts_timeline`
+		uncorrected tuple pagination match the uncached paths byte-for-byte."""
+		from crm_cskh.api import customers as customers_api
+		from crm_cskh.services import reporting
+
+		frappe.set_user("Administrator")
+		camp = self.make_campaign(title="Chiến dịch Đối chứng API-02B", team_scope=self.team_a)
+		wis = [self._assign_new_work_item(camp, self.staff_a) for _ in range(4)]
+		due_future = (now_datetime() + timedelta(hours=4)).strftime("%Y-%m-%d %H:%M:%S")
+		due_past = (now_datetime() - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
+
+		# Record 5 attempts on `wis[0]` (testing paginated timeline with `page_size=2`)
+		for i in range(5):
+			det_i = read_model.get_work_item_detail(wis[0], actor=self.staff_a)
+			contact_attempt.record_attempt(
+				work_item=wis[0],
+				channel="phone_call",
+				outcome_code="callback_requested" if i == 4 else "no_answer",
+				note=f"Lần liên hệ kiểm chứng phân trang #{i + 1}",
+				expected_revision=det_i["work_item"]["revision"],
+				followup={"due_at": due_future, "title": "Hẹn gọi lại kiểm chứng"} if i == 4 else None,
+				idempotency_key=self.unique_key(f"api02b-att-{i}"),
+				actor=self.staff_a,
+			)
+		# Make `wis[0]` overdue on_hold so `my_list` exercises the `CASE WHEN next_action_due < now` sort bucket
+		frappe.db.set_value("CSKH Work Item", wis[0], "next_action_due", due_past, update_modified=False)
+		frappe.db.commit()
+
+		uncached_ml_p1 = reporting.my_list(self.staff_a, page=1, page_size=2)
+		uncached_ml_p2 = reporting.my_list(self.staff_a, page=2, page_size=2)
+		with mock.patch.object(read_model, "_has_any_attempt_correction_cached", return_value=True):
+			uncached_tl_p1 = read_model.list_attempts_timeline(
+				wis[0], page=1, page_size=2, actor=self.staff_a
+			)
+			uncached_tl_p2 = read_model.list_attempts_timeline(
+				wis[0], page=2, page_size=2, actor=self.staff_a
+			)
+			uncached_tl_p3 = read_model.list_attempts_timeline(
+				wis[0], page=3, page_size=2, actor=self.staff_a
+			)
+		uncached_det = read_model.get_work_item_detail(wis[0], actor=self.staff_a)
+
+		with (
+			runtime_cache.enable_runtime_cache_for_test(),
+			mock.patch.object(read_model, "_has_any_attempt_correction_cached", return_value=False),
+		):
+			cached_ml_p1 = reporting.my_list(self.staff_a, page=1, page_size=2)
+			cached_ml_p2 = reporting.my_list(self.staff_a, page=2, page_size=2)
+			cached_tl_p1 = read_model.list_attempts_timeline(wis[0], page=1, page_size=2, actor=self.staff_a)
+			cached_tl_p2 = read_model.list_attempts_timeline(wis[0], page=2, page_size=2, actor=self.staff_a)
+			cached_tl_p3 = read_model.list_attempts_timeline(wis[0], page=3, page_size=2, actor=self.staff_a)
+			cached_tl_p4 = read_model.list_attempts_timeline(wis[0], page=4, page_size=2, actor=self.staff_a)
+			cached_det = read_model.get_work_item_detail(wis[0], actor=self.staff_a)
+
+			frappe.set_user(self.staff_a)
+			api_ml = customers_api.my_list(page=1, page_size=2)
+			self.assertEqual(api_ml["total"], cached_ml_p1["total"])
+
+		for a, b in ((uncached_ml_p1, cached_ml_p1), (uncached_ml_p2, cached_ml_p2)):
+			self.assertEqual(a["total"], b["total"])
+			self.assertEqual(a["items"], b["items"])
+		self.assertTrue(cached_ml_p1["items"][0]["is_followup_overdue"])
+		self.assertEqual(cached_ml_p1["items"][0]["work_item"], wis[0])
+
+		for a, b in (
+			(uncached_tl_p1, cached_tl_p1),
+			(uncached_tl_p2, cached_tl_p2),
+			(uncached_tl_p3, cached_tl_p3),
+		):
+			self.assertEqual(a["total"], b["total"])
+			self.assertEqual(a["items"], b["items"])
+			self.assertEqual(a["ownership_milestones"], b["ownership_milestones"])
+		self.assertEqual(cached_tl_p4["total"], 5)
+		self.assertEqual(cached_tl_p4["items"], [])
+		self.assertEqual(cached_det["open_followup"]["task_id"], uncached_det["open_followup"]["task_id"])

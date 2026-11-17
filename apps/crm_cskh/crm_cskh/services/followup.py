@@ -134,9 +134,28 @@ def _ensure_task_todo(
 	return todo.name
 
 
-def get_open_followup_task(work_item: str) -> dict | None:
+def get_open_followup_task(work_item: str, *, known_task_id: str | None = None) -> dict | None:
 	if not work_item or not runtime_cache.has_column("CRM Task", "cskh_work_item"):
 		return None
+	if known_task_id:
+		pk_rows = frappe.db.sql(
+			"""
+			select name, title, description, status, due_date, assigned_to,
+			       cskh_work_item, cskh_source_attempt, cskh_reschedule_count, cskh_task_history_json
+			from `tabCRM Task`
+			where name = %s
+			  and cskh_work_item = %s
+			  and cskh_is_followup = 1
+			  and status in ('Backlog', 'Todo', 'In Progress')
+			limit 1
+			""",
+			(known_task_id, work_item),
+			as_dict=True,
+		)
+		if pk_rows:
+			row = pk_rows[0]
+			row["name"] = str(row["name"])
+			return row
 	rows = frappe.db.sql(
 		"""
 		select name, title, description, status, due_date, assigned_to,

@@ -278,38 +278,71 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 	use_camp_cache = runtime_cache.is_runtime_db_cache_active()
 	if use_camp_cache:
 		camp_map = runtime_cache.get_campaign_map()
-		page_from_sql = "from `tabCSKH Work Item` wi inner join `tabCRM Lead` l on l.name = wi.lead"
 		camp_cols_sql = "null as campaign_title, null as campaign_code,"
 	else:
 		camp_map = {}
-		page_from_sql = from_sql
 		camp_cols_sql = "c.title as campaign_title, c.code as campaign_code,"
 
-	rows = frappe.db.sql(
-		f"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
-		f"wi.status as status, coalesce(wi.revision, 1) as revision, wi.assigned_at as assigned_at, "
-		f"coalesce(wi.attempt_count, 0) as attempt_count, "
-		f"coalesce(wi.connected_attempt_count, 0) as connected_attempt_count, "
-		f"wi.first_attempt_at as first_attempt_at, wi.last_attempt_at as last_attempt_at, "
-		f"wi.last_outcome_code as last_outcome_code, wi.last_outcome_label as last_outcome_label, "
-		f"wi.last_connected_at as last_connected_at, "
-		f"wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due, "
-		f"{camp_cols_sql} "
-		f"l.lead_name as lead_name, l.first_name as first_name, "
-		f"l.mobile_no as mobile_no, l.source as source, l.status as lead_status, {dnc_col} "
-		f"{page_from_sql} where {where_sql} "
-		f"order by case when wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc, "
-		f"wi.assigned_at desc, wi.name desc limit %s offset %s",
-		(*tuple(params), now, limit, offset),
-		as_dict=True,
-	)
+	if use_camp_cache and not search_val:
+		# Deferred join: sort & paginate narrow `tabCSKH Work Item` rows first so `tabCRM Lead`
+		# is probed by PK for at most `limit` (`20`) rows instead of ~1,100 rows per staff user.
+		_, where_sql_p, params_p = _my_list_where(user, status_val, campaign_val, None, wi_alias="wi_p")
+		rows = frappe.db.sql(
+			f"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
+			f"wi.status as status, coalesce(wi.revision, 1) as revision, wi.assigned_at as assigned_at, "
+			f"coalesce(wi.attempt_count, 0) as attempt_count, "
+			f"coalesce(wi.connected_attempt_count, 0) as connected_attempt_count, "
+			f"wi.first_attempt_at as first_attempt_at, wi.last_attempt_at as last_attempt_at, "
+			f"wi.last_outcome_code as last_outcome_code, wi.last_outcome_label as last_outcome_label, "
+			f"wi.last_connected_at as last_connected_at, "
+			f"wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due, "
+			f"{camp_cols_sql} "
+			f"l.lead_name as lead_name, l.first_name as first_name, "
+			f"l.mobile_no as mobile_no, l.source as source, l.status as lead_status, {dnc_col} "
+			f"from ("
+			f"select wi_p.name from `tabCSKH Work Item` wi_p where {where_sql_p} "
+			f"order by case when wi_p.next_action_due is not null and wi_p.next_action_due < %s then 0 else 1 end asc, "
+			f"wi_p.assigned_at desc, wi_p.name desc limit %s offset %s"
+			f") page_wi "
+			f"inner join `tabCSKH Work Item` wi on wi.name = page_wi.name "
+			f"inner join `tabCRM Lead` l on l.name = wi.lead "
+			f"order by case when wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc, "
+			f"wi.assigned_at desc, wi.name desc",
+			(*tuple(params_p), now, limit, offset, now),
+			as_dict=True,
+		)
+	else:
+		page_from_sql = (
+			"from `tabCSKH Work Item` wi inner join `tabCRM Lead` l on l.name = wi.lead"
+			if use_camp_cache
+			else from_sql
+		)
+		rows = frappe.db.sql(
+			f"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
+			f"wi.status as status, coalesce(wi.revision, 1) as revision, wi.assigned_at as assigned_at, "
+			f"coalesce(wi.attempt_count, 0) as attempt_count, "
+			f"coalesce(wi.connected_attempt_count, 0) as connected_attempt_count, "
+			f"wi.first_attempt_at as first_attempt_at, wi.last_attempt_at as last_attempt_at, "
+			f"wi.last_outcome_code as last_outcome_code, wi.last_outcome_label as last_outcome_label, "
+			f"wi.last_connected_at as last_connected_at, "
+			f"wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due, "
+			f"{camp_cols_sql} "
+			f"l.lead_name as lead_name, l.first_name as first_name, "
+			f"l.mobile_no as mobile_no, l.source as source, l.status as lead_status, {dnc_col} "
+			f"{page_from_sql} where {where_sql} "
+			f"order by case when wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc, "
+			f"wi.assigned_at desc, wi.name desc limit %s offset %s",
+			(*tuple(params), now, limit, offset),
+			as_dict=True,
+		)
 
+	now_dt = get_datetime(now)
 	items = []
 	for row in rows:
 		is_overdue = False
 		if row.status == "on_hold" and row.next_action_due:
 			try:
-				is_overdue = get_datetime(row.next_action_due) < get_datetime(now)
+				is_overdue = get_datetime(row.next_action_due) < now_dt
 			except Exception:
 				is_overdue = False
 		if use_camp_cache and row.campaign:
@@ -358,21 +391,21 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 	}
 
 
-def _my_list_where(user, status_val, campaign_val, search_val):
+def _my_list_where(user, status_val, campaign_val, search_val, *, wi_alias: str = "wi"):
 	from_sql = (
-		"from `tabCSKH Work Item` wi "
-		"inner join `tabCRM Lead` l on l.name = wi.lead "
-		"left join `tabCSKH Campaign` c on c.name = wi.campaign"
+		f"from `tabCSKH Work Item` {wi_alias} "
+		f"inner join `tabCRM Lead` l on l.name = {wi_alias}.lead "
+		f"left join `tabCSKH Campaign` c on c.name = {wi_alias}.campaign"
 	)
-	clauses = ["wi.assigned_to = %s"]
+	clauses = [f"{wi_alias}.assigned_to = %s"]
 	params = [user]
 	if status_val:
-		clauses.append("wi.status = %s")
+		clauses.append(f"{wi_alias}.status = %s")
 		params.append(status_val)
 	else:
-		clauses.append("wi.status in ('assigned', 'in_progress', 'on_hold')")
+		clauses.append(f"{wi_alias}.status in ('assigned', 'in_progress', 'on_hold')")
 	if campaign_val:
-		clauses.append("wi.campaign = %s")
+		clauses.append(f"{wi_alias}.campaign = %s")
 		params.append(campaign_val)
 	if search_val:
 		like = f"%{search_val}%"

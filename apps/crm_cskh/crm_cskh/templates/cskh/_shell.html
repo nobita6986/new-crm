@@ -21,7 +21,7 @@
 	{% endblock %}
 
 	<p class="cskh-session">
-		{{ _("Signed in as") }} <strong>{{ cskh_user }}</strong>
+		{{ _("Signed in as") }} <strong>{{ cskh_user_html | safe if cskh_user_html is defined else cskh_user }}</strong>
 		&middot; {{ _("Site/user timezone") }}: <code>{{ (cskh_timezone or {}).get("effective", "Asia/Ho_Chi_Minh") }}</code>
 		{% if (cskh_capabilities or {}).get("can_open_crm_app") %}
 		&middot; <a href="/crm/leads/view/list">{{ _("Return to CRM Leads") }}</a>
@@ -35,7 +35,7 @@
 </div>
 
 <script>
-	window.cskhUser = {{ cskh_user | tojson }}
+	window.cskhUser = {{ cskh_user_json | safe if cskh_user_json is defined else (cskh_user | tojson) }}
 	window.cskhCapabilities = {{ cskh_capabilities | tojson }}
 	window.cskhTimezone = {{ cskh_timezone_json | safe if cskh_timezone_json is defined else (cskh_timezone | default({}) | tojson) }}
 	window.cskhI18n = {{ cskh_i18n_json | safe if cskh_i18n_json is defined else (cskh_i18n | tojson) }}

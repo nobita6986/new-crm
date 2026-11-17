@@ -102,6 +102,8 @@ _SCHEMA_LRU = _BoundedLRU(maxsize=2048)
 _TRANSLATIONS_LRU = _BoundedLRU(maxsize=16)
 _STATIC_UI_LRU = _BoundedLRU(maxsize=16)
 _USER_PROFILE_LRU = _BoundedLRU(maxsize=2048)
+_USER_BULK_EPOCH_LRU = _BoundedLRU(maxsize=8)
+_USER_BULK_LOCK = threading.RLock()
 _HIERARCHY_LRU = _BoundedLRU(maxsize=16)
 _CAMPAIGN_LRU = _BoundedLRU(maxsize=32)
 _POLICY_LRU = _BoundedLRU(maxsize=512)
@@ -310,6 +312,7 @@ def _clear_all_lru_stores() -> None:
 		_TRANSLATIONS_LRU,
 		_STATIC_UI_LRU,
 		_USER_PROFILE_LRU,
+		_USER_BULK_EPOCH_LRU,
 		_HIERARCHY_LRU,
 		_CAMPAIGN_LRU,
 		_POLICY_LRU,
@@ -697,10 +700,18 @@ def get_user_auth_profile(user: str | None = None) -> dict:
 			"user_image": str(row.get("user_image") or ""),
 		}
 
-	key = (_current_site(), u, get_domain_epoch(DOMAIN_USER_HIERARCHY))
+	site = _current_site()
+	ep = get_domain_epoch(DOMAIN_USER_HIERARCHY)
+	key = (site, u, ep)
 	hit = _USER_PROFILE_LRU.get(key)
 	if hit is not None:
 		return hit
+
+	if u != "Administrator":
+		_preload_enabled_users_into_lru(site, ep)
+		hit = _USER_PROFILE_LRU.get(key)
+		if hit is not None:
+			return hit
 
 	roles = frozenset(frappe.get_roles(u))
 	row = (
@@ -717,6 +728,73 @@ def get_user_auth_profile(user: str | None = None) -> dict:
 	}
 	_USER_PROFILE_LRU.set(key, profile)
 	return profile
+
+
+def _preload_enabled_users_into_lru(site: str, ep: int) -> None:
+	"""Bulk-load enabled non-Administrator `User` profiles + active `Has Role` rows once per epoch."""
+	bulk_key = (site, ep)
+	if _USER_BULK_EPOCH_LRU.get(bulk_key):
+		return
+	with _USER_BULK_LOCK:
+		if _USER_BULK_EPOCH_LRU.get(bulk_key):
+			return
+		try:
+			cnt_rows = frappe.db.sql("select count(*) from `tabUser` where enabled = 1")
+			enabled_cnt = int((cnt_rows[0][0] if cnt_rows and cnt_rows[0] else 0) or 0)
+			if 0 < enabled_cnt <= 2000:
+				u_rows = frappe.db.sql(
+					"""
+					select name, time_zone, full_name, user_image
+					from `tabUser`
+					where enabled = 1 and name not in ('Administrator', 'Guest')
+					""",
+					as_dict=False,
+				)
+				r_rows = frappe.db.sql(
+					"""
+					select hr.parent, hr.role
+					from `tabHas Role` hr
+					inner join `tabRole` r on r.name = hr.role
+					where hr.parenttype = 'User' and coalesce(r.disabled, 0) = 0
+					""",
+					as_dict=False,
+				)
+				roles_by_user: dict[str, set[str]] = {}
+				for parent_u, role_name in r_rows or ():
+					if parent_u and role_name:
+						roles_by_user.setdefault(str(parent_u), set()).add(str(role_name))
+				for u_name, u_tz, u_fn, u_img in u_rows or ():
+					if not u_name:
+						continue
+					u_str = str(u_name)
+					r_set = frozenset((roles_by_user.get(u_str) or set()) | {"All", "Guest"})
+					_USER_PROFILE_LRU.set(
+						(site, u_str, ep),
+						{
+							"user": u_str,
+							"enabled": 1,
+							"roles": r_set,
+							"time_zone": str(u_tz or ""),
+							"full_name": str(u_fn or u_str),
+							"user_image": str(u_img or ""),
+						},
+					)
+		except Exception:
+			return
+		_USER_BULK_EPOCH_LRU.set(bulk_key, True)
+
+
+def get_cached_system_timezone() -> str:
+	"""Return cached `System Settings.time_zone` without per-request Redis `get_value` round-trips."""
+	if not is_runtime_db_cache_active():
+		return str(frappe.utils.get_system_timezone() or "Asia/Ho_Chi_Minh")
+	key = (_current_site(), "__system_tz__", get_domain_epoch(DOMAIN_USER_HIERARCHY))
+	hit = _STATIC_UI_LRU.get(key)
+	if isinstance(hit, str) and hit:
+		return hit
+	tz_val = str(frappe.utils.get_system_timezone() or "Asia/Ho_Chi_Minh")
+	_STATIC_UI_LRU.set(key, tz_val)
+	return tz_val
 
 
 def get_roles_set(user: str | None = None) -> frozenset[str]:
@@ -901,6 +979,14 @@ def get_campaign_row(campaign: str | None) -> dict | None:
 	return get_campaign_map().get(str(campaign))
 
 
+def _clone_policy_dict(pol: dict) -> dict:
+	out = dict(pol)
+	ch = out.get("enabled_channels")
+	if isinstance(ch, list):
+		out["enabled_channels"] = list(ch)
+	return out
+
+
 def get_cached_effective_policy(
 	*,
 	campaign: str | None,
@@ -917,9 +1003,9 @@ def get_cached_effective_policy(
 	)
 	hit = _POLICY_LRU.get(key)
 	if hit is not None:
-		return copy.deepcopy(hit)
+		return _clone_policy_dict(hit)
 	res = compute_fn()
-	_POLICY_LRU.set(key, copy.deepcopy(res))
+	_POLICY_LRU.set(key, _clone_policy_dict(res))
 	return res
 
 

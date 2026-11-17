@@ -238,7 +238,10 @@ def timezone_context(user=None):
 	user = user or frappe.session.user
 	site_tz = "Asia/Ho_Chi_Minh"
 	try:
-		site_tz = frappe.utils.get_system_timezone() or site_tz
+		if runtime_cache.is_runtime_db_cache_active():
+			site_tz = runtime_cache.get_cached_system_timezone() or site_tz
+		else:
+			site_tz = frappe.utils.get_system_timezone() or site_tz
 	except Exception:
 		site_tz = "Asia/Ho_Chi_Minh"
 
@@ -430,4 +433,8 @@ def build_context(
 		context.cskh_csrf_header = {"X-Frappe-CSRF-Token": sentinels["csrf_token"]}
 		context.cskh_csrf_header_json = sentinels["csrf_header_json"]
 		context.cskh_timezone_json = sentinels["timezone_json"]
+		if "user_html" in sentinels:
+			context.cskh_user_html = sentinels["user_html"]
+		if "user_json" in sentinels:
+			context.cskh_user_json = sentinels["user_json"]
 	return context

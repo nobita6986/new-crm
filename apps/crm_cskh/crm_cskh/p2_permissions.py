@@ -179,23 +179,19 @@ def is_work_item_readable_for_workflow(work_item_doc_or_name, user: str | None =
 
 	has_owner_close = runtime_cache.has_column("CSKH Work Item", "owner_at_close")
 	if isinstance(work_item_doc_or_name, str):
-		wi_fields = [
-			"name",
-			"lead",
-			"campaign",
-			"status",
-			"assigned_to",
-			"closed_by",
-			"last_activity_by",
-		]
-		if has_owner_close:
-			wi_fields.append("owner_at_close")
-		wi = frappe.db.get_value(
-			"CSKH Work Item",
-			work_item_doc_or_name,
-			wi_fields,
+		owner_close_sel = "`owner_at_close`" if has_owner_close else "null as `owner_at_close`"
+		wi_rows = frappe.db.sql(
+			f"""
+			select `name`, `lead`, `campaign`, `status`, `assigned_to`,
+			       `closed_by`, `last_activity_by`, {owner_close_sel}
+			from `tabCSKH Work Item`
+			where `name` = %s
+			limit 1
+			""",
+			(work_item_doc_or_name,),
 			as_dict=True,
 		)
+		wi = wi_rows[0] if wi_rows else None
 	else:
 		wi = work_item_doc_or_name
 	if not wi:
