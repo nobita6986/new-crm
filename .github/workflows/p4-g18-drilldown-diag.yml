@@ -13,11 +13,18 @@ on:
         required: false
         type: string
         default: ''
+      only_api01c_c40_diag:
+        description: 'Run focused API-01C c=40 isolated Staging diagnostic probe only (true/false)'
+        required: false
+        type: string
+        default: ''
   push:
     branches:
       - 'codex/p4-t1b-g18-drilldown-opt'
+      - 'codex/p4-diag-api01c-c40'
     paths:
       - 'deploy/release/diagnose_g18_drilldown.py'
+      - 'deploy/release/diagnose_api01c_c40.py'
       - 'deploy/release/g18_diag_target.json'
       - '.github/workflows/p4-g18-drilldown-diag.yml'
 
@@ -37,6 +44,7 @@ jobs:
       target_digest: ${{ steps.plan.outputs.target_digest }}
       matrix_json: ${{ steps.plan.outputs.matrix_json }}
       run_g04_probe: ${{ steps.plan.outputs.run_g04_probe }}
+      only_c40_diag: ${{ steps.plan.outputs.only_c40_diag }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -46,6 +54,7 @@ jobs:
         env:
           INPUT_DIGEST: ${{ inputs.app_image_digest }}
           INPUT_PROBE: ${{ inputs.run_g04_remediation_probe }}
+          INPUT_ONLY_C40: ${{ inputs.only_api01c_c40_diag }}
         shell: bash
         run: |
           set -euo pipefail
@@ -57,12 +66,20 @@ jobs:
           cfg = json.loads(Path("deploy/release/g18_diag_target.json").read_text(encoding="utf-8"))
           digest = os.environ.get("INPUT_DIGEST", "").strip() or str(cfg.get("app_image_digest") or "").strip()
           probe_in = os.environ.get("INPUT_PROBE", "").strip().lower()
+          only_c40_in = os.environ.get("INPUT_ONLY_C40", "").strip().lower()
+          if only_c40_in in ("true", "false"):
+              only_c40 = only_c40_in == "true"
+          else:
+              only_c40 = bool(cfg.get("only_api01c_c40_diag", False))
           if probe_in in ("true", "false"):
               run_probe = probe_in == "true"
           else:
               run_probe = bool(cfg.get("run_g04_remediation_probe", False))
 
-          if digest:
+          if only_c40:
+              items = []
+              run_probe = False
+          elif digest:
               items = [
                   {
                       "label": "post_opt_s1_canonical_4x4",
@@ -94,6 +111,7 @@ jobs:
           print("target_digest=" + digest)
           print("matrix_json=" + json.dumps({"include": items}))
           print("run_g04_probe=" + ("true" if run_probe else "false"))
+          print("only_c40_diag=" + ("true" if only_c40 else "false"))
           PY
 
   g18-drilldown-diagnostic:
@@ -292,7 +310,7 @@ jobs:
   s1-benchmark-staging-vps-capped:
     name: Full S1 workload benchmark (staging_vps_capped + live resource guard)
     needs: [resolve-matrix]
-    if: ${{ needs.resolve-matrix.outputs.target_digest != '' }}
+    if: ${{ needs.resolve-matrix.outputs.target_digest != '' && needs.resolve-matrix.outputs.only_c40_diag != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     permissions:
@@ -377,7 +395,7 @@ jobs:
   s1-short-probe-staging-vps-capped:
     name: S1 500-item BG-01 short probe (staging_vps_capped Before/After parity)
     needs: [resolve-matrix]
-    if: ${{ needs.resolve-matrix.outputs.target_digest != '' }}
+    if: ${{ needs.resolve-matrix.outputs.target_digest != '' && needs.resolve-matrix.outputs.only_c40_diag != 'true' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -458,5 +476,82 @@ jobs:
         with:
           name: p4-s1-short-probe-staging-vps-capped-${{ github.run_id }}
           path: ${{ runner.temp }}/p4-s1-short-probe-capped/
+          if-no-files-found: warn
+          retention-days: 30
+
+  api01c-c40-isolated-diag:
+    name: API-01C c=40 isolated Staging diagnostic probe
+    needs: [resolve-matrix]
+    if: ${{ needs.resolve-matrix.outputs.target_digest != '' && needs.resolve-matrix.outputs.only_c40_diag == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc /usr/local/.ghcup || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Pull immutable GHCR @sha256 image
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.resolve-matrix.outputs.target_digest }}
+          GITHUB_ACTOR_PULL: ${{ github.actor }}
+          GITHUB_TOKEN_READONLY: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          mkdir -p "$RUNNER_TEMP/api01c-c40-diag"
+          printf '%s\n' "${GITHUB_TOKEN_READONLY}" | docker login ghcr.io \
+            --username "${GITHUB_ACTOR_PULL}" \
+            --password-stdin
+          docker pull "${APP_IMAGE_DIGEST}"
+
+      - name: Execute API-01C c=40 isolated Staging diagnostic & fair-worker A/B probe
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ needs.resolve-matrix.outputs.target_digest }}
+        run: |
+          set -euo pipefail
+          OUT_DIR="$RUNNER_TEMP/api01c-c40-diag"
+          python3 deploy/release/diagnose_api01c_c40.py \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --pull-policy never \
+            --port 18892 \
+            --out "$OUT_DIR/api01c-c40-diagnostic.json"
+
+          python3 - "$OUT_DIR" <<'PY'
+          import hashlib
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          sums = []
+          for path in sorted(root.rglob("*")):
+              if not path.is_file() or path.name == "SHA256SUMS.txt":
+                  continue
+              sums.append(f"{hashlib.sha256(path.read_bytes()).hexdigest()}  {path.relative_to(root).as_posix()}")
+          (root / "SHA256SUMS.txt").write_text("\n".join(sums) + "\n", encoding="utf-8")
+          PY
+
+      - name: Logout from GHCR
+        if: always()
+        shell: bash
+        run: |
+          docker logout ghcr.io >/dev/null 2>&1 || true
+
+      - name: Upload API-01C c=40 isolated diagnostic bundle
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: api01c-c40-isolated-diag-${{ github.run_id }}
+          path: ${{ runner.temp }}/api01c-c40-diag/
           if-no-files-found: warn
           retention-days: 30
