@@ -583,8 +583,8 @@ def _run_c40_wave_detailed(
     wall_sec = max(1e-6, time.perf_counter() - t0)
 
     lats = [float(r["client_ms"]) for r in records]
-    summary = summarize_latencies_ms(lats, wall_sec=wall_sec)
-    summary["error_count"] = sum(1 for r in records if int(r["status"]) != 200)
+    err_cnt = sum(1 for r in records if int(r["status"]) != 200)
+    summary = summarize_latencies_ms(lats, error_count=err_cnt, elapsed_sec=wall_sec)
 
     pid_counts: dict[str, int] = {}
     pid_p95: dict[str, float] = {}
