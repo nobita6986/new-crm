@@ -42,29 +42,31 @@ class TestBg02AndSloGovernance(unittest.TestCase):
         self.assertEqual(doc.get("exceptions"), [])
 
     def test_zero_fault_injection_tokens_in_production_modules(self) -> None:
+        py_files = [APP_ROOT / "gunicorn_worker.py"]
         for sub in ("api", "services", "jobs", "www"):
             folder = APP_ROOT / sub
-            for py_file in sorted(folder.rglob("*.py")):
-                source = py_file.read_text(encoding="utf-8")
-                tree = ast.parse(source, filename=str(py_file))
-                for node in ast.walk(tree):
-                    name = None
-                    if isinstance(
-                        node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
-                    ):
-                        name = node.name
-                    elif isinstance(node, ast.Name):
-                        name = node.id
-                    elif isinstance(node, ast.Attribute):
-                        name = node.attr
-                    if name and name != "__exit__":
-                        low = name.lower()
-                        for bad in FORBIDDEN_PRODUCTION_TOKENS:
-                            self.assertNotIn(
-                                bad,
-                                low,
-                                f"Forbidden fault-injection identifier {name!r} in {py_file}",
-                            )
+            py_files.extend(sorted(folder.rglob("*.py")))
+        for py_file in py_files:
+            source = py_file.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(py_file))
+            for node in ast.walk(tree):
+                name = None
+                if isinstance(
+                    node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)
+                ):
+                    name = node.name
+                elif isinstance(node, ast.Name):
+                    name = node.id
+                elif isinstance(node, ast.Attribute):
+                    name = node.attr
+                if name and name != "__exit__":
+                    low = name.lower()
+                    for bad in FORBIDDEN_PRODUCTION_TOKENS:
+                        self.assertNotIn(
+                            bad,
+                            low,
+                            f"Forbidden fault-injection identifier {name!r} in {py_file}",
+                        )
 
     def test_hooks_py_preserves_tier3_n_minus_1_rollback_compatibility(self) -> None:
         hooks_src = (APP_ROOT / "hooks.py").read_text(encoding="utf-8")
@@ -239,6 +241,19 @@ class TestBg02AndSloGovernance(unittest.TestCase):
         self.assertIn("cskh_user_json", ctx_src)
         self.assertIn("_is_role_shareable_skeleton", rend_src)
         self.assertIn("_RENDER_LOCK_STRIPES", rend_src)
+
+    def test_api01c_fair_gthread_worker_and_start_sh_contracts(self) -> None:
+        gw_src = (APP_ROOT / "gunicorn_worker.py").read_text(encoding="utf-8")
+        start_sh = (
+            REPO_ROOT / "deploy" / "images" / "resources" / "start.sh"
+        ).read_bytes()
+        self.assertNotIn(b"\r\n", start_sh, "start.sh must retain LF line endings")
+        start_txt = start_sh.decode("utf-8")
+        self.assertIn("crm_cskh.gunicorn_worker.FairGthreadWorker", start_txt)
+        self.assertIn("--keep-alive=", start_txt)
+        self.assertIn("class FairGthreadWorker(ThreadWorker):", gw_src)
+        self.assertIn("self.shutdown_event", gw_src)
+        self.assertIn("self.cfg.graceful_timeout", gw_src)
 
 
 if __name__ == "__main__":

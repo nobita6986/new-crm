@@ -14,6 +14,8 @@ Every query is scoped by the actor's team scope. A caller can never widen the
 scope with a `user` or `team` parameter (ADR-P1-07).
 """
 
+from datetime import datetime
+
 import frappe
 from frappe.utils import get_datetime, now_datetime
 
@@ -286,29 +288,28 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 	if use_camp_cache and not search_val:
 		# Deferred join: sort & paginate narrow `tabCSKH Work Item` rows first so `tabCRM Lead`
 		# is probed by PK for at most `limit` (`20`) rows instead of ~1,100 rows per staff user.
-		_, where_sql_p, params_p = _my_list_where(user, status_val, campaign_val, None, wi_alias="wi_p")
 		rows = frappe.db.sql(
-			f"select wi.name as work_item, wi.lead as lead, wi.campaign as campaign, "
-			f"wi.status as status, coalesce(wi.revision, 1) as revision, wi.assigned_at as assigned_at, "
-			f"coalesce(wi.attempt_count, 0) as attempt_count, "
-			f"coalesce(wi.connected_attempt_count, 0) as connected_attempt_count, "
-			f"wi.first_attempt_at as first_attempt_at, wi.last_attempt_at as last_attempt_at, "
-			f"wi.last_outcome_code as last_outcome_code, wi.last_outcome_label as last_outcome_label, "
-			f"wi.last_connected_at as last_connected_at, "
-			f"wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due, "
+			f"select wi_row.name as work_item, wi_row.lead as lead, wi_row.campaign as campaign, "
+			f"wi_row.status as status, coalesce(wi_row.revision, 1) as revision, wi_row.assigned_at as assigned_at, "
+			f"coalesce(wi_row.attempt_count, 0) as attempt_count, "
+			f"coalesce(wi_row.connected_attempt_count, 0) as connected_attempt_count, "
+			f"wi_row.first_attempt_at as first_attempt_at, wi_row.last_attempt_at as last_attempt_at, "
+			f"wi_row.last_outcome_code as last_outcome_code, wi_row.last_outcome_label as last_outcome_label, "
+			f"wi_row.last_connected_at as last_connected_at, "
+			f"wi_row.open_callback_task as open_callback_task, wi_row.next_action_due as next_action_due, "
 			f"{camp_cols_sql} "
 			f"l.lead_name as lead_name, l.first_name as first_name, "
 			f"l.mobile_no as mobile_no, l.source as source, l.status as lead_status, {dnc_col} "
 			f"from ("
-			f"select wi_p.name from `tabCSKH Work Item` wi_p where {where_sql_p} "
-			f"order by case when wi_p.next_action_due is not null and wi_p.next_action_due < %s then 0 else 1 end asc, "
-			f"wi_p.assigned_at desc, wi_p.name desc limit %s offset %s"
-			f") page_wi "
-			f"inner join `tabCSKH Work Item` wi on wi.name = page_wi.name "
-			f"inner join `tabCRM Lead` l on l.name = wi.lead "
+			f"select wi.name from `tabCSKH Work Item` wi where {where_sql} "
 			f"order by case when wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc, "
-			f"wi.assigned_at desc, wi.name desc",
-			(*tuple(params_p), now, limit, offset, now),
+			f"wi.assigned_at desc, wi.name desc limit %s offset %s"
+			f") page_wi "
+			f"inner join `tabCSKH Work Item` wi_row on wi_row.name = page_wi.name "
+			f"inner join `tabCRM Lead` l on l.name = wi_row.lead "
+			f"order by case when wi_row.next_action_due is not null and wi_row.next_action_due < %s then 0 else 1 end asc, "
+			f"wi_row.assigned_at desc, wi_row.name desc",
+			(*tuple(params), now, limit, offset, now),
 			as_dict=True,
 		)
 	else:
@@ -336,15 +337,19 @@ def my_list(user=None, page=1, page_size=20, status=None, campaign=None, search=
 			as_dict=True,
 		)
 
-	now_dt = get_datetime(now)
+	now_dt = now if isinstance(now, datetime) else get_datetime(now)
 	items = []
 	for row in rows:
 		is_overdue = False
-		if row.status == "on_hold" and row.next_action_due:
-			try:
-				is_overdue = get_datetime(row.next_action_due) < now_dt
-			except Exception:
-				is_overdue = False
+		due_val = row.next_action_due
+		if row.status == "on_hold" and due_val:
+			if isinstance(due_val, datetime):
+				is_overdue = due_val < now_dt
+			else:
+				try:
+					is_overdue = get_datetime(due_val) < now_dt
+				except Exception:
+					is_overdue = False
 		if use_camp_cache and row.campaign:
 			c_info = camp_map.get(str(row.campaign)) or {}
 			camp_title = c_info.get("title")

@@ -1124,3 +1124,285 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		self.assertEqual(cached_tl_p4["total"], 5)
 		self.assertEqual(cached_tl_p4["items"], [])
 		self.assertEqual(cached_det["open_followup"]["task_id"], uncached_det["open_followup"]["task_id"])
+
+	def test_my_customers_worklist_rbac_scope_sort_order_and_pagination_regression(self):
+		"""Verify `customers.my_list` (`API-01A` / `API-01B` / `API-01C`) preserves strict RBAC scope,
+		deterministic overdue-first + `assigned_at DESC, name DESC` ordering, and multi-page pagination."""
+		from crm_cskh.api import customers as customers_api
+		from crm_cskh.services import reporting
+
+		frappe.set_user("Administrator")
+		# Baseline Administrator owns zero Work Items -> fast 0-row path
+		admin_empty = customers_api.my_list(page=1, page_size=20)
+		self.assertEqual(admin_empty["scope"], "self")
+		self.assertEqual(admin_empty["total"], 0)
+		self.assertEqual(admin_empty["items"], [])
+
+		# Roleless user must receive Forbidden (403)
+		unpriv_email = f"unpriv.{self.unique_key('u')}@dev.local"
+		unpriv_doc = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": unpriv_email,
+				"first_name": "Không Quyền CSKH",
+				"enabled": 1,
+				"send_welcome_email": 0,
+				"user_type": "System User",
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.commit()
+		try:
+			frappe.set_user(unpriv_email)
+			with self.assertRaises(Forbidden):
+				customers_api.my_list(page=1, page_size=20)
+		finally:
+			frappe.set_user("Administrator")
+			frappe.delete_doc("User", unpriv_doc.name, force=True, ignore_permissions=True)
+			frappe.db.commit()
+
+		camp_1 = self.make_campaign(title="Chiến dịch API-01C A", team_scope=self.team_a)
+		camp_2 = self.make_campaign(title="Chiến dịch API-01C B", team_scope=self.team_a)
+		other_camp = self.make_campaign(title="Chiến dịch Đội Khác", team_scope=self.team_b)
+
+		# Create 6 active Work Items + 1 closed Work Item for `staff_a`, plus items for `staff_b` and `leader_a`
+		wi_overdue_old = self._assign_new_work_item(camp_1, self.staff_a)
+		wi_overdue_new = self._assign_new_work_item(camp_2, self.staff_a)
+		wi_future_hold = self._assign_new_work_item(camp_1, self.staff_a)
+		wi_active_newest = self._assign_new_work_item(camp_2, self.staff_a)
+		wi_tie_1 = self._assign_new_work_item(camp_1, self.staff_a)
+		wi_tie_2 = self._assign_new_work_item(camp_1, self.staff_a)
+		wi_closed = self._assign_new_work_item(camp_1, self.staff_a)
+
+		wi_other_staff = self._assign_new_work_item(other_camp, self.staff_b)
+		wi_leader_own = self._assign_new_work_item(camp_1, self.leader_a)
+
+		base_now = now_datetime().replace(microsecond=0)
+		due_past_1 = base_now - timedelta(hours=3)
+		due_past_2 = base_now - timedelta(hours=1)
+		due_future = base_now + timedelta(hours=5)
+
+		frappe.db.set_value(
+			"CSKH Work Item",
+			wi_overdue_old,
+			{
+				"status": "on_hold",
+				"assigned_at": base_now - timedelta(days=4),
+				"next_action_due": due_past_1,
+			},
+			update_modified=False,
+		)
+		frappe.db.set_value(
+			"CSKH Work Item",
+			wi_overdue_new,
+			{
+				"status": "on_hold",
+				"assigned_at": base_now - timedelta(days=2),
+				"next_action_due": due_past_2,
+			},
+			update_modified=False,
+		)
+		frappe.db.set_value(
+			"CSKH Work Item",
+			wi_active_newest,
+			{
+				"status": "in_progress",
+				"assigned_at": base_now - timedelta(hours=2),
+				"next_action_due": None,
+			},
+			update_modified=False,
+		)
+		tie_ts = base_now - timedelta(days=1)
+		for wi_t in (wi_tie_1, wi_tie_2):
+			frappe.db.set_value(
+				"CSKH Work Item",
+				wi_t,
+				{"status": "assigned", "assigned_at": tie_ts, "next_action_due": None},
+				update_modified=False,
+			)
+		frappe.db.set_value(
+			"CSKH Work Item",
+			wi_future_hold,
+			{
+				"status": "on_hold",
+				"assigned_at": base_now - timedelta(days=3),
+				"next_action_due": due_future,
+			},
+			update_modified=False,
+		)
+		frappe.db.set_value(
+			"CSKH Work Item",
+			wi_closed,
+			{"status": "closed", "assigned_at": base_now - timedelta(minutes=10)},
+			update_modified=False,
+		)
+		frappe.db.commit()
+
+		tie_hi, tie_lo = sorted([wi_tie_1, wi_tie_2], reverse=True)
+		expected_order = [
+			wi_overdue_new,
+			wi_overdue_old,
+			wi_active_newest,
+			tie_hi,
+			tie_lo,
+			wi_future_hold,
+		]
+
+		uncached_all = reporting.my_list(self.staff_a, page=1, page_size=20)
+		with runtime_cache.enable_runtime_cache_for_test():
+			frappe.set_user(self.staff_a)
+			cached_all = customers_api.my_list(page=1, page_size=20)
+			p1 = customers_api.my_list(page=1, page_size=2)
+			p2 = customers_api.my_list(page=2, page_size=2)
+			p3 = customers_api.my_list(page=3, page_size=2)
+			p4 = customers_api.my_list(page=4, page_size=2)
+			only_hold = customers_api.my_list(page=1, page_size=10, status="on_hold")
+			only_camp2 = customers_api.my_list(page=1, page_size=10, campaign=camp_2)
+			only_closed = customers_api.my_list(page=1, page_size=10, status="closed")
+
+			# Team Leader calling `my_list` sees ONLY their own `assigned_to == leader_a` items (never subordinates')
+			frappe.set_user(self.leader_a)
+			leader_ml = customers_api.my_list(page=1, page_size=50)
+
+		self.assertEqual(cached_all["scope"], "self")
+		self.assertEqual(cached_all["total"], uncached_all["total"])
+		self.assertEqual(
+			[it["work_item"] for it in cached_all["items"]], [it["work_item"] for it in uncached_all["items"]]
+		)
+
+		# Filter to the 7 items created in this test (in case base fixture had earlier items)
+		our_set = set(expected_order) | {wi_closed}
+		got_our = [it for it in cached_all["items"] if it["work_item"] in our_set]
+		self.assertEqual([it["work_item"] for it in got_our], expected_order)
+		self.assertNotIn(wi_other_staff, {it["work_item"] for it in cached_all["items"]})
+		self.assertNotIn(wi_leader_own, {it["work_item"] for it in cached_all["items"]})
+
+		# Overdue flags must be True ONLY for overdue `on_hold` items
+		by_wi = {it["work_item"]: it for it in got_our}
+		self.assertTrue(by_wi[wi_overdue_new]["is_followup_overdue"])
+		self.assertTrue(by_wi[wi_overdue_old]["is_followup_overdue"])
+		self.assertFalse(by_wi[wi_future_hold]["is_followup_overdue"])
+		self.assertFalse(by_wi[wi_active_newest]["is_followup_overdue"])
+
+		# Multi-page disjointness, completeness, and out-of-range page invariants
+		if cached_all["total"] == 6:
+			self.assertEqual(p4["items"], [])
+			self.assertEqual(p4["total"], 6)
+		paged_ids = [it["work_item"] for it in (p1["items"] + p2["items"] + p3["items"])]
+		self.assertEqual(len(paged_ids), len(set(paged_ids)))
+		self.assertEqual(paged_ids, [it["work_item"] for it in cached_all["items"][:6]])
+		for idx_p, page_resp in enumerate((p1, p2, p3, p4), start=1):
+			self.assertEqual(page_resp["page"], idx_p)
+			self.assertEqual(page_resp["page_size"], 2)
+			self.assertEqual(page_resp["total"], cached_all["total"])
+
+		# Status & campaign filters preserve order and RBAC scope
+		hold_ids = [it["work_item"] for it in only_hold["items"] if it["work_item"] in our_set]
+		self.assertEqual(hold_ids, [wi_overdue_new, wi_overdue_old, wi_future_hold])
+		camp2_ids = [it["work_item"] for it in only_camp2["items"] if it["work_item"] in our_set]
+		self.assertEqual(camp2_ids, [wi_overdue_new, wi_active_newest])
+		self.assertIn(wi_closed, {it["work_item"] for it in only_closed["items"]})
+
+		leader_ids = {it["work_item"] for it in leader_ml["items"]}
+		self.assertIn(wi_leader_own, leader_ids)
+		self.assertTrue(leader_ids.isdisjoint(our_set))
+
+	def test_api01c_fair_gthread_worker_prevents_single_worker_connection_hoarding(self):
+		"""Verify `FairGthreadWorker` gates listener `accept()` at `max_in_flight` and distributes
+		concurrent HTTP bursts fairly across 2 Gunicorn worker processes."""
+		import concurrent.futures as cf
+		import json as _json
+		import os as _os
+		import signal
+		import socket
+		import subprocess
+		import sys
+		import tempfile
+		import time as _time
+		import urllib.request
+
+		from crm_cskh.gunicorn_worker import FairGthreadWorker
+
+		self.assertTrue(callable(FairGthreadWorker.run))
+		with tempfile.TemporaryDirectory(prefix="cskh-fair-worker-test-") as td:
+			app_file = _os.path.join(td, "mini_wsgi.py")
+			with open(app_file, "w", encoding="utf-8") as fh:
+				fh.write(
+					"import json, os, time\n"
+					"def app(environ, start_response):\n"
+					"    if environ.get('PATH_INFO') == '/work':\n"
+					"        time.sleep(0.03)\n"
+					"    body = json.dumps({'pid': os.getpid()}).encode('utf-8')\n"
+					"    start_response('200 OK', [('Content-Type', 'application/json'), ('Content-Length', str(len(body)))])\n"
+					"    return [body]\n"
+				)
+			with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+				s.bind(("127.0.0.1", 0))
+				port = s.getsockname()[1]
+
+			gunicorn_bin = _os.path.join(_os.path.dirname(sys.executable), "gunicorn")
+			proc = subprocess.Popen(
+				[
+					gunicorn_bin,
+					"--pythonpath",
+					td,
+					"--bind",
+					f"127.0.0.1:{port}",
+					"--workers",
+					"2",
+					"--threads",
+					"2",
+					"--worker-class",
+					"crm_cskh.gunicorn_worker.FairGthreadWorker",
+					"--keep-alive",
+					"0",
+					"--preload",
+					"mini_wsgi:app",
+				],
+				stdout=subprocess.PIPE,
+				stderr=subprocess.PIPE,
+				text=True,
+			)
+			try:
+				ready = False
+				for _ in range(40):
+					try:
+						with urllib.request.urlopen(f"http://127.0.0.1:{port}/ping", timeout=2) as r:
+							if r.status == 200:
+								ready = True
+								break
+					except Exception:
+						_time.sleep(0.1)
+				self.assertTrue(ready, "FairGthreadWorker test server failed to start")
+
+				def _call(_idx: int) -> int:
+					req = urllib.request.Request(
+						f"http://127.0.0.1:{port}/work", headers={"Connection": "close"}
+					)
+					with urllib.request.urlopen(req, timeout=10) as resp:
+						data = _json.loads(resp.read().decode("utf-8"))
+						return int(data["pid"])
+
+				with cf.ThreadPoolExecutor(max_workers=20) as ex:
+					pids = list(ex.map(_call, range(40)))
+
+				counts: dict[int, int] = {}
+				for p in pids:
+					counts[p] = counts.get(p, 0) + 1
+				self.assertEqual(
+					len(counts), 2, f"Expected both Gunicorn workers to serve burst, got {counts}"
+				)
+				for p, cnt in counts.items():
+					self.assertGreaterEqual(
+						cnt, 14, f"Worker {p} starved ({counts}); expected fair ~20/20 split"
+					)
+			finally:
+				proc.send_signal(signal.SIGTERM)
+				try:
+					proc.wait(timeout=10)
+				except subprocess.TimeoutExpired:
+					proc.kill()
+					proc.wait(timeout=5)
+				if proc.stdout:
+					proc.stdout.close()
+				if proc.stderr:
+					proc.stderr.close()
