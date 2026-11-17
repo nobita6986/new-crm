@@ -1163,6 +1163,7 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		camp_1 = self.make_campaign(title="Chiến dịch API-01C A", team_scope=self.team_a)
 		camp_2 = self.make_campaign(title="Chiến dịch API-01C B", team_scope=self.team_a)
 		other_camp = self.make_campaign(title="Chiến dịch Đội Khác", team_scope=self.team_b)
+		baseline_b_total = reporting.my_list(self.staff_b, page=1, page_size=1)["total"]
 
 		# Create 6 active Work Items + 1 closed Work Item for `staff_b` (clean owner in `team_a`),
 		# plus items for same-team peer `staff_a`, cross-team `staff_c`, and `leader_a`
@@ -1249,29 +1250,32 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 			wi_future_hold,
 		]
 
-		uncached_all = reporting.my_list(self.staff_b, page=1, page_size=50)
+		uncached_all = reporting.my_list(self.staff_b, page=1, page_size=100)
 		with runtime_cache.enable_runtime_cache_for_test():
 			frappe.set_user(self.staff_b)
-			cached_all = customers_api.my_list(page=1, page_size=50)
+			cached_all = customers_api.my_list(page=1, page_size=100)
 			p1 = customers_api.my_list(page=1, page_size=2)
 			p2 = customers_api.my_list(page=2, page_size=2)
 			p3 = customers_api.my_list(page=3, page_size=2)
-			p4 = customers_api.my_list(page=4, page_size=2)
-			only_hold = customers_api.my_list(page=1, page_size=10, status="on_hold")
-			only_camp2 = customers_api.my_list(page=1, page_size=10, campaign=camp_2)
-			only_closed = customers_api.my_list(page=1, page_size=10, status="closed")
+			c1_p1 = customers_api.my_list(page=1, page_size=2, campaign=camp_1)
+			c1_p2 = customers_api.my_list(page=2, page_size=2, campaign=camp_1)
+			c1_p3 = customers_api.my_list(page=3, page_size=2, campaign=camp_1)
+			only_hold = customers_api.my_list(page=1, page_size=100, status="on_hold")
+			only_camp2 = customers_api.my_list(page=1, page_size=100, campaign=camp_2)
+			only_closed = customers_api.my_list(page=1, page_size=100, status="closed")
 
 			# Team Leader calling `my_list` sees ONLY their own `assigned_to == leader_a` items (never subordinates')
 			frappe.set_user(self.leader_a)
-			leader_ml = customers_api.my_list(page=1, page_size=50)
+			leader_ml = customers_api.my_list(page=1, page_size=100)
 
 		self.assertEqual(cached_all["scope"], "self")
+		self.assertEqual(cached_all["total"], baseline_b_total + 6)
 		self.assertEqual(cached_all["total"], uncached_all["total"])
 		self.assertEqual(
 			[it["work_item"] for it in cached_all["items"]], [it["work_item"] for it in uncached_all["items"]]
 		)
 
-		# Filter to the 7 items created in this test (in case base fixture had earlier items)
+		# Filter to the 7 items created in this test (in case earlier suites left items on `staff_b`)
 		our_set = set(expected_order) | {wi_closed}
 		got_our = [it for it in cached_all["items"] if it["work_item"] in our_set]
 		self.assertEqual([it["work_item"] for it in got_our], expected_order)
@@ -1288,16 +1292,22 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		self.assertFalse(by_wi[wi_active_newest]["is_followup_overdue"])
 
 		# Multi-page disjointness, completeness, and out-of-range page invariants
-		self.assertEqual(cached_all["total"], 6)
-		self.assertEqual(p4["items"], [])
-		self.assertEqual(p4["total"], 6)
 		paged_ids = [it["work_item"] for it in (p1["items"] + p2["items"] + p3["items"])]
 		self.assertEqual(len(paged_ids), len(set(paged_ids)))
 		self.assertEqual(paged_ids, [it["work_item"] for it in cached_all["items"][:6]])
-		for idx_p, page_resp in enumerate((p1, p2, p3, p4), start=1):
+		for idx_p, page_resp in enumerate((p1, p2, p3), start=1):
 			self.assertEqual(page_resp["page"], idx_p)
 			self.assertEqual(page_resp["page_size"], 2)
 			self.assertEqual(page_resp["total"], cached_all["total"])
+
+		# Isolated campaign pagination (exact 4 active items in `camp_1`, out-of-range `page=3` empty)
+		self.assertEqual([it["work_item"] for it in c1_p1["items"]], [wi_overdue_old, tie_hi])
+		self.assertEqual([it["work_item"] for it in c1_p2["items"]], [tie_lo, wi_future_hold])
+		self.assertEqual(c1_p3["items"], [])
+		for idx_c, c_resp in enumerate((c1_p1, c1_p2, c1_p3), start=1):
+			self.assertEqual(c_resp["page"], idx_c)
+			self.assertEqual(c_resp["page_size"], 2)
+			self.assertEqual(c_resp["total"], 4)
 
 		# Status & campaign filters preserve order and RBAC scope
 		hold_ids = [it["work_item"] for it in only_hold["items"] if it["work_item"] in our_set]
