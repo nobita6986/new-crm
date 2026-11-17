@@ -1164,16 +1164,18 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		camp_2 = self.make_campaign(title="Chiến dịch API-01C B", team_scope=self.team_a)
 		other_camp = self.make_campaign(title="Chiến dịch Đội Khác", team_scope=self.team_b)
 
-		# Create 6 active Work Items + 1 closed Work Item for `staff_a`, plus items for `staff_b` and `leader_a`
-		wi_overdue_old = self._assign_new_work_item(camp_1, self.staff_a)
-		wi_overdue_new = self._assign_new_work_item(camp_2, self.staff_a)
-		wi_future_hold = self._assign_new_work_item(camp_1, self.staff_a)
-		wi_active_newest = self._assign_new_work_item(camp_2, self.staff_a)
-		wi_tie_1 = self._assign_new_work_item(camp_1, self.staff_a)
-		wi_tie_2 = self._assign_new_work_item(camp_1, self.staff_a)
-		wi_closed = self._assign_new_work_item(camp_1, self.staff_a)
+		# Create 6 active Work Items + 1 closed Work Item for `staff_b` (clean owner in `team_a`),
+		# plus items for same-team peer `staff_a`, cross-team `staff_c`, and `leader_a`
+		wi_overdue_old = self._assign_new_work_item(camp_1, self.staff_b)
+		wi_overdue_new = self._assign_new_work_item(camp_2, self.staff_b)
+		wi_future_hold = self._assign_new_work_item(camp_1, self.staff_b)
+		wi_active_newest = self._assign_new_work_item(camp_2, self.staff_b)
+		wi_tie_1 = self._assign_new_work_item(camp_1, self.staff_b)
+		wi_tie_2 = self._assign_new_work_item(camp_1, self.staff_b)
+		wi_closed = self._assign_new_work_item(camp_1, self.staff_b)
 
-		wi_other_staff = self._assign_new_work_item(other_camp, self.staff_b)
+		wi_same_team_peer = self._assign_new_work_item(camp_1, self.staff_a)
+		wi_other_team_staff = self._assign_new_work_item(other_camp, self.staff_c)
 		wi_leader_own = self._assign_new_work_item(camp_1, self.leader_a)
 
 		base_now = now_datetime().replace(microsecond=0)
@@ -1247,10 +1249,10 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 			wi_future_hold,
 		]
 
-		uncached_all = reporting.my_list(self.staff_a, page=1, page_size=20)
+		uncached_all = reporting.my_list(self.staff_b, page=1, page_size=50)
 		with runtime_cache.enable_runtime_cache_for_test():
-			frappe.set_user(self.staff_a)
-			cached_all = customers_api.my_list(page=1, page_size=20)
+			frappe.set_user(self.staff_b)
+			cached_all = customers_api.my_list(page=1, page_size=50)
 			p1 = customers_api.my_list(page=1, page_size=2)
 			p2 = customers_api.my_list(page=2, page_size=2)
 			p3 = customers_api.my_list(page=3, page_size=2)
@@ -1273,8 +1275,10 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		our_set = set(expected_order) | {wi_closed}
 		got_our = [it for it in cached_all["items"] if it["work_item"] in our_set]
 		self.assertEqual([it["work_item"] for it in got_our], expected_order)
-		self.assertNotIn(wi_other_staff, {it["work_item"] for it in cached_all["items"]})
-		self.assertNotIn(wi_leader_own, {it["work_item"] for it in cached_all["items"]})
+		cached_ids = {it["work_item"] for it in cached_all["items"]}
+		self.assertNotIn(wi_same_team_peer, cached_ids)
+		self.assertNotIn(wi_other_team_staff, cached_ids)
+		self.assertNotIn(wi_leader_own, cached_ids)
 
 		# Overdue flags must be True ONLY for overdue `on_hold` items
 		by_wi = {it["work_item"]: it for it in got_our}
@@ -1284,9 +1288,9 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		self.assertFalse(by_wi[wi_active_newest]["is_followup_overdue"])
 
 		# Multi-page disjointness, completeness, and out-of-range page invariants
-		if cached_all["total"] == 6:
-			self.assertEqual(p4["items"], [])
-			self.assertEqual(p4["total"], 6)
+		self.assertEqual(cached_all["total"], 6)
+		self.assertEqual(p4["items"], [])
+		self.assertEqual(p4["total"], 6)
 		paged_ids = [it["work_item"] for it in (p1["items"] + p2["items"] + p3["items"])]
 		self.assertEqual(len(paged_ids), len(set(paged_ids)))
 		self.assertEqual(paged_ids, [it["work_item"] for it in cached_all["items"][:6]])
