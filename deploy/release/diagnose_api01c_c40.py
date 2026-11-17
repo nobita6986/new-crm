@@ -852,8 +852,28 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
                     "trials": trial_results,
                 }
 
-            # 1. Pure unmodified stock `d3e35f81` on `staging_vps_capped` (1.50 vCPU)
-            unmodified_150 = _run_peak40_suite("unmodified_d3e35f81_1_50cpu", trials=5)
+            # 1. Pure unmodified image on `staging_vps_capped` (1.50 vCPU)
+            unmodified_150 = _run_peak40_suite("unmodified_image_1_50cpu", trials=5)
+
+            # 1b. Pure unmodified image (`start.sh` out-of-the-box!) at VPS-calibrated `0.36 vCPU`
+            unmod_vps_override = tmp_dir / "compose.backend-unmod-vps.yaml"
+            unmod_vps_override.write_text(
+                "services:\n  backend:\n    cpus: 0.36\n", encoding="utf-8"
+            )
+            cbase_unmod_vps = [
+                "docker",
+                "compose",
+                *_compose_files_arg([VERIFY_COMPOSE_FILE, bench_override, unmod_vps_override]),
+                "-p",
+                compose_project,
+            ]
+            _run_checked(
+                [*cbase_unmod_vps, "up", "-d", "--no-build", "--force-recreate", "backend", "frontend"],
+                label="recreate unmodified backend at 0.36 vCPU",
+                timeout_sec=120,
+            )
+            _wait_http_ready(base_url, site_name)
+            unmodified_vps_036 = _run_peak40_suite("unmodified_image_vps_0_36cpu", trials=5)
 
             # Write diagnostic modules onto shared `sites` volume (`/home/frappe/frappe-bench/sites/_diag_c40`)
             # so container restarts retain them cleanly without touching the immutable image.
@@ -971,7 +991,8 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
                 },
                 "in_container_sql_and_gthread_inspection": in_container,
                 "suites": {
-                    "unmodified_d3e35f81_1_50cpu": unmodified_150,
+                    "unmodified_image_1_50cpu": unmodified_150,
+                    "unmodified_image_vps_0_36cpu": unmodified_vps_036,
                     "stock_gthread_diag_1_50cpu": stock_diag_150,
                     "stock_gthread_vps_calibrated": stock_diag_vps,
                     "fair_gthread_m4_vps_calibrated": fair_m4_vps,
