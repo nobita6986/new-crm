@@ -56,7 +56,6 @@ from datetime import datetime, timedelta
 
 import frappe
 from frappe.utils.password import update_password
-from werkzeug.test import EnvironBuilder
 
 import gunicorn.workers.gthread as gthread_mod
 from crm_cskh.p2_models import ensure_p2_indexes, ensure_p2_seeds
@@ -96,6 +95,7 @@ def _ensure_user(email, full_name, roles, pw):
     return email
 
 
+os.chdir("/home/frappe/frappe-bench/sites")
 site = os.environ["BENCH_SITE"]
 actor_pw = os.environ["BENCH_ACTOR_PW"]
 frappe.init(site=site, sites_path="/home/frappe/frappe-bench/sites")
@@ -266,17 +266,12 @@ explain_staff_cnt = frappe.db.sql(
     as_dict=True,
 )
 
-# Measure pymysql.connect() cost vs warm SQL cost
-import pymysql
-db_host = frappe.conf.db_host or "db"
-db_port = int(frappe.conf.db_port or 3306)
-db_name = frappe.conf.db_name
-db_pw = frappe.conf.db_password
+# Measure Frappe per-request DB connection close+reopen cost vs warm SQL cost
 conn_times = []
 for _ in range(20):
+    frappe.db.close()
     t0 = time.perf_counter()
-    c = pymysql.connect(host=db_host, port=db_port, user=db_name, password=db_pw, database=db_name, charset="utf8mb4")
-    c.close()
+    frappe.db.connect()
     conn_times.append((time.perf_counter() - t0) * 1000.0)
 
 gthread_src = inspect.getsource(gthread_mod.ThreadWorker)
@@ -694,15 +689,25 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
             compose_project,
         ]
 
-        try:
-            subprocess.run(
-                [*compose_base, "up", "-d", "--no-build"],
+        def _run_checked(cmd: list[str], *, label: str, input_text: str | None = None, timeout_sec: int = 300) -> subprocess.CompletedProcess[str]:
+            proc = subprocess.run(
+                cmd,
+                input=input_text,
                 env=compose_env,
-                check=True,
+                check=False,
                 capture_output=True,
                 text=True,
-                timeout=300,
+                timeout=timeout_sec,
             )
+            if proc.returncode != 0:
+                msg = f"{label} failed (rc={proc.returncode}):\nSTDOUT:\n{proc.stdout[-2500:]}\nSTDERR:\n{proc.stderr[-2500:]}"
+                for sec in (db_root_pw, admin_pw, actor_pw):
+                    msg = msg.replace(sec, "[REDACTED]")
+                raise RuntimeError(msg)
+            return proc
+
+        try:
+            _run_checked([*compose_base, "up", "-d", "--no-build"], label="compose up", timeout_sec=300)
             init_cmd = (
                 "set -euo pipefail; cd /home/frappe/frappe-bench; "
                 "bench new-site --no-mariadb-socket --mariadb-user-host-login-scope=% "
@@ -715,7 +720,7 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
                 'bench --site "$BENCH_SITE" migrate; '
                 'bench --site "$BENCH_SITE" clear-cache'
             )
-            subprocess.run(
+            _run_checked(
                 [
                     *compose_base,
                     "exec",
@@ -731,25 +736,21 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
                     "-lc",
                     init_cmd,
                 ],
-                env=compose_env,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=600,
+                label="site init",
+                timeout_sec=600,
             )
-            subprocess.run(
+            _run_checked(
                 [*compose_base, "restart", "backend", "websocket", "queue-short", "queue-long", "scheduler"],
-                env=compose_env,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=120,
+                label="restart services",
+                timeout_sec=120,
             )
-            setup_proc = subprocess.run(
+            setup_proc = _run_checked(
                 [
                     *compose_base,
                     "exec",
                     "-T",
+                    "-e",
+                    "FRAPPE_STREAM_LOGGING=1",
                     "-e",
                     f"BENCH_SITE={site_name}",
                     "-e",
@@ -758,12 +759,9 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
                     "/home/frappe/frappe-bench/env/bin/python",
                     "-",
                 ],
-                input=IN_CONTAINER_SETUP_AND_PROFILE,
-                env=compose_env,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=900,
+                label="in-container S1 setup & profile",
+                input_text=IN_CONTAINER_SETUP_AND_PROFILE,
+                timeout_sec=900,
             )
             markers = [
                 ln[len("API01C_SETUP_JSON:") :]
@@ -859,22 +857,6 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
 
             # Write diagnostic modules onto shared `sites` volume (`/home/frappe/frappe-bench/sites/_diag_c40`)
             # so container restarts retain them cleanly without touching the immutable image.
-            subprocess.run(
-                [
-                    *compose_base,
-                    "exec",
-                    "-T",
-                    "backend",
-                    "python3",
-                    "-c",
-                    "import pathlib, sys; d = pathlib.Path('/home/frappe/frappe-bench/sites/_diag_c40'); "
-                    "d.mkdir(parents=True, exist_ok=True); payload = json.loads(sys.stdin.read()) if False else None",
-                ],
-                env=compose_env,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
             write_diag_py = (
                 "import json, pathlib, sys; "
                 "d = pathlib.Path('/home/frappe/frappe-bench/sites/_diag_c40'); d.mkdir(parents=True, exist_ok=True); "
@@ -882,14 +864,11 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
                 "(d / 'cskh_diag_wsgi.py').write_text(obj['wsgi'], encoding='utf-8'); "
                 "(d / 'cskh_fair_worker.py').write_text(obj['fair'], encoding='utf-8')"
             )
-            subprocess.run(
+            _run_checked(
                 [*compose_base, "exec", "-T", "backend", "/home/frappe/frappe-bench/env/bin/python", "-c", write_diag_py],
-                input=json.dumps({"wsgi": DIAG_WSGI_MODULE, "fair": FAIR_GTHREAD_MODULE}),
-                env=compose_env,
-                check=True,
-                capture_output=True,
-                text=True,
-                timeout=30,
+                label="write diagnostic wsgi/worker modules",
+                input_text=json.dumps({"wsgi": DIAG_WSGI_MODULE, "fair": FAIR_GTHREAD_MODULE}),
+                timeout_sec=30,
             )
 
             def _recreate_backend(*, cpus: float, worker_class: str, keepalive_zero: bool, max_inflight: int | None) -> None:
@@ -899,13 +878,13 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
                     '      GUNICORN_THREADS: "4"',
                     '      GUNICORN_TIMEOUT: "120"',
                     '      TZ: Asia/Ho_Chi_Minh',
-                    '      PYTHONPATH: "/home/frappe/frappe-bench/sites/_diag_c40"',
                 ]
                 if max_inflight is not None:
                     env_block.append(f'      CSKH_FAIR_MAX_INFLIGHT: "{max_inflight}"')
                 cmd_list = [
                     "/home/frappe/frappe-bench/env/bin/gunicorn",
                     "--chdir=/home/frappe/frappe-bench/sites",
+                    "--pythonpath=/home/frappe/frappe-bench/sites/_diag_c40",
                     "--bind=0.0.0.0:8000",
                     "--threads=4",
                     "--workers=2",
@@ -916,11 +895,6 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
                     "--preload",
                     "cskh_diag_wsgi:application",
                 ]
-                dyn_yaml = (
-                    STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML.replace("    cpus: 1.50\n    mem_limit: 1536m", f"    cpus: {cpus:.2f}\n    mem_limit: 1536m")
-                    + "\n"
-                )
-                # Write a second override file overriding only backend cpus, env, and command
                 backend_override = tmp_dir / "compose.backend-diag.yaml"
                 backend_override.write_text(
                     "services:\n"
@@ -935,13 +909,10 @@ def run_probe(*, app_image: str, pull_policy: str = "never", port: int = 18892) 
                 )
                 files_now = [VERIFY_COMPOSE_FILE, bench_override, backend_override]
                 cbase_now = ["docker", "compose", *_compose_files_arg(files_now), "-p", compose_project]
-                subprocess.run(
+                _run_checked(
                     [*cbase_now, "up", "-d", "--no-build", "--force-recreate", "backend", "frontend"],
-                    env=compose_env,
-                    check=True,
-                    capture_output=True,
-                    text=True,
-                    timeout=120,
+                    label=f"recreate backend ({worker_class}, cpus={cpus})",
+                    timeout_sec=120,
                 )
                 _wait_http_ready(base_url, site_name)
 
