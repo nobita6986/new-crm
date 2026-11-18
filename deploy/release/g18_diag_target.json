@@ -1,8 +1,10 @@
 {
   "schema_version": "cskh-p4-g18-diag-target-v1",
-  "mode": "api01c_c40_isolated_diag",
-  "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:5537071c1bcb340b22db3aa2a4a954be290b9829a31177a10fcae2bdecc3de45",
-  "only_api01c_c40_diag": true,
+  "mode": "ab_119a9f1_vs_35f512c_isolated_diag",
+  "app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:caf6a8effb9ca59e788a3afc2512ba40865bbee536542fd6e5a28d4ad01c7761",
+  "baseline_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:d3e35f813b7de9b8bcd0ef5b03d2827efe8d8c78d2cdeef9c4aa8ee393096b2e",
+  "only_api01c_c40_diag": false,
+  "only_ab_119a9f1_vs_35f512c_diag": true,
   "skip_default_push": true,
   "run_g04_remediation_probe": false
 }
