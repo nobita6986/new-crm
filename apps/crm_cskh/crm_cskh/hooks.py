@@ -89,6 +89,8 @@ fixtures = [
 
 # required_apps = []
 
+setup_wizard_requires = "/assets/crm_cskh/cskh/setup-wizard.js"
+
 # Each item in the list will be shown as an app in the apps page and CRM App Switcher
 add_to_apps_screen = [
 	{
