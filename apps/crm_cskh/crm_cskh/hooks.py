@@ -89,16 +89,16 @@ fixtures = [
 
 # required_apps = []
 
-# Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "crm_cskh",
-# 		"logo": "/assets/crm_cskh/logo.png",
-# 		"title": "CRM CSKH",
-# 		"route": "/crm_cskh",
-# 		"has_permission": "crm_cskh.api.permission.has_app_permission"
-# 	}
-# ]
+# Each item in the list will be shown as an app in the apps page and CRM App Switcher
+add_to_apps_screen = [
+	{
+		"name": "crm_cskh",
+		"logo": "/assets/crm_cskh/cskh/logo.svg",
+		"title": "CSKH",
+		"route": "/cskh",
+		"has_permission": "crm_cskh.cskh_sidebar.has_app_permission",
+	}
+]
 
 # Includes in <head>
 # ------------------
@@ -376,7 +376,11 @@ override_whitelisted_methods = {
 # ----------------
 before_request = ["crm_cskh.i18n.set_guest_language", "crm_cskh.p1_errors.clear_p1_error_context"]
 update_website_context = ["crm_cskh.i18n.update_website_context"]
-after_request = ["crm_cskh.errors.normalize_error_response", "crm_cskh.p1_errors.normalize_p1_error_response"]
+after_request = [
+	"crm_cskh.errors.normalize_error_response",
+	"crm_cskh.p1_errors.normalize_p1_error_response",
+	"crm_cskh.cskh_sidebar.inject_crm_sidebar_bridge",
+]
 
 # Job Events
 # ----------
