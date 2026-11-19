@@ -114,8 +114,13 @@ def forward_fix_vs_restore_contract() -> dict[str, object]:
         "tier3_image_rollback_n_to_n_minus_1": {
             "when_to_use": "Class A (code/dependency/OS only) or Class B (additive nullable/default columns or new indexes/tables).",
             "action": (
-                "Pin `APP_IMAGE` back to verified `N-1` `@sha256` digest, recreate `backend`, `frontend`, "
-                "`websocket`, `queue-short`, `queue-long`, `scheduler`, and run `bench --site <site> clear-cache`. "
+                "1. Stop `N` runtime services (`backend`, `frontend`, `websocket`, `queue-short`, `queue-long`, `scheduler`) "
+                "so `N` cannot repopulate Redis `app_hooks`; "
+                "2. Pin `APP_IMAGE` back to verified `N-1` `@sha256` digest and run `configurator`; "
+                "3. Run `bench --site <site> clear-cache && bench --site <site> clear-website-cache` on the `N-1` image "
+                "BEFORE starting `N-1` runtime services (`F-G09-HOOK-01`); "
+                "4. Recreate `backend`, `frontend`, `websocket`, `queue-short`, `queue-long`, `scheduler` on `N-1` and "
+                "verify rolled-back menu/app hooks (`frappe.apps.get_apps`, `add_to_apps_screen`, `setup_wizard_requires`, `after_request`). "
                 "NEVER run `git reset`, `bench update --reset`, or manual `DROP TABLE`/`DROP COLUMN`."
             ),
             "tier3_safe_for_current_batch1_candidate": True,
@@ -729,22 +734,127 @@ def run_live_rehearsal(
         )
         assert reenabled["reconcile"]["ok"] is True, reenabled
 
-        # Step 5: `G09` / `D13` Tier 3 Application Image Rollback (`N -> N-1` WITHOUT DB downgrade)
-        scrubber.log(
-            "Executing Tier 3 Application Image rollback N -> N-1 without touching MariaDB"
+        # Step 5: `G09` / `D13` / `F-G09-HOOK-01` Tier 3 Application Image Rollback (`N -> N-1` WITHOUT DB downgrade)
+        # First confirm `N` menu/app hooks are active and populated in Redis `app_hooks` before rollback!
+        pre_rollback_n_hooks = stack.exec_site_python(
+            "add_apps = list(frappe.get_hooks('add_to_apps_screen') or [])\n"
+            "setup_req = list(frappe.get_hooks('setup_wizard_requires') or [])\n"
+            "after_req = list(frappe.get_hooks('after_request') or [])\n"
+            "print(json.dumps({\n"
+            "  'add_to_apps_screen_names': [str(a.get('name')) for a in add_apps if isinstance(a, dict)],\n"
+            "  'has_cskh_sidebar_permission_hook': any('cskh_sidebar' in str(a.get('has_permission', '')) for a in add_apps if isinstance(a, dict)),\n"
+            "  'has_cskh_setup_wizard_hook': '/assets/crm_cskh/cskh/setup-wizard.js' in [str(x) for x in setup_req],\n"
+            "  'after_request': [str(x) for x in after_req],\n"
+            "}))"
         )
+        st_n_apps_staff, _, body_n_apps_staff = staff_a.get_json(
+            "/api/method/frappe.apps.get_apps"
+        )
+        st_n_apps_admin, _, body_n_apps_admin = admin.get_json(
+            "/api/method/frappe.apps.get_apps"
+        )
+        st_n_crm_html, _, raw_n_crm_html = staff_a.raw_request("GET", "/crm")
+        n_apps_staff_names = [
+            str(a.get("name"))
+            for a in (unwrap_message(body_n_apps_staff) or [])
+            if isinstance(a, dict)
+        ]
+        n_apps_admin_names = [
+            str(a.get("name"))
+            for a in (unwrap_message(body_n_apps_admin) or [])
+            if isinstance(a, dict)
+        ]
+        n_crm_has_bridge = "crm-sidebar-bridge.js" in raw_n_crm_html.decode(
+            "utf-8", errors="replace"
+        )
+        assert pre_rollback_n_hooks["has_cskh_sidebar_permission_hook"] is True, (
+            pre_rollback_n_hooks
+        )
+        assert pre_rollback_n_hooks["has_cskh_setup_wizard_hook"] is True, (
+            pre_rollback_n_hooks
+        )
+        assert st_n_apps_staff == 200 and "crm_cskh" in n_apps_staff_names, (
+            st_n_apps_staff,
+            n_apps_staff_names,
+        )
+        assert st_n_apps_admin == 200 and "crm_cskh" in n_apps_admin_names, (
+            st_n_apps_admin,
+            n_apps_admin_names,
+        )
+        assert st_n_crm_html == 200 and n_crm_has_bridge is True, (
+            st_n_crm_html,
+            n_crm_has_bridge,
+        )
+
+        scrubber.log(
+            "Executing Tier 3 Application Image rollback N -> N-1: stop N -> pin N-1 -> configurator -> clear-cache BEFORE opening traffic"
+        )
+        stack.run_compose(["stop", *APP_RUNTIME_SERVICES])
         stack.set_app_image(n_minus_1_image)
+        stack.run_compose(["run", "--rm", "configurator"])
+        t3_clear_cache = stack.run_compose(
+            [
+                "run",
+                "--rm",
+                "--no-deps",
+                "backend",
+                "bash",
+                "-c",
+                (
+                    f"cd /home/frappe/frappe-bench "
+                    f"&& bench --site {stack.site_name} clear-cache "
+                    f"&& bench --site {stack.site_name} clear-website-cache"
+                ),
+            ]
+        )
+        assert t3_clear_cache.returncode == 0, t3_clear_cache.stderr
+
         stack.run_compose(
             ["up", "-d", "--no-build", "--force-recreate", *APP_RUNTIME_SERVICES]
         )
         stack.wait_services_healthy(APP_RUNTIME_SERVICES, timeout_sec=180)
         stack.wait_http_ping(timeout_sec=90)
 
+        # Verify live HTTP menu/app hooks on rolled-back `N-1` IMMEDIATELY (zero post-traffic clear-cache!)
+        st_t3_apps_staff, _, body_t3_apps_staff = staff_a.get_json(
+            "/api/method/frappe.apps.get_apps"
+        )
+        st_t3_apps_admin, _, body_t3_apps_admin = admin.get_json(
+            "/api/method/frappe.apps.get_apps"
+        )
+        st_t3_crm_html, _, raw_t3_crm_html = staff_a.raw_request("GET", "/crm")
+        t3_apps_staff_names = [
+            str(a.get("name"))
+            for a in (unwrap_message(body_t3_apps_staff) or [])
+            if isinstance(a, dict)
+        ]
+        t3_apps_admin_names = [
+            str(a.get("name"))
+            for a in (unwrap_message(body_t3_apps_admin) or [])
+            if isinstance(a, dict)
+        ]
+        t3_crm_has_bridge = "crm-sidebar-bridge.js" in raw_t3_crm_html.decode(
+            "utf-8", errors="replace"
+        )
+        assert st_t3_apps_staff == 200, (st_t3_apps_staff, body_t3_apps_staff)
+        assert st_t3_apps_admin == 200, (st_t3_apps_admin, body_t3_apps_admin)
+        assert "crm" in t3_apps_staff_names and "crm_cskh" not in t3_apps_staff_names, (
+            t3_apps_staff_names
+        )
+        assert "crm_cskh" not in t3_apps_admin_names, t3_apps_admin_names
+        assert st_t3_crm_html == 200 and t3_crm_has_bridge is False, (
+            st_t3_crm_html,
+            t3_crm_has_bridge,
+        )
+
+        # Inspect `N-1` hooks & data reconciliation WITHOUT running any second post-traffic `clear_cache()`
         tier3_check = stack.exec_site_python(
             "import frappe\n"
             "from crm_cskh.services import distribution as dist_svc\n"
             "from crm_cskh.jobs.reconcile_metrics import reconcile_published_period\n"
-            "frappe.clear_cache()\n"
+            "add_apps = list(frappe.get_hooks('add_to_apps_screen') or [])\n"
+            "setup_req = [str(x) for x in (frappe.get_hooks('setup_wizard_requires') or [])]\n"
+            "after_req = [str(x) for x in (frappe.get_hooks('after_request') or [])]\n"
             "att_exists = bool(frappe.db.exists('CSKH Contact Attempt', _IN['post_att']))\n"
             "d_rec = dist_svc.reconcile(_IN['campaign_id'])\n"
             "d_ok = (\n"
@@ -758,6 +868,14 @@ def run_live_rehearsal(
             "  'total_attempts_on_n_minus_1': frappe.db.count('CSKH Contact Attempt'),\n"
             "  'distribution_reconciled': d_ok,\n"
             "  'kpi_reconciled': bool(k_rec.get('ok')),\n"
+            "  'n_minus_1_hooks_verified': {\n"
+            "    'add_to_apps_screen_names': [str(a.get('name')) for a in add_apps if isinstance(a, dict)],\n"
+            "    'has_stale_cskh_sidebar_hook': any('cskh_sidebar' in str(a.get('has_permission', '')) or str(a.get('name', '')) == 'crm_cskh' for a in add_apps if isinstance(a, dict)),\n"
+            "    'setup_wizard_requires': setup_req,\n"
+            "    'has_stale_cskh_setup_wizard_hook': '/assets/crm_cskh/cskh/setup-wizard.js' in setup_req,\n"
+            "    'after_request': after_req,\n"
+            "    'has_stale_n_after_request_hook': any(any(tok in h for tok in ('cskh_sidebar', 'runtime_cache', 'cskh_renderer')) for h in after_req),\n"
+            "  },\n"
             "}, default=str))",
             {
                 "post_att": post_upgrade_attempt_id,
@@ -770,6 +888,15 @@ def run_live_rehearsal(
         )
         assert tier3_check["distribution_reconciled"] is True, tier3_check
         assert tier3_check["kpi_reconciled"] is True, tier3_check
+        n_m1_hooks = tier3_check["n_minus_1_hooks_verified"]
+        assert n_m1_hooks["has_stale_cskh_sidebar_hook"] is False, n_m1_hooks
+        assert n_m1_hooks["has_stale_cskh_setup_wizard_hook"] is False, n_m1_hooks
+        assert n_m1_hooks["has_stale_n_after_request_hook"] is False, n_m1_hooks
+        assert (
+            "crm_cskh.errors.normalize_error_response" in n_m1_hooks["after_request"]
+            and "crm_cskh.p1_errors.normalize_p1_error_response"
+            in n_m1_hooks["after_request"]
+        ), n_m1_hooks
 
         st_t3_my, _, _ = staff_a.get_json(
             "/api/method/crm_cskh.api.customers.my_list", {"page": 1, "page_size": 10}
@@ -921,6 +1048,30 @@ print(json.dumps({"restored_site": site}))
                 },
                 "tier3_image_rollback_n_to_n_minus_1": {
                     **tier3_check,
+                    "pre_rollback_n_hooks": {
+                        **pre_rollback_n_hooks,
+                        "http_get_apps_staff_status": st_n_apps_staff,
+                        "http_get_apps_staff_names": n_apps_staff_names,
+                        "http_get_apps_admin_status": st_n_apps_admin,
+                        "http_get_apps_admin_names": n_apps_admin_names,
+                        "http_crm_page_status": st_n_crm_html,
+                        "http_crm_has_n_sidebar_bridge": n_crm_has_bridge,
+                    },
+                    "clear_cache_before_traffic_order": [
+                        "stop_n_runtime_services",
+                        "set_app_image_n_minus_1",
+                        "run_configurator",
+                        "bench_clear_cache_and_clear_website_cache_before_up",
+                        "start_n_minus_1_runtime_services",
+                        "verify_n_minus_1_hooks_and_http",
+                    ],
+                    "clear_cache_exit_code": t3_clear_cache.returncode,
+                    "http_get_apps_staff_status": st_t3_apps_staff,
+                    "http_get_apps_staff_names": t3_apps_staff_names,
+                    "http_get_apps_admin_status": st_t3_apps_admin,
+                    "http_get_apps_admin_names": t3_apps_admin_names,
+                    "http_crm_page_status": st_t3_crm_html,
+                    "http_crm_has_n_sidebar_bridge": t3_crm_has_bridge,
                     "http_my_customers_status": st_t3_my,
                     "http_executive_overview_status": st_t3_ov,
                 },

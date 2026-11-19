@@ -392,6 +392,54 @@ class TestBatch2DeltaContracts(unittest.TestCase):
             "v15.126.0",
         )
 
+    def test_f_g09_hook_01_tier3_clear_cache_ordering_and_rolled_back_hooks_contract(
+        self,
+    ) -> None:
+        src = (
+            RELEASE_DIR / "batch2_delta" / "verify_g06_g09_migration_and_rollback.py"
+        ).read_text(encoding="utf-8")
+        # Locate Step 5 (Tier 3 rollback N -> N-1) and enforce exact safe ordering:
+        #   stop N -> set_app_image(N-1) -> configurator -> bench clear-cache + clear-website-cache
+        #   -> up -d N-1 -> verify live HTTP frappe.apps.get_apps + Python hooks WITHOUT second clear_cache()!
+        step5_idx = src.index("# Step 5: `G09` / `D13` / `F-G09-HOOK-01`")
+        step6_idx = src.index("# Step 6:", step5_idx)
+        step5_src = src[step5_idx:step6_idx]
+
+        stop_pos = step5_src.index('stack.run_compose(["stop", *APP_RUNTIME_SERVICES])')
+        pin_pos = step5_src.index("stack.set_app_image(n_minus_1_image)")
+        cfg_pos = step5_src.index('stack.run_compose(["run", "--rm", "configurator"])')
+        clear_pos = step5_src.index("bench --site {stack.site_name} clear-cache")
+        clear_web_pos = step5_src.index(
+            "bench --site {stack.site_name} clear-website-cache"
+        )
+        up_pos = step5_src.index(
+            '["up", "-d", "--no-build", "--force-recreate", *APP_RUNTIME_SERVICES]'
+        )
+        ping_pos = step5_src.index("stack.wait_http_ping(timeout_sec=90)")
+        apps_verify_pos = step5_src.index(
+            'st_t3_apps_staff, _, body_t3_apps_staff = staff_a.get_json(\n            "/api/method/frappe.apps.get_apps"'
+        )
+        self.assertLess(stop_pos, pin_pos)
+        self.assertLess(pin_pos, cfg_pos)
+        self.assertLess(cfg_pos, clear_pos)
+        self.assertLess(clear_pos, clear_web_pos)
+        self.assertLess(clear_web_pos, up_pos)
+        self.assertLess(up_pos, ping_pos)
+        self.assertLess(ping_pos, apps_verify_pos)
+
+        # Tier 3 verification MUST NOT hide stale Redis hooks with a post-traffic `frappe.clear_cache()`
+        self.assertNotIn("frappe.clear_cache()", step5_src)
+        self.assertIn("has_stale_cskh_sidebar_hook", step5_src)
+        self.assertIn("has_stale_cskh_setup_wizard_hook", step5_src)
+        self.assertIn("has_stale_n_after_request_hook", step5_src)
+        self.assertIn("clear_cache_before_traffic_order", src)
+
+        contract = forward_fix_vs_restore_contract()
+        t3_action = str(contract["tier3_image_rollback_n_to_n_minus_1"]["action"])  # type: ignore[index]
+        self.assertIn("F-G09-HOOK-01", t3_action)
+        self.assertIn("clear-website-cache", t3_action)
+        self.assertIn("BEFORE starting `N-1` runtime services", t3_action)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -1124,3 +1124,245 @@ class TestP4Bg02AndSloRemediation(P1TestCase):
 		self.assertEqual(cached_tl_p4["total"], 5)
 		self.assertEqual(cached_tl_p4["items"], [])
 		self.assertEqual(cached_det["open_followup"]["task_id"], uncached_det["open_followup"]["task_id"])
+
+	def test_f_kpi_1305_record_attempt_post_commit_1020_lost_savepoint_recovers_and_idempotent_replay(self):
+		"""`F-KPI-1305`: MariaDB 1020 + lost savepoint after committed `record_attempt` MUST recover cleanly,
+		persist `CSKH Dirty Scope` (`pending`), return committed response, drain KPI, and keep replay idempotent."""
+		from crm_cskh.jobs.reconcile_metrics import reconcile_published_period
+
+		frappe.set_user("Administrator")
+		frappe.db.sql("delete from `tabCSKH Dirty Scope`")
+		frappe.db.commit()
+		camp = self.make_campaign(title="Chiến dịch Hồi quy F-KPI-1305", team_scope=self.team_a)
+		wi = self._assign_new_work_item(camp, self.staff_a)
+		frappe.db.commit()
+
+		# Seed an existing processed Dirty Scope row for today's scope, matching production contention
+		kpi_runs.process_dirty_scopes(max_scopes=50)
+		frappe.db.commit()
+
+		det = read_model.get_work_item_detail(wi, actor=self.staff_a)
+		idem_key = self.unique_key("fkpi1305-1020")
+		orig_sql = frappe.db.sql
+		orig_rollback = frappe.db.rollback
+		fault_state = {"injected": 0, "savepoint_rollbacks": 0}
+
+		def _inject_1020_on_first_dirty_upsert(query, *args, **kwargs):
+			if (
+				isinstance(query, str)
+				and "tabcskh dirty scope" in query.lower()
+				and "insert into" in query.lower()
+				and fault_state["injected"] == 0
+			):
+				fault_state["injected"] += 1
+				# Simulate MariaDB 11.8 implicitly rolling back the active tx and dropping all savepoints
+				orig_rollback()
+				raise frappe.QueryDeadlockError(
+					1020,
+					"Record has changed since last read in table 'tabCSKH Dirty Scope'",
+				)
+			return orig_sql(query, *args, **kwargs)
+
+		def _spy_rollback(*args, **kwargs):
+			if kwargs.get("save_point") or args:
+				fault_state["savepoint_rollbacks"] += 1
+			return orig_rollback(*args, **kwargs)
+
+		with (
+			mock.patch.object(frappe.db, "sql", side_effect=_inject_1020_on_first_dirty_upsert),
+			mock.patch.object(frappe.db, "rollback", side_effect=_spy_rollback),
+			mock.patch.object(kpi_runs.time, "sleep"),
+		):
+			res = contact_attempt.record_attempt(
+				work_item=wi,
+				channel="phone_call",
+				outcome_code="connected_interested",
+				note="Kiểm thử phục hồi F-KPI-1305 sau lỗi MariaDB 1020",
+				expected_revision=det["work_item"]["revision"],
+				idempotency_key=idem_key,
+				actor=self.staff_a,
+			)
+
+		self.assertEqual(fault_state["injected"], 1)
+		self.assertEqual(fault_state["savepoint_rollbacks"], 0)
+		self.assertEqual(res["status"], "recorded")
+		self.assertFalse(res["idempotent_replay"])
+		self.assertTrue(frappe.db.exists("CSKH Contact Attempt", res["attempt_id"]))
+
+		dirty_row = frappe.db.get_value(
+			"CSKH Dirty Scope",
+			{"campaign": camp, "owner_user": self.staff_a, "dirty_date": today_hcm().isoformat()},
+			["status", "trigger_reference"],
+			as_dict=True,
+		)
+		self.assertIsNotNone(dirty_row)
+		self.assertEqual(dirty_row.status, "pending")
+		self.assertEqual(dirty_row.trigger_reference, res["attempt_id"])
+
+		# Drain dirty scopes -> KPI recomputes & reconciles cleanly!
+		frappe.set_user("Administrator")
+		drain_res = kpi_runs.process_dirty_scopes(max_scopes=50)
+		self.assertGreaterEqual(drain_res["processed_scopes"], 1)
+		rec = reconcile_published_period(period_type="daily", period_key=today_hcm().isoformat())
+		self.assertTrue(rec["ok"], rec)
+
+		# Idempotent replay returns identical attempt_id with 0 duplicate attempts
+		replay = contact_attempt.record_attempt(
+			work_item=wi,
+			channel="phone_call",
+			outcome_code="connected_interested",
+			note="Kiểm thử phục hồi F-KPI-1305 sau lỗi MariaDB 1020",
+			expected_revision=det["work_item"]["revision"],
+			idempotency_key=idem_key,
+			actor=self.staff_a,
+		)
+		self.assertTrue(replay["idempotent_replay"])
+		self.assertEqual(replay["attempt_id"], res["attempt_id"])
+		self.assertEqual(frappe.db.count("CSKH Contact Attempt", {"work_item": wi}), 1)
+
+	def test_f_kpi_1305_worker_concurrency_and_exhausted_dirty_flush_preserves_committed_api_and_followup(
+		self,
+	):
+		"""`F-KPI-1305`: Verify (A) concurrent `record_attempt` while worker is processing preserves `pending`
+		state for follow-up KPI drain, and (B) exhausted Dirty Scope write errors log diagnostics, preserve
+		the committed API response (zero HTTP 500), keep idempotent replay intact, and recover on next call."""
+		from crm_cskh.jobs.reconcile_metrics import reconcile_published_period
+
+		frappe.set_user("Administrator")
+		frappe.db.sql("delete from `tabCSKH Dirty Scope`")
+		frappe.db.commit()
+		camp = self.make_campaign(title="Chiến dịch Cạnh Tranh Worker F-KPI-1305", team_scope=self.team_a)
+		wi = self._assign_new_work_item(camp, self.staff_a)
+		frappe.db.commit()
+
+		# Part A: Concurrent `record_attempt` runs while `process_dirty_scopes` holds `status='processing'`
+		orig_exec_recompute = kpi_runs.execute_kpi_recompute
+		interleaved = {"done": False, "attempt_id": None}
+
+		def _interleaving_recompute(p_spec, **kwargs):
+			if not interleaved["done"]:
+				interleaved["done"] = True
+				det_in = read_model.get_work_item_detail(wi, actor=self.staff_a)
+				att_in = contact_attempt.record_attempt(
+					work_item=wi,
+					channel="phone_call",
+					outcome_code="no_answer",
+					note="Liên hệ đồng thời khi worker đang xử lý Dirty Scope",
+					expected_revision=det_in["work_item"]["revision"],
+					idempotency_key=self.unique_key("fkpi1305-concurrent"),
+					actor=self.staff_a,
+				)
+				interleaved["attempt_id"] = att_in["attempt_id"]
+			return orig_exec_recompute(p_spec, **kwargs)
+
+		with mock.patch.object(kpi_runs, "execute_kpi_recompute", side_effect=_interleaving_recompute):
+			kpi_runs.process_dirty_scopes(max_scopes=50)
+
+		self.assertTrue(interleaved["done"])
+		self.assertTrue(interleaved["attempt_id"])
+		# The scope dirtied during recompute MUST remain `pending` (not overwritten by `mark_processed`)
+		scope_after_race = frappe.db.get_value(
+			"CSKH Dirty Scope",
+			{"campaign": camp, "owner_user": self.staff_a, "dirty_date": today_hcm().isoformat()},
+			["status", "trigger_reference"],
+			as_dict=True,
+		)
+		self.assertIsNotNone(scope_after_race)
+		self.assertEqual(scope_after_race.status, "pending")
+		self.assertEqual(scope_after_race.trigger_reference, interleaved["attempt_id"])
+
+		# Follow-up drain processes the concurrently dirtied scope to `processed`
+		kpi_runs.process_dirty_scopes(max_scopes=50)
+		self.assertEqual(
+			frappe.db.get_value(
+				"CSKH Dirty Scope",
+				{"campaign": camp, "owner_user": self.staff_a, "dirty_date": today_hcm().isoformat()},
+				"status",
+			),
+			"processed",
+		)
+
+		# Part B: Persistent MariaDB 1020 across ALL bounded retries during `record_attempt` #2
+		det2 = read_model.get_work_item_detail(wi, actor=self.staff_a)
+		idem2 = self.unique_key("fkpi1305-exhaust")
+		orig_sql = frappe.db.sql
+		orig_rollback = frappe.db.rollback
+		upsert_tries = {"n": 0}
+		captured_log_errors: list[dict] = []
+
+		def _always_fail_dirty_upsert(query, *args, **kwargs):
+			if (
+				isinstance(query, str)
+				and "tabcskh dirty scope" in query.lower()
+				and "insert into" in query.lower()
+			):
+				upsert_tries["n"] += 1
+				orig_rollback()
+				raise frappe.QueryDeadlockError(
+					1020,
+					"Record has changed since last read in table 'tabCSKH Dirty Scope'",
+				)
+			return orig_sql(query, *args, **kwargs)
+
+		def _capture_log_error(*args, **kwargs):
+			captured_log_errors.append({"args": args, "kwargs": kwargs})
+
+		with (
+			mock.patch.object(frappe.db, "sql", side_effect=_always_fail_dirty_upsert),
+			mock.patch.object(frappe, "log_error", side_effect=_capture_log_error),
+			mock.patch.object(kpi_runs.time, "sleep"),
+		):
+			res2 = contact_attempt.record_attempt(
+				work_item=wi,
+				channel="phone_call",
+				outcome_code="connected_interested",
+				note="Liên hệ ghi thành công dù Dirty Scope tạm lỗi toàn bộ retry",
+				expected_revision=det2["work_item"]["revision"],
+				idempotency_key=idem2,
+				actor=self.staff_a,
+			)
+
+		# Committed business write MUST still return success, retry count strictly bounded, diagnostics logged!
+		self.assertEqual(res2["status"], "recorded")
+		self.assertFalse(res2["idempotent_replay"])
+		self.assertTrue(frappe.db.exists("CSKH Contact Attempt", res2["attempt_id"]))
+		self.assertEqual(upsert_tries["n"], kpi_runs.DIRTY_FLUSH_MAX_ATTEMPTS)
+		self.assertEqual(len(captured_log_errors), 1)
+		self.assertEqual(
+			captured_log_errors[0]["kwargs"].get("title"),
+			"CSKH Dirty Scope Post-Commit Flush Failed",
+		)
+		self.assertIn(res2["attempt_id"], str(captured_log_errors[0]["kwargs"].get("message")))
+
+		# Idempotent replay right after error returns exact committed attempt
+		replay2 = contact_attempt.record_attempt(
+			work_item=wi,
+			channel="phone_call",
+			outcome_code="connected_interested",
+			note="Liên hệ ghi thành công dù Dirty Scope tạm lỗi toàn bộ retry",
+			expected_revision=det2["work_item"]["revision"],
+			idempotency_key=idem2,
+			actor=self.staff_a,
+		)
+		self.assertTrue(replay2["idempotent_replay"])
+		self.assertEqual(replay2["attempt_id"], res2["attempt_id"])
+
+		# Follow-up write after transient error clears persists Dirty Scope and reconciles ALL 3 attempts!
+		det3 = read_model.get_work_item_detail(wi, actor=self.staff_a)
+		res3 = contact_attempt.record_attempt(
+			work_item=wi,
+			channel="zalo",
+			outcome_code="message_sent_no_reply",
+			note="Thao tác gọi lại sau khi lỗi Dirty Scope kết thúc",
+			expected_revision=det3["work_item"]["revision"],
+			idempotency_key=self.unique_key("fkpi1305-followup"),
+			actor=self.staff_a,
+		)
+		self.assertEqual(res3["status"], "recorded")
+		self.assertEqual(frappe.db.count("CSKH Contact Attempt", {"work_item": wi}), 3)
+
+		frappe.set_user("Administrator")
+		drain_final = kpi_runs.process_dirty_scopes(max_scopes=50)
+		self.assertGreaterEqual(drain_final["processed_scopes"], 1)
+		rec_final = reconcile_published_period(period_type="daily", period_key=today_hcm().isoformat())
+		self.assertTrue(rec_final["ok"], rec_final)

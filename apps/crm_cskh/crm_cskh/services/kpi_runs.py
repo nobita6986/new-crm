@@ -23,6 +23,7 @@ from __future__ import annotations
 import gc
 import json
 import secrets
+import time
 from contextlib import contextmanager
 from datetime import date, datetime, timedelta
 
@@ -40,6 +41,8 @@ from crm_cskh.services.errors import (
 	NotFound,
 	PolicyConflict,
 	RecomputeInProgress,
+	is_dirty_scope_retryable_error,
+	is_transient_tx_abort,
 )
 from crm_cskh.services.kpi_calculator import (
 	METRIC_LABELS_VI,
@@ -274,6 +277,16 @@ DIRTY_SCOPE_BULK_FIELDS = [
 	"last_dirtied_at",
 ]
 
+DIRTY_FLUSH_MAX_ATTEMPTS = 4
+DIRTY_FLUSH_RETRY_BASE_SEC = 0.02
+DIRTY_FLUSH_RETRY_MAX_SEC = 0.15
+DIRTY_FLUSH_BATCH_CHUNK_SIZE = 100
+DIRTY_WORKER_TX_MAX_ATTEMPTS = 4
+
+_DIRTY_SCOPE_COLUMNS_SQL = ", ".join(f"`{col}`" for col in DIRTY_SCOPE_BULK_FIELDS)
+_DIRTY_SCOPE_ROW_PH_SQL = "(" + ", ".join(["%s"] * len(DIRTY_SCOPE_BULK_FIELDS)) + ")"
+_RESTATED_REASONS_SQL = ", ".join(f"'{r}'" for r in sorted(RESTATED_TRIGGER_REASONS))
+
 
 def _enqueue_dirty_scopes_worker() -> bool:
 	if getattr(frappe.flags, "in_test", False) or not is_p3_reporting_enabled():
@@ -295,6 +308,29 @@ def _enqueue_dirty_scopes_worker() -> bool:
 	return False
 
 
+def _clear_dirty_worker_enqueued_flag() -> None:
+	try:
+		cache = frappe.cache
+		cache.delete(cache.make_key("cskh:kpi:dirty_worker_enqueued"))
+	except Exception:
+		pass
+
+
+def _rollback_dirty_flush_tx() -> None:
+	"""Reset ONLY the post-commit dirty-scope transaction without raising on an already-aborted tx."""
+	try:
+		frappe.db.rollback()
+	except Exception:
+		pass
+
+
+def _sleep_dirty_retry_backoff(retry_index: int) -> None:
+	"""Bounded exponential backoff (`0.02s -> 0.04s -> 0.08s`, capped at `0.15s`) for DB retries."""
+	delay = min(DIRTY_FLUSH_RETRY_MAX_SEC, DIRTY_FLUSH_RETRY_BASE_SEC * (2 ** max(0, retry_index)))
+	if delay > 0:
+		time.sleep(delay)
+
+
 def flush_suppressed_dirty_scope_enqueue() -> bool:
 	"""Enqueue a single deduplicated `process_dirty_scopes` job if dirty scopes were written while suppressed."""
 	local = getattr(frappe, "local", None)
@@ -306,49 +342,190 @@ def flush_suppressed_dirty_scope_enqueue() -> bool:
 	return _enqueue_dirty_scopes_worker()
 
 
-def _upsert_dirty_scopes_per_key(by_key: dict[str, dict], now_dt: datetime) -> bool:
-	wrote_any = False
-	for skey, item in by_key.items():
-		d = item["dirty_date"]
-		month_str = f"{d.year:04d}-{d.month:02d}"
-		existing_name = frappe.db.get_value("CSKH Dirty Scope", {"scope_key": skey}, "name")
-		if existing_name:
-			updates = {
-				"status": "pending",
-				"last_dirtied_at": now_dt,
-				"reason": item["reason"],
-			}
-			if item["is_prior_period"]:
-				updates["is_prior_period"] = 1
-			if item["trigger_reference"]:
-				updates["trigger_reference"] = item["trigger_reference"]
-			frappe.db.set_value("CSKH Dirty Scope", existing_name, updates, update_modified=True)
-		else:
-			doc = frappe.get_doc(
-				{
-					"doctype": "CSKH Dirty Scope",
-					"scope_key": skey,
-					"dirty_date": d.isoformat(),
-					"period_month": month_str,
-					"campaign": item["campaign"] or None,
-					"team_node": item["team_node"] or None,
-					"owner_user": item["owner_user"] or None,
-					"reason": item["reason"],
-					"is_prior_period": item["is_prior_period"],
-					"trigger_reference": item["trigger_reference"] or item["work_item"] or None,
-					"status": "pending",
-					"first_dirtied_at": now_dt,
-					"last_dirtied_at": now_dt,
-				}
-			)
-			doc.flags.ignore_links = True
-			doc.insert(ignore_permissions=True)
-		wrote_any = True
-	return wrote_any
+def _build_dirty_scope_upsert_row(
+	skey: str,
+	item: dict,
+	now_dt: datetime,
+	session_user: str,
+	seen_names: set[str],
+) -> tuple:
+	d = item["dirty_date"]
+	month_str = f"{d.year:04d}-{d.month:02d}"
+	row_name = frappe.generate_hash(length=10)
+	while row_name in seen_names:
+		row_name = frappe.generate_hash(length=10)
+	seen_names.add(row_name)
+	return (
+		row_name,
+		now_dt,
+		now_dt,
+		session_user,
+		session_user,
+		0,
+		0,
+		skey,
+		d.isoformat(),
+		month_str,
+		item["campaign"] or None,
+		item["team_node"] or None,
+		item["owner_user"] or None,
+		item["reason"],
+		int(item["is_prior_period"]),
+		item["trigger_reference"] or item["work_item"] or None,
+		"pending",
+		now_dt,
+		now_dt,
+	)
+
+
+def _atomic_upsert_dirty_scope_chunk(
+	by_key: dict[str, dict],
+	skeys: list[str],
+	now_dt: datetime,
+	session_user: str,
+) -> None:
+	"""Atomically insert or re-mark `CSKH Dirty Scope` rows in deterministic `scope_key` order.
+
+	Uses a single MariaDB `INSERT ... ON DUPLICATE KEY UPDATE` keyed on `UNIQUE(scope_key)` with
+	NO preceding `SELECT` snapshot read and NO fragile savepoint, eliminating both MariaDB `1020`
+	snapshot staleness and `1305 SAVEPOINT does not exist` cascades under concurrent worker drain.
+	"""
+	if not skeys:
+		return
+
+	seen_names: set[str] = set()
+	params: list = []
+	explicit_ref_keys: list[str] = []
+	for skey in skeys:
+		item = by_key[skey]
+		params.extend(_build_dirty_scope_upsert_row(skey, item, now_dt, session_user, seen_names))
+		if item["trigger_reference"]:
+			explicit_ref_keys.append(skey)
+
+	if len(explicit_ref_keys) == len(skeys):
+		trigger_ref_update_sql = "coalesce(nullif(values(`trigger_reference`), ''), `trigger_reference`)"
+	elif not explicit_ref_keys:
+		trigger_ref_update_sql = "coalesce(nullif(`trigger_reference`, ''), values(`trigger_reference`))"
+	else:
+		ref_ph = ", ".join(["%s"] * len(explicit_ref_keys))
+		trigger_ref_update_sql = (
+			f"case when `scope_key` in ({ref_ph}) "
+			"then coalesce(nullif(values(`trigger_reference`), ''), `trigger_reference`) "
+			"else coalesce(nullif(`trigger_reference`, ''), values(`trigger_reference`)) end"
+		)
+		params.extend(explicit_ref_keys)
+
+	values_sql = ", ".join([_DIRTY_SCOPE_ROW_PH_SQL] * len(skeys))
+	frappe.db.sql(
+		f"""
+		insert into `tabCSKH Dirty Scope` ({_DIRTY_SCOPE_COLUMNS_SQL})
+		values {values_sql}
+		on duplicate key update
+			`status` = 'pending',
+			`last_dirtied_at` = values(`last_dirtied_at`),
+			`modified` = values(`modified`),
+			`modified_by` = values(`modified_by`),
+			`reason` = case
+				when values(`reason`) in ({_RESTATED_REASONS_SQL})
+					then values(`reason`)
+				when `status` in ('pending', 'processing')
+				     and `reason` in ({_RESTATED_REASONS_SQL})
+					then `reason`
+				else values(`reason`)
+			end,
+			`is_prior_period` = greatest(coalesce(`is_prior_period`, 0), values(`is_prior_period`)),
+			`trigger_reference` = {trigger_ref_update_sql}
+		""",
+		tuple(params),
+	)
+
+
+def _upsert_dirty_scopes_per_key(
+	by_key: dict[str, dict],
+	now_dt: datetime,
+	*,
+	skeys: list[str] | None = None,
+	session_user: str | None = None,
+) -> tuple[list[str], list[str], Exception | None]:
+	"""Commit each `scope_key` independently via atomic upsert so one contended key never blocks others."""
+	target_keys = list(skeys) if skeys is not None else sorted(by_key.keys())
+	actor = session_user or getattr(getattr(frappe, "session", None), "user", None) or "Administrator"
+	succeeded: list[str] = []
+	failed: list[str] = []
+	last_exc: Exception | None = None
+
+	for skey in target_keys:
+		try:
+			_atomic_upsert_dirty_scope_chunk(by_key, [skey], now_dt, actor)
+			frappe.db.commit()
+			succeeded.append(skey)
+		except Exception as exc:
+			last_exc = exc
+			_rollback_dirty_flush_tx()
+			failed.append(skey)
+	return succeeded, failed, last_exc
+
+
+def _record_dirty_flush_diagnostic(
+	*,
+	failed_keys: list[str],
+	succeeded_count: int,
+	attempts: int,
+	last_exc: Exception | None,
+	by_key: dict[str, dict],
+	retryable: bool,
+) -> None:
+	"""Emit structured diagnostics without allowing a post-commit log failure to crash the API."""
+	trigger_refs = sorted(
+		{
+			str(by_key[k].get("trigger_reference") or by_key[k].get("work_item") or "")
+			for k in failed_keys
+			if k in by_key
+		}
+		- {""}
+	)
+	payload = {
+		"event": "cskh_dirty_scope_post_commit_flush_failed",
+		"failed_scope_keys": failed_keys,
+		"failed_count": len(failed_keys),
+		"succeeded_count": succeeded_count,
+		"attempts": attempts,
+		"max_attempts": DIRTY_FLUSH_MAX_ATTEMPTS,
+		"retryable": retryable,
+		"trigger_references": trigger_refs,
+		"error_type": type(last_exc).__name__ if last_exc else "UnknownError",
+		"error_message": str(last_exc) if last_exc else "",
+	}
+	rendered = json.dumps(payload, ensure_ascii=False, default=str)
+	try:
+		frappe.logger("crm_cskh").error("CSKH Dirty Scope post-commit flush exhausted: %s", rendered)
+	except Exception:
+		pass
+	try:
+		frappe.log_error(
+			title="CSKH Dirty Scope Post-Commit Flush Failed",
+			message=rendered,
+		)
+		frappe.db.commit()
+	except Exception:
+		_rollback_dirty_flush_tx()
 
 
 def _flush_pending_dirty_events() -> None:
-	"""Execute AFTER transaction commit: upsert `CSKH Dirty Scope` rows and optionally enqueue worker."""
+	"""Execute AFTER transaction commit: upsert `CSKH Dirty Scope` rows and optionally enqueue worker.
+
+	Transaction & recovery guarantees (`F-KPI-1305`):
+	  1. Runs strictly AFTER the business write (`record_attempt`, `assign`, `review_correction`, ...)
+	     has already durably committed, in its own isolated post-commit transaction.
+	  2. Uses atomic `INSERT ... ON DUPLICATE KEY UPDATE` (zero `SELECT`-before-`UPDATE` snapshot gap,
+	     zero savepoints that MariaDB `1020`/`1213` would drop into `1305 SAVEPOINT does not exist`).
+	  3. On transient DB conflict (`1020`, `1213`, `1205`, `1062`, `1305`), executes full `frappe.db.rollback()`
+	     (affecting ONLY the post-commit dirty flush) and retries boundedly up to `DIRTY_FLUSH_MAX_ATTEMPTS`,
+	     falling back to per-key atomic commits for multi-key batches.
+	  4. If all bounded retries fail, resets the aborted post-commit DB transaction cleanly, records structured
+	     diagnostics (`frappe.logger` + `frappe.log_error`), clears the worker dedup flag, and NEVER raises out
+	     of `after_commit` so the already-committed API returns its exact success payload.
+	"""
 	local = getattr(frappe, "local", None)
 	if local is None:
 		return
@@ -379,156 +556,96 @@ def _flush_pending_dirty_events() -> None:
 			if ev["trigger_reference"]:
 				prev["trigger_reference"] = ev["trigger_reference"]
 
-	wrote_any = False
+	skeys = sorted(by_key.keys())
+	session_user = getattr(getattr(frappe, "session", None), "user", None) or "Administrator"
+	pending_keys = list(skeys)
+	succeeded_count = 0
+	attempts_used = 0
+	last_exc: Exception | None = None
+	last_retryable = False
+
 	with authorized_kpi_write():
-		skeys = sorted(by_key.keys())
-		try:
-			frappe.db.savepoint("cskh_dirty_flush_batch")
-			ph = ", ".join(["%s"] * len(skeys))
-			existing_rows = frappe.db.sql(
-				f"""
-				select name, scope_key, is_prior_period, trigger_reference
-				from `tabCSKH Dirty Scope`
-				where scope_key in ({ph})
-				""",
-				tuple(skeys),
-				as_dict=True,
-			)
-			existing_by_key = {str(r.scope_key): r for r in existing_rows}
-			session_user = getattr(getattr(frappe, "session", None), "user", None) or "Administrator"
+		for attempt in range(DIRTY_FLUSH_MAX_ATTEMPTS):
+			attempts_used = attempt + 1
+			if attempt > 0:
+				_sleep_dirty_retry_backoff(attempt - 1)
 
-			insert_rows: list[tuple] = []
-			update_items: list[tuple[dict, dict]] = []
-			seen_names: set[str] = set()
-			for skey in skeys:
-				item = by_key[skey]
-				ex_row = existing_by_key.get(skey)
-				if ex_row is not None:
-					update_items.append((ex_row, item))
-				else:
-					d = item["dirty_date"]
-					month_str = f"{d.year:04d}-{d.month:02d}"
-					row_name = frappe.generate_hash(length=10)
-					while row_name in seen_names:
-						row_name = frappe.generate_hash(length=10)
-					seen_names.add(row_name)
-					insert_rows.append(
-						(
-							row_name,
-							now_dt,
-							now_dt,
-							session_user,
-							session_user,
-							0,
-							0,
-							skey,
-							d.isoformat(),
-							month_str,
-							item["campaign"] or None,
-							item["team_node"] or None,
-							item["owner_user"] or None,
-							item["reason"],
-							int(item["is_prior_period"]),
-							item["trigger_reference"] or item["work_item"] or None,
-							"pending",
-							now_dt,
-							now_dt,
+			use_per_key = len(pending_keys) > 1 and attempt > 0
+			if not use_per_key:
+				try:
+					for idx in range(0, len(pending_keys), DIRTY_FLUSH_BATCH_CHUNK_SIZE):
+						chunk = pending_keys[idx : idx + DIRTY_FLUSH_BATCH_CHUNK_SIZE]
+						_atomic_upsert_dirty_scope_chunk(by_key, chunk, now_dt, session_user)
+					frappe.db.commit()
+					succeeded_count += len(pending_keys)
+					pending_keys = []
+					break
+				except Exception as exc:
+					last_exc = exc
+					last_retryable = is_dirty_scope_retryable_error(exc)
+					_rollback_dirty_flush_tx()
+					try:
+						frappe.logger("crm_cskh").warning(
+							"CSKH Dirty Scope batch flush retry %s/%s failed (%s): %s",
+							attempts_used,
+							DIRTY_FLUSH_MAX_ATTEMPTS,
+							type(exc).__name__,
+							str(exc),
 						)
-					)
+					except Exception:
+						pass
+					if not last_retryable and len(pending_keys) == 1:
+						break
+					continue
 
-			if insert_rows:
-				frappe.db.bulk_insert(
-					"CSKH Dirty Scope",
-					fields=DIRTY_SCOPE_BULK_FIELDS,
-					values=insert_rows,
+			ok_keys, failed_keys, per_key_exc = _upsert_dirty_scopes_per_key(
+				by_key,
+				now_dt,
+				skeys=pending_keys,
+				session_user=session_user,
+			)
+			succeeded_count += len(ok_keys)
+			pending_keys = failed_keys
+			if not pending_keys:
+				break
+			last_exc = per_key_exc
+			last_retryable = bool(per_key_exc and is_dirty_scope_retryable_error(per_key_exc))
+			try:
+				frappe.logger("crm_cskh").warning(
+					"CSKH Dirty Scope per-key flush retry %s/%s left %s keys failed (%s): %s",
+					attempts_used,
+					DIRTY_FLUSH_MAX_ATTEMPTS,
+					len(pending_keys),
+					type(per_key_exc).__name__ if per_key_exc else "UnknownError",
+					str(per_key_exc) if per_key_exc else "",
 				)
+			except Exception:
+				pass
+			if not last_retryable:
+				break
 
-			if update_items:
-				update_items.sort(key=lambda pair: str(pair[0].name))
-				if len(update_items) == 1:
-					ex_row, item = update_items[0]
-					eff_prior = 1 if (item["is_prior_period"] or cint(ex_row.is_prior_period)) else 0
-					eff_trig = item["trigger_reference"] or ex_row.trigger_reference
-					frappe.db.sql(
-						"""
-						update `tabCSKH Dirty Scope`
-						set status = 'pending',
-						    last_dirtied_at = %s,
-						    modified = %s,
-						    modified_by = %s,
-						    reason = %s,
-						    is_prior_period = %s,
-						    trigger_reference = %s
-						where name = %s
-						""",
-						(
-							now_dt,
-							now_dt,
-							session_user,
-							item["reason"],
-							eff_prior,
-							eff_trig,
-							str(ex_row.name),
-						),
-					)
-				else:
-					reason_cases: list[str] = []
-					reason_params: list = []
-					prior_cases: list[str] = []
-					prior_params: list = []
-					trig_cases: list[str] = []
-					trig_params: list = []
-					upd_names: list[str] = []
-					for ex_row, item in update_items:
-						ename = str(ex_row.name)
-						upd_names.append(ename)
-						reason_cases.append("when %s then %s")
-						reason_params.extend((ename, item["reason"]))
-						eff_prior = 1 if (item["is_prior_period"] or cint(ex_row.is_prior_period)) else 0
-						prior_cases.append("when %s then %s")
-						prior_params.extend((ename, eff_prior))
-						eff_trig = item["trigger_reference"] or ex_row.trigger_reference
-						trig_cases.append("when %s then %s")
-						trig_params.extend((ename, eff_trig))
-
-					upd_ph = ", ".join(["%s"] * len(upd_names))
-					frappe.db.sql(
-						f"""
-						update `tabCSKH Dirty Scope`
-						set status = 'pending',
-						    last_dirtied_at = %s,
-						    modified = %s,
-						    modified_by = %s,
-						    reason = case name {" ".join(reason_cases)} end,
-						    is_prior_period = case name {" ".join(prior_cases)} end,
-						    trigger_reference = case name {" ".join(trig_cases)} end
-						where name in ({upd_ph})
-						""",
-						(
-							now_dt,
-							now_dt,
-							session_user,
-							*reason_params,
-							*prior_params,
-							*trig_params,
-							*upd_names,
-						),
-					)
-			wrote_any = bool(insert_rows or update_items)
+	wrote_any = succeeded_count > 0
+	if wrote_any:
+		try:
+			runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
 		except Exception:
-			frappe.db.rollback(save_point="cskh_dirty_flush_batch")
-			wrote_any = _upsert_dirty_scopes_per_key(by_key, now_dt)
-
-	if wrote_any:
-		runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
-		frappe.db.commit()
-
-	# Enqueue deduplicated background worker outside unit tests unless explicitly suppressed
-	if wrote_any:
+			pass
 		if getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False):
 			local.cskh_dirty_scopes_written_while_suppressed = True
 		else:
 			_enqueue_dirty_scopes_worker()
+
+	if pending_keys:
+		_rollback_dirty_flush_tx()
+		_clear_dirty_worker_enqueued_flag()
+		_record_dirty_flush_diagnostic(
+			failed_keys=pending_keys,
+			succeeded_count=succeeded_count,
+			attempts=attempts_used,
+			last_exc=last_exc,
+			by_key=by_key,
+			retryable=last_retryable,
+		)
 
 
 @contextmanager
@@ -918,6 +1035,42 @@ def _should_defer_unmaterialized_large_rollup(p_spec: PeriodSpec) -> bool:
 	return (att_cnt + ob_cnt) > 2000
 
 
+def _run_dirty_worker_tx(fn, *, op_label: str):
+	"""Execute a worker `tabCSKH Dirty Scope` state transition with bounded retry on `1020`/`1213`/`1205`."""
+	for attempt in range(DIRTY_WORKER_TX_MAX_ATTEMPTS):
+		if attempt > 0:
+			_sleep_dirty_retry_backoff(attempt - 1)
+		try:
+			return fn()
+		except Exception as exc:
+			_rollback_dirty_flush_tx()
+			retryable = is_transient_tx_abort(exc) or is_dirty_scope_retryable_error(exc)
+			if not retryable or attempt + 1 >= DIRTY_WORKER_TX_MAX_ATTEMPTS:
+				try:
+					frappe.logger("crm_cskh").error(
+						"CSKH Dirty Scope worker transition '%s' failed after %s/%s attempts (%s): %s",
+						op_label,
+						attempt + 1,
+						DIRTY_WORKER_TX_MAX_ATTEMPTS,
+						type(exc).__name__,
+						str(exc),
+					)
+				except Exception:
+					pass
+				raise
+			try:
+				frappe.logger("crm_cskh").warning(
+					"CSKH Dirty Scope worker transition '%s' retry %s/%s after %s: %s",
+					op_label,
+					attempt + 1,
+					DIRTY_WORKER_TX_MAX_ATTEMPTS,
+					type(exc).__name__,
+					str(exc),
+				)
+			except Exception:
+				pass
+
+
 def process_dirty_scopes(
 	max_scopes: int = 100,
 	as_of: datetime | str | None = None,
@@ -930,28 +1083,35 @@ def process_dirty_scopes(
 	if not is_p3_reporting_enabled():
 		return {"processed_scopes": 0, "skipped": True, "reason": "p3_reporting_disabled", "runs": []}
 
-	pending_rows = frappe.db.sql(
-		"""
-		select name, dirty_date, campaign, reason, is_prior_period, trigger_reference
-		from `tabCSKH Dirty Scope`
-		where status = 'pending'
-		order by first_dirtied_at asc
-		limit %s
-		""",
-		(int(max_scopes),),
-		as_dict=True,
-	)
+	def _claim_pending_batch():
+		rows = frappe.db.sql(
+			"""
+			select name, dirty_date, campaign, reason, is_prior_period, trigger_reference
+			from `tabCSKH Dirty Scope`
+			where status = 'pending'
+			order by first_dirtied_at asc
+			limit %s
+			""",
+			(int(max_scopes),),
+			as_dict=True,
+		)
+		if not rows:
+			return [], []
+		ids = sorted(str(r.name) for r in rows)
+		ph_claim = ", ".join(["%s"] * len(ids))
+		frappe.db.sql(
+			f"update `tabCSKH Dirty Scope` set status = 'processing' where name in ({ph_claim}) and status = 'pending'",
+			tuple(ids),
+		)
+		runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+		frappe.db.commit()
+		return rows, ids
+
+	pending_rows, scope_ids = _run_dirty_worker_tx(_claim_pending_batch, op_label="claim_pending")
 	if not pending_rows:
 		return {"processed_scopes": 0, "runs": []}
 
-	scope_ids = sorted(str(r.name) for r in pending_rows)
 	ph = ", ".join(["%s"] * len(scope_ids))
-	frappe.db.sql(
-		f"update `tabCSKH Dirty Scope` set status = 'processing' where name in ({ph}) and status = 'pending'",
-		tuple(scope_ids),
-	)
-	runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
-	frappe.db.commit()
 
 	# Expand unique affected standard periods `(daily, weekly, monthly, quarterly, yearly)`
 	periods_map: dict[tuple[str, str], PeriodSpec] = {}
@@ -995,36 +1155,56 @@ def process_dirty_scopes(
 			last_run_id = res["run_id"]
 			gc.collect()
 	except Exception:
-		frappe.db.sql(
-			f"update `tabCSKH Dirty Scope` set status = 'pending' where name in ({ph})",
-			tuple(scope_ids),
-		)
-		runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
-		frappe.db.commit()
+		_rollback_dirty_flush_tx()
+
+		def _requeue_pending():
+			frappe.db.sql(
+				f"update `tabCSKH Dirty Scope` set status = 'pending' where name in ({ph})",
+				tuple(scope_ids),
+			)
+			runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+			frappe.db.commit()
+
 		try:
-			cache = frappe.cache
-			cache.delete(cache.make_key("cskh:kpi:dirty_worker_enqueued"))
+			_run_dirty_worker_tx(_requeue_pending, op_label="requeue_pending_on_error")
 		except Exception:
 			pass
+		_clear_dirty_worker_enqueued_flag()
 		raise
 
 	done_dt = now_datetime()
-	frappe.db.sql(
-		f"""
-		update `tabCSKH Dirty Scope`
-		set status = 'processed',
-		    processed_by_run = %s,
-		    processed_at = %s
-		where name in ({ph})
-		  and status = 'processing'
-		""",
-		(last_run_id or None, done_dt, *scope_ids),
-	)
-	runtime_cache.bump_cache_domain(
-		runtime_cache.DOMAIN_DIRTY_SCOPE,
-		runtime_cache.DOMAIN_KPI_SNAPSHOT,
-	)
-	frappe.db.commit()
+
+	def _mark_processed():
+		frappe.db.sql(
+			f"""
+			update `tabCSKH Dirty Scope`
+			set status = 'processed',
+			    processed_by_run = %s,
+			    processed_at = %s
+			where name in ({ph})
+			  and status = 'processing'
+			""",
+			(last_run_id or None, done_dt, *scope_ids),
+		)
+		runtime_cache.bump_cache_domain(
+			runtime_cache.DOMAIN_DIRTY_SCOPE,
+			runtime_cache.DOMAIN_KPI_SNAPSHOT,
+		)
+		frappe.db.commit()
+
+	_run_dirty_worker_tx(_mark_processed, op_label="mark_processed")
+
+	# If a concurrent writer re-marked any scope `pending` during recompute, trigger a follow-up drain
+	_clear_dirty_worker_enqueued_flag()
+	try:
+		remaining = frappe.db.sql(
+			"select 1 from `tabCSKH Dirty Scope` where status = 'pending' limit 1",
+		)
+		if remaining:
+			_enqueue_dirty_scopes_worker()
+	except Exception:
+		pass
+
 	return {
 		"processed_scopes": len(scope_ids),
 		"periods_recomputed": len(runs_out),
