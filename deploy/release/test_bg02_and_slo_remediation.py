@@ -78,6 +78,11 @@ class TestBg02AndSloGovernance(unittest.TestCase):
             hooks_src,
             "hooks.py must not serialize page_renderer into Redis app_hooks (breaks G09 Tier 3 N->N-1 rollback)",
         )
+        self.assertNotIn(
+            "crm_cskh.cskh_sidebar.inject_crm_sidebar_bridge",
+            hooks_src,
+            "hooks.py after_request must not serialize new module paths into Redis app_hooks (breaks G09 Tier 3 N->N-1 rollback)",
+        )
 
     def test_cli_and_cross_worker_cache_invalidation_contracts(self) -> None:
         init_src = (APP_ROOT / "__init__.py").read_text(encoding="utf-8")
