@@ -68,6 +68,20 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+RELEASE_DIR = Path(__file__).resolve().parent
+if str(RELEASE_DIR) not in sys.path:
+    sys.path.insert(0, str(RELEASE_DIR))
+
+from g18_resource_profiles import (  # noqa: E402
+    RAW_G18_RESOURCE_PROFILES,
+    VERIFY_DAEMON_SERVICES,
+    RuntimeConfigVerificationError,
+    collect_pre_acceptance_runtime_snapshot,
+    get_g18_resource_profile_spec,
+    render_verify_compose_override_yaml,
+    verify_declared_vs_runtime_config_snapshot,
+)
+
 IMAGES_DIR = REPO_ROOT / "deploy" / "images"
 LOCK_FILE = IMAGES_DIR / "release-lock.json"
 VERIFY_COMPOSE_FILE = IMAGES_DIR / "compose.verify.yaml"
@@ -176,126 +190,35 @@ def _classify_http_statuses(statuses: list[int]) -> dict[str, object]:
     }
 
 
-EPHEMERAL_BENCH_OVERRIDE_YAML = """\
-services:
-  backend:
-    cpu_shares: 1024
-    environment:
-      GUNICORN_WORKERS: "4"
-      GUNICORN_THREADS: "4"
-      GUNICORN_TIMEOUT: "120"
-      TZ: Asia/Ho_Chi_Minh
-  queue-short:
-    cpu_shares: 512
-    command: ["bench", "worker", "--queue", "short,default"]
-  queue-long:
-    image: ${APP_IMAGE:?set APP_IMAGE}
-    pull_policy: ${PULL_POLICY:-never}
-    restart: "no"
-    cpu_shares: 1024
-    security_opt:
-      - no-new-privileges:true
-    command: ["bench", "worker", "--queue", "long"]
-    environment:
-      TZ: Asia/Ho_Chi_Minh
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-    depends_on:
-      configurator:
-        condition: service_completed_successfully
-    networks:
-      - data_net
-  db:
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-      - --skip-character-set-client-handshake
-      - --innodb-buffer-pool-size=2560M
-      - --innodb-log-file-size=512M
-      - --innodb-log-buffer-size=64M
-      - --innodb-flush-log-at-trx-commit=1
-      - --innodb-flush-method=O_DIRECT
-      - --innodb-io-capacity=1000
-      - --innodb-io-capacity-max=2000
-      - --max-connections=200
-"""
+EPHEMERAL_BENCH_OVERRIDE_YAML = render_verify_compose_override_yaml("s1_canonical_4x4")
+STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML = render_verify_compose_override_yaml(
+    "staging_vps_capped"
+)
 
-STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML = """\
-services:
-  frontend:
-    cpus: 0.35
-    mem_limit: 256m
-  backend:
-    cpus: 1.50
-    mem_limit: 1536m
-    cpu_shares: 1024
-    environment:
-      GUNICORN_WORKERS: "2"
-      GUNICORN_THREADS: "4"
-      GUNICORN_TIMEOUT: "120"
-      TZ: Asia/Ho_Chi_Minh
-  websocket:
-    cpus: 0.25
-    mem_limit: 256m
-  queue-short:
-    cpus: 0.50
-    mem_limit: 2048m
-    cpu_shares: 512
-    command: ["bench", "worker", "--queue", "short,default"]
-  queue-long:
-    image: ${APP_IMAGE:?set APP_IMAGE}
-    pull_policy: ${PULL_POLICY:-never}
-    restart: "no"
-    cpus: 1.25
-    mem_limit: 1536m
-    cpu_shares: 1024
-    security_opt:
-      - no-new-privileges:true
-    command: ["bench", "worker", "--queue", "long"]
-    environment:
-      TZ: Asia/Ho_Chi_Minh
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-    depends_on:
-      configurator:
-        condition: service_completed_successfully
-    networks:
-      - data_net
-  scheduler:
-    cpus: 0.15
-    mem_limit: 256m
-  db:
-    cpus: 2.00
-    mem_limit: 3584m
-    command:
-      - --character-set-server=utf8mb4
-      - --collation-server=utf8mb4_unicode_ci
-      - --skip-character-set-client-handshake
-      - --innodb-buffer-pool-size=2560M
-      - --innodb-log-file-size=512M
-      - --innodb-log-buffer-size=64M
-      - --innodb-flush-log-at-trx-commit=1
-      - --innodb-flush-method=O_DIRECT
-      - --innodb-io-capacity=1000
-      - --innodb-io-capacity-max=2000
-      - --max-connections=200
-  redis-cache:
-    cpus: 0.15
-    mem_limit: 256m
-    command:
-      - redis-server
-      - --save
-      - ""
-      - --appendonly
-      - "no"
-      - --maxmemory
-      - 128mb
-      - --maxmemory-policy
-      - allkeys-lru
-  redis-queue:
-    cpus: 0.15
-    mem_limit: 256m
-"""
+
+def capture_and_verify_pre_acceptance_runtime_config(
+    *,
+    compose_base: list[str],
+    compose_env: dict[str, str],
+    site_name: str,
+    profile_key: str,
+    worker_registration_wait_sec: float = 10.0,
+) -> dict[str, object]:
+    """Capture cgroup & live worker counts for all 9 services and enforce declared limits fail-closed."""
+    snapshot = collect_pre_acceptance_runtime_snapshot(
+        compose_base=compose_base,
+        compose_env=compose_env,
+        site_name=site_name,
+        profile_key=profile_key,
+        worker_registration_wait_sec=worker_registration_wait_sec,
+    )
+    verdict = verify_declared_vs_runtime_config_snapshot(
+        snapshot, profile_key=profile_key
+    )
+    return {
+        **snapshot,
+        "verification_verdict": verdict,
+    }
 
 
 def enforce_live_resource_headroom(
@@ -3962,6 +3885,7 @@ def provision_and_execute_s1_benchmark(
     port: int = 18880,
     site_name: str = "p4-s1-bench.localhost",
     resource_profile: str = "s1_canonical_4x4",
+    resource_variant: str = "",
     require_live_headroom: bool = False,
 ) -> dict[str, object]:
     """Self-contained isolated S1 provisioning, seeding, measurement, and teardown."""
@@ -3969,9 +3893,19 @@ def provision_and_execute_s1_benchmark(
         raise ValueError(
             f"Unsupported --resource-profile {resource_profile!r}; expected s1_canonical_4x4 or staging_vps_capped"
         )
+    profile_key = (resource_variant or "").strip() or resource_profile
+    profile_spec = get_g18_resource_profile_spec(profile_key)
+    if profile_spec["slo_spec_profile_column"] != resource_profile:
+        raise ValueError(
+            f"--resource-variant {profile_key!r} belongs to SLO column "
+            f"{profile_spec['slo_spec_profile_column']!r}, not --resource-profile {resource_profile!r}"
+        )
     live_headroom = (
         enforce_live_resource_headroom()
-        if (require_live_headroom or resource_profile == "staging_vps_capped")
+        if (
+            require_live_headroom
+            or bool(profile_spec["require_live_headroom_precheck"])
+        )
         else None
     )
     compose_project = f"cskh-p4-bench-{secrets.token_hex(4)}"
@@ -3994,11 +3928,7 @@ def provision_and_execute_s1_benchmark(
         db_secret = tmp_dir / "db_root_password.txt"
         db_secret.write_text(db_root_pw, encoding="utf-8")
         bench_override = tmp_dir / "compose.bench-override.yaml"
-        override_yaml = (
-            STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML
-            if resource_profile == "staging_vps_capped"
-            else EPHEMERAL_BENCH_OVERRIDE_YAML
-        )
+        override_yaml = str(profile_spec["verify_compose_override_yaml"])
         bench_override.write_text(override_yaml, encoding="utf-8")
         compose_files = [VERIFY_COMPOSE_FILE, bench_override]
 
@@ -4024,6 +3954,7 @@ def provision_and_execute_s1_benchmark(
         current_stage = "compose_up"
         s1_in_container: dict[str, object] | None = None
         http_report: dict[str, object] | None = None
+        pre_acceptance_runtime_snap: dict[str, object] | None = None
 
         try:
             subprocess.run(
@@ -4194,6 +4125,16 @@ def provision_and_execute_s1_benchmark(
                     f"HTTP readiness probe failed on {base_url}:\n{diag.stdout[-2000:]}\n{diag.stderr[-1000:]}"
                 )
 
+            current_stage = "pre_acceptance_runtime_config_verification"
+            pre_acceptance_runtime_snap = (
+                capture_and_verify_pre_acceptance_runtime_config(
+                    compose_base=compose_base,
+                    compose_env=compose_env,
+                    site_name=site_name,
+                    profile_key=profile_key,
+                )
+            )
+
             current_stage = "http_benchmark_execution"
             http_report = execute_isolated_benchmark(
                 spec,
@@ -4215,6 +4156,11 @@ def provision_and_execute_s1_benchmark(
                 for k, v in s1_in_container.items()
                 if k not in ("http_open_work_items", "staff_users", "leader_users")
             }
+            if isinstance(pre_acceptance_runtime_snap.get("mariadb_variables"), dict):
+                s1_clean.setdefault(
+                    "mariadb_runtime_variables",
+                    pre_acceptance_runtime_snap["mariadb_variables"],
+                )
             acceptance_matrix = _build_p4_9_2_acceptance_matrix(s1_clean, http_report)
             pre_teardown_diag = _collect_pre_teardown_diagnostics(
                 compose_project=compose_project,
@@ -4246,7 +4192,43 @@ def provision_and_execute_s1_benchmark(
                 "app_image_tested": app_image,
                 "image_id": image_id,
                 "resource_profile": resource_profile,
+                "resource_variant": profile_spec["variant_id"],
+                "config_spec_sha256": profile_spec["config_spec_sha256"],
+                "compose_env_overrides_sha256": profile_spec[
+                    "compose_env_overrides_sha256"
+                ],
+                "verify_9_service_config_spec_sha256": profile_spec[
+                    "verify_9_service_config_spec_sha256"
+                ],
+                "verify_9_to_staging_10_mapping": profile_spec[
+                    "verify_9_to_staging_10_mapping"
+                ],
                 "live_resource_headroom_precheck": live_headroom,
+                "cgroup_container_inspection": pre_acceptance_runtime_snap.get(
+                    "cgroup_container_inspection"
+                ),
+                "service_worker_inspection": pre_acceptance_runtime_snap.get(
+                    "service_worker_inspection"
+                ),
+                "mariadb_variables": pre_acceptance_runtime_snap.get(
+                    "mariadb_variables"
+                ),
+                "rq_workers": pre_acceptance_runtime_snap.get("rq_workers"),
+                "s1_short_probe_telemetry": {
+                    "effective_mariadb_and_worker_config": {
+                        "mariadb_variables": pre_acceptance_runtime_snap.get(
+                            "mariadb_variables"
+                        )
+                        or {},
+                        "rq_workers": pre_acceptance_runtime_snap.get("rq_workers")
+                        or [],
+                        "service_worker_inspection": pre_acceptance_runtime_snap.get(
+                            "service_worker_inspection"
+                        )
+                        or {},
+                    }
+                },
+                "pre_acceptance_runtime_config_snapshot": pre_acceptance_runtime_snap,
                 "s1_domain_and_database_benchmark": s1_clean,
                 "worker_and_job_diagnostics": pre_teardown_diag,
                 "p4_9_2_acceptance_matrix": acceptance_matrix,
@@ -4263,6 +4245,11 @@ def provision_and_execute_s1_benchmark(
                 secrets_to_redact=secrets_to_redact,
             )
             scrubbed_err = _scrub_diagnostic_text(str(exc), secrets_to_redact)
+            err_code = (
+                exc.code
+                if isinstance(exc, RuntimeConfigVerificationError)
+                else type(exc).__name__
+            )
             s1_partial = (
                 {
                     k: v
@@ -4279,12 +4266,19 @@ def provision_and_execute_s1_benchmark(
                 "all_acceptance_passed": False,
                 "failed_stage": current_stage,
                 "error_type": type(exc).__name__,
+                "error_code": err_code,
                 "error_message": scrubbed_err,
                 "completed_at_utc": datetime.now(timezone.utc).isoformat(),
                 "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
                 "app_image_tested": app_image,
                 "resource_profile": resource_profile,
+                "resource_variant": profile_spec["variant_id"],
+                "config_spec_sha256": profile_spec["config_spec_sha256"],
+                "verify_9_service_config_spec_sha256": profile_spec[
+                    "verify_9_service_config_spec_sha256"
+                ],
                 "live_resource_headroom_precheck": live_headroom,
+                "pre_acceptance_runtime_config_snapshot": pre_acceptance_runtime_snap,
                 "s1_domain_and_database_benchmark": s1_partial,
                 "worker_and_job_diagnostics": pre_teardown_diag,
             }
@@ -4339,7 +4333,7 @@ def _parse_mem_usage_pair_mib(mem_usage: str) -> tuple[float, float]:
 def _inspect_compose_service_cgroups(
     compose_base: list[str],
     compose_env: dict[str, str],
-    services: tuple[str, ...] = ("db", "backend", "queue-long", "queue-short"),
+    services: tuple[str, ...] = VERIFY_DAEMON_SERVICES,
 ) -> dict[str, dict[str, object]]:
     inspected: dict[str, dict[str, object]] = {}
     for svc in services:
@@ -4422,6 +4416,7 @@ def provision_and_execute_s1_short_probe(
     port: int = 18880,
     site_name: str = "p4-s1-probe.localhost",
     resource_profile: str = "staging_vps_capped",
+    resource_variant: str = "",
     require_live_headroom: bool = True,
     probe_items: int = 500,
 ) -> dict[str, object]:
@@ -4430,10 +4425,20 @@ def provision_and_execute_s1_short_probe(
         raise ValueError(
             f"Unsupported --resource-profile {resource_profile!r}; expected s1_canonical_4x4 or staging_vps_capped"
         )
+    profile_key = (resource_variant or "").strip() or resource_profile
+    profile_spec = get_g18_resource_profile_spec(profile_key)
+    if profile_spec["slo_spec_profile_column"] != resource_profile:
+        raise ValueError(
+            f"--resource-variant {profile_key!r} belongs to SLO column "
+            f"{profile_spec['slo_spec_profile_column']!r}, not --resource-profile {resource_profile!r}"
+        )
     bounded_probe_items = max(100, min(int(probe_items), 2000))
     live_headroom = (
         enforce_live_resource_headroom()
-        if (require_live_headroom or resource_profile == "staging_vps_capped")
+        if (
+            require_live_headroom
+            or bool(profile_spec["require_live_headroom_precheck"])
+        )
         else None
     )
     compose_project = f"cskh-p4-bench-probe-{secrets.token_hex(4)}"
@@ -4457,11 +4462,7 @@ def provision_and_execute_s1_short_probe(
         db_secret = tmp_dir / "db_root_password.txt"
         db_secret.write_text(db_root_pw, encoding="utf-8")
         bench_override = tmp_dir / "compose.bench-override.yaml"
-        override_yaml = (
-            STAGING_VPS_CAPPED_BENCH_OVERRIDE_YAML
-            if resource_profile == "staging_vps_capped"
-            else EPHEMERAL_BENCH_OVERRIDE_YAML
-        )
+        override_yaml = str(profile_spec["verify_compose_override_yaml"])
         bench_override.write_text(override_yaml, encoding="utf-8")
         compose_files = [VERIFY_COMPOSE_FILE, bench_override]
         compose_env = {
@@ -4485,6 +4486,7 @@ def provision_and_execute_s1_short_probe(
 
         current_stage = "compose_up"
         probe_in_container: dict[str, object] | None = None
+        pre_acceptance_runtime_snap: dict[str, object] | None = None
         stats_samples: list[dict[str, object]] = []
         stop_stats_event = threading.Event()
 
@@ -4573,6 +4575,16 @@ def provision_and_execute_s1_short_probe(
                 capture_output=True,
                 text=True,
                 timeout=120,
+            )
+
+            current_stage = "pre_acceptance_runtime_config_verification"
+            pre_acceptance_runtime_snap = (
+                capture_and_verify_pre_acceptance_runtime_config(
+                    compose_base=compose_base,
+                    compose_env=compose_env,
+                    site_name=site_name,
+                    profile_key=profile_key,
+                )
             )
 
             current_stage = "s1_short_probe_execution"
@@ -4962,9 +4974,24 @@ def provision_and_execute_s1_short_probe(
                 "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
                 "app_image_tested": app_image,
                 "resource_profile": resource_profile,
+                "resource_variant": profile_spec["variant_id"],
+                "config_spec_sha256": profile_spec["config_spec_sha256"],
+                "compose_env_overrides_sha256": profile_spec[
+                    "compose_env_overrides_sha256"
+                ],
+                "verify_9_service_config_spec_sha256": profile_spec[
+                    "verify_9_service_config_spec_sha256"
+                ],
+                "verify_9_to_staging_10_mapping": profile_spec[
+                    "verify_9_to_staging_10_mapping"
+                ],
                 "probe_items": bounded_probe_items,
                 "live_resource_headroom_precheck": live_headroom,
                 "cgroup_container_inspection": cgroup_inspection,
+                "service_worker_inspection": pre_acceptance_runtime_snap.get(
+                    "service_worker_inspection"
+                ),
+                "pre_acceptance_runtime_config_snapshot": pre_acceptance_runtime_snap,
                 "s1_short_probe_telemetry": probe_in_container,
                 "queue_short_load_telemetry": queue_short_load_telemetry,
                 "queue_long_scaling_evaluation": queue_long_scaling_evaluation,
@@ -4986,6 +5013,11 @@ def provision_and_execute_s1_short_probe(
                 secrets_to_redact=secrets_to_redact,
             )
             scrubbed_err = _scrub_diagnostic_text(str(exc), secrets_to_redact)
+            err_code = (
+                exc.code
+                if isinstance(exc, RuntimeConfigVerificationError)
+                else type(exc).__name__
+            )
             failure_report: dict[str, object] = {
                 **spec,
                 "mode": "s1_short_throughput_probe",
@@ -4996,12 +5028,19 @@ def provision_and_execute_s1_short_probe(
                 "all_acceptance_passed": False,
                 "failed_stage": current_stage,
                 "error_type": type(exc).__name__,
+                "error_code": err_code,
                 "error_message": scrubbed_err,
                 "sla_commitment_status": "UNCOMMITTED_PROPOSAL_PENDING_OWNER_APPROVAL",
                 "app_image_tested": app_image,
                 "resource_profile": resource_profile,
+                "resource_variant": profile_spec["variant_id"],
+                "config_spec_sha256": profile_spec["config_spec_sha256"],
+                "verify_9_service_config_spec_sha256": profile_spec[
+                    "verify_9_service_config_spec_sha256"
+                ],
                 "probe_items": bounded_probe_items,
                 "live_resource_headroom_precheck": live_headroom,
+                "pre_acceptance_runtime_config_snapshot": pre_acceptance_runtime_snap,
                 "s1_short_probe_telemetry": probe_in_container,
                 "worker_and_job_diagnostics": pre_teardown_diag,
             }
@@ -5076,6 +5115,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Container CPU/RAM & Gunicorn topology (s1_canonical_4x4 or staging_vps_capped)",
     )
     p.add_argument(
+        "--resource-variant",
+        default="",
+        choices=("", *sorted(RAW_G18_RESOURCE_PROFILES)),
+        help="Optional explicit profile variant key (e.g. staging_vps_capped_b_plus_2_5vcpu)",
+    )
+    p.add_argument(
         "--require-live-headroom",
         action="store_true",
         help="Enforce fail-closed host CPU/RAM headroom precheck before provisioning",
@@ -5112,6 +5157,7 @@ def main(argv: list[str] | None = None) -> int:
                     else "p4-s1-probe.localhost"
                 ),
                 resource_profile=args.resource_profile,
+                resource_variant=args.resource_variant,
                 require_live_headroom=args.require_live_headroom,
                 probe_items=args.probe_items,
             )
@@ -5129,7 +5175,9 @@ def main(argv: list[str] | None = None) -> int:
                 "ERROR: --provision-and-run-s1 requires explicit --confirm-isolated-target"
             )
         if not args.app_image.strip():
-            raise SystemExit("ERROR: --provision-and-run-s1 requires --app-image")
+            raise SystemExit(
+                "ERROR: --probe-s1-short/--provision-and-run-s1 requires --app-image"
+            )
         try:
             report = provision_and_execute_s1_benchmark(
                 app_image=args.app_image.strip(),
@@ -5141,6 +5189,7 @@ def main(argv: list[str] | None = None) -> int:
                     else "p4-s1-bench.localhost"
                 ),
                 resource_profile=args.resource_profile,
+                resource_variant=args.resource_variant,
                 require_live_headroom=args.require_live_headroom,
             )
         except BenchmarkExecutionError as exc:

@@ -58,111 +58,48 @@ from benchmark_p4_isolated import (
     enforce_isolated_benchmark_target,
     summarize_latencies_ms,
 )
+from g18_resource_profiles import (
+    get_g18_resource_profile_spec,
+    render_verify_compose_override_yaml,
+)
 
-S1_CANONICAL_OVERRIDE_YAML = """\
-services:
-  db:
-    mem_limit: 3g
-  backend:
-    mem_limit: 8g
-    environment:
-      GUNICORN_WORKERS: "4"
-      GUNICORN_THREADS: "4"
-      GUNICORN_TIMEOUT: "120"
-      TZ: Asia/Ho_Chi_Minh
-  queue-short:
-    command: ["bench", "worker", "--queue", "short,default"]
-  queue-long:
-    image: ${APP_IMAGE:?set APP_IMAGE}
-    pull_policy: ${PULL_POLICY:-never}
-    restart: "no"
-    security_opt:
-      - no-new-privileges:true
-    command: ["bench", "worker", "--queue", "long"]
-    environment:
-      TZ: Asia/Ho_Chi_Minh
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-    depends_on:
-      configurator:
-        condition: service_completed_successfully
-    networks:
-      - data_net
-"""
-
-# Exact cgroup CPU & RAM quotas from `deploy/compose/env/staging.env.example`
-# protecting co-hosted / live VPS resources from noisy-neighbor starvation.
-STAGING_VPS_CAPPED_OVERRIDE_YAML = """\
-services:
-  db:
-    cpus: 1.5
-    mem_limit: 2g
-  redis-cache:
-    cpus: 0.5
-    mem_limit: 384m
-    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "256mb", "--maxmemory-policy", "allkeys-lru"]
-  redis-queue:
-    cpus: 0.5
-    mem_limit: 512m
-  backend:
-    cpus: 1.5
-    mem_limit: 1536m
-    environment:
-      GUNICORN_WORKERS: "2"
-      GUNICORN_THREADS: "4"
-      GUNICORN_TIMEOUT: "120"
-      TZ: Asia/Ho_Chi_Minh
-  websocket:
-    cpus: 0.5
-    mem_limit: 256m
-  queue-short:
-    cpus: 0.5
-    mem_limit: 512m
-    command: ["bench", "worker", "--queue", "short,default"]
-  queue-long:
-    image: ${APP_IMAGE:?set APP_IMAGE}
-    pull_policy: ${PULL_POLICY:-never}
-    restart: "no"
-    security_opt:
-      - no-new-privileges:true
-    cpus: 1.0
-    mem_limit: 1g
-    command: ["bench", "worker", "--queue", "long"]
-    environment:
-      TZ: Asia/Ho_Chi_Minh
-    volumes:
-      - sites:/home/frappe/frappe-bench/sites
-    depends_on:
-      configurator:
-        condition: service_completed_successfully
-    networks:
-      - data_net
-  scheduler:
-    cpus: 0.5
-    mem_limit: 384m
-  frontend:
-    cpus: 0.5
-    mem_limit: 256m
-"""
+S1_CANONICAL_OVERRIDE_YAML = render_verify_compose_override_yaml("s1_canonical_4x4")
+STAGING_VPS_CAPPED_OVERRIDE_YAML = render_verify_compose_override_yaml(
+    "staging_vps_capped"
+)
 
 RESOURCE_PROFILES: dict[str, dict[str, object]] = {
     "s1_canonical_4x4": {
-        "description": "Canonical S1 benchmark profile (Gunicorn 4 workers x 4 threads = 16 threads, matching 4522d04 & bcdc419)",
+        "description": str(
+            get_g18_resource_profile_spec("s1_canonical_4x4")["description"]
+        ),
         "override_yaml": S1_CANONICAL_OVERRIDE_YAML,
-        "gunicorn_workers": 4,
-        "gunicorn_threads": 4,
-        "cgroup_capped": False,
+        "gunicorn_workers": int(
+            get_g18_resource_profile_spec("s1_canonical_4x4")["gunicorn_workers"]
+        ),
+        "gunicorn_threads": int(
+            get_g18_resource_profile_spec("s1_canonical_4x4")["gunicorn_threads"]
+        ),
+        "cgroup_capped": True,
+        "config_spec_sha256": str(
+            get_g18_resource_profile_spec("s1_canonical_4x4")["config_spec_sha256"]
+        ),
     },
     "staging_vps_capped": {
-        "description": (
-            "Staging VPS resource-capped profile matching deploy/compose/env/staging.env.example "
-            "(backend 1.5 vCPU / 1536m RAM, Gunicorn 2x4=8 threads, db 1.5 vCPU / 2g RAM, "
-            "frontend 0.5 vCPU / 256m RAM, queue-short 0.5 vCPU / 512m, queue-long 1.0 vCPU / 1g)"
+        "description": str(
+            get_g18_resource_profile_spec("staging_vps_capped")["description"]
         ),
         "override_yaml": STAGING_VPS_CAPPED_OVERRIDE_YAML,
-        "gunicorn_workers": 2,
-        "gunicorn_threads": 4,
+        "gunicorn_workers": int(
+            get_g18_resource_profile_spec("staging_vps_capped")["gunicorn_workers"]
+        ),
+        "gunicorn_threads": int(
+            get_g18_resource_profile_spec("staging_vps_capped")["gunicorn_threads"]
+        ),
         "cgroup_capped": True,
+        "config_spec_sha256": str(
+            get_g18_resource_profile_spec("staging_vps_capped")["config_spec_sha256"]
+        ),
     },
 }
 

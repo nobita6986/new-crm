@@ -19,12 +19,132 @@ if str(RELEASE_DIR) not in sys.path:
 
 import benchmark_p4_isolated as bench  # noqa: E402
 import evaluate_s1_slo  # noqa: E402
+import g18_resource_profiles as g18_prof  # noqa: E402
 
 CANDIDATE_DIGEST = (
     "ghcr.io/nobita6986/crm-cskh@sha256:"
     "ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
 )
 SLO_SPEC_PATH = RELEASE_DIR / "p4-s1-slo-spec.json"
+
+
+def _handle_mock_runtime_topology_subproc(
+    cmd: list[str],
+    kwargs: dict[str, object],
+    *,
+    profile_key: str,
+) -> subprocess.CompletedProcess[str] | None:
+    spec = g18_prof.get_g18_resource_profile_spec(profile_key)
+    limits_9 = spec["verify_9_service_limits"]
+    gw = int(spec["gunicorn_workers"])
+    gt = int(spec["gunicorn_threads"])
+
+    if "ps" in cmd and "-q" in cmd:
+        svc = str(cmd[-1])
+        if svc in limits_9:
+            return subprocess.CompletedProcess(cmd, 0, stdout=f"cid-{svc}\n", stderr="")
+    if cmd[:2] == ["docker", "inspect"] and str(cmd[2]).startswith("cid-"):
+        svc = str(cmd[2])[len("cid-") :]
+        if svc in limits_9:
+            nano = int(round(float(limits_9[svc]["cpus"]) * 1_000_000_000))
+            mem_b = int(round(float(limits_9[svc]["memory_limit_mib"]) * 1024 * 1024))
+            return subprocess.CompletedProcess(
+                cmd,
+                0,
+                stdout=json.dumps(
+                    [
+                        {
+                            "Id": f"full-cid-{svc}",
+                            "Name": f"/cskh-p4-bench-{svc}-1",
+                            "State": {"Running": True, "OOMKilled": False},
+                            "HostConfig": {
+                                "NanoCpus": nano,
+                                "Memory": mem_b,
+                                "CpuShares": 512 if svc == "queue-short" else 1024,
+                            },
+                            "Config": {"Cmd": [svc]},
+                            "RestartCount": 0,
+                        }
+                    ]
+                ),
+                stderr="",
+            )
+    if (
+        "-" in cmd
+        and kwargs.get("input") == g18_prof.PRE_ACCEPTANCE_BACKEND_DB_RQ_PROBE_PY
+    ):
+        be_cpu = float(spec["backend_cpus"])
+        be_mem = float(spec["backend_mem_mib"])
+        payload = {
+            "backend_runtime": {
+                "env_gunicorn_workers": gw,
+                "env_gunicorn_threads": gt,
+                "env_gunicorn_timeout": "120",
+                "cgroup_cpu_max_raw": f"{int(be_cpu * 100000)} 100000",
+                "cgroup_cpus": be_cpu,
+                "cgroup_memory_max_raw": str(int(be_mem * 1024 * 1024)),
+                "cgroup_mem_mib": be_mem,
+                "gunicorn_master_pid": 1,
+                "gunicorn_worker_pids": list(range(11, 11 + gw)),
+                "live_gunicorn_worker_count": gw,
+                "os_threads_per_worker": [gt] * gw,
+                "effective_total_web_threads": gw * gt,
+            },
+            "mariadb_variables": {
+                "innodb_buffer_pool_size": str(
+                    g18_prof.EXPECTED_INNODB_BUFFER_POOL_BYTES
+                ),
+                "innodb_log_file_size": str(g18_prof.EXPECTED_INNODB_LOG_FILE_BYTES),
+                "innodb_log_buffer_size": "67108864",
+                "innodb_flush_log_at_trx_commit": "1",
+                "innodb_flush_method": "O_DIRECT",
+                "max_connections": "200",
+            },
+            "rq_workers": [
+                {
+                    "name": "w-short-1",
+                    "state": "idle",
+                    "queues": [
+                        "home-frappe-frappe-bench:short",
+                        "home-frappe-frappe-bench:default",
+                    ],
+                    "normalized_queues": ["short", "default"],
+                },
+                {
+                    "name": "w-long-1",
+                    "state": "idle",
+                    "queues": ["home-frappe-frappe-bench:long"],
+                    "normalized_queues": ["long"],
+                },
+            ],
+        }
+        return subprocess.CompletedProcess(
+            cmd,
+            0,
+            stdout=g18_prof.RUNTIME_PROBE_MARKER + json.dumps(payload) + "\n",
+            stderr="",
+        )
+    if (
+        len(cmd) >= 5
+        and cmd[:2] == ["docker", "exec"]
+        and str(cmd[2]).startswith("cid-")
+    ):
+        svc = str(cmd[2])[len("cid-") :]
+        cmdline_map = {
+            "frontend": "nginx: master process\nnginx: worker process\n",
+            "websocket": "node /home/frappe/frappe-bench/apps/frappe/socketio.js\n",
+            "queue-short": "bench worker --queue short,default\n",
+            "queue-long": "bench worker --queue long\n",
+            "scheduler": "bench schedule\n",
+            "db": "mariadbd --innodb-buffer-pool-size=2560M\n",
+            "redis-cache": "redis-server --maxmemory 128mb\n",
+            "redis-queue": "redis-server --appendonly yes\n",
+        }
+        if svc in cmdline_map:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout=cmdline_map[svc], stderr=""
+            )
+    return None
 
 
 def _make_http_node(
@@ -532,6 +652,11 @@ class TestBenchmarkP4IsolatedRunnerFix(unittest.TestCase):
                         + "\n",
                         stderr="",
                     )
+            handled = _handle_mock_runtime_topology_subproc(
+                cmd, kwargs, profile_key="staging_vps_capped"
+            )
+            if handled is not None:
+                return handled
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         class _FakeHTTPResp:
@@ -683,6 +808,11 @@ class TestBenchmarkP4IsolatedRunnerFix(unittest.TestCase):
                     stdout="S1_BENCH_JSON:" + json.dumps(s1_payload) + "\n",
                     stderr="",
                 )
+            handled = _handle_mock_runtime_topology_subproc(
+                cmd, kwargs, profile_key="s1_canonical_4x4"
+            )
+            if handled is not None:
+                return handled
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         class _FakeHTTPResp:
@@ -774,6 +904,11 @@ class TestBenchmarkP4IsolatedRunnerFix(unittest.TestCase):
                     stdout="S1_BENCH_JSON:" + json.dumps(s1_payload) + "\n",
                     stderr="",
                 )
+            handled = _handle_mock_runtime_topology_subproc(
+                cmd, kwargs, profile_key="s1_canonical_4x4"
+            )
+            if handled is not None:
+                return handled
             return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
         class _FakeHTTPResp:
