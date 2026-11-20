@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import sys
 import unittest
 from pathlib import Path
@@ -10,6 +11,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from diagnose_g18_drilldown import (  # noqa: E402
+    IN_CONTAINER_DIAG_SCRIPT,
+    RESOURCE_PROFILES,
     classify_http_outcomes,
     enforce_live_resource_headroom,
     scrub_sensitive_tokens,
@@ -104,6 +107,28 @@ class TestDiagnoseG18Drilldown(unittest.TestCase):
         self.assertNotIn("abc123def456", cleaned)
         self.assertNotIn("deadbeef99", cleaned)
         self.assertIn("[REDACTED]", cleaned)
+
+    def test_in_container_diag_script_parses_cleanly_and_supports_config_b_and_b_plus(
+        self,
+    ) -> None:
+        tree = ast.parse(IN_CONTAINER_DIAG_SCRIPT)
+        self.assertGreater(len(tree.body), 10)
+        self.assertIn("Innodb_buffer_pool_read_requests", IN_CONTAINER_DIAG_SCRIPT)
+        self.assertIn(
+            "s1_dirty_and_concurrent_worker_reconciliation", IN_CONTAINER_DIAG_SCRIPT
+        )
+        self.assertIn("staging_vps_capped", RESOURCE_PROFILES)
+        self.assertIn("staging_vps_capped_b_plus_2_5vcpu", RESOURCE_PROFILES)
+        self.assertEqual(
+            RESOURCE_PROFILES["staging_vps_capped"]["config_spec_sha256"],
+            "7cbc282ff2c380b145a21c494dbf06c9249d08bd6ec75234f8f4dbc332ccc906",
+        )
+        self.assertEqual(
+            RESOURCE_PROFILES["staging_vps_capped_b_plus_2_5vcpu"][
+                "config_spec_sha256"
+            ],
+            "530765c275067dc08bef704cc316c22683376c850b32cde5546e52b9c0d302a7",
+        )
 
 
 if __name__ == "__main__":

@@ -11,7 +11,7 @@ from frappe.utils import get_datetime, now_datetime
 
 from crm_cskh.api import p3_reporting
 from crm_cskh.p3_models import authorized_sla_write, ensure_p3_indexes
-from crm_cskh.services import contact_attempt, correction, followup, ownership, report_query
+from crm_cskh.services import contact_attempt, correction, followup, ownership, report_query, runtime_cache
 from crm_cskh.services.attribution import AUTHORITATIVE, UNKNOWN_HISTORICAL
 from crm_cskh.services.errors import ForbiddenScope
 from crm_cskh.services.kpi_calculator import COMPANY_SCOPE_ID, UNATTRIBUTED_TEAM_ID
@@ -19,6 +19,7 @@ from crm_cskh.services.kpi_periods import resolve_period_spec
 from crm_cskh.services.kpi_runs import (
 	_flush_pending_dirty_events,
 	execute_kpi_recompute,
+	process_dirty_scopes,
 	schedule_post_commit_dirty_invalidation,
 )
 from crm_cskh.tests.p3_base import P3TestCase
@@ -980,3 +981,474 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		}
 		self.assertIn("idx_cskh_sla_type_due_name", sla_idx_after)
 		self.assertIn("idx_cskh_attempt_ownevt_cover", att_idx_after)
+
+	def test_dirty_pending_and_concurrent_worker_interval_count_plan_and_invariants(self):
+		"""F-G18-AB-CONFIGB-AND-DIRTY-COUNT-01: verify index-only EXPLAIN on `_count_intervals`, deferred deep pagination, multi-bucket/scope/RBAC parity across fresh/dirty/invalid-phone/canceled-SLA/correction states, `process_dirty_scopes` convergence, and `N -> N-1` fallback."""
+		frappe.set_user("Administrator")
+		ensure_p3_indexes()
+
+		expected_new_indexes = (
+			("CSKH Assignment History", "idx_cskh_ah_start_cover"),
+			("CSKH Assignment History", "idx_cskh_ah_team_start_cover"),
+			("CSKH Assignment History", "idx_cskh_ah_user_start_cover"),
+			("CSKH Work Item", "idx_cskh_wi_name_camp"),
+			("CSKH Contact Attempt", "idx_cskh_attempt_iv_flags_cover"),
+			("CSKH Contact Attempt", "idx_cskh_attempt_inv_occ"),
+			("CSKH Contact Attempt", "idx_cskh_attempt_ocode_occ"),
+			("CSKH SLA Obligation", "idx_cskh_sla_ivevt_cover"),
+		)
+		for dt_name, idx_name in expected_new_indexes:
+			rows = frappe.db.sql(f"show index from `tab{dt_name}` where Key_name = %s", (idx_name,))
+			self.assertTrue(rows, f"Expected additive index {idx_name} on {dt_name}")
+
+		base_dt = datetime(2026, 8, 12, 9, 0, 0)
+		m_key = "2026-08"
+		orig_tmh = frappe.db.sql(
+			"select name, effective_from from `tabCSKH Team Membership History`",
+			as_dict=True,
+		)
+		frappe.db.sql("update `tabCSKH Team Membership History` set effective_from = '2026-01-01 00:00:00'")
+		frappe.db.commit()
+
+		try:
+			now_s = now_datetime()
+			for i in range(60):
+				lead_id = f"LEAD-G18-DEEP-DC-{i:04d}"
+				wi_id = f"WI-G18-DC-{i:04d}"
+				ah_id = f"AH-G18-DC-{i:04d}"
+				sla_id = f"SLA-G18-DC-{i:04d}"
+				is_team_a = i < 40
+				owner_u = (
+					self.staff_a
+					if (i % 2 == 0 and is_team_a)
+					else (self.staff_b if is_team_a else self.staff_c)
+				)
+				team_u = self.team_a if is_team_a else self.team_b
+				camp_u = self.shared_campaign if (i % 3 != 0) else self.team_b_campaign
+				iv_ts = base_dt + timedelta(minutes=i * 5)
+				due_ts = iv_ts + timedelta(minutes=30)
+
+				frappe.db.sql(
+					"""
+					insert into `tabCRM Lead`
+					(`name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`, `idx`,
+					 `naming_series`, `first_name`, `lead_name`, `mobile_no`, `status`, `lead_owner`, `cskh_do_not_contact`)
+					values (%s, %s, %s, 'Administrator', 'Administrator', 0, 0,
+					        'CRM-LEAD-', %s, %s, %s, 'Contacted', %s, 0)
+					""",
+					(
+						lead_id,
+						now_s,
+						now_s,
+						f"Ứng viên DC {i:04d}",
+						f"Ứng viên DC {i:04d}",
+						f"097788{i:04d}",
+						owner_u,
+					),
+				)
+
+				has_attempt = i < 54  # 6 untried intervals (54..59)
+				is_conn = i < 36  # 36 connected (0..35), 18 not connected (36..53)
+				att_ts = iv_ts + timedelta(minutes=10)
+				ocode = "connected_interested" if is_conn else "no_answer"
+				olabel = "Đã trao đổi — Có quan tâm" if is_conn else "Không nghe máy"
+				ogroup = "positive" if is_conn else "unreached"
+
+				frappe.db.sql(
+					"""
+					insert into `tabCSKH Work Item`
+					(`name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`, `idx`,
+					 `lead`, `campaign`, `status`, `assigned_to`, `assigned_at`,
+					 `attempt_count`, `connected_attempt_count`, `first_attempt_at`, `last_attempt_at`,
+					 `last_outcome_code`, `last_outcome_label`, `revision`)
+					values (%s, %s, %s, 'Administrator', 'Administrator', 0, 0,
+					        %s, %s, 'in_progress', %s, %s, %s, %s, %s, %s, %s, %s, 1)
+					""",
+					(
+						wi_id,
+						iv_ts,
+						att_ts if has_attempt else iv_ts,
+						lead_id,
+						camp_u,
+						owner_u,
+						iv_ts,
+						1 if has_attempt else 0,
+						1 if is_conn else 0,
+						att_ts if has_attempt else None,
+						att_ts if has_attempt else None,
+						ocode if has_attempt else None,
+						olabel if has_attempt else None,
+					),
+				)
+				frappe.db.sql(
+					"""
+					insert into `tabCSKH Assignment History`
+					(`name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`, `idx`,
+					 `work_item`, `action`, `from_user`, `to_user`, `actor`, `event_at`,
+					 `ownership_start`, `ownership_end`, `event_id`, `team_at_assignment`, `attribution_status`, `reason`)
+					values (%s, %s, %s, 'Administrator', 'Administrator', 0, 0,
+					        %s, 'assign', null, %s, 'Administrator', %s, %s, null, %s, %s, %s, 'Seed DC')
+					""",
+					(
+						ah_id,
+						iv_ts,
+						iv_ts,
+						wi_id,
+						owner_u,
+						iv_ts,
+						iv_ts,
+						f"evt-dc-{i:04d}",
+						team_u,
+						AUTHORITATIVE,
+					),
+				)
+
+				sla_status = (
+					"fulfilled_on_time"
+					if has_attempt
+					else ("canceled_validly" if i == 59 else "breached_open")
+				)
+				frappe.db.sql(
+					"""
+					insert into `tabCSKH SLA Obligation`
+					(`name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`, `idx`,
+					 `obligation_type`, `work_item`, `lead`, `campaign`, `interval_event`, `owner_user`,
+					 `team_at_obligation`, `attribution_status`, `status`, `informational_only`,
+					 `is_recovery_obligation`, `reschedule_seq`, `started_at`, `original_due_at`, `effective_due_at`,
+					 `is_paused`, `fulfilled_at`, `fulfilled_by_attempt`, `breached_at`, `closed_at`,
+					 `evaluation_anchor_at`, `policy_name_snapshot`, `policy_version_snapshot`, `idempotency_key`)
+					values (%s, %s, %s, 'Administrator', 'Administrator', 0, 0,
+					        'FIRST_ATTEMPT', %s, %s, %s, %s, %s, %s, %s, %s, 0, 0, 0,
+					        %s, %s, %s, 0, %s, %s, %s, %s, %s, 'GLOBAL-DEFAULT', 1, %s)
+					""",
+					(
+						sla_id,
+						iv_ts,
+						att_ts if has_attempt else due_ts,
+						wi_id,
+						lead_id,
+						camp_u,
+						ah_id,
+						owner_u,
+						team_u,
+						AUTHORITATIVE,
+						sla_status,
+						iv_ts,
+						due_ts,
+						due_ts,
+						att_ts if has_attempt else None,
+						f"CA-G18-DC-{i:04d}" if has_attempt else None,
+						None if has_attempt or i == 59 else due_ts,
+						due_ts if i == 59 else None,
+						att_ts if has_attempt else due_ts,
+						f"sla-dc-{i:04d}",
+					),
+				)
+				if has_attempt:
+					frappe.db.sql(
+						"""
+						insert into `tabCSKH Contact Attempt`
+						(`name`, `creation`, `modified`, `modified_by`, `owner`, `docstatus`, `idx`,
+						 `work_item`, `lead`, `campaign`, `ownership_event`, `owner_at_attempt`, `performed_by`,
+						 `occurred_at`, `recorded_at`, `channel`, `outcome_code`, `outcome_label_snapshot`,
+						 `outcome_group_snapshot`, `outcome_version_snapshot`, `contact_attempt_snapshot`,
+						 `connected_snapshot`, `interested_snapshot`, `terminal_snapshot`, `dnc_snapshot`,
+						 `invalid_phone_snapshot`, `note`, `verification_status`,
+						 `policy_name_snapshot`, `policy_version_snapshot`, `idempotency_key`, `payload_hash`, `work_item_revision`)
+						values (%s, %s, %s, %s, %s, 0, 0,
+						        %s, %s, %s, %s, %s, %s, %s, %s, 'phone_call', %s, %s, %s, 1, 1,
+						        %s, %s, 0, 0, 0, %s, 'self_reported', 'GLOBAL-DEFAULT', 1, %s, %s, 1)
+						""",
+						(
+							f"CA-G18-DC-{i:04d}",
+							att_ts,
+							att_ts,
+							owner_u,
+							owner_u,
+							wi_id,
+							lead_id,
+							camp_u,
+							ah_id,
+							owner_u,
+							owner_u,
+							att_ts,
+							att_ts,
+							ocode,
+							olabel,
+							ogroup,
+							1 if is_conn else 0,
+							1 if is_conn else 0,
+							f"Ghi chú DC {i:04d}",
+							f"idem-dc-{i:04d}",
+							f"hash-dc-{i:04d}",
+						),
+					)
+			frappe.db.commit()
+
+			execute_kpi_recompute(
+				resolve_period_spec("monthly", m_key), run_mode="full", actor="Administrator"
+			)
+
+			with runtime_cache.enable_runtime_cache_for_test():
+				# 1. Fresh state (`dirty_pending=False`) parity across pages 1..3
+				frappe.set_user(self.bod_user)
+				fresh_p1 = self._assert_fast_matches_reference(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="company",
+					page=1,
+					page_size=20,
+				)
+				self.assertFalse(fresh_p1["freshness"]["dirty_pending"])
+				self.assertEqual(fresh_p1["pagination"]["total"], 54)
+
+				# 2. Mark dirty (`dirty_pending=True`, no invalid-phone rows yet) and inspect `_count_intervals` EXPLAIN + deferred page=3 SQL
+				frappe.set_user("Administrator")
+				prev_sup = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+				frappe.flags.cskh_suppress_dirty_enqueue = True
+				try:
+					schedule_post_commit_dirty_invalidation(
+						work_item="WI-G18-DC-0000",
+						campaign=self.shared_campaign,
+						owner_user=self.staff_a,
+						event_dt=base_dt,
+						reason="fg18_dirty_count_plan_check",
+						trigger_reference="WI-G18-DC-0000",
+					)
+					_flush_pending_dirty_events()
+					frappe.db.commit()
+				finally:
+					frappe.flags.cskh_suppress_dirty_enqueue = prev_sup
+
+				captured_sql: list[tuple[str, tuple]] = []
+				orig_sql = frappe.db.sql
+
+				def _capture_sql(query, values=(), *args, **kwargs):
+					captured_sql.append(
+						(str(query).strip(), tuple(values) if isinstance(values, list | tuple) else values)
+					)
+					return orig_sql(query, values, *args, **kwargs)
+
+				frappe.set_user(self.bod_user)
+				frappe.db.sql = _capture_sql
+				try:
+					dirty_p3 = p3_reporting.get_metric_drilldown(
+						metric_code="CONNECTED_RATE",
+						period_type="monthly",
+						period_key=m_key,
+						scope_type="company",
+						page=3,
+						page_size=20,
+					)
+				finally:
+					frappe.db.sql = orig_sql
+
+				self.assertTrue(dirty_p3["freshness"]["dirty_pending"])
+				self.assertEqual(dirty_p3["pagination"]["total"], 54)
+				self.assertEqual(len(dirty_p3["rows"]), 14)
+
+				count_queries = [
+					(q, v)
+					for q, v in captured_sql
+					if "select count(*)" in q.lower() and "tabcskh assignment history" in q.lower()
+				]
+				self.assertEqual(len(count_queries), 1)
+				cnt_q, cnt_v = count_queries[0]
+				self.assertNotIn("tabcskh work item", cnt_q.lower())
+				exp_cnt = orig_sql("EXPLAIN " + cnt_q, cnt_v, as_dict=True)
+				ah_exp = next(r for r in exp_cnt if r.get("table") == "ah")
+				ca_exp = next(r for r in exp_cnt if r.get("table") == "ca")
+				self.assertEqual(ah_exp["key"], "idx_cskh_ah_start_cover")
+				self.assertIn("Using index", str(ah_exp.get("Extra") or ""))
+				self.assertEqual(ca_exp["key"], "idx_cskh_attempt_iv_flags_cover")
+				self.assertIn("Using index", str(ca_exp.get("Extra") or ""))
+
+				# Deferred join check on `offset > 0` (`page=3`)
+				deferred_queries = [(q, v) for q, v in captured_sql if "page_iv" in q.lower()]
+				self.assertEqual(len(deferred_queries), 1)
+				exp_def = orig_sql("EXPLAIN " + deferred_queries[0][0], deferred_queries[0][1], as_dict=True)
+				for er in exp_def:
+					if er.get("select_type") == "DERIVED" and er.get("table") == "ah":
+						self.assertEqual(er["key"], "idx_cskh_ah_start_cover")
+						self.assertIn("Using index", str(er.get("Extra") or ""))
+						self.assertNotIn("Using filesort", str(er.get("Extra") or ""))
+
+				# 3. Mutate attempt `CA-G18-DC-0002` into `wrong_number` (`invalid_phone`) while `dirty_pending=True`
+				#    and verify immediate live freshness (`54 -> 53` denominator, `36 -> 35` numerator, `6 -> 7` excluded)
+				frappe.set_user("Administrator")
+				frappe.db.sql(
+					"""
+					update `tabCSKH Contact Attempt`
+					set outcome_code = 'wrong_number', connected_snapshot = 0, invalid_phone_snapshot = 1
+					where name = 'CA-G18-DC-0002'
+					"""
+				)
+				frappe.db.commit()
+
+				frappe.set_user(self.admin_user)
+				for mcode in ("CONNECTED_RATE", "ELIGIBLE_COVERAGE", "FIRST_ATTEMPT_SLA_RATE"):
+					for bucket in ("all_denominator", "numerator_only", "breached_only", "excluded"):
+						res_b = self._assert_fast_matches_reference(
+							metric_code=mcode,
+							period_type="monthly",
+							period_key=m_key,
+							scope_type="company",
+							filter_bucket=bucket,
+							page=1,
+							page_size=20,
+						)
+						if mcode == "CONNECTED_RATE" and bucket == "all_denominator":
+							self.assertEqual(res_b["pagination"]["total"], 53)
+						elif mcode == "CONNECTED_RATE" and bucket == "numerator_only":
+							self.assertEqual(res_b["pagination"]["total"], 35)
+						elif mcode == "CONNECTED_RATE" and bucket == "breached_only":
+							self.assertEqual(res_b["pagination"]["total"], 18)
+						elif mcode == "CONNECTED_RATE" and bucket == "excluded":
+							self.assertEqual(res_b["pagination"]["total"], 7)
+						elif mcode == "ELIGIBLE_COVERAGE" and bucket == "all_denominator":
+							self.assertEqual(res_b["pagination"]["total"], 59)
+						elif mcode == "ELIGIBLE_COVERAGE" and bucket == "excluded":
+							self.assertEqual(res_b["pagination"]["total"], 1)
+
+				# Check pagination disjointness & total consistency across all pages (`page=1..3`) while dirty
+				p1_dirty = p3_reporting.get_metric_drilldown(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="company",
+					page=1,
+					page_size=20,
+				)
+				p2_dirty = p3_reporting.get_metric_drilldown(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="company",
+					page=2,
+					page_size=20,
+				)
+				p3_dirty = p3_reporting.get_metric_drilldown(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="company",
+					page=3,
+					page_size=20,
+				)
+				all_ids_dirty = (
+					[r["record_id"] for r in p1_dirty["rows"]]
+					+ [r["record_id"] for r in p2_dirty["rows"]]
+					+ [r["record_id"] for r in p3_dirty["rows"]]
+				)
+				self.assertEqual(len(all_ids_dirty), 53)
+				self.assertEqual(len(set(all_ids_dirty)), 53)
+
+				# Check Team Leader (`team_a`), Campaign (`shared_campaign`), and Staff (`staff_a`) scopes while dirty
+				frappe.set_user(self.leader_a)
+				for bucket in ("all_denominator", "numerator_only", "breached_only", "excluded"):
+					self._assert_fast_matches_reference(
+						metric_code="CONNECTED_RATE",
+						period_type="monthly",
+						period_key=m_key,
+						scope_type="team",
+						scope_id=self.team_a,
+						filter_bucket=bucket,
+						page=1,
+						page_size=20,
+					)
+				self._assert_fast_matches_reference(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="campaign",
+					scope_id=self.shared_campaign,
+					page=1,
+					page_size=20,
+				)
+				frappe.set_user(self.staff_a)
+				self._assert_fast_matches_reference(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="employee",
+					scope_id=self.staff_a,
+					page=1,
+					page_size=20,
+				)
+
+				# 4. Drop the 8 new additive indexes (`N -> N-1` rollback) while `dirty_pending=True` and verify fallback parity
+				frappe.set_user("Administrator")
+				for dt_name, idx_name in expected_new_indexes:
+					frappe.db.sql_ddl(f"alter table `tab{dt_name}` drop index `{idx_name}`")
+				runtime_cache.clear_schema_cache()
+
+				frappe.set_user(self.bod_user)
+				fallback_res = self._assert_fast_matches_reference(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="company",
+					page=2,
+					page_size=20,
+				)
+				self.assertEqual(fallback_res["pagination"]["total"], 53)
+
+				# Re-apply `ensure_p3_indexes()` (`N-1 -> N`)
+				frappe.set_user("Administrator")
+				ensure_p3_indexes()
+
+				# 5. Simulate active worker mid-flight (`status = 'processing'`) -> verify `dirty_pending=True` still holds,
+				#    then reset to `'pending'` and execute `process_dirty_scopes(max_scopes=25)` to verify snapshot convergence (53 / 35)
+				frappe.db.sql(
+					"update `tabCSKH Dirty Scope` set status = 'processing' where status = 'pending'"
+				)
+				runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+				frappe.db.commit()
+				frappe.set_user(self.bod_user)
+				in_flight_res = self._assert_fast_matches_reference(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="company",
+					page=1,
+					page_size=20,
+				)
+				self.assertTrue(in_flight_res["freshness"]["dirty_pending"])
+				self.assertEqual(in_flight_res["pagination"]["total"], 53)
+
+				frappe.set_user("Administrator")
+				frappe.db.sql(
+					"update `tabCSKH Dirty Scope` set status = 'pending' where status = 'processing'"
+				)
+				runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+				frappe.db.commit()
+				worker_res = process_dirty_scopes(max_scopes=25)
+				self.assertGreaterEqual(int(worker_res.get("processed_scopes") or 0), 1)
+				frappe.set_user(self.bod_user)
+				post_worker_res = self._assert_fast_matches_reference(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="company",
+					page=1,
+					page_size=20,
+				)
+				self.assertFalse(post_worker_res["freshness"]["dirty_pending"])
+				self.assertEqual(post_worker_res["pagination"]["total"], 53)
+				snap_after = (post_worker_res.get("drilldown_context") or {}).get("snapshot_metric") or {}
+				self.assertEqual(snap_after.get("denominator"), 53)
+				self.assertEqual(snap_after.get("numerator"), 35)
+		finally:
+			frappe.set_user("Administrator")
+			ensure_p3_indexes()
+			for row in orig_tmh:
+				frappe.db.set_value(
+					"CSKH Team Membership History",
+					row["name"],
+					"effective_from",
+					row["effective_from"],
+					update_modified=False,
+				)
+			frappe.db.sql("delete from `tabCRM Lead` where name like 'LEAD-G18-DEEP-%'")
+			frappe.db.commit()

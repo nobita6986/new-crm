@@ -67,6 +67,9 @@ S1_CANONICAL_OVERRIDE_YAML = render_verify_compose_override_yaml("s1_canonical_4
 STAGING_VPS_CAPPED_OVERRIDE_YAML = render_verify_compose_override_yaml(
     "staging_vps_capped"
 )
+STAGING_VPS_CAPPED_B_PLUS_OVERRIDE_YAML = render_verify_compose_override_yaml(
+    "staging_vps_capped_b_plus_2_5vcpu"
+)
 
 RESOURCE_PROFILES: dict[str, dict[str, object]] = {
     "s1_canonical_4x4": {
@@ -99,6 +102,30 @@ RESOURCE_PROFILES: dict[str, dict[str, object]] = {
         "cgroup_capped": True,
         "config_spec_sha256": str(
             get_g18_resource_profile_spec("staging_vps_capped")["config_spec_sha256"]
+        ),
+    },
+    "staging_vps_capped_b_plus_2_5vcpu": {
+        "description": str(
+            get_g18_resource_profile_spec("staging_vps_capped_b_plus_2_5vcpu")[
+                "description"
+            ]
+        ),
+        "override_yaml": STAGING_VPS_CAPPED_B_PLUS_OVERRIDE_YAML,
+        "gunicorn_workers": int(
+            get_g18_resource_profile_spec("staging_vps_capped_b_plus_2_5vcpu")[
+                "gunicorn_workers"
+            ]
+        ),
+        "gunicorn_threads": int(
+            get_g18_resource_profile_spec("staging_vps_capped_b_plus_2_5vcpu")[
+                "gunicorn_threads"
+            ]
+        ),
+        "cgroup_capped": True,
+        "config_spec_sha256": str(
+            get_g18_resource_profile_spec("staging_vps_capped_b_plus_2_5vcpu")[
+                "config_spec_sha256"
+            ]
         ),
     },
 }
@@ -279,6 +306,7 @@ from frappe.utils.password import update_password
 from crm_cskh.api import p3_reporting
 from crm_cskh.p2_models import ensure_p2_indexes, ensure_p2_seeds
 from crm_cskh.p3_models import ensure_p3_indexes, ensure_p3_seeds
+from crm_cskh.services import runtime_cache
 from crm_cskh.services.attribution import AUTHORITATIVE
 from crm_cskh.services.kpi_periods import resolve_period_spec
 from crm_cskh.services.kpi_runs import (
@@ -673,6 +701,15 @@ def _session_status():
     return {str(k): int(v or 0) for k, v in rows}
 
 
+def _innodb_bp_status():
+    rows = frappe.db.sql(
+        "SHOW GLOBAL STATUS WHERE Variable_name IN ("
+        "'Innodb_buffer_pool_read_requests','Innodb_buffer_pool_reads','Innodb_rows_read'"
+        ")"
+    )
+    return {str(k): int(v or 0) for k, v in rows}
+
+
 def _normalize_sql_shape(sql_str):
     s = " ".join(str(sql_str).split())
     s = re.sub(r"\(\s*%s(?:\s*,\s*%s){3,}\s*\)", "(%s, ...CHUNK...)", s)
@@ -716,6 +753,7 @@ def _profile_drilldown_call(label, actor_email, kwargs):
         return res
 
     st_before = _session_status()
+    bp_before = _innodb_bp_status()
     tracemalloc.start()
     cpu0 = time.process_time()
     t0 = time.perf_counter()
@@ -729,8 +767,10 @@ def _profile_drilldown_call(label, actor_email, kwargs):
     _, peak_bytes = tracemalloc.get_traced_memory()
     tracemalloc.stop()
     st_after = _session_status()
+    bp_after = _innodb_bp_status()
 
     status_delta = {k: st_after.get(k, 0) - st_before.get(k, 0) for k in st_after}
+    innodb_bp_delta = {k: bp_after.get(k, 0) - bp_before.get(k, 0) for k in bp_after}
     total_sql_ms = sum(v["total_ms"] for v in shape_stats.values())
     total_sql_calls = sum(v["executions"] for v in shape_stats.values())
     total_rows_fetched = sum(v["total_rows_returned"] for v in shape_stats.values())
@@ -787,6 +827,7 @@ def _profile_drilldown_call(label, actor_email, kwargs):
         "sql_rows_fetched_into_python": total_rows_fetched,
         "tracemalloc_peak_mib": round(peak_bytes / (1024.0 * 1024.0), 3),
         "mariadb_handler_and_sort_delta": status_delta,
+        "innodb_buffer_pool_delta": innodb_bp_delta,
         "pagination": pag,
         "snapshot_reconciliation": {
             "published_numerator": snap_m.get("numerator"),
@@ -963,9 +1004,262 @@ dirty_profile = _profile_drilldown_call(
 )
 diagnostic_profiles.append(dirty_profile)
 
-# Clear the synthetic diagnostic dirty row so HTTP waves run against a clean baseline
+dirty_warm_profile = _profile_drilldown_call(
+    "D4_warm_monthly_company_connected_rate_dirty_pending_p1",
+    bod_user,
+    {
+        "period_type": "monthly",
+        "period_key": "2026-10",
+        "scope_type": "company",
+        "metric_code": "CONNECTED_RATE",
+        "page": 1,
+        "page_size": 20,
+    },
+)
+diagnostic_profiles.append(dirty_warm_profile)
+
+dirty_cov_profile = _profile_drilldown_call(
+    "D4_elig_cov_monthly_company_dirty_pending_p1",
+    bod_user,
+    {
+        "period_type": "monthly",
+        "period_key": "2026-10",
+        "scope_type": "company",
+        "metric_code": "ELIGIBLE_COVERAGE",
+        "page": 1,
+        "page_size": 20,
+    },
+)
+diagnostic_profiles.append(dirty_cov_profile)
+
+# Clear the synthetic diagnostic dirty row before running full S1 fresh/dirty/concurrent-worker cross-check
 frappe.set_user("Administrator")
 frappe.db.sql("DELETE FROM `tabCSKH Dirty Scope` WHERE trigger_reference = 'S1-WI-049200'")
+runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE, runtime_cache.DOMAIN_KPI_SNAPSHOT)
+frappe.db.commit()
+
+# F-G18-AB-CONFIGB-AND-DIRTY-COUNT-01: Full S1 count cross-check across (a) fresh, (b) dirty mutated,
+# (c) live concurrent `process_dirty_scopes` worker in `queue-short`, and (d) post-worker snapshot convergence.
+def _bucket_totals(actor_u, mcode_name, scope_t="company", scope_i=None):
+    frappe.set_user(actor_u)
+    res_map = {}
+    for bkt in ("all_denominator", "numerator_only", "breached_only", "excluded"):
+        kw_b = {
+            "period_type": "monthly",
+            "period_key": "2026-10",
+            "scope_type": scope_t,
+            "metric_code": mcode_name,
+            "filter_bucket": bkt,
+            "page": 1,
+            "page_size": 20,
+        }
+        if scope_i:
+            kw_b["scope_id"] = scope_i
+        rb = p3_reporting.get_metric_drilldown(**kw_b)
+        res_map[bkt] = {
+            "total": rb["pagination"]["total"],
+            "dirty_pending": rb["freshness"]["dirty_pending"],
+        }
+    return res_map
+
+s1_fresh_counts = {
+    "company_connected_rate": _bucket_totals(bod_user, "CONNECTED_RATE", "company"),
+    "company_eligible_coverage": _bucket_totals(bod_user, "ELIGIBLE_COVERAGE", "company"),
+    "team1_connected_rate": _bucket_totals(leader_users[0], "CONNECTED_RATE", "team", team_nodes[0]),
+    "campaign1_connected_rate": _bucket_totals(bod_user, "CONNECTED_RATE", "campaign", campaigns[0]),
+    "staff1_connected_rate": _bucket_totals(staff_users[0], "CONNECTED_RATE", "employee", staff_users[0]),
+}
+
+# Mutate 2 attempts (`S1-ATT-049200-1` unconnected + `S1-ATT-049201-1` connected) to `wrong_number`
+# and seed multi-day dirty scopes (`2026-10-23..2026-10-27`) so `process_dirty_scopes` runs ~8-15s in `queue-short`
+frappe.set_user("Administrator")
+frappe.db.sql(
+    "UPDATE `tabCSKH Contact Attempt` "
+    "SET outcome_code = 'wrong_number', invalid_phone_snapshot = 1 "
+    "WHERE name IN ('S1-ATT-049200-1', 'S1-ATT-049201-1')"
+)
+prev_sup_cw = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+frappe.flags.cskh_suppress_dirty_enqueue = True
+try:
+    for d_day in (23, 24, 25, 26, 27):
+        schedule_post_commit_dirty_invalidation(
+            campaign=campaigns[0],
+            event_dt=datetime(2026, 10, d_day, 14, 0, 0),
+            reason="fg18_s1_concurrent_worker_probe",
+            trigger_reference="S1-FG18-CONC-WORKER",
+        )
+    _flush_pending_dirty_events()
+    frappe.db.commit()
+finally:
+    frappe.flags.cskh_suppress_dirty_enqueue = prev_sup_cw
+
+s1_dirty_pre_worker_counts = {
+    "company_connected_rate": _bucket_totals(bod_user, "CONNECTED_RATE", "company"),
+    "company_eligible_coverage": _bucket_totals(bod_user, "ELIGIBLE_COVERAGE", "company"),
+    "team1_connected_rate": _bucket_totals(leader_users[0], "CONNECTED_RATE", "team", team_nodes[0]),
+    "campaign1_connected_rate": _bucket_totals(bod_user, "CONNECTED_RATE", "campaign", campaigns[0]),
+    "staff1_connected_rate": _bucket_totals(staff_users[0], "CONNECTED_RATE", "employee", staff_users[0]),
+}
+dirty_inv_profile = _profile_drilldown_call(
+    "D4_inv_monthly_company_connected_rate_dirty_with_invalid_phone_p1",
+    bod_user,
+    {
+        "period_type": "monthly",
+        "period_key": "2026-10",
+        "scope_type": "company",
+        "metric_code": "CONNECTED_RATE",
+        "page": 1,
+        "page_size": 20,
+    },
+)
+diagnostic_profiles.append(dirty_inv_profile)
+
+# Enqueue real `process_dirty_scopes` job onto `queue-short` and wait for `status = 'processing'`
+frappe.set_user("Administrator")
+try:
+    frappe.cache.delete(frappe.cache.make_key("cskh:kpi:dirty_worker_enqueued"))
+except Exception:
+    pass
+frappe.enqueue(
+    "crm_cskh.jobs.recompute_kpi.process_dirty_scopes",
+    queue="short",
+    timeout=900,
+    now=False,
+    defer_unmaterialized_large_rollups=True,
+)
+frappe.db.commit()
+
+worker_started_ts = None
+poll_deadline = time.monotonic() + 30.0
+while time.monotonic() < poll_deadline:
+    frappe.db.commit()
+    proc_cnt = int(
+        frappe.db.sql(
+            "SELECT COUNT(*) FROM `tabCSKH Dirty Scope` WHERE trigger_reference = 'S1-FG18-CONC-WORKER' AND status = 'processing'"
+        )[0][0]
+        or 0
+    )
+    if proc_cnt > 0:
+        worker_started_ts = time.monotonic()
+        break
+    done_cnt = int(
+        frappe.db.sql(
+            "SELECT COUNT(*) FROM `tabCSKH Dirty Scope` WHERE trigger_reference = 'S1-FG18-CONC-WORKER' AND status = 'processed'"
+        )[0][0]
+        or 0
+    )
+    if done_cnt > 0:
+        break
+    time.sleep(0.05)
+
+# Execute monthly/company drilldowns concurrently WHILE `process_dirty_scopes` is running in `queue-short`
+conc_worker_profile_p1 = _profile_drilldown_call(
+    "D4b_monthly_company_connected_rate_dirty_concurrent_worker_p1",
+    bod_user,
+    {
+        "period_type": "monthly",
+        "period_key": "2026-10",
+        "scope_type": "company",
+        "metric_code": "CONNECTED_RATE",
+        "page": 1,
+        "page_size": 20,
+    },
+)
+diagnostic_profiles.append(conc_worker_profile_p1)
+
+conc_worker_profile_p30 = _profile_drilldown_call(
+    "D4c_monthly_company_connected_rate_dirty_concurrent_worker_p30",
+    bod_user,
+    {
+        "period_type": "monthly",
+        "period_key": "2026-10",
+        "scope_type": "company",
+        "metric_code": "CONNECTED_RATE",
+        "page": 30,
+        "page_size": 20,
+    },
+)
+diagnostic_profiles.append(conc_worker_profile_p30)
+
+s1_concurrent_worker_counts = _bucket_totals(bod_user, "CONNECTED_RATE", "company")
+frappe.db.commit()
+processing_still_active_after_calls = int(
+    frappe.db.sql(
+        "SELECT COUNT(*) FROM `tabCSKH Dirty Scope` WHERE trigger_reference = 'S1-FG18-CONC-WORKER' AND status = 'processing'"
+    )[0][0]
+    or 0
+)
+
+# Wait for `queue-short` `process_dirty_scopes` to finish publishing restated/incremental snapshots
+finish_deadline = time.monotonic() + 240.0
+while time.monotonic() < finish_deadline:
+    frappe.db.commit()
+    rem_cnt = int(
+        frappe.db.sql(
+            "SELECT COUNT(*) FROM `tabCSKH Dirty Scope` WHERE trigger_reference = 'S1-FG18-CONC-WORKER' AND status IN ('pending', 'processing')"
+        )[0][0]
+        or 0
+    )
+    if rem_cnt == 0:
+        break
+    time.sleep(0.25)
+
+frappe.db.commit()
+runtime_cache.clear_all_local_caches()
+frappe.set_user(bod_user)
+post_worker_p1 = p3_reporting.get_metric_drilldown(
+    period_type="monthly",
+    period_key="2026-10",
+    scope_type="company",
+    metric_code="CONNECTED_RATE",
+    page=1,
+    page_size=20,
+)
+post_worker_snap = (post_worker_p1.get("drilldown_context") or {}).get("snapshot_metric") or {}
+
+s1_dirty_and_concurrent_worker_reconciliation = {
+    "worker_processing_observed": worker_started_ts is not None,
+    "worker_still_processing_after_concurrent_calls": processing_still_active_after_calls > 0,
+    "fresh_baseline_counts": s1_fresh_counts,
+    "dirty_pre_worker_counts": s1_dirty_pre_worker_counts,
+    "dirty_concurrent_worker_counts": s1_concurrent_worker_counts,
+    "post_worker_converged": {
+        "dirty_pending": post_worker_p1["freshness"]["dirty_pending"],
+        "pagination_total": post_worker_p1["pagination"]["total"],
+        "published_numerator": post_worker_snap.get("numerator"),
+        "published_denominator": post_worker_snap.get("denominator"),
+    },
+    "all_invariants_verified": (
+        s1_fresh_counts["company_connected_rate"]["all_denominator"]["total"] == 75000
+        and s1_fresh_counts["company_connected_rate"]["numerator_only"]["total"] == 56250
+        and s1_fresh_counts["company_connected_rate"]["breached_only"]["total"] == 18750
+        and s1_fresh_counts["company_connected_rate"]["excluded"]["total"] == 0
+        and s1_dirty_pre_worker_counts["company_connected_rate"]["all_denominator"]["total"] == 74998
+        and s1_dirty_pre_worker_counts["company_connected_rate"]["numerator_only"]["total"] == 56249
+        and s1_dirty_pre_worker_counts["company_connected_rate"]["breached_only"]["total"] == 18749
+        and s1_dirty_pre_worker_counts["company_connected_rate"]["excluded"]["total"] == 2
+        and s1_concurrent_worker_counts["all_denominator"]["total"] == 74998
+        and s1_concurrent_worker_counts["numerator_only"]["total"] == 56249
+        and s1_concurrent_worker_counts["breached_only"]["total"] == 18749
+        and s1_concurrent_worker_counts["excluded"]["total"] == 2
+        and post_worker_p1["freshness"]["dirty_pending"] is False
+        and post_worker_p1["pagination"]["total"] == 74998
+        and post_worker_snap.get("denominator") == 74998
+        and post_worker_snap.get("numerator") == 56249
+    ),
+}
+
+# Restore canonical 75,000 S1 baseline cleanly before HTTP concurrency waves (`W1..W6`)
+frappe.set_user("Administrator")
+frappe.db.sql(
+    "UPDATE `tabCSKH Contact Attempt` "
+    "SET outcome_code = 'no_answer', invalid_phone_snapshot = 0 "
+    "WHERE name IN ('S1-ATT-049200-1', 'S1-ATT-049201-1')"
+)
+frappe.db.sql("DELETE FROM `tabCSKH Dirty Scope` WHERE trigger_reference = 'S1-FG18-CONC-WORKER'")
+execute_kpi_recompute(month_spec, run_mode="full", actor="Administrator")
+execute_kpi_recompute(day_spec, run_mode="incremental", actor="Administrator")
+runtime_cache.clear_all_local_caches()
 frappe.db.commit()
 
 # Correctness, pagination disjointness & RBAC cross-access checks
@@ -1075,6 +1369,7 @@ out = {
     "staff_users": staff_users,
     "table_and_index_inventory": table_and_index_inventory,
     "single_call_sql_and_explain_profiles": diagnostic_profiles,
+    "s1_dirty_and_concurrent_worker_reconciliation": s1_dirty_and_concurrent_worker_reconciliation,
     "correctness_pagination_and_rbac": correctness_summary,
 }
 frappe.destroy()

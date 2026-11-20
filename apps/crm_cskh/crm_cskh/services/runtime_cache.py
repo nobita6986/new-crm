@@ -47,6 +47,7 @@ DOMAIN_KPI_SNAPSHOT = "kpi_snapshot"
 DOMAIN_DIRTY_SCOPE = "dirty_scope"
 DOMAIN_CORRECTION = "correction"
 DOMAIN_ASSIGNMENT_HISTORY = "assignment_history"
+DOMAIN_WORK_ITEM = "work_item"
 
 ALL_DOMAINS = (
 	DOMAIN_POLICY,
@@ -59,6 +60,7 @@ ALL_DOMAINS = (
 	DOMAIN_DIRTY_SCOPE,
 	DOMAIN_CORRECTION,
 	DOMAIN_ASSIGNMENT_HISTORY,
+	DOMAIN_WORK_ITEM,
 )
 
 _EPOCH_REDIS_HASH = "cskh:runtime_epochs"
@@ -139,6 +141,10 @@ _SET_VALUE_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 	"System Settings": (DOMAIN_USER_HIERARCHY, DOMAIN_CALENDAR),
 }
 
+_DELETE_ONLY_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
+	"CSKH Work Item": (DOMAIN_WORK_ITEM,),
+}
+
 
 def _resolve_redis_wrapper():
 	"""Unwrap `frappe.cache` (`LocalProxy` or callable returning `RedisWrapper`) safely."""
@@ -185,6 +191,20 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 
 		_wrapped_set_single_value._cskh_cache_wrapped = True  # type: ignore[attr-defined]
 		db_cls.set_single_value = _wrapped_set_single_value  # type: ignore[attr-defined]
+
+	orig_db_delete = db_cls.__dict__.get("delete")
+	if callable(orig_db_delete) and not getattr(orig_db_delete, "_cskh_cache_wrapped", False):
+
+		def _wrapped_db_delete(self, doctype: str, *args, **kwargs):
+			res = orig_db_delete(self, doctype, *args, **kwargs)
+			dt_key = str(doctype) if doctype else ""
+			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(dt_key, ()) + _DELETE_ONLY_DOCTYPE_DOMAINS.get(dt_key, ())
+			if doms:
+				bump_cache_domain(*doms)
+			return res
+
+		_wrapped_db_delete._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+		db_cls.delete = _wrapped_db_delete  # type: ignore[attr-defined]
 
 	_DB_INSTANCE_HOOKED_TYPES.add(db_cls)
 
@@ -250,7 +270,10 @@ def _ensure_mutation_hooks_installed() -> None:
 				dts = doctype if isinstance(doctype, list | tuple | set) else (doctype,)
 				b_doms: list[str] = []
 				for dt in dts:
-					found = _SET_VALUE_DOCTYPE_DOMAINS.get(str(dt) if dt else "")
+					dt_key = str(dt) if dt else ""
+					found = _SET_VALUE_DOCTYPE_DOMAINS.get(dt_key, ()) + _DELETE_ONLY_DOCTYPE_DOMAINS.get(
+						dt_key, ()
+					)
 					if found:
 						b_doms.extend(found)
 				if b_doms:
@@ -657,6 +680,25 @@ def has_column(doctype: str, column: str) -> bool:
 	val = bool(frappe.db.has_column(doctype, column))
 	_SCHEMA_LRU.set(key, val)
 	return val
+
+
+def has_index(doctype: str, index_name: str) -> bool:
+	if not getattr(frappe, "db", None):
+		return False
+	clean_tbl = f"tab{doctype}".replace("`", "")
+	if not is_runtime_db_cache_active():
+		return bool(frappe.db.sql(f"show index from `{clean_tbl}` where Key_name = %s", (index_name,)))
+	key = (_current_site(), "idx", doctype, index_name)
+	hit = _SCHEMA_LRU.get(key)
+	if hit is not None:
+		return bool(hit)
+	val = bool(frappe.db.sql(f"show index from `{clean_tbl}` where Key_name = %s", (index_name,)))
+	_SCHEMA_LRU.set(key, val)
+	return val
+
+
+def clear_schema_cache() -> None:
+	_SCHEMA_LRU.clear()
 
 
 # ---------------------------------------------------------------------------

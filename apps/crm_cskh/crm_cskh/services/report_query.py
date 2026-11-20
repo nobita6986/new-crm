@@ -2254,12 +2254,58 @@ def _fast_interval_cohort_drilldown_page(
 	):
 		return None
 
+	has_ah_start_cover = runtime_cache.has_index("CSKH Assignment History", "idx_cskh_ah_start_cover")
+	has_ah_team_cover = runtime_cache.has_index("CSKH Assignment History", "idx_cskh_ah_team_start_cover")
+	has_ah_user_cover = runtime_cache.has_index("CSKH Assignment History", "idx_cskh_ah_user_start_cover")
+	has_wi_name_camp = runtime_cache.has_index("CSKH Work Item", "idx_cskh_wi_name_camp")
+	has_ca_iv_cover = runtime_cache.has_index("CSKH Contact Attempt", "idx_cskh_attempt_iv_flags_cover")
+	has_sla_iv_cover = runtime_cache.has_index("CSKH SLA Obligation", "idx_cskh_sla_ivevt_cover")
+
 	if eff_emp:
-		ah_idx = "FORCE INDEX (idx_cskh_ah_user_interval)"
+		ah_idx = (
+			"FORCE INDEX (idx_cskh_ah_user_start_cover)"
+			if has_ah_user_cover
+			else "FORCE INDEX (idx_cskh_ah_user_interval)"
+		)
 	elif team_mode == "authoritative_in" and len(team_nodes) == 1:
-		ah_idx = "FORCE INDEX (idx_cskh_ah_team_start)"
+		ah_idx = (
+			"FORCE INDEX (idx_cskh_ah_team_start_cover)"
+			if has_ah_team_cover
+			else "FORCE INDEX (idx_cskh_ah_team_start)"
+		)
 	else:
-		ah_idx = "FORCE INDEX (idx_cskh_ah_start_name)"
+		ah_idx = (
+			"FORCE INDEX (idx_cskh_ah_start_cover)"
+			if has_ah_start_cover
+			else "FORCE INDEX (idx_cskh_ah_start_name)"
+		)
+
+	wi_idx_hint = "FORCE INDEX (idx_cskh_wi_name_camp)" if has_wi_name_camp else ""
+	can_omit_wi_in_count = False
+	if not eff_camp and runtime_cache.is_runtime_db_cache_active():
+		has_orphan_wi = runtime_cache.get_cached_invariant_bool(
+			"ah_orphan_work_item",
+			(runtime_cache.DOMAIN_WORK_ITEM,),
+			(),
+			lambda: bool(
+				frappe.db.sql(
+					f"""
+					select 1
+					from `tabCSKH Assignment History` ah USE INDEX (idx_cskh_ah_wi_act_start)
+					left join `tabCSKH Work Item` wi {wi_idx_hint} on wi.name = ah.work_item
+					where wi.name is null
+					limit 1
+					"""
+				)
+			),
+		)
+		can_omit_wi_in_count = not has_orphan_wi
+
+	count_wi_join_sql = (
+		""
+		if can_omit_wi_in_count
+		else f"inner join `tabCSKH Work Item` wi {wi_idx_hint} on wi.name = ah.work_item"
+	)
 
 	where_parts = [
 		"ah.ownership_start >= %s",
@@ -2288,35 +2334,45 @@ def _fast_interval_cohort_drilldown_page(
 			where_parts.append(f"ah.team_at_assignment in ({ph_t}) and ah.attribution_status = %s")
 			base_params.extend([*team_nodes, AUTHORITATIVE])
 
-	# Scalar `coalesce((select 1 ... FORCE INDEX ... limit 1), 0)` prevents MariaDB 11.x from flattening
-	# correlated probes into a 250k-row semi-join scan. The attempt-exists probe uses a covering index so
-	# dirty-scope exact counts avoid fetching base-table rows for each assignment interval.
-	ca_att_flag_sql = """
+	# Scalar `coalesce((select ... FORCE INDEX ...), 0)` keeps MariaDB 11.x on covering index probes
+	# (`Using where; Using index`, 0 base-table PK reads and 0 disk-spilling temp tables).
+	ca_att_idx = (
+		"FORCE INDEX (idx_cskh_attempt_iv_flags_cover)"
+		if has_ca_iv_cover
+		else "FORCE INDEX (idx_cskh_attempt_ownevt_cover)"
+	)
+	ca_flags_idx = (
+		"FORCE INDEX (idx_cskh_attempt_iv_flags_cover)"
+		if has_ca_iv_cover
+		else "FORCE INDEX (idx_cskh_attempt_ownevt_occ)"
+	)
+
+	ca_att_flag_sql = f"""
 		coalesce((
-		select 1 from `tabCSKH Contact Attempt` ca FORCE INDEX (idx_cskh_attempt_ownevt_cover)
+			select 1 from `tabCSKH Contact Attempt` ca {ca_att_idx}
 			where ca.ownership_event = ah.name
-			  and coalesce(ca.contact_attempt_snapshot, 0) = 1
-			  and ca.recorded_at <= %s
+			  and ca.contact_attempt_snapshot = 1
 			  and ca.occurred_at < %s
 			  and ca.occurred_at <= %s
+			  and ca.recorded_at <= %s
 			limit 1
 		), 0)
 	"""
-	ca_att_params = (eff_as_of, end_dt_excl, eff_as_of)
+	ca_att_params = (end_dt_excl, eff_as_of, eff_as_of)
 
-	ca_conn_flag_sql = """
+	ca_conn_flag_sql = f"""
 		coalesce((
-			select 1 from `tabCSKH Contact Attempt` ca_c FORCE INDEX (idx_cskh_attempt_ownevt_occ)
+			select 1 from `tabCSKH Contact Attempt` ca_c {ca_flags_idx}
 			where ca_c.ownership_event = ah.name
-			  and coalesce(ca_c.contact_attempt_snapshot, 0) = 1
-			  and ca_c.recorded_at <= %s
+			  and ca_c.contact_attempt_snapshot = 1
 			  and ca_c.occurred_at < %s
 			  and ca_c.occurred_at <= %s
-			  and coalesce(ca_c.connected_snapshot, 0) = 1
+			  and ca_c.recorded_at <= %s
+			  and ca_c.connected_snapshot = 1
 			limit 1
 		), 0)
 	"""
-	ca_conn_params = (eff_as_of, end_dt_excl, eff_as_of)
+	ca_conn_params = (end_dt_excl, eff_as_of, eff_as_of)
 
 	extra_sel_sql = ""
 	extra_sel_params: list = []
@@ -2329,53 +2385,157 @@ def _fast_interval_cohort_drilldown_page(
 		inv_codes_sorted = sorted(c for c in invalid_phone_codes if c)
 		inv_ph = ", ".join(["%s"] * len(inv_codes_sorted)) if inv_codes_sorted else "''"
 		has_inv_col = runtime_cache.has_column("CSKH Contact Attempt", "invalid_phone_snapshot")
-		inv_expr = (
-			f"(coalesce(ca_i.invalid_phone_snapshot, 0) = 1 or lower(coalesce(ca_i.outcome_code, '')) in ({inv_ph}))"
-			if has_inv_col
-			else f"(lower(coalesce(ca_i.outcome_code, '')) in ({inv_ph}))"
+		has_inv_occ_idx = has_inv_col and runtime_cache.has_index(
+			"CSKH Contact Attempt", "idx_cskh_attempt_inv_occ"
 		)
-		ca_inv_flag_sql = f"""
-			coalesce((
-				select 1 from `tabCSKH Contact Attempt` ca_i FORCE INDEX (idx_cskh_attempt_ownevt_occ)
-				where ca_i.ownership_event = ah.name
-				  and coalesce(ca_i.contact_attempt_snapshot, 0) = 1
-				  and ca_i.recorded_at <= %s
-				  and ca_i.occurred_at < %s
-				  and ca_i.occurred_at <= %s
-				  and {inv_expr}
-				limit 1
-			), 0)
-		"""
-		ca_inv_params = (eff_as_of, end_dt_excl, eff_as_of, *inv_codes_sorted)
+		has_ocode_occ_idx = runtime_cache.has_index("CSKH Contact Attempt", "idx_cskh_attempt_ocode_occ")
 
-		if bucket == "all_denominator":
-			where_parts.append(f"({ca_att_flag_sql} = 1) and ({ca_inv_flag_sql} = 0)")
-			base_params.extend([*ca_att_params, *ca_inv_params])
-			extra_sel_sql = f", ({ca_conn_flag_sql}) as is_conn_flag"
-			extra_sel_params.extend(ca_conn_params)
-		elif bucket == "numerator_only":
-			where_parts.append(f"({ca_conn_flag_sql} = 1) and ({ca_inv_flag_sql} = 0)")
-			base_params.extend([*ca_conn_params, *ca_inv_params])
-		elif bucket == "breached_only":
-			where_parts.append(
-				f"({ca_att_flag_sql} = 1) and ({ca_inv_flag_sql} = 0) and ({ca_conn_flag_sql} = 0)"
+		if has_inv_occ_idx and has_ocode_occ_idx:
+			has_any_inv = bool(
+				frappe.db.sql(
+					"""
+					select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_inv_occ)
+					where invalid_phone_snapshot = 1
+					  and contact_attempt_snapshot = 1
+					  and occurred_at < %s
+					  and occurred_at <= %s
+					  and recorded_at <= %s
+					limit 1
+					""",
+					(end_dt_excl, eff_as_of, eff_as_of),
+				)
+			) or (
+				bool(inv_codes_sorted)
+				and bool(
+					frappe.db.sql(
+						f"""
+						select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_ocode_occ)
+						where outcome_code in ({inv_ph})
+						  and contact_attempt_snapshot = 1
+						  and occurred_at < %s
+						  and occurred_at <= %s
+						  and recorded_at <= %s
+						limit 1
+						""",
+						(*inv_codes_sorted, end_dt_excl, eff_as_of, eff_as_of),
+					)
+				)
 			)
-			base_params.extend([*ca_att_params, *ca_inv_params, *ca_conn_params])
-		else:  # excluded
-			where_parts.append(f"(({ca_att_flag_sql} = 0) or ({ca_inv_flag_sql} = 1))")
-			base_params.extend([*ca_att_params, *ca_inv_params])
-			extra_sel_sql = f", ({ca_inv_flag_sql}) as has_inv_flag"
-			extra_sel_params.extend(ca_inv_params)
+		elif (not has_inv_col) and has_ocode_occ_idx:
+			has_any_inv = bool(inv_codes_sorted) and bool(
+				frappe.db.sql(
+					f"""
+					select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_ocode_occ)
+					where outcome_code in ({inv_ph})
+					  and contact_attempt_snapshot = 1
+					  and occurred_at < %s
+					  and occurred_at <= %s
+					  and recorded_at <= %s
+					limit 1
+					""",
+					(*inv_codes_sorted, end_dt_excl, eff_as_of, eff_as_of),
+				)
+			)
+		else:
+			has_any_inv = True
+
+		if not has_any_inv:
+			ca_att_conn_mask_sql = f"""
+				coalesce((
+					select max(1) + max(case when ca_ac.connected_snapshot = 1 then 2 else 0 end)
+					from `tabCSKH Contact Attempt` ca_ac {ca_flags_idx}
+					where ca_ac.ownership_event = ah.name
+					  and ca_ac.contact_attempt_snapshot = 1
+					  and ca_ac.occurred_at < %s
+					  and ca_ac.occurred_at <= %s
+					  and ca_ac.recorded_at <= %s
+				), 0)
+			"""
+			ca_att_conn_mask_params = (end_dt_excl, eff_as_of, eff_as_of)
+			if bucket == "all_denominator":
+				where_parts.append(f"({ca_att_flag_sql} = 1)")
+				base_params.extend(ca_att_params)
+				extra_sel_sql = f", ({ca_conn_flag_sql}) as is_conn_flag"
+				extra_sel_params.extend(ca_conn_params)
+			elif bucket == "numerator_only":
+				where_parts.append(f"({ca_conn_flag_sql} = 1)")
+				base_params.extend(ca_conn_params)
+			elif bucket == "breached_only":
+				where_parts.append(f"({ca_att_conn_mask_sql} = 1)")
+				base_params.extend(ca_att_conn_mask_params)
+			else:  # excluded
+				where_parts.append(f"({ca_att_flag_sql} = 0)")
+				base_params.extend(ca_att_params)
+				extra_sel_sql = ", 0 as has_inv_flag"
+		else:
+			inv_expr_m = (
+				f"(coalesce(ca_m.invalid_phone_snapshot, 0) = 1 or lower(coalesce(ca_m.outcome_code, '')) in ({inv_ph}))"
+				if has_inv_col
+				else f"(lower(coalesce(ca_m.outcome_code, '')) in ({inv_ph}))"
+			)
+			ca_full_mask_sql = f"""
+				coalesce((
+					select max(1)
+					     + max(case when ca_m.connected_snapshot = 1 then 2 else 0 end)
+					     + max(case when {inv_expr_m} then 4 else 0 end)
+					from `tabCSKH Contact Attempt` ca_m {ca_flags_idx}
+					where ca_m.ownership_event = ah.name
+					  and ca_m.contact_attempt_snapshot = 1
+					  and ca_m.occurred_at < %s
+					  and ca_m.occurred_at <= %s
+					  and ca_m.recorded_at <= %s
+				), 0)
+			"""
+			ca_full_mask_params = (*inv_codes_sorted, end_dt_excl, eff_as_of, eff_as_of)
+			if bucket == "all_denominator":
+				where_parts.append(f"({ca_full_mask_sql} in (1, 3))")
+				base_params.extend(ca_full_mask_params)
+				extra_sel_sql = f", ({ca_conn_flag_sql}) as is_conn_flag"
+				extra_sel_params.extend(ca_conn_params)
+			elif bucket == "numerator_only":
+				where_parts.append(f"({ca_full_mask_sql} = 3)")
+				base_params.extend(ca_full_mask_params)
+			elif bucket == "breached_only":
+				where_parts.append(f"({ca_full_mask_sql} = 1)")
+				base_params.extend(ca_full_mask_params)
+			else:  # excluded
+				where_parts.append(f"({ca_full_mask_sql} not in (1, 3))")
+				base_params.extend(ca_full_mask_params)
+				inv_expr_i = (
+					f"(coalesce(ca_i.invalid_phone_snapshot, 0) = 1 or lower(coalesce(ca_i.outcome_code, '')) in ({inv_ph}))"
+					if has_inv_col
+					else f"(lower(coalesce(ca_i.outcome_code, '')) in ({inv_ph}))"
+				)
+				ca_inv_flag_sql = f"""
+					coalesce((
+						select 1 from `tabCSKH Contact Attempt` ca_i {ca_flags_idx}
+						where ca_i.ownership_event = ah.name
+						  and ca_i.contact_attempt_snapshot = 1
+						  and ca_i.occurred_at < %s
+						  and ca_i.occurred_at <= %s
+						  and ca_i.recorded_at <= %s
+						  and {inv_expr_i}
+						limit 1
+					), 0)
+				"""
+				ca_inv_params = (end_dt_excl, eff_as_of, eff_as_of, *inv_codes_sorted)
+				extra_sel_sql = f", ({ca_inv_flag_sql}) as has_inv_flag"
+				extra_sel_params.extend(ca_inv_params)
 	else:  # ELIGIBLE_COVERAGE
 		if not runtime_cache.table_exists("CSKH SLA Obligation"):
 			return None
-		fa_canc_flag_sql = """
+		sla_iv_idx = (
+			"FORCE INDEX (idx_cskh_sla_ivevt_cover)"
+			if has_sla_iv_cover
+			else "FORCE INDEX (idx_cskh_sla_ivevt_type)"
+		)
+		fa_canc_flag_sql = f"""
 			coalesce((
-				select 1 from `tabCSKH SLA Obligation` fa FORCE INDEX (idx_cskh_sla_ivevt_type)
+				select 1 from `tabCSKH SLA Obligation` fa {sla_iv_idx}
 				where fa.interval_event = ah.name
 				  and fa.obligation_type = 'FIRST_ATTEMPT'
-				  and fa.started_at <= %s
 				  and fa.status = 'canceled_validly'
+				  and fa.started_at <= %s
 				  and (fa.closed_at is null or fa.closed_at <= %s)
 				limit 1
 			), 0)
@@ -2390,11 +2550,22 @@ def _fast_interval_cohort_drilldown_page(
 			if asg_val is not None and cov_den is not None and int(asg_val) == int(cov_den):
 				all_assigned_eligible = True
 
+		has_any_fa_canc = True
 		if not all_assigned_eligible:
+			has_any_fa_canc = bool(
+				frappe.db.sql(
+					"""
+					select 1 from `tabCSKH SLA Obligation` USE INDEX (idx_cskh_sla_status_due)
+					where status = 'canceled_validly' and started_at <= %s
+					limit 1
+					""",
+					(eff_as_of,),
+				)
+			)
 			# Verify zero intervals require calendar-based `min_exposure_business_minutes` (`not has_att and not fa_canceled and not fa_matured`)
-			fa_matured_strict_flag_sql = """
+			fa_matured_strict_flag_sql = f"""
 				coalesce((
-					select 1 from `tabCSKH SLA Obligation` fa_m FORCE INDEX (idx_cskh_sla_ivevt_type)
+					select 1 from `tabCSKH SLA Obligation` fa_m {sla_iv_idx}
 					where fa_m.interval_event = ah.name
 					  and fa_m.obligation_type = 'FIRST_ATTEMPT'
 					  and fa_m.started_at <= %s
@@ -2406,12 +2577,12 @@ def _fast_interval_cohort_drilldown_page(
 					          and not (coalesce(fa_m.is_paused, 0) = 1 and fa_m.status = 'open' and (fa_m.paused_at is null or fa_m.paused_at <= %s))
 					          and (fa_m.fulfilled_at is null or fa_m.fulfilled_at > %s)
 					          and coalesce((
-					              select 1 from `tabCSKH Contact Attempt` ca_fa FORCE INDEX (idx_cskh_attempt_ownevt_occ)
+					              select 1 from `tabCSKH Contact Attempt` ca_fa {ca_att_idx}
 					              where ca_fa.ownership_event = ah.name
-					                and coalesce(ca_fa.contact_attempt_snapshot, 0) = 1
-					                and ca_fa.recorded_at <= %s
+					                and ca_fa.contact_attempt_snapshot = 1
 					                and ca_fa.occurred_at <= %s
 					                and (ah.ownership_end is null or ca_fa.occurred_at <= ah.ownership_end)
+					                and ca_fa.recorded_at <= %s
 					              limit 1
 					          ), 0) = 0
 					        )
@@ -2420,25 +2591,27 @@ def _fast_interval_cohort_drilldown_page(
 				), 0)
 			"""
 			fa_mat_params = (eff_as_of,) * 7
-			ambig_where = " and ".join(
-				[
-					*where_parts,
-					f"({ca_att_flag_sql} = 0)",
-					f"({fa_canc_flag_sql} = 0)",
-					f"({fa_matured_strict_flag_sql} = 0)",
-				]
-			)
+			ambig_parts = [*where_parts, f"({ca_att_flag_sql} = 0)"]
+			ambig_params: list = [*base_params, *ca_att_params]
+			if has_any_fa_canc:
+				ambig_parts.append(f"({fa_canc_flag_sql} = 0)")
+				ambig_params.extend(fa_canc_params)
+			ambig_parts.append(f"({fa_matured_strict_flag_sql} = 0)")
+			ambig_params.extend(fa_mat_params)
+			ambig_where = " and ".join(ambig_parts)
 			if frappe.db.sql(
 				f"""
 				select 1
 				from `tabCSKH Assignment History` ah {ah_idx}
-				inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
+				{count_wi_join_sql}
 				where {ambig_where}
 				limit 1
 				""",
-				tuple([*base_params, *ca_att_params, *fa_canc_params, *fa_mat_params]),
+				tuple(ambig_params),
 			):
 				return None
+			if not has_any_fa_canc:
+				all_assigned_eligible = True
 
 		if bucket == "all_denominator":
 			if not all_assigned_eligible:
@@ -2472,7 +2645,7 @@ def _fast_interval_cohort_drilldown_page(
 				f"""
 				select count(*)
 				from `tabCSKH Assignment History` ah {ah_idx}
-				inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
+				{count_wi_join_sql}
 				where {where_clause}
 				""",
 				tuple(base_params),
@@ -2490,21 +2663,44 @@ def _fast_interval_cohort_drilldown_page(
 	if total == 0 or offset >= total:
 		return [], total
 
-	page_rows = frappe.db.sql(
-		f"""
-		select ah.name, ah.work_item, ah.to_user, ah.event_at,
-		       ah.ownership_start, ah.ownership_end,
-		       ah.team_at_assignment, ah.attribution_status,
-		       wi.campaign, wi.lead{extra_sel_sql}
-		from `tabCSKH Assignment History` ah {ah_idx}
-		inner join `tabCSKH Work Item` wi on wi.name = ah.work_item
-		where {where_clause}
-		order by ah.ownership_start asc, ah.name asc
-		limit %s offset %s
-		""",
-		tuple([*extra_sel_params, *base_params, limit, offset]),
-		as_dict=True,
-	)
+	if offset > 0:
+		page_rows = frappe.db.sql(
+			f"""
+			select ah.name, ah.work_item, ah.to_user, ah.event_at,
+			       ah.ownership_start, ah.ownership_end,
+			       ah.team_at_assignment, ah.attribution_status,
+			       wi.campaign, wi.lead{extra_sel_sql}
+			from (
+				select ah.name
+				from `tabCSKH Assignment History` ah {ah_idx}
+				{count_wi_join_sql}
+				where {where_clause}
+				order by ah.ownership_start asc, ah.name asc
+				limit %s offset %s
+			) page_iv
+			inner join `tabCSKH Assignment History` ah on ah.name = page_iv.name
+			inner join `tabCSKH Work Item` wi {wi_idx_hint} on wi.name = ah.work_item
+			order by ah.ownership_start asc, ah.name asc
+			""",
+			tuple([*extra_sel_params, *base_params, limit, offset]),
+			as_dict=True,
+		)
+	else:
+		page_rows = frappe.db.sql(
+			f"""
+			select ah.name, ah.work_item, ah.to_user, ah.event_at,
+			       ah.ownership_start, ah.ownership_end,
+			       ah.team_at_assignment, ah.attribution_status,
+			       wi.campaign, wi.lead{extra_sel_sql}
+			from `tabCSKH Assignment History` ah {ah_idx}
+			inner join `tabCSKH Work Item` wi {wi_idx_hint} on wi.name = ah.work_item
+			where {where_clause}
+			order by ah.ownership_start asc, ah.name asc
+			limit %s offset %s
+			""",
+			tuple([*extra_sel_params, *base_params, limit, offset]),
+			as_dict=True,
+		)
 	if any(not r.get("attribution_status") for r in page_rows):
 		return None
 
@@ -2685,16 +2881,21 @@ def _fast_sla_obligation_drilldown_page(
 		"((ah_iv.ownership_end is not null and ah_iv.ownership_end <= %s) "
 		"or (ob.status = 'breached_handoff' and ob.closed_at is not null and ob.closed_at <= %s))"
 	)
-	f_dt_sql = """
+	sla_ca_idx = (
+		"USE INDEX (idx_cskh_attempt_iv_flags_cover)"
+		if runtime_cache.has_index("CSKH Contact Attempt", "idx_cskh_attempt_iv_flags_cover")
+		else "USE INDEX (idx_cskh_attempt_ownevt_occ)"
+	)
+	f_dt_sql = f"""
 		coalesce(
 			case when ob.obligation_type = 'FIRST_ATTEMPT' and ob.interval_event is not null and ob.interval_event != '' then (
 				select min(ca.occurred_at)
-				from `tabCSKH Contact Attempt` ca USE INDEX (idx_cskh_attempt_ownevt_occ)
+				from `tabCSKH Contact Attempt` ca {sla_ca_idx}
 				where ca.ownership_event = ob.interval_event
-				  and coalesce(ca.contact_attempt_snapshot, 0) = 1
-				  and ca.recorded_at <= %s
+				  and ca.contact_attempt_snapshot = 1
 				  and ca.occurred_at <= %s
 				  and (ah_iv.ownership_end is null or ca.occurred_at <= ah_iv.ownership_end)
+				  and ca.recorded_at <= %s
 			) else null end,
 			case when ob.fulfilled_by_attempt is not null and ob.fulfilled_by_attempt != '' then (
 				select ca2.occurred_at
