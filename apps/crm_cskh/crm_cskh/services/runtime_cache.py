@@ -206,6 +206,17 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 		_wrapped_db_delete._cskh_cache_wrapped = True  # type: ignore[attr-defined]
 		db_cls.delete = _wrapped_db_delete  # type: ignore[attr-defined]
 
+	orig_sql_ddl = db_cls.__dict__.get("sql_ddl")
+	if callable(orig_sql_ddl) and not getattr(orig_sql_ddl, "_cskh_cache_wrapped", False):
+
+		def _wrapped_sql_ddl(self, *args, **kwargs):
+			res = orig_sql_ddl(self, *args, **kwargs)
+			_SCHEMA_LRU.clear()
+			return res
+
+		_wrapped_sql_ddl._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+		db_cls.sql_ddl = _wrapped_sql_ddl  # type: ignore[attr-defined]
+
 	_DB_INSTANCE_HOOKED_TYPES.add(db_cls)
 
 
@@ -685,13 +696,12 @@ def has_column(doctype: str, column: str) -> bool:
 def has_index(doctype: str, index_name: str) -> bool:
 	if not getattr(frappe, "db", None):
 		return False
-	clean_tbl = f"tab{doctype}".replace("`", "")
-	if not is_runtime_db_cache_active():
-		return bool(frappe.db.sql(f"show index from `{clean_tbl}` where Key_name = %s", (index_name,)))
+	_ensure_mutation_hooks_installed()
 	key = (_current_site(), "idx", doctype, index_name)
 	hit = _SCHEMA_LRU.get(key)
 	if hit is not None:
 		return bool(hit)
+	clean_tbl = f"tab{doctype}".replace("`", "")
 	val = bool(frappe.db.sql(f"show index from `{clean_tbl}` where Key_name = %s", (index_name,)))
 	_SCHEMA_LRU.set(key, val)
 	return val

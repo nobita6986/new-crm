@@ -2254,29 +2254,25 @@ def _fast_interval_cohort_drilldown_page(
 	):
 		return None
 
-	has_ah_start_cover = runtime_cache.has_index("CSKH Assignment History", "idx_cskh_ah_start_cover")
-	has_ah_team_cover = runtime_cache.has_index("CSKH Assignment History", "idx_cskh_ah_team_start_cover")
-	has_ah_user_cover = runtime_cache.has_index("CSKH Assignment History", "idx_cskh_ah_user_start_cover")
 	has_wi_name_camp = runtime_cache.has_index("CSKH Work Item", "idx_cskh_wi_name_camp")
 	has_ca_iv_cover = runtime_cache.has_index("CSKH Contact Attempt", "idx_cskh_attempt_iv_flags_cover")
-	has_sla_iv_cover = runtime_cache.has_index("CSKH SLA Obligation", "idx_cskh_sla_ivevt_cover")
 
 	if eff_emp:
 		ah_idx = (
 			"FORCE INDEX (idx_cskh_ah_user_start_cover)"
-			if has_ah_user_cover
+			if runtime_cache.has_index("CSKH Assignment History", "idx_cskh_ah_user_start_cover")
 			else "FORCE INDEX (idx_cskh_ah_user_interval)"
 		)
 	elif team_mode == "authoritative_in" and len(team_nodes) == 1:
 		ah_idx = (
 			"FORCE INDEX (idx_cskh_ah_team_start_cover)"
-			if has_ah_team_cover
+			if runtime_cache.has_index("CSKH Assignment History", "idx_cskh_ah_team_start_cover")
 			else "FORCE INDEX (idx_cskh_ah_team_start)"
 		)
 	else:
 		ah_idx = (
 			"FORCE INDEX (idx_cskh_ah_start_cover)"
-			if has_ah_start_cover
+			if runtime_cache.has_index("CSKH Assignment History", "idx_cskh_ah_start_cover")
 			else "FORCE INDEX (idx_cskh_ah_start_name)"
 		)
 
@@ -2391,36 +2387,57 @@ def _fast_interval_cohort_drilldown_page(
 		has_ocode_occ_idx = runtime_cache.has_index("CSKH Contact Attempt", "idx_cskh_attempt_ocode_occ")
 
 		if has_inv_occ_idx and has_ocode_occ_idx:
-			has_any_inv = bool(
-				frappe.db.sql(
-					"""
-					select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_inv_occ)
-					where invalid_phone_snapshot = 1
-					  and contact_attempt_snapshot = 1
-					  and occurred_at < %s
-					  and occurred_at <= %s
-					  and recorded_at <= %s
-					limit 1
-					""",
-					(end_dt_excl, eff_as_of, eff_as_of),
-				)
-			) or (
-				bool(inv_codes_sorted)
-				and bool(
+			if inv_codes_sorted:
+				has_any_inv = bool(
 					frappe.db.sql(
 						f"""
-						select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_ocode_occ)
-						where outcome_code in ({inv_ph})
+						select 1 from (
+							select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_inv_occ)
+							where invalid_phone_snapshot = 1
+							  and contact_attempt_snapshot = 1
+							  and occurred_at < %s
+							  and occurred_at <= %s
+							  and recorded_at <= %s
+							limit 1
+						) _iv_snap
+						union all
+						select 1 from (
+							select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_ocode_occ)
+							where outcome_code in ({inv_ph})
+							  and contact_attempt_snapshot = 1
+							  and occurred_at < %s
+							  and occurred_at <= %s
+							  and recorded_at <= %s
+							limit 1
+						) _iv_code
+						limit 1
+						""",
+						(
+							end_dt_excl,
+							eff_as_of,
+							eff_as_of,
+							*inv_codes_sorted,
+							end_dt_excl,
+							eff_as_of,
+							eff_as_of,
+						),
+					)
+				)
+			else:
+				has_any_inv = bool(
+					frappe.db.sql(
+						"""
+						select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_inv_occ)
+						where invalid_phone_snapshot = 1
 						  and contact_attempt_snapshot = 1
 						  and occurred_at < %s
 						  and occurred_at <= %s
 						  and recorded_at <= %s
 						limit 1
 						""",
-						(*inv_codes_sorted, end_dt_excl, eff_as_of, eff_as_of),
+						(end_dt_excl, eff_as_of, eff_as_of),
 					)
 				)
-			)
 		elif (not has_inv_col) and has_ocode_occ_idx:
 			has_any_inv = bool(inv_codes_sorted) and bool(
 				frappe.db.sql(
@@ -2524,6 +2541,7 @@ def _fast_interval_cohort_drilldown_page(
 	else:  # ELIGIBLE_COVERAGE
 		if not runtime_cache.table_exists("CSKH SLA Obligation"):
 			return None
+		has_sla_iv_cover = runtime_cache.has_index("CSKH SLA Obligation", "idx_cskh_sla_ivevt_cover")
 		sla_iv_idx = (
 			"FORCE INDEX (idx_cskh_sla_ivevt_cover)"
 			if has_sla_iv_cover
