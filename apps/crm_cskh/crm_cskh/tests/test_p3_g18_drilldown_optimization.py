@@ -1484,6 +1484,22 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 			camp_cycle = [self.shared_campaign, self.shared_campaign, self.team_b_campaign]
 
 			now_ts = now_datetime()
+			lead_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"naming_series",
+				"first_name",
+				"lead_name",
+				"mobile_no",
+				"status",
+				"lead_owner",
+				"cskh_do_not_contact",
+			]
 			wi_cols = [
 				"name",
 				"creation",
@@ -1497,11 +1513,8 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				"status",
 				"assigned_to",
 				"assigned_at",
-				"owner_at_close",
-				"closed_by",
-				"closed_at",
 				"attempt_count",
-				"connected_count",
+				"connected_attempt_count",
 				"first_attempt_at",
 				"last_attempt_at",
 				"last_outcome_code",
@@ -1548,20 +1561,21 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				"channel",
 				"outcome_code",
 				"outcome_label_snapshot",
-				"result_group_snapshot",
+				"outcome_group_snapshot",
 				"outcome_version_snapshot",
 				"contact_attempt_snapshot",
 				"connected_snapshot",
 				"interested_snapshot",
+				"terminal_snapshot",
+				"dnc_snapshot",
 				"invalid_phone_snapshot",
-				"complete_fields",
 				"note",
 				"verification_status",
-				"policy_used",
+				"policy_name_snapshot",
 				"policy_version_snapshot",
 				"idempotency_key",
 				"payload_hash",
-				"work_item_revision_after",
+				"work_item_revision",
 			]
 			sla_cols = [
 				"name",
@@ -1581,8 +1595,8 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				"attribution_status",
 				"status",
 				"informational_only",
-				"reschedule_count",
-				"transfer_reset_seq",
+				"is_recovery_obligation",
+				"reschedule_seq",
 				"started_at",
 				"original_due_at",
 				"effective_due_at",
@@ -1590,9 +1604,9 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				"fulfilled_at",
 				"fulfilled_by_attempt",
 				"breached_at",
-				"waived_at",
 				"closed_at",
-				"policy_used",
+				"evaluation_anchor_at",
+				"policy_name_snapshot",
 				"policy_version_snapshot",
 				"idempotency_key",
 			]
@@ -1624,11 +1638,13 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 						"Administrator",
 						0,
 						0,
-						f"Khách SF {i:04d}",
-						"Khách",
-						f"SF {i:04d}",
+						"CRM-LEAD-",
+						f"Ứng viên SF {i:04d}",
+						f"Ứng viên SF {i:04d}",
 						f"09681{i:05d}",
+						"Contacted",
 						u,
+						0,
 					)
 				)
 				wi_rows.append(
@@ -1645,9 +1661,6 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 						"in_progress",
 						u,
 						st_dt,
-						None,
-						None,
-						None,
 						1,
 						is_conn,
 						att_dt,
@@ -1706,7 +1719,8 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 						is_conn,
 						is_conn,
 						0,
-						1,
+						0,
+						0,
 						f"Ghi chú SF {i:04d}",
 						"self_reported",
 						"GLOBAL-DEFAULT",
@@ -1744,7 +1758,7 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 						att_dt,
 						att_id,
 						None,
-						None,
+						att_dt,
 						att_dt,
 						"GLOBAL-DEFAULT",
 						1,
@@ -1753,30 +1767,14 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				)
 
 			def _insert_rows(tbl, cols, vals):
+				assert len(vals[0]) == len(cols), f"{tbl}: {len(vals[0])} != {len(cols)}"
 				c_sql = ", ".join(f"`{c}`" for c in cols)
 				ph = "(" + ", ".join(["%s"] * len(cols)) + ")"
 				v_sql = ", ".join([ph] * len(vals))
 				flat = [x for row in vals for x in row]
 				frappe.db.sql(f"insert into `{tbl}` ({c_sql}) values {v_sql}", tuple(flat))
 
-			_insert_rows(
-				"tabCRM Lead",
-				[
-					"name",
-					"creation",
-					"modified",
-					"modified_by",
-					"owner",
-					"docstatus",
-					"idx",
-					"lead_name",
-					"first_name",
-					"last_name",
-					"mobile_no",
-					"lead_owner",
-				],
-				lead_rows,
-			)
+			_insert_rows("tabCRM Lead", lead_cols, lead_rows)
 			_insert_rows("tabCSKH Work Item", wi_cols, wi_rows)
 			_insert_rows("tabCSKH Assignment History", ah_cols, ah_rows)
 			_insert_rows("tabCSKH Contact Attempt", att_cols, att_rows)
@@ -1885,6 +1883,7 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				barrier_key = f"cskh:test:proc_barrier:{int(time.time() * 1000)}"
 				child_code = """
 import json, os, sys, time
+import redis
 import frappe
 from crm_cskh.api import p3_reporting
 from crm_cskh.services import runtime_cache
@@ -1899,11 +1898,12 @@ try:
 	with runtime_cache.enable_runtime_cache_for_test():
 		cache_obj = runtime_cache._resolve_redis_wrapper()
 		bkey = cache_obj.make_key(cfg["barrier_key"])
-		cache_obj.incr(bkey)
-		cache_obj.expire(bkey, 30)
-		dl = time.monotonic() + 2.0
+		redis.Redis.incr(cache_obj, bkey)
+		redis.Redis.expire(cache_obj, bkey, 30)
+		dl = time.monotonic() + 8.0
 		while time.monotonic() < dl:
-			cur = int(cache_obj.get(bkey) or 0)
+			raw_cur = redis.Redis.get(cache_obj, bkey)
+			cur = int(raw_cur.decode("utf-8") if isinstance(raw_cur, bytes) else (raw_cur or 0))
 			if cur >= int(cfg["party_size"]):
 				break
 			time.sleep(0.005)
@@ -1924,6 +1924,10 @@ try:
 			"first_lead": res["rows"][0]["lead"] if res["rows"] else None,
 		}))
 finally:
+	try:
+		frappe.db.rollback()
+	except Exception:
+		pass
 	frappe.destroy()
 """
 				procs = []
@@ -2013,7 +2017,8 @@ finally:
 							)
 						finally:
 							try:
-								frappe.db.close()
+								frappe.db.rollback()
+								frappe.destroy()
 							except Exception:
 								pass
 
@@ -2051,10 +2056,7 @@ finally:
 				runtime_cache.set_cross_process_diag_mode(probe_enabled=False, disable_coalesce=False)
 
 				# 4. RBAC scope isolation & `process_dirty_scopes` convergence
-				frappe.init(site_name, sites_path=sites_path, force=True)
-				frappe.connect()
-				frappe.flags.in_test = True
-				frappe.flags.cskh_force_runtime_cache = True
+				runtime_cache.on_before_request()
 
 				frappe.set_user(self.leader_a)
 				with self.assertRaises(ForbiddenScope):
@@ -2112,9 +2114,10 @@ finally:
 				self.assertEqual(post_worker["pagination"]["total"], 89)
 				self.assertEqual(runtime_cache.get_coalesce_telemetry()["sql_count_executions"], 0)
 		finally:
-			frappe.init(site_name, sites_path=sites_path, force=True)
-			frappe.connect()
-			frappe.flags.in_test = True
+			try:
+				frappe.db.rollback()
+			except Exception:
+				pass
 			frappe.set_user("Administrator")
 			runtime_cache.set_cross_process_diag_mode(probe_enabled=False, disable_coalesce=False)
 			for row in orig_tmh:
@@ -2130,6 +2133,8 @@ finally:
 
 	def test_singleflight_mid_count_epoch_change_lock_expiry_dead_holder_and_bounded_wait(self):
 		"""Verify mid-COUNT epoch change, lock TTL expiry, SIGKILL dead lock holder, and bounded wait."""
+		import redis as _redis_raw
+
 		frappe.set_user("Administrator")
 		site_name = str(frappe.local.site)
 		sites_path = os.path.abspath(getattr(frappe.local, "sites_path", ".") or ".")
@@ -2182,7 +2187,8 @@ finally:
 					)
 				finally:
 					try:
-						frappe.db.close()
+						frappe.db.rollback()
+						frappe.destroy()
 					except Exception:
 						pass
 
@@ -2199,7 +2205,8 @@ finally:
 					proceed_after_bump.set()
 				finally:
 					try:
-						frappe.db.close()
+						frappe.db.rollback()
+						frappe.destroy()
 					except Exception:
 						pass
 
@@ -2285,7 +2292,8 @@ finally:
 					)
 				finally:
 					try:
-						frappe.db.close()
+						frappe.db.rollback()
+						frappe.destroy()
 					except Exception:
 						pass
 
@@ -2324,6 +2332,7 @@ finally:
 			ready_rkey_raw = f"cskh:test:dead_holder_ready:{int(time.time() * 1000)}"
 			dead_holder_script = """
 import json, os, sys, time
+import redis
 import frappe
 from crm_cskh.services import runtime_cache
 
@@ -2337,7 +2346,7 @@ runtime_cache.on_before_request()
 
 def _hang_holding_lock():
 	c = runtime_cache._resolve_redis_wrapper()
-	c.set(c.make_key(cfg["ready_key"]), str(os.getpid()), ex=30)
+	redis.Redis.set(c, c.make_key(cfg["ready_key"]), str(os.getpid()), ex=30)
 	time.sleep(30.0)
 	return 56250
 
@@ -2370,10 +2379,11 @@ runtime_cache.get_coalesced_drilldown_count(
 			try:
 				ready_full = cache_obj.make_key(ready_rkey_raw)
 				dl_ready = time.monotonic() + 15.0
-				while time.monotonic() < dl_ready and not cache_obj.get(ready_full):
+				while time.monotonic() < dl_ready and not _redis_raw.Redis.get(cache_obj, ready_full):
 					time.sleep(0.02)
 				self.assertIsNotNone(
-					cache_obj.get(ready_full), "Dead-holder child did not acquire lock in time"
+					_redis_raw.Redis.get(cache_obj, ready_full),
+					"Dead-holder child did not acquire lock in time",
 				)
 				# Hard-kill (`SIGKILL`) the lock holder so its `finally:` block NEVER runs!
 				dead_proc.kill()

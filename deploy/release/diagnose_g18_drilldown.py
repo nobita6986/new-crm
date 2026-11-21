@@ -1895,7 +1895,7 @@ def _run_api05b_stampede_before_after_suite(
                 cookie_header=cookie,
                 path=path,
                 method="GET",
-                timeout_sec=30.0,
+                timeout=30.0,
             )
             tot_v = None
             dirty_v = None
