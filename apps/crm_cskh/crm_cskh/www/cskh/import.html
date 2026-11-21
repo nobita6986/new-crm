@@ -85,23 +85,25 @@
 	<div id="import-history-empty" class="cskh-alert is-empty" hidden>
 		{{ _("No import batch yet.") }}
 	</div>
-	<table id="import-history-table" class="cskh-table" hidden>
-		<thead>
-			<tr>
-				<th>{{ _("Batch") }}</th>
-				<th>{{ _("Status") }}</th>
-				<th class="num">{{ _("Total rows") }}</th>
-				<th class="num">{{ _("Created rows") }}</th>
-				<th class="num">{{ _("Reused rows") }}</th>
-				<th class="num">{{ _("Skipped rows") }}</th>
-				<th class="num">{{ _("Error rows") }}</th>
-				<th>{{ _("Committed at") }}</th>
-				<th>{{ _("Error file") }}</th>
-				<th>{{ _("Actions") }}</th>
-			</tr>
-		</thead>
-		<tbody id="import-history-rows"></tbody>
-	</table>
+	<div class="cskh-table-scroll">
+		<table id="import-history-table" class="cskh-table" hidden>
+			<thead>
+				<tr>
+					<th>{{ _("Batch") }}</th>
+					<th>{{ _("Status") }}</th>
+					<th class="num">{{ _("Total rows") }}</th>
+					<th class="num">{{ _("Created rows") }}</th>
+					<th class="num">{{ _("Reused rows") }}</th>
+					<th class="num">{{ _("Skipped rows") }}</th>
+					<th class="num">{{ _("Error rows") }}</th>
+					<th>{{ _("Committed at") }}</th>
+					<th>{{ _("Error file") }}</th>
+					<th>{{ _("Actions") }}</th>
+				</tr>
+			</thead>
+			<tbody id="import-history-rows"></tbody>
+		</table>
+	</div>
 	<div class="cskh-pager">
 		<button id="import-history-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
 		<span id="import-history-range"></span>

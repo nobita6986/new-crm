@@ -62,21 +62,23 @@
 	<div id="pool-empty" class="cskh-alert is-empty" hidden>
 		{{ _("No customers match the current filters.") }}
 	</div>
-	<table id="pool-table" class="cskh-table" hidden>
-		<thead>
-			<tr>
-				<th>{{ _("Contact record") }}</th>
-				<th>{{ _("Phone number") }}</th>
-				<th>{{ _("Source") }}</th>
-				<th>{{ _("Campaign") }}</th>
-				<th>{{ _("Distribution state") }}</th>
-				<th>{{ _("Owner") }}</th>
-				<th>{{ _("Created at") }}</th>
-				<th>{{ _("Actions") }}</th>
-			</tr>
-		</thead>
-		<tbody id="pool-rows"></tbody>
-	</table>
+	<div class="cskh-table-scroll">
+		<table id="pool-table" class="cskh-table" hidden>
+			<thead>
+				<tr>
+					<th>{{ _("Contact record") }}</th>
+					<th>{{ _("Phone number") }}</th>
+					<th>{{ _("Source") }}</th>
+					<th>{{ _("Campaign") }}</th>
+					<th>{{ _("Distribution state") }}</th>
+					<th>{{ _("Owner") }}</th>
+					<th>{{ _("Created at") }}</th>
+					<th>{{ _("Actions") }}</th>
+				</tr>
+			</thead>
+			<tbody id="pool-rows"></tbody>
+		</table>
+	</div>
 	<div class="cskh-pager">
 		<button id="pool-prev" class="cskh-btn" type="button">{{ _("Previous") }}</button>
 		<span id="pool-range"></span>
