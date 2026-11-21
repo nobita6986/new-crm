@@ -106,7 +106,7 @@ add_to_apps_screen = [
 # ------------------
 
 # include js, css files in header of desk.html
-# app_include_css = "/assets/crm_cskh/css/crm_cskh.css"
+app_include_css = "/assets/crm_cskh/cskh/desk-theme.css"
 # app_include_js = "/assets/crm_cskh/js/crm_cskh.js"
 
 # include js, css files in header of web template

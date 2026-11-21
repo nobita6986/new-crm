@@ -285,8 +285,26 @@
 		const doc = win.document
 		const config = readBridgeConfig(doc)
 
+		function ensureThemeStylesheet() {
+			if (!isCrmPath(win) || !doc.head || typeof doc.createElement !== 'function') {
+				return
+			}
+			if (
+				typeof doc.querySelector === 'function' &&
+				doc.querySelector('link[data-cskh-crm-theme]')
+			) {
+				return
+			}
+			const linkEl = doc.createElement('link')
+			linkEl.setAttribute('rel', 'stylesheet')
+			linkEl.setAttribute('href', '/assets/crm_cskh/cskh/crm-theme.css')
+			linkEl.setAttribute('data-cskh-crm-theme', '1')
+			doc.head.appendChild(linkEl)
+		}
+
 		function syncAll(root) {
 			if (!isCrmPath(win)) return 0
+			ensureThemeStylesheet()
 			const navs = findPrimaryNavs(win, root || doc)
 			for (let i = 0; i < navs.length; i += 1) {
 				ensureSidebarItem(win, navs[i], config)

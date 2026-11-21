@@ -1,8 +1,9 @@
-"""Server-side `/crm` sidebar bridge injector and Frappe App Switcher permission hook.
+"""Server-side `/crm` sidebar bridge & SaaS theme injector and Frappe App Switcher hook.
 
-Exposes `CSKH` directly on the Frappe CRM left navigation panel (`/crm/*`) and in the
-Frappe App Switcher (`add_to_apps_screen`) without modifying upstream `apps/crm`
-Git-tracked files (`ADR-UI-001`, `Containerfile` clean-tree invariant).
+Exposes `CSKH` directly on the Frappe CRM left navigation panel (`/crm/*`), injects
+the cohesive soft Indigo/Slate SaaS stylesheet (`crm-theme.css`) into `<head>`, and
+registers `CSKH` in the Frappe App Switcher (`add_to_apps_screen`) without modifying
+upstream `apps/crm` Git-tracked files (`ADR-UI-001`, `Containerfile` clean-tree invariant).
 """
 
 from __future__ import annotations
@@ -14,6 +15,8 @@ import frappe
 
 BRIDGE_SCRIPT_PATH = "/assets/crm_cskh/cskh/crm-sidebar-bridge.js"
 BRIDGE_MARKER = "crm-sidebar-bridge.js"
+CRM_THEME_CSS_PATH = "/assets/crm_cskh/cskh/crm-theme.css"
+CRM_THEME_MARKER = 'data-cskh-crm-theme="1"'
 DEFAULT_SIDEBAR_HREF = "/cskh"
 DEFAULT_SIDEBAR_LABEL = "CSKH"
 
@@ -45,14 +48,28 @@ def has_app_permission(user: str | None = None) -> bool:
 		return False
 
 
-def _bridge_asset_version() -> str:
+def _asset_mtime_version(filename: str) -> str:
 	try:
-		bridge_file = os.path.join(os.path.dirname(__file__), "public", "cskh", "crm-sidebar-bridge.js")
-		if os.path.isfile(bridge_file):
-			return str(int(os.path.getmtime(bridge_file)))
+		asset_file = os.path.join(os.path.dirname(__file__), "public", "cskh", filename)
+		if os.path.isfile(asset_file):
+			return str(int(os.path.getmtime(asset_file)))
 	except Exception:
 		pass
 	return "1"
+
+
+def _bridge_asset_version() -> str:
+	return _asset_mtime_version("crm-sidebar-bridge.js")
+
+
+def _theme_asset_version() -> str:
+	return _asset_mtime_version("crm-theme.css")
+
+
+def _build_theme_link_tag(*, version: str | None = None) -> str:
+	ver = html.escape(version or _theme_asset_version(), quote=True)
+	safe_href = html.escape(f"{CRM_THEME_CSS_PATH}?v={ver}", quote=True)
+	return f'<link rel="stylesheet" href="{safe_href}" {CRM_THEME_MARKER}>'
 
 
 def _build_script_tag(
@@ -82,7 +99,7 @@ def _is_crm_spa_request(request) -> bool:
 
 
 def inject_crm_sidebar_bridge(response=None, request=None):
-	"""`after_request` hook: append the CSKH sidebar bridge `<script>` to `/crm` HTML pages."""
+	"""`after_request` hook: inject `crm-theme.css` + CSKH sidebar bridge into `/crm` HTML pages."""
 	try:
 		if response is None or not _is_crm_spa_request(request):
 			return response
@@ -102,15 +119,26 @@ def inject_crm_sidebar_bridge(response=None, request=None):
 		else:
 			return response
 
-		if 'id="app"' not in body or BRIDGE_MARKER in body:
+		if 'id="app"' not in body:
 			return response
 
-		closing_idx = body.rfind("</body>")
-		if closing_idx < 0:
-			return response
+		modified = False
+		if CRM_THEME_MARKER not in body:
+			head_idx = body.rfind("</head>")
+			if head_idx >= 0:
+				theme_tag = _build_theme_link_tag()
+				body = f"{body[:head_idx]}{theme_tag}\n{body[head_idx:]}"
+				modified = True
 
-		script_tag = _build_script_tag()
-		response.data = f"{body[:closing_idx]}{script_tag}\n{body[closing_idx:]}"
+		if BRIDGE_MARKER not in body:
+			closing_idx = body.rfind("</body>")
+			if closing_idx >= 0:
+				script_tag = _build_script_tag()
+				body = f"{body[:closing_idx]}{script_tag}\n{body[closing_idx:]}"
+				modified = True
+
+		if modified:
+			response.data = body
 		return response
 	except Exception:
 		return response
