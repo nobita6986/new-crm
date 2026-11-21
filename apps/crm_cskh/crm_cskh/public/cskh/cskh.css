@@ -509,11 +509,10 @@ body:has(#cskh-root) .web-footer {
 	justify-content: space-between;
 	gap: 16px;
 	padding: 20px;
-	transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s ease, border-color 0.18s ease;
+	transition: box-shadow 0.18s ease, border-color 0.18s ease;
 }
 
 .cskh-feature-card:hover {
-	transform: translateY(-2px);
 	border-color: #cbd5e1;
 	box-shadow: var(--cskh-shadow-md);
 }
@@ -602,11 +601,10 @@ body:has(#cskh-root) .web-footer {
 	padding: 16px;
 	background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
 	box-shadow: var(--cskh-shadow-xs);
-	transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+	transition: box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
 .cskh-metric:hover {
-	transform: translateY(-1px);
 	border-color: var(--cskh-border-strong);
 	box-shadow: var(--cskh-shadow-sm);
 }
@@ -772,18 +770,13 @@ body:has(#cskh-root) .web-footer {
 	justify-content: center;
 	gap: 6px;
 	box-shadow: var(--cskh-shadow-xs);
-	transition: all 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+	transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .cskh-btn:hover {
 	border-color: #94a3b8;
 	background: #f8fafc;
 	color: var(--cskh-text);
-	transform: translateY(-0.5px);
-}
-
-.cskh-btn:active {
-	transform: translateY(0);
 }
 
 .cskh-btn:focus-visible,
@@ -1424,13 +1417,12 @@ body:has(#cskh-root) .web-footer {
 	justify-content: space-between;
 	gap: 10px;
 	box-shadow: var(--cskh-shadow-xs);
-	transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+	transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .cskh-kpi-card:hover {
 	border-color: #cbd5e1;
 	box-shadow: var(--cskh-shadow-sm);
-	transform: translateY(-1px);
 }
 
 .cskh-kpi-card.is-na {
