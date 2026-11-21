@@ -1261,7 +1261,8 @@ try:
         '<h2>BÁO CÁO CHẤT LƯỢNG DỊCH VỤ CSKH</h2>'
         '<p>Khách hàng: <strong>{{ doc.first_name }} {{ doc.last_name }}</strong> — '
         'Đơn vị: {{ doc.organization }} — Giá trị: 12.500.000 ₫</p>'
-        '<p>Tổ hợp dấu tiếng Việt: ă â đ ê ô ơ ư Ắ Ầ Ẩ Ẫ Ậ Ế Ề Ể Ễ Ệ Ố Ồ Ổ Ỗ Ộ Ớ Ờ Ở Ỡ Ợ Ứ Ừ Ử Ữ Ự</p>'
+        '<p>Tổ hợp dấu A/E/O: ă â đ ê ô ơ ư Ắ Ầ Ẩ Ẫ Ậ Ế Ề Ể Ễ Ệ Ố Ồ Ổ Ỗ Ộ</p>'
+        '<p>Tổ hợp dấu Ơ/Ư: Ớ Ờ Ở Ỡ Ợ Ứ Ừ Ử Ữ Ự</p>'
         f'<p><img src="{badge_url}" width="48" height="48" alt="CSKH Badge"/></p>'
         '<table class="cskh-pdf-tbl" style="width: 100%; border-collapse: collapse;">'
         '<thead><tr><th>STT</th><th>Mã dòng</th><th>Nội dung chăm sóc</th><th>Kết quả</th></tr></thead>'
@@ -1483,11 +1484,14 @@ finally:
             )
 
         inspect_pdf_py = r"""
-import base64, io, json, sys
+import base64, io, json, sys, unicodedata
 from pypdf import PdfReader
 
 req = json.loads(sys.stdin.read())
 out = {}
+
+def _compact(s: str) -> str:
+    return "".join(unicodedata.normalize("NFC", s or "").split())
 
 def walk_resources(res_obj, fonts, images, seen):
     if not res_obj:
@@ -1515,12 +1519,21 @@ def walk_resources(res_obj, fonts, images, seen):
                 images.append({"width": int(xo.get("/Width") or 0), "height": int(xo.get("/Height") or 0)})
             elif subtype == "/Form":
                 walk_resources(xo.get("/Resources"), fonts, images, seen)
+    pdict = res.get("/Pattern")
+    if pdict:
+        pdict = pdict.get_object() if hasattr(pdict, "get_object") else pdict
+        if isinstance(pdict, dict):
+            for _, pref in pdict.items():
+                po = pref.get_object() if hasattr(pref, "get_object") else pref
+                if isinstance(po, dict):
+                    walk_resources(po.get("/Resources"), fonts, images, seen)
 
 for engine_key, b64_str in req.items():
     raw = base64.b64decode(b64_str)
     reader = PdfReader(io.BytesIO(raw))
-    page_texts = [p.extract_text() or "" for p in reader.pages]
-    full_text = "\n".join(page_texts)
+    page_texts = [unicodedata.normalize("NFC", p.extract_text() or "") for p in reader.pages]
+    page_compact = [_compact(t) for t in page_texts]
+    full_compact = "".join(page_compact)
     fonts, images, seen = [], [], set()
     for p in reader.pages:
         walk_resources(p.get("/Resources"), fonts, images, seen)
@@ -1530,30 +1543,35 @@ for engine_key, b64_str in req.items():
         "byte_length": len(raw),
         "page_count": len(reader.pages),
         "fonts_detected": unique_fonts,
-        "dejavu_font_embedded": any("DejaVu" in bf for bf in unique_fonts),
+        "dejavu_font_embedded": any("dejavu" in bf.lower() for bf in unique_fonts),
         "tounicode_cmap_count": tounicode_count,
         "image_xobject_count": len(images),
         "images": images[:5],
+        "page_1_preview": " ".join(page_texts[0].split())[:220] if page_texts else "",
         "vietnamese_checks": {
-            "report_title": "BÁO CÁO CHẤT LƯỢNG DỊCH VỤ CSKH" in full_text,
-            "customer_name": "Nguyễn Thị Ánh Tuyết" in full_text,
-            "organization_name": "Đặng Quốc Cường" in full_text,
-            "currency_dong": "12.500.000 ₫" in full_text,
-            "tone_matrix_a": "Ắ Ầ Ẩ Ẫ Ậ" in full_text,
-            "tone_matrix_u": "Ứ Ừ Ử Ữ Ự" in full_text,
+            "report_title": _compact("BÁO CÁO CHẤT LƯỢNG DỊCH VỤ CSKH") in full_compact,
+            "customer_name": _compact("Nguyễn Thị Ánh Tuyết") in full_compact,
+            "organization_name": _compact("Đặng Quốc Cường") in full_compact,
+            "currency_dong": _compact("12.500.000 ₫") in full_compact,
+            "tone_matrix_a": _compact("Ắ Ầ Ẩ Ẫ Ậ") in full_compact,
+            "tone_matrix_u": _compact("Ứ Ừ Ử Ữ Ự") in full_compact,
         },
         "multipage_table_checks": {
-            "row_001_on_page_1": "DÒNG-BẢNG-001" in page_texts[0],
-            "row_050_present": "DÒNG-BẢNG-050" in full_text,
-            "row_095_on_last_page": "DÒNG-BẢNG-095" in page_texts[-1],
+            "row_001_on_page_1": bool(page_compact) and (_compact("DÒNG-BẢNG-001") in page_compact[0]),
+            "row_050_after_page_1": any(_compact("DÒNG-BẢNG-050") in pg for pg in page_compact[1:]),
+            "row_095_on_page_3_or_later": (
+                len(page_compact) >= 3
+                and any(_compact("DÒNG-BẢNG-095") in pg for pg in page_compact[2:])
+                and (_compact("DÒNG-BẢNG-095") not in page_compact[0])
+            ),
         },
         "header_footer_checks": {
-            "header_on_page_1": "TIÊU ĐỀ ĐẦU TRANG CSKH" in page_texts[0],
-            "header_on_page_2": len(page_texts) >= 2 and ("TIÊU ĐỀ ĐẦU TRANG CSKH" in page_texts[1]),
-            "header_on_last_page": "TIÊU ĐỀ ĐẦU TRANG CSKH" in page_texts[-1],
-            "footer_on_page_1": "CHÂN TRANG BẢO MẬT CSKH" in page_texts[0],
-            "footer_on_page_2": len(page_texts) >= 2 and ("CHÂN TRANG BẢO MẬT CSKH" in page_texts[1]),
-            "footer_on_last_page": "CHÂN TRANG BẢO MẬT CSKH" in page_texts[-1],
+            "header_on_page_1": bool(page_compact) and (_compact("TIÊU ĐỀ ĐẦU TRANG CSKH") in page_compact[0]),
+            "header_on_page_2": len(page_compact) >= 2 and (_compact("TIÊU ĐỀ ĐẦU TRANG CSKH") in page_compact[1]),
+            "header_on_page_3": len(page_compact) >= 3 and (_compact("TIÊU ĐỀ ĐẦU TRANG CSKH") in page_compact[2]),
+            "footer_on_page_1": bool(page_compact) and (_compact("CHÂN TRANG BẢO MẬT CSKH") in page_compact[0]),
+            "footer_on_page_2": len(page_compact) >= 2 and (_compact("CHÂN TRANG BẢO MẬT CSKH") in page_compact[1]),
+            "footer_on_page_3": len(page_compact) >= 3 and (_compact("CHÂN TRANG BẢO MẬT CSKH") in page_compact[2]),
         },
     }
 
