@@ -546,6 +546,9 @@ def _fetch_snapshots(
 			r["lead_source"] = extra.get("lead_source")
 			r["exclusion_counts"] = json.loads(r.exclusion_counts_json or "{}")
 			r["trend_series"] = json.loads(r.trend_series_json or "[]")
+			r.pop("metrics_json", None)
+			r.pop("exclusion_counts_json", None)
+			r.pop("trend_series_json", None)
 		return rows
 
 	return runtime_cache.get_cached_kpi_snapshots(
@@ -2148,6 +2151,32 @@ def _resolve_drilldown_team_scope_mode(
 	return "authoritative_in", tuple(sorted(nodes_opt))
 
 
+def _build_drilldown_count_scope_key(
+	*,
+	mcode: str,
+	period: PeriodSpec,
+	eff_as_of,
+	eff_camp: str,
+	eff_emp: str,
+	team_mode: str,
+	team_nodes: tuple[str, ...],
+	bucket: str,
+) -> tuple:
+	return (
+		mcode,
+		period.period_type,
+		period.period_key,
+		str(period.start_dt),
+		str(period.end_dt_exclusive),
+		str(eff_as_of),
+		eff_camp,
+		eff_emp,
+		team_mode,
+		team_nodes,
+		bucket,
+	)
+
+
 def _resolve_fast_total(
 	*,
 	mcode: str,
@@ -2155,8 +2184,9 @@ def _resolve_fast_total(
 	snap_cell: dict | None,
 	dirty_pending: bool,
 	count_fn,
+	coalesce_scope_key: tuple | None = None,
 ) -> int:
-	"""Use published `snap_cell` count in `O(1)` when fresh & exact, else run exact SQL `COUNT(*)`."""
+	"""Use published `snap_cell` count in `O(1)` when fresh & exact, else run coalesced exact SQL `COUNT(*)`."""
 	if not dirty_pending and snap_cell is not None and bucket != "excluded" and mcode != "SLA_BREACH_COUNT":
 		if mcode in (
 			"CONNECTED_RATE",
@@ -2191,6 +2221,8 @@ def _resolve_fast_total(
 		):
 			if bucket in ("all_denominator", "numerator_only") and snap_cell.get("value") is not None:
 				return int(snap_cell.get("value") or 0)
+	if coalesce_scope_key is not None:
+		return runtime_cache.get_coalesced_drilldown_count(coalesce_scope_key, count_fn)
 	return int(count_fn())
 
 
@@ -2277,31 +2309,39 @@ def _fast_interval_cohort_drilldown_page(
 		)
 
 	wi_idx_hint = "FORCE INDEX (idx_cskh_wi_name_camp)" if has_wi_name_camp else ""
-	can_omit_wi_in_count = False
-	if not eff_camp and runtime_cache.is_runtime_db_cache_active():
-		has_orphan_wi = runtime_cache.get_cached_invariant_bool(
-			"ah_orphan_work_item",
-			(runtime_cache.DOMAIN_WORK_ITEM,),
-			(),
-			lambda: bool(
-				frappe.db.sql(
-					f"""
-					select 1
-					from `tabCSKH Assignment History` ah USE INDEX (idx_cskh_ah_wi_act_start)
-					left join `tabCSKH Work Item` wi {wi_idx_hint} on wi.name = ah.work_item
-					where wi.name is null
-					limit 1
-					"""
-				)
-			),
-		)
-		can_omit_wi_in_count = not has_orphan_wi
+	_count_wi_join_memo: list[str] = []
 
-	count_wi_join_sql = (
-		""
-		if can_omit_wi_in_count
-		else f"inner join `tabCSKH Work Item` wi {wi_idx_hint} on wi.name = ah.work_item"
-	)
+	def _get_count_wi_join_sql() -> str:
+		if _count_wi_join_memo:
+			return _count_wi_join_memo[0]
+		can_omit = False
+		if not eff_camp and runtime_cache.is_runtime_db_cache_active():
+			has_orphan_wi = runtime_cache.get_cached_invariant_bool(
+				"ah_orphan_work_item",
+				(runtime_cache.DOMAIN_WORK_ITEM,),
+				(),
+				lambda: bool(
+					frappe.db.sql(
+						f"""
+						select 1
+						from `tabCSKH Assignment History` ah USE INDEX (idx_cskh_ah_wi_act_start)
+						left join `tabCSKH Work Item` wi {wi_idx_hint} on wi.name = ah.work_item
+						where wi.name is null
+						limit 1
+						"""
+					)
+				),
+			)
+			can_omit = not has_orphan_wi
+		sql_val = (
+			"" if can_omit else f"inner join `tabCSKH Work Item` wi {wi_idx_hint} on wi.name = ah.work_item"
+		)
+		_count_wi_join_memo.append(sql_val)
+		return sql_val
+
+	# Diagnostic pre-fix reproduction mode (`__diag_disable_coalesce__ = 1`): reproduce pre-fix eager check
+	if runtime_cache.is_diag_coalesce_disabled():
+		_ = _get_count_wi_join_sql()
 
 	where_parts = [
 		"ah.ownership_start >= %s",
@@ -2386,45 +2426,45 @@ def _fast_interval_cohort_drilldown_page(
 		)
 		has_ocode_occ_idx = runtime_cache.has_index("CSKH Contact Attempt", "idx_cskh_attempt_ocode_occ")
 
-		if has_inv_occ_idx and has_ocode_occ_idx:
-			if inv_codes_sorted:
-				has_any_inv = bool(
-					frappe.db.sql(
-						f"""
-						select 1 from (
-							select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_inv_occ)
-							where invalid_phone_snapshot = 1
-							  and contact_attempt_snapshot = 1
-							  and occurred_at < %s
-							  and occurred_at <= %s
-							  and recorded_at <= %s
+		def _check_has_any_inv() -> bool:
+			if has_inv_occ_idx and has_ocode_occ_idx:
+				if inv_codes_sorted:
+					return bool(
+						frappe.db.sql(
+							f"""
+							select 1 from (
+								select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_inv_occ)
+								where invalid_phone_snapshot = 1
+								  and contact_attempt_snapshot = 1
+								  and occurred_at < %s
+								  and occurred_at <= %s
+								  and recorded_at <= %s
+								limit 1
+							) _iv_snap
+							union all
+							select 1 from (
+								select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_ocode_occ)
+								where outcome_code in ({inv_ph})
+								  and contact_attempt_snapshot = 1
+								  and occurred_at < %s
+								  and occurred_at <= %s
+								  and recorded_at <= %s
+								limit 1
+							) _iv_code
 							limit 1
-						) _iv_snap
-						union all
-						select 1 from (
-							select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_ocode_occ)
-							where outcome_code in ({inv_ph})
-							  and contact_attempt_snapshot = 1
-							  and occurred_at < %s
-							  and occurred_at <= %s
-							  and recorded_at <= %s
-							limit 1
-						) _iv_code
-						limit 1
-						""",
-						(
-							end_dt_excl,
-							eff_as_of,
-							eff_as_of,
-							*inv_codes_sorted,
-							end_dt_excl,
-							eff_as_of,
-							eff_as_of,
-						),
+							""",
+							(
+								end_dt_excl,
+								eff_as_of,
+								eff_as_of,
+								*inv_codes_sorted,
+								end_dt_excl,
+								eff_as_of,
+								eff_as_of,
+							),
+						)
 					)
-				)
-			else:
-				has_any_inv = bool(
+				return bool(
 					frappe.db.sql(
 						"""
 						select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_inv_occ)
@@ -2438,23 +2478,41 @@ def _fast_interval_cohort_drilldown_page(
 						(end_dt_excl, eff_as_of, eff_as_of),
 					)
 				)
-		elif (not has_inv_col) and has_ocode_occ_idx:
-			has_any_inv = bool(inv_codes_sorted) and bool(
-				frappe.db.sql(
-					f"""
-					select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_ocode_occ)
-					where outcome_code in ({inv_ph})
-					  and contact_attempt_snapshot = 1
-					  and occurred_at < %s
-					  and occurred_at <= %s
-					  and recorded_at <= %s
-					limit 1
-					""",
-					(*inv_codes_sorted, end_dt_excl, eff_as_of, eff_as_of),
+			if (not has_inv_col) and has_ocode_occ_idx:
+				return bool(inv_codes_sorted) and bool(
+					frappe.db.sql(
+						f"""
+						select 1 from `tabCSKH Contact Attempt` FORCE INDEX (idx_cskh_attempt_ocode_occ)
+						where outcome_code in ({inv_ph})
+						  and contact_attempt_snapshot = 1
+						  and occurred_at < %s
+						  and occurred_at <= %s
+						  and recorded_at <= %s
+						limit 1
+						""",
+						(*inv_codes_sorted, end_dt_excl, eff_as_of, eff_as_of),
+					)
 				)
-			)
-		else:
-			has_any_inv = True
+			return True
+
+		has_any_inv = runtime_cache.get_cached_invariant_bool(
+			"ca_has_any_invalid_phone",
+			(
+				runtime_cache.DOMAIN_DIRTY_SCOPE,
+				runtime_cache.DOMAIN_OUTCOME,
+				runtime_cache.DOMAIN_KPI_SNAPSHOT,
+				runtime_cache.DOMAIN_CORRECTION,
+			),
+			(
+				str(end_dt_excl),
+				str(eff_as_of),
+				tuple(inv_codes_sorted),
+				bool(has_inv_col),
+				bool(has_inv_occ_idx),
+				bool(has_ocode_occ_idx),
+			),
+			_check_has_any_inv,
+		)
 
 		if not has_any_inv:
 			ca_att_conn_mask_sql = f"""
@@ -2621,7 +2679,7 @@ def _fast_interval_cohort_drilldown_page(
 				f"""
 				select 1
 				from `tabCSKH Assignment History` ah {ah_idx}
-				{count_wi_join_sql}
+				{_get_count_wi_join_sql()}
 				where {ambig_where}
 				limit 1
 				""",
@@ -2663,7 +2721,7 @@ def _fast_interval_cohort_drilldown_page(
 				f"""
 				select count(*)
 				from `tabCSKH Assignment History` ah {ah_idx}
-				{count_wi_join_sql}
+				{_get_count_wi_join_sql()}
 				where {where_clause}
 				""",
 				tuple(base_params),
@@ -2671,12 +2729,23 @@ def _fast_interval_cohort_drilldown_page(
 			or 0
 		)
 
+	count_scope_key = _build_drilldown_count_scope_key(
+		mcode=mcode,
+		period=period,
+		eff_as_of=eff_as_of,
+		eff_camp=eff_camp,
+		eff_emp=eff_emp,
+		team_mode=team_mode,
+		team_nodes=team_nodes,
+		bucket=bucket,
+	)
 	total = _resolve_fast_total(
 		mcode=mcode,
 		bucket=bucket,
 		snap_cell=snap_cell,
 		dirty_pending=dirty_pending,
 		count_fn=_count_intervals,
+		coalesce_scope_key=count_scope_key,
 	)
 	if total == 0 or offset >= total:
 		return [], total
@@ -2691,7 +2760,7 @@ def _fast_interval_cohort_drilldown_page(
 			from (
 				select ah.name
 				from `tabCSKH Assignment History` ah {ah_idx}
-				{count_wi_join_sql}
+				{_get_count_wi_join_sql()}
 				where {where_clause}
 				order by ah.ownership_start asc, ah.name asc
 				limit %s offset %s
@@ -2802,30 +2871,44 @@ def _fast_sla_obligation_drilldown_page(
 		if mcode == "OPEN_FOLLOWUPS_OVERDUE"
 		else (start_dt, due_upper, UNKNOWN_HISTORICAL)
 	)
-	if frappe.db.sql(
-		f"""
-		select 1 from `tabCSKH SLA Obligation` USE INDEX (idx_cskh_sla_team_due)
-		where (team_at_obligation is null or team_at_obligation = '')
-		  {due_lower_sql}and effective_due_at < %s
-		  and coalesce(attribution_status, '') != %s
-		limit 1
-		""",
-		due_guard_params,
+	if runtime_cache.get_cached_invariant_bool(
+		"sla_missing_team_at_obligation",
+		(runtime_cache.DOMAIN_DIRTY_SCOPE, runtime_cache.DOMAIN_ASSIGNMENT_HISTORY),
+		(mcode == "OPEN_FOLLOWUPS_OVERDUE", str(start_dt), str(due_upper)),
+		lambda: bool(
+			frappe.db.sql(
+				f"""
+				select 1 from `tabCSKH SLA Obligation` USE INDEX (idx_cskh_sla_team_due)
+				where (team_at_obligation is null or team_at_obligation = '')
+				  {due_lower_sql}and effective_due_at < %s
+				  and coalesce(attribution_status, '') != %s
+				limit 1
+				""",
+				due_guard_params,
+			)
+		),
 	):
 		return None
 
 	if mcode == "FIRST_CONNECTED_TRACKING_RATE":
-		if frappe.db.sql(
-			"""
-			select 1
-			from `tabCSKH SLA Obligation` ob USE INDEX (idx_cskh_sla_type_due_name)
-			inner join `tabCSKH Assignment History` ah_iv on ah_iv.name = ob.interval_event
-			where ob.obligation_type = 'FIRST_CONNECTED'
-			  and ob.effective_due_at >= %s and ob.effective_due_at < %s
-			  and ob.owner_user != ah_iv.to_user
-			limit 1
-			""",
-			(start_dt, end_dt_excl),
+		if runtime_cache.get_cached_invariant_bool(
+			"sla_fc_owner_mismatch",
+			(runtime_cache.DOMAIN_DIRTY_SCOPE, runtime_cache.DOMAIN_ASSIGNMENT_HISTORY),
+			(str(start_dt), str(end_dt_excl)),
+			lambda: bool(
+				frappe.db.sql(
+					"""
+					select 1
+					from `tabCSKH SLA Obligation` ob USE INDEX (idx_cskh_sla_type_due_name)
+					inner join `tabCSKH Assignment History` ah_iv on ah_iv.name = ob.interval_event
+					where ob.obligation_type = 'FIRST_CONNECTED'
+					  and ob.effective_due_at >= %s and ob.effective_due_at < %s
+					  and ob.owner_user != ah_iv.to_user
+					limit 1
+					""",
+					(start_dt, end_dt_excl),
+				)
+			),
 		):
 			return None
 
@@ -3061,6 +3144,16 @@ def _fast_sla_obligation_drilldown_page(
 		snap_cell=snap_cell,
 		dirty_pending=dirty_pending,
 		count_fn=_count_obligations,
+		coalesce_scope_key=_build_drilldown_count_scope_key(
+			mcode=mcode,
+			period=period,
+			eff_as_of=eff_as_of,
+			eff_camp=eff_camp,
+			eff_emp=eff_emp,
+			team_mode=team_mode,
+			team_nodes=team_nodes,
+			bucket=bucket,
+		),
 	)
 	if total == 0 or offset >= total:
 		return [], total
@@ -3164,24 +3257,38 @@ def _fast_attempt_grain_drilldown_page(
 	end_dt_excl = period.end_dt_exclusive
 
 	# Index-prefix guards (`<0.05ms` via `idx_cskh_attempt_ownevt_occ` & `cskh_attempt_perf_occ_idx`)
-	if frappe.db.sql(
-		"""
-		select 1 from `tabCSKH Contact Attempt` USE INDEX (idx_cskh_attempt_ownevt_occ)
-		where (ownership_event is null or ownership_event = '')
-		  and occurred_at >= %s and occurred_at < %s
-		limit 1
-		""",
-		(start_dt, end_dt_excl),
+	if runtime_cache.get_cached_invariant_bool(
+		"ca_missing_ownership_event",
+		(runtime_cache.DOMAIN_DIRTY_SCOPE, runtime_cache.DOMAIN_ASSIGNMENT_HISTORY),
+		(str(start_dt), str(end_dt_excl)),
+		lambda: bool(
+			frappe.db.sql(
+				"""
+				select 1 from `tabCSKH Contact Attempt` USE INDEX (idx_cskh_attempt_ownevt_occ)
+				where (ownership_event is null or ownership_event = '')
+				  and occurred_at >= %s and occurred_at < %s
+				limit 1
+				""",
+				(start_dt, end_dt_excl),
+			)
+		),
 	):
 		return None
-	if eff_emp and frappe.db.sql(
-		"""
-		select 1 from `tabCSKH Contact Attempt` USE INDEX (cskh_attempt_perf_occ_idx)
-		where (performed_by is null or performed_by = '')
-		  and occurred_at >= %s and occurred_at < %s
-		limit 1
-		""",
-		(start_dt, end_dt_excl),
+	if eff_emp and runtime_cache.get_cached_invariant_bool(
+		"ca_missing_performed_by",
+		(runtime_cache.DOMAIN_DIRTY_SCOPE,),
+		(str(start_dt), str(end_dt_excl)),
+		lambda: bool(
+			frappe.db.sql(
+				"""
+				select 1 from `tabCSKH Contact Attempt` USE INDEX (cskh_attempt_perf_occ_idx)
+				where (performed_by is null or performed_by = '')
+				  and occurred_at >= %s and occurred_at < %s
+				limit 1
+				""",
+				(start_dt, end_dt_excl),
+			)
+		),
 	):
 		return None
 
@@ -3291,6 +3398,16 @@ def _fast_attempt_grain_drilldown_page(
 		snap_cell=snap_cell,
 		dirty_pending=dirty_pending,
 		count_fn=_count_attempts,
+		coalesce_scope_key=_build_drilldown_count_scope_key(
+			mcode=mcode,
+			period=period,
+			eff_as_of=eff_as_of,
+			eff_camp=eff_camp,
+			eff_emp=eff_emp,
+			team_mode=team_mode,
+			team_nodes=team_nodes,
+			bucket=bucket,
+		),
 	)
 	if total == 0 or offset >= total:
 		return [], total

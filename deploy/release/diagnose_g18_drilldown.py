@@ -1593,6 +1593,531 @@ def _run_monitored_http_wave(
     }
 
 
+_STAMPEDE_DB_STATUS_KEYS = (
+    "Questions",
+    "Com_select",
+    "Innodb_buffer_pool_read_requests",
+    "Innodb_buffer_pool_reads",
+    "Handler_read_next",
+    "Handler_read_key",
+    "Handler_read_rnd_next",
+    "Innodb_row_lock_waits",
+    "Slow_queries",
+)
+
+_BACKEND_STAMPEDE_CONTROL_SCRIPT = r"""
+import json, os, sys
+from datetime import datetime, timedelta
+import frappe
+from crm_cskh.services import contact_attempt, runtime_cache
+from crm_cskh.services.kpi_periods import resolve_period_spec
+from crm_cskh.services.kpi_runs import (
+    _flush_pending_dirty_events,
+    execute_kpi_recompute,
+    process_dirty_scopes,
+    schedule_post_commit_dirty_invalidation,
+)
+
+cmd = json.loads(os.environ["STAMPEDE_CMD_JSON"])
+site = os.environ["BENCH_SITE"]
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path="/home/frappe/frappe-bench/sites")
+frappe.connect()
+frappe.set_user("Administrator")
+try:
+    action = cmd["action"]
+    out = {"ok": True, "action": action}
+    if action == "prepare_wave":
+        mode = cmd["reset_mode"]
+        disable_c = bool(cmd.get("disable_coalesce", False))
+        if mode == "cold_clean_all":
+            frappe.clear_cache()
+        elif mode == "post_record_attempt_2026_11":
+            # Reproduce exact benchmark sequence: callback ToDo user cache clear + dirty/snapshot epoch bump
+            u = str(cmd["staff_user"])
+            if disable_c:
+                # Reproduce 2796d1f2 pre-fix _wrapped_clear_cache(user=...) wiping all domains
+                runtime_cache.clear_all_local_caches()
+                runtime_cache.bump_cache_domain(*runtime_cache.ALL_DOMAINS)
+            else:
+                frappe.clear_cache(user=u)
+                runtime_cache.bump_cache_domain(
+                    runtime_cache.DOMAIN_DIRTY_SCOPE,
+                    runtime_cache.DOMAIN_KPI_SNAPSHOT,
+                )
+        elif mode == "dirty_2026_10_mutation":
+            frappe.db.sql(
+                "update `tabCSKH Contact Attempt` set invalid_phone_snapshot = 1, outcome_code = 'wrong_number' "
+                "where name in ('S1-ATT-000000-1', 'S1-ATT-000000-2', 'S1-ATT-000000-3', 'S1-ATT-000000-4')"
+            )
+            prev_sup = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+            frappe.flags.cskh_suppress_dirty_enqueue = True
+            try:
+                schedule_post_commit_dirty_invalidation(
+                    work_item="S1-WI-000000",
+                    campaign=str(cmd["primary_camp"]),
+                    owner_user=str(cmd["staff_user"]),
+                    event_dt=datetime(2026, 10, 27, 9, 0, 0),
+                    reason="diag_api05b_stampede_dirty",
+                    trigger_reference="S1-ATT-000000-1",
+                )
+                _flush_pending_dirty_events()
+                frappe.db.commit()
+            finally:
+                frappe.flags.cskh_suppress_dirty_enqueue = prev_sup
+            if disable_c:
+                runtime_cache.bump_cache_domain(*runtime_cache.ALL_DOMAINS)
+            else:
+                runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+        elif mode == "dirty_2026_10_enqueue_worker":
+            frappe.db.sql(
+                "update `tabCSKH Contact Attempt` set invalid_phone_snapshot = 1, outcome_code = 'wrong_number' "
+                "where name in ('S1-ATT-000000-1', 'S1-ATT-000000-2', 'S1-ATT-000000-3', 'S1-ATT-000000-4')"
+            )
+            prev_sup = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+            frappe.flags.cskh_suppress_dirty_enqueue = True
+            try:
+                schedule_post_commit_dirty_invalidation(
+                    work_item="S1-WI-000000",
+                    campaign=str(cmd["primary_camp"]),
+                    owner_user=str(cmd["staff_user"]),
+                    event_dt=datetime(2026, 10, 27, 9, 0, 0),
+                    reason="diag_api05b_worker_overlap",
+                    trigger_reference="S1-ATT-000000-1",
+                )
+                _flush_pending_dirty_events()
+                frappe.db.commit()
+            finally:
+                frappe.flags.cskh_suppress_dirty_enqueue = prev_sup
+            job = frappe.enqueue(
+                "crm_cskh.jobs.recompute_kpi.process_dirty_scopes",
+                queue="short",
+                timeout=900,
+                now=False,
+                defer_unmaterialized_large_rollups=True,
+            )
+            frappe.db.commit()
+            out["enqueued_job_id"] = getattr(job, "id", None)
+            if disable_c:
+                runtime_cache.bump_cache_domain(*runtime_cache.ALL_DOMAINS)
+            else:
+                runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+        runtime_cache.set_cross_process_diag_mode(probe_enabled=True, disable_coalesce=disable_c)
+        runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+    elif action == "read_telemetry":
+        out["telemetry"] = runtime_cache.read_cross_process_diag_telemetry()
+        out["dirty_scope_counts"] = {
+            str(s): int(c)
+            for s, c in frappe.db.sql("select status, count(*) from `tabCSKH Dirty Scope` group by status")
+        }
+    elif action == "restore_clean_s1":
+        runtime_cache.set_cross_process_diag_mode(probe_enabled=False, disable_coalesce=False)
+        runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+        import time as _t
+        dl = _t.monotonic() + 90.0
+        while _t.monotonic() < dl:
+            rem = frappe.db.sql(
+                "select count(*) from `tabCSKH Dirty Scope` where status in ('pending', 'processing')"
+            )[0][0]
+            running = frappe.db.sql(
+                "select count(*) from `tabCSKH KPI Run` where status = 'running'"
+            )[0][0]
+            if int(rem or 0) == 0 and int(running or 0) == 0:
+                break
+            _t.sleep(0.5)
+            frappe.db.commit()
+        frappe.db.sql(
+            "update `tabCSKH Contact Attempt` set invalid_phone_snapshot = 0, "
+            "outcome_code = case when name = 'S1-ATT-000000-1' then 'no_answer' "
+            "when name = 'S1-ATT-000000-4' then 'connected_interested' else 'busy' end "
+            "where name in ('S1-ATT-000000-1', 'S1-ATT-000000-2', 'S1-ATT-000000-3', 'S1-ATT-000000-4')"
+        )
+        frappe.db.sql("delete from `tabCSKH Dirty Scope`")
+        frappe.db.commit()
+        execute_kpi_recompute(resolve_period_spec("monthly", "2026-10"), run_mode="full", actor="Administrator")
+        frappe.db.commit()
+        frappe.clear_cache()
+    print("STAMPEDE_CTRL_JSON:" + json.dumps(out, default=str))
+finally:
+    frappe.destroy()
+"""
+
+
+def _read_stampede_db_counters(
+    *,
+    compose_base: list[str],
+    compose_env: dict[str, str],
+    db_root_pw: str,
+) -> dict[str, int]:
+    in_list = ",".join(f"'{k}'" for k in _STAMPEDE_DB_STATUS_KEYS)
+    proc = subprocess.run(
+        [
+            *compose_base,
+            "exec",
+            "-T",
+            "-e",
+            f"MYSQL_PWD={db_root_pw}",
+            "db",
+            "mariadb",
+            "-uroot",
+            "-N",
+            "-B",
+            "-e",
+            f"SHOW GLOBAL STATUS WHERE Variable_name IN ({in_list});",
+        ],
+        env=compose_env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    out: dict[str, int] = {k: 0 for k in _STAMPEDE_DB_STATUS_KEYS}
+    if proc.returncode == 0:
+        for ln in proc.stdout.splitlines():
+            parts = ln.strip().split("\t")
+            if len(parts) == 2 and parts[0] in out:
+                try:
+                    out[parts[0]] = int(float(parts[1]))
+                except ValueError:
+                    pass
+    return out
+
+
+def _exec_stampede_ctrl(
+    *,
+    compose_base: list[str],
+    compose_env: dict[str, str],
+    site_name: str,
+    cmd_payload: dict[str, object],
+) -> dict[str, object]:
+    proc = subprocess.run(
+        [
+            *compose_base,
+            "exec",
+            "-T",
+            "-e",
+            f"BENCH_SITE={site_name}",
+            "-e",
+            f"STAMPEDE_CMD_JSON={json.dumps(cmd_payload)}",
+            "backend",
+            "/home/frappe/frappe-bench/env/bin/python",
+            "-",
+        ],
+        input=_BACKEND_STAMPEDE_CONTROL_SCRIPT,
+        env=compose_env,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=180,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"Stampede control action {cmd_payload.get('action')!r} failed:\n"
+            f"{proc.stdout[-1200:]}\n{proc.stderr[-1200:]}"
+        )
+    lines = [
+        ln[len("STAMPEDE_CTRL_JSON:") :]
+        for ln in proc.stdout.splitlines()
+        if ln.startswith("STAMPEDE_CTRL_JSON:")
+    ]
+    if not lines:
+        raise RuntimeError(f"Missing STAMPEDE_CTRL_JSON marker:\n{proc.stdout[-800:]}")
+    return json.loads(lines[-1])
+
+
+def _run_api05b_stampede_before_after_suite(
+    *,
+    base_url: str,
+    site_name: str,
+    admin_cookie: str,
+    bod_cookie: str,
+    leader_cookie: str,
+    staff_cookie: str,
+    primary_camp_raw: str,
+    primary_team_raw: str,
+    staff_user_raw: str,
+    compose_base: list[str],
+    compose_env: dict[str, str],
+    db_root_pw: str,
+) -> dict[str, object]:
+    """Reproduce `API-05B-C12`, `API-05B-BOD`, and `c=40` BEFORE vs AFTER cross-process coalescing."""
+    path_comp = (
+        "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown"
+        "?period_type=monthly&period_key=2026-10&scope_type=company"
+        "&metric_code=CONNECTED_RATE&page=1&page_size=20"
+    )
+    path_team = (
+        "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown"
+        f"?period_type=monthly&period_key=2026-10&scope_type=team"
+        f"&scope_id={urllib.parse.quote(primary_team_raw)}&metric_code=CONNECTED_RATE&page=1&page_size=20"
+    )
+    path_emp = (
+        "/api/method/crm_cskh.api.p3_reporting.get_metric_drilldown"
+        f"?period_type=monthly&period_key=2026-10&scope_type=employee"
+        f"&scope_id={urllib.parse.quote(staff_user_raw)}&metric_code=CONNECTED_RATE&page=1&page_size=20"
+    )
+
+    def _run_single_probed_wave(
+        *,
+        wave_id: str,
+        path: str,
+        cookie: str,
+        concurrency: int,
+        requests_total: int,
+        reset_mode: str,
+        disable_coalesce: bool,
+    ) -> dict[str, object]:
+        prep = _exec_stampede_ctrl(
+            compose_base=compose_base,
+            compose_env=compose_env,
+            site_name=site_name,
+            cmd_payload={
+                "action": "prepare_wave",
+                "reset_mode": reset_mode,
+                "disable_coalesce": disable_coalesce,
+                "primary_camp": primary_camp_raw,
+                "staff_user": staff_user_raw,
+            },
+        )
+        db_before = _read_stampede_db_counters(
+            compose_base=compose_base, compose_env=compose_env, db_root_pw=db_root_pw
+        )
+
+        ordered_lats: list[float] = [0.0] * requests_total
+        outcomes: list[tuple[float, int]] = []
+        observed_totals: set[int] = set()
+        observed_dirty: set[bool] = set()
+
+        def _one_req(idx: int) -> tuple[int, float, int, int | None, bool | None]:
+            lat_ms, st, raw = _http_call(
+                base_url=base_url,
+                site_name=site_name,
+                cookie_header=cookie,
+                path=path,
+                method="GET",
+                timeout_sec=30.0,
+            )
+            tot_v = None
+            dirty_v = None
+            if st == 200 and raw:
+                try:
+                    msg = (json.loads(raw.decode("utf-8", errors="ignore")) or {}).get(
+                        "message"
+                    ) or {}
+                    tot_v = int((msg.get("pagination") or {}).get("total") or 0)
+                    dirty_v = bool((msg.get("freshness") or {}).get("dirty_pending"))
+                except Exception:
+                    pass
+            return idx, lat_ms, st, tot_v, dirty_v
+
+        t_w0 = time.perf_counter()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
+            futs = [pool.submit(_one_req, i) for i in range(requests_total)]
+            for fut in concurrent.futures.as_completed(futs):
+                idx, lat_ms, st, tot_v, dirty_v = fut.result()
+                ordered_lats[idx] = round(lat_ms, 3)
+                outcomes.append((lat_ms, st))
+                if tot_v is not None:
+                    observed_totals.add(tot_v)
+                if dirty_v is not None:
+                    observed_dirty.add(dirty_v)
+        elapsed_s = time.perf_counter() - t_w0
+
+        db_after = _read_stampede_db_counters(
+            compose_base=compose_base, compose_env=compose_env, db_root_pw=db_root_pw
+        )
+        tel_out = _exec_stampede_ctrl(
+            compose_base=compose_base,
+            compose_env=compose_env,
+            site_name=site_name,
+            cmd_payload={"action": "read_telemetry"},
+        )
+        db_delta = {
+            k: max(0, int(db_after.get(k, 0)) - int(db_before.get(k, 0)))
+            for k in _STAMPEDE_DB_STATUS_KEYS
+        }
+        summary = classify_http_outcomes(
+            outcomes, elapsed_sec=elapsed_s, timeout_sec=30.0
+        )
+        tel_obj = tel_out.get("telemetry") or {}
+        totals_map = (tel_obj.get("totals") if isinstance(tel_obj, dict) else {}) or {}
+
+        return {
+            "wave_id": wave_id,
+            "mode": "before_uncoalesced" if disable_coalesce else "after_coalesced",
+            "reset_mode": reset_mode,
+            "concurrency": concurrency,
+            "requests_total": requests_total,
+            "enqueued_worker_job_id": prep.get("enqueued_job_id"),
+            **summary,
+            "first_12_latencies_ms": ordered_lats[: min(12, len(ordered_lats))],
+            "after_first_12_latencies_ms": ordered_lats[12:36],
+            "per_request_latencies_ms": ordered_lats,
+            "observed_pagination_totals": sorted(observed_totals),
+            "observed_dirty_pending_states": sorted(observed_dirty),
+            "sql_count_executions": int(totals_map.get("sql_count_executions", 0)),
+            "sql_count_elapsed_ms": tel_obj.get("sql_count_elapsed_ms", 0.0)
+            if isinstance(tel_obj, dict)
+            else 0.0,
+            "cache_and_coalesce_telemetry": tel_obj,
+            "dirty_scope_counts_after_wave": tel_out.get("dirty_scope_counts"),
+            "mariadb_delta": db_delta,
+        }
+
+    scenarios_spec = [
+        (
+            "API05B_C12_admin_cold_clean",
+            path_comp,
+            admin_cookie,
+            12,
+            48,
+            "cold_clean_all",
+        ),
+        (
+            "API05B_C40_admin_warm_control",
+            path_comp,
+            admin_cookie,
+            40,
+            80,
+            "warm_no_reset",
+        ),
+        (
+            "API05B_BOD_c12_post_record_attempt_epoch_bump",
+            path_comp,
+            bod_cookie,
+            12,
+            48,
+            "post_record_attempt_2026_11",
+        ),
+        (
+            "API05B_C12_admin_dirty_2026_10_cold_epoch",
+            path_comp,
+            admin_cookie,
+            12,
+            48,
+            "dirty_2026_10_mutation",
+        ),
+        (
+            "API05B_C40_admin_dirty_2026_10_cold_epoch",
+            path_comp,
+            admin_cookie,
+            40,
+            80,
+            "dirty_2026_10_mutation",
+        ),
+        (
+            "API05B_BOD_c12_dirty_2026_10_concurrent_worker",
+            path_comp,
+            bod_cookie,
+            12,
+            48,
+            "dirty_2026_10_enqueue_worker",
+        ),
+        (
+            "RBAC_team_leader_c12_dirty_2026_10",
+            path_team,
+            leader_cookie,
+            12,
+            36,
+            "dirty_2026_10_mutation",
+        ),
+        (
+            "RBAC_staff_self_c12_dirty_2026_10",
+            path_emp,
+            staff_cookie,
+            12,
+            36,
+            "dirty_2026_10_mutation",
+        ),
+    ]
+
+    before_waves: dict[str, object] = {}
+    after_waves: dict[str, object] = {}
+    comparisons: dict[str, object] = {}
+
+    try:
+        for sc_name, sc_path, sc_cookie, sc_conc, sc_reqs, sc_reset in scenarios_spec:
+            if sc_reset == "dirty_2026_10_enqueue_worker":
+                # Ensure clean S1 before worker-overlap wave
+                _exec_stampede_ctrl(
+                    compose_base=compose_base,
+                    compose_env=compose_env,
+                    site_name=site_name,
+                    cmd_payload={"action": "restore_clean_s1"},
+                )
+            bw = _run_single_probed_wave(
+                wave_id=f"BEFORE_{sc_name}",
+                path=sc_path,
+                cookie=sc_cookie,
+                concurrency=sc_conc,
+                requests_total=sc_reqs,
+                reset_mode=sc_reset,
+                disable_coalesce=True,
+            )
+            before_waves[sc_name] = bw
+
+        _exec_stampede_ctrl(
+            compose_base=compose_base,
+            compose_env=compose_env,
+            site_name=site_name,
+            cmd_payload={"action": "restore_clean_s1"},
+        )
+
+        for sc_name, sc_path, sc_cookie, sc_conc, sc_reqs, sc_reset in scenarios_spec:
+            if sc_reset == "dirty_2026_10_enqueue_worker":
+                _exec_stampede_ctrl(
+                    compose_base=compose_base,
+                    compose_env=compose_env,
+                    site_name=site_name,
+                    cmd_payload={"action": "restore_clean_s1"},
+                )
+            aw = _run_single_probed_wave(
+                wave_id=f"AFTER_{sc_name}",
+                path=sc_path,
+                cookie=sc_cookie,
+                concurrency=sc_conc,
+                requests_total=sc_reqs,
+                reset_mode=sc_reset,
+                disable_coalesce=False,
+            )
+            after_waves[sc_name] = aw
+
+            bw = before_waves[sc_name]
+            assert isinstance(bw, dict)
+            comparisons[sc_name] = {
+                "before_p95_ms": bw["p95_ms"],
+                "after_p95_ms": aw["p95_ms"],
+                "before_p99_ms": bw["p99_ms"],
+                "after_p99_ms": aw["p99_ms"],
+                "before_sql_count_executions": bw["sql_count_executions"],
+                "after_sql_count_executions": aw["sql_count_executions"],
+                "before_bp_read_requests": bw["mariadb_delta"][
+                    "Innodb_buffer_pool_read_requests"
+                ],
+                "after_bp_read_requests": aw["mariadb_delta"][
+                    "Innodb_buffer_pool_read_requests"
+                ],
+                "before_questions": bw["mariadb_delta"]["Questions"],
+                "after_questions": aw["mariadb_delta"]["Questions"],
+                "exact_totals_before": bw["observed_pagination_totals"],
+                "exact_totals_after": aw["observed_pagination_totals"],
+            }
+    finally:
+        _exec_stampede_ctrl(
+            compose_base=compose_base,
+            compose_env=compose_env,
+            site_name=site_name,
+            cmd_payload={"action": "restore_clean_s1"},
+        )
+
+    return {
+        "schema_version": "cskh-p4-api05b-stampede-before-after-v1",
+        "before_uncoalesced_waves": before_waves,
+        "after_coalesced_waves": after_waves,
+        "before_vs_after_summary": comparisons,
+    }
+
+
 def run_diagnostic(
     *,
     app_image: str,
@@ -1803,6 +2328,12 @@ def run_diagnostic(
             if not http_ready:
                 raise RuntimeError(f"Frontend HTTP not ready on {base_url}")
 
+            admin_sess = _login_session(
+                base_url=base_url,
+                site_name=site_name,
+                user="Administrator",
+                password=admin_pw,
+            )
             bod_sess = _login_session(
                 base_url=base_url,
                 site_name=site_name,
@@ -1820,6 +2351,21 @@ def run_diagnostic(
                 site_name=site_name,
                 user=str(in_container["staff_user"]),
                 password=actor_pw,
+            )
+
+            api05b_stampede_suite = _run_api05b_stampede_before_after_suite(
+                base_url=base_url,
+                site_name=site_name,
+                admin_cookie=admin_sess["cookie"],
+                bod_cookie=bod_sess["cookie"],
+                leader_cookie=leader_sess["cookie"],
+                staff_cookie=staff_sess["cookie"],
+                primary_camp_raw=str(in_container["primary_campaign_id"]),
+                primary_team_raw=str(in_container["primary_team_id"]),
+                staff_user_raw=str(in_container["staff_user"]),
+                compose_base=compose_base,
+                compose_env=compose_env,
+                db_root_pw=db_root_pw,
             )
 
             primary_camp = urllib.parse.quote(str(in_container["primary_campaign_id"]))
@@ -2036,6 +2582,7 @@ def run_diagnostic(
                 "isolation_guard": isolation,
                 "live_resource_protection_guard": live_guard,
                 "in_container_diagnostics": in_clean,
+                "api05b_stampede_reproduction_and_coalescing_verification": api05b_stampede_suite,
                 "http_concurrency_and_saturation_waves": http_waves,
                 "http_cross_access_status_codes": {
                     "staff_to_company_http_status": st_staff_comp,

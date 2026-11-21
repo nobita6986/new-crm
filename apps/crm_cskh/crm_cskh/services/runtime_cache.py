@@ -22,12 +22,15 @@ Guarantees:
 from __future__ import annotations
 
 import copy
+import hashlib
 import json
 import os
+import secrets
 import threading
 import time
 from collections import OrderedDict
 from contextlib import contextmanager
+from datetime import date, datetime
 
 import frappe
 from frappe.utils import cint
@@ -65,7 +68,20 @@ ALL_DOMAINS = (
 
 _EPOCH_REDIS_HASH = "cskh:runtime_epochs"
 _EPOCH_GEN_FIELD = "__gen__"
+_DIAG_PROBE_FIELD = "__diag_probe__"
+_DIAG_DISABLE_COALESCE_FIELD = "__diag_disable_coalesce__"
+_DIAG_REDIS_STATS_HASH = "cskh:diag:coalesce_stats"
 _EPOCH_SYNC_TTL_SEC = 0.50
+
+_LRU_MISS = object()
+
+_SF_RELEASE_LOCK_LUA = """
+if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+else
+    return 0
+end
+"""
 
 
 class _BoundedLRU:
@@ -99,8 +115,10 @@ class _BoundedLRU:
 _EPOCH_LOCK = threading.RLock()
 _SITE_EPOCHS: dict[str, tuple[float, dict[str, int]]] = {}
 _SITE_GENS: dict[str, int] = {}
+_SITE_DIAG_FLAGS: dict[str, tuple[bool, bool]] = {}
 
 _SCHEMA_LRU = _BoundedLRU(maxsize=2048)
+_SCHEMA_LOCK = threading.RLock()
 _TRANSLATIONS_LRU = _BoundedLRU(maxsize=16)
 _STATIC_UI_LRU = _BoundedLRU(maxsize=16)
 _USER_PROFILE_LRU = _BoundedLRU(maxsize=2048)
@@ -114,8 +132,29 @@ _CALENDAR_LRU = _BoundedLRU(maxsize=32)
 _KPI_RUN_LRU = _BoundedLRU(maxsize=256)
 _KPI_SNAP_LRU = _BoundedLRU(maxsize=512)
 _DIRTY_CHECK_LRU = _BoundedLRU(maxsize=256)
-_INVARIANT_LRU = _BoundedLRU(maxsize=128)
+_INVARIANT_LRU = _BoundedLRU(maxsize=256)
+_DRILLDOWN_COUNT_LRU = _BoundedLRU(maxsize=1024)
 _SSR_HTML_LRU = _BoundedLRU(maxsize=1024)
+
+_INPROC_SF_LOCK = threading.Lock()
+_INPROC_SF_EVENTS: dict[tuple, threading.Event] = {}
+
+_COALESCE_STATS_LOCK = threading.Lock()
+_COALESCE_METRIC_KEYS = (
+	"l1_hits",
+	"redis_hits",
+	"leader_computes",
+	"coalesced_follower_hits",
+	"epoch_changed_mid_compute",
+	"lock_expired_takeovers",
+	"lock_release_skipped_token_mismatch",
+	"wait_timeouts",
+	"fallback_computes",
+	"bypass_uncached_computes",
+	"sql_count_executions",
+	"sql_count_elapsed_us",
+)
+_COALESCE_STATS: dict[str, int] = {k: 0 for k in _COALESCE_METRIC_KEYS}
 
 _ASSET_VERSION_CACHE: str | None = None
 _MUTATION_HOOKS_INSTALLED: bool = False
@@ -129,10 +168,14 @@ _SET_VALUE_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 	"CRM Holiday List": (DOMAIN_CALENDAR,),
 	"CSKH Campaign": (DOMAIN_CAMPAIGN, DOMAIN_POLICY),
 	"User": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
+	"Role": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
+	"Has Role": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
 	"CRM Sales Hierarchy": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
 	"CSKH Team Membership History": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
 	"CSKH Attempt Correction": (DOMAIN_CORRECTION,),
 	"CSKH Assignment History": (DOMAIN_ASSIGNMENT_HISTORY,),
+	"CSKH Contact Attempt": (DOMAIN_DIRTY_SCOPE,),
+	"CSKH SLA Obligation": (DOMAIN_DIRTY_SCOPE,),
 	"CSKH Dirty Scope": (DOMAIN_DIRTY_SCOPE,),
 	"CSKH KPI Run": (DOMAIN_KPI_SNAPSHOT, DOMAIN_DIRTY_SCOPE),
 	"CSKH KPI Snapshot": (DOMAIN_KPI_SNAPSHOT, DOMAIN_DIRTY_SCOPE),
@@ -144,6 +187,11 @@ _SET_VALUE_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 _DELETE_ONLY_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 	"CSKH Work Item": (DOMAIN_WORK_ITEM,),
 }
+
+_SCHEMA_INVALIDATION_DOCTYPES = frozenset(("DocType", "Custom Field", "Property Setter", "DocField"))
+_USER_PERMISSION_DOCTYPES = frozenset(
+	("User", "Role", "Has Role", "User Permission", "CRM Sales Hierarchy", "CSKH Team Membership History")
+)
 
 
 def _resolve_redis_wrapper():
@@ -206,6 +254,19 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 		_wrapped_db_delete._cskh_cache_wrapped = True  # type: ignore[attr-defined]
 		db_cls.delete = _wrapped_db_delete  # type: ignore[attr-defined]
 
+	orig_bulk_insert = db_cls.__dict__.get("bulk_insert")
+	if callable(orig_bulk_insert) and not getattr(orig_bulk_insert, "_cskh_cache_wrapped", False):
+
+		def _wrapped_bulk_insert(self, doctype: str, *args, **kwargs):
+			res = orig_bulk_insert(self, doctype, *args, **kwargs)
+			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(doctype) if doctype else "")
+			if doms:
+				bump_cache_domain(*doms)
+			return res
+
+		_wrapped_bulk_insert._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+		db_cls.bulk_insert = _wrapped_bulk_insert  # type: ignore[attr-defined]
+
 	orig_sql_ddl = db_cls.__dict__.get("sql_ddl")
 	if callable(orig_sql_ddl) and not getattr(orig_sql_ddl, "_cskh_cache_wrapped", False):
 
@@ -218,6 +279,50 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 		db_cls.sql_ddl = _wrapped_sql_ddl  # type: ignore[attr-defined]
 
 	_DB_INSTANCE_HOOKED_TYPES.add(db_cls)
+
+
+def _invalidate_scoped_clear_cache(*args, **kwargs) -> None:
+	"""Scope `frappe.clear_cache(user=..., doctype=...)` so per-user `ToDo` / callback writes
+	do not wipe static schema/KPI/invariant caches or bump unrelated `DOMAIN_WORK_ITEM` epochs,
+	while full `frappe.clear_cache()` (`FLUSHALL` / `bench clear-cache`) still purges everything."""
+	user_arg = args[0] if len(args) >= 1 else kwargs.get("user")
+	dt_arg = args[1] if len(args) >= 2 else kwargs.get("doctype")
+	has_extra = len(args) > 2 or bool(set(kwargs) - {"user", "doctype"})
+	if (not user_arg and not dt_arg) or has_extra:
+		clear_all_local_caches()
+		bump_cache_domain(*ALL_DOMAINS)
+		return
+
+	b_doms: list[str] = []
+	if user_arg:
+		_USER_PROFILE_LRU.clear()
+		_USER_BULK_EPOCH_LRU.clear()
+		_HIERARCHY_LRU.clear()
+		_POLICY_LRU.clear()
+		_SSR_HTML_LRU.clear()
+		b_doms.extend((DOMAIN_USER_HIERARCHY, DOMAIN_POLICY))
+
+	if dt_arg:
+		dts = dt_arg if isinstance(dt_arg, list | tuple | set) else (dt_arg,)
+		for dt in dts:
+			dt_key = str(dt) if dt else ""
+			if not dt_key:
+				continue
+			if dt_key in _SCHEMA_INVALIDATION_DOCTYPES:
+				_SCHEMA_LRU.clear()
+			if dt_key in _USER_PERMISSION_DOCTYPES:
+				_USER_PROFILE_LRU.clear()
+				_USER_BULK_EPOCH_LRU.clear()
+				_HIERARCHY_LRU.clear()
+				_POLICY_LRU.clear()
+				_SSR_HTML_LRU.clear()
+				b_doms.extend((DOMAIN_USER_HIERARCHY, DOMAIN_POLICY))
+			found = _SET_VALUE_DOCTYPE_DOMAINS.get(dt_key, ()) + _DELETE_ONLY_DOCTYPE_DOMAINS.get(dt_key, ())
+			if found:
+				b_doms.extend(found)
+
+	if b_doms:
+		bump_cache_domain(*b_doms)
 
 
 def _ensure_mutation_hooks_installed() -> None:
@@ -299,8 +404,7 @@ def _ensure_mutation_hooks_installed() -> None:
 
 			def _wrapped_clear_cache(*args, **kwargs):
 				res = orig_clear_cache(*args, **kwargs)
-				clear_all_local_caches()
-				bump_cache_domain(*ALL_DOMAINS)
+				_invalidate_scoped_clear_cache(*args, **kwargs)
 				return res
 
 			_wrapped_clear_cache._cskh_cache_wrapped = True  # type: ignore[attr-defined]
@@ -356,6 +460,7 @@ def _clear_all_lru_stores() -> None:
 		_KPI_SNAP_LRU,
 		_DIRTY_CHECK_LRU,
 		_INVARIANT_LRU,
+		_DRILLDOWN_COUNT_LRU,
 		_SSR_HTML_LRU,
 	):
 		lru.clear()
@@ -366,6 +471,7 @@ def clear_all_local_caches() -> None:
 	with _EPOCH_LOCK:
 		_SITE_EPOCHS.clear()
 		_SITE_GENS.clear()
+		_SITE_DIAG_FLAGS.clear()
 	local = getattr(frappe, "local", None)
 	if local is not None:
 		local._cskh_req_epochs = None
@@ -400,6 +506,8 @@ def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
 
 	redis_ok = False
 	redis_gen = 0
+	diag_probe = False
+	diag_disable_coalesce = False
 	redis_epochs: dict[str, int] = {}
 	try:
 		cache_obj = _resolve_redis_wrapper()
@@ -412,7 +520,11 @@ def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
 					v_int = int(v.decode("utf-8") if isinstance(v, bytes) else v)
 					if k_str == _EPOCH_GEN_FIELD:
 						redis_gen = v_int
-					else:
+					elif k_str == _DIAG_PROBE_FIELD:
+						diag_probe = v_int != 0
+					elif k_str == _DIAG_DISABLE_COALESCE_FIELD:
+						diag_disable_coalesce = v_int != 0
+					elif not k_str.startswith("__"):
 						redis_epochs[k_str] = v_int
 				if not redis_gen:
 					redis_gen = _ensure_redis_gen(cache_obj, rkey)
@@ -424,7 +536,11 @@ def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
 					v_int = int(v.decode("utf-8") if isinstance(v, bytes) else v)
 					if k_str == _EPOCH_GEN_FIELD:
 						redis_gen = v_int
-					else:
+					elif k_str == _DIAG_PROBE_FIELD:
+						diag_probe = v_int != 0
+					elif k_str == _DIAG_DISABLE_COALESCE_FIELD:
+						diag_disable_coalesce = v_int != 0
+					elif not k_str.startswith("__"):
 						redis_epochs[k_str] = v_int
 				if not redis_gen:
 					redis_gen = _new_gen_nonce()
@@ -438,6 +554,7 @@ def _sync_site_epochs(site: str, *, force: bool = False) -> dict[str, int]:
 	if redis_ok:
 		gen_changed = False
 		with _EPOCH_LOCK:
+			_SITE_DIAG_FLAGS[site] = (diag_probe, diag_disable_coalesce)
 			prev_gen = _SITE_GENS.get(site, 0)
 			if redis_gen != prev_gen:
 				# Redis `FLUSHALL` (`frappe.clear_cache()`) or first worker sync: adopt Redis epochs
@@ -486,6 +603,18 @@ def _get_current_epochs(site: str) -> tuple[int, dict[str, int]]:
 	with _EPOCH_LOCK:
 		gen_val = _SITE_GENS.get(site, 1)
 	return gen_val, epochs
+
+
+def _force_fresh_domains_epoch_tuple(site: str, domains: tuple[str, ...]) -> tuple[int, ...]:
+	"""Force an immediate Redis epoch re-sync (used post-`COUNT` & during follower wait)."""
+	epochs = _sync_site_epochs(site, force=True)
+	with _EPOCH_LOCK:
+		gen_val = _SITE_GENS.get(site, 1)
+	local = getattr(frappe, "local", None)
+	if local is not None:
+		local._cskh_req_epochs = (site, gen_val, epochs)
+	prefix = int(gen_val) << 32
+	return tuple(prefix + int(epochs.get(d, 0)) for d in domains)
 
 
 def get_domain_epoch(domain: str) -> int:
@@ -674,9 +803,13 @@ def table_exists(doctype: str) -> bool:
 	hit = _SCHEMA_LRU.get(key)
 	if hit is not None:
 		return bool(hit)
-	val = bool(frappe.db.table_exists(doctype))
-	_SCHEMA_LRU.set(key, val)
-	return val
+	with _SCHEMA_LOCK:
+		hit = _SCHEMA_LRU.get(key)
+		if hit is not None:
+			return bool(hit)
+		val = bool(frappe.db.table_exists(doctype))
+		_SCHEMA_LRU.set(key, val)
+		return val
 
 
 def has_column(doctype: str, column: str) -> bool:
@@ -688,9 +821,13 @@ def has_column(doctype: str, column: str) -> bool:
 	hit = _SCHEMA_LRU.get(key)
 	if hit is not None:
 		return bool(hit)
-	val = bool(frappe.db.has_column(doctype, column))
-	_SCHEMA_LRU.set(key, val)
-	return val
+	with _SCHEMA_LOCK:
+		hit = _SCHEMA_LRU.get(key)
+		if hit is not None:
+			return bool(hit)
+		val = bool(frappe.db.has_column(doctype, column))
+		_SCHEMA_LRU.set(key, val)
+		return val
 
 
 def has_index(doctype: str, index_name: str) -> bool:
@@ -701,10 +838,14 @@ def has_index(doctype: str, index_name: str) -> bool:
 	hit = _SCHEMA_LRU.get(key)
 	if hit is not None:
 		return bool(hit)
-	clean_tbl = f"tab{doctype}".replace("`", "")
-	val = bool(frappe.db.sql(f"show index from `{clean_tbl}` where Key_name = %s", (index_name,)))
-	_SCHEMA_LRU.set(key, val)
-	return val
+	with _SCHEMA_LOCK:
+		hit = _SCHEMA_LRU.get(key)
+		if hit is not None:
+			return bool(hit)
+		clean_tbl = f"tab{doctype}".replace("`", "")
+		val = bool(frappe.db.sql(f"show index from `{clean_tbl}` where Key_name = %s", (index_name,)))
+		_SCHEMA_LRU.set(key, val)
+		return val
 
 
 def clear_schema_cache() -> None:
@@ -1196,29 +1337,557 @@ def get_static_cskh_ui_bundle(lang: str = "vi") -> dict:
 
 
 # ---------------------------------------------------------------------------
-# 5. KPI Published Run, Immutable Snapshot, Dirty-Scope & Drill-down Guards
+# 5. Cross-Process Singleflight Coalescing, KPI Snapshots & Drill-down Guards
 # ---------------------------------------------------------------------------
+
+DRILLDOWN_COUNT_DOMAINS = (
+	DOMAIN_DIRTY_SCOPE,
+	DOMAIN_KPI_SNAPSHOT,
+	DOMAIN_ASSIGNMENT_HISTORY,
+	DOMAIN_CORRECTION,
+	DOMAIN_OUTCOME,
+	DOMAIN_CAMPAIGN,
+	DOMAIN_POLICY,
+	DOMAIN_WORK_ITEM,
+	DOMAIN_CALENDAR,
+)
+
+
+def _is_diag_probe_enabled(site: str | None = None) -> bool:
+	flags = getattr(frappe, "flags", None)
+	if flags is not None and getattr(flags, "cskh_diag_probe", False):
+		return True
+	s = site or _current_site()
+	with _EPOCH_LOCK:
+		pair = _SITE_DIAG_FLAGS.get(s)
+	return bool(pair and pair[0])
+
+
+def is_diag_coalesce_disabled(site: str | None = None) -> bool:
+	flags = getattr(frappe, "flags", None)
+	if flags is not None and getattr(flags, "cskh_disable_coalesce", False):
+		return True
+	s = site or _current_site()
+	with _EPOCH_LOCK:
+		pair = _SITE_DIAG_FLAGS.get(s)
+	return bool(pair and pair[1])
+
+
+def _record_coalesce_stat(metric: str, delta: int = 1, *, site: str | None = None) -> None:
+	if delta == 0:
+		return
+	with _COALESCE_STATS_LOCK:
+		_COALESCE_STATS[metric] = int(_COALESCE_STATS.get(metric, 0)) + int(delta)
+	if _is_diag_probe_enabled(site):
+		try:
+			cache_obj = _resolve_redis_wrapper()
+			if cache_obj is not None and _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+				skey = cache_obj.make_key(_DIAG_REDIS_STATS_HASH)
+				_redis_mod.Redis.hincrby(cache_obj, skey, metric, int(delta))
+				_redis_mod.Redis.hincrby(cache_obj, skey, f"pid:{os.getpid()}:{metric}", int(delta))
+		except Exception:
+			pass
+
+
+def get_coalesce_telemetry() -> dict[str, int]:
+	with _COALESCE_STATS_LOCK:
+		return dict(_COALESCE_STATS)
+
+
+def reset_coalesce_telemetry(*, clear_redis_diag: bool = False) -> None:
+	with _COALESCE_STATS_LOCK:
+		for k in _COALESCE_METRIC_KEYS:
+			_COALESCE_STATS[k] = 0
+	if clear_redis_diag:
+		try:
+			cache_obj = _resolve_redis_wrapper()
+			if cache_obj is not None and _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+				_redis_mod.Redis.delete(cache_obj, cache_obj.make_key(_DIAG_REDIS_STATS_HASH))
+		except Exception:
+			pass
+
+
+def set_cross_process_diag_mode(*, probe_enabled: bool, disable_coalesce: bool = False) -> None:
+	"""Toggle zero-production-cost Redis diagnostic probe across all Gunicorn worker processes."""
+	site = _current_site()
+	with _EPOCH_LOCK:
+		_SITE_DIAG_FLAGS[site] = (bool(probe_enabled), bool(disable_coalesce))
+	try:
+		cache_obj = _resolve_redis_wrapper()
+		if cache_obj is not None and _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+			rkey = cache_obj.make_key(_EPOCH_REDIS_HASH)
+			_ensure_redis_gen(cache_obj, rkey)
+			if probe_enabled:
+				_redis_mod.Redis.hset(cache_obj, rkey, _DIAG_PROBE_FIELD, "1")
+			else:
+				_redis_mod.Redis.hdel(cache_obj, rkey, _DIAG_PROBE_FIELD)
+			if disable_coalesce:
+				_redis_mod.Redis.hset(cache_obj, rkey, _DIAG_DISABLE_COALESCE_FIELD, "1")
+			else:
+				_redis_mod.Redis.hdel(cache_obj, rkey, _DIAG_DISABLE_COALESCE_FIELD)
+	except Exception:
+		pass
+	_sync_site_epochs(site, force=True)
+
+
+def read_cross_process_diag_telemetry() -> dict[str, object]:
+	"""Read aggregated cross-Gunicorn-process singleflight & SQL COUNT telemetry from Redis."""
+	totals: dict[str, int] = {k: 0 for k in _COALESCE_METRIC_KEYS}
+	by_pid: dict[str, dict[str, int]] = {}
+	try:
+		cache_obj = _resolve_redis_wrapper()
+		if cache_obj is not None and _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+			raw = _redis_mod.Redis.hgetall(cache_obj, cache_obj.make_key(_DIAG_REDIS_STATS_HASH)) or {}
+			for k, v in raw.items():
+				k_str = k.decode("utf-8") if isinstance(k, bytes) else str(k)
+				v_int = int(v.decode("utf-8") if isinstance(v, bytes) else v)
+				if k_str.startswith("pid:"):
+					parts = k_str.split(":", 2)
+					if len(parts) == 3:
+						by_pid.setdefault(parts[1], {})[parts[2]] = v_int
+				else:
+					totals[k_str] = v_int
+	except Exception:
+		pass
+	return {
+		"totals": totals,
+		"sql_count_elapsed_ms": round(totals.get("sql_count_elapsed_us", 0) / 1000.0, 3),
+		"distinct_worker_pids_observed": sorted(by_pid.keys()),
+		"by_pid": by_pid,
+	}
+
+
+def _sf_json_default(obj):
+	if isinstance(obj, datetime):
+		return {"__cskh_dt__": obj.isoformat()}
+	if isinstance(obj, date):
+		return {"__cskh_d__": obj.isoformat()}
+	if isinstance(obj, tuple | set | frozenset):
+		return list(obj)
+	return str(obj)
+
+
+def _sf_json_object_hook(d: dict):
+	if len(d) == 1:
+		if "__cskh_dt__" in d:
+			return datetime.fromisoformat(d["__cskh_dt__"])
+		if "__cskh_d__" in d:
+			return date.fromisoformat(d["__cskh_d__"])
+	return d
+
+
+def _sf_json_dumps(payload) -> str:
+	return json.dumps(payload, default=_sf_json_default, separators=(",", ":"), ensure_ascii=False)
+
+
+def _sf_json_loads(raw: bytes | str):
+	txt = raw.decode("utf-8") if isinstance(raw, bytes) else str(raw)
+	return json.loads(txt, object_hook=_sf_json_object_hook)
+
+
+def _build_sf_digest(site: str, namespace: str, scope_key: tuple, epochs: tuple[int, ...]) -> str:
+	raw = json.dumps(
+		[site, namespace, scope_key, list(epochs)],
+		default=_sf_json_default,
+		separators=(",", ":"),
+		ensure_ascii=True,
+	).encode("utf-8")
+	return hashlib.sha256(raw).hexdigest()[:40]
+
+
+def _sf_redis_get_json(cache_obj, val_rkey: str, expected_epochs: tuple[int, ...]) -> tuple[object, bool]:
+	if cache_obj is None:
+		return None, False
+	try:
+		if _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+			raw = _redis_mod.Redis.get(cache_obj, val_rkey)
+		elif hasattr(cache_obj, "get"):
+			raw = cache_obj.get(val_rkey)
+		else:
+			return None, False
+		if raw is None:
+			return None, False
+		parsed = _sf_json_loads(raw)
+		if isinstance(parsed, dict) and parsed.get("ep") == list(expected_epochs):
+			return parsed.get("v"), True
+	except Exception:
+		return None, False
+	return None, False
+
+
+def _sf_redis_set_json(
+	cache_obj,
+	val_rkey: str,
+	payload: dict,
+	val_ttl_ms: int,
+	*,
+	nx: bool = False,
+) -> bool:
+	if cache_obj is None:
+		return False
+	ttl = max(1, int(val_ttl_ms))
+	try:
+		encoded = _sf_json_dumps(payload)
+		if _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+			return bool(_redis_mod.Redis.set(cache_obj, val_rkey, encoded, px=ttl, nx=nx))
+		if hasattr(cache_obj, "set"):
+			return bool(cache_obj.set(val_rkey, encoded, px=ttl, nx=nx))
+	except Exception:
+		return False
+	return False
+
+
+def _sf_redis_acquire_lock(cache_obj, lock_rkey: str, owner_token: str, lock_ttl_ms: int) -> bool:
+	if cache_obj is None:
+		return False
+	ttl = max(1, int(lock_ttl_ms))
+	try:
+		if _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+			return bool(_redis_mod.Redis.set(cache_obj, lock_rkey, owner_token, nx=True, px=ttl))
+		if hasattr(cache_obj, "set"):
+			return bool(cache_obj.set(lock_rkey, owner_token, nx=True, px=ttl))
+	except Exception:
+		return False
+	return False
+
+
+def _sf_redis_lock_exists(cache_obj, lock_rkey: str) -> bool:
+	if cache_obj is None:
+		return False
+	try:
+		if _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+			return bool(_redis_mod.Redis.exists(cache_obj, lock_rkey))
+		if hasattr(cache_obj, "get"):
+			return cache_obj.get(lock_rkey) is not None
+	except Exception:
+		return False
+	return False
+
+
+def _sf_release_lock_if_owner(
+	cache_obj, lock_rkey: str, owner_token: str, *, site: str | None = None
+) -> bool:
+	"""Atomically release `lock_rkey` ONLY if it is still owned by `owner_token`."""
+	if cache_obj is None:
+		return False
+	try:
+		if _redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis):
+			deleted = int(
+				_redis_mod.Redis.eval(cache_obj, _SF_RELEASE_LOCK_LUA, 1, lock_rkey, owner_token) or 0
+			)
+			if deleted == 0:
+				_record_coalesce_stat("lock_release_skipped_token_mismatch", 1, site=site)
+				return False
+			return True
+		if hasattr(cache_obj, "get") and hasattr(cache_obj, "delete"):
+			cur = cache_obj.get(lock_rkey)
+			cur_str = cur.decode("utf-8") if isinstance(cur, bytes) else (str(cur) if cur is not None else "")
+			if cur_str == owner_token:
+				cache_obj.delete(lock_rkey)
+				return True
+			_record_coalesce_stat("lock_release_skipped_token_mismatch", 1, site=site)
+			return False
+	except Exception:
+		return False
+	return False
+
+
+def _acquire_inproc_sf_slot(inproc_key: tuple) -> tuple[bool, threading.Event]:
+	with _INPROC_SF_LOCK:
+		existing = _INPROC_SF_EVENTS.get(inproc_key)
+		if existing is not None:
+			return False, existing
+		ev = threading.Event()
+		_INPROC_SF_EVENTS[inproc_key] = ev
+		return True, ev
+
+
+def _register_inproc_sf_event(inproc_key: tuple) -> threading.Event:
+	with _INPROC_SF_LOCK:
+		ev = _INPROC_SF_EVENTS.get(inproc_key)
+		if ev is None:
+			ev = threading.Event()
+			_INPROC_SF_EVENTS[inproc_key] = ev
+		return ev
+
+
+def _notify_inproc_sf_waiters(inproc_key: tuple) -> None:
+	with _INPROC_SF_LOCK:
+		ev = _INPROC_SF_EVENTS.pop(inproc_key, None)
+	if ev is not None:
+		ev.set()
+
+
+def _wait_inproc_or_sleep(inproc_key: tuple, timeout_sec: float) -> None:
+	if timeout_sec <= 0:
+		return
+	with _INPROC_SF_LOCK:
+		ev = _INPROC_SF_EVENTS.get(inproc_key)
+	if ev is not None:
+		ev.wait(timeout=timeout_sec)
+	else:
+		time.sleep(timeout_sec)
+
+
+def coalesced_epoch_compute(
+	namespace: str,
+	scope_key: tuple,
+	domains: tuple[str, ...],
+	compute_fn,
+	*,
+	l1_lru: _BoundedLRU | None = None,
+	val_ttl_ms: int = 300_000,
+	lock_ttl_ms: int = 5_000,
+	wait_timeout_ms: int = 2_500,
+	poll_interval_ms: int = 12,
+	is_sql_count: bool = False,
+):
+	"""Cross-Gunicorn-process + intra-process singleflight coalescing bound to `domains` epochs.
+
+	Guarantees:
+	  1. Concurrent requests across separate Gunicorn worker processes sharing `(site, namespace,
+	     scope_key, pre_epochs)` elect 1 Redis lock leader (`SET NX PX`); followers wait up to
+	     `wait_timeout_ms` and reuse the leader's result (`0` duplicate SQL `COUNT(*)` executions).
+	  2. **Mid-compute epoch change guard:** After `compute_fn()` finishes, epochs are force-resynced
+	     from Redis (`_force_fresh_domains_epoch_tuple`). If any governing domain epoch bumped while
+	     computing, the pre-bump result is NEVER written to Redis or L1.
+	  3. **Safe lock expiration & dead-holder recovery:** Locks always carry mandatory `PX lock_ttl_ms`
+	     (auto-expiring on `SIGKILL` / worker crash) and release atomically via token-checked Lua
+	     `EVAL` so an expired leader never deletes a newer leader's lock.
+	  4. **Bounded follower wait:** Followers never block beyond `wait_timeout_ms`, cleanly falling
+	     back to direct computation if the leader is still busy.
+	"""
+	site = _current_site()
+
+	def _timed_compute():
+		if not is_sql_count:
+			return compute_fn()
+		t_c0 = time.perf_counter()
+		try:
+			return compute_fn()
+		finally:
+			el_us = max(0, round((time.perf_counter() - t_c0) * 1_000_000))
+			_record_coalesce_stat("sql_count_executions", 1, site=site)
+			_record_coalesce_stat("sql_count_elapsed_us", el_us, site=site)
+
+	if not is_runtime_db_cache_active():
+		return _timed_compute()
+
+	if is_diag_coalesce_disabled(site):
+		_record_coalesce_stat("bypass_uncached_computes", 1, site=site)
+		return _timed_compute()
+
+	flags = getattr(frappe, "flags", None)
+	if flags is not None:
+		if getattr(flags, "cskh_sf_lock_ttl_ms", None) is not None:
+			lock_ttl_ms = int(flags.cskh_sf_lock_ttl_ms)
+		if getattr(flags, "cskh_sf_wait_timeout_ms", None) is not None:
+			wait_timeout_ms = int(flags.cskh_sf_wait_timeout_ms)
+		if getattr(flags, "cskh_sf_poll_interval_ms", None) is not None:
+			poll_interval_ms = int(flags.cskh_sf_poll_interval_ms)
+
+	pre_epochs = get_domains_epoch_tuple(*domains)
+	l1_key = (site, namespace, scope_key, pre_epochs)
+	if l1_lru is not None:
+		hit_l1 = l1_lru.get(l1_key, _LRU_MISS)
+		if hit_l1 is not _LRU_MISS:
+			_record_coalesce_stat("l1_hits", 1, site=site)
+			return hit_l1
+
+	digest = _build_sf_digest(site, namespace, scope_key, pre_epochs)
+	inproc_key = (site, namespace, digest)
+	cache_obj = _resolve_redis_wrapper()
+	has_redis = cache_obj is not None and (
+		(_redis_mod is not None and isinstance(cache_obj, _redis_mod.Redis))
+		or (hasattr(cache_obj, "set") and hasattr(cache_obj, "get"))
+	)
+	val_rkey = cache_obj.make_key(f"cskh:sf:v1:val:{namespace}:{digest}") if has_redis else ""
+	lock_rkey = cache_obj.make_key(f"cskh:sf:v1:lock:{namespace}:{digest}") if has_redis else ""
+
+	if has_redis:
+		hit_r, found_r = _sf_redis_get_json(cache_obj, val_rkey, pre_epochs)
+		if found_r:
+			if l1_lru is not None:
+				l1_lru.set(l1_key, hit_r)
+			_record_coalesce_stat("redis_hits", 1, site=site)
+			return hit_r
+
+	owner_token = f"{os.getpid()}:{threading.get_ident()}:{secrets.token_hex(8)}"
+	if has_redis:
+		acquired = _sf_redis_acquire_lock(cache_obj, lock_rkey, owner_token, lock_ttl_ms)
+		if acquired:
+			_register_inproc_sf_event(inproc_key)
+	else:
+		acquired, _ = _acquire_inproc_sf_slot(inproc_key)
+
+	if acquired:
+		try:
+			_record_coalesce_stat("leader_computes", 1, site=site)
+			val = _timed_compute()
+			post_epochs = _force_fresh_domains_epoch_tuple(site, domains)
+			if post_epochs == pre_epochs:
+				if has_redis:
+					_sf_redis_set_json(cache_obj, val_rkey, {"ep": list(pre_epochs), "v": val}, val_ttl_ms)
+				if l1_lru is not None:
+					l1_lru.set(l1_key, val)
+			else:
+				_record_coalesce_stat("epoch_changed_mid_compute", 1, site=site)
+			return val
+		finally:
+			if has_redis:
+				_sf_release_lock_if_owner(cache_obj, lock_rkey, owner_token, site=site)
+			_notify_inproc_sf_waiters(inproc_key)
+
+	# Follower wait loop (bounded strictly by `wait_timeout_ms`)
+	deadline = time.monotonic() + (max(0, int(wait_timeout_ms)) / 1000.0)
+	poll_sec = max(0.002, int(poll_interval_ms) / 1000.0)
+	active_epochs = pre_epochs
+	active_digest = digest
+	active_inproc_key = inproc_key
+	active_l1_key = l1_key
+	active_val_rkey = val_rkey
+	active_lock_rkey = lock_rkey
+
+	while True:
+		if l1_lru is not None:
+			hit_w1 = l1_lru.get(active_l1_key, _LRU_MISS)
+			if hit_w1 is not _LRU_MISS:
+				_record_coalesce_stat("coalesced_follower_hits", 1, site=site)
+				return hit_w1
+
+		if has_redis:
+			hit_wr, found_wr = _sf_redis_get_json(cache_obj, active_val_rkey, active_epochs)
+			if found_wr:
+				if l1_lru is not None:
+					l1_lru.set(active_l1_key, hit_wr)
+				_record_coalesce_stat("coalesced_follower_hits", 1, site=site)
+				return hit_wr
+
+		fresh_epochs = _force_fresh_domains_epoch_tuple(site, domains)
+		if fresh_epochs != active_epochs:
+			active_epochs = fresh_epochs
+			active_digest = _build_sf_digest(site, namespace, scope_key, active_epochs)
+			active_inproc_key = (site, namespace, active_digest)
+			active_l1_key = (site, namespace, scope_key, active_epochs)
+			if has_redis:
+				active_val_rkey = cache_obj.make_key(f"cskh:sf:v1:val:{namespace}:{active_digest}")
+				active_lock_rkey = cache_obj.make_key(f"cskh:sf:v1:lock:{namespace}:{active_digest}")
+				hit_ne, found_ne = _sf_redis_get_json(cache_obj, active_val_rkey, active_epochs)
+				if found_ne:
+					if l1_lru is not None:
+						l1_lru.set(active_l1_key, hit_ne)
+					_record_coalesce_stat("coalesced_follower_hits", 1, site=site)
+					return hit_ne
+
+		if has_redis and not _sf_redis_lock_exists(cache_obj, active_lock_rkey):
+			tk_token = f"{os.getpid()}:{threading.get_ident()}:{secrets.token_hex(8)}"
+			if _sf_redis_acquire_lock(cache_obj, active_lock_rkey, tk_token, lock_ttl_ms):
+				_register_inproc_sf_event(active_inproc_key)
+				try:
+					hit_dc, found_dc = _sf_redis_get_json(cache_obj, active_val_rkey, active_epochs)
+					if found_dc:
+						if l1_lru is not None:
+							l1_lru.set(active_l1_key, hit_dc)
+						_record_coalesce_stat("coalesced_follower_hits", 1, site=site)
+						return hit_dc
+					_record_coalesce_stat("lock_expired_takeovers", 1, site=site)
+					_record_coalesce_stat("leader_computes", 1, site=site)
+					val_tk = _timed_compute()
+					post_tk = _force_fresh_domains_epoch_tuple(site, domains)
+					if post_tk == active_epochs:
+						_sf_redis_set_json(
+							cache_obj, active_val_rkey, {"ep": list(active_epochs), "v": val_tk}, val_ttl_ms
+						)
+						if l1_lru is not None:
+							l1_lru.set(active_l1_key, val_tk)
+					else:
+						_record_coalesce_stat("epoch_changed_mid_compute", 1, site=site)
+					return val_tk
+				finally:
+					_sf_release_lock_if_owner(cache_obj, active_lock_rkey, tk_token, site=site)
+					_notify_inproc_sf_waiters(active_inproc_key)
+		elif not has_redis:
+			tk_inproc_ok, _ = _acquire_inproc_sf_slot(active_inproc_key)
+			if tk_inproc_ok:
+				try:
+					if l1_lru is not None:
+						hit_ip = l1_lru.get(active_l1_key, _LRU_MISS)
+						if hit_ip is not _LRU_MISS:
+							_record_coalesce_stat("coalesced_follower_hits", 1, site=site)
+							return hit_ip
+					_record_coalesce_stat("lock_expired_takeovers", 1, site=site)
+					_record_coalesce_stat("leader_computes", 1, site=site)
+					val_ip = _timed_compute()
+					post_ip = _force_fresh_domains_epoch_tuple(site, domains)
+					if post_ip == active_epochs and l1_lru is not None:
+						l1_lru.set(active_l1_key, val_ip)
+					elif post_ip != active_epochs:
+						_record_coalesce_stat("epoch_changed_mid_compute", 1, site=site)
+					return val_ip
+				finally:
+					_notify_inproc_sf_waiters(active_inproc_key)
+
+		rem = deadline - time.monotonic()
+		if rem <= 0:
+			_record_coalesce_stat("wait_timeouts", 1, site=site)
+			_record_coalesce_stat("fallback_computes", 1, site=site)
+			val_fb = _timed_compute()
+			post_fb = _force_fresh_domains_epoch_tuple(site, domains)
+			if post_fb == active_epochs:
+				if has_redis:
+					_sf_redis_set_json(
+						cache_obj,
+						active_val_rkey,
+						{"ep": list(active_epochs), "v": val_fb},
+						val_ttl_ms,
+						nx=True,
+					)
+				if l1_lru is not None:
+					l1_lru.set(active_l1_key, val_fb)
+			else:
+				_record_coalesce_stat("epoch_changed_mid_compute", 1, site=site)
+			return val_fb
+
+		_wait_inproc_or_sleep(active_inproc_key, min(poll_sec, rem))
+
+
+def get_coalesced_drilldown_count(
+	scope_key: tuple,
+	count_fn,
+	*,
+	lock_ttl_ms: int = 5_000,
+	wait_timeout_ms: int = 2_500,
+) -> int:
+	"""Coalesce identical drill-down `SELECT COUNT(*)` calls across Gunicorn processes & threads."""
+	val = coalesced_epoch_compute(
+		"dd_count",
+		scope_key,
+		DRILLDOWN_COUNT_DOMAINS,
+		lambda: int(count_fn()),
+		l1_lru=_DRILLDOWN_COUNT_LRU,
+		lock_ttl_ms=lock_ttl_ms,
+		wait_timeout_ms=wait_timeout_ms,
+		is_sql_count=True,
+	)
+	return int(val or 0)
 
 
 def get_cached_published_kpi_run(period_type: str, period_key: str, campaign_filter: str, load_fn):
 	if not is_runtime_db_cache_active():
 		return load_fn()
-	key = (
-		_current_site(),
-		period_type,
-		period_key,
-		campaign_filter or "",
-		get_domain_epoch(DOMAIN_KPI_SNAPSHOT),
+
+	def _load_dict():
+		row = load_fn()
+		return "__NONE__" if row is None else dict(row)
+
+	hit = coalesced_epoch_compute(
+		"kpi_run",
+		(period_type, period_key, campaign_filter or ""),
+		(DOMAIN_KPI_SNAPSHOT,),
+		_load_dict,
+		l1_lru=_KPI_RUN_LRU,
 	)
-	hit = _KPI_RUN_LRU.get(key)
-	if hit is not None:
-		return None if hit == "__NONE__" else frappe._dict(hit)
-	row = load_fn()
-	if row is None:
-		_KPI_RUN_LRU.set(key, "__NONE__")
-		return None
-	_KPI_RUN_LRU.set(key, dict(row))
-	return frappe._dict(row)
+	return None if (hit is None or hit == "__NONE__") else frappe._dict(hit)
 
 
 def get_cached_kpi_snapshots(
@@ -1234,53 +1903,45 @@ def get_cached_kpi_snapshots(
 ) -> list[dict]:
 	if not is_runtime_db_cache_active():
 		return load_fn()
-	key = (
-		_current_site(),
-		run_id,
-		period_type,
-		period_key,
-		scope_type,
-		campaign_filter or "",
-		scope_ids,
-		team_filters,
-		get_domain_epoch(DOMAIN_KPI_SNAPSHOT),
+
+	def _load_rows():
+		rows = load_fn()
+		return [dict(r) for r in rows]
+
+	hit = coalesced_epoch_compute(
+		"kpi_snap",
+		(run_id, period_type, period_key, scope_type, campaign_filter or "", scope_ids, team_filters),
+		(DOMAIN_KPI_SNAPSHOT,),
+		_load_rows,
+		l1_lru=_KPI_SNAP_LRU,
 	)
-	hit = _KPI_SNAP_LRU.get(key)
-	if hit is not None:
-		return [frappe._dict(copy.deepcopy(r)) for r in hit]
-	rows = load_fn()
-	_KPI_SNAP_LRU.set(key, [dict(r) for r in rows])
-	return [frappe._dict(copy.deepcopy(r)) for r in rows]
+	return [frappe._dict(copy.deepcopy(r)) for r in (hit or ())]
 
 
 def get_cached_dirty_pending(from_iso: str, to_iso: str, campaign_filter: str, check_fn) -> bool:
 	if not is_runtime_db_cache_active():
 		return bool(check_fn())
-	key = (
-		_current_site(),
-		from_iso,
-		to_iso,
-		campaign_filter or "",
-		get_domains_epoch_tuple(DOMAIN_DIRTY_SCOPE, DOMAIN_KPI_SNAPSHOT),
+	val = coalesced_epoch_compute(
+		"dirty_chk",
+		(from_iso, to_iso, campaign_filter or ""),
+		(DOMAIN_DIRTY_SCOPE, DOMAIN_KPI_SNAPSHOT),
+		lambda: bool(check_fn()),
+		l1_lru=_DIRTY_CHECK_LRU,
 	)
-	hit = _DIRTY_CHECK_LRU.get(key)
-	if hit is not None:
-		return bool(hit)
-	val = bool(check_fn())
-	_DIRTY_CHECK_LRU.set(key, val)
-	return val
+	return bool(val)
 
 
 def get_cached_invariant_bool(name: str, domains: tuple[str, ...], args_key: tuple, check_fn) -> bool:
 	if not is_runtime_db_cache_active():
 		return bool(check_fn())
-	key = (_current_site(), name, args_key, get_domains_epoch_tuple(*domains))
-	hit = _INVARIANT_LRU.get(key)
-	if hit is not None:
-		return bool(hit)
-	val = bool(check_fn())
-	_INVARIANT_LRU.set(key, val)
-	return val
+	val = coalesced_epoch_compute(
+		"inv_bool",
+		(name, args_key),
+		domains,
+		lambda: bool(check_fn()),
+		l1_lru=_INVARIANT_LRU,
+	)
+	return bool(val)
 
 
 def get_ssr_html_cache() -> _BoundedLRU:

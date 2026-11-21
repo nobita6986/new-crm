@@ -74,6 +74,11 @@ jobs:
                       "app_image": digest,
                       "resource_profile": "staging_vps_capped",
                   },
+                  {
+                      "label": "post_opt_staging_vps_capped_b_plus",
+                      "app_image": digest,
+                      "resource_profile": "staging_vps_capped_b_plus_2_5vcpu",
+                  },
               ]
           elif bool(cfg.get("skip_default_push", False)):
               items = []

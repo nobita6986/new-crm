@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
+import os
+import subprocess
+import sys
+import threading
+import time
 from datetime import datetime, timedelta
 from unittest.mock import patch
 
@@ -1452,3 +1458,983 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 				)
 			frappe.db.sql("delete from `tabCRM Lead` where name like 'LEAD-G18-DEEP-%'")
 			frappe.db.commit()
+
+	def test_api05b_cross_process_coalescing_cold_warm_dirty_worker_and_rbac_scopes(self):
+		"""Verify cross-Gunicorn-process & c=12/c=40 coalescing across cold/warm/dirty/worker & RBAC scopes."""
+		frappe.set_user("Administrator")
+		base_dt = datetime(2099, 7, 15, 9, 0, 0)
+		m_key = "2099-07"
+		orig_tmh = frappe.get_all(
+			"CSKH Team Membership History",
+			fields=["name", "effective_from"],
+		)
+		site_name = str(frappe.local.site)
+		sites_path = os.path.abspath(getattr(frappe.local, "sites_path", ".") or ".")
+		child_env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+
+		try:
+			frappe.db.sql(
+				"update `tabCSKH Team Membership History` set effective_from = %s",
+				(datetime(2099, 7, 1, 0, 0, 0),),
+			)
+			frappe.db.commit()
+
+			staff_cycle = [self.staff_a, self.staff_b, self.staff_c]
+			team_cycle = [self.team_a, self.team_a, self.team_b]
+			camp_cycle = [self.shared_campaign, self.shared_campaign, self.team_b_campaign]
+
+			now_ts = now_datetime()
+			wi_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"lead",
+				"campaign",
+				"status",
+				"assigned_to",
+				"assigned_at",
+				"owner_at_close",
+				"closed_by",
+				"closed_at",
+				"attempt_count",
+				"connected_count",
+				"first_attempt_at",
+				"last_attempt_at",
+				"last_outcome_code",
+				"last_outcome_label",
+				"revision",
+			]
+			ah_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"work_item",
+				"action",
+				"from_user",
+				"to_user",
+				"actor",
+				"event_at",
+				"ownership_start",
+				"ownership_end",
+				"event_id",
+				"team_at_assignment",
+				"attribution_status",
+				"reason",
+			]
+			att_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"work_item",
+				"lead",
+				"campaign",
+				"ownership_event",
+				"owner_at_attempt",
+				"performed_by",
+				"occurred_at",
+				"recorded_at",
+				"channel",
+				"outcome_code",
+				"outcome_label_snapshot",
+				"result_group_snapshot",
+				"outcome_version_snapshot",
+				"contact_attempt_snapshot",
+				"connected_snapshot",
+				"interested_snapshot",
+				"invalid_phone_snapshot",
+				"complete_fields",
+				"note",
+				"verification_status",
+				"policy_used",
+				"policy_version_snapshot",
+				"idempotency_key",
+				"payload_hash",
+				"work_item_revision_after",
+			]
+			sla_cols = [
+				"name",
+				"creation",
+				"modified",
+				"modified_by",
+				"owner",
+				"docstatus",
+				"idx",
+				"obligation_type",
+				"work_item",
+				"lead",
+				"campaign",
+				"interval_event",
+				"owner_user",
+				"team_at_obligation",
+				"attribution_status",
+				"status",
+				"informational_only",
+				"reschedule_count",
+				"transfer_reset_seq",
+				"started_at",
+				"original_due_at",
+				"effective_due_at",
+				"is_paused",
+				"fulfilled_at",
+				"fulfilled_by_attempt",
+				"breached_at",
+				"waived_at",
+				"closed_at",
+				"policy_used",
+				"policy_version_snapshot",
+				"idempotency_key",
+			]
+
+			lead_rows, wi_rows, ah_rows, att_rows, sla_rows = [], [], [], [], []
+			for i in range(90):
+				lid = f"LEAD-G18-DEEP-SF-{i:04d}"
+				wi_id = f"WI-G18-SF-{i:04d}"
+				ah_id = f"AH-G18-SF-{i:04d}"
+				att_id = f"CA-G18-SF-{i:04d}"
+				sla_id = f"SLA-G18-SF-{i:04d}"
+				u = staff_cycle[i % 3]
+				t_node = team_cycle[i % 3]
+				c_id = camp_cycle[i % 3]
+				st_dt = base_dt + timedelta(minutes=i)
+				att_dt = st_dt + timedelta(minutes=10)
+				due_dt = st_dt + timedelta(minutes=30)
+				is_conn = 1 if (i % 2 == 0) else 0
+				ocode = "connected_interested" if is_conn else "no_answer"
+				olabel = "Đã trao đổi — Có quan tâm" if is_conn else "Không nghe máy"
+				ogroup = "positive" if is_conn else "unreached"
+
+				lead_rows.append(
+					(
+						lid,
+						now_ts,
+						now_ts,
+						"Administrator",
+						"Administrator",
+						0,
+						0,
+						f"Khách SF {i:04d}",
+						"Khách",
+						f"SF {i:04d}",
+						f"09681{i:05d}",
+						u,
+					)
+				)
+				wi_rows.append(
+					(
+						wi_id,
+						st_dt,
+						att_dt,
+						"Administrator",
+						"Administrator",
+						0,
+						0,
+						lid,
+						c_id,
+						"in_progress",
+						u,
+						st_dt,
+						None,
+						None,
+						None,
+						1,
+						is_conn,
+						att_dt,
+						att_dt,
+						ocode,
+						olabel,
+						1,
+					)
+				)
+				ah_rows.append(
+					(
+						ah_id,
+						st_dt,
+						st_dt,
+						"Administrator",
+						"Administrator",
+						0,
+						0,
+						wi_id,
+						"assign",
+						None,
+						u,
+						"Administrator",
+						st_dt,
+						st_dt,
+						None,
+						f"evt-g18-sf-{i:04d}",
+						t_node,
+						AUTHORITATIVE,
+						"Seed SF",
+					)
+				)
+				att_rows.append(
+					(
+						att_id,
+						att_dt,
+						att_dt,
+						u,
+						u,
+						0,
+						0,
+						wi_id,
+						lid,
+						c_id,
+						ah_id,
+						u,
+						u,
+						att_dt,
+						att_dt,
+						"phone_call",
+						ocode,
+						olabel,
+						ogroup,
+						1,
+						1,
+						is_conn,
+						is_conn,
+						0,
+						1,
+						f"Ghi chú SF {i:04d}",
+						"self_reported",
+						"GLOBAL-DEFAULT",
+						1,
+						f"idem-g18-sf-{i:04d}",
+						f"hash-g18-sf-{i:04d}",
+						1,
+					)
+				)
+				sla_rows.append(
+					(
+						sla_id,
+						st_dt,
+						att_dt,
+						"Administrator",
+						"Administrator",
+						0,
+						0,
+						"FIRST_ATTEMPT",
+						wi_id,
+						lid,
+						c_id,
+						ah_id,
+						u,
+						t_node,
+						AUTHORITATIVE,
+						"fulfilled_on_time",
+						0,
+						0,
+						0,
+						st_dt,
+						due_dt,
+						due_dt,
+						0,
+						att_dt,
+						att_id,
+						None,
+						None,
+						att_dt,
+						"GLOBAL-DEFAULT",
+						1,
+						f"idem-sla-sf-{i:04d}",
+					)
+				)
+
+			def _insert_rows(tbl, cols, vals):
+				c_sql = ", ".join(f"`{c}`" for c in cols)
+				ph = "(" + ", ".join(["%s"] * len(cols)) + ")"
+				v_sql = ", ".join([ph] * len(vals))
+				flat = [x for row in vals for x in row]
+				frappe.db.sql(f"insert into `{tbl}` ({c_sql}) values {v_sql}", tuple(flat))
+
+			_insert_rows(
+				"tabCRM Lead",
+				[
+					"name",
+					"creation",
+					"modified",
+					"modified_by",
+					"owner",
+					"docstatus",
+					"idx",
+					"lead_name",
+					"first_name",
+					"last_name",
+					"mobile_no",
+					"lead_owner",
+				],
+				lead_rows,
+			)
+			_insert_rows("tabCSKH Work Item", wi_cols, wi_rows)
+			_insert_rows("tabCSKH Assignment History", ah_cols, ah_rows)
+			_insert_rows("tabCSKH Contact Attempt", att_cols, att_rows)
+			_insert_rows("tabCSKH SLA Obligation", sla_cols, sla_rows)
+			frappe.db.commit()
+
+			execute_kpi_recompute(
+				resolve_period_spec("monthly", m_key), run_mode="full", actor="Administrator"
+			)
+			frappe.db.commit()
+
+			with runtime_cache.enable_runtime_cache_for_test():
+				# 1. Cold cache (`dirty_pending=False`, `page=1`): `0` `ah_orphan_work_item` `LEFT JOIN` & `0` `COUNT(*)`!
+				frappe.clear_cache()
+				runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+				captured_cold_sql: list[str] = []
+				orig_sql = frappe.db.sql
+
+				def _spy_cold(q, *a, **kw):
+					captured_cold_sql.append(" ".join(str(q).lower().split()))
+					return orig_sql(q, *a, **kw)
+
+				frappe.set_user(self.bod_user)
+				with patch.object(frappe.db, "sql", side_effect=_spy_cold):
+					cold_clean = p3_reporting.get_metric_drilldown(
+						metric_code="CONNECTED_RATE",
+						period_type="monthly",
+						period_key=m_key,
+						scope_type="company",
+						page=1,
+						page_size=20,
+					)
+				self.assertFalse(cold_clean["freshness"]["dirty_pending"])
+				self.assertEqual(cold_clean["pagination"]["total"], 90)
+				self.assertTrue(
+					all(r["pii_redacted"] and r["lead"] == "REDACTED" for r in cold_clean["rows"])
+				)
+				orphan_scans = [
+					q
+					for q in captured_cold_sql
+					if "left join `tabcskh work item`" in q and "wi.name is null" in q
+				]
+				self.assertEqual(
+					len(orphan_scans),
+					0,
+					f"Expected 0 eager ah_orphan_work_item LEFT JOIN scans on page=1 fresh snapshot, got {orphan_scans}",
+				)
+				self.assertEqual(runtime_cache.get_coalesce_telemetry()["sql_count_executions"], 0)
+
+				# 2. Scoped `frappe.clear_cache(user=...)` (e.g. `ToDo` creation in `record_attempt` callback)
+				#    preserves `DOMAIN_WORK_ITEM`, `DOMAIN_KPI_SNAPSHOT`, `DOMAIN_DIRTY_SCOPE`, and `_SCHEMA_LRU`!
+				ep_before_user_cc = runtime_cache.get_domains_epoch_tuple(
+					runtime_cache.DOMAIN_WORK_ITEM,
+					runtime_cache.DOMAIN_KPI_SNAPSHOT,
+					runtime_cache.DOMAIN_DIRTY_SCOPE,
+					runtime_cache.DOMAIN_USER_HIERARCHY,
+				)
+				self.assertIsNotNone(
+					runtime_cache._SCHEMA_LRU.get(
+						(site_name, "idx", "CSKH Work Item", "idx_cskh_wi_name_camp")
+					)
+				)
+				frappe.clear_cache(user=self.staff_a)
+				ep_after_user_cc = runtime_cache.get_domains_epoch_tuple(
+					runtime_cache.DOMAIN_WORK_ITEM,
+					runtime_cache.DOMAIN_KPI_SNAPSHOT,
+					runtime_cache.DOMAIN_DIRTY_SCOPE,
+					runtime_cache.DOMAIN_USER_HIERARCHY,
+				)
+				self.assertEqual(ep_after_user_cc[:3], ep_before_user_cc[:3])
+				self.assertGreater(ep_after_user_cc[3], ep_before_user_cc[3])
+				self.assertIsNotNone(
+					runtime_cache._SCHEMA_LRU.get(
+						(site_name, "idx", "CSKH Work Item", "idx_cskh_wi_name_camp")
+					)
+				)
+
+				# 3. Mutate period data (`dirty_pending=True`) & verify REAL 4-process OS stampede coalescing!
+				frappe.set_user("Administrator")
+				frappe.db.sql(
+					"update `tabCSKH Contact Attempt` set invalid_phone_snapshot = 1, outcome_code = 'wrong_number' where name = %s",
+					("CA-G18-SF-0000",),
+				)
+				prev_suppress = getattr(frappe.flags, "cskh_suppress_dirty_enqueue", False)
+				frappe.flags.cskh_suppress_dirty_enqueue = True
+				try:
+					schedule_post_commit_dirty_invalidation(
+						work_item="WI-G18-SF-0000",
+						campaign=self.shared_campaign,
+						owner_user=self.staff_a,
+						event_dt=base_dt,
+						reason="sf_dirty_mutation",
+						trigger_reference="CA-G18-SF-0000",
+					)
+					_flush_pending_dirty_events()
+					frappe.db.commit()
+				finally:
+					frappe.flags.cskh_suppress_dirty_enqueue = prev_suppress
+
+				# 3a. Spawn 4 REAL separate OS Python worker processes hitting cold Redis epoch simultaneously:
+				runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+				runtime_cache.clear_all_local_caches()
+				runtime_cache.set_cross_process_diag_mode(probe_enabled=True, disable_coalesce=False)
+				runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+
+				barrier_key = f"cskh:test:proc_barrier:{int(time.time() * 1000)}"
+				child_code = """
+import json, os, sys, time
+import frappe
+from crm_cskh.api import p3_reporting
+from crm_cskh.services import runtime_cache
+
+cfg = json.loads(sys.argv[1])
+os.chdir(cfg["sites_path"])
+frappe.init(cfg["site"], sites_path=cfg["sites_path"], force=True)
+frappe.connect()
+frappe.flags.in_test = True
+frappe.set_user(cfg["actor"])
+try:
+	with runtime_cache.enable_runtime_cache_for_test():
+		cache_obj = runtime_cache._resolve_redis_wrapper()
+		bkey = cache_obj.make_key(cfg["barrier_key"])
+		cache_obj.incr(bkey)
+		cache_obj.expire(bkey, 30)
+		dl = time.monotonic() + 2.0
+		while time.monotonic() < dl:
+			cur = int(cache_obj.get(bkey) or 0)
+			if cur >= int(cfg["party_size"]):
+				break
+			time.sleep(0.005)
+		runtime_cache.on_before_request()
+		res = p3_reporting.get_metric_drilldown(
+			metric_code="CONNECTED_RATE",
+			period_type="monthly",
+			period_key=cfg["m_key"],
+			scope_type="company",
+			page=1,
+			page_size=20,
+		)
+		print("CHILD_SF_JSON:" + json.dumps({
+			"pid": os.getpid(),
+			"total": res["pagination"]["total"],
+			"dirty_pending": res["freshness"]["dirty_pending"],
+			"rows_len": len(res["rows"]),
+			"first_lead": res["rows"][0]["lead"] if res["rows"] else None,
+		}))
+finally:
+	frappe.destroy()
+"""
+				procs = []
+				for p_idx in range(4):
+					actor_u = "Administrator" if (p_idx % 2 == 0) else self.bod_user
+					arg_json = json.dumps(
+						{
+							"site": site_name,
+							"sites_path": sites_path,
+							"actor": actor_u,
+							"m_key": m_key,
+							"barrier_key": barrier_key,
+							"party_size": 4,
+						}
+					)
+					procs.append(
+						subprocess.Popen(
+							[sys.executable, "-c", child_code, arg_json],
+							stdout=subprocess.PIPE,
+							stderr=subprocess.PIPE,
+							text=True,
+							env=child_env,
+						)
+					)
+
+				child_payloads = []
+				for p_idx, proc in enumerate(procs):
+					out_txt, err_txt = proc.communicate(timeout=45)
+					self.assertEqual(proc.returncode, 0, f"Child {p_idx} failed:\n{out_txt}\n{err_txt}")
+					lines = [
+						ln[len("CHILD_SF_JSON:") :]
+						for ln in out_txt.splitlines()
+						if ln.startswith("CHILD_SF_JSON:")
+					]
+					self.assertEqual(len(lines), 1, out_txt)
+					child_payloads.append(json.loads(lines[0]))
+
+				self.assertEqual(len({c["pid"] for c in child_payloads}), 4)
+				for idx, cp in enumerate(child_payloads):
+					self.assertEqual(cp["total"], 89)
+					self.assertTrue(cp["dirty_pending"])
+					self.assertEqual(cp["rows_len"], 20)
+					if idx % 2 == 0:
+						self.assertNotEqual(cp["first_lead"], "REDACTED")
+					else:
+						self.assertEqual(cp["first_lead"], "REDACTED")
+
+				cross_stats = runtime_cache.read_cross_process_diag_telemetry()
+				self.assertEqual(
+					cross_stats["totals"]["sql_count_executions"],
+					1,
+					f"Expected exactly 1 SQL COUNT(*) across 4 separate OS processes, got {cross_stats}",
+				)
+				self.assertGreaterEqual(
+					cross_stats["totals"]["coalesced_follower_hits"] + cross_stats["totals"]["redis_hits"],
+					3,
+					cross_stats,
+				)
+
+				# 3b. Compare c=12 BEFORE (`disable_coalesce=True`) vs AFTER (`disable_coalesce=False`) + c=40 & warm!
+				def _run_threaded_drilldown_wave(
+					concurrency: int, actor_user: str, *, clear_l1_each: bool
+				) -> list[dict]:
+					barrier = threading.Barrier(concurrency, timeout=10.0)
+
+					def _worker(_idx: int) -> dict:
+						frappe.init(site_name, sites_path=sites_path, force=True)
+						frappe.connect()
+						frappe.flags.in_test = True
+						frappe.flags.cskh_force_runtime_cache = True
+						frappe.set_user(actor_user)
+						try:
+							try:
+								barrier.wait()
+							except threading.BrokenBarrierError:
+								pass
+							if clear_l1_each:
+								runtime_cache._DRILLDOWN_COUNT_LRU.clear()
+							runtime_cache.on_before_request()
+							return p3_reporting.get_metric_drilldown(
+								metric_code="CONNECTED_RATE",
+								period_type="monthly",
+								period_key=m_key,
+								scope_type="company",
+								page=1,
+								page_size=20,
+							)
+						finally:
+							try:
+								frappe.db.close()
+							except Exception:
+								pass
+
+					with concurrent.futures.ThreadPoolExecutor(max_workers=concurrency) as pool:
+						futs = [pool.submit(_worker, idx) for idx in range(concurrency)]
+						return [f.result(timeout=30) for f in futs]
+
+				# Before-mode (`disable_coalesce=True`): 12 concurrent requests execute 12 duplicate `COUNT(*)`!
+				runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+				runtime_cache.clear_all_local_caches()
+				runtime_cache.set_cross_process_diag_mode(probe_enabled=True, disable_coalesce=True)
+				runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+				before_c12 = _run_threaded_drilldown_wave(12, self.bod_user, clear_l1_each=True)
+				self.assertTrue(all(r["pagination"]["total"] == 89 for r in before_c12))
+				before_stats = runtime_cache.read_cross_process_diag_telemetry()["totals"]
+				self.assertEqual(before_stats["sql_count_executions"], 12)
+
+				# After-mode (`disable_coalesce=False`): 12 concurrent cold requests execute 1 `COUNT(*)`, warm c=20 executes 0!
+				runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+				runtime_cache.clear_all_local_caches()
+				runtime_cache.set_cross_process_diag_mode(probe_enabled=True, disable_coalesce=False)
+				runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+				after_c12 = _run_threaded_drilldown_wave(12, self.bod_user, clear_l1_each=True)
+				self.assertTrue(all(r["pagination"]["total"] == 89 for r in after_c12))
+				after_c12_stats = runtime_cache.read_cross_process_diag_telemetry()["totals"]
+				self.assertEqual(after_c12_stats["sql_count_executions"], 1, after_c12_stats)
+
+				runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+				warm_wave = _run_threaded_drilldown_wave(20, "Administrator", clear_l1_each=False)
+				self.assertTrue(all(r["pagination"]["total"] == 89 for r in warm_wave))
+				warm_stats = runtime_cache.read_cross_process_diag_telemetry()["totals"]
+				self.assertEqual(warm_stats["sql_count_executions"], 0, warm_stats)
+				self.assertEqual(warm_stats["l1_hits"] + warm_stats["redis_hits"], 20, warm_stats)
+
+				runtime_cache.set_cross_process_diag_mode(probe_enabled=False, disable_coalesce=False)
+
+				# 4. RBAC scope isolation & `process_dirty_scopes` convergence
+				frappe.init(site_name, sites_path=sites_path, force=True)
+				frappe.connect()
+				frappe.flags.in_test = True
+				frappe.flags.cskh_force_runtime_cache = True
+
+				frappe.set_user(self.leader_a)
+				with self.assertRaises(ForbiddenScope):
+					p3_reporting.get_metric_drilldown(
+						metric_code="CONNECTED_RATE",
+						period_type="monthly",
+						period_key=m_key,
+						scope_type="company",
+					)
+				tl_dirty = self._assert_fast_matches_reference(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="team",
+					scope_id=self.team_a,
+					page=1,
+					page_size=20,
+				)
+				self.assertEqual(tl_dirty["pagination"]["total"], 59)
+
+				frappe.set_user(self.staff_a)
+				with self.assertRaises(ForbiddenScope):
+					p3_reporting.get_metric_drilldown(
+						metric_code="CONNECTED_RATE",
+						period_type="monthly",
+						period_key=m_key,
+						scope_type="team",
+						scope_id=self.team_a,
+					)
+				st_dirty = self._assert_fast_matches_reference(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="employee",
+					scope_id=self.staff_a,
+					page=1,
+					page_size=20,
+				)
+				self.assertEqual(st_dirty["pagination"]["total"], 29)
+
+				frappe.set_user("Administrator")
+				worker_out = process_dirty_scopes(max_scopes=25)
+				self.assertGreaterEqual(int(worker_out.get("processed_scopes") or 0), 1)
+				frappe.set_user(self.bod_user)
+				runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+				post_worker = self._assert_fast_matches_reference(
+					metric_code="CONNECTED_RATE",
+					period_type="monthly",
+					period_key=m_key,
+					scope_type="company",
+					page=1,
+					page_size=20,
+				)
+				self.assertFalse(post_worker["freshness"]["dirty_pending"])
+				self.assertEqual(post_worker["pagination"]["total"], 89)
+				self.assertEqual(runtime_cache.get_coalesce_telemetry()["sql_count_executions"], 0)
+		finally:
+			frappe.init(site_name, sites_path=sites_path, force=True)
+			frappe.connect()
+			frappe.flags.in_test = True
+			frappe.set_user("Administrator")
+			runtime_cache.set_cross_process_diag_mode(probe_enabled=False, disable_coalesce=False)
+			for row in orig_tmh:
+				frappe.db.set_value(
+					"CSKH Team Membership History",
+					row["name"],
+					"effective_from",
+					row["effective_from"],
+					update_modified=False,
+				)
+			frappe.db.sql("delete from `tabCRM Lead` where name like 'LEAD-G18-DEEP-%'")
+			frappe.db.commit()
+
+	def test_singleflight_mid_count_epoch_change_lock_expiry_dead_holder_and_bounded_wait(self):
+		"""Verify mid-COUNT epoch change, lock TTL expiry, SIGKILL dead lock holder, and bounded wait."""
+		frappe.set_user("Administrator")
+		site_name = str(frappe.local.site)
+		sites_path = os.path.abspath(getattr(frappe.local, "sites_path", ".") or ".")
+		child_env = {**os.environ, "PYTHONPATH": os.pathsep.join(sys.path)}
+
+		with runtime_cache.enable_runtime_cache_for_test():
+			cache_obj = runtime_cache._resolve_redis_wrapper()
+			self.assertIsNotNone(cache_obj)
+
+			# ------------------------------------------------------------------
+			# 1. Mid-COUNT epoch change: leader MUST NOT poison old or new epoch,
+			#    and concurrent follower switches cleanly to the new epoch!
+			# ------------------------------------------------------------------
+			runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+			runtime_cache.clear_all_local_caches()
+			runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+
+			scope_ep = ("CONNECTED_RATE", "monthly", "2099-08", "ep-mid-change-case")
+			db_backing_count = [75000]
+			leader_entered = threading.Event()
+			proceed_after_bump = threading.Event()
+			compute_calls = [0]
+
+			def _leader_or_fresh_count() -> int:
+				compute_calls[0] += 1
+				call_no = compute_calls[0]
+				snap_val = db_backing_count[0]
+				if call_no == 1:
+					leader_entered.set()
+					proceed_after_bump.wait(timeout=3.0)
+				return snap_val
+
+			follower_res: list[int] = []
+
+			def _follower_thread():
+				frappe.init(site_name, sites_path=sites_path, force=True)
+				frappe.connect()
+				frappe.flags.in_test = True
+				frappe.flags.cskh_force_runtime_cache = True
+				try:
+					leader_entered.wait(timeout=3.0)
+					time.sleep(0.02)
+					follower_res.append(
+						runtime_cache.get_coalesced_drilldown_count(
+							scope_ep,
+							_leader_or_fresh_count,
+							lock_ttl_ms=3000,
+							wait_timeout_ms=2000,
+						)
+					)
+				finally:
+					try:
+						frappe.db.close()
+					except Exception:
+						pass
+
+			def _mutator_thread():
+				frappe.init(site_name, sites_path=sites_path, force=True)
+				frappe.connect()
+				frappe.flags.in_test = True
+				frappe.flags.cskh_force_runtime_cache = True
+				try:
+					leader_entered.wait(timeout=3.0)
+					time.sleep(0.05)
+					db_backing_count[0] = 74998
+					runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+					proceed_after_bump.set()
+				finally:
+					try:
+						frappe.db.close()
+					except Exception:
+						pass
+
+			t_fol = threading.Thread(target=_follower_thread)
+			t_mut = threading.Thread(target=_mutator_thread)
+			t_fol.start()
+			t_mut.start()
+
+			leader_val = runtime_cache.get_coalesced_drilldown_count(
+				scope_ep,
+				_leader_or_fresh_count,
+				lock_ttl_ms=3000,
+				wait_timeout_ms=2000,
+			)
+			t_fol.join(timeout=10.0)
+			t_mut.join(timeout=10.0)
+
+			self.assertEqual(leader_val, 75000)
+			self.assertEqual(follower_res, [74998])
+			tel_ep = runtime_cache.get_coalesce_telemetry()
+			self.assertGreaterEqual(tel_ep["epoch_changed_mid_compute"], 1, tel_ep)
+
+			# Subsequent call under the new epoch hits the fresh 74,998 value (never 75,000!)
+			after_bump_val = runtime_cache.get_coalesced_drilldown_count(
+				scope_ep,
+				lambda: 999999,
+				lock_ttl_ms=3000,
+				wait_timeout_ms=2000,
+			)
+			self.assertEqual(after_bump_val, 74998)
+
+			# ------------------------------------------------------------------
+			# 2. Lock expiration (`lock_ttl_ms` expires while slow Leader 1 runs):
+			#    Leader 2 takes over cleanly, and Leader 1's Lua compare-and-del
+			#    NEVER deletes Leader 2's active lock!
+			# ------------------------------------------------------------------
+			runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+			runtime_cache.clear_all_local_caches()
+			runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+
+			scope_exp = ("CONNECTED_RATE", "monthly", "2099-08", "lock-expiry-case")
+			l1_started = threading.Event()
+			l2_acquired_and_holding = threading.Event()
+			l1_finished_release = threading.Event()
+			lock_still_present_after_l1_release: list[bool] = []
+
+			ep_exp = runtime_cache.get_domains_epoch_tuple(*runtime_cache.DRILLDOWN_COUNT_DOMAINS)
+			dig_exp = runtime_cache._build_sf_digest(site_name, "dd_count", scope_exp, ep_exp)
+			lock_rkey_exp = cache_obj.make_key(f"cskh:sf:v1:lock:dd_count:{dig_exp}")
+
+			def _slow_l1_compute() -> int:
+				l1_started.set()
+				l2_acquired_and_holding.wait(timeout=3.0)
+				return 18750
+
+			def _l2_takeover_worker() -> int:
+				frappe.init(site_name, sites_path=sites_path, force=True)
+				frappe.connect()
+				frappe.flags.in_test = True
+				frappe.flags.cskh_force_runtime_cache = True
+				try:
+					l1_started.wait(timeout=3.0)
+					dl = time.monotonic() + 1.5
+					while time.monotonic() < dl and runtime_cache._sf_redis_lock_exists(
+						cache_obj, lock_rkey_exp
+					):
+						time.sleep(0.01)
+					runtime_cache._DRILLDOWN_COUNT_LRU.clear()
+
+					def _l2_compute() -> int:
+						l2_acquired_and_holding.set()
+						l1_finished_release.wait(timeout=3.0)
+						lock_still_present_after_l1_release.append(
+							runtime_cache._sf_redis_lock_exists(cache_obj, lock_rkey_exp)
+						)
+						return 18750
+
+					return runtime_cache.get_coalesced_drilldown_count(
+						scope_exp,
+						_l2_compute,
+						lock_ttl_ms=3000,
+						wait_timeout_ms=2000,
+					)
+				finally:
+					try:
+						frappe.db.close()
+					except Exception:
+						pass
+
+			l2_out: list[int] = []
+			t_l2 = threading.Thread(target=lambda: l2_out.append(_l2_takeover_worker()))
+			t_l2.start()
+
+			val_l1 = runtime_cache.get_coalesced_drilldown_count(
+				scope_exp,
+				_slow_l1_compute,
+				lock_ttl_ms=70,
+				wait_timeout_ms=2000,
+			)
+			l1_finished_release.set()
+			t_l2.join(timeout=10.0)
+
+			self.assertEqual(val_l1, 18750)
+			self.assertEqual(l2_out, [18750])
+			self.assertEqual(
+				lock_still_present_after_l1_release,
+				[True],
+				"Expired Leader 1 must NOT delete Leader 2's active Redis lock!",
+			)
+			tel_exp = runtime_cache.get_coalesce_telemetry()
+			self.assertGreaterEqual(tel_exp["lock_release_skipped_token_mismatch"], 1, tel_exp)
+
+			# ------------------------------------------------------------------
+			# 3. Dead lock-holder OS process (`SIGKILL` / `proc.kill()` mid-COUNT):
+			#    Lock auto-expires via Redis `PX` TTL and follower recovers cleanly!
+			# ------------------------------------------------------------------
+			runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+			runtime_cache.clear_all_local_caches()
+			runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+
+			scope_dead = ("CONNECTED_RATE", "monthly", "2099-08", "sigkill-dead-holder-case")
+			ready_rkey_raw = f"cskh:test:dead_holder_ready:{int(time.time() * 1000)}"
+			dead_holder_script = """
+import json, os, sys, time
+import frappe
+from crm_cskh.services import runtime_cache
+
+cfg = json.loads(sys.argv[1])
+os.chdir(cfg["sites_path"])
+frappe.init(cfg["site"], sites_path=cfg["sites_path"], force=True)
+frappe.connect()
+frappe.flags.in_test = True
+frappe.flags.cskh_force_runtime_cache = True
+runtime_cache.on_before_request()
+
+def _hang_holding_lock():
+	c = runtime_cache._resolve_redis_wrapper()
+	c.set(c.make_key(cfg["ready_key"]), str(os.getpid()), ex=30)
+	time.sleep(30.0)
+	return 56250
+
+runtime_cache.get_coalesced_drilldown_count(
+	tuple(cfg["scope"]),
+	_hang_holding_lock,
+	lock_ttl_ms=500,
+	wait_timeout_ms=2000,
+)
+"""
+			dead_proc = subprocess.Popen(
+				[
+					sys.executable,
+					"-c",
+					dead_holder_script,
+					json.dumps(
+						{
+							"site": site_name,
+							"sites_path": sites_path,
+							"scope": list(scope_dead),
+							"ready_key": ready_rkey_raw,
+						}
+					),
+				],
+				stdout=subprocess.PIPE,
+				stderr=subprocess.PIPE,
+				text=True,
+				env=child_env,
+			)
+			try:
+				ready_full = cache_obj.make_key(ready_rkey_raw)
+				dl_ready = time.monotonic() + 15.0
+				while time.monotonic() < dl_ready and not cache_obj.get(ready_full):
+					time.sleep(0.02)
+				self.assertIsNotNone(
+					cache_obj.get(ready_full), "Dead-holder child did not acquire lock in time"
+				)
+				# Hard-kill (`SIGKILL`) the lock holder so its `finally:` block NEVER runs!
+				dead_proc.kill()
+				dead_proc.wait(timeout=10.0)
+			finally:
+				if dead_proc.poll() is None:
+					dead_proc.kill()
+					dead_proc.wait(timeout=5.0)
+
+			runtime_cache.on_before_request()
+			t_rec0 = time.perf_counter()
+			recovered_val = runtime_cache.get_coalesced_drilldown_count(
+				scope_dead,
+				lambda: 56250,
+				lock_ttl_ms=2000,
+				wait_timeout_ms=1500,
+			)
+			rec_ms = (time.perf_counter() - t_rec0) * 1000.0
+			self.assertEqual(recovered_val, 56250)
+			self.assertLess(rec_ms, 1300.0, f"Expected fast TTL recovery after SIGKILL, took {rec_ms:.1f} ms")
+			tel_dead = runtime_cache.get_coalesce_telemetry()
+			self.assertGreaterEqual(tel_dead["leader_computes"], 1, tel_dead)
+
+			# ------------------------------------------------------------------
+			# 4. Bounded follower wait timeout (`wait_timeout_ms` ceiling):
+			#    Pre-plant a 20,000 ms Redis lock; follower MUST return within
+			#    bounded budget (~120 ms) via clean direct fallback (`0` hang)!
+			# ------------------------------------------------------------------
+			runtime_cache.bump_cache_domain(runtime_cache.DOMAIN_DIRTY_SCOPE)
+			runtime_cache.clear_all_local_caches()
+			runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
+
+			scope_bw = ("CONNECTED_RATE", "monthly", "2099-08", "bounded-wait-ceiling-case")
+			ep_bw = runtime_cache.get_domains_epoch_tuple(*runtime_cache.DRILLDOWN_COUNT_DOMAINS)
+			dig_bw = runtime_cache._build_sf_digest(site_name, "dd_count", scope_bw, ep_bw)
+			lock_rkey_bw = cache_obj.make_key(f"cskh:sf:v1:lock:dd_count:{dig_bw}")
+			self.assertTrue(
+				runtime_cache._sf_redis_acquire_lock(
+					cache_obj, lock_rkey_bw, "stalled-holder:999:tok", 20_000
+				)
+			)
+			try:
+				t_bw0 = time.perf_counter()
+				bw_val = runtime_cache.get_coalesced_drilldown_count(
+					scope_bw,
+					lambda: 12500,
+					lock_ttl_ms=5000,
+					wait_timeout_ms=120,
+				)
+				bw_elapsed_ms = (time.perf_counter() - t_bw0) * 1000.0
+			finally:
+				runtime_cache._sf_release_lock_if_owner(cache_obj, lock_rkey_bw, "stalled-holder:999:tok")
+
+			self.assertEqual(bw_val, 12500)
+			self.assertGreaterEqual(bw_elapsed_ms, 95.0)
+			self.assertLess(
+				bw_elapsed_ms,
+				800.0,
+				f"Follower wait exceeded bounded timeout budget (elapsed={bw_elapsed_ms:.1f} ms)",
+			)
+			tel_bw = runtime_cache.get_coalesce_telemetry()
+			self.assertEqual(tel_bw["wait_timeouts"], 1, tel_bw)
+			self.assertEqual(tel_bw["fallback_computes"], 1, tel_bw)
+			self.assertEqual(tel_bw["sql_count_executions"], 1, tel_bw)
