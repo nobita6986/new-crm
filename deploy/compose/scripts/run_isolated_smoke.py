@@ -1435,16 +1435,18 @@ finally:
 
         guest_wk_code, _, guest_wk_raw = http_call_bytes(guest_pdf_opener, wk_url, site_name)
         guest_wp_code, _, guest_wp_raw = http_call_bytes(guest_pdf_opener, wp_url, site_name)
+        guest_wi_code, _, guest_wi_raw = http_call_bytes(guest_pdf_opener, wi_url, site_name)
         staff_b_wk_code, _, staff_b_wk_raw = http_call_bytes(staff_b_opener, wk_url, site_name)
         staff_b_wp_code, _, staff_b_wp_raw = http_call_bytes(staff_b_opener, wp_url, site_name)
-        staff_a_wi_code, _, staff_a_wi_raw = http_call_bytes(staff_a_opener, wi_url, site_name)
+        staff_b_wi_code, _, staff_b_wi_raw = http_call_bytes(staff_b_opener, wi_url, site_name)
 
         for label, code_val, raw_val in (
             ("guest_wkhtmltopdf_lead", guest_wk_code, guest_wk_raw),
             ("guest_weasyprint_lead", guest_wp_code, guest_wp_raw),
+            ("guest_wkhtmltopdf_work_item", guest_wi_code, guest_wi_raw),
             ("out_of_scope_staff_b_wkhtmltopdf_lead", staff_b_wk_code, staff_b_wk_raw),
             ("out_of_scope_staff_b_weasyprint_lead", staff_b_wp_code, staff_b_wp_raw),
-            ("staff_a_work_item_print_disabled", staff_a_wi_code, staff_a_wi_raw),
+            ("out_of_scope_staff_b_wkhtmltopdf_work_item", staff_b_wi_code, staff_b_wi_raw),
         ):
             assert code_val == 403 and not raw_val.startswith(b"%PDF"), (
                 f"Expected HTTP 403 non-PDF on {label}, got HTTP {code_val} ({raw_val[:80]!r})"
@@ -1456,6 +1458,9 @@ finally:
         staff_a_wp_code, staff_a_wp_hdrs, staff_a_wp_pdf = http_call_bytes(
             staff_a_opener, wp_url, site_name
         )
+        staff_a_wi_code, staff_a_wi_hdrs, staff_a_wi_pdf = http_call_bytes(
+            staff_a_opener, wi_url, site_name
+        )
         admin_wi_code, admin_wi_hdrs, admin_wi_pdf = http_call_bytes(
             admin_opener, wi_url, site_name
         )
@@ -1463,6 +1468,7 @@ finally:
         for label, code_val, hdrs_val, pdf_bytes in (
             ("in_scope_staff_a_wkhtmltopdf", staff_a_wk_code, staff_a_wk_hdrs, staff_a_wk_pdf),
             ("in_scope_staff_a_weasyprint", staff_a_wp_code, staff_a_wp_hdrs, staff_a_wp_pdf),
+            ("in_scope_staff_a_work_item_wkhtmltopdf", staff_a_wi_code, staff_a_wi_hdrs, staff_a_wi_pdf),
             ("admin_work_item_wkhtmltopdf", admin_wi_code, admin_wi_hdrs, admin_wi_pdf),
         ):
             ctype = str(hdrs_val.get("content-type") or "").lower()
@@ -1603,18 +1609,21 @@ print(json.dumps(out, ensure_ascii=False))
             "PDF functional & RBAC smoke passed across wkhtmltopdf + WeasyPrint: "
             f"wk_pages={inspected['wkhtmltopdf']['page_count']}, "
             f"wp_pages={inspected['weasyprint']['page_count']}, "
-            "rbac={guest:403, out_of_scope_staff:403, wi_print_disabled:403, owner_staff:200, admin:200}"
+            "rbac={guest:403, out_of_scope_staff:403, in_scope_staff:200, admin:200}"
         )
         return {
             "status": "PASS",
             "rbac_matrix": {
                 "guest_wkhtmltopdf_lead_status": guest_wk_code,
                 "guest_weasyprint_lead_status": guest_wp_code,
+                "guest_wkhtmltopdf_work_item_status": guest_wi_code,
                 "out_of_scope_staff_wkhtmltopdf_lead_status": staff_b_wk_code,
                 "out_of_scope_staff_weasyprint_lead_status": staff_b_wp_code,
-                "staff_work_item_print_disabled_status": staff_a_wi_code,
+                "out_of_scope_staff_wkhtmltopdf_work_item_status": staff_b_wi_code,
                 "in_scope_staff_wkhtmltopdf_lead_status": staff_a_wk_code,
                 "in_scope_staff_weasyprint_lead_status": staff_a_wp_code,
+                "in_scope_staff_work_item_standard_pdf_status": staff_a_wi_code,
+                "in_scope_staff_work_item_standard_pdf_bytes": len(staff_a_wi_pdf),
                 "admin_work_item_standard_pdf_status": admin_wi_code,
                 "admin_work_item_standard_pdf_bytes": len(admin_wi_pdf),
             },
