@@ -385,7 +385,9 @@ def validate_stack(
         "bench set-config -g redis_queue",
         "bench set-config -g redis_socketio",
         "bench set-config -gp socketio_port",
+        "if [ -x /usr/lib/chromium/chromium-headless-shell ]; then",
         "bench set-config -g chromium_path /usr/lib/chromium/chromium-headless-shell",
+        'd.pop("chromium_path", None)',
     ):
         assert required_cfg_step in cfg_cmd, (
             f"{stack_name}.configurator missing required step '{required_cfg_step}'"

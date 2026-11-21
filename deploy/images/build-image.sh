@@ -123,6 +123,7 @@ print(py_constraints["bench_constraints_sha256"])
 print(lock["security_patches"]["frappe_form_data_version"])
 print(lock["security_patches"]["pyjwt_version"])
 print(lock["security_patches"]["pillow_version"])
+print(lock["security_patches"].get("mariadb_client_debian_version", "1:11.8.9+ds-0+deb13u1"))
 PY
 )
 
@@ -156,6 +157,7 @@ BENCH_PYTHON_CONSTRAINTS_SHA256="${LOCK_VARS[26]}"
 FORM_DATA_PATCH_VERSION="${LOCK_VARS[27]}"
 PYJWT_PATCH_VERSION="${LOCK_VARS[28]}"
 PILLOW_PATCH_VERSION="${LOCK_VARS[29]}"
+MARIADB_DEB_VERSION="${LOCK_VARS[30]}"
 
 ACTUAL_HEAD_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD | tr -d '\r')"
 ACTUAL_APPS_TREE_SHA="$(git -C "${REPO_ROOT}" rev-parse HEAD:apps | tr -d '\r')"
@@ -214,6 +216,7 @@ docker buildx build \
   --build-arg "WKHTMLTOPDF_DISTRO=${WKHTMLTOPDF_DISTRO}" \
   --build-arg "WKHTMLTOPDF_AMD64_SHA256=${WKHTMLTOPDF_AMD64_SHA256}" \
   --build-arg "INSTALL_CHROMIUM=${INSTALL_CHROMIUM}" \
+  --build-arg "MARIADB_DEB_VERSION=${MARIADB_DEB_VERSION}" \
   --build-arg "FRAPPE_REPO=${FRAPPE_REPO}" \
   --build-arg "FRAPPE_TAG=${FRAPPE_TAG}" \
   --build-arg "FRAPPE_SHA=${FRAPPE_SHA}" \

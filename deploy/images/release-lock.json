@@ -4,8 +4,8 @@
   "p4_01_baseline_lock_sha256": "dde3bdaa11180cd103f8d8b064e20411d380135ac88d4a39226b7d451a990962",
   "p4_00_entry_dossier_sha": "be33e6c931337c42b94184b2fe292e094bd51c97",
   "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
-  "apps_tree_sha": "28bfeacf712843cf1c81faecb2cb603eb153eca3",
-  "crm_cskh_tree_sha": "6fef2cbfe55de370dbb6590debb385a3af098c34",
+  "apps_tree_sha": "c1744ee45bfc1c4df702b56ab96735d9bbfed934",
+  "crm_cskh_tree_sha": "0b6c60c3ac444e7ff4bb85679bb357b1b7e1380f",
   "builder_upstream": {
     "repository": "https://github.com/frappe/frappe_docker.git",
     "tag": "v4.2.0",
@@ -32,7 +32,7 @@
     "wkhtmltopdf_version": "0.12.6.1-3",
     "wkhtmltopdf_distro": "bookworm",
     "wkhtmltopdf_amd64_sha256": "98ba0d157b50d36f23bd0dedf4c0aa28c7b0c50fcdcdc54aa5b6bbba81a3941d",
-    "install_chromium": true
+    "install_chromium": false
   },
   "python_constraints": {
     "system_constraints_file": "deploy/images/resources/system-python-constraints.txt",
@@ -47,6 +47,15 @@
     "frappe_form_data_version": "4.0.6",
     "pyjwt_version": "2.15.1",
     "pillow_version": "13.0.0",
+    "mariadb_client_debian_version": "1:11.8.9+ds-0+deb13u1",
+    "mariadb_client_debian_source": "trixie-proposed-updates (PGP InRelease + SHA-256 verified)",
+    "mariadb_client_amd64_sha256": {
+      "mariadb-common": "6e7b81b9edd56b40830e04b7fbe9711c76d7d6657199486a1ee59938cf54a2a4",
+      "libmariadb3": "450b99a4f4434de071e4980c75ade41ed432392f3fd223b0d8baf97fc8eb95aa",
+      "mariadb-client-core": "33a191b771d7f0e85882dc2f4adabc57799fd7cec3b315ad4bd562e49cb0a11c",
+      "mariadb-client": "e994b5e860dc9826b56aca07d685a10f038727882e770b52e84a21c7f1ce6a04",
+      "libmariadb-dev": "cd404871abb92e5f984b5ff621be086880668f0a11db4f1d0c4e829ccb29a651"
+    },
     "pruned_frappe_build_only_node_modules": [
       "esbuild",
       "esbuild-linux-64",
@@ -56,7 +65,9 @@
     "removed_unused_runtime_apt_packages": [
       "libpq-dev",
       "postgresql-client",
-      "restic"
+      "restic",
+      "chromium-headless-shell",
+      "libxml2"
     ]
   },
   "apps": {
@@ -93,8 +104,8 @@
       "declared_app_version": "0.0.1",
       "identity_rule": "Identify release exclusively by source_commit_sha + crm_cskh_tree_sha + OCI image digest (never by 0.0.1 alone).",
       "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
-      "apps_tree_sha": "28bfeacf712843cf1c81faecb2cb603eb153eca3",
-      "crm_cskh_tree_sha": "6fef2cbfe55de370dbb6590debb385a3af098c34"
+      "apps_tree_sha": "c1744ee45bfc1c4df702b56ab96735d9bbfed934",
+      "crm_cskh_tree_sha": "0b6c60c3ac444e7ff4bb85679bb357b1b7e1380f"
     }
   },
   "infra_images": {

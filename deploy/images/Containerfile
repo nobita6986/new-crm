@@ -33,7 +33,13 @@ COPY deploy/images/resources/system-python-constraints.txt /tmp/system-python-co
 ARG WKHTMLTOPDF_VERSION=0.12.6.1-3
 ARG WKHTMLTOPDF_DISTRO=bookworm
 ARG WKHTMLTOPDF_AMD64_SHA256=98ba0d157b50d36f23bd0dedf4c0aa28c7b0c50fcdcdc54aa5b6bbba81a3941d
-ARG INSTALL_CHROMIUM=true
+ARG INSTALL_CHROMIUM=false
+
+ARG MARIADB_DEB_VERSION=1:11.8.9+ds-0+deb13u1
+ARG MARIADB_COMMON_DEB_SHA256=6e7b81b9edd56b40830e04b7fbe9711c76d7d6657199486a1ee59938cf54a2a4
+ARG LIBMARIADB3_AMD64_DEB_SHA256=450b99a4f4434de071e4980c75ade41ed432392f3fd223b0d8baf97fc8eb95aa
+ARG MARIADB_CLIENT_CORE_AMD64_DEB_SHA256=33a191b771d7f0e85882dc2f4adabc57799fd7cec3b315ad4bd562e49cb0a11c
+ARG MARIADB_CLIENT_AMD64_DEB_SHA256=e994b5e860dc9826b56aca07d685a10f038727882e770b52e84a21c7f1ce6a04
 
 ARG NVM_VERSION=v0.40.6
 ARG NVM_INSTALL_SHA256=2ef7e8d4373c1ffd70daa55f919f629e98a619543ffc0a8d892d77a5247e50e4
@@ -57,12 +63,14 @@ RUN useradd -u 1000 -g 0 -d /home/frappe -ms /bin/bash frappe \
         nginx \
         gettext-base \
         file \
+        fontconfig \
+        fonts-dejavu-core \
+        fonts-dejavu-mono \
         libpango-1.0-0 \
         libharfbuzz0b \
         libpangoft2-1.0-0 \
         libpangocairo-1.0-0 \
         gpg \
-        mariadb-client \
         less \
         wait-for-it \
         jq \
@@ -71,6 +79,29 @@ RUN useradd -u 1000 -g 0 -d /home/frappe -ms /bin/bash frappe \
     && if [ "${VERSION_CODENAME:-}" = "trixie" ]; then \
         DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y tzdata-legacy; \
     fi \
+    && printf 'Types: deb\nURIs: https://deb.debian.org/debian\nSuites: trixie-proposed-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/trixie-proposed-updates.sources \
+    && printf 'Package: *\nPin: release n=trixie-proposed-updates\nPin-Priority: 100\n\nPackage: mariadb-common libmariadb3 mariadb-client-core mariadb-client libmariadb-dev\nPin: version %s\nPin-Priority: 990\n' "${MARIADB_DEB_VERSION}" \
+        > /etc/apt/preferences.d/99-cskh-mariadb-only \
+    && apt-get update \
+    && mkdir -p /tmp/cskh-mariadb-debs \
+    && chmod 777 /tmp/cskh-mariadb-debs \
+    && (cd /tmp/cskh-mariadb-debs && apt-get download \
+        "mariadb-common=${MARIADB_DEB_VERSION}" \
+        "libmariadb3=${MARIADB_DEB_VERSION}" \
+        "mariadb-client-core=${MARIADB_DEB_VERSION}" \
+        "mariadb-client=${MARIADB_DEB_VERSION}") \
+    && EXPECTED_VER="${MARIADB_DEB_VERSION}" \
+       SHA_COMMON="${MARIADB_COMMON_DEB_SHA256}" \
+       SHA_LIB="${LIBMARIADB3_AMD64_DEB_SHA256}" \
+       SHA_CORE="${MARIADB_CLIENT_CORE_AMD64_DEB_SHA256}" \
+       SHA_CLIENT="${MARIADB_CLIENT_AMD64_DEB_SHA256}" \
+       TARGET_ARCH="$(dpkg --print-architecture)" \
+       python3 -c 'import hashlib, os, pathlib, subprocess; debs = sorted(pathlib.Path("/tmp/cskh-mariadb-debs").glob("*.deb")); assert len(debs) == 4, [p.name for p in debs]; exp_ver = os.environ["EXPECTED_VER"]; arch = os.environ["TARGET_ARCH"]; exp_sha = {"mariadb-common": os.environ["SHA_COMMON"], "libmariadb3": os.environ["SHA_LIB"], "mariadb-client-core": os.environ["SHA_CORE"], "mariadb-client": os.environ["SHA_CLIENT"]}; f = lambda p, k: subprocess.check_output(["dpkg-deb", "-f", str(p), k], text=True).strip(); rows = {f(p, "Package"): (f(p, "Version"), f(p, "Architecture"), hashlib.sha256(p.read_bytes()).hexdigest()) for p in debs}; assert set(rows) == set(exp_sha), rows; bad = {k: v for k, v in rows.items() if v[0] != exp_ver or v[1] not in ("all", arch) or (arch == "amd64" and v[2] != exp_sha[k])}; assert not bad, bad' \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y /tmp/cskh-mariadb-debs/*.deb \
+    && rm -rf /tmp/cskh-mariadb-debs /etc/apt/sources.list.d/trixie-proposed-updates.sources /etc/apt/preferences.d/99-cskh-mariadb-only \
+    && mariadb --version | grep -F "11.8.9-MariaDB" \
+    && mariadb-dump --version | grep -F "11.8.9-MariaDB" \
     && mkdir -p "${NVM_DIR}" \
     && curl -fsSL "https://raw.githubusercontent.com/nvm-sh/nvm/${NVM_VERSION}/install.sh" -o /tmp/nvm-install.sh \
     && echo "${NVM_INSTALL_SHA256}  /tmp/nvm-install.sh" | sha256sum -c - \
@@ -95,6 +126,7 @@ RUN useradd -u 1000 -g 0 -d /home/frappe -ms /bin/bash frappe \
     && if [ "${INSTALL_CHROMIUM}" != "false" ]; then \
         DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y chromium-headless-shell; \
     fi \
+    && fc-cache -f \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf /etc/nginx/sites-enabled/default \
     && mkdir -p /etc/nginx/snippets /usr/local/share/cskh-locks \
@@ -121,7 +153,21 @@ RUN useradd -u 1000 -g 0 -d /home/frappe -ms /bin/bash frappe \
 
 FROM base AS builder
 
-RUN apt-get update \
+ARG MARIADB_DEB_VERSION=1:11.8.9+ds-0+deb13u1
+ARG LIBMARIADB_DEV_AMD64_DEB_SHA256=cd404871abb92e5f984b5ff621be086880668f0a11db4f1d0c4e829ccb29a651
+
+RUN printf 'Types: deb\nURIs: https://deb.debian.org/debian\nSuites: trixie-proposed-updates\nComponents: main\nSigned-By: /usr/share/keyrings/debian-archive-keyring.gpg\n' \
+        > /etc/apt/sources.list.d/trixie-proposed-updates.sources \
+    && printf 'Package: *\nPin: release n=trixie-proposed-updates\nPin-Priority: 100\n\nPackage: mariadb-common libmariadb3 mariadb-client-core mariadb-client libmariadb-dev\nPin: version %s\nPin-Priority: 990\n' "${MARIADB_DEB_VERSION}" \
+        > /etc/apt/preferences.d/99-cskh-mariadb-only \
+    && apt-get update \
+    && mkdir -p /tmp/cskh-mariadb-dev \
+    && chmod 777 /tmp/cskh-mariadb-dev \
+    && (cd /tmp/cskh-mariadb-dev && apt-get download "libmariadb-dev=${MARIADB_DEB_VERSION}") \
+    && EXPECTED_VER="${MARIADB_DEB_VERSION}" \
+       SHA_DEV="${LIBMARIADB_DEV_AMD64_DEB_SHA256}" \
+       TARGET_ARCH="$(dpkg --print-architecture)" \
+       python3 -c 'import hashlib, os, pathlib, subprocess; debs = sorted(pathlib.Path("/tmp/cskh-mariadb-dev").glob("*.deb")); assert len(debs) == 1, [p.name for p in debs]; p = debs[0]; f = lambda k: subprocess.check_output(["dpkg-deb", "-f", str(p), k], text=True).strip(); pkg, ver, deb_arch = f("Package"), f("Version"), f("Architecture"); digest = hashlib.sha256(p.read_bytes()).hexdigest(); arch = os.environ["TARGET_ARCH"]; assert pkg == "libmariadb-dev" and ver == os.environ["EXPECTED_VER"] and deb_arch == arch and (arch != "amd64" or digest == os.environ["SHA_DEV"]), (pkg, ver, deb_arch, digest)' \
     && DEBIAN_FRONTEND=noninteractive apt-get install --no-install-recommends -y \
         wget \
         libcairo2-dev \
@@ -133,7 +179,6 @@ RUN apt-get update \
         libffi-dev \
         liblcms2-dev \
         libldap2-dev \
-        libmariadb-dev \
         libsasl2-dev \
         libtiff-dev \
         libwebp-dev \
@@ -145,7 +190,8 @@ RUN apt-get update \
         gcc \
         build-essential \
         libbz2-dev \
-    && rm -rf /var/lib/apt/lists/*
+        /tmp/cskh-mariadb-dev/*.deb \
+    && rm -rf /tmp/cskh-mariadb-dev /etc/apt/sources.list.d/trixie-proposed-updates.sources /etc/apt/preferences.d/99-cskh-mariadb-only /var/lib/apt/lists/*
 
 USER frappe
 
@@ -225,12 +271,13 @@ COPY --chown=frappe:0 deploy/dev/apply-crm-ui-vi-patch.py /tmp/cskh-build/apply-
 COPY --chown=frappe:0 apps/crm_cskh /home/frappe/frappe-bench/apps/crm_cskh
 
 ARG BASE_IMAGE=python:3.11.18-slim-trixie@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535
+ARG INSTALL_CHROMIUM=false
 ARG FRAPPE_DOCKER_TAG=v4.2.0
 ARG FRAPPE_DOCKER_SHA=61d35da827ebc04d01b64c9e78385597ccebc9d8
 ARG BASELINE_MAIN_SHA=467830195358b2431ac772486530ab935887a518
 ARG CSKH_SOURCE_SHA=467830195358b2431ac772486530ab935887a518
-ARG APPS_TREE_SHA=28bfeacf712843cf1c81faecb2cb603eb153eca3
-ARG CRM_CSKH_TREE_SHA=6fef2cbfe55de370dbb6590debb385a3af098c34
+ARG APPS_TREE_SHA=c1744ee45bfc1c4df702b56ab96735d9bbfed934
+ARG CRM_CSKH_TREE_SHA=0b6c60c3ac444e7ff4bb85679bb357b1b7e1380f
 
 # 3. Apply pinned Vietnamese UI patches (Frappe Jinja + CRM frappe-ui after frontend deps install),
 #    verify upstream `apps/frappe/pyproject.toml` is untouched, install `crm_cskh` under locked
@@ -309,7 +356,9 @@ RUN set -eux; \
     FORM_DATA_VER_ARG="${FORM_DATA_PATCH_VERSION}" \
     PYJWT_VER_ARG="${PYJWT_PATCH_VERSION}" \
     PILLOW_VER_ARG="${PILLOW_PATCH_VERSION}" \
-    ./env/bin/python -c 'import hashlib, json, os, subprocess; from pathlib import Path; meta = Path("/home/frappe/frappe-bench/release-metadata"); sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest(); cskh_ver = {}; exec(Path("apps/crm_cskh/crm_cskh/__init__.py").read_text(), cskh_ver); out = {"schema_version": "cskh-image-build-manifest-v1", "base_image": os.environ["BASE_IMAGE_ARG"], "frappe_docker": {"tag": os.environ["FRAPPE_DOCKER_TAG_ARG"], "commit_sha": os.environ["FRAPPE_DOCKER_SHA_ARG"]}, "apps": {"frappe": {"tag": os.environ["FRAPPE_TAG_ARG"], "commit_sha": os.environ["FRAPPE_HEAD"], "pyproject_unmodified": True}, "crm": {"tag": os.environ["CRM_TAG_ARG"], "commit_sha": os.environ["CRM_HEAD"]}, "crm_cskh": {"declared_version": cskh_ver["__version__"], "baseline_main_sha": os.environ["BASELINE_MAIN_SHA_ARG"], "source_commit_sha": os.environ["CSKH_SOURCE_SHA_ARG"], "apps_tree_sha": os.environ["APPS_TREE_SHA_ARG"], "crm_cskh_tree_sha": os.environ["CRM_CSKH_TREE_SHA_ARG"], "files_manifest_sha256": sha(meta / "crm-cskh-files.sha256")}}, "toolchain": {"python": subprocess.check_output(["/home/frappe/frappe-bench/env/bin/python", "--version"], text=True).strip(), "node": subprocess.check_output(["node", "--version"], text=True).strip(), "yarn": subprocess.check_output(["yarn", "--version"], text=True).strip(), "bench": subprocess.check_output(["bench", "--version"], text=True).strip(), "uv": subprocess.check_output(["uv", "--version"], text=True).strip()}, "locks": {"pip_freeze_sha256": sha(meta / "pip-freeze.txt"), "pip_freeze_all_sha256": sha(meta / "pip-freeze-all.txt"), "system_pip_freeze_sha256": sha(meta / "system-pip-freeze.txt"), "python_constraints_sha256": sha(meta / "python-constraints.txt"), "system_python_constraints_sha256": sha(meta / "system-python-constraints.txt"), "yarn_locks_sha256": sha(meta / "yarn-locks.sha256"), "dpkg_packages_sha256": sha(meta / "dpkg-packages.txt"), "builder_dpkg_packages_sha256": sha(meta / "builder-dpkg-packages.txt"), "upstream_patches_diff_sha256": sha(meta / "upstream-patches.diff"), "assets_json_sha256": sha("sites/assets/assets.json"), "crm_www_html_sha256": sha("apps/crm/crm/www/crm.html")}, "security_patches": {"frappe_form_data_version": os.environ["FORM_DATA_VER_ARG"], "pyjwt_version": os.environ["PYJWT_VER_ARG"], "pillow_version": os.environ["PILLOW_VER_ARG"], "pip_check_verified": True, "pruned_frappe_build_only_node_modules": ["esbuild", "esbuild-linux-64", "loader-utils", "shell-quote"], "removed_unused_runtime_apt_packages": ["libpq-dev", "postgresql-client", "restic"]}}; (meta / "build-manifest.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")'; \
+    MARIADB_VER_ARG="${MARIADB_DEB_VERSION}" \
+    INSTALL_CHROMIUM_ARG="${INSTALL_CHROMIUM}" \
+    ./env/bin/python -c 'import hashlib, json, os, subprocess; from pathlib import Path; meta = Path("/home/frappe/frappe-bench/release-metadata"); sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest(); cskh_ver = {}; exec(Path("apps/crm_cskh/crm_cskh/__init__.py").read_text(), cskh_ver); out = {"schema_version": "cskh-image-build-manifest-v1", "base_image": os.environ["BASE_IMAGE_ARG"], "frappe_docker": {"tag": os.environ["FRAPPE_DOCKER_TAG_ARG"], "commit_sha": os.environ["FRAPPE_DOCKER_SHA_ARG"]}, "apps": {"frappe": {"tag": os.environ["FRAPPE_TAG_ARG"], "commit_sha": os.environ["FRAPPE_HEAD"], "pyproject_unmodified": True}, "crm": {"tag": os.environ["CRM_TAG_ARG"], "commit_sha": os.environ["CRM_HEAD"]}, "crm_cskh": {"declared_version": cskh_ver["__version__"], "baseline_main_sha": os.environ["BASELINE_MAIN_SHA_ARG"], "source_commit_sha": os.environ["CSKH_SOURCE_SHA_ARG"], "apps_tree_sha": os.environ["APPS_TREE_SHA_ARG"], "crm_cskh_tree_sha": os.environ["CRM_CSKH_TREE_SHA_ARG"], "files_manifest_sha256": sha(meta / "crm-cskh-files.sha256")}}, "toolchain": {"python": subprocess.check_output(["/home/frappe/frappe-bench/env/bin/python", "--version"], text=True).strip(), "node": subprocess.check_output(["node", "--version"], text=True).strip(), "yarn": subprocess.check_output(["yarn", "--version"], text=True).strip(), "bench": subprocess.check_output(["bench", "--version"], text=True).strip(), "uv": subprocess.check_output(["uv", "--version"], text=True).strip(), "install_chromium": os.environ["INSTALL_CHROMIUM_ARG"] != "false"}, "locks": {"pip_freeze_sha256": sha(meta / "pip-freeze.txt"), "pip_freeze_all_sha256": sha(meta / "pip-freeze-all.txt"), "system_pip_freeze_sha256": sha(meta / "system-pip-freeze.txt"), "python_constraints_sha256": sha(meta / "python-constraints.txt"), "system_python_constraints_sha256": sha(meta / "system-python-constraints.txt"), "yarn_locks_sha256": sha(meta / "yarn-locks.sha256"), "dpkg_packages_sha256": sha(meta / "dpkg-packages.txt"), "builder_dpkg_packages_sha256": sha(meta / "builder-dpkg-packages.txt"), "upstream_patches_diff_sha256": sha(meta / "upstream-patches.diff"), "assets_json_sha256": sha("sites/assets/assets.json"), "crm_www_html_sha256": sha("apps/crm/crm/www/crm.html")}, "security_patches": {"frappe_form_data_version": os.environ["FORM_DATA_VER_ARG"], "pyjwt_version": os.environ["PYJWT_VER_ARG"], "pillow_version": os.environ["PILLOW_VER_ARG"], "mariadb_client_debian_version": os.environ["MARIADB_VER_ARG"], "pip_check_verified": True, "pruned_frappe_build_only_node_modules": ["esbuild", "esbuild-linux-64", "loader-utils", "shell-quote"], "removed_unused_runtime_apt_packages": ["libpq-dev", "postgresql-client", "restic"] + (["chromium-headless-shell", "libxml2"] if os.environ["INSTALL_CHROMIUM_ARG"] == "false" else [])}}; (meta / "build-manifest.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")'; \
     rm -rf \
         /tmp/cskh-build \
         /home/frappe/.cache \
@@ -322,6 +371,8 @@ RUN set -eux; \
 
 FROM base AS backend
 
+ARG INSTALL_CHROMIUM=false
+ARG MARIADB_DEB_VERSION=1:11.8.9+ds-0+deb13u1
 ARG FRAPPE_TAG=v15.126.0
 ARG FRAPPE_SHA=53bae3ef2550ca96320f036f581446783cd11b72
 ARG CRM_TAG=v1.87.0
@@ -329,8 +380,8 @@ ARG CRM_SHA=0d3910b456ef4fb913e77b29db011b3debc4f778
 ARG FRAPPE_DOCKER_SHA=61d35da827ebc04d01b64c9e78385597ccebc9d8
 ARG BASELINE_MAIN_SHA=467830195358b2431ac772486530ab935887a518
 ARG CSKH_SOURCE_SHA=467830195358b2431ac772486530ab935887a518
-ARG APPS_TREE_SHA=28bfeacf712843cf1c81faecb2cb603eb153eca3
-ARG CRM_CSKH_TREE_SHA=6fef2cbfe55de370dbb6590debb385a3af098c34
+ARG APPS_TREE_SHA=c1744ee45bfc1c4df702b56ab96735d9bbfed934
+ARG CRM_CSKH_TREE_SHA=0b6c60c3ac444e7ff4bb85679bb357b1b7e1380f
 
 LABEL org.opencontainers.image.title="crm-cskh" \
       org.opencontainers.image.description="CRM-CSKH immutable production image (Frappe + Frappe CRM + crm_cskh)" \
@@ -371,7 +422,8 @@ RUN set -eux; \
     test "$(git -C /home/frappe/frappe-bench/apps/crm rev-parse HEAD)" = "${CRM_SHA}"; \
     /home/frappe/frappe-bench/env/bin/pip check; \
     dpkg-query -W -f='${Package}=${Version}\n' | LC_ALL=C sort > /home/frappe/frappe-bench/release-metadata/dpkg-packages.txt; \
-    /home/frappe/frappe-bench/env/bin/python -c 'import hashlib, json; from pathlib import Path; meta = Path("/home/frappe/frappe-bench/release-metadata"); dpkg_txt = (meta / "dpkg-packages.txt").read_text(encoding="utf-8"); pkgs = {ln.split("=", 1)[0] for ln in dpkg_txt.splitlines() if "=" in ln}; forbidden = sorted(pkgs & {"restic", "libpq-dev", "postgresql-client", "gcc", "build-essential", "libcairo2-dev"}); assert not forbidden, f"Forbidden packages leaked into runtime image: {forbidden}"; bm = json.loads((meta / "build-manifest.json").read_text(encoding="utf-8")); bm["locks"]["dpkg_packages_sha256"] = hashlib.sha256((meta / "dpkg-packages.txt").read_bytes()).hexdigest(); (meta / "build-manifest.json").write_text(json.dumps(bm, indent=2) + "\n", encoding="utf-8")'; \
+    MARIADB_VER_ARG="${MARIADB_DEB_VERSION}" INSTALL_CHROMIUM_ARG="${INSTALL_CHROMIUM}" \
+    /home/frappe/frappe-bench/env/bin/python -c 'import hashlib, json, os; from pathlib import Path; meta = Path("/home/frappe/frappe-bench/release-metadata"); dpkg_txt = (meta / "dpkg-packages.txt").read_text(encoding="utf-8"); pkg_map = dict(ln.split("=", 1) for ln in dpkg_txt.splitlines() if "=" in ln); pkgs = set(pkg_map); forbidden_set = {"restic", "libpq-dev", "postgresql-client", "gcc", "build-essential", "libcairo2-dev", "libmariadb-dev"}; forbidden_set |= ({"chromium-headless-shell", "libxml2"} if os.environ["INSTALL_CHROMIUM_ARG"] == "false" else set()); forbidden = sorted(pkgs & forbidden_set); assert not forbidden, f"Forbidden packages leaked into runtime image: {forbidden}"; exp_mdb = os.environ["MARIADB_VER_ARG"]; mdb_pkgs = ("mariadb-common", "libmariadb3", "mariadb-client-core", "mariadb-client"); mdb_bad = {k: pkg_map.get(k) for k in mdb_pkgs if pkg_map.get(k) != exp_mdb}; assert not mdb_bad, f"Unexpected MariaDB runtime package versions: {mdb_bad}"; assert not Path("/etc/apt/sources.list.d/trixie-proposed-updates.sources").exists(); assert not Path("/etc/apt/preferences.d/99-cskh-mariadb-only").exists(); bm = json.loads((meta / "build-manifest.json").read_text(encoding="utf-8")); bm["locks"]["dpkg_packages_sha256"] = hashlib.sha256((meta / "dpkg-packages.txt").read_bytes()).hexdigest(); (meta / "build-manifest.json").write_text(json.dumps(bm, indent=2) + "\n", encoding="utf-8")'; \
     chmod -R g=u /home/frappe/frappe-bench
 
 VOLUME [ \

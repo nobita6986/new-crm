@@ -285,6 +285,10 @@ for pkg in (
     "mariadb-server-core",
     "galera-4",
     "libxml2",
+    "chromium-headless-shell",
+    "wkhtmltox",
+    "fontconfig",
+    "fonts-dejavu-core",
     "libsqlite3-0",
     "zlib1g",
 ):

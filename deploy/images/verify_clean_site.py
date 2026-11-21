@@ -221,6 +221,10 @@ def main() -> int:
     expected_load_order = lock["apps"]["load_order"]
     expected_pyjwt_ver = lock["security_patches"]["pyjwt_version"]
     expected_pillow_ver = lock["security_patches"]["pillow_version"]
+    expected_mariadb_deb_ver = lock["security_patches"].get(
+        "mariadb_client_debian_version"
+    )
+    expected_install_chromium = bool(lock["toolchain"].get("install_chromium", True))
 
     project_name = f"cskh-p4-verify-{secrets.token_hex(4)}"
     db_root_pw = secrets.token_hex(24)
@@ -467,10 +471,20 @@ def main() -> int:
                 "Image.new('RGB', (32, 32), (16, 64, 128)).save(img_buf, format='PNG'); "
                 "opt_bytes = optimize_image(img_buf.getvalue(), 'image/png', max_width=16, max_height=16); "
                 "pruned_present = []\n"
-                "for pkg in ('restic', 'libpq-dev', 'postgresql-client', 'gcc', 'build-essential'):\n"
+                "for pkg in ('restic', 'libpq-dev', 'postgresql-client', 'gcc', 'build-essential', 'libmariadb-dev'):\n"
                 "    p = subprocess.run(['dpkg-query', '-W', '-f=${Status}\\n', pkg], capture_output=True, text=True)\n"
                 "    if p.returncode == 0 and 'install ok installed' in p.stdout:\n"
                 "        pruned_present.append(pkg)\n"
+                "mdb_dpkg = {}\n"
+                "for pkg in ('mariadb-common', 'libmariadb3', 'mariadb-client-core', 'mariadb-client', 'chromium-headless-shell', 'libxml2'):\n"
+                "    p = subprocess.run(['dpkg-query', '-W', '-f=${Status}|${Version}', pkg], capture_output=True, text=True)\n"
+                "    mdb_dpkg[pkg] = p.stdout.strip().split('|', 1)[1] if (p.returncode == 0 and 'install ok installed' in p.stdout) else None\n"
+                "mdb_cli_ver = subprocess.check_output(['mariadb', '--version'], text=True).strip(); "
+                "mdb_dump_ver = subprocess.check_output(['mariadb-dump', '--version'], text=True).strip(); "
+                "wkhtml_ver = subprocess.check_output(['wkhtmltopdf', '--version'], text=True).strip(); "
+                "fc_dejavu = 'DejaVu Sans' in subprocess.check_output(['fc-list', ':', 'family'], text=True); "
+                "import lxml.etree, pymysql, pypdf, weasyprint; "
+                "pdf_deps = {'wkhtmltopdf_cli': wkhtml_ver, 'weasyprint': weasyprint.__version__, 'pypdf': pypdf.__version__, 'pymysql': pymysql.__version__, 'lxml_libxml': '.'.join(str(x) for x in lxml.etree.LIBXML_VERSION), 'fontconfig_dejavu_sans': fc_dejavu}; "
                 "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites'); "
                 "frappe.connect(); "
                 "cskh_rows = frappe.get_all('DocType', filters=[['name', 'like', 'CSKH %']], fields=['name', 'module'], order_by='name asc'); "
@@ -479,7 +493,7 @@ def main() -> int:
                 "export_table_exists = bool(frappe.db.sql(\"SHOW TABLES LIKE 'tabCSKH Export Job'\")); "
                 "dev_mode = bool(frappe.conf.get('developer_mode')); "
                 "frappe.destroy(); "
-                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'frappe_pyproject_diff': f_pyproject_diff, 'bench_pip_check_rc': bench_pip_check_rc, 'sys_pip_check_rc': sys_pip_check_rc, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
+                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'frappe_pyproject_diff': f_pyproject_diff, 'bench_pip_check_rc': bench_pip_check_rc, 'sys_pip_check_rc': sys_pip_check_rc, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'mdb_dpkg': mdb_dpkg, 'mdb_cli_ver': mdb_cli_ver, 'mdb_dump_ver': mdb_dump_ver, 'pdf_deps': pdf_deps, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
             )
             probe_res = run_cmd(
                 [
@@ -588,6 +602,59 @@ def main() -> int:
                 runtime_info["pruned_present"] == [],
                 [],
                 runtime_info["pruned_present"],
+            )
+            if expected_mariadb_deb_ver:
+                mdb_expected_map = {
+                    k: expected_mariadb_deb_ver
+                    for k in (
+                        "mariadb-common",
+                        "libmariadb3",
+                        "mariadb-client-core",
+                        "mariadb-client",
+                    )
+                }
+                mdb_actual_map = {
+                    k: runtime_info["mdb_dpkg"].get(k) for k in mdb_expected_map
+                }
+                record(
+                    "runtime.security_patch.mariadb_client_packages",
+                    mdb_actual_map == mdb_expected_map
+                    and "11.8.9-MariaDB" in runtime_info["mdb_cli_ver"]
+                    and "11.8.9-MariaDB" in runtime_info["mdb_dump_ver"],
+                    {
+                        "packages": mdb_expected_map,
+                        "cli_substring": "11.8.9-MariaDB",
+                    },
+                    {
+                        "packages": mdb_actual_map,
+                        "mariadb_cli": runtime_info["mdb_cli_ver"],
+                        "mariadb_dump": runtime_info["mdb_dump_ver"],
+                    },
+                )
+            if not expected_install_chromium:
+                record(
+                    "runtime.security_patch.chromium_and_libxml2_absent",
+                    runtime_info["mdb_dpkg"].get("chromium-headless-shell") is None
+                    and runtime_info["mdb_dpkg"].get("libxml2") is None,
+                    {"chromium-headless-shell": None, "libxml2": None},
+                    {
+                        "chromium-headless-shell": runtime_info["mdb_dpkg"].get(
+                            "chromium-headless-shell"
+                        ),
+                        "libxml2": runtime_info["mdb_dpkg"].get("libxml2"),
+                    },
+                )
+            record(
+                "runtime.pdf_and_db_dependencies",
+                "0.12.6.1" in runtime_info["pdf_deps"]["wkhtmltopdf_cli"]
+                and runtime_info["pdf_deps"]["weasyprint"] == "70.0"
+                and runtime_info["pdf_deps"]["fontconfig_dejavu_sans"] is True,
+                {
+                    "wkhtmltopdf_contains": "0.12.6.1",
+                    "weasyprint": "70.0",
+                    "fontconfig_dejavu_sans": True,
+                },
+                runtime_info["pdf_deps"],
             )
 
             cskh_by_name = {
@@ -931,6 +998,149 @@ def main() -> int:
                 {"logout": st_logout, "post_logout_cskh": st_after_logout},
             )
 
+            # 5b. MariaDB 11.8.9 backup -> mutate/delete -> restore -> migrate roundtrip
+            probe_vi_org = (
+                "Đối tác Nhân sự Việt Nam — Kiểm thử Sao lưu MariaDB 11.8.9 ₫"
+            )
+            seed_backup_py = (
+                "import glob, gzip, json, os, subprocess, frappe; "
+                f"site = {args.site_name!r}; "
+                f"org_val = {probe_vi_org!r}; "
+                "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites'); "
+                "frappe.connect(); "
+                "frappe.set_user('Administrator'); "
+                "lead = frappe.get_doc({'doctype': 'CRM Lead', 'first_name': 'Nguyễn Văn', 'last_name': 'Khôi', 'organization': org_val, 'lead_owner': 'Administrator'}).insert(ignore_permissions=True); "
+                "lead_name = lead.name; "
+                "frappe.db.commit(); "
+                "frappe.destroy(); "
+                "subprocess.run(['bench', '--site', site, 'backup', '--with-files'], cwd='/home/frappe/frappe-bench', check=True, capture_output=True, text=True); "
+                "bdir = f'/home/frappe/frappe-bench/sites/{site}/private/backups'; "
+                "sql_files = sorted(glob.glob(f'{bdir}/*-database.sql.gz')); "
+                "assert sql_files, f'No sql.gz backup created in {bdir}'; "
+                "latest_sql = sql_files[-1]; "
+                "with gzip.open(latest_sql, 'rb') as gz:\n"
+                "    sample_hdr = gz.read(256).decode('utf-8', errors='replace')\n"
+                "sql_size = os.path.getsize(latest_sql); "
+                "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites'); "
+                "frappe.connect(); "
+                "frappe.set_user('Administrator'); "
+                "frappe.delete_doc('CRM Lead', lead_name, force=True, ignore_permissions=True); "
+                "frappe.db.commit(); "
+                "exists_after_delete = bool(frappe.db.exists('CRM Lead', lead_name)); "
+                "frappe.destroy(); "
+                "print(json.dumps({'lead_name': lead_name, 'backup_sql_path': latest_sql, 'backup_sql_bytes': sql_size, 'dump_header_sample': sample_hdr[:120], 'exists_after_delete': exists_after_delete}))"
+            )
+            seed_bkp_res = run_cmd(
+                [
+                    *compose_base,
+                    "exec",
+                    "-T",
+                    "backend",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "-c",
+                    seed_backup_py,
+                ],
+                env=compose_env,
+                timeout=180,
+            )
+            bkp_stage = json.loads(seed_bkp_res.stdout.strip().splitlines()[-1])
+
+            run_cmd(
+                [*compose_base, "stop", "queue-short", "scheduler"],
+                env=compose_env,
+                timeout=60,
+            )
+            exec_backend(
+                "set -euo pipefail; cd /home/frappe/frappe-bench; "
+                'bench --site "$VERIFY_SITE" --force restore "$VERIFY_BACKUP_SQL" --db-root-password "$VERIFY_DB_ROOT_PW"; '
+                'bench --site "$VERIFY_SITE" migrate; '
+                'bench --site "$VERIFY_SITE" clear-cache',
+                {
+                    **secret_env,
+                    "VERIFY_BACKUP_SQL": str(bkp_stage["backup_sql_path"]),
+                },
+            )
+            run_cmd(
+                [*compose_base, "up", "-d", "queue-short", "scheduler"],
+                env=compose_env,
+                timeout=60,
+            )
+            run_cmd(
+                [
+                    *compose_base,
+                    "restart",
+                    "backend",
+                    "websocket",
+                    "queue-short",
+                    "scheduler",
+                ],
+                env=compose_env,
+                timeout=120,
+            )
+            wait_for_http_ping(args.port, args.site_name, timeout_sec=90)
+
+            verify_restore_py = (
+                "import json, subprocess, frappe; "
+                f"site = {args.site_name!r}; "
+                f"lead_name = {bkp_stage['lead_name']!r}; "
+                "frappe.init(site=site, sites_path='/home/frappe/frappe-bench/sites'); "
+                "frappe.connect(); "
+                "frappe.set_user('Administrator'); "
+                "restored = frappe.db.get_value('CRM Lead', lead_name, ['first_name', 'last_name', 'organization'], as_dict=True); "
+                "cskh_cnt = frappe.db.count('DocType', filters=[['name', 'like', 'CSKH %']]); "
+                "if restored:\n"
+                "    frappe.delete_doc('CRM Lead', lead_name, force=True, ignore_permissions=True)\n"
+                "    frappe.db.commit()\n"
+                "frappe.destroy(); "
+                "apps_after = json.loads(subprocess.check_output(['bench', '--site', site, 'list-apps', '--format', 'json'], text=True)).get(site); "
+                "print(json.dumps({'restored_lead': restored, 'cskh_doctype_count_after_restore_migrate': cskh_cnt, 'list_apps_after_restore_migrate': apps_after}))"
+            )
+            ver_rest_res = run_cmd(
+                [
+                    *compose_base,
+                    "exec",
+                    "-T",
+                    "backend",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "-c",
+                    verify_restore_py,
+                ],
+                env=compose_env,
+                timeout=90,
+            )
+            rest_stage = json.loads(ver_rest_res.stdout.strip().splitlines()[-1])
+            restored_lead = rest_stage.get("restored_lead") or {}
+            backup_restore_audit = {
+                "backup_sql_bytes": bkp_stage["backup_sql_bytes"],
+                "dump_header_sample": bkp_stage["dump_header_sample"],
+                "deleted_before_restore": bkp_stage["exists_after_delete"] is False,
+                "restored_lead": restored_lead,
+                "cskh_doctype_count_after_restore_migrate": rest_stage[
+                    "cskh_doctype_count_after_restore_migrate"
+                ],
+                "list_apps_after_restore_migrate": rest_stage[
+                    "list_apps_after_restore_migrate"
+                ],
+            }
+            record(
+                "runtime.backup_restore_and_migrate_roundtrip",
+                int(bkp_stage["backup_sql_bytes"]) > 1000
+                and bkp_stage["exists_after_delete"] is False
+                and restored_lead.get("first_name") == "Nguyễn Văn"
+                and restored_lead.get("last_name") == "Khôi"
+                and restored_lead.get("organization") == probe_vi_org
+                and rest_stage["list_apps_after_restore_migrate"] == expected_load_order
+                and int(rest_stage["cskh_doctype_count_after_restore_migrate"]) >= 22,
+                {
+                    "deleted_before_restore": True,
+                    "restored_first_name": "Nguyễn Văn",
+                    "restored_last_name": "Khôi",
+                    "restored_organization": probe_vi_org,
+                    "list_apps": expected_load_order,
+                },
+                backup_restore_audit,
+            )
+
             # 6. Check background worker/scheduler/websocket container health
             ps_after = run_cmd(
                 [*compose_base, "ps", "--format", "json"], env=compose_env
@@ -1022,6 +1232,11 @@ def main() -> int:
                     "pruned_unused_apt_packages_present": runtime_info[
                         "pruned_present"
                     ],
+                    "mariadb_and_xml2_dpkg": runtime_info["mdb_dpkg"],
+                    "mariadb_cli_version": runtime_info["mdb_cli_ver"],
+                    "mariadb_dump_version": runtime_info["mdb_dump_ver"],
+                    "pdf_and_db_dependencies": runtime_info["pdf_deps"],
+                    "backup_restore_and_migrate_roundtrip": backup_restore_audit,
                 },
                 "upstream_revisions": {
                     "frappe": runtime_info["frappe_sha"],

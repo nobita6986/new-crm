@@ -97,7 +97,11 @@ services:
         bench set-config -g redis_queue "redis://$$REDIS_QUEUE"
         bench set-config -g redis_socketio "redis://$$REDIS_QUEUE"
         bench set-config -gp socketio_port "$$SOCKETIO_PORT"
-        bench set-config -g chromium_path /usr/lib/chromium/chromium-headless-shell
+        if [ -x /usr/lib/chromium/chromium-headless-shell ]; then
+          bench set-config -g chromium_path /usr/lib/chromium/chromium-headless-shell
+        else
+          python3 -c 'import json, pathlib; p = pathlib.Path("sites/common_site_config.json"); d = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}; d.pop("chromium_path", None); p.write_text(json.dumps(d, indent=1) + "\n", encoding="utf-8")'
+        fi
     environment:
       DB_HOST: db
       DB_PORT: "3306"
