@@ -196,6 +196,51 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
                 found = mod._cskh_get_element(tree, "header")
                 self.assertIsNotNone(found)
                 self.assertEqual(found.element_tag, "header")
+
+                # Verify WeasyPrint 70+ URLFetcher / URLFetcherResponse compatibility (no default_url_fetcher)
+                wp_mod = types.ModuleType("weasyprint")
+                wp_urls_mod = types.ModuleType("weasyprint.urls")
+
+                class _FakeURLFetcher:
+                    def __init__(self, fail_on_errors=False, **_kw):
+                        self._fail_on_errors = fail_on_errors
+
+                    def fetch(self, url, headers=None):
+                        return ("DATA_FETCH", url)
+
+                class _FakeURLFetcherResponse:
+                    def __init__(self, url, body=None, headers=None, status=200):
+                        self.url = url
+                        self.body = body
+                        self.headers = headers or {}
+                        self.status = status
+
+                wp_urls_mod.URLFetcher = _FakeURLFetcher  # type: ignore[attr-defined]
+                wp_urls_mod.URLFetcherResponse = _FakeURLFetcherResponse  # type: ignore[attr-defined]
+                saved_wp = {
+                    k: sys.modules.get(k) for k in ("weasyprint", "weasyprint.urls")
+                }
+                sys.modules["weasyprint"] = wp_mod
+                sys.modules["weasyprint.urls"] = wp_urls_mod
+                try:
+                    fetcher = mod._make_weasyprint_url_fetcher(wp_mod)
+                    self.assertIsInstance(fetcher, _FakeURLFetcher)
+                    resp = fetcher.fetch("http://p4-smoke.localhost/files/badge.png")
+                    self.assertIsInstance(resp, _FakeURLFetcherResponse)
+                    self.assertEqual(resp.status, 200)
+                    self.assertEqual(resp.body, png_bytes)
+                    self.assertEqual(
+                        fetcher.fetch("data:image/png;base64,AA=="),
+                        ("DATA_FETCH", "data:image/png;base64,AA=="),
+                    )
+                    with self.assertRaises(ValueError):
+                        fetcher.fetch("https://evil.example.invalid/ssrf.png")
+                finally:
+                    for k, v in saved_wp.items():
+                        if v is None:
+                            sys.modules.pop(k, None)
+                        else:
+                            sys.modules[k] = v
             finally:
                 for k, v in saved.items():
                     if v is None:

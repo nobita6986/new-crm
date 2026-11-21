@@ -263,18 +263,46 @@ def _cskh_get_element(boxes, element: str):
 	return None
 
 
-def _make_weasyprint_url_fetcher(default_fetcher):
-	def _fetcher(url: str, timeout: int = 10, ssl_context=None):
-		cleaned = (url or "").strip()
-		if cleaned.startswith("data:"):
-			return default_fetcher(cleaned, timeout=timeout, ssl_context=ssl_context)
-		resolved = _resolve_same_site_resource(cleaned, include_private_files=True)
-		if resolved is not None:
-			raw_bytes, mime, _ = resolved
-			return {"string": raw_bytes, "mime_type": mime}
-		raise ValueError(f"Blocked non-local or missing PDF resource URL in isolated runtime: {cleaned}")
+def _make_weasyprint_url_fetcher(weasyprint_mod):
+	"""Build a local-only URL fetcher compatible with WeasyPrint 70+ (`URLFetcher`) and older APIs."""
+	try:
+		from weasyprint.urls import URLFetcher, URLFetcherResponse
 
-	return _fetcher
+		class _LocalSafeWeasyPrintURLFetcher(URLFetcher):
+			def fetch(self, url, headers=None):
+				cleaned = (url or "").strip()
+				if cleaned.startswith("data:"):
+					return super().fetch(cleaned, headers=headers)
+				resolved = _resolve_same_site_resource(cleaned, include_private_files=True)
+				if resolved is not None:
+					raw_bytes, mime, _ = resolved
+					return URLFetcherResponse(
+						cleaned,
+						body=raw_bytes,
+						headers={"Content-Type": mime},
+						status=200,
+					)
+				raise ValueError(
+					f"Blocked non-local or missing PDF resource URL in isolated runtime: {cleaned}"
+				)
+
+		return _LocalSafeWeasyPrintURLFetcher(fail_on_errors=False)
+	except ImportError:
+		default_fetcher = getattr(weasyprint_mod, "default_url_fetcher", None)
+		if default_fetcher is None:
+			return None
+
+		def _legacy_fetcher(url: str, timeout: int = 10, ssl_context=None):
+			cleaned = (url or "").strip()
+			if cleaned.startswith("data:"):
+				return default_fetcher(cleaned, timeout=timeout, ssl_context=ssl_context)
+			resolved = _resolve_same_site_resource(cleaned, include_private_files=True)
+			if resolved is not None:
+				raw_bytes, mime, _ = resolved
+				return {"string": raw_bytes, "mime_type": mime}
+			raise ValueError(f"Blocked non-local or missing PDF resource URL in isolated runtime: {cleaned}")
+
+		return _legacy_fetcher
 
 
 def ensure_pdf_runtime_hooks(*_args, **_kwargs) -> None:
@@ -311,25 +339,30 @@ def ensure_pdf_runtime_hooks(*_args, **_kwargs) -> None:
 	try:
 		import frappe.utils.weasyprint as frappe_weasyprint
 		import weasyprint
+	except ImportError:
+		frappe_weasyprint = None
+		weasyprint = None
 
+	if frappe_weasyprint is not None and weasyprint is not None:
 		frappe_weasyprint.PrintFormatGenerator.get_element = staticmethod(_cskh_get_element)
 		orig_import_wp = frappe_weasyprint.import_weasyprint
 		if not getattr(orig_import_wp, "_cskh_pdf_wrapped", False):
-			safe_fetcher = _make_weasyprint_url_fetcher(weasyprint.default_url_fetcher)
+			safe_fetcher = _make_weasyprint_url_fetcher(weasyprint)
 
 			def _wrapped_import_weasyprint():
 				html_cls, css_cls = orig_import_wp()
 
 				def _html_factory(*args, **kwargs):
-					kwargs.setdefault("url_fetcher", safe_fetcher)
+					if isinstance(kwargs.get("string"), str):
+						kwargs["string"] = inline_local_pdf_assets(kwargs["string"])
+					if safe_fetcher is not None:
+						kwargs.setdefault("url_fetcher", safe_fetcher)
 					return html_cls(*args, **kwargs)
 
 				return _html_factory, css_cls
 
 			_wrapped_import_weasyprint._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
 			frappe_weasyprint.import_weasyprint = _wrapped_import_weasyprint
-	except Exception:
-		pass
 
 	_HOOKS_INSTALLED = True
 
