@@ -188,6 +188,28 @@ _DELETE_ONLY_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 	"CSKH Work Item": (DOMAIN_WORK_ITEM,),
 }
 
+_SQL_DML_TABLE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = tuple(
+	(
+		f"tab{dt}".lower(),
+		_SET_VALUE_DOCTYPE_DOMAINS.get(dt, ()),
+		tuple(
+			dict.fromkeys(_SET_VALUE_DOCTYPE_DOMAINS.get(dt, ()) + _DELETE_ONLY_DOCTYPE_DOMAINS.get(dt, ()))
+		),
+	)
+	for dt in sorted(set(_SET_VALUE_DOCTYPE_DOMAINS) | set(_DELETE_ONLY_DOCTYPE_DOMAINS))
+)
+_SQL_MUTATION_PREFIXES = ("insert", "update", "delete", "replac", "trunca", "alter ")
+
+
+def _orm_hook_depth_delta(delta: int) -> int:
+	local = getattr(frappe, "local", None)
+	if local is None:
+		return 0
+	prev = int(getattr(local, "_cskh_orm_hook_depth", 0) or 0)
+	local._cskh_orm_hook_depth = max(0, prev + delta)
+	return prev
+
+
 _SCHEMA_INVALIDATION_DOCTYPES = frozenset(("DocType", "Custom Field", "Property Setter", "DocField"))
 _USER_PERMISSION_DOCTYPES = frozenset(
 	("User", "Role", "Has Role", "User Permission", "CRM Sales Hierarchy", "CSKH Team Membership History")
@@ -218,7 +240,11 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 	if callable(orig_set_value) and not getattr(orig_set_value, "_cskh_cache_wrapped", False):
 
 		def _wrapped_set_value(self, dt, dn, field, val=None, *args, **kwargs):
-			res = orig_set_value(self, dt, dn, field, val, *args, **kwargs)
+			_orm_hook_depth_delta(1)
+			try:
+				res = orig_set_value(self, dt, dn, field, val, *args, **kwargs)
+			finally:
+				_orm_hook_depth_delta(-1)
 			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(dt) if dt else "")
 			if doms:
 				bump_cache_domain(*doms)
@@ -231,7 +257,11 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 	if callable(orig_set_single) and not getattr(orig_set_single, "_cskh_cache_wrapped", False):
 
 		def _wrapped_set_single_value(self, doctype, fieldname, value=None, *args, **kwargs):
-			res = orig_set_single(self, doctype, fieldname, value, *args, **kwargs)
+			_orm_hook_depth_delta(1)
+			try:
+				res = orig_set_single(self, doctype, fieldname, value, *args, **kwargs)
+			finally:
+				_orm_hook_depth_delta(-1)
 			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(doctype) if doctype else "")
 			if doms:
 				bump_cache_domain(*doms)
@@ -244,7 +274,11 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 	if callable(orig_db_delete) and not getattr(orig_db_delete, "_cskh_cache_wrapped", False):
 
 		def _wrapped_db_delete(self, doctype: str, *args, **kwargs):
-			res = orig_db_delete(self, doctype, *args, **kwargs)
+			_orm_hook_depth_delta(1)
+			try:
+				res = orig_db_delete(self, doctype, *args, **kwargs)
+			finally:
+				_orm_hook_depth_delta(-1)
 			dt_key = str(doctype) if doctype else ""
 			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(dt_key, ()) + _DELETE_ONLY_DOCTYPE_DOMAINS.get(dt_key, ())
 			if doms:
@@ -258,7 +292,11 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 	if callable(orig_bulk_insert) and not getattr(orig_bulk_insert, "_cskh_cache_wrapped", False):
 
 		def _wrapped_bulk_insert(self, doctype: str, *args, **kwargs):
-			res = orig_bulk_insert(self, doctype, *args, **kwargs)
+			_orm_hook_depth_delta(1)
+			try:
+				res = orig_bulk_insert(self, doctype, *args, **kwargs)
+			finally:
+				_orm_hook_depth_delta(-1)
 			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(doctype) if doctype else "")
 			if doms:
 				bump_cache_domain(*doms)
@@ -266,6 +304,40 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 
 		_wrapped_bulk_insert._cskh_cache_wrapped = True  # type: ignore[attr-defined]
 		db_cls.bulk_insert = _wrapped_bulk_insert  # type: ignore[attr-defined]
+
+	orig_sql = db_cls.__dict__.get("sql")
+	if callable(orig_sql) and not getattr(orig_sql, "_cskh_cache_wrapped", False):
+
+		def _wrapped_sql(self, query, *args, **kwargs):
+			if not isinstance(query, str):
+				return orig_sql(self, query, *args, **kwargs)
+			q_s = query.lstrip()
+			kw = q_s[:7].lower()
+			if not kw.startswith(_SQL_MUTATION_PREFIXES):
+				return orig_sql(self, query, *args, **kwargs)
+			prev_depth = _orm_hook_depth_delta(1)
+			try:
+				res = orig_sql(self, query, *args, **kwargs)
+			finally:
+				_orm_hook_depth_delta(-1)
+			if kw.startswith("alter "):
+				_SCHEMA_LRU.clear()
+				return res
+			if prev_depth == 0:
+				is_del = kw.startswith(("delete", "trunca"))
+				q_low = q_s.lower()
+				b_doms: list[str] = []
+				for tab_low, w_doms, d_doms in _SQL_DML_TABLE_RULES:
+					if tab_low in q_low:
+						doms = d_doms if is_del else w_doms
+						if doms:
+							b_doms.extend(doms)
+				if b_doms:
+					bump_cache_domain(*b_doms)
+			return res
+
+		_wrapped_sql._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+		db_cls.sql = _wrapped_sql  # type: ignore[attr-defined]
 
 	orig_sql_ddl = db_cls.__dict__.get("sql_ddl")
 	if callable(orig_sql_ddl) and not getattr(orig_sql_ddl, "_cskh_cache_wrapped", False):
@@ -353,7 +425,11 @@ def _ensure_mutation_hooks_installed() -> None:
 				cur_db = getattr(frappe, "db", None)
 				if cur_db is not None and type(cur_db) not in _DB_INSTANCE_HOOKED_TYPES:
 					_wrap_db_class_set_value(type(cur_db))
-				res = orig_db_insert(self, *args, **kwargs)
+				_orm_hook_depth_delta(1)
+				try:
+					res = orig_db_insert(self, *args, **kwargs)
+				finally:
+					_orm_hook_depth_delta(-1)
 				doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(getattr(self, "doctype", "") or ""))
 				if doms:
 					bump_cache_domain(*doms)
@@ -369,7 +445,11 @@ def _ensure_mutation_hooks_installed() -> None:
 				cur_db = getattr(frappe, "db", None)
 				if cur_db is not None and type(cur_db) not in _DB_INSTANCE_HOOKED_TYPES:
 					_wrap_db_class_set_value(type(cur_db))
-				res = orig_db_update(self, *args, **kwargs)
+				_orm_hook_depth_delta(1)
+				try:
+					res = orig_db_update(self, *args, **kwargs)
+				finally:
+					_orm_hook_depth_delta(-1)
 				doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(getattr(self, "doctype", "") or ""))
 				if doms:
 					bump_cache_domain(*doms)
@@ -382,7 +462,11 @@ def _ensure_mutation_hooks_installed() -> None:
 		if callable(orig_delete_doc) and not getattr(orig_delete_doc, "_cskh_cache_wrapped", False):
 
 			def _wrapped_delete_doc(doctype=None, *args, **kwargs):
-				res = orig_delete_doc(doctype, *args, **kwargs)
+				_orm_hook_depth_delta(1)
+				try:
+					res = orig_delete_doc(doctype, *args, **kwargs)
+				finally:
+					_orm_hook_depth_delta(-1)
 				dts = doctype if isinstance(doctype, list | tuple | set) else (doctype,)
 				b_doms: list[str] = []
 				for dt in dts:

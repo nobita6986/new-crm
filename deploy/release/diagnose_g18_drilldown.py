@@ -1711,10 +1711,11 @@ try:
             for s, c in frappe.db.sql("select status, count(*) from `tabCSKH Dirty Scope` group by status")
         }
     elif action == "restore_clean_s1":
+        from crm_cskh.services.errors import RecomputeInProgress
         runtime_cache.set_cross_process_diag_mode(probe_enabled=False, disable_coalesce=False)
         runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
         import time as _t
-        dl = _t.monotonic() + 90.0
+        dl = _t.monotonic() + 240.0
         while _t.monotonic() < dl:
             rem = frappe.db.sql(
                 "select count(*) from `tabCSKH Dirty Scope` where status in ('pending', 'processing')"
@@ -1724,7 +1725,7 @@ try:
             )[0][0]
             if int(rem or 0) == 0 and int(running or 0) == 0:
                 break
-            _t.sleep(0.5)
+            _t.sleep(1.0)
             frappe.db.commit()
         frappe.db.sql(
             "update `tabCSKH Contact Attempt` set invalid_phone_snapshot = 0, "
@@ -1734,7 +1735,20 @@ try:
         )
         frappe.db.sql("delete from `tabCSKH Dirty Scope`")
         frappe.db.commit()
-        execute_kpi_recompute(resolve_period_spec("monthly", "2026-10"), run_mode="full", actor="Administrator")
+        for _retry in range(60):
+            try:
+                execute_kpi_recompute(
+                    resolve_period_spec("monthly", "2026-10"),
+                    run_mode="full",
+                    actor="Administrator",
+                )
+                break
+            except RecomputeInProgress:
+                if _retry == 59:
+                    raise
+                _t.sleep(2.5)
+                frappe.db.commit()
+        frappe.db.sql("delete from `tabCSKH Dirty Scope`")
         frappe.db.commit()
         frappe.clear_cache()
     print("STAMPEDE_CTRL_JSON:" + json.dumps(out, default=str))
@@ -1808,7 +1822,7 @@ def _exec_stampede_ctrl(
         check=False,
         capture_output=True,
         text=True,
-        timeout=180,
+        timeout=360,
     )
     if proc.returncode != 0:
         raise RuntimeError(
@@ -2006,14 +2020,6 @@ def _run_api05b_stampede_before_after_suite(
             "dirty_2026_10_mutation",
         ),
         (
-            "API05B_BOD_c12_dirty_2026_10_concurrent_worker",
-            path_comp,
-            bod_cookie,
-            12,
-            48,
-            "dirty_2026_10_enqueue_worker",
-        ),
-        (
             "RBAC_team_leader_c12_dirty_2026_10",
             path_team,
             leader_cookie,
@@ -2029,6 +2035,14 @@ def _run_api05b_stampede_before_after_suite(
             36,
             "dirty_2026_10_mutation",
         ),
+        (
+            "API05B_BOD_c12_dirty_2026_10_concurrent_worker",
+            path_comp,
+            bod_cookie,
+            12,
+            48,
+            "dirty_2026_10_enqueue_worker",
+        ),
     ]
 
     before_waves: dict[str, object] = {}
@@ -2037,14 +2051,6 @@ def _run_api05b_stampede_before_after_suite(
 
     try:
         for sc_name, sc_path, sc_cookie, sc_conc, sc_reqs, sc_reset in scenarios_spec:
-            if sc_reset == "dirty_2026_10_enqueue_worker":
-                # Ensure clean S1 before worker-overlap wave
-                _exec_stampede_ctrl(
-                    compose_base=compose_base,
-                    compose_env=compose_env,
-                    site_name=site_name,
-                    cmd_payload={"action": "restore_clean_s1"},
-                )
             bw = _run_single_probed_wave(
                 wave_id=f"BEFORE_{sc_name}",
                 path=sc_path,
@@ -2064,13 +2070,6 @@ def _run_api05b_stampede_before_after_suite(
         )
 
         for sc_name, sc_path, sc_cookie, sc_conc, sc_reqs, sc_reset in scenarios_spec:
-            if sc_reset == "dirty_2026_10_enqueue_worker":
-                _exec_stampede_ctrl(
-                    compose_base=compose_base,
-                    compose_env=compose_env,
-                    site_name=site_name,
-                    cmd_payload={"action": "restore_clean_s1"},
-                )
             aw = _run_single_probed_wave(
                 wave_id=f"AFTER_{sc_name}",
                 path=sc_path,

@@ -1090,6 +1090,12 @@ print(json.dumps({"users_seeded": len(users), "team_nodes": nodes}))
                 else (self.admin_pw if email == "Administrator" else self.actor_pw)
             )
             st, body = sess.login(email, pw)
+            for _attempt in range(5):
+                if st == 200 or "Module Core not found" not in str(body):
+                    break
+                self.exec_site_python("import frappe; frappe.clear_cache()")
+                time.sleep(1.5)
+                st, body = sess.login(email, pw)
             if st != 200:
                 raise RuntimeError(
                     f"Actor {label} ({email}) login failed ({st}): {body}"

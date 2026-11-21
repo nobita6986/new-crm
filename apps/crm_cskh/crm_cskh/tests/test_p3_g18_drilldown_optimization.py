@@ -1462,8 +1462,8 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 	def test_api05b_cross_process_coalescing_cold_warm_dirty_worker_and_rbac_scopes(self):
 		"""Verify cross-Gunicorn-process & c=12/c=40 coalescing across cold/warm/dirty/worker & RBAC scopes."""
 		frappe.set_user("Administrator")
-		base_dt = datetime(2099, 7, 15, 9, 0, 0)
-		m_key = "2099-07"
+		base_dt = datetime(2026, 7, 15, 9, 0, 0)
+		m_key = "2026-07"
 		orig_tmh = frappe.get_all(
 			"CSKH Team Membership History",
 			fields=["name", "effective_from"],
@@ -1475,7 +1475,7 @@ class TestP3G18DrilldownOptimization(P3TestCase):
 		try:
 			frappe.db.sql(
 				"update `tabCSKH Team Membership History` set effective_from = %s",
-				(datetime(2099, 7, 1, 0, 0, 0),),
+				(datetime(2026, 1, 1, 0, 0, 0),),
 			)
 			frappe.db.commit()
 
