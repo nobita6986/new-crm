@@ -1009,43 +1009,45 @@ def main() -> int:
             probe_vi_org = (
                 "Đối tác Nhân sự Việt Nam — Kiểm thử Sao lưu MariaDB 11.8.9 ₫"
             )
-            seed_backup_py = (
-                "import glob, gzip, json, os, shutil, subprocess, frappe; "
-                f"site = {args.site_name!r}; "
-                f"org_val = {probe_vi_org!r}; "
-                "os.chdir('/home/frappe/frappe-bench/sites'); "
-                "frappe.init(site=site, sites_path='.'); "
-                "frappe.connect(); "
-                "frappe.set_user('Administrator'); "
-                "os.makedirs(frappe.get_site_path('public', 'files'), exist_ok=True); "
-                "os.makedirs(frappe.get_site_path('private', 'files'), exist_ok=True); "
-                "lead = frappe.get_doc({'doctype': 'CRM Lead', 'first_name': 'Nguyễn Văn', 'last_name': 'Khôi', 'organization': org_val, 'lead_owner': 'Administrator'}).insert(ignore_permissions=True); "
-                "lead_name = lead.name; "
-                "frappe.db.commit(); "
-                "frappe.destroy(); "
-                "bkp_proc = subprocess.run(['bench', '--site', site, 'backup', '--with-files'], cwd='/home/frappe/frappe-bench', capture_output=True, text=True); "
-                "assert bkp_proc.returncode == 0, f'bench backup failed: {bkp_proc.stderr}\\n{bkp_proc.stdout}'; "
-                "bdir = f'/home/frappe/frappe-bench/sites/{site}/private/backups'; "
-                "sql_files = sorted(glob.glob(f'{bdir}/*-database.sql.gz')); "
-                "priv_files = sorted(glob.glob(f'{bdir}/*-private-files.tar')); "
-                "pub_files = sorted([p for p in glob.glob(f'{bdir}/*-files.tar') if not p.endswith('-private-files.tar')]); "
-                "assert sql_files and priv_files and pub_files, f'Missing backup artifacts in {bdir}'; "
-                "latest_sql, latest_priv, latest_pub = sql_files[-1], priv_files[-1], pub_files[-1]; "
-                "shutil.copy2(latest_sql, '/tmp/cskh-verify-db.sql.gz'); "
-                "shutil.copy2(latest_priv, '/tmp/cskh-verify-priv.tar'); "
-                "shutil.copy2(latest_pub, '/tmp/cskh-verify-pub.tar'); "
-                "with gzip.open(latest_sql, 'rb') as gz:\n"
-                "    sample_hdr = gz.read(256).decode('utf-8', errors='replace')\n"
-                "sql_size = os.path.getsize(latest_sql); "
-                "os.chdir('/home/frappe/frappe-bench/sites'); "
-                "frappe.init(site=site, sites_path='.'); "
-                "frappe.connect(); "
-                "frappe.set_user('Administrator'); "
-                "frappe.delete_doc('CRM Lead', lead_name, force=True, ignore_permissions=True); "
-                "frappe.db.commit(); "
-                "exists_after_delete = bool(frappe.db.exists('CRM Lead', lead_name)); "
-                "frappe.destroy(); "
-                "print(json.dumps({'lead_name': lead_name, 'backup_sql_bytes': sql_size, 'dump_header_sample': sample_hdr[:120], 'exists_after_delete': exists_after_delete}))"
+            seed_backup_py = "\n".join(
+                [
+                    "import glob, gzip, json, os, shutil, subprocess, frappe",
+                    f"site = {args.site_name!r}",
+                    f"org_val = {probe_vi_org!r}",
+                    "os.chdir('/home/frappe/frappe-bench/sites')",
+                    "frappe.init(site=site, sites_path='.')",
+                    "frappe.connect()",
+                    "frappe.set_user('Administrator')",
+                    "os.makedirs(frappe.get_site_path('public', 'files'), exist_ok=True)",
+                    "os.makedirs(frappe.get_site_path('private', 'files'), exist_ok=True)",
+                    "lead = frappe.get_doc({'doctype': 'CRM Lead', 'first_name': 'Nguyễn Văn', 'last_name': 'Khôi', 'organization': org_val, 'lead_owner': 'Administrator'}).insert(ignore_permissions=True)",
+                    "lead_name = lead.name",
+                    "frappe.db.commit()",
+                    "frappe.destroy()",
+                    "bkp_proc = subprocess.run(['bench', '--site', site, 'backup', '--with-files'], cwd='/home/frappe/frappe-bench', capture_output=True, text=True)",
+                    "assert bkp_proc.returncode == 0, f'bench backup failed: {bkp_proc.stderr}\\n{bkp_proc.stdout}'",
+                    "bdir = f'/home/frappe/frappe-bench/sites/{site}/private/backups'",
+                    "sql_files = sorted(glob.glob(f'{bdir}/*-database.sql.gz'))",
+                    "priv_files = sorted(glob.glob(f'{bdir}/*-private-files.tar'))",
+                    "pub_files = sorted([p for p in glob.glob(f'{bdir}/*-files.tar') if not p.endswith('-private-files.tar')])",
+                    "assert sql_files and priv_files and pub_files, f'Missing backup artifacts in {bdir}'",
+                    "latest_sql, latest_priv, latest_pub = sql_files[-1], priv_files[-1], pub_files[-1]",
+                    "shutil.copy2(latest_sql, '/tmp/cskh-verify-db.sql.gz')",
+                    "shutil.copy2(latest_priv, '/tmp/cskh-verify-priv.tar')",
+                    "shutil.copy2(latest_pub, '/tmp/cskh-verify-pub.tar')",
+                    "with gzip.open(latest_sql, 'rb') as gz:",
+                    "    sample_hdr = gz.read(256).decode('utf-8', errors='replace')",
+                    "sql_size = os.path.getsize(latest_sql)",
+                    "os.chdir('/home/frappe/frappe-bench/sites')",
+                    "frappe.init(site=site, sites_path='.')",
+                    "frappe.connect()",
+                    "frappe.set_user('Administrator')",
+                    "frappe.delete_doc('CRM Lead', lead_name, force=True, ignore_permissions=True)",
+                    "frappe.db.commit()",
+                    "exists_after_delete = bool(frappe.db.exists('CRM Lead', lead_name))",
+                    "frappe.destroy()",
+                    "print(json.dumps({'lead_name': lead_name, 'backup_sql_bytes': sql_size, 'dump_header_sample': sample_hdr[:120], 'exists_after_delete': exists_after_delete}))",
+                ]
             )
             seed_bkp_res = run_cmd(
                 [
@@ -1098,22 +1100,24 @@ def main() -> int:
             )
             wait_for_http_ping(args.port, args.site_name, timeout_sec=90)
 
-            verify_restore_py = (
-                "import json, os, subprocess, frappe; "
-                f"site = {args.site_name!r}; "
-                f"lead_name = {bkp_stage['lead_name']!r}; "
-                "os.chdir('/home/frappe/frappe-bench/sites'); "
-                "frappe.init(site=site, sites_path='.'); "
-                "frappe.connect(); "
-                "frappe.set_user('Administrator'); "
-                "restored = frappe.db.get_value('CRM Lead', lead_name, ['first_name', 'last_name', 'organization'], as_dict=True); "
-                "cskh_cnt = frappe.db.count('DocType', filters=[['name', 'like', 'CSKH %']]); "
-                "if restored:\n"
-                "    frappe.delete_doc('CRM Lead', lead_name, force=True, ignore_permissions=True)\n"
-                "    frappe.db.commit()\n"
-                "frappe.destroy(); "
-                "apps_after = json.loads(subprocess.check_output(['bench', '--site', site, 'list-apps', '--format', 'json'], cwd='/home/frappe/frappe-bench', text=True)).get(site); "
-                "print(json.dumps({'restored_lead': restored, 'cskh_doctype_count_after_restore_migrate': cskh_cnt, 'list_apps_after_restore_migrate': apps_after}))"
+            verify_restore_py = "\n".join(
+                [
+                    "import json, os, subprocess, frappe",
+                    f"site = {args.site_name!r}",
+                    f"lead_name = {bkp_stage['lead_name']!r}",
+                    "os.chdir('/home/frappe/frappe-bench/sites')",
+                    "frappe.init(site=site, sites_path='.')",
+                    "frappe.connect()",
+                    "frappe.set_user('Administrator')",
+                    "restored = frappe.db.get_value('CRM Lead', lead_name, ['first_name', 'last_name', 'organization'], as_dict=True)",
+                    "cskh_cnt = frappe.db.count('DocType', filters=[['name', 'like', 'CSKH %']])",
+                    "if restored:",
+                    "    frappe.delete_doc('CRM Lead', lead_name, force=True, ignore_permissions=True)",
+                    "    frappe.db.commit()",
+                    "frappe.destroy()",
+                    "apps_after = json.loads(subprocess.check_output(['bench', '--site', site, 'list-apps', '--format', 'json'], cwd='/home/frappe/frappe-bench', text=True)).get(site)",
+                    "print(json.dumps({'restored_lead': restored, 'cskh_doctype_count_after_restore_migrate': cskh_cnt, 'list_apps_after_restore_migrate': apps_after}))",
+                ]
             )
             ver_rest_res = run_cmd(
                 [

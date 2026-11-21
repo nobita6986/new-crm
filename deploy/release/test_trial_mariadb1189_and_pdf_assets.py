@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import ast
 import base64
 import importlib.util
 import json
@@ -98,6 +99,37 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
             "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg", cfile
         )
         self.assertEqual(exc_doc.get("exceptions"), [])
+
+    def test_all_embedded_python_probes_in_clean_site_and_smoke_compile_cleanly(
+        self,
+    ) -> None:
+        dummy_ns = {
+            "args": types.SimpleNamespace(site_name="p4-clean-verify.localhost"),
+            "probe_vi_org": "Đối tác Nhân sự",
+            "bkp_stage": {"lead_name": "CRM-LEAD-0001"},
+        }
+        for rel in (
+            "deploy/images/verify_clean_site.py",
+            "deploy/compose/scripts/run_isolated_smoke.py",
+        ):
+            src = (REPO_ROOT / rel).read_text(encoding="utf-8")
+            mod_ast = ast.parse(src, filename=rel)
+            checked = 0
+            for node in ast.walk(mod_ast):
+                if not isinstance(node, ast.Assign):
+                    continue
+                for tgt in node.targets:
+                    if isinstance(tgt, ast.Name) and tgt.id.endswith("_py"):
+                        expr_code = compile(
+                            ast.Expression(node.value), filename=rel, mode="eval"
+                        )
+                        rendered = eval(
+                            expr_code, {"__builtins__": __builtins__}, dummy_ns
+                        )
+                        self.assertIsInstance(rendered, str)
+                        ast.parse(rendered, filename=f"{rel}:{tgt.id}")
+                        checked += 1
+            self.assertGreaterEqual(checked, 3, rel)
 
     def test_pdf_assets_inlines_same_site_css_and_images_and_blocks_traversal(
         self,
