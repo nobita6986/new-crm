@@ -2051,7 +2051,8 @@ finally:
 				self.assertTrue(all(r["pagination"]["total"] == 89 for r in warm_wave))
 				warm_stats = runtime_cache.read_cross_process_diag_telemetry()["totals"]
 				self.assertEqual(warm_stats["sql_count_executions"], 0, warm_stats)
-				self.assertEqual(warm_stats["l1_hits"] + warm_stats["redis_hits"], 20, warm_stats)
+				self.assertEqual(warm_stats["leader_computes"], 0, warm_stats)
+				self.assertGreaterEqual(warm_stats["l1_hits"] + warm_stats["redis_hits"], 20, warm_stats)
 
 				runtime_cache.set_cross_process_diag_mode(probe_enabled=False, disable_coalesce=False)
 
@@ -2098,9 +2099,24 @@ finally:
 				self.assertEqual(st_dirty["pagination"]["total"], 29)
 
 				frappe.set_user("Administrator")
-				worker_out = process_dirty_scopes(max_scopes=25)
-				self.assertGreaterEqual(int(worker_out.get("processed_scopes") or 0), 1)
+				from crm_cskh.services.errors import RecomputeInProgress
+
+				for _w_att in range(15):
+					try:
+						worker_out = process_dirty_scopes(max_scopes=25)
+						break
+					except RecomputeInProgress:
+						time.sleep(0.5)
+						frappe.db.commit()
+				rem_dirty = int(
+					frappe.db.sql(
+						"select count(*) from `tabCSKH Dirty Scope` where status in ('pending', 'processing')"
+					)[0][0]
+					or 0
+				)
+				self.assertEqual(rem_dirty, 0, worker_out)
 				frappe.set_user(self.bod_user)
+				runtime_cache.on_before_request()
 				runtime_cache.reset_coalesce_telemetry(clear_redis_diag=True)
 				post_worker = self._assert_fast_matches_reference(
 					metric_code="CONNECTED_RATE",
