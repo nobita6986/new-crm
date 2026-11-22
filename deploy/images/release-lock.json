@@ -48,7 +48,7 @@
     "pyjwt_version": "2.15.1",
     "pillow_version": "13.0.0",
     "mariadb_client_debian_version": "1:11.8.9+ds-0+deb13u1",
-    "mariadb_client_debian_source": "debian-stable trixie/main (PGP InRelease Signed-By debian-archive-keyring.gpg + SHA-256 verified)",
+    "mariadb_client_debian_source": "debian-stable trixie/main (PGP InRelease Signed-By debian-archive-keyring.pgp + SHA-256 verified)",
     "mariadb_client_amd64_sha256": {
       "mariadb-common": "6e7b81b9edd56b40830e04b7fbe9711c76d7d6657199486a1ee59938cf54a2a4",
       "libmariadb3": "450b99a4f4434de071e4980c75ade41ed432392f3fd223b0d8baf97fc8eb95aa",

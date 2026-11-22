@@ -97,7 +97,7 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
         self.assertIn("ARG INSTALL_CHROMIUM=false", cfile)
         self.assertIn("ARG MARIADB_DEB_VERSION=1:11.8.9+ds-0+deb13u1", cfile)
         self.assertIn(
-            "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg", cfile
+            "Signed-By: /usr/share/keyrings/debian-archive-keyring.pgp", cfile
         )
         self.assertNotIn("proposed-updates", cfile.lower())
         self.assertNotIn("proposed-updates", json.dumps(lock).lower())
