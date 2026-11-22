@@ -7,6 +7,7 @@ import ast
 import base64
 import importlib.util
 import json
+import re
 import sys
 import tempfile
 import types
@@ -98,7 +99,38 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
         self.assertIn(
             "Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg", cfile
         )
+        self.assertNotIn("proposed-updates", cfile.lower())
+        self.assertNotIn("proposed-updates", json.dumps(lock).lower())
+        self.assertIn(
+            "debian-stable trixie/main",
+            lock["security_patches"]["mariadb_client_debian_source"],
+        )
         self.assertEqual(exc_doc.get("exceptions"), [])
+
+        # AST-parse every inline python -c '...' script in Containerfile
+        py_c_matches = re.findall(r"python3?\s+-c\s+'([^']+)'", cfile)
+        self.assertGreaterEqual(len(py_c_matches), 4)
+        for idx, snippet in enumerate(py_c_matches):
+            ast.parse(snippet, filename=f"Containerfile:python_c_{idx}")
+
+    def test_release_signing_secret_name_and_existing_digest_binding_sync(self) -> None:
+        cand_wf = (
+            REPO_ROOT / ".github" / "workflows" / "p4-candidate-verify.yml"
+        ).read_text(encoding="utf-8")
+        rel_wf = (REPO_ROOT / ".github" / "workflows" / "p4-release.yml").read_text(
+            encoding="utf-8"
+        )
+        legacy_wrong_name = "CSKH_" + "RELEASE_SIGNING_PRIVATE_KEY"
+        for wf_path in sorted((REPO_ROOT / ".github" / "workflows").glob("*.yml")):
+            self.assertNotIn(
+                legacy_wrong_name,
+                wf_path.read_text(encoding="utf-8"),
+                wf_path.name,
+            )
+        self.assertIn("RELEASE_SIGNING_PRIVATE_KEY", cand_wf)
+        self.assertIn("RELEASE_SIGNING_PRIVATE_KEY", rel_wf)
+        self.assertIn("existing_app_image_digest", rel_wf)
+        self.assertIn("deploy_to_staging", rel_wf)
 
     def test_all_embedded_python_probes_in_clean_site_and_smoke_compile_cleanly(
         self,

@@ -463,6 +463,8 @@ def main() -> int:
                 "frappe_navbar = Path('/home/frappe/frappe-bench/apps/frappe/frappe/templates/includes/navbar/navbar.html').read_text(); "
                 "frappe_doc = Path('/home/frappe/frappe-bench/apps/frappe/frappe/templates/doc.html').read_text(); "
                 "manifest = json.loads(Path('/home/frappe/frappe-bench/release-metadata/build-manifest.json').read_text()); "
+                "mdb_prov_path = Path('/home/frappe/frappe-bench/release-metadata/mariadb-stable-apt-provenance.json'); "
+                "mdb_prov = json.loads(mdb_prov_path.read_text()) if mdb_prov_path.is_file() else None; "
                 "assets_map = json.loads(Path('/home/frappe/frappe-bench/sites/assets/assets.json').read_text()); "
                 "modules_txt = [x.strip() for x in Path('/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/modules.txt').read_text().splitlines() if x.strip()]; "
                 "export_json = json.loads(Path('/home/frappe/frappe-bench/apps/crm_cskh/crm_cskh/crm_cskh/doctype/cskh_export_job/cskh_export_job.json').read_text()); "
@@ -478,7 +480,7 @@ def main() -> int:
                 "Image.new('RGB', (32, 32), (16, 64, 128)).save(img_buf, format='PNG'); "
                 "opt_bytes = optimize_image(img_buf.getvalue(), 'image/png', max_width=16, max_height=16); "
                 "pruned_present = []\n"
-                "for pkg in ('restic', 'libpq-dev', 'postgresql-client', 'gcc', 'build-essential', 'libmariadb-dev'):\n"
+                "for pkg in ('restic', 'libpq-dev', 'postgresql-client', 'gcc', 'g++', 'make', 'dpkg-dev', 'build-essential', 'pkg-config', 'libcairo2-dev', 'libpango1.0-dev', 'libmariadb-dev', 'wget', 'tk8.6-dev'):\n"
                 "    p = subprocess.run(['dpkg-query', '-W', '-f=${Status}\\n', pkg], capture_output=True, text=True)\n"
                 "    if p.returncode == 0 and 'install ok installed' in p.stdout:\n"
                 "        pruned_present.append(pkg)\n"
@@ -500,7 +502,7 @@ def main() -> int:
                 "export_table_exists = bool(frappe.db.sql(\"SHOW TABLES LIKE 'tabCSKH Export Job'\")); "
                 "dev_mode = bool(frappe.conf.get('developer_mode')); "
                 "frappe.destroy(); "
-                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'frappe_pyproject_diff': f_pyproject_diff, 'bench_pip_check_rc': bench_pip_check_rc, 'sys_pip_check_rc': sys_pip_check_rc, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'mdb_dpkg': mdb_dpkg, 'mdb_cli_ver': mdb_cli_ver, 'mdb_dump_ver': mdb_dump_ver, 'pdf_deps': pdf_deps, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
+                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'frappe_pyproject_diff': f_pyproject_diff, 'bench_pip_check_rc': bench_pip_check_rc, 'sys_pip_check_rc': sys_pip_check_rc, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'mdb_prov': mdb_prov, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'mdb_dpkg': mdb_dpkg, 'mdb_cli_ver': mdb_cli_ver, 'mdb_dump_ver': mdb_dump_ver, 'pdf_deps': pdf_deps, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
             )
             probe_res = run_cmd(
                 [
@@ -637,6 +639,37 @@ def main() -> int:
                         "mariadb_cli": runtime_info["mdb_cli_ver"],
                         "mariadb_dump": runtime_info["mdb_dump_ver"],
                     },
+                )
+                mdb_prov_doc = runtime_info.get("mdb_prov") or {}
+                mdb_prov_pkgs = mdb_prov_doc.get("packages") or {}
+                exp_5_pkgs = {
+                    "mariadb-common",
+                    "libmariadb3",
+                    "mariadb-client-core",
+                    "mariadb-client",
+                    "libmariadb-dev",
+                }
+                record(
+                    "runtime.security_patch.mariadb_stable_apt_provenance",
+                    mdb_prov_doc.get("trixie_inrelease", {}).get("suite") == "stable"
+                    and mdb_prov_doc.get("trixie_inrelease", {}).get(
+                        "pgp_signed_header_verified"
+                    )
+                    is True
+                    and set(mdb_prov_pkgs) == exp_5_pkgs
+                    and all(
+                        mdb_prov_pkgs[k].get("version") == expected_mariadb_deb_ver
+                        and "trixie/main" in str(mdb_prov_pkgs[k].get("apt_policy", ""))
+                        and "proposed"
+                        not in str(mdb_prov_pkgs[k].get("apt_policy", "")).lower()
+                        for k in exp_5_pkgs
+                    ),
+                    {
+                        "suite": "stable",
+                        "packages": sorted(exp_5_pkgs),
+                        "version": expected_mariadb_deb_ver,
+                    },
+                    mdb_prov_doc,
                 )
             if not expected_install_chromium:
                 record(
@@ -1257,6 +1290,7 @@ def main() -> int:
                         "pruned_present"
                     ],
                     "mariadb_and_xml2_dpkg": runtime_info["mdb_dpkg"],
+                    "mariadb_stable_apt_provenance": runtime_info.get("mdb_prov"),
                     "mariadb_cli_version": runtime_info["mdb_cli_ver"],
                     "mariadb_dump_version": runtime_info["mdb_dump_ver"],
                     "pdf_and_db_dependencies": runtime_info["pdf_deps"],

@@ -48,7 +48,7 @@
     "pyjwt_version": "2.15.1",
     "pillow_version": "13.0.0",
     "mariadb_client_debian_version": "1:11.8.9+ds-0+deb13u1",
-    "mariadb_client_debian_source": "trixie-proposed-updates (PGP InRelease + SHA-256 verified)",
+    "mariadb_client_debian_source": "debian-stable trixie/main (PGP InRelease Signed-By debian-archive-keyring.gpg + SHA-256 verified)",
     "mariadb_client_amd64_sha256": {
       "mariadb-common": "6e7b81b9edd56b40830e04b7fbe9711c76d7d6657199486a1ee59938cf54a2a4",
       "libmariadb3": "450b99a4f4434de071e4980c75ade41ed432392f3fd223b0d8baf97fc8eb95aa",
@@ -104,8 +104,8 @@
       "declared_app_version": "0.0.1",
       "identity_rule": "Identify release exclusively by source_commit_sha + crm_cskh_tree_sha + OCI image digest (never by 0.0.1 alone).",
       "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
-      "apps_tree_sha": "c1744ee45bfc1c4df702b56ab96735d9bbfed934",
-      "crm_cskh_tree_sha": "0b6c60c3ac444e7ff4bb85679bb357b1b7e1380f"
+      "apps_tree_sha": "384544e349b415799a46a674b26f039ffc9d1180",
+      "crm_cskh_tree_sha": "afa4226a43d0c35d068dd5ba77811998c3621121"
     }
   },
   "infra_images": {

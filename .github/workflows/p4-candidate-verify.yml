@@ -358,7 +358,7 @@ jobs:
               "signed_manifest_relpath": manifest_rel,
               "signing_key_provenance": (
                   "ephemeral_ci_ed25519_keypair (private key destroyed immediately after signing; "
-                  "use p4-release.yml with protected CSKH_RELEASE_SIGNING_PRIVATE_KEY for formal Go-Live cutover)"
+                  "use p4-release.yml with protected RELEASE_SIGNING_PRIVATE_KEY for formal Go-Live cutover)"
               ),
               "identifier_taxonomy": {
                   "local_image_id": {

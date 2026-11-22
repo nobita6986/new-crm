@@ -12,6 +12,16 @@ on:
         required: false
         default: ""
         type: string
+      existing_app_image_digest:
+        description: "Optional pre-verified immutable @sha256 digest to sign directly without rebuilding"
+        required: false
+        default: ""
+        type: string
+      deploy_to_staging:
+        description: "Deploy signed digest to Staging after verify-by-digest (false = sign & verify only)"
+        required: false
+        default: true
+        type: boolean
   push:
     tags:
       - 'release-v*'
@@ -144,29 +154,99 @@ jobs:
             exit 1
           fi
 
-      - name: Build custom production image ONCE (--no-cache) & push to approved registry
+      - name: Build custom production image ONCE (--no-cache) or bind pre-verified @sha256 digest
         id: build
         shell: bash
         env:
           CSKH_REGISTRY_IMAGE: ${{ vars.CSKH_REGISTRY_IMAGE }}
+          EXISTING_APP_IMAGE_DIGEST: ${{ inputs.existing_app_image_digest }}
         run: |
           set -euo pipefail
           BUNDLE="$RUNNER_TEMP/p4-release-bundle"
           ACTUAL_HEAD_SHA="$(git rev-parse HEAD)"
+          ACTUAL_APPS_TREE="$(git rev-parse HEAD:apps)"
+          ACTUAL_CSKH_TREE="$(git rev-parse HEAD:apps/crm_cskh)"
           REL_TAG="0.0.1-${ACTUAL_HEAD_SHA::12}"
 
-          PYTHON_BIN="$RUNNER_TEMP/p4-venv/bin/python" \
-          LOCAL_IMAGE_REPO="${CSKH_REGISTRY_IMAGE}" \
-          REGISTRY_PUSH=true \
-          CSKH_REGISTRY_IMAGE="${CSKH_REGISTRY_IMAGE}" \
-          bash deploy/images/build-image.sh \
-            --no-cache \
-            --out-dir "$BUNDLE/build" \
-            --tag "${REL_TAG}"
+          if [ -n "${EXISTING_APP_IMAGE_DIGEST}" ]; then
+            sh deploy/release/validate_digest_uri.sh "${EXISTING_APP_IMAGE_DIGEST}"
+            test "${EXISTING_APP_IMAGE_DIGEST%@sha256:*}" = "${CSKH_REGISTRY_IMAGE}"
+            docker pull "${EXISTING_APP_IMAGE_DIGEST}"
 
-          APP_IMAGE_DIGEST="$(jq -r '.registry_verification.approved_registry_repo_digest' \
-            "$BUNDLE/build/image-inspect-summary.json")"
-          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+            PULLED_REV="$(docker image inspect -f '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${EXISTING_APP_IMAGE_DIGEST}")"
+            PULLED_APPS="$(docker image inspect -f '{{ index .Config.Labels "io.cskh.apps_tree_sha" }}' "${EXISTING_APP_IMAGE_DIGEST}")"
+            PULLED_CSKH="$(docker image inspect -f '{{ index .Config.Labels "io.cskh.crm_cskh_tree_sha" }}' "${EXISTING_APP_IMAGE_DIGEST}")"
+            test "${PULLED_REV}" = "${ACTUAL_HEAD_SHA}"
+            test "${PULLED_APPS}" = "${ACTUAL_APPS_TREE}"
+            test "${PULLED_CSKH}" = "${ACTUAL_CSKH_TREE}"
+
+            CID="$(docker create "${EXISTING_APP_IMAGE_DIGEST}")"
+            docker cp "${CID}:/home/frappe/frappe-bench/release-metadata/." "$BUNDLE/build/"
+            docker rm -f "${CID}" >/dev/null
+
+            LOCAL_IMAGE_ID="$(docker image inspect -f '{{ .Id }}' "${EXISTING_APP_IMAGE_DIGEST}")"
+            docker image inspect "${EXISTING_APP_IMAGE_DIGEST}" > "$BUNDLE/build/.raw-inspect.json"
+            "$RUNNER_TEMP/p4-venv/bin/python" - "$BUNDLE/build/.raw-inspect.json" "$BUNDLE/build/image-inspect-summary.json" "${CSKH_REGISTRY_IMAGE}:${REL_TAG}" "${LOCAL_IMAGE_ID}" "${EXISTING_APP_IMAGE_DIGEST}" <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          raw = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))[0]
+          out_path = Path(sys.argv[2])
+          local_tag, local_id, reg_digest = sys.argv[3:6]
+          summary = {
+              "schema_version": "cskh-image-inspect-v1",
+              "local_image_tag": local_tag,
+              "local_image_id": local_id,
+              "repo_tags": raw.get("RepoTags") or [],
+              "repo_digests": raw.get("RepoDigests") or [reg_digest],
+              "architecture": raw.get("Architecture"),
+              "os": raw.get("Os"),
+              "size_bytes": raw.get("Size"),
+              "user": raw.get("Config", {}).get("User"),
+              "working_dir": raw.get("Config", {}).get("WorkingDir"),
+              "entrypoint": raw.get("Config", {}).get("Entrypoint"),
+              "cmd": raw.get("Config", {}).get("Cmd"),
+              "volumes": sorted((raw.get("Config", {}).get("Volumes") or {}).keys()),
+              "labels": raw.get("Config", {}).get("Labels") or {},
+              "rootfs_layers": (raw.get("RootFS") or {}).get("Layers") or [],
+              "registry_verification": {
+                  "status": "VERIFIED",
+                  "approved_registry_repo_digest": reg_digest,
+                  "blocker": None,
+              },
+              "identifier_taxonomy": {
+                  "local_image_id_class": "oci_image_config_sha256",
+                  "local_image_id": local_id,
+                  "registry_manifest_digest_class": "oci_distribution_manifest_sha256",
+                  "registry_manifest_digest": reg_digest,
+                  "note": "Bound directly to pre-verified @sha256 digest without image rebuild.",
+              },
+              "compose_handoff": {
+                  "APP_IMAGE_for_remote_deploy": reg_digest,
+                  "APP_IMAGE_for_local_isolated_smoke": reg_digest,
+                  "LOCAL_TAG_REFERENCE": local_tag,
+                  "PULL_POLICY_local": "never",
+                  "PULL_POLICY_staging_prod": "always",
+              },
+          }
+          out_path.write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+          PY
+            rm -f "$BUNDLE/build/.raw-inspect.json"
+            APP_IMAGE_DIGEST="${EXISTING_APP_IMAGE_DIGEST}"
+          else
+            PYTHON_BIN="$RUNNER_TEMP/p4-venv/bin/python" \
+            LOCAL_IMAGE_REPO="${CSKH_REGISTRY_IMAGE}" \
+            REGISTRY_PUSH=true \
+            CSKH_REGISTRY_IMAGE="${CSKH_REGISTRY_IMAGE}" \
+            bash deploy/images/build-image.sh \
+              --no-cache \
+              --out-dir "$BUNDLE/build" \
+              --tag "${REL_TAG}"
+
+            APP_IMAGE_DIGEST="$(jq -r '.registry_verification.approved_registry_repo_digest' \
+              "$BUNDLE/build/image-inspect-summary.json")"
+            sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+          fi
 
           echo "app_image_digest=${APP_IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
           echo "actual_head_sha=${ACTUAL_HEAD_SHA}" >> "$GITHUB_OUTPUT"
@@ -459,6 +539,7 @@ jobs:
 
   deploy-staging:
     name: Deploy identical @sha256 digest to Staging & attest running containers (G05)
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.deploy_to_staging != false }}
     needs: [build-once-sign-and-push, verify-by-digest]
     runs-on: ubuntu-24.04
     timeout-minutes: 30
