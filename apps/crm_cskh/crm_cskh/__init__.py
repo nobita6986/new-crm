@@ -8,3 +8,10 @@ try:
 	_runtime_cache._ensure_mutation_hooks_installed()
 except Exception:
 	pass
+
+try:
+	from crm_cskh.services import pdf_hooks as _pdf_hooks
+
+	_pdf_hooks.ensure_pdf_runtime_hooks()
+except Exception:
+	pass

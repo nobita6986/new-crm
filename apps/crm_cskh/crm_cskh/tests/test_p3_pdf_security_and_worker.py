@@ -20,7 +20,10 @@ from __future__ import annotations
 
 import http.server
 import io
+import json
 import os
+import subprocess
+import sys
 import threading
 import unicodedata
 from concurrent.futures import ThreadPoolExecutor
@@ -35,7 +38,7 @@ from frappe.utils.weasyprint import PrintFormatGenerator, import_weasyprint
 from PIL import Image
 from pypdf import PdfReader
 
-from crm_cskh.services import pdf_assets
+from crm_cskh.services import pdf_assets, pdf_hooks
 
 
 def _make_png_bytes(width: int = 48, height: int = 48, color: tuple[int, int, int] = (24, 108, 192)) -> bytes:
@@ -487,7 +490,13 @@ class TestP3PdfSecurityAndWorker(FrappeTestCase):
 
 	def test_background_job_execute_job_runs_before_job_hook_and_renders_safe_pdfs(self):
 		before_job_hooks = list(frappe.get_hooks("before_job") or [])
-		self.assertIn("crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks", before_job_hooks)
+		before_req_hooks = list(frappe.get_hooks("before_request") or [])
+		before_test_hooks = list(frappe.get_hooks("before_tests") or [])
+		on_print_hooks = list(frappe.get_hooks("on_print_pdf") or [])
+		self.assertIn("crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks", before_job_hooks)
+		self.assertIn("crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks", before_req_hooks)
+		self.assertIn("crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks", before_test_hooks)
+		self.assertIn("crm_cskh.services.pdf_hooks.on_print_pdf", on_print_hooks)
 
 		frappe.set_user("Administrator")
 		lead = frappe.get_doc(
@@ -626,3 +635,387 @@ class TestP3PdfSecurityAndWorker(FrappeTestCase):
 				if frappe.db.exists(dt, dn):
 					frappe.delete_doc(dt, dn, force=True, ignore_permissions=True)
 			PrintFormatGenerator.get_element  # keep import active
+
+	def test_non_pdf_jobs_in_fresh_process_do_not_load_pdf_engines_and_measure_fast_hook(self):
+		"""Real fresh child processes executing non-PDF jobs must NOT load WeasyPrint or PDF engines."""
+		sites_dir = str(Path(getattr(frappe.local, "sites_path", ".")).resolve())
+		site_name = str(frappe.local.site)
+
+		probe_code = r"""
+import json, os, sys, time
+import frappe
+from frappe.utils.background_jobs import execute_job
+
+site = sys.argv[1]
+sites_dir = sys.argv[2]
+os.chdir(sites_dir)
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    hooks = list(frappe.get_hooks("before_job") or [])
+    timings = []
+    for h in hooks:
+        t0 = time.perf_counter()
+        fn = frappe.get_attr(h)
+        t1 = time.perf_counter()
+        fn()
+        t2 = time.perf_counter()
+        timings.append({
+            "hook": h,
+            "import_ms": round((t1 - t0) * 1000.0, 3),
+            "call_ms": round((t2 - t1) * 1000.0, 3),
+            "total_ms": round((t2 - t0) * 1000.0, 3),
+        })
+
+    for method_path, jname in (
+        ("frappe.ping", "ut-nonpdf-ping"),
+        ("crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations", "ut-nonpdf-sla"),
+    ):
+        execute_job(
+            site=site,
+            method=method_path,
+            event=None,
+            job_name=jname,
+            kwargs={},
+            user="Administrator",
+            is_async=False,
+        )
+
+    from crm_cskh.services import pdf_hooks
+    monitored = (
+        "weasyprint",
+        "frappe.utils.weasyprint",
+        "frappe.utils.pdf",
+        "pdfkit",
+        "cssutils",
+        "pypdf",
+        "bs4",
+        "crm_cskh.services.pdf_assets",
+    )
+    print("SUBPROC_NONPDF_JSON:" + json.dumps({
+        "before_job_hooks": hooks,
+        "timings": timings,
+        "guard_armed": pdf_hooks.is_pdf_hook_guard_installed(),
+        "loaded_after_non_pdf_jobs": {m: (m in sys.modules) for m in monitored},
+    }))
+finally:
+    frappe.destroy()
+"""
+		proc = subprocess.run(
+			[sys.executable, "-c", probe_code, site_name, sites_dir],
+			capture_output=True,
+			text=True,
+			timeout=60,
+			check=False,
+		)
+		self.assertEqual(
+			proc.returncode, 0, f"Fresh non-PDF subprocess failed:\n{proc.stderr}\n{proc.stdout}"
+		)
+		marker = [
+			ln[len("SUBPROC_NONPDF_JSON:") :]
+			for ln in proc.stdout.splitlines()
+			if ln.startswith("SUBPROC_NONPDF_JSON:")
+		]
+		self.assertTrue(marker, proc.stdout)
+		data = json.loads(marker[-1])
+		self.assertTrue(data["guard_armed"])
+		self.assertIn("crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks", data["before_job_hooks"])
+		for mod_name, was_loaded in data["loaded_after_non_pdf_jobs"].items():
+			self.assertFalse(was_loaded, f"Non-PDF job eagerly imported {mod_name}: {data}")
+		pdf_hook_timings = [
+			t for t in data["timings"] if t["hook"] == "crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks"
+		]
+		self.assertEqual(len(pdf_hook_timings), 1)
+		self.assertLess(float(pdf_hook_timings[0]["total_ms"]), 250.0, pdf_hook_timings[0])
+		self.assertTrue(pdf_hooks.is_pdf_hook_guard_installed())
+
+	def test_first_pdf_call_in_fresh_process_enforces_security_across_http_rq_and_cli_paths(self):
+		"""First PDF engine call in a fresh process must enforce full SSRF/file/RBAC protections."""
+		sites_dir = Path(getattr(frappe.local, "sites_path", ".")).resolve()
+		bench_root = sites_dir.parent
+		site_name = str(frappe.local.site)
+
+		frappe.set_user("Administrator")
+		lead = frappe.get_doc(
+			{
+				"doctype": "CRM Lead",
+				"first_name": "Lê Hoàng",
+				"last_name": "Khởi Tạo Lười",
+				"lead_owner": self.staff_a,
+			}
+		).insert(ignore_permissions=True)
+		priv_file = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "cskh-ut-lazy-first-call-priv.png",
+				"is_private": 1,
+				"attached_to_doctype": "CRM Lead",
+				"attached_to_name": lead.name,
+				"content": _make_png_bytes(52, 52, (25, 130, 90)),
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.commit()
+
+		try:
+			with _ephemeral_ssrf_and_redirect_server() as (probe_origin, hits):
+				# Path A: Fresh process -> first `from weasyprint import HTML, CSS` & `from frappe.utils.pdf import get_pdf`
+				first_use_py = r"""
+import io, json, os, sys
+import frappe
+from pypdf import PdfReader
+
+cfg = json.loads(sys.stdin.read())
+os.chdir(cfg["sites_dir"])
+frappe.init(site=cfg["site_name"], sites_path=".")
+frappe.connect()
+try:
+    # Simulate HTTP before_request / RQ before_job arming lazy hook before any PDF import
+    for h in (frappe.get_hooks("before_request") or []):
+        if "pdf_hooks" in h:
+            frappe.get_attr(h)()
+
+    pre_loaded = {
+        k: (k in sys.modules)
+        for k in ("weasyprint", "frappe.utils.weasyprint", "frappe.utils.pdf", "pdfkit")
+    }
+
+    # 1. Direct `from weasyprint import HTML, CSS` must receive ALREADY-WRAPPED safe factories!
+    from weasyprint import CSS, HTML
+    wp_wrapped = bool(getattr(HTML, "_cskh_pdf_wrapped", False) and getattr(CSS, "_cskh_pdf_wrapped", False))
+    wp_file_blocked = False
+    try:
+        HTML(filename="/etc/hosts")
+    except ValueError:
+        wp_file_blocked = True
+
+    # 2. Direct `import pdfkit` + `from frappe.utils.pdf import get_pdf` must block from_url & SSRF on 1st call!
+    import pdfkit
+    from frappe.utils.pdf import get_pdf
+    pdfkit_url_blocked = False
+    try:
+        pdfkit.from_url(cfg["probe_origin"] + "/ssrf.png", False)
+    except PermissionError:
+        pdfkit_url_blocked = True
+
+    tpl = (
+        '<html><head><style>@import "' + cfg["probe_origin"] + '/evil.css"; '
+        'body { font-family: "DejaVu Sans", sans-serif; }</style></head><body>'
+        '<p>Kiểm định lần gọi PDF đầu tiên</p>'
+        '<img src="' + cfg["priv_url"] + '" width="52" height="52"/>'
+        '<img src="' + cfg["probe_origin"] + '/redirect"/>'
+        '<img src="//evil.example.invalid/files/p.png"/>'
+        '<img src="file:///etc/passwd"/>'
+        '</body></html>'
+    )
+
+    def _has_52(pdf_bytes):
+        rdr = PdfReader(io.BytesIO(pdf_bytes))
+        for p in rdr.pages:
+            res = p.get("/Resources")
+            res = res.get_object() if hasattr(res, "get_object") else (res or {})
+            xd = res.get("/XObject")
+            xd = xd.get_object() if hasattr(xd, "get_object") else (xd or {})
+            for _, xr in xd.items():
+                xo = xr.get_object() if hasattr(xr, "get_object") else xr
+                if str(xo.get("/Subtype") or "") == "/Image" and int(xo.get("/Width") or 0) == 52:
+                    return True
+        return False
+
+    frappe.set_user(cfg["staff_b"])
+    b_wk = _has_52(get_pdf(tpl))
+    b_wp = _has_52(HTML(string=tpl, base_url="/etc/").write_pdf(
+        stylesheets=[CSS(string='@import "' + cfg["probe_origin"] + '/redirect";', base_url="file:///etc/")]
+    ))
+
+    frappe.set_user(cfg["staff_a"])
+    a_wk = _has_52(get_pdf(tpl))
+    a_wp = _has_52(HTML(string=tpl).write_pdf())
+
+    print("FIRST_USE_JSON:" + json.dumps({
+        "pre_loaded": pre_loaded,
+        "wp_wrapped": wp_wrapped,
+        "wp_file_blocked": wp_file_blocked,
+        "pdfkit_url_blocked": pdfkit_url_blocked,
+        "staff_b_wk_has_priv": b_wk,
+        "staff_b_wp_has_priv": b_wp,
+        "staff_a_wk_has_priv": a_wk,
+        "staff_a_wp_has_priv": a_wp,
+    }))
+finally:
+    frappe.destroy()
+"""
+				p1 = subprocess.run(
+					[sys.executable, "-c", first_use_py],
+					input=json.dumps(
+						{
+							"sites_dir": str(sites_dir),
+							"site_name": site_name,
+							"probe_origin": probe_origin,
+							"priv_url": priv_file.file_url,
+							"staff_a": self.staff_a,
+							"staff_b": self.staff_b,
+						}
+					),
+					capture_output=True,
+					text=True,
+					timeout=90,
+					check=False,
+				)
+				self.assertEqual(p1.returncode, 0, f"First-use subprocess failed:\n{p1.stderr}\n{p1.stdout}")
+				m1 = [
+					ln[len("FIRST_USE_JSON:") :]
+					for ln in p1.stdout.splitlines()
+					if ln.startswith("FIRST_USE_JSON:")
+				]
+				self.assertTrue(m1, p1.stdout)
+				r1 = json.loads(m1[-1])
+				self.assertEqual(
+					r1["pre_loaded"],
+					{
+						"weasyprint": False,
+						"frappe.utils.weasyprint": False,
+						"frappe.utils.pdf": False,
+						"pdfkit": False,
+					},
+				)
+				self.assertTrue(r1["wp_wrapped"])
+				self.assertTrue(r1["wp_file_blocked"])
+				self.assertTrue(r1["pdfkit_url_blocked"])
+				self.assertFalse(r1["staff_b_wk_has_priv"])
+				self.assertFalse(r1["staff_b_wp_has_priv"])
+				self.assertTrue(r1["staff_a_wk_has_priv"])
+				self.assertTrue(r1["staff_a_wp_has_priv"])
+				self.assertEqual(hits, [], f"First-use subprocess leaked SSRF/redirect requests: {hits}")
+
+				# Path B: Supported CLI `bench --site <site> execute frappe.utils.pdf.get_pdf`
+				cli_html = (
+					f'<html><body><p>CLI PDF</p><img src="{probe_origin}/ssrf.png"/>'
+					f'<img src="{probe_origin}/redirect"/><img src="file:///etc/hosts"/></body></html>'
+				)
+				p_cli = subprocess.run(
+					[
+						sys.executable,
+						"-m",
+						"frappe.utils.bench_helper",
+						"frappe",
+						"--site",
+						site_name,
+						"execute",
+						"frappe.utils.pdf.get_pdf",
+						"--args",
+						json.dumps([cli_html]),
+					],
+					cwd=str(sites_dir),
+					env={
+						**os.environ,
+						"PYTHONPATH": os.pathsep.join(
+							[
+								str(bench_root / "apps" / "frappe"),
+								str(bench_root / "apps" / "crm"),
+								str(bench_root / "apps" / "crm_cskh"),
+							]
+						),
+					},
+					capture_output=True,
+					text=True,
+					timeout=60,
+					check=False,
+				)
+				self.assertEqual(
+					p_cli.returncode,
+					0,
+					f"CLI bench execute get_pdf failed:\n{p_cli.stderr}\n{p_cli.stdout}",
+				)
+				self.assertEqual(hits, [], f"CLI bench execute leaked SSRF/redirect requests: {hits}")
+		finally:
+			frappe.set_user("Administrator")
+			for dt, dn in (("File", priv_file.name), ("CRM Lead", lead.name)):
+				if frappe.db.exists(dt, dn):
+					frappe.delete_doc(dt, dn, force=True, ignore_permissions=True)
+			frappe.db.commit()
+
+	def test_subsequent_and_concurrent_first_time_pdf_calls_in_fresh_process_work_cleanly(self):
+		"""Concurrent multi-threaded first-time + subsequent PDF calls in a fresh process must be race-free."""
+		sites_dir = str(Path(getattr(frappe.local, "sites_path", ".")).resolve())
+		site_name = str(frappe.local.site)
+
+		with _ephemeral_ssrf_and_redirect_server() as (probe_origin, hits):
+			concurrent_py = r"""
+import json, os, sys, threading
+from concurrent.futures import ThreadPoolExecutor
+import frappe
+
+site = sys.argv[1]
+sites_dir = sys.argv[2]
+probe_origin = sys.argv[3]
+os.chdir(sites_dir)
+
+from crm_cskh.services import pdf_hooks
+pdf_hooks.ensure_pdf_runtime_hooks()
+assert "weasyprint" not in sys.modules
+assert "frappe.utils.pdf" not in sys.modules
+
+barrier = threading.Barrier(8)
+html_doc = (
+    '<html><body style="font-family: \'DejaVu Sans\', sans-serif;">'
+    '<p>Kiểm thử đa luồng đồng thời Đặng Quốc Cường</p>'
+    f'<img src="{probe_origin}/ssrf.png"/>'
+    '</body></html>'
+)
+
+def _worker(idx: int) -> dict:
+    frappe.init(site=site, sites_path=".")
+    frappe.connect()
+    try:
+        frappe.set_user("Administrator")
+        barrier.wait(timeout=15)
+        if idx % 2 == 0:
+            from frappe.utils.pdf import get_pdf
+            b1 = get_pdf(html_doc)
+            b2 = get_pdf(html_doc)
+        else:
+            from frappe.utils.weasyprint import import_weasyprint
+            h_cls, c_cls = import_weasyprint()
+            b1 = h_cls(string=html_doc).write_pdf(stylesheets=[c_cls(string="@page { size: A4; }")])
+            b2 = h_cls(string=html_doc).write_pdf()
+        return {
+            "ok_first": b1.startswith(b"%PDF-1.") and b"%%EOF" in b1[-128:],
+            "ok_second": b2.startswith(b"%PDF-1.") and b"%%EOF" in b2[-128:],
+        }
+    finally:
+        frappe.destroy()
+
+with ThreadPoolExecutor(max_workers=8) as pool:
+    outcomes = list(pool.map(_worker, range(8)))
+
+from crm_cskh.services import pdf_assets
+print("CONC_FIRST_JSON:" + json.dumps({
+    "outcomes": outcomes,
+    "wrap_install_count": pdf_assets._WRAP_INSTALL_COUNT,
+}))
+"""
+			proc = subprocess.run(
+				[sys.executable, "-c", concurrent_py, site_name, sites_dir, probe_origin],
+				capture_output=True,
+				text=True,
+				timeout=90,
+				check=False,
+			)
+			self.assertEqual(
+				proc.returncode,
+				0,
+				f"Concurrent first-use subprocess failed:\n{proc.stderr}\n{proc.stdout}",
+			)
+			marker = [
+				ln[len("CONC_FIRST_JSON:") :]
+				for ln in proc.stdout.splitlines()
+				if ln.startswith("CONC_FIRST_JSON:")
+			]
+			self.assertTrue(marker, proc.stdout)
+			payload = json.loads(marker[-1])
+			self.assertEqual(len(payload["outcomes"]), 8)
+			for item in payload["outcomes"]:
+				self.assertTrue(item["ok_first"], payload)
+				self.assertTrue(item["ok_second"], payload)
+			self.assertEqual(payload["wrap_install_count"], 1, payload)
+			self.assertEqual(hits, [], f"Concurrent PDF workers leaked SSRF hits: {hits}")

@@ -29,30 +29,23 @@ Security & functional invariants enforced by this module (`F-TRIAL-PDFSEC-01`, `
 from __future__ import annotations
 
 import base64
-import inspect
 import io
-import mimetypes
 import os
 import re
-import socket
 import stat
 import tempfile
-import threading
-import unicodedata
-import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qs, unquote, urlparse
 
 import frappe
-from bs4 import BeautifulSoup
 
-ET.register_namespace("", "http://www.w3.org/2000/svg")
-ET.register_namespace("xlink", "http://www.w3.org/1999/xlink")
+from crm_cskh.services import pdf_hooks as _pdf_hooks
 
-_HOOKS_LOCK = threading.RLock()
+_HOOKS_LOCK = _pdf_hooks._HOOKS_LOCK
 _HOOKS_INSTALLED = False
 _WRAP_INSTALL_COUNT = 0
+_SVG_ET_INITIALIZED = False
 
 _ORIG_PDFKIT_FROM_STRING: Any = None
 _ORIG_PDFKIT_FROM_URL: Any = None
@@ -63,6 +56,25 @@ _ORIG_GET_COOKIE_OPTIONS: Any = None
 _ORIG_IMPORT_WEASYPRINT: Any = None
 _ORIG_WP_HTML: Any = None
 _ORIG_WP_CSS: Any = None
+_CACHED_WEASYPRINT_SAFE_FETCHER: Any = None
+
+
+def _get_beautiful_soup_cls():
+	from bs4 import BeautifulSoup
+
+	return BeautifulSoup
+
+
+def _get_svg_et():
+	global _SVG_ET_INITIALIZED
+	import xml.etree.ElementTree as ET
+
+	if not _SVG_ET_INITIALIZED:
+		ET.register_namespace("", "http://www.w3.org/2000/svg")
+		ET.register_namespace("xlink", "http://www.w3.org/1999/xlink")
+		_SVG_ET_INITIALIZED = True
+	return ET
+
 
 _MAX_ASSET_BYTES = 25 * 1024 * 1024
 _MAX_CSS_IMPORT_DEPTH = 3
@@ -164,6 +176,8 @@ def _guess_mime(path_or_name: str) -> str:
 	ext = Path(path_or_name).suffix.lower()
 	if ext in _EXTRA_MIME_TYPES:
 		return _EXTRA_MIME_TYPES[ext]
+	import mimetypes
+
 	guessed, _ = mimetypes.guess_type(path_or_name)
 	return guessed or "application/octet-stream"
 
@@ -539,15 +553,16 @@ def _sanitize_svg_bytes(svg_bytes: bytes) -> bytes | None:
 		return None
 	if _SVG_UNSAFE_DECL_RE.search(svg_bytes[:8192]):
 		return None
+	et_mod = _get_svg_et()
 	try:
-		root = ET.fromstring(svg_bytes)
-	except ET.ParseError:
+		root = et_mod.fromstring(svg_bytes)
+	except et_mod.ParseError:
 		return None
 
 	if _local_tag_name(root.tag) != "svg":
 		return None
 
-	def _walk(parent: ET.Element) -> None:
+	def _walk(parent: Any) -> None:
 		for child in list(parent):
 			lname = _local_tag_name(child.tag)
 			if lname in ("script", "foreignobject", "iframe", "embed", "object"):
@@ -589,7 +604,7 @@ def _sanitize_svg_bytes(svg_bytes: bytes) -> bytes | None:
 			)
 
 	_walk(root)
-	return ET.tostring(root, encoding="utf-8")
+	return et_mod.tostring(root, encoding="utf-8")
 
 
 def _encode_safe_image_data_uri(raw_bytes: bytes, mime: str) -> str | None:
@@ -775,7 +790,8 @@ def inline_local_pdf_assets(html: str) -> str:
 	if not html:
 		return html
 
-	soup = BeautifulSoup(html, "html.parser")
+	soup_cls = _get_beautiful_soup_cls()
+	soup = soup_cls(html, "html.parser")
 
 	for bad_tag in list(soup.find_all(_FORBIDDEN_HTML_TAGS)):
 		bad_tag.decompose()
@@ -872,6 +888,8 @@ def _cskh_get_element(boxes, element: str):
 
 def _make_weasyprint_url_fetcher(weasyprint_mod):
 	"""Build a local-only URL fetcher compatible with WeasyPrint 70+ (`URLFetcher`) and older APIs."""
+	import inspect
+
 	try:
 		from weasyprint.urls import URLFetcher, URLFetcherResponse
 
@@ -1092,7 +1110,8 @@ def _guarded_frappe_get_base64_image(src: str) -> str | None:
 def _guarded_frappe_inline_private_images(html: str) -> str:
 	if not html:
 		return html
-	soup = BeautifulSoup(html, "html.parser")
+	soup_cls = _get_beautiful_soup_cls()
+	soup = soup_cls(html, "html.parser")
 	for img in soup.find_all("img"):
 		raw_src = str(img.get("src") or "").strip()
 		if not raw_src:
@@ -1108,121 +1127,183 @@ def _guarded_frappe_get_cookie_options() -> dict[str, Any]:
 	return {}
 
 
-def _install_pdf_runtime_hooks_locked() -> None:
+def _patch_pdfkit_module(pdfkit_mod: Any) -> None:
 	global _WRAP_INSTALL_COUNT
 	global _ORIG_PDFKIT_FROM_STRING, _ORIG_PDFKIT_FROM_URL, _ORIG_PDFKIT_FROM_FILE
+
+	if pdfkit_mod is None:
+		return
+
+	with _HOOKS_LOCK:
+		if hasattr(pdfkit_mod, "from_string") and not getattr(
+			pdfkit_mod.from_string, "_cskh_pdf_wrapped", False
+		):
+			if _ORIG_PDFKIT_FROM_STRING is None:
+				_ORIG_PDFKIT_FROM_STRING = pdfkit_mod.from_string
+
+			def _wrapped_from_string(input_html, *args, **kwargs):
+				rewritten_html = (
+					inline_local_pdf_assets(input_html) if isinstance(input_html, str) else input_html
+				)
+				call_args = list(args)
+				call_kwargs = dict(kwargs)
+				if "options" in call_kwargs or len(call_args) < 2:
+					raw_opts = call_kwargs.get("options")
+					call_kwargs["options"] = _sanitize_wkhtmltopdf_options(
+						raw_opts if isinstance(raw_opts, dict) else {}
+					)
+				elif isinstance(call_args[1], dict):
+					call_args[1] = _sanitize_wkhtmltopdf_options(call_args[1])
+				return _ORIG_PDFKIT_FROM_STRING(rewritten_html, *call_args, **call_kwargs)
+
+			_wrapped_from_string._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+			pdfkit_mod.from_string = _wrapped_from_string
+			_WRAP_INSTALL_COUNT += 1
+
+		for blocked_api_name, orig_slot_name in (
+			("from_url", "_ORIG_PDFKIT_FROM_URL"),
+			("from_file", "_ORIG_PDFKIT_FROM_FILE"),
+		):
+			cur_fn = getattr(pdfkit_mod, blocked_api_name, None)
+			if cur_fn is not None and not getattr(cur_fn, "_cskh_pdf_wrapped", False):
+				if globals()[orig_slot_name] is None:
+					globals()[orig_slot_name] = cur_fn
+
+				def _blocked_pdfkit_call(*_a, _name=blocked_api_name, **_kw):
+					raise PermissionError(
+						f"pdfkit.{_name} is disabled by CSKH PDF security policy; render sanitized HTML strings only"
+					)
+
+				_blocked_pdfkit_call._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+				setattr(pdfkit_mod, blocked_api_name, _blocked_pdfkit_call)
+
+		pdfkit_mod._cskh_module_patched = True
+
+
+def _patch_frappe_pdf_module(frappe_pdf: Any) -> None:
 	global _ORIG_GET_BASE64_IMAGE, _ORIG_INLINE_PRIVATE_IMAGES, _ORIG_GET_COOKIE_OPTIONS
-	global _ORIG_IMPORT_WEASYPRINT, _ORIG_WP_HTML, _ORIG_WP_CSS
 
-	import frappe.utils.pdf as frappe_pdf
+	if frappe_pdf is None:
+		return
 
-	if not getattr(frappe_pdf.pdfkit.from_string, "_cskh_pdf_wrapped", False):
-		if _ORIG_PDFKIT_FROM_STRING is None:
-			_ORIG_PDFKIT_FROM_STRING = frappe_pdf.pdfkit.from_string
+	_patch_pdfkit_module(getattr(frappe_pdf, "pdfkit", None))
 
-		def _wrapped_from_string(input_html, *args, **kwargs):
-			rewritten_html = (
-				inline_local_pdf_assets(input_html) if isinstance(input_html, str) else input_html
-			)
-			call_args = list(args)
-			call_kwargs = dict(kwargs)
-			if "options" in call_kwargs or len(call_args) < 2:
-				raw_opts = call_kwargs.get("options")
-				call_kwargs["options"] = _sanitize_wkhtmltopdf_options(
-					raw_opts if isinstance(raw_opts, dict) else {}
-				)
-			elif isinstance(call_args[1], dict):
-				call_args[1] = _sanitize_wkhtmltopdf_options(call_args[1])
-			return _ORIG_PDFKIT_FROM_STRING(rewritten_html, *call_args, **call_kwargs)
+	with _HOOKS_LOCK:
+		if hasattr(frappe_pdf, "_get_base64_image") and not getattr(
+			frappe_pdf._get_base64_image, "_cskh_pdf_wrapped", False
+		):
+			if _ORIG_GET_BASE64_IMAGE is None:
+				_ORIG_GET_BASE64_IMAGE = frappe_pdf._get_base64_image
+			_guarded_frappe_get_base64_image._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+			frappe_pdf._get_base64_image = _guarded_frappe_get_base64_image
 
-		_wrapped_from_string._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
-		frappe_pdf.pdfkit.from_string = _wrapped_from_string
-		_WRAP_INSTALL_COUNT += 1
+		if hasattr(frappe_pdf, "inline_private_images") and not getattr(
+			frappe_pdf.inline_private_images, "_cskh_pdf_wrapped", False
+		):
+			if _ORIG_INLINE_PRIVATE_IMAGES is None:
+				_ORIG_INLINE_PRIVATE_IMAGES = frappe_pdf.inline_private_images
+			_guarded_frappe_inline_private_images._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+			frappe_pdf.inline_private_images = _guarded_frappe_inline_private_images
 
-	for blocked_api_name, orig_slot_name in (
-		("from_url", "_ORIG_PDFKIT_FROM_URL"),
-		("from_file", "_ORIG_PDFKIT_FROM_FILE"),
-	):
-		cur_fn = getattr(frappe_pdf.pdfkit, blocked_api_name, None)
-		if cur_fn is not None and not getattr(cur_fn, "_cskh_pdf_wrapped", False):
-			if globals()[orig_slot_name] is None:
-				globals()[orig_slot_name] = cur_fn
+		if hasattr(frappe_pdf, "get_cookie_options") and not getattr(
+			frappe_pdf.get_cookie_options, "_cskh_pdf_wrapped", False
+		):
+			if _ORIG_GET_COOKIE_OPTIONS is None:
+				_ORIG_GET_COOKIE_OPTIONS = frappe_pdf.get_cookie_options
+			_guarded_frappe_get_cookie_options._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+			frappe_pdf.get_cookie_options = _guarded_frappe_get_cookie_options
 
-			def _blocked_pdfkit_call(*_a, _name=blocked_api_name, **_kw):
-				raise PermissionError(
-					f"pdfkit.{_name} is disabled by CSKH PDF security policy; render sanitized HTML strings only"
-				)
+		frappe_pdf._cskh_module_patched = True
 
-			_blocked_pdfkit_call._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
-			setattr(frappe_pdf.pdfkit, blocked_api_name, _blocked_pdfkit_call)
 
-	if not getattr(frappe_pdf._get_base64_image, "_cskh_pdf_wrapped", False):
-		if _ORIG_GET_BASE64_IMAGE is None:
-			_ORIG_GET_BASE64_IMAGE = frappe_pdf._get_base64_image
-		_guarded_frappe_get_base64_image._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
-		frappe_pdf._get_base64_image = _guarded_frappe_get_base64_image
+def _patch_weasyprint_module(weasyprint_mod: Any) -> None:
+	global _ORIG_WP_HTML, _ORIG_WP_CSS, _CACHED_WEASYPRINT_SAFE_FETCHER
 
-	if not getattr(frappe_pdf.inline_private_images, "_cskh_pdf_wrapped", False):
-		if _ORIG_INLINE_PRIVATE_IMAGES is None:
-			_ORIG_INLINE_PRIVATE_IMAGES = frappe_pdf.inline_private_images
-		_guarded_frappe_inline_private_images._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
-		frappe_pdf.inline_private_images = _guarded_frappe_inline_private_images
+	if weasyprint_mod is None or not hasattr(weasyprint_mod, "HTML") or not hasattr(weasyprint_mod, "CSS"):
+		return
 
-	if not getattr(frappe_pdf.get_cookie_options, "_cskh_pdf_wrapped", False):
-		if _ORIG_GET_COOKIE_OPTIONS is None:
-			_ORIG_GET_COOKIE_OPTIONS = frappe_pdf.get_cookie_options
-		_guarded_frappe_get_cookie_options._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
-		frappe_pdf.get_cookie_options = _guarded_frappe_get_cookie_options
+	# Build URL fetcher outside `_HOOKS_LOCK` so `from weasyprint.urls import ...` never holds `_HOOKS_LOCK`.
+	safe_fetcher = _make_weasyprint_url_fetcher(weasyprint_mod)
 
-	try:
-		import frappe.utils.weasyprint as frappe_weasyprint
-		import weasyprint
-	except ImportError:
-		frappe_weasyprint = None
-		weasyprint = None
+	with _HOOKS_LOCK:
+		if _ORIG_WP_HTML is None and not getattr(weasyprint_mod.HTML, "_cskh_pdf_wrapped", False):
+			_ORIG_WP_HTML = weasyprint_mod.HTML
+		if _ORIG_WP_CSS is None and not getattr(weasyprint_mod.CSS, "_cskh_pdf_wrapped", False):
+			_ORIG_WP_CSS = weasyprint_mod.CSS
 
-	if frappe_weasyprint is not None and weasyprint is not None:
-		frappe_weasyprint.PrintFormatGenerator.get_element = staticmethod(_cskh_get_element)
-		if _ORIG_WP_HTML is None and not getattr(weasyprint.HTML, "_cskh_pdf_wrapped", False):
-			_ORIG_WP_HTML = weasyprint.HTML
-		if _ORIG_WP_CSS is None and not getattr(weasyprint.CSS, "_cskh_pdf_wrapped", False):
-			_ORIG_WP_CSS = weasyprint.CSS
-
-		safe_fetcher = _make_weasyprint_url_fetcher(weasyprint)
+		_CACHED_WEASYPRINT_SAFE_FETCHER = safe_fetcher
 		if _ORIG_WP_HTML is not None and _ORIG_WP_CSS is not None:
 			safe_html_cls, safe_css_cls = _build_safe_weasyprint_factories(
 				_ORIG_WP_HTML,
 				_ORIG_WP_CSS,
 				safe_fetcher,
 			)
-			if not getattr(weasyprint.HTML, "_cskh_pdf_wrapped", False):
-				weasyprint.HTML = safe_html_cls
-			if not getattr(weasyprint.CSS, "_cskh_pdf_wrapped", False):
-				weasyprint.CSS = safe_css_cls
+			if not getattr(weasyprint_mod.HTML, "_cskh_pdf_wrapped", False):
+				weasyprint_mod.HTML = safe_html_cls
+			if not getattr(weasyprint_mod.CSS, "_cskh_pdf_wrapped", False):
+				weasyprint_mod.CSS = safe_css_cls
 
-		if not getattr(frappe_weasyprint.import_weasyprint, "_cskh_pdf_wrapped", False):
+		weasyprint_mod._cskh_module_patched = True
+
+
+def _patch_frappe_weasyprint_module(frappe_weasyprint: Any) -> None:
+	global _ORIG_IMPORT_WEASYPRINT
+
+	if frappe_weasyprint is None:
+		return
+
+	with _HOOKS_LOCK:
+		if hasattr(frappe_weasyprint, "PrintFormatGenerator"):
+			frappe_weasyprint.PrintFormatGenerator.get_element = staticmethod(_cskh_get_element)
+
+		if hasattr(frappe_weasyprint, "import_weasyprint") and not getattr(
+			frappe_weasyprint.import_weasyprint, "_cskh_pdf_wrapped", False
+		):
 			if _ORIG_IMPORT_WEASYPRINT is None:
 				_ORIG_IMPORT_WEASYPRINT = frappe_weasyprint.import_weasyprint
 
 			def _wrapped_import_weasyprint():
 				raw_html_cls, raw_css_cls = _ORIG_IMPORT_WEASYPRINT()
+				import weasyprint as _wp_mod
+
+				if not getattr(_wp_mod, "_cskh_module_patched", False) or not getattr(
+					_wp_mod.HTML, "_cskh_pdf_wrapped", False
+				):
+					_patch_weasyprint_module(_wp_mod)
+				if getattr(_wp_mod.HTML, "_cskh_pdf_wrapped", False) and getattr(
+					_wp_mod.CSS, "_cskh_pdf_wrapped", False
+				):
+					return _wp_mod.HTML, _wp_mod.CSS
+				fetcher = _CACHED_WEASYPRINT_SAFE_FETCHER or _make_weasyprint_url_fetcher(_wp_mod)
 				base_html_cls = _ORIG_WP_HTML if _ORIG_WP_HTML is not None else raw_html_cls
 				base_css_cls = _ORIG_WP_CSS if _ORIG_WP_CSS is not None else raw_css_cls
-				return _build_safe_weasyprint_factories(base_html_cls, base_css_cls, safe_fetcher)
+				return _build_safe_weasyprint_factories(base_html_cls, base_css_cls, fetcher)
 
 			_wrapped_import_weasyprint._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
 			frappe_weasyprint.import_weasyprint = _wrapped_import_weasyprint
 
+		frappe_weasyprint._cskh_module_patched = True
+
+
+def patch_loaded_pdf_module(fullname: str, module: Any) -> None:
+	"""Idempotently patch a single already-loaded PDF target module without importing others."""
+	if fullname == "pdfkit":
+		_patch_pdfkit_module(module)
+	elif fullname == "frappe.utils.pdf":
+		_patch_frappe_pdf_module(module)
+	elif fullname == "frappe.utils.weasyprint":
+		_patch_frappe_weasyprint_module(module)
+	elif fullname == "weasyprint":
+		_patch_weasyprint_module(module)
+
 
 def ensure_pdf_runtime_hooks(*_args, **_kwargs) -> None:
-	"""Thread-safely and idempotently install PDF security/asset hooks for `wkhtmltopdf` & `WeasyPrint`."""
+	"""Thread-safely and idempotently arm lazy PDF security hooks without eager engine imports."""
 	global _HOOKS_INSTALLED
-	if _HOOKS_INSTALLED:
+	if _HOOKS_INSTALLED and _pdf_hooks.is_pdf_hook_guard_installed():
 		return
+	_pdf_hooks.ensure_pdf_runtime_hooks(force_recheck=not _HOOKS_INSTALLED)
 	with _HOOKS_LOCK:
-		if _HOOKS_INSTALLED:
-			return
-		_install_pdf_runtime_hooks_locked()
 		_HOOKS_INSTALLED = True
 
 
@@ -1232,6 +1313,8 @@ def on_print_pdf(*_args, **_kwargs) -> None:
 
 
 def _inspect_pdf_bytes_summary(raw_pdf: bytes) -> dict[str, Any]:
+	import unicodedata
+
 	from pypdf import PdfReader
 
 	reader = PdfReader(io.BytesIO(raw_pdf))
@@ -1302,7 +1385,14 @@ def run_rq_pdf_verification_job(
 	result_cache_key: str | None = None,
 ) -> dict[str, Any]:
 	"""Internal non-whitelisted RQ worker job verifying real `before_job` PDF rendering & RBAC."""
-	hooks_preinstalled_by_before_job = bool(_HOOKS_INSTALLED)
+	import socket
+	import sys
+
+	hooks_preinstalled_by_before_job = bool(_pdf_hooks.is_pdf_hook_guard_installed())
+	pre_first_call_modules = {
+		mod_key: (mod_key in sys.modules)
+		for mod_key in ("weasyprint", "frappe.utils.weasyprint", "frappe.utils.pdf", "pdfkit", "pypdf")
+	}
 	ensure_pdf_runtime_hooks()
 
 	from frappe.utils.pdf import get_pdf
@@ -1376,6 +1466,7 @@ def run_rq_pdf_verification_job(
 			"worker_hostname": socket.gethostname(),
 			"worker_pid": os.getpid(),
 			"hooks_preinstalled_by_before_job": hooks_preinstalled_by_before_job,
+			"pre_first_call_modules": pre_first_call_modules,
 			"wkhtmltopdf": _inspect_pdf_bytes_summary(wk_pdf),
 			"weasyprint": _inspect_pdf_bytes_summary(wp_pdf),
 			"private_file_and_ssrf_probe": rbac_probe,

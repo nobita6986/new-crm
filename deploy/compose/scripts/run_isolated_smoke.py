@@ -1652,6 +1652,35 @@ frappe.connect()
 try:
     frappe.set_user("Administrator")
     backend_host = socket.gethostname()
+    conn = get_redis_conn()
+
+    def _wait_job(job_id: str, timeout_sec: float = 75.0) -> tuple[str, str | None]:
+        dl = time.monotonic() + timeout_sec
+        st = "unknown"
+        exc = None
+        while time.monotonic() < dl:
+            fetched = Job.fetch(job_id, connection=conn)
+            st = fetched.get_status(refresh=True)
+            if st in ("finished", "failed", "stopped", "canceled"):
+                exc = fetched.exc_info
+                break
+            time.sleep(0.5)
+        return st, exc
+
+    # 1. Real forked `queue-short` non-PDF RQ job must NOT load WeasyPrint or PDF engines
+    nonpdf_key = f"cskh:smoke:rq_nonpdf:{frappe.generate_hash(length=10)}"
+    nonpdf_job = frappe.enqueue(
+        "crm_cskh.services.pdf_hooks.run_rq_non_pdf_probe_job",
+        queue="short",
+        timeout=60,
+        enqueue_after_commit=False,
+        result_cache_key=nonpdf_key,
+    )
+    nonpdf_status, nonpdf_exc = _wait_job(nonpdf_job.id, 60.0)
+    nonpdf_payload = frappe.cache.get_value(nonpdf_key)
+    frappe.cache.delete_value(nonpdf_key)
+
+    # 2. Real forked `queue-short` PDF RQ job must lazily enforce full security & render 7-dim PDFs
     cache_key = f"cskh:smoke:rq_pdf:{frappe.generate_hash(length=10)}"
     rq_job = frappe.enqueue(
         "crm_cskh.services.pdf_assets.run_rq_pdf_verification_job",
@@ -1668,20 +1697,14 @@ try:
         private_file_url=req["private_badge_url"],
         result_cache_key=cache_key,
     )
-    conn = get_redis_conn()
-    deadline = time.monotonic() + 75.0
-    final_status = "unknown"
-    exc_info = None
-    while time.monotonic() < deadline:
-        fetched = Job.fetch(rq_job.id, connection=conn)
-        final_status = fetched.get_status(refresh=True)
-        if final_status in ("finished", "failed", "stopped", "canceled"):
-            exc_info = fetched.exc_info
-            break
-        time.sleep(0.5)
+    final_status, exc_info = _wait_job(rq_job.id, 75.0)
     worker_payload = frappe.cache.get_value(cache_key)
     frappe.cache.delete_value(cache_key)
     print(json.dumps({
+        "non_pdf_rq_job_id": nonpdf_job.id,
+        "non_pdf_rq_job_status": nonpdf_status,
+        "non_pdf_rq_exc_info": nonpdf_exc,
+        "non_pdf_worker_result": nonpdf_payload,
         "rq_job_id": rq_job.id,
         "rq_job_status": final_status,
         "rq_exc_info": exc_info,
@@ -1721,6 +1744,17 @@ finally:
                 f"RQ worker PDF verification failed: {rq_proc.stderr}\n{rq_proc.stdout}"
             )
         rq_pdf_info = json.loads([ln for ln in rq_proc.stdout.splitlines() if ln.strip()][-1])
+        assert rq_pdf_info["non_pdf_rq_job_status"] == "finished" and not rq_pdf_info["non_pdf_rq_exc_info"], (
+            f"Non-PDF RQ worker probe did not finish cleanly: {rq_pdf_info}"
+        )
+        npres = rq_pdf_info["non_pdf_worker_result"]
+        assert isinstance(npres, dict) and npres.get("status") == "PASS", rq_pdf_info
+        assert npres["worker_hostname"] != rq_pdf_info["backend_hostname"], rq_pdf_info
+        assert npres["hook_guard_armed"] is True, npres
+        assert npres["any_pdf_engine_loaded"] is False, (
+            f"Non-PDF RQ job loaded PDF engines eagerly: {npres}"
+        )
+
         assert rq_pdf_info["rq_job_status"] == "finished" and not rq_pdf_info["rq_exc_info"], (
             f"RQ worker PDF job did not finish cleanly: {rq_pdf_info}"
         )
@@ -1730,6 +1764,9 @@ finally:
             f"Expected separate queue-short container hostname, got {rq_pdf_info}"
         )
         assert wres["hooks_preinstalled_by_before_job"] is True, wres
+        assert all(v is False for v in wres["pre_first_call_modules"].values()), (
+            f"before_job eagerly imported PDF modules before job body: {wres['pre_first_call_modules']}"
+        )
         for eng in ("wkhtmltopdf", "weasyprint"):
             assert wres[eng]["valid_pdf_envelope"] is True, (eng, wres[eng])
             assert wres[eng]["page_count"] >= 3, (eng, wres[eng])

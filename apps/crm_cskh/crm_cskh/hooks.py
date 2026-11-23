@@ -382,16 +382,16 @@ override_whitelisted_methods = {
 before_request = [
 	"crm_cskh.i18n.set_guest_language",
 	"crm_cskh.p1_errors.clear_p1_error_context",
-	"crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks",
+	"crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks",
 ]
 update_website_context = ["crm_cskh.i18n.update_website_context"]
 after_request = ["crm_cskh.errors.normalize_error_response", "crm_cskh.p1_errors.normalize_p1_error_response"]
 
 # Job & Print Events
 # ------------------
-before_job = ["crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks"]
-before_tests = ["crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks"]
-on_print_pdf = ["crm_cskh.services.pdf_assets.on_print_pdf"]
+before_job = ["crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks"]
+before_tests = ["crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks"]
+on_print_pdf = ["crm_cskh.services.pdf_hooks.on_print_pdf"]
 # after_job = ["crm_cskh.utils.after_job"]
 
 # User Data Protection

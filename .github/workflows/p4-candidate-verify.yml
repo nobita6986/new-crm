@@ -646,11 +646,13 @@ jobs:
             --username "${GITHUB_ACTOR_PULL}" \
             --password-stdin
           docker pull "${APP_IMAGE_DIGEST}"
+          docker pull "ghcr.io/nobita6986/crm-cskh@sha256:177df99a51ec07787129e195037b60448c6e4bb0fce292d04f92d05519050b7b"
 
-      - name: Execute isolated S1 suggested-dataset benchmark (zero Owner VPS traffic)
+      - name: Execute isolated S1 suggested-dataset benchmark & controlled Before/After A/B proof (zero Owner VPS traffic)
         shell: bash
         env:
           APP_IMAGE_DIGEST: ${{ inputs.existing_app_image_digest || needs.build-scan-sign-and-push-ghcr.outputs.app_image_digest }}
+          BEFORE_IMAGE_DIGEST: ghcr.io/nobita6986/crm-cskh@sha256:177df99a51ec07787129e195037b60448c6e4bb0fce292d04f92d05519050b7b
         run: |
           set -euo pipefail
           BENCH_OUT="$RUNNER_TEMP/p4-s1-benchmark"
@@ -662,13 +664,26 @@ jobs:
             --port 18880 \
             --out "$BENCH_OUT/benchmark-s1-report.json"
 
-          python3 - "$BENCH_OUT" <<'PY'
+          if [ "${APP_IMAGE_DIGEST}" != "${BEFORE_IMAGE_DIGEST}" ]; then
+            python3 deploy/release/verify_g18_before_job_lazy_ab.py \
+              --confirm-isolated-target \
+              --before-image "${BEFORE_IMAGE_DIGEST}" \
+              --after-image "${APP_IMAGE_DIGEST}" \
+              --resource-variant staging_vps_capped_b_plus_2_5vcpu \
+              --pull-policy never \
+              --port 18882 \
+              --out "$BENCH_OUT/before-after-lazy-hook-ab-report.json"
+          fi
+
+          python3 - "$BENCH_OUT" "${APP_IMAGE_DIGEST}" "${BEFORE_IMAGE_DIGEST}" <<'PY'
           import hashlib
           import json
           import sys
           from pathlib import Path
 
           root = Path(sys.argv[1])
+          after_img = sys.argv[2]
+          before_img = sys.argv[3]
           rpt = json.loads((root / "benchmark-s1-report.json").read_text(encoding="utf-8"))
           s1 = rpt["s1_domain_and_database_benchmark"]
           counts = s1["s1_seeded_counts"]
@@ -678,6 +693,16 @@ jobs:
           assert counts["active_staff_users"] == 40, counts
           assert rpt["isolation_guard"]["owner_vps_touched"] is False
           assert rpt["p4_9_2_acceptance_matrix"]["all_passed"] is True, rpt["p4_9_2_acceptance_matrix"]
+
+          if after_img != before_img:
+              ab_rpt = json.loads((root / "before-after-lazy-hook-ab-report.json").read_text(encoding="utf-8"))
+              assert ab_rpt["verdict"] == "PASS", ab_rpt["comparison"]
+              assert ab_rpt["comparison"]["all_checks_passed"] is True, ab_rpt["comparison"]
+              assert ab_rpt["after"]["rq_short_50_job_burst"]["queue_depths_before_http_waves"] == {
+                  "short": 0,
+                  "default": 0,
+                  "long": 0,
+              }, ab_rpt["after"]["rq_short_50_job_burst"]
 
           sums = []
           for path in sorted(root.rglob("*")):

@@ -746,7 +746,8 @@ def run_live_rehearsal(
             "after_req = [str(x) for x in (frappe.get_hooks('after_request') or [])]\n"
             "before_jb = [str(x) for x in (frappe.get_hooks('before_job') or [])]\n"
             "on_pdf = [str(x) for x in (frappe.get_hooks('on_print_pdf') or [])]\n"
-            "n_job = frappe.enqueue('frappe.ping', queue='short', enqueue_after_commit=False)\n"
+            "nonpdf_key = f'cskh:b2:nonpdf:{frappe.generate_hash(length=8)}'\n"
+            "n_job = frappe.enqueue('crm_cskh.services.pdf_hooks.run_rq_non_pdf_probe_job', queue='short', enqueue_after_commit=False, result_cache_key=nonpdf_key)\n"
             "conn = get_redis_conn()\n"
             "n_job_status = 'unknown'\n"
             "for _ in range(60):\n"
@@ -754,14 +755,17 @@ def run_live_rehearsal(
             "    if n_job_status in ('finished', 'failed', 'stopped', 'canceled'):\n"
             "        break\n"
             "    time.sleep(0.5)\n"
+            "nonpdf_res = frappe.cache.get_value(nonpdf_key) or {}\n"
+            "frappe.cache.delete_value(nonpdf_key)\n"
             "print(json.dumps({\n"
             "  'add_to_apps_screen_names': [str(a.get('name')) for a in add_apps if isinstance(a, dict)],\n"
             "  'has_cskh_sidebar_permission_hook': any('cskh_sidebar' in str(a.get('has_permission', '')) for a in add_apps if isinstance(a, dict)),\n"
             "  'has_cskh_setup_wizard_hook': '/assets/crm_cskh/cskh/setup-wizard.js' in [str(x) for x in setup_req],\n"
-            "  'has_n_pdf_before_request_hook': 'crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks' in before_req,\n"
-            "  'has_n_pdf_before_job_hook': 'crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks' in before_jb,\n"
-            "  'has_n_pdf_on_print_hook': 'crm_cskh.services.pdf_assets.on_print_pdf' in on_pdf,\n"
+            "  'has_n_pdf_before_request_hook': 'crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks' in before_req,\n"
+            "  'has_n_pdf_before_job_hook': 'crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks' in before_jb,\n"
+            "  'has_n_pdf_on_print_hook': 'crm_cskh.services.pdf_hooks.on_print_pdf' in on_pdf,\n"
             "  'n_rq_worker_job_status': n_job_status,\n"
+            "  'n_rq_non_pdf_probe': nonpdf_res,\n"
             "  'after_request': after_req,\n"
             "}))"
         )
@@ -800,6 +804,17 @@ def run_live_rehearsal(
         assert pre_rollback_n_hooks["has_n_pdf_on_print_hook"] is True, (
             pre_rollback_n_hooks
         )
+        assert pre_rollback_n_hooks["n_rq_worker_job_status"] == "finished", (
+            pre_rollback_n_hooks
+        )
+        assert (
+            pre_rollback_n_hooks.get("n_rq_non_pdf_probe", {}).get("hook_guard_armed")
+            is True
+            and pre_rollback_n_hooks.get("n_rq_non_pdf_probe", {}).get(
+                "any_pdf_engine_loaded"
+            )
+            is False
+        ), pre_rollback_n_hooks
         assert pre_rollback_n_hooks["n_rq_worker_job_status"] == "finished", (
             pre_rollback_n_hooks
         )
@@ -941,7 +956,7 @@ def run_live_rehearsal(
             "    'after_request': after_req,\n"
             "    'before_job': before_jb,\n"
             "    'on_print_pdf': on_pdf,\n"
-            "    'has_stale_pdf_assets_hook': any('pdf_assets' in h for h in callable_hooks),\n"
+            "    'has_stale_pdf_assets_hook': any(any(tok in h for tok in ('pdf_assets', 'pdf_hooks')) for h in callable_hooks),\n"
             "    'has_stale_n_after_request_hook': any(any(tok in h for tok in ('cskh_sidebar', 'runtime_cache', 'cskh_renderer')) for h in after_req),\n"
             "    'unresolved_orphan_hooks': unresolved_orphan_hooks,\n"
             "  },\n"

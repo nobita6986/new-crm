@@ -63,6 +63,7 @@ FULL_SUITE_PREFIXES: tuple[str, ...] = (
     "apps/crm_cskh/crm_cskh/patches/",
     "apps/crm_cskh/crm_cskh/permissions",
     "apps/crm_cskh/crm_cskh/services/pdf_assets.py",
+    "apps/crm_cskh/crm_cskh/services/pdf_hooks.py",
     "apps/crm_cskh/crm_cskh/crm_cskh/doctype/",
 )
 

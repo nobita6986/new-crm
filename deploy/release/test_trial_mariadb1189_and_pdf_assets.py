@@ -10,6 +10,7 @@ import io
 import json
 import os
 import re
+import subprocess
 import sys
 import tempfile
 import threading
@@ -31,7 +32,7 @@ def _load_pdf_assets_with_stub_frappe(
     files_db: dict[str, dict[str, object]] | None = None,
     perm_callback=None,
 ):
-    """Load `crm_cskh.services.pdf_assets` against a deterministic stub `frappe` runtime."""
+    """Load `crm_cskh.services.pdf_hooks` + `pdf_assets` against a deterministic stub `frappe` runtime."""
     assert bs4.__version__
     records = files_db if files_db is not None else {}
 
@@ -81,29 +82,64 @@ def _load_pdf_assets_with_stub_frappe(
     stub_frappe.get_doc = _get_doc  # type: ignore[attr-defined]
     stub_frappe.has_permission = _has_permission  # type: ignore[attr-defined]
 
-    saved = {k: sys.modules.get(k) for k in ("frappe", "frappe.utils")}
+    saved_keys = (
+        "frappe",
+        "frappe.utils",
+        "crm_cskh",
+        "crm_cskh.services",
+        "crm_cskh.services.pdf_hooks",
+        "crm_cskh.services.pdf_assets",
+    )
+    saved: dict[str, object] = {k: sys.modules.get(k) for k in saved_keys}
+    saved["__meta_path__"] = list(sys.meta_path)
     sys.modules["frappe"] = stub_frappe
     sys.modules["frappe.utils"] = stub_utils
     try:
+        cskh_pkg = types.ModuleType("crm_cskh")
+        cskh_pkg.__path__ = [str(REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh")]  # type: ignore[attr-defined]
+        services_pkg = types.ModuleType("crm_cskh.services")
+        services_pkg.__path__ = [  # type: ignore[attr-defined]
+            str(REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "services")
+        ]
+        sys.modules["crm_cskh"] = cskh_pkg
+        sys.modules["crm_cskh.services"] = services_pkg
+
+        hooks_path = (
+            REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "services" / "pdf_hooks.py"
+        )
+        hooks_spec = importlib.util.spec_from_file_location(
+            "crm_cskh.services.pdf_hooks", hooks_path
+        )
+        assert hooks_spec and hooks_spec.loader
+        hooks_mod = importlib.util.module_from_spec(hooks_spec)
+        sys.modules["crm_cskh.services.pdf_hooks"] = hooks_mod
+        hooks_spec.loader.exec_module(hooks_mod)
+        services_pkg.pdf_hooks = hooks_mod  # type: ignore[attr-defined]
+
         mod_path = (
             REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "services" / "pdf_assets.py"
         )
-        spec = importlib.util.spec_from_file_location("_ut_pdf_assets", mod_path)
+        spec = importlib.util.spec_from_file_location(
+            "crm_cskh.services.pdf_assets", mod_path
+        )
         assert spec and spec.loader
         mod = importlib.util.module_from_spec(spec)
+        sys.modules["crm_cskh.services.pdf_assets"] = mod
         spec.loader.exec_module(mod)
+        services_pkg.pdf_assets = mod  # type: ignore[attr-defined]
         return mod, stub_frappe, saved
     except Exception:
-        for k, v in saved.items():
-            if v is None:
-                sys.modules.pop(k, None)
-            else:
-                sys.modules[k] = v
+        _restore_modules(saved)
         raise
 
 
 def _restore_modules(saved: dict[str, object]) -> None:
+    orig_mp = saved.get("__meta_path__")
+    if isinstance(orig_mp, list):
+        sys.meta_path[:] = orig_mp
     for k, v in saved.items():
+        if k == "__meta_path__":
+            continue
         if v is None:
             sys.modules.pop(k, None)
         else:
@@ -601,6 +637,181 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
                     _restore_modules(extra_saved)
             finally:
                 _restore_modules(saved)
+
+    def test_lazy_pdf_hooks_zero_eager_imports_and_pre_first_use_meta_path_interception(
+        self,
+    ) -> None:
+        """Verify `pdf_hooks` has near-zero import/call cost and patches engines before first import returns."""
+        hooks_src = (
+            REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "hooks.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'before_job = ["crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks"]',
+            hooks_src,
+        )
+        self.assertIn(
+            '"crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks"',
+            hooks_src,
+        )
+        self.assertIn(
+            'on_print_pdf = ["crm_cskh.services.pdf_hooks.on_print_pdf"]',
+            hooks_src,
+        )
+
+        # Spawn a real clean child Python process to verify zero eager imports & pre-first-use loader patching
+        with tempfile.TemporaryDirectory() as td:
+            fake_sp = Path(td) / "fake_site_packages"
+            (fake_sp / "weasyprint").mkdir(parents=True)
+            (fake_sp / "weasyprint" / "urls.py").write_text(
+                "class URLFetcher:\n"
+                "    def __init__(self, fail_on_errors=False, allow_redirects=True, allowed_protocols=None):\n"
+                "        self.allow_redirects = allow_redirects\n"
+                "        self.allowed_protocols = allowed_protocols\n"
+                "class URLFetcherResponse:\n"
+                "    def __init__(self, url, body=None, headers=None, status=200):\n"
+                "        self.url = url\n"
+                "        self.body = body\n",
+                encoding="utf-8",
+            )
+            (fake_sp / "weasyprint" / "__init__.py").write_text(
+                "class HTML:\n"
+                "    def __init__(self, **kwargs):\n"
+                "        self.kwargs = kwargs\n"
+                "class CSS:\n"
+                "    def __init__(self, **kwargs):\n"
+                "        self.kwargs = kwargs\n",
+                encoding="utf-8",
+            )
+            (fake_sp / "pdfkit").mkdir(parents=True)
+            (fake_sp / "pdfkit" / "__init__.py").write_text(
+                "def from_string(html, *a, **kw):\n"
+                "    return (html, a, kw)\n"
+                "def from_url(*a, **kw):\n"
+                "    return b'UNSAFE'\n"
+                "def from_file(*a, **kw):\n"
+                "    return b'UNSAFE'\n",
+                encoding="utf-8",
+            )
+            (fake_sp / "frappe" / "utils").mkdir(parents=True)
+            (fake_sp / "frappe" / "__init__.py").write_text(
+                "import types\n"
+                "local = types.SimpleNamespace(sites_path='.', site='lazy.localhost', request=None)\n"
+                "session = types.SimpleNamespace(user='Administrator', sid='sid')\n"
+                "get_site_path = lambda *p: '/'.join(('sites', 'lazy.localhost', *p))\n"
+                "get_all = lambda *a, **k: []\n"
+                "has_permission = lambda *a, **k: True\n",
+                encoding="utf-8",
+            )
+            (fake_sp / "frappe" / "utils" / "__init__.py").write_text(
+                "get_url = lambda: 'http://lazy.localhost'\n",
+                encoding="utf-8",
+            )
+            (fake_sp / "frappe" / "utils" / "pdf.py").write_text(
+                "import pdfkit\n"
+                "_get_base64_image = lambda s: 'UNPATCHED'\n"
+                "inline_private_images = lambda h: h\n"
+                "get_cookie_options = lambda: {'cookie-jar': '/tmp/bad.jar'}\n",
+                encoding="utf-8",
+            )
+
+            sub_py = r"""
+import importlib, json, sys, threading, time
+from concurrent.futures import ThreadPoolExecutor
+
+t0 = time.perf_counter()
+pdf_hooks = importlib.import_module("crm_cskh.services.pdf_hooks")
+t1 = time.perf_counter()
+pdf_hooks.ensure_pdf_runtime_hooks()
+t2 = time.perf_counter()
+
+eager_after_hook = {
+    m: (m in sys.modules)
+    for m in (
+        "weasyprint",
+        "pdfkit",
+        "frappe.utils.pdf",
+        "frappe.utils.weasyprint",
+        "bs4",
+        "xml.etree.ElementTree",
+        "crm_cskh.services.pdf_assets",
+    )
+}
+
+# Verify `from weasyprint import HTML, CSS` binds ALREADY-PATCHED classes on very first import across 8 threads!
+barrier = threading.Barrier(8)
+def _race_import(i: int):
+    barrier.wait(timeout=10)
+    if i % 2 == 0:
+        from weasyprint import CSS, HTML
+        return bool(getattr(HTML, "_cskh_pdf_wrapped", False) and getattr(CSS, "_cskh_pdf_wrapped", False))
+    else:
+        import frappe.utils.pdf as fpdf
+        return bool(
+            getattr(fpdf.pdfkit.from_string, "_cskh_pdf_wrapped", False)
+            and fpdf.get_cookie_options() == {}
+        )
+
+with ThreadPoolExecutor(max_workers=8) as pool:
+    race_ok = list(pool.map(_race_import, range(8)))
+
+from weasyprint import HTML
+import pdfkit
+wp_blocked = False
+try:
+    HTML(filename="/etc/passwd")
+except ValueError:
+    wp_blocked = True
+
+pk_blocked = False
+try:
+    pdfkit.from_url("http://127.0.0.1:9/")
+except PermissionError:
+    pk_blocked = True
+
+from crm_cskh.services import pdf_assets
+print("LAZY_SUBPROC_JSON:" + json.dumps({
+    "import_ms": round((t1 - t0) * 1000.0, 3),
+    "call_ms": round((t2 - t1) * 1000.0, 3),
+    "eager_after_hook": eager_after_hook,
+    "race_ok": race_ok,
+    "wp_blocked": wp_blocked,
+    "pk_blocked": pk_blocked,
+    "wrap_install_count": pdf_assets._WRAP_INSTALL_COUNT,
+}))
+"""
+            proc = subprocess.run(
+                [sys.executable, "-c", sub_py],
+                env={
+                    **os.environ,
+                    "PYTHONPATH": os.pathsep.join(
+                        [
+                            str(fake_sp),
+                            str(REPO_ROOT / "apps" / "crm_cskh"),
+                            os.environ.get("PYTHONPATH", ""),
+                        ]
+                    ),
+                },
+                capture_output=True,
+                text=True,
+                timeout=30,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, f"{proc.stderr}\n{proc.stdout}")
+            payload = json.loads(
+                [
+                    ln[len("LAZY_SUBPROC_JSON:") :]
+                    for ln in proc.stdout.splitlines()
+                    if ln.startswith("LAZY_SUBPROC_JSON:")
+                ][-1]
+            )
+            for mod_name, loaded in payload["eager_after_hook"].items():
+                self.assertFalse(loaded, f"Eagerly loaded {mod_name}: {payload}")
+            self.assertEqual(payload["race_ok"], [True] * 8)
+            self.assertTrue(payload["wp_blocked"])
+            self.assertTrue(payload["pk_blocked"])
+            self.assertEqual(payload["wrap_install_count"], 1)
+            self.assertLess(float(payload["import_ms"]), 250.0, payload)
+            self.assertLess(float(payload["call_ms"]), 25.0, payload)
 
 
 if __name__ == "__main__":
