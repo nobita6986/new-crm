@@ -216,3 +216,44 @@ class TestUiP2PagesAndContext(P2TestCase):
 		self.assertIn("formatHistoryReason(event.reason)", history_table_slice)
 		self.assertNotIn("caps.bod", history_table_slice)
 		self.assertNotIn("allowPii", history_table_slice)
+
+	def test_saas_shell_hooks_crm_theme_bridge_and_vietnamese_toggle_nav(self):
+		from types import SimpleNamespace
+
+		from crm_cskh import p1_errors as p1_err_hook
+		from crm_cskh import p1_strings
+		from crm_cskh.www.cskh_renderer import CskhPageRenderer
+
+		self.assertIn("/assets/crm_cskh/cskh/desk-theme.css", frappe.get_hooks("app_include_css"))
+		self.assertIn("/assets/crm_cskh/cskh/web-theme.css", frappe.get_hooks("web_include_css"))
+		self.assertIn("/assets/crm_cskh/cskh/setup-wizard.js", frappe.get_hooks("setup_wizard_requires"))
+
+		i18n_map = p1_strings.translated_map()
+		self.assertEqual(i18n_map.get("Toggle navigation"), "Ẩn/hiện thanh điều hướng")
+
+		frappe.set_user(self.staff_a)
+		renderer = CskhPageRenderer(path="cskh")
+		self.assertTrue(renderer.can_render())
+		rendered_html = renderer.get_html()
+		self.assertIn('id="cskh-root"', rendered_html)
+		self.assertIn('class="cskh-sidebar"', rendered_html)
+		self.assertIn("Ẩn/hiện thanh điều hướng", rendered_html)
+		self.assertLess(
+			rendered_html.index("/assets/crm_cskh/cskh/cskh.css"),
+			rendered_html.index("</head>"),
+		)
+
+		crm_sample = (
+			'<!doctype html><html><head><title>CRM</title></head><body><div id="app"></div></body></html>'
+		)
+		resp_staff = SimpleNamespace(data=crm_sample, status_code=200, mimetype="text/html")
+		req_crm = SimpleNamespace(path="/crm/leads", method="GET")
+		p1_err_hook.normalize_p1_error_response(resp_staff, req_crm)
+		self.assertIn('data-cskh-crm-theme="1"', resp_staff.data)
+		self.assertIn("crm-sidebar-bridge.js", resp_staff.data)
+
+		frappe.set_user("Guest")
+		resp_guest = SimpleNamespace(data=crm_sample, status_code=200, mimetype="text/html")
+		p1_err_hook.normalize_p1_error_response(resp_guest, req_crm)
+		self.assertNotIn('data-cskh-crm-theme="1"', resp_guest.data)
+		self.assertNotIn("crm-sidebar-bridge.js", resp_guest.data)

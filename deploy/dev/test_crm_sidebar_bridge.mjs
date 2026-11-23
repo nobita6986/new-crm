@@ -176,7 +176,9 @@ class MiniDocument {
 		this.mutations = 0
 		this._observers = []
 		this.documentElement = new MiniElement('html', this)
+		this.head = new MiniElement('head', this)
 		this.body = new MiniElement('body', this)
+		this.documentElement.appendChild(this.head)
 		this.documentElement.appendChild(this.body)
 		this.currentScript = null
 	}
@@ -335,11 +337,17 @@ test('Inserts CSKH directly after Leads in All Views nav and skips Public Views'
 	// Public Views nav must remain untouched
 	assert.equal(publicViewsNav.querySelector('[data-cskh-sidebar-item="1"]'), null)
 
+	// Client fallback ensures crm-theme.css link is present once in <head>
+	const themeLinks = win.document.head.querySelectorAll('link[data-cskh-crm-theme]')
+	assert.equal(themeLinks.length, 1)
+	assert.equal(themeLinks[0].getAttribute('href'), '/assets/crm_cskh/cskh/crm-theme.css')
+
 	// Repeated syncAll calls are idempotent and produce zero extra DOM mutations
 	const beforeMutations = win.document.mutations
 	win.__cskhSidebarBridge.syncAll()
 	win.__cskhSidebarBridge.syncAll()
 	assert.equal(allViewsNav.querySelectorAll('[data-cskh-sidebar-item="1"]').length, 1)
+	assert.equal(win.document.head.querySelectorAll('link[data-cskh-crm-theme]').length, 1)
 	assert.equal(win.document.mutations, beforeMutations, 'Zero redundant mutations when unchanged')
 })
 

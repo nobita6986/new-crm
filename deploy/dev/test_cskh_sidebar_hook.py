@@ -68,7 +68,9 @@ class CskhSidebarHookTests(unittest.TestCase):
             "crm_cskh.cskh_sidebar", APP_DIR / "cskh_sidebar.py"
         )
         self.hooks_mod = _load_module("crm_cskh.hooks", APP_DIR / "hooks.py")
-        self.p1_errors_mod = _load_module("crm_cskh.p1_errors", APP_DIR / "p1_errors.py")
+        self.p1_errors_mod = _load_module(
+            "crm_cskh.p1_errors", APP_DIR / "p1_errors.py"
+        )
 
     def tearDown(self):
         if self._prev_frappe is None:
@@ -94,6 +96,14 @@ class CskhSidebarHookTests(unittest.TestCase):
             getattr(self.hooks_mod, "setup_wizard_requires", None),
             "/assets/crm_cskh/cskh/setup-wizard.js",
         )
+        self.assertEqual(
+            getattr(self.hooks_mod, "app_include_css", None),
+            "/assets/crm_cskh/cskh/desk-theme.css",
+        )
+        self.assertEqual(
+            getattr(self.hooks_mod, "web_include_css", None),
+            "/assets/crm_cskh/cskh/web-theme.css",
+        )
 
         # Preserve G09 Tier 3 N->N-1 rollback compatibility: after_request keeps N-1 hooks
         after_req = getattr(self.hooks_mod, "after_request", [])
@@ -104,11 +114,18 @@ class CskhSidebarHookTests(unittest.TestCase):
                 "crm_cskh.p1_errors.normalize_p1_error_response",
             ],
         )
+        self.assertEqual(
+            getattr(self.hooks_mod, "before_job", []),
+            ["crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks"],
+        )
 
         self.assertTrue((APP_DIR / "public" / "cskh" / "logo.svg").is_file())
         self.assertTrue(
             (APP_DIR / "public" / "cskh" / "crm-sidebar-bridge.js").is_file()
         )
+        self.assertTrue((APP_DIR / "public" / "cskh" / "crm-theme.css").is_file())
+        self.assertTrue((APP_DIR / "public" / "cskh" / "desk-theme.css").is_file())
+        self.assertTrue((APP_DIR / "public" / "cskh" / "web-theme.css").is_file())
         self.assertTrue((APP_DIR / "public" / "cskh" / "setup-wizard.js").is_file())
 
     def test_has_app_permission_enforces_cskh_and_system_roles(self):
@@ -152,20 +169,27 @@ class CskhSidebarHookTests(unittest.TestCase):
                     if isinstance(resp.data, str)
                     else resp.data.decode("utf-8")
                 )
+                self.assertIn("/assets/crm_cskh/cskh/crm-theme.css?v=", html_text)
+                self.assertIn('data-cskh-crm-theme="1"', html_text)
+                self.assertLess(
+                    html_text.index("crm-theme.css"), html_text.index("</head>")
+                )
                 self.assertIn(
                     "/assets/crm_cskh/cskh/crm-sidebar-bridge.js?v=", html_text
                 )
                 self.assertIn('data-cskh-href="/cskh"', html_text)
                 self.assertIn('data-cskh-label="CSKH"', html_text)
+                self.assertEqual(html_text.count("crm-theme.css"), 1)
                 self.assertEqual(html_text.count("crm-sidebar-bridge.js"), 1)
 
-                # Second pass must be a strict no-op (no duplicate script tags)
+                # Second pass must be a strict no-op (no duplicate link/script tags)
                 self.p1_errors_mod.normalize_p1_error_response(resp, req)
                 html_after = (
                     resp.data
                     if isinstance(resp.data, str)
                     else resp.data.decode("utf-8")
                 )
+                self.assertEqual(html_after.count("crm-theme.css"), 1)
                 self.assertEqual(html_after.count("crm-sidebar-bridge.js"), 1)
 
     def test_skips_guest_non_crm_routes_post_requests_and_json_responses(self):
@@ -176,6 +200,7 @@ class CskhSidebarHookTests(unittest.TestCase):
         self.p1_errors_mod.normalize_p1_error_response(
             guest_resp, _DummyRequest("/crm", "GET")
         )
+        self.assertNotIn("crm-theme.css", guest_resp.data)
         self.assertNotIn("crm-sidebar-bridge.js", guest_resp.data)
 
         # 2. Authorized user on /cskh, /login, /crm-form/lead, POST /crm, JSON, 403
@@ -200,6 +225,7 @@ class CskhSidebarHookTests(unittest.TestCase):
             text = (
                 resp.data if isinstance(resp.data, str) else resp.data.decode("utf-8")
             )
+            self.assertNotIn("crm-theme.css", text)
             self.assertNotIn("crm-sidebar-bridge.js", text)
 
 

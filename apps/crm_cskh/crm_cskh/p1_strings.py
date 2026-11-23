@@ -15,6 +15,7 @@ import frappe
 SHELL = (
 	"CSKH",
 	"Recruitment workspace",
+	"Toggle navigation",
 	"Open in Recruitment workspace",
 	"Manage contact records, assignments, follow-up schedules, and recruitment team performance.",
 	"Recruitment outreach workflow",

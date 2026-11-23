@@ -1926,14 +1926,22 @@ def run_http_and_socketio_smoke(
         f"set_cookie_headers={sid_cookie_attrs['set_cookie_header_count']}"
     )
 
-    # 3. Vietnamese UI + timezone + CSRF token extraction
+    # 3. Vietnamese UI + SaaS shell/theme + timezone + CSRF token extraction
     dash_code, _, dash_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
     assert dash_code == 200, f"Expected 200 on /cskh/dashboard, got {dash_code}"
     assert "Asia/Ho_Chi_Minh" in dash_html, "Missing Asia/Ho_Chi_Minh timezone in /cskh/dashboard"
+    assert 'class="cskh-sidebar"' in dash_html, "Missing cskh-sidebar in /cskh/dashboard"
+    assert 0 <= dash_html.find("/assets/crm_cskh/cskh/cskh.css") < dash_html.find("</head>"), (
+        "Expected cskh.css inside <head> on /cskh/dashboard"
+    )
 
     ui_code, _, ui_html = http_call(auth_opener, f"{base_url}/cskh/quality-overview", site_name)
     assert ui_code == 200, f"Expected 200 on /cskh/quality-overview, got {ui_code}"
     assert "Asia/Ho_Chi_Minh" in ui_html, "Missing Asia/Ho_Chi_Minh timezone in /cskh/quality-overview"
+    assert 'class="cskh-sidebar"' in ui_html, "Missing cskh-sidebar in /cskh/quality-overview"
+    assert 0 <= ui_html.find("/assets/crm_cskh/cskh/cskh.css") < ui_html.find("</head>"), (
+        "Expected cskh.css inside <head> on /cskh/quality-overview"
+    )
 
     candidate_vi_labels = [
         "Đã đăng nhập với tư cách",
@@ -1961,8 +1969,10 @@ def run_http_and_socketio_smoke(
     csrf_token = csrf_match.group(1)
     logger.register_secret(csrf_token, "<REDACTED_CSRF_TOKEN>")
 
-    crm_code, _, _ = http_call(auth_opener, f"{base_url}/crm", site_name)
+    crm_code, _, crm_html = http_call(auth_opener, f"{base_url}/crm", site_name)
     assert crm_code == 200, f"Expected 200 on authenticated /crm, got {crm_code}"
+    assert 'data-cskh-crm-theme="1"' in crm_html, "Missing crm-theme.css link in authenticated /crm HTML"
+    assert "crm-sidebar-bridge.js" in crm_html, "Missing crm-sidebar-bridge.js in authenticated /crm HTML"
     logger.info(
         f"Vietnamese UI & SPA checks passed: /cskh/dashboard={dash_code}, "
         f"/cskh/quality-overview={ui_code}, /crm={crm_code}, matched_labels={matched_vi_labels}"

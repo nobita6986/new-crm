@@ -742,6 +742,8 @@ def run_live_rehearsal(
             "from frappe.utils.background_jobs import get_redis_conn\n"
             "add_apps = list(frappe.get_hooks('add_to_apps_screen') or [])\n"
             "setup_req = list(frappe.get_hooks('setup_wizard_requires') or [])\n"
+            "app_css = [str(x) for x in (frappe.get_hooks('app_include_css') or [])]\n"
+            "web_css = [str(x) for x in (frappe.get_hooks('web_include_css') or [])]\n"
             "before_req = [str(x) for x in (frappe.get_hooks('before_request') or [])]\n"
             "after_req = [str(x) for x in (frappe.get_hooks('after_request') or [])]\n"
             "before_jb = [str(x) for x in (frappe.get_hooks('before_job') or [])]\n"
@@ -761,6 +763,8 @@ def run_live_rehearsal(
             "  'add_to_apps_screen_names': [str(a.get('name')) for a in add_apps if isinstance(a, dict)],\n"
             "  'has_cskh_sidebar_permission_hook': any('cskh_sidebar' in str(a.get('has_permission', '')) for a in add_apps if isinstance(a, dict)),\n"
             "  'has_cskh_setup_wizard_hook': '/assets/crm_cskh/cskh/setup-wizard.js' in [str(x) for x in setup_req],\n"
+            "  'has_desk_theme_css_hook': '/assets/crm_cskh/cskh/desk-theme.css' in app_css,\n"
+            "  'has_web_theme_css_hook': '/assets/crm_cskh/cskh/web-theme.css' in web_css,\n"
             "  'has_n_pdf_before_request_hook': 'crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks' in before_req,\n"
             "  'has_n_pdf_before_job_hook': 'crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks' in before_jb,\n"
             "  'has_n_pdf_on_print_hook': 'crm_cskh.services.pdf_hooks.on_print_pdf' in on_pdf,\n"
@@ -786,13 +790,19 @@ def run_live_rehearsal(
             for a in (unwrap_message(body_n_apps_admin) or [])
             if isinstance(a, dict)
         ]
-        n_crm_has_bridge = "crm-sidebar-bridge.js" in raw_n_crm_html.decode(
-            "utf-8", errors="replace"
-        )
+        n_crm_txt = raw_n_crm_html.decode("utf-8", errors="replace")
+        n_crm_has_bridge = "crm-sidebar-bridge.js" in n_crm_txt
+        n_crm_has_theme = 'data-cskh-crm-theme="1"' in n_crm_txt
         assert pre_rollback_n_hooks["has_cskh_sidebar_permission_hook"] is True, (
             pre_rollback_n_hooks
         )
         assert pre_rollback_n_hooks["has_cskh_setup_wizard_hook"] is True, (
+            pre_rollback_n_hooks
+        )
+        assert pre_rollback_n_hooks["has_desk_theme_css_hook"] is True, (
+            pre_rollback_n_hooks
+        )
+        assert pre_rollback_n_hooks["has_web_theme_css_hook"] is True, (
             pre_rollback_n_hooks
         )
         assert pre_rollback_n_hooks["has_n_pdf_before_request_hook"] is True, (
@@ -826,9 +836,14 @@ def run_live_rehearsal(
             st_n_apps_admin,
             n_apps_admin_names,
         )
-        assert st_n_crm_html == 200 and n_crm_has_bridge is True, (
+        assert (
+            st_n_crm_html == 200
+            and n_crm_has_bridge is True
+            and n_crm_has_theme is True
+        ), (
             st_n_crm_html,
             n_crm_has_bridge,
+            n_crm_has_theme,
         )
 
         scrubber.log(
@@ -878,18 +893,23 @@ def run_live_rehearsal(
             for a in (unwrap_message(body_t3_apps_admin) or [])
             if isinstance(a, dict)
         ]
-        t3_crm_has_bridge = "crm-sidebar-bridge.js" in raw_t3_crm_html.decode(
-            "utf-8", errors="replace"
-        )
+        t3_crm_txt = raw_t3_crm_html.decode("utf-8", errors="replace")
+        t3_crm_has_bridge = "crm-sidebar-bridge.js" in t3_crm_txt
+        t3_crm_has_theme = 'data-cskh-crm-theme="1"' in t3_crm_txt
         assert st_t3_apps_staff == 200, (st_t3_apps_staff, body_t3_apps_staff)
         assert st_t3_apps_admin == 200, (st_t3_apps_admin, body_t3_apps_admin)
         assert "crm" in t3_apps_staff_names and "crm_cskh" not in t3_apps_staff_names, (
             t3_apps_staff_names
         )
         assert "crm_cskh" not in t3_apps_admin_names, t3_apps_admin_names
-        assert st_t3_crm_html == 200 and t3_crm_has_bridge is False, (
+        assert (
+            st_t3_crm_html == 200
+            and t3_crm_has_bridge is False
+            and t3_crm_has_theme is False
+        ), (
             st_t3_crm_html,
             t3_crm_has_bridge,
+            t3_crm_has_theme,
         )
 
         # Inspect `N-1` hooks, orphan-hook resolution, real `N-1` RQ worker execution & data reconciliation
@@ -903,6 +923,8 @@ def run_live_rehearsal(
             "from crm_cskh.jobs.reconcile_metrics import reconcile_published_period\n"
             "add_apps = list(frappe.get_hooks('add_to_apps_screen') or [])\n"
             "setup_req = [str(x) for x in (frappe.get_hooks('setup_wizard_requires') or [])]\n"
+            "app_css = [str(x) for x in (frappe.get_hooks('app_include_css') or [])]\n"
+            "web_css = [str(x) for x in (frappe.get_hooks('web_include_css') or [])]\n"
             "before_req = [str(x) for x in (frappe.get_hooks('before_request') or [])]\n"
             "after_req = [str(x) for x in (frappe.get_hooks('after_request') or [])]\n"
             "before_jb = [str(x) for x in (frappe.get_hooks('before_job') or [])]\n"
@@ -952,6 +974,8 @@ def run_live_rehearsal(
             "    'has_stale_cskh_sidebar_hook': any('cskh_sidebar' in str(a.get('has_permission', '')) or str(a.get('name', '')) == 'crm_cskh' for a in add_apps if isinstance(a, dict)),\n"
             "    'setup_wizard_requires': setup_req,\n"
             "    'has_stale_cskh_setup_wizard_hook': '/assets/crm_cskh/cskh/setup-wizard.js' in setup_req,\n"
+            "    'has_stale_desk_theme_css_hook': '/assets/crm_cskh/cskh/desk-theme.css' in app_css,\n"
+            "    'has_stale_web_theme_css_hook': '/assets/crm_cskh/cskh/web-theme.css' in web_css,\n"
             "    'before_request': before_req,\n"
             "    'after_request': after_req,\n"
             "    'before_job': before_jb,\n"
@@ -976,6 +1000,8 @@ def run_live_rehearsal(
         n_m1_hooks = tier3_check["n_minus_1_hooks_verified"]
         assert n_m1_hooks["has_stale_cskh_sidebar_hook"] is False, n_m1_hooks
         assert n_m1_hooks["has_stale_cskh_setup_wizard_hook"] is False, n_m1_hooks
+        assert n_m1_hooks["has_stale_desk_theme_css_hook"] is False, n_m1_hooks
+        assert n_m1_hooks["has_stale_web_theme_css_hook"] is False, n_m1_hooks
         assert n_m1_hooks["has_stale_pdf_assets_hook"] is False, n_m1_hooks
         assert n_m1_hooks["has_stale_n_after_request_hook"] is False, n_m1_hooks
         assert n_m1_hooks["unresolved_orphan_hooks"] == [], n_m1_hooks

@@ -757,12 +757,19 @@ def main() -> int:
                     f"HTTP {st} ({len(body)} bytes)",
                 )
 
-            # CSKH static JS/CSS assets served directly by nginx `/assets/crm_cskh/cskh/*`
+            # CSKH static JS/CSS/SVG assets served directly by nginx `/assets/crm_cskh/cskh/*`
             for cskh_asset in (
                 "/assets/crm_cskh/cskh/cskh.js",
                 "/assets/crm_cskh/cskh/cskh.css",
+                "/assets/crm_cskh/cskh/crm-theme.css",
+                "/assets/crm_cskh/cskh/desk-theme.css",
+                "/assets/crm_cskh/cskh/web-theme.css",
+                "/assets/crm_cskh/cskh/crm-sidebar-bridge.js",
+                "/assets/crm_cskh/cskh/setup-wizard.js",
+                "/assets/crm_cskh/cskh/logo.svg",
                 "/assets/crm_cskh/cskh/p2-api.js",
                 "/assets/crm_cskh/cskh/p3-api.js",
+                "/assets/crm_cskh/cskh/p3-widgets.js",
                 "/assets/crm_cskh/cskh/quality-overview.js",
             ):
                 st, _, body = http_request(
@@ -778,15 +785,17 @@ def main() -> int:
                     f"HTTP {st} ({len(body)} bytes)",
                 )
 
-            # Guest login page & Guest `/cskh/quality-overview` guard
+            # Guest login page (`web_include_css`) & Guest `/cskh/quality-overview` guard
             st_login, _, login_body = http_request(
                 anon_no_redirect, f"{base_url}/login", host_header=args.site_name
             )
             login_html = login_body.decode("utf-8", errors="replace")
             record(
                 "http.guest.login_200",
-                st_login == 200 and len(login_html) > 500,
-                "HTTP 200 & non-empty HTML",
+                st_login == 200
+                and len(login_html) > 500
+                and "/assets/crm_cskh/cskh/web-theme.css" in login_html,
+                "HTTP 200 & web-theme.css included",
                 f"HTTP {st_login} (len={len(login_html)})",
             )
 
@@ -838,8 +847,11 @@ def main() -> int:
             crm_html = crm_raw.decode("utf-8", errors="replace")
             record(
                 "http.auth.crm_page_200",
-                st_crm == 200 and 'id="app"' in crm_html,
-                "HTTP 200 with #app",
+                st_crm == 200
+                and 'id="app"' in crm_html
+                and 'data-cskh-crm-theme="1"' in crm_html
+                and 'data-cskh-sidebar-bridge="1"' in crm_html,
+                "HTTP 200 with #app, crm-theme.css & crm-sidebar-bridge.js",
                 f"HTTP {st_crm} (len={len(crm_html)})",
             )
 
@@ -893,12 +905,16 @@ def main() -> int:
                     )
                 )
                 slug_route = cskh_route.strip("/").replace("/", "_")
+                head_end_idx = page_html.find("</head>")
+                cskh_css_idx = page_html.find("/assets/crm_cskh/cskh/cskh.css")
                 record(
                     f"http.auth.route.{slug_route}",
                     st_page == 200
                     and 'id="cskh-root"' in page_html
+                    and 'class="cskh-sidebar"' in page_html
+                    and 0 <= cskh_css_idx < head_end_idx
                     and "Asia/Ho_Chi_Minh" in page_html,
-                    "HTTP 200 with #cskh-root & Asia/Ho_Chi_Minh",
+                    "HTTP 200 with #cskh-root, head cskh.css, cskh-sidebar & Asia/Ho_Chi_Minh",
                     f"HTTP {st_page} (len={len(page_html)})",
                 )
                 record(
