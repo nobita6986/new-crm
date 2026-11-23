@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Trivy security scan evaluator & fail-closed vulnerability/secret gate (P4-02 / G04).
 
-Enforces F-P4-REL-01A & F-P4-REL-01B:
+Enforces F-P4-REL-01A, F-P4-REL-01B & G04 Scoped Exception Governance:
 1. Secret gate (`fail-closed` in ALL modes):
    - Never suppresses a whole file path (`target_suffix` alone is forbidden).
-   - An upstream documentation false positive (such as the PyJWT 2.14.0 `METADATA` doctest JWT)
+   - An upstream documentation false positive (such as the PyJWT 2.15.1 `METADATA` doctest JWT)
      is permitted ONLY when ALL four invariants hold simultaneously:
        a) `rule_id` and normalized `target_suffix` (case-insensitive dist-info folder) match a
           non-expired rule in `cve-exceptions.json`
@@ -15,13 +15,21 @@ Enforces F-P4-REL-01A & F-P4-REL-01B:
           `exact_sample_sha256` on the exact same line reported by Trivy
        d) Full-file JWT token scan of `METADATA` confirms ZERO other JWT tokens exist anywhere in
           that same file (a second or modified JWT in `METADATA` fails closed immediately).
-2. Vulnerability gate:
-   - `--strict` (default; mandatory in `p4-release.yml`): fails closed on ANY unapproved `CRITICAL`
-     CVE (both fixable language/OS CVEs and unfixed upstream OS CVEs) unless covered by a
-     non-expired `T0`/Owner-approved exception in `cve-exceptions.json`.
+2. Vulnerability & Scoped Exception gate:
+   - Every CVE exception entry in `cve-exceptions.json` MUST pin all five scope attributes:
+       (1) canonical `@sha256:<64-hex>` `image_digest` (or `digest`),
+       (2) exact `cve_id` (`CVE-YYYY-NNNN+` or `GHSA-xxxx-xxxx-xxxx`, zero wildcards),
+       (3) exact `package` or `packages` list (zero wildcards),
+       (4) exact `installed_version` (zero wildcards or comparator ranges),
+       (5) non-expired ISO `expires_on` (`expires_on >= reference_date`) with written `Owner`/`T0`
+           `approved_by` (never self-approved by `T1B`).
+   - `--strict` (default; mandatory in `p4-release.yml` and `production_candidate` manifests):
+     fails closed on ANY malformed/expired/wrong-digest/unmatched exception entry AND on ANY
+     unapproved `CRITICAL` CVE (both fixable language/OS CVEs and unfixed upstream OS CVEs).
    - `--advisory-upstream-critical` (PR CI rehearsal alongside `--strict` report output): records
      pending upstream `CRITICAL` CVEs for `T0`/Owner review while still failing closed on ANY
-     secret finding and on any package listed in `--forbid-critical-packages`.
+     secret finding, ANY malformed/expired exception entry, and ANY package listed in
+     `--forbid-critical-packages`.
 """
 
 from __future__ import annotations
@@ -37,31 +45,327 @@ DEFAULT_EXCEPTIONS_FILE = Path(__file__).resolve().parent / "cve-exceptions.json
 JWT_CANDIDATE_RE = re.compile(
     r"eyJ[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}\.[A-Za-z0-9_-]{5,}"
 )
+REGISTRY_DIGEST_RE = re.compile(
+    r"\A[^/@\s:<>]+(?::[0-9]+)?(?:/[^/@\s:<>]+)+(?::[A-Za-z0-9._-]+)?@sha256:[0-9a-f]{64}\Z"
+)
+ZERO_DIGEST_SUFFIX = "@sha256:" + ("0" * 64)
+CVE_ID_RE = re.compile(
+    r"\A(?:CVE-\d{4}-\d{4,}|GHSA-[0-9a-z]{4}-[0-9a-z]{4}-[0-9a-z]{4})\Z"
+)
+ISO_DATE_RE = re.compile(r"\A\d{4}-\d{2}-\d{2}\Z")
+PLACEHOLDER_APPROVERS = {
+    "TBD",
+    "TODO",
+    "PENDING",
+    "NONE",
+    "N/A",
+    "NA",
+    "UNAPPROVED",
+    "UNKNOWN",
+}
 
 
 def _sha256_ascii(val: str) -> str:
     return hashlib.sha256(val.encode("utf-8")).hexdigest()
 
 
+def is_valid_registry_digest(image_ref: str) -> bool:
+    if not image_ref or not isinstance(image_ref, str):
+        return False
+    if (
+        "BLOCKED" in image_ref.upper()
+        or "ACTUAL_DIGEST" in image_ref
+        or "<" in image_ref
+    ):
+        return False
+    if image_ref.endswith(ZERO_DIGEST_SUFFIX):
+        return False
+    return bool(REGISTRY_DIGEST_RE.match(image_ref))
+
+
+def _extract_exception_packages(
+    item: dict[str, object], exc_id: str, cve_label: str
+) -> tuple[list[str], list[str]]:
+    errors: list[str] = []
+    has_single = "package" in item and item.get("package") is not None
+    has_multi = "packages" in item and item.get("packages") is not None
+
+    candidates: list[object] = []
+    if has_single and has_multi:
+        single_val = item.get("package")
+        multi_val = item.get("packages")
+        if (
+            not isinstance(single_val, str)
+            or not isinstance(multi_val, list)
+            or [single_val] != multi_val
+        ):
+            errors.append(
+                f"Exception {exc_id} ({cve_label}): conflicting 'package' and 'packages' fields"
+            )
+            return [], errors
+        candidates = list(multi_val)
+    elif has_multi:
+        multi_val = item.get("packages")
+        if not isinstance(multi_val, list) or not multi_val:
+            errors.append(
+                f"Exception {exc_id} ({cve_label}): 'packages' must be a non-empty list of package names"
+            )
+            return [], errors
+        candidates = list(multi_val)
+    elif has_single:
+        candidates = [item.get("package")]
+    else:
+        errors.append(
+            f"Exception {exc_id} ({cve_label}): missing required 'package' or 'packages' scope"
+        )
+        return [], errors
+
+    normalized: list[str] = []
+    for raw_pkg in candidates:
+        if not isinstance(raw_pkg, str) or not raw_pkg or raw_pkg != raw_pkg.strip():
+            errors.append(
+                f"Exception {exc_id} ({cve_label}): invalid empty or padded package name {raw_pkg!r}"
+            )
+            continue
+        if re.search(r"\s", raw_pkg) or "*" in raw_pkg or "?" in raw_pkg:
+            errors.append(
+                f"Exception {exc_id} ({cve_label}): wildcard or whitespace forbidden in package {raw_pkg!r}"
+            )
+            continue
+        if raw_pkg not in normalized:
+            normalized.append(raw_pkg)
+
+    if not normalized and not errors:
+        errors.append(
+            f"Exception {exc_id} ({cve_label}): 'packages' resolved to zero valid package names"
+        )
+    return normalized, errors
+
+
+def validate_cve_exception_entries(
+    raw_exceptions: object,
+    *,
+    reference_date: date | None = None,
+    expected_image_digest: str | None = None,
+    enforce_digest_match: bool = True,
+) -> tuple[list[dict[str, object]], list[dict[str, object]], list[str]]:
+    """Validates `exceptions` entries against the 5-tuple G04 scope contract.
+
+    Returns `(valid_rules, rejected_entries, error_messages)`.
+    """
+    today = reference_date or datetime.now(timezone.utc).date()
+    valid_rules: list[dict[str, object]] = []
+    rejected_entries: list[dict[str, object]] = []
+    errors: list[str] = []
+
+    if raw_exceptions is None:
+        return [], [], []
+    if not isinstance(raw_exceptions, list):
+        msg = "cve-exceptions.json 'exceptions' field must be a JSON array"
+        return [], [{"rejection_reasons": [msg]}], [msg]
+
+    target_digest = (expected_image_digest or "").strip()
+    if (
+        raw_exceptions
+        and enforce_digest_match
+        and not is_valid_registry_digest(target_digest)
+    ):
+        msg = (
+            "Strict exception evaluation requires a valid canonical @sha256 target image "
+            f"digest, got {target_digest!r}"
+        )
+        errors.append(msg)
+
+    seen_tuples: set[tuple[str, str, str, str]] = set()
+
+    for idx, item in enumerate(raw_exceptions):
+        if not isinstance(item, dict):
+            msg = f"Exception entry #{idx} must be a JSON object"
+            errors.append(msg)
+            rejected_entries.append({"index": idx, "rejection_reasons": [msg]})
+            continue
+
+        exc_id = str(item.get("id") or f"EXC-{idx + 1:03d}").strip()
+        raw_cve = item.get("cve_id")
+        cve_label = str(raw_cve or "<missing-cve>")
+        entry_errors: list[str] = []
+
+        # 1. Exact CVE / GHSA identifier
+        if (
+            not isinstance(raw_cve, str)
+            or raw_cve != raw_cve.strip()
+            or not CVE_ID_RE.match(raw_cve)
+        ):
+            entry_errors.append(
+                f"Exception {exc_id}: invalid or wildcard cve_id {raw_cve!r}"
+            )
+
+        # 2. Canonical @sha256 image digest
+        has_img_digest = "image_digest" in item and item.get("image_digest") is not None
+        has_digest = "digest" in item and item.get("digest") is not None
+        raw_digest: object = None
+        if has_img_digest and has_digest:
+            if item.get("image_digest") != item.get("digest"):
+                entry_errors.append(
+                    f"Exception {exc_id} ({cve_label}): conflicting 'image_digest' and 'digest' fields"
+                )
+            raw_digest = item.get("image_digest")
+        elif has_img_digest:
+            raw_digest = item.get("image_digest")
+        elif has_digest:
+            raw_digest = item.get("digest")
+
+        if not isinstance(raw_digest, str) or not is_valid_registry_digest(raw_digest):
+            entry_errors.append(
+                f"Exception {exc_id} ({cve_label}): missing or invalid canonical @sha256 image_digest {raw_digest!r}"
+            )
+        elif enforce_digest_match and target_digest and raw_digest != target_digest:
+            entry_errors.append(
+                f"Exception {exc_id} ({cve_label}): image_digest scope mismatch "
+                f"(exception={raw_digest!r} != target={target_digest!r})"
+            )
+
+        # 3. Exact package(s)
+        packages, pkg_errors = _extract_exception_packages(item, exc_id, cve_label)
+        entry_errors.extend(pkg_errors)
+
+        # 4. Exact installed_version
+        raw_ver = item.get("installed_version")
+        if (
+            not isinstance(raw_ver, str)
+            or not raw_ver
+            or raw_ver != raw_ver.strip()
+            or bool(re.search(r"\s", raw_ver))
+            or "*" in raw_ver
+            or "?" in raw_ver
+            or raw_ver.startswith((">", "<", "=", "~", "^"))
+        ):
+            entry_errors.append(
+                f"Exception {exc_id} ({cve_label}): missing, wildcard, or range installed_version {raw_ver!r}"
+            )
+
+        # 5. Expiration date (`expires_on >= today`)
+        raw_exp = item.get("expires_on")
+        if not isinstance(raw_exp, str) or not ISO_DATE_RE.match(raw_exp):
+            entry_errors.append(
+                f"Exception {exc_id} ({cve_label}): missing or invalid ISO expires_on date {raw_exp!r}"
+            )
+        else:
+            try:
+                exp_date = date.fromisoformat(raw_exp)
+            except ValueError:
+                entry_errors.append(
+                    f"Exception {exc_id} ({cve_label}): invalid calendar expires_on date {raw_exp!r}"
+                )
+            else:
+                if exp_date < today:
+                    entry_errors.append(
+                        f"Exception {exc_id} ({cve_label}): expired on {raw_exp} "
+                        f"(reference_date={today.isoformat()})"
+                    )
+
+        # 6. Written Owner / T0 approval (never placeholder, never self-approved by T1B)
+        raw_approver = item.get("approved_by")
+        if (
+            not isinstance(raw_approver, str)
+            or not raw_approver.strip()
+            or raw_approver != raw_approver.strip()
+        ):
+            entry_errors.append(
+                f"Exception {exc_id} ({cve_label}): missing required approved_by authority"
+            )
+        else:
+            approver_uc = raw_approver.upper()
+            if (
+                "<" in raw_approver
+                or ">" in raw_approver
+                or approver_uc in PLACEHOLDER_APPROVERS
+            ):
+                entry_errors.append(
+                    f"Exception {exc_id} ({cve_label}): placeholder approved_by {raw_approver!r} forbidden"
+                )
+            elif approver_uc == "T1B" or approver_uc.startswith(
+                ("T1B-", "T1B_", "T1B/")
+            ):
+                entry_errors.append(
+                    f"Exception {exc_id} ({cve_label}): self-approval by T1B ({raw_approver!r}) is forbidden"
+                )
+
+        if not entry_errors:
+            assert isinstance(raw_digest, str)
+            assert isinstance(raw_cve, str)
+            assert isinstance(raw_ver, str)
+            assert isinstance(raw_exp, str)
+            assert isinstance(raw_approver, str)
+            for pkg in packages:
+                tup = (raw_digest, raw_cve, pkg, raw_ver)
+                if tup in seen_tuples:
+                    entry_errors.append(
+                        f"Exception {exc_id} ({raw_cve}): duplicate exception scope for {pkg}@{raw_ver} on {raw_digest}"
+                    )
+                else:
+                    seen_tuples.add(tup)
+
+        if entry_errors:
+            errors.extend(entry_errors)
+            rejected_entries.append(
+                {
+                    "id": exc_id,
+                    "cve_id": str(raw_cve or ""),
+                    "image_digest": str(raw_digest or ""),
+                    "packages": packages,
+                    "installed_version": str(raw_ver or ""),
+                    "expires_on": str(raw_exp or ""),
+                    "approved_by": str(raw_approver or ""),
+                    "rejection_reasons": entry_errors,
+                }
+            )
+            continue
+
+        valid_rules.append(
+            {
+                "id": exc_id,
+                "cve_id": raw_cve,
+                "image_digest": raw_digest,
+                "packages": packages,
+                "installed_version": raw_ver,
+                "expires_on": raw_exp,
+                "approved_by": raw_approver,
+                "reason": str(item.get("reason") or ""),
+            }
+        )
+
+    return valid_rules, rejected_entries, errors
+
+
 def load_active_exceptions(
     path: Path,
-) -> tuple[dict[str, dict[str, str]], list[dict[str, object]]]:
+    *,
+    reference_date: date | None = None,
+    expected_image_digest: str | None = None,
+    enforce_digest_match: bool = True,
+) -> tuple[
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[dict[str, object]],
+    list[str],
+]:
     if not path.is_file():
-        return {}, []
+        return [], [], [], []
     raw = json.loads(path.read_text(encoding="utf-8"))
-    today = datetime.now(timezone.utc).date()
-    active_cves: dict[str, dict[str, str]] = {}
+    if not isinstance(raw, dict):
+        msg = f"Exceptions file {path} must contain a top-level JSON object"
+        return [], [], [{"rejection_reasons": [msg]}], [msg]
+
+    today = reference_date or datetime.now(timezone.utc).date()
+    valid_cves, rejected_cves, cve_errors = validate_cve_exception_entries(
+        raw.get("exceptions") if "exceptions" in raw else [],
+        reference_date=today,
+        expected_image_digest=expected_image_digest,
+        enforce_digest_match=enforce_digest_match,
+    )
+
     active_secret_fps: list[dict[str, object]] = []
-
-    for item in raw.get("exceptions") or []:
-        cve_id = str(item.get("cve_id") or "").strip()
-        exp_str = str(item.get("expires_on") or "").strip()
-        approved_by = str(item.get("approved_by") or "").strip()
-        if not cve_id or not exp_str or not approved_by:
-            continue
-        if date.fromisoformat(exp_str) >= today:
-            active_cves[cve_id] = item
-
     for fp in raw.get("secret_false_positives") or []:
         rule_id = str(fp.get("rule_id") or "").strip()
         target_suffix = str(fp.get("target_suffix") or "").strip().replace("\\", "/")
@@ -106,7 +410,7 @@ def load_active_exceptions(
                 }
             )
 
-    return active_cves, active_secret_fps
+    return valid_cves, active_secret_fps, rejected_cves, cve_errors
 
 
 def verify_pyjwt_metadata_content(
@@ -215,7 +519,7 @@ def _match_locked_secret_fp(
 
 
 def _dedupe_critical_entries(
-    items: list[dict[str, str | None]],
+    items: list[dict[str, object]],
 ) -> list[dict[str, object]]:
     grouped: dict[tuple[str, str, str], dict[str, object]] = {}
     for item in items:
@@ -243,6 +547,29 @@ def _dedupe_critical_entries(
     return [grouped[k] for k in sorted(grouped)]
 
 
+def _match_scoped_cve_rule(
+    *,
+    artifact_name: str,
+    cve_id: str,
+    package: str,
+    installed_version: str,
+    reference_date: date,
+    valid_rules: list[dict[str, object]],
+) -> dict[str, object] | None:
+    for rule in valid_rules:
+        pkgs = rule["packages"]
+        assert isinstance(pkgs, list)
+        if (
+            rule["image_digest"] == artifact_name
+            and rule["cve_id"] == cve_id
+            and package in pkgs
+            and rule["installed_version"] == installed_version
+            and date.fromisoformat(str(rule["expires_on"])) >= reference_date
+        ):
+            return rule
+    return None
+
+
 def evaluate_trivy_report(
     trivy_json_path: Path,
     *,
@@ -250,12 +577,26 @@ def evaluate_trivy_report(
     pyjwt_metadata_path: Path | None = None,
     mode: str = "strict",
     forbid_critical_packages: set[str] | None = None,
+    expected_image_digest: str | None = None,
+    reference_date: date | None = None,
 ) -> dict[str, object]:
     if mode not in ("strict", "advisory_upstream_critical"):
         raise ValueError(f"Unsupported evaluation mode: {mode!r}")
 
+    today = reference_date or datetime.now(timezone.utc).date()
     data = json.loads(trivy_json_path.read_text(encoding="utf-8"))
-    active_exceptions, active_secret_fps = load_active_exceptions(exceptions_path)
+    scanned_artifact = str(data.get("ArtifactName") or "").strip()
+    expected_img = (expected_image_digest or "").strip()
+
+    target_digest_for_exceptions = expected_img or scanned_artifact
+    valid_cve_rules, active_secret_fps, rejected_cve_entries, exception_errors = (
+        load_active_exceptions(
+            exceptions_path,
+            reference_date=today,
+            expected_image_digest=target_digest_for_exceptions,
+            enforce_digest_match=(mode == "strict"),
+        )
+    )
     pyjwt_metadata_content = (
         pyjwt_metadata_path.read_text(encoding="utf-8", errors="replace")
         if pyjwt_metadata_path is not None
@@ -263,11 +604,12 @@ def evaluate_trivy_report(
     )
 
     counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "UNKNOWN": 0}
-    fixable_critical_unapproved: list[dict[str, str | None]] = []
-    unfixed_critical: list[dict[str, str | None]] = []
-    excepted_findings: list[dict[str, str | None]] = []
+    fixable_critical_unapproved: list[dict[str, object]] = []
+    unfixed_critical: list[dict[str, object]] = []
+    excepted_findings: list[dict[str, object]] = []
     secret_findings: list[dict[str, object]] = []
     excepted_secret_fps: list[dict[str, object]] = []
+    matched_scope_tuples: set[tuple[str, str, str, str]] = set()
 
     results = data.get("Results") or []
     secret_counts_by_target: dict[str, int] = {}
@@ -332,15 +674,33 @@ def evaluate_trivy_report(
             fixed = str(vuln.get("FixedVersion") or "").strip()
 
             if sev == "CRITICAL":
-                entry = {
+                entry: dict[str, object] = {
                     "cve_id": cve_id,
                     "package": pkg,
                     "installed_version": installed,
                     "fixed_version": fixed or None,
                     "target": target,
                 }
-                if cve_id in active_exceptions:
-                    excepted_findings.append(entry)
+                matched_rule = _match_scoped_cve_rule(
+                    artifact_name=scanned_artifact,
+                    cve_id=cve_id,
+                    package=pkg,
+                    installed_version=installed,
+                    reference_date=today,
+                    valid_rules=valid_cve_rules,
+                )
+                if matched_rule is not None:
+                    matched_scope_tuples.add((scanned_artifact, cve_id, pkg, installed))
+                    excepted_findings.append(
+                        {
+                            **entry,
+                            "exception_id": matched_rule["id"],
+                            "approved_image_digest": matched_rule["image_digest"],
+                            "approved_by": matched_rule["approved_by"],
+                            "expires_on": matched_rule["expires_on"],
+                            "reason": matched_rule["reason"],
+                        }
+                    )
                 elif fixed:
                     fixable_critical_unapproved.append(entry)
                 else:
@@ -371,6 +731,41 @@ def evaluate_trivy_report(
                     }
                 )
 
+    # In strict mode, reject any exception scope item that did not match an actual CRITICAL finding
+    if mode == "strict":
+        for rule in valid_cve_rules:
+            pkgs = rule["packages"]
+            assert isinstance(pkgs, list)
+            unmatched_pkgs = [
+                pkg
+                for pkg in pkgs
+                if (
+                    str(rule["image_digest"]),
+                    str(rule["cve_id"]),
+                    pkg,
+                    str(rule["installed_version"]),
+                )
+                not in matched_scope_tuples
+            ]
+            if unmatched_pkgs:
+                msg = (
+                    f"Exception {rule['id']} ({rule['cve_id']}): out-of-scope or unmatched "
+                    f"package/version {unmatched_pkgs}@{rule['installed_version']} on {scanned_artifact}"
+                )
+                exception_errors.append(msg)
+                rejected_cve_entries.append(
+                    {
+                        "id": rule["id"],
+                        "cve_id": rule["cve_id"],
+                        "image_digest": rule["image_digest"],
+                        "packages": unmatched_pkgs,
+                        "installed_version": rule["installed_version"],
+                        "expires_on": rule["expires_on"],
+                        "approved_by": rule["approved_by"],
+                        "rejection_reasons": [msg],
+                    }
+                )
+
     unique_fixable = _dedupe_critical_entries(fixable_critical_unapproved)
     unique_unfixed = _dedupe_critical_entries(unfixed_critical)
     forbidden_pkgs = {
@@ -378,10 +773,24 @@ def evaluate_trivy_report(
     }
 
     gate_failures: list[str] = []
+    if expected_img:
+        if not is_valid_registry_digest(expected_img):
+            gate_failures.append(
+                f"Invalid --expected-image digest reference: {expected_img!r}"
+            )
+        elif scanned_artifact != expected_img:
+            gate_failures.append(
+                "Scanned artifact digest mismatch: "
+                f"trivy ArtifactName={scanned_artifact!r} != expected_image={expected_img!r}"
+            )
+
     if secret_findings:
         gate_failures.append(
             f"Detected {len(secret_findings)} unapproved embedded secret finding(s) in scanned artifact"
         )
+
+    for exc_err in exception_errors:
+        gate_failures.append(f"Exception gate: {exc_err}")
 
     if forbidden_pkgs:
         regressed = sorted(
@@ -418,6 +827,7 @@ def evaluate_trivy_report(
         "schema_version": "cskh-p4-security-scan-summary-v2",
         "gate_mode": mode,
         "evaluated_at_utc": datetime.now(timezone.utc).isoformat(),
+        "reference_date_utc": today.isoformat(),
         "artifact_name": data.get("ArtifactName"),
         "artifact_type": data.get("ArtifactType"),
         "severity_counts": counts,
@@ -430,6 +840,9 @@ def evaluate_trivy_report(
         "secret_findings": secret_findings,
         "excepted_secret_false_positives_count": len(excepted_secret_fps),
         "excepted_secret_false_positives": excepted_secret_fps,
+        "rejected_exceptions_count": len(rejected_cve_entries),
+        "rejected_exceptions": rejected_cve_entries,
+        "exception_validation_errors": exception_errors,
         "unique_fixable_critical_unapproved": unique_fixable,
         "unique_unfixed_critical_upstream_os": unique_unfixed,
         "fixable_critical_unapproved": fixable_critical_unapproved,
@@ -445,6 +858,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--trivy-json", required=True)
     p.add_argument("--exceptions", default=str(DEFAULT_EXCEPTIONS_FILE))
     p.add_argument(
+        "--expected-image",
+        default="",
+        help="Canonical @sha256 image digest that Trivy ArtifactName and CVE exceptions must match",
+    )
+    p.add_argument(
+        "--reference-date",
+        default="",
+        help="Optional ISO YYYY-MM-DD reference date for deterministic expiry verification",
+    )
+    p.add_argument(
         "--pyjwt-metadata-file",
         default="",
         help="Path to extracted pyjwt-*.dist-info/METADATA from scanned image for exact-token verification",
@@ -453,12 +876,12 @@ def main(argv: list[str] | None = None) -> int:
     mode_group.add_argument(
         "--strict",
         action="store_true",
-        help="Fail closed on ANY secret finding AND ANY unapproved CRITICAL CVE (default; mandatory for Release)",
+        help="Fail closed on ANY secret finding, invalid/out-of-scope exception, or unapproved CRITICAL CVE",
     )
     mode_group.add_argument(
         "--advisory-upstream-critical",
         action="store_true",
-        help="PR rehearsal mode: fail closed on ANY secret & forbidden packages; record upstream CRITICALs",
+        help="PR rehearsal mode: fail closed on ANY secret, invalid/expired exception & forbidden packages",
     )
     p.add_argument(
         "--forbid-critical-packages",
@@ -473,6 +896,11 @@ def main(argv: list[str] | None = None) -> int:
         x.strip() for x in args.forbid_critical_packages.split(",") if x.strip()
     }
     meta_path = Path(args.pyjwt_metadata_file) if args.pyjwt_metadata_file else None
+    ref_date = (
+        date.fromisoformat(args.reference_date.strip())
+        if args.reference_date.strip()
+        else None
+    )
 
     summary = evaluate_trivy_report(
         Path(args.trivy_json),
@@ -480,6 +908,8 @@ def main(argv: list[str] | None = None) -> int:
         pyjwt_metadata_path=meta_path,
         mode=mode,
         forbid_critical_packages=forbid_pkgs,
+        expected_image_digest=args.expected_image or None,
+        reference_date=ref_date,
     )
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -495,6 +925,7 @@ def main(argv: list[str] | None = None) -> int:
                 "excepted_secret_false_positives_count": summary[
                     "excepted_secret_false_positives_count"
                 ],
+                "rejected_exceptions_count": summary["rejected_exceptions_count"],
             }
         )
     )

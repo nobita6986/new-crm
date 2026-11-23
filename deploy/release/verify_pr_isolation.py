@@ -172,10 +172,29 @@ def audit_workflow_text(wf_path: Path, text: str) -> list[str]:
                     "p4-release.yml: build-once-sign-and-push must never use --advisory-upstream-critical"
                 )
             if not re.search(
+                r"evaluate_security_scan\.py[\s\S]*?--expected-image\b[\s\S]*?--exceptions\b",
+                build_job,
+            ):
+                errors.append(
+                    "p4-release.yml: `evaluate_security_scan.py` must pass `--expected-image` and `--exceptions` for strict G04 scope verification"
+                )
+            if not re.search(
+                r"release_manifest\.py\s+generate\b[\s\S]*?--exceptions\b", build_job
+            ):
+                errors.append(
+                    "p4-release.yml: `release_manifest.py generate` must pass `--exceptions` to enforce G04 exception scope before manifest creation"
+                )
+            if not re.search(
                 r"release_manifest\.py\s+sign\b[\s\S]*?--security-scan\b", build_job
             ):
                 errors.append(
                     "p4-release.yml: `release_manifest.py sign` must pass `--security-scan` to enforce strict PASS before signing"
+                )
+            if not re.search(
+                r"release_manifest\.py\s+sign\b[\s\S]*?--exceptions\b", build_job
+            ):
+                errors.append(
+                    "p4-release.yml: `release_manifest.py sign` must pass `--exceptions` to enforce G04 exception scope before signing"
                 )
 
         verify_job = jobs.get("verify-by-digest", "")

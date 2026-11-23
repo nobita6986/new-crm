@@ -498,6 +498,8 @@ jobs:
           set +e
           "$PY" deploy/release/evaluate_security_scan.py \
             --strict \
+            --expected-image "${APP_IMAGE_DIGEST}" \
+            --exceptions deploy/release/cve-exceptions.json \
             --trivy-json "$EVIDENCE_DIR/security/trivy-image.json" \
             --pyjwt-metadata-file "$EVIDENCE_DIR/security/pyjwt-METADATA.txt" \
             --out "$EVIDENCE_DIR/security/security-scan-strict.json"
@@ -506,12 +508,12 @@ jobs:
           echo "Strict security gate exit code: ${STRICT_RC}"
 
           # Verify strict report exists, has 0 real secrets, 0 fixable Critical CVEs, and 0 regressions on patched packages
-          python3 - "$EVIDENCE_DIR/security/security-scan-strict.json" <<'PY'
+          python3 - "$EVIDENCE_DIR/security/trivy-image.json" "$EVIDENCE_DIR/security/security-scan-strict.json" <<'PY'
           import json
           import sys
           from pathlib import Path
 
-          strict_doc = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          strict_doc = json.loads(Path(sys.argv[2]).read_text(encoding="utf-8"))
           assert strict_doc["gate_mode"] == "strict", strict_doc["gate_mode"]
           assert strict_doc["secret_findings_count"] == 0, strict_doc["secret_findings"]
           assert strict_doc["excepted_secret_false_positives_count"] == 1, strict_doc
@@ -527,6 +529,7 @@ jobs:
           "$PY" deploy/release/evaluate_security_scan.py \
             --advisory-upstream-critical \
             --forbid-critical-packages uv,form-data,loader-utils,shell-quote,stdlib,pyjwt,pillow \
+            --exceptions deploy/release/cve-exceptions.json \
             --trivy-json "$EVIDENCE_DIR/security/trivy-image.json" \
             --pyjwt-metadata-file "$EVIDENCE_DIR/security/pyjwt-METADATA.txt" \
             --out "$EVIDENCE_DIR/security/security-scan-summary.json"

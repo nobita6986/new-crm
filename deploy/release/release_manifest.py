@@ -28,10 +28,20 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
+RELEASE_DIR = Path(__file__).resolve().parent
+if str(RELEASE_DIR) not in sys.path:
+    sys.path.insert(0, str(RELEASE_DIR))
+
+from evaluate_security_scan import (  # noqa: E402
+    DEFAULT_EXCEPTIONS_FILE,
+    _match_scoped_cve_rule,
+    load_active_exceptions,
+)
+
+REPO_ROOT = RELEASE_DIR.parents[1]
 DEFAULT_LOCK_PATH = REPO_ROOT / "deploy" / "images" / "release-lock.json"
 PATCHES_TXT_PATH = REPO_ROOT / "apps" / "crm_cskh" / "crm_cskh" / "patches.txt"
 KPI_CALC_PATH = (
@@ -107,8 +117,10 @@ def verify_security_scan_for_manifest(
     *,
     environment_scope: str,
     expected_image: str,
+    exceptions_path: Path | None = DEFAULT_EXCEPTIONS_FILE,
+    reference_date: date | None = None,
 ) -> None:
-    """Enforces fail-closed scan & same-digest invariants before manifest generate or sign."""
+    """Enforces fail-closed scan, same-digest & 5-tuple CVE exception scope invariants before generate or sign."""
     if (
         scan_doc.get("status") != "PASS"
         or int(scan_doc.get("secret_findings_count", -1)) != 0
@@ -121,6 +133,13 @@ def verify_security_scan_for_manifest(
         raise ValueError(
             f"Refusing security scan with non-empty gate_failures: {scan_doc.get('gate_failures')!r}"
         )
+    if int(scan_doc.get("rejected_exceptions_count", 0)) != 0 or scan_doc.get(
+        "exception_validation_errors"
+    ):
+        raise ValueError(
+            "Refusing security scan containing rejected or invalid CVE exceptions: "
+            f"{scan_doc.get('exception_validation_errors') or scan_doc.get('rejected_exceptions')!r}"
+        )
 
     scanned_artifact = str(scan_doc.get("artifact_name") or "").strip()
     if scanned_artifact != expected_image:
@@ -129,14 +148,15 @@ def verify_security_scan_for_manifest(
             f"scan artifact_name={scanned_artifact!r} != manifest image={expected_image!r}"
         )
 
-    if environment_scope == "production_candidate":
+    is_prod = environment_scope == "production_candidate"
+    crit_counts = scan_doc.get("unique_critical_counts")
+    if is_prod:
         gate_mode = scan_doc.get("gate_mode")
         if gate_mode != "strict":
             raise ValueError(
                 "production_candidate release-manifest.json requires explicit security scan "
                 f"gate_mode='strict', got {gate_mode!r}"
             )
-        crit_counts = scan_doc.get("unique_critical_counts")
         if isinstance(crit_counts, dict):
             fixable_unapproved = int(crit_counts.get("fixable_unapproved", 0))
             unfixed_unapproved = int(
@@ -155,6 +175,115 @@ def verify_security_scan_for_manifest(
                 "production_candidate manifest cannot be generated or signed while "
                 "unapproved Critical CVE lists are non-empty"
             )
+
+    today = reference_date or datetime.now(timezone.utc).date()
+    if exceptions_path is None:
+        raise ValueError("CVE exceptions_path is required for manifest verification")
+    if not exceptions_path.is_file():
+        raise ValueError(
+            f"Missing required CVE exceptions file for manifest verification: {exceptions_path}"
+        )
+
+    valid_cve_rules, _, _, exc_errors = load_active_exceptions(
+        exceptions_path,
+        reference_date=today,
+        expected_image_digest=expected_image,
+        enforce_digest_match=is_prod or bool(scan_doc.get("excepted_critical")),
+    )
+    if exc_errors:
+        raise ValueError(
+            "Invalid, out-of-scope, or expired CVE exception(s) blocked manifest operation: "
+            + "; ".join(exc_errors)
+        )
+
+    raw_excepted = scan_doc.get("excepted_critical")
+    if raw_excepted is not None and not isinstance(raw_excepted, list):
+        raise ValueError("security-scan 'excepted_critical' field must be a JSON array")
+    excepted_rows: list[object] = raw_excepted or []
+
+    unique_excepted_keys: set[tuple[str, str, str]] = set()
+    observed_scope_tuples: set[tuple[str, str, str, str]] = set()
+    for idx, row in enumerate(excepted_rows):
+        if not isinstance(row, dict):
+            raise ValueError(f"excepted_critical[{idx}] must be a JSON object")
+        cve_id = str(row.get("cve_id") or "").strip()
+        pkg = str(row.get("package") or "").strip()
+        installed = str(row.get("installed_version") or "").strip()
+        if not cve_id or not pkg or not installed:
+            raise ValueError(
+                f"excepted_critical[{idx}] missing cve_id/package/installed_version: {row!r}"
+            )
+
+        row_digest = str(row.get("approved_image_digest") or "").strip()
+        if not row_digest or row_digest != expected_image:
+            raise ValueError(
+                f"excepted_critical[{idx}] ({cve_id}) approved_image_digest mismatch: "
+                f"{row_digest!r} != {expected_image!r}"
+            )
+        row_approver = str(row.get("approved_by") or "").strip()
+        if not row_approver:
+            raise ValueError(
+                f"excepted_critical[{idx}] ({cve_id}) missing required approved_by authority"
+            )
+        row_exp = str(row.get("expires_on") or "").strip()
+        if not row_exp:
+            raise ValueError(
+                f"excepted_critical[{idx}] ({cve_id}) missing required expires_on date"
+            )
+        try:
+            row_exp_date = date.fromisoformat(row_exp)
+        except ValueError as exc:
+            raise ValueError(
+                f"excepted_critical[{idx}] ({cve_id}) has invalid expires_on {row_exp!r}"
+            ) from exc
+        if row_exp_date < today:
+            raise ValueError(
+                f"excepted_critical[{idx}] ({cve_id}) expired on {row_exp} "
+                f"(reference_date={today.isoformat()})"
+            )
+
+        matched = _match_scoped_cve_rule(
+            artifact_name=expected_image,
+            cve_id=cve_id,
+            package=pkg,
+            installed_version=installed,
+            reference_date=today,
+            valid_rules=valid_cve_rules,
+        )
+        if matched is None:
+            raise ValueError(
+                "Security scan contains excepted Critical CVE without a valid active "
+                f"5-tuple exception rule for {expected_image}: {cve_id} ({pkg}@{installed})"
+            )
+        unique_excepted_keys.add((cve_id, pkg, installed))
+        observed_scope_tuples.add((expected_image, cve_id, pkg, installed))
+
+    if isinstance(crit_counts, dict) and "excepted" in crit_counts:
+        reported_excepted = int(crit_counts.get("excepted", 0))
+        if reported_excepted != len(unique_excepted_keys):
+            raise ValueError(
+                "Security scan excepted Critical CVE count mismatch: "
+                f"unique_critical_counts.excepted={reported_excepted} != "
+                f"deduplicated excepted_critical={len(unique_excepted_keys)}"
+            )
+
+    if is_prod:
+        for rule in valid_cve_rules:
+            pkgs = rule["packages"]
+            assert isinstance(pkgs, list)
+            for pkg in pkgs:
+                key = (
+                    str(rule["image_digest"]),
+                    str(rule["cve_id"]),
+                    pkg,
+                    str(rule["installed_version"]),
+                )
+                if key not in observed_scope_tuples:
+                    raise ValueError(
+                        f"Out-of-scope or unmatched CVE exception {rule['id']} "
+                        f"({rule['cve_id']} {pkg}@{rule['installed_version']}) does not match "
+                        f"any verified excepted_critical finding on {expected_image}"
+                    )
 
 
 def _find_openssl() -> str | None:
@@ -351,6 +480,8 @@ def build_manifest_dict(
     test_report_url: str,
     previous_release_id: str | None,
     approved_by: list[str],
+    exceptions_path: Path = DEFAULT_EXCEPTIONS_FILE,
+    reference_date: date | None = None,
 ) -> dict[str, object]:
     if environment_scope not in ALLOWED_SCOPES:
         raise ValueError(
@@ -415,6 +546,8 @@ def build_manifest_dict(
         scan_doc,
         environment_scope=environment_scope,
         expected_image=reg_digest,
+        exceptions_path=exceptions_path,
+        reference_date=reference_date,
     )
 
     migration_rev = read_latest_migration_revision()
@@ -428,6 +561,8 @@ def build_manifest_dict(
     }
     if sbom_spdx_path and sbom_spdx_path.is_file():
         artifacts["sbom_spdx_sha256"] = sha256_file(sbom_spdx_path)
+    if exceptions_path.is_file():
+        artifacts["cve_exceptions_sha256"] = sha256_file(exceptions_path)
 
     return {
         "schema_version": "cskh-p4-release-manifest-v1",
@@ -534,6 +669,12 @@ def validate_manifest_dict(
             raise ValueError(
                 f"Invalid SHA-256 checksum for artifacts.{req_key}: {val!r}"
             )
+    if "cve_exceptions_sha256" in artifacts:
+        exc_sha = str(artifacts.get("cve_exceptions_sha256") or "")
+        if not SHA64_RE.match(exc_sha):
+            raise ValueError(
+                f"Invalid SHA-256 checksum for artifacts.cve_exceptions_sha256: {exc_sha!r}"
+            )
 
 
 def _load_key_bytes(*, file_arg: str | None, env_arg: str | None, label: str) -> bytes:
@@ -570,6 +711,11 @@ def cmd_keygen(args: argparse.Namespace) -> int:
 
 def cmd_generate(args: argparse.Namespace) -> int:
     approved_by = [x.strip() for x in (args.approved_by or "").split(",") if x.strip()]
+    ref_date = (
+        date.fromisoformat(args.reference_date.strip())
+        if getattr(args, "reference_date", "").strip()
+        else None
+    )
     manifest = build_manifest_dict(
         release_id=args.release_id,
         environment_scope=args.environment_scope,
@@ -583,6 +729,8 @@ def cmd_generate(args: argparse.Namespace) -> int:
         test_report_url=args.test_report_url,
         previous_release_id=args.previous_release_id or None,
         approved_by=approved_by,
+        exceptions_path=Path(args.exceptions),
+        reference_date=ref_date,
     )
     out_path = Path(args.out)
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -612,17 +760,41 @@ def cmd_sign(args: argparse.Namespace) -> int:
 
     scope = str(manifest_obj.get("environment_scope") or "")
     scan_arg = str(getattr(args, "security_scan", "") or "").strip()
+    exc_path = Path(getattr(args, "exceptions", "") or str(DEFAULT_EXCEPTIONS_FILE))
+    ref_date = (
+        date.fromisoformat(args.reference_date.strip())
+        if getattr(args, "reference_date", "").strip()
+        else None
+    )
     if scope == "production_candidate" and not scan_arg:
         raise ValueError(
             "Signing a production_candidate manifest requires --security-scan "
             "pointing to the strict PASS security scan report for that exact @sha256 digest"
         )
+    if scope == "production_candidate" and not exc_path.is_file():
+        raise ValueError(
+            f"Signing a production_candidate manifest requires CVE exceptions file: {exc_path}"
+        )
+
+    artifacts = manifest_obj.get("artifacts")
+    assert isinstance(artifacts, dict)
+    expected_exc_sha = str(artifacts.get("cve_exceptions_sha256") or "")
+    if expected_exc_sha:
+        if not exc_path.is_file():
+            raise ValueError(
+                f"Missing CVE exceptions file during manifest signing: {exc_path}"
+            )
+        actual_exc_sha = sha256_file(exc_path)
+        if actual_exc_sha != expected_exc_sha:
+            raise ValueError(
+                "CVE exceptions SHA-256 mismatch during manifest signing: "
+                f"exceptions file={actual_exc_sha} != manifest.artifacts.cve_exceptions_sha256={expected_exc_sha}"
+            )
+
     if scan_arg:
         scan_path = Path(scan_arg)
         if not scan_path.is_file():
             raise ValueError(f"Missing security scan file for signing: {scan_path}")
-        artifacts = manifest_obj.get("artifacts")
-        assert isinstance(artifacts, dict)
         expected_scan_sha = str(artifacts.get("security_scan_sha256") or "")
         actual_scan_sha = sha256_file(scan_path)
         if actual_scan_sha != expected_scan_sha:
@@ -635,7 +807,22 @@ def cmd_sign(args: argparse.Namespace) -> int:
             scan_doc,
             environment_scope=scope,
             expected_image=str(manifest_obj["image"]),
+            exceptions_path=exc_path,
+            reference_date=ref_date,
         )
+    elif exc_path.is_file():
+        today = ref_date or datetime.now(timezone.utc).date()
+        _, _, _, exc_errors = load_active_exceptions(
+            exc_path,
+            reference_date=today,
+            expected_image_digest=str(manifest_obj["image"]),
+            enforce_digest_match=False,
+        )
+        if exc_errors:
+            raise ValueError(
+                "Invalid or expired CVE exception(s) blocked manifest signing: "
+                + "; ".join(exc_errors)
+            )
 
     priv_pem = _load_key_bytes(
         file_arg=args.private_key_file,
@@ -739,6 +926,16 @@ def build_parser() -> argparse.ArgumentParser:
     gen.add_argument("--sbom-cyclonedx", required=True)
     gen.add_argument("--sbom-spdx", default="")
     gen.add_argument("--security-scan", required=True)
+    gen.add_argument(
+        "--exceptions",
+        default=str(DEFAULT_EXCEPTIONS_FILE),
+        help="Path to cve-exceptions.json enforced against manifest.image and excepted_critical before generation",
+    )
+    gen.add_argument(
+        "--reference-date",
+        default="",
+        help="Optional ISO YYYY-MM-DD reference date for deterministic exception expiry verification",
+    )
     gen.add_argument("--build-url", required=True)
     gen.add_argument("--test-report-url", required=True)
     gen.add_argument("--previous-release-id", default="")
@@ -753,6 +950,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--security-scan",
         default="",
         help="Path to security-scan JSON (mandatory when signing production_candidate manifests)",
+    )
+    sg.add_argument(
+        "--exceptions",
+        default=str(DEFAULT_EXCEPTIONS_FILE),
+        help="Path to cve-exceptions.json enforced against manifest.image and excepted_critical before signing",
+    )
+    sg.add_argument(
+        "--reference-date",
+        default="",
+        help="Optional ISO YYYY-MM-DD reference date for deterministic exception expiry verification",
     )
     sg.add_argument("--private-key-file", default="")
     sg.add_argument("--private-key-env", default="RELEASE_SIGNING_PRIVATE_KEY")

@@ -209,9 +209,11 @@ jobs:
             -c "from pathlib import Path; matches = sorted(Path('/home/frappe/frappe-bench/env/lib/python3.11/site-packages').glob('[Pp]y[Jj][Ww][Tt]-2.15.1.dist-info/METADATA')); assert len(matches) == 1, matches; print(matches[0].read_text(encoding='utf-8'), end='')" \
             > "$BUNDLE/security/pyjwt-METADATA.txt"
 
-          # Strict release gate: fails closed on ANY secret OR ANY unapproved CRITICAL CVE (fixable or unfixed OS)
+          # Strict release gate: fails closed on ANY secret, invalid/out-of-scope exception, OR unapproved CRITICAL CVE
           "$PY" deploy/release/evaluate_security_scan.py \
             --strict \
+            --expected-image "${APP_IMAGE_DIGEST}" \
+            --exceptions deploy/release/cve-exceptions.json \
             --trivy-json "$BUNDLE/security/trivy-image.json" \
             --pyjwt-metadata-file "$BUNDLE/security/pyjwt-METADATA.txt" \
             --out "$BUNDLE/security/security-scan-strict.json"
@@ -240,6 +242,7 @@ jobs:
             --sbom-cyclonedx "$BUNDLE/sbom/sbom.cyclonedx.json" \
             --sbom-spdx "$BUNDLE/sbom/sbom.spdx.json" \
             --security-scan "$BUNDLE/security/security-scan-strict.json" \
+            --exceptions deploy/release/cve-exceptions.json \
             --build-url "${RUN_URL}" \
             --test-report-url "${RUN_URL}" \
             --out "$BUNDLE/manifest/release-manifest.json"
@@ -247,6 +250,7 @@ jobs:
           "$PY" deploy/release/release_manifest.py sign \
             --manifest "$BUNDLE/manifest/release-manifest.json" \
             --security-scan "$BUNDLE/security/security-scan-strict.json" \
+            --exceptions deploy/release/cve-exceptions.json \
             --private-key-env RELEASE_SIGNING_PRIVATE_KEY \
             --sig-out "$BUNDLE/manifest/release-manifest.json.sig" \
             --envelope-out "$BUNDLE/manifest/release-manifest.envelope.json"
