@@ -75,7 +75,7 @@ jobs:
             "$RUNNER_TEMP/p4-ghcr-bundle/security" \
             "$RUNNER_TEMP/p4-ghcr-bundle/manifest"
           python3 -m venv "$RUNNER_TEMP/p4-venv"
-          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2 beautifulsoup4==4.12.3
           "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/verify_pr_isolation.py \
             --check-workflows \
             --check-locks \
@@ -473,7 +473,7 @@ jobs:
           (cd "$RUNNER_TEMP/p4-ghcr-bundle" && sha256sum -c SHA256SUMS.txt)
 
           python3 -m venv "$RUNNER_TEMP/p4-venv"
-          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2 beautifulsoup4==4.12.3
           "$RUNNER_TEMP/p4-venv/bin/python" deploy/release/release_manifest.py verify \
             --manifest "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_MANIFEST_REL}" \
             --sig "$RUNNER_TEMP/p4-ghcr-bundle/${SIGNED_SIG_REL}" \
@@ -629,7 +629,7 @@ jobs:
           sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
           mkdir -p "$RUNNER_TEMP/p4-s1-benchmark"
           python3 -m venv "$RUNNER_TEMP/p4-venv"
-          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2
+          "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir cryptography==44.0.2 beautifulsoup4==4.12.3
           "$RUNNER_TEMP/p4-venv/bin/python" -m unittest discover -s deploy/release -p 'test_*.py' -v
 
           if [ "${RUN_MODE}" != "s1_only" ]; then

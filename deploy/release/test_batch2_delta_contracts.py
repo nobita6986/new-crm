@@ -162,9 +162,14 @@ class TestBatch2DeltaContracts(unittest.TestCase):
     def test_edge_ratelimit_override_is_self_contained_in_release_dir(self) -> None:
         self.assertTrue(EDGE_RATELIMIT_OVERRIDE.is_file())
         txt = EDGE_RATELIMIT_OVERRIDE.read_text(encoding="utf-8")
-        self.assertIn("cskh-login-rl.ratelimit.average", txt)
+        self.assertIn("${COMPOSE_PROJECT_NAME}-login-rl.ratelimit.average", txt)
         self.assertIn(
-            "cskh-heavy-rl.ratelimit.sourcecriterion.requestheadername=Cookie", txt
+            "${COMPOSE_PROJECT_NAME}-heavy-rl.ratelimit.sourcecriterion.requestheadername=Cookie",
+            txt,
+        )
+        self.assertIn(
+            "routers.${COMPOSE_PROJECT_NAME}-frontend-http.service=${COMPOSE_PROJECT_NAME}-frontend",
+            txt,
         )
 
     def test_all_three_verifiers_support_plan_only_cli(self) -> None:

@@ -42,7 +42,7 @@ jobs:
             --check-locks
 
           python3 -m venv "$RUNNER_TEMP/lint-venv"
-          "$RUNNER_TEMP/lint-venv/bin/pip" install --no-cache-dir ruff==0.14.0 cryptography==44.0.2
+          "$RUNNER_TEMP/lint-venv/bin/pip" install --no-cache-dir ruff==0.14.0 cryptography==44.0.2 beautifulsoup4==4.12.3
           "$RUNNER_TEMP/lint-venv/bin/ruff" check deploy/release
           "$RUNNER_TEMP/lint-venv/bin/ruff" format --check deploy/release
           "$RUNNER_TEMP/lint-venv/bin/python" -m unittest discover -s deploy/release -p 'test_*.py' -v

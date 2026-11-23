@@ -62,6 +62,7 @@ FULL_SUITE_PREFIXES: tuple[str, ...] = (
     "apps/crm_cskh/crm_cskh/patches.txt",
     "apps/crm_cskh/crm_cskh/patches/",
     "apps/crm_cskh/crm_cskh/permissions",
+    "apps/crm_cskh/crm_cskh/services/pdf_assets.py",
     "apps/crm_cskh/crm_cskh/crm_cskh/doctype/",
 )
 
@@ -193,6 +194,7 @@ def resolve_diff_impact_plan(
                 tok in low
                 for tok in (
                     "p3",
+                    "pdf",
                     "kpi",
                     "report",
                     "calendar",

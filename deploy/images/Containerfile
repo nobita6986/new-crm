@@ -149,6 +149,10 @@ RUN useradd -u 1000 -g 0 -d /home/frappe -ms /bin/bash frappe \
 FROM base AS builder
 
 ARG MARIADB_DEB_VERSION=1:11.8.9+ds-0+deb13u1
+ARG MARIADB_COMMON_DEB_SHA256=6e7b81b9edd56b40830e04b7fbe9711c76d7d6657199486a1ee59938cf54a2a4
+ARG LIBMARIADB3_AMD64_DEB_SHA256=450b99a4f4434de071e4980c75ade41ed432392f3fd223b0d8baf97fc8eb95aa
+ARG MARIADB_CLIENT_CORE_AMD64_DEB_SHA256=33a191b771d7f0e85882dc2f4adabc57799fd7cec3b315ad4bd562e49cb0a11c
+ARG MARIADB_CLIENT_AMD64_DEB_SHA256=e994b5e860dc9826b56aca07d685a10f038727882e770b52e84a21c7f1ce6a04
 ARG LIBMARIADB_DEV_AMD64_DEB_SHA256=cd404871abb92e5f984b5ff621be086880668f0a11db4f1d0c4e829ccb29a651
 
 RUN apt-get update \
@@ -267,8 +271,8 @@ ARG FRAPPE_DOCKER_TAG=v4.2.0
 ARG FRAPPE_DOCKER_SHA=61d35da827ebc04d01b64c9e78385597ccebc9d8
 ARG BASELINE_MAIN_SHA=467830195358b2431ac772486530ab935887a518
 ARG CSKH_SOURCE_SHA=467830195358b2431ac772486530ab935887a518
-ARG APPS_TREE_SHA=c1744ee45bfc1c4df702b56ab96735d9bbfed934
-ARG CRM_CSKH_TREE_SHA=0b6c60c3ac444e7ff4bb85679bb357b1b7e1380f
+ARG APPS_TREE_SHA=69258b23a80c2518e3b13d9c50234aad5c18a1e8
+ARG CRM_CSKH_TREE_SHA=aa1db8199448c2f98c5da32545391e39878b3945
 
 # 3. Apply pinned Vietnamese UI patches (Frappe Jinja + CRM frappe-ui after frontend deps install),
 #    verify upstream `apps/frappe/pyproject.toml` is untouched, install `crm_cskh` under locked
@@ -349,8 +353,13 @@ RUN set -eux; \
     PYJWT_VER_ARG="${PYJWT_PATCH_VERSION}" \
     PILLOW_VER_ARG="${PILLOW_PATCH_VERSION}" \
     MARIADB_VER_ARG="${MARIADB_DEB_VERSION}" \
+    MARIADB_SHA_COMMON_ARG="${MARIADB_COMMON_DEB_SHA256}" \
+    MARIADB_SHA_LIB_ARG="${LIBMARIADB3_AMD64_DEB_SHA256}" \
+    MARIADB_SHA_CORE_ARG="${MARIADB_CLIENT_CORE_AMD64_DEB_SHA256}" \
+    MARIADB_SHA_CLIENT_ARG="${MARIADB_CLIENT_AMD64_DEB_SHA256}" \
+    MARIADB_SHA_DEV_ARG="${LIBMARIADB_DEV_AMD64_DEB_SHA256}" \
     INSTALL_CHROMIUM_ARG="${INSTALL_CHROMIUM}" \
-    ./env/bin/python -c 'import hashlib, json, os, subprocess; from pathlib import Path; meta = Path("/home/frappe/frappe-bench/release-metadata"); sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest(); cskh_ver = {}; exec(Path("apps/crm_cskh/crm_cskh/__init__.py").read_text(), cskh_ver); out = {"schema_version": "cskh-image-build-manifest-v1", "base_image": os.environ["BASE_IMAGE_ARG"], "frappe_docker": {"tag": os.environ["FRAPPE_DOCKER_TAG_ARG"], "commit_sha": os.environ["FRAPPE_DOCKER_SHA_ARG"]}, "apps": {"frappe": {"tag": os.environ["FRAPPE_TAG_ARG"], "commit_sha": os.environ["FRAPPE_HEAD"], "pyproject_unmodified": True}, "crm": {"tag": os.environ["CRM_TAG_ARG"], "commit_sha": os.environ["CRM_HEAD"]}, "crm_cskh": {"declared_version": cskh_ver["__version__"], "baseline_main_sha": os.environ["BASELINE_MAIN_SHA_ARG"], "source_commit_sha": os.environ["CSKH_SOURCE_SHA_ARG"], "apps_tree_sha": os.environ["APPS_TREE_SHA_ARG"], "crm_cskh_tree_sha": os.environ["CRM_CSKH_TREE_SHA_ARG"], "files_manifest_sha256": sha(meta / "crm-cskh-files.sha256")}}, "toolchain": {"python": subprocess.check_output(["/home/frappe/frappe-bench/env/bin/python", "--version"], text=True).strip(), "node": subprocess.check_output(["node", "--version"], text=True).strip(), "yarn": subprocess.check_output(["yarn", "--version"], text=True).strip(), "bench": subprocess.check_output(["bench", "--version"], text=True).strip(), "uv": subprocess.check_output(["uv", "--version"], text=True).strip(), "install_chromium": os.environ["INSTALL_CHROMIUM_ARG"] != "false"}, "locks": {"pip_freeze_sha256": sha(meta / "pip-freeze.txt"), "pip_freeze_all_sha256": sha(meta / "pip-freeze-all.txt"), "system_pip_freeze_sha256": sha(meta / "system-pip-freeze.txt"), "python_constraints_sha256": sha(meta / "python-constraints.txt"), "system_python_constraints_sha256": sha(meta / "system-python-constraints.txt"), "yarn_locks_sha256": sha(meta / "yarn-locks.sha256"), "dpkg_packages_sha256": sha(meta / "dpkg-packages.txt"), "builder_dpkg_packages_sha256": sha(meta / "builder-dpkg-packages.txt"), "upstream_patches_diff_sha256": sha(meta / "upstream-patches.diff"), "assets_json_sha256": sha("sites/assets/assets.json"), "crm_www_html_sha256": sha("apps/crm/crm/www/crm.html")}, "security_patches": {"frappe_form_data_version": os.environ["FORM_DATA_VER_ARG"], "pyjwt_version": os.environ["PYJWT_VER_ARG"], "pillow_version": os.environ["PILLOW_VER_ARG"], "mariadb_client_debian_version": os.environ["MARIADB_VER_ARG"], "pip_check_verified": True, "pruned_frappe_build_only_node_modules": ["esbuild", "esbuild-linux-64", "loader-utils", "shell-quote"], "removed_unused_runtime_apt_packages": ["libpq-dev", "postgresql-client", "restic"] + (["chromium-headless-shell", "libxml2"] if os.environ["INSTALL_CHROMIUM_ARG"] == "false" else [])}}; (meta / "build-manifest.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")'; \
+    ./env/bin/python -c 'import hashlib, json, os, subprocess; from pathlib import Path; meta = Path("/home/frappe/frappe-bench/release-metadata"); sha = lambda p: hashlib.sha256(Path(p).read_bytes()).hexdigest(); cskh_ver = {}; exec(Path("apps/crm_cskh/crm_cskh/__init__.py").read_text(), cskh_ver); out = {"schema_version": "cskh-image-build-manifest-v1", "base_image": os.environ["BASE_IMAGE_ARG"], "frappe_docker": {"tag": os.environ["FRAPPE_DOCKER_TAG_ARG"], "commit_sha": os.environ["FRAPPE_DOCKER_SHA_ARG"]}, "apps": {"frappe": {"tag": os.environ["FRAPPE_TAG_ARG"], "commit_sha": os.environ["FRAPPE_HEAD"], "pyproject_unmodified": True}, "crm": {"tag": os.environ["CRM_TAG_ARG"], "commit_sha": os.environ["CRM_HEAD"]}, "crm_cskh": {"declared_version": cskh_ver["__version__"], "baseline_main_sha": os.environ["BASELINE_MAIN_SHA_ARG"], "source_commit_sha": os.environ["CSKH_SOURCE_SHA_ARG"], "apps_tree_sha": os.environ["APPS_TREE_SHA_ARG"], "crm_cskh_tree_sha": os.environ["CRM_CSKH_TREE_SHA_ARG"], "files_manifest_sha256": sha(meta / "crm-cskh-files.sha256")}}, "toolchain": {"python": subprocess.check_output(["/home/frappe/frappe-bench/env/bin/python", "--version"], text=True).strip(), "node": subprocess.check_output(["node", "--version"], text=True).strip(), "yarn": subprocess.check_output(["yarn", "--version"], text=True).strip(), "bench": subprocess.check_output(["bench", "--version"], text=True).strip(), "uv": subprocess.check_output(["uv", "--version"], text=True).strip(), "install_chromium": os.environ["INSTALL_CHROMIUM_ARG"] != "false"}, "locks": {"pip_freeze_sha256": sha(meta / "pip-freeze.txt"), "pip_freeze_all_sha256": sha(meta / "pip-freeze-all.txt"), "system_pip_freeze_sha256": sha(meta / "system-pip-freeze.txt"), "python_constraints_sha256": sha(meta / "python-constraints.txt"), "system_python_constraints_sha256": sha(meta / "system-python-constraints.txt"), "yarn_locks_sha256": sha(meta / "yarn-locks.sha256"), "dpkg_packages_sha256": sha(meta / "dpkg-packages.txt"), "builder_dpkg_packages_sha256": sha(meta / "builder-dpkg-packages.txt"), "upstream_patches_diff_sha256": sha(meta / "upstream-patches.diff"), "assets_json_sha256": sha("sites/assets/assets.json"), "crm_www_html_sha256": sha("apps/crm/crm/www/crm.html")}, "security_patches": {"frappe_form_data_version": os.environ["FORM_DATA_VER_ARG"], "pyjwt_version": os.environ["PYJWT_VER_ARG"], "pillow_version": os.environ["PILLOW_VER_ARG"], "mariadb_client_debian_version": os.environ["MARIADB_VER_ARG"], "mariadb_client_amd64_sha256": {"mariadb-common": os.environ["MARIADB_SHA_COMMON_ARG"], "libmariadb3": os.environ["MARIADB_SHA_LIB_ARG"], "mariadb-client-core": os.environ["MARIADB_SHA_CORE_ARG"], "mariadb-client": os.environ["MARIADB_SHA_CLIENT_ARG"], "libmariadb-dev": os.environ["MARIADB_SHA_DEV_ARG"]}, "pip_check_verified": True, "pruned_frappe_build_only_node_modules": ["esbuild", "esbuild-linux-64", "loader-utils", "shell-quote"], "removed_unused_runtime_apt_packages": ["libpq-dev", "postgresql-client", "restic"] + (["chromium-headless-shell", "libxml2"] if os.environ["INSTALL_CHROMIUM_ARG"] == "false" else [])}}; (meta / "build-manifest.json").write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")'; \
     rm -rf \
         /tmp/cskh-build \
         /home/frappe/.cache \
@@ -372,8 +381,8 @@ ARG CRM_SHA=0d3910b456ef4fb913e77b29db011b3debc4f778
 ARG FRAPPE_DOCKER_SHA=61d35da827ebc04d01b64c9e78385597ccebc9d8
 ARG BASELINE_MAIN_SHA=467830195358b2431ac772486530ab935887a518
 ARG CSKH_SOURCE_SHA=467830195358b2431ac772486530ab935887a518
-ARG APPS_TREE_SHA=c1744ee45bfc1c4df702b56ab96735d9bbfed934
-ARG CRM_CSKH_TREE_SHA=0b6c60c3ac444e7ff4bb85679bb357b1b7e1380f
+ARG APPS_TREE_SHA=69258b23a80c2518e3b13d9c50234aad5c18a1e8
+ARG CRM_CSKH_TREE_SHA=aa1db8199448c2f98c5da32545391e39878b3945
 
 LABEL org.opencontainers.image.title="crm-cskh" \
       org.opencontainers.image.description="CRM-CSKH immutable production image (Frappe + Frappe CRM + crm_cskh)" \

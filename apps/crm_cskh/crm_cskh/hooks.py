@@ -390,6 +390,7 @@ after_request = ["crm_cskh.errors.normalize_error_response", "crm_cskh.p1_errors
 # Job & Print Events
 # ------------------
 before_job = ["crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks"]
+before_tests = ["crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks"]
 on_print_pdf = ["crm_cskh.services.pdf_assets.on_print_pdf"]
 # after_job = ["crm_cskh.utils.after_job"]
 

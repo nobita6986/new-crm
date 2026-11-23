@@ -1,24 +1,40 @@
 #!/usr/bin/env python3
-"""Unit & contract tests for MariaDB 1:11.8.9+ds-0+deb13u1 + INSTALL_CHROMIUM=false + PDF local assets."""
+"""Unit & contract tests for MariaDB 11.8.9, PDF SSRF/file/RBAC lockdown, inventory & provenance."""
 
 from __future__ import annotations
 
 import ast
 import base64
 import importlib.util
+import io
 import json
+import os
 import re
 import sys
 import tempfile
+import threading
 import types
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import bs4  # Hard requirement (`F-TRIAL-INV-01`): never skip silently if bs4 is missing!
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
-def _load_pdf_assets_with_stub_frappe(sites_dir: Path, site_name: str):
-    """Loads `crm_cskh.services.pdf_assets` against a lightweight stub `frappe` module."""
+def _load_pdf_assets_with_stub_frappe(
+    sites_dir: Path,
+    site_name: str,
+    *,
+    user: str = "Administrator",
+    files_db: dict[str, dict[str, object]] | None = None,
+    perm_callback=None,
+):
+    """Load `crm_cskh.services.pdf_assets` against a deterministic stub `frappe` runtime."""
+    assert bs4.__version__
+    records = files_db if files_db is not None else {}
+
     stub_frappe = types.ModuleType("frappe")
     stub_local = types.SimpleNamespace(
         sites_path=str(sites_dir),
@@ -26,10 +42,44 @@ def _load_pdf_assets_with_stub_frappe(sites_dir: Path, site_name: str):
         request=types.SimpleNamespace(host=site_name),
     )
     stub_frappe.local = stub_local  # type: ignore[attr-defined]
+    stub_frappe.session = types.SimpleNamespace(user=user, sid="secret-sid-123")  # type: ignore[attr-defined]
+
     stub_utils = types.ModuleType("frappe.utils")
     stub_utils.get_url = lambda: f"http://{site_name}"  # type: ignore[attr-defined]
     stub_frappe.utils = stub_utils  # type: ignore[attr-defined]
     stub_frappe.get_site_path = lambda *parts: str(sites_dir / site_name / Path(*parts))  # type: ignore[attr-defined]
+
+    def _get_all(doctype: str, filters=None, pluck=None, **_kw):
+        if doctype != "File":
+            return []
+        fdict = filters or {}
+        matched = []
+        for fname, meta in records.items():
+            if fdict.get("file_url") and meta.get("file_url") != fdict["file_url"]:
+                continue
+            if "is_private" in fdict and int(meta.get("is_private", 0)) != int(
+                fdict["is_private"]
+            ):
+                continue
+            if fdict.get("name") and fname != fdict["name"]:
+                continue
+            matched.append(fname if pluck == "name" else {"name": fname, **meta})
+        return matched
+
+    def _get_doc(doctype: str, name: str):
+        assert doctype == "File"
+        meta = records[name]
+        return types.SimpleNamespace(doctype="File", name=name, **meta)
+
+    def _has_permission(doctype: str, ptype: str = "read", doc=None, user=None, **_kw):
+        eff_user = user or stub_frappe.session.user
+        if perm_callback is not None:
+            return bool(perm_callback(doctype, ptype, doc, eff_user))
+        return eff_user == "Administrator"
+
+    stub_frappe.get_all = _get_all  # type: ignore[attr-defined]
+    stub_frappe.get_doc = _get_doc  # type: ignore[attr-defined]
+    stub_frappe.has_permission = _has_permission  # type: ignore[attr-defined]
 
     saved = {k: sys.modules.get(k) for k in ("frappe", "frappe.utils")}
     sys.modules["frappe"] = stub_frappe
@@ -42,7 +92,7 @@ def _load_pdf_assets_with_stub_frappe(sites_dir: Path, site_name: str):
         assert spec and spec.loader
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        return mod, saved
+        return mod, stub_frappe, saved
     except Exception:
         for k, v in saved.items():
             if v is None:
@@ -52,8 +102,16 @@ def _load_pdf_assets_with_stub_frappe(sites_dir: Path, site_name: str):
         raise
 
 
+def _restore_modules(saved: dict[str, object]) -> None:
+    for k, v in saved.items():
+        if v is None:
+            sys.modules.pop(k, None)
+        else:
+            sys.modules[k] = v  # type: ignore[assignment]
+
+
 class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
-    def test_release_lock_and_containerfile_mariadb1189_and_no_chromium_pins(
+    def test_release_lock_containerfile_and_build_script_mariadb1189_and_tree_sha_sync(
         self,
     ) -> None:
         lock = json.loads(
@@ -62,6 +120,9 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
             )
         )
         cfile = (REPO_ROOT / "deploy" / "images" / "Containerfile").read_text(
+            encoding="utf-8"
+        )
+        build_sh = (REPO_ROOT / "deploy" / "images" / "build-image.sh").read_text(
             encoding="utf-8"
         )
         exc_doc = json.loads(
@@ -79,20 +140,38 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
             lock["security_patches"]["mariadb_client_debian_version"],
             "1:11.8.9+ds-0+deb13u1",
         )
+
+        # F-TRIAL-PROV-01: All 5 MariaDB SHA-256s in release-lock, Containerfile, and build-image.sh --build-arg
         sha_map = lock["security_patches"]["mariadb_client_amd64_sha256"]
-        self.assertEqual(
-            set(sha_map),
-            {
-                "mariadb-common",
-                "libmariadb3",
-                "mariadb-client-core",
-                "mariadb-client",
-                "libmariadb-dev",
-            },
-        )
-        for pkg, sha_hex in sha_map.items():
+        expected_arg_map = {
+            "mariadb-common": "MARIADB_COMMON_DEB_SHA256",
+            "libmariadb3": "LIBMARIADB3_AMD64_DEB_SHA256",
+            "mariadb-client-core": "MARIADB_CLIENT_CORE_AMD64_DEB_SHA256",
+            "mariadb-client": "MARIADB_CLIENT_AMD64_DEB_SHA256",
+            "libmariadb-dev": "LIBMARIADB_DEV_AMD64_DEB_SHA256",
+        }
+        self.assertEqual(set(sha_map), set(expected_arg_map))
+        for pkg, arg_name in expected_arg_map.items():
+            sha_hex = sha_map[pkg]
             self.assertEqual(len(sha_hex), 64, pkg)
-            self.assertIn(sha_hex, cfile)
+            self.assertIn(f"ARG {arg_name}={sha_hex}", cfile)
+            self.assertIn(f'--build-arg "{arg_name}=${{{arg_name}}}"', build_sh)
+
+        # F-TRIAL-PROV-01: All tree SHA fields synchronized across release-lock & Containerfile
+        self.assertEqual(
+            lock["apps"]["crm_cskh"]["apps_tree_sha"], lock["apps_tree_sha"]
+        )
+        self.assertEqual(
+            lock["apps"]["crm_cskh"]["crm_cskh_tree_sha"], lock["crm_cskh_tree_sha"]
+        )
+        cfile_apps_trees = re.findall(
+            r"(?m)^ARG\s+APPS_TREE_SHA=([0-9a-f]{40})\s*$", cfile
+        )
+        cfile_cskh_trees = re.findall(
+            r"(?m)^ARG\s+CRM_CSKH_TREE_SHA=([0-9a-f]{40})\s*$", cfile
+        )
+        self.assertEqual(cfile_apps_trees, [lock["apps_tree_sha"]] * 2)
+        self.assertEqual(cfile_cskh_trees, [lock["crm_cskh_tree_sha"]] * 2)
 
         self.assertIn("ARG INSTALL_CHROMIUM=false", cfile)
         self.assertIn("ARG MARIADB_DEB_VERSION=1:11.8.9+ds-0+deb13u1", cfile)
@@ -112,6 +191,30 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
         self.assertGreaterEqual(len(py_c_matches), 4)
         for idx, snippet in enumerate(py_c_matches):
             ast.parse(snippet, filename=f"Containerfile:python_c_{idx}")
+
+    def test_canonical_p3_inventory_and_ci_workflows_eliminate_bs4_skip(self) -> None:
+        this_src = Path(__file__).read_text(encoding="utf-8")
+        self.assertNotIn("skip" + "Test(", this_src)
+        self.assertNotIn("@unittest." + "skip", this_src)
+
+        for wf_rel in (
+            ".github/workflows/p4-ci.yml",
+            ".github/workflows/p4-candidate-verify.yml",
+            ".github/workflows/p4-batch2-delta.yml",
+        ):
+            wf_txt = (REPO_ROOT / wf_rel).read_text(encoding="utf-8")
+            self.assertIn("beautifulsoup4==4.12.3", wf_txt, wf_rel)
+
+        p3_inv = json.loads(
+            (
+                REPO_ROOT / "deploy" / "dev" / "seed" / "p3_test_inventory.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertGreaterEqual(int(p3_inv["expected_total"]), 53)
+        pdf_mod_methods = p3_inv["modules"].get(
+            "crm_cskh.tests.test_p3_pdf_security_and_worker", []
+        )
+        self.assertGreaterEqual(len(pdf_mod_methods), 8)
 
     def test_release_signing_secret_name_and_existing_digest_binding_sync(self) -> None:
         cand_wf = (
@@ -163,14 +266,9 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
                         checked += 1
             self.assertGreaterEqual(checked, 3, rel)
 
-    def test_pdf_assets_inlines_same_site_css_and_images_and_blocks_traversal(
+    def test_pdf_assets_html_css_ssrf_protocol_relative_traversal_and_symlink_lockdown(
         self,
     ) -> None:
-        try:
-            import bs4  # noqa: F401
-        except ImportError:
-            self.skipTest("bs4 not installed in host Python")
-
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             sites = root / "sites"
@@ -182,63 +280,214 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
             font_bytes = b"FAKE-WOFF2-BYTES"
             (assets_dir / "font.woff2").write_bytes(font_bytes)
             (assets_dir / "print.bundle.123.css").write_text(
-                '@font-face { src: url("font.woff2"); } body { color: #111; }',
+                '@import "https://evil.example.invalid/steal.css"; '
+                '@font-face { src: url("font.woff2"); } '
+                '.ssrf { background: url("http://127.0.0.1:6379/ping"); }',
                 encoding="utf-8",
             )
             png_bytes = b"\x89PNG\r\n\x1a\nFAKEPNG"
             (public_files / "badge.png").write_bytes(png_bytes)
-            (root / "secret.txt").write_text("TOP_SECRET", encoding="utf-8")
+            secret_file = root / "secret.txt"
+            secret_file.write_text("TOP_SECRET", encoding="utf-8")
 
-            mod, saved = _load_pdf_assets_with_stub_frappe(sites, "p4-smoke.localhost")
+            symlink_created = False
+            sym_path = public_files / "sym.png"
+            try:
+                os.symlink(secret_file, sym_path)
+                symlink_created = True
+            except OSError:
+                symlink_created = False
+
+            mod, _, saved = _load_pdf_assets_with_stub_frappe(
+                sites, "p4-smoke.localhost"
+            )
             try:
                 raw_html = (
                     "<html><head>"
+                    '<base href="https://evil.example.invalid/">'
+                    '<meta http-equiv="refresh" content="0;url=http://169.254.169.254/">'
                     '<link type="text/css" rel="stylesheet" '
                     'href="http://p4-smoke.localhost/assets/frappe/dist/css/print.bundle.123.css">'
-                    "</head><body>"
+                    '<link rel="stylesheet" href="https://evil.example.invalid/ext.css">'
+                    '<style>@import "//evil.example.invalid/proto.css"; '
+                    'div { background-image: url("file:///etc/passwd"); }</style>'
+                    "</head><body style=\"background: url('https://evil.example.invalid/bg.png')\">"
                     '<img src="http://p4-smoke.localhost/files/badge.png"/>'
                     '<img src="http://p4-smoke.localhost/files/../../../secret.txt"/>'
+                    '<img src="http://p4-smoke.localhost/files/%2e%2e/%2e%2e/%2e%2e/secret.txt"/>'
+                    '<img src="//evil.example.invalid/files/badge.png"/>'
+                    '<img src="//p4-smoke.localhost/files/badge.png"/>'
+                    '<img src="\\\\p4-smoke.localhost\\files\\badge.png"/>'
                     '<img src="https://evil.example.invalid/ssrf.png"/>'
+                    '<iframe src="http://127.0.0.1:8000/"></iframe>'
+                    '<script src="https://evil.example.invalid/x.js"></script>'
                     "</body></html>"
                 )
                 out = mod.inline_local_pdf_assets(raw_html)
-                self.assertNotIn("print.bundle.123.css", out)
                 self.assertIn(base64.b64encode(font_bytes).decode("ascii"), out)
-                self.assertIn(
-                    f"data:image/png;base64,{base64.b64encode(png_bytes).decode('ascii')}",
-                    out,
+                # Authorized badge appears ONCE (protocol-relative //p4-smoke.localhost/files/badge.png was blocked!)
+                expected_badge_uri = f"data:image/png;base64,{base64.b64encode(png_bytes).decode('ascii')}"
+                self.assertEqual(out.count(expected_badge_uri), 1)
+                for forbidden_tok in (
+                    "evil.example.invalid",
+                    "169.254.169.254",
+                    "127.0.0.1:6379",
+                    "127.0.0.1:8000",
+                    "file:///etc/passwd",
+                    "TOP_SECRET",
+                    base64.b64encode(b"TOP_SECRET").decode("ascii"),
+                    "<iframe",
+                    "<script",
+                    "<base",
+                    "http-equiv",
+                    "@import",
+                ):
+                    self.assertNotIn(forbidden_tok, out)
+
+                if symlink_created:
+                    self.assertIsNone(
+                        mod._resolve_same_site_resource(
+                            "/files/sym.png", include_private_files=True
+                        )
+                    )
+
+                # SVG sanitization: strip <script> and external <image href=...> while rejecting <!ENTITY>
+                xxe_svg = b'<!DOCTYPE svg [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><svg xmlns="http://www.w3.org/2000/svg">&xxe;</svg>'
+                self.assertIsNone(mod._sanitize_svg_bytes(xxe_svg))
+                dirty_svg = (
+                    b'<svg xmlns="http://www.w3.org/2000/svg">'
+                    b"<script>alert(1)</script>"
+                    b'<image href="https://evil.example.invalid/spy.png"/>'
+                    b'<rect width="10" height="10"/></svg>'
                 )
-                self.assertNotIn("TOP_SECRET", out)
-                self.assertNotIn(base64.b64encode(b"TOP_SECRET").decode("ascii"), out)
-                self.assertIn("https://evil.example.invalid/ssrf.png", out)
+                clean_svg = mod._sanitize_svg_bytes(dirty_svg)
+                assert clean_svg is not None
+                self.assertNotIn(b"script", clean_svg)
+                self.assertNotIn(b"evil.example.invalid", clean_svg)
+            finally:
+                _restore_modules(saved)
 
-                # Verify depth-first _cskh_get_element finds <header> even after a MarginBox sibling
-                class _Box:
-                    def __init__(self, tag, children=()):
-                        self.element_tag = tag
-                        self._children = list(children)
+    def test_private_file_rbac_weasyprint_html_css_and_multithreaded_hooks(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            sites = root / "sites"
+            site_dir = sites / "p4-smoke.localhost"
+            (sites / "assets").mkdir(parents=True)
+            priv_dir = site_dir / "private" / "files"
+            priv_dir.mkdir(parents=True)
 
-                    def all_children(self):
-                        return self._children
+            priv_png = b"\x89PNG\r\n\x1a\nPRIVATEPNG"
+            (priv_dir / "lead_secret.png").write_bytes(priv_png)
 
-                tree = [
-                    _Box(None, [_Box("span")]),  # @page MarginBox preceding <html>
-                    _Box("html", [_Box("body", [_Box("div"), _Box("header")])]),
-                ]
-                found = mod._cskh_get_element(tree, "header")
-                self.assertIsNotNone(found)
-                self.assertEqual(found.element_tag, "header")
+            lead_owner_state = {"LEAD-1": "staff.a@cskh.local"}
+            files_db = {
+                "FILE-PRIV-1": {
+                    "file_url": "/private/files/lead_secret.png",
+                    "is_private": 1,
+                    "owner": "staff.a@cskh.local",
+                    "attached_to_doctype": "CRM Lead",
+                    "attached_to_name": "LEAD-1",
+                }
+            }
 
-                # Verify WeasyPrint 70+ URLFetcher / URLFetcherResponse compatibility (no default_url_fetcher)
+            def _perm_cb(doctype: str, _ptype: str, doc, eff_user: str) -> bool:
+                if eff_user == "Administrator":
+                    return True
+                if doctype == "CRM Lead":
+                    lead_id = doc if isinstance(doc, str) else getattr(doc, "name", "")
+                    return lead_owner_state.get(lead_id) == eff_user
+                if doctype == "File":
+                    att_dt = getattr(doc, "attached_to_doctype", None)
+                    att_dn = getattr(doc, "attached_to_name", None)
+                    if att_dt != "CRM Lead" or not att_dn:
+                        return False
+                    return lead_owner_state.get(att_dn) == eff_user
+                return False
+
+            mod, stub_frappe, saved = _load_pdf_assets_with_stub_frappe(
+                sites,
+                "p4-smoke.localhost",
+                user="Guest",
+                files_db=files_db,
+                perm_callback=_perm_cb,
+            )
+            try:
+                # 1. Guest -> denied
+                self.assertIsNone(
+                    mod._resolve_same_site_resource(
+                        "/private/files/lead_secret.png", include_private_files=True
+                    )
+                )
+                # 2. Out-of-scope staff.b -> denied
+                stub_frappe.session.user = "staff.b@cskh.local"
+                self.assertIsNone(
+                    mod._resolve_same_site_resource(
+                        "/private/files/lead_secret.png", include_private_files=True
+                    )
+                )
+                # 3. Current Lead owner staff.a -> allowed
+                stub_frappe.session.user = "staff.a@cskh.local"
+                hit_a = mod._resolve_same_site_resource(
+                    "/private/files/lead_secret.png", include_private_files=True
+                )
+                self.assertIsNotNone(hit_a)
+                assert hit_a is not None
+                self.assertEqual(hit_a[0], priv_png)
+                self.assertIsNotNone(
+                    mod._guarded_frappe_get_base64_image(
+                        "/private/files/lead_secret.png"
+                    )
+                )
+
+                # 4. Reassign CRM Lead to staff.b -> former owner staff.a (still file.owner!) is DENIED
+                lead_owner_state["LEAD-1"] = "staff.b@cskh.local"
+                self.assertIsNone(
+                    mod._resolve_same_site_resource(
+                        "/private/files/lead_secret.png", include_private_files=True
+                    )
+                )
+                self.assertIsNone(
+                    mod._guarded_frappe_get_base64_image(
+                        "/private/files/lead_secret.png"
+                    )
+                )
+                stub_frappe.session.user = "staff.b@cskh.local"
+                self.assertIsNotNone(
+                    mod._resolve_same_site_resource(
+                        "/private/files/lead_secret.png", include_private_files=True
+                    )
+                )
+
+                # 5. wkhtmltopdf options sanitizer forces proxy=127.0.0.1:1, disable-local-file-access & strips cookie-jar
+                self.assertEqual(mod._guarded_frappe_get_cookie_options(), {})
+                s_opts = mod._sanitize_wkhtmltopdf_options(
+                    {"cookie-jar": "/nonexistent.jar", "allow": "/etc"}
+                )
+                self.assertNotIn("cookie-jar", s_opts)
+                self.assertNotIn("allow", s_opts)
+                self.assertEqual(s_opts["proxy"], "http://127.0.0.1:1")
+                self.assertEqual(s_opts["disable-local-file-access"], "")
+                self.assertEqual(s_opts["disable-javascript"], "")
+
+                # 6. WeasyPrint 70+ URLFetcher + HTML & CSS factory lockdown + 16-thread hook init
                 wp_mod = types.ModuleType("weasyprint")
                 wp_urls_mod = types.ModuleType("weasyprint.urls")
 
                 class _FakeURLFetcher:
-                    def __init__(self, fail_on_errors=False, **_kw):
-                        self._fail_on_errors = fail_on_errors
+                    def __init__(
+                        self,
+                        fail_on_errors=False,
+                        allow_redirects=True,
+                        allowed_protocols=None,
+                    ):
+                        self.fail_on_errors = fail_on_errors
+                        self.allow_redirects = allow_redirects
+                        self.allowed_protocols = allowed_protocols
 
                     def fetch(self, url, headers=None):
-                        return ("DATA_FETCH", url)
+                        return ("SUPER_FETCH", url)
 
                 class _FakeURLFetcherResponse:
                     def __init__(self, url, body=None, headers=None, status=200):
@@ -247,38 +496,111 @@ class TestTrialMariaDb1189AndPdfAssets(unittest.TestCase):
                         self.headers = headers or {}
                         self.status = status
 
+                class _RawHTML:
+                    def __init__(self, **kwargs):
+                        self.kwargs = kwargs
+
+                class _RawCSS:
+                    def __init__(self, **kwargs):
+                        self.kwargs = kwargs
+
+                wp_mod.HTML = _RawHTML  # type: ignore[attr-defined]
+                wp_mod.CSS = _RawCSS  # type: ignore[attr-defined]
                 wp_urls_mod.URLFetcher = _FakeURLFetcher  # type: ignore[attr-defined]
                 wp_urls_mod.URLFetcherResponse = _FakeURLFetcherResponse  # type: ignore[attr-defined]
-                saved_wp = {
-                    k: sys.modules.get(k) for k in ("weasyprint", "weasyprint.urls")
+
+                frappe_pdf_mod = types.ModuleType("frappe.utils.pdf")
+                frappe_pdf_mod.pdfkit = types.SimpleNamespace(  # type: ignore[attr-defined]
+                    from_string=lambda h, *a, **kw: (h, a, kw),
+                    from_url=lambda *_a, **_kw: b"",
+                    from_file=lambda *_a, **_kw: b"",
+                )
+                frappe_pdf_mod._get_base64_image = lambda _s: None  # type: ignore[attr-defined]
+                frappe_pdf_mod.inline_private_images = lambda h: h  # type: ignore[attr-defined]
+                frappe_pdf_mod.get_cookie_options = lambda: {"cookie-jar": "/tmp/x.jar"}  # type: ignore[attr-defined]
+
+                frappe_wp_mod = types.ModuleType("frappe.utils.weasyprint")
+                frappe_wp_mod.PrintFormatGenerator = type(  # type: ignore[attr-defined]
+                    "PrintFormatGenerator",
+                    (),
+                    {"get_element": staticmethod(lambda b, e: None)},
+                )
+                frappe_wp_mod.import_weasyprint = lambda: (_RawHTML, _RawCSS)  # type: ignore[attr-defined]
+
+                extra_saved = {
+                    k: sys.modules.get(k)
+                    for k in (
+                        "weasyprint",
+                        "weasyprint.urls",
+                        "frappe.utils.pdf",
+                        "frappe.utils.weasyprint",
+                    )
                 }
                 sys.modules["weasyprint"] = wp_mod
                 sys.modules["weasyprint.urls"] = wp_urls_mod
+                sys.modules["frappe.utils.pdf"] = frappe_pdf_mod
+                sys.modules["frappe.utils.weasyprint"] = frappe_wp_mod
                 try:
-                    fetcher = mod._make_weasyprint_url_fetcher(wp_mod)
-                    self.assertIsInstance(fetcher, _FakeURLFetcher)
-                    resp = fetcher.fetch("http://p4-smoke.localhost/files/badge.png")
-                    self.assertIsInstance(resp, _FakeURLFetcherResponse)
-                    self.assertEqual(resp.status, 200)
-                    self.assertEqual(resp.body, png_bytes)
-                    self.assertEqual(
-                        fetcher.fetch("data:image/png;base64,AA=="),
-                        ("DATA_FETCH", "data:image/png;base64,AA=="),
+                    barrier = threading.Barrier(16)
+
+                    def _init_worker(_i: int) -> bool:
+                        barrier.wait(timeout=10)
+                        mod.ensure_pdf_runtime_hooks()
+                        return bool(mod._HOOKS_INSTALLED)
+
+                    with ThreadPoolExecutor(max_workers=16) as pool:
+                        self.assertEqual(
+                            list(pool.map(_init_worker, range(16))), [True] * 16
+                        )
+                    self.assertEqual(mod._WRAP_INSTALL_COUNT, 1)
+
+                    html_cls, css_cls = frappe_wp_mod.import_weasyprint()
+                    for blocked in (
+                        lambda: html_cls("/etc/passwd"),
+                        lambda: html_cls(filename="/etc/passwd"),
+                        lambda: html_cls(file_obj=io.StringIO("<p>x</p>")),
+                        lambda: html_cls(url="https://evil.example.invalid/"),
+                        lambda: css_cls("/etc/passwd"),
+                        lambda: css_cls(filename="/etc/passwd"),
+                        lambda: css_cls(file_obj=io.StringIO("body{}")),
+                        lambda: css_cls(url="https://evil.example.invalid/a.css"),
+                    ):
+                        with self.assertRaises(ValueError):
+                            blocked()
+                    with self.assertRaises(PermissionError):
+                        frappe_pdf_mod.pdfkit.from_url("https://evil.example.invalid/")
+                    with self.assertRaises(PermissionError):
+                        frappe_pdf_mod.pdfkit.from_file("/etc/passwd")
+
+                    h_inst = html_cls(
+                        string='<img src="https://evil.example.invalid/x.png"/>',
+                        base_url="/etc/",
+                        url_fetcher="CALLER_BYPASS_ATTEMPT",
                     )
-                    with self.assertRaises(ValueError):
-                        fetcher.fetch("https://evil.example.invalid/ssrf.png")
+                    c_inst = css_cls(
+                        string='@import "//evil.example.invalid/x.css"; body { background: url("file:///etc/passwd"); }',
+                        base_url="file:///etc/",
+                        url_fetcher="CALLER_BYPASS_ATTEMPT",
+                    )
+                    self.assertEqual(
+                        h_inst.kwargs["base_url"], "http://p4-smoke.localhost/"
+                    )
+                    self.assertEqual(
+                        c_inst.kwargs["base_url"], "http://p4-smoke.localhost/"
+                    )
+                    self.assertIsInstance(h_inst.kwargs["url_fetcher"], _FakeURLFetcher)
+                    self.assertIsInstance(c_inst.kwargs["url_fetcher"], _FakeURLFetcher)
+                    self.assertFalse(c_inst.kwargs["url_fetcher"].allow_redirects)
+                    self.assertEqual(
+                        c_inst.kwargs["url_fetcher"].allowed_protocols, {"data"}
+                    )
+                    self.assertNotIn("evil.example.invalid", h_inst.kwargs["string"])
+                    self.assertNotIn("evil.example.invalid", c_inst.kwargs["string"])
+                    self.assertNotIn("file:///etc/passwd", c_inst.kwargs["string"])
                 finally:
-                    for k, v in saved_wp.items():
-                        if v is None:
-                            sys.modules.pop(k, None)
-                        else:
-                            sys.modules[k] = v
+                    _restore_modules(extra_saved)
             finally:
-                for k, v in saved.items():
-                    if v is None:
-                        sys.modules.pop(k, None)
-                    else:
-                        sys.modules[k] = v
+                _restore_modules(saved)
 
 
 if __name__ == "__main__":

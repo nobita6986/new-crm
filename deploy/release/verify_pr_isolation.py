@@ -438,6 +438,67 @@ def check_locks_and_repo_hygiene(
             f"{git_ref}:apps/crm_cskh tree SHA ({actual_cskh_tree}) != release-lock.json ({lock['crm_cskh_tree_sha']})"
         )
 
+    # 2b. Verify nested tree SHA sync, Containerfile ARG tree SHA sync & 5 MariaDB checksum build-args (F-TRIAL-PROV-01)
+    cskh_app_lock = (lock.get("apps") or {}).get("crm_cskh") or {}
+    if cskh_app_lock:
+        if cskh_app_lock.get("apps_tree_sha") != lock["apps_tree_sha"]:
+            errors.append(
+                f"release-lock.json apps.crm_cskh.apps_tree_sha ({cskh_app_lock.get('apps_tree_sha')}) != apps_tree_sha ({lock['apps_tree_sha']})"
+            )
+        if cskh_app_lock.get("crm_cskh_tree_sha") != lock["crm_cskh_tree_sha"]:
+            errors.append(
+                f"release-lock.json apps.crm_cskh.crm_cskh_tree_sha ({cskh_app_lock.get('crm_cskh_tree_sha')}) != crm_cskh_tree_sha ({lock['crm_cskh_tree_sha']})"
+            )
+
+    cfile_path = repo_root / "deploy" / "images" / "Containerfile"
+    build_sh_path = repo_root / "deploy" / "images" / "build-image.sh"
+    if cfile_path.is_file():
+        cfile_txt = cfile_path.read_text(encoding="utf-8")
+        cfile_apps_trees = re.findall(
+            r"(?m)^ARG\s+APPS_TREE_SHA=([0-9a-f]{40})\s*$", cfile_txt
+        )
+        cfile_cskh_trees = re.findall(
+            r"(?m)^ARG\s+CRM_CSKH_TREE_SHA=([0-9a-f]{40})\s*$", cfile_txt
+        )
+        if not cfile_apps_trees or any(
+            v != lock["apps_tree_sha"] for v in cfile_apps_trees
+        ):
+            errors.append(
+                f"Containerfile ARG APPS_TREE_SHA ({cfile_apps_trees}) != release-lock.json ({lock['apps_tree_sha']})"
+            )
+        if not cfile_cskh_trees or any(
+            v != lock["crm_cskh_tree_sha"] for v in cfile_cskh_trees
+        ):
+            errors.append(
+                f"Containerfile ARG CRM_CSKH_TREE_SHA ({cfile_cskh_trees}) != release-lock.json ({lock['crm_cskh_tree_sha']})"
+            )
+        mdb_sha_map = (lock.get("security_patches") or {}).get(
+            "mariadb_client_amd64_sha256"
+        ) or {}
+        arg_to_pkg = (
+            ("MARIADB_COMMON_DEB_SHA256", "mariadb-common"),
+            ("LIBMARIADB3_AMD64_DEB_SHA256", "libmariadb3"),
+            ("MARIADB_CLIENT_CORE_AMD64_DEB_SHA256", "mariadb-client-core"),
+            ("MARIADB_CLIENT_AMD64_DEB_SHA256", "mariadb-client"),
+            ("LIBMARIADB_DEV_AMD64_DEB_SHA256", "libmariadb-dev"),
+        )
+        for arg_name, pkg_name in arg_to_pkg:
+            exp_val = str(mdb_sha_map.get(pkg_name) or "")
+            found_vals = re.findall(
+                rf"(?m)^ARG\s+{arg_name}=([0-9a-f]{{64}})\s*$", cfile_txt
+            )
+            if not exp_val or not found_vals or any(v != exp_val for v in found_vals):
+                errors.append(
+                    f"Containerfile ARG {arg_name} ({found_vals}) != release-lock.json {pkg_name} ({exp_val})"
+                )
+        if build_sh_path.is_file():
+            build_sh_txt = build_sh_path.read_text(encoding="utf-8")
+            for arg_name, _ in arg_to_pkg:
+                if f'--build-arg "{arg_name}=${{{arg_name}}}"' not in build_sh_txt:
+                    errors.append(
+                        f'build-image.sh missing explicit `--build-arg "{arg_name}=${{{arg_name}}}"`'
+                    )
+
     # 3. Verify 10/10 SHA256SUMS.txt entries from P4-01 image build
     verified_sums = 0
     for line in sums_path.read_text(encoding="utf-8").splitlines():

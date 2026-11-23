@@ -6,6 +6,7 @@ from __future__ import annotations
 import http.server
 import json
 import pathlib
+import re
 import socket
 import subprocess
 import sys
@@ -324,6 +325,7 @@ class SmokeRunnerSafetyTests(unittest.TestCase):
             ("production", "crm-cskh-prod"),
             ("staging", "crm-cskh-staging"),
             ("isolated-smoke", "crm-cskh-p4-smoke"),
+            ("staging-dr-https", "crm-cskh-staging-dr-https"),
         ):
             st = payload["stacks"][stack_name]
             self.assertTrue(st["apps_order_guard_verified"])
@@ -341,6 +343,43 @@ class SmokeRunnerSafetyTests(unittest.TestCase):
                     "websocket",
                 ],
             )
+
+    def test_traefik_project_constraint_and_scoped_router_service_names(self) -> None:
+        repo_root = SCRIPTS_DIR.parents[2]
+        constraint_line = (
+            "--providers.docker.constraints=Label(`com.docker.compose.project`,`${COMPOSE_PROJECT_NAME}`)"
+        )
+        proxy_overrides = [
+            repo_root / "deploy/compose/overrides/compose.cskh-tls.yaml",
+            repo_root / "deploy/compose/overrides/compose.cskh-isolated-smoke.yaml",
+            repo_root / "deploy/compose/overrides/compose.cskh-dr-https.yaml",
+        ]
+        for ov_path in proxy_overrides:
+            txt = ov_path.read_text(encoding="utf-8")
+            self.assertIn(constraint_line, txt, ov_path.name)
+
+        all_label_overrides = proxy_overrides + [
+            repo_root / "deploy/release/batch2_delta/compose.cskh-edge-ratelimit.yaml"
+        ]
+        label_entity_re = re.compile(
+            r"traefik\.http\.(services|routers|middlewares)\.([A-Za-z0-9_${}-]+)\."
+        )
+        router_srv_re = re.compile(
+            r"traefik\.http\.routers\.[A-Za-z0-9_${}-]+\.service=([^\s\"']+)"
+        )
+        for ov_path in all_label_overrides:
+            txt = ov_path.read_text(encoding="utf-8")
+            matches = label_entity_re.findall(txt)
+            self.assertTrue(matches, f"Expected Traefik HTTP labels in {ov_path.name}")
+            for kind, entity in matches:
+                self.assertTrue(
+                    entity.startswith("${COMPOSE_PROJECT_NAME}-"),
+                    f"Unprefixed Traefik {kind} '{entity}' in {ov_path.name}",
+                )
+            srv_targets = router_srv_re.findall(txt)
+            self.assertTrue(srv_targets, f"Expected explicit router.service in {ov_path.name}")
+            for tgt in srv_targets:
+                self.assertEqual(tgt, "${COMPOSE_PROJECT_NAME}-frontend", ov_path.name)
 
 
 if __name__ == "__main__":

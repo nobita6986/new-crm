@@ -1439,10 +1439,10 @@ class TestDiffImpactAndIsolatedBenchmark(unittest.TestCase):
         self.assertEqual(invs["g007"]["expected_total"], 99)
         self.assertEqual(invs["p1"]["expected_total"], 209)
         self.assertEqual(invs["p2"]["expected_total"], 38)
-        self.assertGreaterEqual(int(invs["p3"]["expected_total"]), 31)  # type: ignore[arg-type]
+        self.assertGreaterEqual(int(invs["p3"]["expected_total"]), 53)  # type: ignore[arg-type]
         self.assertEqual(invs["p3_ui"]["expected_total"], 7)
 
-        # Containerfile change escalates to full P0-P3 suite (33 modules)
+        # Containerfile / PDF security change escalates to full P0-P3 suite (dynamic >= 34 modules, > 398 methods)
         full_plan = resolve_diff_impact_plan(
             ["deploy/images/Containerfile"], repo_root=REPO_ROOT
         )
@@ -1450,7 +1450,19 @@ class TestDiffImpactAndIsolatedBenchmark(unittest.TestCase):
         self.assertEqual(
             full_plan["selected_suites"], ["g007", "p1", "p2", "p3", "p3_ui"]
         )
-        self.assertEqual(full_plan["total_modules_to_run"], 33)
+        self.assertGreaterEqual(int(full_plan["total_modules_to_run"]), 34)  # type: ignore[arg-type]
+        expected_dynamic_total = sum(
+            int(invs[k]["expected_total"])  # type: ignore[arg-type]
+            for k in ("g007", "p1", "p2", "p3", "p3_ui")
+        )
+        self.assertGreater(expected_dynamic_total, 398)
+        self.assertEqual(
+            full_plan["expected_gated_methods_total"], expected_dynamic_total
+        )
+        self.assertIn(
+            "crm_cskh.tests.test_p3_pdf_security_and_worker",
+            full_plan["junit_modules"],
+        )
 
         # Scoped P3 KPI edit runs g007 + p3 + p3_ui without unneeded P1/P2 modules
         p3_plan = resolve_diff_impact_plan(

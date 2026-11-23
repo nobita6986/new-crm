@@ -1240,6 +1240,20 @@ try:
         "lead_owner": staff_a,
     }).insert(ignore_permissions=True)
 
+    priv_buf = io.BytesIO()
+    priv_img = Image.new("RGB", (36, 36), (24, 136, 92))
+    priv_img.save(priv_buf, format="PNG")
+    priv_file_doc = frappe.get_doc({
+        "doctype": "File",
+        "file_name": "cskh-pdf-smoke-private-badge.png",
+        "is_private": 1,
+        "attached_to_doctype": "CRM Lead",
+        "attached_to_name": lead_doc.name,
+        "content": priv_buf.getvalue(),
+    })
+    priv_file_doc.insert(ignore_permissions=True)
+    private_badge_url = priv_file_doc.file_url
+
     camp_doc = frappe.get_doc({
         "doctype": "CSKH Campaign",
         "code": f"PDF-SMOKE-{frappe.generate_hash(length=6).upper()}",
@@ -1349,6 +1363,8 @@ try:
         "campaign_name": camp_doc.name,
         "file_name": file_doc.name,
         "badge_url": badge_url,
+        "private_file_name": priv_file_doc.name,
+        "private_badge_url": private_badge_url,
         "letterhead": lh_name,
         "wkhtmltopdf_format": pf_wk,
         "weasyprint_format": pf_wp,
@@ -1623,10 +1639,111 @@ print(json.dumps(out, ensure_ascii=False))
                 f"{eng}: repeatable header/footer check failed: {ed['header_footer_checks']}"
             )
 
+        rq_worker_pdf_py = r"""
+import json, os, socket, sys, time
+import frappe
+from rq.job import Job
+from frappe.utils.background_jobs import get_redis_conn
+
+req = json.loads(sys.stdin.read())
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=req["site_name"], sites_path=".")
+frappe.connect()
+try:
+    frappe.set_user("Administrator")
+    backend_host = socket.gethostname()
+    cache_key = f"cskh:smoke:rq_pdf:{frappe.generate_hash(length=10)}"
+    rq_job = frappe.enqueue(
+        "crm_cskh.services.pdf_assets.run_rq_pdf_verification_job",
+        queue="short",
+        timeout=180,
+        enqueue_after_commit=False,
+        doctype="CRM Lead",
+        name=req["lead_name"],
+        wkhtmltopdf_format=req["wkhtmltopdf_format"],
+        weasyprint_format=req["weasyprint_format"],
+        letterhead=req["letterhead"],
+        authorized_user=req["staff_a_email"],
+        unauthorized_user=req["staff_b_email"],
+        private_file_url=req["private_badge_url"],
+        result_cache_key=cache_key,
+    )
+    conn = get_redis_conn()
+    deadline = time.monotonic() + 75.0
+    final_status = "unknown"
+    exc_info = None
+    while time.monotonic() < deadline:
+        fetched = Job.fetch(rq_job.id, connection=conn)
+        final_status = fetched.get_status(refresh=True)
+        if final_status in ("finished", "failed", "stopped", "canceled"):
+            exc_info = fetched.exc_info
+            break
+        time.sleep(0.5)
+    worker_payload = frappe.cache.get_value(cache_key)
+    frappe.cache.delete_value(cache_key)
+    print(json.dumps({
+        "rq_job_id": rq_job.id,
+        "rq_job_status": final_status,
+        "rq_exc_info": exc_info,
+        "backend_hostname": backend_host,
+        "worker_result": worker_payload,
+    }, ensure_ascii=False))
+finally:
+    frappe.destroy()
+"""
+        rq_proc = subprocess.run(
+            compose_cmd(
+                project_name,
+                env_file,
+                [
+                    "exec",
+                    "-T",
+                    "backend",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "-c",
+                    rq_worker_pdf_py,
+                ],
+            ),
+            input=json.dumps(
+                {
+                    "site_name": site_name,
+                    "staff_a_email": staff_a_email,
+                    "staff_b_email": staff_b_email,
+                    **staged,
+                }
+            ),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if rq_proc.returncode != 0:
+            raise RuntimeError(
+                f"RQ worker PDF verification failed: {rq_proc.stderr}\n{rq_proc.stdout}"
+            )
+        rq_pdf_info = json.loads([ln for ln in rq_proc.stdout.splitlines() if ln.strip()][-1])
+        assert rq_pdf_info["rq_job_status"] == "finished" and not rq_pdf_info["rq_exc_info"], (
+            f"RQ worker PDF job did not finish cleanly: {rq_pdf_info}"
+        )
+        wres = rq_pdf_info["worker_result"]
+        assert isinstance(wres, dict) and wres.get("status") == "PASS", rq_pdf_info
+        assert wres["worker_hostname"] != rq_pdf_info["backend_hostname"], (
+            f"Expected separate queue-short container hostname, got {rq_pdf_info}"
+        )
+        assert wres["hooks_preinstalled_by_before_job"] is True, wres
+        for eng in ("wkhtmltopdf", "weasyprint"):
+            assert wres[eng]["valid_pdf_envelope"] is True, (eng, wres[eng])
+            assert wres[eng]["page_count"] >= 3, (eng, wres[eng])
+            assert wres[eng]["dejavu_font_embedded"] is True, (eng, wres[eng])
+            assert wres[eng]["contains_vietnamese_title"] is True, (eng, wres[eng])
+        wprobe = wres["private_file_and_ssrf_probe"]
+        assert wprobe["authorized_large_images_wk"] == 1 and wprobe["authorized_large_images_wp"] == 1, wprobe
+        assert wprobe["unauthorized_large_images_wk"] == 0 and wprobe["unauthorized_large_images_wp"] == 0, wprobe
+
         logger.info(
-            "PDF functional & RBAC smoke passed across wkhtmltopdf + WeasyPrint: "
+            "PDF functional, RBAC & real RQ worker smoke passed across wkhtmltopdf + WeasyPrint: "
             f"wk_pages={inspected['wkhtmltopdf']['page_count']}, "
             f"wp_pages={inspected['weasyprint']['page_count']}, "
+            f"rq_worker_host={wres['worker_hostname']}, "
             "rbac={guest:403, out_of_scope_staff:403, in_scope_staff:200, admin:200}"
         )
         return {
@@ -1652,6 +1769,7 @@ print(json.dumps(out, ensure_ascii=False))
                 "weasyprint_content_disposition": staff_a_wp_hdrs.get("content-disposition"),
             },
             "engines_verified": inspected,
+            "rq_worker_pdf_verification": rq_pdf_info,
         }
     finally:
         cleanup_py = r"""
@@ -1669,6 +1787,7 @@ try:
         ("Print Format", d["wkhtmltopdf_format"]),
         ("Print Format", d["weasyprint_format"]),
         ("Letter Head", d["letterhead"]),
+        ("File", d.get("private_file_name")),
         ("File", d["file_name"]),
     ):
         if dn and frappe.db.exists(dt, dn):

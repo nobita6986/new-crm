@@ -11,8 +11,14 @@
 
 services:
   frontend:
-    labels:
+    labels: !override
+      - traefik.enable=true
       - traefik.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+      - traefik.http.services.${COMPOSE_PROJECT_NAME}-frontend.loadbalancer.server.port=${NGINX_LISTEN_PORT:-8080}
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-frontend-https.entrypoints=websecure
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-frontend-https.tls.certresolver=main-resolver
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-frontend-https.rule=${SITES_RULE:?SITES_RULE not set}
+      - traefik.http.routers.${COMPOSE_PROJECT_NAME}-frontend-https.service=${COMPOSE_PROJECT_NAME}-frontend
 
   proxy:
     image: ${PROXY_IMAGE:?set PROXY_IMAGE to traefik@sha256:digest}
@@ -29,6 +35,7 @@ services:
       - --providers.docker=true
       - --providers.docker.exposedbydefault=false
       - --providers.docker.network=${COMPOSE_PROJECT_NAME}_edge_net
+      - --providers.docker.constraints=Label(`com.docker.compose.project`,`${COMPOSE_PROJECT_NAME}`)
       - --entrypoints.web.address=:80
       - --entrypoints.web.http.underscoreHeadersStrategy=delete
       - --entrypoints.web.http.redirections.entrypoint.to=websecure

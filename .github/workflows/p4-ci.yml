@@ -7,6 +7,8 @@ on:
     paths:
       - 'apps/**'
       - 'deploy/images/**'
+      - 'deploy/compose/**'
+      - 'deploy/dev/seed/p3_test_inventory.json'
       - 'deploy/release/python-constraints.txt'
       - 'deploy/release/system-python-constraints.txt'
       - 'deploy/release/cve-exceptions.json'
@@ -43,7 +45,8 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/p4-venv"
           "$RUNNER_TEMP/p4-venv/bin/pip" install --no-cache-dir \
             ruff==0.14.0 \
-            cryptography==44.0.2
+            cryptography==44.0.2 \
+            beautifulsoup4==4.12.3
 
       - name: Audit workflow isolation, PR zero-secret boundary & release locks
         shell: bash
@@ -113,8 +116,15 @@ jobs:
           assert g007["expected_total"] == 99
           assert p1["expected_total"] == 209
           assert p2["expected_total"] == 38
-          assert p3["expected_total"] >= 31
+          assert p3["expected_total"] >= 53
           assert p3_ui["expected_total"] == 7
+          assert (
+              g007["expected_total"]
+              + p1["expected_total"]
+              + p2["expected_total"]
+              + p3["expected_total"]
+              + p3_ui["expected_total"]
+          ) >= 406
           t1c_bytes = Path(
               "apps/crm_cskh/crm_cskh/tests/fixtures/t1c_p3_golden_dataset_expected.json"
           ).read_bytes()
@@ -130,10 +140,33 @@ jobs:
           set -euo pipefail
           "$RUNNER_TEMP/p4-venv/bin/python" deploy/compose/scripts/validate_compose_config.py \
             > "$RUNNER_TEMP/p4-static-evidence/compose-validation.json"
-          "$RUNNER_TEMP/p4-venv/bin/python" -m unittest discover \
-            -s deploy/compose/scripts -p "test_*.py" -v
-          "$RUNNER_TEMP/p4-venv/bin/python" -m unittest discover \
-            -s deploy/release -p "test_*.py" -v
+          "$RUNNER_TEMP/p4-venv/bin/python" - <<'PY'
+          import json
+          import sys
+          import unittest
+          from pathlib import Path
+
+          root = str(Path.cwd().resolve())
+          if root not in sys.path:
+              sys.path.insert(0, root)
+          summary = {}
+          for suite_dir in ("deploy/compose/scripts", "deploy/release"):
+              s_abs = str(Path(suite_dir).resolve())
+              if s_abs not in sys.path:
+                  sys.path.insert(0, s_abs)
+              suite = unittest.TestLoader().discover(s_abs, pattern="test_*.py", top_level_dir=s_abs)
+              result = unittest.TextTestRunner(verbosity=2).run(suite)
+              assert result.wasSuccessful(), f"{suite_dir} unit tests failed"
+              assert len(result.skipped) == 0, f"{suite_dir} had unexpected skipped tests: {result.skipped}"
+              summary[suite_dir] = {
+                  "tests_run": result.testsRun,
+                  "skipped": len(result.skipped),
+                  "failures": len(result.failures),
+                  "errors": len(result.errors),
+              }
+          Path("p4-host-unittest-zero-skip.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+          PY
+          mv p4-host-unittest-zero-skip.json "$RUNNER_TEMP/p4-static-evidence/p4-host-unittest-zero-skip.json"
           (
             cd "$RUNNER_TEMP/p4-static-evidence"
             sha256sum *.json > SHA256SUMS.txt

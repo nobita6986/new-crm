@@ -734,17 +734,35 @@ def run_live_rehearsal(
         )
         assert reenabled["reconcile"]["ok"] is True, reenabled
 
-        # Step 5: `G09` / `D13` / `F-G09-HOOK-01` Tier 3 Application Image Rollback (`N -> N-1` WITHOUT DB downgrade)
-        # First confirm `N` menu/app hooks are active and populated in Redis `app_hooks` before rollback!
+        # Step 5: `G09` / `D13` / `F-G09-HOOK-01` / `F-TRIAL-HOOK-RB-01` Tier 3 Application Image Rollback (`N -> N-1` WITHOUT DB downgrade)
+        # First confirm `N` menu/app & PDF worker hooks are active in Redis `app_hooks` AND run a real RQ job on `N` before rollback!
         pre_rollback_n_hooks = stack.exec_site_python(
+            "import time\n"
+            "from rq.job import Job\n"
+            "from frappe.utils.background_jobs import get_redis_conn\n"
             "add_apps = list(frappe.get_hooks('add_to_apps_screen') or [])\n"
             "setup_req = list(frappe.get_hooks('setup_wizard_requires') or [])\n"
-            "after_req = list(frappe.get_hooks('after_request') or [])\n"
+            "before_req = [str(x) for x in (frappe.get_hooks('before_request') or [])]\n"
+            "after_req = [str(x) for x in (frappe.get_hooks('after_request') or [])]\n"
+            "before_jb = [str(x) for x in (frappe.get_hooks('before_job') or [])]\n"
+            "on_pdf = [str(x) for x in (frappe.get_hooks('on_print_pdf') or [])]\n"
+            "n_job = frappe.enqueue('frappe.ping', queue='short', enqueue_after_commit=False)\n"
+            "conn = get_redis_conn()\n"
+            "n_job_status = 'unknown'\n"
+            "for _ in range(60):\n"
+            "    n_job_status = Job.fetch(n_job.id, connection=conn).get_status(refresh=True)\n"
+            "    if n_job_status in ('finished', 'failed', 'stopped', 'canceled'):\n"
+            "        break\n"
+            "    time.sleep(0.5)\n"
             "print(json.dumps({\n"
             "  'add_to_apps_screen_names': [str(a.get('name')) for a in add_apps if isinstance(a, dict)],\n"
             "  'has_cskh_sidebar_permission_hook': any('cskh_sidebar' in str(a.get('has_permission', '')) for a in add_apps if isinstance(a, dict)),\n"
             "  'has_cskh_setup_wizard_hook': '/assets/crm_cskh/cskh/setup-wizard.js' in [str(x) for x in setup_req],\n"
-            "  'after_request': [str(x) for x in after_req],\n"
+            "  'has_n_pdf_before_request_hook': 'crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks' in before_req,\n"
+            "  'has_n_pdf_before_job_hook': 'crm_cskh.services.pdf_assets.ensure_pdf_runtime_hooks' in before_jb,\n"
+            "  'has_n_pdf_on_print_hook': 'crm_cskh.services.pdf_assets.on_print_pdf' in on_pdf,\n"
+            "  'n_rq_worker_job_status': n_job_status,\n"
+            "  'after_request': after_req,\n"
             "}))"
         )
         st_n_apps_staff, _, body_n_apps_staff = staff_a.get_json(
@@ -771,6 +789,18 @@ def run_live_rehearsal(
             pre_rollback_n_hooks
         )
         assert pre_rollback_n_hooks["has_cskh_setup_wizard_hook"] is True, (
+            pre_rollback_n_hooks
+        )
+        assert pre_rollback_n_hooks["has_n_pdf_before_request_hook"] is True, (
+            pre_rollback_n_hooks
+        )
+        assert pre_rollback_n_hooks["has_n_pdf_before_job_hook"] is True, (
+            pre_rollback_n_hooks
+        )
+        assert pre_rollback_n_hooks["has_n_pdf_on_print_hook"] is True, (
+            pre_rollback_n_hooks
+        )
+        assert pre_rollback_n_hooks["n_rq_worker_job_status"] == "finished", (
             pre_rollback_n_hooks
         )
         assert st_n_apps_staff == 200 and "crm_cskh" in n_apps_staff_names, (
@@ -847,14 +877,48 @@ def run_live_rehearsal(
             t3_crm_has_bridge,
         )
 
-        # Inspect `N-1` hooks & data reconciliation WITHOUT running any second post-traffic `clear_cache()`
+        # Inspect `N-1` hooks, orphan-hook resolution, real `N-1` RQ worker execution & data reconciliation
+        # WITHOUT running any second post-traffic `clear_cache()` (`F-G09-HOOK-01` + `F-TRIAL-HOOK-RB-01`)
         tier3_check = stack.exec_site_python(
+            "import time\n"
             "import frappe\n"
+            "from rq.job import Job\n"
+            "from frappe.utils.background_jobs import get_redis_conn\n"
             "from crm_cskh.services import distribution as dist_svc\n"
             "from crm_cskh.jobs.reconcile_metrics import reconcile_published_period\n"
             "add_apps = list(frappe.get_hooks('add_to_apps_screen') or [])\n"
             "setup_req = [str(x) for x in (frappe.get_hooks('setup_wizard_requires') or [])]\n"
+            "before_req = [str(x) for x in (frappe.get_hooks('before_request') or [])]\n"
             "after_req = [str(x) for x in (frappe.get_hooks('after_request') or [])]\n"
+            "before_jb = [str(x) for x in (frappe.get_hooks('before_job') or [])]\n"
+            "after_jb = [str(x) for x in (frappe.get_hooks('after_job') or [])]\n"
+            "after_mig = [str(x) for x in (frappe.get_hooks('after_migrate') or [])]\n"
+            "on_pdf = [str(x) for x in (frappe.get_hooks('on_print_pdf') or [])]\n"
+            "auth_hk = [str(x) for x in (frappe.get_hooks('auth_hooks') or [])]\n"
+            "callable_hooks = before_req + after_req + before_jb + after_jb + after_mig + on_pdf + auth_hk\n"
+            "unresolved_orphan_hooks = []\n"
+            "for h_str in callable_hooks:\n"
+            "    try:\n"
+            "        frappe.get_attr(h_str)\n"
+            "    except Exception as exc:\n"
+            "        unresolved_orphan_hooks.append({'hook': h_str, 'error': str(exc)})\n"
+            "conn = get_redis_conn()\n"
+            "rq_jobs_verified = {}\n"
+            "for label, method_str in (\n"
+            "    ('ping_job', 'frappe.ping'),\n"
+            "    ('cskh_sla_job', 'crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations'),\n"
+            "):\n"
+            "    j_obj = frappe.enqueue(method_str, queue='short', enqueue_after_commit=False)\n"
+            "    j_status = 'unknown'\n"
+            "    j_exc = None\n"
+            "    for _ in range(80):\n"
+            "        fetched = Job.fetch(j_obj.id, connection=conn)\n"
+            "        j_status = fetched.get_status(refresh=True)\n"
+            "        if j_status in ('finished', 'failed', 'stopped', 'canceled'):\n"
+            "            j_exc = fetched.exc_info\n"
+            "            break\n"
+            "        time.sleep(0.5)\n"
+            "    rq_jobs_verified[label] = {'job_id': j_obj.id, 'method': method_str, 'status': j_status, 'exc_info': j_exc}\n"
             "att_exists = bool(frappe.db.exists('CSKH Contact Attempt', _IN['post_att']))\n"
             "d_rec = dist_svc.reconcile(_IN['campaign_id'])\n"
             "d_ok = (\n"
@@ -873,9 +937,15 @@ def run_live_rehearsal(
             "    'has_stale_cskh_sidebar_hook': any('cskh_sidebar' in str(a.get('has_permission', '')) or str(a.get('name', '')) == 'crm_cskh' for a in add_apps if isinstance(a, dict)),\n"
             "    'setup_wizard_requires': setup_req,\n"
             "    'has_stale_cskh_setup_wizard_hook': '/assets/crm_cskh/cskh/setup-wizard.js' in setup_req,\n"
+            "    'before_request': before_req,\n"
             "    'after_request': after_req,\n"
+            "    'before_job': before_jb,\n"
+            "    'on_print_pdf': on_pdf,\n"
+            "    'has_stale_pdf_assets_hook': any('pdf_assets' in h for h in callable_hooks),\n"
             "    'has_stale_n_after_request_hook': any(any(tok in h for tok in ('cskh_sidebar', 'runtime_cache', 'cskh_renderer')) for h in after_req),\n"
+            "    'unresolved_orphan_hooks': unresolved_orphan_hooks,\n"
             "  },\n"
+            "  'n_minus_1_rq_worker_jobs_verified': rq_jobs_verified,\n"
             "}, default=str))",
             {
                 "post_att": post_upgrade_attempt_id,
@@ -891,7 +961,15 @@ def run_live_rehearsal(
         n_m1_hooks = tier3_check["n_minus_1_hooks_verified"]
         assert n_m1_hooks["has_stale_cskh_sidebar_hook"] is False, n_m1_hooks
         assert n_m1_hooks["has_stale_cskh_setup_wizard_hook"] is False, n_m1_hooks
+        assert n_m1_hooks["has_stale_pdf_assets_hook"] is False, n_m1_hooks
         assert n_m1_hooks["has_stale_n_after_request_hook"] is False, n_m1_hooks
+        assert n_m1_hooks["unresolved_orphan_hooks"] == [], n_m1_hooks
+        n_m1_rq = tier3_check["n_minus_1_rq_worker_jobs_verified"]
+        for j_label in ("ping_job", "cskh_sla_job"):
+            assert (
+                n_m1_rq[j_label]["status"] == "finished"
+                and not n_m1_rq[j_label]["exc_info"]
+            ), n_m1_rq
         assert (
             "crm_cskh.errors.normalize_error_response" in n_m1_hooks["after_request"]
             and "crm_cskh.p1_errors.normalize_p1_error_response"
