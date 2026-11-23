@@ -667,9 +667,30 @@ try:
             "total_ms": round((t2 - t0) * 1000.0, 3),
         })
 
+    from crm_cskh.services import pdf_hooks
+    pdf_engine_mods = (
+        "weasyprint",
+        "frappe.utils.weasyprint",
+        "frappe.utils.pdf",
+        "pdfkit",
+        "cssutils",
+        "pypdf",
+        "crm_cskh.services.pdf_assets",
+    )
+    execute_job(
+        site=site,
+        method="frappe.ping",
+        event=None,
+        job_name="ut-nonpdf-ping",
+        kwargs={},
+        user="Administrator",
+        is_async=False,
+    )
+    loaded_after_ping = {m: (m in sys.modules) for m in (*pdf_engine_mods, "bs4")}
+
     for method_path, jname in (
-        ("frappe.ping", "ut-nonpdf-ping"),
         ("crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations", "ut-nonpdf-sla"),
+        ("crm_cskh.jobs.recompute_kpi.drain_dirty_kpi_scopes", "ut-nonpdf-kpi-drain"),
     ):
         execute_job(
             site=site,
@@ -681,22 +702,12 @@ try:
             is_async=False,
         )
 
-    from crm_cskh.services import pdf_hooks
-    monitored = (
-        "weasyprint",
-        "frappe.utils.weasyprint",
-        "frappe.utils.pdf",
-        "pdfkit",
-        "cssutils",
-        "pypdf",
-        "bs4",
-        "crm_cskh.services.pdf_assets",
-    )
     print("SUBPROC_NONPDF_JSON:" + json.dumps({
         "before_job_hooks": hooks,
         "timings": timings,
         "guard_armed": pdf_hooks.is_pdf_hook_guard_installed(),
-        "loaded_after_non_pdf_jobs": {m: (m in sys.modules) for m in monitored},
+        "loaded_after_ping": loaded_after_ping,
+        "loaded_after_non_pdf_jobs": {m: (m in sys.modules) for m in pdf_engine_mods},
     }))
 finally:
     frappe.destroy()
@@ -720,8 +731,10 @@ finally:
 		data = json.loads(marker[-1])
 		self.assertTrue(data["guard_armed"])
 		self.assertIn("crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks", data["before_job_hooks"])
+		for mod_name, was_loaded in data["loaded_after_ping"].items():
+			self.assertFalse(was_loaded, f"Ping job / before_job hook eagerly imported {mod_name}: {data}")
 		for mod_name, was_loaded in data["loaded_after_non_pdf_jobs"].items():
-			self.assertFalse(was_loaded, f"Non-PDF job eagerly imported {mod_name}: {data}")
+			self.assertFalse(was_loaded, f"Non-PDF CSKH job eagerly imported {mod_name}: {data}")
 		pdf_hook_timings = [
 			t for t in data["timings"] if t["hook"] == "crm_cskh.services.pdf_hooks.ensure_pdf_runtime_hooks"
 		]

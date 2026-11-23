@@ -515,15 +515,40 @@ def measure_single_candidate_under_capped_profile(
                     f"[{label}] site bootstrap failed:\n{init_proc.stdout[-1500:]}\n{init_proc.stderr[-1500:]}"
                 )
 
+            # Stop workers & flush stale pre-bootstrap RQ worker registrations before starting fresh workers
+            subprocess.run(
+                [*compose_base, "stop", "scheduler", "queue-short", "queue-long"],
+                env=compose_env,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=90,
+            )
+            subprocess.run(
+                [*compose_base, "exec", "-T", "redis-queue", "redis-cli", "FLUSHALL"],
+                env=compose_env,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            subprocess.run(
+                [*compose_base, "restart", "backend", "websocket"],
+                env=compose_env,
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=120,
+            )
             subprocess.run(
                 [
                     *compose_base,
-                    "restart",
-                    "backend",
-                    "websocket",
+                    "up",
+                    "-d",
+                    "--no-build",
+                    "scheduler",
                     "queue-short",
                     "queue-long",
-                    "scheduler",
                 ],
                 env=compose_env,
                 check=True,
