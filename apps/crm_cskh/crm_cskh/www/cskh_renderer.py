@@ -169,6 +169,14 @@ def _render_cskh_page_html(page: TemplatePage, orig_get_html) -> str:
 	live_csrf = str(auth_ctx.get("csrf_token") or "")
 	live_tz = dict(auth_ctx.get("cskh_timezone") or {})
 	caps = dict(auth_ctx.get("cskh_capabilities") or {})
+	branding_info = dict(auth_ctx.get("cskh_branding") or {})
+	branding_sig = (
+		str(auth_ctx.get("splash_image") or ""),
+		str(branding_info.get("favicon") or ""),
+		str(branding_info.get("brand_html") or ""),
+		str(branding_info.get("banner_image") or ""),
+		str(branding_info.get("app_logo") or ""),
+	)
 	nav_sig = tuple(str(item.get("key") or "") for item in (auth_ctx.get("cskh_navigation") or ()))
 	caps_sig = tuple(sorted((str(k), v) for k, v in caps.items()))
 	u_prof = runtime_cache.get_user_auth_profile(live_user)
@@ -184,11 +192,13 @@ def _render_cskh_page_html(page: TemplatePage, orig_get_html) -> str:
 		str(live_tz.get("effective") or ""),
 		str(live_tz.get("site") or ""),
 		str(auth_ctx.get("cskh_asset_version") or ""),
+		branding_sig,
 		bool(frappe.conf.developer_mode),
 		runtime_cache.get_domains_epoch_tuple(
 			runtime_cache.DOMAIN_TRANSLATIONS,
 			runtime_cache.DOMAIN_POLICY,
 			runtime_cache.DOMAIN_USER_HIERARCHY,
+			runtime_cache.DOMAIN_BRANDING,
 		),
 	)
 	user_cache_key = (

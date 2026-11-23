@@ -392,9 +392,12 @@ def build_context(
 			leader_root_team = ""
 
 	ui_bundle = runtime_cache.get_static_cskh_ui_bundle(LANGUAGE)
+	branding = runtime_cache.get_website_branding()
 
 	context.no_cache = 1
 	context.title = _(title) if title else _("CSKH")
+	context.splash_image = branding["splash_image"]
+	context.cskh_branding = branding
 	context.csrf_token = _get_or_init_csrf_token()
 	context.cskh_csrf_header = {"X-Frappe-CSRF-Token": context.csrf_token}
 	context.cskh_user = actor

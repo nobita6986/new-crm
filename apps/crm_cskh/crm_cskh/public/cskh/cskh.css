@@ -191,6 +191,14 @@ body:has(#cskh-root) .web-footer {
 	min-width: 0;
 }
 
+.cskh-sidebar-logo.is-brand-logo {
+	width: 48px;
+	height: 38px;
+	object-fit: contain;
+	border-radius: 0;
+	box-shadow: none;
+}
+
 .cskh-sidebar-brand-title {
 	font-size: 13.5px;
 	font-weight: 700;

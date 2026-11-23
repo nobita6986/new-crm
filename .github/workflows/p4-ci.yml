@@ -65,12 +65,14 @@ jobs:
           RUFF="$RUNNER_TEMP/p4-venv/bin/ruff"
           "$RUFF" check \
             apps/crm_cskh \
+            deploy/dev/apply-crm-branding-patch.py \
             deploy/images/verify_clean_site.py \
             deploy/images/resources/apply-frappe-vi-patch.py \
             deploy/compose/scripts \
             deploy/release
           "$RUFF" format --check \
             apps/crm_cskh \
+            deploy/dev/apply-crm-branding-patch.py \
             deploy/images/verify_clean_site.py \
             deploy/images/resources/apply-frappe-vi-patch.py \
             deploy/release

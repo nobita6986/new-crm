@@ -2034,6 +2034,70 @@ def run_http_and_socketio_smoke(
         f"valid={good_csrf_code} (app_version={good_csrf_json.get('app_version')})"
     )
 
+    # 4b. HRPARTNER /crm prepaint favicon+logo on reload & /cskh warm-cache branding rotation
+    def _smoke_set_branding(splash_val: str, fav_val: str) -> None:
+        b_code, _, b_body = http_call(
+            auth_opener,
+            f"{base_url}/api/method/frappe.client.set_value",
+            site_name,
+            method="POST",
+            data=json.dumps(
+                {
+                    "doctype": "Website Settings",
+                    "name": "Website Settings",
+                    "fieldname": {"splash_image": splash_val, "favicon": fav_val},
+                }
+            ).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+                "X-Frappe-CSRF-Token": csrf_token,
+            },
+        )
+        assert b_code == 200, f"Branding update failed ({b_code}): {b_body[:200]}"
+
+    b_logo_v1 = "/assets/crm_cskh/cskh/logo.svg?brand=smoke-v1"
+    b_fav_v1 = "/assets/crm_cskh/cskh/logo.svg?fav=smoke-v1"
+    b_logo_v2 = "/assets/crm_cskh/cskh/logo.svg?brand=smoke-v2"
+    b_fav_v2 = "/assets/crm_cskh/cskh/logo.svg?fav=smoke-v2"
+    try:
+        _smoke_set_branding(b_logo_v1, b_fav_v1)
+        for _ in range(6):
+            c1_st, _, c1_html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
+            assert c1_st == 200 and f'href="{b_fav_v1}"' in c1_html, "Missing favicon v1 on /crm/leads reload"
+            assert 'id="hrpartner-branding-prepaint"' in c1_html and b_logo_v1 in c1_html, (
+                "Missing HRPARTNER prepaint logo v1 on /crm/leads reload"
+            )
+            k1_st, _, k1_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
+            assert (
+                k1_st == 200
+                and f'src="{b_logo_v1}"' in k1_html
+                and 'class="cskh-sidebar-logo is-brand-logo"' in k1_html
+            ), "Missing brand logo v1 on /cskh/dashboard"
+
+        _smoke_set_branding(b_logo_v2, b_fav_v2)
+        for _ in range(6):
+            c2_st, _, c2_html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
+            assert (
+                c2_st == 200
+                and f'href="{b_fav_v2}"' in c2_html
+                and b_logo_v2 in c2_html
+                and b_logo_v1 not in c2_html
+            ), "Stale logo/favicon v1 survived warm reload on /crm/leads"
+            k2_st, _, k2_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
+            assert (
+                k2_st == 200
+                and f'src="{b_logo_v2}"' in k2_html
+                and b_logo_v1 not in k2_html
+            ), "Stale logo v1 survived warm SSR cache on /cskh/dashboard"
+    finally:
+        _smoke_set_branding("", "")
+    kr_st, _, kr_html = http_call(auth_opener, f"{base_url}/cskh/dashboard", site_name)
+    assert (
+        kr_st == 200 and b_logo_v2 not in kr_html and "is-brand-logo" not in kr_html
+    ), "Clearing branding did not restore default CSKH logo"
+    logger.info("HRPARTNER branding prepaint & warm-cache rotation checks passed (v1 -> v2 -> default)")
+
     # 5. Socket.IO EIO=4 HTTP Polling check through proxy -> frontend -> websocket
     _, unauth_sio = make_http_client()
     eio_code1, _, eio_open1 = http_call(

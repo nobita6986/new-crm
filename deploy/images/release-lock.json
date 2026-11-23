@@ -4,8 +4,8 @@
   "p4_01_baseline_lock_sha256": "dde3bdaa11180cd103f8d8b064e20411d380135ac88d4a39226b7d451a990962",
   "p4_00_entry_dossier_sha": "be33e6c931337c42b94184b2fe292e094bd51c97",
   "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
-  "apps_tree_sha": "8d546c69444803911ca5524c70b07a2f962c28f5",
-  "crm_cskh_tree_sha": "cf736cdfed16673be85bf8f3c1d359c66ffca32e",
+  "apps_tree_sha": "f4cb374f0eed89304e7b55e4978434a83d406051",
+  "crm_cskh_tree_sha": "f1b9258c53b231390da8f9421e2c7c06cfc9281a",
   "builder_upstream": {
     "repository": "https://github.com/frappe/frappe_docker.git",
     "tag": "v4.2.0",
@@ -92,7 +92,8 @@
       "pinned_frappe_ui": "1.0.0-beta.29",
       "pinned_vite": "8.2.0",
       "localization_patchers": [
-        "deploy/dev/apply-crm-ui-vi-patch.py"
+        "deploy/dev/apply-crm-ui-vi-patch.py",
+        "deploy/dev/apply-crm-branding-patch.py"
       ],
       "dev_only_patchers_excluded": [
         "deploy/dev/apply-crm-vite-dev-patch.py"
@@ -104,8 +105,8 @@
       "declared_app_version": "0.0.1",
       "identity_rule": "Identify release exclusively by source_commit_sha + crm_cskh_tree_sha + OCI image digest (never by 0.0.1 alone).",
       "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
-      "apps_tree_sha": "8d546c69444803911ca5524c70b07a2f962c28f5",
-      "crm_cskh_tree_sha": "cf736cdfed16673be85bf8f3c1d359c66ffca32e"
+      "apps_tree_sha": "f4cb374f0eed89304e7b55e4978434a83d406051",
+      "crm_cskh_tree_sha": "f1b9258c53b231390da8f9421e2c7c06cfc9281a"
     }
   },
   "infra_images": {

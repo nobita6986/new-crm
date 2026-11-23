@@ -51,6 +51,7 @@ DOMAIN_DIRTY_SCOPE = "dirty_scope"
 DOMAIN_CORRECTION = "correction"
 DOMAIN_ASSIGNMENT_HISTORY = "assignment_history"
 DOMAIN_WORK_ITEM = "work_item"
+DOMAIN_BRANDING = "branding"
 
 ALL_DOMAINS = (
 	DOMAIN_POLICY,
@@ -64,6 +65,7 @@ ALL_DOMAINS = (
 	DOMAIN_CORRECTION,
 	DOMAIN_ASSIGNMENT_HISTORY,
 	DOMAIN_WORK_ITEM,
+	DOMAIN_BRANDING,
 )
 
 _EPOCH_REDIS_HASH = "cskh:runtime_epochs"
@@ -180,23 +182,39 @@ _SET_VALUE_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 	"CSKH KPI Run": (DOMAIN_KPI_SNAPSHOT, DOMAIN_DIRTY_SCOPE),
 	"CSKH KPI Snapshot": (DOMAIN_KPI_SNAPSHOT, DOMAIN_DIRTY_SCOPE),
 	"Translation": (DOMAIN_TRANSLATIONS,),
-	"FCRM Settings": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY),
+	"FCRM Settings": (DOMAIN_USER_HIERARCHY, DOMAIN_POLICY, DOMAIN_BRANDING),
 	"System Settings": (DOMAIN_USER_HIERARCHY, DOMAIN_CALENDAR),
+	"Website Settings": (DOMAIN_BRANDING,),
+	"Navbar Settings": (DOMAIN_BRANDING,),
+	"Website Theme": (DOMAIN_BRANDING,),
 }
+
+_BRANDING_SINGLE_DOCTYPES = frozenset(
+	("Website Settings", "Navbar Settings", "Website Theme", "FCRM Settings")
+)
 
 _DELETE_ONLY_DOCTYPE_DOMAINS: dict[str, tuple[str, ...]] = {
 	"CSKH Work Item": (DOMAIN_WORK_ITEM,),
 }
 
-_SQL_DML_TABLE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = tuple(
+_SQL_DML_TABLE_RULES: tuple[tuple[str, tuple[str, ...], tuple[str, ...]], ...] = (
+	*(
+		(
+			f"tab{dt}".lower(),
+			_SET_VALUE_DOCTYPE_DOMAINS.get(dt, ()),
+			tuple(
+				dict.fromkeys(
+					_SET_VALUE_DOCTYPE_DOMAINS.get(dt, ()) + _DELETE_ONLY_DOCTYPE_DOMAINS.get(dt, ())
+				)
+			),
+		)
+		for dt in sorted(set(_SET_VALUE_DOCTYPE_DOMAINS) | set(_DELETE_ONLY_DOCTYPE_DOMAINS))
+	),
 	(
-		f"tab{dt}".lower(),
-		_SET_VALUE_DOCTYPE_DOMAINS.get(dt, ()),
-		tuple(
-			dict.fromkeys(_SET_VALUE_DOCTYPE_DOMAINS.get(dt, ()) + _DELETE_ONLY_DOCTYPE_DOMAINS.get(dt, ()))
-		),
-	)
-	for dt in sorted(set(_SET_VALUE_DOCTYPE_DOMAINS) | set(_DELETE_ONLY_DOCTYPE_DOMAINS))
+		"tabsingles",
+		(DOMAIN_BRANDING, DOMAIN_USER_HIERARCHY, DOMAIN_POLICY, DOMAIN_CALENDAR),
+		(DOMAIN_BRANDING, DOMAIN_USER_HIERARCHY, DOMAIN_POLICY, DOMAIN_CALENDAR),
+	),
 )
 _SQL_MUTATION_PREFIXES = ("insert", "update", "delete", "replac", "trunca", "alter ")
 
@@ -233,6 +251,24 @@ def _resolve_redis_wrapper():
 		return None
 
 
+def _clear_branding_doc_caches() -> None:
+	"""Purge Frappe's Redis + thread-local Single DocType caches for branding settings."""
+	clear_doc_fn = getattr(frappe, "clear_document_cache", None)
+	orig_clear_doc = getattr(clear_doc_fn, "_cskh_orig", clear_doc_fn)
+	if callable(orig_clear_doc):
+		for dt in _BRANDING_SINGLE_DOCTYPES:
+			try:
+				orig_clear_doc(dt, dt)
+			except Exception:
+				pass
+	local = getattr(frappe, "local", None)
+	if local is not None and hasattr(local, "website_settings"):
+		try:
+			delattr(local, "website_settings")
+		except Exception:
+			pass
+
+
 def _wrap_db_class_set_value(db_cls: type) -> None:
 	if db_cls in _DB_INSTANCE_HOOKED_TYPES:
 		return
@@ -245,7 +281,10 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 				res = orig_set_value(self, dt, dn, field, val, *args, **kwargs)
 			finally:
 				_orm_hook_depth_delta(-1)
-			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(dt) if dt else "")
+			dt_key = str(dt) if dt else ""
+			if dt_key in _BRANDING_SINGLE_DOCTYPES:
+				_clear_branding_doc_caches()
+			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(dt_key)
 			if doms:
 				bump_cache_domain(*doms)
 			return res
@@ -262,7 +301,10 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 				res = orig_set_single(self, doctype, fieldname, value, *args, **kwargs)
 			finally:
 				_orm_hook_depth_delta(-1)
-			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(str(doctype) if doctype else "")
+			dt_key = str(doctype) if doctype else ""
+			if dt_key in _BRANDING_SINGLE_DOCTYPES:
+				_clear_branding_doc_caches()
+			doms = _SET_VALUE_DOCTYPE_DOMAINS.get(dt_key)
 			if doms:
 				bump_cache_domain(*doms)
 			return res
@@ -326,6 +368,8 @@ def _wrap_db_class_set_value(db_cls: type) -> None:
 			if prev_depth == 0:
 				is_del = kw.startswith(("delete", "trunca"))
 				q_low = q_s.lower()
+				if "tabsingles" in q_low:
+					_clear_branding_doc_caches()
 				b_doms: list[str] = []
 				for tab_low, w_doms, d_doms in _SQL_DML_TABLE_RULES:
 					if tab_low in q_low:
@@ -389,6 +433,10 @@ def _invalidate_scoped_clear_cache(*args, **kwargs) -> None:
 				_POLICY_LRU.clear()
 				_SSR_HTML_LRU.clear()
 				b_doms.extend((DOMAIN_USER_HIERARCHY, DOMAIN_POLICY))
+			if dt_key in _BRANDING_SINGLE_DOCTYPES:
+				_clear_branding_doc_caches()
+				_STATIC_UI_LRU.clear()
+				_SSR_HTML_LRU.clear()
 			found = _SET_VALUE_DOCTYPE_DOMAINS.get(dt_key, ()) + _DELETE_ONLY_DOCTYPE_DOMAINS.get(dt_key, ())
 			if found:
 				b_doms.extend(found)
@@ -398,11 +446,12 @@ def _invalidate_scoped_clear_cache(*args, **kwargs) -> None:
 
 
 def _ensure_mutation_hooks_installed() -> None:
-	"""Idempotently hook `BaseDocument.db_insert`/`db_update`, `Database.set_value`/`set_single_value`
-	(plus active `type(frappe.db)`), `frappe.delete_doc`, and `frappe.clear_cache` in-process so all
-	ORM / low-level writes in HTTP, RQ, scheduler, and standalone CLI processes invalidate `runtime_cache`
-	domains immediately WITHOUT adding new module paths to `hooks.py` (preserving `G09` Tier 3 `N -> N-1`
-	image rollback without flushing Redis)."""
+	"""Idempotently hook `BaseDocument.db_insert`/`db_update`, `Document.update_single`,
+	`Database.set_value`/`set_single_value` (plus active `type(frappe.db)`), `frappe.delete_doc`,
+	`frappe.clear_document_cache`, `frappe.website.utils.clear_cache`, and `frappe.clear_cache`
+	in-process so all ORM / low-level writes in HTTP, RQ, scheduler, and standalone CLI processes
+	invalidate `runtime_cache` domains immediately WITHOUT adding new module paths to `hooks.py`
+	(preserving `G09` Tier 3 `N -> N-1` image rollback without flushing Redis)."""
 	global _MUTATION_HOOKS_INSTALLED
 	db_obj = getattr(frappe, "db", None)
 	if db_obj is not None and type(db_obj) not in _DB_INSTANCE_HOOKED_TYPES:
@@ -415,8 +464,32 @@ def _ensure_mutation_hooks_installed() -> None:
 	try:
 		from frappe.database.database import Database
 		from frappe.model.base_document import BaseDocument
+		from frappe.model.document import Document
 
 		_wrap_db_class_set_value(Database)
+
+		orig_update_single = getattr(Document, "update_single", None)
+		if callable(orig_update_single) and not getattr(orig_update_single, "_cskh_cache_wrapped", False):
+
+			def _wrapped_update_single(self, *args, **kwargs):
+				cur_db = getattr(frappe, "db", None)
+				if cur_db is not None and type(cur_db) not in _DB_INSTANCE_HOOKED_TYPES:
+					_wrap_db_class_set_value(type(cur_db))
+				_orm_hook_depth_delta(1)
+				try:
+					res = orig_update_single(self, *args, **kwargs)
+				finally:
+					_orm_hook_depth_delta(-1)
+				dt_key = str(getattr(self, "doctype", "") or "")
+				if dt_key in _BRANDING_SINGLE_DOCTYPES:
+					_clear_branding_doc_caches()
+				doms = _SET_VALUE_DOCTYPE_DOMAINS.get(dt_key)
+				if doms:
+					bump_cache_domain(*doms)
+				return res
+
+			_wrapped_update_single._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+			Document.update_single = _wrapped_update_single  # type: ignore[method-assign]
 
 		orig_db_insert = getattr(BaseDocument, "db_insert", None)
 		if callable(orig_db_insert) and not getattr(orig_db_insert, "_cskh_cache_wrapped", False):
@@ -493,6 +566,39 @@ def _ensure_mutation_hooks_installed() -> None:
 
 			_wrapped_clear_cache._cskh_cache_wrapped = True  # type: ignore[attr-defined]
 			frappe.clear_cache = _wrapped_clear_cache
+
+		orig_clear_doc_cache = getattr(frappe, "clear_document_cache", None)
+		if callable(orig_clear_doc_cache) and not getattr(orig_clear_doc_cache, "_cskh_cache_wrapped", False):
+
+			def _wrapped_clear_document_cache(doctype: str, name: str | None = None):
+				res = orig_clear_doc_cache(doctype, name)
+				if str(doctype or "") in _BRANDING_SINGLE_DOCTYPES:
+					_STATIC_UI_LRU.clear()
+					_SSR_HTML_LRU.clear()
+					bump_cache_domain(DOMAIN_BRANDING)
+				return res
+
+			_wrapped_clear_document_cache._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+			_wrapped_clear_document_cache._cskh_orig = orig_clear_doc_cache  # type: ignore[attr-defined]
+			frappe.clear_document_cache = _wrapped_clear_document_cache
+
+		try:
+			import frappe.website.utils as web_utils_mod
+
+			orig_web_clear = getattr(web_utils_mod, "clear_cache", None)
+			if callable(orig_web_clear) and not getattr(orig_web_clear, "_cskh_cache_wrapped", False):
+
+				def _wrapped_website_clear_cache(*args, **kwargs):
+					res = orig_web_clear(*args, **kwargs)
+					_STATIC_UI_LRU.clear()
+					_SSR_HTML_LRU.clear()
+					bump_cache_domain(DOMAIN_BRANDING)
+					return res
+
+				_wrapped_website_clear_cache._cskh_cache_wrapped = True  # type: ignore[attr-defined]
+				web_utils_mod.clear_cache = _wrapped_website_clear_cache
+		except Exception:
+			pass
 
 		_MUTATION_HOOKS_INSTALLED = True
 	except Exception:
@@ -1418,6 +1524,102 @@ def get_static_cskh_ui_bundle(lang: str = "vi") -> dict:
 	if use_cache:
 		_STATIC_UI_LRU.set(key, bundle)
 	return bundle
+
+
+def get_website_branding() -> dict[str, str]:
+	"""Return epoch-cached site branding (`splash_image`, `favicon`, `brand_html`, `banner_image`, `app_logo`).
+
+	Keyed by `DOMAIN_BRANDING` so warm `/cskh/*` SSR caches never retain a stale logo or favicon
+	when `Website Settings`, `Navbar Settings`, `Website Theme`, or `FCRM Settings` changes.
+	"""
+	use_cache = is_runtime_db_cache_active()
+	key = (_current_site(), "__website_branding__", get_domain_epoch(DOMAIN_BRANDING))
+	if use_cache:
+		hit = _STATIC_UI_LRU.get(key)
+		if isinstance(hit, dict):
+			return dict(hit)
+
+	branding = {
+		"splash_image": "",
+		"favicon": "/assets/frappe/images/frappe-favicon.svg",
+		"brand_html": "",
+		"banner_image": "",
+		"app_logo": "",
+	}
+	get_hooks_fn = getattr(frappe, "get_hooks", None)
+	if callable(get_hooks_fn):
+		try:
+			via_hooks = get_hooks_fn("website_context") or {}
+			if isinstance(via_hooks, dict):
+				for bkey in ("splash_image", "favicon", "brand_html", "banner_image", "app_logo"):
+					val = via_hooks.get(bkey)
+					if isinstance(val, list | tuple) and val:
+						val = val[-1]
+					if isinstance(val, str) and val:
+						branding[bkey] = val
+		except Exception:
+			pass
+
+	ws_values: dict[str, str] = {}
+	nav_logo = ""
+	db_obj = getattr(frappe, "db", None)
+	loaded_from_sql = False
+	if db_obj is not None and callable(getattr(db_obj, "sql", None)):
+		try:
+			rows = db_obj.sql(
+				"""
+				select doctype, field, value
+				from `tabSingles`
+				where doctype in ('Website Settings', 'Navbar Settings')
+				  and field in ('splash_image', 'favicon', 'brand_html', 'banner_image', 'app_logo')
+				""",
+				as_dict=False,
+			)
+			for dt_name, fld_name, fld_val in rows or ():
+				s_val = str(fld_val or "")
+				if dt_name == "Website Settings":
+					ws_values[str(fld_name)] = s_val
+				elif dt_name == "Navbar Settings" and fld_name == "app_logo":
+					nav_logo = s_val
+			loaded_from_sql = True
+		except Exception:
+			loaded_from_sql = False
+
+	if not loaded_from_sql and callable(getattr(frappe, "get_cached_doc", None)):
+		try:
+			ws_doc = frappe.get_cached_doc("Website Settings")
+			for bkey in ("splash_image", "favicon", "brand_html", "banner_image", "app_logo"):
+				ws_values[bkey] = str(ws_doc.get(bkey) or "")
+		except Exception:
+			pass
+
+	if loaded_from_sql and callable(getattr(frappe, "get_cached_doc", None)):
+		try:
+			cached_ws = frappe.get_cached_doc("Website Settings")
+			if any(
+				str(cached_ws.get(k) or "") != ws_values.get(k, "")
+				for k in ("splash_image", "favicon", "brand_html", "banner_image", "app_logo")
+			):
+				_clear_branding_doc_caches()
+		except Exception:
+			pass
+
+	hook_splash = branding["splash_image"]
+	branding["splash_image"] = ws_values.get("splash_image") or hook_splash
+
+	ws_fav = ws_values.get("favicon", "")
+	if ws_fav and ws_fav != "attach_files:":
+		branding["favicon"] = ws_fav
+	if ws_values.get("brand_html"):
+		branding["brand_html"] = ws_values["brand_html"]
+	if ws_values.get("banner_image"):
+		branding["banner_image"] = ws_values["banner_image"]
+	if ws_values.get("app_logo") or nav_logo:
+		branding["app_logo"] = ws_values.get("app_logo") or nav_logo
+
+	if use_cache:
+		_STATIC_UI_LRU.set(key, dict(branding))
+	return branding
 
 
 # ---------------------------------------------------------------------------

@@ -26,7 +26,11 @@
 	<aside class="cskh-sidebar">
 		<div class="cskh-sidebar-top">
 			<a href="/cskh" class="cskh-sidebar-brand">
+				{% if splash_image %}
+				<img src="{{ splash_image | e }}" alt="HRPARTNER" class="cskh-sidebar-logo is-brand-logo" width="48" height="38">
+				{% else %}
 				<img src="/assets/crm_cskh/cskh/logo.svg?v={{ cskh_asset_version | default('') }}" alt="" class="cskh-sidebar-logo" width="30" height="30">
+				{% endif %}
 				<span class="cskh-sidebar-brand-copy">
 					<span class="cskh-sidebar-brand-title">{{ _("CSKH") }}</span>
 					<span class="cskh-sidebar-brand-sub">{{ _("Recruitment workspace") }}</span>

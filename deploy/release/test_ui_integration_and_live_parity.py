@@ -144,6 +144,73 @@ class TestUiIntegrationAndLiveParity(unittest.TestCase):
                 f"External asset src/href found in {fpath.name}",
             )
 
+    def test_hrpartner_branding_prepaint_patch_dockerignore_and_cskh_brand_logo(
+        self,
+    ) -> None:
+        patcher_path = REPO_ROOT / "deploy" / "dev" / "apply-crm-branding-patch.py"
+        self.assertTrue(patcher_path.is_file())
+        spec = importlib.util.spec_from_file_location(
+            "apply_crm_branding_patch", str(patcher_path)
+        )
+        assert spec is not None and spec.loader is not None
+        patcher_mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(patcher_mod)
+
+        sample_crm_built_html = (
+            '<!doctype html>\n<html class="h-full" lang="en">\n  <head>\n'
+            '    <meta charset="UTF-8" />\n'
+            '    <link rel="icon" type="image/png" sizes="196x196" href="/assets/crm/manifest/apple-icon-180.png" />\n'
+            '    <link rel="apple-touch-icon" href="/assets/crm/manifest/apple-icon-180.png" />\n'
+            '  </head>\n  <body><div id="app"></div></body>\n</html>\n'
+        )
+        patched_once = patcher_mod.patch_template(sample_crm_built_html)
+        patched_twice = patcher_mod.patch_template(patched_once)
+        self.assertEqual(patched_once, patched_twice)
+        self.assertIn(
+            '<link rel="icon" href="{{ favicon | e }}" type="image/x-icon">',
+            patched_once,
+        )
+        self.assertNotIn('rel="icon" type="image/png" sizes="196x196"', patched_once)
+        self.assertIn('id="hrpartner-branding-prepaint"', patched_once)
+        self.assertIn(
+            "{% set hrpartner_logo = splash_image | default('') %}", patched_once
+        )
+        self.assertIn("object-fit: contain;", patched_once)
+
+        dockerignore = (
+            REPO_ROOT / "deploy" / "images" / "Containerfile.dockerignore"
+        ).read_text(encoding="utf-8")
+        self.assertIn("!deploy/dev/apply-crm-branding-patch.py", dockerignore)
+
+        containerfile = (REPO_ROOT / "deploy" / "images" / "Containerfile").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "COPY --chown=frappe:0 deploy/dev/apply-crm-branding-patch.py /tmp/cskh-build/apply-crm-branding-patch.py",
+            containerfile,
+        )
+        self.assertLess(
+            containerfile.index("CI=true bench build --production --force;"),
+            containerfile.index(
+                "./env/bin/python /tmp/cskh-build/apply-crm-branding-patch.py apps/crm/crm/www/crm.html;"
+            ),
+        )
+
+        shell_html = (APP_DIR / "templates" / "cskh" / "_shell.html").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("{% if splash_image %}", shell_html)
+        self.assertIn(
+            '<img src="{{ splash_image | e }}" alt="HRPARTNER" class="cskh-sidebar-logo is-brand-logo" width="48" height="38">',
+            shell_html,
+        )
+
+        cskh_css = (APP_DIR / "public" / "cskh" / "cskh.css").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(".cskh-sidebar-logo.is-brand-logo", cskh_css)
+        self.assertIn("object-fit: contain;", cskh_css)
+
 
 if __name__ == "__main__":
     unittest.main()

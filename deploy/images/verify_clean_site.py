@@ -462,6 +462,7 @@ def main() -> int:
                 "crm_modified = [x.strip() for x in subprocess.check_output(['git', '-C', '/home/frappe/frappe-bench/apps/crm', 'diff', '--name-only'], text=True).splitlines() if x.strip()]; "
                 "frappe_navbar = Path('/home/frappe/frappe-bench/apps/frappe/frappe/templates/includes/navbar/navbar.html').read_text(); "
                 "frappe_doc = Path('/home/frappe/frappe-bench/apps/frappe/frappe/templates/doc.html').read_text(); "
+                "crm_www_html = Path('/home/frappe/frappe-bench/apps/crm/crm/www/crm.html').read_text(); "
                 "manifest = json.loads(Path('/home/frappe/frappe-bench/release-metadata/build-manifest.json').read_text()); "
                 "mdb_prov_path = Path('/home/frappe/frappe-bench/release-metadata/mariadb-stable-apt-provenance.json'); "
                 "mdb_prov = json.loads(mdb_prov_path.read_text()) if mdb_prov_path.is_file() else None; "
@@ -502,7 +503,7 @@ def main() -> int:
                 "export_table_exists = bool(frappe.db.sql(\"SHOW TABLES LIKE 'tabCSKH Export Job'\")); "
                 "dev_mode = bool(frappe.conf.get('developer_mode')); "
                 "frappe.destroy(); "
-                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'frappe_pyproject_diff': f_pyproject_diff, 'bench_pip_check_rc': bench_pip_check_rc, 'sys_pip_check_rc': sys_pip_check_rc, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'manifest': manifest, 'mdb_prov': mdb_prov, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'mdb_dpkg': mdb_dpkg, 'mdb_cli_ver': mdb_cli_ver, 'mdb_dump_ver': mdb_dump_ver, 'pdf_deps': pdf_deps, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
+                "print(json.dumps({'list_apps': list_apps.get(site), 'apps_txt': apps_txt, 'frappe_sha': f_sha, 'frappe_pyproject_diff': f_pyproject_diff, 'bench_pip_check_rc': bench_pip_check_rc, 'sys_pip_check_rc': sys_pip_check_rc, 'crm_sha': c_sha, 'crm_modified': crm_modified, 'frappe_jinja_patched': ('_(\\'Toggle navigation\\')|e' in frappe_navbar and '_(\\'Toggle navigation\\')|e' in frappe_doc), 'crm_branding_patched': ('hrpartner-branding-prepaint' in crm_www_html and '{{ favicon | e }}' in crm_www_html), 'manifest': manifest, 'mdb_prov': mdb_prov, 'pyjwt_ver': pyjwt_ver, 'pillow_ver': pillow_ver, 'pem_guard': pem_guard, 'pillow_optimize_ok': len(opt_bytes) > 0, 'pruned_present': pruned_present, 'mdb_dpkg': mdb_dpkg, 'mdb_cli_ver': mdb_cli_ver, 'mdb_dump_ver': mdb_dump_ver, 'pdf_deps': pdf_deps, 'cskh_doctypes_rows': cskh_rows, 'module_defs_for_app': mod_defs, 'module_def_crm_cskh_titlecase_exists': bool(all_mod_crm_cskh), 'modules_txt': modules_txt, 'export_job_json_module': export_json.get('module'), 'export_job_table_exists': export_table_exists, 'developer_mode': dev_mode, 'desk_js': assets_map.get('desk.bundle.js'), 'desk_css': assets_map.get('desk.bundle.css'), 'web_js': assets_map.get('frappe-web.bundle.js')}))"
             )
             probe_res = run_cmd(
                 [
@@ -574,6 +575,12 @@ def main() -> int:
                 runtime_info["frappe_jinja_patched"] is True,
                 True,
                 runtime_info["frappe_jinja_patched"],
+            )
+            record(
+                "runtime.crm_branding_prepaint_patched",
+                runtime_info["crm_branding_patched"] is True,
+                True,
+                runtime_info["crm_branding_patched"],
             )
             record(
                 "runtime.cskh_tree_sha",
@@ -1000,6 +1007,132 @@ def main() -> int:
                 crm_has_vi_boot,
                 "Vietnamese translated_messages in /crm boot",
                 crm_has_vi_boot,
+            )
+
+            # Verify HRPARTNER /crm prepaint favicon+logo on reload & /cskh warm-cache branding rotation
+            def _set_site_branding(splash_val: str, fav_val: str) -> int:
+                st_b, _, _ = http_request(
+                    auth_opener,
+                    f"{base_url}/api/method/frappe.client.set_value",
+                    host_header=args.site_name,
+                    method="POST",
+                    form_data={
+                        "doctype": "Website Settings",
+                        "name": "Website Settings",
+                        "fieldname": json.dumps(
+                            {"splash_image": splash_val, "favicon": fav_val}
+                        ),
+                    },
+                    extra_headers={"X-Frappe-CSRF-Token": csrf_token},
+                )
+                return st_b
+
+            logo_v1 = "/assets/crm_cskh/cskh/logo.svg?brand=hrpartner-v1"
+            fav_v1 = "/assets/crm_cskh/cskh/logo.svg?fav=hrpartner-v1"
+            logo_v2 = "/assets/crm_cskh/cskh/logo.svg?brand=hrpartner-v2"
+            fav_v2 = "/assets/crm_cskh/cskh/logo.svg?fav=hrpartner-v2"
+            st_set_v1 = _set_site_branding(logo_v1, fav_v1)
+            v1_crm_ok = True
+            v1_cskh_ok = True
+            for _ in range(6):
+                st_c1, _, raw_c1 = http_request(
+                    auth_opener,
+                    f"{base_url}/crm/leads",
+                    host_header=args.site_name,
+                )
+                txt_c1 = raw_c1.decode("utf-8", errors="replace")
+                if not (
+                    st_c1 == 200
+                    and f'href="{fav_v1}"' in txt_c1
+                    and 'id="hrpartner-branding-prepaint"' in txt_c1
+                    and logo_v1 in txt_c1
+                ):
+                    v1_crm_ok = False
+                st_k1, _, raw_k1 = http_request(
+                    auth_opener,
+                    f"{base_url}/cskh/dashboard",
+                    host_header=args.site_name,
+                )
+                txt_k1 = raw_k1.decode("utf-8", errors="replace")
+                if not (
+                    st_k1 == 200
+                    and f'src="{logo_v1}"' in txt_k1
+                    and 'class="cskh-sidebar-logo is-brand-logo"' in txt_k1
+                ):
+                    v1_cskh_ok = False
+
+            st_set_v2 = _set_site_branding(logo_v2, fav_v2)
+            v2_crm_ok = True
+            v2_cskh_ok = True
+            for _ in range(6):
+                st_c2, _, raw_c2 = http_request(
+                    auth_opener,
+                    f"{base_url}/crm/leads",
+                    host_header=args.site_name,
+                )
+                txt_c2 = raw_c2.decode("utf-8", errors="replace")
+                if not (
+                    st_c2 == 200
+                    and f'href="{fav_v2}"' in txt_c2
+                    and logo_v2 in txt_c2
+                    and logo_v1 not in txt_c2
+                    and fav_v1 not in txt_c2
+                ):
+                    v2_crm_ok = False
+                st_k2, _, raw_k2 = http_request(
+                    auth_opener,
+                    f"{base_url}/cskh/dashboard",
+                    host_header=args.site_name,
+                )
+                txt_k2 = raw_k2.decode("utf-8", errors="replace")
+                if not (
+                    st_k2 == 200
+                    and f'src="{logo_v2}"' in txt_k2
+                    and logo_v1 not in txt_k2
+                ):
+                    v2_cskh_ok = False
+
+            st_reset_b = _set_site_branding("", "")
+            reset_cskh_ok = True
+            for _ in range(4):
+                st_kr, _, raw_kr = http_request(
+                    auth_opener,
+                    f"{base_url}/cskh/dashboard",
+                    host_header=args.site_name,
+                )
+                txt_kr = raw_kr.decode("utf-8", errors="replace")
+                if not (
+                    st_kr == 200
+                    and logo_v2 not in txt_kr
+                    and "is-brand-logo" not in txt_kr
+                    and "/assets/crm_cskh/cskh/logo.svg?v=" in txt_kr
+                ):
+                    reset_cskh_ok = False
+
+            record(
+                "http.branding.prepaint_and_warm_cache_rotation",
+                st_set_v1 == 200
+                and st_set_v2 == 200
+                and st_reset_b == 200
+                and v1_crm_ok
+                and v1_cskh_ok
+                and v2_crm_ok
+                and v2_cskh_ok
+                and reset_cskh_ok,
+                {
+                    "v1_crm_prepaint": True,
+                    "v1_cskh_sidebar": True,
+                    "v2_warm_cache_rotated_zero_stale": True,
+                    "reset_restores_default_logo": True,
+                },
+                {
+                    "set_statuses": [st_set_v1, st_set_v2, st_reset_b],
+                    "v1_crm_prepaint": v1_crm_ok,
+                    "v1_cskh_sidebar": v1_cskh_ok,
+                    "v2_crm_rotated": v2_crm_ok,
+                    "v2_cskh_rotated": v2_cskh_ok,
+                    "reset_cskh_ok": reset_cskh_ok,
+                },
             )
 
             # Socket.IO Engine.IO v4 HTTP polling + RFC 6455 WebSocket upgrade via frontend nginx -> websocket:9000

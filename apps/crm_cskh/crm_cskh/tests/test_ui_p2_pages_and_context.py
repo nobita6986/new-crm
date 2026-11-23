@@ -257,3 +257,87 @@ class TestUiP2PagesAndContext(P2TestCase):
 		p1_err_hook.normalize_p1_error_response(resp_guest, req_crm)
 		self.assertNotIn('data-cskh-crm-theme="1"', resp_guest.data)
 		self.assertNotIn("crm-sidebar-bridge.js", resp_guest.data)
+
+	def test_branding_splash_image_context_ssr_sentinels_and_warm_cache_invalidation(self):
+		from crm_cskh.services import runtime_cache
+		from crm_cskh.www.cskh_renderer import CskhPageRenderer, _is_role_shareable_skeleton
+
+		ws_doc = frappe.get_doc("Website Settings")
+		orig_splash = ws_doc.splash_image
+		orig_favicon = ws_doc.favicon
+		logo_v1 = "/assets/crm_cskh/cskh/logo.svg?brand=hrpartner-v1"
+		logo_v2 = "/assets/crm_cskh/cskh/logo.svg?brand=hrpartner-v2"
+		logo_v3 = "/assets/crm_cskh/cskh/logo.svg?brand=hrpartner-v3"
+		try:
+			with runtime_cache.enable_runtime_cache_for_test():
+				frappe.set_user("Administrator")
+				frappe.db.set_single_value("Website Settings", "splash_image", logo_v1)
+				frappe.db.set_single_value(
+					"Website Settings", "favicon", "/assets/crm_cskh/cskh/logo.svg?fav=v1"
+				)
+
+				# 1. Context resolves splash_image and preserves SSR sentinels when compiling skeleton
+				frappe.set_user(self.staff_a)
+				ctx = index_page.get_context(self._fresh_ctx())
+				self.assertEqual(ctx.splash_image, logo_v1)
+
+				renderer_a = CskhPageRenderer(path="cskh")
+				self.assertTrue(renderer_a.can_render())
+				html_a_1 = renderer_a.get_html()
+				html_a_2 = renderer_a.get_html()  # Warm SSR skeleton cache hit
+				self.assertIn(f'src="{logo_v1}"', html_a_1)
+				self.assertIn('class="cskh-sidebar-logo is-brand-logo"', html_a_1)
+				self.assertIn(f'src="{logo_v1}"', html_a_2)
+
+				ssr_entries = list(runtime_cache.get_ssr_html_cache()._data.values())
+				self.assertGreaterEqual(len(ssr_entries), 1)
+				u_prof = runtime_cache.get_user_auth_profile(self.staff_a)
+				self.assertTrue(
+					_is_role_shareable_skeleton(
+						ssr_entries[-1],
+						live_user=self.staff_a,
+						u_full_name=str(u_prof["full_name"] or ""),
+						u_image=str(u_prof["user_image"] or ""),
+					)
+				)
+
+				# Verify zero cross-user token leakage on warm role-shared skeleton
+				frappe.set_user(self.staff_b)
+				html_b = CskhPageRenderer(path="cskh").get_html()
+				self.assertIn(self.staff_b, html_b)
+				self.assertNotIn(self.staff_a, html_b)
+				self.assertIn(f'src="{logo_v1}"', html_b)
+
+				# 2. Warm-cache branding mutation via set_single_value must NOT retain old logo
+				frappe.set_user("Administrator")
+				frappe.db.set_single_value("Website Settings", "splash_image", logo_v2)
+				runtime_cache.on_before_request()
+				frappe.set_user(self.staff_a)
+				html_v2 = CskhPageRenderer(path="cskh").get_html()
+				self.assertIn(f'src="{logo_v2}"', html_v2)
+				self.assertNotIn(logo_v1, html_v2)
+
+				# 3. Warm-cache branding mutation via Document.save() must NOT retain old logo
+				frappe.set_user("Administrator")
+				ws_live = frappe.get_doc("Website Settings")
+				ws_live.splash_image = logo_v3
+				ws_live.save(ignore_permissions=True)
+				runtime_cache.on_before_request()
+				frappe.set_user(self.staff_a)
+				html_v3 = CskhPageRenderer(path="cskh").get_html()
+				self.assertIn(f'src="{logo_v3}"', html_v3)
+				self.assertNotIn(logo_v2, html_v3)
+
+				# 4. Clearing splash_image while cache is warm immediately restores default CSKH logo.svg
+				frappe.set_user("Administrator")
+				frappe.db.set_single_value("Website Settings", "splash_image", "")
+				runtime_cache.on_before_request()
+				frappe.set_user(self.staff_a)
+				html_cleared = CskhPageRenderer(path="cskh").get_html()
+				self.assertNotIn(logo_v3, html_cleared)
+				self.assertNotIn("is-brand-logo", html_cleared)
+				self.assertIn("/assets/crm_cskh/cskh/logo.svg?v=", html_cleared)
+		finally:
+			frappe.set_user("Administrator")
+			frappe.db.set_single_value("Website Settings", "splash_image", orig_splash or "")
+			frappe.db.set_single_value("Website Settings", "favicon", orig_favicon or "")
