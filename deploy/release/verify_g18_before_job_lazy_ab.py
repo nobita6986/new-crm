@@ -301,7 +301,6 @@ from frappe.utils.background_jobs import generate_qname
 payload = json.loads(sys.stdin.read())
 site = payload["site_name"]
 job_ids = payload["job_ids"]
-t_drain0_epoch = float(payload["t_drain0_epoch"])
 
 os.chdir("/home/frappe/frappe-bench/sites")
 frappe.init(site=site, sites_path=".")
@@ -324,7 +323,8 @@ try:
     wait_lags_ms = []
     e2e_lags_ms = []
     exec_spans_ms = []
-    ended_epochs = []
+    enqueued_dts = []
+    ended_dts = []
     failed_jobs = 0
 
     for jid in job_ids:
@@ -334,17 +334,21 @@ try:
         enq = job.enqueued_at
         st = job.started_at
         end = job.ended_at
+        if enq:
+            enqueued_dts.append(enq)
+        if end:
+            ended_dts.append(end)
         if enq and st:
             wait_lags_ms.append(max(0.0, (st - enq).total_seconds() * 1000.0))
         if enq and end:
             e2e_lags_ms.append(max(0.0, (end - enq).total_seconds() * 1000.0))
         if st and end:
             exec_spans_ms.append(max(0.0, (end - st).total_seconds() * 1000.0))
-        if end:
-            ended_epochs.append(end.timestamp())
 
-    if ended_epochs:
-        full_wall_ms = round(max(1.0, (max(ended_epochs) - t_drain0_epoch) * 1000.0), 2)
+    if enqueued_dts and ended_dts:
+        full_wall_ms = round(
+            max(1.0, (max(ended_dts) - min(enqueued_dts)).total_seconds() * 1000.0), 2
+        )
     else:
         full_wall_ms = 0.0
 
