@@ -1,5 +1,6 @@
 """Exercise the real approved signature and fail-closed negative cases."""
 
+from datetime import datetime, timedelta, timezone
 import base64
 import json
 import os
@@ -10,7 +11,12 @@ import sys
 import tempfile
 import unittest
 
-from verify_offline_signed_candidate import IMAGE, verify
+from verify_live_trivy_freshness import (
+    EXPECTED_TRIVY_VERSION,
+    TRIVY_IMAGE,
+    evaluate_live_trivy_freshness,
+)
+from verify_offline_signed_candidate import IMAGE, IMAGE_ID, verify
 
 
 BUNDLE = Path(__file__).parent / "bundle"
@@ -108,6 +114,111 @@ class OfflineSignatureTests(unittest.TestCase):
                 check=False,
             )
         self.assertNotEqual(result.returncode, 0)
+
+
+class LiveTrivyFreshnessTests(unittest.TestCase):
+    def _seed_fresh_scan_dir(
+        self,
+        out_dir: Path,
+        *,
+        eval_now: datetime,
+        db_age_hours: float = 2.5,
+        inject_critical: bool = False,
+    ) -> None:
+        out_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(BUNDLE / "pyjwt-METADATA.txt", out_dir / "pyjwt-METADATA.txt")
+
+        scan_dt = eval_now - timedelta(minutes=2)
+        db_updated_dt = scan_dt - timedelta(hours=db_age_hours)
+        db_next_dt = db_updated_dt + timedelta(hours=12)
+
+        (out_dir / "trivy-version.json").write_text(
+            json.dumps(
+                {
+                    "Version": EXPECTED_TRIVY_VERSION,
+                    "PinnedTrivyImage": TRIVY_IMAGE,
+                    "PulledTrivyImageID": "sha256:" + "a" * 64,
+                }
+            ),
+            encoding="utf-8",
+        )
+        (out_dir / "trivy-db-metadata.json").write_text(
+            json.dumps(
+                {
+                    "Version": 2,
+                    "UpdatedAt": db_updated_dt.strftime("%Y-%m-%dT%H:%M:%S.123456789Z"),
+                    "NextUpdate": db_next_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "DownloadedAt": scan_dt.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        trivy_doc = json.loads(
+            (BUNDLE / "trivy-image.json").read_text(encoding="utf-8")
+        )
+        trivy_doc["CreatedAt"] = scan_dt.strftime("%Y-%m-%dT%H:%M:%S.987654321Z")
+        trivy_doc["ArtifactName"] = IMAGE
+        trivy_doc["Metadata"]["ImageID"] = IMAGE_ID
+        if inject_critical:
+            trivy_doc["Results"][0].setdefault("Vulnerabilities", []).append(
+                {
+                    "VulnerabilityID": "CVE-2026-99999",
+                    "PkgName": "openssl",
+                    "InstalledVersion": "3.5.4-1",
+                    "FixedVersion": "3.5.4-2",
+                    "Severity": "CRITICAL",
+                }
+            )
+        (out_dir / "trivy-image-fresh.json").write_text(
+            json.dumps(trivy_doc), encoding="utf-8"
+        )
+
+    def test_fresh_db_within_24h_and_zero_critical_passes(self):
+        eval_now = datetime(2026, 11, 25, 14, 0, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as directory:
+            out_dir = Path(directory) / "fresh-scan"
+            self._seed_fresh_scan_dir(out_dir, eval_now=eval_now, db_age_hours=3.0)
+            report = evaluate_live_trivy_freshness(
+                SOURCE, out_dir, bundle_dir=BUNDLE, eval_now=eval_now
+            )
+            self.assertEqual(report["status"], "PASS")
+            self.assertTrue(report["vulnerability_db"]["db_age_within_24h"])
+            self.assertTrue(report["sealed_offline_bundle_untouched"])
+            self.assertTrue((out_dir / "SHA256SUMS.txt").is_file())
+
+    def test_stale_db_over_24h_fails_closed(self):
+        eval_now = datetime(2026, 11, 25, 14, 0, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as directory:
+            out_dir = Path(directory) / "stale-scan"
+            self._seed_fresh_scan_dir(out_dir, eval_now=eval_now, db_age_hours=25.5)
+            report = evaluate_live_trivy_freshness(
+                SOURCE, out_dir, bundle_dir=BUNDLE, eval_now=eval_now
+            )
+            self.assertEqual(report["status"], "FAIL")
+            self.assertFalse(report["vulnerability_db"]["db_age_within_24h"])
+            self.assertTrue((out_dir / "SHA256SUMS.txt").is_file())
+
+    def test_new_critical_cve_in_fresh_scan_fails_closed_and_reports_finding(self):
+        eval_now = datetime(2026, 11, 25, 14, 0, 0, tzinfo=timezone.utc)
+        with tempfile.TemporaryDirectory() as directory:
+            out_dir = Path(directory) / "crit-scan"
+            self._seed_fresh_scan_dir(
+                out_dir, eval_now=eval_now, db_age_hours=1.5, inject_critical=True
+            )
+            report = evaluate_live_trivy_freshness(
+                SOURCE, out_dir, bundle_dir=BUNDLE, eval_now=eval_now
+            )
+            self.assertEqual(report["status"], "FAIL")
+            self.assertEqual(
+                report["strict_evaluation"]["unapproved_fixable_critical"][0]["cve_id"],
+                "CVE-2026-99999",
+            )
+            self.assertTrue((out_dir / "SHA256SUMS.txt").is_file())
+
+    def test_output_dir_overlapping_sealed_bundle_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "strictly separate"):
+            evaluate_live_trivy_freshness(SOURCE, BUNDLE, bundle_dir=BUNDLE)
 
 
 if __name__ == "__main__":
