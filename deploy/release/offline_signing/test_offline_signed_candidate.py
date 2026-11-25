@@ -20,11 +20,25 @@ SOURCE = Path(os.environ["P4_CANDIDATE_SOURCE_ROOT"])
 class OfflineSignatureTests(unittest.TestCase):
     def canonical_verify(self, sig: Path, pub: Path) -> subprocess.CompletedProcess:
         return subprocess.run(
-            [sys.executable, "-B", str(SOURCE / "deploy/release/release_manifest.py"),
-             "verify", "--manifest", str(BUNDLE / "release-manifest.json"),
-             "--sig", str(sig), "--public-key-file", str(pub),
-             "--expected-image", IMAGE, "--expected-scope", "production_candidate"],
-            text=True, capture_output=True, check=False,
+            [
+                sys.executable,
+                "-B",
+                str(SOURCE / "deploy/release/release_manifest.py"),
+                "verify",
+                "--manifest",
+                str(BUNDLE / "release-manifest.json"),
+                "--sig",
+                str(sig),
+                "--public-key-file",
+                str(pub),
+                "--expected-image",
+                IMAGE,
+                "--expected-scope",
+                "production_candidate",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
         )
 
     def test_real_approved_signature_and_artifact_bindings(self):
@@ -46,7 +60,9 @@ class OfflineSignatureTests(unittest.TestCase):
     def test_substituted_signature_is_rejected_cryptographically(self):
         with tempfile.TemporaryDirectory() as directory:
             sig = Path(directory) / "substituted.sig"
-            sig.write_text(base64.b64encode(bytes(64)).decode() + "\n", encoding="ascii")
+            sig.write_text(
+                base64.b64encode(bytes(64)).decode() + "\n", encoding="ascii"
+            )
             result = self.canonical_verify(sig, BUNDLE / "official-release-signing.pub")
         self.assertEqual(result.returncode, 2)
 
@@ -54,8 +70,12 @@ class OfflineSignatureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             pub = Path(directory) / "wrong.pub"
             der = bytes.fromhex("302a300506032b6570032100") + bytes([1]) * 32
-            pub.write_text("-----BEGIN PUBLIC KEY-----\n" + base64.b64encode(der).decode()
-                           + "\n-----END PUBLIC KEY-----\n", encoding="ascii")
+            pub.write_text(
+                "-----BEGIN PUBLIC KEY-----\n"
+                + base64.b64encode(der).decode()
+                + "\n-----END PUBLIC KEY-----\n",
+                encoding="ascii",
+            )
             result = self.canonical_verify(BUNDLE / "release-manifest.json.sig", pub)
         self.assertEqual(result.returncode, 2)
 
@@ -67,12 +87,25 @@ class OfflineSignatureTests(unittest.TestCase):
             scan = root / "cross-digest.json"
             scan.write_text(json.dumps(raw), encoding="utf-8")
             result = subprocess.run(
-                [sys.executable, "-B", str(SOURCE / "deploy/release/evaluate_security_scan.py"),
-                 "--trivy-json", str(scan), "--expected-image", IMAGE,
-                 "--exceptions", str(BUNDLE / "cve-exceptions.json"),
-                 "--pyjwt-metadata-file", str(BUNDLE / "pyjwt-METADATA.txt"),
-                 "--strict", "--out", str(root / "rejected.json")],
-                text=True, capture_output=True, check=False,
+                [
+                    sys.executable,
+                    "-B",
+                    str(SOURCE / "deploy/release/evaluate_security_scan.py"),
+                    "--trivy-json",
+                    str(scan),
+                    "--expected-image",
+                    IMAGE,
+                    "--exceptions",
+                    str(BUNDLE / "cve-exceptions.json"),
+                    "--pyjwt-metadata-file",
+                    str(BUNDLE / "pyjwt-METADATA.txt"),
+                    "--strict",
+                    "--out",
+                    str(root / "rejected.json"),
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
             )
         self.assertNotEqual(result.returncode, 0)
 
