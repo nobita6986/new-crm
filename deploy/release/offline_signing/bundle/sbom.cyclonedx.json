@@ -1,0 +1,2537 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "serialNumber": "urn:uuid:b8d62620-95b4-43a9-a0c6-7d567b2ccebd",
+  "version": 1,
+  "metadata": {
+    "timestamp": "2026-11-23T14:05:15Z",
+    "tools": [
+      {
+        "vendor": "CRM-CSKH",
+        "name": "cskh-p4-sbom-generator",
+        "version": "1.0.0"
+      }
+    ],
+    "component": {
+      "type": "container",
+      "bom-ref": "container:ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+      "name": "crm-cskh",
+      "version": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c"
+    }
+  },
+  "components": [
+    {
+      "type": "application",
+      "bom-ref": "app:frappe@53bae3ef2550ca96320f036f581446783cd11b72",
+      "name": "frappe",
+      "version": "v15.126.0@53bae3ef2550ca96320f036f581446783cd11b72",
+      "purl": "pkg:github/frappe/frappe@53bae3ef2550ca96320f036f581446783cd11b72"
+    },
+    {
+      "type": "application",
+      "bom-ref": "app:crm@0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "name": "crm",
+      "version": "v1.87.0@0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "purl": "pkg:github/frappe/crm@0d3910b456ef4fb913e77b29db011b3debc4f778"
+    },
+    {
+      "type": "application",
+      "bom-ref": "app:crm_cskh@f1b9258c53b231390da8f9421e2c7c06cfc9281a",
+      "name": "crm_cskh",
+      "version": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+      "purl": "pkg:github/nobita6986/new-crm@3d0c47486c78c09a966a3ea9100c477f53fe6a79#apps/crm_cskh",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "722f9d6a975c36684ce84094d9e22f0036e321b077c6ecdfa2090902b72d6ff2"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "yarnlock:apps/frappe/yarn.lock",
+      "name": "apps/frappe/yarn.lock",
+      "version": "fd713bb100a3",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "fd713bb100a3b4ae0ce801bbeec1135938f5028e21f249343daf4e434c528bad"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "yarnlock:apps/crm/yarn.lock",
+      "name": "apps/crm/yarn.lock",
+      "version": "49e1cb522c13",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "49e1cb522c1350c51654c391a30dfc1bd2cf1f40f2342dfba6048a4e744ea5b3"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "bom-ref": "yarnlock:apps/crm/frontend/yarn.lock",
+      "name": "apps/crm/frontend/yarn.lock",
+      "version": "b0d89f3bed31",
+      "hashes": [
+        {
+          "alg": "SHA-256",
+          "content": "b0d89f3bed314eb1fb7b7cfbab8c6a95855583196e0f327326f1f9c69cd299ab"
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/adduser@3.152?arch=amd64&distro=debian-12",
+      "name": "adduser",
+      "version": "3.152",
+      "purl": "pkg:deb/debian/adduser@3.152?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/apt@3.0.4?arch=amd64&distro=debian-12",
+      "name": "apt",
+      "version": "3.0.4",
+      "purl": "pkg:deb/debian/apt@3.0.4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/base-files@13.8%2Bdeb13u8?arch=amd64&distro=debian-12",
+      "name": "base-files",
+      "version": "13.8+deb13u8",
+      "purl": "pkg:deb/debian/base-files@13.8%2Bdeb13u8?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/base-passwd@3.6.7?arch=amd64&distro=debian-12",
+      "name": "base-passwd",
+      "version": "3.6.7",
+      "purl": "pkg:deb/debian/base-passwd@3.6.7?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/bash@5.2.37-2%2Bb10?arch=amd64&distro=debian-12",
+      "name": "bash",
+      "version": "5.2.37-2+b10",
+      "purl": "pkg:deb/debian/bash@5.2.37-2%2Bb10?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/bsdutils@1%3A2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "bsdutils",
+      "version": "1:2.41.5-0+deb13u1",
+      "purl": "pkg:deb/debian/bsdutils@1%3A2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/ca-certificates@20250419%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "ca-certificates",
+      "version": "20250419+deb13u1",
+      "purl": "pkg:deb/debian/ca-certificates@20250419%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/coreutils@9.7-3?arch=amd64&distro=debian-12",
+      "name": "coreutils",
+      "version": "9.7-3",
+      "purl": "pkg:deb/debian/coreutils@9.7-3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u7?arch=amd64&distro=debian-12",
+      "name": "curl",
+      "version": "8.14.1-2+deb13u7",
+      "purl": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u7?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/dash@0.5.12-12?arch=amd64&distro=debian-12",
+      "name": "dash",
+      "version": "0.5.12-12",
+      "purl": "pkg:deb/debian/dash@0.5.12-12?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/debconf@1.5.91?arch=amd64&distro=debian-12",
+      "name": "debconf",
+      "version": "1.5.91",
+      "purl": "pkg:deb/debian/debconf@1.5.91?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/debian-archive-keyring@2025.1?arch=amd64&distro=debian-12",
+      "name": "debian-archive-keyring",
+      "version": "2025.1",
+      "purl": "pkg:deb/debian/debian-archive-keyring@2025.1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/debianutils@5.23.2?arch=amd64&distro=debian-12",
+      "name": "debianutils",
+      "version": "5.23.2",
+      "purl": "pkg:deb/debian/debianutils@5.23.2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/diffutils@1%3A3.10-4?arch=amd64&distro=debian-12",
+      "name": "diffutils",
+      "version": "1:3.10-4",
+      "purl": "pkg:deb/debian/diffutils@1%3A3.10-4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/dpkg@1.22.22?arch=amd64&distro=debian-12",
+      "name": "dpkg",
+      "version": "1.22.22",
+      "purl": "pkg:deb/debian/dpkg@1.22.22?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/file@1%3A5.46-5?arch=amd64&distro=debian-12",
+      "name": "file",
+      "version": "1:5.46-5",
+      "purl": "pkg:deb/debian/file@1%3A5.46-5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/findutils@4.10.0-3?arch=amd64&distro=debian-12",
+      "name": "findutils",
+      "version": "4.10.0-3",
+      "purl": "pkg:deb/debian/findutils@4.10.0-3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/fontconfig-config@2.15.0-2.3?arch=amd64&distro=debian-12",
+      "name": "fontconfig-config",
+      "version": "2.15.0-2.3",
+      "purl": "pkg:deb/debian/fontconfig-config@2.15.0-2.3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/fontconfig@2.15.0-2.3?arch=amd64&distro=debian-12",
+      "name": "fontconfig",
+      "version": "2.15.0-2.3",
+      "purl": "pkg:deb/debian/fontconfig@2.15.0-2.3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/fonts-dejavu-core@2.37-8?arch=amd64&distro=debian-12",
+      "name": "fonts-dejavu-core",
+      "version": "2.37-8",
+      "purl": "pkg:deb/debian/fonts-dejavu-core@2.37-8?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/fonts-dejavu-mono@2.37-8?arch=amd64&distro=debian-12",
+      "name": "fonts-dejavu-mono",
+      "version": "2.37-8",
+      "purl": "pkg:deb/debian/fonts-dejavu-mono@2.37-8?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/gcc-14-base@14.2.0-19?arch=amd64&distro=debian-12",
+      "name": "gcc-14-base",
+      "version": "14.2.0-19",
+      "purl": "pkg:deb/debian/gcc-14-base@14.2.0-19?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/gettext-base@0.23.1-2?arch=amd64&distro=debian-12",
+      "name": "gettext-base",
+      "version": "0.23.1-2",
+      "purl": "pkg:deb/debian/gettext-base@0.23.1-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/git-man@1%3A2.47.3-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "git-man",
+      "version": "1:2.47.3-0+deb13u1",
+      "purl": "pkg:deb/debian/git-man@1%3A2.47.3-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/git@1%3A2.47.3-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "git",
+      "version": "1:2.47.3-0+deb13u1",
+      "purl": "pkg:deb/debian/git@1%3A2.47.3-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/gpg@2.4.7-21%2Bdeb13u1%2Bb5?arch=amd64&distro=debian-12",
+      "name": "gpg",
+      "version": "2.4.7-21+deb13u1+b5",
+      "purl": "pkg:deb/debian/gpg@2.4.7-21%2Bdeb13u1%2Bb5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/gpgconf@2.4.7-21%2Bdeb13u1%2Bb5?arch=amd64&distro=debian-12",
+      "name": "gpgconf",
+      "version": "2.4.7-21+deb13u1+b5",
+      "purl": "pkg:deb/debian/gpgconf@2.4.7-21%2Bdeb13u1%2Bb5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/grep@3.11-4?arch=amd64&distro=debian-12",
+      "name": "grep",
+      "version": "3.11-4",
+      "purl": "pkg:deb/debian/grep@3.11-4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/gzip@1.13-1%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "gzip",
+      "version": "1.13-1+deb13u1",
+      "purl": "pkg:deb/debian/gzip@1.13-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/hostname@3.25?arch=amd64&distro=debian-12",
+      "name": "hostname",
+      "version": "3.25",
+      "purl": "pkg:deb/debian/hostname@3.25?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/init-system-helpers@1.69~deb13u1?arch=amd64&distro=debian-12",
+      "name": "init-system-helpers",
+      "version": "1.69~deb13u1",
+      "purl": "pkg:deb/debian/init-system-helpers@1.69~deb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/iproute2@6.15.0-1?arch=amd64&distro=debian-12",
+      "name": "iproute2",
+      "version": "6.15.0-1",
+      "purl": "pkg:deb/debian/iproute2@6.15.0-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/jq@1.7.1-6%2Bdeb13u4?arch=amd64&distro=debian-12",
+      "name": "jq",
+      "version": "1.7.1-6+deb13u4",
+      "purl": "pkg:deb/debian/jq@1.7.1-6%2Bdeb13u4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/less@668-1?arch=amd64&distro=debian-12",
+      "name": "less",
+      "version": "668-1",
+      "purl": "pkg:deb/debian/less@668-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libacl1",
+      "version": "2.3.2-2+b1",
+      "purl": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libapt-pkg7.0@3.0.4?arch=amd64&distro=debian-12",
+      "name": "libapt-pkg7.0",
+      "version": "3.0.4",
+      "purl": "pkg:deb/debian/libapt-pkg7.0@3.0.4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libassuan9@3.0.2-2?arch=amd64&distro=debian-12",
+      "name": "libassuan9",
+      "version": "3.0.2-2",
+      "purl": "pkg:deb/debian/libassuan9@3.0.2-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libatomic1@14.2.0-19?arch=amd64&distro=debian-12",
+      "name": "libatomic1",
+      "version": "14.2.0-19",
+      "purl": "pkg:deb/debian/libatomic1@14.2.0-19?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libattr1@1%3A2.5.2-3?arch=amd64&distro=debian-12",
+      "name": "libattr1",
+      "version": "1:2.5.2-3",
+      "purl": "pkg:deb/debian/libattr1@1%3A2.5.2-3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libaudit-common@1%3A4.0.2-2%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libaudit-common",
+      "version": "1:4.0.2-2+deb13u1",
+      "purl": "pkg:deb/debian/libaudit-common@1%3A4.0.2-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libaudit1@1%3A4.0.2-2%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libaudit1",
+      "version": "1:4.0.2-2+deb13u1",
+      "purl": "pkg:deb/debian/libaudit1@1%3A4.0.2-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libblkid1",
+      "version": "2.41.5-0+deb13u1",
+      "purl": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libbpf1@1%3A1.5.0-3?arch=amd64&distro=debian-12",
+      "name": "libbpf1",
+      "version": "1:1.5.0-3",
+      "purl": "pkg:deb/debian/libbpf1@1%3A1.5.0-3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libbrotli1@1.1.0-2%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libbrotli1",
+      "version": "1.1.0-2+deb13u1",
+      "purl": "pkg:deb/debian/libbrotli1@1.1.0-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libbsd0@0.12.2-2?arch=amd64&distro=debian-12",
+      "name": "libbsd0",
+      "version": "0.12.2-2",
+      "purl": "pkg:deb/debian/libbsd0@0.12.2-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libbz2-1.0@1.0.8-6?arch=amd64&distro=debian-12",
+      "name": "libbz2-1.0",
+      "version": "1.0.8-6",
+      "purl": "pkg:deb/debian/libbz2-1.0@1.0.8-6?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u5?arch=amd64&distro=debian-12",
+      "name": "libc-bin",
+      "version": "2.41-12+deb13u5",
+      "purl": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u5?arch=amd64&distro=debian-12",
+      "name": "libc6",
+      "version": "2.41-12+deb13u5",
+      "purl": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libcairo2@1.18.4-1%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libcairo2",
+      "version": "1.18.4-1+b1",
+      "purl": "pkg:deb/debian/libcairo2@1.18.4-1%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libcap-ng0@0.8.5-4%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libcap-ng0",
+      "version": "0.8.5-4+b1",
+      "purl": "pkg:deb/debian/libcap-ng0@0.8.5-4%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libcap2-bin@1%3A2.75-10%2Bdeb13u1%2Bb3?arch=amd64&distro=debian-12",
+      "name": "libcap2-bin",
+      "version": "1:2.75-10+deb13u1+b3",
+      "purl": "pkg:deb/debian/libcap2-bin@1%3A2.75-10%2Bdeb13u1%2Bb3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libcap2@1%3A2.75-10%2Bdeb13u1%2Bb3?arch=amd64&distro=debian-12",
+      "name": "libcap2",
+      "version": "1:2.75-10+deb13u1+b3",
+      "purl": "pkg:deb/debian/libcap2@1%3A2.75-10%2Bdeb13u1%2Bb3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libcom-err2@1.47.2-3%2Bb12?arch=amd64&distro=debian-12",
+      "name": "libcom-err2",
+      "version": "1.47.2-3+b12",
+      "purl": "pkg:deb/debian/libcom-err2@1.47.2-3%2Bb12?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libconfig-inifiles-perl@3.000003-3%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libconfig-inifiles-perl",
+      "version": "3.000003-3+deb13u1",
+      "purl": "pkg:deb/debian/libconfig-inifiles-perl@3.000003-3%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libcrypt1@1%3A4.4.38-1?arch=amd64&distro=debian-12",
+      "name": "libcrypt1",
+      "version": "1:4.4.38-1",
+      "purl": "pkg:deb/debian/libcrypt1@1%3A4.4.38-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libcurl3t64-gnutls@8.14.1-2%2Bdeb13u7?arch=amd64&distro=debian-12",
+      "name": "libcurl3t64-gnutls",
+      "version": "8.14.1-2+deb13u7",
+      "purl": "pkg:deb/debian/libcurl3t64-gnutls@8.14.1-2%2Bdeb13u7?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u7?arch=amd64&distro=debian-12",
+      "name": "libcurl4t64",
+      "version": "8.14.1-2+deb13u7",
+      "purl": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u7?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libdatrie1@0.2.13-3%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libdatrie1",
+      "version": "0.2.13-3+b1",
+      "purl": "pkg:deb/debian/libdatrie1@0.2.13-3%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libdb5.3t64@5.3.28%2Bdfsg2-9?arch=amd64&distro=debian-12",
+      "name": "libdb5.3t64",
+      "version": "5.3.28+dfsg2-9",
+      "purl": "pkg:deb/debian/libdb5.3t64@5.3.28%2Bdfsg2-9?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libdebconfclient0@0.280?arch=amd64&distro=debian-12",
+      "name": "libdebconfclient0",
+      "version": "0.280",
+      "purl": "pkg:deb/debian/libdebconfclient0@0.280?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libedit2@3.1-20250104-1?arch=amd64&distro=debian-12",
+      "name": "libedit2",
+      "version": "3.1-20250104-1",
+      "purl": "pkg:deb/debian/libedit2@3.1-20250104-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libelf1t64@0.192-4?arch=amd64&distro=debian-12",
+      "name": "libelf1t64",
+      "version": "0.192-4",
+      "purl": "pkg:deb/debian/libelf1t64@0.192-4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/liberror-perl@0.17030-1?arch=amd64&distro=debian-12",
+      "name": "liberror-perl",
+      "version": "0.17030-1",
+      "purl": "pkg:deb/debian/liberror-perl@0.17030-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1?arch=amd64&distro=debian-12",
+      "name": "libexpat1",
+      "version": "2.9.0-1~deb13u1",
+      "purl": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libffi8@3.4.8-2?arch=amd64&distro=debian-12",
+      "name": "libffi8",
+      "version": "3.4.8-2",
+      "purl": "pkg:deb/debian/libffi8@3.4.8-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libfontconfig1@2.15.0-2.3?arch=amd64&distro=debian-12",
+      "name": "libfontconfig1",
+      "version": "2.15.0-2.3",
+      "purl": "pkg:deb/debian/libfontconfig1@2.15.0-2.3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libfontenc1@1%3A1.1.8-1%2Bb2?arch=amd64&distro=debian-12",
+      "name": "libfontenc1",
+      "version": "1:1.1.8-1+b2",
+      "purl": "pkg:deb/debian/libfontenc1@1%3A1.1.8-1%2Bb2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libfreetype6@2.13.3%2Bdfsg-1%2Bdeb13u2?arch=amd64&distro=debian-12",
+      "name": "libfreetype6",
+      "version": "2.13.3+dfsg-1+deb13u2",
+      "purl": "pkg:deb/debian/libfreetype6@2.13.3%2Bdfsg-1%2Bdeb13u2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libfribidi0@1.0.16-1?arch=amd64&distro=debian-12",
+      "name": "libfribidi0",
+      "version": "1.0.16-1",
+      "purl": "pkg:deb/debian/libfribidi0@1.0.16-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libgcc-s1@14.2.0-19?arch=amd64&distro=debian-12",
+      "name": "libgcc-s1",
+      "version": "14.2.0-19",
+      "purl": "pkg:deb/debian/libgcc-s1@14.2.0-19?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libgcrypt20@1.11.0-7%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libgcrypt20",
+      "version": "1.11.0-7+deb13u1",
+      "purl": "pkg:deb/debian/libgcrypt20@1.11.0-7%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libgdbm-compat4t64@1.24-2?arch=amd64&distro=debian-12",
+      "name": "libgdbm-compat4t64",
+      "version": "1.24-2",
+      "purl": "pkg:deb/debian/libgdbm-compat4t64@1.24-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libgdbm6t64@1.24-2?arch=amd64&distro=debian-12",
+      "name": "libgdbm6t64",
+      "version": "1.24-2",
+      "purl": "pkg:deb/debian/libgdbm6t64@1.24-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libglib2.0-0t64@2.84.4-3~deb13u5?arch=amd64&distro=debian-12",
+      "name": "libglib2.0-0t64",
+      "version": "2.84.4-3~deb13u5",
+      "purl": "pkg:deb/debian/libglib2.0-0t64@2.84.4-3~deb13u5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libgmp10@2%3A6.3.0%2Bdfsg-3?arch=amd64&distro=debian-12",
+      "name": "libgmp10",
+      "version": "2:6.3.0+dfsg-3",
+      "purl": "pkg:deb/debian/libgmp10@2%3A6.3.0%2Bdfsg-3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u4?arch=amd64&distro=debian-12",
+      "name": "libgnutls30t64",
+      "version": "3.8.9-3+deb13u4",
+      "purl": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libgpg-error0@1.51-4?arch=amd64&distro=debian-12",
+      "name": "libgpg-error0",
+      "version": "1.51-4",
+      "purl": "pkg:deb/debian/libgpg-error0@1.51-4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libgraphite2-3@1.3.14-2%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libgraphite2-3",
+      "version": "1.3.14-2+deb13u1",
+      "purl": "pkg:deb/debian/libgraphite2-3@1.3.14-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12",
+      "name": "libgssapi-krb5-2",
+      "version": "1.21.3-5+deb13u2",
+      "purl": "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libharfbuzz0b@10.2.0-1%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libharfbuzz0b",
+      "version": "10.2.0-1+deb13u1",
+      "purl": "pkg:deb/debian/libharfbuzz0b@10.2.0-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libhogweed6t64@3.10.1-1?arch=amd64&distro=debian-12",
+      "name": "libhogweed6t64",
+      "version": "3.10.1-1",
+      "purl": "pkg:deb/debian/libhogweed6t64@3.10.1-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libidn2-0@2.3.8-2?arch=amd64&distro=debian-12",
+      "name": "libidn2-0",
+      "version": "2.3.8-2",
+      "purl": "pkg:deb/debian/libidn2-0@2.3.8-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libjpeg62-turbo@1%3A2.1.5-4?arch=amd64&distro=debian-12",
+      "name": "libjpeg62-turbo",
+      "version": "1:2.1.5-4",
+      "purl": "pkg:deb/debian/libjpeg62-turbo@1%3A2.1.5-4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libjq1@1.7.1-6%2Bdeb13u4?arch=amd64&distro=debian-12",
+      "name": "libjq1",
+      "version": "1.7.1-6+deb13u4",
+      "purl": "pkg:deb/debian/libjq1@1.7.1-6%2Bdeb13u4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12",
+      "name": "libk5crypto3",
+      "version": "1.21.3-5+deb13u2",
+      "purl": "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libkeyutils1@1.6.3-6?arch=amd64&distro=debian-12",
+      "name": "libkeyutils1",
+      "version": "1.6.3-6",
+      "purl": "pkg:deb/debian/libkeyutils1@1.6.3-6?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12",
+      "name": "libkrb5-3",
+      "version": "1.21.3-5+deb13u2",
+      "purl": "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12",
+      "name": "libkrb5support0",
+      "version": "1.21.3-5+deb13u2",
+      "purl": "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libksba8@1.6.7-2%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libksba8",
+      "version": "1.6.7-2+b1",
+      "purl": "pkg:deb/debian/libksba8@1.6.7-2%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "liblastlog2-2",
+      "version": "2.41.5-0+deb13u1",
+      "purl": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libldap2@2.6.10%2Bdfsg-1?arch=amd64&distro=debian-12",
+      "name": "libldap2",
+      "version": "2.6.10+dfsg-1",
+      "purl": "pkg:deb/debian/libldap2@2.6.10%2Bdfsg-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/liblz4-1@1.10.0-4?arch=amd64&distro=debian-12",
+      "name": "liblz4-1",
+      "version": "1.10.0-4",
+      "purl": "pkg:deb/debian/liblz4-1@1.10.0-4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/liblzma5@5.8.1-1%2Bdeb13u2?arch=amd64&distro=debian-12",
+      "name": "liblzma5",
+      "version": "5.8.1-1+deb13u2",
+      "purl": "pkg:deb/debian/liblzma5@5.8.1-1%2Bdeb13u2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libmagic-mgc@1%3A5.46-5?arch=amd64&distro=debian-12",
+      "name": "libmagic-mgc",
+      "version": "1:5.46-5",
+      "purl": "pkg:deb/debian/libmagic-mgc@1%3A5.46-5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libmagic1t64@1%3A5.46-5?arch=amd64&distro=debian-12",
+      "name": "libmagic1t64",
+      "version": "1:5.46-5",
+      "purl": "pkg:deb/debian/libmagic1t64@1%3A5.46-5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libmariadb3@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libmariadb3",
+      "version": "1:11.8.9+ds-0+deb13u1",
+      "purl": "pkg:deb/debian/libmariadb3@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libmd0@1.1.0-2%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libmd0",
+      "version": "1.1.0-2+b1",
+      "purl": "pkg:deb/debian/libmd0@1.1.0-2%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libmnl0@1.0.5-3?arch=amd64&distro=debian-12",
+      "name": "libmnl0",
+      "version": "1.0.5-3",
+      "purl": "pkg:deb/debian/libmnl0@1.0.5-3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libmount1",
+      "version": "2.41.5-0+deb13u1",
+      "purl": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libncurses6@6.5%2B20250216-2?arch=amd64&distro=debian-12",
+      "name": "libncurses6",
+      "version": "6.5+20250216-2",
+      "purl": "pkg:deb/debian/libncurses6@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libncursesw6@6.5%2B20250216-2?arch=amd64&distro=debian-12",
+      "name": "libncursesw6",
+      "version": "6.5+20250216-2",
+      "purl": "pkg:deb/debian/libncursesw6@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libnettle8t64@3.10.1-1?arch=amd64&distro=debian-12",
+      "name": "libnettle8t64",
+      "version": "3.10.1-1",
+      "purl": "pkg:deb/debian/libnettle8t64@3.10.1-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libnghttp2-14@1.64.0-1.1%2Bdeb13u2?arch=amd64&distro=debian-12",
+      "name": "libnghttp2-14",
+      "version": "1.64.0-1.1+deb13u2",
+      "purl": "pkg:deb/debian/libnghttp2-14@1.64.0-1.1%2Bdeb13u2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libnghttp3-9@1.8.0-1?arch=amd64&distro=debian-12",
+      "name": "libnghttp3-9",
+      "version": "1.8.0-1",
+      "purl": "pkg:deb/debian/libnghttp3-9@1.8.0-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libngtcp2-16@1.11.0-1%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libngtcp2-16",
+      "version": "1.11.0-1+deb13u1",
+      "purl": "pkg:deb/debian/libngtcp2-16@1.11.0-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libngtcp2-crypto-gnutls8@1.11.0-1%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libngtcp2-crypto-gnutls8",
+      "version": "1.11.0-1+deb13u1",
+      "purl": "pkg:deb/debian/libngtcp2-crypto-gnutls8@1.11.0-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libnpth0t64@1.8-3?arch=amd64&distro=debian-12",
+      "name": "libnpth0t64",
+      "version": "1.8-3",
+      "purl": "pkg:deb/debian/libnpth0t64@1.8-3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libonig5@6.9.9-1%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libonig5",
+      "version": "6.9.9-1+b1",
+      "purl": "pkg:deb/debian/libonig5@6.9.9-1%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libp11-kit0@0.25.5-3?arch=amd64&distro=debian-12",
+      "name": "libp11-kit0",
+      "version": "0.25.5-3",
+      "purl": "pkg:deb/debian/libp11-kit0@0.25.5-3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpam-modules-bin@1.7.0-5?arch=amd64&distro=debian-12",
+      "name": "libpam-modules-bin",
+      "version": "1.7.0-5",
+      "purl": "pkg:deb/debian/libpam-modules-bin@1.7.0-5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpam-modules@1.7.0-5?arch=amd64&distro=debian-12",
+      "name": "libpam-modules",
+      "version": "1.7.0-5",
+      "purl": "pkg:deb/debian/libpam-modules@1.7.0-5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpam-runtime@1.7.0-5?arch=amd64&distro=debian-12",
+      "name": "libpam-runtime",
+      "version": "1.7.0-5",
+      "purl": "pkg:deb/debian/libpam-runtime@1.7.0-5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpam0g@1.7.0-5?arch=amd64&distro=debian-12",
+      "name": "libpam0g",
+      "version": "1.7.0-5",
+      "purl": "pkg:deb/debian/libpam0g@1.7.0-5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpango-1.0-0@1.56.3-1?arch=amd64&distro=debian-12",
+      "name": "libpango-1.0-0",
+      "version": "1.56.3-1",
+      "purl": "pkg:deb/debian/libpango-1.0-0@1.56.3-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpangocairo-1.0-0@1.56.3-1?arch=amd64&distro=debian-12",
+      "name": "libpangocairo-1.0-0",
+      "version": "1.56.3-1",
+      "purl": "pkg:deb/debian/libpangocairo-1.0-0@1.56.3-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpangoft2-1.0-0@1.56.3-1?arch=amd64&distro=debian-12",
+      "name": "libpangoft2-1.0-0",
+      "version": "1.56.3-1",
+      "purl": "pkg:deb/debian/libpangoft2-1.0-0@1.56.3-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpcre2-8-0@10.46-1~deb13u3?arch=amd64&distro=debian-12",
+      "name": "libpcre2-8-0",
+      "version": "10.46-1~deb13u3",
+      "purl": "pkg:deb/debian/libpcre2-8-0@10.46-1~deb13u3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpcre2-posix3@10.46-1~deb13u3?arch=amd64&distro=debian-12",
+      "name": "libpcre2-posix3",
+      "version": "10.46-1~deb13u3",
+      "purl": "pkg:deb/debian/libpcre2-posix3@10.46-1~deb13u3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libperl5.40@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libperl5.40",
+      "version": "5.40.1-6+deb13u1",
+      "purl": "pkg:deb/debian/libperl5.40@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpixman-1-0@0.44.0-3?arch=amd64&distro=debian-12",
+      "name": "libpixman-1-0",
+      "version": "0.44.0-3",
+      "purl": "pkg:deb/debian/libpixman-1-0@0.44.0-3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpng16-16t64@1.6.48-1%2Bdeb13u6?arch=amd64&distro=debian-12",
+      "name": "libpng16-16t64",
+      "version": "1.6.48-1+deb13u6",
+      "purl": "pkg:deb/debian/libpng16-16t64@1.6.48-1%2Bdeb13u6?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libpsl5t64@0.21.2-1.1%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libpsl5t64",
+      "version": "0.21.2-1.1+b1",
+      "purl": "pkg:deb/debian/libpsl5t64@0.21.2-1.1%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libreadline8t64@8.2-6?arch=amd64&distro=debian-12",
+      "name": "libreadline8t64",
+      "version": "8.2-6",
+      "purl": "pkg:deb/debian/libreadline8t64@8.2-6?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/librtmp1@2.4%2B20151223.gitfa8646d.1-2%2Bb5?arch=amd64&distro=debian-12",
+      "name": "librtmp1",
+      "version": "2.4+20151223.gitfa8646d.1-2+b5",
+      "purl": "pkg:deb/debian/librtmp1@2.4%2B20151223.gitfa8646d.1-2%2Bb5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg1-9?arch=amd64&distro=debian-12",
+      "name": "libsasl2-2",
+      "version": "2.1.28+dfsg1-9",
+      "purl": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg1-9?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg1-9?arch=amd64&distro=debian-12",
+      "name": "libsasl2-modules-db",
+      "version": "2.1.28+dfsg1-9",
+      "purl": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg1-9?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libseccomp2@2.6.0-2?arch=amd64&distro=debian-12",
+      "name": "libseccomp2",
+      "version": "2.6.0-2",
+      "purl": "pkg:deb/debian/libseccomp2@2.6.0-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libselinux1@3.8.1-1?arch=amd64&distro=debian-12",
+      "name": "libselinux1",
+      "version": "3.8.1-1",
+      "purl": "pkg:deb/debian/libselinux1@3.8.1-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libsemanage-common@3.8.1-1?arch=amd64&distro=debian-12",
+      "name": "libsemanage-common",
+      "version": "3.8.1-1",
+      "purl": "pkg:deb/debian/libsemanage-common@3.8.1-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libsemanage2@3.8.1-1?arch=amd64&distro=debian-12",
+      "name": "libsemanage2",
+      "version": "3.8.1-1",
+      "purl": "pkg:deb/debian/libsemanage2@3.8.1-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libsepol2@3.8.1-1?arch=amd64&distro=debian-12",
+      "name": "libsepol2",
+      "version": "3.8.1-1",
+      "purl": "pkg:deb/debian/libsepol2@3.8.1-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libsmartcols1",
+      "version": "2.41.5-0+deb13u1",
+      "purl": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2?arch=amd64&distro=debian-12",
+      "name": "libsqlite3-0",
+      "version": "3.46.1-7+deb13u2",
+      "purl": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libssh2-1t64@1.11.1-1%2Bdeb13u2?arch=amd64&distro=debian-12",
+      "name": "libssh2-1t64",
+      "version": "1.11.1-1+deb13u2",
+      "purl": "pkg:deb/debian/libssh2-1t64@1.11.1-1%2Bdeb13u2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libssl3t64@3.5.9-1~deb13u1?arch=amd64&distro=debian-12",
+      "name": "libssl3t64",
+      "version": "3.5.9-1~deb13u1",
+      "purl": "pkg:deb/debian/libssl3t64@3.5.9-1~deb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libstdc%2B%2B6@14.2.0-19?arch=amd64&distro=debian-12",
+      "name": "libstdc++6",
+      "version": "14.2.0-19",
+      "purl": "pkg:deb/debian/libstdc%2B%2B6@14.2.0-19?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1?arch=amd64&distro=debian-12",
+      "name": "libsystemd0",
+      "version": "257.13-1~deb13u1",
+      "purl": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libtasn1-6@4.20.0-2%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libtasn1-6",
+      "version": "4.20.0-2+deb13u1",
+      "purl": "pkg:deb/debian/libtasn1-6@4.20.0-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libthai-data@0.1.29-2?arch=amd64&distro=debian-12",
+      "name": "libthai-data",
+      "version": "0.1.29-2",
+      "purl": "pkg:deb/debian/libthai-data@0.1.29-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libthai0@0.1.29-2%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libthai0",
+      "version": "0.1.29-2+b1",
+      "purl": "pkg:deb/debian/libthai0@0.1.29-2%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2?arch=amd64&distro=debian-12",
+      "name": "libtinfo6",
+      "version": "6.5+20250216-2",
+      "purl": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libtirpc-common@1.3.6%2Bds-1?arch=amd64&distro=debian-12",
+      "name": "libtirpc-common",
+      "version": "1.3.6+ds-1",
+      "purl": "pkg:deb/debian/libtirpc-common@1.3.6%2Bds-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libtirpc3t64@1.3.6%2Bds-1?arch=amd64&distro=debian-12",
+      "name": "libtirpc3t64",
+      "version": "1.3.6+ds-1",
+      "purl": "pkg:deb/debian/libtirpc3t64@1.3.6%2Bds-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libudev1@257.13-1~deb13u1?arch=amd64&distro=debian-12",
+      "name": "libudev1",
+      "version": "257.13-1~deb13u1",
+      "purl": "pkg:deb/debian/libudev1@257.13-1~deb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libunistring5@1.3-2?arch=amd64&distro=debian-12",
+      "name": "libunistring5",
+      "version": "1.3-2",
+      "purl": "pkg:deb/debian/libunistring5@1.3-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "libuuid1",
+      "version": "2.41.5-0+deb13u1",
+      "purl": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libx11-6@2%3A1.8.12-1?arch=amd64&distro=debian-12",
+      "name": "libx11-6",
+      "version": "2:1.8.12-1",
+      "purl": "pkg:deb/debian/libx11-6@2%3A1.8.12-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libx11-data@2%3A1.8.12-1?arch=amd64&distro=debian-12",
+      "name": "libx11-data",
+      "version": "2:1.8.12-1",
+      "purl": "pkg:deb/debian/libx11-data@2%3A1.8.12-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libxau6@1%3A1.0.11-1?arch=amd64&distro=debian-12",
+      "name": "libxau6",
+      "version": "1:1.0.11-1",
+      "purl": "pkg:deb/debian/libxau6@1%3A1.0.11-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libxcb-render0@1.17.0-2%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libxcb-render0",
+      "version": "1.17.0-2+b1",
+      "purl": "pkg:deb/debian/libxcb-render0@1.17.0-2%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libxcb-shm0@1.17.0-2%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libxcb-shm0",
+      "version": "1.17.0-2+b1",
+      "purl": "pkg:deb/debian/libxcb-shm0@1.17.0-2%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libxcb1@1.17.0-2%2Bb1?arch=amd64&distro=debian-12",
+      "name": "libxcb1",
+      "version": "1.17.0-2+b1",
+      "purl": "pkg:deb/debian/libxcb1@1.17.0-2%2Bb1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libxdmcp6@1%3A1.1.5-1?arch=amd64&distro=debian-12",
+      "name": "libxdmcp6",
+      "version": "1:1.1.5-1",
+      "purl": "pkg:deb/debian/libxdmcp6@1%3A1.1.5-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libxext6@2%3A1.3.4-1%2Bb3?arch=amd64&distro=debian-12",
+      "name": "libxext6",
+      "version": "2:1.3.4-1+b3",
+      "purl": "pkg:deb/debian/libxext6@2%3A1.3.4-1%2Bb3?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libxrender1@1%3A0.9.12-1?arch=amd64&distro=debian-12",
+      "name": "libxrender1",
+      "version": "1:0.9.12-1",
+      "purl": "pkg:deb/debian/libxrender1@1%3A0.9.12-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libxtables12@1.8.11-2?arch=amd64&distro=debian-12",
+      "name": "libxtables12",
+      "version": "1.8.11-2",
+      "purl": "pkg:deb/debian/libxtables12@1.8.11-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libxxhash0@0.8.3-2?arch=amd64&distro=debian-12",
+      "name": "libxxhash0",
+      "version": "0.8.3-2",
+      "purl": "pkg:deb/debian/libxxhash0@0.8.3-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/libzstd1@1.5.7%2Bdfsg-1?arch=amd64&distro=debian-12",
+      "name": "libzstd1",
+      "version": "1.5.7+dfsg-1",
+      "purl": "pkg:deb/debian/libzstd1@1.5.7%2Bdfsg-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/login.defs@1%3A4.17.4-2?arch=amd64&distro=debian-12",
+      "name": "login.defs",
+      "version": "1:4.17.4-2",
+      "purl": "pkg:deb/debian/login.defs@1%3A4.17.4-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/login@1%3A4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "login",
+      "version": "1:4.16.0-2+really2.41.5-0+deb13u1",
+      "purl": "pkg:deb/debian/login@1%3A4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/mariadb-client-core@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "mariadb-client-core",
+      "version": "1:11.8.9+ds-0+deb13u1",
+      "purl": "pkg:deb/debian/mariadb-client-core@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/mariadb-client@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "mariadb-client",
+      "version": "1:11.8.9+ds-0+deb13u1",
+      "purl": "pkg:deb/debian/mariadb-client@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/mariadb-common@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "mariadb-common",
+      "version": "1:11.8.9+ds-0+deb13u1",
+      "purl": "pkg:deb/debian/mariadb-common@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/mawk@1.3.4.20250131-1?arch=amd64&distro=debian-12",
+      "name": "mawk",
+      "version": "1.3.4.20250131-1",
+      "purl": "pkg:deb/debian/mawk@1.3.4.20250131-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/media-types@13.0.0?arch=amd64&distro=debian-12",
+      "name": "media-types",
+      "version": "13.0.0",
+      "purl": "pkg:deb/debian/media-types@13.0.0?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "mount",
+      "version": "2.41.5-0+deb13u1",
+      "purl": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/mysql-common@5.8%2B1.1.1?arch=amd64&distro=debian-12",
+      "name": "mysql-common",
+      "version": "5.8+1.1.1",
+      "purl": "pkg:deb/debian/mysql-common@5.8%2B1.1.1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/ncurses-base@6.5%2B20250216-2?arch=amd64&distro=debian-12",
+      "name": "ncurses-base",
+      "version": "6.5+20250216-2",
+      "purl": "pkg:deb/debian/ncurses-base@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2?arch=amd64&distro=debian-12",
+      "name": "ncurses-bin",
+      "version": "6.5+20250216-2",
+      "purl": "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/netbase@6.5?arch=amd64&distro=debian-12",
+      "name": "netbase",
+      "version": "6.5",
+      "purl": "pkg:deb/debian/netbase@6.5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/nginx-common@1.26.3-3%2Bdeb13u11?arch=amd64&distro=debian-12",
+      "name": "nginx-common",
+      "version": "1.26.3-3+deb13u11",
+      "purl": "pkg:deb/debian/nginx-common@1.26.3-3%2Bdeb13u11?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/nginx@1.26.3-3%2Bdeb13u11?arch=amd64&distro=debian-12",
+      "name": "nginx",
+      "version": "1.26.3-3+deb13u11",
+      "purl": "pkg:deb/debian/nginx@1.26.3-3%2Bdeb13u11?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/openssl-provider-legacy@3.5.9-1~deb13u1?arch=amd64&distro=debian-12",
+      "name": "openssl-provider-legacy",
+      "version": "3.5.9-1~deb13u1",
+      "purl": "pkg:deb/debian/openssl-provider-legacy@3.5.9-1~deb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/openssl@3.5.9-1~deb13u1?arch=amd64&distro=debian-12",
+      "name": "openssl",
+      "version": "3.5.9-1~deb13u1",
+      "purl": "pkg:deb/debian/openssl@3.5.9-1~deb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/passwd@1%3A4.17.4-2?arch=amd64&distro=debian-12",
+      "name": "passwd",
+      "version": "1:4.17.4-2",
+      "purl": "pkg:deb/debian/passwd@1%3A4.17.4-2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "perl-base",
+      "version": "5.40.1-6+deb13u1",
+      "purl": "pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/perl-modules-5.40@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "perl-modules-5.40",
+      "version": "5.40.1-6+deb13u1",
+      "purl": "pkg:deb/debian/perl-modules-5.40@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/perl@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "perl",
+      "version": "5.40.1-6+deb13u1",
+      "purl": "pkg:deb/debian/perl@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/readline-common@8.2-6?arch=amd64&distro=debian-12",
+      "name": "readline-common",
+      "version": "8.2-6",
+      "purl": "pkg:deb/debian/readline-common@8.2-6?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/sed@4.9-2%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "sed",
+      "version": "4.9-2+deb13u1",
+      "purl": "pkg:deb/debian/sed@4.9-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/sqv@1.3.0-3%2Bb2?arch=amd64&distro=debian-12",
+      "name": "sqv",
+      "version": "1.3.0-3+b2",
+      "purl": "pkg:deb/debian/sqv@1.3.0-3%2Bb2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/sysvinit-utils@3.14-4?arch=amd64&distro=debian-12",
+      "name": "sysvinit-utils",
+      "version": "3.14-4",
+      "purl": "pkg:deb/debian/sysvinit-utils@3.14-4?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/tar@1.35%2Bdfsg-3.1?arch=amd64&distro=debian-12",
+      "name": "tar",
+      "version": "1.35+dfsg-3.1",
+      "purl": "pkg:deb/debian/tar@1.35%2Bdfsg-3.1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/tzdata-legacy@2026f-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "tzdata-legacy",
+      "version": "2026f-0+deb13u1",
+      "purl": "pkg:deb/debian/tzdata-legacy@2026f-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/tzdata@2026f-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "tzdata",
+      "version": "2026f-0+deb13u1",
+      "purl": "pkg:deb/debian/tzdata@2026f-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "util-linux",
+      "version": "2.41.5-0+deb13u1",
+      "purl": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/wait-for-it@0.0~git20180723-1?arch=amd64&distro=debian-12",
+      "name": "wait-for-it",
+      "version": "0.0~git20180723-1",
+      "purl": "pkg:deb/debian/wait-for-it@0.0~git20180723-1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/wkhtmltox@1%3A0.12.6.1-3.bookworm?arch=amd64&distro=debian-12",
+      "name": "wkhtmltox",
+      "version": "1:0.12.6.1-3.bookworm",
+      "purl": "pkg:deb/debian/wkhtmltox@1%3A0.12.6.1-3.bookworm?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/x11-common@1%3A7.7%2B24%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "x11-common",
+      "version": "1:7.7+24+deb13u1",
+      "purl": "pkg:deb/debian/x11-common@1%3A7.7%2B24%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/xfonts-75dpi@1%3A1.0.5?arch=amd64&distro=debian-12",
+      "name": "xfonts-75dpi",
+      "version": "1:1.0.5",
+      "purl": "pkg:deb/debian/xfonts-75dpi@1%3A1.0.5?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/xfonts-base@1%3A1.0.5%2Bnmu1?arch=amd64&distro=debian-12",
+      "name": "xfonts-base",
+      "version": "1:1.0.5+nmu1",
+      "purl": "pkg:deb/debian/xfonts-base@1%3A1.0.5%2Bnmu1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/xfonts-encodings@1%3A1.0.4-2.2?arch=amd64&distro=debian-12",
+      "name": "xfonts-encodings",
+      "version": "1:1.0.4-2.2",
+      "purl": "pkg:deb/debian/xfonts-encodings@1%3A1.0.4-2.2?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/xfonts-utils@1%3A7.7%2B7?arch=amd64&distro=debian-12",
+      "name": "xfonts-utils",
+      "version": "1:7.7+7",
+      "purl": "pkg:deb/debian/xfonts-utils@1%3A7.7%2B7?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bdeb13u1?arch=amd64&distro=debian-12",
+      "name": "zlib1g",
+      "version": "1:1.3.dfsg+really1.3.1-1+deb13u1",
+      "purl": "pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:crm_cskh@editable-locked",
+      "name": "crm_cskh",
+      "version": "editable-locked",
+      "purl": "pkg:pypi/crm_cskh@0.0.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:crm@editable-locked",
+      "name": "crm",
+      "version": "editable-locked",
+      "purl": "pkg:pypi/crm@0.0.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:frappe@editable-locked",
+      "name": "frappe",
+      "version": "editable-locked",
+      "purl": "pkg:pypi/frappe@0.0.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:GitPython@3.2.1",
+      "name": "GitPython",
+      "version": "3.2.1",
+      "purl": "pkg:pypi/gitpython@3.2.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:Jinja2@3.1.6",
+      "name": "Jinja2",
+      "version": "3.1.6",
+      "purl": "pkg:pypi/jinja2@3.1.6"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:MarkupSafe@3.0.4",
+      "name": "MarkupSafe",
+      "version": "3.0.4",
+      "purl": "pkg:pypi/markupsafe@3.0.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:PyJWT@2.15.1",
+      "name": "PyJWT",
+      "version": "2.15.1",
+      "purl": "pkg:pypi/pyjwt@2.15.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:PyMySQL@1.1.1",
+      "name": "PyMySQL",
+      "version": "1.1.1",
+      "purl": "pkg:pypi/pymysql@1.1.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:PyPika@git+https://github.com/frappe/pypika@7ef6e40215d46cd531e8c4e58650b84c11abbd04",
+      "name": "PyPika",
+      "version": "git+https://github.com/frappe/pypika@7ef6e40215d46cd531e8c4e58650b84c11abbd04",
+      "purl": "pkg:pypi/pypika"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:PyQRCode@1.2.1",
+      "name": "PyQRCode",
+      "version": "1.2.1",
+      "purl": "pkg:pypi/pyqrcode@1.2.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:PyYAML@6.0.3",
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "purl": "pkg:pypi/pyyaml@6.0.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:Pygments@2.21.0",
+      "name": "Pygments",
+      "version": "2.21.0",
+      "purl": "pkg:pypi/pygments@2.21.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:RestrictedPython@8.5",
+      "name": "RestrictedPython",
+      "version": "8.5",
+      "purl": "pkg:pypi/restrictedpython@8.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:Werkzeug@3.1.9",
+      "name": "Werkzeug",
+      "version": "3.1.9",
+      "purl": "pkg:pypi/werkzeug@3.1.9"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:Whoosh@2.7.4",
+      "name": "Whoosh",
+      "version": "2.7.4",
+      "purl": "pkg:pypi/whoosh@2.7.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:aiohappyeyeballs@2.7.1",
+      "name": "aiohappyeyeballs",
+      "version": "2.7.1",
+      "purl": "pkg:pypi/aiohappyeyeballs@2.7.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:aiohttp-retry@2.9.1",
+      "name": "aiohttp-retry",
+      "version": "2.9.1",
+      "purl": "pkg:pypi/aiohttp-retry@2.9.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:aiohttp@3.14.5",
+      "name": "aiohttp",
+      "version": "3.14.5",
+      "purl": "pkg:pypi/aiohttp@3.14.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:aiosignal@1.4.0",
+      "name": "aiosignal",
+      "version": "1.4.0",
+      "purl": "pkg:pypi/aiosignal@1.4.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:annotated-types@0.8.0",
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "purl": "pkg:pypi/annotated-types@0.8.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:asttokens@3.0.2",
+      "name": "asttokens",
+      "version": "3.0.2",
+      "purl": "pkg:pypi/asttokens@3.0.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:attrs@26.1.0",
+      "name": "attrs",
+      "version": "26.1.0",
+      "purl": "pkg:pypi/attrs@26.1.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:babel@2.18.0",
+      "name": "babel",
+      "version": "2.18.0",
+      "purl": "pkg:pypi/babel@2.18.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:backcall@0.2.0",
+      "name": "backcall",
+      "version": "0.2.0",
+      "purl": "pkg:pypi/backcall@0.2.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:backoff@2.2.1",
+      "name": "backoff",
+      "version": "2.2.1",
+      "purl": "pkg:pypi/backoff@2.2.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:beautifulsoup4@4.12.3",
+      "name": "beautifulsoup4",
+      "version": "4.12.3",
+      "purl": "pkg:pypi/beautifulsoup4@4.12.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:bleach-allowlist@1.0.3",
+      "name": "bleach-allowlist",
+      "version": "1.0.3",
+      "purl": "pkg:pypi/bleach-allowlist@1.0.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:bleach@6.4.0",
+      "name": "bleach",
+      "version": "6.4.0",
+      "purl": "pkg:pypi/bleach@6.4.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:boto3@1.34.162",
+      "name": "boto3",
+      "version": "1.34.162",
+      "purl": "pkg:pypi/boto3@1.34.162"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:botocore@1.34.162",
+      "name": "botocore",
+      "version": "1.34.162",
+      "purl": "pkg:pypi/botocore@1.34.162"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:brotli@1.2.1",
+      "name": "brotli",
+      "version": "1.2.1",
+      "purl": "pkg:pypi/brotli@1.2.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:cachetools@8.0.0",
+      "name": "cachetools",
+      "version": "8.0.0",
+      "purl": "pkg:pypi/cachetools@8.0.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:cairocffi@1.5.1",
+      "name": "cairocffi",
+      "version": "1.5.1",
+      "purl": "pkg:pypi/cairocffi@1.5.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:certifi@2026.10.23",
+      "name": "certifi",
+      "version": "2026.10.23",
+      "purl": "pkg:pypi/certifi@2026.10.23"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:cffi@2.1.1",
+      "name": "cffi",
+      "version": "2.1.1",
+      "purl": "pkg:pypi/cffi@2.1.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:chardet@5.2.0",
+      "name": "chardet",
+      "version": "5.2.0",
+      "purl": "pkg:pypi/chardet@5.2.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:charset-normalizer@3.5.2",
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "purl": "pkg:pypi/charset-normalizer@3.5.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:click@8.4.2",
+      "name": "click",
+      "version": "8.4.2",
+      "purl": "pkg:pypi/click@8.4.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:croniter@6.0.0",
+      "name": "croniter",
+      "version": "6.0.0",
+      "purl": "pkg:pypi/croniter@6.0.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:cryptography@50.0.2",
+      "name": "cryptography",
+      "version": "50.0.2",
+      "purl": "pkg:pypi/cryptography@50.0.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:cssselect2@0.10.1",
+      "name": "cssselect2",
+      "version": "0.10.1",
+      "purl": "pkg:pypi/cssselect2@0.10.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:cssselect@1.6.0",
+      "name": "cssselect",
+      "version": "1.6.0",
+      "purl": "pkg:pypi/cssselect@1.6.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:cssutils@2.11.1",
+      "name": "cssutils",
+      "version": "2.11.1",
+      "purl": "pkg:pypi/cssutils@2.11.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:decorator@5.3.1",
+      "name": "decorator",
+      "version": "5.3.1",
+      "purl": "pkg:pypi/decorator@5.3.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:distro@1.9.0",
+      "name": "distro",
+      "version": "1.9.0",
+      "purl": "pkg:pypi/distro@1.9.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:docopt@0.6.2",
+      "name": "docopt",
+      "version": "0.6.2",
+      "purl": "pkg:pypi/docopt@0.6.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:dropbox@12.0.2",
+      "name": "dropbox",
+      "version": "12.0.2",
+      "purl": "pkg:pypi/dropbox@12.0.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:duckdb@1.4.5",
+      "name": "duckdb",
+      "version": "1.4.5",
+      "purl": "pkg:pypi/duckdb@1.4.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:email-reply-parser@0.5.12",
+      "name": "email-reply-parser",
+      "version": "0.5.12",
+      "purl": "pkg:pypi/email-reply-parser@0.5.12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:et_xmlfile@2.0.0",
+      "name": "et_xmlfile",
+      "version": "2.0.0",
+      "purl": "pkg:pypi/et_xmlfile@2.0.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:executing@2.3.0",
+      "name": "executing",
+      "version": "2.3.0",
+      "purl": "pkg:pypi/executing@2.3.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:filelock@4.2.9",
+      "name": "filelock",
+      "version": "4.2.9",
+      "purl": "pkg:pypi/filelock@4.2.9"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:filetype@1.2.0",
+      "name": "filetype",
+      "version": "1.2.0",
+      "purl": "pkg:pypi/filetype@1.2.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:flit_core@3.12.0",
+      "name": "flit_core",
+      "version": "3.12.0",
+      "purl": "pkg:pypi/flit_core@3.12.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:fonttools@4.68.0",
+      "name": "fonttools",
+      "version": "4.68.0",
+      "purl": "pkg:pypi/fonttools@4.68.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:frozenlist@1.8.0",
+      "name": "frozenlist",
+      "version": "1.8.0",
+      "purl": "pkg:pypi/frozenlist@1.8.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:gitdb@4.0.12",
+      "name": "gitdb",
+      "version": "4.0.12",
+      "purl": "pkg:pypi/gitdb@4.0.12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:google-api-core@2.44.0",
+      "name": "google-api-core",
+      "version": "2.44.0",
+      "purl": "pkg:pypi/google-api-core@2.44.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:google-api-python-client@2.188.0",
+      "name": "google-api-python-client",
+      "version": "2.188.0",
+      "purl": "pkg:pypi/google-api-python-client@2.188.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:google-auth-httplib2@0.4.4",
+      "name": "google-auth-httplib2",
+      "version": "0.4.4",
+      "purl": "pkg:pypi/google-auth-httplib2@0.4.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:google-auth-oauthlib@1.2.4",
+      "name": "google-auth-oauthlib",
+      "version": "1.2.4",
+      "purl": "pkg:pypi/google-auth-oauthlib@1.2.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:google-auth@2.48.0",
+      "name": "google-auth",
+      "version": "2.48.0",
+      "purl": "pkg:pypi/google-auth@2.48.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:googleapis-common-protos@1.76.0",
+      "name": "googleapis-common-protos",
+      "version": "1.76.0",
+      "purl": "pkg:pypi/googleapis-common-protos@1.76.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:gunicorn@git+https://github.com/frappe/gunicorn@bb554053bb87218120d76ab6676af7015680e8b6",
+      "name": "gunicorn",
+      "version": "git+https://github.com/frappe/gunicorn@bb554053bb87218120d76ab6676af7015680e8b6",
+      "purl": "pkg:pypi/gunicorn"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:hiredis@2.2.3",
+      "name": "hiredis",
+      "version": "2.2.3",
+      "purl": "pkg:pypi/hiredis@2.2.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:html5lib@1.1",
+      "name": "html5lib",
+      "version": "1.1",
+      "purl": "pkg:pypi/html5lib@1.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:httplib2@0.32.1",
+      "name": "httplib2",
+      "version": "0.32.1",
+      "purl": "pkg:pypi/httplib2@0.32.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:idna@3.20",
+      "name": "idna",
+      "version": "3.20",
+      "purl": "pkg:pypi/idna@3.20"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:ipython@8.15.0",
+      "name": "ipython",
+      "version": "8.15.0",
+      "purl": "pkg:pypi/ipython@8.15.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:jedi@0.20.1",
+      "name": "jedi",
+      "version": "0.20.1",
+      "purl": "pkg:pypi/jedi@0.20.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:jmespath@1.1.0",
+      "name": "jmespath",
+      "version": "1.1.0",
+      "purl": "pkg:pypi/jmespath@1.1.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:ldap3@2.9.1",
+      "name": "ldap3",
+      "version": "2.9.1",
+      "purl": "pkg:pypi/ldap3@2.9.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:lxml@6.1.3",
+      "name": "lxml",
+      "version": "6.1.3",
+      "purl": "pkg:pypi/lxml@6.1.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:markdown2@2.5.5",
+      "name": "markdown2",
+      "version": "2.5.5",
+      "purl": "pkg:pypi/markdown2@2.5.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:markdownify@0.14.1",
+      "name": "markdownify",
+      "version": "0.14.1",
+      "purl": "pkg:pypi/markdownify@0.14.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:matplotlib-inline@0.2.2",
+      "name": "matplotlib-inline",
+      "version": "0.2.2",
+      "purl": "pkg:pypi/matplotlib-inline@0.2.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:maxminddb-geolite2@2018.703",
+      "name": "maxminddb-geolite2",
+      "version": "2018.703",
+      "purl": "pkg:pypi/maxminddb-geolite2@2018.703"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:maxminddb@3.2.0",
+      "name": "maxminddb",
+      "version": "3.2.0",
+      "purl": "pkg:pypi/maxminddb@3.2.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:monotonic@1.6",
+      "name": "monotonic",
+      "version": "1.6",
+      "purl": "pkg:pypi/monotonic@1.6"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:more-itertools@11.2.1",
+      "name": "more-itertools",
+      "version": "11.2.1",
+      "purl": "pkg:pypi/more-itertools@11.2.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:multidict@7.2.1",
+      "name": "multidict",
+      "version": "7.2.1",
+      "purl": "pkg:pypi/multidict@7.2.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:num2words@0.5.14",
+      "name": "num2words",
+      "version": "0.5.14",
+      "purl": "pkg:pypi/num2words@0.5.14"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:oauthlib@4.0.1",
+      "name": "oauthlib",
+      "version": "4.0.1",
+      "purl": "pkg:pypi/oauthlib@4.0.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:openpyxl@3.1.5",
+      "name": "openpyxl",
+      "version": "3.1.5",
+      "purl": "pkg:pypi/openpyxl@3.1.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:opentelemetry-api@1.45.2",
+      "name": "opentelemetry-api",
+      "version": "1.45.2",
+      "purl": "pkg:pypi/opentelemetry-api@1.45.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:packaging@26.3",
+      "name": "packaging",
+      "version": "26.3",
+      "purl": "pkg:pypi/packaging@26.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:parso@0.8.7",
+      "name": "parso",
+      "version": "0.8.7",
+      "purl": "pkg:pypi/parso@0.8.7"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:passlib@1.7.4",
+      "name": "passlib",
+      "version": "1.7.4",
+      "purl": "pkg:pypi/passlib@1.7.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pdfkit@1.0.0",
+      "name": "pdfkit",
+      "version": "1.0.0",
+      "purl": "pkg:pypi/pdfkit@1.0.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pexpect@4.9.0",
+      "name": "pexpect",
+      "version": "4.9.0",
+      "purl": "pkg:pypi/pexpect@4.9.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:phonenumbers@9.0.43",
+      "name": "phonenumbers",
+      "version": "9.0.43",
+      "purl": "pkg:pypi/phonenumbers@9.0.43"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pickleshare@0.7.5",
+      "name": "pickleshare",
+      "version": "0.7.5",
+      "purl": "pkg:pypi/pickleshare@0.7.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pillow@13.0.0",
+      "name": "pillow",
+      "version": "13.0.0",
+      "purl": "pkg:pypi/pillow@13.0.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:ply@3.11",
+      "name": "ply",
+      "version": "3.11",
+      "purl": "pkg:pypi/ply@3.11"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:posthog@3.21.0",
+      "name": "posthog",
+      "version": "3.21.0",
+      "purl": "pkg:pypi/posthog@3.21.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:premailer@3.10.0",
+      "name": "premailer",
+      "version": "3.10.0",
+      "purl": "pkg:pypi/premailer@3.10.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:prompt_toolkit@3.0.53",
+      "name": "prompt_toolkit",
+      "version": "3.0.53",
+      "purl": "pkg:pypi/prompt_toolkit@3.0.53"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:propcache@0.5.4",
+      "name": "propcache",
+      "version": "0.5.4",
+      "purl": "pkg:pypi/propcache@0.5.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:proto-plus@1.29.0",
+      "name": "proto-plus",
+      "version": "1.29.0",
+      "purl": "pkg:pypi/proto-plus@1.29.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:protobuf@7.36.2",
+      "name": "protobuf",
+      "version": "7.36.2",
+      "purl": "pkg:pypi/protobuf@7.36.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:psutil@5.9.8",
+      "name": "psutil",
+      "version": "5.9.8",
+      "purl": "pkg:pypi/psutil@5.9.8"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:psycopg2-binary@2.9.13",
+      "name": "psycopg2-binary",
+      "version": "2.9.13",
+      "purl": "pkg:pypi/psycopg2-binary@2.9.13"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:ptyprocess@0.7.0",
+      "name": "ptyprocess",
+      "version": "0.7.0",
+      "purl": "pkg:pypi/ptyprocess@0.7.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pure_eval@0.2.4",
+      "name": "pure_eval",
+      "version": "0.2.4",
+      "purl": "pkg:pypi/pure_eval@0.2.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pyOpenSSL@26.4.0",
+      "name": "pyOpenSSL",
+      "version": "26.4.0",
+      "purl": "pkg:pypi/pyopenssl@26.4.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pyarrow@25.0.1",
+      "name": "pyarrow",
+      "version": "25.0.1",
+      "purl": "pkg:pypi/pyarrow@25.0.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pyasn1@0.6.5",
+      "name": "pyasn1",
+      "version": "0.6.5",
+      "purl": "pkg:pypi/pyasn1@0.6.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pyasn1_modules@0.4.2",
+      "name": "pyasn1_modules",
+      "version": "0.4.2",
+      "purl": "pkg:pypi/pyasn1_modules@0.4.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pycparser@3.12",
+      "name": "pycparser",
+      "version": "3.12",
+      "purl": "pkg:pypi/pycparser@3.12"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pydantic@2.12.5",
+      "name": "pydantic",
+      "version": "2.12.5",
+      "purl": "pkg:pypi/pydantic@2.12.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pydantic_core@2.41.5",
+      "name": "pydantic_core",
+      "version": "2.41.5",
+      "purl": "pkg:pypi/pydantic_core@2.41.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pydyf@0.12.1",
+      "name": "pydyf",
+      "version": "0.12.1",
+      "purl": "pkg:pypi/pydyf@0.12.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pyotp@2.9.0",
+      "name": "pyotp",
+      "version": "2.9.0",
+      "purl": "pkg:pypi/pyotp@2.9.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pyparsing@3.3.3",
+      "name": "pyparsing",
+      "version": "3.3.3",
+      "purl": "pkg:pypi/pyparsing@3.3.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pypdf@6.21.4",
+      "name": "pypdf",
+      "version": "6.21.4",
+      "purl": "pkg:pypi/pypdf@6.21.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pyphen@0.18.1",
+      "name": "pyphen",
+      "version": "0.18.1",
+      "purl": "pkg:pypi/pyphen@0.18.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:python-dateutil@2.9.0.post0",
+      "name": "python-dateutil",
+      "version": "2.9.0.post0",
+      "purl": "pkg:pypi/python-dateutil@2.9.0.post0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:pytz@2025.2",
+      "name": "pytz",
+      "version": "2025.2",
+      "purl": "pkg:pypi/pytz@2025.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:rauth@0.7.3",
+      "name": "rauth",
+      "version": "0.7.3",
+      "purl": "pkg:pypi/rauth@0.7.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:redis@4.5.5",
+      "name": "redis",
+      "version": "4.5.5",
+      "purl": "pkg:pypi/redis@4.5.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:requests-oauthlib@1.3.1",
+      "name": "requests-oauthlib",
+      "version": "1.3.1",
+      "purl": "pkg:pypi/requests-oauthlib@1.3.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:requests@2.33.1",
+      "name": "requests",
+      "version": "2.33.1",
+      "purl": "pkg:pypi/requests@2.33.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:rq@1.15.1",
+      "name": "rq",
+      "version": "1.15.1",
+      "purl": "pkg:pypi/rq@1.15.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:rsa@4.9.1",
+      "name": "rsa",
+      "version": "4.9.1",
+      "purl": "pkg:pypi/rsa@4.9.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:s3transfer@0.10.4",
+      "name": "s3transfer",
+      "version": "0.10.4",
+      "purl": "pkg:pypi/s3transfer@0.10.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:semantic-version@2.10.0",
+      "name": "semantic-version",
+      "version": "2.10.0",
+      "purl": "pkg:pypi/semantic-version@2.10.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:sentry-sdk@1.45.1",
+      "name": "sentry-sdk",
+      "version": "1.45.1",
+      "purl": "pkg:pypi/sentry-sdk@1.45.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:six@1.17.0",
+      "name": "six",
+      "version": "1.17.0",
+      "purl": "pkg:pypi/six@1.17.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:smmap@5.0.3",
+      "name": "smmap",
+      "version": "5.0.3",
+      "purl": "pkg:pypi/smmap@5.0.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:soupsieve@4.0.1",
+      "name": "soupsieve",
+      "version": "4.0.1",
+      "purl": "pkg:pypi/soupsieve@4.0.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:sql_metadata@3.0.1",
+      "name": "sql_metadata",
+      "version": "3.0.1",
+      "purl": "pkg:pypi/sql_metadata@3.0.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:sqlglot@30.30.0",
+      "name": "sqlglot",
+      "version": "30.30.0",
+      "purl": "pkg:pypi/sqlglot@30.30.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:sqlparse@0.6.1",
+      "name": "sqlparse",
+      "version": "0.6.1",
+      "purl": "pkg:pypi/sqlparse@0.6.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:stack-data@0.6.3",
+      "name": "stack-data",
+      "version": "0.6.3",
+      "purl": "pkg:pypi/stack-data@0.6.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:stone@3.3.1",
+      "name": "stone",
+      "version": "3.3.1",
+      "purl": "pkg:pypi/stone@3.3.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:tenacity@8.2.3",
+      "name": "tenacity",
+      "version": "8.2.3",
+      "purl": "pkg:pypi/tenacity@8.2.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:terminaltables@3.1.10",
+      "name": "terminaltables",
+      "version": "3.1.10",
+      "purl": "pkg:pypi/terminaltables@3.1.10"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:tinycss2@1.5.1",
+      "name": "tinycss2",
+      "version": "1.5.1",
+      "purl": "pkg:pypi/tinycss2@1.5.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:tinyhtml5@2.1.0",
+      "name": "tinyhtml5",
+      "version": "2.1.0",
+      "purl": "pkg:pypi/tinyhtml5@2.1.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:tomli@2.0.2",
+      "name": "tomli",
+      "version": "2.0.2",
+      "purl": "pkg:pypi/tomli@2.0.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:traceback-with-variables@2.0.4",
+      "name": "traceback-with-variables",
+      "version": "2.0.4",
+      "purl": "pkg:pypi/traceback-with-variables@2.0.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:traitlets@5.16.1",
+      "name": "traitlets",
+      "version": "5.16.1",
+      "purl": "pkg:pypi/traitlets@5.16.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:twilio@8.5.0",
+      "name": "twilio",
+      "version": "8.5.0",
+      "purl": "pkg:pypi/twilio@8.5.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:typing-inspection@0.4.5",
+      "name": "typing-inspection",
+      "version": "0.4.5",
+      "purl": "pkg:pypi/typing-inspection@0.4.5"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:typing_extensions@4.16.0",
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "purl": "pkg:pypi/typing_extensions@4.16.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:unittest-xml-reporting@3.2.0",
+      "name": "unittest-xml-reporting",
+      "version": "3.2.0",
+      "purl": "pkg:pypi/unittest-xml-reporting@3.2.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:uritemplate@4.2.0",
+      "name": "uritemplate",
+      "version": "4.2.0",
+      "purl": "pkg:pypi/uritemplate@4.2.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:urllib3@2.8.0",
+      "name": "urllib3",
+      "version": "2.8.0",
+      "purl": "pkg:pypi/urllib3@2.8.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:vobject@0.9.9",
+      "name": "vobject",
+      "version": "0.9.9",
+      "purl": "pkg:pypi/vobject@0.9.9"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:wcwidth@0.9.4",
+      "name": "wcwidth",
+      "version": "0.9.4",
+      "purl": "pkg:pypi/wcwidth@0.9.4"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:weasyprint@70.0",
+      "name": "weasyprint",
+      "version": "70.0",
+      "purl": "pkg:pypi/weasyprint@70.0"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:webencodings@0.6.1",
+      "name": "webencodings",
+      "version": "0.6.1",
+      "purl": "pkg:pypi/webencodings@0.6.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:xlrd@2.0.2",
+      "name": "xlrd",
+      "version": "2.0.2",
+      "purl": "pkg:pypi/xlrd@2.0.2"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:yarl@1.25.1",
+      "name": "yarl",
+      "version": "1.25.1",
+      "purl": "pkg:pypi/yarl@1.25.1"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:zopfli@0.4.3",
+      "name": "zopfli",
+      "version": "0.4.3",
+      "purl": "pkg:pypi/zopfli@0.4.3"
+    },
+    {
+      "type": "library",
+      "bom-ref": "pypi:zxcvbn@4.4.28",
+      "name": "zxcvbn",
+      "version": "4.4.28",
+      "purl": "pkg:pypi/zxcvbn@4.4.28"
+    }
+  ]
+}

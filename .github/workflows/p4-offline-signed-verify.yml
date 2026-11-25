@@ -1,0 +1,69 @@
+name: P4 offline signature - read-only verification
+
+on:
+  push:
+    branches: ['codex/offline-release-verification']
+    paths:
+      - '.github/workflows/p4-offline-signed-verify.yml'
+      - 'deploy/release/offline_signing/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p4-offline-signature-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-offline-signed-candidate:
+    name: Verify official signature, strict scan, fresh Trivy DB (<=24h) and immutable registry objects
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout verification workflow
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Checkout the independently accepted application source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          repository: nobita6986/new-crm
+          ref: 3d0c47486c78c09a966a3ea9100c477f53fe6a79
+          path: accepted-candidate
+          persist-credentials: false
+      - name: Test rejection of altered manifests, signatures and stale/failing scans
+        env:
+          P4_CANDIDATE_SOURCE_ROOT: ${{ github.workspace }}/accepted-candidate
+        run: python3 -B -m unittest discover -s deploy/release/offline_signing -p 'test_*.py' -v
+      - name: Verify accepted offline signature without signing or deploy credentials
+        run: |
+          set -euo pipefail
+          python3 -B deploy/release/offline_signing/verify_offline_signed_candidate.py \
+            --source-root "$GITHUB_WORKSPACE/accepted-candidate" \
+            --out-dir "$RUNNER_TEMP/p4-offline-verify" \
+            --verify-registry
+      - name: Run read-only live Trivy DB freshness scan (<=24h) on accepted @sha256 image (DK-03)
+        run: |
+          set -euo pipefail
+          python3 -B deploy/release/offline_signing/verify_live_trivy_freshness.py \
+            --source-root "$GITHUB_WORKSPACE/accepted-candidate" \
+            --out-dir "$RUNNER_TEMP/p4-live-trivy-freshness" \
+            --run-docker-scan \
+            --max-db-age-hours 24
+      - name: Archive read-only verification results
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-offline-signature-verification-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-offline-verify/
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Archive separate live Trivy DB freshness scan evidence (DK-03)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: p4-live-trivy-freshness-scan-${{ github.run_id }}
+          path: ${{ runner.temp }}/p4-live-trivy-freshness/
+          if-no-files-found: warn
+          retention-days: 30

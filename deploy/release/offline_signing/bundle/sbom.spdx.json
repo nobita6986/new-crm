@@ -1,0 +1,4978 @@
+{
+  "spdxVersion": "SPDX-2.3",
+  "dataLicense": "CC0-1.0",
+  "SPDXID": "SPDXRef-DOCUMENT",
+  "name": "crm-cskh-b8d6262095b4",
+  "documentNamespace": "https://github.com/nobita6986/new-crm/sbom/b8d62620-95b4-43a9-a0c6-7d567b2ccebd",
+  "creationInfo": {
+    "created": "2026-11-23T14:05:15Z",
+    "creators": [
+      "Tool: cskh-p4-sbom-generator-1.0.0"
+    ]
+  },
+  "packages": [
+    {
+      "SPDXID": "SPDXRef-Package-0001",
+      "name": "frappe",
+      "versionInfo": "v15.126.0@53bae3ef2550ca96320f036f581446783cd11b72",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/frappe/frappe@53bae3ef2550ca96320f036f581446783cd11b72"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0002",
+      "name": "crm",
+      "versionInfo": "v1.87.0@0d3910b456ef4fb913e77b29db011b3debc4f778",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/frappe/crm@0d3910b456ef4fb913e77b29db011b3debc4f778"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0003",
+      "name": "crm_cskh",
+      "versionInfo": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:github/nobita6986/new-crm@3d0c47486c78c09a966a3ea9100c477f53fe6a79#apps/crm_cskh"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0004",
+      "name": "apps/frappe/yarn.lock",
+      "versionInfo": "fd713bb100a3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0005",
+      "name": "apps/crm/yarn.lock",
+      "versionInfo": "49e1cb522c13",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0006",
+      "name": "apps/crm/frontend/yarn.lock",
+      "versionInfo": "b0d89f3bed31",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0007",
+      "name": "adduser",
+      "versionInfo": "3.152",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/adduser@3.152?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0008",
+      "name": "apt",
+      "versionInfo": "3.0.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/apt@3.0.4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0009",
+      "name": "base-files",
+      "versionInfo": "13.8+deb13u8",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/base-files@13.8%2Bdeb13u8?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0010",
+      "name": "base-passwd",
+      "versionInfo": "3.6.7",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/base-passwd@3.6.7?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0011",
+      "name": "bash",
+      "versionInfo": "5.2.37-2+b10",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/bash@5.2.37-2%2Bb10?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0012",
+      "name": "bsdutils",
+      "versionInfo": "1:2.41.5-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/bsdutils@1%3A2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0013",
+      "name": "ca-certificates",
+      "versionInfo": "20250419+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/ca-certificates@20250419%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0014",
+      "name": "coreutils",
+      "versionInfo": "9.7-3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/coreutils@9.7-3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0015",
+      "name": "curl",
+      "versionInfo": "8.14.1-2+deb13u7",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/curl@8.14.1-2%2Bdeb13u7?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0016",
+      "name": "dash",
+      "versionInfo": "0.5.12-12",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/dash@0.5.12-12?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0017",
+      "name": "debconf",
+      "versionInfo": "1.5.91",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/debconf@1.5.91?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0018",
+      "name": "debian-archive-keyring",
+      "versionInfo": "2025.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/debian-archive-keyring@2025.1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0019",
+      "name": "debianutils",
+      "versionInfo": "5.23.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/debianutils@5.23.2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0020",
+      "name": "diffutils",
+      "versionInfo": "1:3.10-4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/diffutils@1%3A3.10-4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0021",
+      "name": "dpkg",
+      "versionInfo": "1.22.22",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/dpkg@1.22.22?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0022",
+      "name": "file",
+      "versionInfo": "1:5.46-5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/file@1%3A5.46-5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0023",
+      "name": "findutils",
+      "versionInfo": "4.10.0-3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/findutils@4.10.0-3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0024",
+      "name": "fontconfig-config",
+      "versionInfo": "2.15.0-2.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/fontconfig-config@2.15.0-2.3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0025",
+      "name": "fontconfig",
+      "versionInfo": "2.15.0-2.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/fontconfig@2.15.0-2.3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0026",
+      "name": "fonts-dejavu-core",
+      "versionInfo": "2.37-8",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/fonts-dejavu-core@2.37-8?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0027",
+      "name": "fonts-dejavu-mono",
+      "versionInfo": "2.37-8",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/fonts-dejavu-mono@2.37-8?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0028",
+      "name": "gcc-14-base",
+      "versionInfo": "14.2.0-19",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/gcc-14-base@14.2.0-19?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0029",
+      "name": "gettext-base",
+      "versionInfo": "0.23.1-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/gettext-base@0.23.1-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0030",
+      "name": "git-man",
+      "versionInfo": "1:2.47.3-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/git-man@1%3A2.47.3-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0031",
+      "name": "git",
+      "versionInfo": "1:2.47.3-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/git@1%3A2.47.3-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0032",
+      "name": "gpg",
+      "versionInfo": "2.4.7-21+deb13u1+b5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/gpg@2.4.7-21%2Bdeb13u1%2Bb5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0033",
+      "name": "gpgconf",
+      "versionInfo": "2.4.7-21+deb13u1+b5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/gpgconf@2.4.7-21%2Bdeb13u1%2Bb5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0034",
+      "name": "grep",
+      "versionInfo": "3.11-4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/grep@3.11-4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0035",
+      "name": "gzip",
+      "versionInfo": "1.13-1+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/gzip@1.13-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0036",
+      "name": "hostname",
+      "versionInfo": "3.25",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/hostname@3.25?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0037",
+      "name": "init-system-helpers",
+      "versionInfo": "1.69~deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/init-system-helpers@1.69~deb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0038",
+      "name": "iproute2",
+      "versionInfo": "6.15.0-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/iproute2@6.15.0-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0039",
+      "name": "jq",
+      "versionInfo": "1.7.1-6+deb13u4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/jq@1.7.1-6%2Bdeb13u4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0040",
+      "name": "less",
+      "versionInfo": "668-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/less@668-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0041",
+      "name": "libacl1",
+      "versionInfo": "2.3.2-2+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0042",
+      "name": "libapt-pkg7.0",
+      "versionInfo": "3.0.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libapt-pkg7.0@3.0.4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0043",
+      "name": "libassuan9",
+      "versionInfo": "3.0.2-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libassuan9@3.0.2-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0044",
+      "name": "libatomic1",
+      "versionInfo": "14.2.0-19",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libatomic1@14.2.0-19?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0045",
+      "name": "libattr1",
+      "versionInfo": "1:2.5.2-3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libattr1@1%3A2.5.2-3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0046",
+      "name": "libaudit-common",
+      "versionInfo": "1:4.0.2-2+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libaudit-common@1%3A4.0.2-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0047",
+      "name": "libaudit1",
+      "versionInfo": "1:4.0.2-2+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libaudit1@1%3A4.0.2-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0048",
+      "name": "libblkid1",
+      "versionInfo": "2.41.5-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0049",
+      "name": "libbpf1",
+      "versionInfo": "1:1.5.0-3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libbpf1@1%3A1.5.0-3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0050",
+      "name": "libbrotli1",
+      "versionInfo": "1.1.0-2+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libbrotli1@1.1.0-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0051",
+      "name": "libbsd0",
+      "versionInfo": "0.12.2-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libbsd0@0.12.2-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0052",
+      "name": "libbz2-1.0",
+      "versionInfo": "1.0.8-6",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libbz2-1.0@1.0.8-6?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0053",
+      "name": "libc-bin",
+      "versionInfo": "2.41-12+deb13u5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libc-bin@2.41-12%2Bdeb13u5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0054",
+      "name": "libc6",
+      "versionInfo": "2.41-12+deb13u5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libc6@2.41-12%2Bdeb13u5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0055",
+      "name": "libcairo2",
+      "versionInfo": "1.18.4-1+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libcairo2@1.18.4-1%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0056",
+      "name": "libcap-ng0",
+      "versionInfo": "0.8.5-4+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libcap-ng0@0.8.5-4%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0057",
+      "name": "libcap2-bin",
+      "versionInfo": "1:2.75-10+deb13u1+b3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libcap2-bin@1%3A2.75-10%2Bdeb13u1%2Bb3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0058",
+      "name": "libcap2",
+      "versionInfo": "1:2.75-10+deb13u1+b3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libcap2@1%3A2.75-10%2Bdeb13u1%2Bb3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0059",
+      "name": "libcom-err2",
+      "versionInfo": "1.47.2-3+b12",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libcom-err2@1.47.2-3%2Bb12?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0060",
+      "name": "libconfig-inifiles-perl",
+      "versionInfo": "3.000003-3+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libconfig-inifiles-perl@3.000003-3%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0061",
+      "name": "libcrypt1",
+      "versionInfo": "1:4.4.38-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libcrypt1@1%3A4.4.38-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0062",
+      "name": "libcurl3t64-gnutls",
+      "versionInfo": "8.14.1-2+deb13u7",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libcurl3t64-gnutls@8.14.1-2%2Bdeb13u7?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0063",
+      "name": "libcurl4t64",
+      "versionInfo": "8.14.1-2+deb13u7",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libcurl4t64@8.14.1-2%2Bdeb13u7?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0064",
+      "name": "libdatrie1",
+      "versionInfo": "0.2.13-3+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libdatrie1@0.2.13-3%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0065",
+      "name": "libdb5.3t64",
+      "versionInfo": "5.3.28+dfsg2-9",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libdb5.3t64@5.3.28%2Bdfsg2-9?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0066",
+      "name": "libdebconfclient0",
+      "versionInfo": "0.280",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libdebconfclient0@0.280?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0067",
+      "name": "libedit2",
+      "versionInfo": "3.1-20250104-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libedit2@3.1-20250104-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0068",
+      "name": "libelf1t64",
+      "versionInfo": "0.192-4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libelf1t64@0.192-4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0069",
+      "name": "liberror-perl",
+      "versionInfo": "0.17030-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/liberror-perl@0.17030-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0070",
+      "name": "libexpat1",
+      "versionInfo": "2.9.0-1~deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libexpat1@2.9.0-1~deb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0071",
+      "name": "libffi8",
+      "versionInfo": "3.4.8-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libffi8@3.4.8-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0072",
+      "name": "libfontconfig1",
+      "versionInfo": "2.15.0-2.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libfontconfig1@2.15.0-2.3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0073",
+      "name": "libfontenc1",
+      "versionInfo": "1:1.1.8-1+b2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libfontenc1@1%3A1.1.8-1%2Bb2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0074",
+      "name": "libfreetype6",
+      "versionInfo": "2.13.3+dfsg-1+deb13u2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libfreetype6@2.13.3%2Bdfsg-1%2Bdeb13u2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0075",
+      "name": "libfribidi0",
+      "versionInfo": "1.0.16-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libfribidi0@1.0.16-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0076",
+      "name": "libgcc-s1",
+      "versionInfo": "14.2.0-19",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libgcc-s1@14.2.0-19?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0077",
+      "name": "libgcrypt20",
+      "versionInfo": "1.11.0-7+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libgcrypt20@1.11.0-7%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0078",
+      "name": "libgdbm-compat4t64",
+      "versionInfo": "1.24-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libgdbm-compat4t64@1.24-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0079",
+      "name": "libgdbm6t64",
+      "versionInfo": "1.24-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libgdbm6t64@1.24-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0080",
+      "name": "libglib2.0-0t64",
+      "versionInfo": "2.84.4-3~deb13u5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libglib2.0-0t64@2.84.4-3~deb13u5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0081",
+      "name": "libgmp10",
+      "versionInfo": "2:6.3.0+dfsg-3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libgmp10@2%3A6.3.0%2Bdfsg-3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0082",
+      "name": "libgnutls30t64",
+      "versionInfo": "3.8.9-3+deb13u4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libgnutls30t64@3.8.9-3%2Bdeb13u4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0083",
+      "name": "libgpg-error0",
+      "versionInfo": "1.51-4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libgpg-error0@1.51-4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0084",
+      "name": "libgraphite2-3",
+      "versionInfo": "1.3.14-2+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libgraphite2-3@1.3.14-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0085",
+      "name": "libgssapi-krb5-2",
+      "versionInfo": "1.21.3-5+deb13u2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libgssapi-krb5-2@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0086",
+      "name": "libharfbuzz0b",
+      "versionInfo": "10.2.0-1+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libharfbuzz0b@10.2.0-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0087",
+      "name": "libhogweed6t64",
+      "versionInfo": "3.10.1-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libhogweed6t64@3.10.1-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0088",
+      "name": "libidn2-0",
+      "versionInfo": "2.3.8-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libidn2-0@2.3.8-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0089",
+      "name": "libjpeg62-turbo",
+      "versionInfo": "1:2.1.5-4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libjpeg62-turbo@1%3A2.1.5-4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0090",
+      "name": "libjq1",
+      "versionInfo": "1.7.1-6+deb13u4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libjq1@1.7.1-6%2Bdeb13u4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0091",
+      "name": "libk5crypto3",
+      "versionInfo": "1.21.3-5+deb13u2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libk5crypto3@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0092",
+      "name": "libkeyutils1",
+      "versionInfo": "1.6.3-6",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libkeyutils1@1.6.3-6?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0093",
+      "name": "libkrb5-3",
+      "versionInfo": "1.21.3-5+deb13u2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libkrb5-3@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0094",
+      "name": "libkrb5support0",
+      "versionInfo": "1.21.3-5+deb13u2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libkrb5support0@1.21.3-5%2Bdeb13u2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0095",
+      "name": "libksba8",
+      "versionInfo": "1.6.7-2+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libksba8@1.6.7-2%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0096",
+      "name": "liblastlog2-2",
+      "versionInfo": "2.41.5-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0097",
+      "name": "libldap2",
+      "versionInfo": "2.6.10+dfsg-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libldap2@2.6.10%2Bdfsg-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0098",
+      "name": "liblz4-1",
+      "versionInfo": "1.10.0-4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/liblz4-1@1.10.0-4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0099",
+      "name": "liblzma5",
+      "versionInfo": "5.8.1-1+deb13u2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/liblzma5@5.8.1-1%2Bdeb13u2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0100",
+      "name": "libmagic-mgc",
+      "versionInfo": "1:5.46-5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libmagic-mgc@1%3A5.46-5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0101",
+      "name": "libmagic1t64",
+      "versionInfo": "1:5.46-5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libmagic1t64@1%3A5.46-5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0102",
+      "name": "libmariadb3",
+      "versionInfo": "1:11.8.9+ds-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libmariadb3@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0103",
+      "name": "libmd0",
+      "versionInfo": "1.1.0-2+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libmd0@1.1.0-2%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0104",
+      "name": "libmnl0",
+      "versionInfo": "1.0.5-3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libmnl0@1.0.5-3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0105",
+      "name": "libmount1",
+      "versionInfo": "2.41.5-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0106",
+      "name": "libncurses6",
+      "versionInfo": "6.5+20250216-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libncurses6@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0107",
+      "name": "libncursesw6",
+      "versionInfo": "6.5+20250216-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libncursesw6@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0108",
+      "name": "libnettle8t64",
+      "versionInfo": "3.10.1-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libnettle8t64@3.10.1-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0109",
+      "name": "libnghttp2-14",
+      "versionInfo": "1.64.0-1.1+deb13u2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libnghttp2-14@1.64.0-1.1%2Bdeb13u2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0110",
+      "name": "libnghttp3-9",
+      "versionInfo": "1.8.0-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libnghttp3-9@1.8.0-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0111",
+      "name": "libngtcp2-16",
+      "versionInfo": "1.11.0-1+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libngtcp2-16@1.11.0-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0112",
+      "name": "libngtcp2-crypto-gnutls8",
+      "versionInfo": "1.11.0-1+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libngtcp2-crypto-gnutls8@1.11.0-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0113",
+      "name": "libnpth0t64",
+      "versionInfo": "1.8-3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libnpth0t64@1.8-3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0114",
+      "name": "libonig5",
+      "versionInfo": "6.9.9-1+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libonig5@6.9.9-1%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0115",
+      "name": "libp11-kit0",
+      "versionInfo": "0.25.5-3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libp11-kit0@0.25.5-3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0116",
+      "name": "libpam-modules-bin",
+      "versionInfo": "1.7.0-5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpam-modules-bin@1.7.0-5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0117",
+      "name": "libpam-modules",
+      "versionInfo": "1.7.0-5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpam-modules@1.7.0-5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0118",
+      "name": "libpam-runtime",
+      "versionInfo": "1.7.0-5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpam-runtime@1.7.0-5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0119",
+      "name": "libpam0g",
+      "versionInfo": "1.7.0-5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpam0g@1.7.0-5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0120",
+      "name": "libpango-1.0-0",
+      "versionInfo": "1.56.3-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpango-1.0-0@1.56.3-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0121",
+      "name": "libpangocairo-1.0-0",
+      "versionInfo": "1.56.3-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpangocairo-1.0-0@1.56.3-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0122",
+      "name": "libpangoft2-1.0-0",
+      "versionInfo": "1.56.3-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpangoft2-1.0-0@1.56.3-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0123",
+      "name": "libpcre2-8-0",
+      "versionInfo": "10.46-1~deb13u3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpcre2-8-0@10.46-1~deb13u3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0124",
+      "name": "libpcre2-posix3",
+      "versionInfo": "10.46-1~deb13u3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpcre2-posix3@10.46-1~deb13u3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0125",
+      "name": "libperl5.40",
+      "versionInfo": "5.40.1-6+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libperl5.40@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0126",
+      "name": "libpixman-1-0",
+      "versionInfo": "0.44.0-3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpixman-1-0@0.44.0-3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0127",
+      "name": "libpng16-16t64",
+      "versionInfo": "1.6.48-1+deb13u6",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpng16-16t64@1.6.48-1%2Bdeb13u6?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0128",
+      "name": "libpsl5t64",
+      "versionInfo": "0.21.2-1.1+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libpsl5t64@0.21.2-1.1%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0129",
+      "name": "libreadline8t64",
+      "versionInfo": "8.2-6",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libreadline8t64@8.2-6?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0130",
+      "name": "librtmp1",
+      "versionInfo": "2.4+20151223.gitfa8646d.1-2+b5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/librtmp1@2.4%2B20151223.gitfa8646d.1-2%2Bb5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0131",
+      "name": "libsasl2-2",
+      "versionInfo": "2.1.28+dfsg1-9",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libsasl2-2@2.1.28%2Bdfsg1-9?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0132",
+      "name": "libsasl2-modules-db",
+      "versionInfo": "2.1.28+dfsg1-9",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libsasl2-modules-db@2.1.28%2Bdfsg1-9?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0133",
+      "name": "libseccomp2",
+      "versionInfo": "2.6.0-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libseccomp2@2.6.0-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0134",
+      "name": "libselinux1",
+      "versionInfo": "3.8.1-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libselinux1@3.8.1-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0135",
+      "name": "libsemanage-common",
+      "versionInfo": "3.8.1-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libsemanage-common@3.8.1-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0136",
+      "name": "libsemanage2",
+      "versionInfo": "3.8.1-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libsemanage2@3.8.1-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0137",
+      "name": "libsepol2",
+      "versionInfo": "3.8.1-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libsepol2@3.8.1-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0138",
+      "name": "libsmartcols1",
+      "versionInfo": "2.41.5-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0139",
+      "name": "libsqlite3-0",
+      "versionInfo": "3.46.1-7+deb13u2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0140",
+      "name": "libssh2-1t64",
+      "versionInfo": "1.11.1-1+deb13u2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libssh2-1t64@1.11.1-1%2Bdeb13u2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0141",
+      "name": "libssl3t64",
+      "versionInfo": "3.5.9-1~deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libssl3t64@3.5.9-1~deb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0142",
+      "name": "libstdc++6",
+      "versionInfo": "14.2.0-19",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libstdc%2B%2B6@14.2.0-19?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0143",
+      "name": "libsystemd0",
+      "versionInfo": "257.13-1~deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libsystemd0@257.13-1~deb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0144",
+      "name": "libtasn1-6",
+      "versionInfo": "4.20.0-2+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libtasn1-6@4.20.0-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0145",
+      "name": "libthai-data",
+      "versionInfo": "0.1.29-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libthai-data@0.1.29-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0146",
+      "name": "libthai0",
+      "versionInfo": "0.1.29-2+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libthai0@0.1.29-2%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0147",
+      "name": "libtinfo6",
+      "versionInfo": "6.5+20250216-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libtinfo6@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0148",
+      "name": "libtirpc-common",
+      "versionInfo": "1.3.6+ds-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libtirpc-common@1.3.6%2Bds-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0149",
+      "name": "libtirpc3t64",
+      "versionInfo": "1.3.6+ds-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libtirpc3t64@1.3.6%2Bds-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0150",
+      "name": "libudev1",
+      "versionInfo": "257.13-1~deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libudev1@257.13-1~deb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0151",
+      "name": "libunistring5",
+      "versionInfo": "1.3-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libunistring5@1.3-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0152",
+      "name": "libuuid1",
+      "versionInfo": "2.41.5-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0153",
+      "name": "libx11-6",
+      "versionInfo": "2:1.8.12-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libx11-6@2%3A1.8.12-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0154",
+      "name": "libx11-data",
+      "versionInfo": "2:1.8.12-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libx11-data@2%3A1.8.12-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0155",
+      "name": "libxau6",
+      "versionInfo": "1:1.0.11-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libxau6@1%3A1.0.11-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0156",
+      "name": "libxcb-render0",
+      "versionInfo": "1.17.0-2+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libxcb-render0@1.17.0-2%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0157",
+      "name": "libxcb-shm0",
+      "versionInfo": "1.17.0-2+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libxcb-shm0@1.17.0-2%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0158",
+      "name": "libxcb1",
+      "versionInfo": "1.17.0-2+b1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libxcb1@1.17.0-2%2Bb1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0159",
+      "name": "libxdmcp6",
+      "versionInfo": "1:1.1.5-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libxdmcp6@1%3A1.1.5-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0160",
+      "name": "libxext6",
+      "versionInfo": "2:1.3.4-1+b3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libxext6@2%3A1.3.4-1%2Bb3?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0161",
+      "name": "libxrender1",
+      "versionInfo": "1:0.9.12-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libxrender1@1%3A0.9.12-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0162",
+      "name": "libxtables12",
+      "versionInfo": "1.8.11-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libxtables12@1.8.11-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0163",
+      "name": "libxxhash0",
+      "versionInfo": "0.8.3-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libxxhash0@0.8.3-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0164",
+      "name": "libzstd1",
+      "versionInfo": "1.5.7+dfsg-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/libzstd1@1.5.7%2Bdfsg-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0165",
+      "name": "login.defs",
+      "versionInfo": "1:4.17.4-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/login.defs@1%3A4.17.4-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0166",
+      "name": "login",
+      "versionInfo": "1:4.16.0-2+really2.41.5-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/login@1%3A4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0167",
+      "name": "mariadb-client-core",
+      "versionInfo": "1:11.8.9+ds-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/mariadb-client-core@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0168",
+      "name": "mariadb-client",
+      "versionInfo": "1:11.8.9+ds-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/mariadb-client@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0169",
+      "name": "mariadb-common",
+      "versionInfo": "1:11.8.9+ds-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/mariadb-common@1%3A11.8.9%2Bds-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0170",
+      "name": "mawk",
+      "versionInfo": "1.3.4.20250131-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/mawk@1.3.4.20250131-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0171",
+      "name": "media-types",
+      "versionInfo": "13.0.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/media-types@13.0.0?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0172",
+      "name": "mount",
+      "versionInfo": "2.41.5-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0173",
+      "name": "mysql-common",
+      "versionInfo": "5.8+1.1.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/mysql-common@5.8%2B1.1.1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0174",
+      "name": "ncurses-base",
+      "versionInfo": "6.5+20250216-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/ncurses-base@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0175",
+      "name": "ncurses-bin",
+      "versionInfo": "6.5+20250216-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0176",
+      "name": "netbase",
+      "versionInfo": "6.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/netbase@6.5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0177",
+      "name": "nginx-common",
+      "versionInfo": "1.26.3-3+deb13u11",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/nginx-common@1.26.3-3%2Bdeb13u11?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0178",
+      "name": "nginx",
+      "versionInfo": "1.26.3-3+deb13u11",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/nginx@1.26.3-3%2Bdeb13u11?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0179",
+      "name": "openssl-provider-legacy",
+      "versionInfo": "3.5.9-1~deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/openssl-provider-legacy@3.5.9-1~deb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0180",
+      "name": "openssl",
+      "versionInfo": "3.5.9-1~deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/openssl@3.5.9-1~deb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0181",
+      "name": "passwd",
+      "versionInfo": "1:4.17.4-2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/passwd@1%3A4.17.4-2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0182",
+      "name": "perl-base",
+      "versionInfo": "5.40.1-6+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/perl-base@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0183",
+      "name": "perl-modules-5.40",
+      "versionInfo": "5.40.1-6+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/perl-modules-5.40@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0184",
+      "name": "perl",
+      "versionInfo": "5.40.1-6+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/perl@5.40.1-6%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0185",
+      "name": "readline-common",
+      "versionInfo": "8.2-6",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/readline-common@8.2-6?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0186",
+      "name": "sed",
+      "versionInfo": "4.9-2+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/sed@4.9-2%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0187",
+      "name": "sqv",
+      "versionInfo": "1.3.0-3+b2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/sqv@1.3.0-3%2Bb2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0188",
+      "name": "sysvinit-utils",
+      "versionInfo": "3.14-4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/sysvinit-utils@3.14-4?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0189",
+      "name": "tar",
+      "versionInfo": "1.35+dfsg-3.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/tar@1.35%2Bdfsg-3.1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0190",
+      "name": "tzdata-legacy",
+      "versionInfo": "2026f-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/tzdata-legacy@2026f-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0191",
+      "name": "tzdata",
+      "versionInfo": "2026f-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/tzdata@2026f-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0192",
+      "name": "util-linux",
+      "versionInfo": "2.41.5-0+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0193",
+      "name": "wait-for-it",
+      "versionInfo": "0.0~git20180723-1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/wait-for-it@0.0~git20180723-1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0194",
+      "name": "wkhtmltox",
+      "versionInfo": "1:0.12.6.1-3.bookworm",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/wkhtmltox@1%3A0.12.6.1-3.bookworm?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0195",
+      "name": "x11-common",
+      "versionInfo": "1:7.7+24+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/x11-common@1%3A7.7%2B24%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0196",
+      "name": "xfonts-75dpi",
+      "versionInfo": "1:1.0.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/xfonts-75dpi@1%3A1.0.5?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0197",
+      "name": "xfonts-base",
+      "versionInfo": "1:1.0.5+nmu1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/xfonts-base@1%3A1.0.5%2Bnmu1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0198",
+      "name": "xfonts-encodings",
+      "versionInfo": "1:1.0.4-2.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/xfonts-encodings@1%3A1.0.4-2.2?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0199",
+      "name": "xfonts-utils",
+      "versionInfo": "1:7.7+7",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/xfonts-utils@1%3A7.7%2B7?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0200",
+      "name": "zlib1g",
+      "versionInfo": "1:1.3.dfsg+really1.3.1-1+deb13u1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:deb/debian/zlib1g@1%3A1.3.dfsg%2Breally1.3.1-1%2Bdeb13u1?arch=amd64&distro=debian-12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0201",
+      "name": "crm_cskh",
+      "versionInfo": "editable-locked",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/crm_cskh@0.0.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0202",
+      "name": "crm",
+      "versionInfo": "editable-locked",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/crm@0.0.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0203",
+      "name": "frappe",
+      "versionInfo": "editable-locked",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/frappe@0.0.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0204",
+      "name": "GitPython",
+      "versionInfo": "3.2.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/gitpython@3.2.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0205",
+      "name": "Jinja2",
+      "versionInfo": "3.1.6",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/jinja2@3.1.6"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0206",
+      "name": "MarkupSafe",
+      "versionInfo": "3.0.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/markupsafe@3.0.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0207",
+      "name": "PyJWT",
+      "versionInfo": "2.15.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyjwt@2.15.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0208",
+      "name": "PyMySQL",
+      "versionInfo": "1.1.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pymysql@1.1.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0209",
+      "name": "PyPika",
+      "versionInfo": "git+https://github.com/frappe/pypika@7ef6e40215d46cd531e8c4e58650b84c11abbd04",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pypika"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0210",
+      "name": "PyQRCode",
+      "versionInfo": "1.2.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyqrcode@1.2.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0211",
+      "name": "PyYAML",
+      "versionInfo": "6.0.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyyaml@6.0.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0212",
+      "name": "Pygments",
+      "versionInfo": "2.21.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pygments@2.21.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0213",
+      "name": "RestrictedPython",
+      "versionInfo": "8.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/restrictedpython@8.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0214",
+      "name": "Werkzeug",
+      "versionInfo": "3.1.9",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/werkzeug@3.1.9"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0215",
+      "name": "Whoosh",
+      "versionInfo": "2.7.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/whoosh@2.7.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0216",
+      "name": "aiohappyeyeballs",
+      "versionInfo": "2.7.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/aiohappyeyeballs@2.7.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0217",
+      "name": "aiohttp-retry",
+      "versionInfo": "2.9.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/aiohttp-retry@2.9.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0218",
+      "name": "aiohttp",
+      "versionInfo": "3.14.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/aiohttp@3.14.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0219",
+      "name": "aiosignal",
+      "versionInfo": "1.4.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/aiosignal@1.4.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0220",
+      "name": "annotated-types",
+      "versionInfo": "0.8.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/annotated-types@0.8.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0221",
+      "name": "asttokens",
+      "versionInfo": "3.0.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/asttokens@3.0.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0222",
+      "name": "attrs",
+      "versionInfo": "26.1.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/attrs@26.1.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0223",
+      "name": "babel",
+      "versionInfo": "2.18.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/babel@2.18.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0224",
+      "name": "backcall",
+      "versionInfo": "0.2.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/backcall@0.2.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0225",
+      "name": "backoff",
+      "versionInfo": "2.2.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/backoff@2.2.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0226",
+      "name": "beautifulsoup4",
+      "versionInfo": "4.12.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/beautifulsoup4@4.12.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0227",
+      "name": "bleach-allowlist",
+      "versionInfo": "1.0.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/bleach-allowlist@1.0.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0228",
+      "name": "bleach",
+      "versionInfo": "6.4.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/bleach@6.4.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0229",
+      "name": "boto3",
+      "versionInfo": "1.34.162",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/boto3@1.34.162"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0230",
+      "name": "botocore",
+      "versionInfo": "1.34.162",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/botocore@1.34.162"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0231",
+      "name": "brotli",
+      "versionInfo": "1.2.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/brotli@1.2.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0232",
+      "name": "cachetools",
+      "versionInfo": "8.0.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/cachetools@8.0.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0233",
+      "name": "cairocffi",
+      "versionInfo": "1.5.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/cairocffi@1.5.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0234",
+      "name": "certifi",
+      "versionInfo": "2026.10.23",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/certifi@2026.10.23"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0235",
+      "name": "cffi",
+      "versionInfo": "2.1.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/cffi@2.1.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0236",
+      "name": "chardet",
+      "versionInfo": "5.2.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/chardet@5.2.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0237",
+      "name": "charset-normalizer",
+      "versionInfo": "3.5.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/charset-normalizer@3.5.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0238",
+      "name": "click",
+      "versionInfo": "8.4.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/click@8.4.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0239",
+      "name": "croniter",
+      "versionInfo": "6.0.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/croniter@6.0.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0240",
+      "name": "cryptography",
+      "versionInfo": "50.0.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/cryptography@50.0.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0241",
+      "name": "cssselect2",
+      "versionInfo": "0.10.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/cssselect2@0.10.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0242",
+      "name": "cssselect",
+      "versionInfo": "1.6.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/cssselect@1.6.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0243",
+      "name": "cssutils",
+      "versionInfo": "2.11.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/cssutils@2.11.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0244",
+      "name": "decorator",
+      "versionInfo": "5.3.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/decorator@5.3.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0245",
+      "name": "distro",
+      "versionInfo": "1.9.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/distro@1.9.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0246",
+      "name": "docopt",
+      "versionInfo": "0.6.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/docopt@0.6.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0247",
+      "name": "dropbox",
+      "versionInfo": "12.0.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/dropbox@12.0.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0248",
+      "name": "duckdb",
+      "versionInfo": "1.4.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/duckdb@1.4.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0249",
+      "name": "email-reply-parser",
+      "versionInfo": "0.5.12",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/email-reply-parser@0.5.12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0250",
+      "name": "et_xmlfile",
+      "versionInfo": "2.0.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/et_xmlfile@2.0.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0251",
+      "name": "executing",
+      "versionInfo": "2.3.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/executing@2.3.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0252",
+      "name": "filelock",
+      "versionInfo": "4.2.9",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/filelock@4.2.9"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0253",
+      "name": "filetype",
+      "versionInfo": "1.2.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/filetype@1.2.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0254",
+      "name": "flit_core",
+      "versionInfo": "3.12.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/flit_core@3.12.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0255",
+      "name": "fonttools",
+      "versionInfo": "4.68.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/fonttools@4.68.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0256",
+      "name": "frozenlist",
+      "versionInfo": "1.8.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/frozenlist@1.8.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0257",
+      "name": "gitdb",
+      "versionInfo": "4.0.12",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/gitdb@4.0.12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0258",
+      "name": "google-api-core",
+      "versionInfo": "2.44.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/google-api-core@2.44.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0259",
+      "name": "google-api-python-client",
+      "versionInfo": "2.188.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/google-api-python-client@2.188.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0260",
+      "name": "google-auth-httplib2",
+      "versionInfo": "0.4.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/google-auth-httplib2@0.4.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0261",
+      "name": "google-auth-oauthlib",
+      "versionInfo": "1.2.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/google-auth-oauthlib@1.2.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0262",
+      "name": "google-auth",
+      "versionInfo": "2.48.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/google-auth@2.48.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0263",
+      "name": "googleapis-common-protos",
+      "versionInfo": "1.76.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/googleapis-common-protos@1.76.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0264",
+      "name": "gunicorn",
+      "versionInfo": "git+https://github.com/frappe/gunicorn@bb554053bb87218120d76ab6676af7015680e8b6",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/gunicorn"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0265",
+      "name": "hiredis",
+      "versionInfo": "2.2.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/hiredis@2.2.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0266",
+      "name": "html5lib",
+      "versionInfo": "1.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/html5lib@1.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0267",
+      "name": "httplib2",
+      "versionInfo": "0.32.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/httplib2@0.32.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0268",
+      "name": "idna",
+      "versionInfo": "3.20",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/idna@3.20"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0269",
+      "name": "ipython",
+      "versionInfo": "8.15.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/ipython@8.15.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0270",
+      "name": "jedi",
+      "versionInfo": "0.20.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/jedi@0.20.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0271",
+      "name": "jmespath",
+      "versionInfo": "1.1.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/jmespath@1.1.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0272",
+      "name": "ldap3",
+      "versionInfo": "2.9.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/ldap3@2.9.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0273",
+      "name": "lxml",
+      "versionInfo": "6.1.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/lxml@6.1.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0274",
+      "name": "markdown2",
+      "versionInfo": "2.5.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/markdown2@2.5.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0275",
+      "name": "markdownify",
+      "versionInfo": "0.14.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/markdownify@0.14.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0276",
+      "name": "matplotlib-inline",
+      "versionInfo": "0.2.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/matplotlib-inline@0.2.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0277",
+      "name": "maxminddb-geolite2",
+      "versionInfo": "2018.703",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/maxminddb-geolite2@2018.703"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0278",
+      "name": "maxminddb",
+      "versionInfo": "3.2.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/maxminddb@3.2.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0279",
+      "name": "monotonic",
+      "versionInfo": "1.6",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/monotonic@1.6"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0280",
+      "name": "more-itertools",
+      "versionInfo": "11.2.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/more-itertools@11.2.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0281",
+      "name": "multidict",
+      "versionInfo": "7.2.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/multidict@7.2.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0282",
+      "name": "num2words",
+      "versionInfo": "0.5.14",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/num2words@0.5.14"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0283",
+      "name": "oauthlib",
+      "versionInfo": "4.0.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/oauthlib@4.0.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0284",
+      "name": "openpyxl",
+      "versionInfo": "3.1.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/openpyxl@3.1.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0285",
+      "name": "opentelemetry-api",
+      "versionInfo": "1.45.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/opentelemetry-api@1.45.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0286",
+      "name": "packaging",
+      "versionInfo": "26.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/packaging@26.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0287",
+      "name": "parso",
+      "versionInfo": "0.8.7",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/parso@0.8.7"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0288",
+      "name": "passlib",
+      "versionInfo": "1.7.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/passlib@1.7.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0289",
+      "name": "pdfkit",
+      "versionInfo": "1.0.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pdfkit@1.0.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0290",
+      "name": "pexpect",
+      "versionInfo": "4.9.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pexpect@4.9.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0291",
+      "name": "phonenumbers",
+      "versionInfo": "9.0.43",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/phonenumbers@9.0.43"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0292",
+      "name": "pickleshare",
+      "versionInfo": "0.7.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pickleshare@0.7.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0293",
+      "name": "pillow",
+      "versionInfo": "13.0.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pillow@13.0.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0294",
+      "name": "ply",
+      "versionInfo": "3.11",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/ply@3.11"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0295",
+      "name": "posthog",
+      "versionInfo": "3.21.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/posthog@3.21.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0296",
+      "name": "premailer",
+      "versionInfo": "3.10.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/premailer@3.10.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0297",
+      "name": "prompt_toolkit",
+      "versionInfo": "3.0.53",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/prompt_toolkit@3.0.53"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0298",
+      "name": "propcache",
+      "versionInfo": "0.5.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/propcache@0.5.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0299",
+      "name": "proto-plus",
+      "versionInfo": "1.29.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/proto-plus@1.29.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0300",
+      "name": "protobuf",
+      "versionInfo": "7.36.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/protobuf@7.36.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0301",
+      "name": "psutil",
+      "versionInfo": "5.9.8",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/psutil@5.9.8"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0302",
+      "name": "psycopg2-binary",
+      "versionInfo": "2.9.13",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/psycopg2-binary@2.9.13"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0303",
+      "name": "ptyprocess",
+      "versionInfo": "0.7.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/ptyprocess@0.7.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0304",
+      "name": "pure_eval",
+      "versionInfo": "0.2.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pure_eval@0.2.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0305",
+      "name": "pyOpenSSL",
+      "versionInfo": "26.4.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyopenssl@26.4.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0306",
+      "name": "pyarrow",
+      "versionInfo": "25.0.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyarrow@25.0.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0307",
+      "name": "pyasn1",
+      "versionInfo": "0.6.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyasn1@0.6.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0308",
+      "name": "pyasn1_modules",
+      "versionInfo": "0.4.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyasn1_modules@0.4.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0309",
+      "name": "pycparser",
+      "versionInfo": "3.12",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pycparser@3.12"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0310",
+      "name": "pydantic",
+      "versionInfo": "2.12.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pydantic@2.12.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0311",
+      "name": "pydantic_core",
+      "versionInfo": "2.41.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pydantic_core@2.41.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0312",
+      "name": "pydyf",
+      "versionInfo": "0.12.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pydyf@0.12.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0313",
+      "name": "pyotp",
+      "versionInfo": "2.9.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyotp@2.9.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0314",
+      "name": "pyparsing",
+      "versionInfo": "3.3.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyparsing@3.3.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0315",
+      "name": "pypdf",
+      "versionInfo": "6.21.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pypdf@6.21.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0316",
+      "name": "pyphen",
+      "versionInfo": "0.18.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pyphen@0.18.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0317",
+      "name": "python-dateutil",
+      "versionInfo": "2.9.0.post0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/python-dateutil@2.9.0.post0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0318",
+      "name": "pytz",
+      "versionInfo": "2025.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/pytz@2025.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0319",
+      "name": "rauth",
+      "versionInfo": "0.7.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/rauth@0.7.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0320",
+      "name": "redis",
+      "versionInfo": "4.5.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/redis@4.5.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0321",
+      "name": "requests-oauthlib",
+      "versionInfo": "1.3.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/requests-oauthlib@1.3.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0322",
+      "name": "requests",
+      "versionInfo": "2.33.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/requests@2.33.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0323",
+      "name": "rq",
+      "versionInfo": "1.15.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/rq@1.15.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0324",
+      "name": "rsa",
+      "versionInfo": "4.9.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/rsa@4.9.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0325",
+      "name": "s3transfer",
+      "versionInfo": "0.10.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/s3transfer@0.10.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0326",
+      "name": "semantic-version",
+      "versionInfo": "2.10.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/semantic-version@2.10.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0327",
+      "name": "sentry-sdk",
+      "versionInfo": "1.45.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/sentry-sdk@1.45.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0328",
+      "name": "six",
+      "versionInfo": "1.17.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/six@1.17.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0329",
+      "name": "smmap",
+      "versionInfo": "5.0.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/smmap@5.0.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0330",
+      "name": "soupsieve",
+      "versionInfo": "4.0.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/soupsieve@4.0.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0331",
+      "name": "sql_metadata",
+      "versionInfo": "3.0.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/sql_metadata@3.0.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0332",
+      "name": "sqlglot",
+      "versionInfo": "30.30.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/sqlglot@30.30.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0333",
+      "name": "sqlparse",
+      "versionInfo": "0.6.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/sqlparse@0.6.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0334",
+      "name": "stack-data",
+      "versionInfo": "0.6.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/stack-data@0.6.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0335",
+      "name": "stone",
+      "versionInfo": "3.3.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/stone@3.3.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0336",
+      "name": "tenacity",
+      "versionInfo": "8.2.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/tenacity@8.2.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0337",
+      "name": "terminaltables",
+      "versionInfo": "3.1.10",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/terminaltables@3.1.10"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0338",
+      "name": "tinycss2",
+      "versionInfo": "1.5.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/tinycss2@1.5.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0339",
+      "name": "tinyhtml5",
+      "versionInfo": "2.1.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/tinyhtml5@2.1.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0340",
+      "name": "tomli",
+      "versionInfo": "2.0.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/tomli@2.0.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0341",
+      "name": "traceback-with-variables",
+      "versionInfo": "2.0.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/traceback-with-variables@2.0.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0342",
+      "name": "traitlets",
+      "versionInfo": "5.16.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/traitlets@5.16.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0343",
+      "name": "twilio",
+      "versionInfo": "8.5.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/twilio@8.5.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0344",
+      "name": "typing-inspection",
+      "versionInfo": "0.4.5",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/typing-inspection@0.4.5"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0345",
+      "name": "typing_extensions",
+      "versionInfo": "4.16.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/typing_extensions@4.16.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0346",
+      "name": "unittest-xml-reporting",
+      "versionInfo": "3.2.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/unittest-xml-reporting@3.2.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0347",
+      "name": "uritemplate",
+      "versionInfo": "4.2.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/uritemplate@4.2.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0348",
+      "name": "urllib3",
+      "versionInfo": "2.8.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/urllib3@2.8.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0349",
+      "name": "vobject",
+      "versionInfo": "0.9.9",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/vobject@0.9.9"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0350",
+      "name": "wcwidth",
+      "versionInfo": "0.9.4",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/wcwidth@0.9.4"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0351",
+      "name": "weasyprint",
+      "versionInfo": "70.0",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/weasyprint@70.0"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0352",
+      "name": "webencodings",
+      "versionInfo": "0.6.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/webencodings@0.6.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0353",
+      "name": "xlrd",
+      "versionInfo": "2.0.2",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/xlrd@2.0.2"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0354",
+      "name": "yarl",
+      "versionInfo": "1.25.1",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/yarl@1.25.1"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0355",
+      "name": "zopfli",
+      "versionInfo": "0.4.3",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/zopfli@0.4.3"
+        }
+      ]
+    },
+    {
+      "SPDXID": "SPDXRef-Package-0356",
+      "name": "zxcvbn",
+      "versionInfo": "4.4.28",
+      "downloadLocation": "NOASSERTION",
+      "filesAnalyzed": false,
+      "externalRefs": [
+        {
+          "referenceCategory": "PACKAGE-MANAGER",
+          "referenceType": "purl",
+          "referenceLocator": "pkg:pypi/zxcvbn@4.4.28"
+        }
+      ]
+    }
+  ]
+}

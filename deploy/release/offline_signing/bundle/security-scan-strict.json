@@ -1,0 +1,51 @@
+{
+  "schema_version": "cskh-p4-security-scan-summary-v2",
+  "gate_mode": "strict",
+  "evaluated_at_utc": "2026-11-23T14:07:42.263737+00:00",
+  "reference_date_utc": "2026-11-23",
+  "artifact_name": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+  "artifact_type": "container_image",
+  "severity_counts": {
+    "CRITICAL": 0,
+    "HIGH": 135,
+    "MEDIUM": 207,
+    "LOW": 236,
+    "UNKNOWN": 22
+  },
+  "unique_critical_counts": {
+    "fixable_unapproved": 0,
+    "unfixed_upstream_os_unapproved": 0,
+    "excepted": 0
+  },
+  "secret_findings_count": 0,
+  "secret_findings": [],
+  "excepted_secret_false_positives_count": 1,
+  "excepted_secret_false_positives": [
+    {
+      "target": "/home/frappe/frappe-bench/env/lib/python3.11/site-packages/pyjwt-2.15.1.dist-info/METADATA",
+      "rule_id": "jwt-token",
+      "category": "JWT",
+      "severity": "MEDIUM",
+      "title": "JWT token",
+      "start_line": 77,
+      "end_line": 77,
+      "fp_id": "FP-PYJWT-DOCTEST-HS256-SAMPLE",
+      "exact_line": 77,
+      "exact_sample_sha256": "bf145d9380bbe05bdc1a72525796b224f8a8c93ae0e9e102eafbc255ac1af9e8",
+      "verified_via_metadata_file": true,
+      "approved_by": "T1B-P4-02",
+      "expires_on": "2027-11-06",
+      "reason": "Upstream PyJWT 2.15.1 wheel METADATA (line 77) embeds the public doctest HS256 sample (`jwt.encode({\"some\": \"payload\"}, \"secret\", algorithm=\"HS256\")`). Any other JWT in the same METADATA file or any other path fails closed."
+    }
+  ],
+  "rejected_exceptions_count": 0,
+  "rejected_exceptions": [],
+  "exception_validation_errors": [],
+  "unique_fixable_critical_unapproved": [],
+  "unique_unfixed_critical_upstream_os": [],
+  "fixable_critical_unapproved": [],
+  "unfixed_critical_upstream_os": [],
+  "excepted_critical": [],
+  "gate_failures": [],
+  "status": "PASS"
+}
