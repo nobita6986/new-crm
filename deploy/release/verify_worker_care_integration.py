@@ -1007,12 +1007,118 @@ try:
             "do_not_contact": dnc_cnt,
         }
 
-    print(json.dumps({
-        "staff_a": query_expected(["staff.a@mock.local"]),
-        "staff_b": query_expected(["staff.b@mock.local"]),
-        "leader_a": query_expected(["leader.a@mock.local", "staff.a@mock.local", "staff.b@mock.local"]),
-        "all": query_expected(None, is_all=True),
-    }))
+        print(json.dumps({
+            "staff_a": query_expected(["staff.a@mock.local"]),
+            "staff_b": query_expected(["staff.b@mock.local"]),
+            "leader_a": query_expected(["leader.a@mock.local", "staff.a@mock.local", "staff.b@mock.local"]),
+            "all": query_expected(None, is_all=True),
+        }))
+finally:
+    frappe.destroy()
+"""
+
+
+TZ_PROBE_PY = r"""
+import json, os, sys
+from datetime import datetime
+from unittest import mock
+import frappe
+from frappe.utils import add_to_date, now_datetime
+from crm_cskh.services import runtime_cache, worker_overview
+from crm_cskh.api import workflow as wf_api
+
+req = json.loads(sys.stdin.read())
+site = req["site_name"]
+wi = req["work_item"]
+
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    frappe.set_user("staff.b@mock.local")
+    att = wf_api.record_attempt(
+        work_item=wi,
+        channel="phone_call",
+        outcome_code="no_answer",
+        note="[DỮ LIỆU GIẢ LẬP] Kiểm tra biên ngày TZ",
+        followup_due_at=str(add_to_date(now_datetime(), hours=2)),
+        followup_title="[DỮ LIỆU GIẢ LẬP] Hẹn cuối ngày",
+        idempotency_key="tz-boundary-b1",
+    )
+    frappe.set_user("Administrator")
+    frappe.db.set_value(
+        "CRM Task",
+        att["callback_task"],
+        "due_date",
+        "2026-11-26 23:30:00",
+        update_modified=False,
+    )
+    fixed_now = datetime(2026, 11, 26, 12, 0, 0)
+    with mock.patch.object(worker_overview, "now_datetime", return_value=fixed_now):
+        frappe.db.set_value(
+            "User",
+            "staff.b@mock.local",
+            "time_zone",
+            "Asia/Ho_Chi_Minh",
+            update_modified=False,
+        )
+        runtime_cache.clear_all_local_caches()
+        ict_today = worker_overview.get_overview("staff.b@mock.local")["callbacks"]["today"]
+
+        frappe.db.set_value(
+            "User",
+            "staff.b@mock.local",
+            "time_zone",
+            "Asia/Tokyo",
+            update_modified=False,
+        )
+        runtime_cache.clear_all_local_caches()
+        tokyo_today = worker_overview.get_overview("staff.b@mock.local")["callbacks"]["today"]
+
+    frappe.db.set_value(
+        "User",
+        "staff.b@mock.local",
+        "time_zone",
+        "Asia/Ho_Chi_Minh",
+        update_modified=False,
+    )
+    frappe.db.set_value(
+        "CRM Task", att["callback_task"], "status", "Done", update_modified=False
+    )
+    runtime_cache.clear_all_local_caches()
+    frappe.db.commit()
+    print(json.dumps({"ict_today": ict_today, "tokyo_today": tokyo_today}))
+finally:
+    frappe.destroy()
+"""
+
+
+POST_BROWSER_PY = r"""
+import json, os, sys
+import frappe
+
+req = json.loads(sys.stdin.read())
+site = req["site_name"]
+wi = req["work_item"]
+lead = req["lead_id"]
+
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    att_cnt = frappe.db.count("CSKH Contact Attempt", {"work_item": wi})
+    open_cb = frappe.db.get_value("CSKH Work Item", wi, "open_callback_task")
+    job_title = frappe.db.get_value("CRM Lead", lead, "job_title")
+    print(
+        json.dumps(
+            {
+                "attempt_count": att_cnt,
+                "open_callback_task": open_cb,
+                "lead_job_title": job_title,
+            },
+            ensure_ascii=False,
+        )
+    )
 finally:
     frappe.destroy()
 """
@@ -1088,7 +1194,12 @@ def run_playwright_browser_e2e(
         page.locator("#login_email").fill(email)
         page.locator("#login_password").fill(actor_pw)
         page.locator("button.btn-login").click()
-        page.wait_for_url("**/cskh**", timeout=30000)
+        try:
+            page.wait_for_url("**/cskh**", timeout=30000)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Login for {email} landed on {page.url!r} instead of /cskh"
+            ) from exc
         return page, urllib.parse.urlsplit(page.url).path
 
     with sync_playwright() as pw:
@@ -1906,33 +2017,6 @@ def run_phase_b_and_c_reconcile_and_browser(
             assert post_l_ov["message"]["workload"]["active"] == 69  # type: ignore[index]
 
             # Timezone midnight boundary check on staff.b (23:30 ICT vs 01:30 next day Asia/Tokyo)
-            tz_probe_py = (
-                "import json, os, frappe; "
-                "from datetime import datetime; "
-                "from unittest import mock; "
-                "from frappe.utils import add_to_date, now_datetime; "
-                "from crm_cskh.services import runtime_cache, worker_overview; "
-                "from crm_cskh.api import workflow as wf_api; "
-                f"site = {site_name!r}; wi = {seeded['staff_b_sample_wi_id']!r}; "
-                "os.chdir('/home/frappe/frappe-bench/sites'); "
-                "frappe.init(site=site, sites_path='.'); frappe.connect(); "
-                "frappe.set_user('staff.b@mock.local'); "
-                "att = wf_api.record_attempt(work_item=wi, channel='phone_call', outcome_code='no_answer', note='[DỮ LIỆU GIẢ LẬP] Kiểm tra biên ngày TZ', followup_due_at=str(add_to_date(now_datetime(), hours=2)), followup_title='[DỮ LIỆU GIẢ LẬP] Hẹn cuối ngày', idempotency_key='tz-boundary-b1'); "
-                "frappe.set_user('Administrator'); "
-                "frappe.db.set_value('CRM Task', att['callback_task'], 'due_date', '2026-11-26 23:30:00', update_modified=False); "
-                "fixed_now = datetime(2026, 11, 26, 12, 0, 0); "
-                "with mock.patch.object(worker_overview, 'now_datetime', return_value=fixed_now): "
-                "    frappe.db.set_value('User', 'staff.b@mock.local', 'time_zone', 'Asia/Ho_Chi_Minh', update_modified=False); "
-                "    runtime_cache.clear_all_local_caches(); "
-                "    ict_today = worker_overview.get_overview('staff.b@mock.local')['callbacks']['today']; "
-                "    frappe.db.set_value('User', 'staff.b@mock.local', 'time_zone', 'Asia/Tokyo', update_modified=False); "
-                "    runtime_cache.clear_all_local_caches(); "
-                "    tokyo_today = worker_overview.get_overview('staff.b@mock.local')['callbacks']['today']; "
-                "frappe.db.set_value('User', 'staff.b@mock.local', 'time_zone', 'Asia/Ho_Chi_Minh', update_modified=False); "
-                "frappe.db.set_value('CRM Task', att['callback_task'], 'status', 'Done', update_modified=False); "
-                "runtime_cache.clear_all_local_caches(); frappe.db.commit(); frappe.destroy(); "
-                "print(json.dumps({'ict_today': ict_today, 'tokyo_today': tokyo_today}))"
-            )
             tz_res = run_cmd(
                 [
                     *compose_base,
@@ -1941,9 +2025,15 @@ def run_phase_b_and_c_reconcile_and_browser(
                     "backend",
                     "/home/frappe/frappe-bench/env/bin/python",
                     "-c",
-                    tz_probe_py,
+                    TZ_PROBE_PY,
                 ],
                 env=compose_env,
+                input_text=json.dumps(
+                    {
+                        "site_name": site_name,
+                        "work_item": seeded["staff_b_sample_wi_id"],
+                    }
+                ),
             )
             tz_boundary = json.loads(tz_res.stdout.strip().splitlines()[-1])
             assert tz_boundary["ict_today"] - tz_boundary["tokyo_today"] == 1, (
@@ -1991,17 +2081,6 @@ def run_phase_b_and_c_reconcile_and_browser(
             )
 
             # Confirm browser-created attempt & Lead field update persisted in MariaDB
-            post_browser_py = (
-                "import json, os, frappe; "
-                f"site = {site_name!r}; wi = {seeded['primary_work_item_id']!r}; lead = {seeded['primary_lead_id']!r}; "
-                "os.chdir('/home/frappe/frappe-bench/sites'); "
-                "frappe.init(site=site, sites_path='.'); frappe.connect(); "
-                "att_cnt = frappe.db.count('CSKH Contact Attempt', {'work_item': wi}); "
-                "open_cb = frappe.db.get_value('CSKH Work Item', wi, 'open_callback_task'); "
-                "job_title = frappe.db.get_value('CRM Lead', lead, 'job_title'); "
-                "frappe.destroy(); "
-                "print(json.dumps({'attempt_count': att_cnt, 'open_callback_task': open_cb, 'lead_job_title': job_title}, ensure_ascii=False))"
-            )
             pb_res = run_cmd(
                 [
                     *compose_base,
@@ -2010,9 +2089,16 @@ def run_phase_b_and_c_reconcile_and_browser(
                     "backend",
                     "/home/frappe/frappe-bench/env/bin/python",
                     "-c",
-                    post_browser_py,
+                    POST_BROWSER_PY,
                 ],
                 env=compose_env,
+                input_text=json.dumps(
+                    {
+                        "site_name": site_name,
+                        "work_item": seeded["primary_work_item_id"],
+                        "lead_id": seeded["primary_lead_id"],
+                    }
+                ),
             )
             post_browser_db = json.loads(pb_res.stdout.strip().splitlines()[-1])
             assert post_browser_db["attempt_count"] >= 1, post_browser_db
