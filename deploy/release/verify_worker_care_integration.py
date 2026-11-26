@@ -771,7 +771,7 @@ try:
     )
     frappe.set_user("Administrator")
     frappe.db.set_value("CRM Task", res_done["callback_task"], "status", "Done", update_modified=False)
-    frappe.db.set_value("CRM Task", res_cancel["callback_task"], "status", "Cancelled", update_modified=False)
+    frappe.db.set_value("CRM Task", res_cancel["callback_task"], "status", "Canceled", update_modified=False)
 
     # Mark 2 worker Leads DNC (staff_a_leads[0] has 2 Work Items across camp_a1 + camp_a2!)
     for dnc_lead in (staff_a_leads[0][0], staff_a_leads[25][0]):
@@ -1230,7 +1230,9 @@ def run_playwright_browser_e2e(
             assert urllib.parse.urlsplit(staff_page.url).path == "/crm/leads"
 
             # SPA pushState to /crm/deals must redirect to /cskh
-            staff_page.evaluate("() => window.history.pushState({}, '', '/crm/deals')")
+            staff_page.evaluate(
+                "() => window.setTimeout(() => window.history.pushState({}, '', '/crm/deals'), 10)"
+            )
             staff_page.wait_for_url("**/cskh**", timeout=15000)
             assert urllib.parse.urlsplit(staff_page.url).path == "/cskh"
 
@@ -1298,7 +1300,11 @@ def run_playwright_browser_e2e(
             assert palette_focus_preserved is True
 
             palette_input.fill("Đặc Biệt")
-            staff_page.wait_for_timeout(900)
+            staff_page.wait_for_function(
+                "() => (document.querySelector('.crm-command-palette')?.innerText || '').includes('Công nhân Đặc Biệt 01')",
+                timeout=15000,
+            )
+            staff_page.wait_for_timeout(300)
             palette_search_opts = staff_page.evaluate(
                 """() => Array.from(document.querySelectorAll('.crm-command-palette [role="option"]'))
                   .filter(o => !o.hasAttribute('hidden') && o.offsetParent !== null)
@@ -1321,7 +1327,13 @@ def run_playwright_browser_e2e(
             # Verify valid Lead field Save from browser context (and UI Save button not blocked)
             lead_save_res = staff_page.evaluate(
                 """async (leadName) => {
-                  const csrf = window.csrf_token || '';
+                  let csrf = window.csrf_token || (window.frappe && window.frappe.csrf_token) || '';
+                  if (!csrf) {
+                    const htmlRes = await fetch('/cskh', { headers: { Accept: 'text/html' } });
+                    const htmlTxt = await htmlRes.text();
+                    const m = htmlTxt.match(/(?:X-Frappe-CSRF-Token|csrf_token)["']?\\s*[:=]\\s*["']([0-9a-fA-F\\-]{16,})["']/);
+                    if (m) csrf = m[1];
+                  }
                   const r = await fetch('/api/method/frappe.client.set_value', {
                     method: 'POST',
                     headers: {
@@ -1354,7 +1366,9 @@ def run_playwright_browser_e2e(
             staff_page.locator('[data-cskh-sidebar-item="1"]').first.wait_for(
                 state="visible", timeout=30000
             )
-            staff_page.wait_for_timeout(1200)
+            staff_page.locator('[data-cskh-contact-care-panel="1"]').first.wait_for(
+                state="visible", timeout=15000
+            )
             contact_tabs_audit = staff_page.evaluate(
                 """() => {
                   const visibleDealTabs = Array.from(document.querySelectorAll('[role="tab"]'))
@@ -1871,14 +1885,14 @@ def run_phase_b_and_c_reconcile_and_browser(
                 "fixed_now = datetime(2026, 11, 26, 12, 0, 0); "
                 "with mock.patch.object(worker_overview, 'now_datetime', return_value=fixed_now): "
                 "    frappe.db.set_value('User', 'staff.b@mock.local', 'time_zone', 'Asia/Ho_Chi_Minh', update_modified=False); "
-                "    runtime_cache.invalidate_auth_epoch(); "
+                "    runtime_cache.clear_all_local_caches(); "
                 "    ict_today = worker_overview.get_overview('staff.b@mock.local')['callbacks']['today']; "
                 "    frappe.db.set_value('User', 'staff.b@mock.local', 'time_zone', 'Asia/Tokyo', update_modified=False); "
-                "    runtime_cache.invalidate_auth_epoch(); "
+                "    runtime_cache.clear_all_local_caches(); "
                 "    tokyo_today = worker_overview.get_overview('staff.b@mock.local')['callbacks']['today']; "
                 "frappe.db.set_value('User', 'staff.b@mock.local', 'time_zone', 'Asia/Ho_Chi_Minh', update_modified=False); "
                 "frappe.db.set_value('CRM Task', att['callback_task'], 'status', 'Done', update_modified=False); "
-                "runtime_cache.invalidate_auth_epoch(); frappe.db.commit(); frappe.destroy(); "
+                "runtime_cache.clear_all_local_caches(); frappe.db.commit(); frappe.destroy(); "
                 "print(json.dumps({'ict_today': ict_today, 'tokyo_today': tokyo_today}))"
             )
             tz_res = run_cmd(

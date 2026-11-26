@@ -179,15 +179,15 @@ class TestWorkerCareOverview(P2TestCase):
 				frappe.db.set_value(
 					"User", self.staff_a, "time_zone", "Asia/Ho_Chi_Minh", update_modified=False
 				)
-				runtime_cache.invalidate_auth_epoch()
+				runtime_cache.clear_all_local_caches()
 				ict_ov = worker_overview.get_overview(self.staff_a)
 
 				frappe.db.set_value("User", self.staff_a, "time_zone", "Asia/Tokyo", update_modified=False)
-				runtime_cache.invalidate_auth_epoch()
+				runtime_cache.clear_all_local_caches()
 				tokyo_ov = worker_overview.get_overview(self.staff_a)
 
 			frappe.db.set_value("User", self.staff_a, "time_zone", "", update_modified=False)
-			runtime_cache.invalidate_auth_epoch()
+			runtime_cache.clear_all_local_caches()
 			self.assertEqual(ict_ov["callbacks"]["today"] - tokyo_ov["callbacks"]["today"], 1)
 
 			# Reassign wi_1 from staff_a to staff_b -> staff_a drops by 1, staff_b rises by 1, leader_a unchanged
