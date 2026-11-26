@@ -207,4 +207,7 @@ def execute():
 	backfill_closed_work_item_owners()
 	migrate_p2_assignment_history_privacy()
 	ensure_p2_seeds()
+	cur_default_app = frappe.db.get_single_value("System Settings", "default_app")
+	if not cur_default_app or cur_default_app == "crm":
+		frappe.db.set_single_value("System Settings", "default_app", "crm_cskh")
 	frappe.db.commit()

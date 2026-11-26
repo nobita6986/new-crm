@@ -56,6 +56,30 @@ class WorkerCareProductTests(unittest.TestCase):
         self.assertEqual(writes, [])
         self.assertEqual(len(clears), 2)
 
+    def test_upgrade_migrates_system_default_app_from_empty_or_crm_to_worker_care(self):
+        singles = {"default_app": "crm"}
+        sql_calls = []
+        stub = types.ModuleType("frappe")
+        stub.db = types.SimpleNamespace(
+            exists=lambda _dt, _name: False,
+            set_value=lambda *_args: None,
+            get_single_value=lambda _dt, field: singles.get(field),
+            set_single_value=lambda _dt, field, val: singles.__setitem__(field, val),
+            has_column=lambda dt, col: dt == "User" and col == "default_app",
+            sql=lambda q: sql_calls.append(q),
+        )
+        stub.clear_cache = lambda: None
+        spec = importlib.util.spec_from_file_location(
+            "worker_care_workspace_patch_default_app",
+            APP / "patches" / "v4_0" / "worker_care_workspace.py",
+        )
+        module = importlib.util.module_from_spec(spec)
+        with patch.dict(sys.modules, {"frappe": stub}):
+            spec.loader.exec_module(module)
+            module.execute()
+        self.assertEqual(singles["default_app"], "crm_cskh")
+        self.assertEqual(len(sql_calls), 1)
+
     def test_fresh_install_also_disables_legacy_deal_shortcut(self):
         scripts = json.loads(
             (APP / "fixtures" / "crm_form_script.json").read_text(encoding="utf-8")

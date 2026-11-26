@@ -312,6 +312,7 @@ def run_phase_a_migrate_and_suites(
                 f"frappe.init(site={site_name!r}, sites_path='.'); frappe.connect(); "
                 "fresh_enabled = int(frappe.db.get_value('CRM Form Script', 'CSKH - Open CSKH Page from Deal', 'enabled') or 0); "
                 "frappe.db.set_value('CRM Form Script', 'CSKH - Open CSKH Page from Deal', 'enabled', 1); "
+                "frappe.db.set_single_value('System Settings', 'default_app', 'crm'); "
                 "frappe.cache.set_value('wc_migrate_cache_probe', 'stale-before-migrate'); "
                 "frappe.db.commit(); frappe.destroy(); "
                 "print(json.dumps({'fresh_install_deal_script_enabled': fresh_enabled}))"
@@ -348,6 +349,7 @@ def run_phase_a_migrate_and_suites(
                 "m2 = subprocess.run(['bench', '--site', site, 'migrate'], cwd='/home/frappe/frappe-bench', capture_output=True, text=True, check=True); "
                 "frappe.init(site=site, sites_path='.'); frappe.connect(); "
                 "after_m2_enabled = int(frappe.db.get_value('CRM Form Script', 'CSKH - Open CSKH Page from Deal', 'enabled') or 0); "
+                "default_app_after_m2 = str(frappe.db.get_single_value('System Settings', 'default_app') or ''); "
                 "lead_list_enabled = int(frappe.db.get_value('CRM Form Script', 'CSKH - Open CSKH Page', 'enabled') or 0); "
                 "lead_form_enabled = int(frappe.db.get_value('CRM Form Script', 'CSKH - Open Lead CSKH Workspace', 'enabled') or 0); "
                 "patch_logged = bool(frappe.db.exists('Patch Log', {'patch': 'crm_cskh.patches.v4_0.worker_care_workspace'})); "
@@ -359,6 +361,7 @@ def run_phase_a_migrate_and_suites(
                 "'after_migrate_1_deal_script_enabled': after_m1_enabled, "
                 "'cache_probe_after_migrate_1': cache_after_m1, "
                 "'after_migrate_2_deal_script_enabled': after_m2_enabled, "
+                "'default_app_after_migrate_2': default_app_after_m2, "
                 "'lead_list_script_enabled': lead_list_enabled, "
                 "'lead_form_script_enabled': lead_form_enabled, "
                 "'patch_logged': patch_logged"
@@ -386,6 +389,9 @@ def run_phase_a_migrate_and_suites(
                 migrate_info
             )
             assert migrate_info["after_migrate_2_deal_script_enabled"] == 0, (
+                migrate_info
+            )
+            assert migrate_info["default_app_after_migrate_2"] == "crm_cskh", (
                 migrate_info
             )
             assert migrate_info["cache_probe_after_migrate_1"] is None, migrate_info
@@ -796,13 +802,28 @@ try:
         "annual_revenue": 120000000,
     }).insert(ignore_permissions=True)
 
+    deal_org_doc = frappe.get_doc({
+        "doctype": "CRM Organization",
+        "organization_name": "[DỮ LIỆU GIẢ LẬP] Đối tác Giao dịch Đặc Biệt 01",
+        "annual_revenue": 120000000,
+    }).insert(ignore_permissions=True)
+
     contact_doc = frappe.get_doc({
         "doctype": "Contact",
         "first_name": "[DỮ LIỆU GIẢ LẬP] Liên hệ Nhân sự",
         "company_name": org_doc.name,
     }).insert(ignore_permissions=True)
 
-    deal_status = frappe.db.get_value("CRM Deal Status", {}, "name")
+    deal_status = "Qualification"
+    if not frappe.db.exists("CRM Deal Status", deal_status):
+        deal_status = (
+            frappe.db.get_value(
+                "CRM Deal Status", {"type": ["not in", ["Lost", "Won"]]}, "name"
+            )
+            or frappe.db.get_value(
+                "CRM Deal Status", {"name": ["!=", "Lost"]}, "name"
+            )
+        )
     deal_payload = {
         "doctype": "CRM Deal",
         "deal_owner": "staff.a@mock.local",
@@ -811,9 +832,9 @@ try:
     if deal_status:
         deal_payload["status"] = deal_status
     if frappe.db.has_column("CRM Deal", "organization"):
-        deal_payload["organization"] = org_doc.name
+        deal_payload["organization"] = deal_org_doc.name
     if frappe.db.has_column("CRM Deal", "organization_name"):
-        deal_payload["organization_name"] = "[DỮ LIỆU GIẢ LẬP] Giao dịch Đặc Biệt 01"
+        deal_payload["organization_name"] = deal_org_doc.organization_name
     if frappe.db.has_column("CRM Deal", "lead_name"):
         deal_payload["lead_name"] = "[DỮ LIỆU GIẢ LẬP] Giao dịch Đặc Biệt 01"
     legacy_deal = frappe.get_doc(deal_payload).insert(ignore_permissions=True)
@@ -1326,9 +1347,13 @@ def run_playwright_browser_e2e(
             assert any("Công nhân Đặc Biệt 01" in t for t in palette_search_opts), (
                 palette_search_opts
             )
-            assert not any("Giao dịch Đặc Biệt 01" in t for t in palette_search_opts), (
-                palette_search_opts
-            )
+            assert not any(
+                legacy_deal_id in t
+                or t.endswith("Deal")
+                or t.endswith("CRM Deal")
+                or t.endswith("Giao dịch CRM")
+                for t in palette_search_opts
+            ), palette_search_opts
             snap(
                 staff_page,
                 "03-frappe-real-desktop-command-palette.png",
