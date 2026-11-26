@@ -395,7 +395,7 @@ def build_context(
 	branding = runtime_cache.get_website_branding()
 
 	context.no_cache = 1
-	context.title = _(title) if title else _("CSKH")
+	context.title = _(title) if title else _("Worker care")
 	context.splash_image = branding["splash_image"]
 	context.cskh_branding = branding
 	context.csrf_token = _get_or_init_csrf_token()

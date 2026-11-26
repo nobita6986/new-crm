@@ -779,7 +779,8 @@ def run_live_rehearsal(
         st_n_apps_admin, _, body_n_apps_admin = admin.get_json(
             "/api/method/frappe.apps.get_apps"
         )
-        st_n_crm_html, _, raw_n_crm_html = staff_a.raw_request("GET", "/crm")
+        st_n_crm_root, n_crm_root_hdrs, _ = staff_a.raw_request("GET", "/crm")
+        st_n_crm_html, _, raw_n_crm_html = staff_a.raw_request("GET", "/crm/leads")
         n_apps_staff_names = [
             str(a.get("name"))
             for a in (unwrap_message(body_n_apps_staff) or [])
@@ -837,10 +838,14 @@ def run_live_rehearsal(
             n_apps_admin_names,
         )
         assert (
-            st_n_crm_html == 200
+            st_n_crm_root == 302
+            and n_crm_root_hdrs.get("location") == "/cskh"
+            and st_n_crm_html == 200
             and n_crm_has_bridge is True
             and n_crm_has_theme is True
         ), (
+            st_n_crm_root,
+            n_crm_root_hdrs.get("location"),
             st_n_crm_html,
             n_crm_has_bridge,
             n_crm_has_theme,

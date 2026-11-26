@@ -1,0 +1,241 @@
+name: P4 Worker Care integration, Frappe suites & real Vue browser verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'codex/worker-care-marketing'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: p4-worker-care-verify-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-static-and-bootstrap-gate:
+    name: Linux bootstrap contract, release locks, lint & Node/Python unit gates
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Install isolated Python tooling
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wc-static"
+          python3 -m venv "$RUNNER_TEMP/wc-venv"
+          "$RUNNER_TEMP/wc-venv/bin/pip" install --no-cache-dir \
+            ruff==0.14.0 \
+            cryptography==44.0.2 \
+            beautifulsoup4==4.12.3
+
+      - name: Verify workflow isolation, release locks, Ruff lint/format, translations & Linux shell bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          PY="$RUNNER_TEMP/wc-venv/bin/python"
+          RUFF="$RUNNER_TEMP/wc-venv/bin/ruff"
+
+          "$PY" deploy/release/verify_pr_isolation.py \
+            --check-workflows \
+            --check-runtime-env \
+            --check-locks \
+            --out "$RUNNER_TEMP/wc-static/pr-isolation-audit.json"
+
+          "$RUFF" check \
+            apps/crm_cskh \
+            deploy/dev/apply-crm-branding-patch.py \
+            deploy/images/verify_clean_site.py \
+            deploy/images/resources/apply-frappe-vi-patch.py \
+            deploy/compose/scripts \
+            deploy/release
+
+          "$RUFF" format --check \
+            apps/crm_cskh \
+            deploy/dev/apply-crm-branding-patch.py \
+            deploy/images/verify_clean_site.py \
+            deploy/images/resources/apply-frappe-vi-patch.py \
+            deploy/release
+
+          bash -n \
+            deploy/dev/bootstrap.sh \
+            deploy/images/build-image.sh \
+            deploy/images/resources/main-entrypoint.sh \
+            deploy/images/resources/nginx-entrypoint.sh \
+            deploy/images/resources/start.sh
+          git diff --check
+
+          python3 -m unittest deploy/dev/test_bootstrap_contract.py -v \
+            2>&1 | tee "$RUNNER_TEMP/wc-static/linux-bootstrap-contract.log"
+
+          node --test \
+            deploy/dev/test_crm_sidebar_bridge.mjs \
+            deploy/dev/test_worker_care_navigation.mjs \
+            deploy/dev/test-crm-vite-bootstrap.cjs \
+            | tee "$RUNNER_TEMP/wc-static/node-navigation-tests.log"
+
+          node deploy/p3/test_p3_ui_timezone_and_contracts.mjs
+          python3 deploy/p1/check_translations_audit.py | tee "$RUNNER_TEMP/wc-static/translations-audit.log"
+
+          "$PY" - <<'PY'
+          import sys
+          import unittest
+          from pathlib import Path
+
+          root = str(Path.cwd().resolve())
+          if root not in sys.path:
+              sys.path.insert(0, root)
+          for suite_dir in ("deploy/compose/scripts", "deploy/release"):
+              s_abs = str(Path(suite_dir).resolve())
+              if s_abs not in sys.path:
+                  sys.path.insert(0, s_abs)
+              suite = unittest.TestLoader().discover(s_abs, pattern="test_*.py", top_level_dir=s_abs)
+              res = unittest.TextTestRunner(verbosity=2).run(suite)
+              assert res.wasSuccessful(), f"{suite_dir} failed"
+              assert len(res.skipped) == 0, f"{suite_dir} had skipped tests: {res.skipped}"
+          PY
+
+      - name: Upload static & Linux bootstrap evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: worker-care-static-and-linux-bootstrap-${{ github.run_id }}
+          path: ${{ runner.temp }}/wc-static/
+          if-no-files-found: warn
+          retention-days: 14
+
+  real-frappe-and-vue-integration:
+    name: Build real image, double-migrate, Frappe suites, DB reconcile & Playwright Vue E2E
+    needs: [linux-static-and-bootstrap-gate]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      LOOPBACK_REGISTRY_ADDR: 127.0.0.1:15000
+      LOOPBACK_REGISTRY_REPO: 127.0.0.1:15000/cskh/crm-cskh
+      LOOPBACK_REGISTRY_IMAGE: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+
+    steps:
+      - name: Reclaim unused runner SDK space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf \
+            /usr/local/lib/android \
+            /usr/share/dotnet \
+            /opt/ghc \
+            /usr/local/.ghcup || true
+          df -h
+
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Prepare tooling & Playwright Chromium on runner host
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p \
+            "$RUNNER_TEMP/wc-evidence/build" \
+            "$RUNNER_TEMP/wc-evidence/clean-site" \
+            "$RUNNER_TEMP/wc-evidence/integration"
+          python3 -m venv "$RUNNER_TEMP/wc-venv"
+          "$RUNNER_TEMP/wc-venv/bin/pip" install --no-cache-dir \
+            cryptography==44.0.2 \
+            beautifulsoup4==4.12.3 \
+            playwright==1.50.0
+          "$RUNNER_TEMP/wc-venv/bin/playwright" install --with-deps chromium
+          echo "127.0.0.1 worker-care-e2e.localhost worker-care-suites.localhost p4-clean-verify.localhost" | sudo tee -a /etc/hosts
+
+      - name: Start loopback OCI v2 registry
+        shell: bash
+        run: |
+          set -euo pipefail
+          REG_CONTAINER="cskh-wc-loopback-registry-${GITHUB_RUN_ID}"
+          docker rm -f "${REG_CONTAINER}" >/dev/null 2>&1 || true
+          docker run -d \
+            --name "${REG_CONTAINER}" \
+            -p "127.0.0.1:15000:5000" \
+            "${LOOPBACK_REGISTRY_IMAGE}"
+          for _ in $(seq 1 30); do
+            if curl -fsS "http://${LOOPBACK_REGISTRY_ADDR}/v2/" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "ERROR: Loopback registry failed to start" >&2
+          exit 1
+
+      - name: Build production Frappe + CRM Vue image (--no-cache) & push @sha256 digest
+        id: build_image
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE="$RUNNER_TEMP/wc-evidence"
+          HEAD_SHA="$(git rev-parse HEAD)"
+          TAG="wc-${HEAD_SHA::12}"
+
+          PYTHON_BIN="$RUNNER_TEMP/wc-venv/bin/python" \
+          LOCAL_IMAGE_REPO="${LOOPBACK_REGISTRY_REPO}" \
+          REGISTRY_PUSH=true \
+          CSKH_REGISTRY_IMAGE="${LOOPBACK_REGISTRY_REPO}" \
+          bash deploy/images/build-image.sh \
+            --no-cache \
+            --out-dir "$EVIDENCE/build" \
+            --tag "${TAG}"
+
+          APP_IMAGE_DIGEST="$(jq -r '.registry_verification.approved_registry_repo_digest' "$EVIDENCE/build/image-inspect-summary.json")"
+          LOCAL_IMAGE_ID="$(jq -r '.local_image_id' "$EVIDENCE/build/image-inspect-summary.json")"
+          sh deploy/release/validate_digest_uri.sh "${APP_IMAGE_DIGEST}"
+
+          docker rmi -f "${LOOPBACK_REGISTRY_REPO}:${TAG}" "${APP_IMAGE_DIGEST}" "${LOCAL_IMAGE_ID}" >/dev/null 2>&1 || true
+          docker pull "${APP_IMAGE_DIGEST}"
+
+          echo "app_image_digest=${APP_IMAGE_DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Run G02 clean-site + Socket.IO + asset verification on pulled @sha256 digest
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ steps.build_image.outputs.app_image_digest }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/wc-venv/bin/python" deploy/images/verify_clean_site.py \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --pull-policy always \
+            --port 18780 \
+            --out "$RUNNER_TEMP/wc-evidence/clean-site/clean-site-verify.json"
+
+      - name: Run Worker Care double-migrate, Frappe test suites, DB reconciliation & real Vue Playwright E2E
+        shell: bash
+        env:
+          APP_IMAGE_DIGEST: ${{ steps.build_image.outputs.app_image_digest }}
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/wc-venv/bin/python" deploy/release/verify_worker_care_integration.py \
+            --app-image "${APP_IMAGE_DIGEST}" \
+            --out-dir "$RUNNER_TEMP/wc-evidence/integration" \
+            --suites-port 18782 \
+            --e2e-port 18784 \
+            2>&1 | tee "$RUNNER_TEMP/wc-evidence/integration/verify-worker-care.log"
+
+      - name: Tear down loopback OCI registry
+        if: always()
+        shell: bash
+        run: |
+          docker rm -f "cskh-wc-loopback-registry-${GITHUB_RUN_ID}" >/dev/null 2>&1 || true
+
+      - name: Upload Worker Care real Frappe + Vue integration evidence & screenshots
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: worker-care-integration-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/wc-evidence/
+          if-no-files-found: warn
+          retention-days: 30

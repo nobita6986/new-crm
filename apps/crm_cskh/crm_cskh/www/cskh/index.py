@@ -9,9 +9,9 @@ def get_context(context):
 	return build_context(
 		context,
 		route="/cskh",
-		title=_("Recruitment workspace"),
+		title=_("Worker care overview"),
 		subtitle=_(
-			"Manage contact records, assignments, follow-up schedules, and recruitment team performance."
+			"Marketing workspace for contacting workers, following up on time, and keeping care responsibilities clear."
 		),
 		allowed_roles=READ_ROLES,
 	)

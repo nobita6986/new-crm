@@ -834,7 +834,7 @@ class TestReleaseManifestAndDigestPromotion(unittest.TestCase):
     def test_source_derived_constants(self) -> None:
         self.assertEqual(
             read_latest_migration_revision(),
-            "crm_cskh.patches.v3_0.p3_schema_and_seeds",
+            "crm_cskh.patches.v4_0.worker_care_workspace",
         )
         self.assertEqual(read_kpi_formula_version(), "cskh-metrics-v2")
 

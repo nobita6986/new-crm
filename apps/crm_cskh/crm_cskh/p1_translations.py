@@ -470,6 +470,26 @@ def _merge_p2_translations():
 _merge_p2_translations()
 
 
+def _merge_worker_translations(module_name):
+	import importlib
+
+	try:
+		mod = importlib.import_module(f"crm_cskh.{module_name}")
+	except ImportError:
+		import importlib.util
+		from pathlib import Path
+
+		path = Path(__file__).with_name(f"{module_name}.py")
+		spec = importlib.util.spec_from_file_location(f"crm_cskh_{module_name}", path)
+		mod = importlib.util.module_from_spec(spec)
+		spec.loader.exec_module(mod)
+	TRANSLATIONS.update(mod.TRANSLATIONS)
+
+
+_merge_worker_translations("worker_care_strings")
+_merge_worker_translations("worker_overview_strings")
+
+
 def translation_rows():
 	"""Return the CSV rows of the P1 translations."""
 	buffer = io.StringIO()

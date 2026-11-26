@@ -760,9 +760,20 @@ if (import.meta.env.DEV) {
       window.csrf_token = match[2]
       return frappeRequest({ url: '/api/method/crm.www.crm.get_context_for_dev' })
     })
-    .then((values) => {
+    .then(async (values) => {
       if (!values) return
       for (const key in values) window[key] = values[key]
+      // Vite's static HTML has no trusted role context. Activate worker routing
+      // only after the authenticated server confirms the capability, before Vue.
+      const routing = await fetch('/api/method/crm_cskh.cskh_sidebar.worker_care_entry', {
+        credentials: 'same-origin', cache: 'no-store', headers: { Accept: 'application/json' },
+      })
+      if (!routing.ok) throw new Error(`Worker-care bootstrap returned ${routing.status}`)
+      const capability = await routing.json()
+      if (capability.message?.enabled && !window.__cskhSidebarBridge) {
+        throw new Error('Worker-care navigation is unavailable')
+      }
+      if (window.__cskhSidebarBridge?.activateWorkerCare(capability.message)) return
       initializeApp()
     })
     .catch((error) => {
@@ -830,8 +841,9 @@ export default function translationPlugin(app) {"""
         "    <script>var __ = window.__ = window.__ || ((message) => message)</script>"
     )
     sidebar_bridge_line = (
-        '    <script defer src="/assets/crm_cskh/cskh/crm-sidebar-bridge.js" '
-        'data-cskh-sidebar-bridge="1" data-cskh-href="/cskh" data-cskh-label="CSKH"></script>'
+        '    <script src="/assets/crm_cskh/cskh/crm-sidebar-bridge.js" '
+        'data-cskh-sidebar-bridge="1" data-cskh-href="/cskh" '
+        'data-cskh-label="Chăm sóc người lao động"></script>'
     )
     current_index = index_html.read_text(encoding="utf-8")
     index_lines = [
@@ -852,7 +864,7 @@ export default function translationPlugin(app) {"""
     )
     if body_close_index < 0:
         raise RuntimeError("Pinned CRM Vite index.html body close marker is missing")
-    index_lines.insert(body_close_index, sidebar_bridge_line)
+    index_lines.insert(head_index + 2, sidebar_bridge_line)
     normalized_index = "\n".join(index_lines) + "\n"
     changed_index = normalized_index != current_index
     if changed_index:

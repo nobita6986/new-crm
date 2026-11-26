@@ -4,10 +4,10 @@
  *
  * Verifies against the exact `AppSidebar.vue` + `SidebarItem.vue` (`frappe-ui@1.0.0-beta.29`)
  * DOM structure:
- *   1. Inserts `CSKH` (`href="/cskh"`) into `All Views` `<nav>` immediately below `Leads` (`/crm/leads`).
- *   2. Never injects into `Public Views` or `Pinned Views` sections (`?view=...`).
+ *   1. Promotes worker care (`href="/cskh"`) before native contact/task helpers.
+ *   2. Removes sales navigation without adding entries to saved contact views.
  *   3. Remains strictly idempotent across repeated syncs / mutations.
- *   4. Synchronizes collapsed (`justify-center`, `size-7`, `opacity-0`, `title="CSKH"`)
+ *   4. Synchronizes collapsed (`justify-center`, `size-7`, `opacity-0`, translated title)
  *      and expanded (`pl-2`, `ml-2 w-auto opacity-100`, no `title`) rail classes.
  *   5. Ignores non-`/crm` paths (`/cskh`, `/login`).
  */
@@ -42,6 +42,19 @@ class MiniClassList {
 	contains(token) {
 		return this._tokens().includes(token)
 	}
+	add(token) {
+		const list = this._tokens()
+		if (!list.includes(token)) {
+			list.push(token)
+			this._el.className = list.join(' ')
+		}
+	}
+	remove(token) {
+		const list = this._tokens().filter((t) => t !== token)
+		if (list.length !== this._tokens().length) {
+			this._el.className = list.join(' ')
+		}
+	}
 }
 
 class MiniElement {
@@ -54,6 +67,22 @@ class MiniElement {
 		this.attributes = new Map()
 		this.textContent = ''
 		this.classList = new MiniClassList(this)
+		this._listeners = new Map()
+	}
+
+	addEventListener(type, handler) {
+		if (!this._listeners.has(type)) this._listeners.set(type, [])
+		this._listeners.get(type).push(handler)
+	}
+
+	dispatchEvent(event) {
+		const handlers = this._listeners.get(event.type) || []
+		for (const fn of handlers) fn(event)
+		return !event.defaultPrevented
+	}
+
+	click() {
+		this.dispatchEvent({ type: 'click', target: this, defaultPrevented: false, preventDefault() { this.defaultPrevented = true } })
 	}
 
 	get className() {
@@ -98,6 +127,15 @@ class MiniElement {
 
 	appendChild(child) {
 		return this.insertBefore(child, null)
+	}
+
+	removeChild(child) {
+		const idx = this.children.indexOf(child)
+		if (idx < 0) throw new Error('Child not found')
+		this.children.splice(idx, 1)
+		child.parentElement = null
+		if (this.ownerDocument) this.ownerDocument._notifyMutation()
+		return child
 	}
 
 	insertBefore(child, refNode) {
@@ -175,6 +213,7 @@ class MiniDocument {
 		this.readyState = 'complete'
 		this.mutations = 0
 		this._observers = []
+		this.listeners = new Map()
 		this.documentElement = new MiniElement('html', this)
 		this.head = new MiniElement('head', this)
 		this.body = new MiniElement('body', this)
@@ -201,10 +240,16 @@ class MiniDocument {
 	querySelectorAll(sel) {
 		return this.documentElement.querySelectorAll(sel)
 	}
-	addEventListener() {}
+	addEventListener(type, handler) {
+		if (!this.listeners.has(type)) this.listeners.set(type, [])
+		this.listeners.get(type).push(handler)
+	}
+	dispatch(type, event) {
+		for (const handler of this.listeners.get(type) || []) handler(event)
+	}
 }
 
-function makeNativeSidebarItem(doc, { href, label, collapsed = false }) {
+export function makeNativeSidebarItem(doc, { href, label, collapsed = false }) {
 	const item = doc.createElement('div')
 	item.setAttribute('data-slot', 'sidebar-item')
 	item.setAttribute('data-state', 'inactive')
@@ -229,7 +274,7 @@ function makeNativeSidebarItem(doc, { href, label, collapsed = false }) {
 	return item
 }
 
-function createCrmDom({ pathname = '/crm/leads', collapsed = false } = {}) {
+export function createCrmDom({ pathname = '/crm/leads', collapsed = false, workerCare = true } = {}) {
 	const doc = new MiniDocument()
 	const app = doc.createElement('div')
 	app.setAttribute('id', 'app')
@@ -278,17 +323,31 @@ function createCrmDom({ pathname = '/crm/leads', collapsed = false } = {}) {
 	const scriptTag = doc.createElement('script')
 	scriptTag.setAttribute('data-cskh-sidebar-bridge', '1')
 	scriptTag.setAttribute('data-cskh-href', '/cskh')
-	scriptTag.setAttribute('data-cskh-label', 'CSKH')
+	scriptTag.setAttribute('data-cskh-label', 'Chăm sóc người lao động')
+	if (workerCare) scriptTag.setAttribute('data-cskh-worker-care', '1')
 	doc.body.appendChild(scriptTag)
 	doc.currentScript = scriptTag
 
 	const pendingRaf = []
+	const navigations = []
+	const historyCalls = []
+	const listeners = new Map()
 	const win = {
 		URL,
 		location: {
 			origin: 'https://crm.hrpartner.vn',
 			pathname,
+			assign(href) { navigations.push(href) },
 		},
+		history: {
+			pushState(...args) { historyCalls.push(['pushState', ...args]) },
+			replaceState(...args) { historyCalls.push(['replaceState', ...args]) },
+		},
+		addEventListener(type, handler) {
+			if (!listeners.has(type)) listeners.set(type, [])
+			listeners.get(type).push(handler)
+		},
+		dispatch(type) { for (const fn of listeners.get(type) || []) fn() },
 		document: doc,
 		requestAnimationFrame(fn) {
 			pendingRaf.push(fn)
@@ -311,26 +370,28 @@ function createCrmDom({ pathname = '/crm/leads', collapsed = false } = {}) {
 	vm.runInNewContext(BRIDGE_SOURCE, { window: win })
 
 	function flushRaf() {
+		let iterations = 0
 		while (pendingRaf.length) {
+			if (++iterations > 100) throw new Error('Mutation observer did not settle')
 			const fn = pendingRaf.shift()
 			fn()
 		}
 	}
 
-	return { doc, win, allViewsNav, publicViewsNav, flushRaf }
+	return { doc, win, allViewsNav, publicViewsNav, flushRaf, navigations, historyCalls }
 }
 
-test('Inserts CSKH directly after Leads in All Views nav and skips Public Views', () => {
+test('Promotes worker care before native helpers and removes sales navigation', () => {
 	const { allViewsNav, publicViewsNav, win } = createCrmDom({ pathname: '/crm/leads' })
 
 	const allLinks = allViewsNav.children.map((item) => item.querySelector('a')?.getAttribute('href'))
-	assert.deepEqual(allLinks, ['/crm/dashboard', '/crm/leads', '/cskh', '/crm/deals', '/crm/tasks'])
+	assert.deepEqual(allLinks, ['/cskh', '/crm/leads', '/crm/tasks'])
 
 	const cskhItem = allViewsNav.querySelector('[data-cskh-sidebar-item="1"]')
 	assert.ok(cskhItem, 'CSKH item must exist in All Views nav')
 	const cskhAnchor = cskhItem.querySelector('a[data-cskh-nav-link="1"]')
 	assert.equal(cskhAnchor.getAttribute('href'), '/cskh')
-	assert.equal(cskhAnchor.getAttribute('aria-label'), 'CSKH')
+	assert.equal(cskhAnchor.getAttribute('aria-label'), 'Chăm sóc người lao động')
 	assert.equal(cskhAnchor.getAttribute('title'), null)
 	assert.ok(cskhAnchor.classList.contains('pl-2'))
 
@@ -352,7 +413,7 @@ test('Inserts CSKH directly after Leads in All Views nav and skips Public Views'
 })
 
 test('Mirrors collapsed and expanded sidebar states accurately', () => {
-	const { allViewsNav, flushRaf } = createCrmDom({ pathname: '/crm/dashboard', collapsed: false })
+	const { allViewsNav, flushRaf } = createCrmDom({ pathname: '/crm/leads', collapsed: false })
 	const cskhItem = allViewsNav.querySelector('[data-cskh-sidebar-item="1"]')
 	const cskhAnchor = cskhItem.querySelector('a[data-cskh-nav-link="1"]')
 	const iconSlot = cskhItem.querySelector('[data-cskh-slot="icon"]')
@@ -363,13 +424,13 @@ test('Mirrors collapsed and expanded sidebar states accurately', () => {
 	assert.ok(labelSlot.classList.contains('opacity-100'))
 
 	// Simulate user clicking "Thu gọn" (Collapse) on Frappe CRM sidebar
-	const firstSiblingAnchor = allViewsNav.children[0].querySelector('a')
+	const firstSiblingAnchor = allViewsNav.children[1].querySelector('a')
 	firstSiblingAnchor.className =
 		'flex h-full min-w-0 flex-1 items-center focus:outline-none focus-visible:ring-0 justify-center'
 	flushRaf()
 
 	assert.ok(cskhAnchor.classList.contains('justify-center'))
-	assert.equal(cskhAnchor.getAttribute('title'), 'CSKH')
+	assert.equal(cskhAnchor.getAttribute('title'), 'Chăm sóc người lao động')
 	assert.ok(iconSlot.classList.contains('size-7'))
 	assert.ok(labelSlot.classList.contains('opacity-0'))
 

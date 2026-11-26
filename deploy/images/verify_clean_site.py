@@ -778,6 +778,8 @@ def main() -> int:
                 "/assets/crm_cskh/cskh/p3-api.js",
                 "/assets/crm_cskh/cskh/p3-widgets.js",
                 "/assets/crm_cskh/cskh/quality-overview.js",
+                "/assets/crm_cskh/cskh/worker-overview.js",
+                "/assets/crm_cskh/cskh/worker-overview.css",
             ):
                 st, _, body = http_request(
                     anon_no_redirect,
@@ -848,8 +850,18 @@ def main() -> int:
                 who_msg,
             )
 
+            st_crm_root, crm_root_hdrs, _ = http_request(
+                auth_no_redirect, f"{base_url}/crm", host_header=args.site_name
+            )
+            record(
+                "http.auth.crm_root_redirects_to_worker_care",
+                st_crm_root == 302 and crm_root_hdrs.get("location") == "/cskh",
+                {"status": 302, "location": "/cskh"},
+                {"status": st_crm_root, "location": crm_root_hdrs.get("location")},
+            )
+
             st_crm, _, crm_raw = http_request(
-                auth_opener, f"{base_url}/crm", host_header=args.site_name
+                auth_opener, f"{base_url}/crm/leads", host_header=args.site_name
             )
             crm_html = crm_raw.decode("utf-8", errors="replace")
             record(
@@ -858,7 +870,7 @@ def main() -> int:
                 and 'id="app"' in crm_html
                 and 'data-cskh-crm-theme="1"' in crm_html
                 and 'data-cskh-sidebar-bridge="1"' in crm_html,
-                "HTTP 200 with #app, crm-theme.css & crm-sidebar-bridge.js",
+                "HTTP 200 on /crm/leads with #app, crm-theme.css & crm-sidebar-bridge.js",
                 f"HTTP {st_crm} (len={len(crm_html)})",
             )
 
@@ -889,7 +901,7 @@ def main() -> int:
                 )
 
             csrf_token = ""
-            for cskh_route in ("/cskh/dashboard", "/cskh/quality-overview"):
+            for cskh_route in ("/cskh", "/cskh/dashboard", "/cskh/quality-overview"):
                 st_page, _, page_raw = http_request(
                     auth_opener, f"{base_url}{cskh_route}", host_header=args.site_name
                 )

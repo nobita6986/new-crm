@@ -1969,13 +1969,17 @@ def run_http_and_socketio_smoke(
     csrf_token = csrf_match.group(1)
     logger.register_secret(csrf_token, "<REDACTED_CSRF_TOKEN>")
 
-    crm_code, _, crm_html = http_call(auth_opener, f"{base_url}/crm", site_name)
-    assert crm_code == 200, f"Expected 200 on authenticated /crm, got {crm_code}"
-    assert 'data-cskh-crm-theme="1"' in crm_html, "Missing crm-theme.css link in authenticated /crm HTML"
-    assert "crm-sidebar-bridge.js" in crm_html, "Missing crm-sidebar-bridge.js in authenticated /crm HTML"
+    crm_root_code, crm_root_hdrs, _ = http_call(auth_opener, f"{base_url}/crm", site_name)
+    assert crm_root_code == 302 and crm_root_hdrs.get("location") == "/cskh", (
+        f"Expected 302 -> /cskh on authenticated /crm, got {crm_root_code} ({crm_root_hdrs.get('location')!r})"
+    )
+    crm_code, _, crm_html = http_call(auth_opener, f"{base_url}/crm/leads", site_name)
+    assert crm_code == 200, f"Expected 200 on authenticated /crm/leads, got {crm_code}"
+    assert 'data-cskh-crm-theme="1"' in crm_html, "Missing crm-theme.css link in authenticated /crm/leads HTML"
+    assert "crm-sidebar-bridge.js" in crm_html, "Missing crm-sidebar-bridge.js in authenticated /crm/leads HTML"
     logger.info(
         f"Vietnamese UI & SPA checks passed: /cskh/dashboard={dash_code}, "
-        f"/cskh/quality-overview={ui_code}, /crm={crm_code}, matched_labels={matched_vi_labels}"
+        f"/cskh/quality-overview={ui_code}, /crm=302->/cskh, /crm/leads={crm_code}, matched_labels={matched_vi_labels}"
     )
 
     # 4. CSRF negative (forged + missing) & positive smoke
