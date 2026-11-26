@@ -499,6 +499,8 @@ frappe.set_user("Administrator")
 try:
     frappe.db.set_single_value("System Settings", "language", "vi")
     frappe.db.set_single_value("System Settings", "time_zone", "Asia/Ho_Chi_Minh")
+    frappe.db.set_single_value("System Settings", "country", "Vietnam")
+    frappe.db.set_single_value("System Settings", "setup_complete", 1)
     frappe.db.set_value("User", "Administrator", {"language": "vi", "time_zone": "Asia/Ho_Chi_Minh"})
     frappe.db.set_single_value("FCRM Settings", "enable_sales_hierarchy", 1)
 
@@ -558,13 +560,15 @@ try:
         if existing:
             nodes[label] = existing
         else:
-            d = frappe.get_doc({
+            h_payload = {
                 "doctype": "CRM Sales Hierarchy",
-                "full_name": label,
                 "is_group": is_grp,
                 "user": uemail,
                 "reports_to": nodes.get(parent_label) if parent_label else None,
-            }).insert(ignore_permissions=True)
+            }
+            if frappe.db.has_column("CRM Sales Hierarchy", "full_name"):
+                h_payload["full_name"] = label
+            d = frappe.get_doc(h_payload).insert(ignore_permissions=True)
             nodes[label] = d.name
 
     frappe.db.sql(
@@ -612,11 +616,10 @@ try:
             "team": team_id,
         }).insert(ignore_permissions=True)
 
-    seq = 1000
+    seq = [1000]
     def make_worker_lead(name_label: str, owner_email: str) -> tuple[str, str]:
-        nonlocal seq
-        seq += 1
-        phone = f"0917{seq:06d}"
+        seq[0] += 1
+        phone = f"0917{seq[0]:06d}"
         norm = normalize_vn_phone(phone)
         lead_doc = frappe.get_doc({
             "doctype": "CRM Lead",
@@ -790,6 +793,7 @@ try:
     org_doc = frappe.get_doc({
         "doctype": "CRM Organization",
         "organization_name": "[DỮ LIỆU GIẢ LẬP] Nhà máy Điện tử Bắc Ninh",
+        "annual_revenue": 120000000,
     }).insert(ignore_permissions=True)
 
     contact_doc = frappe.get_doc({
@@ -801,12 +805,17 @@ try:
     deal_status = frappe.db.get_value("CRM Deal Status", {}, "name")
     deal_payload = {
         "doctype": "CRM Deal",
-        "organization": org_doc.name,
-        "lead_name": "[DỮ LIỆU GIẢ LẬP] Giao dịch Đặc Biệt 01",
         "deal_owner": "staff.a@mock.local",
+        "annual_revenue": 120000000,
     }
     if deal_status:
         deal_payload["status"] = deal_status
+    if frappe.db.has_column("CRM Deal", "organization"):
+        deal_payload["organization"] = org_doc.name
+    if frappe.db.has_column("CRM Deal", "organization_name"):
+        deal_payload["organization_name"] = "[DỮ LIỆU GIẢ LẬP] Giao dịch Đặc Biệt 01"
+    if frappe.db.has_column("CRM Deal", "lead_name"):
+        deal_payload["lead_name"] = "[DỮ LIỆU GIẢ LẬP] Giao dịch Đặc Biệt 01"
     legacy_deal = frappe.get_doc(deal_payload).insert(ignore_permissions=True)
 
     # Native Call Log on primary test Lead
@@ -831,28 +840,32 @@ try:
     pinned_lead_view = None
     pinned_deal_view = None
     if frappe.db.exists("DocType", "CRM View Settings"):
-        lv = frappe.get_doc({
-            "doctype": "CRM View Settings",
-            "label": "[Giả lập] NLĐ Ưu tiên",
-            "dt": "CRM Lead",
-            "type": "list",
-            "route_name": "Leads",
-            "public": 1,
-            "pinned": 1,
-            "user": "staff.a@mock.local",
-        }).insert(ignore_permissions=True)
-        dv = frappe.get_doc({
-            "doctype": "CRM View Settings",
-            "label": "[Giả lập] Deal Doanh thu Cũ",
-            "dt": "CRM Deal",
-            "type": "list",
-            "route_name": "Deals",
-            "public": 1,
-            "pinned": 1,
-            "user": "staff.a@mock.local",
-        }).insert(ignore_permissions=True)
-        pinned_lead_view = lv.name
-        pinned_deal_view = dv.name
+        try:
+            lv = frappe.get_doc({
+                "doctype": "CRM View Settings",
+                "label": "[Giả lập] NLĐ Ưu tiên",
+                "dt": "CRM Lead",
+                "type": "list",
+                "route_name": "Leads",
+                "public": 1,
+                "pinned": 1,
+                "user": "staff.a@mock.local",
+            }).insert(ignore_permissions=True)
+            dv = frappe.get_doc({
+                "doctype": "CRM View Settings",
+                "label": "[Giả lập] Deal Doanh thu Cũ",
+                "dt": "CRM Deal",
+                "type": "list",
+                "route_name": "Deals",
+                "public": 1,
+                "pinned": 1,
+                "user": "staff.a@mock.local",
+            }).insert(ignore_permissions=True)
+            pinned_lead_view = lv.name
+            pinned_deal_view = dv.name
+        except Exception:
+            pinned_lead_view = None
+            pinned_deal_view = None
 
     frappe.db.commit()
     frappe.clear_cache()
