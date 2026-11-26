@@ -618,3 +618,44 @@ test('BOD overview enforces zero-PII banner and never links to PII callback or r
 		assert.ok(!href.startsWith('/crm'), `BOD must not link to CRM: ${href}`)
 	}
 })
+
+test('Onboarding widget div steps for Deal conversion and Deal status are blocked without detaching v-for siblings', () => {
+	const { doc, flushRaf } = createCrmDom({ pathname: '/crm/leads/LEAD-002' })
+	const stepsList = doc.createElement('div')
+
+	function makeStepRow(label, withSkip = false) {
+		const row = doc.createElement('div')
+		const inner = doc.createElement('div')
+		const textSpan = doc.createElement('span')
+		textSpan.textContent = label
+		inner.appendChild(textSpan)
+		row.appendChild(inner)
+		if (withSkip) {
+			const skipBtn = doc.createElement('button')
+			skipBtn.textContent = 'Bỏ qua'
+			row.appendChild(skipBtn)
+		}
+		stepsList.appendChild(row)
+		return row
+	}
+
+	const stepPassword = makeStepRow('Thiết lập mật khẩu của bạn', true)
+	const stepFirstLead = makeStepRow('Tạo hồ sơ liên hệ đầu tiên của bạn', true)
+	const stepConvertDeal = makeStepRow('Chuyển hồ sơ liên hệ thành Giao dịch CRM')
+	const stepFirstTask = makeStepRow('Tạo công việc đầu tiên của bạn', true)
+	const stepDealStatus = makeStepRow('Thay đổi trạng thái Giao dịch CRM', true)
+
+	doc.body.appendChild(stepsList)
+	flushRaf()
+
+	assert.equal(stepConvertDeal.getAttribute('data-cskh-sales-blocked'), '1')
+	assert.equal(stepConvertDeal.getAttribute('hidden'), 'hidden')
+	assert.equal(stepDealStatus.getAttribute('data-cskh-sales-blocked'), '1')
+	assert.equal(stepDealStatus.getAttribute('hidden'), 'hidden')
+	assert.equal(stepConvertDeal.parentElement, stepsList, 'v-for node stays mounted for Vue patching')
+
+	assert.equal(stepPassword.getAttribute('hidden'), null)
+	assert.equal(stepFirstLead.getAttribute('hidden'), null)
+	assert.equal(stepFirstTask.getAttribute('hidden'), null)
+	assert.equal(stepsList.getAttribute('hidden'), null)
+})

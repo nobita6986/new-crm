@@ -1416,6 +1416,20 @@ def run_playwright_browser_e2e(
                   .filter(t => /convert to deal|chuyển thành giao dịch crm|create deal|tạo giao dịch crm/i.test(t))"""
             )
             assert visible_convert_btns == [], visible_convert_btns
+            lead_page_visible_text = staff_page.evaluate(
+                "() => document.body.innerText || ''"
+            )
+            for forbidden_onboarding_step in (
+                "Chuyển hồ sơ liên hệ thành Giao dịch CRM",
+                "Thay đổi trạng thái Giao dịch CRM",
+                "Tạo Giao dịch CRM đầu tiên",
+                "Convert lead to deal",
+                "Change deal status",
+                "Create your first deal",
+            ):
+                assert forbidden_onboarding_step not in lead_page_visible_text, (
+                    f"Onboarding Deal step still visible: {forbidden_onboarding_step}"
+                )
             snap(
                 staff_page,
                 "02-frappe-real-desktop-crm-lead-detail.png",
@@ -1714,13 +1728,18 @@ def run_playwright_browser_e2e(
             admin_page.locator("#care-metrics .care-metric").first.wait_for(
                 state="visible", timeout=20000
             )
-            admin_page.goto(
+            # Pure CSKH CRM Admin (without Sales User / System Manager) gets 403 from Frappe CRM
+            # on /crm/* and cskh_sidebar preserves non-200 error pages without false redirect.
+            adm_deal_resp = admin_page.goto(
                 f"{base_url}/crm/data-import/doctype/CRM Deal",
                 wait_until="domcontentloaded",
                 timeout=20000,
             )
-            admin_page.wait_for_url("**/cskh**", timeout=15000)
-            assert urllib.parse.urlsplit(admin_page.url).path == "/cskh"
+            adm_deal_status = adm_deal_resp.status if adm_deal_resp else 0
+            adm_deal_path = urllib.parse.urlsplit(admin_page.url).path
+            assert adm_deal_path == "/cskh" or (
+                adm_deal_status == 403 and admin_page.locator("#app").count() == 0
+            ), (adm_deal_status, admin_page.url)
             admin_ctx.close()
 
             sys_ctx = browser.new_context(
@@ -1801,11 +1820,14 @@ def run_playwright_browser_e2e(
                 "08-frappe-real-desktop-bod-overview.png",
                 "DỮ LIỆU GIẢ LẬP — BAN GIÁM ĐỐC (Tổng hợp Toàn hệ thống · 0 PII)",
             )
-            bod_page.goto(
+            bod_deal_resp = bod_page.goto(
                 f"{base_url}/crm/deals", wait_until="domcontentloaded", timeout=20000
             )
-            bod_page.wait_for_url("**/cskh**", timeout=15000)
-            assert urllib.parse.urlsplit(bod_page.url).path == "/cskh"
+            bod_deal_status = bod_deal_resp.status if bod_deal_resp else 0
+            bod_deal_path = urllib.parse.urlsplit(bod_page.url).path
+            assert bod_deal_path == "/cskh" or (
+                bod_deal_status == 403 and bod_page.locator("#app").count() == 0
+            ), (bod_deal_status, bod_page.url)
             bod_ctx.close()
         finally:
             browser.close()

@@ -61,6 +61,21 @@
 	])
 	const SALES_SUBTITLES = new Set(['Deal', 'CRM Deal', 'Giao dịch CRM'])
 	const SALES_SETTINGS_PAGES = new Set(['Dashboard', 'Trang tổng quan'])
+	const ONBOARDING_SALES_STEPS = new Set([
+		'Create your first deal',
+		'Convert lead to deal',
+		'Convert Lead to Deal',
+		'Change deal status',
+		'Change Deal Status',
+		'Tạo Giao dịch CRM đầu tiên',
+		'Tạo giao dịch CRM đầu tiên',
+		'Tạo giao dịch đầu tiên của bạn',
+		'Tạo Giao dịch CRM đầu tiên của bạn',
+		'Chuyển hồ sơ liên hệ thành Giao dịch CRM',
+		'Chuyển Hồ sơ liên hệ thành Giao dịch CRM',
+		'Thay đổi trạng thái Giao dịch CRM',
+		'Đổi trạng thái Giao dịch CRM',
+	])
 	const DEAL_TAB_PREFIXES = ['Deals', 'Giao dịch CRM']
 	const DEAL_DIALOG_TITLES = new Set([
 		'Convert to Deal',
@@ -282,6 +297,48 @@
 			if (SALES_SETTINGS_PAGES.has(page)) {
 				markElementBlocked(item)
 			}
+		}
+	}
+
+	function readElementText(el) {
+		if (!el) return ''
+		const direct = normalizeText(el.textContent)
+		if (direct) return direct
+		const children = el.children
+		if (!children || !children.length) return ''
+		const parts = []
+		for (let i = 0; i < children.length; i += 1) {
+			const childText = readElementText(children[i])
+			if (childText) parts.push(childText)
+		}
+		return normalizeText(parts.join(' '))
+	}
+
+	function isSingleOnboardingStepWrapper(parent, stepLabel) {
+		if (!parent || parent.tagName !== 'DIV') return false
+		if (parent.hasAttribute('id') || parent.hasAttribute('role')) return false
+		const parentText = readElementText(parent)
+		if (parentText === stepLabel) return true
+		if (parentText.indexOf(stepLabel) !== 0) return false
+		const rest = normalizeText(parentText.slice(stepLabel.length))
+		return rest === 'Skip' || rest === 'Bỏ qua'
+	}
+
+	function syncOnboardingItems(scope) {
+		const candidates = scope.querySelectorAll('span, div, p, button')
+		for (let i = 0; i < candidates.length; i += 1) {
+			const node = candidates[i]
+			if (node.getAttribute(BLOCKED_ATTR) === '1') continue
+			if (node.closest('[' + BLOCKED_ATTR + '="1"]')) continue
+			const stepLabel = readElementText(node)
+			if (!ONBOARDING_SALES_STEPS.has(stepLabel)) continue
+			let row = node
+			for (let depth = 0; depth < 3; depth += 1) {
+				const parent = row.parentElement
+				if (!isSingleOnboardingStepWrapper(parent, stepLabel)) break
+				row = parent
+			}
+			markElementBlocked(row)
 		}
 	}
 
@@ -890,6 +947,11 @@
 
 		function interceptPointerSalesTarget(event) {
 			if (!event || !event.target || typeof event.target.closest !== 'function') return
+			if (event.target.closest('[' + BLOCKED_ATTR + '="1"]')) {
+				event.preventDefault()
+				event.stopImmediatePropagation()
+				return
+			}
 			const optionTarget = event.target.closest('[role="option"]')
 			if (optionTarget && isSalesOption(optionTarget)) {
 				event.preventDefault()
@@ -1006,6 +1068,7 @@
 			if (!config.workerCare || !isCrmPath(win) || navigatingAway || guardCurrentRoute()) return 0
 			const scope = root || doc
 			ensureThemeStylesheet()
+			syncOnboardingItems(scope)
 			removeSalesControls(win, scope)
 			syncSettingsItems(scope)
 			syncSalesOptions(win, scope)
