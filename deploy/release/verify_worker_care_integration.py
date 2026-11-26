@@ -1007,12 +1007,12 @@ try:
             "do_not_contact": dnc_cnt,
         }
 
-        print(json.dumps({
-            "staff_a": query_expected(["staff.a@mock.local"]),
-            "staff_b": query_expected(["staff.b@mock.local"]),
-            "leader_a": query_expected(["leader.a@mock.local", "staff.a@mock.local", "staff.b@mock.local"]),
-            "all": query_expected(None, is_all=True),
-        }))
+    print(json.dumps({
+        "staff_a": query_expected(["staff.a@mock.local"]),
+        "staff_b": query_expected(["staff.b@mock.local"]),
+        "leader_a": query_expected(["leader.a@mock.local", "staff.a@mock.local", "staff.b@mock.local"]),
+        "all": query_expected(None, is_all=True),
+    }))
 finally:
     frappe.destroy()
 """
