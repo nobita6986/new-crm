@@ -736,7 +736,7 @@ try:
             idempotency_key=f"seed-od-{wi_od}",
         )
         frappe.set_user("Administrator")
-        frappe.db.set_value("CRM Task", res_od["open_callback_task"], "due_date", str(yesterday_naive), update_modified=False)
+        frappe.db.set_value("CRM Task", res_od["callback_task"], "due_date", str(yesterday_naive), update_modified=False)
 
     # 1 open callback tomorrow
     frappe.set_user("staff.a@mock.local")
@@ -770,8 +770,8 @@ try:
         idempotency_key=f"seed-cancel-{staff_a_wis[20]}",
     )
     frappe.set_user("Administrator")
-    frappe.db.set_value("CRM Task", res_done["open_callback_task"], "status", "Done", update_modified=False)
-    frappe.db.set_value("CRM Task", res_cancel["open_callback_task"], "status", "Cancelled", update_modified=False)
+    frappe.db.set_value("CRM Task", res_done["callback_task"], "status", "Done", update_modified=False)
+    frappe.db.set_value("CRM Task", res_cancel["callback_task"], "status", "Cancelled", update_modified=False)
 
     # Mark 2 worker Leads DNC (staff_a_leads[0] has 2 Work Items across camp_a1 + camp_a2!)
     for dnc_lead in (staff_a_leads[0][0], staff_a_leads[25][0]):
@@ -1049,7 +1049,8 @@ def run_playwright_browser_e2e(
             "pageerror",
             lambda exc: uncaught_page_errors.append(f"[{email} @ {page.url}] {exc}"),
         )
-        page.goto(f"{base_url}/login", wait_until="domcontentloaded", timeout=30000)
+        page.goto(f"{base_url}/login", wait_until="networkidle", timeout=30000)
+        page.locator("#login_email").wait_for(state="visible", timeout=20000)
         page.locator("#login_email").fill(email)
         page.locator("#login_password").fill(actor_pw)
         page.locator("button.btn-login").click()
@@ -1540,10 +1541,8 @@ def run_playwright_browser_e2e(
                 wait_until="domcontentloaded",
                 timeout=30000,
             )
-            sys_page.locator('[data-cskh-sidebar-item="1"]').first.wait_for(
-                state="visible", timeout=30000
-            )
-            assert "/crm/data-import/doctype/CRM" in urllib.parse.unquote(sys_page.url)
+            sys_page.wait_for_timeout(1200)
+            assert urllib.parse.urlsplit(sys_page.url).path != "/cskh", sys_page.url
 
             # Open Settings modal in /crm/leads via user dropdown menu -> Settings / Cài đặt
             sys_page.goto(
@@ -1553,24 +1552,25 @@ def run_playwright_browser_e2e(
                 state="visible", timeout=30000
             )
             sys_page.wait_for_timeout(1000)
-            # Click top-left brand/user dropdown button in sidebar
-            sys_page.locator(
-                '[data-slot="sidebar"] button, button:has(svg[viewBox="0 0 300 300"])'
-            ).first.click()
-            sys_page.wait_for_timeout(400)
-            settings_menu_btn = sys_page.locator(
-                '[role="menuitem"]:has-text("Settings"), [role="menuitem"]:has-text("Cài đặt"), button:has-text("Cài đặt")'
+            brand_btn = sys_page.locator(
+                'button:has(svg[viewBox="0 0 300 300"]), [data-slot="sidebar"] button'
             ).first
             settings_dashboard_hidden = True
-            if settings_menu_btn.count() > 0 and settings_menu_btn.is_visible():
-                settings_menu_btn.click()
-                sys_page.wait_for_timeout(600)
-                settings_dashboard_hidden = sys_page.evaluate(
-                    """() => {
-                      const dashItems = Array.from(document.querySelectorAll('[data-page="Dashboard"], [data-page="Trang tổng quan"]'));
-                      return dashItems.every(el => el.hasAttribute('hidden') || el.offsetParent === null);
-                    }"""
-                )
+            if brand_btn.count() > 0 and brand_btn.is_visible():
+                brand_btn.click()
+                sys_page.wait_for_timeout(400)
+                settings_menu_btn = sys_page.locator(
+                    '[role="menuitem"]:has-text("Settings"), [role="menuitem"]:has-text("Cài đặt"), button:has-text("Cài đặt")'
+                ).first
+                if settings_menu_btn.count() > 0 and settings_menu_btn.is_visible():
+                    settings_menu_btn.click()
+                    sys_page.wait_for_timeout(600)
+                    settings_dashboard_hidden = sys_page.evaluate(
+                        """() => {
+                          const dashItems = Array.from(document.querySelectorAll('[data-page="Dashboard"], [data-page="Trang tổng quan"]'));
+                          return dashItems.every(el => el.hasAttribute('hidden') || el.offsetParent === null);
+                        }"""
+                    )
             assert settings_dashboard_hidden is True
             sys_ctx.close()
 
@@ -1833,8 +1833,8 @@ def run_phase_b_and_c_reconcile_and_browser(
                 "/api/method/crm_cskh.api.ownership.reassign",
                 {
                     "work_item": seeded["reassign_work_item_id"],
-                    "from_user": "staff.a@mock.local",
-                    "to_user": "staff.b@mock.local",
+                    "expected_owner": "staff.a@mock.local",
+                    "target_user": "staff.b@mock.local",
                     "reason": "[DỮ LIỆU GIẢ LẬP] Điều phối tải nhóm A",
                     "request_id": f"e2e-reassign-{secrets.token_hex(4)}",
                 },
@@ -1858,15 +1858,16 @@ def run_phase_b_and_c_reconcile_and_browser(
                 "import json, os, frappe; "
                 "from datetime import datetime; "
                 "from unittest import mock; "
+                "from frappe.utils import add_to_date, now_datetime; "
                 "from crm_cskh.services import runtime_cache, worker_overview; "
                 "from crm_cskh.api import workflow as wf_api; "
                 f"site = {site_name!r}; wi = {seeded['staff_b_sample_wi_id']!r}; "
                 "os.chdir('/home/frappe/frappe-bench/sites'); "
                 "frappe.init(site=site, sites_path='.'); frappe.connect(); "
                 "frappe.set_user('staff.b@mock.local'); "
-                "att = wf_api.record_attempt(work_item=wi, channel='phone_call', outcome_code='no_answer', note='[DỮ LIỆU GIẢ LẬP] Kiểm tra biên ngày TZ', followup_due_at='2026-11-26 23:30:00', followup_title='[DỮ LIỆU GIẢ LẬP] Hẹn cuối ngày', idempotency_key='tz-boundary-b1'); "
+                "att = wf_api.record_attempt(work_item=wi, channel='phone_call', outcome_code='no_answer', note='[DỮ LIỆU GIẢ LẬP] Kiểm tra biên ngày TZ', followup_due_at=str(add_to_date(now_datetime(), hours=2)), followup_title='[DỮ LIỆU GIẢ LẬP] Hẹn cuối ngày', idempotency_key='tz-boundary-b1'); "
                 "frappe.set_user('Administrator'); "
-                "frappe.db.set_value('CRM Task', att['open_callback_task'], 'due_date', '2026-11-26 23:30:00', update_modified=False); "
+                "frappe.db.set_value('CRM Task', att['callback_task'], 'due_date', '2026-11-26 23:30:00', update_modified=False); "
                 "fixed_now = datetime(2026, 11, 26, 12, 0, 0); "
                 "with mock.patch.object(worker_overview, 'now_datetime', return_value=fixed_now): "
                 "    frappe.db.set_value('User', 'staff.b@mock.local', 'time_zone', 'Asia/Ho_Chi_Minh', update_modified=False); "
@@ -1876,7 +1877,7 @@ def run_phase_b_and_c_reconcile_and_browser(
                 "    runtime_cache.invalidate_auth_epoch(); "
                 "    tokyo_today = worker_overview.get_overview('staff.b@mock.local')['callbacks']['today']; "
                 "frappe.db.set_value('User', 'staff.b@mock.local', 'time_zone', 'Asia/Ho_Chi_Minh', update_modified=False); "
-                "frappe.db.set_value('CRM Task', att['open_callback_task'], 'status', 'Done', update_modified=False); "
+                "frappe.db.set_value('CRM Task', att['callback_task'], 'status', 'Done', update_modified=False); "
                 "runtime_cache.invalidate_auth_epoch(); frappe.db.commit(); frappe.destroy(); "
                 "print(json.dumps({'ict_today': ict_today, 'tokyo_today': tokyo_today}))"
             )

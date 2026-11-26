@@ -150,7 +150,7 @@ class TestWorkerCareOverview(P2TestCase):
 				followup_title="Hẹn gọi lại",
 				idempotency_key=self.unique_key("ov-att"),
 			)
-			task_id = att["open_callback_task"]
+			task_id = att["callback_task"]
 			self.assertTrue(task_id)
 
 			mid_a = worker_overview.get_overview(self.staff_a)
@@ -194,8 +194,8 @@ class TestWorkerCareOverview(P2TestCase):
 			frappe.set_user(self.admin_user)
 			ownership_api.reassign(
 				work_item=wi_1,
-				from_user=self.staff_a,
-				to_user=self.staff_b,
+				expected_owner=self.staff_a,
+				target_user=self.staff_b,
 				reason="Điều phối tải nhóm A",
 				request_id=self.unique_key("ov-reassign"),
 			)
