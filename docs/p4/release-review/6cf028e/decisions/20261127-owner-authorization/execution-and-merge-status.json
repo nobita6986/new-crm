@@ -1,0 +1,105 @@
+{
+  "status": "PREPARATION_COMPLETED_MERGES_BLOCKED_BY_P3_SECURITY_FINDING",
+  "recorded_at_utc": "2026-11-27T08:47:06.620921+00:00",
+  "main_sha": "467830195358b2431ac772486530ab935887a518",
+  "main_changed": false,
+  "pr20": {
+    "url": "https://github.com/nobita6986/new-crm/pull/20",
+    "state": "OPEN",
+    "draft": true,
+    "head_sha": "4562ecb6b7e7eec3aae7ddf0e48632d899cf09a4",
+    "merge_state": "UNSTABLE",
+    "reviews": [],
+    "checks": [
+      {
+        "name": "p3",
+        "status": "COMPLETED",
+        "conclusion": "FAILURE",
+        "detailsUrl": "https://github.com/nobita6986/new-crm/actions/runs/45967068984/job/140398180219"
+      },
+      {
+        "name": "p0",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/nobita6986/new-crm/actions/runs/45967068626/job/140398178862"
+      },
+      {
+        "name": "p1",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/nobita6986/new-crm/actions/runs/45967068675/job/140398178910"
+      },
+      {
+        "name": "p2",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/nobita6986/new-crm/actions/runs/45967071592/job/140398190108"
+      },
+      {
+        "name": "PR isolation, locks, lint & static contracts",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/nobita6986/new-crm/actions/runs/45967068643/job/140398178802"
+      },
+      {
+        "name": "Two clean builds (--no-cache) Python constraint & hash proof (REL-03)",
+        "status": "COMPLETED",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://github.com/nobita6986/new-crm/actions/runs/45967068643/job/140398354905"
+      },
+      {
+        "name": "Build-once, SBOM, strict/PR scan & same-digest promotion (loopback OCI)",
+        "status": "IN_PROGRESS",
+        "conclusion": "",
+        "detailsUrl": "https://github.com/nobita6986/new-crm/actions/runs/45967068643/job/140398354806"
+      }
+    ]
+  },
+  "pr19": {
+    "url": "https://github.com/nobita6986/new-crm/pull/19",
+    "base_preserved": true,
+    "state": "OPEN"
+  },
+  "pr18": {
+    "url": "https://github.com/nobita6986/new-crm/pull/18",
+    "state": "OPEN",
+    "not_authorized_for_merge": true
+  },
+  "ci_coverage_repair": {
+    "commit": "4562ecb6b7e7eec3aae7ddf0e48632d899cf09a4",
+    "scope": [
+      ".github/workflows/p3.yml",
+      "deploy/p2/ui_test_inventory.json"
+    ],
+    "image_inputs_changed": false
+  },
+  "merge_blocker": "F-P4-LEGACY-DEV-PDF-CSS-SSRF-01",
+  "actual_merged_source_artifact_equivalence": "NOT_YET_APPLICABLE_NO_MERGE",
+  "new_candidate_rebuilt_or_signed": false,
+  "key_loaded_or_used": false,
+  "staging_or_production_deployed": false,
+  "slo_criteria_approval_recorded": true,
+  "uat_roles_requiring_real_people": {
+    "BOD": null,
+    "CRM_ADMIN": null,
+    "TEAM_LEAD": null,
+    "STAFF": null
+  },
+  "other_people_to_designate": {
+    "repository_environment_configurator": null,
+    "official_key_custodian_loader": null,
+    "signing_environment_reviewer": null,
+    "staging_operator": null,
+    "primary_operator": null
+  },
+  "next_required_work": "Resolve P3 finding with runtime-scope evidence; keep accepted candidate frozen until any artifact-impacting delta is assessed.",
+  "repository_control_snapshot": {
+    "main_protected": false,
+    "active_branch_rules": [],
+    "configured_required_status_checks": [],
+    "github_reviews": [],
+    "bypass_used": false,
+    "github_approval_fabricated": false,
+    "red_security_check_still_blocks_this_authorized_execution": true
+  }
+}

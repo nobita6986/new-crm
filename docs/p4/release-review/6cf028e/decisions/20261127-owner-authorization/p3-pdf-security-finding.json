@@ -1,0 +1,67 @@
+{
+  "finding_id": "F-P4-LEGACY-DEV-PDF-CSS-SSRF-01",
+  "status": "OPEN_MERGE_BLOCKER",
+  "severity": "HIGH",
+  "description": "Legacy DEV P3 workflow executed all 56 declared backend tests; 54 PASS and 2 PDF security tests observed forbidden /evil.css network requests. Do not suppress or skip these tests.",
+  "foundation_head": "4562ecb6b7e7eec3aae7ddf0e48632d899cf09a4",
+  "actual_tested_pull_request_merge_sha": "70fcf2d4aecafa206dc1254208e8f1cedf99c1ec",
+  "run_id": 45967068984,
+  "job_id": 140398180219,
+  "artifact_id": 15183328073,
+  "run_url": "https://github.com/nobita6986/new-crm/actions/runs/45967068984",
+  "job_url": "https://github.com/nobita6986/new-crm/actions/runs/45967068984/job/140398180219",
+  "legacy_environment": {
+    "frappe_sha": "d2efa79657ba5c1abf96098b3bfacc199517d57e",
+    "crm_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+    "bench_image": "frappe/bench:v5.31.0@sha256:3b75943bf00a1db92723d99ec34fbfa92f4b67b9b643ae1e96750899b7fbd980"
+  },
+  "failed_cases": [
+    {
+      "name": "test_first_pdf_call_in_fresh_process_enforces_security_across_http_rq_and_cli_paths",
+      "type": "AssertionError",
+      "message": "Lists differ: ['/evil.css', '/evil.css'] != []\n\nFirst list contains 2 additional elements.\nFirst extra element 0:\n'/evil.css'\n\n- ['/evil.css', '/evil.css']\n+ [] : First-use subprocess leaked SSRF/redirect requests: ['/evil.css', '/evil.css']",
+      "trace": "Traceback (most recent call last):\n  File \"/src/apps/crm_cskh/crm_cskh/tests/test_p3_pdf_security_and_worker.py\", line 901, in test_first_pdf_call_in_fresh_process_enforces_security_across_http_rq_and_cli_paths\n    self.assertEqual(hits, [], f\"First-use subprocess leaked SSRF/redirect requests: {hits}\")\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Lists differ: ['/evil.css', '/evil.css'] != []\n\nFirst list contains 2 additional elements.\nFirst extra element 0:\n'/evil.css'\n\n- ['/evil.css', '/evil.css']\n+ [] : First-use subprocess leaked SSRF/redirect requests: ['/evil.css', '/evil.css']\n"
+    },
+    {
+      "name": "test_wkhtmltopdf_blocks_ssrf_redirects_and_local_files_while_preserving_vietnamese_pdf",
+      "type": "AssertionError",
+      "message": "Lists differ: ['/evil.css'] != []\n\nFirst list contains 1 additional elements.\nFirst extra element 0:\n'/evil.css'\n\n- ['/evil.css']\n+ [] : wkhtmltopdf emitted unexpected network/redirect hits: ['/evil.css']",
+      "trace": "Traceback (most recent call last):\n  File \"/src/apps/crm_cskh/crm_cskh/tests/test_p3_pdf_security_and_worker.py\", line 220, in test_wkhtmltopdf_blocks_ssrf_redirects_and_local_files_while_preserving_vietnamese_pdf\n    self.assertEqual(hits, [], f\"wkhtmltopdf emitted unexpected network/redirect hits: {hits}\")\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Lists differ: ['/evil.css'] != []\n\nFirst list contains 1 additional elements.\nFirst extra element 0:\n'/evil.css'\n\n- ['/evil.css']\n+ [] : wkhtmltopdf emitted unexpected network/redirect hits: ['/evil.css']\n"
+    }
+  ],
+  "legacy_junit_sha256": "4767a87a36359d802e2b6d1dc42c35ecdf67365e88437b83afe2b985a2be4a3e",
+  "artifact_file_checksums_verified": 24,
+  "existing_candidate_counter_evidence": {
+    "source_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+    "image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+    "run_id": 45953937721,
+    "artifact_id": 15178578168,
+    "junit_sha256": "31ad7c7307050899e91e6b03ccbdd2b20339921cb37a7a08880e229ba26ced40",
+    "frappe_version": "15.126.0",
+    "frappe_sha": "53bae3ef2550ca96320f036f581446783cd11b72",
+    "same_cases": [
+      {
+        "name": "test_first_pdf_call_in_fresh_process_enforces_security_across_http_rq_and_cli_paths",
+        "passed": true
+      },
+      {
+        "name": "test_wkhtmltopdf_blocks_ssrf_redirects_and_local_files_while_preserving_vietnamese_pdf",
+        "passed": true
+      }
+    ]
+  },
+  "candidate_6599356c_affected": "NOT_DEMONSTRATED_BY_THIS_LEGACY_DEV_FAILURE",
+  "pdf_service_and_test_source_delta_between_baseline_and_integration": [],
+  "required_delta_investigation": [
+    "Reproduce and identify whether old DEV upstream/PDF engine integration or supported application runtime needs correction.",
+    "If changing only CI harness/dependencies, prove its runtime contract and keep full 56-method coverage; rerun affected P3 checks and verify no release image inputs changed.",
+    "If changing app/runtime/build recipe/locks, stop binding existing image to changed source, produce a new candidate and scoped regression/security/migration/performance verification.",
+    "After a passing correction, recheck PR20 conditions; merge PR20 before retargeting/reviewing PR19."
+  ],
+  "prohibited_workarounds": [
+    "Skip the two PDF cases",
+    "Reduce inventory count or SSRF assertions",
+    "Override red check or bypass repository controls",
+    "Claim new candidate is vulnerable or safe on the basis of legacy failure alone"
+  ]
+}

@@ -47,6 +47,17 @@ Chưa gán người. Owner cần chỉ định họ tên và kênh an toàn củ
 
 [artifact-source-projection.json](artifact-source-projection.json) phân biệt dự kiến với merge thực tế. PR #18 chưa vào main: không tuyên bố root tree bằng integration. Ngoài công cụ offline còn có hai thay đổi CI để bổ sung coverage; runtime/build inputs không đổi.
 
-Các check mới của PR #20 đã phát hiện P2 inventory thiếu hai test UI, P3 runner bỏ sót 17 test thuộc hai module. Commit `4562ecb6b7e7eec3aae7ddf0e48632d899cf09a4` chỉ sửa hai tệp kê khai/chạy test; không giảm tiêu chí, không đổi apps/recipe/locks, không rebuild candidate. Chờ CI mới hoàn tất trước merge.
+Các check mới của PR #20 đã phát hiện P2 inventory thiếu hai test UI, P3 runner bỏ sót 17 test thuộc hai module. Commit `4562ecb6b7e7eec3aae7ddf0e48632d899cf09a4` chỉ sửa hai tệp kê khai/chạy test; không giảm tiêu chí, không đổi apps/recipe/locks, không rebuild candidate. P0/P1/P2 mới đã PASS. P3 chạy đủ 56 test nhưng chỉ 54 PASS: hai ca PDF ghi nhận request bị cấm tới `/evil.css`. Chưa merge.
 
 Kết quả và SHA main thực tế sẽ được ghi trong biên nhận thực thi, không dùng cây dự kiến làm chứng cứ đã merge.
+
+
+## Biên nhận thực thi và finding mới
+
+[execution-and-merge-status.json](execution-and-merge-status.json) ghi main thực tế vẫn `467830195358b2431ac772486530ab935887a518`; #20 còn mở Draft, #19 chưa đổi base, #18 chưa merge.
+
+Finding [F-P4-LEGACY-DEV-PDF-CSS-SSRF-01](p3-pdf-security-finding.json) chặn merge. Legacy DEV dùng Frappe `d2efa796…`; image release dùng Frappe 15.126.0 / `53bae3ef…`. Cùng hai test đã PASS trong artifact kiểm định image `6599356c…`; khác môi trường chưa phải bằng chứng candidate mới mắc lỗi. PDF service/test không có diff giữa baseline và Worker Care.
+
+Delta cần xử lý: tái hiện và xác định hợp đồng runtime được hỗ trợ; sửa harness/dependency CI nếu có căn cứ hoặc sửa runtime và tạo candidate mới khi cần. Không bỏ test, không nới kiểm tra SSRF và không merge qua check đỏ. Sau khi P3 đạt mới tiếp tục #20 → đổi base/kiểm phạm vi #19.
+
+Các check P4 còn chạy tại lúc ghi nhận được giữ là IN_PROGRESS, không gán PASS và không hủy job.

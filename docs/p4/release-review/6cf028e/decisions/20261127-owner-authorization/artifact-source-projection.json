@@ -1,5 +1,5 @@
 {
-  "status": "PROJECTION_ONLY_MERGES_NOT_YET_EXECUTED",
+  "status": "PROJECTION_ONLY_MERGES_BLOCKED_BY_P3_FINDING",
   "candidate_source": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
   "candidate_image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
   "foundation_head_after_ci_coverage_repair": "4562ecb6b7e7eec3aae7ddf0e48632d899cf09a4",
@@ -31,11 +31,13 @@
     "D\tdeploy/release/offline_signing/verify_offline_signed_candidate.py"
   ],
   "runtime_recipe_and_lock_delta": [],
-  "actual_main_sha": null,
+  "actual_main_sha": "467830195358b2431ac772486530ab935887a518",
   "offline_pr18_not_merged": true,
   "additional_ci_only_delta": [
     ".github/workflows/p3.yml",
     "deploy/p2/ui_test_inventory.json"
   ],
-  "note": "Verify actual merge tree again after each merge. This projection is not a CI verdict for an unexecuted merge SHA."
+  "note": "Verify actual merge tree again after each merge. This projection is not a CI verdict for an unexecuted merge SHA.",
+  "actual_main_contains_worker_care": false,
+  "actual_main_contains_p4_foundation": false
 }
