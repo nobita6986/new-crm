@@ -2487,7 +2487,7 @@ def run_playwright_browser_e2e(
             sys_page.wait_for_url("**/cskh**", timeout=15000)
             assert urllib.parse.urlsplit(sys_page.url).path == "/cskh", sys_page.url
 
-            # Open Settings modal in /crm/leads via UserDropdown button -> Settings / Cài đặt (non-vacuous!)
+            # Open Settings modal in /crm/leads via Command Palette -> Settings -> General (non-vacuous!)
             sys_page.goto(
                 f"{base_url}/crm/leads", wait_until="domcontentloaded", timeout=30000
             )
@@ -2495,23 +2495,45 @@ def run_playwright_browser_e2e(
                 state="visible", timeout=30000
             )
             sys_page.wait_for_timeout(1000)
-            user_dropdown_btn = sys_page.locator(
-                "button:has(.lucide-chevron-down)"
+            sys_palette_input = sys_page.locator(
+                '.crm-command-palette input, [role="dialog"] [role="combobox"], [role="dialog"] input'
             ).first
-            user_dropdown_btn.wait_for(state="visible", timeout=15000)
-            user_dropdown_btn.click()
-            settings_menu_btn = sys_page.locator(
-                '[role="menuitem"]:has-text("Settings"), [role="menuitem"]:has-text("Cài đặt")'
-            ).first
-            settings_menu_btn.wait_for(state="visible", timeout=10000)
-            settings_menu_btn.click()
-            sys_page.locator('[role="dialog"] [data-page]').first.wait_for(
+            sys_page.keyboard.press("Control+k")
+            try:
+                sys_palette_input.wait_for(state="visible", timeout=3500)
+            except Exception:
+                sys_page.keyboard.press("Meta+k")
+                sys_palette_input.wait_for(state="visible", timeout=10000)
+            sys_page.wait_for_timeout(300)
+            sys_palette_input.fill("Settings")
+            sys_page.wait_for_timeout(300)
+            sys_page.keyboard.press("Enter")
+            sys_page.wait_for_timeout(400)
+            palette_settings_children = sys_page.evaluate(
+                """() => {
+                  const root = document.querySelector('.crm-command-palette');
+                  if (!root) return [];
+                  return Array.from(root.querySelectorAll('[role="option"]'))
+                    .filter(o => !o.hasAttribute('hidden') && o.offsetParent !== null)
+                    .map(o => (o.innerText || '').replace(/\\s+/g, ' ').trim());
+                }"""
+            )
+            for child_txt in palette_settings_children:
+                assert child_txt.lower() not in (
+                    "dashboard",
+                    "trang tổng quan",
+                    "bảng điều khiển",
+                ), palette_settings_children
+            sys_palette_input.fill("General")
+            sys_page.wait_for_timeout(300)
+            sys_page.keyboard.press("Enter")
+            sys_page.locator("[data-page]").first.wait_for(
                 state="visible", timeout=15000
             )
             sys_page.wait_for_timeout(500)
             settings_audit = sys_page.evaluate(
                 """() => {
-                  const allPages = Array.from(document.querySelectorAll('[role="dialog"] [data-page]'));
+                  const allPages = Array.from(document.querySelectorAll('[data-page]'));
                   const dashItems = allPages.filter(el => {
                     const p = (el.getAttribute('data-page') || '').trim();
                     return p === 'Dashboard' || p === 'Trang tổng quan' || p === 'Bảng điều khiển';
