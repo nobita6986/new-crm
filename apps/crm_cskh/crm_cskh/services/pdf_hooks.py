@@ -15,13 +15,14 @@ Design invariants:
   2. Hook call cost (`call_ms`) on non-PDF requests/jobs is near-zero: registers an
      idempotent `sys.meta_path` post-exec loader guard (`_CskhPdfEngineMetaPathFinder`)
      under a leaf `threading.RLock` without importing any PDF engine.
-  3. Pre-first-use guarantee: the instant any code path imports `pdfkit`, `frappe.utils.pdf`,
-     `frappe.utils.weasyprint`, or `weasyprint`, `_CskhPostExecLoaderWrapper.exec_module`
-     patches that module *before* the `import` statement returns or binds attributes in the
-     caller. Any target already present in `sys.modules` when `ensure_pdf_runtime_hooks()`
-     runs is patched immediately without importing unloaded targets.
-  4. Deadlock-free concurrency: `_HOOKS_LOCK` is a strict leaf lock (no `import` ever runs
-     while holding `_HOOKS_LOCK`), cooperating cleanly with Python's per-module import locks.
+	3. Pre-first-use guarantee: the instant any code path imports `cssutils`, `pdfkit`,
+	   `frappe.utils.pdf`, `frappe.utils.weasyprint`, or `weasyprint`,
+	   `_CskhPostExecLoaderWrapper.exec_module` patches that module *before* the `import`
+	   statement returns or binds attributes in the caller. Any target already present in
+	   `sys.modules` when `ensure_pdf_runtime_hooks()` runs is patched immediately without
+	   importing unloaded targets.
+	4. Deadlock-free concurrency: `_HOOKS_LOCK` is a strict leaf lock (no `import` ever runs
+	   while holding `_HOOKS_LOCK`), cooperating cleanly with Python's per-module import locks.
 """
 
 from __future__ import annotations
@@ -31,6 +32,7 @@ import sys
 import threading
 
 PDF_ENGINE_TARGET_MODULES: tuple[str, ...] = (
+	"cssutils",
 	"pdfkit",
 	"frappe.utils.pdf",
 	"frappe.utils.weasyprint",

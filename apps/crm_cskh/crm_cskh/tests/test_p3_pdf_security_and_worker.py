@@ -902,7 +902,10 @@ finally:
 
 				# Path B: Supported CLI `bench --site <site> execute frappe.utils.pdf.get_pdf`
 				cli_html = (
-					f'<html><body><p>CLI PDF</p><img src="{probe_origin}/ssrf.png"/>'
+					f'<html><head><style>@import "{probe_origin}/evil.css"; '
+					f'@import url("{probe_origin}/redirect"); '
+					'@import "file:///etc/passwd";</style></head>'
+					f'<body><p>CLI PDF</p><img src="{probe_origin}/ssrf.png"/>'
 					f'<img src="{probe_origin}/redirect"/><img src="file:///etc/hosts"/></body></html>'
 				)
 				p_cli = subprocess.run(
@@ -1032,3 +1035,148 @@ print("CONC_FIRST_JSON:" + json.dumps({
 				self.assertTrue(item["ok_second"], payload)
 			self.assertEqual(payload["wrap_install_count"], 1, payload)
 			self.assertEqual(hits, [], f"Concurrent PDF workers leaked SSRF hits: {hits}")
+
+	def test_cssutils_and_print_style_preprocessing_block_import_ssrf_redirects_and_files(self):
+		"""`frappe.utils.pdf` print-style extraction & `cssutils` must block `@import` SSRF, redirects & files (`F-P4-LEGACY-DEV-PDF-CSS-SSRF-01`)."""
+		import cssutils
+		import frappe.utils.pdf as frappe_pdf
+
+		sites_dir = Path(getattr(frappe.local, "sites_path", ".")).resolve()
+		site_name = str(frappe.local.site)
+		pub_css_file = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "cskh-ut-print-margin.css",
+				"is_private": 0,
+				"content": b".print-format { margin-top: 23mm; page-size: A4; }",
+			}
+		).insert(ignore_permissions=True)
+		frappe.db.commit()
+
+		try:
+			with _ephemeral_ssrf_and_redirect_server() as (probe_origin, hits):
+				# 1. Direct `read_options_from_html` / `get_print_format_styles` preprocessing before `pdfkit.from_string`
+				raw_html = (
+					"<html><head>"
+					f'<base href="{probe_origin}/">'
+					f'<link rel="stylesheet" href="{probe_origin}/evil.css">'
+					"<style>"
+					f'@import "{probe_origin}/evil.css"; '
+					f'@import url("{probe_origin}/redirect"); '
+					'@import "file:///etc/passwd"; '
+					f'@import "//{site_name}/assets/frappe/css/nonexistent.css"; '
+					f'@import "{pub_css_file.file_url}";'
+					"</style></head><body>"
+					f'<div id="header-html"><div>TIÊU ĐỀ<img src="{probe_origin}/redirect"/></div></div>'
+					"<p>Nội dung kiểm định tiền xử lý CSS tiếng Việt</p>"
+					"</body></html>"
+				)
+				rewritten_html, html_opts = frappe_pdf.read_options_from_html(raw_html)
+				try:
+					self.assertEqual(
+						hits,
+						[],
+						f"Print-style HTML/CSS preprocessing leaked SSRF/redirect requests: {hits}",
+					)
+					self.assertEqual(html_opts.get("margin-top"), "23mm")
+					self.assertEqual(html_opts.get("page-size"), "A4")
+					self.assertNotIn("/evil.css", rewritten_html)
+					hf_temp = html_opts.get("header-html")
+					if isinstance(hf_temp, str) and os.path.isfile(hf_temp):
+						hf_on_disk = Path(hf_temp).read_text(encoding="utf-8")
+						self.assertNotIn(probe_origin, hf_on_disk)
+				finally:
+					frappe_pdf.cleanup(html_opts)
+
+				# 2. Direct `cssutils` entrypoints (`parseString`, `parseUrl`, `CSSParser`, `parseFile`)
+				cssutils.parseString(
+					f'@import "{probe_origin}/evil.css"; '
+					f'@import url("{probe_origin}/redirect"); '
+					'@import "file:///etc/hosts";'
+				)
+				cssutils.parseUrl(f"{probe_origin}/evil.css")
+				custom_parser = cssutils.CSSParser(fetcher=lambda u: ("utf-8", f"/*{u}*/"))
+				custom_parser.parseString(f'@import "{probe_origin}/evil.css";')
+				with self.assertRaises(PermissionError):
+					cssutils.parseFile("/etc/hosts")
+				with self.assertRaises(PermissionError):
+					cssutils.CSSParser().parseFile("/etc/hosts")
+				self.assertEqual(hits, [], f"Direct cssutils calls leaked SSRF/redirect requests: {hits}")
+
+				# 3. Cold fresh subprocess importing `cssutils` BEFORE `frappe.utils.pdf`
+				cold_css_py = r"""
+import json, os, sys
+import frappe
+
+site, sites_dir, probe_origin, pub_css_url = sys.argv[1:5]
+os.chdir(sites_dir)
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    from crm_cskh.services import pdf_hooks
+    pdf_hooks.ensure_pdf_runtime_hooks()
+    pre = {k: (k in sys.modules) for k in ("cssutils", "frappe.utils.pdf", "pdfkit", "weasyprint")}
+    from cssutils import CSSParser, parseFile, parseString
+    parseString(f'@import "{probe_origin}/evil.css"; @import url("{probe_origin}/redirect");')
+    blocked_file = False
+    try:
+        parseFile("/etc/hosts")
+    except PermissionError:
+        blocked_file = True
+    sheet = CSSParser().parseString(f'@import "{pub_css_url}";')
+    from frappe.utils.pdf import get_pdf
+    pdf_bytes = get_pdf(
+        f'<html><head><style>@import "{probe_origin}/evil.css"; '
+        f'@import "{pub_css_url}"; '
+        'body { font-family: "DejaVu Sans", sans-serif; }</style></head>'
+        '<body><p>Kiểm chứng tiến trình lạnh Đặng Quốc Cường</p></body></html>'
+    )
+    print("COLD_CSSUTILS_JSON:" + json.dumps({
+        "pre": pre,
+        "blocked_file": blocked_file,
+        "css_rules_len": len(list(sheet.cssRules)),
+        "valid_pdf": pdf_bytes.startswith(b"%PDF-1.") and b"%%EOF" in pdf_bytes[-128:],
+    }))
+finally:
+    frappe.destroy()
+"""
+				p_cold = subprocess.run(
+					[
+						sys.executable,
+						"-c",
+						cold_css_py,
+						site_name,
+						str(sites_dir),
+						probe_origin,
+						pub_css_file.file_url,
+					],
+					capture_output=True,
+					text=True,
+					timeout=60,
+					check=False,
+				)
+				self.assertEqual(
+					p_cold.returncode,
+					0,
+					f"Cold cssutils subprocess failed:\n{p_cold.stderr}\n{p_cold.stdout}",
+				)
+				cold_res = json.loads(
+					[
+						ln[len("COLD_CSSUTILS_JSON:") :]
+						for ln in p_cold.stdout.splitlines()
+						if ln.startswith("COLD_CSSUTILS_JSON:")
+					][-1]
+				)
+				self.assertEqual(
+					cold_res["pre"],
+					{"cssutils": False, "frappe.utils.pdf": False, "pdfkit": False, "weasyprint": False},
+				)
+				self.assertTrue(cold_res["blocked_file"])
+				self.assertGreaterEqual(int(cold_res["css_rules_len"]), 1)
+				self.assertTrue(cold_res["valid_pdf"])
+				self.assertEqual(hits, [], f"Cold cssutils subprocess leaked SSRF/redirect hits: {hits}")
+		finally:
+			frappe.set_user("Administrator")
+			if frappe.db.exists("File", pub_css_file.name):
+				frappe.delete_doc("File", pub_css_file.name, force=True, ignore_permissions=True)
+			frappe.db.commit()
