@@ -1,0 +1,20 @@
+{
+  "status": "PASS",
+  "measurement_executed": false,
+  "approval_document_validation": {
+    "approval_status": "OWNER_APPROVED",
+    "slo_spec_sha256_bound": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+    "approved_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+    "approved_profiles": [
+      "staging_vps_capped"
+    ],
+    "owner_approved_for_profile": true,
+    "owner_signoff": {
+      "approved_by": "T0 — current chat user; personal name not supplied",
+      "approved_at_utc": "2026-11-27T08:40:14.242041+00:00",
+      "decision_reference": "T0-20261127-WORKER-CARE-INTEGRATION-PROTECTED-SIGNING-STAGING-CRITERIA / owner-source.md sha256:e003805084d8b1507ff944be242803c945f63add7827003a6c15159e67845164"
+    }
+  },
+  "resource_condition_still_required": true,
+  "staging_deployment_authorized": false
+}

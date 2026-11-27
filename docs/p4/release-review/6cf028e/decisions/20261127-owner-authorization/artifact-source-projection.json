@@ -1,0 +1,41 @@
+{
+  "status": "PROJECTION_ONLY_MERGES_NOT_YET_EXECUTED",
+  "candidate_source": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+  "candidate_image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+  "foundation_head_after_ci_coverage_repair": "4562ecb6b7e7eec3aae7ddf0e48632d899cf09a4",
+  "worker_care_head": "c0f4debece35f907c15ea12d07368effa3905244",
+  "projected_tree_after_pr20_then_pr19": "dc5d9e6850c36183871b10598f905e421e7b83be",
+  "apps_tree": "3a4f3d0ea036c814ae352c45b6b2f07fe33c1185",
+  "crm_cskh_tree": "471b7925d35d4aa7de154df9cb57aab24bf2ca19",
+  "full_root_tree_equal_to_candidate": false,
+  "delta_from_candidate": [
+    "M\t.github/workflows/p3.yml",
+    "D\t.github/workflows/p4-offline-signed-verify.yml",
+    "M\tdeploy/p2/ui_test_inventory.json",
+    "D\tdeploy/release/offline_signing/bundle/SHA256SUMS.txt",
+    "D\tdeploy/release/offline_signing/bundle/build-manifest.json",
+    "D\tdeploy/release/offline_signing/bundle/cve-exceptions.json",
+    "D\tdeploy/release/offline_signing/bundle/image-inspect-summary.json",
+    "D\tdeploy/release/offline_signing/bundle/official-release-signing.pub",
+    "D\tdeploy/release/offline_signing/bundle/pyjwt-METADATA.txt",
+    "D\tdeploy/release/offline_signing/bundle/release-manifest.envelope.json",
+    "D\tdeploy/release/offline_signing/bundle/release-manifest.json",
+    "D\tdeploy/release/offline_signing/bundle/release-manifest.json.sig",
+    "D\tdeploy/release/offline_signing/bundle/sbom.cyclonedx.json",
+    "D\tdeploy/release/offline_signing/bundle/sbom.spdx.json",
+    "D\tdeploy/release/offline_signing/bundle/security-scan-strict.json",
+    "D\tdeploy/release/offline_signing/bundle/trivy-image.json",
+    "D\tdeploy/release/offline_signing/policy_proposal.json",
+    "D\tdeploy/release/offline_signing/test_offline_signed_candidate.py",
+    "D\tdeploy/release/offline_signing/verify_live_trivy_freshness.py",
+    "D\tdeploy/release/offline_signing/verify_offline_signed_candidate.py"
+  ],
+  "runtime_recipe_and_lock_delta": [],
+  "actual_main_sha": null,
+  "offline_pr18_not_merged": true,
+  "additional_ci_only_delta": [
+    ".github/workflows/p3.yml",
+    "deploy/p2/ui_test_inventory.json"
+  ],
+  "note": "Verify actual merge tree again after each merge. This projection is not a CI verdict for an unexecuted merge SHA."
+}

@@ -1,0 +1,52 @@
+{
+  "decision_id": "T0-20261127-WORKER-CARE-INTEGRATION-PROTECTED-SIGNING-STAGING-CRITERIA",
+  "recorded_at_utc": "2026-11-27T08:40:14.242041+00:00",
+  "source": {
+    "type": "DIRECT_USER_CHAT_INSTRUCTION",
+    "path": "owner-source.md",
+    "sha256": "e003805084d8b1507ff944be242803c945f63add7827003a6c15159e67845164",
+    "actor": "CURRENT_CHAT_USER_T0",
+    "personal_name_provided": false,
+    "github_identity_asserted": null,
+    "message_timestamp_available": false
+  },
+  "authorized": {
+    "merge_order": [
+      20,
+      19
+    ],
+    "merge_condition": "Repository checks, review and protection satisfied; no bypass",
+    "source_binding": {
+      "source_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+      "image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+      "preserve_image": true,
+      "verify_runtime_recipe_locks_against_merge": true
+    },
+    "signing_preparation": {
+      "method": "PROTECTED_P4_RELEASE_WORKFLOW",
+      "pinned_ref": "codex/p4-worker-care-integration",
+      "expected_ref_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+      "deploy_to_staging": false
+    },
+    "staging_slo_criteria": {
+      "version": "1.0.0",
+      "profile": "staging_vps_capped",
+      "variant": "staging_vps_capped_b_plus_2_5vcpu",
+      "spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+      "config_sha256": "530765c275067dc08bef704cc316c22683376c850b32cde5546e52b9c0d302a7",
+      "condition": "Resource preflight must pass before official VPS measurement"
+    },
+    "readonly_preflight": true
+  },
+  "not_authorized": {
+    "offline_amendment": true,
+    "merge_pr18": true,
+    "official_key_loading_or_use_without_designated_authorized_actor": true,
+    "staging_deployment": true,
+    "production_deployment": true,
+    "production_sla_commitment": true,
+    "claim_new_vps_g18_pass": true,
+    "sign_as_uat_humans_or_owner": true
+  },
+  "note": "Transcript of explicit user authorization, not an assistant-generated Owner signature or GitHub review."
+}

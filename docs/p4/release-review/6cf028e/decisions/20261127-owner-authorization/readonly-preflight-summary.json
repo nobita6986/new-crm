@@ -1,0 +1,53 @@
+{
+  "status": "READ_ONLY_SNAPSHOT_CAPTURED_CAPACITY_CLEARANCE_PENDING",
+  "captured_at_utc": "2026-11-27T08:35:25.627329+00:00",
+  "host": "vps-3928",
+  "cpu_count": 6,
+  "loadavg": [
+    0.6748046875,
+    0.640625,
+    0.54541015625
+  ],
+  "memory_mib": {
+    "total": 11960.71,
+    "available": 9266.31
+  },
+  "disk_gib": {
+    "total": 76.9,
+    "free": 30.54
+  },
+  "proposed_ports": {
+    "18084_free": true,
+    "18446_free": true
+  },
+  "running_containers_by_project": {
+    "crm-cskh-uat-staging-f76c101b": 10,
+    "crm-cskh-vps-staging": 10
+  },
+  "live_backend": {
+    "config_digest": "sha256:158105c0da9d420a9193e939f64c4b257a507a075072d31a5606261561bbad27",
+    "source_labels": {
+      "io.cskh.apps_tree_sha": "652fb0ed3f0b278ac34c3ff1e6ee9b17cac332f8",
+      "io.cskh.crm_cskh_tree_sha": "14b480200552f642dd27aab39c36ae4b8fd4cf90",
+      "org.opencontainers.image.description": "CRM-CSKH immutable production image (Frappe + Frappe CRM + crm_cskh)",
+      "org.opencontainers.image.revision": "152d057735db9b920763dc09882118fab2e6fada",
+      "org.opencontainers.image.source": "https://github.com/nobita6986/new-crm",
+      "org.opencontainers.image.title": "crm-cskh"
+    }
+  },
+  "g06_g09_ci_n_minus_1": "467830195358b2431ac772486530ab935887a518",
+  "live_n_minus_1_matches_ci_baseline": false,
+  "migration_state_read_from_database": false,
+  "g06_g09_delta_rehearsal_required_for_actual_live_n_minus_1": true,
+  "config_file_presence_only": {
+    "/etc/crm-cskh/offsite-backup.env": false,
+    "/etc/crm-cskh/alerting.env": true
+  },
+  "bplus_full_stack_caps": {
+    "cpu_sum": 7.5,
+    "memory_mib_sum": 10688
+  },
+  "capacity_caveat": "Aggregate caps are not reservations. Available RAM is below total candidate memory caps and caps exceed physical vCPU count. Snapshot alone does not clear concurrent Live/UAT/new-stack capacity; approved preflight guards and scheduling/headroom decision are required.",
+  "deployments_or_restarts_executed": false,
+  "docker_exec_used": false
+}

@@ -1,0 +1,34 @@
+{
+  "schema_version": "cskh-p4-s1-slo-approval-v1",
+  "description": "Staging measurement criteria approved directly by T0 in chat, conditional on resource preflight. No deployment authorization, VPS result acceptance, or Production SLA. Personal name was not supplied.",
+  "slo_bundle_id": "cskh-p4-g18-s1-endpoint-slo",
+  "slo_version": "1.0.0",
+  "slo_spec_path": "deploy/release/p4-s1-slo-spec.json",
+  "slo_spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+  "approved_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+  "approved_profiles": [
+    "staging_vps_capped"
+  ],
+  "approval_status": "OWNER_APPROVED",
+  "owner_signoff": {
+    "approved_by": "T0 — current chat user; personal name not supplied",
+    "approved_at_utc": "2026-11-27T08:40:14.242041+00:00",
+    "decision_reference": "T0-20261127-WORKER-CARE-INTEGRATION-PROTECTED-SIGNING-STAGING-CRITERIA / owner-source.md sha256:e003805084d8b1507ff944be242803c945f63add7827003a6c15159e67845164"
+  },
+  "approved_resource_variant": "staging_vps_capped_b_plus_2_5vcpu",
+  "approved_config_spec_sha256": "530765c275067dc08bef704cc316c22683376c850b32cde5546e52b9c0d302a7",
+  "benchmark_runner_sha256": "5283a0fdfec6d4bf2608aaf3d053fd060c9f811962b04582d934ae6f785044d2",
+  "approval_source": {
+    "path": "owner-source.md",
+    "sha256": "e003805084d8b1507ff944be242803c945f63add7827003a6c15159e67845164",
+    "timestamp_basis": "Approval recorded at this UTC time from the preceding user message; exact source-message timestamp unavailable.",
+    "digital_signature_created": false
+  },
+  "conditions": {
+    "resource_preflight_pass_required": true,
+    "staging_deployment_authorized": false,
+    "new_candidate_vps_g18_result": null,
+    "production_sla_approved": false,
+    "variant_and_config_hash_must_be_checked_in_addition_to_profile_name": true
+  }
+}

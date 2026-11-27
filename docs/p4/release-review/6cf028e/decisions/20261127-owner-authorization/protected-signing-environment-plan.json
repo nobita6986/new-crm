@@ -1,0 +1,61 @@
+{
+  "status": "PREPARED_NOT_APPLIED",
+  "method_selected": "PROTECTED_P4_RELEASE_WORKFLOW",
+  "current_environments": {
+    "total_count": 0,
+    "environments": []
+  },
+  "environment_creator": null,
+  "official_key_custodian_or_loader": null,
+  "environment_reviewer": null,
+  "reviewer_github_user_id": null,
+  "official_key_fingerprint_sha256": "b1ed6b9e26baa2ef6e415e96a99456d59020111c434c70a7bb73b96ca0627931",
+  "environments": {
+    "registry-build": {
+      "secret_names": [
+        "RELEASE_SIGNING_PRIVATE_KEY"
+      ],
+      "required_reviewer_count": 1,
+      "reviewer_id": null,
+      "prevent_self_review": true,
+      "can_admins_bypass": false,
+      "allowed_deployment_branch": "codex/p4-worker-care-integration",
+      "push_role": true,
+      "ssh_or_registry_pull_secrets_allowed": false
+    },
+    "registry-verify": {
+      "signing_private_key_allowed": false,
+      "role": "pull-only",
+      "allowed_deployment_branch": "codex/p4-worker-care-integration"
+    }
+  },
+  "repository_variables_required": [
+    "CSKH_REGISTRY_IMAGE",
+    "CSKH_REGISTRY_IS_PUBLIC",
+    "RELEASE_SIGNING_PUBLIC_KEY"
+  ],
+  "repository_variables_previously_verified": true,
+  "inputs": {
+    "status": "PROPOSED_NOT_DISPATCHED",
+    "workflow": "p4-release.yml",
+    "ref": "codex/p4-worker-care-integration",
+    "expected_ref_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+    "inputs": {
+      "release_id": "crm-cskh-worker-care-20261127-6599356c",
+      "previous_release_id": "",
+      "existing_app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+      "deploy_to_staging": false
+    },
+    "previous_release_id_note": "Resolve actual previous release identity before production approval; empty is only the current workflow optional default, not evidence of an initial deployment.",
+    "prerequisites": [
+      "Owner selects protected signing and approves use for this exact candidate",
+      "Authorized repository administrator configures protected environments and loads the official key only in registry-build",
+      "Environment deployment branch policy permits the pinned integration ref",
+      "Ref remains exactly 6cf028e; existing-image revision check requires this SHA"
+    ],
+    "official_signature_already_available_for_new_candidate": false
+  },
+  "additional_guard": "Ref must remain exactly 6cf028eff4cfd35b5c82ade40358a3bbe22f4273; do not dispatch until authorized actor and reviewer are designated and protected configuration is verified.",
+  "official_key_used_or_loaded": false,
+  "workflow_dispatched": false
+}
