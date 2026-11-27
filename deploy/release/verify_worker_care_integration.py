@@ -2447,11 +2447,12 @@ def run_playwright_browser_e2e(
                 viewport={"width": 1440, "height": 900}, locale="vi-VN"
             )
             sys_page, _ = login_via_browser(sys_ctx, "crm.sysadmin@mock.local")
-            # /crm/data-import/doctype/CRM Deal (and percent-encoded /crm/%64eals) redirect to /cskh while CRM Lead import stays 200
+            # /crm/data-import/doctype/CRM Deal (and percent-encoded /crm/%64eals, /crm/%64ashboard) redirect to /cskh while CRM Lead import stays 200
             for sales_variant in (
                 "/crm/data-import/doctype/CRM Deal",
+                "/crm/data-import/doctype/CRM%20Deal",
                 "/crm/%64eals",
-                "/crm//deals",
+                "/crm/%64ashboard",
             ):
                 sys_page.goto(
                     f"{base_url}{sales_variant}",
@@ -2478,6 +2479,13 @@ def run_playwright_browser_e2e(
                 "/crm/data-import"
             ), sys_page.url
             assert sys_page.locator("#app").count() == 1, sys_page.url
+
+            # SPA pushState with repeated slashes (/crm//deals) must also redirect to /cskh
+            sys_page.evaluate(
+                "() => window.setTimeout(() => window.history.pushState({}, '', '/crm//deals'), 10)"
+            )
+            sys_page.wait_for_url("**/cskh**", timeout=15000)
+            assert urllib.parse.urlsplit(sys_page.url).path == "/cskh", sys_page.url
 
             # Open Settings modal in /crm/leads via UserDropdown button -> Settings / Cài đặt (non-vacuous!)
             sys_page.goto(
