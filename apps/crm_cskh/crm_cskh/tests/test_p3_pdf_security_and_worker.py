@@ -957,8 +957,36 @@ finally:
 
 		with _ephemeral_ssrf_and_redirect_server() as (probe_origin, hits):
 			concurrent_py = r"""
-import json, os, sys, threading
+import json, logging, os, sys, threading
 from concurrent.futures import ThreadPoolExecutor
+
+def _emit_diag(worker_idx: int, engine: str, phase: str) -> None:
+    tid = threading.get_native_id() if hasattr(threading, "get_native_id") else threading.get_ident()
+    line = (
+        json.dumps(
+            {
+                "worker_index": worker_idx,
+                "thread_native_id": tid,
+                "engine": engine,
+                "phase": phase,
+            }
+        )
+        + "\n"
+    ).encode("utf-8")
+    os.write(2, line)
+
+class _DiagStderrHandler(logging.Handler):
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            msg = f"[wp-progress] {record.getMessage()}\n".encode("utf-8", "replace")
+            os.write(2, msg)
+        except Exception:
+            pass
+
+_wp_prog = logging.getLogger("weasyprint.progress")
+_wp_prog.setLevel(logging.DEBUG)
+_wp_prog.addHandler(_DiagStderrHandler())
+
 import frappe
 
 site = sys.argv[1]
@@ -968,8 +996,14 @@ os.chdir(sites_dir)
 
 from crm_cskh.services import pdf_hooks
 pdf_hooks.ensure_pdf_runtime_hooks()
+pre_targets = {
+    k: (k in sys.modules)
+    for k in ("cssutils", "weasyprint", "frappe.utils.weasyprint", "frappe.utils.pdf", "pdfkit")
+}
+os.write(2, (json.dumps({"phase": "pre_worker_start", "sys_modules": pre_targets}) + "\n").encode("utf-8"))
 assert "weasyprint" not in sys.modules
 assert "frappe.utils.pdf" not in sys.modules
+assert "cssutils" not in sys.modules
 
 barrier = threading.Barrier(8)
 html_doc = (
@@ -980,26 +1014,46 @@ html_doc = (
 )
 
 def _worker(idx: int) -> dict:
+    engine = "wkhtmltopdf" if idx % 2 == 0 else "weasyprint"
+    _emit_diag(idx, engine, "before_init")
     frappe.init(site=site, sites_path=".")
+    _emit_diag(idx, engine, "after_init")
     frappe.connect()
+    _emit_diag(idx, engine, "after_connect")
     try:
         frappe.set_user("Administrator")
+        _emit_diag(idx, engine, "before_barrier")
         barrier.wait(timeout=15)
+        _emit_diag(idx, engine, "after_barrier")
         if idx % 2 == 0:
+            _emit_diag(idx, engine, "before_engine_import")
             from frappe.utils.pdf import get_pdf
+            _emit_diag(idx, engine, "after_engine_import")
+            _emit_diag(idx, engine, "before_first_render")
             b1 = get_pdf(html_doc)
+            _emit_diag(idx, engine, "after_first_render")
+            _emit_diag(idx, engine, "before_second_render")
             b2 = get_pdf(html_doc)
+            _emit_diag(idx, engine, "after_second_render")
         else:
+            _emit_diag(idx, engine, "before_engine_import")
             from frappe.utils.weasyprint import import_weasyprint
             h_cls, c_cls = import_weasyprint()
+            _emit_diag(idx, engine, "after_engine_import")
+            _emit_diag(idx, engine, "before_first_render")
             b1 = h_cls(string=html_doc).write_pdf(stylesheets=[c_cls(string="@page { size: A4; }")])
+            _emit_diag(idx, engine, "after_first_render")
+            _emit_diag(idx, engine, "before_second_render")
             b2 = h_cls(string=html_doc).write_pdf()
+            _emit_diag(idx, engine, "after_second_render")
         return {
             "ok_first": b1.startswith(b"%PDF-1.") and b"%%EOF" in b1[-128:],
             "ok_second": b2.startswith(b"%PDF-1.") and b"%%EOF" in b2[-128:],
         }
     finally:
+        _emit_diag(idx, engine, "before_destroy")
         frappe.destroy()
+        _emit_diag(idx, engine, "after_destroy")
 
 with ThreadPoolExecutor(max_workers=8) as pool:
     outcomes = list(pool.map(_worker, range(8)))
@@ -1011,16 +1065,32 @@ print("CONC_FIRST_JSON:" + json.dumps({
 }))
 """
 			proc = subprocess.run(
-				[sys.executable, "-c", concurrent_py, site_name, sites_dir, probe_origin],
+				[
+					sys.executable,
+					"-X",
+					"faulthandler",
+					"-u",
+					"-c",
+					concurrent_py,
+					site_name,
+					sites_dir,
+					probe_origin,
+				],
 				capture_output=True,
 				text=True,
 				timeout=90,
 				check=False,
 			)
+			diag_dir = Path("/tmp/p3-evidence")
+			if diag_dir.is_dir():
+				(diag_dir / "concurrent-first-use-diagnostics.log").write_text(
+					f"returncode={proc.returncode}\n=== STDERR ===\n{proc.stderr}\n=== STDOUT ===\n{proc.stdout}\n",
+					encoding="utf-8",
+				)
 			self.assertEqual(
 				proc.returncode,
 				0,
-				f"Concurrent first-use subprocess failed:\n{proc.stderr}\n{proc.stdout}",
+				f"Concurrent first-use subprocess failed (rc={proc.returncode}):\n{proc.stderr}\n{proc.stdout}",
 			)
 			marker = [
 				ln[len("CONC_FIRST_JSON:") :]
@@ -1088,19 +1158,78 @@ print("CONC_FIRST_JSON:" + json.dumps({
 				finally:
 					frappe_pdf.cleanup(html_opts)
 
-				# 2. Direct `cssutils` entrypoints (`parseString`, `parseUrl`, `CSSParser`, `parseFile`)
+				# 2. Direct `cssutils` entrypoints (`parseString`, `parseUrl`, `CSSParser` constructor & `setFetcher`, `parseFile`)
+				custom_calls: list[str] = []
+
+				def _rogue_network_fetcher(url: str):
+					custom_calls.append(url)
+					raise AssertionError(f"Custom network fetcher must never be delegated to: {url}")
+
 				cssutils.parseString(
 					f'@import "{probe_origin}/evil.css"; '
 					f'@import url("{probe_origin}/redirect"); '
 					'@import "file:///etc/hosts";'
 				)
 				cssutils.parseUrl(f"{probe_origin}/evil.css")
-				custom_parser = cssutils.CSSParser(fetcher=lambda u: ("utf-8", f"/*{u}*/"))
-				custom_parser.parseString(f'@import "{probe_origin}/evil.css";')
+				cssutils.parseUrl(f"{probe_origin}/redirect")
+
+				orig_req = getattr(frappe.local, "request", None)
+				probe_host_port = probe_origin.split("://", 1)[-1]
+				try:
+					frappe.local.request = type("_Req", (), {"host": probe_host_port})()
+					same_site_local_css = f"{probe_origin}{pub_css_file.file_url}"
+					same_site_redirect = f"{probe_origin}/redirect"
+
+					ctor_parser = cssutils.CSSParser(fetcher=_rogue_network_fetcher)
+					ctor_sheet = ctor_parser.parseUrl(same_site_local_css)
+					self.assertIsNotNone(ctor_sheet)
+					self.assertGreaterEqual(len(list(ctor_sheet.cssRules)), 1)
+					ctor_parser.parseUrl(same_site_redirect)
+					ctor_parser.parseString(
+						f'@import "{same_site_local_css}"; '
+						f'@import url("{same_site_redirect}"); '
+						f'@import "{probe_origin}/evil.css";'
+					)
+
+					ctor_pos_parser = cssutils.CSSParser(None, None, None, _rogue_network_fetcher)
+					ctor_pos_sheet = ctor_pos_parser.parseUrl(same_site_local_css)
+					self.assertIsNotNone(ctor_pos_sheet)
+					self.assertGreaterEqual(len(list(ctor_pos_sheet.cssRules)), 1)
+
+					setter_parser = cssutils.CSSParser()
+					setter_parser.setFetcher(_rogue_network_fetcher)
+					setter_sheet = setter_parser.parseUrl(same_site_local_css)
+					self.assertIsNotNone(setter_sheet)
+					self.assertGreaterEqual(len(list(setter_sheet.cssRules)), 1)
+					setter_parser.parseUrl(same_site_redirect)
+					setter_parser.parseString(
+						f'@import "{same_site_local_css}"; '
+						f'@import url("{same_site_redirect}"); '
+						f'@import "{probe_origin}/evil.css";'
+					)
+
+					setter_kw_parser = cssutils.CSSParser()
+					setter_kw_parser.setFetcher(fetcher=_rogue_network_fetcher)
+					setter_kw_sheet = setter_kw_parser.parseUrl(same_site_local_css)
+					self.assertIsNotNone(setter_kw_sheet)
+					self.assertGreaterEqual(len(list(setter_kw_sheet.cssRules)), 1)
+					setter_kw_parser.parseUrl(same_site_redirect)
+					setter_kw_parser.setFetcher(fetcher=None)
+					self.assertGreaterEqual(
+						len(list(setter_kw_parser.parseUrl(same_site_local_css).cssRules)), 1
+					)
+				finally:
+					if orig_req is None:
+						if hasattr(frappe.local, "request"):
+							delattr(frappe.local, "request")
+					else:
+						frappe.local.request = orig_req
+
 				with self.assertRaises(PermissionError):
 					cssutils.parseFile("/etc/hosts")
 				with self.assertRaises(PermissionError):
 					cssutils.CSSParser().parseFile("/etc/hosts")
+				self.assertEqual(custom_calls, [], f"Custom fetcher was invoked: {custom_calls}")
 				self.assertEqual(hits, [], f"Direct cssutils calls leaked SSRF/redirect requests: {hits}")
 
 				# 3. Cold fresh subprocess importing `cssutils` BEFORE `frappe.utils.pdf`

@@ -897,10 +897,15 @@ print("LAZY_SUBPROC_JSON:" + json.dumps({
                     "        if 'margin-top: 24mm' in (text or ''):\n"
                     "            rules.append(_StyleRule('.print-format', [('margin-top', '24mm')]))\n"
                     "        return rules\n"
+                    "    def parseUrl(self, href, **_kw):\n"
+                    "        _, sub_txt = util._readUrl(href, fetcher=self._fetcher)\n"
+                    "        return self.parseString(sub_txt or '')\n"
                     "    def parseFile(self, filename, **_kw):\n"
                     "        return open(filename, 'rb').read()\n"
                     "def parseString(text, **kw):\n"
                     "    return CSSParser().parseString(text, **kw)\n"
+                    "def parseUrl(href, **kw):\n"
+                    "    return CSSParser().parseUrl(href, **kw)\n"
                     "def parseFile(filename, **kw):\n"
                     "    return CSSParser().parseFile(filename, **kw)\n",
                     encoding="utf-8",
@@ -926,7 +931,7 @@ print("LAZY_SUBPROC_JSON:" + json.dumps({
                     "get_url = lambda: 'http://dev.localhost'\n",
                     encoding="utf-8",
                 )
-                # Exact Frappe v15.123.1 (`d2efa796`) pattern calling `cssutils.parseString(stylesheet)` BEFORE `pdfkit.from_string`
+                # Exact Frappe v15.123.1 (`d2efa796`) pattern calling `read_options_from_html` + `cssutils.parseString(stylesheet)` BEFORE `pdfkit.from_string`
                 (fake_sp / "frappe" / "utils" / "pdf.py").write_text(
                     "import cssutils, pdfkit\n"
                     "from bs4 import BeautifulSoup\n"
@@ -941,35 +946,63 @@ print("LAZY_SUBPROC_JSON:" + json.dumps({
                     "        if isinstance(r, cssutils.css.CSSStyleRule) and '.print-format' in r.selectorText:\n"
                     "            out.extend(r.style)\n"
                     "    return out\n"
-                    "def get_pdf(html):\n"
+                    "def read_options_from_html(html):\n"
                     "    soup = BeautifulSoup(html, 'html.parser')\n"
                     "    styles = get_print_format_styles(soup)\n"
                     "    opts = {s.name: s.value for s in styles}\n"
-                    "    return pdfkit.from_string(str(soup), options=opts), opts\n",
+                    "    return str(soup), opts\n"
+                    "def get_pdf(html):\n"
+                    "    rewritten, opts = read_options_from_html(html)\n"
+                    "    return pdfkit.from_string(rewritten, options=opts), opts, rewritten\n",
                     encoding="utf-8",
                 )
 
                 sub_py = r"""
-import json, sys
+import json, sys, urllib.request
 from crm_cskh.services import pdf_hooks
 
 origin = sys.argv[1]
 pdf_hooks.ensure_pdf_runtime_hooks()
 pre_loaded = {k: (k in sys.modules) for k in ("cssutils", "frappe.utils.pdf", "pdfkit")}
 
+import frappe
 from frappe.utils.pdf import get_pdf
 import cssutils
 
 html = (
-    '<html><head><style>'
+    '<html><head>'
+    f'<link rel="stylesheet" href="{origin}/evil.css">'
+    '<style>'
     f'@import "{origin}/evil.css"; '
     f'@import url("{origin}/redirect"); '
     '@import "file:///etc/passwd"; '
     '@import "/assets/crm_cskh/css/local-print.css";'
     '</style></head><body><p>DEV v15.123.1</p></body></html>'
 )
-_, opts = get_pdf(html)
+_, opts, rewritten = get_pdf(html)
 cssutils.parseString(f'@import "{origin}/evil.css"; @import url("{origin}/redirect");')
+
+frappe.local.request.host = origin.split("://", 1)[-1]
+same_site_css = f"{origin}/assets/crm_cskh/css/local-print.css"
+same_site_redir = f"{origin}/redirect"
+custom_calls = []
+def _network_fetcher(u):
+    custom_calls.append(u)
+    with urllib.request.urlopen(u, timeout=5) as r:
+        return ("utf-8", r.read().decode("utf-8", "replace"))
+
+ctor_rules = cssutils.CSSParser(fetcher=_network_fetcher).parseUrl(same_site_css)
+ctor_pos_rules = cssutils.CSSParser(None, None, None, _network_fetcher).parseUrl(same_site_css)
+cssutils.CSSParser(fetcher=_network_fetcher).parseUrl(same_site_redir)
+setter_p = cssutils.CSSParser()
+setter_p.setFetcher(_network_fetcher)
+setter_rules = setter_p.parseUrl(same_site_css)
+setter_p.parseUrl(same_site_redir)
+setter_kw_p = cssutils.CSSParser()
+setter_kw_p.setFetcher(fetcher=_network_fetcher)
+setter_kw_rules = setter_kw_p.parseUrl(same_site_css)
+setter_kw_p.parseUrl(same_site_redir)
+
 parse_file_blocked = False
 try:
     cssutils.parseFile("/etc/hosts")
@@ -979,6 +1012,12 @@ except PermissionError:
 print("DEV_CSS_SSRF_JSON:" + json.dumps({
     "pre_loaded": pre_loaded,
     "opts_margin_top": opts.get("margin-top"),
+    "evil_in_rewritten": "/evil.css" in rewritten,
+    "ctor_rules_len": len(ctor_rules),
+    "ctor_pos_rules_len": len(ctor_pos_rules),
+    "setter_rules_len": len(setter_rules),
+    "setter_kw_rules_len": len(setter_kw_rules),
+    "custom_calls": custom_calls,
     "parse_file_blocked": parse_file_blocked,
 }))
 """
@@ -1012,6 +1051,12 @@ print("DEV_CSS_SSRF_JSON:" + json.dumps({
                     {"cssutils": False, "frappe.utils.pdf": False, "pdfkit": False},
                 )
                 self.assertEqual(res["opts_margin_top"], "24mm")
+                self.assertFalse(res["evil_in_rewritten"])
+                self.assertEqual(res["ctor_rules_len"], 1)
+                self.assertEqual(res["ctor_pos_rules_len"], 1)
+                self.assertEqual(res["setter_rules_len"], 1)
+                self.assertEqual(res["setter_kw_rules_len"], 1)
+                self.assertEqual(res["custom_calls"], [])
                 self.assertTrue(res["parse_file_blocked"])
                 self.assertEqual(
                     hits,

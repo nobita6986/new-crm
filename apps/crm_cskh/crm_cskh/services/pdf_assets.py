@@ -54,6 +54,7 @@ _ORIG_PDFKIT_FROM_FILE: Any = None
 _ORIG_GET_BASE64_IMAGE: Any = None
 _ORIG_INLINE_PRIVATE_IMAGES: Any = None
 _ORIG_GET_COOKIE_OPTIONS: Any = None
+_ORIG_READ_OPTIONS_FROM_HTML: Any = None
 _ORIG_GET_PRINT_FORMAT_STYLES: Any = None
 _ORIG_PREPARE_HEADER_FOOTER: Any = None
 _ORIG_CSSUTILS_FETCH_DEFAULT: Any = None
@@ -793,6 +794,16 @@ def _resolve_image_attr_to_safe_data_uri(raw_src: str, *, include_private_files:
 	return _SAFE_TRANSPARENT_GIF_DATA_URI
 
 
+def _extract_bs4_style_text(style_tag: Any) -> str:
+	"""Extract raw CSS text from a BeautifulSoup `<style>` tag across `html5lib` and `html.parser`."""
+	if getattr(style_tag, "string", None) is not None:
+		return str(style_tag.string)
+	contents = getattr(style_tag, "contents", None)
+	if contents:
+		return "".join(str(child) for child in contents)
+	return str(style_tag.get_text() or "")
+
+
 def inline_local_pdf_assets(html: str) -> str:
 	"""Sanitize HTML & CSS and inline authorized local `/assets/...`, `/files/...`, and `/private/files/...`."""
 	if not html:
@@ -832,7 +843,7 @@ def inline_local_pdf_assets(html: str) -> str:
 		link_tag.decompose()
 
 	for style_tag in soup.find_all("style"):
-		raw_css = style_tag.get_text()
+		raw_css = _extract_bs4_style_text(style_tag)
 		if raw_css:
 			style_tag.string = sanitize_pdf_css(raw_css, include_private_files=True)
 
@@ -1155,23 +1166,6 @@ def _guarded_cssutils_fetcher(url: str) -> tuple[str | None, str]:
 _guarded_cssutils_fetcher._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
 
 
-def _wrap_cssutils_fetcher_arg(fetcher: Any):
-	if fetcher is None or getattr(fetcher, "_cskh_pdf_wrapped", False):
-		return _guarded_cssutils_fetcher
-
-	def _gated_custom_fetcher(url: str):
-		cleaned = str(url or "").strip()
-		if not cleaned:
-			return None, ""
-		resolved = _resolve_same_site_resource(cleaned, include_private_files=False)
-		if resolved is None or resolved[1] != "text/css":
-			return None, ""
-		return fetcher(url)
-
-	_gated_custom_fetcher._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
-	return _gated_custom_fetcher
-
-
 def _blocked_cssutils_parse_file(*_args: Any, **_kwargs: Any):
 	raise PermissionError(
 		"cssutils.parseFile is disabled by CSKH PDF security policy; parse sanitized CSS strings only"
@@ -1221,9 +1215,9 @@ def _patch_cssutils_module(cssutils_mod: Any) -> None:
 					call_args = list(args)
 					call_kwargs = dict(kwargs)
 					if len(call_args) >= 4:
-						call_args[3] = _wrap_cssutils_fetcher_arg(call_args[3])
+						call_args[3] = _guarded_cssutils_fetcher
 					else:
-						call_kwargs["fetcher"] = _wrap_cssutils_fetcher_arg(call_kwargs.get("fetcher"))
+						call_kwargs["fetcher"] = _guarded_cssutils_fetcher
 					_ORIG_CSSUTILS_PARSER_INIT(self, *call_args, **call_kwargs)
 
 				_wrapped_cssparser_init._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
@@ -1235,7 +1229,8 @@ def _patch_cssutils_module(cssutils_mod: Any) -> None:
 					_ORIG_CSSUTILS_PARSER_SET_FETCHER = orig_set_fetcher
 
 				def _wrapped_cssparser_set_fetcher(self, fetcher: Any = None):
-					return _ORIG_CSSUTILS_PARSER_SET_FETCHER(self, _wrap_cssutils_fetcher_arg(fetcher))
+					del fetcher
+					return _ORIG_CSSUTILS_PARSER_SET_FETCHER(self, _guarded_cssutils_fetcher)
 
 				_wrapped_cssparser_set_fetcher._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
 				parser_cls.setFetcher = _wrapped_cssparser_set_fetcher
@@ -1308,7 +1303,7 @@ def _patch_pdfkit_module(pdfkit_mod: Any) -> None:
 
 def _patch_frappe_pdf_module(frappe_pdf: Any) -> None:
 	global _ORIG_GET_BASE64_IMAGE, _ORIG_INLINE_PRIVATE_IMAGES, _ORIG_GET_COOKIE_OPTIONS
-	global _ORIG_GET_PRINT_FORMAT_STYLES, _ORIG_PREPARE_HEADER_FOOTER
+	global _ORIG_READ_OPTIONS_FROM_HTML, _ORIG_GET_PRINT_FORMAT_STYLES, _ORIG_PREPARE_HEADER_FOOTER
 
 	if frappe_pdf is None:
 		return
@@ -1350,13 +1345,28 @@ def _patch_frappe_pdf_module(frappe_pdf: Any) -> None:
 			def _guarded_frappe_get_print_format_styles(soup: Any):
 				if soup is not None and hasattr(soup, "find_all"):
 					for style_tag in soup.find_all("style"):
-						raw_css = style_tag.get_text()
+						raw_css = _extract_bs4_style_text(style_tag)
 						if raw_css:
 							style_tag.string = sanitize_pdf_css(raw_css, include_private_files=True)
 				return _ORIG_GET_PRINT_FORMAT_STYLES(soup)
 
 			_guarded_frappe_get_print_format_styles._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
 			frappe_pdf.get_print_format_styles = _guarded_frappe_get_print_format_styles
+
+		if hasattr(frappe_pdf, "read_options_from_html") and not getattr(
+			frappe_pdf.read_options_from_html, "_cskh_pdf_wrapped", False
+		):
+			if _ORIG_READ_OPTIONS_FROM_HTML is None:
+				_ORIG_READ_OPTIONS_FROM_HTML = frappe_pdf.read_options_from_html
+
+			def _guarded_frappe_read_options_from_html(html: Any):
+				rewritten_html, html_opts = _ORIG_READ_OPTIONS_FROM_HTML(html)
+				if isinstance(rewritten_html, str):
+					rewritten_html = inline_local_pdf_assets(rewritten_html)
+				return rewritten_html, html_opts
+
+			_guarded_frappe_read_options_from_html._cskh_pdf_wrapped = True  # type: ignore[attr-defined]
+			frappe_pdf.read_options_from_html = _guarded_frappe_read_options_from_html
 
 		if hasattr(frappe_pdf, "prepare_header_footer") and not getattr(
 			frappe_pdf.prepare_header_footer, "_cskh_pdf_wrapped", False
