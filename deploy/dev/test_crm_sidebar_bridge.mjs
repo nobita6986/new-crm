@@ -384,8 +384,20 @@ export function createCrmDom({ pathname = '/crm/leads', collapsed = false, worke
 test('Promotes worker care before native helpers and removes sales navigation', () => {
 	const { allViewsNav, publicViewsNav, win } = createCrmDom({ pathname: '/crm/leads' })
 
-	const allLinks = allViewsNav.children.map((item) => item.querySelector('a')?.getAttribute('href'))
-	assert.deepEqual(allLinks, ['/cskh', '/crm/leads', '/crm/tasks'])
+	const visibleLinks = allViewsNav.children
+		.filter((item) => item.getAttribute('data-cskh-sales-blocked') !== '1')
+		.map((item) => item.querySelector('a')?.getAttribute('href'))
+	assert.deepEqual(visibleLinks, ['/cskh', '/crm/leads', '/crm/tasks'])
+	const blockedLinks = allViewsNav.children
+		.filter((item) => item.getAttribute('data-cskh-sales-blocked') === '1')
+		.map((item) => item.querySelector('a')?.getAttribute('href'))
+	assert.deepEqual(blockedLinks, ['/crm/dashboard', '/crm/deals'])
+	for (const blockedItem of allViewsNav.children.filter(
+		(item) => item.getAttribute('data-cskh-sales-blocked') === '1'
+	)) {
+		assert.equal(blockedItem.getAttribute('hidden'), 'hidden')
+		assert.equal(blockedItem.parentElement, allViewsNav, 'VDOM anchor remains mounted')
+	}
 
 	const cskhItem = allViewsNav.querySelector('[data-cskh-sidebar-item="1"]')
 	assert.ok(cskhItem, 'CSKH item must exist in All Views nav')
@@ -424,7 +436,12 @@ test('Mirrors collapsed and expanded sidebar states accurately', () => {
 	assert.ok(labelSlot.classList.contains('opacity-100'))
 
 	// Simulate user clicking "Thu gọn" (Collapse) on Frappe CRM sidebar
-	const firstSiblingAnchor = allViewsNav.children[1].querySelector('a')
+	const firstSiblingItem = allViewsNav.children.find(
+		(item) =>
+			!item.hasAttribute('data-cskh-sidebar-item') &&
+			item.getAttribute('data-cskh-sales-blocked') !== '1'
+	)
+	const firstSiblingAnchor = firstSiblingItem.querySelector('a')
 	firstSiblingAnchor.className =
 		'flex h-full min-w-0 flex-1 items-center focus:outline-none focus-visible:ring-0 justify-center'
 	flushRaf()

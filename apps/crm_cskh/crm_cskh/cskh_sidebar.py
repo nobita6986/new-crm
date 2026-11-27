@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import html
 import os
+import urllib.parse
 
 import frappe
 
@@ -99,19 +100,31 @@ def _build_script_tag(
 
 
 def is_sales_crm_path(path: str) -> bool:
-	"""Match route segments, never query strings, lookalike paths or external URLs."""
-	if not isinstance(path, str) or any(ch in path for ch in ("?", "#", "\\")):
+	"""Match normalized route segments, including percent-encoded or repeated-slash variants."""
+	if (
+		not isinstance(path, str)
+		or not path.startswith("/")
+		or path.startswith("//")
+		or any(ch in path for ch in ("?", "#", "\\"))
+	):
 		return False
-	if "%" in path:
-		return path.rstrip("/") == "/crm/data-import/doctype/CRM%20Deal"
-	if path.rstrip("/") == "/crm":
-		return True
-	parts = path.split("/")
-	if len(parts) < 3 or parts[0] != "" or parts[1] != "crm":
+	parts: list[str] = []
+	for raw_seg in path.split("/"):
+		if not raw_seg:
+			continue
+		decoded = urllib.parse.unquote(raw_seg)
+		if any(ord(ch) < 32 or ord(ch) == 127 for ch in decoded):
+			return False
+		for sub in decoded.split("/"):
+			if sub:
+				parts.append(sub)
+	if not parts or parts[0] != "crm":
 		return False
-	if parts[2] in SALES_CRM_SECTIONS:
+	if len(parts) == 1:
 		return True
-	return len(parts) >= 5 and parts[2] == "data-import" and parts[3] == "doctype" and parts[4] == "CRM Deal"
+	if parts[1] in SALES_CRM_SECTIONS:
+		return True
+	return len(parts) >= 4 and parts[1] == "data-import" and parts[2] == "doctype" and parts[3] == "CRM Deal"
 
 
 def _is_crm_spa_request(request) -> bool:

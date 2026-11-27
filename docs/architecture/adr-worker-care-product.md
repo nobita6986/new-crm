@@ -27,7 +27,8 @@ Tổng quan Frappe CRM gốc đo giao dịch, giá trị giao dịch và doanh t
 
 ## Nâng cấp và bảo toàn dữ liệu
 
-- Fixture của action `CSKH - Open CSKH Page from Deal` được giữ cùng tên nhưng tắt. Patch `v4_0.worker_care_workspace` tắt action trên site cũ và xóa cache để nhãn/website mới có hiệu lực.
+- Fixture của action `CSKH - Open CSKH Page from Deal` được giữ cùng tên nhưng tắt. Patch `v4_0.worker_care_workspace` tắt action trên site cũ, chỉ cập nhật `User.default_app` từ `crm` sang `crm_cskh` cho người dùng giữ vai trò chăm sóc/quản trị hệ thống (không sửa tài khoản ngoài nhóm chăm sóc hay `default_app` hợp lệ khác), và xóa cache để nhãn/website mới có hiệu lực. Hook `after_migrate` không ghi đè cấu hình `System Settings.default_app` trên các lần `migrate` về sau.
+- Trong kịch bản hạ cấp nhanh chỉ cuộn image ứng dụng (`Tier 3 N -> N-1`, không khôi phục DB), `System Settings.default_app = 'crm_cskh'` khiến đăng nhập mới trên `N-1` fallback an toàn về `/app` (`200 OK`, không lỗi `403`); nếu muốn quay hẳn về trang đích `/crm` của `N-1`, quản trị viên đặt lại `System Settings.default_app = 'crm'`.
 - Dữ liệu Deal cũ vẫn tồn tại để bảo toàn lịch sử. Không có migration xóa Lead/Deal/Work Item/Attempt/Task hoặc đổi role của người dùng.
 - Triển khai qua image/nhánh ứng viên có kiểm chứng; không sửa trực tiếp container đang chạy. Cần chạy migrate, làm mới cache và khởi động lại worker theo quy trình phát hành hiện có.
 - Thay đổi nằm trong custom app; giữ điều kiện upstream sạch của quy trình build đã khóa.

@@ -28,14 +28,13 @@
 	if (assigneeWrap && canFilterAssignee) assigneeWrap.hidden = false
 
 	function mapBucketQuery(bucketKey) {
-		const sameTz = cskh.effectiveTimeZone() === cskh.siteTimeZone()
 		switch (bucketKey) {
 			case 'due_today':
-				return { status: 'open', bucket: sameTz ? 'today' : 'all', clientBucket: sameTz ? '' : 'due_today' }
+				return { status: 'open', bucket: 'today', clientBucket: '' }
 			case 'overdue':
 				return { status: 'open', bucket: 'overdue', clientBucket: '' }
 			case 'upcoming':
-				return { status: 'open', bucket: sameTz ? 'upcoming' : 'all', clientBucket: sameTz ? '' : 'upcoming' }
+				return { status: 'open', bucket: 'upcoming', clientBucket: '' }
 			case 'done':
 				return { status: 'done', bucket: 'all', clientBucket: '' }
 			case 'canceled':

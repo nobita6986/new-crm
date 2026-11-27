@@ -917,6 +917,12 @@ def run_live_rehearsal(
             t3_crm_has_theme,
         )
 
+        # Also verify a brand-new `POST /api/method/login` session on rolled-back `N-1` (where DB holds
+        # `default_app = 'crm_cskh'`) never 403s or loops, landing cleanly on a 200 OK route (`/app`).
+        fresh_t3_staff = stack.make_actor("staff_a_t3_fresh", "staff.a@dev.local")
+        st_t3_app, _, _ = fresh_t3_staff.raw_request("GET", "/app")
+        assert st_t3_app == 200, st_t3_app
+
         # Inspect `N-1` hooks, orphan-hook resolution, real `N-1` RQ worker execution & data reconciliation
         # WITHOUT running any second post-traffic `clear_cache()` (`F-G09-HOOK-01` + `F-TRIAL-HOOK-RB-01`)
         tier3_check = stack.exec_site_python(

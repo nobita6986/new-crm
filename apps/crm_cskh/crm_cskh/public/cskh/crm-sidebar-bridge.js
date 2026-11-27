@@ -49,6 +49,7 @@
 	const SALES_OPTION_TITLES = new Set([
 		'Dashboard',
 		'Trang tổng quan',
+		'Bảng điều khiển',
 		'Deals',
 		'Deal',
 		'CRM Deal',
@@ -60,7 +61,7 @@
 		'Doanh thu',
 	])
 	const SALES_SUBTITLES = new Set(['Deal', 'CRM Deal', 'Giao dịch CRM'])
-	const SALES_SETTINGS_PAGES = new Set(['Dashboard', 'Trang tổng quan'])
+	const SALES_SETTINGS_PAGES = new Set(['Dashboard', 'Trang tổng quan', 'Bảng điều khiển'])
 	const ONBOARDING_SALES_STEPS = new Set([
 		'Create your first deal',
 		'Convert lead to deal',
@@ -136,15 +137,42 @@
 	}
 
 	function isSalesPath(path) {
-		if (typeof path !== 'string' || /[?#\\]/.test(path)) return false
-		if (path.indexOf('%') !== -1) {
-			return path.replace(/\/+$/, '') === '/crm/data-import/doctype/CRM%20Deal'
+		if (
+			typeof path !== 'string' ||
+			path.charAt(0) !== '/' ||
+			path.slice(0, 2) === '//' ||
+			/[?#\\]/.test(path)
+		) {
+			return false
 		}
-		if (path.replace(/\/+$/, '') === '/crm') return true
-		const parts = path.split('/')
-		if (parts[0] !== '' || parts[1] !== 'crm') return false
-		if (SALES_SECTIONS.has(parts[2])) return true
-		return parts[2] === 'data-import' && parts[3] === 'doctype' && parts[4] === 'CRM Deal'
+		const parts = []
+		const rawParts = path.split('/')
+		for (let i = 0; i < rawParts.length; i += 1) {
+			const rawSeg = rawParts[i]
+			if (!rawSeg) continue
+			let decoded = rawSeg
+			if (rawSeg.indexOf('%') !== -1) {
+				try {
+					decoded = decodeURIComponent(rawSeg)
+				} catch (_err) {
+					decoded = rawSeg
+				}
+			}
+			if (/[\x00-\x1f\x7f]/.test(decoded)) return false
+			const subParts = decoded.split('/')
+			for (let j = 0; j < subParts.length; j += 1) {
+				if (subParts[j]) parts.push(subParts[j])
+			}
+		}
+		if (!parts.length || parts[0] !== 'crm') return false
+		if (parts.length === 1) return true
+		if (SALES_SECTIONS.has(parts[1])) return true
+		return (
+			parts.length >= 4 &&
+			parts[1] === 'data-import' &&
+			parts[2] === 'doctype' &&
+			parts[3] === 'CRM Deal'
+		)
 	}
 
 	function isSalesUrl(win, href) {
@@ -278,14 +306,13 @@
 		for (let i = 0; i < controls.length; i += 1) {
 			const control = controls[i]
 			if (control.getAttribute('role') === 'tab') continue
+			if (control.getAttribute(BLOCKED_ATTR) === '1') continue
 			if (!isSalesControl(win, control)) continue
 			const slotItem = control.closest('[data-slot="sidebar-item"]')
-			if (slotItem && slotItem.hasAttribute('data-page')) {
-				markElementBlocked(slotItem)
-				continue
-			}
-			// Remove structural sidebar items or action buttons cleanly.
-			removeElement(slotItem || control)
+			const target = slotItem || control
+			if (target.getAttribute(BLOCKED_ATTR) === '1') continue
+			// Keep VNode anchors mounted so Vue 3 `v-for` / Fragment patching never throws `insertBefore` NotFoundError.
+			markElementBlocked(target)
 		}
 	}
 
@@ -302,6 +329,7 @@
 
 	function readElementText(el) {
 		if (!el) return ''
+		if (el.children && el.children.length > 3) return ''
 		const direct = normalizeText(el.textContent)
 		if (direct) return direct
 		const children = el.children
@@ -317,6 +345,7 @@
 	function isSingleOnboardingStepWrapper(parent, stepLabel) {
 		if (!parent || parent.tagName !== 'DIV') return false
 		if (parent.hasAttribute('id') || parent.hasAttribute('role')) return false
+		if (parent.children && parent.children.length > 3) return false
 		const parentText = readElementText(parent)
 		if (parentText === stepLabel) return true
 		if (parentText.indexOf(stepLabel) !== 0) return false
@@ -328,10 +357,11 @@
 		const candidates = scope.querySelectorAll('span, div, p, button')
 		for (let i = 0; i < candidates.length; i += 1) {
 			const node = candidates[i]
+			if (node.children && node.children.length > 3) continue
 			if (node.getAttribute(BLOCKED_ATTR) === '1') continue
 			if (node.closest('[' + BLOCKED_ATTR + '="1"]')) continue
 			const stepLabel = readElementText(node)
-			if (!ONBOARDING_SALES_STEPS.has(stepLabel)) continue
+			if (!stepLabel || !ONBOARDING_SALES_STEPS.has(stepLabel)) continue
 			let row = node
 			for (let depth = 0; depth < 3; depth += 1) {
 				const parent = row.parentElement
@@ -375,6 +405,15 @@
 				setAttrIfChanged(groupEl, 'hidden', null)
 			}
 		}
+
+		const ctx = findActivePaletteContext(scope)
+		if (!ctx) {
+			lastPaletteDirection = 'ArrowDown'
+			return
+		}
+		if (ctx.activeOption && isSalesOption(ctx.activeOption)) {
+			nudgePaletteOffBlockedOption(win, scope, lastPaletteDirection)
+		}
 	}
 
 	function findActivePaletteContext(scope) {
@@ -395,8 +434,11 @@
 	}
 
 	let skippingOption = false
-	function nudgePaletteOffBlockedOption(win, scope, keyDirection) {
+	let nudgeTimerPending = false
+	let lastPaletteDirection = 'ArrowDown'
+	function nudgePaletteOffBlockedOption(win, scope, keyDirection, remainingBudget) {
 		if (skippingOption) return
+		if (nudgeTimerPending && typeof remainingBudget !== 'number') return
 		const ctx = findActivePaletteContext(scope)
 		if (!ctx || !ctx.activeOption || !isSalesOption(ctx.activeOption)) return
 		if (!ctx.input || typeof ctx.input.dispatchEvent !== 'function' || typeof win.KeyboardEvent !== 'function') {
@@ -410,26 +452,40 @@
 			}
 		}
 		if (!hasAllowed) return
+		const budget = typeof remainingBudget === 'number' ? remainingBudget : ctx.options.length
+		if (budget <= 0) return
+
+		const dir = keyDirection || 'ArrowDown'
 		skippingOption = true
 		try {
-			const maxSteps = ctx.options.length
-			for (let step = 0; step < maxSteps; step += 1) {
-				ctx.input.dispatchEvent(
-					new win.KeyboardEvent('keydown', {
-						key: keyDirection || 'ArrowDown',
-						bubbles: true,
-						cancelable: true,
-					})
-				)
-				const nextCtx = findActivePaletteContext(scope)
-				if (!nextCtx || !nextCtx.activeOption || !isSalesOption(nextCtx.activeOption)) {
-					break
-				}
-			}
+			ctx.input.dispatchEvent(
+				new win.KeyboardEvent('keydown', {
+					key: dir,
+					bubbles: true,
+					cancelable: true,
+				})
+			)
 		} catch (_err) {
-			/* ignore synthetic event unsupported in minimal DOM */
-		} finally {
 			skippingOption = false
+			return
+		}
+		skippingOption = false
+
+		// Dispatch one step per turn so Vue 3 / HeadlessUI microtasks flush `aria-activedescendant` first.
+		const scheduleNext = typeof win.setTimeout === 'function' ? win.setTimeout : win.requestAnimationFrame
+		if (typeof scheduleNext === 'function' && !nudgeTimerPending && budget > 1) {
+			nudgeTimerPending = true
+			scheduleNext.call(
+				win,
+				function () {
+					nudgeTimerPending = false
+					const nextCtx = findActivePaletteContext(scope)
+					if (nextCtx && nextCtx.activeOption && isSalesOption(nextCtx.activeOption)) {
+						nudgePaletteOffBlockedOption(win, scope, dir, budget - 1)
+					}
+				},
+				0
+			)
 		}
 	}
 
@@ -890,7 +946,11 @@
 				const rawUrl =
 					typeof input === 'string'
 						? input
-						: (input && typeof input.url === 'string' ? input.url : '')
+						: input && typeof input.url === 'string'
+							? input.url
+							: input && typeof input.href === 'string'
+								? input.href
+								: ''
 				const parsed = parseHref(win, rawUrl)
 				const apiPath = parsed && parsed.origin === win.location.origin ? parsed.pathname : ''
 
@@ -1008,6 +1068,7 @@
 				return
 			}
 			if (key === 'ArrowDown' || key === 'ArrowUp') {
+				lastPaletteDirection = key
 				if (typeof win.setTimeout === 'function') {
 					win.setTimeout(function () {
 						nudgePaletteOffBlockedOption(win, doc, key)

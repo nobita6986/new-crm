@@ -78,14 +78,24 @@ class WorkerCareRoutingTests(unittest.TestCase):
                 "/crm/",
                 "/crm/dashboard",
                 "/crm/dashboard/",
+                "/crm/%64ashboard",
                 "/crm/deals",
+                "/crm/%64eals",
+                "/crm//deals",
                 "/crm/deals/DEAL-001",
+                "/crm/deals/DEAL%20001",
+                "/crm/deals/DEAL%3F001",
+                "/crm/deals/DEAL%23001",
+                "/crm/deals/DEAL%5C001",
+                "/crm/deals/Giao%20d%E1%BB%8Bch-01",
                 "/crm/deals/view/list/",
                 "/crm/forecast",
                 "/crm/forecasts/",
                 "/crm/revenue/by-month",
                 "/crm/data-import/doctype/CRM Deal",
                 "/crm/data-import/doctype/CRM%20Deal",
+                "/crm/data-import/doctype/CRM%20Deal/IMP-001",
+                "/crm/data-import/doctype/CRM%20Deal/IMP%3F001",
             ):
                 with self.subTest(role=role, path=path):
                     response = self.adapt(path, roles=[role])
@@ -175,12 +185,12 @@ class WorkerCareRoutingTests(unittest.TestCase):
         self.assertEqual(response.headers["Location"], "/cskh")
         for path in (
             "/crm/leads",
+            "/crm/leads/LEAD%20001",
             "/crm/deals-archive",
             "/crm/dashboard-tools",
             "/crm-form/deal",
             "//crm/deals",
             "https://attacker.test/crm/deals",
-            "/crm/%64eals",
             "/crm/leads?next=/crm/deals",
             "/crm\\deals",
         ):

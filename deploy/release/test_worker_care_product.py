@@ -56,7 +56,9 @@ class WorkerCareProductTests(unittest.TestCase):
         self.assertEqual(writes, [])
         self.assertEqual(len(clears), 2)
 
-    def test_upgrade_migrates_system_default_app_from_empty_or_crm_to_worker_care(self):
+    def test_upgrade_migrates_system_default_app_from_empty_or_crm_and_scopes_users_by_role(
+        self,
+    ):
         singles = {"default_app": "crm"}
         sql_calls = []
         stub = types.ModuleType("frappe")
@@ -66,7 +68,7 @@ class WorkerCareProductTests(unittest.TestCase):
             get_single_value=lambda _dt, field: singles.get(field),
             set_single_value=lambda _dt, field, val: singles.__setitem__(field, val),
             has_column=lambda dt, col: dt == "User" and col == "default_app",
-            sql=lambda q: sql_calls.append(q),
+            sql=lambda q, params=None: sql_calls.append((q, params)),
         )
         stub.clear_cache = lambda: None
         spec = importlib.util.spec_from_file_location(
@@ -77,8 +79,33 @@ class WorkerCareProductTests(unittest.TestCase):
         with patch.dict(sys.modules, {"frappe": stub}):
             spec.loader.exec_module(module)
             module.execute()
-        self.assertEqual(singles["default_app"], "crm_cskh")
-        self.assertEqual(len(sql_calls), 1)
+            self.assertEqual(singles["default_app"], "crm_cskh")
+            self.assertEqual(len(sql_calls), 1)
+            query_txt, query_params = sql_calls[0]
+            self.assertIn("`tabHas Role`", query_txt)
+            self.assertEqual(
+                set(query_params),
+                {
+                    "Sales User",
+                    "Sales Manager",
+                    "CSKH CRM Admin",
+                    "CSKH BOD Viewer",
+                    "System Manager",
+                },
+            )
+
+            # Unrelated valid default_app (e.g. "frappe") is preserved untouched
+            singles["default_app"] = "frappe"
+            module.execute()
+            self.assertEqual(singles["default_app"], "frappe")
+
+    def test_p2_after_migrate_does_not_overwrite_admin_cleared_default_app(self):
+        p2_patch_src = (APP / "patches" / "v2_0" / "p2_schema_and_seeds.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            'getattr(getattr(frappe, "flags", None), "in_migrate", False)', p2_patch_src
+        )
 
     def test_fresh_install_also_disables_legacy_deal_shortcut(self):
         scripts = json.loads(

@@ -35,16 +35,26 @@ test('Direct old sales routes navigate once to a fixed worker-care destination',
 		'/crm',
 		'/crm/',
 		'/crm/dashboard/',
+		'/crm/%64ashboard',
+		'/crm/%64eals',
+		'/crm//deals',
 		'/crm/deals/DEAL-001',
+		'/crm/deals/DEAL%20001',
+		'/crm/deals/DEAL%3F001',
+		'/crm/deals/DEAL%23001',
+		'/crm/deals/DEAL%5C001',
+		'/crm/deals/Giao%20d%E1%BB%8Bch-01',
 		'/crm/revenue',
 		'/crm/data-import/doctype/CRM Deal',
 		'/crm/data-import/doctype/CRM%20Deal',
+		'/crm/data-import/doctype/CRM%20Deal/IMP-001',
+		'/crm/data-import/doctype/CRM%20Deal/IMP%3F001',
 	]) {
 		const { win, navigations, flushRaf } = createCrmDom({ pathname })
 		win.__cskhSidebarBridge.guardCurrentRoute()
 		win.dispatch('popstate')
 		flushRaf()
-		assert.deepEqual(navigations, ['/cskh'])
+		assert.deepEqual(navigations, ['/cskh'], `Expected redirect for ${pathname}`)
 	}
 })
 
@@ -65,10 +75,10 @@ test('External navigation, API paths and lookalike route names are preserved', (
 		'/api/method/crm.api.dashboard',
 		'/crm/deals-archive',
 		'/crm/dashboard-tools',
+		'/crm/leads/LEAD%20001',
 		'/crm/tasks',
 		'/crm/call-logs',
 		'/crm/data-import/doctype/CRM Lead',
-		'/crm/%64eals',
 	]) {
 		win.history.pushState({}, '', url)
 	}
@@ -85,7 +95,7 @@ test('Back/Forward to an old sales page is redirected without an observer loop',
 	assert.deepEqual(navigations, ['/cskh'])
 })
 
-test('Newly rendered sales links and exact conversion actions are removed while Save stays', () => {
+test('Newly rendered sales links and exact conversion actions are blocked VDOM-safely while Save stays', () => {
 	const { doc, allViewsNav, publicViewsNav, flushRaf } = createCrmDom()
 	for (const href of ['/crm/deals?view=VIEW-001', '/crm/forecast', '/crm/revenue']) {
 		allViewsNav.appendChild(makeNativeSidebarItem(doc, { href, label: 'Sales' }))
@@ -94,15 +104,31 @@ test('Newly rendered sales links and exact conversion actions are removed while 
 	const save = doc.createElement('button')
 	save.textContent = 'Save'
 	doc.body.appendChild(save)
+	const blockedButtons = []
 	for (const label of ['Convert to Deal', 'Chuyển thành Giao dịch CRM', 'Tạo Giao dịch CRM']) {
 		const button = doc.createElement('button')
 		button.textContent = label
 		doc.body.appendChild(button)
+		blockedButtons.push(button)
 	}
 	flushRaf()
 	assert.ok(save.parentElement)
-	assert.equal(doc.querySelectorAll('button').length, 1)
-	assert.equal(doc.querySelectorAll('a[href]').filter(a => /\/crm\/(deals|forecast|revenue)/.test(a.getAttribute('href'))).length, 0)
+	assert.equal(save.getAttribute('hidden'), null)
+	for (const btn of blockedButtons) {
+		assert.equal(btn.parentElement, doc.body, 'Vue anchor stays mounted')
+		assert.equal(btn.getAttribute('data-cskh-sales-blocked'), '1')
+		assert.equal(btn.getAttribute('hidden'), 'hidden')
+	}
+	const visibleButtons = doc.querySelectorAll('button').filter((b) => !b.closest('[data-cskh-sales-blocked="1"]'))
+	assert.equal(visibleButtons.length, 1)
+	const visibleSalesAnchors = doc
+		.querySelectorAll('a[href]')
+		.filter(
+			(a) =>
+				!a.closest('[data-cskh-sales-blocked="1"]') &&
+				/\/crm\/(deals|forecast|revenue)/.test(a.getAttribute('href'))
+		)
+	assert.equal(visibleSalesAnchors.length, 0)
 	const mutations = doc.mutations
 	flushRaf()
 	assert.equal(doc.mutations, mutations)
@@ -222,8 +248,14 @@ test('Mobile Lead detail removes Convert / Chuyển đổi button while preservi
 
 	assert.ok(makeCall.parentElement)
 	assert.ok(saveBtn.parentElement)
-	assert.equal(mobileConvertEn.parentElement, null)
-	assert.equal(mobileConvertVi.parentElement, null)
+	assert.equal(makeCall.getAttribute('hidden'), null)
+	assert.equal(saveBtn.getAttribute('hidden'), null)
+	assert.equal(mobileConvertEn.parentElement, doc.body, 'Mobile Convert stays mounted for Vue VDOM')
+	assert.equal(mobileConvertVi.parentElement, doc.body, 'Mobile Chuyển đổi stays mounted for Vue VDOM')
+	assert.equal(mobileConvertEn.getAttribute('data-cskh-sales-blocked'), '1')
+	assert.equal(mobileConvertVi.getAttribute('data-cskh-sales-blocked'), '1')
+	assert.equal(mobileConvertEn.getAttribute('hidden'), 'hidden')
+	assert.equal(mobileConvertVi.getAttribute('hidden'), 'hidden')
 })
 
 test('Organization Deals tab auto-switches once without stealing input focus and Contact renders worker-care helper', () => {
@@ -344,7 +376,7 @@ test('Bridge fetch & localStorage guards preserve headers, errors, non-Deal requ
 
 	let nextViewsMode = 'mixed'
 	win.fetch = async (input, init) => {
-		const url = typeof input === 'string' ? input : input.url
+		const url = typeof input === 'string' ? input : (input.url || input.href)
 		if (url.includes('network-fail')) {
 			throw new TypeError('NetworkError when attempting to fetch resource')
 		}
@@ -432,11 +464,17 @@ test('Bridge fetch & localStorage guards preserve headers, errors, non-Deal requ
 	assert.equal(searchBody.message.recent.length, 0)
 	assert.equal(searchBody.message.upcoming.length, 1)
 
-	// 4. Filtered views response preserves headers; clean views response returns exact original Response instance
+	// 4. Filtered views response preserves headers (both string and URL instance); clean views returns exact Response
 	const viewsRes = await win.fetch('/api/method/crm.api.views.get_views')
 	assert.equal(viewsRes.headers.get('x-frappe-request-id'), 'req-views-456')
 	const viewsBody = await viewsRes.json()
 	assert.deepEqual(viewsBody.message.map((v) => v.name), ['V-LEAD'])
+
+	const viewsUrlObjRes = await win.fetch(
+		new URL('/api/method/crm.api.views.get_views', win.location.origin)
+	)
+	const viewsUrlObjBody = await viewsUrlObjRes.json()
+	assert.deepEqual(viewsUrlObjBody.message.map((v) => v.name), ['V-LEAD'])
 
 	nextViewsMode = 'clean'
 	const untouchedViewsRes = await win.fetch('/api/method/crm.api.views.get_views')
@@ -658,4 +696,115 @@ test('Onboarding widget div steps for Deal conversion and Deal status are blocke
 	assert.equal(stepFirstLead.getAttribute('hidden'), null)
 	assert.equal(stepFirstTask.getAttribute('hidden'), null)
 	assert.equal(stepsList.getAttribute('hidden'), null)
+})
+
+test('Command palette nudges across consecutive blocked options one async Vue microtask at a time without overshooting', async () => {
+	const { doc, win, navigations } = createCrmDom({ pathname: '/crm/leads/LEAD-077' })
+	const timers = []
+	win.setTimeout = (fn) => {
+		timers.push(fn)
+		return timers.length
+	}
+	win.KeyboardEvent = class KeyboardEvent {
+		constructor(type, init = {}) {
+			this.type = type
+			this.key = init.key || ''
+			this.bubbles = !!init.bubbles
+			this.cancelable = !!init.cancelable
+			this.defaultPrevented = false
+		}
+		preventDefault() {
+			this.defaultPrevented = true
+		}
+	}
+
+	const dialog = doc.createElement('div')
+	dialog.setAttribute('role', 'dialog')
+	const palette = doc.createElement('div')
+	palette.className = 'crm-command-palette'
+	const input = doc.createElement('input')
+	input.setAttribute('role', 'combobox')
+	palette.appendChild(input)
+
+	function makeOpt(id, title) {
+		const opt = doc.createElement('div')
+		opt.setAttribute('role', 'option')
+		opt.setAttribute('id', id)
+		const sp = doc.createElement('span')
+		sp.textContent = title
+		opt.appendChild(sp)
+		return opt
+	}
+
+	const opts = [
+		makeOpt('opt-0-convert', 'Convert to deal'),
+		makeOpt('opt-1-dash', 'Dashboard'),
+		makeOpt('opt-2-status', 'Change status'),
+		makeOpt('opt-3-deals', 'Deals'),
+		makeOpt('opt-4-task', 'Create task'),
+	]
+	const group = doc.createElement('div')
+	for (const o of opts) group.appendChild(o)
+	palette.appendChild(group)
+	dialog.appendChild(palette)
+
+	// Simulate Vue 3 + HeadlessUI Combobox: `keydown` updates `activeIdx` synchronously,
+	// but flushes `aria-activedescendant` asynchronously on `Promise.resolve()` microtask (`nextTick`)!
+	let activeIdx = 0
+	input.setAttribute('aria-activedescendant', opts[0].getAttribute('id'))
+	input.addEventListener('keydown', (ev) => {
+		if (ev.key === 'ArrowDown') {
+			activeIdx = (activeIdx + 1) % opts.length
+		} else if (ev.key === 'ArrowUp') {
+			activeIdx = (activeIdx - 1 + opts.length) % opts.length
+		} else {
+			return
+		}
+		const targetId = opts[activeIdx].getAttribute('id')
+		Promise.resolve().then(() => {
+			input.setAttribute('aria-activedescendant', targetId)
+		})
+	})
+
+	async function drainAsyncPalette() {
+		for (let round = 0; round < 12; round += 1) {
+			await Promise.resolve()
+			await Promise.resolve()
+			if (!timers.length) break
+			const fn = timers.shift()
+			fn()
+		}
+	}
+
+	doc.body.appendChild(dialog)
+	win.__cskhSidebarBridge.syncAll()
+	await drainAsyncPalette()
+
+	// Opening Ctrl+K when index 0 & 1 are blocked lands cleanly on index 2 ('Change status'), NOT overshooting!
+	assert.equal(input.getAttribute('aria-activedescendant'), 'opt-2-status')
+
+	// User presses ArrowDown -> HeadlessUI moves to opt-3-deals -> bridge nudges once onto opt-4-task!
+	input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowDown' }))
+	doc.dispatch('keydown', { key: 'ArrowDown', target: input, preventDefault() {}, stopImmediatePropagation() {} })
+	await drainAsyncPalette()
+	assert.equal(input.getAttribute('aria-activedescendant'), 'opt-4-task')
+
+	// User presses ArrowUp from opt-4-task -> HeadlessUI moves to opt-3-deals, and even if rAF `syncAll()`
+	// runs BEFORE setTimeout, `lastPaletteDirection` keeps moving upward onto opt-2-status!
+	doc.dispatch('keydown', { key: 'ArrowUp', target: input, preventDefault() {}, stopImmediatePropagation() {} })
+	input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowUp' }))
+	await Promise.resolve()
+	win.__cskhSidebarBridge.syncAll()
+	await drainAsyncPalette()
+	assert.equal(input.getAttribute('aria-activedescendant'), 'opt-2-status')
+
+	// Pressing ArrowUp again from opt-2-status traverses across BOTH blocked opt-1-dash & opt-0-convert
+	// upward (wrapping to opt-4-task) without bouncing back down!
+	doc.dispatch('keydown', { key: 'ArrowUp', target: input, preventDefault() {}, stopImmediatePropagation() {} })
+	input.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'ArrowUp' }))
+	await Promise.resolve()
+	win.__cskhSidebarBridge.syncAll()
+	await drainAsyncPalette()
+	assert.equal(input.getAttribute('aria-activedescendant'), 'opt-4-task')
+	assert.deepEqual(navigations, [])
 })

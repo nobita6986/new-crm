@@ -153,7 +153,7 @@ class HttpActorSession:
             )
             return exc.code, hdr_map, raw
 
-    def login(self, usr: str, pwd: str) -> None:
+    def login_raw(self, usr: str, pwd: str) -> tuple[int, dict[str, object]]:
         body = urllib.parse.urlencode({"usr": usr, "pwd": pwd}).encode("utf-8")
         st, _, raw = self.request(
             "POST",
@@ -164,8 +164,68 @@ class HttpActorSession:
                 "Accept": "application/json",
             },
         )
+        parsed: dict[str, object] = {}
+        try:
+            parsed = json.loads(raw.decode("utf-8", errors="replace"))
+        except Exception:
+            parsed = {"raw": raw[:200].decode("utf-8", errors="replace")}
+        return st, parsed
+
+    def follow_redirects(
+        self, start_path: str, max_hops: int = 10
+    ) -> dict[str, object]:
+        cur = start_path
+        hops: list[dict[str, object]] = []
+        seen_paths: set[str] = set()
+        loop_detected = False
+        visited_cskh = False
+        final_status = 0
+        for _ in range(max_hops + 1):
+            norm_path = urllib.parse.urlsplit(cur).path or "/"
+            if norm_path == "/cskh" or norm_path.startswith("/cskh/"):
+                visited_cskh = True
+            if cur in seen_paths:
+                loop_detected = True
+                break
+            seen_paths.add(cur)
+            st, hdrs, _ = self.request(
+                "GET",
+                cur,
+                headers={"Accept": "text/html,application/xhtml+xml,*/*;q=0.8"},
+            )
+            final_status = st
+            loc = hdrs.get("location")
+            hops.append({"path": cur, "status": st, "location": loc})
+            if st in (301, 302, 303, 307, 308) and loc:
+                resolved = urllib.parse.urljoin(f"http://{self.site_host}{cur}", loc)
+                parsed_loc = urllib.parse.urlsplit(resolved)
+                next_target = parsed_loc.path or "/"
+                if parsed_loc.query:
+                    next_target = f"{next_target}?{parsed_loc.query}"
+                cur = next_target
+                continue
+            break
+        else:
+            loop_detected = True
+        redirect_count = sum(
+            1
+            for h in hops
+            if int(h["status"]) in (301, 302, 303, 307, 308)  # type: ignore[arg-type]
+        )
+        return {
+            "start_path": start_path,
+            "final_path": urllib.parse.urlsplit(cur).path or "/",
+            "final_status": final_status,
+            "redirect_count": redirect_count,
+            "loop_detected": loop_detected,
+            "visited_cskh": visited_cskh,
+            "hops": hops,
+        }
+
+    def login(self, usr: str, pwd: str) -> None:
+        st, parsed = self.login_raw(usr, pwd)
         if st != 200:
-            raise RuntimeError(f"Login failed for {usr} (HTTP {st}): {raw[:200]!r}")
+            raise RuntimeError(f"Login failed for {usr} (HTTP {st}): {parsed!r}")
         st_html, _, html_bytes = self.request("GET", "/cskh")
         if st_html == 200:
             html_txt = html_bytes.decode("utf-8", errors="replace")
@@ -230,6 +290,230 @@ def parse_junit_counts(xml_path: Path) -> dict[str, int]:
     return {"tests": tests, "failures": failures, "errors": errors, "skipped": skipped}
 
 
+STAGE_PRE_MIGRATE_LOGIN_PY = r"""
+import json, os, sys
+import frappe
+
+cfg = json.loads(sys.stdin.read())
+site = cfg["site_name"]
+actor_pw = cfg["actor_pw"]
+
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+frappe.set_user("Administrator")
+try:
+    fresh_enabled = int(
+        frappe.db.get_value("CRM Form Script", "CSKH - Open CSKH Page from Deal", "enabled") or 0
+    )
+    frappe.db.set_single_value("System Settings", "setup_complete", 1)
+    frappe.db.set_single_value("System Settings", "language", "vi")
+    frappe.db.set_single_value("System Settings", "time_zone", "Asia/Ho_Chi_Minh")
+    frappe.db.set_single_value("System Settings", "default_app", "crm")
+    frappe.db.set_single_value("Website Settings", "app_name", "[DỮ LIỆU GIẢ LẬP] Cổng Nhân Lực")
+    frappe.db.set_single_value("Portal Settings", "default_portal_home", "/me")
+    frappe.db.set_value("CRM Form Script", "CSKH - Open CSKH Page from Deal", "enabled", 1)
+    frappe.db.sql(
+        "DELETE FROM `tabPatch Log` WHERE patch = 'crm_cskh.patches.v4_0.worker_care_workspace'"
+    )
+    frappe.cache.set_value("wc_migrate_cache_probe", "stale-before-migrate")
+
+    for rname, desk_flag in (
+        ("Internal Backoffice User", 1),
+        ("Sales User", 1),
+    ):
+        if not frappe.db.exists("Role", rname):
+            frappe.get_doc(
+                {"doctype": "Role", "role_name": rname, "desk_access": desk_flag}
+            ).insert(ignore_permissions=True)
+
+    user_specs = [
+        (
+            "outsider.sys@mock.local",
+            "[DỮ LIỆU GIẢ LẬP] Nhân sự Hành chính (System User ngoài CSKH)",
+            "System User",
+            ["Internal Backoffice User"],
+            "",
+        ),
+        (
+            "outsider.web@mock.local",
+            "[DỮ LIỆU GIẢ LẬP] Tài khoản Cổng Web (Website User ngoài CSKH)",
+            "Website User",
+            [],
+            "",
+        ),
+        (
+            "personal.desk@mock.local",
+            "[DỮ LIỆU GIẢ LẬP] User có default_app hợp lệ khác (frappe)",
+            "System User",
+            ["Sales User"],
+            "frappe",
+        ),
+        (
+            "outsider.frappe@mock.local",
+            "[DỮ LIỆU GIẢ LẬP] User ngoài nhóm có default_app hợp lệ khác (frappe)",
+            "System User",
+            ["Internal Backoffice User"],
+            "frappe",
+        ),
+        (
+            "outsider.legacycrm@mock.local",
+            "[DỮ LIỆU GIẢ LẬP] User ngoài nhóm có default_app cũ là crm",
+            "System User",
+            ["Internal Backoffice User"],
+            "crm",
+        ),
+        (
+            "care.legacycrm@mock.local",
+            "[DỮ LIỆU GIẢ LẬP] Nhân viên CSKH có default_app cũ là crm",
+            "System User",
+            ["Sales User"],
+            "crm",
+        ),
+    ]
+
+    created_types = {}
+    for email, fname, expected_utype, uroles, def_app in user_specs:
+        if not frappe.db.exists("User", email):
+            frappe.get_doc(
+                {
+                    "doctype": "User",
+                    "email": email,
+                    "first_name": fname,
+                    "enabled": 1,
+                    "language": "vi",
+                    "time_zone": "Asia/Ho_Chi_Minh",
+                    "send_welcome_email": 0,
+                    "user_type": expected_utype,
+                }
+            ).insert(ignore_permissions=True)
+        u = frappe.get_doc("User", email)
+        u.enabled = 1
+        u.new_password = actor_pw
+        u.roles = []
+        for rn in uroles:
+            u.append("roles", {"role": rn})
+        u.save(ignore_permissions=True)
+        frappe.db.set_value("User", email, "default_app", def_app, update_modified=False)
+        actual_utype = str(frappe.db.get_value("User", email, "user_type") or "")
+        assert actual_utype == expected_utype, (email, actual_utype, expected_utype)
+        created_types[email] = {
+            "user_type": actual_utype,
+            "roles": uroles,
+            "default_app": str(frappe.db.get_value("User", email, "default_app") or ""),
+        }
+
+    frappe.db.commit()
+    frappe.clear_cache()
+    print(json.dumps({
+        "fresh_install_deal_script_enabled": fresh_enabled,
+        "system_default_app_before": str(frappe.db.get_single_value("System Settings", "default_app") or ""),
+        "website_app_name_before": str(frappe.db.get_single_value("Website Settings", "app_name") or ""),
+        "portal_home_before": str(frappe.db.get_single_value("Portal Settings", "default_portal_home") or ""),
+        "users_before": created_types,
+    }, ensure_ascii=False))
+finally:
+    frappe.destroy()
+"""
+
+INSPECT_POST_MIGRATE_CONFIG_PY = r"""
+import json, os, subprocess, sys
+import frappe
+from crm_cskh.patches.v4_0 import worker_care_workspace
+
+cfg = json.loads(sys.stdin.read())
+site = cfg["site_name"]
+emails = cfg["emails"]
+
+os.chdir("/home/frappe/frappe-bench/sites")
+frappe.init(site=site, sites_path=".")
+frappe.connect()
+try:
+    users_after = {}
+    for email in emails:
+        users_after[email] = {
+            "user_type": str(frappe.db.get_value("User", email, "user_type") or ""),
+            "default_app": str(frappe.db.get_value("User", email, "default_app") or ""),
+        }
+    sys_default_after = str(frappe.db.get_single_value("System Settings", "default_app") or "")
+    web_app_name_after = str(frappe.db.get_single_value("Website Settings", "app_name") or "")
+    portal_home_after = str(frappe.db.get_single_value("Portal Settings", "default_portal_home") or "")
+
+    # Verify unrelated System Settings.default_app ('frappe') AND admin-cleared ('') survive migrate!
+    frappe.db.set_single_value("System Settings", "default_app", "frappe")
+    worker_care_workspace.execute()
+    frappe.db.commit()
+    preserved_frappe_after_patch = str(frappe.db.get_single_value("System Settings", "default_app") or "")
+
+    frappe.db.set_single_value("System Settings", "default_app", "")
+    frappe.db.commit()
+    frappe.destroy()
+
+    subprocess.run(
+        ["bench", "--site", site, "migrate"],
+        cwd="/home/frappe/frappe-bench",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    frappe.init(site=site, sites_path=".")
+    frappe.connect()
+    preserved_empty_after_migrate = str(frappe.db.get_single_value("System Settings", "default_app") or "")
+    # Restore canonical site default_app='crm_cskh' for downstream JUnit suites
+    frappe.db.set_single_value("System Settings", "default_app", "crm_cskh")
+    frappe.db.commit()
+    frappe.clear_cache()
+
+    print(json.dumps({
+        "system_default_app_after": sys_default_after,
+        "website_app_name_after": web_app_name_after,
+        "portal_home_after": portal_home_after,
+        "users_after": users_after,
+        "preserved_other_system_default_app_frappe": preserved_frappe_after_patch,
+        "preserved_admin_cleared_default_app_across_migrate": preserved_empty_after_migrate,
+    }, ensure_ascii=False))
+finally:
+    frappe.destroy()
+"""
+
+
+def probe_http_login_matrix(
+    base_http: str,
+    site_name: str,
+    actor_pw: str,
+    emails: list[str],
+) -> dict[str, dict[str, object]]:
+    results: dict[str, dict[str, object]] = {}
+    for email in emails:
+        sess = HttpActorSession(base_http, site_name)
+        st_login, body_login = sess.login_raw(email, actor_pw)
+        assert st_login == 200, (email, st_login, body_login)
+        home_page = str(body_login.get("home_page") or "")
+        assert home_page.startswith("/"), (email, body_login)
+
+        home_chain = sess.follow_redirects(home_page)
+        login_route_chain = sess.follow_redirects("/login")
+        st_direct_cskh, hdrs_direct_cskh, _ = sess.request(
+            "GET", "/cskh", headers={"Accept": "text/html"}
+        )
+        st_direct_crm, hdrs_direct_crm, _ = sess.request(
+            "GET", "/crm", headers={"Accept": "text/html"}
+        )
+        results[email] = {
+            "login_post_status": st_login,
+            "login_message": body_login.get("message"),
+            "home_page": home_page,
+            "home_page_chain": home_chain,
+            "authenticated_login_page_chain": login_route_chain,
+            "direct_cskh_status": st_direct_cskh,
+            "direct_cskh_location": hdrs_direct_cskh.get("location"),
+            "direct_crm_status": st_direct_crm,
+            "direct_crm_location": hdrs_direct_crm.get("location"),
+        }
+    return results
+
+
 def run_phase_a_migrate_and_suites(
     *,
     app_image: str,
@@ -237,15 +521,25 @@ def run_phase_a_migrate_and_suites(
     out_dir: Path,
     port: int,
 ) -> dict[str, object]:
-    """Boots clean Frappe stack #1, proves double-migrate & Deal action retirement, runs JUnit suites."""
+    """Boots clean Frappe stack #1, proves double-migrate, non-care login matrix & JUnit suites."""
     project = f"cskh-wc-suites-{secrets.token_hex(4)}"
     site_name = "worker-care-suites.localhost"
     db_pw = secrets.token_hex(24)
     adm_pw = f"WcSuites#{secrets.token_hex(12)}"
+    actor_pw = f"WcLoginMat#{secrets.token_hex(12)}"
     junit_dir = out_dir / "junit"
     junit_ui_dir = out_dir / "junit-ui"
     junit_dir.mkdir(parents=True, exist_ok=True)
     junit_ui_dir.mkdir(parents=True, exist_ok=True)
+
+    matrix_emails = [
+        "outsider.sys@mock.local",
+        "outsider.web@mock.local",
+        "personal.desk@mock.local",
+        "outsider.frappe@mock.local",
+        "outsider.legacycrm@mock.local",
+        "care.legacycrm@mock.local",
+    ]
 
     with tempfile.TemporaryDirectory(prefix="cskh-wc-suites-") as td:
         sec_file = Path(td) / "db_pw.txt"
@@ -273,6 +567,8 @@ def run_phase_a_migrate_and_suites(
                     "redis-queue",
                     "configurator",
                     "backend",
+                    "websocket",
+                    "frontend",
                 ],
                 env=compose_env,
             )
@@ -305,18 +601,7 @@ def run_phase_a_migrate_and_suites(
                 timeout=900,
             )
 
-            # Pre-seed legacy enabled=1 state + Redis sentinel, then run `bench migrate` TWICE
-            pre_mig_py = (
-                "import json, os, frappe; "
-                "os.chdir('/home/frappe/frappe-bench/sites'); "
-                f"frappe.init(site={site_name!r}, sites_path='.'); frappe.connect(); "
-                "fresh_enabled = int(frappe.db.get_value('CRM Form Script', 'CSKH - Open CSKH Page from Deal', 'enabled') or 0); "
-                "frappe.db.set_value('CRM Form Script', 'CSKH - Open CSKH Page from Deal', 'enabled', 1); "
-                "frappe.db.set_single_value('System Settings', 'default_app', 'crm'); "
-                "frappe.cache.set_value('wc_migrate_cache_probe', 'stale-before-migrate'); "
-                "frappe.db.commit(); frappe.destroy(); "
-                "print(json.dumps({'fresh_install_deal_script_enabled': fresh_enabled}))"
-            )
+            # Pre-seed legacy enabled=1 state + non-care & personal default_app synthetic users BEFORE migrate
             pre_res = run_cmd(
                 [
                     *compose_base,
@@ -325,22 +610,35 @@ def run_phase_a_migrate_and_suites(
                     "backend",
                     "/home/frappe/frappe-bench/env/bin/python",
                     "-c",
-                    pre_mig_py,
+                    STAGE_PRE_MIGRATE_LOGIN_PY,
                 ],
                 env=compose_env,
+                input_text=json.dumps({"site_name": site_name, "actor_pw": actor_pw}),
             )
             pre_info = json.loads(pre_res.stdout.strip().splitlines()[-1])
 
-            # Execute patch + migrate #1 and migrate #2 (`patches.txt` marks patch executed on install,
-            # so test both fresh-install fixture state AND upgrade migration execution + double `bench migrate`).
+            run_cmd(
+                [*compose_base, "restart", "backend", "websocket"],
+                env=compose_env,
+                timeout=120,
+            )
+            wait_for_ping(port, site_name, timeout_sec=90)
+            base_http = f"http://127.0.0.1:{port}"
+
+            # 1. Real Frappe HTTP login & redirect audit BEFORE migration
+            login_before = probe_http_login_matrix(
+                base_http=base_http,
+                site_name=site_name,
+                actor_pw=actor_pw,
+                emails=matrix_emails,
+            )
+
+            # 2. Execute upgrade migration + double `bench migrate`
             upg_py = (
                 "import json, os, subprocess, frappe; "
                 "from crm_cskh.patches.v4_0 import worker_care_workspace; "
                 "os.chdir('/home/frappe/frappe-bench/sites'); "
                 f"site = {site_name!r}; "
-                "frappe.init(site=site, sites_path='.'); frappe.connect(); "
-                "frappe.db.sql(\"DELETE FROM `tabPatch Log` WHERE patch = 'crm_cskh.patches.v4_0.worker_care_workspace'\"); "
-                "frappe.db.commit(); frappe.destroy(); "
                 "m1 = subprocess.run(['bench', '--site', site, 'migrate'], cwd='/home/frappe/frappe-bench', capture_output=True, text=True, check=True); "
                 "frappe.init(site=site, sites_path='.'); frappe.connect(); "
                 "after_m1_enabled = int(frappe.db.get_value('CRM Form Script', 'CSKH - Open CSKH Page from Deal', 'enabled') or 0); "
@@ -381,7 +679,9 @@ def run_phase_a_migrate_and_suites(
                 timeout=600,
             )
             migrate_info = {
-                **pre_info,
+                "fresh_install_deal_script_enabled": pre_info[
+                    "fresh_install_deal_script_enabled"
+                ],
                 **json.loads(upg_res.stdout.strip().splitlines()[-1]),
             }
             assert migrate_info["fresh_install_deal_script_enabled"] == 0, migrate_info
@@ -398,6 +698,290 @@ def run_phase_a_migrate_and_suites(
             assert migrate_info["lead_list_script_enabled"] == 1, migrate_info
             assert migrate_info["lead_form_script_enabled"] == 1, migrate_info
             assert migrate_info["patch_logged"] is True, migrate_info
+
+            # Restart Gunicorn workers so post-migrate HTTP requests see fresh worker caches
+            run_cmd(
+                [*compose_base, "restart", "backend", "websocket"],
+                env=compose_env,
+                timeout=120,
+            )
+            wait_for_ping(port, site_name, timeout_sec=90)
+
+            # 3. Real Frappe HTTP login & redirect audit AFTER migration
+            login_after = probe_http_login_matrix(
+                base_http=base_http,
+                site_name=site_name,
+                actor_pw=actor_pw,
+                emails=matrix_emails,
+            )
+
+            post_cfg_res = run_cmd(
+                [
+                    *compose_base,
+                    "exec",
+                    "-T",
+                    "backend",
+                    "/home/frappe/frappe-bench/env/bin/python",
+                    "-c",
+                    INSPECT_POST_MIGRATE_CONFIG_PY,
+                ],
+                env=compose_env,
+                input_text=json.dumps(
+                    {"site_name": site_name, "emails": matrix_emails}
+                ),
+                timeout=300,
+            )
+            post_cfg = json.loads(post_cfg_res.stdout.strip().splitlines()[-1])
+
+            # Strict assertions across BEFORE and AFTER migration for all 4 non-care cases + care control:
+            for phase_name, phase_map in (
+                ("before_migration", login_before),
+                ("after_migration", login_after),
+            ):
+                # (a) System User without care roles -> /app (200), 0 loops, never /cskh, direct /cskh == 403
+                sys_out = phase_map["outsider.sys@mock.local"]
+                assert sys_out["home_page"] == "/app", (phase_name, sys_out)
+                assert sys_out["home_page_chain"]["final_path"] == "/app", (
+                    phase_name,
+                    sys_out,
+                )
+                assert sys_out["home_page_chain"]["final_status"] == 200, (
+                    phase_name,
+                    sys_out,
+                )
+                assert sys_out["home_page_chain"]["redirect_count"] == 0, (
+                    phase_name,
+                    sys_out,
+                )
+                assert sys_out["home_page_chain"]["loop_detected"] is False, (
+                    phase_name,
+                    sys_out,
+                )
+                assert sys_out["home_page_chain"]["visited_cskh"] is False, (
+                    phase_name,
+                    sys_out,
+                )
+                assert (
+                    sys_out["authenticated_login_page_chain"]["final_path"] == "/app"
+                ), (phase_name, sys_out)
+                assert (
+                    sys_out["authenticated_login_page_chain"]["final_status"] == 200
+                ), (phase_name, sys_out)
+                assert (
+                    sys_out["authenticated_login_page_chain"]["redirect_count"] == 1
+                ), (phase_name, sys_out)
+                assert (
+                    sys_out["authenticated_login_page_chain"]["loop_detected"] is False
+                ), (phase_name, sys_out)
+                assert (
+                    sys_out["authenticated_login_page_chain"]["visited_cskh"] is False
+                ), (phase_name, sys_out)
+                assert sys_out["direct_cskh_status"] == 403, (phase_name, sys_out)
+                assert sys_out["direct_crm_status"] == 403, (phase_name, sys_out)
+
+                # (b) Website User without care roles -> /me (200), 0 loops, never /cskh, direct /cskh == 403
+                web_out = phase_map["outsider.web@mock.local"]
+                assert web_out["home_page"] == "/me", (phase_name, web_out)
+                assert web_out["home_page_chain"]["final_path"] == "/me", (
+                    phase_name,
+                    web_out,
+                )
+                assert web_out["home_page_chain"]["final_status"] == 200, (
+                    phase_name,
+                    web_out,
+                )
+                assert web_out["home_page_chain"]["loop_detected"] is False, (
+                    phase_name,
+                    web_out,
+                )
+                assert web_out["home_page_chain"]["visited_cskh"] is False, (
+                    phase_name,
+                    web_out,
+                )
+                assert (
+                    web_out["authenticated_login_page_chain"]["final_path"] == "/me"
+                ), (phase_name, web_out)
+                assert (
+                    web_out["authenticated_login_page_chain"]["final_status"] == 200
+                ), (phase_name, web_out)
+                assert (
+                    web_out["authenticated_login_page_chain"]["redirect_count"] == 1
+                ), (phase_name, web_out)
+                assert (
+                    web_out["authenticated_login_page_chain"]["loop_detected"] is False
+                ), (phase_name, web_out)
+                assert (
+                    web_out["authenticated_login_page_chain"]["visited_cskh"] is False
+                ), (phase_name, web_out)
+                assert web_out["direct_cskh_status"] == 403, (phase_name, web_out)
+                assert web_out["direct_crm_status"] == 403, (phase_name, web_out)
+
+                # (c) Personal default_app='frappe' (both care-role user & non-care user) -> /app (200), preserved!
+                pers_care = phase_map["personal.desk@mock.local"]
+                assert pers_care["home_page"] == "/app", (phase_name, pers_care)
+                assert pers_care["home_page_chain"]["final_path"] == "/app", (
+                    phase_name,
+                    pers_care,
+                )
+                assert pers_care["home_page_chain"]["final_status"] == 200, (
+                    phase_name,
+                    pers_care,
+                )
+                assert (
+                    pers_care["authenticated_login_page_chain"]["final_path"] == "/app"
+                ), (phase_name, pers_care)
+                assert (
+                    pers_care["authenticated_login_page_chain"]["redirect_count"] == 1
+                ), (phase_name, pers_care)
+                assert pers_care["direct_cskh_status"] == 200, (phase_name, pers_care)
+
+                pers_out = phase_map["outsider.frappe@mock.local"]
+                assert pers_out["home_page"] == "/app", (phase_name, pers_out)
+                assert pers_out["home_page_chain"]["final_path"] == "/app", (
+                    phase_name,
+                    pers_out,
+                )
+                assert pers_out["home_page_chain"]["final_status"] == 200, (
+                    phase_name,
+                    pers_out,
+                )
+                assert pers_out["home_page_chain"]["visited_cskh"] is False, (
+                    phase_name,
+                    pers_out,
+                )
+                assert pers_out["direct_cskh_status"] == 403, (phase_name, pers_out)
+
+                # (d) Outsider with legacy default_app='crm' -> /app (200), 0 loops, never /cskh, direct /cskh == 403
+                leg_out = phase_map["outsider.legacycrm@mock.local"]
+                assert leg_out["home_page"] == "/app", (phase_name, leg_out)
+                assert leg_out["home_page_chain"]["final_path"] == "/app", (
+                    phase_name,
+                    leg_out,
+                )
+                assert leg_out["home_page_chain"]["final_status"] == 200, (
+                    phase_name,
+                    leg_out,
+                )
+                assert leg_out["home_page_chain"]["redirect_count"] == 0, (
+                    phase_name,
+                    leg_out,
+                )
+                assert leg_out["home_page_chain"]["loop_detected"] is False, (
+                    phase_name,
+                    leg_out,
+                )
+                assert leg_out["home_page_chain"]["visited_cskh"] is False, (
+                    phase_name,
+                    leg_out,
+                )
+                assert (
+                    leg_out["authenticated_login_page_chain"]["final_path"] == "/app"
+                ), (phase_name, leg_out)
+                assert (
+                    leg_out["authenticated_login_page_chain"]["redirect_count"] == 1
+                ), (phase_name, leg_out)
+                assert (
+                    leg_out["authenticated_login_page_chain"]["visited_cskh"] is False
+                ), (phase_name, leg_out)
+                assert leg_out["direct_cskh_status"] == 403, (phase_name, leg_out)
+                assert leg_out["direct_crm_status"] == 403, (phase_name, leg_out)
+
+            # Care-role user with legacy default_app='crm': before='/crm' (302->/cskh), after='/cskh' (200 direct)
+            assert login_before["care.legacycrm@mock.local"]["home_page"] == "/crm", (
+                login_before["care.legacycrm@mock.local"]
+            )
+            assert (
+                login_before["care.legacycrm@mock.local"]["home_page_chain"][
+                    "final_path"
+                ]
+                == "/cskh"
+            ), login_before["care.legacycrm@mock.local"]
+            assert (
+                login_before["care.legacycrm@mock.local"]["home_page_chain"][
+                    "final_status"
+                ]
+                == 200
+            ), login_before["care.legacycrm@mock.local"]
+            assert login_after["care.legacycrm@mock.local"]["home_page"] == "/cskh", (
+                login_after["care.legacycrm@mock.local"]
+            )
+            assert (
+                login_after["care.legacycrm@mock.local"]["home_page_chain"][
+                    "final_path"
+                ]
+                == "/cskh"
+            ), login_after["care.legacycrm@mock.local"]
+            assert (
+                login_after["care.legacycrm@mock.local"]["home_page_chain"][
+                    "final_status"
+                ]
+                == 200
+            ), login_after["care.legacycrm@mock.local"]
+            assert (
+                login_after["care.legacycrm@mock.local"]["home_page_chain"][
+                    "redirect_count"
+                ]
+                == 0
+            ), login_after["care.legacycrm@mock.local"]
+            assert (
+                login_after["care.legacycrm@mock.local"][
+                    "authenticated_login_page_chain"
+                ]["final_path"]
+                == "/cskh"
+            ), login_after["care.legacycrm@mock.local"]
+            assert (
+                login_after["care.legacycrm@mock.local"][
+                    "authenticated_login_page_chain"
+                ]["redirect_count"]
+                == 1
+            ), login_after["care.legacycrm@mock.local"]
+
+            # Verify DB config preservation across migration
+            assert (
+                post_cfg["website_app_name_after"] == "[DỮ LIỆU GIẢ LẬP] Cổng Nhân Lực"
+            ), post_cfg
+            assert post_cfg["portal_home_after"] == "/me", post_cfg
+            assert (
+                post_cfg["users_after"]["personal.desk@mock.local"]["default_app"]
+                == "frappe"
+            ), post_cfg
+            assert (
+                post_cfg["users_after"]["outsider.frappe@mock.local"]["default_app"]
+                == "frappe"
+            ), post_cfg
+            assert (
+                post_cfg["users_after"]["outsider.legacycrm@mock.local"]["default_app"]
+                == "crm"
+            ), post_cfg
+            assert (
+                post_cfg["users_after"]["care.legacycrm@mock.local"]["default_app"]
+                == "crm_cskh"
+            ), post_cfg
+            assert post_cfg["preserved_other_system_default_app_frappe"] == "frappe", (
+                post_cfg
+            )
+            assert (
+                post_cfg["preserved_admin_cleared_default_app_across_migrate"] == ""
+            ), post_cfg
+
+            non_care_login_report = {
+                "status": "PASS",
+                "is_synthetic": True,
+                "site_name": site_name,
+                "before_migration_config": {
+                    "system_default_app": pre_info["system_default_app_before"],
+                    "website_app_name": pre_info["website_app_name_before"],
+                    "portal_home": pre_info["portal_home_before"],
+                    "users": pre_info["users_before"],
+                },
+                "after_migration_config": post_cfg,
+                "http_login_before_migration": login_before,
+                "http_login_after_migration": login_after,
+            }
+            (out_dir / "non-care-login-migration-report.json").write_text(
+                json.dumps(non_care_login_report, indent=2, ensure_ascii=False) + "\n",
+                encoding="utf-8",
+            )
 
             suite_results: dict[str, dict[str, int]] = {}
             for mod, bucket in SUITE_MODULES:
@@ -469,6 +1053,7 @@ def run_phase_a_migrate_and_suites(
                 "status": "PASS",
                 "site_name": site_name,
                 "double_migrate_and_deal_script_audit": migrate_info,
+                "non_care_login_and_migration_matrix": non_care_login_report,
                 "frappe_test_suites": suite_results,
             }
         finally:
@@ -857,36 +1442,84 @@ try:
         "reference_docname": primary_lead_id,
     }).insert(ignore_permissions=True)
 
+    # Seed real CSKH SLA Obligations on staff.a active Work Items (1 open + 1 breached overdue;
+    # plus 1 paused, 1 informational_only, and 1 mismatched-owner obligation that must be excluded)
+    if frappe.db.exists("DocType", "CSKH SLA Obligation"):
+        sla_wi_open = staff_a_wis[3]
+        sla_lead_open = frappe.db.get_value("CSKH Work Item", sla_wi_open, "lead")
+        sla_wi_over = staff_a_wis[4]
+        sla_lead_over = frappe.db.get_value("CSKH Work Item", sla_wi_over, "lead")
+        past_sla_due = add_to_date(now_naive, hours=-3)
+        fut_sla_due = add_to_date(now_naive, hours=4)
+        frappe.get_doc({
+            "doctype": "CSKH SLA Obligation",
+            "obligation_type": "FIRST_ATTEMPT",
+            "work_item": sla_wi_open,
+            "lead": sla_lead_open,
+            "campaign": camp_a1,
+            "owner_user": "staff.a@mock.local",
+            "attribution_status": "authoritative",
+            "status": "open",
+            "started_at": add_to_date(now_naive, hours=-1),
+            "original_due_at": fut_sla_due,
+            "effective_due_at": fut_sla_due,
+        }).insert(ignore_permissions=True)
+        frappe.get_doc({
+            "doctype": "CSKH SLA Obligation",
+            "obligation_type": "FIRST_ATTEMPT",
+            "work_item": sla_wi_over,
+            "lead": sla_lead_over,
+            "campaign": camp_a1,
+            "owner_user": "staff.a@mock.local",
+            "attribution_status": "authoritative",
+            "status": "breached_open",
+            "started_at": add_to_date(now_naive, hours=-5),
+            "original_due_at": past_sla_due,
+            "effective_due_at": past_sla_due,
+        }).insert(ignore_permissions=True)
+        for extra_sla in (
+            {"is_paused": 1, "owner_user": "staff.a@mock.local"},
+            {"informational_only": 1, "owner_user": "staff.a@mock.local"},
+            {"owner_user": "staff.b@mock.local"},
+        ):
+            frappe.get_doc({
+                "doctype": "CSKH SLA Obligation",
+                "obligation_type": "FIRST_CONNECTED",
+                "work_item": sla_wi_open,
+                "lead": sla_lead_open,
+                "campaign": camp_a1,
+                "attribution_status": "authoritative",
+                "status": "open",
+                "started_at": add_to_date(now_naive, hours=-2),
+                "original_due_at": past_sla_due,
+                "effective_due_at": past_sla_due,
+                **extra_sla,
+            }).insert(ignore_permissions=True)
+
     # Saved/pinned CRM View Settings: 1 for CRM Deal (must be filtered out) + 1 for CRM Lead (must stay)
-    pinned_lead_view = None
-    pinned_deal_view = None
-    if frappe.db.exists("DocType", "CRM View Settings"):
-        try:
-            lv = frappe.get_doc({
-                "doctype": "CRM View Settings",
-                "label": "[Giả lập] NLĐ Ưu tiên",
-                "dt": "CRM Lead",
-                "type": "list",
-                "route_name": "Leads",
-                "public": 1,
-                "pinned": 1,
-                "user": "staff.a@mock.local",
-            }).insert(ignore_permissions=True)
-            dv = frappe.get_doc({
-                "doctype": "CRM View Settings",
-                "label": "[Giả lập] Deal Doanh thu Cũ",
-                "dt": "CRM Deal",
-                "type": "list",
-                "route_name": "Deals",
-                "public": 1,
-                "pinned": 1,
-                "user": "staff.a@mock.local",
-            }).insert(ignore_permissions=True)
-            pinned_lead_view = lv.name
-            pinned_deal_view = dv.name
-        except Exception:
-            pinned_lead_view = None
-            pinned_deal_view = None
+    assert frappe.db.exists("DocType", "CRM View Settings"), "CRM View Settings DocType missing"
+    lv = frappe.get_doc({
+        "doctype": "CRM View Settings",
+        "label": "[Giả lập] NLĐ Ưu tiên",
+        "dt": "CRM Lead",
+        "type": "list",
+        "route_name": "Leads",
+        "public": 1,
+        "pinned": 1,
+        "user": "staff.a@mock.local",
+    }).insert(ignore_permissions=True)
+    dv = frappe.get_doc({
+        "doctype": "CRM View Settings",
+        "label": "[Giả lập] Deal Doanh thu Cũ",
+        "dt": "CRM Deal",
+        "type": "list",
+        "route_name": "Deals",
+        "public": 1,
+        "pinned": 1,
+        "user": "staff.a@mock.local",
+    }).insert(ignore_permissions=True)
+    pinned_lead_view = lv.name
+    pinned_deal_view = dv.name
 
     frappe.db.commit()
     frappe.clear_cache()
@@ -976,11 +1609,34 @@ try:
                         FROM `tabCSKH Work Item` wi
                         INNER JOIN `tabCRM Lead` l ON l.name = wi.lead
                         WHERE COALESCE(l.cskh_do_not_contact, 0) = 1
-                          AND wi.assigned_to IN ({placeholders})''',
-                    tuple(users),
+                          AND (
+                            wi.assigned_to IN ({placeholders})
+                            OR (wi.status = 'closed' AND wi.owner_at_close IN ({placeholders}))
+                          )''',
+                    tuple(users) + tuple(users),
                 )[0][0]
                 or 0
             )
+        from crm_cskh.services.p3_flags import is_p3_sla_enabled
+        sla_expected = None
+        if is_p3_sla_enabled() and frappe.db.table_exists("CSKH SLA Obligation"):
+            s_row = frappe.db.sql(
+                f'''SELECT COUNT(*) AS pending,
+                           SUM(CASE WHEN o.effective_due_at < %s THEN 1 ELSE 0 END) AS overdue
+                    FROM `tabCSKH SLA Obligation` o
+                    INNER JOIN `tabCSKH Work Item` wi
+                      ON wi.name = o.work_item AND o.owner_user = wi.assigned_to
+                    WHERE o.status IN ('open', 'breached_open')
+                      AND COALESCE(o.is_paused, 0) = 0
+                      AND COALESCE(o.informational_only, 0) = 0
+                      AND {where}''',
+                (now_val, *params),
+                as_dict=True,
+            )[0]
+            sla_expected = {
+                "pending": int(s_row["pending"] or 0),
+                "overdue": int(s_row["overdue"] or 0),
+            }
         active = int(w["active"] or 0)
         attempted = int(w["attempted"] or 0)
         connected = int(w["connected"] or 0)
@@ -1005,6 +1661,7 @@ try:
                 "assignees_with_overdue": int(cb["assignees_with_overdue"] or 0),
             },
             "do_not_contact": dnc_cnt,
+            "sla": sla_expected,
         }
 
     print(json.dumps({
@@ -1347,6 +2004,7 @@ def run_playwright_browser_e2e(
             assert sidebar_audit["firstIsCskh"] is True, sidebar_audit
             assert sidebar_audit["cskhHref"] == "/cskh", sidebar_audit
             assert sidebar_audit["visibleSalesLinks"] == [], sidebar_audit
+            assert sidebar_audit["hasPinnedLeadView"] is True, sidebar_audit
             assert sidebar_audit["hasPinnedDealView"] is False, sidebar_audit
 
             apps_switcher = staff_page.evaluate(
@@ -1470,16 +2128,51 @@ def run_playwright_browser_e2e(
                     "create deal",
                 ), opt_txt
 
+            def read_palette_active_state() -> dict[str, object]:
+                return staff_page.evaluate(
+                    """() => {
+                      const root = document.querySelector('.crm-command-palette') || document.querySelector('[role="dialog"]');
+                      if (!root) return { hasRoot: false };
+                      const input = root.querySelector('[role="combobox"]') || root.querySelector('input');
+                      const activeId = (input && input.getAttribute('aria-activedescendant')) || '';
+                      const opts = Array.from(root.querySelectorAll('[role="option"]'));
+                      const activeOpt = opts.find(o =>
+                        (activeId && o.id === activeId) ||
+                        o.getAttribute('aria-selected') === 'true' ||
+                        (o.getAttribute('data-headlessui-state') || '').split(/\\s+/).includes('active')
+                      );
+                      return {
+                        hasRoot: true,
+                        focusInside: !!(document.activeElement && root.contains(document.activeElement)),
+                        activeFound: !!activeOpt,
+                        activeBlocked: activeOpt ? activeOpt.getAttribute('data-cskh-sales-blocked') === '1' : false,
+                        activeHidden: activeOpt ? (activeOpt.hasAttribute('hidden') || activeOpt.offsetParent === null) : false,
+                        activeText: activeOpt ? (activeOpt.innerText || '').replace(/\\s+/g, ' ').trim() : '',
+                      };
+                    }"""
+                )
+
+            initial_active = read_palette_active_state()
+            assert initial_active.get("focusInside") is True, initial_active
+            if initial_active.get("activeFound"):
+                assert initial_active["activeBlocked"] is False, initial_active
+                assert initial_active["activeHidden"] is False, initial_active
+
             staff_page.keyboard.press("ArrowDown")
+            staff_page.wait_for_timeout(120)
+            after_down_1 = read_palette_active_state()
             staff_page.keyboard.press("ArrowDown")
+            staff_page.wait_for_timeout(120)
+            after_down_2 = read_palette_active_state()
             staff_page.keyboard.press("ArrowUp")
-            palette_focus_preserved = staff_page.evaluate(
-                """() => {
-                  const root = document.querySelector('.crm-command-palette') || document.querySelector('[role="dialog"]');
-                  return !!(root && document.activeElement && root.contains(document.activeElement));
-                }"""
-            )
-            assert palette_focus_preserved is True
+            staff_page.wait_for_timeout(120)
+            after_up = read_palette_active_state()
+
+            for st_snap in (after_down_1, after_down_2, after_up):
+                assert st_snap.get("focusInside") is True, st_snap
+                assert st_snap.get("activeFound") is True, st_snap
+                assert st_snap.get("activeBlocked") is False, st_snap
+                assert st_snap.get("activeHidden") is False, st_snap
 
             palette_input.fill("Đặc Biệt")
             staff_page.wait_for_function(
@@ -1737,8 +2430,10 @@ def run_playwright_browser_e2e(
             )
             adm_deal_status = adm_deal_resp.status if adm_deal_resp else 0
             adm_deal_path = urllib.parse.urlsplit(admin_page.url).path
-            assert adm_deal_path == "/cskh" or (
-                adm_deal_status == 403 and admin_page.locator("#app").count() == 0
+            assert (
+                adm_deal_status == 403
+                and adm_deal_path != "/cskh"
+                and admin_page.locator("#app").count() == 0
             ), (adm_deal_status, admin_page.url)
             admin_ctx.close()
 
@@ -1746,24 +2441,39 @@ def run_playwright_browser_e2e(
                 viewport={"width": 1440, "height": 900}, locale="vi-VN"
             )
             sys_page, _ = login_via_browser(sys_ctx, "crm.sysadmin@mock.local")
-            # /crm/data-import/doctype/CRM Deal redirects to /cskh while CRM Lead import stays 200
-            sys_page.goto(
-                f"{base_url}/crm/data-import/doctype/CRM Deal",
-                wait_until="domcontentloaded",
-                timeout=20000,
-            )
-            sys_page.wait_for_url("**/cskh**", timeout=15000)
-            assert urllib.parse.urlsplit(sys_page.url).path == "/cskh"
+            # /crm/data-import/doctype/CRM Deal (and percent-encoded /crm/%64eals) redirect to /cskh while CRM Lead import stays 200
+            for sales_variant in (
+                "/crm/data-import/doctype/CRM Deal",
+                "/crm/%64eals",
+                "/crm//deals",
+            ):
+                sys_page.goto(
+                    f"{base_url}{sales_variant}",
+                    wait_until="domcontentloaded",
+                    timeout=20000,
+                )
+                sys_page.wait_for_url("**/cskh**", timeout=15000)
+                assert urllib.parse.urlsplit(sys_page.url).path == "/cskh", (
+                    sales_variant,
+                    sys_page.url,
+                )
 
-            sys_page.goto(
+            lead_imp_resp = sys_page.goto(
                 f"{base_url}/crm/data-import/doctype/CRM Lead",
                 wait_until="domcontentloaded",
                 timeout=30000,
             )
             sys_page.wait_for_timeout(1200)
-            assert urllib.parse.urlsplit(sys_page.url).path != "/cskh", sys_page.url
+            assert lead_imp_resp is not None and lead_imp_resp.status == 200, (
+                lead_imp_resp.status if lead_imp_resp else None,
+                sys_page.url,
+            )
+            assert urllib.parse.urlsplit(sys_page.url).path.startswith(
+                "/crm/data-import"
+            ), sys_page.url
+            assert sys_page.locator("#app").count() == 1, sys_page.url
 
-            # Open Settings modal in /crm/leads via user dropdown menu -> Settings / Cài đặt
+            # Open Settings modal in /crm/leads via UserDropdown button -> Settings / Cài đặt (non-vacuous!)
             sys_page.goto(
                 f"{base_url}/crm/leads", wait_until="domcontentloaded", timeout=30000
             )
@@ -1771,26 +2481,38 @@ def run_playwright_browser_e2e(
                 state="visible", timeout=30000
             )
             sys_page.wait_for_timeout(1000)
-            brand_btn = sys_page.locator(
-                'button:has(svg[viewBox="0 0 300 300"]), [data-slot="sidebar"] button'
+            user_dropdown_btn = sys_page.locator(
+                "button:has(.lucide-chevron-down)"
             ).first
-            settings_dashboard_hidden = True
-            if brand_btn.count() > 0 and brand_btn.is_visible():
-                brand_btn.click()
-                sys_page.wait_for_timeout(400)
-                settings_menu_btn = sys_page.locator(
-                    '[role="menuitem"]:has-text("Settings"), [role="menuitem"]:has-text("Cài đặt"), button:has-text("Cài đặt")'
-                ).first
-                if settings_menu_btn.count() > 0 and settings_menu_btn.is_visible():
-                    settings_menu_btn.click()
-                    sys_page.wait_for_timeout(600)
-                    settings_dashboard_hidden = sys_page.evaluate(
-                        """() => {
-                          const dashItems = Array.from(document.querySelectorAll('[data-page="Dashboard"], [data-page="Trang tổng quan"]'));
-                          return dashItems.every(el => el.hasAttribute('hidden') || el.offsetParent === null);
-                        }"""
-                    )
-            assert settings_dashboard_hidden is True
+            user_dropdown_btn.wait_for(state="visible", timeout=15000)
+            user_dropdown_btn.click()
+            settings_menu_btn = sys_page.locator(
+                '[role="menuitem"]:has-text("Settings"), [role="menuitem"]:has-text("Cài đặt")'
+            ).first
+            settings_menu_btn.wait_for(state="visible", timeout=10000)
+            settings_menu_btn.click()
+            sys_page.locator('[role="dialog"] [data-page]').first.wait_for(
+                state="visible", timeout=15000
+            )
+            sys_page.wait_for_timeout(500)
+            settings_audit = sys_page.evaluate(
+                """() => {
+                  const allPages = Array.from(document.querySelectorAll('[role="dialog"] [data-page]'));
+                  const dashItems = allPages.filter(el => {
+                    const p = (el.getAttribute('data-page') || '').trim();
+                    return p === 'Dashboard' || p === 'Trang tổng quan' || p === 'Bảng điều khiển';
+                  });
+                  return {
+                    totalPages: allPages.length,
+                    dashCount: dashItems.length,
+                    allDashHidden: dashItems.length >= 1 && dashItems.every(el => el.hasAttribute('hidden') || el.offsetParent === null),
+                  };
+                }"""
+            )
+            assert settings_audit["totalPages"] >= 2, settings_audit
+            assert settings_audit["dashCount"] >= 1, settings_audit
+            assert settings_audit["allDashHidden"] is True, settings_audit
+            settings_dashboard_hidden = settings_audit["allDashHidden"]
             sys_ctx.close()
 
             # =================================================================
@@ -1825,8 +2547,10 @@ def run_playwright_browser_e2e(
             )
             bod_deal_status = bod_deal_resp.status if bod_deal_resp else 0
             bod_deal_path = urllib.parse.urlsplit(bod_page.url).path
-            assert bod_deal_path == "/cskh" or (
-                bod_deal_status == 403 and bod_page.locator("#app").count() == 0
+            assert (
+                bod_deal_status == 403
+                and bod_deal_path != "/cskh"
+                and bod_page.locator("#app").count() == 0
             ), (bod_deal_status, bod_page.url)
             bod_ctx.close()
         finally:
@@ -2021,10 +2745,14 @@ def run_phase_b_and_c_reconcile_and_browser(
                     "callbacks",
                     "bottlenecks",
                     "do_not_contact",
+                    "sla",
                 ):
                     assert got[section] == exp[section], (
                         f"DB mismatch for {actor_key}.{section}: api={got[section]} != sql={exp[section]}"
                     )
+            assert api_overviews["staff_a"]["sla"] == {"pending": 2, "overdue": 1}, (
+                api_overviews["staff_a"]
+            )
 
             # BOD zero-PII & zero-sales/converted-as-hired check
             bod_raw = json.dumps(api_overviews["bod"], ensure_ascii=False)
