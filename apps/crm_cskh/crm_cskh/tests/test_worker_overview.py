@@ -354,5 +354,8 @@ class TestWorkerCareOverview(P2TestCase):
 						)
 						self.assertEqual(ov["callbacks"]["today"], fu["total"], tz_name)
 			finally:
+				frappe.db.set_value(
+					"CRM Task", att_cb["callback_task"], "status", "Done", update_modified=False
+				)
 				frappe.db.set_value("User", self.staff_a, "time_zone", "", update_modified=False)
 				runtime_cache.clear_all_local_caches()
