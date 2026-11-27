@@ -1,0 +1,76 @@
+{
+  "schema_version": "cskh-image-inspect-v1",
+  "local_image_tag": "ghcr.io/nobita6986/crm-cskh:0.0.1-cand-3d0c47486c78",
+  "local_image_id": "sha256:04b97d587ec12491edee7197f3392df642e41c61b4f2a2e5ff92de779b7d6061",
+  "repo_tags": [
+    "ghcr.io/nobita6986/crm-cskh:0.0.1-cand-3d0c47486c78"
+  ],
+  "repo_digests": [
+    "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c"
+  ],
+  "architecture": "amd64",
+  "os": "linux",
+  "size_bytes": 3206869044,
+  "user": "frappe",
+  "working_dir": "/home/frappe/frappe-bench",
+  "entrypoint": [
+    "/usr/local/bin/entrypoint.sh"
+  ],
+  "cmd": [
+    "start.sh"
+  ],
+  "volumes": [
+    "/home/frappe/frappe-bench/logs",
+    "/home/frappe/frappe-bench/sites"
+  ],
+  "labels": {
+    "io.cskh.apps_tree_sha": "f4cb374f0eed89304e7b55e4978434a83d406051",
+    "io.cskh.baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
+    "io.cskh.crm_cskh_tree_sha": "f1b9258c53b231390da8f9421e2c7c06cfc9281a",
+    "io.cskh.crm_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778",
+    "io.cskh.crm_tag": "v1.87.0",
+    "io.cskh.frappe_docker_sha": "61d35da827ebc04d01b64c9e78385597ccebc9d8",
+    "io.cskh.frappe_sha": "53bae3ef2550ca96320f036f581446783cd11b72",
+    "io.cskh.frappe_tag": "v15.126.0",
+    "org.opencontainers.image.description": "CRM-CSKH immutable production image (Frappe + Frappe CRM + crm_cskh)",
+    "org.opencontainers.image.revision": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+    "org.opencontainers.image.source": "https://github.com/nobita6986/new-crm",
+    "org.opencontainers.image.title": "crm-cskh"
+  },
+  "rootfs_layers": [
+    "sha256:dd57f90311a2567b55ff22eeacff1602fd04ad7566e315957731359eab173b90",
+    "sha256:cd9a29aa43e014bda7a7815521ab51a3ababf2bceb4de66302701ac217ff26fb",
+    "sha256:961adfab8c074ba37b3fa0c54bb96911f8648a1788176a864bfb0750cfdef155",
+    "sha256:688ef2053b5da5e0048efd435dace328a25d5d4c8cb5e2cd1a7a92c697c586d5",
+    "sha256:5d869cea7bdccc8e70956308ac141e7cd3527ec3a79c83993bc05fb674805905",
+    "sha256:bc316653e19de9b735b7442460290e060138f70eda9611bab333bc1fd20afaac",
+    "sha256:5e2372419766a039e6b75d21fa6b32e946d758e0158fe86d67a44e61d55ac6b6",
+    "sha256:20c78990f7071457ca4bfd7f5c6cf7473cd3e15567d490b2af92b77e4f295964",
+    "sha256:22279d8307fdb4d7a702537c0b4b77bebb8f19109b13914580ae3538de51af8c",
+    "sha256:70f5d6f9102ac2760d617d341016b0f243dde431e4e274b05027b2a7439b33a9",
+    "sha256:5f70bf18a086007016e948b04aed3b82103a36bea41755b6cddfaf10ace3c6ef",
+    "sha256:cbd505bafe3cedbc9cafe79772333197016c8d118c1d3d4cfd21c83e4a6e09d0",
+    "sha256:565640d629d67687b2e342f1bb7ec8479a1884d9cf3dd0bc34ae6d2eebf1c2a7",
+    "sha256:d7c600733110121ef97761ed7c3c84c65f62708e1639d48fb16b9d85cf25494b",
+    "sha256:0b3be0b2535efd8bd41198d3eaf30e2ba2efb37da129158352a44220c137af55"
+  ],
+  "registry_verification": {
+    "status": "VERIFIED",
+    "approved_registry_repo_digest": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+    "blocker": null
+  },
+  "identifier_taxonomy": {
+    "local_image_id_class": "oci_image_config_sha256",
+    "local_image_id": "sha256:04b97d587ec12491edee7197f3392df642e41c61b4f2a2e5ff92de779b7d6061",
+    "registry_manifest_digest_class": "oci_distribution_manifest_sha256",
+    "registry_manifest_digest": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+    "note": "local_image_id (OCI config JSON SHA-256) and registry_manifest_digest (OCI distribution manifest JSON SHA-256) hash different OCI objects of the same image and are never equal by specification; only compare same-class identifiers across stages, and never compare against unrelated live images."
+  },
+  "compose_handoff": {
+    "APP_IMAGE_for_remote_deploy": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+    "APP_IMAGE_for_local_isolated_smoke": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+    "LOCAL_TAG_REFERENCE": "ghcr.io/nobita6986/crm-cskh:0.0.1-cand-3d0c47486c78",
+    "PULL_POLICY_local": "never",
+    "PULL_POLICY_staging_prod": "always"
+  }
+}

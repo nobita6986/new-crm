@@ -1,0 +1,76 @@
+{
+  "schema_version": "cskh-image-build-manifest-v1",
+  "base_image": "python:3.11.18-slim-trixie@sha256:07d4824036af339fa1b6ef769cc99d9c10a141769538b52b3b597c84f7a7b535",
+  "frappe_docker": {
+    "tag": "v4.2.0",
+    "commit_sha": "61d35da827ebc04d01b64c9e78385597ccebc9d8"
+  },
+  "apps": {
+    "frappe": {
+      "tag": "v15.126.0",
+      "commit_sha": "53bae3ef2550ca96320f036f581446783cd11b72",
+      "pyproject_unmodified": true
+    },
+    "crm": {
+      "tag": "v1.87.0",
+      "commit_sha": "0d3910b456ef4fb913e77b29db011b3debc4f778"
+    },
+    "crm_cskh": {
+      "declared_version": "0.0.1",
+      "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
+      "source_commit_sha": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+      "apps_tree_sha": "f4cb374f0eed89304e7b55e4978434a83d406051",
+      "crm_cskh_tree_sha": "f1b9258c53b231390da8f9421e2c7c06cfc9281a",
+      "files_manifest_sha256": "722f9d6a975c36684ce84094d9e22f0036e321b077c6ecdfa2090902b72d6ff2"
+    }
+  },
+  "toolchain": {
+    "python": "Python 3.11.18",
+    "node": "v22.23.3",
+    "yarn": "1.22.22",
+    "bench": "5.31.1",
+    "uv": "uv 0.13.7 (x86_64-unknown-linux-gnu)",
+    "install_chromium": false
+  },
+  "locks": {
+    "pip_freeze_sha256": "89b76ae16c002f025260fd6bb50f3b6b27060b78b2e86e231d5ca25bae5d63ce",
+    "pip_freeze_all_sha256": "aa59befffe47c278b31f1d748cab371421838e422505dcdf70d70e9a426d9d5a",
+    "system_pip_freeze_sha256": "3b45d43569e4541aa9b5c76a9fc74053c05d70393ba8d12ae32ebfcf4761def4",
+    "python_constraints_sha256": "4e69d3138d445c0548b9cdf2f8177b715f1b0d96bbabf9c85fbf48a35ae92620",
+    "system_python_constraints_sha256": "d8f6cae77c62f12d5e62be7437995d6afa4e3ac94bcb58ea47491d998b1cd7df",
+    "yarn_locks_sha256": "393383a8fc86bb04aefe188a7cde74c9b9fdbba5223ca1b70e0049419a3b566a",
+    "dpkg_packages_sha256": "a3fe8813ddbc4139a2e476786e34e71bce49aca5a395d57659f586543cbddd11",
+    "builder_dpkg_packages_sha256": "78aec22466bd30d177fd949088e537c084f90e490de482d283fbca42e00a6916",
+    "upstream_patches_diff_sha256": "7b80f0a9cf59078a96f674a9a9a7d5738a1d42d86a6163f785075ba999adfbf0",
+    "assets_json_sha256": "fd8e2fa8385594b8f830dd2a9460cd07c830a0ab515845489de68aebdd3c200d",
+    "crm_www_html_sha256": "c9300e986279fb8c2904838d7ee1a82437fb4286ca6af81f0c262fb181981943",
+    "mariadb_stable_apt_provenance_sha256": "ac4fc78ec6d7e0f20b38391bab04fe0574035cf581b7ae98ca0ccf70f8cc2c30"
+  },
+  "security_patches": {
+    "frappe_form_data_version": "4.0.6",
+    "pyjwt_version": "2.15.1",
+    "pillow_version": "13.0.0",
+    "mariadb_client_debian_version": "1:11.8.9+ds-0+deb13u1",
+    "mariadb_client_amd64_sha256": {
+      "mariadb-common": "6e7b81b9edd56b40830e04b7fbe9711c76d7d6657199486a1ee59938cf54a2a4",
+      "libmariadb3": "450b99a4f4434de071e4980c75ade41ed432392f3fd223b0d8baf97fc8eb95aa",
+      "mariadb-client-core": "33a191b771d7f0e85882dc2f4adabc57799fd7cec3b315ad4bd562e49cb0a11c",
+      "mariadb-client": "e994b5e860dc9826b56aca07d685a10f038727882e770b52e84a21c7f1ce6a04",
+      "libmariadb-dev": "cd404871abb92e5f984b5ff621be086880668f0a11db4f1d0c4e829ccb29a651"
+    },
+    "pip_check_verified": true,
+    "pruned_frappe_build_only_node_modules": [
+      "esbuild",
+      "esbuild-linux-64",
+      "loader-utils",
+      "shell-quote"
+    ],
+    "removed_unused_runtime_apt_packages": [
+      "libpq-dev",
+      "postgresql-client",
+      "restic",
+      "chromium-headless-shell",
+      "libxml2"
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "schema_version": "cskh-p4-signed-manifest-envelope-v1",
+  "signature_algorithm": "ed25519",
+  "payload_sha256": "befc8e21313574be922a89c54791749bb25ab4d7307cb49da291f62ad24d1b64",
+  "public_key_fingerprint_sha256": "b1ed6b9e26baa2ef6e415e96a99456d59020111c434c70a7bb73b96ca0627931",
+  "public_key_pem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAPuhgeEIUYrKlAx8OOsC0xaFq2o1PwDDOyINqOILJV4A=\n-----END PUBLIC KEY-----",
+  "signature_base64": "CevMFFlC4VOQTWvxJqph0/EmEWuEUUy1mepS4IVH4/RtC9WDwQ32llaLRMK39QG9R3eoATFElHqQzOW8Kok0Cw==",
+  "signed_at_utc": "2026-11-25T07:09:48.275915+00:00"
+}

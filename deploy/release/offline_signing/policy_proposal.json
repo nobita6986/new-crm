@@ -1,0 +1,60 @@
+{
+  "schema_version": "cskh-p4-offline-signing-alternative-proposal-v1",
+  "status": "PROPOSED_NOT_APPROVED",
+  "official_source_repository": "nobita6986/new-crm",
+  "user_constraints": [
+    "No access to the nobita6986 account",
+    "No release repository or infrastructure hosted under duongltvp95-lang"
+  ],
+  "implementation_scope": "A read-only verification workflow contributed to the existing official repository using ordinary contributor rights; no new repository, GitHub environment, credentials or private keys are created.",
+  "candidate_git_sha": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+  "candidate_image": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+  "signing_method": "Existing official-key signature created outside GitHub; key remains in the existing ACL-protected custody store.",
+  "verification_method": "GitHub-hosted read-only runner independently checks official fingerprint, signature, six signed artifact bindings, accepted-source strict scan evaluator and public immutable OCI manifest.",
+  "trusted_application_checkout": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+  "workflow_tool_commit_is_separate_from_application_commit": true,
+  "workflow_permissions": {
+    "contents": "read"
+  },
+  "private_key_entered_into_github": false,
+  "ssh_or_deployment_credentials_required": false,
+  "registry_push_or_pull_credentials_required": false,
+  "image_rebuild_required": false,
+  "g18_rerun_required_by_this_change": false,
+  "production_deployment_included": false,
+  "existing_application_ci_evidence": {
+    "p4_ci": "https://github.com/nobita6986/new-crm/actions/runs/45189381148",
+    "candidate": "https://github.com/nobita6986/new-crm/actions/runs/45189381039",
+    "batch2": "https://github.com/nobita6986/new-crm/actions/runs/45191525016"
+  },
+  "normative_basis_for_review": [
+    {
+      "document": "docs/root-plan/P4.md",
+      "section": "4.3",
+      "requirement": "CI stages, environment protection and separation of build/deploy credentials"
+    },
+    {
+      "document": "docs/root-plan/P4.md",
+      "section": "19 G04",
+      "requirement": "Pipeline CI pass test/lint/build/security and reproducible artifacts"
+    },
+    {
+      "document": "docs/p4/P4-ADR-03-ci-registry-and-promotion.md",
+      "section": "2.1",
+      "current_implementation": "Official signing in registry-build and verification in registry-verify"
+    }
+  ],
+  "differences_from_current_adr": [
+    "The signing key is not stored in registry-build; registry-build has NOT run.",
+    "The private-key operation remains outside CI. CI only verifies the existing exact signed payload.",
+    "The source scan is reevaluated from the sealed Trivy report; no claim of a fresh vulnerability database scan is made."
+  ],
+  "residual_limits": [
+    "An ACL-protected local key is not a hardware-backed key or a filesystem-sandboxed signing enclave.",
+    "CI cannot attest to the physical isolation or human approval of the earlier offline signing process.",
+    "Passing this read-only workflow is additional evidence, not automatic acceptance of an alternate G04 policy."
+  ],
+  "required_independent_decision": "T1C must assess whether these controls satisfy the release policy, identify any remaining controls, and obtain any required authorized policy decision before changing G04. Do not treat this proposal as a waiver or as evidence registry-build ran.",
+  "g04_status_changed": false,
+  "g23_verdict": "NO-GO"
+}

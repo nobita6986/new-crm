@@ -1,0 +1,28 @@
+{
+  "schema_version": "cskh-p4-release-manifest-v1",
+  "release_id": "crm-cskh-cand-45189381039",
+  "environment_scope": "production_candidate",
+  "created_at_utc": "2026-11-23T14:07:43.048482+00:00",
+  "git_sha": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+  "apps_tree_sha": "f4cb374f0eed89304e7b55e4978434a83d406051",
+  "crm_cskh_tree_sha": "f1b9258c53b231390da8f9421e2c7c06cfc9281a",
+  "frappe_framework_ref": "v15.126.0@53bae3ef2550ca96320f036f581446783cd11b72",
+  "frappe_crm_ref": "v1.87.0@0d3910b456ef4fb913e77b29db011b3debc4f778",
+  "crm_cskh_ref": "3d0c47486c78c09a966a3ea9100c477f53fe6a79 (tree:f1b9258c53b231390da8f9421e2c7c06cfc9281a)",
+  "image": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+  "image_id": "sha256:04b97d587ec12491edee7197f3392df642e41c61b4f2a2e5ff92de779b7d6061",
+  "migration_revision": "crm_cskh.patches.v3_0.p3_schema_and_seeds",
+  "kpi_formula_version": "cskh-metrics-v2",
+  "previous_release_id": null,
+  "build_url": "https://github.com/nobita6986/new-crm/actions/runs/45189381039",
+  "test_report_url": "https://github.com/nobita6986/new-crm/actions/runs/45189381039",
+  "approved_by": [],
+  "artifacts": {
+    "build_manifest_sha256": "468c7de868bc80d5e0b14fbfc21f11cb2e7b695bfad96c6dd2f0202df3807944",
+    "image_inspect_summary_sha256": "fc76533ddeaa9fa0b64818ca9b7c28106b7bc7f7f073173ad41f0ac1fc834a91",
+    "sbom_cyclonedx_sha256": "2034191b7a0c3df9c34ec6a508076aba86d10319dce2524a56f2adee449a88eb",
+    "security_scan_sha256": "0dc81aff5a71bd08c90b94f5567fc8571b9f250d6c0d5375340fb119845895c6",
+    "sbom_spdx_sha256": "fa0fb22221340d2a82b64154e3b32e29ad2b1d13dd5f46e87e57624d549beff8",
+    "cve_exceptions_sha256": "2e00aa50e874968800238413568a691c8f21f33d2a29c41123ab475acac6eacd"
+  }
+}
