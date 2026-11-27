@@ -1,14 +1,16 @@
-/* Mounts the `CSKH` navigation item directly onto Frappe CRM's left sidebar (`/crm/*`).
+/* Promotes worker care while keeping native CRM contact/task/call helpers usable.
  *
  * Design invariants (`ADR-UI-001` / `Containerfile` clean-upstream rule):
  *   1. Zero modifications to `apps/crm` Git-tracked Vue source files.
  *   2. Exact DOM structure and Tailwind utility classes of `frappe-ui@1.0.0-beta.29`
  *      `SidebarItem.vue` so expanded, hover, focus, and collapsed-rail states match
  *      native Frappe CRM items pixel-for-pixel across desktop and mobile drawers.
- *   3. Targets ONLY the primary `All Views` `<nav>` (never `Public Views` or
- *      `Pinned Views` sections whose links carry `?view=...`).
+ *   3. Adds worker care only to primary navigation. Sales destinations, deal tabs,
+ *      command-palette deal actions, settings/onboarding deal entries, and explicit
+ *      deal-conversion controls are blocked from native helpers while preserving
+ *      ordinary saved contact views, phone calls, tasks, Save, and API contracts.
  *   4. Uses pure DOM APIs (`createElement` / `createElementNS` / `textContent`) with
- *      mutation-free idempotent class checks so `MutationObserver` never loops.
+ *      mutation-free idempotent checks so `MutationObserver` never loops.
  */
 (function () {
 	'use strict'
@@ -16,6 +18,71 @@
 	const SVG_NS = 'http://www.w3.org/2000/svg'
 	const ITEM_ATTR = 'data-cskh-sidebar-item'
 	const LINK_ATTR = 'data-cskh-nav-link'
+	const BLOCKED_ATTR = 'data-cskh-sales-blocked'
+	const GROUP_HIDDEN_ATTR = 'data-cskh-group-hidden'
+	const CARE_PANEL_ATTR = 'data-cskh-contact-care-panel'
+	const TAB_SWITCHED_ATTR = 'data-cskh-tab-switched'
+
+	const SALES_SECTIONS = new Set(['dashboard', 'deals', 'forecast', 'forecasts', 'revenue'])
+	// Exact action labels only: generic Save and unrelated form actions stay intact.
+	const SALES_ACTIONS = new Set([
+		'Convert to Deal',
+		'Convert to deal',
+		'Convert Lead to Deal',
+		'Convert lead to deal',
+		'Create Deal',
+		'Create deal',
+		'New Deal',
+		'New deal',
+		'Change deal status',
+		'Change Deal Status',
+		'Create your first deal',
+		'Chuyển thành Giao dịch CRM',
+		'Chuyển Hồ sơ liên hệ thành Giao dịch CRM',
+		'Chuyển hồ sơ liên hệ thành Giao dịch CRM',
+		'Tạo Giao dịch CRM',
+		'Giao dịch CRM mới',
+		'Thay đổi trạng thái Giao dịch CRM',
+		'Tạo Giao dịch CRM đầu tiên',
+	])
+	const LEAD_MOBILE_CONVERT_LABELS = new Set(['Convert', 'Chuyển đổi'])
+	const SALES_OPTION_TITLES = new Set([
+		'Dashboard',
+		'Trang tổng quan',
+		'Bảng điều khiển',
+		'Deals',
+		'Deal',
+		'CRM Deal',
+		'Giao dịch CRM',
+		'Forecast',
+		'Forecasts',
+		'Dự báo',
+		'Revenue',
+		'Doanh thu',
+	])
+	const SALES_SUBTITLES = new Set(['Deal', 'CRM Deal', 'Giao dịch CRM'])
+	const SALES_SETTINGS_PAGES = new Set(['Dashboard', 'Trang tổng quan', 'Bảng điều khiển'])
+	const ONBOARDING_SALES_STEPS = new Set([
+		'Create your first deal',
+		'Convert lead to deal',
+		'Convert Lead to Deal',
+		'Change deal status',
+		'Change Deal Status',
+		'Tạo Giao dịch CRM đầu tiên',
+		'Tạo giao dịch CRM đầu tiên',
+		'Tạo giao dịch đầu tiên của bạn',
+		'Tạo Giao dịch CRM đầu tiên của bạn',
+		'Chuyển hồ sơ liên hệ thành Giao dịch CRM',
+		'Chuyển Hồ sơ liên hệ thành Giao dịch CRM',
+		'Thay đổi trạng thái Giao dịch CRM',
+		'Đổi trạng thái Giao dịch CRM',
+	])
+	const DEAL_TAB_PREFIXES = ['Deals', 'Giao dịch CRM']
+	const DEAL_DIALOG_TITLES = new Set([
+		'Convert to Deal',
+		'Convert to deal',
+		'Chuyển thành Giao dịch CRM',
+	])
 
 	const ITEM_CLASS =
 		'group/sidebar-item flex h-7 items-center rounded transition text-ink-gray-6 hover:bg-surface-gray-2'
@@ -25,14 +92,19 @@
 	const LABEL_BASE_CLASS = 'min-w-0 flex-1 transition-all ease-in-out '
 	const SUFFIX_BASE_CLASS = 'flex shrink-0 items-center transition-all ease-in-out '
 
+	function normalizeText(raw) {
+		return String(raw || '').replace(/\s+/g, ' ').trim()
+	}
+
 	function readBridgeConfig(doc) {
 		const script =
 			doc.currentScript || doc.querySelector('script[data-cskh-sidebar-bridge]')
 		const rawHref = (script && script.getAttribute('data-cskh-href')) || '/cskh'
-		const rawLabel = (script && script.getAttribute('data-cskh-label')) || 'CSKH'
+		const rawLabel = (script && script.getAttribute('data-cskh-label')) || 'Chăm sóc người lao động'
 		return {
 			href: rawHref.trim() || '/cskh',
-			label: rawLabel.trim() || 'CSKH',
+			label: rawLabel.trim() || 'Chăm sóc người lao động',
+			workerCare: !!(script && script.getAttribute('data-cskh-worker-care') === '1'),
 		}
 	}
 
@@ -44,6 +116,16 @@
 		return pathname === '/crm' || pathname.indexOf('/crm/') === 0
 	}
 
+	function isLeadDetailPath(pathname) {
+		if (typeof pathname !== 'string') return false
+		const clean = pathname.replace(/\/+$/, '')
+		const parts = clean.split('/')
+		if (parts.length !== 4 || parts[0] !== '' || parts[1] !== 'crm' || parts[2] !== 'leads') {
+			return false
+		}
+		return parts[3] !== '' && parts[3] !== 'view' && parts[3] !== 'list'
+	}
+
 	function parseHref(win, rawHref) {
 		if (!rawHref) return null
 		try {
@@ -51,6 +133,484 @@
 			return new win.URL(rawHref, base)
 		} catch (_err) {
 			return null
+		}
+	}
+
+	function isSalesPath(path) {
+		if (
+			typeof path !== 'string' ||
+			path.charAt(0) !== '/' ||
+			path.slice(0, 2) === '//' ||
+			/[?#\\]/.test(path)
+		) {
+			return false
+		}
+		const parts = []
+		const rawParts = path.split('/')
+		for (let i = 0; i < rawParts.length; i += 1) {
+			const rawSeg = rawParts[i]
+			if (!rawSeg) continue
+			let decoded = rawSeg
+			if (rawSeg.indexOf('%') !== -1) {
+				try {
+					decoded = decodeURIComponent(rawSeg)
+				} catch (_err) {
+					decoded = rawSeg
+				}
+			}
+			if (/[\x00-\x1f\x7f]/.test(decoded)) return false
+			const subParts = decoded.split('/')
+			for (let j = 0; j < subParts.length; j += 1) {
+				if (subParts[j]) parts.push(subParts[j])
+			}
+		}
+		if (!parts.length || parts[0] !== 'crm') return false
+		if (parts.length === 1) return true
+		if (SALES_SECTIONS.has(parts[1])) return true
+		return (
+			parts.length >= 4 &&
+			parts[1] === 'data-import' &&
+			parts[2] === 'doctype' &&
+			parts[3] === 'CRM Deal'
+		)
+	}
+
+	function isSalesUrl(win, href) {
+		const url = parseHref(win, href)
+		return !!(url && url.origin === win.location.origin && isSalesPath(url.pathname))
+	}
+
+	function isSalesAction(win, el) {
+		if (!el) return false
+		const labels = [
+			el.textContent,
+			el.getAttribute('aria-label'),
+			el.getAttribute('title'),
+		].map(normalizeText)
+		if (labels.some(function (label) { return SALES_ACTIONS.has(label) })) {
+			return true
+		}
+		// MobileLead.vue (<768px) renders header action button labeled `Convert` / `Chuyển đổi`.
+		if (
+			el.tagName === 'BUTTON' &&
+			isLeadDetailPath((win.location && win.location.pathname) || '') &&
+			!el.closest('[role="dialog"]') &&
+			!el.closest('[role="tablist"]') &&
+			labels.some(function (label) { return LEAD_MOBILE_CONVERT_LABELS.has(label) })
+		) {
+			return true
+		}
+		return false
+	}
+
+	function isSalesControl(win, control) {
+		if (!control || control.getAttribute('role') === 'tab') return false
+		const href = control.getAttribute('href')
+		const url = href && parseHref(win, href)
+		if (url && url.origin !== win.location.origin) return false
+		return isSalesUrl(win, href) || isSalesAction(win, control)
+	}
+
+	function extractOptionParts(optionEl) {
+		const spans = optionEl.querySelectorAll('span')
+		if (spans.length > 0) {
+			const primary = normalizeText(spans[0].textContent)
+			const subtitle = spans.length > 1 ? normalizeText(spans[1].textContent) : ''
+			return { primary: primary, subtitle: subtitle }
+		}
+		return {
+			primary: normalizeText(
+				optionEl.textContent || optionEl.getAttribute('aria-label') || optionEl.getAttribute('title')
+			),
+			subtitle: '',
+		}
+	}
+
+	function isSalesOption(optionEl) {
+		if (!optionEl) return false
+		if (optionEl.getAttribute(BLOCKED_ATTR) === '1') return true
+		if (SALES_ACTIONS.has(normalizeText(optionEl.getAttribute('aria-label')))) return true
+		const parts = extractOptionParts(optionEl)
+		if (SALES_ACTIONS.has(parts.primary)) return true
+		if (SALES_SUBTITLES.has(parts.subtitle)) return true
+		// Preserve non-Deal records whose title happens to match a section word (e.g. a Lead named "Dashboard").
+		if (parts.subtitle && !SALES_SUBTITLES.has(parts.subtitle)) return false
+		return SALES_OPTION_TITLES.has(parts.primary)
+	}
+
+	function isDealTab(tabEl) {
+		if (!tabEl) return false
+		if (tabEl.getAttribute(BLOCKED_ATTR) === '1') return true
+		const label = normalizeText(
+			tabEl.textContent || tabEl.getAttribute('aria-label') || tabEl.getAttribute('title')
+		)
+		for (let i = 0; i < DEAL_TAB_PREFIXES.length; i += 1) {
+			const prefix = DEAL_TAB_PREFIXES[i]
+			if (label === prefix || new RegExp('^' + prefix + '(?:\\s+\\d+)?$').test(label)) {
+				return true
+			}
+		}
+		return false
+	}
+
+	function isTabSelected(tabEl) {
+		if (!tabEl) return false
+		if (tabEl.getAttribute('aria-selected') === 'true') return true
+		const state = tabEl.getAttribute('data-headlessui-state') || ''
+		return state.split(/\s+/).indexOf('selected') !== -1
+	}
+
+	function isOptionActive(optionEl, activeId) {
+		if (!optionEl) return false
+		const id = optionEl.getAttribute('id')
+		if (activeId && id && id === activeId) return true
+		if (optionEl.getAttribute('aria-selected') === 'true') return true
+		const state = optionEl.getAttribute('data-headlessui-state') || ''
+		return state.split(/\s+/).indexOf('active') !== -1
+	}
+
+	function removeElement(el) {
+		if (el && el.parentElement) el.parentElement.removeChild(el)
+	}
+
+	function setClassIfChanged(el, nextClass) {
+		if (el && el.className !== nextClass) {
+			el.className = nextClass
+		}
+	}
+
+	function setAttrIfChanged(el, attr, value) {
+		if (!el) return
+		if (value === null || value === '') {
+			if (el.hasAttribute(attr)) {
+				el.removeAttribute(attr)
+			}
+			return
+		}
+		if (el.getAttribute(attr) !== value) {
+			el.setAttribute(attr, value)
+		}
+	}
+
+	function markElementBlocked(el) {
+		setAttrIfChanged(el, BLOCKED_ATTR, '1')
+		setAttrIfChanged(el, 'aria-disabled', 'true')
+		setAttrIfChanged(el, 'aria-hidden', 'true')
+		setAttrIfChanged(el, 'tabindex', '-1')
+		setAttrIfChanged(el, 'hidden', 'hidden')
+	}
+
+	function removeSalesControls(win, root) {
+		const scope = root || win.document
+		const controls = scope.querySelectorAll('a[href], button, [role="menuitem"]')
+		for (let i = 0; i < controls.length; i += 1) {
+			const control = controls[i]
+			if (control.getAttribute('role') === 'tab') continue
+			if (control.getAttribute(BLOCKED_ATTR) === '1') continue
+			if (!isSalesControl(win, control)) continue
+			const slotItem = control.closest('[data-slot="sidebar-item"]')
+			const target = slotItem || control
+			if (target.getAttribute(BLOCKED_ATTR) === '1') continue
+			// Keep VNode anchors mounted so Vue 3 `v-for` / Fragment patching never throws `insertBefore` NotFoundError.
+			markElementBlocked(target)
+		}
+	}
+
+	function syncSettingsItems(scope) {
+		const settingsItems = scope.querySelectorAll('[data-page]')
+		for (let i = 0; i < settingsItems.length; i += 1) {
+			const item = settingsItems[i]
+			const page = normalizeText(item.getAttribute('data-page'))
+			if (SALES_SETTINGS_PAGES.has(page)) {
+				markElementBlocked(item)
+			}
+		}
+	}
+
+	function readElementText(el) {
+		if (!el) return ''
+		if (el.children && el.children.length > 3) return ''
+		const direct = normalizeText(el.textContent)
+		if (direct) return direct
+		const children = el.children
+		if (!children || !children.length) return ''
+		const parts = []
+		for (let i = 0; i < children.length; i += 1) {
+			const childText = readElementText(children[i])
+			if (childText) parts.push(childText)
+		}
+		return normalizeText(parts.join(' '))
+	}
+
+	function isSingleOnboardingStepWrapper(parent, stepLabel) {
+		if (!parent || parent.tagName !== 'DIV') return false
+		if (parent.hasAttribute('id') || parent.hasAttribute('role')) return false
+		if (parent.children && parent.children.length > 3) return false
+		const parentText = readElementText(parent)
+		if (parentText === stepLabel) return true
+		if (parentText.indexOf(stepLabel) !== 0) return false
+		const rest = normalizeText(parentText.slice(stepLabel.length))
+		return rest === 'Skip' || rest === 'Bỏ qua'
+	}
+
+	function syncOnboardingItems(scope) {
+		const candidates = scope.querySelectorAll('span, div, p, button')
+		for (let i = 0; i < candidates.length; i += 1) {
+			const node = candidates[i]
+			if (node.children && node.children.length > 3) continue
+			if (node.getAttribute(BLOCKED_ATTR) === '1') continue
+			if (node.closest('[' + BLOCKED_ATTR + '="1"]')) continue
+			const stepLabel = readElementText(node)
+			if (!stepLabel || !ONBOARDING_SALES_STEPS.has(stepLabel)) continue
+			let row = node
+			for (let depth = 0; depth < 3; depth += 1) {
+				const parent = row.parentElement
+				if (!isSingleOnboardingStepWrapper(parent, stepLabel)) break
+				row = parent
+			}
+			markElementBlocked(row)
+		}
+	}
+
+	function syncSalesOptions(win, scope) {
+		const options = scope.querySelectorAll('[role="option"]')
+		const touchedGroups = []
+		for (let i = 0; i < options.length; i += 1) {
+			const opt = options[i]
+			if (isSalesOption(opt)) {
+				markElementBlocked(opt)
+			}
+			const parent = opt.parentElement
+			if (parent && touchedGroups.indexOf(parent) === -1 && opt.closest('.crm-command-palette')) {
+				touchedGroups.push(parent)
+			}
+		}
+
+		for (let g = 0; g < touchedGroups.length; g += 1) {
+			const groupEl = touchedGroups[g]
+			const groupOpts = groupEl.querySelectorAll('[role="option"]')
+			if (!groupOpts.length) continue
+			let hasVisible = false
+			for (let j = 0; j < groupOpts.length; j += 1) {
+				if (groupOpts[j].getAttribute(BLOCKED_ATTR) !== '1') {
+					hasVisible = true
+					break
+				}
+			}
+			if (!hasVisible) {
+				setAttrIfChanged(groupEl, GROUP_HIDDEN_ATTR, '1')
+				setAttrIfChanged(groupEl, 'hidden', 'hidden')
+			} else if (groupEl.getAttribute(GROUP_HIDDEN_ATTR) === '1') {
+				setAttrIfChanged(groupEl, GROUP_HIDDEN_ATTR, null)
+				setAttrIfChanged(groupEl, 'hidden', null)
+			}
+		}
+
+		const ctx = findActivePaletteContext(scope)
+		if (!ctx) {
+			lastPaletteDirection = 'ArrowDown'
+			return
+		}
+		if (ctx.activeOption && isSalesOption(ctx.activeOption)) {
+			nudgePaletteOffBlockedOption(win, scope, lastPaletteDirection)
+		}
+	}
+
+	function findActivePaletteContext(scope) {
+		const palettes = scope.querySelectorAll('.crm-command-palette')
+		if (!palettes.length) return null
+		const palette = palettes[0]
+		const input = palette.querySelector('[role="combobox"]') || palette.querySelector('input')
+		const activeId = (input && input.getAttribute('aria-activedescendant')) || ''
+		const options = palette.querySelectorAll('[role="option"]')
+		let activeOption = null
+		for (let i = 0; i < options.length; i += 1) {
+			if (isOptionActive(options[i], activeId)) {
+				activeOption = options[i]
+				break
+			}
+		}
+		return { palette: palette, input: input, options: options, activeOption: activeOption }
+	}
+
+	let skippingOption = false
+	let nudgeTimerPending = false
+	let lastPaletteDirection = 'ArrowDown'
+	function nudgePaletteOffBlockedOption(win, scope, keyDirection, remainingBudget) {
+		if (skippingOption) return
+		if (nudgeTimerPending && typeof remainingBudget !== 'number') return
+		const ctx = findActivePaletteContext(scope)
+		if (!ctx || !ctx.activeOption || !isSalesOption(ctx.activeOption)) return
+		if (!ctx.input || typeof ctx.input.dispatchEvent !== 'function' || typeof win.KeyboardEvent !== 'function') {
+			return
+		}
+		let hasAllowed = false
+		for (let i = 0; i < ctx.options.length; i += 1) {
+			if (!isSalesOption(ctx.options[i])) {
+				hasAllowed = true
+				break
+			}
+		}
+		if (!hasAllowed) return
+		const budget = typeof remainingBudget === 'number' ? remainingBudget : ctx.options.length
+		if (budget <= 0) return
+
+		const dir = keyDirection || 'ArrowDown'
+		skippingOption = true
+		try {
+			ctx.input.dispatchEvent(
+				new win.KeyboardEvent('keydown', {
+					key: dir,
+					bubbles: true,
+					cancelable: true,
+				})
+			)
+		} catch (_err) {
+			skippingOption = false
+			return
+		}
+		skippingOption = false
+
+		// Dispatch one step per turn so Vue 3 / HeadlessUI microtasks flush `aria-activedescendant` first.
+		const scheduleNext = typeof win.setTimeout === 'function' ? win.setTimeout : win.requestAnimationFrame
+		if (typeof scheduleNext === 'function' && !nudgeTimerPending && budget > 1) {
+			nudgeTimerPending = true
+			scheduleNext.call(
+				win,
+				function () {
+					nudgeTimerPending = false
+					const nextCtx = findActivePaletteContext(scope)
+					if (nextCtx && nextCtx.activeOption && isSalesOption(nextCtx.activeOption)) {
+						nudgePaletteOffBlockedOption(win, scope, dir, budget - 1)
+					}
+				},
+				0
+			)
+		}
+	}
+
+	function buildContactCarePanel(doc, config) {
+		const panel = doc.createElement('section')
+		panel.setAttribute(CARE_PANEL_ATTR, '1')
+		panel.className = 'cskh-contact-care-panel'
+
+		const heading = doc.createElement('h3')
+		heading.className = 'cskh-contact-care-title'
+		heading.textContent = config.label
+
+		const desc = doc.createElement('p')
+		desc.className = 'cskh-contact-care-desc'
+		desc.textContent =
+			'Lịch sử chăm sóc người lao động, kết quả liên hệ và lịch hẹn chăm sóc được quản lý tập trung tại không gian Chăm sóc người lao động.'
+
+		const actions = doc.createElement('div')
+		actions.className = 'cskh-contact-care-actions'
+
+		const overviewLink = doc.createElement('a')
+		overviewLink.setAttribute('href', config.href)
+		overviewLink.className = 'cskh-contact-care-btn is-primary'
+		overviewLink.textContent = 'Mở tổng quan chăm sóc'
+
+		const assignedLink = doc.createElement('a')
+		assignedLink.setAttribute('href', '/cskh/my-customers')
+		assignedLink.className = 'cskh-contact-care-btn'
+		assignedLink.textContent = 'Người lao động phụ trách'
+
+		actions.appendChild(overviewLink)
+		actions.appendChild(assignedLink)
+		panel.appendChild(heading)
+		panel.appendChild(desc)
+		panel.appendChild(actions)
+		return panel
+	}
+
+	function isInteractiveFocusElement(el) {
+		if (!el || !el.tagName) return false
+		if (
+			el.tagName === 'INPUT' ||
+			el.tagName === 'TEXTAREA' ||
+			el.tagName === 'SELECT'
+		) {
+			return true
+		}
+		const role = typeof el.getAttribute === 'function' ? el.getAttribute('role') : ''
+		if (role === 'combobox' || role === 'textbox' || role === 'searchbox') return true
+		return typeof el.getAttribute === 'function' && el.getAttribute('contenteditable') === 'true'
+	}
+
+	function syncDealTabs(doc, scope, config) {
+		const tablists = scope.querySelectorAll('[role="tablist"]')
+		for (let i = 0; i < tablists.length; i += 1) {
+			const tablist = tablists[i]
+			const tabs = tablist.querySelectorAll('[role="tab"]')
+			if (!tabs.length) continue
+			const dealTabs = []
+			const otherTabs = []
+			for (let j = 0; j < tabs.length; j += 1) {
+				if (isDealTab(tabs[j])) {
+					dealTabs.push(tabs[j])
+				} else {
+					otherTabs.push(tabs[j])
+				}
+			}
+			if (!dealTabs.length) continue
+
+			if (otherTabs.length > 0) {
+				// Organization.vue / MobileContact.vue / MobileOrganization.vue:
+				// switch away from Deals once on mount without stealing active input focus.
+				const alreadySwitched = tablist.getAttribute(TAB_SWITCHED_ATTR) === '1'
+				for (let d = 0; d < dealTabs.length; d += 1) {
+					if (!alreadySwitched && isTabSelected(dealTabs[d]) && typeof otherTabs[0].click === 'function') {
+						const prevActive = doc.activeElement
+						setAttrIfChanged(tablist, TAB_SWITCHED_ATTR, '1')
+						otherTabs[0].click()
+						if (
+							isInteractiveFocusElement(prevActive) &&
+							prevActive !== dealTabs[d] &&
+							typeof prevActive.focus === 'function'
+						) {
+							try {
+								prevActive.focus({ preventScroll: true })
+							} catch (_err) {
+								prevActive.focus()
+							}
+						}
+					}
+					markElementBlocked(dealTabs[d])
+				}
+			} else {
+				// Contact.vue desktop has Deals as its sole tab in the right pane.
+				for (let d = 0; d < dealTabs.length; d += 1) {
+					markElementBlocked(dealTabs[d])
+				}
+				setAttrIfChanged(tablist, 'hidden', 'hidden')
+				const container = tablist.parentElement
+				if (container) {
+					const panels = container.querySelectorAll('[role="tabpanel"]')
+					for (let p = 0; p < panels.length; p += 1) {
+						setAttrIfChanged(panels[p], 'hidden', 'hidden')
+					}
+					if (!container.querySelector('[' + CARE_PANEL_ATTR + '="1"]')) {
+						container.appendChild(buildContactCarePanel(doc, config))
+					}
+				}
+			}
+		}
+	}
+
+	function syncSalesDialogs(scope, openWorkerCare) {
+		const dialogs = scope.querySelectorAll('[role="dialog"]')
+		for (let i = 0; i < dialogs.length; i += 1) {
+			const dialog = dialogs[i]
+			if (dialog.getAttribute(BLOCKED_ATTR) === '1') continue
+			const headings = dialog.querySelectorAll('h1, h2, h3')
+			for (let h = 0; h < headings.length; h += 1) {
+				if (DEAL_DIALOG_TITLES.has(normalizeText(headings[h].textContent))) {
+					markElementBlocked(dialog)
+					openWorkerCare()
+					return
+				}
+			}
 		}
 	}
 
@@ -114,7 +674,7 @@
 		const siblings = nav.querySelectorAll('[data-slot="sidebar-item"]')
 		for (let i = 0; i < siblings.length; i += 1) {
 			const sib = siblings[i]
-			if (sib.hasAttribute(ITEM_ATTR)) continue
+			if (sib.hasAttribute(ITEM_ATTR) || sib.getAttribute(BLOCKED_ATTR) === '1') continue
 			const trigger = sib.querySelector('a, button')
 			if (trigger && trigger.classList && trigger.classList.contains('justify-center')) {
 				return true
@@ -171,25 +731,6 @@
 		svg.appendChild(rightEar)
 		svg.appendChild(mic)
 		return svg
-	}
-
-	function setClassIfChanged(el, nextClass) {
-		if (el && el.className !== nextClass) {
-			el.className = nextClass
-		}
-	}
-
-	function setAttrIfChanged(el, attr, value) {
-		if (!el) return
-		if (value === null || value === '') {
-			if (el.hasAttribute(attr)) {
-				el.removeAttribute(attr)
-			}
-			return
-		}
-		if (el.getAttribute(attr) !== value) {
-			el.setAttribute(attr, value)
-		}
 	}
 
 	function syncCollapsedClasses(itemEl, collapsed, labelText) {
@@ -269,13 +810,104 @@
 		}
 
 		const itemEl = buildSidebarItem(win.document, config, collapsed)
-		const leadsItem = findPrimaryLeadsItem(win, nav)
-		if (leadsItem && leadsItem.parentElement === nav) {
-			nav.insertBefore(itemEl, leadsItem.nextSibling)
-		} else {
-			nav.insertBefore(itemEl, nav.firstChild)
-		}
+		nav.insertBefore(itemEl, nav.firstChild)
 		return itemEl
+	}
+
+	function scrubRecentDealsFromStorage(win) {
+		try {
+			const storage = win.localStorage
+			if (!storage || typeof storage.length !== 'number') return
+			const keys = []
+			for (let i = 0; i < storage.length; i += 1) {
+				const key = storage.key(i)
+				if (key && key.indexOf('crm-command-palette-recent:') === 0) {
+					keys.push(key)
+				}
+			}
+			for (let i = 0; i < keys.length; i += 1) {
+				const key = keys[i]
+				const raw = storage.getItem(key)
+				if (!raw) continue
+				const parsed = JSON.parse(raw)
+				if (Array.isArray(parsed)) {
+					const filtered = parsed.filter(function (item) {
+						return !item || item.doctype !== 'CRM Deal'
+					})
+					if (filtered.length !== parsed.length) {
+						storage.setItem(key, JSON.stringify(filtered))
+					}
+				}
+			}
+		} catch (_err) {
+			/* storage may be unavailable in sandboxed contexts */
+		}
+	}
+
+	function isNonDealPaletteRecord(item) {
+		if (!item || typeof item !== 'object') return false
+		if (item.doctype === 'CRM Deal') return false
+		if (item.route === 'Deal' || item.route === 'Deals') return false
+		return true
+	}
+
+	function cloneResponseHeaders(win, sourceRes) {
+		const sourceHeaders = sourceRes && sourceRes.headers
+		if (typeof win.Headers === 'function') {
+			const headers = new win.Headers(sourceHeaders || undefined)
+			headers.delete('content-length')
+			headers.delete('content-encoding')
+			if (!headers.has('content-type')) {
+				headers.set('content-type', 'application/json')
+			}
+			return headers
+		}
+		const plain = {}
+		if (sourceHeaders && typeof sourceHeaders.forEach === 'function') {
+			sourceHeaders.forEach(function (val, key) {
+				const lower = String(key).toLowerCase()
+				if (lower !== 'content-length' && lower !== 'content-encoding') {
+					plain[key] = val
+				}
+			})
+		} else if (sourceHeaders && typeof sourceHeaders === 'object') {
+			Object.keys(sourceHeaders).forEach(function (key) {
+				const lower = String(key).toLowerCase()
+				if (lower !== 'content-length' && lower !== 'content-encoding') {
+					plain[key] = sourceHeaders[key]
+				}
+			})
+		}
+		const hasContentType = Object.keys(plain).some(function (k) {
+			return k.toLowerCase() === 'content-type'
+		})
+		if (!hasContentType) {
+			plain['content-type'] = 'application/json'
+		}
+		return plain
+	}
+
+	function buildJsonResponse(win, bodyObj, sourceRes) {
+		const jsonText = JSON.stringify(bodyObj)
+		const headers = cloneResponseHeaders(win, sourceRes)
+		const status = (sourceRes && typeof sourceRes.status === 'number') ? sourceRes.status : 200
+		const statusText = (sourceRes && typeof sourceRes.statusText === 'string') ? sourceRes.statusText : 'OK'
+		if (typeof win.Response === 'function') {
+			return new win.Response(jsonText, {
+				status: status,
+				statusText: statusText,
+				headers: headers,
+			})
+		}
+		return {
+			ok: status >= 200 && status < 300,
+			status: status,
+			statusText: statusText,
+			headers: headers,
+			clone: function () { return buildJsonResponse(win, bodyObj, sourceRes) },
+			json: function () { return Promise.resolve(bodyObj) },
+			text: function () { return Promise.resolve(jsonText) },
+		}
 	}
 
 	function installSidebarBridge(win) {
@@ -284,6 +916,197 @@
 
 		const doc = win.document
 		const config = readBridgeConfig(doc)
+		let navigatingAway = false
+		function openWorkerCare() {
+			if (navigatingAway) return
+			navigatingAway = true
+			// Never forward the old route's query/hash or accept an external target.
+			win.location.assign('/cskh')
+		}
+
+		function guardCurrentRoute() {
+			if (isSalesPath(win.location.pathname || '')) {
+				openWorkerCare()
+				return true
+			}
+			return false
+		}
+
+		let dataGuardsInstalled = false
+		function installDataGuards() {
+			if (dataGuardsInstalled || !config.workerCare || !isCrmPath(win)) return
+			dataGuardsInstalled = true
+			scrubRecentDealsFromStorage(win)
+			if (typeof win.fetch !== 'function') return
+			const originalFetch = win.fetch
+			win.fetch = function (input) {
+				if (!config.workerCare || !isCrmPath(win)) {
+					return originalFetch.apply(this, arguments)
+				}
+				const rawUrl =
+					typeof input === 'string'
+						? input
+						: input && typeof input.url === 'string'
+							? input.url
+							: input && typeof input.href === 'string'
+								? input.href
+								: ''
+				const parsed = parseHref(win, rawUrl)
+				const apiPath = parsed && parsed.origin === win.location.origin ? parsed.pathname : ''
+
+				if (
+					apiPath !== '/api/method/crm.api.command_palette.search' &&
+					apiPath !== '/api/method/crm.api.views.get_views'
+				) {
+					return originalFetch.apply(this, arguments)
+				}
+
+				return originalFetch.apply(this, arguments).then(function (res) {
+					if (!res || !res.ok || typeof res.json !== 'function') return res
+					if (res.headers && typeof res.headers.get === 'function') {
+						const ct = String(res.headers.get('content-type') || '').toLowerCase()
+						if (ct && ct.indexOf('json') === -1) return res
+					}
+					const clone = typeof res.clone === 'function' ? res.clone() : res
+					return clone.json().then(function (payload) {
+						if (!payload || typeof payload !== 'object') return res
+						if (
+							apiPath === '/api/method/crm.api.command_palette.search' &&
+							payload.message &&
+							typeof payload.message === 'object'
+						) {
+							const msg = payload.message
+							let changed = false
+							const nextMsg = Object.assign({}, msg)
+							;['matches', 'recent', 'upcoming'].forEach(function (bucket) {
+								if (Array.isArray(msg[bucket])) {
+									const filtered = msg[bucket].filter(isNonDealPaletteRecord)
+									if (filtered.length !== msg[bucket].length) {
+										changed = true
+										nextMsg[bucket] = filtered
+									}
+								}
+							})
+							if (!changed) return res
+							return buildJsonResponse(win, Object.assign({}, payload, { message: nextMsg }), res)
+						}
+						if (apiPath === '/api/method/crm.api.views.get_views' && Array.isArray(payload.message)) {
+							const nextViews = payload.message.filter(function (v) {
+								return !v || (v.dt !== 'CRM Deal' && v.route_name !== 'Deals')
+							})
+							if (nextViews.length === payload.message.length) return res
+							return buildJsonResponse(win, Object.assign({}, payload, { message: nextViews }), res)
+						}
+						return res
+					}).catch(function () {
+						return res
+					})
+				})
+			}
+		}
+
+		function interceptPointerSalesTarget(event) {
+			if (!event || !event.target || typeof event.target.closest !== 'function') return
+			if (event.target.closest('[' + BLOCKED_ATTR + '="1"]')) {
+				event.preventDefault()
+				event.stopImmediatePropagation()
+				return
+			}
+			const optionTarget = event.target.closest('[role="option"]')
+			if (optionTarget && isSalesOption(optionTarget)) {
+				event.preventDefault()
+				event.stopImmediatePropagation()
+				openWorkerCare()
+				return
+			}
+			const tabTarget = event.target.closest('[role="tab"]')
+			if (tabTarget && isDealTab(tabTarget)) {
+				event.preventDefault()
+				event.stopImmediatePropagation()
+				return
+			}
+			const pageTarget = event.target.closest('[data-page]')
+			if (pageTarget && SALES_SETTINGS_PAGES.has(normalizeText(pageTarget.getAttribute('data-page')))) {
+				event.preventDefault()
+				event.stopImmediatePropagation()
+				return
+			}
+			const controlTarget = event.target.closest('a[href], button, [role="menuitem"]')
+			if (!controlTarget || !isSalesControl(win, controlTarget)) return
+			event.preventDefault()
+			event.stopImmediatePropagation()
+			openWorkerCare()
+		}
+
+		function interceptKeyboardSalesTarget(event) {
+			if (!event || skippingOption) return
+			const key = event.key
+			if (key === 'Enter') {
+				const target = event.target
+				if (target && typeof target.closest === 'function') {
+					const opt = target.closest('[role="option"]')
+					if (opt && isSalesOption(opt)) {
+						event.preventDefault()
+						event.stopImmediatePropagation()
+						openWorkerCare()
+						return
+					}
+					const ctrl = target.closest('a[href], button, [role="menuitem"]')
+					if (ctrl && isSalesControl(win, ctrl)) {
+						event.preventDefault()
+						event.stopImmediatePropagation()
+						openWorkerCare()
+						return
+					}
+				}
+				const ctx = findActivePaletteContext(doc)
+				if (ctx && ctx.activeOption && isSalesOption(ctx.activeOption)) {
+					event.preventDefault()
+					event.stopImmediatePropagation()
+					openWorkerCare()
+				}
+				return
+			}
+			if (key === 'ArrowDown' || key === 'ArrowUp') {
+				lastPaletteDirection = key
+				if (typeof win.setTimeout === 'function') {
+					win.setTimeout(function () {
+						nudgePaletteOffBlockedOption(win, doc, key)
+					}, 0)
+				}
+			}
+		}
+
+		// Router links use pushState/replaceState without a network request. Install
+		// before Vue boots, and also cover browser Back/Forward and direct old links.
+		let guardsInstalled = false
+		function installNavigationGuards() {
+			if (guardsInstalled || !config.workerCare || !isCrmPath(win)) return
+			guardsInstalled = true
+			installDataGuards()
+			if (win.history) {
+				;['pushState', 'replaceState'].forEach(function (method) {
+					const original = win.history[method]
+					if (typeof original !== 'function') return
+					win.history[method] = function (state, title, url) {
+						if (url !== undefined && url !== null && isSalesUrl(win, String(url))) {
+							openWorkerCare()
+							return
+						}
+						return original.apply(this, arguments)
+					}
+				})
+			}
+			if (typeof win.addEventListener === 'function') {
+				win.addEventListener('popstate', guardCurrentRoute)
+				win.addEventListener('pageshow', guardCurrentRoute)
+			}
+			doc.addEventListener('click', interceptPointerSalesTarget, true)
+			doc.addEventListener('mousedown', interceptPointerSalesTarget, true)
+			doc.addEventListener('keydown', interceptKeyboardSalesTarget, true)
+			guardCurrentRoute()
+		}
+		installNavigationGuards()
 
 		function ensureThemeStylesheet() {
 			if (!isCrmPath(win) || !doc.head || typeof doc.createElement !== 'function') {
@@ -303,9 +1126,16 @@
 		}
 
 		function syncAll(root) {
-			if (!isCrmPath(win)) return 0
+			if (!config.workerCare || !isCrmPath(win) || navigatingAway || guardCurrentRoute()) return 0
+			const scope = root || doc
 			ensureThemeStylesheet()
-			const navs = findPrimaryNavs(win, root || doc)
+			syncOnboardingItems(scope)
+			removeSalesControls(win, scope)
+			syncSettingsItems(scope)
+			syncSalesOptions(win, scope)
+			syncDealTabs(doc, scope, config)
+			syncSalesDialogs(scope, openWorkerCare)
+			const navs = findPrimaryNavs(win, scope)
 			for (let i = 0; i < navs.length; i += 1) {
 				ensureSidebarItem(win, navs[i], config)
 			}
@@ -328,18 +1158,48 @@
 		}
 
 		let observer = null
+		function isSelfOwnedNode(node) {
+			if (!node || typeof node.closest !== 'function') return false
+			return !!(
+				node.closest('[' + ITEM_ATTR + '="1"]') ||
+				node.closest('[' + CARE_PANEL_ATTR + '="1"]')
+			)
+		}
 		function startObserver() {
 			if (observer || typeof win.MutationObserver !== 'function') return
-			const target = doc.getElementById('app') || doc.body || doc.documentElement
+			// Observe document.body so portals (CommandPalette, MobileSidebar, Settings, Modals) are covered.
+			const target = doc.body || doc.documentElement
 			if (!target) return
-			observer = new win.MutationObserver(function () {
+			observer = new win.MutationObserver(function (mutations) {
+				if (Array.isArray(mutations) && mutations.length > 0) {
+					let relevant = false
+					for (let i = 0; i < mutations.length; i += 1) {
+						const m = mutations[i]
+						if (m.type === 'childList') {
+							if (m.addedNodes && m.addedNodes.length > 0 && !isSelfOwnedNode(m.target)) {
+								relevant = true
+								break
+							}
+						} else if (m.type === 'attributes' && !isSelfOwnedNode(m.target)) {
+							relevant = true
+							break
+						}
+					}
+					if (!relevant) return
+				}
 				scheduleSync()
 			})
 			observer.observe(target, {
 				childList: true,
 				subtree: true,
 				attributes: true,
-				attributeFilter: ['class'],
+				attributeFilter: [
+					'class',
+					'href',
+					'title',
+					'aria-label',
+					'aria-selected',
+				],
 			})
 		}
 
@@ -360,6 +1220,18 @@
 				return findPrimaryNavs(win, root || doc)
 			},
 			detectCollapsedState: detectCollapsedState,
+			isSalesPath: isSalesPath,
+			isSalesOption: isSalesOption,
+			guardCurrentRoute: guardCurrentRoute,
+			activateWorkerCare: function (capability) {
+				if (!capability || capability.enabled !== true) return false
+				config.workerCare = true
+				config.href = '/cskh'
+				if (capability.label) config.label = String(capability.label)
+				installNavigationGuards()
+				syncAll(doc)
+				return navigatingAway
+			},
 		}
 		win.__cskhSidebarBridge = api
 		return api

@@ -864,6 +864,33 @@
 			load()
 		})
 	}
+	;(function applyInitialCareFiltersFromQuery() {
+		if (!allowPii) return
+		try {
+			const params = new URLSearchParams(window.location.search || '')
+			const rawCare = (params.get('care_filter') || '').trim()
+			if (rawCare && careSelect) {
+				const hasOption = Array.from(careSelect.options).some(function (o) {
+					return o.value === rawCare
+				})
+				if (hasOption) {
+					careSelect.value = rawCare
+					syncFilterChips(rawCare)
+				}
+			}
+			const rawScopeCare = (params.get('scope_care') || '').trim()
+			if (rawScopeCare && scopeCareSelect && canReadScope) {
+				const hasScopeOption = Array.from(scopeCareSelect.options).some(function (o) {
+					return o.value === rawScopeCare
+				})
+				if (hasScopeOption) {
+					scopeCareSelect.value = rawScopeCare
+				}
+			}
+		} catch (_err) {
+			/* ignore malformed query */
+		}
+	})()
 	if (chipBar) {
 		chipBar.addEventListener('click', function (ev) {
 			const btn = ev.target.closest('.cskh-chip')

@@ -32,8 +32,8 @@
 				<img src="/assets/crm_cskh/cskh/logo.svg?v={{ cskh_asset_version | default('') }}" alt="" class="cskh-sidebar-logo" width="30" height="30">
 				{% endif %}
 				<span class="cskh-sidebar-brand-copy">
-					<span class="cskh-sidebar-brand-title">{{ _("CSKH") }}</span>
-					<span class="cskh-sidebar-brand-sub">{{ _("Recruitment workspace") }}</span>
+					<span class="cskh-sidebar-brand-title">{{ _("Worker care") }}</span>
+					<span class="cskh-sidebar-brand-sub">{{ _("Marketing workspace") }}</span>
 				</span>
 			</a>
 			<button type="button" class="cskh-mobile-nav-toggle" id="cskh-mobile-nav-toggle" aria-expanded="false" aria-controls="cskh-sidebar-nav" aria-label="{{ _('Toggle navigation') }}">
@@ -45,24 +45,24 @@
 			</button>
 		</div>
 
-		<nav class="cskh-nav" id="cskh-sidebar-nav" aria-label="{{ _('Recruitment workspace') }}">
+		<nav class="cskh-nav" id="cskh-sidebar-nav" aria-label="{{ _('Worker care') }}">
 			<div class="cskh-nav-group">
-				<a href="/cskh" class="{{ 'is-active' if cskh_route == '/cskh' else '' }}">{{ nav_icon("home") }}<span class="cskh-nav-label">{{ _("Recruitment workspace") }}</span></a>
+				<a href="/cskh" class="{{ 'is-active' if cskh_route == '/cskh' else '' }}">{{ nav_icon("home") }}<span class="cskh-nav-label">{{ _("Worker care overview") }}</span></a>
 			</div>
-
-			{% if pool_items %}
-			<div class="cskh-nav-group">
-				<div class="cskh-nav-group-label">{{ _("Contact pool, import & assignment management") }}</div>
-				{% for item in pool_items %}
-				<a href="{{ item.route }}" class="{{ 'is-active' if item.route == cskh_route else '' }}">{{ nav_icon(item.key) }}<span class="cskh-nav-label">{{ _(item.label) }}</span></a>
-				{% endfor %}
-			</div>
-			{% endif %}
 
 			{% if daily_items %}
 			<div class="cskh-nav-group">
 				<div class="cskh-nav-group-label">{{ _("Daily outreach tasks") }}</div>
 				{% for item in daily_items %}
+				<a href="{{ item.route }}" class="{{ 'is-active' if item.route == cskh_route else '' }}">{{ nav_icon(item.key) }}<span class="cskh-nav-label">{{ _(item.label) }}</span></a>
+				{% endfor %}
+			</div>
+			{% endif %}
+
+			{% if pool_items %}
+			<div class="cskh-nav-group">
+				<div class="cskh-nav-group-label">{{ _("Contact pool, import & assignment management") }}</div>
+				{% for item in pool_items %}
 				<a href="{{ item.route }}" class="{{ 'is-active' if item.route == cskh_route else '' }}">{{ nav_icon(item.key) }}<span class="cskh-nav-label">{{ _(item.label) }}</span></a>
 				{% endfor %}
 			</div>
@@ -94,13 +94,7 @@
 					<path d="M10 14 21 3"></path>
 					<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path>
 				</svg>
-				<span class="cskh-nav-label">{{ _("Return to CRM Leads") }}</span>
-			</a>
-			<a href="/crm/deals/view/list" class="cskh-crm-shortcut">
-				<svg class="cskh-nav-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-					<path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-				</svg>
-				<span class="cskh-nav-label">{{ _("Open CRM Deals") }}</span>
+				<span class="cskh-nav-label">{{ _("Worker contact records") }}</span>
 			</a>
 		</div>
 		{% endif %}
@@ -111,7 +105,7 @@
 			{% block cskh_head %}
 			<div class="cskh-head">
 				<div class="cskh-head-copy">
-					<h1 class="cskh-title">{% block cskh_title %}{{ _("CSKH") }}{% endblock %}</h1>
+					<h1 class="cskh-title">{% block cskh_title %}{{ _("Worker care") }}{% endblock %}</h1>
 					<p class="cskh-subtitle">{% block cskh_subtitle %}{% endblock %}</p>
 				</div>
 				<div class="cskh-actions">{% block cskh_actions %}{% endblock %}</div>
@@ -126,8 +120,7 @@
 					{{ _("Site/user timezone") }}: <code>{{ (cskh_timezone or {}).get("effective", "Asia/Ho_Chi_Minh") }}</code>
 				</span>
 				{% if (cskh_capabilities or {}).get("can_open_crm_app") %}
-				<a class="cskh-session-link" href="/crm/leads/view/list">{{ _("Return to CRM Leads") }}</a>
-				<a class="cskh-session-link" href="/crm/deals/view/list">{{ _("Open CRM Deals") }}</a>
+				<a class="cskh-session-link" href="/crm/leads/view/list">{{ _("Worker contact records") }}</a>
 				{% endif %}
 			</p>
 		</header>

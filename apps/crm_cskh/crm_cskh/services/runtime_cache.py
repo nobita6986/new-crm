@@ -656,12 +656,16 @@ def _clear_all_lru_stores() -> None:
 		lru.clear()
 
 
+_WORKER_LAST_BRANDING_EPOCH: dict[str, int] = {}
+
+
 def clear_all_local_caches() -> None:
 	_clear_all_lru_stores()
 	with _EPOCH_LOCK:
 		_SITE_EPOCHS.clear()
 		_SITE_GENS.clear()
 		_SITE_DIAG_FLAGS.clear()
+		_WORKER_LAST_BRANDING_EPOCH.clear()
 	local = getattr(frappe, "local", None)
 	if local is not None:
 		local._cskh_req_epochs = None
@@ -906,6 +910,8 @@ def bump_cache_domain(*domains: str) -> None:
 				items = tuple(sorted(getattr(local, "_cskh_pending_epoch_bumps", None) or ()))
 				local._cskh_pending_epoch_bumps = None
 				if items:
+					if DOMAIN_BRANDING in items:
+						_clear_branding_doc_caches()
 					_bump_domains_once(items)
 
 			try:
@@ -977,6 +983,18 @@ def on_before_request(*_args, **_kwargs) -> None:
 		install_template_page_fastpath()
 	except Exception:
 		pass
+	req = getattr(local, "request", None) if local is not None else None
+	req_path = str(getattr(req, "path", "") or "")
+	if (req_path == "/crm" or req_path.startswith("/crm/")) and is_runtime_db_cache_active():
+		try:
+			site = _current_site()
+			b_ep = get_domain_epoch(DOMAIN_BRANDING)
+			if _WORKER_LAST_BRANDING_EPOCH.get(site) != b_ep:
+				get_website_branding()
+				with _EPOCH_LOCK:
+					_WORKER_LAST_BRANDING_EPOCH[site] = b_ep
+		except Exception:
+			pass
 
 
 # ---------------------------------------------------------------------------

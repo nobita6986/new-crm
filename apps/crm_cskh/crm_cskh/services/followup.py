@@ -963,12 +963,13 @@ def list_followups(
 	if wi_val:
 		assert_work_item_workflow_access(wi_val, user=actor, require_active_mutation=False)
 
+	from crm_cskh.services.worker_overview import _timezones, day_window
+
 	scope = reporting._scope(actor)
 	scope_label = "all" if scope["scope"] in ("system", "all") else scope["scope"]
 	now_dt = now_datetime()
-	today = getdate(now_dt)
-	day_start = f"{today} 00:00:00"
-	day_end = f"{today} 23:59:59"
+	site_tz, user_tz = _timezones(actor)
+	day_start, day_end, _ = day_window(now_dt, site_tz, user_tz)
 
 	clauses = ["coalesce(t.cskh_is_followup, 0) = 1"]
 	params: list = []
@@ -1014,10 +1015,10 @@ def list_followups(
 		clauses.append("t.status in ('Backlog', 'Todo', 'In Progress') and t.due_date < %s")
 		params.append(now_dt)
 	elif bucket_val == "today":
-		clauses.append("t.due_date >= %s and t.due_date <= %s")
+		clauses.append("t.due_date >= %s and t.due_date < %s")
 		params.extend([day_start, day_end])
 	elif bucket_val == "upcoming":
-		clauses.append("t.due_date > %s")
+		clauses.append("t.due_date >= %s")
 		params.append(day_end)
 
 	from_where = (

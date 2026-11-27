@@ -28,14 +28,13 @@
 	if (assigneeWrap && canFilterAssignee) assigneeWrap.hidden = false
 
 	function mapBucketQuery(bucketKey) {
-		const sameTz = cskh.effectiveTimeZone() === cskh.siteTimeZone()
 		switch (bucketKey) {
 			case 'due_today':
-				return { status: 'open', bucket: sameTz ? 'today' : 'all', clientBucket: sameTz ? '' : 'due_today' }
+				return { status: 'open', bucket: 'today', clientBucket: '' }
 			case 'overdue':
 				return { status: 'open', bucket: 'overdue', clientBucket: '' }
 			case 'upcoming':
-				return { status: 'open', bucket: sameTz ? 'upcoming' : 'all', clientBucket: sameTz ? '' : 'upcoming' }
+				return { status: 'open', bucket: 'upcoming', clientBucket: '' }
 			case 'done':
 				return { status: 'done', bucket: 'all', clientBucket: '' }
 			case 'canceled':
@@ -511,6 +510,20 @@
 	}
 
 	const bucketSelect = document.getElementById('cb-bucket')
+	;(function applyInitialBucketFromQuery() {
+		try {
+			const params = new URLSearchParams(window.location.search || '')
+			const rawBucket = (params.get('bucket') || '').trim()
+			const normalized = rawBucket === 'today' ? 'due_today' : rawBucket
+			const allowed = { open: 1, due_today: 1, overdue: 1, upcoming: 1, done: 1, canceled: 1 }
+			if (normalized && allowed[normalized] && bucketSelect) {
+				bucketSelect.value = normalized
+				syncChips(normalized)
+			}
+		} catch (_err) {
+			/* ignore malformed query */
+		}
+	})()
 	bucketSelect.addEventListener('change', function () {
 		syncChips(bucketSelect.value)
 		pager.goto(1)

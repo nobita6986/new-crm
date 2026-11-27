@@ -20,11 +20,18 @@ const suffix = JSON.parse(execFileSync(
 const source = suffix.slice(suffix.lastIndexOf('\nif (import.meta.env.DEV)'))
   .replaceAll('import.meta.env.DEV', 'true')
 
-async function runBoot(response, bootError) {
-  const seen = { mounted: 0, requests: [], errors: [], children: [], redirect: null }
+async function runBoot(response, bootError, routing = { enabled: true }, navigationRedirect = false) {
+  const seen = { mounted: 0, requests: [], errors: [], children: [], redirect: null, capabilities: [] }
   const context = {
     URL,
     window: {
+      __cskhSidebarBridge: {
+        activateWorkerCare(capability) {
+          assert.equal(seen.mounted, 0, 'Role routing must run before Vue mounts')
+          seen.capabilities.push(capability)
+          return navigationRedirect
+        },
+      },
       location: {
         origin: 'http://dev.localhost:8091',
         pathname: '/crm/leads/view/list', search: '?view=mine', hash: '#activity',
@@ -41,9 +48,14 @@ async function runBoot(response, bootError) {
     console: { error(...args) { seen.errors.push(args) } },
     fetch: async (url, options) => {
       seen.requests.push({ url, options })
-      assert.equal(url, '/desk')
       assert.equal(options.credentials, 'same-origin')
       assert.equal(options.cache, 'no-store')
+      if (url === '/api/method/crm_cskh.cskh_sidebar.worker_care_entry') {
+        assert.equal(options.headers.Accept, 'application/json')
+        if (routing instanceof Error) throw routing
+        return { ok: true, json: async () => ({ message: routing }) }
+      }
+      assert.equal(url, '/desk')
       return response
     },
     frappeRequest: async ({ url }) => {
@@ -79,7 +91,7 @@ test('Guest goes to login with the original CRM route and makes no boot POST', a
 test('Authenticated Desk session supplies CSRF before booting the app', async () => {
   const result = await runBoot(desk())
   assert.equal(result.mounted, 1)
-  assert.equal(result.requests.length, 2)
+  assert.equal(result.requests.length, 3)
   assert.equal(result.window.site_name, 'dev.localhost')
   assert.equal(result.errors.length, 0)
 })
@@ -107,4 +119,24 @@ test('Context request failure leaves a usable recovery message', async () => {
   assert.equal(result.mounted, 0)
   assert.equal(result.children.length, 3)
   assert.equal(result.errors.length, 1)
+})
+
+test('Worker-care redirect is decided before Vue mounts', async () => {
+  const result = await runBoot(desk(), null, { enabled: true }, true)
+  assert.equal(result.mounted, 0)
+  assert.equal(result.capabilities.length, 1)
+  assert.equal(result.errors.length, 0)
+})
+
+test('Authenticated outsiders retain native CRM bootstrap', async () => {
+  const result = await runBoot(desk(), null, { enabled: false })
+  assert.equal(result.mounted, 1)
+  assert.equal(result.capabilities[0].enabled, false)
+})
+
+test('Capability failure shows recovery instead of mounting the sales app', async () => {
+  const result = await runBoot(desk(), null, new Error('Capability unavailable'))
+  assert.equal(result.mounted, 0)
+  assert.equal(result.errors.length, 1)
+  assert.equal(result.children.length, 3)
 })

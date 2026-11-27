@@ -49,7 +49,10 @@ AUXILIARY_MODULES: dict[str, tuple[str, ...]] = {
         "crm_cskh.tests.test_p4_bg02_and_slo_remediation",
     ),
     "p1_ui": ("crm_cskh.tests.test_ui_p1_endpoints",),
-    "p2_ui": ("crm_cskh.tests.test_ui_p2_pages_and_context",),
+    "p2_ui": (
+        "crm_cskh.tests.test_ui_p2_pages_and_context",
+        "crm_cskh.tests.test_worker_overview",
+    ),
 }
 
 FULL_SUITE_PREFIXES: tuple[str, ...] = (

@@ -9,8 +9,8 @@ Last Modified,Cập nhật lần cuối
 Signed in as,Đã đăng nhập với tư cách
 This page uses the same Frappe site session as CRM.,Trang này dùng cùng phiên đăng nhập Frappe với CRM.
 Check session and CSRF,Kiểm tra phiên đăng nhập và CSRF
-Return to CRM Leads,Về danh sách Hồ sơ liên hệ (CRM)
-CSKH,Không gian tuyển dụng
+Return to CRM Leads,Thông tin liên hệ người lao động
+CSKH,Chăm sóc người lao động
 Email,Thư điện tử
 Emails,Thư điện tử
 Email Address,Địa chỉ thư điện tử
@@ -116,7 +116,7 @@ Number of deals,Số lượng giao dịch CRM
 Deal value,Giá trị giao dịch CRM
 Deals by salesperson,Giao dịch CRM theo nhân viên phụ trách
 Number of deals and total value per salesperson,Số lượng và tổng giá trị giao dịch CRM theo nhân viên
-Salesperson,Nhân viên phụ trách
+Salesperson,Nhân viên marketing phụ trách
 Leads,Hồ sơ liên hệ
 leads,Hồ sơ liên hệ
 deals,Giao dịch CRM
@@ -239,10 +239,10 @@ Batch,Lô
 CAPACITY_EXCEEDED,CAPACITY_EXCEEDED
 CAPACITY_FULL,CAPACITY_FULL
 CONFLICT,CONFLICT
-Campaign,Chiến dịch
-Campaigns,Chiến dịch
-Campaigns and distribution rules,Phân công — Chiến dịch và quy tắc phân phối
-Campaigns and rules,Phân công & chiến dịch
+Campaign,Chiến dịch chăm sóc
+Campaigns,Chiến dịch chăm sóc
+Campaigns and distribution rules,Chiến dịch chăm sóc & quy tắc phân công
+Campaigns and rules,Chiến dịch chăm sóc & phân công
 Cancel,Hủy
 Capacity,Sức chứa
 Classification,Phân loại
@@ -256,17 +256,17 @@ Confirm,Xác nhận
 Confirm distribution,Xác nhận phân phối
 Confirm import,Xác nhận nhập
 Conflict,Xung đột
-Create campaign,Tạo chiến dịch
+Create campaign,Tạo chiến dịch chăm sóc
 Created,Đã tạo
 Created at,Thời điểm tạo
 Current owners,Người đang phụ trách
 Current owners are counted from work items; assignment events come from the audit trail.,Người đang phụ trách được đếm từ công việc; sự kiện phân công lấy từ nhật ký kiểm toán.
 Currently assigned,Đang được giao
-Customer,Hồ sơ liên hệ
-Customer pool,Kho hồ sơ liên hệ
-Customers assigned to me,Hồ sơ được giao cho tôi
-Customers assigned to me.,"Danh sách hồ sơ liên hệ đang giao cho bạn tiếp nhận, liên hệ và hẹn lại."
-Customers currently assigned to you.,Các hồ sơ liên hệ hiện do bạn phụ trách.
+Customer,Người lao động
+Customer pool,Kho người lao động
+Customers assigned to me,Người lao động được giao cho tôi
+Customers assigned to me.,Người lao động được giao cho bạn liên hệ và chăm sóc.
+Customers currently assigned to you.,Người lao động hiện do bạn phụ trách chăm sóc.
 DUPLICATE,DUPLICATE
 Data as of,Dữ liệu tính đến
 Description,Mô tả
@@ -274,7 +274,7 @@ Display name,Tên hiển thị
 Distribution,Phân phối
 Distribution completed with errors.,Đã phân phối xong nhưng có lỗi.
 Distribution completed.,Đã phân phối xong.
-Distribution dashboard,Bảng điều khiển phân phối
+Distribution dashboard,Tổng quan phân công
 Distribution runs,Đợt phân phối
 Distribution state,Trạng thái phân phối
 Duplicate rows,Số dòng trùng
@@ -300,23 +300,23 @@ Import list,Nhập danh sách liên hệ
 Import source files must be private.,Tệp nguồn nhập dữ liệu phải là riêng tư.
 Loading...,Đang tải...
 Log in to access this page.,Hãy đăng nhập để truy cập trang này.
-My customers,Hồ sơ được giao
+My customers,Người lao động phụ trách
 NOT_FOUND,NOT_FOUND
 NO_ELIGIBLE_LEADS,NO_ELIGIBLE_LEADS
-Name or phone number,Tên hoặc số điện thoại
-New campaign,Chiến dịch mới
+Name or phone number,Tên hoặc số điện thoại người lao động
+New campaign,Chiến dịch chăm sóc mới
 New rows,Số dòng mới
 Next,Trang sau
 No assignment rule yet.,Chưa có quy tắc phân công nào.
 No campaign yet.,Chưa có chiến dịch nào.
-No customers match the current filters.,Không có hồ sơ nào khớp với bộ lọc hiện tại.
+No customers match the current filters.,Không có người lao động nào khớp với bộ lọc hiện tại.
 No data,Không có dữ liệu
 No data in the current scope.,Không có dữ liệu trong phạm vi hiện tại.
 No import batch yet.,Chưa có lô nhập nào.
 Normalized share,Tỷ lệ chuẩn hóa
 Not distributed,Chưa phân phối
 Only an active work item may hold an active claim.,Chỉ công việc đang hoạt động mới được giữ quyền sở hữu đang hoạt động.
-Only the customers that are currently assigned to you.,"Danh sách hồ sơ liên hệ hiện giao cho bạn tiếp nhận, liên hệ và đặt lịch hẹn lại."
+Only the customers that are currently assigned to you.,"Người lao động được giao cho bạn liên hệ, ghi nhận nhu cầu và thực hiện lịch hẹn chăm sóc đúng hạn."
 Open in CRM,Mở hồ sơ gốc (CRM)
 Operational distribution figures for your scope.,Số liệu phân phối trong phạm vi của bạn.
 Owner,Người phụ trách
@@ -358,7 +358,7 @@ The active claim must reference the same lead and campaign as its work item.,Quy
 The actual payload must be valid JSON.,Dữ liệu kết quả phải là JSON hợp lệ.
 The allocator state must be a JSON object.,Trạng thái bộ phân bổ phải là một đối tượng JSON.
 The allocator state must be valid JSON.,Trạng thái bộ phân bổ phải là JSON hợp lệ.
-The assignee must be an enabled Sales User.,Người được giao phải là nhân viên tuyển dụng có tài khoản đang hoạt động.
+The assignee must be an enabled Sales User.,Người được giao phải là nhân viên marketing có tài khoản đang hoạt động.
 The campaign is already distributed by another executor.,Chiến dịch đã được một bộ thực thi khác phân phối.
 The canonical lead must have a mobile number.,Hồ sơ liên hệ chuẩn phải có số điện thoại di động.
 The distribution run,Đợt phân phối
@@ -386,11 +386,11 @@ Unique customers in scope,Số hồ sơ không trùng trong phạm vi
 Valid rows,Số dòng hợp lệ
 Weight,Trọng số
 Weight and version must be positive; capacity must not be negative.,Trọng số và phiên bản phải là số dương; sức chứa không được âm.
-Work item,Đầu việc liên hệ
+Work item,Hồ sơ chăm sóc
 Work item status,Trạng thái công việc
 Work items,Số công việc
 You do not have permission to access this page.,Bạn không có quyền truy cập trang này.
-You have not been assigned any customer yet.,Bạn chưa được giao hồ sơ nào.
+You have not been assigned any customer yet.,Bạn chưa được giao người lao động nào.
 active_claim_in_other_campaign,Đang được giữ bởi chiến dịch khác
 assignment_failed,Phân công thất bại
 capacity_full,Đã đầy sức chứa
@@ -402,9 +402,9 @@ no_assignment_rule,Chưa có quy tắc phân công
 no_canonical_identity,Chưa có định danh chuẩn
 no_eligible_assignee,Không có người nhận đủ điều kiện
 no_positive_weight,Trọng số không dương
-owned_outside_cskh,Được quản lý ngoài Không gian tuyển dụng
+owned_outside_cskh,Được quản lý ngoài Chăm sóc người lao động
 user_disabled,Tài khoản đã bị vô hiệu hóa
-user_is_not_sales_user,Người dùng không có vai trò nhân viên tuyển dụng
+user_is_not_sales_user,Người dùng không có vai trò nhân viên marketing
 user_out_of_team_scope,Ngoài phạm vi đội được phép
 valid,Hợp lệ
 work_item_exists_in_campaign,Đã có công việc trong chiến dịch
@@ -449,21 +449,21 @@ Campaign closed,Đã đóng
 Campaign draft,Nháp
 Campaign paused,Tạm dừng
 Clear date filter,Xóa bộ lọc ngày
-Close campaign,Đóng chiến dịch
+Close campaign,Đóng chiến dịch chăm sóc
 Completed with errors,Đã hoàn tất nhưng có lỗi
 Confirmed,Đã xác nhận
 Created rows,Số dòng tạo mới
 Current owner,Người đang phụ trách
 Current ownership (live work items),Quyền phụ trách hiện tại (công việc đang hoạt động)
 "Customer pool, imports, campaigns and distribution.","Kho hồ sơ liên hệ, nhập danh sách, chiến dịch và phân công."
-Customers assigned in the scope,Hồ sơ được giao trong phạm vi
+Customers assigned in the scope,Người lao động được giao trong phạm vi
 Data error,Lỗi dữ liệu
 Distributing the customers requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép phân phối hồ sơ liên hệ.
 Distribution failed.,Phân phối thất bại.
 Distribution is running in the background...,Đang thực thi phân phối nền...
 Distribution queued. Waiting for background worker...,Đã xếp hàng đợi phân phối. Đang chờ tiến trình nền xử lý...
 Download error file,Tải tệp lỗi
-Edit campaign,Sửa chiến dịch
+Edit campaign,Sửa chiến dịch chăm sóc
 Error file,Tệp lỗi
 Event at,Thời điểm sự kiện
 Failed runs,Đợt phân phối lỗi
@@ -483,7 +483,7 @@ Invalid integer value for page_size.,Giá trị số nguyên cho kích thước 
 Invalid integer value for value.,Giá trị số nguyên không hợp lệ.
 Invalid integer value for version.,Giá trị số nguyên cho phiên bản quy tắc không hợp lệ.
 Invalid or expired session/CSRF token. Reload the page and try again.,Phiên đăng nhập hoặc mã CSRF không hợp lệ hoặc đã hết hạn. Hãy tải lại trang và thử lại.
-"Leads in your scope, with the derived distribution state.",Danh sách Hồ sơ liên hệ (CRM Lead) trong phạm vi quản lý và trạng thái phân phối.
+"Leads in your scope, with the derived distribution state.","Hồ sơ liên hệ người lao động trong phạm vi quản lý, kèm trạng thái phân công chăm sóc."
 Look up run,Tra cứu đợt chạy
 Managing the campaigns requires the CRM Admin business role.,Chỉ vai trò Quản trị CRM mới được phép quản lý chiến dịch.
 Name column,Cột họ tên
@@ -565,7 +565,7 @@ The target user has no positive assignment weight in this campaign.,Người nh�
 The target user has no remaining capacity.,Người nhận đã hết sức chứa còn lại.
 The target user is disabled.,Tài khoản người nhận đang bị vô hiệu hóa.
 The target user is outside the campaign team scope.,Người nhận nằm ngoài phạm vi đội của chiến dịch.
-The target user must be a Sales User.,Người nhận phải có vai trò nhân viên tuyển dụng.
+The target user must be a Sales User.,Người nhận phải có vai trò nhân viên marketing.
 The target user must be a string.,Người nhận phải là chuỗi văn bản.
 The target user's assignment rule is disabled in this campaign.,Quy tắc phân công của người nhận đang bị tắt trong chiến dịch này.
 The target user's assignment rule is outside the campaign team scope.,Quy tắc phân công của người nhận nằm ngoài phạm vi đội của chiến dịch.
@@ -649,8 +649,8 @@ Active assigned work items,Công việc đang phụ trách
 Add clarification,Bổ sung giải trình
 All timeline items,Tất cả mục
 Allow close without contact for invalid/DNC,Cho phép đóng không cần liên hệ với sai số / trùng / DNC
-Allow leader reopen,Cho phép Trưởng nhóm mở lại công việc trong đội
-Allow leader review correction,Cho phép Trưởng nhóm xét duyệt yêu cầu hiệu chỉnh
+Allow leader reopen,Cho phép Trưởng nhóm marketing mở lại hồ sơ chăm sóc trong nhóm
+Allow leader review correction,Cho phép Trưởng nhóm marketing xét duyệt yêu cầu hiệu chỉnh
 Allowed channels,Kênh cho phép
 Approve correction,Duyệt áp dụng
 Attempted,Đã thử
@@ -659,8 +659,8 @@ Attempted work items,Công việc đã thử liên hệ
 "Attempted, not connected",Đã thử nhưng chưa kết nối
 "Attempted, not connected work items","Công việc đã thử, chưa kết nối"
 Attempts are append-only: direct editing or deletion is disabled. Submit a correction or void request instead.,Lần liên hệ là bất biến (append-only): không được sửa hoặc xóa trực tiếp. Hãy gửi yêu cầu hiệu chỉnh hoặc vô hiệu có lý do.
-Back to my customers,Về Hồ sơ được giao
-Basic customer care activity counts in your scope (not a quality or SLA score).,"Số liệu liên hệ trong phạm vi của bạn, tách riêng với điểm chất lượng và SLA."
+Back to my customers,Về Người lao động phụ trách
+Basic customer care activity counts in your scope (not a quality or SLA score).,Theo dõi số hồ sơ chăm sóc và hoạt động liên hệ người lao động; xem chất lượng và đúng hạn trong báo cáo tương ứng.
 Block future outreach,Chặn liên hệ mới về sau
 Block outreach and auto-close work item,Chặn liên hệ mới và tự động đóng công việc
 Breakdown by assignee in scope,Chi tiết theo nhân viên trong phạm vi
@@ -676,15 +676,15 @@ Callback task counters,Số liệu lịch hẹn liên hệ lại
 Callback title / note,Nội dung lịch hẹn
 Callbacks / tasks,Lịch hẹn / Nhiệm vụ
 Callbacks due today,Đến hạn hôm nay
-Callbacks schedule,Lịch hẹn liên hệ lại
+Callbacks schedule,Lịch hẹn chăm sóc
 Cancel callback,Hủy lịch hẹn
 Cancel reason,Lý do hủy hẹn
 Canceled,Đã hủy
 Care coverage by work item,Độ phủ liên hệ theo công việc (Work Item)
-Care filter,Bộ lọc trạng thái liên hệ
-Care progress,Tiến độ liên hệ
-Care status,Trạng thái liên hệ
-Care workspace,Chi tiết hồ sơ
+Care filter,Bộ lọc chăm sóc
+Care progress,Tiến độ chăm sóc
+Care status,Trạng thái chăm sóc
+Care workspace,Hồ sơ chăm sóc
 Change channel,Đổi kênh liên hệ
 Change outcome,Đổi kết quả liên hệ
 Change timestamp,Đính chính thời điểm liên hệ
@@ -695,7 +695,7 @@ Close care work item with this outcome,Đóng đầu việc liên hệ của h�
 Close work item,Đóng đầu việc liên hệ
 Closed work items by reason,Đầu việc đã đóng theo kết quả / lý do
 Complete / cancel callback,Hoàn tất / hủy lịch hẹn
-Completed care,Hoàn tất xử lý liên hệ
+Completed care,Hoàn tất đợt chăm sóc
 Completed work items,Công việc đã đóng
 Completing a callback without a contact attempt requires a cancellation reason.,Đóng lịch hẹn khi chưa thực hiện liên hệ bắt buộc phải có lý do hủy.
 Completing callback task,Thực hiện cho lịch hẹn
@@ -723,9 +723,9 @@ Correction type,Loại hiệu chỉnh
 Corrections and void history,Lịch sử hiệu chỉnh & vô hiệu
 Could not copy phone number in this browser.,Trình duyệt không cho phép sao chép tự động.
 Counts as connected,Tính là đã kết nối (chưa phải đã tuyển/bố trí)
-"Customer care detail, unified timeline, callbacks and append-only corrections.","Tiếp nhận hồ sơ liên hệ, ghi nhận trao đổi, đặt lịch hẹn liên hệ lại và đối chiếu nhật ký hợp nhất."
-Customer care workspace,Chi tiết hồ sơ liên hệ
-Customer compliance counters (distinct customers),Chỉ số tuân thủ theo hồ sơ liên hệ
+"Customer care detail, unified timeline, callbacks and append-only corrections.","Thông tin người lao động, lịch sử trao đổi, lịch hẹn chăm sóc và kết quả liên hệ có truy vết."
+Customer care workspace,Hồ sơ chăm sóc người lao động
+Customer compliance counters (distinct customers),Tuân thủ theo người lao động không trùng
 Customer ownership has changed to another staff member. Refresh your list.,Hồ sơ liên hệ này đã được chuyển giao cho nhân viên khác. Vui lòng làm mới danh sách.
 "Customer pool, imports, campaigns, distribution and customer care workflow.","Kho hồ sơ liên hệ, nhập danh sách, chiến dịch, phân công và theo dõi liên hệ."
 Data scope,Phạm vi dữ liệu
@@ -748,9 +748,9 @@ Enforce Do Not Contact (DNC),Chặn liên hệ khi người liên hệ từ ch�
 Enter contact summary or customer feedback...,Nhập nội dung trao đổi hoặc phản hồi của người liên hệ...
 Enter the reason for requesting this correction or void...,Nhập lý do cụ thể cho yêu cầu hiệu chỉnh hoặc vô hiệu...
 Facebook channel,Kênh Facebook
-"Follow-up callbacks in your scope, classified by site/user timezone.","Lịch hẹn liên hệ lại trong phạm vi của bạn, theo múi giờ áp dụng."
+"Follow-up callbacks in your scope, classified by site/user timezone.","Lịch hẹn chăm sóc người lao động trong phạm vi của bạn, theo múi giờ áp dụng."
 Global,Toàn hệ thống (Global)
-In progress,Đang xử lý liên hệ
+In progress,Đang chăm sóc
 Inbound,Gọi đến
 Interested,Có quan tâm
 Interested (call),Đã trao đổi — Có quan tâm
@@ -787,17 +787,17 @@ Note is required for this outcome.,Kết quả này bắt buộc nhập ghi chú
 Note — excluded from attempt count,Ghi chú nội bộ — không tính vào số lần liên hệ
 Notice: This view reports scoped operational counts only. It is not a quality KPI score or formal P3 SLA grade.,"Lưu ý: Màn hình này chỉ thống kê số lượng hoạt động liên hệ cơ bản trong phạm vi quyền (tách biệt số đầu việc/hồ sơ với số lần liên hệ, và tự báo cáo với đã xác minh) — không phải điểm chất lượng hay xếp loại SLA."
 Occurred at,Thời điểm liên hệ
-On hold,Chờ liên hệ lại
+On hold,Chờ chăm sóc lại
 On-hold work items (awaiting callback),Đang chờ liên hệ lại
 Only the active owner may record a contact attempt.,Chỉ nhân viên đang trực tiếp phụ trách mới được ghi nhận lần liên hệ.
 Open callback,Lịch hẹn đang mở
 Open callbacks,Lịch hẹn đang mở
-Open care workspace,Mở chi tiết hồ sơ
+Open care workspace,Mở hồ sơ chăm sóc
 Original snapshot,Bản ghi gốc
 Other,Khác
 Other channel,Kênh khác
 Outbound,Gọi đi
-Outcome and policy settings,Cấu hình kết quả & chính sách
+Outcome and policy settings,Kết quả liên hệ & chính sách chăm sóc
 Outcome code,Mã kết quả
 Outcome code catalog,Danh mục mã kết quả liên hệ
 Outcome code saved.,Đã lưu cấu hình mã kết quả.
@@ -910,17 +910,17 @@ You do not have permission to modify outcome codes or policies.,Bạn không có
 You do not have permission to review correction requests.,Bạn không có quyền xét duyệt yêu cầu hiệu chỉnh.
 You do not have permission to view this work item.,Bạn không có quyền xem chi tiết đầu việc liên hệ này.
 Zalo channel,Kênh Zalo
-Quality overview,Tổng quan chất lượng
-Team comparison,So sánh đội nhóm
-Employee quality,Chất lượng nhân viên
-Campaign & source quality,Chiến dịch & nguồn liên hệ
-SLA & QA operations,Vận hành SLA & QA
-Personal scorecard,Bảng điểm cá nhân
-Executive quality overview (BOD),Tổng quan chất lượng liên hệ & SLA (BOD)
-"Company-wide SLA compliance, connection effectiveness, data reliability and drill-down.","Toàn cảnh tuân thủ SLA, hiệu quả kết nối, độ tin cậy dữ liệu và truy vết nguồn toàn công ty."
+Quality overview,Chất lượng chăm sóc
+Team comparison,Hiệu quả nhóm marketing
+Employee quality,Hiệu quả nhân viên marketing
+Campaign & source quality,Chiến dịch chăm sóc & nguồn người lao động
+SLA & QA operations,Giám sát lịch hẹn & chất lượng
+Personal scorecard,Kết quả chăm sóc của tôi
+Executive quality overview (BOD),Tổng quan chất lượng chăm sóc người lao động
+"Company-wide SLA compliance, connection effectiveness, data reliability and drill-down.","Theo dõi đúng hạn, hiệu quả kết nối và độ tin cậy dữ liệu chăm sóc người lao động trong phạm vi được cấp."
 Team quality comparison,So sánh chất lượng giữa các đội nhóm
 "Compare teams by historical team-as-of attribution, SLA compliance, connection and data confidence.","Đối chiếu các đội theo quy gán đội nhóm tại thời điểm sự kiện (team-as-of), tuân thủ SLA, kết nối và độ tin cậy dữ liệu."
-Employee quality & compliance,Chất lượng & mức độ tuân thủ theo nhân viên
+Employee quality & compliance,Chất lượng & tuân thủ của nhân viên marketing
 "Evaluate staff across process compliance, connection and data reliability without mixing provisional and finalized ranks.","Đánh giá nhân viên theo 3 trụ cột tuân thủ, kết nối và độ tin cậy dữ liệu; không xếp chung điểm tạm tính với điểm đã chốt."
 Campaign & lead source performance,Hiệu quả theo chiến dịch & nguồn liên hệ
 Separate lead source quality (invalid/DNC) from staff SLA execution across versioned policies.,Tách biệt chất lượng nguồn liên hệ đầu vào (sai số / ngừng liên hệ) với kỷ luật thực thi SLA của nhân viên theo phiên bản chính sách.
@@ -953,8 +953,8 @@ Point-in-time at as-of,Ảnh chụp tồn kho tại mốc chốt (as-of)
 Snapshot revision,Phiên bản bản chụp
 Latest published snapshot,Bản chụp xuất bản mới nhất
 "Half-open interval [from, to_exclusive)","Khoảng nửa mở [từ, đến_loại_trừ)"
-Lead source,Nguồn liên hệ
-Employee,Nhân viên
+Lead source,Nguồn người lao động
+Employee,Nhân viên marketing
 Active employees only,Chỉ nhân viên đang hoạt động
 Include inactive employees,Bao gồm nhân viên ngưng hoạt động
 Score group,Nhóm trạng thái điểm
@@ -1050,7 +1050,7 @@ Breached at,Vi phạm lúc
 SLA status,Trạng thái SLA
 Exemption / waiver reason,Lý do miễn trừ / loại trừ
 Approved by,Người phê duyệt
-Customer ref,Mã hồ sơ liên hệ
+Customer ref,Mã hồ sơ người lao động
 Verification status,Trạng thái xác minh
 Disputed,Đang tranh chấp
 Historical attribution unknown,Chưa xác định quy gán lịch sử
@@ -1109,8 +1109,8 @@ Component,Thành phần đánh giá
 My rate,Tỷ lệ đạt
 Weighted contribution,Điểm quy đổi theo trọng số
 Actionable SLA obligations & callbacks,Nghĩa vụ SLA & lịch hẹn cần xử lý
-Go to My Customers,Mở Hồ sơ được giao
-Go to Callbacks Schedule,Mở Lịch hẹn liên hệ lại
+Go to My Customers,Mở người lao động phụ trách
+Go to Callbacks Schedule,Mở Lịch hẹn chăm sóc
 Trend over period,Xu hướng biến động theo kỳ
 Team comparison summary,Tóm tắt đối chiếu đội nhóm
 Top overdue obligations,Các nghĩa vụ quá hạn cần ưu tiên xử lý
@@ -1255,19 +1255,19 @@ Export jobs are audit records and cannot be deleted.,"Tiến trình xuất báo 
 Company-wide,Toàn công ty
 Company-wide (BOD),Toàn công ty (BOD)
 CRM system administration,Quản trị hệ thống CRM
-Managed team scope,Phạm vi đội nhóm quản lý
-Employee scope,Phạm vi nhân viên
-Campaign scope,Phạm vi chiến dịch
+Managed team scope,Phạm vi nhóm marketing quản lý
+Employee scope,Phạm vi nhân viên marketing
+Campaign scope,Phạm vi chiến dịch chăm sóc
 N/A — Policy disabled,N/A — Chính sách đang tắt
 BOD read-only mode: customer PII is redacted and SLA mutation actions are disabled by authorization policy.,Chế độ chỉ đọc BOD: thông tin định danh người liên hệ (PII) được che giấu và các thao tác thay đổi SLA bị vô hiệu theo chính sách phân quyền.
 Raw weighted points,Điểm trọng số thô
 Normalized contribution (0-100),Điểm đóng góp sau chuẩn hóa (0–100)
 Open overdue SLA obligations require attention in the selected scope.,Đang có nghĩa vụ SLA quá hạn cần xử lý trong phạm vi đã chọn.
 Disputed contact attempts or pending correction requests exist in this period.,Có lần liên hệ đang tranh chấp hoặc chờ duyệt hiệu chỉnh trong kỳ này.
-Recruitment workspace,Không gian tuyển dụng
-"Manage contact records, assignments, follow-up schedules, and recruitment team performance.","Tiếp nhận hồ sơ liên hệ được giao, ghi nhận trao đổi, theo dõi lịch hẹn liên hệ lại và hiệu quả đội tuyển dụng."
-Contact record,Hồ sơ liên hệ
-1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.,1. Tiếp nhận hồ sơ được giao → 2. Liên hệ & ghi nhận kết quả thực tế → 3. Đặt lịch hẹn liên hệ lại đúng hạn.
+Recruitment workspace,Chăm sóc người lao động
+"Manage contact records, assignments, follow-up schedules, and recruitment team performance.","Quản lý người lao động, phân công hồ sơ chăm sóc, lịch hẹn chăm sóc và hiệu quả của bộ phận marketing."
+Contact record,Hồ sơ liên hệ người lao động
+1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.,1. Tiếp nhận người lao động phụ trách → 2. Liên hệ & ghi nhận kết quả liên hệ thực tế → 3. Thực hiện lịch hẹn chăm sóc đúng hạn.
 Activity,Hoạt động
 Address,Địa chỉ
 Annual Revenue,Doanh thu năm
@@ -1277,21 +1277,21 @@ CRM Lead,Hồ sơ liên hệ
 Choose Existing Contact,Chọn liên hệ hiện có
 Choose Existing Organization,Chọn tổ chức hiện có
 Comments,Trao đổi
-"Contact pool, import & assignment management","Quản lý kho hồ sơ, nhập danh sách & phân công"
-Contact records here correspond directly to CRM Leads along with their campaign distribution status. Use Import list to load new contact files and Campaigns and rules to assign records to staff.,Hồ sơ liên hệ tại đây đối chiếu trực tiếp từ dữ liệu CRM Lead kèm trạng thái phân phối. Quản trị CRM dùng Nhập danh sách liên hệ để nạp nguồn mới và Phân công & chiến dịch để giao hồ sơ cho nhân viên.
+"Contact pool, import & assignment management",Nguồn người lao động & phân công
+Contact records here correspond directly to CRM Leads along with their campaign distribution status. Use Import list to load new contact files and Campaigns and rules to assign records to staff.,Thông tin người lao động tại đây đối chiếu trực tiếp từ CRM Lead kèm trạng thái phân công. Dùng Nhập danh sách liên hệ để nạp nguồn mới và Chiến dịch chăm sóc & phân công để giao cho nhân viên marketing.
 Convert,Chuyển đổi
 Convert Lead to Deal,Chuyển Hồ sơ liên hệ thành Giao dịch CRM
 Convert to deal,Chuyển thành Giao dịch CRM
 Create,Tạo mới
 Create Lead,Tạo Hồ sơ liên hệ
-Daily outreach tasks,Tác nghiệp liên hệ hằng ngày
+Daily outreach tasks,Chăm sóc hằng ngày
 Data,Dữ liệu
 Deal Owner,Người phụ trách Giao dịch CRM
 Details,Thông tin chi tiết
 Existing Contact,Liên hệ hiện có
 Existing Organization,Tổ chức hiện có
 First Name,Tên
-Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.,"Lưu ý: Trạng thái ""Đã kết nối"" chỉ xác nhận đã trao đổi hai chiều, chưa đồng nghĩa đã tuyển dụng hay đã bố trí người. Các màn Giao dịch CRM (/crm/deals) là nghiệp vụ giao dịch gốc của CRM, tách biệt với bước liên hệ tại đây."
+Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.,"Lưu ý: Trạng thái ""Đã kết nối"" chỉ xác nhận đã trao đổi hai chiều với người lao động — chưa đồng nghĩa người lao động đã nhận việc hay đi làm."
 Industry,Ngành nghề
 Job Title,Vị trí / Chức danh
 Khách hẹn gọi / liên hệ lại,Đã hẹn gọi / liên hệ lại
@@ -1300,11 +1300,11 @@ New Deal,Giao dịch CRM mới
 New Lead,Hồ sơ liên hệ mới
 No. of Employees,Quy mô nhân sự
 Open CRM Deals,Màn Giao dịch CRM
-Open in Recruitment workspace,Mở trong Không gian tuyển dụng
+Open in Recruitment workspace,Mở hồ sơ chăm sóc người lao động
 Organization,Tổ chức / Doanh nghiệp
 Person,Thông tin cá nhân
-Recruitment outreach workflow,Quy trình tiếp nhận & liên hệ tuyển dụng
-"SLA, KPI & outreach quality","Giám sát SLA, KPI & chất lượng liên hệ"
+Recruitment outreach workflow,Quy trình quản lý và chăm sóc người lao động
+"SLA, KPI & outreach quality",Hiệu quả chăm sóc & lịch hẹn
 Salutation,Danh xưng
 "Uploaded files stay private, normalize Vietnamese mobile numbers, and check duplicates against existing CRM Lead contact records before creating new pool entries.","Tệp danh sách tải lên được lưu riêng tư, tự động chuẩn hóa số di động Việt Nam và kiểm tra trùng với Hồ sơ liên hệ hiện có trên CRM trước khi thêm vào kho."
 created this deal,đã tạo giao dịch CRM này
@@ -1316,16 +1316,121 @@ Change deal status,Thay đổi trạng thái Giao dịch CRM
 Convert lead to deal,Chuyển hồ sơ liên hệ thành Giao dịch CRM
 Create your first lead,Tạo hồ sơ liên hệ đầu tiên của bạn
 "Welcome {0}, lets add your first lead","Chào mừng {0}, hãy thêm hồ sơ liên hệ đầu tiên"
-1. Import list -> 2. Contact pool -> 3. Assign & distribute -> 4. Assigned contact records -> 5. Record contact outcome -> 6. Follow-up callbacks.,1. Nhập danh sách liên hệ → 2. Kho hồ sơ liên hệ → 3. Phân công & chiến dịch → 4. Hồ sơ được giao → 5. Ghi nhận liên hệ → 6. Lịch hẹn liên hệ lại.
+1. Import list -> 2. Contact pool -> 3. Assign & distribute -> 4. Assigned contact records -> 5. Record contact outcome -> 6. Follow-up callbacks.,1. Nhập danh sách người lao động → 2. Kho người lao động → 3. Chiến dịch chăm sóc & phân công → 4. Người lao động phụ trách → 5. Ghi nhận kết quả liên hệ → 6. Lịch hẹn chăm sóc.
 "Assignment step: 1. Create or select an Active campaign -> 2. Configure eligible staff and weights -> 3. Preview distribution, then Confirm distribution to hand over contact records.",Bước Phân công: 1. Tạo hoặc chọn chiến dịch Đang hoạt động → 2. Cấu hình nhân viên đủ điều kiện và trọng số → 3. Xem trước phân phối rồi Xác nhận phân phối để giao hồ sơ liên hệ.
 Campaign goal completion closes outreach intake only — it does not confirm hiring or placement.,"Lưu ý: Hoàn tất mục tiêu liên hệ chiến dịch chỉ đóng bước liên hệ đầu vào — không tự xác nhận đã trúng tuyển, bố trí hay nhận việc."
 Continue to assignment,Chuyển sang Phân công
 Converted,Đã chuyển sang Giao dịch CRM
 Junk,Dữ liệu rác
-Open assigned records,Xem Hồ sơ được giao
-Open batch in contact pool,Xem lô này trong Kho hồ sơ liên hệ
+Open assigned records,Xem người lao động được giao
+Open batch in contact pool,Xem lô nhập trong Kho người lao động
 Sales Tasks,Công việc liên hệ
 Distinct two-way connected records,Hồ sơ đã kết nối hai chiều duy nhất
 "First-touch latency (business minutes, p50)",Trung vị thời gian phản hồi lần đầu (Phút làm việc - P50)
 "First-touch latency (business minutes, p90)",Phân vị P90 thời gian phản hồi lần đầu (Phút làm việc - P90)
 Hoàn tất mục tiêu chiến dịch,Hoàn tất mục tiêu liên hệ chiến dịch
+Worker care,Chăm sóc người lao động
+Worker care overview,Tổng quan chăm sóc người lao động
+Marketing workspace,Bộ phận marketing
+Worker contact records,Thông tin liên hệ người lao động
+Sales User,Nhân viên marketing
+Sales Manager,Trưởng nhóm marketing
+Customer name,Tên người lao động
+Lead reference,Mã hồ sơ người lao động
+Open My Customers,Mở người lao động phụ trách
+Contact outcomes track communication; employment milestones require separate confirmation.,Kết quả liên hệ ghi nhận việc trao đổi với người lao động; các mốc nhận việc và đi làm cần được xác nhận riêng.
+"Marketing workspace for contacting workers, following up on time, and keeping care responsibilities clear.","Không gian làm việc của bộ phận marketing: liên hệ người lao động, thực hiện lịch hẹn chăm sóc đúng hạn và theo dõi rõ trách nhiệm phụ trách."
+Refresh care overview,Cập nhật tổng quan
+Loading care overview,Đang tải tình hình chăm sóc…
+Daily worker care,CHĂM SÓC HẰNG NGÀY
+Care priorities today,Việc cần ưu tiên hôm nay
+Today's callbacks include appointments already overdue today. These counts overlap; do not add them together.,"Lịch hẹn chăm sóc hôm nay gồm cả những lịch hẹn đã quá giờ trong ngày. Hai số liệu có phần giao nhau, không cộng gộp."
+Current care workload,KHỐI LƯỢNG HỒ SƠ CHĂM SÓC
+Worker contact progress,Tiến độ liên hệ người lao động
+Coverage uses all effective contact history on currently assigned care work items. A two-way connection does not confirm a worker has started a job.,Tiến độ tính theo toàn bộ kết quả liên hệ hợp lệ trên các hồ sơ chăm sóc đang phụ trách. Đã trao đổi hai chiều chưa đồng nghĩa người lao động đã nhận việc hay đi làm.
+Review care activity details,Xem chi tiết tiến độ chăm sóc
+Responsible worker care,Chăm sóc người lao động có trách nhiệm
+Contact outcomes may be self-reported. Review call evidence and care quality in the existing reports.,Kết quả liên hệ có thể do nhân viên marketing tự ghi nhận. Đối chiếu bằng chứng cuộc gọi và chất lượng chăm sóc trong các báo cáo hiện có.
+Continue your work,Tiếp tục công việc
+Open assigned worker records,Mở người lao động phụ trách
+Open care callbacks,Mở lịch hẹn chăm sóc
+Review team care quality,Xem chất lượng chăm sóc của nhóm
+Review my care quality,Xem kết quả chăm sóc của tôi
+Manage worker contact pool,Quản lý kho người lao động
+Manage care campaigns,Quản lý chiến dịch chăm sóc
+Care data scope,Phạm vi số liệu
+Care data updated,Cập nhật lúc
+Worker records in active care,Người lao động đang chăm sóc
+Distinct contact records currently assigned,Số người lao động (CRM Lead) không trùng đang có hồ sơ chăm sóc mở
+Care items awaiting first contact,Hồ sơ chăm sóc chưa liên hệ
+No effective contact attempt recorded,Chưa có kết quả liên hệ hợp lệ nào được ghi nhận
+Care callbacks due today,Lịch hẹn chăm sóc hôm nay
+Open callbacks within your calendar day,Lịch hẹn chăm sóc còn mở trong biên ngày của bạn
+Overdue care callbacks,Lịch hẹn chăm sóc quá hạn
+Open appointments before the update time,Lịch hẹn chăm sóc chưa xử lý đã qua thời điểm cập nhật
+Follow up overdue appointments,Xử lý lịch hẹn chăm sóc quá hạn
+Prioritize workers whose agreed contact time has passed.,Ưu tiên liên hệ người lao động đã qua thời gian hẹn chăm sóc.
+Check the callback schedule and record the real outcome.,"Mở lịch hẹn chăm sóc, liên hệ người lao động và ghi nhận kết quả liên hệ thực tế."
+Contact untouched worker records,Liên hệ hồ sơ chăm sóc chưa gọi lần đầu
+Review the worker record before making the first call.,Xem thông tin người lao động trước khi thực hiện cuộc gọi chăm sóc đầu tiên.
+View care tasks,Mở danh sách xử lý
+active care work items,hồ sơ chăm sóc (Work Item) đang phụ trách
+Not yet contacted,Chưa thực hiện liên hệ
+Attempted without two-way connection,"Đã thử liên hệ, chưa kết nối hai chiều"
+Two-way connection recorded,Đã kết nối trao đổi hai chiều
+worker contact records marked do not contact in your scope. Respect their contact preference.,người lao động trong phạm vi đã yêu cầu ngừng liên hệ (DNC). Tôn trọng lựa chọn của người lao động.
+pending care SLA obligations are overdue. Paused and informational obligations are excluded.,nghĩa vụ SLA chăm sóc đang mở đã quá hạn (không tính nghĩa vụ tạm dừng hoặc chỉ tham khảo).
+Care overview could not refresh. The last snapshot is still displayed.,Chưa thể cập nhật tổng quan. Số liệu đang hiển thị là bản chụp lần tải thành công trước.
+Care overview could not load. Refresh to try again.,Không thể tải tổng quan chăm sóc. Vui lòng thử tải lại.
+Care overview is more than five minutes old. Refresh before acting on these counts.,Số liệu đã quá 5 phút chưa cập nhật. Hãy cập nhật lại trước khi điều phối theo số lượng này.
+Across {0} active care work items (Work Item),Tương ứng {0} hồ sơ chăm sóc (Work Item) đang mở
+Aggregate care volume & attention areas,Khối lượng chăm sóc và điểm cần lưu ý
+Aggregate open callbacks past their scheduled contact time.,Tổng số lịch hẹn chăm sóc còn mở đã quá thời điểm hẹn.
+"Aggregate-only executive view: worker names, phone numbers, and personal identifiers are never transmitted to this screen.","Chế độ tổng hợp Ban Giám đốc: họ tên, số điện thoại và mã hồ sơ cá nhân của người lao động không được truyền xuống màn hình này."
+Assigned care work items without an effective contact attempt yet.,Tổng số hồ sơ chăm sóc đang giao nhưng chưa phát sinh kết quả liên hệ hợp lệ.
+Calendar day,Ngày lịch chăm sóc
+Care SLA obligation tracking is currently disabled in site configuration.,Theo dõi nghĩa vụ SLA chăm sóc hiện đang tắt trong cấu hình hệ thống.
+Care items awaiting follow-up (on hold),Hồ sơ chăm sóc đang chờ hẹn lại
+Clear uncontacted care backlog,Xử lý tồn đọng hồ sơ chăm sóc chưa liên hệ
+Day boundaries follow your timezone ({0}) converted against site timezone ({1}).,"Biên ngày tính theo múi giờ người dùng ({0}), quy đổi sang múi giờ hệ thống ({1})."
+Do-not-contact (DNC) counter is not available on this site schema.,Bộ đếm ngừng liên hệ (DNC) chưa sẵn sàng trên cấu trúc dữ liệu hiện tại.
+Executive aggregate view (0 PII),Tổng hợp Ban Giám đốc (không hiển thị dữ liệu cá nhân)
+Executive care summary,TỔNG HỢP BAN GIÁM ĐỐC
+Inspect newly assigned worker records with zero contact attempts.,Kiểm tra các hồ sơ chăm sóc đã giao nhưng chưa có lượt liên hệ nào.
+Inspect scope backlog,Xem hồ sơ tồn đọng trong phạm vi
+Keep today's contact promises,Thực hiện lịch hẹn chăm sóc hôm nay
+Marketing care administration view,Quản trị chăm sóc người lao động
+Marketing staff holding active care items,Nhân viên marketing đang giữ hồ sơ chăm sóc
+Marketing staff view,Nhân viên marketing
+Marketing staff with overdue callbacks,Nhân viên marketing có lịch hẹn quá hạn
+Marketing staff with untouched items,Nhân viên marketing còn hồ sơ chưa liên hệ
+Marketing team leader view,Trưởng nhóm marketing
+Monitor callbacks due today so care commitments stay on time.,Theo dõi các lịch hẹn chăm sóc đến hạn hôm nay để đảm bảo đúng cam kết với người lao động.
+No active care workload in this scope yet,Chưa có hồ sơ chăm sóc hoặc lịch hẹn đang mở trong phạm vi này
+Open callbacks scheduled within the current calendar day.,Tổng số lịch hẹn chăm sóc còn mở trong ngày lịch hiện tại.
+Open overdue callbacks,Mở lịch hẹn quá hạn
+Open today callbacks,Mở lịch hẹn hôm nay
+Open uncontacted records,Mở hồ sơ chưa liên hệ
+Refreshing care overview...,Đang cập nhật số liệu chăm sóc…
+Resolve overdue care callbacks in scope,Giải tỏa lịch hẹn chăm sóc quá hạn trong phạm vi
+Review overdue callbacks across marketing staff in your scope.,Rà soát các lịch hẹn chăm sóc quá hạn của nhân viên marketing trong phạm vi quản lý.
+Role view,Vai trò hiển thị
+Team care coordination,ĐIỀU PHỐI NHÓM MARKETING
+Team priorities & bottlenecks today,Ưu tiên và điểm nghẽn trong phạm vi nhóm
+Team workload & bottlenecks,KHỐI LƯỢNG & ĐIỂM NGHẼN TRONG PHẠM VI
+There are currently zero active care work items in this scope. Open the worker contact pool or care campaigns to distribute records.,Hiện chưa có hồ sơ chăm sóc đang mở trong phạm vi này. Mở Kho người lao động hoặc Chiến dịch chăm sóc để kiểm tra và phân công hồ sơ.
+There are currently zero active care work items or open callbacks across the authorized scope.,Hiện chưa có hồ sơ chăm sóc hoặc lịch hẹn chăm sóc đang mở trong phạm vi được phân quyền.
+Total open care callbacks in scope: {0},Tổng lịch hẹn chăm sóc đang mở trong phạm vi: {0}
+Try again,Thử tải lại
+Updated,Cập nhật
+View aggregate report,Xem báo cáo tổng hợp
+View on-hold items,Xem hồ sơ chờ chăm sóc lại
+View staff workload,Xem khối lượng theo nhân viên
+Workload and bottlenecks in scope,Phân bổ phụ trách và điểm nghẽn chăm sóc
+You currently have zero assigned care work items and zero open callbacks. New worker records will appear here once assigned from a care campaign.,Hiện bạn chưa có hồ sơ chăm sóc hoặc lịch hẹn chăm sóc đang mở. Hồ sơ người lao động mới sẽ hiển thị tại đây ngay khi được phân công từ chiến dịch chăm sóc.
+care callbacks,lịch hẹn chăm sóc
+care work items,hồ sơ chăm sóc (Work Item)
+distinct workers,người lao động không trùng
+marketing staff,nhân viên marketing
+{0} active care work items across {1} distinct workers,{0} hồ sơ chăm sóc (Work Item) đang mở trên {1} người lao động không trùng
+{0} care work items currently on hold awaiting scheduled callback.,{0} hồ sơ chăm sóc đang ở trạng thái chờ chăm sóc lại theo lịch hẹn.

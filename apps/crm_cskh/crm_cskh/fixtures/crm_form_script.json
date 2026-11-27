@@ -22,7 +22,7 @@
     "name": "CSKH - Open CSKH Page from Deal",
     "dt": "CRM Deal",
     "view": "List",
-    "enabled": 1,
+    "enabled": 0,
     "is_standard": 1,
     "script": "function setupList() {\n    return {\n        actions: [{\n            label: __('Recruitment workspace'),\n            onClick: () => window.location.assign('/cskh'),\n        }],\n    }\n}"
   }

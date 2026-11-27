@@ -19,6 +19,8 @@ def _install_frappe_stub(user: str = "Guest", roles: list[str] | None = None):
     stub.local = types.SimpleNamespace()
     role_list = list(roles or [])
     stub.get_roles = lambda _u=None: list(role_list)
+    stub.whitelist = lambda **_kwargs: lambda fn: fn
+    stub._ = lambda message: "Chăm sóc người lao động" if message == "Worker care" else message
     sys.modules["frappe"] = stub
     return stub
 
@@ -48,6 +50,7 @@ class _DummyResponse:
         self.data = data
         self.status_code = status_code
         self.mimetype = mimetype
+        self.headers = {}
 
 
 SAMPLE_CRM_HTML = (
@@ -85,7 +88,7 @@ class CskhSidebarHookTests(unittest.TestCase):
         self.assertEqual(len(apps_entries), 1)
         entry = apps_entries[0]
         self.assertEqual(entry["name"], "crm_cskh")
-        self.assertEqual(entry["title"], "CSKH")
+        self.assertEqual(entry["title"], "Worker care")
         self.assertEqual(entry["route"], "/cskh")
         self.assertEqual(entry["logo"], "/assets/crm_cskh/cskh/logo.svg")
         self.assertEqual(
@@ -159,7 +162,7 @@ class CskhSidebarHookTests(unittest.TestCase):
         _install_frappe_stub("staff@example.com", ["Sales User"])
         self.sidebar_mod.frappe = sys.modules["frappe"]
 
-        for path in ("/crm", "/crm/leads", "/crm/deals/view/list"):
+        for path in ("/crm/leads", "/crm/tasks", "/crm/call-logs"):
             with self.subTest(path=path):
                 resp = _DummyResponse(SAMPLE_CRM_HTML.encode("utf-8"))
                 req = _DummyRequest(path=path, method="GET")
@@ -178,7 +181,8 @@ class CskhSidebarHookTests(unittest.TestCase):
                     "/assets/crm_cskh/cskh/crm-sidebar-bridge.js?v=", html_text
                 )
                 self.assertIn('data-cskh-href="/cskh"', html_text)
-                self.assertIn('data-cskh-label="CSKH"', html_text)
+                self.assertIn('data-cskh-label="Chăm sóc người lao động"', html_text)
+                self.assertLess(html_text.index("crm-sidebar-bridge.js"), html_text.index('id="app"'))
                 self.assertEqual(html_text.count("crm-theme.css"), 1)
                 self.assertEqual(html_text.count("crm-sidebar-bridge.js"), 1)
 

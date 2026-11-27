@@ -1,318 +1,68 @@
 {% extends "templates/cskh/_shell.html" %}
-
-{% block cskh_title %}{{ _("Recruitment workspace") }}{% endblock %}
-{% block cskh_subtitle %}{{ _("Manage contact records, assignments, follow-up schedules, and recruitment team performance.") }}{% endblock %}
-
+{% block head_include %}
+{{ super() }}
+<link rel="stylesheet" href="/assets/crm_cskh/cskh/worker-overview.css?v={{ cskh_asset_version | default('') }}">
+{% endblock %}
+{% block cskh_title %}{{ _("Worker care overview") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Marketing workspace for contacting workers, following up on time, and keeping care responsibilities clear.") }}{% endblock %}
+{% block cskh_actions %}<button type="button" class="cskh-btn" id="care-refresh">{{ _("Refresh care overview") }}</button>{% endblock %}
 {% block cskh_body %}
 {% set nav_keys = (cskh_navigation | default([])) | map(attribute='key') | list %}
-
-<div class="cskh-card cskh-workflow-guide">
-	<div class="cskh-workflow-hero">
-		<div class="cskh-workflow-badge" aria-hidden="true">
-			<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-				<path d="M12 2L2 7l10 5 10-5-10-5z"></path>
-				<path d="M2 17l10 5 10-5"></path>
-				<path d="M2 12l10 5 10-5"></path>
-			</svg>
+<section id="care-overview" class="care-overview" aria-busy="true">
+	<div id="care-status" class="care-notice is-loading" role="status" aria-live="polite">{{ _("Loading care overview") }}</div>
+	<div id="care-data" hidden>
+		<div class="care-context" id="care-context">
+			<span class="care-context-pill" id="care-role"></span>
+			<span class="care-context-pill" id="care-scope"></span>
+			<span class="care-context-pill" id="care-day"></span>
+			<span class="care-context-pill" id="care-updated"></span>
 		</div>
-		<div class="cskh-workflow-copy">
-			<h2>{{ _("Recruitment outreach workflow") }}</h2>
-			<p class="cskh-workflow-steps">
-				{% if 'import' in nav_keys or 'pool' in nav_keys or 'campaigns' in nav_keys %}
-				{{ _("1. Import list -> 2. Contact pool -> 3. Assign & distribute -> 4. Assigned contact records -> 5. Record contact outcome -> 6. Follow-up callbacks.") }}
-				{% else %}
-				{{ _("1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.") }}
-				{% endif %}
-			</p>
-			<p class="cskh-workflow-note">
-				{{ _("Important: A connected contact record only confirms two-way communication — it does not mean a candidate has been hired or placed. Native CRM Deals (/crm/deals) remain separate commercial/CRM transactions.") }}
-			</p>
+		<p class="care-tz-note" id="care-tz-note" hidden></p>
+		<div class="care-bod-banner" id="care-bod-banner" hidden></div>
+		<div class="care-empty-banner" id="care-empty" hidden></div>
+		<div class="care-metrics" id="care-metrics"></div>
+		<div class="care-columns">
+			<section class="cskh-card care-priorities" aria-labelledby="care-priority-title">
+				<p class="care-eyebrow" id="care-priority-eyebrow">{{ _("Daily worker care") }}</p>
+				<h2 id="care-priority-title">{{ _("Care priorities today") }}</h2>
+				<p class="care-open-summary" id="care-open-summary"></p>
+				<div id="care-priorities"></div>
+				<p class="care-caption">{{ _("Today's callbacks include appointments already overdue today. These counts overlap; do not add them together.") }}</p>
+			</section>
+			<section class="cskh-card care-coverage" aria-labelledby="care-coverage-title">
+				<p class="care-eyebrow">{{ _("Current care workload") }}</p>
+				<h2 id="care-coverage-title">{{ _("Worker contact progress") }}</h2>
+				<div id="care-coverage"></div>
+				<p class="care-caption">{{ _("Coverage uses all effective contact history on currently assigned care work items. A two-way connection does not confirm a worker has started a job.") }}</p>
+				{% if 'progress' in nav_keys %}<a class="care-text-link" href="/cskh/progress">{{ _("Review care activity details") }} <span aria-hidden="true">→</span></a>{% endif %}
+			</section>
 		</div>
-	</div>
-</div>
-
-{% if 'pool' in nav_keys or 'import' in nav_keys or 'campaigns' in nav_keys or 'dashboard' in nav_keys or 'settings' in nav_keys %}
-<h2 class="cskh-section-heading">{{ _("Contact pool, import & assignment management") }}</h2>
-<div class="cskh-home-grid">
-	{% if 'import' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-indigo" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-					<polyline points="17 8 12 3 7 8"></polyline>
-					<line x1="12" y1="3" x2="12" y2="15"></line>
-				</svg>
-			</span>
-			<h2>{{ _("Import list") }}</h2>
-			<p class="cskh-muted">{{ _("Upload a private file, map the phone column, preview, then confirm.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn is-primary" href="/cskh/import">{{ _("Import list") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'pool' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-sky" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<ellipse cx="12" cy="5" rx="9" ry="3"></ellipse>
-					<path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"></path>
-					<path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
-				</svg>
-			</span>
-			<h2>{{ _("Customer pool") }}</h2>
-			<p class="cskh-muted">{{ _("Leads in your scope, with the derived distribution state.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/pool">{{ _("Customer pool") }}</a>
+		<section class="cskh-card care-bottlenecks" id="care-bottlenecks-card" aria-labelledby="care-bottlenecks-title" hidden>
+			<p class="care-eyebrow">{{ _("Team workload & bottlenecks") }}</p>
+			<h2 id="care-bottlenecks-title">{{ _("Workload and bottlenecks in scope") }}</h2>
+			<div class="care-bottleneck-grid" id="care-bottlenecks"></div>
+		</section>
+		<div class="care-bottom">
+			<section class="care-compliance" aria-labelledby="care-compliance-title">
+				<h2 id="care-compliance-title">{{ _("Responsible worker care") }}</h2>
+				<p id="care-dnc"></p>
+				<p id="care-sla"></p>
+				<p class="care-caption">{{ _("Contact outcomes may be self-reported. Review call evidence and care quality in the existing reports.") }}</p>
+			</section>
+			<section class="care-tools" aria-labelledby="care-tools-title">
+				<h2 id="care-tools-title">{{ _("Continue your work") }}</h2>
+				<div class="care-tool-links">
+				{% if 'my-customers' in nav_keys and (cskh_capabilities or {}).get('pii') %}<a class="cskh-btn is-primary" href="/cskh/my-customers">{{ _("Open assigned worker records") }}</a>{% endif %}
+				{% if 'callbacks' in nav_keys %}<a class="cskh-btn" href="/cskh/callbacks">{{ _("Open care callbacks") }}</a>{% endif %}
+				{% if 'quality-overview' in nav_keys %}<a class="cskh-btn" href="/cskh/quality-overview">{{ _("Review team care quality") }}</a>{% elif 'scorecard' in nav_keys %}<a class="cskh-btn" href="/cskh/scorecard">{{ _("Review my care quality") }}</a>{% endif %}
+				{% if 'team-quality' in nav_keys and not (cskh_capabilities or {}).get('pii') %}<a class="cskh-btn" href="/cskh/team-quality">{{ _("Team comparison") }}</a>{% endif %}
+				{% if 'sla-operations' in nav_keys and ((cskh_capabilities or {}).get('leader') or (cskh_capabilities or {}).get('bod')) %}<a class="cskh-btn" href="/cskh/sla-operations">{{ _("SLA & QA operations") }}</a>{% endif %}
+				{% if 'pool' in nav_keys and (cskh_capabilities or {}).get('pii') %}<a class="cskh-btn" href="/cskh/pool">{{ _("Manage worker contact pool") }}</a>{% endif %}
+				{% if 'campaigns' in nav_keys and (cskh_capabilities or {}).get('pii') %}<a class="cskh-btn" href="/cskh/campaigns">{{ _("Manage care campaigns") }}</a>{% endif %}
+				</div>
+			</section>
 		</div>
 	</div>
-	{% endif %}
-
-	{% if 'campaigns' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-violet" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<circle cx="18" cy="5" r="3"></circle>
-					<circle cx="6" cy="12" r="3"></circle>
-					<circle cx="18" cy="19" r="3"></circle>
-					<line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
-					<line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
-				</svg>
-			</span>
-			<h2>{{ _("Campaigns and distribution rules") }}</h2>
-			<p class="cskh-muted">{{ _("Set up the target set and the weights, then preview before distributing.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/campaigns">{{ _("Campaigns and rules") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'dashboard' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-emerald" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<line x1="18" y1="20" x2="18" y2="10"></line>
-					<line x1="12" y1="20" x2="12" y2="4"></line>
-					<line x1="6" y1="20" x2="6" y2="14"></line>
-				</svg>
-			</span>
-			<h2>{{ _("Distribution dashboard") }}</h2>
-			<p class="cskh-muted">{{ _("Total pool, assigned, unassigned, per team, per user and per campaign.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/dashboard">{{ _("Distribution dashboard") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'settings' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-slate" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<line x1="4" y1="21" x2="4" y2="14"></line>
-					<line x1="4" y1="10" x2="4" y2="3"></line>
-					<line x1="12" y1="21" x2="12" y2="12"></line>
-					<line x1="12" y1="8" x2="12" y2="3"></line>
-					<line x1="20" y1="21" x2="20" y2="16"></line>
-					<line x1="20" y1="12" x2="20" y2="3"></line>
-					<line x1="1" y1="14" x2="7" y2="14"></line>
-					<line x1="9" y1="8" x2="15" y2="8"></line>
-					<line x1="17" y1="16" x2="23" y2="16"></line>
-				</svg>
-			</span>
-			<h2>{{ _("Outcome and policy settings") }}</h2>
-			<p class="cskh-muted">{{ _("Configure contact outcome codes and versioned customer care policies.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/settings">{{ _("Outcome and policy settings") }}</a>
-		</div>
-	</div>
-	{% endif %}
-</div>
-{% endif %}
-
-{% if 'my-customers' in nav_keys or 'callbacks' in nav_keys or 'progress' in nav_keys %}
-<h2 class="cskh-section-heading">{{ _("Daily outreach tasks") }}</h2>
-<div class="cskh-home-grid">
-	{% if 'my-customers' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-indigo" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
-					<circle cx="9" cy="7" r="4"></circle>
-					<polyline points="16 11 18 13 22 9"></polyline>
-				</svg>
-			</span>
-			<h2>{{ _("My customers") }}</h2>
-			<p class="cskh-muted">{{ _("Only the customers that are currently assigned to you.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn is-primary" href="/cskh/my-customers">{{ _("My customers") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'callbacks' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-amber" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<rect x="3" y="4" width="18" height="18" rx="2.5"></rect>
-					<line x1="16" y1="2" x2="16" y2="6"></line>
-					<line x1="8" y1="2" x2="8" y2="6"></line>
-					<line x1="3" y1="10" x2="21" y2="10"></line>
-					<path d="M12 14v3l2 1.5"></path>
-				</svg>
-			</span>
-			<h2>{{ _("Callbacks schedule") }}</h2>
-			<p class="cskh-muted">{{ _("Follow-up callbacks in your scope, classified by site/user timezone.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/callbacks">{{ _("Callbacks schedule") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'progress' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-sky" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-				</svg>
-			</span>
-			<h2>{{ _("Care progress") }}</h2>
-			<p class="cskh-muted">{{ _("Basic customer care activity counts in your scope (not a quality or SLA score).") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/progress">{{ _("Care progress") }}</a>
-		</div>
-	</div>
-	{% endif %}
-</div>
-{% endif %}
-
-{% if 'quality-overview' in nav_keys or 'team-quality' in nav_keys or 'employee-quality' in nav_keys or 'campaign-quality' in nav_keys or 'sla-operations' in nav_keys or 'scorecard' in nav_keys %}
-<h2 class="cskh-section-heading">{{ _("SLA, KPI & outreach quality") }}</h2>
-<div class="cskh-home-grid">
-	{% if 'quality-overview' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-indigo" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
-					<path d="m9 12 2 2 4-4"></path>
-				</svg>
-			</span>
-			<h2>{{ _("Executive quality overview (BOD)") }}</h2>
-			<p class="cskh-muted">{{ _("Company-wide SLA compliance, connection effectiveness, data reliability and drill-down.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn is-primary" href="/cskh/quality-overview">{{ _("Quality overview") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'team-quality' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-emerald" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
-					<circle cx="9" cy="7" r="4"></circle>
-					<path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
-					<path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
-				</svg>
-			</span>
-			<h2>{{ _("Team quality comparison") }}</h2>
-			<p class="cskh-muted">{{ _("Compare teams by historical team-as-of attribution, SLA compliance, connection and data confidence.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/team-quality">{{ _("Team comparison") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'employee-quality' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-sky" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<circle cx="12" cy="8" r="5"></circle>
-					<path d="M20 21a8 8 0 1 0-16 0"></path>
-				</svg>
-			</span>
-			<h2>{{ _("Employee quality & compliance") }}</h2>
-			<p class="cskh-muted">{{ _("Evaluate staff across process compliance, connection and data reliability without mixing provisional and finalized ranks.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/employee-quality">{{ _("Employee quality") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'campaign-quality' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-violet" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<circle cx="12" cy="12" r="10"></circle>
-					<circle cx="12" cy="12" r="6"></circle>
-					<circle cx="12" cy="12" r="2"></circle>
-				</svg>
-			</span>
-			<h2>{{ _("Campaign & lead source performance") }}</h2>
-			<p class="cskh-muted">{{ _("Separate lead source quality (invalid/DNC) from staff SLA execution across versioned policies.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/campaign-quality">{{ _("Campaign & source quality") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'sla-operations' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-amber" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<circle cx="12" cy="12" r="10"></circle>
-					<polyline points="12 6 12 12 16 14"></polyline>
-				</svg>
-			</span>
-			<h2>{{ _("SLA & QA operations center") }}</h2>
-			<p class="cskh-muted">{{ _("Inspect overdue, breached, waived and escalated SLA obligations, QA status and audit actions.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn" href="/cskh/sla-operations">{{ _("SLA & QA operations") }}</a>
-		</div>
-	</div>
-	{% endif %}
-
-	{% if 'scorecard' in nav_keys %}
-	<div class="cskh-card cskh-feature-card">
-		<div class="cskh-feature-top">
-			<span class="cskh-feature-icon is-indigo" aria-hidden="true">
-				<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
-					<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
-				</svg>
-			</span>
-			<h2>{{ _("My quality scorecard") }}</h2>
-			<p class="cskh-muted">{{ _("Personal SLA obligations, component breakdown and progress in your own scope.") }}</p>
-		</div>
-		<div class="cskh-feature-foot">
-			<a class="cskh-btn is-primary" href="/cskh/scorecard">{{ _("Personal scorecard") }}</a>
-		</div>
-	</div>
-	{% endif %}
-</div>
-{% endif %}
+</section>
 {% endblock %}
+{% block cskh_script %}<script src="/assets/crm_cskh/cskh/worker-overview.js?v={{ cskh_asset_version | default('') }}"></script>{% endblock %}
