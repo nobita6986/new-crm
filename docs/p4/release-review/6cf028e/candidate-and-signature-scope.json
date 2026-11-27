@@ -1,0 +1,36 @@
+{
+  "integration_commit": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+  "image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+  "oci_config_digest": "sha256:a4ff0da5e2ef71f7690de4c35cc02c54081f621519953d28c05a60b5aa99c86a",
+  "apps_tree": "3a4f3d0ea036c814ae352c45b6b2f07fe33c1185",
+  "crm_cskh_tree": "471b7925d35d4aa7de154df9cb57aab24bf2ca19",
+  "ci_manifest": {
+    "payload_sha256": "7ee73bf8ee4c702d3fca48eb38f60457538fee3734bedcfe6892c547aa85cd79",
+    "scope": "production_candidate",
+    "public_key_fingerprint_sha256": "fbc2cd1629d3831b63b88bc37f138e22d8e13caababdd03899359201daef3037",
+    "key_provenance": "ephemeral_ci_ed25519_keypair (private key destroyed immediately after signing; use p4-release.yml with protected RELEASE_SIGNING_PRIVATE_KEY for formal Go-Live cutover)",
+    "official_release_signature": false,
+    "approved_by": []
+  },
+  "official_key_fingerprint": "b1ed6b9e26baa2ef6e415e96a99456d59020111c434c70a7bb73b96ca0627931",
+  "old_offline_workflow": {
+    "run_id": 45953941451,
+    "tool_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+    "verified_candidate_sha": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+    "verified_image": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+    "covers_new_worker_care_candidate": false
+  },
+  "strict_scan": {
+    "status": "PASS",
+    "image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+    "severity_counts": {
+      "CRITICAL": 0,
+      "HIGH": 135,
+      "MEDIUM": 215,
+      "LOW": 234,
+      "UNKNOWN": 19
+    },
+    "secret_findings_count": 0,
+    "cve_exceptions": []
+  }
+}

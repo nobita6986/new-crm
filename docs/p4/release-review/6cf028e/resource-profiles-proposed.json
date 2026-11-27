@@ -1,0 +1,482 @@
+{
+  "canonical_ci": {
+    "profile_id": "s1_canonical_4x4",
+    "g18_s1_benchmark_capable": true,
+    "backend_cpus": 2.0,
+    "backend_mem_mib": 2048.0,
+    "gunicorn_workers": 4,
+    "gunicorn_threads": 4,
+    "db_cpus": 2.0,
+    "db_mem_mib": 4096.0,
+    "queue_long_cpus": 1.5,
+    "queue_long_mem_mib": 2048.0,
+    "queue_short_cpus": 1.0,
+    "queue_short_mem_mib": 1024.0,
+    "frontend_cpus": 1.0,
+    "frontend_mem_mib": 512.0,
+    "websocket_cpus": 0.5,
+    "websocket_mem_mib": 512.0,
+    "scheduler_cpus": 0.5,
+    "scheduler_mem_mib": 512.0,
+    "proxy_cpus": 0.5,
+    "proxy_mem_mib": 256.0,
+    "redis_cache_cpus": 0.5,
+    "redis_cache_mem_mib": 512.0,
+    "redis_queue_cpus": 0.5,
+    "redis_queue_mem_mib": 512.0,
+    "total_capped_cpus": 10.0,
+    "total_capped_ram_mib": 12032.0,
+    "lookup_key": "s1_canonical_4x4",
+    "variant_id": "s1_canonical_4x4_capped",
+    "slo_spec_profile_column": "s1_canonical_4x4",
+    "description": "Full 4-vCPU / Gunicorn 4w x 4t (16 threads) isolated S1 benchmark configuration with enforced cgroups",
+    "g03_g05_smoke_capable": true,
+    "require_live_headroom_precheck": false,
+    "config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+    "compose_env_overrides_sha256": "083c39246fbc8cfb642f71c4f2097c8368d97166ae9cce32fbe6bd7b8ebb8254",
+    "verify_9_service_config_spec_sha256": "02487783e08ed2cae221121d1c39b749c2dfd7de49c1fbb27d5b89c89c7400ba",
+    "verify_9_service_compose_env_overrides_sha256": "26e3f09569eb85534d5f4b356b8e3f266254c8b5c06755c99112868b1140a218",
+    "verify_9_service_envelope": {
+      "profile_id": "s1_canonical_4x4",
+      "g18_s1_benchmark_capable": true,
+      "backend_cpus": 2.0,
+      "backend_mem_mib": 2048.0,
+      "gunicorn_workers": 4,
+      "gunicorn_threads": 4,
+      "db_cpus": 2.0,
+      "db_mem_mib": 4096.0,
+      "queue_long_cpus": 1.5,
+      "queue_long_mem_mib": 2048.0,
+      "queue_short_cpus": 1.0,
+      "queue_short_mem_mib": 1024.0,
+      "frontend_cpus": 1.0,
+      "frontend_mem_mib": 512.0,
+      "websocket_cpus": 0.5,
+      "websocket_mem_mib": 512.0,
+      "scheduler_cpus": 0.5,
+      "scheduler_mem_mib": 512.0,
+      "proxy_cpus": 0.0,
+      "proxy_mem_mib": 0.0,
+      "redis_cache_cpus": 0.5,
+      "redis_cache_mem_mib": 512.0,
+      "redis_queue_cpus": 0.5,
+      "redis_queue_mem_mib": 512.0,
+      "total_capped_cpus": 9.5,
+      "total_capped_ram_mib": 11776.0
+    },
+    "verify_9_service_limits": {
+      "frontend": {
+        "cpus": 1.0,
+        "memory_limit_mib": 512.0
+      },
+      "backend": {
+        "cpus": 2.0,
+        "memory_limit_mib": 2048.0
+      },
+      "websocket": {
+        "cpus": 0.5,
+        "memory_limit_mib": 512.0
+      },
+      "queue-short": {
+        "cpus": 1.0,
+        "memory_limit_mib": 1024.0
+      },
+      "queue-long": {
+        "cpus": 1.5,
+        "memory_limit_mib": 2048.0
+      },
+      "scheduler": {
+        "cpus": 0.5,
+        "memory_limit_mib": 512.0
+      },
+      "db": {
+        "cpus": 2.0,
+        "memory_limit_mib": 4096.0
+      },
+      "redis-cache": {
+        "cpus": 0.5,
+        "memory_limit_mib": 512.0
+      },
+      "redis-queue": {
+        "cpus": 0.5,
+        "memory_limit_mib": 512.0
+      }
+    },
+    "verify_compose_override_yaml": "services:\n  frontend:\n    cpus: 1.00\n    mem_limit: 512m\n  backend:\n    cpus: 2.00\n    mem_limit: 2048m\n    cpu_shares: 1024\n    environment:\n      GUNICORN_WORKERS: \"4\"\n      GUNICORN_THREADS: \"4\"\n      GUNICORN_TIMEOUT: \"120\"\n      TZ: Asia/Ho_Chi_Minh\n  websocket:\n    cpus: 0.50\n    mem_limit: 512m\n  queue-short:\n    cpus: 1.00\n    mem_limit: 1024m\n    cpu_shares: 512\n    command: [\"bench\", \"worker\", \"--queue\", \"short,default\"]\n  queue-long:\n    image: ${APP_IMAGE:?set APP_IMAGE}\n    pull_policy: ${PULL_POLICY:-never}\n    restart: \"no\"\n    cpus: 1.50\n    mem_limit: 2048m\n    cpu_shares: 1024\n    security_opt:\n      - no-new-privileges:true\n    command: [\"bench\", \"worker\", \"--queue\", \"long\"]\n    environment:\n      TZ: Asia/Ho_Chi_Minh\n    volumes:\n      - sites:/home/frappe/frappe-bench/sites\n    depends_on:\n      configurator:\n        condition: service_completed_successfully\n    networks:\n      - data_net\n  scheduler:\n    cpus: 0.50\n    mem_limit: 512m\n  db:\n    cpus: 2.00\n    mem_limit: 4096m\n    command:\n      - --character-set-server=utf8mb4\n      - --collation-server=utf8mb4_unicode_ci\n      - --skip-character-set-client-handshake\n      - --innodb-buffer-pool-size=2560M\n      - --innodb-log-file-size=512M\n      - --innodb-log-buffer-size=64M\n      - --innodb-flush-log-at-trx-commit=1\n      - --innodb-flush-method=O_DIRECT\n      - --innodb-io-capacity=1000\n      - --innodb-io-capacity-max=2000\n      - --max-connections=200\n  redis-cache:\n    cpus: 0.50\n    mem_limit: 512m\n    command:\n      - redis-server\n      - --save\n      - \"\"\n      - --appendonly\n      - \"no\"\n      - --maxmemory\n      - 256mb\n      - --maxmemory-policy\n      - allkeys-lru\n  redis-queue:\n    cpus: 0.50\n    mem_limit: 512m\n",
+    "verify_compose_override_yaml_sha256": "849c0d71383125b914afbf5acb60924591f96ad9e1680b1204894d643d240058",
+    "host_safety_requirements": {
+      "min_host_cpu_cores": 6,
+      "min_mem_available_mib": 8192.0,
+      "min_live_ram_reserve_mib": 2048.0,
+      "max_load_per_cpu": 0.65,
+      "min_free_disk_gib": 20.0
+    },
+    "compose_env_overrides": {
+      "PROXY_CPUS": "0.5",
+      "PROXY_MEM_LIMIT": "256m",
+      "FRONTEND_CPUS": "1.0",
+      "FRONTEND_MEM_LIMIT": "512m",
+      "BACKEND_CPUS": "2.0",
+      "BACKEND_MEM_LIMIT": "2048m",
+      "GUNICORN_WORKERS": "4",
+      "GUNICORN_THREADS": "4",
+      "GUNICORN_TIMEOUT": "120",
+      "WEBSOCKET_CPUS": "0.5",
+      "WEBSOCKET_MEM_LIMIT": "512m",
+      "QUEUE_SHORT_CPUS": "1.0",
+      "QUEUE_SHORT_MEM_LIMIT": "1024m",
+      "QUEUE_SHORT_CPU_SHARES": "512",
+      "QUEUE_LONG_CPUS": "1.5",
+      "QUEUE_LONG_MEM_LIMIT": "2048m",
+      "QUEUE_LONG_CPU_SHARES": "1024",
+      "SCHEDULER_CPUS": "0.5",
+      "SCHEDULER_MEM_LIMIT": "512m",
+      "DB_CPUS": "2.0",
+      "DB_MEM_LIMIT": "4096m",
+      "DB_INNODB_BUFFER_POOL_SIZE": "2560M",
+      "DB_INNODB_LOG_FILE_SIZE": "512M",
+      "DB_INNODB_LOG_BUFFER_SIZE": "64M",
+      "DB_INNODB_FLUSH_LOG_AT_TRX_COMMIT": "1",
+      "DB_INNODB_FLUSH_METHOD": "O_DIRECT",
+      "DB_INNODB_IO_CAPACITY": "1000",
+      "DB_INNODB_IO_CAPACITY_MAX": "2000",
+      "DB_MAX_CONNECTIONS": "200",
+      "REDIS_CACHE_CPUS": "0.5",
+      "REDIS_CACHE_MEM_LIMIT": "512m",
+      "REDIS_CACHE_MAXMEMORY": "256mb",
+      "REDIS_QUEUE_CPUS": "0.5",
+      "REDIS_QUEUE_MEM_LIMIT": "512m"
+    },
+    "verify_9_to_staging_10_mapping": {
+      "verify_stack_compose_file": "deploy/images/compose.verify.yaml",
+      "verify_daemon_service_count": 9,
+      "verify_one_shot_init_services": [
+        "configurator"
+      ],
+      "staging_full_daemon_service_count": 10,
+      "staging_extra_edge_service": "proxy",
+      "verify_9_total_capped_cpus": 9.5,
+      "verify_9_total_capped_ram_mib": 11776.0,
+      "staging_10_total_capped_cpus": 10.0,
+      "staging_10_total_capped_ram_mib": 12032.0,
+      "delta_cpus_staging_minus_verify": 0.5,
+      "delta_ram_mib_staging_minus_verify": 256.0,
+      "delta_equals_proxy_budget_exactly": true,
+      "services": {
+        "frontend": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 1.0,
+          "declared_memory_mib": 512.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "backend": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 2.0,
+          "declared_memory_mib": 2048.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "websocket": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.5,
+          "declared_memory_mib": 512.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "queue-short": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 1.0,
+          "declared_memory_mib": 1024.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "queue-long": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 1.5,
+          "declared_memory_mib": 2048.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "scheduler": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.5,
+          "declared_memory_mib": 512.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "db": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 2.0,
+          "declared_memory_mib": 4096.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "redis-cache": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.5,
+          "declared_memory_mib": 512.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "redis-queue": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.5,
+          "declared_memory_mib": 512.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "proxy": {
+          "present_in_compose_verify_9": false,
+          "present_in_staging_full_10": true,
+          "declared_cpus_staging_10": 0.5,
+          "declared_memory_mib_staging_10": 256.0,
+          "declared_cpus_verify_9": 0.0,
+          "declared_memory_mib_verify_9": 0.0,
+          "parity": "EXCLUDED_IN_LOOPBACK_VERIFY_STACK",
+          "rationale": "`deploy/images/compose.verify.yaml` publishes `frontend` (nginx) directly on `127.0.0.1:${VERIFY_HTTP_PORT}:8080` with zero public TLS ingress, whereas the 10-service `deploy/compose/` Staging stack adds `proxy` (Traefik/Caddy TLS edge). All 9 application, worker, cache, and database containers have 100% identical cgroup CPU, RAM, Gunicorn, RQ, and MariaDB limits across both stacks."
+        }
+      }
+    }
+  },
+  "recommended_staging": {
+    "profile_id": "staging_vps_capped",
+    "g18_s1_benchmark_capable": true,
+    "backend_cpus": 2.5,
+    "backend_mem_mib": 2048.0,
+    "gunicorn_workers": 4,
+    "gunicorn_threads": 4,
+    "db_cpus": 2.0,
+    "db_mem_mib": 3584.0,
+    "queue_long_cpus": 1.25,
+    "queue_long_mem_mib": 1536.0,
+    "queue_short_cpus": 0.5,
+    "queue_short_mem_mib": 2048.0,
+    "frontend_cpus": 0.35,
+    "frontend_mem_mib": 256.0,
+    "websocket_cpus": 0.25,
+    "websocket_mem_mib": 256.0,
+    "scheduler_cpus": 0.15,
+    "scheduler_mem_mib": 256.0,
+    "proxy_cpus": 0.2,
+    "proxy_mem_mib": 192.0,
+    "redis_cache_cpus": 0.15,
+    "redis_cache_mem_mib": 256.0,
+    "redis_queue_cpus": 0.15,
+    "redis_queue_mem_mib": 256.0,
+    "total_capped_cpus": 7.5,
+    "total_capped_ram_mib": 10688.0,
+    "lookup_key": "staging_vps_capped_b_plus_2_5vcpu",
+    "variant_id": "config_b_plus_2_5vcpu_4x4",
+    "slo_spec_profile_column": "staging_vps_capped",
+    "description": "Contingency cgroup-capped shared Staging VPS S1 G18 configuration (Config B+: backend 2.50 vCPU / 2048 MiB, Gunicorn 4w x 4t = 16 web threads, MariaDB 2.00 vCPU / 3584 MiB, queue-long 1.25 vCPU / 1536 MiB, queue-short 0.50 vCPU / 2048 MiB)",
+    "g03_g05_smoke_capable": true,
+    "require_live_headroom_precheck": true,
+    "config_spec_sha256": "530765c275067dc08bef704cc316c22683376c850b32cde5546e52b9c0d302a7",
+    "compose_env_overrides_sha256": "87d28a4d9e10299611cc0b706b128e6d1a9e7b8d3a377165bf5034ec5be5941c",
+    "verify_9_service_config_spec_sha256": "3aae6715d5e11b87ee86e4dc3ee9172434bfa0a73f4d510a04b5bcb407895589",
+    "verify_9_service_compose_env_overrides_sha256": "dce80eaed5b495a78b2428c5769a859ef8b9b67c6f9cec3908507ce60faba719",
+    "verify_9_service_envelope": {
+      "profile_id": "staging_vps_capped",
+      "g18_s1_benchmark_capable": true,
+      "backend_cpus": 2.5,
+      "backend_mem_mib": 2048.0,
+      "gunicorn_workers": 4,
+      "gunicorn_threads": 4,
+      "db_cpus": 2.0,
+      "db_mem_mib": 3584.0,
+      "queue_long_cpus": 1.25,
+      "queue_long_mem_mib": 1536.0,
+      "queue_short_cpus": 0.5,
+      "queue_short_mem_mib": 2048.0,
+      "frontend_cpus": 0.35,
+      "frontend_mem_mib": 256.0,
+      "websocket_cpus": 0.25,
+      "websocket_mem_mib": 256.0,
+      "scheduler_cpus": 0.15,
+      "scheduler_mem_mib": 256.0,
+      "proxy_cpus": 0.0,
+      "proxy_mem_mib": 0.0,
+      "redis_cache_cpus": 0.15,
+      "redis_cache_mem_mib": 256.0,
+      "redis_queue_cpus": 0.15,
+      "redis_queue_mem_mib": 256.0,
+      "total_capped_cpus": 7.3,
+      "total_capped_ram_mib": 10496.0
+    },
+    "verify_9_service_limits": {
+      "frontend": {
+        "cpus": 0.35,
+        "memory_limit_mib": 256.0
+      },
+      "backend": {
+        "cpus": 2.5,
+        "memory_limit_mib": 2048.0
+      },
+      "websocket": {
+        "cpus": 0.25,
+        "memory_limit_mib": 256.0
+      },
+      "queue-short": {
+        "cpus": 0.5,
+        "memory_limit_mib": 2048.0
+      },
+      "queue-long": {
+        "cpus": 1.25,
+        "memory_limit_mib": 1536.0
+      },
+      "scheduler": {
+        "cpus": 0.15,
+        "memory_limit_mib": 256.0
+      },
+      "db": {
+        "cpus": 2.0,
+        "memory_limit_mib": 3584.0
+      },
+      "redis-cache": {
+        "cpus": 0.15,
+        "memory_limit_mib": 256.0
+      },
+      "redis-queue": {
+        "cpus": 0.15,
+        "memory_limit_mib": 256.0
+      }
+    },
+    "verify_compose_override_yaml": "services:\n  frontend:\n    cpus: 0.35\n    mem_limit: 256m\n  backend:\n    cpus: 2.50\n    mem_limit: 2048m\n    cpu_shares: 1024\n    environment:\n      GUNICORN_WORKERS: \"4\"\n      GUNICORN_THREADS: \"4\"\n      GUNICORN_TIMEOUT: \"120\"\n      TZ: Asia/Ho_Chi_Minh\n  websocket:\n    cpus: 0.25\n    mem_limit: 256m\n  queue-short:\n    cpus: 0.50\n    mem_limit: 2048m\n    cpu_shares: 512\n    command: [\"bench\", \"worker\", \"--queue\", \"short,default\"]\n  queue-long:\n    image: ${APP_IMAGE:?set APP_IMAGE}\n    pull_policy: ${PULL_POLICY:-never}\n    restart: \"no\"\n    cpus: 1.25\n    mem_limit: 1536m\n    cpu_shares: 1024\n    security_opt:\n      - no-new-privileges:true\n    command: [\"bench\", \"worker\", \"--queue\", \"long\"]\n    environment:\n      TZ: Asia/Ho_Chi_Minh\n    volumes:\n      - sites:/home/frappe/frappe-bench/sites\n    depends_on:\n      configurator:\n        condition: service_completed_successfully\n    networks:\n      - data_net\n  scheduler:\n    cpus: 0.15\n    mem_limit: 256m\n  db:\n    cpus: 2.00\n    mem_limit: 3584m\n    command:\n      - --character-set-server=utf8mb4\n      - --collation-server=utf8mb4_unicode_ci\n      - --skip-character-set-client-handshake\n      - --innodb-buffer-pool-size=2560M\n      - --innodb-log-file-size=512M\n      - --innodb-log-buffer-size=64M\n      - --innodb-flush-log-at-trx-commit=1\n      - --innodb-flush-method=O_DIRECT\n      - --innodb-io-capacity=1000\n      - --innodb-io-capacity-max=2000\n      - --max-connections=200\n  redis-cache:\n    cpus: 0.15\n    mem_limit: 256m\n    command:\n      - redis-server\n      - --save\n      - \"\"\n      - --appendonly\n      - \"no\"\n      - --maxmemory\n      - 128mb\n      - --maxmemory-policy\n      - allkeys-lru\n  redis-queue:\n    cpus: 0.15\n    mem_limit: 256m\n",
+    "verify_compose_override_yaml_sha256": "186c393fd79b84620aa336eb03742d3a68ce111b6456dc94bae95cd3146caea4",
+    "host_safety_requirements": {
+      "min_host_cpu_cores": 6,
+      "min_mem_available_mib": 3072.0,
+      "min_live_ram_reserve_mib": 1536.0,
+      "max_load_per_cpu": 0.85,
+      "min_free_disk_gib": 12.0
+    },
+    "compose_env_overrides": {
+      "PROXY_CPUS": "0.20",
+      "PROXY_MEM_LIMIT": "192m",
+      "FRONTEND_CPUS": "0.35",
+      "FRONTEND_MEM_LIMIT": "256m",
+      "BACKEND_CPUS": "2.50",
+      "BACKEND_MEM_LIMIT": "2048m",
+      "GUNICORN_WORKERS": "4",
+      "GUNICORN_THREADS": "4",
+      "GUNICORN_TIMEOUT": "120",
+      "WEBSOCKET_CPUS": "0.25",
+      "WEBSOCKET_MEM_LIMIT": "256m",
+      "QUEUE_SHORT_CPUS": "0.50",
+      "QUEUE_SHORT_MEM_LIMIT": "2048m",
+      "QUEUE_SHORT_CPU_SHARES": "512",
+      "QUEUE_LONG_CPUS": "1.25",
+      "QUEUE_LONG_MEM_LIMIT": "1536m",
+      "QUEUE_LONG_CPU_SHARES": "1024",
+      "SCHEDULER_CPUS": "0.15",
+      "SCHEDULER_MEM_LIMIT": "256m",
+      "DB_CPUS": "2.00",
+      "DB_MEM_LIMIT": "3584m",
+      "DB_INNODB_BUFFER_POOL_SIZE": "2560M",
+      "DB_INNODB_LOG_FILE_SIZE": "512M",
+      "DB_INNODB_LOG_BUFFER_SIZE": "64M",
+      "DB_INNODB_FLUSH_LOG_AT_TRX_COMMIT": "1",
+      "DB_INNODB_FLUSH_METHOD": "O_DIRECT",
+      "DB_INNODB_IO_CAPACITY": "1000",
+      "DB_INNODB_IO_CAPACITY_MAX": "2000",
+      "DB_MAX_CONNECTIONS": "200",
+      "REDIS_CACHE_CPUS": "0.15",
+      "REDIS_CACHE_MEM_LIMIT": "256m",
+      "REDIS_CACHE_MAXMEMORY": "128mb",
+      "REDIS_QUEUE_CPUS": "0.15",
+      "REDIS_QUEUE_MEM_LIMIT": "256m"
+    },
+    "verify_9_to_staging_10_mapping": {
+      "verify_stack_compose_file": "deploy/images/compose.verify.yaml",
+      "verify_daemon_service_count": 9,
+      "verify_one_shot_init_services": [
+        "configurator"
+      ],
+      "staging_full_daemon_service_count": 10,
+      "staging_extra_edge_service": "proxy",
+      "verify_9_total_capped_cpus": 7.3,
+      "verify_9_total_capped_ram_mib": 10496.0,
+      "staging_10_total_capped_cpus": 7.5,
+      "staging_10_total_capped_ram_mib": 10688.0,
+      "delta_cpus_staging_minus_verify": 0.2,
+      "delta_ram_mib_staging_minus_verify": 192.0,
+      "delta_equals_proxy_budget_exactly": true,
+      "services": {
+        "frontend": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.35,
+          "declared_memory_mib": 256.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "backend": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 2.5,
+          "declared_memory_mib": 2048.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "websocket": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.25,
+          "declared_memory_mib": 256.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "queue-short": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.5,
+          "declared_memory_mib": 2048.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "queue-long": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 1.25,
+          "declared_memory_mib": 1536.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "scheduler": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.15,
+          "declared_memory_mib": 256.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "db": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 2.0,
+          "declared_memory_mib": 3584.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "redis-cache": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.15,
+          "declared_memory_mib": 256.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "redis-queue": {
+          "present_in_compose_verify_9": true,
+          "present_in_staging_full_10": true,
+          "declared_cpus": 0.15,
+          "declared_memory_mib": 256.0,
+          "parity": "IDENTICAL_1_TO_1"
+        },
+        "proxy": {
+          "present_in_compose_verify_9": false,
+          "present_in_staging_full_10": true,
+          "declared_cpus_staging_10": 0.2,
+          "declared_memory_mib_staging_10": 192.0,
+          "declared_cpus_verify_9": 0.0,
+          "declared_memory_mib_verify_9": 0.0,
+          "parity": "EXCLUDED_IN_LOOPBACK_VERIFY_STACK",
+          "rationale": "`deploy/images/compose.verify.yaml` publishes `frontend` (nginx) directly on `127.0.0.1:${VERIFY_HTTP_PORT}:8080` with zero public TLS ingress, whereas the 10-service `deploy/compose/` Staging stack adds `proxy` (Traefik/Caddy TLS edge). All 9 application, worker, cache, and database containers have 100% identical cgroup CPU, RAM, Gunicorn, RQ, and MariaDB limits across both stacks."
+        }
+      }
+    }
+  }
+}

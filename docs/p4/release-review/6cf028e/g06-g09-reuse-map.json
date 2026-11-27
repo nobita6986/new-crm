@@ -1,0 +1,194 @@
+{
+  "status": "VERIFIED_CI_EVIDENCE_REUSE_SUBJECT_TO_TARGET_ENVIRONMENT_MATCH",
+  "run_id": 45955303485,
+  "job_id": 140360398992,
+  "artifact_id": 15179146880,
+  "artifact_zip_sha256": "0dce6f1f5adfa8de3676099a3896f59275183ee9b2798f08ee6dffceea92417f",
+  "report_sha256": "84625aec034ee230b36c00858844e12b41b23de41591a316cec7fbf6b7491486",
+  "candidate": {
+    "git_commit_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+    "image_ref": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+    "frappe_version": "15.126.0"
+  },
+  "n_minus_1": {
+    "git_commit_sha": "467830195358b2431ac772486530ab935887a518",
+    "image_ref": "cskh-n-minus-1:local",
+    "frappe_version": "15.123.1"
+  },
+  "migration": {
+    "migrator_run_1_exit_code": 0,
+    "migrator_run_2_exit_code": 0,
+    "migrator_run_1_duration_sec": 10.473,
+    "migrator_run_2_duration_sec": 9.99,
+    "failed_migration_guard_d03_exit_code": 1,
+    "schema_compatibility": {
+      "compatibility_class": "Class_A_Code_And_Runtime_Only",
+      "tier3_image_rollback_safe": true,
+      "added_tables": [],
+      "dropped_tables": [],
+      "added_compatible_columns": [],
+      "added_non_nullable_no_default": [],
+      "dropped_columns": [],
+      "type_changes": []
+    }
+  },
+  "rollback": {
+    "tier2_export_flag_rollback": {
+      "overview_http_status": 200,
+      "export_blocked_http_status": 503
+    },
+    "tier1_master_p3_flag_rollback": {
+      "p3_page_http_status": 403,
+      "p3_overview_http_status": 503,
+      "p1_my_customers_http_status": 200,
+      "p2_record_attempt_http_status": 200,
+      "dirty_scope_reenable_reconcile_ok": true
+    },
+    "tier3_image_rollback_n_to_n_minus_1": {
+      "frappe_version": "15.123.1",
+      "post_upgrade_attempt_preserved_on_n_minus_1": true,
+      "total_attempts_on_n_minus_1": 4,
+      "distribution_reconciled": true,
+      "kpi_reconciled": true,
+      "n_minus_1_hooks_verified": {
+        "add_to_apps_screen_names": [
+          "crm"
+        ],
+        "has_stale_cskh_sidebar_hook": false,
+        "setup_wizard_requires": [],
+        "has_stale_cskh_setup_wizard_hook": false,
+        "has_stale_desk_theme_css_hook": false,
+        "has_stale_web_theme_css_hook": false,
+        "before_request": [
+          "frappe.recorder.record",
+          "frappe.monitor.start",
+          "frappe.rate_limiter.apply",
+          "crm_cskh.i18n.set_guest_language",
+          "crm_cskh.p1_errors.clear_p1_error_context"
+        ],
+        "after_request": [
+          "frappe.monitor.stop",
+          "crm_cskh.errors.normalize_error_response",
+          "crm_cskh.p1_errors.normalize_p1_error_response"
+        ],
+        "before_job": [
+          "frappe.recorder.record",
+          "frappe.monitor.start"
+        ],
+        "on_print_pdf": [],
+        "has_stale_pdf_assets_hook": false,
+        "has_stale_n_after_request_hook": false,
+        "unresolved_orphan_hooks": []
+      },
+      "n_minus_1_rq_worker_jobs_verified": {
+        "ping_job": {
+          "job_id": "p4-b2-g06g09-63177-7b8a05.localhost::fe755991-0ea0-4db9-a4ff-22c175350180",
+          "method": "frappe.ping",
+          "status": "finished",
+          "exc_info": null
+        },
+        "cskh_sla_job": {
+          "job_id": "p4-b2-g06g09-63177-7b8a05.localhost::3bbfa059-b490-4988-98b6-994201619714",
+          "method": "crm_cskh.jobs.evaluate_sla.evaluate_sla_obligations",
+          "status": "finished",
+          "exc_info": null
+        }
+      },
+      "pre_rollback_n_hooks": {
+        "add_to_apps_screen_names": [
+          "crm",
+          "crm_cskh"
+        ],
+        "has_cskh_sidebar_permission_hook": true,
+        "has_cskh_setup_wizard_hook": true,
+        "has_desk_theme_css_hook": true,
+        "has_web_theme_css_hook": true,
+        "has_n_pdf_before_request_hook": true,
+        "has_n_pdf_before_job_hook": true,
+        "has_n_pdf_on_print_hook": true,
+        "n_rq_worker_job_status": "finished",
+        "n_rq_non_pdf_probe": {
+          "status": "PASS",
+          "worker_hostname": "73c0d9254d25",
+          "worker_pid": 48,
+          "hook_guard_armed": true,
+          "reentry_call_ms": 0.0006,
+          "loaded_modules": {
+            "weasyprint": false,
+            "frappe.utils.weasyprint": false,
+            "frappe.utils.pdf": false,
+            "pdfkit": false,
+            "cssutils": false,
+            "pypdf": false,
+            "bs4": false,
+            "crm_cskh.services.pdf_assets": false
+          },
+          "any_pdf_engine_loaded": false
+        },
+        "after_request": [
+          "frappe.monitor.stop",
+          "crm_cskh.errors.normalize_error_response",
+          "crm_cskh.p1_errors.normalize_p1_error_response"
+        ],
+        "http_get_apps_staff_status": 200,
+        "http_get_apps_staff_names": [
+          "crm",
+          "crm_cskh"
+        ],
+        "http_get_apps_admin_status": 200,
+        "http_get_apps_admin_names": [
+          "crm_cskh"
+        ],
+        "http_crm_page_status": 200,
+        "http_crm_has_n_sidebar_bridge": true
+      },
+      "clear_cache_before_traffic_order": [
+        "stop_n_runtime_services",
+        "set_app_image_n_minus_1",
+        "run_configurator",
+        "bench_clear_cache_and_clear_website_cache_before_up",
+        "start_n_minus_1_runtime_services",
+        "verify_n_minus_1_hooks_and_http"
+      ],
+      "clear_cache_exit_code": 0,
+      "http_get_apps_staff_status": 200,
+      "http_get_apps_staff_names": [
+        "crm"
+      ],
+      "http_get_apps_admin_status": 200,
+      "http_get_apps_admin_names": [],
+      "http_crm_page_status": 200,
+      "http_crm_has_n_sidebar_bridge": false,
+      "http_my_customers_status": 200,
+      "http_executive_overview_status": 200
+    },
+    "tier4_dr_full_restore_and_delta_accounting": {
+      "backup_files_bytes": {
+        "db_gz": 321494,
+        "priv_tar": 10240,
+        "pub_tar": 10240,
+        "site_config": 94
+      },
+      "restored_counts_match_pre_upgrade": true,
+      "restored_fingerprints_match_pre_upgrade": true,
+      "audited_post_backup_delta_window": {
+        "post_backup_attempts_count": 2,
+        "attempt_ids": [
+          "f0t73iu2eu",
+          "f1o2d6in57"
+        ]
+      }
+    }
+  },
+  "reuse_conditions": [
+    "Same candidate digest and unchanged relevant code, recipe, lock and runner",
+    "Actual target N-1 schema, patches and data assumptions match rehearsed baseline; otherwise rehearse delta on a clone",
+    "Actual pre-upgrade backup, target inventory, permissions and smoke remain required at authorized deployment"
+  ],
+  "not_proven": [
+    "Current Live image equals CI N-1",
+    "Production RTO/RPO",
+    "New candidate accepted on Staging VPS",
+    "Human UAT, Operator handover or Go-Live approval"
+  ]
+}

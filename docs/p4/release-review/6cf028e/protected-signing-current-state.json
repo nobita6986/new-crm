@@ -1,0 +1,12 @@
+{
+  "captured_at_utc": "2026-11-27T07:54:08.195126+00:00",
+  "environments": [],
+  "registry_image": "ghcr.io/nobita6986/crm-cskh",
+  "registry_is_public": "true",
+  "repository_public_key_der_sha256": "b1ed6b9e26baa2ef6e415e96a99456d59020111c434c70a7bb73b96ca0627931",
+  "matches_official_key": true,
+  "current_contributor_has_administration": false,
+  "official_key_used_in_this_task": false,
+  "protected_environment_secret_configuration": "NOT_CONFIGURED_ENVIRONMENTS_ABSENT",
+  "legacy_ci_preflight_note": "Candidate CI audit intentionally lacks protected-role variables; use actual repository/API state for provisioning decisions."
+}

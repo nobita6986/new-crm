@@ -1,0 +1,141 @@
+{
+  "status": "PENDING_OWNER_APPROVAL",
+  "candidate_commit_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+  "image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+  "oci_config_digest": "sha256:a4ff0da5e2ef71f7690de4c35cc02c54081f621519953d28c05a60b5aa99c86a",
+  "slo_spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+  "slo_spec_version": "1.0.0",
+  "source_approval_snapshot": {
+    "sha256": "71bdf60ff8982f5532d00c714d3224ce796fe771c752e8a41ecabb93a2b1a483",
+    "status": "PENDING_OWNER_APPROVAL",
+    "stale_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:ba68cd229ea3f3dc2566017e13251387b3fe398196acd4880a2a184201a00be8"
+  },
+  "proposed_staging": {
+    "threshold_profile": "staging_vps_capped",
+    "resource_variant": "staging_vps_capped_b_plus_2_5vcpu",
+    "config_spec_sha256": "530765c275067dc08bef704cc316c22683376c850b32cde5546e52b9c0d302a7",
+    "benchmark_runner_sha256": "5283a0fdfec6d4bf2608aaf3d053fd060c9f811962b04582d934ae6f785044d2",
+    "new_candidate_vps_measurement": null,
+    "approval_must_precede_official_measurement": true
+  },
+  "measured_ci": {
+    "profile": "s1_canonical_4x4",
+    "variant": "s1_canonical_4x4_capped",
+    "config_spec_sha256": "683bc830dc7542c381fe2fb9016389a1d919c2b518f211cfe3ff5de5ff8324fe",
+    "report_sha256": "2ccb71c92d8dd88455e5afc1b4598905ae1bce92589870ac455ed3a627addcb8",
+    "p4_9_2": {
+      "all_passed": true,
+      "total_checks": 11,
+      "passed_count": 11,
+      "failed_count": 0,
+      "failed_checks": [],
+      "items": {
+        "staff_my_customers_p95_le_1500ms": {
+          "target_p95_ms": 1500.0,
+          "measured_http_p95_ms": 61.217,
+          "error_rate_pct": 0.0,
+          "passed": true
+        },
+        "open_lead_and_history_p95_le_2000ms": {
+          "target_p95_ms": 2000.0,
+          "measured_http_p95_ms": 149.265,
+          "error_rate_pct": 0.0,
+          "passed": true
+        },
+        "record_attempt_and_callback_p95_le_2000ms_zero_dup": {
+          "target_p95_ms": 2000.0,
+          "measured_http_p95_ms": 147.18,
+          "duplicate_idempotency_keys": 0,
+          "attempts_created": 80,
+          "work_items_with_open_callback_task": 80,
+          "http_idempotent_replays_verified": 10,
+          "passed": true
+        },
+        "bod_overview_snapshot_p95_le_3000ms": {
+          "target_p95_ms": 3000.0,
+          "measured_http_p95_ms": 75.704,
+          "explain_index_key": "idx_cskh_kpisnap_lookup",
+          "passed": true
+        },
+        "kpi_drilldown_paginated_p95_le_3000ms": {
+          "target_p95_ms": 3000.0,
+          "measured_daily_campaign_http_p95_ms": 50.196,
+          "measured_monthly_company_250k_http_p95_ms": 52.944,
+          "staff_unauthorized_company_http_status": 403,
+          "passed": true
+        },
+        "preview_weighted_distribution_10000_items": {
+          "reference_target_ms": 60000.0,
+          "eligible_count": 10000,
+          "measured_preview_ms": 692.59,
+          "passed": true
+        },
+        "execute_weighted_distribution_10000_items": {
+          "created_work_items": 10000,
+          "duplicate_work_items": 0,
+          "execute_ms": 28449.4,
+          "ownership_reconciled": true,
+          "abort_cancel_guard_verified": true,
+          "passed": true
+        },
+        "import_50000_csv_rows": {
+          "total_rows": 50000,
+          "created_rows": 10000,
+          "reused_rows": 5000,
+          "error_rows": 500,
+          "error_artifact_present": true,
+          "total_ms": 4531.62,
+          "preview_hwm_mib": 579.75,
+          "passed": true
+        },
+        "recompute_kpi_non_blocking_atomic_publish": {
+          "atomic_publish_verified": true,
+          "concurrent_ui_p95_ms": 2.971,
+          "passed": true
+        },
+        "concurrent_20_40_80_mixed_user_sessions": {
+          "sessions_20_p95_ms": 152.749,
+          "sessions_20_error_rate_pct": 0.0,
+          "sessions_40_p95_ms": 282.236,
+          "sessions_40_error_rate_pct": 0.0,
+          "sessions_80_p95_ms": 599.196,
+          "sessions_80_error_rate_pct": 0.0,
+          "passed": true
+        },
+        "telesale_worklist_ssr_zero_errors_c12_and_c40": {
+          "shared_new_session_c12_error_count": 0,
+          "shared_new_session_c12_timeout_count": 0,
+          "staff_40_sessions_c40_error_count": 0,
+          "staff_40_sessions_c40_timeout_count": 0,
+          "passed": true
+        }
+      }
+    },
+    "overall_summary": {
+      "requests_total": 1920,
+      "ok_count": 1920,
+      "error_count": 0,
+      "error_rate_pct": 0.0,
+      "throughput_rps": 191.698,
+      "min_ms": 5.286,
+      "p50_ms": 42.386,
+      "p95_ms": 149.663,
+      "p99_ms": 364.932,
+      "max_ms": 910.102,
+      "timeout_count": 0,
+      "client_error_count": 0,
+      "http_4xx_count": 0,
+      "http_5xx_count": 0,
+      "http_error_count": 0,
+      "status_counts": {
+        "200": 1920
+      }
+    },
+    "formal_owner_approval": false
+  },
+  "owner_signoff": {
+    "approved_by": null,
+    "approved_at_utc": null,
+    "decision_reference": null
+  }
+}

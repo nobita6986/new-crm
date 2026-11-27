@@ -1,0 +1,41 @@
+{
+  "status": "PROPOSED_NOT_APPROVED",
+  "candidate_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+  "image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+  "decisions": {
+    "merge_order": {
+      "recommendation": [
+        "P4 foundation PR #20",
+        "Worker Care PR #19 after P4 is actually on main",
+        "Independent offline tooling PR #18 only if approved"
+      ],
+      "owner_choice": null
+    },
+    "release_source_binding": {
+      "recommendation": "Preserve tested 6cf028e/6599356c and sign from pinned integration ref after verifying merge-tree equivalence; do not rebuild only to rename a merge SHA.",
+      "owner_choice": null
+    },
+    "signing_method": {
+      "recommendation": "PROTECTED_P4_RELEASE_WORKFLOW",
+      "alternative": "NEW_CANDIDATE_BOUND_OFFLINE_AMENDMENT_IF_APPROVED",
+      "owner_choice": null
+    },
+    "staging_slo": {
+      "recommendation": "staging_vps_capped / Config B+ 2.5 vCPU backend, subject to current headroom preflight and new-candidate measurement",
+      "owner_choice": null
+    },
+    "staging_execution_authorization": {
+      "recommendation": "Separate approval after official signature and SLO binding are verified",
+      "owner_choice": null
+    },
+    "production_go_live": {
+      "owner_choice": null,
+      "approval_requested_now": false
+    }
+  },
+  "owner_signoff": {
+    "approved_by": null,
+    "approved_at_utc": null,
+    "decision_reference": null
+  }
+}

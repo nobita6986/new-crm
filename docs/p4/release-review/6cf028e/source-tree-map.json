@@ -1,0 +1,74 @@
+{
+  "main": {
+    "commit": "467830195358b2431ac772486530ab935887a518",
+    "root_tree": "4dc5a5d215dc3aff82d80c92e0c2c0c11808a3db",
+    "apps_tree": "14b5387296dad815a6b9f663411f265fa7d9f910",
+    "crm_cskh_tree": "f51095ec245e103ed3a487654b5580636424ea36",
+    "selected_file_sha256": {
+      "deploy/images/Containerfile": "85728fe9058f916c22240745598c4919588838352a66cf89f467f9b2f765f610",
+      "deploy/images/release-lock.json": "9adfc11427a8ec434c1e995c26419946dcb685be06b9685bf4c1745489a801ae"
+    }
+  },
+  "p4": {
+    "commit": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+    "root_tree": "0d96001d368d8dc44f2a5cf9b299912344ded469",
+    "apps_tree": "f4cb374f0eed89304e7b55e4978434a83d406051",
+    "crm_cskh_tree": "f1b9258c53b231390da8f9421e2c7c06cfc9281a",
+    "selected_file_sha256": {
+      "deploy/images/Containerfile": "2e447772bc880f582d5cc01b61055af8974e67ab880e1506dc72b2130a9da177",
+      "deploy/images/release-lock.json": "2abddc707f3ca7eb4d9cbaa2ec31087fea546c0c5a5eb5d72306cbd684564f7f",
+      "deploy/release/p4-s1-slo-spec.json": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+      "deploy/release/g18_resource_profiles.py": "daac6696fa1e9a55e20224723bb3b6e90d3b6bd36e17df8b777fc51a3cd1618c",
+      "deploy/release/benchmark_p4_isolated.py": "5283a0fdfec6d4bf2608aaf3d053fd060c9f811962b04582d934ae6f785044d2"
+    }
+  },
+  "worker": {
+    "commit": "c0f4debece35f907c15ea12d07368effa3905244",
+    "root_tree": "8644c084aea5de50018bd33e8b1ef549e3c1d6a4",
+    "apps_tree": "3a4f3d0ea036c814ae352c45b6b2f07fe33c1185",
+    "crm_cskh_tree": "471b7925d35d4aa7de154df9cb57aab24bf2ca19",
+    "selected_file_sha256": {
+      "deploy/images/Containerfile": "c540abed3e85eee2ecef7c1a406948e19b37713f6a0e3100008dfb9fd3f94f07",
+      "deploy/images/release-lock.json": "a6b7112009347063d88c43a9759c85d337c46c7ac6af2e5830e1305c91acc9b0",
+      "deploy/release/p4-s1-slo-spec.json": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+      "deploy/release/g18_resource_profiles.py": "daac6696fa1e9a55e20224723bb3b6e90d3b6bd36e17df8b777fc51a3cd1618c",
+      "deploy/release/benchmark_p4_isolated.py": "5283a0fdfec6d4bf2608aaf3d053fd060c9f811962b04582d934ae6f785044d2"
+    }
+  },
+  "p4_worker": {
+    "commit": "d1d12b778bf6cad689c6176c4e8283947b5e5060",
+    "root_tree": "8644c084aea5de50018bd33e8b1ef549e3c1d6a4",
+    "apps_tree": "3a4f3d0ea036c814ae352c45b6b2f07fe33c1185",
+    "crm_cskh_tree": "471b7925d35d4aa7de154df9cb57aab24bf2ca19",
+    "selected_file_sha256": {
+      "deploy/images/Containerfile": "c540abed3e85eee2ecef7c1a406948e19b37713f6a0e3100008dfb9fd3f94f07",
+      "deploy/images/release-lock.json": "a6b7112009347063d88c43a9759c85d337c46c7ac6af2e5830e1305c91acc9b0",
+      "deploy/release/p4-s1-slo-spec.json": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+      "deploy/release/g18_resource_profiles.py": "daac6696fa1e9a55e20224723bb3b6e90d3b6bd36e17df8b777fc51a3cd1618c",
+      "deploy/release/benchmark_p4_isolated.py": "5283a0fdfec6d4bf2608aaf3d053fd060c9f811962b04582d934ae6f785044d2"
+    }
+  },
+  "integration": {
+    "commit": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+    "root_tree": "d100401f1412a5a3b9ac5ec3c02e8da00e46fdba",
+    "apps_tree": "3a4f3d0ea036c814ae352c45b6b2f07fe33c1185",
+    "crm_cskh_tree": "471b7925d35d4aa7de154df9cb57aab24bf2ca19",
+    "selected_file_sha256": {
+      "deploy/images/Containerfile": "c540abed3e85eee2ecef7c1a406948e19b37713f6a0e3100008dfb9fd3f94f07",
+      "deploy/images/release-lock.json": "a6b7112009347063d88c43a9759c85d337c46c7ac6af2e5830e1305c91acc9b0",
+      "deploy/release/p4-s1-slo-spec.json": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+      "deploy/release/g18_resource_profiles.py": "daac6696fa1e9a55e20224723bb3b6e90d3b6bd36e17df8b777fc51a3cd1618c",
+      "deploy/release/benchmark_p4_isolated.py": "5283a0fdfec6d4bf2608aaf3d053fd060c9f811962b04582d934ae6f785044d2"
+    }
+  },
+  "offline": {
+    "commit": "e9bb412df02e8f6826e5ab45a7a84e6b47c92ad0",
+    "root_tree": "2b5164f7bba946e646604a44b20abfb91268164b",
+    "apps_tree": "14b5387296dad815a6b9f663411f265fa7d9f910",
+    "crm_cskh_tree": "f51095ec245e103ed3a487654b5580636424ea36",
+    "selected_file_sha256": {
+      "deploy/images/Containerfile": "85728fe9058f916c22240745598c4919588838352a66cf89f467f9b2f765f610",
+      "deploy/images/release-lock.json": "9adfc11427a8ec434c1e995c26419946dcb685be06b9685bf4c1745489a801ae"
+    }
+  }
+}

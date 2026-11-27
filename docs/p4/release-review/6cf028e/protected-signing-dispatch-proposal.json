@@ -1,0 +1,20 @@
+{
+  "status": "PROPOSED_NOT_DISPATCHED",
+  "workflow": "p4-release.yml",
+  "ref": "codex/p4-worker-care-integration",
+  "expected_ref_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+  "inputs": {
+    "release_id": "crm-cskh-worker-care-20261127-6599356c",
+    "previous_release_id": "",
+    "existing_app_image_digest": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+    "deploy_to_staging": false
+  },
+  "previous_release_id_note": "Resolve actual previous release identity before production approval; empty is only the current workflow optional default, not evidence of an initial deployment.",
+  "prerequisites": [
+    "Owner selects protected signing and approves use for this exact candidate",
+    "Authorized repository administrator configures protected environments and loads the official key only in registry-build",
+    "Environment deployment branch policy permits the pinned integration ref",
+    "Ref remains exactly 6cf028e; existing-image revision check requires this SHA"
+  ],
+  "official_signature_already_available_for_new_candidate": false
+}

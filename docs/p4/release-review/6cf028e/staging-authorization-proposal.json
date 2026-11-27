@@ -1,0 +1,29 @@
+{
+  "status": "PROPOSED_PENDING_OWNER_AUTHORIZATION",
+  "candidate_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+  "image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+  "official_signature_required": true,
+  "proposed_project": "crm-cskh-worker-care-staging-6599356c",
+  "proposed_loopback_http_port": 18084,
+  "proposed_loopback_https_port": 18446,
+  "ports_verified_free_now": false,
+  "resource_profile": "staging_vps_capped",
+  "resource_variant": "staging_vps_capped_b_plus_2_5vcpu",
+  "config_spec_sha256": "530765c275067dc08bef704cc316c22683376c850b32cde5546e52b9c0d302a7",
+  "slo_spec_sha256": "ccd8f83c97f4ef9fa92cffa08c6811c2119b6bc582a02f78c8bd0ef802cab34d",
+  "benchmark_runner_sha256": "5283a0fdfec6d4bf2608aaf3d053fd060c9f811962b04582d934ae6f785044d2",
+  "headroom_preflight_required": true,
+  "new_candidate_vps_measurement": null,
+  "uat_signers": {
+    "BOD": null,
+    "CRM_ADMIN": null,
+    "TEAM_LEAD": null,
+    "STAFF": null
+  },
+  "owner_signoff": {
+    "approved_by": null,
+    "approved_at_utc": null,
+    "decision_reference": null
+  },
+  "production_deployment_authorized": false
+}

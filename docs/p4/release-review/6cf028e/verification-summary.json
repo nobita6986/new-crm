@@ -1,0 +1,307 @@
+{
+  "status": "TECHNICAL_EVIDENCE_VERIFIED_OWNER_DECISIONS_PENDING",
+  "candidate_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+  "image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+  "workflow_count": 5,
+  "job_count": 14,
+  "jobs_passed": 14,
+  "runs": [
+    {
+      "run_id": 45955303485,
+      "url": "https://github.com/nobita6986/new-crm/actions/runs/45955303485",
+      "jobs": [
+        {
+          "id": 140360305904,
+          "name": "PR isolation, release-lock integrity, ruff & Batch 2 unit contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45955303485/job/140360305904",
+          "started_at": "2026-11-27T06:58:33Z",
+          "completed_at": "2026-11-27T06:58:48Z"
+        },
+        {
+          "id": 140360398992,
+          "name": "G06 & G09 — N-1 clone migration, migrate x2, Tier 1-3 rollback & Tier 4 DR restore",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45955303485/job/140360398992",
+          "started_at": "2026-11-27T06:58:50Z",
+          "completed_at": "2026-11-27T07:10:58Z"
+        },
+        {
+          "id": 140360399027,
+          "name": "G11 & G12 — Current-topology session/Socket.IO revocation & S01-S20 security controls",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45955303485/job/140360399027",
+          "started_at": "2026-11-27T06:58:50Z",
+          "completed_at": "2026-11-27T07:03:04Z"
+        },
+        {
+          "id": 140360399068,
+          "name": "G13-G15 & G17 — Golden dataset cskh-metrics-v2, P1-P3 HTTP delta & worker SIGKILL recovery",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45955303485/job/140360399068",
+          "started_at": "2026-11-27T06:58:50Z",
+          "completed_at": "2026-11-27T07:05:39Z"
+        }
+      ],
+      "scope": "INTEGRATION_6cf028e_CHECKS_SEE_ARTIFACT_IMAGE_BINDING"
+    },
+    {
+      "run_id": 45953941451,
+      "url": "https://github.com/nobita6986/new-crm/actions/runs/45953941451",
+      "jobs": [
+        {
+          "id": 140355948899,
+          "name": "Verify official signature, strict scan, fresh Trivy DB (<=24h) and immutable registry objects",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953941451/job/140355948899",
+          "started_at": "2026-11-27T06:45:49Z",
+          "completed_at": "2026-11-27T06:48:58Z"
+        }
+      ],
+      "scope": "LEGACY_3d0c474_f76c101b_OFFLINE_SIGNATURE_AND_FRESH_SCAN"
+    },
+    {
+      "run_id": 45953937721,
+      "url": "https://github.com/nobita6986/new-crm/actions/runs/45953937721",
+      "jobs": [
+        {
+          "id": 140355936127,
+          "name": "Build-once, push GHCR @sha256, SBOM, strict scan & Ed25519 sign",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953937721/job/140355936127",
+          "started_at": "2026-11-27T06:45:48Z",
+          "completed_at": "2026-11-27T06:54:08Z"
+        },
+        {
+          "id": 140358839641,
+          "name": "Pull GHCR @sha256, G02 clean-site, G03 10-service smoke & full P0-P3 suites",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953937721/job/140358839641",
+          "started_at": "2026-11-27T06:54:11Z",
+          "completed_at": "2026-11-27T07:04:57Z"
+        },
+        {
+          "id": 140358839690,
+          "name": "Pull identical GHCR @sha256 & run isolated S1 benchmark (50k/75k/250k/40 staff)",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953937721/job/140358839690",
+          "started_at": "2026-11-27T06:54:10Z",
+          "completed_at": "2026-11-27T07:05:28Z"
+        }
+      ],
+      "scope": "INTEGRATION_6cf028e_CHECKS_SEE_ARTIFACT_IMAGE_BINDING"
+    },
+    {
+      "run_id": 45953933914,
+      "url": "https://github.com/nobita6986/new-crm/actions/runs/45953933914",
+      "jobs": [
+        {
+          "id": 140355922628,
+          "name": "Linux bootstrap contract, release locks, lint & Node/Python unit gates",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953933914/job/140355922628",
+          "started_at": "2026-11-27T06:45:45Z",
+          "completed_at": "2026-11-27T06:46:14Z"
+        },
+        {
+          "id": 140356109539,
+          "name": "Build real image, double-migrate, Frappe suites, DB reconcile & Playwright Vue E2E",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953933914/job/140356109539",
+          "started_at": "2026-11-27T06:46:17Z",
+          "completed_at": "2026-11-27T07:01:34Z"
+        }
+      ],
+      "scope": "INTEGRATION_6cf028e_CHECKS_SEE_ARTIFACT_IMAGE_BINDING"
+    },
+    {
+      "run_id": 45953929696,
+      "url": "https://github.com/nobita6986/new-crm/actions/runs/45953929696",
+      "jobs": [
+        {
+          "id": 140355911184,
+          "name": "PR isolation, locks, lint & static contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953929696/job/140355911184",
+          "started_at": "2026-11-27T06:45:43Z",
+          "completed_at": "2026-11-27T06:46:07Z"
+        },
+        {
+          "id": 140356066290,
+          "name": "Build-once, SBOM, strict/PR scan & same-digest promotion (loopback OCI)",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953929696/job/140356066290",
+          "started_at": "2026-11-27T06:46:09Z",
+          "completed_at": "2026-11-27T06:58:50Z"
+        },
+        {
+          "id": 140356066423,
+          "name": "Two clean builds (--no-cache) Python constraint & hash proof (REL-03)",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953929696/job/140356066423",
+          "started_at": "2026-11-27T06:46:09Z",
+          "completed_at": "2026-11-27T06:56:39Z"
+        },
+        {
+          "id": 140360408493,
+          "name": "Attest SHA256SUMS & 3-clean-build Python lock identity across runners",
+          "status": "completed",
+          "conclusion": "success",
+          "head_sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+          "html_url": "https://github.com/nobita6986/new-crm/actions/runs/45953929696/job/140360408493",
+          "started_at": "2026-11-27T06:58:52Z",
+          "completed_at": "2026-11-27T06:58:58Z"
+        }
+      ],
+      "scope": "INTEGRATION_6cf028e_CHECKS_SEE_ARTIFACT_IMAGE_BINDING"
+    }
+  ],
+  "artifacts": [
+    {
+      "artifact_id": 15179146880,
+      "run_id": 45955303485,
+      "name": "p4-batch2-g06-g09-45955303485",
+      "zip_sha256": "0dce6f1f5adfa8de3676099a3896f59275183ee9b2798f08ee6dffceea92417f",
+      "github_api_digest": "sha256:0dce6f1f5adfa8de3676099a3896f59275183ee9b2798f08ee6dffceea92417f",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15178866237,
+      "run_id": 45955303485,
+      "name": "p4-batch2-g11-g12-45955303485",
+      "zip_sha256": "f1fb50f5ad1eccab8b57096b878a96ff00eb8819fb9d8439dfd65309c589b759",
+      "github_api_digest": "sha256:f1fb50f5ad1eccab8b57096b878a96ff00eb8819fb9d8439dfd65309c589b759",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15178701969,
+      "run_id": 45955303485,
+      "name": "p4-batch2-g13-g17-45955303485",
+      "zip_sha256": "d718a7a8c6a950662a9d5dc149a344f42ab4274938a5717e05fb41eb44f8f53c",
+      "github_api_digest": "sha256:d718a7a8c6a950662a9d5dc149a344f42ab4274938a5717e05fb41eb44f8f53c",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15177753469,
+      "run_id": 45953941451,
+      "name": "p4-live-trivy-freshness-scan-45953941451",
+      "zip_sha256": "997c1c3bc65c121d0c43917be4f42ad9ae9626796a2d9b5026dad731ca5f3eea",
+      "github_api_digest": "sha256:997c1c3bc65c121d0c43917be4f42ad9ae9626796a2d9b5026dad731ca5f3eea",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15177748450,
+      "run_id": 45953941451,
+      "name": "p4-offline-signature-verification-45953941451",
+      "zip_sha256": "029393ce20beb0f63b50872d43ea87906c992afb29cc567acb37bac439a6ded6",
+      "github_api_digest": "sha256:029393ce20beb0f63b50872d43ea87906c992afb29cc567acb37bac439a6ded6",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15179176106,
+      "run_id": 45953937721,
+      "name": "p4-s1-isolated-benchmark-45953937721",
+      "zip_sha256": "ff04b7c5295662d4a0d32586d1d33c8f3c21c4064889ab7f953818563b46f49c",
+      "github_api_digest": "sha256:ff04b7c5295662d4a0d32586d1d33c8f3c21c4064889ab7f953818563b46f49c",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15178578168,
+      "run_id": 45953937721,
+      "name": "p4-ghcr-verify-and-regression-45953937721",
+      "zip_sha256": "f1cda5ff9691362132eecf2c33a7a92380b5abce18928e6718986a35d05060ca",
+      "github_api_digest": "sha256:f1cda5ff9691362132eecf2c33a7a92380b5abce18928e6718986a35d05060ca",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15177669101,
+      "run_id": 45953937721,
+      "name": "p4-ghcr-candidate-bundle-45953937721",
+      "zip_sha256": "1b4a5886fddc40ca47df7c5f0f45dd1dceb08bd419a055084eab93371ffa98ba",
+      "github_api_digest": "sha256:1b4a5886fddc40ca47df7c5f0f45dd1dceb08bd419a055084eab93371ffa98ba",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15179110396,
+      "run_id": 45953933914,
+      "name": "worker-care-integration-evidence-45953933914",
+      "zip_sha256": "dc9376e116ae62d1fbedb6a57f7c0f3b2656824d5e742ceb5286cf616d1f5f93",
+      "github_api_digest": "sha256:dc9376e116ae62d1fbedb6a57f7c0f3b2656824d5e742ceb5286cf616d1f5f93",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15178300652,
+      "run_id": 45953933914,
+      "name": "worker-care-static-and-linux-bootstrap-45953933914",
+      "zip_sha256": "99ff9a5a8046b6c0a81418366754a28801ebf52b9d70a5a3a9f7d31b8fdca021",
+      "github_api_digest": "sha256:99ff9a5a8046b6c0a81418366754a28801ebf52b9d70a5a3a9f7d31b8fdca021",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15179005104,
+      "run_id": 45953929696,
+      "name": "p4-cross-runner-attestation-45953929696",
+      "zip_sha256": "269198a31b3b4e0e04d38cabf35b56a9d6af51db58af1a897b7f040966e9d97c",
+      "github_api_digest": "sha256:269198a31b3b4e0e04d38cabf35b56a9d6af51db58af1a897b7f040966e9d97c",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15178481841,
+      "run_id": 45953929696,
+      "name": "p4-ci-evidence-45953929696",
+      "zip_sha256": "9f9bcf2bfe64659222526bdf4aed3c6147fcab1a5b8eeebb13c173e8062ddb18",
+      "github_api_digest": "sha256:9f9bcf2bfe64659222526bdf4aed3c6147fcab1a5b8eeebb13c173e8062ddb18",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15177922012,
+      "run_id": 45953929696,
+      "name": "p4-static-evidence-45953929696",
+      "zip_sha256": "6069204101d8680c3881a1c24ad96a6a9f83b46c02e445ef8aab9f7f6939e88c",
+      "github_api_digest": "sha256:6069204101d8680c3881a1c24ad96a6a9f83b46c02e445ef8aab9f7f6939e88c",
+      "zip_digest_matches_api": true
+    },
+    {
+      "artifact_id": 15177744730,
+      "run_id": 45953929696,
+      "name": "p4-lock-reproducibility-45953929696",
+      "zip_sha256": "5d737f3c4f094225642ee9998bb8981f497e0dcd87f5937ca27d1fdd9e3fa6f1",
+      "github_api_digest": "sha256:5d737f3c4f094225642ee9998bb8981f497e0dcd87f5937ca27d1fdd9e3fa6f1",
+      "zip_digest_matches_api": true
+    }
+  ],
+  "ci_slo_rules": {
+    "total": 35,
+    "passed": 35,
+    "scope": "EXISTING_MEASUREMENT_PRECHECK_NOT_FORMAL_VPS_ACCEPTANCE"
+  },
+  "formal_owner_approval": false,
+  "deployment_executed": false,
+  "official_key_used": false
+}

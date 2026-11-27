@@ -1,0 +1,23 @@
+{
+  "baseline": {
+    "sha": "3d0c47486c78c09a966a3ea9100c477f53fe6a79",
+    "image": "ghcr.io/nobita6986/crm-cskh@sha256:f76c101b0d102977d3b185da531797c0c10b02bbdd648214fe6cef76525c1d7c",
+    "vps_g18_historical": {
+      "slo_rules_passed": 35,
+      "p4_checks_passed": 11,
+      "scope": "BASELINE_ONLY"
+    }
+  },
+  "integration": {
+    "sha": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+    "image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e",
+    "ci_workflows": 5,
+    "ci_jobs_passed": 14,
+    "ci_slo_rules_passed": 35,
+    "p4_checks_passed": 11,
+    "official_signature_present": false,
+    "owner_slo_approval_present": false,
+    "new_vps_g18_acceptance_present": false
+  },
+  "application_or_deployment_mutation_during_preparation": false
+}
