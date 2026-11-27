@@ -1,0 +1,57 @@
+{
+  "recorded_at_utc": "2026-11-27T09:03:04.045425+00:00",
+  "source_attachments": [
+    {
+      "attachment_id": "d79aa710-8ab8-4088-ad33-058d4dd86718",
+      "role": "T1C v1.84",
+      "sha256": "a3c5ee888b6bdfc53a66d235394f724418ea2ae49ee8e51a90d29765c7ddbac9"
+    },
+    {
+      "attachment_id": "1f4f0901-1ed8-45c9-b04f-dd2449f887f8",
+      "role": "T1A read-only Live inventory",
+      "sha256": "cffdc6379404d7951ee03ac4587a641654fcc021a104b11355cae16b0d8113d6"
+    },
+    {
+      "attachment_id": "d53a6b0c-8279-4521-97d7-09fe5fedf7a8",
+      "role": "T1B review of historical b549ff3",
+      "sha256": "6cf89a8fd3834db39773a518f01201c848e1f1daf0ad33eb5c1ab224a9862d25"
+    }
+  ],
+  "t1c_audit_sha256": "d956cadc61b29492acaa97894697ab0093716eea910fbc1015fd43b6ac59677d",
+  "t1c_ticket_sha256": "bc51f5ebe30d94a6e3a6b743c3be79d2c98b27b23e45b93f5ca7d4213d0486e2",
+  "ticket_version": "1.84",
+  "accepted_candidate": {
+    "source": "6cf028eff4cfd35b5c82ade40358a3bbe22f4273",
+    "image": "ghcr.io/nobita6986/crm-cskh@sha256:6599356cb09a9fa76f284cdc5d23ac2accc91dfdefe3b4161393488d7782e37e"
+  },
+  "authority_source": "../decisions/20261127-owner-authorization/owner-source.md",
+  "approved_decisions_not_to_request_again": [
+    "PR20 then PR19, subject to repository checks/review/protection",
+    "Protected p4-release.yml with exact image source ref; deploy_to_staging=false",
+    "SLO v1.0.0 and Staging Config B+, conditional on resource preflight"
+  ],
+  "still_not_authorized": [
+    "Offline amendment or PR18 merge",
+    "Official key loading/use without designated authorized person and protected channel",
+    "Staging or Production deployment",
+    "Stopping existing UAT",
+    "Clone migration/rollback execution under the current read-only scope"
+  ],
+  "findings": {
+    "F-WC-6CF028E-PR20-LEGACY-P2P3-CHECKS-01": {
+      "status": "OPEN_PARTIAL_REMEDIATION",
+      "coverage_repaired_commit": "4562ecb6b7e7eec3aae7ddf0e48632d899cf09a4",
+      "remaining_issue": "F-P4-LEGACY-DEV-PDF-CSS-SSRF-01: P3 54/56 PASS, two PDF tests fail on DEV runtime",
+      "new_candidate_impacted": "NOT_DEMONSTRATED; same two tests PASS in verified release-image artifact"
+    },
+    "F-WC-6CF028E-LIVE-NMINUS1-AND-TIER3-DB-STATE-01": {
+      "status": "OPEN_DOCUMENTATION_PREPARED_EXECUTION_EVIDENCE_PENDING",
+      "annex": "tier3-live-nminus1-annex.md",
+      "clone_migration_rollback_executed": false,
+      "capacity_cleared": false
+    }
+  },
+  "old_b549ff3_payloads_preserved": true,
+  "new_approval_is_staging_measurement_criteria_only": true,
+  "no_owner_human_signature_created": true
+}
