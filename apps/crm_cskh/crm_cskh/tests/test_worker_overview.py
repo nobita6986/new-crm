@@ -208,79 +208,87 @@ class TestWorkerCareOverview(P2TestCase):
 
 	def test_real_mariadb_sla_obligations_dnc_auto_close_and_cross_tz_followups(self):
 		"""Verify live MariaDB SLA SQL, DNC auto-close via record_attempt, and cross-TZ today callbacks."""
+		from crm_cskh.p3_models import authorized_sla_write
 		from crm_cskh.services import followup as followup_svc
 
 		camp = self.make_campaign(team_scope=self.team_a)
 		self.make_rule(camp, self.staff_b, weight=50, team=self.team_a)
 
 		with mock.patch.object(worker_overview, "is_p3_sla_enabled", return_value=True):
-			base_a = worker_overview.get_overview(self.staff_a)
-			base_sla = base_a["sla"] or {"pending": 0, "overdue": 0}
-			base_dnc = int(base_a["do_not_contact"] or 0)
-
 			wi_sla_open, lead_sla_open = self.make_assigned_work_item(camp, self.staff_a)
 			wi_sla_over, lead_sla_over = self.make_assigned_work_item(camp, self.staff_a)
 			wi_dnc, lead_dnc = self.make_assigned_work_item(camp, self.staff_a)
+
+			base_a = worker_overview.get_overview(self.staff_a)
+			base_sla = base_a["sla"] or {"pending": 0, "overdue": 0}
+			base_dnc = int(base_a["do_not_contact"] or 0)
 
 			now_ts = now_datetime()
 			past_due = add_to_date(now_ts, hours=-3)
 			future_due = add_to_date(now_ts, hours=4)
 
-			# 1. Valid open obligation (pending +1, overdue +0)
-			frappe.get_doc(
-				{
-					"doctype": "CSKH SLA Obligation",
-					"obligation_type": "FIRST_ATTEMPT",
-					"work_item": wi_sla_open,
-					"lead": lead_sla_open,
-					"campaign": camp,
-					"owner_user": self.staff_a,
-					"attribution_status": "authoritative",
-					"status": "open",
-					"started_at": add_to_date(now_ts, hours=-1),
-					"original_due_at": future_due,
-					"effective_due_at": future_due,
-				}
-			).insert(ignore_permissions=True)
-
-			# 2. Breached open obligation (pending +1, overdue +1)
-			frappe.get_doc(
-				{
-					"doctype": "CSKH SLA Obligation",
-					"obligation_type": "FIRST_ATTEMPT",
-					"work_item": wi_sla_over,
-					"lead": lead_sla_over,
-					"campaign": camp,
-					"owner_user": self.staff_a,
-					"attribution_status": "authoritative",
-					"status": "breached_open",
-					"started_at": add_to_date(now_ts, hours=-5),
-					"original_due_at": past_due,
-					"effective_due_at": past_due,
-				}
-			).insert(ignore_permissions=True)
-
-			# 3. Paused, informational_only, and mismatched-owner obligations MUST be excluded
-			for extra_flags in (
-				{"is_paused": 1, "owner_user": self.staff_a},
-				{"informational_only": 1, "owner_user": self.staff_a},
-				{"owner_user": self.staff_b},
-			):
+			with authorized_sla_write():
+				# 1. Valid open obligation (pending +1, overdue +0)
 				frappe.get_doc(
 					{
 						"doctype": "CSKH SLA Obligation",
-						"obligation_type": "FIRST_CONNECTED",
+						"obligation_type": "FIRST_ATTEMPT",
 						"work_item": wi_sla_open,
 						"lead": lead_sla_open,
 						"campaign": camp,
+						"owner_user": self.staff_a,
 						"attribution_status": "authoritative",
 						"status": "open",
-						"started_at": add_to_date(now_ts, hours=-2),
-						"original_due_at": past_due,
-						"effective_due_at": past_due,
-						**extra_flags,
+						"started_at": add_to_date(now_ts, hours=-1),
+						"original_due_at": future_due,
+						"effective_due_at": future_due,
+						"idempotency_key": self.unique_key("ov-sla-open"),
 					}
 				).insert(ignore_permissions=True)
+
+				# 2. Breached open obligation (pending +1, overdue +1)
+				frappe.get_doc(
+					{
+						"doctype": "CSKH SLA Obligation",
+						"obligation_type": "FIRST_ATTEMPT",
+						"work_item": wi_sla_over,
+						"lead": lead_sla_over,
+						"campaign": camp,
+						"owner_user": self.staff_a,
+						"attribution_status": "authoritative",
+						"status": "breached_open",
+						"started_at": add_to_date(now_ts, hours=-5),
+						"original_due_at": past_due,
+						"effective_due_at": past_due,
+						"breached_at": past_due,
+						"idempotency_key": self.unique_key("ov-sla-over"),
+					}
+				).insert(ignore_permissions=True)
+
+				# 3. Paused, informational_only, and mismatched-owner obligations MUST be excluded
+				for idx, extra_flags in enumerate(
+					(
+						{"is_paused": 1, "owner_user": self.staff_a},
+						{"informational_only": 1, "owner_user": self.staff_a},
+						{"owner_user": self.staff_b},
+					)
+				):
+					frappe.get_doc(
+						{
+							"doctype": "CSKH SLA Obligation",
+							"obligation_type": "FIRST_CONNECTED",
+							"work_item": wi_sla_open,
+							"lead": lead_sla_open,
+							"campaign": camp,
+							"attribution_status": "authoritative",
+							"status": "open",
+							"started_at": add_to_date(now_ts, hours=-2),
+							"original_due_at": past_due,
+							"effective_due_at": past_due,
+							"idempotency_key": self.unique_key(f"ov-sla-excl-{idx}"),
+							**extra_flags,
+						}
+					).insert(ignore_permissions=True)
 
 			after_sla_a = worker_overview.get_overview(self.staff_a)
 			self.assertEqual(after_sla_a["sla"]["pending"] - base_sla["pending"], 2)
@@ -294,6 +302,7 @@ class TestWorkerCareOverview(P2TestCase):
 				channel="phone_call",
 				outcome_code="do_not_contact",
 				note="Người lao động yêu cầu ngừng liên hệ thực tế",
+				completion_reason="Người lao động từ chối liên hệ và yêu cầu DNC",
 				idempotency_key=self.unique_key("ov-dnc-att"),
 			)
 			wi_dnc_row = frappe.db.get_value(

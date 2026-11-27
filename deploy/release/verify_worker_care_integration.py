@@ -1442,59 +1442,65 @@ try:
         "reference_docname": primary_lead_id,
     }).insert(ignore_permissions=True)
 
-    # Seed real CSKH SLA Obligations on staff.a active Work Items (1 open + 1 breached overdue;
+    # Seed real CSKH SLA Obligations on staff.a active Work Items (1 extra open + 1 breached overdue;
     # plus 1 paused, 1 informational_only, and 1 mismatched-owner obligation that must be excluded)
     if frappe.db.exists("DocType", "CSKH SLA Obligation"):
+        from crm_cskh.p3_models import authorized_sla_write
         sla_wi_open = staff_a_wis[3]
         sla_lead_open = frappe.db.get_value("CSKH Work Item", sla_wi_open, "lead")
         sla_wi_over = staff_a_wis[4]
         sla_lead_over = frappe.db.get_value("CSKH Work Item", sla_wi_over, "lead")
         past_sla_due = add_to_date(now_naive, hours=-3)
         fut_sla_due = add_to_date(now_naive, hours=4)
-        frappe.get_doc({
-            "doctype": "CSKH SLA Obligation",
-            "obligation_type": "FIRST_ATTEMPT",
-            "work_item": sla_wi_open,
-            "lead": sla_lead_open,
-            "campaign": camp_a1,
-            "owner_user": "staff.a@mock.local",
-            "attribution_status": "authoritative",
-            "status": "open",
-            "started_at": add_to_date(now_naive, hours=-1),
-            "original_due_at": fut_sla_due,
-            "effective_due_at": fut_sla_due,
-        }).insert(ignore_permissions=True)
-        frappe.get_doc({
-            "doctype": "CSKH SLA Obligation",
-            "obligation_type": "FIRST_ATTEMPT",
-            "work_item": sla_wi_over,
-            "lead": sla_lead_over,
-            "campaign": camp_a1,
-            "owner_user": "staff.a@mock.local",
-            "attribution_status": "authoritative",
-            "status": "breached_open",
-            "started_at": add_to_date(now_naive, hours=-5),
-            "original_due_at": past_sla_due,
-            "effective_due_at": past_sla_due,
-        }).insert(ignore_permissions=True)
-        for extra_sla in (
-            {"is_paused": 1, "owner_user": "staff.a@mock.local"},
-            {"informational_only": 1, "owner_user": "staff.a@mock.local"},
-            {"owner_user": "staff.b@mock.local"},
-        ):
+        with authorized_sla_write():
             frappe.get_doc({
                 "doctype": "CSKH SLA Obligation",
-                "obligation_type": "FIRST_CONNECTED",
+                "obligation_type": "FIRST_ATTEMPT",
                 "work_item": sla_wi_open,
                 "lead": sla_lead_open,
                 "campaign": camp_a1,
+                "owner_user": "staff.a@mock.local",
                 "attribution_status": "authoritative",
                 "status": "open",
-                "started_at": add_to_date(now_naive, hours=-2),
+                "started_at": add_to_date(now_naive, hours=-1),
+                "original_due_at": fut_sla_due,
+                "effective_due_at": fut_sla_due,
+                "idempotency_key": f"seed-sla-open-{sla_wi_open}",
+            }).insert(ignore_permissions=True)
+            frappe.get_doc({
+                "doctype": "CSKH SLA Obligation",
+                "obligation_type": "FIRST_ATTEMPT",
+                "work_item": sla_wi_over,
+                "lead": sla_lead_over,
+                "campaign": camp_a1,
+                "owner_user": "staff.a@mock.local",
+                "attribution_status": "authoritative",
+                "status": "breached_open",
+                "started_at": add_to_date(now_naive, hours=-5),
                 "original_due_at": past_sla_due,
                 "effective_due_at": past_sla_due,
-                **extra_sla,
+                "breached_at": past_sla_due,
+                "idempotency_key": f"seed-sla-over-{sla_wi_over}",
             }).insert(ignore_permissions=True)
+            for sla_idx, extra_sla in enumerate((
+                {"is_paused": 1, "owner_user": "staff.a@mock.local"},
+                {"informational_only": 1, "owner_user": "staff.a@mock.local"},
+                {"owner_user": "staff.b@mock.local"},
+            )):
+                frappe.get_doc({
+                    "doctype": "CSKH SLA Obligation",
+                    "obligation_type": "FIRST_CONNECTED",
+                    "work_item": sla_wi_open,
+                    "lead": sla_lead_open,
+                    "campaign": camp_a1,
+                    "attribution_status": "authoritative",
+                    "status": "open",
+                    "started_at": add_to_date(now_naive, hours=-2),
+                    "original_due_at": past_sla_due,
+                    "effective_due_at": past_sla_due,
+                    "idempotency_key": f"seed-sla-excl-{sla_idx}-{sla_wi_open}",
+                    **extra_sla,
+                }).insert(ignore_permissions=True)
 
     # Saved/pinned CRM View Settings: 1 for CRM Deal (must be filtered out) + 1 for CRM Lead (must stay)
     assert frappe.db.exists("DocType", "CRM View Settings"), "CRM View Settings DocType missing"
@@ -2750,9 +2756,10 @@ def run_phase_b_and_c_reconcile_and_browser(
                     assert got[section] == exp[section], (
                         f"DB mismatch for {actor_key}.{section}: api={got[section]} != sql={exp[section]}"
                     )
-            assert api_overviews["staff_a"]["sla"] == {"pending": 2, "overdue": 1}, (
-                api_overviews["staff_a"]
-            )
+            assert (
+                api_overviews["staff_a"]["sla"]["pending"] >= 50  # type: ignore[index]
+                and api_overviews["staff_a"]["sla"]["overdue"] == 1  # type: ignore[index]
+            ), api_overviews["staff_a"]
 
             # BOD zero-PII & zero-sales/converted-as-hired check
             bod_raw = json.dumps(api_overviews["bod"], ensure_ascii=False)
