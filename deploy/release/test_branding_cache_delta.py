@@ -106,12 +106,23 @@ def _runtime_harness():
         )
 
     recursive_wrapper._cskh_orig = state.clear_document_cache
+    recursive_wrapper._cskh_cache_wrapped = True
     frappe.clear_document_cache = recursive_wrapper
     utils = types.ModuleType("frappe.utils")
     utils.cint = lambda value=0: int(value or 0)
     renderer = types.ModuleType("crm_cskh.www.cskh_renderer")
     renderer.install_template_page_fastpath = lambda: None
     modules = {"frappe": frappe, "frappe.utils": utils, renderer.__name__: renderer}
+    for blocked in (
+        "frappe.database",
+        "frappe.database.database",
+        "frappe.model",
+        "frappe.model.base_document",
+        "frappe.model.document",
+        "frappe.website",
+        "frappe.website.utils",
+    ):
+        modules[blocked] = None
     for name in ("crm_cskh", "crm_cskh.www"):
         modules[name] = types.ModuleType(name)
         modules[name].__path__ = []
