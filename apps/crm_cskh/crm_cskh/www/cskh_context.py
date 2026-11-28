@@ -93,50 +93,35 @@ NAV_ITEMS = (
 
 NAV_BY_ROLE = {
 	ROLE_ADMIN: {
+		"my-customers",
+		"callbacks",
+		"progress",
+		"dashboard",
+		"campaigns",
 		"pool",
 		"import",
-		"campaigns",
-		"my-customers",
-		"callbacks",
-		"progress",
-		"dashboard",
+		"settings",
 		"quality-overview",
 		"team-quality",
 		"employee-quality",
 		"campaign-quality",
 		"sla-operations",
 		"scorecard",
-		"settings",
 	},
 	ROLE_BOD: {
-		"pool",
-		"campaigns",
-		"my-customers",
-		"progress",
 		"dashboard",
+		"progress",
+		"campaigns",
+		"pool",
 		"quality-overview",
 		"team-quality",
 		"employee-quality",
 		"campaign-quality",
 		"sla-operations",
-		"settings",
 	},
-	"Sales Manager": {
-		"pool",
-		"campaigns",
-		"my-customers",
-		"callbacks",
-		"progress",
-		"dashboard",
-		"quality-overview",
-		"team-quality",
-		"employee-quality",
-		"campaign-quality",
-		"sla-operations",
-		"scorecard",
-		"settings",
-	},
-	"Sales User": {"my-customers", "callbacks", "progress", "scorecard"},
+	# 2-tier KCN Marketing model: no separate Team Leader UI tier
+	"Sales Manager": {"my-customers", "callbacks", "progress"},
+	"Sales User": {"my-customers", "callbacks", "progress"},
 }
 
 
@@ -207,6 +192,15 @@ def has_role_grant(grants, user=None):
 	return bool(runtime_cache.get_roles_set(user) & set(grants))
 
 
+def is_p3_nav_visible():
+	"""Keep sidebar streamlined for KCN Marketing; P3 screens appear in nav only if explicitly opted in."""
+	if not is_p3_enabled():
+		return False
+	conf = getattr(frappe, "conf", None) or {}
+	raw = conf.get("cskh_show_p3_nav") if isinstance(conf, dict) else getattr(conf, "cskh_show_p3_nav", None)
+	return _flag_bool(raw, False)
+
+
 def _visible_keys():
 	"""Navigation keys visible to the actor."""
 	actor_roles = runtime_cache.get_roles_set(frappe.session.user)
@@ -217,7 +211,7 @@ def _visible_keys():
 		for role, allowed in NAV_BY_ROLE.items():
 			if role in actor_roles:
 				keys |= allowed
-	if not is_p3_enabled():
+	if not is_p3_nav_visible():
 		keys -= P3_NAV_KEYS
 	return keys
 
@@ -364,6 +358,7 @@ def build_context(
 		frappe.throw(_("You do not have permission to access this page."), frappe.PermissionError)
 
 	p3_flag = is_p3_enabled()
+	show_p3_nav = p3_flag and is_p3_nav_visible()
 	actor_roles = runtime_cache.get_roles_set(actor)
 	sys_flag = actor == "Administrator" or "System Manager" in actor_roles
 	if sys_flag:
@@ -373,23 +368,18 @@ def build_context(
 		for role, allowed in NAV_BY_ROLE.items():
 			if role in actor_roles:
 				visible |= allowed
-	if not p3_flag:
+	if not show_p3_nav:
 		visible -= P3_NAV_KEYS
 
 	nav_items = [item for item in NAV_ITEMS if item["key"] in visible]
 	p3_subnav = [item for item in nav_items if item.get("phase") == "p3"]
 
 	bod_flag = sys_flag or ROLE_BOD in actor_roles
-	leader_flag = admin_flag or ("Sales Manager" in actor_roles)
+	# 2-tier KCN model: only CRM Admin / System Manager holds management powers in UI
+	leader_flag = admin_flag
 	staff_flag = "Sales User" in actor_roles
 
 	leader_root_team = ""
-	if leader_flag and not admin_flag and actor and actor != "Guest":
-		try:
-			h_node = runtime_cache.get_user_hierarchy_node(actor)
-			leader_root_team = str(h_node["name"]) if h_node else ""
-		except Exception:
-			leader_root_team = ""
 
 	ui_bundle = runtime_cache.get_static_cskh_ui_bundle(LANGUAGE)
 	branding = runtime_cache.get_website_branding()
@@ -414,13 +404,13 @@ def build_context(
 		"leader_root_team": leader_root_team,
 		"pii": not bod_flag or admin_flag,
 		"can_manage_settings": admin_flag,
-		"can_review_correction": admin_flag or leader_flag,
-		"p3_enabled": p3_flag,
+		"can_review_correction": admin_flag,
+		"p3_enabled": show_p3_nav,
 		"qa_enabled": is_qa_enabled(),
-		"can_recompute_kpi": admin_flag or leader_flag,
-		"can_waive_sla": admin_flag or leader_flag,
+		"can_recompute_kpi": admin_flag,
+		"can_waive_sla": admin_flag,
 		"can_export_report": sys_flag or bool(actor_roles & READ_ROLES),
-		"can_open_crm_app": sys_flag or bool(actor_roles & {"Sales Manager", "Sales User"}),
+		"can_open_crm_app": sys_flag,
 	}
 	context.cskh_timezone = timezone_context(actor)
 	context.cskh_error_codes = ui_bundle["error_codes"]

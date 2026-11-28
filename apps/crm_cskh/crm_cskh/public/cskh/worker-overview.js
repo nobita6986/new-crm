@@ -9,12 +9,271 @@
 	const status = document.getElementById('care-status')
 	const dataWrap = document.getElementById('care-data')
 	const refresh = document.getElementById('care-refresh')
+	const acceptDateInput = document.getElementById('care-accept-date')
+	const exportCsvBtn = document.getElementById('care-export-csv')
 	const caps = cskh.capabilities() || {}
 	const STALE_AFTER_MS = 300000
 	let loadedAt = 0
 	let lastAsOfText = ''
 	let failed = false
 	let busy = false
+
+	function renderPhonePills(natPhone) {
+		if (!caps.pii || !natPhone) return null
+		const formatted = cskh.formatPhone ? cskh.formatPhone(natPhone) : natPhone
+		const telHref = cskh.telUrl ? cskh.telUrl(natPhone) : ''
+		const zaloHref = cskh.zaloUrl ? cskh.zaloUrl(natPhone) : ''
+		return el('div', { class: 'cskh-phone-bar', style: 'margin-top: 4px;' }, [
+			el('span', { class: 'cskh-phone-num', text: formatted }),
+			telHref ? el('a', { class: 'cskh-phone-link is-call', href: telHref, text: t('Call') }) : null,
+			zaloHref
+				? el('a', {
+						class: 'cskh-phone-link is-zalo',
+						href: zaloHref,
+						target: '_blank',
+						rel: 'noopener noreferrer',
+						text: 'Zalo',
+					})
+				: null,
+		])
+	}
+
+	async function triggerQuickProgress(workItem, actionType, extra) {
+		const alertBox = document.getElementById('care-accept-alert')
+		cskh.clear(alertBox)
+		try {
+			const payload = Object.assign(
+				{
+					work_item: workItem,
+					action_type: actionType,
+					channel: 'zalo',
+					idempotency_key: 'ui-ov-' + workItem + '-' + actionType + '-' + cskh.uuid(),
+				},
+				extra || {}
+			)
+			const res = await cskh.post('crm_cskh.api.worker_intake.record_progress', payload)
+			if (res && res.completed_7_days) {
+				cskh.toast('success', t('Completed 7/7 workdays — worker care closed as accepted!'))
+			} else {
+				cskh.toast('success', t('Worker KCN milestone updated.'))
+			}
+			await load()
+		} catch (err) {
+			cskh.renderError(alertBox, err)
+		}
+	}
+
+	function renderAcceptanceBoard(board) {
+		const card = document.getElementById('care-acceptance-card')
+		const summaryBox = document.getElementById('care-accept-summary')
+		const listsBox = document.getElementById('care-accept-lists')
+		const staffBox = document.getElementById('care-accept-staff')
+		if (!card || !summaryBox) return
+		cskh.clear(summaryBox)
+		cskh.clear(listsBox)
+		cskh.clear(staffBox)
+
+		if (!board || !board.summary) {
+			card.hidden = true
+			return
+		}
+		card.hidden = false
+		if (acceptDateInput && !acceptDateInput.value && board.date) {
+			acceptDateInput.value = board.date
+		}
+
+		const s = board.summary || {}
+		const kpis = [
+			[t('Self-sourced today'), s.self_sourced_period],
+			[t('Protected in care'), s.active_protected],
+			[t('Interview due today'), s.interview_due_today],
+			[t('Working (1-6 days)'), s.working_1_to_6],
+			[t('Unlogged workday today'), s.workday_unlogged_today],
+			[t('Completed 7 workdays today'), s.completed_7_days_today],
+		]
+		kpis.forEach(function (pair) {
+			summaryBox.appendChild(
+				el('div', { class: 'cskh-metric' }, [
+					el('div', { class: 'label', text: pair[0] }),
+					el('div', { class: 'value', text: number(pair[1] || 0) }),
+				])
+			)
+		})
+
+		if (board.allow_pii && caps.pii) {
+			listsBox.hidden = false
+			const ivCol = el('div', { class: 'cskh-panel' }, [
+				el('h3', { style: 'margin: 0 0 8px; font-size: 14.5px;', text: t('Interviews to confirm by end of day') }),
+			])
+			const ivItems = board.pending_interviews || []
+			if (!ivItems.length) {
+				ivCol.appendChild(el('p', { class: 'care-caption', text: t('No pending KCN interviews for today.') }))
+			} else {
+				const listNode = el('div', { class: 'cskh-accept-list' })
+				ivItems.forEach(function (row) {
+					const kcn = [row.factory, row.industrial_zone].filter(Boolean).join(' · ')
+					listNode.appendChild(
+						el('div', { class: 'cskh-accept-item' }, [
+							el('div', {}, [
+								el('strong', { text: row.display_name || row.lead }),
+								kcn ? el('div', { class: 'care-caption', text: kcn }) : null,
+								renderPhonePills(row.national_phone),
+							]),
+							el('div', { class: 'cskh-row-actions' }, [
+								el('button', {
+									type: 'button',
+									class: 'cskh-btn is-success is-small',
+									text: t('Started working (Day 1)'),
+									onclick: function () {
+										triggerQuickProgress(row.work_item, 'onboard', { workdays_completed: 1 })
+									},
+								}),
+								el('button', {
+									type: 'button',
+									class: 'cskh-btn is-small',
+									text: t('Missed interview'),
+									onclick: function () {
+										triggerQuickProgress(row.work_item, 'interview_no_show')
+									},
+								}),
+								el('button', {
+									type: 'button',
+									class: 'cskh-btn is-small',
+									text: t('Switch factory'),
+									onclick: function () {
+										triggerQuickProgress(row.work_item, 'switch_factory')
+									},
+								}),
+							]),
+						])
+					)
+				})
+				ivCol.appendChild(listNode)
+			}
+
+			const wdCol = el('div', { class: 'cskh-panel' }, [
+				el('h3', { style: 'margin: 0 0 8px; font-size: 14.5px;', text: t('Workers in days 1-6 — daily workday check-in') }),
+			])
+			const wdItems = board.pending_workdays || []
+			if (!wdItems.length) {
+				wdCol.appendChild(el('p', { class: 'care-caption', text: t('No workers currently in days 1-6.') }))
+			} else {
+				const wdList = el('div', { class: 'cskh-accept-list' })
+				wdItems.forEach(function (row) {
+					const kcn = [row.factory, row.industrial_zone].filter(Boolean).join(' · ')
+					const progressTxt =
+						(row.workdays_completed || 0) + '/' + (row.target_workdays || 7) + ' ' + t('workdays')
+					wdList.appendChild(
+						el('div', { class: 'cskh-accept-item' + (row.logged_today ? ' is-done' : '') }, [
+							el('div', {}, [
+								el('strong', { text: row.display_name || row.lead }),
+								el('div', {
+									class: 'care-caption',
+									text: [progressTxt, kcn].filter(Boolean).join(' · '),
+								}),
+								renderPhonePills(row.national_phone),
+							]),
+							el('div', { class: 'cskh-row-actions' }, [
+								row.logged_today
+									? el('span', { class: cskh.stateBadge('completed_7_days'), text: t('Logged today') })
+									: el('button', {
+											type: 'button',
+											class: 'cskh-btn is-success is-small',
+											text:
+												t('+1 Workday') +
+												' (' +
+												Math.min((row.workdays_completed || 0) + 1, row.target_workdays || 7) +
+												'/' +
+												(row.target_workdays || 7) +
+												')',
+											onclick: function () {
+												triggerQuickProgress(row.work_item, 'checkin_workday', { increment_workday: 1 })
+											},
+										}),
+								el('a', {
+									class: 'cskh-btn is-small',
+									href: '/cskh/work-item?id=' + encodeURIComponent(row.work_item),
+									text: t('Care workspace'),
+								}),
+							]),
+						])
+					)
+				})
+				wdCol.appendChild(wdList)
+			}
+
+			listsBox.appendChild(ivCol)
+			listsBox.appendChild(wdCol)
+
+			const done7 = board.completed_7d_items || []
+			if (done7.length) {
+				const c7Col = el('div', { class: 'cskh-panel' }, [
+					el('h3', { style: 'margin: 0 0 8px; font-size: 14.5px;', text: t('Accepted — completed 7 workdays') }),
+				])
+				const c7List = el('div', { class: 'cskh-accept-list' })
+				done7.forEach(function (row) {
+					const kcn = [row.factory, row.industrial_zone].filter(Boolean).join(' · ')
+					c7List.appendChild(
+						el('div', { class: 'cskh-accept-item is-done' }, [
+							el('div', {}, [
+								el('strong', { text: row.display_name || row.lead }),
+								el('div', {
+									class: 'care-caption',
+									text: [kcn, row.owner_user].filter(Boolean).join(' · '),
+								}),
+							]),
+							el('span', { class: cskh.stateBadge('completed_7_days'), text: t('Completed 7 workdays') }),
+						])
+					)
+				})
+				c7Col.appendChild(c7List)
+				listsBox.appendChild(c7Col)
+			}
+		} else {
+			listsBox.hidden = true
+		}
+
+		const staffRows = board.per_staff || []
+		if (staffRows.length) {
+			staffBox.hidden = false
+			const tbl = el('table', { class: 'cskh-table' }, [
+				el('thead', {}, [
+					el('tr', {}, [
+						el('th', { text: t('Marketing staff') }),
+						el('th', { class: 'num', text: t('Self-sourced today') }),
+						el('th', { class: 'num', text: t('Protected in care') }),
+						el('th', { class: 'num', text: t('Interview scheduled') }),
+						el('th', { class: 'num', text: t('Working (1-6 days)') }),
+						el('th', { class: 'num', text: t('Completed 7 workdays today') }),
+						el('th', { class: 'num', text: t('Dropped before 7 days') }),
+					]),
+				]),
+			])
+			const tb = el('tbody')
+			staffRows.forEach(function (r) {
+				tb.appendChild(
+					el('tr', {}, [
+						el('td', { text: (r.full_name && r.full_name !== r.user ? r.full_name + ' (' + r.user + ')' : r.user) }),
+						el('td', { class: 'num', text: number(r.self_sourced_period) }),
+						el('td', { class: 'num', text: number(r.active_protected) }),
+						el('td', { class: 'num', text: number(r.interview_scheduled) }),
+						el('td', { class: 'num', text: number(r.working_1_to_6) }),
+						el('td', { class: 'num', text: number(r.completed_7_days_today) }),
+						el('td', { class: 'num', text: number(r.dropped_period) }),
+					])
+				)
+			})
+			tbl.appendChild(tb)
+			staffBox.appendChild(
+				el('div', { class: 'cskh-panel' }, [
+					el('h3', { style: 'margin: 0 0 8px; font-size: 14.5px;', text: t('End-of-day acceptance by Marketing staff') }),
+					el('div', { class: 'cskh-table-scroll' }, [tbl]),
+				])
+			)
+		} else {
+			staffBox.hidden = true
+		}
+	}
 
 	function formatTemplate(template, values) {
 		let out = String(template || '')
@@ -535,7 +794,20 @@
 				invalidErr.code = 'INVALID_REQUEST'
 				throw invalidErr
 			}
+			let board = null
+			if (document.getElementById('care-acceptance-card')) {
+				const targetDate = acceptDateInput && acceptDateInput.value ? acceptDateInput.value : ''
+				board = await cskh
+					.get(
+						'crm_cskh.api.worker_intake.acceptance_board',
+						targetDate ? { target_date: targetDate } : {}
+					)
+					.catch(function () {
+						return null
+					})
+			}
 			render(data)
+			renderAcceptanceBoard(board)
 			loadedAt = Date.now()
 			failed = false
 			renderNotice('', '')
@@ -566,6 +838,29 @@
 	}
 
 	refresh.addEventListener('click', load)
+	if (acceptDateInput) {
+		acceptDateInput.addEventListener('change', load)
+	}
+	if (exportCsvBtn) {
+		exportCsvBtn.addEventListener('click', async function () {
+			exportCsvBtn.disabled = true
+			try {
+				const dVal = acceptDateInput && acceptDateInput.value ? acceptDateInput.value : ''
+				const csvRes = await cskh.get(
+					'crm_cskh.api.worker_intake.export_acceptance_csv',
+					dVal ? { date_from: dVal, date_to: dVal } : {}
+				)
+				if (csvRes && csvRes.csv_content) {
+					cskh.downloadCsv(csvRes.filename, csvRes.csv_content)
+					cskh.toast('success', t('Acceptance CSV downloaded.'))
+				}
+			} catch (err) {
+				cskh.renderError(document.getElementById('care-accept-alert'), err)
+			} finally {
+				exportCsvBtn.disabled = false
+			}
+		})
+	}
 	window.setInterval(checkStaleSnapshot, 30000)
 	document.addEventListener('visibilitychange', function () {
 		if (!document.hidden) checkStaleSnapshot()

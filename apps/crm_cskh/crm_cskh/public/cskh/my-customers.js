@@ -46,8 +46,10 @@
 	let assignees = []
 	let canManage = false
 	let cachedOutcomes = null
+	let intakeCampaigns = []
 	let searchDebounceTimer = null
 	let scopeOwnerDebounceTimer = null
+	let phoneCheckTimer = null
 
 	function stateLabel(value) {
 		const map = {
@@ -59,6 +61,65 @@
 			closed: cskh.t('Completed care'),
 		}
 		return map[value] || cskh.workItemStateLabel(value) || '—'
+	}
+
+	function renderWorkdayBar(doneDays, targetDays) {
+		const total = Math.max(1, Math.min(14, Number(targetDays || 7)))
+		const done = Math.max(0, Math.min(total, Number(doneDays || 0)))
+		const dots = []
+		for (let i = 0; i < total; i += 1) {
+			dots.push(cskh.el('span', { class: 'cskh-workday-dot' + (i < done ? ' is-done' : '') }))
+		}
+		return cskh.el('div', { class: 'cskh-workday-wrap' }, [
+			cskh.el('div', { class: 'cskh-workday-dots' }, dots),
+			cskh.el('span', {
+				class: 'cskh-workday-caption',
+				text: done + '/' + Number(targetDays || 7) + ' ' + cskh.t('workdays'),
+			}),
+		])
+	}
+
+	function renderPhoneActionCell(rawPhone, nationalPhoneVal) {
+		const effPhone = nationalPhoneVal || rawPhone || ''
+		if (!allowPii || !effPhone) {
+			return cskh.el('span', { class: 'cskh-mono', text: '—' })
+		}
+		const formatted = cskh.formatPhone ? cskh.formatPhone(effPhone) : effPhone
+		const telHref = cskh.telUrl ? cskh.telUrl(effPhone) : ''
+		const zaloHref = cskh.zaloUrl ? cskh.zaloUrl(effPhone) : ''
+		const nodes = [cskh.el('span', { class: 'cskh-phone-num', text: formatted })]
+		if (telHref) {
+			nodes.push(
+				cskh.el('a', {
+					class: 'cskh-phone-link is-call',
+					href: telHref,
+					text: cskh.t('Call'),
+				})
+			)
+		}
+		if (zaloHref) {
+			nodes.push(
+				cskh.el('a', {
+					class: 'cskh-phone-link is-zalo',
+					href: zaloHref,
+					target: '_blank',
+					rel: 'noopener noreferrer',
+					text: 'Zalo',
+				})
+			)
+		}
+		nodes.push(
+			cskh.el('a', {
+				class: 'cskh-phone-link',
+				href: '#copy-phone',
+				text: cskh.t('Copy'),
+				onclick: function (ev) {
+					ev.preventDefault()
+					cskh.copyPhone(effPhone)
+				},
+			})
+		)
+		return cskh.el('div', { class: 'cskh-phone-bar' }, nodes)
 	}
 
 	function syncFilterChips(selected) {
@@ -75,11 +136,41 @@
 	/* Cell renderers                                                      */
 	/* ------------------------------------------------------------------ */
 
+	function renderWorkerNameCell(item) {
+		const nameText = (allowPii && item.display_name) || item.lead
+		const metaParts = []
+		if (allowPii && item.birth_year) metaParts.push(String(item.birth_year))
+		if (allowPii && item.gender) metaParts.push(item.gender)
+		if (allowPii && item.current_area) metaParts.push(item.current_area)
+		if (item.source_type === 'self_sourced') metaParts.push(cskh.t('Self-sourced'))
+		return cskh.el('div', {}, [
+			cskh.el('div', { style: 'font-weight: 600;', text: nameText }),
+			metaParts.length
+				? cskh.el('div', { class: 'cskh-worker-submeta', text: metaParts.join(' · ') })
+				: null,
+		])
+	}
+
+	function renderFactoryCell(item) {
+		const fac = item.target_factory || ''
+		const iz = item.target_industrial_zone || ''
+		const kcn = [fac, iz].filter(Boolean).join(' · ')
+		const campText = item.campaign_title || item.campaign_code || item.campaign || '—'
+		if (kcn) {
+			return cskh.el('div', {}, [
+				cskh.el('div', { style: 'font-weight: 500;', text: kcn }),
+				cskh.el('div', { class: 'cskh-muted', style: 'font-size: 11.5px;', text: campText }),
+			])
+		}
+		return cskh.el('span', { text: campText })
+	}
+
 	function renderCareStatusCell(item) {
+		const stage = item.worker_stage || 'new_contact'
 		const badges = [
 			cskh.el('span', {
-				class: cskh.stateBadge(item.work_item_status),
-				text: stateLabel(item.work_item_status),
+				class: cskh.stateBadge(stage),
+				text: cskh.workerStageLabel ? cskh.workerStageLabel(stage) : stateLabel(item.work_item_status),
 			}),
 		]
 		if (item.do_not_contact) {
@@ -89,13 +180,18 @@
 					text: cskh.t('Do not contact'),
 				})
 			)
-		} else if (item.work_item_status !== 'closed' && item.attempt_count === 0) {
+		}
+		if (stage === 'interview_scheduled' && item.interview_date) {
 			badges.push(
 				cskh.el('span', {
-					class: cskh.stateBadge('not_contacted'),
-					text: cskh.t('Not contacted'),
+					class: 'cskh-muted',
+					style: 'font-size: 11.5px;',
+					text: cskh.t('Interview') + ': ' + cskh.formatDateOnly(item.interview_date),
 				})
 			)
+		}
+		if (stage === 'working_care' || stage === 'completed_7_days' || Number(item.workdays_completed || 0) > 0) {
+			badges.push(renderWorkdayBar(item.workdays_completed, item.target_workdays || 7))
 		}
 		return cskh.el('div', { class: 'cskh-badge-stack' }, badges)
 	}
@@ -197,13 +293,31 @@
 				const quickAnchor = cskh.el('a', {
 					class: 'cskh-btn is-primary is-small',
 					href: '#quick-record-' + encodeURIComponent(item.work_item),
-					text: cskh.t('Record result'),
+					text: cskh.t('Update KCN progress'),
 					onclick: function (ev) {
 						ev.preventDefault()
 						openQuickRecord(rowItem)
 					},
 				})
 				actions.push(quickAnchor)
+			}
+			if (
+				allowPii &&
+				item.worker_stage === 'working_care' &&
+				item.capabilities &&
+				item.capabilities.can_record_progress
+			) {
+				actions.push(
+					cskh.el('a', {
+						class: 'cskh-btn is-success is-small',
+						href: '#checkin-' + encodeURIComponent(item.work_item),
+						text: cskh.t('+1 Workday'),
+						onclick: function (ev) {
+							ev.preventDefault()
+							quickCheckinWorkday(rowItem)
+						},
+					})
+				)
 			}
 			if (allowPii && item.work_item) {
 				actions.push(
@@ -224,36 +338,12 @@
 				)
 			}
 
-			const phoneCellChildren = [
-				cskh.el('span', {
-					class: 'cskh-mono',
-					text: allowPii && item.phone ? cskh.maskPhone(item.phone) : '—',
-				}),
-			]
-			if (allowPii && item.phone) {
-				phoneCellChildren.push(
-					cskh.el('a', {
-						class: 'cskh-btn is-small',
-						style: 'margin-left: 6px; padding: 2px 6px; font-size: 11px;',
-						href: '#copy-phone',
-						text: cskh.t('Copy phone number'),
-						onclick: function (ev) {
-							ev.preventDefault()
-							cskh.copyPhone(item.phone)
-						},
-					})
-				)
-			}
-
 			rows.appendChild(
 				cskh.el('tr', {}, [
-					cskh.el('td', { text: (allowPii && item.display_name) || item.lead }),
-					cskh.el('td', {}, phoneCellChildren),
-					cskh.el('td', {
-						text: item.campaign_title || item.campaign_code || item.campaign || '—',
-					}),
+					cskh.el('td', {}, [renderWorkerNameCell(item)]),
+					cskh.el('td', {}, [renderPhoneActionCell(item.phone, item.national_phone)]),
+					cskh.el('td', {}, [renderFactoryCell(item)]),
 					cskh.el('td', {}, [renderCareStatusCell(item)]),
-					cskh.el('td', { text: cskh.formatDate(item.last_attempt_at) }),
 					cskh.el('td', {}, [renderLastOutcomeCell(item)]),
 					cskh.el('td', { class: 'cskh-mono', text: cskh.formatNumber(item.attempt_count) }),
 					cskh.el('td', {}, [renderNextCallbackCell(item)]),
@@ -262,6 +352,265 @@
 			)
 		})
 		table.hidden = false
+	}
+
+	async function quickCheckinWorkday(item) {
+		const alertBox = document.getElementById('mine-alert')
+		cskh.clear(alertBox)
+		try {
+			const res = await cskhP2Api.recordWorkerProgress({
+				work_item: item.work_item,
+				action_type: 'checkin_workday',
+				increment_workday: 1,
+				channel: 'zalo',
+				idempotency_key: 'ui-wday-' + item.work_item + '-' + cskh.dateKeyInTz(cskh.serverNow()),
+			})
+			if (res && res.completed_7_days) {
+				cskh.toast('success', cskh.t('Completed 7/7 workdays — worker care closed as accepted!'))
+			} else {
+				cskh.toast(
+					'success',
+					cskh.t('Logged workday') +
+						': ' +
+						(res.workdays_completed || 1) +
+						'/' +
+						(res.target_workdays || 7)
+				)
+			}
+			await load()
+			await loadScope()
+		} catch (error) {
+			cskh.renderError(alertBox, error)
+		}
+	}
+
+	function buildKcnMilestoneSection(wi, onDone) {
+		const msgBox = cskh.el('div', { 'aria-live': 'polite' })
+		const todayIso = cskh.dateKeyInTz(cskh.serverNow())
+		const ivDateInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'date',
+			value: wi.interview_date || todayIso,
+		})
+		const facInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.target_factory || '',
+			placeholder: cskh.t('Factory name'),
+		})
+		const izInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.target_industrial_zone || '',
+			placeholder: cskh.t('Industrial zone'),
+		})
+		const noteInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			style: 'min-width: 220px;',
+			placeholder: cskh.t('Milestone note / dropout reason...'),
+		})
+
+		async function fireProgress(actionType, extra) {
+			cskh.clear(msgBox)
+			if (actionType === 'dropout' && !noteInput.value.trim()) {
+				cskh.alert(msgBox, 'warning', cskh.t('Please enter the reason the worker dropped out early.'))
+				return
+			}
+			try {
+				const payload = Object.assign(
+					{
+						work_item: wi.work_item_id || wi.work_item,
+						action_type: actionType,
+						channel: 'zalo',
+						interview_date: ivDateInput.value || null,
+						target_factory: facInput.value.trim() || null,
+						target_industrial_zone: izInput.value.trim() || null,
+						note: noteInput.value.trim() || null,
+						dropout_reason: actionType === 'dropout' ? noteInput.value.trim() : null,
+						idempotency_key: 'ui-kcn-' + cskh.uuid(),
+					},
+					extra || {}
+				)
+				const res = await cskhP2Api.recordWorkerProgress(payload)
+				if (res && res.completed_7_days) {
+					cskh.toast('success', cskh.t('Completed 7/7 workdays — worker care closed as accepted!'))
+				} else {
+					cskh.toast('success', cskh.t('Worker KCN milestone updated.'))
+				}
+				if (typeof onDone === 'function') await onDone()
+			} catch (err) {
+				cskh.renderError(msgBox, err)
+			}
+		}
+
+		const profName = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.display_name || '',
+			placeholder: cskh.t('Worker full name'),
+		})
+		const profYear = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'number',
+			min: '1960',
+			max: '2012',
+			value: wi.birth_year ? String(wi.birth_year) : '',
+			placeholder: '2000',
+		})
+		const profArea = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.current_area || '',
+			placeholder: cskh.t('Current area / boarding house'),
+		})
+		const profTags = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.worker_tags || '',
+			placeholder: cskh.t('Screening notes (shift, tattoos, skills, transport...)'),
+		})
+		const saveProfBtn = cskh.el('button', {
+			type: 'button',
+			class: 'cskh-btn is-small is-primary',
+			text: cskh.t('Save worker profile'),
+			onclick: async function () {
+				saveProfBtn.disabled = true
+				try {
+					await cskhP2Api.updateWorkerProfile({
+						work_item: wi.work_item_id || wi.work_item,
+						full_name: profName.value.trim() || null,
+						birth_year: profYear.value ? Number(profYear.value) : '',
+						current_area: profArea.value.trim(),
+						worker_tags: profTags.value.trim(),
+						target_factory: facInput.value.trim(),
+						target_industrial_zone: izInput.value.trim(),
+					})
+					cskh.toast('success', cskh.t('Worker profile saved.'))
+					if (typeof onDone === 'function') await onDone()
+				} catch (err) {
+					cskh.renderError(msgBox, err)
+				} finally {
+					saveProfBtn.disabled = false
+				}
+			},
+		})
+
+		return cskh.el('div', { class: 'cskh-panel', style: 'margin-bottom: 12px;' }, [
+			cskh.el(
+				'div',
+				{ class: 'cskh-actions', style: 'justify-content: space-between; align-items: center;' },
+				[
+					cskh.el('strong', {
+						text:
+							cskh.t('Fast KCN milestone & 7-workday check-in') +
+							' — ' +
+							(wi.display_name || wi.lead),
+					}),
+					renderPhoneActionCell(wi.phone, wi.national_phone),
+				]
+			),
+			msgBox,
+			cskh.el('div', { class: 'cskh-actions', style: 'margin-top: 8px;' }, [
+				cskh.el('label', { class: 'cskh-field', style: 'margin: 0;' }, [
+					cskh.el('span', { text: cskh.t('Interview / onboard date') }),
+					ivDateInput,
+				]),
+				cskh.el('label', { class: 'cskh-field', style: 'margin: 0;' }, [
+					cskh.el('span', { text: cskh.t('Factory name') }),
+					facInput,
+				]),
+				cskh.el('label', { class: 'cskh-field', style: 'margin: 0;' }, [
+					cskh.el('span', { text: cskh.t('Industrial zone') }),
+					izInput,
+				]),
+				cskh.el('label', { class: 'cskh-field', style: 'margin: 0; flex: 1;' }, [
+					cskh.el('span', { text: cskh.t('Contact note') }),
+					noteInput,
+				]),
+			]),
+			cskh.el('div', { class: 'cskh-kcn-quick-bar' }, [
+				cskh.el('button', {
+					type: 'button',
+					class: 'cskh-btn is-primary is-small',
+					text: cskh.t('Schedule KCN interview'),
+					onclick: function () {
+						fireProgress('schedule_interview')
+					},
+				}),
+				cskh.el('button', {
+					type: 'button',
+					class: 'cskh-btn is-success is-small',
+					text: cskh.t('Started working (Day 1)'),
+					onclick: function () {
+						fireProgress('onboard', { onboard_date: ivDateInput.value || todayIso, workdays_completed: 1 })
+					},
+				}),
+				cskh.el('button', {
+					type: 'button',
+					class: 'cskh-btn is-success is-small',
+					text:
+						cskh.t('+1 Workday') +
+						' (' +
+						Math.min((wi.workdays_completed || 0) + 1, wi.target_workdays || 7) +
+						'/' +
+						(wi.target_workdays || 7) +
+						')',
+					onclick: function () {
+						fireProgress('checkin_workday', { increment_workday: 1 })
+					},
+				}),
+				cskh.el('button', {
+					type: 'button',
+					class: 'cskh-btn is-small',
+					text: cskh.t('Missed interview'),
+					onclick: function () {
+						fireProgress('interview_no_show')
+					},
+				}),
+				cskh.el('button', {
+					type: 'button',
+					class: 'cskh-btn is-small',
+					text: cskh.t('Switch factory'),
+					onclick: function () {
+						fireProgress('switch_factory')
+					},
+				}),
+				cskh.el('button', {
+					type: 'button',
+					class: 'cskh-btn is-danger is-small',
+					text: cskh.t('Dropped before 7 days'),
+					onclick: function () {
+						fireProgress('dropout', { close_after_dropout: 1 })
+					},
+				}),
+			]),
+			cskh.el('details', { style: 'margin-top: 10px;' }, [
+				cskh.el('summary', {
+					style: 'cursor: pointer; font-weight: 600; font-size: 12.5px; color: var(--cskh-primary);',
+					text: cskh.t('Edit worker screening profile (name, birth year, area, notes)'),
+				}),
+				cskh.el('div', { class: 'cskh-form-grid', style: 'margin-top: 8px;' }, [
+					cskh.el('label', { class: 'cskh-field' }, [
+						cskh.el('span', { text: cskh.t('Worker full name') }),
+						profName,
+					]),
+					cskh.el('label', { class: 'cskh-field' }, [
+						cskh.el('span', { text: cskh.t('Birth year') }),
+						profYear,
+					]),
+					cskh.el('label', { class: 'cskh-field' }, [
+						cskh.el('span', { text: cskh.t('Current area / boarding house') }),
+						profArea,
+					]),
+					cskh.el('label', { class: 'cskh-field' }, [
+						cskh.el('span', { text: cskh.t('Screening notes (shift, tattoos, skills, transport...)') }),
+						profTags,
+					]),
+				]),
+				cskh.el('div', { class: 'cskh-actions', style: 'margin-top: 8px;' }, [saveProfBtn]),
+			]),
+		])
 	}
 
 	async function openQuickRecord(item) {
@@ -286,7 +635,21 @@
 			const outList = (res[1] && res[1].items) || []
 			if (!cachedOutcomes && outList.length) cachedOutcomes = outList
 
-			cskhAttemptForm.mount(body, {
+			cskh.clear(body)
+			if (freshWi.capabilities && freshWi.capabilities.can_record_progress) {
+				body.appendChild(
+					buildKcnMilestoneSection(freshWi, async function () {
+						card.hidden = true
+						cskh.clear(body)
+						await load()
+						await loadScope()
+					})
+				)
+			}
+			const attemptHost = cskh.el('div', {})
+			body.appendChild(attemptHost)
+
+			cskhAttemptForm.mount(attemptHost, {
 				workItem: freshWi,
 				outcomes: outList,
 				onCancel: function () {
@@ -570,7 +933,9 @@
 				metric(cskh.t('Contact record'), (allowPii && item.display_name) || item.lead),
 				metric(
 					cskh.t('Phone number'),
-					allowPii && item.phone ? cskh.maskPhone(item.phone) : '—'
+					allowPii && (item.national_phone || item.phone)
+						? cskh.formatPhone(item.national_phone || item.phone)
+						: '—'
 				),
 				metric(cskh.t('Current owner'), item.assigned_to || '—'),
 				metric(cskh.t('Campaign'), item.campaign_title || item.campaign || '—'),
@@ -1008,8 +1373,241 @@
 		load()
 	})
 
+	async function loadIntakeCampaigns() {
+		if (!allowPii) return
+		try {
+			const res = await cskhP2Api.listIntakeCampaigns()
+			intakeCampaigns = (res && res.items) || []
+			const singleSel = document.getElementById('intake-campaign')
+			const bulkSel = document.getElementById('intake-bulk-campaign')
+			const mineSel = document.getElementById('mine-campaign')
+			const knownMine = {}
+			if (mineSel) {
+				Array.from(mineSel.options).forEach(function (o) {
+					if (o.value) knownMine[o.value] = true
+				})
+			}
+			intakeCampaigns.forEach(function (camp) {
+				const kcn = [camp.factory_name, camp.industrial_zone].filter(Boolean).join(' · ')
+				const label = (camp.title || camp.code) + (kcn ? ' (' + kcn + ')' : '')
+				if (singleSel) {
+					singleSel.appendChild(cskh.el('option', { value: camp.campaign, text: label }))
+				}
+				if (bulkSel) {
+					bulkSel.appendChild(cskh.el('option', { value: camp.campaign, text: label }))
+				}
+				if (mineSel && !knownMine[camp.campaign]) {
+					knownMine[camp.campaign] = true
+					mineSel.appendChild(cskh.el('option', { value: camp.campaign, text: label }))
+				}
+			})
+		} catch (_err) {
+			/* optional */
+		}
+	}
+
+	function setupIntakePanel() {
+		const card = document.getElementById('mine-intake-card')
+		const openBtn = document.getElementById('mine-open-intake')
+		const closeBtn = document.getElementById('mine-close-intake')
+		const tabSingle = document.getElementById('intake-tab-single')
+		const tabBulk = document.getElementById('intake-tab-bulk')
+		const singlePane = document.getElementById('intake-single-pane')
+		const bulkPane = document.getElementById('intake-bulk-pane')
+		const phoneInput = document.getElementById('intake-phone')
+		const statusBox = document.getElementById('intake-phone-status')
+		const intakeAlert = document.getElementById('intake-alert')
+		const submitSingle = document.getElementById('intake-submit-single')
+		const submitBulk = document.getElementById('intake-submit-bulk')
+		const bulkResult = document.getElementById('intake-bulk-result')
+		if (!card || !openBtn) return
+
+		openBtn.addEventListener('click', function () {
+			card.hidden = !card.hidden
+			if (!card.hidden && phoneInput) phoneInput.focus()
+		})
+		if (closeBtn) {
+			closeBtn.addEventListener('click', function () {
+				card.hidden = true
+			})
+		}
+		if (tabSingle && tabBulk && singlePane && bulkPane) {
+			tabSingle.addEventListener('click', function () {
+				tabSingle.classList.add('is-active')
+				tabBulk.classList.remove('is-active')
+				singlePane.hidden = false
+				bulkPane.hidden = true
+			})
+			tabBulk.addEventListener('click', function () {
+				tabBulk.classList.add('is-active')
+				tabSingle.classList.remove('is-active')
+				bulkPane.hidden = false
+				singlePane.hidden = true
+			})
+		}
+
+		async function runPhoneCheck(rawVal) {
+			if (!statusBox) return
+			const trimmed = String(rawVal || '').trim()
+			if (trimmed.replace(/\D/g, '').length < 9) {
+				statusBox.hidden = true
+				statusBox.textContent = ''
+				return
+			}
+			try {
+				const check = await cskhP2Api.checkPhone(trimmed)
+				statusBox.hidden = false
+				if (!check || check.valid === false) {
+					statusBox.className = 'cskh-protection-status is-conflict'
+					statusBox.textContent = (check && check.message) || cskh.t('Invalid Vietnamese mobile phone number.')
+				} else if (check.status === 'available' || check.status === 'reusable' || check.status === 'reclaimable') {
+					statusBox.className = 'cskh-protection-status is-ok'
+					statusBox.textContent =
+						'✓ ' +
+						check.national_phone +
+						' — ' +
+						cskh.t('Available: ready to bind ownership protection to you immediately.')
+				} else if (check.status === 'owned_by_me') {
+					statusBox.className = 'cskh-protection-status is-mine'
+					statusBox.textContent =
+						'ℹ ' +
+						check.national_phone +
+						' — ' +
+						cskh.t('Already protected under your account.')
+				} else {
+					statusBox.className = 'cskh-protection-status is-conflict'
+					statusBox.textContent =
+						'✕ ' +
+						check.national_phone +
+						' — ' +
+						cskh.t('Protected by another Marketing staff — duplicate blocked.')
+				}
+			} catch (err) {
+				if (err && err.code === 'INVALID_PHONE') {
+					statusBox.hidden = false
+					statusBox.className = 'cskh-protection-status is-conflict'
+					statusBox.textContent = cskh.t('Invalid Vietnamese mobile phone number.')
+				} else {
+					statusBox.hidden = true
+				}
+			}
+		}
+
+		if (phoneInput) {
+			phoneInput.addEventListener('input', function () {
+				if (phoneCheckTimer) clearTimeout(phoneCheckTimer)
+				phoneCheckTimer = setTimeout(function () {
+					runPhoneCheck(phoneInput.value)
+				}, 260)
+			})
+		}
+
+		if (submitSingle) {
+			submitSingle.addEventListener('click', async function () {
+				cskh.clear(intakeAlert)
+				const rawPhone = phoneInput ? phoneInput.value.trim() : ''
+				if (!rawPhone) {
+					cskh.alert(intakeAlert, 'warning', cskh.t('A phone number is required.'))
+					return
+				}
+				submitSingle.disabled = true
+				try {
+					const res = await cskhP2Api.addWorker({
+						phone: rawPhone,
+						full_name: document.getElementById('intake-name').value.trim() || null,
+						campaign: document.getElementById('intake-campaign').value || null,
+						acquisition_channel: document.getElementById('intake-source').value || 'Zalo',
+						birth_year: document.getElementById('intake-birth-year').value || null,
+						gender: document.getElementById('intake-gender').value || null,
+						current_area: document.getElementById('intake-area').value.trim() || null,
+						id_card_status: document.getElementById('intake-cccd').value || null,
+						worker_tags: document.getElementById('intake-tags').value.trim() || null,
+						request_id: 'ui-intake-' + cskh.uuid(),
+					})
+					cskh.toast(
+						'success',
+						cskh.t('Protected worker phone') + ': ' + (res.national_phone || rawPhone)
+					)
+					phoneInput.value = ''
+					document.getElementById('intake-name').value = ''
+					document.getElementById('intake-birth-year').value = ''
+					document.getElementById('intake-area').value = ''
+					document.getElementById('intake-tags').value = ''
+					if (statusBox) statusBox.hidden = true
+					pager.goto(1)
+					await load()
+					await loadScope()
+				} catch (err) {
+					cskh.renderError(intakeAlert, err)
+				} finally {
+					submitSingle.disabled = false
+				}
+			})
+		}
+
+		if (submitBulk) {
+			submitBulk.addEventListener('click', async function () {
+				cskh.clear(intakeAlert)
+				cskh.clear(bulkResult)
+				const text = document.getElementById('intake-bulk-text').value.trim()
+				if (!text) {
+					cskh.alert(intakeAlert, 'warning', cskh.t('Please paste at least one worker phone line.'))
+					return
+				}
+				submitBulk.disabled = true
+				try {
+					const res = await cskhP2Api.bulkAddWorkers({
+						lines_text: text,
+						campaign: document.getElementById('intake-bulk-campaign').value || null,
+						acquisition_channel: document.getElementById('intake-bulk-source').value || 'Facebook',
+						request_id: 'ui-bulk-intake-' + cskh.uuid(),
+					})
+					const summaryText =
+						cskh.t('Protected') +
+						': ' +
+						cskh.formatNumber(res.protected_count) +
+						' · ' +
+						cskh.t('Already yours') +
+						': ' +
+						cskh.formatNumber(res.already_mine_count) +
+						' · ' +
+						cskh.t('Duplicate / blocked') +
+						': ' +
+						cskh.formatNumber(res.conflict_count) +
+						' · ' +
+						cskh.t('Invalid') +
+						': ' +
+						cskh.formatNumber(res.invalid_count)
+					cskh.alert(bulkResult, res.conflict_count || res.invalid_count ? 'warning' : 'success', summaryText)
+					if (res.protected_count > 0) {
+						document.getElementById('intake-bulk-text').value = ''
+						pager.goto(1)
+						await load()
+						await loadScope()
+					}
+				} catch (err) {
+					cskh.renderError(intakeAlert, err)
+				} finally {
+					submitBulk.disabled = false
+				}
+			})
+		}
+
+		try {
+			const params = new URLSearchParams(window.location.search || '')
+			if (params.get('add') === '1') {
+				card.hidden = false
+				if (phoneInput) phoneInput.focus()
+			}
+		} catch (_err) {
+			/* ignore */
+		}
+	}
+
 	loadAssignees()
 	loadCampaigns()
+	loadIntakeCampaigns()
+	setupIntakePanel()
 	load()
 	loadScope()
 })()

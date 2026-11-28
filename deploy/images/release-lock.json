@@ -4,8 +4,8 @@
   "p4_01_baseline_lock_sha256": "dde3bdaa11180cd103f8d8b064e20411d380135ac88d4a39226b7d451a990962",
   "p4_00_entry_dossier_sha": "be33e6c931337c42b94184b2fe292e094bd51c97",
   "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
-  "apps_tree_sha": "20a3b1ee395f48306ae8acddc868d0d86d1d2a66",
-  "crm_cskh_tree_sha": "f4f2dc9cb4eab67769996d31420bd76fea297ae2",
+  "apps_tree_sha": "067c530d5761d7631609f53fd4eb1f74d7bdcc2e",
+  "crm_cskh_tree_sha": "d28be80dc911c9bfef46cd62c39c5c282d42d123",
   "builder_upstream": {
     "repository": "https://github.com/frappe/frappe_docker.git",
     "tag": "v4.2.0",
@@ -105,8 +105,8 @@
       "declared_app_version": "0.0.1",
       "identity_rule": "Identify release exclusively by source_commit_sha + crm_cskh_tree_sha + OCI image digest (never by 0.0.1 alone).",
       "baseline_main_sha": "467830195358b2431ac772486530ab935887a518",
-      "apps_tree_sha": "20a3b1ee395f48306ae8acddc868d0d86d1d2a66",
-      "crm_cskh_tree_sha": "f4f2dc9cb4eab67769996d31420bd76fea297ae2"
+      "apps_tree_sha": "067c530d5761d7631609f53fd4eb1f74d7bdcc2e",
+      "crm_cskh_tree_sha": "d28be80dc911c9bfef46cd62c39c5c282d42d123"
     }
   },
   "infra_images": {

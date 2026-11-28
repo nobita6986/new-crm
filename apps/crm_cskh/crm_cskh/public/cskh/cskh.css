@@ -1784,3 +1784,214 @@ body:has(#cskh-root) .web-footer {
 		gap: 12px;
 	}
 }
+
+/* ========================================================================== */
+/* KCN Worker Sourcing, 1-Click Zalo/Call & 7-Workday Care Progress           */
+/* ========================================================================== */
+
+.cskh-intake-card {
+	border: 1px solid #c7d2fe;
+	border-left: 4px solid var(--cskh-primary);
+	background: linear-gradient(135deg, #f8faff 0%, #ffffff 65%, #f0fdf4 100%);
+}
+
+.cskh-intake-tabs {
+	display: inline-flex;
+	gap: 6px;
+	padding: 4px;
+	border-radius: 10px;
+	background: #f1f5f9;
+	border: 1px solid var(--cskh-border);
+	margin-bottom: 14px;
+}
+
+.cskh-protection-status {
+	margin: 8px 0 12px;
+	padding: 10px 14px;
+	border-radius: 10px;
+	font-size: 13px;
+	font-weight: 500;
+	line-height: 1.5;
+	border: 1px solid var(--cskh-border);
+	background: var(--cskh-surface-subtle);
+}
+
+.cskh-protection-status.is-ok {
+	border-color: #a7f3d0;
+	background: #ecfdf5;
+	color: #065f46;
+}
+
+.cskh-protection-status.is-conflict {
+	border-color: #fecdd3;
+	background: #fff1f2;
+	color: #9f1239;
+}
+
+.cskh-protection-status.is-mine {
+	border-color: #bfdbfe;
+	background: #eff6ff;
+	color: #1e40af;
+}
+
+.cskh-phone-bar {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 6px;
+}
+
+.cskh-phone-num {
+	font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	font-size: 13.5px;
+	font-weight: 600;
+	color: var(--cskh-text);
+	letter-spacing: 0.01em;
+}
+
+.cskh-phone-link {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	padding: 3px 8px;
+	border-radius: 7px;
+	font-size: 11.5px;
+	font-weight: 600;
+	text-decoration: none !important;
+	border: 1px solid var(--cskh-border);
+	background: #ffffff;
+	color: var(--cskh-text-secondary);
+	transition: all 0.14s ease;
+}
+
+.cskh-phone-link:hover {
+	border-color: var(--cskh-primary-border);
+	color: var(--cskh-primary);
+	background: var(--cskh-primary-soft);
+}
+
+.cskh-phone-link.is-call {
+	border-color: #a7f3d0;
+	background: #ecfdf5;
+	color: #047857;
+}
+
+.cskh-phone-link.is-call:hover {
+	background: #d1fae5;
+}
+
+.cskh-phone-link.is-zalo {
+	border-color: #bae6fd;
+	background: #f0f9ff;
+	color: #0369a1;
+}
+
+.cskh-phone-link.is-zalo:hover {
+	background: #e0f2fe;
+}
+
+.cskh-workday-wrap {
+	display: inline-flex;
+	flex-direction: column;
+	gap: 4px;
+	min-width: 108px;
+}
+
+.cskh-workday-dots {
+	display: inline-flex;
+	gap: 4px;
+	align-items: center;
+}
+
+.cskh-workday-dot {
+	width: 9px;
+	height: 9px;
+	border-radius: 999px;
+	background: #e2e8f0;
+	border: 1px solid #cbd5e1;
+}
+
+.cskh-workday-dot.is-done {
+	background: var(--cskh-success);
+	border-color: #047857;
+}
+
+.cskh-workday-caption {
+	font-size: 11.5px;
+	font-weight: 600;
+	color: var(--cskh-text-secondary);
+	font-variant-numeric: tabular-nums;
+}
+
+.cskh-kcn-quick-bar {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	padding: 12px 14px;
+	border-radius: 12px;
+	background: linear-gradient(90deg, #f8fafc 0%, #eef2ff 100%);
+	border: 1px solid #dbeafe;
+	margin-top: 12px;
+}
+
+.cskh-btn.is-success {
+	background: var(--cskh-success);
+	border-color: var(--cskh-success);
+	color: #ffffff;
+}
+
+.cskh-btn.is-success:hover {
+	background: #047857;
+	border-color: #047857;
+	color: #ffffff;
+}
+
+.cskh-preset-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 5px;
+}
+
+.cskh-chip.is-compact {
+	padding: 3px 9px;
+	font-size: 11.5px;
+}
+
+.cskh-worker-submeta {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin-top: 4px;
+	font-size: 11.5px;
+	color: var(--cskh-muted);
+}
+
+.cskh-accept-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+	gap: 16px;
+	margin-top: 14px;
+}
+
+.cskh-accept-list {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.cskh-accept-item {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: space-between;
+	align-items: center;
+	gap: 10px;
+	padding: 12px 14px;
+	border-radius: 11px;
+	border: 1px solid var(--cskh-border);
+	background: #ffffff;
+}
+
+.cskh-accept-item.is-done {
+	background: #f0fdf4;
+	border-color: #bbf7d0;
+}

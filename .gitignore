@@ -5,7 +5,34 @@
 _tmp_*
 _t1b_ext1_*
 _t1b-*
+_t1a_*
+_t1b_*
+_t1c_*
+_a_*.json
+_art*
+_r[0-9]*.json
+_run*
+_allruns.json
+_scan*.py
+_sync*.py
+_parse*.py
+_fix*.py
+_check*.py
+_count*.py
+_find*.py
+_hist*.py
+_label*.py
+_show*.py
+_verify*.py
+_audit*.py
+_rebuild.py
+_chk.md
+_d.txt
+_remote.md
+p4-ops-reh-*/
 t1b-ext1-*.json
+t1b-http-transport-*.json
+t1c-candidate-confirmation-receipt.json
 
 # Thư mục tạm
 _recovery/

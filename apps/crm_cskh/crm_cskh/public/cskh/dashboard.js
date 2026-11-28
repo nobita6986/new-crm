@@ -18,6 +18,8 @@
 	const API_CAMPAIGNS = 'crm_cskh.api.dashboard.campaigns'
 	const API_RULES = 'crm_cskh.api.campaigns.rules'
 	const API_RUNS = 'crm_cskh.api.run_history.runs'
+	const API_ACCEPTANCE = 'crm_cskh.api.worker_intake.acceptance_board'
+	const API_EXPORT_CSV = 'crm_cskh.api.worker_intake.export_acceptance_csv'
 
 	const teamByUser = {}
 	let lastPerUser = []
@@ -391,6 +393,72 @@
 		box.appendChild(table)
 	}
 
+	function renderAcceptanceSection(board) {
+		const card = document.getElementById('dash-acceptance-card')
+		const sumBox = document.getElementById('dash-acceptance-summary')
+		const staffBox = document.getElementById('dash-acceptance-staff')
+		if (!card || !sumBox || !staffBox) return
+		cskh.clear(sumBox)
+		cskh.clear(staffBox)
+		if (!board || !board.summary) {
+			card.hidden = true
+			return
+		}
+		card.hidden = false
+		const s = board.summary || {}
+		;[
+			[cskh.t('Self-sourced in period'), s.self_sourced_period],
+			[cskh.t('Protected in care'), s.active_protected],
+			[cskh.t('Interview scheduled'), s.interview_scheduled],
+			[cskh.t('Working (1-6 days)'), s.working_1_to_6],
+			[cskh.t('Completed 7 workdays in period'), s.completed_7_days_period],
+			[cskh.t('Dropped before 7 days'), s.dropped_early],
+		].forEach(function (pair) {
+			sumBox.appendChild(metric(pair[0], pair[1] || 0))
+		})
+
+		const rows = board.per_staff || []
+		if (!rows.length) {
+			staffBox.appendChild(
+				cskh.el('div', { class: 'cskh-alert is-empty', text: cskh.t('No data in the current scope.') })
+			)
+			return
+		}
+		const tbl = cskh.el('table', { class: 'cskh-table' }, [
+			cskh.el('thead', {}, [
+				cskh.el('tr', {}, [
+					cskh.el('th', { text: cskh.t('Marketing staff') }),
+					cskh.el('th', { class: 'num', text: cskh.t('Self-sourced in period') }),
+					cskh.el('th', { class: 'num', text: cskh.t('Protected in care') }),
+					cskh.el('th', { class: 'num', text: cskh.t('Interview scheduled') }),
+					cskh.el('th', { class: 'num', text: cskh.t('Working (1-6 days)') }),
+					cskh.el('th', { class: 'num', text: cskh.t('Completed 7 workdays today') }),
+					cskh.el('th', { class: 'num', text: cskh.t('Completed 7 workdays in period') }),
+					cskh.el('th', { class: 'num', text: cskh.t('Dropped before 7 days') }),
+				]),
+			]),
+		])
+		const tb = cskh.el('tbody')
+		rows.forEach(function (r) {
+			tb.appendChild(
+				cskh.el('tr', {}, [
+					cskh.el('td', {
+						text: r.full_name && r.full_name !== r.user ? r.full_name + ' (' + r.user + ')' : r.user,
+					}),
+					cskh.el('td', { class: 'num', text: cskh.formatNumber(r.self_sourced_period) }),
+					cskh.el('td', { class: 'num', text: cskh.formatNumber(r.active_protected) }),
+					cskh.el('td', { class: 'num', text: cskh.formatNumber(r.interview_scheduled) }),
+					cskh.el('td', { class: 'num', text: cskh.formatNumber(r.working_1_to_6) }),
+					cskh.el('td', { class: 'num', text: cskh.formatNumber(r.completed_7_days_today) }),
+					cskh.el('td', { class: 'num', text: cskh.formatNumber(r.completed_7_days_period) }),
+					cskh.el('td', { class: 'num', text: cskh.formatNumber(r.dropped_period) }),
+				])
+			)
+		})
+		tbl.appendChild(tb)
+		staffBox.appendChild(cskh.el('div', { class: 'cskh-table-scroll' }, [tbl]))
+	}
+
 	async function load() {
 		const loading = document.getElementById('dash-loading')
 		const alertBox = document.getElementById('dash-alert')
@@ -419,11 +487,21 @@
 				}),
 				cskh.get(API_CAMPAIGNS),
 				loadRunsSnapshot(campaign),
+				cskh
+					.get(API_ACCEPTANCE, {
+						campaign: campaign || '',
+						date_from: dateFrom || '',
+						date_to: dateTo || '',
+					})
+					.catch(function () {
+						return null
+					}),
 			])
 			if (mine !== reads.current()) return
 			const data = pair[0]
 			const summary = pair[1]
 			const runSnap = pair[2] || {}
+			const acceptanceBoard = pair[3] || null
 			lastRuns = runSnap.items || []
 			assignedAllRunsByUser = runSnap.allAssigned || {}
 			assignedPerRun = runSnap.byRun || {}
@@ -440,6 +518,7 @@
 			const cards = (data && data.cards) || {}
 			lastPerUser = (data && data.per_user) || []
 
+			renderAcceptanceSection(acceptanceBoard)
 			renderCards(cards, {
 				assignment_events: data && data.assignment_events,
 			})
@@ -479,6 +558,28 @@
 		} catch (error) {
 			/* The filter is optional. */
 		}
+	}
+
+	const exportCsvBtn = document.getElementById('dash-export-csv')
+	if (exportCsvBtn) {
+		exportCsvBtn.addEventListener('click', async function () {
+			exportCsvBtn.disabled = true
+			try {
+				const res = await cskh.get(API_EXPORT_CSV, {
+					campaign: document.getElementById('dash-campaign').value || '',
+					date_from: document.getElementById('dash-date-from').value || '',
+					date_to: document.getElementById('dash-date-to').value || '',
+				})
+				if (res && res.csv_content) {
+					cskh.downloadCsv(res.filename, res.csv_content)
+					cskh.toast('success', cskh.t('Acceptance CSV downloaded.'))
+				}
+			} catch (error) {
+				cskh.renderError(document.getElementById('dash-alert'), error)
+			} finally {
+				exportCsvBtn.disabled = false
+			}
+		})
 	}
 
 	document.getElementById('dash-refresh').addEventListener('click', function () {

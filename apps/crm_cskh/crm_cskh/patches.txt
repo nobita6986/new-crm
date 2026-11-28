@@ -29,3 +29,6 @@ crm_cskh.patches.v3_0.p3_schema_and_seeds
 # Marketing worker-care entry point; retire the app-owned sales shortcut and
 # invalidate website/translation caches without rewriting business history.
 crm_cskh.patches.v4_0.worker_care_workspace
+
+# KCN Marketing self-sourced worker intake, factory profile, and 7-workday acceptance funnel.
+crm_cskh.patches.v5_0.kcn_worker_care_7days

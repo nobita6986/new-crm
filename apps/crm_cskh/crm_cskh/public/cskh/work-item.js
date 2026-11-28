@@ -117,10 +117,24 @@
 
 		const badges = [
 			cskh.el('span', {
+				class: cskh.stateBadge(wi.worker_stage || wi.work_item_status),
+				text: cskh.workerStageLabel
+					? cskh.workerStageLabel(wi.worker_stage)
+					: cskh.workItemStateLabel(wi.work_item_status),
+			}),
+			cskh.el('span', {
 				class: cskh.stateBadge(wi.work_item_status),
 				text: cskh.workItemStateLabel(wi.work_item_status),
 			}),
 		]
+		if (wi.source_type === 'self_sourced') {
+			badges.push(
+				cskh.el('span', {
+					class: cskh.stateBadge('connected'),
+					text: cskh.t('Self-sourced'),
+				})
+			)
+		}
 		if (wi.do_not_contact) {
 			badges.push(
 				cskh.el('span', {
@@ -138,6 +152,14 @@
 			)
 		}
 
+		const profileSub = [
+			wi.birth_year ? cskh.t('Birth year') + ': ' + wi.birth_year : '',
+			wi.gender || '',
+			wi.current_area || '',
+			wi.id_card_status || '',
+			wi.worker_tags || '',
+		].filter(Boolean)
+
 		header.appendChild(
 			cskh.el(
 				'div',
@@ -152,6 +174,13 @@
 							text: (allowPii && wi.display_name) || wi.lead || wi.work_item,
 						}),
 						cskh.el('div', { class: 'cskh-badge-stack' }, badges),
+						allowPii && profileSub.length
+							? cskh.el('div', {
+									class: 'cskh-worker-submeta',
+									style: 'margin-top: 6px;',
+									text: profileSub.join(' · '),
+								})
+							: null,
 					]),
 					cskh.el('div', { class: 'cskh-muted cskh-mono', style: 'text-align: right;' }, [
 						cskh.el('div', { text: cskh.t('Work item') + ': ' + wi.work_item }),
@@ -175,29 +204,61 @@
 			)
 		)
 
-		const phoneNode = cskh.el('div', { class: 'cskh-actions', style: 'margin: 0; gap: 6px;' }, [
+		const effPhone = wi.national_phone || wi.phone || ''
+		const phoneNode = cskh.el('div', { class: 'cskh-phone-bar' }, [
 			cskh.el('span', {
-				class: 'cskh-mono',
-				text: allowPii && wi.phone ? cskh.maskPhone(wi.phone) : '—',
+				class: 'cskh-phone-num',
+				text: allowPii && effPhone ? cskh.formatPhone(effPhone) : '—',
 			}),
-			allowPii && wi.phone
+			allowPii && effPhone && cskh.telUrl(effPhone)
+				? cskh.el('a', {
+						class: 'cskh-phone-link is-call',
+						href: cskh.telUrl(effPhone),
+						text: cskh.t('Call'),
+					})
+				: null,
+			allowPii && effPhone && cskh.zaloUrl(effPhone)
+				? cskh.el('a', {
+						class: 'cskh-phone-link is-zalo',
+						href: cskh.zaloUrl(effPhone),
+						target: '_blank',
+						rel: 'noopener noreferrer',
+						text: 'Zalo',
+					})
+				: null,
+			allowPii && effPhone
 				? cskh.el('button', {
 						class: 'cskh-btn is-small',
 						id: 'wi-btn-copy-phone',
 						type: 'button',
-						text: cskh.t('Copy phone number'),
+						text: cskh.t('Copy'),
 						onclick: function () {
-							cskh.copyPhone(wi.phone)
+							cskh.copyPhone(effPhone)
 						},
 					})
 				: null,
 		])
 
+		const kcnFactoryText =
+			[wi.target_factory, wi.target_industrial_zone].filter(Boolean).join(' · ') ||
+			wi.campaign_title ||
+			wi.campaign_code ||
+			wi.campaign
+
 		metrics.appendChild(metric(cskh.t('Phone number'), phoneNode))
+		metrics.appendChild(metric(cskh.t('Factory / Industrial zone'), kcnFactoryText))
 		metrics.appendChild(
-			metric(cskh.t('Campaign'), wi.campaign_title || wi.campaign_code || wi.campaign)
+			metric(
+				cskh.t('7-workday stage'),
+				(wi.workdays_completed || 0) +
+					'/' +
+					(wi.target_workdays || 7) +
+					' ' +
+					cskh.t('workdays') +
+					(wi.interview_date ? ' · ' + cskh.t('Interview') + ': ' + cskh.formatDateOnly(wi.interview_date) : '')
+			)
 		)
-		metrics.appendChild(metric(cskh.t('Current owner'), wi.assigned_to || '—'))
+		metrics.appendChild(metric(cskh.t('Current owner'), wi.assigned_to || wi.owner_at_close || '—'))
 		metrics.appendChild(
 			metric(
 				cskh.t('Contact count'),
@@ -211,18 +272,33 @@
 		)
 		metrics.appendChild(
 			metric(
-				cskh.t('Last outcome'),
-				wi.last_outcome_code || wi.last_outcome_label
-					? cskh.outcomeLabel(wi.last_outcome_code, wi.last_outcome_label)
-					: '—'
-			)
-		)
-		metrics.appendChild(
-			metric(
 				cskh.t('Open callback'),
 				wi.next_action_due ? cskh.formatDate(wi.next_action_due) : cskh.t('No open callback.')
 			)
 		)
+
+		if (wiCaps.can_record_progress) {
+			actions.appendChild(
+				cskh.el('button', {
+					class: 'cskh-btn is-success',
+					id: 'wi-btn-kcn-progress',
+					type: 'button',
+					text: cskh.t('Update KCN progress'),
+					onclick: openKcnProgressDrawer,
+				})
+			)
+		}
+		if (wiCaps.can_update_profile) {
+			actions.appendChild(
+				cskh.el('button', {
+					class: 'cskh-btn',
+					id: 'wi-btn-edit-profile',
+					type: 'button',
+					text: cskh.t('Save worker profile'),
+					onclick: openProfileDrawer,
+				})
+			)
+		}
 
 		if (wiCaps.can_record_attempt) {
 			actions.appendChild(
@@ -318,6 +394,205 @@
 		const body = document.getElementById('wi-action-drawer-body')
 		if (card) card.hidden = true
 		cskh.clear(body)
+	}
+
+	function openProfileDrawer() {
+		if (!currentWi) return
+		const wi = currentWi
+		const card = document.getElementById('wi-action-drawer')
+		const body = document.getElementById('wi-action-drawer-body')
+		cskh.clear(body)
+		card.hidden = false
+
+		const alertBox = cskh.el('div', { 'aria-live': 'polite' })
+		const nameInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.display_name || '',
+		})
+		const yearInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'number',
+			min: '1960',
+			max: '2012',
+			value: wi.birth_year ? String(wi.birth_year) : '',
+		})
+		const genderSelect = cskh.el('select', { class: 'cskh-select' }, [
+			cskh.el('option', { value: '', text: cskh.t('Select...') }),
+			cskh.el('option', { value: 'Nam', text: cskh.t('Male') }),
+			cskh.el('option', { value: 'Nu', text: cskh.t('Female') }),
+			cskh.el('option', { value: 'Khac', text: cskh.t('Other') }),
+		])
+		genderSelect.value = wi.gender || ''
+		const areaInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.current_area || '',
+		})
+		const cccdSelect = cskh.el('select', { class: 'cskh-select' }, [
+			cskh.el('option', { value: '', text: cskh.t('Select...') }),
+			cskh.el('option', { value: 'Co CCCD goc', text: cskh.t('Original chip ID ready') }),
+			cskh.el('option', { value: 'VNeID muc 2', text: cskh.t('VNeID level 2') }),
+			cskh.el('option', { value: 'Mat / dang lam lai', text: cskh.t('Lost / renewing') }),
+		])
+		cccdSelect.value = wi.id_card_status || ''
+		const facInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.target_factory || '',
+		})
+		const izInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.target_industrial_zone || '',
+		})
+		const tagsInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.worker_tags || '',
+		})
+
+		const saveBtn = cskh.el('button', {
+			class: 'cskh-btn is-primary',
+			type: 'button',
+			text: cskh.t('Save worker profile'),
+			onclick: async function () {
+				saveBtn.disabled = true
+				cskh.clear(alertBox)
+				try {
+					await cskhP2Api.updateWorkerProfile({
+						work_item: wi.work_item_id || wi.work_item,
+						full_name: nameInput.value.trim() || null,
+						birth_year: yearInput.value ? Number(yearInput.value) : '',
+						gender: genderSelect.value,
+						current_area: areaInput.value.trim(),
+						id_card_status: cccdSelect.value,
+						target_factory: facInput.value.trim(),
+						target_industrial_zone: izInput.value.trim(),
+						worker_tags: tagsInput.value.trim(),
+					})
+					cskh.toast('success', cskh.t('Worker profile saved.'))
+					closeDrawer()
+					await loadAll()
+				} catch (err) {
+					cskh.renderError(alertBox, err)
+				} finally {
+					saveBtn.disabled = false
+				}
+			},
+		})
+
+		body.appendChild(
+			cskh.el('div', { class: 'cskh-panel' }, [
+				cskh.el('h3', { style: 'margin-top: 0;', text: cskh.t('Edit worker screening profile (name, birth year, area, notes)') }),
+				alertBox,
+				cskh.el('div', { class: 'cskh-form-grid' }, [
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Worker full name') }), nameInput]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Birth year') }), yearInput]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Gender') }), genderSelect]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Citizen ID (CCCD) status') }), cccdSelect]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Current area / boarding house') }), areaInput]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Factory name') }), facInput]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Industrial zone') }), izInput]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Screening notes (shift, tattoos, skills, transport...)') }), tagsInput]),
+				]),
+				cskh.el('div', { class: 'cskh-actions', style: 'margin-top: 12px;' }, [
+					saveBtn,
+					cskh.el('button', { class: 'cskh-btn', type: 'button', text: cskh.t('Cancel'), onclick: closeDrawer }),
+				]),
+			])
+		)
+		card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+	}
+
+	function openKcnProgressDrawer() {
+		if (!currentWi) return
+		const wi = currentWi
+		const card = document.getElementById('wi-action-drawer')
+		const body = document.getElementById('wi-action-drawer-body')
+		cskh.clear(body)
+		card.hidden = false
+
+		const alertBox = cskh.el('div', { 'aria-live': 'polite' })
+		const todayIso = cskh.dateKeyInTz(cskh.serverNow())
+		const dateInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'date',
+			value: wi.interview_date || wi.onboard_date || todayIso,
+		})
+		const facInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.target_factory || '',
+		})
+		const izInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			value: wi.target_industrial_zone || '',
+		})
+		const noteInput = cskh.el('input', {
+			class: 'cskh-input',
+			type: 'text',
+			placeholder: cskh.t('Milestone note / dropout reason...'),
+		})
+
+		async function submitProgress(actionType, extra) {
+			cskh.clear(alertBox)
+			if (actionType === 'dropout' && !noteInput.value.trim()) {
+				cskh.alert(alertBox, 'warning', cskh.t('Please enter the reason the worker dropped out early.'))
+				return
+			}
+			try {
+				const res = await cskhP2Api.recordWorkerProgress(
+					Object.assign(
+						{
+							work_item: wi.work_item_id || wi.work_item,
+							action_type: actionType,
+							channel: 'zalo',
+							interview_date: dateInput.value || null,
+							target_factory: facInput.value.trim() || null,
+							target_industrial_zone: izInput.value.trim() || null,
+							note: noteInput.value.trim() || null,
+							dropout_reason: actionType === 'dropout' ? noteInput.value.trim() : null,
+							idempotency_key: 'ui-wi-kcn-' + cskh.uuid(),
+						},
+						extra || {}
+					)
+				)
+				if (res && res.completed_7_days) {
+					cskh.toast('success', cskh.t('Completed 7/7 workdays — worker care closed as accepted!'))
+				} else {
+					cskh.toast('success', cskh.t('Worker KCN milestone updated.'))
+				}
+				closeDrawer()
+				await loadAll()
+			} catch (err) {
+				cskh.renderError(alertBox, err)
+			}
+		}
+
+		body.appendChild(
+			cskh.el('div', { class: 'cskh-panel' }, [
+				cskh.el('h3', { style: 'margin-top: 0;', text: cskh.t('Fast KCN milestone & 7-workday check-in') }),
+				alertBox,
+				cskh.el('div', { class: 'cskh-form-grid' }, [
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Interview / onboard date') }), dateInput]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Factory name') }), facInput]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Industrial zone') }), izInput]),
+					cskh.el('label', { class: 'cskh-field' }, [cskh.el('span', { text: cskh.t('Contact note') }), noteInput]),
+				]),
+				cskh.el('div', { class: 'cskh-kcn-quick-bar' }, [
+					cskh.el('button', { type: 'button', class: 'cskh-btn is-primary', text: cskh.t('Schedule KCN interview'), onclick: function () { submitProgress('schedule_interview') } }),
+					cskh.el('button', { type: 'button', class: 'cskh-btn is-success', text: cskh.t('Started working (Day 1)'), onclick: function () { submitProgress('onboard', { onboard_date: dateInput.value || todayIso, workdays_completed: 1 }) } }),
+					cskh.el('button', { type: 'button', class: 'cskh-btn is-success', text: cskh.t('+1 Workday') + ' (' + Math.min((wi.workdays_completed || 0) + 1, wi.target_workdays || 7) + '/' + (wi.target_workdays || 7) + ')', onclick: function () { submitProgress('checkin_workday', { increment_workday: 1 }) } }),
+					cskh.el('button', { type: 'button', class: 'cskh-btn', text: cskh.t('Missed interview'), onclick: function () { submitProgress('interview_no_show') } }),
+					cskh.el('button', { type: 'button', class: 'cskh-btn', text: cskh.t('Switch factory'), onclick: function () { submitProgress('switch_factory') } }),
+					cskh.el('button', { type: 'button', class: 'cskh-btn is-danger', text: cskh.t('Dropped before 7 days'), onclick: function () { submitProgress('dropout', { close_after_dropout: 1 }) } }),
+					cskh.el('button', { type: 'button', class: 'cskh-btn', text: cskh.t('Cancel'), onclick: closeDrawer }),
+				]),
+			])
+		)
+		card.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
 	}
 
 	function openAttemptDrawer(completeCallback) {

@@ -227,11 +227,12 @@
 		const headCells = [
 			cskh.el('th', { text: cskh.t('Code') }),
 			cskh.el('th', { text: cskh.t('Title') }),
+			cskh.el('th', { text: cskh.t('Factory / Industrial zone') }),
+			cskh.el('th', { class: 'num', text: cskh.t('Target workdays') }),
 			cskh.el('th', { text: cskh.t('Status') }),
 			cskh.el('th', { text: cskh.t('Team scope') }),
 			cskh.el('th', { class: 'num', text: cskh.t('Rule version') }),
 			cskh.el('th', { text: cskh.t('Started at') }),
-			cskh.el('th', { text: cskh.t('Ended at') }),
 		]
 		if (isAdmin) headCells.push(cskh.el('th', { text: cskh.t('Actions') }))
 
@@ -240,9 +241,21 @@
 		])
 		const body = cskh.el('tbody')
 		items.forEach(function (campaign) {
+			const kcnText = [campaign.factory_name, campaign.industrial_zone].filter(Boolean).join(' · ') || '—'
 			const cells = [
 				cskh.el('td', { text: campaign.code }),
-				cskh.el('td', { text: campaign.title }),
+				cskh.el('td', {}, [
+					cskh.el('div', { text: campaign.title }),
+					campaign.recruitment_criteria
+						? cskh.el('div', {
+								class: 'cskh-muted',
+								style: 'font-size: 11.5px;',
+								text: campaign.recruitment_criteria,
+							})
+						: null,
+				]),
+				cskh.el('td', { text: kcnText }),
+				cskh.el('td', { class: 'num', text: (campaign.target_workdays || 7) + ' ' + cskh.t('workdays') }),
 				cskh.el('td', {}, [
 					cskh.el('span', {
 						class: cskh.stateBadge(
@@ -258,7 +271,6 @@
 				cskh.el('td', { text: campaign.team_scope || '—' }),
 				cskh.el('td', { class: 'num', text: campaign.rule_version }),
 				cskh.el('td', { text: cskh.formatDate(campaign.started_at) }),
-				cskh.el('td', { text: cskh.formatDate(campaign.ended_at) }),
 			]
 			if (isAdmin) {
 				const rowActions = [
@@ -298,6 +310,16 @@
 		document.getElementById('campaign-description').value = campaign.description || ''
 		document.getElementById('campaign-status').value = campaign.status || 'Active'
 		document.getElementById('campaign-team').value = campaign.team_scope || ''
+		const facEl = document.getElementById('campaign-factory')
+		const izEl = document.getElementById('campaign-iz')
+		const twEl = document.getElementById('campaign-target-workdays')
+		const critEl = document.getElementById('campaign-criteria')
+		const selfEl = document.getElementById('campaign-allow-self-sourced')
+		if (facEl) facEl.value = campaign.factory_name || ''
+		if (izEl) izEl.value = campaign.industrial_zone || ''
+		if (twEl) twEl.value = String(campaign.target_workdays || 7)
+		if (critEl) critEl.value = campaign.recruitment_criteria || ''
+		if (selfEl) selfEl.checked = campaign.allow_self_sourced !== false
 		document.getElementById('campaign-create').textContent = cskh.t('Save')
 		document.getElementById('campaign-cancel-edit').hidden = false
 	}
@@ -310,6 +332,16 @@
 		document.getElementById('campaign-description').value = ''
 		document.getElementById('campaign-status').value = 'Draft'
 		document.getElementById('campaign-team').value = ''
+		const facEl = document.getElementById('campaign-factory')
+		const izEl = document.getElementById('campaign-iz')
+		const twEl = document.getElementById('campaign-target-workdays')
+		const critEl = document.getElementById('campaign-criteria')
+		const selfEl = document.getElementById('campaign-allow-self-sourced')
+		if (facEl) facEl.value = ''
+		if (izEl) izEl.value = ''
+		if (twEl) twEl.value = '7'
+		if (critEl) critEl.value = ''
+		if (selfEl) selfEl.checked = true
 		document.getElementById('campaign-create').textContent = cskh.t('Create campaign')
 		document.getElementById('campaign-cancel-edit').hidden = true
 	}
@@ -1244,12 +1276,22 @@
 		}
 		createBtn.disabled = true
 		try {
+			const facEl = document.getElementById('campaign-factory')
+			const izEl = document.getElementById('campaign-iz')
+			const twEl = document.getElementById('campaign-target-workdays')
+			const critEl = document.getElementById('campaign-criteria')
+			const selfEl = document.getElementById('campaign-allow-self-sourced')
 			const payload = {
 				code: code,
 				title: title,
 				description: document.getElementById('campaign-description').value.trim() || null,
 				status: document.getElementById('campaign-status').value,
 				team_scope: document.getElementById('campaign-team').value.trim() || null,
+				factory_name: facEl ? facEl.value.trim() || null : null,
+				industrial_zone: izEl ? izEl.value.trim() || null : null,
+				target_workdays: twEl && twEl.value ? Number(twEl.value) : 7,
+				recruitment_criteria: critEl ? critEl.value.trim() || null : null,
+				allow_self_sourced: selfEl ? (selfEl.checked ? 1 : 0) : 1,
 			}
 			if (editingCampaign) payload.campaign = editingCampaign
 			await cskh.post(API_SAVE, payload)

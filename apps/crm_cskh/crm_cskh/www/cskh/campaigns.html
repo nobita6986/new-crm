@@ -48,6 +48,26 @@
 			{{ _("Team scope") }}
 			<input id="campaign-team" class="cskh-input" type="text">
 		</label>
+		<label class="cskh-field">
+			{{ _("Factory name") }}
+			<input id="campaign-factory" class="cskh-input" type="text" placeholder="{{ _('Factory name') }}">
+		</label>
+		<label class="cskh-field">
+			{{ _("Industrial zone") }}
+			<input id="campaign-iz" class="cskh-input" type="text" placeholder="{{ _('Industrial zone') }}">
+		</label>
+		<label class="cskh-field">
+			{{ _("Target workdays") }}
+			<input id="campaign-target-workdays" class="cskh-input" type="number" min="1" max="60" value="7" style="width: 90px;">
+		</label>
+		<label class="cskh-field" style="min-width: 240px;">
+			{{ _("Recruitment criteria") }}
+			<input id="campaign-criteria" class="cskh-input" type="text" placeholder="{{ _('Age, gender, shift, salary...') }}">
+		</label>
+		<label class="cskh-checkbox-row" style="align-self: center; margin-top: 14px;">
+			<input id="campaign-allow-self-sourced" type="checkbox" checked>
+			<span>{{ _("Allow self-sourced intake") }}</span>
+		</label>
 		<button id="campaign-create" class="cskh-btn is-primary" type="button">
 			{{ _("Create campaign") }}
 		</button>

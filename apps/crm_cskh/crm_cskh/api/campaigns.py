@@ -50,20 +50,30 @@ def list(status=None, campaign=None):
 		filters["status"] = status_val
 	if campaign_val:
 		filters["name"] = campaign_val
+	fields = [
+		"name",
+		"code",
+		"title",
+		"description",
+		"status",
+		"team_scope",
+		"rule_version",
+		"started_at",
+		"ended_at",
+	]
+	for opt_col in (
+		"factory_name",
+		"industrial_zone",
+		"recruitment_criteria",
+		"target_workdays",
+		"allow_self_sourced",
+	):
+		if frappe.db.has_column("CSKH Campaign", opt_col):
+			fields.append(opt_col)
 	rows = frappe.get_list(
 		"CSKH Campaign",
 		filters=filters,
-		fields=[
-			"name",
-			"code",
-			"title",
-			"description",
-			"status",
-			"team_scope",
-			"rule_version",
-			"started_at",
-			"ended_at",
-		],
+		fields=fields,
 		order_by="code asc",
 		limit_page_length=0,
 	)
@@ -75,6 +85,11 @@ def list(status=None, campaign=None):
 				"code": row.code,
 				"title": row.title,
 				"description": row.description,
+				"factory_name": row.get("factory_name") or "",
+				"industrial_zone": row.get("industrial_zone") or "",
+				"recruitment_criteria": row.get("recruitment_criteria") or "",
+				"target_workdays": int(row.get("target_workdays") or 7),
+				"allow_self_sourced": bool(int(row.get("allow_self_sourced", 1))),
 				"status": row.status,
 				"team_scope": row.team_scope,
 				"rule_version": row.rule_version,
@@ -87,7 +102,18 @@ def list(status=None, campaign=None):
 
 @frappe.whitelist(methods=["POST"])
 def save(
-	code=None, title=None, description=None, status=None, team_scope=None, campaign=None, selection=None
+	code=None,
+	title=None,
+	description=None,
+	status=None,
+	team_scope=None,
+	campaign=None,
+	selection=None,
+	factory_name=None,
+	industrial_zone=None,
+	recruitment_criteria=None,
+	target_workdays=None,
+	allow_self_sourced=None,
 ):
 	"""Create or update a campaign. The server validates every field."""
 	actor = frappe.session.user
@@ -110,6 +136,18 @@ def save(
 	doc.description = description
 	doc.status = status
 	doc.team_scope = team_scope
+	if factory_name is not None and hasattr(doc, "factory_name"):
+		doc.factory_name = parse_optional_str(factory_name, "Invalid factory_name.")
+	if industrial_zone is not None and hasattr(doc, "industrial_zone"):
+		doc.industrial_zone = parse_optional_str(industrial_zone, "Invalid industrial_zone.")
+	if recruitment_criteria is not None and hasattr(doc, "recruitment_criteria"):
+		doc.recruitment_criteria = parse_optional_str(recruitment_criteria, "Invalid recruitment_criteria.")
+	if target_workdays is not None and str(target_workdays).strip() != "" and hasattr(doc, "target_workdays"):
+		doc.target_workdays = parse_int(target_workdays, default=7, minimum=1, field="target_workdays")
+	if allow_self_sourced is not None and hasattr(doc, "allow_self_sourced"):
+		doc.allow_self_sourced = (
+			1 if parse_bool(allow_self_sourced, default=True, field="allow_self_sourced") else 0
+		)
 	if selection is not None:
 		doc.selection_json = (
 			selection if isinstance(selection, str) else json.dumps(selection, ensure_ascii=False)

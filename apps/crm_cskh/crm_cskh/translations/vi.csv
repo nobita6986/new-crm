@@ -1434,3 +1434,116 @@ distinct workers,người lao động không trùng
 marketing staff,nhân viên marketing
 {0} active care work items across {1} distinct workers,{0} hồ sơ chăm sóc (Work Item) đang mở trên {1} người lao động không trùng
 {0} care work items currently on hold awaiting scheduled callback.,{0} hồ sơ chăm sóc đang ở trạng thái chờ chăm sóc lại theo lịch hẹn.
++ Add worker phone,+ Thêm SĐT người lao động
++1 Workday,+1 Ngày công
++30 min,+30 phút
+1. Add worker phone (auto-dedupe & protect) -> 2. Call / Zalo & schedule KCN interview -> 3. Confirm onboarding & daily workdays until 7 workdays.,1. Thêm SĐT người lao động (tự động kiểm trùng & gắn bảo hộ) → 2. Gọi / Zalo tư vấn & chốt lịch phỏng vấn KCN → 3. Nghiệm thu nhận việc & điểm công hằng ngày đến khi đủ 7 ngày công.
+7-workday funnel & Marketing staff acceptance,Phễu 7 ngày công & Nghiệm thu theo Nhân viên Marketing
+7-workday stage,Tiến độ 7 ngày công
+Acceptance CSV downloaded.,Đã tải xuống tệp CSV nghiệm thu.
+Acceptance date,Ngày nghiệm thu
+Accepted — completed 7 workdays,Đã chốt nghiệm thu — Đạt đủ 7 ngày công
+Add single worker,Thêm từng người lao động
+Added Zalo & sent factory job,Đã kết bạn Zalo & gửi đơn tuyển nhà máy
+After shift 18:00,Tan ca 18:00
+"Age, gender, shift, salary...","Độ tuổi, giới tính, ca làm, thu nhập..."
+Allow self-sourced intake,Cho phép Marketing tự thêm SĐT bảo hộ
+Already protected under your account.,Số điện thoại này đang được bảo hộ dưới tài khoản của bạn.
+Already yours,Đang thuộc quyền của bạn
+Available: ready to bind ownership protection to you immediately.,Hợp lệ & chưa ai giữ: sẵn sàng gắn quyền bảo hộ ngay cho bạn.
+Birth year,Năm sinh
+Bulk check & claim protection,Kiểm trùng hàng loạt & gắn bảo hộ
+Bulk paste phones,Dán nhanh danh sách SĐT
+Call,Gọi
+"Can work night shift, has motorbike...","Đi được ca đêm, có xe máy, tay nghề..."
+Check duplicate & claim protection,Kiểm trùng & gắn bảo hộ ngay
+Citizen ID (CCCD) status,Tình trạng CCCD
+Completed 7 workdays,Đạt đủ 7 ngày công
+Completed 7 workdays in period,Đạt 7 ngày công trong kỳ
+Completed 7 workdays today,Đạt 7 ngày công hôm nay
+Completed 7 workdays — closed,Đạt đủ 7 ngày công — Chốt chăm sóc
+Completed 7/7 workdays — worker care closed as accepted!,Đạt đủ 7/7 ngày công — Đã chốt nghiệm thu chăm sóc người lao động!
+Consulting KCN,Đang tư vấn đơn KCN
+Copy,Sao chép
+Current area / boarding house,Khu vực trọ / nơi ở hiện tại
+Daily KCN worker acceptance board,Bảng nghiệm thu cuối ngày & điểm công KCN
+Daily workday check-in,Điểm danh ngày công đi làm
+Default self-sourced pool,Nguồn tự khai thác chung (mặc định)
+Direct KCN gate,Tuyển trực tiếp cổng KCN
+District / KCN area...,Huyện / khu trọ gần KCN...
+Dropped before 7 days,Nghỉ sớm trước 7 công
+Dropped out before 7 workdays,Nghỉ ngang trước 7 ngày công
+Duplicate / blocked,Trùng bảo hộ / bị chặn
+"Edit worker screening profile (name, birth year, area, notes)","Cập nhật thông tin sơ tuyển người lao động (họ tên, năm sinh, nơi ở, ghi chú)"
+End-of-day acceptance,Nghiệm thu cuối ngày
+End-of-day acceptance & 7-workday milestone,NGHIỆM THU CUỐI NGÀY & MỐC 7 NGÀY CÔNG
+End-of-day acceptance by Marketing staff,Kết quả nghiệm thu theo Nhân viên Marketing
+Evening 20:00,Buổi tối 20:00
+Export 7-workday CSV,Xuất CSV 7 ngày công
+Factory / Industrial zone,Nhà máy / Khu công nghiệp
+Factory name,Tên nhà máy / công ty
+Factory order / Campaign,Đơn hàng nhà máy / Chiến dịch
+Fast KCN milestone & 7-workday check-in,Cập nhật nhanh mốc KCN & điểm công 7 ngày
+Female,Nữ
+Gender,Giới tính
+Industrial zone,Khu công nghiệp (KCN)
+Interview,Phỏng vấn
+Interview / onboard date,Ngày phỏng vấn / vào xưởng
+Interview due today,Lịch phỏng vấn hôm nay
+Interview scheduled,Đã hẹn phỏng vấn KCN
+Interviews to confirm by end of day,Lịch phỏng vấn KCN cần chốt kết quả cuối ngày
+Invalid,Sai định dạng
+Invalid Vietnamese mobile phone number.,Số điện thoại di động Việt Nam không hợp lệ.
+Logged today,Đã điểm công hôm nay
+Logged workday,Đã ghi nhận ngày công
+Lost / renewing,Mất / đang làm lại CCCD
+Male,Nam
+Marketing staff,Nhân viên Marketing
+Milestone note / dropout reason...,Ghi chú kết quả / lý do nghỉ sớm...
+Missed interview,Bùng lịch phỏng vấn
+Missed interview — follow up,Không ra điểm phỏng vấn — Cần hẹn lại
+No pending KCN interviews for today.,Không còn lịch phỏng vấn KCN nào chờ chốt hôm nay.
+No workers currently in days 1–6.,Hiện chưa có công nhân nào đang trong giai đoạn 1–6 ngày công.
+Noon 12:00,Nghỉ trưa 12:00
+Original chip ID ready,Có CCCD gắn chip bản gốc
+Paste worker list (1 worker per line: Phone | Full name | Birth year | Note),Dán danh sách người lao động (mỗi dòng 1 người: SĐT | Họ tên | Năm sinh | Ghi chú)
+Please enter the reason the worker dropped out early.,Vui lòng nhập lý do người lao động nghỉ sớm trước 7 ngày công.
+Please paste at least one worker phone line.,Vui lòng dán ít nhất 01 dòng số điện thoại người lao động.
+Protected,Đã gắn bảo hộ mới
+Protected by another Marketing staff — duplicate blocked.,Số điện thoại đang thuộc quyền bảo hộ của nhân viên Marketing khác — đã chặn trùng.
+Protected in care,Đang bảo hộ chăm sóc
+Protected worker phone,Đã gắn bảo hộ SĐT người lao động
+Recruitment criteria,Tiêu chí tuyển dụng KCN
+Save worker profile,Lưu hồ sơ người lao động
+Schedule KCN interview,Chốt lịch phỏng vấn KCN
+Scheduled KCN interview,Đã chốt lịch phỏng vấn KCN
+"Screening notes (shift, tattoos, skills, transport...)","Ghi chú sơ tuyển (ca đêm, hình xăm, tay nghề, phương tiện...)"
+Select...,Chọn...
+Self-sourced,Tự khai thác
+Self-sourced in period,Tự khai thác trong kỳ
+Self-sourced today,Tự khai thác hôm nay
+Self-sourced worker intake & phone protection,Tự thêm mới SĐT người lao động & gắn quyền bảo hộ
+"Source workers, protect phone numbers instantly, and track care until 7 workdays.","Tự khai thác nguồn lao động, kiểm trùng bảo hộ SĐT tức thì và chăm sóc đến khi đạt đủ 7 ngày công đi làm."
+Sourcing channel,Nguồn khai thác
+Started working (Day 1),Đã vào xưởng (Công 1)
+Started working at factory,Đã nhận việc vào xưởng đi làm
+Stopped care,Đã dừng chăm sóc
+Switch factory,Đổi sang xưởng khác
+Switched to another factory,Chuyển tư vấn sang nhà máy khác
+Target workdays,Mốc ngày công nghiệm thu
+"The system normalizes Vietnamese phone numbers, checks duplicates company-wide, and binds ownership protection to you immediately.","Hệ thống tự động chuẩn hóa đầu số di động Việt Nam, kiểm trùng toàn công ty và gắn quyền bảo hộ ngay cho bạn nếu chưa có người giữ."
+Tomorrow 07:30,Sáng mai 07:30
+"Tracks self-sourced intake, active protection, KCN interviews, days 1–6 care, and accepted 7-workday completions.","Theo dõi nguồn tự khai thác, số lượng đang bảo hộ, lịch phỏng vấn KCN, công nhân đi làm 1–6 công và số đạt đủ 7 ngày công."
+Unlogged workday today,Chưa điểm công hôm nay
+Update KCN progress,Cập nhật KCN
+VNeID level 2,Có VNeID mức 2
+Worker KCN milestone updated.,Đã cập nhật tiến độ KCN của người lao động.
+Worker full name,Họ và tên người lao động
+Worker profile saved.,Đã lưu hồ sơ sơ tuyển người lao động.
+Worker referral,Công nhân giới thiệu
+Workers in days 1–6 — daily workday check-in,Công nhân đang đi làm (1–6 công) — Điểm công cuối ngày
+Working (1-6 days),Đang đi làm (1-6 công)
+workdays,ngày công
+No workers currently in days 1-6.,Hiện chưa có công nhân nào đang trong giai đoạn 1-6 ngày công.
+"Tracks self-sourced intake, active protection, KCN interviews, days 1-6 care, and accepted 7-workday completions.","Theo dõi nguồn tự khai thác, số lượng đang bảo hộ, lịch phỏng vấn KCN, công nhân đi làm 1-6 công và số đạt đủ 7 ngày công."
+Workers in days 1-6 — daily workday check-in,Công nhân đang đi làm (1-6 công) — Điểm công cuối ngày

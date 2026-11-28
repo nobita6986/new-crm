@@ -24,6 +24,38 @@
    "label": "Description"
   },
   {
+   "fieldname": "factory_name",
+   "fieldtype": "Data",
+   "label": "Factory Name",
+   "description": "Tên nhà máy / doanh nghiệp trong Khu công nghiệp."
+  },
+  {
+   "fieldname": "industrial_zone",
+   "fieldtype": "Data",
+   "label": "Industrial Zone",
+   "description": "Tên Khu công nghiệp (VD: KCN Quế Võ, KCN Quang Châu, VSIP...)."
+  },
+  {
+   "fieldname": "recruitment_criteria",
+   "fieldtype": "Small Text",
+   "label": "Recruitment Criteria",
+   "description": "Tóm tắt độ tuổi, giới tính, ca làm, mức lương và giấy tờ yêu cầu."
+  },
+  {
+   "fieldname": "target_workdays",
+   "fieldtype": "Int",
+   "label": "Target Workdays",
+   "default": "7",
+   "description": "Số ngày công đi làm tối thiểu để chốt nghiệm thu chăm sóc (mặc định 7 ngày công)."
+  },
+  {
+   "fieldname": "allow_self_sourced",
+   "fieldtype": "Check",
+   "label": "Allow Self Sourced",
+   "default": "1",
+   "description": "Cho phép nhân viên Marketing tự thêm SĐT người lao động vào chiến dịch/đơn hàng này."
+  },
+  {
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
@@ -71,6 +103,11 @@
  "field_order": [
   "code",
   "title",
+  "factory_name",
+  "industrial_zone",
+  "recruitment_criteria",
+  "target_workdays",
+  "allow_self_sourced",
   "description",
   "status",
   "team_scope",

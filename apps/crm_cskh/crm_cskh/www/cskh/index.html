@@ -5,7 +5,15 @@
 {% endblock %}
 {% block cskh_title %}{{ _("Worker care overview") }}{% endblock %}
 {% block cskh_subtitle %}{{ _("Marketing workspace for contacting workers, following up on time, and keeping care responsibilities clear.") }}{% endblock %}
-{% block cskh_actions %}<button type="button" class="cskh-btn" id="care-refresh">{{ _("Refresh care overview") }}</button>{% endblock %}
+{% block cskh_actions %}
+{% if (cskh_capabilities or {}).get('pii') %}
+<a class="cskh-btn is-primary" href="/cskh/my-customers?add=1">{{ _("+ Add worker phone") }}</a>
+{% endif %}
+{% if (cskh_capabilities or {}).get('can_export_report') %}
+<button type="button" class="cskh-btn" id="care-export-csv">{{ _("Export 7-workday CSV") }}</button>
+{% endif %}
+<button type="button" class="cskh-btn" id="care-refresh">{{ _("Refresh care overview") }}</button>
+{% endblock %}
 {% block cskh_body %}
 {% set nav_keys = (cskh_navigation | default([])) | map(attribute='key') | list %}
 <section id="care-overview" class="care-overview" aria-busy="true">
@@ -20,6 +28,26 @@
 		<p class="care-tz-note" id="care-tz-note" hidden></p>
 		<div class="care-bod-banner" id="care-bod-banner" hidden></div>
 		<div class="care-empty-banner" id="care-empty" hidden></div>
+
+		<section class="cskh-card" id="care-acceptance-card" aria-labelledby="care-acceptance-title">
+			<div class="cskh-actions" style="justify-content: space-between; align-items: center; margin-bottom: 12px;">
+				<div>
+					<p class="care-eyebrow" style="margin: 0 0 4px;">{{ _("End-of-day acceptance & 7-workday milestone") }}</p>
+					<h2 id="care-acceptance-title" style="margin: 0;">{{ _("Daily KCN worker acceptance board") }}</h2>
+				</div>
+				<div class="cskh-actions" style="margin: 0;">
+					<label class="cskh-field" style="margin: 0;">
+						<span>{{ _("Acceptance date") }}</span>
+						<input id="care-accept-date" class="cskh-input" type="date">
+					</label>
+				</div>
+			</div>
+			<div id="care-accept-alert" aria-live="polite"></div>
+			<div id="care-accept-summary" class="cskh-grid"></div>
+			<div id="care-accept-lists" class="cskh-accept-grid" hidden></div>
+			<div id="care-accept-staff" style="margin-top: 14px;" hidden></div>
+		</section>
+
 		<div class="care-metrics" id="care-metrics"></div>
 		<div class="care-columns">
 			<section class="cskh-card care-priorities" aria-labelledby="care-priority-title">

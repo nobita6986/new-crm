@@ -762,8 +762,29 @@ window.cskh = (function () {
 			ready: 'is-assigned',
 			running: 'is-info',
 			expired: 'is-invalid',
+			// KCN 7-workday worker care stages
+			new_contact: 'is-info',
+			consulting: 'is-info',
+			interview_scheduled: 'is-queued',
+			working_care: 'is-assigned',
+			completed_7_days: 'is-assigned',
+			dropped_early: 'is-conflict',
+			stopped: 'is-invalid',
 		}
 		return 'cskh-state ' + (map[kind] || '')
+	}
+
+	function workerStageLabel(value) {
+		const map = {
+			new_contact: t('Not contacted'),
+			consulting: t('Consulting KCN'),
+			interview_scheduled: t('Interview scheduled'),
+			working_care: t('Working (1-6 days)'),
+			completed_7_days: t('Completed 7 workdays'),
+			dropped_early: t('Dropped before 7 days'),
+			stopped: t('Stopped care'),
+		}
+		return map[value] || value || '—'
 	}
 
 	function workItemStateLabel(value) {
@@ -832,6 +853,14 @@ window.cskh = (function () {
 			message_replied_interested: t('Replied — interested'),
 			message_replied_not_interested: t('Replied — not interested'),
 			message_replied_callback: t('Replied — callback requested'),
+			zalo_added_sent_job: t('Added Zalo & sent factory job'),
+			interview_scheduled: t('Scheduled KCN interview'),
+			interview_no_show: t('Missed interview — follow up'),
+			interview_failed_switch: t('Switched to another factory'),
+			onboarded_working: t('Started working at factory'),
+			workday_checkin: t('Daily workday check-in'),
+			completed_7_days: t('Completed 7 workdays — closed'),
+			dropped_before_7_days: t('Dropped out before 7 workdays'),
 			other: t('Other'),
 		}
 		return map[code] || snapshotLabel || code || '—'
@@ -840,6 +869,42 @@ window.cskh = (function () {
 	function formatNumber(value) {
 		if (value === undefined || value === null || value === '') return '—'
 		return new Intl.NumberFormat('vi-VN').format(value)
+	}
+
+	function nationalPhone(value) {
+		if (!value) return ''
+		const text = String(value).trim()
+		if (text.indexOf('*') >= 0) return ''
+		const digits = text.replace(/\D/g, '')
+		if (!digits) return ''
+		if (digits.indexOf('84') === 0 && digits.length >= 11) {
+			return '0' + digits.slice(2)
+		}
+		if (digits.charAt(0) !== '0' && digits.length === 9) {
+			return '0' + digits
+		}
+		return digits
+	}
+
+	function formatPhone(value) {
+		if (!value) return '—'
+		const text = String(value).trim()
+		if (text.indexOf('*') >= 0) return text
+		const nat = nationalPhone(text)
+		if (nat.length === 10) {
+			return nat.slice(0, 4) + ' ' + nat.slice(4, 7) + ' ' + nat.slice(7)
+		}
+		return nat || text
+	}
+
+	function telUrl(value) {
+		const nat = nationalPhone(value)
+		return nat ? 'tel:' + nat : ''
+	}
+
+	function zaloUrl(value) {
+		const nat = nationalPhone(value)
+		return nat ? 'https://zalo.me/' + nat : ''
 	}
 
 	function maskPhone(value) {
@@ -1020,9 +1085,10 @@ window.cskh = (function () {
 
 	async function copyPhone(phoneValue) {
 		if (!phoneValue) return false
+		const toCopy = nationalPhone(phoneValue) || String(phoneValue)
 		try {
 			if (navigator.clipboard && navigator.clipboard.writeText) {
-				await navigator.clipboard.writeText(String(phoneValue))
+				await navigator.clipboard.writeText(toCopy)
 				toast('success', t('Phone number copied to clipboard.'))
 				return true
 			}
@@ -1031,6 +1097,20 @@ window.cskh = (function () {
 		}
 		toast('warning', t('Could not copy phone number in this browser.'))
 		return false
+	}
+
+	function downloadCsv(filename, csvContent) {
+		const blob = new Blob([String(csvContent || '')], { type: 'text/csv;charset=utf-8;' })
+		const url = URL.createObjectURL(blob)
+		const link = document.createElement('a')
+		link.href = url
+		link.download = filename || 'export.csv'
+		document.body.appendChild(link)
+		link.click()
+		document.body.removeChild(link)
+		setTimeout(function () {
+			URL.revokeObjectURL(url)
+		}, 1000)
 	}
 
 	function pager(options) {
@@ -1132,6 +1212,7 @@ window.cskh = (function () {
 		clear: clear,
 		uuid: uuid,
 		stateBadge: stateBadge,
+		workerStageLabel: workerStageLabel,
 		workItemStateLabel: workItemStateLabel,
 		dueStateLabel: dueStateLabel,
 		channelLabel: channelLabel,
@@ -1155,8 +1236,13 @@ window.cskh = (function () {
 		capacityLabel: capacityLabel,
 		scopeLabel: scopeLabel,
 		campaignStatusLabel: campaignStatusLabel,
+		nationalPhone: nationalPhone,
+		formatPhone: formatPhone,
+		telUrl: telUrl,
+		zaloUrl: zaloUrl,
 		maskPhone: maskPhone,
 		copyPhone: copyPhone,
+		downloadCsv: downloadCsv,
 		alert: alert,
 		toast: toast,
 		renderError: renderError,

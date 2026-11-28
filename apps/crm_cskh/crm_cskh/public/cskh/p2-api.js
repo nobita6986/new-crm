@@ -37,6 +37,14 @@ window.cskhP2Api = (function () {
 		saveOutcome: 'crm_cskh.api.settings.save_outcome',
 		setLeadDnc: 'crm_cskh.api.settings.set_lead_dnc',
 		linkedActivities: 'crm.api.activities.get_activities',
+		intakeCampaigns: 'crm_cskh.api.worker_intake.campaigns',
+		checkPhone: 'crm_cskh.api.worker_intake.check_phone',
+		addWorker: 'crm_cskh.api.worker_intake.add_worker',
+		bulkAddWorkers: 'crm_cskh.api.worker_intake.bulk_add_workers',
+		updateWorkerProfile: 'crm_cskh.api.worker_intake.update_profile',
+		recordWorkerProgress: 'crm_cskh.api.worker_intake.record_progress',
+		acceptanceBoard: 'crm_cskh.api.worker_intake.acceptance_board',
+		exportAcceptanceCsv: 'crm_cskh.api.worker_intake.export_acceptance_csv',
 	}
 
 	function toBool(value, defaultValue) {
@@ -312,7 +320,42 @@ window.cskhP2Api = (function () {
 				rawCaps.can_reassign_or_revoke !== undefined
 					? toBool(rawCaps.can_reassign_or_revoke, false)
 					: !!(globalCaps.admin && activeStatuses[wiStatus]),
+			can_update_profile:
+				rawCaps.can_update_profile !== undefined
+					? toBool(rawCaps.can_update_profile, false)
+					: !!((isOwner || globalCaps.admin) && activeStatuses[wiStatus]),
+			can_record_progress:
+				rawCaps.can_record_progress !== undefined
+					? toBool(rawCaps.can_record_progress, false)
+					: !!((isOwner || globalCaps.admin) && activeStatuses[wiStatus] && !dnc),
 		}
+
+		const natPhone =
+			(leadObj && leadObj.national_phone) ||
+			raw.national_phone ||
+			wiObj.national_phone ||
+			(cskh.nationalPhone ? cskh.nationalPhone(phone) : '')
+		const workdaysDone = Number(
+			wiObj.workdays_completed !== undefined
+				? wiObj.workdays_completed
+				: raw.workdays_completed !== undefined
+					? raw.workdays_completed
+					: 0
+		)
+		const targetWorkdays = Math.max(
+			1,
+			Number(wiObj.target_workdays || raw.target_workdays || 7)
+		)
+		const workerStage =
+			wiObj.worker_stage ||
+			raw.worker_stage ||
+			(wiStatus === 'closed'
+				? workdaysDone >= targetWorkdays
+					? 'completed_7_days'
+					: 'stopped'
+				: attemptCount > 0
+					? 'consulting'
+					: 'new_contact')
 
 		return {
 			raw: raw,
@@ -321,8 +364,32 @@ window.cskhP2Api = (function () {
 			lead: leadId,
 			display_name: displayName,
 			phone: phone,
+			national_phone: natPhone,
 			email: email,
 			source: source,
+			is_placeholder_name: toBool(
+				leadObj ? leadObj.is_placeholder_name : raw.is_placeholder_name,
+				false
+			),
+			birth_year: (leadObj && leadObj.birth_year) || raw.birth_year || null,
+			gender: (leadObj && leadObj.gender) || raw.gender || '',
+			current_area: (leadObj && leadObj.current_area) || raw.current_area || '',
+			id_card_status: (leadObj && leadObj.id_card_status) || raw.id_card_status || '',
+			worker_tags: (leadObj && leadObj.worker_tags) || raw.worker_tags || '',
+			zalo_phone: (leadObj && leadObj.zalo_phone) || raw.zalo_phone || '',
+			source_type: wiObj.source_type || raw.source_type || 'company_assigned',
+			acquisition_channel: wiObj.acquisition_channel || raw.acquisition_channel || '',
+			target_factory: wiObj.target_factory || raw.target_factory || '',
+			target_industrial_zone: wiObj.target_industrial_zone || raw.target_industrial_zone || '',
+			campaign_criteria: wiObj.campaign_criteria || raw.campaign_criteria || '',
+			worker_stage: workerStage,
+			interview_date: wiObj.interview_date || raw.interview_date || null,
+			onboard_date: wiObj.onboard_date || raw.onboard_date || null,
+			workdays_completed: workdaysDone,
+			target_workdays: targetWorkdays,
+			last_workday_logged_on: wiObj.last_workday_logged_on || raw.last_workday_logged_on || null,
+			completed_7d_at: wiObj.completed_7d_at || raw.completed_7d_at || null,
+			dropout_reason: wiObj.dropout_reason || raw.dropout_reason || '',
 			campaign: wiObj.campaign || '',
 			campaign_title: wiObj.campaign_title || '',
 			campaign_code: wiObj.campaign_code || '',
@@ -615,6 +682,26 @@ window.cskhP2Api = (function () {
 				break
 			case 'closed':
 				query.status = 'closed'
+				break
+			case 'completed_7_days':
+				query.status = 'closed'
+				query.care_state = 'completed_7_days'
+				break
+			case 'consulting':
+				query.status = 'active'
+				query.care_state = 'consulting'
+				break
+			case 'interview_scheduled':
+				query.status = 'active'
+				query.care_state = 'interview_scheduled'
+				break
+			case 'working_care':
+				query.status = 'active'
+				query.care_state = 'working_care'
+				break
+			case 'dropped_early':
+				query.status = 'all'
+				query.care_state = 'dropped_early'
 				break
 			case 'do_not_contact':
 				query.status = 'all'
@@ -968,6 +1055,38 @@ window.cskhP2Api = (function () {
 		return cskh.post(ENDPOINTS.setLeadDnc, payload)
 	}
 
+	function listIntakeCampaigns() {
+		return cskh.get(ENDPOINTS.intakeCampaigns, {})
+	}
+
+	function checkPhone(phone) {
+		return cskh.get(ENDPOINTS.checkPhone, { phone: phone })
+	}
+
+	function addWorker(payload) {
+		return cskh.post(ENDPOINTS.addWorker, payload)
+	}
+
+	function bulkAddWorkers(payload) {
+		return cskh.post(ENDPOINTS.bulkAddWorkers, payload)
+	}
+
+	function updateWorkerProfile(payload) {
+		return cskh.post(ENDPOINTS.updateWorkerProfile, payload)
+	}
+
+	function recordWorkerProgress(payload) {
+		return cskh.post(ENDPOINTS.recordWorkerProgress, payload)
+	}
+
+	function getAcceptanceBoard(params) {
+		return cskh.get(ENDPOINTS.acceptanceBoard, params || {})
+	}
+
+	function exportAcceptanceCsv(params) {
+		return cskh.get(ENDPOINTS.exportAcceptanceCsv, params || {})
+	}
+
 	return {
 		ENDPOINTS: ENDPOINTS,
 		buildWorkItemsQuery: buildWorkItemsQuery,
@@ -998,5 +1117,13 @@ window.cskhP2Api = (function () {
 		saveOutcome: saveOutcome,
 		savePolicy: savePolicy,
 		setLeadDnc: setLeadDnc,
+		listIntakeCampaigns: listIntakeCampaigns,
+		checkPhone: checkPhone,
+		addWorker: addWorker,
+		bulkAddWorkers: bulkAddWorkers,
+		updateWorkerProfile: updateWorkerProfile,
+		recordWorkerProgress: recordWorkerProgress,
+		getAcceptanceBoard: getAcceptanceBoard,
+		exportAcceptanceCsv: exportAcceptanceCsv,
 	}
 })()

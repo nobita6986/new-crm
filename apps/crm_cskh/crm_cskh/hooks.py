@@ -57,6 +57,12 @@ fixtures = [
 					"CRM Lead-cskh_dnc_reason",
 					"CRM Lead-cskh_dnc_at",
 					"CRM Lead-cskh_dnc_work_item",
+					"CRM Lead-cskh_birth_year",
+					"CRM Lead-cskh_gender",
+					"CRM Lead-cskh_current_area",
+					"CRM Lead-cskh_id_card_status",
+					"CRM Lead-cskh_worker_tags",
+					"CRM Lead-cskh_zalo_phone",
 					"CRM Task-cskh_work_item",
 					"CRM Task-cskh_is_followup",
 					"CRM Task-cskh_source_attempt",
@@ -173,10 +179,12 @@ role_home_page = {
 after_install = [
 	"crm_cskh.patches.v2_0.p2_schema_and_seeds.execute",
 	"crm_cskh.patches.v3_0.p3_schema_and_seeds.execute",
+	"crm_cskh.patches.v5_0.kcn_worker_care_7days.execute",
 ]
 after_migrate = [
 	"crm_cskh.patches.v2_0.p2_schema_and_seeds.execute",
 	"crm_cskh.patches.v3_0.p3_schema_and_seeds.execute",
+	"crm_cskh.patches.v5_0.kcn_worker_care_7days.execute",
 ]
 
 # Uninstallation

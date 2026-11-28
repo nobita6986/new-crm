@@ -1,17 +1,132 @@
 {% extends "templates/cskh/_shell.html" %}
 
 {% block cskh_title %}{{ _("My customers") }}{% endblock %}
-{% block cskh_subtitle %}{{ _("Customers assigned to me.") }}{% endblock %}
+{% block cskh_subtitle %}{{ _("Source workers, protect phone numbers instantly, and track care until 7 workdays.") }}{% endblock %}
 {% block cskh_actions %}
+{% if (cskh_capabilities or {}).get("pii") %}
+<button id="mine-open-intake" class="cskh-btn is-primary is-small" type="button">{{ _("+ Add worker phone") }}</button>
+{% endif %}
+<a class="cskh-btn is-small" href="/cskh">{{ _("End-of-day acceptance") }}</a>
 <a class="cskh-btn is-small" href="/cskh/callbacks">{{ _("Callbacks schedule") }}</a>
 <a class="cskh-btn is-small" href="/cskh/progress">{{ _("Care progress") }}</a>
 {% endblock %}
 
 {% block cskh_body %}
 <div class="cskh-banner-notice">
-	{{ _("1. Receive assigned contact records -> 2. Reach out and log real contact outcomes -> 3. Schedule follow-up callbacks on time.") }}
-	<span class="cskh-muted">{{ _("Contact outcomes track communication; employment milestones require separate confirmation.") }}</span>
+	{{ _("1. Add worker phone (auto-dedupe & protect) -> 2. Call / Zalo & schedule KCN interview -> 3. Confirm onboarding & daily workdays until 7 workdays.") }}
 </div>
+
+{% if (cskh_capabilities or {}).get("pii") %}
+<div class="cskh-card cskh-intake-card" id="mine-intake-card" hidden>
+	<div class="cskh-actions" style="justify-content: space-between; align-items: center; margin-bottom: 10px;">
+		<div>
+			<h2 style="margin: 0 0 4px;">{{ _("Self-sourced worker intake & phone protection") }}</h2>
+			<p class="cskh-muted" style="margin: 0;">{{ _("The system normalizes Vietnamese phone numbers, checks duplicates company-wide, and binds ownership protection to you immediately.") }}</p>
+		</div>
+		<button id="mine-close-intake" class="cskh-btn is-small" type="button">{{ _("Close") }}</button>
+	</div>
+
+	<div class="cskh-intake-tabs" role="tablist">
+		<button id="intake-tab-single" class="cskh-chip is-active" type="button">{{ _("Add single worker") }}</button>
+		<button id="intake-tab-bulk" class="cskh-chip" type="button">{{ _("Bulk paste phones") }}</button>
+	</div>
+
+	<div id="intake-alert" aria-live="polite"></div>
+
+	<div id="intake-single-pane">
+		<div class="cskh-form-grid">
+			<label class="cskh-field">
+				<span>{{ _("Phone number") }} *</span>
+				<input id="intake-phone" class="cskh-input cskh-mono" type="tel" placeholder="0912 345 678" autocomplete="off">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Worker full name") }}</span>
+				<input id="intake-name" class="cskh-input" type="text" placeholder="{{ _('Worker full name') }}">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Factory order / Campaign") }}</span>
+				<select id="intake-campaign" class="cskh-select">
+					<option value="">{{ _("Default self-sourced pool") }}</option>
+				</select>
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Sourcing channel") }}</span>
+				<select id="intake-source" class="cskh-select">
+					<option value="Zalo">Zalo</option>
+					<option value="Facebook">Facebook</option>
+					<option value="TikTok">TikTok</option>
+					<option value="Gioi thieu">{{ _("Worker referral") }}</option>
+					<option value="Tuyen truc tiep KCN">{{ _("Direct KCN gate") }}</option>
+					<option value="Khac">{{ _("Other") }}</option>
+				</select>
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Birth year") }}</span>
+				<input id="intake-birth-year" class="cskh-input" type="number" min="1960" max="2012" placeholder="2000">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Gender") }}</span>
+				<select id="intake-gender" class="cskh-select">
+					<option value="">{{ _("Select...") }}</option>
+					<option value="Nam">{{ _("Male") }}</option>
+					<option value="Nu">{{ _("Female") }}</option>
+					<option value="Khac">{{ _("Other") }}</option>
+				</select>
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Current area / boarding house") }}</span>
+				<input id="intake-area" class="cskh-input" type="text" placeholder="{{ _('District / KCN area...') }}">
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Citizen ID (CCCD) status") }}</span>
+				<select id="intake-cccd" class="cskh-select">
+					<option value="">{{ _("Select...") }}</option>
+					<option value="Co CCCD goc">{{ _("Original chip ID ready") }}</option>
+					<option value="VNeID muc 2">{{ _("VNeID level 2") }}</option>
+					<option value="Mat / dang lam lai">{{ _("Lost / renewing") }}</option>
+				</select>
+			</label>
+		</div>
+		<div id="intake-phone-status" class="cskh-protection-status" hidden></div>
+		<label class="cskh-field" style="margin-top: 8px;">
+			<span>{{ _("Screening notes (shift, tattoos, skills, transport...)") }}</span>
+			<input id="intake-tags" class="cskh-input" type="text" placeholder="{{ _('Can work night shift, has motorbike...') }}">
+		</label>
+		<div class="cskh-actions" style="margin-top: 12px;">
+			<button id="intake-submit-single" class="cskh-btn is-primary" type="button">{{ _("Check duplicate & claim protection") }}</button>
+		</div>
+	</div>
+
+	<div id="intake-bulk-pane" hidden>
+		<div class="cskh-form-grid">
+			<label class="cskh-field">
+				<span>{{ _("Factory order / Campaign") }}</span>
+				<select id="intake-bulk-campaign" class="cskh-select">
+					<option value="">{{ _("Default self-sourced pool") }}</option>
+				</select>
+			</label>
+			<label class="cskh-field">
+				<span>{{ _("Sourcing channel") }}</span>
+				<select id="intake-bulk-source" class="cskh-select">
+					<option value="Facebook">Facebook</option>
+					<option value="Zalo">Zalo</option>
+					<option value="TikTok">TikTok</option>
+					<option value="Gioi thieu">{{ _("Worker referral") }}</option>
+					<option value="Tuyen truc tiep KCN">{{ _("Direct KCN gate") }}</option>
+				</select>
+			</label>
+		</div>
+		<label class="cskh-field" style="margin-top: 8px;">
+			<span>{{ _("Paste worker list (1 worker per line: Phone | Full name | Birth year | Note)") }}</span>
+			<textarea id="intake-bulk-text" class="cskh-textarea cskh-mono" rows="5" placeholder="0912345678 | Nguyen Van A | 2001 | KCN VSIP&#10;0987654321 | Tran Thi B | 1999 | Tang ca"></textarea>
+		</label>
+		<div class="cskh-actions" style="margin-top: 12px;">
+			<button id="intake-submit-bulk" class="cskh-btn is-primary" type="button">{{ _("Bulk check & claim protection") }}</button>
+		</div>
+		<div id="intake-bulk-result" style="margin-top: 12px;"></div>
+	</div>
+</div>
+{% endif %}
 
 <div class="cskh-card">
 	<div class="cskh-actions">
@@ -26,12 +141,17 @@
 			<select id="mine-care-filter" class="cskh-select">
 				<option value="">{{ _("All") }}</option>
 				<option value="not_contacted">{{ _("Not contacted") }}</option>
+				<option value="consulting">{{ _("Consulting KCN") }}</option>
+				<option value="interview_scheduled">{{ _("Interview scheduled") }}</option>
+				<option value="working_care">{{ _("Working (1-6 days)") }}</option>
+				<option value="completed_7_days">{{ _("Completed 7 workdays") }}</option>
+				<option value="dropped_early">{{ _("Dropped before 7 days") }}</option>
+				<option value="followup_due">{{ _("Due today") }}</option>
+				<option value="followup_overdue">{{ _("Overdue") }}</option>
 				<option value="attempted">{{ _("Attempted") }}</option>
 				<option value="attempted_not_connected">{{ _("Attempted, not connected") }}</option>
 				<option value="connected">{{ _("Connected") }}</option>
 				<option value="on_hold">{{ _("On hold") }}</option>
-				<option value="followup_due">{{ _("Due today") }}</option>
-				<option value="followup_overdue">{{ _("Overdue") }}</option>
 				<option value="closed">{{ _("Completed care") }}</option>
 				<option value="do_not_contact">{{ _("Do not contact") }}</option>
 			</select>
@@ -57,13 +177,13 @@
 	<div class="cskh-chip-bar" id="mine-filter-chips" role="group" aria-label="{{ _('Care filter') }}" style="margin-top: 10px;">
 		<button type="button" class="cskh-chip is-active" data-filter="">{{ _("All") }}</button>
 		<button type="button" class="cskh-chip" data-filter="not_contacted">{{ _("Not contacted") }}</button>
-		<button type="button" class="cskh-chip" data-filter="attempted">{{ _("Attempted") }}</button>
-		<button type="button" class="cskh-chip" data-filter="attempted_not_connected">{{ _("Attempted, not connected") }}</button>
-		<button type="button" class="cskh-chip" data-filter="connected">{{ _("Connected") }}</button>
+		<button type="button" class="cskh-chip" data-filter="consulting">{{ _("Consulting KCN") }}</button>
+		<button type="button" class="cskh-chip" data-filter="interview_scheduled">{{ _("Interview scheduled") }}</button>
+		<button type="button" class="cskh-chip" data-filter="working_care">{{ _("Working (1-6 days)") }}</button>
+		<button type="button" class="cskh-chip" data-filter="completed_7_days">{{ _("Completed 7 workdays") }}</button>
+		<button type="button" class="cskh-chip" data-filter="dropped_early">{{ _("Dropped before 7 days") }}</button>
 		<button type="button" class="cskh-chip" data-filter="followup_due">{{ _("Due today") }}</button>
 		<button type="button" class="cskh-chip" data-filter="followup_overdue">{{ _("Overdue") }}</button>
-		<button type="button" class="cskh-chip" data-filter="closed">{{ _("Completed care") }}</button>
-		<button type="button" class="cskh-chip" data-filter="do_not_contact">{{ _("Do not contact") }}</button>
 	</div>
 </div>
 
@@ -84,9 +204,8 @@
 				<tr>
 					<th>{{ _("Contact record") }}</th>
 					<th>{{ _("Phone number") }}</th>
-					<th>{{ _("Campaign") }}</th>
-					<th>{{ _("Care status") }}</th>
-					<th>{{ _("Last contact at") }}</th>
+					<th>{{ _("Factory / Industrial zone") }}</th>
+					<th>{{ _("7-workday stage") }}</th>
 					<th>{{ _("Last outcome") }}</th>
 					<th>{{ _("Contact count") }}</th>
 					<th>{{ _("Next callback") }}</th>

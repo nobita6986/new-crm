@@ -781,6 +781,14 @@ def record_attempt(
 			final_callback = new_task_id or recomputed["open_callback_task"]
 
 		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
+		from crm_cskh.services.worker_lifecycle import sync_stage_after_attempt_in_tx
+
+		sync_stage_after_attempt_in_tx(
+			work_item=wi_val,
+			outcome_code=outcome["code"],
+			should_close=should_close,
+			now_dt=now_dt,
+		)
 
 		schedule_post_commit_dirty_invalidation(
 			work_item=wi_val,
@@ -1013,6 +1021,18 @@ def close_work_item(
 
 		from crm_cskh.services.kpi_runs import schedule_post_commit_dirty_invalidation
 
+		if frappe.db.has_column("CSKH Work Item", "worker_stage"):
+			w_done = cint(frappe.db.get_value("CSKH Work Item", wi_val, "workdays_completed") or 0)
+			w_target = max(1, cint(frappe.db.get_value("CSKH Work Item", wi_val, "target_workdays") or 7))
+			close_stage = "completed_7_days" if (cat_val == "normal" and w_done >= w_target) else "stopped"
+			frappe.db.set_value(
+				"CSKH Work Item",
+				wi_val,
+				"worker_stage",
+				close_stage,
+				update_modified=False,
+			)
+
 		schedule_post_commit_dirty_invalidation(
 			work_item=wi_val,
 			campaign=locked.campaign,
@@ -1214,6 +1234,8 @@ def reopen_work_item(
 		}
 		if frappe.db.has_column("CSKH Work Item", "owner_at_close"):
 			reopen_updates["owner_at_close"] = None
+		if frappe.db.has_column("CSKH Work Item", "worker_stage"):
+			reopen_updates["worker_stage"] = "consulting" if summary["attempt_count"] > 0 else "new_contact"
 		frappe.db.set_value(
 			"CSKH Work Item",
 			wi_val,

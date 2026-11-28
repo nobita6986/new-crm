@@ -181,12 +181,102 @@
    "label": "Policy Version",
    "default": "1",
    "read_only": 1
+  },
+  {
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "company_assigned\nself_sourced",
+   "default": "company_assigned",
+   "read_only": 1
+  },
+  {
+   "fieldname": "acquisition_channel",
+   "fieldtype": "Data",
+   "label": "Acquisition Channel",
+   "read_only": 1
+  },
+  {
+   "fieldname": "target_factory",
+   "fieldtype": "Data",
+   "label": "Target Factory",
+   "read_only": 1
+  },
+  {
+   "fieldname": "target_industrial_zone",
+   "fieldtype": "Data",
+   "label": "Target Industrial Zone",
+   "read_only": 1
+  },
+  {
+   "fieldname": "worker_stage",
+   "fieldtype": "Select",
+   "label": "Worker Stage",
+   "options": "new_contact\nconsulting\ninterview_scheduled\nworking_care\ncompleted_7_days\ndropped_early\nstopped",
+   "default": "new_contact",
+   "read_only": 1
+  },
+  {
+   "fieldname": "interview_date",
+   "fieldtype": "Date",
+   "label": "Interview Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "onboard_date",
+   "fieldtype": "Date",
+   "label": "Onboard Date",
+   "read_only": 1
+  },
+  {
+   "fieldname": "workdays_completed",
+   "fieldtype": "Int",
+   "label": "Workdays Completed",
+   "default": "0",
+   "read_only": 1
+  },
+  {
+   "fieldname": "target_workdays",
+   "fieldtype": "Int",
+   "label": "Target Workdays",
+   "default": "7",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_workday_logged_on",
+   "fieldtype": "Date",
+   "label": "Last Workday Logged On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "completed_7d_at",
+   "fieldtype": "Datetime",
+   "label": "Completed 7 Days At",
+   "read_only": 1
+  },
+  {
+   "fieldname": "dropout_reason",
+   "fieldtype": "Small Text",
+   "label": "Dropout Reason",
+   "read_only": 1
   }
  ],
  "field_order": [
   "campaign",
   "lead",
   "status",
+  "worker_stage",
+  "source_type",
+  "acquisition_channel",
+  "target_factory",
+  "target_industrial_zone",
+  "interview_date",
+  "onboard_date",
+  "workdays_completed",
+  "target_workdays",
+  "last_workday_logged_on",
+  "completed_7d_at",
+  "dropout_reason",
   "revision",
   "assigned_to",
   "assigned_at",

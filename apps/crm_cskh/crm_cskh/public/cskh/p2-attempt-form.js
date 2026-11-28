@@ -140,11 +140,98 @@ window.cskhAttemptForm = (function () {
 			class: 'cskh-muted',
 			style: 'font-size: 12px;',
 		})
+
+		function applyFollowupPreset(kind) {
+			if (followupToggle.disabled && !followupToggle.checked) return
+			const now = cskh.serverNow()
+			const zone = cskh.effectiveTimeZone()
+			const parts = cskh.partsAtEpochInTz(now.getTime(), zone)
+			let targetMs = now.getTime() + 30 * 60000
+			if (kind === 'plus_30m') {
+				targetMs = now.getTime() + 30 * 60000
+			} else if (kind === 'today_12') {
+				targetMs = cskh.tzWallClockToEpochMs(parts.year, parts.month, parts.day, 12, 0, 0, zone)
+				if (targetMs <= now.getTime()) targetMs += 86400000
+			} else if (kind === 'today_18') {
+				targetMs = cskh.tzWallClockToEpochMs(parts.year, parts.month, parts.day, 18, 0, 0, zone)
+				if (targetMs <= now.getTime()) targetMs += 86400000
+			} else if (kind === 'today_20') {
+				targetMs = cskh.tzWallClockToEpochMs(parts.year, parts.month, parts.day, 20, 0, 0, zone)
+				if (targetMs <= now.getTime()) targetMs += 86400000
+			} else if (kind === 'tomorrow_07') {
+				const baseNext = new Date(Date.UTC(parts.year, parts.month - 1, parts.day + 1, 12, 0, 0))
+				targetMs = cskh.tzWallClockToEpochMs(
+					baseNext.getUTCFullYear(),
+					baseNext.getUTCMonth() + 1,
+					baseNext.getUTCDate(),
+					7,
+					30,
+					0,
+					zone
+				)
+			}
+			followupToggle.checked = true
+			followupInput.disabled = false
+			followupTitleInput.disabled = false
+			followupInput.value = cskh.toDatetimeLocalValue(new Date(targetMs), zone)
+			bumpIdempotencyKey()
+		}
+
+		const presetBar = cskh.el('div', { class: 'cskh-preset-chips' }, [
+			cskh.el('button', {
+				type: 'button',
+				class: 'cskh-chip is-compact',
+				text: cskh.t('+30 min'),
+				onclick: function () {
+					applyFollowupPreset('plus_30m')
+				},
+			}),
+			cskh.el('button', {
+				type: 'button',
+				class: 'cskh-chip is-compact',
+				text: cskh.t('Noon 12:00'),
+				onclick: function () {
+					applyFollowupPreset('today_12')
+				},
+			}),
+			cskh.el('button', {
+				type: 'button',
+				class: 'cskh-chip is-compact',
+				text: cskh.t('After shift 18:00'),
+				onclick: function () {
+					applyFollowupPreset('today_18')
+				},
+			}),
+			cskh.el('button', {
+				type: 'button',
+				class: 'cskh-chip is-compact',
+				text: cskh.t('Evening 20:00'),
+				onclick: function () {
+					applyFollowupPreset('today_20')
+				},
+			}),
+			cskh.el('button', {
+				type: 'button',
+				class: 'cskh-chip is-compact',
+				text: cskh.t('Tomorrow 07:30'),
+				onclick: function () {
+					applyFollowupPreset('tomorrow_07')
+				},
+			}),
+		])
+
 		const followupWrap = cskh.el('div', { class: 'cskh-panel' }, [
-			cskh.el('label', { class: 'cskh-checkbox-row' }, [
-				followupToggle,
-				cskh.el('span', { text: cskh.t('Schedule follow-up callback') }),
-			]),
+			cskh.el(
+				'div',
+				{ class: 'cskh-actions', style: 'justify-content: space-between; align-items: center;' },
+				[
+					cskh.el('label', { class: 'cskh-checkbox-row' }, [
+						followupToggle,
+						cskh.el('span', { text: cskh.t('Schedule follow-up callback') }),
+					]),
+					presetBar,
+				]
+			),
 			cskh.el(
 				'div',
 				{
@@ -657,7 +744,14 @@ window.cskhAttemptForm = (function () {
 
 		container.appendChild(cskh.el('div', { class: 'cskh-panel' }, bodyNodes))
 		populateChannels()
+		if (options.initialChannel && Array.from(channelSelect.options).some(function (o) { return o.value === options.initialChannel })) {
+			channelSelect.value = options.initialChannel
+		}
 		populateOutcomes()
+		if (options.initialOutcomeCode && Array.from(outcomeSelect.options).some(function (o) { return o.value === options.initialOutcomeCode })) {
+			outcomeSelect.value = options.initialOutcomeCode
+			syncOutcomeConstraints()
+		}
 
 		return {
 			updateWorkItem: function (nextWi) {

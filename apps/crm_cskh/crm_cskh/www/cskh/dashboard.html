@@ -41,6 +41,9 @@
 		<button id="dash-refresh" class="cskh-btn is-primary" type="button">
 			{{ _("Refresh") }}
 		</button>
+		<button id="dash-export-csv" class="cskh-btn is-success" type="button">
+			{{ _("Export 7-workday CSV") }}
+		</button>
 		<button id="dash-clear-dates" class="cskh-btn" type="button">
 			{{ _("Clear date filter") }}
 		</button>
@@ -50,6 +53,17 @@
 </div>
 
 <div id="dash-alert" aria-live="polite"></div>
+
+<div class="cskh-card" id="dash-acceptance-card">
+	<div class="cskh-actions" style="justify-content: space-between; align-items: center; margin-bottom: 10px;">
+		<div>
+			<h2 style="margin-bottom: 4px;">{{ _("7-workday funnel & Marketing staff acceptance") }}</h2>
+			<p class="cskh-muted" style="margin: 0;">{{ _("Tracks self-sourced intake, active protection, KCN interviews, days 1-6 care, and accepted 7-workday completions.") }}</p>
+		</div>
+	</div>
+	<div id="dash-acceptance-summary" class="cskh-grid"></div>
+	<div id="dash-acceptance-staff" style="margin-top: 14px;"></div>
+</div>
 
 <div class="cskh-card">
 	<div id="dash-loading" class="cskh-loading">{{ _("Loading...") }}</div>

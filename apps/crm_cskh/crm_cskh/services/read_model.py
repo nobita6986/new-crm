@@ -580,8 +580,13 @@ def _capabilities_for_work_item(wi_row: dict, policy: dict, actor: str) -> dict:
 			can_reopen = True
 
 	can_review_corr = bool(is_admin or (is_leader and bool(policy.get("allow_leader_review_correction"))))
+	is_direct_owner = bool(
+		status in OWNED_ACTIVE_WORK_ITEM_STATES and assigned_to and (is_admin or assigned_to == actor)
+	)
 	return {
 		"can_record_attempt": in_active_scope,
+		"can_update_profile": is_direct_owner,
+		"can_record_progress": is_direct_owner,
 		"can_schedule_followup": in_active_scope,
 		"can_complete_followup": bool(in_active_scope and wi_row.get("open_callback_task")),
 		"can_close": in_active_scope,
@@ -601,8 +606,38 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 
 	has_owner_close = runtime_cache.has_column("CSKH Work Item", "owner_at_close")
 	owner_close_sel = "wi.owner_at_close" if has_owner_close else "null as owner_at_close"
+	wi_opt_sels: list[str] = []
+	for opt_wi in (
+		"source_type",
+		"acquisition_channel",
+		"target_factory",
+		"target_industrial_zone",
+		"worker_stage",
+		"interview_date",
+		"onboard_date",
+		"workdays_completed",
+		"target_workdays",
+		"last_workday_logged_on",
+		"completed_7d_at",
+		"dropout_reason",
+	):
+		if runtime_cache.has_column("CSKH Work Item", opt_wi):
+			wi_opt_sels.append(f"wi.`{opt_wi}` as `{opt_wi}`")
+		else:
+			wi_opt_sels.append(f"null as `{opt_wi}`")
 	lead_opt_sels: list[str] = []
-	for opt_f in ("cskh_is_placeholder_name", "cskh_do_not_contact", "cskh_dnc_reason", "cskh_dnc_at"):
+	for opt_f in (
+		"cskh_is_placeholder_name",
+		"cskh_do_not_contact",
+		"cskh_dnc_reason",
+		"cskh_dnc_at",
+		"cskh_birth_year",
+		"cskh_gender",
+		"cskh_current_area",
+		"cskh_id_card_status",
+		"cskh_worker_tags",
+		"cskh_zalo_phone",
+	):
 		if runtime_cache.has_column("CRM Lead", opt_f):
 			lead_opt_sels.append(f"l.`{opt_f}` as `lead_{opt_f}`")
 		else:
@@ -617,6 +652,7 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 		       wi.next_action_due, wi.last_activity_by, wi.closed_at, wi.closed_by,
 		       wi.completion_reason, wi.reopened_at, wi.reopened_by, wi.reopen_reason,
 		       wi.policy_version, {owner_close_sel},
+		       {", ".join(wi_opt_sels)},
 		       l.name as lead_pk, l.lead_name as lead_lead_name, l.first_name as lead_first_name,
 		       l.mobile_no as lead_mobile_no, l.email as lead_email, l.source as lead_source,
 		       {", ".join(lead_opt_sels)}
@@ -635,13 +671,15 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 		require_active_mutation=False,
 	)
 
-	if runtime_cache.is_runtime_db_cache_active():
-		camp = runtime_cache.get_campaign_row(wi.campaign) or {}
-	else:
-		camp = (
-			frappe.db.get_value("CSKH Campaign", wi.campaign, ["code", "title", "status"], as_dict=True)
-			or frappe._dict()
-		)
+	from crm_cskh.services.worker_intake import to_national_phone
+
+	camp_cols = ["code", "title", "status"]
+	for opt_c in ("factory_name", "industrial_zone", "recruitment_criteria", "target_workdays"):
+		if runtime_cache.has_column("CSKH Campaign", opt_c):
+			camp_cols.append(opt_c)
+	camp = (
+		frappe.db.get_value("CSKH Campaign", wi.campaign, camp_cols, as_dict=True) if wi.campaign else None
+	) or frappe._dict()
 
 	lead = {
 		"name": wi.lead_pk,
@@ -654,6 +692,12 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 		"cskh_do_not_contact": wi.lead_cskh_do_not_contact,
 		"cskh_dnc_reason": wi.lead_cskh_dnc_reason,
 		"cskh_dnc_at": wi.lead_cskh_dnc_at,
+		"cskh_birth_year": wi.get("lead_cskh_birth_year"),
+		"cskh_gender": wi.get("lead_cskh_gender"),
+		"cskh_current_area": wi.get("lead_cskh_current_area"),
+		"cskh_id_card_status": wi.get("lead_cskh_id_card_status"),
+		"cskh_worker_tags": wi.get("lead_cskh_worker_tags"),
+		"cskh_zalo_phone": wi.get("lead_cskh_zalo_phone"),
 	}
 
 	if wi.status in OWNED_ACTIVE_WORK_ITEM_STATES:
@@ -717,17 +761,44 @@ def get_work_item_detail(work_item: str, actor: str | None = None) -> dict:
 			"reopened_by": wi.reopened_by,
 			"reopen_reason": wi.reopen_reason,
 			"policy_version": cint(wi.policy_version or policy["version"] or 1),
+			"source_type": wi.get("source_type") or "company_assigned",
+			"acquisition_channel": wi.get("acquisition_channel") or "",
+			"target_factory": wi.get("target_factory") or camp.get("factory_name") or "",
+			"target_industrial_zone": wi.get("target_industrial_zone") or camp.get("industrial_zone") or "",
+			"campaign_criteria": camp.get("recruitment_criteria") or "",
+			"worker_stage": wi.get("worker_stage")
+			or (
+				"completed_7_days"
+				if wi.status == "closed" and cint(wi.get("workdays_completed") or 0) >= 7
+				else ("stopped" if wi.status == "closed" else "new_contact")
+			),
+			"interview_date": str(wi.get("interview_date")) if wi.get("interview_date") else None,
+			"onboard_date": str(wi.get("onboard_date")) if wi.get("onboard_date") else None,
+			"workdays_completed": cint(wi.get("workdays_completed") or 0),
+			"target_workdays": max(cint(wi.get("target_workdays") or camp.get("target_workdays") or 7), 1),
+			"last_workday_logged_on": str(wi.get("last_workday_logged_on"))
+			if wi.get("last_workday_logged_on")
+			else None,
+			"completed_7d_at": wi.get("completed_7d_at"),
+			"dropout_reason": wi.get("dropout_reason") or "",
 		},
 		"lead": {
 			"name": lead.get("name") or wi.lead,
 			"display_name": lead.get("lead_name") or lead.get("first_name") or "",
 			"phone": lead.get("mobile_no"),
+			"national_phone": to_national_phone(lead.get("mobile_no")),
 			"email": lead.get("email"),
 			"source": lead.get("source"),
 			"is_placeholder_name": bool(cint(lead.get("cskh_is_placeholder_name") or 0)),
 			"do_not_contact": bool(cint(lead.get("cskh_do_not_contact") or 0)),
 			"dnc_reason": lead.get("cskh_dnc_reason"),
 			"dnc_at": lead.get("cskh_dnc_at"),
+			"birth_year": cint(lead.get("cskh_birth_year")) if lead.get("cskh_birth_year") else None,
+			"gender": lead.get("cskh_gender") or "",
+			"current_area": lead.get("cskh_current_area") or "",
+			"id_card_status": lead.get("cskh_id_card_status") or "",
+			"worker_tags": lead.get("cskh_worker_tags") or "",
+			"zalo_phone": lead.get("cskh_zalo_phone") or "",
 		},
 		"active_ownership": (
 			{
@@ -760,6 +831,11 @@ _CARE_STATE_ALIASES = {
 	"closed": "closed",
 	"do_not_contact": "do_not_contact",
 	"dnc": "do_not_contact",
+	"interview_scheduled": "interview_scheduled",
+	"working_care": "working_care",
+	"completed_7_days": "completed_7_days",
+	"dropped_early": "dropped_early",
+	"consulting": "consulting",
 }
 
 
@@ -813,11 +889,11 @@ def list_work_items(
 	raw_status = parse_optional_str(status, "Bộ lọc status không hợp lệ.")
 	if raw_status:
 		status_val = raw_status.lower()
-	elif care_val == "closed" or owner_close_val or closed_by_val:
+	elif care_val in ("closed", "completed_7_days") or owner_close_val or closed_by_val:
 		status_val = "closed"
 	elif care_val in ("on_hold", "followup_due", "followup_overdue"):
 		status_val = "on_hold"
-	elif care_val == "do_not_contact":
+	elif care_val in ("do_not_contact", "dropped_early"):
 		status_val = "all"
 	else:
 		status_val = "active"
@@ -941,6 +1017,23 @@ def list_work_items(
 			clauses.append("coalesce(l.cskh_do_not_contact, 0) = 1")
 		else:
 			clauses.append("1=0")
+	elif care_val in (
+		"consulting",
+		"interview_scheduled",
+		"working_care",
+		"completed_7_days",
+		"dropped_early",
+	):
+		if frappe.db.has_column("CSKH Work Item", "worker_stage"):
+			if care_val == "dropped_early":
+				clauses.append(
+					"wi.worker_stage in ('dropped_early', 'stopped') and coalesce(wi.workdays_completed, 0) < 7 and (wi.worker_stage = 'dropped_early' or coalesce(wi.workdays_completed, 0) > 0)"
+				)
+			else:
+				clauses.append("wi.worker_stage = %s")
+				params.append(care_val)
+		else:
+			clauses.append("1=0")
 
 	if fu_val == "overdue":
 		clauses.append("wi.status = 'on_hold' and wi.next_action_due is not null and wi.next_action_due < %s")
@@ -990,9 +1083,41 @@ def list_work_items(
 	if total == 0:
 		return _empty_response()
 
+	from crm_cskh.services.worker_intake import to_national_phone
+
 	dnc_col = "coalesce(l.cskh_do_not_contact, 0) as do_not_contact" if has_dnc else "0 as do_not_contact"
 	owner_close_select = (
 		"wi.owner_at_close as owner_at_close" if has_owner_close else "null as owner_at_close"
+	)
+	has_wi_stage = frappe.db.has_column("CSKH Work Item", "worker_stage")
+	wi_extra_sel = (
+		"wi.worker_stage as worker_stage, wi.source_type as source_type, "
+		"wi.target_factory as target_factory, wi.target_industrial_zone as target_industrial_zone, "
+		"wi.interview_date as interview_date, wi.onboard_date as onboard_date, "
+		"coalesce(wi.workdays_completed, 0) as workdays_completed, "
+		"coalesce(wi.target_workdays, 7) as target_workdays, "
+		"wi.last_workday_logged_on as last_workday_logged_on, wi.completed_7d_at as completed_7d_at"
+		if has_wi_stage
+		else "null as worker_stage, 'company_assigned' as source_type, "
+		"null as target_factory, null as target_industrial_zone, "
+		"null as interview_date, null as onboard_date, "
+		"0 as workdays_completed, 7 as target_workdays, "
+		"null as last_workday_logged_on, null as completed_7d_at"
+	)
+	has_lead_byear = frappe.db.has_column("CRM Lead", "cskh_birth_year")
+	lead_extra_sel = (
+		"l.cskh_birth_year as birth_year, l.cskh_gender as gender, "
+		"l.cskh_current_area as current_area, l.cskh_id_card_status as id_card_status, "
+		"l.cskh_worker_tags as worker_tags, l.cskh_zalo_phone as zalo_phone"
+		if has_lead_byear
+		else "null as birth_year, null as gender, null as current_area, "
+		"null as id_card_status, null as worker_tags, null as zalo_phone"
+	)
+	has_camp_fac = frappe.db.has_column("CSKH Campaign", "factory_name")
+	camp_extra_sel = (
+		"c.factory_name as camp_factory_name, c.industrial_zone as camp_industrial_zone"
+		if has_camp_fac
+		else "null as camp_factory_name, null as camp_industrial_zone"
 	)
 
 	rows = frappe.db.sql(
@@ -1007,9 +1132,11 @@ def list_work_items(
 		       wi.last_connected_at as last_connected_at,
 		       wi.open_callback_task as open_callback_task, wi.next_action_due as next_action_due,
 		       wi.closed_at as closed_at, wi.closed_by as closed_by, {owner_close_select},
-		       c.title as campaign_title, c.code as campaign_code,
+		       {wi_extra_sel},
+		       c.title as campaign_title, c.code as campaign_code, {camp_extra_sel},
 		       l.lead_name as lead_name, l.first_name as first_name,
 		       l.mobile_no as mobile_no, l.source as source, l.status as lead_status,
+		       {lead_extra_sel},
 		       {dnc_col}
 		{from_where}
 		order by case when wi.status = 'on_hold' and wi.next_action_due is not null and wi.next_action_due < %s then 0 else 1 end asc,
@@ -1037,11 +1164,37 @@ def list_work_items(
 				"lead": row.lead,
 				"display_name": row.lead_name or row.first_name or "",
 				"phone": row.mobile_no,
+				"national_phone": to_national_phone(row.mobile_no),
+				"zalo_phone": row.get("zalo_phone") or "",
+				"birth_year": int(row.birth_year) if row.get("birth_year") else None,
+				"gender": row.get("gender") or "",
+				"current_area": row.get("current_area") or "",
+				"id_card_status": row.get("id_card_status") or "",
+				"worker_tags": row.get("worker_tags") or "",
 				"source": row.source,
+				"source_type": row.get("source_type") or "company_assigned",
 				"lead_status": row.lead_status,
 				"campaign": row.campaign,
 				"campaign_title": row.campaign_title,
 				"campaign_code": row.campaign_code,
+				"target_factory": row.get("target_factory") or row.get("camp_factory_name") or "",
+				"target_industrial_zone": row.get("target_industrial_zone")
+				or row.get("camp_industrial_zone")
+				or "",
+				"worker_stage": row.get("worker_stage")
+				or (
+					"completed_7_days"
+					if row.status == "closed" and int(row.get("workdays_completed") or 0) >= 7
+					else ("stopped" if row.status == "closed" else "new_contact")
+				),
+				"interview_date": str(row.interview_date) if row.get("interview_date") else None,
+				"onboard_date": str(row.onboard_date) if row.get("onboard_date") else None,
+				"workdays_completed": int(row.get("workdays_completed") or 0),
+				"target_workdays": max(int(row.get("target_workdays") or 7), 1),
+				"last_workday_logged_on": str(row.last_workday_logged_on)
+				if row.get("last_workday_logged_on")
+				else None,
+				"completed_7d_at": row.get("completed_7d_at"),
 				"status": row.status,
 				"work_item_status": row.status,
 				"care_state": _derive_row_care_state(row),
@@ -1063,6 +1216,22 @@ def list_work_items(
 				"closed_by": row.closed_by,
 				"owner_at_close": eff_owner_close,
 				"do_not_contact": bool(int(row.do_not_contact or 0)),
+				"capabilities": {
+					"can_record_attempt": bool(
+						row.status in OWNED_ACTIVE_WORK_ITEM_STATES
+						and row.assigned_to
+						and (_is_system(actor) or ROLE_ADMIN in _roles(actor) or row.assigned_to == actor)
+					),
+					"can_update_profile": bool(
+						row.status in OWNED_ACTIVE_WORK_ITEM_STATES
+						and row.assigned_to
+						and (_is_system(actor) or ROLE_ADMIN in _roles(actor) or row.assigned_to == actor)
+					),
+					"can_reassign_or_revoke": bool(
+						(_is_system(actor) or ROLE_ADMIN in _roles(actor))
+						and row.status in OWNED_ACTIVE_WORK_ITEM_STATES
+					),
+				},
 			}
 		)
 
